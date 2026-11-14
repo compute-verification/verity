@@ -247,9 +247,10 @@ class Binder:
     reference's, every block read on the CPU.  With ``tiles`` (the driver's `audit.Tiles`), each receipt is bound to
     ``tiles.output(seed, j)``, PoUW's tile output before block ``j`` is read, and the default receipt is the driver's
     (`PoubReceipt`); without them, its default kind, sketch-sha512, of the block alone (`KindReceipt`).
-    With ``passes=False`` the binder runs no pass: a remote session's backend runs them, and its windows (`verity_vllm.protocols.remote_bandwidth.remote.CommitSession`).
+    With ``passes=False`` the binder runs no pass: a remote session's backend runs them, and its windows
+    (`verity_vllm.protocols.poub.remote.CommitSession`).
     With ``weight_blocks`` it registers weight tensors in order while their blocks fit that many, and counts the rest
-    unregistered: a store small enough for a remote session's CPU passes (`remote.StoreBackend`).  With ``kv=False``
+    unregistered: a store small enough for a remote session's CPU passes (`node_store.serving.StoreBackend`).  With ``kv=False``
     the KV pool stays outside the registration (counted unregistered): its pages' hooks reach no store, and a step
     writes no registered block, so its `kv_append` only numbers the step; `register_filler` adds the store's filler."""
 

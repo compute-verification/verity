@@ -57,7 +57,7 @@ def claim (b : ByteArray) : V Claim := do
   let samplingDesign ← match j.getObjVal? "law" with
     | .ok .null => pure none
     | .ok (.str s) => pure (some s)
-    | _ => throw s!"{ctx}: samplingDesign is a string or null"
+    | _ => throw s!"{ctx}: law is a string or null"
   return ⟨← Flock.unhex (← Flock.J.str j "store" ctx), ← Flock.unhex (← Flock.J.str j "unit" ctx), samplingDesign,
     ← Flock.unhex (← Flock.J.str j "outcome" ctx)⟩
 

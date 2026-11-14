@@ -59,7 +59,7 @@ rank 0 accepted and rank 1 refused by Lean's registered reads by its reason. ``-
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a5_tp_gates.py --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
-        [--firewall flock-firewall] --challenger local --main FILE [--altered | --made-for KIND] --out DIR
+        [--zk-server flock-zk-server] --challenger local --main FILE [--altered | --made-for KIND] --out DIR
 """
 from __future__ import annotations
 
@@ -427,7 +427,7 @@ def main(argv=None) -> int:
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
-    ap.add_argument("--firewall", help="a5.py's --firewall: the core protocols' path, every session behind the ZK server; "
+    ap.add_argument("--zk-server", help="a5.py's --zk-server: the core protocols' path, every session behind the ZK server; "
                     "without it each runs prove --zk itself, as SPOT[Flock]'s proof server does")
     ap.add_argument("--challenger", choices=["local"], required=True, help="draw both ranks on one local challenger session's coins")
     ap.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`")
@@ -447,6 +447,7 @@ def main(argv=None) -> int:
         ap.error("--requests ≥ 2: the gates bind each request's peer reads to its own partials, and not another request's")
     from verity.protocols.proofs.spot.prover.audit import window_audit as a5
     from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     out = a.out
     parts = partials(a.hidden, a.tokens, a.requests, a.seed)
@@ -459,7 +460,7 @@ def main(argv=None) -> int:
     sets = {tg: (composer(defs[tg], a.hidden, a.compose_cache), defs[tg]), rid: (row_composer(defs[rid], 8 * REST_BYTES), defs[rid])}
     a.rule, a.window_root, a.compose_cache, a.transfer_gate = RULE, ROOT, None, [tg]
     port = a.port or free_ports(a5.RANK_PORTS * len(RANKS))
-    manager, a.coins, finisher = AC.start("local", ROOT, list(RANKS), out / "challenger", a.main)
+    manager, a.coins, finisher = AC.start("local", ROOT, list(RANKS), out / "challenger", a.main, local=LC.Local)
 
     def rank(r: int) -> dict:
         try:

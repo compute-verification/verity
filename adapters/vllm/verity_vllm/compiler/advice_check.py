@@ -46,8 +46,11 @@ from verity.circuits.boolean.forms import ONE, ZERO, add, and_reduce, const_bits
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
-from verity.protocols.accounting.certifier.verifier.advice import FINISHES, VERSION, WIDTH_BITS, MalformedAdvice, _Reader, decode
-from verity.protocols.accounting.certifier.verifier.head_check import BIT, _coll, _Consts, _part, _refs, ands
+from verity.protocols.accounting.certifier.verifier.advice import FINISHES, VERSION, WIDTH_BITS, MalformedAdvice, _Reader
+from verity.circuits.boolean import BIT
+from verity.circuits.boolean.trace import part as _part
+from verity.commitments.gates.frame_v3 import _refs
+from verity.protocols.accounting.certifier.verifier.head_check import _coll, _Consts, ands
 
 #: the refusals of `advice.decode` the circuit doesn't make yet, by the start of decode's message for each
 DEFERRED = {
@@ -143,15 +146,6 @@ def reference(data: bytes, L: int) -> bool:
     except (_Refused, MalformedAdvice):
         return False
     return True
-
-
-def decodes(data: bytes) -> tuple[bool, str]:
-    """Whether `advice.decode` takes `data`, and its refusal's message when it doesn't."""
-    try:
-        decode(bytes(data))
-    except MalformedAdvice as e:
-        return False, str(e)
-    return True, ""
 
 
 # --- the circuit's helpers (bit lists, least significant bit first) --------------------------------------------------
@@ -703,5 +697,5 @@ def size(L: int) -> dict[str, int]:
 
 
 __all__ = ["AdviceCheck", "AdviceParse", "AdviceParseEnd", "AdviceReplay", "AdviceReplayEnd", "AdviceSwap", "BLOCK",
-           "DEFERRED", "PARTS", "arguments", "comparators", "decodes", "evaluate", "part_ands", "reference", "size",
+           "DEFERRED", "PARTS", "arguments", "comparators", "evaluate", "part_ands", "reference", "size",
            "sort_layers", "unit"]

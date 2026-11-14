@@ -21,7 +21,7 @@ import Proofs.Pous.StreamedWipe.Family
 instances are the 5 GB form at their `n`, `R`, `r` and `k` (the H200's the measured deployment `StreamedWipe.h200`),
 each `(r − 1)^k · 2^129 ≤ r^k` and each `B(n, r, k, R) ≤ 4·10^10` decided by the kernel. Each guarantee is its claim at
 `StreamedWipe.Accepts`, whose `winRealBy` and `wipeDistinguisherBy` are `winReal` and `wipeDistinguisher` by
-definition. The claims' witnesses are `Security/Proofs/Pous/StreamedWipe/Witnesses.lean`.
+definition. The claims' witnesses are `security/Proofs/Pous/StreamedWipe/Witnesses.lean`.
 -/
 
 @[expose] public section

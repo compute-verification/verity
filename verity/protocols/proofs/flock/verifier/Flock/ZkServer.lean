@@ -1,7 +1,7 @@
 /-
 The ZK server's contract, inner phase (live PROTOCOL.md §10.3): what the ZK server may send the challenger's live-coin part, as a
 program. `rec_live` relays a live session through it (`flock-zk-server live`, `liveCmd`), and its Python mirror is held to
-it (`flock-zk-server`, `verity/ml/flock/tests/test_zk_server_agreement.py`).
+it (`flock-zk-server`, `verity/protocols/proofs/flock/prover/tests/test_zk_server_agreement.py`).
 -/
 module
 

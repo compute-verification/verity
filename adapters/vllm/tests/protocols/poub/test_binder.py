@@ -20,7 +20,7 @@ from verity.protocols.accounting.poub.verifier import receipts as rb
 
 from tests import fake_vllm
 from verity_vllm.engine.hooks import Hooks, Patch
-from verity_vllm.protocols.remote_bandwidth.binder import (
+from verity_vllm.protocols.poub.binder import (
     KERNEL_BLOCK_SIZES,
     Binder,
     Every,

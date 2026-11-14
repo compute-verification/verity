@@ -68,6 +68,7 @@ public import Spot.PopOrder
 public import Spot.Service
 public import Spot.ChallengerCoins
 public import Spot.SecondStage
+public import Spot.SecondStagePass
 
 @[expose] public section
 set_option backward.privateInPublic true

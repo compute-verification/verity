@@ -272,7 +272,7 @@ __device__ __forceinline__ void verity_p1_store(const Params &params, const uint
 //   VERITY_ROW_GUARD 1 = the guarded-max build: word 3 of the row state holds GuardNegInfZero(row_max) at every key block after the
 //                    first a row visits (0 at the first); 0 (default) = word 3 is never written.  `verity_tap_row3()` reports it.
 //                    VERITY_MAT_SRC bit 64 (the same build) appends the MS class after FIN: per (slab, row, block) the max * scale the
-//                    block's exp2 FMAs read (softmax.h `tap_max_scaled`, apply_v8.py step 6), at every visited block.
+//                    block's exp2 FMAs read (softmax.h `tap_max_scaled`, apply_fa2_tap.py step 6), at every visited block.
 //   VERITY_TAP == 4  "H1" per-thread SHA-256 leaf: every thread hashes, per visited 128-key block, exactly its own
 //                    register words of the classes in VERITY_SHA_SRC with a real SHA-256 (FIPS 180-4, verified on the
 //                    host with hashlib on the M1-materialised words), preceded by one 16-word position header

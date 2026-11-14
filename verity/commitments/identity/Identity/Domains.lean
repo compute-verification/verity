@@ -5,7 +5,7 @@ public import Identity.Domains.Shared
 
 /-!
 One table of domain separators: every versioned string a protocol hashes, derives from or commits under, or names its
-records, schemes and protocols by. `verity/ml/commitments/domains.py` mirrors it, entry for entry
+records, schemes and protocols by. `verity/commitments/domains.py` mirrors it, entry for entry
 (`tests/test_domains.py`).
 
 A name is in today's words; the bytes keep the words of their version (a PoUW period's tags say "window", its
@@ -30,7 +30,7 @@ abbrev CERTIFIER_MARK : String := "verity-network-certifier/mark/v1"
 abbrev CERTIFIER_SPAN : String := "verity-network-certifier/span/v0"
 abbrev CERTIFIER_SPAN_PROTOCOL : String := "verity/certifier/span/v0"
 
--- Not yet read from here: the commitments' own (`verity.ml.commitments`)
+-- Not yet read from here: the commitments' own (`verity.commitments`)
 abbrev BLAKE3_KEYED_ROW_NVFP4 : String := "blake3-keyed/row-nvfp4/v1"
 abbrev BLAKE3_KEYED_ROW : String := "blake3-keyed/row/v2"
 abbrev SHA256_ROW_NVFP4_DIGEST : String := "sha256/row-nvfp4/v1"
@@ -56,7 +56,7 @@ abbrev SHA256_ROW : String := "verity/sha256-row/v1"
 abbrev VLLM_V1_DOMAIN : String := "verity/vllm-v1/domain/v1"
 abbrev WORD_CODEC_KV : String := "verity/word-codec/kv/v0"
 
--- Not yet read from here: signatures and AEAD (`verity.ml.crypto`, `Lms`)
+-- Not yet read from here: signatures and AEAD (`verity.commitments.crypto`, `Lms`)
 abbrev LMS_I : String := "verity/lms/v0/I"
 
 -- Not yet read from here: SPOT and the proof system's challenger
@@ -247,7 +247,7 @@ abbrev PERIOD_CIRCUIT : String := "verity/window-circuit/v1"
 abbrev ONSITE_PROTOCOL : String := "verity/onsite/v0"
 abbrev REMOTE_PROTOCOL : String := "verity/remote/v0"
 
--- Not yet read from here: served periods (`verity.ml.windows`, the bytes say window)
+-- Not yet read from here: served periods (`verity.commitments.periods`, the bytes say window)
 abbrev VLLM_ADVICE_WINDOWS_ADVICE : String := "verity-vllm/advice-windows/advice/v1"
 abbrev VLLM_SERVING_ROWS_ORDER : String := "verity-vllm/serving-rows/order/v0"
 abbrev VLLM_SERVING_ROWS_BLOCKS : String := "verity-vllm/serving-rows/units/v0"

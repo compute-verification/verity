@@ -957,7 +957,7 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
             .unwrap_or_else(|e| refuse(format!("{flag}: {e}")))
     };
     if [&file, &sampling_design, &sampling_design_file].iter().filter(|s| !s.is_empty()).count() > 1 {
-        refuse("one of --draw-file, --draw and --draw-law".into());
+        refuse("one of --draw-file, --draw and --sample-design".into());
     }
     // the verifier's own sample, made outside this server: served at Register as it is (checked there, U2, and against the
     // registered population when the sampled statement is built)
@@ -969,10 +969,10 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
     // `--sample-design`: a sampling design object, a stratified one the verifier's own expansion over its program and query, sampled afresh at
     // each session's Register over this registered population
     let sampling_design = if !sampling_design_file.is_empty() {
-        let sampling_design = SamplingDesign::of_json(&read("--sample-design", &sampling_design_file)).unwrap_or_else(|e| refuse(format!("--draw-law: {e}")));
+        let sampling_design = SamplingDesign::of_json(&read("--sample-design", &sampling_design_file)).unwrap_or_else(|e| refuse(format!("--sample-design: {e}")));
         if let SamplingDesign::Stratified { k, strata } = &sampling_design {
             if let Some(why) = flock_live::unit_draw::strata_problem(*k, strata, inst.n as u64) {
-                refuse(format!("--draw-law over the {} registered units: {why}", inst.n));
+                refuse(format!("--sample-design over the {} registered units: {why}", inst.n));
             }
         }
         Some(sampling_design)

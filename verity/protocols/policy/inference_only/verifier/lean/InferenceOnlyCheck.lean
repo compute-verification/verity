@@ -24,7 +24,7 @@ public import InferenceOnlyCheck.DefinitionDigest
 # The inference-only policy's check
 
 `InferenceOnlyCheck.Theta.check` (the `inference-only-check` exe) is the verifier's check that a declared division of a declaration into
-inference blocks meets `InferenceOnly.CompliesRate Γ α` (`Security/Definitions/InferenceOnly.lean`), for inference blocks aligned to the root's Calls, at
+inference blocks meets `InferenceOnly.CompliesRate Γ α` (`security/Definitions/InferenceOnly.lean`), for inference blocks aligned to the root's Calls, at
 the cost of the descriptor: `InferenceOnlyCheck.Desc.check`, one summary per Definition, never a walk over the unrolled circuit
 (AGENTS.md "Design rules"), then each θ entry's provenance, registered public data that the first record of the
 deployment's registration log registers and never an earlier run's output, against the service's log

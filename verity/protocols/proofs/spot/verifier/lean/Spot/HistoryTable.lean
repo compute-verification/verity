@@ -1,5 +1,5 @@
 /-
-History tables (`verity/ml/commitments/history.py`): a table of rows that other proof blocks output, read at hidden
+History tables (`verity/commitments/history.py`): a table of rows that other proof blocks output, read at hidden
 positions by table reads (`EmbeddingRead_v1`). The verifier computes each table's root itself, from the writers' public
 `b ‖ c` in the order its own program gives; the root the prover registers is only checked against it, so the prover
 can't register rows of its choosing.
