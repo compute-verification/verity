@@ -169,12 +169,13 @@ Such a loop was added on the pod alone: add it to `watchers.toml` in a PR and de
 add `--allow-drop NAME` to the check. The last line restarts nothing while a config that didn't pass the check is left.
 The loops' `ssh` (`bin/ssh`) reads `/data/watchers/ssh_config`, which the tree doesn't hold: `research deploy install
 vy-control-verity /data/watchers/ssh_config --by WHO --apply` writes it from `watchers_ssh_config` and the register of
-machines, so install it before a tree whose `bin/ssh` reads it, and again when `research deploy drift --on
-vy-control-verity` reads it `stale` (a node's address changed):
+machines, so install it before a tree whose `bin/ssh` reads it (the block's first line puts no tree in place while it
+is missing), and again when `research deploy drift --on vy-control-verity` reads it `stale` (a node's address changed):
 
 ~~~sh
 git archive HEAD tools/research infra/control infra/ops/verity_ops .agents/skills/using-slack tools/verity/check/slot.py \
   tools/verity/check/lean_slot.py | $CP "set -e; cd /data/watchers; \
+  [ -r ssh_config ] || { echo 'no /data/watchers/ssh_config, which bin/ssh reads: install it first' >&2; exit 1; }; \
   rm -rf src.new; mkdir src.new; tar -x -C src.new; echo $(git rev-parse HEAD) > src.new/COMMIT; \
   if [ -e src ]; then rm -rf src.prev; mv src src.prev; fi; mv src.new src"
 $CP "cat > /data/watchers/watchers.toml.new && PYTHONPATH=/data/watchers/src/tools/research/src python3.12 \
