@@ -194,7 +194,7 @@ class Int8ExactConfig(QuantizationConfig):
         return []
 
     @classmethod
-    def from_config(cls, config: dict[str, Any]) -> "Int8ExactConfig":
+    def from_config(cls, config: dict[str, Any]) -> Int8ExactConfig:
         return cls(int(cls.get_from_keys(config, ["weight_max"])), cls.get_from_keys_or(config, ["modules_to_not_convert"], None))
 
     def get_quant_method(self, layer: torch.nn.Module, prefix: str
