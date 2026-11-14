@@ -29,12 +29,14 @@ HEX, HEX_WITHHELD = re.compile(r"[0-9a-fA-F]{32,}"), "(hex withheld)"
 
 def gate_call(gate: str, args: list[str], ssh: Sequence[str] = SSH, run: Callable[..., Any] = subprocess.run) -> dict:
     """The gate's answer to `args` (``ssh GATE VERB ...``, quoted for the gate's shell words); a refusal raises. It
-    quotes the gate's reason, else ssh's stderr, else the answer without its long hex runs (`HEX`): an open's answer
-    holds its session's secret."""
+    quotes the gate's reason, else ssh's stderr, else the answer, whichever it is without its long hex runs (`HEX`): an
+    open's answer holds its session's secret, which a gate failing mid-open can put in any of the three. The filter
+    knows only hex: a secret in another encoding is quoted as it stands."""
     p = run([*ssh, gate, shlex.join(args)], capture_output=True, text=True)
 
     def refused(why: object = None) -> Ch.CoinError:
-        return Ch.CoinError(f"infra's gate refused {args[0]}: {why or p.stderr.strip() or HEX.sub(HEX_WITHHELD, p.stdout.strip()) or f'exit {p.returncode}'}")
+        quoted = str(why or p.stderr.strip() or p.stdout.strip() or f"exit {p.returncode}")
+        return Ch.CoinError(f"infra's gate refused {args[0]}: {HEX.sub(HEX_WITHHELD, quoted)}")
 
     try:
         got = json.loads(p.stdout)
