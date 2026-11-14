@@ -5,7 +5,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `decode`: a case's three decoders run independently (`answer` stops at the first refusal), the parameters and the
   evidence as parsed (`OneStage.paramsParsed`, `evidenceParsed`), before the protocol's refusals of what soundness
   doesn't cover;
-* `partition`: the partition's digest, population, strata and expanded law from the verifier's parameters;
+* `partition`: the partition's digest, population, strata and expanded sampling design from the verifier's parameters;
 * `committed_bits`: per Definition `Q_call` cuts, its units' committed bits read off its layout and by the walk that
   layout replaced (`Partition.committedBits`, `Partition.committedBitsRef`);
 * `unit_gates`: each unit's gates over a program and query, a template query's instances a range at a time and by the
@@ -131,7 +131,8 @@ two-stage rule's second stage, on the coins after the interior registration), `c
 `check_proved`, `record`, `across`, `across_all`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its
 outcome to it),
 `hello`,
-`stream` (each of `service.Stream`'s ops) and `fleet` (each of `service.Fleet`'s).
+`stream` (each of `service.Stream`'s ops), `fleet` (each of `service.Fleet`'s), and the challenger's ledger and session:
+`challenger_ledger`, `challenger_head`, `challenger_session`, `challenger_credited` and `challenger_pinned`.
 -/
 module
 
@@ -369,7 +370,7 @@ def ranOut (j : Json) : V Json := do
 
 /-- `{"rule", "program", "query", "work_table", "closure", "source"}` to `{"draw", "read"}`: the challenger's sample
 (`Select.select`) under a Spec's selection rule over the units of the program under the query (`Select.resolve`, a rate
-law's `subset:k`), from the source's bytes,
+sampling design's `subset:k`), from the source's bytes,
 and how many of them it read. The program and the query are objects, the work table and the closure map
 (`Select.closureMap?`) null when absent, the source hex; refused where the Python raises. -/
 def select (j : Json) : V Json := do
@@ -388,7 +389,7 @@ def select (j : Json) : V Json := do
   let (draw, _, read) ← Select.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the select"))
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
 
-/-- `select`'s input to `{"design"}`: the sampling design (`Core.SamplingDesign.ofFlock`) of Flock's law of the challenger's
+/-- `select`'s input to `{"design"}`: the sampling design (`Core.SamplingDesign.ofFlock`) of Flock's sampling design of the challenger's
 sample, as the profile writes it (`Core.SamplingDesign.toJson`); refused where `select` is. -/
 def design (j : Json) : V Json := do
   let d ← Flock.Draw.UnitDraw.ofJson (getD (← select j) "draw")
@@ -1090,9 +1091,10 @@ def table : List (String × (Json → V Json)) :=
    ("history_order", HistoryTable.orderPiece), ("history_strings", HistoryTable.stringsPiece),
    ("history_roots", HistoryTable.rootsPiece)]
 
-/-- The verifier's pieces: `table`'s, by name. -/
+/-- The verifier's pieces: `table`'s, by name, the challenger's ledger and session checks among them. -/
 def verifier : List (String × (Json → V Json)) :=
   table.filter fun p => ["registration", "matches_public", "select", "select_second", "check_draw", "check_proved",
-    "record", "across", "across_all", "check_public", "check_verdicts", "run", "hello", "stream", "fleet"].contains p.1
+    "record", "across", "across_all", "check_public", "check_verdicts", "run", "hello", "stream", "fleet",
+    "challenger_ledger", "challenger_head", "challenger_session", "challenger_credited", "challenger_pinned"].contains p.1
 
 end Spot.Pieces

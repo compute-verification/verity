@@ -97,7 +97,7 @@ theorem pa_subset_range (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ}
     Finset.filter_true_of_mem fun v hv => (Finset.mem_range.1 hv).trans_le hK₀
   rw [pa_partOf_subset P hns, window_zero_filter, hF, Finset.card_range]
 
-/-- **`All` misses no proof block**: `subset n`'s `P_a` on `partOf P κ ns`, `All`'s law over the `n` units, is `0` at any
+/-- **`All` misses no proof block**: `subset n`'s `P_a` on `partOf P κ ns`, `All`'s sampling design over the `n` units, is `0` at any
 `B` holding a population slot. -/
 theorem pa_all (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ} (hns : ns.sum = n) {B : Finset ℕ}
     (hB : ∃ v ∈ B, v < n) : (designOf (.subset n)).Pa (partOf P κ ns) B = 0 := by

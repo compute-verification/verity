@@ -44,7 +44,7 @@
 #include <string>
 #include <vector>
 
-#include "../../../verity/commitments/cuda/row_commit.cuh"
+#include "../row_commit.cuh"
 
 using u64 = uint64_t;
 using u32 = uint32_t;

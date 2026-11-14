@@ -36,7 +36,7 @@ proofs only from the record, so no check of the record establishes either fact:
 * `RecordsLive I dj wr`: the record `verify` reads is the one the challenger wrote for the live session. At every
   transcript it accepts, its sample is `dj S`, its proofs are the prover's, and its root, link points and rounds are the
   live outcome's.
-* `DrawOk I dj mPts` at every sample of the live law `L`: the record's sample file `dj S` proves every unit of `S`, and the
+* `DrawOk I dj mPts` at every sample of the live sampling design `L`: the record's sample file `dj S` proves every unit of `S`, and the
   statement sets up at it with the outcome's `mPts` link points.
 
 Both are stated at what verity-verify-proof parses, so the record's serialization is outside them. -/

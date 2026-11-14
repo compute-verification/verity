@@ -3912,7 +3912,7 @@
     {"file": "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Skeleton.lean", "count": 3},
     {"file": "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Values.lean", "count": 18},
     {"file": "verity/protocols/proofs/flock/verifier/Flock/HmRow.lean", "count": 214},
-    {"file": "verity/protocols/proofs/flock/verifier/Flock/KsScope.lean", "count": 40},
+    {"file": "verity/protocols/proofs/flock/verifier/Flock/KsScope.lean", "count": 26},
     {"file": "verity/protocols/proofs/flock/verifier/Flock/Layout.lean", "count": 1},
     {"file": "verity/protocols/proofs/flock/verifier/Flock/Proof.lean", "count": 2},
     {"file": "verity/protocols/proofs/flock/verifier/Flock/ProvedScope.lean", "count": 23},
