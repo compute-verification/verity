@@ -298,7 +298,7 @@ def runOfO (s : Claims.Seen) (j : ℕ) : Option Claims.Flock.ZkRun := do
   let lv ← (liveOf spec f.record).toOption
   let extras ← (tab.extra lv.points).toOption
   pure { m := tab.m, kLog := tab.kLog, claims := 2 + extras.size, hashLen := tab.merkle.digestLen,
-         saltLen := saltLenOf true tab,
+         saltLen := saltLenOf true tab, wideLeaf := tab.wideLeaf,
          reps := [(lv.streams.getD (2 * j) #[], f.proofs.getD (2 * j) ByteArray.empty),
                   (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)] }
 
@@ -333,7 +333,7 @@ noncomputable def N₀O (x : Claims.Msg) : ℝ := ((tablesO x).map fun p => tabl
 /-- **Table `j`'s word's length**: its masked level-0 codeword length `2^d`; `0` past the statement's tables. -/
 def wordLenJO (x : Claims.Msg) (j : ℕ) : ℕ :=
   match (tablesO x)[j]? with
-  | some (_, st) => 2 ^ (Claims.Flock.zkLevel0 st.m).d
+  | some (_, st) => 2 ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).d
   | none => 0
 
 private theorem sum_range_getD_le {α : Type} (g : α → ℕ) : ∀ (l : List α) (n : ℕ),
@@ -350,7 +350,7 @@ private theorem sum_range_getD_le {α : Type} (g : α → ℕ) : ∀ (l : List �
 /-- **The words together are no longer than `N₀O`** (`FlockDeploy.KS.sum_wordLenJ_le` at the recursive setup): the
 `hN` of `Claims.Flock.oneWait_of_tableBoundJR` at `deployZkRec`. -/
 theorem sum_wordLenJO_le (x : Claims.Msg) (n : ℕ) : ((∑ j : Fin n, wordLenJO x j : ℕ) : ℝ) ≤ N₀O x := by
-  set g : SessionSpec × Stmt → ℕ := fun p => 2 ^ (Claims.Flock.zkLevel0 p.2.m).d with hg
+  set g : SessionSpec × Stmt → ℕ := fun p => 2 ^ (Claims.Flock.zkLevel0 p.2.wideLeaf p.2.m).d with hg
   have hw : ∀ j, wordLenJO x j = ((tablesO x)[j]?.map g).getD 0 := by
     intro j
     unfold wordLenJO

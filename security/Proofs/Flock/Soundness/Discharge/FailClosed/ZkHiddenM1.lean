@@ -45,6 +45,8 @@ which import the `ZkHidden` headlines.
 
 namespace FlockSoundness.Accounting
 
+variable {wideLeaf : Bool}
+
 /-- `padLinkUp` at 1026 regions. -/
 def padLinkUpWide (s : Schedule) (t : ℕ) : ℚ :=
   (s.levels.headD default).padListBound t * 1026 * (64 / 2 ^ 128) ^ 2
@@ -109,21 +111,21 @@ theorem padTableError_le_of_check_wide (s : Schedule) (st : Stmt) (hst : st.InRa
 
 /-- The rational check at 1026 regions for `25 ≤ m ≤ 33`. -/
 theorem m1_check_wide_le_33 : ∀ m, 25 ≤ m → m ≤ 33 →
-    padLinkUpWide (m1Schedule m) (m1Pad m) + padRepUpWide (m1Schedule m) (m1Pad m) 2 (m1SqrtUp m) ^ 2 ≤
+    padLinkUpWide (m1Schedule wideLeaf m) (m1Pad wideLeaf m) + padRepUpWide (m1Schedule wideLeaf m) (m1Pad wideLeaf m) 2 (m1SqrtUp wideLeaf m) ^ 2 ≤
       3 / 2 ^ 206 := by
   intro m h1 h2
-  interval_cases m <;> decide +kernel
+  cases wideLeaf <;> interval_cases m <;> decide +kernel
 
 /-- The rational check at 1026 regions for `m = 34, 35`. -/
 theorem m1_check_wide_34_35 : ∀ m, 34 ≤ m → m ≤ 35 →
-    padLinkUpWide (m1Schedule m) (m1Pad m) + padRepUpWide (m1Schedule m) (m1Pad m) 2 (m1SqrtUp m) ^ 2 ≤
+    padLinkUpWide (m1Schedule wideLeaf m) (m1Pad wideLeaf m) + padRepUpWide (m1Schedule wideLeaf m) (m1Pad wideLeaf m) 2 (m1SqrtUp wideLeaf m) ^ 2 ≤
       3 / 2 ^ 206 := by
   intro m h1 h2
-  interval_cases m <;> decide +kernel
+  cases wideLeaf <;> interval_cases m <;> decide +kernel
 
 /-- The rational check at 1026 regions, `25 ≤ m ≤ 35`. -/
 theorem m1_check_wide (m : ℕ) (h1 : 25 ≤ m) (h2 : m ≤ 35) :
-    padLinkUpWide (m1Schedule m) (m1Pad m) + padRepUpWide (m1Schedule m) (m1Pad m) 2 (m1SqrtUp m) ^ 2 ≤
+    padLinkUpWide (m1Schedule wideLeaf m) (m1Pad wideLeaf m) + padRepUpWide (m1Schedule wideLeaf m) (m1Pad wideLeaf m) 2 (m1SqrtUp wideLeaf m) ^ 2 ≤
       3 / 2 ^ 206 := by
   rcases le_or_gt m 33 with h | h
   · exact m1_check_wide_le_33 m h1 h
@@ -132,10 +134,10 @@ theorem m1_check_wide (m : ℕ) (h1 : 25 ≤ m) (h2 : m ≤ 35) :
 /-- **The padded table error at Flock ZK's parameters over 1026 regions**: at most `3/2^206` per table, for every
 statement shape in `Stmt.InRangeWide`. -/
 theorem padTableError_le_m1_wide : ∀ m, 25 ≤ m → m ≤ 35 → ∀ st : Stmt, st.InRangeWide →
-    padTableError (m1Schedule m) st (m1Pad m) 2 ≤ (3 : ℝ) / 2 ^ 206 := by
+    padTableError (m1Schedule wideLeaf m) st (m1Pad wideLeaf m) 2 ≤ (3 : ℝ) / 2 ^ 206 := by
   intro m h1 h2 st hst
-  have h := m1Facts_spec (m1Facts_all m h1 h2)
-  exact padTableError_le_of_check_wide (m1Schedule m) st hst (m1Pad m) 2 (m1SqrtUp m) h.1 h.2.2.1 h.2.2.2.2
+  have h := m1Facts_spec (m1Facts_all (wide := wideLeaf) m h1 h2)
+  exact padTableError_le_of_check_wide (m1Schedule wideLeaf m) st hst (m1Pad wideLeaf m) 2 (m1SqrtUp wideLeaf m) h.1 h.2.2.1 h.2.2.2.2
     (m1_check_wide m h1 h2)
 
 /-! ## The hash-sum coefficient -/
@@ -162,37 +164,37 @@ def hashUp (s : Schedule) : ℕ := ∑ ℓ ∈ Finset.Icc 1 s.levels.length, roo
 square root, the hash-sum coefficient is at most `25638` (`√` summed exactly: `25632.6`, at `m = 35`), and level 0's
 codeword has length at most `2^23`. -/
 theorem m1Ks_all : ∀ m, 25 ≤ m → m ≤ 35 →
-    (∀ ℓ ∈ Finset.Icc 1 (m1Schedule m).levels.length,
-      hashArg (m1Schedule m) ℓ ≤ rootUp (hashArg (m1Schedule m) ℓ) * rootUp (hashArg (m1Schedule m) ℓ)) ∧
-    hashUp (m1Schedule m) ≤ 25638 ∧ (lvOf (m1Schedule m) 0).logLen ≤ 23 := by
+    (∀ ℓ ∈ Finset.Icc 1 (m1Schedule wideLeaf m).levels.length,
+      hashArg (m1Schedule wideLeaf m) ℓ ≤ rootUp (hashArg (m1Schedule wideLeaf m) ℓ) * rootUp (hashArg (m1Schedule wideLeaf m) ℓ)) ∧
+    hashUp (m1Schedule wideLeaf m) ≤ 25638 ∧ (lvOf (m1Schedule wideLeaf m) 0).logLen ≤ 23 := by
   intro m h1 h2
-  interval_cases m <;> decide +kernel
+  cases wideLeaf <;> interval_cases m <;> decide +kernel
 
 theorem sqrt_cast_le_of_le_mul {n r : ℕ} (h : n ≤ r * r) : Real.sqrt n ≤ r :=
   Real.sqrt_le_iff.2 ⟨Nat.cast_nonneg _, by rw [sq]; exact_mod_cast h⟩
 
 /-- **The hash sum at Flock ZK's schedules**: `Σ_{1 ≤ ℓ ≤ L} √(2^{log N_ℓ}·Q_ℓ·x) ≤ 25638·√x`. -/
 theorem hashSum_le_m1 (m : ℕ) (h1 : 25 ≤ m) (h2 : m ≤ 35) (x : ℝ) :
-    ∑ ℓ ∈ Finset.Icc 1 (m1Schedule m).levels.length,
-        Real.sqrt (2 ^ (lvOf (m1Schedule m) ℓ).logLen * (lvOf (m1Schedule m) ℓ).queries * x) ≤
+    ∑ ℓ ∈ Finset.Icc 1 (m1Schedule wideLeaf m).levels.length,
+        Real.sqrt (2 ^ (lvOf (m1Schedule wideLeaf m) ℓ).logLen * (lvOf (m1Schedule wideLeaf m) ℓ).queries * x) ≤
       25638 * Real.sqrt x := by
-  obtain ⟨hr, hc, -⟩ := m1Ks_all m h1 h2
-  calc ∑ ℓ ∈ Finset.Icc 1 (m1Schedule m).levels.length,
-          Real.sqrt (2 ^ (lvOf (m1Schedule m) ℓ).logLen * (lvOf (m1Schedule m) ℓ).queries * x)
-      ≤ ∑ ℓ ∈ Finset.Icc 1 (m1Schedule m).levels.length,
-          (rootUp (hashArg (m1Schedule m) ℓ) : ℝ) * Real.sqrt x := by
+  obtain ⟨hr, hc, -⟩ := m1Ks_all (wideLeaf := wideLeaf) m h1 h2
+  calc ∑ ℓ ∈ Finset.Icc 1 (m1Schedule wideLeaf m).levels.length,
+          Real.sqrt (2 ^ (lvOf (m1Schedule wideLeaf m) ℓ).logLen * (lvOf (m1Schedule wideLeaf m) ℓ).queries * x)
+      ≤ ∑ ℓ ∈ Finset.Icc 1 (m1Schedule wideLeaf m).levels.length,
+          (rootUp (hashArg (m1Schedule wideLeaf m) ℓ) : ℝ) * Real.sqrt x := by
         refine Finset.sum_le_sum fun ℓ hℓ => ?_
-        have e : (2 : ℝ) ^ (lvOf (m1Schedule m) ℓ).logLen * ((lvOf (m1Schedule m) ℓ).queries : ℝ) * x =
-            (hashArg (m1Schedule m) ℓ : ℝ) * x := by
+        have e : (2 : ℝ) ^ (lvOf (m1Schedule wideLeaf m) ℓ).logLen * ((lvOf (m1Schedule wideLeaf m) ℓ).queries : ℝ) * x =
+            (hashArg (m1Schedule wideLeaf m) ℓ : ℝ) * x := by
           unfold hashArg
           push_cast
           ring
         rw [e, Real.sqrt_mul (Nat.cast_nonneg _)]
         exact mul_le_mul_of_nonneg_right (sqrt_cast_le_of_le_mul (hr ℓ hℓ)) (Real.sqrt_nonneg _)
-    _ = (hashUp (m1Schedule m) : ℝ) * Real.sqrt x := by
+    _ = (hashUp (m1Schedule wideLeaf m) : ℝ) * Real.sqrt x := by
         rw [← Finset.sum_mul, hashUp, Nat.cast_sum]
     _ ≤ 25638 * Real.sqrt x := by
-        have hc' : (hashUp (m1Schedule m) : ℝ) ≤ 25638 := by exact_mod_cast hc
+        have hc' : (hashUp (m1Schedule wideLeaf m) : ℝ) ≤ 25638 := by exact_mod_cast hc
         exact mul_le_mul_of_nonneg_right hc' (Real.sqrt_nonneg _)
 
 end FlockSoundness.Accounting
@@ -207,14 +209,15 @@ variable {F : Type} [Field F] [Fintype F] [DecidableEq F] {mPts : ℕ}
 /-- **A `--zk` table at Flock ZK's parameters over the plan's shapes**: `TabZK.M1` with the statement in
 `Stmt.InRangeWide` (up to 1026 regions, a refused table's), not `Stmt.InRange`. -/
 def TabZK.M1W (T : TabZK F mPts) : Prop :=
-  ∃ m, 25 ≤ m ∧ m ≤ 35 ∧ T.sch = m1Schedule m ∧ T.t = m1Pad m ∧ T.e = 2 ∧ (T.S.shape mPts).InRangeWide ∧
+  ∃ wideLeaf m, 25 ≤ m ∧ m ≤ 35 ∧ T.sch = m1Schedule wideLeaf m ∧ T.t = m1Pad wideLeaf m ∧ T.e = 2 ∧
+    (T.S.shape mPts).InRangeWide ∧
     T.N ≤ 2 ^ 13 ∧ T.q = 168 ∧ 7 / 16 ≤ T.δ
 
 /-- **A `--zk` table's bound at `M1W`** is at most `2^-203` (`TabZK.bound_le_m1` at 1026 regions, from
 `padTableError_le_m1_wide`'s `3/2^206`). -/
 theorem TabZK.bound_le_m1w (hF : Fintype.card F = 2 ^ 128) (T : TabZK F mPts) (hT : T.M1W) :
     T.bound ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(203 : ℝ))) := by
-  obtain ⟨m, h1, h2, hsch, ht, he, hst, hN, hq, hδ⟩ := hT
+  obtain ⟨wideLeaf, m, h1, h2, hsch, ht, he, hst, hN, hq, hδ⟩ := hT
   unfold TabZK.bound
   set r := padRepError T.sch (T.S.shape mPts) T.t T.e
   set l := padLinkError T.sch (T.S.shape mPts) T.t
@@ -306,14 +309,14 @@ theorem ksClosedM1_nonneg (k : ℕ) (qF qS : ℝ) : 0 ≤ ksClosedM1 k qF qS := 
 theorem ksStrictZm1_le_closed (ts : List (TabZK F mPts)) (j : Fin ts.length) (hT : (ts.get j).M1W) (k : ℕ)
     (qF qS : ℝ) : ksStrictZm1 ts j k qF qS ≤ ksClosedM1 k qF qS := by
   unfold ksStrictZm1 ksClosedM1
-  obtain ⟨m, h1, h2, hsch, -, -, -, hN, -, -⟩ := hT
+  obtain ⟨wideLeaf, m, h1, h2, hsch, -, -, -, hN, -, -⟩ := hT
   set x := qF ^ 2 / 2 ^ (513 : ℝ) with hxdef
   have hsx := Real.sqrt_nonneg x
   have hH : ∑ _r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 (ts.get j).sch.levels.length,
       Real.sqrt (2 ^ (lvOf (ts.get j).sch ℓ).logLen * (lvOf (ts.get j).sch ℓ).queries * x) ≤
         2 * 25638 * Real.sqrt x := by
     rw [Finset.sum_const, Finset.card_range, nsmul_eq_mul, hsch]
-    have := hashSum_le_m1 m h1 h2 x
+    have := hashSum_le_m1 (wideLeaf := wideLeaf) m h1 h2 x
     push_cast
     linarith
   have hNt : ∑ _r ∈ Finset.range 2, Real.sqrt ((ts.get j).N * (ts.get j).N * x) ≤ 2 ^ 14 * Real.sqrt x := by
@@ -333,8 +336,8 @@ theorem ksStrictZm1_le_closed (ts : List (TabZK F mPts)) (j : Fin ts.length) (hT
 /-- At `M1W`, the level-0 rate `N₀/(ek)` is at most `rateM1 k`. -/
 theorem rateZ_le_m1w (ts : List (TabZK F mPts)) (j : Fin ts.length) (hT : (ts.get j).M1W) (k : ℕ) :
     rateZ ts j k ≤ rateM1 k := by
-  obtain ⟨m, h1, h2, hsch, -⟩ := hT
-  have hc := (m1Ks_all m h1 h2).2.2
+  obtain ⟨wideLeaf, m, h1, h2, hsch, -⟩ := hT
+  have hc := (m1Ks_all (wideLeaf := wideLeaf) m h1 h2).2.2
   unfold rateZ rateM1
   rw [hsch]
   exact div_le_div_of_nonneg_right (pow_le_pow_right₀ (by norm_num) hc) (by positivity)
@@ -446,7 +449,7 @@ theorem tabAt_M1W (regs : List (Model.Region y.x.st.c.kLog (y.x.st.m - y.x.st.c.
     rw [ZkExec.innerN, Zk.INNER_LOG_INV_RATE, show (2 : ℕ) ^ 3 = 8 by norm_num]
     omega
   have : NeZero ((layOf y.x.st y.sch).len + Zk.K_PAD) := ⟨by simp [Zk.K_PAD]⟩
-  refine ⟨y.x.st.m, h1, h2, hsch, hpad, rfl, ⟨hk, hR, hp⟩, ?_, rfl, relUDR_ge_m1 y.innerDom h8⟩
+  refine ⟨y.x.st.wideLeaf, y.x.st.m, h1, h2, hsch, hpad, rfl, ⟨hk, hR, hp⟩, ?_, rfl, relUDR_ge_m1 y.innerDom h8⟩
   show innerN (layOf y.x.st y.sch) ≤ 2 ^ 13
   rw [hb]
   exact Nat.pow_le_pow_right (by norm_num) hb13
