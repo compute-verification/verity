@@ -1088,7 +1088,7 @@ def test_a_file_past_zips_32_bit_sizes_is_the_one_np_savez_writes(tmp_path, monk
     ``np.savez`` past them (here with the limit lowered to nothing), the same file either way, 0600."""
     arrays: dict[str, np.ndarray] = {"a": np.arange(6, dtype="<u2").reshape(2, 3), "s_a": np.zeros(0, "<f4")}
     want = io.BytesIO()
-    np.savez(want, **arrays)  # type: ignore[arg-type]
+    np.savez(want, a=arrays["a"], s_a=arrays["s_a"])
     own = PV.savez(tmp_path / "own.npz", arrays)
     monkeypatch.setattr(PV, "zipfile", SimpleNamespace(ZIP64_LIMIT=0))
     past = PV.savez(tmp_path / "past.npz", arrays)
