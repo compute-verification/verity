@@ -186,7 +186,7 @@ def test_another_context_is_refused(bundle) -> None:
     assert {k for k, v in bad.items() if v == PATHS} == {f"unit:{u}/{p}" for u in DRAW for p in ("x", "sx", "o0")}
 
 
-def test_a_live_draw_carries_its_receipt(bundle, validator) -> None:
+def test_a_live_sample_carries_its_receipt(bundle, validator) -> None:
     doc, payload = bundle
     live = copy.deepcopy(doc)
     live["draw"]["source"] = "live"

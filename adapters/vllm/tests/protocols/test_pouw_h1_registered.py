@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from verity.commitments.windows import interface as I
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import interface as I
+from verity.commitments.periods import rows as CS
 from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 

@@ -405,26 +405,26 @@ theorem servedRun_out_none {Coin W₂ : Type} {V : Verifier Coin} (H : Msg → M
 def at00 {X : Type} (ρ : Fin 1 → Fin 1 → X) : X := ρ 0 0
 
 /-- `E*`'s one inner rerun's sample: the compiled verifier's coins and `E_O`'s. -/
-def gDraw (H : Msg → Msg) (decO : List (ℕ × ℕ) → List Unit) (x : Msg) (c : (E H (gD H) gI gDO decO).C x) :
+def gSample (H : Msg → Msg) (decO : List (ℕ × ℕ) → List Unit) (x : Msg) (c : (E H (gD H) gI gDO decO).C x) :
     (Fin ((gD H).V.k x) → Bool) × (EO (gD H) gI gDO decO).C x :=
   at00 c.2
 
 /-- **`E*` gives up when its inner rerun's outer coin rejects**: `E_O` gives up at a rejected run, so the inner stage
 sees its one rerun rejected. -/
 theorem gE_none (H : Msg → Msg) (decO : List (ℕ × ℕ) → List Unit) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
-    (r₀ : Fin ((gD H).V.k x) → Bool) (c : (E H (gD H) gI gDO decO).C x) (h : coinSeq (gDraw H decO x c).1 1 = true) :
+    (r₀ : Fin ((gD H).V.k x) → Bool) (c : (E H (gD H) gI gDO decO).C x) (h : coinSeq (gSample H decO x c).1 1 = true) :
     ((E H (gD H) gI gDO decO).eval H P x ω r₀ c).1 = none := by
-  have hrej : (run H P (gD H).V x ω (gDraw H decO x c).1).out ≠ .acc := fun h' => by
+  have hrej : (run H P (gD H).V x ω (gSample H decO x c).1).out ≠ .acc := fun h' => by
     have := ((gD_out H P x ω _).1 h').2
     rw [h] at this
     exact Bool.noConfusion this
   have hserved := servedRun_out_none H (EO (gD H) gI gDO decO) (dec H (gD H)) x (run H P (gD H).V x ω)
-    (gDraw H decO x c) (EO_ext_none H (gD H) gI gDO decO P x ω _ hrej)
+    (gSample H decO x c) (EO_ext_none H (gD H) gI gDO decO P x ω _ hrej)
   simp only [Extractor.eval, E, served]
   rw [serve_eq, (RP.serve_eval H _ _ _).1]
   refine erep_one_none H _ gI.opens (gI.assemble _) (gI.check _) rfl (r₀, c.1) c.2 ?_
   change (servedRun H (outerStage (EO (gD H) gI gDO decO) (dec H (gD H)) x) (run H P (gD H).V x ω)
-    (gDraw H decO x c)).out ≠ .acc
+    (gSample H decO x c)).out ≠ .acc
   rw [hserved]
   simp [dec]
 
@@ -442,11 +442,11 @@ theorem gPrBad_ge (H : Msg → Msg) (decO : List (ℕ × ℕ) → List Unit) :
   have h1 : (1 : ℕ) < (gD H).V.k [] := by show 1 < 2; omega
   have hc : ∀ r : Fin ((gD H).V.k []) → Bool, coinSeq r 1 = r ⟨1, h1⟩ := fun r => dite_eq_left h1
   let φ : Unit × (Fin ((gD H).V.k []) → Bool) × (E H (gD H) gI gDO decO).C [] → Bool × Bool :=
-    fun s => (coinSeq s.2.1 1, coinSeq (gDraw H decO [] s.2.2).1 1)
+    fun s => (coinSeq s.2.1 1, coinSeq (gSample H decO [] s.2.2).1 1)
   have hcoin : UnifMap (fun r : Fin ((gD H).V.k []) → Bool => coinSeq r 1) := by
     simp only [hc]
     exact UnifMap.coord _
-  have hd : UnifMap (fun c : (E H (gD H) gI gDO decO).C [] => (gDraw H decO [] c).1) :=
+  have hd : UnifMap (fun c : (E H (gD H) gI gDO decO).C [] => (gSample H decO [] c).1) :=
     ((UnifMap.snd.comp (UnifMap.coord (0 : Fin 1))).comp (UnifMap.coord (0 : Fin 1))).comp UnifMap.fst
   have hp := hcoin.prod (hd.comp hcoin)
   have hφ : UnifMap φ := fun G => by

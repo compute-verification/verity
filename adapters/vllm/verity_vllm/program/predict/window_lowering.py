@@ -15,7 +15,7 @@ from verity.circuits.defs import bind
 from verity.circuits.refs import Refs, runs
 from verity.circuits.types import Tuple
 from verity.commitments.gates import embedding as E
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity.definitions.registry import int8_exact as IX
 from verity.definitions.registry import io_shell as IO
 from verity.definitions.registry import rmsnorm_fused_split as NS

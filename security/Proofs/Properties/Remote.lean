@@ -283,7 +283,7 @@ theorem stage_registered_at {p : Spot.OneStage.Params} {c : Spot.OneStage.Commit
   unfold Spot.OneStage.checkAt at h
   split at h
   · cases h
-  · obtain ⟨law, d, n, hreg, -⟩ := Properties.Spot.acceptMeans _ _ _ _ _ h
+  · obtain ⟨samplingDesign, d, n, hreg, -⟩ := Properties.Spot.acceptMeans _ _ _ _ _ h
     exact hreg.2.1
 
 /-- What one-stage v1's live check gives on acceptance: its record keeps R2 against the audit's own verifier. -/

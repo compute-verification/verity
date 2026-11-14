@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Claims.KS.ZkDrawJ
+public import Proofs.Flock.Claims.KS.ZkSampleJ
 public import Proofs.Flock.Claims.KS.ZkLevels
 public import Proofs.Flock.Claims.KS.ZkLevelsAll
 import Mathlib.Algebra.Order.Floor.Extended
@@ -59,7 +59,7 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 /-!
 # The masked reader's opened rows at a rep's run
 
-`ZkEntries` and `ZkDrawJ` with each opened row whole: at level 0 its witness lanes and both reps' extra lanes, and past
+`ZkEntries` and `ZkSampleJ` with each opened row whole: at level 0 its witness lanes and both reps' extra lanes, and past
 level 0 every level's. A masked self-clash (`ClashW`, `ClashL`) compares whole rows, so where `OpensEntries` reads an
 output's level-0 openings as the reader's entries on the witness lanes, `OpensRows` reads each level's openings as the
 rep's opened rows, row by row:
@@ -528,10 +528,10 @@ def OpensRows (I : Inputs) (d : Lean.Json) (t : Exec.Transcript) (j : ℕ) (T : 
 /-- **`runsZCJ_live` at the setup at each sample, with the rows**: `runsAtZCJ_live_entries` at `OpensRows`
 (`zk_table_rows₀Z`). -/
 theorem runsAtZCJ_live_rows (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
-    {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
+    {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : SampleSetupZJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
-    (L : Law n) (hT : TagsOkZJ I) (hRec : ∀ S R o, RecordsLiveAtS I (dj S) o (wr S R o))
-    (hDraw : ∀ ω, DrawOkZKJ I dj mPts (L.draw ω)) :
+    (L : SamplingDesign n) (hT : TagsOkZJ I) (hRec : ∀ S R o, RecordsLiveAtS I (dj S) o (wr S R o))
+    (hDraw : ∀ ω, SampleOkZKJ I dj mPts (L.draw ω)) :
     RunsOnZCJW (K := 𝕂) execArith hs512 (planZJ dj y₀) (opnAtZJ (planZJ dj y₀) I dj) (decAtZJ (planZJ dj y₀))
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L
       (fun S R o => AcceptsAt I (dj S) (wr S R o))
@@ -554,12 +554,12 @@ theorem runsAtZCJ_live_rows (I : Inputs) (_ht : I.tags.typed = false) (dj : Fins
   have hz' : Zk.schedule sts[j.val].wideLeaf sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
   obtain ⟨-, -, sch₀, hf⟩ := schedule_spec hz'
   have ht' : (inputsJ I j.val).tags.typed = false := typedJ _ht j.val
-  obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn hst
-  obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdr
-  obtain ⟨x, hx⟩ := drawSetup_of_setupH_g (I := inputsJ I j.val)
+  obtain ⟨pop, -, hdr⟩ := Layout.setupH_sampled hst
+  obtain ⟨D, hD, -⟩ := Layout.sampled_spec hdr
+  obtain ⟨x, hx⟩ := sampleSetup_of_setupH_g (I := inputsJ I j.val)
     (S := partS I (dj (L.draw ω)) (L.draw ω) ⟨j.val, hjn⟩) (mPts := mPts) ht' hst hf hD
     ((hDraw ω ⟨j.val, hjn⟩).1 D hD) ((hDraw ω ⟨j.val, hjn⟩).2 _ hst)
-  obtain ⟨y, hyx, hysch, hytp⟩ := drawSetupZJ_of ht' x (sch := schs[j.val].1) (tPad := schs[j.val].2)
+  obtain ⟨y, hyx, hysch, hytp⟩ := sampleSetupZJ_of ht' x (sch := schs[j.val].1) (tPad := schs[j.val].2)
     (by rw [hx]; exact hz')
   have hyst : y.x.st = sts[j.val] := by rw [hyx]; exact hx
   have hTy : (planZJ (Reg := Reg) dj y₀ (L.draw ω) R).get j = y.table := by
@@ -568,7 +568,7 @@ theorem runsAtZCJ_live_rows (I : Inputs) (_ht : I.tags.typed = false) (dj : Fins
     rw [hget]
     unfold tableZJ
     rw [dite_eq_left_of_eq_true (eq_true ⟨y⟩)]
-    exact DrawSetupZJ.table_eq _ _
+    exact SampleSetupZJ.table_eq _ _
   rw [← hysch, ← hytp, ← hyst] at hv0 hv1
   rw [← hyst] at hst
   obtain ⟨hpts, hrj⟩ := hrec spec sts sess hs hdecS
@@ -703,10 +703,10 @@ variable {n mPts : ℕ} {Reg : Type}
 (`zk_table_rows₀Z`). -/
 theorem runsAtZCJH_live_rows (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
-    (L : Law n) (hT : TagsOkZHJ I) (hRec : ∀ S R o, RecordsLiveAtS I (dj S) o (wr S R o))
-    (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (L.draw ω)) :
+    (L : SamplingDesign n) (hT : TagsOkZHJ I) (hRec : ∀ S R o, RecordsLiveAtS I (dj S) o (wr S R o))
+    (hDraw : ∀ ω, SampleOkZKHJ I dj mPts (L.draw ω)) :
     RunsOnZCJW (K := 𝕂) execArith hs512 (planZHJ dj y₀) (opnAtZHJ (planZHJ dj y₀) I dj) (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L
       (fun S R o => AcceptsAt I (dj S) (wr S R o))
@@ -728,12 +728,12 @@ theorem runsAtZCJH_live_rows (I : Inputs) (ht : I.tags.typed = false)
   have hz' : Zk.schedule sts[j.val].wideLeaf sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
   obtain ⟨sch₀, hf⟩ := fast100_of_schedule hz'
   have ht' : (inputsJ I j.val).tags.typed = false := typedJ ht j.val
-  obtain ⟨pop, -, hdr⟩ := setupHidden_drawn hst
-  obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { sts[j.val].c with outPorts := #[] }) hdr
-  obtain ⟨x, hx⟩ := HiddenExec.drawSetupH_of_setupHiddenU (I := inputsJ I j.val)
+  obtain ⟨pop, -, hdr⟩ := setupHidden_sampled hst
+  obtain ⟨D, hD, -⟩ := Layout.sampled_spec (c := { sts[j.val].c with outPorts := #[] }) hdr
+  obtain ⟨x, hx⟩ := HiddenExec.sampleSetupH_of_setupHiddenU (I := inputsJ I j.val)
     (S := partS I (dj (L.draw ω)) (L.draw ω) ⟨j.val, hjn⟩) (mPts := mPts) ht' hst hf hD
     ((hDraw ω ⟨j.val, hjn⟩).1 D hD) ((hDraw ω ⟨j.val, hjn⟩).2 _ hst)
-  obtain ⟨y, hyx, hysch, hytp⟩ := drawSetupZHJ_of x (by rw [hx]; exact array_forM_ok hshape j.val hj)
+  obtain ⟨y, hyx, hysch, hytp⟩ := sampleSetupZHJ_of x (by rw [hx]; exact array_forM_ok hshape j.val hj)
     (sch := schs[j.val].1) (tPad := schs[j.val].2) (by rw [hx]; exact hz')
   have hyst : y.x.st = sts[j.val] := by rw [hyx]; exact hx
   have hTy : (planZHJ (Reg := Reg) dj y₀ (L.draw ω) R).get j = y.table := by
@@ -742,7 +742,7 @@ theorem runsAtZCJH_live_rows (I : Inputs) (ht : I.tags.typed = false)
     rw [hget]
     unfold tableZHJ
     rw [dite_eq_left_of_eq_true (eq_true ⟨y⟩)]
-    exact DrawSetupZHJ.table_eq _ _
+    exact SampleSetupZHJ.table_eq _ _
   rw [← hysch, ← hytp, ← hyst] at hv0 hv1
   rw [← hyst] at hst
   obtain ⟨hpts, hrj⟩ := hrec spec sts sess hs hdecS
@@ -890,7 +890,7 @@ theorem decodesTableR_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT :
       (opnD sts (tabsJ sts.size (zkTabs h0 L hz hk hlay))) (decD (tabsJ sts.size (zkTabs h0 L hz hk hlay)))
       (fun _ _ => true) (fun _ _ _ => []) (fun rs j => Exec.capOfRoot rs[j.val]!)
       (repJ execArith ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay))) i := by
-  have hok := drawOkZKJ_empty hT.1 dj hs
+  have hok := sampleOkZKJ_empty hT.1 dj hs
   obtain ⟨y₀, -, -, -⟩ := setupZJ_of_setupAt hT.1 ht dj hs hok ⟨0, Composed.nTab_pos I⟩ h0 (hz 0 h0)
   have h := Composed.decodes_of_runsOnZCJW
     (Composed.runsAtZCJ_live_rows (Reg := Unit) I ht dj y₀ (fun S _ o => Claims.Bridge.Custody.wrS I (dj S) o)
@@ -920,7 +920,7 @@ theorem decodesTableHR_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT 
       (opnD sts (tabsJ sts.size (zkTabs h0 L hz hk hlay))) (decD (tabsJ sts.size (zkTabs h0 L hz hk hlay)))
       (fun _ _ => true) (fun _ _ _ => []) (fun rs j => Exec.capOfRoot rs[j.val]!)
       (repJ execArith ZkExec.hs512 (tabsJ sts.size (zkTabs h0 L hz hk hlay))) i := by
-  have hok := drawOkZKHJ_empty hT.1 dj hs
+  have hok := sampleOkZKHJ_empty hT.1 dj hs
   obtain ⟨y₀, -, -, -⟩ :=
     setupZHJ_of_setupAt hT.1 ht dj hs hshape hok ⟨0, Composed.nTab_pos I⟩ h0 (hz 0 h0)
   have h := Composed.decodes_of_runsOnZCJW

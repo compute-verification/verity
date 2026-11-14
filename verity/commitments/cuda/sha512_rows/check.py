@@ -1,14 +1,13 @@
 """The engine against the CPU reference (``verity.commitments``), bit for bit: row digests on random rows at edge sizes
 (every variant), hm96 leaves under both salt forms and fused with their units' frame leaves, frame leaves, unit frame
 tables, levels (a front child, strided trees), pads and roots, and on a CUDA device the frozen H200
-layout's rows (``bench.h200_rows``) on sampled slots. ``python check.py --out DIR`` runs it on the current CUDA device (or
-``--device host``) and writes check.json; the tests call the same functions on the host twin.
+layout's rows (``bench.h200_rows``) on sampled slots. ``report`` runs them all; the benchmarks'
+``benchmarks/torch_gpu/sha512_rows/check_gpu.py`` runs it on a CUDA device and writes check.json, and the tests call the
+same functions on the host twin.
 """
 from __future__ import annotations
 
-import argparse
 import hashlib
-import json
 import sys
 import time
 from collections.abc import Sequence
@@ -17,13 +16,12 @@ from typing import Any
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 #: where ``bench.h200_rows`` is, the H200 layer's rows ``check_layout`` reads
 BENCH_DIR = Path(__file__).resolve().parents[4] / "benchmarks" / "torch_gpu" / "sha512_rows"
 
-import engine as E
 from verity.commitments import hm96
 from verity.commitments.crypto.chacha20 import keystream
+from verity.commitments.cuda.sha512_rows import engine as E
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
@@ -247,14 +245,9 @@ def check_layout(engine: E.Engine, slots: int, sample: Sequence[int], seed: int 
             "mismatches": {"x": bad_x, "leaves": bad_l}}
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--device", default="cuda")
-    ap.add_argument("--layout-slots", type=int, nargs="*", default=[4096, 16384])
-    a = ap.parse_args(argv)
-    a.out.mkdir(parents=True, exist_ok=True)
-    engine = E.Engine(a.device)
+def report(engine: E.Engine, layout_slots: Sequence[int] = ()) -> dict[str, Any]:
+    """Every check on ``engine``, and on a CUDA device the H200 layout at each of ``layout_slots`` slots, with the total of
+    their mismatches (``all_mismatches``): what check.json holds."""
     t0 = time.time()
     doc: dict[str, Any] = {"device": str(engine.device), "default": engine.default, "variants": engine.variants,
                            "lib": str(engine.lib.path)}
@@ -263,7 +256,7 @@ def main(argv: list[str] | None = None) -> int:
     doc["leaves"] = check_leaves(engine)
     doc["trees"] = check_trees(engine)
     if not engine.host:
-        for slots in a.layout_slots:
+        for slots in layout_slots:
             doc[f"layout_{slots}"] = check_layout(engine, slots, sorted({0, 1, 31, 32, slots // 2, slots - 1}))
     doc["seconds"] = time.time() - t0
 
@@ -273,10 +266,4 @@ def main(argv: list[str] | None = None) -> int:
         return int(d) if isinstance(d, (int, np.integer)) and not isinstance(d, bool) else 0
 
     doc["all_mismatches"] = sum(total(v["mismatches"]) for v in doc.values() if isinstance(v, dict) and "mismatches" in v)
-    (a.out / "check.json").write_text(json.dumps(doc, indent=1, default=int) + "\n")
-    print(json.dumps({"all_mismatches": doc["all_mismatches"], "seconds": round(doc["seconds"], 1)}))
-    return 0 if doc["all_mismatches"] == 0 else 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+    return doc

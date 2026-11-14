@@ -38,7 +38,7 @@ structure RecShared where
   registration : Option ByteArray
   innerStatement : Option String
   innerTables : Option (List (String × ByteArray))
-  innerDraw : Option ByteArray
+  innerSample : Option ByteArray
   links : Option (ByteArray × Nat)
   innerProgram : Option ByteArray
 
@@ -46,12 +46,12 @@ structure RecShared where
 def RecShared.files (S : RecShared) : List ByteArray :=
   S.recInner.toList ++ S.recRows.toList ++ S.innerCircuit.toList ++ S.innerPublic.toList ++
     S.innerPartition.toList ++ S.innerCoins.toList ++ S.innerSession.toList ++ S.transcript.toList ++
-    S.registration.toList ++ ((S.innerTables.getD []).map (·.2)) ++ S.innerDraw.toList ++ S.innerProgram.toList
+    S.registration.toList ++ ((S.innerTables.getD []).map (·.2)) ++ S.innerSample.toList ++ S.innerProgram.toList
 
 /-- The digests a `VERDICT`'s `rec_shared` names of it (`RecCompose.Shared.ofFiles`). -/
 def RecShared.digests (S : RecShared) : RecCompose.Shared :=
   RecCompose.Shared.ofFiles S.recInner S.innerCircuit S.innerPublic S.innerPartition S.innerCoins S.innerSession
-    S.transcript S.registration S.innerStatement S.innerTables S.innerDraw S.links S.innerProgram
+    S.transcript S.registration S.innerStatement S.innerTables S.innerSample S.links S.innerProgram
 
 /-- **The compiled verifier's form** (`RecDeploy.partRaw`): every input a part reads is held, and no record of check
 5's coins. -/

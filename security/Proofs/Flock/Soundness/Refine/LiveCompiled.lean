@@ -91,7 +91,7 @@ theorem allInh_opening [Field F] [Fintype F] [DecidableEq F] [Field K] (A : Arit
     AllInh.bind' (AllInh.draw' _) fun _ => .ret _) _) fun _ => ?_
   exact AllInh.bind' (AllInh.draw' _) fun _ => .ret _
 
-theorem allInh_drawK [Field F] [Fintype F] [Field K] (A : Arith F K) : AllInh (drawK A) := by
+theorem allInh_sampleK [Field F] [Fintype F] [Field K] (A : Arith F K) : AllInh (drawK A) := by
   unfold drawK
   repeat' (first
     | exact AllInh.ret _
@@ -105,7 +105,7 @@ theorem allInh_foldRoundsC [Field F] [Fintype F] [DecidableEq F] [Field K] [Fint
   | 0, _, _ => .ret _
   | k + 1, s, q => by
       simp only [foldRoundsC]
-      refine AllInh.bind' (allInh_drawK A) fun _ => ?_
+      refine AllInh.bind' (allInh_sampleK A) fun _ => ?_
       repeat' (first
         | exact AllInh.ret _
         | exact AllInh.pure' _

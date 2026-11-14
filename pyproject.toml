@@ -41,7 +41,7 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv.workspace]
-members = ["tools/research", "tools/config", "infra/cluster", "infra/ops", "benchmarks/numerical", "benchmarks/harness", "adapters/vllm", "infra/slack-events", "verity/protocols/proofs/flock/prover", "tools/verity/circuit_check", "tools/check", "tools/verity/lean", "benchmarks/native_peak", "benchmarks/tc_probe", "benchmarks/tc_probe_fp4", "benchmarks/commitments", "benchmarks/pouw", "benchmarks/machine_model", "benchmarks/network_traces", "benchmarks/network_e2e", "benchmarks/network_sim", "benchmarks/certifier_timing", "tools/verity/cli", "tools/verity/graph", "tools/verity/landq", "tools/difftest", "verity/protocols/accounting/pous/verifier/check", "verity/commitments/identity", "verity/protocols/compose/verifier/lean", "verity/circuits/evaluate", "verity/protocols/proofs/recursion/verifier/zk_server", "verity/protocols/proofs/spot/verifier/lean", "verity/protocols/accounting/pouw/verifier/lean/window", "verity/protocols/accounting/pouw/verifier/lean/check", "verity/protocols/accounting/pous/device/lean", "benchmarks/pouw/exact_kit", "benchmarks/proof_throughput", "benchmarks/harness/specs"]
+members = ["tools/research", "tools/config", "infra/cluster", "infra/ops", "benchmarks/numerical", "benchmarks/harness", "adapters/vllm", "infra/slack-events", "verity/protocols/proofs/flock/prover", "tools/verity/circuit_check", "tools/check", "tools/verity/lean", "benchmarks/native_peak", "benchmarks/tc_probe", "benchmarks/tc_probe_fp4", "benchmarks/commitments", "benchmarks/pouw", "benchmarks/machine_model", "benchmarks/network_traces", "benchmarks/network_e2e", "benchmarks/network_sim", "benchmarks/certifier_timing", "tools/verity/cli", "tools/verity/graph", "tools/verity/landq", "tools/difftest", "verity/protocols/accounting/pous/verifier/check", "verity/commitments/identity", "verity/protocols/compose/verifier/lean", "verity/circuits/evaluate", "verity/protocols/proofs/recursion/verifier/zk_server", "verity/protocols/proofs/spot/verifier/lean", "verity/protocols/accounting/pouw/verifier/lean/window", "verity/protocols/accounting/pouw/verifier/lean/check", "verity/protocols/accounting/pous/device/lean", "benchmarks/pouw/exact_kit", "benchmarks/proof_throughput", "benchmarks/harness/specs", "adapters/torch"]
 exclude = ["infra/slack-events/service"]               # a Vercel project's root, which Vercel installs on its own
 
 [tool.uv.sources]
@@ -61,6 +61,7 @@ verity-graph = { workspace = true }
 verity-difftest = { workspace = true }
 verity-exact-kit = { workspace = true }
 verity-proof-throughput = { workspace = true }
+verity-torch = { workspace = true }
 
 [dependency-groups]
 # pyyaml: the tests of node 1's dispatcher and pack pilot (research/pods/nebius), which render Job templates with it on the
@@ -95,7 +96,6 @@ untraced = [
     "tests/test_doc_paths.py",
     "tests/test_documented_commands.py",
     "tests/test_domains.py",
-    "tests/test_examples.py",
     "tests/test_flock_json.py",
     "tests/test_flock_literals.py",
     "tests/test_gate_paths.py",

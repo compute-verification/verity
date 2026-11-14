@@ -42,8 +42,8 @@ open Properties.Challenger Spot.Challenger
 two windows, the first session's releases as the cut reads them hold no coin tree's `Hello`. -/
 def FirstTreeless (C : CaseOf) : Prop :=
   ∀ o, FormAccepts C o → ∀ p c e key d₁ ξ r₁ d₂, caseOf o.sent = .ok (p, c, e) → keyOf o.sent.params = some key →
-    firstDraws key p c e = some d₁ → drawCoins d₁.key d₁.window d₁.label d₁.after (firstCoins e) = .ok ξ →
-    firstRead key p c e ξ = some r₁ → secondDraws p e = some d₂ → d₁.window ≠ d₂.window →
+    firstSamples key p c e = some d₁ → sampleCoins d₁.key d₁.window d₁.label d₁.after (firstCoins e) = .ok ξ →
+    firstRead key p c e ξ = some r₁ → secondSamples p e = some d₂ → d₁.window ≠ d₂.window →
     ∀ r ∈ r₁, ∀ sp, r.frame ≠ .hello sp
 
 theorem getD_nil_some {α : Type} {x : Option (List α)} (h : x.getD [] ≠ []) : ∃ L, x = some L := by
@@ -55,9 +55,9 @@ theorem getD_nil_some {α : Type} {x : Option (List α)} (h : x.getD [] ≠ []) 
 sessions' reads make of the play's log. -/
 theorem readsLogs_some {s : Verity.Sent} (h : readsLogs s ≠ []) :
     ∃ p c e key d₁ ξ c₂ d₂ ξ₂ r₁ r₂, caseOf s = .ok (p, c, e) ∧ keyOf s.params = some key ∧
-      firstDraws key p c e = some d₁ ∧
-      drawCoins d₁.key d₁.window d₁.label d₁.after (firstCoins e) = .ok ξ ∧
-      interiorOf e = .ok c₂ ∧ secondDraws p e = some d₂ ∧
+      firstSamples key p c e = some d₁ ∧
+      sampleCoins d₁.key d₁.window d₁.label d₁.after (firstCoins e) = .ok ξ ∧
+      interiorOf e = .ok c₂ ∧ secondSamples p e = some d₂ ∧
       Spot.OneStageZk.coinsOf p.audit c₂ e.interior = .ok ξ₂ ∧ firstRead key p c e ξ = some r₁ ∧
       secondRead p e (_root_.Core.Blobs.ofArray s.blobs) ξ₂ = some r₂ ∧
       readsLogs s = logsOf d₁.window d₂.window r₁ r₂ := by
@@ -111,8 +111,8 @@ theorem secondRead_interior {C : CaseOf}
     exact hc₂'
   obtain rfl : c₂ = c₂' := Except.ok.inj (h5.symm.trans hi)
   obtain rfl : ξ₂ = ξ₂' := Except.ok.inj (h7.symm.trans hξ')
-  have h6 : secondDraws p e = some d := by
-    unfold secondDraws
+  have h6 : secondSamples p e = some d := by
+    unfold secondSamples
     rw [h5]
     exact hd
   have hr : secondRecords (_root_.Core.Blobs.ofArray o.sent.blobs) e = some recs := by
@@ -164,7 +164,7 @@ coins (`readLog_plain`). The form's check refuses any other log on two windows, 
 `SessionTreeless.firstTreeless_of_check` reaches this. -/
 theorem firstTreeless_of_plain (C : CaseOf)
     (h : ∀ o, FormAccepts C o → ∀ p c e key d₁ d₂ ls, caseOf o.sent = .ok (p, c, e) →
-      keyOf o.sent.params = some key → firstDraws key p c e = some d₁ → secondDraws p e = some d₂ →
+      keyOf o.sent.params = some key → firstSamples key p c e = some d₁ → secondSamples p e = some d₂ →
       d₁.window ≠ d₂.window → firstLines e = .ok ls → ∀ l ∈ ls, Spot.Challenger.treeLine l = false) :
     FirstTreeless C := by
   intro o hacc p c e key d₁ ξ r₁ d₂ h1 h2 h3 _ h8 h6 hw r hr sp hsp

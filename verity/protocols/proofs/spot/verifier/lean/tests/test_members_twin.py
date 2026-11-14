@@ -54,7 +54,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
 
 from test_challenger_difftest import Ledger, TreeSession, _pinned, lms_verify
 from test_difftest import (LEAF, PAIR, RECEIVED, SCHEME, STAND_IN_CIRCUIT, TRIPLE, V2_TABLES, WINDOW, Setup,
-                           _challenger_draw, _json)
+                           _challenger_sample, _json)
 
 #: slow: the first of them builds the executable, and each row runs it
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")]
@@ -99,7 +99,7 @@ class Audit:
         self.rec = R.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF)
         held = None
         while held != set(sampled):
-            ch, sample, _ = _challenger_draw(rng, s, DESIGN, self.rec, trees=0)
+            ch, sample, _ = _challenger_sample(rng, s, DESIGN, self.rec, trees=0)
             held = {n for n in (A, B) if any(lo <= u < hi for u in DR.proved(sample) for lo, hi in UNITS[n])}
         self.files: dict[str, bytes] = {}
         sessions = {}

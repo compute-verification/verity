@@ -188,10 +188,10 @@ def startRep (ch : Frame.Chan) (reg : IO.Ref Sessions) (l0s : IO.Ref Level0.Slot
     let (lay, mask) ← match Drive.start st with
       | .ok x => pure x
       | .error e => return (← err s!"the rep's start: {e}")
-    let d ← match ← Frame.drawsWith IO.getRandomBytes lay with
+    let d ← match ← Frame.samplesWith IO.getRandomBytes lay with
       | .ok d => pure d
       | .error e => return (← err s!"the rep's start: {e}")
-    let c := Frame.Cfg.ofDraws lay d (some mask)
+    let c := Frame.Cfg.ofSamples lay d (some mask)
     if let .error e := c.check then return (← err s!"the rep's start: {e}")
     let added ← reg.modifyGet fun R =>
       if (R.find sid i r).isSome then (false, R) else (true, { R with reps := R.reps.push { sid, table := i, rep := r, cfg := c, draws := d } })
