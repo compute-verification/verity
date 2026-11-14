@@ -19,12 +19,16 @@
   `second-population`, `second-roots`, `second-sample`, `second-read`, `second-values`, `second-refs`, `second-tables`
   and `second-verified`, read against the rank member in place of an interior part, with the window-domain binding at
   the rank's program, partition digest and run (`portBinding`); and `ranks-wire-tree`: the writer rows a sampled reader
-  member reads through a port lie in one rank's window, so its session reads the port from one committed tree.
+  member reads through a row lie in one rank's window, so its session reads the row from one committed tree.
+* **Rows, not ports.** A session's circuit has one row a port, or `k` rows `port#j` of a port the record cuts `k` ways
+  (`cuts`; `rowName`), each its own registered read at its own root. Every per-session check reads a wire at one row
+  (`rowWire`: a cut wire's last digit fixed), so a collective's port, whose rows are its ranks' partials, reads each
+  row from its writer's rank.
 * **The form**: it runs behind `Spot.SecondStage.FORM`, the one switch, and is refused last (`two-stage-form`) while
   that is off.
 
 * **A member's session** (`ownFor`) is `Spot.SecondStage`'s part of one block: the member's units in its rank's
-  window, the interior its rank's docket record (`Given.dockets`). Each port it reads through a wire reads through the
+  window, the interior its rank's docket record (`Given.dockets`). Each row it reads through a wire reads through the
   one its units read it through (`wireFor`, the one rule every check reads a wire by), so `second-header`'s bindings,
   `second-values`' run fields and `second-read` agree on it. `Spot.SecondStage.stmtCodes` runs as it is but for
   `second-read`, which reads the window's rows (`windowReadOk`): a wired port the writer's output port in the docket
@@ -144,14 +148,16 @@ where
 /-- **The joined record's wires as the per-session checks read them**: sorted by reader template, port and first reader
 unit (ties in the record's order), and at each place the most end (`start + readerUnits`) of its port's wires up to
 there. The wires of a port that meet some units are then one run of it, found by two bisections (`Index.meets`), so a
-sampled member costs a logarithm of the wires and the wires it meets, never a pass over the wires. -/
+sampled member costs a logarithm of the wires and the wires it meets, never a pass over the wires. Beside them, the
+record's cuts (`cuts`, `{tid: {port: k}}`), sorted, each port's count of rows. -/
 structure Index where
   ws : Array Spot.Wires.Wire
   ends : Array Nat
+  cuts : Array ((String × String) × Nat) := #[]
 
 def pairLt (a b : String × String) : Bool := decide (a.1 < b.1) || (a.1 == b.1 && decide (a.2 < b.2))
 
-def Index.of (ws : Array Spot.Wires.Wire) : Index :=
+def Index.of (ws : Array Spot.Wires.Wire) (cuts : Array ((String × String) × Nat) := #[]) : Index :=
   let s := (ws.zipIdx.qsort fun (a, i) (b, j) =>
     pairLt (a.reader, a.port) (b.reader, b.port) ||
       (a.reader == b.reader && a.port == b.port && (a.start < b.start || (a.start == b.start && i < j)))).map (·.1)
@@ -161,7 +167,7 @@ def Index.of (ws : Array Spot.Wires.Wire) : Index :=
       | some v => if v.reader == w.reader && v.port == w.port then max (acc.back?.getD 0) e else e
       | none => e
     (some w, acc.push m)) (none, #[])).2
-  ⟨s, ends⟩
+  ⟨s, ends, cuts.qsort fun a b => pairLt a.1 b.1⟩
 
 /-- The run of the index holding template `t`'s port `port`'s wires. -/
 def Index.block (ix : Index) (t port : String) : Nat × Nat :=
@@ -181,6 +187,56 @@ def Index.ports (ix : Index) (t : String) : Array String :=
   let b := bisect ix.ws.size fun i => ((ix.ws[i]?).map fun w => decide (t < w.reader)).getD true
   (ix.ws.extract a b).foldl (fun acc w => if acc.back? == some w.port then acc else acc.push w.port) #[]
 
+/-- The rows template `t`'s port `port` is cut into (`Spot.Wires.Wiring.cutsOf`; none stated, 1). -/
+def Index.cut (ix : Index) (t port : String) : Nat :=
+  let i := bisect ix.cuts.size fun i => ((ix.cuts[i]?).map fun c => !pairLt c.1 (t, port)).getD true
+  match ix.cuts[i]? with
+  | some ((t', p'), k) => if t' == t && p' == port then k else 1
+  | none => 1
+
+/-- Row `j` of a port cut `k` ways as the session's circuit names it (`interface.row_name`, Flock's
+`class_statement.unit_ports`): the port itself uncut, else `port#j`, each its own row and its own registered read. -/
+def rowName (port : String) (j k : Nat) : String := if k == 1 then port else port ++ "#" ++ toString j
+
+/-- Template `t`'s wired rows: each wired port's rows, `(name, port, j)`, `rowName` of each. -/
+def Index.rows (ix : Index) (t : String) : Array (String × String × Nat) :=
+  (ix.ports t).flatMap fun p => let k := ix.cut t p; (List.range k).toArray.map fun j => (rowName p j k, p, j)
+
+/-- The port and row a row name of template `t` names (`rowName`): none where it names no row of its port's cut. -/
+def Index.rowOf (ix : Index) (t name : String) : Option (String × Nat) :=
+  match name.splitOn "#" with
+  | [p] => if ix.cut t p == 1 then some (p, 0) else none
+  | [p, js] => do
+    let j ← js.toNat?
+    if 1 < ix.cut t p && j < ix.cut t p && rowName p j (ix.cut t p) == name then some (p, j) else none
+  | _ => none
+
+/-- Wire `w` at its reader row `j` alone, as a wire of that row named `name`: uncut, itself; cut (its last digit the
+row, `Spot.Wires`' `cut` check), its last digit fixed at `j - cut0`, so its base moves by that digit's step and its
+reader units stay. None where it covers no row `j`, or its last digit isn't its cut. -/
+def rowWire (w : Spot.Wires.Wire) (name : String) (j : Nat) : Option Spot.Wires.Wire :=
+  if !(decide (w.cut0 ≤ j) && decide (j < w.cut0 + w.cuts)) then none
+  else if w.cuts == 1 then some { w with port := name }
+  else if w.radix.getLast? != some w.cuts then none
+  else some { w with port := name, radix := w.radix.dropLast, step := w.step.dropLast, cut0 := j, cuts := 1,
+              base := w.base + (w.step.getLast?.getD 0) * ((j - w.cut0 : Nat) : Int) }
+
+/-- The wires reading template `t`'s row `name` (`Index.rowOf`) that meet units `[lo, lo + n)`, each at that row
+(`rowWire`), by first unit. -/
+def Index.meetsRow (ix : Index) (t name : String) (lo n : Nat) : Array Spot.Wires.Wire :=
+  match ix.rowOf t name with
+  | some (p, j) => (ix.meets t p lo n).filterMap fun w => rowWire w name j
+  | none => #[]
+
+/-- The joined record `rec`'s cuts (`cuts`, `{tid: {port: k}}`, none stated: none); none unless each `k` is a natural. -/
+def cutsOf? (rec : Json) : Option (Array ((String × String) × Nat)) :=
+  match getD rec "cuts" with
+  | .null => some #[]
+  | .obj ts => ts.toArray.foldlM (fun acc (t, v) => match v with
+      | .obj ps => ps.toArray.foldlM (fun acc (p, k) => (nat? k).map fun k => acc.push ((t, p), k)) acc
+      | _ => none) #[]
+  | _ => none
+
 -- The index's wires of a port meeting some units are the scan's, by first unit; its ports are the template's.
 #guard
   let wire (t p : String) (a n : Nat) : Spot.Wires.Wire :=
@@ -195,10 +251,19 @@ def Index.ports (ix : Index) (t : String) : Array String :=
     ("B", "x", 0, 9), ("C", "x", 0, 9)].all fun (t, p, lo, n) =>
       (ix.meets t p lo n).map (·.start) == scan t p lo n) &&
     ix.ports "A" == #["x", "y"] && ix.ports "B" == #["x"] && ix.ports "C" == #[]
+-- Port `parts` cut 2 ways, one wire over both rows: row 0 reads writer units `2u`, row 1 writer units `2u + 1`.
+#guard
+  let w : Spot.Wires.Wire := { reader := "A", port := "parts", writer := "B", out := "o0", start := 0, radix := [3, 2],
+    base := 0, step := [2, 1], cut0 := 0, cuts := 2 }
+  let ix := Index.of #[w] #[(("A", "parts"), 2)]
+  let wr (name : String) (u : Nat) := (ix.meetsRow "A" name u 1).map fun v => v.writerAt (u - v.start)
+  ix.rows "A" == #[("parts#0", "parts", 0), ("parts#1", "parts", 1)] && wr "parts#0" 2 == #[4] &&
+    wr "parts#1" 2 == #[5] && wr "parts" 2 == #[] && wr "parts#2" 2 == #[] && ix.rowOf "A" "parts#01" == none &&
+    (Index.of #[{ w with cuts := 1, radix := [3] , step := [2] }]).rowOf "A" "parts" == some ("parts", 0)
 
 def WIRE_TREE_WHY : String :=
-  "a sampled reader member reads one port through writer rows in more than one rank's window, or in none: its " ++
-  "session reads each wired port from one rank's committed tree"
+  "a sampled reader member reads one row of a port (the port, or row j of a port cut k ways) through writer rows in " ++
+  "more than one rank's window, or in none: its session reads each wired row from one rank's committed tree"
 
 /-- The ranks whose units hold the writer rows member `m`'s units read through wire `w`: none read, `some []`; all in
 one rank, that rank, by the closed-form box (`Spot.Wires.Wire.box`) on the writers of the reader indices in `m`, whose
@@ -213,13 +278,15 @@ def writerRanks (rs : Spot.Ranks.Ranks) (m : Spot.Ranks.Member) (w : Spot.Wires.
   | some p, some q => if p == q then some [p] else none
   | _, _ => none
 
-/-- Member `m` reads each wired port of its template from one rank's tree: the writer rows every wire of that port
-reads in `m` lie in one rank (`writerRanks`). Writer members don't matter: a rank's docket commits one tree a port over
-all its members, each member a range of its leaves. -/
+/-- Member `m` reads each wired row of its template (`Index.rows`: a port, or row `j` of a port cut `k` ways) from one
+rank's tree: the writer rows every wire of that row reads in `m` lie in one rank (`writerRanks` on the row's wires,
+`Index.meetsRow`). A cut port's rows may lie in different ranks (a collective reads each rank's partial as a row of its
+own): each row is its own registered read, at its own root. Writer members don't matter: a rank's docket commits one
+tree a port over all its members, each member a range of its leaves. -/
 def treeOk (rs : Spot.Ranks.Ranks) (ix : Index) (m : Spot.Ranks.Member) : Bool :=
   let lo := (rs.segment m.template m.rank).1 + m.base
-  (ix.ports m.template).all fun port =>
-    match (ix.meets m.template port lo m.units).toList.mapM (writerRanks rs m) with
+  (ix.rows m.template).all fun (name, _) =>
+    match (ix.meetsRow m.template name lo m.units).toList.mapM (writerRanks rs m) with
     | some rss => (distinct rss.flatten.toArray).size ≤ 1
     | none => false
 
@@ -227,9 +294,9 @@ def treeOk (rs : Spot.Ranks.Ranks) (ix : Index) (m : Spot.Ranks.Member) : Bool :
 template from one rank's committed tree (`treeOk`), the one tree its session's registered read of the port names.
 Work per sampled member and wire, never per unit. -/
 def wireTreeFailures (rs : Spot.Ranks.Ranks) (rec : Json) (ms : Array Spot.Ranks.Member) : List (String × Json) :=
-  match patternsOf? rec with
-  | some ws => if ms.all (treeOk rs (Index.of ws)) then [] else [("ranks-wire-tree", Json.str WIRE_TREE_WHY)]
-  | none => [("ranks-wire-tree", Json.str WIRE_TREE_WHY)]
+  match patternsOf? rec, cutsOf? rec with
+  | some ws, some cs => if ms.all (treeOk rs (Index.of ws cs)) then [] else [("ranks-wire-tree", Json.str WIRE_TREE_WHY)]
+  | _, _ => [("ranks-wire-tree", Json.str WIRE_TREE_WHY)]
 
 /-- What `Spot.SecondStage`'s statement checks read of the joined record `rec` that this reader builds: its wires. -/
 def ownOf (rec : Json) : Spot.SecondStage.Own :=
@@ -248,14 +315,15 @@ structure Given where
   refReads : Array (String × Json) := #[]
 
 /-- **The wire a member reads a port through**, the one rule every per-session check reads a wire by: of the joined
-record's wires reading template `t`'s port `port`, those meeting the member's units `[lo, lo + n)` (the joined
-circuit's; `Index.meets`). None meets them: `some none`, the port is no wired port of the member's. All of one writer's output port,
-uncut, together covering every unit: `some (some w)`. Else none: the member reads the port through two writers, or
-partly through none, and no one session's header binds the port. A port two writer templates write, each over its
+record's wires reading template `t`'s row `port` (a port, or `port#j`), those meeting the member's units
+`[lo, lo + n)` (the joined circuit's), each at that row (`Index.meetsRow`). None meets them: `some none`, the row is
+no wired row of the member's. All of one writer's output port, together covering every unit: `some (some w)`, `w`'s
+port the row's name. Else none: the member reads the row through two writers, or partly through none, and no one
+session's header binds the row. A port two writer templates write, each over its
 own reader units (a select's first step and the rest), is then one writer a member wherever the member rule cuts at
 their bounds. Work per wire, never per unit. -/
 def wireFor (ix : Index) (t port : String) (lo n : Nat) : Option (Option Spot.SecondStage.Wire) :=
-  let meet := ix.meets t port lo n
+  let meet := ix.meetsRow t port lo n
   match meet[0]? with
   | none => some none
   | some w0 =>
@@ -264,18 +332,18 @@ def wireFor (ix : Index) (t port : String) (lo n : Nat) : Option (Option Spot.Se
       some (some ⟨t, port, w0.writer, w0.out⟩)
     else none
 
-/-- Member `m`'s wires, its units from `lo` in the joined circuit: one a wired port of its template (`wireFor`); none
-where a port has no one wire. -/
+/-- Member `m`'s wires, its units from `lo` in the joined circuit: one a wired row of its template (`Index.rows`,
+`wireFor`); none where a row has no one wire. -/
 def memberWires (ix : Index) (m : Spot.Ranks.Member) (lo : Nat) : Option (Array Spot.SecondStage.Wire) :=
-  (ix.ports m.template).foldlM (fun acc p => do
+  (ix.rows m.template).foldlM (fun acc (p, _) => do
     match ← wireFor ix m.template p lo m.units with
     | some w => pure (acc.push w)
     | none => pure acc) #[]
 
-/-- The writer template and unit joined unit `u` of template `t` reads at port `port`: the one of the joined record's
-wires (`Index.meets`) whose reader units hold `u`, at its first row. -/
+/-- The writer template and unit joined unit `u` of template `t` reads at row `port` (a port, or `port#j`): the one of
+the joined record's wires at that row (`Index.meetsRow`) whose reader units hold `u`. -/
 def writerUnit (ix : Index) (t port : String) (u : Nat) : Option (String × Int) := do
-  let w ← (ix.meets t port u 1)[0]?
+  let w ← (ix.meetsRow t port u 1)[0]?
   pure (w.writer, w.writerAt ((u - w.start) * w.cuts))
 
 /-- Member `m`'s session as `Spot.SecondStage` reads a part's: one block (`sample` `#[0]`), its part `m`'s units in
@@ -359,7 +427,7 @@ def sessionFailures (g : Given) (rs : Spot.Ranks.Ranks) (regs : Array Spot.Ranks
     (ms : Array Spot.Ranks.Member) (sample : Array (String × Nat)) (ss : List Json) : List (String × Json) :=
   let detail := Spot.SecondStage.detailOf
   let each := match linksOf? rec, patternsOf? rec with
-    | some links, some ws => let ix := Index.of ws; (List.range (max ms.size ss.length)).flatMap fun i =>
+    | some links, some ws => let ix := Index.of ws ((cutsOf? rec).getD #[]); (List.range (max ms.size ss.length)).flatMap fun i =>
       match ms[i]?, ss[i]? with
       | some m, none => [("second-cover", detail i (.str m.template))]
       | none, some _ => [("second-order", detail i .null)]
@@ -462,6 +530,27 @@ end Example
     windowReadOk exRanks (Index.of ws) dockets own true ⟨"A", 0, 2⟩ 0 port j
   ok "x" (e "B/o0" "b1" [0, 1]) && !ok "x" (e "B/o0" "b1" [1, 0]) && !ok "x" (e "A/y" "a0" [0, 1]) &&
     ok "y" (e "A/y" "a0" [0, 1]) && !ok "y" (e "A/y" "a0" [1, 0]) && !ok "y" (e "B/o0" "b1" [0, 1])
+-- Rank 0's member of `A` reads port `parts` cut 2 ways, row `j` rank `j`'s `B` partials, through one wire: each row is
+-- its own read at its own rank's root. A wire whose row 1 reads both ranks is refused.
+#guard
+  let ms := (partsOf? exRanks exRegs #[("A", 1)]).getD #[]
+  let cut (s1 : Int) : Json := Json.mkObj [("at", num 0), ("base", num 0), ("cut", .arr #[num 0, num 2]),
+    ("out", .str "o0"), ("port", .str "parts"), ("radix", .arr #[num 2, num 2]), ("reader", .str "A"),
+    ("step", .arr #[num 1, Lean.toJson s1]), ("writer", .str "B")]
+  let cuts := Json.mkObj [("A", Json.mkObj [("parts", num 2)])]
+  let codes (w : Json) := (wireTreeFailures exRanks (Json.mkObj [("cuts", cuts), ("wires", .arr #[w])]) ms).map (·.1)
+  let ix := Index.of ((patternsOf? (Json.mkObj [("wires", .arr #[cut 2])])).getD #[]) #[(("A", "parts"), 2)]
+  let wires := (memberWires ix ⟨0, "A", 0, 0, 2⟩ 0).getD #[]
+  let root (r : String) : Json :=
+    Json.mkObj [("domain", .str ("d" ++ r)), ("leaves", num 2), ("port", .str "B/o0"), ("root", .str ("b" ++ r))]
+  let dockets := #[Json.mkObj [("roots", .arr #[root "0"])], Json.mkObj [("roots", .arr #[root "1"])]]
+  let own := ownFor { dockets } #[] ⟨0, "A", 0, 0, 2⟩ #[1] wires
+  let ok (row r : String) (reads : List Nat) : Bool :=
+    windowReadOk exRanks ix dockets own true ⟨"A", 0, 2⟩ 0 row (Json.mkObj [("domain", .str ("d" ++ r)),
+      ("leaves", num 2), ("reads", .arr (reads.map num).toArray), ("root", .str ("b" ++ r)), ("value", .str "B/o0")])
+  codes (cut 2) == [] && codes (cut 1) == ["ranks-wire-tree"] && ms.size == 1 &&
+    wires == #[⟨"A", "parts#0", "B", "o0"⟩, ⟨"A", "parts#1", "B", "o0"⟩] && ok "parts#0" "0" [0, 1] &&
+    ok "parts#1" "1" [0, 1] && !ok "parts#1" "0" [0, 1] && !ok "parts#0" "1" [0, 1] && !ok "parts#1" "1" [1, 0]
 -- The statements by position: a member that reads `live` through both selects, a missing statement, one for another
 -- template.
 #guard

@@ -43,8 +43,8 @@ READS_WHY = ("the joined record's registered declarations are not its ranks', ea
              "parameters)")
 #: the keys of a rank record's ``registered`` the join names, each by its rule (`Spot.Ranks.REGISTERED_KEYS`)
 REGISTERED_KEYS = ("formats", "openings", "params", "reads", "roots", "tables")
-WIRE_TREE_WHY = ("a sampled reader member reads one port through writer rows in more than one rank's window, or in none: its "
-                 "session reads each wired port from one rank's committed tree")
+WIRE_TREE_WHY = ("a sampled reader member reads one row of a port (the port, or row j of a port cut k ways) through writer rows in "
+                 "more than one rank's window, or in none: its session reads each wired row from one rank's committed tree")
 PARTS_WHY = "a sampled unit is in no rank member"
 NO_REGISTERED = {"openings": [], "params": {}, "reads": [], "roots": [], "tables": []}
 #: the `two-stage-form` refusal's detail (`Spot.SecondStage.FORM_WHY`)
@@ -375,7 +375,8 @@ class Index:
     """`Spot.SecondWindow.Index`: the wires sorted by reader template, port and first unit (ties in the record's order),
     and at each place the most end of its port's wires up to there."""
 
-    def __init__(self, ws: Sequence[Mapping[str, Any]]) -> None:
+    def __init__(self, ws: Sequence[Mapping[str, Any]], cuts: Mapping[str, Mapping[str, int]] | None = None) -> None:
+        self.cuts = {(t, p): k for t, ps in (cuts or {}).items() for p, k in ps.items()}
         self.ws = sorted(ws, key=lambda w: (w["reader"], w["port"], w["at"]))
         self.keys = [(w["reader"], w["port"]) for w in self.ws]
         self.ends: list[int] = []
@@ -403,6 +404,59 @@ class Index:
                 out.append(w["port"])
         return out
 
+    def cut(self, t: str, port: str) -> int:
+        """`Index.cut`."""
+        return self.cuts.get((t, port), 1)
+
+    def rows(self, t: str) -> list[tuple[str, str, int]]:
+        """`Index.rows`: ``t``'s wired rows, ``(name, port, j)``."""
+        return [(row_name(p, j, self.cut(t, p)), p, j) for p in self.ports(t) for j in range(self.cut(t, p))]
+
+    def row_of(self, t: str, name: str) -> tuple[str, int] | None:
+        """`Index.rowOf`."""
+        ps = name.split("#")
+        if len(ps) == 1:
+            return (name, 0) if self.cut(t, name) == 1 else None
+        if len(ps) != 2 or not ps[1].isascii() or not ps[1].isdigit():
+            return None
+        p, j, k = ps[0], int(ps[1]), self.cut(t, ps[0])
+        return (p, j) if 1 < k and j < k and row_name(p, j, k) == name else None
+
+    def meets_row(self, t: str, name: str, lo: int, n: int) -> list[Mapping[str, Any]]:
+        """`Index.meetsRow`."""
+        pj = self.row_of(t, name)
+        if pj is None:
+            return []
+        return [x for w in self.meets(t, pj[0], lo, n) if (x := row_wire(w, name, pj[1])) is not None]
+
+
+def row_name(port: str, j: int, k: int) -> str:
+    """`Spot.SecondWindow.rowName` (`interface.row_name`)."""
+    return port if k == 1 else f"{port}#{j}"
+
+
+def row_wire(w: Mapping[str, Any], name: str, j: int) -> dict[str, Any] | None:
+    """`Spot.SecondWindow.rowWire`: wire ``w`` at its reader row ``j`` alone, named ``name``."""
+    c0, c = w["cut"]
+    if not c0 <= j < c0 + c:
+        return None
+    if c == 1:
+        return {**w, "port": name}
+    if w["radix"][-1] != c:
+        return None
+    return {**w, "port": name, "radix": w["radix"][:-1], "step": w["step"][:-1], "cut": [j, 1],
+            "base": w["base"] + w["step"][-1] * (j - c0)}
+
+
+def cuts_of(record: Mapping[str, Any]) -> dict[str, dict[str, int]] | None:
+    """`Spot.SecondWindow.cutsOf?`."""
+    x = record.get("cuts") if isinstance(record, Mapping) else None
+    if x is None:
+        return {}
+    if not isinstance(x, Mapping) or not all(isinstance(v, Mapping) and all(_nat(k) for k in v.values()) for v in x.values()):
+        return None
+    return {t: dict(v) for t, v in x.items()}
+
 
 def _writer_ranks(ranks: Sequence[tuple[str, Mapping[str, int], int]], m: tuple[int, str, int, int, int],
                   w: Mapping[str, Any]) -> list[int] | None:
@@ -422,8 +476,8 @@ def _writer_ranks(ranks: Sequence[tuple[str, Mapping[str, int], int]], m: tuple[
 def _tree_ok(ranks: Sequence[tuple[str, Mapping[str, int], int]], ix: Index, m: tuple[int, str, int, int, int]) -> bool:
     """`Spot.SecondWindow.treeOk`."""
     lo = segment(ranks, m[1], m[0])[0] + m[3]
-    for port in ix.ports(m[1]):
-        rss = [_writer_ranks(ranks, m, w) for w in ix.meets(m[1], port, lo, m[4])]
+    for name, _p, _j in ix.rows(m[1]):
+        rss = [_writer_ranks(ranks, m, w) for w in ix.meets_row(m[1], name, lo, m[4])]
         if any(x is None for x in rss) or len({r for x in rss for r in x}) > 1:
             return False
     return True
@@ -432,8 +486,8 @@ def _tree_ok(ranks: Sequence[tuple[str, Mapping[str, int], int]], ix: Index, m: 
 def wire_tree_failures(ranks: Sequence[tuple[str, Mapping[str, int], int]], record: Mapping[str, Any],
                        ms: Sequence[tuple[int, str, int, int, int]]) -> list[tuple[str, Any]]:
     """`Spot.SecondWindow.wireTreeFailures`: ``ranks-wire-tree``."""
-    ws = _all(_list(record, "wires"), _pattern)
-    ok = ws is not None and all(_tree_ok(ranks, Index(ws), m) for m in ms)
+    ws, cs = _all(_list(record, "wires"), _pattern), cuts_of(record)
+    ok = ws is not None and cs is not None and all(_tree_ok(ranks, Index(ws, cs), m) for m in ms)
     return [] if ok else [("ranks-wire-tree", WIRE_TREE_WHY)]
 
 
@@ -457,7 +511,7 @@ def wire_for(ix: Index, t: str, port: str, lo: int, n: int) -> tuple[SS.Wire | N
     """`Spot.SecondWindow.wireFor`, the one rule every per-session check reads a wire by: ``(None,)`` for no wired port
     of the member's, ``(wire,)`` for its one writer's output port covering every unit, None for two writers or a
     partial cover."""
-    meet = ix.meets(t, port, lo, n)
+    meet = ix.meets_row(t, port, lo, n)
     if not meet:
         return (None,)
     w0 = meet[0]
@@ -470,8 +524,8 @@ def wire_for(ix: Index, t: str, port: str, lo: int, n: int) -> tuple[SS.Wire | N
 def member_wires(ix: Index, m: tuple[int, str, int, int, int], lo: int) -> list[SS.Wire] | None:
     """`Spot.SecondWindow.memberWires`."""
     out = []
-    for port in ix.ports(m[1]):
-        x = wire_for(ix, m[1], port, lo, m[4])
+    for name, _p, _j in ix.rows(m[1]):
+        x = wire_for(ix, m[1], name, lo, m[4])
         if x is None:
             return None
         out += [x[0]] if x[0] is not None else []
@@ -480,7 +534,7 @@ def member_wires(ix: Index, m: tuple[int, str, int, int, int], lo: int) -> list[
 
 def writer_unit(ix: Index, t: str, port: str, u: int) -> tuple[str, int] | None:
     """`Spot.SecondWindow.writerUnit`."""
-    w = next(iter(ix.meets(t, port, u, 1)), None)
+    w = next(iter(ix.meets_row(t, port, u, 1)), None)
     return None if w is None else (w["writer"], _writer_at(w, (u - w["at"]) * w["cut"][1]))
 
 
@@ -566,7 +620,7 @@ def session_failures(g: Given, ranks: Sequence[tuple[str, Mapping[str, int], int
     if links is None or ws is None:
         out.append(("second-read", DESIGN_WHY))
     else:
-        ix = Index(ws)
+        ix = Index(ws, cuts_of(record) or {})
         for i in range(max(len(ms), len(statements))):
             m = ms[i] if i < len(ms) else None
             if i >= len(statements):

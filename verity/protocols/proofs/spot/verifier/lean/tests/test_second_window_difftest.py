@@ -2,7 +2,8 @@
 Python twin (`second_window.failures`): the ``second_window`` piece answers every failure, ``[code, detail]`` in order,
 of an instance, and the reference below reads the same instance into `second_window`'s types. Generated instances are
 joins of one or two ranks' windows of two templates, ``A`` writing and ``B`` reading it, laid out as a join lays them
-(each rank's wires moved to its units, its registered names prefixed ``r<rank>/``, then the join's own wires), with
+(each rank's wires moved to its units, its registered names prefixed ``r<rank>/``, then the join's own wires, among
+them a collective's: ``B``'s port ``parts`` cut 2 ways, each row read from one rank or both), with
 members of a random cap, a sample, the sampled members' statements and each rank's docket; one field of most is then
 changed. Malformed instances, a field of the wrong type, are rejected by both. The Python is the difftest's reference
 alone: no verdict reads it.
@@ -120,6 +121,12 @@ def joins(draw) -> dict:
     totals = {t: sum(u[t] for u in units) for t in ("A", "B")}
     record = {"ranks": ranks_doc, "templates": [[t, k] for t, k in totals.items()], "wires": joined,
               "registered": W.joined_registered(ranks, records)}
+    if n == 2 and draw(st.booleans()):
+        a0 = units[0]["A"]
+        joined.append({"reader": "B", "port": "parts", "writer": "A", "out": "y", "at": 0, "radix": [totals["B"], 2],
+                       "base": draw(st.integers(0, 1)), "step": [draw(st.integers(0, 1)), draw(st.sampled_from([0, 1, a0]))],
+                       "cut": [0, 2]})
+        record["cuts"] = {"B": {"parts": 2}}
     if draw(st.booleans()):
         record["boundary_reads"] = [{"reader": "A", "port": "t", "param": "o0", "at": 0, "radix": [1], "base": 0,
                                      "step": [0]}]
@@ -133,7 +140,7 @@ def joins(draw) -> dict:
         e = {"value": draw(st.sampled_from(["y", "A/y", "z", "r0/w"])), "root": draw(st.sampled_from(["R0", "R1"])),
              "domain": "d", "leaves": draw(st.sampled_from([2, 4, 6])), "reads": draw(st.lists(
                  st.one_of(st.none(), st.integers(0, 2)), max_size=2))}
-        reg = draw(st.sampled_from([None, {"ports": {draw(st.sampled_from(["x", "z", "w"])): e}}]))
+        reg = draw(st.sampled_from([None, {"ports": {draw(st.sampled_from(["x", "z", "w", "parts", "parts#0", "parts#1"])): e}}]))
         statements.append({"template": m[1], "header": {}, "draw": {}, "registered": reg})
     return {"allow": draw(st.booleans()), "given": {"dockets": dockets, "boundary": None, "verified": [], "refs": [],
                                                     "ref_reads": []},
@@ -143,7 +150,7 @@ def joins(draw) -> dict:
 
 
 CHANGES = ["none", "units", "window", "run", "logged", "member", "wire", "join-wire", "registered", "supplied",
-           "statement", "order", "sample", "docket"]
+           "statement", "order", "sample", "docket", "cuts"]
 
 
 @st.composite
@@ -181,6 +188,8 @@ def instances(draw, broken: bool = False) -> dict:
         j["sample"].append(["B", sum(q["units"]["B"] for q in rec["ranks"]["of"])])
     elif change == "docket":
         j["given"]["dockets"] = j["given"]["dockets"][:-1]
+    elif change == "cuts":
+        rec["cuts"] = draw(st.sampled_from([{"B": {"parts": 1}}, {"B": {"parts": 3}}, {"B": {"parts": True}}, "x", None]))
     if broken:
         key = draw(st.sampled_from(["allow", "given", "record", "records", "served", "registrations", "root", "logged",
                                     "sample", "statements"]))
@@ -210,5 +219,5 @@ def test_both_sides_reach_every_code_the_generator_aims_at(pieces):
         return out
     port = D.Port(PIECES, "second_window", counting, INPUTS, package=PACKAGE, of_record="lean")
     D.run(port, examples=1500, server=pieces)
-    assert {"ranks-window", "ranks-run", "ranks-members", "ranks-units", "ranks-wires", "ranks-reads", "second-read",
-            "second-order", "second-cover", "two-stage-form"} <= seen, sorted(seen)
+    assert {"ranks-window", "ranks-run", "ranks-members", "ranks-units", "ranks-wires", "ranks-reads", "ranks-wire-tree",
+            "second-read", "second-order", "second-cover", "two-stage-form"} <= seen, sorted(seen)

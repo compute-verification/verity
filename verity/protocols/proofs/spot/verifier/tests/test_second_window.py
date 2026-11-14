@@ -161,6 +161,32 @@ def test_a_wired_read_opens_the_writer_ranks_tree_and_an_own_read_its_own():
     assert ok("y", e("A/y", "a0", [0, 1])) and not ok("y", e("A/y", "a0", [1, 0])) and not ok("y", e("B/o0", "b1", [0, 1]))
 
 
+def test_a_collectives_cut_port_reads_each_row_from_its_writers_rank():
+    """`Spot.SecondWindow`'s `#guard` on rows: rank 0's member of `A` reads port ``parts`` cut 2 ways, row ``j`` rank
+    ``j``'s ``B`` partials, through one wire; each row is its own read at its own rank's root."""
+    ms = W.parts_of(EX_RANKS, EX_REGS, [("A", 1)])
+    cut = {"cut": [0, 2], "radix": [2, 2], "reader": "A", "port": "parts", "writer": "B", "out": "o0", "at": 0, "base": 0}
+    good, bad = {**cut, "step": [1, 2]}, {**cut, "step": [1, 1]}
+    cuts = {"A": {"parts": 2}}
+
+    def codes(w: dict) -> list[str]:
+        return [c for c, _ in W.wire_tree_failures(EX_RANKS, {"wires": [w], "cuts": cuts}, ms)]
+    assert codes(good) == [] and codes(bad) == ["ranks-wire-tree"]
+    ix = W.Index([W._pattern(good)], cuts)
+    assert [n for n, _, _ in ix.rows("A")] == ["parts#0", "parts#1"]
+    assert W.member_wires(ix, ms[0], 0) == [W.SS.Wire("A", "parts#0", "B", "o0"), W.SS.Wire("A", "parts#1", "B", "o0")]
+    assert ix.row_of("A", "parts") is None and ix.row_of("A", "parts#2") is None and ix.row_of("A", "parts#01") is None
+    dockets = ({"roots": [{"domain": "d0", "leaves": 2, "port": "B/o0", "root": "b0"}]},
+               {"roots": [{"domain": "d1", "leaves": 2, "port": "B/o0", "root": "b1"}]})
+    own = W.own_for(W.Given(dockets=dockets), [], ms[0], [1], W.member_wires(ix, ms[0], 0))
+
+    def ok(row: str, r: str, reads: list) -> bool:
+        e = {"domain": "d" + r, "leaves": 2, "reads": reads, "root": "b" + r, "value": "B/o0"}
+        return W.window_read_ok(EX_RANKS, ix, dockets, own, True, W.SS.Part("A", 0, 2), 0, row, e)
+    assert ok("parts#0", "0", [0, 1]) and ok("parts#1", "1", [0, 1])
+    assert not ok("parts#1", "0", [0, 1]) and not ok("parts#0", "1", [0, 1]) and not ok("parts#1", "1", [1, 0])
+
+
 def test_the_statements_are_the_sampled_members_by_position():
     """`Spot.SecondWindow`'s `#guard` on `sessionFailures`."""
     sel = [{"at": a, "base": 0, "out": "o0", "port": "live", "radix": [1], "reader": "A", "step": [1], "writer": x}
