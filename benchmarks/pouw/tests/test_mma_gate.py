@@ -22,8 +22,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 FIX = Path(__file__).resolve().parent / "fixtures"
 VERDICTS = FIX / "mma_gate" / "verdicts.json"
-GATES = {"pearl_c_sm90": ("benchmarks/pouw/pearl_c_sm90/sass_gate.py", None),
-         "pearl_c_sm120": ("benchmarks/pouw/pearl_c_sm120/sass_gate.py", None),
+GATES = {"pearl_c_sm90": ("verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/sass_gate.py", None),
+         "pearl_c_sm120": ("verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/sass_gate.py", None),
          "s8_linear": ("benchmarks/kernels/s8_linear/sass_gate.py", None)}
 #: the arch each gate's real-listing cases are reported for
 REAL_ARCH = {"pearl_c_sm90": "sm_90a", "pearl_c_sm120": "sm_120a", "s8_linear": "sm_90a"}

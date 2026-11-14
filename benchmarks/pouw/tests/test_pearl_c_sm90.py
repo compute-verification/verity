@@ -1,4 +1,4 @@
-"""Pearl-C's sm_90a tree off the card (benchmarks/pouw/pearl_c_sm90): the GEMMs within the H100's 227 KB with their
+"""Pearl-C's sm_90a tree off the card (verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90): the GEMMs within the H100's 227 KB with their
 tiles the runner's, the kernel's constants the scheme's, the SASS gate refusing a lowered or spilling build, the check
 fixture against the scheme on the H100 record, and run.py's identity refusal and dry run on a CPU stand-in for libcuda
 (pearl_c/fake_cuda.c, with pearl_c_sm120/fake_tma.c's tensor maps; an H200's name, SM count, compute capability, UUID
@@ -26,7 +26,7 @@ from verity_config.settings import of
 from verity.protocols.accounting.pouw.verifier.audit import weights_root
 from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
 
-HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm90"
+HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
 SM120_DIR = HERE.parent / "pearl_c_sm120"
 
 
@@ -431,7 +431,7 @@ def test_a_programmatic_launch_waits_at_its_entry():
     assert RUN.PDL_KERNELS - set(form_kernels()) == {"gemm_words_win_d", "pa_w", "gemm_pearlc_d"}
     assert RUN.PDL_ENTRY_KERNELS == {"widen_a"} | {f"pd_commit_{v}" for v in (*RUN.PD_SERVED, *RUN.PD_STAMPED)}
     assert f'void {RUN.PDL_ENTRY_MARK}() {{}}' in SOURCE
-    assert SOURCE.index("#define PD_PDL") < SOURCE.index('#include "../pearl_c_sm120/hash_decode.cuh"')
+    assert SOURCE.index("#define PD_PDL") < SOURCE.index('#include "../../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/hash_decode.cuh"')
     pd = (SM120_DIR / "hash_decode.cuh").read_text()
     entry = pd[pd.index("DEV void pd_commit_t("):]
     entry = entry[:entry.index("#endif")]

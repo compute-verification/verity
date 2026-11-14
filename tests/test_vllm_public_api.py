@@ -241,7 +241,7 @@ PUBLIC = {
                                             "benchmarks/prove_path and benchmarks/pouw read",
     "verity.protocols.accounting.pouw.prover.serving.pearl_c.grouped": "I1: Pearl-C's grouped call for a fused-MoE layer on an H100 or H200, every "
                                                   "routed expert's rows of one layer in one launch a step (gemm_grouped, group, "
-                                                  "module, ROTATED), which benchmarks/pouw/pearl_c_sm90 checks and times",
+                                                  "module, ROTATED), which verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90 checks and times",
     "verity.protocols.accounting.pouw.prover.serving.pearl_c.manifest": "I1: the Pearl-C device path's manifest as a verifier reads it, and a retained "
                                                    "pass's execution phase re-started from it (manifest_epoch, session_head), "
                                                    "which benchmarks/pouw/pearl_c_vllm's screen reads",
