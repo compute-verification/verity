@@ -24,9 +24,10 @@ list, or two blobs that collide (`names_same`, `tables_same`). A collision is th
 
 **Not established here**: `MemberAtFixed` and `DrawAtFixed`, hypotheses. The check holds the statements to the
 members' order and gives a member a statement only where the sample draws one of its units, and it holds each
-session's sample to the verifier's own at the stage coins (`SpotFlock.sample_of_stmtOk`); that the stage coins of two
-plays with one log before the round are one, and what follows of the members named and the samples printed, is not
-shown.
+session's sample to the verifier's own at the stage coins (`SpotFlock.sample_of_stmtOk`). `FormDraw.lean` gives
+`DrawAtFixed` where the two plays' statements pass that check at one pair of stage coins (`drawAtFixed_of_coins`).
+That the stage coins of two plays with one log before the round are one, and what follows of the members named, is
+not shown.
 -/
 
 @[expose] public section
