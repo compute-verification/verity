@@ -1,0 +1,8 @@
+{
+ "binding_peaks": {
+  "_model_roots:Dsv4SwaWindow_v2": 4.65
+ },
+ "peaks": {
+  "Dsv4SwaWindow_v2{SW=128,BS=64,NB=16384}": 12.76
+ }
+}

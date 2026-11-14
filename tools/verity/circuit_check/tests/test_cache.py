@@ -1813,21 +1813,25 @@ CHECKER = (HARNESS.replace("sys.path.insert(0, str(root))", "sys.path.insert(0, 
            .replace('"hits": hits}', '"hits": hits, "checker": cli.__file__}'))
 
 
+def _unkeyed(root: Path, mod: str, d: dict) -> None:
+    (root / f"syn/{mod}.circuit-check.unkeyed.json").write_text(json.dumps(d))
+
+
 @pytest.mark.slow
 def test_the_scheduler_s_peaks_are_in_no_key(tmp_path):
-    """`heavy.json` (`cli.HEAVY`) says only which targets may run beside which (`cli.run`'s scheduler), never what a check
-    computes: an edit to it reuses every target and the task list (so adding a peak never makes
+    """The peaks beside their owners (`sidecars.UNKEYED`) say only which targets may run beside which (`cli.run`'s
+    scheduler), never what a check computes: an edit to any of them reuses every target and the task list (so adding a peak never makes
     `circuit-check --all` run cold), and so does an edit to the checker's docstrings and comments (`cache.version`), while an
     edit to the checker's code still reruns them all."""
     import shutil
 
     root = _tree(tmp_path)
     checker = root / "checker" / "circuit_check"
-    shutil.copytree(REPO / "tools/verity/circuit_check/src/circuit_check", checker,
-                    ignore=shutil.ignore_patterns("__pycache__", "heavy.json"))
-    (checker / "heavy.json").write_text(json.dumps({"SynOther_v1": 20.0}))
+    shutil.copytree(REPO / "tools/verity/circuit_check/src/circuit_check", checker, ignore=shutil.ignore_patterns("__pycache__"))
+    _unkeyed(root, "other", {"peaks": {"SynOther_v1": 20.0}})
     assert _run(root, CHECKER)["checker"] == str(checker / "cli.py")
-    (checker / "heavy.json").write_text(json.dumps({"SynOther_v1": 20.0, "SynTop_v1": 161.8}))
+    _unkeyed(root, "other", {"peaks": {"SynOther_v1": 21.0}})
+    _unkeyed(root, "top", {"peaks": {"SynTop_v1": 161.8}, "binding_peaks": {"_core_roots": 3.0}})
     out = _run(root, CHECKER)
     assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["task_list"]
     checks = checker / "checks.py"

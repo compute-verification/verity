@@ -1,12 +1,12 @@
 """``circuit-check TARGET... [--out report.json]``: the standard property checks on each target, one machine-readable report.
 
-    circuit-check F32Add_v1 'RMSNormTriton_v1{N=64,EPS=1e-05}'     Definitions
+    circuit-check F32Add_v1 'WidgetNorm_v1{N=64,EPS=1e-05}'        Definitions
     circuit-check rope-head gemm-coordinate/k64/sm80-mma-bf16       templates, subcircuits
     circuit-check path/to/build_request_LP3_T2                      a served workload's request Program
     circuit-check verity/circuits/ops/boolean/gf2k.circuit-check.py
                                                                     the targets a sidecar's bindings reach that its module defines
     circuit-check --all                                             every registered Definition and template (the suite's set)
-    circuit-check --as-call --ranges SparseMlaSplit_v1              the spots of a family's RANGES rule (`ranges`)
+    circuit-check --as-call --ranges WidgetSplit_v1                 the spots of a family's RANGES rule (`ranges`)
     circuit-check --all --shard 2/4 --shard-dir s2                  only the targets whose id hashes to shard 2 of 4 (`shard`)
     circuit-check --combine s1 s2 s3 s4                             the four shards' records as the unsharded run's report
     circuit-check --all --records-only --cache DIR -j 64            every catalog binding's record, no target (`records`)
@@ -18,7 +18,7 @@
                                                                     NAME's targets from its slice alone (`units.sliced`)
     circuit-check --all --cache DIR --bindings                      each catalog binding's targets, none checked (`bindings`)
     circuit-check --structural unit.tmpl GemmAccumulatorS8_v2{...}   a flock-ir-tmpl template as the Definition's lowering
-    circuit-check --structural split/ SparseMlaHeadEnd_v1{...}       a split (struct_slots), its nets wired to lookup slots
+    circuit-check --structural split/ WidgetHeadEnd_v1{...}          a split (struct_slots), its nets wired to lookup slots
     circuit-check --ambient PouwU129_v2 F32Mul_v4                   each lowering one text in a plain and a perturbed interpreter
 
 A root a sidecar lists in ``_by_calls_roots`` is checked by its calls alone and never built (`by_calls`): its report entry says
@@ -724,14 +724,14 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     so a run that is itself killed still leaves them.
 
     Isolated, circuit-check's memory stays under ``mem_gb`` GiB (default: what `memory_gb` leaves this process) as long as every
-    target that grows more than `HEAVY_GB` past the task list it is forked with (``peak_gb - rss_start_gb``) is listed in `HEAVY`
-    with its peak: a target starts only while the peaks of those running and its own add up to at most `budget_gb` (``mem_gb``
+    target that grows more than `HEAVY_GB` past the task list it is forked with (``peak_gb - rss_start_gb``) has its peak listed
+    beside its owner (`heavy`): a target starts only while the peaks of those running and its own add up to at most `budget_gb` (``mem_gb``
     less this process's RSS), counting an unlisted target as `HEAVY_GB`; one heavier than that still runs, alone, and the log
     says it does not fit, or, when the budget is under `HEAVY_GB` and so every target runs alone, says why and what to do
     (`short_budget`; on stderr without ``log``); the listed targets go first, heaviest first.  The sum counts each listed
     process's copy of the task list, which they share, so the bound is conservative by that much per process.  An unlisted target that grows well past
     `HEAVY_GB` can still break it: the process it gets killed in is reported as that target's failure (``circuit-check/killed``,
-    with its peak), the other targets run on, and its peak belongs in `HEAVY`.  Once ``mem_file`` holds a number of GiB
+    with its peak and the file it belongs in, `peak_file`), the other targets run on.  Once ``mem_file`` holds a number of GiB
     (`granted_gb`: check.py writes its slot's mem= there when every step beside circuit-check has ended), that number takes
     ``mem_gb``'s place for the targets not yet started.
 
@@ -1096,7 +1096,8 @@ def _checked_all(tasks: list[tuple], specs: list[str], opts: CK.Options, everyth
                 if isinstance(g, Killed):
                     r = {"failures": [{"check": "circuit-check", "code": "killed", "definition": tasks[i][1],
                                        "name": f"circuit-check/killed {tasks[i][1]}: its process died ({g['how']}: the OOM "
-                                               f"killer?) at a peak of {peak} GiB"}],
+                                               f"killer?) at a peak of {peak} GiB, which belongs in "
+                                               f"{peak_file(tasks[i][0], tasks[i][1])}"}],
                          "warnings": [], "kind": tasks[i][0], "target": tasks[i][1], "seconds": 0.0, "peak_gb": peak, "killed": True}
                     done(i, r)
                 else:
@@ -1154,11 +1155,6 @@ def update_pins(rep: dict) -> dict:
     return CK.load_pins()
 
 
-#: the targets that grow more than `HEAVY_GB` past the task list they are forked with, each with its ``peak_gb`` in GiB in an
-#: isolated `--all` run (`run`'s scheduling; it counts that task list).  The commit that writes a peak
-#: names the run it was measured in.  No key holds it (`cache.HEAVY`), so a new peak reruns no target and needs no edit here.
-#: Beside them, by binding name, how far the catalog bindings whose builds grow past `units.APART_GB` grew (`units.built_apart`)
-HEAVY = CC.HEAVY
 #: what an unlisted target is counted at: nearly all grow less than 1.5 GiB, and their copy-on-write copies of the task list
 #: are small too (16 of them beside a 43 GiB task list hold 62-77 GiB together)
 HEAVY_GB = 4
@@ -1215,8 +1211,34 @@ def granted_gb(path: Path | None) -> int | None:
 
 
 def heavy() -> dict[str, float]:
-    with CC.internal():
-        return json.loads(HEAVY.read_text()) if HEAVY.exists() else {}
+    """The measured peaks `run` and `units.built_apart` schedule by, in GiB, each beside its owner in that module's unkeyed
+    file (`sidecars.UNKEYED`): each target that grows more than `HEAVY_GB` past the task list it is forked with, by its label
+    (its ``peak_gb`` in an isolated `--all` run, in the file of the module that defines its Definition, or binds its template
+    row); and each catalog binding whose build grows past `units.APART_GB`, by its name.  No key holds them, so a new
+    peak reruns no target.  A label or binding in two files is an error."""
+    out: dict[str, float] = {}
+    where: dict[str, str] = {}
+    for mod, d in SC.unkeyed().items():
+        mine = {**d.get("peaks", {}),
+                **{",".join(u if u.startswith("<") else f"{mod}{SC.SUFFIX}#{u}" for u in k.split(",")): gb
+                   for k, gb in d.get("binding_peaks", {}).items()}}
+        for k, gb in mine.items():
+            if where.setdefault(k, mod) != mod:
+                raise ValueError(f"the peak of {k} is in {where[k]}'s unkeyed file and in {mod}'s: keep the owner's")
+            out[k] = gb
+    return out
+
+
+def peak_file(kind: str, label: str) -> str:
+    """Where the peak of target ``label`` of ``kind`` goes (`heavy`): its owner's unkeyed file, by its path."""
+    mod = _family_owner(kind, label)
+    p = SC.unkeyed_file(mod) if mod else None
+    return SC.rel(p) if p is not None else f"the unkeyed file of the module that owns {label}"
+
+
+def _family_owner(kind: str, label: str) -> str | None:
+    """The module that owns a target, as its pins have it (`sidecars.pin_owner`): its Definition's, its template's."""
+    return SC.pin_owner({"definition": "definitions", "template": "units"}.get(kind, kind), label)
 
 
 #: the memory a worker counts on: a cold `--all` grows some workers to 40-155 GiB, and two `--all -j 0` runs, ~130 workers

@@ -9,14 +9,17 @@ path, is
 - the label of a template row a sidecar in the handed package binds (a ``TEMPLATE_PARAMS`` entry's subcircuit id);
 - the handed package or a module under it, dotted or as a path, which is how a root group is named
   (``<module>.circuit-check#<group>``), and a sidecar file there by its stem (``<stem>.circuit-check``) where no sidecar
-  outside the handed package shares that stem.
+  outside the handed package shares that stem;
+- a pin in ``pins/`` whose owner (`sidecars.pin_owner`) is in the handed package: it goes in that module's pins file.
 
-An integration is a package of `sidecars.TREES` (``adapters/<stack>/<package>``): the package imports none, by an ``import``
-statement or by a string naming it, and no file names one as a word.  What circuit-check needs of a served circuit, its sidecar
+An integration is a package of `sidecars.TREES` that registers itself (``adapters/<stack>/<package>`` with an
+``__init__.circuit-check`` sidecar, as `sidecars` finds it): the package imports none, by an ``import`` statement or by a
+string naming it, and no file names one as a word.  What circuit-check needs of a served circuit, its sidecar
 hands it (`sidecars`), and a docstring that needs an example names a made-up one."""
 from __future__ import annotations
 
 import ast
+import json
 import re
 from pathlib import Path
 from typing import NamedTuple
@@ -48,7 +51,12 @@ def handed_package() -> str:
 
 
 def integrations() -> set[str]:
-    return {d.name for tree in SC.TREES for d in (SC.REPO / tree).glob("*/*") if (d / "__init__.py").is_file()}
+    return {d.name for tree in SC.TREES for d in (SC.REPO / tree).glob("*/*")
+            if any((d / f"__init__{SC.SUFFIX}.{kind}").is_file() for kind in ("py", "json"))}
+
+
+def under(pkg: str, module: str | None) -> bool:
+    return module == pkg or (module or "").startswith(pkg + ".")
 
 
 def handed_names(pkg: str) -> tuple[set[str], set[str], list[str]]:
@@ -57,16 +65,14 @@ def handed_names(pkg: str) -> tuple[set[str], set[str], list[str]]:
     from verity_flock import subcircuit_templates as TM
 
     TG.load_registries()
-    under = (lambda m: m == pkg or (m or "").startswith(pkg + "."))
-    ids = {i for i, d in REGISTRY.defs.items() if TG._authored(d) and under(SC.owner(d))}
+    ids = {i for i, d in REGISTRY.defs.items() if TG._authored(d) and under(pkg, SC.owner(d))}
     rows = set()
     for entry, (unit, params) in TG.template_params().items():
-        if under(unit.partition(SC.SUFFIX)[0]):
+        if under(pkg, unit.partition(SC.SUFFIX)[0]):
             t = TM.TEMPLATES[TG.template_of(entry)]
             rows |= {t.bind(**p).id for p in params}
-    stem = (lambda m: m.rpartition(".")[2])
-    theirs = {stem(m) for m in SC.discover() if not under(m)}
-    stems = sorted({stem(m) for m in SC.discover() if under(m)} - theirs)
+    theirs = {m.rpartition(".")[2] for m in SC.discover() if not under(pkg, m)}
+    stems = sorted({m.rpartition(".")[2] for m in SC.discover() if under(pkg, m)} - theirs)
     return ids, rows, stems
 
 
@@ -111,6 +117,9 @@ def findings() -> list[Found]:
                     out += [Found(rel, no, kind, m[0]) for m in rx.finditer(line)]
         if p.suffix == ".py":
             out += _imports(p, text, tops)
+    for p in sorted(SC.SHARED_PINS.glob("*/*.json")):
+        for kind, pins in json.loads(p.read_text()).items():
+            out += [Found(SC.rel(p), 0, "pin", key) for key in pins if under(pkg, SC.pin_owner(kind, key))]
     return sorted(set(out))
 
 
@@ -118,6 +127,7 @@ def test_the_checker_names_no_circuit_it_is_handed():
     found = findings()
     assert not found, (
         f"{len(found)} name(s) of the handed catalog ({handed_package()}) or of an integration in circuit-check's package; "
-        "each goes to the sidecar of the module that defines it (a binding or a table in `<module>.circuit-check.py`, a "
-        "scheduler's peak in `<module>.circuit-check.peaks.json`), and a docstring's example is made up:\n"
+        "each goes to the sidecars of the module that defines it (a binding or a table in `<module>.circuit-check.py`, a pin "
+        "in `<module>.circuit-check.json`, a peak, a held block or a family's count in `<module>.circuit-check.unkeyed.json`), "
+        "and a docstring's example is made up:\n"
         + "\n".join(f"  {f.path}:{f.line}: {f.kind} {f.name}" for f in found))
