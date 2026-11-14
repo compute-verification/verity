@@ -153,15 +153,28 @@ def test_an_install_writes_what_the_register_gives_in_one_order_and_drift_then_r
 def test_drift_compares_the_node_with_what_the_register_gives_now_never_with_the_tracked_file(fleet):
     path = fleet["tmp"] / "a" / "etc" / "peers"
     path.write_text(PEERS)                                  # the tracked file, byte for byte: not what a node should hold
-    assert _read(fleet)["state"] == "unknown"
+    e = _read(fleet)
+    assert e["state"] == "unknown" and e["detail"].endswith("; it names 0 machine(s) and the register gives 4; it lacks "
+                                                            "vy-cpu-1, vy-cpu-2, vy-cpu-10, vy-n-2")
     _install(fleet)
     assert _read(fleet)["state"] == "ok"
     machine(fleet["reg"], "vy-cpu-3", "192.0.2.13")        # a machine joins: every installed list is behind the register
     e = _read(fleet)
-    assert e["state"] == "stale" and "by lane-x" in e["detail"] and "the register or its template has changed since" in e["detail"]
+    assert e["state"] == "stale" and "by lane-x" in e["detail"] and e["detail"].endswith(
+        "the register or its template has changed since; it names 4 machine(s) and the register gives 5; it lacks vy-cpu-3: install it")
     path.write_text(path.read_text() + "vy-cpu-3 research@192.0.2.13\n")
     e = _read(fleet)
-    assert e["state"] == "unknown" and "written by hand" in e["detail"]
+    assert e["state"] == "unknown" and e["detail"].endswith(
+        "written by hand or edited in place; it names the 5 machine(s) the register gives, written otherwise")
+    path.write_text(path.read_text() + "vy-cpu-77 research@192.0.2.9\n")       # a machine the register never held
+    assert _read(fleet)["detail"].endswith("the register gives, written otherwise (6 line(s) for the register's 5)")
+    path.write_text(path.read_text().replace("vy-cpu-77 research@192.0.2.9\n", "vy-gate research@192.0.2.9\n"))
+    assert _read(fleet)["detail"].endswith("; it names 6 machine(s) and the register gives 5; it has vy-gate (live in the register)")
+    path.write_text(path.read_text().replace("vy-gate research@192.0.2.9\n", ""))
+    path.write_text(path.read_text().replace("vy-cpu-1 ", "vy-n-1 "))
+    assert _read(fleet)["detail"].endswith("; it names 5 machine(s) and the register gives 5; it lacks vy-cpu-1; it has vy-n-1 "
+                                           "(released in the register)")
+    path.write_text(path.read_text().replace("vy-n-1 ", "vy-cpu-1 "))
     _install(fleet)
     assert _read(fleet)["state"] == "ok" and "vy-cpu-3 -i /k research@192.0.2.13\n" in path.read_text()
 

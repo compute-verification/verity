@@ -65,14 +65,16 @@ field of its register file (`host`, its address), where NAME is one machine or a
 a pattern is written once for each machine of the pattern, in the order of their names with numbers by value, so one register
 gives one text; a line names one machine or pattern, and a line that names none is copied. The register is the launcher's, the
 directory `research pods` finds a machine in ($RESEARCH_MACHINES_D, else the notes clone's `machines.d`; the launcher's own
-clone is pulled first unless --no-fetch), and each machine in it is one of three: live, released (`released_host` and no `host`: a pattern passes it by, so
-its line goes at the next install, and a template that names it is refused), or broken (a file that doesn't parse or doesn't
-validate). A stopped machine (`unreachable_since`) is live: its address is still its own, and its line stays. Nothing is written
-from a register that can't be read: `install` refuses, naming the path, when the register is off or isn't a directory, holds no
-machine, holds a broken file a pattern matches, lacks a machine or a field the template names, or gives a value that isn't one
-plain word. `drift` compares the installed file with the text the register gives now: `ok` when they are the same, `stale` when
-an install wrote the file and the register or the template has changed since, `unknown` when no install wrote it or the
-register can't be read (the detail names the path).
+clone is pulled first unless --no-fetch), and each machine in it is one of three: live, released (`released_host` and no
+`host`: a pattern passes it by, so its line goes at the next install, and a template that names it is refused), or broken (a
+file that doesn't parse or doesn't validate). A stopped machine (`unreachable_since`) is live: its address is still its own,
+and its line stays. Nothing is written from a register that can't be read: `install` refuses, naming the path, when the
+register is off or isn't a directory, holds no machine, holds a broken file a pattern matches, lacks a machine or a field the
+template names, or gives a value that isn't one plain word. `drift` compares the installed file with the text the register
+gives now: `ok` when they are the same, `stale` when an install wrote the file and the register or the template has changed
+since, `unknown` when no install wrote it or the register can't be read (the detail names the path); where the two differ it
+says how the machines the installed file names do: how many each names, which the installed one lacks and which it has that the
+register's text doesn't.
 An install never takes a machine out of a list unasked. The machines a file names are the register's names (live, released or
 broken) that its lines hold as whole words, comments apart; `install` refuses when the text it would write lacks one the
 installed file names, or has fewer lines, and says which machines would go and what the register says of each. `--allow-shrink`
@@ -815,11 +817,17 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
     commit = git("rev-parse", f"{ref}^{{commit}}", repo=repo).strip()
     want = expected(node, commit, repo)
     generated = [e.path for e in node.entries if e.by]
-    seen = probe(node, sorted({*want, *generated}), run)
+    filled = [p for p, v in want.items() if v[3].register]
+    reg, unread = None, None
+    if filled:
+        try:
+            reg = register()
+        except NoRegister as err:
+            unread = str(err)
+    seen = probe(node, sorted({*want, *generated}), run, {p: reg.names() for p in filled} if reg else None)
     srcs = sorted({v[0] for v in want.values()})
     old = versions(srcs, commit, limit=HISTORY, repo=repo) if srcs else {}
     recent: dict | None = None
-    reg: Register | None = None
     entries = []
 
     def of(e: Entry) -> dict:
@@ -840,11 +848,11 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
                 {"detail": "in the tree, not installed"})})
             continue
         rec = seen["record"].get(path) or {}
-        unmade = None
-        if e.register:
+        unmade, apart = unread if e.register else None, ""
+        if e.register and reg:
             try:
-                reg = reg or register()
-                sha = made(e, sha, reg, repo).blob      # what the register gives now, not the template
+                new = made(e, sha, reg, repo)
+                sha, apart = new.blob, differs(got, new, reg)      # what the register gives now, not the template
             except NoRegister as err:
                 unmade = str(err)
         if unmade:
@@ -857,10 +865,10 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
             state, detail = "ok", ""
         elif e.register and rec.get("blob") == got["blob"] and rec.get("commit"):
             state, detail = "stale", (f"installed {rec.get('at')} by {rec.get('by')} from {rec.get('ref')} @ {rec['commit'][:12]}; "
-                                      "the register or its template has changed since: install it")
+                                      f"the register or its template has changed since{apart}: install it")
         elif e.register:
             state, detail = "unknown", ("not the text the register gives, and no install wrote it: written by hand or edited "
-                                        "in place; an install says which machines it would add and drop")
+                                        f"in place{apart}")
         elif (rp, got["blob"]) in old:
             c, d = old[(rp, got["blob"])]
             state, detail = "stale", f"{ref}'s version of {c[:12]} ({d}); {ref} has changed it since: install it"
@@ -1037,6 +1045,21 @@ def listed(node: Node, e: Entry, now: dict | None, new: Made, reg: Register, all
                       f"{out['after']} in {rows}: an install would take out {', '.join(gone)}. Nothing changed; "
                       "`--allow-shrink` installs it all the same")
     return out
+
+
+def differs(now: dict | None, new: Made, reg: Register) -> str:
+    """For drift's line: how the machines an installed register-made file names (`now`: the probe's reading of it) differ from
+    those the register's text names. Names and counts, never an address."""
+    if not now or "names" not in now:
+        return ""
+    rows, after = named(new.data.decode(), reg.names())
+    lacks = sorted(set(after) - set(now["names"]), key=natural)
+    extra = [f"{n} ({reg.says(n)})" for n in sorted(set(now["names"]) - set(after), key=natural)]
+    if not lacks and not extra:
+        return (f"; it names the {len(after)} machine(s) the register gives, written otherwise"
+                + (f" ({now['rows']} line(s) for the register's {rows})" if now["rows"] != rows else ""))
+    return (f"; it names {len(now['names'])} machine(s) and the register gives {len(after)}"
+            + "".join(f"; it {verb} {', '.join(names)}" for verb, names in (("lacks", lacks), ("has", extra)) if names))
 
 
 def accept(node: Node, e: Entry, sources: list[str], commit: str, ref: str, by: str, run: Runner, apply: bool) -> dict:
