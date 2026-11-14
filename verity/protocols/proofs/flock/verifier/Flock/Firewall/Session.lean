@@ -878,7 +878,7 @@ the frame to release
 (`Frames.Sessions.innerRound`), its proof file for the session's `Proof` (`Frames.Sessions.file`), its proofs on its
 frame's samples, and its requests refused unless they carry the values its frame took, the session's extra claims and the
 coins the stream answered (`Frames.ownOf`).
-Anything else is answered `err WHY`. Each connection is served inside `around` (the kept loop counts them, `kept`). -/
+Anything else is answered `err WHY`. Each connection is served inside `around` (`listenAt`). -/
 def frames (setupAt : Hello.SetupAt) (srv : Socket.Server) (reg : IO.Ref Frames.Sessions)
     (l0s : IO.Ref Level0.Slots) (around : IO Unit → IO Unit) : IO Unit := do
   let keep := fun (root : ByteArray) (r : Nat) (s : Array ByteArray) => reg.modifyGet fun R =>
@@ -914,8 +914,9 @@ def frames (setupAt : Hello.SetupAt) (srv : Socket.Server) (reg : IO.Ref Frames.
 /-- **The loop's two ports**: sessions' on `127.0.0.1:listen` (`0`: a port the system picks) and the frames' on a port the
 system picks, printed as `LISTENING 127.0.0.1:PORT` and then `FRAMES 127.0.0.1:PORT` once it listens on both. Each
 connection is served on its own thread: the frames' by `frames` at `setupAt`, and each session's, numbered in arrival
-order, by `session`, after which every level 0 sampled for it is freed (`Level0.Slots.close`); each frame's inside
-`around`. -/
+order, by `session`, after which its frames and every level 0 sampled for it are freed (`Frames.close`,
+`Level0.Slots.close`). Each connection, a session's with the freeing after it, is served inside `around` (the kept loop
+counts them, `kept`). -/
 def listenAt (listen : Nat) (setupAt : Hello.SetupAt) (reg : IO.Ref Frames.Sessions) (l0s : IO.Ref Level0.Slots)
     (around : IO Unit → IO Unit) (session : Nat → Socket.Client → IO Unit) : IO Unit := do
   let sids ← IO.mkRef 0
@@ -933,7 +934,7 @@ def listenAt (listen : Nat) (setupAt : Hello.SetupAt) (reg : IO.Ref Frames.Sessi
     repeat
       let p ← srv.accept.block
       let sid ← sids.modifyGet fun n => (n, n + 1)
-      let _ ← IO.asTask (prio := .dedicated) do
+      let _ ← IO.asTask (prio := .dedicated) <| around do
         try session sid p catch e => IO.eprintln s!"session: {e}"
         Frames.close reg sid (((← l0s.get).slots.filter (·.owner == sid)).map (·.l0.root))
         let (k, n) ← l0s.modifyGet fun R =>
@@ -1071,13 +1072,16 @@ def keptState (w : Hello.Window) (m : Option Member) (n : Nat) (R : Frames.Sessi
 every statement of a window, one member after another. It reads the window (`Hello.Window`) once, and each member's
 statement and auditor on its standard input: `member LEN` followed by the `LEN` bytes of a JSON array of the member's
 flags, the statement flags (`Hello.FLAGS` without the window's) and `--verifier HOST:PORT`, is answered `ok` once it has
-read the member's files, or `refused WHY`. The member changes only while no session and no frames connection is open, so
-a session is of the member it started at, from its first request to its end, and so is every frame and finish of it
-(`frames`); its sample's statement is set up once a member (`Hello.Setup.setupAt`), as `run` sets up each of its one
-statement's. At the change the old member, with its setups, is dropped and the frames and level 0s are emptied
-before the new member is set, so only the window and its readings outlive a member; standard error says
-`kept: member K ok, its files read in R ms, then W ms until no session or frame was open: FLAGS`. A session while the loop
-has no member is refused.
+read the member's files, or `refused WHY`. Every connection is counted open from before it reads the member to
+after its session's frames and level 0s are freed (`listenAt`'s `around`), and the member changes only while none is
+open, so a session is of the member it started at, from its first request to its end, and so is every frame and finish
+of it (`frames`); its sample's statement is set up once a member (`Hello.Setup.setupAt`), as `run` sets up each of its
+one statement's. Besides the window and its readings, the loop's frames and level-0 tables (`reg`, `l0s`) outlive a
+member, as they outlive a session in `run`'s loop; their entries are each one session's, freed at its end, and at the
+change, with the old member and its setups dropped, both are emptied of anything left, before the new member is set.
+Standard error says `kept: member K ok, its files read in R ms, then W ms until no session or frame was open, E entries
+left emptied: FLAGS`, `E` the entries it emptied, none unless a frames connection wrote one after its session ended.
+A session while the loop has no member is refused.
 `schedule LEN` followed by the `LEN` bytes of a sample's JSON is answered as `run --schedule` answers it at the member,
 and `state 0` with `state JSON`, what the loop holds (`keptState`). A request it cannot read is answered `err WHY` and
 ends the loop; so does the end of its standard input, which is how it is stopped. -/
@@ -1100,15 +1104,13 @@ def kept (usage : String) (args : List String) : IO UInt32 := do
     member.modify fun (m, n) => (m, n + 1)
     try act finally member.modify fun (m, n) => (m, n - 1)
   listenAt listen current reg l0s counted fun sid p => do
-    match ← member.modifyGet fun (m, n) => (m, (m, if m.isSome then n + 1 else n)) with
+    match (← member.get).1 with
     | none =>
       match ← recvFrame p with
       | some f => refuseAll p f (stopOf "a session while the kept loop has no member")
       | none => pure ()
       close p
-    | some m =>
-      try serve (m.S.setupAt m.specs) m.auditor reg l0s sid p
-      finally member.modify fun (m, n) => (m, n - 1)
+    | some m => serve (m.S.setupAt m.specs) m.auditor reg l0s sid p
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout
   let say := fun (line : String) => do
@@ -1136,11 +1138,14 @@ def kept (usage : String) (args : List String) : IO UInt32 := do
           repeat
             if ← member.modifyGet fun (old, n) => if n == 0 then (true, (none, 0)) else (false, (old, n)) then break
             IO.sleep 1
-          reg.set {}
-          l0s.set {}
+          let R ← reg.modifyGet fun R => (R, {})
+          let L ← l0s.modifyGet fun L => (L, {})
           member.modify fun (_, n) => (some m, n)
+          let left := R.sessions.size + R.reps.size + R.salts.size + R.files.size + R.inner.size + L.slots.size +
+            L.sessions.size + L.tables.size
           IO.eprintln (s!"kept: member {members} ok, its files read in {t1 - t0} ms, then {(← IO.monoMsNow) - t1} ms " ++
-            s!"until no session or frame was open: {(Json.arr (margs.toArray.map Json.str)).compress}")
+            s!"until no session or frame was open, {left} entries left emptied: " ++
+            (Json.arr (margs.toArray.map Json.str)).compress)
           (← IO.getStderr).flush
           members := members + 1
           say "ok"

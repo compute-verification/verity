@@ -59,8 +59,8 @@ class Kept:
         assert line.startswith("state "), line
         return json.loads(line.removeprefix("state "))
 
-    def said(self, prefix: str) -> str:
-        """The loop's next line on its standard error that starts with `prefix`."""
+    def said(self, prefix: str | tuple[str, ...]) -> str:
+        """The loop's next line on its standard error that starts with `prefix` (or one of them)."""
         while not (line := self.p.stderr.readline().decode()).startswith(prefix):
             assert line, "the loop's standard error closed"
         return line.rstrip("\n")
@@ -179,59 +179,78 @@ def test_each_session_is_of_the_member_current_at_its_start(zk):
         assert got == want.replace(nonce, NONCE.search(got)[1]), i
 
 
+
 EMPTY = {"frames": {"sessions": 0, "reps": 0, "salts": 0, "files": 0, "inner": 0},
          "level0": {"slots": 0, "sessions": 0, "tables": 0}}
+
+
+def _flags(args: list[str]) -> str:
+    return json.dumps(args, separators=(",", ":"))
+
+
+def _live(k: Kept, args: list[str]) -> tuple[socket.socket, bytes]:
+    """A session of the member at `args`, past its level 0 and its `Commit`, still open, and what its `Commit` carried
+    past its Σ. A session before it, refused at its first `Commit`, names the statement's table."""
+    first = _streams(args)[0]
+    s = k.connect()
+    call(s, REGISTER)
+    call(s, hello(""))
+    assert call(s, open_(first)) == b"\x01"
+    [table] = re.search(r"tables are \[(.*)\]$", reason(call(s, COMMIT)))[1].split(", ")
+    s.close()
+    s = k.connect()
+    call(s, REGISTER)
+    name = _name(call(s, hello("")))
+    assert call(s, open_(first)) == b"\x01"
+    m = _statement_m(k, name)
+    [(_, _, r)] = level0(k, [(m, _zeros(m))], name)
+    live = k.state()
+    assert live["member"]["setups"] == 1 and live["level0"]["slots"] == 1 and live["open"] >= 1, live
+    assert live["frames"]["sessions"] >= 1 and live["level0"]["sessions"] >= 1, live
+    call(s, commit([(table, r)]))
+    return s, commit([(table, r)])[5:]
 
 
 @pytest.mark.slow
 def test_between_two_members_it_holds_only_the_window_and_each_takes_its_own_coins(zk):
     """Two members, the fixture's statement over its 16-unit and its 32-unit population, each with a session that has its
-    level 0 sampled and its `Commit` sent. When the second member is answered `ok`, the loop holds the window as read and
-    the second member's flags, and nothing else: no setup at a sample, no frame, salt, proof file or inner proof, no level 0
-    and no session's name, and none open. While the first member's session was live the same report held its level 0 and
-    its session, so the report sees them. Each member's sessions reach the auditor on connections of their own: the
-    member's recorded `Hello`, the statement, first, and only then its `Open` and its `Commit`, the session's first coin
-    request, carrying that `Hello`'s Σ.
-    The other tests here never sample a level 0 under a kept loop, so none of them would see a level 0, frame or setup
-    that outlives its member."""
+    level 0 sampled and its `Commit` sent; the second member is asked for while the first's session is still open, so the
+    change waits for it. Its end, with its level 0 freed, is on standard error before the change, and the change finds
+    nothing left to empty. When the second member is answered `ok` the loop holds the window as read and the second
+    member's flags, and nothing else: no setup at a sample, no frame, salt, proof file or inner proof, no level 0, no
+    session's name, nothing open. While a session was live the same report held its level 0 and its session, so the
+    report sees them. Each member's sessions reach the auditor on connections of their own: the member's recorded
+    `Hello`, the statement, first, and only then its `Open` and its `Commit`, the session's first coin request, carrying
+    that `Hello`'s Σ. A loop whose count of open sessions drops before a session's entries are freed fails here whenever
+    its change of member overtakes the freeing, which such a loop allows and this test cannot force. No other test here
+    samples a level 0 under a kept loop, so none would see one outlive its member."""
     records = [_record(zk, "selftest/honest"), _record(zk, "m26")]
     roots = iter(range(1, 256))
     answers = {10: plain(REGISTER), 3: b"\x01", 7: coins([])}
     auditor = Auditor(lambda f: _answer(root=next(roots)) if f[0] == 1 else answers[f[0]])
+    members = [_args(zk, "pub-16.bin"), _args(zk, "pub-32.bin")]
+    flags = [[*args, "--verifier", auditor.addr] for args in members]
     k = Kept()
-    left = []
-    for i, args in enumerate([_args(zk, "pub-16.bin"), _args(zk, "pub-32.bin")]):
-        flags = [*args, "--verifier", auditor.addr]
-        assert k.member(flags) == "ok"
-        assert k.said(f"kept: member {i} ok, ").endswith(f": {json.dumps(flags, separators=(',', ':'))}")
-        assert k.state() == {"window": {"partition": False, "program": 0}, "member": {"flags": flags, "setups": 0},
-                             "open": 0, **EMPTY}
-        first = _streams(args)[0]
-        s = k.connect()
-        call(s, REGISTER)
-        call(s, hello(""))
-        assert call(s, open_(first)) == b"\x01"
-        [table] = re.search(r"tables are \[(.*)\]$", reason(call(s, COMMIT)))[1].split(", ")
-        s.close()
-        s = k.connect()
-        call(s, REGISTER)
-        name = _name(call(s, hello("")))
-        assert call(s, open_(first)) == b"\x01"
-        m = _statement_m(k, name)
-        [(_, _, r)] = level0(k, [(m, _zeros(m))], name)
-        live = k.state()
-        assert live["member"]["setups"] == 1 and live["level0"]["slots"] == 1 and live["open"] >= 1, live
-        assert live["frames"]["sessions"] >= 1 and live["level0"]["sessions"] >= 1, live
-        call(s, commit([(table, r)]))
-        left.append(commit([(table, r)])[5:])
-        s.close()
-        k.said(f"level 0: session {2 * i + 1} ended; ")
+    assert k.member(flags[0]) == "ok"
+    assert k.said("kept: member 0 ok, ").endswith(f", 0 entries left emptied: {_flags(flags[0])}")
+    assert k.state() == {"window": {"partition": False, "program": 0}, "member": {"flags": flags[0], "setups": 0},
+                         "open": 0, **EMPTY}
+    s, left0 = _live(k, members[0])
+    k.send("member", json.dumps(flags[1]).encode())
+    s.close()
+    assert k.line() == "ok"
+    assert k.said(("level 0: session ", "kept: member ")).startswith("level 0: session 1 ended; ")
+    assert k.said("kept: member 1 ok, ").endswith(f", 0 entries left emptied: {_flags(flags[1])}")
+    assert k.state() == {"window": {"partition": False, "program": 0}, "member": {"flags": flags[1], "setups": 0},
+                         "open": 0, **EMPTY}
+    s, left1 = _live(k, members[1])
+    s.close()
     k.close()
     assert [[f[0] for f in c] for c in auditor.got] == [[10, 1, 3], [10, 1, 3, 7]] * 2
-    for i, (want, nonce, _) in enumerate(records):
+    for i, ((want, nonce, _), left) in enumerate(zip(records, [left0, left1])):
         for c in auditor.got[2 * i:2 * i + 2]:
             got = c[1][5:].decode()
             assert got == want.replace(nonce, NONCE.search(got)[1]), i
         _, sent, _, commit_left = auditor.got[2 * i + 1]
         sigma = bytes.fromhex(json.loads(sent[5:])["link"]["sigma"])
-        assert commit_left == b"\x07" + _bytes(sigma) + left[i], i
+        assert commit_left == b"\x07" + _bytes(sigma) + left, i
