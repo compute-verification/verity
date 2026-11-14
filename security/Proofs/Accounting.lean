@@ -67,6 +67,7 @@ public import Proofs.Accounting.RemoteHeld.DrawMeets
 public import Proofs.Accounting.RemoteHeld.Binding
 public import Proofs.Accounting.RemoteHeld.Sketch
 public import Proofs.Accounting.RemoteHeld.SketchLine
+public import Proofs.Accounting.RemoteHeld.SketchMeets
 public import Proofs.Accounting.RemoteHeld.SketchP2
 public import Proofs.Accounting.RemoteHeld.Line
 public import Proofs.Accounting.RemoteHeld.Subprotocol
