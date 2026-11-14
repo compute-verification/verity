@@ -38,13 +38,20 @@ gives its outcome (`prove`, `outcome_of`).
   challenger session on the window's run (`a5_coins.start`: ``local``, ``loopback:HOST:PORT`` or ``gate:USER@HOST``),
   each class a rank of it, sampling on a thread of its own in its turn, and each stop class's stop blocks a rank more;
   the session's evidence goes into every class's ``stage1.json``.
+* **A class's place** (`place`, `family_of`; `window_place`): a class's rank in its window's session is a number its
+  record's window fixes, from its two sizes and whether it is a stop class, and its stop blocks' rank is the next. So
+  the family a sample reads its challenges from is its layout's, and a session samples a class once: two directories
+  of one place are refused before the session opens (`_unopened`).
 * **The hand-off** (``stage1.json``, a class's: its ``commit.json``, the rule and the Spec's digest, the record, its
   registration's digest and receipt, the sample, the bytes it read, the coins' segment and evidence and the window root
   its registration was held to; a stop class's ``stop``, the same of its stop record, with the order check's result).
   A `Stream` holds
   code and doesn't persist, so `resume` builds the class's stream again from them, registers the record and samples it
   again on the bytes read (`Staged`, which then reads the second stage's coins from a live session), holding each to
-  ``stage1.json``: the same Spec digest, registration digest and sample.
+  ``stage1.json``: the same Spec digest, registration digest and sample. `resume` names the first stage's family and
+  its session's root itself, from the class's layout and the record's window (`first_root`), and refuses a hand-off
+  that names another of either: below a rate of 1/1, a hand-off that could name them would choose among the samples
+  its prover holds.
 
 * **The design** (`design`, from the class's layout alone, so the replay side and the verifier derive one): what the
   replay block makes of a sampled span's interior, as round 2 derives it: one member a template, the block's
@@ -131,7 +138,7 @@ from typing import Any
 import numpy as np
 
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
-from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
+from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, draw as D, partition as P, registered as REG
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import SpecializedDefinition
@@ -274,6 +281,42 @@ def stream_of(layout: BR.Layout, rule: Rule, coins: CC.ChallengerCoins, *, delta
                     challenger=CHALLENGER, coins=coins, replay=layout.replay, span_values=rule.span_values, **kwargs)
 
 
+def place_window(layout: BR.Layout, blocks: bool = False) -> dict[str, Any]:
+    """The items of a class's record's window that name its sample's place (`window_place.of`): its boundary record's
+    (`boundary_rows.Layout.provenance`) or, with ``blocks``, its stop record's (`boundary_stop.stop_record`)."""
+    return {"prompt": layout.prompt, "outputs": layout.outputs, "stopped": layout.stopped,
+            **({"population": "stop"} if blocks else {})}
+
+
+def place(layout: BR.Layout, blocks: bool = False) -> int:
+    """A class's place in its window's session (`window_place.of`), of the sample of its spans or, with ``blocks``, of
+    its stop blocks. ValueError as `window_place.of`."""
+    return WP.of(place_window(layout, blocks))
+
+
+def family_of(layout: BR.Layout, blocks: bool = False) -> str:
+    """The family of its window's session that a class's sample reads its challenges from (``blocks``: its stop
+    blocks' sample): its place's (`window_place.family`), ``draw/<place>``, the family `a5_coins.family` gives the
+    rank of that number. The first stage reserves it and samples from it, and whoever reads the sample again names it
+    from the class's layout, never from a file the prover wrote."""
+    return WP.family(place_window(layout, blocks))
+
+
+def another_family(named: Any, mine: str) -> str:
+    """Why a hand-off that names the family ``named`` for a sample is refused, the sample's place's being ``mine``."""
+    return (f"the hand-off names the family {named!r} for the sample's challenges, and the sample's place in its "
+            f"window's session is the family {mine!r}: a class is sampled once, on its own family, and a hand-off does "
+            f"not choose among the families the session reserved")
+
+
+def held_family(coins: CC.ChallengerCoins, mine: str) -> None:
+    """ValueError where the challenges ``coins`` gives are of another family of their session than ``mine``, the
+    family of the place of the sample that is to read them."""
+    if coins.label != mine:
+        raise ValueError(f"the challenges are of the family {coins.label!r}, and the sample's place in its window's "
+                         f"session is the family {mine!r}: a class is sampled once, on its own family")
+
+
 class Recorded(CC.ChallengerCoins):
     """``coins`` (a `ChallengerCoins`) with every byte read kept (`read`): what `resume` samples again."""
 
@@ -373,9 +416,11 @@ def first(pub: Mapping[str, Any], check: SpecializedDefinition, rule: Rule, coin
     """One class's first stage on ``coins``, laid out under the verifier's own check template and stop rule (``stop``):
     its stream registers the boundary record (`boundary_rows.record`, at the rule's first-stage rate over its spans,
     chained after ``previous``, its window naming ``window``'s items), the coins commit to the registration's digest,
-    and the stream samples once. Raises `service.Refused` as the stream does."""
+    and the stream samples once. Raises `service.Refused` as the stream does, and ValueError, before anything is
+    registered, where ``coins`` are of another family than the class's place's (`family_of`)."""
     layout = BR.layout_of(pub, check, stop)
     coins = coins if isinstance(coins, Recorded) else Recorded(coins)
+    held_family(coins, family_of(layout))
     stream = stream_of(layout, rule, coins, delta=delta, **kwargs)
     rec = BR.record(pub, check, S.selection_law(stream.spec.selection, layout.spans), previous, window, stop=stop)
     reg = stream.register(rec, layout.ports(), **({} if window_root is None else {"window_root": window_root}))
@@ -388,15 +433,33 @@ def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, then: CC.Cha
            delta: float = 0.5, window_root: str | None = None, stop: BS.Stop | None = None, **kwargs: Any) -> First:
     """A class's stream again at the end of its first stage, from its ``stage1.json``, under the verifier's own check
     template and stop rule: the record registered again and sampled again on the bytes the sample read, then on ``then``
-    once the interior registration's digest is committed (`Staged.commit`). ValueError when the Spec, the registration
-    or the sample isn't ``stage1.json``'s."""
+    once the interior registration's digest is committed (`Staged.commit`). The hand-off chooses neither the family
+    nor the session of the first stage's challenges. The family the stream names for them is the class's place's
+    (`family_of`, from its layout), and the session's root is the record's window's ``run`` (`first_root`), which is
+    the run the class's commitment was laid out under. ``window_root``: the root the caller holds the registration to
+    (None: to none, as a `first` that named none). ValueError when the Spec, the registration or the sample isn't
+    ``stage1.json``'s; when the hand-off names another family than the class's or another root than its record's;
+    when the record's window is of another run or another place (`window_place.of`) than its commitment's layout; and
+    when ``window_root`` is not the record's."""
     if stage1.get("format") != FORMAT:
         raise ValueError(f"not a {FORMAT} hand-off")
     pub, rule = stage1["commit"], Rule.from_json(stage1["rule"])
     layout = BR.layout_of(pub, check, stop)
+    root = first_root(stage1)
+    if root != layout.run:
+        raise ValueError(f"the record's window is of run {str(root)[:16]}, and the class's commitment is of run "
+                         f"{layout.run[:16]}: a class's first stage is sampled on the session its commitment's run opens")
+    if window_root is not None and window_root != root:
+        raise ValueError(f"the registration is held to the session root {str(window_root)[:16]}, and the record's "
+                         f"window is of run {root[:16]}: the first stage's session is the one on its record's run")
+    if WP.of(stage1["record"]["window"]) != place(layout):
+        raise ValueError("the record's window names another class than its commitment's layout: a record's sample is "
+                         "of the family its window's place names, which is its class's")
     coins = Staged(bytes.fromhex(stage1["read"]), then)
     stream = stream_of(layout, rule, coins, delta=delta, **kwargs)
-    coins.family = stage1.get("family")
+    coins.family = family_of(layout)
+    if stage1.get("family") not in (None, coins.family):
+        raise ValueError(another_family(stage1["family"], coins.family))
     if stream.spec.digest() != stage1["spec"]:
         raise ValueError("the class's Spec isn't the one its first stage ran under")
     reg = stream.register(stage1["record"], layout.ports(), **({} if window_root is None else {"window_root": window_root}))
@@ -435,9 +498,11 @@ def stop_first(pub: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
     registered on it, its inputs that record's ports as output values; the coins committed to the registration's
     digest; and the sample. The hand-off's ``stop``: the Spec's digest, the sampling design, the record, its
     registration's digest and receipt, the sample and the bytes it read. Raises `service.Refused` as the stream does,
-    and ValueError where the class is no stop class of ``stop`` or ``boundary`` isn't its record."""
+    and ValueError where the class is no stop class of ``stop``, ``boundary`` isn't its record, or ``coins`` are of
+    another family than the stop blocks' place's (`family_of`)."""
     layout = BR.layout_of(pub, check, stop)
     coins = coins if isinstance(coins, Recorded) else Recorded(coins)
+    held_family(coins, family_of(layout, blocks=True))
     stream = S.Stream(stop_spec(layout, design, proof_deadline), stop.template, budget=1, delta=delta,
                       challenger=CHALLENGER, coins=coins, log=[boundary])
     held = BS.stop_registration(pub, check, stop, boundary)
@@ -902,31 +967,63 @@ def _refusal(pub: Mapping[str, Any], e: Exception) -> dict[str, Any]:
             "error": f"{type(e).__name__}: {e}"}
 
 
+def _unopened(pubs: Sequence[Mapping[str, Any]], early: Mapping[int, Exception],
+              twice: Sequence[Sequence[int]]) -> list[dict]:
+    """Every class's refusal where the window's session is not opened at all: a class with no layout or no place
+    (``early``: its own error), or directories of one place (``twice``, each group's indices), which one session would
+    sample as often as there are directories of it. A class registers once a window and is sampled once, so the whole
+    window is refused and no challenge is released."""
+    why = "; ".join([*(f"class {k} has no place in the window's session ({e})" for k, e in sorted(early.items())),
+                     *(f"directories {list(ks)} are of one class (prompt {pubs[ks[0]].get('prompt')}, outputs "
+                       f"{pubs[ks[0]].get('outputs')}), which registers once a window and is sampled once" for ks in twice)])
+    session = {"error": f"the challenger's session was not opened: {why}"}
+    return [{**_refusal(pub, early.get(k) or Ch.CoinError(f"{why}: the root's one session was not opened")),
+             "segment": None, "evidence": None, "session": session} for k, pub in enumerate(pubs)]
+
+
 def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefinition, rule: Rule | None,
                window: Mapping[str, Any] | None, stop: BS.Stop | None = None) -> list[dict]:
     """Every class's first stage on one challenger session over the window's run, each class a rank on a thread of its own
     (`a5_coins.Draws`: the session opens once every rank has planned): each class's ``stage1.json`` contents, or why it
     sampled nothing. ``rule``: every class's, or None for each class's own from its replay block (`rule_of`). ``stop``:
-    the verifier's own stop rule. A stop class's stop blocks are a rank more of the session (`stop_first`), planned
-    with the class's own and sampled on the class's thread after its first stage: its ``stop``. Once the session has
-    closed, each stop sample's order is read from the challenger's signed log (`stop_order`), and a window where one
-    does not hold is refused whole. Every stream is made with the challenger's key and the verifier's copy of main's
-    history as the session's start had them (`a5_coins.held`), and the order is read under them; a ``local``
-    challenger is kept where the second stage reopens it (`challenger_host`)."""
+    the verifier's own stop rule. A class's rank is its place (`place`), so the family the session reserves for it is
+    its layout's and no order of the directories or word of a ``commit.json`` moves it. A class with no
+    layout has no place, and two directories of one place would be one class sampled twice: either refuses the whole
+    window before any session opens (`_unopened`). A stop class's stop blocks are a rank more of the session
+    (`stop_first`), at their own place, planned with the class's own and sampled on the class's thread after its first
+    stage: its ``stop``. Once the session has closed, each stop sample's order is read from the challenger's signed log
+    (`stop_order`), and a window where one does not hold is refused whole. Every stream is made with
+    the challenger's key and the verifier's copy of main's history as the session's start had them (`a5_coins.held`),
+    and the order is read under them; a ``local`` challenger is kept where the second stage reopens it
+    (`challenger_host`)."""
     import a5_coins as AC
 
     root = pubs[0]["run"]
-    stops = {k: len(pubs) + j for j, k in enumerate(k for k, p in enumerate(pubs) if p.get("stopped") is True)}
-    manager, turns, finisher = AC.start(a.challenger, root, list(range(len(pubs) + len(stops))),
+    caught = (S.Refused, ValueError, KeyError, TypeError, OSError)
+    laid: dict[int, BR.Layout] = {}
+    ranks: dict[int, int] = {}
+    stops: dict[int, int] = {}
+    early: dict[int, Exception] = {}
+    for k, pub in enumerate(pubs):
+        try:
+            laid[k] = BR.layout_of(pub, check, stop)
+            ranks[k] = place(laid[k])
+            if laid[k].stopped:
+                stops[k] = place(laid[k], blocks=True)
+        except caught as e:
+            early[k] = e
+    twice = [ks for ks in ([k for k in ranks if ranks[k] == p] for p in sorted(set(ranks.values()))) if len(ks) > 1]
+    if early or twice:
+        return _unopened(pubs, early, twice)
+    manager, turns, finisher = AC.start(a.challenger, root, sorted([*ranks.values(), *stops.values()]),
                                         Path(a.out) / "challenger", a.main, ssh_key=a.ssh_key, peer=a.peer,
                                         key_record=a.challenger_key, host=challenger_host(a, Path(a.out) / HOST_DIR))
     ours = AC.held(turns)
     out: list[dict] = [{} for _ in pubs]
     stop_design = a.stop_design or a.replay
-    caught = (S.Refused, ValueError, KeyError, TypeError, OSError)
 
     def run(k: int) -> None:
-        coins, blocks = AC.RankCoins(turns, k), AC.RankCoins(turns, stops[k]) if k in stops else None
+        coins, blocks = AC.RankCoins(turns, ranks[k]), AC.RankCoins(turns, stops[k]) if k in stops else None
         planner, unplanned = None, []
 
         def plan_blocks(need: int) -> None:
@@ -936,7 +1033,7 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
                 unplanned.append(e)
 
         try:
-            layout = BR.layout_of(pubs[k], check, stop)
+            layout = laid[k]
             mine = rule if rule is not None else rule_of(layout, a.replay, a.k, a.proof_deadline)
             need = AC.need(mine.replay, layout.program, layout.grain, layout.spans)
             if blocks is not None:
@@ -950,7 +1047,7 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
             out[k] = _refusal(pubs[k], e)
         finally:
             out[k]["segment"] = coins.drawn()
-            turns.skip(k)
+            turns.skip(ranks[k])
         if blocks is None:
             return
         mine_stop: dict[str, Any] = {}
@@ -991,8 +1088,8 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
             continue
         s["evidence"] = AC.evidence(published, s["segment"]) if s.get("segment") else None
         if "units" in s and "units" in o:
-            why = stop_order(ours["key"], ours["main"], s["evidence"], root, s.get("family"), o["registration"],
-                             s["registration"], bytes.fromhex(s["read"]), AC.lms_verify)
+            why = stop_order(ours["key"], ours["main"], s["evidence"], root, family_of(laid[k], blocks=True),
+                             o["registration"], s["registration"], bytes.fromhex(s["read"]), AC.lms_verify)
             s["order"] = {"held": why is None, "reason": why}
             if why is not None:
                 wrong.append(f"class {k} (prompt {pubs[k].get('prompt')}, outputs {pubs[k].get('outputs')}): {why}")
@@ -1046,9 +1143,18 @@ def first_coins(again: First, evidence: Mapping[str, Any] | None, window_root: s
 
 
 def first_root(stage1: Mapping[str, Any]) -> str:
-    """The open root a class's first stage registered under: its ``stage1.json``'s ``window_root``, or, where the
-    hand-off names none, its commitment's ``run``, the root `_first_all` opens the window's session on."""
-    return stage1.get("window_root") or stage1["commit"]["run"]
+    """The root of the session a class's first stage was sampled on: its record's window's ``run``, which the
+    registration's digest binds and which is the root `_first_all` opens the window's session on. A ``stage1.json``
+    names it too (``window_root``), and one that names another is refused, ValueError: a hand-off does not choose the
+    session its sample's challenges are read from."""
+    run = WP.run(stage1["record"]["window"])
+    if run is None:
+        raise ValueError("the hand-off's record names no run in its window: its first stage has no session")
+    named = stage1.get("window_root")
+    if named is not None and named != run:
+        raise ValueError(f"the hand-off names the session root {str(named)[:16]}, and its record's window is of run "
+                         f"{str(run)[:16]}: the first stage's session is the one on its record's run")
+    return run
 
 
 def _second(a: argparse.Namespace) -> int:
