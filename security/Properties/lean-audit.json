@@ -163,11 +163,6 @@
    "digest": "a8c4bfe5e79395886a03a986a2fc77b66507e94ea807a6f1631b609341f326f7",
    "why": "Inside DeviceModel, the coins on which it bounds each round's program: those on which the memory challenger's signed record has every answer on time."
   },
-  "Pous.Period.AuditsOf.Certified": {
-   "owner": "@memory-accounting",
-   "digest": "a5523188ea97551f362ab989b871ae899fb673338540019db8fca8f143686c29",
-   "why": "Inside RingDeviceAt, the challenges on which it makes the device a ring-model server: those on which the store decodes to the commitment and is published at the point's parameters, and a trusted memory challenger's signed run of the audit's session has every answer on time."
-  },
   "Pous.Period.CountMeets": {
    "owner": "@memory-accounting",
    "digest": "2dd5770d9bba758689a23a1684b8878df4b5e70ac858cdccf9da4ee3fa831597",
@@ -24817,20 +24812,6 @@
     "Pous.Period.Strategy": "ed199d30a98be5fa95987d783e637fca18a1bee1dfdec8739d04b0e05473b050",
     "Pous.Period.Strategy.pre": "9b452a9084c82c7df820973e2057765e71fa974a1d28f092add285d92c28ce74",
     "Pous.Period.Strategy.step": "763d2ff6837aaaf6be99aecf1f11a06768e76fe56981c5c0c9e670b5cbb3ec02"
-   }
-  },
-  "Properties.Pous.Period.Witnesses": {
-   "digest": "acd16be7eda860d2b6ee72070e45286dbc4f5eff0ff28a609ee0331e925c8753",
-   "definitions": {
-    "Pous.Period.DEMO_FULL": "095e839b2073f6ce713ba20145102c14dcd3c08e87b59273e43f3c17e51a323a",
-    "Pous.Period.IdKeys": "1d58abfafe6743dbb04496c05c77544b5acb9e1481e6b7ab124770e86c8967e3",
-    "Pous.Period.demoDevice": "726b74e49c4d49a307ddd3379661f4d59fbcce62ced264796b402d132b8313bb",
-    "Pous.Period.demoPoint": "84999ec59058d56f9b2db5a670524c06f76692cf8584850cc88a11032275f069",
-    "Pous.Period.demoRun": "a6ffd3ee28f00aed70626a3ff47ad75eca9edf06a54db5cb7a6a8a705d8159ce",
-    "Pous.Period.obligationAudit": "daf79c98bea9d882089c853f152f1dc8c5ce84eec1c69b4193d7a128a2c8ac8e",
-    "Pous.Period.obligationRun": "965d65fe4fd0ec162952a063ae9f3d36c2f3037541ab5b58e4a6f941b86fc2f1",
-    "Pous.Period.sidAuditAt": "a60d5efa5b0b6730abf9dffb74c1f7c268cd83065c0fe128fe3466d5d6960299",
-    "Pous.Period.verdictRun": "ebbc8081aa698556663227ac88cf560991906aa400bd34238be34b52125ec18c"
    }
   },
   "Properties.Pous.PeriodAt": {
