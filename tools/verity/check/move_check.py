@@ -61,7 +61,8 @@ Every path git sees changed must be one of:
   directory had an `__init__.py`) or from outside every package (none at or above it; `rules`'s `level`) to a directory
   not run by path (`tests/`, `lean/`), and no higher than the root of that file's package after the move (`[roots] new`
   of a path map under `tools/move/` at BASE): the package level `tools/move/layout.py` writes so the module imports by
-  its new name. And a
+  its new name; or one a path map of the range lists in `[create]`, in a directory a renamed file went to or below
+  (`rules`'s `create`). And a
   deleted `__init__.py` of a package the range's moves took away (files left its directory by a rename and HEAD has none
   at or below it; `rules`'s `emptied` in the `--json` report) that holds nothing but whitespace and comments at BASE, read
   by the mover's own `only_comments`: one with a docstring, code, or text that doesn't parse is refused, and it gets a row
@@ -1125,6 +1126,9 @@ class Rows:
 
     `[drop] paths`: the files the move deletes.
 
+    `[create]`: the empty `__init__.py` files the move writes (`create`), each counted only in a directory a renamed file
+    went to or below: a package level the mover writes nowhere on its own, as in a directory run by path.
+
     `[rewrite] root_prefixes`: what stands for the root before a path, beyond what the mover reads so in every tree (a
     pod's install directory, `/opt/vy-verifier/current/`), each as it is written.
 
@@ -1140,6 +1144,8 @@ class Rows:
                              and isinstance(ps := rw.get("root_prefixes"), list) for p in ps if _rename().L.root_prefix_ok(p)})
         self.drop = {p for data in maps if isinstance(d := data.get("drop"), dict) and isinstance(ps := d.get("paths"), list)
                      for p in ps if isinstance(p, str)}
+        self.create = {p for data in maps if isinstance(c := data.get("create"), dict) for p, body in c.items()
+                       if posixpath.basename(p) == "__init__.py" and body == ""}
         bad = set()
         for data in maps:
             rows = data.get("tokens")
@@ -1866,6 +1872,10 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             report["edits"].append({"path": new, "kind": "package level"})
             if by == "outside":
                 report["rules"].setdefault("level", []).append(new)
+            continue
+        if st == "A" and new in rows.create and text(e, 1) == "" and any(n.startswith(posixpath.dirname(new) + "/") for _, n in renamed):
+            report["edits"].append({"path": new, "kind": "package level"})
+            report["rules"].setdefault("create", []).append(new)
             continue
         if st == "D" and old in rows.drop:
             report["edits"].append({"path": old, "kind": "dropped"})

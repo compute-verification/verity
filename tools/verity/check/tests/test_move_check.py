@@ -1857,6 +1857,27 @@ FLOCK_MOVED = {
 }
 
 
+@pytest.mark.parametrize(("init", "message", "certified"), [
+    ("lib/tests/new/__init__.py", LAYOUT_MSG, True),
+    ("lib/tests/new/__init__.py", "Move by hand\n", False),
+    ("lib/tests/else/__init__.py", LAYOUT_MSG, False),
+])
+def test_an_empty_init_the_map_creates_where_a_file_went_is_certified(tmp_path, init, message, certified):
+    """`tests/` is run by path, so the mover writes no package level there on its own: a map's `[create]` row asks for
+    it. The empty `__init__.py` it names counts in a directory a renamed file went to, and nowhere else."""
+    repo, base = _repo(tmp_path, {
+        LAYOUT_MAP: f'[paths]\n"lib/tests/old/test_x.py" = "lib/tests/new/test_x.py"\n\n[create]\n"{init}" = ""\n',
+        "lib/tests/old/test_x.py": "def test():\n    pass\n"})
+    _move(repo, "lib/tests/old/test_x.py", "lib/tests/new/test_x.py")
+    _write(repo, {init: ""})
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", message)
+    r = MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+    assert r["certified"] == certified, r["refusals"]
+    if not certified:
+        assert _refused(r) == {init: "added"}
+
+
 def _flock(tmp_path: Path, message: str = LAYOUT_MSG, **over: str) -> dict:
     repo, base = _repo(tmp_path, FLOCK)
     _move(repo, "verity/ml/flock/tool.py", "verity/flock/prover/tool.py")
