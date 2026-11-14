@@ -133,8 +133,9 @@ FIGURES = {"gpus_per_serving_gpu": "prover GPUs a serving GPU",
            "lean_verifier_seconds_per_token": "Lean verifier seconds a served token",
            "proof_bytes_per_token": "proof bytes a served token",
            AT_RECORD: "prover GPUs a serving GPU"}
-#: the target of the prover GPUs a serving GPU, at most this many: goal benchmarks/proof-system-performance's, top's
-#: ruling 30, stated until proofs gives its own number (due Mon 16 Nov), which replaces it here
+#: the target the goal benchmarks/proof-system-performance holds the prover GPUs a serving GPU to, at most this many:
+#: proving's share of the 10% compute budget, in prover GPUs a serving GPU; replaced when the proof system's own
+#: number is set
 GPUS_PER_SERVING_GPU_TARGET = 0.0545
 #: the figures whose measurements carry that target, lower being better; no other figure carries one
 TARGETED = ("gpus_per_serving_gpu", AT_RECORD)
