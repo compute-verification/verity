@@ -78,7 +78,7 @@ theorem count_tail_fiber {B : ℕ} {X : Fin B → Type} [∀ i, Fintype (X i)] (
     _ = p i * (Fintype.card (X i) * #W) := by ring
 
 open Classical in
-/-- **`count_tail_fiber` on coins that are a product up to `e`**: the first factor drawn first, then coordinates
+/-- **`count_tail_fiber` on coins that are a product up to `e`**: the first factor sampled first, then coordinates
 `Fin B` in order. Event `i` reads the first factor and coordinates up to `i`, and with every other coin fixed at most a
 `p i` share of coordinate `i`'s values make it hold. -/
 theorem count_tail_equiv {α R X : Type} [Fintype α] [Fintype R] [Fintype X] {B : ℕ} (e : α ≃ R × (Fin B → X))

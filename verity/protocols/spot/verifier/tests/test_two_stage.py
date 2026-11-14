@@ -163,7 +163,7 @@ def _stages(stream: S.Stream, row=0, sample=list) -> tuple[S.Draw, S.Draw]:
 
 
 def _reads_of(statements) -> dict | None:
-    """What a verifier of record reports the sessions read (`{<template>/<port>: {"value", "root"}}`): the statements'
+    """What the verifier reports the sessions read (`{<template>/<port>: {"value", "root"}}`): the statements'
     registered reads, None when none reads any."""
     out = {}
     for s in statements if isinstance(statements, list) else ():
@@ -175,7 +175,7 @@ def _reads_of(statements) -> dict | None:
 def _two_stage_outcome(stream: S.Stream, statements, reads=_reads_of, sample=list, checked=None, tables=1,
                        **params) -> S.Outcome:
     """The run's outcome with the second-stage statements `statements` gives (a function of the honest prover's one,
-    `fake_challenger.Stream.statements`, PAIR's, and the second stage's sample, or as given), and the verifier of record
+    `fake_challenger.Stream.statements`, PAIR's, and the second stage's sample, or as given), and the verifier
     reporting the reads `reads` gives of them and naming what it checked of the first one's session, or of the one
     `checked` gives (a function of the honest statement, None for none), as `tables` tables; the interior record naming
     `sample` of the replay sample (`_stages`); the auditor's params `proofs`, if given, else the honest ones
@@ -395,7 +395,7 @@ def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
     unit's row of its cell's replay block (the form's refusal their one failure), under the auditor's params whose
     reference statement reads those ports (`fake_challenger.Stream.proofs`), so one reading its own `out` too is
     refused (`second-values`),
-    and refuses, each statement's session checked as it states by a verifier of record: none (`second-statements`), none
+    and refuses, each statement's session checked as it states by the verifier: none (`second-statements`), none
     for a part's template (`second-cover`), a template twice or one of no part (`second-template`), one that isn't a
     statement (`second-statement`, and `second-reported` when its session's reads are reported, since no statement makes
     them), one whose header has a key its template's reference header lacks, at the top or in an object, or holds
@@ -422,7 +422,7 @@ def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
     lambda ss: {**_reads_of(ss), "z": {"value": "w", "root": "02" * 64}},
 ])
 def test_round_two_holds_the_reads_to_what_the_verdicts_report(reads):
-    """The reads the verifier of record reports are exactly the statements' (`second-reported`): none, another root, or
+    """The reads the verifier reports are exactly the statements' (`second-reported`): none, another root, or
     one more."""
     stream = _stream()
     out = _two_stage_outcome(stream, lambda s, second: [s], reads)
@@ -438,7 +438,7 @@ def test_round_two_holds_the_reads_to_what_the_verdicts_report(reads):
 def test_round_two_holds_each_statement_to_the_verdict_that_checked_it(checked):
     """The run's own statement, which passes every other check, is refused (`second-verified`) when no verdict of record
     names its session, or the one that does checked it against a public file whose header names another file, at another
-    sample, or on other registered reads: round 2 reads a statement only as a verifier of record checked it."""
+    sample, or on other registered reads: round 2 reads a statement only as the verifier checked it."""
     stream = _stream()
     out = _two_stage_outcome(stream, lambda s, second: [s], checked=checked)
     assert not out.accepted and stream.records[0]["audit"]["checks"]["statements"]["codes"] == ["second-verified"]
@@ -531,7 +531,7 @@ def test_round_two_holds_each_port_a_header_shares_rows_at_to_a_registered_read(
     (``shared_rows``: tables whose rows an instance reads by the refs in its public file's body) and read the
     interior's own `out` (`READS_OUT`). The run's statement reading its linked `x` at the boundary and its own `out` at
     each slot's own rows passes, refused only on the form. One leaving the shared `out` unread is refused: the session's
-    verifier would only bound its refs by their table, so one could point a drawn unit at another unit's rows; its
+    verifier would only bound its refs by their table, so one could point a sampled proof block at another unit's rows; its
     reads are then not its reference's either (`second-values`). So is one reading nothing registered. A shared port
     read at another slot's rows, where the verifier would hold the ref, is `second-read`'s, and a header sharing no rows
     where its reference does is `second-header`'s."""
@@ -885,7 +885,7 @@ def test_the_verifier_of_record_draws_both_stages():
 
 def test_the_second_stage_samples_k_in_each_cell():
     """One stratum per cell, template by template and in each by sampled replay block, tiling the interior in order,
-    each of the work law's floor its count (cells' counts aren't in proportion to their sizes, as the stratified law's
+    each of the work sampling design's floor its count (cells' counts aren't in proportion to their sizes, as the stratified sampling design's
     are); a cell smaller than the rule's count is proved whole, and counts proving every cell whole are refused."""
     law = S.second_law([1, 3], (4,), (2,))
     assert law == {"law": "work", "k": 1,

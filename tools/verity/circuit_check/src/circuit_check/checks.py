@@ -110,7 +110,7 @@ _LIMB = (1 << 64) - 1
 class Options:
     """``vectors`` input vectors per correspondence check (the all-edge ones first), fewer when the reference would spend more
     than ``reference_budget`` gate evaluations on them (never fewer than ``min_vectors``); ``X`` / ``W`` / ``extras`` the word
-    query; the word view draws 16 times the vectors within 16 times the budget (`_word_vectors`); Definitions over
+    query; the word view samples 16 times the vectors within 16 times the budget (`_word_vectors`); Definitions over
     ``partition_max_gates`` gates or ``partition_max_leaves`` parameter leaves are not partitioned, over
     ``lower_max_gates`` gates or about ``lower_max_ands`` ANDs (the piece pins' estimate) not lowered whole; ``input_budget``
     bounds vectors x input leaves, ``lane_budget`` vectors x proof blocks when a template's proof blocks are evaluated;
