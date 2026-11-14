@@ -67,7 +67,7 @@ namespace PousCheck.Properties.SecurityProofs.Accepts
 open Flock PousCheck PousCheck.Prim Identity.Sha512
 open Properties.Identity (L L_length L_append Rep rep_init rep_update chain chain_succ chain_congr finalize_eq
   L_padding zeroPad lenBytes getElem?_L_append_left update_update)
-open Properties.NetworkCertifier.Bytes (be64_size be32_size)
+open Properties.Certifier.Bytes (be64_size be32_size)
 
 /-! ## A byte string's big-endian value -/
 
