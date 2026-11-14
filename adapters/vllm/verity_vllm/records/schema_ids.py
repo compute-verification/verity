@@ -268,13 +268,6 @@ COMPILED_STEPS_SCHEMA = "verity-vllm/compiled-steps/v2"
 #: `pipeline.global_program.build` writes as `workload_program.json`
 WORKLOAD_PROGRAM_SCHEMA = "verity/workload-program/v1"
 
-# --- PoUW's H1 (`verity.protocols.accounting.pouw.prover.serving.h1`)
-#: a served window's calls record, `pouw-h1-calls.json` (`protocols.pouw.h1.RECORD`), which `H1Run.finish` writes
-POUW_H1_CALLS_SCHEMA = "verity-vllm/pouw-h1-calls/v2"
-#: a suspended window's hand-off state (`protocols.pouw.h1.handoff.SCHEMA`), which `suspend` writes and `resume` refuses
-#: any other than
-POUW_H1_HANDOFF_SCHEMA = "verity-vllm/pouw-h1-handoff/v1"
-
 # --- the protocol options (`verity_vllm.protocols`)
 #: the record of the options one stage installed (`protocols.RECORD_SCHEMA`), which `Composition.record` builds and
 #: `into_verdict` writes as a Commit's `protocols.json`
