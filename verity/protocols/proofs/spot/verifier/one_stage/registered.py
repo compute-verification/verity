@@ -52,7 +52,7 @@ verifier's binding, `{"stream", "prover"}`, and the window's canonical JSON: a s
 takes one record a window and the window names the binding, so a tile seeded in one stream is no other's). A row's bytes
 are read as the parameter's leaves of `w` bits
 (`bytes_leaves`: each big-endian 32-bit half, its `32 / w` leaves least significant first, so a digest is 16 leaves of 32
-bits or 512 of one), except where the parameter's leaves are whole `Digest`s (`digests`: `DIGEST` or an array of them),
+bits or 512 of one; a row of two bytes is one 16-bit half, its `16 / w` leaves: `half_leaves`), except where the parameter's leaves are whole `Digest`s (`digests`: `DIGEST` or an array of them),
 read as a circuit's `Digest` holds them (`digest_leaves`: each big-endian 64-bit word's 64 bits least significant
 first). Its rows are
 committed as any registered value's, in the row format the verifier names for it (`schema`, as the port that reads it:
@@ -508,9 +508,19 @@ def bytes_leaves(data: bytes, bits: int) -> list[int]:
 
 def half_leaves(data: bytes, bits: int) -> list[int]:
     """Two bytes, one big-endian 16-bit half, as its ``16 / bits`` leaves of `bits` bits least significant first: the
-    row `second_stage.VERDICT_ONE_LEAF` fills, one 16-bit leaf where `bytes_leaves` gives two
-    (`Supplied.halfLeaves`). No source reads it yet."""
-    raise NotImplementedError("VERDICT_ONE_LEAF: a 16-bit half's leaves, for the verdict value's one-leaf row")
+    row `second_stage.VERDICT_ONE_LEAF` fills, one 16-bit leaf (`Supplied.halfLeaves`)."""
+    if not (0 < bits <= 16 and 16 % bits == 0):
+        raise ValueError(f"leaves of {bits} bits hold no whole 16-bit half")
+    if len(data) != 2:
+        raise ValueError(f"{len(data)} bytes are not one 16-bit half")
+    h = int.from_bytes(data, "big")
+    return [(h >> (bits * j)) & ((1 << bits) - 1) for j in range(16 // bits)]
+
+
+def leaves_of(data: bytes, bits: int) -> list[int]:
+    """A row's bytes as the parameter's leaves of `bits` bits: one 16-bit half's (`half_leaves`) where it is two bytes,
+    else its 32-bit halves' (`bytes_leaves`; `Supplied.leavesOf`)."""
+    return half_leaves(data, bits) if len(data) == 2 else bytes_leaves(data, bits)
 
 
 def digests(t: Any) -> bool:
@@ -603,7 +613,7 @@ def supplied_rows(program: Program, value: str, rows: Sequence[Sequence[tuple[st
                   supplied: Sequence[str] = (), log: Sequence[Any] = (),
                   binding: Mapping[str, str] | None = None) -> list[list[int]]:
     """The rows the verifier fills a supplied value with, from `rec`, the log of this prover's earlier records, its
-    binding (`window_salt`) and its own bytes: each row its sources' bytes, read as the parameter's leaves (`bytes_leaves`
+    binding (`window_salt`) and its own bytes: each row its sources' bytes, read as the parameter's leaves (`leaves_of`
     at its leaf width, or `digest_leaves` where its leaves are whole digests, `digests`). `supplied`: every supplied
     value's name, whose roots no row reads. ValueError where a source names nothing the record or the verifier holds, or
     the leaves are not one width dividing 32."""
@@ -611,7 +621,7 @@ def supplied_rows(program: Program, value: str, rows: Sequence[Sequence[tuple[st
     w = None if t is None else t.homogeneous_width()
     if w is None:
         raise ValueError(f"{value!r} is not a parameter of the program whose leaves are one width")
-    leaves = digest_leaves if digests(t) else (lambda data: bytes_leaves(data, w))
+    leaves = digest_leaves if digests(t) else (lambda data: leaves_of(data, w))
     return [leaves(b"".join(_source_bytes(rec, value, k, n, supplied, log, binding) for k, n in row)) for row in rows]
 
 
@@ -709,7 +719,7 @@ def bind_ports(file: Mapping[str, Any], ports: Iterable[str], roots: Mapping[str
 __all__ = ["BLOCK", "BOUND", "DIGEST", "ENTRY_KEYS", "OWNER", "PARAM_KEY", "PRODUCED_KEY", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
            "SCHEMA_SEG", "SCHEMA_V2", "SESSION_KEY", "SOURCES", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WINDOW_SALT",
            "WORD_BITS",
-           "bind_ports", "bit_words", "bytes_leaves", "digest_leaves", "digests", "domain", "half_leaves", "held_gates", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
+           "bind_ports", "bit_words", "bytes_leaves", "digest_leaves", "digests", "domain", "half_leaves", "held_gates", "leaf", "leaves_of", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
            "row_digest", "row_leaves", "row_words", "schema_entry", "shape", "sources",
            "supplied_root", "supplied_rows", "supplied_salts", "supplied_value", "table", "verify_read", "width",
            "width_entry", "window_root", "window_salt"]

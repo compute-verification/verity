@@ -50,7 +50,7 @@ it only updates its own state. So the inner proof that follows begins its first 
 
 @[expose] public section
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 open Flock Transcript
 open FlockComplete (PS)
@@ -202,4 +202,4 @@ theorem ligeritoCut_end (coin : ℕ → ℕ → F128) (n : ℕ) (ms : MerkleSche
       | exact keepT_pure _
       | (split; exact keepT_pure _)
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish

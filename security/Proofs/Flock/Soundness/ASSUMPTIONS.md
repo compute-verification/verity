@@ -145,7 +145,7 @@ coins.
     SHA-512 tree, and answers `Hello` with the root and the key. It opens round `r`'s leaves only in
     its answer to the prover's round-`r` message. That ordering takes the place of "sampled after the prover's message"
     in the statement above. As with A6 itself, the record can't establish it: it keeps no opening, so the Lean verifier
-    checks none, and the prover checks each against the root (`Flock.Firewall.Coins.check`, under the ZK server's session
+    checks none, and the prover checks each against the root (`Flock.ZkServer.Coins.check`, under the ZK server's session
     loop), not when it was sampled or opened. On `sampled-proofs-one-stage-zk` the auditor's challenger samples each
     session's tree and opens each round after its message digest, logging both under its signed
     close, and the audit holds each session's record to those lines, one tree per session
@@ -328,10 +328,9 @@ malicious-verifier claim rests on beyond the theorems.
   - Keyed by the secret bytes in its first message block, it is a dual PRF, as the HMAC analyses use. The secret follows
     a fixed public tag: 28 bytes for `stream`, and 37 for `derive` with the source's frame header.
   - The secret's uniformity is not A4's but A5's.
-- **η, stated.** η stays symbolic in Lean, and every record-level statement keeps `+ η` visible, never absorbed.
-  - **The claimed value:** for `S = 32`, η ≤ 2⁻¹²⁸ for the chain's tests: generic key search over `min(256, 8S)` bits,
-    plus a hybrid over the test's `q` compression calls. The key is SHA-512 truncated to 32 bytes, which costs nothing
-    at `S = 32`. The derivation, and what truncation costs: `assumption-notes/a4-prf-sha512.md`.
+- **η is a parameter.** η stays symbolic in Lean, and every record-level statement keeps `+ η` visible, never absorbed.
+  - **No value:** η is an argument of the assumption, and no model fixes it yet. What a model would have to bound, the
+    key guess as an attack, and what truncation costs: `assumption-notes/a4-prf-sha512.md`.
   - **One η for the whole family:** every set `B` (the closures of the bad sets, which `closure_escape` evaluates), every
     stream budget `L`, and every receipt context. The audit takes a sup over `B`, not a union, and `E_B` costs the same
     for every `B`, every `L` and every context.

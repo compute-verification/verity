@@ -173,7 +173,10 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   (`check_verdicts`), stream rules (`stream`) and fleet rules (`fleet`). Its one line
   `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back). The service's `Stream` and
   `benchmarks/one_stage` call it. Python is held to the Lean by
-  `verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py`. The same package ports the challenger's sample from the
+  `verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py`. The executable answers the challenger's ledger
+  and session checks too (`challenger_ledger`, `challenger_head`, `challenger_session`, `challenger_credited` and
+  `challenger_pinned`, `Spot/ChallengerSession.lean`), for a caller that asks the verifier for them;
+  `lean/tests/test_challenger_difftest.py` holds its answers to the challenger's Python. The same package ports the challenger's sample from the
   selection rule on (`Spot/Select.lean`: `service.selection_law`, `draw.derive` and `service.select_draw`,
   with the number of coin bytes it reads), which the difftest holds to the Python on fixed coins, every rule and random
   partitions. It is the `Stream`'s sample of record.
@@ -348,7 +351,7 @@ from verity.protocols.proofs.spot.prover.costfit import fit
   proved), so a protocol reads verdicts from that run, never from a record the prover hands in.
 - `parties`: SPOT[Flock]'s `InferenceServer`, `ProofServer` and `SpotVerifier` (`SPOT_MANIFEST`, `SPOT_PROTOCOL`,
   `spot_params_of`), in two stages with `TwoStageProofServer` and `TwoStageVerifier` (`SPOT_TWO_MANIFEST`,
-  `SPOT_TWO_PROTOCOL`), the core deployment's `Firewall`, `Workers` and `Verifier` (`MANIFEST`, `PROTOCOL`, `params_of`),
+  `SPOT_TWO_PROTOCOL`), the core deployment's `ZkServer`, `Workers` and `Verifier` (`MANIFEST`, `PROTOCOL`, `params_of`),
   the `Challenger` both run, `PROTOCOLS` by id, and `IDS`, the configuration's subprotocol names and their protocol ids.
 - `consumers`: `infiltration_bound`, `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `window_place`: `of`, `family` and `run`, the place a registration record's window names in its window's session, the

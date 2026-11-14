@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Firewall
+public import Proofs.Properties.ZkServer
 public import Proofs.Flock.Recursive.StopCount
 import all Init.Data.Repr
 
@@ -8,7 +8,7 @@ import all Init.Data.Repr
 # A recursive session's stops, counted from the ZK server's rules: the proof
 
 `Flock.SecurityProofs.RecStopsOfRun`, by an invariant of `StopCount.step` (`Inv`) over the run's ops, on the record's
-rules as `Firewall.Record` writes them and as `Proofs.Properties.Firewall` proves them (`admit_ok`, `served_ok`,
+rules as `ZkServer.Record` writes them and as `Proofs.Properties.ZkServer` proves them (`admit_ok`, `served_ok`,
 `nextOf_lt`, `stopOf_push_stop`, `afterOnTime`). What one more event does to a recursive session's open, stop, finish,
 released statements and the slot's orphan comes first. Its witnesses come last: `RecStopsOfRun_honest`, an honest run
 that runs through and releases its statement at its release time, and `RecStopsOfRun_nontrivial`, a ZK server without
@@ -19,7 +19,7 @@ that runs through and releases its statement at its release time, and `RecStopsO
 
 namespace Flock.StopCount
 
-open Core.Firewall
+open Core.ZkServer
 
 /-! ## One more event on the record -/
 
@@ -64,7 +64,7 @@ theorem stopOf_push_isSome {evs : Events} {s : String} (e : Event) (h : (stopOf 
   rfl
 
 theorem stopOf_push_stop_isSome (evs : Events) (s p w : String) : (stopOf (evs.push (.stop s p w)) s).isSome := by
-  rw [Properties.Firewall.stopOf_push_stop]
+  rw [Properties.ZkServer.stopOf_push_stop]
   cases stopOf evs s <;> rfl
 
 theorem finished_push_ne {evs : Events} {e : Event} (he : ∀ s', e ≠ .finish s') (s : String) :
@@ -240,7 +240,7 @@ theorem orphan_push_ne {evs : Events} {e : Event} (he : ∀ s p, e ≠ .slot s p
 /-! ## The ops' events -/
 
 theorem openSession_evs (evs : Events) (stream : String) (parts : Array String) (budget : Option ℕ)
-    (release : Option Core.Firewall.Schedule) :
+    (release : Option Core.ZkServer.Schedule) :
     (openSession evs stream parts budget release).2 = evs ∨
       ∃ s, (openSession evs stream parts budget release).2 =
         evs.push (.opened { session := s, stream, parts, budget, release }) := by
@@ -252,7 +252,7 @@ theorem openSession_evs (evs : Events) (stream : String) (parts : Array String) 
 theorem stop_evs (evs : Events) (s part why : String) :
     (stop evs s part why).2 =
       if (openOf evs s).isNone || (stopOf evs s).isSome then evs else evs.push (.stop s part why) := by
-  by_cases h : (openOf evs s).isNone || (stopOf evs s).isSome <;> simp only [Core.Firewall.stop, h] <;> rfl
+  by_cases h : (openOf evs s).isNone || (stopOf evs s).isSome <;> simp only [Core.ZkServer.stop, h] <;> rfl
 
 theorem stop_evs_none {evs : Events} {s : String} (part why : String) (ho : (openOf evs s).isSome = true)
     (h : stopOf evs s = none) : (stop evs s part why).2 = evs.push (.stop s part why) := by
@@ -267,7 +267,7 @@ theorem slot_evs (evs : Events) (s part : String) :
     ∀ k s' p', orphan evs = some (k, s', p') → (openOf evs s').isSome = true →
       (stopOf (slot evs s part) s').isSome := by
   refine ⟨?_, fun k s' p' ho hos => ?_⟩
-  · unfold Core.Firewall.slot
+  · unfold Core.ZkServer.slot
     cases ho : orphan evs with
     | none => exact Or.inl rfl
     | some t =>
@@ -281,7 +281,7 @@ theorem slot_evs (evs : Events) (s part : String) :
             by simp only [Option.isNone_none, Bool.and_self, ↓reduceIte]⟩
         | false => exact Or.inl rfl
       | some _ => exact Or.inl (by simp)
-  · unfold Core.Firewall.slot
+  · unfold Core.ZkServer.slot
     rw [ho]
     dsimp only
     apply stopOf_push_isSome
@@ -303,9 +303,9 @@ theorem admit_error {evs : Events} {s part why : String} {evs' : Events} (h : ad
     | (simp only [Prod.mk.injEq] at h; exact Or.inr ⟨_, _, h.2.symm⟩)
     | simp at h
 
-theorem after_go {a : Admitted} {now : ℕ} {prove ready : Core.Firewall.Run} {a' : Admitted}
+theorem after_go {a : Admitted} {now : ℕ} {prove ready : Core.ZkServer.Run} {a' : Admitted}
     (h : Decision.after a now prove ready = .go a') : a' = a :=
-  (Properties.Firewall.afterOnTime a now prove ready a' h).1
+  (Properties.ZkServer.afterOnTime a now prove ready a' h).1
 
 /-- What `partsOk` admits: at least one statement, and distinct ones. -/
 theorem partsOk_ok {parts : Array String} (h : partsOk parts = .ok ()) :
@@ -634,7 +634,7 @@ theorem Inv.pushOpened {σ : St} (hI : Inv M σ) (o' : Open) (hp : partsOk o'.pa
       exact ⟨o, hO s o ho, hr⟩ }
 
 theorem Inv.openRec {σ : St} (hI : Inv M σ) (stream : String) (parts : Array String) (budget : Option ℕ)
-    (release : Option Core.Firewall.Schedule) : Inv M (step M σ (.openRec stream parts budget release)) := by
+    (release : Option Core.ZkServer.Schedule) : Inv M (step M σ (.openRec stream parts budget release)) := by
   dsimp only [step]
   cases hp : partsOk parts with
   | error _ => exact hI
@@ -793,9 +793,9 @@ theorem Inv.seat {σ : St} (hI : Inv M σ) (s part : String) : Inv M (step M σ 
     obtain ⟨k1, hor1⟩ := orphan_slot σ.evs s part
     split
     · rename_i a evs2 hadm
-      obtain ⟨o, j, hO1, hS1', hN1, hserved⟩ := Properties.Firewall.admit_ok hadm
-      obtain ⟨hF1, hp, rfl, rfl⟩ := Properties.Firewall.served_ok hserved
-      have hj := Properties.Firewall.nextOf_lt hN1
+      obtain ⟨o, j, hO1, hS1', hN1, hserved⟩ := Properties.ZkServer.admit_ok hadm
+      obtain ⟨hF1, hp, rfl, rfl⟩ := Properties.ZkServer.served_ok hserved
+      have hj := Properties.ZkServer.nextOf_lt hN1
       have hO : openOf σ.evs s = some o := (hS1.open_ s).symm.trans hO1
       have hses := openOf_session hO
       have hp' : o.parts[j] = part := by rw [← getElem!_pos o.parts j hj]; exact hp
@@ -994,7 +994,7 @@ theorem Inv.released {σ : St} (hI : Inv M σ) {h : Holder} (hh : σ.holder = so
       obtain ⟨o', ho', hr⟩ := hI.leftAt s j t hl
       exact ⟨o', (hO' _).trans ho', hr⟩ }
 
-theorem Inv.barrier {σ : St} (hI : Inv M σ) (now : ℕ) (prove ready : Core.Firewall.Run) :
+theorem Inv.barrier {σ : St} (hI : Inv M σ) (now : ℕ) (prove ready : Core.ZkServer.Run) :
     Inv M (step M σ (.barrier now prove ready)) := by
   dsimp only [step]
   split
@@ -1225,7 +1225,7 @@ end Flock.SecurityProofs
 
 namespace Flock.StopCount.Witness
 
-open Core.Firewall
+open Core.ZkServer
 
 /-- One message a statement. -/
 def one : String → ℕ → ℕ := fun _ _ => 1
@@ -1255,7 +1255,7 @@ end Flock.StopCount.Witness
 
 namespace Flock.SecurityProofs
 
-open Core.Firewall Flock.StopCount Flock.StopCount.Witness
+open Core.ZkServer Flock.StopCount Flock.StopCount.Witness
 
 /-- **`RecStopsOfRun` says something at an honest run**: its session runs through (`recStop … = none`), every message of
 both statements reached the auditor, nothing is left unreleased, and the statement's proofs left at its release time. -/

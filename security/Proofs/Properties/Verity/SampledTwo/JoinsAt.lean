@@ -18,7 +18,7 @@ public import Proofs.Properties.Verity.SampledTwo.GoodCaseHeld
 public import Proofs.Properties.Verity.SampledTwo.BlobFinder
 
 /-!
-# The two-stage leg's projection at the form's accept, from the coin map's law
+# The two-stage leg's projection at the form's accept, from the coin map's distribution
 
 `joined` (`Joined.lean`) is the projection's bound over any acceptance. This module is the one place the two-stage
 form's check comes in: the acceptance is the form's (`FormAccepts C`), the check read a log of both sessions, the log
@@ -26,7 +26,7 @@ it read is the device's and every fresh coin carries its 512 bits (`JoinGood`), 
 (`joinLocate`: the stages' families' fresh coins on rounds `0` to `stage`, the sessions' openings on theirs).
 
 **One premise at the form's accept.** `joinedOfLaw` takes `JoinsAt`, a structure whose fields are the pieces'
-remaining premises, each in its owner's words, and the coin map's law (`CoinMap.CoinMapHolds`), which speaks of the
+remaining premises, each in its owner's words, and the coin map's distribution (`CoinMap.CoinMapHolds`), which speaks of the
 period's game and the coin map alone and reads no accept. `joinedForm` (`JoinedForm.lean`) is `joinedOfLaw` at
 COINMAP's proof of the sampling design (`CoinMap.coinMapHolds`), so it takes `JoinsAt` and nothing else, and a witness of it at an
 accepted play is one term of that structure. The sampling design is a hypothesis here only so that this module does not import
@@ -294,10 +294,10 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   /-- The vocabulary's signer is the deployment's. -/
   signer : V.signer θ = P.signer fs₁ fs₂ cut θ
 
-/-- **The projection's bound at the form's accept, from the coin map's law**: `joined` at the form's acceptance,
+/-- **The projection's bound at the form's accept, from the coin map's distribution**: `joined` at the form's acceptance,
 `JoinGood` with no collision of the play's blobs with the registered files, and the run's locator, at the cut's terms
 at the deployed two-session history plus the blob finder's collision probability (`cutBound_avoid`), from the coin
-map's law (`hHolds`) and the join's one premise (`JoinsAt`). The stages' pieces are taken at the case kept on the
+map's distribution (`hHolds`) and the join's one premise (`JoinsAt`). The stages' pieces are taken at the case kept on the
 plays `JoinGood` holds of, and the run of record's accept at the case kept on the plays with no such collision. -/
 theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf)

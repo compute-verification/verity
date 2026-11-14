@@ -64,7 +64,7 @@ A party does no I/O: what its machine does is a capability it is given (`Identit
 - the core deployment's:
   - the workers' ``serve(block) -> bytes``, as the inference server's;
   - the ZK server's ``pin() -> {"sha512", "sessions"}``: the ZK server the prover's sessions run, by its SHA-512;
-  - the verifier's ``audit(block, registration, challenger, firewall) -> (answer, case)``: the block's one-stage audit
+  - the verifier's ``audit(block, registration, challenger, zk_server) -> (answer, case)``: the block's one-stage audit
     sampled on that challenger's coins, its answer and its case for the product (`COMPOSED`'s, in its one-stage form), or
     None; ``component(block, name) -> (answer, case) | None``, another listed subprotocol's; and ``product(ids, cases,
     digests) -> {"product", "verdict", "reason"}``, the composite of exactly those subprotocols (`Core.Composites.ofIds`:
@@ -138,7 +138,7 @@ VERSION = 1
 SPOT_ID = "verity/sampled-proofs/spot/v1"
 #: SPOT[Flock] on its own under a two-stage sampling design
 SPOT_TWO_ID = "verity/sampled-proofs/spot/two-stage/v1"
-CHALLENGER, FIREWALL, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
+CHALLENGER, ZK_SERVER, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
 INFERENCE_SERVER, PROOF_SERVER = "inference-server", "proof-server"
 #: each composite's subprotocols, by a configuration's names, and their protocol ids (`Core.Onsite.components`,
 #: `Core.Remote.V1.components`): onsite's PoUW is its period check and its bandwidth the P2 session on PoUS's store,
@@ -170,12 +170,12 @@ DONE_SCHEMA = Schema("Done", 1, "structure")
 REGISTRATION_SCHEMA = Schema("Registration", 1, "commitment", {"block": Int(0, MAX_BLOCKS - 1)}, Body(max=MAX_REGISTRATION))
 MANIFEST = Manifest(
     ID, VERSION, "verity.protocols.proofs.spot.verifier.parties:params_of",
-    parties=(Role(CHALLENGER, "auditor", needs=("host",)), Role(FIREWALL, "developer", needs=("pin",)),
+    parties=(Role(CHALLENGER, "auditor", needs=("host",)), Role(ZK_SERVER, "developer", needs=("pin",)),
              Role(WORKERS, "developer", needs=("serve",)),
              Role(VERIFIER, "auditor", needs=("audit", "component", "product"))),
     channels=(Channel(CHALLENGER, VERIFIER, ("Challenger",), carries_coins=True),
               Channel(VERIFIER, CHALLENGER, ("Done",)),
-              Channel(FIREWALL, VERIFIER, ("Firewall",)),
+              Channel(ZK_SERVER, VERIFIER, ("Firewall",)),
               Channel(WORKERS, VERIFIER, ("Registration",))),
     messages=(CHALLENGER_SCHEMA, DONE_SCHEMA,
               Schema("Firewall", 1, "structure", {"sha512": Hex(64), "sessions": Int(1, 1 << 10)}),
@@ -283,7 +283,7 @@ class Challenger:
         return [Finish(self.at, m.fields["name"] if m.type == "Refused" else "closed")]
 
 
-class Firewall:
+class ZkServer:
     """The core deployment's ZK server: its pin told to the verifier."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
@@ -510,26 +510,26 @@ class Verifier(_Verifier):
     composite of the listed subprotocols (module docstring)."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
-        self.firewall: dict[str, Any] | None = None
+        self.zk_server: dict[str, Any] | None = None
         caps = identity.capabilities
         self.audit, self.component, self.product = caps["audit"], caps["component"], caps["product"]
         return self._start(params, _params)
 
     def _take(self, m: Message) -> str | None:
-        if m.type != "Firewall":
+        if m.type != "ZkServer":
             return super()._take(m)
-        if self.firewall is not None:
+        if self.zk_server is not None:
             return "out-of-phase"
-        self.firewall = dict(m.fields)
+        self.zk_server = dict(m.fields)
         return None
 
     def _said(self, peer: str) -> bool:
-        return self.firewall is not None if peer == FIREWALL else super()._said(peer)
+        return self.zk_server is not None if peer == ZK_SERVER else super()._said(peer)
 
     def _advance(self) -> list[Any]:
         out: list[Any] = []
         while (len(self.lines) < self.params["blocks"] and len(self.lines) in self.registrations
-               and self.challenger is not None and self.firewall is not None):
+               and self.challenger is not None and self.zk_server is not None):
             out += self._decide(len(self.lines))
         if len(self.lines) == self.params["blocks"]:
             out += self._finish(None)
@@ -541,7 +541,7 @@ class Verifier(_Verifier):
         digest = R.digest(record)
         out = []
         try:
-            answer, case = self.audit(i, raw, dict(self.challenger), dict(self.firewall))
+            answer, case = self.audit(i, raw, dict(self.challenger), dict(self.zk_server))
         except Unavailable as e:
             answer, case = {"verdict": "error"}, None
             out.append(_unavailable(i, e))
@@ -666,7 +666,7 @@ class TwoStageVerifier(SpotVerifier):
     TWO = True
 
 
-PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: Challenger, FIREWALL: Firewall, WORKERS: Workers, VERIFIER: Verifier})
+PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: Challenger, ZK_SERVER: ZkServer, WORKERS: Workers, VERIFIER: Verifier})
 SPOT_PROTOCOL = ProtocolDef(SPOT_MANIFEST, {CHALLENGER: Challenger, INFERENCE_SERVER: InferenceServer,
                                             PROOF_SERVER: ProofServer, VERIFIER: SpotVerifier})
 SPOT_TWO_PROTOCOL = ProtocolDef(SPOT_TWO_MANIFEST, {CHALLENGER: Challenger, INFERENCE_SERVER: InferenceServer,
@@ -674,8 +674,8 @@ SPOT_TWO_PROTOCOL = ProtocolDef(SPOT_TWO_MANIFEST, {CHALLENGER: Challenger, INFE
 PROTOCOLS = {ID: PROTOCOL, SPOT_ID: SPOT_PROTOCOL, SPOT_TWO_ID: SPOT_TWO_PROTOCOL}
 
 
-__all__ = ["ABSENT", "CHALLENGER", "COINS", "COMPONENT", "COMPOSED", "FIREWALL", "ID", "IDS", "INFERENCE_SERVER", "MANIFEST",
+__all__ = ["ABSENT", "CHALLENGER", "COINS", "COMPONENT", "COMPOSED", "ZK_SERVER", "ID", "IDS", "INFERENCE_SERVER", "MANIFEST",
            "NO_CASE", "PROOF_SERVER", "PROTOCOL", "PROTOCOLS", "SPOT_ID", "SPOT_MANIFEST", "SPOT_PROTOCOL", "SPOT_SCHEMAS",
            "SPOT_TWO_ID", "SPOT_TWO_MANIFEST", "SPOT_TWO_PROTOCOL", "SUBPROTOCOLS", "VERIFIER", "VERSION", "WORKERS",
-           "Challenger", "Firewall", "InferenceServer", "ProofServer", "SpotVerifier", "TwoStageProofServer",
+           "Challenger", "ZkServer", "InferenceServer", "ProofServer", "SpotVerifier", "TwoStageProofServer",
            "TwoStageVerifier", "Unavailable", "Verifier", "Workers", "ids_of", "params_of", "spot_params_of"]

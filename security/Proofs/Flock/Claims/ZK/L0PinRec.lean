@@ -58,8 +58,8 @@ points are the coins':
 namespace FlockComplete.LigLock.Fed
 
 open _root_.Flock (F128 ZcOut LcOut abcClaims)
-open _root_.Flock.Firewall.Drive (Step OpenM stepAsks)
-open _root_.Flock.Firewall.Finish (AsksRel Asks.toC repPiop)
+open _root_.Flock.ZkServer.Drive (Step OpenM stepAsks)
+open _root_.Flock.ZkServer.Finish (AsksRel Asks.toC repPiop)
 open FlockComplete.Replay (pushes pushes_congr)
 
 /-- **The recorded coins as a coin function**: round `k`'s word `i`, zero past either. -/
@@ -245,14 +245,14 @@ theorem repPiop_rec (coins : Got) (st : _root_.Flock.Setup) (lay : _root_.Flock.
     (h : ((repPiop (stepAsks coins false) st lay cap root extras mk).run t).run #[] = .done r) :
     ∃ zc lc, r.1.1.2.2 = abcClaims st.m st.kLog zc lc ++ extras ∧
       PtsAt st.m st.fold.kLog (recCoin coins) 0 zc lc := by
-  have hR := _root_.Flock.Firewall.Finish.repPiop_rel recSim (asksRel_rec coins) st lay cap root extras mk
+  have hR := _root_.Flock.ZkServer.Finish.repPiop_rel recSim (asksRel_rec coins) st lay cap root extras mk
   obtain ⟨l', hy, -⟩ := hR t #[] r.1 r.2 h #[] rfl
   obtain ⟨⟨⟨zp, lp, cl⟩, t''⟩, g⟩ := r
   dsimp only at hy ⊢
   unfold repPiop at hy
-  obtain ⟨⟨zp', zc⟩, t₁, l₁, h₁, hy⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hy
+  obtain ⟨⟨zp', zc⟩, t₁, l₁, h₁, hy⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok hy
   dsimp only at hy
-  obtain ⟨⟨lp', lc⟩, t₂, l₂, h₂, hy⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hy
+  obtain ⟨⟨lp', lc⟩, t₂, l₂, h₂, hy⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok hy
   have hy' : (Except.ok ((zp', lp', abcClaims st.m st.kLog zc lc ++ extras), t₂), l₂) =
       ((Except.ok ((zp, lp, cl), t'') : Except String _), l') := hy
   simp only [Prod.mk.injEq, Except.ok.injEq] at hy'

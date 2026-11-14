@@ -21,7 +21,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Headline
 /-!
 # The soundness half of one `--zk` sampled session
 
-`zk_session_sound`: `zk_session_composed`'s soundness conjunct, at the same law and parameters, with the same proof.
+`zk_session_sound`: `zk_session_composed`'s soundness conjunct, at the same sampling design and parameters, with the same proof.
 For any live prover `τ` of a public-output one-table `--zk` session,
 `Pr[verity-verify-proof --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key
 program's partition (`keyProg c hU n`), each read at its `--zk` site and bound to the rows it commits (lp-zkbind's

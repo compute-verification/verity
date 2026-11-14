@@ -122,7 +122,7 @@ open Lean (Json)
 
 open Classical in
 /-- **A simulator of each prover at the verdict at the sample**: for each prover `P` and tape `ω`, a live prover `P'`
-with a finite tape `τ` and coins `Φ` of `V false` at the tape and the live coins, of uniform law, whose strategies send
+with a finite tape `τ` and coins `Φ` of `V false` at the tape and the live coins, of uniform distribution, whose strategies send
 `P`'s roots, that simulates `P`'s accepting runs at `Φ` (`PlainSimRun`), whose live self-clashes against
 `plainVerdictAt` give `P`'s accepting runs with a collision there (`PlainClashRun`), and whose strategies' fork bound
 at each plain fork round `j` is no more than an accepting fork's with a collision there (`plainForkEv`) and the slack
