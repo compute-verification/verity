@@ -28746,7 +28746,7 @@
    },
    "Pouw.PearlC.Assumptions.W1CompleteH100": {
     "status": "falsified",
-    "why": "W1 on the H100 with INT8 at the data sheets' prices per second at the tensor clock dominates the card's cost model within every bound on rev1's audit tiles (w1-complete-h100); an open premise, falsified on the H200: the timed loop of FP32 beside the tensor pipe (run r20261113-180927-646d) refutes both data-sheet readings of an FP32 instruction's price, the per-clock 32 and the tensor-clock 976/33 (29.58)."
+    "why": "W1 on the H100 with INT8 at the data sheets' prices per second at the tensor clock dominates the card's cost model within every bound on rev1's audit tiles (w1-complete-h100); an open premise, falsified on the H200: the H200's measured FP32 adds beside the tensor pipe refute both data-sheet readings of an FP32 instruction's price, the per-clock 32 and the tensor-clock 976/33 (29.58)."
    },
    "Pous.P2.Assumptions.P2RingAuditSecure": {
     "status": "open",
