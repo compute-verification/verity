@@ -250,9 +250,9 @@ T_{S−1} it passes exactly when O is right, at any S. A constant O is therefore
   at K = 384 and 0.0144 at K = 4,096. The block earns no credit (see "What is credited"), so this guess bounds its
   check of O, and the credit's η needn't price it (see "The outcome").
 - Where registration pins B, the prover knows c = B + d_B (d_B comes with the call's seeds, before it computes O), so
-  O's variance an output cell at A = 0 is Σ_ℓ c_{jℓ}²/4 and the guess passes at about 1/√(2π Σ_ℓ c_{jℓ}²/4). On `LLAMA31_8B_INT8` the least such row
-  (gate-up, layer 18: one entry at ±126, rms 2.58 elsewhere) gives 4.83e-3, and 0.34–1.33% of each linear's rows give
-  more than 1e-3.
+  O's variance an output cell at A = 0 is Σ_ℓ c_{jℓ}²/4 and the guess passes at about 1/√(2π Σ_ℓ c_{jℓ}²/4). On
+  `LLAMA31_8B_INT8` the least such row (gate-up, layer 18: one entry at ±126, rms 2.58 elsewhere) gives 4.83e-3, and
+  0.34–1.33% of each linear's rows give more than 1e-3.
 
 **S = 1.** Where L ≥ K, an output cell commits O alone, and its one proof block checks O alone. With O right, the T_S it derives
 passes whatever U, V and π are, so the noise does nothing there: the call is un-noised, and earns no credit (see "What
