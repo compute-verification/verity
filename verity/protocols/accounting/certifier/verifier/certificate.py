@@ -73,12 +73,40 @@ unforgeability is ``euf-cma/lms-sha512-n64``. The certifier's signing step (`Iss
 signer refuses (`SignerRefused`), and then the execution phase has no certificate: it fails closed, as a `no-verdict`.
 So does a signer asked to start a session its state has already started (`Signer.start`): the issuer starts its session
 before its first signature, and a refused start leaves every execution phase of the run without a certificate.
+
+**The device state** (`DeviceState`): what the network certifier keeps for its registered key across sessions, in a
+file of its own beside the key and apart from the key's leaf state: the key's life so far, in milliseconds on the
+network certifier's clock, and the ids of the sessions started under the key. A session's start takes the key's life
+as it stands as the session's base and moves it on by the session's whole span, its execution phases of T ticks each,
+written and synced to disk before the base is returned: a run that ends early loses the rest of its span, and no later
+session is given a millisecond an earlier one was. The state is held, under a lock, by one run of the network certifier
+from before its first tick to after its last, so no two sessions under a key run at once, and it refuses a session id
+it has started (`StartRefused`). It is keyed by the registered key, which today is the key that signs.
+
+**The start's certificate** (`CertifiedStart`, `Issuer.certify_start`): once a session, before its first tick, the
+network certifier signs where the session starts on its key's life, under the message every certificate signs, for
+the link's name with ``-origin`` (`start_link`), ``egress``, window 0:
+
+    signed digest = tagged_sha512("verity-network-certifier/start/v1", u64be base_ms ‖ schedule)       (`start_digest`)
+
+`base_ms` is the session's base and `schedule` the schedule's parameters digest (64 bytes), so tick t of the session is
+millisecond `base_ms` + t·τ_b of the key's life. Both are public, so the digest carries no salt, and a verifier that
+holds them checks the certificate alone (`CertifiedStart.verify`). The tag and the link name are the start's own, so
+a start's certificate opens as no record's or clock's.
+
+The tag says which clock the session's ticks are read on: ``verity-network-certifier/start/v1`` means the host's raw
+clock, and a device whose ticks read any other clock signs its starts under another tag. The digest names no clock:
+the base is a sum of spans, not a reading, and that a device's ticks read the clock its tag means rests on
+`trusted-host`. A device that signs no start has no session a check of the start accepts.
 """
 
 from __future__ import annotations
 
 import enum
+import fcntl
 import hashlib
+import json
+import os
 import secrets
 import threading
 from collections.abc import Callable, Sequence
@@ -96,6 +124,7 @@ from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, S
 RECORD_TAG = "verity-network-certifier/record/v2"
 PARAMETERS_TAG = "verity-network-certifier/parameters/v1"
 CLOCK_TAG = "verity-network-certifier/clock/v1"
+START_TAG = "verity-network-certifier/start/v1"
 FRAME_TAG = b"verity-network-certifier/frame/v2\0"
 EMPTY_TAG = b"verity-network-certifier/empty/v2\0"
 NODE_TAG = b"verity-network-certifier/node/v2\0"
@@ -313,6 +342,147 @@ def clock_commitment(salt: bytes, sync: ClockSync) -> bytes:
     return certificate_digest(salt, clock_digest(sync))
 
 
+def start_link(link: str) -> str:
+    """The link name a session's start is certified under: `link`'s with ``-origin``, which no record or clock has."""
+    return f"{link}-origin"
+
+
+def start_digest(base_ms: int, schedule: bytes) -> bytes:
+    """The digest a start's certificate signs: tagged_sha512("verity-network-certifier/start/v1", u64be base_ms ‖
+    schedule), `base_ms` the key's life at the session's start, in milliseconds on the network certifier's clock, and
+    `schedule` the schedule's parameters digest. Both are public, so it carries no salt."""
+    if type(schedule) is not bytes or len(schedule) != DIGEST_BYTES:
+        raise ValueError(f"a schedule's parameters digest is {DIGEST_BYTES} bytes")
+    return tagged_sha512(START_TAG, _u(base_ms, 8, "base_ms") + schedule)
+
+
+class StartRefused(Exception):
+    """The device state refuses a session's start: it is held by another run of the network certifier, missing,
+    unreadable or another key's; the session is already started; or the key's life has no room for the session's span.
+    The network certifier then does not start: no tick runs and nothing is signed."""
+
+
+def _fsync_dir(d: Path) -> None:
+    fd = os.open(d, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+class DeviceState:
+    """One registered key's device state, in a file that fails closed (the module docstring's "The device state").
+
+    ``path`` holds ``{"public", "count_ms", "sessions", "check"}`` as JSON: the registered key (``I ‖ T[1]``, in hex),
+    the key's life so far in milliseconds on the network certifier's clock, the ids of the sessions started under the
+    key (in hex), and ``check``, the first 16 bytes of SHA-512 over the rest. Opening takes ``path.lock`` exclusively
+    for the object's life and refuses a state another run holds, so a run that opens it before its first tick and
+    closes it after its last is the key's only one. It refuses a state that is missing, unreadable or another key's.
+    `start` gives a session its base. A restore of the file from an earlier copy is past what a file can see: that
+    rests on its host never restoring one."""
+
+    def __init__(self, path: str | os.PathLike, public: bytes) -> None:
+        self.path, self.public = Path(path), bytes(public)
+        self._session: bytes | None = None
+        try:
+            self._lock = open(self.path.with_name(self.path.name + ".lock"), "a+")
+        except OSError as e:
+            raise StartRefused(f"{self.path}: no device state ({type(e).__name__})") from None
+        try:
+            fcntl.flock(self._lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            self._lock.close()
+            raise StartRefused(f"{self.path} is held by another run of the network certifier under this key") from None
+        try:
+            self._count, self._sessions = self._read()
+        except BaseException:
+            self.close()
+            raise
+
+    @staticmethod
+    def create(path: str | os.PathLike, public: bytes) -> None:
+        """A new key's state: no millisecond of its life used and no session started. Refused when the state exists."""
+        p = Path(path)
+        if p.exists():
+            raise StartRefused(f"{p} already has a device state")
+        DeviceState._write(p, bytes(public), 0, ())
+
+    @staticmethod
+    def _body(public: bytes, count: int, sessions: tuple[bytes, ...]) -> dict:
+        b = {"public": public.hex(), "count_ms": count, "sessions": [s.hex() for s in sessions]}
+        b["check"] = hashlib.sha512(json.dumps(b, sort_keys=True).encode()).hexdigest()[:32]
+        return b
+
+    @staticmethod
+    def _write(p: Path, public: bytes, count: int, sessions: tuple[bytes, ...]) -> None:
+        tmp = p.with_name(p.name + ".tmp")
+        with open(tmp, "w") as f:
+            json.dump(DeviceState._body(public, count, sessions), f, sort_keys=True)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, p)
+        _fsync_dir(p.parent)
+
+    def _read(self) -> tuple[int, tuple[bytes, ...]]:
+        try:
+            body = json.loads(self.path.read_text())
+            count, sessions = body["count_ms"], tuple(bytes.fromhex(s) for s in body["sessions"])
+            intact = (type(count) is int and 0 <= count < 1 << 64
+                      and body == self._body(bytes.fromhex(body["public"]), count, sessions))
+        except FileNotFoundError:
+            raise StartRefused(f"{self.path}: missing (a key's device state is made with the key, never after: "
+                               f"a key without one runs no network certifier)") from None
+        except (OSError, ValueError, TypeError, KeyError) as e:
+            raise StartRefused(f"{self.path}: unreadable ({type(e).__name__})") from None
+        if not intact:
+            raise StartRefused(f"{self.path}: unreadable (its check does not match)")
+        if body["public"] != self.public.hex():
+            raise StartRefused(f"{self.path} is another key's")
+        return count, sessions
+
+    @property
+    def count_ms(self) -> int:
+        """The key's life so far, in milliseconds on the network certifier's clock, as this object last read or wrote
+        it."""
+        return self._count
+
+    def start(self, session: bytes, span_ms: int) -> int:
+        """The base of this run's one session, ``session``: the key's life as it stands, in milliseconds, after the
+        state on disk records the session as started and the key's life as ``span_ms`` further on, the session's whole
+        span. Refused when the state has started the session, when this object has started one, and when the span
+        would take the key's life past a u64."""
+        session = bytes(session)
+        if len(session) != lms.SESSION_BYTES:
+            raise ValueError(f"a certifier session id is {lms.SESSION_BYTES} bytes, not {len(session)}")
+        if type(span_ms) is not int or span_ms <= 0:
+            raise ValueError(f"a session's span is a positive number of milliseconds, not {span_ms!r}")
+        if self._lock.closed:
+            raise StartRefused(f"{self.path}: closed")
+        if self._read() != (self._count, self._sessions):
+            raise StartRefused(f"{self.path}: changed under this run")
+        if self._session is not None:
+            raise StartRefused(f"{self.path}: this run has already started a session")
+        if session in self._sessions:
+            raise StartRefused(f"{self.path}: session {session.hex()} is already started")
+        base = self._count
+        if base + span_ms >= 1 << 64:
+            raise StartRefused(f"{self.path}: the key's life, {base} ms, has no room for {span_ms} ms more")
+        self._write(self.path, self.public, base + span_ms, self._sessions + (session,))
+        self._count, self._sessions, self._session = base + span_ms, self._sessions + (session,), session
+        return base
+
+    def close(self) -> None:
+        if not self._lock.closed:
+            fcntl.flock(self._lock, fcntl.LOCK_UN)
+            self._lock.close()
+
+    def __enter__(self) -> DeviceState:
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+
 class SignerRefused(Exception):
     """The signer's one-time-key state is missing, behind or held by another signer, so it signs nothing rather than risk
     reusing a key; or the session it is asked to start is already started."""
@@ -523,6 +693,43 @@ class CertifiedClock:
         return self.refusal(key, session) is None
 
 
+@dataclass(frozen=True, slots=True)
+class CertifiedStart:
+    """What the network certifier hands over once a session, before its first tick: the session's base on its key's
+    life (`base_ms`, milliseconds on the network certifier's clock), the schedule's parameters digest it runs under,
+    and the certificate, which signs their start digest (`start_digest`) for the link's start name (`start_link`),
+    ``egress``, window 0. All of it is public."""
+
+    base_ms: int
+    schedule: bytes
+    certificate: Certificate
+
+    def refusal(self, key: PublicKey, session: bytes, link: str, schedule: bytes) -> str | None:
+        """Why the start's certificate fails under `key` in certifier session `session` for `link` under the schedule
+        whose parameters digest is `schedule`, or None when it holds: ``start`` unless it is an egress certificate of
+        window 0 under `link`'s start name, ``key`` unless it is `key`'s, ``schedule`` unless it names `schedule`,
+        ``opening`` unless its base and schedule give the digest it signs, and ``signature`` unless its signature
+        verifies over its message in the session (`Certificate.verify`)."""
+        c = self.certificate
+        if (type(c) is not Certificate or c.direction is not Direction.EGRESS or c.window != 0
+                or c.link != start_link(link)):
+            return "start"
+        if c.key_id != key.key_id:
+            return "key"
+        if self.schedule != schedule:
+            return "schedule"
+        base, named = self.base_ms, self.schedule
+        if (type(base) is not int or not 0 <= base < 1 << 64 or type(named) is not bytes
+                or len(named) != DIGEST_BYTES or c.digest != start_digest(base, named)):
+            return "opening"
+        if not c.verify(key, session):
+            return "signature"
+        return None
+
+    def verify(self, key: PublicKey, session: bytes, link: str, schedule: bytes) -> bool:
+        return self.refusal(key, session, link, schedule) is None
+
+
 def _named(c: CertifiedClock) -> str:
     x = c.certificate
     if type(x) is not Certificate:
@@ -654,11 +861,19 @@ class Issuer:
         self.clock_salts.add(salt)
         return CertifiedClock(sync, salt, certificate)
 
+    def certify_start(self, link: str, base_ms: int, schedule: bytes) -> CertifiedStart | None:
+        """The start's certificate of this session on `link`: its base on the key's life, `base_ms`, under the
+        schedule whose parameters digest is `schedule` (`start_digest`), or None when the signer refuses. The network
+        certifier signs it before its first tick, with the base its device state gave the session
+        (`DeviceState.start`), and does not start without it."""
+        certificate = self.sign(start_link(link), Direction.EGRESS, 0, start_digest(base_ms, schedule))
+        return None if certificate is None else CertifiedStart(base_ms, schedule, certificate)
+
     def sign(self, link: str, direction: Direction, window: int, digest: bytes) -> Certificate | None:
         """A certificate of the 64-byte `digest` for the execution phase in this session, or None when the signer
         refuses (the execution phase is then listed in `refused`). `certify` signs a record's salted digest with it,
-        `salted_clock` a window's salted sync, and the network certifier's cell rows their head's digest
-        (`warden_rows`)."""
+        `salted_clock` a window's salted sync, `certify_start` the session's start, and the network certifier's cell
+        rows their head's digest (`warden_rows`)."""
         key_id = self.signer.key_id
         message = certificate_message(key_id, self.session, link, direction, window, digest)
         try:
