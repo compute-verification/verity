@@ -1,0 +1,7 @@
+{
+ "held": {
+  "neither a Call of a served Program (targets.call_families), a serving cut (serving_templates) nor PoUW's: a subcircuit proved inside its callers' units, or a whole step's composition, which no window stages whole": [
+   "Fa3AttentionSplit_v1{T=300,NS=2,NH=4,KVH=2,D=64,BN=192,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,MASKED_FROM=1}"
+  ]
+ }
+}
