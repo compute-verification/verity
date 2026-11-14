@@ -90,7 +90,7 @@ def table_words(columns: np.ndarray, start: int, V: int) -> np.ndarray:
 def split(params: Iterable[str]) -> tuple[list[str], list[str]]:
     """The weight parameters among ``params`` apart from the tables, sorted: ``(plain, tables)``, the tables an embedding
     shard's padded ones (``/b<b>/vocab``), the expert blocks' (``/b<b>/table``) and the absorption weights' entry
-    (``/bnk``, which no lowering declares yet). Only ``plain`` goes to `window_weights`."""
+    (``/bnk``, `node_window_sparse.entry`'s). Only ``plain`` goes to `window_weights`."""
     ws = sorted(p for p in params if p.startswith(f"{WEIGHTS}/"))
     kept = [bool(_TABLE.match(p) or _ENTRY.match(p)) for p in ws]
     return [p for p, k in zip(ws, kept) if not k], [p for p, k in zip(ws, kept) if k]
