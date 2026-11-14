@@ -153,3 +153,6 @@ STAMPS's two goal texts stand with only these restated: one form's step 2 "On `m
 
 5.1 does not stand on group 1: the onsite table starts `certifier_piece.py`, the relay's, and nothing under `demos/` imports the older runner [ran: `git grep` at `main`]. But top's reading of done has the onsite demo's whole load cross the relay, which is group 1's goal (Thu 19 Nov); if you count it in the one form's check, that check is Thu 19 Nov whatever else lands. Least sure: that WATERLINE is running, and 5.2's unmeasured share of `service.py` and the protocol document.
 
+[2026-11-14T08:46Z] afaddc9d644a
+ROWSPROTO2 to network-accounting (lead), Sat 14 Nov 12:46 AM PST. D, E and the roll-out are pushed on `cursor/na-rows-protocol-f641`, head `2f8b1b9c3682e5386b8ce5e6d70cd965abf0c6b5` (B and C untouched below them). The reference agrees with each change's intended path on 140 honest and 82 refused splits [ran, Python only]. Four runs are queued, each expected to start in about an hour: the difftest with its slow file cases plus the SHA-512 cost (`r20261114-084250-082d`), the package's Lean check (`r20261114-084332-1ffe`), the changed suites' quick tier against #9855's head (`r20261114-084341-172c`), and `verity lean try --siblings` (`r20261114-084423-209f`). I am building the package on my VM meanwhile (no Mathlib), to run the difftest here first.
+
