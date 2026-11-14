@@ -102,13 +102,16 @@ candidate and those above it are built again without them in the same tick.
                                                    `open` does, keeping only the Cursor PR tool's markers and footer (`edit_pr`);
                                                    refuses a body that drops or changes the PR's `Lane NAME` owner; --dry-run
                                                    prints the body it would write
-    research queue stats [--json] [--short] [--rounds] [--until TS]
+    research queue stats [--json] [--short] [--rounds | --reds] [--until TS]
                                                    the queue's core numbers as one table, read live in under two minutes: mark to
                                                    `main`, the heads the loop leaves out, the review wait, the quick tier's wait
                                                    for a slot, a candidate's check by shard, a red's cost, the executor, cores and
                                                    slots (`research.queue_table`); --short leaves out the column saying how each
                                                    number is measured; --rounds prints one row a candidate instead: the Lean it
                                                    changed and was checked on top of, its first shard, its steps and its verdict;
+                                                   --reds prints each candidate being checked instead: its members above
+                                                   `main`, each shard's node, run, state and steps, and only its reds on the
+                                                   merge gate (a step off it in policy.toml is left out); --json has both;
                                                    --until ends the windows at a past time, for a day that is over
     research queue stats --log FILE [--hours H] [--until TS] [--json]
                                                    where landed PRs' time went, from drive's log (`research.queue_stats`)
@@ -6995,6 +6998,8 @@ def main(argv: list[str]) -> int:
                     "compare a check with the executor's verdicts (default 10)")
     ap.add_argument("--short", action="store_true", help="stats: the table without the column saying how each number is measured")
     ap.add_argument("--rounds", action="store_true", help="stats: one row for each candidate built in the window, instead of the table")
+    ap.add_argument("--reds", action="store_true", help="stats: each candidate being checked, its members above `main`, its shards' "
+                    "runs and steps, and only the reds on the merge gate, instead of the table")
     ap.add_argument("--hours", type=float, default=24.0, help="stats: the window's length (default 24)")
     ap.add_argument("--days", type=int, default=7, help="delegate: how long the delegation lasts (default 7, at most 14)")
     ap.add_argument("--until", metavar="YYYY-MM-DDTHH:MM:SSZ", help="stats: the window's end (default now); for the table, a past "
@@ -7010,7 +7015,9 @@ def main(argv: list[str]) -> int:
         if a.log is None:
             from . import queue_table
 
-            return queue_table.main(a.store, a.json, short=a.short, until=a.until, by_round=a.rounds)
+            if a.rounds and a.reds:
+                ap.error("stats: --rounds or --reds, not both")
+            return queue_table.main(a.store, a.json, short=a.short, until=a.until, by_round=a.rounds, by_red=a.reds)
         return _stats(a)
     if a.command == "checked-heads":
         return _checked_heads(a)
