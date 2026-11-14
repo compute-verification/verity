@@ -11,6 +11,7 @@ from __future__ import annotations
 import functools
 import gc
 import hashlib
+import io
 import json
 import os
 import socket
@@ -272,7 +273,7 @@ def test_a_second_session_for_an_audit_is_refused_never_redrawn(tmp_path) -> Non
     CP.give_salt(salts, {"audit": AUDIT.hex(), "commitment": published.commitment.hex()}, entropy=lambda n: COINS)
     sid, _ = _audit_session(point, published, lambda i: blocks[i], ts.TestSigner(b"once", 2), salts, log)
     request = CS.request_of("n0", point, published.root, audit=AUDIT, published=published)
-    assert _refused(request, salts, log) == (f"a session has run for audit {AUDIT.hex()}: the memory challenger runs one "
+    assert _refused(request, salts, log) == ("a session has run for the request's `audit`: the memory challenger runs one "
                                              "an audit, and a retry is refused, never redrawn")
     assert log.path.read_text().splitlines()[1:] == [sid.hex()]
 
@@ -292,15 +293,15 @@ def test_a_session_whose_setup_salt_is_not_the_challengers_is_refused(tmp_path) 
     _, point, published, _, _ = _in_process()
     salts, log = _salt_log(tmp_path), ts.session_log(tmp_path)
     request = CS.request_of("n0", point, published.root, audit=AUDIT, published=published)
-    assert _refused(request, salts, log).startswith(f"the memory challenger drew no salt for audit {AUDIT.hex()}")
+    assert _refused(request, salts, log).startswith("the memory challenger drew no salt for the request's `audit`")
     CP.give_salt(salts, {"audit": AUDIT.hex(), "commitment": published.commitment.hex()})
-    assert _refused(request, salts, log) == ("setup's published outputs do not carry the commitment and salt the memory "
-                                             f"challenger logged for audit {AUDIT.hex()}")
+    assert _refused(request, salts, log) == ("setup's published outputs (`published`) do not carry the commitment and salt "
+                                             "the memory challenger logged for the request's `audit`")
     logged = run.Setup(published.blocks, published.commitment, published.root, salts.get(AUDIT)[1])
     elsewhere = CS.request_of("n0", point, b"\x01" * 64, audit=AUDIT, published=logged)
     assert _refused(elsewhere, salts, log).startswith("the session does not audit the C* setup published")
     assert _refused({k: v for k, v in request.items() if k != "published"}, salts, log).startswith(
-        "the request names no audit and setup's published outputs")
+        "the request's `published` is setup's published outputs")
     assert log.path.read_text() == f"{mc.SESSION_LOG}\n"
 
 
@@ -333,11 +334,11 @@ def test_the_side_serves_a_salt_request_and_refuses_before_it_listens(tmp_path) 
     source = CS.salt(side, AUDIT, commitment)
     assert len(source) == CP.SOURCE_BYTES
     assert mc.SaltLog(device / "salts").get(AUDIT) == (commitment, period.setup.draw_salt(source, commitment))
-    with pytest.raises(RuntimeError, match="the memory challenger on auditor-host drew no salt: audit .* has its salt"):
+    with pytest.raises(RuntimeError, match="the memory challenger on auditor-host drew no salt: the request's `audit` has its"):
         CS.salt(side, AUDIT, commitment)
     point = period.point_for(len(STORE), period.W, period.C0)
     wrong = run.Setup(point.params.blocks, commitment, b"\x02" * 64, bytes(24))
-    with pytest.raises(RuntimeError, match="the side on auditor-host refused: setup's published outputs do not carry"):
+    with pytest.raises(RuntimeError, match=r"the side on auditor-host refused: setup's published outputs \(`published`\) do not carry"):
         side.talk(CS.request_of("n0", point, wrong.root, audit=AUDIT, published=wrong), lambda s: None)
     assert not (device / "seed").exists() and mc.SessionLog(device / "sessions").path.read_text() == f"{mc.SESSION_LOG}\n"
 
@@ -372,7 +373,7 @@ def test_a_request_carries_its_setup_and_the_challenger_keeps_each_completed_ses
                      ({"salt": "00"}, "salt PoUS's"), ({"extra": 1}, "a request's published outputs are")):
         with pytest.raises(ValueError, match=why):
             CS.setup_of(req | {"published": req["published"] | bad})
-    for params, why in ((req["params"] | {"segments": q.segments + 1}, "not the session's blocks"),
+    for params, why in ((req["params"] | {"segments": q.segments + 1}, "not P2's at the session's blocks"),
                         ({k: v for k, v in req["params"].items() if k != "w"}, "a setup's params are")):
         with pytest.raises(ValueError, match=why):
             CS.setup_of(req | {"params": params})
@@ -385,3 +386,85 @@ def test_a_request_carries_its_setup_and_the_challenger_keeps_each_completed_ses
     assert [p.stat().st_mode & 0o777 for p in (path.parent, path)] == [0o700, 0o600]
     with pytest.raises(FileExistsError):
         CP.keep(tmp_path, sid, req | {"node": "another"})
+
+
+LONGS = (hashlib.sha512(b"a long field").hexdigest() * 64, "\N{SNOWMAN} not hex, and long " * 300)
+"""Long strings for a request's fields: one hex of the wrong length, one not hex."""
+
+
+def _quotes(why: str, value: str) -> bool:
+    return any(value[i:i + 12] in why for i in range(len(value) - 12))
+
+
+def _long_requests(req: dict):
+    """`req` with each of its fields, and each of `published`'s and `params`'s, a long string: the field and the request."""
+    for value in LONGS:
+        for field in req:
+            yield field, value, req | {field: value}
+        for outer in ("published", "params"):
+            for field in req[outer]:
+                yield field, value, req | {outer: req[outer] | {field: value}}
+
+
+def _audit_request(salts: mc.SaltLog) -> dict:
+    """A request naming `AUDIT`, whose salt the challenger logs in `salts`, that `designate` and `setup_of` admit."""
+    _, point, published, _, _ = _in_process()
+    source = CP.give_salt(salts, {"audit": AUDIT.hex(), "commitment": published.commitment.hex()})
+    salt = period.setup.draw_salt(source, published.commitment)
+    logged = run.Setup(published.blocks, published.commitment, published.root, salt)
+    return CS.request_of("n0", point, logged.root, audit=AUDIT, published=logged)
+
+
+def test_designate_refuses_a_long_field_by_name_and_quotes_none_of_it(tmp_path) -> None:
+    salts, log = _salt_log(tmp_path), ts.session_log(tmp_path)
+    req = _audit_request(salts)
+    CP.designate(req, salts, log)
+    refused = 0
+    for field, value, bad in _long_requests(req):
+        try:
+            CP.designate(bad, salts, log)
+        except CP.Refusal as e:
+            refused += 1
+            assert not _quotes(str(e), value) and (field in str(e) or "published" in str(e)), (field, str(e))
+    assert refused >= 2 * 7
+
+
+def test_setup_of_refuses_a_long_field_by_name_and_quotes_none_of_it(tmp_path) -> None:
+    req = _audit_request(_salt_log(tmp_path))
+    assert CS.setup_of(req) is not None
+    refused = 0
+    for field, value, bad in _long_requests(req):
+        try:
+            CS.setup_of(bad)
+        except ValueError as e:
+            refused += 1
+            assert not _quotes(str(e), value) and field in str(e), (field, str(e))
+    assert refused >= 2 * 12
+
+
+def test_the_side_prints_a_refusal_that_quotes_none_of_the_request(tmp_path, monkeypatch, capsys) -> None:
+    """`main`'s answer to every request `designate` or `setup_of` refuses (it listens for the rest), and to a salt request
+    or a whole request that is a long string."""
+    device = tmp_path / "device"
+    salts, log = CP._logs(device)
+    req = _audit_request(salts)
+
+    def refusal(request) -> str:
+        monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(request) + "\n"))
+        assert CP.main(["--device", str(device)]) == 1
+        return json.loads(capsys.readouterr().out.splitlines()[-1])["refused"]
+
+    cases = [(value, value) for value in LONGS]
+    cases += [(value, {"salt": value}) for value in LONGS]
+    cases += [(value, {"salt": {"audit": value, "commitment": AUDIT.hex()}}) for value in LONGS]
+    cases += [(value, {"salt": {"audit": (b"a" * 64).hex(), "commitment": value}}) for value in LONGS]
+    for _, value, bad in _long_requests(req):
+        try:
+            CP.designate(bad, salts, log)
+            CS.setup_of(bad)
+        except (CP.Refusal, ValueError):
+            cases.append((value, bad))
+    for value, bad in cases:
+        why = refusal(bad)
+        assert why and not _quotes(why, value), why
+    assert not (device / "seed").exists() and len(cases) >= 2 * 12

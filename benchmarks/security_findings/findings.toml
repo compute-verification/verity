@@ -1,0 +1,103 @@
+# The serious findings of the security review still to fix, one [[finding]] each, which `open_findings.py` counts.
+#
+# A finding is closed only by a check `open_findings.py` runs itself (its `CHECKS`, by the finding's id), and is open
+# otherwise. A finding with a check names it (`check`), says what it reads (`reads`: `tree`, this repository's own files, the
+# thing the finding is about; or `declared`, the tree's declared state of something outside it) and how it decides (`how`).
+# A finding with none says in one line what check would close it (`would_close`).
+#
+# Never an address, a key, a token, the name of an auditor's machine or a provider's id here.
+
+[[finding]]
+id = "agent-holds-personal-and-cloud-keys"
+statement = "An agent holds Daniel's Linear key and notes token, and the Google Cloud, RunPod and Nebius keys."
+would_close = "A check on a freshly booted agent VM that `compgen -e` names none of LINEAR_API_KEY, RESEARCH_NOTES_TOKEN, GCP_SA_KEY_B64, RUNPOD_API_KEY and NEBIUS_SA_PRIVATE_KEY_B64."
+
+[[finding]]
+id = "guard-runs-from-the-branch"
+statement = "The agent guard runs from the branch an agent works on, so checking out someone's branch runs that branch's code with every key."
+check = "guard-outside-checkout"
+reads = "declared"
+how = """Reads the hooks the tree declares at the commit the run is at (`.cursor/hooks.json` there), not what a VM runs. \
+Closed only when every hook command starts with a file directly under `/opt/agent-guard/` and no other word of it is a \
+path or names one of the checkout's top-level files or directories; a command that doesn't split into plain words (a \
+variable, a substitution, quoting that joins, a redirection, `..`) counts as running from the checkout, and a commit that \
+tracks no hooks file declares no hook and stays open. A branch's own copy of the file is exactly the finding: this reads \
+only the copy at the commit it runs at."""
+
+[[finding]]
+id = "agents-have-root"
+statement = "Agents have root on the control pod and the older CPU machines."
+would_close = "A check, as the account agents log in with, that `sudo -n id -u` is refused on every CPU machine and on the control pod."
+
+[[finding]]
+id = "security-updates-and-kernel"
+statement = "11 of the 15 CPU machines install only a short list of security updates by themselves, and not every CPU machine runs a kernel that still gets fixes."
+would_close = "A check on each CPU machine that unattended-upgrades allows Ubuntu's security pocket with no strict whitelist, `apt list --upgradable` lists nothing from it, and `uname -r` names a kernel Ubuntu still fixes."
+
+[[finding]]
+id = "store-key-writes"
+statement = "The store key in every agent can write."
+would_close = "A check that a scratch write with the store key an agent VM holds is refused on each bucket."
+
+[[finding]]
+id = "machine-addresses-in-the-tree"
+statement = "14 files of the public repository hold the public addresses of 15 machines, the auditor's machines among them."
+check = "no-public-address"
+reads = "tree"
+how = """No tracked file holds a public IPv4 address that `research.addresses` counts (the rule \
+`tests/test_literal_addresses.py` holds the tree to; a documentation, private or resolver address is none) beyond what \
+an exception below excepts: a file, how many of its addresses, and why they are nobody's machine of ours."""
+
+[[finding.except]]
+path = "benchmarks/pouw/dc/dc.cuh"
+count = 1
+kind = "version"
+reason = "a PTX ISA section number, beside the one the rule reads as such"
+
+[[finding.except]]
+path = "benchmarks/pouw/harness/README.md"
+count = 1
+kind = "version"
+reason = "the version of the cuBLASLt library a toolkit ships"
+
+[[finding.except]]
+path = "infra/ops/tests/test_cloud_watch.py"
+count = 1
+kind = "third party"
+reason = "a database provider's address, quoted in the provider's own error message"
+
+[[finding.except]]
+path = "infra/ops/tests/test_watchers.py"
+count = 3
+kind = "example"
+reason = "a test's stand-in host, the placeholder address every example uses"
+
+[[finding.except]]
+path = "tools/research/tests/test_budgets.py"
+count = 1
+kind = "example"
+reason = "a test's stand-in host, the placeholder address every example uses"
+
+[[finding.except]]
+path = "tools/research/tests/test_env_credentials.py"
+count = 2
+kind = "example"
+reason = "a test's stand-in host, the placeholder address every example uses"
+
+[[finding.except]]
+path = "tools/research/tests/test_pod_lease.py"
+count = 2
+kind = "example"
+reason = "a test's stand-in host, the placeholder address every example uses"
+
+[[finding.except]]
+path = "tools/research/tests/test_remote_ship_git.py"
+count = 2
+kind = "example"
+reason = "a test's stand-in host, the placeholder address every example uses"
+
+[[finding.except]]
+path = "tools/verity/check/tests/test_verdicts.py"
+count = 2
+kind = "example"
+reason = "two test stand-in pods' addresses, the placeholder and the one after it"

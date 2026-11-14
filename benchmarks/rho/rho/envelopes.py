@@ -314,8 +314,8 @@ class Certifier:
         r_in ≤ windowBits / (T τ_b) = (lanes ⌈T / (D + 1)⌉ requestBits + T lanes ⌈log₂(r + 2)⌉) / (T τ_b)
         r_out ≤ lanes ⌈T / (D + 1)⌉ (KO IDB + ⌈log₂(KO + 1)⌉) / (T τ_b)
 
-    (`requestBits`, `bucketBits`, `windowRequests` and `windowBits` of the Lean statement
-    `Properties.NetworkCertifier.PerServerIngress`, `draft:per-server-ingress`; the egress at the same requests). The
+    (`requestBits`, `bucketBits`, `windowRequests` and `windowBits` of the draft statement
+    `draft:per-server-ingress`, not yet in Lean; the egress at the same requests). The
     bound is stated per link-window, so the rate is too: this package never cites less than the bound states. This is
     its honest-δ form, at a δ where only the empty incorrect set is possible. An incorrect ingress unit adds
     `faulty_unit_bits` (`faultyIngressBits`), which this form excludes; it is 0 when every ingress unit is sampled. The
@@ -484,6 +484,8 @@ class Remote:
     #: the inference cut: the remote composition, `Nci.Guarantees.DampenerRemote`, term for term, its envelopes'
     #: premises, and the registration
     CITES = ("Nci.Guarantees.DampenerRemote",) + Pouw.CITES + Detection.CITES + ("Nci.Assumptions.ThetaRegistered",)
+    #: the server-block bound each of its cuts is an argument of: the inference cap alone
+    BOUND = ("Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote",)
     #: the routes a strategy that never cheats gets: no wrong certificate, faulty block or detection
     ABIDING = ("undecl.host", "undecl.gpu", "undecl.clock", "skip.pouw")
 
@@ -507,7 +509,7 @@ class Remote:
     def inference(self, ctx: Context, gates: float) -> Cut:
         """`n_S q_T(c, k) + q_U(U_S)`: the inference blocks and the uncertified gates by route."""
         return Cut("inference", (self.blocks(ctx, gates),), {k: v * gates for k, v in self.slack(ctx).items()},
-                   self.CITES)
+                   self.CITES + self.BOUND)
 
     def abiding(self, ctx: Context, gates: float) -> dict[str, float]:
         """The uncertified gates a strategy that never cheats trains with in `gates` of a location, at the training
@@ -532,7 +534,10 @@ FORMS = ("certified", "links")
 @dataclass(frozen=True)
 class Onsite(Remote):
     """The remote audit's envelopes plus the wipe and the certifier: each server block, one server between two wipes,
-    gets the serving cut `q_T(c_S, k_S)` as well, and contributes the lesser."""
+    gets the serving cut `q_T(c_S, k_S) + ω_max μ k_S` as well, and contributes the lesser."""
+
+    #: the server-block bound, both its cuts' minimum
+    BOUND = ("Accounting.Guarantees.ServingBlocks.ServingBlockBound",)
 
     wipe: Wipe = Wipe()
     certifier: Certifier = Certifier()
@@ -580,7 +585,7 @@ class Onsite(Remote):
 
     def partition(self, ctx: Context) -> Partition:
         budget = self.budget(ctx)
-        serving = Cut("serving", (Blocks("serving", budget, 1.0),), {}, self.cites())
+        serving = Cut("serving", (Blocks("serving", budget, 1.0),), {}, self.cites() + self.BOUND, budget.inputs)
         # The uncertified block may take the whole server block's input: generous to the adversary, since the
         # inference blocks' prompts come out of it too.
         uncertified = Budget(math.fsum(self.abiding(ctx, budget.gates).values()), budget.inputs)

@@ -60,7 +60,7 @@
 # time it reads, epoch seconds (tests).
 #
 # CPU quota: where the machine's CPU time is capped (a container's cpu.max: $GPU_LEASE_CPU_MAX, default /sys/fs/cgroup/cpu.max), runs
-# pinned to more CPUs than the cap allows are throttled together, and a timed run among them is void.  --cores CPUS (48-57,60)
+# pinned to more CPUs than the quota allows are throttled together, and a timed run among them is void.  --cores CPUS (48-57,60)
 # declares the CPUs a run pins: CMD runs under `taskset -c CPUS`, and the lease records cores=CPUS.  The pin is the lease's word, not
 # a fence: a job can still widen its own affinity.  Every CPU of the list must be one this request may run on here: `taskset -c
 # CPUS` is tried, and a list it can't pin to at all, or pins to only a part of (the rest are CPUs this machine hasn't, or outside
@@ -90,7 +90,7 @@
 # GPU_LEASE_STARTED overrides the lease's start time, %Y-%m-%dT%H:%M:%SZ (tests).
 #
 # Agent mode: while the node's scheduler (`cluster agent --mode live`, infra/cluster) holds $GPU_LEASE_DIR/agent.lock, it decides
-# instead of the rules above.  Every request queues at once as its wait file, which also records --max-min (max=), the memory cap
+# instead of the rules above.  Every request queues at once as its wait file, which also records --max-min (max=), the memory limit
 # (mem=), --preemptible (preempt=1) and --timed (timed=1); the agent stops what its plan evicts, and grants by writing
 # $GPU_LEASE_DIR/grant.<pid>, the GPU indices comma-separated.  gpu-lease takes exactly those GPUs (polling every
 # $GPU_LEASE_AGENT_POLL_S seconds, default 0.5) and preempts nothing itself.  A request without --wait gives up with 75 when no
@@ -591,12 +591,12 @@ def every():
 
 try:
     with open(e["GL_CPU_MAX"]) as fh:
-        cap = fh.read().split()
+        quota_line = fh.read().split()
 except OSError:
-    cap = []
-if len(cap) != 2 or not (cap[0].isdigit() and cap[1].isdigit() and int(cap[1])):
+    quota_line = []
+if len(quota_line) != 2 or not (quota_line[0].isdigit() and quota_line[1].isdigit() and int(quota_line[1])):
     sys.exit(0)                     # no quota here: no file, or `max`
-quota, period = int(cap[0]), int(cap[1])
+quota, period = int(quota_line[0]), int(quota_line[1])
 leases = {}
 for line in e["GL_LEASES"].splitlines():
     i, _, head = line.partition(" ")
@@ -836,7 +836,7 @@ if [ "$memgb" != 0 ]; then
   if command -v systemd-run > /dev/null && systemd-run --user --scope --quiet --collect true > /dev/null 2>&1; then
     scope=(systemd-run --user --scope --quiet --collect --unit "gpu-lease-$$" -p "MemoryMax=${memgb}G" -p MemorySwapMax=0 --)
   else
-    echo "gpu-lease: this user's systemd can't make a scope here, so CMD runs without a memory cap" >&2
+    echo "gpu-lease: this user's systemd can't make a scope here, so CMD runs without a memory limit" >&2
     memgb=""
   fi
 fi

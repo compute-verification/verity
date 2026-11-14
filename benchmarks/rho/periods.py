@@ -378,6 +378,27 @@ def main() -> None:
             {"measured": asdict(measured) | {"u_over_w": measured.u_over_w(measured.s_x)}} if measured else {})
         (out / "periods.md").write_text(text + "\n")
         (out / "periods.json").write_text(json.dumps(_finite(doc), indent=1, allow_nan=False))
+        if not (args.set or args.bounds or args.measured):
+            write_metric(out, rows)
+
+
+#: the metric's id (`metrics.toml` beside this file), the scenario whose lower bound it is, and its unit
+METRIC, METRIC_SCENARIO = "training/slowdown-onsite-h200", "reference-onsite-h200"
+UNIT = ("the slowdown's lower bound over a year of the world's compute: the adversary's GPU-hours to the target over "
+        "the reference training algorithm's at MFU₀ (Lean's hardwareMultiple), at least 1")
+
+
+def write_metric(out: Path, rows: list[dict]) -> None:
+    """`METRIC_SCENARIO`'s lower bound over a year of the world's compute, written into the run's result under `METRIC`
+    as one measurement (`period` year, `over` world); the other fleets and periods stay in `periods.json`. Modeled:
+    the registry's parameters, fleets and periods, which no run measured. Written only for a run at the registry as it
+    is (no `--set`, `--bounds` or `--measured`), whose lower bound is the metric's."""
+    from verity_bench import kit
+
+    x = next((x for x in rows if (x["scenario"], x["fleet"], x["period"]) == (METRIC_SCENARIO, "world-h200", "year")),
+             None)
+    if x is not None:
+        kit.writer(out).measurement(METRIC, x["slowdown"], UNIT, mark="modeled", period="year", over="world")
 
 
 if __name__ == "__main__":

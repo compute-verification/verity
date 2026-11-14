@@ -1,7 +1,7 @@
 """The ZK server's contract (`Flock/Firewall/Contract.lean`, `flock-firewall contract`) against the inner phase's ZK server
 (`verity_flock.rec_live.Proxy`), on the transcripts `verity_flock.firewall_transcript` records (`firewall_agree.py`):
 honest sessions accepted by both, the red team's six sessions against the ZK server refused by both or sent as the schedule has them,
-tamper controls (firewalls that let out what the contract forbids) refused by the contract, the ZK server review's leaks
+tamper controls (ZK servers that let out what the contract forbids) refused by the contract, the ZK server review's leaks
 each cut at its item, every session `test_firewall_agreement` holds the proxy to `Flock.Firewall.run` on, the inner
 session's live coins, coins that do not open a challenger's commitment refused by both, and no salt used twice."""
 from __future__ import annotations
