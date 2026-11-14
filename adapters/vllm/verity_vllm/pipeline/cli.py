@@ -45,7 +45,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "compiled-merge": ("verity_vllm.pipeline.compiled_merge", "merge control/treatment outputs of a compiled row"),
     "coverage-workloads": ("verity_vllm.pipeline.coverage_workloads", "coverage campaign workloads"),
     "epoch": ("verity_vllm.pipeline.epoch", "the re-baseline epoch's row job (job, resolve, row-state, word-check, digests, ...)"),
-    "fa2-tap-apply": ("verity_vllm.acquire.fa2_tap_src.apply_v8", "patch a pinned vllm-flash-attn tree into the FA2 tapped tree"),
+    "fa2-tap-apply": ("verity_vllm.acquire.fa2_tap_src.apply_fa2_tap", "patch a pinned vllm-flash-attn tree into the FA2 tapped tree"),
     "fa2-tap-build": ("verity_vllm.acquire.fa2_tap_src.build_ext", "build one FA2 forward variant extension"),
     "fa3-tap-apply": ("verity_vllm.acquire.fa3_tap_src.apply_fa3_tap", "patch a pinned vllm-flash-attn tree into the FA3 tapped tree"),
     "fa3-tap-build": ("verity_vllm.acquire.fa3_tap_src.build_fa3_ext", "build the FA3 forward extension"),

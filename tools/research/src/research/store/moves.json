@@ -4462,6 +4462,11 @@
         "verity/protocols/proofs/spot/verifier/tests/test_pearltie.py": "verity/protocols/proofs/spot/prover/tests/test_pearltie.py",
         "verity/protocols/proofs/spot/verifier/tests/test_remotetie.py": "verity/protocols/proofs/spot/prover/tests/test_remotetie.py"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/acquire/fa2_tap_src/apply_v8.py": "adapters/vllm/verity_vllm/acquire/fa2_tap_src/apply_fa2_tap.py"
+      }
     }
   ]
 }
