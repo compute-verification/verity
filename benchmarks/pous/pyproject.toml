@@ -25,7 +25,7 @@ inputs = ["verity/protocols/spot/device/coins.py", "verity/protocols/spot/verifi
           "verity/hardware/record.py", "verity/protocols/reporting.py",
           "verity/protocols/flock/verifier", "verity/commitments/identity", "verity/commitments/randomness",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
-          "verity/commitments/lms", "verity/difftest", "verity/protocols/pous/device",
+          "verity/commitments/lms", "tools/difftest", "verity/protocols/pous/device",
           "verity/periods/__init__.py", "verity/commitments", "verity/commitments/crypto",
           "verity/commitments/randomness",
           "benchmarks/census/hardware.json", "benchmarks/numerical/python/verity_numerical/bench/placement.py",
