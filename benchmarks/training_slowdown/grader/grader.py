@@ -96,14 +96,16 @@ def _visited(b: dict) -> int:
 @dataclass(frozen=True)
 class Product:
     """One matrix product a fused attention's head computes: its name, the bmm of torch's math path it stands for (`mkn`: its
-    m, k and n, each the head's T or D; its batch the occurrence's B x H heads), its multiply-adds and outputs (one f32
-    accumulator word an entry it computes, however the kernel splits the sum) from the head's bindings, and the head's
-    arguments each of its two operands is computed from."""
+    m, k and n, each the head's T or D; its batch the occurrence's B x H heads), its multiply-adds and outputs (one an entry
+    it computes, however the kernel splits the sum) from the head's bindings, the head's arguments each of its two operands
+    is computed from, and the head's return its result is rounded to (`ret`, its index in the head's return), whose word an
+    output is; None for a product the head reads only inside itself, whose output is the tensor-core dot's f32 accumulator."""
     name: str
     mkn: tuple[str, str, str]
     macs: Callable[[dict], int]
     outputs: Callable[[dict], int]
     operands: tuple[tuple[str, ...], tuple[str, ...]]
+    ret: int | None = None
 
 
 @dataclass(frozen=True)
@@ -119,17 +121,19 @@ _BWD = ("do", "q", "k", "v", "o", "lse")
 #: the fused attention ops the grader reads as matrix products, by op: torch's flash attention forward and backward, lowered to
 #: their head Definitions (`fa2_train`, `fa2_train_bwd`), whose products are tensor-core k16 steps (`DOT`). The forward computes
 #: the scores of its visible pairs and P V over the blocks it visits; the backward computes the scores again, dP over the
-#: blocks it visits, and dV, dK and dQ from bf16 P and dS
+#: blocks it visits, and dV, dK and dQ from bf16 P and dS. P V is the forward's bf16 O (its return 0), and dQ, dK and dV the
+#: backward's returns 0, 1 and 2, each rounded to bf16 after an elementwise f32 step (the row's total, the scale D^-0.5)
 ATTENTION = {
     "_scaled_dot_product_flash_attention": Fused(0, ("Fa2TrainHead_v1", "Fa2TrainSplitHead_v1"), (
         Product("scores", ("T", "D", "T"), lambda b: b["D"] * _visible(b), _visible, (("q",), ("k",))),
-        Product("pv", ("T", "T", "D"), lambda b: b["D"] * _visited(b), lambda b: b["T"] * b["D"], (("q", "k"), ("v",))))),
+        Product("pv", ("T", "T", "D"), lambda b: b["D"] * _visited(b), lambda b: b["T"] * b["D"], (("q", "k"), ("v",)), ret=0))),
     "_scaled_dot_product_flash_attention_backward": Fused(1, ("Fa2TrainBwdHead_v1",), (
         Product("scores", ("T", "D", "T"), lambda b: b["D"] * _visible(b), _visible, (("q",), ("k",))),
         Product("dp", ("T", "D", "T"), lambda b: b["D"] * _visited(b), _visited, (("do",), ("v",))),
-        Product("dv", ("T", "T", "D"), lambda b: b["D"] * _visited(b), lambda b: b["T"] * b["D"], (("q", "k", "lse"), ("do",))),
-        Product("dk", ("D", "T", "T"), lambda b: b["D"] * _visited(b), lambda b: b["T"] * b["D"], (("q",), _BWD)),
-        Product("dq", ("T", "T", "D"), lambda b: b["D"] * _visited(b), lambda b: b["T"] * b["D"], (_BWD, ("k",))))),
+        Product("dv", ("T", "T", "D"), lambda b: b["D"] * _visited(b), lambda b: b["T"] * b["D"], (("q", "k", "lse"), ("do",)),
+                ret=2),
+        Product("dk", ("D", "T", "T"), lambda b: b["D"] * _visited(b), lambda b: b["T"] * b["D"], (("q",), _BWD), ret=1),
+        Product("dq", ("T", "T", "D"), lambda b: b["D"] * _visited(b), lambda b: b["T"] * b["D"], (_BWD, ("k",)), ret=0))),
 }
 HEADS = {h: f for f in ATTENTION.values() for h in f.heads}
 #: the tensor-core dot a head's products are k16 steps of, whose signature gives their operands' and accumulators' widths
@@ -536,7 +540,8 @@ class Cells:
     (`MAC_CELLS`): its occurrence, census class, instances, MACs and outputs, whether each of its two operands depends on θ′,
     and the operands' and the outputs' word widths, from the cell Definition's signature. A fused attention's head is one
     record a product it computes (`Fused.products`: `product`), its operands' dependence that of the head's arguments the
-    product names, their widths and its outputs' the tensor-core dot's (`DOT`); `heads` holds each head cell once."""
+    product names, their widths the tensor-core dot's (`DOT`), and its outputs' the word of the head's return it is
+    (`Product.ret`), or the dot's accumulator where it is none; `heads` holds each head cell once."""
 
     def __init__(self, p: _Program) -> None:
         from verity.circuits.codec import descriptor_id
@@ -579,8 +584,9 @@ class Cells:
                 self.heads.append(cell)
                 arg = {name: any(dep[x] for x in _ref_nodes(a.refs, logs)) for (name, _), a in zip(params, nd.args)}
                 for pr in HEADS[base].products:
+                    out = dot_ret if pr.ret is None else ret.fields[pr.ret]
                     self.cells.append({**cell, "product": pr.name, "macs": k * pr.macs(nd.fn.bindings),
-                                       "outputs": k * pr.outputs(nd.fn.bindings), "out_width": max(dot_ret.width_set()),
+                                       "outputs": k * pr.outputs(nd.fn.bindings), "out_width": max(out.width_set()),
                                        "widths": dot_widths, "dep": [any(arg[a] for a in names) for names in pr.operands]})
                 continue
             macs, outs = per(nd.fn.bindings)

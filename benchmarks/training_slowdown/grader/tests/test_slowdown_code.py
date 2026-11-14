@@ -128,10 +128,10 @@ def test_the_tiny_steps_beside_the_slowdown_code(step, fresh, steps, monkeypatch
     other, the circuit's O is 32 bits a word against the trace's 16, twice the trace's, and its operands are 32 bits wide each,
     where the trace has at 16 every one its capture passes at the call's width (at least one a product); the float32 step has no
     such row. On sm_120 the step keeps the card's flash attention, and they differ at attention's (phase, dims) alone
-    (`differences`): in the count, by the backward's scores, which the math path saves; in N, the head Definitions'
-    multiply-adds against whole rectangles, where the scores are; in O there and at each of its other products, whose outputs
-    are the tensor-core dot's f32 accumulators, 32 bits a word against the trace's 16, twice the trace's; and in the widths of
-    the products with an operand of the softmax's (`SOFTMAX`), bf16 on the card, f32 in the trace as on the math path. Priced at
+    (`differences`): in the count, by the backward's scores, which the math path saves; in N and O, the head Definitions'
+    multiply-adds and outputs against whole rectangles, where the scores are; and in the widths of the products with an
+    operand of the softmax's (`SOFTMAX`), bf16 on the card, f32 in the trace as on the math path. At those products O is the
+    trace's: their outputs are the bf16 words the head returns them in, 16 bits as the trace prices them. Priced at
     the tensor-core dot alone (`dot_alone`), the linears' |C| is the trace's (its gates a bf16 MAC that dot's over 16) times
     their routes' factor (`route_factor`: the zeros grid.z slices pad their residue tiles with are dots the trace doesn't
     count)."""
@@ -153,11 +153,11 @@ def test_the_tiny_steps_beside_the_slowdown_code(step, fresh, steps, monkeypatch
     a = G.against(out, code.products.rows(g), code)
     if cc:
         scores, softmax = fused_keys(out, ("scores",)), fused_keys(out, SOFTMAX)
-        assert differences(a, out) == {"count": {k for k in scores if k[0] == "backward"}, "N": scores,
-                                       "O": scores | softmax, "widths": softmax}, a["rows"]
+        assert differences(a, out) == {"count": {k for k in scores if k[0] == "backward"}, "N": scores, "O": scores,
+                                       "widths": softmax}, a["rows"]
         for r in a["rows"]:
             if (r["phase"], tuple(r["dims"][d] for d in G.DIMS)) in softmax - scores:
-                assert r["circuit"]["O"] == 2 * r["trace"]["O"] > 0, r
+                assert r["circuit"]["O"] == r["trace"]["O"] > 0, r
     else:
         bits = {"bfloat16": 16, "float32": 32}
         narrower = {G._key(r["phase"], r["op"], r["dims"]) for r in code.products.raw_on_dial(g)["rows"]

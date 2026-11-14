@@ -52,6 +52,8 @@ STEPS = {"f32": (None, None), "bf16": (torch.bfloat16, None), "bf16-cublas": (to
 FUSED = {aten._scaled_dot_product_flash_attention.default: (0, {"scores": "TDT", "pv": "TTD"}),
          aten._scaled_dot_product_flash_attention_backward.default: (
              1, {"scores": "TDT", "dp": "TDT", "dv": "TTD", "dk": "DTT", "dq": "TTD"})}
+#: the output of its op each fused product's result is: the forward's O, and the backward's dQ, dK and dV
+RESULTS = {"pv": 0, "dq": 0, "dk": 1, "dv": 2}
 #: the product of a fused attention the math path doesn't compute
 RECOMPUTED = ("_scaled_dot_product_flash_attention_backward", "scores")
 
@@ -133,8 +135,8 @@ def test_a_handover_is_refused_with_its_fix(case, steps, tmp_path) -> None:
 def _graph_products(gm, gm2) -> dict:
     """Each mm and bmm of a step's ATen graph by node, and each product of a flash attention op by node and product (`FUSED`):
     its op, dims, operand widths, output width and token dims (those that differ in the structure's graph `gm2`). A flash
-    attention's products are the bmm's each stands for at its query's [B, H, T, D], on bf16 operands into the f32
-    accumulators of the card's tensor cores."""
+    attention's products are the bmm's each stands for at its query's [B, H, T, D], on bf16 operands, its output the op's
+    output it is (`RESULTS`), or the f32 accumulator of the card's tensor cores for one the op returns none of."""
     def dims(n, product=None) -> dict:
         if product is not None:
             B, H, T, D = n.args[FUSED[n.target][0]].meta["val"].shape
@@ -151,9 +153,10 @@ def _graph_products(gm, gm2) -> dict:
     for n in gm.graph.nodes:
         if n.op != "call_function" or n.target not in (aten.mm.default, aten.bmm.default, *FUSED):
             continue
-        ws = ([(16, 16)], [32]) if n.target in FUSED else ([(width(n.args[0]), width(n.args[1]))], [width(n)])
         for product in FUSED[n.target][1] if n.target in FUSED else (None,):
             d, d2 = dims(n, product), dims(other[n.name], product)
+            ws = (([(16, 16)], [n.meta["val"][RESULTS[product]].dtype.itemsize * 8 if product in RESULTS else 32])
+                  if n.target in FUSED else ([(width(n.args[0]), width(n.args[1]))], [width(n)]))
             got[n.name, product] = (n.target.overloadpacket.__name__, d, *ws, sorted(x for x in d if d2[x] != d[x]))
     return got
 
@@ -186,7 +189,8 @@ def test_the_products_are_the_steps_matrix_products(step, steps, unit_prices) ->
     """Each mm and bmm of the step's ATen graph is one product row, and so is each product of a flash attention op (two of the
     forward's, five of the backward's), with the graph's dims (a flash attention's the bmm's it stands for), operand and
     output widths (the bf16 linears' 16 bits; attention's 32 on torch's math path, which computes it from upcast operands, and
-    on the card bf16 operands into f32 accumulators) and the token dims the structure's graph varies, in its phase: the
+    on the card bf16 operands, each product's output the bf16 word the op returns it in, or for the scores and dP, which it
+    returns none of, the f32 accumulator) and the token dims the structure's graph varies, in its phase: the
     forward's products, and two in the backward for each but a flash attention's, which has five for two. Every operand
     depends on θ′, so N is every product's MACs and O every output's wires: an mm's and a bmm's their dims', a flash
     attention's 16 for each k16 step its heads take in the step's census. Each row's |C| is its cells' (at one gate a
@@ -213,7 +217,7 @@ def test_the_products_are_the_steps_matrix_products(step, steps, unit_prices) ->
     assert t["N"] == t["macs"] == (sum(math.prod(d.values()) for (_, p), (_, d, *_) in graph.items() if not p)
                                    + 16 * sum(steps16.values()))
     assert t["O"] == (sum(d["batch"] * d["m"] * d["n"] * w for (_, p), (_, d, _, (w,), _) in graph.items() if not p)
-                      + sum(32 * r["outputs"] for r in fused))
+                      + sum(graph[r["node"], r["product"]][3][0] * r["outputs"] for r in fused))
     assert (t["widths"], t["out_widths"]) == (([(16, 16)], [16, 32]) if cc else ([(16, 16), (32, 32)], [16, 32]) if dtype
                                               else ([(32, 32)], [32]))
     gates = {**{r["occ"]: r["gates"] for r in out["products"] if not r["product"]}, **{a["occ"]: a["gates"] for a in out["attention"]}}
@@ -414,7 +418,9 @@ HEAD_SHAPES = [(FT.Fa2TrainHead, {"T": 32, "D": 32, "BN": 16}), (FT.Fa2TrainHead
 def test_the_attention_table_is_its_heads_census(head, b) -> None:
     """The multiply-adds `ATTENTION` gives a head's products are 16 for each k16 step of the tensor-core dot in the head's
     census, and those of its products whose k is D (the scores, and the backward's dP) D for each `DotBf16_v2` dot, with one
-    output a dot: the grader's table can't drift from the Definitions it reads."""
+    output a dot; and each return of the head a product's result is (`Product.ret`) is a bf16 word an output, a return of no
+    other product, where the products it is none of are those whose k is D: the grader's table can't drift from the
+    Definitions it reads."""
     fn = bind(head, **b)
     classes = census(Program(fn))["classes"]
     products = G.HEADS[fn.base_id].products
@@ -422,6 +428,11 @@ def test_the_attention_table_is_its_heads_census(head, b) -> None:
     dots = classes[descriptor_id(bind(DotBf16, K=b["D"], DOT=HopperBF16WgmmaDot16))]["instances"]
     by_dot = [pr for pr in products if pr.mkn[1] == "D"]
     assert (sum(pr.macs(b) for pr in by_dot), sum(pr.outputs(b) for pr in by_dot)) == (b["D"] * dots, dots)
+    returns = fn.signature()[1].fields
+    rounded = [pr for pr in products if pr.ret is not None]
+    assert len({pr.ret for pr in rounded}) == len(rounded) and {pr.name for pr in products} - {pr.name for pr in rounded} == {
+        pr.name for pr in by_dot}
+    assert all((returns[pr.ret].leaves, set(returns[pr.ret].width_set())) == (pr.outputs(b), {16}) for pr in rounded), returns
 
 
 def test_every_head_is_held_to_its_census() -> None:
