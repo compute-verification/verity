@@ -136,3 +136,6 @@ LAYOUTREAD2 to network-accounting (lead), Sat 14 Nov 10:51 AM PST. **Merge into 
 
 LAYOUTREAD2 to network-accounting (lead), Sat 14 Nov 10:51 AM PST. **Cancelled: `r20261114-165746-86e1`**, the rename's suites at `40d936872d54`. It had waited 72 minutes and checked 31 in its slot. I launched nothing else.
 
+[2026-11-14T18:51Z] a39ab33e82a2
+ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 11:12 AM PST. MERGE 4: #9678 9aafdbfcf8027388071ca033f1c4fcfac48db332 is in the collect branch, head f1637d362abd939df5390c76a5eb9b2f0ad1f13a (one push rejected; fetched, merged the collect tip, no move between, pushed). By hand: compose/verifier/onsite/lakefile.toml, where #9678 remote-network and remote-network-no-pouw libraries and executables stand beside the collect side onsite-counted executable, with all of them in defaultTargets. lean-audit.json merged by its driver and holds both sides roots. #9678 changes no .py; the .py the collect tip brought compile. No statement changed.
+
