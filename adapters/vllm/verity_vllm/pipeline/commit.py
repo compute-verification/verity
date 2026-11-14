@@ -1138,7 +1138,7 @@ def main(args: Options) -> None:
     _rs, source_identity_doc, args, _planner, fault, served = cfg.session, cfg.source_identity, cfg.args, cfg.planner, cfg.fault, cfg.served
     required_classes, required_classes_cli, required_manifest = cfg.required_classes, cfg.required_classes_cli, cfg.required_manifest
     out, wl, engine_args, kinds, multi, coins = cfg.out, cfg.wl, cfg.engine_args, cfg.kinds, cfg.multi, cfg.coins
-    oracle_producers, plan_rec, cb_plan, cb_rec = cfg.oracle_producers, cfg.plan_rec, cfg.cb_plan, cfg.cb_rec
+    oracle_producers, cb_plan = cfg.oracle_producers, cfg.cb_plan
     if args.required_manifest:
         from verity_vllm.query.manifest.bind import coverage_check as manifest_coverage_check, source_ports
     moe_attached = False
@@ -2024,6 +2024,28 @@ def main(args: Options) -> None:
         c.close()
     if coins is not None and (_why := coins.close()):
         print(f"[delta] the challenger session did not close (no ledger end: its coins credit nothing): {_why}", flush=True)
+    write_verdict(cfg, versions=versions, rows=rows, step_rows=step_rows, decl=decl, decls=decls, required_classes=required_classes,
+                  fa_version=fa_version, moe_attached=moe_attached, flip_weight_rec=flip_weight_rec, replay_cache=replay_cache,
+                  first_run=_RUN0, protocols=protocols, engine_kw=_ekw, deferred=deferred)
+
+
+def write_verdict(cfg: CommitConfig, *, versions: dict, rows: list[dict], step_rows: list[dict], decl: Any | None,
+                  decls: dict[str, dict], required_classes: tuple[str, ...], fa_version: int | None, moe_attached: bool,
+                  flip_weight_rec: dict | None, replay_cache: dict[str, dict[str, Any]], first_run: dict[str, object],
+                  protocols: PO.Composition | None, engine_kw: dict[str, Any], deferred: dict[int, dict[str, Any]]) -> None:
+    """What a Commit writes once its runs are over and its committers closed, the timeline's ``closure.summary``: the summary
+    (of the one arm under ``--only-arm``, of the pairs, or of each treatment arm against the control), then the verdict, which
+    names the replays the cache shared and holds the process's peak against the host admission's bound, and which the
+    protocols, the deferred replays' bundles and the remote session each add to before it is written.  It ends the process with
+    exit 3 where an instrumented run failed or the remote session did not accept.  A control arm alone has no run to hold: it
+    returns after its summary.
+
+    `cfg` is the Commit's configuration, and the keywords are what `main` built and ran after it: `required_classes` as the
+    engine's attention implementation left them, `first_run` when the first measured run began, `engine_kw` the engine's
+    build arguments (their target is the protocols' profile) and `deferred` each deferred replay's context by pair."""
+    args, out, multi, kinds, _rs = cfg.args, cfg.out, cfg.multi, cfg.kinds, cfg.session
+    required_manifest, plan_rec, cb_rec = cfg.required_manifest, cfg.plan_rec, cfg.cb_rec
+    _RUN0, _ekw = first_run, engine_kw
     TL.start("closure.summary")
     if args.only_arm:
         # one arm per process: the paired summary (delta, CI) is produced by compiled_merge from both runs.jsonl files
