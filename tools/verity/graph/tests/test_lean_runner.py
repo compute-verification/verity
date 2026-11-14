@@ -106,12 +106,12 @@ def _replay(cache: Path) -> None:
 
 
 @pytest.fixture(scope="module")
-def lean_env(tmp_path_factory) -> Path:
+def lean_env(pytestconfig, tmp_path_factory) -> Path:
     """The check's cache, holding the worker's `lean` env, shared by this file's tests, with `Replay.lean` compiled once a
     run (`once`) and copied in, where `module_runner.program` finds it."""
     cache = tmp_path_factory.mktemp("check-cache")
     programs = Path("lean-env") / "programs"
-    shutil.copytree(once(tmp_path_factory, "replay", _replay) / programs, cache / programs, symlinks=True)
+    shutil.copytree(once(pytestconfig, tmp_path_factory, "replay", _replay) / programs, cache / programs, symlinks=True)
     return cache
 
 
@@ -121,8 +121,8 @@ class Envs:
     and its record, which each test's executor takes as a cache would: the toolchain's env replays every module of the
     toolchain."""
 
-    def __init__(self, factory: pytest.TempPathFactory) -> None:
-        self.factory, self.got = factory, {}
+    def __init__(self, config: pytest.Config, factory: pytest.TempPathFactory) -> None:
+        self.config, self.factory, self.got = config, factory, {}
 
     def run(self, task: dict, doc: dict) -> tuple[dict, Path]:
         key = task["key"]
@@ -137,7 +137,7 @@ class Envs:
                 res = runners.execute(task, doc, d / "work")
                 (d / "result.json").write_text(json.dumps(res))
                 assert json.loads((d / "result.json").read_text()) == res, "a result its JSON doesn't give back"
-            d = once(self.factory, "lean-env-" + hashlib.sha256(key.encode()).hexdigest()[:32], make)
+            d = once(self.config, self.factory, "lean-env-" + hashlib.sha256(key.encode()).hexdigest()[:32], make)
             self.got[key] = (json.loads((d / "result.json").read_text()), d / "work" / record)
         return self.got[key]
 
@@ -166,8 +166,8 @@ def stage(record: Path, work: Path, at: str) -> Path:
 
 
 @pytest.fixture(scope="module")
-def envs(tmp_path_factory) -> Envs:
-    return Envs(tmp_path_factory)
+def envs(pytestconfig, tmp_path_factory) -> Envs:
+    return Envs(pytestconfig, tmp_path_factory)
 
 
 @pytest.fixture

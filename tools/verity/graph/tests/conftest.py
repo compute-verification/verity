@@ -4,7 +4,6 @@ makes what several tests read, and no test changes, once a run, for every xdist 
 from __future__ import annotations
 
 import fcntl
-import os
 import shutil
 import subprocess
 from collections.abc import Callable
@@ -63,11 +62,12 @@ def toy_tree(root: Path, spec: str = SPEC, files: dict[str, str] | None = None) 
     return root
 
 
-def once(tmp_path_factory: pytest.TempPathFactory, name: str, make: Callable[[Path], None]) -> Path:
-    """The directory ``name`` that ``make`` fills, once a run: xdist's workers share their basetemp's parent and wait on its
-    lock, so the first makes it and the rest read it.  A ``make`` that fails leaves nothing, and the next caller tries again."""
+def once(config: pytest.Config, tmp_path_factory: pytest.TempPathFactory, name: str, make: Callable[[Path], None]) -> Path:
+    """The directory ``name`` that ``make`` fills, once a run: xdist's workers (each with a `workerinput`) share their
+    basetemp's parent and wait on its lock, so the first makes it and the rest read it.  A ``make`` that fails leaves
+    nothing, and the next caller tries again."""
     base = tmp_path_factory.getbasetemp()
-    root = base.parent if os.environ.get("PYTEST_XDIST_WORKER") else base
+    root = base.parent if hasattr(config, "workerinput") else base
     d = root / f"once-{name}"
     with open(root / f"once-{name}.lock", "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)

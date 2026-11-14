@@ -38,9 +38,9 @@ def _audit(d: Path) -> None:
 
 
 @pytest.fixture(scope="module")
-def audited(tmp_path_factory) -> tuple[dict, list[str]]:
+def audited(pytestconfig, tmp_path_factory) -> tuple[dict, list[str]]:
     """This checkout's listing under an audit hook: (its graph, the paths it opened outside the tree), listed once a run."""
-    d = once(tmp_path_factory, "audited-listing", _audit)
+    d = once(pytestconfig, tmp_path_factory, "audited-listing", _audit)
     return json.loads((d / "graph.json").read_bytes()), json.loads((d / "outside.json").read_text())
 
 
