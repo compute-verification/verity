@@ -17,10 +17,10 @@ from verity.protocol import Manifest
 ROOT = Path(__file__).resolve().parents[1]
 LIST = Path(__file__).resolve().parent / "workload_messages.toml"
 MODULES = {
-    "spot": "verity.protocols.proofs.spot.verifier.workload",
-    "pouw": "verity.protocols.accounting.pouw.verifier.workload",
-    "pous": "verity.protocols.accounting.pous.verifier.workload",
-    "certifier": "verity.protocols.accounting.certifier.verifier.workload",
+    "spot": "verity.protocols.proofs.spot.prover.workload",
+    "pouw": "verity.protocols.accounting.pouw.prover.workload",
+    "pous": "verity.protocols.accounting.pous.prover.workload",
+    "certifier": "verity.protocols.accounting.certifier.prover.workload",
 }
 #: The two messages declared in today's direction, prover to workload, against the architecture's, each with the
 #: direction the architecture gives it.
