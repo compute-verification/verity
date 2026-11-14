@@ -1,7 +1,6 @@
-"""In this benchmark, only `adapter.py` imports the vLLM adapter past its public interface (a `verity_vllm` module that
-``tests/test_vllm_public_api.py`` lists in ``PUBLIC``, and from it only the names its ``__all__`` lists), and it imports only
-what that interface doesn't offer. An import is what the harness's scan (`benchmarks/harness/tests/test_adapter.py`)
-counts, each form it states."""
+"""In this benchmark, every file imports the vLLM adapter through its public interface only: a `verity_vllm` module that
+``tests/test_vllm_public_api.py`` lists in ``PUBLIC``, and from it only the names its ``__all__`` lists. An import is what
+the harness's scan (`benchmarks/harness/tests/test_adapter.py`) counts, each form it states."""
 from __future__ import annotations
 
 import importlib.util
@@ -11,7 +10,6 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parents[1]
 ROOT = HERE.parents[1]
 SCAN = ROOT / "benchmarks/harness/tests/test_adapter.py"
-ADAPTER = "benchmarks/inference_only/adapter.py"
 #: files whose `verity_vllm` strings are data, not imports, each with why
 NOT_SCANNED = {"benchmarks/inference_only/tests/test_adapter.py": "this file"}
 
@@ -34,17 +32,10 @@ def sites() -> list:
     return [s for p in files for s in S.sites_in(str(p.relative_to(ROOT)), p.read_text(encoding="utf-8"))]
 
 
-def test_only_the_adapter_module_reaches_past_the_public_interface():
+def test_no_file_reaches_past_the_public_interface():
+    found = sites()
     bad = [f"{s.file}:{s.line}: imports {s.module}{'' if s.name is None else '.' + s.name}, which is not the vLLM adapter's "
-           f"public interface (PUBLIC in {S.PUBLIC_API}, and each module's __all__): import it in {ADAPTER} once, with "
-           "the name asked of the adapter in that module's table, and take it from `adapter` here"
-           for s in sites() if s.file != ADAPTER and not S.is_public(s)]
-    assert not bad, "\n".join(bad)
-
-
-def test_the_adapter_module_imports_only_what_has_no_public_home():
-    reached = [s for s in sites() if s.file == ADAPTER]
-    assert reached, f"{ADAPTER} imports nothing of {S.PACKAGE}: delete it and this test, now the interface offers every name"
-    stale = [f"{s.module}{'' if s.name is None else '.' + s.name}" for s in reached if S.is_public(s)]
-    assert not stale, (f"{ADAPTER} imports names the public interface now offers: import them from there in their users, "
-                       f"and delete their lines and table rows in {ADAPTER}: {stale}")
+           f"public interface (PUBLIC in {S.PUBLIC_API}, and each module's __all__): import a name it offers, or ask the "
+           "adapter to make the name public"
+           for s in found if not S.is_public(s)]
+    assert found and not bad, "\n".join(bad) or "the scan found no import of the adapter here: check SCAN and HERE"

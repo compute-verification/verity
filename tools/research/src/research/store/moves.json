@@ -3616,6 +3616,11 @@
     },
     {
       "paths": {
+        "adapters/torch/tests/frontend/test_broadcast_bias_add.py": "adapters/vllm/tests/program/test_broadcast_bias_add.py"
+      }
+    },
+    {
+      "paths": {
         "verity/protocols/accounting/pouw/prover/circuit/pc4.py": "verity/protocols/experimental/pearl_c4/prover/pc4.py",
         "verity/protocols/accounting/pouw/prover/circuit/pc4.circuit-check.py": "verity/protocols/experimental/pearl_c4/prover/pc4.circuit-check.py",
         "verity/protocols/accounting/pouw/prover/circuit/pc4_rowk.py": "verity/protocols/experimental/pearl_c4/prover/pc4_rowk.py",

@@ -194,7 +194,7 @@ class Case:
     dtype: str
     expect: str  # the expected outcome, for the report
     notes: str = ""
-    importer_kw: dict | None = None  # e.g. {"mode": "profile", "profile": "b1-eager"}; default reference mode
+    importer_kw: dict | None = None  # the derivation's mode and profile; default reference mode
 
 
 torch.manual_seed(1234)  # the case inputs below are sampled once at import; seeded so every run evaluates the same words
@@ -218,13 +218,6 @@ CASES = [
          "bounded request: 3 argmax selections, KV as values; must not shrink on observed tokens"),
     Case("gpt2_lm_bf16", lambda: GPT2TinyLM(dtype=torch.bfloat16), (_tok(4),), "bf16",
          "reference mode on a bf16 module: casts/kinds are f32-only in the reference vocabulary -> refusal expected"),
-    # added AFTER the freeze run (00:40): the bf16 probe as it was meant, in profile mode with the B1 eager vocabulary
-    Case("gpt2_lm_bf16_profile", lambda: GPT2TinyLM(dtype=torch.bfloat16), (_tok(4),), "bf16",
-         "profile-mode probe: bf16 x@W layout vs Gemm_v1{K,N}[N][K]; LayerNorm/GELU/softmax unregistered in the B0/B1 profile",
-         importer_kw={"mode": "profile", "profile": "b1-eager"}),
-    Case("gpt2_lm_bf16_profile_i32", lambda: GPT2TinyLM(dtype=torch.bfloat16), (_tok(4).to(torch.int32),), "bf16",
-         "as above with int32 token ids (the profile's Embedding_v1 takes I32): how far does the B1 vocabulary carry GPT-2?",
-         importer_kw={"mode": "profile", "profile": "b1-eager"}),
     # HF's addmm form of Conv1D, T=3 rows -- support-matrix row 8 on this file's own modules
     Case("gpt2_conv1d_addmm_f32", lambda: Conv1DAddmm(CFG["H"], CFG["I"]), (torch.randn(3, CFG["H"]),), "f32",
          "HF Conv1D via addmm: matrix row 8 says LinearRef with the weight as a transposed view"),
