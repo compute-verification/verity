@@ -92,6 +92,7 @@ follows.
 | `merge_rows.py` | git's merge driver for Markdown: two changes to one table's rows merge row by row |
 | `pins.py` | every file that records a Lean source's digest, with the command that regenerates it |
 | `import_order.py` | writes the generated tables of `tests/import_order.toml`, which folder may import which, from the tree |
+| `tracked_tree.py` | the tracked files of a checkout, and where a Python or Lean import of one resolves, which `tests/test_boundaries.py` reads the import order through |
 | `mutants.py` | deletes each check a verifier source runs, one at a time, and names each deletion its tests miss |
 
 ## Running it
@@ -212,19 +213,6 @@ other's suspects are the PRs whose change touches what it names: a lone one is e
 the gate holds nothing. The team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its
 body) lands on its ready mark alone once the queue's rerun of its map is certified (`tools/move/README.md`);
 `move_check.py` certifies a pure move (`verity check move BASE HEAD`).
-
-## The public boundary
-
-The public monorepo is exported one way from this repository. `public_boundary.toml` is the decided list of what it holds.
-`public_boundary.py` reads what each public file needs (Lean imports, Lake requires, Python imports and dependencies, anchored
-paths, commands) and fails on an edge into a file the export doesn't copy that `public_boundary_allowed.txt` doesn't list; the
-list only shrinks (`tests/test_public_boundary.py`). `public_export.py DEST` is the export's dry run: the public set as one
-commit of fresh history, its manifests pruned to what it copies, each Lean lock stating only what it copies
-(`tools/verity/lean/public_lock.py`), the leftovers a public reader shouldn't meet counted by area, and the third-party pins. It
-never rewords a lock: one whose kept text holds lane text, or names a declaration, a module or a path it leaves out, refuses
-the export by file, section and entry until the lock is reworded, unless the boundary lists it as known residue
-(`[[residue]]`); with `--build` (a node's work: `research run`), each Lake package's `lake build`, the workspace's
-`uv sync` and the licenses of what they fetched. It publishes nothing.
 
 ## Settings
 
