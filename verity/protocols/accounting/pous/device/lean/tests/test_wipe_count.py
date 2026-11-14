@@ -61,12 +61,13 @@ def sampled(draw) -> dict:
     """A sampled session's case: as it ran, under one adversarial edit, unsigned, or under params of another server."""
     s = draw(WC.sessions())
     x = draw(st.integers(0, 2 ** 16))
-    how = draw(st.sampled_from(["as-is", "as-is", "as-is", "as-is", "mutated", "unsigned", "other"]))
+    how = draw(st.sampled_from(["as-is", "as-is", "as-is", "as-is", "mutated", "unsigned", "unsigned", "other"]))
     if how == "mutated":
         s = draw(st.sampled_from(WC.MUTATIONS))(s, x)
     signed = None if how == "unsigned" else s.signed
     server = s.commitment.server + b"x" if how == "other" else None
-    return C.wipe_case(s.commitment, signed, s.trusted, server=server, egress_mib=draw(WC.EGRESS))
+    egress = draw(st.integers(0, sw.EGRESS_MAX_UNITS) if draw(st.booleans()) else WC.EGRESS)
+    return C.wipe_case(s.commitment, signed, s.trusted, server=server, egress_mib=egress)
 
 
 @pytest.mark.slow
