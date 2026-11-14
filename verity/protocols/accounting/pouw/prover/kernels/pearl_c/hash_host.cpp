@@ -3,7 +3,7 @@
 // threads run in order too, or as host threads under one barrier for a kernel that calls __syncthreads (hash_rows, s512_rows,
 // s512_tile_leaves, s512_tree_small).  Buffers are host memory: Args' pointers are host addresses.  A kernel's __trap ends
 // its launch, which returns 2 (hash_wide.cuh's kernels: none of them syncs).
-//   g++ -O2 -std=c++20 -pthread -shared -fPIC -I benchmarks/pouw/pearl_c -o hash_host.so hash_host.cpp
+//   g++ -O2 -std=c++20 -pthread -shared -fPIC -I verity/protocols/accounting/pouw/prover/kernels/pearl_c -o hash_host.so hash_host.cpp
 #include <algorithm>
 #include <barrier>
 #include <cstdint>
