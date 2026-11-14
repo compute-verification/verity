@@ -1037,8 +1037,8 @@ def test_a_row_is_judged_by_the_steady_state_rules_own_checks_and_by_no_rule_of_
     tell" prices nothing. `one_numa_node` is no condition here: a row that fails it, or can't show it, is still
     priced."""
 
-    assert R.CHECKS == tuple(getattr(S, name) for name in GATES)
-    assert S.CHECKS == tuple(sorted(GATES + NO_GATES, key=S.CHECKS.index)) and S.one_numa_node not in R.CHECKS
+    assert tuple(getattr(S, name) for name in GATES) == R.CHECKS
+    assert tuple(sorted(GATES + NO_GATES, key=S.CHECKS.index)) == S.CHECKS and S.one_numa_node not in R.CHECKS
     good = {row["type"]: row for row in REFUSALS}["good"]
     rows = [row for row in REFUSALS if "stage" in row] + [changed(good, change) for change, _ in STRICT]
     for row in rows:
@@ -2419,15 +2419,15 @@ def test_under_a_research_run_the_runner_records_spots_metrics_and_prints_the_sa
     head, seconds = by["benchmarks/prover-gpus-per-serving-gpu"], by["benchmarks/prover-gpu-seconds-per-token"]
     assert head["value"] == pytest.approx(0.5420038985704952, rel=1e-12) and seconds["value"] == t["gpu_seconds_per_token"]
     assert head["mark"] == "modeled" and head["inputs"][:2] == [
-        "modeled", f"proving: modeled: steady-state measurements cover {t['steady_time_share']:.1%} of the proving "
-                   f"time; range 0.186021 to 0.542004, the other end {t['range_basis']}"]
+        "modeled", (f"proving: modeled: steady-state measurements cover {t['steady_time_share']:.1%} of the proving "
+                    f"time; range 0.186021 to 0.542004, the other end {t['range_basis']}")]
     assert head["inputs"][2].startswith("serving rate (modeled, a stated input): MFU ") and head["inputs"][3:] == targets
     assert seconds["mark"] == "modeled" and seconds["inputs"][0].startswith("modeled: ") and seconds["inputs"][1:] == targets
     assert "why" not in head and head["ci95"] is None and head["host"]["node"] == "cpu-node-0"
     for name in ("benchmarks/lean-verifier-seconds-per-token", "benchmarks/proof-bytes-per-token"):
         assert by[name]["value"] is None and by[name]["mark"] == "modeled" and by[name]["inputs"] == ["modeled", *targets]
-        assert by[name]["why"] == "not measured: no Lean verifier run of record measures a block type " \
-                                  "(`run_of_record=prove-glm53-lean-verify`)"
+        assert by[name]["why"] == ("not measured: no Lean verifier run of record measures a block type "
+                                   "(`run_of_record=prove-glm53-lean-verify`)")
     steady = next(x["block_types"] for x in doc["sources"] if x["source"] == P.STEADY)
     assert got["validation"] == {
         "status": "passed", "checker": "verity_bench.prove_records.CHECKS", "evidence": [R.TABLE],

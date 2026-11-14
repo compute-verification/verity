@@ -356,8 +356,8 @@ def rates(store: Any, run: str) -> tuple[list[P.Steady], list[str]]:
     held = {row["path"] for row in store.listing(files, [REPORTS, REPORTS.rsplit("/", 1)[0] + "/" + TYPES])}
     paths = sorted(p for p in held if p.endswith("/server.json") and p.rsplit("/", 1)[0] + "/" + TYPES in held)
     if not paths:
-        return [], [f"holds no proof server rate (`{RATES}`, which `benchmarks/one_stage/server_rate.py` writes) and no "
-                    f"proof server report (`{REPORTS}` with its `{TYPES}`)"]
+        return [], [(f"holds no proof server rate (`{RATES}`, which `benchmarks/one_stage/server_rate.py` writes) and no "
+                     f"proof server report (`{REPORTS}` with its `{TYPES}`)")]
     tree = Path(store.fetch(files, paths=[*paths, *(p.rsplit("/", 1)[0] + "/" + TYPES for p in paths)]))
     found = []
     for path in paths:
@@ -418,8 +418,8 @@ def steady_rows(store: Any, target: str, superseded: bool = False) -> dict[str, 
     if manifest.payload is None or not store.listing(target, [ART_RATES]):
         return {run: found for named in runs for run, found in steady_rows(store, named, superseded).items()}
     if len(runs) != 1:
-        return {target: ([], [f"holds `{ART_RATES}` and names {len(runs)} runs ({', '.join(runs)}): an art's rows are "
-                              "one run's, so each run's go in an art of their own"])}
+        return {target: ([], [(f"holds `{ART_RATES}` and names {len(runs)} runs ({', '.join(runs)}): an art's rows are "
+                               "one run's, so each run's go in an art of their own")])}
     return {target: _rows(_read(store, target, ART_RATES), runs[0], target)}
 
 
@@ -816,10 +816,10 @@ def _planned_lines(planned: Mapping[str, Any]) -> list[str]:
     """The same blocks at the sampling plan's own prices, and where they leave the table's: each source's GPU-seconds
     at the table's prices over the plan's, and the block type that holds most of the difference."""
 
-    lines = [f"- the same blocks at the sampling plan's own prices: {_n(planned['gpus_per_serving_gpu'])} prover GPUs per "
-             "serving GPU. Its planner sized the sample at them; they are the plan's record's, no source this table "
-             "reads, and hold whatever its planner counts in a block's price. Every other figure here prices a block "
-             "from this table's sources"]
+    lines = [(f"- the same blocks at the sampling plan's own prices: {_n(planned['gpus_per_serving_gpu'])} prover GPUs per "
+              "serving GPU. Its planner sized the sample at them; they are the plan's record's, no source this table "
+              "reads, and hold whatever its planner counts in a block's price. Every other figure here prices a block "
+              "from this table's sources")]
     ratios = ", ".join(
         f"{P.SOURCES[x['source']]} {x['gpu_seconds_per_token'] / x['planned_gpu_seconds_per_token']:.3g}x "
         f"({x['block_types']} block types)" for x in planned["sources"] if x["planned_gpu_seconds_per_token"])
@@ -847,10 +847,10 @@ def _record_lines(doc: Mapping[str, Any]) -> list[str]:
     head = "- prover GPUs per serving GPU at"
     lines = [f"{head} the sampling plan of record ({plan}): {t['gpus_per_serving_gpu']:.4g}, {t['status']}"]
     if r["gpus_per_serving_gpu"] is None:
-        return [*lines, f"{head} the exfiltration run of record's design (`{RUN_OF_RECORD}={r['record']}`): not read: "
-                        f"{r['why']}"]
-    return [*lines, f"{head} the exfiltration run of record's design: {r['gpus_per_serving_gpu']:.4g}, {r['status']}: "
-                    f"{_design(r)}"]
+        return [*lines, (f"{head} the exfiltration run of record's design (`{RUN_OF_RECORD}={r['record']}`): not read: "
+                         f"{r['why']}")]
+    return [*lines, (f"{head} the exfiltration run of record's design: {r['gpus_per_serving_gpu']:.4g}, {r['status']}: "
+                     f"{_design(r)}")]
 
 
 def _lean_lines(doc: Mapping[str, Any]) -> list[str]:
@@ -864,8 +864,8 @@ def _lean_lines(doc: Mapping[str, Any]) -> list[str]:
     t = doc["totals"]
     seconds, size, measured = t["lean_verifier_seconds_per_token"], t["proof_bytes_per_token"], t["lean_verify"]
     if not measured:
-        return ["- Lean verifier seconds per token: not measured (no Lean verifier run of record measures a block type: "
-                f"label one {_label(record_name(doc['workload'], LEAN))})", "- proof bytes per token: not measured"]
+        return [("- Lean verifier seconds per token: not measured (no Lean verifier run of record measures a block type: "
+                 f"label one {_label(record_name(doc['workload'], LEAN))})"), "- proof bytes per token: not measured"]
     m = measured[0]
     of = "the proving time at the sampling plan" if doc["system"].startswith("spot") else "the proving time"
     share = "none" if m["time_share"] is None else f"{m['time_share']:.1%}"
@@ -920,10 +920,10 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
                  "held that many, else from those that held the fewest above it, which its row names; a row that held "
                  f"fewer prices nothing, and one whose record states no cores is read as {P.UNSTATED_CORES}")
     s = doc["serving"]
-    lines += [f"- serving rate ({s['status']}, a stated input, not a record): {_n(s['gpu_seconds_per_token'])} GPU-seconds a "
-              f"served token, {_n(1 / s['gpu_seconds_per_token'])} tokens a serving GPU-second: {s['basis']}", "",
-              f"| block type | k_log | blocks {'proved ' if spot else ''}per token | ms per block | "
-              f"{'ms per block in the plan | ' if planned else ''}source | record | share of proving time | note |",
+    lines += [(f"- serving rate ({s['status']}, a stated input, not a record): {_n(s['gpu_seconds_per_token'])} GPU-seconds a "
+               f"served token, {_n(1 / s['gpu_seconds_per_token'])} tokens a serving GPU-second: {s['basis']}"), "",
+              (f"| block type | k_log | blocks {'proved ' if spot else ''}per token | ms per block | "
+               f"{'ms per block in the plan | ' if planned else ''}source | record | share of proving time | note |"),
               "| --- | --- | --- | --- | --- | --- | --- | --- |" + (" --- |" if planned else "")]
     shown = doc["rows"] if rows is None else doc["rows"][:rows]
     for r in shown:
@@ -938,11 +938,11 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
     lines += ["", "## At the sampling plan" if spot else "## Every block proved", "",
               f"- blocks {'proved ' if spot else ''}per token: {_n(t['blocks_per_token'])}",
               f"- prover GPU-seconds per token: {_n(t['gpu_seconds_per_token'])}{_range(t['gpu_seconds_per_token_range'])}",
-              f"- {'served tokens covered' if spot else 'tokens proved'} per second per prover GPU: "
-              f"{_n(t['tokens_per_gpu_second'])}{_range(t['tokens_per_gpu_second_range'])}",
-              f"- prover GPUs per serving GPU: {_n(t['gpus_per_serving_gpu'])}{_range(t['gpus_per_serving_gpu_range'])}, "
-              f"{t['status']}: steady-state measurements cover {t['steady_time_share']:.1%} of "
-              f"{'the proving time it prices' if t['missing'] else 'its proving time'}"]
+              (f"- {'served tokens covered' if spot else 'tokens proved'} per second per prover GPU: "
+               f"{_n(t['tokens_per_gpu_second'])}{_range(t['tokens_per_gpu_second_range'])}"),
+              (f"- prover GPUs per serving GPU: {_n(t['gpus_per_serving_gpu'])}{_range(t['gpus_per_serving_gpu_range'])}, "
+               f"{t['status']}: steady-state measurements cover {t['steady_time_share']:.1%} of "
+               f"{'the proving time it prices' if t['missing'] else 'its proving time'}")]
     if t["missing"]:
         named = "; ".join(f"`{_short(m['block'])}` ({_missing_share(m)})" for m in t["missing"][:MISSING_NAMED])
         more = len(t["missing"]) - MISSING_NAMED
@@ -966,14 +966,14 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
                      f"them for, {v['block_share']:.1%} of the blocks{basis}; the rest: not measured")
     lines += _lean_lines(doc)
     lines += ["", "Share of the proving time each source covers:", "",
-              "| source | block types | blocks per token | share of blocks | prover GPU-seconds per token | "
-              "share of proving time |", "| --- | --- | --- | --- | --- | --- |"]
+              ("| source | block types | blocks per token | share of blocks | prover GPU-seconds per token | "
+               "share of proving time |"), "| --- | --- | --- | --- | --- | --- |"]
     lines += [f"| {P.SOURCES[x['source']]} | {x['block_types']} | {_n(x['per_token'])} | "
               f"{'—' if x['block_share'] is None else format(x['block_share'], '.2%')} | {_n(x['gpu_seconds_per_token'])} | "
               f"{'—' if x['time_share'] is None else format(x['time_share'], '.2%')} |" for x in doc["sources"]]
     p = doc["periods"]
-    lines += ["", f"Per monitoring period, over all compute ({p['gates_basis']}); every total is the table's ratio scaled, "
-              f"not measured at that size{', and partial as that ratio is' if t['missing'] else ''}:", "",
+    lines += ["", (f"Per monitoring period, over all compute ({p['gates_basis']}); every total is the table's ratio scaled, "
+              f"not measured at that size{', and partial as that ratio is' if t['missing'] else ''}:"), "",
               "| compute | period | serving GPUs | served AND gates | prover GPUs | prover GPU-seconds |",
               "| --- | --- | --- | --- | --- | --- |"]
     lines += [f"| {x['compute']} | {x['period']} | {_n(x['serving_gpus'])} | {_n(x['served_gates'])} | {_n(x['prover_gpus'])} | "
@@ -984,8 +984,8 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
         lines += ["", "Refused (not read):", ""]
         lines += [f"- {x['target']} (`{x['record']}`): {x['why']}" for x in doc["refused"]]
     if doc["unread"]:
-        lines += ["", "Unread (labelled steady-state rows whose staged Definition is no block type of this census under "
-                  "its cut; they are in no figure above):", ""]
+        lines += ["", ("Unread (labelled steady-state rows whose staged Definition is no block type of this census under "
+                  "its cut; they are in no figure above):"), ""]
         lines += [f"- {_record(x['record'])}{'' if x['record'] == x['run'] else ', run ' + x['run']}: `{x['type']}` at "
                   f"{x['provers']} prover{'' if x['provers'] == 1 else 's'}, `{x['definition']}`: "
                   + (f"not a steady-state measurement: {x['why']}" if x["seconds"] is None else
