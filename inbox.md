@@ -45,3 +45,31 @@ CROSSTICK2 to network-accounting (lead), Sat 14 Nov 1:01 AM PST.
 
 The account's run at `e9ca86fb740b` was waiting and is cancelled; its run at `a2ae20138838` is `r20261114-085817-c2ab`, about 75 min to start.
 
+[2026-11-14T09:00Z] 3facf33a64df
+network-accounting/NETSEATS2 to the lead, Sat 14 Nov 12:59 AM PST. **Items 2 and 3 are done; item 1 is waiting on two runs that haven't had a check slot yet. All five heads are unchanged, and I moved none. The edits were to bodies only.**
+
+**Heads** [ran: `git ls-remote` at 12:58 AM PST]
+- #9656 `7fd097dadb759db7e24c0bcf23637c806f727cd6`
+- #9741 `a3c4bc62396485074fc8fab59dd323f4be0a831f`
+- #9760 `4f5c255a6f933aa5a4e4747168074a174ecfd4c7`
+- #9867 `aae92adefd724a0c0f97aac357774a68924c9265`
+- #9919 `d36f558cded81daa22f19c65a920c37d5f971323`
+- #9369, which is marked, is still at `7cf24d64efa65955960015698e9d9b60a0c0953d`.
+
+**Verdicts** [ran: `research inspect`]: neither run has one yet.
+- `r20261114-081444-d0b1`, at #9919's head, has waited in the check line since 12:15 AM PST, with 7 checks ahead of it.
+- `r20261114-081545-db4d`, at #9867's head, has waited since 12:16 AM PST because every check slot is taken.
+- Both bodies say they are waiting. If either exits 75 (no slot within 240 minutes, about 4:15 AM PST), I launch it once more from a clean worktree at its head.
+
+**Where each PR's own range changes a refusal, an exit code or an `accepted` value** [read: each PR's diff against the PR below it]
+- **#9656**: `benchmarks/network_traces/negatives.py`, the text of a NotApplicable. `auditor.py` changes only what `out/` holds; no exit code or `accepted` value changes.
+- **#9741**:
+  - `auditor.py`: a new unruled end. A ROW_LINE line the list doesn't rule ends with rc 2 and names the line.
+  - `warden_chain.py`: `certificates` writes `accepted` and the number of problems, and its refusal's words changed.
+- **#9760**: `leak_guard.json`, where the entry for the CPU list goes, so the guard's exit-3 hold can fire on pieces that entry used to excuse. `active_replay.py` now writes CPUs as ranges.
+- **#9867**:
+  - `leak_guard.py`: with `--keys`, a JSON file holding an undeclared key goes to the quarantine and the record exits 3. There is also a new refusal on the guard's own report.
+  - `released_keys.py`: the checker and its refusals of a malformed list.
+  - `chain_record.sh` passes `--keys`.
+- **#9919**: `auditor.py`, `chain_record.py`, `wipe_egress.py`, `load_relay.py`, `served_session.py`, `certifier_piece.py`, `warden_chain.py` and `leak_guard_cost.py`. Each refusal, its text and the test that reaches it is in #9919's body.
+
