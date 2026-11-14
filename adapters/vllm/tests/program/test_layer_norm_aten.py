@@ -13,7 +13,7 @@ from verity.circuits.evaluation import evaluate
 from verity_vllm.definitions.numerics.serve3_reference import materialize
 from verity_vllm.definitions.registry.layer_norm import LayerNormAten
 
-from verity_torch.frontend.derive import derive_report
+from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import (
     clear_observations,
     vllm_ruleset,

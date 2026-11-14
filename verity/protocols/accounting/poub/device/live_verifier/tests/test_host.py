@@ -466,7 +466,7 @@ def test_a_run_through_the_stub_verifier_leaves_verifier_pys_record_which_fetch_
     line = auditor_line.analyse(o, host_bytes=1843153879040, pin=None, period=None, heads=None, peer="auditor-host")
     assert line["registration"] == v["registration"]["digest"]
     assert [(r["k"], r["accepted"], r["skipped"]) for r in line["sessions"]] == [
-        (0, True, "no challenger log: coins drawn in the verifier's process")]
+        (0, True, "no challenger log: coins flipped in the verifier's process")]
 
     rc, shipped = call(svc, ["fetch", RUN], units, key="-")
     assert rc == 0

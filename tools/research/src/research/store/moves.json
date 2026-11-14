@@ -3613,6 +3613,11 @@
         "adapters/vllm/verity_vllm/definitions/registry/pearl_c_tile.circuit-check.json": "verity/protocols/accounting/pouw/prover/circuit/pearl_c_tile.circuit-check.json",
         "adapters/vllm/verity_vllm/definitions/boolean.py": "verity/circuits/ops/boolean/versions.py"
       }
+    },
+    {
+      "paths": {
+        "adapters/torch/tests/frontend/test_broadcast_bias_add.py": "adapters/vllm/tests/program/test_broadcast_bias_add.py"
+      }
     }
   ]
 }

@@ -6,7 +6,7 @@ registered `P.Bf16Add`), the bias parameter is recorded with role `linear.bias`,
 fail-closed (never silently bound to a different numeric).  These are tests of the operation, not of a Qwen layer: the modules are
 ordinary `y + b` graphs with unrelated shapes; the vLLM shape (persistent GEMM output + separate bias add) is one case among them.
 
-Run (pod venv, CPU): `CUDA_VISIBLE_DEVICES="" PYTHONPATH=. python -m pytest -q -p no:cacheprovider ../torch/tests/frontend/test_broadcast_bias_add.py`
+Run (pod venv, CPU): `CUDA_VISIBLE_DEVICES="" PYTHONPATH=. python -m pytest -q -p no:cacheprovider tests/program/test_broadcast_bias_add.py`
 """
 from __future__ import annotations
 
@@ -14,8 +14,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from verity_vllm.definitions.numerics.serve3_reference import materialize
-
-from verity_torch.frontend.derive import derive_report
+from verity_vllm.program.frontend.vllm_derive import derive_report
 
 PROF = dict(mode="profile", profile="b1-eager")
 BF = torch.bfloat16
