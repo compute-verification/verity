@@ -6,8 +6,8 @@ release stay deactivated (spec.active=false), new arrivals included. It reactiva
   - at most MAX_INFLIGHT (6) of its releases are unfinished,
   - at most MAX_BIG (6) Commits at batch 8 or more are unfinished (released or admitted),
   - node 1's unreplayed replay bundles (jobs/cov, jobs/probe-jit), plus the estimated bundles of the unfinished Commits and of
-    the candidate, stay under the cap: what is left under CAP_ROOM_PCT (75) of /workspace after everything that is not a bundle,
-    at most CAP_GB (2000), recomputed every tick; 150 GB once the disk has reached 78%. A model's estimate is learned from its
+    the candidate, stay under the limit: what is left under LIMIT_ROOM_PCT (75) of /workspace after everything that is not a bundle,
+    at most LIMIT_GB (2000), recomputed every tick; 150 GB once the disk has reached 78%. A model's estimate is learned from its
     finished bundles (the largest GB per batch x tokens seen, x1.25; bundle-sizes.json). Until then it is infra's 120 GB x batch/8 x (input + output tokens)/1152
     for Phi-3-mini, scaled by the model's hidden size x layers against Phi-3-mini's and at least 10 GB (it stays above every bundle
     measured for Phi-3-mini, Mistral-7B, TinyLlama, Llama-3.2-1B, Qwen2.5-0.5B and -1.5B),
@@ -18,7 +18,7 @@ release stay deactivated (spec.active=false), new arrivals included. It reactiva
   - node 1's /workspace is under DISK_PAUSE_PCT (80, as df reports it): at or over it nothing is released.
 Rows circuits keeps held (batch 64, batch 16+ of 7B+ or MoE models, Gemma-2 at batch 16+ with 1024 input tokens, and the named ones) are never reactivated. It evicts nothing
 that Kueue has admitted, and deletes nothing. Since Kueue admits a leased Commit before a tick can hold it, the pacer holds
-the deployments-gpu LocalQueue itself (stopPolicy Hold) unless the next Commit's projected bundle fits under the cap, and
+the deployments-gpu LocalQueue itself (stopPolicy Hold) unless the next Commit's projected bundle fits under the limit, and
 releases its own hold once it does (gate()); the lease pools' GPU holders use their own LocalQueue, so it gates Commits only. With no Commit in flight it always lets one through, outside the 78% latch, so a big one can't starve. It ticks every TICK_S (10) s and logs a tick when its summary changes or once a minute;
 a Job created while GPU quota is free is admitted in the same second, before any tick, so a lane must not resubmit a held Commit. `--dry-run` prints what it would do.
 
@@ -41,17 +41,17 @@ KEEP = {"cov-n133", "cov-g108", "cov-n002", "cov-g019", "cov-g061", "cov-n158", 
 BIG_MODELS = ("mistral-7b", "qwen25-7b", "qwen3-30b", "olmoe", "llama31-8b", "gemma2-9b")
 CIRCUITS = ("vllm-epoch-run/", "n2-build/", "vllm-coverage-defs/")
 MAX_INFLIGHT, MAX_BIG, DISK_PAUSE_PCT = 6, 6, 80   # circuits, 2:04 AM PDT Oct 2: batch 8+ as many as in flight (was 4, a
-                                                   # disk guard the disk-following cap and the 80% pause now cover)
+                                                   # disk guard the disk-following limit and the 80% pause now cover)
 BOOST_UNTIL, BOOST_INFLIGHT, BOOST_BIG = 1790866200, 8, 6   # circuits, 6:22 AM PDT Oct 1: 8 and 6 until 7:50 AM PDT (14:50Z)
 
 
 def limits():
     return (BOOST_INFLIGHT, BOOST_BIG) if time.time() < BOOST_UNTIL else (MAX_INFLIGHT, MAX_BIG)
-CAP_GB, CAP_LOW_GB, CAP_DROP_PCT = 2000, 150, 78  # the 78% drop latch and the 80% pause stay the guard
-CAP_ROOM_PCT = 75   # the cap follows the disk, 3 points under the latch
+LIMIT_GB, LIMIT_LOW_GB, LIMIT_DROP_PCT = 2000, 150, 78  # the 78% drop latch and the 80% pause stay the guard
+LIMIT_ROOM_PCT = 75   # the limit follows the disk, 3 points under the latch
 ROOT = Path(os.environ.get("VY_PACER_DIR", str(Path.home() / "commit-release")))
 NO_RELEASE = ROOT / "no-release"   # while it exists, nothing is released (new arrivals still wait deactivated)
-CAP_LATCH = ROOT / "cap-150"  # the drop is a latch: delete this file to go back to CAP_GB
+LIMIT_LATCH = ROOT / "cap-150"  # the drop is a latch: delete this file to go back to LIMIT_GB
 TICK_S, LOG_EVERY_S = 10, 60
 _last_tick = {"summary": None, "t": 0.0}
 STATE = ROOT / "released"
@@ -76,11 +76,11 @@ def bundles_gb():
     return int(r.stdout.strip() or 0) / 1e9
 
 
-def room_cap(gb):
-    """The bundle cap, GB: CAP_ROOM_PCT of /workspace less everything on it that is not a bundle (gb), at most CAP_GB."""
+def room_limit(gb):
+    """The bundle limit, GB: LIMIT_ROOM_PCT of /workspace less everything on it that is not a bundle (gb), at most LIMIT_GB."""
     s = os.statvfs("/workspace")
     used, total = (s.f_blocks - s.f_bfree) * s.f_frsize / 1e9, (s.f_blocks - s.f_bfree + s.f_bavail) * s.f_frsize / 1e9
-    return int(max(0, min(CAP_GB, CAP_ROOM_PCT / 100 * total - (used - gb))))
+    return int(max(0, min(LIMIT_GB, LIMIT_ROOM_PCT / 100 * total - (used - gb))))
 
 
 def disk_pct():
@@ -224,11 +224,11 @@ GPU_QUEUE = "deployments-gpu"                                  # the LocalQueue 
 GATE = ROOT / "gpu-held"                                      # exists while the pacer itself holds GPU_QUEUE
 
 
-def gate(close, projected, cap, probing=()):
+def gate(close, projected, limit, probing=()):
     """Kueue admits a leased Commit (it requests no GPU) the moment it arrives, before a tick can deactivate it, so the pacer holds
     the GPU_QUEUE LocalQueue itself (stopPolicy Hold: nothing new is admitted from it, nothing running is touched) while `close`,
     and lets it go otherwise. tick() closes it while the admitted Commits' projection plus the next Commit's (the next released
-    or waiting one, else the largest admitted, standing for the next arrival) would pass the cap, or the disk is at
+    or waiting one, else the largest admitted, standing for the next arrival) would pass the limit, or the disk is at
     DISK_PAUSE_PCT, or a Commit of a model with no size (`probing`, sized()) is admitted: the next arrival may be another of
     that model. With no Commit admitted it always opens (outside the 78% latch), so a big one can't starve.
     The hold gates Commits only, by construction: the lease pools' GPU holders are submitted to their own LocalQueue
@@ -238,7 +238,7 @@ def gate(close, projected, cap, probing=()):
     if close:
         if policy == "None":
             why = (f"a Commit of {', '.join(probing)} (no size yet) is admitted" if probing else
-                   f"projected {projected:.0f} GB with the next Commit is over the {cap} GB cap (or the disk at {DISK_PAUSE_PCT}%)")
+                   f"projected {projected:.0f} GB with the next Commit is over the {limit} GB limit (or the disk at {DISK_PAUSE_PCT}%)")
             log(f"{why}: holding the {GPU_QUEUE} LocalQueue, so Kueue admits no new Commit")
             if not DRY:
                 k("patch", "localqueue", GPU_QUEUE, "-n", "default", "--type=merge", "-p", '{"spec":{"stopPolicy":"Hold"}}')
@@ -248,7 +248,7 @@ def gate(close, projected, cap, probing=()):
     if not GATE.exists():
         return
     if policy == "Hold":
-        log(f"projected {projected:.0f} GB with the next Commit fits under the {cap} GB cap: releasing the {GPU_QUEUE} LocalQueue")
+        log(f"projected {projected:.0f} GB with the next Commit fits under the {limit} GB limit: releasing the {GPU_QUEUE} LocalQueue")
         if not DRY:
             k("patch", "localqueue", GPU_QUEUE, "-n", "default", "--type=merge", "-p", '{"spec":{"stopPolicy":"None"}}')
     if not DRY:
@@ -287,12 +287,12 @@ def tick():
     big = sum(1 for w in ws if (w["admitted"] or w["name"] in released) and batch(w["row"]) >= 8)
     gb = bundles_gb()
     disk = disk_pct()
-    if disk >= CAP_DROP_PCT and not CAP_LATCH.exists():
-        log(f"disk {disk:.1f}% reached {CAP_DROP_PCT}%: the bundle cap drops to {CAP_LOW_GB} GB until {CAP_LATCH} is removed")
+    if disk >= LIMIT_DROP_PCT and not LIMIT_LATCH.exists():
+        log(f"disk {disk:.1f}% reached {LIMIT_DROP_PCT}%: the bundle limit drops to {LIMIT_LOW_GB} GB until {LIMIT_LATCH} is removed")
         if not DRY:
-            CAP_LATCH.write_text(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} disk {disk:.1f}%\n")
-    latched = CAP_LATCH.exists() or disk >= CAP_DROP_PCT
-    cap = CAP_LOW_GB if latched else room_cap(gb)
+            LIMIT_LATCH.write_text(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} disk {disk:.1f}%\n")
+    latched = LIMIT_LATCH.exists() or disk >= LIMIT_DROP_PCT
+    limit = LIMIT_LOW_GB if latched else room_limit(gb)
     flying = [w for w in ws if w["admitted"] or w["name"] in released]
     written = {w["name"]: written_gb(w) for w in flying}
     learn(flying, written, jobs)
@@ -305,7 +305,7 @@ def tick():
     for w in cands:
         if inflight >= limits()[0] or disk >= DISK_PAUSE_PCT or NO_RELEASE.exists():
             break
-        fits = projected + estimate_gb(w["row"]) <= cap or (inflight == 0 and not latched)   # with none in flight, a big one can't starve
+        fits = projected + estimate_gb(w["row"]) <= limit or (inflight == 0 and not latched)   # with none in flight, a big one can't starve
         if (batch(w["row"]) >= 8 and big >= limits()[1]) or not fits or (not sized(w["row"]) and model(w["row"]) in probing):
             continue
         log(f"release {w['cov']} ({w['row'][:40]}) {w['name']}: in flight {inflight}, batch-8+ {big}, bundles {gb:.0f} GB, "
@@ -322,15 +322,15 @@ def tick():
     waiting = [w for w in ws if w["name"] in released and not w["admitted"]] + [w for w in cands if w["name"] not in released]
     base = gb + sum(rest.get(w["name"], 0) for w in admitted)
     reserve = estimate_gb(waiting[0]["row"]) if waiting else max((estimate_gb(w["row"]) for w in admitted), default=0.0)
-    room = (not admitted and not latched) or base + reserve <= cap
+    room = (not admitted and not latched) or base + reserve <= limit
     probe = sorted({model(w["row"]) for w in admitted if not sized(w["row"])})
-    gate(not room or disk >= DISK_PAUSE_PCT or bool(probe), base + reserve, cap, probe)
+    gate(not room or disk >= DISK_PAUSE_PCT or bool(probe), base + reserve, limit, probe)
     if not DRY:
         STATE.parent.mkdir(parents=True, exist_ok=True)
         STATE.write_text("\n".join(sorted(released)) + "\n")
         SEEN.write_text("\n".join(sorted(seen)) + "\n")
     held = [w["cov"] for w in ws if not w["active"] and not w["admitted"]]
-    summary = (f"tick: {'NO-RELEASE, ' if NO_RELEASE.exists() else ''}cap {cap} GB, disk {disk:.0f}%{' PAUSED' if disk >= DISK_PAUSE_PCT else ''}, in flight {inflight}, batch-8+ {big}, bundles {gb:.0f} GB, projected {projected:.0f} GB, waiting {len(held)}: {' '.join(held)}")
+    summary = (f"tick: {'NO-RELEASE, ' if NO_RELEASE.exists() else ''}limit {limit} GB, disk {disk:.0f}%{' PAUSED' if disk >= DISK_PAUSE_PCT else ''}, in flight {inflight}, batch-8+ {big}, bundles {gb:.0f} GB, projected {projected:.0f} GB, waiting {len(held)}: {' '.join(held)}")
     if summary != _last_tick["summary"] or time.monotonic() - _last_tick["t"] >= LOG_EVERY_S:
         log(summary)
         _last_tick.update(summary=summary, t=time.monotonic())

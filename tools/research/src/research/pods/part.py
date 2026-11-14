@@ -214,7 +214,7 @@ def main(argv: list[str]) -> int:
             return 1
         print(json.dumps(rep, indent=2, sort_keys=True) if ns.json else render(rep))
         return 0 if rep.get("reference") else 3
-    if argv[:1] in (["register"], ["unregister"], ["registry"]):
+    if argv[:1] in (["register"], ["unregister"], ["registry"], ["env"]):
         from .registry import main as registry_main           # one file per machine (registry.py)
 
         return registry_main(argv)

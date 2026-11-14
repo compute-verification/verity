@@ -6,6 +6,7 @@
     research pods registry [--json]                          # every machine `research run --on` accepts, and where it comes from
     research pods registry import [--apply] [--all]          # seed machines.d from machines.toml (running pods only unless --all)
     research pods create <runpod flags> --register --project P [--guard N]   # create, wait for sshd, register under --name
+    research pods env NAME [NAME ...]                        # `export <NAME>_HOST=<host>` per machine, for `eval` only (`host_env`)
 
 `~/.research/machines.toml` is one hand-edited file on the laptop; every lane that creates a pod had to merge an entry into it.
 The registry is a directory with one TOML file per machine, `<dir>/<name>.toml`, holding that machine's table (`provider`,
@@ -38,6 +39,7 @@ import datetime as dt
 import json
 import os
 import re
+import shlex
 import socket
 import subprocess
 import sys
@@ -119,6 +121,32 @@ def binding(entry: dict) -> str | None:
 
 def _bound(entry: dict) -> str:
     return f"pod {entry['pod_id']}" if entry.get("pod_id") else f"host {entry.get('host')}"
+
+
+def host_var(name: str) -> str:
+    """The variable a script reads machine `name`'s host from: the name in capitals, `-` as `_`, then `_HOST`
+    (vy-challenger-1 -> VY_CHALLENGER_1_HOST)."""
+    return re.sub(r"[^A-Z0-9]", "_", name.upper()) + "_HOST"
+
+
+def host_env(names: list[str], machines: dict[str, dict] | None = None) -> dict[str, str]:
+    """{host_var(name): host} for each named ssh machine, read as `research pods ssh NAME` reads it (`remote.load_machines`,
+    `remote.ssh_host_target`).  Refused, naming the file it looked for, when a name is not a registered ssh machine; nothing is
+    returned for the others then.  The refusal never holds an address."""
+    from .. import remote
+
+    ms = remote.load_machines() if machines is None else machines
+    out: dict[str, str] = {}
+    for name in names:
+        m = ms.get(name)
+        if m is None or m.get("provider") != "ssh":
+            d = registry_dir(remote.machines_path())
+            looked = d / f"{name}.toml" if d is not None else remote.machines_path()
+            why = ("its file is refused (`research pods registry` says why)" if name in problems else
+                   "it is a RunPod pod, whose address RunPod gives" if m is not None else f"no {looked}")
+            raise remote.Refused(f"{name!r} is not a registered ssh machine: {why}")
+        out[host_var(name)] = remote.ssh_host_target({**m, "name": name})["host"]
+    return out
 
 
 def load_dir(d: Path) -> tuple[dict[str, dict], dict[str, str]]:
@@ -408,9 +436,19 @@ def main(argv: list[str]) -> int:
     ls.add_argument("--apply", action="store_true", help="import: write the files (default: show the plan)")
     ls.add_argument("--all", action="store_true", help="import: also entries whose pod is not running")
     ls.add_argument("--json", action="store_true")
+    ev = sub.add_parser("env", help="print `export <NAME>_HOST=<host>` for each named machine, from the register. Its output holds "
+                                    "addresses: for `eval \"$(research pods env NAME ...)\"` only, never a log, a note or a brief",
+                        description="Print `export <NAME>_HOST=<host>` for each named machine, from the register. The output holds "
+                                    "addresses: for `eval \"$(research pods env NAME ...)\"` only, never a log, a note or a brief. "
+                                    "An unregistered name prints nothing for any.")
+    ev.add_argument("names", nargs="+", metavar="NAME")
     ns = ap.parse_args(argv)
     mt = remote.machines_path()
     try:
+        if ns.cmd == "env":
+            hosts = host_env(ns.names)
+            print("".join(f"export {k}={shlex.quote(v)}\n" for k, v in hosts.items()), end="")
+            return 0
         if ns.cmd == "register" and ns.host:
             p, what = register_ssh(ns.name, ns.host, ns.project, port=ns.port, user=ns.user, rate=ns.rate, root=ns.root, python=ns.python,
                                    replace=ns.replace, nebius_instance_id=ns.nebius_instance_id, lane=ns.lane)

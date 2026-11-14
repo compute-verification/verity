@@ -69,7 +69,7 @@ BUNDLE_GLOBS = os.environ.get("PACK_BUNDLE_GLOBS", "/workspace/jobs/cov/*/*/comm
                               "/workspace/jobs/probe-jit/*/*/sweep/*/commit/replay_bundle_p*,"
                               "/workspace/research/runs/*/*/sweep/*/commit/replay_bundle_p*,"
                               "/workspace/research/runs/*/*/*/commit/replay_bundle_p*").split(",")
-BUNDLE_CAP = float(os.environ.get("PACK_BUNDLE_CAP_GB", "400")) * 1e9
+BUNDLE_LIMIT = float(os.environ.get("PACK_BUNDLE_CAP_GB", "400")) * 1e9
 BUNDLE_BATCH = 8
 BUNDLE_EST = float(os.environ.get("PACK_BUNDLE_EST_GB", "60")) * 1e9
 # phi3-mini's measured 113 GB; the packable 3-4B models nobody has measured are taken to be as large
@@ -140,8 +140,8 @@ def bundle_est(entry: dict) -> float:
 
 
 def bundle_ok(entry: dict, waiting: int, running: list[dict]) -> bool:
-    """Whether the entry may start: below batch 8 always; else only if the bundles stay within the cap."""
-    return batch(entry) < BUNDLE_BATCH or waiting + sum(map(bundle_est, running)) + bundle_est(entry) <= BUNDLE_CAP
+    """Whether the entry may start: below batch 8 always; else only if the bundles stay within the limit."""
+    return batch(entry) < BUNDLE_BATCH or waiting + sum(map(bundle_est, running)) + bundle_est(entry) <= BUNDLE_LIMIT
 
 
 def bundle_bytes(globs: list[str]) -> int:

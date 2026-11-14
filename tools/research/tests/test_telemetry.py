@@ -1486,3 +1486,15 @@ def test_a_cancel_request_that_does_not_parse_is_none_and_says_so_but_no_request
     (tmp_path / scope.CONTROL_CANCEL).write_text('{"grace_s": "soon"}')
     assert scope.cancel_request(tmp_path) is None
     assert "is no cancel request (ValueError" in capsys.readouterr().err
+
+
+# ---- the real-kernel fixtures (fixtures/run_fixtures.sh), which a person runs in a pod of its own --------------------------------------------
+
+FIXTURES = Path(events.__file__).resolve().parent / "fixtures"
+
+
+def test_the_kernel_fixtures_parse_and_each_workload_answers_help():
+    subprocess.run(["bash", "-n", str(FIXTURES / "run_fixtures.sh")], check=True)
+    for name in ("hog.py", "forkshare.py", "writer.py", "spans.py"):
+        r = subprocess.run([sys.executable, str(FIXTURES / name), "--help"], capture_output=True, text=True)
+        assert r.returncode == 0 and r.stdout.startswith("usage: "), (name, r.stderr)
