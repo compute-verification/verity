@@ -453,7 +453,7 @@ def test_refresh_fixtures_missing_conflict_and_no_map(env, tmp_path, capsys):
     assert len(bad) == 1 and bad[0]["new_id"] == a and "already registered" in bad[0]["errors"][0] and not rep["written"]
     # without a map there is nothing to refresh
     assert main(["refresh-fixtures", "--repo", str(tmp_path / "elsewhere")]) == 1
-    assert "no fixtures/artifacts.json found" in capsys.readouterr().err
+    assert "no artifacts.json found" in capsys.readouterr().err
 
 
 # ---- doctor -----------------------------------------------------------------------------------------------------------------------------
