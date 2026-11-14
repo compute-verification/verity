@@ -567,7 +567,7 @@ theorem callerCheckSound_of_means (hm : CallerCheckMeans) : CallerCheckSound := 
 /-- `CallerCheckSound`, from `callerCheckMeans`. -/
 theorem callerCheckSound : CallerCheckSound := callerCheckSound_of_means callerCheckMeans
 
-/-- What sampled proofs' accepted case gives, on any blobs: `StageHeld`, at the form its params name, where the caller's
+/-- What SPOT's accepted case gives, on any blobs: `StageHeld`, at the form its params name, where the caller's
 check finds nothing only where the record keeps the caller's facts (`CallerCheckSound`). -/
 theorem stage_held (hm : CallerCheckSound) {k : Case} {n : Named} {bs : Blobs} (hp : k.params = n.params)
     (h : Properties.Composition.DecodedAccepted (VStar.Recursive.Sampled.protocol.onBlobs bs) n.params.toUTF8

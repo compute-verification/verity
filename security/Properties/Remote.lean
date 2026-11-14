@@ -116,7 +116,7 @@ verifier, `VStar.Recursive.Caller.check` returns no code exactly when the record
 against that verifier: its day's declared program, its window's stream, prover, seed salt, the pool's reset, week and
 spent mark with at most one reset a week, and the registration log's compiler and advice within its length, and, when
 the verifier expects values registered, the pool its window opens and no output value reading a port of a record its
-verdict log names refused. Sampled proofs' one-stage form and the recursive audit read SPOT's acceptance through that
+verdict log names refused. SPOT's one-stage form and the recursive audit read SPOT's acceptance through that
 check (`VStar.Recursive.Caller.gate`), so `StageHeld` reads the caller's facts off it (`CallerCheckSound`). -/
 def CallerCheckMeans : Prop :=
   ∀ (rec : Json) (v : Spot.Registration.Verifier),
@@ -129,7 +129,7 @@ def CallerCheckSound : Prop :=
   ∀ (rec : Json) (v : Spot.Registration.Verifier),
     VStar.Recursive.Caller.check rec v = #[] → Properties.Spot.CallerHeld rec v
 
-/-- Sampled proofs' case `k` decodes under sampled proofs' own decoders (`VStar.Recursive.Sampled`, whose params name
+/-- SPOT's case `k` decodes under SPOT's own decoders (`VStar.Recursive.Sampled`, whose params name
 the form), and the record it decodes to names, by its SHA-512, the program the named form verifies the sessions against
 (`Properties.Spot.R2`): in the one-stage form, the program of one-stage v2's own verifier (the v1 part of its
 params, `Spot.OneStageZk.Params.base`); in the recursive form, the program of the inner statement's verifier
