@@ -960,7 +960,7 @@ refuses `--salt-key`: a statement's value commitments are admitted on the ZK ser
 def run (usage : String) (args : List String) (mkHold : Option (Hello.Setup → IO (Except String (IO Hold)))) :
     IO UInt32 := do
   if args.contains "--kept" then
-    IO.eprintln "--kept: a kept loop is `flock-firewall session --kept`'s alone, with no hold"
+    IO.eprintln "--kept: a kept loop is `session --kept`'s alone, with no hold"
     return 2
   let S ← match ← Hello.Setup.ofArgs usage args with
     | .ok S => pure S
@@ -1047,7 +1047,7 @@ def keptFlags (valued : List String) : List String → Bool
   | f :: _ :: rest => valued.contains f && keptFlags valued rest
   | [_] => false
 
-/-- **The kept loop** (`flock-firewall session --kept [--listen PORT] [--partition F] [--program F]`): `run`'s loop for
+/-- **The kept loop** (`session --kept [--listen PORT] [--partition F] [--program F]`): `run`'s loop for
 every statement of a window, one member after another. It reads the window (`Hello.Window`) once, and each member's
 statement and auditor on its standard input: `member LEN` followed by the `LEN` bytes of a JSON array of the member's
 flags, the statement flags (`Hello.FLAGS` without the window's) and `--verifier HOST:PORT`, is answered `ok` once it has
@@ -1069,9 +1069,9 @@ def kept (usage : String) (args : List String) : IO UInt32 := do
   let member : IO.Ref (Option Member × Nat) ← IO.mkRef (none, 0)
   let reg : IO.Ref Frames.Sessions ← IO.mkRef {}
   let l0s : IO.Ref Level0.Slots ← IO.mkRef {}
-  let current : Hello.SetupAt := fun draw => do
+  let current : Hello.SetupAt := fun sample => do
     match (← member.get).1 with
-    | some m => m.S.setupAt m.specs draw
+    | some m => m.S.setupAt m.specs sample
     | none => pure (.error "the kept loop has no member")
   listenAt listen current reg l0s fun sid p => do
     match ← member.modifyGet fun (m, n) => (m, (m, if m.isSome then n + 1 else n)) with
@@ -1112,8 +1112,8 @@ def kept (usage : String) (args : List String) : IO UInt32 := do
       let some m := (← member.get).1 | say "refused the kept loop has no member"
       match Hello.drawOf ((String.fromUTF8? b).getD "?") with
       | .error e => say s!"refused {e}"
-      | .ok draw =>
-        match ← m.S.setupAt m.specs draw with
+      | .ok sample =>
+        match ← m.S.setupAt m.specs sample with
         | .error e => say s!"refused {e}"
         | .ok (spec, sts) =>
           let p := planOf spec sts
@@ -1122,10 +1122,10 @@ def kept (usage : String) (args : List String) : IO UInt32 := do
     | _ => say s!"err a request `{line}`"; IO.Process.exit 1
   IO.Process.exit 0
 
-/-- `flock-firewall session`: `run`, with no hold, or with `--kept`, `kept`. -/
+/-- `flock-firewall session`: `run`, with no hold; with `--kept`, `kept`. -/
 def cmd (args : List String) : IO UInt32 :=
-  let usage := s!"usage: flock-firewall session (--verifier HOST:PORT [--listen PORT] | --schedule) {Hello.FLAGS}\n" ++
-    "       flock-firewall session --kept [--listen PORT] [--partition F] [--program F]"
+  let usage := s!"usage: flock-firewall session (--verifier HOST:PORT [--listen PORT] | --schedule) {Hello.FLAGS}" ++
+    " | --kept [--listen PORT] [--partition F] [--program F]"
   if args.contains "--kept" then kept usage args else run usage args none
 
 end Flock.Firewall.Session

@@ -655,7 +655,7 @@ impl LeanSession {
         Self::spawn(exe, &all)
     }
 
-    /// The kept loop (`flock-firewall session --kept`) on the window's flags `window` (`--partition F`, `--program F`),
+    /// The kept loop (`session --kept`, the Lean verifier's `Session.kept`) on the window's flags `window` (`--partition F`, `--program F`),
     /// which it reads once for every member's statement; it serves no session before its first [`LeanSession::member`].
     pub fn start_kept(exe: &std::path::Path, window: &[String]) -> Result<Self, String> {
         let mut all = vec!["--kept".to_string()];
@@ -685,7 +685,7 @@ impl LeanSession {
         Ok(LeanSession { child, stdin, stdout, addr, frames })
     }
 
-    /// A kept loop's next member: the statement flags `args` (`flock-verify verify --zk`'s, without the window's) with
+    /// A kept loop's next member: the statement flags `args` (the verifier's `verify --zk` flags, without the window's) with
     /// `--verifier HOST:PORT`, which every session after it is of. The loop answers once it has read the member's files,
     /// and only while no session is open does it change member.
     pub fn member(&mut self, args: &[String]) -> Result<(), String> {

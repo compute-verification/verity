@@ -1650,8 +1650,8 @@ fn window_split(args: Vec<String>) -> (Vec<String>, Vec<String>) {
     (window, rest)
 }
 
-/// The kept Lean session loop (`firewall::LeanSession::start_kept`) on `FC_FIREWALL_HELLO_ARGS`' window flags, which every
-/// member's statement shares ([`kept_member`]).
+/// The kept Lean session loop (`LeanSession::start_kept`) on the window's flags among the ZK server's `Hello` flags, which
+/// every member's statement shares ([`kept_member`]).
 fn kept_loop() -> Result<flock_live::firewall::LeanSession, String> {
     let hello = std::env::var("FC_FIREWALL_HELLO_ARGS").unwrap_or_default();
     let (window, _) = window_split(hello.split_whitespace().map(String::from).collect());

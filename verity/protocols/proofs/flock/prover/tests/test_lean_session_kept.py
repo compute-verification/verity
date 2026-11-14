@@ -1,7 +1,7 @@
-"""The ZK server's kept session loop (`Flock/Firewall/Session.lean`'s `kept`, `flock-firewall session --kept`): one loop
+"""The ZK server's kept session loop (the Lean verifier's `Session.kept`, `session --kept`): one loop
 for every statement of a window, which reads the window's partition and program once and takes each member's statement
-on its standard input (`member LEN`, then the member's flags as a JSON array). What it must keep of `flock-firewall
-session` is what an accepted session means: each session is of one member's statement from its start to its end, the one
+on its standard input (`member LEN`, then the member's flags as a JSON array). What it must keep of a loop of one
+statement (`session`) is what an accepted session means: each session is of one member's statement from its start to its end, the one
 current when it started, whatever `member` arrives while it is open; its `Hello` is the one a loop of that member's own
 sends (`test_lean_hello.py`'s recorded `Hello` at the loop's nonce), and its plan is `session --schedule`'s on the
 member's flags. A session before any member is refused without reaching the auditor, and a member's flags never name
@@ -14,11 +14,11 @@ import subprocess
 
 import pytest
 from test_lean_hello import BIN, NONCE, _args, _record, built  # noqa: F401
-from test_lean_session import REGISTER, STOP, Auditor, _answer, call, coins, draw, hello, plain, reason, zk  # noqa: F401
+from test_lean_session import REGISTER, STOP, Auditor, _answer, call, coins, hello, plain, reason, zk  # noqa: F401
 
 
 class Kept:
-    """A running `flock-firewall session --kept` on the window's flags `window`."""
+    """A running kept loop (`session --kept`) on the window's flags `window`."""
 
     def __init__(self, window: list[str] | None = None):
         self.p = subprocess.Popen([str(BIN), "session", "--kept", *(window or [])], stdin=subprocess.PIPE,
@@ -108,7 +108,7 @@ def test_a_members_session_is_set_up_on_its_files(junk):
     k = Kept()
     assert k.member([*junk, "--verifier", auditor.addr]) == "ok"
     s = k.connect()
-    assert call(s, REGISTER) == draw("null")
+    assert call(s, REGISTER) == plain(REGISTER)
     assert reason(call(s, hello(""))).startswith(STOP + "the Lean Hello: setup: ")
     s.close()
     k.close()
@@ -130,7 +130,7 @@ def test_each_session_is_of_the_member_current_at_its_start(zk):
     sends the second's. At each member, the plan is `session --schedule`'s on the member's flags."""
     first, n16, null = _record(zk, "selftest/honest")
     second, n32, _ = _record(zk, "m26")
-    answers = {10: draw("null"), 1: _answer(), 3: b"\x01", 7: coins([])}
+    answers = {10: plain(REGISTER), 1: _answer(), 3: b"\x01", 7: coins([])}
     auditor = Auditor(lambda f: answers[f[0]])
     members = [_args(zk, "pub-16.bin"), _args(zk, "pub-32.bin")]
     fresh = [subprocess.run([str(BIN), "session", "--schedule", *args], input=null.encode(), capture_output=True,
