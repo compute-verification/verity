@@ -2,12 +2,12 @@ module
 
 public import Proofs.Core.AndSize
 public import Proofs.Pouw.ServedValues
-public import Proofs.Pouw.PeriodJ10R.Honest
+public import Proofs.Pouw.MonitoringPeriodJ10R.Honest
 
 /-!
 # `RightValues` at an honest period, and against a verifier that accepts everything
 
-The two witnesses of `Properties.Pouw.ServedValues.RightValues`, on `Proofs.Pouw.PeriodJ10R.Honest`'s J10-R
+The two witnesses of `Properties.Pouw.ServedValues.RightValues`, on `Proofs.Pouw.MonitoringPeriodJ10R.Honest`'s J10-R
 period. Its registered circuit has `N = N_p` committed words of no operands, one a block. The honest registered
 declaration (`andDecl N`) is a Boolean circuit of two input gates and `N` output gates, each the AND of the two
 (`andCircuit N`), and its lowering is itself (`Verity.RegisteredCircuit.D`). The honest map (`blocks N`) has block `t` AND
@@ -26,8 +26,8 @@ size is `1` (`Verity.SecurityProofs.ToCircuitAnd`: Flock's `and a b` of two dist
 @[expose] public section
 namespace Properties.Pouw.ServedValues.SecurityProofs.HonestValues
 
-open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs Properties.Pouw.ServedValues
-open Properties.Pouw.ServedValues.SecurityProofs Properties.Pouw.PeriodJ10R.SecurityProofs.HonestJ10R
+open Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs Properties.Pouw.ServedValues
+open Properties.Pouw.ServedValues.SecurityProofs Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.HonestJ10R
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 open Accounting.SecurityProofs.ComposeMonitoringPeriod
 

@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.Guarantees.PerRun
-public import Proofs.Accounting.Joint
+public import Proofs.Compose.Joint
 
 /-!
 # Proof of the per-run joint guarantee and its covert residual

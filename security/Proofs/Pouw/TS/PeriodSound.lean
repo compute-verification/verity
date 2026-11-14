@@ -1,9 +1,9 @@
 module
 
-public import Properties.Accounting.JointBridge.ServiceSoundOfSessions
+public import Properties.Certifier.JointBridge.ServiceSoundOfSessions
 public import Proofs.Pouw.TS.SessionSound
 public import Proofs.Pouw.FillerLuck
-public import Proofs.Pouw.Period.Honest
+public import Proofs.Pouw.MonitoringPeriod.Honest
 
 /-!
 # PoUW's proof system soundness from its proof layer (the proof)
@@ -15,7 +15,7 @@ its statement fails at its opening, so the event lies in the union of the window
 that are Flock sessions meeting that guarantee's named premises give `ServiceSound` at `n_π · (δ_s + δ)`.
 
 The witnesses' statements name no instance. Each proof takes H1's honest live-salt period
-(`Properties.Pouw.Period.SecurityProofs.HonestH1`), one window and one session: there the check accepts every window on
+(`Properties.Pouw.MonitoringPeriod.SecurityProofs.HonestH1`), one window and one session: there the check accepts every window on
 every path and its layer is sound at `0`, and with relations that every opening fails `ServiceSound` fails at `0`,
 since the check accepts and samples a unit on every path.
 
@@ -27,7 +27,7 @@ imports it and no theorem here binds `X`.
 
 namespace Accounting.SecurityProofs.Bridge
 
-open Pouw.RelativeSecurity Properties.Accounting.JointBridge Properties.Accounting.JointBridge.Sessions
+open Pouw.RelativeSecurity Properties.Certifier.JointBridge Properties.Certifier.JointBridge.Sessions
 
 /-- **A window's drawn-unit failures are a union of its unsound sessions**: the window is accepted and some sampled proof block
 fails its relation with probability at most `n_π · δ` when each session of the layer is unsound with probability at
@@ -49,9 +49,9 @@ theorem prob_drawn_le {Ω U V : Type} [Fintype Ω] {n nπ : ℕ} (acc : Paths Ω
     _ = nπ * δ := by simp
 
 /-- **PoUW's proof system is sound against its check, from its sessions' soundness**
-(`Properties.Accounting.JointBridge.CheckProofSystemSound`): `prob_drawn_le` at the check's layer, whose verdict is the
+(`Properties.Certifier.JointBridge.CheckProofSystemSound`): `prob_drawn_le` at the check's layer, whose verdict is the
 check's acceptance and whose sampled proof blocks are the units it publishes. -/
-theorem CheckProofSystemSound : Properties.Accounting.JointBridge.CheckProofSystemSound := by
+theorem CheckProofSystemSound : Properties.Certifier.JointBridge.CheckProofSystemSound := by
   intro C Ξ V _ _ m Np n nπ p ws opened rel sessOf δ h w
   refine (prob_mono fun x hx => ?_).trans (prob_drawn_le _ _ Fin.val opened rel sessOf h w)
   obtain ⟨pub, prof, hc, u, hu, hr⟩ := hx
@@ -64,7 +64,7 @@ open scoped ENNReal
 meet `Accounting.Guarantees.TS.SessionSoundAt`'s named premises, the check accepts a window and some sampled proof block fails
 its relation with probability at most `n_π · (δ_s + δ)`. -/
 theorem serviceSound_of_sessions {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m Np n nπ : ℕ} (p : PouwCheck.Params)
-    (ws : Properties.Pouw.Period.Executions (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n)
+    (ws : Properties.Pouw.MonitoringPeriod.Executions (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (rel : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop)
     (sessOf : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → Fin nπ)
@@ -77,12 +77,12 @@ theorem serviceSound_of_sessions {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m Np 
     (hChk : Accounting.Assumptions.TS.ServedChecksHold (checkLayer p ws opened rel sessOf) sess out rows)
     (hLink : Accounting.Assumptions.TS.ServedRootsLinked (checkLayer p ws opened rel sessOf) sess out rows δs)
     (hδ : ∀ x w i, ((sess x w i).n : ℝ≥0∞) * (sess x w i).bound ≤ ENNReal.ofReal δ) (hδ0 : 0 ≤ δ) :
-    Properties.Pouw.Period.ServiceSound p ws opened rel (nπ * (δs + δ)) :=
+    Properties.Pouw.MonitoringPeriod.ServiceSound p ws opened rel (nπ * (δs + δ)) :=
   Accounting.SecurityProofs.Bridge.CheckProofSystemSound p ws opened rel sessOf (δs + δ)
     (Accounting.SecurityProofs.TS.SessionSoundAt (checkLayer p ws opened rel sessOf) sess out rows δs δ hCR hAcc hLaw
       hChk hLink hδ hδ0)
 
-open Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs.HonestH1
+open Properties.Pouw.MonitoringPeriod Properties.Pouw.MonitoringPeriod.SecurityProofs.HonestH1
 
 /-- **The honest witness of `CheckProofSystemSound`** (`CheckProofSystemSoundHonest`): at H1's honest live-salt period
 of one window, one session a window, the deployed check accepts the window on every path, and its layer is sound at
