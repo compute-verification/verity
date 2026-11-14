@@ -25,7 +25,7 @@
 #include <cuda_runtime.h>
 
 #include "sha512.cuh"
-#include "../../verity/circuits/kernels/row_commit.cuh"
+#include "../../../../../circuits/kernels/row_commit.cuh"
 
 namespace rb {
 

@@ -1,5 +1,5 @@
 """P2's arm of the POUS-only harness (`benchmarks/pous/p2_v1/`, `bench.py --impl p2-v1-gpu | p2-v3-gpu`) on CPU: the reference
-(`p2_v1/reference.py`) against the spec's pinned vectors, and every step of the arm with the reference standing in for the GPU
+(`verity/protocols/accounting/pous/verifier/p2_v1/reference.py`) against the spec's pinned vectors, and every step of the arm with the reference standing in for the GPU
 library at the kit's 128-bit width, `test_pous_harness`'s Python responder for the native one, and the arm's memory challenger process
 (`p2_v1/memory_challenger.py` for the spec's framing, `verity/protocols/accounting/pous/device/timed_audit.py`'s `protocol.TimedAudit` for `p2-16448/v4`) on its
 logical clock, so no outcome depends on a clock."""
@@ -26,7 +26,7 @@ SEED = "5eed" * 8
 """`--seed` for the `V3` arm's `verity/protocols/accounting/pous/device/timed_audit.py` and the `MC` arm's `memory_challenger/live.py`:
 an audit's challenges, and so its controls' verdicts, are fixed."""
 MC_CHANGED = [9, 8]
-"""Of the 105 blocks each of the `MC` arm's two sessions draws under `SEED` from the small case's 192, those whose index is a
+"""Of the 105 blocks each of the `MC` arm's two sessions samples under `SEED` from the small case's 192, those whose index is a
 multiple of 10: the blocks its value and tampered controls change."""
 
 
@@ -39,7 +39,10 @@ def _bench():
 
 def _p2():
     sys.path.insert(0, str(BENCH))
-    from p2_v1 import gpu, harness, reference
+    sys.path.insert(0, str((ROOT / "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py").parents[1]))
+    from p2_store import gpu
+    from p2_v1 import harness
+    from verity.protocols.accounting.pous.verifier.p2_v1 import reference
     return reference, harness, gpu
 
 
