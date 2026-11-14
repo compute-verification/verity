@@ -33,7 +33,7 @@ witnesses at the toy circuit (`InferenceOnly.Capability.Toy`, with the instances
 The premise each `X_nontrivial` drops is the one the bound rests on: the coverage `κ` when the bound is a share of the
 reference circuit (at the threading `T0` of no counted multiplication, every bound is `0`), `ThetaRegistered` when it is
 in the read cap `k` (at `Dθ`, the declaration registering the token too, the toy complies at `k = 0`), `WindowsHold`
-for the dampener, and PoUW's soundness (`PouwSound`) for the remote dampener, whose witnesses take its declared
+for the slowdown, and PoUW's soundness (`PouwSound`) for the remote slowdown, whose witnesses take its declared
 computation at the min-cut toy (`InferenceOnly.Cut.Toy`), where the count verdict `CompliesAtMost` holds under (H) and (E). The cover theorem's join
 (`InferenceOnly.Cover.Guarantees.CoverTraining`) is stated at the multiplication blocks `mb0` of no product, where coverage
 `α₀ > 0` fails.
