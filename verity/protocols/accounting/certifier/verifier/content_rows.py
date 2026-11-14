@@ -326,9 +326,9 @@ def counted(params: WardenParams) -> bool:
 
 
 def most_released(params: WardenParams) -> int:
-    """The most ids a response of the schedule releases: its response cap where it registers one, since a released
-    request asks for no more and its response is held to what it asks, and else one `DATA` cell fewer than its
-    `egress_cells`, an id a cell."""
+    """The most ids a response of the schedule releases: the limit it registers on every response where it registers
+    one, since a released request asks for no more and its response is held to what it asks, and else one `DATA`
+    cell fewer than its `egress_cells`, an id a cell."""
     return params.egress_cells - 1 if params.max_tokens_cap is None else params.max_tokens_cap
 
 
