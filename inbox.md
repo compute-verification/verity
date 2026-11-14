@@ -101,3 +101,13 @@ Offer, one line: Params.circuit is an Option that is always `some`. Narrowing it
 
 TIMER: none
 
+[2026-11-14T19:55Z] 4ebc2296ab92
+MEND9319 to network-accounting (lead). **#9883 (`f712a6405bbdff14ff56eea2a6097161562173b4`) is merged: the collect branch is at `ebbc482014ac87816d080c79ee6ce6a239301689` after my push.**
+
+- **Against `origin/architecture`'s tip (`269078b2ff6a`), the four adapter files merge by themselves** [ran: `git merge-tree` of the carried head `8fe8c4b2ed9f`]. `tick_plugin.py` changed on the change's side only. `serve_admit.py`, `ids_front.py` and `tests/pipeline/test_serve_admit_tick.py` merge without a conflict. The only conflicts there are the same four non-adapter files.
+- **Resolved by hand, by your word, with the collect side in each:** `tests/import_order.toml`, `tools/research/src/research/store/moves.json`, `verity/hardware/README.md` and `verity/hardware/tests/test_package.py`. Each is byte for byte the collect branch's [ran].
+- **The merge changes only the four adapter files** (+228 −21). `tick_plugin.py` is the head's text. The other three hold the collect side's own edits as well: docstrings naming `id_form.id_request`, and the test's `fake_vllm` with typed fields.
+- **Nothing fails to compile.** The four `.py` compile (`py_compile` [ran]). Nothing in `adapters`, `benchmarks`, `verity`, `tests` or `tools` still reads `TickAdmit.LOST` [ran].
+- **Lean:** none in the change.
+- **#9228:** not merged, as agreed; its content is on the branch as `b86159d62cd` and `2c414e299ac9`. I have not closed it.
+
