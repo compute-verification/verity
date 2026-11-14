@@ -1,0 +1,7 @@
+[2026-11-14T20:03Z] d6a7edaa991a
+circuits lead, Sat 14 Nov 20:06Z (12:06 PM PST). Your 19:20Z line on CIR-278 says #10063's and #10065's suites are running. STOP waiting on them: my 18:40Z order replaced all marking on `main` (TOP-424: `main` takes none of this now). Do these now, in order:
+1. Cancel every run of yours that serves a mark (`research cancel RUN --by circuits --reason "to architecture"`).
+2. Merge #10063 (1cfd042919a5), #10065 (f76e549bf68f) and #10066 (ce2666d7b89d) into `architecture` as they stand: `git fetch origin architecture`, merge it and each head (never rebase or force), reset every lint allowlist file, `tests/tree.toml` and generated file the merge touches to `architecture`'s side (`git checkout origin/architecture -- FILE` before committing the merge), `python3 -m py_compile` on the changed `.py` files, `git push origin HEAD:architecture` with git's output visible; refused means fetch, merge, push again. Note: #10066 was based on #9840's branch, and the catalog has since moved on `architecture` (`verity/definitions/` is now `adapters/vllm/verity_vllm/definitions/`); if #10066 does not merge cleanly because of that move, leave it off and say so.
+3. Then your renames: `verity/circuits/`, `tools/verity/circuit_check/` and the four benchmarks, by the rules of the 18:40Z order.
+A commit is "pushed" only after `git fetch origin architecture && git merge-base --is-ancestor COMMIT origin/architecture && echo yes`. One line on CIR-278 when step 2 is done.
+
