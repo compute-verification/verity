@@ -440,10 +440,19 @@ RECORD_FILES = ("commit/verdict.json", "commit/runs.jsonl", "commit_summary.json
                 "match_summary.json", "build_summary.json")
 
 
+def _replay_records(row_dir: Path, runs: Sequence[CommitRun]) -> tuple[str, ...]:
+    """The replay records under `row_dir`'s `commit/` that are `runs`' own, as paths from `row_dir`: for each pair with a run that
+    is not the control arm, its `sampled_replay_p<pair>.json` and its ranks' `sampled_replay_p<pair>_rank<r>.json`.  A replay is of
+    a run that commits, so a record of any other pair is another Commit's, left under the same `--out`."""
+    names = {name for r in runs if r.arm != "control" for name in (f"sampled_replay_p{r.pair}.json", f"sampled_replay_p{r.pair}_rank*.json")}
+    return tuple(sorted(os.path.relpath(p, row_dir) for name in names for p in (row_dir / "commit").glob(name)))
+
+
 def from_record(row_dir: str | os.PathLike, *, rc: int | None = None, stage_ok: str | None = None) -> CommitChecks:
     """Rebuild the `CommitChecks` from a row dir's evidence (`commit/runs.jsonl`, `commit/verdict.json`, `commit/summary.json` + `commit.log`
-    (`execution_of_record`), `commit/manifest_verify.json`, `commit/sampled_replay_p*.json` for their digests; an older row's
-    `commit_summary.json` is read when present).  A row whose Commit never ran gives NOT_RUN with the missing files named.
+    (`execution_of_record`), `commit/manifest_verify.json`, the replay records of the runs `commit/runs.jsonl` holds (`_replay_records`)
+    for their digests; an older row's `commit_summary.json` is read when present).  A row whose Commit never ran gives NOT_RUN with the
+    missing files named.
     `rc` = commit_delta's exit code when the caller (row_pod.sh) knows it; `stage_ok` = a stage decision made OUTSIDE this verdict (older
     rows: the commit_summary word), recorded under `compat.stage_ok` and compared (a disagreement is a note, never a changed decision).
     The verdict's `outcome` IS the Commit stage's decision (row_pod.sh reads it back).  Every `<row>/properties/*.json` is cited
@@ -451,12 +460,12 @@ def from_record(row_dir: str | os.PathLike, *, rc: int | None = None, stage_ok: 
     A `build_summary.json` its record (`records.build_summary`) refuses is a note too, and the wrappers' own `result.json` give the
     correspondence digest."""
     d = Path(row_dir)
+    rows = CommitRun.load_lines(d / "commit" / "runs.jsonl") if (d / "commit" / "runs.jsonl").is_file() else []
     digests: dict[str, str] = {}
-    for rel in RECORD_FILES + tuple(sorted(os.path.relpath(p, d) for p in glob.glob(str(d / "commit" / "sampled_replay_p*.json")))):
+    for rel in RECORD_FILES + _replay_records(d, rows):
         p = d / rel
         if p.is_file():
             digests[rel] = _sha256(p)
-    rows = CommitRun.load_lines(d / "commit" / "runs.jsonl") if (d / "commit" / "runs.jsonl").is_file() else []
     vd = json.loads((d / "commit" / "verdict.json").read_text()) if (d / "commit" / "verdict.json").is_file() else None
     summ = json.loads((d / "commit_summary.json").read_text()) if (d / "commit_summary.json").is_file() else None
     mv = json.loads((d / "commit" / "manifest_verify.json").read_text()) if (d / "commit" / "manifest_verify.json").is_file() else None
