@@ -19,7 +19,7 @@ def test_an_unreadable_build_result_is_named_and_the_other_wrappers_still_count(
     d, _ = _row_dir(tmp_path, _base(), commit_pass=True, rc=0)
     step = "e6" * 32
     _wrappers(d, '{"ok": true, "program": ', step)
-    v = V.from_record(d, rc=0, stage_ok="PASS")
+    v = V.from_record(d, rc=0)
     assert v.outcome == V.PASS
     assert v.correspondence_digest == step and v.correspondence_digest_source == "result.json:step" and v.correspondence_digests == {"step": step}
     (note,) = v.notes
@@ -30,5 +30,5 @@ def test_readable_build_results_add_no_note(tmp_path):
     d, _ = _row_dir(tmp_path, _base(), commit_pass=True, rc=0)
     step, req = "e6" * 32, "fc" * 32
     _wrappers(d, json.dumps({"ok": True, "program": {"digest": "p" * 64, "correspondence_digest": req}}), step)
-    v = V.from_record(d, rc=0, stage_ok="PASS")
+    v = V.from_record(d, rc=0)
     assert v.outcome == V.PASS and not v.notes and v.correspondence_digests == {"request": req, "step": step}

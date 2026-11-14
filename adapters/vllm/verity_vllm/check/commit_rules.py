@@ -675,7 +675,7 @@ def rule_required_classes(commit: dict, ctx: dict, declaration: dict | None, req
 
 
 def rule_manifest_verified(commit: dict, ctx: dict) -> CheckResult:
-    """row_pod.sh: `required_manifest verify` rebuilt the manifest from this attempt's Program x workload == the one used."""
+    """The row's driver: `manifest-verify` rebuilt the manifest from this attempt's Program x workload == the one used."""
     mv = ctx.get("manifest_verify")
     claim = "The required-value manifest the Commit used is byte-identical (rows digest) to the one rebuilt from this attempt's Program x workload."
     compat = ["manifest_verify.ok", "manifest_verify.used_digest", "manifest_verify.rebuilt_digest", "stages.txt manifest_verify="]

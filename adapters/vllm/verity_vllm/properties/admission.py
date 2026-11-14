@@ -39,6 +39,10 @@ import numpy as np
 from verity_vllm.commit import challenge as CH
 from verity_vllm.config import option
 from verity_vllm.records.property_record import REGISTRY, seal
+from verity_vllm.records.schema_ids import (
+    DIFFTEST_PRODUCE_SCHEMA,
+    QUARANTINE_ADMISSION_SCHEMA,
+)
 
 REQUIRED_EDGE_KINDS = ("zeros", "max", "subnormal", "alternating")
 DTYPE_BITS = {"bfloat16": 16, "float16": 16, "float32": 32, "int32": 32, "int64": 64, "uint8": 8, "int8": 8, "bool": 8}
@@ -97,7 +101,7 @@ def produce(adapter: str, n: int, seed: int, out: Path, device: str = "cuda") ->
     mod = importlib.import_module(adapter)
     rng_py = CH.stream(seed)
     out.mkdir(parents=True, exist_ok=True)
-    manifest: dict[str, Any] = {"schema": "verity-gen/difftest-produce/v1", "adapter": adapter, "semantic_id": getattr(mod, "SEMANTIC_ID", None),
+    manifest: dict[str, Any] = {"schema": DIFFTEST_PRODUCE_SCHEMA, "adapter": adapter, "semantic_id": getattr(mod, "SEMANTIC_ID", None),
                                 "seed": seed, "n": n, "torch": torch.__version__, "device": torch.cuda.get_device_name(0) if device.startswith("cuda") else device,
                                 "cases": []}
     tmap = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": torch.float32, "int32": torch.int32, "int64": torch.int64,
@@ -218,7 +222,7 @@ def main(a: ProduceOptions | CheckOptions) -> int:
         return 0
     rep = check(a.adapter, Path(a.dir))
     out = Path(a.out)
-    doc: dict[str, Any] = {"schema": "verity-gen/quarantine/v1", "definitions": {}}
+    doc: dict[str, Any] = {"schema": QUARANTINE_ADMISSION_SCHEMA, "definitions": {}}
     if a.append and out.exists():
         doc = json.loads(out.read_text())
     doc["definitions"][rep["semantic_id"] or a.adapter] = rep

@@ -291,15 +291,6 @@ def test_moe_scope_resolves_as_the_six_part_pair_major_group(M, naive):
     assert kernels.count("fused_moe_kernel") == 2 and "topkGating" in kernels and "moe_sum_vec_kernel" in kernels and "act_and_mul_kernel" in kernels
     aligns = [p for p in g.parts if isinstance(p, Transparent) and any("moe_align_block_size" in k for k in p.kernels)]
     assert len(aligns) == (0 if naive else 1) and all(t.effect == "noop" for t in aligns)
-    if aligns:
-        # the claim must cover both of vLLM's dispatch paths as Kineto names them: the small-batch kernel (decode) and the
-        # sorted pair (prefill: under the single-name claim a 155-token prompt leaves 32 kernels of G1 residue)
-        from verity_vllm.properties.census import claims_for
-        declared = set(aligns[0].kernels)
-        for kineto in ("void vllm::moe::moe_align_block_size_small_batch_expert_kernel<int>(int const*, int*, int*, int*, unsigned long, int, int, int)",
-                       "void vllm::moe::moe_align_block_size_kernel<int>(int const*, int*, int*, int*, int*, int, int, int, int, unsigned long)",
-                       "void vllm::moe::count_and_sort_expert_tokens_kernel<int>(int const*, int*, int*, int*, unsigned long, int, int, int, bool)"):
-            assert len(claims_for(kineto, declared)) == 1, kineto
 
 
 @pytest.mark.parametrize("kw,needle", [

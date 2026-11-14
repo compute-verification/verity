@@ -14,21 +14,26 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 * **the registration** keeps R1–R8 against the verifier's own copies (`Registered`): the record's format, protocol, law
   and window (`R1`); its program, query, partition and population (`R2`); its scheme, ports, roots, leaves and domains,
   a wired port at the root of the port that holds it (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record and
-  window (`R6`); for a v2 record its registered values (`R7`); and under a template query, no run Input its proof blocks
-  don't each read alone (`R8`); and in the per-member form each member's one count of link points (`RL`);
+  window (`R6`); for a v2 record its registered values, the verifier's own and the ones it holds certified entries for
+  (`R7`, `CertifiedHeld`); and under a template query, no run Input its proof blocks don't each read alone (`R8`); and
+  in the per-member form each member's one count of link points (`RL`);
 * **the sample** is a sample of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work sampling design, its strata and closure;
-* **the units** were proved and served as sampled, under the registered roots, and the verifiers opened the
-  registered values' reads against the registered roots, a read named by one of the record's own ports taken only at
-  that port's root (`UnitsProved`), and the receipt names the commitment's digest (`Receipt`);
+* **the units** were proved and served as sampled, under the registered roots, and each read the verifiers report of
+  one of the record's own values, less a read named by one of its own ports taken at that port's own root, is of a
+  registered value, opened against its registered root (`UnitsProved`; a registered value needs no reported read), and
+  the receipt names the commitment's digest (`Receipt`);
 * **the verdicts** accepted: one of record at least, every one of record ran, and none that ran refused
   (`VerdictsAccept`);
 * the sampling design has a profile's sample and the population is a natural number;
 
 and it then publishes the sampled and proved units with the exact bounds at δ and whether every verdict ran, those not
 of record too (`publicOf`), and the profile of one level
-`unit`, the partition's units, sampled by the sampling design at δ (`profileOf`). That the check accepts every such commitment and
-evidence that keeps the caller's facts too is completeness, `Properties.Spot.acceptMeans_complete`.
+`unit`, the partition's units, sampled by the sampling design at δ (`profileOf`). The check asks one thing more, which
+this does not state: a reported read of each value the verifier holds a certified entry for (the record's check
+`certified`). That the check accepts every such commitment and evidence that keeps the caller's facts too, with those
+reads, is completeness, `Properties.Spot.acceptMeans_complete`, and `Properties.Spot.acceptMeans_iff` is the two
+together.
 
 **The caller's facts** (`CallerHeld`) are not `AcceptMeans`'s. The registration check also holds the record to what
 SPOT's caller hands the verifier beside the record and SPOT's own log: the day's declared program (`DeclaredDay`), the
@@ -54,19 +59,22 @@ open OneStage (Params Commitment Evidence Public)
 
 /-! ## The registration: R1–R8 against the verifier's own copies -/
 
-/-- The verifier expects a v2 record: it expects values registered. -/
-def ExpectsV2 (v : Registration.Verifier) : Prop := v.registered.isEmpty = false
+/-- The verifier expects a v2 record: it expects values registered or holds certified entries
+(`Registration.Verifier.v2`). -/
+def ExpectsV2 (v : Registration.Verifier) : Prop := (v.registered.isEmpty && v.certified.isEmpty) = false
 
 /-- The partition object the verifier holds: its own, or the canonical one over its program's SHA-512 and its query. -/
 def partitionOf (v : Registration.Verifier) : Json :=
   v.partition.getD (Partition.build (Flock.hexOf v.program.sha512) v.query)
 
-/-- R1: the record has exactly a v1 record's keys, or a v2 record's when the verifier expects values registered; its format
+/-- R1: the record has exactly a v1 record's keys, or a v2 record's when the verifier expects values registered or holds
+certified entries; its format
 is the matching one and its protocol one-stage's; its sampling design is `law`, the verifier's agreed law as `Draw.derive` expands it
 over the verifier's own program and query; and its window is an object of kind `served` or `stand-in`. -/
 def R1 (rec : Json) (v : Registration.Verifier) (law : Json) : Prop :=
-  keys? rec = some (if v.registered.isEmpty then Registration.KEYS else Registration.KEYS_V2) ∧
-  jeq (getD rec "format") (.str (if v.registered.isEmpty then Registration.FORMAT else Registration.FORMAT_V2)) ∧
+  keys? rec = some (if v.registered.isEmpty && v.certified.isEmpty then Registration.KEYS else Registration.KEYS_V2) ∧
+  jeq (getD rec "format")
+    (.str (if v.registered.isEmpty && v.certified.isEmpty then Registration.FORMAT else Registration.FORMAT_V2)) ∧
   jeq (getD rec "protocol") (.str Registration.PROTOCOL) ∧
   Draw.derive v.program v.query v.law v.workTable = .ok law ∧ jeq (getD rec "law") law ∧
   (getD rec "window" matches .obj _) ∧ ∃ k ∈ Registration.KINDS, jeq (getD (getD rec "window") "kind") (.str k)
@@ -264,11 +272,14 @@ output value it has an entry for has its earlier port, with the value's leaf cou
 with the value's leaves, words and word bits (`EarlierIs`), and takes that port's or entry's domain and root
 (`Registration.applyOutputs`: `mine'` and `held'`); the
 record's `registered` is a list of entries, each exactly `{value, root, leaves, words, domain}` with `word_bits` beside
-them or not; its values are exactly the verifier's (`ValuesAre`); each of the verifier's values has its entry (the last
-naming it, as Python's dict reads it) as derived and held (`EntryIs`), a value it doesn't fill held to its output's root,
+them or not; its values are exactly the verifier's and its certified entries' (`ValuesAre`, over `mine'` then
+`v.certified`'s entries, so a value among both is in no record it accepts); each of those values has its entry (the last
+naming it, as Python's dict reads it) as derived, or as certified, and held (`EntryIs`), a value it doesn't fill held to
+its output's root,
 else to the root it pinned before the record, else to the root the log first registered it under with the domain it
 takes now (`Registration.heldRoots`), and one it fills to none (`heldFor`); and each value it fills has the root it
-recomputes from the record, the log and its binding, in the row format it names for it (`SuppliedIs`, `Supplied.root`). -/
+recomputes from the record, the log and its binding, in the row format it names for it (`SuppliedIs`, `Supplied.root`).
+A certified value's root is `CertifiedHeld`'s. -/
 def R7 (rec : Json) (v : Registration.Verifier) : Prop :=
   ∃ mine es mine' held', Registration.ownEntries v = .ok mine ∧
     getD rec "registered" = .arr es ∧
@@ -278,10 +289,11 @@ def R7 (rec : Json) (v : Registration.Verifier) : Prop :=
       v.outputs v.log).2 = (mine', held') ∧
     (∀ e ∈ es, keys? e = some Registered.ENTRY_KEYS ∨
       keys? e = some (sortStrings (Registered.ENTRY_KEYS.push Registered.WIDTH_KEY))) ∧
-    ValuesAre es mine' ∧
-    (∀ want ∈ mine', ∀ e, es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
-      EntryIs e want (heldFor v.supplied held' want.value)) ∧
-    SuppliedIs es mine' v.supplied
+    ValuesAre es (mine' ++ v.certified.map (·.1)) ∧
+    (∀ want ∈ mine' ++ v.certified.map (·.1), ∀ e,
+      es.reverse.find? (fun e => jeq (getD e "value") (.str want.value)) = some e →
+        EntryIs e want (heldFor v.supplied held' want.value)) ∧
+    SuppliedIs es (mine' ++ v.certified.map (·.1)) v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)) v.schemas)
 
 /-- The pool chain R7's check holds (`Registration.poolChained`), a caller's fact (`CallerHeld`): for a verifier with a
@@ -295,6 +307,12 @@ def PoolChained (rec : Json) (v : Registration.Verifier) : Prop :=
   ∀ p, v.pool = some p → ∃ e d r, Registration.entryOf rec p.pin = some e ∧
     Registration.poolOpen rec v p = some (d, r) ∧
     jeq (getD e "domain") (.str d) = true ∧ jeq (getD e "root") (.str r) = true
+
+/-- R7's certified roots (`Registration.certifiedHeld`): the record has an entry for each value the verifier holds a
+certified entry for (`Registration.entryOf`, the last naming it), with the root the verifier holds for it, whether or
+not the verifier fills, pinned or takes the value from an earlier run. -/
+def CertifiedHeld (rec : Json) (v : Registration.Verifier) : Prop :=
+  ∀ x ∈ v.certified, ∃ e, Registration.entryOf rec x.1.value = some e ∧ jeq (getD e "root") (.str x.2) = true
 
 /-- R7's roots at the values the verifier pinned (`Registration.checkRegistered`'s `R7-held`), which R7 implies: of the
 verifier's own entries (`Registration.ownEntries`), each value it pinned before the record (`pinned`, the first root it
@@ -318,12 +336,13 @@ def RL (v : Registration.Verifier) : Prop :=
   v.members.isEmpty = false → ∃ law n, LinkPoints.lawOf v.program v.query v.law v.workTable = .ok (law, n) ∧
     LinkPoints.refused law n v.members = .ok #[]
 
-/-- The registration keeps R1–R8 against the verifier's own copies, with `law` the agreed law as derived; R7 and its
-pinned roots (`PinnedHeld`) when the verifier expects values registered; and the per-member form's members' link
-points (`RL`). The caller's facts are `CallerHeld`'s, not these. -/
+/-- The registration keeps R1–R8 against the verifier's own copies, with `law` the agreed law as derived; R7, its
+pinned roots (`PinnedHeld`) and its certified roots (`CertifiedHeld`) when the verifier expects values registered or
+holds certified entries; and the per-member form's members' link points (`RL`). The caller's facts are `CallerHeld`'s,
+not these. -/
 def Registered (v : Registration.Verifier) (rec law : Json) : Prop :=
   R1 rec v law ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧
-    (ExpectsV2 v → R7 rec v ∧ PinnedHeld rec v) ∧ R8 v ∧ RL v
+    (ExpectsV2 v → R7 rec v ∧ PinnedHeld rec v ∧ CertifiedHeld rec v) ∧ R8 v ∧ RL v
 
 /-- The caller's facts: what the registration check holds the record to against what SPOT's caller hands the verifier
 beside the record and SPOT's own log. The record names its day's declared program (`DeclaredDay`, the registration
@@ -408,18 +427,19 @@ such verdict reports any (`audit.session_registered` and `audit.less_own_reads`,
 def openedRoots (rec : Json) (vs : Array (String × Json)) : Option (Array (String × Json)) :=
   Record.lessOwnReads rec (Record.ownRegistered rec (Record.sessionRegistered vs))
 
-/-- Two `{value: root}` dicts with distinct keys are equal (Python's `==`): the same size, and each entry of the first has
-the same key and root in the second. -/
-def SameRoots (a b : Array (String × Json)) : Prop :=
-  a.size = b.size ∧ ∀ x ∈ a, ∃ y ∈ b, x.1 = y.1 ∧ jeq x.2 y.2
+/-- Each opened read is of a registered value at its registered root: every entry of `opened`, a `{value: root}`, has its
+value and root in `registered`. It asks nothing of a registered value that `opened` lacks. -/
+def OpenedRegistered (opened registered : Array (String × Json)) : Prop :=
+  ∀ x ∈ opened, ∃ y ∈ registered, x.1 = y.1 ∧ jeq x.2 y.2
 
 /-- The units, as the record holds them (`audit_record`'s checks after the sample's): the proved statement's instances are
 exactly the units the sample proves (its units and a work sample's closure, ascending); the receipt names the commitment's
 digest; the sessions were served exactly the sampled proof blocks, when they were handed the sample; the sessions' roots, when
 given, name at least one port, each port's root the one the record registers for it (`Record.byPort`, the last root of
-each port); and, when the record registers values or the verifiers report reads of the record's own values,
-those reads, less those of its own ports at their own roots (`openedRoots`), were opened against exactly the record's
-`{value: root}` (`Record.registeredRoots`, each value's last entry). -/
+each port); and each of the record's own values the verifiers report a read of, less those of its own ports at their
+own roots (`openedRoots`), is a value the record registers, the read opened against the record's root for it
+(`Record.registeredRoots`, each value's last entry). A registered value no verifier reports a read of is not required
+to have one. -/
 def UnitsProved (c : Commitment) (e : Evidence) : Prop :=
   e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
   Receipt c e ∧
@@ -427,8 +447,7 @@ def UnitsProved (c : Commitment) (e : Evidence) : Prop :=
     (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (drawnInts e.draw).qsort (· < ·)) ∧
   (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
     ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧ jeq (getD reg.2 "root") pr.2) ∧
-  ((field? c.record "registered").isSome ∨ (openedRoots c.record e.verdicts).isSome →
-    SameRoots ((openedRoots c.record e.verdicts).getD #[]) (Record.registeredRoots c.record))
+  OpenedRegistered ((openedRoots c.record e.verdicts).getD #[]) (Record.registeredRoots c.record)
 
 /-- The verdicts accept (`verdict` of `audit_record`): every verdict that ran (`accepted` not null) accepted; at least
 one is of record (`of_record` truthy); and every verdict of record ran. -/

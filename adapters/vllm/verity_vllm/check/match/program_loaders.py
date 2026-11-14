@@ -13,6 +13,7 @@ from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.check.match.instance_sequence import RootView
 from verity_vllm.program.compact import p_item_indices as _p_indices  # [GLM-5.3 "P"]
 from verity_vllm.program.compact import p_item_weight_span as _p_w_span
+from verity_vllm.query.program_view import _read_instance_header
 
 
 def load_derived(d: str, label: str, cls: type[RootView] = RootView, compact: bool = False) -> RootView:
@@ -61,7 +62,6 @@ def load_derived(d: str, label: str, cls: type[RootView] = RootView, compact: bo
 def check_rows(d: str) -> list[int]:
     """The instance rows of Program dir ``d``'s checks (its `instances.json.gz` header's `checks`, `at`; none without one), which
     the runtime never runs, so no fold holds them."""
-    from verity_vllm.query.program_view import _read_instance_header
     path = os.path.join(d, "instances.json.gz")
     return [int(a[0]) for a in _read_instance_header(path).get("checks", {}).get("at", ())] if os.path.exists(path) else []
 
