@@ -42,7 +42,7 @@ import Proofs.Pouw.ServedWork
 # `ServedWork` is honest and nontrivial
 
 The honest and nontrivial lemmas of `Properties.Pouw.Served.ServedWork`, over `Proofs.Pouw.MonitoringPeriodJ10R.Honest`'s honest J10-R
-period, conditional as `j10r_meets` is on `Credit.window`'s verdict on the execution phases' inputs (`hacc`, `hsalt`, `hdraw`).
+period, conditional as `j10r_meets` is on `Credit.executionPhase`'s verdict on the execution phases' inputs (`hacc`, `hsalt`, `hdraw`).
 
 * `fm`, `fa c`: a flat machine. A program is any function, and every run uses `c` units of one resource at rate 1 and
   exchanges nothing, so its cost at price 1 is `c` (`fa_cost`). It meets the device premises (`fa_G1`, `fa_G2`).
