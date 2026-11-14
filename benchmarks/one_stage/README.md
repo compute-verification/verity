@@ -258,13 +258,16 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   each unit's served MACs and the bits of each of its ports; `--steps all` takes every request step.
 - `block_census.py` (run by `block_census.sh ROW_DIR` on the machine holding the row's Build): the proof-block census of
   a TP Commit's Build. Every rank's `m1_families.py --steps all --estimate`, each Program row cut into proof blocks (the
-  row itself when it fits Flock's block and a size class, else each slot of its split at its coarsest fitting unit, else
+  row itself when it fits Flock's block and a size class and is no longer than its family's `WHOLE_UP_TO`, else each slot
+  of its split at its coarsest fitting unit, else
   a gap with the reason; a `COLS` row or slot, and the block-scaled FP8 GEMM's coordinates (`WIDE_COORDS`), at its fitting
   width of least leakage-weighted proving cost, `width_pick`),
   and per proof-block Definition its count in the prefill step and the decode steps, output bits
   and size class, estimated ANDs, served MACs and opened row bytes, with the totals per token and per request, the gaps
   and the rows that are no proof block (`census.json`, `table.md`), and the planner's card (`card.json`,
-  `benchmarks/sampling_plan/glm53.py`).
+  `benchmarks/sampling_plan/glm53.py`). `block_recut.sh ART` makes a stored census again from its families (its
+  `census-rank<r>.json`) with this tree's unit templates, sizing and `block_census.py`, for a change to the cut or to a
+  family's units that needs no Commit Build, and writes `compare.json` against the planner's card.
   `m1_unit.py` builds one family's unit through Flock's circuit prover's `UnitStager`, flat or `--structural`, and with `--bin`
   and `--lean` proves one round of it on stand-in bf16 values under `--zk` and verifies it with the Lean verifier.
   `m1_forms.sh` runs it on one Definition per form, side by side, with the Lean call's seconds and peak memory beside each
