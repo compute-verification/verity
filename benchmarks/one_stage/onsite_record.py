@@ -207,7 +207,7 @@ if str(HERE.parents[1]) not in sys.path:
     sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces
 import advice_charge as AC  # noqa: E402
 import leak_bounds as LB  # noqa: E402
-from served_integrity import exact_delta  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage.served_integrity import exact_delta  # noqa: E402
 
 FORMAT = "verity/onsite-network-record/v1"
 EXTENDS = "verity/all-protocols-window/v1"

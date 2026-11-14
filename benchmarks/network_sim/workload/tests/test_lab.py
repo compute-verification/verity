@@ -2,16 +2,11 @@
 certifier's canonical framing."""
 import pytest
 
-from verity.protocols.accounting.certifier.verifier.active import (
-    CANONICAL_STREAM,
-    EVENT_BYTES,
-    event_body,
-    request_frames,
-)
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, encode_frame
 from workload import framing as F
 from workload import lab as L
 from workload.block import Context
+from workload.canonical import CANONICAL_STREAM, EVENT_BYTES, event_body, request_frames
 
 B = 240  # a canonical event's frame is at least 235 bytes
 CONFIG = {"spec": {"d": 4, "layers": 3, "requests": 2}, "blocks": 3, "devices": 2, "frame_bytes": B, "seed": 1}

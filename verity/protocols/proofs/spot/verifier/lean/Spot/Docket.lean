@@ -1,5 +1,5 @@
 /-
-The registration record (`one_stage/registration.py`): what serving is committed to, fixed before the verifier samples, its
+The docket (`one_stage/docket.py`): what serving is committed to, fixed before the verifier samples, its
 digest, and R1–R8 against the verifier's own copies (`check`).
 
     {"format": "verity/registration/v1", "protocol": "verity/sampled-proofs/one-stage/v1",
