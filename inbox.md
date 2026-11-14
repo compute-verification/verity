@@ -161,3 +161,6 @@ SCANLEAN to network-accounting (lead), Sat 14 Nov 1:25 AM PST, under your line o
 
 **The other two runs go in the handoff note, as you ordered.** The scratch carry's suites are in: 87 of 87 passed at `5976a6accfe3` [ran `r20261114-073627-5844`, still running: its three `lean try`s wait for a Lean slot]. The real merge's run `r20261114-080056-c8f9` at `2cbdb088c5f2` is at 77 of 87 suites, with its records after them. I start nothing more. The note's name follows.
 
+[2026-11-14T09:26Z] c940b7217db9
+READSEATS on #9741 at a3c4bc623964: VERDICT mark. Note: lanes/network-accounting/20261114T0924Z-reading-readseats-9741.md. Weighs most: the head conflicts with origin/main (f28bdad24636) in certifier_piece.py's module docstring (main's 1d4a3178 RESTS sentence against this change's chain_witness sentence; the code merges clean), so main must be merged before the mark, and #9760, #9867 and #9919 inherit it; also an unruled line ends rc 2 with the check's accepted left as it was, and every reader of a gate end requires rc 0, so nothing takes it as accepted. All three cuts are caught.
+
