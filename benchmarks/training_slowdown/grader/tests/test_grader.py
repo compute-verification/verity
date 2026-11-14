@@ -30,8 +30,8 @@ from verity.circuits.defs import bind
 from verity.circuits.ops.gemm import DotBf16
 from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity.circuits.program import REGISTRATION, Program, input_prim
-from verity.definitions.registry import fa2_train as FT
-from verity.definitions.registry import fa2_train_bwd as FTB
+from verity_vllm.definitions.registry import fa2_train as FT
+from verity_vllm.definitions.registry import fa2_train_bwd as FTB
 from verity_vllm.program.frontend.train_step import primitives
 
 aten = torch.ops.aten
