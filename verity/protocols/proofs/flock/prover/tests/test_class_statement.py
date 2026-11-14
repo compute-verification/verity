@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 pytest.importorskip("verity.circuits.units")
-pytest.importorskip("verity.definitions.registry")
+pytest.importorskip("verity_vllm.definitions.registry")
 from circuit_check import targets as TG  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
@@ -30,7 +30,7 @@ from verity_flock import partition_units as PU  # noqa: E402
 @pytest.fixture(scope="module")
 def units():
     TG.load_registries()
-    from verity.definitions.registry import b1
+    from verity_vllm.definitions.registry import b1
 
     CS.cache_slot_circuits()
     return PU.partition_units(Program(bind(b1.Serve, C=TG.TINY, LP=3, STEPS=2)), "q-word")

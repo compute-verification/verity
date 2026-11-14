@@ -11,6 +11,8 @@ set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
 export D=verity/protocols/accounting/pouw/prover/kernels/masked_gemm
+# the references import their siblings as verity's modules, from the clone's root
+export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}
 export B; B=$(mktemp -d /tmp/masked-gemm.XXXXXX); trap 'rm -rf "$B"' EXIT
 STAGE=${STAGE:-all}
 git rev-parse HEAD > "$O/commit.txt" 2>&1

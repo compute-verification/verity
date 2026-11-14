@@ -20,7 +20,7 @@ from typing import Any
 
 import pytest
 import torch
-from verity.definitions.registry.dsa_topk import waksman_switches
+from verity_vllm.definitions.registry.dsa_topk import waksman_switches
 
 from tests.acquire import glm53_model as G
 from tests.acquire.glm53_model import (

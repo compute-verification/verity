@@ -40,7 +40,7 @@ import os
 import re
 import sys
 import types
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import cast
 
@@ -460,6 +460,25 @@ def structure_program(model: torch.nn.Module, loss_fn: Callable, optimizer: Adam
     return report.result
 
 
+def export_steps(step_fns: Sequence[Callable[[torch.nn.Module, torch.Tensor, list[torch.optim.Optimizer]], object]],
+                 model: torch.nn.Module, example_batch: torch.Tensor, *, measured: int,
+                 optimizers: Sequence[AdamW | torch.optim.Optimizer] | None = None, mid_run: bool = False,
+                 gpu: bool = False) -> tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout]:
+    """`export_step` for step `measured` of consecutive steps of one run, each written as ``step_fn(model, batch, optimizers)``
+    on one model and one set of fresh `optimizers`: its graph reads what the steps before it wrote, and its outputs include
+    what the step after it reads. `mid_run`: the first of `step_fns` is not the run's first, so the values the steps write
+    are the run's own where the first reads them, not theta's."""
+    raise NotImplementedError("export_steps: goal training/one-pytorch-translator")
+
+
+def steps_program(step_fns: Sequence[Callable[[torch.nn.Module, torch.Tensor, list[torch.optim.Optimizer]], object]],
+                  model: torch.nn.Module, example_batch: torch.Tensor, *, measured: int,
+                  optimizers: Sequence[AdamW | torch.optim.Optimizer] | None = None, mid_run: bool = False,
+                  mode: str = "reference", cc: tuple[int, int] | None = None) -> Program | Unsupported:
+    """`step_program` for step `measured` of consecutive steps of one run, as `export_steps` exports it."""
+    raise NotImplementedError("steps_program: goal training/one-pytorch-translator")
+
+
 def in_bits_beyond_theta(program: Program, gates: GateSet) -> int | parts.Unsupported:
     """The bits a witness block `gates` reads beyond theta: the summed widths of the distinct gates outside it with a wire into it
     (`boundary.in_gates`), less theta's input gates (the start's weights, `Program.root.theta`) and structure (a constant, or a gate
@@ -497,5 +516,5 @@ def _structure(circuit, g: int, memo: dict[int, bool]) -> bool:
     return True
 
 
-__all__ = ["AdamW", "StepLayout", "StepSurvey", "export_step", "in_bits_beyond_theta", "primitives", "step_report", "step_program",
-           "structure_program"]
+__all__ = ["AdamW", "StepLayout", "StepSurvey", "export_step", "export_steps", "in_bits_beyond_theta", "primitives", "step_report",
+           "step_program", "steps_program", "structure_program"]

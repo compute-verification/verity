@@ -1,6 +1,6 @@
 """The stepping loop of the timed rounds (`challenger_session.run`): a party over its protocol's own bytes, its sources
-answered once the step that asked is done and in the order it asked, its frames unstamped, what it recorded kept, and
-what the stream doesn't carry refused."""
+answered once the step that asked is done and in the order it asked, its frames unstamped, what it recorded kept, what
+the stream doesn't carry refused, and a failed write the caller's, or with `broken` the party's, told next."""
 
 from __future__ import annotations
 
@@ -117,3 +117,49 @@ def test_what_the_stream_does_not_carry_is_refused(action, why) -> None:
 def test_a_stream_that_ends_is_the_callers() -> None:
     with pytest.raises(ConnectionError, match="the stream ended"):
         run(Asks(), {}, Identity("asker"), Duplex(b"\0\0"), U64(), peer="peer")
+
+
+class Unwritable(Duplex):
+    """A stream that takes `room` writes and fails each one after."""
+
+    def __init__(self, room: int) -> None:
+        super().__init__(b"")
+        self.room = room
+
+    def write(self, b: bytes) -> None:
+        if self.room == 0:
+            raise BrokenPipeError(32, "Broken pipe")
+        self.room -= 1
+        super().write(b)
+
+
+class Twice:
+    """Pings twice in one step between a record and a clock read, then finishes with what it is told, pinging once
+    more."""
+
+    def __init__(self) -> None:
+        self.seen: list = []
+
+    def start(self, params, identity):
+        return [Send("peer", Message("Ping", {"n": 1})), LogEntry({"between": True}, "private"),
+                Send("peer", Message("Ping", {"n": 2})), Send("clock", Message("ClockRead"))]
+
+    def on(self, r):
+        self.seen.append((r.channel, r.message.type, dict(r.message.fields)))
+        return [Send("peer", Message("Ping", {"n": 3})), Finish(r.message.type)]
+
+
+def test_without_broken_a_failed_write_is_the_callers() -> None:
+    f, clock, party = Unwritable(1), Clock(Duplex(b"")), Twice()
+    with pytest.raises(BrokenPipeError):
+        run(party, {}, Identity("pinger"), f, U64(), peer="peer", clock=clock)
+    assert bytes(f.out) == (1).to_bytes(8, "big") and party.seen == [] and clock.now == 0
+
+
+def test_with_broken_a_failed_write_drops_its_step_and_is_told_next() -> None:
+    f, clock, party = Unwritable(1), Clock(Duplex(b"")), Twice()
+    done, records = run(party, {}, Identity("pinger"), f, U64(), peer="peer", clock=clock,
+                        broken=lambda e: Message("Closed", {"how": f"{type(e).__name__}: {e}"}))
+    assert bytes(f.out) == (1).to_bytes(8, "big")
+    assert party.seen == [("peer", "Closed", {"how": "BrokenPipeError: [Errno 32] Broken pipe"})]
+    assert records == [LogEntry({"between": True}, "private")] and clock.now == 0 and done == Finish("Closed")
