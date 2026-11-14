@@ -5,6 +5,8 @@ import importlib.util
 import os
 from pathlib import Path
 
+import pytest
+
 NEBIUS = Path(__file__).resolve().parents[1] / "src/research/pods/nebius"
 _spec = importlib.util.spec_from_file_location("nebius_write_probe", NEBIUS / "write_probe.py")
 W = importlib.util.module_from_spec(_spec)
@@ -189,10 +191,8 @@ def test_the_relay_keeps_its_place_through_an_unmounted_log_and_a_failed_post(tm
     assert json.loads(state.read_text())["lines"]["n2"] == 2
     log["n2"] = rows                                   # remounted, two new rows; the second post fails
     fail_on.add("t3")
-    try:
+    with pytest.raises(slack.SlackError, match="identity socket"):
         W.relay(ns)
-    except slack.SlackError:
-        pass
     assert posted == ["t0", "t1", "t2"]
     fail_on.clear()
     W.relay(ns)

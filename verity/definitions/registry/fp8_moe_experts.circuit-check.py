@@ -17,7 +17,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     (K = 6144, N = 512) and the routed w2 launch (K = 256, N = 6144) of one TP8 rank's 256 experts at each served (SWAP, DOT)
     (`SERVED_GLM53_H200`), which verity-vllm's `test_moe_fp8_served` holds to the compiler's tile rule.  Each is over
     `targets.MAX_GATES`, and its ``digests`` pin keeps it whole in ``--all``: its expert stack is read lazily
-    (`targets.LAZY_OPERANDS`), and its gathers resolve only the expert a vector selects."""
+    (`targets.lazy_operands`), and its gathers resolve only the expert a vector selects."""
     from verity.circuits.defs import bind
     from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
     from verity.definitions.registry import fp8_moe_experts

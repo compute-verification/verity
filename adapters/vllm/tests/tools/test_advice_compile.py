@@ -144,13 +144,19 @@ def _launched(**engine_kwargs: Any) -> dict:
             "engine_record": {"engine_kwargs": {"tensor_parallel_size": 8, "max_model_len": 2048, **engine_kwargs}}}
 
 
+def _kv_refused(cache: str, model_type: str | None, cc: tuple[int, ...] | None) -> str:
+    return (f"engine kv_cache_dtype={cache!r} for model_type {model_type!r} on cc {cc!r}: a request Program models the KV cache of a "
+            "launch at kv_cache_dtype auto or bfloat16, and at kv_cache_dtype 'fp8' only glm_moe_dsa's on cc 9.0 (its layout "
+            "fp8_ds_mla), so the compile of this launch would be Programs it did not run. Serve with kv_cache_dtype at vLLM's "
+            "default to compile it")
+
+
 @pytest.mark.parametrize("cache", ["fp8", "fp8_e4m3", "fp8_ds_mla"])
 def test_a_launch_that_names_another_kv_cache_format_is_refused_by_its_setting(cache):
-    """φ carries no KV cache format, so such a launch would compile to the Programs of a launch at the default, which it did
-    not run: the registration refuses it by the setting. The default, by either name or left out, compiles as before."""
-    why = (f"engine kv_cache_dtype={cache!r}: a request Program models the KV cache of a launch at kv_cache_dtype auto or bfloat16 "
-           "and no other format (an FP8 KV cache is not modelled), so the compile of this launch would be Programs it did not run. "
-           "Serve with kv_cache_dtype at vLLM's default to compile it")
+    """φ states an FP8 cache only as the layout of the one model and target it is stated for, so a launch at another format,
+    or at that one with no model and target to state it for, would compile to the Programs of a launch at the default, which
+    it did not run: the registration refuses it by the setting. The default, by either name or left out, compiles as before."""
+    why = _kv_refused(cache, None, None)
     with pytest.raises(ValueError, match=re.escape(why)):
         AC.engine_of(_launched(kv_cache_dtype=cache), 0)
     with pytest.raises(ValueError, match=re.escape(why)):
@@ -220,6 +226,52 @@ def test_an_fp8_checkpoint_reaches_predict_dsa_as_float8_e4m3fn_and_a_config_sta
     with pytest.raises(Unexpressible, match=re.escape("vocabulary cannot express: checkpoint dtype None (float8_e4m3fn only)")):
         build.decoder(bare)
     assert AC.checkpoint_dtype({"quantization_config": {"quant_method": "fp8", "fmt": "e5m2"}}) is None
+
+
+def _glm53_launch(target: dict | None = None, **engine_kwargs: Any) -> dict:
+    return {"model": GLM53[0], "revision": GLM53[1], "target": H200 if target is None else target, "execution": "eager",
+            "engine_record": {"engine_kwargs": {"tensor_parallel_size": 8, "max_model_len": 2048, **engine_kwargs}}}
+
+
+def test_an_fp8_launch_of_glm53_on_cc_9_0_states_the_fp8_ds_mla_layout_and_no_decoder_models_it_yet():
+    """GLM-5.3 at ``--kv-cache-dtype fp8`` on cc 9.0, the cache vLLM's FlashMLA sparse backend stores as ``fp8_ds_mla``: φ's
+    engine states that layout, so its digest is not the default launch's, which is as before. Every other format, model or
+    capability is refused by the setting, and so is the fp8 launch beside another attention backend or with layers skipped.
+    No decoder models the layout yet: `build.decoder` refuses that φ by the engine arg, so no Program of a launch at the
+    default stands in for it."""
+    from verity_vllm.program.predict import build, dsa
+    from verity_vllm.program.predict.build import Unexpressible
+
+    hf = json.loads(pinned_hf_config(*GLM53).read_text())
+    fp8, bf16 = AC.phi_of(_glm53_launch(kv_cache_dtype="fp8"), hf, 3), AC.phi_of(_glm53_launch(), hf, 3)
+    assert fp8.engine == {"max_model_len": 2048, "kv_cache_dtype": "fp8_ds_mla"} and bf16.engine == {"max_model_len": 2048}
+    assert AC.engine_of(_glm53_launch(kv_cache_dtype="fp8"), 3, hf) == ({"world": 8, "rank": 3}, fp8.engine)
+    assert fp8.digest() != bf16.digest()
+    assert {AC.phi_of(_glm53_launch(kv_cache_dtype=c), hf, 3).digest() for c in (None, "auto", "bfloat16")} == {bf16.digest()}
+    assert AC.phi_of(_glm53_launch(kv_cache_dtype="fp8", attention_backend="FLASHMLA_SPARSE", kv_cache_dtype_skip_layers=[]),
+                     hf, 3).digest() == fp8.digest()
+    for cache in ("fp8_e4m3", "fp8_e5m2", "fp8_ds_mla"):
+        with pytest.raises(ValueError, match=re.escape(_kv_refused(cache, "glm_moe_dsa", (9, 0)))):
+            AC.phi_of(_glm53_launch(kv_cache_dtype=cache), hf, 3)
+    with pytest.raises(ValueError, match=re.escape(_kv_refused("fp8", "glm_moe_dsa", (10, 0)))):
+        AC.phi_of(_glm53_launch({**H200, "compute_capability": [10, 0]}, kv_cache_dtype="fp8"), hf, 3)
+    with pytest.raises(ValueError, match=re.escape(_kv_refused("fp8", "glm_moe_dsa", None))):
+        AC.phi_of(_glm53_launch({k: v for k, v in H200.items() if k != "compute_capability"}, kv_cache_dtype="fp8"), hf, 3)
+    with pytest.raises(ValueError, match=re.escape(_kv_refused("fp8", "llama", (9, 0)))):
+        AC.phi_of(_glm53_launch(kv_cache_dtype="fp8"), {**hf, "model_type": "llama"}, 3)
+    with pytest.raises(ValueError, match=re.escape(_kv_refused("fp8", None, (9, 0)))):
+        AC.engine_of(_glm53_launch(kv_cache_dtype="fp8"), 3)
+    with pytest.raises(ValueError, match=re.escape(
+            "engine attention_backend='FLASH_ATTN_MLA_SPARSE' at kv_cache_dtype='fp8': a request Program models that cache in "
+            "FLASHMLA_SPARSE's layout fp8_ds_mla, which another backend does not store it in. Leave the backend to vLLM to compile it")):
+        AC.phi_of(_glm53_launch(kv_cache_dtype="fp8", attention_backend="FLASH_ATTN_MLA_SPARSE"), hf, 3)
+    with pytest.raises(ValueError, match=re.escape(
+            "engine kv_cache_dtype_skip_layers=['0'] at kv_cache_dtype='fp8': a request Program models every layer's cache in the "
+            "layout fp8_ds_mla, and those layers keep the default's. Serve with no layer skipped to compile it")):
+        AC.phi_of(_glm53_launch(kv_cache_dtype="fp8", kv_cache_dtype_skip_layers=["0"]), hf, 3)
+    assert isinstance(build.decoder(bf16), dsa.Net)
+    with pytest.raises(Unexpressible, match=re.escape("vocabulary cannot express: engine arg kv_cache_dtype='fp8_ds_mla' (not modelled)")):
+        build.decoder(fp8)
 
 
 def test_a_user_with_two_requests_in_one_window_is_refused(tmp_path):

@@ -152,6 +152,10 @@ SETTINGS: dict[str, Setting] = _declare(
     S("TRAIN_CARRY_FROM", str, None, WHERE, "run ids, comma-separated, whose verdict packs a recorded launch sends first, held "
       "to no GATHER_BYTES (`check.carried_packs`): the shards a rebuilt candidate of the verified queue replaces",
       "each pack is held to its sha256, and a pass to its key"),
+    S("TRAIN_SUITES_FROM", str, None, WHERE, "the commit whose check answers for the suites a recorded `--deferred` launch's "
+      "run leaves out (`check.lender`, `suites.py --lend-from`): the candidate of the verified queue that the launched "
+      "candidate is built on", "a suite is left out only where its key in that commit's tree is its key here, and the queue "
+      "lands the candidate only after that commit"),
     S("AWS_ACCESS_KEY_ID", str, None, WHERE, "the parent store key, which train.sh requires to mint the run's custody key",
       "a credential, never what a step computes", secret=True),
     S("AWS_SESSION_TOKEN", str, None, WHERE, "a temporary credential's token, which train.sh refuses: it cannot mint the "

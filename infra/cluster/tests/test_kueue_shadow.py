@@ -153,6 +153,13 @@ def test_last_disagree_reads_the_records_last_tick(tmp_path) -> None:
     assert K.last_disagree(out) == {"b"}
 
 
+def test_last_disagree_says_which_line_it_skipped_and_reads_the_one_before(tmp_path, capsys) -> None:
+    out = tmp_path / "rec.jsonl"
+    out.write_text(json.dumps({"disagree": ["a"]}) + "\n" + '{"disagree": ["b"\n')
+    assert K.last_disagree(out) == {"a"}
+    assert f"kueue shadow: a line of {out} is not JSON, skipped" in capsys.readouterr().err
+
+
 def test_tick_writes_only_shadow_objects(tmp_path, monkeypatch) -> None:
     calls: list[list[str]] = []
     answers = {"clusterqueues": {"items": CQS}, "localqueues": {"items": [{"metadata": {"name": "provers"},

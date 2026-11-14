@@ -20,7 +20,7 @@ import hashlib, json, shutil, sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import redigest as rd  # noqa: E402
+import redigest as rd
 
 ACCEPT = {"accepted": True, "why": ""}
 

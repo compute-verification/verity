@@ -17,12 +17,12 @@ Each case edits one thing, chosen with `random.Random(seed)`:
 Writes OUT_DIR/<case>/ and OUT_DIR/fuzz.json (the `--expect` form of `agree.py`; cases without an expectation are omitted).
 Use a fixed seed per CI run and a rolling seed for nightly runs.
 """
-import argparse, hashlib, json, random, shutil, sys
+import argparse, hashlib, json, random, sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import redigest as rd  # noqa: E402
-import transcript_check as tc  # noqa: E402
+import redigest as rd
+import transcript_check as tc
 
 NONCES = ("zc.nonce", "lc.nonce", "batching.nonce", "lig.qn", "lig.fold", "lig.cbn", "lig.consn")
 

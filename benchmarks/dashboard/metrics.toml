@@ -7,6 +7,7 @@ title = "Top goals on the Metrics dashboard whose own number has a target, a fre
 owner = "console"
 unit = "goals"
 better = "higher"
-command = "research run --on auto --cwd source -- uv run python benchmarks/dashboard/run.py"
+# reading the dashboard takes a site key, which one machine holds (`~/.research/jobs/token`), so the row names it
+command = "research run --on vy-nebius-cpu-9 --project verity --source . --cwd source -- uv run python benchmarks/dashboard/run.py"
 every = "1d"
 goal = "console/one-dashboard"
