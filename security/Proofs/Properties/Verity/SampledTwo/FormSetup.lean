@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.FormVerdicts
 public import Proofs.Properties.Verity.SampledTwo.LastSlot
+public import Proofs.Properties.Verity.SampledTwo.SessionLive
 public import Proofs.Properties.Verity.Sampled.Record.PartReadsBack
 public import Proofs.Properties.Verity.Sampled.Held
 public import Proofs.Flock.Claims.JsonNorm
@@ -38,6 +39,9 @@ This module shows the two sessions are one, and proves `VerdictsAt` from what is
   (`Spot.OneStageZk.fitsWhy`, `drawFitsWhy`), so every length of the statement fits its 8-byte word
   (`stmtRaw_fits`) and `FlockDeploy.decode` reads it back (`FlockDeploy.decode_encode_of_fits`).
 * **The session digests with SHA-512** (`setupAt_sha512`), as `setupAt_oneTable` gives its one table.
+* **The session retains rounds** (`setupAt_retains`), as the circuit statement's tags do, so a session the masked
+  verdict accepts has messages (`SessionLive.sessionMsgs_of_verify`): its record reads as a live session and each
+  recorded round kept its bytes.
 * **`VerdictsAt`** (`verdictsAt_of`), at the table `Flock.Tags.circuit.table`, and so `MsgsOfRecords`
   (`msgsOfRecords_form`).
 
@@ -49,8 +53,6 @@ What `verdictsAt_of` takes beside the join's fields (`HeldOfAt`, `StmtsRead`, `R
   (`FormPrint.lean`) proves it of every case.
 * `StmtsFit`: the statements' message holds fewer than `2^64` statements of fewer than `2^64` bytes each. The form
   refuses a field its statement can't hold, which bounds each field and no sum of them. No check gives it here.
-* `SessionsLive`: a session the masked verdict accepts has messages (`SessionMsgs.sessionMsgs`): its record reads as a
-  live session and each recorded round kept its bytes. No check gives it here.
 -/
 
 @[expose] public section
@@ -255,6 +257,22 @@ theorem setupAt_sha512 {W : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {
     exact hr
   · exact absurd h1 (by omega)
 
+/-- **The session `--zk` sets up at one table retains rounds** where its tags do: its record must carry each round's
+bytes (`Flock.Record.decode`'s S12). -/
+theorem setupAt_retains {W : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {dr : Option Json}
+    {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {x : Json × Json}
+    (hh : (Flock.Witness.zkTags W).hiddenOutputs = true) (hr : (Flock.Witness.zkTags W).retainRounds = true)
+    (hc : W.count = 1) (h : Spot.OneStageZk.setupAt W rd dr = .ok (spec, tabs, x)) :
+    spec.retainRounds = true := by
+  obtain ⟨sts, hs, -⟩ := Verity.Sampled.setupAt_ok h
+  obtain ⟨hset, -⟩ := Verity.Sampled.sessionAt_ok hs
+  rcases FlockSoundness.Discharge.HiddenExec.setupTables_okHP hh hset with ⟨-, st, hst, rfl, -⟩ | ⟨h1, -⟩
+  · obtain ⟨_, hP⟩ := FlockSoundness.Discharge.Hidden.setupHidden_specP hst
+    show st.tags.retainRounds = true
+    rw [hP.tagsEq]
+    exact hr
+  · exact absurd h1 (by omega)
+
 /-! ## `VerdictsAt`, from what is left -/
 
 /-- **What each member's statement prints of the member reads back**: on a play the form accepts whose log the
@@ -273,25 +291,17 @@ def StmtsFit (C : CaseOf) (Good : Verity.Exchange → Prop) : Prop :=
     (List.range e.stmts.size).mapM (SessionMsgs.stmtAtCase k) = some xs →
       xs.length < 2 ^ 64 ∧ ∀ x ∈ xs, x.length < 2 ^ 64
 
-/-- **A session the masked verdict accepts has messages**: on a play the form accepts whose log the check read is
-the device's, where the masked verdict accepts template `t`'s session's record and proof files at its statement's
-setup (`SessionMsgs.SessionParts`), the session has messages (`SessionMsgs.sessionMsgs`). -/
-def SessionsLive (C : CaseOf) (Good : Verity.Exchange → Prop) : Prop :=
-  ∀ o k, FormAccepts C o → Good o → C o = some k → ∀ t x s spec sts record proofs,
-    SessionMsgs.SessionParts k t x s spec sts record proofs →
-      Flock.Zk.verify spec (FlockDeploy.tabsOf sts) record proofs = .ok () →
-        ∃ ms, SessionMsgs.sessionMsgs spec x record proofs = some ms
-
 /-- **`VerdictsAt`, at the table `Flock.Tags.circuit.table`**: on an accepted play, the statement the statements'
 message states for template `t` is the template's session statement on the case (`SessionMsgs.stmtAt_stmtsMsg`),
 which sets up one table with the template's count of rounds (`reps_of_scope`). The check verified the session at the
 member's files (`verified_at`), which are that statement's fields (`stmtAtCase_of_member`), so the session the
 statement sets up is the one the check verified (`setupOf_of_fields`), of one table, `Flock.Tags.circuit.table`
-(`setupAt_oneTable`), under SHA-512 digests (`setupAt_sha512`). -/
+(`setupAt_oneTable`), under SHA-512 digests (`setupAt_sha512`). It retains rounds (`setupAt_retains`), so the session
+the verdict accepted has messages (`SessionLive.sessionMsgs_of_verify`). -/
 theorem verdictsAt_of {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Verity.Exchange → Prop}
     (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg) (hof : HeldOfAt A C) (hst : StmtsRead A C S)
     (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hcount : StmtsCount A C Good)
-    (hprint : StmtsPrint C Good) (hfit : StmtsFit C Good) (hlive : SessionsLive C Good) :
+    (hprint : StmtsPrint C Good) (hfit : StmtsFit C Good) :
     VerdictsAt A C Good fun _ => Flock.Tags.circuit.table := by
   intro o k hacc hgood hk t ht
   have hacc₀ := hacc
@@ -346,11 +356,14 @@ theorem verdictsAt_of {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Ve
     (Verity.Sampled.statement_zkTags htag _ _).1
   have hrows : (Flock.Witness.zkTags
       (Spot.OneStageZk.inputsOf Flock.Tags.circuit m.own circuitB pubB k.blobs)).hm96Rows = true := rfl
+  have hret : (Flock.Witness.zkTags
+      (Spot.OneStageZk.inputsOf Flock.Tags.circuit m.own circuitB pubB k.blobs)).retainRounds = true := rfl
   have hparts : SessionMsgs.SessionParts k t (SpotFlock.stmtAt A.h m₂ t) s' spec #[st] record proofs :=
     ⟨p, e, fs, hf, hfs, hrec, hx, hset', hfiles⟩
-  obtain ⟨ms, hms⟩ := hlive o k hacc hgood hk t _ _ _ _ _ _ hparts hzk
-  exact ⟨_, s', spec, st, record, proofs, ms, hparts, hzk, setupAt_sha512 hh hrows rfl hsetup,
-    setupAt_oneTable hh rfl hsetup, hk₀, hms⟩
+  have htab : spec.tables = #[Flock.Tags.circuit.table] := setupAt_oneTable hh rfl hsetup
+  obtain ⟨ms, hms⟩ := SessionLive.sessionMsgs_of_verify (SpotFlock.stmtAt A.h m₂ t) hzk htab
+    (setupAt_retains hh hret rfl hsetup)
+  exact ⟨_, s', spec, st, record, proofs, ms, hparts, hzk, setupAt_sha512 hh hrows rfl hsetup, htab, hk₀, hms⟩
 
 /-- **`MsgsOfRecords` at the form's reading**, at the table `Flock.Tags.circuit.table`: `msgsOfRecords_of` at
 `verdictsAt_of`, where the reading's statements and messages are the case's. -/
@@ -358,8 +371,8 @@ theorem msgsOfRecords_form {A : Live₂} {C : CaseOf} {S : SessionReading} {Good
     (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg)
     (hM : ∀ o t j, S.msg o t j = (C o).bind fun k => SessionMsgs.msgAtCase k t j) (hof : HeldOfAt A C)
     (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S)
-    (hcount : StmtsCount A C Good) (hprint : StmtsPrint C Good) (hfit : StmtsFit C Good)
-    (hlive : SessionsLive C Good) : MsgsOfRecords A C S Good fun _ => Flock.Tags.circuit.table :=
-  msgsOfRecords_of hM (verdictsAt_of hS hof hst hrounds hscope hcount hprint hfit hlive)
+    (hcount : StmtsCount A C Good) (hprint : StmtsPrint C Good) (hfit : StmtsFit C Good) :
+    MsgsOfRecords A C S Good fun _ => Flock.Tags.circuit.table :=
+  msgsOfRecords_of hM (verdictsAt_of hS hof hst hrounds hscope hcount hprint hfit)
 
 end Verity.SampledTwo.SessionCoins

@@ -21,7 +21,9 @@ piece at that table, where the three are theorems, and with them the statements'
   `SessionCoins.interiorReads`) and `SessionCoins.InteriorLogged`.
 * `SessionCoins.RecordsCover` is `SessionCoins.recordsCover_of`, from `StmtsRead` and `StmtsCount`.
 * `SessionCoins.MsgsOfRecords` is `SessionCoins.msgsOfRecords_form` (`FormSetup.lean`), from the join's fields,
-  `StmtsCount`, `SessionCoins.StmtsPrint`, and `SessionCoins.StmtsFit` and `SessionCoins.SessionsLive`.
+  `StmtsCount`, `SessionCoins.StmtsPrint` and `SessionCoins.StmtsFit`. That a session the verdict accepts has
+  messages is `SessionLive.sessionMsgs_of_verify` (`SessionLive.lean`), with no hypothesis on the case: the circuit
+  statement retains rounds, so the record the verdict decoded kept each round's bytes.
 * `SessionCoins.StmtsPrint` is `stmtsPrint_of` (`FormPrint.lean`), with no hypothesis: the parameters are read from
   the tree `Core.canonicalJson` returns, which is printable.
 * `StmtsFixed` is `stmtsFixed_of_each` (`StmtsRound.lean`), from `StmtsCount`, `StmtAtFixed` and each case being the
@@ -36,8 +38,8 @@ piece at that table, where the three are theorems, and with them the statements'
 The reading's statements and messages are taken to be the case's (`hS`, `hM`), which holds by definition at
 `SessionMsgs.sessionReading`.
 
-**Not established here**: `StmtsRead`, `PartsHeldAt`, `SessionCoins.StmtsFit`, `SessionCoins.SessionsLive`,
-`MemberAtFixed` and `DrawAtFixed`, each a hypothesis, and `agreed_form`'s `hR`.
+**Not established here**: `StmtsRead`, `PartsHeldAt`, `SessionCoins.StmtsFit`, `MemberAtFixed` and `DrawAtFixed`,
+each a hypothesis, and `agreed_form`'s `hR`.
 -/
 
 @[expose] public section
@@ -71,9 +73,8 @@ theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
     (hM : ∀ o t j, S.msg o t j = (C o).bind fun k => SessionMsgs.msgAtCase k t j)
     (hplay : PlayAccepts A C S P') (hsess : SessionMsgs A C S P') (hof : HeldOfAt A C) (hst : StmtsRead A C S)
     (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hparts : PartsHeldAt A C)
-    (hfit : SessionCoins.StmtsFit C Good) (hlive : SessionCoins.SessionsLive C Good) (hsent : CaseIsSent C)
-    (hmemb : MemberAtFixed A C Good L) (hdraw : DrawAtFixed A C Good L) (hC : CaseCommits C)
-    (hx : stmtOf c = some x)
+    (hfit : SessionCoins.StmtsFit C Good) (hsent : CaseIsSent C) (hmemb : MemberAtFixed A C Good L)
+    (hdraw : DrawAtFixed A C Good L) (hC : CaseCommits C) (hx : stmtOf c = some x)
     (hR : ∀ (ω : TapeOf V θ F c σ) (r : Coins A x),
       FormAccepts C ((formFrame V A x θ F c σ C S dev Good L).out ω r) →
       Good ((formFrame V A x θ F c σ C S dev Good L).out ω r) →
@@ -94,15 +95,15 @@ theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
     rw [hL]
     exact SessionCoins.logCloses_run A C Good (CoinMap.stageLocate ℓ₁ ℓ₂) _ hsz hlog hcov
   have hverd : SessionCoins.VerdictsAt A C Good fun _ => Flock.Tags.circuit.table :=
-    SessionCoins.verdictsAt_of hS hof hst hrounds hscope hcount hprint hfit hlive
+    SessionCoins.verdictsAt_of hS hof hst hrounds hscope hcount hprint hfit
   have hLast : LastFixed A C S Good L := lastFixed_of A C S Good L _ hM hverd hclose hfix
   have hLink : LinkFixed A C S Good L := linkFixed_of A C S Good L hM hsz hverd hfix
   exact agreed_form V A x θ F c σ C S dev P' (fun _ => Flock.Tags.circuit.table) ℓ₁ ℓ₂ Good L hL q hne hSecond hDraw
     hsz hlog hθ
     (SessionCoins.logRising_of (SessionCoins.located_rising A C _ hsz) hlog (SessionCoins.interiorReads C hsz))
     hcov
-    (SessionCoins.msgsOfRecords_form hS hM hof hst hrounds hscope hcount hprint hfit hlive) hplay hsess hof hst
-    hrounds hscope
+    (SessionCoins.msgsOfRecords_form hS hM hof hst hrounds hscope hcount hprint hfit) hplay hsess hof hst hrounds
+    hscope
     (stmtsFixed_of_each A C S Good L hS hsent hcount hfix) hLink hLast hC hx hR
 
 end Verity.SampledTwo
