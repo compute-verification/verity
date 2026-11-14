@@ -20,7 +20,7 @@ from verity.commitments import history as HT
 from verity.commitments.gates.rowleaf import digest_bits
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, docket as R, verifier as V
 
-from test_registered import LAW, MIX, POS, Q, SCHEME, SERVED, TABLE
+from test_registered import SAMPLING_DESIGN, MIX, POS, Q, SCHEME, SERVED, TABLE
 
 VECTOR = Path(__file__).parent / "fixtures" / "history_read_vector.json"
 TABLE_NAME = "layer"
@@ -81,12 +81,12 @@ def _case(hist_rows=None):
     w = G.Registered.commit(pd, "W", TABLE)
     if hist_rows is None:
         resolved = HT.resolve(HT.roots_of(leaf, history), SUPPLIED)
-        base = R.record(prog, Q, LAW, SCHEME, served, SERVED, registered=[w.entry()], leaf_layer=leaf)
+        base = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, served, SERVED, registered=[w.entry()], leaf_layer=leaf)
         hist = G.supplied_value(prog, "hist", G.sources(resolved)["hist"], base, ["hist"])
     else:
         hist = G.Registered.commit(pd, "hist", hist_rows, G.supplied_salts(pd, "hist", 2), word_bits=16)
-    rec = R.record(prog, Q, LAW, SCHEME, served, SERVED, registered=[w.entry(), hist.entry()], leaf_layer=leaf)
-    check = {"program": prog, "query": Q, "law": LAW, "scheme": SCHEME, "ports": ports, "leaf_layer": leaf,
+    rec = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, served, SERVED, registered=[w.entry(), hist.entry()], leaf_layer=leaf)
+    check = {"program": prog, "query": Q, "sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports, "leaf_layer": leaf,
              "registered": {"W": 2, "hist": 512}, "supplied": SUPPLIED, "history": history}
     return rec, check, hist, root, dom
 

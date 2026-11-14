@@ -3,7 +3,7 @@ reads a design exactly, in rationals, and answers what it certifies, and `Proper
 from the proved guarantees (`LeakCheckSound`, `LeakCountSound`, `WorkCheckSound`).
 
 A leak design is `units` proof blocks each exporting at most `width` bits, each sampled independently at `rate`
-(`Law.bernoulli`), planned so that more than `count` incorrect ones escape with probability below `delta`.  Lean answers
+(`SamplingDesign.bernoulli`), planned so that more than `count` incorrect ones escape with probability below `delta`.  Lean answers
 the bits it certifies (`CertifiesLeak`), or None when it can't certify the count: at least the planner's
 `b K + loc_bits(n, K)` in exact arithmetic, which the planner's float can exceed by its rounding.  A work design is strata of proof blocks, each a block's `work` and its rate `num / den`, planned so that incorrect
 blocks of total work at least `target` escape with probability at most `delta` (`MeetsTarget`, however many blocks each

@@ -456,7 +456,7 @@ def first(pub: Mapping[str, Any], check: SpecializedDefinition, rule: Rule, coin
     coins = coins if isinstance(coins, Recorded) else Recorded(coins)
     held_family(coins, family_of(layout))
     stream = stream_of(layout, rule, coins, delta=delta, **kwargs)
-    rec = BR.record(pub, check, S.selection_law(stream.spec.selection, layout.spans), previous, window, stop=stop)
+    rec = BR.record(pub, check, S.selection_sampling_design(stream.spec.selection, layout.spans), previous, window, stop=stop)
     reg = stream.register(rec, layout.ports(), **({} if window_root is None else {"window_root": window_root}))
     coins.commit(bytes.fromhex(reg.digest))
     sample = stream.select(reg)
@@ -520,7 +520,7 @@ def stop_spec(layout: BR.Layout, design: str, proof_deadline: float = PROOF_DEAD
                 for v, port in BS.STOP_READS.items() for k in ("leaves", "words", "domain", "word_bits")))
     values = (S.Value(BR.STOP, BR.SCHEMA, "serve"), *(S.Value(v, None, "serve", registered=True) for v in BS.STOP_READS))
     check = S.Check(P.program_digest(Program(block)), P.template_instance_query(block), proof_deadline=proof_deadline)
-    return S.Spec(values, S.Law(design), check, public, f"{BR.FORMAT}\0{layout.run}\0{BR.STOP}".encode())
+    return S.Spec(values, S.SamplingDesign(design), check, public, f"{BR.FORMAT}\0{layout.run}\0{BR.STOP}".encode())
 
 
 def stop_first(pub: Mapping[str, Any], check: SpecializedDefinition, stop: BS.Stop, design: str,
@@ -540,7 +540,7 @@ def stop_first(pub: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
     stream = S.Stream(stop_spec(layout, design, proof_deadline), stop.template, budget=1, delta=delta,
                       challenger=CHALLENGER, coins=coins, log=[boundary])
     held = BS.stop_registration(pub, check, stop, boundary)
-    rec = BS.stop_record(pub, check, stop, S.selection_law(stream.spec.selection, layout.spans), boundary)
+    rec = BS.stop_record(pub, check, stop, S.selection_sampling_design(stream.spec.selection, layout.spans), boundary)
     reg = stream.register(rec, layout.stop_ports(), registered=held.values, outputs=held.outputs, schemas=held.schemas,
                           **({} if window_root is None else {"window_root": window_root}))
     coins.commit(bytes.fromhex(reg.digest))

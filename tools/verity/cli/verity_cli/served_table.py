@@ -86,7 +86,7 @@ RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only":
 # --- what each component and the workload declare -------------------------------------------------------------------
 
 def _law(law: str, params: Mapping[str, Any]) -> None:
-    """The served window's rule is a rate, which its audit states to its stream (`service.Law`): a fixed count is refused
+    """The served window's rule is a rate, which its audit states to its stream (`service.SamplingDesign`): a fixed count is refused
     by name, with the rate to state in its place, and so is a work rate, for which the window's class has no work table."""
     strata = parse_strata_rate(law)
     if parse_rate(law) is None and (strata is None or strata[0]):
