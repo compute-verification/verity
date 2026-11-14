@@ -84,13 +84,13 @@ def _dumps(flip: str | None = None, drop_recv_rank: int | None = None, gather_wr
 
 def test_definition_holds_on_the_honest_record_for_every_family():
     r = XC.check_picks(_dumps(), world=2)
-    # 4 received-output picks (3 all_reduce incl. the embedding site + 1 all_gather) + the EmbeddingShard_v1 partial leg at the embedding site
+    # 4 received-output picks (3 all_reduce incl. the embedding site + 1 all_gather) + the EmbeddingShard_v1 partial check at the embedding site
     assert r["result"] is True and r["picks"] == 5 and r["equal"] == 5 and not r["mismatches"] and not r["missing"]
     assert set(r["by_family"]) == {"AllReduce2_v1", "EmbeddingShard_v1", "AllGather2_v1"}
     assert r["by_family"]["AllGather2_v1"]["equal"] == 1 and r["by_family"]["AllReduce2_v1"]["equal"] == 3 and r["by_family"]["EmbeddingShard_v1"]["equal"] == 1
 
 
-def test_a_partial_that_is_not_the_masked_gather_from_the_ranks_shard_fails_the_embedding_leg_by_rank():
+def test_a_partial_that_is_not_the_masked_gather_from_the_ranks_shard_fails_the_embedding_check_by_rank():
     r = XC.check_picks(_dumps(emb_bad_rank=1), world=2)
     assert r["result"] is False and r["mismatch_n"] == 1 and r["by_family"]["EmbeddingShard_v1"]["mismatch"] == 1 and r["by_family"]["AllReduce2_v1"]["equal"] == 3
     m = r["mismatches"][0]
@@ -116,7 +116,7 @@ def test_a_wrong_gather_order_fails_the_all_gather_pick():
 
 def test_a_received_output_missing_on_one_rank_is_a_named_fail_not_a_pass():
     r = XC.check_picks(_dumps(drop_recv_rank=1), world=2)
-    assert r["result"] is False and r["missing_n"] == 4 and r["equal"] == 1      # the embedding-shard leg (per rank, no received member needed) still holds
+    assert r["result"] is False and r["missing_n"] == 4 and r["equal"] == 1      # the embedding-shard check (per rank, no received member needed) still holds
     assert "rank 1" in r["missing"][0]["why"] and "received" in r["missing"][0]["why"]
 
 

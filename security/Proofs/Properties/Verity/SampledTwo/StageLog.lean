@@ -44,9 +44,9 @@ theorem drawn_fresh {key : Spot.Challenger.ChallengerKey} {w label : String} {af
     (hr : readLog label after records ξ lines = some l) :
     (freshCoins label after l).flatten = Properties.Challenger.bitsOf ξ ∧ ∀ cs ∈ freshCoins label after l, cs ≠ [] := by
   obtain ⟨cm, roots, hts, hstream⟩ := Verity.Sampled.drawCoins_ok hd
-  obtain ⟨_, hsn⟩ := Verity.Sampled.trustedSessionOf_ok hts
-  obtain ⟨_, hso⟩ := Verity.Sampled.sessionNamed_ok hsn
-  obtain ⟨ls', lines', hlog', hls', hrr⟩ := Verity.Sampled.sessionOf_ok hso
+  obtain ⟨_, hsn⟩ := Verity.Sampled.trustedChallengePhaseOf_ok hts
+  obtain ⟨_, hso⟩ := Verity.Sampled.challengePhaseNamed_ok hsn
+  obtain ⟨ls', lines', hlog', hls', hrr⟩ := Verity.Sampled.challengePhaseOf_ok hso
   rw [hlog] at hlog'
   cases hlog'
   rw [hls] at hls'

@@ -27,7 +27,7 @@ from verity.circuits.ops.scalar import I32Add
 
 PATH = Path(__file__).parent / "qcall_vectors.json"
 REWRITE = ("the vectors differ from the tree's; a change meant to move them rewrites them with "
-           "`uv run python tools/verity/check/pins.py --write verity/circuits/tests/qcall_vectors.json`")
+           "`uv run python tools/check/pins.py --write verity/circuits/tests/qcall_vectors.json`")
 BIT, V32, V64 = BL.BIT, Value(32), Value(64)
 
 TLo32 = PrimitiveDefinition("TLo32", 1, (("a", V64),), V32, lambda a: a & 0xFFFFFFFF, register=False)

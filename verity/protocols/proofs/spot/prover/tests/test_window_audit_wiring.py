@@ -25,7 +25,7 @@ from verity.commitments.windows import wiring as WI
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[6] / "benchmarks" / "one_stage")))
-import a5
+from verity.protocols.proofs.spot.prover.audit import window_audit as a5
 
 GEMM = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
 WIDE = bind(G.Gemm, K=16, N=32, **G.GEMM_AMPERE)
@@ -183,11 +183,11 @@ def test_a_wired_row_is_flipped_where_its_unit_reads_it_in_a_shared_row_member_w
 
 def test_a_wired_port_with_no_tree_of_its_own_is_a_read_of_its_writers_tree_and_never_bound():
     """A reader whose wired port has no tree of its own (`rows.Member.wired_trees`): the verifier's window names it under
-    its reader at its writer's tree (`rows.wired_ports`), and the registration holds its writer's root under that name.
+    its reader at its writer's tree (`rows.wired_ports`), and the docket holds its writer's root under that name.
     The verifier's file (`rows.own_reads`) names it a read of its writer's tree, each unit at its writer unit's leaf, and
     `a5.bound_reads` leaves that file as it is: the root under the reader's name is no tree of the port's own, and it
     binds the port to none. A file that leaves the wired port out is refused, and a port with a tree of its own that a
-    file leaves out is bound at the registration's root and the window's domain for it."""
+    file leaves out is bound at the docket's root and the window's domain for it."""
     circuit = I.Circuit("chain", ((GEMM, 2 * UNITS),), external=(f"{GID}/x",),
                         wires=(I.Wire(GID, "x", GID, "o0", at=UNITS, radix=(UNITS,), base=0, step=(1,)),),
                         order=((GID, 0, UNITS), (GID, UNITS, UNITS)))

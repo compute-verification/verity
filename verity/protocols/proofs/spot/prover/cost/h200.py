@@ -31,15 +31,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from dataclasses import asdict, dataclass, field, replace
 from math import ceil, exp, log
 from pathlib import Path
 
-sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "sampling_plan")))
-
-import transformer as X
-from inputs import CARDS, I, cap
+from verity.protocols.proofs.spot.prover.cost import transformer as X
+from verity.protocols.proofs.spot.prover.cost.inputs import CARDS, I, cap
 
 from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
 from verity.protocols.proofs.spot.prover.candidates import shape_of

@@ -9,10 +9,10 @@ one integrity profile.
   layer's order), staged by M0 as one stand-in population per template (`stage_subset.py`: the frame domains bind the
   selection). The program is `TemplatePopulations_v1` over the templates' Definitions, and the partition is
   `Q_template_instances` v0: one unit per instance, no width rule.
-* **One registration** lists every template's roots (ports named `<set>/<port>`), and `leaf_layer` is the SHA-512 of the
+* **One docket** lists every template's roots (ports named `<set>/<port>`), and `leaf_layer` is the SHA-512 of the
   canonical map from set to the SHA-512 of its public file.
 * **One sample, `Subset(k)` over the union.** The verifier's Lean `verity-verify-proof draw` samples k units over the whole
-  population, on a development challenger's coins opened after the registration (`a0.challenger_draw`).
+  population, on a development challenger's coins opened after the docket (`a0.challenger_draw`).
   With `--draw-file` (M0 `serve --draw-file`) each template's server serves its share of that very sample, so the audited
   sample is the verifier's; without it, the Lean sample fixes only how many units fall in each template and each server samples
   a uniform subset of that size, which is still exactly `Subset(k)` over the union (conditioned on the counts, a uniform
@@ -32,11 +32,11 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import a0  # noqa: E402
-import r2_population as R2  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
+from verity.protocols.proofs.spot.verifier.tests import other_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402
 
 ORDER = ("rmstriton", "gemm2048", "rope", "rmsfused", "silu", "gemm8192")
 
@@ -116,7 +116,7 @@ def main() -> int:
         assert tid == P.template_id(m["defn"]) and cnt == m["n"]
         m["base"] = base
 
-    # one registration, before the sample
+    # one docket, before the sample
     law = D.parse_design(f"subset:{a.k}")
     want, roots, publics = {}, [], {}
     for m in members:

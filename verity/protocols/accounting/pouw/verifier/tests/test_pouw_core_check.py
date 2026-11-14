@@ -36,7 +36,7 @@ from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as PT
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 ROOT = Path(__file__).resolve().parents[6]
 PKG = ROOT / "verity/protocols/accounting/pouw/verifier/lean/check"
@@ -108,6 +108,7 @@ EXPECT = {
     "answer-programs-two": "profile: programs", "answer-level-query": "profile: its levels",
     "answer-level-size": "profile: its levels", "answer-level-draw": "profile: its levels",
     "answer-level-bernoulli": "profile: its levels", "answer-level-stratified": "profile: its levels",
+    "answer-level-work": "profile: its levels",
     "answer-level-name": "evidence: profile: not in the form toJson writes", "answer-levels-two": "profile: its levels",
     "answer-delta": "profile: delta", "answer-drawn": "profile: drawn", "answer-draw-k": "draw: subset:",
     "answer-draw-population": "draw: subset:", "answer-units-order": "draw: its", "answer-units-range": "draw: its",

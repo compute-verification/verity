@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The committer's per-expert tables registration of a TP model, one file a rank (`verity-vllm tp-register-tables --served`), on a
+# The committer's per-expert tables docket of a TP model, one file a rank (`verity-vllm tp-register-tables --served`), on a
 # CPU machine that holds the checkpoint: each rank's expert stacks composed from the checkpoint of record for the rank, each
 # weight held to a capture's served SHA-512 (its params.json, one a rank), every table committed under the committer's key. The
 # files are what the verifier pins (records_audit.py audit --registered) and what the rank's windows commit their tables under.

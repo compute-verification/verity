@@ -27,7 +27,7 @@ DIR`` stages from them without the fold, which is most of a run's time on a shar
   transcript's returns must agree. A kind the table lowers through its Boolean version (``boolean``: MoeSum_v1 as
   MoeSum_v3's 64-column members, TokenSelect_v1 as TokenSelect_v2's argmax leaves) evaluates that version bit-sliced on the
   same operands (`boolean_units`), holds its returns to the snapshot as words, and stages its unit's bits.
-* **Audit.** As `a6.py`: kinds sharing a unit Definition share its template, one member each; one registration before the
+* **Audit.** As `a6.py`: kinds sharing a unit Definition share its template, one member each; one docket before the
   sample; the verifier's Lean stratified sample over its own program and partition; each member serves its share
   (``serve --zk --draw-file``) and Lean ``verify --zk --partition --program`` holds each session; the audit record and
   a6's negatives. A tampered copy of one kind's member (bit 0 of every instance's first output word flipped before it is
@@ -68,10 +68,10 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "served_units"))
 sys.setrecursionlimit(100000)
 
-import a0  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
 import a6  # noqa: E402
 import a11_kinds as K  # noqa: E402
-import r2_population as R2  # noqa: E402
+from verity.protocols.proofs.spot.verifier.tests import other_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import PrimitiveDefinition  # noqa: E402
 from verity.circuits.evaluation.reference import evaluate_region  # noqa: E402
@@ -79,7 +79,7 @@ from verity.circuits.program import Program  # noqa: E402
 from verity.circuits.refs import runs  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V  # noqa: E402
 
 ROW = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 WINDOW_OF = ("GLM-5.3 TP8 B1 rank 0's step values: the Match capture's activation snapshots of row " + ROW
@@ -919,7 +919,7 @@ def main() -> int:
                            "k_log": m["st"]["meta"].get("k_log"), "pin": m["st"]["pin"], "class": m["st"]["class"],
                            "twin": m["st"]["twin"], "stage_s": m["st"]["seconds"]} for m in members]
 
-    # one registration, before the sample
+    # one docket, before the sample
     want, roots, publics = {}, [], {}
     for m in members:
         fv = m["header"]["frame_v3"]

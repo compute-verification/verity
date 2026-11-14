@@ -1,8 +1,8 @@
 """SPOT[Flock]'s own deployment on the deployment layer (`parties.SPOT_PROTOCOL`), every party on stand-in capabilities: an
-honest run samples each block's sample on the challenger's coins once its registration is in, the proof server proves it from
+honest run samples each block's sample on the challenger's coins once its docket is in, the proof server proves it from
 the inference server's replay inputs and that sample, and the verifier audits each block in order on its proof and accepts,
 with no ZK server, no pin and no composite; the inference server only sends, and the proof server hears only the
-inference server and the verifier and answers only the verifier; an accepting audit of another registration rejects; an
+inference server and the verifier and answers only the verifier; an accepting audit of another docket rejects; an
 audit that is `Unavailable` is its block's error, a sample that is ends the verifier refused ``draw``, and a proof server or
 inference server that can't do its step leaves the verifier refused ``closed``; parameters out of range are refused by
 every party; the verifier replays from its own transcript; and the placement holds each party to its principal's machine
@@ -25,7 +25,7 @@ from verity.protocol import place, site_of
 from verity.party import Identity, Received
 from verity.runtime.runner import run
 from verity.protocols.proofs.spot.verifier import parties as P
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.channel import Message, Refused
 
 ROLES = [P.CHALLENGER, P.INFERENCE_SERVER, P.PROOF_SERVER, P.VERIFIER]

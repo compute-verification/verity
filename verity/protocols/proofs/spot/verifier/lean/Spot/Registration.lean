@@ -4,7 +4,7 @@ digest, and R1–R8 against the verifier's own copies (`check`).
 
     {"format": "verity/registration/v1", "protocol": "verity/sampled-proofs/one-stage/v1",
      "program": "<SHA-512 of the program>", "query": "<SHA-512 of the query>", "partition": "<partition digest>",
-     "population": <units the query derives>, "law": <the law, expanded>, "scheme": "<leaf and tree scheme>",
+     "population": <units the query derives>, "law": <the sampling design, expanded>, "scheme": "<leaf and tree scheme>",
      "roots": [{"port", "root", "leaves", "domain"}, ...], "leaf_layer": "<SHA-512 of the verifier's public file>" | null,
      "anchors": [], "window": {"kind": "served" | "stand-in", ...provenance}, "previous": null | "<digest>"}
 
@@ -189,7 +189,7 @@ def Pool.spentBefore (p : Pool) (log : Array Json) : Bool :=
 structure Verifier where
   program : Program
   query : Json
-  /-- the agreed law: a rule, which `Draw.derive` expands -/
+  /-- the agreed sampling design: a rule, which `Draw.derive` expands -/
   law : Json
   workTable : Option Json
   scheme : String

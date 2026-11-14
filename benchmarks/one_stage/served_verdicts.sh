@@ -53,17 +53,17 @@
 #     aggregate's, which `served_overhead.py table` reads there) or Pearl+'s exclusion tiles' count or its replayed tiles'
 #     ids (its verdict's profile and replay by tile, the reference's and the Lean's), its exact credit where the work is
 #     in the grid form, or its prover's give-up before the coin (the piece's give-up document and the counts in its
-#     log's volunteer and retain lines), its public form in its place. The advice registration's published copies
+#     log's volunteer and retain lines), its public form in its place. The advice docket's published copies
 #     ($OUT/registration.json, the records audit's served-records) carry the advice's length padded to its compiler's
 #     cap (`served_verdicts.py public-registration`), and the audit's log and run.sh's served path (its summary,
-#     registrations, sessions and audit log, which carry the advice's length) stay in the serve dir, where the record reads
+#     dockets, sessions and audit log, which carry the advice's length) stay in the serve dir, where the record reads
 #     them.
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; the
 #     pick stays in the serve dir's private/window.json, the WINDOW line saying only the class's SLOTS slots, and CLASSES
 #     the window circuit's classes beside the certifier's scan class, CERTIFIER_SCAN, default W63, the one the gate serves): every
-#     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
+#     closed window's advice under the prove path's registered compiler and the weights docket (`--weights-of-record`),
 #     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit (`prove_path.py window-circuit
-#     --pins` the registration, and PIN's NAME=ROOT if set), its registered and free input bits at those
+#     --pins` the docket, and PIN's NAME=ROOT if set), its registered and free input bits at those
 #     pins: at each class of CLASSES (default 4,32,4, V2's), each within WC_TIMEOUT (default 30m), all of which the run needs
 #     (the class of record is counted only where CLASSES names `record`, and gates like any other); then the window
 #     audited from its records alone
@@ -71,7 +71,7 @@
 #     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
 #     layer 0's SiluMul_v2 at step 1, or at step 0 with MAX_TOKENS 1, whose window has no step 1), not the window circuit's.
 #     Every unit of a template the served model's compiler of record lists as a transfer gate (prove_path.GATES_OF_RECORD)
-#     is proved beside the sampled rest, which only a work:K law samples, so the preflight refuses a partition of another law
+#     is proved beside the sampled rest, which only a work:K sampling design samples, so the preflight refuses a partition of another sampling design
 #     or without them; PP_SETS names their input sets.
 #  4. PoUW (H1 credit, or with POUW=pearlplus Pearl+'s own served run, below), PoUS, the bandwidth audit and the network
 #     certifier: `served_verdicts.py pieces` runs each one's piece
@@ -119,16 +119,16 @@
 #  6. V3c, after the record since V2 doesn't read it: it proves the window circuit's own units at V3C_CLASS (default 4,32,4,
 #     which CLASSES must hold). `prove_path.py window-commit`, within V3C_TIMEOUT (default 15m), commits the window as that
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
-#     registration's root; its circuit.json less its run fields is held to the verifier's own window-circuit record at the
+#     docket's root; its circuit.json less its run fields is held to the verifier's own window-circuit record at the
 #     class; then `records_audit.py audit --circuit --registered`, within V3C_AUDIT_TIMEOUT (default 30m), samples the
-#     registration's members by its rule V3C_LAW, a rate (records_audit.py refuses a fixed count): by default the rate that
+#     docket's members by its rule V3C_LAW, a rate (records_audit.py refuses a fixed count): by default the rate that
 #     samples one proof block of class 4,32,4's window, under H1_TIE one of each template's, on V3C_CHALLENGER's coins
 #     (below, Coins; pinned on main's first-parent line: MAIN_FILE's, kept as $OUT/v3c-audit/main.txt, else MAIN_SHA's)
 #     and proves them, its composes made before it with V3C_WARM_JOBS (at `v3c_audit`); then
 #     `records_audit.py period` writes the audit as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json,
-#     and a copy in $OUT/v3c-audit: the registration, the Program, its answer and its free inputs), and V3c fails where it
+#     and a copy in $OUT/v3c-audit: the docket, the Program, its answer and its free inputs), and V3c fails where it
 #     writes none. Under H1_TIE (below and at `v3c_audit`) the window commit is the one made at H1's close, its
-#     registration held to the record H1 bound and its circuit to the verifier's record reading H1's W's tables (step 3
+#     docket held to the record H1 bound and its circuit to the verifier's record reading H1's W's tables (step 3
 #     writes it after the classes, `window-circuit --window-registration W`), none is made here, and the audit is tied to
 #     H1's W;
 #     V3c then runs before step 5's composite, whose one-stage and policy cases are its audit's, unless this node has less
@@ -156,7 +156,7 @@
 # ALPHA, GAMMA, the served node, the serve dir's path, COMPOSE_NODE, the tree's commit and the host V3c's audit ran on)
 # and its every input relative to the serve dir
 # (`handoff_inputs`: verifier-side files alone, the records audits' cases and the blobs they name, H1's log and records,
-# PoUW's period case, sampled proofs' summary and registration), listed (inputs.txt) and hashed (inputs.sha256). A list
+# PoUW's period case, sampled proofs' summary and docket), listed (inputs.txt) and hashed (inputs.sha256). A list
 # holding a served run's witness (`served_verdicts.py witness`: a value file, a prover's instance, private or salts file,
 # the advice, a key, a row dir, the requests) or a blob outside the serve dir is refused, and the run fails. Those files alone
 # are copied to the same path on COMPOSE_NODE, an auditor device the prover doesn't control and where no witness goes
@@ -223,7 +223,7 @@
 # [--lanes H1_LANES]` builds its circuit files (the live file, only the strata H1_STRATA lists, default none, and each K
 # of H1_LANES, default none, in credit's lanes form: lane<K> and combine<K>; a file already there under the same bind is
 # reused), then `served_verdicts.py period open` opens period H1_PERIOD (default served-RUN_ID) on its
-# digest, its sample K H1_DRAW_K (default `pouw_h1_challenger.draw_k`'s), its weights H1_MODEL's registration (default
+# digest, its sample K H1_DRAW_K (default `pouw_h1_challenger.draw_k`'s), its weights H1_MODEL's docket (default
 # none, which credit refuses), and its fixed length SLOTS requests of MAX_TOKENS (`--cap 2`: one window and its sample session);
 # `period served`
 # holds the Program serve-openai then declared to it, and `period close` closes it once the windows are sealed, or
@@ -238,7 +238,7 @@
 # window's close, once it is sealed and before its sample coin, serve-openai's `--h1-window-commit` runs
 # `served_verdicts.sh tie` on the served node, under the serve's lease (LEASE_MIN then defaults to 150 and LEASE_MEM_GB to
 # 160, the serve's 128 and window-commit's peak): the window's advice, the one step 3 then reads, and `prove_path.py window-commit --window-registration W --h1-key
-# PROVER/key --law V3C_LAW` within V3C_TIMEOUT (then default 60m, at most 90m), whose registration R, chained right after
+# PROVER/key --law V3C_LAW` within V3C_TIMEOUT (then default 60m, at most 90m), whose docket R, chained right after
 # H1's W, H1 names as the window's Commit record (`serve_tie`). Its output stays in the serve dir's h1/w<k>/. H1's sessions
 # are reserved for the gate's default 120 minutes, the window's sample session at the serve's start, and the sample coin
 # waits for R. window-commit makes each Program's Build itself (`own_builds`), since step 3's compile writes the row dir's
@@ -265,7 +265,7 @@
 # Step 5's record says what was deferred and why (its `deferred`), a DEFERRED line says so, and the serve dir's
 # private/deferred gets the pieces the record read, the inference-only verdict (which the follow-on's record carries as
 # the served node wrote it), the settings the follow-on runs at (deferred.env: the window, the
-# product, V3c's class, law and coins (V3C_CHALLENGER, DEVELOPMENT), H1_TIE, COMPOSITE, ALPHA, GAMMA, the served node, its
+# product, V3c's class, sampling design and coins (V3C_CHALLENGER, DEVELOPMENT), H1_TIE, COMPOSITE, ALPHA, GAMMA, the served node, its
 # peer, the tree's commit, COMPOSE_OFF_NODE and COMPOSE_NODE; a deferral that names no COMPOSE_OFF_NODE follows on at 0),
 # and the
 # follow-on's every input relative to the serve dir (`deferred_inputs`), listed (inputs.txt, which names inputs.sha256
@@ -333,8 +333,8 @@
 # reads the period's circuit against the window-circuit record V3c held R's circuit to (`window_tie` keeps it beside R).
 # Pearl+'s piece then serves
 # nothing of its own (served_pearlplus.sh's PEARLPLUS_TIE): it takes the window's epoch pearl/w<k>/, writes W
-# (`retain --window-record`) chained after the serve's first registration record (`--previous-record`: the serve dir's
-# deployment-registration.json, the weights registration as a `verity/registration/v2` record, which weights() writes
+# (`retain --window-record`) chained after the serve's first docket (`--previous-record`: the serve dir's
+# deployment-registration.json, the weights docket as a `verity/registration/v2` record, which weights() writes
 # before the first request and the WEIGHTS and DEPLOYMENT-REGISTRATION lines name: the developer's own record, whose
 # digest no auditor holds), so the log before R is that record and W, and runs `served_verdicts.sh pearl-tie`
 # (PEARLPLUS_TIE_CMD) before its coin: the window's
@@ -530,10 +530,10 @@ case $PRODUCT in
 esac
 case $COMPOSE_OFF_NODE in 0 | 1) ;; *) say "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default) or 0, not $COMPOSE_OFF_NODE"; exit 3 ;; esac
 CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights_registration.json
-# the serve's first registration record: the weights registration as a record of the log, which Pearl+'s W is chained after
+# the serve's first docket: the weights docket as a record of the log, which Pearl+'s W is chained after
 DREG=$D/deployment-registration.json
 NO_WEIGHTS="NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free"
-weights() {  # under the lease (its commit hashes on the leased GPU), before the first request: the committer's registration
+weights() {  # under the lease (its commit hashes on the leased GPU), before the first request: the committer's docket
   (cd "$TREE" && "$PY" verity/protocols/proofs/spot/prover/audit/prove_path.py weights-registration --serve-run "$D" --checkpoint-dir "$CKPT" \
     --key "$D/private/weights.key" --out "$WREG" --deployment-record "$DREG") > "$OUT/weights_registration.txt" 2>&1
   local rc=$? log=$OUT/weights_registration.txt
@@ -630,10 +630,10 @@ window_commit() {  # window K of $D committed as V3C's class circuit's units in 
   elif [ "$rc" != 0 ]; then echo "refused (exit $rc): $(grep -v '^ ' "$err" | tail -2 | cut -c1-800)"; fi
   return "$rc"
 }
-tied() {  # under H1_TIE: 0 iff H1 bound window K's R at its close (the serve dir's h1/log.jsonl) and R is $VW's registration
+tied() {  # under H1_TIE: 0 iff H1 bound window K's R at its close (the serve dir's h1/log.jsonl) and R is $VW's docket
   "$PY" - "$D/h1/log.jsonl" "$K" "$VW/window/registration.json" <<'EOF' 2>&1
 import json, sys
-from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 log, k, mine = sys.argv[1], int(sys.argv[2]), sys.argv[3]
 try:
     bound = [x["digest"] for x in (json.loads(s) for s in open(log) if s.strip()) if x["window"] == k and x["kind"] == "record"]
@@ -653,10 +653,10 @@ EOF
 # under PEARLPLUS_TIE: Pearl+'s window record W and the window commit tied to it (`pearl_tie`), in the serve dir's
 # pearlplus/w<k>/, and where the record reads the tie (`window_tie`: R and V3c's audit's summary, record --window-tie)
 pearl_dir() { echo "$D/pearlplus/w$K"; }
-pearl_tied() {  # under PEARLPLUS_TIE: 0 iff Pearl+'s piece wrote W for window K and $VW's registration R is chained right after it
+pearl_tied() {  # under PEARLPLUS_TIE: 0 iff Pearl+'s piece wrote W for window K and $VW's docket R is chained right after it
   "$PY" - "$(pearl_dir)/registration.json" "$VW/window/registration.json" <<'EOF' 2>&1
 import json, sys
-from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 try:
     w = REG.digest(json.load(open(sys.argv[1])))
 except (OSError, ValueError):

@@ -12,7 +12,7 @@ those, v2's one statement: v1's params with the partition and ``proofs: {circuit
 pin, the summary's, else its ``compose.log``'s; the public file's digest, below; and its registered file), v1's
 commitment, the evidence with the sessions' proofs, and the blobs' paths, the lookup tables its circuit names
 (``m<k>/tables/*.u32``) last. A window without ``summary.json`` is ``m0`` alone. v2 reads one member's statement and
-refuses a windowed registration, so a window of several members has no v2 case: it leaves only ``missing.json`` saying
+refuses a windowed docket, so a window of several members has no v2 case: it leaves only ``missing.json`` saying
 so.
 
 ``public`` is the digest the audit took when it staged the public file, where the window keeps it: ``case-v2.json``'s
@@ -50,7 +50,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-import a5
+from verity.protocols.proofs.spot.prover.audit import window_audit as a5
 from composite import canonical, write_private
 
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF

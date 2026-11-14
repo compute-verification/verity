@@ -74,9 +74,9 @@ CLASS_G_ENGINE = {"max_model_len": 131072, "max_num_batched_tokens": 2048, "long
 
 
 def _registered(cfg: dict = TINY, **kw) -> Registered:
-    cap = kw.pop("cap_bits", None)
+    cap_bits = kw.pop("cap_bits", None)
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=dict(RTXPRO6000), **kw)
-    return Registered.of(phi, default_seed=7) if cap is None else Registered.of(phi, default_seed=7, cap_bits=cap)
+    return Registered.of(phi, default_seed=7) if cap_bits is None else Registered.of(phi, default_seed=7, cap_bits=cap_bits)
 
 
 def _prompt(i: int, lp: int) -> list[int]:
@@ -187,7 +187,7 @@ def test_an_unseeded_stochastic_requests_seed_is_derived_from_its_id_and_the_win
     assert policy_of(0, {**unseeded, "seed": 5}, 188, request_id="q1", salt=SALT) == (STOCH_POLICY, 5)
     with pytest.raises(Unexpressible, match=r"request 0 \('q1'\): stochastic with no seed in its certified body, and the compile has "
                                             r"no window seed salt to derive one from: a seed serving fills in \(`served_seed.DEFAULT_SEED`\) "
-                                            r"or draws"):
+                                            r"or samples"):
         policy_of(0, unseeded, 188, request_id="q1")
     with pytest.raises(Unexpressible, match="request 0 \\('a'\\): stochastic with no seed in its certified body, and the window carries "
                                             "it in, so its seed derives from its admitting window's seed salt"):
@@ -340,8 +340,8 @@ def test_each_request_program_returns_its_length_rule_as_its_last_check():
     (2, [11, 12, 13], 1),         # an honest length finish
     (1, [11, 12, 13], 0),         # cut short before its first stop
     (1, [11, 255, 255], 0),       # run past a stop to finish on another
-    (2, [11, 255, 13], 0),        # run past a stop to its cap
-    (2, [11, 12, 255], 0),        # a stop at its cap read as a length finish
+    (2, [11, 255, 13], 0),        # run past a stop to its length limit
+    (2, [11, 12, 255], 0),        # a stop at its length limit read as a length finish
 ])
 def test_a_programs_own_length_rule_passes_an_honest_finish_and_refuses_a_stream_cut_short_or_run_past_a_stop(finish, ids, ok):
     """The rule each Program carries, evaluated on the streams its 3 outputs could hold: 1 only for the stream that ends the way
@@ -364,9 +364,9 @@ def test_a_body_with_stops_of_its_own_is_refused_naming_the_fix(body, why):
         compile_steps(reg, advice, ingress)
 
 
-def test_ignore_eos_leaves_a_request_no_stop_ids_and_a_rule_over_its_length_caps():
+def test_ignore_eos_leaves_a_request_no_stop_ids_and_a_rule_over_its_length_limits():
     """Under ignore_eos vLLM stops a request only on its own stop_token_ids (`SamplingParams.update_from_generation_config`), which
-    are refused, so it has none: its rule reads the length caps alone, and a finish on a stop id is refused.  Empty stops are none,
+    are refused, so it has none: its rule reads the length limits alone, and a finish on a stop id is refused.  Empty stops are none,
     and compile as without them."""
     reg, (advice, ingress) = _registered(), _stops()
     plain = compile_steps(reg, advice, ingress)
@@ -382,7 +382,7 @@ def test_ignore_eos_leaves_a_request_no_stop_ids_and_a_rule_over_its_length_caps
         compile_steps(reg, advice, {**ingress, "q1": {**ingress["q1"], "ignore_eos": "yes"}})
 
 
-def test_a_model_that_states_no_stop_ids_has_a_rule_over_its_length_caps_and_refuses_a_finish_on_one():
+def test_a_model_that_states_no_stop_ids_has_a_rule_over_its_length_limits_and_refuses_a_finish_on_one():
     bare = _registered({k: v for k, v in TINY.items() if k != "eos_token_id"})
     advice, ingress = _stops()
     with pytest.raises(Unexpressible, match="request 0: finished on a stop id, and the registered model states none"):
@@ -605,7 +605,7 @@ def test_the_row_past_a_requests_last_kept_output_is_discarded():
 def test_an_aborted_request_compiles_as_one_stopped_at_its_last_kept_output():
     """Request 0's client aborted it after 3 outputs, and the endpoint freed it after the step in flight, whose row (step 3) ran past
     them: it compiles to the rows of a stop at 3 outputs, that row discarded, with ignore_eos set or not. Its length rule runs on
-    past its last output (finish 0) where the stop's ends there on a stop id (1), under ignore_eos over its length caps alone. At its
+    past its last output (finish 0) where the stop's ends there on a stop id (1), under ignore_eos over its length limits alone. At its
     max_tokens vLLM has finished it on length, so an abort there is refused."""
     reg = _registered()
     stopped, ingress = _session([(8, 3, GREEDY)], [[(0, 0, 8)], [(0, 8, 1)], [(0, 9, 1)], [(0, 10, 1)]])
@@ -745,7 +745,7 @@ def test_a_target_without_batch_invariance_outside_class_g_is_refused():
 
 
 def _class_g(hf_home: Path, rank: int = 0, engine: dict | None = None, layers: int | None = None, **edit: dict) -> Registered:
-    """GLM-5.3's B8 row of record at `rank` as `score.phi_of` makes its φ (the checkpoint's config.json the package's byte copy, or
+    """GLM-5.3's B8 workload of record at `rank` as `score.phi_of` makes its φ (the checkpoint's config.json the package's byte copy, or
     with `layers` its first `layers` decoder layers), registered with class G's engine limits (`engine` over them, None dropping
     one; `edit` over φ's other parts)."""
     w = json.loads(workload_file(WORKLOADS / f"{GLM53_B8}.json").read_text())

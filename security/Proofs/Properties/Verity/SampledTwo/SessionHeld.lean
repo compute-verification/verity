@@ -341,7 +341,7 @@ set_option maxHeartbeats 1000000 in
 /-- **One-stage v2's sample and its trees read one log's lines, and the read reads them**, as
 `Verity.Sampled.logRead_isSome` shows of v2's own acceptance: the sample's source is the parameters' challenger and
 window (`source_some`); the sample's read went through the challenger session's log, a list of lines whose pairs are
-in order (`Verity.Sampled.sessionOf_ok`, `releasedRootsOf_pairsOk`); `treesOf` read the same lines as coin trees
+in order (`Verity.Sampled.challengePhaseOf_ok`, `releasedRootsOf_pairsOk`); `treesOf` read the same lines as coin trees
 (`trustedTreesOf_ok`, `coinTreesOf_fold`); so `Verity.Sampled.readLog` reads them, at any records. -/
 theorem lines_read {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {e : Spot.OneStageZk.Evidence}
     {ξ : ByteArray} {ts : Array Spot.Challenger.LoggedTree} (hξ : Spot.OneStageZk.coinsOf p c e = .ok ξ)
@@ -353,9 +353,9 @@ theorem lines_read {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {
   obtain ⟨raw, hraw, hrξ⟩ := Properties.Challenger.oneStageZk_reads p c d hd e ξ hξ
   rw [hrξ] at hraw
   obtain ⟨cm, roots, htsn, -⟩ := Verity.Sampled.drawCoins_ok hraw
-  obtain ⟨_, hsn⟩ := Verity.Sampled.trustedSessionOf_ok htsn
-  obtain ⟨_, hso⟩ := Verity.Sampled.sessionNamed_ok hsn
-  obtain ⟨ls, lines, hlog, hls, hrr⟩ := Verity.Sampled.sessionOf_ok hso
+  obtain ⟨_, hsn⟩ := Verity.Sampled.trustedChallengePhaseOf_ok htsn
+  obtain ⟨_, hso⟩ := Verity.Sampled.challengePhaseNamed_ok hsn
+  obtain ⟨ls, lines, hlog, hls, hrr⟩ := Verity.Sampled.challengePhaseOf_ok hso
   have hlines := Verity.Sampled.linesOf_of hlog hls
   obtain ⟨key, w, htt⟩ := Verity.Sampled.treesOf_ok hts
   obtain ⟨ls', lines', hlog', hls', hct⟩ := Verity.Sampled.trustedTreesOf_ok htt

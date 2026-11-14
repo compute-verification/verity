@@ -1,8 +1,8 @@
 """The audit from a window's records alone (`records_audit`), without proving, on a window written through the interface
-(`verity.commitments.windows.interface`) under core's registration:
+(`verity.commitments.windows.interface`) under core's docket:
 
 * the verifier's window is the circuit record's, each template a Definition a catalog registers, and the record must be the one
-  the registration binds; a window with row tables is refused until its records carry their segment roots;
+  the docket binds; a window with row tables is refused until its records carry their segment roots;
 * the compile check runs the registered compiler as the verifier's table names it, on advice that opens the registered root,
   and refuses by name a compiler it doesn't hold, an opening of another root, a compiler that refuses the advice, one whose
   circuit is another or that writes none, and a length other than the registered one or none;
@@ -14,7 +14,7 @@
   prints the window figure beside the run figure with its premise;
 * a circuit reading registered values is audited against the entries the verifier pinned, each under its own domain
   (`pinned`), and refused before any sample without them, a record that lists its members (a served window's) as one that
-  states them; one whose program takes values only tied to the earlier registration that registered them first
+  states them; one whose program takes values only tied to the earlier docket that registered them first
   (`tie_of`), its readers' reads registered at that record's roots;
 * a window's audit is one compute audit of the network certifier's period (`period`), its scan state's reads registered;
 * a declared day (``--day``, `declared_day`) hands R2 the registration log's declarations, so a program other than the
@@ -26,7 +26,7 @@
   read's by the verifier's executable too, and the audit takes that cache;
 * of `verity_vllm` it loads only a catalog package (`verity.circuits.defs.catalog_package`) and nothing else of the adapter,
   and the served compiler's command (``prove_path.py circuit``) refuses advice it can't compile and charges the length the
-  registration does;
+  docket does;
 * that command compiles over its own trace of each Program, never the prover's row dir, so a row dir whose names make
   another circuit under unchanged digests is refused by name and one whose names make the same circuit is ignored."""
 from __future__ import annotations
@@ -44,7 +44,7 @@ import numpy as np
 import pytest
 import settings
 
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import caller as C, draw as D, registered as REG, docket as R
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch, evaluate_words
@@ -54,8 +54,8 @@ from verity.commitments.windows import interface as IF, rows as CS
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path" / "tests")
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[1] / "one_stage"))
-import records_audit as RA  # noqa: E402
-import served_integrity as SI  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI  # noqa: E402
 
 K = 64
 COORD = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM120_S8)
@@ -99,7 +99,7 @@ print(a.say if a.say is not None else json.dumps({"bits": 8 * len(data) if a.bit
 
 def _write(d: Path, n: int = 5, cap: int = 4, advice: bool = True, compiler: dict = COMPILER) -> SimpleNamespace:
     """A window of ``n`` coordinates in members of ``cap``, its advice committed under ``compiler`` (or none), written and
-    registered through the interface under core's registration."""
+    registered through the interface under core's docket."""
     reg = IF.commit_advice(compiler, ADVICE)
     bound = IF.advice_binding(compiler, reg.root.hex(), 8 * len(ADVICE)) if advice else None
     win = IF.Window(IF.Circuit("test", ((COORD, n),)), RUN, D.parse_design(LAW), cap, advice=bound)
@@ -153,7 +153,7 @@ def test_a_registry_template_resolves_in_a_fresh_audit_process():
     code = f"""
 import sys
 sys.path.insert(0, {str(HERE.parent)!r})
-import records_audit as RA
+from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA
 from verity.circuits.codec import descriptor_id
 assert descriptor_id(RA.catalog_resolve(sys.argv[1])) == sys.argv[1]
 """
@@ -305,16 +305,16 @@ def _registered_circuit(n: int = 2, free: str | None = None) -> IF.Circuit:
     return IF.Circuit("test", ((COORD, n),), registered=IF.Registered({"a": at}, reads=tuple(reads)))
 
 
-#: the verifier's pin of ``a``, and a window registration's root for it
+#: the verifier's pin of ``a``, and a window docket's root for it
 PIN_A = {"a": "ab" * 64}
 
 
 def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_charge(tmp_path, capsys):
     """A stated record whose inputs are declared is counted from its description alone: with every input row registered at
-    a root the verifier pinned before the run, the root the window's registration records, nothing is free, so its other
+    a root the verifier pinned before the run, the root the window's docket records, nothing is free, so its other
     inputs are the advice's bits, the charge; a port left free adds its rows and the bound is vacuous, and so does every
     registered read when the verifier pins no root, or when the window's root is another than the pin or none.
-    ``records_audit.py count`` prints the same from the record's and the registration's files (core's, its window's
+    ``records_audit.py count`` prints the same from the record's and the docket's files (core's, its window's
     ``registered_roots`` or its committed values' entries, or an integration's own, whose ``window`` is its index), and
     refuses a pin with no root."""
     doc, inputs = _registered_circuit().description(), 2 * sum(16 * w for _p, w in IF.layout(COORD).rows)
@@ -374,7 +374,7 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
 
 
 def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entries_roots():
-    """`window_roots`: the roots a window's registration records for its parameters are its ``registered_roots`` and each
+    """`window_roots`: the roots a window's docket records for its parameters are its ``registered_roots`` and each
     entry's root of the committed values it names, ``{program, values}`` (`ENTRY_GROUPS`: per-window ``activations``,
     PoUW's operands among them, and pinned ``registered``, PoUW's weights), one root a parameter; a group that isn't one,
     an entry with no root of hex digits, or two roots for one parameter are refused."""
@@ -403,11 +403,11 @@ def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entri
 def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge(tmp_path, monkeypatch, capsys):
     """``prove_path.py window-circuit`` on the synthetic serve-openai run of `test_prove_path` (I2's window circuit stubbed,
     one whose every input is registered): it writes the circuit's record from its description (members stated at its cap,
-    no run) or, ``--description``, the description, prints the length the registration charges with the count, and exits
+    no run) or, ``--description``, the description, prints the length the docket charges with the count, and exits
     `records_audit.REFUSED` where I2's circuit refuses the advice. ``records_audit.py count`` over the record finds the
-    charge. Each count holds the pin to the window's root its advice registration records: where it records another root,
+    charge. Each count holds the pin to the window's root its advice docket records: where it records another root,
     or none, every registered read is free."""
-    import prove_path as PP
+    from verity.protocols.proofs.spot.prover.audit import prove_path as PP
     from test_prove_path import _served
     from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.program.predict.build import Unexpressible
@@ -459,7 +459,7 @@ def test_class_circuit_from_phi_alone_is_window_circuits_record_and_serve_phi_na
     linears under ``--pearl-tables`` alike (I2's class circuit stubbed, `window_circuit.window_circuit` left to call it).
     ``serve-phi`` states what serve.json will record of φ from this device (`prove_path.device_target` stubbed with the
     run's), and ``compiler --serve`` over it names the compiler ``compiler --serve-run`` names once the run has served."""
-    import prove_path as PP
+    from verity.protocols.proofs.spot.prover.audit import prove_path as PP
     from test_prove_path import _served
     from verity_vllm.program.predict import window_circuit as WC
 
@@ -498,7 +498,7 @@ def test_the_window_circuit_command_under_h1s_w_reads_its_tables_with_no_key(tmp
     """``prove_path.py window-circuit --window-registration W``, the verifier's record of a window H1 tied: I2's window
     circuit reads H1's tables of W's Program (`h1_tie`'s, as window-commit's circuit with W reads them), and the command
     takes no key, which is H1's prover's alone; without W it reads none. Refused for a W under another Program."""
-    import prove_path as PP
+    from verity.protocols.proofs.spot.prover.audit import prove_path as PP
     from test_prove_path import _served
     from verity_vllm.program.predict import window_circuit as WC
     from verity.protocols.accounting.pouw.prover.serving import h1 as PH
@@ -583,8 +583,8 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
 
 
 def test_an_expert_tables_registration_is_a_pin_as_written():
-    """A TP rank's registration of the per-expert cut's tables (``verity-vllm tp-register-tables``) is ``--registered`` as written,
-    each table under its rank's program: moved to another rank's program it refuses, and two ranks' registrations name each table
+    """A TP rank's docket of the per-expert cut's tables (``verity-vllm tp-register-tables``) is ``--registered`` as written,
+    each table under its rank's program: moved to another rank's program it refuses, and two ranks' dockets name each table
     twice, so a rank's window pins its own rank's."""
     from verity_vllm.pipeline import expert_tables as ET
 
@@ -612,9 +612,9 @@ def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_s
     """A record that lists its members (a served window's form) declares its registered reads beside them, as a served
     window reads its model's weights: the verifier's window takes it, each member's ``--registered`` file is the one the
     stated record of the same window makes, and its count is the stated record's, the reads registered where the verifier
-    pinned the parameter at the root the window's registration records. Without a pin the audit refuses the window before
+    pinned the parameter at the root the window's docket records. Without a pin the audit refuses the window before
     any sample; the count names the parameter ``unpinned`` and counts its reads free, as it does for a pin of another root
-    or a registration that records none."""
+    or a docket that records none."""
     law = D.parse_design(LAW)
     stated, listed = _registered(tmp_path / "s"), _registered(tmp_path / "l", listed=True)
     (ms, sdoc, _), (ml, ldoc, _) = (RA.verifier_window(g.dir, law, None) for g in (stated, listed))
@@ -645,7 +645,7 @@ def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_s
 
 def test_a_tie_pins_the_circuits_values_at_the_earlier_registrations_tables():
     """`tie_of`: a circuit whose program takes values (a served window's H1 tables, by their Commit names) is tied to the
-    earlier registration W that registered them first: one-stage's ``log`` is W, each value's ``registered`` words are W's
+    earlier docket W that registered them first: one-stage's ``log`` is W, each value's ``registered`` words are W's
     entry's, its ``outputs`` W's table of it under the prefix (`credit.window_table`) and its schema v2, and the audit pins
     each at W's     entry under the value's own name. With neither values nor W there's no tie; values without W, W without values, a
     value W registers other than once (with no prefix, by its own name: told to give H1's) and a value that is no Commit
@@ -734,8 +734,8 @@ class _Reused(REG.Registered):
 
 def _tied(d: Path, n: int = 8, cap: int = 4) -> SimpleNamespace:
     """A window of ``n`` coordinates each reading its ``wrow`` from round 0's A table of K (4 rows, coordinate u row u % 4),
-    a value its circuit's program takes (`IF.Registered.values`) and an earlier registration W registered first as
-    ``h1/a/<K>@0``: the window's registration is chained right after W and registers the table by W's entry, as
+    a value its circuit's program takes (`IF.Registered.values`) and an earlier docket W registered first as
+    ``h1/a/<K>@0``: the window's docket is chained right after W and registers the table by W's entry, as
     ``prove_path.py window-commit --window-registration W`` does. W is written beside the window as ``w.json``."""
     rng = np.random.default_rng(2)
     rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
@@ -778,7 +778,7 @@ def test_the_audit_refuses_a_fixed_count_as_its_rule_by_name(written, tmp_path, 
 def test_the_windows_design_is_the_one_the_stated_rate_names_over_its_own_proof_blocks(written):
     """Under a rate, the verifier's window takes the sampling design that rate names over the window's own N proof blocks
     (`a5.rated`, as the stream derives it): at 2 in 5 the window's 5 register the design they were committed under, and
-    at half that rate another design, which the stream then holds the registration to and refuses. The rate is its
+    at half that rate another design, which the stream then holds the docket to and refuses. The rate is its
     caller's constant: the window's records change nothing but the design's K."""
     committed, _doc, _sets = RA.verifier_window(written.dir, D.parse_design(LAW), None)
     assert committed.population == 5 and written.rec["law"]["k"] == 2
@@ -791,14 +791,14 @@ def test_the_windows_design_is_the_one_the_stated_rate_names_over_its_own_proof_
 
 
 def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_registration(tmp_path, monkeypatch, capsys):
-    """A window whose circuit takes values (`_tied`) is audited tied to the earlier registration W that registered them
+    """A window whose circuit takes values (`_tied`) is audited tied to the earlier docket W that registered them
     first (``--tie W --tie-prefix P``), and refused before any session without the tie: the tie hands a5 one-stage's
     ``log``, ``registered``, ``outputs`` and ``schemas`` (`tie_of`), the value's readers read W's table at W's root and
-    count registered (the root the window's registration records for the value), the value is the window's own to the
+    count registered (the root the window's docket records for the value), the value is the window's own to the
     output class (its readers sampled like any other unit), and the summary names W's digest and the values. The sessions
     (`a5.audit`) are stubbed and sample nothing, so the audit doesn't pass."""
-    import a5 as A5
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.prover.audit import window_audit as A5
+    from verity.protocols.proofs.spot.device import challenger_session as AC
 
     got = _tied(tmp_path / "w")
     assert got.rec["previous"] == R.digest(got.w) and got.rec["registered"] == [{**got.entry, "value": got.name}]
@@ -891,7 +891,7 @@ def test_a_declared_day_holds_the_registrations_program_to_the_days_one_declarat
     assert day == {"day": 3, "declarations": [e.body() for e in entries]}
 
     def r2(d: dict) -> list[str]:
-        v = R.check(written.rec, mine.program, mine.query, D.parse_design(LAW), CS.SCHEME, {}, **d)
+        v = C.both(written.rec, mine.program, mine.query, D.parse_design(LAW), CS.SCHEME, {}, **d)
         return sorted(c for c in v.codes if c.startswith("R2"))
     assert r2(day) == []
     assert r2({**day, "day": 4}) == ["R2-declared"] and r2({**day, "day": 5}) == ["R2-undeclared"]
@@ -934,7 +934,7 @@ DAY0, PIN, S1, S2 = 20746, "c" * 40, "s20261020T093000Z-0001", "s20261020T093000
 
 
 def _auditor():
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.device import challenger_session as AC
     return AC._module("a5_auditor", HERE.parents[2] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
 
 
@@ -977,7 +977,7 @@ def _window(session: str, reserve_seq: int, root: str, by: str = "hash", reserve
 
 
 def _verify(key: object):
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.device import challenger_session as AC
     return AC.lms_verify
 
 
@@ -1014,7 +1014,7 @@ def test_a_window_opened_before_its_days_declaration_or_of_a_lane_that_never_dec
     program = written.rec["program"]
 
     def r2(d: dict) -> list[str]:
-        v = R.check(written.rec, mine.program, mine.query, D.parse_design(LAW), CS.SCHEME, {}, **d)
+        v = C.both(written.rec, mine.program, mine.query, D.parse_design(LAW), CS.SCHEME, {}, **d)
         return sorted(c for c in v.codes if c.startswith("R2"))
     late, key, _ = _device_ledger(tmp_path / "late",
                                   [*_window(S1, 0, "01" * 64), _declared(program), *_window(S2, 3, "02" * 64)])
@@ -1055,7 +1055,7 @@ def test_a_window_that_crosses_utc_midnight_belongs_to_its_opens_day(written, tm
     program, root = written.rec["program"], "01" * 64
 
     def r2(d: dict) -> list[str]:
-        v = R.check(written.rec, mine.program, mine.query, D.parse_design(LAW), CS.SCHEME, {}, **d)
+        v = C.both(written.rec, mine.program, mine.query, D.parse_design(LAW), CS.SCHEME, {}, **d)
         return sorted(c for c in v.codes if c.startswith("R2"))
     def late(reserve_seq: int) -> list[tuple[str, str, dict]]:
         return _window(S1, reserve_seq, root, reserved_at="2026-10-20T23:55:00Z", expires="2026-10-21T00:05:00Z",
@@ -1111,11 +1111,11 @@ def _history(d: Path, n: int = 4) -> SimpleNamespace:
 def test_a5_holds_a_history_tables_registered_root_to_the_one_over_its_writers_bodies(tmp_path, monkeypatch):
     """A window with a history table (`interface.History`) is audited with a5 handed the table as the verifier
     takes it (``history``, `ml.windows.history.params`): from the window's public bodies it computes the table's root, to
-    which it holds the root the window's registration records, the root the table is pinned at (`history.pins`). A
-    registration that records no root for the table is refused before any session. The sessions (`a5.audit`) are stubbed
+    which it holds the root the window's docket records, the root the table is pinned at (`history.pins`). A
+    docket that records no root for the table is refused before any session. The sessions (`a5.audit`) are stubbed
     and sample nothing, so the audit doesn't pass."""
-    import a5 as A5
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.prover.audit import window_audit as A5
+    from verity.protocols.proofs.spot.device import challenger_session as AC
     from verity.commitments import history as HT
 
     got, seen = _history(tmp_path / "w"), {}
@@ -1166,11 +1166,11 @@ def _audited(window: Path, out: Path, registration: dict | None = None, accepted
 
 def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_registered(tmp_path, capsys):
     """`period`: a window whose circuit reads its own scan state (`RA.TIED`) gives the network certifier's period its
-    registration, the Program the audit sampled (the one the registration names), the audit's answer, ``steps`` 0 and
+    docket, the Program the audit sampled (the one the docket names), the audit's answer, ``steps`` 0 and
     ``free``: the audit's count, but with the state's reads registered (the period ties them to its scan's state tree),
     where the audit's own count leaves them free. ``records_audit.py period`` writes the same and says it in one line.
-    Refused by name: a window that commits no scan state, a circuit the registration doesn't bind, an audit that wrote no
-    Program or another than the registration names, and an answer committing to another registration."""
+    Refused by name: a window that commits no scan state, a circuit the docket doesn't bind, an audit that wrote no
+    Program or another than the docket names, and an answer committing to another docket."""
     got = _registered(tmp_path / "w", name=RA.TIED, own=True)
     audit = _audited(got.dir, tmp_path / "a")
     rec, doc = (json.loads((got.dir / f).read_text()) for f in ("registration.json", "circuit.json"))
@@ -1254,7 +1254,7 @@ def test_a_period_counts_an_io_shell_window_in_a_process_that_loaded_no_registry
     `interface.resolve` alone refuses the window ("names no Definition a catalog registers")."""
     got = _io_shell_window(tmp_path / "w")
     audit = _audited(got.dir, tmp_path / "a")
-    p = subprocess.run([sys.executable, str(HERE.parent / "records_audit.py"), "period", "--window", str(got.dir),
+    p = subprocess.run([sys.executable, str(RA.__file__), "period", "--window", str(got.dir),
                         "--audit", str(audit), "--out", str(tmp_path / "p.json")], capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-3000:]
     coord, state = (sum(16 * w for _p, w in IF.layout(fn).rows) for fn in (COORD, got.shell))
@@ -1315,7 +1315,7 @@ def test_an_input_only_window_value_is_free_in_the_count_and_named():
 
 
 def test_the_windows_own_values_the_circuit_reads_are_pinned_only_when_they_are_ties():
-    """`window_pins`: the per-window values the circuit reads are the registration's entries, each held to a domain binding
+    """`window_pins`: the per-window values the circuit reads are the docket's entries, each held to a domain binding
     the window's run root, split into ties (pinned) and the untied (read only by input ports, counted free); one it
     doesn't read is neither, and one committed under another run, or naming another value, is refused."""
     rows = [[1, 2], [3, 4]]
@@ -1348,7 +1348,7 @@ def test_the_audit_needs_the_run_root_the_run_published(written, capsys):
 
 
 def test_the_advice_is_fixed_before_the_draw_and_refused_re_committed_after_it(written):
-    import a5 as A5
+    from verity.protocols.proofs.spot.prover.audit import window_audit as A5
 
     rec, held = written.rec, {**written.bound, "opening": written.opening, "run": RUN, "circuit": written.rec["window"]["circuit"],
                               "compiled": True}
@@ -1365,7 +1365,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
     """``--challenger gate:USER@HOST`` hands ``--gate-key``, ``--peer`` and ``--challenger-key`` to `a5_coins.start`, as
     `prove_path.py audit` does; the command refuses a gate without the peer or the key record, and any other challenger.
     ``--deployed-key`` reaches `a5_coins.start` as ``deployed`` with ``--challenger local``, and is refused with a gate."""
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.device import challenger_session as AC
 
     args = ["audit", "--window", str(written.dir), "--law", _rate(written.dir), "--circuit", written.rec["window"]["circuit"], "--run", RUN,
             "--port", "10000",
@@ -1407,8 +1407,8 @@ def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path,
     """A session listens on one port a member with a proved unit (closure included), so 20 proved members need 20 ports:
     the audit reserves one a member, not a rank's 16 (`a5.RANK_PORTS`), and a sample needing more than ``--ports`` is
     refused before any session listens, since the next one could reach another audit's verifier."""
-    import a5 as A5
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.prover.audit import window_audit as A5
+    from verity.protocols.proofs.spot.device import challenger_session as AC
 
     got = _write(tmp_path / "w", n=20, cap=1)
     mine, _doc, _sets = RA.verifier_window(got.dir, D.parse_design(LAW), None)
@@ -1456,8 +1456,8 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says
     rejected audit does, and told both the command refuses its arguments before any session. The summary of a window
     that passes as a forged read carries that verdict under ``forged``, as a forged unit's does, so no reader of it
     takes the pass for an accepting audit (the weights tie's pins refuse a summary that holds it)."""
-    import a5 as A5
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.prover.audit import window_audit as A5
+    from verity.protocols.proofs.spot.device import challenger_session as AC
 
     why = "setup: registered reads: port w: table row 0 does not open weights's registered root at position 0"
     self_checks = []
@@ -1520,8 +1520,8 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
     carry the run figure, the window ingress still free in it, and beside it the window figure with its premise
     (`WINDOW_PREMISE`). The sessions (`a5.audit`) are stubbed and sample nothing, so the audit doesn't pass; its leak count
     is the records' alone."""
-    import a5 as A5
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.prover.audit import window_audit as A5
+    from verity.protocols.proofs.spot.device import challenger_session as AC
 
     mine, stated, _sets = RA.verifier_window(written.dir, D.parse_design(LAW), None)
     ingress = [{"reader": TID, "port": p, "at": 0, "units": 5, "step": 0} for p in ("x", "sx")]
@@ -1555,8 +1555,8 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
     """``warm`` hands `a5.warm` the verifier's window and its composers, each saying what it composes from (the record's
     statement under the stager's label, which a5's cache keys), with ``--compose-cache`` and ``--jobs``; the audit hands a5
     that cache, and none without ``--compose-cache``."""
-    import a5 as A5
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.prover.audit import window_audit as A5
+    from verity.protocols.proofs.spot.device import challenger_session as AC
 
     seen = {}
 
@@ -1601,8 +1601,8 @@ def test_a_table_reads_composer_is_keyed_by_the_verifiers_executable_and_no_othe
     with it, and a compose cache kept under another build is not taken. Every other template's composer never asks for the
     executable, and its inputs and its key are the statement's alone; the Definition decides, not the statement's form. The
     read here is the toy template under the read's name (`read_tmpl.READ`), which is all `is_read` asks of a Definition."""
-    import a5 as A5
-    import compose_circuit as CM
+    from verity.protocols.proofs.spot.prover.audit import window_audit as A5
+    from verity.protocols.proofs.spot.verifier.one_stage import compose_circuit as CM
     from verity_flock import read_tmpl as RT
 
     st, flat = {"layout": "iv/hybrid/4", "structural": True}, {"reads": "inline"}
@@ -1639,9 +1639,9 @@ def test_the_audit_from_the_records_loads_of_verity_vllm_only_a_catalog_package(
 import json, sys
 from pathlib import Path
 sys.path.insert(0, {str(HERE.parent)!r})
-import records_audit as RA
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, registration as R
-import a5 as A5
+from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, docket as R
+from verity.protocols.proofs.spot.prover.audit import window_audit as A5
 d, t = Path({str(written.dir)!r}), Path({str(tmp_path)!r})
 mine, doc, sets = RA.verifier_window(d, D.parse_design({LAW!r}), None)
 rec = json.loads((d / "registration.json").read_text())
@@ -1667,8 +1667,8 @@ def test_the_served_compilers_command_charges_the_registered_length_and_refuses_
     """``prove_path.py circuit``, the served window's registered compiler as `records_audit.compile_check` runs it, on the
     synthetic serve-openai run of `test_prove_path` (its I2 compile stubbed, and the window over its Programs a coordinate
     window): it writes a circuit record the audit reads (`interface.window_of_record`) under no run and prints the length the
-    registration charges, and exits `records_audit.REFUSED` on advice it can't compile."""
-    import prove_path as PP
+    docket charges, and exits `records_audit.REFUSED` on advice it can't compile."""
+    from verity.protocols.proofs.spot.prover.audit import prove_path as PP
     from test_prove_path import _served
     from verity_vllm.pipeline import serving_rows as SRW
 
@@ -1733,7 +1733,7 @@ def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_igno
     circuit (a layer-1 SiluMul row and layer 0's first down_proj row swap names: one more SiluMul row in layer 0's scope), and
     ignores names that make the same one (layers 0 and 1's first SiluMul rows swapped, which moves only the prover's own reads;
     two weights fields swapped): the verifier's record is its own compile's in each case."""
-    import prove_path as PP
+    from verity.protocols.proofs.spot.prover.audit import prove_path as PP
     from test_prove_path import LAYER0, _circuit, _row_dir, _tiny_served
 
     s = _tiny_served(tmp_path, monkeypatch)

@@ -39,7 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 
 `LeanRelease.ProgReads` and `LeanRelease.ProgChecks` take the transport's frame state (`prog`) as given: the state Rust's
 requests leave the compiled frame in. The session loop drives each rep's frame itself, on one schedule of requests
-(`Flock.Firewall.Drive.reqs`), so its state is a Lean function. This file defines it from the decoded coins alone, at
+(`Flock.ZkServer.Drive.reqs`), so its state is a Lean function. This file defines it from the decoded coins alone, at
 placeholder samples, and the release whose transport state it is:
 
 * `Loop.placeholder`: a rep stream's frame at zero samples, its table at a zero level 0 of the statement's shape, and zero
@@ -65,8 +65,8 @@ namespace Claims.ZKServer
 
 open _root_.Flock (V F128 Stmt SessionSpec)
 open _root_.Flock.Transcript (header)
-open _root_.Flock.Firewall.Frame (Cfg Masker Draws INNER_ROUNDS drawBytes)
-open _root_.Flock.Firewall.Finish (Tab tabOfLevel0 flat)
+open _root_.Flock.ZkServer.Frame (Cfg Masker Draws INNER_ROUNDS drawBytes)
+open _root_.Flock.ZkServer.Finish (Tab tabOfLevel0 flat)
 
 namespace Loop
 
@@ -80,25 +80,25 @@ zero salts for levels ≥ 1 (`hiSaltsOf`'s sizes). -/
 def placeholder (spec : SessionSpec) (sts : Array Stmt) (k : ℕ) (link : Array F128) :
     V (Cfg × Tab × ByteArray × Array (Array F128) × Array ByteArray) := do
   let st := sts[k / 2]!
-  let (lay, mask) ← _root_.Flock.Firewall.Drive.start st
+  let (lay, mask) ← _root_.Flock.ZkServer.Drive.start st
   let (sch, tPad) ← _root_.Flock.Zk.schedule st.wideLeaf st.m
   let lv := sch.levels.getD 0 default
-  let l0 ← _root_.Flock.Firewall.Level0.ofDraws st.wideLeaf st.m (Array.replicate (2 ^ (lv.lanes + lv.cols)) 0)
-    (zeros (_root_.Flock.Firewall.Level0.drawSize lv tPad))
+  let l0 ← _root_.Flock.ZkServer.Level0.ofDraws st.wideLeaf st.m (Array.replicate (2 ^ (lv.lanes + lv.cols)) 0)
+    (zeros (_root_.Flock.ZkServer.Level0.drawSize lv tPad))
   let t ← tabOfLevel0 (_root_.Flock.Setup.ofCircuit st) l0
   let hi := (Array.range (t.sch.levels.size - 1)).map fun j => zeros (192 * 2 ^ (t.sch.levels.getD (j + 1) default).d)
   return (Cfg.ofDraws lay (Draws.ofBytes lay (zeros (drawBytes lay))) (some mask), t,
     (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8,
-    _root_.Flock.Firewall.Drive.extras st (_root_.Flock.Firewall.Drive.linkPoints st link), hi)
+    _root_.Flock.ZkServer.Drive.extras st (_root_.Flock.ZkServer.Drive.linkPoints st link), hi)
 
 /-- **A rep's scheduled rounds so far** at the table `t`, its released rounds' coins `cr`: the algebraic phase's
 (`Skeleton.rounds`), then, once their coins are all in, the opening's (`Drive.openStep`, as `Frames.placeOf` begins it)
 fed the rest, with the round it asks for next. -/
 def schedSoFar (t : Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
     (cr : Array (Array F128)) : V (Array (ByteArray × ℕ)) := do
-  let alg ← _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom
+  let alg ← _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom
   if cr.size < alg.size then return alg
-  match (_root_.Flock.Firewall.Drive.openStep t rep dom xs hi (cr.extract 0 alg.size)).feed
+  match (_root_.Flock.ZkServer.Drive.openStep t rep dom xs hi (cr.extract 0 alg.size)).feed
       (cr.extract alg.size cr.size).toList #[] with
   | (.ask c n _, rs) => return alg ++ rs.push (c, n)
   | (.done _, rs) => return alg ++ rs
@@ -120,22 +120,22 @@ the frame takes no coins (`Masker.answer` owes none at `{}`). -/
 def repState (c : Cfg) (t : Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128)) (hi : Array ByteArray)
     (cr0 cr : Array (Array F128)) (ns : ℕ → ℕ) (i : ℕ) : Masker :=
   match (do
-      let alg ← _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom
+      let alg ← _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom
       return (alg.size, ← schedSoFar t rep dom xs hi cr.pop) : V (ℕ × Array (ByteArray × ℕ))) with
   | .error _ => {}
   | .ok (nAlg, sched) =>
     let prior := if rep = 0 then #[] else (cr0.extract 0 nAlg).foldl (· ++ ·) #[]
     let own := ownRounds c (cr.extract sched.size cr.size) fun j => ns (sched.size + j)
     let pre := if prior.isEmpty then 0 else 1
-    let qs := _root_.Flock.Firewall.Drive.reqs prior sched own (fun k => (sched.getD k (.empty, 0)).1) cr
-    let r := _root_.Flock.Firewall.Frame.run c {} (qs.take (pre + 2 * i - 1))
+    let qs := _root_.Flock.ZkServer.Drive.reqs prior sched own (fun k => (sched.getD k (.empty, 0)).1) cr
+    let r := _root_.Flock.ZkServer.Frame.run c {} (qs.take (pre + 2 * i - 1))
     if r.2 then {} else r.1.m
 
 /-- The words of opening `q` among the decoded coins `cs`, as many as its request's count (`readCoins`'s); none past
 them. -/
 def wordsAt (x : Msg) (cs : List FlockDeploy.Coin) (q : ℕ) : Array F128 :=
   match cs[q]? with
-  | some c => c.vals (min (loopNr x q) _root_.Flock.Firewall.Frames.COIN_MAX)
+  | some c => c.vals (min (loopNr x q) _root_.Flock.ZkServer.Frames.COIN_MAX)
   | none => #[]
 
 /-- **The loop's frame state after the decoded coins `cs`** at `x`: the state of the rep that released the last of the
@@ -174,7 +174,7 @@ noncomputable def freshOf (x : Msg) (cs : List FlockDeploy.Coin) : Except String
     match placeholder spec sts k (wordsAt x cs 0) with
     | .error e => throw e
     | .ok (c, t, dom, _, _) =>
-      match _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom with
+      match _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (flat t.cm0.cap) dom with
       | .error e => throw e
       | .ok alg =>
         if k % 2 = 0 then pure {}
@@ -182,8 +182,8 @@ noncomputable def freshOf (x : Msg) (cs : List FlockDeploy.Coin) : Except String
         else
           let cr0 := (Array.range n0).map fun j => wordsAt x cs (q - n0 + j + 1)
           let prior := (cr0.extract 0 alg.size).foldl (· ++ ·) #[]
-          match _root_.Flock.Firewall.Frame.step c {}
-              (.prior prior.size (_root_.Flock.Firewall.Frame.wordBytes prior)) with
+          match _root_.Flock.ZkServer.Frame.step c {}
+              (.prior prior.size (_root_.Flock.ZkServer.Frame.wordBytes prior)) with
           | (.ok, st') => pure st'.m
           | _ => throw "rep 0's algebraic-phase coins"
   | some _, 0 => pure {}
@@ -205,7 +205,7 @@ noncomputable def schedOf (real : ℕ → V (Tab × Array ByteArray)) (x : Msg) 
     match real ki.1 with
     | .ok (t, hi) =>
       match schedSoFar t (ki.1 % 2) (spec.domain (spec.tables[ki.1 / 2]!) (ki.1 % 2)).toUTF8
-          (_root_.Flock.Firewall.Drive.extras st (_root_.Flock.Firewall.Drive.linkPoints st (wordsAt x cs 0))) hi cr with
+          (_root_.Flock.ZkServer.Drive.extras st (_root_.Flock.ZkServer.Drive.linkPoints st (wordsAt x cs 0))) hi cr with
       | .ok sched => sched[ki.2]?.map (·.1)
       | .error _ => some .empty
     | .error _ => some .empty
@@ -218,9 +218,9 @@ noncomputable def repOf (x : Msg) (j : ℕ) : ℕ :=
   | none => 0
 
 /-- Rep stream `k`'s start at `x` (`Drive.start` at table `k / 2`'s statement): its layout and mask slot. -/
-noncomputable def startOf (x : Msg) (k : ℕ) : V (_root_.Flock.Zk.PadLayout × _root_.Flock.Firewall.Frame.MaskSlot) :=
+noncomputable def startOf (x : Msg) (k : ℕ) : V (_root_.Flock.Zk.PadLayout × _root_.Flock.ZkServer.Frame.MaskSlot) :=
   match FlockDeploy.setupOf true x with
-  | some (_, _, sts) => _root_.Flock.Firewall.Drive.start sts[k / 2]!
+  | some (_, _, sts) => _root_.Flock.ZkServer.Drive.start sts[k / 2]!
   | none => .error "no session"
 
 end Loop

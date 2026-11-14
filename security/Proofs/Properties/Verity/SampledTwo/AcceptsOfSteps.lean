@@ -24,7 +24,7 @@ step before it returned, so no step holds the evidence to anything the listed on
   (`stagesFit`), the run of record ran and its symbol is `accept`, the first stage's bytes are the ones it read
   (`sourceRead`), the first session shows none of the second stage's coins (`interiorUnshown`), the stages' sessions
   are in order (`stagesOrdered`), the first session's log holds no coin tree's line (`firstTreeless`), the second
-  session's log opens each coin tree's rounds stream by stream (`repStreamsOrdered`), the second stage's law is
+  session's log opens each coin tree's rounds stream by stream (`repStreamsOrdered`), the second stage's sampling design is
   computed (`secondDesignOf`) and the interior audit's check at that sampling design accepts (`secondCheck`).
 * `accepts_iff_steps`: the check accepts exactly there.
 
@@ -137,7 +137,7 @@ theorem inputAt_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
        done)
 
 /-- **Steps 0 to 5 return where each does**: `prepare`, at the switch on, returns the interior audit's verdict at the
-second stage's law and the run of record. -/
+second stage's sampling design and the run of record. -/
 theorem prepare_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {c₂ : OneStage.Commitment} {ξ₂ : ByteArray} {r : OneStageZk.Run} {i : Spot.Run.Input} {run law : Json}
     (hb : stmtsBytesFit p e bs = .ok ()) (hss : stmtsSessions p e bs = .ok ())

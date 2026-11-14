@@ -1,7 +1,7 @@
 """The bundle prover's inputs (`prove_bundle.py --bundle B --window DIR`) on the H200 interfaces' drawn-unit bundle (four sampled proof blocks
 of a W8A8 MLP's window) and the part of its window that the hold reads (`fixtures/bundle-window-public`: its
 `window.json`'s run, registration and partition digests and the sampled members' public bodies, beside the H200 interfaces' copy of
-its registration): the honest bundle is held to its window with every check passing, and the command refuses, before
+its docket): the honest bundle is held to its window with every check passing, and the command refuses, before
 staging or proving anything, a bundle whose payload was edited and a window whose sampled member's public body isn't the
 one the bundle names. Proving it end to end needs Flock, Lean and the window's private files: `prove_bundle.sh`."""
 from __future__ import annotations
@@ -14,10 +14,10 @@ from pathlib import Path
 import pytest
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
-PUBLIC = HERE / "fixtures" / "bundle-window-public"
+PUBLIC = Path(__file__).resolve().parent / "fixtures" / "bundle-window-public"
 E2E = HERE.parents[2] / "benchmarks" / "one_stage" / "interfaces" / "tests" / "fixtures"
 sys.path.insert(0, str(HERE.parent))
-import prove_bundle as PB  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import prove_bundle as PB  # noqa: E402
 
 
 @pytest.fixture

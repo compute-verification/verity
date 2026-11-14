@@ -1,6 +1,6 @@
 module
 
-public import Flock.Firewall.Frames
+public import Flock.ZkServer.Frames
 public import Proofs.Flock.Claims.ZK.MaskedTables
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -62,7 +62,7 @@ open _root_.Flock FlockDeploy FlockComplete
 theorem live_links {x : Msg} (hx : Live x) {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hsx : setupOf true x = some (s, spec, sts)) {k : ℕ} (hk : k < spec.repStreams.size) :
     sts[k / 2]!.mPts = spec.mPts ∧ 0 < spec.mPts ∧
-      spec.points * spec.mPts ≤ _root_.Flock.Firewall.Frames.COIN_MAX := by
+      spec.points * spec.mPts ≤ _root_.Flock.ZkServer.Frames.COIN_MAX := by
   obtain ⟨p, hp, hsc⟩ := (Readable.scope_iff (deployZk Readable.relation) Readable.relation (readOf true) rfl
     (fun _ _ h => readOf_zk h) x).1 hx.1
   have hi := (setupOf_some hsx).1
@@ -98,7 +98,7 @@ theorem live_links {x : Msg} (hx : Live x) {s : Ins} {spec : SessionSpec} {sts :
   · unfold PT_LOCAL at hlo
     omega
   · rw [hpts]
-    unfold _root_.Flock.Firewall.Frames.COIN_MAX
+    unfold _root_.Flock.ZkServer.Frames.COIN_MAX
     omega
 
 end Claims.ZKMal.Masked

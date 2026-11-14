@@ -56,7 +56,7 @@ with probability `p`, then `k` of its proof blocks uniformly, and the replay uni
 noncomputable def detectionRisk (N k : ℕ) (p : ℝ) (m : ℕ) : ℝ :=
   -Real.log (1 - p + p * ((N - m).choose k : ℝ) / (N.choose k : ℝ))
 
-/-- **The nested law** over `R` replay units of `N` proof blocks each, proof block `j` of replay unit `i` being
+/-- **The nested sampling design** over `R` replay units of `N` proof blocks each, proof block `j` of replay unit `i` being
 `finProdFinEquiv (i, j)`: each replay unit is sampled independently with probability `a / b` (`Law.bernoulli`), and inside
 each sampled one, `k` of its `N` proof blocks uniformly (`Law.subset`), independently across replay units. -/
 def nested (R N k a b : ℕ) [NeZero b] (hk : k ≤ N) : Law (R * N) where

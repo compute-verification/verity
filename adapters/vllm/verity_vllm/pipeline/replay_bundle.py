@@ -110,7 +110,7 @@ def start(out: Path, pair: int, com: Any, rc: Any, args: Any, protocols: Any) ->
     C2 site: the store is final at finalize and every one of those checks only reads it, so `defer` takes the same files and digests
     without waiting for both in turn.  The registered tensors the bundle carries (`weights_extra`, read from the device) and the engine's
     facts of record are read here, before it returns.  None when `defer` would not write the full store from here: no deferral, a slim
-    one (its reads come from the challenge), a live-only replay, a retention other than host, or a store over the cap."""
+    one (its reads come from the challenge), a live-only replay, a retention other than host, or a store over its bound."""
     if (not args.replay_deferred or args.replay_deferred == "slim" or not getattr(args, "replay_bundle_overlap", 1)
             or C2.live_only_entry(protocols) or C2.retention_of(com, args) != "host"
             or SD.nbytes(com) > float(getattr(args, "replay_bundle_cap_gb", 300)) * 1e9):
@@ -181,20 +181,20 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
                     "linkage": planned.get("linkage"), "plan_s": round(time.perf_counter() - t0, 3)}
             logger.info("[delta] REPLAY BUNDLE (pair %s): slim -- %s picks + linkage read %s MiB of the store in %s s (unresolved %s)", pair,
                         slim["picked"], read >> 20, slim["plan_s"], slim["unresolved_n"])
-        size, cap = t.nbytes() if t is not None else SD.nbytes(com), float(getattr(args, "replay_bundle_cap_gb", 300)) * 1e9
-        if size > cap:
+        size, bound = t.nbytes() if t is not None else SD.nbytes(com), float(getattr(args, "replay_bundle_cap_gb", 300)) * 1e9
+        if size > bound:
             tl.end("validate.replay_bundle", pair=pair, ok=False)
-            logger.warning("[delta] REPLAY BUNDLE (pair %s): REFUSED -- %.1f GB is over the %.0f GB cap (--replay-bundle-cap-gb); the C2 replay "
-                           "runs in this process", pair, size / 1e9, cap / 1e9)
+            logger.warning("[delta] REPLAY BUNDLE (pair %s): REFUSED -- %.1f GB is over the %.0f GB bound (--replay-bundle-cap-gb); the C2 replay "
+                           "runs in this process", pair, size / 1e9, bound / 1e9)
             return False
         hashed = {}
         write_store(out, pair, com, rc, digests=hashed, touched=t)
-    caps = {str(q.get("request_id")): int(q.get("max_tokens") or 1) for q in reqs}
+    max_tokens = {str(q.get("request_id")): int(q.get("max_tokens") or 1) for q in reqs}
     ctx = {"pair": pair, "arm": arm, "committer": com.name, "run_root": rc.run_root.hex(), "code": versions.get("git_head"),
            "args": {k: getattr(args, k, None) for k in ARGS}, "requests": reqs, "sampling": sampling, "tokens": tokens,
            "stop_of_record": stop_of_record,
            # the reconciliation of the not-executed class reads the placed identities only when a request stopped early
-           "ids_full": ids_full if any(len(v) < caps.get(str(k), 0) for k, v in tokens.items()) else None,
+           "ids_full": ids_full if any(len(v) < max_tokens.get(str(k), 0) for k, v in tokens.items()) else None,
            "retention": C2.retention_of(com, args),
            "required_manifest_sha256": hashlib.sha256(Path(args.required_manifest).read_bytes()).hexdigest() if args.required_manifest else None,
            "declaration": declaration, "required_classes": list(required_classes), "min_openings": min(64, args.openings),

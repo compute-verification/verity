@@ -118,7 +118,7 @@ theorem ite_eq_ok {c : Prop} [Decidable c] {a j : Json} {rest : V Json}
 set_option maxHeartbeats 4000000 in
 /-- **A decided run passed its registration and ran the sample of record**: `run` either refuses at a step or passed the
 population, R1–R7 under the sampling design of the rule over it and the program's strata (`Rule.over`, `strataSizes`, a
-rate law's `subset:K`) and the work table it expands (`Rule.tableOver`, a work rate law's), and the sample's own check,
+rate sampling design's `subset:K`) and the work table it expands (`Rule.tableOver`, a work rate sampling design's), and the sample's own check,
 with its `draw` and `read` those of `Select.select` under `Select.resolve`'s rule on the challenger's bytes. -/
 theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :
     (∃ (step : String) (codes : Array String),

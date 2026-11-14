@@ -1,4 +1,4 @@
-"""difftest adapter for `act/SiluMul@v2`: production = vLLM `torch.ops._C.silu_and_mul(out, x)` on one bf16 row [gate | up].
+"""difftest adapter for `act/SiluMul@v2`: the served side = vLLM `torch.ops._C.silu_and_mul(out, x)` on one bf16 row [gate | up].
 
     verity-vllm properties-admission produce --adapter verity_vllm.program.quarantine.act.silu_mul_difftest --n 60 --seed 7 --out DIR
     verity-vllm properties-admission check   --adapter verity_vllm.program.quarantine.act.silu_mul_difftest --dir DIR --out quarantine.json
@@ -37,10 +37,10 @@ def production(statics: dict, inputs: list) -> list:
     import vllm._custom_ops  # noqa: F401  (registers torch.ops._C)
 
     (x,) = inputs
-    I = int(statics["I"])
-    out = torch.empty((1, I), dtype=torch.bfloat16, device=x.device)
-    torch.ops._C.silu_and_mul(out, x.view(1, 2 * I))
-    return [out.view(I)]
+    width = int(statics["I"])
+    out = torch.empty((1, width), dtype=torch.bfloat16, device=x.device)
+    torch.ops._C.silu_and_mul(out, x.view(1, 2 * width))
+    return [out.view(width)]
 
 
 def spec(statics: dict):
