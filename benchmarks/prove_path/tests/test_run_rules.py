@@ -7,6 +7,8 @@ script:
   blocks for the honest run, every one for the forged run, and a stratified design under ``PP_PLAIN=1``;
 * the rule the script's weights tie arm states to its records audit is the rate of every unit of the tie, which names
   the tie's own design, work over every one of its units;
+* that arm tells its records audit what each tie that must be refused forges, a registered read or a unit, and no other
+  arm of the script audits a window as forging a read;
 * each partition file (`partitions`: this benchmark's, the one-stage audit's and each one the script names) states a
   rate a stream takes or is listed as still stating a fixed design (`FIXED`), which an audit on a challenger's coins
   (`prove_path.py audit`, `a5.py --challenger`) refuses at the rule check and a served window's audit from its records
@@ -128,6 +130,40 @@ def test_the_weights_ties_arm_states_the_rate_of_every_unit_of_the_tie():
         program, query = population_program([(SRW.template(STANDIN).fn, units)])
         names = S.selection_law(rule, units, S.selection_sizes(rule, program, query))
         assert names == {KEY: "work", "k": units}, (text, names)
+
+
+def test_the_weights_ties_arm_tells_the_audit_what_each_refused_tie_forges():
+    """The weights tie's arm audits two ties that must be refused and tells `records_audit.py audit` what each forges,
+    since the audit passes a refused window on that kind's check alone. ``weights-tie-other`` serves another
+    checkpoint's words as the registered one's: a registered read that opens no pinned root, in a window of no false
+    unit (``--forged-read``). ``weights-tie-forged`` forges its ends' digests too: false units (``--forged``). The
+    honest tie is told neither. `tie` sets what the audit is told from its own arguments, each in turn, and hands it to
+    the audit, and no other arm of the script names ``--forged-read``."""
+    def code(text: str) -> str:
+        """``text``'s lines but its comments', each without a comment after its code."""
+        return "\n".join(x.split(" #", 1)[0] for x in text.splitlines() if not x.lstrip().startswith("#"))
+
+    script = code(RUN_SH.read_text())
+    arm = script.split('elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then', 1)[1].split("\nelse\n", 1)[0]
+    told = dict(re.findall(r"^\s*(--[\w-]+)\) forged=(\S+);", arm, re.M))
+    ties = re.findall(r"\btie (weights-tie[\w-]*)((?: --[\w-]+)*) \|\| rc=1", arm)
+    assert told and ties and re.search(r'for x in "\$@"; do\s+case \$x in', arm), (
+        f"{RUN_SH.name}'s weights tie arm no longer sets what its audit is told as this test reads it (a `case` over "
+        f"`tie`'s arguments in turn, each `--ARG) forged=FLAG;`, and `tie NAME [--ARG ...] || rc=1`): {told}, {ties}")
+
+    def audited(args: str) -> str | None:
+        flag = None
+        for x in args.split():
+            flag = told.get(x, flag)
+        return flag
+    assert {name: audited(args) for name, args in ties} == {
+        "weights-tie": None, "weights-tie-other": "--forged-read", "weights-tie-forged": "--forged"}, (told, ties)
+    audits = re.findall(r"records_audit\.py audit [^\n]*", arm.replace("\\\n", " "))
+    assert len(audits) == 1 and " $forged " in audits[0] and "--forged" not in audits[0], (
+        f"{RUN_SH.name}'s weights tie arm hands its one records audit what `tie` set, and no flag of its own: {audits}")
+    assert script.count("--forged-read") == arm.count("--forged-read") == 1, (
+        f"{RUN_SH.name} audits a window as forging a registered read (`--forged-read`) outside its weights tie's "
+        "`--served`: say in its header which arm passes on that refusal, and hold it here")
 
 
 def test_each_partition_file_states_a_rate_or_is_listed_as_still_stating_a_fixed_design():
