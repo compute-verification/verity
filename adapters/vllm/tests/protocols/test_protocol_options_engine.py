@@ -81,16 +81,15 @@ def test_unhook_takes_every_options_hooks_off_and_leaves_each_release_to_the_clo
     log: list[str] = []
     _both(monkeypatch, log)
     model, before = Model(), hooks.live()
-    comp = PO.install(model, _serve(POUW, POUS))
-    layer = model.layers[0]
-    assert layer.quant_method.apply(layer, "x") == ("pouw", 2, "x") and log == ["pouw", "responder up", "pous"]
-    comp.unhook()
-    assert log[3:] == ["responder down handle"]                              # its service stopped, nothing released
-    assert hooks.live() == before and all("apply" not in vars(m.quant_method) for m in model.layers)
-    assert layer.quant_method.apply(layer, "x") == ("gemm", 2, "x")
-    assert not comp.closed and comp.entries == (POUW, POUS) and not any(opt.closed for opt in comp.installed)
-    comp.unhook()                                                            # nothing is left to take off
-    comp.close()
+    with PO.install(model, _serve(POUW, POUS)) as comp:
+        layer = model.layers[0]
+        assert layer.quant_method.apply(layer, "x") == ("pouw", 2, "x") and log == ["pouw", "responder up", "pous"]
+        comp.unhook()
+        assert log[3:] == ["responder down handle"]                          # its service stopped, nothing released
+        assert hooks.live() == before and all("apply" not in vars(m.quant_method) for m in model.layers)
+        assert layer.quant_method.apply(layer, "x") == ("gemm", 2, "x")
+        assert not comp.closed and comp.entries == (POUW, POUS) and not any(opt.closed for opt in comp.installed)
+        comp.unhook()                                                        # nothing is left to take off
     assert log[3:] == ["responder down handle", "pous released"] and hooks.live() == before
 
 
@@ -106,24 +105,22 @@ def test_unhook_tries_every_options_hooks_and_raises_the_first_error(monkeypatch
     _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=(POUW.partition(":")[2],))
     _fake_adapter(monkeypatch, "pous", install, schemes=(POUS.partition(":")[2],))
     model, before = Model(), hooks.live()
-    comp = PO.install(model, _serve(POUW, POUS))
-    with pytest.raises(RuntimeError, match="^the responder did not stop$"):
-        comp.unhook()
-    assert hooks.live() == before and all("apply" not in vars(m.quant_method) for m in model.layers)
-    comp.close()                                                             # a stop that raised is not tried again
+    with PO.install(model, _serve(POUW, POUS)) as comp:                      # its close: a stop that raised is not tried again
+        with pytest.raises(RuntimeError, match="^the responder did not stop$"):
+            comp.unhook()
+        assert hooks.live() == before and all("apply" not in vars(m.quant_method) for m in model.layers)
 
 
 def test_an_option_closed_before_its_composition_is_released_once(monkeypatch):
     log: list[str] = []
     _both(monkeypatch, log)
     model, before = Model(), hooks.live()
-    comp = PO.install(model, _serve(POUS))
-    opt = comp.get("pous")
-    opt.close()
-    assert opt.closed and log == ["responder up", "pous", "responder down handle", "pous released"]
-    assert hooks.live() == before
-    opt.close()
-    comp.close()
+    with PO.install(model, _serve(POUS)) as comp:
+        opt = comp.get("pous")
+        opt.close()
+        assert opt.closed and log == ["responder up", "pous", "responder down handle", "pous released"]
+        assert hooks.live() == before
+        opt.close()
     assert log.count("pous released") == 1 and log.count("responder down handle") == 1
 
 

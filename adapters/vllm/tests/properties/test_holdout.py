@@ -1,18 +1,23 @@
 """holdout.py (protected): a seed's workloads are the same workloads at every run, so a holdout can be made again from its
-seed, and every request keeps to the generator's pools and off the reserved token ids; `assemble` passes the holdouts whose
-six gates each pass; and what `main` writes, prints and exits with."""
+seed, and every request keeps to the generator's pools and off the reserved token ids, or takes the lengths given for its
+place; a holdout is a workload record with the pinned engine and greedy sampling, and its digest is of all of it but the
+time it was made; `assemble` passes the holdouts whose six gates each pass; and what `main` writes, prints and exits with."""
 from __future__ import annotations
 
+import datetime as dt
+import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 from verity_vllm.check.gates import HOLDOUT_GATES
-from verity_vllm.config import UsageError
+from verity_vllm.config import VLLM, UsageError
 from verity_vllm.pipeline import cli
 from verity_vllm.properties import holdout
+from verity_vllm.records.workload import Workload
 
 CASE, MODEL, VOCAB, SEED = "B0", "m/x", 1000, 20260917
 
@@ -47,6 +52,70 @@ def test_every_request_keeps_to_the_pools_and_off_the_reserved_ids(tmp_path: Pat
         for r in d["requests"]:
             assert len(r["prompt_token_ids"]) in holdout.LENGTH_POOL and r["max_tokens"] in holdout.DECODE_POOL
             assert all(100 <= t < VOCAB - 100 for t in r["prompt_token_ids"])
+
+
+def _workload(**given: Any) -> dict[str, Any]:
+    return holdout.make_workload(**{"case": CASE, "model": MODEL, "vocab": VOCAB, "seed": 7, **given})
+
+
+def test_a_request_takes_the_lengths_given_for_its_place_and_the_pools_past_them() -> None:
+    doc = _workload(n_requests=3, lengths=[4, 6], max_tokens=[3])
+    assert doc["prompt_lengths"][:2] == [4, 6] and doc["prompt_lengths"][2] in holdout.LENGTH_POOL
+    decode = [r["max_tokens"] for r in doc["requests"]]
+    assert decode[0] == 3 and set(decode[1:]) <= set(holdout.DECODE_POOL)
+
+
+def test_the_token_ids_keep_off_the_reserves_given_and_a_vocabulary_with_nothing_between_them_gives_one_id() -> None:
+    ids = _workload(lengths=[64], reserve_low=10, reserve_high=20)["requests"][0]["prompt_token_ids"]
+    assert all(10 <= t < VOCAB - 20 for t in ids) and not all(100 <= t < VOCAB - 100 for t in ids)
+    assert _workload(vocab=150, lengths=[64])["requests"][0]["prompt_token_ids"] == [100] * 64             # the first id above the low reserve
+
+
+def test_a_sampling_given_is_the_greedy_variant_in_place_of_the_default() -> None:
+    assert _workload()["variants"] == {"greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0}}
+    assert _workload(sampling={"temperature": 0.0, "top_k": 1})["variants"] == {"greedy": {"temperature": 0.0, "top_k": 1}}
+
+
+def _utc_clock(monkeypatch: pytest.MonkeyPatch, *instants: dt.datetime) -> None:
+    """`holdout` reads its clock from `instants`, one a reading, and may ask for nothing but the time in UTC."""
+    readings = iter(instants)
+
+    def now(tz: dt.tzinfo | None = None) -> dt.datetime:
+        assert tz is dt.UTC
+        return next(readings)
+    monkeypatch.setattr(holdout, "dt", SimpleNamespace(UTC=dt.UTC, datetime=SimpleNamespace(now=now)))
+
+
+def test_a_workloads_digest_is_of_all_of_it_but_the_time_it_was_made(monkeypatch: pytest.MonkeyPatch) -> None:
+    made, again = dt.datetime(2026, 1, 2, 3, 4, 5, tzinfo=dt.UTC), dt.datetime(2027, 6, 7, 8, 9, 10, tzinfo=dt.UTC)
+    _utc_clock(monkeypatch, made, again, made)
+    first, later, other = _workload(n_requests=2), _workload(n_requests=2), _workload(n_requests=2, seed=8)
+    assert (first["generated_utc"], later["generated_utc"]) == ("2026-01-02T03:04:05Z", "2027-06-07T08:09:10Z")
+    assert list(first)[-2:] == ["generated_utc", "sha256"]
+    rest = {k: v for k, v in first.items() if k not in ("generated_utc", "sha256")}
+    assert rest == {k: v for k, v in later.items() if k not in ("generated_utc", "sha256")}
+    assert first["sha256"] == later["sha256"] == hashlib.sha256(json.dumps(rest, sort_keys=True).encode()).hexdigest()
+    assert other["generated_utc"] == first["generated_utc"] and other["sha256"] != first["sha256"]
+
+
+def test_a_holdout_is_a_workload_record_with_the_pinned_engine_and_greedy_sampling(tmp_path: Path) -> None:
+    """Each file `generate` writes, into a directory it makes, loads as the record, whose reader refuses a field it does not
+    know: the model, the case, the engine of the pin with the tokenizer's revision and no argument, the one variant, the
+    requests, and what a reader does not interpret (the seed, the note that names it, the lengths, the time, the digest)."""
+    paths = holdout.generate(tmp_path / "gen" / "holdouts" / CASE, case=CASE, model=MODEL, vocab=VOCAB, n=2, seed=SEED, n_requests=2,
+                             tokenizer_revision="abc")
+    assert [p.name for p in paths] == ["holdout_B0_0_1363946732.json", "holdout_B0_1_1302387300.json"]
+    for p, seed in zip(paths, (1363946732, 1302387300), strict=True):
+        w, doc = Workload.load(p), json.loads(p.read_text())
+        assert (w.schema, w.model, w.case, w.sampling, w.sweep) == ("verity-vllm/workload/v2", MODEL, CASE, None, None)
+        assert w.engine == {"revision": "abc", "vllm": VLLM, "args": {}}
+        assert w.variants == {"greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0}}
+        assert [(r.request_id, r.max_tokens, r.prompt_length) for r in w.requests] == [
+            (r["request_id"], r["max_tokens"], len(r["prompt_token_ids"])) for r in doc["requests"]]
+        assert [list(r.prompt_token_ids or ()) for r in w.requests] == [r["prompt_token_ids"] for r in doc["requests"]]
+        assert set(w.info) == {"seed", "seeds", "note", "prompt_lengths", "generated_utc", "sha256"}
+        assert (w.info["seed"], w.info["seeds"]) == (seed, [seed]) and f"seed {seed})" in w.info["note"]
+        assert w.info["prompt_lengths"] == [r.prompt_length for r in w.requests]
 
 
 def _run(root: Path, name: str, gates: Any = None, workload: str | None = None) -> Path:
@@ -125,6 +194,19 @@ def test_main_generates_a_seeds_workloads_and_prints_each(tmp_path: Path, capsys
     assert printed.out.split("\n") == [f"{tmp_path / 'B0' / names[0]}  lengths=[31, 65] max_tokens=[5, 24]",
                                        f"{tmp_path / 'B0' / names[1]}  lengths=[33, 96] max_tokens=[9, 5]", ""]
     assert printed.err == f"[holdout] seed {SEED}: 2 workloads\n"
+
+
+def test_main_without_a_seed_takes_it_from_the_clock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    """The seed is the clock's whole seconds, less 2**31 once they are past it."""
+    instant = dt.datetime(2040, 1, 2, 3, 4, 5, 600000, tzinfo=dt.UTC)
+    monkeypatch.setattr(holdout, "dt", SimpleNamespace(UTC=dt.UTC, datetime=SimpleNamespace(now=lambda tz=None: instant)))
+    seed = 2209086245 - 2**31
+    assert holdout.main(cli.parse("holdout", ["--generate", "--case", CASE, "--model", MODEL, "--vocab", str(VOCAB), "--n", "1",
+                                              "--out", str(tmp_path / "B0")], {})) == 0
+    assert capsys.readouterr().err == f"[holdout] seed {seed}: 1 workloads\n"
+    again = holdout.generate(tmp_path / "again", case=CASE, model=MODEL, vocab=VOCAB, n=1, seed=seed)
+    assert [p.name for p in (tmp_path / "B0").iterdir()] == [p.name for p in again]
+    assert (tmp_path / "B0" / again[0].name).read_text() == again[0].read_text()
 
 
 @pytest.mark.parametrize("argv, why", [
