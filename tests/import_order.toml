@@ -490,6 +490,7 @@ paths = [
 loads = [
     "verity/circuits",
     "verity/commitments",
+    "verity/commitments/windows",
 ]
 
 [[place]]

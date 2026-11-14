@@ -585,7 +585,7 @@ theorem law_placeA (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : 
 
 end Along
 
-/-- **The coin map's law holds** (`CoinMapHolds`): at every vocabulary, statement, strategy, locator, prover and set
+/-- **The coin map's distribution holds** (`CoinMapHolds`): at every vocabulary, statement, strategy, locator, prover and set
 of read rounds, `CoinMapLaw` at the frame of `L`, the agreement `ElemAgrees` and `hide = gapOf`. -/
 theorem coinMapHolds {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] :
     CoinMapHolds (d := d) (α := α) := by

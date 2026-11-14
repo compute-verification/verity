@@ -29,10 +29,10 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   `challenger`, `{"key", "label"}`: the auditor's challenger the sample's coins come from (its LMS key,
   `ChallengerKey.ofJson`) and the family they are sampled from, which needs `window_root`, refused in any other form; and
   it may add `day` and `declarations`, both or neither: the window's day (a natural number) and the registration log's
-  declarations, each exactly `{"blocks", "day", "program"}` with a natural day and a string program, which R2 holds the
-  record's program to (`Registration.declaredCode`), refused in any other form; and it may add `seed_salt`: the window's
+  declarations, each exactly `{"blocks", "day", "program"}` with a natural day and a string program, which the caller's
+  check holds the record's program to (`VStar.Recursive.Caller.declaredCode`), refused in any other form; and it may add `seed_salt`: the window's
   seed salt it read from the challenger's log (`Challenger.seedSaltOf`), lowercase hex of 64 bytes, which needs
-  `window_root` and which R6 holds the record's window to name (`R6-seed-salt`), refused in any other form; and it may
+  `window_root` and which the caller's check holds the record's window to name (`R6-seed-salt`), refused in any other form; and it may
   add `compiler`: the registration log's registered compiler as its view publishes it (`RegistrationLog`'s
   item), null when the log registers none, the digest lowercase hex of 64 bytes and the length ℓ a natural, whose digest
   R6 holds the record's window's compiler to and ℓ its advice's bits (`Registration.compilerOk`,
@@ -85,7 +85,7 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   (`Record.allRan`, the audit record's own `complete`): an accept waits on the verdicts of record and on no other, so
   one that is not of record may not have run, and a reader for which every one must have reads accept and `complete`,
   an answer without the field as not complete; and the **profile** is `audit.profile`'s `IntegrityProfile`: one level
-  `unit`, the partition's units, sampled by the verifier's law.
+  `unit`, the partition's units, sampled by the verifier's sampling design.
 -/
 module
 
@@ -150,7 +150,7 @@ private def nats (j : Json) (what : String) : V (Array Nat) := do
     | some n => pure n
     | none => throw s!"{what} is not a list of natural numbers"
 
-/-- The agreed law, a rule `Draw.derive` expands. -/
+/-- The agreed sampling design, a rule `Draw.derive` expands. -/
 def rule (law : Json) : V Json := do
   match getD law "law" with
   | .str "bernoulli" =>
@@ -164,7 +164,7 @@ def rule (law : Json) : V Json := do
   return law
 
 /-- The agreed sampling design and the work table it is expanded over: a sampling design object (`rule`) with the verifier's own work
-`table`, or a rate stated as a selection rule's law text (`Select.parseRate`, `Select.parseStrataRate`), which names its
+`table`, or a rate stated as a selection rule's sampling design text (`Select.parseRate`, `Select.parseStrataRate`), which names its
 sampling design over the population of `program` under `query` and its strata as a stream's rule does (`Select.Rule.over`,
 `Select.strataSizes`, `Select.Rule.lawOver`) and its work table (`Select.Rule.tableOver`). -/
 def design (program : Program) (query : Json) (law : Json) (table : Option Json) : V (Json × Option Json) := do
@@ -610,7 +610,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
         delta := p.delta, drawn := #[(Record.LEVEL, units.size)] }
   | _, _ => .reject "the law the draw passed under has no profile"
 
-/-- Why the sample is not the one the coins `src` give under the verifier's law as derived (`coinsReason`); none when it
+/-- Why the sample is not the one the coins `src` give under the verifier's sampling design as derived (`coinsReason`); none when it
 is, and when the sampling design doesn't derive, which `check` refuses. -/
 def coinsWhy (p : Params) (c : Commitment) (e : Evidence) (src : ByteArray) : Option String :=
   let v := p.verifier
@@ -618,7 +618,7 @@ def coinsWhy (p : Params) (c : Commitment) (e : Evidence) (src : ByteArray) : Op
   | .ok law => coinsReason v law c.record e.draw src
   | .error _ => none
 
-/-- Whether the coins `src` run out before the sample under the verifier's law as derived ends (`drawnFrom` refused with
+/-- Whether the coins `src` run out before the sample under the verifier's sampling design as derived ends (`drawnFrom` refused with
 `Draw.RAN_OUT`); false when the sampling design doesn't derive or the record names no population, which `check` refuses. -/
 def ranOut (p : Params) (c : Commitment) (src : ByteArray) : Bool :=
   let v := p.verifier

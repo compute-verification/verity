@@ -37,6 +37,7 @@ verity_vllm.program.predict.node_window_sparse
 verity_vllm.program.predict.node_window_multimem
 verity_vllm.program.predict.node_window_embed
 verity_vllm.program.predict.node_window_select
+verity_vllm.program.predict.node_window_reads       # a node window's boundary reads: a library entry point (`boundary_reads`, `written_once`), for the class's Definition
 verity_vllm.program.predict.node_window_values      # a node window's value check: a library entry point (`made_up`, `Values`, `Check`, `run`)
 verity_vllm.program.predict.steps      # I2, the compiler: a library entry point (`compile_steps`), called from outside the package
 verity_vllm.program.predict.window_circuit      # the window class circuit: a library entry point (`window_circuit`), called by benchmarks/prove_path (window-circuit, class-size)
@@ -57,6 +58,8 @@ verity_vllm.pipeline.tick_plugin      # --admit tick under vLLM's own server: vL
 verity_vllm.pipeline.cut_plugin       # the carried pool's cut at each window edge under vLLM's own server: vLLM imports its general plugin (register) by name
 verity_vllm.pipeline.edge      # a replay block's edge values and `follows`: a library entry point, read by benchmarks/prove_path
 verity_vllm.pipeline.interior_rows      # a two-stage audit's interior registration from replay: a library entry point (`Replay`, `span`, `interior`), for the two-stage driver
+verity_vllm.pipeline.window_replay      # a window's circuit as one replay Definition: a library entry point (`replay`), for a class's replay block
+verity_vllm.pipeline.node_window_rows   # a rank's node window on the served path: a library entry point (`commit_rank_window`), not built
 verity_vllm.pipeline.serve_h1      # a served window's PoUW H1 release: a library entry point (`config_of`), read by benchmarks/one_stage/served_verdicts.py
 verity.definitions.numerics.twins      # the twins register their kernels with core on import: a library entry point, imported by circuit-check's targets and check's prebuild
 # the engine core's seam and the stock engine: library entry points (tests/test_vllm_public_api.py's PUBLIC), which general plugins

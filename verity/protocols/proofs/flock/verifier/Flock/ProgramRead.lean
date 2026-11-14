@@ -456,7 +456,7 @@ def Stmt.setupTablesBy (readDesc : ByteArray → V TemplateQuery.Desc) (readProg
   if count > Tags.MAX_TABLES then throw s!"tables: at most {Tags.MAX_TABLES} per session, not {count}"
   let splits := fun (n : Nat) => if n == 0 || n % count != 0 then throw s!"tables: {n} units do not split into {count} equal tables"
     else (pure () : V Unit)
-  -- the sample's law and count are refused before the circuit is read
+  -- the sample's sampling design and count are refused before the circuit is read
   let u? ← draw.mapM Draw.UnitDraw.ofJson
   if let some u := u? then
     match u.law with

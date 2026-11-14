@@ -73,8 +73,6 @@
     {"file": "benchmarks/pouw/rt2_logic/clock_offsets.py", "count": 1},
     {"file": "benchmarks/pouw/rt_fp/fx1_absorb.py", "count": 3},
     {"file": "benchmarks/pouw/rt_hopper/forms_gap.py", "count": 1},
-    {"file": "benchmarks/pouw/served_zk/rows_bench.py", "count": 5},
-    {"file": "benchmarks/pouw/served_zk/stage_tile.py", "count": 1},
     {"file": "benchmarks/pouw/tests/test_fp_exact.py", "count": 1},
     {"file": "benchmarks/pouw/tests/test_pearl_c_sm120.py", "count": 1},
     {"file": "benchmarks/pouw/tests/test_pearl_c_sm90.py", "count": 1},
@@ -267,6 +265,8 @@
     {"file": "tools/research/src/research/at_main.py", "count": 4},
     {"file": "benchmarks/served_commit/tests/test_served_arm.py", "count": 1},
     {"file": "tools/research/src/research/landing.py", "count": 2},
-    {"file": "tools/config/verity_config/verity_settings.py", "registry": true}
+    {"file": "tools/config/verity_config/verity_settings.py", "registry": true},
+    {"file": "verity/protocols/accounting/pouw/prover/kernels/served_zk/rows_bench.py", "count": 5},
+    {"file": "verity/protocols/accounting/pouw/prover/kernels/served_zk/stage_tile.py", "count": 1}
   ]
 }

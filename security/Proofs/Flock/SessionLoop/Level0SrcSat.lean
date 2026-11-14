@@ -6,7 +6,7 @@ public import Proofs.Flock.Claims.ZK.FrameParse
 /-!
 # The loop's level-0 source is satisfiable
 
-`Loop.Level0Src`, the level-0 half of `Loop.Src` (`flock-firewall-os-src`), holds at every statement and witness for
+`Loop.Level0Src`, the level-0 half of `Loop.Src` (`flock-zk-server-os-src`), holds at every statement and witness for
 some source: the one that hands each rep stream its table's packed witness at the tape's mask words and the tape's
 level-0 samples, written in `Level0.ofDraws`'s layout.
 
@@ -22,7 +22,7 @@ level-0 samples, written in `Level0.ofDraws`'s layout.
 
 @[expose] public section
 
-namespace Flock.Firewall.Level0
+namespace Flock.ZkServer.Level0
 
 open Claims.ZKServer (get!_list size_list u64OfLE_of_get)
 
@@ -257,7 +257,7 @@ theorem ofDraws_inBytes {m : Nat} {s : _root_.Flock.Schedule} {tPad : Nat} {lv :
   exact ⟨_, hok, In_ext hw.symm hm.symm rfl (funext fun e => funext fun c => hE e c)
     (funext fun l => funext fun k => hP l k) (funext fun q => hS q)⟩
 
-end Flock.Firewall.Level0
+end Flock.ZkServer.Level0
 
 namespace Claims.ZKServer
 
@@ -274,7 +274,7 @@ noncomputable def Loop.tapeSrc (x : Msg) (w : Flock.Wit)
     (ρ : (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand)
     (k : ℕ) : V (Array F128 × ByteArray × Array ByteArray) :=
   if h : k / 2 < Masked.jOf x then
-    .ok ((Masked.linkIn x w ρ.2 ⟨k / 2, h⟩).g, _root_.Flock.Firewall.Level0.inBytes (Masked.lv0 x ⟨k / 2, h⟩)
+    .ok ((Masked.linkIn x w ρ.2 ⟨k / 2, h⟩).g, _root_.Flock.ZkServer.Level0.inBytes (Masked.lv0 x ⟨k / 2, h⟩)
       (Masked.zkTab x ⟨k / 2, h⟩).tPad (Masked.linkIn x w ρ.2 ⟨k / 2, h⟩), #[])
   else .error "no table"
 
@@ -289,7 +289,7 @@ theorem Loop.level0Src_tapeSrc (x : Msg) (w : Flock.Wit) : Loop.Level0Src Loop.t
     omega
   have hJ : (⟨(2 * j.val + r.val) / 2, hj⟩ : Fin (Masked.jOf x)) = j := Fin.ext hk
   have hsrc : Loop.tapeSrc x w (ν, t) (2 * j.val + r.val) = .ok ((Masked.linkIn x w t j).g,
-      _root_.Flock.Firewall.Level0.inBytes (Masked.lv0 x j) (Masked.zkTab x j).tPad (Masked.linkIn x w t j), #[]) := by
+      _root_.Flock.ZkServer.Level0.inBytes (Masked.lv0 x j) (Masked.zkTab x j).tPad (Masked.linkIn x w t j), #[]) := by
     unfold Loop.tapeSrc
     rw [dif_pos hj, hJ]
     all_goals rfl
@@ -335,7 +335,7 @@ theorem Loop.level0Src_tapeSrc (x : Msg) (w : Flock.Wit) : Loop.Level0Src Loop.t
   rw [hsrc]
   simp only [bind, Except.bind]
   rw [Masked.stsOf_half x j r]
-  exact _root_.Flock.Firewall.Level0.ofDraws_inBytes (m := (Masked.stAt x j).m) (s := (Masked.zkTab x j).sch)
+  exact _root_.Flock.ZkServer.Level0.ofDraws_inBytes (m := (Masked.stAt x j).m) (s := (Masked.zkTab x j).sch)
     (tPad := (Masked.zkTab x j).tPad) (lv := Masked.lv0 x j) (Masked.zkTab x j).hz rfl (Masked.linkIn x w t j) rfl rfl hg
     he hp hs hs'
 

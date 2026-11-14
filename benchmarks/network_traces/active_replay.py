@@ -162,7 +162,7 @@ from verity.protocols.accounting.certifier.verifier.schedule import (
     run_shaper,
 )
 from verity.protocols.accounting.certifier.verifier.served import Admission, ServedProfile, admits
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.service import WindowCommitmentRecord
 
 MODEL = "llama-3.1-8b-instruct"

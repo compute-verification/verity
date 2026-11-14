@@ -2,7 +2,7 @@
 its first template one instance short, or one over where it has a single instance, since a population has at least one
 (`partition.population_program`). A one-unit window is the case one short would leave empty.
 
-    import r2_population as R2
+    from verity.protocols.proofs.spot.verifier.tests import other_population as R2
     other = R2.program([(template, n)], mixed=False)            # TemplateInstances, as A0 and A2 build theirs
     other = R2.program(list(zip(defs, ns)), mixed=True)         # TemplatePopulations, as A3, A6, A7 and A11 do
 """

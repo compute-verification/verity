@@ -21,7 +21,7 @@ from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.accounting.certifier.verifier.warden import WardenParams
 from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
-from verity.protocols.proofs.spot.verifier.one_stage import registration as RG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.channel import Refused
 from verity_cli import run as R
 
@@ -519,11 +519,11 @@ def test_parties_apart_meet_only_at_a_configured_listen_port(tmp_path, capsys):
     rc, _ = run(tmp_path, registry(), "--on", "auditor-1", cfg=auditor)
     captured = capsys.readouterr()
     assert rc == 2 and said(captured.out) == [{"party": "network-certifier", "exit": 0}]
-    assert "refused listen: the verifier dials firewall, workers" in captured.err
+    assert "refused listen: the verifier dials zk_server, workers" in captured.err
     prover = tmp_path / "prover"
     prover.mkdir()
     rc, _ = run(prover, registry(), cfg=auditor)
-    assert rc == 2 and "refused listen: firewall, workers listen for the verifier" in capsys.readouterr().err
+    assert rc == 2 and "refused listen: zk_server, workers listen for the verifier" in capsys.readouterr().err
     party(auditor, "firewall").update(address="10.0.0.5", listen=7001)
     party(auditor, "workers").update(listen=7002)
     assert D.listening(K.check(auditor, REG.components, REG.workloads)) == {"firewall": "10.0.0.5:7001",
