@@ -16,9 +16,10 @@ are the Program's theta (`Program.theta`: the start's weights); the optimizer st
 
 At a compute capability (`cc`) the step is traced as that GPU runs it (`export_step(..., gpu=True)`): a `Tensor.is_cuda` the step's
 own code reads is True, so it takes its CUDA branches (`x.bfloat16() if x.is_cuda else x.float()` is bf16); an attention call
-the card gives its flash kernel is that kernel's op, which autograd pairs with the kernel's backward (`_CardSdpa`); and the two
-settings its calls run under that the traced graph doesn't show are the rules': TF32 (cuda.matmul.allow_tf32, `tf32`) and
-deterministic algorithms (`deterministic`), which the flash backward reads.
+the card gives its flash kernel is that kernel's op, which autograd pairs with the kernel's backward, one it gives its
+memory-efficient kernel is that kernel's op, which no rule lowers, and one whose kernel the trace can't name is refused
+(`_CardSdpa`); and the two settings its calls run under that the traced graph doesn't show are the rules': TF32
+(cuda.matmul.allow_tf32, `tf32`) and deterministic algorithms (`deterministic`), which the flash backward reads.
 
 A node no rule lowers is `Unsupported`, as for any derivation. `step_report(..., survey=True)` instead lowers every node it can and
 takes each refused one's output as a field of the `run` input (a hole, `rules.training_survey`), and returns a `StepSurvey`: every
@@ -158,17 +159,38 @@ class _TF32Seen(TorchFunctionMode):
 
 
 def _deterministic() -> bool:
-    """Whether torch's kernels run their deterministic algorithms now: the setting on, and not warn-only."""
+    """Whether the flash attention backward runs its deterministic algorithm now: torch.use_deterministic_algorithms on and not
+    warn-only, under which the kernel runs its non-deterministic one and warns. It is the one kernel of a step that reads it."""
     return torch.are_deterministic_algorithms_enabled() and not torch.is_deterministic_algorithms_warn_only_enabled()
 
 
+#: the dtypes of q, k and v the flash kernel takes, and the memory-efficient kernel from sm_80 (cuDNN's are the flash kernel's)
+_FLASH, _FUSED = (torch.float16, torch.bfloat16), (torch.float16, torch.bfloat16, torch.float32)
+
+
+def _efficient_takes(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, mask: torch.Tensor | None, gqa: bool) -> bool:
+    """Whether torch's memory-efficient kernel takes a 4-D call of one dtype of `_FUSED` on a card of sm_80 to sm_121, as
+    `can_use_mem_efficient_attention` decides for dense inputs; a grouped-query call (`gqa`) is not decided here: False."""
+    a = 4 if q.dtype == torch.float32 else 8   # `minimum_gemm_alignment`: 128 bits of the dtype, and at least 4
+    D, Dv = q.shape[-1], v.shape[-1]
+    return (not gqa and k.shape[-1] == D and D > 0 and Dv > 0 and D % a == 0 and Dv % a == 0
+            and all(t.storage_offset() % a == 0 and t.stride(-1) == 1 for t in (q, k, v)) and (mask is None or mask.stride(-1) == 1)
+            and q.shape[-2] > 0 and k.shape[-2] > 0 and q.shape[0] == k.shape[0] == v.shape[0]
+            and (q.shape[1] == k.shape[1] == v.shape[1] or (q.shape[1] > 0 and k.shape[1] == v.shape[1] == 1)))
+
+
 class _CardSdpa(TorchFunctionMode):
-    """`F.scaled_dot_product_attention` as torch's composite dispatches it on a CUDA device whose order of backends has flash
-    attention first: a call with no mask whose q, k and v are 4-D f16 or bf16 tensors is the flash kernel's op,
-    `aten._scaled_dot_product_flash_attention`, at the head dim padded to a multiple of 8 and the scale written out (1 / sqrt(D)
-    by default), its output cut back to D; autograd pairs it with `aten._scaled_dot_product_flash_attention_backward`. Every other
-    call is left to the trace, which decomposes it to the math path. Collects whether each call it sends to the kernel ran under
-    deterministic algorithms, which the kernel's backward reads."""
+    """`F.scaled_dot_product_attention` as torch's composite dispatches it on a CUDA device of sm_80 to sm_121 whose order of
+    backends is torch's default, flash, memory-efficient, math and cuDNN (torch puts cuDNN first only on some sm_9x and sm_10x
+    cards), every backend enabled. A call with 3-D q, k and v is the call on a batch of one, its output that batch's. A call with no mask whose q, k and
+    v are 4-D f16 or bf16 tensors is the flash kernel's op, `aten._scaled_dot_product_flash_attention`, at the head dim padded to
+    a multiple of 8 and the scale written out (1 / sqrt(D) by default), its output cut back to D; autograd pairs it with
+    `aten._scaled_dot_product_flash_attention_backward`. Another 4-D call of one dtype of `_FUSED` that the memory-efficient
+    kernel takes (`_efficient_takes`) is that kernel's op, `aten._scaled_dot_product_efficient_attention`, its mask as the
+    composite hands it over, which no rule lowers; one it doesn't take is refused (`ValueError`), naming the call, since it is
+    then a card's math path only by checks this trace doesn't read. Only a call no fused kernel takes, its q, k and v not all 4-D
+    of one such dtype, is left to the trace, which decomposes it to the math path. Collects whether each call it sends to the
+    flash kernel ran under deterministic algorithms, which the kernel's backward reads."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -179,16 +201,38 @@ class _CardSdpa(TorchFunctionMode):
         if func is not F.scaled_dot_product_attention:
             return func(*args, **kwargs)
         call = {**dict(zip(("query", "key", "value", "attn_mask", "dropout_p", "is_causal"), args)), **kwargs}
-        q, k, v = call["query"], call["key"], call["value"]
-        if call.get("attn_mask") is not None or any(t.dim() != 4 or t.dtype not in (torch.float16, torch.bfloat16) for t in (q, k, v)):
+        q, k, v, mask = call["query"], call["key"], call["value"], call.get("attn_mask")
+        if all(t.dim() == 3 for t in (q, k, v)):
+            q, k, v = (t.unsqueeze(0) for t in (q, k, v))
+            while mask is not None and mask.dim() < 4:
+                mask = mask.unsqueeze(0)
+        if any(t.dim() != 4 for t in (q, k, v)) or len({t.dtype for t in (q, k, v)}) != 1 or q.dtype not in _FUSED:
             return func(*args, **kwargs)
+        out = self._fused(q, k, v, mask, call)
+        return out.squeeze(0) if q.dim() != call["query"].dim() else out
+
+    def _fused(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, mask: torch.Tensor | None, call: dict) -> torch.Tensor:
+        scale, dropout_p, is_causal = call.get("scale"), call.get("dropout_p", 0.0), call.get("is_causal", False)
+        if mask is not None or q.dtype not in _FLASH:
+            if not _efficient_takes(q, k, v, mask, call.get("enable_gqa", False)):
+                raise ValueError(f"export_step: an attention call of q {list(q.shape)} {q.dtype}"
+                                 f"{' with a mask' if mask is not None else ''} is not one torch's flash kernel takes, nor its "
+                                 "memory-efficient kernel by the checks this trace reads, and no kernel is claimed for it")
+            if mask is not None:
+                if mask.dtype == torch.bool:
+                    mask = torch.where(mask, 0.0, torch.scalar_tensor(-math.inf, dtype=q.dtype, device=mask.device))
+                if not (mask.stride(-1) == 1 and all(s % 8 == 0 for s in mask.stride()[:-1])):
+                    L = mask.shape[-1]
+                    mask = F.pad(mask, (0, 8 - L % 8))[..., :L]
+                mask = mask.expand(q.shape[0], q.shape[1], q.shape[2], k.shape[2])
+            lse = torch.is_grad_enabled() and any(t.requires_grad for t in (q, k, v) + ((mask,) if mask is not None else ()))
+            return torch.ops.aten._scaled_dot_product_efficient_attention(q, k, v, mask, lse, dropout_p, is_causal, scale=scale)[0]
         self.deterministic.add(_deterministic())
         D = q.shape[-1]
         pad = -D % 8
         if pad:
             q, k, v = (F.pad(t, (0, pad)) for t in (q, k, v))
-        scale = call.get("scale")
-        out = torch.ops.aten._scaled_dot_product_flash_attention(q, k, v, call.get("dropout_p", 0.0), call.get("is_causal", False), False,
+        out = torch.ops.aten._scaled_dot_product_flash_attention(q, k, v, dropout_p, is_causal, False,
                                                                  scale=1.0 / math.sqrt(D) if scale is None else scale)[0]
         return out[..., :D] if pad else out
 
@@ -228,7 +272,7 @@ def _gpu_branches():
 def export_step(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | torch.optim.Optimizer, example_batch: torch.Tensor, *,
                 gpu: bool = False) -> tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout]:
     """The step's joint ATen graph (a `make_fx` `GraphModule`), its example inputs (meta tensors) and its `StepLayout`. `gpu`: traced
-    as a GPU runs it (`_gpu_branches`): its CUDA branches, its attention the card's flash kernel where the card takes it, and the
+    as a GPU runs it (`_gpu_branches`): its CUDA branches, its attention the card's fused kernel where the card takes one, and the
     layout's `tf32` and `deterministic` the cuda.matmul.allow_tf32 its calls and the deterministic algorithms its flash attention
     ran under, each of which must be one setting for the whole step (a step that changes one between calls is refused)."""
     from torch.fx.experimental.proxy_tensor import make_fx

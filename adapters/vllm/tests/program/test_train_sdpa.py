@@ -5,7 +5,8 @@ algorithms, one batch of its head Definition, its dQ, dK and dV each head's in o
 non-causal call, dropout, another scale and a read of the forward's state outside its own backward are refused, and the backward
 too in a step not under deterministic algorithms and in a variable-length call; only the training rules at the capture's cc
 hold the rules; and a bf16 step traced as the GPU runs it (`export_step(..., gpu=True)`) holds the op and its backward where
-the trace holds the math path otherwise."""
+the trace holds the math path otherwise, and a call the flash kernel doesn't take, with a mask or in f32, the op of the kernel
+the card takes it to, which is refused, or a refusal at export where the trace can't name that kernel."""
 from __future__ import annotations
 
 import math
@@ -178,9 +179,12 @@ def test_flash_backward_refusals(monkeypatch, why, kw, captured, deterministic, 
 
 
 def _attention_ops(gm: torch.fx.GraphModule) -> dict[str, int]:
-    """How many of the graph's nodes are the flash attention op, its backward, and the math path's products."""
+    """How many of the graph's nodes are the flash attention op, its backward, the memory-efficient attention op, its backward,
+    and the math path's products."""
     names = {aten._scaled_dot_product_flash_attention.default: "flash",
-             aten._scaled_dot_product_flash_attention_backward.default: "backward", aten.bmm.default: "bmm"}
+             aten._scaled_dot_product_flash_attention_backward.default: "backward",
+             aten._scaled_dot_product_efficient_attention.default: "efficient",
+             aten._scaled_dot_product_efficient_attention_backward.default: "efficient_backward", aten.bmm.default: "bmm"}
     out = dict.fromkeys(names.values(), 0)
     for n in gm.graph.nodes:
         if n.op == "call_function" and n.target in names:
@@ -190,13 +194,64 @@ def _attention_ops(gm: torch.fx.GraphModule) -> dict[str, int]:
 
 def test_gpu_export_takes_the_cards_attention_op() -> None:
     """`export_step(..., gpu=True)` holds each bf16 attention call of the tiny step as the flash attention op and its backward as
-    that op's, where the trace holds the math path's six products a layer: without `gpu`, and with it in f32."""
+    that op's, and each f32 one as the memory-efficient attention op and its backward, where without `gpu` the trace holds the
+    math path's six products a layer."""
     def ops(dtype, **kw) -> dict[str, int]:
         model, batch = meta_step("tiny", 2, ctx=16, vocab=64, matmul_dtype=dtype)
         return _attention_ops(export_step(model, square_loss, AdamW(**ADAMW), batch, **kw)[0])
 
-    assert ops(torch.bfloat16, gpu=True) == {"flash": 2, "backward": 2, "bmm": 0}
-    assert ops(torch.bfloat16) == ops(None, gpu=True) == {"flash": 0, "backward": 0, "bmm": 12}
+    none = {"flash": 0, "backward": 0, "efficient": 0, "efficient_backward": 0, "bmm": 0}
+    assert ops(torch.bfloat16, gpu=True) == {**none, "flash": 2, "backward": 2}
+    assert ops(None, gpu=True) == {**none, "efficient": 2, "efficient_backward": 2}
+    assert ops(torch.bfloat16) == ops(None) == {**none, "bmm": 12}
+
+
+class _OneAttention(torch.nn.Module):
+    """One attention call on the input plus a parameter of [1, 2, 16, 32], cast to `dtype`, cut to its first `D` features of a
+    head, and made 3-D (its first batch) where `unbatched`; causal, or with the causal mask of a bool `attn_mask` where `masked`."""
+
+    def __init__(self, dtype=torch.bfloat16, masked=False, D=32, unbatched=False) -> None:
+        super().__init__()
+        self.w = torch.nn.Parameter(torch.empty(1, 2, 16, 32, device="meta"))
+        self.dtype, self.masked, self.D, self.unbatched = dtype, masked, D, unbatched
+
+    def forward(self, x):
+        y = (x + self.w).to(self.dtype)[..., :self.D]
+        y = y[0] if self.unbatched else y
+        if self.masked:
+            return F.scaled_dot_product_attention(y, y, y, attn_mask=torch.ones(16, 16, dtype=torch.bool, device=y.device).tril())
+        return F.scaled_dot_product_attention(y, y, y, is_causal=True)
+
+
+def _one_attention(**kw):
+    model, batch, opt = _OneAttention(**kw), torch.empty(1, 2, 16, 32, device="meta"), AdamW(**ADAMW)
+    with _deterministic_algorithms():
+        exported = export_step(model, _sum_of_squares, opt, batch, gpu=True)
+        return exported, step_report(model, _sum_of_squares, opt, batch, exported=exported, cc=CC).unsupported
+
+
+@pytest.mark.parametrize("why, kw", [("a mask", {"masked": True}), ("f32", {"dtype": torch.float32}),
+                                     ("f32 with a mask", {"dtype": torch.float32, "masked": True})])
+def test_gpu_export_refuses_a_call_flash_does_not_take(why, kw) -> None:
+    """At a cc a 4-D attention call torch's flash kernel doesn't take, with a mask or in f32, is the op of the kernel a card
+    takes it to, memory-efficient attention, and its backward that op's, which no rule lowers: the step is refused there, and
+    none of the call is the math path's."""
+    exported, u = _one_attention(**kw)
+    ops = _attention_ops(exported[0])
+    assert ops["efficient"] == ops["efficient_backward"] == 1 and ops["flash"] == ops["bmm"] == 0, (why, ops)
+    assert isinstance(u, Unsupported) and "aten._scaled_dot_product_efficient_attention.default" in str(u), (why, u)
+
+
+def test_gpu_export_takes_no_kernel_it_cannot_name() -> None:
+    """At a cc an f32 attention call at a head dim of 30, which neither fused kernel takes by the checks the trace reads, is
+    refused at export, naming the call; an f64 call, which no fused kernel takes, is the math path's; and a 3-D call is the call
+    on a batch of one, the flash attention op."""
+    with pytest.raises(ValueError, match=r"an attention call of q \[1, 2, 16, 30\] torch.float32 .* no kernel is claimed"):
+        _one_attention(dtype=torch.float32, D=30)
+    ops = _attention_ops(_one_attention(dtype=torch.float64)[0][0])
+    assert ops["bmm"] == 6 and ops["flash"] == ops["efficient"] == 0, ops
+    ops = _attention_ops(_one_attention(unbatched=True)[0][0])
+    assert ops["flash"] == ops["backward"] == 1 and ops["bmm"] == ops["efficient"] == 0, ops
 
 
 class _TwoAttentions(torch.nn.Module):
