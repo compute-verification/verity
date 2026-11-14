@@ -1,6 +1,6 @@
 """The Build's DeepSeek sparse attention (GLM-5.3 on the H200), on a synthetic layer that makes `DeepseekV32Attention.forward`'s calls:
 
-* `export_compat.dsa_leaves` exports `fused_norm_rope`, `fused_q` and `_sparse_indexer_and_attn` as the `vllm_iface` leaves (the
+* `dsa_leaves.dsa_leaves` exports `fused_norm_rope`, `fused_q` and `_sparse_indexer_and_attn` as the `vllm_iface` leaves (the
   meta export has no KV cache, so the kernels' slot-mapping asserts never run) and unwinds; what it does not model refuses at export;
   `export_compat.moe_gate_leaf` does the same for the MoE gate's cuteDSL `ll_bf16_gemm`, which checks for CUDA operands;
 * `rules/vllm_dsa.py` derives an indexer layer and an IndexShare layer over a prefill and a decode step: per token the norms and
@@ -59,7 +59,7 @@ from tests import fake_vllm
 from verity_vllm.program import dsa_table
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
-from verity_vllm.program.frontend.export_compat import dsa_leaves
+from verity_vllm.program.frontend.dsa_leaves import dsa_leaves
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsa, vllm_dsa_dense
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
@@ -525,7 +525,8 @@ def test_the_observed_split_count_is_the_pin_on_the_impls_module(monkeypatch):
 def test_the_shims_leave_a_model_without_their_layers_unchanged(monkeypatch):
     """A gate that does not take tier 1 and a model without a sparse attention layer patch nothing (and import no vLLM site); the
     DSA kernels are patched in the module the layer's `forward` is defined in."""
-    from verity_vllm.program.frontend.export_compat import dsa_ops_leaf, moe_gate_leaf
+    from verity_vllm.program.frontend.dsa_leaves import dsa_ops_leaf
+    from verity_vllm.program.frontend.export_compat import moe_gate_leaf
     rng = np.random.default_rng(3)
     with moe_gate_leaf(_Gate(rng, allow=False)), dsa_ops_leaf(_Gate(rng)):
         assert GATE_SITE.ll_bf16_gemm is _cuda_only
