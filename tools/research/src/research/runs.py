@@ -20,6 +20,8 @@ from . import record, result
 DEFAULT_ROOT = Path.home() / ".research" / "runs"
 TERMINAL = ("done", "failed", "cancelled")
 ACTIVE = ("submitted", "admitted", "waiting", "running", "preserving")
+#: the states `summarize` gives a remote run that will not change again
+ENDED = (*TERMINAL, "refused", "launcher-exited", "runner-gone")
 #: a check's slot record in its run dir, kept by tools/verity/check/slot.py (RUN_SLOT): `waiting` in a machine's check line, `held`
 #: (the slot and when it was taken) or `left`; while it waits, the run is `waiting`, since its check hasn't started
 SLOT_FILE = "slot.json"
@@ -129,6 +131,7 @@ def summarize(run_dir: Path) -> dict[str, Any]:
         "rc": status.get("rc"),
         "signal": status.get("signal"),
         "wall_s": status.get("wall_s"),
+        "memory": status.get("memory"),
         "class": failure.get("class"),
         "certainty": failure.get("certainty"),
         "why": failure.get("why"),

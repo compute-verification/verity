@@ -59,7 +59,7 @@ prover at `deployedB` of the deployed brings at `x` (`bringsAt`: the deployed as
 
 This file has the run's records (`bLAt`, `IAt`, `DAt`) and the premises witnessed outside Lean, all on one run
 (`HonestFixture`): the run accepting (`HonestRunAccepted`), and no collision among a part's recorded calls (`NoCollAt`,
-SHA-512's collision event, which passed on that run's tree). Each part's staging setting up follows from the run
+SHA-512's collision event on that run). Each part's staging setting up follows from the run
 accepting (`stagedSetsUp_accepted`).
 `bringsAt_deployedB`: the brings here are `RecursiveKS`'s `deployedB` at `bringsAt mask Ir b0 x`.
 -/
@@ -115,17 +115,18 @@ noncomputable abbrev DAt : Claims.Recursion.Deploy Coin :=
 /-- **The verifier accepts the reference prover's run, at an instance that exists** (witnessed outside Lean). The
 statement `x` with witness `w` is in the compiled record's relation, parses to `st` at the dense form, and the compiled
 verifier accepts the reference prover's run on tape `ω` and coins `r`. A concrete statement can't be evaluated in Lean
-(its circuit is 22 MB and `Json.parse` is not kernel-evaluable), so this is witnessed outside Lean: every V\* part's
-session of the honest deployed recursive run is accepted by the compiled `flock-verify` (composed per part; no single
-compiled verdict exists).
+(its circuit is megabytes of text and `Json.parse` is not kernel-evaluable), so this is witnessed outside Lean: every
+V\* part's session of an honest deployed recursive session is accepted by Flock's compiled verifier at that part's
+flags, and by V\*'s compiled check over the whole session (`vstar-recursive verdicts`).
 
-The witness is a run of `benchmarks/recursion_e2e --e2e --cpu` (K = 64, N = 16, under the ZK server, at
-16a44e3b86). The compiled verifier printed `VERDICT {"accepted":true}` on each of the 10 V\* parts (L0–L3,
-alg-p0, alg-p1, cap, cap-L1–L3), and the inner session was accepted. With a challenge or query coin flipped, the parts
-that read it refused.
+The witness is `HonestFixture`'s session, whose docstring names its generator, its parameters and the kept session the
+tests read. The whole-session tests of
+`verity/protocols/proofs/recursion/verifier/vstar_cli/tests/test_vstar_recursive.py` (opt-in, under
+`VERITY_VSTAR_RECURSIVE_DATA`) hold that the two compiled programs accept every V\* part of it, each part's verdict the
+same in both, and that over the inner session with one challenge flipped some part refuses, the same parts in both.
 
-Only Python joins the 10 per-part verdicts, so what the run witnesses is that every part's session accepted, not that
-one compiled verifier accepted the whole outer statement. -/
+What the tests witness is that the compiled programs accept every part's session, on the session's files. No Lean
+term `x` is formed, so it is not `DAt`'s verifier evaluated at one. -/
 def HonestRunAccepted (w : Claims.Flock.Wit) (st : Claims.Recursion.CompiledStatement)
     (ω : Tape (bLAt mask Ir b0 x aux nOf hd recRest))
     (r : Fin ((DAt mask Ir b0 x aux nOf hd recRest).V.k x) → Coin) : Prop :=

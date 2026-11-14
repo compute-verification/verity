@@ -20,8 +20,9 @@ config that fails to compile (shared memory) or fails its gate is recorded and n
 models' K: each (num_warps, rows a program) plan gated (`quant`) and timed over copies of plain rows past the L2.
 
 Writes sweep.jsonl (every config's record), best.json after each shape ({"arch", "table": {"n,k": [[m, cfg, us,
-vllm_tiles_us, stock_us] (with `--zy` also zy_us, vllm_tiles_zy_us), ...]}}, what exactlin.CONFIGS[arch] takes, and with
-`--zy` "sass_gate"), quant.json (`--quant-only`: only it), and with `--zy` cubins/ and sass_gate.json.
+vllm_tiles_us, stock_us] (with `--zy` also zy_us, vllm_tiles_zy_us), ...]}, "configs"}: `table` is what CONFIGS[arch]
+takes in the file `configs` names, where the served kernel reads its tiles; the sweep names that file and never writes
+it; with `--zy` also "sass_gate"), quant.json (`--quant-only`: only it), and with `--zy` cubins/ and sass_gate.json.
 
 `--only CFG,...` skips coarse and refine: the final stage runs on those configs and vLLM's tiles (a confirmation).
 
@@ -39,9 +40,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import torch
+from verity_vllm.engine import int8_fused as X
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import exactlin as X
 import kbench
 import kgate
 
@@ -55,6 +56,8 @@ STAGES = (2, 3, 4, 5)
 QUANT_WARPS = (4, 8, 16, 32)
 QUANT_ROWS = (1, 2, 4, 8)
 QUANT_MAX_ELEMS = 32768  # a program's x elements: past this its float32 tile no longer fits in registers
+# where `gemm`'s winners go: the table `int8_fused.pick` reads, in the integration's engine profile
+CONFIGS_FILE = "adapters/vllm/verity_vllm/engine/profiles/int8_gemm_configs.py"
 
 
 def coarse_grid(m: int, tma: bool = False) -> list[X.Cfg]:
@@ -101,12 +104,12 @@ class Shape:
                 X.scaled_mm(self.xq, self.sa, w, sw, self.y, cfg, work)
         return f
 
-    def fn_zy(self, cfg: X.Cfg):
+    def fn_zy(self, cfg: X.Cfg) -> Callable[[], None]:
         from verity_vllm.engine import int8_fused as F
         work = kgate.work()
         ws = [(w, sw.reshape(-1)) for w, sw in self.ws]
 
-        def f():
+        def f() -> None:
             for w, sw in ws:
                 F.scaled_mm_zy(self.xq, self.sa, w, sw, self.y, self.zy, self.rows, cfg, work)
         return f
@@ -244,8 +247,8 @@ def gemm(out: Path, models: tuple[str, ...], ms: tuple[int, ...], top: int, reps
             row += [zmed.get(f"zy:{win}"), zmed.get(f"zy:{vt}")]
         table.setdefault(f"{n},{k}", []).append(row)
         print(json.dumps({"n": n, "k": k, "m": m, "layers": names, "best": row}), flush=True)
-        (out / "best.json").write_text(json.dumps({"device": torch.cuda.get_device_name(), "arch": X.arch(),
-                                                   "models": models, "table": table}, indent=1) + "\n")
+        (out / "best.json").write_text(json.dumps({"device": torch.cuda.get_device_name(), "arch": X.arch(), "models": models,
+                                                   "table": table, "configs": CONFIGS_FILE}, indent=1) + "\n")
         del shape
         torch.cuda.empty_cache()
     return table
@@ -327,9 +330,13 @@ def main() -> int:
     if a.quant_only:
         return 0
     table = gemm(out, models, ms, a.top, a.reps, clock, a.tma, a.zy, only)
+    print(json.dumps({"best": str(out / "best.json"), "configs": CONFIGS_FILE,
+                      "note": f"the served kernel reads CONFIGS[{X.arch()!r}] of `configs`; this sweep does not write it"}),
+          flush=True)
     if not a.zy:
         return 0
-    doc = {"device": torch.cuda.get_device_name(), "arch": X.arch(), "models": models, "table": table, "sass_gate": sass(out)}
+    doc = {"device": torch.cuda.get_device_name(), "arch": X.arch(), "models": models, "table": table,
+           "configs": CONFIGS_FILE, "sass_gate": sass(out)}
     (out / "best.json").write_text(json.dumps(doc, indent=1) + "\n")
     print(json.dumps({"sass_gate": doc["sass_gate"]}), flush=True)
     return 0 if doc["sass_gate"]["ok"] else 6

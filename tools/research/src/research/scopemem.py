@@ -32,6 +32,7 @@ import json
 import os
 import re
 import sys
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -110,7 +111,12 @@ def samples(run_dir: Path) -> list[dict[str, Any]]:
             lines = f.read().decode("utf-8", "replace").splitlines()[1 if size > SAMPLES_TAIL else 0:]
     except OSError:
         return []
-    out = []
+    return list(cgroup_records(lines))
+
+
+def cgroup_records(lines: Iterable[str]) -> Iterator[dict[str, Any]]:
+    """The sampler's cgroup records among the lines of a resources.jsonl, in the file's order. A line of another kind, and one
+    a write left unfinished, is passed over."""
     for line in lines:
         if '"kind":"cgroup"' not in line:
             continue
@@ -119,8 +125,7 @@ def samples(run_dir: Path) -> list[dict[str, Any]]:
         except ValueError:
             continue
         if isinstance(rec.get("cgroup"), dict) and isinstance(rec.get("t_mono"), (int, float)):
-            out.append(rec)
-    return out
+            yield rec
 
 
 def growth(recs: list[dict[str, Any]], path: str) -> dict[str, Any] | None:

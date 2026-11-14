@@ -479,6 +479,71 @@ def test_a_block_with_neither_its_own_nor_its_family_s_row_keeps_the_planner_s_p
         H.spec_of("(ii) honest", "world year", 0.4, steady={"rows": {}}, prices=H.prices(doc))
 
 
+#: one type timed both ways by one prover on ten cores: a full statement of 1,024 blocks and a quarter of one, in a
+#: statement's GPU-seconds (read off a split run, which is no steady-state row of record: a fixture only)
+FULL, QUARTER = (1024, 2.384), (256, 0.835)
+
+
+def two_sizes(full=FULL, part=QUARTER) -> dict:
+    """A type's own table row that timed a full statement and a part of one, priced at the full one's seconds a block."""
+    return {"source": "steady", "seconds": full[1] / full[0], "record": "r-full",
+            "sizes": [{"blocks": full[0], "statement_seconds": full[1], "record": "r-full"},
+                      {"blocks": part[0], "statement_seconds": part[1], "record": "r-part"}]}
+
+
+def test_a_type_timed_at_two_statement_sizes_takes_their_split_not_the_planner_s_proportion():
+    """A block whose own row timed two statement sizes takes the line through them: (f S_q - q S_f) / (f - q) fixed
+    seconds a statement, 0.318 s (13% of a full statement) on the full and quarter statements, and (S_f - S_q) / (f - q)
+    seconds a block, with the verifier's seconds a statement on top as before; a block and its share of a full
+    statement's fixed seconds still come to the row's seconds. The split says so (`own row, fixed part timed`). A
+    one-size row, and a block beside it, keep the planner's proportion exactly; two sizes whose line has a negative
+    fixed part are no split, and keep it too, saying why."""
+    core, v = 2.0, 2.0 * H.V_OTHER[0]
+    combine = {"source": "steady", "seconds": 3.0, "record": "art:combine"}
+    one_size = {k: x for k, x in two_sizes().items() if k != "sizes"}
+
+    def priced(quant: dict) -> tuple[list, list]:
+        calls = []
+        return H.pricing(planner_price, {}, core, calls, table={QUANT: quant, COMBINE: combine})(LINE, verify=1.0), calls
+
+    (timed, other), calls = priced(two_sizes())
+    (plain, other_plain), _ = priced(one_size)
+    fixed = (1024 * 0.835 - 256 * 2.384) / 768
+    assert isclose(timed["fixed_seconds"] - v, fixed, rel_tol=1e-12) and int(1000 * fixed) == 318
+    assert round(100 * fixed / 2.384) == 13
+    assert isclose(timed["seconds_per_block"], (2.384 - 0.835) / 768, rel_tol=1e-12)
+    assert isclose(timed["seconds_per_block"] + (timed["fixed_seconds"] - v) / 1024, 2.384 / 1024, rel_tol=1e-12)
+    assert timed["basis"] == f"steady: r-full, {H.TIMED} at 1024 and 256 blocks"
+    assert isclose(timed["verifier_fixed"] * timed["fixed_seconds"], v) and timed["verifier_block"] == 0
+    assert timed["fixed_timed"]["fixed_s"] == pytest.approx(fixed) and plain["fixed_timed"] is None
+    # the planner's proportion: the line's 8 s a statement over 4 blocks to 1 s a block (and the walk), scaled
+    assert (plain["fixed_seconds"] - v) / plain["seconds_per_block"] == pytest.approx(8.0 / (1.0 + walked(QUANT)))
+    assert other == other_plain and other["fixed_timed"] is None
+    assert [x["fixed_timed"] is not None for x in calls[-1][1]] == [True, False]
+
+    p = {"q": 1e-6, "replay_sample": 1.0, "left_out": [],
+         "cells": [{"block": QUANT, "share": 0.5, "prove_s": 1.0, "taken": 1.0, "fixed_s": 1.0, "sessions": 0.0},
+                   {"block": COMBINE, "share": 0.5, "prove_s": 1.0, "taken": 1.0, "fixed_s": 1.0, "sessions": 0.0}]}
+    assert H.plan_split(p, calls, [])["sources"] == {f"own row, {H.TIMED}": 0.5, "own row": 0.5}
+    assert H.table_share({"sources": H.plan_split(p, calls, [])["sources"]}) == 1.0
+
+    (crossed, _), _ = priced(two_sizes(FULL, (256, 0.4)))
+    assert [crossed[k] for k in ("fixed_seconds", "seconds_per_block", "fixed_timed")] == [
+        plain["fixed_seconds"], plain["seconds_per_block"], None]
+    assert crossed["basis"] == ("steady: r-full, the planner's proportion: its 1024 and 256 blocks timed give no split "
+                                "(-0.2613 s fixed, 0.002583 s a block)")
+    assert H.show_timed(QUANT, H.timed_split(two_sizes())) == (
+        f"`{QUANT}`: {H.TIMED}, 0.3187 s a statement (13.4% of 1024 blocks') and 2.017 ms a block: its own row timed "
+        "1024 blocks at 2.384 GPU-s a statement and 256 at 0.835 (r-full, r-part)")
+    assert H.timed_split(one_size) is None and H.timed_split(two_sizes() | {"source": "family"}) is None
+
+
+def walked(block: str) -> float:
+    """The quant walk's seconds a block of `block`, which the planner's price carries."""
+    m = H.QUANT.match(block)
+    return H.QUANT_WALK * int(m.group(1)) / 2048 if m else 0.0
+
+
 CONTROL = Path(__file__).parent / "fixtures" / "control"
 #: the control: `verity bench prove`'s table it prices row (ii) at, and the planner's inputs of the plan it must give
 CONTROL_SHA256 = {"bench_prices.json": "f2badd5ecdf36530b918b34782fec63466b8586cd6df55e46c43af442af9604c",
@@ -522,6 +587,37 @@ def test_row_ii_at_the_control_s_table_is_the_plan_s():
     assert (priced["steady"], priced["family"]) == (sources["own row"], sources["family row"])
     assert priced["computed"] < sources[H.PLANNER]
     assert got["split"]["scaled"] == 0 and "note" not in got
+
+
+def test_row_ii_at_the_control_s_table_with_one_type_at_two_sizes_moves_that_type_alone():
+    """Row (ii) at the control's table with the fused read GEMM's own row given a full and a quarter statement (about
+    3 s): that block takes the two sizes' split, 0.3187 s fixed a statement and 2.017 ms a block, with the Lean
+    verifier's seconds on top; every other block a table row prices keeps the planner's proportion, a block and its
+    share of a statement's fixed seconds its row's seconds; the split names the block's source as its fixed part
+    timed, the row names the block's split and `rows` prints it. Catches the split reaching a one-size row, or the
+    timed split dropping out of the line's pricing, which the stand-in pricing can't."""
+    table = H.prices(json.loads((CONTROL / "bench_prices.json").read_text()))
+    w2 = H.fused_block(W2)
+    table = table | {"cells": table["cells"] | {w2: table["cells"][w2] | two_sizes()}}
+    P = H.planner()
+    spec = H.spec_of("(ii) honest", "world year", PLAN_BETA, prices=table)
+    row, reads = H.evaluate(spec, P)
+    got = H.assemble(row, H.plan(spec, row, reads, {}, P), reads["calls"], reads["strata"], reads["pricing"])
+    assert isclose(got["bound_bits"] / 8e9, 2558.2497865050154, rel_tol=1e-9)
+    by = {x["block"]: x for x in reads["pricing"]}
+    x = by[w2]
+    assert isclose(x["fixed_seconds"] * (1 - x["verifier_fixed"]), (1024 * 0.835 - 256 * 2.384) / 768, rel_tol=1e-9)
+    assert isclose(x["seconds_per_block"], (2.384 - 0.835) / 768, rel_tol=1e-12) and x["statement_blocks"] == 1024
+    others = [b for b, y in by.items() if y["table"] and b != w2]
+    assert len(others) > 100 and not any(by[b]["fixed_timed"] for b in others)
+    for b in others:
+        y = by[b]
+        own = y["seconds_per_block"] + y["fixed_seconds"] * (1 - y["verifier_fixed"]) / max(1, y["statement_blocks"])
+        assert isclose(own, table["cells"][b]["seconds"], rel_tol=1e-9), b
+    sources = got["split"]["sources"]
+    assert 0 < sources[f"own row, {H.TIMED}"] < sources["own row"] and isclose(sum(sources.values()), 1.0, rel_tol=1e-12)
+    assert list(got["prices"]["fixed_timed"]) == [w2]
+    assert H.show_prices(got["prices"]).splitlines()[1] == H.show_timed(w2, H.timed_split(two_sizes()))
 
 
 def test_row_iii_at_the_control_s_table_is_row_ii_s_design():

@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 import summarize as S
 
-from verity.hardware import cards
+from verity.device import load_card
 
 BOUND = 132 * 4096 * 1830e6
 SECS = 1.2
@@ -35,9 +35,9 @@ def run(tmp_path: Path, *pts: dict, name: str = "out") -> tuple[int, dict]:
 
 def test_the_bound_is_the_cards_tensor_rate_and_follows_its_clock(monkeypatch: pytest.MonkeyPatch) -> None:
     assert S.readings() == (BOUND, 132 * 4096 * 1980e6, 132 * 4096 * 1e6)
-    card = copy.deepcopy(cards.load(S.SKU))
+    card = copy.deepcopy(load_card(S.SKU))
     card["clock"]["tensor"]["value"] = 1900
-    monkeypatch.setattr(S, "load", lambda sku: card)
+    monkeypatch.setattr(S, "load_card", lambda sku: card)
     assert S.readings()[0] == 132 * 4096 * 1900e6
 
 

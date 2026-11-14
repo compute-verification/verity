@@ -851,7 +851,7 @@ class LocalStore:
         local the file payloads (at most `payload_max_bytes` each) of every catalogued artifact of those kinds whose blob is not
         here yet -- what a reader of payloads (a render) needs; the count is `payloads`.  `attempts_only`: the attempts alone (what
         `research merge` reads), one listing instead of three.  `since` (a run id or its prefix, `rYYYYMMDD-HHMMSS`): only the
-        attempts whose ids sort after it, listed from there (`research queue ready`'s records gate)."""
+        attempts whose ids sort after it, listed from there (`research lean-times`)."""
         from . import labels_sync as LS  # noqa: PLC0415
 
         t0 = time.monotonic()

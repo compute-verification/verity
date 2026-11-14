@@ -15,10 +15,10 @@ import pytest
 from verity.circuits import ports as PT
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate, evaluate_bits
+from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.program import Program, is_input
 from verity.circuits.refs import runs
 from verity.circuits.types import Array
-from verity.circuits.ops.boolean import gemm as BG
 from verity.protocols.accounting.pouw.prover.circuit import h1tile as H
 from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
 from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z

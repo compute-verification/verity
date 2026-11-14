@@ -62,14 +62,15 @@ INDEX = RECORDS
 INDEX_SCHEMA = RECORDS_INDEX_SCHEMA
 #: The tiers of a row's rebuild (`pipeline.neutrality.TIER_FLAGS`).
 TIERS = ("fast", "heavy")
-INDEX_ABOUT = ("Per row of record: `record`, its config record's art: id (`verity-vllm records publish`; null for a row pinned "
-               "before it has one), and its circuit's pins: every rank's Program digests (step, each request shape, GP-01's workload) "
-               "as the Build `pinned_from` names made them (the record, when they are its Programs), the manifest digest and the tier "
-               "of its rebuild.  `verity-vllm neutrality` rebuilds a row and compares; the PR that changes a circuit on purpose "
-               "re-pins it (`verity-vllm neutrality ROW --update`) and re-publishes its record.  A switched row's `aot` names the "
-               "comparison run whose predicted Programs equal its traced Build's on every rank (`verity-vllm predict compare`) and "
-               "that traced Build (`trace`): its record path's Build is the AOT Build (`verity_vllm.program.predict.aot`), its pins the "
-               "predicted Programs, and its rebuild the trace.")
+INDEX_ABOUT = ("Per row of record: `record`, its config record's art: id, and its circuit's pins: every rank's Program digests "
+               "(step, each request shape, GP-01's workload) as the Build `pinned_from` names made them (the record, when they are "
+               "its Programs), the manifest digest and the tier of its rebuild.  `record` is null, or a PASS record whose Programs "
+               "are the pins: `verity-vllm records publish` writes the two together, and a row whose pins move names no record "
+               "until it is published again.  `verity-vllm neutrality` rebuilds a row and compares; the PR that changes a circuit "
+               "on purpose re-pins it (`verity-vllm neutrality ROW --update`, which clears its `record`).  A switched row's `aot` "
+               "names the comparison run whose predicted Programs equal its traced Build's on every rank (`verity-vllm predict "
+               "compare`) and that traced Build (`trace`): its record path's Build is the AOT Build "
+               "(`verity_vllm.program.predict.aot`), its pins the predicted Programs, and its rebuild the trace.")
 
 
 def load_index(path: Path) -> dict[str, Any]:

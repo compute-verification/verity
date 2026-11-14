@@ -83,7 +83,7 @@ fields every resource's benchmark reports (`amounts`), each stamped with this ru
 recorded run: the metric (the printed number, its unit and target), the verified MACs (the credit), the capacity and
 the free MACs at each data-sheet reading, and the error beside them (the answer's δ_s, sampling's alone). Their names
 are every resource's: `metric`, `verified`, `capacity`, `free` and `error`. A reading is a clock of a
-registered device's card file (`clock.tensor`, `clock.sm`; `verity.hardware.cards`), capacity the registered devices'
+registered device's card file (`clock.tensor`, `clock.sm`; `verity.device.load_card`), capacity the registered devices'
 peak e4m3 MACs a second at that clock times the run's span (`capacity`), and free capacity less verified. A recorded
 run's record holds no registration of its hardware and no span the verifier holds its passes to, so capacity and free
 are written as one entry each, with no value and why.
@@ -100,8 +100,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from verity.hardware import cards
-from verity.device import Site
+from verity.device import Site, load_card, rate
 from verity_bench import kit
 from verity_config.settings import SHARED
 
@@ -462,7 +461,7 @@ def document(tree: Path, commit: str | None, run: str | None, withdrawn: list[st
 
 def capacity(site: Site, span_s: Fraction) -> dict[str, int]:
     """The registered hardware's MACs over `span_s` seconds at each data-sheet reading (`READINGS`): each registered
-    device's peak `FORMAT` MACs a second at its card's clock of that reading (`verity.hardware.cards.rate` on the card
+    device's peak `FORMAT` MACs a second at its card's clock of that reading (`verity.device.rate` on the card
     file of its sheet's SKU), summed over the devices, times the span, rounded up. `Unreadable` where the site registers
     no device, or a device names no registered sheet or an SKU with no card file."""
     if not site.units:
@@ -472,11 +471,11 @@ def capacity(site: Site, span_s: Fraction) -> dict[str, int]:
         if (sheet := site.sheet(d)) is None:
             raise Unreadable(f"the registered device {d} names no registered sheet")
         try:
-            card = cards.load(sheet.sku)
+            card = load_card(sheet.sku)
         except KeyError as e:
             raise Unreadable(f"the registered device {d}'s SKU has no card file: {e}") from e
         for r in READINGS:
-            total[r] += cards.rate(card, fmt=FORMAT, mhz=card["clock"][r]["value"]) * span_s
+            total[r] += rate(card, fmt=FORMAT, mhz=card["clock"][r]["value"]) * span_s
     return {r: math.ceil(v) for r, v in total.items()}
 
 

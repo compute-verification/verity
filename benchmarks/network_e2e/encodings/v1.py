@@ -6,7 +6,8 @@ is certified, replayed, derived and sent, the windows and the string), re-export
 load this one by path. This module adds a trace's certified record (`record_of`), its I1 v0 advice (`advice_of`) and,
 for a trace served with a draft, which no I1 v0 says, its schedule (`schedule_of`, `schedule_code`'s),
 a trace's residual windows (`windows_of`) and the books held out from it (`held_out_books`), and the table
-(`measure`, `render`):
+(`measure`, `render`), which is of I1 v0 and so has an error row for a trace served with a draft (`by_class.py`
+reads one):
 
     python v1.py LABEL=DIR ... --stops IDS [--T 600 --ingress client --jobs N] --out TABLE.json
 """
@@ -96,7 +97,10 @@ def record_of(trace: Any, stop_ids: Sequence[int], *, bucket_s: float = 0.1) -> 
 def advice_of(trace: Any, record: Record) -> I1.Advice:
     """The trace as I1 v0: its rows in the order its runner ran them, I1's numbering by first row, each admitting row's
     hit its start and its sources the canonical ones, and each kept output released in the record's bucket. The trace's
-    requests are the record's, by id."""
+    requests are the record's, by id. A trace served with a draft is refused: `schedule_of` says it."""
+    if trace.engine.num_speculative_tokens:
+        raise AdviceCodeError("the trace was served with a draft, and I1 v0's rows emit one output each: `schedule_of` "
+                              "gives its schedule")
     steps_rows = [list(st.rows) for st in trace.steps]
     num: dict[int, int] = {}
     order: list[int] = []

@@ -29,6 +29,8 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `prod` | nothing: `published`'s server, as the stock arm the arms made from it are costed over | `published` |
 | `prod-again` | nothing: `prod` in a second server lifetime, the noise floor of a cost over `prod` | `prod` |
 | `prod-record` | the scheduler's step trace on that server, as `record` is on `compiled`; each request's prompt ids and served ids, which a replay of a pass sent by vLLM's client is given and compared with; and the canonical DSA top-k, as `two-stage` has it (its counters kept on the node), which that replay runs under too | `prod` |
+| `prod-seeded` | nothing on the server: `prod`, a sampled pass's client sending each user's seed as `prod-record`'s does | `prod` |
+| `prod-trace` | the step trace and each request's ids on that server: `prod-record` with the canonical top-k off; its client sends seeds, as `prod-record`'s does | `prod` |
 | `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |
 | `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
 | `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
@@ -289,7 +291,12 @@ scheduler's step trace and keeps each request's prompt ids and served ids (`serv
 the second (`replay.window`). It serves on the canonical DSA top-k too (`serve_tax.TOPK`, `TOPK_ENV`): vLLM's own
 kernels order a row of more than 2,048 keys differently run to run, and the agentic load's prompts are longer, so a
 replay is to give the served tokens only where both select by the canonical rule. Its cost over `prod` holds the
-top-k's with the record's. An arm is costed over the nearest stock arm above it (`serve_tax.STOCK`, `stock_of`),
+top-k's with the record's and, on a sampled load, what the seeds its client sends move. `prod-seeded` and `prod-trace`
+read those apart: `prod-seeded` is `prod`'s server sent the seeds, and `prod-trace` is `prod-record` with the canonical
+top-k off. A sampled pass of each beside `prod` and `prod-record` says which moves a figure (the share of draft tokens
+accepted among them): `prod-seeded` against `prod` is the seed, `prod-record` against `prod-trace` the canonical top-k,
+and `prod-trace` against `prod-seeded` the record and its ids. Neither is an arm a replay is promised for:
+`prod-seeded` keeps no ids, and `prod-trace` selects by vLLM's own rule. An arm is costed over the nearest stock arm above it (`serve_tax.STOCK`, `stock_of`),
 so `serve_tax.py cost --arm prod-record` is over `prod`, stock at the same settings, with `prod-again`'s cost over
 `prod` as its noise floor, printed beside it. The three start from one environment, the job's (`VENV`), and `cost` refuses arms that
 different builds of vLLM served. Where `prod`'s server and its requests differ from the recipe's line, beside
@@ -303,8 +310,9 @@ different builds of vLLM served. Where `prod`'s server and its requests differ f
 Under `SAMPLED=1` the client sends `prod-record`, as it sends every arm that keeps the record, each user's seed with
 the request (`serve_tax.user_seed`, `sends_seed`): its replay samples the request again under that seed. `prod` is
 sent none, so vLLM samples its requests as it samples any without a seed, and what a seed changes in vLLM's sampling
-is in `prod-record`'s cost over `prod`, a change of ours like the record and the top-k. The seed is the client's; a
-served request need not send one. It is made from the user's name and, under `LIFETIMES`, the lifetime's number: a
+is in `prod-record`'s cost over `prod`, a change of ours like the record and the top-k; `prod-seeded` is `prod` sent
+the seeds, the one arm sent them that keeps no record (`Arm.seeds`), which reads that change apart. The seed is the
+client's; a served request need not send one. It is made from the user's name and, under `LIFETIMES`, the lifetime's number: a
 pass's users have the same names in every lifetime, and a server samples much the same tokens again under one seed,
 so with the name alone every lifetime of `prod-record` would serve one sample of text where `prod`'s serve a new one
 each. The share of its drafts' tokens a text accepts sets how many steps it takes to serve, so that one sample's

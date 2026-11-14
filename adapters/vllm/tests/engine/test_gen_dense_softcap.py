@@ -23,7 +23,7 @@ from tests.observe.test_patterns_synthetic import D, KVH, NH, _context_on_host, 
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.program.frontend.rules.vocab import vocabulary_for
 from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.quarantine.dense import softcap as SC
+from verity.definitions.registry import dense as SC
 
 BASE = "Attention_v3{T=33,NH=9,KVH=3,D=64,BN=128}"
 CAPPED = "AttentionSoftcap_v1{T=33,NH=9,KVH=3,D=64,BN=128,CAP=50.0}"
@@ -87,7 +87,7 @@ def test_softcapped_launch_resolves_to_attention_softcap_with_the_base_operands(
 def test_softcap_definition_is_the_quarantined_one_and_builds_a_body():
     se, res = _resolve(softcap=50.0)
     (c,) = by_spec(res)[CAPPED]
-    assert c.spec.defn is SC.AttentionSoftcap and SC.SEMANTIC_ID == "dense/AttentionSoftcap@v1"
+    assert c.spec.defn is SC.AttentionSoftcap
     assert "quarantine" in (c.spec.defn.conformance or "")
     # CAP is a static of the body: the two constants differ from the base body's
     assert SC.softcap_mul_bits(64, 50.0) != SC.softcap_scale_log2_bits(50.0)

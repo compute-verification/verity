@@ -7,7 +7,7 @@ and z against its CPU twin and the Definition (`h1tile.reference` and `h1tile.j1
 `verity/protocols/accounting/pouw/prover/circuit/h1tile.py`). Nothing a verifier runs reads this directory.
 
 The arms' names (`dither`, `dither-1s`, `dither-a`, ...) are identifiers the runs' records carry. What they serve are
-H1's and J10-R's folds, not Dither, PoUW's no-fold design (`verity/protocols/accounting/pouw/verifier/dither/`).
+H1's and J10-R's folds, not Dither, PoUW's no-fold design (`verity/protocols/experimental/dither/`).
 
 ## The arm of record
 
