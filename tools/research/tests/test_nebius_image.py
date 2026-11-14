@@ -16,14 +16,16 @@ def test_build_parses():
     subprocess.run(["bash", "-n", str(IMAGE / "build.sh")], check=True)
 
 
-def test_build_dry_run_prints_the_content_tag_and_builds_nothing(tmp_path):
+def test_build_dry_run_prints_the_content_tag_and_builds_nothing(tmp_path, monkeypatch):
     calls = tmp_path / "sudo.calls"
     (tmp_path / "sudo").write_text(f'#!/bin/sh\necho "$*" >> {calls}\n[ "$2" = docker ] && echo /var/lib/docker\nexit 0\n')
     (tmp_path / "sudo").chmod(0o755)
-    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "MIN_FREE_GB": "0", "EST_GB": "0"}
+    monkeypatch.setenv("PATH", str(tmp_path), prepend=os.pathsep)
+    monkeypatch.setenv("MIN_FREE_GB", "0")
+    monkeypatch.setenv("EST_GB", "0")
     for name in ("IMAGE_NAME", "DOCKERFILE"):
-        env.pop(name, None)
-    r = subprocess.run(["bash", str(IMAGE / "build.sh"), "--dry-run"], env=env, capture_output=True, text=True)
+        monkeypatch.delenv(name, raising=False)
+    r = subprocess.run(["bash", str(IMAGE / "build.sh"), "--dry-run"], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     tag = "verity-base:" + hashlib.sha256((IMAGE / "Dockerfile").read_bytes()).hexdigest()[:16]
     assert r.stdout.splitlines()[0] == f"tag: {tag}"
