@@ -28,20 +28,38 @@ def query : Json :=
 /-- The subset sampling design named by the parameters. -/
 def law : Json := jsonOfText """{"k":16,"law":"subset"}"""
 
-/-- The descriptor parser's result on the registered circuit. -/
-def descResult : Flock.V Flock.Desc :=
-  Flock.Desc.parse (ZkExec.zkTags inputs) inputs.circuitFile inputs.tables
+/-- The accepted setup consists of one table, as the one-stage statement requires. -/
+theorem setup_size : setup.2.size = 1 :=
+  (ZkHidden.setupOf_tableJHP (I := inputs) (own := none) (d := draw)
+    (by decide) record_draw setup_ok).1
 
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 1000000 in
-theorem desc_some : descResult.toOption.isSome = true := by decide +kernel
+/-- The concrete table is the hidden statement at the transcript's recorded draw. -/
+theorem table_setup :
+    Flock.Stmt.setupHidden (Composed.inputsJ inputs 0).tags
+      (Composed.inputsJ inputs 0).circuitFile (Composed.inputsJ inputs 0).publicFile
+      (Composed.inputsJ inputs 0).coins (Composed.inputsJ inputs 0).tables
+      (Exec.recordDraw transcript.record) (Composed.inputsJ inputs 0).partition
+      (Composed.inputsJ inputs 0).program none = .ok setup.2[0] := by
+  have h := (ZkHidden.setupOf_tableJHP (I := inputs) (own := none) (d := draw)
+    (by decide) record_draw setup_ok).2 0 (by rw [setup_size]; decide)
+  simpa [inputs] using h
+
+/-- The concrete table passes the ZK shape check. -/
+theorem table_shape : Flock.Zk.shapeOk setup.2[0] = .ok () :=
+  ZkExec.array_forM_ok shape_ok 0 (by rw [setup_size]; decide)
 
 /-- The descriptor parsed from the registered circuit. -/
-def D : Flock.Desc := descResult.toOption.get desc_some
+def D : Flock.Desc := .single setup.2[0].c
 
-theorem desc_ok : descResult = .ok D := by
-  generalize h : descResult = r at desc_some ⊢
-  cases r <;> simp_all [D]
+theorem desc_ok :
+    Flock.Desc.parse (ZkExec.zkTags inputs) inputs.circuitFile inputs.tables = .ok D := by
+  have hp := HiddenExec.setupHidden_parseCP
+    (tags := (Composed.inputsJ inputs 0).tags) (by decide) table_setup
+  have ht :
+      (Composed.inputsJ inputs 0).tags = ZkExec.zkTags inputs := by
+    simp [Composed.inputsJ, Exec.tagsAt, inputs]
+  rw [ht] at hp
+  exact Flock.Desc.parse_single hp
 
 /-- The registered public file as the circuit reads it. -/
 def publicResult : Flock.V Flock.Public :=
@@ -99,26 +117,6 @@ theorem record_drawn :
   · rw [← exec_recordDraw, record_draw]
     apply congrArg some
     simpa [units, unit_population] using h.2
-
-/-- The accepted setup consists of one table, as the one-stage statement requires. -/
-theorem setup_size : setup.2.size = 1 :=
-  (ZkHidden.setupOf_tableJHP (I := inputs) (own := none) (d := draw)
-    (by decide) record_draw setup_ok).1
-
-/-- The concrete table is the hidden statement at the transcript's recorded draw. -/
-theorem table_setup :
-    Flock.Stmt.setupHidden (Composed.inputsJ inputs 0).tags
-      (Composed.inputsJ inputs 0).circuitFile (Composed.inputsJ inputs 0).publicFile
-      (Composed.inputsJ inputs 0).coins (Composed.inputsJ inputs 0).tables
-      (Exec.recordDraw transcript.record) (Composed.inputsJ inputs 0).partition
-      (Composed.inputsJ inputs 0).program none = .ok setup.2[0] := by
-  have h := (ZkHidden.setupOf_tableJHP (I := inputs) (own := none) (d := draw)
-    (by decide) record_draw setup_ok).2 0 (by rw [setup_size]; decide)
-  simpa [inputs] using h
-
-/-- The concrete table passes the ZK shape check. -/
-theorem table_shape : Flock.Zk.shapeOk setup.2[0] = .ok () :=
-  ZkExec.array_forM_ok shape_ok 0 (by rw [setup_size]; decide)
 
 /-- The concrete accepted setup supplies every field of a `Live` session. -/
 theorem exists_live : ∃ A : Live,

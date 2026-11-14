@@ -20,11 +20,25 @@ open FlockSoundness.Discharge
 def setupResult : Flock.V (Flock.SessionSpec × Array Flock.Stmt) :=
   Exec.setupOfP (ZkExec.zkInputs inputs) none transcript.record
 
+/-- One closed run of setup, shape checking and proof verification. -/
+def verifierOk : Bool :=
+  match setupResult with
+  | .error _ => false
+  | .ok (spec, sts) =>
+    (sts.forM Flock.Zk.shapeOk).isOk &&
+      (Flock.Zk.verify spec (sts.map Flock.Setup.ofCircuit) transcript.record transcript.proofs).isOk
+
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 1000000 in
+/-- Setup, shape checking and proof verification all accept in one kernel-checked computation. -/
+theorem verifier_ok : verifierOk = true := by
+  decide +kernel
+
 /-- The compiled verifier's setup computation succeeds. -/
 theorem setup_some : setupResult.toOption.isSome = true := by
-  decide +kernel
+  unfold verifierOk at verifier_ok
+  generalize h : setupResult = r at verifier_ok ⊢
+  cases r <;> simp_all
 
 /-- The compiled verifier's setup result on the honest session. -/
 def setup : Flock.SessionSpec × Array Flock.Stmt :=
@@ -37,18 +51,27 @@ theorem setup_ok :
   generalize h : setupResult = r at setup_some ⊢
   cases r <;> simp_all [setup]
 
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 1000000 in
 /-- Every table in the honest session has the shape required by the ZK verifier. -/
 theorem shape_ok : setup.2.forM Flock.Zk.shapeOk = .ok () := by
-  decide +kernel
+  unfold verifierOk at verifier_ok
+  rw [setup_ok] at verifier_ok
+  have h := (Bool.and_eq_true.mp verifier_ok).1
+  generalize he : setup.2.forM Flock.Zk.shapeOk = e at h ⊢
+  cases e with
+  | error msg => simp at h
+  | ok u => cases u; exact he
 
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 1000000 in
 /-- The compiled ZK verifier accepts the honest session's proofs. -/
 theorem verify_ok :
     Flock.Zk.verify setup.1 (setup.2.map Flock.Setup.ofCircuit) transcript.record transcript.proofs = .ok () := by
-  decide +kernel
+  unfold verifierOk at verifier_ok
+  rw [setup_ok] at verifier_ok
+  have h := (Bool.and_eq_true.mp verifier_ok).2
+  generalize he :
+      Flock.Zk.verify setup.1 (setup.2.map Flock.Setup.ofCircuit) transcript.record transcript.proofs = e at h ⊢
+  cases e with
+  | error msg => simp at h
+  | ok u => cases u; exact he
 
 /-- The honest proving transcript is in the deployed theorem's executable acceptance event. -/
 theorem accepts :
