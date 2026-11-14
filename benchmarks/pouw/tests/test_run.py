@@ -62,7 +62,7 @@ def test_commit_gpus_runner_starts_the_job_beside_it_and_ends_as_it_does(tmp_pat
 
 
 #: the harness's jobs, each with the script the runner starts for it
-HARNESS_JOBS = {"build": "../../../verity/protocols/accounting/pouw/prover/kernels/harness/native/build.sh",
+HARNESS_JOBS = {"build": "../harness/native/build.sh",
                 "pin_target": "jobs/pin_target.sh",
                 **{job: f"{job}.py" for job in ("bench", "characterize", "verify", "ledger", "price_twins", "ieee_pin")}}
 

@@ -2798,6 +2798,12 @@
       "paths": {
         "benchmarks/pouw/commit_gpu/": "verity/commitments/cuda/commit_gpu/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/prover/kernels/harness/native/": "benchmarks/pouw/harness/native/",
+        "verity/protocols/accounting/pouw/prover/kernels/nvfp4_sm120/": "benchmarks/pouw/nvfp4_sm120/"
+      }
     }
   ]
 }
