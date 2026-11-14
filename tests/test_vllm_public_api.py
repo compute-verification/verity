@@ -206,7 +206,7 @@ PUBLIC = {
                        "(resolve_options, protocol_context), which the harness's tests hold its engine to",
     "verity_vllm.pipeline.commit_coins": "I1: the Commit's coins from the auditor host's challenger, one challenge phase a Commit "
                                          "(ChallengerGate), which benchmarks/one_stage's local Pearl+ run and benchmarks/pouw's "
-                                         "Pearl-C arm draw from",
+                                         "Pearl-C arm take their coins from",
     "verity_vllm.pipeline.replay_bundle": "I1: the replay bundle a Commit with --replay-deferred leaves for its C2 replay on CPU "
                                           "(MANIFEST, open_bundle), which benchmarks/one_stage opens",
     "verity_vllm.pipeline.tp.rank_replay": "I1: the C2 of record on one rank of a TP Commit, and a rank's manifest (load, "
@@ -214,7 +214,7 @@ PUBLIC = {
     "verity_vllm.program.model": "I7: what a model configuration is, and the roots that are functions of it (config_of, "
                                  "cos_sin_table, INT8_EXACT_QUANT), which benchmarks/prove_path and benchmarks/inference_only "
                                  "build under",
-    "verity_vllm.protocols": "I1: the protocol options of a vLLM run (PoUW, PoUS and sampled proofs, each enabled on its own): "
+    "verity_vllm.protocols": "I1: the protocol options of a vLLM run (PoUW, PoUS and SPOT, each enabled on its own): "
                              "their selector, context, install and refusals (parse, adapter, Context, install, Refused, "
                              "requires_build, commit_guard), which the harness's arms and the served benchmarks of PoUW, PoUS and "
                              "the Commit install",
