@@ -3058,11 +3058,22 @@ impl StmtCache {
     }
 }
 
+/// The shape of circuit `c`'s statement at `n` instances ([`shape_in_range`] at its dense size and link points).
+fn shape_at(c: &Composite, n: usize) -> Result<(), String> {
+    let nbl = log2ceil(n.div_ceil(c.g).max(1)).max(3);
+    shape_in_range(c.k_log + nbl, PT_LOCAL + nbl)
+}
+
 impl Stmt {
     pub fn new(c: Composite, n: usize, identity: Value) -> Result<Self, String> {
-        let blocks_real = n.div_ceil(c.g);
-        let nbl = log2ceil(blocks_real.max(1)).max(3);
-        shape_in_range(c.k_log + nbl, PT_LOCAL + nbl)?;
+        shape_at(&c, n)?;
+        Self::population(c, n, identity)
+    }
+
+    /// A registered population's statement at its `n` instances, its shape not tested: a sampled session proves
+    /// [`Stmt::drawn`]'s statement, which tests the shape at the sample's count, so only a session that proves the
+    /// population itself tests [`Stmt::in_shape`].
+    pub fn population(c: Composite, n: usize, identity: Value) -> Result<Self, String> {
         let pin = pin_of(&c);
         let (da, db) = delta(&c, pin);
         let mut types: Vec<(usize, CscCircuit)> = Vec::new();
@@ -3101,9 +3112,21 @@ impl Stmt {
     /// one's circuit, slot types and `A_0`, `B_0`, `C_0` shared rather than built again: [`Stmt::new`] derives them from the
     /// circuit alone.
     pub fn drawn(&self, n: usize, identity: Value) -> Result<Self, String> {
+        shape_at(&self.c, n)?;
+        self.population_at(n, identity)
+    }
+
+    /// `Stmt::population(self.c, n, identity)`, sharing what [`Stmt::drawn`] shares: another registered population of this
+    /// one's circuit, its shape not tested.
+    pub fn population_at(&self, n: usize, identity: Value) -> Result<Self, String> {
         let r = &self.r1cs;
         let mats = [r.a_0.clone(), r.b_0.clone(), r.c_0.clone()];
         Self::of(self.c.clone(), self.circuit.clone(), Self::regions(&self.c)?, Some(mats), n, identity)
+    }
+
+    /// Whether this statement is in the spec's shape at its own count: what [`Stmt::new`] and [`Stmt::drawn`] test first.
+    pub fn in_shape(&self) -> Result<(), String> {
+        shape_in_range(self.m, self.m_pts)
     }
 
     /// The statement of circuit `c` (its slot types and regions built) at `n` instances; `mats`: its `A_0`, `B_0` and `C_0`,
@@ -3114,7 +3137,6 @@ impl Stmt {
         let blocks_real = n.div_ceil(c.g);
         let nbl = log2ceil(blocks_real.max(1)).max(3);
         let m = k_log + nbl;
-        shape_in_range(m, PT_LOCAL + nbl)?;
         let pin = circuit.pin;
         let mut h = Sha512::new();
         h.update(c.tags().statement.as_bytes());
@@ -4488,6 +4510,45 @@ mod tests {
             assert_eq!(cache.len(), k + 2, "{what}: not built");
         }
         assert!(Arc::ptr_eq(&first, &cache.drawn(&bases[0], 2, json!({})).unwrap()), "the first key's statement was dropped");
+    }
+
+    /// The shape is tested on the units a session proves. A population one block past the spec's shape (m = 36) is a
+    /// statement of its own (`Stmt::population`), which `Stmt::new` refuses in the shape's words; each sample of it in the
+    /// shape, up to the largest (m = 35), is byte for byte the statement `Stmt::new` builds at the sample's count, through the
+    /// statement cache too; and a sample past the shape is refused in `Stmt::new`'s words at its count. A population in the
+    /// shape is `Stmt::new`'s statement, and another population of the circuit (`Stmt::population_at`) is `Stmt::population`'s.
+    #[test]
+    fn the_shape_is_tested_at_the_sample_not_the_population() {
+        for (name, c) in test_circuits() {
+            for id in [json!({}), json!({"zk": true, "reps": 2, "leaf": "hm96-sha512/v1"})] {
+                let nbl = M_MAX + 1 - c.k_log;
+                let (largest, past) = ((1usize << (nbl - 1)) * c.g, ((1usize << (nbl - 1)) + 1) * c.g);
+                let words = |m: usize| format!("m = {m}: outside the spec's shape (m <= {M_MAX})");
+                assert_eq!(Stmt::new(c.clone(), past, id.clone()).err(), Some(words(M_MAX + 1)), "{name}: the population");
+                let pop = Stmt::population(c.clone(), past, id.clone()).unwrap_or_else(|e| panic!("{name}: {e}"));
+                assert_eq!((pop.n, pop.m, pop.in_shape().err()), (past, M_MAX + 1, Some(words(M_MAX + 1))), "{name}");
+                let cache = StmtCache::new();
+                for k in [1, 2, 9, largest] {
+                    let fresh = Stmt::new(c.clone(), k, id.clone()).unwrap_or_else(|e| panic!("{name} k={k}: {e}"));
+                    let sample = pop.drawn(k, id.clone()).unwrap_or_else(|e| panic!("{name} k={k}: {e}"));
+                    let cached = cache.drawn(&pop, k, id.clone()).unwrap_or_else(|e| panic!("{name} k={k}: {e}"));
+                    assert!(stmt_bytes(&sample) == stmt_bytes(&fresh) && stmt_bytes(&cached) == stmt_bytes(&fresh),
+                            "{name} k={k}: the sample's statement is not Stmt::new's at its count");
+                    assert!(sample.in_shape().is_ok() && Arc::ptr_eq(&sample.c, &pop.c), "{name} k={k}");
+                }
+                for k in [past, past + 1, 2 * past] {
+                    let want = Stmt::new(c.clone(), k, id.clone()).err();
+                    assert!(want.as_deref().is_some_and(|w| w.ends_with(&format!("outside the spec's shape (m <= {M_MAX})"))), "{name} k={k}");
+                    assert_eq!(pop.drawn(k, id.clone()).err(), want, "{name} k={k}: a sample past the shape");
+                    assert_eq!(cache.drawn(&pop, k, id.clone()).err(), want, "{name} k={k}: a sample past the shape, cached");
+                }
+                for n in [2, 9, largest] {
+                    let inside = Stmt::population(c.clone(), n, id.clone()).unwrap();
+                    assert!(stmt_bytes(&inside) == stmt_bytes(&Stmt::new(c.clone(), n, id.clone()).unwrap()), "{name} n={n}");
+                    assert!(stmt_bytes(&pop.population_at(n, id.clone()).unwrap()) == stmt_bytes(&inside), "{name} n={n}");
+                }
+            }
+        }
     }
 
     /// A public file with what `proved_scope::check` reads of it: registered reads named in its header, shared rows.

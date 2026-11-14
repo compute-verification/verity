@@ -530,6 +530,9 @@ fn stmt_cache_seen(side: Side) -> Value {
 }
 
 fn side_tables(side: Side, st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, count: usize) -> Result<Tables, String> {
+    if draw.is_none() {
+        st.in_shape()?;
+    }
     if count <= 1 {
         let (st, inst) = match draw { Some(d) => side_drawn(side, st, inst, d)?, None => (st.clone(), inst.clone()) };
         if draw.is_some() && is_zk(&st) {
@@ -960,6 +963,9 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
     } else {
         (!law.is_empty()).then(|| Law::parse(&law).unwrap_or_else(|e| refuse(e)))
     };
+    if given.is_none() && law.is_none() {
+        st.in_shape().unwrap_or_else(|e| refuse(e));
+    }
     // several tables are refused here, before any session, for a sample they cannot split or whose tables `--zk` cannot prove. A
     // subset or stratified sampling design's table shapes depend on its counts alone, so a sample of the first units stands for every sample.
     if count > 1 {
@@ -7236,8 +7242,9 @@ fn prove_jobs(mut jobs: Jobs, base: &Plan, warm: usize, verify_ahead: usize, fw:
             plan.zk_self_check = c;
         }
         let (job_addr, own_loop) = (job.addr.clone(), job.own_loop.clone());
+        // a population out of the spec's shape is never a session's own statement: no witness of it is built ahead
         if pipeline {
-            if run == 0 && prepin {
+            if run == 0 && prepin && st.in_shape().is_ok() {
                 let p = prebuild(&st, &inst, base, seed).join().expect("the first session's witness");
                 #[cfg(feature = "gpu")]
                 if let WitData::Dev(_, h, _) | WitData::DevCut(_, h, _, _) = &p.wt0 {
@@ -7254,7 +7261,9 @@ fn prove_jobs(mut jobs: Jobs, base: &Plan, warm: usize, verify_ahead: usize, fw:
             let from = ahead.back().map_or(run + 1, |(r, _)| r + 1);
             for r in from..run + 1 + depth {
                 let Some(next) = jobs.get(r, false) else { break };
-                ahead.push_back((r, prebuild(&next.st, &next.inst, base, next.seed)));
+                if next.st.in_shape().is_ok() {
+                    ahead.push_back((r, prebuild(&next.st, &next.inst, base, next.seed)));
+                }
             }
         }
         if run == warm {
@@ -7580,7 +7589,7 @@ fn stacked() {
 }
 
 /// The prover's refusals of a statement it can't prove: on the device (`--gpu`) at most 12 slot types, the device's nnz
-/// bound and no table-direct reads; under `--zk` the ZK shape.
+/// bound and no table-direct reads; under `--zk` the ZK shape (of a population in the spec's shape: [`Stmt::population`]).
 fn statement_checks(st: &Stmt) {
     // the device prover holds at most 12 slot types (`gpu_circuit::FC_MAX_TYPES`)
     if flag("--gpu") && st.circuit.types.len() > 12 {
@@ -7593,7 +7602,8 @@ fn statement_checks(st: &Stmt) {
     if flag("--gpu") && st.circuit.tables.iter().any(Option::is_some) {
         refuse("a typed template's table reads: the GPU prover folds no table-direct side".into());
     }
-    if zk_mode() {
+    // a population out of the spec's shape is proved only through its samples, each of which `side_tables` checks
+    if zk_mode() && st.in_shape().is_ok() {
         zk_shape_ok(st).unwrap_or_else(|e| refuse(e));
     }
 }
@@ -7677,8 +7687,8 @@ fn serve_queue(c: Composite, path: &str) {
             Some(st) => st.clone(),
             None => {
                 let st = match c0.take() {
-                    Some(c) => Stmt::new(c, inst.n, id.clone()),
-                    None => stmts[0].drawn(inst.n, id.clone()),
+                    Some(c) => Stmt::population(c, inst.n, id.clone()),
+                    None => stmts[0].population_at(inst.n, id.clone()),
                 };
                 let st = Arc::new(st.unwrap_or_else(|e| refuse(e)));
                 statement_checks(&st);
@@ -7780,9 +7790,9 @@ fn prove_stream(path: &str) {
                     let st = match loaded {
                         Some(c) => {
                             let id = identity(&c);
-                            Stmt::new(c, inst.n, id)
+                            Stmt::population(c, inst.n, id)
                         }
-                        None => have[0].drawn(inst.n, have[0].identity.clone()),
+                        None => have[0].population_at(inst.n, have[0].identity.clone()),
                     };
                     let st = Arc::new(st.unwrap_or_else(|e| refuse(e)));
                     statement_checks(&st);
@@ -7883,7 +7893,10 @@ fn main() {
         refuse("--zk: the statement's trees have plain SHA-512 leaves (flock-leaf/sha512-unsalted), a ZK-off statement".into());
     }
     let id = identity(&c);
-    let st = Arc::new(Stmt::new(c, inst.n, id).unwrap_or_else(|e| refuse(e)));
+    // serve, prove and replay test the population's shape where a session proves it rather than a sample (`serving`,
+    // `side_tables`); every other command proves the population itself
+    let st = if matches!(cmd.as_str(), "serve" | "prove" | "replay") { Stmt::population(c, inst.n, id) } else { Stmt::new(c, inst.n, id) };
+    let st = Arc::new(st.unwrap_or_else(|e| refuse(e)));
     statement_checks(&st);
     let tables = tables_arg();
     if tables > 1 && flag("--gpu") {
