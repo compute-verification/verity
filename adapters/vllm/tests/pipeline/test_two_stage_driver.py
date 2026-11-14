@@ -961,11 +961,11 @@ def test_the_writer_reads_a_stop_class_as_the_driver_and_the_stop_audit_write_it
     got = VR.record("stop_record", first, summary, **NAMES)
     layout = r.layout
     assert got["class"] == f"w{pubs[0]['window']}/p{layout.prompt}-o{layout.outputs}"
-    assert got["registration"] == r.boundary == first["registration"] != r.registration.digest
+    assert got["registration"] == r.boundary == first["registration"] != r.docket.digest
     assert got["rate"] == VR.rate({"population": layout.spans, **_design("subset", len(r.sample.units))})
     assert (got["verdict"], got["verifier"]["module"]) == ("not complete", SA.TOOL)
-    assert (got["stream_registration"], got["stream_names_boundary"]) == (r.registration.digest, True)
-    assert r.registration.digest == first["stop"]["registration"] and first["stop"]["record"]["previous"] == r.boundary
+    assert (got["stream_registration"], got["stream_names_boundary"]) == (r.docket.digest, True)
+    assert r.docket.digest == first["stop"]["registration"] and first["stop"]["record"]["previous"] == r.boundary
     interior = _record(4, 4, previous=r.boundary, interior=True)
     second = {"first_stage": {"registration": r.first.registration.digest}, "held": True, "outcome": {"accepted": False},
               "second_stage": {"registration": R.digest(interior)}}
