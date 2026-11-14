@@ -45,11 +45,11 @@ from verity_config.settings import of
 from verity.commitments import hm96
 from verity.commitments.merkle import merkle_depth
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
-from verity.circuits.kernels import ROW_COMMIT, SHA512
+from verity.commitments.cuda import ROW_COMMIT, SHA512
 
 __all__ = ["DEFAULT_VARIANT", "Engine", "LeafTable", "RowTable", "SaltKey", "device_lib", "digests", "host_lib", "words"]
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent / "benchmarks" / "torch_gpu" / "sha512_rows")
+HERE = Path(__file__).resolve().parent
 DEVICE_SOURCES = (SHA512, ROW_COMMIT, HERE / "rows.cuh", HERE / "rows.cu")
 HOST_SOURCES = (SHA512, ROW_COMMIT, HERE / "rows.cuh", HERE / "rows_host.cpp")
 #: no -lineinfo: nothing reads a line table, and with one the cubin holds the source's path

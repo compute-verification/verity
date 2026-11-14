@@ -498,6 +498,13 @@ def bytes_leaves(data: bytes, bits: int) -> list[int]:
             for j in range(32 // bits)]
 
 
+def half_leaves(data: bytes, bits: int) -> list[int]:
+    """Two bytes, one big-endian 16-bit half, as its ``16 / bits`` leaves of `bits` bits least significant first: the
+    row `second_stage.VERDICT_ONE_LEAF` fills, one 16-bit leaf where `bytes_leaves` gives two
+    (`Supplied.halfLeaves`). No source reads it yet."""
+    raise NotImplementedError("VERDICT_ONE_LEAF: a 16-bit half's leaves, for the verdict value's one-leaf row")
+
+
 def digests(t: Any) -> bool:
     """A parameter whose leaves are whole `Digest`s, eight SHA-512 words of 64 one-bit leaves each (`DIGEST`), or an array
     of them."""
@@ -694,7 +701,7 @@ def bind_ports(file: Mapping[str, Any], ports: Iterable[str], roots: Mapping[str
 __all__ = ["BLOCK", "BOUND", "DIGEST", "ENTRY_KEYS", "OWNER", "PARAM_KEY", "PRODUCED_KEY", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
            "SCHEMA_SEG", "SCHEMA_V2", "SESSION_KEY", "SOURCES", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WINDOW_SALT",
            "WORD_BITS",
-           "bind_ports", "bit_words", "bytes_leaves", "digest_leaves", "digests", "domain", "held_gates", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
+           "bind_ports", "bit_words", "bytes_leaves", "digest_leaves", "digests", "domain", "half_leaves", "held_gates", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
            "row_digest", "row_leaves", "row_words", "schema_entry", "shape", "sources",
            "supplied_root", "supplied_rows", "supplied_salts", "supplied_value", "table", "verify_read", "width",
            "width_entry", "window_root", "window_salt"]

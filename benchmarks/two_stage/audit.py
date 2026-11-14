@@ -36,8 +36,8 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
 
 Exit 0 when the run is as expected: every session's circuit file the one its template's params name, and every Lean
 verdict accepted with every negative refused, round 2 accepting the statements, a5's record accepted or refusing only
-the sessions' reads of the interior's own ports (`own_reads_only`: one-stage's record takes reads of earlier values
-alone), and the outcome accepted or refused by round 2's two-stage form alone (`second_stage.FORM`), its records taking
+the sessions' reads of the interior's own ports (`own_reads_only`: one-stage's record takes an own port's read only at
+that port's root), and the outcome accepted or refused by round 2's two-stage form alone (`second_stage.FORM`), its records taking
 those reads (the interior's at the interior record and the links' boundary ports at the boundary record); or
 (``--altered``) refused at both link members by Lean's registered reads and nowhere else, and the outcome refused.
 ``--out`` holds the params
@@ -160,10 +160,10 @@ def own_ports(window: T.CS.Binding, drawn: list[int]) -> list[str]:
 
 def own_reads_only(record: dict | None, ports: list[str]) -> bool:
     """Whether a5's audit record refuses only the sessions' reads of its registration's own ``ports``: its one failed
-    check is one-stage's ``registered``, which takes reads of earlier values alone, naming no registered value and
-    exactly those ports. `SpotFlock.FrameIs` asks for those reads (an interior port's at the interior record, a link
-    port's at the boundary record's leaf S[i]), and the stream's two-stage records take them (`verifier.audit_record`'s
-    ``own_reads``)."""
+    check is one-stage's ``registered``, which takes an own port's read only at that port's root, naming no registered
+    value and exactly those ports. `SpotFlock.FrameIs` asks for those reads (an interior port's at the interior record, a
+    link port's at the boundary record's leaf S[i]), and every audit record takes them at their own roots
+    (`audit.less_own_reads`)."""
     bad = {k: v for k, v in ((record or {}).get("checks") or {}).items() if not v.get("ok")}
     d = (bad.get("registered") or {}).get("detail") or {}
     return set(bad) == {"registered"} and d.get("registered") == [] == d.get("wrong") and d.get("opened") == ports

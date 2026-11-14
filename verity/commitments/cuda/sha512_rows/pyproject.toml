@@ -18,5 +18,6 @@ testpaths = ["tests"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_engine.py"]
-# engine.py reads its variables through settings.py, on verity_config.settings.
-inputs = ["tools/config/verity_config"]
+# engine.py reads its variables through settings.py, on verity_config.settings; the tests read the H200 layer's rows from
+# the benchmark's bench.py (h200_rows).
+inputs = ["tools/config/verity_config", "benchmarks/torch_gpu/sha512_rows/bench.py"]

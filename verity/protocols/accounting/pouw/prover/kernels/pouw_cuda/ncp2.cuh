@@ -7,7 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// the GPU's one SHA-512 (verity.circuits.kernels' sha512.cuh, on every build's include path), host and device
+// the GPU's one SHA-512 (verity.commitments.cuda' sha512.cuh, on every build's include path), host and device
 #include "sha512.cuh"
 
 #ifdef __CUDACC__

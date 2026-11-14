@@ -32,7 +32,7 @@ from verity.commitments.gates import frame_v3 as F
 from verity.commitments.gates import hm96 as H
 from verity.commitments.gates.sha512 import midstate, words_be
 from verity.commitments.merkle import merkle_depth
-from verity.circuits.kernels import ROW_COMMIT, SHA512
+from verity.commitments.cuda import ROW_COMMIT, SHA512
 
 if TYPE_CHECKING:
     from numpy.typing import ArrayLike

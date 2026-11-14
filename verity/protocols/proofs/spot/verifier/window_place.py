@@ -2,7 +2,7 @@
 
 A window's challenger session reserves one family of challenges a sample, and a family's challenges follow one
 registration (`coins.FAMILY_ROOT`). Which family a sample reads is no prover's file's to say: it is the sample's place,
-a number its registration record's window fixes (`of`), the family is ``draw/<place>`` with the place in decimal
+a number its registration record's window fixes (`of`), the family is `FAMILY`, a slash and the place in decimal
 (`family`), and the session is the one opened on the window's run (`run`). Whoever reserves a session's families
 reserves by place, and whoever reads a sample again names its family by place and refuses another. This is the one
 Python definition of a place: every caller uses it, and a stream of any sampling design holds its challenge source
@@ -52,7 +52,7 @@ def of(window: Any) -> int:
 
 def family(window: Any) -> str:
     """The family of its window's session that the sample a record registers reads its challenges from: the one of its
-    place (`of`), ``draw/<place>`` with the place in decimal. ValueError as `of`."""
+    place (`of`), `FAMILY`, a slash and the place in decimal. ValueError as `of`."""
     return f"{FAMILY}/{of(window)}"
 
 

@@ -43,8 +43,7 @@ from typing import Any
 import numpy as np
 from verity_config.settings import SHARED
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "commitments" / "cuda" / "commit_slots"))
 
 import slots as S  # noqa: E402
 from verity.commitments.identity import identity_digest_sha512  # noqa: E402

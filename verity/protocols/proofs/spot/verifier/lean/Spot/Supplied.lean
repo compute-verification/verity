@@ -77,6 +77,12 @@ def bytesLeaves (data : ByteArray) (bits : Nat) : V (Array Nat) := do
     let h := (List.range 4).foldl (fun acc k => acc * 256 + (data.get! (4 * i + k)).toNat) 0
     (Array.range (32 / bits)).map fun j => h / 2 ^ (bits * j) % 2 ^ bits
 
+/-- `registered.half_leaves`: two bytes, one big-endian 16-bit half, as its `16 / bits` leaves of `bits` bits least
+significant first: the row `SecondStage.VERDICT_ONE_LEAF` fills, one 16-bit leaf where `bytesLeaves` gives two. Refused
+until written: no source reads it yet. -/
+def halfLeaves (data : ByteArray) (bits : Nat) : V (Array Nat) :=
+  throw s!"{data.size} bytes at leaves of {bits} bits: a 16-bit half's leaves are not yet read (VERDICT_ONE_LEAF)"
+
 /-- `registered.digests`: a parameter whose leaves are whole `Digest`s, eight SHA-512 words of 64 one-bit leaves each
 (`gates.rowleaf.digest_bits`'s order), or an array of them. -/
 def digests : Flock.Program.Ty → Bool

@@ -2496,10 +2496,10 @@
     },
     {
       "paths": {
-        "verity/circuits/kernels/sha512.cuh": "verity/commitments/cuda/sha512.cuh",
-        "verity/circuits/kernels/row_commit.cuh": "verity/commitments/cuda/row_commit.cuh",
-        "verity/circuits/kernels/tests/": "verity/commitments/cuda/tests/",
-        "verity/circuits/kernels/pyproject.toml": "verity/commitments/cuda/pyproject.toml"
+        "benchmarks/pouw/edited_gemm/": "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/",
+        "benchmarks/pouw/masked_gemm/": "verity/protocols/accounting/pouw/prover/kernels/masked_gemm/",
+        "benchmarks/pouw/floored_gemm/": "verity/protocols/accounting/pouw/prover/kernels/floored_gemm/",
+        "benchmarks/pouw/gpu_kit/": "verity/protocols/accounting/pouw/prover/kernels/gpu_kit/"
       }
     },
     {
@@ -2581,6 +2581,14 @@
         "adapters/vllm/tests/protocols/test_pouw_lead_record.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_lead_record.py",
         "adapters/vllm/tests/protocols/test_pouw_native.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_native.py",
         "adapters/vllm/tests/commit/test_lead_rows.py": "verity/protocols/accounting/pouw/prover/tests/test_lead_rows.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/circuits/kernels/sha512.cuh": "verity/commitments/cuda/sha512.cuh",
+        "verity/circuits/kernels/row_commit.cuh": "verity/commitments/cuda/row_commit.cuh",
+        "verity/circuits/kernels/tests/": "verity/commitments/cuda/tests/",
+        "verity/circuits/kernels/pyproject.toml": "verity/commitments/cuda/pyproject.toml"
       }
     },
     {

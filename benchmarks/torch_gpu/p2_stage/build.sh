@@ -19,7 +19,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/../ship.sh"
 OUT=${1:-${OUT:?usage: build.sh OUT}}; ARCH=${ARCH:-sm_90a}
 P2=$(dirname verity/protocols/accounting/pous/prover/p2/p2_store/Makefile)
-ship_stage "$P2" "$(dirname verity/protocols/accounting/pous/prover/p2/p2_gpu/p2dec.cu)" verity/circuits/kernels
+ship_stage "$P2" "$(dirname verity/protocols/accounting/pous/prover/p2/p2_gpu/p2dec.cu)" verity/commitments/cuda
 P2=$SRC/$P2
 S=$(mktemp -d "${TMPDIR:-/tmp}/p2-stage-build.XXXXXX"); trap 'rm -rf "$S"' EXIT
 mkdir -p "$OUT/lib"

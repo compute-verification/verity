@@ -9,10 +9,8 @@ wider than the widest class is refused (a template instance's bits are its disti
 `Q_call` unit's count the constants its activation holds, `committedBits`, which `Q_call`'s width rule leaves out; a
 `Q_word` unit's are its cut's), and so is a program with a template of no gate. The verifier holds its own copy of the
 program and applies the query itself; it never takes a population or a unit index on the prover's word.
-`unitGatesFast` is the walk unit by unit with a template query's units reading their gates off one `table`
-(`gatesBy_table`), each root callee's gate count computed once through a memo (`gatesMemo`) and each range's offset
-once, where `TemplateQuery.gates` recomputes both per unit. `unitGates` reads a range at a time instead
-(`TemplateQuery.unitGates`), so nothing runs as `unitGatesFast`.
+`unitGates` reads a template query's units a range at a time (`TemplateQuery.unitGates`). `gTable` computes each root
+callee's gate count once through a memo (`gatesMemo`), for the readers that would otherwise recompute it per node.
 -/
 module
 
@@ -355,75 +353,6 @@ theorem look_gTable (d : Desc) : look d (gTable d) = d.gates := by
   · rename_i v hv; exact gTable_spec d c v hv
   · rfl
 
-/-- The gates of `root`'s nodes before node `k`, each callee's count by `g` (`TemplateQuery.gates`' offset at
-`g = d.gates`). -/
-def offWith (d : Desc) (g : String → Nat) (root : DDef) (k : Nat) : Nat :=
-  (root.nodes.extract 0 k).foldl (fun acc x => acc + x.members * g (d.callees.getD x.fn "")) 0
-
-/-- What `TemplateQuery.gates` reads per unit, once per program and ranges: the root, each root callee's gates
-(`gTable`) and the offset of each range's node. -/
-structure GateTable where
-  root : Option DDef
-  G : Std.HashMap String Nat
-  offs : Std.HashMap Nat Nat
-
-def table (d : Desc) (rs : Array TRange) : GateTable :=
-  let G := gTable d
-  let root := d.def? d.root
-  { root, G, offs := match root with
-      | none => {}
-      | some r => rs.foldl (fun o x => o.insert x.node (offWith d (look d G) r x.node)) {} }
-
-/-- `TemplateQuery.gates` off a `GateTable`. -/
-def gatesBy (d : Desc) (tb : GateTable) (rs : Array TRange) (i : Nat) : Option (Nat × Nat) := do
-  let (k, m, t) ← Flock.TemplateQuery.locate rs i
-  let root ← tb.root
-  let off := match tb.offs[k]? with
-    | some o => o
-    | none => offWith d (look d tb.G) root k
-  let g := look d tb.G t
-  return (off + m * g, off + m * g + g)
-
-theorem offs_spec (d : Desc) (g : String → Nat) (r : DDef) (rs : Array TRange) (k o : Nat)
-    (h : (rs.foldl (fun (o : Std.HashMap Nat Nat) (x : TRange) => o.insert x.node (offWith d g r x.node)) {})[k]? =
-      some o) : o = offWith d g r k := by
-  rw [← Array.foldl_toList] at h
-  have key : ∀ (l : List TRange) (O : Std.HashMap Nat Nat), (∀ k o, O[k]? = some o → o = offWith d g r k) →
-      ∀ k o, (l.foldl (fun (o : Std.HashMap Nat Nat) (x : TRange) => o.insert x.node (offWith d g r x.node)) O)[k]? =
-        some o → o = offWith d g r k := by
-    intro l
-    induction l with
-    | nil => intro O h; exact h
-    | cons x l ihl =>
-      intro O hO
-      apply ihl
-      intro k' o' h'
-      simp only [Std.HashMap.getElem?_insert] at h'
-      split at h'
-      · rename_i he
-        cases eq_of_beq he
-        simp only [Option.some.injEq] at h'
-        exact h'.symm
-      · exact hO _ _ h'
-  exact key _ _ (by intro k o h; simp at h) k o h
-
-theorem gatesBy_table (d : Desc) (rs : Array TRange) (i : Nat) :
-    gatesBy d (table d rs) rs i = Flock.TemplateQuery.gates d rs i := by
-  simp only [gatesBy, table, Flock.TemplateQuery.gates, look_gTable]
-  cases Flock.TemplateQuery.locate rs i with
-  | none => rfl
-  | some kmt =>
-    obtain ⟨k, m, t⟩ := kmt
-    cases d.def? d.root with
-    | none => rfl
-    | some r =>
-      simp only [Option.bind_eq_bind, Option.bind_some]
-      split
-      · rename_i o ho
-        rw [offs_spec d d.gates r rs k o ho]
-        rfl
-      · rfl
-
 /-- `partition.unit_gates` with a template query's units laid out by `instances` (`TemplateQuery.unitGates` or
 `TemplateQuery.unitGatesRef`): each unit's gates `[lo, hi)` in root gates, by unit: an instance's
 (`TemplateQuery.gates`), a `Q_call` unit's interval of its Call, or the span of the gates a `Q_word` unit owns. -/
@@ -576,26 +505,5 @@ def runInputs (P : Flock.Program.Prog) (first count : Nat) : Bool :=
   !inside.isEmpty && inside.all fun i => match nodes[i]? >>= fun x => P.defs[x.fn]? with
     | some f => f.prim && f.binding == some Flock.Program.RUN
     | none => false
-
-/-- The walk unit by unit (`unitGatesBy` at each unit's `TemplateQuery.gates`) with a template query's units read off
-one `table` of the program and ranges (`gatesBy`, `gatesBy_table`), rather than each unit recomputing its node's offset
-and its template's gates. `unitGates` reads a range at a time instead, and nothing runs this. -/
-def unitGatesFast (p : Program) (query : Json) : V (Array (Nat × Nat)) := do
-  let rs ← evaluate p query
-  let q := getD (build (Flock.hexOf p.sha512) query) "query"
-  let name := (q.getObjValAs? String "name").toOption.getD ""
-  let version := (nat? (getD q "version")).getD 0
-  let X := (nat? (getD (getD q "params") "X")).getD 0
-  if (Flock.TemplateQuery.templatesOf name version (getD q "params")).isSome then
-    let tb := table p.desc rs
-    return ← (Array.range (Flock.TemplateQuery.population rs)).mapM fun u =>
-      match gatesBy p.desc tb rs u with
-      | some g => pure g
-      | none => throw s!"unit {u} has no instance"
-  let root := (p.prog.defs[p.prog.root]!).body
-  if name == "Q_word" then
-    return ← (← wordCalls p.prog).foldlM (fun acc (k, d, c) => return acc ++ (← wordGates p.prog k d c)) #[]
-  return (← Flock.Qcall.evaluate p.prog X).foldl (fun acc c =>
-    acc ++ c.c.units.map fun u => (root.offsets[c.k]! + u.lo, root.offsets[c.k]! + u.hi)) #[]
 
 end Spot.Partition

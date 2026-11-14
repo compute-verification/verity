@@ -11,11 +11,10 @@ The one-stage audit record (`audit.audit_record`), whole, and what the drivers c
 * `checks`: `audit_record`'s checks, each with Python's detail: the sample's and the proved units' always, and the receipt's,
   the served sample's, the sessions' roots' and the registered roots' when they fail;
 * `record`: the record, every field as `audit_record` writes it, the registered roots its checks read derived here from
-  the verdicts (`sessionRegistered`, `ownRegistered`), never taken as input; with `own_reads` (a two-stage run's, whose
-  round 2 holds those reads' rows), less the reads of the registration's own ports at their own roots
-  (`lessOwnReads`). `checks` and `ownRegistered` run linear in the
+  the verdicts (`sessionRegistered`, `ownRegistered`), never taken as input, less the reads of the registration's own
+  ports at their own roots (`lessOwnReads`). `checks`, `ownRegistered` and `lessOwnReads` run linear in the
   registration's roots: each is compiled as its form on `lastRoots`, a hash map of `byPort` (`checks_eq_checksFast`,
-  `ownRegistered_eq_ownRegisteredFast`), while every theorem reads the definitions above. Python writes `delta` as a float: here it is the double nearest
+  `ownRegistered_eq_ownRegisteredFast`, `lessOwnReads_eq_lessOwnReadsFast`), while every theorem reads the definitions above. Python writes `delta` as a float: here it is the double nearest
   the exact δ given, which `PyJson` writes as Python's `repr` does. `wrong_units.bound` is exact under every sampling design
   (`Bound.boundOf`).
 -/
@@ -280,7 +279,6 @@ structure Input where
   sessions : Array Json
   served : Option (Array Int)
   sessionRoots : Option (Array (String × Json))
-  ownReads : Bool := false
 
 private def need (ok : Bool) (what : String) : V Unit := if ok then pure () else throw what
 
@@ -295,15 +293,9 @@ private def INPUT_KEYS : Array String := sortStrings #["registration", "receipt"
 canonical JSON is Python's (`pyCanonical`, so its digest is `registration.digest`'s) and that has every field the record reads (its roots and registered entries objects with a string port or value), a sample object whose
 units (and closure) are integers, its population an integer and a subset's `k` present, integer proved units and
 instances, verdicts objects (the verifier that accepted reporting its registered reads as objects with a string
-`value` and a `root`), session digests as strings, served units integers, and δ an exact ratio in (0, 1); and
-optionally `own_reads`, a boolean (`record`). -/
+`value` and a `root`), session digests as strings, served units integers, and δ an exact ratio in (0, 1) (`record`). -/
 def inputOf (j : Json) : V Input := do
-  need (keys? j == some INPUT_KEYS || keys? j == some (sortStrings (INPUT_KEYS.push "own_reads")))
-    s!"the record's input is exactly {", ".intercalate INPUT_KEYS.toList}, and optionally own_reads"
-  let ownReads ← match field? j "own_reads" with
-    | none => pure false
-    | some (.bool b) => pure b
-    | some _ => throw "own_reads is not a boolean"
+  need (keys? j == some INPUT_KEYS) s!"the record's input is exactly {", ".intercalate INPUT_KEYS.toList}"
   let reg := getD j "registration"
   need (reg matches .obj _) "the registration is not an object"
   need (pyCanonical reg) "the registration holds a number that is not an integer"
@@ -354,7 +346,7 @@ def inputOf (j : Json) : V Input := do
   let delta ← Core.Ratio.ofString d "delta"
   need (delta.num != 0 && delta.num < delta.den) "delta is not in (0, 1)"
   return { registration := reg, receipt, draw, units, law, provedUnits, instances := getD j "instances",
-           statement := getD j "statement", verdicts, delta, sessions, served, sessionRoots, ownReads }
+           statement := getD j "statement", verdicts, delta, sessions, served, sessionRoots }
 
 private def strataDrawn (draw : Json) (units : Array Int) : Json :=
   obj ((match getD draw "strata" with | .arr ss => ss | _ => #[]).toList.filterMap fun s =>
@@ -364,10 +356,19 @@ private def strataDrawn (draw : Json) (units : Array Int) : Json :=
       some (t, Lean.toJson (units.filter fun u => rs.any fun (lo, hi) => lo ≤ u && u < hi).size)
     | _ => none)
 
-/-- `opened` less the reads of `reg`'s own ports at their own roots. -/
+/-- `opened` less the reads of `reg`'s own ports at their own roots: a read named by one of its ports is taken where
+its root is that port's last root (`byPort`), and stays, to be held to the registered values, at any other. -/
 def lessOwnReads (reg : Json) (opened : Option (Array (String × Json))) : Option (Array (String × Json)) :=
-  let ports := byPort reg
-  opened.map (·.filter fun (v, r) => !ports.any fun (p, x) => p == v && jeq (getD x "root") r)
+  opened.map (·.filter fun (v, r) => !((byPort reg).find? (·.1 == v)).any fun (_, x) => jeq (getD x "root") r)
+
+/-- `lessOwnReads`, each port's root a hash lookup. -/
+def lessOwnReadsFast (reg : Json) (opened : Option (Array (String × Json))) : Option (Array (String × Json)) :=
+  let ports := lastRoots reg
+  opened.map (·.filter fun (v, r) => !(ports[v]?.any fun x => jeq (getD x "root") r))
+
+@[csimp] theorem lessOwnReads_eq_lessOwnReadsFast : @lessOwnReads = @lessOwnReadsFast := by
+  funext reg opened
+  simp only [lessOwnReads, lessOwnReadsFast, find?_byPort, Option.any_map]
 
 /-- Whether every verdict ran (`accepted` not null): the audit record's `complete` (`record`), and what one-stage's
 accept publishes under the same name (`OneStage.Public`). -/
@@ -378,9 +379,8 @@ def record (i : Input) : V Json := do
   let reg := i.registration
   let get := getD reg
   let digest ← Flock.WindowRecord.digestHex reg
-  let opened := ownRegistered reg (sessionRegistered i.verdicts)
   let cs := checks reg i.receipt i.draw i.law i.units i.provedUnits i.instances digest i.served i.sessionRoots
-    (if i.ownReads then lessOwnReads reg opened else opened)
+    (lessOwnReads reg (ownRegistered reg (sessionRegistered i.verdicts)))
   let accepted' := fun (v : Json) => jeq (getD v "accepted") (.bool true)
   let ran := i.verdicts.filter fun (_, v) => !(getD v "accepted" matches .null)
   let ofRecord := i.verdicts.filter fun (_, v) => truthy (getD v "of_record")

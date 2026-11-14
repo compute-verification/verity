@@ -58,10 +58,13 @@ The default is `0000`; `pouw` is commit_gpu's `sha::compress`. `rows.cu` builds 
 - `engine.py`: the call.
 - `settings.py`: the variables `engine.py` reads.
 - `check.py`: the engine against the reference: every variant, edge sizes, the H200 layer on sampled slots.
+- `tests/`: the host twin always, every variant on a CUDA device.
+
+What measures it is in `benchmarks/torch_gpu/sha512_rows/`:
+
 - `bench.py`: the variant and leaf-kernel sweeps, and whole steps at the H200 demo's shape.
 - `sass.py`: opcode counts per variant.
 - `gpu.sh`: one leased GPU run.
-- `tests/`: the host twin always, every variant on a CUDA device.
 
 From the tree's root, on a CUDA GPU (an H200 for the H200 layer) with CUDA torch, CUDA's nvcc and `gpu-lease`:
 

@@ -27,8 +27,8 @@ GOLDEN = {"json": "d00fd9f23632ac85627cda499654432a6bd547fd30f391760a08de62972b3
           "bin": "183e9e504664b5d831135407b51246829dc10eedf9587917cd88cef516599d2c9685bb19e9b013f403bba1aba68e270495c2e830139fea7efa961f0c823b3db3"}
 #: SHA-512 of kernels' fixtures/commit-slots-v1.json, which `S.fixture()` writes as ``json.dumps(fixture, indent=1) + "\n"``;
 #: its roots and digests are those of the commit `B.REFERENCE` pins
-SLOTS_FIXTURE_SHA512 = ("56114dd7ddaaed0cc2a0dba4eed2dedf6660a5462c8696cfa4a5b66e0b0eb54b"
-                        "dddf1ba6713756579099f58dc6671f49000b75dea7461359106f3a6ae336c48a")
+SLOTS_FIXTURE_SHA512 = ("b0af136a50096f7a769deca08c2c36a09129f43c688328a7e823597e835d9438"
+                        "80ca988e3b7a71da38cf60faf80617557f99957e22e2d121f997ba25d86d0ea0")
 
 
 @pytest.fixture(scope="module")

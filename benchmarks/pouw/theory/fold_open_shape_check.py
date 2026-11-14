@@ -43,7 +43,7 @@ def kj19_scaled(a: int, e: int = R1) -> bool:
 
 
 def main() -> int:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "edited_gemm"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "edited_gemm"))
     import egemm_depthr_check as fold_ref
 
     checks = Checks()

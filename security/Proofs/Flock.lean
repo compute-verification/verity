@@ -42,7 +42,6 @@ public import Proofs.Flock.RecGeneric
 public import Proofs.Flock.C3
 public import Proofs.Flock.Claims.Complete.ZkTables
 public import Proofs.Flock.VBridge
-public import Proofs.Flock.Sampled
 public import Proofs.Flock.SampledGeneric
 public import Proofs.Flock.Claims
 public import Proofs.Flock.SamplingClaims

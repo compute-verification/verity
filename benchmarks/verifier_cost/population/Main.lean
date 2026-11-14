@@ -1,8 +1,8 @@
 import Spot
 
 /-!
-`population-time FILE [--no-ref]`: on one `{"descriptor", "query", "population"}` input, `Partition.unitGates` (which runs
-as `unitGatesFast`), `Slots.popOk` (the run's `population-order` check, which runs from the ranges as
+`population-time FILE [--no-ref]`: on one `{"descriptor", "query", "population"}` input, `Partition.unitGates` (a range at
+a time, `TemplateQuery.unitGates`), `Slots.popOk` (the run's `population-order` check, which runs from the ranges as
 `Slots.popOkRanges`) and, unless `--no-ref`, the per-unit reference (`TemplateQuery.gates` on every unit, as `unitGates`
 first ran) and `popOk` as stated, off `Slots.layout`'s population, at the population and either side of it, each timed
 after the program is parsed, one `PHASE {json}` line each on stdout; exit 1 if the reference's gates differ from
