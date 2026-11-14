@@ -255,17 +255,17 @@ namespace Accounting.SecurityProofs
 
 open Accounting.Rate Accounting.Remote
 
-/-- **The deployed session meets the remote audit's routes** (`Accounting.Guarantees.RemoteSessionRoutes`). -/
-theorem RemoteSessionRoutes : Accounting.Guarantees.RemoteSessionRoutes := by
+/-- **The deployed session meets the remote audit's routes** (`Accounting.Guarantees.RemoteRunRoutes`). -/
+theorem RemoteRunRoutes : Accounting.Guarantees.RemoteRunRoutes := by
   intro n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A Nd a dbar hn hP hN hb hrc hdbar ha hab hal hC hW hF hA
   exact ⟨ofDeployed_sampled A tier _ Nd a dbar hn hP hN hb hdbar hab hC,
     ofDeployed_paid_route A tier Nd a hrc ha hab hal hW hF hA⟩
 
 /-- **The deployed session conserves its words as a run of the remote audit, at the same `γ`**
-(`Accounting.Guarantees.RemoteSessionRunConservation`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
-theorem RemoteSessionRunConservation : Accounting.Guarantees.RemoteSessionRunConservation := by
+(`Accounting.Guarantees.RemoteMonitoringPeriodConservation`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
+theorem RemoteMonitoringPeriodConservation : Accounting.Guarantees.RemoteMonitoringPeriodConservation := by
   intro n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A Nd a dbar hn hP hN hb hrc hdbar ha hab hal hC hW hF hA
-  obtain ⟨hs, hp⟩ := RemoteSessionRoutes n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A Nd a dbar hn hP hN
+  obtain ⟨hs, hp⟩ := RemoteRunRoutes n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A Nd a dbar hn hP hN
     hb hrc hdbar ha hab hal hC hW hF hA
   have hC0 : 0 < Nd.declared a.T := by rw [hC]; positivity
   refine Remote.holds_mono ?_ (Remote.Conservation (Fin τ) _ Nd a _ dbar _ _ hC0 hs hp)
