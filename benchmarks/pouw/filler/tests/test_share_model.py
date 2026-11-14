@@ -8,7 +8,7 @@ import pytest
 import share as S
 
 MHZ = 2000
-CAP = 1024 * 188 * MHZ * 1e6  # the int8 peak at the read clock, MACs a second
+PEAK = 1024 * 188 * MHZ * 1e6  # the int8 peak at the read clock, MACs a second
 
 
 def _lin(mhz, m, ms, lm=None):
@@ -41,7 +41,7 @@ def m():
 
 
 def _att(p, eta):
-    return S.causal(p) / (eta * CAP) * 1e3  # a causal prompt's attention at a share eta of the peak, ms
+    return S.causal(p) / (eta * PEAK) * 1e3  # a causal prompt's attention at a share eta of the peak, ms
 
 
 def test_the_fit_of_a_runs_lines(m):
@@ -49,7 +49,7 @@ def test_the_fit_of_a_runs_lines(m):
     # of the twelve clocks in order, the one at half the 14 lines: the gate lines are counted, so it is the eighth,
     # one past the median's two (1998 and 1999)
     assert m.mhz == MHZ
-    assert m.capacity == CAP and m.capacity_max == 1024 * 188 * 2430e6
+    assert m.capacity == PEAK and m.capacity_max == 1024 * 188 * 2430e6
     assert (m.lm_m, m.lm_ms) == ([1, 16, 256], [0.5, 1.0, 4.0])
     assert m.lin_m == [1, 16, 256, 8192] and m.lin_body == [1.5, 3.0, 12.0, 384.0]  # without lm_head
     assert [r["M"] for r in m.lin_rows] == m.lin_m
@@ -58,7 +58,7 @@ def test_the_fit_of_a_runs_lines(m):
     # the least-squares line through the four attention points: 4 ms for each 2^31 bytes, and 0.5 ms
     assert m.att_bw == pytest.approx(250 * 2 ** 31) and m.att_c0 == pytest.approx(0.5)
     assert m.delta == pytest.approx(0.4)  # the mean of 0.7 and 0.1
-    assert m.eta_fa2 == pytest.approx(S.causal(8192) / (0.07311 * CAP))  # causal 8,192 in FA2's 73.11 ms
+    assert m.eta_fa2 == pytest.approx(S.causal(8192) / (0.07311 * PEAK))  # causal 8,192 in FA2's 73.11 ms
 
 
 def test_lm_head_and_the_linears_are_read_from_their_curves(m):
@@ -87,7 +87,7 @@ def test_a_prompts_time_packs_prompts_into_a_batch_of_8192_tokens(m):
 
 
 def test_a_rows_ratios_are_of_the_read_clocks_capacity_and_of_the_2430_mhz_one(m):
-    r = m.row(0.25 * CAP * 0.010, 10.0, fill=0.1)  # a quarter of the read clock's capacity for 10 ms
+    r = m.row(0.25 * PEAK * 0.010, 10.0, fill=0.1)  # a quarter of the read clock's capacity for 10 ms
     at_max = 0.25 * MHZ / 2430
     assert r == pytest.approx({"nominal/capacity": 0.25, "nominal/capacity_2430": at_max, "certified/nominal": 0.99,
                                "tau": S.A_V99 * at_max, "certified/capacity": 0.2475,
