@@ -106,7 +106,7 @@ places them on, the hosts and addresses only in the deploy bindings.
 | `onsite_network.toml` | SPOT, the network certifier, the wipe | refused `composite` |
 | `onsite_compute.toml` | those three, PoUW (`pouw`, onsite's work subprotocol), the inference-only policy | refused `composite` |
 
-Neither set is a composite's (`verity.configuration.deploy.config.COMPOSITES`, `Core.Composites.ofIds`): protocol
+Neither set is a composite's (`verity.config.COMPOSITES`, `Core.Composites.ofIds`): protocol
 soundness covers onsite's seven and remote's three alone, so `verity run` refuses each file by name before it reads a
 party, and neither is a demo with a `demo.toml`. `tools/verity/cli/tests/test_onsite_served.py` holds each file to the
 table's declarations and to that refusal.
