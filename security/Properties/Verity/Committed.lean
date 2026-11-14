@@ -136,7 +136,10 @@ What it does not say:
   `Spot.Wires.check`, whose templates the text does not hold.
 * **Anything of a composite whose policy check is another one.** The case is the one `NciCheck.Protocol.protocol`
   decodes (`PolicyCase`); at a composite whose list has another policy check in its place no case decodes, and the
-  claim holds of every play. -/
+  claim holds of every play.
+* **Anything of a record that names no wiring.** Where the record's `window.circuit` is the SHA-512 of no text
+  that parses to a wiring (`RecordWiring` holds of no `W`), the claim holds of the play and says nothing, not even
+  sampled proofs' share. -/
 def WiresHold (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Game.Strategy (V.game θ F c)) (o : Exchange) : Prop :=
   ∀ p r e, PolicyCase k o.sent p r e → ∀ W, RecordWiring r.record W →
