@@ -2415,6 +2415,11 @@
       "paths": {
         "verity/hardware/registration.py": "verity/protocols/accounting/registration/verifier/registration.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/hash/maxtput/build_job.sh": "adapters/vllm/verity_vllm/ops/served_build.sh"
+      }
     }
   ]
 }

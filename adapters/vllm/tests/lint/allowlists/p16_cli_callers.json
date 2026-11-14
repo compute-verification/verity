@@ -8,7 +8,7 @@
     "int8-checkpoint": "benchmarks/hash/dither/pin_glm53.sh",
     "row": "tools/research/src/research/pods/nebius/n2_commit.sh",
     "serve-openai": "demos/vllm/serve.sh",
-    "served-match": "benchmarks/hash/maxtput/build_job.sh",
+    "served-match": "adapters/vllm/verity_vllm/ops/served_build.sh",
     "served-pin": "benchmarks/served_commit/served_arm.sh",
     "serving-rows": "benchmarks/one_stage/a5.sh",
     "tp-serving-rows": "benchmarks/one_stage/a5_tp.sh",
