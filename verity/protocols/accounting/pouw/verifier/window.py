@@ -75,11 +75,11 @@ import json
 import math
 import struct
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from verity.circuits.codec import canonical_json
 from verity.commitments import domains, hm96
@@ -187,7 +187,7 @@ class Work:
     n: int
 
     @classmethod
-    def at(cls, ell: int, bits: int = GRID_BITS) -> "Work":
+    def at(cls, ell: int, bits: int = GRID_BITS) -> Work:
         return cls(ell, point(ell, bits), point(ell + 1, bits))
 
     def to_json(self, tile_work: int) -> dict[str, int]:
@@ -415,7 +415,7 @@ class Entry:
         return list(struct.unpack(f"<{ENTRY_WORDS}H", self.row()))
 
     @classmethod
-    def from_row(cls, row: bytes) -> "Entry":
+    def from_row(cls, row: bytes) -> Entry:
         """The entry a row holds; raises ValueError for a row of another length, an unknown kind or a nonzero pad."""
         row = bytes(row)
         if len(row) != ENTRY_BYTES:
@@ -432,7 +432,7 @@ class Entry:
         return cls(kind, lo, hi, n_a, n_b, row[48:112], row[112:176], row[176:240], row[272:336], tile0, cols, m)
 
     @classmethod
-    def from_words(cls, words: Sequence[int]) -> "Entry":
+    def from_words(cls, words: Sequence[int]) -> Entry:
         if len(words) != ENTRY_WORDS or any(not 0 <= int(w) < 1 << 16 for w in words):
             raise ValueError(f"an entry row is {ENTRY_WORDS} u16 words")
         return cls.from_row(struct.pack(f"<{ENTRY_WORDS}H", *map(int, words)))
@@ -443,7 +443,7 @@ class Entry:
                 "m": self.m, "record": self.record.hex()}
 
     @classmethod
-    def from_json(cls, x: Mapping[str, Any]) -> "Entry":
+    def from_json(cls, x: Mapping[str, Any]) -> Entry:
         return cls(x["kind"], x["lo"], x["hi"], x["n_a"], x["n_b"], bytes.fromhex(x["root_a"]), bytes.fromhex(x["root_b"]),
                    bytes.fromhex(x["root_h3"]), bytes.fromhex(x["record"]), x["tile0"], x["cols"], x["m"])
 

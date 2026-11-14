@@ -1,9 +1,9 @@
 """`audit.AuditRun` held to the remote audit's verifier in Lean (`RemoteAudit.Session`, the definition, served by
 `remote-audit-difftest`), a whole session at a time: every event's result (the coin released, the append's index and
-coin, the window's samples, the verdict, or the rejection with its failure and draw), the outcome and the record.
-Recorded sessions (`ra_cases.SCENARIOS`) are honest ones and ones that each reach one of `audit.FAILURES` in the Lean;
-sampled ones are those with their events, fields and parameters edited, which reach the rest of the bookkeeping and the
-decoders' refusals."""
+coin, the window's samples, the verdict, or the rejection with its failure and the sample it failed at), the outcome
+and the record. Recorded sessions (`ra_cases.SCENARIOS`) are honest ones and ones that each reach one of
+`audit.FAILURES` in the Lean; sampled ones are those with their events, fields and parameters edited, which reach the
+rest of the bookkeeping and the decoders' refusals."""
 
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ import json
 import shutil
 
 import pytest
-from hypothesis import strategies as st
-
 import ra_cases as M
 import verity_difftest as D
+from hypothesis import strategies as st
+
 from verity.protocols.accounting.poub.verifier import audit
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -49,7 +49,7 @@ def test_a_session_that_defers_residency_at_a_lifetime_of_one_is_refused_by_both
 
 
 @pytest.mark.parametrize("key", ["samples", "min_passes"])
-def test_a_session_that_could_draw_nothing_is_refused_by_both(server, key) -> None:
+def test_a_session_that_could_sample_nothing_is_refused_by_both(server, key) -> None:
     """A window samples `min(samples, U)` of its U ≥ `min_passes` receipts (a plan reads at least one chunk), so with
     both positive it samples at least one. Both sides refuse either at 0, so no session has a window with no samples, which
     both would reject `malformed` whatever its openings (`test_appends`, `test_opening`)."""
