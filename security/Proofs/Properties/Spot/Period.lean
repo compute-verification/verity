@@ -9,7 +9,7 @@ import all Init.Data.Array.Basic
 # Proofs of the properties of SPOT's period (`Properties.Spot.Period`)
 
 The period's check is monadic. What each of its functions read where it returns is a Hoare triple proved by `mvcgen`
-and read back at an `.ok` result (`read_ok`, `windowsIn_ok`, `caseAt_ok`, `windowAt_raw`, `run_ok`); the properties
+and read back at an `.ok` result (`read_ok`, `windowsIn_ok`, `caseAt_ok`, `executionPhaseAt_raw`, `run_ok`); the properties
 are then facts about arrays.
 
 * **The ledger's half** (`ledgerMeans`). `read` keeps, of the windows `Challenger.checked` returns, those whose open
@@ -18,8 +18,8 @@ are then facts about arrays.
   whether their layout holds the sample's family (`partition_eq`) and makes one window of each that does, in order
   (`Returned.win`). The checked ledger's windows share no root and no session (`LedgerInv.distinct`), so neither do
   the sessions, nor the windows and the others together (`Returned.nodup`).
-* **The audits' half** (`acceptMeans`). `windowAt` either leaves an audit undecided or adds one window with one
-  audit and that audit's record (`windowAt_step`). Along `run`'s fold over the windows and their evidence, while no
+* **The audits' half** (`acceptMeans`). `executionPhaseAt` either leaves an audit undecided or adds one window with one
+  audit and that audit's record (`executionPhaseAt_step`). Along `run`'s fold over the windows and their evidence, while no
   audit is undecided, window `i` passed with one audit, made at the records of the windows before it (`FoldGood`,
   `foldGood_step`, `foldlM_prefix`).
 * **Whose each session is** (`registeredIn_ok`). Where `registeredIn` returns, every window is in a period that
@@ -564,15 +564,15 @@ theorem caseAt_spec (inner : Inner) (p : AuditParams) (ledger pins session : Jso
     ⦃⌜True⌝⦄ caseAt inner p ledger pins session w want before k bs
       ⦃⇓? x => ⌜caseAt inner p ledger pins session w want before k bs = .ok x⌝⦄ := ok_spec _
 
--- `mvcgen` splits `windowAt` into one goal per refusal and per answer of the audit
+-- `mvcgen` splits `executionPhaseAt` into one goal per refusal and per answer of the audit
 set_option maxHeartbeats 4000000 in
-/-- What `windowAt` read where it returns: the ledger's window on the root, its session pinned on main's line, its
+/-- What `executionPhaseAt` read where it returns: the ledger's window on the root, its session pinned on main's line, its
 files under the key, its coin commitment withheld, the one registration it sampled, the one case, and that case's
 record and answer (`caseAt`). An accept adds the window with its one audit and the record; an undecided adds the
 record and is kept. -/
-theorem windowAt_raw {inner : Inner} {p : AuditParams} {r : Read} {ledger pins : Json} {bs : Core.Blobs}
+theorem executionPhaseAt_raw {inner : Inner} {p : AuditParams} {r : Read} {ledger pins : Json} {bs : Core.Blobs}
     {st st' : Progress} {w : Window} {we : WindowEvidence}
-    (h : windowAt inner p r ledger pins bs st w we = .ok st') :
+    (h : executionPhaseAt inner p r ledger pins bs st w we = .ok st') :
     ∃ (au : Audited) (opened : Json) (lc : LiveCommitment) (roots : Roots) (d : String) (k : Case) (record : Json)
         (o : Core.Outcome OneStage.Public Core.Integrity),
       auditedIn r.wins r.periods (Json.mkObj [("root", Json.str w.root)]) = .ok (au, opened) ∧
@@ -604,7 +604,7 @@ theorem windowAt_raw {inner : Inner} {p : AuditParams} {r : Read} {ledger pins :
                             { window := w, audits := #[{ registration := d, published, profile }] } }) ∨
         (∃ why, st' = { st with before := st.before.push record, undecided := st.undecided <|> some why }))) ?_ h
   clear h
-  mvcgen [windowAt, -Spec.throw_Except, throw_spec, coinOf_spec, caseAt_spec]
+  mvcgen [executionPhaseAt, -Spec.throw_Except, throw_spec, coinOf_spec, caseAt_spec]
   all_goals
     subst_vars
     refine ⟨_, _, _, _, _, _, _, _, by assumption, none_of_forall (by assumption), none_of_forall (by assumption),
@@ -623,10 +623,10 @@ def StepOk (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs
       AuditedAt inner p c e bs r w we st.before record a) ∨
     st'.undecided.isSome = true
 
-theorem windowAt_step {inner : Inner} {p : AuditParams} {c : Commitment} {e : Evidence} {bs : Core.Blobs} {r : Read}
+theorem executionPhaseAt_step {inner : Inner} {p : AuditParams} {c : Commitment} {e : Evidence} {bs : Core.Blobs} {r : Read}
     {st st' : Progress} {w : Window} {we : WindowEvidence}
-    (h : windowAt inner p r c.ledger e.pins bs st w we = .ok st') : StepOk inner p c e bs r st w we st' := by
-  obtain ⟨au, opened, lc, roots, d, k, record, o, h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := windowAt_raw h
+    (h : executionPhaseAt inner p r c.ledger e.pins bs st w we = .ok st') : StepOk inner p c e bs r st w we st' := by
+  obtain ⟨au, opened, lc, roots, d, k, record, o, h1, h2, h3, h4, h5, h6, h7, h8, h9⟩ := executionPhaseAt_raw h
   obtain ⟨cm, q, ev, c1, c2, c3, c4, c5, c6⟩ := caseAt_ok h8
   obtain ⟨hrec, ho⟩ := Prod.mk.inj c6
   unfold StepOk
@@ -717,19 +717,19 @@ theorem othersOf_nodup {r : Read} {others : Array Session} (h : (others.toList.m
 -- `mvcgen` splits `run` at the ledger's half, whose each session is, the count of the evidence's windows and the fold
 set_option maxHeartbeats 4000000 in
 /-- What `run` read where it returns: the ledger's half's sessions and windows, whose each session is, as many
-windows' evidence, and the fold of `windowAt` over the windows with their evidence, from the empty state. -/
+windows' evidence, and the fold of `executionPhaseAt` over the windows with their evidence, from the empty state. -/
 theorem run_ok {inner : Inner} {p : AuditParams} {c : Commitment} {e : Evidence} {bs : Core.Blobs}
     {x : Array Other × Progress} (h : _root_.Spot.Period.run inner p c e bs = .ok x) :
     ∃ r ws, read p.ledger c.ledger = .ok r ∧ windowsIn p.ledger r = .ok ws ∧ registeredIn p r ws = .ok x.1 ∧
       e.windows.size = ws.windows.size ∧
       ∃ f : Progress → Window × WindowEvidence → Except (Code × String) Progress,
         (ws.windows.zip e.windows).foldlM f ({} : Progress) = .ok x.2 ∧
-        ∀ st w ev, f st (w, ev) = windowAt inner p r c.ledger e.pins bs st w ev := by
+        ∀ st w ev, f st (w, ev) = executionPhaseAt inner p r c.ledger e.pins bs st w ev := by
   refine of_triple (Q := fun x => ∃ r ws, read p.ledger c.ledger = .ok r ∧ windowsIn p.ledger r = .ok ws ∧
       registeredIn p r ws = .ok x.1 ∧ e.windows.size = ws.windows.size ∧
       ∃ f : Progress → Window × WindowEvidence → Except (Code × String) Progress,
         (ws.windows.zip e.windows).foldlM f ({} : Progress) = .ok x.2 ∧
-        ∀ st w ev, f st (w, ev) = windowAt inner p r c.ledger e.pins bs st w ev) ?_ h
+        ∀ st w ev, f st (w, ev) = executionPhaseAt inner p r c.ledger e.pins bs st w ev) ?_ h
   clear h
   mvcgen [_root_.Spot.Period.run, -Spec.throw_Except, throw_spec, -Spec.foldlM_array, foldlM_spec, read_spec,
     windowsIn_spec, registeredIn_spec]
@@ -824,7 +824,7 @@ theorem acceptMeans : AcceptMeans := by
     intro pre x s t hI hfx
     obtain ⟨w, we⟩ := x
     rw [hf] at hfx
-    exact foldInv_step hI (windowAt_step hfx)
+    exact foldInv_step hI (executionPhaseAt_step hfx)
   have hinit : FoldInv inner p c e bs r [] ({} : Progress) := by
     unfold FoldInv
     intro _
