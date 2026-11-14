@@ -2182,7 +2182,8 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
         if not ns.worker:
             author = acting_as(ns, reg, need(ns.handle, "--as HANDLE, the comment's sender (a lane's worker: --worker NAME)"))["handle"]
             warn_unrouted(text, reg, author)
-        info = lin.gql("query($id: String!) { issue(id: $id) { id identifier url team { key } } }", {"id": issue})["issue"]
+        info = lin.gql("query($id: String!) { issue(id: $id) { id identifier url team { key } labels { nodes { name } } } }",
+                       {"id": issue})["issue"]
         if ns.worker:
             lane = worker_lane or linear.owners(reg).get(info["team"]["key"])
             if not lane:
@@ -2207,12 +2208,12 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
 
 
 def ring_comment(ns: argparse.Namespace, reg: dict, author: str, issue: dict, text: str) -> list[str]:
-    """Ring the inbox of the issue's team's handle and of each name the comment starts with, as `send` would, so nobody
-    polls Linear for comments (no one subscribes to them: every handle writes as one app).  The author is never
-    rung.  One line per name."""
+    """Ring the inbox of the issue's lane (`linear.lane`: its `lane:` label's handle, else its team's handle) and of each
+    name the comment starts with, as `send` would, so nobody polls Linear for comments (no one subscribes to them: every
+    handle writes as one app).  The author is never rung.  One line per name."""
     from . import linear
 
-    owner = linear.owners(reg).get(issue["team"]["key"])
+    owner = linear.lane(issue, reg)
     names = list(dict.fromkeys(([owner] if owner else []) + lead_names(text, reg)))
     routes, api, lines = routes_of(ns), client(ns), []
     ch = channel_id(ns, reg, FRONT_DOOR)

@@ -4142,7 +4142,7 @@ def test_a_forward_loop_or_a_chain_past_three_hops_rings_no_closed_inbox(fake, r
     add_route(local, "old-b", boxes["old-b"], closed="2026-10-01T18:00Z", forward_to="old-a")
     rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@old-a", "--text", "where is the tree?")
     assert rc == 0 and "route @old-a: its forward_to loops or runs past 3 hops (stopped at @old-b)" in err
-    issue = {"identifier": "LEAN-1", "url": "https://linear.app/x/LEAN-1", "team": {"key": "NOPE"}}
+    issue = {"identifier": "LEAN-1", "url": "https://linear.app/x/LEAN-1", "team": {"key": "NOPE"}, "labels": {"nodes": []}}
     assert slack.ring_comment(argparse_ns(), json.loads(registry.read_text()), "infra", issue, "@old-a see the comment") == [
         "@old-a: its forward_to loops or runs past 3 hops (stopped at @old-b): see `research msg names list`; the comment is on LEAN-1"]
     assert all(bells(fake, b) == [] for b in boxes.values())
