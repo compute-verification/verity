@@ -78,7 +78,9 @@ register's text doesn't.
 An install never takes a machine out of a list unasked. The machines a file names are the register's names (live, released or
 broken) that its lines hold as whole words, comments apart; `install` refuses when the text it would write lacks one the
 installed file names, or has fewer lines, and says which machines would go and what the register says of each. `--allow-shrink`
-installs it all the same. Without `--apply` it prints how many machines the file names now and after.
+installs it all the same. Without `--apply` it prints how many machines the file names now and after. An install of a whole
+node (no PATH) never replaces a list written by hand and never refuses for a list: it leaves such a file, and one it would take
+a machine out of, as it is, says why, and installs the node's other files; naming the file, or `roll`, is how either is done.
 An entry's `accept` is a public key on the node (`/home/research/.ssh/vy-cluster.pub`): before the list is written, the
 `authorized_keys` beside the key takes it from the address of every machine the list names. Only the `from=` of the key's own
 line grows (a line is added when the file has none; one with no `from=` already takes the key from anywhere); no address is ever
@@ -453,7 +455,7 @@ if how != "kept" and req["apply"]:
     os.replace(tmp, ak)
     append(req["record"], [{"at": stamp, "path": ak, "accept": key, "added": len(add), "commit": req["commit"], "ref": req["ref"],
                             "by": req["by"]}])
-print(json.dumps({"line": how, "added": len(add), "sources": len(have | set(add))}))
+print(json.dumps({"line": how, "added": len(add), "sources": len(have | set(add)), "anywhere": any(m is None for m in lists)}))
 '''
 BACKUP = re.compile(r"\.(bak|prev|orig)([-.\d_]|$)")       # a hand deploy's copy: x.py.bak-20261001T0611Z, x.sh.prev, x.orig
 SUFFIX = re.compile(r"\.(service|timer|socket|path|target|mount|slice|scope)$")
@@ -1085,7 +1087,8 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
     `ref` lacks is among the files, its `changed` "dropped" ("would drop" without `apply`). A register-made file's entry has
     `machines` too (`listed`'s) and, when its entry names a key, `accept` (`accept`'s); `part` "accept" stops once each such
     key is taken, before any file is written and so whatever a file would lose, and "list" writes the files and leaves the
-    keys (`roll`'s two passes)."""
+    keys (`roll`'s two passes). An install of the whole node (no `only`) leaves a register-made file that was written by
+    hand, or that it would take a machine out of, as it is: `changed` "left", with `why`."""
     commit = git("rev-parse", f"{ref}^{{commit}}", repo=repo).strip()
     if not origin_branches(commit, repo, most=1):
         raise Refused(f"{ref} ({commit[:12]}) is on no origin branch: push it first, so what runs is in a pushed commit")
@@ -1122,7 +1125,22 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
 
     seen = probe(node, sorted(gen) if apply else [f["path"] for f in files], run,
                  {p: reg.names() for p in gen}) if gen or not apply else {"files": {}}
-    lists = {p: listed(node, want[p][3], seen["files"].get(p), g, reg, allow_shrink or part == "accept") for p, g in gen.items()}
+    lists, left = {}, {}
+    for p, g in gen.items():
+        e, now = want[p][3], seen["files"].get(p)
+        if not only and now and now.get("blob") not in (None, g.blob, (seen["record"].get(p) or {}).get("blob")):
+            left[p] = f"written by hand, which an install of the whole node leaves: name it, or `research deploy roll {p}`"
+            continue
+        try:
+            lists[p] = listed(node, e, now, g, reg, allow_shrink or part == "accept")
+        except Refused as err:
+            if only:
+                raise
+            left[p] = str(err).replace("Nothing changed; `--allow-shrink` installs",
+                                       f"Naming it with `--allow-shrink`, or `research deploy roll {p} --allow-shrink`, installs")
+    skipped += [{"path": p, "src": want[p][0], "changed": "left", "run": [], "why": why} for p, why in sorted(left.items())]
+    files = [f for f in files if f["path"] not in left]
+    gen, want = ({p: v for p, v in d.items() if p not in left} for d in (gen, want))
     made_of = {p: {"machines": lists[p], **({"accept": accept(node, want[p][3], g.sources, commit, ref, by, run, apply)}
                                             if want[p][3].accept and part != "list" else {})} for p, g in gen.items()}
     if part == "accept":
@@ -1187,6 +1205,7 @@ def told(f: dict) -> list[str]:
                    + (f"; drops {drops}" if drops else ""))
     if a := f.get("accept"):
         out.append(f"its key can't be read here ({a['unread']})" if "unread" in a else
+                   "its key is taken from anywhere already (its line has no from=), and stays so" if a.get("anywhere") else
                    f"its key is taken from {a['added']} more address(es), {a['sources']} in all" if a["added"] else
                    f"its key is taken from each of them already ({a['sources']} address(es))")
     return out
@@ -1420,8 +1439,9 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
         return 1
     for f in done["files"]:
         mark = {None: "would install", True: "installed", False: "unchanged", "absent": f"skipped ({ns.ref} lacks it)",
-                "held": "held", "dropped": f"dropped ({ns.ref} lacks it)", "would drop": f"would drop ({ns.ref} lacks it)"}[f["changed"]]
-        print(f"{mark:13} {f['path']}  <- {f['src']}" + (f"  ({f['hold']})" if f.get("hold") else ""))
+                "held": "held", "dropped": f"dropped ({ns.ref} lacks it)", "would drop": f"would drop ({ns.ref} lacks it)",
+                "left": "left as it is"}[f["changed"]]
+        print(f"{mark:13} {f['path']}  <- {f['src']}" + "".join(f"  ({f[k]})" for k in ("hold", "why") if f.get(k)))
         for ln in told(f):
             print(f"{'':13} {ln}")
     hint = {"not running": "; it stays stopped", "not quiet": f"; the node isn't quiet (`{nodes[ns.node].quiet}`): restart it once it is"}

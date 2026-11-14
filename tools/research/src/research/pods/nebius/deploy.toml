@@ -9,7 +9,8 @@
 # With `register = true`, `src` is a template and the file is made from it and the register of machines at each install: a line
 # names a machine (`{{NAME}}`, `{{NAME:host}}` for its address) or a pattern of them, so the tree holds no address, and drift
 # compares the node with what the register gives now. Its `accept`: a public key on the node, taken from the address of every
-# machine the file names. `research deploy roll PATH` puts such a file on every node that lists it, one node at a time.
+# machine the file names. `research deploy roll PATH` puts such a file on every node that lists it, one node at a time; an
+# install of a whole node leaves one written by hand, or one it would take a machine out of, as it is, and says so.
 # [[tree]]: every file of the directory `src` at the commit, installed under `path`. A file of it not installed leaves drift
 # clean, unless the tree has `required = true`: what runs from it needs all of it. With `whole = true`, `path` is a link to a
 # directory holding the tree at one commit, and a change (a file that differs, or one the commit no longer has) installs a new
@@ -522,11 +523,13 @@ run = ["systemd:vy-auditor-only.timer"]
 owner = "infra"
 
 # the auditor host's own list, made from the register too: its template names each serving node, and the host's own line asks
-# the register for its private address
+# the register for its private address. No register file holds that field yet, so the entry is held: an install of the host's
+# other files passes it by, and drift says why
 [[file]]
 path = "/etc/vy/peers"
 src = "tools/research/src/research/pods/nebius/peers-challenger"
 register = true
+hold = "its own line asks the register for the host's private address (`private_host`), which no register file holds yet"
 nodes = ["vy-challenger-1"]
 owner = "infra"
 

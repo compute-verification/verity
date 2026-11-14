@@ -210,6 +210,34 @@ def test_an_install_never_takes_a_machine_out_of_a_list_unasked_and_says_which_w
     assert path.read_text() == LIST
 
 
+def test_an_install_of_the_whole_node_leaves_a_list_written_by_hand_or_one_it_would_shorten_and_installs_the_rest(fleet, capsys):
+    """Landing changes no list: until one is named or rolled, a node's other files install around it, and an install of them
+    is never refused for a list."""
+    a, run, repo, etc = fleet["nodes"]["a"], fleet["run"], fleet["repo"], fleet["tmp"] / "a" / "etc"
+    hand = LIST.replace("-i /k ", "")                       # the register's machines, written another way
+    (etc / "peers").write_text(hand)
+    for apply in ((), ("--apply",)):
+        assert _main(fleet, "install", "a", "--by", "lane-x", *apply) == 0
+        assert ("left as it is /NODE/etc/peers  <- src/peers  (written by hand, which an install of the whole node leaves: name it, "
+                "or `research deploy roll /NODE/etc/peers`)") in capsys.readouterr().out
+    assert (etc / "peers").read_text() == hand and (etc / "conf.json").exists() and _keys(fleet) == [OTHER]
+    assert _install(fleet)["files"][0]["changed"] is True and (etc / "peers").read_text() == LIST       # named: the register's now
+
+    machine(fleet["reg"], "vy-cpu-10", None)                # a machine is released: the list deploy wrote would lose its line
+    left = [f for f in deploy.install(a, "origin/main", "lane-x", [], run, apply=True, repo=repo)["files"] if f["changed"] == "left"]
+    assert [f["path"] for f in left] == ["/NODE/etc/peers"] and (etc / "peers").read_text() == LIST
+    assert "would take out vy-cpu-10 (released in the register)" in left[0]["why"]
+    assert "`research deploy roll /NODE/etc/peers --allow-shrink`, installs it all the same" in left[0]["why"]
+    with pytest.raises(deploy.Refused, match="would take out vy-cpu-10"):
+        _install(fleet)
+    done = deploy.install(a, "origin/main", "lane-x", [], run, apply=True, repo=repo, allow_shrink=True)
+    assert "left" not in [f["changed"] for f in done["files"]] and "vy-cpu-10" not in (etc / "peers").read_text()
+
+    machine(fleet["reg"], "vy-cpu-11", "192.0.2.21")        # a machine joins: the whole node's install keeps deploy's list current
+    done = deploy.install(a, "origin/main", "lane-x", [], run, apply=True, repo=repo)
+    assert "left" not in [f["changed"] for f in done["files"]] and "vy-cpu-11 " in (etc / "peers").read_text()
+
+
 def test_the_machines_a_file_names_are_whole_words_of_its_lines_comments_apart():
     text = "# vy-cpu-1 in a comment\n\nvy-cpu-10 -i /k research@192.0.2.20\n  Host n2 vy-n-2 x\n{\"vy-gate\": 1}\n"
     assert deploy.named(text, ["vy-cpu-1", "vy-cpu-10", "vy-n-2", "vy-gate", "research", "absent"]) == \
@@ -291,13 +319,13 @@ def test_the_lists_key_is_taken_from_every_machine_it_names_and_no_other_line_ch
     assert _main(fleet, "install", "a", "--by", "lane-x", "/NODE/etc/peers") == 0       # a dry run reads and says
     assert "its key is taken from 4 more address(es), 4 in all" in capsys.readouterr().out and _keys(fleet) == [OTHER]
 
-    assert _install(fleet)["files"][0]["accept"] == {"line": "new", "added": 4, "sources": 4}
+    assert _install(fleet)["files"][0]["accept"] == {"line": "new", "added": 4, "sources": 4, "anywhere": False}
     assert _keys(fleet) == [OTHER, f'from="{every}" {KEY}']
-    assert _install(fleet)["files"][0]["accept"] == {"line": "kept", "added": 0, "sources": 4}
+    assert _install(fleet)["files"][0]["accept"] == {"line": "kept", "added": 0, "sources": 4, "anywhere": False}
 
     # the key's line as a machine has it: sources no register holds, an option, another key before and after it
     ak.write_text(f'{OTHER}\nrestrict,from="10.0.0.5,192.0.2.11",pty {KEY}\n# a comment\n{OTHER} again\n')
-    assert _install(fleet)["files"][0]["accept"] == {"line": "extended", "added": 3, "sources": 5}
+    assert _install(fleet)["files"][0]["accept"] == {"line": "extended", "added": 3, "sources": 5, "anywhere": False}
     assert _keys(fleet) == [OTHER, f'restrict,from="10.0.0.5,192.0.2.11,192.0.2.12,192.0.2.20,192.0.2.2",pty {KEY}',
                             "# a comment", f"{OTHER} again"]
     assert {p.name.split(".")[0] for p in (ak.parent / ".deploy-prev").iterdir()} == {"authorized_keys"}
@@ -305,13 +333,17 @@ def test_the_lists_key_is_taken_from_every_machine_it_names_and_no_other_line_ch
     assert [(r["path"], r["added"], r["by"]) for r in record if "accept" in r] == [(str(ak), 4, "lane-x"), (str(ak), 3, "lane-x")]
 
     ak.write_text(f"{KEY}\n")                               # no from=: taken from anywhere already, and never narrowed
-    assert _install(fleet)["files"][0]["accept"]["line"] == "kept" and _keys(fleet) == [KEY]
+    assert _install(fleet)["files"][0]["accept"] == {"line": "kept", "added": 0, "sources": 0, "anywhere": True} and _keys(fleet) == [KEY]
+    assert _main(fleet, "install", "a", "--by", "lane-x", "/NODE/etc/peers") == 0
+    assert "its key is taken from anywhere already (its line has no from=), and stays so" in capsys.readouterr().out
 
     if os.geteuid():                                        # a login that can't read the key's directory (vy-admin on a
         ak.parent.chmod(0)                                  # locked-out node): the dry run says so, and --apply reads as root
-        assert _main(fleet, "install", "a", "--by", "lane-x", "/NODE/etc/peers") == 0
+        try:
+            assert _main(fleet, "install", "a", "--by", "lane-x", "/NODE/etc/peers") == 0
+        finally:
+            ak.parent.chmod(0o700)
         assert "its key can't be read here (PermissionError: --apply reads it as root)" in capsys.readouterr().out
-        ak.parent.chmod(0o700)
 
     (ak.parent / "k.pub").unlink()                          # no key here: refused before the list is touched
     (fleet["tmp"] / "a" / "etc" / "peers").write_text("by hand\n")
@@ -560,3 +592,5 @@ def test_the_challengers_list_is_not_made_until_the_register_holds_its_hosts_pri
     src = "tools/research/src/research/pods/nebius/peers-challenger"
     with pytest.raises(deploy.NoRegister, match=r"vy-challenger-1.toml has no `private_host`, which .*peers-challenger:\d+ asks"):
         deploy.fill((deploy.SRC / src).read_text(), reg, src)
+    held = [e.hold for e in deploy.load()["vy-challenger-1"].entries if e.src == src]
+    assert held and "`private_host`" in held[0], "held, so the host's other files install and its drift says why"
