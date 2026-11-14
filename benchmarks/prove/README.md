@@ -68,7 +68,18 @@ verity bench prove lean-verify --lean VERIFIER --proof TREE         the Lean ver
   row, each source's proving time at the table's prices over the plan's, and the block type that holds most of the
   difference. The plan's prices are its record's: they are no measurement the table reads, and they hold whatever its
   planner counts in a block's price. A plan that prices only some of its cells is refused.
+- **Under a sampling plan, the prover GPUs a serving GPU at two designs,** a line each naming its source: at the
+  sampling plan of record (its art), the table's total; and at the exfiltration run of record's design (the run that
+  carries `run_of_record=exfiltration-glm53-compute-audit` and no `superseded_by`), read by `verity bench
+  exfiltration`'s own reader of that run's rows: the planner's world year at 10% of total compute, whose proving is a
+  share of total compute at an audit budget β, so a serving GPU holds that share / (1 − β) prover GPUs, modeled.
+  Where the record can't be read, its line says why and the table stands.
 - **The share of the proving time each source covers.**
+- **The Lean verifier's seconds a block on every block type,** a row each in the main table's order, marked by what
+  it rests on: measured on a statement of its own Definition, modeled on its Definition's measured statement at its
+  AND gates, assumed at the rate fitted over every measured statement, none with no AND gates. A measured or modeled
+  row names the run that measured its statement, that statement's blocks, and the circuit file the Lean verifier read
+  it from (the unrolled file, or its templates), as the record's statement id says.
 - **The steady-state rows it didn't read,** under "Unread": a labelled row whose staged Definition is no block type
   of the census under its cut, at any prover count. Each is named with what holds it, the type and Definition it
   staged, and its own ms per block where it is a steady-state measurement, else why it isn't one. It is on no row and
@@ -249,9 +260,10 @@ until more types have runs of their own.
 
 ## The metrics
 
-`run.py`'s `METRICS` are four rows of `benchmarks/metrics.toml`: the prover GPUs a serving GPU needs (the headline),
+`run.py`'s `METRICS` are the five rows of `benchmarks/prove/metrics.toml`: the prover GPUs a serving GPU needs (the headline),
 the prover GPU-seconds, the Lean verifier's seconds and the proof's bytes a served token, each SPOT's at the
-workload's sampling plan of record. Under a research run, `--system spot` writes them into the run's `result.json`
+workload's sampling plan of record; and the prover GPUs a serving GPU at the exfiltration run of record's design
+(`benchmarks/prover-gpus-per-serving-gpu-at-record`, modeled, its input the run it is read from). Under a research run, `--system spot` writes them into the run's `result.json`
 through the harness kit (`prove_records.record`) and `--system flock` writes nothing; outside one neither writes, and
 what it prints is the same either way:
 
@@ -260,11 +272,16 @@ research run --on auto --project verity --source . --cwd source --store-read -- 
     uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53
 ```
 
-A measurement's mark is the table's word for its total (`measured`, `modeled`, `partial`, or for the Lean verifier's
-two figures `modeled, not measured` with each source's share (own, family, fitted), the fitted rate, the block type
-measured and what its accept holds), first among its inputs,
-then the records the table read; the proving totals' marks also give the plan's own prices where its record states
-them. A total the table gives as not measured has no value and says why. The validation is
+A measurement's mark (`measured`, `modeled` or `partial`) is its total's, and the table's words for it (for the Lean
+verifier's two figures `modeled, not measured` with each source's share (own, family, fitted), the fitted rate, the
+block type measured and what its accept holds) come first among its inputs, then the records the table read; the
+proving totals' words also give the plan's own prices where its record states them. The prover GPUs a serving GPU are
+the proving total over the stated serving rate, so their mark is the weaker of the two's (measured, then partial, then
+modeled), first among their inputs, then proving's words and the serving rate's. A total the table gives as not
+measured has no value, says why and is marked `modeled`. Both prover GPUs a serving GPU, at the plan of record and
+at the exfiltration run of record's design, carry the goal's target, at most 0.0545 (`prove_records.GPUS_PER_SERVING_GPU_TARGET`:
+proving's share of the 10% compute budget, until the proof system's own number is set), and, with a value, the verdict `meets` at or under it or `misses`
+over it; no other measurement carries a target. The validation is
 the six checks a steady-state row is held to: passed when some block type is priced from rows that passed them all
 and no block type is left out of the totals. The run keeps the table as `out/prove.json`, and its fingerprint names
 the sampling plan.

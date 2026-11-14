@@ -2,8 +2,8 @@
  "schema": "lean-unread-caps/v1",
  "areas": {
   "Definitions/Pouw": {
-   "modules": 18,
-   "declarations": 81
+   "modules": 20,
+   "declarations": 85
   },
   "Proofs/Accounting": {
    "modules": 5,
@@ -14,8 +14,8 @@
    "declarations": 60
   },
   "Proofs/Flock": {
-   "modules": 275,
-   "declarations": 2151
+   "modules": 277,
+   "declarations": 2150
   },
   "Proofs/Nci": {
    "modules": 1,
@@ -30,8 +30,8 @@
    "declarations": 3
   },
   "Proofs/Pouw": {
-   "modules": 44,
-   "declarations": 382
+   "modules": 45,
+   "declarations": 385
   },
   "Proofs/Spot": {
    "modules": 6,

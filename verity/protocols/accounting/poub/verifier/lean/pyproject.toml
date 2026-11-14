@@ -26,7 +26,6 @@ untraced = [
 # interface (`RemoteAudit.Protocol`, which `test_protocol.py` holds to the period hook, `period.py`). The schedule check
 # (`schedule.py`) is a reference too.
 inputs = ["verity/__init__.py", "verity/errors.py", 
-          "verity/hardware/record.py",
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/accounting/poub/verifier/__init__.py",
           "verity/protocols/accounting/poub/verifier/audit.py", "verity/protocols/accounting/poub/verifier/codec.py",
           "verity/protocols/accounting/poub/verifier/wire.py",

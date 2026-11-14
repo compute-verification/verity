@@ -255,8 +255,8 @@ def test_statements_the_sample_did_not_ask_for_are_refused(seed, tmp_path, verif
     of another call, and a sampled call with no statement: each refuses the window."""
     d, statements = window(seed, tmp_path)
     assert credit(d, statements + [statements[0]])[1] == (
-        "outcome", f"call {statements[0]['call']} has two statements: a call's drawn units are proved in one "
-                   "statement and verified once, and a retry never reproves them")
+        "outcome", (f"call {statements[0]['call']} has two statements: a call's drawn units are proved in one "
+                    "statement and verified once, and a retry never reproves them"))
     lay = _layout(d)
     idle = [c for c in range(len(lay["calls"])) if c not in {s["call"] for s in statements}]
     if idle:
@@ -293,9 +293,9 @@ def test_a_session_proving_another_calls_unit_is_refused(seed, tmp_path, verifie
     rec["proof"] = hashlib.sha512(bound + json.dumps(rec["unit_draw"]["units"]).encode()).hexdigest()
     p.write_text(json.dumps(rec))
     got, refused = credit(d, statements)
-    assert got is None and refused == ("proof", f"call {s['call']}'s session {s['sessions'][0]} proved unit {other}, "
-                                                f"which is no unit of call {s['call']}: a call's statement proves its "
-                                                "own call's units")
+    assert got is None and refused == ("proof", (f"call {s['call']}'s session {s['sessions'][0]} proved unit {other}, "
+                                                 f"which is no unit of call {s['call']}: a call's statement proves its "
+                                                 "own call's units"))
 
 
 def _files(d: dict, s: dict) -> tuple[str, dict, dict, dict]:
