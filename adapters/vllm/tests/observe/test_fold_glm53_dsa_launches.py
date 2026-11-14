@@ -27,6 +27,7 @@ from __future__ import annotations
 __models__ = ("zai-org/GLM-5.3",)
 
 import dataclasses
+import math
 
 import pytest
 
@@ -43,6 +44,7 @@ from verity_vllm.observe.fold.patterns.geometry import GeometryError
 from verity_vllm.observe.fold.profiles import profile_for_case
 from verity_vllm.observe.fold.resolver import (
     Compute,
+    Const,
     Gather,
     GatherMany,
     Group,
@@ -159,13 +161,46 @@ def test_a_single_prefill_of_256_rows_folds_as_before():
     assert len(got) == 256 and got[255] == ("DsaMqaLogits_v3{N=256,H=32,D=128}", ("a", 255), 255 * 512, (1, 256))
 
 
-@pytest.mark.parametrize("keys,shape", [(11, (11, 512)), (6, (12, 512)), (None, (12, 512))],
+def test_a_logits_row_reads_its_token_s_index_q_and_weights_and_its_request_s_keys_and_scales_from_the_index_cache():
+    """a's decode row, then b's prefill of three rows in a [4, 512] allocation: b's last row is step row 3, the launch's third."""
+    ctx = _ctx([("a", [19]), ("b", range(3))])
+    ix = D._state(ctx)["modules"][LAYER]["index_cache"]
+    D.DsaMqaGather().match(_gather(2, 3), ctx)
+    r = D.DsaMqaAllocation().match(_empty(3, (4, 512), 40), ctx)
+    assert isinstance(r, Group) and (r.consumed, r.hint, r.pattern) == ((3,), LAYER, "dsa.mqa_logits.invisible_deepgemm")
+    assert [p.consumed for p in r.parts] == [(3,), (), ()], "the launch's first row carries the allocation's event"
+    last, slots = r.parts[2], (64, 65, 66)
+    assert isinstance(last, Compute) and (spec_label(last.spec), last.rows) == ("DsaMqaLogits_v3{N=3,H=32,D=128}", 1)
+    assert last.operands == (PerRow(view(10, (1, 32, 128), "float8_e4m3fn", offset=3 * 4096)), PerRow(view(11, (1, 32), offset=3 * 32)),
+                             GatherMany(ix.rows, (tuple(map(ix.row, slots)),)), GatherMany(ix.scales, (tuple(map(ix.scale, slots)),)))
+    assert last.outputs == (PerRow(view(40, (1, 3), offset=2 * 512, strides=(512, 1))),)
+    assert (last.hint, last.kernels) == (f"{LAYER}/mqa[t=2]", ("fp8_mqa_logits", "fp8_paged_mqa_logits"))
+    assert (last.attribution, last.pattern) == ((("b", 2),), "dsa.mqa_logits.invisible_deepgemm")
+
+
+NOT_NEXT = ("MQA logits allocation is not the next indexer launch's: a prefill chunk of whole requests over the keys its gather staged "
+            "([align(rows, 4), width]), else the decodes ([rows, width])")
+
+
+@pytest.mark.parametrize("keys,shape,request_keys,rows", [(11, (11, 512), 11, 11), (6, (12, 512), 11, 11), (None, (12, 512), 0, 0)],
                          ids=["unaligned-rows", "partial-request", "no-gather"])
-def test_an_allocation_that_is_not_the_next_launch_is_refused(keys, shape):
+def test_an_allocation_that_is_not_the_next_launch_is_refused(keys, shape, request_keys, rows):
     ctx = _ctx([("b", range(11)), ("c", range(4))])
     if keys is not None:
         D.DsaMqaGather().match(_gather(2, keys), ctx)
-    assert isinstance(D.DsaMqaAllocation().match(_empty(3, shape, 40), ctx), Unsupported)
+    off = D.DsaMqaAllocation().match(_empty(3, shape, 40), ctx)
+    assert isinstance(off, Unsupported) and off.reason == NOT_NEXT
+    assert {k: off.detail[k] for k in ("allocation", "gathered_keys", "request_keys", "rows")} == {
+        "allocation": repr(view(40, shape)), "gathered_keys": keys, "request_keys": request_keys, "rows": rows}
+
+
+def test_a_prefill_request_the_step_gives_no_length_counts_for_no_keys():
+    ctx = _ctx([("b", range(3))])
+    ctx.start = dataclasses.replace(ctx.start, seq_lens={})
+    D.DsaMqaGather().match(_gather(2, 1), ctx)
+    off = D.DsaMqaAllocation().match(_empty(3, (4, 512), 40), ctx)
+    assert isinstance(off, Unsupported) and off.reason == NOT_NEXT
+    assert (off.detail["gathered_keys"], off.detail["request_keys"], off.detail["rows"]) == (1, 0, 3)
 
 
 def test_each_top_k_writes_the_rows_of_its_launch():
@@ -176,11 +211,19 @@ def test_each_top_k_writes_the_rows_of_its_launch():
     r = D.DsaTopK().match(pre, ctx)
     assert isinstance(r, Group) and [p.attribution[0] for p in r.parts] == [("b", p) for p in range(11)]
     assert [p.outputs[0].view.offset for p in r.parts] == [(1 + p) * 2048 for p in range(11)]
+    assert (r.consumed, r.hint, r.pattern) == ((6,), LAYER, "dsa.topk_short_row")
+    assert [p.consumed for p in r.parts] == [(6,)] + [()] * 10, "the launch's first row carries the call's event"
+    assert all(p.kernels == ("topKPerRowPrefill",) for p in r.parts)
+    third = r.parts[2]
+    assert isinstance(third, Compute) and (spec_label(third.spec), third.rows) == ("DsaTopKShortRow_v1{TOPK=2048}", 1)
+    assert (third.operands, third.hint, third.pattern) == ((Const(32, 3, "len"),), f"{LAYER}/topk[t=2]", "dsa.topk_short_row")
+    assert third.outputs == (PerRow(view(TOPK_ALLOC, (1, 2048), "int32", offset=3 * 2048)),)
     dec = _node(7, "_C.cooperative_topk.default", DECODE_TOPK,
                 [view(31018, (1, 288), strides=(512, 1)), view(3, (1, 1), "int32"), view(TOPK_ALLOC, (1, 2048), "int32"),
                  view(4, (1048576,), "uint8"), 2048, 20])
     r = D.DsaTopK().match(dec, ctx)
     assert isinstance(r, Group) and [(p.attribution[0], p.outputs[0].view.offset) for p in r.parts] == [(("a", 19), 0)]
+    assert (r.parts[0].operands, r.parts[0].kernels, r.parts[0].consumed) == ((Const(32, 20, "len"),), ("cooperative_topk",), (7,))
     off = _node(8, "_C.cooperative_topk.default", DECODE_TOPK,
                 [view(31018, (1, 288), strides=(512, 1)), view(3, (1, 1), "int32"), view(TOPK_ALLOC, (1, 2048), "int32", offset=12 * 2048),
                  view(4, (1048576,), "uint8"), 2048, 20])
@@ -262,6 +305,16 @@ def test_a_fused_norm_rope_of_an_index_share_layer_is_the_two_norms_and_the_k_ro
     dims = D.DsaNormRope().match(_norm(indexer=False, consts={"INDEX_K_DIM": 128}), ctx)
     assert isinstance(dims, Unsupported) and dims.reason == "IndexShare layer has unexpected dummy index-K dimensions"
     assert (dims.detail["INDEX_K_DIM"], dims.detail["INDEX_K_BLOCK_SIZE"]) == (128, 1)
+
+
+def test_a_step_s_first_fused_norm_rope_establishes_the_top_k_allocation_its_later_layers_are_held_to():
+    ctx = _ctx(TWO, slots=[5, 70])
+    D._state(ctx)["topk"] = None
+    assert isinstance(D.DsaNormRope().match(_norm(topk_indices_ptr=view(99, (16, 2048), "int32", offset=4096)), ctx), Group)
+    assert D._state(ctx)["topk"] == (99, 4096, 2048, (2048, 1))
+    later = D.DsaNormRope().match(_norm(), ctx)
+    assert isinstance(later, Unsupported) and later.reason == "IndexShare layer does not use the indexer layers' top-k allocation"
+    assert (later.detail["observed"], later.detail["established"]) == ((TOPK_ALLOC, 0, 2048, (2048, 1)), (99, 4096, 2048, (2048, 1)))
 
 
 NARROW_LATENT, SHORT_INDEX = view(77, (2, 64, 512), "bfloat16"), view(81, (1, 64, 132), "uint8")
@@ -368,6 +421,7 @@ def _q(rows=2, indexer=True, consts=None, warps=1, fn="vllm.models.glm." + D.Q_K
 
 def test_a_fused_q_of_an_indexer_layer_is_one_rope_row_a_head_and_one_index_q_row_a_token():
     ctx = _ctx([("a", [5]), ("b", [9])])
+    D._state(ctx)["modules"][LAYER]["mqa_launches"] = None
     assert D.DsaQ().match(_q(fn="vllm.models.glm.another_kernel"), ctx) is None, "another kernel is not this pattern's"
     r = D.DsaQ().match(_q(), ctx)
     assert isinstance(r, Group) and (r.consumed, r.hint, r.pattern) == ((21,), LAYER, "dsa.fused_q")
@@ -380,7 +434,7 @@ def test_a_fused_q_of_an_indexer_layer_is_one_rope_row_a_head_and_one_index_q_ro
     assert index_q.operands == (PerRow(view(65, (2, 32, 128), "bfloat16")), Gather(view(66, (4096, 64), "bfloat16"), (5, 9)),
                                 PerRow(view(67, (2, 32), "bfloat16")))
     assert index_q.outputs == (PerRow(view(68, (2, 32, 128), "float8_e4m3fn")), PerRow(view(69, (2, 32))))
-    assert (index_q.consumed, index_q.hint) == ((), f"{LAYER}/indexer_q")
+    assert (index_q.consumed, index_q.hint, index_q.roots) == ((), f"{LAYER}/indexer_q", (None, None, None))
     state = D._state(ctx)["modules"][LAYER]
     assert (state["q_rope"], state["q_v"]) == (view(61, (2, 8, 64), "bfloat16"), view(64, (2, 8, 512), "bfloat16"))
     assert (state["index_q"], state["index_weights"]) == (view(68, (2, 32, 128), "float8_e4m3fn"), view(69, (2, 32)))
@@ -397,6 +451,16 @@ def test_a_fused_q_of_an_index_share_layer_is_the_rope_rows_alone():
     assert {k: state[k] for k in before} == before, "an IndexShare layer leaves the indexer's state as it was"
     dims = D.DsaQ().match(_q(indexer=False, consts={"NUM_INDEX_Q_HEADS": 32}), ctx)
     assert isinstance(dims, Unsupported) and dims.reason == "IndexShare layer has unexpected dummy index-Q dimensions"
+
+
+def test_an_index_q_scale_in_the_last_bit_of_its_power_is_taken_and_one_a_part_in_1e14_off_is_refused():
+    """The launch's two scales are floats vLLM computes; the fold takes one within 1e-15 of D^-0.5 and H^-0.5, relative."""
+    ctx = _ctx([("a", [5]), ("b", [9])])
+    near = _q(index_weights_softmax_scale=math.nextafter(128 ** -0.5, 1), index_weights_head_scale=math.nextafter(32 ** -0.5, 0))
+    assert isinstance(D.DsaQ().match(near, ctx), Group)
+    for name, scale in (("index_weights_softmax_scale", 128 ** -0.5), ("index_weights_head_scale", 32 ** -0.5)):
+        far = D.DsaQ().match(_q(**{name: scale * (1 + 1e-14)}), ctx)
+        assert isinstance(far, Unsupported) and far.reason == "index-Q scales differ from D^-0.5 and H^-0.5", name
 
 
 @pytest.mark.parametrize("kw,reason,detail", [
@@ -638,6 +702,17 @@ def test_an_allocation_that_is_no_logits_buffer_is_left_and_one_the_indexer_cann
     assert unfused.detail["module"] == LAYER
 
 
+def test_a_gather_is_staging_and_the_rows_of_its_destination_are_the_keys_it_stages():
+    ctx = _ctx([("b", range(11))])
+    r = D.DsaMqaGather().match(_gather(2, 11), ctx)
+    assert isinstance(r, Transparent) and (r.effect, r.consumed, r.hint) == ("noop", (2,), f"{LAYER}/indexer K-cache staging")
+    assert (r.kernels, r.pattern) == ((D.MQA_STAGE,), "dsa.mqa_cache_gather") and D._state(ctx)["modules"][LAYER]["mqa_keys"] == 11
+    unnamed = _node(4, "_C_cache_ops.cp_gather_indexer_k_quant_cache.default", "",
+                    [view(13, (8, 64, 132), "uint8"), view(14, (7, 128), "float8_e4m3fn")])
+    assert isinstance(D.DsaMqaGather().match(unnamed, ctx), Transparent), "a call recorded with no schema names its destination by position"
+    assert D._state(ctx)["modules"][LAYER]["mqa_keys"] == 7
+
+
 def test_a_gather_without_a_keys_destination_is_refused_and_stages_no_keys():
     ctx = _ctx([("b", range(11))])
     node = _node(2, "_C_cache_ops.cp_gather_indexer_k_quant_cache.default", GATHER, [view(13, (8, 64, 132), "uint8"), None])
@@ -685,5 +760,8 @@ def test_another_call_is_none_of_the_dispatch_patterns_whatever_its_output_or_it
 
 def test_a_row_outside_a_view_is_no_row_of_it():
     assert D._one_row(view(1, (2, 4)), 1) == view(1, (1, 4), offset=4)
+    assert D._one_row(view(1, (4,)), 3) == view(1, (1,), offset=3), "a vector's row is one element of it"
     with pytest.raises(GeometryError, match="row 2 outside"):
         D._one_row(view(1, (2, 4)), 2)
+    with pytest.raises(GeometryError, match="row 0 outside"):
+        D._one_row(view(1, ()), 0)
