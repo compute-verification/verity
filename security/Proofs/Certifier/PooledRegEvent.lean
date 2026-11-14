@@ -1,6 +1,6 @@
 module
 
-public import Definitions.NetworkCertifier.PooledReg
+public import Definitions.Certifier.PooledReg
 public import Proofs.Flock.Claims.Finder
 public import Proofs.Flock.Claims.Prob
 public import Proofs.Flock.Claims.Sampling.Bext
@@ -13,7 +13,7 @@ public import Proofs.Flock.SamplingGeneric.Fails
 public import Proofs.Flock.SamplingGeneric.Reg
 public import Proofs.Flock.SamplingGeneric.RegTrace
 public import Proofs.Flock.SamplingGeneric.RegX
-public import Proofs.NetworkCertifier.TapRows
+public import Proofs.Certifier.TapRows
 
 /-!
 # The pooled bound at the trace with the registered openings: the event

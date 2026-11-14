@@ -1,11 +1,11 @@
 module
 
-public import Definitions.NetworkCertifier.Guarantees.PooledReg
+public import Definitions.Certifier.Guarantees.PooledReg
 public import Proofs.Flock.SamplingGeneric.Session
-public import Proofs.NetworkCertifier.PooledLeak
-public import Proofs.NetworkCertifier.PooledRegEvent
-public import Proofs.NetworkCertifier.PooledRegLeak
-public import Proofs.NetworkCertifier.PooledRegSample
+public import Proofs.Certifier.PooledLeak
+public import Proofs.Certifier.PooledRegEvent
+public import Proofs.Certifier.PooledRegLeak
+public import Proofs.Certifier.PooledRegSample
 
 /-!
 # The pooled bound at the trace with the registered openings

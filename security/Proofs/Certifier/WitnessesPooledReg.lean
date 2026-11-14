@@ -1,11 +1,11 @@
 module
 
-public import Definitions.NetworkCertifier.Guarantees.PooledReg
-public import Definitions.NetworkCertifier.Witness
+public import Definitions.Certifier.Guarantees.PooledReg
+public import Definitions.Certifier.Witness
 public import Proofs.Flock.Claims.Deploy
 public import Proofs.Flock.Claims.Witnesses.Shared
 public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
-public import Proofs.NetworkCertifier.PooledRegSample
+public import Proofs.Certifier.PooledRegSample
 
 /-!
 # The witnesses of the pooled bound at the trace with the registered openings

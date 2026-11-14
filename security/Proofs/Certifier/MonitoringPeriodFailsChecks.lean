@@ -1,9 +1,9 @@
 module
 
-public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodFails
-public import Proofs.NetworkCertifier.MonitoringPeriodCheckedChecks
-public import Proofs.NetworkCertifier.MonitoringPeriodCheckedExclusion
-public import Proofs.NetworkCertifier.MonitoringPeriodFails
+public import Definitions.Certifier.Guarantees.MonitoringPeriodFails
+public import Proofs.Certifier.MonitoringPeriodCheckedChecks
+public import Proofs.Certifier.MonitoringPeriodCheckedExclusion
+public import Proofs.Certifier.MonitoringPeriodFails
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -47,7 +47,7 @@ import Std.Tactic.BVDecide.Normalize.Bool
 `MonitoringPeriodLeakFails`, `MonitoringPeriodLeakFailsAtMost` and `MonitoringPeriodLeakCharged` let the operator's moves and the registered values
 follow the network certifier's fail cells, and pay for it: a factor `failPatterns bound j` on the count, or a charge
 under weights on the number of failures (`KraftWeights`). These checks are at the monitoring period of one placed
-window that `Proofs.NetworkCertifier.MonitoringPeriodCheckedExclusion` builds: the code `posL`, which rejects every run, the
+window that `Proofs.Certifier.MonitoringPeriodCheckedExclusion` builds: the code `posL`, which rejects every run, the
 record format `bitFmt` of one connection of one cell with no data, under the one schedule `oneSched`, with the secret
 whether the server's end is late for its bucket (`bitArr`). There the connection fails exactly when the bit is set
 (`bit_isSome`), the client reads the bit off the fail cell (`bit_dec`), and the window's record holds it (`bit_obs`).

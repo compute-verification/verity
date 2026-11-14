@@ -58,10 +58,10 @@ content and order. Conventions follow POUS's package (`tools/pous_grader/`): the
 ../../Definitions/Certifier/Guarantees/PooledLeak.lean  trusted: the leak through the network certifier over a
     monitoring period of sampled audits, conditional on two per-window inputs
     (PooledLeakAccepted)
-../../Definitions/NetworkCertifier/PooledReg.lean  trusted: that bound at the trace with the registered openings: the
+../../Definitions/Certifier/PooledReg.lean  trusted: that bound at the trace with the registered openings: the
     trace, its incorrect sets and the named premises (regValR, WregR, RateAt, PhasesAdaptive, PhaseErrors)
-../../Definitions/NetworkCertifier/Guarantees/PooledReg.lean  trusted: PooledLeakRegistered
-../../Definitions/NetworkCertifier/Checked.lean  trusted: the sequences accepted with a run a check passes
+../../Definitions/Certifier/Guarantees/PooledReg.lean  trusted: PooledLeakRegistered
+../../Definitions/Certifier/Checked.lean  trusted: the sequences accepted with a run a check passes
     (AcceptedChecked, AccSeqsChecked, LeakAtChecked, RLeakChecked), a check that pins its
     inputs (CheckedUnique) and misses at most εchk on given runs (CheckedWitness, traceRun),
     and the monitoring
@@ -84,10 +84,10 @@ content and order. Conventions follow POUS's package (`tools/pous_grader/`): the
 ../../Definitions/Certifier/Assumptions/RegisteredInputs.lean  trusted: RegisteredInputsHeld, an open premise
 ../../Definitions/Certifier/MonitoringPeriodChecked.lean  trusted: the run at the network certifier's rows
     (certifierRun) and the leak relation there (RLeakCertifierChecked)
-../../Definitions/NetworkCertifier/Guarantees/MonitoringPeriodChecked.lean  trusted: ExecutionPhaseGoodChecked and MonitoringPeriodLeakChecked
-../../Definitions/NetworkCertifier/Guarantees/MonitoringPeriodFails.lean  trusted: the period's leak with each failure charged
+../../Definitions/Certifier/Guarantees/MonitoringPeriodChecked.lean  trusted: ExecutionPhaseGoodChecked and MonitoringPeriodLeakChecked
+../../Definitions/Certifier/Guarantees/MonitoringPeriodFails.lean  trusted: the period's leak with each failure charged
     (failPatterns, KraftWeights; MonitoringPeriodLeakFails, MonitoringPeriodLeakFailsAtMost, MonitoringPeriodLeakCharged)
-../../Definitions/NetworkCertifier/Witness.lean  trusted: the instances the honest and nontrivial lemmas are
+../../Definitions/Certifier/Witness.lean  trusted: the instances the honest and nontrivial lemmas are
     stated at, each built by hand (trivLay, notLay, certOps; the honest certifier at a
     Program, the reference schedule, the verifier and the sender that accept and leak
     everything, a sampled audit, the rows format of the fixture `fxQueue`, the record
@@ -299,8 +299,8 @@ The lock (`lean-audit.json`'s `guarantees`) holds the 6 statements of `Guarantee
 (`../../Definitions/Certifier/Guarantees/SampledCharge.lean`), the monitoring period's leak through the network certifier
 (`Guarantees/MonitoringPeriod.lean`) with its bound with checked inputs (`Guarantees/MonitoringPeriodChecked.lean`), the monitoring period's
 incorrect proof blocks
-(`../../Definitions/NetworkCertifier/Guarantees/Pooled.lean`), the leak over a monitoring period
-(`../../Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`) and it at the registered openings
+(`../../Definitions/Certifier/Guarantees/Pooled.lean`), the leak over a monitoring period
+(`../../Definitions/Certifier/Guarantees/PooledLeak.lean`) and it at the registered openings
 (`Guarantees/PooledReg.lean`), each listed as
 `NetTiming.SecurityProofs.G` and proved by the lemma of the same statement whose name it spells in UpperCamelCase (the
 last three by `pooledIncorrectBlocks`, `pooledLeak` and `pooledLeakRegistered`). All 18 are under `shape.frozen` as

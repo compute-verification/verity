@@ -1,10 +1,10 @@
 module
 
 public import Definitions.Claims.SamplingGenericX
-public import Definitions.NetworkCertifier.MonitoringPeriod
-public import Definitions.NetworkCertifier.PooledLeak
-public import Definitions.NetworkCertifier.SampledReg
-public import Definitions.NetworkCertifier.TapRows
+public import Definitions.Certifier.MonitoringPeriod
+public import Definitions.Certifier.PooledLeak
+public import Definitions.Certifier.SampledReg
+public import Definitions.Certifier.TapRows
 
 /-!
 # The pooled bound at the trace with the registered openings: its vocabulary and its premises

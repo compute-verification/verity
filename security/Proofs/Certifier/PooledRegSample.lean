@@ -1,6 +1,6 @@
 module
 
-public import Definitions.NetworkCertifier.PooledReg
+public import Definitions.Certifier.PooledReg
 public import Proofs.Flock.Claims.Prob
 public import Proofs.Flock.Claims.Sampling.EndToEndDraw
 public import Proofs.Flock.Claims.Sampling.KS
@@ -9,7 +9,7 @@ public import Proofs.Flock.Claims.Sampling.Wait
 public import Proofs.Flock.SamplingGeneric.Fails
 public import Proofs.Flock.SamplingGeneric.Reg
 public import Proofs.Flock.SamplingGeneric.ZK
-public import Proofs.NetworkCertifier.Pooled
+public import Proofs.Certifier.Pooled
 
 /-!
 # The pooled bound at the trace with the registered openings: the sample's term

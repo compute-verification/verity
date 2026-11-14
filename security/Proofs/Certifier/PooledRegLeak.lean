@@ -1,12 +1,12 @@
 module
 
-public import Definitions.NetworkCertifier.PooledReg
+public import Definitions.Certifier.PooledReg
 public import Proofs.Flock.Claims.Prob
 public import Proofs.Flock.Claims.Sampling.ProgReads
 public import Proofs.Flock.SamplingGeneric.TwoReg
-public import Proofs.NetworkCertifier.SampledAuditAccepted
-public import Proofs.NetworkCertifier.SampledLeak
-public import Proofs.NetworkCertifier.TapRows
+public import Proofs.Certifier.SampledAuditAccepted
+public import Proofs.Certifier.SampledLeak
+public import Proofs.Certifier.TapRows
 
 /-!
 # The pooled bound at the trace with the registered openings: the leak relation

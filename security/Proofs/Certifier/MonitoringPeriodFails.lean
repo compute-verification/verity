@@ -1,7 +1,7 @@
 module
 
-public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodFails
-public import Proofs.NetworkCertifier.MonitoringPeriodChecked
+public import Definitions.Certifier.Guarantees.MonitoringPeriodFails
+public import Proofs.Certifier.MonitoringPeriodChecked
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

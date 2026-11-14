@@ -1,7 +1,7 @@
 module
 
-public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodChecked
-public import Proofs.NetworkCertifier.Witnesses
+public import Definitions.Certifier.Guarantees.MonitoringPeriodChecked
+public import Proofs.Certifier.Witnesses
 public import Proofs.Flock.Claims.CompleteFails
 public import Proofs.Flock.Claims.Witnesses.SamplingGenericPlaced
 public import Proofs.Flock.SamplingGeneric.Fails
@@ -56,7 +56,7 @@ the bit and whose egress frame is there when the bit is unset. The window meets 
 check that always holds, with no checked input (`pos_checkedUnique`): the leak relation holds at every witness, since
 the circuit computes the frame the openings hold.
 
-**The network certifier** (`Definitions.NetworkCertifier.Witness`) is one connection of one cell with no data
+**The network certifier** (`Definitions.Certifier.Witness`) is one connection of one cell with no data
 (`Cell := Empty`): its end is late for its bucket or not (`bitArr`), so the client receives the fail cell or padding,
 and the record format `bitFmt` writes that bit as the window's frame and reads it back under the whole schedule. Its
 host runs `recordingCode bitFmt`.

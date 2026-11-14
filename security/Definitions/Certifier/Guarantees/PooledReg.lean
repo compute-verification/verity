@@ -1,6 +1,6 @@
 module
 
-public import Definitions.NetworkCertifier.PooledReg
+public import Definitions.Certifier.PooledReg
 
 /-!
 # The leak through the network certifier over a monitoring period, at the trace with the registered openings

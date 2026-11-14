@@ -1,13 +1,13 @@
 module
 
-public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodFails
-public import Definitions.NetworkCertifier.Guarantees.PooledReg
-public import Proofs.NetworkCertifier.MonitoringPeriodCheckedExclusion
-public import Proofs.NetworkCertifier.MonitoringPeriodFails
-public import Proofs.NetworkCertifier.MonitoringPeriodFailsChecks
-public import Proofs.NetworkCertifier.MonitoringPeriodLengths
-public import Proofs.NetworkCertifier.PooledReg
-public import Proofs.NetworkCertifier.WitnessesPooledReg
+public import Definitions.Certifier.Guarantees.MonitoringPeriodFails
+public import Definitions.Certifier.Guarantees.PooledReg
+public import Proofs.Certifier.MonitoringPeriodCheckedExclusion
+public import Proofs.Certifier.MonitoringPeriodFails
+public import Proofs.Certifier.MonitoringPeriodFailsChecks
+public import Proofs.Certifier.MonitoringPeriodLengths
+public import Proofs.Certifier.PooledReg
+public import Proofs.Certifier.WitnessesPooledReg
 public import Definitions.Certifier.Guarantees
 public import Definitions.Certifier.Guarantees.Pooled
 public import Definitions.Certifier.Guarantees.MonitoringPeriod

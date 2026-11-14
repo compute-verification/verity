@@ -1,7 +1,7 @@
 module
 
-public import Definitions.NetworkCertifier.MonitoringPeriodConditions
-public import Proofs.NetworkCertifier.Warden
+public import Definitions.Certifier.MonitoringPeriodConditions
+public import Proofs.Certifier.Warden
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
