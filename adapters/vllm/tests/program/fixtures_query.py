@@ -40,8 +40,8 @@ modules are tested against.
 """
 from __future__ import annotations
 
-from functools import lru_cache
-from typing import Callable, Iterable
+from collections.abc import Callable, Iterable
+from functools import cache
 
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits import query_ast as QA
@@ -315,7 +315,7 @@ VLLM_FAMILY_FIXTURES: tuple[str, ...] = ("gemm", "gemm_v2", "rmsnorm_triton", "r
                                          "attention", "moe_router", "moe_expert_gemm", "moe_sum", "token_select", "embedding")
 
 
-@lru_cache(maxsize=None)
+@cache
 def fixture(name: str) -> Program:
     """The memoised fixture Program `name` (see the module docstring)."""
     return _CONSTRUCTORS[name]()
@@ -341,7 +341,7 @@ def wrap(spec) -> Program:
     return Program(bind(Wrap, FN=spec))
 
 
-@lru_cache(maxsize=None)
+@cache
 def wrapped_fixture(name: str) -> Program:
     """`fixture(name)`'s specialization behind a one-call root (see `Wrap`)."""
     return wrap(fixture(name).fn)

@@ -53,8 +53,6 @@
     {"file": "tests/program/beyond_gemm.py", "kind": "SIM300", "symbol": "probe_silu", "detail": "Yoda condition detected"},
     {"file": "tests/program/fixtures_query.py", "kind": "E741", "symbol": "silu_mul_program", "detail": "Ambiguous variable name: `I`"},
     {"file": "tests/program/fixtures_query.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "tests/program/fixtures_query.py", "kind": "UP033", "symbol": "<module>", "detail": "Use `@functools.cache` instead of `@functools.lru_cache(maxsize=None)`", "count": 2},
-    {"file": "tests/program/fixtures_query.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`, `Iterable`"},
     {"file": "tests/program/predict/test_dsa_long_rows.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/program/predict/test_dsa_long_rows.py", "kind": "I001", "symbol": "test_class_g_carries_a_request_past_index_topk_with_its_indexer_history", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/program/predict/test_reads.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
