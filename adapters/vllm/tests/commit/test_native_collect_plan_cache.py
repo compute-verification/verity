@@ -621,6 +621,38 @@ def test_a_windowed_hit_step_exports_the_hinted_plan_the_worker_has_not_absorbed
     assert [(m.name, m.dev_off, m.nbytes) for m in got] == [(com._names[nid], off, nb) for nid, _dt, _sz, nb, off, _gap in entries]
 
 
+@pytest.mark.parametrize(("retain", "keeps"), [("host", True), ("none", False)])
+def test_a_root_over_kept_levels_waits_for_their_copies(monkeypatch, retain, keeps):
+    """A step that keeps its levels copies each fold's window levels to host on the collector's copy stream, and the upper
+    tree's stream waits for that stream before the tree over the window tops is built: every such tree comes straight after a
+    wait for the copy stream. A step that keeps no level makes no copy stream, and its tree waits for none."""
+    log: list[Any] = []
+    tree = _Hasher.rows_tree
+
+    def wait_logged(self, stream) -> None:
+        log.append(stream)
+
+    def tree_logged(self, *a, **k):
+        log.append("tree")
+        return tree(self, *a, **k)
+
+    monkeypatch.setattr(_Stream, "wait_stream", wait_logged)
+    monkeypatch.setattr(_Hasher, "rows_tree", tree_logged)
+    com = committer(monkeypatch, retain=retain)
+    assert com.retain_levels is keeps and com._copy is None
+    sched = rising()[0]
+    com.install()
+    for kv in sched:
+        com._commit_step(serve(com, kv))
+    assert com.errors == [], com.errors[:3]
+    trees = [i for i, e in enumerate(log) if e == "tree"]
+    assert len(trees) == len(sched)
+    if keeps:
+        assert isinstance(com._copy, _Stream) and all(i and log[i - 1] is com._copy for i in trees), log
+    else:
+        assert com._copy is None and log == ["tree"] * len(sched)
+
+
 def test_a_footprint_takes_each_step_the_worker_absorbs_with_its_bytes_by_value_family(monkeypatch, tmp_path):
     """A committer with a footprint writes three events a step: `begin_step` and `end_step` from the serving thread's side, then the
     worker's `absorbed`. That one holds the step's stream length, its length in whole rows, where its bytes are kept, and the bytes
