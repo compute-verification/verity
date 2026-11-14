@@ -56,25 +56,22 @@
 "a4_law" = "a4_design"
 
 [[words_in]]
-files = ["adapters/vllm/**", "benchmarks/pouw/**"]
+files = ["adapters/**", "benchmarks/pouw/**"]
 [words_in.words]
 "window_law" = "window_design"
 "law_of" = "design_of"
 
 [[words_in]]
-files = ["demos/onsite_served/served_table.py"]
+files = ["**/served_table.py"]
 [words_in.words]
 "_law" = "_design"
 
 [[words_in]]
-files = ["verity/commitments/windows/tests/test_blocks.py", "verity/commitments/windows/tests/test_interface.py",
-         "verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py",
-         "adapters/vllm/tests/pipeline/test_tp_wires.py", "adapters/vllm/tests/pipeline/served_rope.py",
-         "adapters/vllm/tests/pipeline/test_edge_history.py", "adapters/vllm/tests/pipeline/served_experts.py",
-         "adapters/vllm/tests/pipeline/test_serving_rows_bundle.py",
-         "adapters/vllm/tests/pipeline/test_serving_rows_boolean.py",
-         "adapters/vllm/tests/program/predict/test_window_circuit_pearl.py",
-         "adapters/vllm/tests/program/predict/test_window_rows.py", "adapters/vllm/verity_vllm/protocols/spot.py"]
+files = ["verity/commitments/**/tests/test_blocks.py", "verity/commitments/**/tests/test_interface.py",
+         "verity/protocols/compose/**/test_composition_difftest.py", "adapters/**/test_tp_wires.py",
+         "adapters/**/served_rope.py", "adapters/**/test_edge_history.py", "adapters/**/served_experts.py",
+         "adapters/**/test_serving_rows_bundle.py", "adapters/**/test_serving_rows_boolean.py",
+         "adapters/**/test_window_circuit_pearl.py", "adapters/**/test_window_rows.py", "adapters/**/protocols/spot.py"]
 [words_in.words]
 "REUSING_LAW" = "REUSING_DESIGN"
 "LAW" = "DESIGN"
