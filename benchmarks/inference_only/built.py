@@ -237,9 +237,11 @@ def lake_built(exe: str) -> Path:
     return PACKAGE / ".lake/build/bin" / exe
 
 
-def timed(argv: list[str], stdout: Path, clock: Callable[[], float] = time.perf_counter) -> dict[str, Any]:
+def timed(argv: list[str], stdout: Path, clock: Callable[[], float] = time.perf_counter,
+          private: bool = False) -> dict[str, Any]:
     """Run ``argv`` with its standard output to ``stdout``: what it cost (wall and CPU seconds, peak memory), or a
-    RuntimeError with its standard error where it exits nonzero."""
+    RuntimeError where it exits nonzero, with its exit code and, unless what it reads is ``private``, its standard
+    error."""
     with stdout.open("wb") as fh:
         start = clock()
         child = subprocess.Popen(argv, stdout=fh, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
@@ -250,7 +252,8 @@ def timed(argv: list[str], stdout: Path, clock: Callable[[], float] = time.perf_
         wall = clock() - start
         child.returncode = os.waitstatus_to_exitcode(status)
     if child.returncode:
-        raise RuntimeError(f"{Path(argv[0]).name} exited {child.returncode}: {err.decode(errors='replace')[-2000:]}")
+        said = "" if private else f": {err.decode(errors='replace')[-2000:]}"
+        raise RuntimeError(f"{Path(argv[0]).name} exited {child.returncode}{said}")
     return {"wall_s": wall, "cpu_s": used.ru_utime + used.ru_stime, "peak_mib": used.ru_maxrss / 1024}
 
 

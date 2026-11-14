@@ -65,10 +65,11 @@ def stand_in(tmp_path) -> Path:
 
 
 def made(case: dict, where: Path, *, accept: bool = False, credited: float = 0.9, macs: int | None = None,
-         tie: str | None = "same", n: int | None = None, kinds: bool = True, counts: int = 1) -> list[str]:
-    """``case`` as a served run's files under ``where``, and the options that read them. Its policy is the case's count
-    limits (``n`` in place of its n) on class `CLASS`, k by kind made of the linears' outputs and a scan state row of 16
-    bits (none where not ``kinds``). Its PoUW row is a development accept, or with ``accept`` Pearl+'s accept of record
+         tie: str | None = "same", n: int | None = None, kinds: bool = True, counts: int = 1,
+         limits: dict | None = None) -> list[str]:
+    """``case`` as a served run's files under ``where``, and the options that read them. Its rate rule's limits are the
+    case's, or ``limits``; its policy is the case's count limits (``n`` in place of its n) on class `CLASS`, k by kind
+    made of the linears' outputs and a scan state row of 16 bits (none where not ``kinds``). Its PoUW row is a development accept, or with ``accept`` Pearl+'s accept of record
     crediting ``credited`` of the ``macs`` it counts (default the class's linears), its window record the run's
     registration's previous (``tie`` "same"), another, or none."""
     inst, tr = case["instance"], case["trusted"]
@@ -83,7 +84,7 @@ def made(case: dict, where: Path, *, accept: bool = False, credited: float = 0.9
     count = {**case["count"], **({"n": n} if n else {})}
     for k in range(counts):
         (out / f"block-counts-{k}.json").write_text(json.dumps(count))
-    (out / "inference-only-limits.json").write_text(json.dumps({"alpha": inst["alpha"], "gamma": inst["gamma"]}))
+    (out / "inference-only-limits.json").write_text(json.dumps(limits or {"alpha": inst["alpha"], "gamma": inst["gamma"]}))
     work = B.block_work(CLASS, B.MODEL)
     policy = {"format": R.POLICY_FORMAT, **{x: count[x] for x in "ckn"}, "serve": {"model": B.MODEL},
               "class": {"slots": CLASS[0], "prompt": CLASS[1], "outputs": CLASS[2],
@@ -190,18 +191,30 @@ def test_an_accept_with_no_window_record_says_nothing_ties_it(case, stand_in, tm
     assert f"  tie       {R.NO_TIE}" in out.splitlines() and f"({R.NO_TIE});" in out
 
 
-def test_a_record_whose_count_refuses_is_one_and_measured_and_says_only_that(case, stand_in, tmp_path, capsys) -> None:
-    """The count against n = 1 refuses the record's two blocks: the value is 1 whatever PoUW says, and the print says the
-    count does not comply, not which of c, k and n failed nor any count."""
-    doc = _main(made(case, tmp_path, accept=True, n=1), stand_in)
+#: rate rule limits the case's record exceeds, where its count stays within its own
+TIGHT = {"alpha": [1, 84], "gamma": 84}
+
+
+@pytest.mark.parametrize(("how", "which", "complies"), [
+    ({"n": 1}, "the count", {"check": True, "count": False}),
+    ({"limits": TIGHT}, "the rate rule", {"check": False, "count": True}),
+    ({"n": 1, "limits": TIGHT}, "both rules", {"check": False, "count": False}),
+])
+def test_a_record_a_rule_refuses_is_one_and_measured_and_names_only_the_rule(case, stand_in, tmp_path, capsys, how,
+                                                                            which, complies) -> None:
+    """The count against n = 1 refuses the record's two blocks, and the rate rule refuses it at limits it exceeds,
+    each alone or both: the value is 1 whatever PoUW says, and the print names the rule that refused, not which of its
+    limits failed nor any count."""
+    doc = _main(made(case, tmp_path, accept=True, **how), stand_in)
     out = capsys.readouterr().out
     rec = doc["record"]
-    assert rec["check"]["count"] == {"rule": "the count", "public_form": "NciCheck.RecordCount.check", "complies": False}
-    assert rec["check"]["check"]["complies"] is True
+    assert {line: rec["check"][line]["complies"] for line in R.PUBLIC} == complies
+    assert rec["check"]["count"]["public_form"] == "NciCheck.RecordCount.check"
     assert (rec["block"]["value"], rec["block"]["mark"], rec["tied"]) == (1, "measured", None)
-    assert rec["block"]["reading"].startswith("the check refused the record (the count), ")
-    assert {r["reading"] for r in rec["periods"]} == {"the count refused"}
-    assert "              the count (NciCheck.RecordCount.check): complies: false" in out.splitlines()
+    assert rec["block"]["reading"].startswith(f"the check refused the record ({which}), ")
+    assert {r["reading"] for r in rec["periods"]} == {f"{which} refused"}
+    for line, (rule, form) in R.PUBLIC.items():
+        assert f"              {rule} ({form}): complies: {str(complies[line]).lower()}" in out.splitlines()
     for word in ("failure", "fresh", "gates", "unregistered"):
         assert word not in json.dumps(rec["check"])
 
@@ -264,6 +277,16 @@ def test_the_record_class_under_the_tie_is_its_own_kinds(tmp_path) -> None:
                        ({"linears": served.outside, "scan_state": 1}, "sum to")):
         with pytest.raises(R.Refused, match="no figure for the tied class" if kinds is None else why):
             R.tied_of({**doc, "k_by_kind": kinds} if kinds else {x: v for x, v in doc.items() if x != "k_by_kind"}, RUN)
+
+
+def test_a_check_that_fails_is_named_by_its_exit_code_alone(case, tmp_path) -> None:
+    """A check that exits nonzero, whatever it wrote on its standard error, raises with its exit code and none of it."""
+    exe = tmp_path / "inference-only-record-check"
+    exe.write_text(f"#!{sys.executable}\nimport sys\nsys.stderr.write('{{\"bool_gates\": 7, \"failure\": 3}}')\nsys.exit(3)\n")
+    exe.chmod(0o755)
+    with pytest.raises(RuntimeError) as got:
+        _main(made(case, tmp_path / "a", accept=True), exe)
+    assert str(got.value) == "inference-only-record-check exited 3"
 
 
 def test_a_line_keeps_only_its_public_form() -> None:

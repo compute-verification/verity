@@ -181,9 +181,9 @@ def checked(files: Files, got: Mapping[str, Any], scratch: Path, clock: Callable
     argv = [sys.executable, str(SCRIPT), "--program", str(files.program), "--record", str(files.circuit),
             "--log", *map(str, files.logs), "--limits", str(got["limits"]), "--count", str(got["count"]),
             "--out", str(scratch), "--name", "served", "--case-only"]
-    written = B.timed(argv, scratch / "case.out", clock)
+    written = B.timed(argv, scratch / "case.out", clock, private=True)
     case = scratch / "served.case.json"
-    cost = B.timed([str(exe or B.lake_built(CHECK)), str(case)], scratch / "check.out", clock)
+    cost = B.timed([str(exe or B.lake_built(CHECK)), str(case)], scratch / "check.out", clock, private=True)
     said, at = {}, {}
     for line in (scratch / "check.out").read_text().splitlines():
         if m := LINE.fullmatch(line):
