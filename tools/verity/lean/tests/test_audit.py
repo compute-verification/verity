@@ -260,6 +260,21 @@ def test_every_guarantee_has_an_owner_and_an_update_keeps_it():
     assert text == [f"guarantee P.t: owner @lean -> @compute-accounting: {A.OWNED}"] and A.statement_changes(text) == []
 
 
+def test_a_premise_entry_s_claim_id_is_kept_by_an_update_and_held_to_its_form():
+    """A premise entry's `id`, the claim id that names it, is written by hand: a check and an update keep it, and one that
+    is no claim id fails."""
+    pol = recorded()
+    for cid in ("cr/sha-512", "trusted-device"):
+        named = {**pol, "assumptions": {"P.Hyp": {"id": cid} | pol["assumptions"]["P.Hyp"]}}
+        assert A.judge(named, facts(), FILES) == ([], named)
+        assert A.judge(named, facts(), FILES, update=True)[1] == named
+    for bad in ("CR SHA-512", "cr/sha-512/x", "", 7):
+        odd = {**pol, "assumptions": {"P.Hyp": pol["assumptions"]["P.Hyp"] | {"id": bad}}}
+        assert [f.code for f in A.judge(odd, facts(), FILES)[0]] == ["assumptions.id-form"], bad
+        fails, written = A.judge(odd, facts(), FILES, update=True)
+        assert [f.code for f in fails] == ["assumptions.id-form"] and "id" not in written["assumptions"]["P.Hyp"], bad
+
+
 def laneless(lock: dict) -> dict:
     """``lock`` as a tree with no lanes holds it: no entry's owner, issue or due date, and no section of their defaults."""
     return {k: {n: {f: v for f, v in r.items() if f not in A.LANE_FIELDS} if isinstance(r, dict) else r
