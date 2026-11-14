@@ -14,10 +14,11 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 * **the registration** keeps R1–R8 against the verifier's own copies (`Registered`): the record's format, protocol, law
   and window (`R1`); its program, query, partition and population, and its day's declared program (`R2`); its scheme,
   ports, roots, leaves and domains (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window, the
-  window's stream and prover, its seed salt and its pool's reset, once a week (`R6`); and for a v2 record its registered
+  window's stream and prover, its seed salt and its pool's reset, once a week (`R6`); for a v2 record its registered
   values (`R7`), its window opening the pool the previous window of record left, or the empty pool where the public
   rule or its reset restarts it, for a verifier with a pool (`PoolChained`); and under a template query, no run Input
-  its proof blocks don't each read alone (`R8`);
+  its proof blocks don't each read alone (`R8`); and in the per-member form each member's one count of link points
+  (`RL`);
 * **the sample** is a sample of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work sampling design, its strata and closure;
 * **the units** were proved and served as sampled, under the registered roots, and the verifiers opened the
@@ -131,31 +132,33 @@ blocks in the fan-out (`Partition.fanout`), so a run Input two proof blocks read
 R8 claims nothing of a tied value's rows: its Input is outside the claim, and the registration piece names each one it
 let through (`Registration.tiedThrough`, published as `rests_on_period_check`). The network period check holds them:
 `Properties.NetworkPeriod.RowsProgWired` equates the scan's `scan/prog` entry's root and domain with an audit's entries
-port, and `Properties.NetworkPeriod.RowsTiedSampled` has that audit sample every unit. That the rows under that root are
-the outputs of the proof blocks that computed them (one-stage's ports and the commitment's binding) is not composed
-with those into a theorem: unproved. -/
+port. It accepts that audit at any sample and charges one sampled in part: `Properties.NetworkPeriod.RowsTiedCharged`
+has its δ in the period's ε and, where its bound is at least one incorrect proof block, every slot entry bit of each
+link-window whose scan's `prog` is its output counted as faulty. That the rows under that root are the outputs of the
+proof blocks that computed them (one-stage's ports and the commitment's binding) is not composed with those into a
+theorem: unproved. -/
 def R8 (v : Registration.Verifier) : Prop :=
   (Registration.tiedBad v).isEmpty = true ∧
     Partition.readAlone v.program v.query (Registration.heldGates v ++ Registration.tiedGates v) = true
 
 /-- The record's window names the seed salt the verifier read from the challenger's log (`seedSalt`), and none when it
 read none. -/
-def WindowSeedSalt (rec : Json) (v : Registration.Verifier) : Prop :=
+def RunSeedSalt (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD (getD rec "window") "seed_salt") (match v.seedSalt with | some s => .str s | none => .null)
 
 /-- The record's window names the reset serving chose for the verifier's pool (`Registration.Pool.reset`), and none for
 a verifier with no pool. -/
-def WindowPoolReset (rec : Json) (v : Registration.Verifier) : Prop :=
+def RunPoolReset (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD (getD rec "window") "pool_reset") (match v.pool with | some p => .bool p.reset | none => .null)
 
 /-- The record's window names its week on the verifier's clock (`Registration.Pool.week`), and none for a verifier with
 no pool. -/
-def WindowPoolWeek (rec : Json) (v : Registration.Verifier) : Prop :=
+def RunPoolWeek (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD (getD rec "window") "pool_week") (match v.pool with | some p => Lean.toJson p.week | none => .null)
 
 /-- The record's window names whether its week's one reset is spent at it: that it resets, or that the previous record,
 of its week, named it spent (`Registration.Pool.spentBefore`); none for a verifier with no pool. -/
-def WindowPoolSpent (rec : Json) (v : Registration.Verifier) : Prop :=
+def RunPoolSpent (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD (getD rec "window") "pool_spent")
     (match v.pool with | some p => .bool (p.reset || p.spentBefore v.log) | none => .null)
 
@@ -166,8 +169,8 @@ def PoolResetOnce (v : Registration.Verifier) : Prop :=
 
 /-- R6: the record names the digest of the prover's last earlier record (null when the log is empty, or when that record
 has no digest), no earlier record has its window, a verifier bound to a stream and a prover (`binding`) sees its
-window name both, and its window names the verifier's seed salt (`WindowSeedSalt`) and its pool's reset, week and
-spent mark (`WindowPoolReset`, `WindowPoolWeek`, `WindowPoolSpent`), at most one reset a week (`PoolResetOnce`). -/
+window name both, and its window names the verifier's seed salt (`RunSeedSalt`) and its pool's reset, week and
+spent mark (`RunPoolReset`, `RunPoolWeek`, `RunPoolSpent`), at most one reset a week (`PoolResetOnce`). -/
 def R6 (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD rec "previous") (match v.log.back? with
     | some e => ((Registration.digestHex e).toOption.map Json.str).getD .null
@@ -175,7 +178,7 @@ def R6 (rec : Json) (v : Registration.Verifier) : Prop :=
   (∀ e ∈ v.log, jeq (getD e "window") (getD rec "window") = false) ∧
   (∀ sp, v.binding = some sp → jeq (getD (getD rec "window") "stream") (.str sp.1) = true ∧
     jeq (getD (getD rec "window") "prover") (.str sp.2) = true) ∧
-  WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧ WindowPoolSpent rec v ∧ PoolResetOnce v
+  RunSeedSalt rec v ∧ RunPoolReset rec v ∧ RunPoolWeek rec v ∧ RunPoolSpent rec v ∧ PoolResetOnce v
 
 /-- A v2 record's registered values: the string values, each once (`names`), as many as the list's entries and as the
 verifier's own entries, and each one of the verifier's. -/
@@ -286,11 +289,20 @@ def PinnedHeld (rec : Json) (v : Registration.Verifier) : Prop :=
     v.outputs.any (·.1 == want.value) = false → ∀ x ∈ v.pinned.find? (·.1 == want.value), ∀ e,
       Registration.entryOf rec want.value = some e → jeq (getD e "root") (.str x.2) = true
 
+/-- The per-member form's link points (`Registration.linkRefused`): when the verifier names members, its own sampling design over its
+program and query applies (`LinkPoints.lawOf`, with the population), some sample under it ends, and no member's fewest
+and most sampled proof blocks under it, over the samples that end, give different link points (`LinkPoints.refused`, which
+refuses a sampling design no sample of which ends); a sample that runs out of coins fails the window (`OneStageZk.RAN_OUT`). -/
+def RL (v : Registration.Verifier) : Prop :=
+  v.members.isEmpty = false → ∃ law n, LinkPoints.lawOf v.program v.query v.law v.workTable = .ok (law, n) ∧
+    LinkPoints.refused law n v.members = .ok #[]
+
 /-- The registration keeps R1–R8 against the verifier's own copies, with `law` the agreed law as derived; R7, its pool
-chain and its pinned roots (`PinnedHeld`) when the verifier expects values registered. -/
+chain and its pinned roots (`PinnedHeld`) when the verifier expects values registered; and the per-member form's
+members' link points (`RL`). -/
 def Registered (v : Registration.Verifier) (rec law : Json) : Prop :=
   R1 rec v law ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧
-    (ExpectsV2 v → R7 rec v ∧ PoolChained rec v ∧ PinnedHeld rec v) ∧ R8 v
+    (ExpectsV2 v → R7 rec v ∧ PoolChained rec v ∧ PinnedHeld rec v) ∧ R8 v ∧ RL v
 
 /-! ## The sample: the registered law over the registered population -/
 
@@ -400,7 +412,7 @@ def drawnNats (draw : Json) : Array Nat :=
 /-- The public outputs at δ, for the sampling design `law` with its profile's sample `d` over `n` units: the sampled proof blocks, the proved
 ones, the exact bound on incorrect proof blocks (`Bound.boundOf`: `Bound.countBound` over the sample's strata, `Bound.bernoulliBound`
 for a Bernoulli sample), and for a stratified or work sampling design each template's own (`Bound.stratumBound`). -/
-def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat) : Public :=
+def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.SamplingDesign) (n : Nat) : Public :=
   { drawn := drawnNats e.draw,
     proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
     bound := Bound.boundOf n d p.delta,
@@ -409,7 +421,7 @@ def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat) 
 
 /-- The integrity profile at δ: the record's program; one level `unit`, the record's partition, of `n` units, sampled by
 `d`; and the number of units sampled. -/
-def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.Draw) (n : Nat) : Core.Integrity :=
+def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.SamplingDesign) (n : Nat) : Core.Integrity :=
   let str := fun (k : String) => match getD c.record k with | .str s => s | _ => ""
   { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
     levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := n, draw := some d }],

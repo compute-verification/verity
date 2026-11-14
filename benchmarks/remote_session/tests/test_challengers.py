@@ -1,4 +1,4 @@
-"""`challengers.ChallengerGate` against the auditor host's own gate (`verity/composite/device/live_challenger/auditor.py`), in this process: its
+"""`challengers.ChallengerGate` against the auditor host's own gate (`verity/protocols/compose/device/live_challenger/auditor.py`), in this process: its
 requests go to `auditor.gate` as the lane key's forced command would pass them, and each opened session is served by
 `auditor.run` through `serve.py` (the Lean's coins stubbed, `stub_serve.py`) on a thread, with the gate's root steps
 (chown, systemctl) and the clock injected. An honest session whose coins the gate's session released is accepted and
@@ -27,24 +27,24 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-LIVE = ROOT / "verity" / "composite" / "device" / "live_challenger"
+LIVE = ROOT / "verity" / "protocols" / "compose" / "device" / "live_challenger"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(LIVE))
-sys.path.insert(0, str(ROOT / "verity" / "protocols" / "poub" / "verifier" / "tests"))
+sys.path.insert(0, str(ROOT / "verity" / "protocols" / "accounting" / "poub" / "verifier" / "tests"))
 
 import auditor as A  # noqa: E402
 import auditor_line as al  # noqa: E402
-from verity.protocols.poub.verifier.session import challengers  # noqa: E402
-from verity.protocols.poub.verifier.session import verifier  # noqa: E402
-from verity.protocols.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
-from verity.protocols.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import challengers  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import verifier  # noqa: E402
+from verity.protocols.accounting.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
-from verity.protocols.certifier.verifier import certificate as cert  # noqa: E402
-from verity.protocols.certifier.verifier.grid import COMPLETE, GridParams, Record, fill  # noqa: E402
-from verity.protocols.poub.verifier import coins  # noqa: E402
-from verity.protocols.spot.device.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import certificate as cert  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.grid import COMPLETE, GridParams, BlockGrid, fill  # noqa: E402
+from verity.protocols.accounting.poub.verifier import coins  # noqa: E402
+from verity.protocols.proofs.spot.device.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
 from verity.commitments.crypto import lms  # noqa: E402
 
 P = lms.Params(64, 4, 4)
@@ -506,6 +506,28 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
         al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger])
 
 
+
+def test_an_unbound_sessions_line_credits_nothing_and_exits_0_with_no_model_to_bind_the_store_to(host, tmp_path,
+                                                                                               monkeypatch, capsys):
+    """A gate run under `BIND=0` (`gate.sh`): its period signs no model (`period-open` without `--model`) and its
+    verifier bound the store to none. `auditor_line.py` prints a line that credits the session nothing, its *bound*
+    check failing with the reason that no model is there to bind the store to, and exits 0, so the fire run that ran
+    it ends as a run that ran."""
+    host.seal(monkeypatch, PINS)
+    out = tmp_path / "run"
+    sessions, reg, _ = gate_run(host, out, "honest", True)
+    assert sessions[0]["accepted"]
+    (out / "verifier.json").write_text(json.dumps({"registration": reg, "sessions": sessions}))
+    monkeypatch.setattr(al, "verifier_tree", lambda commit, repo: (commit, "ab" * 20))
+    rc = al.main([str(out), "--host-bytes", str(1 << 30), "--pin", host.pin, "--period", "p-1", "--ledger",
+                  str(host.host.ledger), "--commit", VERIFIER, "--line-by", "python"])
+    printed, err = capsys.readouterr()
+    doc = json.loads(printed)
+    why = "no model to bind the store to: the audit's period signs none and no --model-pin names one"
+    assert rc == 0 and f"auditor_line: bound: no: {why}" in err
+    assert doc["bound"]["reason"] == why and doc["sessions"][0]["credit"]["bound"]["reason"] == why
+    assert doc["credit"]["credited_sessions"] == [] and doc["credit"]["summary"].startswith("the line credits zero")
+
 def test_a_session_drawn_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not(
         host, tmp_path, monkeypatch):
     """`--groups-per-coin 4` at two windows in flight: `auditor_line`'s line of record over a gate run of an honest
@@ -698,8 +720,9 @@ def boundary(d: Path, let_in: dict[str, list[bytes]], *, links: tuple[str, ...] 
     key = certifier_key()
     issuer = cert.Issuer(cert.LmsSigner.create(key, d / "signer.json"), CERTIFIER_SESSION, coins=lambda n: b"\x07" * n)
     T, r = BOUNDARY_GRID.buckets, BOUNDARY_GRID.allocation
-    records = [issuer.certify(Record(link, 0, fill(frames, [max(0, min(r, len(frames) - r * t)) for t in range(T)], r),
-                                     COMPLETE), cert.Direction.INGRESS, BOUNDARY_GRID,
+    records = [issuer.certify(BlockGrid(link, 0,
+                                        fill(frames, [max(0, min(r, len(frames) - r * t)) for t in range(T)], r),
+                                        COMPLETE), cert.Direction.INGRESS, BOUNDARY_GRID,
                               cert.parameters_digest(BOUNDARY_GRID)) for link, frames in let_in.items()]
     public = lms.public_key(key)
     (d / "boundary.json").write_text(json.dumps({

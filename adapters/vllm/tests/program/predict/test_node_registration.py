@@ -11,27 +11,28 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from verity.circuits.codec import canonical_json
 from verity.commitments import hm96
+
+from tests.pipeline.test_cpu_replay import _shard
+from tests.program.predict.test_predict import TINY, _phi
 from verity_vllm.commit import registered_rows as RR
 from verity_vllm.commit import step_rows
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import registration_log as RL
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.program.predict import aot as A
-from verity_vllm.program.predict.common import _arr_shape
 from verity_vllm.program.predict import node_registration as NR
+from verity_vllm.program.predict.common import _arr_shape
 from verity_vllm.program.predict.node import build_node_program, node_parameters
-from tests.pipeline.test_cpu_replay import _shard
-from tests.program.predict.test_predict import TINY, _phi
 
 _spec = importlib.util.spec_from_file_location(
-    "nci_reference", Path(__file__).resolve().parents[5] / "verity/protocols/inference_only/verifier/nci/lean/scripts/nci_reference.py")
+    "nci_reference", Path(__file__).resolve().parents[5] / "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/nci_reference.py")
+assert _spec is not None and _spec.loader is not None
 REF = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(REF)
 
-WORLD, PREFIX, GEO, WK = 2, "inner.model.", bytes(32), bytes(range(64))
+WORLD, PREFIX, GEO, WK = 2, "inner.model.", bytes(64), bytes(range(64))
 SHAPE = {"LP": 4, "T": 2}
 PHI = _phi(TINY, tp={"world": WORLD, "rank": 0})
 NODE = build_node_program(PHI, "request", **SHAPE)
@@ -70,6 +71,7 @@ def commit(tmp_path, monkeypatch):
     ckd.mkdir()
     (ckd / "config.json").write_text("{}")
     _shard(ckd / "model.safetensors", CKPT)
+    cfg: dict
     served, roots, bundles, cfg = {}, {}, [], {"programs": {}, "of_record": {}, "requests": [{"request_id": "r0", "prompt_len": 4, "max_tokens": 3}]}
     for r in range(WORLD):
         served[r] = _served(r)
@@ -91,7 +93,7 @@ def commit(tmp_path, monkeypatch):
             if name not in CKPT:
                 extra[name] = i
                 raw.tofile(bdir / "weights" / "extra" / f"{i}.bin")
-        tree = step_rows.weights_tree(GEO, names, step_rows.names_digest(names), troots, WK) | {"extra": extra}
+        tree = step_rows.weights_tree(GEO, names, troots, WK) | {"extra": extra}
         roots[r] = tree["root"]
         (bdir / "weights" / "tree.json").write_text(json.dumps(tree))
         (bdir / "context.json").write_text(json.dumps({"pair": 0, "tp": {"world": WORLD, "rank": r}, "replay": cfg}))
@@ -224,6 +226,13 @@ def _flip_checkpoint(d):
      "rank 1: rank1.weights[0] (model.embed_tokens.weight) is"),
     (lambda d: _retree(d, 0, lambda ns: next(n for n in ns if n[0] == "model.norm.weight").__setitem__(0, "model.final_norm.weight")),
      "rank 0: rank0.weights[13] is 'model.norm.weight', which the rank's committed weights tree does not register"),
+    # a field the record leaves out states nothing: no bundle, no request, no Program of record, no committed root
+    (lambda d: (d["out"] / "replay_deferred.json").write_text(json.dumps({"world": WORLD})), "rank 0: replay_deferred.json names no bundle of pair 0"),
+    (lambda d: _ctx(d, 1, lambda c: c["replay"].pop("requests")), "holds no Program of record for the rank (['1111111111111111'])"),
+    (lambda d: _ctx(d, 1, lambda c: c["replay"].pop("of_record")), "rank1'] holds no Program of record for the rank ([])"),
+    (lambda d: _ctx(d, 1, lambda c: c["replay"]["of_record"].pop("1")), "rank1'] holds no Program of record for the rank ([])"),
+    (lambda d: _runs(d, lambda c: c.pop("per_rank")), "is not the committed weights root None"),
+    (lambda d: _runs(d, lambda c: c["per_rank"].pop("1")), "is not the committed weights root None"),
 ])
 def test_a_commit_that_is_not_the_nodes_is_refused_by_name(commit, tamper, named, capsys):
     tamper(commit)
@@ -241,6 +250,19 @@ def test_a_descriptor_that_is_not_the_nodes_is_refused(commit, capsys):
     desc["annotations"]["theta"] = desc["annotations"]["theta"][1:]
     Path(commit["o"].program).write_bytes(gzip.compress(canonical_json(desc)))
     assert NR.main(commit["o"]) == 2 and "the descriptor's θ is" in capsys.readouterr().out
+    bare = {k: v for k, v in NODE.desc.items() if k != "annotations"}
+    for desc in ({**bare, "annotations": {}}, bare):   # annotations that hold no θ, and a descriptor without annotations: no θ at all
+        Path(commit["o"].program).write_bytes(gzip.compress(canonical_json(desc)))
+        assert NR.main(commit["o"]) == 2 and "the descriptor's θ is 0 root nodes" in capsys.readouterr().out
+
+
+def test_a_builds_program_digest_is_its_program_blocks_else_the_one_at_the_results_top(tmp_path):
+    """`program_digest_of` reads a Build's `result.json`: the `program` block's `digest`, else `program_digest` at its top (a
+    result without the block), else none."""
+    for doc, digest in (({"program": {"digest": "aa"}, "program_digest": "bb"}, "aa"), ({"program_digest": "bb"}, "bb"),
+                        ({"program": {}, "program_digest": "bb"}, "bb"), ({}, "")):
+        (tmp_path / "result.json").write_text(json.dumps(doc))
+        assert NR.program_digest_of(str(tmp_path)) == digest
 
 
 def test_a_checkpoint_its_manifest_does_not_pin_is_refused(commit, capsys):

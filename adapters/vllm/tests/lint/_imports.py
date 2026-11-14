@@ -50,6 +50,7 @@ LAYER = {
     "verity_vllm.engine.hooks": "core",                        # the patch owner; imports nothing from verity_vllm
     "verity_vllm.engine.env": "core",                          # the vLLM env pins; imports nothing from verity_vllm
     "verity_vllm.settings": "core",                            # the environment's registry; imports nothing from verity_vllm
+    "verity_vllm.gc_tuning": "core",                           # the offline processes' GC thresholds; imports only settings
     "verity_vllm.log": "core",                                 # the logger; imports nothing from verity_vllm
     "verity_vllm.commit.challenge": "core",                    # -> verity.commitments.randomness; imports nothing from verity_vllm
     "verity_vllm.records": "core",                             # the typed stage records; imports nothing else from verity_vllm
@@ -74,7 +75,8 @@ VALUE_CHECK_MODULES = tuple(f"verity_vllm.{m}" for m in (
 
 #: The verdict and the rules it decides from (the per-run rules, the C2 rules, the Build gates).
 VERDICT_MODULES = ("verity_vllm.check.verdict", "verity_vllm.check.verdict_names", "verity_vllm.check.commit_pass", "verity_vllm.check.commit_rules",
-                   "verity_vllm.check.c2_rules", "verity_vllm.check.gates")
+                   "verity_vllm.check.c2_rules", "verity_vllm.check.gates", "verity_vllm.check.gate_base",
+                   "verity_vllm.check.gate_rules")
 
 
 def layer_of(module: str) -> str:

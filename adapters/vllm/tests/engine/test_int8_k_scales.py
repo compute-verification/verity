@@ -46,7 +46,7 @@ def test_layer_index_refuses_a_name_without_one():
 
 
 def test_a_tensor_parallel_rank_serves_its_consecutive_kv_heads_columns():
-    s = np.arange(80 * 8, dtype=np.float32).reshape(80, 8)
+    s: np.ndarray = np.arange(80 * 8, dtype=np.float32).reshape(80, 8)
     assert K.rank_table(s, 8).tobytes() == s.tobytes()
     parts = [K.rank_table(s, 2, r, 4) for r in range(4)]
     assert all(p.shape == (80, 2) and p.flags.c_contiguous for p in parts)

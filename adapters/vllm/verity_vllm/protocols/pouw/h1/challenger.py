@@ -1,4 +1,4 @@
-"""H1's coins from the proof system's challenger on its auditor host (`verity.protocols.spot.device.remote`), and the
+"""H1's coins from the proof system's challenger on its auditor host (`verity.protocols.proofs.spot.device.remote`), and the
 verifier's check that a served window's coins are that challenger's.
 
 * **Serving** (`pouw_h1_window`): a window takes its salt, round and sampling coins from one session of the auditor host's
@@ -24,7 +24,7 @@ verifier's check that a served window's coins are that challenger's.
   Its coin must have been opened once, after that root: a sample opened early, from another session or family,
   from a session the ledger didn't open withheld, or never, is refused.
 * **Sessions** (the pouw setting ``session``): a lane reserves a session on infra's challenger gate
-  (``reserve --peer NAME --scheme S --families JSON``, `verity/composite/device/live_challenger/auditor.py` on vy-challenger-1, under
+  (``reserve --peer NAME --scheme S --families JSON``, `verity/protocols/compose/device/live_challenger/auditor.py` on vy-challenger-1, under
   the lane's own gate key), and the window opens it on its root (``open --session S --root R``, H1's R its window-open
   root, opened from the serving process: `pouw_h1_window.Window`), and carries the gate's open answer (``commits["session"]``: its
   ``session``, ``seq``, ``root`` and coin ``commitment``,
@@ -58,7 +58,7 @@ verifier's check that a served window's coins are that challenger's.
   close, one whose close isn't complete (an empty one, or a window never opened, never ended, unclosed or short of its
   coins), an accepted window that isn't one of its windows, and a window of it that has no accepted window (abandoned
   after its coins).
-* **Credit** is core's rules of record (`verity.protocols.pouw.verifier.credit`), called through its one composed
+* **Credit** is core's rules of record (`verity.protocols.accounting.pouw.verifier.credit`), called through its one composed
   entry, never copied or run step by step. A period's open commits its circuit, the SHA-512 of the declared window
   Program's descriptor (`pouw_h1_served.descriptor`), its sample size K (``draw_k``, `draw_k`: the proof system's selection
   at `DRAW_EPS` for the credited share `EXPECTED_CREDIT`), each K's circuit file (``circuit_files``) and its
@@ -79,26 +79,41 @@ import hashlib
 import itertools
 import json
 import re
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any
 
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import salt as PS
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.audit import salt_of
-from verity.protocols.pouw.verifier.protocol import DomainError
-from verity.protocols.spot.device import challenger as Ch
-from verity.protocols.spot.device import remote
-from verity.protocols.spot.device.challenger import (ChallengerKey, CoinError, LiveCommitment, LiveOpening,
-                                                             extends, ledger_head, live_reason, pinned_session,
-                                                             session_named)
+from verity.commitments.crypto import lms
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import salt_of
+from verity.protocols.accounting.pouw.verifier.protocol import DomainError
+from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.proofs.spot.device import remote
+from verity.protocols.proofs.spot.device.challenger import (
+    ChallengerKey,
+    CoinError,
+    LiveCommitment,
+    LiveOpening,
+    extends,
+    ledger_head,
+    live_reason,
+    pinned_session,
+    session_named,
+)
 
-from verity_vllm.protocols.pouw.h1 import requests as RQ
-from verity_vllm.protocols.pouw.h1.draw import NO_DRAW_SESSION, draw_files, draw_reason, draw_session_reason
 from verity_vllm.protocols.pouw import pearl_c as PPD
+from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw.h1.draw import (
+    NO_DRAW_SESSION,
+    draw_files,
+    draw_reason,
+    draw_session_reason,
+)
 
 SCHEME = Wd.LIVE_SCHEME
 #: the pouw setting ``session``: the gate's open answer (``commitment`` from ``status SESSION`` when the answer's is
@@ -164,8 +179,6 @@ def carried(given: Mapping[str, Any]) -> dict[str, Any]:
 
 def lms_verify(key: ChallengerKey, message: bytes, signature: bytes) -> bool:
     """`challenger.Verify`: LMS over SHA-512 at the verifier's challenger key's (64, W, H)."""
-    from verity.commitments.crypto import lms
-
     p = lms.Params(64, key.W, key.H)
     try:
         return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))
@@ -307,7 +320,7 @@ class Ledger:
         of it, each its lines, `pins_of`), refused (`CoinError`) as core refuses them, its sessions held to `main`."""
         lines = ledger_head([list(h) for h in heads], key, verify)
         log = pins_of(pins)
-        raw, I = [line.encode() for line in lines], key.public[:16]
+        raw, ident = [line.encode() for line in lines], key.public[:16]
 
         def verifies(message: bytes, signature: bytes) -> bool:
             try:
@@ -315,7 +328,7 @@ class Ledger:
             except ValueError:
                 return False
 
-        return cls(key, tuple(lines), Ch.verify_ledger(raw, I, verifies), Ch.verify_periods(raw, I, verifies),
+        return cls(key, tuple(lines), Ch.verify_ledger(raw, ident, verifies), Ch.verify_periods(raw, ident, verifies),
                    None if log is None else tuple(log), None if main is None else tuple(main))
 
     @classmethod
@@ -414,8 +427,8 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
     if commits.get("scheme") in PPD.SCHEMES:
         return salt_session_reason(commits, ledger, fetch, registered, commit, verify)
     why, window = held(commits.get("session"), ledger, commit)
-    if why is not None:
-        return why
+    if why is not None or window is None:
+        return why or "no window of the auditor's ledger holds the window's session"
     if registered is not None and commits.get("weights_root") != bytes(registered).hex():
         return "the window's weights' root is not the one the period registered"
     sid, root = window["open"]["session"], Ch.root_of(window["open"])
@@ -455,8 +468,8 @@ def salt_session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch
     if isinstance(commits.get("session"), Mapping) and "secret" in commits["session"]:
         return "the pass's session names its hello's secret, which a pass never records: a refused pass"
     why, window = held(commits.get("session"), ledger, root.hex())
-    if why is not None:
-        return why
+    if why is not None or window is None:
+        return why or "no window of the auditor's ledger holds the pass's session"
     sid, reserve, end = window["open"]["session"], window["reserve"], window["end"]["body"]
     families = None if reserve is None else reserve["body"].get("families")
     salt_only = [list(f) for f in Wd.SALT_FAMILIES]
@@ -525,8 +538,8 @@ def _period_reasons(ledger: Ledger, period: str, p: Mapping[str, Any], accepted:
     out = [f"session {s}, an accepted window, is not one of period {period}'s windows ({p['windows']}, lane {p['lane']}'s "
            "between its period-open and its period-close)" for s in accepted if s not in p["windows"]]
     if p["close"] is None:
-        return out + [f"period {period} has no period-close in the auditor's ledger, so its windows aren't all known: an "
-                      "open period credits nothing"]
+        return out + [(f"period {period} has no period-close in the auditor's ledger, so its windows aren't all known: "
+                       "an open period credits nothing")]
     listed = p["close"]["body"]["windows"]
     if not listed:
         out.append(f"period {period} closed with no window")
@@ -540,6 +553,13 @@ def _period_reasons(ledger: Ledger, period: str, p: Mapping[str, Any], accepted:
     return out
 
 
+def _commitment(record: Mapping[str, Any]) -> Mapping[str, Any]:
+    """The window record's ``commitment`` (`pouw_h1.CALLS_FILE`), read once: an empty one where the record's is absent
+    or empty."""
+    c = record.get("commitment")
+    return c if c else {}
+
+
 def manifest_reason(record: Mapping[str, Any]) -> str | None:
     """Why a window's record (`pouw_h1.CALLS_FILE`) isn't one manifest under its coins: the Program salt from its salt
     coin over its weights' root, each round's root over its parts, each call's A table under its own round's root (step
@@ -551,8 +571,9 @@ def manifest_reason(record: Mapping[str, Any]) -> str | None:
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import served as SV
 
-    c, rows = record.get("commitment") or {}, list(record.get("calls") or ())
+    rows = list(record.get("calls") or ())
     try:
+        c = _commitment(record)
         salt = program_salt_of(c)
     except (CoinError, KeyError, TypeError, ValueError) as e:
         return f"the window's salt can't be derived from its record ({e})"
@@ -581,8 +602,6 @@ def manifest_reason(record: Mapping[str, Any]) -> str | None:
 
 def program_salt_of(c: Mapping[str, Any]) -> bytes:
     """The window's Program salt, from its H1 commitment `c`'s salt coin over its weights' root."""
-    from verity.protocols.pouw.verifier.audit import salt_of
-
     from verity_vllm.protocols.pouw import h1 as PH
     return PH.program_salt(salt_of(LiveCommitment.from_json(c.get("coins")), LiveOpening.from_json(c.get("salt_opening")).coin,
                                    bytes.fromhex(c["weights_root"])))
@@ -611,7 +630,7 @@ def _layout(descriptor: Any) -> tuple[dict | None, Any]:
     return CR.layout_of(bytes(descriptor))
 
 
-def drawn_of(record: Mapping[str, Any], window: Mapping[str, Any], k: Any, descriptor: bytes
+def drawn_of(record: Mapping[str, Any], window: Mapping[str, Any], k: Any, descriptor: bytes | None
              ) -> tuple[list[int] | None, Any]:
     """The proof blocks core samples from the window `record` (`pouw_h1.CALLS_FILE`) at K = `k`, and None; or None and core's
     refusal: `credit.drawn` of its sampling coin over the layout of `descriptor` (`credit.layout_of`, the bytes of the
@@ -621,9 +640,9 @@ def drawn_of(record: Mapping[str, Any], window: Mapping[str, Any], k: Any, descr
     layout, why = _layout(descriptor)
     if why is not None:
         return None, why
-    c = record.get("commitment") or {}
-    draw = c.get("draw") if isinstance(c.get("draw"), Mapping) else {}
     try:
+        given = _commitment(record).get("draw")
+        draw: Mapping[str, Any] = given if isinstance(given, Mapping) else {}
         coin = LiveOpening.from_json(draw.get("coin")).coin.hex()
     except CoinError as e:
         return None, ("draw", f"the window's draw coin is malformed ({e})")
@@ -674,8 +693,8 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
         out["window"] = ("coin", f"the window's coins, session or salt can't be read ({e})")
     else:
         why = None if audited.period is not None else (
-            "budget", f"the window is in no period of the auditor's ledger, so no period-open committed the K it is drawn "
-                      f"with ({CR.K_FIELD}): reserve its session inside a period")
+            "budget", (f"the window is in no period of the auditor's ledger, so no period-open committed the K it is "
+                       f"drawn with ({CR.K_FIELD}): reserve its session inside a period"))
         files = rows = None
         if why is None and out["k"] is None:
             out["k"], why = CR.committed_k(lines, audited.period)
@@ -692,8 +711,8 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
         out["window"] = why
     ok = out["manifest"] is None and out["window"] is None
     if ok:
-        e = CR.established(_layout(descriptor)[0], out["calls"], [row[CR.SERVED_ROWS] for row in ev["calls"]], out["k"])
-        out["eps"] = None if e is None else str(e)
+        eps = CR.established(_layout(descriptor)[0], out["calls"], [row[CR.SERVED_ROWS] for row in ev["calls"]], out["k"])
+        out["eps"] = None if eps is None else str(eps)
     out["credit"] = out["calls"] if ok else None
     return out
 
@@ -710,7 +729,7 @@ def window_evidence(record: Mapping[str, Any], directory: str | Path, window: Ma
     Round 0's ``requests`` in its round log is the request table's root its open root binds (`salt.window_open_root`).
     ValueError on a record whose served trees or salt can't be read."""
     from verity_vllm.protocols.pouw.h1 import served as SV
-    c = record.get("commitment") or {}
+    c = _commitment(record)
     served = c.get("served")
     try:
         digest = None if served is None else SV.digest_of(served["entries"], served["refused"]).hex()

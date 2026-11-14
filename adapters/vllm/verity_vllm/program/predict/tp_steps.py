@@ -42,7 +42,7 @@ def compile_tp(reg: Registered, advice: Any, bodies: dict, **kw: Any) -> TpCompi
         raise ValueError(f"φ.tp's world is {world}: a TP compile composes two or more ranks")
     digests: list[str] = []
     units: list[tuple[str | None, ...]] = []
-    sites: list[dict[str, TB.RankSites]] = []
+    sites: list[dict[str | None, TB.RankSites]] = []
     rows = None
     for r in range(world):
         c = compile_steps(at_rank(reg, r), advice, bodies, **kw)
@@ -56,9 +56,9 @@ def compile_tp(reg: Registered, advice: Any, bodies: dict, **kw: Any) -> TpCompi
         rows = got
         digests.append(c.workload.digest)
         units.append(mine)
-        sites.append({d: TB.rank_sites(c.programs[d].fn.body, world, r, d) for d in set(mine) - {None}})
+        sites.append({d: TB.rank_sites(c.programs[d].fn.body, world, r, d) for d in set(mine) - {None} if d is not None})
         del c
-    made: dict[tuple[str, ...], TB.RequestBinding] = {}
+    made: dict[tuple[str | None, ...], TB.RequestBinding] = {}
     bindings: list[TB.RequestBinding | None] = []
     for i in range(len(units[0])):
         key = tuple(u[i] for u in units)

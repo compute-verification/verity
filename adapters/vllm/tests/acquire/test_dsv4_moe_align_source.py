@@ -15,16 +15,17 @@ import types
 import numpy as np
 import pytest
 import torch
-
-from tests.acquire.test_glm53_sources import Committer
-from tests.program.test_marlin_moe import _vllm_align
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+from verity.definitions.registry import marlin_moe as MM
+
+from tests import fake_vllm
+from tests.acquire.test_glm53_sources import Committer
+from tests.program.test_marlin_moe import _vllm_align
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import moe_align_source as MA
 from verity_vllm.acquire.sources import oracle_witness as OW
 from verity_vllm.acquire.sources import taps
-from verity.definitions.registry import marlin_moe as MM
 from verity_vllm.query.manifest.bind import Binder, source_ports
 
 
@@ -151,9 +152,8 @@ def fake_marlin(monkeypatch, *, tamper: str | None = None, seed: int = 0) -> Non
         out = kernel(ids, num_experts, block_size, np.random.default_rng(len(ids) + seed).permutation(len(ids)), unwritten=0)
         return _tamper(*out, ids, num_experts, block_size, tamper) if tamper else out
 
-    m = types.ModuleType(MA.MARLIN_MODULE)
-    m.moe_align_block_size = moe_align_block_size
-    monkeypatch.setitem(sys.modules, MA.MARLIN_MODULE, m)
+    fake = fake_vllm.install(monkeypatch, extra=[f"{MA.MARLIN_MODULE}:{MA.ALIGN}"])     # a module the source reaches by name
+    fake[MA.MARLIN_MODULE].moe_align_block_size = moe_align_block_size
 
 
 def align_rows(layer: int, P: int, step: int = 0) -> list[dict]:
@@ -364,7 +364,7 @@ def _capture(monkeypatch, tmp_path, ids: list[torch.Tensor], steps: int = 2) -> 
 
 def _commit(src, c, model, steps: int = 2) -> dict:
     """The Commit's committed witness digests by (step, module, member) over ``steps`` steps."""
-    got = {}
+    got: dict = {}
     for s in range(steps):
         c._cur.step = s
         run_step(src, c, model)
@@ -433,9 +433,14 @@ def test_the_rank_worker_arms_the_replay_once_before_the_committer_installs(monk
     _capture(monkeypatch, tmp_path, [ids_of(1), ids_of(2)])
     events: list = []
     arm = MA.MoeAlignSource.arm
-    monkeypatch.setattr(MA.MoeAlignSource, "arm", lambda self, calls: (events.append(("arm", len(calls))), arm(self, calls))[1])
 
-    def worker(capture_dir: str | None) -> tuple[object, MA.MoeAlignSource]:
+    def armed(self, calls):
+        events.append(("arm", len(calls)))
+        return arm(self, calls)
+
+    monkeypatch.setattr(MA.MoeAlignSource, "arm", armed)
+
+    def worker(capture_dir: str | None) -> tuple[RW.TP2CaptureWorkerExtension, MA.MoeAlignSource]:
         src = MA.MoeAlignSource(Committer(), model_of([ids_of(1), ids_of(2)]))
         com = types.SimpleNamespace(sources=[object(), src], reset=lambda: None,
                                     install=lambda: events.append(("install", src.replay is not None)))

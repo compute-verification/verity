@@ -10,7 +10,7 @@ and Row its H u16 words): a static, as `boolean_fp8_moe`'s is, so this module im
 and Path are READ's; `READ_PORTS` its parameters.  The body is three stages, each a unit or several (`cut`, `CUTS`):
 
 * the mask, `DsaTopKMaskCounted_v2{N,TOPK}` (scores, n), cut past `dsa_topk_mask_cut.WHOLE_MAX` keys and up to it a unit,
-  `DsaTopKMaskWhole_v1{N,TOPK}`;
+  `DsaTopKMaskWhole_v2{N,TOPK}`;
 * the index, over a block a mask unit (`index_block`): the row's blocks of BLOCK keys (`dsa_topk_mask_cut.blocks`) where the
   mask is cut, and the whole row where it is one unit.  Per block,
   ``DsaMaskPositions_v1{N,AT,K}`` compacts its members (its mask in u16 words, `dsa_topk_mask_cut.words`) to their positions,
@@ -44,7 +44,7 @@ its positions are a constant a bit.  ``DsaMaskPositions_v2{N,AT,K}`` is the same
 and the count are one tree of counts written as Calls (`boolean_dsa_topk_mask.DsaButterflyTagsCount_v1`), and the positions
 AT .. AT+N-1 are runs of 2^L that start at a multiple of 2^L, each `DsaPositionWord_v1{L,HI}` over the indices of
 `DsaIndexBits_v1{L}`, which are those of L - 1 bits twice with a bit after each (`DsaBitAppend_v1`).  The cut names the
-`_v1` units; a `_v2` serves only a caller that binds it.
+`_v2` units, the mask's (`dsa_topk_mask_cut.plan`) and the index's; the body calls the `_v1`s, the same functions.
 """
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ from typing import Any, Sequence
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import ZERO, add, const_bits, mux, sub
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.definitions.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.refs import Coll, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import boolean_dsa_topk_mask as BM
@@ -376,7 +376,8 @@ DsaPositionsSlot = EW.specialized(
 
 def index_block(N: int, TOPK: int, block: int) -> int:
     """The index's block at a row of N keys: ``block`` past `dsa_topk_mask_cut.WHOLE_MAX`, where the mask is cut a block a
-    unit, and N up to it, where the mask is one unit, so that each `DsaMaskPositions_v1` reads one mask unit's whole output.
+    unit, and N up to it, where the mask is one unit, so that each block's `DsaMaskPositions_v2` of the cut reads one mask
+    unit's whole output.
     The whole mask with a block an output instead would have 5 rows at 40,960 keys, so 8 hm96 slots for its 3 rows' 4, and
     be past Flock's 2^27 bits."""
     return block if N > X.WHOLE_MAX else N
@@ -461,18 +462,18 @@ DSA_TOPK_READS = [DsaMaskPositions, DsaPositionsMerge, DsaPositionsChunk, DsaPos
 
 def cut(t) -> list[tuple[Any, int]]:
     """The units a binding of `DsaTopKReadRows_v1` is cut into, each Definition bound and how many of it: the mask's own (its
-    `dsa_topk_mask_cut.cut`, else the mask whole, `DsaTopKMaskWhole_v1{N,TOPK}`), a `DsaMaskPositions_v1` a block of
-    `index_block` keys, block b's reading the mask unit of block b, the merge, ceil(TOPK/CHUNK) of
+    `dsa_topk_mask_cut.cut`, else the mask whole, `DsaTopKMaskWhole_v2{N,TOPK}`), a `DsaMaskPositions_v2` a block of
+    `index_block` keys, block b's reading the mask unit of block b, the merge (`DsaPositionsMerge_v2`), ceil(TOPK/CHUNK) of
     `DsaPositionsChunk_v1{K=TOPK,W=CHUNK}`, chunk c's c its input, TOPK of `DsaPositionsSlot_v1{K=CHUNK,N}`, slot j's
     slots chunk j // CHUNK's output and its j the input j mod CHUNK, and TOPK of READ, read j at slot j's output.  The body
-    computes the same function with the reads over the merge's slots directly: a slot's output is the merge's slot j
-    wherever that is below N, as every one is."""
+    computes the same function with the `_v1` index units and the reads over the merge's slots directly: a slot's output
+    is the merge's slot j wherever that is below N, as every one is."""
     N, TOPK, block, READ = int(t.bindings["N"]), int(t.bindings["TOPK"]), int(t.bindings["BLOCK"]), t.bindings["READ"]
     mask = bind(BM.DsaTopKMaskCountedV2, N=N, TOPK=TOPK)
     bl = X.blocks(N, TOPK, index_block(N, TOPK, block))
-    units: Counter = Counter(dict(X.cut(mask) or [(bind(X.DsaTopKMaskWhole, N=N, TOPK=TOPK), 1)]))
-    units.update(bind(DsaMaskPositions, N=hi - lo, AT=lo, K=TOPK) for lo, hi in bl)
-    units[bind(DsaPositionsMerge, M=len(bl), K=TOPK)] += 1
+    units: Counter = Counter(dict(X.cut(mask) or [(bind(X.DsaTopKMaskWholeV2, N=N, TOPK=TOPK), 1)]))
+    units.update(bind(DsaMaskPositionsV2, N=hi - lo, AT=lo, K=TOPK) for lo, hi in bl)
+    units[bind(DsaPositionsMergeV2, M=len(bl), K=TOPK)] += 1
     units[bind(DsaPositionsChunk, K=TOPK, W=CHUNK)] += -(-TOPK // CHUNK)
     units[bind(DsaPositionsSlot, K=CHUNK, N=N)] += TOPK
     units[READ] += TOPK

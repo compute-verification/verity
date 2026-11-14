@@ -82,9 +82,10 @@ it, and fast-forwards `main` only to a candidate with no new failure:
   (every PR when none does): a lone suspect is ejected, its mark withdrawn and its owner sent the failed tasks' logs,
   several are bisected, and in the same tick the candidate and those above it are built again without them; a PR held,
   ejected or unmarked leaves the same way, taking no other PR out. A failure above the lowest candidate waits for its
-  base's check unless only its own PRs meet it. A failure of the machines is retried and rung to @infra; a red off the
-  gate (circuit-check, ratchet-gate) holds nothing. Only the loop moves `main`: GitHub's rulesets let only its App push
-  it. Citations and tables read only `main`'s commits.
+  base's check unless only its own PRs meet it. A failure of the machines (a timeout, a kill, a full disk) is no red and
+  blames no PR: it is retried on other machines and rung to @infra, and only one that persists from runs that started the
+  candidate's steps splits it, ejecting nobody; a red off the gate (circuit-check, ratchet-gate) holds nothing. Only the
+  loop moves `main`: GitHub's rulesets let only its App push it. Citations and tables read only `main`'s commits.
 - When a changed lock record lands on `main`, Daniel gets a DM showing it; that DM is the check, and nothing waits on it.
 - Anyone may do whatever it takes to cut check time: a change to how `check` runs lands without its file owner's review,
   and the owner is told. infra owns check time and its spend, and ci owns landing: no agent acts between a ready mark
@@ -122,10 +123,10 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
 - **Workers run where they can't take you down**: as cloud subagents (`Task` with `environment: "cloud"`, a standing
   request for every agent here, so nobody asks first) or as detached `research run`s; a local subagent only for a short
   read-only lookup. A cloud worker boots from the environment's snapshot, so its brief is complete (the task, the
-  done-condition, the deadline, "reread `git show origin/main:AGENTS.md`"), tells it to create
-  `cursor/<lane>-<topic>-<hex>` from `origin/main` and push only there, and names an inbox branch it reads hourly
-  (`git show origin/B:inbox/<agent-id>.md`); larger changes go in when you resume it. It opens its own PR, or reports
-  its branch and SHA for its launcher to.
+  done-condition, the deadline, "reread `git show origin/main:AGENTS.md`") and tells it to create
+  `cursor/<lane>-<topic>-<hex>` from `origin/main` and push only there. Write no brief or message to a branch (Daniel,
+  13 Nov): later word goes by `inbox.py send` or a resume, a document on a Linear issue or in Notion. It opens its own
+  PR, or reports its branch and SHA for its launcher to.
 - **Pick a worker's model by its task**, as `Task`'s `model`, a standing request for every agent here: name it on every
   launch, never `inherit` or left out. `claude-opus-5-5-high` is the default: moving files, reading code, a count or a
   sweep, a specified change with its tests, a merge, a review, a swarm seat, a proof of a fixed statement.
@@ -134,8 +135,10 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   Leads run Fable: they plan and launch. A resume keeps its model, so a Fable worker whose task is Opus's is not
   resumed: it tells its launcher, who briefs an Opus worker from its note.
 - **Reach a running agent** on any VM through its shell commands, since it never rereads a shared file mid-run:
-  `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`, and
-  its shell hook delivers it within about a minute or as its turn ends (`--local`: a subagent on your VM, at once);
+  `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`
+  (INF-801 moves that off the repository), and its next shell command delivers it (`--local`: a subagent on your VM, no
+  push). Nothing delivers it at a turn's end, and one waiting then may be gone by the next turn: an agent whose turn
+  has ended is resumed with the text itself.
   `inbox.py selftest` checks your own VM end to end.
 - **Stay reachable.** Push and write a one-line checkpoint note at least every 60 minutes; when you'd wait on a run, end
   your turn naming its id and ETA, and your launcher resumes you. The control pod's agent watch flags a stalled or

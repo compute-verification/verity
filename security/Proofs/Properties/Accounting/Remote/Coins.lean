@@ -2,7 +2,7 @@ module
 
 public import Batteries.Tactic.OpenPrivate
 public import Proofs.Properties.Accounting.Remote.Draw
-public import Proofs.Properties.Accounting.Remote.Session
+public import Proofs.Properties.Accounting.Remote.Run
 public import Proofs.Properties.Accounting.Remote.Window
 public import Properties.Accounting.Remote.Coins
 
@@ -81,7 +81,7 @@ theorem verify_coins (s : State) (c : Array ByteArray) (t : Int) (o : Array Open
   unfold verify State.fail
   simp only [Id.run, live_C, record_C]
   repeat' (split <;> try dsimp only)
-  all_goals try rfl
+  all_goals first | rfl | (simp only [*, ↓reduceIte]; rfl)
 
 theorem release_coins (s : State) (c : Array ByteArray) (runs withdrawn : Array (Int × Int)) :
     release (C c s) runs withdrawn = ((release s runs withdrawn).1, C c (release s runs withdrawn).2) := by

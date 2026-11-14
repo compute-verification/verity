@@ -9,7 +9,7 @@ public import Proofs.Accounting.Lemmas.Compose
 /-!
 # Proof of `H1J10RCheckedCreditPeriod`
 
-`Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod` at `tileRun`, as `Proofs.Pouw.Period` proves
+`Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` at `tileRun`, as `Proofs.Pouw.Period` proves
 `CheckedCreditPeriod`: a window is credited exactly when it and every earlier one are accepted by `Credit.window`
 (`credited_iff`, at `k s_T > 0`), so the run's accepted prefix and live words are `Credit.window`'s (`prefixLen_eq`,
 `creditedLive_eq`), and `JointSound` at `tileLayer` follows from `TileSampleIsCoin` and `TileServiceSound` by
@@ -53,7 +53,7 @@ theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) 
     (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → (ℕ → V) → Prop)
-    (Wp : WindowPlay C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
+    (Wp : ExecutionPhasePlay C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
     (x : Paths (Coin C Ξ Cd.rounds σ sT) n) :
     creditedLive Sc Cd Wp (tileRun σ k hk sT unitOf ws opened rel right) x = creditLive Sc Cd Wp ws x := by
   classical
@@ -118,14 +118,14 @@ theorem pins_j10r {C B V : Type} {m n Np : ℕ} (hm : 0 < m) {salt : Paths (Path
   rw [← hs x w]
   exact h
 
-/-- **`H1J10RCheckedCreditPeriod`**: `CircuitCreditPeriod` at `tileRun`, its accepted prefix and live words
+/-- **`H1J10RCheckedCreditPeriod`**: `CircuitCreditMonitoringPeriod` at `tileRun`, its accepted prefix and live words
 `Credit.window`'s, at `rate_j10r`'s rate and `pins_j10r`'s pins. -/
 theorem h1J10RCheckedCreditPeriod : H1J10RCheckedCreditPeriod := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ nB mB σ k hk sT unitOf Sc Cd n hn hN hr _hM hKd ws opened enc place tile
     Wp Pl folded ρ δs δbind δks hS hρ hρ1 hρN hwmax hlk hG hDD hPre hMoved _hReg hDraw hServ hSalt hLucks hUF
   obtain ⟨hMu, hRB, hGs⟩ := hLucks
   have hK0 : 0 < k sT := hKd
-  have h := Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod Sc Cd hn hN hr (hk sT) Wp Pl
+  have h := Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod Sc Cd hn hN hr (hk sT) Wp Pl
     (tileRun σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile) (j10rAtCoin hr enc place tile))
     folded ρ (7 / 8) (1 / 2) 1 1 1 (j10rRate (k sT) ρ) δs δbind δks hS hρ hρN hwmax hlk one_pos one_pos
     (j10rRate_pos hKd hρ) (rate_j10r hKd hρ hρ1) hG hDD hPre hMoved
@@ -182,7 +182,7 @@ theorem nDigits_eq (k : ℕ) : PouwCheck.Credit.nDigits k = J10R.nDigits k := by
 reads, is `J10R.unitBlocks` at every slot, contraction, tile and place. -/
 theorem j10rBlocks_eq (M k R C I J : ℕ) :
     PouwCheck.Credit.j10rBlocks M k (R, C) I J = J10R.unitBlocks M k R C I J := by
-  simp only [PouwCheck.Credit.j10rBlocks, J10R.unitBlocks, J10R.Layout.row, J10R.Layout.col, J10R.rb, J10R.cb,
+  simp only [PouwCheck.Credit.j10rBlocks, J10R.unitBlocks, J10R.NoiseLayout.row, J10R.NoiseLayout.col, J10R.rb, J10R.cb,
     J10R.rowBits, J10R.colBits, nDigits_eq]
 
 end Properties.Pouw.PeriodJ10R.SecurityProofs

@@ -118,11 +118,40 @@ research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool
   bash benchmarks/verifier_cost/registration.sh 1024 4096 12288 49152
 ~~~
 
+`population.sh N...` times the one-stage run's population-order check (`Slots.popOk`) against a template population's
+units: `population.py` writes, per N, a population of about N units over a layered call hierarchy (by default 234 root
+batches of 234 templates over six levels of at most 1,800 composites, about 8,100 Definitions; `POPULATION_ARGS`
+changes them), and `population/Main.lean`, built in a scratch Lake package against the checkout's verifier, times
+`Partition.unitGates` (one gate table per program, `unitGates_eq_unitGatesFast`), `Slots.popOk` (from the ranges,
+`popOk_eq_popOkRanges`: no replay unit and no input gate is built) and the references: `TemplateQuery.gates` on every
+unit, each recomputing its offset and template through an unmemoized walk, and `popOk` as stated, off `Slots.layout`'s
+population, at N and either side of it. It fails where a reference differs. The references run up to `REF_MAX` units
+(default 50). `POPULATION_ARGS='--input-members M'` widens the root's input nodes to M members each, which only the
+layout's input class reads. `$OUT` gets population.jsonl, one row per N and function (units, milliseconds, peak RSS).
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd clone --mem-gb 90 -- \
+  bash benchmarks/verifier_cost/population.sh 20 50 100000 1000000 6963296
+~~~
+
+`members_parse.sh N...` times the per-member form's parse of its members (`OneStageZk.membersOf`) against their count:
+`members_parse/Main.lean`, built in a scratch Lake package against the checkout's verifier, makes N members of one range
+of units each, no unit in two, and times the parse on them, then on the same members with one more whose range starts
+inside the last member's. It fails where the parse gives back other members than those made, name by name and unit by
+unit, or accepts the unit in two. The parse reads each member once and sorts the members' ranges, so its time must grow
+no faster than N log N: a time that quadruples where N doubles is work in the members squared. `$OUT` gets
+members_parse.jsonl, one row per N and case (members, milliseconds, peak RSS).
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd clone -- \
+  bash benchmarks/verifier_cost/members_parse.sh 1000 25000 100000 1000000
+~~~
+
 `whole_run.sh run|desc SHAPE N...` times `Run.run`, the stream's whole run of one registration, against the population.
 `whole_run.py` writes, per N, an accepted `run` input (`run`: a v1 audit on challenger coins with N/8 more ports) or the
 program and query alone (`desc`), over a template population of about N units: `toy`, the difftest's three templates,
 or `l5`, a GLM-5.3 MoE window's seven templates at the window's proportions (whose Python partition walks every gate,
-so `l5` takes `desc`). The audit's law is the stratified rate of two in the population, `stratified-rate:2/P` over its
+so `l5` takes `desc`). The audit's sampling design is the stratified rate of two in the population, `stratified-rate:2/P` over its
 P units, on `toy` the stratified sampling design at K = 3. Stated over P, it samples one unit of each template and two
 of `toy`'s largest at every N, so the sample stays four units while the population it is timed against grows.
 `whole_run/Main.lean` times the `run` piece and each of `Run.run`'s steps,

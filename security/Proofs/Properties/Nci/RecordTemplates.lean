@@ -51,6 +51,8 @@ theorem finish_wiring {f : Front} {pin : String → Option String} {c : Case} (h
           · cases h
           · split at h
             · cases h
+            split at h
+            · cases h
             · split at h
               · cases h
               · cases h

@@ -1,0 +1,100 @@
+"""`verity_vllm.records.schema_ids`: each constant holds the id its records on disk carry, so an id can be read from here
+and never moves."""
+from __future__ import annotations
+
+from verity_vllm.observe import events
+from verity_vllm.records import schema_ids
+
+#: the ids as the records on disk have them
+ON_DISK = {
+    "ADMISSION_PLAN_SCHEMA": "verity/admission-plan/v1",
+    "AOT_COMPARISON_SCHEMA": "verity-vllm/aot-comparison/v1",
+    "BATCH_DECOMP_SCHEMA": "cb-a/batch-decomp/v1",
+    "BOUNDARY_LINKAGE_SCHEMA": "verity-sweep/boundary-linkage/v1",
+    "BUILD_RELABEL_GUARD_SCHEMA": "verity-vllm/build-relabel-guard/v1",
+    "BUILD_RELABEL_SCHEMA": "verity-vllm/build-relabel/v1",
+    "CALL_BOUNDARIES_GATE_SCHEMA": "verity-vllm/call-boundaries-gate/v1",
+    "CAPTURE_LOG_SCHEMA": "verity-capture/log/v1",
+    "CAPTURE_SNAPSHOTS_SCHEMA": "verity-capture/snapshots/v1",
+    "CENSUS_RANK_SCHEMA": "verity-capture/census-rank/v0",
+    "COMMITTED_STORE_SCHEMA": "verity-vllm/committed-store/v1",
+    "COMMIT_PLAN_SCHEMA": "verity-vllm/commit-plan/v1",
+    "COMMIT_TOKENS_SCHEMA": "verity-vllm/commit-tokens/v1",
+    "CONFIGURATION_CARD_SCHEMA": "verity-gen/card/v1",
+    "CONFIG_RECORD_SCHEMA": "verity-vllm/config-record/v1",
+    "CONSTRUCTION_MANIFEST_SCHEMA": "cb-a/construction_manifest/v3",
+    "CONSTRUCTION_VERSION_SCHEMA": "cb-a/aot-artifact/v1",
+    "COVERAGE_DECLARATION_SCHEMA": "verity/commit-integ/coverage-declaration/v1",
+    "DERIVE_STEP_SCHEMA": "cb-a/derive_step/v3",
+    "ENGINE_PROFILE_SCHEMA": "verity-vllm/profile/v1",
+    "ENGINE_SPEC_SCHEMA": "verity-vllm/engine-spec/v0",
+    "EXPERIMENT_SCHEMA": "verity-gen/experiment/v1",
+    "EXPERIMENT_SPEC_SCHEMA": "verity-gen/spec/v1",
+    "FOLD_SUMMARY_SCHEMA": "verity-gen/fold-summary/v1",
+    "GATES_SCHEMA": "verity-gen/gates/v1",
+    "GENERATED_WORKLOAD_SCHEMA": "verity-sweep/workload/v1",
+    "GLOBAL_PROGRAM_SCHEMA": "cb-a/global-program/v1",
+    "IMPORT_PATH_RUNTIME_SCHEMA": "verity/tp2/import-path-runtime/v1",
+    "INSTANCE_SEQUENCE_SCHEMA": "cb-a/instance-sequence/v2",
+    "INT8_ERROR_REPORT_SCHEMA": "verity-vllm/int8-error-report/v1",
+    "INT8_K_SCALES_SCHEMA": "verity-vllm/int8-k-scales/v1",
+    "KERNEL_IDENTITY_SCHEMA": "verity-vllm/kernel-identity/v1",
+    "LATE_READ_CHECK_SCHEMA": "verity/commit-integ/t6_4-check/v1",
+    "MANIFEST_VERIFY_SCHEMA": "verity-sweep/manifest-verify/v1",
+    "MATCH_RUN_SCHEMA": "verity-gen/run/v1",
+    "MATCH_STAGES_SCHEMA": "verity-gen/stages/v1",
+    "META_INVENTORY_SCHEMA": "verity-vllm/meta-inventory/v1",
+    "MOE_PLANE_ALIAS_CHECK_SCHEMA": "verity-sweep/moe-plane-alias-check/v1",
+    "NEUTRALITY_REPORT_SCHEMA": "verity-vllm/neutrality/v1",
+    "NODE_REGISTRATION_SCHEMA": "verity-vllm/node-registration/v1",
+    "NOT_EXECUTED_RECONCILIATION_SCHEMA": "verity-sweep/not-executed-reconciliation/v3",
+    "ORACLE_COMPARE_SCHEMA": "verity-sweep/oracle-compare/v1",
+    "PHI_SCHEMA": "verity-predict/phi/v1",
+    "POUW_CIRCUIT_REPLAY_SCHEMA": "verity-vllm/pouw-ncp-v2-replay/v3",
+    "POUW_H1_CALLS_SCHEMA": "verity-vllm/pouw-h1-calls/v2",
+    "POUW_H1_HANDOFF_SCHEMA": "verity-vllm/pouw-h1-handoff/v1",
+    "PREDICT_NODE_SCHEMA": "verity-predict/node/v1",
+    "PROFILE_FALLBACK_SCHEMA": "verity-capture/profile-fallback/v1",
+    "PROGRAM_CACHE_ENTRY_SCHEMA": "verity-vllm/program-cache-entry/v1",
+    "PROGRAM_COMPARE_SCHEMA": "cb-a/compare/v1",
+    "QUERY_USE_SCHEMA": "verity-ir/query-use/v1",
+    "RANK_COMMIT_BINDING_SCHEMA": "verity/tp2/commit-binding/v1",
+    "RANK_MATCH_SCHEMA": "tp2/rank_match/v1",
+    "REALIZED_INSTANCES_PROGRESSIONS_SCHEMA": "verity-gen/instances/v2",
+    "REALIZED_INSTANCES_SCHEMA": "verity-gen/instances/v1",
+    "REALIZED_PROGRAM_SCHEMA": "verity-gen/program/v1",
+    "REBASELINE_DIGESTS_SCHEMA": "verity-vllm/rebaseline-digests/v1",
+    "RECORDS_INDEX_SCHEMA": "verity-vllm/records-index/v1",
+    "REPLAY_BUNDLE_SCHEMA": "verity-vllm/replay-bundle/v1",
+    "REPLAY_SLIM_SCHEMA": "verity-vllm/replay-slim/v1",
+    "ROW_ATTEMPTS_SCHEMA": "verity-sweep/row-v2/v1",
+    "SAMPLED_REPLAY_SCHEMA": "verity-sweep/sampled-replay/v1",
+    "SERVED_SWITCHES_SCHEMA": "verity-vllm/served-switches/v1",
+    "SERVING_ROWS_INDEX_SCHEMA": "verity-vllm/serving-rows/index/v0",
+    "SPEC_TOKENS_SCHEMA": "verity-gen/spec-tokens/v1",
+    "STATIC_SCHEDULE_SCHEMA": "verity-vllm/static-schedule/v1",
+    "STEP_TRACE_SCHEMA": "verity-vllm/step-trace/v1",
+    "STOCH_RECOMPUTE_SCHEMA": "verity-r15/stoch-recompute/v2",
+    "TARGET_FAMILY_SCHEMA": "verity-sweep/target-family/v1",
+    "TIMELINE_SCHEMA": "verity-sweep/timeline/v1",
+    "TP_FOLD_MATCH_SCHEMA": "verity/tp2/fold-match/v1",
+    "TP_LINKS_SCHEMA": "cb-a/tp_links/v2",
+    "TP_PARAM_HASHES_SCHEMA": "verity-capture/tp2-param-hashes/v0",
+    "TP_RANK_REPLAY_SCHEMA": "verity-vllm/tp-rank-replay/v1",
+    "TP_REPLAY_DEFERRED_SCHEMA": "verity-vllm/tp-replay-deferred/v1",
+    "TP_SAMPLED_REPLAY_SCHEMA": "verity-sweep/tp-sampled-replay/v1",
+    "WEIGHTS_OF_RECORD_PRIOR_SCHEMA": "verity/commit/weights-of-record/v1",
+    "WEIGHTS_OF_RECORD_SCHEMA": "verity/commit/weights-of-record/v2",
+    "X09_PROFILE_SCHEMA": "cb-a/x09-profile/v1",
+    "XRANK_PICKS_SCHEMA": "verity/tp2/xrank-picks/v1",
+}
+
+
+def test_every_constant_is_the_id_on_disk_and_the_module_holds_no_other():
+    held = {name: value for name, value in vars(schema_ids).items() if name.isupper()}
+    assert held == ON_DISK
+    assert len(set(held.values())) == len(held)
+
+
+def test_the_observation_reads_its_ids_from_the_module():
+    assert events.SCHEMA is schema_ids.CAPTURE_LOG_SCHEMA

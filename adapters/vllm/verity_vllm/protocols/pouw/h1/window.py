@@ -1,10 +1,10 @@
 """H1's, ncp-v2's and Pearl-C's session on the proof system's challenger on its auditor host
-(`verity.protocols.spot.device.remote`), as the serving process opens and closes it; `pouw_h1_challenger` is
+(`verity.protocols.proofs.spot.device.remote`), as the serving process opens and closes it; `pouw_h1_challenger` is
 the verifier's check of what it served.
 
 The pouw setting ``challenger`` (``HOST:PORT``): a window connects once (`remote.connect_when_listening`) to a
 challenger started over a live epoch's layout, scheme `pouw_h1_challenger.SCHEME` and `pouw_h1_challenger.families` (S)
-as ``FAMILIES`` (`verity/composite/device/live_challenger/run.sh`). An H1 window (`Window`) holds the gate's reserve answer
+as ``FAMILIES`` (`verity/protocols/compose/device/live_challenger/run.sh`). An H1 window (`Window`) holds the gate's reserve answer
 (``session``: S) and, once round 0's request table is committed (`pouw_h1.H1Run.open_window`), has the gate (``gate``)
 open S on the window's open root R = `salt.window_open_root` of the weights' root, that table's root and S, connects,
 and opens its salt coin after R; the epoch's salt is `audit.salt_of` of that coin over the weights' root. A Pearl-C
@@ -31,14 +31,20 @@ from __future__ import annotations
 import contextlib
 import json
 import time
-from typing import Any, Callable, Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
+from typing import Any
 
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import salt as PS
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.audit import salt_of
-from verity.protocols.spot.device import remote
-from verity.protocols.spot.device.challenger import CoinError, LiveCommitment, LiveOpening, LiveRecord
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import salt_of
+from verity.protocols.proofs.spot.device import remote
+from verity.protocols.proofs.spot.device.challenger import (
+    CoinError,
+    LiveCommitment,
+    LiveOpening,
+    LiveRecord,
+)
 
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
@@ -129,6 +135,19 @@ def open_period(lines: Iterable[str], lane: str) -> dict[str, Any] | None:
         elif e["kind"] == "period-close" and opened is not None and e["body"]["period"] == opened["period"]:
             opened = None
     return opened
+
+
+def after_close(lines: Iterable[str], lane: str, period: str) -> tuple[bool, dict[str, Any] | None]:
+    """Whether the auditor's ledger `lines` closes period `period`, and the first ``reserve`` entry after that close
+    whose prover (``for``, else ``by``) is lane `lane`, None while there is none: the one reserve a Pearl-C run's sample
+    session may be, so a sample is taken once (`bench_arm.LiveDraw`, `served_verdicts.pearlplus_live_draw`)."""
+    closed = False
+    for e in map(json.loads, lines):
+        if not closed:
+            closed = e["kind"] == "period-close" and e["body"]["period"] == period
+        elif e["kind"] == "reserve" and (e["body"].get("for") or e["body"].get("by")) == lane:
+            return True, e
+    return closed, None
 
 
 def period_setting(raw: Any) -> dict[str, Any] | None:
@@ -278,6 +297,16 @@ def reserve_salt(call: Callable[..., Mapping[str, Any]], ledger: Callable[[], It
     if (why := period_reason(period, reserved)) is not None:
         raise ValueError(f"session {reserved.get('session')} is reserved and refused before its open: {why}")
     return reserved, period
+
+
+def reserve_draw(call: Callable[..., Mapping[str, Any]], peer: str) -> dict[str, Any]:
+    """A sample session (`window.DRAW_FAMILIES`, the sampling coin alone) reserved withheld at infra's gate, as words (`call`,
+    ``reserve --peer PEER ... --withhold``, under the lane's gate key): its reserve answer as `DrawSession` takes it
+    (`reserved_of`). `CoinError` when the gate refuses, or reserves it plain."""
+    answer = call("reserve", "--peer", peer, "--scheme", PHC.SCHEME, "--families", PHC.draw_families(), "--withhold")
+    if answer.get("withheld") is not True:
+        raise CoinError(f"the gate reserved draw session {answer.get('session')} plain, not withheld")
+    return reserved_of({k: v for k, v in answer.items() if k in ("session", *RESERVE_FIELDS)}, "draw_session")
 
 
 def open_session(entry: str, gate: Callable[..., Mapping[str, Any]], sid: str, root: bytes, k: int = 0,
@@ -439,5 +468,5 @@ def finish(run: Any, client: Any) -> None:
 
 __all__ = ["DrawSession", "EPOCHS", "Gate", "H1_PERIOD", "NO_DRAW_SESSION", "RESERVE_FIELDS", "WITHHELD_OPEN", "Window", "at_port",
            "closed_on_error", "connect", "finish", "gate_of", "in_process_draw", "open_period", "open_session", "opened",
-           "period_reason", "period_setting", "refusals", "reserve_salt", "reserved_of", "salt_session", "session",
-           "session_setting"]
+           "period_reason", "period_setting", "refusals", "reserve_draw", "reserve_salt", "reserved_of", "salt_session",
+           "session", "session_setting"]

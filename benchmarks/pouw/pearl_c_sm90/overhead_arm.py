@@ -5,7 +5,7 @@ one definition here: `SCHEME` (Pearl+'s id in the door), `verifier` (the referen
 
 - **The cubin** is the file `$VERITY_BENCH_CUBIN` names (the art the door sent), listed in the build record's ``binaries``
   so the SASS gate passes it before anything is timed. Without it the arm builds one into the run's directory
-  (``build.sh`` with ``CUBIN_ONLY=1``), for development only (the record's ``cubin.source``). The cubin of record is
+  (``build.sh``: the cubin and its SASS gates), for development only (the record's ``cubin.source``). The cubin of record is
   `PINNED`'s art (`pinned`), the one `verity bench overhead run --scheme pearl-plus --cubin ART` sends: the record's
   ``cubin.art`` names it when the loaded bytes are its, and is None otherwise.
 - **The call** (`prepare`): one `PearlCDeviceRun` a weight (the operand set's B, BF16, read in place; its root and weight
@@ -35,7 +35,6 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
-import os
 import subprocess
 import sys
 from collections.abc import Callable
@@ -95,7 +94,7 @@ def epsilon(m: int, n: int, k: int, card: str, delta: Fraction = DELTA) -> dict:
                           f"(window.eps_at), and {PINNED.name} states no window of record")
     if w["card"] != card:
         raise ValueError(f"the window of record ({w['basis']}) ran on the {w['card']}, not the {card}")
-    from verity.protocols.pouw.verifier import window as Wd
+    from verity.protocols.accounting.pouw.verifier import window as Wd
 
     eps = Wd.eps_at(w["k"], Fraction(delta), w["credited"], w["work"], 1)
     return {"epsilon": float(eps), "delta": float(delta),
@@ -119,12 +118,11 @@ def cubin_of(sent: str | None, out_dir: Path, build: Callable[[Path], Path] | No
 
 
 def build_dev(out: Path) -> Path:
-    """build.sh's cubin and SASS gates alone (``CUBIN_ONLY=1``) into `out`."""
+    """build.sh's cubin and SASS gates into `out`."""
     log = out.with_name(out.name + ".log")
     out.parent.mkdir(parents=True, exist_ok=True)
     with log.open("w") as f:
-        rc = subprocess.run(["bash", str(HERE / "build.sh"), str(out)], env={**os.environ, "CUBIN_ONLY": "1"}, stdout=f,
-                            stderr=subprocess.STDOUT).returncode
+        rc = subprocess.run(["bash", str(HERE / "build.sh"), str(out)], stdout=f, stderr=subprocess.STDOUT).returncode
     if rc:
         raise RuntimeError(f"build.sh exited {rc} (see {log}): send the cubin instead (`verity bench overhead run --cubin ART`)")
     return out / "pearl_c_sm90.cubin"
@@ -205,7 +203,7 @@ class PearlPlus:
         rows (FP32 words) and the tile leaves (C̃ and U, FP32 words, over the m₁₆ rows a partial row tile has) the call
         hashes, and B's rows its weight side does."""
         from arm import Work
-        from verity.protocols.pouw.verifier.protocol import Shape as Unit
+        from verity.protocols.accounting.pouw.verifier.protocol import Shape as Unit
         from verity_vllm.protocols.pouw import pearl_c as PPD
 
         s, m = PPD.scheme_of(SERVED), m16(shape.m)
@@ -290,9 +288,9 @@ class _Held:
 
     def __init__(self, arm: PearlPlus, key: tuple, operands, shape):
         import torch
-        from verity.protocols.pouw.verifier import verifier as PV
-        from verity.protocols.pouw.verifier.audit import weights_root
-        from verity.protocols.pouw.verifier.coins import Challenger
+        from verity.protocols.accounting.pouw.verifier import verifier as PV
+        from verity.protocols.accounting.pouw.verifier.audit import weights_root
+        from verity.protocols.accounting.pouw.verifier.coins import Challenger
         from verity_vllm.protocols.pouw import pearl_c as PPD
 
         self.arm, self.key, self.users = arm, key, 0
@@ -415,8 +413,8 @@ class _Call:
         """The pass the launch wrote, ended as a retained served pass ends, into `out`, and the epoch's coin commitment
         beside it."""
         import torch
-        from verity.protocols.pouw.verifier.protocol import Matmul
-        from verity.protocols.pouw.verifier.protocol import Shape as Unit
+        from verity.protocols.accounting.pouw.verifier.protocol import Matmul
+        from verity.protocols.accounting.pouw.verifier.protocol import Shape as Unit
         from verity_vllm.protocols.pouw import pearl_c as PPD
 
         if not self.hashing:

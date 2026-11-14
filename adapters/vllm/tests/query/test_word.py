@@ -1,20 +1,50 @@
-"""`Q_word_v1{X,W,R=no-recompute}` (`verity.definitions.word`): every computation gate certified by exactly one unit, cross-unit reads
+"""`Q_word_v1{X,W,R=no-recompute}` (`verity.circuits.word`): every computation gate certified by exactly one unit, cross-unit reads
 only through committed values (`verity.circuits.partition.validate_unit_cut`), wiring and constants as structure, the widths as the circuit's own
 |out(S)| where no wiring sits between units, the committed interior values of a norm, a Gemm and FA2 attention, failures by name, and
 the rule cache (`word.use_rule_cache`, the manifest CLI's `--unit-rule-cache`): a read rule is the computed one, keyed by the Definition's content, the query, the limits and
 the code, and the manifest is the same with it."""
 from __future__ import annotations
 
+import gzip
+import hashlib
+import json
+import shutil
+import subprocess
+import sys
+import tracemalloc
+from collections import Counter
+from pathlib import Path
+
 import numpy as np
 import pytest
-
-from verity.circuits.query_ast import oracle_gateset, oracle_out
+from verity.circuits import cut
+from verity.circuits import partition_object as PO
+from verity.circuits.codec import canonical_json
 from verity.circuits.cut import call_scope
-from verity.definitions import word as W
+from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
+from verity.circuits.layout import resolve
+from verity.circuits.partition import INPUT_UNIT, validate_unit_cut
+from verity.circuits.program import Program
+from verity.circuits.query_ast import oracle_gateset, oracle_out
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, Tuple
+from verity.circuits import word as W
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+from verity.definitions.registry import fp8_moe_experts as XM
+from verity.definitions.registry import moe
+from verity.definitions.registry import sampling as SM
+
+from verity_vllm.commit.partition import word_check_refusal
+from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.pipeline import cli
+from verity_vllm.pipeline import manifest as M
+from verity_vllm.query import program_view as PV
+from verity_vllm.query.program_view import from_instances
+from verity_vllm.query.required import population
 
 
 def _fn(fam: str, **statics):
-    return W.specialization(fam, statics)
+    return PV.specialization(fam, statics)
 
 
 @pytest.fixture(scope="module")
@@ -52,7 +82,6 @@ def test_every_computation_gate_is_certified_by_one_unit(fam, statics):
     assert R["cut"].ok, R["cut"].detail
     assert G.n + G.free == fn.gates and R["owner"].min() >= 0 and int(R["gates"].sum()) == G.n
     assert R["cut"].detail["input_gates"] == len(G.input_ids) > 0 and R["cut"].detail["certified"] == G.n
-    from verity.circuits.defs import REGISTRY
     prims = {G.prim_names[p] for p in set(G.prim.tolist())}
     assert not prims & W.WIRING and all(REGISTRY.defs[p].params for p in prims)     # structure is in no unit
 
@@ -70,7 +99,6 @@ def test_widths_are_the_irs_out_where_no_wiring_sits_between_units(fam, statics)
 
 
 def test_the_checker_names_gates_that_break_the_invariant():
-    from verity.circuits.partition import validate_unit_cut
     v = validate_unit_cut(10, 2, [0, 0, 1, -1, 1, 1, 2, 2], [(0, 2), (1, 2), (2, 6), (4, 6)], [7], {1, 7})
     assert v.codes == ("gate-not-certified-once", "gate-count", "read-uncommitted")
     assert v.detail["gate-not-certified-once"]["gates"] == [3] and v.detail["read-uncommitted"]["gates"] == [[0, 2], [2, 6], [4, 6]]
@@ -78,7 +106,6 @@ def test_the_checker_names_gates_that_break_the_invariant():
     assert validate_unit_cut(9, 2, [0, 0, 1, 1, 1, 1, 2], [(1, 2), (5, 6)], [6], {1, 5, 6, 3}).codes == ("committed-unread",)
     assert validate_unit_cut(9, 2, [0, 0, 1, 1, 1, 1, 2], [(1, 2), (5, 6)], [6], {1, 5}).codes == ("output-uncommitted",)
     # the input unit: every input gate in it, read by any unit through its committed value
-    from verity.circuits.partition import INPUT_UNIT
     own = [0, 1, INPUT_UNIT, INPUT_UNIT]
     assert validate_unit_cut(5, 1, own, [(2, 0), (3, 1), (0, 1)], [1], {0, 1, 2, 3}, input_gates=[2, 3]).ok
     v = validate_unit_cut(5, 1, [0, 1, 0, INPUT_UNIT], [(2, 0), (3, 1), (0, 1)], [1], {0, 1, 3}, input_gates=[2, 3])
@@ -103,8 +130,7 @@ def _copies_bits(prim, rng) -> bool:
 
 
 def test_wiring_only_rearranges_bits():
-    from verity.circuits.defs import REGISTRY
-    W.specialization("Gemm_v1", {"K": 16, "N": 1})
+    PV.specialization("Gemm_v1", {"K": 16, "N": 1})
     rng = np.random.default_rng(0)
     assert all(_copies_bits(REGISTRY.defs[p], rng) for p in W.WIRING)
     assert not _copies_bits(REGISTRY.defs["F32Add_v1"], rng) and not _copies_bits(REGISTRY.defs["GuardNegInfZero_v1"], rng)
@@ -136,20 +162,19 @@ def test_attention_commits_scores_p_row_values_and_inverse_sum(attn):
 
 def test_a_width_over_x_and_w_is_named():
     with pytest.raises(W.QueryRuleViolation, match=r"Gemm_v1\{K=64,N=8\}: output:F2fpBf16_v1"):
-        W.check_calls([{"family": "Gemm_v1", "statics": {"K": 64, "N": 8}, "definition": "Gemm_v1{K=64,N=8}", "calls": 3, "where": "m.proj"}], 8, 8)
+        W.check_calls([{"family": "Gemm_v1", "statics": {"K": 64, "N": 8}, "definition": "Gemm_v1{K=64,N=8}", "calls": 3, "where": "m.proj"}], 8, 8, specialize=PV.specialization)
 
 
 def test_the_gate_limit_is_the_runs_not_the_querys(norm):
     g = {"family": "RMSNormTriton_v1", "statics": {"N": 2048, "EPS": 1e-05}, "definition": norm.id, "calls": 1}
     low = norm.gates - 1
-    capped = W.check_calls([g], strict=False, max_gates=f"{low:_}")
+    capped = W.check_calls([g], strict=False, max_gates=f"{low:_}", specialize=PV.specialization)
     assert [(v["class"], v["limit"]) for v in capped["violations"]] == [("too-large", low)]
-    assert W.check_calls([g], strict=False)["ok"] and W.gate_limits() == {"*": W.MAX_GATES}
+    assert W.check_calls([g], strict=False, specialize=PV.specialization)["ok"] and W.gate_limits() == {"*": W.MAX_GATES}
     for raised in (f"{low},RMSNormTriton_v1={norm.gates}", {"RMSNormTriton_v1": norm.gates}, norm.gates):
-        r = W.check_calls([g], strict=False, max_gates=raised)
+        r = W.check_calls([g], strict=False, max_gates=raised, specialize=PV.specialization)
         assert r["ok"] and r["units"] == 2049 and r["query"] == capped["query"] == W.query_id()
     assert W.gate_limit(norm, f"{low},Gemm_v1=5") == low and W.gate_limit(norm, {norm.id: 7, "RMSNormTriton_v1": 9}) == 7
-    from verity_vllm.pipeline import cli
     for cmd, argv in (("manifest", ["build", "--program", "p", "--out", "o"]), ("program-graph", ["o", "i"])):
         assert cli.parse(cmd, argv, {W.MAX_GATES_ENV: "GumbelTopPTokenSelect_v2=120000000"}).word_max_gates == "GumbelTopPTokenSelect_v2=120000000"
         assert cli.parse(cmd, [*argv, "--word-max-gates", "1"], {}).word_max_gates == "1"
@@ -158,20 +183,16 @@ def test_the_gate_limit_is_the_runs_not_the_querys(norm):
 def test_uncommitted_boundaries_are_named():
     g = {"family": "Gemm_v1", "statics": {"K": 64, "N": 8}, "definition": "Gemm_v1{K=64,N=8}", "calls": 2, "where": "m.proj",
          "outputs_committed": False}
-    r = W.check_calls([g], strict=False)
+    r = W.check_calls([g], strict=False, specialize=PV.specialization)
     assert [v["class"] for v in r["violations"]] == ["output-not-committed"] and r["violations"][0]["where"] == ["m.proj"]
     with pytest.raises(W.QueryRuleViolation, match="output-not-committed, 2 Call"):
-        W.check_calls([g])
-    ok = W.check_calls([dict(g, outputs_committed=True)])
+        W.check_calls([g], specialize=PV.specialization)
+    ok = W.check_calls([dict(g, outputs_committed=True)], specialize=PV.specialization)
     assert ok["ok"] and ok["units"] == 16 and ok["gates"] == 2 * _fn("Gemm_v1", K=64, N=8).gates
 
 
 def test_the_manifest_build_runs_the_check(tmp_path):
     from tests.check.test_sampled_replay import _program
-    from verity_vllm.pipeline import manifest as M
-    from verity_vllm.query.program_view import from_instances
-    from verity_vllm.correspondence.reader_for_query import Correspondence
-    from verity_vllm.query.required import population
     inst, _w = _program(attn=True)
     P = from_instances(inst)
     corr = Correspondence(P)
@@ -186,8 +207,6 @@ def test_the_manifest_build_runs_the_check(tmp_path):
 
 
 def _program_dir(tmp_path, **kw) -> str:
-    import gzip
-    import json
     from tests.check.test_sampled_replay import _program
     inst, _w = _program(**kw)
     with gzip.open(tmp_path / "instances.json.gz", "wt") as f:
@@ -200,8 +219,6 @@ def _program_dir(tmp_path, **kw) -> str:
 def test_the_manifest_records_the_check_it_passed_in_the_header_and_its_rows_are_unchanged(tmp_path):
     """The header's `query.word_check` is what the Commit requires (`commit.partition.word_check_refusal`); it is no identity, so the
     rows digest of a checked build is the unchecked one's.  A check that fails raises before the manifest is written."""
-    from verity_vllm.commit.partition import word_check_refusal
-    from verity_vllm.pipeline import manifest as M
     d = _program_dir(tmp_path)
     checked, plain = (M.build(d, request_id="r0", word=w) for w in ("16/32", None))
     wc = checked["query"]["word_check"]
@@ -217,14 +234,13 @@ def test_a_dead_output_passes_the_check_only_as_unreturned_and_listed(tmp_path):
     """The attention Program's o_proj output feeds nothing and no policy requires it: UNRETURNED, so the check skips it and the
     manifest lists it by identity, outside the identities.  A Call with a required output gets no such pass: without the return-slot
     policy the final fused norm's residual is read by nothing while its normed row feeds the logits, and the check fails it."""
-    from verity_vllm.pipeline import manifest as M
     (tmp_path / "attn").mkdir()
     attn = M.build(_program_dir(tmp_path / "attn", attn=True), request_id="r0", word="16/32")
     dead = [r for r in attn["unreturned"] if "o_proj" in r["op_path"]]
     assert attn["query"]["word_check"]["ok"] and dead and {r["spec"] for r in dead} == {"Gemm_v1"}
     assert {r["step"] for r in dead} == set(attn["steps"])
     assert not [r for r in attn["identities"] if "o_proj" in r["op_path"] and r["family"] != "weights"]
-    assert attn["populations"]["unreturned_calls"] == sum(r["rows"] for r in dead) and len(attn["unreturned_digest"]) == 64
+    assert attn["populations"]["unreturned_calls"] == sum(r["rows"] for r in dead) and len(attn["unreturned_digest"]) == 128
     with pytest.raises(W.QueryRuleViolation, match="RMSNormFusedCuda_v2.*output-not-committed"):
         M.build(_program_dir(tmp_path, attn=True), request_id="r0", word="16/32", return_slots=False)
 
@@ -236,8 +252,6 @@ def test_a_dead_gate_joins_the_unit_it_reads():
 
 @pytest.mark.parametrize("name,E,committed", [("MoeRouterTopKOrdered", 64, 2 * 64 + 2), ("MoeRouterTopKOrderedNorm", 128, 2 * 128 + 2 + 8 + 1)])
 def test_the_ordered_router_commits_its_softmax_once_and_recomputes_nothing(name, E, committed):
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import moe
     f = bind(getattr(moe, name), E=E, TOPK=8, VPT=8)
     G = W.Graph(f)
     R = W.units(G, 16, 32)
@@ -255,7 +269,6 @@ def test_a_recompute_fails_the_cut():
 
 
 def test_a_value_computed_again_in_its_own_unit_is_redundant_not_a_recompute():
-    from verity.circuits.partition import validate_unit_cut
     assert validate_unit_cut(3, 0, [0, 0, 1], [(0, 2), (1, 2)], [2], {0, 2}, recomputed=[(1, 0)]).codes == ("read-uncommitted",)
     v = validate_unit_cut(3, 0, [0, 0, 0], [(0, 2), (1, 2)], [2], {2}, recomputed=[(1, 0)])
     assert v.ok and v.detail["redundant_gates"] == 1
@@ -273,8 +286,6 @@ def test_the_sampler_computes_its_greedy_flag_twice_inside_its_one_unit():
 
 def test_a_call_that_only_rearranges_bits_returns_its_inputs():
     # every gate is wiring: the returned values are the committed inputs themselves (not committed and unread)
-    from verity.circuits.defs import CompositeDefinition, bind
-    from verity.circuits.types import Array
     from verity.definitions.registry import prims as P
     f = bind(CompositeDefinition("Widen", 1, ("N",), lambda S: ((("a", Array(S.N, P.BF16)),), Array(S.N, P.F32)),
                                  lambda B, S, a: B.batch(P.Bf16ToF32, a, axes=(0,)), register=False), N=8)
@@ -286,11 +297,6 @@ def test_a_call_that_only_rearranges_bits_returns_its_inputs():
 
 def test_the_graph_is_the_core_reference_and_a_programs_partition_object_verifies_in_core():
     # word.Graph is verity.circuits.cut.CallGraph's graph in flat arrays; a Program's cut, as verity/partition/v1, checks in core
-    from verity.circuits import cut, partition_object as PO
-    from verity.circuits.defs import CompositeDefinition, bind
-    from verity.circuits.program import Program
-    from verity.circuits.refs import tuple_of
-    from verity.circuits.types import Tuple
     fns = [_fn("RMSNormTriton_v1", N=64, EPS=1e-05), _fn("TokenSelect_v1", V=8), _fn("Attention_v3", T=3, NH=2, KVH=1, D=16, BN=128)]
     for f in fns:
         c, g = cut.CallGraph(f), W.Graph(f)
@@ -322,8 +328,6 @@ def test_the_graph_is_the_core_reference_and_a_programs_partition_object_verifie
 def test_a_wide_gate_skips_the_calls_parameters_unresolved_and_its_graph_is_unchanged(monkeypatch):
     """`EmbeddingShard_v1`'s gathers are wide gates over a strided (transposed) view of the Call's own table: operands a wide gate never
     lists.  Skipping them unresolved gives the graph that resolving every operand gives (the OLMoE shard's cut: 29 s -> 0.06 s)."""
-    from verity.circuits import cut
-    from verity.circuits.layout import resolve
     fn = _fn("EmbeddingShard_v1", VS=cut.WIDE_FAN_IN + 3, H=4, START=0)
     enumerated = []
 
@@ -351,18 +355,12 @@ def test_a_wide_gate_skips_the_calls_parameters_unresolved_and_its_graph_is_unch
 
 def _moe(routed: bool, E: int, K: int, N: int, swap: bool):
     """GLM-5.3's MoE expert FP8 GEMM (w13; w2 `routed`) on Hopper's tiles (G = KB = 128), scaled down in E, K and N."""
-    from verity.circuits.defs import bind
-    from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
-    from verity.definitions.registry import fp8_moe_experts as XM
     return bind(XM.MoeExpertFp8GemmW if routed else XM.MoeExpertFp8Gemm, E=E, K=K, N=N, G=128, KB=128, SWAP=swap,
                 DOT=HopperE4m3QgmmaDot32 if swap else HopperE4m3MmaV2Dot32)
 
 
 def _twice():
     """The same F32Add computed twice, each copy read by its own output: a value computed in two units."""
-    from verity.circuits.defs import CompositeDefinition, bind
-    from verity.circuits.refs import tuple_of
-    from verity.circuits.types import Array, Tuple
     from verity.definitions.registry import prims as P
 
     def body(B, S, x):
@@ -373,16 +371,11 @@ def _twice():
 
 
 def _sampler():
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import sampling as SM
     return bind(SM.GumbelTopPTokenSelect, V=16)
 
 
 def _dead_input():
     """A parameter read only by wiring nothing reads (committed, unread), beside one returned through wiring."""
-    from verity.circuits.defs import CompositeDefinition, bind
-    from verity.circuits.refs import tuple_of
-    from verity.circuits.types import Array, Tuple
     from verity.definitions.registry import prims as P
 
     def body(B, S, x, y):
@@ -404,7 +397,6 @@ class _Reference:
     """main's `word.Graph` before the flat arrays: core's `CallGraph` itself, with numpy views of the arrays the cut computes on."""
 
     def __new__(cls, fn):
-        from verity.circuits import cut
         g = cut.CallGraph(fn)
         for a in ("keep", "width", "prim", "scope", "src", "dst"):
             setattr(g, a, np.asarray(getattr(g, a), np.int64))
@@ -414,7 +406,6 @@ class _Reference:
 
 def _reference_verdict(G, owner, head):
     """main's check of a cut: `validate_unit_cut` over a Python pair per read, the Call's parameters standing for the input unit."""
-    from verity.circuits.partition import INPUT_UNIT, validate_unit_cut
     k = len(G.input_ids)
     reads = list(zip(G.src.tolist(), G.dst.tolist())) + [(G.n + i, q) for i, q in G.input_reads]
     return validate_unit_cut(G.total + k, G.free, np.asarray(owner).tolist() + [INPUT_UNIT] * k, reads,
@@ -426,9 +417,6 @@ def _reference_verdict(G, owner, head):
 def test_a_rule_is_the_reference_cuts_byte_for_byte(name, monkeypatch):
     """The unit rule, as the rule cache writes it, is the one main cut with core's graph and `validate_unit_cut` (`_Reference`,
     `_reference_verdict`): GLM-5.3's MoE expert FP8 GEMMs scaled down, and a failing cut's violation detail, gate ids and all."""
-    import hashlib
-    import json
-    from verity.circuits.codec import canonical_json
     f = CORPUS[name]()
     new = W.unit_rule(f, memo={})
     monkeypatch.setattr(W, "Graph", _Reference)
@@ -439,10 +427,10 @@ def test_a_rule_is_the_reference_cuts_byte_for_byte(name, monkeypatch):
     assert (name in ("twice", "dead-input")) == bool(new["violations"])
 
 
+@pytest.mark.slow
 def test_the_graph_holds_a_few_bytes_per_operand_read():
     """A MoE expert FP8 GEMM's gathers read every expert's weight word (E + 1 operands a gate): the graph's peak is a few bytes per
     read (19 here), where core's reference, a Python object per read, peaks at 435 (GLM-5.3's w13 at E=256: 468 GB)."""
-    import tracemalloc
     f = _moe(False, E=64, K=256, N=4, swap=True)
     W.Graph(f)
     tracemalloc.start()
@@ -458,13 +446,14 @@ def test_the_graph_holds_a_few_bytes_per_operand_read():
 #: forking happens in a fresh interpreter: a pytest-xdist worker has threads, and a fork beside them may deadlock
 PREFETCH_PROBE = """
 import json, multiprocessing
-from verity.definitions import word as W
+from verity.circuits import word as W
+from verity_vllm.query.program_view import specialization
 from verity_vllm.query.program_view import spec_base, spec_statics
 specs = ["Attention_v3{T=5,NH=2,KVH=1,D=64,BN=128}", "batch:RMSNormTriton_v1{N=64,EPS=1e-05}", "EmbeddingShard_v1{VS=4099,H=4,START=0}",
          "NoSuch_v1{N=1}"]
-n = W.prefetch(specs, jobs=2)
+n = W.prefetch(specs, jobs=2, specialize=specialization)
 memo = W._RULES.get(tuple(sorted(W.gate_limits(None).items())), {})
-same = all(rule == W.unit_rule(W.specialization(spec_base(fid), spec_statics(fid)), X, W_, e, memo={}) for (fid, X, W_, e), rule in memo.items())
+same = all(rule == W.unit_rule(specialization(spec_base(fid), spec_statics(fid)), X, W_, e, memo={}) for (fid, X, W_, e), rule in memo.items())
 print(json.dumps({"fork": "fork" in multiprocessing.get_all_start_methods(), "n": n, "families": sorted({k[0].split("{")[0] for k in memo}),
                   "same": same}))
 """
@@ -473,9 +462,6 @@ print(json.dumps({"fork": "fork" in multiprocessing.get_all_start_methods(), "n"
 def test_prefetch_memos_the_rules_the_check_computes_in_place():
     """`word.prefetch` cuts in forked processes what `check_calls` would cut one after another -- the bodies cut as a whole, then each
     separable body over its memoed members -- and memos exactly those rules; a spec that does not resolve is left to the check."""
-    import json
-    import subprocess
-    import sys
     r = json.loads(subprocess.run([sys.executable, "-c", PREFETCH_PROBE], capture_output=True, text=True, check=True).stdout)
     if not r["fork"]:
         assert r["n"] == 0 and r["families"] == []
@@ -486,7 +472,8 @@ def test_prefetch_memos_the_rules_the_check_computes_in_place():
 #: the probe's specs prefetched under a budget no cut fits, each cut counted in its worker while it runs, then without one
 PREFETCH_BUDGET_PROBE = """
 import json, multiprocessing
-from verity.definitions import word as W
+from verity.circuits import word as W
+from verity_vllm.query.program_view import specialization
 specs = ["Attention_v3{T=5,NH=2,KVH=1,D=64,BN=128}", "batch:RMSNormTriton_v1{N=64,EPS=1e-05}", "EmbeddingShard_v1{VS=4099,H=4,START=0}"]
 live, most = multiprocessing.Value("i", 0), multiprocessing.Value("i", 0)
 cut = W._rule_of_pending
@@ -505,9 +492,9 @@ def counted(i):
 
 W._rule_of_pending = counted
 key = tuple(sorted(W.gate_limits(None).items()))
-n = [W.prefetch(specs, jobs=4, budget=1)]
+n = [W.prefetch(specs, jobs=4, budget=1, specialize=specialization)]
 budgeted, at_once = W._RULES.pop(key, {}), most.value
-n.append(W.prefetch(specs, jobs=4))
+n.append(W.prefetch(specs, jobs=4, specialize=specialization))
 free = W._RULES.get(key, {})
 print(json.dumps({"fork": "fork" in multiprocessing.get_all_start_methods(), "n": n, "at_once": at_once,
                   "same": list(budgeted.items()) == list(free.items())}))
@@ -518,9 +505,6 @@ def test_prefetch_under_a_memory_budget_runs_only_the_cuts_that_fit_and_memos_th
     """`word.prefetch(budget=...)`: the cuts in flight are those whose estimated peaks fit the budget, and one over it runs alone, so
     under a budget no cut fits the three bodies cut as a whole run one at a time; the rules memoed, and their order, are those of a
     prefetch without a budget."""
-    import json
-    import subprocess
-    import sys
     r = json.loads(subprocess.run([sys.executable, "-c", PREFETCH_BUDGET_PROBE], capture_output=True, text=True, check=True).stdout)
     if not r["fork"]:
         assert r["n"] == [0, 0]
@@ -534,13 +518,6 @@ def test_build_global_builds_the_same_manifest_in_one_process_and_in_several(tmp
     manifest one process gives, byte for byte; the first component to fail, in declaration order, is the one reported.  A workload
     digest read from stdin once the components are built (`--workload-digest -`) gives the manifest the same digest named on the
     command line gives, and none read fails it."""
-    import gzip
-    import json
-    import shutil
-    import subprocess
-    import sys
-    from collections import Counter
-    from pathlib import Path
     from tests.check.test_sampled_replay import LP, T
     d = tmp_path / "row" / f"build_request_LP{LP}_T{T}"
     d.mkdir(parents=True)
@@ -548,7 +525,8 @@ def test_build_global_builds_the_same_manifest_in_one_process_and_in_several(tmp
     with gzip.open(d / "instances.json.gz", "rt") as f:
         hist = Counter(r["spec"] for r in json.load(f)["rows"])
     (d / "result.json").write_text(json.dumps(dict(json.loads((d / "result.json").read_text()), spec_histogram=dict(hist))))
-    fx = {"fixture": "t", "requests": [{"request_id": q, "prompt_len": LP, "max_tokens": T + 1, "arrive_step": 0} for q in "abc"]}
+    requests = [{"request_id": q, "prompt_len": LP, "max_tokens": T + 1, "arrive_step": 0} for q in "abc"]
+    fx = {"fixture": "t", "requests": requests}
     (tmp_path / "wl.json").write_text(json.dumps(fx))
 
     def build_global(jobs: int, out: str, *extra: str, stdin: str | None = None) -> subprocess.CompletedProcess:
@@ -565,7 +543,7 @@ def test_build_global_builds_the_same_manifest_in_one_process_and_in_several(tmp
     p = build_global(3, "none.json", "--workload-digest", "-", stdin="")
     assert p.returncode != 0 and "no workload digest on stdin" in p.stderr and not (tmp_path / "none.json").exists(), p.stderr[-2000:]
     shutil.copytree(d, tmp_path / "row" / f"build_request_LP{LP}_T{T - 1}")    # a wrong component for r1
-    fx["requests"][1]["max_tokens"] = T
+    requests[1]["max_tokens"] = T
     (tmp_path / "wl.json").write_text(json.dumps(fx))
     p = build_global(3, "bad.json")
     assert p.returncode != 0 and f"request r1: Program has {T + 1} steps" in p.stderr, p.stderr[-2000:]
@@ -599,7 +577,6 @@ def test_an_entry_is_keyed_by_the_definitions_content_the_query_the_limits_and_t
 
 
 def test_an_entry_under_another_key_or_unreadable_is_not_read(tmp_path, monkeypatch, norm):
-    import json
     monkeypatch.setattr(W, "_RULE_CACHE", [str(tmp_path)])
     rule = W.unit_rule(norm, memo={})
     path, key = W._rule_entry(norm, 16, 32, 0, W.gate_limits(None))
@@ -617,7 +594,6 @@ def test_a_rule_json_would_not_give_back_equal_is_not_written(tmp_path, monkeypa
 
 
 def test_the_manifest_is_the_same_without_the_cache_as_with_it_cold_and_read_back(tmp_path, monkeypatch):
-    from verity_vllm.pipeline import manifest as M
     d = _program_dir(tmp_path)
 
     def build():
@@ -631,7 +607,6 @@ def test_the_manifest_is_the_same_without_the_cache_as_with_it_cold_and_read_bac
 
 
 def test_the_manifest_cli_takes_the_cache_directory_from_its_flag_or_the_environment():
-    from verity_vllm.pipeline import cli
     argv = ["build", "--program", "p", "--out", "o"]
     assert cli.parse("manifest", [*argv, "--unit-rule-cache", "/r"], {}).unit_rule_cache == "/r"
     assert cli.parse("manifest", argv, {W.RULE_CACHE_ENV: "/e"}).unit_rule_cache == "/e"

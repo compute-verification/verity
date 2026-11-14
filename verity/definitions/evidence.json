@@ -58,6 +58,13 @@
                                "probe": "art:18051dc5513925b2acd93ec47d8b67dffbef971e3b543715dddb7cbf707fe0d5",
                                "probe_ftz": "art:a70db8e4224a49a4e95e210226fc6586db656768f0394a485347b146f7dbdccd",
                                "fit_ftz": "art:1d3772056fdf1bd15edeebe8a428f04eaae66edeaa1eb7f424c2223920004435"},
+  "cc12_fa2_backward_capture": {"capture": "art:6a0d7e798b0d04914013112c84cfde313b0e4ba84dc8fd0ac47491c75b5667d1",
+                                "run_record": "art:d0ff62a57a2a30e69d4aa459d15517ba597db41c5e657e400afa4b2eb0678548",
+                                "fit": "art:d5d495b82cdfdeba2d084f62538c2379857ef794fb53aec24442b40f7a084034",
+                                "probe_ovf_ftz": "art:9b8fed01914051a93281aa6d273cec6075cd796fcf4a0c11411c2a055346be50",
+                                "fit_ovf_ftz": "art:4f1553038f4707df75ae8d06bb23e13dbc37b1b79ee84af4d671c81e2dde29cf",
+                                "probe_fma": "art:7ba7ac7f3a42314d7a9473eac81e1fb214134d1d4467d1954aad0376ab5a8824",
+                                "fit_fma": "art:3ed65974ae9ec20828baa1ae4c3625d4a8f5833a7070a98ac2bd1d91b4d50d4d"},
   "hopper_fp8_block_capture": {"captured_utc": "2026-09-19"},
   "vllm_fp8_kernels_probe": {"captured_utc": "2026-09-08"},
   "cc12_scaled_mm_epilogue_probe": {"no_bias": "art:f1db07fc73a48aa66bcec5cd2ce414c44f945afe852688b1e37998d68deb20c4",
@@ -90,5 +97,10 @@
                         "fit": "art:22ddf58885c5ecc24a4ca565f4e44e745dd1fb121d0549994f0cf21dae4b261c"},
   "tp4_nccl_tree_replay": {"run_records": ["art:471f07d6e0d54babb6552460ee8c02ac5c94160ba6d03b639848aa44c48132d1",
                                            "art:810937f8e54906606040a9cc3c50a3f64d5bbfd2208b2690a66cff8ae23d175b",
-                                           "art:0100e5b51638084905fb91111c22e76b30993856de32d908d49c2f00db84e0c3"]}
+                                           "art:0100e5b51638084905fb91111c22e76b30993856de32d908d49c2f00db84e0c3"]},
+  "sampled_accept_ptx": {"run_record": "art:d1e9f5cb5c2d7e2a1bbed2a0950123f1f0922fdef7378549ffb7c15ec0e11cf9"},
+  "sampled_accept_capture": {"run_record": "art:22646cae49d02752d3296b87110b3bcaafd221d5a7d58fa8789fcaacaedd9a21",
+                             "replay_run_record": "art:69f76ea2ce962f904e997d8076d77be09cdbdf2288d4be63b14fbaf068a09555"},
+  "sampled_accept_split_rate": {"run_record": "art:fc64796c7c3fca12298583b9a4f49eee54431e4909ac1bd5b0c63591ded29e03",
+                                "harness": "37eeb6d81"}
 }

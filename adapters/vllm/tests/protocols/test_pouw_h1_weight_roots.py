@@ -7,6 +7,12 @@ import types
 
 import numpy as np
 import pytest
+from verity.protocols.accounting.pouw.verifier.audit import (
+    HM96,
+    HM96_WEIGHTS,
+    commit_rows,
+    weight_binding,
+)
 
 torch = pytest.importorskip("torch")
 PH = pytest.importorskip("verity_vllm.protocols.pouw.h1")
@@ -30,7 +36,12 @@ def computed(monkeypatch: pytest.MonkeyPatch) -> list[int]:
     """The linears whose root was computed, not reused, in call order, from an empty cache."""
     monkeypatch.setattr(PHK, "_ROOTS", {})
     seen: list[int] = []
-    monkeypatch.setattr(PH, "weight_root", lambda w, rows, key=None: seen.append(w) or FRESH(w, rows, key))
+
+    def computing(w: int, rows: np.ndarray, key: bytes | None = None) -> bytes:
+        seen.append(w)
+        return FRESH(w, rows, key)
+
+    monkeypatch.setattr(PH, "weight_root", computing)
     return seen
 
 
@@ -46,8 +57,6 @@ def test_two_weight_sets_roots_differ_and_none_is_recomputed_without_the_key():
     """A root is core's hiding tree over the rows (``audit.commit_rows(weight_binding(w), -2, rows, HM96, key,
     HM96_WEIGHTS + w)``) under this process's 32-byte key: another weight set's root differs, and the same rows under any
     other key, or in the unsalted tree, give another root."""
-    from verity.protocols.pouw.verifier.audit import HM96, HM96_WEIGHTS, commit_rows, weight_binding
-
     first, second = (m.weight.detach().numpy() for m in _layers(7, n=2, shape=(16, 32)))
     key = PH.WEIGHT_KEY
     root = PH.weight_root(3, first)
