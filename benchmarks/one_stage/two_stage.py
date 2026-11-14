@@ -140,6 +140,7 @@ import numpy as np
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
 from verity.protocols.proofs.spot.verifier.one_stage import audit as A, draw as D, partition as P, registered as REG
+from verity.protocols.proofs.spot.verifier.one_stage import registration as RG
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.program import Program
@@ -152,6 +153,9 @@ CHALLENGER = "two_stage.py on the auditor's challenger's coins"
 STAGE1 = "stage1.json"
 #: what round 2 refuses every two-stage run by while the form is off (`second_stage.FORM`)
 FORM_REFUSED = "two-stage-form"
+#: round 2's code for an interior registration that registers a value a replay block's input may not read: one the
+#: prover chose after the first stage's sample (`second_stage.inputs_failure`); a run that has it never held (`held`)
+INPUTS_REFUSED = "second-inputs"
 #: a window refused after its samples: a stop class's coins don't follow its registrations in the challenger's log
 ORDER_REFUSED = "cross-stream-order"
 #: a stop class whose stop blocks registered or sampled nothing
@@ -755,7 +759,8 @@ def verifier_reads(d: Design, window: CS.Binding, interior: Mapping[str, Any], b
 
 def references(d: Design, q: int, out: Path) -> dict[str, Any]:
     """Params for a development run (`service.template_circuits`' ``proofs``): by template, in the check's order, its
-    circuit file's SHA-512 and its reference statement's header and registered reads. The reference is
+    circuit file's SHA-512 and its reference statement's header and registered reads, and for a table read whose
+    circuit file the verifier's template check accepts, that record beside the digest (`read_record`). The reference is
     `member_stager`'s statement of the template's member in the interior window of ``q`` replay blocks (`Design.window`,
     under a run of its own, whose fields round 2 places or blanks), bound to that window's partition and program as the
     sessions' circuits are, on zero rows, salted under `REFERENCE_KEY`: its public file is ``out``/m<k>/pub.bin, its
@@ -782,8 +787,32 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
         reads = LK.reads_file({p: {"value": linked.get((m.template, p), window.held(m, p)), "words": int(words),
                                    "word_bits": REG.WORD_BITS, REG.SCHEMA_KEY: m.schema(p)}
                                for p, words in m.all_rows}, registered=REG)
-        named.append({"template": m.template, "circuit": header["circuit_sha512"], "header": header, "registered": reads})
+        read = read_record(template_fn(m.template), at / "circuit.txt", header["circuit_sha512"])
+        named.append({"template": m.template, "circuit": header["circuit_sha512"], "header": header, "registered": reads,
+                      **({} if read is None else {"read": read})})
     return {"templates": named}
+
+
+def read_record(defn: SpecializedDefinition, circuit: Path, sha512: str) -> dict[str, int] | None:
+    """What the params record of a table read's template beside its circuit file's SHA-512 ``sha512``
+    (`service.template_reads`): ``{"V", "H"}``, the read's rows and words a row, where the verifier's template check
+    (``flock-read-tmpl check V H``, `Flock.ReadNet.check`) accepts the file ``circuit``, which must be the one of that
+    SHA-512. None for a Definition that is no read, and for a read whose file the check refuses: round 2 then takes
+    that template as no read and refuses the opened rows of its reads (``second-inputs``). The check accepts only a
+    templated statement whose unit is the verifier's own read template, so a read staged as a flat statement gets no
+    record."""
+    from verity_flock import read_tmpl
+
+    if not read_tmpl.is_read(defn):
+        return None
+    h = hashlib.sha512()
+    with open(circuit, "rb") as f:
+        while chunk := f.read(1 << 24):
+            h.update(chunk)
+    if h.hexdigest() != sha512:
+        raise ValueError(f"{circuit} is not the circuit file of SHA-512 {sha512}")
+    V, H = int(defn.statics["V"]), int(defn.statics["H"])
+    return {"V": V, "H": H} if read_tmpl.check(V, H, circuit) is None else None
 
 
 def composer(defn: SpecializedDefinition, member: CS.Member) -> Callable[[Path, str, str], dict[str, Any]]:
@@ -836,22 +865,29 @@ def pins(proofs: Mapping[str, Any], stmts: Sequence[Mapping[str, Any]]) -> dict[
 
 def round_two(replay: Program, key: str, sample: Sequence[int], window: CS.Binding, irec: Mapping[str, Any],
               brec: Mapping[str, Any], drawn: Sequence[int], stmts: Sequence[Mapping[str, Any]],
-              record: Mapping[str, Any], proofs: Mapping[str, Any]) -> dict[str, Any]:
+              record: Mapping[str, Any], proofs: Mapping[str, Any], tie: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Round 2's statement check of the sessions (`second_stage.check`, the form allowed): over the links and wires the
     replay block ``replay`` defines under descriptor id ``key`` makes (`second_stage.replay_links`, at the boundary
     record's ports, and `second_stage.replay_wires`, as the stream derives them), their rows
     (`second_stage.replay_rows`) and the names of what the block returns (`second_stage.replay_returns`), the reads
     the audit record's verdicts of record report, what they name of each session they accepted
-    (`second_stage.verified_of`), and each template's reference header and registered reads the params ``proofs``
-    give."""
-    verdicts = record.get("verdicts") or {}
+    (`second_stage.verified_of`), each template's reference header and registered reads the params ``proofs`` give,
+    the templates they record as table reads (`service.template_reads`), and, of the challenger's copies the interior
+    registration was held to (``tie``), the values it fills itself
+    (``supplied``, a history table's root and domain id as the bytes its ``history`` registers:
+    `registration.resolved`) and those it pinned or holds to an earlier record (``pinned``, ``outputs``), as the
+    stream hands them: every other value the interior registers is the prover's, which round 2 takes only as a read's
+    opened row (`INPUTS_REFUSED`)."""
+    verdicts, tie = record.get("verdicts") or {}, tie or {}
     own = SS.Own(tuple(sample), SS.parts(len(sample), P.strata(window.program, window.query)), irec, brec, tuple(drawn),
                  SS.replay_links(replay, key, brec), A.session_registered(verdicts),
                  verified=SS.verified_of(verdicts),
                  refs=tuple((e["template"], e["header"]) for e in proofs["templates"]),
                  ref_reads=tuple((e["template"], e["registered"]) for e in proofs["templates"]),
                  wires=SS.replay_wires(replay, key), rows=SS.replay_rows(replay, key),
-                 returns=SS.replay_returns(replay, key, brec))
+                 returns=SS.replay_returns(replay, key, brec),
+                 supplied=SS.supplied_of(RG.resolved(tie.get("supplied"), tie.get("history"))),
+                 fixed=(*(tie.get("pinned") or ()), *(tie.get("outputs") or ())), reads=S.template_reads(proofs))
     return SS.check(True, own, stmts).to_json()
 
 
@@ -892,7 +928,7 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
         stmts = statements(out / "audit", window)
         (out / "statements.json").write_text(json.dumps(stmts, indent=1, sort_keys=True))
         got["pins"] = pins(proofs, stmts)
-        got["round_two"] = round_two(*replay, sample, window, irec, brec, s["draw"], stmts, record, proofs)
+        got["round_two"] = round_two(*replay, sample, window, irec, brec, s["draw"], stmts, record, proofs, tie)
     return s, ok, record, got, stmts
 
 
@@ -926,9 +962,14 @@ def held(s: Mapping[str, Any], r2: Mapping[str, Any] | None, o: Mapping[str, Any
     one its template's params name (`pins`, ``files``), every Lean verdict accepted, the sessions' registered reads
     the verifier's own, every negative refused, round 2 ``r2`` accepting the statements, and the stream's outcome ``o``
     accepted or refused by round 2's two-stage form alone (`FORM_REFUSED`, while `second_stage.FORM` is off): the
-    interior's audit record failing no check but round 2's, by that code at most, and the replay sample's none."""
+    interior's audit record failing no check but round 2's, by that code at most, and the replay sample's none. A
+    run whose interior registration registers a value a replay block's input may not read (`INPUTS_REFUSED`, in
+    ``r2``'s codes or the outcome's) never held, whatever else it reports: its sessions proved replay blocks over inputs
+    the prover chose after the first stage's sample."""
     audit = s.get("audit") or {}
     refused = [v if isinstance(v, bool) else bool(v.get("refused")) for v in (s.get("negatives") or {}).values()]
+    if INPUTS_REFUSED in ((r2 or {}).get("codes") or ()) or INPUTS_REFUSED in ((o or {}).get("statements") or ()):
+        return False
     return (all((s.get("checks_before_draw") or {}).values()) and bool(files) and all((files or {}).values())
             and audit.get("complete") is True and audit.get("registered_reads") is True
             and all(v is True for v in (audit.get("verdicts") or {}).values()) and bool(refused) and all(refused)
