@@ -508,9 +508,8 @@ def id_request(payload: int = proto.ID_PAYLOAD) -> bytes:
 
 
 def shims_request(port: int) -> bytes:
-    """An id request as the network certifier's live shim sends it straight to the endpoint
-    (`benchmarks/network_traces/active_replay.LiveServer._serve`): its fields, the user forwarded and
-    certifier_serve's `UPSTREAM_FIELDS` added, compact, in a POST of the shim's own head with a release."""
+    """An id request as a shim in front of the endpoint sends it straight there: its fields, the user forwarded and
+    ``return_token_ids`` added, compact, in a POST of the shim's own head with a release."""
     body = json.loads(id_request().partition(b"\r\n\r\n")[2])
     name = body.pop("user")
     raw = json.dumps(body | {"user": name} | {"return_token_ids": True}, separators=(",", ":")).encode()
@@ -629,7 +628,7 @@ def test_under_ids_a_failed_stream_stops_unterminated():
 
 
 def test_under_ids_the_network_certifiers_clients_get_vllms_http_and_json(tmp_path):
-    """The same endpoint under ``--protocol ids`` for the network certifier (certifier_serve, straight to the
+    """The same endpoint under ``--protocol ids`` for the network certifier (a shim straight to the
     endpoint): ``/v1/models`` and ``/tokenize`` as ever, its shim's streamed POST (the id request's fields with
     ``return_token_ids``) an HTTP response, chunked, of vLLM's JSON chunks carrying the token ids, and its probe's
     (urllib) the same."""
