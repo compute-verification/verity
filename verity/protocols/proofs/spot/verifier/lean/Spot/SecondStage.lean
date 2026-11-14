@@ -37,14 +37,14 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
     theirs, and each port of its `shared_rows` the rows the statement's registered reads give them;
   - `second-population`: its header's `units.indices` are not its part's slots in order, or its `instances` not their
     count, or more than `2^64` (`MAX_LEAVES`); or, for a statement of only its part's sampled proof blocks
-    (`sampledOnly`, `sampledCodes`, which `checkAny` holds it to), not the part's slots the second draw samples and no
+    (`sampledOnly`, `sampledCodes`, which `checkAny` holds it to), not the part's slots the second stage samples and no
     other (`sampledOk`);
   - `second-roots`: its scheme is not the interior record's, or its `frame_v3` roots and `domain_ids`, its registered
     reads aside, are not the record's for its template's ports (port `p` of template `t` is the record's `t/p` when the
     record names its ports by template, else `p`), each of which it roots or reads;
   - `second-sample`: its sample is not the verifier's own, the second sample's units in its part as a subset of its slots
     (`ownDraw`); or, for a statement of only its part's sampled proof blocks, not every unit of the statement
-    (`wholeDraw`);
+    (`wholeSample`);
   - `second-read`: a port's registered read (`readOk`) is not, for a port a link names, the boundary port it names,
     each slot reading only its unit's row of its cell's replay block's (`S[i]·r + ρ(j)`, `r` the port's rows a block
     and `ρ` its units' rows, the port's `Rows`, `j` the slot's unit in its cell, the port's leaves the boundary
@@ -904,21 +904,21 @@ def ownDraw (q : Nat) (p : Part) (drawn : Array Nat) : Json :=
   Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson (q * p.n)), ("k", Lean.toJson units.size),
     ("units", natsJson units)]
 
-/-- Part `p`'s slots among the second draw's units `drawn`, in the draw's order. -/
-def sampledSlots (q : Nat) (p : Part) (drawn : Array Nat) : Array Nat := drawn.filter (p.holds q)
+/-- Part `p`'s slots among the second sample's units `us`, in its order. -/
+def sampledSlots (q : Nat) (p : Part) (us : Array Nat) : Array Nat := us.filter (p.holds q)
 
-/-- The header's `units.indices` are part `p`'s slots the second draw samples (`sampledSlots`) and no other, at least
+/-- The header's `units.indices` are part `p`'s slots the second stage samples (`sampledSlots`) and no other, at least
 one, and its `instances` their count: the header of a statement of only its part's sampled proof blocks. -/
-def sampledOk (q : Nat) (p : Part) (drawn : Array Nat) (h : Json) : Bool :=
-  let slots := sampledSlots q p drawn
+def sampledOk (q : Nat) (p : Part) (us : Array Nat) (h : Json) : Bool :=
+  let slots := sampledSlots q p us
   match getD (getD h "units") "indices", nat? (getD h "instances") with
   | .arr is, some m => decide (0 < m) && m == slots.size && is.toList.map nat? == slots.toList.map some
   | _, _ => false
 
 /-- Header `h` is of only part `p`'s sampled proof blocks (`sampledOk`), and not of every slot of the part
-(`populationOk`): where the second draw samples every slot the two are one header, held as the part's whole. -/
-def sampledOnly (q : Nat) (p : Part) (drawn : Array Nat) (h : Json) : Bool :=
-  sampledOk q p drawn h && !populationOk q p h
+(`populationOk`): where the second stage samples every slot the two are one header, held as the part's whole. -/
+def sampledOnly (q : Nat) (p : Part) (us : Array Nat) (h : Json) : Bool :=
+  sampledOk q p us h && !populationOk q p h
 
 /-- The rows registered-reads entry `e` gives slots `slots` (slot `reads_from + k` reads row `reads[k]`), each once. -/
 def rowsRead (e : Json) (slots : Array Nat) : Nat :=
@@ -961,7 +961,7 @@ def sampledHeaderOk (own : Own) (named : Bool) (k : Nat) (t : String) (h : Json)
 
 /-- **The sample of every unit** of a population of `m`, as `unit_draw` writes a subset of it: the session's sample
 of a statement of only its part's sampled proof blocks. -/
-def wholeDraw (m : Nat) : Json :=
+def wholeSample (m : Nat) : Json :=
   Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson m), ("k", Lean.toJson m),
     ("units", natsJson (Array.range m))]
 
@@ -1147,8 +1147,8 @@ def stmtCodes (own : Own) (named : Bool) (k : Nat) (p : Part) (s : Stmt) : List 
     fun (code, ok) => if ok then none else some code
 
 /-- `stmtCodes` for a statement of only its part `p`'s sampled proof blocks (`sampledOnly`): its population is the
-part's slots the second draw samples (`sampledOk`), its header its template's reference's placed at them
-(`sampledHeaderOk`), and its session's sample every unit of it (`wholeDraw`). Every other check is `stmtCodes`'s: its
+part's slots the second stage samples (`sampledOk`), its header its template's reference's placed at them
+(`sampledHeaderOk`), and its session's sample every unit of it (`wholeSample`). Every other check is `stmtCodes`'s: its
 reads each slot's own rows, a read of a slot it doesn't hold bound to that slot's rows all the same; and every root it
 names outside its reads the interior record's, so a statement whose tables hold fewer rows than the record's trees
 reads every port registered. -/
@@ -1160,7 +1160,7 @@ def sampledCodes (own : Own) (named : Bool) (k : Nat) (p : Part) (s : Stmt) : Li
    ("second-header", sampledHeaderOk own named k s.template s.header (sampledSlots q p own.drawn) reads),
    ("second-population", sampledOk q p own.drawn s.header),
    ("second-roots", rootsOk named own.interior s.template s.header (reads.map (·.1))),
-   ("second-sample", jeq s.draw (wholeDraw (sampledSlots q p own.drawn).size)),
+   ("second-sample", jeq s.draw (wholeSample (sampledSlots q p own.drawn).size)),
    ("second-read", reads.all (fun (port, e) => readOk own named p port e) && linkedRead own p.template reads &&
      wiredRead own p.template reads),
    ("second-refs", refsOk s),
@@ -1962,7 +1962,7 @@ theorem tablesOk_one {own : Own} {s : Stmt} {c : Checked} (h : tablesOk own s = 
 
 /-- A passing statement of only its part's sampled proof blocks: `stmtCodes_nil`'s checks, with its header its
 template's reference's placed at the part's sampled slots (`sampledHeaderOk`), its population those slots
-(`sampledOk`) and its session's sample every unit of it (`wholeDraw`) where `stmtCodes_nil` has `headerOk`,
+(`sampledOk`) and its session's sample every unit of it (`wholeSample`) where `stmtCodes_nil` has `headerOk`,
 `populationOk` and `ownDraw`. -/
 theorem sampledCodes_nil {own : Own} {named : Bool} {k : Nat} {p : Part} {s : Stmt}
     (h : sampledCodes own named k p s = []) :
@@ -1971,7 +1971,7 @@ theorem sampledCodes_nil {own : Own} {named : Bool} {k : Nat} {p : Part} {s : St
         (entries (getD s.registered "ports")) = true ∧
       sampledOk own.sample.size p own.drawn s.header = true ∧
       rootsOk named own.interior s.template s.header ((entries (getD s.registered "ports")).map (·.1)) = true ∧
-      jeq s.draw (wholeDraw (sampledSlots own.sample.size p own.drawn).size) = true ∧
+      jeq s.draw (wholeSample (sampledSlots own.sample.size p own.drawn).size) = true ∧
       (entries (getD s.registered "ports")).all (fun (port, e) => readOk own named p port e) = true ∧
       linkedRead own p.template (entries (getD s.registered "ports")) = true ∧
       wiredRead own p.template (entries (getD s.registered "ports")) = true ∧ refsOk s = true ∧
@@ -2154,18 +2154,18 @@ theorem checkAny_ok_values {allow : Bool} {own : Own} {ss : Array Json}
   obtain ⟨r, hr, hj⟩ := valuesOk_ref hv
   exact ⟨s, r, hs, hr, hj⟩
 
-/-- Each of part `p`'s sampled slots is one of the second draw's units and one of the part's slots. -/
-theorem mem_sampledSlots {q : Nat} {p : Part} {drawn : Array Nat} {u : Nat} (h : u ∈ sampledSlots q p drawn) :
-    u ∈ drawn ∧ p.holds q u = true := by
+/-- Each of part `p`'s sampled slots is one of the second sample's units and one of the part's slots. -/
+theorem mem_sampledSlots {q : Nat} {p : Part} {us : Array Nat} {u : Nat} (h : u ∈ sampledSlots q p us) :
+    u ∈ us ∧ p.holds q u = true := by
   simpa [sampledSlots] using h
 
 /-- **A passing `second-population` of a statement of only its part's sampled proof blocks**: the header's
-`units.indices` are the part's slots the second draw samples, in the draw's order (`sampledSlots`), at least one, and
-its `instances` their count. -/
-theorem sampledOk_indices {q : Nat} {p : Part} {drawn : Array Nat} {h : Json} (hh : sampledOk q p drawn h = true) :
+`units.indices` are the part's slots the second stage samples, in the second sample's order (`sampledSlots`), at
+least one, and its `instances` their count. -/
+theorem sampledOk_indices {q : Nat} {p : Part} {us : Array Nat} {h : Json} (hh : sampledOk q p us h = true) :
     ∃ is, getD (getD h "units") "indices" = .arr is ∧
-      nat? (getD h "instances") = some (sampledSlots q p drawn).size ∧ 0 < (sampledSlots q p drawn).size ∧
-      is.toList.map nat? = (sampledSlots q p drawn).toList.map some := by
+      nat? (getD h "instances") = some (sampledSlots q p us).size ∧ 0 < (sampledSlots q p us).size ∧
+      is.toList.map nat? = (sampledSlots q p us).toList.map some := by
   simp only [sampledOk] at hh
   split at hh
   · rename_i is m hi hm
@@ -2192,9 +2192,9 @@ theorem sampledHeaderOk_ref {own : Own} {named : Bool} {k : Nat} {t : String} {h
       exact ⟨r, r', refOf_mem hf, ha, hh⟩
 
 /-- **What a statement of only its part's sampled proof blocks holds**: in a passing `checkAny`, where the `i`-th
-statement is one (`sampledOnly`), its `units.indices` are its part's slots the second draw samples, in the draw's
-order (`sampledSlots`), at least one, its `instances` their count, its session's sample every unit of it
-(`wholeDraw`), and its header its template's reference's placed in the run and at those slots. So instance `j` of its
+statement is one (`sampledOnly`), its `units.indices` are its part's slots the second stage samples, in the second
+sample's order (`sampledSlots`), at least one, its `instances` their count, its session's sample every unit of it
+(`wholeSample`), and its header its template's reference's placed in the run and at those slots. So instance `j` of its
 session is the part's `j`-th sampled slot, and every instance is a checked one. -/
 theorem checkAny_ok_sampled {allow : Bool} {own : Own} {ss : Array Json}
     (h : (checkAny allow own (some ss)).codes = #[]) :
@@ -2205,7 +2205,7 @@ theorem checkAny_ok_sampled {allow : Bool} {own : Own} {ss : Array Json}
           nat? (getD s.header "instances") = some (sampledSlots own.sample.size p own.drawn).size ∧
           0 < (sampledSlots own.sample.size p own.drawn).size ∧
           is.toList.map nat? = (sampledSlots own.sample.size p own.drawn).toList.map some) ∧
-        jeq s.draw (wholeDraw (sampledSlots own.sample.size p own.drawn).size) = true ∧
+        jeq s.draw (wholeSample (sampledSlots own.sample.size p own.drawn).size) = true ∧
         ∃ r r', (s.template, r) ∈ own.refs ∧
           atRun own (byTemplate own.interior) (posOf ps s.template) s.template r = some r' ∧
           jeq (blankRun s.header) (blankRun (atSampled r' (sampledSlots own.sample.size p own.drawn)
@@ -2263,13 +2263,13 @@ theorem at_of_mem {α : Type} : ∀ (l : List α) (a : α), a ∈ l → ∃ i : 
 
 /-- **Instance `j` of a statement of only its part's sampled proof blocks is the part's `j`-th sampled slot**: where
 the header's `units.indices` `is` are the part's sampled slots (`sampledOk_indices`), the slot `u` at place `j` of
-`sampledSlots` is a unit of the second draw and a slot of the part, and `is` has its number at place `j`. -/
-theorem sampled_at {q : Nat} {p : Part} {drawn : Array Nat} {is : Array Json}
-    (hl : is.toList.map nat? = (sampledSlots q p drawn).toList.map some) {j u : Nat}
-    (hj : (sampledSlots q p drawn).toList[j]? = some u) :
-    u ∈ drawn ∧ p.holds q u = true ∧ ∃ x, is.toList[j]? = some x ∧ nat? x = some u := by
+`sampledSlots` is a unit of the second sample and a slot of the part, and `is` has its number at place `j`. -/
+theorem sampled_at {q : Nat} {p : Part} {us : Array Nat} {is : Array Json}
+    (hl : is.toList.map nat? = (sampledSlots q p us).toList.map some) {j u : Nat}
+    (hj : (sampledSlots q p us).toList[j]? = some u) :
+    u ∈ us ∧ p.holds q u = true ∧ ∃ x, is.toList[j]? = some x ∧ nat? x = some u := by
   obtain ⟨x, hx, hn⟩ := map_eq_at nat? some _ _ hl j u hj
-  have hm : u ∈ sampledSlots q p drawn := by
+  have hm : u ∈ sampledSlots q p us := by
     have hmem := (mem_of_at _ j u hj).1
     first
       | exact Array.mem_def.2 hmem
@@ -2277,15 +2277,15 @@ theorem sampled_at {q : Nat} {p : Part} {drawn : Array Nat} {is : Array Json}
   obtain ⟨hd, hp⟩ := mem_sampledSlots hm
   exact ⟨hd, hp, x, hx, hn⟩
 
-/-- **Every slot of the part the second draw samples is an instance of the statement**: where the header's
-`units.indices` `is` are the part's sampled slots, a unit `u` of the second draw that is a slot of part `p` has its
+/-- **Every slot of the part the second stage samples is an instance of the statement**: where the header's
+`units.indices` `is` are the part's sampled slots, a unit `u` of the second sample that is a slot of part `p` has its
 number at a place `j` of `is`, below the count of the part's sampled slots, the statement's `instances`. -/
-theorem sampled_slot {q : Nat} {p : Part} {drawn : Array Nat} {is : Array Json}
-    (hl : is.toList.map nat? = (sampledSlots q p drawn).toList.map some) {u : Nat} (hu : u ∈ drawn)
+theorem sampled_slot {q : Nat} {p : Part} {us : Array Nat} {is : Array Json}
+    (hl : is.toList.map nat? = (sampledSlots q p us).toList.map some) {u : Nat} (hu : u ∈ us)
     (hp : p.holds q u = true) :
-    ∃ (j : Nat) (x : Json), j < (sampledSlots q p drawn).size ∧ is.toList[j]? = some x ∧ nat? x = some u := by
-  have hm : u ∈ sampledSlots q p drawn := by simpa [sampledSlots] using And.intro hu hp
-  have hmem : u ∈ (sampledSlots q p drawn).toList := by
+    ∃ (j : Nat) (x : Json), j < (sampledSlots q p us).size ∧ is.toList[j]? = some x ∧ nat? x = some u := by
+  have hm : u ∈ sampledSlots q p us := by simpa [sampledSlots] using And.intro hu hp
+  have hmem : u ∈ (sampledSlots q p us).toList := by
     first
       | exact Array.mem_def.1 hm
       | simpa using hm
@@ -2296,11 +2296,11 @@ theorem sampled_slot {q : Nat} {p : Part} {drawn : Array Nat} {is : Array Json}
 
 /-- **The slots of a statement of only its part's sampled proof blocks, each way**: in a passing `checkAny`, where
 the `i`-th statement is one (`sampledOnly`), its `units.indices` hold at each place `j` the number of the `j`-th slot
-of its part that the second draw samples, a unit of the draw and a slot of the part (`sampled_at`); and every unit of
-the second draw that is a slot of its part has its number at a place below the statement's `instances`
-(`sampled_slot`). So the statement's instances and the part's sampled slots are one list, in the draw's order: the
-map from a sampled slot to its instance is its place among the part's sampled slots, where a statement of every slot
-of the part has `u - lo`. -/
+of its part that the second stage samples, a unit of the second sample and a slot of the part (`sampled_at`); and
+every unit of the second sample that is a slot of its part has its number at a place below the statement's
+`instances` (`sampled_slot`). So the statement's instances and the part's sampled slots are one list, in the second
+sample's order: the map from a sampled slot to its instance is its place among the part's sampled slots, where a
+statement of every slot of the part has `u - lo`. -/
 theorem checkAny_ok_slots {allow : Bool} {own : Own} {ss : Array Json}
     (h : (checkAny allow own (some ss)).codes = #[]) :
     ∃ ps, own.parts = some ps ∧ ∀ i < ss.size, ∃ s p, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧

@@ -984,24 +984,25 @@ def own_draw(q: int, p: Part, drawn: Sequence[int]) -> dict[str, Any]:
     return {"law": "subset", "population": q * p.n, "k": len(units), "units": units}
 
 
-def sampled_slots(q: int, p: Part, drawn: Sequence[int]) -> list[int]:
-    """`SecondStage.sampledSlots`: part `p`'s slots among the second draw's units `drawn`, in the draw's order."""
-    return [u for u in drawn if p.holds(q, u)]
+def sampled_slots(q: int, p: Part, us: Sequence[int]) -> list[int]:
+    """`SecondStage.sampledSlots`: part `p`'s slots among the second sample's units `us`, in its order."""
+    return [u for u in us if p.holds(q, u)]
 
 
-def _sampled_ok(q: int, p: Part, drawn: Sequence[int], h: Any) -> bool:
-    """`SecondStage.sampledOk`: the header's ``units.indices`` are part `p`'s slots the second draw samples and no other,
-    at least one, and its ``instances`` their count: the header of a statement of only its part's sampled proof blocks."""
-    slots, indices, m = sampled_slots(q, p, drawn), _get(_get(h, "units"), "indices"), _get(h, "instances")
+def _sampled_ok(q: int, p: Part, us: Sequence[int], h: Any) -> bool:
+    """`SecondStage.sampledOk`: the header's ``units.indices`` are part `p`'s slots the second stage samples and no
+    other, at least one, and its ``instances`` their count: the header of a statement of only its part's sampled proof
+    blocks."""
+    slots, indices, m = sampled_slots(q, p, us), _get(_get(h, "units"), "indices"), _get(h, "instances")
     return (isinstance(indices, list) and _nat(m) and 0 < m == len(slots) and len(indices) == len(slots)
             and all(_nat(x) and x == u for x, u in zip(indices, slots)))
 
 
-def sampled_only(q: int, p: Part, drawn: Sequence[int], h: Any) -> bool:
+def sampled_only(q: int, p: Part, us: Sequence[int], h: Any) -> bool:
     """`SecondStage.sampledOnly`: header `h` is of only part `p`'s sampled proof blocks (`_sampled_ok`), and not of
-    every slot of the part (`_population_ok`): where the second draw samples every slot the two are one header, held as
-    the part's whole."""
-    return _sampled_ok(q, p, drawn, h) and not _population_ok(q, p, h)
+    every slot of the part (`_population_ok`): where the second stage samples every slot the two are one header, held
+    as the part's whole."""
+    return _sampled_ok(q, p, us, h) and not _population_ok(q, p, h)
 
 
 def _rows_read(e: Any, slots: Sequence[int]) -> int:
@@ -1044,8 +1045,8 @@ def _sampled_header_ok(own: Own, named: bool, k: int, t: str, h: Any, slots: Seq
     return placed is not None and _jeq(blank_run(h), blank_run(at_sampled(placed, slots, reads)))
 
 
-def whole_draw(m: int) -> dict[str, Any]:
-    """`SecondStage.wholeDraw`: the sample of every unit of a population of `m`, as ``unit_draw`` writes a subset of
+def whole_sample(m: int) -> dict[str, Any]:
+    """`SecondStage.wholeSample`: the sample of every unit of a population of `m`, as ``unit_draw`` writes a subset of
     it: the session's sample of a statement of only its part's sampled proof blocks."""
     return {"law": "subset", "population": m, "k": m, "units": list(range(m))}
 
@@ -1253,9 +1254,9 @@ def _stmt_codes(own: Own, named: bool, k: int, p: Part, s: Stmt) -> list[str]:
 
 def _sampled_codes(own: Own, named: bool, k: int, p: Part, s: Stmt) -> list[str]:
     """`SecondStage.sampledCodes`: `_stmt_codes` for a statement of only its part `p`'s sampled proof blocks
-    (`sampled_only`): its population is the part's slots the second draw samples (`_sampled_ok`), its header its
+    (`sampled_only`): its population is the part's slots the second stage samples (`_sampled_ok`), its header its
     template's reference's placed at them (`_sampled_header_ok`), and its session's sample every unit of it
-    (`whole_draw`); every other check is `_stmt_codes`'s."""
+    (`whole_sample`); every other check is `_stmt_codes`'s."""
     q, reads = len(own.sample), _entries(_get(s.registered, "ports"))
     slots = sampled_slots(q, p, own.drawn)
     checks = (("second-verified", _verified_ok(own, s)),
@@ -1263,7 +1264,7 @@ def _sampled_codes(own: Own, named: bool, k: int, p: Part, s: Stmt) -> list[str]
               ("second-header", _sampled_header_ok(own, named, k, s.template, s.header, slots, reads)),
               ("second-population", _sampled_ok(q, p, own.drawn, s.header)),
               ("second-roots", _roots_ok(named, own.interior, s.template, s.header, [name for name, _ in reads])),
-              ("second-sample", _jeq(s.draw, whole_draw(len(slots)))),
+              ("second-sample", _jeq(s.draw, whole_sample(len(slots)))),
               ("second-read", all(_read_ok(own, named, p, port, e) for port, e in reads)
                and _linked_read(own, p.template, reads) and _wired_read(own, p.template, reads)),
               ("second-refs", _refs_ok(s)),
