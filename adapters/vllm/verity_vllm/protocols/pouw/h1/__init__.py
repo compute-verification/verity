@@ -122,7 +122,7 @@ PROGRAM, PROGRAM_META = "window-program.json.gz", "window-program.meta.json"
 CHALLENGER = "challenger"
 #: the credit refusal of every call of a window whose coins the auditor's challenger didn't sample
 IN_PROCESS = ("credit: coins-not-the-auditors: the window's coins were held in the serving process, not drawn by the "
-              "auditor host's challenger (the pouw setting 'challenger'), so it credits nothing")
+              "auditor device's challenger (the pouw setting 'challenger'), so it credits nothing")
 
 
 def coordinate(k: int) -> Any:

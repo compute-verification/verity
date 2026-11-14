@@ -77,7 +77,7 @@ its checked inputs (`CheckedUnique`) and its closing row at `nrow` (`CheckedClos
 `chains` and opened rows `genesis` (at run 0 the previous period's closing row or the empty pool's, and the empty pool's
 at a restart), serving's choice at each secret and sample of the coins, which where every audit accepts lie in a
 registered finite set `Cs` (`ResetsIn`) and have the runs open the root of the row the rule names (`CarriedRoots`, at the
-`sha512/row-seg/v1` digest over `G`); with the network certifier running its code by `trusted-host`, its one run giving
+`sha512/row-seg/v1` digest over `G`); with the network certifier running its code by `trusted-device`, its one run giving
 the cells the client receives and its record of them, the runs' observations; a covert sender's channel
 (`MonitoringPeriodChannel`), each run's acceptance and incorrect set reading only the earlier runs' coins (`MonitoringPeriodAdaptive`), the
 conditional escape (`MonitoringPeriodEscapes`), and the leak relation at each run's own incorrect set from its extracted rows `rin`,

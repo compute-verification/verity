@@ -51,7 +51,7 @@ Its guarantee is soundness, and it rests on:
 - an honest verifier: the challenger flips its coins after the registration is recorded and logs them, the verifier
   reads that log and the record the challenger wrote (`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`,
   `RecordCustodyZKJ`), and it runs the Lean verifier;
-- where it reads the certifier's stamp, the certifier's own assumptions, which that layer states (`trusted-host` among
+- where it reads the certifier's stamp, the certifier's own assumptions, which that layer states (`trusted-device` among
   them, `verity/protocols/accounting/certifier/verifier/PROTOCOL.md`).
 
 ## Guarantee and assumptions
