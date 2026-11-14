@@ -402,6 +402,57 @@ def membersTreesHeld (ts : Array Challenger.LoggedTree) (log : List String) (sts
         (Flock.JsonParse.parse record).toOption.getD Json.null, sha512Hex evidence)
   if let some why := Challenger.membersTreeReason ts log named then throw why
 
+/-- The refusal of members that are not the registration's population, a range each (`laidHeld`). -/
+def MEMBERS_LAID : String :=
+  "members: the members' units are not the registration's population, each member's one range of it: a member is " ++
+    "the units [base, base + n), and the members' counts sum to the population"
+
+/-- **The members laid over the registration's population**: each member's units are one range, within the record's
+population, and the members' counts sum to it. The parameters' members share no unit (`membersOf`), so every unit of
+the population is exactly one member's, and the members in the order of their first units lie one after another from
+unit 0: a member's units are `[base, base + n)`, `base` the count of the members before it. -/
+def laidHeld (ms : Array Member) (rec : Json) : V Unit :=
+  match nat? (getD rec "population") with
+  | none => throw "the record names no population"
+  | some n =>
+    if ms.all (fun m => m.units.size == 1 && m.units.all (·.2 ≤ n)) && ms.foldl (fun a m => a + m.count) 0 == n then
+      pure ()
+    else throw MEMBERS_LAID
+
+/-- The refusal of two members' ports of one registered value that are not one tree's (`classHeld`): `diff` is the
+first field they differ in (`Flock.RecVStar.portDiff?`). -/
+def classTwo (first second value diff : String) : String :=
+  s!"registered: members {first} and {second} read the registered value {value} as two ({diff}): a value the " ++
+    "window registers is one tree, read by every member at one root"
+
+/-- The member `name`'s registered port `q` after the ports before it: `acc` holds, for each value read so far, the
+first port of it and its member's name. A port of a value `acc` holds must be that port in the value's root, leaves,
+row width, domain and leaf schema (`Flock.RecVStar.portDiff?`, without the units' reads). -/
+def classPort (name : String) (acc : Std.HashMap String (String × Flock.Registered.Port))
+    (q : Flock.Registered.Port) : V (Std.HashMap String (String × Flock.Registered.Port)) :=
+  match acc.get? q.value with
+  | none => pure (acc.insert q.value (name, q))
+  | some (first, q0) =>
+    match Flock.RecVStar.portDiff? q0 q false with
+    | none => pure acc
+    | some diff => throw (classTwo first name q.value diff)
+
+/-- One member's registered ports after the members before it (`classPort` on each); a member whose registered file
+is no registered reads refuses, and one with none reads nothing. -/
+def classStep (acc : Std.HashMap String (String × Flock.Registered.Port)) (m : Member) :
+    V (Std.HashMap String (String × Flock.Registered.Port)) :=
+  match m.own.registered with
+  | none => pure acc
+  | some j =>
+    (Flock.Registered.ofJson j).mapError (s!"member {m.name}: {·}") >>= fun own => own.foldlM (classPort m.name) acc
+
+/-- **A registered value is one tree for every member**: over the parameters' members, sampled or not, every port of
+one value names one root, one count of leaves, one row width, one domain and one leaf schema (`classStep`), so the
+values the members read are a function of the parameters, each with one root. It is one pass over the parameters'
+members, each member's registered file read once, and it reads no blob. -/
+def classHeld (ms : Array Member) : V Unit :=
+  ms.foldlM classStep {} >>= fun _ => pure ()
+
 /-- **The per-member form's structure**, held before its run on the parameters `p`, its members `ms`, the
 registration `c`, the evidence `e` and its statements `sts`: the statements' structure (`membersHeld`), their sessions
 v1's in order, the sessions' coins held to the trees the challenger logged in the order it must release them, each
