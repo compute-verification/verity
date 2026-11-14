@@ -42,6 +42,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+import settings
 
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, registration as R
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
@@ -67,6 +68,14 @@ def _rate(window: Path) -> str:
     """The rule a test's audit states for the window it wrote under `LAW`: a stratified rate, at which the window's own
     proof blocks register that design."""
     return f"stratified-rate:2/{json.loads((window / 'registration.json').read_text())['population']}"
+
+
+def _audit_args(w: SimpleNamespace) -> list[str]:
+    """`audit`'s arguments for written window ``w`` at the circuit it registers, on a development challenger's coins with
+    the negatives skipped: all but ``--out``."""
+    return ["audit", "--window", str(w.dir), "--law", _rate(w.dir), "--circuit", w.rec["window"]["circuit"], "--run", RUN,
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--skip-negatives", "--challenger",
+            "local", "--main", "m.txt"]
 
 
 COMPILER = {"name": "test/compiler", "digest": "cd" * 64}
@@ -811,9 +820,7 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     monkeypatch.setattr(A5, "audit", audit)
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     monkeypatch.setattr(RA, "output_class", output_class)
-    base = ["audit", "--window", str(got.dir), "--law", _rate(got.dir), "--circuit", got.rec["window"]["circuit"], "--run", RUN,
-            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--skip-negatives", "--challenger",
-            "local", "--main", "m.txt"]
+    base = _audit_args(got)
     for extra, why in (([], "tie the audit to it"), (["--tie", str(got.w_file)], "give --tie-prefix"),
                        (["--tie", str(got.w_file), "--tie-prefix", "g/"], "0 times")):
         assert RA.main([*base, "--out", str(tmp_path / "refused"), *extra]) == 1
@@ -1122,9 +1129,7 @@ def test_a5_holds_a_history_tables_registered_root_to_the_one_over_its_writers_b
     monkeypatch.setattr(A5, "audit", audit)
     monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     monkeypatch.setattr(RA, "output_class", lambda circuit, given=(), own=frozenset(): [])
-    base = ["audit", "--window", str(got.dir), "--law", _rate(got.dir), "--circuit", got.rec["window"]["circuit"], "--run", RUN,
-            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--skip-negatives", "--challenger",
-            "local", "--main", "m.txt"]
+    base = _audit_args(got)
     assert RA.main([*base, "--out", str(tmp_path / "out")]) == 1
     hist = seen["history"](got.publics)
     assert hist["registered"] == {"latent": got.table.root.hex()} == IF.registered_roots(got.rec["window"])
@@ -1440,6 +1445,72 @@ def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path,
         with pytest.raises(Opened):
             RA.main([*args, *extra])
         assert seen == want
+
+
+def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says_it_forges(written, tmp_path, monkeypatch, capsys):
+    """`audit` is told what a window that must be refused forges, ``--forged`` a false unit or ``--forged-read`` a
+    registered read that opens no pinned root, and passes it on that kind's check alone (`forged_outcome`). The sessions
+    (`a5.audit`) are stubbed and leave the record of a window of no false unit whose read opens no root: its proof left,
+    and Lean refused its session at setup on a row of the read. As a forged read it passes, its prover run as an honest
+    window's; as a forged unit it fails, its prover run with its self-check skipped; told neither it fails as any
+    rejected audit does, and told both the command refuses its arguments before any session. The summary of a window
+    that passes as a forged read carries that verdict under ``forged``, as a forged unit's does, so no reader of it
+    takes the pass for an accepting audit (the weights tie's pins refuse a summary that holds it)."""
+    import a5 as A5
+    import a5_coins as AC
+
+    why = "setup: registered reads: port w: table row 0 does not open weights's registered root at position 0"
+    self_checks = []
+
+    def audit(a, sets, out, mine, served, source, port, summary, more, **kw):
+        self_checks.append(settings.zk_self_check())
+        (out / "session-m0" / "sessions" / "l0000").mkdir(parents=True)
+        (out / "session-m0" / "sessions" / "l0000" / "session.json").write_text(json.dumps({"proof_sha512": [{"stream": "circuit/rep0"}]}))
+        verdicts = {"lean-verify/m0": {"accepted": False, "why": why, "of_record": True, "digest": "ab" * 64}}
+        (out / "audit.json").write_text(json.dumps({"accepted": False, "verdicts": verdicts}))
+        (out / "registration.json").write_text("{}")
+        (out / "receipt.json").write_text(json.dumps({"registration": RA.R.digest({}), "verifier": A5.CHALLENGER}))
+        return {"draw": [0], "arm": "fw", "checks_before_draw": {"registration": True},
+                "audit": {"accepted": False, "why": {"lean-verify/m0": why}}}, False
+
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
+    monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
+    monkeypatch.setattr(A5, "audit", audit)
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
+    monkeypatch.setenv("FC_ZK_SELF_CHECK", "stop")
+    args = _audit_args(written)
+
+    def run(*told: str) -> tuple[int, dict]:
+        capsys.readouterr()
+        rc = RA.main([*args, "--out", str(tmp_path / ("out" + "".join(told))), *told])
+        (line,) = (x for x in capsys.readouterr().out.splitlines() if x.startswith("RECORDS "))
+        return rc, json.loads(line.removeprefix("RECORDS "))
+
+    def stopped(row: dict) -> dict:
+        """The forged verdict's three checks on where the window was stopped, its two others holding: the one on the
+        checks before the sample, and the record rejecting."""
+        checks = dict(row["forged"]["checks"])
+        got = {k: checks.pop(k) for k in ("no_proof_released", "lean_refused", "read_refused")}
+        assert list(checks.values()) == [True, True], row
+        return got
+
+    rc, row = run("--forged-read")
+    assert rc == 0 and row["ok"] is True and row["accepted"] is False, row
+    assert (row["forged"]["ok"], row["forged"]["passes_on"]) == (True, "read_refused"), row
+    assert stopped(row) == {"no_proof_released": False, "lean_refused": None, "read_refused": True}, row
+    summary = json.loads((tmp_path / "out--forged-read" / "summary.json").read_text())
+    assert summary["ok"] is True and summary["forged"] == row["forged"] and summary["audit"]["accepted"] is False, summary
+    rc, row = run()
+    assert rc == 1 and row["ok"] is False and "forged" not in row, row
+    assert "forged" not in json.loads((tmp_path / "out" / "summary.json").read_text())
+    rc, row = run("--forged")
+    assert rc == 1 and row["ok"] is False, row
+    assert (row["forged"]["ok"], row["forged"]["passes_on"]) == (False, "no_proof_released"), row
+    assert stopped(row) == {"no_proof_released": False, "lean_refused": None, "read_refused": True}, row
+    assert self_checks == ["stop", "stop", "skip"]
+    with pytest.raises(SystemExit) as refused:
+        RA.main([*args, "--out", str(tmp_path / "both"), "--forged", "--forged-read"])
+    assert refused.value.code == 2 and len(self_checks) == 3
 
 
 def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_window_figure_with_its_premise(
