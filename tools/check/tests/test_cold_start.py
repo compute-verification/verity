@@ -151,7 +151,7 @@ def test_circuit_check_checks_a_target_from_a_fresh_tree(shipped):
 
 
 STAND_IN = '''import os, sys
-__path__.append(os.path.join(os.getcwd(), "tools", "research", "src", "research"))
+__path__.append(os.path.join(os.getcwd(), "infra", "research", "src", "research"))
 '''
 LAUNCH = '''import json, os, sys
 with open(os.environ["COLD_START_LAUNCH"], "w") as f:
