@@ -1165,11 +1165,13 @@ def test_a_chain_deeper_than_the_recursion_limit_is_read_as_a_short_one(depth):
 
 #: the guarded attention's variants, each with the nodes it reads from runs and those it reads word by word: its form,
 #: and each off it by one word or reaching a branch a causal mask never does. A condition that is not a constant stops
-#: the reading at the select, before the softmax's rows.
+#: the reading at the select, before the softmax's rows, and so does a compare with a word of a node whose words
+#: differ.
 GUARDED = {"form": ({"softmax", "select"}, set()), "split": ({"softmax", "select"}, set()),
            "input-word": ({"select"}, set()), "repeated-base": ({"softmax"}, {"select"}),
            "masked-row": ({"select"}, set()), "finite": ({"softmax", "select"}, set()),
-           "unguarded-input-word": (set(), {"softmax"})}
+           "unguarded-input-word": (set(), {"softmax"}), "first-masked": ({"softmax", "select"}, set()),
+           "computed-mask": (set(), {"softmax", "select"})}
 
 
 def _guarded_attention(kind: str) -> Program:
@@ -1178,7 +1180,10 @@ def _guarded_attention(kind: str) -> Program:
     ``kind`` "split" writes both rows' constants 0, row 1's from two constants of one value; "input-word" reads row
     1's first mask word from an input, and "unguarded-input-word" too without the guard; "repeated-base" has one and
     read a word of the row twice and another not at all; "masked-row" masks row 1 wholly; "finite" gives row 1 row 0's
-    constants plus 1.0, which a softmax doesn't tell from row 0's."""
+    constants plus 1.0, which a softmax doesn't tell from row 0's; "first-masked" masks row 1 at its first word alone,
+    so that the and's first member is not its last one's; "computed-mask" computes row 1's constants, each plus a
+    stated 0 in one batch, and compares with −inf read from that batch's last word, a word of a node whose words
+    differ."""
     neg = 0xFF800000
 
     def mask_word(B, zn, zeros, p: int, j: int):
@@ -1190,6 +1195,8 @@ def _guarded_attention(kind: str) -> Program:
             return B.call(const(32, 0x3F800000 if j == 0 else neg)).refs
         if kind == "split" and p == 1:
             return zeros[j < D // 2].refs
+        if kind == "first-masked" and p == 1:
+            return B.call(const(32, neg if j == 0 else 0)).refs
         return B.call(const(32, 0 if j <= p or (kind == "split" and p == 0) else neg)).refs
 
     def step(B, c, tok, z, zn):
@@ -1200,11 +1207,15 @@ def _guarded_attention(kind: str) -> Program:
         s = B.batch(LIN_S, rows, w1, axes=(0, None))
         flat = Array(PN * D, F32)
         mask = concat([mask_word(B, zn, zeros, p, j) for p in range(PN) for j in range(D)])
+        inf = None
+        if kind == "computed-mask":
+            row = B.batch(P.F32Add, Coll(S_T, mask.slice(D, 2 * D)), zeros[0], axes=(0, None))
+            mask, inf = concat([mask.slice(0, D), row.refs]), row[D - 1]
         h = B.batch(P.F32Add, Coll(flat, s.refs), Coll(flat, mask), axes=(0, 0))
         p_ = B.batch(SOFTMAX, h.reshape(Array(PN, S_T)), axes=(0,))
         if kind.startswith("unguarded"):
             return finish(B, c, z, zn, p_)
-        e = B.batch(SC.F32Eq, h, B.call(const(32, neg)), axes=(0, None))
+        e = B.batch(SC.F32Eq, h, B.call(const(32, neg)) if inf is None else inf, axes=(0, None))
         bases = list(range(D))
         if kind == "repeated-base":
             bases[2] = 1
