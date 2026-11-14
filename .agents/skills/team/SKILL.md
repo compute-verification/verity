@@ -24,8 +24,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 
   ~~~text
   research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # --quick: no slow tests
-  uv run python tools/verity/check/check.py --record --on auto --pool research  # the whole check, recorded (the testing skill)
-  research status RUN  # check back on a run; research run --wait only under 20 min
+  research status RUN  # check back on a run
   ~~~
 
 - **No tool call blocks more than 20 minutes.** Every `--wait` stops there, cancels nothing and exits 79 naming the
@@ -39,8 +38,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   when its work there ends.
 - **Secrets.** The shell hook (`.cursor/hooks.json`, `tools/agent-guard/shell_hook.py`) refuses a command that would
   print the environment, every process's command line, or a key or env file (its names: `envnames.py` beside the
-  hook); on a VM where it doesn't run, `research` says so, with the fix. A secret is stored as one line (a
-  key as base64, `NAME_B64`).
+  hook). A secret is stored as one line (a key as base64, `NAME_B64`).
 
 ## Landing
 
@@ -140,8 +138,9 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   has ended is resumed with the text itself.
   `inbox.py selftest` checks your own VM end to end.
 - **Stay reachable.** Push and write a one-line checkpoint note every 60 minutes and before ending a turn: a resume
-  or a timer's wake puts a worker on a new machine, with only what it pushed. When you'd wait on a run, end
-  your turn naming its id and ETA, and your launcher resumes you. The control pod's agent watch flags a stalled or
+  or a timer's wake puts a worker on a new machine, with only what it pushed. A turn on another model than the launch's
+  is told so at its first command where the machine's log holds the launch turn; on a new machine, `inbox.py turns`
+  shows each turn's model. When you'd wait on a run, end your turn naming its id and ETA, and your launcher resumes you. The control pod's agent watch flags a stalled or
   stopped agent and an out-of-memory kill. A worker resumed twice, whose base branch is gone, or silent past the watch's
   flag is relaunched fresh from its last note. Briefs ask for a checkpoint before long work and word red-team work
   neutrally.
