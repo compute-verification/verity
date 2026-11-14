@@ -40,6 +40,8 @@ from verity.protocols.accounting.pouw.verifier.protocol import DomainError
 from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.device.challenger import LiveCommitment, LiveOpening
 
+__all__ = ["joined"]
+
 #: the pinned ring's key slots (each call's dom_a ‖ unit, 168 bytes)
 UPLOAD_SLOTS = 1024
 #: torch's stream priority for each of a schedule's priorities (torch maps values past its range to the nearest valid one)
