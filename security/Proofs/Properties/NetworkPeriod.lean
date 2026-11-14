@@ -312,17 +312,18 @@ def stateRun (l lo hi : ℕ) : Lean.Json :=
 
 /-- An execution phase's transfer blocks whose scan's `prog` is at the slot audit's entries port's root and domain,
 whose state, the tree its units read and register their states in, is at the root `s` and the domain `e`, and whose
-registration states its units' `sin` reads as the run `sin` and their `o1` as `o1`. -/
+registration states the start unit's `o0` at leaf 0, its units' `sin` reads as the run `sin` and their `o1` as
+`o1`. -/
 def stateExecutionPhaseOf (sin o1 : Lean.Json) : Lean.Json :=
   Lean.Json.mkObj [
     ("roots", Lean.Json.arr #[
       Lean.Json.mkObj [("port", "scan/prog0"), ("root", "r"), ("domain", "d")],
       Lean.Json.mkObj [("port", "scan/state"), ("root", "s"), ("domain", "e")]]),
-    ("window", Lean.Json.mkObj [("reads", Lean.Json.mkObj [("scan/state", Lean.Json.mkObj [("o1", o1), ("sin", sin)])])])]
+    ("window", Lean.Json.mkObj [("reads", Lean.Json.mkObj [("scan/state", Lean.Json.mkObj [("o0", stateRun 0 0 1), ("o1", o1), ("sin", sin)])])])]
 
-/-- Those transfer blocks under the slot audit's schedule, T = 2: unit 1 reads `sin` at leaf 1, where unit 0 registers
-its `o1`. Their registration opens no row 0. -/
-def stateExecutionPhase : Lean.Json := stateExecutionPhaseOf (stateRun 1 1 2) (stateRun 1 0 1)
+/-- Those transfer blocks under the slot audit's schedule, T = 2: units 1 and 2 read `sin` at leaves 0 and 1, where the
+start unit registers its `o0` and unit 1 its `o1`. Their registration registers no start. -/
+def stateExecutionPhase : Lean.Json := stateExecutionPhaseOf (stateRun 0 1 3) (stateRun 1 1 2)
 
 /-- Its honest side: a slot audit whose `SCAN_STATE` is the scan's state, at its root and domain, ties it. -/
 theorem rowsStateTied_honest : stateTied #[slotAudit] slotSchedule #[stateReg "s"] stateExecutionPhase = true := by
@@ -367,9 +368,10 @@ not tied. -/
 theorem tiedExecutionPhase_unstated : stateTied #[slotAudit] slotSchedule #[stateReg "s"] tiedExecutionPhase = false := by
   decide +kernel
 
-/-- A registration whose units read their state off the chain: unit 1's `sin` at leaf 2, a leaf no unit registered,
-and unit 0's `o1` at leaf 0, the empty state's, at the state's root and domain all the same. -/
-def misindexedExecutionPhase : Lean.Json := stateExecutionPhaseOf (stateRun 2 1 2) (stateRun 0 0 1)
+/-- A registration whose units read their state off the chain: units 1 and 2 read `sin` at leaves 2 and 3, leaves no
+unit registered, and unit 1 registers its `o1` at leaf 0, the start unit's, at the state's root and domain all the
+same. -/
+def misindexedExecutionPhase : Lean.Json := stateExecutionPhaseOf (stateRun 2 1 3) (stateRun 0 1 2)
 
 theorem misindexedExecutionPhase_untied : stateTied #[slotAudit] slotSchedule #[stateReg "s"] misindexedExecutionPhase = false := by
   decide +kernel
@@ -929,10 +931,11 @@ theorem counted_iff {n : ℕ} {e : Lean.Json} :
 root. -/
 theorem entryHeld_ok {cs : Array NetworkCheck.ScanOk.Const} {e : Lean.Json}
     (h : NetworkCheck.ScanOk.entryHeld cs e = true) {q : String} (hq : e.getObjValD "port" = .str q)
-    (hok : NetworkCheck.ScanOk.okPort q = true) :
+    (hok : NetworkCheck.ScanOk.okPort q = true) (hs : q ≠ NetworkCheck.ScanOk.START) :
     ∃ c ∈ cs, c.port = q ∧ (e.getObjValD "leaves").getNat? = .ok c.leaves ∧
       e.getObjValD "domain" = .str c.domain ∧ e.getObjValD "root" = .str c.root := by
-  simp only [NetworkCheck.ScanOk.entryHeld, hq, hok, Bool.not_true, Bool.false_or] at h
+  have hs' : (q == NetworkCheck.ScanOk.START) = false := by simpa using hs
+  simp only [NetworkCheck.ScanOk.entryHeld, hq, hok, hs', Bool.not_true, Bool.false_or] at h
   obtain ⟨c, hc, hp⟩ := Array.any_eq_true'.mp h
   simp only [Bool.and_eq_true, beq_iff_eq] at hp
   exact ⟨c, hc, hp.1.1.1, counted_iff.mp hp.1.1.2, named_iff.mp hp.1.2, named_iff.mp hp.2⟩
@@ -964,8 +967,15 @@ theorem port_inj {a b : String}
 theorem members_name_inj {T : ℕ} {m m' : String × String × ℕ} (hm : m ∈ NetworkCheck.ScanOk.members T)
     (hm' : m' ∈ NetworkCheck.ScanOk.members T) (h : m.1 = m'.1) : m = m' := by
   unfold NetworkCheck.ScanOk.members at hm hm'
-  split_ifs at hm hm' <;> simp at hm hm' <;> rcases hm with rfl | rfl | rfl | rfl <;>
-    rcases hm' with rfl | rfl | rfl | rfl <;> first | rfl | simp at h
+  simp at hm hm'
+  rcases hm with rfl | rfl | rfl <;> rcases hm' with rfl | rfl | rfl <;> first | rfl | simp at h
+
+/-- No member's port is the start unit's. -/
+theorem members_not_start {T : ℕ} {m : String × String × ℕ} (hm : m ∈ NetworkCheck.ScanOk.members T) :
+    m.1 ++ ("/" ++ NetworkCheck.ScanOk.PORT) ≠ NetworkCheck.ScanOk.START := by
+  unfold NetworkCheck.ScanOk.members at hm
+  simp at hm
+  rcases hm with rfl | rfl | rfl <;> (dsimp only; decide)
 
 /-- **What `ScanOk.held` holds, in the constants' terms.** A registration held to the constants of `T` has `T ≥ 2`, a
 `roots` entry that is each member's constant (`OkEntry`), and no entry whose port ends `/o0` that is not a member's
@@ -975,25 +985,26 @@ theorem held_members {T : ℕ} {ks : Array NetworkCheck.ScanOk.Const} {reg : Lea
     (hk : NetworkCheck.ScanOk.consts T = .ok ks) (h : NetworkCheck.ScanOk.held ks reg = true) :
     2 ≤ T ∧ (∀ m ∈ NetworkCheck.ScanOk.members T, ∃ e ∈ NetworkCheck.ScanOk.rootsOf reg, OkEntry m e) ∧
       ∀ e ∈ NetworkCheck.ScanOk.rootsOf reg, ∀ q : String, e.getObjValD "port" = .str q →
-        NetworkCheck.ScanOk.okPort q = true → ∃ m ∈ NetworkCheck.ScanOk.members T, OkEntry m e := by
+        NetworkCheck.ScanOk.okPort q = true → q ≠ NetworkCheck.ScanOk.START →
+          ∃ m ∈ NetworkCheck.ScanOk.members T, OkEntry m e := by
   obtain ⟨hT, hback, hforth⟩ := consts_ok hk
   obtain ⟨hnamed, hall⟩ := held_ok h
   have entry : ∀ e ∈ NetworkCheck.ScanOk.rootsOf reg, ∀ q : String, e.getObjValD "port" = .str q →
-      NetworkCheck.ScanOk.okPort q = true →
+      NetworkCheck.ScanOk.okPort q = true → q ≠ NetworkCheck.ScanOk.START →
         ∃ m ∈ NetworkCheck.ScanOk.members T, m.1 ++ ("/" ++ NetworkCheck.ScanOk.PORT) = q ∧ OkEntry m e := by
-    intro e he q hq hok
-    obtain ⟨k, hkm, hp, hl, hd, hr⟩ := entryHeld_ok (hall e he) hq hok
+    intro e he q hq hok hs
+    obtain ⟨k, hkm, hp, hl, hd, hr⟩ := entryHeld_ok (hall e he) hq hok hs
     obtain ⟨m, hm, hc⟩ := hback k hkm
     obtain ⟨dom, hdom, rfl⟩ := constOf_ok hc
     have hp' : m.1 ++ ("/" ++ NetworkCheck.ScanOk.PORT) = q := hp
     exact ⟨m, hm, hp', dom, hdom, by rw [hp']; exact hq, hl, hd, hr⟩
-  refine ⟨hT, fun m hm => ?_, fun e he q hq hok => ?_⟩
+  refine ⟨hT, fun m hm => ?_, fun e he q hq hok hs => ?_⟩
   · obtain ⟨k, hkm, hc⟩ := hforth m hm
     obtain ⟨dom, hdom, rfl⟩ := constOf_ok hc
     obtain ⟨e, he, hq⟩ := hnamed _ hkm
-    obtain ⟨m', hm', hp, hat⟩ := entry e he _ hq (okPort_port m.1)
+    obtain ⟨m', hm', hp, hat⟩ := entry e he _ hq (okPort_port m.1) (members_not_start hm)
     exact ⟨e, he, members_name_inj hm' hm (port_inj hp) ▸ hat⟩
-  · obtain ⟨m, hm, -, hat⟩ := entry e he q hq hok
+  · obtain ⟨m, hm, -, hat⟩ := entry e he q hq hok hs
     exact ⟨m, hm, hat⟩
 
 theorem rowsOkHeld : RowsOkHeld := by
@@ -1021,12 +1032,12 @@ theorem rootsOf_unnamed : NetworkCheck.ScanOk.rootsOf (Lean.Json.mkObj []) = #[]
   exact Array.eq_empty_of_size_eq_zero h
 
 /-- **`RowsOkHeld`'s nontrivial lemma**: a rows-form period of one execution phase under a schedule of two ticks whose
-scan's registration names no root (`unnamedCommitment`) is not held: the scan's member `first` has no `first/o0` among
+scan's registration names no root (`unnamedCommitment`) is not held: the scan's member `last` has no `last/o0` among
 its `roots`, so its proof block's ok bit is at no constant. -/
 theorem rowsOkHeld_nontrivial : ¬ RowsOkHeldAt (pairParams 1) unnamedCommitment := by
   intro h
   obtain ⟨-, hm, -⟩ := h pairSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 (Lean.Json.mkObj []) rfl
-  obtain ⟨e, he, -⟩ := hm ("first", "first", 1) (by simp [NetworkCheck.ScanOk.members])
+  obtain ⟨e, he, -⟩ := hm ("last", "ingress", 1) (by simp [NetworkCheck.ScanOk.members])
   rw [rootsOf_unnamed] at he
   simp at he
 
