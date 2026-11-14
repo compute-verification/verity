@@ -331,9 +331,9 @@ open scoped ENNReal in
 reading (`Instance.Honest.inst`) that runs no session, whose base publishes `⊤` for every subprotocol: the session
 premise speaks of the sessions the deployment runs, and the base's PoUW and inference-only targets hold at `⊤`. -/
 theorem remote_soundness_deployedReady_honest :
-    (Instance.Honest.inst ⊤ fun _ => none).SessionRegistered .remote ∧
-      (Instance.Honest.inst ⊤ fun _ => none).base.PouwSound .remote ∧
-      (Instance.Honest.inst ⊤ fun _ => none).base.InferenceOnlySound .remote :=
+    (Instance.Honest.inst ⊤).SessionRegistered .remote ∧
+      (Instance.Honest.inst ⊤).base.PouwSound .remote ∧
+      (Instance.Honest.inst ⊤).base.InferenceOnlySound .remote :=
   ⟨Instance.Honest.sessionRegistered_none ⊤ .remote,
     Instance.Honest.target_top .remote .pouw, Instance.Honest.target_top .remote .inferenceOnly⟩
 

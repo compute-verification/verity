@@ -6,6 +6,7 @@ public import Proofs.Properties.Verity.Sampled.CountsLayout
 public import Proofs.Properties.Verity.Sampled.MovesReachAt
 public import Proofs.Properties.Verity.Sampled.Place
 public import Proofs.Flock.Recursive.TopFinder
+import Mathlib.Analysis.Complex.ExponentialBounds
 
 /-!
 # SPOT's vocabulary as deployed
@@ -36,10 +37,10 @@ device (`Instance.base`), so `spotSound_of_targets` and `remote_soundness_of_tar
   session is one v2 sets up (`sessions_some`), whose digests are v2's (`digestsAt_of`) and whose session reads
   `MAX_COINS` frames' bytes, each coin family the base names sampling `MAX_COINS` coins (`Instance.coins`,
   `lb_of_sessions`).
-* **The registered files** (`RegisteredFiles`): at parameters the deployment runs a session at, wherever some
-  committed files pass the file check, the registered files do, at every instance (`registeredFiles`): they are the
-  registration's where those pass it, else the files the parameters' digests name (`registeredFrom`, `registeredOf`).
-  The pinned tables' registered files are the deployment's data (`Instance.pinned`).
+* **The registered files** (`RegisteredFiles`, `registeredFiles`): the instance carries each session's circuit and
+  public files and the pinned tables as deployment data (`Instance.circuitFile`, `Instance.publicFile`,
+  `Instance.tables`). Their SHA-512 digests are proved at each session, the vocabulary registers exactly those files,
+  and `Instance.pinned` looks up a table in those bytes by digest: no file is picked from its digest.
 * **What stays open**: v2's session at the registered files (`SessionAt`, from `SessionRegistered` in
   `Sampled/SessionAt.lean`), each of the sessions the deployment runs; the commitment format's openings (`OpensAt`)
   hold at every instance (`Instance.opensAt` in `Sampled/OpensAt.lean`). Of the coupling, the device's log opening only
@@ -121,42 +122,6 @@ theorem namedFile_eq {h : Option Hash.Digest} {F R : Array ByteArray}
   rw [h1] at hp
   exact lt_irrefl _ hp
 
-/-! ## The registered files -/
-
-open Classical in
-/-- **A file with the digest `h`**, where some file has it. -/
-noncomputable def fileWith (h : Option Hash.Digest) : Option ByteArray :=
-  if hx : ∃ f : ByteArray, h = some (Verity.sha512 f.data.toList) then some hx.choose else none
-
-theorem fileWith_mem {h : Option Hash.Digest} (hx : ∃ f : ByteArray, h = some (Verity.sha512 f.data.toList)) :
-    ∃ f ∈ (fileWith h).toArray, h = some (Verity.sha512 f.data.toList) := by
-  have he : fileWith h = some hx.choose := by
-    unfold fileWith
-    rw [dif_pos hx]
-  refine ⟨hx.choose, ?_, hx.choose_spec⟩
-  rw [he]
-  simp [Option.toArray]
-
-/-- **The files the parameters' digests name**: a file with the circuit file's digest and one with the public file's
-that v2's parameters hold (`programDigestOf`, `publicDigestOf`), where some file has it, and the lookup tables that
-circuit file registers at the pinned tables' registered files `T` (`pinnedTables`). -/
-noncomputable def registeredOf (T : PinnedTables) (θ : ByteArray) : Array ByteArray :=
-  (fileWith (programDigestOf θ)).toArray ++ (fileWith (publicDigestOf θ)).toArray ++
-    (((fileWith (programDigestOf θ)).map fun f => (pinnedTables T f).map (·.2)).getD []).toArray
-
-open Classical in
-/-- **The registered files at the parameters `θ`, from the registration's files `R`**: `R θ` where it holds a file with
-the circuit file's digest and one with the public file's that v2's parameters hold, else the files those digests name
-(`registeredOf`). A session the registration sets up reads `R θ`'s own files, not whichever files of those digests
-`registeredOf` picks. A circuit is registered by its digest, so a file counts as registered only under a digest some
-file hashes to; the fallback is that reading itself, the file `registeredOf` chooses for the digest, which SHA-512's
-collision resistance makes the only one, and it adds no constraint beyond registration by digest. -/
-noncomputable def registeredFrom (T : PinnedTables) (R : ByteArray → Array ByteArray) (θ : ByteArray) :
-    Array ByteArray :=
-  if (∃ f ∈ R θ, programDigestOf θ = some (Verity.sha512 f.data.toList)) ∧
-      ∃ f ∈ R θ, publicDigestOf θ = some (Verity.sha512 f.data.toList) then R θ
-  else registeredOf T θ
-
 /-- **What the session's files must give for its openings to be `Hash.RowLeaf`'s**: they pass `verify --zk`'s ports
 and roots check (`Flock.PortRoots.checkOf` at the circuit `Flock.ProvedScope.circuitOf` reads), which v2 runs on every
 session it accepts (`Accepted.ports`). The check refuses a published frame-v3 domain that is not 64 bytes
@@ -180,33 +145,48 @@ def CostsRead (V : Vocab d α) (dev : Exchange → Properties.Challenger.History
 
 /-- **The deployment, before SPOT's names**: the other subprotocols' vocabulary over the deployed device
 (`base`), whose signer is the deployed device's (`deployment`, `signer`), whose reading of the committed files and
-digests are v2's (`read`, `programDigest`, `publicDigest`) at the files the deployment registers for the pinned tables
-(`pinned`), whose place for each gate is the committed files' (`place`, `placeOfRead`), whose registered files are the
-registration's (`registration`) wherever they hold files with the digests the parameters name (`registered`,
-`registeredFrom`) and whose declared calls cover the deployed device's reading at its history (`costs`, `Device.dev`);
-and the session the deployment runs at each parameters (`session`), whose bound's parameters `θ` fixes; each coin
-family the base names samples the deployed device's `MAX_COINS` coins (`coins`, its one-stage rounds). A deployed
-instance fills `signer`, `place`, `registered` and `coins` at its construction, by `rfl` or a lemma, as the honest
-instance does; no theorem takes any of them as a hypothesis of its own: `couplingTarget_at` reads the signer's and the
-coins' from these fields, `opensAt` the place's and `registeredFiles` the registered files'. -/
+digests are v2's (`read`, `programDigest`, `publicDigest`) at the pinned table files the deployment registers
+(`tables`, `pinned`), whose place for each gate is the committed files' (`place`, `placeOfRead`) and whose declared
+calls cover the deployed device's reading at its history (`costs`, `Device.dev`); the session the deployment runs at
+each parameters (`session`), whose bound's parameters `θ` fixes; each coin family the base names samples the deployed
+device's `MAX_COINS` coins (`coins`, its one-stage rounds); and the circuit and public files it registers at each
+parameters (`circuitFile`, `publicFile`), whose digests the parameters name at a session (`circuitHash`,
+`publicHash`), which with the pinned table files are the registered files (`registered`). A deployed instance fills
+`signer`, `place`, `registered` and `coins` at its construction, by `rfl` or a lemma, as the honest instance does; no
+theorem takes any of them as a hypothesis of its own: `couplingTarget_at` reads the signer's and the coins' from these
+fields, `opensAt` the place's and `registeredFiles` the registered files'. -/
 structure Instance (d : Accounting.Device ι) (α : Type) [Fintype α] where
   base : Vocab d α
   deployment : Device.Deployment
   signer : ∀ θ, base.signer θ = deployment.signer base.families θ
-  pinned : PinnedTables
-  read : ∀ θ F, base.read θ F = readOf pinned θ F
+  /-- Every pinned table file the deployment can register at one of its sessions. -/
+  tables : Array ByteArray
+  read : ∀ θ F, base.read θ F = readOf (PinnedTables.ofFiles tables) θ F
   programDigest : ∀ θ, base.programDigest θ = programDigestOf θ
   publicDigest : ∀ θ, base.publicDigest θ = publicDigestOf θ
   place : ∀ θ F c g, base.place θ F c g = placeOfRead (base.read θ F) g
-  registration : ByteArray → Array ByteArray
-  registered : ∀ θ, base.registered θ = registeredFrom pinned registration θ
   costs : CostsRead base (Device.dev (deployment.setupOf base.families))
   coins : ∀ θ l m, (l, m) ∈ base.families θ → m = _root_.Spot.Challenger.MAX_COINS
   session : ByteArray → Option Live
+  /-- The circuit file the deployment registers at these parameters. -/
+  circuitFile : ByteArray → ByteArray
+  /-- The public file the deployment registers at these parameters. -/
+  publicFile : ByteArray → ByteArray
+  /-- At a session, the parameters' circuit digest is the registered circuit file's SHA-512 digest. -/
+  circuitHash : ∀ θ A, session θ = some A →
+    base.programDigest θ = some (Verity.sha512 (circuitFile θ).data.toList)
+  /-- At a session, the parameters' public digest is the registered public file's SHA-512 digest. -/
+  publicHash : ∀ θ A, session θ = some A →
+    base.publicDigest θ = some (Verity.sha512 (publicFile θ).data.toList)
+  /-- The registered files are exactly the session's circuit and public files followed by its pinned table files. -/
+  registered : ∀ θ, base.registered θ = #[circuitFile θ, publicFile θ] ++ tables
 
 namespace Instance
 
 variable (I : Instance d α)
+
+/-- The deployment's pinned table lookup, derived from the table bytes it registers. -/
+def pinned : PinnedTables := .ofFiles I.tables
 
 /-- **The deployed device's history at each play** (`Device.dev`), at the base's layouts. -/
 noncomputable abbrev dev : Exchange → Properties.Challenger.History :=
@@ -567,29 +547,14 @@ def RegisteredFiles : Prop :=
   ∀ θ F A, I.session θ = some A → (∃ p, ParamsAt θ p) → I.base.Registered θ F →
     I.base.Registered θ (I.base.registered θ)
 
-/-- **The files the parameters' digests name pass the file check wherever some files do** (`registeredOf`). -/
-theorem registered_registeredOf {θ : ByteArray} {F : Array ByteArray} (hF : I.base.Registered θ F) :
-    I.base.Registered θ (registeredOf I.pinned θ) := by
-  unfold Vocab.Registered at hF ⊢
-  obtain ⟨⟨f, -, hc⟩, ⟨g, -, hp⟩⟩ := hF
-  rw [I.programDigest] at hc ⊢
-  rw [I.publicDigest] at hp ⊢
-  rw [registeredOf]
-  obtain ⟨x, hx, hxe⟩ := fileWith_mem ⟨f, hc⟩
-  obtain ⟨y, hy, hye⟩ := fileWith_mem ⟨g, hp⟩
-  exact ⟨⟨x, Array.mem_append_left _ (Array.mem_append_left _ hx), hxe⟩,
-    ⟨y, Array.mem_append_left _ (Array.mem_append_right _ hy), hye⟩⟩
-
-/-- **The registered files pass the file check wherever some files do**, at every instance: the registration's where
-they pass it, else the files the parameters' digests name (`registeredFrom`, `registered_registeredOf`). -/
+/-- **The instance's registered files pass the file check at every session**: its circuit and public files are first in
+the registered array, and their SHA-512 digests are fields of the instance. -/
 theorem registeredFiles : I.RegisteredFiles := by
-  intro θ F _ _ _ hF
-  rw [I.registered θ, registeredFrom]
-  split_ifs with h
-  · unfold Vocab.Registered
-    rw [I.programDigest, I.publicDigest]
-    exact h
-  · exact I.registered_registeredOf hF
+  intro θ _ A hA _ _
+  rw [I.registered θ]
+  constructor
+  · exact ⟨I.circuitFile θ, by simp, I.circuitHash θ A hA⟩
+  · exact ⟨I.publicFile θ, by simp, I.publicHash θ A hA⟩
 
 /-- **v2's session at the registered files' files**: at parameters naming the one-stage form where the deployment runs
 a session, committed files that name the registered circuit and public files, and that some play's sampled verdict
@@ -821,15 +786,15 @@ noncomputable def cost (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 
 /-- **The idle deployment at v2's reading**: `Idle.vocab δ 1` with the idle deployment's signer (`signer`) and its
 signature count, v2's reading of the committed files at no pinned table registered (`PinnedTables.empty`) and its
-digests, the files the digests name as the registered files (`registeredOf`), the declared calls `cost`, and every
-name that reads the committed circuit or a strategy of the play at them. -/
+digests, the declared calls `cost`, and every name that reads the committed circuit or a strategy of the play at
+them. -/
 noncomputable def base (δ : ℝ≥0∞) : Vocab Verity.Idle.device Unit :=
   { Verity.Idle.vocab δ 1 with
     signer := signer
     read := readOf PinnedTables.empty
-    registered := registeredOf PinnedTables.empty
     programDigest := programDigestOf
     publicDigest := publicDigestOf
+    registered := fun θ => #[θ, θ]
     place := fun θ F _ g => placeOfRead (readOf PinnedTables.empty θ F) g
     extract := fun _ _ _ _ _ => 0
     finder := fun _ _ _ _ _ => Verity.Idle.finder
@@ -860,26 +825,32 @@ theorem costs (δ : ℝ≥0∞) : CostsRead (base δ) dev := fun θ F c σ t =>
     Binding.breakCalls (dev (Verity.Game.Tape.out _ σ t)) (Verity.Game.Tape.out _ σ t).sent +
       (Verity.Game.Tape.out _ σ t).sent.blobs.size) (Finset.mem_univ t)
 
-/-- **The instance at the deployment's session `session`**: `base δ` at the idle deployment, which registers no pinned
-table, whose signer is the deployment's, whose reading and digests are v2's by definition and whose registration
-registers the files the digests name (`registeredOf`). -/
-noncomputable def inst (δ : ℝ≥0∞) (session : ByteArray → Option Live) : Instance Verity.Idle.device Unit where
+/-- **The session-free honest instance**: `base δ` at the idle deployment. Its circuit and public files are explicit
+deployment data, its registered files are those two files, and its empty pinned lookup is `find?` over no table bytes.
+The digest fields are vacuous because this instance runs no session. -/
+noncomputable def inst (δ : ℝ≥0∞) : Instance Verity.Idle.device Unit where
   base := base δ
   deployment := deployment
   signer _ := rfl
-  pinned := PinnedTables.empty
+  tables := #[]
   read _ _ := rfl
   programDigest _ := rfl
   publicDigest _ := rfl
   place _ _ _ _ := rfl
-  registration := registeredOf PinnedTables.empty
-  registered θ := (ite_self (registeredOf PinnedTables.empty θ)).symm
   costs := costs δ
   coins _ _ _ h := by cases h
-  session := session
+  session _ := none
+  circuitFile θ := θ
+  publicFile θ := θ
+  circuitHash _ _ h := by cases h
+  publicHash _ _ h := by cases h
+  registered _ := rfl
 
 /-- At no session the openings hold of every session, there being none. -/
-theorem opensAt_none (δ : ℝ≥0∞) : (inst δ fun _ => none).OpensAt := fun _ _ _ h => by simp [inst, sessions] at h
+theorem opensAt_none (δ : ℝ≥0∞) : (inst δ).OpensAt := fun _ _ _ h => by simp [inst, sessions] at h
+
+/-- At no session the registered files pass the file check at every session's parameters, there being none. -/
+theorem registeredFiles_none (δ : ℝ≥0∞) : (inst δ).RegisteredFiles := (inst δ).registeredFiles
 
 /-- At `base ⊤` every subprotocol's error is `⊤`. -/
 theorem error_top (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
@@ -892,6 +863,28 @@ theorem target_top (k : Verity.Registration.Composite) (a : Subprotocol) : (base
   intro θ F c σ
   rw [error_top]
   exact le_top
+
+/-! ## The honest bound's rate -/
+
+/-- **The honest bound's `k`**: `2^23`, `Zk.schedule`'s cap on level 0's length (`zkLogLenCap_23`), so the rate
+condition `2^23 ≤ ρ·(e·k)` asks only `ρ ≥ 1/e`. -/
+def k : ℕ := 2 ^ 23
+
+/-- **The honest bound's rate** `ρ = 3/8`, the plan's tables' rate cap: above `1/e`, so `k` meets it (`kρ`), and below
+one. -/
+noncomputable def ρ : ℝ := 3 / 8
+
+theorem one_le_k : 1 ≤ k := Nat.one_le_two_pow
+
+theorem ρ_pos : 0 < ρ := by norm_num [ρ]
+
+theorem ρ_lt_one : ρ < 1 := by norm_num [ρ]
+
+/-- **The rate condition at the honest bound**: `2^23 ≤ ρ·(e·k)` at `k = 2^23` and `ρ = 3/8`, since `e > 8/3`
+(`Real.exp_one_gt_d9`). -/
+theorem kρ : (2 : ℝ) ^ 23 ≤ ρ * (Real.exp 1 * k) := by
+  norm_num [ρ, k]
+  linarith [Real.exp_one_gt_d9]
 
 end Instance.Honest
 
