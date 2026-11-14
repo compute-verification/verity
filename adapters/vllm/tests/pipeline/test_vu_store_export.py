@@ -35,7 +35,7 @@ class Exported:
     pool: list[dict[str, Any]]
     picked: list[dict[str, Any]]
     replayed: list[dict[str, Any]]
-    printed: list[str]
+    logged: list[str]
     out: Path
 
     @property
@@ -51,7 +51,12 @@ class Exported:
         return {f"{a['value']}.{a['dtype']}" for a in named}
 
 
-def _export(world, out: Path, monkeypatch, capsys, *, limits: VX.Limits, replay=None, **kw) -> Exported:
+def logged(caplog) -> list[str]:
+    """What `vu_store` logged since `caplog` was last cleared."""
+    return [r.getMessage() for r in caplog.records if r.name == VS.__name__]
+
+
+def _export(world, out: Path, monkeypatch, caplog, *, limits: VX.Limits, replay=None, **kw) -> Exported:
     """An export of the honest world under a clock that stands still but where the test moves it: the population is built at `BUILT`,
     each unit's replay takes `EACH` and the extraction `EXTRACTED`.  `replay(k, record)`: the record unit `k`'s replay ends with."""
     now = [0.0]
@@ -80,20 +85,20 @@ def _export(world, out: Path, monkeypatch, capsys, *, limits: VX.Limits, replay=
     monkeypatch.setattr(VX, "capture", capturing)
     monkeypatch.setattr(VS, "extract", extracting)
     bmap, committed = world.bmap_and_reader()
-    capsys.readouterr()
+    caplog.clear()
     s = VS.export_vus(_programs(world), bmap, committed, _weights(world), out_dir=out, run_root=ROOT, limits=limits, **kw)
-    return Exported(s, seen["pool"], seen["picked"], seen["replayed"], capsys.readouterr().out.splitlines(), out)
+    return Exported(s, seen["pool"], seen["picked"], seen["replayed"], logged(caplog), out)
 
 
 def _json(x: Any) -> Any:
     return json.loads(json.dumps(x, default=str))
 
 
-def test_an_export_writes_each_unit_of_its_sample_once_in_its_programs_units_and_once_in_the_list(world, tmp_path, monkeypatch, capsys):
+def test_an_export_writes_each_unit_of_its_sample_once_in_its_programs_units_and_once_in_the_list(world, tmp_path, monkeypatch, caplog):
     limits = VX.Limits(per_family=2, workers=1, gemm_coords_per_row=3)
-    e = _export(world, tmp_path, monkeypatch, capsys, limits=limits, provenance={"row": "test"}, program_dirs={"r0": "/builds/r0"})
+    e = _export(world, tmp_path, monkeypatch, caplog, limits=limits, provenance={"row": "test"}, program_dirs={"r0": "/builds/r0"})
     n, digest = len(e.picked), world.inst["digest"]
-    assert n == 14 and e.printed == [f"[vu-export] population: 2/2 request Programs, {e.summary['population']['vus']} VUs, 14 sampled, 8 s",
+    assert n == 14 and e.logged == [f"[vu-export] population: 2/2 request Programs, {e.summary['population']['vus']} VUs, 14 sampled, 8 s",
                                      "[vu-export] 0/14 VUs, 0 s"]
     assert [p.name for p in (tmp_path / "store" / "programs").iterdir()] == [digest]
     assert json.loads((tmp_path / "store" / "programs" / digest / "program.json").read_text()) == {
@@ -121,9 +126,9 @@ def test_an_export_writes_each_unit_of_its_sample_once_in_its_programs_units_and
         "ok": True, "bad_values": [], "missing_values": 0, "values": len(values)}
 
 
-def test_an_exports_summary_counts_its_population_its_units_by_family_its_store_and_its_seconds(world, tmp_path, monkeypatch, capsys):
+def test_an_exports_summary_counts_its_population_its_units_by_family_its_store_and_its_seconds(world, tmp_path, monkeypatch, caplog):
     limits = VX.Limits(per_family=2, workers=1)
-    e = _export(world, tmp_path, monkeypatch, capsys, limits=limits, provenance={"row": "test"})
+    e = _export(world, tmp_path, monkeypatch, caplog, limits=limits, provenance={"row": "test"})
     s, n = e.summary, len(e.picked)
     assert list(s) == ["schema", "provenance", "limits", "population", "by_family", "store", "sets", "wall_s", "timing"]
     assert json.loads((tmp_path / "export.json").read_text()) == _json(s)
@@ -151,8 +156,8 @@ def test_an_exports_summary_counts_its_population_its_units_by_family_its_store_
     assert sample_s[0].endswith("_s") and sample_s[1] == round(n * EACH, 3) and s["wall_s"] == round(BUILT + n * EACH + EXTRACTED, 3)
 
 
-def test_a_unit_with_a_registered_operand_past_the_word_limit_is_listed_and_counted_and_not_stored(world, tmp_path, monkeypatch, capsys):
-    e = _export(world, tmp_path, monkeypatch, capsys, limits=VX.Limits(per_family=2, workers=1, max_row_words=8))
+def test_a_unit_with_a_registered_operand_past_the_word_limit_is_listed_and_counted_and_not_stored(world, tmp_path, monkeypatch, caplog):
+    e = _export(world, tmp_path, monkeypatch, caplog, limits=VX.Limits(per_family=2, workers=1, max_row_words=8))
     unstored = {"RMSNormFusedCuda_v2", "RMSNormTriton_v1", "RoPE_v1"}
     assert {u["family"] for u in e.units if not u["stored"]} == unstored
     for unit, listed in zip(e.units, e.listed, strict=True):
@@ -167,9 +172,9 @@ def test_a_unit_with_a_registered_operand_past_the_word_limit_is_listed_and_coun
     assert {p.name for p in (tmp_path / "store" / "values").iterdir()} == e.values_named()
 
 
-def test_a_unit_whose_replay_ends_unequal_or_unevaluated_is_listed_with_its_reason_and_never_stored(world, tmp_path, monkeypatch, capsys):
+def test_a_unit_whose_replay_ends_unequal_or_unevaluated_is_listed_with_its_reason_and_never_stored(world, tmp_path, monkeypatch, caplog):
     ends: dict[int, dict[str, Any]] = {0: {"result": False, "why": "word 3 differs"}, 1: {"result": None, "why": "an operand is not committed"}}
-    e = _export(world, tmp_path, monkeypatch, capsys, limits=VX.Limits(per_family=2, workers=1), replay=lambda k, rec: {**rec, **ends.get(k, {})})
+    e = _export(world, tmp_path, monkeypatch, caplog, limits=VX.Limits(per_family=2, workers=1), replay=lambda k, rec: {**rec, **ends.get(k, {})})
     for k, (unit, listed) in enumerate(zip(e.units, e.listed, strict=True)):
         if k in ends:
             assert list(unit) == UNIT and listed["stored"] is None
@@ -184,16 +189,16 @@ def test_a_unit_whose_replay_ends_unequal_or_unevaluated_is_listed_with_its_reas
     assert {p.name for p in (tmp_path / "store" / "values").iterdir()} == e.values_named()
 
 
-def test_an_export_into_a_directory_that_holds_one_writes_the_same_sets(world, tmp_path, monkeypatch, capsys):
+def test_an_export_into_a_directory_that_holds_one_writes_the_same_sets(world, tmp_path, monkeypatch, caplog):
     limits = VX.Limits(per_family=2, workers=1)
-    first = _export(world, tmp_path, monkeypatch, capsys, limits=limits).summary
-    again = _export(world, tmp_path, monkeypatch, capsys, limits=limits).summary
+    first = _export(world, tmp_path, monkeypatch, caplog, limits=limits).summary
+    again = _export(world, tmp_path, monkeypatch, caplog, limits=limits).summary
     assert first["sets"] and again["sets"] == first["sets"] and again["store"] == first["store"]
 
 
-def test_a_program_that_states_no_digest_has_its_units_under_program(world, tmp_path, monkeypatch, capsys):
+def test_a_program_that_states_no_digest_has_its_units_under_program(world, tmp_path, monkeypatch, caplog):
     monkeypatch.setitem(world.inst, "digest", None)
-    e = _export(world, tmp_path, monkeypatch, capsys, limits=VX.Limits(per_family=1, workers=1))
+    e = _export(world, tmp_path, monkeypatch, caplog, limits=VX.Limits(per_family=1, workers=1))
     assert [p.name for p in (tmp_path / "store" / "programs").iterdir()] == ["program"] and len(e.units) == len(e.picked) > 0
     assert json.loads((tmp_path / "store" / "programs" / "program" / "program.json").read_text()) == {
         "program_digest": "program", "requests": ["r0", "r1"], "build_dirs": {"r0": None, "r1": None}}

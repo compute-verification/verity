@@ -20,7 +20,6 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
@@ -36,6 +35,7 @@ from verity_vllm.commit import history_tables as H
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import history_rows as HR
 from verity_vllm.pipeline import serving_rows as SRW
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 
 KVL, R, EPS, TOPK, WORDS = 512, 64, 1e-5, 4, 576
 LATENT = bind(DN.DsaLatentRow, KVL=KVL, R=R, EPS=EPS)
