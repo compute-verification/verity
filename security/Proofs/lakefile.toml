@@ -116,7 +116,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.Sampled.Record.Session", "Proofs.Properties.Verity.Sampled.Record.Accepts",
   "Proofs.Properties.Verity.Sampled.Record.Runs", "Proofs.Properties.Verity.Sampled.Record.Opens",
   "Proofs.Properties.Verity.Sampled.Record.Scope", "Proofs.Properties.Verity.Sampled.Record.Inner",
-  "Proofs.Properties.Verity.Sampled.Record.Reg",
+  "Proofs.Properties.Verity.Sampled.Record.Reg", "Proofs.Flock.Claims.Sampling.Select.Prefix",
   "Proofs.Properties.Verity.Subprotocols", "Proofs.Properties.Verity.Coupling",
   "Proofs.Properties.Remote", "Proofs.Properties.Remote.Honest", "Proofs.Properties.Verity.Recursive",
   "Proofs.Properties.Verity.Recursive.Target", "Proofs.Properties.Verity.Recursive.Refusals",

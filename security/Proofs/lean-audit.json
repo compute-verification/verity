@@ -118,6 +118,7 @@
   "Proofs.Properties.Verity.Sampled.Record.Scope",
   "Proofs.Properties.Verity.Sampled.Record.Inner",
   "Proofs.Properties.Verity.Sampled.Record.Reg",
+  "Proofs.Flock.Claims.Sampling.Select.Prefix",
   "Proofs.Properties.Verity.Sampled.OpensAt",
   "Proofs.Properties.Verity.Assembled",
   "Proofs.Properties.Challenger.Window",
