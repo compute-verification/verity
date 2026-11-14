@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -37,6 +38,15 @@ KEY = bytes(range(32))
 SMALL = sw.WipeParams(64, W.READS, 1, 1_000, (("gpu", 64 * sw.LABEL_BYTES),))
 #: the pin of a period whose challenger is `wipe_side.py` on a host of its own: its key's SHA-512 (`wipe.trusted_sha512`)
 PINNED = wipe_side.key_sha512()
+
+
+def _handed(side: Side) -> Callable[..., Side]:
+    """What hands the wipe `side`, as the program that starts the run hands it the runtime's `Side.of`."""
+    def side_of(doc, node, key, local, what=None):
+        assert (key, what) == ("wipe", "the wipe"), "the wipe's side is period.json's challenger.wipe"
+        return side
+
+    return side_of
 
 
 def test_the_gate_writes_each_power_of_two_boundary() -> None:
@@ -226,7 +236,8 @@ def test_the_leg_on_a_gpu_declares_its_driver_reserve(tmp_path, monkeypatch, nvm
     """The leg on a GPU (`wipe.store` `cuda`, on `cuda_on_host`) of 64 MiB by CUDA's count and an H200's driver reserve
     more by NVML's: the tier declared is NVML's total, so `R`, and `M` with it, counts the reserve (on Demo B's H200,
     the 5,159,518,208 bits CUDA's count leaves out), and none of the device is undeclared. Without NVML the tier is
-    CUDA's, and the record names the reserve uncertified, with the reason."""
+    CUDA's, and the placement names the reserve uncertified by its tier; the prover's own record keeps the device's
+    name, uuid and bus id and the reason, and the published answer names none of them."""
     cuda = 64 << 20
     tier = cuda + RESERVE if nvml else cuda
     _drivers(monkeypatch, {"libcuda.so.1": cuda_on_host(cuda)} | ({WS.NVML: nvml_of({BUS: tier}, [])} if nvml else {}))
@@ -237,22 +248,22 @@ def test_the_leg_on_a_gpu_declares_its_driver_reserve(tmp_path, monkeypatch, nvm
     device = tmp_path / "device"
     device.mkdir()
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
-    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): side)
     wipe_judge.judge(period, monkeypatch)
     out = tmp_path / "out"
-    answer = W.leg(period, "n0", out)
+    answer = W.leg(period, "n0", out, side_of=_handed(side))
     record = json.loads((out / "wipe.json").read_text())
     assert answer["verdict"] == "accept" and record["prover"]["gate"]["passed"], answer
     assert answer["profile"]["tiers"] == [["gpu-hbm", tier]] and answer["public"]["memory_bits"] == 8 * tier
     assert answer["profile"]["certificate"]["outside_bits"] == record["wipe"]["outside_bits"] == 8 * (tier - (1 << 25))
-    store = record["placement"]["prover_store"]
+    store = record["prover"]["store"]
     assert _totals(store) == ((cuda, tier, tier, "nvml") if nvml else (cuda, None, cuda, "cuda"))
+    assert record["placement"] == answer["profile"]["placement"] and "prover_store" not in record["placement"]
+    assert not any(store[k] in json.dumps(answer) for k in ("device", "uuid", "pci_bus_id")) and store["pci_bus_id"] == BUS
     assert [u for u in record["placement"]["undeclared_tiers"] if u["tier"] == "gpu-hbm"] == []
     reserve = [g for g in record["uncertified"] if "driver reserves" in g]
-    assert reserve == ([] if nvml else [(
-        f"tier gpu-hbm: the memory NVIDIA H200's driver reserves is undeclared: the tier is CUDA's total ({cuda} bytes), "
-        f"which leaves it out, since NVML gave none ({store['nvml_error']}); the fill doesn't cover it and M doesn't "
-        "count it")])
+    assert reserve == record["placement"]["store_gaps"] == ([] if nvml else [(
+        f"tier gpu-hbm: the memory the GPU's driver reserves is undeclared: the tier is CUDA's total ({cuda} bytes), "
+        "which leaves it out, since NVML gave none; the fill doesn't cover it and M doesn't count it")])
     assert W.summary(record)["uncertified"] == record["uncertified"]
 
 
@@ -273,10 +284,9 @@ def test_the_leg_on_a_disk_and_a_gpu_declares_the_gpus_driver_reserve(tmp_path, 
     device = tmp_path / "device"
     device.mkdir()
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
-    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): side)
     wipe_judge.judge(period, monkeypatch)
     out = tmp_path / "out"
-    answer = W.leg(period, "n0", out)
+    answer = W.leg(period, "n0", out, side_of=_handed(side))
     assert answer["verdict"] == "accept", answer
     record = json.loads((out / "wipe.json").read_text())
     assert record["wipe"]["tier"] == "disk+gpu-hbm" and answer["profile"]["tiers"][1] == ["gpu-hbm", tier]
@@ -295,7 +305,7 @@ def test_the_leg_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wipe_strea
     """The leg whole as the H200's will run: period.json's wipe on a `wipe_store` prover (host memory standing in for
     the device) gated first, against a challenger side of its own host (`wipe_side.py`) streaming natively. The record
     holds the prover's fill and device reads, the signed session's fill and round trips, and the streamer's gate and
-    figures; the placement names the store."""
+    figures; the prover's record names its store, and the placement doesn't."""
     period = tmp_path / "periods" / "p0"
     period.mkdir(parents=True)
     (period / "period.json").write_text(json.dumps({"challenger_host": "auditor", "wipe": {
@@ -304,14 +314,14 @@ def test_the_leg_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wipe_strea
     device.mkdir()
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device),
                             str(wipe_streamer.path)))
-    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): side)
     wipe_judge.judge(period, monkeypatch)
     out = tmp_path / "out"
-    answer = W.leg(period, "n0", out)
+    answer = W.leg(period, "n0", out, side_of=_handed(side))
     assert answer["verdict"] == "accept", answer
     assert answer["profile"]["tiers"] == [["host-dram", 1 << 25]]
-    assert answer["profile"]["placement"]["prover_store"]["tier"] == "host-dram"
+    assert answer["profile"]["placement"]["store_gaps"] == [] and "prover_store" not in answer["profile"]["placement"]
     record = json.loads((out / "wipe.json").read_text())
+    assert record["prover"]["store"]["tier"] == "host-dram"
     assert record["prover"]["gate"]["passed"] and record["prover"]["fill"]["bytes"] == 1 << 25
     assert record["prover"]["reads"]["n"] == W.READS and record["session"]["reads"]["n"] == W.READS
     assert record["session"]["fill"]["bytes"] == 1 << 25
@@ -334,9 +344,15 @@ def test_the_cheats_leg_rejects_under_a_simulated_placement(tmp_path, monkeypatc
     device.mkdir()
     side = Side("n0", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
     extras = []
-    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): extras.append(extra) or side)
+
+    def side_of(doc, node, key, local, what=None):
+        assert (key, what) == ("wipe", "the wipe"), "the wipe's side is period.json's challenger.wipe"
+        extras.append(tuple(local[len(WP.command("d")):]))
+        return side
+
     out = tmp_path / "out"
-    assert W.main(["--period", str(period), "--out", str(out), "--node", "n0", "--expect", "reject"]) == 0
+    assert W.main(["--period", str(period), "--out", str(out), "--node", "n0", "--expect", "reject"],
+                  side_of=side_of) == 0
     assert extras == [()], "the period's egress count is the check's evidence, never the challenger's"
     assert json.loads(bytes.fromhex(json.loads((out / "wipe.case.json").read_text())["evidence"]))["egress_mib"] == 0
     record = json.loads((out / "wipe.json").read_text())
@@ -447,10 +463,9 @@ def test_the_leg_on_a_disk_and_host_memory(tmp_path, monkeypatch) -> None:
     device = tmp_path / "device"
     device.mkdir()
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
-    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): side)
     wipe_judge.judge(period, monkeypatch)
     out = tmp_path / "out"
-    answer = W.leg(period, "n0", out)
+    answer = W.leg(period, "n0", out, side_of=_handed(side))
     assert answer["verdict"] == "accept", answer
     record = json.loads((out / "wipe.json").read_text())
     disk_total = record["prover"]["store"]["parts"][0]["total_bytes"]
@@ -477,10 +492,9 @@ def test_the_leg_on_a_disk_and_the_whole_dram(tmp_path, monkeypatch) -> None:
     device = tmp_path / "device"
     device.mkdir()
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
-    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): side)
     wipe_judge.judge(period, monkeypatch)
     out = tmp_path / "out"
-    answer = W.leg(period, "n0", out)
+    answer = W.leg(period, "n0", out, side_of=_handed(side))
     assert answer["verdict"] == "accept", answer
     record = json.loads((out / "wipe.json").read_text())
     whole = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")

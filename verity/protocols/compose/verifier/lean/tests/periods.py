@@ -1,5 +1,5 @@
 """Onsite's real subprotocols' cases for the composition's difftest, each with the answer its Python verifier gives it
-(`reference.Recorded`), all on one store: the committed 9-block `C*` of the remote bandwidth audit's fixture
+(`reference.Recorded`), all on one store: the committed 9-block `C*` of PoUB's fixture
 (`remote_bandwidth/tests/fixtures/p2-store.json`), registered for PoUB-P2 on its PoUS setup. Space's
 (`pous.period.audit` of that `C*` on node `n0`, signed by a key at S1's deployed parameters, `mc_cases.deployed_signer`)
 honest, under a prover that answers every other round with zeros, the honest audit's case committed to a setup with
@@ -24,6 +24,7 @@ from verity.protocols.accounting.pous.verifier import period as pous
 from verity.protocols.accounting.pous.verifier import run as RUN
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
+from verity.protocols.accounting.poub.prover import p2_prover
 from verity.protocols.accounting.poub.verifier import p2, p2_case, p2_lean, p2_party
 from verity.commitments.identity import canonical_json_bytes
 
@@ -39,7 +40,7 @@ OTHER_STORE = "other-store"
 """PoUS's honest run on `OTHER_POUS_STORE`, accepted: the one that meets PoUB-P2's case on two stores."""
 
 
-def _committed(T) -> p2.Store:
+def _committed(T) -> p2_prover.Store:
     """The committed `C*` (`fixtures/p2-store.json`), registered for P2 on its PoUS setup at `T`'s node."""
     doc = json.loads((BANDWIDTH / "tests/fixtures/p2-store.json").read_text())
     data = (BANDWIDTH / "tests/fixtures/p2-c-star.bin").read_bytes()
@@ -49,10 +50,10 @@ def _committed(T) -> p2.Store:
     commitment, salt, n = bytes.fromhex(doc["commitment"]), bytes.fromhex(doc["salt"]), params.blocks_per_segment
     vk = setup.verifier_key_from_encoding(params, None, commitment, salt,
                                           [blocks[n * s:n * (s + 1)] for s in range(params.segments)])
-    return p2.Store(p2.register(T.SOURCE, T.NODE, commitment, vk), blocks)
+    return p2_prover.Store(p2.register(T.SOURCE, T.NODE, commitment, vk), blocks)
 
 
-def _held(store: p2.Store) -> pous.EncodedStore:
+def _held(store: p2_prover.Store) -> pous.EncodedStore:
     """PoUS's store for the `C*` that P2's `store` registers: its setup published at that `C*`'s commitment, salt and
     root."""
     reg, q = store.registration, store.registration.params
@@ -145,7 +146,9 @@ def build(tmp: Path) -> None:
     accepted, rejected = reads(), reads(skip=1)
     log = json.loads(bytes.fromhex(accepted[0]["evidence"]))["log"]
     last = max(k for k, x in enumerate(log) if x["op"] == "p2_openings")
-    unverified = accepted[0] | {"evidence": canonical_json_bytes({"log": log[:last]}).hex()}
+    cut, session = log[:last], bytes.fromhex(accepted[0]["params"]["session"])
+    close = p2_case.close_of(T.signer(), session, p2_case.head_of(accepted[0]), cut)
+    unverified = accepted[0] | {"evidence": canonical_json_bytes({"close": close, "log": cut}).hex()}
     R.BANDWIDTH.cases.update({R.ACCEPT: accepted, R.REJECT: rejected,
                               R.UNDECIDED: (unverified, p2_case.answer(unverified, {}))}
                              | _undecodable(R.BANDWIDTH.id, accepted[0], accepted[1]["commitment"]))

@@ -6,7 +6,7 @@ per-member form (`JointAuditV5.hcls_of_bounds`) reads one count of link points p
 verifier's public coins fails the window (`OneStageZk.RAN_OUT`), so only a sample that ends gives counts: between the
 member's fewest and most units (`ended`, `bounds`), and the registration refuses a member whose fewest and most give
 different counts, a member whose fewest is none, and a sampling design no sample of which ends (`refused`,
-`Registration.check`'s `link-points`). A member whose fewest is none is one some sample that ends misses: that sample
+`Docket.check`'s `link-points`). A member whose fewest is none is one some sample that ends misses: that sample
 gives it no statement (`OneStageZk.sampledHeld`), so the check sets up no session of its circuit.
 
 A sample that ends (`Draw.sampleUnits`) samples, under `subset k`, `k` distinct units of the population (`k` above the
@@ -30,7 +30,7 @@ meta import Spot.Draw
 `nbl`, the link points of a session past `PT_LOCAL`; `ended`, the fewest and most of a member's units a sample under a
 sampling design holds when it ends; `bounds` and `refused`, each member's counts and the members some sample that ends
 misses or whose fewest and most give different link points; `ends` and `NEVER_ENDS`, a sampling design no sample of
-which ends; `samplingDesignOf`, the sampling design the sample runs on. `Registration.check` fails a registration `link-points`
+which ends; `samplingDesignOf`, the sampling design the sample runs on. `Docket.check` fails a registration `link-points`
 through `refused` (`linkRefused`), and `Pieces.table`'s `link_points` serves `piece` to the difftest.
 -/
 

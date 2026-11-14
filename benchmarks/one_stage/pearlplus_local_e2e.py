@@ -24,7 +24,7 @@ process of its own (this file's ``serve`` verb, `auditor.run` with no coin link,
    credits nothing, so on the toy every condition holds up to its last, the Lean's credit, which the row names
    (`TOY_ROW`).
 
-Stand-ins, named in OUT/e2e.json: the serve (one toy pass, `served.json` written here), sampled proofs' window
+Stand-ins, named in OUT/e2e.json: the serve (one toy pass, `served.json` written here), SPOT's window
 docket and records audit (two files tied to W), and, unless ``--lean`` names a ``pouw-pearlplus``, the Lean
 ``PouwCheck.PearlPlus`` verdict (``pearlplus-lean.json``, copied from Pearl+'s answer); with it, `served_pearlplus.sh`'s
 Lean step writes that file (``served_passes.py lean``, both verdicts in OUT/e2e.json's ``lean``). Then, as a control, a

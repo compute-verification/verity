@@ -5,7 +5,7 @@ public import Proofs.Accounting.RateAudit.Conservation
 public import Proofs.Accounting.RateAudit.DeployedRun
 
 /-!
-# The remote bandwidth audit as deployed, with side sources that may relay receipts: the proof
+# PoUB as deployed, with side sources that may relay receipts: the proof
 
 **Completions as memory reads.** `Deployed.lean` simulates a pass device by reading its completions over the side
 link, which costs nothing while the side sources ignore the oracle. When they may relay receipts, every bit of the link
@@ -478,7 +478,7 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_mono)
 
-/-- **The remote bandwidth audit as deployed, with side sources that may relay receipts**
+/-- **PoUB as deployed, with side sources that may relay receipts**
 (`Accounting.Guarantees.RemoteRunConservationRelay`). -/
 theorem RemoteRunConservationRelay : Accounting.Guarantees.RemoteRunConservationRelay := by
   intro n P N b h ρ S L q r s d G lam m τ rounds cRoot F cost tier A dbar dw hn hP hN hb hrc hdw hW hF
@@ -486,7 +486,7 @@ theorem RemoteRunConservationRelay : Accounting.Guarantees.RemoteRunConservation
     (DeployedSession.pr_unpaid_le A tier _ _ (window_relay_le A tier hrc hW hF))).trans (le_of_eq ?_)
   ring
 
-/-- **The deployed session with relaying side sources conserves its words as a run of the remote audit**
+/-- **The deployed session with relaying side sources conserves its words as a run of PoUB**
 (`Accounting.Guarantees.RemoteMonitoringPeriodConservationRelay`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
 theorem RemoteMonitoringPeriodConservationRelay : Accounting.Guarantees.RemoteMonitoringPeriodConservationRelay := by
   intro n P N b h ρ S L q r s d G lam m τ rounds cRoot F cost tier A Nd a dbar hn hP hN hb hrc hdbar ha hab hal hC hW hF
@@ -510,7 +510,7 @@ theorem RemoteMonitoringPeriodConservationRelay : Accounting.Guarantees.RemoteMo
   rw [hCr] at h2 eΛ k ⊢
   nlinarith [h2, eΛ, k]
 
-/-- **Each window with relaying side sources conserves its words as a run of the remote audit**
+/-- **Each window with relaying side sources conserves its words as a run of PoUB**
 (`Accounting.Guarantees.RemoteWindowRunConservationRelay`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
 theorem RemoteWindowRunConservationRelay : Accounting.Guarantees.RemoteWindowRunConservationRelay := by
   intro n P N b h ρ S L q r s d G lam m τ rounds cRoot F cost tier A w Nd a dw hP hN hb hrc hdw ha hab hal hC hW hF

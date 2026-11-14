@@ -460,10 +460,10 @@ template's statement and the registered reads it reads (`refReads`, null for non
 wires (`replayWires`, none when the Definition makes none), the rows of the ports they and the links name
 (`replayRows`), the names the replay block's return has in the boundary registration's record (`replayReturns`), and,
 of the values the interior registration registers, the verifier's own copies of those it holds without the prover:
-each one it fills itself, with its rows of sources (`Registration.Verifier.supplied`, `Supplied.Rows`), and the names
-of those it pinned or holds to an earlier record (`fixed`: `Registration.Verifier.pinned` and `outputs`); the
+each one it fills itself, with its rows of sources (`Docket.Verifier.supplied`, `Supplied.Rows`), and the names
+of those it pinned or holds to an earlier record (`fixed`: `Docket.Verifier.pinned` and `outputs`); the
 templates the auditor's params record as reads, each with its table's rows, `(template, V)` (`Run.templateReads`); the
-registered tables the auditor's params pin before any coin (`tables`: `Registration.Verifier.tables`),
+registered tables the auditor's params pin before any coin (`tables`: `Docket.Verifier.tables`),
 `(parameter, entry)` each, the entry the tables' registration names; the words of the rows each wire joins
 (`replayWidths`); and the wired key's switch, by default `WIRED_KEY`, which no executable of record sets otherwise. -/
 structure Own where

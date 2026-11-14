@@ -6,7 +6,7 @@ public import Proofs.Properties.Verity.Sampled.Window.Writes
 public import Proofs.Properties.Verity.Sampled.CountsLayout
 
 /-!
-# Sampled proofs' coupling over a window: a session's stops' frames and counts
+# SPOT's coupling over a window: a session's stops' frames and counts
 
 What the members' steps (`MemberSteps`) read at a stop of a member's session, beside `Window/Record.lean`'s moves:
 

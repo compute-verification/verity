@@ -132,7 +132,7 @@ def _window(design: dict, counts=(2, 18)) -> tuple:
 
 
 def test_the_per_member_forms_link_points_are_held_by_both():
-    """`link-points` by the verifier (`registration.check`'s ``members``, `Registration.linkRefused`), after R8, on a
+    """`link-points` by the verifier (`registration.check`'s ``members``, `Docket.linkRefused`), after R8, on a
     window of two members at one unit a proof block, PAIR's proof blocks then OTHER's: two and eighteen, or ten each.
     A row is a sampling design with each member's fewest and most sampled proof blocks over the samples that end, the
     members a sample that ends misses (fewest none) and the members whose fewest and most open different link points
