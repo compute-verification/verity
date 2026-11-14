@@ -1,6 +1,6 @@
 """The node files: every number an entry under the cards' rules, each naming a GPU card and a host card and no
 machine, address or provider. Every memory leaf states the most its bytes are read back at, a ceiling, which
-`nodes.leaves` gives in whole bits a second beside the rate that bounds a tier's leaves together. `nodes.ways_out`
+`leaves` gives in whole bits a second beside the rate that bounds a tier's leaves together. `ways_out`
 gives a node's ways out: its interfaces, each with its line rate or with none where it reads none, and its storage
 path, at the rate that bounds its disks together. A node whose file states its host's DRAM and disks and an interface
 gives a log accepted for `remote` against the auditor the card files give; a file without them gives no entry. Every
@@ -23,11 +23,10 @@ from pathlib import Path
 import pytest
 
 from verity.errors import InvalidArtifact
-from verity.hardware import cards, nodes
-from verity.hardware.cards import MARKS
-from verity.device import (NO_LINE_RATE, OUTSIDE, SCHEMES, STORAGE_PATH, TIERS, Auditor, ClockPremise, Entry,
-                                  HostFigures, Link, Loc, Malformed, Refused, Registration, Sheet, Site, auditor_host,
-                                  check, clock_drift, node_figures, refusal)
+from verity import device as S
+from verity.device import (MARKS, NO_LINE_RATE, OUTSIDE, SCHEMES, STORAGE_PATH, TIERS, Auditor, ClockPremise, Entry,
+                           HostFigures, Link, Loc, Malformed, Refused, Registration, Sheet, Site, auditor_host, check,
+                           clock_drift, node_figures, refusal)
 
 HOST = "host0"
 """The id a test registers a node's host under: a node file names none."""
@@ -36,10 +35,10 @@ SCHEME = SCHEMES[0]
 CERTIFIER = ("certifier0", "dummy-certifier0-key", SCHEME)
 """A network certifier's id, key and the key's scheme, as whoever registers a node gives them: a node file names
 none of them."""
-READ = [kind for kind in nodes.kinds()
-        if {"dram", "disk"} <= {leaf["tier"] for leaf in nodes.load(kind).get("memory", {}).values()}]
+READ = [kind for kind in S.node_kinds()
+        if {"dram", "disk"} <= {leaf["tier"] for leaf in S.load_node(kind).get("memory", {}).values()}]
 """The nodes whose file states the host's DRAM and a disk: the ones an entry can be built of."""
-WIRED = [kind for kind in READ if any(way.split and way.bw for way in nodes.ways_out(nodes.load(kind), "host0"))]
+WIRED = [kind for kind in READ if any(way.split and way.bw for way in S.ways_out(S.load_node(kind), "host0"))]
 """Those with an interface that states a line rate: the ones a network certifier can be registered in front of."""
 ART = re.compile(r"\bart:[0-9a-f]{12}")
 NAMED = re.compile(r"\bvy-[a-z0-9-]+|\bcomputeinstance-\w+|\b(?:\d{1,3}\.){3}\d{1,3}\b|\b(?:nebius|runpod)\b", re.I)
@@ -62,20 +61,20 @@ def entries(table: dict, at: str = "") -> dict[str, dict]:
 def auditor(kind: str, **keys: str) -> Auditor:
     """The auditor whose data sheets are the GPU card files', with these keys of its own devices, each of `SCHEME`,
     and its figures for node `kind` registered as `HOST`, which `node_figures` reads from the node's files."""
-    node = nodes.load(kind)
-    memory, host = node_figures(node, cards.load(node["host"]["sku"]), HOST, ways=nodes.ways_out(node, HOST),
-                                leaves=nodes.leaves(node, HOST))
-    return Auditor.of_files(map(cards.load, cards.skus("gpu")), keys={i: (k, SCHEME) for i, k in keys.items()},
+    node = S.load_node(kind)
+    memory, host = node_figures(node, S.load_card(node["host"]["sku"]), HOST, ways=S.ways_out(node, HOST),
+                                leaves=S.leaves(node, HOST))
+    return Auditor.of_files(map(S.load_card, S.skus("gpu")), keys={i: (k, SCHEME) for i, k in keys.items()},
                             memory=memory, hosts=[(HOST, host)])
 
 
 def log_of(kind: str, composite: str, certifier: tuple[str, str, str] | None = None) -> Registration:
     """The composite's log of one entry, the node's, with this network certifier standing in front of the node."""
-    node = nodes.load(kind)
+    node = S.load_node(kind)
     log = Registration(composite)
-    return log.append(log.node_entry(node, cards.load(node["device"]["sku"]), HOST, certifier=certifier,
-                                     host_card=cards.load(node["host"]["sku"]), ways=nodes.ways_out(node, HOST),
-                                     leaves=nodes.leaves(node, HOST)))
+    return log.append(log.node_entry(node, S.load_card(node["device"]["sku"]), HOST, certifier=certifier,
+                                     host_card=S.load_card(node["host"]["sku"]), ways=S.ways_out(node, HOST),
+                                     leaves=S.leaves(node, HOST)))
 
 
 def reached(entry: Entry) -> Entry:
@@ -88,12 +87,12 @@ def reached(entry: Entry) -> Entry:
 def test_the_nodes_we_run() -> None:
     """Each states its host's DRAM and disks, so the acceptance tests below hold each one's log. Each states one
     interface: the eight-card node's reads a line rate, and the H200 node's reads none."""
-    assert nodes.kinds() == READ == ["h200-sxm-141gb-x1", "rtx-pro-6000-server-x8"]
+    assert S.node_kinds() == READ == ["h200-sxm-141gb-x1", "rtx-pro-6000-server-x8"]
     assert WIRED == ["rtx-pro-6000-server-x8"]
-    assert all(list(nodes.load(kind)["interface"]) == ["eth0"] for kind in READ)
+    assert all(list(S.load_node(kind)["interface"]) == ["eth0"] for kind in READ)
 
 
-@pytest.mark.parametrize("kind", nodes.kinds())
+@pytest.mark.parametrize("kind", S.node_kinds())
 def test_a_node_file_states_what_no_card_does(kind: str) -> None:
     """Its kind is its card and count; it names a GPU card and a host card; and its only numbers are the count, each
     memory leaf's bytes, in bytes and whole, under a tier of the host's own, with the leaf's read rate, and the line
@@ -101,10 +100,10 @@ def test_a_node_file_states_what_no_card_does(kind: str) -> None:
     read, and no number. The storage path is stated once, naming every disk leaf, each a network disk on both nodes,
     with no rate of its own. A leaf, an interface and the storage path share no name, since each is registered as
     `host/NAME`."""
-    node = nodes.load(kind)
-    device, count = node["device"], cards.number(node["device"]["count"])
+    node = S.load_node(kind)
+    device, count = node["device"], S.number(node["device"]["count"])
     assert kind == f"{device['sku']}-x{count}" and count >= 1
-    assert cards.load(device["sku"])["kind"] == "gpu" and cards.load(node["host"]["sku"])["kind"] == "host"
+    assert S.load_card(device["sku"])["kind"] == "gpu" and S.load_card(node["host"]["sku"])["kind"] == "host"
     assert set(node) <= {"node", "name", "device", "host", "memory", "interface", "storage"}
     leaves, ports = node.get("memory", {}), node.get("interface", {})
     rated = [name for name, port in ports.items() if "rate" in port]
@@ -113,26 +112,26 @@ def test_a_node_file_states_what_no_card_does(kind: str) -> None:
                                             *(f"interface.{name}.rate" for name in rated)])
     for name, leaf in leaves.items():
         assert sorted(leaf) == ["bytes", "rate", "tier"] and leaf["tier"] in set(TIERS) - {"hbm"}, name
-        assert leaf["bytes"]["unit"] == "B" and cards.number(leaf["bytes"]) > 0, name
+        assert leaf["bytes"]["unit"] == "B" and S.number(leaf["bytes"]) > 0, name
     for name, port in ports.items():
         if name in rated:
-            assert sorted(port) == ["rate"] and port["rate"]["unit"] == "bit/s" and cards.number(port["rate"]) > 0, name
+            assert sorted(port) == ["rate"] and port["rate"]["unit"] == "bit/s" and S.number(port["rate"]) > 0, name
         else:
             assert sorted(port) == ["driver", "source"] and port["driver"].strip() and ART.search(port["source"]), name
     path = node["storage"]
     assert sorted(path) == ["leaves", "source"] and ART.search(path["source"])
     assert path["leaves"] == [name for name, leaf in leaves.items() if leaf["tier"] == "disk"]
-    names = (*leaves, *ports, nodes.STORAGE)
+    names = (*leaves, *ports, S.STORAGE)
     assert len(set(names)) == len(names) and not any(re.fullmatch(r"gpu\d+", name) for name in names)
 
 
-@pytest.mark.parametrize("kind", nodes.kinds())
+@pytest.mark.parametrize("kind", S.node_kinds())
 def test_every_number_is_sourced_as_a_cards_is(kind: str) -> None:
     """The cards' rules: a mark and a source on every number, evidence cited by its `art:` id, never by a run id, and
     a measurement citing the record of what measured it."""
-    numbers = entries(nodes.load(kind))
+    numbers = entries(S.load_node(kind))
     assert all(e["mark"] in MARKS and e["source"].strip() for e in numbers.values())
-    text = (nodes.NODES / f"{kind}.toml").read_text(encoding="utf-8")
+    text = (S.NODES / f"{kind}.toml").read_text(encoding="utf-8")
     assert not re.findall(r"\br\d{8}-\d{6}-[0-9a-f]{4}\b", text), \
         "cite the run's record (`research data show RUN`: outputs.run_record) as art:<12 hex>"
     uncited = sorted(key for key, e in numbers.items() if e["mark"] == "measurement" and not ART.search(e["source"]))
@@ -141,11 +140,11 @@ def test_every_number_is_sourced_as_a_cards_is(kind: str) -> None:
                          "one reads it")
 
 
-@pytest.mark.parametrize("kind", nodes.kinds())
+@pytest.mark.parametrize("kind", S.node_kinds())
 def test_a_node_file_names_no_machine_address_or_provider(kind: str) -> None:
     """The node files are in the public tree, and a kind of node is not a machine: a file says "a VM of this kind" and
     "the node", and cites what read it by its `art:` id."""
-    text = (nodes.NODES / f"{kind}.toml").read_text(encoding="utf-8")
+    text = (S.NODES / f"{kind}.toml").read_text(encoding="utf-8")
     assert not NAMED.findall(text), (f"{kind}.toml names {sorted(set(NAMED.findall(text)))}; name the node by its "
                                      "kind and the read by its art:<12 hex>, and leave the machine, its address and "
                                      "its provider out")
@@ -163,18 +162,18 @@ def test_remote_accepts_a_nodes_log(kind: str) -> None:
     from the host to the outside at its rate in bits a second: an interface at the line rate its table states, or at
     none, saying so, where it reads none, then the storage path at the rate that bounds the node's disks together,
     saying it is the storage path. They are boundary links, none of them certified, and neither site is mediated."""
-    node = nodes.load(kind)
-    sheet = Sheet.of_file(cards.load(node["device"]["sku"]))
-    count, leaves = int(cards.number(node["device"]["count"])), node.get("memory", {}).values()
+    node = S.load_node(kind)
+    sheet = Sheet.of_file(S.load_card(node["device"]["sku"]))
+    count, leaves = int(S.number(node["device"]["count"])), node.get("memory", {}).values()
     site = check(log_of(kind, "remote"), auditor(kind))
     assert site.units == tuple(f"{HOST}/gpu{i}" for i in range(count))
     assert all(site.sheet(d) == sheet and site.held(d) == sheet.mem for d in site.units)
     assert site.tiers(HOST) == {"hbm": count * sheet.mem} | {
-        tier: sum(int(cards.number(leaf["bytes"])) for leaf in leaves if leaf["tier"] == tier) for tier in ("dram", "disk")}
-    ports = [Link(f"{HOST}/{name}", (HOST, OUTSIDE), math.ceil(cards.number(port["rate"])), 0) if "rate" in port
+        tier: sum(int(S.number(leaf["bytes"])) for leaf in leaves if leaf["tier"] == tier) for tier in ("dram", "disk")}
+    ports = [Link(f"{HOST}/{name}", (HOST, OUTSIDE), math.ceil(S.number(port["rate"])), 0) if "rate" in port
              else Link(f"{HOST}/{name}", (HOST, OUTSIDE), None, 0, NO_LINE_RATE)
              for name, port in node["interface"].items()]
-    path = Link(f"{HOST}/storage", (HOST, OUTSIDE), nodes.leaves(node, HOST)[1]["disk"], 0, STORAGE_PATH)
+    path = Link(f"{HOST}/storage", (HOST, OUTSIDE), S.leaves(node, HOST)[1]["disk"], 0, STORAGE_PATH)
     assert site.links == (*ports, path) and len(ports) == 1
     assert site.boundary(HOST) == list(site.links) and not any(site.certified(k) for k in site.links)
     assert not site.mediated
@@ -187,7 +186,7 @@ def test_a_node_whose_interface_reads_no_rate_says_why_no_certifier_splits_it(ki
     refuses the node by `challenger-reach` alone, and accepts it once a challenger reaches the host, with a site that
     is not mediated. A network certifier named on the node is refused under either composite: its links would have
     no rate."""
-    assert [way.bw for way in nodes.ways_out(nodes.load(kind), HOST) if way.split] == [None]
+    assert [way.bw for way in S.ways_out(S.load_node(kind), HOST) if way.split] == [None]
     entry = log_of(kind, "onsite").entries[0]
     assert [(k.id, k.beta, k.unmediated) for k in entry.links] == [
         (f"{HOST}/eth0", None, NO_LINE_RATE), (f"{HOST}/storage", 5_293_292_307_696, STORAGE_PATH)]
@@ -209,7 +208,7 @@ def test_onsite_refuses_a_nodes_own_ways_out(kind: str, certifier: tuple[str, st
     links are registered beside the node's own, which stay."""
     keys = {CHALLENGER: "dummy-key", **({} if certifier is None else {certifier[0]: certifier[1]})}
     entry = log_of(kind, "onsite", certifier).entries[0]
-    bare = [f"{HOST}/{name}" for name in nodes.load(kind)["interface"]]
+    bare = [f"{HOST}/{name}" for name in S.load_node(kind)["interface"]]
     for e in (entry, reached(entry)):
         with pytest.raises(Refused) as refused:
             check(Registration("onsite", (e,)), auditor(kind, **keys))
@@ -224,7 +223,7 @@ def test_a_certifier_links_to_one_host_and_the_outside(kind: str) -> None:
     the outside missing, or linked to a second host, is refused by `kind`."""
     log = log_of(kind, "remote", CERTIFIER)
     cert, entry = CERTIFIER[0], log.entries[0]
-    beta = sum(way.bw for way in nodes.ways_out(nodes.load(kind), HOST) if way.split)
+    beta = sum(way.bw for way in S.ways_out(S.load_node(kind), HOST) if way.split)
     assert entry.links[-2:] == (Link(f"{HOST}/{cert}", (HOST, cert), beta, 0),
                                 Link(f"{cert}/{OUTSIDE}", (cert, OUTSIDE), beta, 0))
     assert check(log, auditor(kind, **{CERTIFIER[0]: CERTIFIER[1]})).far(cert) == [HOST, OUTSIDE]
@@ -244,7 +243,7 @@ def test_only_onsites_uncertified_refuses_a_host_with_a_bare_link_beside_its_cer
     certifier on the interface does not mediate the disks, so the site is not mediated. Without the path's link too,
     it is. Either log is refused at its end by `inventory`: the auditor's figures list the ways the entry left out."""
     keys = {CHALLENGER: "dummy-key", **{CERTIFIER[0]: CERTIFIER[1]}}
-    ports = [f"{HOST}/{name}" for name in nodes.load(kind)["interface"]]
+    ports = [f"{HOST}/{name}" for name in S.load_node(kind)["interface"]]
     site = check(log_of(kind, "remote", CERTIFIER), auditor(kind, **keys))
     assert [(k.id, site.certified(k)) for k in site.boundary(HOST)] == [
         *((port, False) for port in ports), (f"{HOST}/storage", False), (f"{HOST}/{CERTIFIER[0]}", True)]
@@ -299,9 +298,9 @@ def test_the_quoted_host_figures() -> None:
     rate, the leaves' together; and its ways out at their rates. The node's entry states the same, which its check
     holds it to."""
     def figures(kind: str) -> HostFigures:
-        node = nodes.load(kind)
-        return node_figures(node, cards.load(node["host"]["sku"]), HOST, ways=nodes.ways_out(node, HOST),
-                            leaves=nodes.leaves(node, HOST))[1]
+        node = S.load_node(kind)
+        return node_figures(node, S.load_card(node["host"]["sku"]), HOST, ways=S.ways_out(node, HOST),
+                            leaves=S.leaves(node, HOST))[1]
 
     assert figures("rtx-pro-6000-server-x8") == HostFigures(
         8_002_732_032, (("rtx-pro-6000-server", 8),), (("dram", 9_011_200_000_000), ("disk", 5_584_738_461_544)),
@@ -310,60 +309,60 @@ def test_the_quoted_host_figures() -> None:
         3_519_021_056, (("h200-sxm-141gb", 1),), (("dram", 4_915_200_000_000), ("disk", 5_293_292_307_696)),
         ((f"{HOST}/eth0", None), (f"{HOST}/storage", 5_293_292_307_696)))
     for kind in READ:
-        node = nodes.load(kind)
+        node = S.load_node(kind)
         host = next(x for x in log_of(kind, "remote").entries[0].locs if x.id == HOST)
         assert (host.chip, host.shared) == (figures(kind).chip, figures(kind).shared)
-        assert host.chip == 8 * cards.number(cards.load(node["host"]["sku"])["store"]["chip"])
+        assert host.chip == 8 * S.number(S.load_card(node["host"]["sku"])["store"]["chip"])
 
 
 def test_the_quoted_ways_out() -> None:
-    """Each node's ways out as `nodes.ways_out` gives them, so a changed table is a changed line here: the interface,
+    """Each node's ways out as `ways_out` gives them, so a changed table is a changed line here: the interface,
     which a certifier may split, with its line rate in whole bits a second or with none, then the storage path, which
-    none may, at the one rate for the node's disks together that `nodes.leaves` returns."""
-    assert nodes.ways_out(nodes.load("rtx-pro-6000-server-x8"), HOST) == (
-        nodes.Way(f"{HOST}/eth0", 400_000_000_000, True), nodes.Way(f"{HOST}/storage", 5_584_738_461_544, False))
-    assert nodes.ways_out(nodes.load("h200-sxm-141gb-x1"), HOST) == (
-        nodes.Way(f"{HOST}/eth0", None, True), nodes.Way(f"{HOST}/storage", 5_293_292_307_696, False))
-    for kind in nodes.kinds():
-        node = nodes.load(kind)
-        assert nodes.ways_out(node, HOST)[-1].bw == nodes.leaves(node, HOST)[1]["disk"]
+    none may, at the one rate for the node's disks together that `leaves` returns."""
+    assert S.ways_out(S.load_node("rtx-pro-6000-server-x8"), HOST) == (
+        S.Way(f"{HOST}/eth0", 400_000_000_000, True), S.Way(f"{HOST}/storage", 5_584_738_461_544, False))
+    assert S.ways_out(S.load_node("h200-sxm-141gb-x1"), HOST) == (
+        S.Way(f"{HOST}/eth0", None, True), S.Way(f"{HOST}/storage", 5_293_292_307_696, False))
+    for kind in S.node_kinds():
+        node = S.load_node(kind)
+        assert S.ways_out(node, HOST)[-1].bw == S.leaves(node, HOST)[1]["disk"]
         assert "rate" not in node["storage"]
 
 
-@pytest.mark.parametrize("kind", nodes.kinds())
+@pytest.mark.parametrize("kind", S.node_kinds())
 def test_every_leaf_states_a_ceiling_on_its_read(kind: str) -> None:
     """Every memory leaf of every node file states a rate in bytes a second, above 0 and marked `ceiling`: the Site's
     check of a leaf's rate refuses 0, and a measured rate or a limit somebody sets bounds nothing. The DRAM leaf's is
     its host card's `memory.bandwidth_max`, and a disk's is at most its host card's `disk.read_max`, the lanes every
     disk's bytes enter the server by."""
-    node = nodes.load(kind)
-    host = cards.load(node["host"]["sku"])
+    node = S.load_node(kind)
+    host = S.load_card(node["host"]["sku"])
     assert node["memory"]
     for name, leaf in node["memory"].items():
         rate = leaf["rate"]
-        assert (rate["unit"], rate["mark"]) == ("B/s", "ceiling") and cards.number(rate) > 0, name
+        assert (rate["unit"], rate["mark"]) == ("B/s", "ceiling") and S.number(rate) > 0, name
         bound = host["memory"]["bandwidth_max"] if leaf["tier"] == "dram" else host["disk"]["read_max"]
-        assert bound["mark"] == "ceiling" and cards.number(rate) <= cards.number(bound), name
-        assert leaf["tier"] != "dram" or cards.number(rate) == cards.number(bound), name
+        assert bound["mark"] == "ceiling" and S.number(rate) <= S.number(bound), name
+        assert leaf["tier"] != "dram" or S.number(rate) == S.number(bound), name
 
 
 def test_the_quoted_leaf_rates() -> None:
-    """Each node's leaves as `nodes.leaves` gives them, in the file's order, and the rate of each tier's leaves
+    """Each node's leaves as `leaves` gives them, in the file's order, and the rate of each tier's leaves
     together, in whole bits a second, so a changed entry is a changed number here. Each disk states its host's lanes:
     2 x (88 lanes at 32 GT/s and four USB ports at 5 GT/s) on the eight-card node's host, and 2 x (80 lanes at
     32 GT/s and a chipset link of 8 at 16 GT/s) on the H200 node's, less the coding, rounded up to a whole byte a
     second."""
-    assert nodes.leaves(nodes.load("rtx-pro-6000-server-x8"), HOST) == ((
-        nodes.Leaf(f"{HOST}/dram", "dram", 1_872_605_741_056, 9_011_200_000_000),
-        nodes.Leaf(f"{HOST}/vda", "disk", 274_877_906_944, 5_584_738_461_544),
-        nodes.Leaf(f"{HOST}/vdb", "disk", 1_048_576, 5_584_738_461_544),
-        nodes.Leaf(f"{HOST}/vdc", "disk", 5_991_479_377_920, 5_584_738_461_544),
+    assert S.leaves(S.load_node("rtx-pro-6000-server-x8"), HOST) == ((
+        S.Leaf(f"{HOST}/dram", "dram", 1_872_605_741_056, 9_011_200_000_000),
+        S.Leaf(f"{HOST}/vda", "disk", 274_877_906_944, 5_584_738_461_544),
+        S.Leaf(f"{HOST}/vdb", "disk", 1_048_576, 5_584_738_461_544),
+        S.Leaf(f"{HOST}/vdc", "disk", 5_991_479_377_920, 5_584_738_461_544),
     ), {"dram": 9_011_200_000_000, "disk": 5_584_738_461_544})
-    assert nodes.leaves(nodes.load("h200-sxm-141gb-x1"), HOST) == ((
-        nodes.Leaf(f"{HOST}/dram", "dram", 214_748_364_800, 4_915_200_000_000),
-        nodes.Leaf(f"{HOST}/vda", "disk", 274_877_906_944, 5_293_292_307_696),
-        nodes.Leaf(f"{HOST}/vdb", "disk", 1_048_576, 5_293_292_307_696),
-        nodes.Leaf(f"{HOST}/vdc", "disk", 499_289_948_160, 5_293_292_307_696),
+    assert S.leaves(S.load_node("h200-sxm-141gb-x1"), HOST) == ((
+        S.Leaf(f"{HOST}/dram", "dram", 214_748_364_800, 4_915_200_000_000),
+        S.Leaf(f"{HOST}/vda", "disk", 274_877_906_944, 5_293_292_307_696),
+        S.Leaf(f"{HOST}/vdb", "disk", 1_048_576, 5_293_292_307_696),
+        S.Leaf(f"{HOST}/vdc", "disk", 499_289_948_160, 5_293_292_307_696),
     ), {"dram": 4_915_200_000_000, "disk": 5_293_292_307_696})
     assert 5_584_738_461_544 == 8 * math.ceil(2 * (88 * 32 + 4 * 5) * 10 ** 9 * 128 / 130 / 8)
     assert 5_293_292_307_696 == 8 * math.ceil(2 * (80 * 32 + 8 * 16) * 10 ** 9 * 128 / 130 / 8)
@@ -371,16 +370,16 @@ def test_the_quoted_leaf_rates() -> None:
 
 @pytest.mark.parametrize("kind", READ)
 def test_the_leaves_are_the_ones_the_entry_registers(kind: str) -> None:
-    """`nodes.leaves` and the Site's entry read one file: the same leaves under the host, by id, tier and bytes, in
+    """`leaves` and the Site's entry read one file: the same leaves under the host, by id, tier and bytes, in
     the same order, and each tier's rate is the host card's ceiling in bits."""
-    node = nodes.load(kind)
-    each, together = nodes.leaves(node, HOST)
+    node = S.load_node(kind)
+    each, together = S.leaves(node, HOST)
     site = check(log_of(kind, "remote"), auditor(kind))
     registered = [(loc.id, loc.tier, loc.bytes) for loc in site.locs if loc.kind == "memory" and loc.parent == HOST]
     assert [(leaf.id, leaf.tier, leaf.bytes) for leaf in each] == registered
-    host = cards.load(node["host"]["sku"])
-    assert together == {"dram": math.ceil(8 * cards.number(host["memory"]["bandwidth_max"])),
-                        "disk": math.ceil(8 * cards.number(host["disk"]["read_max"]))}
+    host = S.load_card(node["host"]["sku"])
+    assert together == {"dram": math.ceil(8 * S.number(host["memory"]["bandwidth_max"])),
+                        "disk": math.ceil(8 * S.number(host["disk"]["read_max"]))}
     assert all(0 < leaf.bw <= together[leaf.tier] for leaf in each)
 
 
@@ -389,16 +388,16 @@ def test_a_ceiling_is_no_less_than_the_measured_rate() -> None:
     and the disks' together are above the disks' measured read, which sums the disks, and the DRAM leaf's is above
     DRAM's measured read. The eight-card node has both on record."""
     seen = []
-    for kind in nodes.kinds():
-        node = nodes.load(kind)
-        host = cards.load(node["host"]["sku"])
-        each, together = nodes.leaves(node, HOST)
+    for kind in S.node_kinds():
+        node = S.load_node(kind)
+        host = S.load_card(node["host"]["sku"])
+        each, together = S.leaves(node, HOST)
         for tier, (table, key) in {"dram": ("memory", "read"), "disk": ("disk", "read")}.items():
             measured = host.get(table, {}).get(key)
             if measured is None or measured["mark"] != "measurement":
                 continue
             assert measured["unit"] == "B/s"
-            bits = 8 * cards.number(measured)
+            bits = 8 * S.number(measured)
             assert 0 < bits <= together[tier] and all(bits <= leaf.bw for leaf in each if leaf.tier == tier), (kind, tier)
             seen.append((kind, tier))
     assert seen == [("rtx-pro-6000-server-x8", "dram"), ("rtx-pro-6000-server-x8", "disk")]
@@ -406,13 +405,13 @@ def test_a_ceiling_is_no_less_than_the_measured_rate() -> None:
 
 def test_an_unknown_node_names_the_nodes() -> None:
     with pytest.raises(KeyError, match="h200-sxm-141gb-x1.*rtx-pro-6000-server-x8"):
-        nodes.load("rtx-pro-6000-server")
+        S.load_node("rtx-pro-6000-server")
 
 
 def sheets(tmp_path: Path) -> tuple[Path, Path]:
     """The node files and the card files, copied to directories of their own."""
     there = tmp_path / "nodes", tmp_path / "cards"
-    for source, copy in zip((nodes.NODES, cards.CARDS), there, strict=True):
+    for source, copy in zip((S.NODES, S.CARDS), there, strict=True):
         shutil.copytree(source, copy, ignore=shutil.ignore_patterns("*.py", "__pycache__"))
     return there
 
@@ -421,13 +420,13 @@ def test_a_copy_of_the_node_files_elsewhere_loads_as_they_do(tmp_path) -> None:
     """The node files and the cards copied to other directories, named as ``directory`` and ``cards_directory``, give
     the same kinds, tables, leaves and ways out as the default."""
     there, card_files = sheets(tmp_path)
-    assert sorted(p.name for p in there.iterdir()) == [f"{kind}.toml" for kind in nodes.kinds()]
-    assert nodes.kinds(directory=there) == nodes.kinds()
-    for kind in nodes.kinds():
-        node = nodes.load(kind, directory=there, cards_directory=card_files)
-        assert node == nodes.load(kind)
-        assert nodes.leaves(node, HOST, cards_directory=card_files) == nodes.leaves(node, HOST)
-        assert nodes.ways_out(node, HOST, cards_directory=card_files) == nodes.ways_out(node, HOST)
+    assert sorted(p.name for p in there.iterdir()) == [f"{kind}.toml" for kind in S.node_kinds()]
+    assert S.node_kinds(directory=there) == S.node_kinds()
+    for kind in S.node_kinds():
+        node = S.load_node(kind, directory=there, cards_directory=card_files)
+        assert node == S.load_node(kind)
+        assert S.leaves(node, HOST, cards_directory=card_files) == S.leaves(node, HOST)
+        assert S.ways_out(node, HOST, cards_directory=card_files) == S.ways_out(node, HOST)
 
 
 def test_a_directory_without_the_sheet_names_itself(tmp_path) -> None:
@@ -438,12 +437,12 @@ def test_a_directory_without_the_sheet_names_itself(tmp_path) -> None:
     kind = "rtx-pro-6000-server-x8"
     (there / "h200-sxm-141gb-x1.toml").unlink()
     with pytest.raises(KeyError, match=re.escape(f"the nodes are ['{kind}'] ({there}/<kind>.toml)")):
-        nodes.load("h200-sxm-141gb-x1", directory=there)
-    node, host = nodes.load(kind), nodes.load(kind)["host"]["sku"]
+        S.load_node("h200-sxm-141gb-x1", directory=there)
+    node, host = S.load_node(kind), S.load_node(kind)["host"]["sku"]
     (card_files / f"{host}.toml").unlink()
     with pytest.raises(InvalidArtifact, match=re.escape(f"host.sku = '{host}'; name a host card, one of ['xeon-p")):
-        nodes.load(kind, directory=there, cards_directory=card_files)
-    for read in (nodes.leaves, nodes.ways_out):
+        S.load_node(kind, directory=there, cards_directory=card_files)
+    for read in (S.leaves, S.ways_out):
         with pytest.raises(InvalidArtifact, match=re.escape(f"no card '{host}'") + ".*" + re.escape(f"({card_files}/")):
             read(node, HOST, cards_directory=card_files)
 
@@ -464,16 +463,16 @@ HOST_TABLE = '[host]\nsku = "xeon-platinum-8468-2s"\n'
 ])
 def test_a_node_file_that_breaks_a_rule_is_refused(tmp_path, monkeypatch, body: str, refusal: str) -> None:
     (tmp_path / "x.toml").write_text(body, encoding="utf-8")
-    monkeypatch.setattr(nodes, "NODES", tmp_path)
+    monkeypatch.setattr(S, "NODES", tmp_path)
     with pytest.raises(InvalidArtifact, match=refusal):
-        nodes.load("x")
+        S.load_node("x")
 
 
 def test_a_node_file_within_the_rules_loads(tmp_path, monkeypatch) -> None:
     """The bodies above differ from this one in the one thing each has wrong."""
     (tmp_path / "x.toml").write_text(f'node = "x"\n{DEVICE}{HOST_TABLE}', encoding="utf-8")
-    monkeypatch.setattr(nodes, "NODES", tmp_path)
-    assert nodes.load("x")["device"]["count"]["value"] == 2 and nodes.kinds() == ["x"]
+    monkeypatch.setattr(S, "NODES", tmp_path)
+    assert S.load_node("x")["device"]["count"]["value"] == 2 and S.node_kinds() == ["x"]
 
 
 DRAM = '[memory.dram]\ntier = "dram"\nbytes = { value = 1, unit = "B", mark = "measurement", source = "s (art:0123456789ab)" }\n'
@@ -490,7 +489,7 @@ def test_a_node_file_without_its_hosts_memory_gives_no_entry(tmp_path, monkeypat
     entry of it would pass `check` for `remote` with a host holding less than the node has, so the builder refuses it
     and says what to read."""
     (tmp_path / "x.toml").write_text(f'node = "x"\n{DEVICE}{HOST_TABLE}{leaves}', encoding="utf-8")
-    monkeypatch.setattr(nodes, "NODES", tmp_path)
+    monkeypatch.setattr(S, "NODES", tmp_path)
     with pytest.raises(Malformed, match=refusal):
         log_of("x", composite)
 
@@ -515,10 +514,10 @@ def test_a_drive_of_the_servers_own_states_its_link(tmp_path, monkeypatch) -> No
     body = (f'node = "x"\n{DEVICE}{HOST_TABLE}{leaf("dram", "dram", ceiling(HOST_DRAM))}'
             f'{leaf("nvme0n1", "disk", ceiling(drive))}{leaf("vda", "disk", ceiling(0.3))}')
     (tmp_path / "x.toml").write_text(body, encoding="utf-8")
-    monkeypatch.setattr(nodes, "NODES", tmp_path)
-    each, together = nodes.leaves(nodes.load("x"), HOST)
-    assert each == (nodes.Leaf(f"{HOST}/dram", "dram", 1, 4_915_200_000_000),
-                    nodes.Leaf(f"{HOST}/nvme0n1", "disk", 1, 8 * drive), nodes.Leaf(f"{HOST}/vda", "disk", 1, 3))
+    monkeypatch.setattr(S, "NODES", tmp_path)
+    each, together = S.leaves(S.load_node("x"), HOST)
+    assert each == (S.Leaf(f"{HOST}/dram", "dram", 1, 4_915_200_000_000),
+                    S.Leaf(f"{HOST}/nvme0n1", "disk", 1, 8 * drive), S.Leaf(f"{HOST}/vda", "disk", 1, 3))
     assert together == {"dram": 4_915_200_000_000, "disk": 5_293_292_307_696} and 8 * drive < together["disk"]
 
 
@@ -526,15 +525,15 @@ def test_the_host_card_given_is_the_one_read(tmp_path, monkeypatch) -> None:
     """A caller that holds the host card's table gives it, and the tiers' rates are that table's."""
     (tmp_path / "x.toml").write_text(f'node = "x"\n{DEVICE}{HOST_TABLE}{leaf("dram", "dram", ceiling(16))}'
                                      f'{leaf("vda", "disk", ceiling(2))}', encoding="utf-8")
-    monkeypatch.setattr(nodes, "NODES", tmp_path)
+    monkeypatch.setattr(S, "NODES", tmp_path)
     entry = {"unit": "B/s", "mark": "ceiling", "source": "s"}
     card = {"memory": {"bandwidth_max": entry | {"value": 16}}, "disk": {"read_max": entry | {"value": 2.5}}}
-    each, together = nodes.leaves(nodes.load("x"), HOST, card)
+    each, together = S.leaves(S.load_node("x"), HOST, card)
     assert [leaf.bw for leaf in each] == [128, 16] and together == {"dram": 128, "disk": 20}
     with pytest.raises(InvalidArtifact, match="the host card has memory.bandwidth_max and disk.read_max"):
-        nodes.leaves(nodes.load("x"), HOST, {"memory": card["memory"]})
+        S.leaves(S.load_node("x"), HOST, {"memory": card["memory"]})
     with pytest.raises(InvalidArtifact, match="the host card's disk.read_max is in 'B/s', marked 'measurement'"):
-        nodes.leaves(nodes.load("x"), HOST, card | {"disk": {"read_max": entry | {"value": 2.5, "mark": "measurement"}}})
+        S.leaves(S.load_node("x"), HOST, card | {"disk": {"read_max": entry | {"value": 2.5, "mark": "measurement"}}})
 
 
 @pytest.mark.parametrize(("leaves", "refusal"), [
@@ -560,17 +559,17 @@ def test_a_leaf_without_a_ceiling_on_its_read_is_refused(tmp_path, monkeypatch, 
     bytes gives no leaves: the file loads, as one that states no memory does, and the reader of its rates refuses it
     and says what to state."""
     (tmp_path / "x.toml").write_text(f'node = "x"\n{DEVICE}{HOST_TABLE}{leaves}', encoding="utf-8")
-    monkeypatch.setattr(nodes, "NODES", tmp_path)
+    monkeypatch.setattr(S, "NODES", tmp_path)
     with pytest.raises(InvalidArtifact, match=refusal):
-        nodes.leaves(nodes.load("x"), HOST)
+        S.leaves(S.load_node("x"), HOST)
 
 
 def test_a_file_with_no_memory_has_no_leaves(tmp_path, monkeypatch) -> None:
     """A file that states no leaf gives none, with its host's rates for the tiers: the entry's builder is what
     refuses a node whose host's memory nothing has read."""
     (tmp_path / "x.toml").write_text(f'node = "x"\n{DEVICE}{HOST_TABLE}', encoding="utf-8")
-    monkeypatch.setattr(nodes, "NODES", tmp_path)
-    assert nodes.leaves(nodes.load("x"), HOST) == ((), {"dram": 4_915_200_000_000, "disk": 5_293_292_307_696})
+    monkeypatch.setattr(S, "NODES", tmp_path)
+    assert S.leaves(S.load_node("x"), HOST) == ((), {"dram": 4_915_200_000_000, "disk": 5_293_292_307_696})
 
 
 SOURCE = "s (art:0123456789ab)"
@@ -594,12 +593,12 @@ def test_a_server_whose_disks_are_its_own_has_no_storage_link(tmp_path, monkeypa
     """A file with no `storage` table has no storage path: its ways out are its interfaces, and its entry's links are
     theirs alone. With the table, the path is a way out after them, at the disks' rate together."""
     (tmp_path / "x.toml").write_text(body(PORT, disk="nvme0n1"), encoding="utf-8")
-    monkeypatch.setattr(nodes, "NODES", tmp_path)
-    assert nodes.ways_out(nodes.load("x"), HOST) == (nodes.Way(f"{HOST}/eth0", 25 * 10 ** 9, True),)
+    monkeypatch.setattr(S, "NODES", tmp_path)
+    assert S.ways_out(S.load_node("x"), HOST) == (S.Way(f"{HOST}/eth0", 25 * 10 ** 9, True),)
     assert log_of("x", "remote").entries[0].links == (Link(f"{HOST}/eth0", (HOST, OUTSIDE), 25 * 10 ** 9, 0),)
     (tmp_path / "x.toml").write_text(body(PORT, PATH), encoding="utf-8")
-    assert nodes.ways_out(nodes.load("x"), HOST) == (nodes.Way(f"{HOST}/eth0", 25 * 10 ** 9, True),
-                                                     nodes.Way(f"{HOST}/storage", DISKS, False))
+    assert S.ways_out(S.load_node("x"), HOST) == (S.Way(f"{HOST}/eth0", 25 * 10 ** 9, True),
+                                                     S.Way(f"{HOST}/storage", DISKS, False))
     assert log_of("x", "remote").entries[0].links == (Link(f"{HOST}/eth0", (HOST, OUTSIDE), 25 * 10 ** 9, 0),
                                                       Link(f"{HOST}/storage", (HOST, OUTSIDE), DISKS, 0, STORAGE_PATH))
 
@@ -608,11 +607,11 @@ def test_the_storage_paths_rate_is_the_host_card_givens(tmp_path, monkeypatch) -
     """A caller that holds the host card's table gives it, and the storage path's rate is that table's for the disks
     together: the file writes none."""
     (tmp_path / "x.toml").write_text(body(UNRATED, PATH), encoding="utf-8")
-    monkeypatch.setattr(nodes, "NODES", tmp_path)
+    monkeypatch.setattr(S, "NODES", tmp_path)
     entry = {"unit": "B/s", "mark": "ceiling", "source": "s"}
     card = {"memory": {"bandwidth_max": entry | {"value": HOST_DRAM}}, "disk": {"read_max": entry | {"value": 2.5}}}
-    assert nodes.ways_out(nodes.load("x"), HOST, card) == (nodes.Way(f"{HOST}/eth0", None, True),
-                                                           nodes.Way(f"{HOST}/storage", 20, False))
+    assert S.ways_out(S.load_node("x"), HOST, card) == (S.Way(f"{HOST}/eth0", None, True),
+                                                           S.Way(f"{HOST}/storage", 20, False))
 
 
 @pytest.mark.parametrize(("tables", "refusal"), [
@@ -627,7 +626,7 @@ def test_a_node_file_with_no_link_out_gives_no_entry(tmp_path, monkeypatch, comp
     says what to state. The same file with an interface gives an entry, one whose only way out has no rate too: its
     link states no capacity and says why no certifier splits it."""
     (tmp_path / "x.toml").write_text(body(*tables), encoding="utf-8")
-    monkeypatch.setattr(nodes, "NODES", tmp_path)
+    monkeypatch.setattr(S, "NODES", tmp_path)
     with pytest.raises(Malformed, match=refusal):
         log_of("x", composite)
     (tmp_path / "x.toml").write_text(body(UNRATED), encoding="utf-8")
@@ -657,10 +656,10 @@ def test_an_interface_states_its_rate_or_what_was_read_of_it(port: object, refus
     interface reads none, its driver and the source of that read, and nothing else: a table that is neither is
     refused by the reader of the ways out, which says what to state. A rate is rounded up to a whole bit."""
     with pytest.raises(InvalidArtifact, match=refusal):
-        nodes.ways_out({"interface": {"eth0": port}}, HOST)
-    assert nodes.ways_out({"interface": {"eth0": {"rate": RATE | {"value": "1000000000.5"}},
+        S.ways_out({"interface": {"eth0": port}}, HOST)
+    assert S.ways_out({"interface": {"eth0": {"rate": RATE | {"value": "1000000000.5"}},
                                          "eth1": {"driver": "virtio_net", "source": SOURCE}}}, HOST) == (
-        nodes.Way(f"{HOST}/eth0", 1_000_000_001, True), nodes.Way(f"{HOST}/eth1", None, True))
+        S.Way(f"{HOST}/eth0", 1_000_000_001, True), S.Way(f"{HOST}/eth1", None, True))
 
 
 @pytest.mark.parametrize(("path", "more", "refusal"), [
@@ -683,13 +682,13 @@ def test_a_storage_path_that_breaks_a_rule_is_refused(tmp_path, monkeypatch, pat
                                                       refusal: str) -> None:
     """The storage path names, each once, disk leaves of the file's and says why they leave, and states nothing
     else: no rate of its own, since its rate is the disks' together. No leaf and no interface takes its name, in a
-    file that states the path or in one that does not. Its rate is read through `nodes.leaves`, so a disk leaf that
+    file that states the path or in one that does not. Its rate is read through `leaves`, so a disk leaf that
     breaks a rule there refuses it too. The file loads, and the reader of the ways out refuses it and says what to
     state."""
     (tmp_path / "x.toml").write_text(body(PORT, more, path), encoding="utf-8")
-    monkeypatch.setattr(nodes, "NODES", tmp_path)
+    monkeypatch.setattr(S, "NODES", tmp_path)
     with pytest.raises(InvalidArtifact, match=refusal):
-        nodes.ways_out(nodes.load("x"), HOST)
+        S.ways_out(S.load_node("x"), HOST)
 
 
 TIMEBASE = "nebius-vm-monotonic-raw"
@@ -699,25 +698,25 @@ VM = ("vy-auditor-1", "dummy-auditor-host-key", SCHEME)
 
 
 def _marked(mark: str, **entry: object) -> dict:
-    card = cards.load(TIMEBASE)
+    card = S.load_card(TIMEBASE)
     return {**card, "drift": {**card["drift"], "max": {**card["drift"]["max"], "mark": mark, **entry}}}
 
 
 def test_a_hosts_clock_on_a_premise_is_its_premise() -> None:
     """The time base's `drift.max`, marked `premise`, gives the host's premise as the card states it: its name with
     the host and the number as the card writes it, the number, its mark and its source."""
-    card = cards.load(TIMEBASE)
+    card = S.load_card(TIMEBASE)
     premise = clock_drift("vy-auditor-1", card)
     assert premise == ClockPremise("vy-auditor-1", "ClockRateWithin(vy-auditor-1, 5e-4)", Fraction(1, 2000), "premise",
                                    card["drift"]["max"]["source"])
-    assert cards.number(card["drift"]["max"]) == premise.drift
+    assert S.number(card["drift"]["max"]) == premise.drift
 
 
 def test_a_number_marked_premise_never_becomes_the_auditors_drift() -> None:
     """A premise is not a figure: the auditor takes none from it for its host, so a row that reads a device's drift
     from the Site prints no premise only where the card's mark is `ceiling`, and the same number then gives the
     figure and no premise."""
-    premise = clock_drift("vy-auditor-1", cards.load(TIMEBASE))
+    premise = clock_drift("vy-auditor-1", S.load_card(TIMEBASE))
     assert isinstance(premise, ClockPremise) and not isinstance(premise, Fraction)
     with pytest.raises(Malformed, match="not a nonnegative rational"):
         Auditor((), drift=((VM[0], premise),))
@@ -727,15 +726,15 @@ def test_a_number_marked_premise_never_becomes_the_auditors_drift() -> None:
 
 
 @pytest.mark.parametrize(("host", "card", "refusal"), [
-    ("vy-auditor-1", lambda: cards.load("h200-sxm-141gb"), "is no time base"),
-    ("vy-auditor-1", lambda: cards.load("xeon-6776p-2s"), "is no time base"),
+    ("vy-auditor-1", lambda: S.load_card("h200-sxm-141gb"), "is no time base"),
+    ("vy-auditor-1", lambda: S.load_card("xeon-6776p-2s"), "is no time base"),
     ("vy-auditor-1", lambda: _marked("measurement"), "marked 'measurement', which bounds no clock"),
     ("vy-auditor-1", lambda: _marked("placeholder"), "marked 'placeholder', which bounds no clock"),
     ("vy-auditor-1", lambda: _marked("premise", unit="ppm"), "state it in s/s"),
     ("vy-auditor-1", lambda: _marked("ceiling", value=1.0), "below 1"),
     ("vy-auditor-1", lambda: _marked("premise", value="fast"), "no drift.max entry"),
-    ("vy-auditor-1", lambda: {**cards.load(TIMEBASE), "drift": {}}, "no drift.max entry"),
-    ("", lambda: cards.load(TIMEBASE), "the host's name is empty"),
+    ("vy-auditor-1", lambda: {**S.load_card(TIMEBASE), "drift": {}}, "no drift.max entry"),
+    ("", lambda: S.load_card(TIMEBASE), "the host's name is empty"),
 ])
 def test_a_clock_the_card_does_not_bound_is_refused(host: str, card, refusal: str) -> None:
     """A card of another kind, a drift a measurement or a placeholder states, one in another unit or of a whole
@@ -749,22 +748,22 @@ def test_an_auditor_holds_its_hosts_time_bases_by_their_cards() -> None:
     """`Auditor.of_files(timebases=)` takes, by a host's id, the card of the time base its clock runs on, and holds the
     card's SKU for the host, which `owner` holds the host's own to, and the card's drift only where it is a figure,
     after the drifts given; a card of another kind is refused."""
-    held = Auditor.of_files((), timebases={VM[0]: cards.load(TIMEBASE)})
+    held = Auditor.of_files((), timebases={VM[0]: S.load_card(TIMEBASE)})
     assert (held.timebases, held.drift) == (((VM[0], TIMEBASE),), ())
     held = Auditor.of_files((), drift=[("vm1", Fraction(1, 10))], timebases={VM[0]: _marked("ceiling")})
     assert (held.timebases, held.drift) == (((VM[0], TIMEBASE),), (("vm1", Fraction(1, 10)), (VM[0], Fraction(1, 2000))))
     with pytest.raises(Malformed, match="is no time base"):
-        Auditor.of_files((), timebases={VM[0]: cards.load("xeon-6776p-2s")})
+        Auditor.of_files((), timebases={VM[0]: S.load_card("xeon-6776p-2s")})
 
 
 def _clocked(kind: str, card: dict) -> tuple[Registration, Auditor]:
     """Node `kind`'s remote log with `CERTIFIER` in front of it, in the auditor's host `VM` whose time base's card is
     `card`, and the auditor holding the certifier's and the host's keys and the host's time base."""
-    node, log = nodes.load(kind), Registration("remote")
-    log = log.append(log.node_entry(node, cards.load(node["device"]["sku"]), HOST, certifier=CERTIFIER,
+    node, log = S.load_node(kind), Registration("remote")
+    log = log.append(log.node_entry(node, S.load_card(node["device"]["sku"]), HOST, certifier=CERTIFIER,
                                     certifier_host=auditor_host(*VM, card),
-                                    host_card=cards.load(node["host"]["sku"]), ways=nodes.ways_out(node, HOST),
-                                    leaves=nodes.leaves(node, HOST)))
+                                    host_card=S.load_card(node["host"]["sku"]), ways=S.ways_out(node, HOST),
+                                    leaves=S.leaves(node, HOST)))
     clocked = Auditor.of_files((), timebases={VM[0]: card})
     return log, replace(auditor(kind, **{CERTIFIER[0]: CERTIFIER[1], VM[0]: VM[1]}), drift=clocked.drift,
                         timebases=clocked.timebases)
@@ -779,8 +778,8 @@ def test_a_certifier_reads_its_hosts_clock_and_a_premise_is_no_figure(kind: str)
     auditor that holds it. Held as the auditor's figure while the host states none, the premise's number is refused
     by `owner`, as is another time base than the host's."""
     cert, vm = CERTIFIER[0], VM[0]
-    premise = clock_drift(vm, cards.load(TIMEBASE))
-    log, held = _clocked(kind, cards.load(TIMEBASE))
+    premise = clock_drift(vm, S.load_card(TIMEBASE))
+    log, held = _clocked(kind, S.load_card(TIMEBASE))
     site = Site.of_log(log)
     assert (site.loc(vm).timebase, site.loc(vm).drift, held.drift) == (TIMEBASE, None, ())
     assert (site.loc(cert).parent, site.clock(cert), site.drift(cert), site.loc(cert).drift) == (vm, vm, None, None)
@@ -806,16 +805,16 @@ def test_a_certifier_at_the_site_reads_no_clock() -> None:
     A host given with no certifier, and one that is no auditor's host at the entry's site, are refused; a host the log
     already holds is not registered twice."""
     kind = WIRED[0]
-    node, cert = nodes.load(kind), CERTIFIER[0]
+    node, cert = S.load_node(kind), CERTIFIER[0]
     site = Site.of_log(log_of(kind, "remote", CERTIFIER))
     assert (site.loc(cert).parent, site.clock(cert), site.drift(cert)) == ("site", None, None)
 
     def entry(log: Registration, host: str = HOST, **given: object):
-        return log.node_entry(node, cards.load(node["device"]["sku"]), host, **given,
-                              host_card=cards.load(node["host"]["sku"]), ways=nodes.ways_out(node, host),
-                              leaves=nodes.leaves(node, host))
+        return log.node_entry(node, S.load_card(node["device"]["sku"]), host, **given,
+                              host_card=S.load_card(node["host"]["sku"]), ways=S.ways_out(node, host),
+                              leaves=S.leaves(node, host))
 
-    vm = auditor_host(*VM, cards.load(TIMEBASE))
+    vm = auditor_host(*VM, S.load_card(TIMEBASE))
     with pytest.raises(Malformed, match="no certifier is given"):
         entry(Registration("remote"), certifier_host=vm)
     for other in (replace(vm, parent="site1"), replace(vm, kind="host"), VM[0]):

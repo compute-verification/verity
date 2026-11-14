@@ -21,11 +21,14 @@ figure is the model's and its name says so (`MODELED`); none is computed from a 
   term is egress, so it counts once. A scope's machines are each taken as registered so. With no registration it has
   no value, and its `inputs` say why.
 - `verified`: capacity less free, where both have a value.
-- `error` (`ERROR`): the row's ε, the calculator's `eps`, a union bound over the period's execution phases.
+- `error` (`ERROR`): the row's ε, the calculator's `eps`, a union bound over the period's execution phases. Its
+  `inputs` state the δ each execution phase's scan is at and where it is from (`at_delta`): with no `--scan-delta`,
+  the δ at which the world's year carries the calculator's error over a monitoring period, so every row's error is
+  that or less.
 
-A row whose error is 1 or more has no bound at its period (`NO_BOUND`): its `free` and `verified`, and `metric` and the
-card's figure where the row is the term of record's, are written with no value and that reason in their `inputs`; its
-`error` is written.
+Under a δ the command gives (`--scan-delta`), a row whose error is 1 or more has no bound at its period (`NO_BOUND`):
+its `free` and `verified`, and `metric` and the card's figure where the row is the term of record's, are written with
+no value and that reason in their `inputs`; its `error` is written.
 
 Each measurement's `inputs` name what it was computed from, and among them the class the term is at, the most ids a
 response holds, and the scan's δ its error is at, as the document states them (`at_class`, `at_delta`).
@@ -123,14 +126,11 @@ def at_class(doc: dict) -> str:
     return stated(CLASS, doc["inputs"][CLASS])
 
 
-def at_delta(lb: Any, doc: dict) -> str:
-    """The scan's δ the document's ε are at (`DELTA`): as the document states it where it is the calculator's default,
-    and where the command gives another, that it is given and assumed, no scan having run at it."""
-    entry = doc["inputs"][DELTA]
-    if entry["value"] == float(lb.SCAN_DELTA):
-        return stated(DELTA, entry)
-    return (f"{DELTA} = {entry['value']} ({entry['mark']}): each execution phase's scan's δ as the command gives it "
-            "(--scan-delta), to the document's float; no scan has run at it")
+def at_delta(doc: dict) -> str:
+    """The scan's δ the document's ε are at (`DELTA`), as the document states it: the δ, that it is assumed, no scan
+    having run at it, and where it is from, the command (`--scan-delta`) or the error the row that pools the most
+    execution phases is to carry over its monitoring period."""
+    return stated(DELTA, doc["inputs"][DELTA])
 
 
 def unbounded(row: dict) -> list[str]:
@@ -189,8 +189,8 @@ def measurements(lb: Any, doc: dict, head: dict, up: Uplink | None = None) -> li
     among the document's inputs; the card's figure's open with the card (`CARD`), whose source is the clause the
     figure rests on."""
     at, target = str(lb.OF_RECORD), doc["target"]["value"]
-    basis = [at_class(doc), at_delta(lb, doc)]
-    by = {k: basis[1] if k == DELTA else stated(k, i) for k, i in doc["inputs"].items()}
+    basis = [at_class(doc), at_delta(doc)]
+    by = {k: stated(k, i) for k, i in doc["inputs"].items()}
     said, card = list(by.values()), doc[CARD_FIGURE]
 
     def stands(value: float, ceiling: float, none: list[str]) -> str | None:
@@ -234,8 +234,8 @@ def main(argv: Sequence[str]) -> int:
                        help="also write the result through the harness kit's writer for DIR, which says where the file "
                             "is (DIR/result.json outside a research run): for the scan at two release schedules, each "
                             f"scope and monitoring period's free, capacity, verified and {ERROR}, the term of record, "
-                            "and beside it the same row's figure with a simulated set-time card, every one modeled; a "
-                            "row whose error is 1 or more carries no amount")
+                            "and beside it the same row's figure with a simulated set-time card, every one modeled; "
+                            "under a --scan-delta at which a row's error is 1 or more, that row carries no amount")
     group.add_argument("--registration", type=Path, metavar="FILE",
                        help="with --out: the registration log a machine's certified boundary link is read from, for "
                             "capacity and verified (default: none, and they are written with no value and why)")

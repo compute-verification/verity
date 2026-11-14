@@ -290,7 +290,7 @@ CARD_FILE = {"sku": "sim-file", "sm": {"count": _entry(2)}, "clock": {"sm": _ent
              "rate": {"tensor": _entry(1024)}, "memory": {"bandwidth": _entry(1.23456e12)},
              "store": {"reg": _entry(65536), "reg_extra": _entry(0), "smem": _entry(262144), "l2": _entry(1 << 20),
                        "dram": _entry(16 << 30)}}
-"""A card file's table as `verity.hardware.cards.load(sku)` returns it, with the entries `Sheet.of_file` reads."""
+"""A card file's table as `load_card(sku)` returns it, with the entries `Sheet.of_file` reads."""
 
 
 def test_a_sheet_reads_the_memory_a_program_gets() -> None:
@@ -331,7 +331,7 @@ number of bits a second."""
 NODE_FILE = {"node": "sim-file-x2", "device": {"sku": "sim-file", "count": _entry(2)}, "host": {"sku": "sim-host"},
              "memory": {"dram": {"tier": "dram", "bytes": _entry(1 << 39)},
                         "vda": {"tier": "disk", "bytes": _entry(1 << 40)}}, "interface": PORTS}
-"""A node file's table as `verity.hardware.nodes.load(kind)` returns it: two devices of the card file's SKU, the
+"""A node file's table as `load_node(kind)` returns it: two devices of the card file's SKU, the
 host's DRAM and one disk, and the two interfaces."""
 UNRATED = {"eth0": {"driver": "virtio_net", "source": "it reads no rate"}}
 """A node file's `interface` tables where the one interface reads no line rate."""
@@ -352,7 +352,7 @@ QUIET = Link("n0/eth0", ("n0", OUTSIDE), None, 0, NO_LINE_RATE)
 
 
 def _ways(host: str = "n0", storage: int | None = None, eth0: int | None = 25 * 10 ** 9) -> tuple[tuple, ...]:
-    """`NODE_FILE`'s ways out under `host` as `verity.hardware.nodes.ways_out` gives them: each interface with its
+    """`NODE_FILE`'s ways out under `host` as `ways_out` gives them: each interface with its
     rate in whole bits a second, rounded up, which a certifier may split, then the storage path at `storage`, which
     none may, where the file states one."""
     ports = ((f"{host}/eth0", eth0, True), (f"{host}/eth1", 1_000_000_001, True))
@@ -728,7 +728,7 @@ def _sheet_json(**f: object) -> Sheet:
     (lambda: _node_entry(interface={}, storage=STORAGE, ways=[("n0/storage", DISKS, False)]), "states no interface"),
     (lambda: _node_entry(("cert0", "k", SCHEME), interface=UNRATED, storage=STORAGE,
                          ways=[("n0/eth0", None, True), ("n0/storage", DISKS, False)]), "takes no certifier"),
-    (lambda: _node_entry(ways=()), r"the ways out given are \[\].*give `verity.hardware.nodes.ways_out\(node, host\)`"),
+    (lambda: _node_entry(ways=()), r"the ways out given are \[\].*give `ways_out\(node, host\)`"),
     (lambda: _node_entry(ways=_ways()[:1]), "the ways out given are"),
     (lambda: _node_entry(ways=_ways(eth0=None)),
      r"the ways out given are \[\('n0/eth0', True, False\).*the node file states \[\('n0/eth0', True, True\)"),

@@ -1,5 +1,6 @@
 """The Site in code: the registered hardware, folded from the registration log, the check each entry passes, and the
-views the protocols read. It mirrors the spec's `Verity.Site` (`security/Definitions/Core/Site.lean`): its sheets, locations,
+views the protocols read; and the readers of the card files and the node files, the data sheets it is registered from.
+It mirrors the spec's `Verity.Site` (`security/Definitions/Core/Site.lean`): its sheets, locations,
 links and log, `Site.ofLog`, and `Registration.Entry.refusal`, check for check and in the same order.
 
 The Site is a tree of locations, each with its owner: the site at the root, stating the site's unit of time
@@ -17,16 +18,15 @@ a host to it, one from it to the outside. Hosts carry no compute: a device names
 tensor clock and the peak rate of each operand class) and its memory figures (bits read from or written to device
 memory a second, bits of on-chip state and bytes of device memory). The auditor's data sheets, public and looked up
 by SKU, are sheets too, whose figures are its estimate of the SKU's (`Auditor.estimate`); they come from the card files
-(`hardware/cards/<sku>.toml`): `Sheet.of_file` reads one as `verity.hardware.cards.load(sku)` returns it. The
-auditor's figures for each host and each leaf under one (`HostFigures`, `MemoryFigures`) come from the node files:
-`node_figures` reads a node file's table (`verity.hardware.nodes.load(kind)`), its host card's, its leaves
-(`verity.hardware.nodes.leaves`) and its ways out (`verity.hardware.nodes.ways_out`). `Registration.node_entry` reads
-the same and its GPU card's, states those figures on the node's locations, and registers each way out, an interface or
-the storage path, as a boundary link that no certifier splits. `clock_drift` reads an auditor's host's time base card
-(`kind = "timebase"`): by its `drift.max` mark, the host's premise (`ClockPremise`) or the figure the host states
-and `Auditor.drift` holds it to, never both. `auditor_host` is the host's location as that card gives it, which
-`node_entry` registers a certifier in (`certifier_host`); `Auditor.of_files`' `timebases` hold the same, and a premise
-gives the host's `Account.Premised` (`ClockPremise.premised`).
+(below): `Sheet.of_file` reads one as `load_card(sku)` returns it. The auditor's figures for each host and each leaf
+under one (`HostFigures`, `MemoryFigures`) come from the node files: `node_figures` reads a node file's table
+(`load_node(kind)`), its host card's, its leaves (`leaves`) and its ways out (`ways_out`). `Registration.node_entry`
+reads the same and its GPU card's, states those figures on the node's locations, and registers each way out, an
+interface or the storage path, as a boundary link that no certifier splits. `clock_drift` reads an auditor's host's
+time base card (`kind = "timebase"`): by its `drift.max` mark, the host's premise (`ClockPremise`) or the figure the
+host states and `Auditor.drift` holds it to, never both. `auditor_host` is the host's location as that card gives it,
+which `node_entry` registers a certifier in (`certifier_host`); `Auditor.of_files`' `timebases` hold the same, and a
+premise gives the host's `Account.Premised` (`ClockPremise.premised`).
 
 The log (`Registration`) is append-only: each site entry adds sheets, locations and links and names the head of the log
 before it (`Entry.previous`), the digest of its last entry or, for an empty log, its composite's genesis. `Site.of_log`
@@ -53,21 +53,109 @@ The views a protocol reads (`Site.sheet`, `device`, `node`, `tiers`, `held`, `re
 `clock`, `drift`, `mediated`, `boundary`, `units`, `registered`) are functions of the site alone, but `device`, which reads the
 auditor's sheet too. Digests are SHA-512 over canonical JSON
 (`verity.channel.canonical`) under the registration log's tags; a rational is the string `n` or `n/d` in lowest terms.
-Stdlib and the wire only.
+
+**The card files**: one TOML file per SKU (`<sku>.toml` in `CARDS`), the one source of each card's numbers. A card is a
+GPU's (`kind = "gpu"`), a host's (`kind = "host"`: a server's CPUs and DRAM, apart from the GPUs it carries), a
+server's (`kind = "server"`: a server model's network ports, apart from its CPUs, DRAM and GPUs) or a time base's
+(`kind = "timebase"`: the clock an auditor's device reads, apart from the host it runs in; its one section is `drift`:
+`max`, the most the clock's rate may differ from the SI second's (`s/s`), and `read`, the largest reading of it on
+record, a `measurement`). Every number in a card file is an entry `{value, unit, mark, source}`. `mark` is `ceiling`
+(no program on that SKU exceeds it, whatever firmware it runs: what the model's premises need), `measurement` (a
+measured value, so only a lower bound on the ceiling), `premise` (no page and no run bounds the number; it is assumed
+under the premise its source states, of whom it names. A row that uses it prints the premise for its device's host, and
+no figure of record uses it) or `placeholder` (none of these: open). `source` names a data sheet, a document or an
+`art:` id (a run's record), and a node by its kind, never its host name. The Lean card tables
+(`security/Definitions/Core/Accel`) are held to the GPU cards that name one (`lean`), number by number
+(`verity/hardware/tests/test_lean.py`). `rate` is the one calculator of a GPU's peak rates, Lean's `card.ρ`: a reader
+that needs the tensor peak at some clock calls it rather than multiplying the card's numbers itself.
+
+~~~python
+from verity.device import load_card, number, rate, skus
+skus("host")                       # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
+drift = load_card("nebius-vm-monotonic-raw")["drift"]["max"]  # {'value': 0.0005, 'unit': 's/s', 'mark': 'premise', ...}
+number(drift)                      # Fraction(1, 2000): the auditor's figure for its device's drift, under that premise
+card = load_card("h200-sxm-141gb")
+card["clock"]["sm"]["value"]       # 1980 (MHz)
+card["memory"]["bandwidth"]        # {'value': 4916736000000.0, 'unit': 'B/s', 'mark': 'ceiling', 'source': ...}
+load_card("dgx-h200")["link"]["rate"]   # {'value': 5011000000000.0, 'unit': 'bit/s', 'mark': 'ceiling', 'source': ...}
+rate(card)                         # Fraction(989429760000000): s8 MACs a second, 132 SMs x 4096 x clock.tensor 1830 MHz
+rate(card, mhz=1980)               # Fraction(1070530560000000): the same at clock.sm's 1980 MHz, the second reading
+rate(card, fmt="f16", mhz=1700)    # the f16 MACs a second at a 1700 MHz clock
+~~~
+
+**The node files**: one TOML file per kind of node (`<kind>.toml` in `NODES`), holding what a node's registration
+states that no card does. A node is a host and the GPUs it carries. Its file names the GPU card and how many of it the
+node carries (`device.sku`, `device.count`), the host card (`host.sku`), the host's own memory, one table a leaf
+(`memory.NAME`: its `tier`, `dram` or `disk`, its `bytes` and its `rate`, the most its bytes are read back at, in
+`B/s`, a ceiling), and the node's ways out: the interfaces that carry traffic off the node, one table each
+(`interface.NAME`: its `rate`, the line rate each way in `bit/s`, or, where the interface reads none, its `driver` and
+the `source` of that read, and no rate), and the storage path, once (`storage`, below). A card's own memory is its
+card's `store.dram`, whole, and no clock or peak of a card is here: those are the cards'. Every number is an entry
+`{value, unit, mark, source}` under the cards' rules, so what is not a number is not written as one, and a leaf or an
+interface with no read on record has no table. A kind is the card and its count, never a host's name, and a file names
+no machine, no address and no provider: whoever registers a node gives its host's id (`Registration.node_entry`, which
+gives no entry of a file with no `dram` or no `disk` leaf, and none of a file with no interface).
+
+**A leaf's rate** is the tightest bound on record that holds whatever the node runs. The DRAM leaf's is the host
+card's `memory.bandwidth_max`, the server's channels. A disk's is its own interface's where the disk states one (a
+drive of the server's own: its link's lanes at their rate, less the coding), and else the host card's
+`disk.read_max`, the lanes into the server's sockets, which every byte of a disk enters by. That figure of the host
+card bounds the host's disks together too, so `leaves` gives it beside each leaf's own, once a tier: a reader that
+adds the leaves' rates of a tier takes the smaller of the sum and the tier's. Neither a limit a provider sets on a
+disk nor a measured rate is a ceiling, so neither is a leaf's rate.
+
+**The ways out** are what a byte leaves the node by, and `ways_out` is their one reader. An interface is one, and a
+network certifier may split it. **The storage path** is the other: a disk that is not the server's own (a network
+disk, which can be attached to another machine or copied through whoever provides it) takes what is written to it
+off the node past every interface, so no certifier can split it. A file states it once, as `storage`: `leaves`,
+the names of the disk leaves that ride it, and `source`, why they leave. It states no rate of its own: its rate is
+the one that bounds the node's disks together, `leaves`'s for `disk`. A server whose drives are all its own has no
+`storage` table and no such way out.
+
+~~~python
+from verity.device import Auditor, Registration, check, leaves, load_card, load_node, node_figures, ways_out
+node = load_node("rtx-pro-6000-server-x8")
+gpu, host = load_card(node["device"]["sku"]), load_card(node["host"]["sku"])
+log = Registration("remote")
+out, own = ways_out(node, "node0"), leaves(node, "node0")
+entry = log.node_entry(node, gpu, "node0", host_card=host, ways=out, leaves=own)
+memory, figures = node_figures(node, host, "node0", ways=out, leaves=own)
+site = check(log.append(entry), Auditor.of_files([gpu], memory=memory, hosts=[("node0", figures)]))
+site.units                          # ('node0/gpu0', ..., 'node0/gpu7')
+site.tiers("node0")                 # {'hbm': 824633720832, 'dram': 1872605741056, 'disk': 6266358333440}
+[(k.id, k.beta) for k in site.boundary("node0")]   # [('node0/eth0', 400000000000), ('node0/storage', 5584738461544)]
+each, tier = own
+[(leaf.id, leaf.bw) for leaf in each]   # [('node0/dram', 9011200000000), ('node0/vda', 5584738461544), ...], bit/s
+tier                                # {'dram': 9011200000000, 'disk': 5584738461544}, each tier's leaves together
+ways_out(node, "node0")            # (Way('node0/eth0', 400000000000, True), Way('node0/storage', 5584738461544, False))
+~~~
+
+`CARDS` and `NODES`, the directories the sheets are in, are `hardware/cards/` and `hardware/nodes/` beside the `verity`
+package's directory, the first of this file's resolved parents so named. The readers of card files (`skus`,
+`load_card`) and of node files (`node_kinds`, `load_node`) take `directory`, and every reader of the node files that
+reads a card file (`load_node`, `leaves`, `ways_out`) takes `cards_directory`, the directories the files are in, so
+that a reader whose copy of them is elsewhere names where it is; `None` is `CARDS` for a card file and `NODES` for a
+node file, read when the reader is called.
+
+Stdlib, the wire (`verity.channel`) and `verity.errors` only.
 """
+
 
 from __future__ import annotations
 
 import hashlib
 import math
 import re
+import tomllib
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from fractions import Fraction
-from typing import Any
+from pathlib import Path
+from typing import Any, NamedTuple
 
 from verity.channel import canonical
+from verity.errors import InvalidArtifact
 
 SITE = "verity/registration/site/v2"
 """A site entry's format: the tag its digest is taken under."""
@@ -221,7 +309,7 @@ def _whole(entry: Any, what: str) -> int:
 
 
 def _way(way: Any, host: str) -> tuple[str, int | None, bool]:
-    """A way out of host `host`'s node as `verity.hardware.nodes.ways_out` gives it: its id under the host, what it
+    """A way out of host `host`'s node as `ways_out` gives it: its id under the host, what it
     carries in whole bits a second, or `None` where its file states no rate, and whether a certifier may split it."""
     try:
         name, bw, split = way
@@ -235,7 +323,7 @@ def _way(way: Any, host: str) -> tuple[str, int | None, bool]:
 
 
 def _leaf(leaf: Any, host: str) -> tuple[str, str, int, int]:
-    """A memory leaf of host `host`'s as `verity.hardware.nodes.leaves` gives it: its id under the host, its tier, its
+    """A memory leaf of host `host`'s as `leaves` gives it: its id under the host, its tier, its
     bytes and the most it is read back at, in whole bits a second."""
     try:
         name, tier, size, bw = leaf
@@ -263,7 +351,7 @@ class _Node:
 
     @classmethod
     def read(cls, node: Mapping[str, Any], host_card: Mapping[str, Any], host: str, ways: Any, leaves: Any) -> _Node:
-        """The node file's table, its host card's, and its ways out and leaves as `verity.hardware.nodes` reads them,
+        """The node file's table, its host card's, and its ways out and leaves as `ways_out` and `leaves` read them,
         held to the file: the ways each by name and in order, with a rate exactly where the file states one, and the
         leaves each by name, tier and bytes, in the file's order. Refused where the file states no `dram` or no `disk`
         leaf, or no interface."""
@@ -282,28 +370,28 @@ class _Node:
             out = [_way(way, host) for way in ways]
         except TypeError:
             raise Malformed(f"`ways` is {ways!r}; give the node file's ways out, "
-                            "`verity.hardware.nodes.ways_out(node, host)`") from None
+                            "`ways_out(node, host)`") from None
         given = [(name, split, bw is not None) for name, bw, split in out]
         if given != stated:
             raise Malformed(f"the ways out given are {given}, and the node file states {stated} under host {host!r} "
                             "(each interface, then its storage path, with whether a certifier may split it and "
-                            "whether it has a rate); give `verity.hardware.nodes.ways_out(node, host)`")
+                            "whether it has a rate); give `ways_out(node, host)`")
         try:
             each, together = leaves
             each, together = list(each), dict(together)
         except (TypeError, ValueError):
             raise Malformed(f"`leaves` is {leaves!r}; give the node file's leaves and the rate each tier's share, "
-                            "`verity.hardware.nodes.leaves(node, host)`") from None
+                            "`leaves(node, host)`") from None
         each = [_leaf(leaf, host) for leaf in each]
         if [leaf[:3] for leaf in each] != stated_leaves:
             raise Malformed(f"the leaves given are {[leaf[:3] for leaf in each]}, and the node file states "
                             f"{stated_leaves} under host {host!r} (each id, tier and bytes); give "
-                            "`verity.hardware.nodes.leaves(node, host)`")
+                            "`leaves(node, host)`")
         shared = tuple((t, together[t]) for t in TIERS if t in together)
         if (len(shared) != len(together) or
                 not all(isinstance(bw, int) and not isinstance(bw, bool) and bw > 0 for _, bw in shared)):
             raise Malformed(f"the tiers' shared rates given are {together!r}; each is a tier's, a whole number of bits "
-                            "a second above 0; give `verity.hardware.nodes.leaves(node, host)`")
+                            "a second above 0; give `leaves(node, host)`")
         unread = [tier for tier in ("dram", "disk") if all(t != tier for _, t, _ in stated_leaves)]
         if unread:
             raise Malformed(f"the node file states no {' and no '.join(unread)} leaf of its host's, so its entry would "
@@ -319,7 +407,7 @@ class _Node:
             card_sku, chip = host_card["sku"], 8 * _whole(host_card["store"]["chip"], "a host card's store.chip")
         except (KeyError, TypeError):
             raise Malformed("the host card given has no sku or no store.chip; give the card the node file names "
-                            f"by host.sku, `verity.hardware.cards.load({host_sku!r})`") from None
+                            f"by host.sku, `load_card({host_sku!r})`") from None
         if card_sku != host_sku:
             raise Malformed(f"the node's host is {host_sku!r}, and the host card given is {card_sku!r}'s")
         return cls(sku, count, each, shared, out, chip)
@@ -334,9 +422,9 @@ class _Node:
 def node_figures(node: Mapping[str, Any], host_card: Mapping[str, Any], host: str, *, ways: Any,
                  leaves: Any) -> tuple[tuple[tuple[str, MemoryFigures], ...], HostFigures]:
     """**The auditor's figures for a node registered as host `host`** (`Auditor.memory` and one of `Auditor.hosts`),
-    from a node file's table (`verity.hardware.nodes.load(kind)`), its host card's table (`verity.hardware.cards.load`
-    of its `host.sku`), its ways out (`verity.hardware.nodes.ways_out(node, host)`) and its leaves
-    (`verity.hardware.nodes.leaves(node, host)`). Each leaf's figures: the host, its bits a second and its bytes. The
+    from a node file's table (`load_node(kind)`), its host card's table (`load_card`
+    of its `host.sku`), its ways out (`ways_out(node, host)`) and its leaves
+    (`leaves(node, host)`). Each leaf's figures: the host, its bits a second and its bytes. The
     host's: its on-chip state in bits, eight times the host card's `store.chip`; its cards, the file's `device.sku` at
     its `device.count`; for each tier, the bits a second its leaves share; and its ways out, each by its link's id at
     its bits a second, or None where its file states none. `Registration.node_entry` states the same figures on the
@@ -365,7 +453,7 @@ class ClockPremise:
 
 
 def _timebase(host: str, card: Mapping[str, Any]) -> str:
-    """The SKU of the time base whose card `card` is (`verity.hardware.cards.load(sku)`, a card of kind `timebase`),
+    """The SKU of the time base whose card `card` is (`load_card(sku)`, a card of kind `timebase`),
     the one the clock of the auditor's host `host` runs on: what the host states as its time base (`Loc.timebase`). A
     card of another kind is refused."""
     _str(host, "the host's name")
@@ -375,12 +463,12 @@ def _timebase(host: str, card: Mapping[str, Any]) -> str:
     if not isinstance(card, Mapping) or card.get("kind") != "timebase":
         raise Malformed(f"card {sku!r} is no time base (its kind is "
                         f"{card.get('kind') if isinstance(card, Mapping) else None!r}); give the card of the clock "
-                        f"host {host}'s device reads, `verity.hardware.cards.load(sku)` of a card of kind \"timebase\"")
+                        f"host {host}'s device reads, `load_card(sku)` of a card of kind \"timebase\"")
     return _str(sku, "a time base's SKU")
 
 
 def clock_drift(host: str, card: Mapping[str, Any]) -> ClockPremise | Fraction:
-    """**The drift of the clock in host `host`**, as its time base's card (`verity.hardware.cards.load(sku)`, a card
+    """**The drift of the clock in host `host`**, as its time base's card (`load_card(sku)`, a card
     of kind `timebase`) states it in `drift.max`: by the entry's mark, a premise or the auditor's figure, never both.
     Marked `premise`, it is the host's premise, `ClockRateWithin(<host>, <drift.max>)` with the number as the card
     writes it in scientific notation; marked `ceiling`, it is the figure the host states and `Auditor.drift` takes
@@ -408,7 +496,7 @@ def clock_drift(host: str, card: Mapping[str, Any]) -> ClockPremise | Fraction:
 
 def auditor_host(host: str, key: str, scheme: str, card: Mapping[str, Any], site: str = "site") -> Loc:
     """**An auditor's host's location**: host `host` of the auditor's at site `site`, with its key and the key's
-    scheme, as its time base's card (`verity.hardware.cards.load(sku)`) gives its clock: it states the card's SKU as
+    scheme, as its time base's card (`load_card(sku)`) gives its clock: it states the card's SKU as
     its time base and, where `clock_drift` gives a figure, that figure as its drift; a premise gives none, since a
     number taken on a premise is never the host's figure, and is the row's to name (`ClockPremise.premised`).
     `Auditor.of_files(..., timebases={host: card})` holds the same, so `owner` takes the location."""
@@ -514,7 +602,7 @@ class Sheet:
 
     @classmethod
     def of_file(cls, card: Mapping[str, Any]) -> Sheet:
-        """The sheet a card file gives (`verity.hardware.cards.load(sku)`'s table). Its figures: the SKU, the SM clock in Hz,
+        """The sheet a card file gives (`load_card(sku)`'s table). Its figures: the SKU, the SM clock in Hz,
         and as every operand class's peak rate the card's s8 MACs a SM-clock (`rate.tensor`; every class is int8) over
         its SMs at that clock. Its memory figures as `Accel.Card.toDevice` reads the card: the bandwidth in bits a
         second, a ceiling rounded up, and the stores' sizes exact."""
@@ -779,10 +867,10 @@ class Registration:
                    certifier: tuple[str, str, str] | None = None, *, host_card: Mapping[str, Any],
                    ways: Iterable[tuple[str, int | None, bool]], leaves: Any,
                    time_unit: Fraction = TIME_UNIT, certifier_host: Loc | None = None) -> Entry:
-        """**A node's entry**, following this log's head: what a node file's table (`verity.hardware.nodes.load(kind)`),
-        the tables of the GPU card and the host card it names (`verity.hardware.cards.load(sku)` each), the file's ways
-        out (`ways`: `verity.hardware.nodes.ways_out(node, host)`, the one reader of their rates) and its leaves
-        (`leaves`: `verity.hardware.nodes.leaves(node, host)`, the one reader of theirs) register as host `host` at site
+        """**A node's entry**, following this log's head: what a node file's table (`load_node(kind)`),
+        the tables of the GPU card and the host card it names (`load_card(sku)` each), the file's ways
+        out (`ways`: `ways_out(node, host)`, the one reader of their rates) and its leaves
+        (`leaves`: `leaves(node, host)`, the one reader of theirs) register as host `host` at site
         `site`. It adds the sheet `Sheet.of_file` gives the card, and the site's location at the unit of time
         `time_unit` in seconds, each only where the log has none; the host, stating its figures (`node_figures`): its
         on-chip state in bits and the rate each tier's leaves share; the node's `device.count` devices `host/gpuI`, each
@@ -921,7 +1009,7 @@ class Auditor:
                  memory: Iterable[tuple[str, MemoryFigures]] = (), hosts: Iterable[tuple[str, HostFigures]] = (),
                  drift: Iterable[tuple[str, Fraction]] = (),
                  timebases: Mapping[str, Mapping[str, Any]] | None = None) -> Auditor:
-        """The auditor whose data sheets come from these card files (`verity.hardware.cards.load(sku)` each), at this
+        """The auditor whose data sheets come from these card files (`load_card(sku)` each), at this
         tolerance, with its devices' keys, each a key and its scheme by the device's id, and these figures
         (`Registration.node_figures` gives a node's). `timebases` gives, by the id of each of its hosts, the card of
         the time base its clock runs on (a card of kind `timebase`): the card's SKU is the host's time base, and
@@ -1456,3 +1544,275 @@ def check(log: Registration, auditor: Auditor) -> Site:
     if lack := incomplete(s, auditor):
         raise Refused("inventory", lack, len(log.entries))
     return s
+
+
+# --- the card files and the node files ---------------------------------------------------------------------------------
+
+_PACKAGE = next(p for p in Path(__file__).resolve().parents if p.name == "verity")
+"""The `verity` package's directory, the first of this file's resolved parents so named: the sheets are in the
+top-level `hardware/` beside it, whatever this file's depth in the package, and wherever a link to the package that
+imported it is (a `research run` job imports `verity` through one)."""
+CARDS = _PACKAGE.parent / "hardware" / "cards"
+CARD_KINDS = ("gpu", "host", "server", "timebase")
+MARKS = ("ceiling", "measurement", "premise", "placeholder")
+ENTRY = frozenset({"value", "unit", "mark", "source"})
+WORD = 4  # bytes in a 32-bit word, the unit of every store and of device memory's rate
+
+
+def skus(kind: str | None = None, *, directory: Path | None = None) -> list[str]:
+    """The SKUs with a card file in ``directory`` (``CARDS`` when ``None``), or those of one ``kind``."""
+    every = sorted(p.stem for p in (CARDS if directory is None else directory).glob("*.toml"))
+    return every if kind is None else [sku for sku in every if load_card(sku, directory=directory)["kind"] == kind]
+
+
+def load_card(sku: str, *, directory: Path | None = None) -> dict:
+    """The card file of ``sku`` in ``directory`` (``CARDS`` when ``None``) as parsed TOML, refused unless every number
+    in it carries its unit, mark and source."""
+    directory = CARDS if directory is None else directory
+    path = directory / f"{sku}.toml"
+    if not path.is_file():
+        raise KeyError(f"no card {sku!r}: the cards are {skus(directory=directory)} ({directory}/<sku>.toml)")
+    card = tomllib.loads(path.read_text(encoding="utf-8"))
+    if card.get("sku") != sku:
+        raise InvalidArtifact(f"{path.name}: sku = {card.get('sku')!r}; set it to the file's name, {sku!r}")
+    if card.get("kind") not in CARD_KINDS:
+        raise InvalidArtifact(f"{path.name}: kind = {card.get('kind')!r}; set it to one of {CARD_KINDS}")
+    check_card(card, path.name)
+    return card
+
+
+def number(entry: dict) -> Fraction:
+    """A card entry's value as an exact rational, read from its decimal text (``1.597568e12`` is that number exactly)."""
+    return Fraction(str(entry["value"]))
+
+
+def rate(card: dict, resource: str = "tensor", *, fmt: str | None = None, mhz: float | None = None) -> Fraction:
+    """Lean's ``card.ρ resource``: the units a second of ``resource`` on the whole GPU, ``sm.count × rate.<resource> ×``
+    its clock in Hz (for the tensor ``clock.tensor`` where the card has one and ``clock.sm`` where it doesn't, for the
+    rest ``clock.sm``, unless ``mhz`` names the clock), and for device memory (``dram``) ``memory.bandwidth`` in 32-bit
+    words. With ``fmt``, the tensor rate in MACs of that operand format (tensor units over ``weight.<fmt>``).
+    ``verity/hardware/tests/test_lean.py`` holds it to every Lean table's arms."""
+    if card["kind"] != "gpu":
+        raise ValueError(f"{card['sku']} is a {card['kind']} card; rate is a GPU's")
+    if resource == "dram":
+        if fmt is not None or mhz is not None:
+            raise ValueError("device memory's rate is memory.bandwidth: no SM clock or operand format scales it")
+        return number(card["memory"]["bandwidth"]) / WORD
+    if resource not in card["rate"]:
+        raise KeyError(f"{card['sku']} has no rate.{resource}: its rates are {sorted(card['rate'])} and dram")
+    if fmt is not None and (resource != "tensor" or fmt not in card["weight"]):
+        raise KeyError(f"{fmt!r} weighs tensor MACs only, and {card['sku']}'s formats are {sorted(card['weight'])}")
+    clocks = card["clock"]
+    tick = clocks["tensor"] if resource == "tensor" and "tensor" in clocks else clocks["sm"]
+    clock = number(tick) if mhz is None else Fraction(str(mhz))
+    units = number(card["sm"]["count"]) * number(card["rate"][resource]) * clock * 10 ** 6
+    return units if fmt is None else units / number(card["weight"][fmt])
+
+
+def check_card(table: dict, where: str) -> None:
+    """Refuse ``table``, the file ``where``'s, unless every number in it, at any depth, is an entry with its unit, mark
+    and source: the rule of a card file, and of every file that states numbers as the cards do."""
+    for key, item in table.items():
+        at = f"{where}: {key}"
+        if isinstance(item, dict) and "value" in item:
+            _check_entry(item, at)
+        elif isinstance(item, dict):
+            check_card(item, at)
+        elif isinstance(item, (int, float)):
+            raise InvalidArtifact(f"{at} is a bare number; write it as {{ value, unit, mark, source }}")
+
+
+def _check_entry(entry: dict, at: str) -> None:
+    if set(entry) != ENTRY:
+        raise InvalidArtifact(f"{at} has keys {sorted(entry)}; an entry has exactly {sorted(ENTRY)}")
+    if isinstance(entry["value"], bool) or not isinstance(entry["value"], (int, float)):
+        raise InvalidArtifact(f"{at}: value {entry['value']!r} is not a number")
+    if entry["mark"] not in MARKS:
+        raise InvalidArtifact(f"{at}: mark {entry['mark']!r}; mark it one of {MARKS}")
+    for field in ("unit", "source"):
+        if not isinstance(entry[field], str) or not entry[field].strip():
+            raise InvalidArtifact(f"{at}: give it a {field}")
+
+
+NODES = _PACKAGE.parent / "hardware" / "nodes"
+CARD_KIND = {"device": "gpu", "host": "host"}
+"""The kind of card each of a node's tables names by ``sku``."""
+TIER = {"dram": ("memory", "bandwidth_max"), "disk": ("disk", "read_max")}
+"""A memory leaf's tiers, each with the entry of the host card that bounds the host's leaves of the tier together."""
+STORAGE = "storage"
+"""The storage path's table, and the name the path registers under, ``HOST/storage``: no leaf and no interface of a
+file takes it."""
+
+
+class Leaf(NamedTuple):
+    """A memory leaf of a host's own, as its node file states it."""
+
+    id: str
+    """``HOST/NAME``, the id the leaf registers under."""
+    tier: str
+    bytes: int
+    bw: int
+    """The most the leaf's bytes are read back at, in whole bits a second, rounded up."""
+
+
+class Way(NamedTuple):
+    """A way out of a node, as its node file states it: an interface, or the storage path."""
+
+    id: str
+    """``HOST/NAME``, the id its link registers under: an interface's name, or ``storage``."""
+    bw: int | None
+    """What it carries each way, in whole bits a second, rounded up; ``None`` where the file states no rate."""
+    split: bool
+    """Whether a network certifier may split it: an interface, yes; the storage path, no."""
+
+
+def node_kinds(*, directory: Path | None = None) -> list[str]:
+    """The kinds of node with a file in ``directory`` (``NODES`` when ``None``)."""
+    return sorted(p.stem for p in (NODES if directory is None else directory).glob("*.toml"))
+
+
+def load_node(kind: str, *, directory: Path | None = None, cards_directory: Path | None = None) -> dict:
+    """The node file of ``kind`` in ``directory`` (``NODES`` when ``None``) as parsed TOML, refused unless every number
+    in it is an entry and each card it names is a card of its kind in ``cards_directory`` (``CARDS`` when
+    ``None``)."""
+    directory = NODES if directory is None else directory
+    path = directory / f"{kind}.toml"
+    if not path.is_file():
+        raise KeyError(f"no node {kind!r}: the nodes are {node_kinds(directory=directory)} ({directory}/<kind>.toml)")
+    node = tomllib.loads(path.read_text(encoding="utf-8"))
+    if node.get("node") != kind:
+        raise InvalidArtifact(f"{path.name}: node = {node.get('node')!r}; set it to the file's name, {kind!r}")
+    check_card(node, path.name)
+    for table, card in CARD_KIND.items():
+        sku, named = node.get(table, {}).get("sku"), skus(card, directory=cards_directory)
+        if sku not in named:
+            raise InvalidArtifact(f"{path.name}: {table}.sku = {sku!r}; name a {card} card, one of {named}")
+    return node
+
+
+def _ceiling(entry: Any, what: str) -> int:
+    """A rate entry in whole bits a second, rounded up, refused unless it is a ceiling in ``B/s`` above 0."""
+    fix = 'state it as { value, unit = "B/s", mark = "ceiling", source }, a bound that holds whatever the node runs'
+    if not isinstance(entry, Mapping) or set(entry) != ENTRY:
+        raise InvalidArtifact(f"{what} is {entry!r}, no entry; {fix}")
+    if entry["unit"] != "B/s" or entry["mark"] != "ceiling":
+        raise InvalidArtifact(f"{what} is in {entry['unit']!r}, marked {entry['mark']!r}; {fix}: a measured rate and a "
+                              "limit somebody sets are no ceiling")
+    rate = number(entry)
+    if rate <= 0:
+        raise InvalidArtifact(f"{what} is {entry['value']!r}; {fix}, above 0: a leaf that holds bytes is read")
+    return math.ceil(8 * rate)
+
+
+def _bytes(entry: Any, what: str) -> int:
+    """A size entry's bytes, refused unless it is a whole number of them in ``B``."""
+    if not isinstance(entry, Mapping) or set(entry) != ENTRY or entry["unit"] != "B":
+        raise InvalidArtifact(f"{what} is {entry!r}; state it as an entry in B")
+    size = number(entry)
+    if size < 0 or size.denominator != 1:
+        raise InvalidArtifact(f"{what} is {entry['value']!r}; state a whole number of bytes")
+    return int(size)
+
+
+def leaves(node: Mapping[str, Any], host: str, card: Mapping[str, Any] | None = None, *,
+           cards_directory: Path | None = None) -> tuple[tuple[Leaf, ...], dict[str, int]]:
+    """**A node's memory leaves and their read rates.** For a node file's table (``load_node(kind)``) registered as host
+    ``host``: each ``memory.NAME`` as a ``Leaf`` (its id ``host/NAME``, its tier, its bytes, and ``bw``, its ``rate``
+    in whole bits a second, rounded up), in the file's order; and, by tier, the rate that bounds the host's leaves of
+    that tier together, in the same unit: the host card's ``memory.bandwidth_max`` for ``dram`` and its
+    ``disk.read_max`` for ``disk``. The host reads a tier at no more than the smaller of its leaves' rates summed and
+    the tier's.
+
+    ``card`` is the host card's table: the card the file names by ``host.sku``, in ``cards_directory``
+    (``CARDS`` when ``None``), when none is given. A leaf is refused
+    when it states no ``rate``, a rate that is no ceiling in ``B/s`` above 0, a tier that is neither, or a rate above
+    its tier's, since no leaf is read faster than the host's leaves of its tier together. A ``dram`` leaf's rate is
+    its tier's exactly: DRAM has no interface narrower than the server's channels."""
+    try:
+        card = load_card(node["host"]["sku"], directory=cards_directory) if card is None else card
+        stated = [(name, leaf["tier"], leaf["bytes"], leaf.get("rate"))
+                  for name, leaf in node.get("memory", {}).items()]
+        together = {tier: _ceiling(card[table][key], f"the host card's {table}.{key}")
+                    for tier, (table, key) in TIER.items()}
+    except (AttributeError, KeyError, TypeError) as e:
+        raise InvalidArtifact(f"a node file's table or its host card's: {e!r}; the file has host.sku and, for each "
+                              "memory.NAME, a tier, bytes and a rate, and the host card has memory.bandwidth_max and "
+                              "disk.read_max") from None
+    out = []
+    for name, tier, size, rate in stated:
+        at = f"memory.{name}"
+        if tier not in TIER:
+            raise InvalidArtifact(f"a node's {at}.tier is {tier!r}; a host's own leaf is one of {sorted(TIER)}")
+        bound = "the host card's " + ".".join(TIER[tier])
+        if rate is None:
+            raise InvalidArtifact(f"a node's {at} states no rate, so nothing bounds how fast its bytes are read back; "
+                                  f"state {at}.rate, a ceiling in B/s: {bound}, or for a drive of the server's own "
+                                  "its link's lanes at their rate, less the coding")
+        bw = _ceiling(rate, f"a node's {at}.rate")
+        if bw > together[tier] or (tier == "dram" and bw != together[tier]):
+            raise InvalidArtifact(f"a node's {at}.rate is {bw} bit/s, and {bound}, which bounds the host's {tier} "
+                                  f"leaves together, is {together[tier]}; state "
+                                  + ("that figure" if tier == "dram" else "a rate at or under it"))
+        out.append(Leaf(f"{host}/{name}", tier, _bytes(size, f"a node's {at}.bytes"), bw))
+    return tuple(out), together
+
+
+def _line_rate(entry: Any, what: str) -> int:
+    """An interface's rate entry in whole bits a second, rounded up, refused unless it is in ``bit/s`` above 0."""
+    fix = 'state the line rate each way as { value, unit = "bit/s", mark, source }'
+    if not isinstance(entry, Mapping) or set(entry) != ENTRY:
+        raise InvalidArtifact(f"{what} is {entry!r}, not an entry; {fix}")
+    rate = number(entry)
+    if entry["unit"] != "bit/s" or rate <= 0:
+        raise InvalidArtifact(f"{what} is {entry['value']!r} {entry['unit']}; {fix}, above 0, in bit/s")
+    return math.ceil(rate)
+
+
+def ways_out(node: Mapping[str, Any], host: str, card: Mapping[str, Any] | None = None, *,
+             cards_directory: Path | None = None) -> tuple[Way, ...]:
+    """**A node's ways out.** For a node file's table (``load_node(kind)``) registered as host ``host``: each
+    ``interface.NAME`` as a ``Way`` a network certifier may split (its id ``host/NAME``, and ``bw``, its ``rate`` in
+    whole bits a second, rounded up, or ``None`` where the table states its ``driver`` and the ``source`` of a read
+    that found no rate), in the file's order; then, where the file states a ``storage`` table, the storage path as a
+    ``Way`` no certifier may split, ``host/storage``, at the rate that bounds the node's disks together
+    (``leaves(node, host, card, cards_directory=cards_directory)``'s for ``disk``, where ``card`` is the host card's
+    table as there). The file writes
+    that rate once, on the host card, and nowhere else.
+
+    An interface is refused when it states neither a rate in ``bit/s`` above 0 nor what was read of it, the storage
+    path when it does not name, each once, disk leaves of the file's, and a leaf or an interface named ``storage``,
+    the path's own name. What registers each way as a link is ``Registration.node_entry``."""
+    ports, memory, path = node.get("interface", {}), node.get("memory", {}), node.get(STORAGE)
+    if not isinstance(ports, Mapping) or not isinstance(memory, Mapping):
+        raise InvalidArtifact("a node file's interface and memory are tables, one table a name")
+    taken = [table for table, names in (("memory", memory), ("interface", ports)) if STORAGE in names]
+    if taken:
+        raise InvalidArtifact(f"a node's {taken[0]}.{STORAGE} would register as {host}/{STORAGE}, the storage path's "
+                              "id; give it another name")
+    out = []
+    for name, port in ports.items():
+        at = f"a node's interface.{name}"
+        if isinstance(port, Mapping) and set(port) == {"rate"}:
+            out.append(Way(f"{host}/{name}", _line_rate(port["rate"], f"{at}.rate"), True))
+        elif isinstance(port, Mapping) and set(port) == {"driver", "source"} and all(
+                isinstance(port[key], str) and port[key].strip() for key in port):
+            out.append(Way(f"{host}/{name}", None, True))
+        else:
+            raise InvalidArtifact(f"{at} is {port!r}; state its rate alone, the line rate each way as an entry in "
+                                  "bit/s, or, where the interface reads none, its driver and the source of that read "
+                                  "alone, each a string, and no rate")
+    if path is None:
+        return tuple(out)
+    disks = [name for name, leaf in memory.items() if isinstance(leaf, Mapping) and leaf.get("tier") == "disk"]
+    fix = ("state the storage path as leaves, the names of the disk leaves that ride it, each once, and source, why "
+           f"a byte written to them has left the node; the file's disk leaves are {disks}, and a server whose drives "
+           "are all its own has no storage table")
+    if not isinstance(path, Mapping) or set(path) != {"leaves", "source"}:
+        raise InvalidArtifact(f"a node's {STORAGE} is {path!r}; {fix}")
+    ride, source = path["leaves"], path["source"]
+    if (not isinstance(ride, list) or not ride or not all(isinstance(name, str) for name in ride)
+            or len(set(ride)) != len(ride) or not set(ride) <= set(disks)):
+        raise InvalidArtifact(f"a node's {STORAGE}.leaves is {ride!r}; {fix}")
+    if not isinstance(source, str) or not source.strip():
+        raise InvalidArtifact(f"a node's {STORAGE}.source is {source!r}; {fix}")
+    return (*out, Way(f"{host}/{STORAGE}", leaves(node, host, card, cards_directory=cards_directory)[1]["disk"], False))
