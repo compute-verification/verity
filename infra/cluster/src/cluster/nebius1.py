@@ -161,7 +161,7 @@ def read(t: int, kubectl: tuple[str, ...] = KUBECTL, prom: str = PROM) -> Observ
         out = subprocess.run([*kubectl, "get", kind, "-n", "default", "-o", "json"], capture_output=True, text=True, check=True)
         return tuple(json.loads(out.stdout)["items"])
     url = f"{prom}/api/v1/query?" + urllib.parse.urlencode({"query": GPU_SERIES})
-    with urllib.request.urlopen(url, timeout=10) as r:
+    with urllib.request.urlopen(url, timeout=10) as r:  # noqa: S310 (prom is PROM, a literal http URL: no caller passes another)
         series = json.load(r)["data"]["result"]
     gpus = {int(s["metric"]["gpu"]): (s["metric"].get("exported_pod") or s["metric"].get("pod", ""), int(float(s["value"][1])))
             for s in series}

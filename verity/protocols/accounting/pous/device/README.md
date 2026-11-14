@@ -27,12 +27,21 @@ From Python there are four modules, each imported by its path.
 `records_root`, `message`), the check of a signed run (`verdict`, `Verdict`), its two logs (`SessionLog`, `SaltLog`), its
 signature schemes (`Signer`, `Verify`, `LmsSigner`, `SCHEMES`, `LMS`, `TEST_PREFIX`) and a block's digest
 (`block_digest`), with the formats' names and constants. `challenger_session` is a run of timed rounds between a node and
-the challenger's host: the two sides and their frames, the request and its ids (`request_of`, `session_id`, `placement`,
-`side_of`), the node's calls (`salt`, `session`, `answer`) and the setups the host keeps (`setup_of`, `SETUPS`).
+the challenger's host: the two sides and their frames, the request and its ids (`request_of`, `session_id`, `placement`),
+the side it is handed (`Side`, `command`), the loop that steps its parties (`run`), the node's calls (`salt`,
+`session`, `answer`) and the setups the host keeps (`setup_of`, `SETUPS`).
 `challenger_party` is the challenger's side of that run: `serve`, `give_salt`, `designate`, `keep`, `report`, `Refusal`,
 `PROTOCOL` and `SOURCE_BYTES`, the byte length of a salt's source. `timed_audit` is the timed audit's client and its
 record's verdicts: the wire (`OP_CHALLENGE`, `OP_PING`, `OP_CLOSE`, `HEADER`), `audit`, `calibrate`, `judge`, `verdict`
 and `lean_verdict`, and the clocks, counters and parameters a harness reads beside them.
+
+What leaves the challenger's host goes into the node that started its party. `challenger_party` answers on two
+channels only: its stdout, which goes to the node that started it (the salt's source, `{"listening": PORT}`, the report
+with the release, or a refusal), and the one connection its prover makes (the indices and the end frame). A refusal
+names the field and the rule the request breaks and quotes none of the request's bytes (`Refusal`, `setup_of`). Nothing
+else of a party leaves its host: its key, session log, salt log and kept setups stay in `DIR`; the auditor host's gate
+keeps each party's log for root on the host and serves it to no ssh caller; and it starts a party only for a caller
+whose address is a registered node's (`verity/protocols/accounting/poub/device/live_verifier/README.md`).
 
 Two files are named `timed_audit.py`, and they are two things. This directory's is the timed audit as the memory
 challenger runs it: the client of a responder's wire, the record it writes and `verdict`, the verdict on that record in

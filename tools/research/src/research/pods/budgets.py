@@ -71,7 +71,7 @@ def parse_time(s: Any) -> float | None:
 
 
 def iso(t: float | None) -> str | None:
-    return None if t is None else dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return None if t is None else dt.datetime.fromtimestamp(t, dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 @dataclass(frozen=True)

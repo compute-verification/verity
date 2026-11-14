@@ -34,7 +34,7 @@ import os
 import re
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 UTIL = Path(os.environ.get("UTIL_OUT_DIR", "/workspace/pouw/infra/util"))
@@ -54,7 +54,7 @@ FOLDERS = ("queue", "running", "done", "failed", "withdrawn")
 
 
 def ts(s: str) -> datetime:
-    return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
 
 
 def ts_or_none(s: str | None) -> datetime | None:
@@ -370,7 +370,7 @@ def main() -> int:
     a = ap.parse_args()
     if timed_window():
         return 0
-    now = datetime.now(timezone.utc).replace(microsecond=0)
+    now = datetime.now(UTC).replace(microsecond=0)
     doc = build(now)
     if not a.no_push:
         alert(doc["nodes"][NODE]["monitors"], now)

@@ -26,7 +26,7 @@ with the memory challenger a party of its own on the challenger host
   each index from ``C*`` where it is held, and the verifier's answer: setup's own inputs tied to the run (`period.tie`,
   the public-encoder check of ``C*``), the run's check, and the bits an accepted run certifies (`period.certify`: 0 at a
   point no certificate covers).  In `PousOption.leg` the memory challenger runs at ``period.json``'s ``challenger_host``
-  (`challenger_session.side_of`) and the Lean answers where the period's tools name it.
+  (`side_of`, which the caller that starts the run hands in) and the Lean answers where the period's tools name it.
 * **Composition:** installed after PoUW and around it, so PoUW's GEMM consumes the decoded weight.  An option that
   keeps a weight-derived copy resident across forwards is the selector's to refuse (``keeps_weight_copy``); POUS keeps
   only ``C*``.
@@ -434,22 +434,23 @@ class PousOption(Option):
         kw.setdefault("prover", self.prover)
         return period.audit(node, self.store.held(), coins, **kw)
 
-    def leg(self, period_dir: str | Path, node: str, out: str | Path, *, schemes: Mapping[str, Any] | None = None,
-            protocol: str | None = None) -> dict[str, Any]:
+    def leg(self, period_dir: str | Path, node: str, out: str | Path, *, side_of: Callable[..., Any],
+            schemes: Mapping[str, Any] | None = None, protocol: str | None = None) -> dict[str, Any]:
         """One period's PoUS of what this option holds, as `period.leg` runs it for a node's records: the memory
-        challenger at ``period.json``'s ``challenger_host`` (`challenger_session.side_of`, its side's key and session log
-        in ``pous-challenger`` beside the periods when it is this node), fresh coins, and the Lean's answer where the
-        period's tools name ``pous-run-protocol`` (and, at the first period, ``pous-setup``), which must agree with the
-        Python's.  Writes ``out/pous.case.json``, ``out/pous.json`` and, at the first period, ``out/pous-setup.case.json``;
-        returns the answer, its profile carrying where each party ran (`challenger_session.placement`).  ``schemes`` and
-        ``protocol`` are the signatures the verifier accepts and the id it answers under (a test signer's in tests)."""
+        challenger at ``period.json``'s ``challenger_host`` (``side_of``, the runtime's ``Side.of``, its side's key and
+        session log in ``pous-challenger`` beside the periods when it is this node), fresh coins, and the Lean's answer
+        where the period's tools name ``pous-run-protocol`` (and, at the first period, ``pous-setup``), which must agree
+        with the Python's.  Writes ``out/pous.case.json``, ``out/pous.json`` and, at the first period,
+        ``out/pous-setup.case.json``; returns the answer, its profile carrying where each party ran
+        (`challenger_session.placement`).  ``schemes`` and ``protocol`` are the signatures the verifier accepts and the
+        id it answers under (a test signer's in tests)."""
         from verity.protocols.accounting.pous.device import challenger_session as CS
         from verity.protocols.accounting.pous.device import memory_challenger as mc
         from verity.protocols.accounting.pous.verifier import period
 
         doc = json.loads((Path(period_dir) / "period.json").read_text())
         tools = doc.get("tools", {})
-        party = CS.side_of(doc, node, Path(period_dir).parent / "pous-challenger")
+        party = side_of(doc, node, "pous", CS.command(Path(period_dir).parent / "pous-challenger"))
         where = CS.placement(node, party.host)
         fresh, answered = self.periods == 0, self.answered
         t = time.monotonic()

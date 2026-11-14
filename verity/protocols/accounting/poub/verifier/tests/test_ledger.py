@@ -437,6 +437,23 @@ def test_the_stated_nodes_tiers_add_up_to_its_read_rates_and_on_chip_bytes() -> 
             dataclasses.replace(n.tiers["hbm"], **bad)
 
 
+def test_a_nodes_capacities_are_handed_in_as_the_ledger_publishes_them() -> None:
+    """`Node.of_json` reads back what `to_json` publishes, through JSON, with no tiers; the stated node's is `timing`'s.
+    Any other key set, a squaring ceiling that isn't a map and a value `Node` refuses are refused."""
+    for n in (ledger.Node.stated(), ledger.Node.stated(disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10), node()):
+        assert ledger.Node.of_json(json.loads(json.dumps(n.to_json()))) == dataclasses.replace(n, tiers={})
+    j = ledger.Node.stated().to_json()
+    assert (j["read_bytes_per_s"], j["chip_bytes"], j["sha512_per_s"]) == (
+        timing.READ_BYTES_PER_S, timing.CHIP_BYTES, timing.SHA512_PER_S)
+    for bad in ({**j, "tiers": {}}, {k: v for k, v in j.items() if k != "chip_bytes"}, [j]):
+        with pytest.raises(ValueError, match="exactly"):
+            ledger.Node.of_json(bad)
+    with pytest.raises(ValueError, match="squarings_per_s"):
+        ledger.Node.of_json({**j, "squarings_per_s": [1.0]})
+    with pytest.raises(ValueError, match="read_bytes_per_s"):
+        ledger.Node.of_json({**j, "read_bytes_per_s": -1.0})
+
+
 def test_wrong_receipts_fill_the_groups_at_their_rates(store) -> None:
     """With 7 of 20 receipts sampled a window, the pooled wrong receipts W are spread over the groups at
     v = (1, 349, 300, 300, L) a wrong read, highest first, at most N a group of one pass."""
