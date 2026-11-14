@@ -83,7 +83,7 @@ kind under `schema` (the protocol's entry schema and version), `session` its ses
 SHA-512 of the protocol's role, the signer's LMS identifier and `d`, the schema's tagged SHA-512 of the entry without its
 sig (`Record.unsigned`). `Record.ofJson` reads the form; what a protocol accepts beyond it (its schemas, kinds, bodies,
 signer and sessions) is its own check. The auditor's ledger (`Spot.Challenger.ledgerEntry?`, schemas
-`verity/challenger-auditor/v1|v2`) reads its entries through it. `verity/hardware/record.py` is its Python.
+`verity/challenger-auditor/v1|v2`) reads its entries through it. `verity/channel.py`'s `Record` is its Python.
 
 ## The profile (`CoreProtocol/Profile.lean`)
 
@@ -186,6 +186,6 @@ clock (`OneClock`). A `Core.MonitoringPeriod` is a span with the boundaries that
 spans, and for each execution block the boundaries that cut its span again, into its `samplingSpans`; `valid` holds
 when each is a cut. The codec reads and writes `{"len":n,"start":t}` and
 `{"execution":[t,...],"sampling":[[t,...],...],"span":{...}}`, refuses any other key, and refuses a monitoring period
-that isn't valid. `Properties.Core.Period` states that the copy is the spec's. `verity.periods` mirrors it in
+that isn't valid. `Properties.Core.Period` states that the copy is the spec's. `verity.protocol` mirrors it in
 Python, and `core-periods-difftest` (`CoreProtocol/PeriodDifftest.lean`) holds the two together through the difftest
 harness, which builds it by name.
