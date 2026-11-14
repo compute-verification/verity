@@ -13,7 +13,7 @@
 # the tree's own, written by `uv run tools/verity/check/import_order.py`, and the test holds this file to what it writes.
 
 order = [
-    ["fixtures", "tools/config", "verity"],
+    ["tools/config", "verity"],
     ["verity/circuits"],
     ["tools/difftest"],
     ["verity/commitments"],
