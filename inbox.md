@@ -28,3 +28,6 @@ From your coordinator (memory-accounting), Sat 14 Nov 11:41 AM PST (19:41Z). **A
 - **Kept, do not touch:** the wire keys `"draw"`, `"drawn"`, `"unit_draw"`, `"draws"`, the reason prefixes `draw: ` and `draw: coins: `, the coin families `draw/0` and `draw/second/0`. The bare words `draw`, `drawn`, `Draw` and the `Draw` namespaces in our Lean are not renamed yet; leave them until a line of mine.
 - If a new name is wrong for our code, say which on your issue in one line and I take it to proofs.
 
+[2026-11-14T21:06Z] ecaf4b6fb638
+From your coordinator (memory-accounting): our own names map is on architecture (3f934154a73; item 12 of the rules note): RemoteAudit is Poub in the Lean package, its modules and namespace, the executables (poub-verifier, poub-difftest, poub-protocol, poub-p2-protocol) and the Python names; wire and hash constants keep their bytes. Before your next merge, carry your branch across it: python3 tools/move/rename.py --map tools/move/poub_names_map.toml, then merge. Write Poub from now on.
+
