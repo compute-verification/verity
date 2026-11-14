@@ -71,42 +71,46 @@ def _all(pattern: str, *files: str) -> tuple[tuple[str, str], ...]:
     return tuple((f, pattern) for f in files)
 
 
+#: A site's pattern that is the name a declaration's ``FILES`` gives the message's file, so a file that states the name
+#: instead of taking it from the list fails once the declaration's name changes.
+NAME = "<FILES>"
+
+
 #: Each declared message as the tree carries it today.  PoUW's, PoUS's and the certifier's pieces and the launcher are
 #: the prover's programs; ``adapters/`` is the workload's side.
 TODAY = {
     "Circuit": Line("a file: the Build of record (`predicted.json`, with its Programs), by `verity-vllm predict row`",
-                    writes=((f"{V}/program/predict/aot.py", r"predicted\.json"),
-                            (f"{V}/records/predicted_row.py", r'FILE = "predicted\.json"')),
-                    reads=((LAUNCHER, r"predicted\.json"), (f"{ONE_STAGE}/served_compare.py", r'"--pred"'),
-                           (SERVE, r"predicted\.json"))),
+                    writes=_all(NAME, f"{V}/program/predict/aot.py", f"{V}/records/predicted_row.py"),
+                    reads=((LAUNCHER, NAME), (f"{ONE_STAGE}/served_compare.py", r'"--pred"'), (SERVE, NAME))),
     "Settings": Line("a file: `serve.json`",
-                     writes=_all(r"serve\.json", f"{V}/pipeline/serve_openai.py", f"{TRACES}/certifier_serve.py",
+                     writes=_all(NAME, f"{V}/pipeline/serve_openai.py", f"{TRACES}/certifier_serve.py",
                                  f"{TRACES}/demo_endpoint.py"),
-                     reads=_all(r"serve\.json", DRIVER, f"{ONE_STAGE}/served_verdicts.py", f"{ONE_STAGE}/served_compare.py", POUS_PIECE, f"{TRACES}/served_session.py",
-                                f"{V}/pipeline/advice.py", f"{TOOLS}/advice_compile.py", f"{E2E}/chain.py", CERTIFIER_PIECE,
+                     reads=_all(NAME, DRIVER, f"{ONE_STAGE}/served_verdicts.py", f"{ONE_STAGE}/served_compare.py",
+                                POUS_PIECE, f"{TRACES}/served_session.py", f"{V}/pipeline/advice.py",
+                                f"{TOOLS}/advice_compile.py", f"{E2E}/chain.py", CERTIFIER_PIECE,
                                 f"{ONE_STAGE}/served_overhead.py", LAUNCHER, f"{PROVE_PATH}/run.sh", SERVE,
                                 f"{V}/pipeline/serve_commit.py", f"{TOOLS}/admit_rows_check.py", f"{TOOLS}/retain_device_gpu.sh")
                      + ((f"{ONE_STAGE}/inference_only.py", r"SV\.SERVE_FILE"),)),
     "Window": Line("a record in a log: a line of `windows.jsonl`",
-                   writes=_all(r"windows\.jsonl", f"{V}/pipeline/serve_commit.py", f"{TRACES}/demo_endpoint.py"),
-                   reads=_all(r"windows\.jsonl", DRIVER, f"{ONE_STAGE}/served_verdicts.py", f"{ONE_STAGE}/pouw_piece.py", LAUNCHER, f"{PROVE_PATH}/run.sh", f"{V}/pipeline/advice.py",
-                              f"{E2E}/chain.py", CERTIFIER_PIECE, f"{TRACES}/served_session.py",
-                              f"{ONE_STAGE}/served_overhead.py", SERVE, f"{TOOLS}/advice_compile.py",
-                              f"{TOOLS}/retain_device_gpu.py", f"{TOOLS}/retain_device_gpu.sh")
+                   writes=_all(NAME, f"{V}/pipeline/serve_commit.py", f"{TRACES}/demo_endpoint.py"),
+                   reads=_all(NAME, DRIVER, f"{ONE_STAGE}/served_verdicts.py", f"{ONE_STAGE}/pouw_piece.py", LAUNCHER,
+                              f"{PROVE_PATH}/run.sh", f"{V}/pipeline/advice.py", f"{E2E}/chain.py", CERTIFIER_PIECE,
+                              f"{TRACES}/served_session.py", f"{ONE_STAGE}/served_overhead.py", SERVE,
+                              f"{TOOLS}/advice_compile.py", f"{TOOLS}/retain_device_gpu.py", f"{TOOLS}/retain_device_gpu.sh")
                    + ((f"{ONE_STAGE}/inference_only.py", r"SV\.WINDOWS_FILE"),)),
     "Io": Line("a record in a log: a line of `requests.jsonl`",
-               writes=_all(r"requests\.jsonl", f"{V}/pipeline/serve_commit.py", f"{TRACES}/demo_endpoint.py"),
-               reads=_all(r"requests\.jsonl", DRIVER, f"{ONE_STAGE}/served_verdicts.py", CERTIFIER_PIECE, f"{V}/pipeline/advice.py", f"{E2E}/chain.py", f"{TRACES}/served_session.py",
-                          LAUNCHER, SERVE, f"{TOOLS}/advice_compile.py", f"{TOOLS}/admit_rows_check.py",
-                          f"{TOOLS}/retain_device_gpu.sh")
+               writes=_all(NAME, f"{V}/pipeline/serve_commit.py", f"{TRACES}/demo_endpoint.py"),
+               reads=_all(NAME, DRIVER, f"{ONE_STAGE}/served_verdicts.py", CERTIFIER_PIECE, f"{V}/pipeline/advice.py",
+                          f"{E2E}/chain.py", f"{TRACES}/served_session.py", LAUNCHER, SERVE, f"{TOOLS}/advice_compile.py",
+                          f"{TOOLS}/admit_rows_check.py", f"{TOOLS}/retain_device_gpu.sh")
                + ((f"{ONE_STAGE}/inference_only.py", r"SV\.REQUESTS_FILE"),)),
     "Summary": Line("a file: `summary.json`",
-                    writes=((f"{V}/pipeline/serve_openai.py", r"summary\.json"),),
-                    reads=_all(r"summary\.json", f"{V}/pipeline/advice.py", SERVE, f"{V}/pipeline/serve_commit.py",
+                    writes=((f"{V}/pipeline/serve_openai.py", NAME),),
+                    reads=_all(NAME, f"{V}/pipeline/advice.py", SERVE, f"{V}/pipeline/serve_commit.py",
                                f"{TOOLS}/retain_device_gpu.py", f"{TOOLS}/retain_device_gpu.sh")),
     "Advice": Line("a file: `advice/w<k>/private/advice.bin`, by `verity-vllm advice`",
-                   writes=((f"{V}/pipeline/advice.py", r"advice\.bin"),),
-                   reads=_all(r"advice\.bin", LAUNCHER, DRIVER, "adapters/vllm/tools/advice_compile.py")),
+                   writes=((f"{V}/pipeline/advice.py", NAME),),
+                   reads=_all(NAME, LAUNCHER, DRIVER, f"{TOOLS}/advice_compile.py")),
     "Programs": Line("files: `windows/w<K>/build_request_*/` and their manifest, by `tools/advice_compile.py`",
                      writes=(("adapters/vllm/tools/advice_compile.py", r"manifest\.json"),),
                      reads=((DRIVER, r"descriptor\.json\.gz"), (LAUNCHER, r'--row-dir "\$D/windows/w\$K"'))),
@@ -125,22 +129,21 @@ TODAY = {
                      reads=((f"{V}/pipeline/advice.py", r"compiler_digest"),)),
     "Weights": Line("a file: `weights_registration.json`, by `prove_path.py weights-registration`",
                     writes=((DRIVER, r"def weights_registration_of_serve"), (LAUNCHER, r"prove_path\.py weights-registration")),
-                    reads=((f"{V}/pipeline/advice.py", r"weights-of-record"), (POUS_PIECE, r"weights_registration\.json"),
-                           (f"{PROVE_PATH}/records_audit.py", r'"--registered"'), (SERVE, r"weights_registration\.json"))),
+                    reads=((f"{V}/pipeline/advice.py", r"weights-of-record"), (POUS_PIECE, NAME),
+                           (f"{PROVE_PATH}/records_audit.py", r'"--registered"'), (SERVE, NAME))),
     "Multiply": Line("a function call: the adapter calls PoUW's prover package, by its schemes and circuits",
                      writes=_all(r"verity\.protocols\.accounting\.pouw\.prover", f"{V}/pipeline/serve_pearl.py",
                                  f"{V}/protocols/pouw/__init__.py"),
                      reads=((f"{POUW_PROVER}/schemes/__init__.py", r"^def get\("), (f"{POUW_PROVER}/circuit/__init__.py", r"^SCHEMES")),
                      calls=(POUW_PROVER,)),
     "WindowProgram": Line("a file: `h1/window-program.json.gz` with `h1/window-program.meta.json`",
-                          writes=((f"{V}/protocols/pouw/h1/__init__.py", r"window-program\.json\.gz"),
+                          writes=((f"{V}/protocols/pouw/h1/__init__.py", NAME),
                                   (f"{V}/protocols/pouw/h1/served_program.py", r"PROGRAM_META")),
-                          reads=((f"{ONE_STAGE}/pouw_piece.py", r"window-program\.json\.gz"),
-                                 (f"{ONE_STAGE}/served_verdicts.py", r"window-program\.json\.gz"), (DRIVER, r"PROGRAM_META"),
-                                 (LAUNCHER, r"window-program\.json\.gz"))),
+                          reads=((f"{ONE_STAGE}/pouw_piece.py", NAME), (f"{ONE_STAGE}/served_verdicts.py", NAME),
+                                 (DRIVER, r"PROGRAM_META"), (LAUNCHER, NAME))),
     "Calls": Line("a file: `h1/w<k>/pouw-h1-calls.json`",
-                  writes=((f"{V}/protocols/pouw/h1/__init__.py", r"pouw-h1-calls\.json"),),
-                  reads=_all(r"pouw-h1-calls\.json", f"{ONE_STAGE}/pouw_piece.py", f"{ONE_STAGE}/served_verdicts.py")),
+                  writes=((f"{V}/protocols/pouw/h1/__init__.py", NAME),),
+                  reads=_all(NAME, f"{ONE_STAGE}/pouw_piece.py", f"{ONE_STAGE}/served_verdicts.py")),
     "Store": Line("a function call: PoUS's piece calls the adapter's `protocols.install` on the weights it loaded",
                   writes=((POUS_PIECE, r"PO\.install\(model, ctx\)"),),
                   reads=((f"{V}/protocols/__init__.py", r"^def install\("), (f"{V}/protocols/pous.py", r"^def install\("))),
@@ -370,12 +373,18 @@ def declared_elsewhere(owner: dict[str, str], texts: dict[str, str]) -> list[str
             for rel, text in sorted(texts.items()) for m in one.finditer(text) if rel != owner[m.group(1)]]
 
 
-def missing(line: Line, texts: dict[str, str | None], taken: str | None = None) -> list[str]:
+def missing(line: Line, texts: dict[str, str | None], taken: str | None = None, name: str | None = None) -> list[str]:
     """The stated writers and readers of ``line`` that hold no such line: ``texts`` is each file's text, None if gone.  A
-    file that holds ``taken``, the list's name for the message's file, holds its line."""
+    file that holds ``taken``, the list's name for the message's file, holds its line, and the pattern ``NAME`` is
+    ``name``, the declaration's name for the file."""
     out = []
     for role, sites in (("writes", line.writes), ("reads", line.reads)):
         for f, pattern in sites:
+            if pattern == NAME:
+                if name is None:
+                    out.append(f"{role}: {f}: its pattern is the declaration's name of the file, and no FILES names one")
+                    continue
+                pattern = re.escape(name)
             if texts.get(f) is None:
                 out.append(f"{role}: {f} is gone")
             elif not re.search(pattern, texts[f], re.M) and not (taken and re.search(taken, texts[f])):
@@ -479,7 +488,8 @@ def test_the_declarations_are_one_list_and_the_tree_carries_each_message_where_i
     twice = declared_elsewhere(owner, {rel: (ROOT / rel).read_text(encoding="utf-8", errors="replace") for rel in grep})
     assert not twice, "a message between the workload and the prover is declared once:\n" + "\n".join(twice)
     texts, named = _texts(list(TODAY.values())), names(mods)
-    moved = [f"{t}: {m}" for t, line in TODAY.items() for m in missing(line, texts, takes(t) if t in named else None)]
+    moved = [f"{t}: {m}" for t, line in TODAY.items()
+             for m in missing(line, texts, takes(t) if t in named else None, named.get(t))]
     assert not moved, ("a message between the workload and the prover is written or read elsewhere than tests/"
                        "test_workload_messages.py's TODAY says. Name the file that writes or reads it now and a line it "
                        "holds, in that message's line of TODAY:\n" + "\n".join(moved))
@@ -539,7 +549,8 @@ def test_every_exception_is_current() -> None:
 def test_a_broken_list_is_found() -> None:
     """The checks above aren't vacuous: a party under another name, a message declared twice, one no channel carries, a name no declaration holds, a
     line of ``TODAY`` with no message, a list grown past its cap, a second ``Schema`` of a declared type, a writer that
-    moved, an import in each form and a spelled name are each found, and a name taken from the list or stated once isn't."""
+    moved, an import in each form, a spelled name and a stated name the declaration no longer gives are each found, and a
+    name taken from the list or stated once isn't."""
     mods = dict(declarations())
     spot = mods[SPOT]
 
@@ -565,6 +576,12 @@ def test_a_broken_list_is_found() -> None:
            "from verity.protocols.proofs import spot\nfrom . import verifier\n")
     assert targets(src, sides) == {*sides, "verity/commitments/windows"}
     assert missing(Line("a file", reads=(("a.py", r"serve\.json"),)), {"a.py": 'd / FILES["Settings"]\n'}, takes("Settings")) == []
+    named = Line("a file", writes=(("a.py", NAME),), reads=(("b.sh", NAME),))
+    stated = {"a.py": 'd / FILES["Settings"]\n', "b.sh": "F=serve.json\n"}
+    assert missing(named, stated, takes("Settings"), "serve.json") == []
+    assert missing(named, stated, takes("Settings"), "settings.json") == [r"reads: no line of b.sh holds /settings\.json/"]
+    assert missing(named, stated) == [f"{role}: {f}: its pattern is the declaration's name of the file, and no FILES names one"
+                                      for role, f in (("writes", "a.py"), ("reads", "b.sh"))]
     for rel, text, spelled in (("a.py", 'def f(d):\n    return d / "serve.json"\n', True), ("a.py", 'SERVE = "serve.json"\nx = d / SERVE\n', False),
                                ("a.py", 'A, B = "x", "h1/serve.json"\nhelp = "its serve.json"\n', False),
                                ("a.py", 'SERVE = "serve.json"\ny = f"{d}/serve.json"\n', True), ("a.py", '"""serve.json\'s"""\n', False),
