@@ -12,16 +12,19 @@ from __future__ import annotations
 import shutil
 
 import pytest
-from hypothesis import strategies as st
-
 import ra_cases as M
 import verity_difftest as D
+from hypothesis import strategies as st
+
 from verity.protocols.accounting.poub.verifier import schedule
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 
-def port(inputs=st.nothing(), reference=schedule.run_json) -> D.Port:
+NOTHING = st.nothing()
+
+
+def port(inputs=NOTHING, reference=schedule.run_json) -> D.Port:
     return D.Port(M.EXE, "schedule", reference, inputs, package=M.PACKAGE, of_record=M.OF_RECORD,
                   rejects=M.REFUSALS)
 
@@ -34,22 +37,23 @@ HONEST = {"blocks": 8, "cap": 256, "schedule": {"registered": [[2, 1, 1]],
           "passes": [[0, [[0, 8]]], [1, [[0, 12]]], [2, [[0, 2], [3, 6], [10, 2]]], [3, [[0, 2], [3, 6], [10, 4]]],
                      [4, [[0, 2], [3, 6], [10, 4]]]],
           "appends": [[8, 4], [12, 2]]}
-"""`tests/test_appends.py`'s honest session: its cap (`CAP`), its schedule, its passes' plans and its appends."""
+"""`tests/test_appends.py`'s honest session: its cap (`SCHEDULE_CAP`), its schedule, its passes' plans and its
+appends."""
 
 
 @st.composite
-def schedules(draw) -> tuple[int, schedule.Schedule]:
-    blocks = draw(st.integers(1, 12))
+def schedules(take) -> tuple[int, schedule.Schedule]:
+    blocks = take(st.integers(1, 12))
     registered, cur = [], 0
-    while cur < blocks and draw(st.integers(0, 2)):
-        f = draw(st.integers(cur, blocks - 1))
-        c = draw(st.integers(1, blocks - f))
-        registered.append((f, c, draw(st.integers(0, 9))))
+    while cur < blocks and take(st.integers(0, 2)):
+        f = take(st.integers(cur, blocks - 1))
+        c = take(st.integers(1, blocks - f))
+        registered.append((f, c, take(st.integers(0, 9))))
         cur = f + c
     block = st.one_of(st.none(), st.tuples(st.integers(0, 9), st.none()),
                       st.integers(0, 8).flatmap(lambda w: st.tuples(st.just(w), st.integers(w + 1, 10))))
-    appends = draw(st.lists(st.lists(block, min_size=1, max_size=4).map(tuple), max_size=4))
-    steps = sorted(draw(st.sets(st.integers(0, 11), max_size=6)))
+    appends = take(st.lists(st.lists(block, min_size=1, max_size=4).map(tuple), max_size=4))
+    steps = sorted(take(st.sets(st.integers(0, 11), max_size=6)))
     return blocks, schedule.Schedule(tuple(registered), tuple(appends), tuple(steps))
 
 
@@ -59,37 +63,37 @@ def as_json(blocks: int, cap: int, sc: schedule.Schedule, passes, appends) -> di
 
 
 @st.composite
-def inputs(draw) -> dict:
+def inputs(take) -> dict:
     """A sampled schedule with its own session's passes and appends and a cap at or above its bits, or one fault (most
     often none)."""
-    blocks, sc = draw(schedules())
+    blocks, sc = take(schedules())
     passes = [(s, list(sc.plan(blocks, s))) for s in sc.steps]
     appends = [list(a) for a in sc.append_runs(blocks)]
-    fault = draw(st.sampled_from([None] * 6 + ["plan", "step", "pass", "append", "extent", "free", "steps",
+    fault = take(st.sampled_from([None] * 6 + ["plan", "step", "pass", "append", "extent", "free", "steps",
                                                 "registered", "malformed", "plan", "malformed"]))
     if fault == "plan" and passes:
-        k = draw(st.integers(0, len(passes) - 1))
+        k = take(st.integers(0, len(passes) - 1))
         runs = passes[k][1]
-        passes[k] = (passes[k][0], draw(st.sampled_from([runs[1:], runs[::-1], runs + [[blocks + 40, 1]],
+        passes[k] = (passes[k][0], take(st.sampled_from([runs[1:], runs[::-1], runs + [[blocks + 40, 1]],
                                                           [[f, c + 1] for f, c in runs[:1]] + runs[1:]])))
     elif fault == "step" and passes:
-        k = draw(st.integers(0, len(passes) - 1))
-        passes[k] = (passes[k][0] + draw(st.integers(1, 3)), passes[k][1])
+        k = take(st.integers(0, len(passes) - 1))
+        passes[k] = (passes[k][0] + take(st.integers(1, 3)), passes[k][1])
     elif fault == "pass":
-        passes = passes[:-1] if passes and draw(st.booleans()) else passes + [(99, [])]
+        passes = passes[:-1] if passes and take(st.booleans()) else passes + [(99, [])]
     elif fault == "append":
-        appends = appends[1:] if appends and draw(st.booleans()) else appends + [[0, 1]]
+        appends = appends[1:] if appends and take(st.booleans()) else appends + [[0, 1]]
     elif fault == "extent" and appends:
-        k = draw(st.integers(0, len(appends) - 1))
+        k = take(st.integers(0, len(appends) - 1))
         appends[k] = [appends[k][0], appends[k][1] + 1]
     elif fault == "free" and sc.appends:
         a = list(sc.appends[0])
-        a[0] = (5, draw(st.integers(0, 5)))
+        a[0] = (5, take(st.integers(0, 5)))
         sc = schedule.Schedule(sc.registered, (tuple(a),) + sc.appends[1:], sc.steps)
     elif fault == "steps":
-        sc = schedule.Schedule(sc.registered, sc.appends, sc.steps + draw(st.sampled_from([(0,), (2 ** 64,)])))
+        sc = schedule.Schedule(sc.registered, sc.appends, sc.steps + take(st.sampled_from([(0,), (2 ** 64,)])))
     elif fault == "registered":
-        sc = schedule.Schedule(sc.registered + draw(st.sampled_from([((0, 1, 0),), ((0, blocks + 1, 0),),
+        sc = schedule.Schedule(sc.registered + take(st.sampled_from([((0, 1, 0),), ((0, blocks + 1, 0),),
                                                                        ((blocks - 1, 1, 2 ** 64),)])),
                                sc.appends, sc.steps)
     try:
@@ -97,14 +101,14 @@ def inputs(draw) -> dict:
     except ValueError:  # a chunk freed before its write has no encoding; the check refuses it before reading the cap
         bits = 0
     cap = bits
-    if fault is None and draw(st.sampled_from([False] * 5 + [True])):
-        fault, cap = "cap", draw(st.integers(0, bits - 1))
+    if fault is None and take(st.sampled_from([False] * 5 + [True])):
+        fault, cap = "cap", take(st.integers(0, bits - 1))
     elif fault is None:
-        cap += draw(st.sampled_from([0, 1, 8, 2 ** 70]))
+        cap += take(st.sampled_from([0, 1, 8, 2 ** 70]))
     v = as_json(blocks, cap, sc, passes, appends)
     if fault == "malformed":
-        bad = draw(st.sampled_from([-1, None, True, "1", [], {}, [1, 2, 3]]))
-        k = draw(st.sampled_from(["blocks", "cap", "passes", "appends", "registered", "block", "step", "drop"]))
+        bad = take(st.sampled_from([-1, None, True, "1", [], {}, [1, 2, 3]]))
+        k = take(st.sampled_from(["blocks", "cap", "passes", "appends", "registered", "block", "step", "drop"]))
         if k in ("blocks", "cap", "passes", "appends"):
             v[k] = bad
         elif k == "registered":
@@ -114,7 +118,7 @@ def inputs(draw) -> dict:
         elif k == "step":
             v["schedule"]["steps"] = [bad]
         else:
-            v.pop(draw(st.sampled_from(["blocks", "cap", "schedule", "passes", "appends"])))
+            v.pop(take(st.sampled_from(["blocks", "cap", "schedule", "passes", "appends"])))
     return v
 
 

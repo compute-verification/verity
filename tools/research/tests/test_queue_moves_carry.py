@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 import research.queue as Q
+from research import landing
 from research.queue import StoreLabels, label_target
 from research.store import vocab
 from test_queue import World, _git
@@ -29,6 +30,9 @@ MAP, PATHS, LIB = "tools/move/demo_map.toml", "tools/move/demo_paths_map.toml", 
 A = "def f():\n    return 1\n\n\ndef g():\n    return 2\n"
 B = "import old_proto.a\n\nX = old_proto.a.f()\n\n\nZ = 1\n"
 ENV = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+#: what pushes and what reaches the store (`research.store`), which the loop holds
+KEYS = (*Q.SCRIPT_UNSET, "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "R2_BUCKET", "R2_ENDPOINT", "RESEARCH_STORE",
+        "RESEARCH_STORE_CONFIG", "RESEARCH_EXPORT_ACCESS_KEY_ID", "CLOUDFLARE_API_TOKEN", "STORE_INDEXER_DATABASE_URL")
 #: the start of a `pins.py` that `rename.py` imports from the tree it runs on: the git directory of that worktree, the clone's
 GIT_DIR = ("import json, pathlib, subprocess\n"
            "c = pathlib.Path(subprocess.run(['git', 'rev-parse', '--git-common-dir'], capture_output=True, text=True)"
@@ -571,17 +575,22 @@ def test_a_moves_script_runs_in_a_directory_of_its_own_under_merged_root_and_one
     assert copied[0][0].startswith(f"{scratch}/{Q.MERGED_PREFIX}{os.getpid()}-") and copied[0][1]
 
 
-def test_a_moves_script_runs_without_the_queues_credentials(world, monkeypatch):
+def test_a_moves_script_and_its_mapping_job_run_without_the_queues_credentials_or_the_stores_keys(world, monkeypatch):
     """The script runs the head's own code (`rename.py` runs the tree's `pins.py`, `layout.py` its `uv lock`), which needs none
-    of the queue's GitHub and Slack credentials, so it sees none, and `gh` finds no stored login."""
+    of the queue's GitHub and Slack credentials nor the store's keys the loop writes labels with, so it sees none, and `gh`
+    finds no stored login; nor does the detached job it runs in, which writes only its result."""
     q = _queue(world)
     head = _git(q.workdir, "rev-parse", q.base)
-    for k in Q.SCRIPT_UNSET:
+    for k in (*KEYS, "KEPT"):
         monkeypatch.setenv(k, "dummy-" + k.lower())
     monkeypatch.setattr(Q, "_MAPPED", "import os, sys; gh = os.environ.get('GH_CONFIG_DIR', ''); sys.exit("
                         "','.join(sorted(k for k, v in os.environ.items() if v.startswith('dummy-'))) + '|' + "
                         "str(gh.startswith(os.environ['TMPDIR']) and not os.path.exists(gh)))")
-    assert Q.mapped_tree(q.workdir, head, head, Path("unused")) == (None, "exit 1: |True")
+    assert Q.mapped_tree(q.workdir, head, head, Path("unused")) == (None, "exit 1: KEPT|True")
+    seen: dict[str, str] = {}
+    monkeypatch.setattr(landing, "detach", lambda repo, argv, env: seen.update(env) or {"pid": 0})
+    q._start_mapping(world.tmp / "mapped" / "x.running", "at", head, head, [], 0.0)
+    assert [k for k, v in seen.items() if v.startswith("dummy-")] == ["KEPT"]
 
 
 def test_only_an_old_head_a_reviewer_passed_runs_a_moves_script_so_a_head_marked_alone_plants_no_hook(world):
@@ -662,8 +671,8 @@ def test_a_head_based_after_a_move_that_isnt_the_last_is_mapped_across_the_rest_
 
 def test_a_head_based_after_the_moves_base_maps_to_none_as_restack_refuses_it(world):
     """A PR based on a commit `main` took after the move's base, before the move landed, is one `restack.py` refuses
-    (`based-after`: its merge of the move's base would bring that commit in a second time), and its owner merges `main`
-    instead: `mapped_change` maps it to nothing either, and says why."""
+    (`based-after`: its merge of the move's base would bring that commit in a second time), and its owner carries it against
+    the move's own commit (`--main MOVE`) before merging `main`: `mapped_change` maps it to nothing either, and says why."""
     move = _move(world)
     _push_main(world, other := world.change({"c.txt": "c landed meanwhile\n"}))
     world.gh.put(1, old := world.change({"b.py": B + "Y = old_proto.a.g()\n"}), ready=False)

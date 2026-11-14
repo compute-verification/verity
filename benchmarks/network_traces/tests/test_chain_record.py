@@ -363,7 +363,7 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
     import jsonschema
     from block_certifier import block_leg
     monkeypatch.setattr(cr, "decide_period", period.reference)
-    # a chain's certifier session numbers its link-windows from 0: the first case whose one entry starts there
+    # a chain's certifier session numbers its execution phases from 0: the first case whose one entry starts there
     case = next(c for n in range(1, 64) for c in [period.case("accept", n, "clock")]
                 if [e["start"] for e in c["params"]["keys"]] == [0])
     answer = period.reference(case)
@@ -400,7 +400,7 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
         f"the case's {', '.join(theirs)}: not the chain's, so another certifier session's period")
     assert why(period_answer=_period(tmp_path / "mixed", foreign, answer)) == (
         "the case isn't the answer's: its commitment's digest is another")
-    # another entry listed after the period's link-windows: the verifier accepts it, and it is not this chain's
+    # another entry listed after the period's execution phases: the verifier accepts it, and it is not this chain's
     p = case["params"]
     another = {"key": period.lms.public_key(period._key(0, 2)).hex(), "session": bytes(32).hex(),
                "start": p["first"] + p["windows"]}
