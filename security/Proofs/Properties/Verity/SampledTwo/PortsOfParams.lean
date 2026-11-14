@@ -43,7 +43,7 @@ theorem ports_of_inputOfCase (hcj : ∀ b j, Core.canonicalJson b = .ok j → Wf
     obtain ⟨j, -, hj⟩ := bind_eq_ok.1 hp
     obtain ⟨hb, hn⟩ := SpotFlock.ParamsWf.ports_nodup_form hcj hj
     obtain ⟨it', hit', hpar, -⟩ := _root_.VStar.Recursive.SampledTwo.inputOf_interior p { c with record := j₁ }
-      e.source ξ₂ { e with record := j₂ } rc vs
+      e.source ξ₂ { e with record := j₂, stmts := VStar.Recursive.SampledTwo.stmtsOwn p e k.blobs } rc vs
     subst hI
     have hii : it = it' := Option.some.inj (hit.symm.trans hit')
     rw [hii, hpar, (_root_.VStar.Recursive.SampledTwo.inputOf_first _ _ _ _ _ _ _).2.1]

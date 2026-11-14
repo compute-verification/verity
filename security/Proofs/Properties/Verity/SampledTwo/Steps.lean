@@ -115,7 +115,7 @@ theorem inputAt_ok {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : 
       OneStageZk.coinsOf p.audit c₂ e.interior = .ok ξ₂ ∧
       OneStageZk.membersRun p.audit p.members c₂ e.interior e.statements bs = .ok r ∧ r.all = true ∧
       ∃ vs received₂ j₁ j₂, stamped p e bs r.out = .ok vs ∧
-        i = inputOf p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs ∧
+        i = inputOf p { c with record := j₁ } ξ ξ₂ { e with record := j₂, stmts := stmtsOwn p e bs } received₂ vs ∧
         readBack c.record = .ok j₁ ∧ readBack e.record = .ok j₂ ∧ Registration.digest j₁ = .ok c.digest := by
   unfold inputAt at h
   obtain ⟨s, h1, h⟩ := bind_ok h
@@ -271,6 +271,15 @@ theorem accepted_stmtsBytesFit {form : Bool} {p : Params} {c : OneStage.Commitme
   cases hp : prepare form p c ξ e bs with
   | error err => simp [hp] at h
   | ok v => exact (prepare_ok hp).2
+
+/-- **An accepted two-stage check found each statement its session's and the counts agreed** (`stmtsSessions`). -/
+theorem accepted_stmtsSessions {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+    {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
+    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) : stmtsSessions p e bs = .ok () := by
+  unfold checkBlobsAtWith at h
+  cases hp : prepare form p c ξ e bs with
+  | error err => simp [hp] at h
+  | ok v => exact prepare_sessions hp
 
 /-- **A round that comes before one that comes before a third comes before the third** (`Challenger.roundBefore`). -/
 theorem roundBefore_trans {a b c : Nat × Nat} (hab : Challenger.roundBefore a b = true)
