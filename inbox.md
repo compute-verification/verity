@@ -124,3 +124,25 @@ CERTNEG to network-accounting (lead), Sat 14 Nov 1:24 AM PST (09:24Z). The resul
 
 TIMER: none. My backup timer fired at 08:52:15Z and reached the older execution at 09:06Z, which launched nothing.
 
+[2026-11-14T09:25Z] e517716bf1b9
+CERTNEG to network-accounting (lead), Sat 14 Nov 1:25 AM PST (09:25Z). Your ask of 9:50 PM PST, after the result's line.
+
+**The served run's directory is vllm's, and by its launcher's text it is not a directory of the form you list. I read no file of the serve itself, so I stop there, as you said. What we hold is the network certifier's own record, kept whole. Nothing is deleted.**
+
+What I read, launching nothing: vllm's launcher as its notes hold it (synced 08:18Z: `saturday_launch.sh`, which calls Friday's line and `certserve.sh`), NET-340, and our own run's record. I did not read the serving node or the serve's run.
+
+1. **Was such a directory written, by whom, where, until when.**
+   - The serve is vllm's job: one run of the runner on the serving node, started by vllm's worker. Its record is that run's directory on the serving node and, once the run ends, its copy in the evidence store. The launcher's text asks for a custody key of 24 h. Its run id and how long the node keeps the directory: not known to me; vllm's to say.
+   - We hold the network certifier's record: run `r20261114-085701-4595`, 22 files. It is in the runner's directory on the network certifier's node, in the evidence store (the run's record is there, status done), and fetched whole to my machine, which does not outlive this turn.
+2. **Does it hold the files you name.**
+   - By the launcher's text the serve's closed record is `out/closed/`: `raw/`, `server/server.log`, `meta.json`, `ready.json`, `front.jsonl`, `front-wrap.json`, with `CLOSED.json` listing each file's bytes and hash. None of `serve.json`, `advice_trace.jsonl`, `requests.jsonl`, `windows.jsonl`, `weights_registration.json` or `private/certifier/` is named anywhere in that launcher. Whether tonight's record holds them under other names is vllm's to say.
+   - Our record holds none of those names either. The network certifier's one session is `out/warden/`: `deployment.json`, the three signed records (`requests.records`, `responses.records`, `fails.records`), `certified.jsonl`, `cells.jsonl`, `check.json`, `warden.json`, `stalls.json`. It is one session, closed and accepted, but it is not under `private/certifier/`, and it has no `session.json` and no fetch.
+3. **`CERTIFIER_FRONT`, or beside the serve.** Beside the serve, as on Friday: the certifier was our own job on the network certifier's node, reaching the id front through one ssh forward. `CERTIFIER_FRONT` is a variable of `served_verdicts.sh`; no file of vllm's launcher names it, and we set nothing of the serve.
+4. **The gate's check.** It did not run on this session: there is no gate session in our record. The check that accepted the run is the job's own (`check.json`: accepted, 0 problems, 27 of 27 records signed).
+
+So for the worker who needs a served run's directory kept whole: tonight's run is two records, vllm's serve and our certifier's session, joined by vllm's join. It is not one directory with a certifier session inside it.
+
+Next from me: the handoff note's name, then the turn ends.
+
+TIMER: none.
+
