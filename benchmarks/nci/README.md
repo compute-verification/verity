@@ -42,8 +42,8 @@ assumption; and `catalog.py`'s category id `efficiency-metrics`.
 | `library.py` | queries over the library: a bracket and the per-block read breakdown for any algorithm, model, policy and data mode |
 | `bracket.py` | the bracket per row; `python benchmarks/nci/bracket.py [--calibration ID] [--row ID]` |
 | `kappa.py` | kappa per token and over each frontier model's pretraining schedule, by part; `python benchmarks/nci/kappa.py [--model ID]` |
-| `tiers.py` | the remote composition's terms under the verification stack, per tier (its `efficiency`, and `remote_terms`, the `s` and `x` the slowdown calculator's `multiple_bound` takes); `python benchmarks/nci/tiers.py [--json]` |
-| `exposure.py` | what `tiers.py`'s `efficiency` is most exposed to: ranges, tornados, elasticities, thresholds on its inverse, and the closed forms of mu, nu and chi |
+| `tiers.py` | the remote composition's terms under the verification stack, per tier (its `counted_share`, and `remote_terms`, the `s` and `x` the slowdown calculator's `multiple_bound` takes); `python benchmarks/nci/tiers.py [--json]` |
+| `exposure.py` | what `tiers.py`'s `counted_share` is most exposed to: ranges, tornados, elasticities, thresholds on its inverse, and the closed forms of mu, nu and chi |
 | `fit.py` | the fit bound: the memory cap when no server window holds a model that reaches the target loss; `python benchmarks/nci/fit.py [--json]` |
 | `statement.py` | every number that the Notion page on `tiers.py`'s claims, model and tiers quotes, at the commit it runs on; `python benchmarks/nci/statement.py [--json]` |
 | `render.py` | the whole index as Markdown on stdout |
