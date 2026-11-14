@@ -469,7 +469,7 @@ SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
     (("lean-agreement",), 390),                                  # the agreement beside lean-build, Flock suite: 339 + 15%
     (("lean-audit:security/Proofs",), 330),                      # security/Proofs replayed beside pytest, suites: 282 + 15%
     (("circuit-check",), 290),                                   # circuit-check granted the slot once alone: 251 + 15%
-    (("pytest:verity/definitions", "lean-suites:verity-vllm"), 170),   # its test beside the parallel suites: 144 + 15%
+    (("pytest:adapters/vllm/verity_vllm/definitions", "lean-suites:verity-vllm"), 170),   # its test beside the parallel suites: 144 + 15%
     (("pytest", "lean-suites"), 240),                            # pytest whole beside the parallel suites: 208 + 15%
     (("lean-build", "lean-audit"), 130),                         # lean-build, the rest of the audit, Flock suite: 110 + 15%
     (("lean-build",), 110),                                      # lean-build and the Flock suite alone: 94 + 15%
