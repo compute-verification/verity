@@ -31,7 +31,7 @@ Beside the modules are each Definition module's binding file and pins (`<module>
 
 ## Tests
 
-`tests/` is this package's suite (`uv run tools/verity/check/suites.py verity/circuits/ops`), which tests
+`tests/` is this package's suite (`uv run tools/check/suites.py verity/circuits/ops`), which tests
 `verity.circuits.silicon` too. [`tests/fixtures/`](tests/fixtures/README.md) holds the hardware captures the semantics
 are replayed against.
 
