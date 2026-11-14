@@ -87,8 +87,8 @@ round, less the rounds ``DIR/retention.json`` drops, with the verifier's coin re
 the device numbers calls across the epoch, and a run whose passes share an index is refused before any replay), then
 reads every pass, holds the window record ``--tie W`` (``retain --window-record W`` writes it) to them where one is named
 (`verify_run.tie`: each call's ``pearl-a/<s>/<c>`` and ``pearl-y/<s>/<c>`` entry its root and its domain recomputed from
-the salt and the call's index, and each weight's ``pearl-b/<w>`` its epoch's weight root and `audit.weight_binding`'s
-domain; a W that states no version, written before W registered the weights, ties the calls alone, its weights named
+the salt and the call's index, and each fixed operand's ``pearl-b/<w>`` its epoch's root for it and `audit.weight_binding`'s
+domain; a W that states no version, written before W registered the fixed operands, ties the calls alone, its fixed operands named
 untied, `verify_run.WEIGHTS_UNTIED`), and with ``--class SLOTS,PROMPT,OUTPUTS`` (the window's class, read only beside
 ``--tie``) refuses passes whose rows by round aren't that class's fixed load (`verify_run.held_to_load`), then
 takes the verifier's coin (with ``PEARLC_CHALLENGER_GATE`` and ``PEARLC_CHALLENGER_PEER``
@@ -172,7 +172,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from verity_config.settings import of
-from verity_vllm.protocols.pouw.pearl_c.window import KEEP, SERVED_SCHEMA, coins_of, served_passes as passes_of
+from verity.protocols.accounting.pouw.prover.serving.pearl_c.window import KEEP, SERVED_SCHEMA, coins_of, served_passes as passes_of
 
 HERE = Path(__file__).resolve().parent
 settings = of(__file__)
@@ -257,9 +257,9 @@ def seeded(label: str):
 
 def seed_install(pouw: dict) -> None:
     """`serve --seeded`: the PoUW settings' in-process challenger sampling from `seeded` coins, and the hm96 salt key the
-    install's weight commitment takes (`pearl_c.new_salt_key`) a `seeded` one, in this process."""
+    install's commitment of the fixed operands takes (`pearl_c.new_salt_key`) a `seeded` one, in this process."""
     from verity.protocols.accounting.pouw.verifier.coins import Challenger
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 
     pouw["coins"] = Challenger(0, seeded("coins"))
     key = seeded("salt key")(32)
@@ -296,7 +296,7 @@ def serve(args: argparse.Namespace) -> int:
         (passes / "coins.json").write_text(json.dumps(config["pouw"]["coins"].commitment.to_json()) + "\n")
     engine_env.apply_engine(None)
     from verity_vllm import LLM
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
     from vllm import SamplingParams
 
     llm = LLM(preset.model, revision=preset.revision, protocols=",".join(arm.protocols), protocols_config=config, **engine)
@@ -548,8 +548,8 @@ def retain(args: argparse.Namespace) -> int:
     if not rounds:
         return 1
     if args.window_record:
-        from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
-        from verity_vllm.protocols.pouw.pearl_c import window as PWR
+        from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
+        from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
         try:
             before = REG.digest(json.loads(Path(args.previous_record).read_text())) if args.previous_record else None
@@ -800,7 +800,7 @@ def uncredited(args: argparse.Namespace) -> int:
 
 def tile_files(p, tile: int) -> list[dict]:
     """The manifest entries the opening of pass ``p``'s tile ``tile`` reads (`verify_run.Opened`'s ``open`` and
-    ``open_y``, the Lean's ``filesOf``): its call's rows and tree, its weight's, the pass's leaves and transcript tree, and
+    ``open_y``, the Lean's ``filesOf``): its call's rows and tree, its fixed operand's, the pass's leaves and transcript tree, and
     its call's y where the call commits one."""
     pos, man = p.verifier.refs[tile].matmul, p.man
     u, wt = man["matmuls"][pos], man["weights"][str(p.epoch.workload.matmuls[pos].weight)]

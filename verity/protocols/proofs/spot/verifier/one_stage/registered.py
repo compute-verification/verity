@@ -443,6 +443,14 @@ def reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int],
     return out
 
 
+def sampled_reads(program: Program, query: Mapping[str, Any], values: Mapping[str, int], units: Sequence[int],
+                  schemas: Mapping[str, str] | None = None) -> dict[str, dict[str, Any]]:
+    """`reads` at the sample's proof blocks `units` alone (`OneStageZk.sampledReadsOf`): `{template parameter: {"value",
+    "rows"}}` with a row for each of `units` only, each position derived from the unit's index, never from a walk over
+    every proof block of the population or a supplied position row. Not written."""
+    raise NotImplementedError("proofs/zero-knowledge: registered reads at the sample's units alone (sampled_reads)")
+
+
 def registered_entries(program: Program, values: Mapping[str, int], schemas: Mapping[str, str] | None = None,
                        window: str | None = None, fixed: Sequence[str] = ()) -> dict[str, dict[str, Any]]:
     """The verifier's own `{value: {"leaves", "words", "word_bits", "domain"}}` for the parameters it expects registered
@@ -496,6 +504,13 @@ def bytes_leaves(data: bytes, bits: int) -> list[int]:
     mask = (1 << bits) - 1
     return [(h >> (bits * j)) & mask for i in range(0, len(data), 4) for h in (int.from_bytes(data[i:i + 4], "big"),)
             for j in range(32 // bits)]
+
+
+def half_leaves(data: bytes, bits: int) -> list[int]:
+    """Two bytes, one big-endian 16-bit half, as its ``16 / bits`` leaves of `bits` bits least significant first: the
+    row `second_stage.VERDICT_ONE_LEAF` fills, one 16-bit leaf where `bytes_leaves` gives two
+    (`Supplied.halfLeaves`). No source reads it yet."""
+    raise NotImplementedError("VERDICT_ONE_LEAF: a 16-bit half's leaves, for the verdict value's one-leaf row")
 
 
 def digests(t: Any) -> bool:
@@ -694,7 +709,7 @@ def bind_ports(file: Mapping[str, Any], ports: Iterable[str], roots: Mapping[str
 __all__ = ["BLOCK", "BOUND", "DIGEST", "ENTRY_KEYS", "OWNER", "PARAM_KEY", "PRODUCED_KEY", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
            "SCHEMA_SEG", "SCHEMA_V2", "SESSION_KEY", "SOURCES", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WINDOW_SALT",
            "WORD_BITS",
-           "bind_ports", "bit_words", "bytes_leaves", "digest_leaves", "digests", "domain", "held_gates", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
+           "bind_ports", "bit_words", "bytes_leaves", "digest_leaves", "digests", "domain", "half_leaves", "held_gates", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
            "row_digest", "row_leaves", "row_words", "schema_entry", "shape", "sources",
            "supplied_root", "supplied_rows", "supplied_salts", "supplied_value", "table", "verify_read", "width",
            "width_entry", "window_root", "window_salt"]

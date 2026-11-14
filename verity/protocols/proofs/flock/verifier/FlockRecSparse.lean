@@ -1,7 +1,8 @@
-/- The `flock-rec-sparse` executable: `Flock.RecSparseCmd.cmd`. -/
 module
 
 public import Flock.RecSparseCmd
+
+/-! The `flock-rec-sparse` executable: `Flock.RecSparseCmd.cmd`. -/
 
 @[expose] public section
 

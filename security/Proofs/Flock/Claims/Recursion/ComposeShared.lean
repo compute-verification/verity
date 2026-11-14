@@ -4,7 +4,7 @@ public import Flock.RecCompose
 import Proofs.Flock.Claims.Complete.Json.Hex
 
 /-!
-# What `flock-verify rec-compose` holds V*'s parts to, read back to their files
+# What `verity-verify-proof rec-compose` holds V*'s parts to, read back to their files
 
 `RecCompose.Accepts` is over the digests the parts' `VERDICT`s name. `RecShared` is what the compiled verifier's parts
 share of their recursive statements (`RecDeploy.RecRaw`'s fields but each part's Flock statement, index and bindings), as

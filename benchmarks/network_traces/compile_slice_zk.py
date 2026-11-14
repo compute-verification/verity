@@ -3,7 +3,7 @@ length term) proved in zero knowledge: one window of a few steps as one unit, pr
 Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--plain``), through the one-stage audit path
 (`warden_zk._one_stage`: its stager, ZK server and received-pieces scan).
 
-    python benchmarks/network_traces/compile_slice_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
+    python benchmarks/network_traces/compile_slice_zk.py prove --bin flock-circuit --lean verity-verify-proof --out DIR
       [--slice demo|corpus|w212] [--g G] [--points 1] [--kinds K,...] [--plain] [--dry]
     python benchmarks/network_traces/compile_slice_zk.py rescan --from PROVE_OUT --out DIR
 
@@ -509,11 +509,11 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
         record, live = a0.session(a.bin, m, n, f"subset:{len(local)}", port, sdir, draw_file=sdir / "draw.json", env=env)
         proc = {"wall_s": round(time.time() - t, 1)}
         lv = a0.lean_verify(a.lean, m, n, sdir, flags=("--coins", "tree"))
-        tool = "flock-verify verify --coins tree --archive --partition --program"
+        tool = "verity-verify-proof verify --coins tree --archive --partition --program"
     else:
         record, live, proc = M.a8.session(a, m, sdir, local, port, env=env)
         lv = a0.lean_verify(a.lean, m, n, sdir, zk=True)
-        tool = "flock-verify verify --zk --archive --partition --program"
+        tool = "verity-verify-proof verify --zk --archive --partition --program"
     draw_t = (record or {}).get("unit_draw") or {}
     v = V.check_draw(draw_t, {"population": n}, {"law": "subset", "k": len(local)})
     verdicts = {f"m0-verifier/{name}": {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True

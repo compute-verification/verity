@@ -1,12 +1,13 @@
-/-
-**Round 2's examples**: `SecondStage`'s checks run, at elaboration, on small records, statements and replay blocks
-(`#guard`): the statement check's codes, the reads a link, a wire or a port of its own may make, and the links, wires
-and rows the verifier derives from a replay block's Definition.
--/
 module
 
 public import Spot.SecondStage
 meta import Spot.SecondStage
+
+/-!
+**Round 2's examples**: `SecondStage`'s checks run, at elaboration, on small records, statements and replay blocks
+(`#guard`): the statement check's codes, the reads a link, a wire or a port of its own may make, and the links, wires
+and rows the verifier derives from a replay block's Definition.
+-/
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -734,6 +735,9 @@ private def exWiredBinding (own : Own) : Option String := do
 #guard (check true { exWired with
     links := some #[⟨"Pair_v0", "out", "o0"⟩]
     rows := exWired.rows.push ⟨"Pair_v0", "out", 3, #[⟨0, 3, 0, 1⟩]⟩ } none).codes == #["second-wires"]
+-- nor does a wire whose reader's port a link names too: a session reads that port at the link's entry, not the wire's
+#guard !wiresOk exTwoParts { exWired with links := some #[⟨"Triple_v0", "x", "bx"⟩] }
+#guard (check true { exWired with links := some #[⟨"Triple_v0", "x", "bx"⟩] } none).codes == #["second-wires"]
 #guard !wiresOk exTwoParts.reverse exWired
 #guard (check true { exWired with parts := some exTwoParts.reverse } none).codes == #["second-wires"]
 #guard !wiresOk exTwoParts { exWiredAt 1 0 with wires := some #[{ exWire with writer := "Triple_v0" }] }
@@ -808,6 +812,12 @@ private def exTwoTables : Array (String × Array (Array (String × String))) :=
   exRefilled "domain" #[#[("bytes", exRoot 8)], #[("bytes", exRoot 3)]]
     (exRefilled "root" #[#[("bytes", exRoot 7)], #[("bytes", exRoot 9)]])
 
+/-- The tables' registration's entry for table `p`, as the auditor's params pin it: root `exRoot r`, domain id
+`exRoot d`, `leaves` rows of two words. -/
+private def exPinned (p : String) (r d leaves : Nat) : String × Json :=
+  (p, Json.mkObj [("value", Json.str p), ("root", Json.str (exRoot r)), ("leaves", Lean.toJson leaves),
+    ("words", Lean.toJson 2), ("domain", Json.str (exRoot d))])
+
 /-- The read's root's rows placed as `exTableRows` places them, its domain's `per` rows a block. -/
 private def exRowsPer (per : Nat) : Array Rows :=
   #[⟨exRead, "root", 1, #[⟨0, 1, 0, 0⟩]⟩, ⟨exRead, "domain", per, #[⟨0, 1, 0, 0⟩]⟩]
@@ -827,6 +837,35 @@ private def exRowsPer (per : Nat) : Array Rows :=
 -- a key the block computes, a wire, is refused, and the reason says so
 #guard inputsFailure exOpeningWired == some "row"
 #guard inputsWhy exOpeningWired "row" == KEY_WHY && inputsWhy exOpeningUnkeyed "row" == INPUTS_WHY
+
+/-- `exOpeningWired` with the wired key's switch on: each unit's key its writer's unit 2 of 3, a row of the key's
+words. -/
+private def exKeyed : Own :=
+  { exOpeningWired with
+    wiredKey := true
+    rows := exTableRows.push ⟨exRead, "tok", 3, #[⟨0, 1, 2, 0⟩]⟩
+    widths := #[⟨exRead, "tok", 2, 2⟩] }
+
+-- the build of record holds the switch off, whatever else the run holds
+#guard !WIRED_KEY && !exOpeningWired.wiredKey && !({ exKeyed with wiredKey := WIRED_KEY } : Own).wiredKey
+#guard inputsFailure { exKeyed with wiredKey := false } == some "row"
+#guard inputsWhy { exKeyed with wiredKey := false } "row" == KEY_WHY
+-- with it on, a key one wire fills whole is taken
+#guard inputsFailure exKeyed == none && keyFailure exKeyed exRead == none
+-- and each other wired key is refused with its own reason
+#guard inputsFailure { exKeyed with wires := exKeyed.wires.map (·.push ⟨exRead, "tok", "Pair_v0", "o1"⟩) } ==
+  some "row"
+#guard inputsWhy { exKeyed with wires := exKeyed.wires.map (·.push ⟨exRead, "tok", "Pair_v0", "o1"⟩) } "row" ==
+  KEY_WIRES_WHY
+#guard inputsFailure { exKeyed with links := exOpeningLinked.links } == some "row"
+#guard inputsWhy { exKeyed with links := exOpeningLinked.links } "row" == KEY_LINKED_WHY
+#guard inputsWhy { exKeyed with widths := #[⟨exRead, "tok", 2, 4⟩] } "row" == KEY_WIDTH_WHY
+#guard inputsWhy { exKeyed with widths := #[] } "row" == KEY_WIDTH_WHY
+#guard inputsWhy { exKeyed with parts := some #[⟨exRead, 0, 1⟩, ⟨"Pair_v0", 1, 3⟩] } "row" == KEY_ORDER_WHY
+#guard inputsWhy { exKeyed with rows := exTableRows.push ⟨exRead, "tok", 3, #[⟨0, 1, 3, 0⟩]⟩ } "row" ==
+  KEY_BOUNDS_WHY
+#guard inputsWhy { exKeyed with rows := exTableRows } "row" == KEY_BOUNDS_WHY
+#guard inputsWhy { exKeyed with parts := some #[⟨"Pair_v0", 0, 2⟩] } "row" == KEY_BOUNDS_WHY
 -- the root and the domain are one table's of round 1's record, row by row and by their bytes
 #guard bytesOf #[("bytes", "0a")] == some "0a" && bytesOf #[("port", "0a")] == none
 #guard bytesOf #[("bytes", "0a"), ("bytes", "0a")] == none && bytesOf #[] == none
@@ -867,6 +906,23 @@ private def exRowsPer (per : Nat) : Array Rows :=
 #guard inputsFailure { exOpening with refReads := exOpening.refReads.push (exRefRead "Other_v1" "x" "salt") } ==
   some "salt"
 #guard inputsFailure { exOpening with refReads := exOpening.refReads.push (exRefRead exRead "row" "row") } == none
+-- or one table's of the tables the auditor's params pin before any coin, its root, domain id and leaves the
+-- verifier's, with round 1's record registering it or not; a table neither pinned nor registered is refused
+#guard inputsFailure { exOpening with boundary := exOwn.boundary, tables := #[exPinned "t" 7 8 4] } == none
+#guard inputsFailure { exOpening with tables := #[exPinned "t" 7 8 4] } == none
+#guard inputsFailure { exOpening with boundary := exOwn.boundary, tables := #[exPinned "u" 9 3 4] } == some "row"
+#guard inputsFailure { exOpening with boundary := exOwn.boundary, tables := #[exPinned "t" 6 8 4] } == some "row"
+#guard inputsFailure { exOpening with boundary := exOwn.boundary, tables := #[exPinned "t" 7 3 4] } == some "row"
+#guard inputsFailure { exOpening with boundary := exOwn.boundary, tables := #[exPinned "t" 7 8 8] } == some "row"
+#guard inputsWhy { exOpening with boundary := exOwn.boundary } "row" == INPUTS_WHY
+#guard inputsFailure { exOpening with boundary := exOwn.boundary, supplied := exTwoTables,
+                                      tables := #[exPinned "t" 7 8 4, exPinned "u" 9 3 4] } == none
+#guard inputsFailure { exOpening with boundary := exRec 4 [("u", 9, 3)], supplied := exTwoTables,
+                                      tables := #[exPinned "t" 7 8 4] } == none
+#guard inputsFailure { exOpening with boundary := exOwn.boundary, supplied := exTwoTables,
+                                      tables := #[exPinned "t" 7 8 4] } == some "row"
+#guard inputsFailure { exOpeningUnkeyed with boundary := exOwn.boundary, tables := #[exPinned "t" 7 8 4] } ==
+  some "row"
 -- the code is reported beside the others, whatever else fails or passes
 #guard (check true (exHolding #["logits"]) none).codes == #["second-inputs", "second-statements"]
 #guard (exCheck true (exHolding #["logits"]) #[exHonest]).codes == #["second-inputs"]

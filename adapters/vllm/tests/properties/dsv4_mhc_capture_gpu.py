@@ -85,9 +85,9 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+from verity.circuits.silicon.models import GroupSum
 from verity.definitions.numerics import mhc_twin as W
 from verity.definitions.registry import mhc as R
-from verity.circuits.silicon.models import GroupSum
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G

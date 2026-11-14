@@ -12,7 +12,7 @@ import pytest
 
 from verity.circuits.types import Array, Value
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, docket as R
 
 from test_service import PAIR as ONE_TEMPLATE, _spec as one_template_spec
 from test_two_stage import (DELTA, MIXED, Q, WINDOW, WINDOW_QUERY, Clock, _refused, _window_boundary,

@@ -254,7 +254,7 @@ private def outputsOf (record : String) : Json := Json.mkObj [
   (PouwCheck.Credit.commitIds 0, Json.mkObj [("record", record), ("value", "pouw/h1/ids@0")]),
   (PouwCheck.Credit.commitRows 0 64, Json.mkObj [("record", record), ("value", "pouw/h1/a/64@0")])]
 
-/-- The verifier's own registered file (`flock-verify --registered`'s): `R`'s tables under the Commit's names, which no
+/-- The verifier's own registered file (`verity-verify-proof --registered`'s): `R`'s tables under the Commit's names, which no
 proof block of the audited circuit reads. -/
 private def readsFile : Json := Json.mkObj [("format", Flock.Registered.FORMAT), ("ports", Json.mkObj (reused.toList.map
   fun x => ((x.getObjValD "value").getStr?.toOption.getD "", Json.mkObj [("domain", x.getObjValD "domain"),
@@ -330,7 +330,7 @@ private def policy (log : Array Json) : Answer := answerOf NciCheck.Protocol.pro
 private def sampled (log : Array Json) (outputs : Option Json) : Answer :=
   answerOf (noBlobs VStar.Recursive.Sampled.protocol) (sampledOn log outputs recR)
 
-/-- The verdicts `flock-verify verify --zk` writes for `e`'s sessions (`OneStageZk.verdictJson`'s names), each of record
+/-- The verdicts `verity-verify-proof verify --zk` writes for `e`'s sessions (`OneStageZk.verdictJson`'s names), each of record
 and accepting, reporting the roots it opened `rec`'s registered values against. -/
 private def grantedOf (rec : Json) (e : Spot.OneStageZk.Evidence) : Array (String × Json) :=
   let reads := match rec.getObjValD "registered" with

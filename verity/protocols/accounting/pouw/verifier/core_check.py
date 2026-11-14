@@ -1,10 +1,10 @@
 """PoUW's check of one audit execution phase as a core protocol (`verity/protocols/interface`): the Python
 reference beside the Lean `pouw_check` (`verity/protocols/accounting/pouw/verifier/lean/check`), the served execution phase's verifier
-(`benchmarks/pouw/served_zk/of_record.py`), held to it answer for answer by the difftest.
+(`verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py`), held to it answer for answer by the difftest.
 
 The proof system registers the execution phase, samples, proves and verifies; PoUW states what it registers and what the outcome
 must show, and publishes `window.PUBLIC` from it.  This is that composition in one function, the parts of
-`benchmarks/pouw/served_zk/served_commit.py` (`public_problem`, `register` and `Challenger.outcome`) that are PoUW's.
+`verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py` (`public_problem`, `register` and `Challenger.outcome`) that are PoUW's.
 
 * **Params**, canonical JSON: the check item (`check`: the tile template, its work per tile w, the commitment scheme,
   the public bound on entries and optionally its coin mode, ``coins``, live or seeded: `window.mode`), ε and δ as ratio
@@ -85,7 +85,7 @@ from verity.protocols.accounting.pouw.verifier import coins as Co
 from verity.protocols.accounting.pouw.verifier import salt as PS
 from verity.protocols.accounting.pouw.verifier import verifier as V
 from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.proofs.spot.verifier.profile import Work, WorkStratum
@@ -565,7 +565,7 @@ def unit_draw(j: Any) -> dict:
 
 
 def law_name(d: dict) -> str:
-    """`parse_design`'s spelling of a sample's law."""
+    """`parse_design`'s spelling of a sampling design."""
     return f"bernoulli:{d['p']}" if d["law"] == "bernoulli" else f"{d['law']}:{d['k']}"
 
 
@@ -634,7 +634,7 @@ def _registered(p: dict, c: dict) -> tuple[str | None, Any]:
     return None, (w, k, items)
 
 
-def registered(p: dict, c: dict) -> str | None:
+def registered_twin(p: dict, c: dict) -> str | None:
     """PoUW's rule over the registration (`PouwCheck.registered`): why it fails, or None."""
     return _registered(p, c)[0]
 
@@ -700,13 +700,8 @@ def verify_path(dom: CommitmentDomain, root: bytes, index: int, leaf: bytes, sib
 
 def _fromhex(s: Any, n: int) -> bytes | None:
     """`bytes.fromhex(s)` when `s` is a string of `n` bytes' hex, else None."""
-    if not _str(s):
-        return None
-    try:
-        b = bytes.fromhex(s)
-    except ValueError:
-        return None
-    return b if len(b) == n else None
+    b = _hex(s)
+    return b if b is not None and len(b) == n else None
 
 
 def _path(x: Any) -> list[bytes] | None:
@@ -846,7 +841,7 @@ def _sides(o: Any, n: int) -> list[tuple[int, list[bytes]]] | None:
     return None if any(not _int(i) or s is None for i, s in out) else out
 
 
-def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op: Any,
+def opening_twin(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op: Any,
             salt: bytes | None = None) -> str | None:
     """None when the tile proof's public file `pub` opens unit `unit`'s rows under the registered execution phase root, else why
     not (`served_commit.check`).  `units` is the sample's (None for a unit opened unsampled, the filler's); `op` the prover's
@@ -908,7 +903,7 @@ def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op
     try:
         h = json.loads(head.decode(), parse_constant=_no_constant) if nl else None
     except ValueError:
-        h = None
+        return "the proof's public file has no JSON header"
     if not isinstance(h, dict):
         return "the proof's public file has no JSON header"
     n = h.get("instances")
@@ -977,13 +972,12 @@ _MATMULS = "the pass's matmuls are not a list of objects with integer index, m, 
 _WEIGHTS = "the pass's weights are not an object from each weight, in decimal, to an object with a hex root"
 
 
+#: exactly the strings `bytes.fromhex` takes: pairs of ASCII hex digits, with ASCII whitespace before and after each pair
+_FROMHEX = re.compile(r"[ \t\n\v\f\r]*(?:[0-9a-fA-F]{2}[ \t\n\v\f\r]*)*")
+
+
 def _hex(s: Any) -> bytes | None:
-    if not _str(s):
-        return None
-    try:
-        return bytes.fromhex(s)
-    except ValueError:
-        return None
+    return bytes.fromhex(s) if _str(s) and _FROMHEX.fullmatch(s) else None
 
 
 def coins_of(j: Any, recorded: bool) -> tuple[str, int, bytes]:
@@ -1071,7 +1065,7 @@ def _manifest(raw: bytes) -> dict:
     try:
         m = json.loads(raw.decode(), parse_constant=_no_constant)
     except ValueError:
-        m = None
+        raise Refused("the pass's manifest is not a JSON object") from None
     if not isinstance(m, dict):
         raise Refused("the pass's manifest is not a JSON object")
     return m
@@ -1191,7 +1185,7 @@ def _live_salt(m: dict, live: Any, verify: Ch.Verify) -> tuple[bytes, str]:
         raise Co.DomainError(LIVE_UNHELD)
     if not (isinstance(live, dict) and sorted(live) == list(LIVE)):
         raise Co.DomainError(LIVE_FORM)
-    salt, refused = live_salt(live["key"], live["ledger"], live["pins"], live["main"], live["session"], m, verify)
+    salt, refused = live_salt_twin(live["key"], live["ledger"], live["pins"], live["main"], live["session"], m, verify)
     if refused is not None:
         raise (Refused if refused[0] == "manifest" else Co.DomainError)(refused[1])
     return salt, "live coin"
@@ -1262,7 +1256,7 @@ def _epoch_salt(m: dict, coins: Any, recorded: bool, reveal: bytes | None = None
     return salt, how
 
 
-def pass_epoch(coins: Any, raw: bytes | None, context: str, recorded: bool = False, reveal: bytes | None = None,
+def pass_epoch_twin(coins: Any, raw: bytes | None, context: str, recorded: bool = False, reveal: bytes | None = None,
                committed: bytes | None = None, stream: bytes | None = None, prover: bytes | None = None,
                live: Any = None, verify: Ch.Verify | None = None) -> tuple[str | None, tuple[str, str] | None]:
     """How the pass's salt was had (``coin``, ``live coin``, ``recorded beacon`` in a replay of a recorded pass, or
@@ -1307,7 +1301,7 @@ def _uniform(n: int, src: bytes, pos: int) -> tuple[int, int] | None:
 
 
 def stream_subset(k: int, n: int, src: bytes) -> list[int] | None:
-    """Lean's ``Draw.subset`` on one stream (``flock-verify draw --stream``): partial Fisher-Yates, each step an exact
+    """Lean's ``Draw.subset`` on one stream (``verity-verify-proof draw --stream``): partial Fisher-Yates, each step an exact
     uniform word of `width` bytes; None when the stream runs out."""
     swapped: dict[int, int] = {}
     pos = 0
@@ -1376,7 +1370,7 @@ def _live_coins(coins: dict, pinned: Any) -> tuple[Ch.LiveCommitment | None, tup
     return (None, ("coin", why)) if (why := Wd.draw_epoch_reason(c)) is not None else (c, None)
 
 
-def draw(coins: Any, recorded: bool, opening: Any, stream: Any, registration: Any, receipt: Any, k: Any, population: Any,
+def draw_twin(coins: Any, recorded: bool, opening: Any, stream: Any, registration: Any, receipt: Any, k: Any, population: Any,
          units: Any, key: Any = None) -> tuple[str, str] | None:
     """None when `units` are the execution phase's sample: the execution phase's sampling coin `opening` opens against `coins` (the challenger's
     commitment, its JSON) after the registration `registration` (its digest's hex), and `units` are ``Draw.subset`` of
@@ -1657,7 +1651,7 @@ def window_salt(p: dict, rec: dict, s: Any, verify: Ch.Verify = lms_verify) -> s
     return None
 
 
-def live_salt(key: Any, ledger: Any, pins: Any, main: Any, session: Any, manifest: Any, verify: Ch.Verify
+def live_salt_twin(key: Any, ledger: Any, pins: Any, main: Any, session: Any, manifest: Any, verify: Ch.Verify
               ) -> tuple[bytes | None, tuple[str, str] | None]:
     """A live Pearl-C pass's salt and None, or None and the refusal (``manifest``, ``coin`` or ``salt``, and why): `salt`'s
     rule with the pass's execution phase's root R in place of an execution phase's open root, its session and commitment read from the
@@ -1736,7 +1730,7 @@ def live_epoch(raw: bytes) -> tuple[dict, bytes, int]:
     return m, weights_root(Co.SCHEME, roots), k
 
 
-def salt(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, weights_root: Any, requests_root: Any,
+def salt_twin(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, weights_root: Any, requests_root: Any,
          opening: Any, verify: Ch.Verify) -> tuple[str, str] | None:
     """None when `opening` is a live execution phase's salt coin, opened after the execution phase's own open root, every coin and root of
     it read through the challenger's own session as `rounds` reads them, never one the prover hands in: the one session
@@ -1780,15 +1774,15 @@ def salt(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any,
 def salt_of_record(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, weights_root: Any,
                    requests_root: Any, opening: Any, verify: Ch.Verify) -> tuple[str, str] | None:
     """`salt`'s verdict of record: the Lean `PouwCheck.saltCheck`'s (`verifier.of_record`, which checks the challenger's
-    signatures itself), with `salt` its Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
-    python = salt(key, ledger, pins, main, window, session, weights_root, requests_root, opening, verify)
+    signatures itself), with `salt_twin` its Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
+    python = salt_twin(key, ledger, pins, main, window, session, weights_root, requests_root, opening, verify)
     got = V.of_record("salt", {"key": key, "ledger": ledger, "pins": pins, "main": main, "window": window,
                                "session": session, "weights": weights_root, "requests": requests_root,
                                "opening": opening}, None if python is None else {"refused": list(python)})
     return None if got is None else tuple(got["refused"])
 
 
-def rounds(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, roots: Any, openings: Any,
+def rounds_twin(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, roots: Any, openings: Any,
            verify: Ch.Verify) -> tuple[str, str] | None:
     """None when `openings` are a live execution phase's round coins, read through the challenger's own session and never a
     commitment the prover hands in: the one session the auditor's signed v2 ledger `ledger` (its lines, the head
@@ -1824,6 +1818,32 @@ def rounds(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: An
     if received.get(Wd.ROUND, ()) != rs:
         return "rounds", "the round roots are not the roots the challenger's log shows it received, in order"
     return None
+
+
+def live_salt(key: Any, ledger: Any, pins: Any, main: Any, session: Any, manifest: Any, verify: Ch.Verify
+              ) -> tuple[bytes | None, tuple[str, str] | None]:
+    """A live Pearl-C pass's salt of record and None, or None and the refusal: the Lean `PouwCheck.liveSaltCheck`'s
+    (`verifier.of_record` on ``live-salt``, which checks the challenger's signatures itself), with `live_salt_twin` its
+    Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
+    salt, why = live_salt_twin(key, ledger, pins, main, session, manifest, verify)
+    got = V.of_record("live-salt", {"key": key, "ledger": ledger, "pins": pins, "main": main, "session": session,
+                                    "manifest": manifest},
+                      {"refused": list(why)} if why is not None else {"salt": salt.hex()})
+    if "salt" in got:
+        return bytes.fromhex(got["salt"]), None
+    return None, tuple(got["refused"])
+
+
+def rounds(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, roots: Any, openings: Any,
+           verify: Ch.Verify) -> tuple[str, str] | None:
+    """A live execution phase's round coins' verdict of record, None or the refusal: the Lean `PouwCheck.roundsCheck`'s
+    (`verifier.of_record` on ``rounds``, which checks the challenger's signatures itself), with `rounds_twin` its Python
+    twin; a disagreement is the refusal ``verifier.DISAGREE``."""
+    python = rounds_twin(key, ledger, pins, main, window, session, roots, openings, verify)
+    got = V.of_record("rounds", {"key": key, "ledger": ledger, "pins": pins, "main": main, "window": window,
+                                 "session": session, "roots": roots, "openings": openings},
+                      None if python is None else {"refused": list(python)})
+    return None if got is None else tuple(got["refused"])
 
 
 def answer_twin(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
@@ -1890,8 +1910,10 @@ def line(a: dict) -> str:
     return _canon(a)
 
 
-__all__ = ["ANSWER_KEYS", "COIN_KEY", "EXE", "FORMATS", "ID", "LEVEL", "LIVE", "ONE_STAGE", "Refused", "SCHEME", "SIGNED_LIVE",
-           "VALUES_TAG", "WINDOW_VALUES", "answer", "answer_of", "answer_twin", "canonical", "case", "case_twin", "check_twin", "commitment", "digest",
-           "draw", "evidence", "integrity", "integrity_json", "law_name", "line", "live_epoch", "live_salt", "lms_verify",
-           "opening", "params", "pass_epoch", "ratio", "recorded_reason", "registered", "rounds", "salt", "salt_of_record", "serve_case", "unit_draw",
-           "values_root", "verify_path", "window_anchors", "window_domain", "window_salt", "work_k", "work_units"]
+__all__ = ["ANSWER_KEYS", "COIN_KEY", "EXE", "FORMATS", "ID", "LEVEL", "LIVE", "ONE_STAGE", "SCHEME", "SIGNED_LIVE",
+           "VALUES_TAG", "WINDOW_VALUES", "Refused", "answer", "answer_of", "answer_twin", "canonical", "case",
+           "case_twin", "check_twin", "commitment", "digest", "draw_twin", "evidence", "integrity", "integrity_json",
+           "law_name", "line", "live_epoch", "live_salt", "live_salt_twin", "lms_verify", "opening_twin", "params",
+           "pass_epoch_twin", "ratio", "recorded_reason", "registered_twin", "rounds", "rounds_twin", "salt_of_record",
+           "salt_twin", "serve_case", "unit_draw", "values_root", "verify_path", "window_anchors", "window_domain",
+           "window_salt", "work_k", "work_units"]

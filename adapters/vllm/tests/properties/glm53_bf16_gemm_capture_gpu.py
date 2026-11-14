@@ -733,6 +733,8 @@ def scan_ops(weights: Weights, gates: dict[str, Any], model: str, phase: str, na
             buf = torch.empty(top, NHL * V_HEAD, device="cuda", dtype=torch.bfloat16)
             out_full = buf.view(top, NHL, V_HEAD).transpose(0, 1)
             run = lambda M: torch.bmm(a[:, :M], b, out=out_full[:, :M])            # noqa: E731
+    xw: np.ndarray | None
+    ww: np.ndarray | None
     if phase != "bmm":
         # x row 0 all ones and crafted boundary rows atop W: the split count reads out of the words at either output rounding
         probe = BC.splitk_count_probe(w.shape[1], max_rows=min(w.shape[0], SCAN_FIT_COLS))
@@ -1382,7 +1384,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
                       f"classes={[(c['split'], c['m0']) for c in rec['classes']]} sweep={rec['sweep']} ok={rec['ok']}", flush=True)
             doc["expected"] = [case_key(*c) for c in todo]
         for i, (model, phase, name, M) in enumerate(todo):
-            key = case_key(model, phase, name, M)
+            key: str | tuple[Any, ...] = case_key(model, phase, name, M)
             try:
                 launch_rec, job = launch(work, weights, gates, model, phase, name, M, 7000 + i, a.served_default,
                                          scan_split.get((model, phase, name, M)))

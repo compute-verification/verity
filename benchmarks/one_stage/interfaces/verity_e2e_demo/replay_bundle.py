@@ -28,7 +28,7 @@ in the payload and holds only public structure, hiding commitments and paths bes
   blocks: [{block, root, domain, steps: [{step, root, domain}]}]}``: the run's 64-byte context, the step layout (groups of
   units of rows of byte ranges, `layout_json`), and per server-time block every step's root (what went to the challenger
   before the step's live coin) under this bundle's block tree over them (`block_domain`).
-* ``members``: per member with a sampled proof block, what Flock's ``--zk`` session reads today (`benchmarks/one_stage/a5.py`): its
+* ``members``: per member with a sampled proof block, what Flock's ``--zk`` session reads today (`verity/protocols/proofs/spot/prover/audit/window_audit.py`): its
   key, template, base and count, the sampled proof blocks' local indices and the session's subset sample over them, its header's
   ``frame_v3`` entry, its public body's SHA-512 and row schemas. The prover's input file is
   ``flock_inputs.flock_input_files(window, k, circuit, out, write=("inst",))`` under the circuit the verifier composed for
@@ -101,7 +101,7 @@ from verity.commitments.row_table import ROOTS_SCHEMA, RootOpening, RootTree, ve
 from verity.commitments.window import window_domain
 from verity.commitments.windows import interface as IF, rows as CS
 
-COMMIT_SLOTS = Path(__file__).resolve().parents[3] / "torch_gpu" / "commit_slots"
+COMMIT_SLOTS = Path(__file__).resolve().parents[4] / "verity" / "commitments" / "cuda" / "commit_slots"
 if str(COMMIT_SLOTS) not in sys.path:
     sys.path.insert(0, str(COMMIT_SLOTS))
 import slots as S  # noqa: E402

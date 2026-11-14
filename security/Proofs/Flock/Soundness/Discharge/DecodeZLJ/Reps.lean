@@ -17,7 +17,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Exec.Rounds
 
 /-!
-# flock-verify's acceptance at table `j`, rep by rep
+# verity-verify-proof's acceptance at table `j`, rep by rep
 
 `accepts_reps_at`: `DecodeZL.accepts_reps` at any table `j` of the session, at any `count`. `Discharge/Exec`'s
 `accepts_verdict_hm96` and `accepts_rep_rounds` already speak of every table `j < sts.size`: table `j`'s streams
@@ -37,7 +37,7 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **flock-verify's acceptance, table by table and rep by rep**: the record's spec, tables and session, and at each
+/-- **verity-verify-proof's acceptance, table by table and rep by rep**: the record's spec, tables and session, and at each
 table `j` its `fast100` schedule and, at the table's link claims, each rep's stream and decoded proof (file `2j + r`),
 its run on the stream's coins with the proof's messages, its stream's rounds retaining `repFrames`' chunks, and the
 salted verdict on the two runs at `capOfRoot` of `root_B[j]` and `opnOf` of proof files `2j`, `2j + 1`. -/
@@ -108,7 +108,7 @@ theorem planJ_length (T₀ : TabSpec mPts) (dj : Finset (Fin n) → Json) (S : F
     (planJ ht T₀ dj S R).length = I.count :=
   List.length_ofFn
 
-/-- **Table `j` where flock-verify sets it up**: `tableJ` at a sample with a `SetupJ` is the `SetupJ.spec` of one with
+/-- **Table `j` where verity-verify-proof sets it up**: `tableJ` at a sample with a `SetupJ` is the `SetupJ.spec` of one with
 the same statement. -/
 theorem tableJ_of {T₀ : TabSpec mPts} {d : Json} {j : ℕ} (x : SetupJ I mPts j (partJson d I.count j)) :
     ∃ y : SetupJ I mPts j (partJson d I.count j), y.st = x.st ∧ tableJ ht T₀ d j = y.spec ht := by

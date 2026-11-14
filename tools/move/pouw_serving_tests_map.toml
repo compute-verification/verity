@@ -1,0 +1,37 @@
+# Four of the tests `pouw_serving_map.toml` moved to PoUW's prover go back to the vLLM adapter's: what
+# `tools/move/layout.py --map tools/move/pouw_serving_tests_map.toml` moves and rewrites. Each serves a call through the
+# adapter's int8_exact arm (`scaled_mm_zy`) or H1's hooks into vLLM's linears (`h1_hooks`), loaded by name, so each
+# tests the adapter's side of the call against PoUW's records, and PoUW's package uses no adapter. No file is split or
+# deleted. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"verity/protocols/accounting/pouw/prover/tests/test_credit_gate_outside.py" = "adapters/vllm/tests/protocols/test_credit_gate_outside.py"
+"verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_records.py" = "adapters/vllm/tests/protocols/test_pouw_h1_records.py"
+"verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_records_device.py" = "adapters/vllm/tests/protocols/test_pouw_h1_records_device.py"
+"verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_weight_roots.py" = "adapters/vllm/tests/protocols/test_pouw_h1_weight_roots.py"
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), files
+# whose bytes a digest pins, every Lean file, every kernel source, and the layout of record.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/circuits/silicon/captures/**",
+           "verity/circuits/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**", "**/*.lean", "tests/tree.toml",
+           "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c"]
+include = ["**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "adapters/vllm/manifests/definitions.json"]
+
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"verity.protocols.accounting.pouw.prover.tests.test_credit_gate_outside" = "adapters.vllm.tests.protocols.test_credit_gate_outside"
+"verity.protocols.accounting.pouw.prover.tests.test_pouw_h1_records" = "adapters.vllm.tests.protocols.test_pouw_h1_records"
+"verity.protocols.accounting.pouw.prover.tests.test_pouw_h1_records_device" = "adapters.vllm.tests.protocols.test_pouw_h1_records_device"
+"verity.protocols.accounting.pouw.prover.tests.test_pouw_h1_weight_roots" = "adapters.vllm.tests.protocols.test_pouw_h1_weight_roots"

@@ -17,7 +17,7 @@ system's answer. The check gives no partial credit (`Properties.Pouw.Check.Accep
 accepted the window's every sampled proof block), so its verdict is every sampled proof's (`checkedRun`). The period is credited up
 to its first window the check refuses (`Executions.prefixLen`), on those windows' live words (`checkedLive`).
 
-It is parametric in the deployed unit and names no device: the scheme `Sc`, the declared circuit `Cd`, the population
+It is parametric in the deployed unit and names no device: the scheme `Sc`, the registered circuit `Cd`, the population
 `N_p` and the sample size `K_d` are arguments, as are the check's parameters `prm` (its check item names the scheme and its
 tile work), and the relation `rel` is the statement the service proves of each unit, whatever it is. An instance fixes
 them: `H1CheckedCreditPeriod` is H1's tile unit on the torch loop (below).
@@ -37,7 +37,7 @@ them: `H1CheckedCreditPeriod` is H1's tile unit on the torch loop (below).
   check's accepted prefix, under their premises at `checkedRun`, with `JointSound` replaced by `SampleIsCoin` and
   `ServiceSound`, and with `RegisteredBeforeDraw`.
 * `SaltIsLiveCoin`, `StagedPins`, `stagedAt`, `flatAtCoin`, `H1CheckedCreditPeriod`: H1's instance. Each window's salt
-  is its round's live coin; the staged statement the leg proves pins the pinned flat tile at one salt; the unit's
+  is its round's live coin; the staged statement the subprotocol proves pins the pinned flat tile at one salt; the unit's
   relation, the staged statement at the window's salt; its rightness, the flat tile's at the window's coin; and
   `CheckedCreditPeriod` at the torch loop's counts with those two in place of `Pins`.
 
@@ -48,7 +48,7 @@ tiles; the service proves the units the check publishes, so it follows from `Ser
 check doesn't discharge it:
 
 * `Scope Sc Cd δs` and the static numbers (`ρ`, `w_max`, the lucks `p, p0`, `SplitRate`), and `DeadConeDead`: facts of the
-  declared circuit and the scheme. They need a `Declared` built from the registered Program, which nothing builds yet
+  registered circuit and the scheme. They need a `Declared` built from the registered Program, which nothing builds yet
   (`Properties.Compose.UnitsOfLayout`, `Properties.Served.IsServed`, the extractor). `Scope`'s `LayerCommitted` also needs
   the live schedule, a coin a round after its root (`PouwCheck.roundsCheck`, `PouwCheck.saltCheck`), which
   `protocol.check` doesn't read: under PoUW's seeded salt-and-draw schedule it fails on every circuit an activation
@@ -68,13 +68,13 @@ check doesn't discharge it:
 * `ServiceSound δks`: Flock's soundness at each sampled proof block under live coins (`Flock.Guarantees.EndToEndRegisteredRows`
   for one session) with one-stage's acceptance (`Properties.Spot.AcceptMeans`) and the check's
   (`Properties.Pouw.Check.AcceptMeans`), both proved; `rel` the relation of the statement the service proves (H1's
-  leg: the window's staged statement, `stagedAt`).
+  subprotocol: the window's staged statement, `stagedAt`).
 * `SampleIsCoin`: the service's `subset:K′` sample from the challenger's sampling coin (`Spot.Select.select`) read as
   the model's uniform permutation coin, with `K′ = K_d` and `N = N_p` (`Properties.Pouw.Check.AcceptedDraw` gives the
   published sample `K′` distinct units below `N`; `Properties.Served.SampleMissesSubset` bounds its misses by the model's).
 * `Pins` (`rel` gives `right`): the relation of the statement the service proves pins the declared tile's rightness, a
   fact of that statement and the tile's Definition, with `UnitsOfLayout`'s tie of `Cd` to it. Where the service proves
-  a statement other than the registered tile's (H1's leg proves the window's staged statement), this is the link
+  a statement other than the registered tile's (H1's subprotocol proves the window's staged statement), this is the link
   between the two, and H1's instance splits it into `StagedPins` and `SaltIsLiveCoin`.
 * `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt` per live tile, and `UnitFixed` at `monitoringPeriodMode`: the named claims, as in
   `CircuitWorkMonitoringPeriod`. On H1's unit they are (H-μ) at `μ = 3/4`, B′ at `r_B = 1/2` and the guess bound at
@@ -85,11 +85,11 @@ check doesn't discharge it:
 refusing the whole period on any refused window. A loop credited through it takes these statements with `Accepts` at
 `Credit.window`'s verdict; a period it credits is one whose windows are all accepted, `Executions.prefixLen = n`.
 
-*H1's tile unit on the torch loop* (`H1CheckedCreditPeriod`, PoUW's leg of the period above). The loop's W8A8
+*H1's tile unit on the torch loop* (`H1CheckedCreditPeriod`, PoUW's subprotocol of the period above). The loop's W8A8
 two-layer MLP at `H = 128` serves 4 requests × 2 decode steps a window, and each linear's `K = 128` is two pinned H1
 tiles `PouwH1Tile_v1` (`K = 64`, `R = 4`, `C = 8`, `core_check.TILES`): 2 steps × 2 linears × 16 column blocks × 2
 halves of `K` = 128 real tiles a window, in a population of `N_p = 144` (the grid's 16 fillers, of zero rows and no
-words, so `ρ = 128/144 = 8/9`), `K_d = 24` of them sampled at the leg's check (`ε = 1/2`, `δ = 10⁻⁶`, `window.k_prime`).
+words, so `ρ = 128/144 = 8/9`), `K_d = 24` of them sampled at the subprotocol's check (`ε = 1/2`, `δ = 10⁻⁶`, `window.k_prime`).
 Every tile's noise reads the window's one salt (its public row, `PouwCheck.publicBc`), so the window is one round
 (`Cd.rounds = 1`, `w_max = 1`): a coin a decode step would need a salt a step, which the pinned tile and the check don't
 take. At H1's lucks (`p = 7/8`, `p0 = ½`, the floors `OperandHMu`, `ReceiptLuckAt` and `GuessLuckAt` claim), `a = b = 1`
@@ -116,7 +116,7 @@ What H1's instance takes that the deployed path doesn't give, each a named premi
   still stand in a SHA-512 of the step's salt key for the salt. What remains: the served windows' salt from the
   auditor's challenger, and a tie of the proved tiles to that salt (their salt port is still a value the prover
   records).
-* `StagedPins`: the leg's proofs are of the window's staged statement, not the pinned flat circuit `core_check.opening`
+* `StagedPins`: the subprotocol's proofs are of the window's staged statement, not the pinned flat circuit `core_check.opening`
   reads. The bridge is stated over the staged statement (`ServiceSound` is the service's soundness for it, `stagedAt`),
   and `StagedPins` is what links it to the flat tile's rightness, which the lucks are claims of (`flatAtCoin`). No Lean
   function of either side exists yet, so both are parameters.
@@ -239,7 +239,7 @@ def RegisteredBeforeDraw {C Ξ : Type} {m Np n : ℕ} (ws : Executions (Paths C 
 /-! ## The period's conclusion at the check's accepted prefix -/
 
 /-- **(L) The circuit's work on its live tiles over the windows PoUW's deployed check accepts, live coins.** For every
-declared circuit `Cd` and scheme `Sc` run as a period of at most `n ≥ 1` windows, each window's registration and the
+registered circuit `Cd` and scheme `Sc` run as a period of at most `n ≥ 1` windows, each window's registration and the
 proof system's answer any function of the period's coins (`Executions`), with the check's parameters `prm`: under
 `CircuitWorkMonitoringPeriod`'s premises at the period's proofs with the check's verdict (`checkedRun`, `checkedLayer`), its
 `JointSound` replaced by the check's sample being the period's sampling coin (`SampleIsCoin`) and the service's soundness
@@ -328,7 +328,7 @@ def SaltIsLiveCoin {C B : Type} {m n : ℕ} (hm : 0 < m) (salt : Paths (Paths C 
   ∀ x w, salt x w = enc (coinAt (coinAt x w).1 ⟨0, hm⟩)
 
 /-- **The staged statement pins the flat tile**: at every salt `s`, values of a unit `t` that satisfy the statement
-the service proves of it (`staged s t`, the window's staged statement, which the leg's proofs are of) satisfy the
+the service proves of it (`staged s t`, the window's staged statement, which the subprotocol's proofs are of) satisfy the
 pinned flat tile's rightness there (`flat s t`, `PouwH1Tile_v1`'s function at salt `s`, the circuit `core_check.opening`
 reads and the lucks are claims of). Nothing proves it yet, and neither side has a Lean function, so both are
 parameters of the statements that take it. A named assumption in the lock: a

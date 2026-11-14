@@ -34,9 +34,17 @@ import pytest
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.pouw.verifier import salt as PS
 from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.accounting.pouw.verifier.audit import Workload, salt_of, weights_root
+from verity.protocols.accounting.pouw.verifier.audit import (
+    Workload,
+    salt_of,
+    weights_root,
+)
 from verity.protocols.accounting.pouw.verifier.coins import Challenger
-from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Matmul, Shape
+from verity.protocols.accounting.pouw.verifier.protocol import (
+    DomainError,
+    Matmul,
+    Shape,
+)
 from verity.protocols.proofs.spot.device import challenger as LC
 from verity.protocols.proofs.spot.device import remote as R
 
@@ -44,11 +52,11 @@ from tests.protocols import challenger_host as CH
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import pearl_c as PPD
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
-from verity_vllm.protocols.pouw.h1 import window as PHW
-from verity_vllm.protocols.pouw.pearl_c import manifest as PPM
-from verity_vllm.protocols.pouw.pearl_c import passes as PP
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import manifest as PPM
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import passes as PP
 
 SCHEME = "pearl-c-sm120-v1-h3"
 ENTRY = f"pouw:{SCHEME}"
@@ -148,7 +156,8 @@ def test_a_step_ends_its_pass_once_under_a_committer_that_patched_the_runner_fir
     original = vars(Stepping)["execute_model"]
 
     def stepped(runner_setting):
-        runner, seen, ends = Stepping(), [], []
+        runner, ends = Stepping(), []
+        seen: list[int] = []
         run = SimpleNamespace(entry=ENTRY, details={}, cur=SimpleNamespace(matmuls=[]),
                               end_pass=lambda step=False: ends.append(step))
         first, h = _committed(runner, seen), hooks.Hooks(ENTRY)
@@ -162,7 +171,8 @@ def test_a_step_ends_its_pass_once_under_a_committer_that_patched_the_runner_fir
     ends, runner = stepped(True)
     assert ends == [True, True] and "execute_model" not in vars(runner) and vars(Stepping)["execute_model"] is original
 
-    runner, seen, ends = Stepping(), [], []
+    runner, ends = Stepping(), []
+    seen: list[int] = []
     run = SimpleNamespace(entry=ENTRY, details={}, cur=SimpleNamespace(matmuls=[]), end_pass=lambda step=False: ends.append(step))
     h = hooks.Hooks(ENTRY)
     PP.hook_steps(h, run, 1, None, runner)
@@ -437,7 +447,7 @@ class _GateSession:
         session = R.open_session(self.challenger, KEY, f"{CH.HOST}.{sid}",
                                  lambda m: lms.sign_at(PRIVATE, self.gate.take(), m).encode(), self.directory, sid)
         ours, theirs = socket.socketpair()
-        self._thread = threading.Thread(target=self._serve, args=(ours, session))
+        self._thread = threading.Thread(target=self._serve, args=(ours, session), daemon=True)
         self._thread.start()
         self.client = R.RemoteChallenger(theirs)
         self.monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(lambda cls, at, secret=None: self.client))

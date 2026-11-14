@@ -27,7 +27,8 @@ inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/ver
           "benchmarks/harness/verity_bench/settings.py",
           "verity", "adapters/vllm/verity_vllm", "adapters/vllm/tests/program/train_step_lf.py",
           "adapters/vllm/tests/__init__.py", "adapters/vllm/tests/program/__init__.py",
-          "benchmarks/rho", "benchmarks/census/deployments.json",
+          "benchmarks/rho", "hardware/cards/h200-sxm-141gb.toml", "hardware/cards/dgx-h200.toml",
+          "benchmarks/census/deployments.json",
           "benchmarks/nci/calibrations.json", "tools/config/verity_config",
           "benchmarks/training_slowdown/grader", "benchmarks/circuit_properties/circuit_properties"]
 

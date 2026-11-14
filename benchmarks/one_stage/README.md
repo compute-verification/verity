@@ -277,7 +277,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   and per proof-block Definition its count in the prefill step and the decode steps, output bits
   and size class, estimated ANDs, served MACs and opened row bytes, with the totals per token and per request, the gaps
   and the rows that are no proof block (`census.json`, `table.md`), and the planner's card (`card.json`,
-  `benchmarks/sampling_plan/glm53.py`).
+  `verity/protocols/proofs/spot/prover/cost/glm53.py`).
   `m1_unit.py` builds one family's unit through Flock's circuit prover's `UnitStager`, flat or `--structural`, and with `--bin`
   and `--lean` proves one round of it on stand-in bf16 values under `--zk` and verifies it with the Lean verifier.
   `m1_forms.sh` runs it on one Definition per form, side by side, with the Lean call's seconds and peak memory beside each
@@ -336,7 +336,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
 
 Flock's circuit prover (`verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of the circuit prover's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
-inputs sent with the run; it builds `flock-circuit` and `flock-verify` once per pod, then runs the driver, whose
+inputs sent with the run; it builds `flock-circuit` and `verity-verify-proof` once per pod, then runs the driver, whose
 `--m0-pythonpath` names that tree. The drivers' checks go through the verifier
 (`one_stage.verifier`), which builds the sampled-proofs Lean in the run's tree on its first check, hence `--cwd clone`:
 

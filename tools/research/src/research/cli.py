@@ -67,7 +67,7 @@
   research metrics show [ID ...] [--owner HANDLE] [--json]   # the console's Metrics tab: each declared metric's latest value
                                                  # (each benchmark's metrics.toml; research/metrics.py)
   research jobs add|list|show|cancel|events ...  # the Job queue: batch work on pods, on the control app (research/jobs/cli.py)
-  research worker --dispatch --pods A,B [--name rc]   # stage 1's dispatcher: claims jobs, runs each with `run --on` on a free pod
+  research worker --dispatch --pods A,B [--name rc]   # step 1's dispatcher: claims jobs, runs each with `run --on` on a free pod
   research git old2new|remap|check|build ...     # after a history rewrite: an old commit's image, a clone's local work moved onto the
                                                  # rewritten history, the old-history guard, the commit-map/v1 payload (research/commitmap.py)
   research pods check-part <machine|pod-id>      # reference-part gate: name, VRAM vs [families.<fam>] vram_mb, host CPU, load, verdict (exit 3 = variant)
@@ -214,7 +214,7 @@ def cmd_run(argv: list[str]) -> int:
 
 
 def _cmd_run(argv: list[str], clones: list[Path]) -> int:
-    started = time.monotonic()                   # --wait's cap counts the launch too: it bounds the whole tool call
+    started = time.monotonic()                   # --wait's limit counts the launch too: it bounds the whole tool call
     if "--" not in argv:
         print("research run: the workload command goes after `--`", file=sys.stderr)
         return 2
@@ -251,16 +251,16 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--exclusive", action="store_true", help="with --on: refuse if another research run is live on the machine")
     ap.add_argument("--wait", action="store_true",
                     help="with --on (or --queue): block until the run ends and exit with its rc (else 1; 3 if refused), for at most "
-                         f"{waitcap.WAIT_CAP_S} s with the launch (20 minutes: no tool call blocks longer): then it stops waiting, "
+                         f"{waitcap.WAIT_LIMIT_S} s with the launch (20 minutes: no tool call blocks longer): then it stops waiting, "
                          f"cancels nothing, names the check-back command (`research status RUN`) and exits {waitcap.STILL_GOING}. "
                          "Without it, run returns once the machine has started the run, so a loop of launches doesn't serialize them")
     ap.add_argument("--wait-every", type=float, default=30.0, metavar="S", help="with --wait: fetch the run's records every S seconds (30)")
     ap.add_argument("--wait-max", type=float, default=None, metavar="S",
-                    help=f"with --wait: stop waiting after S seconds instead of {waitcap.WAIT_CAP_S}; never more than {waitcap.WAIT_CAP_S}")
+                    help=f"with --wait: stop waiting after S seconds instead of {waitcap.WAIT_LIMIT_S}; never more than {waitcap.WAIT_LIMIT_S}")
     ap.add_argument("--mem-gb", type=float, default=None, metavar="N",
                     help="with --on: admit only if the machine's memory cgroup has N GB free after live reservations (/workspace/ramlock), "
                          "and reserve them for the run, which the workload reads as $RESEARCH_RUN_MEM_GB (a reservation sets no cgroup "
-                         "cap); else MemoryNotAvailable (research.mem). With --queue: the job's memory cap "
+                         "limit); else MemoryNotAvailable (research.mem). With --queue: the job's memory limit "
                          "(its scope's MemoryMax=), required unless --kind names a registered kind, whose shape gives it")
     ap.add_argument("--mem-wait", type=float, default=0.0, metavar="S",
                     help="with --mem-gb: wait up to S seconds for the memory instead of refusing, in line behind older waiters "
@@ -393,9 +393,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     if ns.wait_max is not None:
         try:
             if not ns.wait:
-                raise waitcap.OverCap("--wait-max is for --wait")
+                raise waitcap.OverLimit("--wait-max is for --wait")
             waitcap.max_s(ns.wait_max)
-        except waitcap.OverCap as e:
+        except waitcap.OverLimit as e:
             print(f"research run: {e}", file=sys.stderr)
             return 2
     if ns.mem_limit_gb is not None and not (ns.mem_limit_gb > 0 and ns.lane):
@@ -418,7 +418,40 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
 
 
 def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[str], clones: list[Path]) -> int:
-    """`research run` once its place is settled: here, on --on's machine, on the queue's, or where `--on auto` sent it."""
+    """`research run` once its place is settled: here, on --on's machine, on the queue's, or where `--on auto` sent it. A run dir
+    it took (`_take_run_dir`) that no run wrote in is removed as it returns. A run not claimed takes SIGTERM as SystemExit (exit
+    143) until then, so a launcher stopped that way removes it too; the handler it had before is put back. SIGKILL leaves it."""
+    import signal
+    import threading
+
+    own = not ns.claimed and threading.current_thread() is threading.main_thread()
+    before = signal.signal(signal.SIGTERM, _exit_on_sigterm) if own else None
+    try:
+        return _run_placed_in(ns, harness_opts, command, clones)
+    except R.RunDirTaken as e:
+        print(f"research run: {e}", file=sys.stderr)
+        return 2
+    finally:
+        if (taken := getattr(ns, "taken_dir", None)) is not None:
+            R.drop_run_dir(taken)
+        if own:
+            signal.signal(signal.SIGTERM, signal.SIG_DFL if before is None else before)
+
+
+def _exit_on_sigterm(signum: int, _frame: object) -> None:
+    raise SystemExit(128 + signum)
+
+
+def _take_run_dir(ns: argparse.Namespace, root: Path) -> Path:
+    """The run's dir, made now (`runs.take_run_dir`: --id's, else a fresh id's) and kept on `ns` with its id, so each step of
+    the launch that needs it before the next gets the same one."""
+    if getattr(ns, "taken_dir", None) is None:
+        ns.taken_dir = R.take_run_dir(root, ns.id)
+        ns.id = ns.taken_dir.name
+    return ns.taken_dir
+
+
+def _run_placed_in(ns: argparse.Namespace, harness_opts: list[str], command: list[str], clones: list[Path]) -> int:
     if ns.claimed:
         _survive_stray_signals()
     mem_reservation = os.environ.pop("RESEARCH_MEM_RESERVATION", None) if ns.claimed else None    # research.mem: this runner's, not the workload's
@@ -446,7 +479,7 @@ def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[s
             wait_s = ns.pool_wait if ns.pool_wait is not None else slot_only.POOL_WAIT_S
             if asks := getattr(ns, "asks", None):
                 # a run `--on auto` placed carries a pair, its own id, so its late twin can take it from this line (research.asker)
-                ns.id = ns.id or R.new_run_id()
+                _take_run_dir(ns, R.runs_root(ns.runs_dir))
                 asks["wait_s"] = wait_s
             command = slot_only.in_pool(ns.pool, ns.lane, command, timeout, wait_s, twin=ns.id if asks else None)
             if budget := getattr(ns, "budget_gb", None):       # slot.py's own option, before the `--` that ends them
@@ -529,10 +562,10 @@ def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     if not ns.claimed and (why := R.disk_floor_refusal(root)):
         print(f"research run: refused: {why}", file=sys.stderr)
         return 3
-    run_id = ns.id or R.new_run_id()
-    run_dir = root / run_id
     if ns.on:
-        return _run_remote(ns, run_id, run_dir, harness_opts, command)
+        return _run_remote(ns, root, harness_opts, command)
+    run_dir = root / ns.id if ns.claimed else _take_run_dir(ns, root)     # a claimed run's dir is its launch request's
+    run_id = run_dir.name
     job_pw = job_dir = None
     if ns.job_user:
         from . import jobuser
@@ -559,7 +592,7 @@ def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     if ns.claimed and not env_map:
         env_map = _request_env(ns.remote_json)
     workload_env = {**result.env_defaults(os.environ), **env_map}   # every job's defaults, under --env, which still decides
-    if run_dir.exists() and ((run_dir / "job.json").exists() or not ns.claimed):
+    if ns.claimed and (run_dir / "job.json").exists():
         print(f"research run: {run_dir} already exists; a rerun gets a fresh id", file=sys.stderr)
         return 2
     hp = _harness_parser("research run")
@@ -591,7 +624,7 @@ def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[s
         a.cwd = str(run_dir)
     source_root = Path.cwd()
     tree_lock = treelock.lock_path(root, source_root) if cwd_basis == "source" and treelock.builds_lean(command) else None
-    run_dir.mkdir(parents=True, exist_ok=ns.claimed)
+    run_dir.mkdir(parents=True, exist_ok=True)
     _place_dirty_capture(prep, run_dir)
     cost = json.loads(ns.cost_json) if ns.cost_json else None
     if ns.claimed and remote_info is not None:
@@ -720,7 +753,7 @@ def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[s
 
 
 #: The longest custody key ``research run`` mints on request; the default stays 6 h.
-CUSTODY_TTL_CAP_S = 24 * 3600
+CUSTODY_TTL_LIMIT_S = 24 * 3600
 
 
 def _harness_timeout(harness_opts: list[str]) -> float | None:
@@ -762,41 +795,41 @@ def _normalize_timeout(harness_opts: list[str]) -> list[str]:
     return out
 
 
-#: what a run that outlives its custody key needs, since no key lives past `CUSTODY_TTL_CAP_S`
+#: what a run that outlives its custody key needs, since no key lives past `CUSTODY_TTL_LIMIT_S`
 CUSTODY_REPAIR = ("if the run outlives the key, publish its custody with a fresh one after it ends: "
                   "`research data custody RUN --publish` (store README, custody)")
 
 
 def _custody_hours(timeout: float) -> int:
-    """The whole hours a custody key lives to outlast a run of ``timeout`` seconds and its upload, at most the cap's."""
-    return min(-(-int(timeout) // 3600) + 1, CUSTODY_TTL_CAP_S // 3600)
+    """The whole hours a custody key lives to outlast a run of ``timeout`` seconds and its upload, at most the limit's."""
+    return min(-(-int(timeout) // 3600) + 1, CUSTODY_TTL_LIMIT_S // 3600)
 
 
 def _pool_custody_ttl(total_s: float) -> str | None:
     """The custody key's lifetime for a pool run that names none, where the default would refuse it. The key is minted at
     launch, and ``total_s`` is the `--timeout` the launcher gives a pool run: its wait for a slot plus the run's own, a sum the
-    run never asked for. None where the default lifetime covers it, or no key does (past :data:`CUSTODY_TTL_CAP_S`, which
+    run never asked for. None where the default lifetime covers it, or no key does (past :data:`CUSTODY_TTL_LIMIT_S`, which
     `_custody_ttl_problem` refuses with what to pass)."""
     from research.store import credentials as C
     from research.store.custody import DEFAULT_TTL
 
-    if total_s <= C.parse_ttl(DEFAULT_TTL) or total_s > CUSTODY_TTL_CAP_S:
+    if total_s <= C.parse_ttl(DEFAULT_TTL) or total_s > CUSTODY_TTL_LIMIT_S:
         return None
     return f"{_custody_hours(total_s)}h"
 
 
 def _custody_ttl_warning(custody_ttl: str | None, harness_opts: list[str]) -> str | None:
-    """A launch whose ``--timeout`` is past :data:`CUSTODY_TTL_CAP_S`, with a key at the cap: allowed, and told the repair."""
+    """A launch whose ``--timeout`` is past :data:`CUSTODY_TTL_LIMIT_S`, with a key at the limit: allowed, and told the repair."""
     timeout = _harness_timeout(harness_opts)
-    if timeout is not None and timeout > CUSTODY_TTL_CAP_S and custody_ttl:
+    if timeout is not None and timeout > CUSTODY_TTL_LIMIT_S and custody_ttl:
         return f"--timeout {timeout:g} s is past the custody key's {custody_ttl}: {CUSTODY_REPAIR}"
     return None
 
 
 def _custody_ttl_problem(custody_ttl: str | None, harness_opts: list[str]) -> str | None:
-    """Why a custody launch is refused: an explicit ``--custody-ttl`` over :data:`CUSTODY_TTL_CAP_S`, or a ``--timeout`` longer than
+    """Why a custody launch is refused: an explicit ``--custody-ttl`` over :data:`CUSTODY_TTL_LIMIT_S`, or a ``--timeout`` longer than
     the key's lifetime, the explicit ``--custody-ttl``'s or the default's (the key would expire before the run's upload). A
-    ``--timeout`` past the cap takes a key at the cap, and the run that outlives it is repaired after (`_custody_ttl_warning`)."""
+    ``--timeout`` past the limit takes a key at the limit, and the run that outlives it is repaired after (`_custody_ttl_warning`)."""
     from research.store import credentials as C  # noqa: PLC0415
     from research.store.custody import DEFAULT_TTL  # noqa: PLC0415
 
@@ -804,20 +837,20 @@ def _custody_ttl_problem(custody_ttl: str | None, harness_opts: list[str]) -> st
         ttl = C.parse_ttl(custody_ttl or DEFAULT_TTL)
     except C.MintError as e:
         return str(e)
-    if custody_ttl and ttl > CUSTODY_TTL_CAP_S:
-        return (f"--custody-ttl {custody_ttl} is over the {CUSTODY_TTL_CAP_S // 3600} h cap: pass at most "
-                f"--custody-ttl {CUSTODY_TTL_CAP_S // 3600}h, and {CUSTODY_REPAIR}")
+    if custody_ttl and ttl > CUSTODY_TTL_LIMIT_S:
+        return (f"--custody-ttl {custody_ttl} is over the {CUSTODY_TTL_LIMIT_S // 3600} h limit: pass at most "
+                f"--custody-ttl {CUSTODY_TTL_LIMIT_S // 3600}h, and {CUSTODY_REPAIR}")
     timeout = _harness_timeout(harness_opts)
-    if timeout is not None and timeout > CUSTODY_TTL_CAP_S and ttl < CUSTODY_TTL_CAP_S:
-        return (f"--timeout {timeout:g} s is past the {CUSTODY_TTL_CAP_S // 3600} h a custody key lives at most: pass "
-                f"--custody-ttl {CUSTODY_TTL_CAP_S // 3600}h, and {CUSTODY_REPAIR}")
-    if timeout is not None and CUSTODY_TTL_CAP_S >= timeout > ttl:
+    if timeout is not None and timeout > CUSTODY_TTL_LIMIT_S and ttl < CUSTODY_TTL_LIMIT_S:
+        return (f"--timeout {timeout:g} s is past the {CUSTODY_TTL_LIMIT_S // 3600} h a custody key lives at most: pass "
+                f"--custody-ttl {CUSTODY_TTL_LIMIT_S // 3600}h, and {CUSTODY_REPAIR}")
+    if timeout is not None and CUSTODY_TTL_LIMIT_S >= timeout > ttl:
         hours = _custody_hours(timeout)
         if custody_ttl:
             return (f"--timeout {timeout:g} s outlives --custody-ttl {custody_ttl} ({ttl} s; a bare number is seconds): the upload "
-                    f"would fail; pass a longer one, at most {CUSTODY_TTL_CAP_S // 3600}h, such as --custody-ttl {hours}h")
+                    f"would fail; pass a longer one, at most {CUSTODY_TTL_LIMIT_S // 3600}h, such as --custody-ttl {hours}h")
         return (f"--timeout {timeout:g} s outlives the custody key's default lifetime ({DEFAULT_TTL}): the upload would fail; "
-                f"pass --custody-ttl (at most {CUSTODY_TTL_CAP_S // 3600}h) longer than the run, such as --custody-ttl {hours}h")
+                f"pass --custody-ttl (at most {CUSTODY_TTL_LIMIT_S // 3600}h) longer than the run, such as --custody-ttl {hours}h")
     return None
 
 
@@ -1083,7 +1116,7 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
     if ns.campaign:
         env_out["RESEARCH_CAMPAIGN"] = ns.campaign
     conds = None
-    capture = Path(tempfile.mkdtemp(prefix=f"research-{run_id}-")) / E.DIRTY_CAPTURE   # the run dir is made after this returns
+    capture = Path(tempfile.mkdtemp(prefix=f"research-{run_id}-")) / E.DIRTY_CAPTURE   # the run dir holds nothing yet
     try:
         hint = json.loads(ns.source_identity) if ns.source_identity else None
         shipped = getattr(a, "tree_sha", None)
@@ -1144,21 +1177,21 @@ def _place_dirty_capture(prep: dict, run_dir: Path) -> None:
     import hashlib
     import shutil
 
-    cap: Path = prep["dirty_capture"]
+    capture: Path = prep["dirty_capture"]
     try:
         conds = prep["section"].get("conditions") or {}
-        if cap.is_file() and conds.get("source.dirty"):
-            dest = run_dir / cap.name
-            shutil.move(cap, dest)
+        if capture.is_file() and conds.get("source.dirty"):
+            dest = run_dir / capture.name
+            shutil.move(capture, dest)
             with open(dest, "rb") as f:
                 sha = hashlib.file_digest(f, "sha256").hexdigest()
-            prep["section"]["dirty_capture"] = {"path": cap.name, "bytes": dest.stat().st_size, "sha256": sha,
+            prep["section"]["dirty_capture"] = {"path": capture.name, "bytes": dest.stat().st_size, "sha256": sha,
                                                 "dirty_digest": conds.get("source.dirty_digest")}
     except OSError as e:
         prep["section"].pop("dirty_capture", None)
         print(f"research run: the dirty source was not captured ({type(e).__name__}: {e}); its tree stays its only copy", file=sys.stderr)
     finally:
-        shutil.rmtree(cap.parent, ignore_errors=True)
+        shutil.rmtree(capture.parent, ignore_errors=True)
 
 
 def _no_usable_remote() -> str | None:
@@ -1347,7 +1380,7 @@ def _auto_size(ns: argparse.Namespace, harness_opts: list[str], command: list[st
     """`--on auto` as AUTO_KIND, of a suites.py run (named suites, `--changed REV`'s or all): the memory and time their
     `[tool.verity.tests]` worker_gb and timeout_s call for (research.suite_size), where it gives no --mem-gb, or no --timeout or
     --max-min. A run of many suites reserves less than that memory in a pool's slot (`reserve_gb`, which `_auto_spill` hands
-    the slot); on the queue the memory is the job's cap, whole."""
+    the slot); on the queue the memory is the job's limit, whole."""
     timed = ns.max_min is not None or remote.flag_value(harness_opts, "--timeout") is not None
     if ns.queue_kind != AUTO_KIND or (ns.mem_gb is not None and timed):
         return
@@ -1380,7 +1413,7 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     from .pods.lease import RUN_MARGIN_S
 
     root = R.runs_root(ns.runs_dir)
-    run_id = ns.id or R.new_run_id()
+    run_id = _take_run_dir(ns, root).name           # before the queue books the job under it
     given_max = ns.max_min * 60 if ns.max_min is not None else timeout
     spec = {"project": ns.project, "submitter": os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "-",
             "class": ns.queue_class, "kind": ns.queue_kind, "question": ns.question or None, "gpus": ns.gpus,
@@ -1414,7 +1447,7 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
         print(f"research run: {why}", file=sys.stderr)
         return 2
     harness_opts = ["--project", ns.project, *harness_opts]
-    return _run_remote(ns, run_id, root / run_id, harness_opts, command, queue=placed)
+    return _run_remote(ns, root, harness_opts, command, queue=placed)
 
 
 #: a Lean records run (`lean_changed.py --records PKG`), which `_run_remote` sends the URLs of the Lean bundles its node may restore
@@ -1445,13 +1478,9 @@ def lean_records_urls(source: Path | None, command: list[str]) -> Path | None:
     return urls
 
 
-def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts: list[str], command: list[str],
-                queue: dict | None = None) -> int:
+def _run_remote(ns: argparse.Namespace, root: Path, harness_opts: list[str], command: list[str], queue: dict | None = None) -> int:
     if not ns.project:
         print("research run --on: --project is required (the machine is bound to a project)", file=sys.stderr)
-        return 2
-    if run_dir.exists():
-        print(f"research run: {run_dir} already exists; a rerun gets a fresh id", file=sys.stderr)
         return 2
     env = {}
     for kv in ns.env:
@@ -1491,6 +1520,8 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
         harness_args += ["--scratch", s]
     if ns.campaign:
         harness_args += ["--campaign", ns.campaign]
+    run_dir = _take_run_dir(ns, root)
+    run_id = run_dir.name
     custody = ns.custody_r2 is not False
     if not custody:
         print(f"research run --on {ns.on}: --no-custody-r2: this run's records stay on the machine until `research fetch --all {run_id}`",
@@ -1504,8 +1535,8 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
                 preflight_tool=ns.preflight, job_user=ns.job_user, job_namespaces=ns.job_namespaces,
                 gpus=None if queue else ns.gpus, store_read=ns.store_read, mem_limit=_stated_limit(ns))
     try:
-        rec = remote.launch(run_id=run_id, local_dir=run_dir, machine_name=ns.on, source=source, sends=[*sends, *([urls] if urls else [])],
-                            queue=queue, auto=getattr(ns, "placed", None), **what)
+        rec = remote.launch(run_id=run_id, local_dir=run_dir, taken=True, machine_name=ns.on, source=source,
+                            sends=[*sends, *([urls] if urls else [])], queue=queue, auto=getattr(ns, "placed", None), **what)
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         ns.cannot_start = str(e) if isinstance(e, remote.CannotStart) else None
@@ -1553,7 +1584,7 @@ def _moved_to(run_dir: Path) -> Path | None:
         return None
 
 
-def wait_remote(run_id: str, run_dir: Path, *, every_s: float, max_s: float = waitcap.WAIT_CAP_S, fetch=None, sleep=None,
+def wait_remote(run_id: str, run_dir: Path, *, every_s: float, max_s: float = waitcap.WAIT_LIMIT_S, fetch=None, sleep=None,
                 clock=None, moved=_moved_to) -> int:
     """`research run --on ... --wait`: fetch the run's records every `every_s` seconds until it has ended, and return its rc (1 when
     it ended without one, 3 when the machine refused it). A run that left its line without starting while its late twin may

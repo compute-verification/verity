@@ -122,7 +122,7 @@ theorem plain_wordLen {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tab
 
 open Classical Discharge.Tables Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain in
 /-- **The deployed plain decoders are right at `plainTab`**: at a plain statement in scope with public outputs whose
-sample is `d`, `decodesTable_wrP_sc` at `d` and no sampled proof block, on the outcomes whose `wrP` transcript flock-verify
+sample is `d`, `decodesTable_wrP_sc` at `d` and no sampled proof block, on the outcomes whose `wrP` transcript verity-verify-proof
 accepts, whose root is `rootB₀`'s and on which the reader looks up no column off `C`, with the verdict
 `PlainLiveAccAt` reads. -/
 theorem plain_hdec {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)

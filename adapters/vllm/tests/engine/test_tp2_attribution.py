@@ -21,7 +21,7 @@ import pytest
 
 # tp2_worker imports torch inside the methods that need it, so the module imports torch-free.  A module-level
 # `sys.modules.setdefault("torch", SimpleNamespace())` here poisoned the whole pytest session on a torch-free host: every later
-# collected module that imports torch (cb_a torch_frontend -> `torch.utils`) then failed at COLLECTION ("'torch' is not a package")
+# collected module that imports torch (whatever reaches `torch.utils`) then failed at COLLECTION ("'torch' is not a package")
 # instead of skipping -- 2 collection errors, the session interrupted.  If tp2_worker ever needs torch at import, stub it in a
 # fixture with monkeypatch.setitem(sys.modules, ...), never for the process.
 try:

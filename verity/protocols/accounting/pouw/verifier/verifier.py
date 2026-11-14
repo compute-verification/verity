@@ -1,7 +1,7 @@
 """PoUW's verifier. Lean is the definition and the verifier (AGENTS.md "Design
 rules"), and PoUW has switched to it: the served execution phase's checks
 are its Lean's, `lean/check` (`pouw-check`), `lean/commit` (`pouw-commit`) and `lean/window` (`pouw-window`), whose
-verdicts `benchmarks/pouw/served_zk/of_record.py` publishes. The Python beside them (`core_check`, `coins`, `window`) is kept
+verdicts `verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py` publishes. The Python beside them (`core_check`, `coins`, `window`) is kept
 as the reference, and the difftests hold it to the Lean: a disagreement fails with the Lean's verdict. A served H1
 execution phase's statements are judged here too: `credit.window` and `credit.period_credit` take each sampled proof block's outcome from
 `lean("credit-verified", …)` (`PouwCheck.Verified`), with `credit._verified` the reference, and each round's live
@@ -10,7 +10,10 @@ on the circuit files its credit period's open committed, `lean("credit-committed
 with `credit.committed_files` the reference. The verdicts acted on are the Lean's too (`of_record`): `credit.window`'s
 and `credit.period_credit`'s, `lean("window", …)` and `lean("period", …)` (`PouwCheck.Credit.window`,
 `Credit.periodCredit`) on those outcomes, and the challenger's salt check's, `lean("salt", …)` (`PouwCheck.saltCheck`,
-`core_check.salt_of_record`), each with its Python twin beside it, and a disagreement between them is a refusal.
+`core_check.salt_of_record`), each with its Python twin beside it, and a disagreement between them is a refusal. An
+execution phase's and a credit period's verdicts are `pouw-check serve`'s and `pouw-period serve`'s (`serve_of_record`,
+`core_check.case`, `period_check.case`), and a verdict whose Lean no interface here reaches yet raises
+(`not_written`) rather than fall back on its twin; the README's "Verdicts of record" lists each.
 
 `RECORD_VERDICT` is the switch, and setting it to ``"python"`` is the one line that undoes it.
 
@@ -31,7 +34,7 @@ import subprocess
 import tempfile
 import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 RECORD_VERDICT = "lean"
 #: the refusal code of an answer of record the Lean and its Python twin disagree on, or the Lean can't give
@@ -159,9 +162,9 @@ def of_record(fn: str, value: Any, python: Any) -> Any:
     try:
         got = lean(fn, value)
     except (LeanError, TypeError, ValueError) as e:
-        return {"refused": [DISAGREE, f"the Lean verifier of record gave no answer to {fn}, so it stands refused: {e}"]}
+        return {"refused": [DISAGREE, f"the Lean verifier gave no answer to {fn}, so it stands refused: {e}"]}
     if got != json.loads(json.dumps(python)):
-        return {"refused": [DISAGREE, f"the Lean verifier of record and its Python twin disagree on {fn}, so it "
+        return {"refused": [DISAGREE, f"the Lean verifier and its Python twin disagree on {fn}, so it "
                                       f"stands refused: the Lean answered {_said(got)}, the Python {_said(python)}"]}
     return got
 
@@ -178,13 +181,23 @@ def serve_of_record(exe: str, case: Any, python: dict) -> dict:
     try:
         got = _serves[exe].exchange(case, "a serve case")
     except (LeanError, TypeError, ValueError) as e:
-        return {**refuse, "reason": f"{DISAGREE}: the Lean verifier of record ({exe} serve) gave no answer, so the "
+        return {**refuse, "reason": f"{DISAGREE}: the Lean verifier ({exe} serve) gave no answer, so the "
                                     f"case stands refused: {e}"}
     if _canonical(got) != _canonical(python):
-        return {**refuse, "reason": f"{DISAGREE}: the Lean verifier of record ({exe} serve) and its Python twin "
+        return {**refuse, "reason": f"{DISAGREE}: the Lean verifier ({exe} serve) and its Python twin "
                                     f"disagree, so the case stands refused: the Lean answered {_said(got)}, the "
                                     f"Python {_said(python)}"}
     return got
+
+
+#: the goal under which a check `not_written` stands for gets its Lean interface
+GOAL = "compute-accounting/pouw-verdict-from-main"
+
+
+def not_written(fn: str, lean: str) -> NoReturn:
+    """The verdict of record of `fn`, the Lean `lean`'s, which no interface here reaches yet: raises
+    `NotImplementedError` naming `GOAL`. The Python twin beside `fn` answers the difftest only, never in its place."""
+    raise NotImplementedError(GOAL)
 
 
 def coins(n: int) -> bytes:
@@ -206,5 +219,5 @@ CLAIM = "uniform/io-getrandombytes"
 coins.claim = CLAIM  # type: ignore[attr-defined]
 
 
-__all__ = ["CLAIM", "COINS_MAX", "DISAGREE", "RECORD_VERDICT", "SERVE_EXES", "LeanError", "coins", "executable", "lean",
-           "of_record", "serve_of_record"]
+__all__ = ["CLAIM", "COINS_MAX", "DISAGREE", "GOAL", "RECORD_VERDICT", "SERVE_EXES", "LeanError", "coins", "executable",
+           "lean", "not_written", "of_record", "serve_of_record"]

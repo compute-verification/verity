@@ -185,7 +185,7 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
 
 #: the check slot rank (`slot.py --rank`) of every part of a candidate's check and of its records run: a ranked
 #: priority waiter takes the next free check slot ahead of the unranked ones, so `main` never waits on a slot for them
-POSTLAND_SLOT_RANK = 0
+AFTER_LANDING_SLOT_RANK = 0
 #: where detached launches (`detach`) keep their output and exit, under the queue's TMPDIR
 LAUNCHES = "drive-launches"
 #: how long a detached launch may print no run ids before it is taken as having registered none: train.sh stops its launcher
@@ -897,7 +897,7 @@ def not_run(st: dict) -> bool:
 
 class Landing:
     """The queue's side of a landing on ``q`` (the module's docstring).  ``on`` is drive.toml's machines at `main`, which its
-    checks run on ("" for one that launches nothing); ``launch`` launches a check (`train_launch`), which `launch_postland`
+    checks run on ("" for one that launches nothing); ``launch`` launches a check (`train_launch`), which `launch_after_landing`
     and `launch_locks` wrap; ``states``, ``evidence`` and ``cancel`` read and stop runs (`run_states`, `evidence`,
     `cancel_runs`); ``post`` posts to the merge thread (`merge_thread_post`); ``now`` is the clock; ``warn_steps`` is
     drive.toml's `warn_steps`, the steps whose failure doesn't hold `main`; ``reviews`` and ``ready_by`` read a PR head's
@@ -927,21 +927,21 @@ class Landing:
         self.plan_shards: Callable[..., dict] = plan_shards
         self.planned: Callable[[dict], tuple[dict | None, str | None]] = planned
         #: a candidate's check, or the run beside it (`vqueue_slim.start`): `train.sh COMMIT MACHINE --deferred STEPS`, detached
-        #: (`_started`), its check at `POSTLAND_SLOT_RANK`; an injected `launch` launches it too
-        self.launch_postland: Callable[..., tuple[list[str], str] | dict] = (
+        #: (`_started`), its check at `AFTER_LANDING_SLOT_RANK`; an injected `launch` launches it too
+        self.launch_after_landing: Callable[..., tuple[list[str], str] | dict] = (
             (lambda repo, commit, machine, steps, agreement=False, no_cache=False, circuit_cache=False, no_regenerate=False,
                     shard=None, base=None, cc_records=False, cc_records_from=None, shard_plan=None, ratchet_base=None,
                     train_from=None, deselect=None:
              train_launch(repo, commit, machine, agreement, auth=q.auth, deferred=steps, no_cache=no_cache,
                           no_regenerate=no_regenerate, detached=True, circuit_cache=circuit_cache, shard=shard, base=base,
                           cc_records=cc_records, cc_records_from=cc_records_from, shard_plan=shard_plan,
-                          ratchet_base=ratchet_base, rank=POSTLAND_SLOT_RANK, script_from=train_from, deselect=deselect))
+                          ratchet_base=ratchet_base, rank=AFTER_LANDING_SLOT_RANK, script_from=train_from, deselect=deselect))
             if launch is train_launch else (lambda repo, commit, machine, steps, **_: self.launch(repo, commit, machine, False)))
         #: a candidate's records run (`vqueue_records.start`): `train.sh SHA MACHINES --deferred lean-audit`, detached, its check
-        #: at `POSTLAND_SLOT_RANK`, repairing the locks' bookkeeping where train.sh takes `--bookkeeping-warn`
+        #: at `AFTER_LANDING_SLOT_RANK`, repairing the locks' bookkeeping where train.sh takes `--bookkeeping-warn`
         self.launch_locks: Callable[[Path, str, str], tuple[list[str], str] | dict] = (
             (lambda repo, commit, machine: train_launch(repo, commit, machine, False, auth=q.auth, deferred=LEAN_STEP,
-                                                        detached=True, rank=POSTLAND_SLOT_RANK,
+                                                        detached=True, rank=AFTER_LANDING_SLOT_RANK,
                                                         bookkeeping_warn=takes_bookkeeping(repo)))
             if launch is train_launch else (lambda repo, commit, machine: self.launch(repo, commit, machine, False)))
         #: what a detached launch has printed so far (`launched`, `_resolve`)
@@ -966,7 +966,7 @@ class Landing:
 
     @staticmethod
     def _started(got: tuple[list[str], str] | dict) -> tuple[dict | None, str]:
-        """A launch record's fields from what `launch_locks` or `launch_postland` returned: {"ids"} of a launch that printed
+        """A launch record's fields from what `launch_locks` or `launch_after_landing` returned: {"ids"} of a launch that printed
         them, {"ids": [], "launch"} of one still running detached (`detach`), which `_resolve` reads on later ticks and which
         counts as running until then; None, with train.sh's output's tail, of one that registered no run."""
         if isinstance(got, dict):
@@ -1299,7 +1299,7 @@ class Landing:
                       self._handle(n))
 
     def beside_args(self, tip: str, base: str) -> tuple[dict, list[str], str]:
-        """A check of candidate ``tip`` above ``base``, the commit of `main` below it (`vqueue_slim.start`): (`launch_postland`'s
+        """A check of candidate ``tip`` above ``base``, the commit of `main` below it (`vqueue_slim.start`): (`launch_after_landing`'s
         keywords, the steps it skips by name, its flags as a message gives them).  It sends the upstream build (`--agreement`)
         when the merges above ``base`` change what lean-agreement checks (as check.py finds against that base), and skips
         lean-agreement else; lean-audit fails on a record difference (`--no-regenerate`), since the records it checks are the

@@ -1,9 +1,9 @@
 module
 
 public import Definitions.Accounting.Guarantees.JointBridge.CommOfMonitoringPeriodLeakAccepted
-public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriod
+public import Definitions.Certifier.Guarantees.MonitoringPeriod
 public import Definitions.Accounting.NetWitness
-public import Proofs.NetworkCertifier.MonitoringPeriod
+public import Proofs.Certifier.MonitoringPeriod
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

@@ -1607,8 +1607,13 @@ def test_two_branches_that_each_move_the_ratchet_caps_merge_them_three_way(tmp_p
                            capture_output=True, text=True)
     assert plain.returncode == 2, "git alone conflicts on both cap lines"
     assert _caps(tmp_path, base, ours, theirs) == (want, 0)
-    assert M.main(["--caps", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0
+    assert M.main(["--limits", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0
     assert (tmp_path / "ours").read_text() == want and capsys.readouterr().err == ""
+    for n, t in (("base", base), ("ours", ours), ("theirs", theirs)):
+        (tmp_path / n).write_text(t)
+    assert M.main(["--caps", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0, \
+        "the flag's older name, which the registered command passes until origin/main's copy knows --limits"
+    assert (tmp_path / "ours").read_text() == want
 
 
 def test_a_cap_key_a_side_adds_or_lacks_counts_0_there(tmp_path):
@@ -1645,7 +1650,7 @@ def test_a_cap_one_side_lowers_survives_a_merge_whose_other_side_kept_it(tmp_pat
     want = packages({SEC: 232, PROPS: props, FLOCK: flock}, {SEC: 890, PROPS: 132, FLOCK: 6}, doc="only shrinks")
     assert _caps(tmp_path, base, base, lowered) == (lowered, 0)
     assert _caps(tmp_path, base, main, lowered) == _caps(tmp_path, base, lowered, main) == (want, 0)
-    assert M.main(["--caps", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0
+    assert M.main(["--limits", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0
     assert (tmp_path / "ours").read_text() == want and capsys.readouterr().err == ""
 
 
@@ -1710,7 +1715,7 @@ def test_a_cap_two_sides_each_lowered_from_one_base_merges_as_the_larger_not_bel
     base, checked, pr = (packages({SEC: n, PROPS: 191}, inline) for n in (331, 311, 307))
     want = packages({SEC: 311, PROPS: 191}, inline)
     assert _caps(tmp_path, base, checked, pr) == _caps(tmp_path, base, pr, checked) == (want, 0)
-    assert M.main(["--caps", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0
+    assert M.main(["--limits", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0
     assert (tmp_path / "ours").read_text() == want and capsys.readouterr().err == ""
 
 
@@ -1724,7 +1729,7 @@ def test_a_conflict_beyond_the_cap_lines_and_comments_stays_git_s(tmp_path, caps
     text, left = _caps(tmp_path, base, ours, theirs)
     assert left == 1 and f"UNWITNESSED = {json.dumps({SEC: 355, PROPS: 185})}\n" in text
     assert "<<<<<<< ours\n    \"\"\"A lock's `unwitnessed` shrinks.\"\"\"\n" in text and ">>>>>>> theirs\n" in text
-    assert M.main(["--caps", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 1
+    assert M.main(["--limits", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 1
     assert "merge.py: tests/test_lean_packages.py: 1 conflict(s) beyond the ratchet caps" in capsys.readouterr().err
     text, left = _caps(tmp_path, base, packages({SEC: 355, PROPS: 184}, inline).replace("UNWITNESSED = ", "INLINE = "),
                        packages({SEC: 354, PROPS: 185}, inline))
@@ -1744,7 +1749,7 @@ def test_git_merges_two_branches_that_each_move_a_cap_with_the_installed_driver(
     (repo / "tests").mkdir()
     for f in ("merge.py", "check.py", "modules.py"):
         shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
-    (repo / ".gitattributes").write_text(f"tests/test_lean_packages.py merge={M.CAPS}\n")
+    (repo / ".gitattributes").write_text(f"tests/test_lean_packages.py merge={M.LIMITS}\n")
     caps = repo / "tests" / "test_lean_packages.py"
     git(repo, "init", "-q", "-b", "main")
     inline = {SEC: 1422, PROPS: 129, FLOCK: 6}
@@ -1760,8 +1765,10 @@ def test_git_merges_two_branches_that_each_move_a_cap_with_the_installed_driver(
     assert plain.returncode and "CONFLICT (content): Merge conflict in tests/test_lean_packages.py" in plain.stdout
     git(repo, "merge", "--abort")
     subprocess.run([sys.executable, "tools/verity/lean/merge.py", "--install"], cwd=repo, check=True, capture_output=True)
-    driver = git(repo, "config", f"merge.{M.CAPS}.driver").stdout.strip()
-    assert driver == RECORD_DRIVER[f"merge.{M.CAPS}.driver"] == M.driver("--caps ")
+    driver = git(repo, "config", f"merge.{M.LIMITS}.driver").stdout.strip()
+    assert driver == RECORD_DRIVER[f"merge.{M.LIMITS}.driver"] == M.driver(M.LIMITS_FLAG)
+    assert git(repo, "config", f"merge.{M.OLD_LIMITS}.driver").stdout.strip() == driver == RECORD_DRIVER[f"merge.{M.OLD_LIMITS}.driver"], \
+        "the old name stays registered with the same command, for a branch whose .gitattributes still names it"
     git(repo, "merge", "--no-edit", "b")
     assert caps.read_text() == packages({SEC: 355, PROPS: 184, FLOCK: 7}, inline)
 
@@ -1777,7 +1784,7 @@ def test_git_merges_caps_and_comments_over_two_merge_bases_with_the_installed_dr
     (repo / "tests").mkdir()
     for f in ("merge.py", "check.py", "modules.py"):
         shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
-    (repo / ".gitattributes").write_text(f"tests/test_lean_packages.py merge={M.CAPS}\n")
+    (repo / ".gitattributes").write_text(f"tests/test_lean_packages.py merge={M.LIMITS}\n")
     caps = repo / "tests" / "test_lean_packages.py"
     inline = {SEC: 1422}
 
@@ -1820,7 +1827,7 @@ def unread(**areas: tuple[int, int]) -> str:
 def _unread(tmp: Path, base: str, ours: str, theirs: str) -> tuple[int, str]:
     for n, t in (("base", base), ("ours", ours), ("theirs", theirs)):
         (tmp / n).write_text(t)
-    return M.main(["--caps", *(str(tmp / n) for n in ("base", "ours", "theirs")), UNREAD]), (tmp / "ours").read_text()
+    return M.main(["--limits", *(str(tmp / n) for n in ("base", "ours", "theirs")), UNREAD]), (tmp / "ours").read_text()
 
 
 def test_the_driver_reads_and_writes_the_unread_caps_as_unread_py_does():
@@ -1911,7 +1918,7 @@ def test_an_unread_caps_side_the_merge_can_t_vouch_for_is_left_to_git_s_conflict
 
 
 def test_git_merges_two_branches_that_each_raise_an_unread_cap_with_the_installed_driver(tmp_path, monkeypatch):
-    """The `lean-caps` driver `--install` registers, and every clone and the queue already set (`RECORD_DRIVER`), passes the
+    """The `lean-limits` driver `--install` registers, and every clone and the queue already set (`RECORD_DRIVER`), passes the
     path (`%P`), so `.gitattributes` naming it for `unread-caps.json` is all a clone needs: `git merge` of two branches that
     each raise an area's cap merges, and a side in another schema leaves git's conflict."""
     from research.clone import RECORD_DRIVER
@@ -1923,7 +1930,7 @@ def test_git_merges_two_branches_that_each_raise_an_unread_cap_with_the_installe
     (repo / M.DIR).mkdir(parents=True)
     for f in ("merge.py", "check.py", "modules.py"):
         shutil.copy(HERE.parent / f, repo / M.DIR / f)
-    (repo / ".gitattributes").write_text(f"{UNREAD} merge={M.CAPS}\n")
+    (repo / ".gitattributes").write_text(f"{UNREAD} merge={M.LIMITS}\n")
     caps = repo / UNREAD
     git(repo, "init", "-q", "-b", "main")
     for name, start, text in (("main", None, unread(Proofs_Flock=(273, 2309), Proofs_Pouw=(49, 412))),
@@ -1940,8 +1947,8 @@ def test_git_merges_two_branches_that_each_raise_an_unread_cap_with_the_installe
     assert plain.returncode and f"CONFLICT (content): Merge conflict in {UNREAD}" in plain.stdout
     git(repo, "merge", "--abort")
     subprocess.run([sys.executable, f"{M.DIR}/merge.py", "--install"], cwd=repo, check=True, capture_output=True)
-    driver = git(repo, "config", f"merge.{M.CAPS}.driver").stdout.strip()
-    assert driver == RECORD_DRIVER[f"merge.{M.CAPS}.driver"] == M.driver("--caps ") and '"$f" --caps %O %A %B %P;' in driver
+    driver = git(repo, "config", f"merge.{M.LIMITS}.driver").stdout.strip()
+    assert driver == RECORD_DRIVER[f"merge.{M.LIMITS}.driver"] == M.driver(M.LIMITS_FLAG) and '"$f" --caps %O %A %B %P;' in driver
     git(repo, "merge", "--no-edit", "b")
     assert caps.read_text() == unread(Proofs_Flock=(280, 2471), Proofs_Pouw=(50, 416))
     refused = git(repo, "merge", "--no-edit", "v2", check=False)
