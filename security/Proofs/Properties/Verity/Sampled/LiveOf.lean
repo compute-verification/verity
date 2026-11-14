@@ -26,8 +26,9 @@ derives them:
 * **The sampling design** (`lawAt_designAt`): where v2 samples, the design `lawAt` reads off its parameters is
   `designAt`'s at the verifier's descriptor, query, law object and work table.
 * **The lookup tables** (`pinnedTables_eq`): on blobs that hold the registered circuit's lookup tables and no other
-  pinned table (`HoldsRegisteredTables`), each at its registered file (`TablesSent`), the tables v2 reads are the ones
-  the circuit file registers.
+  pinned table (`HoldsRegisteredTables`), each at its registered file (`TablesSent`), where the deployment registers a
+  file for each pinned table the blobs hold (`TablesRegistered`), the tables v2 reads are the ones the circuit file
+  registers.
 -/
 
 @[expose] public section
@@ -117,14 +118,19 @@ theorem lawAt_designAt {desc : Claims.Msg} {v : _root_.Spot.Registration.Verifie
 
 /-! ## The lookup tables -/
 
+/-- **The deployment registers a file for each pinned table the blobs sent hold** (`PinnedTables.file`). -/
+def TablesRegistered (T : PinnedTables) (s : Verity.Sent) : Prop :=
+  ∀ t ∈ Flock.MUFU_TABLES, ∀ a, tableFile t.sha512 s.blobs = some a → ∃ b, T.file t.sha512 = some b
+
 /-- **On blobs holding the registered circuit's lookup tables, each at its registered file, v2's tables are the ones the
-circuit file registers**: a pinned table the blobs hold is one the circuit looks up (`HoldsRegisteredTables`) at its
-registered file (`TablesSent`), and one they don't hold it doesn't look up. -/
-theorem pinnedTables_eq {s : Verity.Sent} {circuitB : ByteArray}
+circuit file registers**: a pinned table the blobs hold is one the circuit looks up (`HoldsRegisteredTables`), which
+the deployment registers (`TablesRegistered`) at the file the blobs hold (`TablesSent`), and one they don't hold it
+doesn't look up. -/
+theorem pinnedTables_eq {T : PinnedTables} {s : Verity.Sent} {circuitB : ByteArray}
     (hl : _root_.Spot.OneStageZk.lookupsOf circuitB =
       .ok ((_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray s.blobs)).map (·.1)))
-    (ht : TablesSent s) :
-    pinnedTables circuitB = _root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray s.blobs) := by
+    (ht : TablesSent T s) (hT : TablesRegistered T s) :
+    pinnedTables T circuitB = _root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray s.blobs) := by
   classical
   simp only [pinnedTables, hl]
   rw [tablesOf_ofArray]
@@ -147,11 +153,8 @@ theorem pinnedTables_eq {s : Verity.Sent} {circuitB : ByteArray}
         (tableFile t.sha512 s.blobs).map fun b => (t.name, b)).map (·.1)) :=
       List.mem_map.2 ⟨(t.name, a), List.mem_filterMap.2 ⟨t, htm, by rw [hf]; rfl⟩, rfl⟩
     rw [if_pos (by simpa using hmem)]
-    have hx : ∃ b : ByteArray, Flock.hexOf (Flock.Sha512.hash b) = t.sha512 := ⟨a, tableFile_hash hf⟩
-    have hpf : pinnedFile t.sha512 = some hx.choose := by
-      unfold pinnedFile
-      rw [dif_pos hx]
-    rw [hpf, ht t htm a hx.choose hf hpf]
+    obtain ⟨b, hb⟩ := hT t htm a hf
+    rw [hb, ht t htm a b hf hb]
 
 /-! ## v2's statement check -/
 
@@ -488,15 +491,16 @@ files `F` at the parameters `θ`, v2's parameters `p` in `θ` set its session up
 circuit and public files (`checkBlobsAt_event`, `get_named`), whose lookup tables are the ones the circuit file
 registers where the blobs hold each at its registered file (`pinnedTables_eq`), and a descriptor of the verifier's
 program reads the session's sampling design off `designAt` (`lawAt_designAt`). -/
-theorem accepted_parts {V : Vocab d α} {θ : ByteArray} (hD : DigestsAt V θ) {k : Verity.Registration.Composite}
-    {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange} (hP : ∃ p, ParamsAt θ p)
-    (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o) (ht : TablesSent o.sent) :
+theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD : DigestsAt V T θ)
+    {k : Verity.Registration.Composite} {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange}
+    (hP : ∃ p, ParamsAt θ p) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
+    (ht : TablesSent T o.sent) (hT : TablesRegistered T o.sent) :
     ∃ p tags0 pubB record proofs n desc, ParamsAt θ p ∧
       Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
       pubB = V.publicFile θ F ∧
       Accepted (toExec (_root_.Spot.OneStageZk.inputsOf tags0 p.own (V.circuitFile θ F) pubB
         (_root_.Core.Blobs.ofArray o.sent.blobs))) { record := record, proofs := proofs } p.base.verifier n ∧
-      _root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray o.sent.blobs) = pinnedTables (V.circuitFile θ F) ∧
+      _root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray o.sent.blobs) = pinnedTables T (V.circuitFile θ F) ∧
       _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program ∧
       lawAt p.base.verifier n = .ok (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law
         p.base.verifier.workTable n) ∧
@@ -535,7 +539,7 @@ theorem accepted_parts {V : Vocab d α} {θ : ByteArray} (hD : DigestsAt V θ) {
   obtain ⟨circuitB', hg, hl⟩ := tables_registered hp₀' hv
   have e0 : circuitB' = circuitB := Except.ok.inj (hg.symm.trans hc)
   rw [e0] at hl
-  have htab := (pinnedTables_eq hl ht).symm
+  have htab := (pinnedTables_eq hl ht hT).symm
   obtain ⟨desc, hdesc⟩ := program_of_paramsAt hp₀
   obtain ⟨out, pub', prof', hat⟩ := checkBlobsAt_checkAt hck
   obtain ⟨lo, n', read, hlo, hn', hdf⟩ := checkAt_drew hat
@@ -577,14 +581,15 @@ v2 hands `flock-verify` on the committed files, whose tags are untyped and hidde
 `hm96-sha512/v1` leaves (`FailClosed.check_ok` at v2's statement check under `--zk`), the descriptor and public file
 its ports check reads (`desc_of_ports`), in `Layout.scopeOkH` (`scopeH_of_form`), with the record's population, which the program's proof blocks under the
 verifier's query are in order (`popMatches_of_popOk`). -/
-theorem session_parts {V : Vocab d α} {θ : ByteArray} (hD : DigestsAt V θ) {k : Verity.Registration.Composite}
-    {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange} (hP : ∃ p, ParamsAt θ p)
-    (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o) (ht : TablesSent o.sent) :
+theorem session_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD : DigestsAt V T θ)
+    {k : Verity.Registration.Composite} {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange}
+    (hP : ∃ p, ParamsAt θ p) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
+    (ht : TablesSent T o.sent) (hT : TablesRegistered T o.sent) :
     ∃ (p : _root_.Spot.OneStageZk.Params) (n : ℕ) (I : FlockSoundness.Discharge.Exec.Inputs) (D : Flock.Desc)
       (pubO : Flock.Public) (desc : Claims.Msg), ParamsAt θ p ∧
       Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some I.tags ∧ I.count = 1 ∧ I.work = none ∧
       I.stratified = none ∧ I.closure = none ∧ I.circuitFile = V.circuitFile θ F ∧
-      I.publicFile = V.publicFile θ F ∧ I.tables = pinnedTables (V.circuitFile θ F) ∧
+      I.publicFile = V.publicFile θ F ∧ I.tables = pinnedTables T (V.circuitFile θ F) ∧
       I.partition = some p.own.partition ∧ I.program = some p.own.program ∧
       I.tags.typed = false ∧ FlockSoundness.Discharge.ZkHidden.TagsOkZHJ I ∧
       Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D ∧
@@ -609,7 +614,7 @@ theorem session_parts {V : Vocab d α} {θ : ByteArray} (hD : DigestsAt V θ) {k
           (FlockSoundness.Discharge.Composed.inputsJ I 0).program none = .ok st ∧
         Flock.Zk.shapeOk st = .ok () := by
   obtain ⟨p, tags0, pubB, record, proofs, n, desc, hp, ht0, hpf, hAc, htab, hdesc, hlaw, reg, hsc,
-    recS, units, rd, x, hrd, hsize, hsetup⟩ := accepted_parts hD hP hreach hv ht
+    recS, units, rd, x, hrd, hsize, hsetup⟩ := accepted_parts hD hP hreach hv ht hT
   subst hpf
   obtain ⟨⟨-, htyp, hret, hleaf, -⟩, -⟩ := FlockSoundness.Discharge.FailClosed.check_ok hsc
   obtain ⟨D, pubO, hDp, hU, hpubO, hcD⟩ := desc_of_ports hAc.flat htyp hAc.ports
@@ -678,15 +683,16 @@ open FlockSoundness.Discharge.Composed (inputsJ nTab) in
 the reference setup at the record's sample (`y₀_of_setup`), the circuit with no public input port and the public file
 with none (`pub_of_setup`), the subset design v2's parameters name (`subsetDesign`), the deployed sample's bytes
 (`Live.deployed`) and the bound's parameters make a `Live`, where the bound's parameters are in range. -/
-theorem liveSpec_of_accepted {V : Vocab d α} {b : SessionBound} (hb : b.Ok) {θ : ByteArray} (hD : DigestsAt V θ)
+theorem liveSpec_of_accepted {V : Vocab d α} {T : PinnedTables} {b : SessionBound} (hb : b.Ok) {θ : ByteArray}
+    (hD : DigestsAt V T θ)
     (hc : ∀ θ, V.programDigest θ = programDigestOf θ) (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ)
     {k : Verity.Registration.Composite} {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange}
-    (hread : V.read θ F = readOf θ F)
+    (hread : V.read θ F = readOf T θ F)
     (hP : ∃ p, ParamsAt θ p) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
-    (ht : TablesSent o.sent) : ∃ A, LiveSpec V b θ F A := by
+    (ht : TablesSent T o.sent) (hT : TablesRegistered T o.sent) : ∃ A, LiveSpec V b θ F A := by
   obtain ⟨p, n, I, D, pubO, desc, hpa, htags, hcount, hwork, hstrat, hclos, hcirc, hpubf, htab, hpart, hprog, htyp,
     hTags, hDp, hU, hpubO, hscope, hports, hnO, hdesc, hpop, hlaw, recS, units, st, hrd, hsize, hst, hshape⟩ :=
-    session_parts hD hP hreach hv ht
+    session_parts hD hP hreach hv ht hT
   have hst2 := hst
   rw [(exec_recordDraw recS).trans hrd.2] at hst2
   obtain ⟨hpiD, pub, hpub, hdup, hn⟩ := pub_of_setup hcount hDp hst2 hpubO hnO hports
@@ -704,18 +710,19 @@ theorem liveSpec_of_accepted {V : Vocab d α} {b : SessionBound} (hb : b.Ok) {θ
       hM := hb.M, ρ := b.ρ, hρ := hb.ρ, hr := fun S R j => hr_planZHJP _ _ hb.kρ S R j, ε := (V.certOf θ).ε,
       v := b.v, w := b.w, h := b.h }
   refine ⟨A, ⟨⟨p, hpa, hpart, hprog, hlaw, hdesc, rfl⟩, rfl, htags, hcount, hwork, hstrat, hclos, rfl, hcirc, hpubf,
-    hread.trans (readOf_eq V hc hp (A := A) htags hcount hcirc hpubf htab), rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩⟩
+    hread.trans (readOf_eq V T hc hp (A := A) htags hcount hcirc hpubf htab), rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩⟩
 
 /-- **The session at the files of an accepted play is set up** (`liveSpec_of_accepted`): `liveOf` is not `none`
 there, so SPOT's published δ there is the session's, not `⊤`. -/
-theorem liveOf_ne_none {V : Vocab d α} {b : SessionBound} (hb : b.Ok) {θ : ByteArray} (hD : DigestsAt V θ)
+theorem liveOf_ne_none {V : Vocab d α} {T : PinnedTables} {b : SessionBound} (hb : b.Ok) {θ : ByteArray}
+    (hD : DigestsAt V T θ)
     (hc : ∀ θ, V.programDigest θ = programDigestOf θ) (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ)
     {k : Verity.Registration.Composite} {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange}
-    (hread : V.read θ F = readOf θ F)
+    (hread : V.read θ F = readOf T θ F)
     (hP : ∃ p, ParamsAt θ p) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
-    (ht : TablesSent o.sent) : liveOf V b θ F ≠ none := by
+    (ht : TablesSent T o.sent) (hT : TablesRegistered T o.sent) : liveOf V b θ F ≠ none := by
   unfold liveOf
-  rw [dif_pos (liveSpec_of_accepted hb hD hc hp hread hP hreach hv ht)]
+  rw [dif_pos (liveSpec_of_accepted hb hD hc hp hread hP hreach hv ht hT)]
   exact Option.some_ne_none _
 
 end Verity.Sampled

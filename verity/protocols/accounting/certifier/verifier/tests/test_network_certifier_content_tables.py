@@ -687,7 +687,7 @@ def test_a_form_2_registration_whose_classes_three_tables_differ_in_rows_is_refu
             ("first", "response.1", 1, "request.1 table 0"), ("first", "end.2", 0, "response.2 table 2"),
             ("second", "end.1", 2, "response.1 table 3"), ("none", "response.3", 6, "request.3 table 0")):
         _, doc, _, _ = by_load[load]
-        with pytest.raises(ValueError, match=f"{name} table has rows {rows}, and its class's {like}: a class's three"):
+        with pytest.raises(ValueError, match=f"{name} table has rows {rows}, and its class's {like}: a class's tables"):
             CR.check_registration(recounted(doc, {name: rows}), key, signers.SESSION, HELD, LINK, 0)
     # a class's request table alone at another count: the response table is then the one that differs
     _, doc, _, _ = by_load["first"]
