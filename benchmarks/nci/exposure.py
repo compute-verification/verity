@@ -56,7 +56,7 @@ RANGES = {
     "step_flop": (1e3, 1e6, "guess"),
     "p_evade": (1e-15, 2.0 ** -20, "guess, around the planner's 2^-40"),
     "luck": (1.0, 32.0, "no luck; spec sheet 8; high a guess"),
-    "step_bits": (float(T.partition_v2.UNIT_CLASSES[0]), float(T.partition_v2.UNIT_CLASS_MAX),
+    "step_bits": (float(T.partition_v2.SIZE_CLASSES[0]), float(T.partition_v2.SIZE_CLASS_MAX),
                   "a proof block's outputs fit its Definition's public size class: the smallest; the widest"),
     "intake_x": (1.0, 1.3e6, "1 once the count check is in the ZK flow; line rate until then"),
     "identities": (1.0, 1e3, "guess"),

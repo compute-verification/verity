@@ -151,7 +151,7 @@ import struct
 from collections.abc import Sequence
 from functools import lru_cache
 
-from verity.circuits.partition_v2 import UNIT_CLASS_MAX
+from verity.circuits.partition_v2 import SIZE_CLASS_MAX
 from verity.protocols.accounting.certifier.verifier import io_request
 from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.id_form import id_request_max_tokens
@@ -189,7 +189,7 @@ def check_size(size: object, what: str) -> None:
 
 def most_ids() -> int:
     """The most ids a response row has (the module docstring's "A response row's ids")."""
-    fit = (UNIT_CLASS_MAX - TIE_WORDS * WORD_BITS) // (8 * U32_BYTES) - 1
+    fit = (SIZE_CLASS_MAX - TIE_WORDS * WORD_BITS) // (8 * U32_BYTES) - 1
     return 1 << fit.bit_length() - 1 if fit >= 1 else 0
 
 
@@ -200,7 +200,7 @@ def check_ids(O: object) -> None:
     if O > most_ids():
         raise ValueError(f"a response row is at most {most_ids()} ids, not O={O!r}: its tie's proof block returns the "
                          f"whole row, {8 * U32_BYTES} bits an id after its count, behind {TIE_WORDS * WORD_BITS} bits "
-                         f"of verdict in a public size class of at most {UNIT_CLASS_MAX} bits; a schedule whose "
+                         f"of verdict in a public size class of at most {SIZE_CLASS_MAX} bits; a schedule whose "
                          f"responses are longer has no response row (fewer egress_cells or a lower max_tokens_cap)")
 
 
