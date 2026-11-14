@@ -6,10 +6,10 @@ public import Definitions.Pous.Game.Prob
 /-!
 # The streamed-label wipe (experimental)
 
-The game of `verity/core/protocols/pous/PROTOCOL.md` ("The streamed-label wipe"), whose reference is
-`verity/core/protocols/pous/streamed_wipe.py`. The memory challenger fills every memory tier of one server with `N`
-labels of `b` bits, `L : Fin N → Bits b`. Once the fill is complete it reveals `k` indices `c : Fin k → Fin N`, uniform
-and independent, one at a time, and accepts when every answer is its label (`Accepts`).
+The game of `verity/protocols/accounting/pous/verifier/PROTOCOL.md` ("The streamed-label wipe"), whose reference is
+`verity/protocols/accounting/pous/verifier/streamed_wipe.py`. The memory challenger fills every memory tier of one
+server with `N` labels of `b` bits, `L : Fin N → Bits b`. Once the fill is complete it reveals `k` indices `c : Fin k →
+Fin N`, uniform and independent, one at a time, and accepts when every answer is its label (`Accepts`).
 
 Before the wipe the server holds `q` bits of prior content `z`, uniform: a statement over a fixed `z` is false, since a
 prover can hard-code it. Its fill is any function of `z` and the labels. When the fill ends the server holds

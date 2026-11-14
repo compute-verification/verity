@@ -18,5 +18,5 @@ The module's docstring gives the design and its cost, and the unit's binding fil
 
 ## Tests
 
-`tests/` is this package's suite (`uv run tools/verity/check/suites.py verity/circuits/private_circuits`), and
+`tests/` is this package's suite (`uv run tools/check/suites.py verity/circuits/private_circuits`), and
 `benchmarks/private_circuit/` measures the unit.

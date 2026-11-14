@@ -14,6 +14,7 @@ from test_ledger import node
 from test_remote_bandwidth import SCHEDULE, Entropy, N, drive, params, store  # noqa: F401
 from test_remote_coins import APPENDS, Service, sign  # noqa: F401
 
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import (
     audit,
     codec,
@@ -33,7 +34,7 @@ def shared(store, g: int, windows: int = 8, **kw) -> tuple[audit.Params, coins.S
     return p, coins.local(store.registration.digest, 0, windows, Entropy(b"coins"), appends=APPENDS, per_coin=g)
 
 
-def finish_samples(s: AuditRun, prover: audit.Prover, passes, clock, open_=None) -> list[audit.Verdict]:
+def finish_samples(s: AuditRun, prover: audit_prover.Prover, passes, clock, open_=None) -> list[audit.Verdict]:
     """`finish` a sample at a time: past the last deadline, each sample closed at its last window, then each of its
     windows verified on its own share of it, in order, up to the first rejection; a window whose share is none keeps
     the verdict its close gave it."""
@@ -179,7 +180,7 @@ def skipping(window: int):
             return prover.run(challenges[t], i, previous, plan)
         held = copy.copy(prover.store)
         held.blocks = [bytes(codec.BLOCK_BYTES)] * N
-        return audit.Prover(held, None, entropy=prover.entropy).run(challenges[t], i, previous, plan)
+        return audit_prover.Prover(held, None, entropy=prover.entropy).run(challenges[t], i, previous, plan)
     return run
 
 

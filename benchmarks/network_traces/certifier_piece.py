@@ -73,7 +73,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
      (``--lean``, else built in verity/protocols/accounting/certifier/verifier/lean); its answer is the piece's, an accept's profile
      with its ``placement`` (`placement`): the machine the network certifier ran on, and the machine that ran each of
      the piece's own steps, the chain and the period check, each read from the machine as it runs the step (`ran_on`).
-     The names are labels: the piece establishes no `trusted-host` and gives no bound on that ground (`UNMET`).
+     The names are labels: the piece establishes no `trusted-device` and gives no bound on that ground (`UNMET`).
   DIR also gets the chain's public part (`PUBLIC`: its report's verdicts and ε at δ; never the scan's answers, the
   endpoint's report, the report's counts or a step's summary, which are private) and the link-window's five
   certificates (`CERTIFICATES`, `certificates`: the three records' certificates and the two row registrations' of the
@@ -181,9 +181,9 @@ PROTOCOL = "verity/certifier/v0"
 #: the protocol ``network-rows`` answers, step 1's rows audit of the network certifier's records
 ROWS = "verity/network-rows/v1"
 #: the named assumption the certifier's guarantee reads (`NetworkCheck.Period`): the certifier is the auditor's device
-PREMISE = "trusted-host"
+PREMISE = "trusted-device"
 #: What a placement says of it, word for word, followed by ``; `` and the names
-UNMET = "unmet: this piece establishes no trusted-host and gives no bound on that ground"
+UNMET = "unmet: this piece establishes no trusted-device and gives no bound on that ground"
 #: the machine of a chain step whose `CHAINED` names none
 UNNAMED = "a machine the chain step did not name"
 #: the front's public outcome, copied beside the kept fetch
@@ -550,7 +550,7 @@ def placement(serve_dir: Path, run: str, steps: dict[str, str] | None = None) ->
     """Which machine ran each party and each of the piece's own steps, as labels read from the run: the network
     certifier ran on the gate's machine (the kept `SESSION`'s ``gate``; ``local`` is the developer's node), and
     ``steps`` (`ran_on`, this machine by default) names the machine that ran the chain's checks and samples and the one
-    that ran the period check and its proofs' challenges. This piece establishes no `trusted-host` and gives no bound
+    that ran the period check and its proofs' challenges. This piece establishes no `trusted-device` and gives no bound
     on that ground (`UNMET`), whatever the names say. ``kind`` is ``prover-node`` where the certifier ran on the
     developer's node, else ``not-placed``. ``links`` are the node's to the gate, and K counts the certified one
     alone."""

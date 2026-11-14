@@ -1,6 +1,6 @@
-"""A two-stage sampling design on the proof system's `Stream`: the boundary registration over replay blocks, the first
-stage, the interior registration over the replay sample's proof blocks, the second stage on its own coins, one outcome
-binding both registrations and both samples, each step by both verifiers; replay blocks of one template and of two,
+"""A two-stage sampling design on the proof system's `Stream`: the boundary docket over replay blocks, the first
+stage, the interior docket over the replay sample's proof blocks, the second stage on its own coins, one outcome
+binding both dockets and both samples, each step by both verifiers; replay blocks of one template and of two,
 whose interior is template-major and whose second stage samples each cell; round 2's statement check of the
 second-stage sessions (`second_stage`), which refuses the two-stage form while `second_stage.FORM` is off; its
 refusals; its profile at the footprint; and its replay grain's fan-out."""
@@ -8,11 +8,13 @@ refusals; its profile at the footprint; and its replay grain's fan-out."""
 from __future__ import annotations
 
 import dataclasses
+import os
 import random
 from collections import Counter
 from collections.abc import Mapping
 from fractions import Fraction
 from math import comb
+from pathlib import Path
 
 import pytest
 
@@ -26,8 +28,7 @@ from verity.circuits.types import Array, Tuple, Value as Bits
 from verity.protocols.proofs.spot.verifier.profile import Bernoulli, Subset
 from verity.protocols.proofs.spot.prover import optimize as O, plancheck as PC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S, window_place as WP
-from verity.protocols.proofs.spot.verifier.one_stage import (draw as D, partition as P, registration as R,
-                                                            verifier as V)
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
 from verity.commitments.window import window_binding
 
 import fake_challenger as FC
@@ -48,7 +49,7 @@ RUN = "r-two-stage-test"
 SESSION = "5e" * 64
 DELTA = 2.0 ** -40
 N, Q, K = 4, 2, 1
-#: The boundary registration's ports, the replay block's `x` and output named by its template, which the design's links
+#: The boundary docket's ports, the replay block's `x` and output named by its template, which the design's links
 #: (`second_stage.replay_links`) name.
 BOUNDARY = BX, BOUT = tuple(f"{codec.descriptor_id(BLOCK)}/{p}" for p in ("x", "o0"))
 INTERIOR = ("x", "out")
@@ -97,7 +98,7 @@ def _stream(spec=None, clock=None, **kwargs) -> S.Stream:
 
 
 def _ports(program: Program, query, names, n: int | Mapping[str, int]) -> dict:
-    """The ports `names` of a registration over `program`, port `v` of ``n[v]`` leaves (each of `n` for a number)."""
+    """The ports `names` of a docket over `program`, port `v` of ``n[v]`` leaves (each of `n` for a number)."""
     part = P.partition(program, query)
     leaves = n if isinstance(n, Mapping) else dict.fromkeys(names, n)
     return {v: {"leaves": leaves[v],
@@ -111,7 +112,7 @@ def _record(program: Program, query, names, n: int | Mapping[str, int], law, win
 
 
 def _boundary(n=N, row=0, previous=None, q=Q, **window) -> tuple[dict, dict]:
-    """The boundary registration over `n` replay blocks: BLOCK's `x` and output, each of N_RHO rows a block, one for
+    """The boundary docket over `n` replay blocks: BLOCK's `x` and output, each of N_RHO rows a block, one for
     each of its PAIR instances' `x` and `o0` (`second_stage.replay_rows`); its window names `window`'s items too."""
     program, leaves = P.population_program(BLOCK, n), dict.fromkeys(BOUNDARY, n * N_RHO)
     return (_record(program, GRAIN, BOUNDARY, leaves, {"law": "subset", "k": q},
@@ -120,7 +121,7 @@ def _boundary(n=N, row=0, previous=None, q=Q, **window) -> tuple[dict, dict]:
 
 
 def _interior(m: int, previous: str, sample, row=0, **change) -> tuple[dict, dict]:
-    """The interior registration's record over `m` proof blocks, its window naming the replay sample `sample` it lays out
+    """The interior docket's record over `m` proof blocks, its window naming the replay sample `sample` it lays out
     (`window.replay_sample`, the first stage's proved blocks in order where honest), and its ports."""
     program = P.population_program(PAIR, m)
     rec = _record(program, QUERY, INTERIOR, m, {"law": "subset", "k": m},
@@ -130,7 +131,7 @@ def _interior(m: int, previous: str, sample, row=0, **change) -> tuple[dict, dic
 
 def _lean(accepted=True, reads=None, checked=None, tables=1) -> dict:
     """The verdict of record, accepted or not, reporting the sessions' registered reads `reads`, and naming what
-    `flock-verify verify` names of the session of statement `checked` it checked: its header's and registered reads'
+    `verity-verify-proof verify` names of the session of statement `checked` it checked: its header's and registered reads'
     digests, its sample and the `tables` it set it up as (None: no statement's). For a list of statements, one such
     verdict of record for each."""
     v = {"of_record": True, "accepted": accepted, "digest": "dd" * 64, "sessions": [SESSION]}
@@ -194,10 +195,10 @@ def _two_stage_outcome(stream: S.Stream, statements, reads=_reads_of, sample=lis
 
 
 def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
-    """The boundary registration's population is the replay blocks; the first stage samples Q of them; the interior
-    registration commits their Q·n_rho proof blocks after it, logged after the registration; the second stage samples k in
-    each sampled replay block on the coins after the interior registration; and one outcome holds both audit records, each
-    by both verifiers and the whole run by the Lean's. Round 2 holds the session's statement to the interior registration
+    """The boundary docket's population is the replay blocks; the first stage samples Q of them; the interior
+    docket commits their Q·n_rho proof blocks after it, logged after the docket; the second stage samples k in
+    each sampled replay block on the coins after the interior docket; and one outcome holds both audit records, each
+    by both verifiers and the whole run by the Lean's. Round 2 holds the session's statement to the interior docket
     and the second stage's cells, its ports the replay block's Definition links (PAIR's `x` and `o0`) read at the
     boundary, each unit at its own row of its replay block's N_RHO, and passes it; while the two-stage form is refused
     (`second_stage.FORM`) that refusal is the outcome's one failure, a reject. The profile an accepted one carries is at
@@ -245,10 +246,10 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
 
 
 def test_a_rate_first_stage_keeps_one_wrong_proof_blocks_escape_however_the_prover_pads_the_replay_blocks():
-    """`rate:1/2` samples Q = ⌈N/2⌉ of each registration's N replay blocks, so a registration padded tenfold (N = 40 for
+    """`rate:1/2` samples Q = ⌈N/2⌉ of each docket's N replay blocks, so a docket padded tenfold (N = 40 for
     4) samples Q = 20, and a wrong proof block escapes the profile an accepted outcome carries (its footprint) with
     probability 1 − (Q/N)·(k/n_rho) = 5/6 at both sizes. The second stage's k/n_rho is the replay Definition's, which the
-    registration can't pad. A fixed `subset:2` first stage, under which the same padding raises that escape from 5/6 to
+    docket can't pad. A fixed `subset:2` first stage, under which the same padding raises that escape from 5/6 to
     59/60 (the same profile at Q = 2), is refused when the rule is made."""
     def run(n, q):
         stream = _stream(_spec(RULE))
@@ -274,8 +275,8 @@ def test_a_rate_first_stage_keeps_one_wrong_proof_blocks_escape_however_the_prov
 
 @pytest.mark.parametrize("port", BOUNDARY)
 def test_a_replay_block_is_held_to_the_boundary_values_committed_while_serving(port):
-    """A replay block's starting state (`bx`) and its far edge (`bout`) are boundary values, committed in the registration
-    before the first stage's coins. An outcome whose sessions opened either at another root rejects, the registration's
+    """A replay block's starting state (`bx`) and its far edge (`bout`) are boundary values, committed in the docket
+    before the first stage's coins. An outcome whose sessions opened either at another root rejects, the docket's
     audit record failing `roots` on that port, so a replay can't start from, or end at, a state other than the
     one committed while serving."""
     stream = _stream()
@@ -297,6 +298,33 @@ def test_the_run_of_record_holds_the_form_switch(monkeypatch):
     checks = stream.records[0]["audit"]["checks"]
     assert not out.accepted and checks["statements"]["ok"] and checks["run"]["codes"] == [V.DISAGREE]
     assert {"interior", "symbol"} <= set(checks["run"]["detail"][V.DISAGREE]["fields"])
+
+
+def test_a_two_stage_outcome_is_complete_only_on_the_form_the_request_definition_and_its_records():
+    """`second_stage.complete_twin`: true only when the two-stage form is allowed, the replay block is the registered request
+    Definition and each audit record accepted and is itself complete. One of the three missing, it is false: the form
+    off, as `FORM` is; a stand-in replay block; a record that is missing, did not accept, is not complete or does not
+    say; no record at all. An argument that is not the boolean true counts as missing."""
+    whole = {"accepted": True, "complete": True}
+    assert SS.FORM is False
+    assert SS.complete_twin(True, True, [whole, whole]) is True and SS.complete_twin(True, True, [whole]) is True
+    assert not SS.complete_twin(SS.FORM, True, [whole, whole])
+    assert not SS.complete_twin(True, False, [whole, whole])
+    for record in (None, {"accepted": True, "complete": False}, {"accepted": False, "complete": True},
+                   {"accepted": True}, {"complete": True}, {"accepted": 1, "complete": True}):
+        assert not SS.complete_twin(True, True, [whole, record])
+    assert not SS.complete_twin(True, True, [])
+    assert not SS.complete_twin(1, True, [whole]) and not SS.complete_twin(True, "yes", [whole])
+
+
+def test_no_python_decides_a_two_stage_outcome():
+    """Round 2's check and a two-stage outcome's completeness of record are the Lean's, which no interface here reaches:
+    each raises naming the goal (`verifier.not_written`), and their Python twins answer only beside it."""
+    whole = {"accepted": True, "complete": True}
+    for call in (lambda: SS.check(True, None, None), lambda: SS.complete(True, True, [whole])):
+        with pytest.raises(NotImplementedError, match=V.GOAL):
+            call()
+    assert V.GOAL == "proofs/spot-two-stage-sound"
 
 
 def _linked(s: dict, shift: int = 0, **ports) -> dict:
@@ -386,7 +414,7 @@ def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
     otherwise, or names another input set than the run's for its position or another binding than the run's for a port
     (`second-header`; the `registered` it names is the reads' business and its `units.blocks` the session verifier's,
     not the header's), and one that isn't the run's: another population of slots (`second-population`), a scheme, root
-    or domain the interior registration's isn't or a port of it it neither roots nor reads (`second-roots`), another
+    or domain the interior docket's isn't or a port of it it neither roots nor reads (`second-roots`), another
     sample (`second-sample`), or a read of another cell's replay block, another unit's row of its own (the block's
     first, or two units' swapped), another slot's rows, a boundary port by a port no link names, another port's own,
     or a linked port's own, or a linked port not read (`second-read`), and
@@ -626,8 +654,8 @@ def test_a_two_stage_registration_publishes_the_bits_a_replay_block_returns():
     three PAIRs return a byte each, a word each; MIXED's two PAIRs and its TRIPLE the same. A field of 18 bits is two
     words, so four of them return 128 bits, while eight in one field are 144 bits on nine words. A replay block whose
     return no link reads, and a descriptor id the program doesn't define, have no count. The count is the same
-    whatever the population, and a two-stage registration carries it (`WindowCommitmentRecord.returned`); a one-stage
-    registration and an interior one carry none."""
+    whatever the population, and a two-stage docket carries it (`WindowCommitmentRecord.returned`); a one-stage
+    docket and an interior one carry none."""
     assert _returned(BLOCK) == 3 * 16 and _returned(MIXED) == 3 * 16
     assert _returned(WIDES) == 4 * 32 and _returned(PACKS) == 2 * 9 * 16 == 2 * 8 * 18
     assert _returned(BARE) is None
@@ -682,7 +710,7 @@ def _registered_codes(monkeypatch):
     reads)``, the reference's reads of the linked ports (`READS`'s when None), and whether the verifier fills the two
     values itself (``filled``) or the prover registers them."""
     seen = []
-    check = SS.check
+    check = SS.check_twin
     monkeypatch.setattr(SS, "check", lambda allow, own, ss: seen.append((own, ss)) or check(allow, own, ss))
     _two_stage_outcome(_stream(), lambda s, second: [s])
     (own, (s,)), = seen
@@ -698,7 +726,7 @@ def _registered_codes(monkeypatch):
                                 reported=SS.statement_reads([stmt]), verified=SS.verified_of(_lean(checked=stmt)),
                                 ref_reads=((TEMPLATE, ref),),
                                 supplied=SS.supplied_of({v: [[{"bytes": "00000000"}]] for v in entries} if filled else None))
-        return list(SS.check(True, o, [stmt]).codes)
+        return list(SS.check_twin(True, o, [stmt]).codes)
     return codes
 
 
@@ -714,7 +742,7 @@ def test_round_two_holds_a_port_to_the_registered_value_its_reference_reads(monk
 
 
 def test_round_two_holds_a_registered_value_to_the_rows_its_reference_reads(monkeypatch):
-    """`second-values` at a value a registration registers: `second-read` holds such a read only to the value's root,
+    """`second-values` at a value a docket registers: `second-read` holds such a read only to the value's root,
     domain and leaves, so the rows at which a session reads it would be the run's choice. Round 2 holds them to the
     reference statement's (`second_stage.READ_ROW_FIELDS`): the run's statement reading `w1` at slot 0's row 0 is
     refused where its reference reads `w1` at row 1, from slot 1, or at no row. A linked port's rows, which
@@ -726,7 +754,7 @@ def test_round_two_holds_a_registered_value_to_the_rows_its_reference_reads(monk
 
 
 def test_round_two_refuses_a_value_the_prover_registers_after_the_first_stages_sample(monkeypatch):
-    """`second-inputs`: the interior registration is made after the first stage's sample, so a value it registers that
+    """`second-inputs`: the interior docket is made after the first stage's sample, so a value it registers that
     the verifier doesn't hold is the prover's choice once it knows which replay blocks are sampled. The run that passes
     with `w1` and `w2` the verifier's own is refused with them the prover's, by the first one's name, beside whatever
     else fails: the code stops no other check."""
@@ -748,7 +776,7 @@ READ_RECORD = {"roots": [{"port": "t", "root": T_ROOT, "domain": T_DOMAIN, "leav
 #: What the verifier fills of a read: its table's root and domain id, as the bytes it computed for the table, its key,
 #: and the 1 its verdict port reads.
 READ_FILLED = {"root": [[{"bytes": T_ROOT}]], "domain": [[{"bytes": T_DOMAIN}]], "tok": [[{"bytes": "00000002"}]],
-               "one": [[{"bytes": "00000001"}], [{"bytes": "00000001"}]]}
+               "one": [[{"bytes": "0001"}], [{"bytes": "0001"}]]}
 READ_REF = ((READ_T, {"ports": {"o1": {"value": "one"}}}),)
 #: The rows of the read's root and domain ports: one row a block, which every unit reads.
 READ_ROWS = tuple(SS.Rows(READ_T, p, 1, (SS.Run(0, 1, 0, 0),)) for p in ("root", "domain"))
@@ -758,13 +786,14 @@ TWO_TABLES = {**READ_FILLED, "root": [[{"bytes": T_ROOT}], [{"bytes": U_ROOT}]],
 
 
 def _holding(registered, links=READ_LINKS, wires=(), supplied=None, fixed=(), ref_reads=READ_REF,
-             rows=READ_ROWS, boundary=READ_RECORD, reads=READ_SIZES) -> SS.Own:
-    """What round 2 holds (`second_stage.Own`) of an interior registration registering values `registered`, with the
+             rows=READ_ROWS, boundary=READ_RECORD, reads=READ_SIZES, tables=()) -> SS.Own:
+    """What round 2 holds (`second_stage.Own`) of an interior docket registering values `registered`, with the
     design's `links`, `wires` and `rows`, the verifier's own `supplied` values and `fixed` names, the reference
-    reads, round 1's record `boundary`, and the templates the params record as `reads`."""
+    reads, round 1's record `boundary`, the templates the params record as `reads`, and the tables they pin."""
     return SS.Own((0,), (), {"registered": [{"value": v} for v in registered]}, boundary, (), tuple(links),
                   wires=tuple(wires), supplied=SS.supplied_of(READ_FILLED if supplied is None else supplied),
-                  fixed=tuple(fixed), ref_reads=tuple(ref_reads), rows=tuple(rows), reads=tuple(reads))
+                  fixed=tuple(fixed), ref_reads=tuple(ref_reads), rows=tuple(rows), reads=tuple(reads),
+                  tables=tuple(tables))
 
 
 READ_VALUES = ("tok", "root", "domain", "row", "salt", "path", "one")
@@ -797,7 +826,8 @@ READ_VALUES = ("tok", "root", "domain", "row", "salt", "path", "one")
     (_holding(READ_VALUES, rows=(READ_ROWS[0], SS.Rows(READ_T, "domain", 2, READ_ROWS[1].runs))), "row"),
     (_holding(READ_VALUES, rows=(READ_ROWS[0], SS.Rows(READ_T, "domain", 1, (SS.Run(0, 1, 0, 1),)))), "row"),
     (_holding(READ_VALUES, supplied={k: v for k, v in READ_FILLED.items() if k != "root"}), "root"),
-    (_holding(READ_VALUES, supplied={**READ_FILLED, "one": [[{"bytes": "00000001"}], [{"bytes": "00000000"}]]}), "row"),
+    (_holding(READ_VALUES, supplied={**READ_FILLED, "one": [[{"bytes": "0001"}], [{"bytes": "0000"}]]}), "row"),
+    (_holding(READ_VALUES, supplied={**READ_FILLED, "one": [[{"bytes": "00000001"}], [{"bytes": "00000001"}]]}), "row"),
     (_holding(READ_VALUES, supplied={**READ_FILLED, "one": []}), "row"),
     (_holding(READ_VALUES, supplied={k: v for k, v in READ_FILLED.items() if k != "one"}, fixed=("one",)), "row"),
     (_holding(READ_VALUES, ref_reads=((READ_T, {"ports": {"o1": {"value": f"{READ_T}/o1"}}}),)), "row"),
@@ -825,7 +855,7 @@ READ_VALUES = ("tok", "root", "domain", "row", "salt", "path", "one")
                                                           "tok": {"value": "tok"}, "x": {"value": "one"}}}),)), None),
 ])
 def test_the_interior_registration_gives_a_replay_block_only_a_reads_opened_row(own, value):
-    """`second_stage.inputs_failure`, the first value of the interior registration that a replay block's input may not
+    """`second_stage.inputs_failure`, the first value of the interior docket that a replay block's input may not
     read. Held without the prover, and passing: a value the verifier fills from its own bytes, or pinned or holds to an
     earlier record. Refused: one the prover registers, or one filled from a root of the interior record. A read's row,
     salt and path pass where the auditor's params record the template as a read, the verifier fills its root and domain
@@ -849,6 +879,62 @@ def test_the_interior_registration_gives_a_replay_block_only_a_reads_opened_row(
     assert found == (None if value is None else {"value": value, "why": SS.INPUTS_WHY})
 
 
+#: The tables' docket's entries for tables ``t`` and ``u``, as the auditor's params pin them (`service.pinned_tables`).
+PINNED = (("t", {"value": "t", "root": T_ROOT, "leaves": 8, "words": 2, "domain": T_DOMAIN}),
+          ("u", {"value": "u", "root": U_ROOT, "leaves": 8, "words": 2, "domain": U_DOMAIN}))
+NO_RECORD = {"roots": []}
+
+
+@pytest.mark.parametrize("own,value", [
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=PINNED), None),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=PINNED[:1]), None),
+    (_holding(READ_VALUES, tables=PINNED), None),
+    (_holding(READ_VALUES, boundary=NO_RECORD, supplied=TWO_TABLES, tables=PINNED), None),
+    (_holding(READ_VALUES, boundary={"roots": READ_RECORD["roots"][1:]}, supplied=TWO_TABLES, tables=PINNED[:1]), None),
+    (_holding(READ_VALUES, boundary=NO_RECORD), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=PINNED[1:]), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, supplied=TWO_TABLES, tables=PINNED[:1]), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=(("t", {**PINNED[0][1], "root": "c3" * 64}),)), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=(("t", {**PINNED[0][1], "domain": U_DOMAIN}),)), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=(("t", {**PINNED[0][1], "leaves": 16}),)), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=(("t", {**PINNED[0][1], "leaves": "8"}),)), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=PINNED, rows=READ_ROWS[:1]), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=PINNED, reads=()), "row"),
+    (_holding(READ_VALUES[1:], READ_LINKS[1:], boundary=NO_RECORD, tables=PINNED), "row"),
+])
+def test_round_two_takes_a_reads_table_from_the_tables_the_auditors_params_pin(own, value):
+    """`second_stage._one_table` beside round 1's record: a read's root and domain may be one table's of the tables
+    the auditor's params pin before any coin (`Own.tables`, the tables' docket's entries), so a read's row,
+    salt and path pass with round 1's record registering no table, or with it registering one of two tables filled
+    row by row and the params pinning the other. Refused, the row named, with `second_stage.INPUTS_WHY`: a table
+    neither pinned nor registered, a pin whose root, domain id or count of leaves is another than the one the verifier
+    filled, and a pin that leaves the read's other conditions unmet (its rows, its record as a read, its key)."""
+    assert SS.inputs_failure(own) == value
+    found = dict(SS._interior_failures(own)).get("second-inputs")
+    assert found == (None if value is None else {"value": value, "why": SS.INPUTS_WHY})
+
+
+def test_the_params_pin_registered_tables_beside_the_circuit_files():
+    """`template_circuits` and `pinned_tables`: the auditor's params may add ``"tables"``, the tables' docket's
+    entries by parameter, which it pinned before any coin; the verifier takes them in the parameters' order and the
+    circuit files as without them, and refuses an entry not exactly the docket's form (`service._table_entry`)
+    and tables that are not an object."""
+    entry = dict(PINNED[0][1])
+    pinned = {**_circuits(), "tables": {"u": {**entry, "value": "u"}, "t": entry}}
+    assert S.template_circuits(pinned, WINDOW_QUERY) == S.template_circuits(_circuits(), WINDOW_QUERY)
+    assert S.pinned_tables(pinned) == (("t", entry), ("u", {**entry, "value": "u"}))
+    assert S.pinned_tables(_circuits()) == () == S.pinned_tables(None)
+    assert S.template_circuits({**_circuits(), "tables": {"t": {**entry, "word_bits": 8}}}, WINDOW_QUERY)
+    for bad in ({**entry, "value": "u"}, {**entry, "root": "AB" * 64}, {**entry, "domain": "ab" * 32},
+                {**entry, "leaves": 0}, {**entry, "words": True}, {**entry, "word_bits": 0}, {**entry, "x": 1},
+                {k: v for k, v in entry.items() if k != "words"}, [entry]):
+        with pytest.raises(ValueError, match="a pinned table's entry is exactly"):
+            S.template_circuits({**_circuits(), "tables": {"t": bad}}, WINDOW_QUERY)
+    for bad in ([entry], "t", None):
+        with pytest.raises(ValueError, match="the params' proofs are"):
+            S.template_circuits({**_circuits(), "tables": bad}, WINDOW_QUERY)
+
+
 def test_a_read_at_a_key_the_block_computes_is_refused_and_says_so():
     """A read whose key is wired to another template's output reads a key the block computes, which no statement
     covers: its row is refused (`second-inputs`), with a reason of its own (`second_stage.KEY_WHY`), where the same read
@@ -863,6 +949,113 @@ def test_a_read_at_a_key_the_block_computes_is_refused_and_says_so():
     unkeyed = _holding(READ_VALUES[1:], READ_LINKS[1:])
     assert dict(SS._interior_failures(unkeyed))["second-inputs"] == {"value": "row", "why": SS.INPUTS_WHY}
     assert SS.KEY_WHY != SS.INPUTS_WHY and "no statement covers it" in SS.KEY_WHY
+
+
+#: One MoE layer's read of its expert's row: the router (`ROUTER_T`), the window's first member, writes each token's
+#: expert index at its output `o0`, a row of two u16 words, and the read's key, of two words too, is wired to it, each
+#: of the read's three units a block reading its router unit's row.
+ROUTER_T = "Router_v1"
+KEY_WIRE = SS.Wire(READ_T, "tok", ROUTER_T, "o0")
+KEY_ROWS = SS.Rows(READ_T, "tok", 3, (SS.Run(0, 3, 0, 1),))
+KEY_WIDTH = SS.Width(READ_T, "tok", 2, 2)
+
+
+def _keyed(on: bool = True, **change) -> SS.Own:
+    """What round 2 holds of the MoE layer's read, its row registered and its key wired (`KEY_WIRE`), with the wired
+    key's switch `on`, and `change` made."""
+    own = _holding(READ_VALUES[1:], READ_LINKS[1:], wires=[KEY_WIRE], rows=(*READ_ROWS, KEY_ROWS))
+    return dataclasses.replace(own, **{"parts": (SS.Part(ROUTER_T, 0, 3), SS.Part(READ_T, 3, 3)),
+                                       "widths": (KEY_WIDTH,), "wired_key": on, **change})
+
+
+def test_the_wired_keys_switch_is_off_and_refuses_as_before():
+    """The switch is a constant of the code, off (`second_stage.WIRED_KEY`): round 2's `Own` holds it by default, so
+    the service's run, which never sets it, refuses the MoE layer's wired key exactly as before, with `KEY_WHY`."""
+    assert SS.WIRED_KEY is False
+    own = dataclasses.replace(_keyed(), wired_key=SS.Own((), None, None, None, ()).wired_key)
+    assert own.wired_key is False
+    assert SS.inputs_failure(own) == "row"
+    assert dict(SS._interior_failures(own))["second-inputs"] == {"value": "row", "why": SS.KEY_WHY}
+
+
+@pytest.mark.parametrize("change,why", [
+    ({}, None),
+    ({"wires": (KEY_WIRE, SS.Wire(READ_T, "tok", ROUTER_T, "o1"))}, SS.KEY_WIRES_WHY),
+    ({"links": (*READ_LINKS[1:], SS.Link(READ_T, "tok", "b.ingress"))}, SS.KEY_LINKED_WHY),
+    ({"widths": (SS.Width(READ_T, "tok", 2, 1),)}, SS.KEY_WIDTH_WHY),
+    ({"widths": ()}, SS.KEY_WIDTH_WHY),
+    ({"parts": (SS.Part(READ_T, 0, 3), SS.Part(ROUTER_T, 3, 3))}, SS.KEY_ORDER_WHY),
+    ({"parts": (SS.Part(READ_T, 0, 3),)}, SS.KEY_ORDER_WHY),
+    ({"rows": (*READ_ROWS, SS.Rows(READ_T, "tok", 3, (SS.Run(0, 3, 1, 1),)))}, SS.KEY_BOUNDS_WHY),
+    ({"rows": READ_ROWS}, SS.KEY_BOUNDS_WHY),
+    ({"parts": (SS.Part(ROUTER_T, 0, 2), SS.Part(READ_T, 2, 3))}, SS.KEY_BOUNDS_WHY),
+])
+def test_with_the_switch_on_a_wired_key_passes_only_whole(change, why):
+    """With the wired key's switch on, the MoE layer's read, its key one wire from the router's output, passes
+    (`second_stage._key_failure`); and its row is refused (`second-inputs`), each with a reason of its own, where its key
+    has two wires, is linked too, is wired to a row of other words or of no width the design derives, to a writer not
+    before it in the window or of no part, or where its rows give a unit a writer row past the writer's units, or give
+    the key no rows. Switched off, each is refused for the one reason, `KEY_WHY`."""
+    own = _keyed(**change)
+    assert SS.inputs_failure(own) == (None if why is None else "row")
+    assert dict(SS._interior_failures(own)).get("second-inputs") == (None if why is None else {"value": "row",
+                                                                                               "why": why})
+    assert len({SS.KEY_WIRES_WHY, SS.KEY_LINKED_WHY, SS.KEY_WIDTH_WHY, SS.KEY_ORDER_WHY, SS.KEY_BOUNDS_WHY,
+                SS.KEY_WHY, SS.INPUTS_WHY}) == 7
+    off = dataclasses.replace(own, wired_key=False)
+    assert dict(SS._interior_failures(off))["second-inputs"] == {"value": "row", "why": SS.KEY_WHY}
+
+
+def test_a_read_whose_key_is_wired_lists_no_table_rows():
+    """A read whose key is wired lists no ``table_rows`` at a port of its opening (its key, row, salt, path or verdict):
+    the rows it reads are a function of a committed value, so listing them would disclose it. Round 2 refuses such an
+    entry with ``second-table-rows`` and `KEY_ROWS_WHY`, the switch on or off. It reads no ``table_rows`` yet, so one
+    listed anywhere else is refused too, with `TABLE_ROWS_WHY`; an entry that lists none, or lists null, passes."""
+    listed = {"value": "row", "table_rows": [0, 2]}
+
+    def stmt(port: str, e: dict) -> dict:
+        return {"template": READ_T, "header": {}, "draw": {}, "registered": {"ports": {port: e}}}
+
+    for own in (_keyed(), _keyed(on=False)):
+        assert all(SS.table_rows_why(own, READ_T, p, listed) == SS.KEY_ROWS_WHY for p in SS.KEYED_PORTS)
+        assert SS.table_rows_why(own, READ_T, "root", listed) == SS.TABLE_ROWS_WHY
+        assert SS.table_rows_why(own, READ_T, "row", {"value": "row"}) is None
+        assert SS.table_rows_why(own, READ_T, "row", {"value": "row", "table_rows": None}) is None
+        assert ("second-table-rows", {"statement": 0, "template": READ_T, "port": "row", "why": SS.KEY_ROWS_WHY}) in \
+            SS._failures(True, own, own.parts, [stmt("row", listed)])
+        assert not any(c == "second-table-rows" for c, _ in SS._failures(True, own, own.parts, [stmt("row", {})]))
+    unwired = dataclasses.replace(_keyed(), wires=())
+    assert SS.table_rows_why(unwired, READ_T, "row", listed) == SS.TABLE_ROWS_WHY
+    assert SS.KEYED_PORTS == ("tok", "row", "salt", "path", "o1")
+
+
+def test_nothing_of_record_turns_the_wired_key_on():
+    """No file under `verity/` sets the wired key's switch but round 2's own code and the development executable
+    `sampled-proofs-wired-key-dev` (`Spot.WiredKeyDevMain`), and none but that executable's lakefile entry and its
+    difftest names it: the service's run, the verifier of record and every script take the switch as the code holds it,
+    off."""
+    root = next(p for p in Path(__file__).resolve().parents if (p / "verity" / "__init__.py").is_file())
+    spot = root / "verity/protocols/proofs/spot/verifier"
+    difftest = spot / "lean/tests/test_wired_key_difftest.py"
+    allowed_set = {spot / "second_stage.py", spot / "lean/Spot/SecondStage.lean",
+                   spot / "lean/Spot/SecondStageExamples.lean", spot / "lean/Spot/WiredKeyDevMain.lean", difftest,
+                   Path(__file__).resolve()}
+    allowed_name = {spot / "lean/lakefile.toml", spot / "lean/Spot/SecondStage.lean",
+                    spot / "lean/Spot/WiredKeyDevMain.lean", difftest, Path(__file__).resolve()}
+    sets, names = [], []
+    skip = {".lake", ".git", "__pycache__", "target", "node_modules", ".venv", "fixtures"}
+    for top, dirs, files in os.walk(root / "verity"):
+        dirs[:] = [d for d in dirs if d not in skip]
+        for f in files:
+            path = Path(top) / f
+            if path.suffix not in {".py", ".lean", ".sh", ".toml"}:
+                continue
+            text = path.read_text(errors="replace")
+            if any(s in text for s in ("wired_key=", "wired_key = ", "wiredKey :=")) and path not in allowed_set:
+                sets.append(path)
+            if "sampled-proofs-wired-key-dev" in text and path not in allowed_name:
+                names.append(path)
+    assert sets == [] and names == [], (sets, names)
 
 
 def test_a_rejected_verdict_rejects_and_names_both_records():
@@ -885,7 +1078,7 @@ def test_the_proof_deadline_counts_from_the_first_stage():
 
 
 def test_each_stage_is_once_and_in_order():
-    """The interior registration follows the first stage and precedes the second, each once; the proof is the second
+    """The interior docket follows the first stage and precedes the second, each once; the proof is the second
     stage's sample's; and a two-stage stream opens no session over several rounds."""
     stream = _stream()
     reg = stream.register(*_boundary())
@@ -910,11 +1103,11 @@ def test_each_stage_is_once_and_in_order():
 
 
 def test_the_interior_registration_is_in_the_boundary_registrations_window_or_the_one_the_verifier_computes():
-    """The interior registration's window root is the boundary registration's, so one session samples both stages, or
-    the root the verifier computes from the boundary registration's digest and the replay sample
+    """The interior docket's window root is the boundary docket's, so one session samples both stages, or
+    the root the verifier computes from the boundary docket's digest and the replay sample
     (`second_stage.interior_root`), so the second stage's session is the one on that root. Any other is refused
-    (`interior-window`): a root of the prover's choosing, none where the boundary registration has one, and the root
-    of another sample or another registration. On the computed root, the second stage's session opened for it, the run
+    (`interior-window`): a root of the prover's choosing, none where the boundary docket has one, and the root
+    of another sample or another docket. On the computed root, the second stage's session opened for it, the run
     of record agrees through both stages, and the outcome's one failure is the form's (`second_stage.FORM`)."""
     stream = _stream()
     reg = stream.register(*_boundary())
@@ -992,7 +1185,7 @@ def test_the_rule_and_the_spec_state_one_form():
     assert S.boundary_values(VALUES) == VALUES[:2] and S.interior_values(VALUES) == VALUES[2:]
 
 
-def test_the_verifier_of_record_draws_both_stages():
+def test_the_verifier_of_record_samples_both_stages():
     """The verifier's executable (`Pieces.verifier`, `verifier.EXE`) samples a two-stage rule's first stage, `Q`
     of the `N` replay blocks, and its second, `k` of each sampled replay block's proof blocks, as the service does."""
     assert V.EXE == "sampled-proofs-verifier" and _spec().selection == RULE
@@ -1146,7 +1339,7 @@ def _window_stream(spec=None, window=WINDOW, replay=MIXED) -> S.Stream:
 
 
 def _window_boundary(stream: S.Stream) -> S.WindowCommitmentRecord:
-    """MIXED's boundary registration over N replay blocks: its `x` and its first output two rows a block, one for each
+    """MIXED's boundary docket over N replay blocks: its `x` and its first output two rows a block, one for each
     of its PAIR instances' `x` and `o0`, and its `y` and second output one, TRIPLE's (`second_stage.replay_rows`)."""
     boundary, leaves = P.population_program(MIXED, N), dict(zip(MIXED_BOUNDARY, (2 * N, N, 2 * N, N)))
     return stream.register(_record(boundary, MIXED_GRAIN, MIXED_BOUNDARY, leaves, {"law": "subset", "k": Q},
@@ -1163,7 +1356,7 @@ def _window_interior(program: Program, previous: str, first: S.Draw) -> tuple[di
 
 
 def _window_stages(stream: S.Stream) -> S.Draw:
-    """The window's two stages on `stream`: MIXED's boundary registration, its replay sample, the interior registration
+    """The window's two stages on `stream`: MIXED's boundary docket, its replay sample, the interior docket
     over the sample's proof blocks template-major, and the second stage, delivered."""
     reg = _window_boundary(stream)
     first = stream.select(reg)
@@ -1174,7 +1367,7 @@ def _window_stages(stream: S.Stream) -> S.Draw:
 
 
 def test_a_replay_block_of_two_templates_runs_with_a_template_major_interior():
-    """A replay block of PAIR x 2 and TRIPLE x 1: the boundary registration over N of them, the interior over the
+    """A replay block of PAIR x 2 and TRIPLE x 1: the boundary docket over N of them, the interior over the
     sample's Q·3 proof blocks template-major (PAIR's Q·2, then TRIPLE's Q), the second stage one stratum per cell, k of
     each PAIR cell and TRIPLE's one-unit cells whole, and an outcome whose whole run is the Lean verifier's. Round 2
     links each template's `x` and output to the boundary ports of the parameter it reads and the field it returns
@@ -1227,7 +1420,7 @@ def test_round_two_refuses_statements_out_of_the_parts_order():
 def test_round_two_names_what_a_replay_block_returns_and_refuses_an_interior_value_of_it():
     """What a replay block returns is committed before the first stage's sample. Its names in the boundary record are
     the block's output ports, one for each field of what it returns, named as the record names its ports
-    (`second_stage.replay_returns`): each port a link names for the return is one of them. An interior registration
+    (`second_stage.replay_returns`): each port a link names for the return is one of them. An interior docket
     that registers a value of one is refused by name (`second-return`, `returns_ok`), with the interior record's
     order; one that registers any other name, or a run whose return has no such name, is not."""
     for block, fields in ((BLOCK, 1), (MIXED, 2)):
@@ -1246,12 +1439,12 @@ def test_round_two_names_what_a_replay_block_returns_and_refuses_an_interior_val
     for registered, returns in (([{"value": "w"}, {"value": 5}, {}], (BOUT,)), (5, (BOUT,)), ([{"value": BOUT}], ()),
                                 ([{"value": BX}], (BOUT,))):
         assert SS.returns_ok(own(registered, returns))
-        assert "second-return" not in SS.check(True, own(registered, returns), None).codes
+        assert "second-return" not in SS.check_twin(True, own(registered, returns), None).codes
     refused = own([{"value": "w"}, {"value": BOUT}])
-    v = SS.check(True, refused, None)
+    v = SS.check_twin(True, refused, None)
     assert not SS.returns_ok(refused) and "second-return" in v.codes and not v.ok, v
     assert v.to_json()["detail"]["second-return"] == SS.RETURN_WHY
-    assert SS.check(False, refused, None).codes == v.codes
+    assert SS.check_twin(False, refused, None).codes == v.codes
 
 
 def test_a_replay_block_of_two_templates_takes_a_count_per_template():

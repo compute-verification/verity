@@ -32,7 +32,7 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
-variable {L : Law n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
+variable {L : SamplingDesign n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
   {Hc : List UInt8 → Dh} (vb : ValueBindingZ A P planZ tab decode Hc)
   (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R)
 

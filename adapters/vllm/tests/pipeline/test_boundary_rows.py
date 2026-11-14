@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 
 from verity.protocols.proofs.spot.verifier import second_stage as SS
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation import evaluate
@@ -27,8 +27,8 @@ from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value as Bits
 from verity.commitments import history as HT
-from verity.commitments.windows import rows as CS
-from verity.definitions.registry import stop_check, stop_rule
+from verity.commitments.periods import rows as CS
+from verity_vllm.definitions.registry import stop_check, stop_rule
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS, boundary_windows as BW
 

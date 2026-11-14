@@ -2,12 +2,12 @@
 computed by its own `EgressBucket_v1` proof block, its computed row, output ``o1``, registered against the network
 certifier's signed root
 (`warden_rows.bucket_port`: unit base + t reads row t), proved by Flock `prove --zk` behind the Lean ZK server and held
-by the Lean verifier's registered reads (`flock-verify verify --zk --registered`), which name every port of the
+by the Lean verifier's registered reads (`verity-verify-proof verify --zk --registered`), which name every port of the
 statement (`Flock.Registered.checkComplete`); each unit's one public output, its 16-bit ``o0`` (1 when the state
 renders a row), read off a value the verifier registers itself at known content, every word 1. Standalone: no Spec
 holds these units yet (`verity.protocols.accounting.certifier.prover.egress`).
 
-    python benchmarks/network_traces/egress_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
+    python benchmarks/network_traces/egress_zk.py prove --bin flock-circuit --lean verity-verify-proof --out DIR [--dry]
 
 * **The link** (`PARAMS`, `NR`, `K`): a fake upstream's responses served through the network certifier's own egress
   (`egress_traffic.busy`, the egress tests'), each execution phase's rows committed by the network certifier and its
@@ -27,7 +27,7 @@ holds these units yet (`verity.protocols.accounting.certifier.prover.egress`).
   the proof block computes a row the network certifier didn't sign, so its ``o1`` opens no registered row: refused by
   Lean ("does not open"). ``moved``: proof blocks t and t + 1 given each other's state, their positions and salts
   swapped to match, so each ``o1`` opens at the other proof block's position: refused by Lean ("reads position"). Each
-  is registered, every proof block sampled by the verifier's Lean (`flock-verify draw --stratified n`), proved ``--zk``
+  is registered, every proof block sampled by the verifier's Lean (`verity-verify-proof draw --stratified n`), proved ``--zk``
   behind the ZK server (``FC_FIREWALL=1``)
   and held by Lean `verify --zk --partition --program --registered`; the verifier opens each held unit's ``o0`` under
   its public salt.
@@ -314,7 +314,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
                                         "why": ((record or {}).get("verdict") or {}).get("why"),
                                         "draw_check": v.to_json()}}
     lv = a0.lean_verify(a.lean, m, n, sdir, zk=True)
-    verdicts[f"lean-verify/{name}"] = {**lv, "tool": "flock-verify verify --zk --archive --partition --program "
+    verdicts[f"lean-verify/{name}"] = {**lv, "tool": "verity-verify-proof verify --zk --archive --partition --program "
                                                      "--registered"}
     proved = a0.proved_units(m["header"], live or {})
     timing = {x: (live or {}).get(x) for x in WZ.TIMING}

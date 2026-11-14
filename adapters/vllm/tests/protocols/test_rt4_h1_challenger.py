@@ -44,14 +44,17 @@ from verity.protocols.accounting.pouw.verifier import window as Wd
 from verity.protocols.accounting.pouw.verifier.audit import salt_of
 from verity.protocols.proofs.spot.device import challenger as LC
 from verity.protocols.proofs.spot.device import remote as R
-from verity.protocols.proofs.spot.device.challenger import LiveCommitment, record_message
+from verity.protocols.proofs.spot.device.challenger import (
+    LiveCommitment,
+    record_message,
+)
 
 from tests.protocols import challenger_host as CH
 from tests.protocols import test_pouw_h1 as T
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
-from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
 
 PRIVATE, KEY = CH.challenger_key(1, H=6)
 COMMIT_A, COMMIT_B = "ca" * 64, "cb" * 64
@@ -105,7 +108,7 @@ class _Session:
         self.reason: str | None = None
         self._ledger: Path | None = None
         self.window: dict = CH.WINDOW
-        self._thread = threading.Thread(target=self._serve, args=(ours, session))
+        self._thread = threading.Thread(target=self._serve, args=(ours, session), daemon=True)
         self._thread.start()
         self.client = R.RemoteChallenger(theirs)
         self.commitment = self.challenger.commitment.root.hex()
@@ -382,7 +385,7 @@ def test_a_session_whose_tree_the_hosts_pins_log_doesnt_record_is_refused(tmp_pa
     assert PHC.session_reason(first, two.ledger(), fetch) is None
     assert PHC.session_reason(first, two.ledger(CH.PINS), fetch) == (
         f"session {SA} is not trusted: the host's pins log has 1 lines, fewer than the 2 the open of session {SA} "
-        "sealed: take the auditor host's operator's newest published pins log")
+        "sealed: take the auditor device's operator's newest published pins log")
     assert PHC.session_reason(first, two.ledger([second, second]), fetch) == (
         f"session {SA} is not trusted: the host's pins log is not the one the open of session {SA} sealed: its first 2 "
         "lines were edited or rewritten")

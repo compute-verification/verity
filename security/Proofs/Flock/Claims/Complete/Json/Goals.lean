@@ -62,7 +62,7 @@ statement's sample), holds at every good case (`stmtOk`, `Stmt`).
 
 `Run.json` is the record at the run: `Record.decodeWith` reads `sessOf` and `liveOf` the live session, its points the
 first coin's (`coinOf_bytes`: a coin's bytes read back are the coin), the first send is the link of its `root_B`, and
-the rest are its streams' rounds (`Recs`). The goals follow: `Decodes`, `LiveReads`, `DrawMatches`, `CustodyRootB`,
+the rest are its streams' rounds (`Recs`). The goals follow: `Decodes`, `LiveReads`, `SampleMatches`, `CustodyRootB`,
 `CustodyPublics`, `CustodyPoints`, `Publics`, `ProofList`, `ProofDigests`, `RepStream`, `RepExtras` and `CustodyRounds`.
 -/
 
@@ -181,10 +181,10 @@ theorem Run.json (h64 : Claims.Out64 H) (hP : ProverOk H rel) (o : Run H rel) :
     intro p hp
     obtain ⟨i, -, rfl⟩ := Array.mem_map.1 hp
     simp
-  have hd : Good (o.spec.unitDraw.getD Json.null) := by
-    unfold DrawOk at hdraw
+  have hd : Good (o.spec.unitSample.getD Json.null) := by
+    unfold SampleOk at hdraw
     revert hdraw
-    cases o.spec.unitDraw with
+    cases o.spec.unitSample with
     | none => exact fun _ => .null
     | some d => exact fun hd => hd.2.1
   dsimp only at hrec
@@ -230,16 +230,16 @@ theorem canonical_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
   obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
     Run.json h64 hP o
   obtain ⟨-, -, hdraw, -⟩ := stmtOk o.toCase
-  have hd : Good (o.spec.unitDraw.getD Json.null) := by
-    unfold DrawOk at hdraw
+  have hd : Good (o.spec.unitSample.getD Json.null) := by
+    unfold SampleOk at hdraw
     revert hdraw
-    cases o.spec.unitDraw with
+    cases o.spec.unitSample with
     | none => exact fun _ => .null
     | some d => exact fun hd => hd.2.1
   rw [hrec]
   exact check_printJ (good_recordObj ht _ rb _ streams o.proofs hd)
 
-/-- **Alike values are equivalent** (`JsonEquiv`, what `drawEq` decides). -/
+/-- **Alike values are equivalent** (`JsonEquiv`, what `sampleEq` decides). -/
 theorem Same.jsonEquiv {a b : Json} (h : Same a b) : JsonEquiv a b := by
   induction h with
   | null => rfl
@@ -249,23 +249,23 @@ theorem Same.jsonEquiv {a b : Json} (h : Same a b) : JsonEquiv a b := by
   | arr hs _ ih => exact (jsonEquiv_arr_iff _ _).2 ⟨hs, ih⟩
   | obj hm hn hk _ ih => exact (jsonEquiv_obj_iff hm hn).2 ⟨hk, ih⟩
 
-/-- **The record's sample is the statement's**: the goal `DrawMatches`. -/
-theorem drawMatches_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
-    DrawMatches H rel := by
+/-- **The record's sample is the statement's**: the goal `SampleMatches`. -/
+theorem sampleMatches_goal (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
+    SampleMatches H rel := by
   intro o
   obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
     Run.json h64 hP o
   obtain ⟨-, -, hdraw, hdr⟩ := stmtOk o.toCase
-  have hd := recordDraw_recordObj (h := Claims.hOf H) ht hdraw rb (pointsOf o.spec (Claims.coinSeq o.r 0)) streams
+  have hd := recordSample_recordObj (h := Claims.hOf H) ht hdraw rb (pointsOf o.spec (Claims.coinSeq o.r 0)) streams
     o.proofs
   rw [hrec, ← hdr]
   revert hd
-  cases o.spec.unitDraw with
+  cases o.spec.unitSample with
   | none => intro hd; rw [hd]; rfl
   | some d =>
     rintro ⟨d', hd', hs⟩
     rw [hd']
-    exact (drawEq_iff _ _).2 (.some hs)
+    exact (sampleEq_iff _ _).2 (.some hs)
 
 theorem list_bytes_beq_self (l : List ByteArray) : (l == l) = true := by
   induction l with

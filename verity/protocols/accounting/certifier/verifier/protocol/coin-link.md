@@ -2,7 +2,7 @@ Part of the certifier's [PROTOCOL.md](../PROTOCOL.md).
 
 ## The coin link (`coin_link`)
 
-D7 (`security/Definitions/NetworkCertifier/Guarantees.lean`, "The coins (D7)") puts the challenger's coins on one more
+D7 (`security/Definitions/Certifier/Guarantees.lean`, "The coins (D7)") puts the challenger's coins on one more
 ingress link of the server's network certifier: its timing is charged on the ingress grid, its content is exempt for
 coin openings that open against the challenger's committed coin root, and everything else on it is counted. The
 prover's requests for coins are egress, charged on their own grid. `coin_link.CoinLink` is that link for one window's
@@ -11,7 +11,7 @@ session, and `verity/protocols/compose/device/live_challenger/coin_link.py` runs
 ### The path
 
 The challenger (`spot.remote`, served by `serve.py`) and the link run on one auditor device, the device that
-runs the server's network certifier (`trusted-host`). A window's session takes this path:
+runs the server's network certifier (`trusted-device`). A window's session takes this path:
 
 1. The gate's `open` signs the open entry, which binds the session to the prover's root, then starts `auditor.py run`.
 2. `serve.py` signs the challenger's record, which states the session's coin commitment, then listens on the host's

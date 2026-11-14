@@ -18,13 +18,13 @@ import numpy as np
 import pytest
 from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
-from verity.commitments import row_table as RT
-from verity.commitments.windows import rows as CS
-from verity.commitments.windows import tables as TB
 from verity.circuits.ops import gemm as OG
+from verity.commitments import row_table as RT
+from verity.commitments.periods import rows as CS
+from verity.commitments.periods import tables as TB
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 from verity_vllm.commit import index as IX
 from verity_vllm.commit import row_tables as RTB
@@ -197,7 +197,7 @@ def test_the_step_roots_serving_computes_at_its_step_boundary_are_the_windows_an
     # the window's commit holds its steps to the roots serving recorded before their coins
     recorded = {step: sr.root for step, sr in served.items()}
     assert committed(monkeypatch, segment_roots=recorded)[0].roots == c.roots
-    with pytest.raises(ValueError, match=r"segments \[1\]: the window's segment roots are not the ones recorded"):
+    with pytest.raises(ValueError, match=r"segments \[1\]: the period's segment roots are not the ones recorded"):
         committed(monkeypatch, segment_roots={**recorded, 1: bytes(64)})
     w2, _, _ = window()
     with pytest.raises(ValueError, match="give row_salt_key"):

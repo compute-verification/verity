@@ -1,7 +1,7 @@
 """`protocol_options.pouw_h1`: each served int8_exact linear call is a Program on bits that `pouw.circuit.compile` takes to
 H1 tile proof blocks, every proof block a full 32 x 32 grid at decode's one row, a partial block and an off-tile column count; a call is one
 seed group, the calls sit at positions fixed by the public parameters (T rows, S steps), and the `pouw` option serves the
-arm's own y beside sampled proofs.
+arm's own y beside SPOT.
 
 The first compile builds the H1 tile proof block (its seeds' and noise blocks' SHA-512 in gates), about 40 s once per process;
 every later shape reuses it."""
@@ -45,12 +45,12 @@ from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_experts as X
 from verity_vllm.engine import vllm_adapter as va
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
-from verity_vllm.protocols.pouw.h1 import hooks as PHK
-from verity_vllm.protocols.pouw.h1 import requests as RQ
-from verity_vllm.protocols.pouw.h1 import served as SV
-from verity_vllm.protocols.pouw.h1 import window as PHW
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+from verity_vllm.protocols.pouw import h1_hooks as PHK
+from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
+from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
 K = 64
 ROW = K * PH.I8_BITS
@@ -1153,7 +1153,7 @@ def _salted(tmp_path, monkeypatch, name, seed, honest, opened_on, salt_after, re
 def test_a_windows_salt_opens_only_after_its_own_window_open_root(tmp_path, monkeypatch):
     """A served window's salt coin opens after its own open root, `salt.window_open_root` of its weights' root,
     its round-0 request table's root (committed before the salt, round 0's ``requests``) and its challenge phase, the root the
-    auditor's ledger opened that challenge phase on (`core_check.salt`). Refused: a challenge phase the ledger opened on another window's
+    auditor's ledger opened that challenge phase on (`core_check.salt_of_record`). Refused: a challenge phase the ledger opened on another window's
     root, on the bare weights' root or on another challenge phase's open root, whatever its salt followed; a challenge phase opened on its
     own root whose salt followed
     another window's root or the bare weights' root; a window whose record names another round-0 table or another
@@ -1294,7 +1294,7 @@ def test_an_open_whose_challenger_signed_no_commitment_is_refused_without_its_se
 
 
 def test_a_session_the_ledger_opened_without_a_reserve_salts_no_window(tmp_path, monkeypatch):
-    """A window's open root binds the challenge phase the auditor's signed reserve entry names (S, `core_check.salt`), so
+    """A window's open root binds the challenge phase the auditor's signed reserve entry names (S, `core_check.salt_of_record`), so
     a challenge phase the ledger opened on the window's own open root without reserving it first is refused, its salt and every
     other coin following the window's own roots."""
     a = _host(tmp_path, monkeypatch, name="a", seed=1, session=CH.session_id(0xa))

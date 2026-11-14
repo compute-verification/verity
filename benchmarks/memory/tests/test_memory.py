@@ -171,6 +171,9 @@ def test_the_number_is_the_session_harnesss_gamma_spec_of_the_same_records(tmp_p
     (a_record(), "the verifier recorded no session"),
     (a_record(a_session(gamma=None)), "session 0 was accepted and its ledger holds no γ"),
     (a_record(a_session(gamma=True)), "session 0 was accepted and its ledger holds no γ"),
+    (a_record(a_session(verdict=None)), "session 0 is recorded accepted, but its record names no Lean verdict (None)"),
+    (a_record(a_session(verdict="python")),
+     "session 0 is recorded accepted, but its record names no Lean verdict ('python')"),
     ({"sessions": "none"}, "the verifier's record doesn't read as one"),
     ("not json", "the verifier's record doesn't read as one"),
 ])
@@ -222,12 +225,12 @@ def test_a_gate_runs_number_is_read_from_the_host_run_its_fire_run_names(store, 
     assert text[2].endswith("bound to SOME_ROLE's pinned checkpoint")
 
 
-def test_a_binding_that_did_not_bind_and_a_record_with_no_lean_verdict_are_said(store, capsys):
-    record = a_record(a_session(verdict=None), binding={"name": "SOME_ROLE", "bound": False})
+def test_a_binding_that_did_not_bind_is_said(store, capsys):
+    record = a_record(a_session(), binding={"name": "SOME_ROLE", "bound": False})
     store.add(RUN, {"out/verifier.json": record}, dirty=True)
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert text[1].startswith(f"  session 0 of {RUN}, commit {COMMIT}-dirty: accepted (its record names no Lean verdict)")
+    assert text[1].startswith(f"  session 0 of {RUN}, commit {COMMIT}-dirty: accepted by the Lean verifier")
     assert text[2].endswith(f"; {M.UNBOUND}") and doc["model"] is None and doc["bound"] is False
     assert doc["commit"] == f"{COMMIT}-dirty"
 
@@ -800,11 +803,11 @@ def test_a_withdrawn_run_is_refused_before_any_of_it_is_fetched(tmp_path, target
 
 @pytest.mark.parametrize("gamma, verdict", [(0.14, "within target"), (0.1401, "past target"), (0.199, "past target")])
 def test_the_metrics_tabs_row_holds_the_number_against_its_target(gamma, verdict):
-    """The Metrics tab's row is `benchmarks/memory/metrics.toml`'s, and its value is the printed number with the goal's
-    target beside it, a share at the target being within it."""
+    """The Metrics tab's row is `benchmarks/memory/metrics.toml`'s, its unit the short form of the measurement's, and its
+    value is the printed number with the goal's target beside it, a share at the target being within it."""
     rows = {m["id"]: m for m in tomllib.loads((ROOT / "benchmarks" / "memory" / "metrics.toml").read_text())["metric"]}
     row = rows[M.METRIC]
-    assert (row["owner"], row["unit"], row["better"]) == ("memory-accounting", M.UNIT, "lower")
+    assert (row["owner"], row["better"]) == ("memory-accounting", "lower") and M.UNIT.startswith(f"{row['unit']} ")
     assert "benchmarks/memory/run.py --from" in row["command"]
     within = {"declared": {"gamma": {"spec": {"error": {"windows": 2.0 ** -100}}}}}
     doc = {"value": gamma, "unit": M.UNIT, "run": RUN, "bound": True}

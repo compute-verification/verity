@@ -1,6 +1,6 @@
 """`IntegrityProfile`: the audit's output, bounds on the incorrect proof blocks of a partition, per stratum, at `delta`.
 
-An audit protocol (one-stage, sampled proofs) produces it: the facts checked exhaustively, and the verifier's sampling
+An audit protocol (one-stage, SPOT) produces it: the facts checked exhaustively, and the verifier's sampling
 design (decision 43) with its failure probability, from which the bounds on incorrect proof blocks follow (`bound`, `stratum_bounds`).
 It counts incorrect proof blocks and weights nothing.  Applications consume it without importing the protocol that produced it:
 each weights incorrect proof blocks by what one costs it, through the generic weighted bounds (`harm_bound`, `worst_case`), and
@@ -9,7 +9,7 @@ union counts it once.
 
 The sampling design is stated over named levels of a partition hierarchy (`verity.circuits.partition.Level`): each level's members
 partition the members of the level above, and a level is either sampled (`Bernoulli`, `Subset`, `Stratified`, `Work`) or
-only groups.  The names are the producer's labels (sampled proofs' one-stage profile is one level "unit"); the profile
+only groups.  The names are the producer's labels (SPOT's one-stage profile is one level "unit"); the profile
 carries samples, never roles.
 """
 
@@ -29,7 +29,7 @@ from verity.circuits.partition import Hierarchy, Level
 MARGIN = 2.0 ** -30
 
 #: the per-window δ, the one failure probability a window's ε is reported at: PoUW's credit and its grind premium, and
-#: the remote bandwidth audit's pooled bound
+#: PoUB's pooled bound
 WINDOW_DELTA = Fraction(1, 2 ** 40)
 
 
@@ -99,13 +99,13 @@ class IntegrityProfile:
     members of level i inside each member of level i - 1.  The finest level is the checked one; each member of it
     is one statement.  `draws` names the sampled levels: at most one `Bernoulli`, and a `Subset` only at the checked
     level; unsampled levels only group.  A `Stratified` or `Work` sample is the only sample, of the checked level, with
-    its strata tiling that level's members; `accept`, `rho` and `worst_case` are the other laws', and it reads through
+    its strata tiling that level's members; `accept`, `rho` and `worst_case` are the other sampling designs', and it reads through
     `strata`.
     `drawn` counts the members actually sampled at each level, all passed.
 
     `accept(m)` reads m at a member's footprint.  When the checked level is committed before the first sample (as
     serving commits every value, at serve time), m is the member's incorrect checked members.  Under a two-stage design
-    the checked level is committed after the sample it follows (the interior registration), so the prover picks a
+    the checked level is committed after the sample it follows (the interior docket), so the prover picks a
     sampled member's interior after seeing that sample; m is then its footprint, the fewest incorrect checked members
     of any interior consistent with its boundary commitment, which is fixed before any coin, and an interior with more
     only lowers `accept`.
@@ -114,7 +114,7 @@ class IntegrityProfile:
     with p = 1).  The k-subset is uniform over all n of them, so unsampled levels in between don't change the sampling design: a
     strategy leaving m_i incorrect checked members in Bernoulli member i is accepted with probability
     prod_i exp(-rho(m_i)), and except with probability `delta` an accepted transcript satisfies
-    sum_i rho(m_i) < ln(1/delta).  A Bernoulli law over single statements is one level sampled `Bernoulli(p)`.
+    sum_i rho(m_i) < ln(1/delta).  A Bernoulli sampling design over single statements is one level sampled `Bernoulli(p)`.
 
     Checked exhaustively:
         `programs`    digests of the evaluated Programs, in commit order;
@@ -423,9 +423,9 @@ def _key_lt(a: Stratum, ma: int, b: Stratum, mb: int) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class Stratified:
-    """The verifier's law as independent uniform samples inside disjoint strata of the partition's units (the `stratified`
-    law): the uniform k-subset is one stratum, and a template floor is a stratum with
-    k >= 1.  The strata are fixed by the agreement before registration, like every sampling design.
+    """The verifier's sampling design as independent uniform samples inside disjoint strata of the partition's units (the
+    `stratified` sampling design): the uniform k-subset is one stratum, and a template floor is a stratum with
+    k >= 1.  The strata are fixed by the agreement before docket, like every sampling design.
 
     An incorrect set with m_s units in stratum s escapes the sample with prod_s C(n_s - m_s, k_s) / C(n_s, k_s), which
     depends only on the counts.  Its risk rho = -ln(escape) is convex in each m_s, the increment from m to m + 1 being
@@ -643,12 +643,6 @@ class Stratified:
         return {"law": "stratified", "strata": [{"name": s.name, "size": s.size, "k": s.k} for s in self.strata]}
 
 
-def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
-    """A stratum's sample size under the work rule (Lean `Flock.Draw.workK`): ceil(k * work * size / total), at least
-    `floor` and at most `size`."""
-    return min(size, max(floor, (k * work * size + total - 1) // total))
-
-
 @dataclass(frozen=True, slots=True)
 class WorkStratum:
     """A stratum of the work sampling design: `size` members, `k` of them sampled, each doing `work` (an integer in any
@@ -664,8 +658,9 @@ class WorkStratum:
 @dataclass(frozen=True, slots=True)
 class Work:
     """The work sampling design `work:k` (Lean `Core.SamplingDesign.work`): uniform samples inside disjoint strata of
-    the checked level, each stratum's k_s sized by its work above its floor (`work_k`).  Its sample is the stratified
-    one at those k_s, so its bounds are `stratified`'s."""
+    the checked level, each recorded with its k_s, its members' work and its floor.  Its sample is the stratified one
+    at those k_s, so its bounds are `stratified`'s.  A k_s is kept as recorded and held to no rule here: the draw's own
+    check holds it to the rule that sizes it by work, and a reader that relies on the rule checks it there."""
 
     k: int
     strata: tuple[WorkStratum, ...]
@@ -686,8 +681,6 @@ class Work:
             seen.add(s.name)
             if s.floor < 1:
                 raise ValueError(f"stratum {s.name!r}: a floor is at least one")
-            if s.k != work_k(self.k, s.work, s.size, total, s.floor):
-                raise ValueError(f"stratum {s.name!r}: k is not the work rule's")
 
     @property
     def population(self) -> int:

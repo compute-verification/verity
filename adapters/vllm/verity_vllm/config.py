@@ -168,7 +168,7 @@ class RowId:
             pfx = _ROW_INT_PREFIX.get(name)
             if pfx is None:
                 vals[name] = tok
-            elif tok.startswith(pfx) and tok[len(pfx):].isdigit():
+            elif tok.startswith(pfx) and tok[len(pfx):].isdecimal():
                 vals[name] = int(tok[len(pfx):])
             else:
                 raise ValueError(f"row id {row!r}: field {name} is {tok!r}, expected {pfx}<N>")
@@ -214,9 +214,9 @@ def row_target(row: str) -> str | None:
 
 
 #: The protocols a run can enable (`verity_vllm.protocols`), in install order, innermost first: PoUW replaces the
-#: linear layers' GEMMs, POUS decodes the weights those GEMMs read, sampled proofs commits what the model computed.
+#: linear layers' GEMMs, POUS decodes the weights those GEMMs read, SPOT commits what the model computed.
 PROTOCOLS = ("pouw", "pous", "sampled-proofs")
-#: The set a row runs when its target declares none: sampled proofs alone, the Commit under its committer's scheme
+#: The set a row runs when its target declares none: SPOT alone, the Commit under its committer's scheme
 #: (rows-sha512 by default, `pipeline.commit --commit-scheme`).
 DEFAULT_ROW_PROTOCOLS = ("sampled-proofs:rows-sha512",)
 _SCHEME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/+-]*")
@@ -376,7 +376,7 @@ def _fetch(paths: list[Path]) -> None:
         if missing := [rel for p, rel in zip(ps, rels) if not p.is_file()]:
             raise RuntimeError(f"{', '.join(missing)}: stored workloads, not here, and `research data fetch-fixtures` could not fetch "
                                f"them (rc {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}); fetch them where the evidence store "
-                               "is reachable, or name the public export with $RESEARCH_PUBLIC_URL")
+                               "is reachable, or name the store's public half with $RESEARCH_PUBLIC_URL")
 
 
 def workload_file(path: str | Path) -> Path:

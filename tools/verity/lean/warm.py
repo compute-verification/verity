@@ -47,7 +47,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 LEAN = Path("tools") / "verity" / "lean"
-CHECK = Path("tools") / "verity" / "check"
+CHECK = Path("tools") / "check"
 #: the pool of the node's Lean audit slots this audit waits in (`lean_slot.py`): the one for audits run outside a check,
 #: never `check`, which a candidate's own audit waits in
 POOL = "audit"

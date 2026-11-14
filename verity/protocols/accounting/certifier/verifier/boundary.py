@@ -1,8 +1,8 @@
 """The run's boundary in a window's circuit: which units' rows hold each step's egress and ingress
-(`NetTiming.BoundaryGates`, `security/Definitions/NetworkCertifier/SampledAudit.lean`), as a window's circuit record
+(`NetTiming.BoundaryGates`, `security/Definitions/Certifier/SampledAudit.lean`), as a window's circuit record
 declares them, and the verifier's check, before it samples, that the layout fits the circuit
 (`NetTiming.BoundaryGates.Fits`, the half of the sampled audit's scope `NetTiming.ScopeAcc` that isn't sampling's). The
-record is ``circuit.json``, `verity/window-circuit/v1` (`verity.commitments.windows.interface.circuit_record`), whose SHA-512 the
+record is ``circuit.json``, `verity/window-circuit/v1` (`verity.commitments.periods.interface.circuit_record`), whose SHA-512 the
 registration binds, so the layout is public and fixed before any coin.
 
 **The record's ``boundary``**, one template a side (and the ingress side's first bucket's), whose proof blocks are its
@@ -71,7 +71,7 @@ from dataclasses import dataclass
 from typing import Any
 
 FORMAT = "verity/boundary/v3"
-#: the circuit record the boundary sits in (`verity.commitments.windows.interface.CIRCUIT`)
+#: the circuit record the boundary sits in (`verity.commitments.periods.interface.CIRCUIT`)
 CIRCUIT = "verity/window-circuit/v1"
 _COUNTS = ("links", "buckets", "slots", "frame_bytes")
 FIELDS = {"egress": ("template", "frame", "verdict", *_COUNTS), "ingress": ("template", "frame", *_COUNTS)}

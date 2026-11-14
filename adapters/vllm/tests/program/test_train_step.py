@@ -30,27 +30,27 @@ from verity.circuits.parts import Part, n_members
 from verity.circuits.program import is_input
 from verity.circuits.query_ast import GateSet, evaluate, parse
 from verity.circuits.refs import runs as ref_runs
-from verity.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.numerics.serve3_reference import materialize
 from verity.circuits.ops import scalar as SC
-from verity.definitions.registry import bf16_gemm_check as BC
-from verity.definitions.registry import cublas_bf16 as CB
-from verity.definitions.registry import fa2_train as FT
-from verity.definitions.registry import fa2_train_bwd as FTB
-from verity.definitions.registry import moe as MOE
-from verity.definitions.registry import prims as P
-from verity.definitions.registry import ref_prims as R
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.definitions.registry import cublas_bf16 as CB
+from verity_vllm.definitions.registry import fa2_train as FT
+from verity_vllm.definitions.registry import fa2_train_bwd as FTB
+from verity_vllm.definitions.registry import moe as MOE
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import ref_prims as R
 
 from tests.program.train_step_lf import ADAMW, loss_fn, meta_step, square_loss
-from verity_vllm.program.frontend.boolean import derived
-from verity_vllm.program.frontend.derive_graph import derive_graph
-from verity_vllm.program.frontend.errors import FrontendError
-from verity_vllm.program.frontend.outcomes import Unsupported
-from verity_vllm.program.frontend.program_identity import check_identity
-from verity_vllm.program.frontend.report import DeriveReport
+from verity_torch.frontend.boolean import derived
+from verity_torch.frontend.derive_graph import derive_graph
+from verity_torch.frontend.errors import FrontendError
+from verity_torch.frontend.outcomes import Unsupported
+from verity_torch.frontend.program_identity import check_identity
+from verity_torch.frontend.report import DeriveReport
 from verity_vllm.program.frontend.rules import TORCH_RULES, VLLM_RULES
-from verity_vllm.program.frontend.rules.training import training_rules
-from verity_vllm.program.frontend.rules.training_survey import survey, with_holes
-from verity_vllm.program.frontend.train_step import (
+from verity_torch.frontend.rules.training import training_rules
+from verity_torch.frontend.rules.training_survey import survey, with_holes
+from verity_torch.frontend.train_step import (
     AdamW,
     _patched,
     export_step,
@@ -819,7 +819,7 @@ CC = CB.TRAIN_CC
                                 {"cc": CC, "structure": True}],
                          ids=["cpu", "cc", "cc-tf32", "cc-deterministic", "cc-structure"])
 def test_training_rules_build_on_the_torch_only_list(kw: dict) -> None:
-    """`verity_vllm.program.frontend.rules.training.training_rules` holds every rule of `rules.TORCH_RULES`, in that list's order,
+    """`verity_torch.frontend.rules.training.training_rules` holds every rule of `rules.TORCH_RULES`, in that list's order,
     and none of `rules.VLLM_RULES`: a training step's rule set names no op of vLLM's."""
     rules = training_rules(**kw).rules
     assert [r for r in rules if any(r is t for t in TORCH_RULES)] == list(TORCH_RULES)

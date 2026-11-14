@@ -40,7 +40,7 @@ from verity.circuits.refs import array_of
 from verity.circuits.types import Array, Value
 from verity.circuits import requirement as R
 from verity.circuits.ops import fp32
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 LEAN = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

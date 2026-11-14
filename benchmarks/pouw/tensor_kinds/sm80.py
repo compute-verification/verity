@@ -6,7 +6,7 @@
                                                                  # census.csv (machine_model/data/devices/sm_80)
 
 Every case of sm80.cu prints its kernel's template (`kern`, `struct`, `targs`), so its mangled name, and so its SASS
-loops, follow from the line. `gate` runs gpu_kit's timing gate (`../gpu_kit/sass_gate.py`: clock reads, the timed
+loops, follow from the line. `gate` runs gpu_kit's timing gate (`../../../verity/protocols/accounting/pouw/prover/kernels/gpu_kit/sass_gate.py`: clock reads, the timed
 loops' exact opcode counts, no LDL/STL, a live sink) on each kernel with the counts its template implies, before the
 lease, and records each timed loop's opcode counts. `analyze` reports no number for a kernel the gate refused or whose
 0xA5 sink gate failed (`sink_gate` in its line), and names it.
@@ -165,7 +165,7 @@ def expect(kern: str, struct: str, targs: list[int]) -> list[dict[str, int]]:
 
 
 def gate(out: Path, bins: list[Path]) -> int:
-    G = _load("gpu_kit_sass_gate", HERE.parent / "gpu_kit" / "sass_gate.py")
+    G = _load("gpu_kit_sass_gate", HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "gpu_kit" / "sass_gate.py")
     verdicts, loops_rec, refused = {}, {}, 0
     for b in bins:
         g = re.search(r"_g(\d+)$", b.name).group(1)

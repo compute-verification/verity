@@ -1,4 +1,4 @@
-# PoUB's verifier on its auditor host: `host.py`, the gate every key of the host's research is
+# PoUB's verifier on its auditor device: `host.py`, the gate every key of the host's research is
 # forced to, and the run, replay and store put its units run as `auditor` (pods/nebius/verifier/). Not a package: the suite runs the
 # gate in this process with its root steps (chown, systemctl) injected, holds its whitelist to verifier.py's own parser, and runs a
 # run through `tests/stub_verifier.py` (a real session over PoUB's in-process harness, `test_session.run`, at the
@@ -23,7 +23,8 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           # challengers.py's gate client, which verifier.py builds for --challenger gate
           "verity/claims/__init__.py", "verity/protocols/proofs/spot",
           # verifier.py and its in-process harness, which the stub verifier runs
-          "benchmarks/remote_session", "verity/protocols/accounting/poub/prover/remote_session/prover.py", "verity/protocols/accounting/poub/prover/remote_session/device.py",
+          "benchmarks/remote_session", "verity/protocols/accounting/poub/prover/remote_session/prover.py", "verity/protocols/accounting/poub/prover/__init__.py",
+          "verity/protocols/accounting/poub/prover/audit_prover.py", "verity/protocols/accounting/poub/prover/remote_session/device.py",
           # the challenger's tunnel client, whose forced pty the challenger's tunnel key allows
           "verity/protocols/compose/device/live_challenger/serve.py",
           # the host's deployed files (the configuration the gate reads, the tunnel's ports), and the store's client its

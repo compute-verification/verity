@@ -118,7 +118,7 @@ from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
 from verity.protocols.accounting.certifier.verifier.id_form import ID_DIGITS, MAX_TOKENS_AT
 from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, WardenParams
 from verity.protocols.accounting.pouw.verifier import core_check as CC
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G, docket as R
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k
 from verity.circuits import boolean as BL, codec, population
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -131,7 +131,7 @@ from verity.commitments.frame_v3 import BitRowLeaf
 from verity.commitments.identity import tagged_sha512
 from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.crypto import lms
-from verity.definitions.registry.sampling import bit_at
+from verity_vllm.definitions.registry.sampling import bit_at
 
 ID = "verity/certifier/v0"
 COMMITMENT_TAG = "verity-network-certifier/period/v0"

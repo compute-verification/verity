@@ -23,7 +23,7 @@ meta import NciCheck.DefinitionDigest
 # The network certifier over a period, a core protocol: `verity/certifier/v0`
 
 The network certifier, one of onsite's subprotocols (`Core.Onsite.components`). A period is one node's link over `m`
-link-windows beside the period's compute audits (sampled proofs' one-stage, one answer per registered window of the
+link-windows beside the period's compute audits (SPOT's one-stage, one answer per registered window of the
 workload). Its link-windows are the rows form's: the network certifier's own run, where it functions as an active warden
 (`warden_serve`): each execution phase's cells committed as rows (`warden_rows`), one registration a direction under one
 fixed schedule, its three records certified, and the scan's one-stage answer for the window (`scan_zk --warden-run`).
@@ -237,7 +237,7 @@ with `b` a scan's bound on incorrect proof blocks at its δ (one-stage's `bound`
 sample leaves possible; `drawn` is the sample's `k`, or its `Σ k` stratified), `jitter` = `⌈log2 Dj^steps⌉`, and `K` the
 sum of the terms. `eps` is the `δ` part of the probability that `K` fails to bound the period's leak; each window's
 knowledge error and collision errors add to it, and the check evaluates neither: their exact sum in lowest terms
-(`Core.Ratio.toString`), as PoUS's and remote bandwidth's publics carry theirs.
+(`Core.Ratio.toString`), as PoUS's and PoUB's publics carry theirs.
 
 A compute audit reads none of the rows, so its own terms are in none (it is an acceptance condition), but the free
 inputs of each audit a scan's `prog` is an output of are in that scan's link-window's term: the egress
@@ -251,6 +251,7 @@ and refuses one there whose `read` is 0, so no `occ` the audit computes drops a 
 at any sample; sampled in part, its at most `b` incorrect proof blocks can set any of its link-window's entries, so that
 link-window's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 1] · E_w`) when `b ≥ 1`, and its δ is in
 `eps`:
+
 
 * `max_tokens_cap`, present when the schedule has a response cap and absent when it has none, is that cap: each
   response the network certifier released in the period has at most its request's `max_tokens` tokens, and every
@@ -295,7 +296,7 @@ no start says (a session that ends early still moves its key's life on by its wh
 next session's start hold no certificate, and no period runs across them); the period's number of a key's first
 listed entry, which is the auditor's pin, the signed message naming the key's life and not the period's numbers; a
 session of the key the list leaves out; and a device state restored from an earlier copy, which rests on the
-network certifier's host (`trusted-host`).
+network certifier's host (`trusted-device`).
 
 The decoders the period's check reads (`exactly`, `keysOf`, `hexAt`, `certificateOf`) are in `NetworkCheck.Clocks`,
 in this namespace.
@@ -1151,6 +1152,7 @@ def answered (what : String) (reg : Json) (a : Core.Answer) : Found (Core.Integr
     | .undecided, _, _ => .error (.undecided, s!"{what}: service: {a.reason.getD ""}")
     | _, _, _ => refuse s!"{what}: service: {a.reason.getD ""}"
 
+
 /-- `warden_rows.domain`'s id: the frame-v3-sha512 domain of execution phase `w`'s rows in direction `d`, in the
 session, under the schedule whose digest is `sd`. -/
 def rowsDomain (s : Schedule) (sd session : ByteArray) (link : String) (d : Direction) (w : Nat) : V ByteArray := do
@@ -1897,6 +1899,7 @@ def protocol : Core.Protocol where
 
 #guard clog2 0 == 0 && clog2 1 == 0 && clog2 2 == 1 && clog2 3 == 2 && clog2 4 == 2 && clog2 5 == 3
 #guard atMost 10 0 == 1 && atMost 10 1 == 11 && atMost 10 2 == 56 && atMost 4 9 == 16 && atMost 0 3 == 1
+
 -- the rows form over 1 link-window: 7 cells on one connection and 2 on another (3 + 2 bits, for the schedules and
 -- again for the fail cells), an audit whose own terms are in none, and one scan of 20 units (T = 10) sampled at
 -- δ = 1/15 with at most 3 wrong, 1,120 free inputs, ingress and egress instances committing 300 and 512 bits, and

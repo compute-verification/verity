@@ -87,7 +87,7 @@ CLEAR = {
           "salt, sibling or the certifier's salt (n2_zk's RECEIVED, scanned for every piece)",
     "scan": "at the verifier: each unit's o0 output opened from the salts the prover sends; the I/O tie "
             "(IoTieRequest) stays in the clear, outside the proofs",
-    "lean": "nothing: each proof is decided by the verifier's own Lean `flock-verify verify --zk` run",
+    "lean": "nothing: each proof is decided by the verifier's own Lean `verity-verify-proof verify --zk` run",
     "warden_certificates": "at the auditor, on the warden's witness: the warden's own offline check "
                            "(warden_serve.check: each record's certificate and its rows' registration under the "
                            "warden's key and session, the audit and the client's view), and the public "
@@ -490,7 +490,7 @@ def input_terms(circuit: dict, pins: dict | None = None, roots: dict | None = No
 
     Refused (ValueError): a record that lists its members, a statement row of no one port, a wire or declaration outside
     its port's units or rows, two filling one row (Lean's ``apart``), and a pin of `SCAN_STATE`."""
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
 
     if "members" in circuit or "wires" not in circuit:
         raise ValueError("a window circuit is counted from its stated record (its templates, statements and wires), as "
@@ -569,7 +569,7 @@ def audit_of(d: Path, pins: dict | None = None) -> dict:
     its ``registered_roots``). Its jitter term is the link's steps over the period, which `d1_terms` charges. A window
     holding a pin must bind ``circuit.json`` by its SHA-512 (``window.circuit``), as `NetworkCheck.Period.auditCheck`
     refuses a count on a circuit its registration doesn't bind."""
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
     reg = json.loads((d / "registration.json").read_text())
     body = (d / "circuit.json").read_bytes()
     window = reg.get("window") if isinstance(reg.get("window"), dict) else {}

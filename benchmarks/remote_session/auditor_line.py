@@ -44,6 +44,13 @@ for a host run. `--peer` overrides it, and a gate run whose record names none is
 (the verifier's machine) has no ledger: its log is read under the key its run wrote (`session_of`) and its line is not
 the auditor's.
 
+The ledger's head, a gate session's read of the ledger and the *credited* and *pinned* checks below are the Lean
+verifier's answers (`sampled-proofs-verifier`'s `challenger_head`, `challenger_ledger`, `challenger_credited` and
+`challenger_pinned`, through `coins.lean_answer`), each held to the Python's, which may only refuse; `verify_ledger`,
+`verify_periods`, the commit on main, *complete* and the store's binding are still the Python's alone. A served
+session's `session_of` has no Lean yet. The Lean's answers for those but the binding have their interfaces, not yet
+written (`periods_answer`, `on_main_answer`, `complete_answer`, `served_session_answer`).
+
 **Credit.** The line of record (`line`) counts a session only when all four hold, each reported per session
 (`credit`), and its store's binding isn't refused, and gives any other session zero credit with the reasons:
 
@@ -110,7 +117,7 @@ binding-split`, then `, DeveloperStore` when unbound), and the evidence store's 
 the gate node: the security group's allow list, each interval it was applied, with infra's records, and whether the
 node mounts a shared filesystem (null while infra's answer is pending). A gate session whose span as the challenger
 signed it on the ledger (its open's `started_utc` to its end's `ended_utc`) lies strictly inside one applied interval
-is grounded by it (`no_relay`): its `NoOutsideCompute` rests on `ProviderLockdown`, under `trusted-host`,
+is grounded by it (`no_relay`): its `NoOutsideCompute` rests on `ProviderLockdown`, under `trusted-device`,
 which names what the lockdown doesn't close. A line whose credited sessions are all grounded (every gate session's,
 with none credited) is conditional on `ProviderLockdown` in its place; any other is conditional on
 `NoOutsideCompute`, as without the file. It changes no credit.
@@ -151,10 +158,15 @@ from verity.protocols.accounting.poub.verifier import store as rstore  # noqa: E
 from verity.protocols.proofs.spot.device import challenger as Ch  # noqa: E402
 from verity.protocols.proofs.spot.device import remote  # noqa: E402
 
-RATES = {"disk_bytes_per_s": 4.4e9, "link_bytes_per_s": 5e10}
-"""The node's ceilings a gate run's line is read at, bytes a second (`line.Rates`): the node's NICs into its memory,
-which Identity leaves in, charged in both forms as `ledger.Node`'s disks are, and its boundary links beyond them,
-link-charged (54.4e9 in all)."""
+import sheets  # noqa: E402
+
+FIGURES = sheets.figures()
+"""The node's figures, from its data sheets (`sheets.figures`)."""
+
+RATES = {"disk_bytes_per_s": FIGURES.disk_bytes_per_s, "link_bytes_per_s": 5e10}
+"""The node's rates a gate run's line is read at, bytes a second (`line.Rates`): its disks' measured read
+(the host card's `disk.read`, `Disks`' β), which Identity leaves in, charged in both forms, and its boundary links beyond
+them, link-charged (54.311e9 in all)."""
 BURSTS = ("stated", "none")
 """What the line charges beyond the rates (`rates_at`): `ledger.Node.stated`'s bursts, the line of record's
 (`verifier.ingress_bursts`), or none, the reading of gate runs up to 7, whose recorded lines it reproduces at the S_chip
@@ -185,7 +197,7 @@ prices and the line doesn't assume (the ledger's). Every error records it by nam
 CONDITIONAL_ON = {"NoOutsideCompute": (
     "statement C in full: no device outside the node computes for it during the session. LineHeld reads it from the "
     "network certifiers' record (no counted ingress over the credited passes, Accounting.Remote.Held.Assumptions."
-    "Covered under certifier-coverage and IngressCounted at δ_net under trusted-host), which this line didn't check; "
+    "Covered under certifier-coverage and IngressCounted at δ_net under trusted-device), which this line didn't check; "
     "assumed until certifiers cover the gate node's boundary and certify that nothing but the verifier's messages "
     "entered it over the credited span"),
     "binding-split": (
@@ -202,7 +214,7 @@ GAPS = ("binding-split",)
 """The gaps in the line's charge (`CONDITIONAL_ON`'s), which every line is conditional on, grounded or not."""
 LOCKDOWN = "ProviderLockdown"
 GROUNDED = {LOCKDOWN: (
-    "the provider's lockdown of the gate node, under trusted-host: while infra's records show it applied, no device "
+    "the provider's lockdown of the gate node, under trusted-device: while infra's records show it applied, no device "
     "outside the node computes for it, which gives statement C for a session whose signed span lies inside an applied "
     "interval; it assumes what the security group doesn't close: the provider's resolver, flows opened before it was "
     "applied, and the provider's own paths (metadata, management plane, a cluster's fabric, a shared filesystem). "
@@ -336,7 +348,8 @@ def rates_at(disk_bytes_per_s: float = RATES["disk_bytes_per_s"],
         raise ValueError(f"bursts are one of {', '.join(BURSTS)}, not {bursts}")
     out = {"disk_bytes_per_s": disk_bytes_per_s, "link_bytes_per_s": link_bytes_per_s}
     if bursts == "stated":
-        node = ledger.Node.stated(disk_bytes_per_s=disk_bytes_per_s, link_bytes_per_s=link_bytes_per_s)
+        node = ledger.Node.stated(FIGURES, disk_bytes_per_s=disk_bytes_per_s,
+                                  link_bytes_per_s=link_bytes_per_s)
         out |= {"rebuild_burst_bytes": node.rebuild_burst_bytes, "disk_burst_bytes": node.disk_burst_bytes,
                 "link_burst_bytes": node.link_burst_bytes}
     return out
@@ -405,7 +418,8 @@ def shares(session: dict, registration: dict, host_bytes: int, rates: dict, lean
     """A session's shares of the node in each form at `rates` (`rates_at`), on the clock its `windows_seen` read
     (`clock`: the record's, which holds its times, or another, `line.CLOCKS`), from its line (`line_of_record`, the
     Lean's with `lean`, off the record `Session.run` makes of `transcript` where given; `shares_of`)."""
-    return shares_of(line_of_record(V.recorded_inputs(session, registration, host_bytes=host_bytes,
+    return shares_of(line_of_record(V.recorded_inputs(session, registration, figures=FIGURES,
+                                                      host_bytes=host_bytes,
                                                       rates=V.recorded_rates(session, registration, **rates),
                                                       clock=clock, transcript=transcript), lean))
 
@@ -713,8 +727,9 @@ def log_checks(lines: list[str], window_root: str) -> dict:
 
 def ledger_check(heads: list[Path], key: Ch.ChallengerKey, period: str, lane: str
                  ) -> tuple[list[str], dict, dict, dict]:
-    """The auditor's ledger: its longest head under `key`, verified, with its windows by root and its periods."""
-    lines = Ch.ledger_head([remote.ledger_lines(p) for p in heads], key, VP.lms_verify)
+    """The auditor's ledger: its longest head under `key` (the Lean verifier's, `coins.lean_answer`), verified, with its
+    windows by root and its periods."""
+    lines = head_lines(heads, key)
     raw = [line.encode() for line in lines]
     verify = lambda m, sig: VP.lms_verify(key, m, sig)  # noqa: E731
     windows = Ch.verify_ledger(raw, key.public[:16], verify)
@@ -733,6 +748,42 @@ def ledger_check(heads: list[Path], key: Ch.ChallengerKey, period: str, lane: st
     return lines, windows, periods, doc
 
 
+def head_lines(heads: list[Path], key: Ch.ChallengerKey) -> list[str]:
+    """The auditor's ledger's longest head under `key`: the Lean verifier's `challenger_head`, held to
+    `challenger.ledger_head`'s."""
+    hl = [remote.ledger_lines(p) for p in heads]
+    return coins.lean_answer("challenger_head", {"heads": hl, "key": key.to_json()},
+                             {"ledger": Ch.ledger_head(hl, key, VP.lms_verify)})["ledger"]
+
+
+def periods_answer(lines: list[str], key: Ch.ChallengerKey) -> dict:
+    """The Lean verifier's read of the ledger's windows and periods (`challenger_periods`, on `{"key", "ledger"}`),
+    held to `verify_ledger`'s and `verify_periods`'s as `{"windows", "periods"}`, which `ledger_check` is to act on in
+    place of the Python's."""
+    raise NotImplementedError("memory-accounting/lean-decides-memory-verdicts")
+
+
+def complete_answer(lines: list[str], R: str, period: str, session: str | None, key: Ch.ChallengerKey) -> dict:
+    """The Lean verifier's *complete* (`challenger_complete`, on `{"key", "ledger", "window": {"root": R}, "period",
+    "session"}`): the window's end and the period's close complete, and the close listing the session's window complete,
+    held to `credit_check`'s *complete*, which is to act on it in place of the Python's."""
+    raise NotImplementedError("memory-accounting/lean-decides-memory-verdicts")
+
+
+def on_main_answer(commit: str, main: list[str] | None) -> bool:
+    """The Lean verifier's answer to whether the verifier's `commit` is on the auditor's first-parent list of main
+    (`challenger_on_main`, on `{"commit", "main"}`), held to `credit_check`'s, which is to act on it in place of the
+    Python's."""
+    raise NotImplementedError("memory-accounting/lean-decides-memory-verdicts")
+
+
+def served_session_answer(key: Ch.ChallengerKey, files: dict) -> dict:
+    """The Lean verifier's read of a served session under the key its run wrote (`challenger_served`, on `{"key",
+    "session"}`, `session` being `remote.session_files`'), held to `challenger.session_of`'s, which `signed_lines` is
+    to act on in place of the Python's."""
+    raise NotImplementedError("memory-accounting/lean-decides-memory-verdicts")
+
+
 def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict, *, key: Ch.ChallengerKey,
                  period: str, desc: bytes, commit: str, pins: list[str] | None, main: list[str] | None,
                  bound: dict) -> dict:
@@ -745,10 +796,12 @@ def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict
     only when its binding is refused: an unbound store is a premise of the line (`conditional_on`), not a check."""
     sid = (s.get("challenger") or {}).get("session")
     credited: dict = {"descriptor_sha512": hashlib.sha512(desc).hexdigest()}
+    asked = {"key": key.to_json(), "ledger": lines, "main": main, "pins": pins, "window": {"root": R}}
     try:
-        got = Ch.credited_session(lines, {"root": R}, key, pins, main, desc, VP.lms_verify)
-        credited.update(period=got.period, ok=got.period == period, reason=None if got.period == period else (
-            f"its window counts toward period {got.period}, not the audit's period {period}"))
+        held = coins.lean_answer("challenger_credited", asked | {"descriptor": desc.hex()}, Ch.credited_session(
+            lines, {"root": R}, key, pins, main, desc, VP.lms_verify)._asdict())["period"]
+        credited.update(period=held, ok=held == period, reason=None if held == period else (
+            f"its window counts toward period {held}, not the audit's period {period}"))
         if credited["ok"] and commit not in (main or ()):
             credited.update(ok=False, reason=(
                 f"its verifier ran commit {commit}, which is not on main's first-parent line in the auditor's copy "
@@ -791,7 +844,8 @@ def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict
     opened = (((windows.get(R) or {}).get("open") or {}).get("body")) or {}
     pinned: dict = {"commit": opened.get("pinned"), "seal": opened.get("pins")}
     try:
-        Ch.pinned_session(lines, {"root": R}, key, pins, main, VP.lms_verify)
+        coins.lean_answer("challenger_pinned", asked,
+                          Ch.pinned_session(lines, {"root": R}, key, pins, main, VP.lms_verify)._asdict())
         pinned.update(ok=True, reason=None)
     except Ch.CoinError as e:
         pinned.update(ok=False, reason=str(e))
@@ -833,11 +887,12 @@ def signed_lines(d: Path, kind: str, R: str, heads: list[Path], key: Ch.Challeng
     files = remote.session_files(d)
     if kind == "gate":
         remote.trusted_session(d, heads, {"root": R}, key, VP.lms_verify)
-        got = Ch.audited_session(Ch.ledger_head([remote.ledger_lines(p) for p in heads], key, VP.lms_verify),
-                                 {"root": R}, key, VP.lms_verify)
-        if got.period != period:
-            raise Ch.CoinError(f"the ledger holds the session's window in period {got.period}, not {period}")
-        trust = {"read": "trusted_session", "period": got.period, "cap": got.cap, "circuit": got.circuit}
+        lines = head_lines(heads, key)
+        got = coins.lean_answer("challenger_ledger", {"key": key.to_json(), "ledger": lines, "window": {"root": R}},
+                                Ch.audited_session(lines, {"root": R}, key, VP.lms_verify)._asdict())
+        if got["period"] != period:
+            raise Ch.CoinError(f"the ledger holds the session's window in period {got['period']}, not {period}")
+        trust = {"read": "trusted_session", "period": got["period"], "cap": got["cap"], "circuit": got["circuit"]}
     else:
         key = Ch.ChallengerKey.from_json(json.loads((d / remote.KEY).read_text()))
         Ch.session_of(key, files["record"], files["log"], files["close"], VP.lms_verify)
@@ -1068,7 +1123,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--peer", help="override the gate sessions' challenger peer, which is otherwise the run's record's "
                     "(`peer_of`: verifier.json's, else a host run's request.json beside OUT)")
     ap.add_argument("--disk-bytes-per-s", type=float, default=RATES["disk_bytes_per_s"], metavar="B/S",
-                    help="the ceiling into node memory both forms charge (default: the NICs', `RATES`)")
+                    help="the disks' rate into node memory both forms charge (default: their measured read, `RATES`)")
     ap.add_argument("--link-bytes-per-s", type=float, default=RATES["link_bytes_per_s"], metavar="B/S",
                     help="the boundary links' ceiling the link-charged form adds (default: 400 Gb/s, `RATES`)")
     ap.add_argument("--bursts", choices=BURSTS, default="stated",

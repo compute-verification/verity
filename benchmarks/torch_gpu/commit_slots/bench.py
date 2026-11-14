@@ -16,18 +16,16 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+import torch_plan as P
 
-import slots as S  # noqa: E402
-import slots_gpu as G  # noqa: E402
-from verity.commitments.identity import identity_digest_sha512  # noqa: E402
+from verity.commitments.cuda.commit_slots import slots as S
+from verity.commitments.cuda.commit_slots import slots_gpu as G
+from verity.commitments.identity import identity_digest_sha512
 
 CTX = identity_digest_sha512("verity/commit-slots/bench/context/v1", {"bench": 1})
 KEY = bytes(range(64, 96))
@@ -64,7 +62,7 @@ def step(plan: G.Plan, bufs: list[torch.Tensor], slots: int, layers: int) -> dic
 def alone(layout: S.CommitShape, slots: int, reps: int, rest_s: list[float], step_slots: int, per_group: int = 1) -> dict[str, Any]:
     layers = len(layout.groups)
     layout = G.regroup(layout, per_group)
-    plan = G.Plan(CTX, layout)
+    plan = P.Plan(CTX, layout, "cuda")
     bufs = data(layout, slots)
     step(plan, bufs, slots, len(layout.groups))
     runs = [step(plan, bufs, slots, len(layout.groups)) for _ in range(reps)]
@@ -82,7 +80,7 @@ def alone(layout: S.CommitShape, slots: int, reps: int, rest_s: list[float], ste
 
 def beside(layout: S.CommitShape, slots: int, reps: int) -> dict[str, Any]:
     """A layer's GEMMs alone, its commit alone, and both at once (GEMMs on the current stream, the commit on the side)."""
-    plan = G.Plan(CTX, layout)
+    plan = P.Plan(CTX, layout, "cuda")
     bufs = data(layout, slots)
     x = torch.randint(-128, 128, (slots, D), dtype=torch.int8, device="cuda")
     h = torch.randint(-128, 128, (slots, F), dtype=torch.int8, device="cuda")

@@ -1128,7 +1128,7 @@ def _stream_forced() -> bool:
 #: the programs of a shipped tree that refuse a tree without .git (suites are keyed from git's view of the tree, check runs them,
 #: lean_changed.py reads its commits): a command naming one is refused at launch from a tree git can't reach (`needs_git`), not
 #: after it has waited for a slot.  A list of the known ones, not a test of what a command does
-NEEDS_GIT = ("tools/verity/check/suites.py", "tools/verity/check/check.py", "tools/verity/lean/lean_changed.py", "verity check")
+NEEDS_GIT = ("tools/check/suites.py", "tools/check/check.py", "tools/verity/lean/lean_changed.py", "verity check")
 
 
 def needs_git(command: list[str]) -> str | None:
@@ -2175,8 +2175,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
            mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None,
            preflight_tool: str | None = None, queue: dict[str, Any] | None = None, job_user: str | None = None,
            gpus: int | None = None, store_read: bool = False, job_namespaces: tuple[str, ...] = (),
-           auto: dict[str, Any] | None = None, mem_limit: dict[str, Any] | None = None) -> dict[str, Any]:
-    """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody).
+           auto: dict[str, Any] | None = None, mem_limit: dict[str, Any] | None = None, taken: bool = False) -> dict[str, Any]:
+    """`taken`: `local_dir` is this run's, made empty for it (runs.take_run_dir); otherwise it must not exist yet.
+    `custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody).
     `mem_limit` (--mem-limit-gb): the memory limit the launch states, `{"gb", "by"}`, which the runner's memory mark is made
     against (research.memmark); it limits nothing.
     `gpus` (--gpus without --queue): the machine runs the workload under `gpu-lease N --wait` (module doc, GPUs).
@@ -2187,7 +2188,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
     may make.  `auto` (--on auto): where the launcher's placement sent the run and why, in the words it printed (the
     machine, the pool or none for the queue, and `said`); kept in the launch record here and in the machine's request.json,
     so the reason outlasts the launcher's terminal, and read by nothing that runs the job."""
-    local_dir.mkdir(parents=True, exist_ok=False)
+    local_dir.mkdir(parents=True, exist_ok=taken)
     rec: dict[str, Any] = {"schema": "research/remote/v0.1", "run_id": run_id, "machine": machine_name, "project": project, "phase": "resolving",
                            "created_utc": utc_now_ms(), "observed_utc": None, "last_observed": None, "command": command, "launch_args": harness_args,
                            **({"queue": queue} if queue else {}), **({"auto": auto} if auto else {})}
@@ -2195,7 +2196,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
     try:
         m = resolve_machine(machine_name, project)
         if m.get("auditor"):
-            raise Refused(f"machine {machine_name!r} is an auditor host: it takes no research run, from anyone. Its service is "
+            raise Refused(f"machine {machine_name!r} is an auditor device: it takes no research run, from anyone. Its service is "
                           f"reached only through its gate: {m['auditor']}")
         guard_min = guard_idle_min(m)
         custody_pub: dict[str, Any] | None = None
@@ -2413,7 +2414,7 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
     ssh = {n: m for n, m in ms.items() if isinstance(m, dict) and m.get("provider") == "ssh"}
     skipped = [] if on else sorted(restricted(ssh))
     names = [on] if on else sorted(n for n in ssh if n not in skipped)
-    not_asked = (f"; not asked: the auditor hosts {', '.join(skipped)}, which refuse lanes' keys (--on NAME asks one)"
+    not_asked = (f"; not asked: the auditor devices {', '.join(skipped)}, which refuse lanes' keys (--on NAME asks one)"
                  if skipped else "")
     answers: dict[str, str] = {}
     targets = []
@@ -2587,7 +2588,7 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
 
 #: slot.py and lean_slot.py, beside this package in the caller's checkout, which NODE_PROGRAM loads on the machine (as `check.py
 #: --slots` does) for the check and Lean slots a run holds or waits on; without them the reading has no slots
-CHECK_DIR = Path(__file__).resolve().parents[3] / "verity" / "check"
+CHECK_DIR = Path(__file__).resolve().parents[3] / "check"
 #: what `node_readings` runs on a machine as `python3 - RUN_DIR...`, after `SRC = {...}`: research.scopemem's `node`
 NODE_PROGRAM = '''
 import json, sys, types
@@ -2602,8 +2603,8 @@ def load(name, src, file):
 
 
 mem = load("research_scopemem", SRC["scopemem"], "research/scopemem.py")
-mods = (load("check_slot_for_lean_slot", SRC["slot"], "tools/verity/check/slot.py"),
-        load("check_lean_slot", SRC["lean"], "tools/verity/check/lean_slot.py")) if SRC.get("slot") and SRC.get("lean") else None
+mods = (load("check_slot_for_lean_slot", SRC["slot"], "tools/check/slot.py"),
+        load("check_lean_slot", SRC["lean"], "tools/check/lean_slot.py")) if SRC.get("slot") and SRC.get("lean") else None
 print(json.dumps(mem.node(sys.argv[1:], slot_mods=mods)))
 '''
 

@@ -22,8 +22,9 @@ branch across it):
 3. in a `lean-audit.json`, renames module names and prose but not the records the Lean check's `--update` writes (`guarantees`,
    `reads`, `dependencies`), so that `--update --moved` compares the build with them under their old names;
 4. rewrites a `TRUSTED.sha256` line whose file the move changed, when it held that file's digest before, and likewise a
-   Lake manifest's digest in a JSON pin of `tools/verity/check/pins.py`: a move changes a manifest only in where its path
-   packages sit, which no pinned output reads (a pin of any other file the move changes is left for its command);
+   Lake manifest's digest in a JSON pin of the check's `pins.py`: a move changes a manifest only in where its path
+   packages sit, which no pinned output reads (`layout.repin_manifests`, as `layout.py` repins one; a pin of any other
+   file the move changes is left for its command);
 5. appends its renamed paths to research's `moves.json` once, as `layout.py` does, each moved path up to the end of each
    run of renamed parts (`.../warden/`, not each file under it, and `.../warden/tests/test_warden.py` besides; a directory
    only when it moves whole, else the file), so that a branch carried across the move appends the same entry unless it
@@ -32,7 +33,7 @@ It refuses a dirty worktree, and a second run changes nothing. The first step ru
 default the cores it may use, at most 32), since `restack.py` runs it once for each branch it carries; a file's new text
 reads only that file and the map, so the result is one process's.
 
-A map with `scope = "prose"` renames only prose, the part of a move `tools/verity/check/move_check.py` certifies without a
+A map with `scope = "prose"` renames only prose, the part of a move the check's `move_check.py` certifies without a
 build: a word that stands as a word in a comment, a docstring or Markdown's text (`regions`, `prose_word`), never one in
 code, a string literal, a data file, backticks, a name, a path or a constant's name, nor in a file a JSON pin records (its
 command regenerates the pin). Such a move moves no path, renames no declaration (`--moves` prints `{}`) and leaves every
@@ -48,7 +49,6 @@ import bisect
 import concurrent.futures
 import fnmatch
 import hashlib
-import importlib.util
 import json
 import multiprocessing
 import os
@@ -68,8 +68,7 @@ POLICY = "lean-audit.json"
 RECORDS = ("guarantees", "reads", "dependencies")   # what the Lean check's `--update` writes from the build
 PINS = "TRUSTED.sha256"
 PIN = re.compile(r"^([0-9a-f]{64})  (.+)$", re.M)
-PINS_PY = "tools/verity/check/pins.py"              # the pins of Lean sources, some of them JSON (`json_pins`)
-MANIFEST = "lake-manifest.json"
+MANIFEST = L.MANIFEST
 MOVES = L.MOVES                                     # research's record of each move's renamed paths
 JOBS, CHUNK = 32, 8                                 # at most this many processes rewrite files, this many files a task
 EXPORTS = re.compile(r"^__all__\s*\+?=\s*[\[(][^\])]*[\])]", re.M)   # a Python module's `__all__`: names, never data
@@ -737,14 +736,9 @@ def repin(root: Path, words: Words, pins: str, texts: dict[str, str], dest: dict
 
 
 def json_pins(root: Path) -> list[tuple[str, str, str]]:
-    """The pins `tools/verity/check/pins.py` lists that record {path: digest} under a JSON key, as (pin, key, the directory
+    """The pins the check's `pins.py` lists that record {path: digest} under a JSON key, as (pin, key, the directory
     its paths are below); none in a tree without it."""
-    if not (root / PINS_PY).is_file():
-        return []
-    spec = importlib.util.spec_from_file_location("rename_move_pins", root / PINS_PY)
-    mod = sys.modules[spec.name] = importlib.util.module_from_spec(spec)       # its dataclass looks its module up
-    spec.loader.exec_module(mod)
-    return [(p.path, p.key, p.under) for p in mod.PINS if p.key is not None]
+    return [(p, key, under) for p, key, under in L.pins(root / L.pins_py(lambda p: (root / p).is_file())) if key is not None]
 
 
 def pinned(root: Path) -> set[str]:
@@ -757,21 +751,21 @@ def pinned(root: Path) -> set[str]:
     return out
 
 
-def repin_manifests(root: Path, words: Words, pin: str, key: str, under: str, texts: dict[str, str]) -> str | None:
-    """The JSON pin at `pin` after the move: each Lake manifest it records under `key` whose digest it held, and which the
-    move changes, gets the manifest's new digest. None when no digest changes."""
-    before = (root / pin).read_text()
-    text = new = texts.get(pin, before)
-    for rel, digest in json.loads(before).get(key, {}).items():
-        target = posixpath.normpath(posixpath.join(under, rel))
-        if posixpath.basename(target) != MANIFEST or target not in texts:
+def repin_json_pins(root: Path, words: Words, texts: dict[str, str], tracked: set[str]) -> dict[str, str]:
+    """Each JSON pin the move changes a Lake manifest's digest in (`layout.repin_manifests`), as it will be written, the
+    manifest's path as the words rename it unless the map excludes the pin."""
+    changed = {t: ((root / t).read_bytes(), texts[t]) for t in texts if posixpath.basename(t) == MANIFEST}
+    out = {}
+    for pin, key, under in json_pins(root):
+        if pin not in tracked:
             continue
-        if hashlib.sha256((root / target).read_bytes()).hexdigest() != digest:
-            continue
-        written = rel if words.excluded(pin) else words.sub(rel, pin)
-        after = hashlib.sha256(texts[target].encode()).hexdigest()
-        new = re.sub(rf'("{re.escape(written)}"\s*:\s*"){digest}"', lambda m, h=after: f'{m[1]}{h}"', new)
-    return None if new == text else new
+        before = (root / pin).read_text()
+        text = texts.get(pin, before)
+        new = L.repin_manifests(before, text, key, under, changed,
+                                lambda rel, pin=pin: rel if words.excluded(pin) else words.sub(rel, pin))
+        if new != text:
+            out[pin] = new
+    return out
 
 
 def renamed_paths(moves: list[tuple[str, str]], present: list[str] = ()) -> dict[str, str]:
@@ -904,9 +898,7 @@ def main(argv: list[str] | None = None) -> int:
     L.refuse_unread({p: os.path.getsize(root / p) for p in todo if L.oversize(root / p)})
     texts, counts, kept = rewrite(root, words, run, todo, a.jobs)
     pins = {p: t for p in present if posixpath.basename(p) == PINS and (t := repin(root, words, p, texts, dest)) is not None}
-    tracked = set(present)
-    pins |= {p: t for p, key, under in json_pins(root)
-             if p in tracked and (t := repin_manifests(root, words, p, key, under, texts)) is not None}
+    pins |= repin_json_pins(root, words, texts, set(present))
     recorded = {MOVES: t} if (t := record(root, moves, present)) is not None else {}
 
     print(f"rename move at {L.git(root, 'rev-parse', 'HEAD').strip()}{' (dry run)' if a.dry_run else ''}")
