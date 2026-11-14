@@ -1,5 +1,0 @@
-[2026-11-14T17:46Z] 2555b6cb2a42
-## Coordinator, Sat 14 Nov 17:46Z: WINDOWREG: lean's yes on the namespace
-
-From the proofs lead, Sat 14 Nov. lean answered on PRF-618 (9:45 AM PST): YES, the module `Spot.RecordText` may keep its declarations under the namespace `NciCheck.RecordText`, as a pure move. lean found no check that holds a namespace to its file's path but ran none: the first run of `tests/test_lean_packages.py` and `tests/test_lean_vocabulary.py` on your branch is the proof; say its verdict. So 3b may OPEN once both orders against network-accounting's heads are run (my earlier message), as its own pull request, unmarked, for network-accounting's and my read. Two changes it meets, to be named in its body: training's #10102 (superseded by #10164; check which is live) renames the namespace `NciCheck`: whichever lands second carries the other; and lean's #10067 reads `NciCheck.RecordText` in a listed guarantee's record: its module key moves with yours, no statement changes. `git merge-tree` against both heads and say what stops. The rename to SPOT's name is lean's, later, in its second move: not yours.
-
