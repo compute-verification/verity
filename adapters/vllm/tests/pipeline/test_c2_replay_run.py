@@ -1,6 +1,7 @@
 """`c2_replay.run`, the replay and linkage of one instrumented run, on a stubbed evaluation: what it records when the replay
-cannot run, when this host cannot hold it and when an earlier pair's record is reused, and what `free_programs` and `record`
-put on the run's row, with the lines each logs.  CPU only; the replay itself is `tests/check/test_sampled_replay.py`."""
+cannot run, when this host cannot hold it and when an earlier pair's record is reused (and the seed in the cache's key), and
+what `free_programs` and `record` put on the run's row, with the lines each logs; and the live weights' reader and check.  CPU
+only; the replay itself is `tests/check/test_sampled_replay.py`."""
 from __future__ import annotations
 
 import json
@@ -15,6 +16,7 @@ import pytest
 
 import verity_vllm.pipeline.c2_replay as C2
 from verity_vllm.check.replay.driver import PoolDoesNotFit
+from verity_vllm.commit import challenge as CH
 
 SAMPLED_REPLAY, BOUNDARY_LINKAGE = "verity-sweep/sampled-replay/v1", "verity-sweep/boundary-linkage/v1"
 CACHED: dict[str, Any] = {"replay_cache": True, "replay_seed": 7, "replay_per_stratum": 1, "replay_max": 0, "replay_k": None}
@@ -164,6 +166,63 @@ def test_a_replay_with_no_result_is_not_kept_for_reuse(tmp_path: Path, monkeypat
     C2.run(sources(tmp_path, 0, **CACHED), cache)
     C2.run(sources(tmp_path, 1, **CACHED), cache)
     assert pairs == [0, 1] and cache == {}
+
+
+def test_with_no_replay_seed_the_key_takes_the_challenge_s_seed_else_the_run_root_s(tmp_path: Path) -> None:
+    """The seed in the cache's key is the one the replay samples with: a challenge's, bound to the run root, else the root's own."""
+    root = bytes(range(64))
+
+    def seed(**args: Any) -> int:
+        s = sources(tmp_path, **CACHED | {"replay_seed": None} | args)
+        s.rc.run_root = root
+        key = C2.cache_key(s)
+        assert key is not None
+        return int(json.loads(key)["seed"])
+
+    assert seed() == 0x0001020304050607, "the run root's first 8 bytes, big-endian"
+    assert seed(replay_challenge="a") == CH.challenge_seed("a", root) != seed(replay_challenge="b")
+    assert seed(replay_challenge="a") != seed() and seed(replay_seed=7, replay_challenge="a") == 7
+
+
+class Committer:
+    """The committer whose weights `live_weights_check` re-registers: a registration replaces its ``weights``."""
+
+    def __init__(self, weights: Record | None) -> None:
+        self.weights = weights
+
+    def registers(self, root: str) -> Callable[[], Record]:
+        def register() -> Record:
+            self.weights = {"root": root}
+            return {"root": root, "tensors": 2, "wall_s": 0.5, "hash": "sha512"}
+        return register
+
+
+@pytest.mark.parametrize("registration, saved, live, equal, ref, why", [
+    ({"root": "ab"}, None, "ab", True, "ab", None),
+    ({"root": "ab"}, None, "cd", False, "ab", "root differs"),
+    (None, {"root": "ab"}, "ab", True, "ab", None),
+    (None, {"root": "ab"}, "cd", False, "ab", "root differs"),
+    ({}, {"root": "ab"}, "ab", None, None, "no committed weights root on the run"),
+    (None, None, "ab", None, None, "no committed weights root on the run"),
+])
+def test_the_live_weights_are_equal_only_to_the_root_the_run_committed(
+        registration: Record | None, saved: Record | None, live: str, equal: bool | None, ref: str | None, why: str | None) -> None:
+    """The root of record is the run's registration's when it has one, else the committer's weights from before the check; a
+    registration that holds no root names none.  The committer keeps the weights it had."""
+    com = Committer(saved)
+    got = C2.live_weights_check(com.registers(live), com, SimpleNamespace(weight_registration=registration))
+    assert got == {"equal": equal, "committed_root": ref, "replay_root": live, "tensors": 2, "wall_s": 0.5, "hash": "sha512",
+                   "method": "live parameters re-registered at replay (register_weights) == the run's committed weights root",
+                   "why": why}
+    assert com.weights == (saved if saved is not None else {"root": live})
+
+
+def test_a_registration_that_raises_leaves_the_weights_unverified_and_says_why() -> None:
+    def register() -> Record:
+        raise RuntimeError("x" * 300)
+
+    got = C2.live_weights_check(register, Committer(None), SimpleNamespace(weight_registration={"root": "ab"}))
+    assert got == {"equal": None, "note": ("by reference, unverified at replay: RuntimeError('" + "x" * 300)[:200]}
 
 
 @pytest.mark.parametrize("entries, live", [(["pouw:ncp-v2"], "pouw:ncp-v2"), (["pous:any", "pouw:ncp-v2-shift24"], "pouw:ncp-v2-shift24"),
