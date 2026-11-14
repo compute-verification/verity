@@ -52,11 +52,15 @@ from typing import Callable
 from zoneinfo import ZoneInfo
 
 try:
+    from research import metrics
     from research.pods.nebius import settings
-except ModuleNotFoundError:     # run by path with a bare python3.12 (cloud_watch.toml's instances_command): this file's own tree
+except ImportError:     # run by path with a bare python3.12 (cloud_watch.toml's instances_command), or beside an older `research`
+    # that lacks one of them: this file's own tree, with none of the other tree's modules kept
+    for name in [n for n in sys.modules if n == "research" or n.startswith("research.")]:
+        del sys.modules[name]
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+    from research import metrics
     from research.pods.nebius import settings
-from research import metrics
 
 HERE = Path(__file__).resolve().parent
 FLEET_DIR = Path(os.environ.get("FLEET_DIR", str(Path.home() / ".research" / "fleet")))

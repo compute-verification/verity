@@ -412,3 +412,16 @@ def test_fleet_runs_by_path_with_no_research_importable(tmp_path):
     env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
     p = subprocess.run([sys.executable, "-S", str(Path(F.__file__)), "--help"], capture_output=True, text=True, env=env, cwd=tmp_path)
     assert p.returncode == 0 and "instances" in p.stdout, p.stderr[-500:]
+
+
+def test_fleet_runs_by_path_beside_an_older_research_that_has_no_metrics(tmp_path):
+    """A host whose site-packages holds an older `research`, with `settings` but no `metrics`: fleet.py run by path imports
+    every `research` module from its own tree, none from the older one."""
+    old = tmp_path / "site"
+    (old / "research" / "pods" / "nebius").mkdir(parents=True)
+    for d in ("research", "research/pods", "research/pods/nebius"):
+        (old / d / "__init__.py").write_text("")
+    (old / "research" / "pods" / "nebius" / "settings.py").write_text("OLDER = True\n")
+    env = {**{k: v for k, v in os.environ.items() if k != "PYTHONPATH"}, "PYTHONPATH": str(old)}
+    p = subprocess.run([sys.executable, "-S", str(Path(F.__file__)), "--help"], capture_output=True, text=True, env=env, cwd=tmp_path)
+    assert p.returncode == 0 and "instances" in p.stdout, p.stderr[-500:]
