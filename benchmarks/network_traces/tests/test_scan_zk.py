@@ -326,8 +326,9 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
               late: tuple[int, ...] = ()) -> Path:
     """The synthetic run's records over ``windows`` execution phases (the setup's by default) published as
     warden_serve's `Publisher` publishes a served run's (each record and its certificate, the wire's rows' registration
-    and salts), under a network certifier key of its own, beside its `deployment.json`; the connections of ``late``
-    failed late (a void run, their reasons in ``fails.records``)."""
+    and salts), under a network certifier key of its own, beside its `deployment.json`, which carries the session's
+    start at base 0 of that key's life; the connections of ``late`` failed late (a void run, their reasons in
+    ``fails.records``)."""
     windows = windows or setup.windows
     reqs = [sz._request(setup, i, p) for i, p in enumerate(setup.prompts)]
     served = sz.traffic.serve(setup.params, reqs, setup.arrivals, [1 << 20] * len(reqs), setup.responses, windows,
@@ -335,13 +336,16 @@ def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int
     out.mkdir(parents=True)
     signer = sz.LmsSigner.create(sz.lms.keygen(sz.lms.Params(64, 1, 6), hashlib.sha512(seed).digest()),
                                  out.parent / f"{out.name}-signer.json")
-    pub = WS.Publisher(out, sz.Issuer(signer, sz.SESSION), setup.params)
+    issuer = sz.Issuer(signer, sz.SESSION)
+    start = WS.start_json(WS.certify_start(issuer, 0, setup.params))  # signed before any record, as the publisher's
+    pub = WS.Publisher(out, issuer, setup.params)
     for w in range(windows):
         for rec, grid in ((served.ingress[w], setup.params.grid), (served.egress[w], setup.params.grid),
                           (served.failed[w], setup.params.fails_grid)):
             pub.keep(rec, grid)
     dep = WS.deployment_record(setup.params, signer.public_key(), sz.SESSION, origin_unix=0.0, windows=windows,
-                               listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=0.025, run_id=bytes(32))
+                               listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=0.025, run_id=bytes(32),
+                               start=start)
     (out / "deployment.json").write_text(json.dumps(dep))
     return out
 
@@ -529,8 +533,8 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
 @pytest.mark.slow
 def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans_answer(tmp_path, monkeypatch):
     """`scan_period.rows_case` of one link-window in the rows form's formats (`NetworkCheck.Period`; its Lean checks the
-    case on a node: scan_period.sh): the deployment's key, session and schedule (its integer fields, the id egress
-    form's), the registered Program and its
+    case on a node: scan_period.sh): the deployment's key and session, the one entry listed, from execution phase 0, and
+    its schedule (its integer fields, the id egress form's), the registered Program and its
     descriptor (``joint/program.json``, the generator form, `scan_zk.scan_root`, whose one-stage reads are each unit's
     slot entries) as the scan, the block's audit (its descriptor, free inputs and no steps; its registration, whose
     ``SlotEntry_v1{…}/c<j>/o0`` is lane j's ``scan/prog<j>`` root and domain and whose ``scan/state`` is the scan's, and
@@ -612,7 +616,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     p = case["params"]
     assert sorted(p) == PC.ROWS_PARAMS_KEYS
     schedule = {k: dep["params"][k] for k in sz.W.INTEGER_FIELDS}
-    assert (p["key"], p["session"], p["schedule"], p["link"]) == (dep["key"]["public"], dep["session"], schedule, WS.LINK)
+    assert (p["keys"], p["schedule"], p["link"]) == (
+        [{"key": dep["key"]["public"], "session": dep["session"], "start": 0}], schedule, WS.LINK)
     assert (p["program"], p["windows"], p["first"]) == (reg["program"], 1, 0)
     assert p["audits"] == [{"free": E * sz.IS.entry_bits(cls), "program": encode_program(block), "steps": 0}]
     key = sz.PA.template_id(defs["block"])

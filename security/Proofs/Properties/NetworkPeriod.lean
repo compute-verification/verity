@@ -183,7 +183,7 @@ accepts a rows-form period of one link-window with no audit, whose scan's `prog`
 theorem rowsProgWired_nontrivial : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+    ⟨#[], #[], 0, 1, "", Lms.deployed, #[], "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
   have hw : wired #[] slotSchedule #[] tiedExecutionPhase = true :=
     h p ⟨#[], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedExecutionPhase rfl
   rw [tiedExecutionPhase_unwired] at hw
@@ -203,7 +203,7 @@ lemma at the pin): such a check accepts a rows-form period whose scan's `prog` i
 `SlotEntry_v1` template's entries port, one member a slot, whose body is none of the pinned Definitions'. -/
 theorem rowsProgWired_renamed : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
-  let p : Params := ⟨#[renamedAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "",
+  let p : Params := ⟨#[renamedAudit], #[], 0, 1, "", Lms.deployed, #[], "",
     .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
   have hw : wired #[renamedAudit] slotSchedule #[slotReg] tiedExecutionPhase = true :=
     h p ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedExecutionPhase rfl
@@ -275,7 +275,7 @@ that audit's `SCAN_STATE`, which skips or alters a transition of the scan's. -/
 theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, #[], "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
   have hs : stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateExecutionPhase = true :=
     h p ⟨#[stateReg "t"], #[stateExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
       stateExecutionPhase rfl
@@ -540,7 +540,7 @@ def otherAnswer : Core.Answer :=
 
 /-- The parameters of one compute audit, the slot audit, under `slotSchedule` and a scan of 7 slot entry bits. -/
 def chargedParams : Params :=
-  ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 7⟩, 1⟩
+  ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, #[], "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 7⟩, 1⟩
 
 /-- Its commitment: the slot audit's registration and the link-window whose scan's `prog` is its entries port. -/
 def chargedCommitment : Commitment := ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩
@@ -561,7 +561,7 @@ charge. -/
 theorem rowsTiedCharged_nontrivial : ¬ RowsTiedChargedOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, #[], "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
   obtain ⟨-, h1⟩ := h p ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩ ⟨#[otherAnswer], #[]⟩ _ _ rfl slotSchedule .empty
     ⟨0, 0, 0, 0, 0⟩ rfl
   obtain ⟨x, f, -, -, hf, -⟩ := h1 0 slotReg rfl rowsProgWired_honest.2

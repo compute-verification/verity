@@ -5,9 +5,10 @@ and its Lean.
     python benchmarks/network_traces/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
         [--v3c PERIOD_JSON] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
-* **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
-  and one schedule, its integer fields and its response cap when it has one: the period check reads the id egress
-  form, and a run in another is refused),
+* **The case** (`rows_case`) of execution phase W: the parameters the warden run's ``deployment.json`` (its key and its
+  session, the one entry the parameters list, its stretch starting at execution phase 0, so the period's numbers are the
+  run's own, and one schedule, its integer fields and its response
+  cap when it has one: the period check reads the id egress form, and a run in another is refused),
   the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
   the jitter bound `leak_bounds.JITTER_BOUND` (K's jitter term T bits a link-window, `leak_bounds.JITTER`), and the
@@ -106,10 +107,11 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     cap = dep["params"].get("max_tokens_cap")
     schedule = {k: dep["params"][k] for k in INTEGER_FIELDS} | ({} if cap is None else {"max_tokens_cap": cap})
     params = {"audits": [{k: a[k] for k in ("free", "program", "steps")} for a in audits], "cells": [],
-              "first": x["window"], "jitter": LB.JITTER_BOUND, "key": dep["key"]["public"], "link": WS.LINK,
+              "first": x["window"], "jitter": LB.JITTER_BOUND,
+              "keys": [{"key": dep["key"]["public"], "session": dep["session"], "start": 0}], "link": WS.LINK,
               "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
               "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": schedule,
-              "session": dep["session"], "windows": 1}
+              "windows": 1}
     commitment = canonical_json({"audits": [a["registration"] for a in audits], "windows": [reg]})
     evidence = canonical_json({"audits": [a["answer"] for a in audits], "windows": [
         {"answer": answer, "certificates": certs, "registrations": x["registrations"]}]})

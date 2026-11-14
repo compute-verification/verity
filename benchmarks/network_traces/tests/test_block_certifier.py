@@ -112,7 +112,8 @@ def test_the_block_leg_fits_the_block_records_schema_its_fixture_and_its_runner_
 
 
 def test_check_hands_network_period_the_cases_three_files_and_reads_its_last_line(monkeypatch):
-    case = {"params": {"windows": 1, "first": 0, "key": "ab"}, "commitment": b'{"audits":[]}'.hex(),
+    case = {"params": {"windows": 1, "first": 0, "keys": [{"key": "ab", "session": "cd", "start": 0}]},
+            "commitment": b'{"audits":[]}'.hex(),
             "evidence": b"\x00\x01".hex()}
     accept, reject = {"verdict": "accept", "public": {"K": 7}}, {"verdict": "reject", "reason": "a window"}
     seen, said = [], {}

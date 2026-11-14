@@ -7,7 +7,7 @@ limit reclaims in the charging thread, which sleeps in D while it does.
 
 It is a process of its own because a thread of the network certifier's process can't run while the ticker holds the
 interpreter in the kernel (a page fault holds the GIL), which is when it is needed. Times are seconds after T, the
-network certifier's origin on the monotonic clock, which every process of the host shares.
+network certifier's origin on its host's raw monotonic clock, which every process of the host shares.
 
 FILE has `threads` (each sampled thread: its process, label, samples by state, and its minor and major page faults
 from the origin to its last sample), `episodes`, the sampler's own `interval_ms` quantiles and every `gap` of
@@ -272,7 +272,7 @@ def stop(proc, out: Path) -> dict:
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="stall_probe.py", description=__doc__.splitlines()[0])
     ap.add_argument("--out", required=True, type=Path)
-    ap.add_argument("--origin", required=True, type=float, help="the network certifier's origin on the monotonic clock")
+    ap.add_argument("--origin", required=True, type=float, help="the network certifier's origin on the host's raw clock")
     ap.add_argument("--label", action="append", default=[], help="TID=NAME: a thread's label (default: thread)")
     ap.add_argument("--samples", type=int, help="stop after this many samples")
     ap.add_argument("watched", nargs="+", help="NAME=PID: a process whose threads are sampled")
@@ -282,7 +282,9 @@ def main(argv: list[str]) -> int:
     stop_ = []
     signal.signal(signal.SIGTERM, lambda *_: stop_.append(1))
     sampler = Sampler(watched, args.origin, labels)
-    clock = time.monotonic
+    def clock() -> float:  # the network certifier's clock, which its origin is a reading of
+        return time.clock_gettime(time.CLOCK_MONOTONIC_RAW)
+
     sampler.sample(clock())
     print(json.dumps({"sampling": len(sampler.threads)}), flush=True)
     nxt = clock()

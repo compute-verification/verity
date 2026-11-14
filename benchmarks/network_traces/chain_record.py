@@ -54,8 +54,9 @@
   run (the gate's ``warden-rehearse``, or `warden_serve.py`'s directory; `warden_chain`) and no certifier rehearsal's,
   whose input is refused by name (`warden_chain.PROXY`). ``certs --warden-run`` reruns the network certifier's own
   offline check on its witness and holds the public ``certificates.jsonl`` to the certified lines
-  (`warden_chain.certificates`; no clock certificate: the network certifier signs none). ``endpoint`` binds the
-  endpoint's own advice to the certified I/O read off the network certifier's cells (`warden_endpoint`); where the
+  (`warden_chain.certificates`; no clock certificate: the network certifier signs none). That check requires the
+  session's certified start, so a gate run made by a device that certifies no start is refused here. ``endpoint`` binds
+  the endpoint's own advice to the certified I/O read off the network certifier's cells (`warden_endpoint`); where the
   endpoint's records stay on the served node, that node runs it (`served_endpoint`, `served_session.py endpoint`) and
   the chain reads its report. N2 is `n2_zk.py prove --warden-run`'s, on the network certifier link; the I/O tie is
   `n2_tie_zk.py prove --class warden`'s, proved (``--tie``, `tie_step`); the scan is `scan_zk.py prove
@@ -968,8 +969,10 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
     (``cert``'s rows) and N2 registered, under N2's own registration (``n2``: the honest member's digest by execution
     phase), and its
     audits must be this report's ``--audit`` registrations (``audits``). The case's parameters and evidence are outside
-    that digest: its link, certifier session and key must be ``cert``'s, and `block_entry` re-decides the case. The
-    rows form's link-windows are the scan's registrations, which no step here holds, so that form is refused."""
+    that digest: its link must be ``cert``'s and its listed entries ``cert``'s key and session alone, their stretch
+    starting at execution phase 0, so the period's numbers are that session's own, and
+    `block_entry` re-decides the case. The rows form's execution phases are the scan's registrations, which no step here
+    holds, so that form is refused."""
     from verity.protocols.proofs.spot.verifier.one_stage import registration as R
     from verity.commitments.identity import tagged_sha512
 
@@ -982,7 +985,8 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
         return "the case isn't the answer's: its commitment's digest is another"
     if "sync_set" not in params:
         return "a rows-form answer: its link-windows are the scan's registrations, which this chain doesn't hold"
-    mine = {"link": cert.get("link"), "session": cert.get("session"), "key": (cert.get("key") or {}).get("public")}
+    mine = {"link": cert.get("link"), "keys": [{"key": (cert.get("key") or {}).get("public"),
+                                                 "session": cert.get("session"), "start": 0}]}
     other = [k for k, v in mine.items() if params.get(k) != v]
     if other:
         return f"the case's {', '.join(other)}: not the chain's, so another certifier session's period"
