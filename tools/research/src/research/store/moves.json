@@ -2673,6 +2673,18 @@
       "paths": {
         "benchmarks/pouw/served_zk/": "verity/protocols/accounting/pouw/prover/kernels/served_zk/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/verifier/lean/Spot/SiteDifftest.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog/SiteDifftest.lean",
+        "verity/protocols/proofs/spot/verifier/lean/Spot/SiteDifftestMain.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog/SiteDifftestMain.lean",
+        "verity/protocols/proofs/spot/verifier/lean/tests/test_site_difftest.py": "verity/protocols/accounting/registration/verifier/lean/tests/test_site_difftest.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/tests/fixtures/sass_gate/": "verity/protocols/accounting/pouw/prover/tests/fixtures/sass_gate/"
+      }
     }
   ]
 }
