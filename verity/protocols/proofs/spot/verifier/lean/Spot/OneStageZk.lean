@@ -3,7 +3,7 @@ Sampled proofs' one-stage audit on the proofs themselves (`verity/sampled-proofs
 v1 audit (`OneStage`) with the verdicts computed here, from the statement's files, rather than read from the evidence.
 
 * **params**: v1's, plus `proofs`, exactly `{"circuit", "public", "registered"}`: the SHA-512s the auditor committed for
-  the circuit and public files (lowercase hex of 64 bytes) and the verifier's own registered file (`flock-verify
+  the circuit and public files (lowercase hex of 64 bytes) and the verifier's own registered file (`verity-verify-proof
   --registered`'s object, or null for a program that reads no registered value). The partition must not be null: the
   sessions are verified against the verifier's own partition object; and v1's `challenger`, with its `window_root`, must
   be named (`NO_CHALLENGER`), its key at the deployed LMS parameters, `Lms.deployed` (`KEY_PARAMS`). The sampling
@@ -19,7 +19,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   statement is theirs: the check refuses evidence naming none or several (`oneSession`) before it reads a tree;
 * **blobs**: the files those digests name (`Core.Blobs`). The registered circuit names the lookup tables its session
   reads (its META's `lookups`, `lookupsOf`), so blobs whose pinned MUFU tables (`tablesOf`, each under its SHA-512 as
-  `flock-verify --archive` finds one) are other than those refuse (`tablesHeld`, `NO_TABLES`) before the session is set
+  `verity-verify-proof --archive` finds one) are other than those refuse (`tablesHeld`, `NO_TABLES`) before the session is set
   up: the tables the session `run` sets up reads are the registered circuit's. The per-member form holds each member
   to its own circuit's tables instead (below, **per member**);
 * **coins** (`coinsOf`): v1's (`OneStage.coinsOf`), what `Challenger.drawCoins` reads from the evidence's `coins` under
@@ -44,7 +44,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   roots and their domains and its instance count the record's, and its `units.indices` the population's units in
   order (`indicesHeld`, `indicesHeld_of_publicHeld`), so no header written after the sample relabels an instance as
   another unit; else the check refuses, before any session is verified;
-* **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
+* **check**: `verity-verify-proof verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the Flock library calls `verifyCmd` makes on that path, its last the files' ports, domains and roots,
   `Flock.PortRoots.checkOf`, and the form `Flock.Guarantees.SampledKSLiveV3` covers, or at a shared-row public file
@@ -54,7 +54,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   `Flock.Bridge.partOf` reads it); then v1's `check` on those verdicts, one of
   record a session (`flock-verify/<name>`). A session accepted under another program than the partition object's, proved
   units other than the evidence's `proved_units`, or a circuit, public or record file no blob holds, rejects; a rep
-  file no blob holds is that session's reject, as a file `flock-verify` can't read is. So does a length a session's
+  file no blob holds is that session's reject, as a file `verity-verify-proof` can't read is. So does a length a session's
   statement can't hold, since it writes each in an 8-byte word: the circuit or public file, the lookup tables, the
   program, the partition object, the registered reads or a session's sample at `2^64` bytes or more (`fitsWhy`,
   `drawFitsWhy`, the JSON ones as `Flock.RecordText.printT` prints them);
@@ -988,7 +988,7 @@ theorem evidenceEitherOf_one {b : ByteArray} {e : Evidence} (h : evidenceEitherO
 /-- `protocol.main`'s commands, and `verdicts OWN PROOFS [BLOB ...]`: the sessions' verdicts alone (`verdicts`, with no
 proved units to bind), from the verifier's own inputs (`ownOfJson`) and the evidence's `proofs` (`proofsOf`), each file
 canonical JSON; one line, `{"verdicts": [verdict, ...]}` in session order or `{"refused": why}`, exit 0 or 1. The
-difftest holds it to `flock-verify verify --zk` (`one_stage.proofs.verify`). -/
+difftest holds it to `verity-verify-proof verify --zk` (`one_stage.proofs.verify`). -/
 def main (args : List String) : IO UInt32 := do
   match args with
   | "verdicts" :: own :: proofs :: blobs =>

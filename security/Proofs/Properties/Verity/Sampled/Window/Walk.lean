@@ -755,7 +755,7 @@ def WindowCouples (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy 
 
 /-- **The decoders' premise at the window**, at the composite `k` and the property `P` of the play: on the joint
 law's support off the held-off events, a tape whose play's sampled verdict accepts, that misses at no round and not at
-the record, and whose play `P` holds of, is beside an outcome the window's audit accepts: flock-verify `--zk` accepts
+the record, and whose play `P` holds of, is beside an outcome the window's audit accepts: verity-verify-proof `--zk` accepts
 the transcript of every member with a proof block in the sample (`JointAuditV5.Accepts`). -/
 def WindowDecodes (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : WindowDecoders V θ F c W σ)

@@ -204,7 +204,7 @@ start on the coin map's tape, whatever `r` (`start`); the session's trace of eac
 sample, from a position `I` holds at that keeps the play's start and whose stop is where `StopsAt` says, ending at a
 position `q` that `r` is past, where `r` keeps the play's start and its tape's play the sampled verdict accepts,
 misses at no round and not at the record and `P` holds of, has `I` at the next place and the position past the stop
-after `q`, the session's closing round's, and writes a transcript flock-verify `--zk` accepts at the member's `own`
+after `q`, the session's closing round's, and writes a transcript verity-verify-proof `--zk` accepts at the member's `own`
 (`step`); and a member with no proof block in the sample, which has
 no statement and no session in the play, has `I` at the next place and the same position (`skip`). It is
 `MemberDecodes` with what every member's trace keeps handed to the step. -/

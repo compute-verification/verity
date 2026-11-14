@@ -51,7 +51,7 @@ root = "Main"
 EOT
 (cd "$S/time" && lake build members-files-time) > "$O/build.log" 2>&1 || { tail -60 "$O/build.log" >&2; exit 1; }
 if [ -z "${MF_CASE:-}" ]; then
-  (cd "$F" && lake build flock-verify flock-firewall) > "$O/verifier-build.log" 2>&1 \
+  (cd "$F" && lake build verity-verify-proof flock-firewall) > "$O/verifier-build.log" 2>&1 \
     || { tail -60 "$O/verifier-build.log" >&2; exit 1; }
 fi
 sizes=("$@")
