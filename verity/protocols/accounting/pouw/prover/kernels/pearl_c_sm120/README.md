@@ -3,7 +3,7 @@
 Pearl-C's device kernels for sm_120a (`pearl_c_sm120.cu`: the served variant `sm120`, G = 4, and `sm120-unpromoted`),
 with hashing format -h3, SHA-512 throughout. `run.py` checks every buffer the kernels write against the CPU reference
 (`verity.protocols.accounting.pouw.prover.schemes.pearl_c`) before it times anything. Its timing is diagnostic, phase by phase; a
-number of record is the GPU harness's (`../harness/`), and the served one is `../pearl_c_vllm/`'s.
+number of record is the GPU harness's (`../../../../../../../benchmarks/pouw/harness/`), and the served one is `../../../../../../../benchmarks/pouw/pearl_c_vllm/`'s.
 
 ## The runner, `run.py`
 
@@ -45,7 +45,7 @@ its `$OUT`: `ship.sha256`, `check.jsonl` and `check.txt`, `run.jsonl` and `run.t
 The vLLM adapter loads `run.py` by path as the served kernel, takes a unit's keys from the scheme (`pearl_c.keys_of`,
 which `fixture.py` re-exports), and names the variant by `run.py`'s sha256, which every pass records, so a change to it
 is a new variant, which serves only once it has passed its own gate.
-`../pearl_c_sm90/` includes `hash_fast.cuh` and `hash_decode.cuh`; `../pearl_c_vllm/` and `../served_zk/` build and load
-this tree; the tests in `../tests/` run `run.py` on the stand-in driver and the hashing on its host builds. `run.py`
-reads the environment itself, because it runs outside the tree; `../settings.py` declares each variable. Nothing here
+`../pearl_c_sm90/` includes `hash_fast.cuh` and `hash_decode.cuh`; `../../../../../../../benchmarks/pouw/pearl_c_vllm/` and `../../../../../../../benchmarks/pouw/served_zk/` build and load
+this tree; the tests in `../../../../../../../benchmarks/pouw/tests/` run `run.py` on the stand-in driver and the hashing on its host builds. `run.py`
+reads the environment itself, because it runs outside the tree; `../../../../../../../benchmarks/pouw/settings.py` declares each variable. Nothing here
 is a verifier, and nothing but `run.py` touches a GPU.

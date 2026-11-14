@@ -15,7 +15,7 @@ struct Args { uint64_t p[16]; int32_t i[16]; };
 #define DEV __device__ __forceinline__
 
 #include "sha512.cuh"
-#include "../../../verity/commitments/cuda/row_commit.cuh"
+#include "../../../../../../commitments/cuda/row_commit.cuh"
 
 // Pearl-C's compression (rs_compress) as the row commitment's policy
 struct PcSha {

@@ -1,10 +1,10 @@
 """PoUW's MVP end to end on the RTX PRO 6000 (sm_120): Pearl-C (`pearl-c-sm120-v1-h3`) commits every linear call of a vLLM model
 on the device, timed against stock vLLM on the same card at the panel's two shapes, rep by rep.
 
-  python benchmarks/pouw/pearl_c_vllm/e2e.py --model DIR --kernel benchmarks/pouw/pearl_c_sm120 --cubin SHIP/pearl_c_sm120.cubin \\
+  python benchmarks/pouw/pearl_c_vllm/e2e.py --model DIR --kernel verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120 --cubin SHIP/pearl_c_sm120.cubin \\
       --out RUN_DIR/e2e.json [--retain DIR] [--reps 3]
 
-On an H100 or H200 the kernel directory is ``benchmarks/pouw/pearl_c_sm90`` under ``--scheme pearl-c-h100-v1-h3`` (window.sh's
+On an H100 or H200 the kernel directory is ``verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90`` under ``--scheme pearl-c-h100-v1-h3`` (window.sh's
 ``PEARLC_KERNEL``), and ``--tag`` names another model in the shape names (`SHAPES`).
 
 The run:

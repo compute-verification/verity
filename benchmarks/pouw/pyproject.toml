@@ -248,7 +248,7 @@ paths = ["verity/protocols/accounting/pouw/verifier/tests"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_pearl_c_sm90_prefill.py"]
-paths = ["benchmarks/pouw/pearl_c_sm120"]
+paths = ["benchmarks/pouw/pearl_c_sm120", "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_receipts_adopters.py"]

@@ -6,7 +6,7 @@
 #pragma once
 #include <cstdint>
 
-#include "../../../verity/commitments/cuda/sha512.cuh"
+#include "../../../../../../commitments/cuda/sha512.cuh"
 
 #ifndef DEV
 #define DEV __device__ __forceinline__

@@ -51,7 +51,7 @@ Each is started by `h200.sh` or by its own command, which its docstring gives.
 The vLLM adapter loads `run.py` and `grouped.py` by path as the served kernel on these cards, takes a unit's keys from
 the scheme (`pearl_c.keys_of`, which `fixture.py` re-exports), and records both files' sha256 in every pass, so a change
 to either is a new variant, which serves only once it has passed its own gate. `verity bench overhead` imports
-`overhead_arm.py`'s `PearlPlus` and `epsilon`, its `__all__`, by the names its `SCHEMES` holds. `../pearlc_k256_gate.py` reads `glm53_slices.py`'s samples; `../pearl_c_vllm/` builds and loads this
-tree; the tests in `../tests/` run `run.py` and `grouped.py` on the stand-in driver and the hashing on its host builds.
-`run.py` and `grouped.py` read the environment themselves, because they run outside the tree; `../settings.py` declares
+`overhead_arm.py`'s `PearlPlus` and `epsilon`, its `__all__`, by the names its `SCHEMES` holds. `../../../../../../../benchmarks/pouw/pearlc_k256_gate.py` reads `glm53_slices.py`'s samples; `../../../../../../../benchmarks/pouw/pearl_c_vllm/` builds and loads this
+tree; the tests in `../../../../../../../benchmarks/pouw/tests/` run `run.py` and `grouped.py` on the stand-in driver and the hashing on its host builds.
+`run.py` and `grouped.py` read the environment themselves, because they run outside the tree; `../../../../../../../benchmarks/pouw/settings.py` declares
 each variable. Nothing here is a verifier: a replay's ACCEPT is a development check, never the protocol's verdict.

@@ -5,7 +5,7 @@
 // The epilogue is the Definition's, in its order, on each accumulator: cvt.rn.f32.s32, mul.rn by s_a[row], mul.rn by
 // s_w[col], cvt.rn.bf16.f32 (built with -fmad=false and no FTZ flag; nothing is added, so nothing could fuse).
 //
-// pearl_c_sm90.cu's plain GEMM (benchmarks/pouw/pearl_c_sm90, gemm_fast) with the s8 atom for the E4M3 one.  Persistent and
+// pearl_c_sm90.cu's plain GEMM (verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90, gemm_fast) with the s8 atom for the E4M3 one.  Persistent and
 // warp-specialized: CTA c takes tiles c, c + gridDim.x, ... of the TM x BN tiles (`raster`: groups of `group` tile rows,
 // column by column), one CTA an SM (its shared memory), so the grid is the set of SMs the GEMM holds and the rest are free.
 // TM / 64 consumer warpgroups, each a 64 x BN wgmma tile (rows 64 wg ..), then a producer warpgroup whose first thread issues
