@@ -24,7 +24,7 @@ export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "ezk: no firewall frame"; exit 7; }
 
 log "ezk: proving${EZ_DRY:+, dry}"
-"$PY" verity/protocols/accounting/certifier/prover/egress_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/ezk" ${EZ_PORT:+--port "$EZ_PORT"} \
+"$PY" -m verity.protocols.accounting.certifier.prover.egress_zk prove --bin "$BIN" --lean "$LEAN" --out "$W/ezk" ${EZ_PORT:+--port "$EZ_PORT"} \
   ${EZ_DRY:+--dry} 2>&1 | tee -a "$OUT/ezk.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/ezk"

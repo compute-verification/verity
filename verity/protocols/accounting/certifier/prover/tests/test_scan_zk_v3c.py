@@ -65,11 +65,10 @@ def v3c_window(d: Path, states: list[list[int]], entries: list[list[list[int]]])
 def scanned(tmp_path_factory):
     """The synthetic w63k4 run's scan, its state rows and lane slot entries, and a V3c window committing them."""
     d = tmp_path_factory.mktemp("v3c")
-    at = sz.link(d / "plain", setup=S)
-    states = sz.IS.window_state(S.cls, at.chain.states[1:], 0, at.T)
-    entries = sz.slot_entries(S.cls, at.chain.progs)
-    return {"states": states, "entries": entries, "window": v3c_window(d / "window", states, entries),
-            "rounds": set(sz.rounds_of(at))}
+    whole = sz.link(d / "plain", setup=S)
+    states = sz.IS.window_state(S.cls, whole.chain.states[1:], 0, whole.T)
+    entries = sz.slot_entries(S.cls, whole.chain.progs)
+    return {"states": states, "entries": entries, "window": v3c_window(d / "window", states, entries)}
 
 
 def test_the_scan_reads_v3cs_trees_at_its_roots_and_proves_no_block_round(tmp_path, scanned):
@@ -77,8 +76,8 @@ def test_the_scan_reads_v3cs_trees_at_its_roots_and_proves_no_block_round(tmp_pa
     rec = json.loads((window / "registration.json").read_text())
     state, roots = rec["window"]["activations"]["values"][sz.SCAN_STATE], {r["port"]: r for r in rec["roots"]}
     h = sz.host(tmp_path / "host", setup=S, v3c=window)
-    assert set(h.rounds) == scanned["rounds"] - {"block"} and "block" in scanned["rounds"]
-    trees = h.at.trees
+    assert list(h.rounds) == ["honest-0", "chain-0", "tampered-0", "unread-0", "stale-1"]
+    trees = h.rounds["honest-0"].at.trees
     assert all(isinstance(trees[k], sz.Held) for k in ("state", *sz.lane_kinds(S.cls)))
     assert (trees["state"].root.hex(), sz.tree_domain(trees["state"]).domain_id.hex()) == (state["root"],
                                                                                           state["domain"])
@@ -86,7 +85,7 @@ def test_the_scan_reads_v3cs_trees_at_its_roots_and_proves_no_block_round(tmp_pa
         r = roots[f"{TID}/c{j}/o0"]
         assert (trees[p].root.hex(), sz.tree_domain(trees[p]).domain_id.hex(), len(trees[p].rows)) == (
             r["root"], r["domain"], r["leaves"])
-    honest = h.rounds["honest"]
+    honest = h.rounds["honest-0"].members
     assert all(m.refused is None for m in honest) and not sz.wired(honest)
     port = sz.tree_port("state", trees["state"], [0, 1], 0)
     entry = sz.tree_entry("state", trees["state"], [0, 1])
@@ -95,7 +94,7 @@ def test_the_scan_reads_v3cs_trees_at_its_roots_and_proves_no_block_round(tmp_pa
     assert sz.main(["prove", "--dry", "--out", str(out), "--class", S.name, "--v3c", str(window)]) == 0
     summary = json.loads((out / "summary.json").read_text())
     assert summary["v3c"] == {"window": str(window), "trees": sorted(["state", *sz.lane_kinds(S.cls)])}
-    assert summary["roots"]["state"] == state["root"] and "block" not in summary["members"]
+    assert summary["roots"]["0"]["state"] == state["root"] and set(summary["members"]) == set(h.rounds)
 
 
 def _rewrite(window: Path, f: str, change) -> None:
@@ -132,7 +131,7 @@ def test_a_v3c_window_that_isnt_the_scans_is_refused_by_name(tmp_path, scanned, 
     assert str(e.value).startswith(f"--v3c {w}: ") and why in str(e.value), str(e.value)
 
 
-def test_v3c_is_one_link_window_from_link_window_0(tmp_path, scanned):
+def test_v3c_is_one_execution_phase_the_runs_first(tmp_path, scanned):
     with pytest.raises(SystemExit, match="--v3c: V3c's window is link-window 0's, a group of 1, not 2 from 0"):
         sz.link(tmp_path, setup=S, group=2, v3c=scanned["window"])
 

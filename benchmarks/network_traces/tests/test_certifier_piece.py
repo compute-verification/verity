@@ -59,7 +59,7 @@ import chain_record as CR  # noqa: E402
 from verity.protocols.accounting.certifier.prover import scan_period as SP  # noqa: E402
 import served_verdicts as S  # noqa: E402
 from verity.protocols.accounting.certifier.device import warden_serve as WS  # noqa: E402
-from test_scan_zk import published, sz  # noqa: E402
+from verity.protocols.accounting.certifier.prover.tests.test_scan_zk import published, sz  # noqa: E402
 from test_served_session import CHALLENGER_HOST, LIVE_GATE, RUN, STUB  # noqa: E402
 from test_warden_chain import WC, gate_run  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
@@ -1618,7 +1618,7 @@ def test_the_served_tables_scan_class_is_v3cs_setup_in_scan_zk():
     """`served_table.SCAN_CLASS` is `V3C_SCAN_CLASS`'s setup (`scan_zk.W63K4`) as served_verdicts.sh's
     SLOTS,PROMPT,OUTPUTS,LANES,EVERY: a slot stride's Program slots over an execution phase's strides, KI, KO, the
     lanes and EVERY."""
-    import scan_zk as SZ
+    from verity.protocols.accounting.certifier.prover import scan_zk as SZ
 
     spec = importlib.util.spec_from_file_location("served_table", ROOT / "demos/onsite_served/served_table.py")
     table = importlib.util.module_from_spec(spec)
