@@ -8,9 +8,10 @@
     kinds(instance, trusted, rows) -> [kind, …] | {"error": code}
     exported(instance, trusted, rows) -> [[slot, why the row is θ or None], …] | {"error": code}
     count(instance, trusted, limits) -> {"bool_gates", "complies", "failure"} | {"error": code}
+    block_rows(instance, trusted, limits) -> {"rows", "fresh", "complies", "failure"} | {"error": code}
 
 `Record`'s docstring gives the instance, the trusted input, the stages and their refusals, and what each field
-of the summary counts; `RecordCount`'s gives the count's limits. Where the Lean reads each template's gates
+of the summary counts; `RecordCount`'s gives the count's limits and `RecordRows`'s the rows rule's. Where the Lean reads each template's gates
 from the Program's own count and its rows from its Definition's parameters, takes one closed form per wire and per
 declaration, and multiplies through the slots, this file expands: each template's gates gate by gate
 (`nci_reference.activation_gates`), every unit's slot from the inference entries' digits, every input row of every
@@ -66,6 +67,8 @@ _nat = reference._nat
 FIELDS = ("program", "record", "gamma", "alpha", "pins")
 #: the count's limits: the gate table, and `(c, k, n)`
 LIMITS = ("table", "c", "k", "n")
+#: the rows rule's limits: the rows table, `Γ` and `α`
+ROWS_LIMITS = ("table", "gamma", "alpha")
 WIRE = {"reader", "port", "writer", "out", "at", "radix", "base", "step"}
 READ = {"reader", "port", "param", "at", "radix", "base", "step"}
 REGISTERED = {"params", "tables", "reads", "roots", "openings"}
@@ -736,3 +739,29 @@ def count(inst, tr, limits) -> dict:
     failure = ("gates" if max(bools) > limits["c"] else "fresh" if max(e["fresh"]) > limits["k"] else
                "count" if e["slots"] > limits["n"] else None)
     return {"bool_gates": max(bools), "complies": failure is None, "failure": failure}
+
+
+def block_rows(inst, tr, limits) -> dict:
+    """`RecordRows.checkDetail`: the rate rule in rows, a block's rows each unit's template's entry of the rows table
+    (`{template: rows of one unit}`, none of them 0), unit by unit: `size` where a block has more than `Γ` rows, else
+    `nci` where its fresh bits exceed `α` times its rows. `instance` or `params` where the limits are not as stated,
+    then the form's own refusal, then `rows-table` where the table lacks a template of the record."""
+    if not (isinstance(limits, dict) and all(k in limits for k in ROWS_LIMITS) and isinstance(limits["table"], dict)):
+        return {"error": "instance"}
+    table, gamma, alpha = (limits[k] for k in ROWS_LIMITS)
+    if not (_nat(gamma) and isinstance(alpha, list) and len(alpha) == 2 and all(map(_nat, alpha)) and alpha[1] != 0
+            and all(_nat(m) and m != 0 for m in table.values())):
+        return {"error": "params"}
+    try:
+        e = expand(inst, tr)
+    except Malformed as m:
+        return {"error": m.code}
+    if any(t.tid not in table for t in e["templates"]):
+        return {"error": "rows-table"}
+    rows = [0] * e["slots"]
+    for t in e["templates"]:
+        for u in range(t.units):
+            rows[e["slot"][t.tid][u]] += table[t.tid]
+    most, fresh = max(rows), max(e["fresh"])
+    failure = "size" if most > gamma else "nci" if fresh * alpha[1] > alpha[0] * most else None
+    return {"rows": most, "fresh": fresh, "complies": failure is None, "failure": failure}
