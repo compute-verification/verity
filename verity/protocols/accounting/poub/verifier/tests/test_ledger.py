@@ -24,7 +24,7 @@ from test_poub import (  # noqa: F401
     store,
 )
 
-from verity import claims
+from verity.commitments import claim_ids
 from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import audit, codec, ledger, line, monitoring, period, receipts, timing
 from verity.protocols.accounting.poub.verifier.audit import AuditRun, Pace
@@ -277,9 +277,9 @@ def test_the_binding_term_is_exact_and_never_below_its_formula() -> None:
 
 def test_the_lines_prf_advantages_are_named_by_a_registered_claim_and_in_no_part_of_delta() -> None:
     """`LineHeld`'s Σ_t adv_t has no numeric value: nothing prices it and the line doesn't assume it.  The ledger names
-    it by its claim (`PRF_CLAIM`, which the registry holds as an assumption of the protocols that do take it) and puts
-    it in no part of δ."""
-    assert claims.get(ledger.PRF_CLAIM).kind == "assumption" and ledger.PRF_CLAIM not in ledger.DELTA_PARTS
+    it by its claim (`PRF_CLAIM`, which the claim ids' table holds as an assumption of the protocols that do take it)
+    and puts it in no part of δ."""
+    assert claim_ids.get(ledger.PRF_CLAIM)["kind"] == "assumption" and ledger.PRF_CLAIM not in ledger.DELTA_PARTS
 
 
 def test_no_delta_the_ledger_renders_comes_without_the_prf_term_it_leaves_out(k1) -> None:

@@ -53,7 +53,7 @@ class SetupIntegration:
         self.prefix, self.store, self.weights, self.module = prefix, store, weights, module
 
     def reads(self) -> tuple[Read, ...]:
-        """Each sampled unit's four reads (16-bit leaves): its block of ``store`` at u·W/16, its row of ``weights`` at
+        """Each sampled block's four reads (16-bit leaves): its block of ``store`` at u·W/16, its row of ``weights`` at
         ⌊u/n⌋·N/2, and its own row of the supplied ``BASE`` (L/2 leaves) and ``SLOT`` (one leaf); and every unit's ok
         output ``o0`` the one row of the supplied ``OK``."""
         tid, bw, rw = descriptor_id(setup_unit(self.w, self.c0, self.row_bytes)), self.w // 16, self.row_bytes // 2
@@ -78,7 +78,7 @@ class SetupIntegration:
                        registered=Registered(params, reads=self.reads(), supplied=(BASE, SLOT, OK)))
 
     def supplied_rows(self) -> dict[str, list[bytes]]:
-        """The supplied values' rows as the verifier makes them (`setup_proof.supplied`'s bytes): one a sampled unit of
+        """The supplied values' rows as the verifier makes them (`setup_proof.supplied`'s bytes): one a sampled block of
         the base's port words (`leaf_bytes`) and of the slot as one big-endian 16-bit leaf, and the ok's one row, 1."""
         if self.prefix is None:
             raise ValueError("SetupIntegration.supplied_rows reads the salt's expansion")

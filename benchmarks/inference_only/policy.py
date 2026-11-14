@@ -99,7 +99,7 @@ def pinned(model: str) -> tuple[str, Path]:
     """The checkpoint ``model`` as the integration's manifests pin it: its revision and its `config.json` of record. A
     model pinned at several revisions of one `config.json` (other weights of the same model, each under a role of its
     own) has that config's shape, and is taken at its first pin: its class circuit reads no weight byte."""
-    from adapter import dense_generic as DG
+    from verity_vllm.engine.profiles import dense_generic as DG
 
     entries = [e for e in DG.checkpoint_entries(DG.MANIFEST) if e.get("repo") == model]
     revisions = list(dict.fromkeys(str(e["revision"]) for e in entries))
@@ -115,13 +115,12 @@ def pinned(model: str) -> tuple[str, Path]:
 
 
 def shape(model: str) -> Shape:
-    """``model``'s forward matmuls, from its config of record: the 2-D weights of a layer's record
-    (`b1.layer_weights_type`) and the LM head's, the embedding's where the two are tied."""
-    from adapter import b1
-    from verity_vllm.program.model import config_of
+    """``model``'s forward matmuls, from its config of record: the 2-D weights of a layer's record (`model.weights_type`'s
+    `layers`) and the LM head's, the embedding's where the two are tied."""
+    from verity_vllm.program.model import config_of, weights_type
 
     C, _ = config_of(pinned(model)[1])
-    weights = dict(b1.weights_type(C).fields)
+    weights = dict(weights_type(C).fields)
     head = weights.get("lm_head", weights["embed"])
     linears = tuple((name.removesuffix("_w"), t.n, t.elem.n) for name, t in weights["layers"].elem.fields
                     if name.endswith("_w"))

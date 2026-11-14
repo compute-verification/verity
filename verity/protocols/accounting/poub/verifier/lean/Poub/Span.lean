@@ -22,7 +22,7 @@ its public file proved and the statements' instances, in order, are the window's
 row and this check no appended block); its `pub` and `signs` rows the verifier's own (`publicWords`, `signWords`:
 `block_check.opening_public_v2`'s) opening under their salts to its instance's `b ‖ c` in the public file; and its `o0`
 row the verdict word under its salt. Else the window rejects `malformed` at (i, p). The word then fails the sample as
-`block_check.verdict` names it (`verdictFailure`), and the first draw that fails rejects the window there, as
+`block_check.verdict` names it (`verdictFailure`), and the first sample that fails rejects the window there, as
 `checkWindow` does.
 
 `Session.verifySpan` is `Session.verifyBy` with `checkSpan`. It is no `Session.Event`: `Session.step`, `Session.run` and
@@ -162,7 +162,7 @@ def unitFails (l : Layout) (reg : Registration) (w : WindowRecord) (i p : Nat) (
 
 /-- The accepted public files' units, in order, held to the window's samples: `malformed` at no sample for a file that
 isn't one `b ‖ c` a port an instance, another count of instances than its statement sends, or another count of units
-than samples; else the first draw whose unit fails (`unitFails`), there, or accept. -/
+than samples; else the first sample whose unit fails (`unitFails`), there, or accept. -/
 def spanHeld (l : Layout) (reg : Registration) (w : WindowRecord) (drawn : Array (Nat × Nat))
     (held : Array (ByteArray × Array Instance)) : Verdict := Id.run do
   let (some (qp, _), some (qs, _), some (qo, _)) := (l.port? "pub", l.port? "signs", l.port? "o0")
