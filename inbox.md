@@ -29,3 +29,18 @@ GATERELAY2: `test_certifier_piece`'s 61 against 60 is (a), a stale expectation. 
    - No owner was sent anything.
 TIMER: none
 
+[2026-11-14T22:06Z] 360aa7806e54
+NETSEATS2, Sat 14 Nov 2:0x PM PST. n2 summary's keys: all four parts are committed locally and nothing is pushed yet. My branch is at 1665019f5a4, merged with the collect tip 090ff6c3069c.
+
+What is committed:
+- b56b096412c: (1) the keys of no kind go to the witness file `$Q/witness/n2/summary.json`; (2) debug_clear's values, `failed` and the scan's finds go there too; (4) a refused run's public summary is each member's flag and ok alone. `chain_record`'s `n2_step` now reads prove_s, verify_s and `structured` from the witness, through `report --n2-witness`.
+- cd36841082d: (3) the list "N2's summary" in released_keys.json, and `test_n2_zk` holding the public summary to the list and the refusal shape to "the same wherever it fell".
+- Ran: 6/6 `test_n2_zk` on 090ff6c3069c's predecessor. On 090ff6c3069c it doesn't collect (`scan_zk` imports `one_stage.registration`), so I checked there by `--dry` on a synthetic run instead.
+
+What stops the push: the collect tip has 12 more moves since 090ff6c3069c (`accounting_split_*`, `period_areas` and others), plus the link_window, leg and law word maps.
+- `restack.py --main tip` refuses: my branch is based after `ba3b50016cfd`.
+- A merge conflicts in `n2_zk.py`.
+- One move, `b2112f543e46`, is not reproducible from its base; its `uv.lock` differs.
+
+Next, as you say: `rename.py --map` for each word map over my lines, and `restack.py` one move at a time per its own carry line, then the merge and the tests, then the push in your parts (1)+(2)+(4) together, then (3). They are one writer, so (1), (2) and (4) are one commit. I'll send one line per push.
+
