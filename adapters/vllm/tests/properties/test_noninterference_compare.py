@@ -33,6 +33,7 @@ from verity_vllm.properties import noninterference as NI
 LAYERS = 2
 TOKENS = [7, 9]
 NORM = "_C.fused_add_rms_norm.default"
+NOT_AN_OBJECT = [None, [], [7], "", "r0", 0, 7, False, True]
 
 
 def _said(caplog: pytest.LogCaptureFixture) -> list[str]:
@@ -252,6 +253,28 @@ def test_the_sampled_ids_are_compared_by_request_where_the_log_names_each_row(tm
     assert "step 0: SampleEnd ids by request {'r1': 5, 'r0': 4} != hooks-run new tokens {'r0': 4, 'r1': 6}" in rep["problems"]
 
 
+@pytest.mark.parametrize("named", [True, False])
+@pytest.mark.parametrize("value", NOT_AN_OBJECT)
+def test_a_run_whose_last_step_sampled_nothing_fails_where_the_hooks_report_no_object_for_it(tmp_path, named, value):
+    ids = itertools.count(1)
+    events: list[Event] = []
+    entries: list[dict] = []
+    for s, sampled in enumerate(([7], [])):
+        step, snapshots = _llama_step(s, ids, sampled, named=named)
+        events += step
+        entries += snapshots
+    _observer(tmp_path, events, entries)
+    hooks = _write(tmp_path / "b_hooks", "hooks.json", _hooks([_hooks_step(0, 0, {}), _hooks_step(1, 1, {"r0": [7]}), _hooks_step(2, None, {})]))
+    for arm in ("a_observer", "b_hooks", "c_bare"):
+        _write(tmp_path / arm, "tokens.json", _tokens([7]))
+    rep = NI.compare(str(tmp_path), None, LAYERS)
+    assert rep["PASS"] is True and rep["steps"][1]["sampled_b"] == []
+    _edit(hooks, lambda doc: doc["steps"][2].update(new_tokens=value))
+    rep = NI.compare(str(tmp_path), None, LAYERS)
+    assert rep["PASS"] is False and rep["problems"] == [f"engine step 2: new_tokens is {type(value).__name__}, not an object"]
+    assert rep["steps"][1]["sampled_b"] == [] and rep["steps"][1]["sampled_eq"] is True
+
+
 def test_the_sampled_ids_are_compared_in_order_where_the_log_names_no_row(tmp_path):
     step, snapshots = _llama_step(0, itertools.count(1), [7], named=False)
     _observer(tmp_path, step, snapshots)
@@ -381,6 +404,15 @@ def test_the_hooks_record_gives_each_step_s_boundaries_and_the_tokens_the_next_e
     assert out["steps"][1]["noncontiguous"] == ["model.layers.1[0]"] and out["steps"][1]["hidden"][1] == "hidden1.1"
     assert out["new_tokens"] == {0: {"r0": [7]}, 1: {"r0": [9]}}, "device step s sampled what engine step s + 1 reports"
     assert (out["hooked_modules"], out["hook_fire_counts"], out["method"]) == (doc["hooked_modules"], doc["hook_fire_counts"], doc["method"])
+
+
+@pytest.mark.parametrize("value", NOT_AN_OBJECT)
+def test_an_engine_step_whose_new_tokens_is_no_object_is_a_problem_and_reports_nothing(tmp_path, value):
+    steps = [_hooks_step(0, 0, {}), _hooks_step(1, 1, {"r0": [7]}), _hooks_step(2, None, {"r0": [9]})]
+    steps[1]["new_tokens"] = value
+    out, problems = NI.hooks_boundary_hashes(_write(tmp_path / "b", "hooks.json", _hooks(steps)).parent)
+    assert problems == [f"engine step 1: new_tokens is {type(value).__name__}, not an object"]
+    assert out["new_tokens"] == {0: {}, 1: {"r0": [9]}}
 
 
 def test_the_hooks_record_is_read_from_its_gzipped_twin_and_under_the_gpt_neox_names(tmp_path):

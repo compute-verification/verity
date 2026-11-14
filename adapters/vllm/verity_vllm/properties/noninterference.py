@@ -283,14 +283,14 @@ def _write_tokens(out: Path, wl: dict, tokens: dict, timing: dict, accepted: dic
                  "serving_profile": wl.get("serving_profile"), "context_class": wl.get("context_class"),
                  "expected_engine_steps": wl.get("expected_engine_steps"), "engine_steps": timing.get("engine_steps")}
     all_eq = True
-    per_req = timing.get("requests") or {}
+    per_req = timing.get("requests", {})
     for r in wl["requests"]:
         rid = r["request_id"]
         acc = accepted.get(rid)
         gen = tokens.get(rid, [])
         eq = (gen == acc) if acc is not None else None
         all_eq = all_eq and bool(eq)
-        sr = per_req.get(rid) or {}
+        sr = per_req.get(rid, {})
         doc["requests"].append({"request_id": rid, "prompt_token_ids": r["prompt_token_ids"], "max_tokens": r["max_tokens"],
                                 "generated_token_ids": gen, "accepted_record_token_ids": acc, "equals_accepted": eq,
                                 "prompt_len": len(r["prompt_token_ids"]), "n_generated": len(gen),          # realized lengths (D87)
@@ -411,7 +411,13 @@ def hooks_boundary_hashes(b_dir: Path) -> tuple[dict, list[str]]:
     # vLLM's LLMEngine.step() returns the ids sampled by the PREVIOUS engine step (one-step output lag; the trailing 17th
     # engine step, which launches no kernel, carries the last token): the ids sampled in device step s are the new tokens
     # reported by engine step (engine_step(s) + 1).
-    by_engine_step = {s["engine_step"]: s["new_tokens"] for s in doc["steps"]}
+    by_engine_step: dict[int, dict] = {}
+    for s in doc["steps"]:
+        if isinstance(s["new_tokens"], dict):
+            by_engine_step[s["engine_step"]] = s["new_tokens"]
+        else:
+            problems.append(f"engine step {s['engine_step']}: new_tokens is {type(s['new_tokens']).__name__}, not an object")
+            by_engine_step[s["engine_step"]] = {}
     new_tokens = {s["step"]: by_engine_step.get(s["engine_step"] + 1, {}) for s in doc["steps"] if s.get("step") is not None}
     return {"steps": out, "new_tokens": new_tokens,
             "hooked_modules": doc.get("hooked_modules"), "hook_fire_counts": doc.get("hook_fire_counts"), "method": doc.get("method")}, problems
@@ -527,14 +533,14 @@ def compare(dir_: str, accepted_ctl: str | None, expected_layers: int | None = N
             else:
                 mismatches.append({"step": s, "layer": None, "tensor": kind, "a": ha, "b": hb})
         sa = hashes_a["sample_ids"].get(s)
-        sb = [t for v in (hashes_b["new_tokens"].get(s) or {}).values() for t in v]
+        sb = [t for v in hashes_b["new_tokens"][s].values() for t in v]
         row["sampled_a"], row["sampled_b"] = sa, sb
         # the runner orders its batch by scheduled-token count, not by request: compare per request when the
         # log names the request of each sampled row (StepStart.logits_rows); the positional result stays as a diagnostic
-        rows_a = (hashes_a.get("sample_rows") or {}).get(s)
+        rows_a = hashes_a["sample_rows"].get(s)
         if sa is not None and rows_a is not None and len(rows_a) == len(sa):
             by_req_a = {r: int(t) for r, t in zip(rows_a, sa)}
-            by_req_b = {r: int(v[0]) for r, v in (hashes_b["new_tokens"].get(s) or {}).items() if v}
+            by_req_b = {r: int(v[0]) for r, v in hashes_b["new_tokens"][s].items() if v}
             row["sampled_eq_by_request"] = by_req_a == by_req_b
             row["batch_order_is_request_order"] = sa == sb
             row["sampled_eq"] = row["sampled_eq_by_request"]
@@ -634,7 +640,7 @@ def record(match_dir: str | Path, world: int, *, run: str | None = None, hashes:
         rep = json.loads(raw)
         boundary = {"sha256": _sha(raw), "PASS": rep.get("PASS") is True, "problems": (rep.get("problems") or [])[:8],
                     **{k: rep.get(k) for k in ("hash_comparisons", "hash_equal", "expected_steps", "layers", "expected_layers")}}
-    observed = docs.get("observed") or {}
+    observed = docs.get("observed", {})
     doc = {"schema": SCHEMA, "world": world, "run": run, "subject": {k: observed[k] for k in ("case", "model") if observed.get(k) is not None},
            "arms": arms, "tokens": parity, "boundary_hashes": boundary, "problems": problems}
     return seal(doc, not problems and bool(parity and parity["equal"]) and (boundary is None or boundary["PASS"]))
