@@ -466,7 +466,7 @@ def finish(run: Any, client: Any) -> None:
             run.details["challenger"] = {"closed": why is None, **({"reason": why} if why else {})}
 
 
-__all__ = ["DrawSession", "EPOCHS", "Gate", "H1_PERIOD", "NO_DRAW_SESSION", "RESERVE_FIELDS", "WITHHELD_OPEN", "Window", "at_port",
-           "closed_on_error", "connect", "finish", "gate_of", "in_process_draw", "open_period", "open_session", "opened",
+__all__ = ["DrawSession", "EPOCHS", "Gate", "H1_PERIOD", "NO_DRAW_SESSION", "RESERVE_FIELDS", "WITHHELD_OPEN", "Window", "after_close",
+           "at_port", "closed_on_error", "connect", "finish", "gate_of", "in_process_draw", "open_period", "open_session", "opened",
            "period_reason", "period_setting", "refusals", "reserve_draw", "reserve_salt", "reserved_of", "salt_session",
            "session", "session_setting"]
