@@ -2,7 +2,7 @@
 
 This is a Lake package (`CoreProtocol`, namespace `Core`). Its modules import the base package (`core_base`) for
 canonical JSON, bytes and hashes, and the difftest harness's Lean for its periods' port, and nothing else: no Mathlib,
-no draw and nothing of Flock's verifier. Its lakefile still requires the commitments' package (`core_commitments`),
+no sample and nothing of Flock's verifier. Its lakefile still requires the commitments' package (`core_commitments`),
 which no module here imports. A protocol's port is its own package. It requires this one by path, defines one
 `Core.Protocol` value, and makes its executable `def main (args) := myProtocol.main args`.
 
@@ -95,7 +95,7 @@ signer and sessions) is its own check. The auditor's ledger (`Spot.Challenger.le
 
 `Core.Integrity` is `verity.protocols.proofs.spot.verifier.profile.IntegrityProfile.to_json`: `programs`, `prescribed`,
 `linked`, `covered`, the `levels` coarse to fine (name, query, size, and sample: `{"bernoulli":"p"}`, `{"subset":k}` or
-`{"law":"stratified","strata":[...]}`), `delta` and `drawn`. The one change is that δ is an exact ratio, not a float. A
+`{"law":"stratified","strata":[...]}`), `delta` and `sampled`. The one change is that δ is an exact ratio, not a float. A
 protocol whose acceptance isn't a sampling design over proof blocks (a timed storage audit, a certificate check) declares its
 own profile type and JSON.
 
@@ -103,7 +103,7 @@ own profile type and JSON.
 
 `Core.Integrity` is `verity.protocols.proofs.spot.verifier.profile.IntegrityProfile.to_json`: `programs`, `prescribed`,
 `linked`, `covered`, the `levels` coarse to fine (name, query, size, and sample: `{"bernoulli":"p"}`, `{"subset":k}` or
-`{"law":"stratified","strata":[...]}`), `delta` and `drawn`. The one change is that δ is an exact ratio, not a float. A
+`{"law":"stratified","strata":[...]}`), `delta` and `sampled`. The one change is that δ is an exact ratio, not a float. A
 protocol whose acceptance isn't a sampling design over proof blocks (a timed storage audit, a certificate check) declares its
 own profile type and JSON.
 

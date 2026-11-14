@@ -90,7 +90,7 @@ POUW_PERIOD_CASES = module("pouw_period_cases", ROOT / "verity/protocols/account
 #: period with one change.
 PERIOD = module("network_period_difftest", ROOT / "verity/protocols/accounting/certifier/verifier/network/tests/test_network_period_protocol.py")
 #: The inference-only policy's difftest: `reference` is the policy's Python check (`check_theta`) behind the
-#: protocol's decoders, and `drawn` samples a declaration's case with one change.
+#: protocol's decoders, and `sampled` samples a declaration's case with one change.
 INFERENCE = module("inference_only_protocol_difftest", ROOT / "verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_protocol.py")
 #: The wipe protocol in Python: `answer`, its mirror under S1's LMS, and `case`, a signed wipe aimed at a kind (`KINDS`).
 WIPE_CASES = module("wipe_protocol_case", ROOT / "verity/protocols/accounting/pous/device/lean/tests/wipe_protocol_case.py")

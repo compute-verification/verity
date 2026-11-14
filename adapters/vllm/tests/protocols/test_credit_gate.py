@@ -1105,7 +1105,7 @@ def test_the_drawn_set_from_a_fixed_coin_is_cores():
     assert why is None and [(s["template"], s["units"], s["work"]) for s in ss] == [
         ("k64", [[0, 4], [6, 10]], 32 * 32 * 64), ("k128", [[4, 6], [10, 12]], 32 * 32 * 128)]
     for k in (1, 6, 12):
-        assert CR.law(ss, k) is None
+        assert CR.sampling_design(ss, k) is None
         want = CC.work_units(bytes.fromhex(coin), root, reg, {"receipts": receipts}, ss)
         got, why = PHC.drawn_of(record, {"root": root}, k, desc)
         assert why is None and got == want == CR.drawn_twin(coin, root, reg, {"receipts": receipts}, layout, k)[0]

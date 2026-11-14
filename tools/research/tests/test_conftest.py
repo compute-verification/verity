@@ -10,7 +10,8 @@ TREE = Path(__file__).resolve().parents[1]
 
 
 def test_git_reads_only_the_tests_own_config_and_commits_unsigned(tmp_path):
-    git = lambda *a: subprocess.run(["git", "-C", str(tmp_path), *a], check=True, capture_output=True, text=True).stdout
+    def git(*a):
+        return subprocess.run(["git", "-C", str(tmp_path), *a], check=True, capture_output=True, text=True).stdout
     git("init", "-q")
     scoped = [line.split("\t", 1) for line in git("config", "--list", "--show-scope").splitlines()]
     assert {scope for scope, _ in scoped} <= {"global", "local"}

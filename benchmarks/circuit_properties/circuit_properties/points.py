@@ -4,7 +4,7 @@ A charged product's operand whose rows the reading shows distinct (`Status.disti
 (`Status.specific`), `claims`, is claimed to have no two equal rows of its contraction's K words, for generic weights. `check` evaluates the Program once at a point and refuses it (`work.RepeatedRows`) where
 two rows of such an operand are equal there and not zero, naming the Definition, the node, the operand and the two
 rows; a row zero there is left out and none of the MACs that read it is charged (`Tally.share`). The point
-is one draw at which every input is one positive word repeated, as a submitter may choose: whoever submits the
+is one sample at which every input is one positive word repeated, as a submitter may choose: whoever submits the
 circuit also picks the data. So every word of an input (`Input<w>`) is one word, sampled generic, nonzero and, as a
 float, positive, repeated through every array it fills (all tokens are one token), and every word of `θ` and of a registered input is sampled on its own: a finite float at its width (four
 binades about 2^`CENTRE`, every sign and mantissa; `held` the bits that leaves it), or any nonzero word at a width no
@@ -19,12 +19,12 @@ of a circuit until the point misses an identity that holds only on a thin set of
 An operand that is specific and not distinct (`by_words`) is tested at a second point, the word-by-word point, whose
 `P` lanes the pass evaluates beside the first's (`Walk.lanes`): the first point holds one token at every position,
 which breaks `work`'s `P_BATCH` (past each row's first position, no two positions of the batch hold equal words), so
-a specific operand's rows may be equal there for an honest circuit. The second point's inputs are drawn word by word
-from SHA-512 of the Program's digest under its own label. `θ`'s and a registered input's words are drawn as at the
+a specific operand's rows may be equal there for an honest circuit. The second point's inputs are sampled word by word
+from SHA-512 of the Program's digest under its own label. `θ`'s and a registered input's words are sampled as at the
 first point. An input whose words reach a lookup's token (`Walk.token_inputs`) is found by that use, since a type has
-a width only (a 32-bit token is an f32 by its type), and drawn as tokens (`tokens`) at any width: each lane a
+a width only (a 32-bit token is an f32 by its type), and sampled as tokens (`tokens`) at any width: each lane a
 permutation of the least table's rows (`Walk.table_rows`), repeated, so that no two of that many positions running
-pick one row of any table. Every other input's word is drawn as `θ`'s are but positive, so a state the step carries in
+pick one row of any table. Every other input's word is sampled as `θ`'s are but positive, so a state the step carries in
 (a learning rate, a moment) is as small as a weight: about 1, one update moves training_slowdown's weights so far that
 its attention's softmax is one-hot, and rows that differ by their tokens come out equal. The second point meets
 `P_BATCH` by that construction wherever a batch holds no more positions than that table has rows, so it shows a
@@ -369,7 +369,7 @@ class Walk:
 
     def inputs(self) -> dict:
         """The point: each input node's words at each lane, (lanes, leaves), by ("n", node). The first `P` lanes are
-        the one-word point; where a claim is tested by words (`by_words`), `P` more are the word-by-word point, drawn
+        the one-word point; where a claim is tested by words (`by_words`), `P` more are the word-by-word point, sampled
         from its own seed: `θ`'s and a registered input's words as at the first, a token input's (`token_inputs`) as
         tokens (`tokens`) at any width, and every other input's as `θ`'s are but positive."""
         env: dict = {}

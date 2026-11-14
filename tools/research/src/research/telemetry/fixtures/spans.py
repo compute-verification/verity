@@ -10,7 +10,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-from research.telemetry.events import Emitter, read_all, spans  # noqa: E402
+from research.telemetry.events import Emitter, read_all, spans
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--attempt-dir", required=True)

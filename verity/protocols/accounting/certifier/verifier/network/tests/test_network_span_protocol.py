@@ -44,13 +44,13 @@ GUARD_PARAMS = {"key": "00" * 24, "link": "eth0", "lms": {"H": 1, "N": 8, "W": 8
                 "schedule": schedule_json(GUARD), "session": "00" * 32}
 #: The registered hardware of the Lean's `#guard`s (`guardSite`): `eth0` joins the host `node0` and the network
 #: certifier `cert0`, which registers the parameters' key, and `out0` is the certifier's other half, to the outside.
+_GUARD_LOC = {"bw": None, "bytes": 0, "chip": None, "drift": None, "key": "", "owner": "prover", "parent": None,
+              "scheme": "", "shared": [], "sheet": "", "tier": None, "time_unit": None, "timebase": None}
 GUARD_SITE = {
-    "links": [{"beta": 100, "ends": ["node0", "cert0"], "id": "eth0", "latency": 1},
-              {"beta": 100, "ends": ["cert0", "outside"], "id": "out0", "latency": 1}],
-    "locs": [{"bytes": 0, "id": "node0", "key": "", "kind": "host", "owner": "prover", "parent": None, "sheet": "",
-              "tier": None},
-             {"bytes": 0, "id": "cert0", "key": "00" * 24, "kind": "certifier", "owner": "auditor", "parent": None,
-              "sheet": "", "tier": None}],
+    "links": [{"beta": 100, "ends": ["node0", "cert0"], "id": "eth0", "latency": 1, "unmediated": None},
+              {"beta": 100, "ends": ["cert0", "outside"], "id": "out0", "latency": 1, "unmediated": None}],
+    "locs": [_GUARD_LOC | {"id": "node0", "kind": "host"},
+             _GUARD_LOC | {"id": "cert0", "key": "00" * 24, "kind": "certifier", "owner": "auditor"}],
     "sheets": []}
 #: The SHA-512 of `guard_mark(5, 1)`'s certificate's bytes, which the Lean's `#guard` holds too.
 GUARD_START = ("37ccc33e0f5191d268bc91c122be57358555be87a54a8b0fa8384ca157a82be17d31e4d6bae5b7c54bc387c9e7d6f8d0"

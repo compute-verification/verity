@@ -662,7 +662,7 @@ def limits(cells: Sequence[Cell], row: dict) -> dict:
     sizes: dict = {}
     for c in split:
         sizes[c.stratum] = sizes.get(c.stratum, 0.0) + c.n
-    draw = count * fsum(min(1.0, n) * (2 * min(k[t], ceil(n)) * sample_width(ceil(n)) + 64) for t, n in sizes.items())
+    sample = count * fsum(min(1.0, n) * (2 * min(k[t], ceil(n)) * sample_width(ceil(n)) + 64) for t, n in sizes.items())
     tables = ceil(row["tables"] - 1e-9)
     past = [f"{what} {n:,}" for n, what in TABLE_LIMITS if tables > n]
     limit = None
@@ -672,10 +672,10 @@ def limits(cells: Sequence[Cell], row: dict) -> dict:
     elif lines > LOG_LINES:
         limit = (f"its sessions write at least {lines:,.0f} lines of session coins, and one challenger session's "
                  f"release log holds {LOG_LINES:,}")
-    elif draw > DRAW_BYTES:
-        limit = (f"its second draw reads {draw:,.0f} bytes of live coins, and one layout of the challenger's holds "
+    elif sample > DRAW_BYTES:
+        limit = (f"its second sample reads {sample:,.0f} bytes of live coins, and one layout of the challenger's holds "
                  f"{DRAW_BYTES:,}")
-    return {"lines": lines, "draw_bytes": draw, "limit": limit}
+    return {"lines": lines, "draw_bytes": sample, "limit": limit}
 
 
 def session_designs(cells: list, g: Grain, m: f1.Model, budget: float, form: str, span: float, served: float) -> dict:
@@ -850,7 +850,7 @@ def captions(out: dict, scope: str) -> dict[str, str]:
              f"the CPU prover and in the Lean verifier, {TABLE_LIMITS[2][0]} in the challenger's coin commitment or "
              f"{SESSION_TABLES} in the proved scope; more lines of session coins than one challenger session's "
              f"release log holds ({LOG_LINES:,}, a session writing at least 2 and {TABLE_LINES} a table); or a second "
-             f"draw of more bytes of live coins than one layout holds ({DRAW_BYTES:,}). Its bound is then the cost "
+             f"sample of more bytes of live coins than one layout holds ({DRAW_BYTES:,}). Its bound is then the cost "
              "model's alone, of a deployment no code runs. "
              "The verification phase, its K and its statements' split are the "
              "protocol's, fixed before any coin, never the prover's. Each two-stage line gives at "

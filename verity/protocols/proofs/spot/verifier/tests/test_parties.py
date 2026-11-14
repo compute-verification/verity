@@ -34,7 +34,7 @@ CASE = {"commitment": "01", "evidence": "02", "params": {"k": 8}}
 OTHER = ({"verdict": "accept", "commitment": "cd" * 64}, {"commitment": "03", "evidence": "04", "params": {}})
 
 
-def registration(i: int) -> bytes:
+def docket(i: int) -> bytes:
     return json.dumps({"block": i, "root": "ab" * 64}, sort_keys=True).encode()
 
 
@@ -63,7 +63,7 @@ class Machine:
         self.calls.append(("serve", i))
         if self.serve_raises:
             raise P.Unavailable("no GPU")
-        return registration(i)
+        return docket(i)
 
     def pin(self) -> dict:
         self.calls.append(("pin",))
@@ -109,9 +109,9 @@ def test_an_honest_run_audits_each_block_in_order_and_accepts():
     assert [x["block"] for x in lines] == [0, 1]
     assert lines[0] == {"block": 0, "coins": "simulated", "components": dict.fromkeys(REMOTE, "accept"),
                         "product": "verity/remote/v1", "reason": None,
-                        "registration": R.digest(json.loads(registration(0))), "verdict": "accept"}
+                        "registration": R.digest(json.loads(docket(0))), "verdict": "accept"}
     audits = [c for c in m.calls if c[0] == "audit"]
-    assert audits == [("audit", i, registration(i), "127.0.0.1:4242", SHA) for i in (0, 1)]
+    assert audits == [("audit", i, docket(i), "127.0.0.1:4242", SHA) for i in (0, 1)]
     assert [c for c in m.calls if c[0] == "product"][0][1:] == (
         [SP, WORK, POLICY], {SP: CASE, WORK: OTHER[1], POLICY: OTHER[1]},
         {SP: lines[0]["registration"], WORK: OTHER[0]["commitment"], POLICY: OTHER[0]["commitment"]})
