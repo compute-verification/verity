@@ -76,9 +76,7 @@ KNOWN = {
     ("verity/protocols/proofs/flock/prover/tests/test_topp_word.py", "verity_vllm.definitions.registry"),
     ("verity/protocols/proofs/flock/prover/tests/test_typed_statement.py", "verity_vllm.definitions.registry.prims"),
     # Listed ahead of the served circuits' move into the vLLM adapter, which makes each of these an integration's import;
-    # each group says whose it is to remove.  circuits': the proof-block cut is handed the catalog, and core's tests take
-    # what they check from `verity`.
-    ("verity/circuits/call_scope.py", "verity_vllm.definitions.registry.catalog"),
+    # each group says whose it is to remove.  circuits': core's tests take what they check from `verity`.
     ("verity/circuits/tests/test_codec.py", "verity_vllm.definitions.registry.io_shell"),
     ("verity/circuits/tests/test_part_log.py", "verity_vllm.definitions.registry.dsa_topk_mask"),
     ("verity/circuits/tests/test_part_log.py", "verity_vllm.definitions.registry.prims"),
