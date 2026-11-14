@@ -41,7 +41,8 @@ from verity_vllm.program.frontend.target_profile import (
 )
 
 INTEGRATION = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # adapters/vllm
-CORE_SRC = os.path.dirname(os.path.dirname(os.path.abspath(verity.circuits.__file__)))  # the repository root
+#: the directory `verity` was imported from, unresolved: the repository's root, or the one directory the tree's declared path puts first
+CORE_SRC = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(verity.circuits.__file__))))
 
 RESULTS: list[dict] = []
 
@@ -92,7 +93,7 @@ def test_G4c_no_capability_or_sm_literal_outside_target_profile():
 def test_G6_program_digest_carries_input_shape_and_dtype():
     torch = pytest.importorskip("torch")
     from verity_vllm.program.frontend import derive_examples as ex
-    from verity_vllm.program.frontend.derive import derive_report
+    from verity_torch.frontend.derive import derive_report
     torch.manual_seed(0)
     m = ex.MLP2(8, 16, 8)
     r3 = derive_report(m, (torch.empty(3, 8),), mode="reference", name="MLP2")
@@ -104,6 +105,14 @@ def test_G6_program_digest_carries_input_shape_and_dtype():
     assert (not rb.ok) or rb.digest != r3.digest  # another dtype: refused or another circuit, never the same digest
     _record("G6 digest vs T=3 / T=4 / bf16 input", "distinct digests (or refusal for the dtype)", f"{r3.digest[:10]} {r4.digest[:10]} bf16 ok={rb.ok}",
             "PASS", "the specialisation IS pinned in the digest; the gap is only that the reuse API cannot see the request")
+
+
+def test_the_path_handed_to_a_live_construction_holds_both_packages():
+    """G5 runs each Build in a fresh interpreter whose whole `PYTHONPATH` is these two directories.  The adapter's package is under the first
+    and the `verity` this file imported is under the second, so a Build reads this tree and no other checkout an interpreter has installed."""
+    profile_file = sys.modules[TargetProfile.__module__].__file__
+    assert profile_file is not None and os.path.samefile(os.path.join(INTEGRATION, "verity_vllm", "program", "frontend", "target_profile.py"), profile_file)
+    assert os.path.samefile(os.path.join(CORE_SRC, "verity", "circuits", "__init__.py"), verity.circuits.__file__)
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -123,7 +132,8 @@ def test_G5_live_constructions_differing_in_M_are_distinct_but_not_distinguishab
             r = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "build", "--out", d, "--wrapper", "step", "--M", str(M), "--pos0", "8"],
                                cwd=INTEGRATION, env=env, capture_output=True, text=True)
             assert r.returncode == 0, r.stdout[-1500:] + r.stderr[-1500:]
-        arts[M] = json.load(open(os.path.join(d, "artifact.json")))
+        with open(os.path.join(d, "artifact.json")) as artifact:
+            arts[M] = json.load(artifact)
     a1, a2 = arts[1], arts[2]
     assert a1["program_digest"] != a2["program_digest"] and a1["identity"] != a2["identity"]
     assert a1["target_profile"] == a2["target_profile"] and a1["applicability"] == a2["applicability"]

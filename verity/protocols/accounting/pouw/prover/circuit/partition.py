@@ -1,9 +1,9 @@
 """`ncp-v2`'s partition: `Q_template_instances` over the unit templates, its invariant, and the Z separator.
 
-* `query(shape, kind)` / `partition(program, ...)`: core's `verity/partition/v1` object naming the templates (`ncp2.templates`;
+* `query(shape, kind)`: the query of core's `verity/partition/v1` object, naming the templates (`ncp2.templates`;
   `NcpNode` only when the call has two strips or more, since a listed template needs an instance). The weight's own
-  Program (`NcpWeight`, its Y units) has `weight_query`; `window_units` and `window_cut` number and cut C calls on one
-  weight in one root (`NcpWindow`).
+  Program (`NcpWeight`, its Y units) has `weight_query`; `window_cut` cuts C calls on one weight in one root
+  (`NcpWindow`).
 * `units(shape, kind)`: every unit with its role, its template's descriptor id, and where it sits (strip, column strip, tile,
   tree node), numbered as `partition_object.evaluate` numbers them (node order, then member).
 * `unit_cut(shape, kind)`: the whole call as one flat `cut.CallGraph` with the owner of every computing gate, checked by
@@ -61,11 +61,6 @@ def program(shape: Shape, kind: str = "shift24") -> Program:
     return Program(ncp2.linear(shape, kind))
 
 
-def partition(shape: Shape, kind: str = "shift24") -> dict[str, Any]:
-    """The `verity/partition/v1` object."""
-    return PO.build(program(shape, kind), query(shape, kind))
-
-
 @dataclass(frozen=True)
 class ProofBlock:
     index: int
@@ -107,11 +102,6 @@ def units_of(fn: Any, shape: Shape, kind: str = "shift24") -> tuple[ProofBlock, 
             deq_node += 1
     assert tile_row % max(ms, 1) == 0
     return tuple(out)
-
-
-def window_units(shape: Shape, calls: int, kind: str = "shift24") -> tuple[ProofBlock, ...]:
-    """`NcpWindow`'s units: the weight's Y units, then each call's, in the partition's numbering."""
-    return units_of(ncp2.window(shape, calls, kind), shape, kind)
 
 
 def window_cut(shape: Shape, calls: int, kind: str = "shift24") -> UnitCut:
@@ -280,5 +270,5 @@ def boundary_bits(shape: Shape, kind: str = "shift24") -> dict[str, Counter]:
 
 
 __all__ = ["POUW_ROLES", "SEPARATOR_PORTS", "Separator", "ProofBlock", "UnitCut", "WidthRule", "boundary_bits", "listed",
-           "partition", "program", "query", "separator", "unit_cut", "unit_cut_of", "units", "units_of", "weight_program",
-           "weight_query", "width_rule", "width_rule_of", "window_cut", "window_units"]
+           "program", "query", "separator", "unit_cut", "unit_cut_of", "units", "units_of", "weight_program",
+           "weight_query", "width_rule", "width_rule_of", "window_cut"]

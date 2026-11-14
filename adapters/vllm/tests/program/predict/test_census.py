@@ -16,11 +16,6 @@ import json
 from functools import lru_cache
 
 import pytest
-from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import CompositeDefinition, bind
-from verity.circuits.evaluation import bits as BS
-from verity.circuits.program import Program, is_input
-from verity.definitions.boolean import boolean_version, lift
 from verity.circuits.census import (
     PRODUCTS,
     SILICON,
@@ -29,17 +24,22 @@ from verity.circuits.census import (
     family,
     step_ends,
 )
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.ops import prims as P
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.program import Program, is_input
 from verity.circuits.requirement import (
     census_gates,
     census_schedule,
     from_census,
     upper_bound,
 )
-from verity.circuits.ops import prims as P
-from verity.circuits.ops.boolean import gemm as BG
-from verity.definitions.registry import b1, b1_tp2
-from verity.definitions.registry import cublas_bf16 as CB
-from verity.definitions.registry import tp_allreduce as TA
+from verity_vllm.definitions.boolean import boolean_version, lift
+from verity_vllm.definitions.registry import b1, b1_tp2
+from verity_vllm.definitions.registry import cublas_bf16 as CB
+from verity_vllm.definitions.registry import tp_allreduce as TA
 
 from tests.program import test_derive_neutrality as GLM
 from tests.program.predict.test_predict import FIX, TINY, _phi
@@ -51,7 +51,7 @@ from verity_vllm.query.required import SAMPLING_EVENTS
 CFG = json.loads((FIX / "llama32-1b.config.json").read_text())
 C = model_shape(CFG)
 #: a token row's linear MACs: q/k/v, o, gate/up and down per layer, and the LM head
-LINEAR = C.NL * C.H * ((C.NH + 2 * C.KVH) * C.D + C.NH * C.D + 3 * C.I) + C.H * C.V
+LINEAR = C.NL * C.H * ((C.NH + 2 * C.KVH) * C.D + C.NH * C.D + 3 * C.INTER) + C.H * C.V
 #: one position's K and V over every layer, in bf16
 KV_BITS = C.NL * 2 * C.KVH * C.D * 16
 #: one position's row of the rotary cos/sin table, in bf16

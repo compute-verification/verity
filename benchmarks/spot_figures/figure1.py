@@ -39,12 +39,13 @@ block's outputs under one-stage, outside the budget, and the token ids under two
   `CompiledTwo.Exfil`'s count, each admissible set of incorrect proof blocks charged its own blocks' committed bits
   (`optimize.two_stage_exfil`), so a wholly incorrect request is charged every bit it commits.
 * `two-stage-capped` and `two-stage-capped-uniform`, `two-stage-patterns` and `two-stage-patterns-uniform`: the same
-  designs with each request charged at most the bits it serves (the `served_bits` input: every one of its tokens
-  served as the token select's output word), in `two_stage_exfil`'s sets' form (`card_influenceTwo_le_served_min`),
-  which still counts which of a request's proof blocks are incorrect, and never above the scope's served bits
-  (`card_influenceTwo_le_min`), or its patterns' form (`card_influenceTwo_le_patterns`), which counts a request's sets
-  of more than its served bits once, at most the served bits too (`card_influenceTwo_le_two_pow_outs`).  `CAP_STATUS`,
-  `SERVED_STATUS` and `OUTS_STATUS` say what each rests on.
+  designs with each request charged at most the bits it serves (the `served_bits` input: each of its tokens served
+  as the token select's output word, at most the network certifier's registered response cap where the model's
+  `certifier` card registers one, else every one of its tokens), in `two_stage_exfil`'s sets' form
+  (`card_influenceTwo_le_served_min`), which still counts which of a request's proof blocks are incorrect, and never
+  above the scope's served bits (`card_influenceTwo_le_min`), or its patterns' form (`card_influenceTwo_le_patterns`),
+  which counts a request's sets of more than its served bits once, at most the served bits too
+  (`card_influenceTwo_le_two_pow_outs`).  `CAP_STATUS`, `SERVED_STATUS` and `OUTS_STATUS` say what each rests on.
 * `one-stage`: every proof block sampled uniformly, each sampled one's request replayed.  Its serve-time commitment,
   every proof block's outputs, is outside the budget, and the output gives its share of compute (`serve_hash_share`).
   For exfiltration it is in `consumers.exfiltration_bound`'s form, the incorrect proof blocks' output bits plus which
@@ -86,6 +87,7 @@ from typing import Callable, Iterator, Sequence
 
 import cards as spot_cards
 from verity.protocol import MONITORING_PERIODS
+from verity.protocols.accounting.certifier.verifier.warden import WardenParams
 from verity.protocols.proofs.spot.prover import plancheck
 from verity.protocols.proofs.spot.prover.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
                                                            two_stage_design, two_stage_strata)
@@ -137,6 +139,10 @@ REQUESTS = ("census", "workload")
 SERVING = ("assumed", "measured")
 #: the exfiltration capacity a row at the measured reading is held against, in bits: 300 GB
 SERVING_GOAL = 8 * 300e9
+#: the tokens a request serves: at most the network certifier's registered response cap, or every one of its tokens
+SERVED = ("cap", "request")
+#: what holds each response the network certifier releases to its registered cap
+CAP_RULE = "NetTiming.Guarantees.ResponseCapped"
 #: the deployment each panel assumes: what serving commits, and the replay block
 DEPLOYMENT = {"exfiltration": "Tokens only: serving commits each request's token ids, and a replay block is a request.",
               "skipped_work": "Every block: serving commits every proof block's outputs, and a replay block is a "
@@ -163,7 +169,7 @@ REF_MODEL, RHO_MODEL = "DeepSeek-V4-Pro", "deepseek-v4-pro"
 REFERENCES = {"ref_sparseloco": ("exfil", "sparseloco-1000", "bits"), "ref_rollouts": ("exfil", "rl-rollouts", "bits"),
               "ref_pretrain": ("work", "v4-pretrain", "flops"), "ref_step": ("work", "v4-step", "flops")}
 #: the circuit-check pin a MAC's AND gates are read from: the Hopper dot's FP8 MoE coordinate
-AND_PIN = ("verity/definitions/registry/boolean_fp8_moe.circuit-check.json",
+AND_PIN = ("adapters/vllm/verity_vllm/definitions/registry/boolean_fp8_moe.circuit-check.json",
            "MoeExpertFp8BlockCoordinateW_v4{K=128,G=128,KB=128,SWAP=True,DOT=HopperE4m3MmaV2Dot32_v2}")
 
 
@@ -203,8 +209,9 @@ def slot_cards(model: str, serving: str = "assumed") -> dict:
     out = {s: spot_cards.load(s, model) for s in ("workload", "proof_overhead", "commitment", "replay", "design")}
     if serving == "measured":
         out["serving_rate"] = spot_cards.load("serving_rate", model)
-    if inf := spot_cards.load("infiltration", model, required=False):
-        out["infiltration"] = inf
+    for slot in ("infiltration", "certifier"):
+        if card := spot_cards.load(slot, model, required=False):
+            out[slot] = card
     return out | ({"references": refs} if (refs := spot_cards.load_all("references", model)) else {})
 
 
@@ -213,12 +220,15 @@ def _card(c: dict, value, unit: str, field: str) -> InputCard:
     return InputCard(value, unit, c["status"], f"{c['slot']} card's {field}{art}: {c['source']}", c["provisional"])
 
 
-def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assumed") -> dict[str, InputCard]:
+def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assumed",
+          served: str | None = None) -> dict[str, InputCard]:
     """Every input: the model's slot cards', those read from the census and rho's reference, and the bits a request
     serves, each of its tokens as the token select's output word, the `design` card's `token_bytes`.  A request is
-    the census's mean or, under `request="workload"`, the `workload` card's.  Under `serving="measured"` the inputs
-    hold the `serving_rate` card's rate (`serving_rate`), which the lines that price serving then read in place of
-    rho's utilization; under the default they hold none, whatever cards exist."""
+    the census's mean or, under `request="workload"`, the `workload` card's.  It serves at most the response cap its
+    `certifier` card's schedule registers (`max_tokens_cap`, the parameters its digest binds), where the card registers
+    one and `served` isn't "request", else every one of its tokens.  Under `serving="measured"` the inputs hold the
+    `serving_rate` card's rate (`serving_rate`), which the lines that price serving then read in place of rho's
+    utilization; under the default they hold none, whatever cards exist."""
     if request not in REQUESTS:
         raise ValueError(f"a request is one of {REQUESTS}, not {request!r}")
     sc = slot_cards(model, serving)
@@ -282,10 +292,28 @@ def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assum
     if (rate := sc.get("serving_rate")) is not None:
         out["serving_rate"] = _card(rate, rate["value"]["tokens_per_gpu_second"], "token/GPU-s", "tokens_per_gpu_second")
     tokens, bits = out["tokens_per_request"].value, round(8 * out["token_bytes"].value)
-    out["served_bits"] = InputCard(tokens * bits, "bit", "modeled",
-                                   f"every one of a request's {tokens:,} tokens served as the token select's output "
-                                   f"word, {bits} bits (the design card's token_bytes), the registered circuit's "
-                                   "only output a token")
+    word = (f"served as the token select's output word, {bits} bits (the design card's token_bytes), the registered "
+            "circuit's only output a token")
+    cert = sc.get("certifier")
+    schedule = WardenParams(**cert["value"]["schedule"]) if cert else None
+    cap = schedule.max_tokens_cap if schedule else None
+    if served not in (None, *SERVED):
+        raise ValueError(f"a request's served tokens are one of {SERVED}, not {served!r}")
+    if served == "cap" and cap is None:
+        raise ValueError(f"{model} has no certifier card registering a response cap, so a request serves every one of "
+                         "its tokens (served='request')")
+    if served == "request" or cap is None:
+        out["served_bits"] = InputCard(tokens * bits, "bit", "modeled", f"every one of a request's {tokens:,} tokens "
+                                       f"{word}")
+        return out
+    out["max_tokens_cap"] = InputCard(cap, "token", cert["status"],
+                                      f"certifier card's schedule, parameters digest {schedule.digest.hex()}, which "
+                                      "every record head binds: the network certifier refuses at ingress a request "
+                                      "whose max_tokens exceeds the cap and releases at most a request's max_tokens "
+                                      f"tokens of its response ({CAP_RULE}): {cert['source']}", cert["provisional"])
+    out["served_bits"] = InputCard(cap * bits, "bit", cert["status"],
+                                   f"at most {cap:,} tokens a response, the network certifier's registered cap "
+                                   f"({CAP_RULE}), each {word}", cert["provisional"])
     return out
 
 
@@ -542,6 +570,15 @@ def served_total(m: Model) -> float:
     return m.request.units * m.served
 
 
+def served_tokens(c: dict[str, InputCard]) -> tuple[int, int, str]:
+    """The tokens a request serves, the bits each serves and, as the captions say it, what bounds them."""
+    bits = round(8 * c["token_bytes"].value)
+    if cap := c.get("max_tokens_cap"):
+        return cap.value, bits, (f"at most the network certifier's registered response cap ({CAP_RULE}; the tie of "
+                                 "the statement's served outputs to the tokens it releases is pending)")
+    return c["tokens_per_request"].value, bits, "every one of the request's tokens"
+
+
 def two_stage_top(m: Model, design: str, top: float | None = None) -> float:
     """A two-stage point's trivial bound: `top` (default everything the scope outputs), under a capped form at most
     the scope's served bits too (`SERVED_STATUS`, `OUTS_STATUS`)."""
@@ -785,10 +822,11 @@ def zero_lines(refs: dict[str, list[dict]], scope: str) -> dict[str, list[str]]:
 
 def captions(serve_hash_share: float, infiltration: dict | None = None, coverage: dict | None = None,
              boundary_hash_share: float = 0.0, zeros: dict[str, list[str]] | None = None,
-             notes: dict[str, list[str]] | None = None, served: tuple[float, int, int, float] | None = None
-             ) -> dict[str, str]:
-    """Each panel's caption.  `served` is (S, tokens, bits a token, N, total) for the capped designs' sentences: the
-    bits a request serves, its tokens at their bits, a request's proof blocks and the scope's served bits."""
+             notes: dict[str, list[str]] | None = None,
+             served: tuple[float, int, int, str, float, float] | None = None) -> dict[str, str]:
+    """Each panel's caption.  `served` is (S, tokens, bits a token, why, N, total) for the capped designs' sentences:
+    the bits a request serves, its tokens at their bits and what bounds them (`served_tokens`), a request's proof
+    blocks and the scope's served bits."""
     serve = (f"hashes every proof block's outputs at serve time, {serve_hash_share:.2g}× the scope's compute, outside "
              "the budget")
     tokens = f"the token ids, {boundary_hash_share:.2g} of the scope's compute"
@@ -808,10 +846,10 @@ def captions(serve_hash_share: float, infiltration: dict | None = None, coverage
     request = "Request-level (dotted) proves each sampled request whole; serving commits only the token ids."
     capped = patterns = ""
     if served:
-        cap, count, bits, blocks, total = served
+        cap, count, bits, why, blocks, total = served
         capped = (f" Capped (dash-dot; {CAP_STATUS['sets']}): two-stage with each request charged at most the "
-                  f"{cap:,.0f} bits it serves ({count:,} tokens of {bits} bits), so a wholly incorrect request is "
-                  f"charged which of its {blocks:.2g} proof blocks are incorrect and what it serves, about "
+                  f"{cap:,.0f} bits it serves ({count:,} tokens of {bits} bits, {why}), so a wholly incorrect request "
+                  f"is charged which of its {blocks:.2g} proof blocks are incorrect and what it serves, about "
                   f"{blocks + cap:.2g} bits; and never above the {total:.2g} bits the scope serves ({SERVED_STATUS}), "
                   "flat where that binds.")
         patterns = (f" Patterns (dash-dot-dot; {CAP_STATUS['patterns']}): a request's incorrect sets of more than "
@@ -856,20 +894,21 @@ def infiltration_panel(card: dict | None, scope_names: list[str]) -> dict:
 
 def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, ...] | None = None,
         request: str = "census", workers: int = 1, designs: tuple[str, ...] | None = None, lean: bool = True,
-        serving: str = "assumed") -> dict:
+        serving: str = "assumed", served: str | None = None) -> dict:
     """Figure 1's JSON at `points` proof overheads besides the vertical line's, over the scopes and designs named
     (default all), with Lean checking every design unless `lean` is off: every point of every curve one job
     (`checked_point`) on `workers` processes (`processes`), the JSON the same at any number.  `serving` is where
-    serving's rate comes from (`SERVING`); the measured reading's JSON says so (`serving`), the default's is as it was."""
+    serving's rate comes from (`SERVING`); the measured reading's JSON says so (`serving`), the default's is as it was.
+    A request's served tokens are as `cards`' `served` takes them."""
     with processes(workers, lean) as each:
-        return _run(model_name, points, scope_names, request, designs, each, lean, serving)
+        return _run(model_name, points, scope_names, request, designs, each, lean, serving, served)
 
 
 def _run(model_name: str, points: int, scope_names: tuple[str, ...] | None, request: str,
-         designs: tuple[str, ...] | None, each, lean: bool, serving: str = "assumed") -> dict:
+         designs: tuple[str, ...] | None, each, lean: bool, serving: str = "assumed", served: str | None = None) -> dict:
     planned = {panel: [d for d in ds if designs is None or d in designs] for panel, ds in DESIGNS.items()}
     sc = slot_cards(model_name, serving)
-    c = cards(model_name, request, serving)
+    c = cards(model_name, request, serving, served)
     part = TokenBlocks.of(c["partition"].value["strata"], c["partition"].value["served_macs_per_token"])
     fill = Fill.of(c["partition"].value["strata"], c["proof_blocks"].value)
     xs = overheads(c, points)
@@ -922,11 +961,11 @@ def _run(model_name: str, points: int, scope_names: tuple[str, ...] | None, requ
                                                    boundary_hash, zero_lines(shown, s.name),
                                                    notes | ({"infiltration": [*notes.get("infiltration", []), ratio]}
                                                             if ratio else {}),
-                                                   (base.served, c["tokens_per_request"].value,
-                                                    round(base.served / c["tokens_per_request"].value),
-                                                    base.blocks_per_request, served_total(base)) if capped else None)}
+                                                   (base.served, *served_tokens(c), base.blocks_per_request,
+                                                    served_total(base)) if capped else None)}
     return ({"serving": reading(sc, c, part)} if serving == "measured" else {}) | {
         "schema": SCHEMA, "model": model_name, "request": request,
+        "served": "cap" if "max_tokens_cap" in c else "request",
         "lean": {"exe": plancheck.EXE, "slack": str(plancheck.SLACK), "search": plancheck.SEARCH,
                  "precision": plancheck.TWO_P} if lean else None,
         "inputs": {k: v.__dict__ for k, v in c.items()},

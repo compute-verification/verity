@@ -38,14 +38,14 @@ import Mathlib.Topology.Sheaves.Init
 
 `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod` over a finite set `S` of the sampling block's tile strata in place
 of its one stratum `s_T`. Each stratum `s ∈ S` is one contraction `K` of the window's layout (H1's served layout has
-two, 16,384 and 65,536), with its own population `N_s = |stratum σ s|` (`tileCount σ s`), its own sample `k s`, declared circuit
+two, 16,384 and 65,536), with its own population `N_s = |stratum σ s|` (`tileCount σ s`), its own sample `k s`, registered circuit
 `Cd s`, live share `ρ s` and rate `Λ_s = j10rRate (k s) (ρ s)`, so its own `ε_s(j)`. The conclusion sums the strata:
 except with probability `∑_{s ∈ S} (δ_s(s) + n·(δ_bind(s) + δ_ks(s)))`, an accepted period's fixed words, summed over
 `S`, are at least the sum over `S` of each stratum's `(1 − ε_s(j))₊` of its live words in the windows before the first
 window `Credit.window` refuses.
 
 * `BlockDraw`, `Rest`, `StrataCoin`: the sampling block's stratified sample, one permutation of each of its strata, sampled
-  independently (`FlockSoundness.Audit.Law.stratified`'s coordinates; stratum `s`'s sample is its permutation's first
+  independently (`FlockSoundness.Audit.SamplingDesign.stratified`'s coordinates; stratum `s`'s sample is its permutation's first
   `k s` images, `tileDraw`); the rest of it beside stratum `s`; and a window's coins, its rounds' coins and the block's
   sample.
 * `atStratum`, `pathsCongr`, `pathsAt`, `pullAt`, `creditAt`: stratum `s`'s view. A window's coins split at `s`
@@ -214,7 +214,7 @@ noncomputable def stratumLive {ι K C : Type} (Sc : Scheme K) (Cd : Declared ι)
 /-- **(L)'s credit over the windows served H1's verdict credits, at J10-R's tile proof block, over several tile strata.** For
 every scheme `Sc` and period of at most `n ≥ 1` windows, each window's `Credit.window` inputs any function of the
 period's coins (`ws`), over a finite set `S` of the sampling block's tile strata of `σ`, each `s ∈ S` with its own
-declared circuit `Cd s` (`(Cd s).units ≤ N_s = |stratum σ s|`, one round a window), sample `k s ≥ 1`, live share
+registered circuit `Cd s` (`(Cd s).units ≤ N_s = |stratum σ s|`, one round a window), sample `k s ≥ 1`, live share
 `0 < ρ s ≤ 1` and rate `Λ_s = j10rRate (k s) (ρ s)`: under the period-wide premises `RegisteredBeforeDraw`,
 `StrataSampleIsCoin` and `SaltIsLiveCoin`, and at each `s ∈ S` the premises `H1J10RCheckedCreditPeriod` takes at its one
 stratum, at stratum `s`'s view (`layerAt`, `runAt`, `relAt`), with `TileSampleIsCoin` replaced by `StrataSampleIsCoin`,

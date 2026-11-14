@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.ResNextW
-public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.ExecSample
 
 /-!
 # Some algebra part reads `acc1` (`AccEndHeldW`)
@@ -760,7 +760,7 @@ theorem accEndHeldW : AccEndHeldW := by
     unfold VStar.Algebra.specOf at hsp'
     simpa using hsp'
   obtain ⟨pt, hpt, hacc⟩ := AccEnd.spec_parts_acc1
-    (fun a y h => (FlockSoundness.Audit.DrawExec.mem_qsort a _ y).2 h) hsp'' hps
+    (fun a y h => (FlockSoundness.Audit.SampleExec.mem_qsort a _ y).2 h) hsp'' hps
   obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 hpt
   refine ⟨_, j, _, ps[j]!, AccEnd.inner_at hj, ?_⟩
   rw [getElem!_pos ps j hj]

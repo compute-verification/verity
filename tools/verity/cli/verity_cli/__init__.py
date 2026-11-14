@@ -10,6 +10,9 @@
     verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
                                     a deployment configuration's parties on this machine, and its verdict (run.py)
     verity config new|check|hash    write, check or hash a deployment configuration (run.py)
+    verity verify proof [ARGS]      Flock's Lean verifier, the executable `lake build` writes in its package, with ARGS as
+                                    its own (`verity verify proof verify --zk --circuit F --public F --session DIR`), run
+                                    in the directory you are in and exiting with its status
     verity tasks list --json [--kind after-landing|preflight] [--changed BASE]
                                     the check's task graph of this checkout (`tasks/v1`, check/tasks.py; its README's "Tasks")
     verity tasks run ID [--out FILE]
@@ -20,9 +23,7 @@
     verity graph run ID --work DIR  run one task of it here and print its result (`verity-result/v1`)
     verity graph check --local [--family F]
                                     run the graph serially here, uncached: the reference executor
-    verity demo NAME [ARGS]         demos/NAME's command (`verity run` its config.toml, else its run.py or run.sh): its
-                                    workload on its placement
-    verity demo --status            every demo's protocol, workload, run and proof, and each one's next missing evidence
+    verity demo [NAME] [ARGS]       `verity run demos/NAME.toml ARGS`, the demo's one file; NAME defaults to onsite_compute
     verity lean try FILE            elaborate one Lean file, the edit loop: `lake env lean FILE` in the Lake package that
                                     holds it, with its Lean options as `lake build` gives them, exiting with lean's
                                     status, and last the axiom probe: each theorem whose
@@ -55,6 +56,11 @@ USAGE = ("verity lean try FILE [--siblings] [--on auto | --on MACHINE [--pool P]
          "verity lean deployed [--rev REV] [--today YYYY-MM-DD]")
 #: `research run --on`'s line naming the run it started (or refused) and the machine it is on, which `--on auto` chose
 LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on (\S+)", re.M)
+#: Flock's Lean verifier, which `verity verify proof` runs: its Lake package and the executable `lake build` writes there
+VERIFIER = "verity/protocols/proofs/flock/verifier"
+VERIFY_PROOF = "verity-verify-proof"
+#: the demo `verity demo` runs given no NAME
+DEFAULT_DEMO = "onsite_compute"
 
 
 def _run(argv: list[str]) -> int:
@@ -80,6 +86,19 @@ def _runner(top: str, command: str, args: list[str]) -> int:
         if (d / runner).exists():
             return _run([*argv, str(d / runner), *args[1:]])
     raise SystemExit(f"{top}/{args[0]} has no run.py or run.sh: run its tool through `research run`")
+
+
+def _demo(args: list[str]) -> int:
+    """`verity demo [NAME] [ARGS]`: `verity run demos/NAME.toml ARGS`, NAME `onsite_compute` when the first of ``args`` is
+    a flag or there is none."""
+    name, rest = (args[0], args[1:]) if args and not args[0].startswith("-") else (DEFAULT_DEMO, args)
+    config = ROOT / "demos" / f"{name.replace('-', '_')}.toml"
+    if not config.is_file():
+        names = sorted(p.stem for p in (ROOT / "demos").glob("*.toml"))
+        raise SystemExit(f"verity demo [NAME] [ARGS] (a - in NAME is a _): NAME is one of {', '.join(names) or 'none'}")
+    from . import run
+
+    return run.run_main([str(config), *rest])
 
 
 def _git(*argv: str, env: dict | None = None, cwd: Path = ROOT) -> str:
@@ -245,6 +264,20 @@ def _lean(args: list[str]) -> int:
     return rc
 
 
+def _verify(args: list[str]) -> int:
+    """`verity verify proof ARGS`: the Lean verifier's executable with ARGS, in the caller's directory, where the files
+    ARGS name are; its exit status."""
+    if args[:1] != ["proof"]:
+        raise SystemExit((f"verity verify: no command {args[0]!r}\n" if args else "") + "verity verify proof [ARGS]")
+    exe = ROOT / VERIFIER / ".lake" / "build" / "bin" / VERIFY_PROOF
+    try:
+        return subprocess.run([str(exe), *args[1:]]).returncode
+    except FileNotFoundError:
+        raise SystemExit(f"verity verify proof: {VERIFIER}/.lake/build/bin/{VERIFY_PROOF} is not built: `bash "
+                         f"tools/verity/lean/setup.sh {VERIFIER}` installs elan, the toolchain and the package's "
+                         f"dependencies, then `lake build {VERIFY_PROOF}` there builds it") from None
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args or args[0] in ("-h", "--help"):
@@ -266,15 +299,10 @@ def main(argv: list[str] | None = None) -> int:
         from . import run
 
         return (run.run_main if args[0] == "run" else run.config_main)(args[1:])
-    if args[0] == "demo" and args[1:] == ["--status"]:
-        from verity_cli.examples import status
-        return status(ROOT)
     if args[0] == "demo":
-        if args[1:] and (config := ROOT / "demos" / args[1].replace("-", "_") / "config.toml").is_file():
-            from . import run
-
-            return run.run_main([str(config), *args[2:]])
-        return _runner("demos", "demo", args[1:])
+        return _demo(args[1:])
+    if args[0] == "verify":
+        return _verify(args[1:])
     if args[0] == "lean":
         return _lean(args[1:])
     raise SystemExit(f"verity: no command {args[0]!r}\n{__doc__}")

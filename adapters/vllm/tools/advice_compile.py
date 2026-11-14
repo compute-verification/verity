@@ -7,7 +7,8 @@ sampling parameters, which advice v0 doesn't carry: they come with the request's
 model pin, the device's target profile, the execution label and the server's default seed).  The registration is φ of that
 model, its config.json the pin's config of record (`dense_generic.pinned_hf_config`, as `prove_path.phi_of_serve` reads it) and
 its checkpoint dtype the one that config's `quantization_config` states (`checkpoint_dtype`), on that target at that execution,
-at the engine's tensor-parallel world and `--rank`, with the engine args class G states (`engine_of`; the whole φ is `phi_of`,
+at the engine's tensor-parallel world and `--rank`, with the engine args class G states and the layout of an FP8 KV cache
+(`engine_of`; the whole φ is `phi_of`,
 `predict.phi.served_phi`, the formula a served window's registered compiler reads φ by too, so the Builds written here hold
 the Programs it compiles), without workload, and the public default seed (`engine.served_seed.DEFAULT_SEED`): a run whose
 server says it filled in another is refused (exit 2, `registered_seed`).  Writes, under `--out`:
@@ -43,6 +44,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from verity_vllm import messages as M
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.program.predict import phi as P
 
@@ -55,7 +57,7 @@ def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
     count: a run can serve a user again in another window."""
     adv = run / "advice" / f"w{window}"
     reg = json.loads((adv / "registration.json").read_text())
-    serve = json.loads((run / "serve.json").read_text())
+    serve = json.loads(M.read(run / "serve.json", "ServingConfiguration"))
     bodies = {}
     for line in (run / "requests.jsonl").read_text().splitlines():
         if line.strip():
@@ -72,10 +74,10 @@ def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
     return adv / "private" / "advice.bin", meta, bodies, reg
 
 
-def engine_of(meta: dict, rank: int) -> tuple[dict, dict]:
-    """The registration's tensor-parallel world at ``rank`` and its engine args, from the run's engine record
-    (`predict.phi.engine_of`, whose ValueError it raises)."""
-    return P.engine_of(meta, rank)
+def engine_of(meta: dict, rank: int, hf_config: dict | None = None) -> tuple[dict, dict]:
+    """The registration's tensor-parallel world at ``rank`` and its engine args, from the run's engine record, with the layout
+    of an FP8 KV cache for the model of the pinned config ``hf_config`` (`predict.phi.engine_of`, whose ValueError it raises)."""
+    return P.engine_of(meta, rank, hf_config)
 
 
 def checkpoint_dtype(hf_config: dict) -> str | None:

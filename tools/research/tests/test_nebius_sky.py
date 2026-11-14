@@ -48,8 +48,8 @@ def test_the_queues_fit_the_server_and_config_runs_never_borrow():
     assert q["deployments-gpu"]["cpu"] == 4 * q["deployments-gpu"]["nvidia.com/gpu"]                   # 4 vCPU per GPU: never waits on CPU
     assert (q["deployments-cpu"]["cpu"], q["provers"]["cpu"]) == (100, 64)
     assert sum(x["cpu"] for x in q.values()) + CONTROLLER["cpu"] <= NODE["cpu"]              # every admitted pod can be placed           # checks and pinned benches run outside Kueue
-    for res, cap in NODE.items():
-        assert sum(x[res] for x in q.values()) <= cap, res
+    for res, limit in NODE.items():
+        assert sum(x[res] for x in q.values()) <= limit, res
     assert sum(x["memory"] for x in q.values()) + CONTROLLER["memory"] <= NODE["memory"]
     text = (SKY / "kueue.yaml").read_text()
     gpuq = next(d for d in documents(SKY / "kueue.yaml") if "metadata: {name: deployments-gpu}" in d and "ClusterQueue" in d)
@@ -135,11 +135,9 @@ def test_a_replay_bundle_goes_only_with_its_complete_slim_keep(tmp_path):
 
     text = (SKY / "jobs" / "config-run.yaml").read_text()
     run = textwrap.dedent(text.split("\n---\n")[3].split("\nrun: |\n", 1)[1].split("\n\nconfig:", 1)[0]) + "\n"
-    try:
+    if importlib.util.find_spec("yaml") is not None:
         import yaml
         assert [d for d in yaml.safe_load_all(text) if d and d.get("name") == "replay"][0]["run"] == run
-    except ImportError:
-        pass
     assert subprocess.run(["bash", "-n"], input=run, text=True).returncode == 0
     body = run.split("<< 'EOF'", 1)[1].split("\n", 1)[1].split("\nEOF\n", 1)[0]
     n2 = (SKY.parent / "n2_commit.sh").read_text()
@@ -436,7 +434,7 @@ def test_gpu_tasks_keep_compiled_kernels_per_tree_on_the_host(tmp_path):
             assert out == want, (f, row, fixed, out)
 
 
-def test_submit_caps_what_waits_in_kueue_until_the_dispatcher_runs(tmp_path):
+def test_submit_limits_what_waits_in_kueue_until_the_dispatcher_runs(tmp_path):
     """A SkyPilot job waiting for quota holds one of its 8 launch slots: at most 4 coverage cells and 6 jobs in all may wait. The
     dispatcher's Kueue Jobs hold none, so any number of them waiting blocks nothing."""
     import subprocess
@@ -457,7 +455,7 @@ def test_submit_caps_what_waits_in_kueue_until_the_dispatcher_runs(tmp_path):
     assert check("config-run", ["circuits"] * 3, finished=5).returncode == 0
     r = check("config-run", ["circuits"] * 4)
     assert r.returncode == 4 and "4 vLLM deployments" in r.stderr
-    assert check("prover-bench", ["circuits"] * 4).returncode == 0                 # the cell cap is coverage's; provers has its own slot
+    assert check("prover-bench", ["circuits"] * 4).returncode == 0                 # the cell limit is coverage's; provers has its own slot
     assert check("prover-bench", ["circuits"] * 4 + ["provers"] * 2).returncode == 4
     (tmp_path / "wl.json").write_text("not json")
     assert subprocess.run(["python3", str(tmp_path / "waiting.py"), str(tmp_path / "wl.json"), "config-run", "4", "6"]).returncode == 0
@@ -1461,7 +1459,7 @@ def test_the_checkers_copies_of_its_runs_are_collected_hourly_on_cpu_7_alone_and
     read and gives no record. Its own unit runs there alone, as root, with --launcher-copies over that directory: the flag that
     gives the copies their record is the one that holds the forced pass to them, so the unit deletes nothing else there. A pass deletes
     by what the remote says and keeps the copies the checker lists, so it refuses, running nothing, without a list written in
-    the last 15 minutes (a checker that is down or doesn't write one would have every copy look unneeded), without the store
+    the last 15 minutes (a checker that is down or doesn't write one would have every copy look spare), without the store
     key to ask the remote with, and without main's copy of the code."""
     import shlex
     import subprocess

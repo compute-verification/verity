@@ -8,7 +8,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 E = pytest.importorskip("verity_vllm.engine.int8_exact")
-ZR = pytest.importorskip("verity_vllm.protocols.pouw.h1.records")
+ZR = pytest.importorskip("verity.protocols.accounting.pouw.prover.serving.h1.records")
 
 K, N, ROWS = 64, 96, 128
 HALF = 4 * 32 * 32

@@ -182,10 +182,10 @@ covers a parameter the verifier gets wrong, such as N, the chunk size or the lea
 
 **Python**: `verity_vllm/commit/scheme.py` is the integration's one route to this module. Headers, root bindings,
 tags and the tree walk are imported from here; the position leaf and the level fold keep a prefix-once form over
-these tags, with a pluggable hash for benchmarks. Every committer and the opening verifiers (`hidden_stream.py`,
-`native_host.py`, `native_ranges.py`) hash through it, and
-`hashing.py` / `merkle.py` re-export the id-leaf rules of `verity_vllm.commitments.leaves`.
-`adapters/vllm/tests/commit/test_production_vectors.py` checks it against every vector, the weights root included.
+these tags, with a pluggable hash for benchmarks.
+`adapters/vllm/tests/commit/test_production_vectors.py` checks it against the vectors: every hash, leaf, tree, rejection
+and root, the weights root included, and the openings of a semantic and a step tree. The openings of a stream and of a
+thread tree are checked by the reference's own test alone (`adapters/vllm/tests/commitments/test_vllm_v1.py`).
 
 **CUDA** (checked against the vectors by the pod-marked `adapters/vllm/tests/commit/test_scheme_cuda.py`):
 

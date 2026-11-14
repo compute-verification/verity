@@ -1040,13 +1040,13 @@ theorem read_prints : ∀ {ts : List (ByteArray × Flock.CoinTree.Spec)} {lines 
 
 /-- **A run the device printed reads as its log** (`ReadOf`): where the device printed its log `log` (`PrintsLog`), on
 a run its ledger opens withheld on a window, whose release log reads as its coin commitment's (`releasedRootsOf`) and
-whose log `coinTreesOf` reads trees from that each record passes, `readLog` reads the run's log, at the run's released
-coins, as `log`: its head is the commitment's line (`readLog_head`), and the lines after it are what the device
-printed. -/
+whose log `coinTreesOf` reads trees from and gives each round opened the records' coins (`TreeLines`), `readLog`
+reads the run's log, at the run's released coins, as `log`: its head is the commitment's line (`readLog_head`), and
+the lines after it are what the device printed. -/
 theorem read_run {dev : History} {log : List Release} (hP : PrintsLog dev log) {pk : ByteArray} {w : String}
     {r : Properties.Challenger.Run} (hr : r ∈ dev.runs pk) (ho : OpensOn dev pk w r.id)
     (hcr : ∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) {ts : Array LoggedTree}
-    (hts : coinTreesOf r.log = .ok ts) (hrecs : ∀ rec ∈ recs, ∃ tabs, sessionTreeReason ts tabs rec = none)
+    (hts : coinTreesOf r.log = .ok ts) (hrecs : TreeLines recs r.log)
     {out : List Release} (h : readLog label after recs (r.released label after) r.log = some out) :
     List.Forall₂ ReadOf out log := by
   obtain ⟨hp, hξ⟩ := hP pk w r hr ho
@@ -1054,7 +1054,7 @@ theorem read_run {dev : History} {log : List Release} (hP : PrintsLog dev log) {
   rw [readLog_head hroots] at h
   have hT := trees_log hts
   have hn : (r.log.filterMap helloRoot).Nodup := hT.roots ▸ hT.nodup
-  refine read_prints hp .nil ((tree_lines hts hrecs).sub fun _ hl => List.mem_of_mem_tail hl) ?_
+  refine read_prints hp .nil (hrecs.sub fun _ hl => List.mem_of_mem_tail hl) ?_
     (fun _ h => absurd h List.not_mem_nil) (hξ hcr label after) h
   simpa using hn.sublist ((List.tail_sublist r.log).filterMap _)
 

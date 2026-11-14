@@ -11,7 +11,7 @@ the tip.  The reconcile cron (`reconcile(now)`, beside the expire-leases cron) l
             in `research.merge.REFUSED_KINDS` and lists each step once (as `research merge` requires: it reads a step's first
             entry), and every step `main`'s `merge_requires` asks for the change (main..tip, `rule_touches`) passed in that
             result.  The worker's report of "passed" is never the verdict.  The declaration is `CHECK = Tool(...)` in main's
-            `tools/verity/check/tool.py`, parsed and its keywords read as literals (`declared`), never run; one this can't read lands
+            `tools/check/tool.py`, parsed and its keywords read as literals (`declared`), never run; one this can't read lands
             nothing.
   land      `main` is moved to the tip with `force: false`, so GitHub itself refuses anything but a fast-forward; a refusal (a
             push in between) rebuilds the train too.
@@ -39,6 +39,7 @@ from __future__ import annotations
 import ast
 import json
 import re
+import sys
 from dataclasses import dataclass, field
 
 from ..merge import REFUSED_KINDS, rule_touches
@@ -56,7 +57,7 @@ _MISSING = object()
 REBUILDS = 3
 TRAIN_TIMEOUT_S = 2 * 3600
 LEASE_MARGIN_S = 900
-TOOL_PY = "tools/verity/check/tool.py"
+TOOL_PY = "tools/check/tool.py"
 TRAIN_STATES = ("checking", "landed", "would-land", "failed", "stuck", "refused", "cancelled")
 
 
@@ -242,7 +243,8 @@ def declared(text: str) -> tuple[list[str], dict[str, list[str]]]:
     def literal(key, empty, ok):
         try:
             v = ast.literal_eval(given[key]) if key in given else empty
-        except Exception:  # noqa: BLE001  (anything but a literal is unreadable)
+        except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError) as e:
+            print(f"trains: {TOOL_PY} on main has a {key} that is not a literal ({type(e).__name__}: {e})", file=sys.stderr)
             v = None
         if not ok(v):
             raise ValueError(f"{TOOL_PY} on main has a {key} this gate can't read")

@@ -1,4 +1,4 @@
-"""Served trees as registered ports (`one_stage.served.register_served`): the registration it builds passes R7 and the file
+"""Served trees as registered ports (`one_stage.served.register_served`): the docket it builds passes R7 and the file
 is `reads_file`'s, an earlier output keeps its port, a reused tree its earlier entry, and every malformed tree is
 refused."""
 from __future__ import annotations
@@ -14,7 +14,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as G, docket as R
 from verity.protocols.proofs.spot.verifier.one_stage.served import ServedTree, register_served
 
 XOR8 = PrimitiveDefinition("ServedTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
@@ -80,8 +80,8 @@ def test_the_registration_it_builds_passes_r7_and_the_file_is_the_verifiers():
 
 
 def test_each_registered_read_opens_the_served_root(tmp_path):
-    """The file's port is what `flock-verify` opens a statement's rows against: every row the program reads opens the served
-    root under the file's domain, and `write` writes the bytes `flock-verify --registered` reads."""
+    """The file's port is what `verity-verify-proof` opens a statement's rows against: every row the program reads opens the served
+    root under the file's domain, and `write` writes the bytes `verity-verify-proof --registered` reads."""
     prog = _program()
     reg, tree = _tree(prog)
     sr = register_served(prog, Q, [tree])

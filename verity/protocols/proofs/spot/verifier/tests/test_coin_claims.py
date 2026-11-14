@@ -44,7 +44,7 @@ def test_a_misnamed_source_is_refused(claim):
         C.LiveChallenger("verity/test/coins/v1", 0, [("x", 1)], source)
 
 
-def test_a_named_source_draws_its_own_bytes_and_the_challenger_keeps_its_claim():
+def test_a_named_source_samples_its_own_bytes_and_the_challenger_keeps_its_claim():
     source = C.named(A3, random.Random(1).randbytes)
     assert C.served_claim(source) == A3 and source(8) == random.Random(1).randbytes(8)
     ch = C.LiveChallenger("verity/test/coins/v1", 0, [("x", 2)], C.named(A3, random.Random(2).randbytes))

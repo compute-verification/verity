@@ -27,7 +27,7 @@ statement read from registered rows. It is a conjunction:
   the event is empty, or the sessions type and there is a registrant fork (`regFinder`), a round fork, a session fork
   or an inner fork of the prover's own runs, or Lean's verifier accepts `st` and the verifier every session
   while `st` fails with probability at most `RecursiveSound`'s bound with the compiled table's error as its inner term;
-* (ii) zero knowledge: `RecursiveFirewallPrivate`, `RecursiveAudit`'s (ii), named; at a public unit it is read at no
+* (ii) zero knowledge: `RecursiveZkServerPrivate`, `RecursiveAudit`'s (ii), named; at a public unit it is read at no
   registration rows, the simulator reading the public circuit and the owed outputs.
 
 What it takes, against `RecursiveAudit`:
@@ -46,7 +46,7 @@ What it takes, against `RecursiveAudit`:
   and SHA-512 enters only as the fork disjuncts;
 * obligations, facts about our own code: in (i), `VStarParses` (V*'s files parse to `Vs`, until gap 4) and `TagsFound`
   (each session's inputs carry the tags their name names, `_hF`), as in `RecursiveAudit`; in (ii), whatever
-  `RecursiveFirewallPrivate` takes.
+  `RecursiveZkServerPrivate` takes.
 
 Its proof is `Flock.SecurityProofs.PublicAudit` (`Proofs.Flock.Recursive.PublicAuditProof`). Its non-vacuity is to be
 shown at one recorded recursive run with a public inner unit (`test_lean_witness.py`).
@@ -71,7 +71,7 @@ def AcceptsPublic (obj : Lean.Json) (prog : ByteArray) (st : Flock.Stmt) : Prop 
   (∃ (cf pf : ByteArray) (spec : Flock.SessionSpec),
     Flock.Stmt.setupTables Flock.RecVStar.innerTags cf pf Flock.RecVStar.innerTree 1 (partition := some obj)
       (program := some prog) = .ok (spec, #[st])) ∧
-  ∃ p, Flock.Zk.schedule st.m = .ok p
+  ∃ p, Flock.Zk.schedule st.wideLeaf st.m = .ok p
 
 theorem AcceptsPublic.acceptsStmt {obj : Lean.Json} {prog : ByteArray} {st : Flock.Stmt}
     (h : AcceptsPublic obj prog st) : AcceptsStmt st := by
@@ -91,7 +91,7 @@ def publicHidden (st : Flock.Stmt) : Hidden (execClassAt st).cls :=
 
 (i) For every partition object `obj` and program `prog` of the verifier's own, every inner statement `st`, with its
 class, regions and schedule `execClassAt st`, and every prover `σ` of the recursive audit with Flock's compiled table
-there as its inner protocol (`innerAt`), at the sampling design of the registration's samples (`drawLaw`: a finite space with an
+there as its inner protocol (`innerAt`), at the sampling design of the registration's samples (`sampleDesign`: a finite space with an
 element, so the sampling design's `nonempty` is no hypothesis): V*'s statements `Vs` (`outerStatementsAt st` of them, each sampling
 all its units), V*'s sessions `zr R ω t R₂ j` as the prover supplies them (`ZkOuterR`), their records' custody
 `_hCust`, the verifier's own inputs to them (the inner shape `ish`, V*'s bindings `bind` and the shared rows
@@ -110,7 +110,7 @@ $$\Pr[\text{Lean's verifier builds } st \text{ from } obj, prog \wedge \text{eve
 is at most V*'s sessions' expected statistical errors under the full sample's model, `r` times their expected stage
 slack, and the compiled table's error.
 
-(ii) `RecursiveFirewallPrivate`, `RecursiveAudit`'s (ii), named rather than restated. At a public unit it is read at
+(ii) `RecursiveZkServerPrivate`, `RecursiveAudit`'s (ii), named rather than restated. At a public unit it is read at
 no registration rows (`nr = 0`) and the public circuit `P` as the simulator's `p₀`: the registration's term
 `2 n_r·δ_{K*}` is zero, the bound is `ε_V(δ_{K*}) + n_h·δ_{K*}`, and the simulator reads `P`, the schedule's transcript
 and the owed outputs.
@@ -134,7 +134,7 @@ def PublicAudit : Prop :=
     (obj : Lean.Json) (prog : ByteArray) (st : Flock.Stmt)
     -- V*'s statements and sessions, as the prover supplies them
     {Vs : Fin (outerStatementsAt st) → VStmt}
-    (zr : Reg → (drawLaw draw).Ω → List (Cm × (innerAt T CT st).Coin) → Reg₂ →
+    (zr : Reg → (sampleDesign draw).Ω → List (Cm × (innerAt T CT st).Coin) → Reg₂ →
       (j : Fin (outerStatementsAt st)) → (Vs j).OuterR Reg')
     -- the records' custody
     (_hCust : Flock.Premises.RecordCustody zr)
@@ -148,7 +148,7 @@ def PublicAudit : Prop :=
     (_hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the recursive prover
-    (σ : Strategy (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N))
+    (σ : Strategy (recGame (sampleDesign draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N))
     -- the messages V*'s layers hold, the rounds' commit strings and commitments
     (wmsg : ((j : Fin (outerStatementsAt st)) → (Vs j).Bits) → List (innerAt T CT st).Msg)
     (Sk : ℕ → (j : Fin (outerStatementsAt st)) →
@@ -164,7 +164,7 @@ def PublicAudit : Prop :=
     -- the count curve, bounding every session's rate
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
     (_hr : ∀ R ω t R₂ j S₀
-      (d₀ : Lean.Json) (y₀ : ZkHidden.DrawSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
+      (d₀ : Lean.Json) (y₀ : ZkHidden.SampleSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
     -- VBridge at the committed rounds, a premise: V*'s circuits compute the inner verifier at the rounds before the
     -- last, at the typed sessions and the public statement
@@ -172,7 +172,7 @@ def PublicAudit : Prop :=
       Flock.Premises.VBridgeC (custodied zr _hCust h) dg N k Rw (fun _ _ => publicHidden st) wmsg Sk cmt msg),
     prob (fun o => AcceptsPublic obj prog st ∧ VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
           ¬ (innerAt T CT st).holds (publicHidden st))
-        (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
+        (recGame (sampleDesign draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
     ∃ h : Typed zr,
       (regFinder (custodied zr _hCust h) dg N (transported zr _hCust h σ)).Finds Refine.H512 ∨
       RoundFork (custodied zr _hCust h) dg N k Rw (transported zr _hCust h σ) cmt ∨
@@ -182,18 +182,18 @@ def PublicAudit : Prop :=
           (execClassAt st).regs (execClassAt st).sch) ∨
       prob (fun o => AcceptsPublic obj prog st ∧ VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
             ¬ (innerAt T CT st).holds (publicHidden st))
-          (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤
+          (recGame (sampleDesign draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤
         expAt (transported zr _hCust h σ) (fun ω t s => sumV (custodied zr _hCust h σ.1 ω t) dg N
             (fun R₂ j τ =>
-              (custodied zr _hCust h σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+              (custodied zr _hCust h σ.1 ω t R₂ j).boundCR dg N (Vs j).samplingDesign.model k Rw M ρ τ) s) +
           ((innerAt T CT st).r : ℝ≥0∞) *
             expAt (transported zr _hCust h σ) (fun ω t s => sumV (custodied zr _hCust h σ.1 ω t) dg N
               (fun R₂ j τ => (custodied zr _hCust h σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal (Accounting.tableError (execClassAt st).sch
             ⟨(execClassAt st).cls.kLog, (execClassAt st).regs.length, (execClassAt st).cls.mPts⟩)) ∧
-  RecursiveFirewallPrivate
+  RecursiveZkServerPrivate
 
-/-- **`PublicAudit` with no A3**: `PublicAudit` without its A3 premise, at the same bound. V*'s laws are the full sample
+/-- **`PublicAudit` with no A3**: `PublicAudit` without its A3 premise, at the same bound. V*'s sampling designs are the full sample
 (`--draw subset:<units>`), which samples every unit at every value of the operating system's bytes
 (`execOS_subset_full_mem`), so no session's miss reads those bytes. -/
 def PublicAuditNoA3 : Prop :=
@@ -204,7 +204,7 @@ def PublicAuditNoA3 : Prop :=
     (obj : Lean.Json) (prog : ByteArray) (st : Flock.Stmt)
     -- V*'s statements and sessions, as the prover supplies them
     {Vs : Fin (outerStatementsAt st) → VStmt}
-    (zr : Reg → (drawLaw draw).Ω → List (Cm × (innerAt T CT st).Coin) → Reg₂ →
+    (zr : Reg → (sampleDesign draw).Ω → List (Cm × (innerAt T CT st).Coin) → Reg₂ →
       (j : Fin (outerStatementsAt st)) → (Vs j).OuterR Reg')
     -- the records' custody
     (_hCust : Flock.Premises.RecordCustody zr)
@@ -218,7 +218,7 @@ def PublicAuditNoA3 : Prop :=
     (_hF : ∀ R ω t R₂ j, TagsFound (zr R ω t R₂ j).I)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the recursive prover
-    (σ : Strategy (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N))
+    (σ : Strategy (recGame (sampleDesign draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N))
     -- the messages V*'s layers hold, the rounds' commit strings and commitments
     (wmsg : ((j : Fin (outerStatementsAt st)) → (Vs j).Bits) → List (innerAt T CT st).Msg)
     (Sk : ℕ → (j : Fin (outerStatementsAt st)) →
@@ -232,7 +232,7 @@ def PublicAuditNoA3 : Prop :=
     -- the count curve, bounding every session's rate
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
     (_hr : ∀ R ω t R₂ j S₀
-      (d₀ : Lean.Json) (y₀ : ZkHidden.DrawSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
+      (d₀ : Lean.Json) (y₀ : ZkHidden.SampleSetupZHJ (inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) S' R' i,
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zr R ω t R₂ j).dj y₀ S' R') i k ≤ ρ)
     -- VBridge at the committed rounds, a premise: V*'s circuits compute the inner verifier at the rounds before the
     -- last, at the typed sessions and the public statement
@@ -240,7 +240,7 @@ def PublicAuditNoA3 : Prop :=
       Flock.Premises.VBridgeC (custodied zr _hCust h) dg N k Rw (fun _ _ => publicHidden st) wmsg Sk cmt msg),
     prob (fun o => AcceptsPublic obj prog st ∧ VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
           ¬ (innerAt T CT st).holds (publicHidden st))
-        (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
+        (recGame (sampleDesign draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ = 0 ∨
     ∃ h : Typed zr,
       (regFinder (custodied zr _hCust h) dg N (transported zr _hCust h σ)).Finds Refine.H512 ∨
       RoundFork (custodied zr _hCust h) dg N k Rw (transported zr _hCust h σ) cmt ∨
@@ -250,15 +250,15 @@ def PublicAuditNoA3 : Prop :=
           (execClassAt st).regs (execClassAt st).sch) ∨
       prob (fun o => AcceptsPublic obj prog st ∧ VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
             ¬ (innerAt T CT st).holds (publicHidden st))
-          (recGame (drawLaw draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤
+          (recGame (sampleDesign draw) Reg (innerAt T CT st) Cm fun R ω t => outerVR (zr R ω t) dg N) σ ≤
         expAt (transported zr _hCust h σ) (fun ω t s => sumV (custodied zr _hCust h σ.1 ω t) dg N
             (fun R₂ j τ =>
-              (custodied zr _hCust h σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+              (custodied zr _hCust h σ.1 ω t R₂ j).boundCR dg N (Vs j).samplingDesign.model k Rw M ρ τ) s) +
           ((innerAt T CT st).r : ℝ≥0∞) *
             expAt (transported zr _hCust h σ) (fun ω t s => sumV (custodied zr _hCust h σ.1 ω t) dg N
               (fun R₂ j τ => (custodied zr _hCust h σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal (Accounting.tableError (execClassAt st).sch
             ⟨(execClassAt st).cls.kLog, (execClassAt st).regs.length, (execClassAt st).cls.mPts⟩)) ∧
-  RecursiveFirewallPrivate
+  RecursiveZkServerPrivate
 
 end Flock.Guarantees

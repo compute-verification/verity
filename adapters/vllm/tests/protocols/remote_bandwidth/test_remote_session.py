@@ -1,4 +1,4 @@
-"""PoUB, run over the node's `NodeMemory` end to end on the CPU: `remote.prove` (the prover's side, the
+"""PoUB, run over the node's `NodeMemory` end to end on the CPU: `serving.prove` (the prover's side, the
 Commit's hook) connects over localhost TCP to PoUB's verifier (`verity/protocols/accounting/poub/verifier/session`),
 registers the store, records its memory map against the registration, and runs each pass after an engine step of a
 serving-like trace (pages written over two steps, held, freed and reused, and one long-lived page re-keyed under L = 2
@@ -29,15 +29,25 @@ from xml.etree import ElementTree
 
 import numpy as np
 import pytest
-from verity.protocols.accounting.poub.verifier import audit, memory_map
+from verity.protocols.accounting.poub.prover.node_store import memory_map as store_map
+from verity.protocols.accounting.poub.prover.node_store import serving
+from verity.protocols.accounting.poub.prover.node_store.interface import (
+    Append,
+    PageLayout,
+)
+from verity.protocols.accounting.poub.prover.node_store.registry import (
+    ArrayBacking,
+    NodeMemory,
+)
+from verity.protocols.accounting.poub.prover.node_store.serving import (
+    RegistrationRefused,
+)
+from verity.protocols.accounting.poub.verifier import audit, memory_map, timing
 from verity.protocols.accounting.poub.verifier import codec as rcodec
 from verity.protocols.accounting.poub.verifier import receipts as rb
 from verity.protocols.accounting.poub.verifier.session import verifier, wire
 
-from verity_vllm.protocols.remote_bandwidth import binder, remote
-from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
-from verity_vllm.protocols.remote_bandwidth.interface import Append, PageLayout
-from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, NodeMemory
+from verity_vllm.protocols.remote_bandwidth import remote
 
 from .test_memory_map import BLOCK, PAGES, SLOT_BYTES, SLOTS, kv_payload
 from .test_registry import CODEC, RECEIPT
@@ -96,8 +106,8 @@ def verifying(sock: socket.socket, clock: PassClock, **kw) -> Iterator[verifier.
     on its stdin."""
     v = None
     try:
-        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), source=os.urandom(32), delta=2.0 ** -40,
-                              jitter_ns=10 ** 9, clock=clock, log=lambda m: None, **kw)
+        v = verifier.Verifier(wire.Conn(sock, clock=clock.now), figures=timing.RTX_PRO_6000_NODE, source=os.urandom(32),
+                              delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None, **kw)
         yield v
     finally:
         with contextlib.suppress(OSError):
@@ -122,7 +132,7 @@ def store() -> NodeMemory:
     return s
 
 
-class TickingBackend(remote.StoreBackend):
+class TickingBackend(serving.StoreBackend):
     def __init__(self, clock: PassClock, *args, **kw) -> None:
         super().__init__(*args, **kw)
         self.clock = clock
@@ -271,7 +281,7 @@ def run(plan: str, *, windows: int = 2, window_ns: int = 5, samples: int = 4096,
     backend = backend(clock, s, engine(s, at), randbytes=random.Random(7).randbytes, **kw)
     lsock = wire.listen("127.0.0.1", 0)
     address = f"127.0.0.1:{lsock.getsockname()[1]}"
-    th = Prover(lambda: remote.prove(backend, address, plan, node=b"test-node", codec=P512, log=lambda m: None))
+    th = Prover(lambda: serving.prove(backend, address, plan, node=b"test-node", codec=P512, log=lambda m: None))
     sock = th.accept(lsock)
     with verifying(sock, clock, windows=windows, window_ns=window_ns, samples=samples, lifetime=lifetime) as v:
         v.register()
@@ -346,16 +356,16 @@ def test_a_prover_that_raises_after_it_connects_fails_the_test_at_its_outcome(mo
 
 
 def test_an_audit_run_whose_prover_cannot_load_the_sessions_files_fails_with_that(monkeypatch):
-    """`run`: `remote.prove` loads the session's prover before it connects, so a tree without that file ends the
+    """`run`: `serving.prove` loads the session's prover before it connects, so a tree without that file ends the
     prover's thread there.  The run fails with what the load raised, where its accept would wait for ever."""
-    load = remote.session_module
+    load = serving.session_module
 
     def missing(name: str, *directory: Any) -> Any:
         if name == "prover":
             raise FileNotFoundError("no prover.py")
         return load(name, *directory)
 
-    monkeypatch.setattr(remote, "session_module", missing)
+    monkeypatch.setattr(serving, "session_module", missing)
     monkeypatch.setattr(threading, "excepthook", lambda raised: None)
     with pytest.raises(pytest.fail.Exception, match="^the prover ended before it connected: it raised\n") as failed:
         run("serve")
@@ -429,7 +439,7 @@ def test_a_completed_block_is_uncredited_until_its_encode_lands_and_resident_fro
 
 def test_a_pass_whose_plan_holds_a_block_not_yet_encoded_is_refused():
     s = store()
-    b = remote.StoreBackend(s, engine(s))
+    b = serving.StoreBackend(s, engine(s))
     reg = audit.register(bytes(32), b"n", b.blocks, b.payload_root(b"n"), P512, nonce=bytes(32))
     b.encode(reg)
     a = b.append([b"\x01" * rcodec.BLOCK_BYTES], [bytes(192)])
@@ -440,12 +450,12 @@ def test_a_pass_whose_plan_holds_a_block_not_yet_encoded_is_refused():
     assert b.run_pass(bytes(64), plan)[1][3] == plan
 
 
-def served(coins: tuple[int, ...]) -> tuple[NodeMemory, remote.StoreBackend]:
+def served(coins: tuple[int, ...]) -> tuple[NodeMemory, serving.StoreBackend]:
     """A store whose trace ran `engine`'s first ``len(coins)`` steps with no session: step 0 before the first window, as
     `Serving.ready` runs it, the rest in window 0.  Once step k has run, the first ``coins[k]`` appends, in the order
     made, are encoded, each under a coin of its own: the line open then writes an append's blocks, and none before."""
     s = store()
-    b = remote.StoreBackend(s, engine(s), randbytes=random.Random(7).randbytes)
+    b = serving.StoreBackend(s, engine(s), randbytes=random.Random(7).randbytes)
     reg = audit.register(bytes(32), b"n", b.blocks, b.payload_root(b"n"), P512, nonce=bytes(32))
     b.encode(reg)
     trace = b.serving(reg, 2)
@@ -507,8 +517,8 @@ def test_a_session_on_an_engine_whose_steps_were_numbered_before_it_adopts_its_f
 
 
 class Device:
-    """kv.cu's encode on the host (`remote.KvDevice`'s interface): each word by `codec.encode_word` under the key
-    set and the offset handed in for its chunk, so `remote.DeviceEncoded`'s plumbing runs without a GPU.  ``shift``
+    """kv.cu's encode on the host (`serving.KvDevice`'s interface): each word by `codec.encode_word` under the key
+    set and the offset handed in for its chunk, so `serving.DeviceEncoded`'s plumbing runs without a GPU.  ``shift``
     moves every offset (a device that keys appends wrongly)."""
 
     def __init__(self, shift: int = 0) -> None:
@@ -543,7 +553,7 @@ def test_a_session_whose_store_is_encoded_on_the_device_is_accepted_and_each_enc
 
 def test_a_device_that_keys_an_append_off_its_bound_offset_fails_its_gate():
     s = store()
-    b = remote.StoreBackend(s, engine(s), device=Device(shift=1))
+    b = serving.StoreBackend(s, engine(s), device=Device(shift=1))
     reg = audit.register(bytes(32), b"n", b.blocks, b.payload_root(b"n"), P512, nonce=bytes(32))
     b.encode(reg)
     a = b.audit.append([b"\x01" * rcodec.BLOCK_BYTES], [bytes(192)])
@@ -552,16 +562,16 @@ def test_a_device_that_keys_an_append_off_its_bound_offset_fails_its_gate():
 
 
 def test_a_device_encoded_store_takes_the_registered_payloads_and_each_appends_coin_once():
-    """`remote.DeviceEncoded` refuses payloads that are not the registration's, by their count or by their root, before
+    """`serving.DeviceEncoded` refuses payloads that are not the registration's, by their count or by their root, before
     the device encodes a block.  An append is encoded once, by the coin for its first block: the store then holds the
     codec's bound encoding of each of its blocks, and the gate counts the append and its first block."""
     s = store()
-    b = remote.StoreBackend(s, engine(s), device=(d := Device()))
+    b = serving.StoreBackend(s, engine(s), device=(d := Device()))
     reg = audit.register(bytes(32), b"n", b.blocks, b.payload_root(b"n"), P512, nonce=bytes(32))
     with pytest.raises(ValueError, match="the registration is of 18 blocks"):
-        remote.DeviceEncoded(reg, b.payloads[:-1], b.salts[:-1], d)
+        serving.DeviceEncoded(reg, b.payloads[:-1], b.salts[:-1], d)
     with pytest.raises(ValueError, match="these payloads are not the registered ones"):
-        remote.DeviceEncoded(reg, [*b.payloads[:-1], b"\x01" * rcodec.BLOCK_BYTES], b.salts, d)
+        serving.DeviceEncoded(reg, [*b.payloads[:-1], b"\x01" * rcodec.BLOCK_BYTES], b.salts, d)
     assert d.calls == []
     b.encode(reg)
     payloads, coin = [b"\x01" * rcodec.BLOCK_BYTES, b"\x02" * rcodec.BLOCK_BYTES], bytes(range(32))
@@ -582,7 +592,7 @@ def test_a_store_that_changed_between_its_hello_and_its_registration_is_not_enco
     """`StoreBackend.encode` holds the store to the payloads its hello committed: a byte changed since, in the first
     block or the last, refuses the registration, and the store as it was at the hello is encoded."""
     s = store()
-    b = remote.StoreBackend(s, engine(s))
+    b = serving.StoreBackend(s, engine(s))
     reg = audit.register(bytes(32), b"n", b.blocks, b.payload_root(b"n"), P512, nonce=bytes(32))
     for region, at in (("w", 0), ("dram", -1)):
         held = s.backing(region).array
@@ -598,7 +608,7 @@ def test_a_paced_backends_calibration_adds_its_step_to_each_pass_time():
     (the maximum, the median and each quantile of ``pass_ns``) grows by ``step_ns``, which the result names, every
     other entry stays, and the calibration handed in is not changed."""
     s = store()
-    b = remote.StoreBackend(s, engine(s), read_bytes_per_s=5e9)
+    b = serving.StoreBackend(s, engine(s), read_bytes_per_s=5e9)
     cal = {"pass_ns_max": 7, "pass_ns_median": 5, "pass_ns": {"p50": 5, "max": 7}, "gap_ns_max": 3}
     assert b.with_step(cal) is cal
     assert b.calibrate() == {"pass_ns_max": 0, "gap_ns_max": 0, "read_bytes_per_s": 5e9}
@@ -712,16 +722,16 @@ def test_a_session_module_that_fails_to_load_is_not_kept(tmp_path):
     assert name not in sys.modules
     try:
         with pytest.raises(FileNotFoundError):
-            remote.session_module(name, tmp_path)
+            serving.session_module(name, tmp_path)
         assert name not in sys.modules
         (tmp_path / f"{name}.py").write_text("VALUE = 1\nraise RuntimeError('half loaded')\n", encoding="utf-8")
         with pytest.raises(RuntimeError, match="half loaded"):
-            remote.session_module(name, tmp_path)
+            serving.session_module(name, tmp_path)
         assert name not in sys.modules
         (tmp_path / f"{name}.py").write_text("VALUE = 2\n", encoding="utf-8")
-        module = remote.session_module(name, tmp_path)
+        module = serving.session_module(name, tmp_path)
         assert module.VALUE == 2 and sys.modules[name] is module
-        assert remote.session_module(name, tmp_path / "elsewhere") is module
+        assert serving.session_module(name, tmp_path / "elsewhere") is module
     finally:
         sys.modules.pop(name, None)
 
@@ -739,8 +749,8 @@ def test_a_pass_interval_is_closed_with_its_phases_its_wall_and_what_they_leave(
         def perf_counter_ns(self) -> int:
             return next(self.readings)
 
-    monkeypatch.setattr(remote, "time", Clock(-9, -2, 0, 10, 30, 40, 45, 50, 60, 100, 160))
-    phases = remote.Phases()
+    monkeypatch.setattr(serving, "time", Clock(-9, -2, 0, 10, 30, 40, 45, 50, 60, 100, 160))
+    phases = serving.Phases()
     with phases.time("engine"):
         pass
     phases.close()
@@ -756,7 +766,7 @@ def test_a_pass_interval_is_closed_with_its_phases_its_wall_and_what_they_leave(
 def test_a_run_whose_step_raises_fails_the_sessions_ask_with_its_reason():
     """`Lockstep.step`: the run's engine step that raises answers the session's ask with what it raised, so the session
     fails there, and raises in the run as it was; the step is counted neither audited nor unaudited."""
-    lock, failed = remote.Lockstep(), []
+    lock, failed = serving.Lockstep(), []
 
     def session() -> None:
         try:
@@ -777,7 +787,7 @@ def test_a_run_whose_step_raises_fails_the_sessions_ask_with_its_reason():
 
 
 def test_a_registration_cut_off_is_a_refusal_only_when_the_verifier_refused(monkeypatch):
-    """`prove` raises `Refused`, with the verifier's address and reason, for a registration the wire closed with
+    """`prove` raises `RegistrationRefused`, with the verifier's address and reason, for a registration the wire closed with
     ``refused``; closed for any other reason it raises as the wire raised.  The connection is shut and closed either
     way."""
     done: list[str] = []
@@ -811,15 +821,17 @@ def test_a_registration_cut_off_is_a_refusal_only_when_the_verifier_refused(monk
             wire, ProverSide = Wire, Side
             parse_plan = staticmethod(lambda plan: [(plan, None)])
 
-        monkeypatch.setattr(remote, "session_module", lambda name: {"prover": Prover}[name])
+        monkeypatch.setattr(serving, "session_module", lambda name: {"prover": Prover}[name])
 
     closing("the peer closed the connection")
     with pytest.raises(Wire.Closed, match="the peer closed the connection"):
-        remote.prove(object(), "10.0.0.7:7781", log=lambda m: None)
+        serving.prove(object(), "10.0.0.7:7781", log=lambda m: None)
     closing("refused: a live registration")
-    with pytest.raises(remote.Refused, match="at 10.0.0.7:7781 refused the store's registration") as refused:
-        remote.prove(object(), "10.0.0.7:7781", log=lambda m: None)
-    assert (refused.value.verifier, refused.value.why) == ("10.0.0.7:7781", "refused: a live registration")
+    with pytest.raises(RegistrationRefused, match="at 10.0.0.7:7781 refused the store's registration") as refused:
+        serving.prove(object(), "10.0.0.7:7781", log=lambda m: None)
+    assert type(refused.value) is RegistrationRefused and refused.value.reasons == (
+        "the verifier at 10.0.0.7:7781 refused the store's registration: refused: a live registration",)
+    assert str(refused.value) == refused.value.reasons[0]
     assert done == ["shutdown", "close"] * 2
 
 
@@ -848,7 +860,7 @@ def test_the_phases_summary_is_each_phases_quantiles_over_the_closed_intervals_i
     """`Phases.summary` over the closed intervals: a phase an interval didn't run counts 0 there, the quantile at q is
     the sorted list's entry at ⌊q·n⌋ (its last at 1.0, and at 0.99 too up to 100 intervals), the mean is over every
     interval, all in ms to 3 places, and the phases come sorted by name."""
-    phases = remote.Phases()
+    phases = serving.Phases()
     assert phases.summary() == {}
     phases.closed = [{"encode": 2_000_000, "wall": 10_000_000, "other": 8_000_000}, {"wall": 4_000_000, "other": 4_000_000},
                      {"encode": 1_500_000, "send": 500_000, "wall": 6_000_000, "other": 4_000_000}]
@@ -897,9 +909,9 @@ def test_a_prover_that_fails_closes_its_connection_even_when_the_shutdown_fails(
         wire_ = Wire(gone)
         side = type("Prover", (), {"wire": wire_, "ProverSide": staticmethod(prover_side),
                                    "parse_plan": staticmethod(lambda plan: [(plan, None)])})()
-        monkeypatch.setattr(remote, "session_module", lambda name, side=side: {"prover": side}[name])
+        monkeypatch.setattr(serving, "session_module", lambda name, side=side: {"prover": side}[name])
         with pytest.raises(ValueError, match=r"deliberate: b'n' \[\('serve', None\)\] \{'windows': 2\}"):
-            remote.prove(object(), "10.0.0.7:7781", node=b"n", windows=2)
+            serving.prove(object(), "10.0.0.7:7781", node=b"n", windows=2)
         assert done == [("connect", "10.0.0.7", 7781), ("shutdown", socket.SHUT_RDWR), "close"]
 
 
@@ -926,7 +938,7 @@ def test_the_commits_session_installs_a_binder_of_its_store_before_the_build(mon
     """`CommitSession.install` makes the store's binder with no passes of its own and the KV outside the store, over
     the session's store and its ``weight_blocks``, and keeps what its `install` returns; `before_build` sets the engine
     arguments, checks the target and installs, in that order, and installs nothing for a target it refuses."""
-    monkeypatch.setattr(binder, "Binder", Binding)
+    monkeypatch.setattr(remote, "Binder", Binding)
     cs = remote.CommitSession("127.0.0.1:7781", kv_pages=8, weight_blocks=5)
     assert cs.binder is None
     cs.install()
@@ -989,6 +1001,22 @@ def test_the_commits_session_checks_the_built_engine_and_registers_its_filler():
         cs.check(built(), runner)
     assert str(e.value) == head + "a KV pool registered (served writes stay outside the registration)"
     assert cs.binder.calls == ["stats"] and len(said) == 2
+
+
+def test_the_commits_session_names_the_step_that_comes_first():
+    """`CommitSession.check` before `install`, and `end` before `begin`, each raise a `RuntimeError` naming the step
+    that comes first; an engine the session doesn't serve is refused before `check` asks for its binder."""
+    cs = remote.CommitSession("127.0.0.1:7781", log=lambda m: None)
+    runner = type("Runner", (), {"device": "cuda:0"})()
+    with pytest.raises(RuntimeError) as early:
+        cs.check(built(), runner)
+    assert str(early.value) == "the Commit's session checks its engine once its binder is installed (`install`)"
+    with pytest.raises(SystemExit, match="^--remote-verifier: the engine is not one the session serves: prefix caching on$"):
+        cs.check(built(prefix=True), runner)
+    with pytest.raises(RuntimeError) as early:
+        cs.end()
+    assert str(early.value) == "the Commit's session ends once it has begun (`begin`)"
+    assert cs.binder is None and cs.lockstep is None and cs.record is None
 
 
 class Stats:
@@ -1085,7 +1113,7 @@ def test_a_commits_session_that_cannot_connect_fails_its_test_where_the_verifier
     def stops(k: int) -> None:
         raise ValueError(f"the run's step {k}")
 
-    monkeypatch.setattr(remote.session_module("prover").wire, "connect", unreachable)
+    monkeypatch.setattr(serving.session_module("prover").wire, "connect", unreachable)
     with pytest.raises(pytest.fail.Exception) as failed:
         lockstep(tmp_path, monkeypatch, 3)
     assert str(failed.value) == ("the Commit's session ended before it connected to its verifier: "
@@ -1178,7 +1206,7 @@ def test_a_commits_session_that_fails_is_recorded_rejected_and_its_run_goes_on_u
     def fails(backend, *a, **kw):
         raise ConnectionRefusedError("no verifier")
 
-    monkeypatch.setattr(remote, "prove", fails)
+    monkeypatch.setattr(serving, "prove", fails)
     cs = remote.CommitSession("127.0.0.1:7781", out=tmp_path)
     cs.store, cs.binder = store(), Stats()
     lock, steps = cs.begin(), []
@@ -1190,6 +1218,35 @@ def test_a_commits_session_that_fails_is_recorded_rejected_and_its_run_goes_on_u
     assert (tmp_path / "remote_session.json").exists()
     with pytest.raises(RuntimeError, match="one session"):
         cs.begin()
+
+
+@pytest.mark.parametrize(("result", "steps"), [(None, []), ({"accepted": True}, []), ({"accepted": True, "pass_steps": None}, []),
+                                               ({"accepted": True, "pass_steps": []}, []),
+                                               ({"accepted": True, "pass_steps": [[0, 0, 5]]}, [[0, 0, 5]])])
+def test_a_session_whose_result_leaves_its_pass_steps_out_records_none(monkeypatch, tmp_path, result, steps):
+    """The audit run's record of a session whose trace began: its map's ``pass_steps`` are the prover's result's, and the
+    empty list where the result leaves the field out, holds None there, or was never returned (the prover raised:
+    ``result`` None here); with no step in the map, none of them is mapped."""
+    def proves(backend, *a, **kw):
+        reg = audit.register(bytes(32), b"n", backend.blocks, backend.payload_root(b"n"), P512, nonce=bytes(32))
+        backend.encode(reg)
+        backend.begin_session()
+        backend.serving(reg, 2)
+        if result is None:
+            raise ConnectionResetError("the verifier went away")
+        return [result]
+
+    monkeypatch.setattr(serving, "prove", proves)
+    cs = remote.CommitSession("127.0.0.1:7781", out=tmp_path, codec=P512, log=lambda m: None)
+    cs.store, cs.binder = store(), Stats()
+    cs.begin()
+    rec = cs.end()
+    mm = rec["memory_map"]
+    assert mm["pass_steps"] == steps and mm["pass_steps_mapped"] is False and mm["first_step"] is None and mm["steps"] == 0
+    assert rec["prover"] == ({} if result is None else result) and rec["run"] == {"steps": 0, "audited": 0, "unaudited": 0}
+    assert rec["error"] == ("ConnectionResetError: the verifier went away" if result is None else None)
+    assert rec["accepted"] is (result is not None) and mm.get("agrees") is (None if result is None else True)
+    assert json.loads((tmp_path / "remote_session.json").read_text())["memory_map"]["pass_steps"] == steps
 
 
 @pytest.mark.slow
@@ -1244,12 +1301,12 @@ def test_a_store_session_whose_prover_withholds_an_appended_block_is_rejected():
 
 
 def test_a_verifier_address_is_host_port_and_a_store_serves_one_session():
-    assert remote.address("10.0.0.7:7781") == ("10.0.0.7", 7781)
+    assert serving.address("10.0.0.7:7781") == ("10.0.0.7", 7781)
     for bad in ("7781", "host:", ":7781", "host:0", "host:65536", "host:x"):
         with pytest.raises(ValueError, match="HOST:PORT"):
-            remote.address(bad)
+            serving.address(bad)
     s = store()
-    b = remote.StoreBackend(s, engine(s))
+    b = serving.StoreBackend(s, engine(s))
     reg = audit.register(bytes(32), b"n", b.blocks, b.payload_root(b"n"), P512, nonce=bytes(32))
     b.encode(reg)
     b.begin_session()
@@ -1262,9 +1319,9 @@ def test_a_verifier_address_is_host_port_and_a_store_serves_one_session():
 
 def test_a_second_registration_of_a_live_node_is_refused_with_the_verifiers_reason():
     """One live registration a node (`audit.Registry`): a hello for a node whose registration the verifier holds live
-    is answered `bye`, and `prove` raises `remote.Refused` with the verifier's reason."""
+    is answered `bye`, and `prove` raises `RegistrationRefused` with the verifier's reason."""
     registry, s = audit.Registry(), store()
-    b = remote.StoreBackend(s, engine(s))
+    b = serving.StoreBackend(s, engine(s))
     registry.register(os.urandom(32), b"test-node", b.blocks, b.payload_root(b"test-node"), P512)
     lsock = wire.listen("127.0.0.1", 0)
     address = f"127.0.0.1:{lsock.getsockname()[1]}"
@@ -1272,8 +1329,8 @@ def test_a_second_registration_of_a_live_node_is_refused_with_the_verifiers_reas
 
     def prover() -> None:
         try:
-            remote.prove(b, address, node=b"test-node", codec=P512, log=lambda m: None)
-        except remote.Refused as e:
+            serving.prove(b, address, node=b"test-node", codec=P512, log=lambda m: None)
+        except RegistrationRefused as e:
             raised.append(e)
 
     th = Prover(prover)
@@ -1283,7 +1340,8 @@ def test_a_second_registration_of_a_live_node_is_refused_with_the_verifiers_reas
             v.register()
         th.outcome()
     (e,) = raised
-    assert e.why == f"refused: {refused.value}" and address in str(e) and e.why in str(e)
+    assert e.reasons == (f"the verifier at {address} refused the store's registration: refused: {refused.value}",)
+    assert str(e) == e.reasons[0]
     assert registry.refused == {b"test-node": 1} and registry.drawn(b"test-node") == 1
 
 
@@ -1292,25 +1350,26 @@ def test_a_serving_store_defers_residency_so_a_lifetime_of_one_window_is_refused
     L = 1 every line would re-key every live chunk: its hello says `deferred`, and a verifier of lifetime 1 answers it
     `bye` before sampling a registration."""
     registry, s = audit.Registry(), store()
-    b = remote.StoreBackend(s, engine(s))
+    b = serving.StoreBackend(s, engine(s))
     lsock = wire.listen("127.0.0.1", 0)
     address = f"127.0.0.1:{lsock.getsockname()[1]}"
     raised = []
 
     def prover() -> None:
         try:
-            remote.prove(b, address, node=b"test-node", codec=P512, log=lambda m: None)
-        except remote.Refused as e:
+            serving.prove(b, address, node=b"test-node", codec=P512, log=lambda m: None)
+        except RegistrationRefused as e:
             raised.append(e)
 
     th = Prover(prover)
     sock = th.accept(lsock)
     with verifying(sock, PassClock(), windows=1, window_ns=5, samples=64, registry=registry, lifetime=1) as v:
-        with pytest.raises(ValueError, match="at least 2 windows"):
+        with pytest.raises(ValueError, match="at least 2 windows") as short:
             v.register()
         th.outcome()
     (e,) = raised
-    assert "at least 2 windows" in e.why and registry.drawn(b"test-node") == 0
+    assert e.reasons == (f"the verifier at {address} refused the store's registration: refused: {short.value}",)
+    assert registry.drawn(b"test-node") == 0
 
 
 FAILING = '''

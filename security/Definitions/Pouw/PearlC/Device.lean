@@ -12,23 +12,26 @@ public import Definitions.Pouw.PearlC.Sm120
 `pearlCProtocol` is Pearl-C on the H100: the ticket chain is `hopperStep` promoted every 4 atoms, U is `PeelExact`'s
 Hopper BF16 order, the debit's flags are `Skip`'s, the salt-dead predicate is P3's at the Hopper atom-mix, and the costs
 are H100 W1 prices. A device record makes each of them a parameter, as the scheme's device record does:
-- `PearlCDevice`: the promotion period `G` (0: no promotion, one chain over all of k), the W1 prices, and the device's
-  maps (the ticket chain, U, the debit's flags, and P3's salt-dead predicate). The FP8 lane's parametric twins over a
-  `Pipeline` supply the maps for a captured step: the chain, `Skip`'s flags, `PeelExact`, and `SaltDead` at the device's
-  atom-mix.
+- `PearlCDevice`: the promotion period `G` (0: no promotion, one chain over all of k), the W1 prices, the device's
+  maps (the ticket chain, U, the debit's flags, and P3's salt-dead predicate), and its FP8 step (`pipe`, which rev1's
+  debit replays at the noise support's ends, `DeviceRev1`). The FP8 lane's parametric twins over a `Pipeline` supply the
+  maps for a captured step: the chain, `Skip`'s flags, `PeelExact`, and `SaltDead` at the device's atom-mix.
 - `pearlCProtocolDev` and `pearlCTilesDev`: the named protocol and its audit tiles at a device record. The domain rules
   (`PearlCSem.OperandOK`) are E4M3's, and `sem` still carries the noise, the forming chain and the scales.
-- `devH100`: today's H100 record. `pearlCProtocolDev devH100 = pearlCProtocol · Costs.adopted`
+- `devH100`: today's H100 record, here because `devH100Tensor` is built on it; `pearl-c-sm120` v2's (`devSm120v2`) and
+  the other records no listed statement reads are in `Proofs.Pouw.PearlC.Records`. `pearlCProtocolDev devH100 = pearlCProtocol · Costs.adopted`
   (`pearlCProtocolDev_h100`, `DeviceGap.lean`), so TT_OUT at the H100 record is the granted `TTOutPearlC`.
+- `devH100Tensor`: the same maps at `Prices.h100Tensor`, the SM pipes priced per second at the tensor clock
+  (`h100TensorMHz / h100SmMHz`), the record the H100 statements over W1 with INT8 take.
 
 - `devAt p G pr`: the record at any captured FP8 step `p` (a `Pipeline`), from the FP8 lane's twins: `Accum.chainAt`,
   `PeelExactP.peelExactValP`, `SkipP.unitFlagsAt` and `FormingP.saltDeadP`. At `hopperE4m3K32`, 4 and `Prices.h100` it
   is `devH100` (`devAt_hopper`, `DeviceGap.lean`).
 - `devSm120v1 pr`: `pearl-c-sm120` v1, the RTX PRO 6000's E4M3 step `⟨[32], 26, −133⟩` (`sm120E4m3`) promoted every 4
   atoms, at prices `pr`. Its named assumption takes `sem.fc = FormingP.atomMixP sm120E4m3`, the sm_120 atom-mix.
-- `devSm120v2 pr`: `pearl-c-sm120` v2, the same step without promotion (`G = 0`). Its flags are `SkipP.unitFlagsAt`'s
-  at `G = 0`, the pure chain's lone skips (`SkipP.pureFlagsP`), not `SkipP.unitFlagsP · 0`, which would judge one group
-  over all of k.
+- `devSm120v2 pr` (`Proofs.Pouw.PearlC.Records`): `pearl-c-sm120` v2, the same step without promotion (`G = 0`). Its
+  flags are `SkipP.unitFlagsAt`'s at `G = 0`, the pure chain's lone skips (`SkipP.pureFlagsP`), not
+  `SkipP.unitFlagsP · 0`, which would judge one group over all of k.
 -/
 
 @[expose] public section
@@ -46,12 +49,33 @@ structure Prices where
   bf16 : ℚ
   costs : Costs
 
-/-- The H100's prices (Rounds 10–11): an FP32 add costs 32, a BF16 MAC 2, and §5's forming `Costs.adopted`. -/
+/-- The H100's prices (Rounds 10–11): an FP32 add costs 32, a BF16 MAC 2, and §5's forming `Costs.adopted`. An FP32 add's
+32 is the default clock reading, both pipes at `h100SmMHz` (CMP-438). -/
 def Prices.h100 : Prices := ⟨32, 2, Costs.adopted⟩
+
+/-- The H100's SM clock, 1980 MHz: `clock.sm` in `hardware/cards/h200-sxm-141gb.toml` (the H200 is the same GH100), from
+NVIDIA's H100 Tensor Core GPU Architecture whitepaper V1.04, Table 3, the boost clock its FP32 and FP64 non-tensor peaks
+are quoted at. With the tensor pipe at it too, it is the default reading of the prices (CMP-438). -/
+def h100SmMHz : ℚ := 1980
+
+/-- The H100's tensor clock, 1830 MHz: `clock.tensor` in the same card file, from the whitepaper's Table 3, the boost
+clock for FP8, FP16, BF16 and TF32 tensor-core operations, which the H200 data sheet's dense tensor peaks are quoted
+at. The prices at it (`W1.W1Prices.h100Tensor`) are the second reading, which holds only if the tensor pipe never
+exceeds it. -/
+def h100TensorMHz : ℚ := 1830
+
+/-- **The H100's prices per second at the tensor clock**: a unit is a dense FP8 MAC's time at `h100TensorMHz`, and the
+SM pipes' prices are `Prices.h100`'s times `h100TensorMHz / h100SmMHz = 61/66`. An FP32 add costs `976/33`, a BF16 MAC
+2, and the forming `fs = ⌈32 + 976/33⌉ = 62` (the noise atom and half a cast at `1952/33`) and `qa = ⌈122/33⌉ = 4`,
+`W1.W1Prices.h100Tensor`'s coarse record (`Proofs.Pouw.PearlC.W1Checks.toPrices_h100Tensor`). A unit is an FP8 MAC's
+time at the tensor clock. An SM-pipe instruction takes 32 MACs' time at the SM clock, which is `32 · 1830/1980 = 976/33`
+(29.58) of those units with the tensor pipe at 1830 MHz beside SM pipes at 1980 MHz, exactly its charge here; with both
+pipes at one clock it takes 32 units, more than its charge. -/
+def Prices.h100Tensor : Prices := ⟨32 * h100TensorMHz / h100SmMHz, 2, ⟨62, 4⟩⟩
 
 /-- **A device record** for Pearl-C: the promotion period `G` (0: none), the prices, and the device's maps on a unit's
 noisy codes (A′, B̃): the ticket words C̃, the useful words U from the codes, F's codes and the peel's noise rows, the
-debit's flags per word and atom, and P3's salt-dead predicate at the rows' scales. -/
+debit's flags per word and atom, P3's salt-dead predicate at the rows' scales, and the FP8 step the maps are of. -/
 structure PearlCDevice where
   G : ℕ
   prices : Prices
@@ -60,6 +84,7 @@ structure PearlCDevice where
     Matrix (Fin k) (Fin 32) Code → Matrix (Fin m) (Fin 32) ℕ → Matrix (Fin n) (Fin 32) ℕ → Matrix (Fin m) (Fin n) (Option ℚ)
   flags : ∀ {m n k : ℕ}, Matrix (Fin m) (Fin k) Code → Matrix (Fin n) (Fin k) Code → Fin m → Fin n → ℕ → Bool
   saltDead : ((k : ℕ) → (Fin k → ℚ) → ℚ) → ((k : ℕ) → (Fin k → ℚ) → ℚ) → (k : ℕ) → (Fin k → ℚ) → Fin k → Prop
+  pipe : Pipeline
 
 /-- The H100 record: `ctChain` promoted every 4 atoms, `PeelExact`'s U, `Skip`'s flags and P3's `SaltDead`. -/
 def devH100 : PearlCDevice where
@@ -69,6 +94,10 @@ def devH100 : PearlCDevice where
   useful := fun A B FA FB beA beB => PeelExact.peelExactVal A B FA FB beA beB
   flags := fun A B => Skip.unitFlags A B
   saltDead := SaltDead.saltDead
+  pipe := hopperE4m3K32
+
+/-- **The H100 record per second at the tensor clock**: `devH100`'s maps at `Prices.h100Tensor`. -/
+def devH100Tensor : PearlCDevice := { devH100 with prices := Prices.h100Tensor }
 
 /-- **The record at a captured FP8 step `p`**, promotion period `G` and prices `pr`: the FP8 lane's twins at `p`. -/
 def devAt (p : Pipeline) (G : ℕ) (pr : Prices) : PearlCDevice where
@@ -78,17 +107,13 @@ def devAt (p : Pipeline) (G : ℕ) (pr : Prices) : PearlCDevice where
   useful := fun A B FA FB beA beB => PeelExactP.peelExactValP p G A B FA FB beA beB
   flags := fun A B => SkipP.unitFlagsAt p G A B
   saltDead := FormingP.saltDeadP p
+  pipe := p
 
 /-- **`pearl-c-sm120` v1's record**: the RTX PRO 6000's E4M3 `mma.sync` step `sm120E4m3 = ⟨[32], 26, −133⟩`, promoted
-every 4 atoms, at prices `pr`; the named rows take `Prices.sm120` (`DevicePrices`). A tensor-core instruction is priced
-by its whole fragment: an E4M3 `m16n8k32` costs 4,096 units and a BF16 `m16n8k16` 2,048 MACs at 2, however few of its
-outputs a program uses (`w1-complete/sm120`). -/
+every 4 atoms, at prices `pr`; the served record takes `Prices.sm120Loop` (`Proofs.Pouw.PearlC.Records`). A tensor-core
+instruction is priced by its whole fragment: an E4M3 `m16n8k32` costs 4,096 units and a BF16 `m16n8k16` 2,048 MACs at 2,
+however few of its outputs a program uses (`w1-complete/sm120`). -/
 def devSm120v1 (pr : Prices) : PearlCDevice := devAt sm120E4m3 4 pr
-
-/-- **`pearl-c-sm120` v2's record**: the same E4M3 step `sm120E4m3` without promotion (`G = 0`), at prices `pr`. The
-ticket is the pure chain over all of k (`AccumProofs.chainAt_zero_eq_pure`), and the debit's flags are the pure chain's
-lone skips (`SkipP.pureFlagsP`, `FreezePPure.unitFlagsAt_zero_iff`). -/
-def devSm120v2 (pr : Prices) : PearlCDevice := devAt sm120E4m3 0 pr
 
 /-- The credited work of one unit at a device: the chain `m·k·n`, its promotion adds (`m·k·n/(32·G)` FP32 adds at the
 device's price, none without promotion), the fused `A′·F_B` (`m·k·r`), the peel (depth `2r` in BF16, `2·r·m·n` MACs at the

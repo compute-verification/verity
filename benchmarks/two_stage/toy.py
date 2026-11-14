@@ -16,7 +16,7 @@ proves them (`audit.py`).
   (`Member.wired_trees`): a reader's row is its writer's output value, a leaf of the writer's tree under that row's salt,
   so the interior commits each value once (`Binding.held`). Each span is replayed from its ingress, the boundary record's
   row at S[i]. Every member is a shared-row member and every port of it a registered read
-  (`verity.commitments.windows.links.Port`), so Lean opens every row a session proves: a link port (b_in's input, b_out's output)
+  (`verity.commitments.periods.links.Port`), so Lean opens every row a session proves: a link port (b_in's input, b_out's output)
   at the boundary record, its rows committed under the boundary's salts at S[i] so an honest replay's ``b || c`` are the
   boundary's, its header naming the boundary port, the leaves S and each one's path to the boundary root; a wired port at
   its writer's port of the interior record, its table the writer's output rows (table row r at leaf r, as the header
@@ -42,13 +42,13 @@ from pathlib import Path
 import numpy as np
 
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as REG, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as REG, docket as R
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.commitments.windows import links as LK, rows as CS
+from verity.commitments.periods import links as LK, rows as CS
 
 #: a row's hm96 hash compresses a block before its last only from 112 bytes on, and Flock's unit statement needs one such row
 H = 1024
@@ -178,10 +178,11 @@ def boundary_ports(window: CS.Binding) -> dict[str, str]:
 def spec(n: int, q: int, k: int | Mapping[str, int], proof_deadline: float = 3600.0) -> S.Spec:
     """The challenger's two-stage design over ``n`` spans: the first stage samples ``q`` of them, the second ``k`` proof
     blocks in each (replay block, template) cell (an int, or one count a template id), each proof by ``proof_deadline``
-    seconds after its sample."""
+    seconds after its sample. Its values are every row port of every member, as the windows' layout names them
+    (`rows.expected_ports`): a wired port of the interior, which has no tree of its own, under its reader too."""
     names = {}
     for phase, w in (("serve", boundary_window(n, q)), ("interior", interior_window("00" * 64, range(q)))):
-        names |= {m.port(p): (m.schema(p), phase) for m in w.members for p in CS.port_leaves(m)}
+        names |= {m.port(p): (m.schema(p), phase) for m in w.members for p, _w in m.all_rows}
     public = (S.Public("population", "structure", "N, the sample's range"),
               S.Public("window", "structure", "provenance: the two-stage toy"),
               S.Public("leaf_layer", "structure", "the members' public bodies' digest"),

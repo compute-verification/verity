@@ -13,28 +13,33 @@ auditor's device reads, apart from the host it runs in). Each number is an entry
 - `source` names a data sheet, a document or an `art:` id (a run's evidence: its record, `research data show RUN`'s
   `outputs.run_record`), and a node by its kind, never its host name.
 
-| SKU | kind | file | Lean table |
-|---|---|---|---|
-| RTX PRO 6000 Blackwell Server Edition (board 900-2G153-0000-000) | gpu | `hardware/cards/rtx-pro-6000-server.toml` | `security/Definitions/Core/Accel/Sm120.lean` |
-| H200 SXM 141 GB (board 692-2G520-0280-001) | gpu | `hardware/cards/h200-sxm-141gb.toml` | `security/Definitions/Core/Accel/H200.lean` |
-| B200 SXM 180 GB (board 692-2G525-0220-000) | gpu | `hardware/cards/b200-sxm-180gb.toml` | none yet: `security/Definitions/Accounting/Sheets/B200.lean` is held to it |
-| Two Xeon 6776P, the RTX node's host | host | `hardware/cards/xeon-6776p-2s.toml` | none |
-| Two Xeon Platinum 8468, the H200 nodes' host | host | `hardware/cards/xeon-platinum-8468-2s.toml` | none |
-| NVIDIA DGX H200, a server none of our nodes is | server | `hardware/cards/dgx-h200.toml` | none |
-| `CLOCK_MONOTONIC_RAW` in a Nebius virtual machine, a KVM guest on `kvm-clock` or `tsc` | timebase | `hardware/cards/nebius-vm-monotonic-raw.toml` | none |
+| SKU | kind | file |
+|---|---|---|
+| RTX PRO 6000 Blackwell Server Edition (board 900-2G153-0000-000) | gpu | `hardware/cards/rtx-pro-6000-server.toml` |
+| H200 SXM 141 GB (board 692-2G520-0280-001) | gpu | `hardware/cards/h200-sxm-141gb.toml` |
+| B200 SXM 180 GB (board 692-2G525-0220-000) | gpu | `hardware/cards/b200-sxm-180gb.toml` |
+| Two Xeon 6776P, the RTX node's host | host | `hardware/cards/xeon-6776p-2s.toml` |
+| Two Xeon Platinum 8468, the H200 nodes' host | host | `hardware/cards/xeon-platinum-8468-2s.toml` |
+| NVIDIA DGX H200, a server none of our nodes is | server | `hardware/cards/dgx-h200.toml` |
+| `CLOCK_MONOTONIC_RAW` in a Nebius virtual machine, a KVM guest on `kvm-clock` or `tsc` | timebase | `hardware/cards/nebius-vm-monotonic-raw.toml` |
 
 Every card of a kind has the same sections and entries, a host card's `disk.read` apart. A GPU card's are `sm` (`count`, the SMs, and
 `warps`, the most warps resident on one at once), `clock` (`tensor` the tensor's, `sm` every other resource's, `memory`
-device memory's),
+device memory's, and `default`, the name of the reading of `readings(card)`, `sm` or `tensor`, that every figure
+is stated at unless it names the other: the higher tensor ceiling, `sm` on every card (CMP-438)),
 `store` (each store's size; `smem` is the pool of L1 and shared memory, and `smem_carveout` the most of that pool a
 kernel can make shared memory, a part of `smem` that no store's size adds; `dram` is the device memory a program gets
-and `dram_installed` the memory on the board, a second reading at or above it; and, only where a run found them, the
-caches an SM serves code and constants from, `l15`, `l1i`, `l0i` and `const_l0`, which the RTX PRO 6000's card has),
+and `dram_installed` the memory on the board, a second reading at or above it, which a registered sheet and a Lean
+table take as device memory; and, only where a run found them, the caches an SM serves code and constants from, `l15`,
+`l1i`, `l0i` and `const_l0`, which the RTX PRO 6000's card has),
 `rate` (each resource's units a SM-clock), `memory` (device memory's bus, transfers and bandwidth, and `read`, the
 fastest read of it measured, which stands at the bandwidth as a placeholder where none is), `weight` (the tensor
-units a MAC of each format uses), `price` (what an operation costs in tensor units in a timed loop: `fp32_loop`, an FP32
-add in a loop of 64 adds and 3 loop instructions, at or above the add's price at the card's ceilings, `rate.tensor` over
-32 lanes of `rate.issue`) and `model` (`Accel.Card`'s `exact` and code space). A host card's are `cpu` (the
+units a MAC of each format uses), `price` (what an operation costs in tensor units, each operation charged in seconds at
+its own pipe's data-sheet ceiling (CMP-438): `fp32`, an FP32 add under each reading, keyed by its name: `fp32.sm`,
+both pipes at `clock.sm`, `rate.tensor` over 32 lanes of `rate.issue`, the default reading; `fp32.tensor`, the same
+with the tensor at `clock.tensor`, which differs only on the H200, 29.58 there and holding only if its tensor pipe
+never exceeds 1830 MHz; and `fp32_loop`, an FP32 add in a loop of 64 adds and 3 loop instructions, at or above
+`fp32.sm`) and `model` (`Accel.Card`'s `exact` and code space). A host card's are `cpu` (the
 server's sockets and cores, and `vm_cores`, the cores a GPU that a node's VM gives: a measurement of our nodes, not a
 number of the server), `clock`, `rate` (AMX MACs and SHA-512 compressions a cycle a core, and the host's op peak),
 `memory` (DRAM's channels, speed, bandwidth, measured read and write ceiling, and `speed_max`, `bandwidth_max` and
@@ -50,8 +55,8 @@ node's host card has it and the H200 nodes' has no entry rather than an invented
 allowances, and `chip`, the host's on-chip bytes in S_chip). A server card's is `link`: the line rates of the
 server's network ports by its guide's classes (`cluster`, `storage`, `management`), each port in one class, and `rate`,
 all of them together, which a boundary link of a host of that model carries at most each way. The DGX H200 is the
-machine the inference-only policy's `h200-hgx` location is, and `tests/test_policy.py` holds the policy's `links` to
-the card's `link.cluster` and `link.storage`, the twelve ConnectX-7 ports it counts. A time base's card's is `drift`:
+machine the inference-only policy's `h200-hgx` location is, whose `links` `benchmarks/rho` reads from the card: its
+`link.rate`, and its `link.cluster` as the low. A time base's card's is `drift`:
 `max`, the most the clock's rate may differ from the SI second's (`s/s`), and `read`, the largest reading of it on
 record, a `measurement`, which `max` is never below.
 
@@ -94,28 +99,11 @@ its kind. `skus(kind=None)` lists the cards, or those of one kind.
 Lean's `card.ρ`, the SMs times the resource's rate times its clock (for the tensor `clock.tensor` where the card has one
 and `clock.sm` where it doesn't, for the rest `clock.sm`, or the clock `mhz` names), in MACs of operand format `fmt` when
 given, and device memory's `memory.bandwidth` in words. A benchmark that quotes a peak calls it rather than multiplying
-the card's numbers itself, and `tests/test_lean.py` holds it to each Lean table. `readings(card, *, fmt=None) -> dict`
-is the tensor peak under each reading of its clock the card states (`READINGS`: `clock.tensor`, the card's own, then
-`clock.sm`), so a figure quoted under every reading names no clock itself.
+the card's numbers itself. `readings(card, *, fmt=None) -> dict` is the tensor peak under each reading of its clock the
+card states (`READINGS`: `clock.tensor`, the card's own, then `clock.sm`), so a figure quoted under every reading names no
+clock itself, and the card's default is `readings(card)[card["clock"]["default"]]`.
 
-**The Lean tables are generated** (`verity/hardware/lean.py`). A GPU card file that names a Lean table (`lean`) gives
-that module: `render(card)` is its text, the card file's numbers (`table(card)`) under the namespace, `clock`,
-`tensorClock` and `card` its importers read, and nobody edits it. The text's shape is fixed (the module's docstring
-gives it): the Lean check's record of a definition digests the term, so a number written another way, or an arm moved,
-is a changed record though no number changed. A division in a field of ℕ is exact, and `render` refuses a card file
-whose entry would make Lean's ℕ division truncate.
-
-**Changing a number:** change the card file, then write its table:
-
-~~~sh
-uv run python -m verity.hardware.lean --write
-~~~
-
-Without `--write` the command names each table its card file no longer gives and exits 1. `tests/test_lean.py` holds
-each committed table to `render` byte for byte; it also evaluates each `card` arm as an exact rational, independently
-of the generator, and fails on any number that differs from the card file's, and on a store, resource or format of
-`security/Definitions/Core/Accel/Isa.lean` that either side lacks. A new SKU is a new card file, whose `lean` names its
-table.
+A new SKU is a new card file.
 
 ## The node files (`hardware/nodes/`, read by `verity.device`)
 
@@ -133,7 +121,7 @@ A file has `device` (`sku`, the GPU card, and `count`, how many of it the node c
 and, one table a leaf, `memory.NAME`: a memory leaf of the host's own, with its `tier` (`dram` or `disk`), its
 `bytes` and its `rate`. DRAM's bytes are the memory the node's VM is given (`lsmem -b`), above `MemTotal`, which leaves
 out what the kernel keeps. A disk's leaf is one block device, whole, mounted or not (`lsblk -b`). A leaf with no read
-on record has no table. A GPU's own memory is not stated: it is its card's `store.dram`, whole.
+on record has no table. A GPU's own memory is not stated: it is its card's `store.dram_installed`, whole.
 
 A leaf's `rate` is the most its bytes are read back at, in `B/s`, marked `ceiling`: the tightest bound on record that
 holds whatever the node runs. The DRAM leaf's is the host card's `memory.bandwidth_max`, the server's channels. A
@@ -184,40 +172,61 @@ is so of an interface and not of the storage path. The interfaces come first, in
 states neither a rate nor its read, a storage path that does not name disk leaves of the file's, each once, and a
 leaf or an interface named `storage`.
 
-`Registration.node_entry(node, card, host, ways=ways_out(node, host))`, in the Site's module beside the readers,
-gives the entry a node file's table, its GPU card's table and its ways out register, under the
-host id its caller passes: the card's sheet, the site, the host, each device `host/gpuI` with one `hbm` leaf at the
-sheet's device memory, the host's leaves `host/NAME`, and for each way out that has a rate a link under its id from
-the host to the outside. The sheet is built from the card file when the entry is, so no digest is kept in the tree.
+`Registration.node_entry(node, card, host, host_card=..., ways=ways_out(node, host), leaves=leaves(node, host))`, in
+the Site's module beside the readers, gives the entry a node file's table, its GPU card's and host card's tables, its
+ways out and its leaves register, under the host id its caller passes: the card's sheet, the site at its unit of time,
+the host with its on-chip state in bits (eight times the host card's `store.chip`) and the rate each tier's leaves
+share, each device `host/gpuI` with one `hbm` leaf at the sheet's device memory, the host's leaves `host/NAME` at their
+rates, and for each way out a link under its id from the host to the outside. `node_figures` of the same tables gives
+the auditor's figures for the host and its leaves, which the Site's check holds the entry's to. The sheet is built from
+the card file when the entry is, so no digest is kept in the tree.
 It refuses a file with no `dram` leaf or no `disk` leaf: an entry of it would pass the Site's check and state a host
 with less memory than the node has. Its message gives the commands that read both on the node. `node_entry` reads
-no file itself, so its caller hands it the ways out, and it holds them to the file's tables:
-each by name and in order, with a rate exactly where the file states one. A rate's value is `ways_out`'s reading.
+no file itself, so its caller hands it the ways out and the leaves, and it holds them to the file's tables: each way
+by name and in order, with a rate exactly where the file states one, and each leaf by name, tier and bytes. A rate's
+value is `ways_out`'s or `leaves`' reading.
 
-A way out's link is a boundary link that no certifier splits, at the bits its rate moves in a tick, rounded up. That
-is what is so of a node none of whose ways out the auditor's hardware sits on, so `onsite` refuses the node by
-`uncertified`. Where a network certifier stands in front of such a node without splitting its interface (a process on
-another machine that reaches the server through a forward), `node_entry(..., certifier=(id, key))` registers it too:
+A way out's link is a boundary link that no certifier splits, at its rate in bits a second. That is what is so of a
+node none of whose ways out the auditor's hardware sits on. Two kinds of way say why no certifier splits them
+(`Link.unmediated`, from the way's kind): an interface that reads no line rate, whose link states no capacity ("no
+line rate stated"), and the storage path ("storage path"). `onsite` takes their reasons, and a site with either is
+not mediated (`Site.mediated`). An interface with a rate says none, so `onsite` refuses the node by `uncertified`
+until a certifier splits it. Where a network certifier stands in front of such a node without splitting its interface (a process on
+another machine that reaches the server through a forward), `node_entry(..., certifier=(id, key, scheme))` registers it too:
 the certifier under the site and a certified way out, host to certifier and certifier to outside, each at the
 interfaces' rates summed. The ways' own links stay beside them, so `onsite` still refuses the node, and no
 registration says that every bit leaves through a certifier that does not hold the wire. The storage path's rate is
 not in a certifier's links and no certifier is linked to the path: a certifier that did split the interface would
-still leave the path's link bare.
+leave the path's link, and the site would still not be mediated.
 
-An entry always registers a link out. An interface with no rate registers no link and takes no certifier, so naming
-one on a node none of whose interfaces has a rate is refused. A file that states no interface gives no entry, since
-the entry would not say how the node reaches the outside, and neither does a file none of whose ways out has a rate.
-Each message says what to read or state.
+An entry always registers a link out. An interface with no rate takes no certifier, so naming one on a node none of
+whose interfaces has a rate is refused. A file that states no interface gives no entry, since the entry would not say
+how the node reaches the outside. Each message says what to read or state.
+
+An auditor's device has no node file: `clock_drift(host, load_card(sku))`, beside `node_entry`, reads the card of the
+time base its clock runs on (`kind = "timebase"`) and gives, by `drift.max`'s mark, the host's premise
+(`ClockPremise`: `ClockRateWithin(<host>, <drift.max>)`, the number, its mark and its source) or, for a `ceiling`, the
+figure the host states and `Auditor.drift` holds it to. A number marked `premise` never becomes that figure, so a row
+that reads a drift the auditor registered names no premise. A `measurement` or a `placeholder` bounds no clock and is
+refused. `auditor_host(host, key, scheme, load_card(sku))` is the host's location (kind `auditor-host`, at the site):
+it states the card's SKU as its time base and the figure as its drift, or no drift for a premise.
+`node_entry(..., certifier=..., certifier_host=that location)` registers the certifier in the host, so the clock the
+certifier reads is the host's (`Site.clock`, `Site.drift`); a certifier under the site reads none and times nothing.
+`Auditor.of_files(..., timebases={host: card})` holds the host's time base and drift, and `ClockPremise.premised()` is
+the host's `Account.Premised` (host, drift, premise), the drift of every device of the auditor's in the host.
 
 ~~~python
-from verity.device import Auditor, Registration, check, load_card, load_node, ways_out
+from verity.device import Auditor, Registration, check, leaves, load_card, load_node, node_figures, ways_out
 node = load_node("rtx-pro-6000-server-x8")
-gpu = load_card(node["device"]["sku"])
+gpu, host = load_card(node["device"]["sku"]), load_card(node["host"]["sku"])
 log = Registration("remote")
-entry = log.node_entry(node, gpu, host="node0", ways=ways_out(node, "node0"))
-site = check(log.append(entry), Auditor.of_files([gpu]))
+out, own = ways_out(node, "node0"), leaves(node, "node0")
+entry = log.node_entry(node, gpu, "node0", host_card=host, ways=out, leaves=own)
+memory, figures = node_figures(node, host, "node0", ways=out, leaves=own)
+site = check(log.append(entry), Auditor.of_files([gpu], memory=memory, hosts=[("node0", figures)]))
 ~~~
 
-`remote` accepts each node's log against the auditor the GPU card files give. `onsite` refuses both by `uncertified`:
-the eight-card node by its interface's link and its storage path's, with a stand-in certifier or without one, and the
-H200 node, whose entry holds the storage path's link alone, by that (`tests/test_nodes.py`).
+`remote` accepts each node's log against the auditor the GPU card files give, and neither site is mediated. `onsite`
+refuses the eight-card node by `uncertified`, by its interface's link, with a stand-in certifier or without one, and
+accepts the H200 node, both of whose links say why no certifier splits them, once a memory challenger reaches its host
+(`tests/test_nodes.py`).

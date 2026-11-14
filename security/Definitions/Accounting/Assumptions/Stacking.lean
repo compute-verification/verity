@@ -5,8 +5,8 @@ public import Definitions.Accounting.Carrier
 /-!
 # Stacking's named assumptions: bound keys, the declared circuit's carriers, the steered layout (trusted)
 
-What the stacking guarantees (`Definitions/Accounting/Guarantees/Stacking.lean`, `RegisteredCircuit.lean`) assume beyond the
-remote audit's own and the gate model's `Accounting.Assumptions.SquaringFloor` and `Accounting.Assumptions.ChainSum`,
+What the stacking guarantees (`Definitions/Accounting/Guarantees/Stacking.lean`, `RegisteredCircuit.lean`) assume beyond
+PoUB's own and the gate model's `Accounting.Assumptions.SquaringFloor` and `Accounting.Assumptions.ChainSum`,
 each a named `Prop` taken as a hypothesis, never an `axiom`:
 
 * `KeyBinding T M δ enc`: under the append-coin rule (`Accounting.appendCoinBlocks`), whatever the writers choose for

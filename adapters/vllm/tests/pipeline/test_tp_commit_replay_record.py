@@ -154,7 +154,7 @@ def test_the_fold_decides_a_record_with_no_cross_rank_verdict_no_finalize_block_
             {"pair": 0, "arm": "instrumented", "tokens_equal_ref": True, "commit": {"per_rank": {"0": dict(PENDING), "1": dict(PENDING)}, "commit_pass": None}},
             {"pair": 1, "arm": "instrumented", "tokens_equal_ref": True})
     (out / "finalize_pair0.json").write_text(json.dumps([{"rank": 0}, {"rank": 1, "sampled_replay": None}]))
-    (out / "summary.json").write_text("{}")
+    (out / "summary.json").write_text(json.dumps({"replay_deferred": {"record": C2.DEFERRED}}))
     assert TPR.fold(out) is False
     summ = json.loads((out / "summary.json").read_text())
     assert summ["commit_pass"] == [False, None] and summ["pass"] is False

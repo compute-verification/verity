@@ -9,7 +9,7 @@
 # verifier's record; the verifier's fold points (rec_vstage points) and InnerFold.lean --hide unit on the tree (an executable,
 # cached by its sources): each rep's public comb and Lean's full fold; rec_session --check-fold (comb + the session's h is the
 # full fold, h nonzero); rec_vstage stage --levels none (the holo algebra's InnerRepCheck parts, h read from the session's
-# rows, each holding); and Lean's reading of the session (flock-verify rec-transcript: every stream of the verifier's record,
+# rows, each holding); and Lean's reading of the session (verity-verify-proof rec-transcript: every stream of the verifier's record,
 # held to the schedule and to the prover's record, R's top to its registration with STACKED), which test_lean_rec_inner_streams
 # runs on the fixture. Lean's plain verify takes a coin tree of the session's own streams (--coins tree), not one with the
 # relay's sparse and stacked streams added, so the prover's session is not verified on its own here (pod 85's INNER_LEAN likewise), nor are the controls on its sample and challenges. The challenger's live-coin part
@@ -23,7 +23,7 @@
 # and with STACKED circuit-registration.json). Exits 1 unless the session, replay, rec_vstar, the fold check, the staging and
 # Lean's reading all pass.
 # Launch it through a check slot, which pins it to the slot's cores and holds the slot:
-#   research run --on vy-cpu-1 --source . --cwd source -- python3 tools/verity/check/slot.py --by NAME -- bash $0 [N=16]
+#   research run --on vy-cpu-1 --source . --cwd source -- python3 tools/check/slot.py --by NAME -- bash $0 [N=16]
 # env: N=16 (RoPE heads, one VU each: Shape(25,22,8))  FLOCK_WORK (as 80-rec-inner.sh)
 #   TREE_FROM= (the challenger's device, HOST:PORT, the session's coin tree sampled and opened there, rec_session --tree-from;
 #   TREE_SECRET_FILE= its session secret, hex; empty: this host's OS samples it, rec_session --tree-test-os, a test's coins,

@@ -235,11 +235,15 @@ def _manifest(tmp_path, reqs, name="workload.json", **extra):
     return str(p)
 
 
+#: Three requests of two shapes, (3, 2) and (5, 0), which `_manifest` writes and `_derived_dir` holds the components of.
+REQUESTS = [{"LP": 3, "cap": 3}, {"LP": 5, "cap": 1, "arrive": 1}, {"LP": 3, "cap": 3, "arrive": 2}]
+
+
 def test_gp01_build_reads_no_execution_record_and_is_stable_across_builds(tmp_path):
     """`global_program.build` (the GP-01 driver) composes from the manifest + derived components only: `execution_record_read` is
     false, two builds give one digest, and a request's declared cap fixes its component shape — a manifest whose requests were
     served 1 or 3 tokens composes to the SAME Program because served lengths are not in the manifest."""
-    reqs = [{"LP": 3, "cap": 3}, {"LP": 5, "cap": 1, "arrive": 1}, {"LP": 3, "cap": 3, "arrive": 2}]
+    reqs = REQUESTS
     derived = [_derived_dir(tmp_path, 3, 2), _derived_dir(tmp_path, 5, 0)]
     m = _manifest(tmp_path, reqs, eos_token_ids=[7])
     a = gp.build(m, derived, str(tmp_path / "out_a"), eos_token_ids=None)
@@ -396,7 +400,7 @@ def test_chronology_follows_arrivals_not_manifest_order_and_programs_every_step_
     assert len(seen) == len(set(seen)) == sum(r.cap for r in wl.requests)
     for r in wl.requests:
         assert sorted(s for rid, s in seen if rid == r.request_id) == list(range(r.cap))
-    # every member names its component segment (the step's instance set) and a global gate range inside the request's interval
+    # every member names its component segment (the step's input set) and a global gate range inside the request's interval
     am = {r["request_id"]: r for r in wl.address_map()["requests"]}
     for e in ch["engine_steps"]:
         for m in e["members"]:
@@ -588,7 +592,7 @@ def test_single_weights_input_node_baseline_still_passes(tmp_path):
 # GM-01's own e2e fixtures (test_global_match: toy fold + batched record with declared arrivals / caps / an EOS stop) are the record of
 # reference here; `memory` is their fold fixture.  R1_EOS: cap 4, stops on the declared EOS 11 after 2 events -> a_r = n_r = 2.
 
-from verity.definitions.registry.topp_geometry import registered_splits, splits_for  # noqa: E402
+from verity_vllm.definitions.registry.topp_geometry import registered_splits, splits_for  # noqa: E402
 
 from tests.check import test_global_match as TGM  # noqa: E402
 from tests.check.test_global_match import memory  # noqa: E402,F401 - the fold fixture

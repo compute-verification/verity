@@ -1,4 +1,8 @@
-/-
+module
+
+public import Flock.Program
+
+/-!
 `Flock.HmRow`: the template-instance partition queries (`verity.ir.partition_object.TemplatePartition`) over the
 verifier's own copy of the program, decoded from its descriptor bytes (`verity-ir/descriptor/v1`) as far as they need:
 the callees, each definition's form and nodes (form, callee, members), and the root body.
@@ -8,9 +12,6 @@ node (`Desc.isInputNode`: its callee a primitive whose id is an input id) must b
 (matched by the descriptor id written in the program's bytes); each call is one unit and each batch member one unit, in node
 then member order; every listed template has at least one unit; no width rule.
 -/
-module
-
-public import Flock.Program
 
 @[expose] public section
 set_option backward.privateInPublic true

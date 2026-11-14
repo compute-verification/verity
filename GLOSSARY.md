@@ -29,10 +29,10 @@ and **the slowdown lower bound** (`ARCHITECTURE.md`'s Glossary, "Feasible set").
 
 | Symbol | Meaning | Lean |
 |---|---|---|
-| 𝓜, ρ | The ACCEL model (below), each resource's rate ρ a ceiling no program exceeds, at the firmware maximum; the card files `hardware/cards/<sku>.toml` hold them. | `Verity.Accel.Machine`, `Verity.Accel.Card.ρ`, `Verity.Accel.H200.card`, `Verity.Accel.Sm120.card` |
+| 𝓜, ρ | The ACCEL model (below), each resource's rate ρ a ceiling no program exceeds, at the firmware maximum; the card files `hardware/cards/<sku>.toml` hold them. | `Verity.Accel.Machine`, `Verity.Accel.Card.ρ` |
 | H, a, Λ | The fleet's fixed transition dynamics, its chosen initial state, and the chosen-state budget: A is H unrolled from a over the period (programs and data are in a or the inputs, never in the circuit's structure), and Λ bounds a, attached to the physical region it bounds. | `Accounting.Device`; `Verity.Device`, `FixedMachine` and `InitialBudget` not yet in Lean |
 | k_exfil(Y), k_infil(Y) | Block Y's exfiltration capacity log2\|O_Y\|, O_Y the observable output behaviours (values, and timing, lengths and routing where an observer can tell them apart) Y can produce and still be accepted; the information reaching Y that its fresh-input budget does not already count. | not yet in Lean |
-| HW, INV | Named assumptions. HW is the hardware model: 𝓜, the device model, links and side-channel rates, what a memory wipe clears. INV is the inventory's: coverage, unregistered hardware's bound, and the honesty of certifiers, challengers and their hosts (`trusted-host`). | `Accounting.Hardware`, `Accounting.Placed.Links`, `Accounting.Placed.Causal`; `Accounting.Covered`, `Accounting.TrustedUnits` |
+| HW, INV | Named assumptions. HW is the hardware model: 𝓜, the device model, links and side-channel rates, what a memory wipe clears. INV is the inventory's: coverage, unregistered hardware's bound, and the honesty of certifiers, challengers and their hosts (`trusted-device`). | `Accounting.Hardware`, `Accounting.Placed.Links`, `Accounting.Placed.Causal`; `Accounting.Covered`, `Accounting.TrustedUnits` |
 
 **Sets, protocols and the guarantee**
 
@@ -97,12 +97,11 @@ Credit and all reporting are in circuit size (tentative).
 - **Size** is a circuit's or a region's AND-gate count, what Flock pays for, in place of work, FLOPs, MAC-times and
   pricing.
   U/s_× (above) replaces κ/2.
-- **Credit** is of two kinds (ASK-166 A). Sampled proofs' is declared size, values certified: an accepted run credits
+- **Credit** is of two kinds (ASK-166 A). SPOT's is declared size, values certified: an accepted run credits
   S, and Pr[accept ∧ the AND gates whose values in the committed trace are right number fewer than (1 − ε_skip)·S] ≤
   δ_coin + δ_crypto, with no algorithmic premise. Dither's compute credit also needs values that read live noise and SAK
-  (`SAKResidual`), over noised operands only; an un-noised call earns none. PoUW's bar is T1–T3
-  (`verity/protocols/accounting/pouw/verifier/README.md`). PoUB (`Accounting.Remote`) bounds no hidden work itself, so PoUW's
-  guarantee beside it is its compute credit alone.
+  (`SAKResidual`), over noised operands only; an un-noised call earns none. PoUB (`Accounting.Remote`) bounds no hidden
+  work itself, so PoUW's guarantee beside it is its compute credit alone.
 - **The slowdown lower bound** bounds the hidden training beside verified compute. Its N counted objects can come from
   verified compute (products the registered circuit computes anyway, through inference-block yields) and free compute: a
   server block on registered hardware yields at most min(q_S, its inference-block yields plus what its free compute can
@@ -165,7 +164,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "M1", "M2" (elsewhere in the code also unrelated things) | Flock ZK: M1 is its masking, M2 its coin tree |
 | `hm96-sha256/v1`, until it is deleted | the hiding leaf `hm96-sha512/v1` |
 | "coin server"; the `round_digest` strings of statement identities in `Flock/Tags.lean`, until a format version | the challenger's live-coin part |
-| "network transparency"; the `network-transparency/` paths the `NetworkCertifier` Lean cites | network accounting |
+| "network transparency"; the `network-transparency/` paths the `Certifier` Lean cites | network accounting |
 | "warden", "network warden", "tap", "the auditor's tap", "uplink tap", "warden/certifier"; the domain tags `verity-network-warden/row/v1` and `verity-network-warden/record/v1`, the store label value `replay_set=warden/re-verify` | the network certifier; "the warden's records" are network certificates |
 | "remote bandwidth audit", "remote bandwidth", "remote audit", "proof of useful bandwidth" | PoUB |
 | "timed verifier"; the recorded config key `verifier_cpu` (`--verifier-cpu`), until a format version | the memory challenger |
@@ -239,7 +238,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "train" for a batch of PRs landed on one check | candidate |
 | "draw" (noun, verb), "drawn proof block", "drawn unit", "sampled unit"; `DrawIsCoin`, `Remote.Draw.Session`, `--draw`, until renamed | the sample, a sampled proof block; to sample (coins are flipped) |
 | "components", "product" for a composite's parts and their joining, and the Lean's and the channels' message format's names | subprotocols; composition |
-| "firewall"; `flock-firewall`, `Flock.Firewall`, `FC_FIREWALL*`, until renamed | the ZK server |
+| "firewall"; the record ids and domain tags `firewall/v0` and `verity/firewall-*`, the party name `firewall` and the message type `Firewall`, until a format version; `benchmarks/`'s `MODES=firewall`, `--firewall`, `FC_FIREWALL*` and `flock-firewall`, until renamed | the ZK server |
 | `flock-verify`, `remote check` for the verifiers, until renamed | `verity verify proof`, `verity verify remote` |
 | "builder", "advice compiler", "circuit builder" for what compiles the advice; `Builder` | registered compiler |
 | "declared advice", "declaring" or "a declaration" of advice; "declared circuit", "declared work"; "declaration block", "declaration period" | reported advice; registered circuit, registered work; execution block, execution phase |
@@ -304,6 +303,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
     and m_pts ≤ 64): a proof block whose unit circuit doesn't fit in one R1CS block can't be proved as one.
 
   An R1CS block is never a proof block; `units_per_vu`, `vus_per_block` and `blocks_real` keep their names.
+- Flock's **Merkle cap** (`cap`, `caps`, `recursiveCaps`) is the row of a commitment tree's nodes that stands in for its root, the 2^c nodes at depth c (`Flock.Level.cap`), which a proof's rows open to (`Flock.merkleCheck`); it is not Pearl's "cap" (Older names).
 - "Candidate C" and "Candidate V" in older notes are the QuickSilver VOLE research backend, since deleted, not Flock.
 - A **pipeline stage** is one buffered step of a CTA's software pipeline, the operands it loads ahead of the tensor cores
   (CUTLASS's `Stages`, Triton's `num_stages`).
@@ -311,8 +311,8 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
 - A **sliding window** is a model's term: the span of positions a layer's attention reads (a model config's
   `sliding_window`).
 - In `adapters/vllm`, "family" and "kind" name circuit Definitions and query families, many of them serialized fields (its README's vocabulary).
-- Seven words still carry two senses in the code:
-  - **Footprint**: a replay block's is where sampled proofs read harm (Two-stage design, below). An HBM footprint
+- Eight words still carry two senses in the code:
+  - **Footprint**: a replay block's is where SPOT reads harm (Two-stage design, below). An HBM footprint
     (`Accounting.BoundReceipt.footprint`) and a theorem's (its hypotheses, in Flock's `ASSUMPTIONS.md`) keep the word.
   - **Row**: a commitment row, the bits one leaf hashes (`hm96` rows, the `*/row/*` leaf schemes, the row-form
     statements). A matrix's row stays plain English. A workload or a server block is never a row (Older names).
@@ -332,6 +332,10 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   - **Acceptance probability**: a prover's success probability, the δ of knowledge soundness's κ(δ). An incorrect proof
     block's chance to pass the sample is its miss probability (Older names), which the Lean's `effAcceptProb` and
     `acceptProb` lemmas and the docstrings of SPOT's Python verifier still call its acceptance probability.
+  - **Cap**: SPOT's served cap S, the most served output bits a request counts in the capped two-stage form, and the
+    network certifier's registered response cap (`WardenParams.max_tokens_cap`, the most tokens a response carries)
+    keep the word. Pearl's cap is its inert-work bound (Older names), and "cap check" and an "over-cap" tile stay
+    retired.
 
 ## Terms of one area
 

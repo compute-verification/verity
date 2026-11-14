@@ -1,4 +1,4 @@
-"""A ZK server session's `Hello` in Lean (`Flock/Firewall/Hello.lean`, `flock-firewall hello`), the one the ZK server's Lean
+"""A ZK server session's `Hello` in Lean (`Flock/ZkServer/Hello.lean`, `flock-zk-server hello`), the one the ZK server's Lean
 session loop sends in the prover's place (`Session.helloOf`): held byte for byte to the `Hello`s Rust's `SessionConfig::hello_with_nonce`
 sent in the recorded `--zk` sessions of `test_lean_zk.py`'s fixture (one table, two tables, m = 26 and a sampled session), at
 each record's nonce and sample; at a nonce of its own, a fresh one each session; at a templated statement
@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-firewall"
+BIN = LEAN / ".lake" / "build" / "bin" / "flock-zk-server"
 #: test_lean_zk.py's: RoPE d64 with hidden outputs and the live build's --zk sessions, under the statement it was staged for; a
 #: fetched fixture (`artifacts.json`), which `suites.py` fetches before the suite runs
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "zk-sessions"
@@ -31,7 +31,7 @@ NONCE = re.compile(r'"nonce":"([0-9a-f]{64})"')
 def built():
     if shutil.which("lake") is None:
         pytest.skip("no Lean toolchain")
-    subprocess.run(["lake", "build", "flock-firewall"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "flock-zk-server"], cwd=LEAN, check=True, capture_output=True)
 
 
 @pytest.fixture(scope="module")
@@ -86,7 +86,7 @@ def test_the_recorded_hello_at_its_nonce(zk, name, public, tables):
 
 
 @pytest.mark.slow
-def test_one_process_serves_every_draw(zk):
+def test_one_process_serves_every_sample(zk):
     """One process answers sessions at several samples, each sample's statement set up once: the population's, a sample's, and the
     population's again at another nonce."""
     m26, n26, null = _record(zk, "m26")
@@ -108,7 +108,7 @@ def test_a_nonce_of_its_own(zk):
 
 
 @pytest.mark.slow
-def test_a_draw_the_setup_refuses_and_the_session_goes_on(zk):
+def test_a_sample_the_setup_refuses_and_the_session_goes_on(zk):
     """The sampled session's sample over the 16-unit population's public file names another population: refused, and the next
     request is answered."""
     hello, nonce, null = _record(zk, "selftest/honest")
@@ -131,7 +131,7 @@ def test_end_of_input_ends_the_session(junk):
 
 def test_usage():
     p = subprocess.run([str(BIN), "hello"], input=b"", capture_output=True)
-    assert p.returncode == 2 and p.stderr.decode().startswith("usage: flock-firewall hello")
+    assert p.returncode == 2 and p.stderr.decode().startswith("usage: flock-zk-server hello")
 
 
 def test_unknown_statement(junk):
@@ -141,7 +141,7 @@ def test_unknown_statement(junk):
 
 @pytest.mark.parametrize("statement, why", [(TMPL, "setup: "), ("no-such", "unknown statement")])
 def test_finish_takes_the_statements_verify_takes(junk, statement, why):
-    """`flock-firewall finish` names its statement as `verify` does (`Tags.byName?`): a templated one gets to its setup, which
+    """`flock-zk-server finish` names its statement as `verify` does (`Tags.byName?`): a templated one gets to its setup, which
     refuses junk files; an unknown name is refused by name."""
     p = subprocess.run([str(BIN), "finish", "--statement", statement, *junk], input=b"", capture_output=True)
     assert p.returncode == 1 and p.stdout.decode().startswith(f"err {why}"), p.stdout
@@ -197,7 +197,7 @@ def test_malformed_line(junk, line):
     assert rc == 1 and answers == [f"err a request `{line.decode().strip()}`"], answers
 
 
-def test_a_draw_that_is_not_json(junk):
+def test_a_sample_that_is_not_json(junk):
     answers, rc = _hello(junk, _request("{"))
     assert rc == 1 and len(answers) == 1 and answers[0].startswith("err the draw is not JSON"), answers
 
@@ -221,7 +221,7 @@ STRATIFIED = json.dumps({"law": "stratified", "population": 2, "k": 1, "strata":
 
 @pytest.mark.parametrize("law, why", [([], "U2: a stratified draw needs the verifier's own K, program and partition"),
                                       (["--stratified", "2"], "U2: the draw's K is 1, not the verifier's 2")])
-def test_a_stratified_draw_at_the_verifiers_own_k(junk, tmp_path, law, why):
+def test_a_stratified_sample_at_the_verifiers_own_k(junk, tmp_path, law, why):
     """A stratified sample sets up only at the verifier's own K, program and partition (`Stmt.setupTables`, U2), so
     `--stratified` reaches the setup: without it the sample is refused for want of it, and at another K for its K."""
     (tmp_path / "partition.json").write_text("{}")
@@ -236,7 +236,7 @@ def test_a_stratified_draw_at_the_verifiers_own_k(junk, tmp_path, law, why):
                                       (["--work", "2"], "--work needs --work-table"),
                                       (["--work-table", "table.json"], "--work-table needs --work"),
                                       (["--closure", "junk"], "not JSON")])
-def test_a_draw_law_input_it_cannot_read(junk, tmp_path, law, why):
+def test_a_sample_law_input_it_cannot_read(junk, tmp_path, law, why):
     (tmp_path / "table.json").write_text('{"t": 1}')
     (tmp_path / "junk").write_text("{")
     law = [str(tmp_path / x) if x in ("table.json", "junk") else x for x in law]

@@ -120,7 +120,7 @@ the gate takes the challenger host's address from where it is launched, ``--env`
     research run --on AUDITOR --source . --project verity --as network-accounting --cwd clone --timeout 270m \\
       --store-read --send challenger-key.json --env VY_CHALLENGER_1_HOST=$VY_CHALLENGER_1_HOST \\
       -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 \\
-      tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 -- nice -n 19 bash -c \\
+      tools/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 -- nice -n 19 bash -c \\
       'python3 benchmarks/network_traces/served_session.py chain --run RUN --endpoint ART \\
       --draw 8 --coins gate --challenger-key "$RESEARCH_RUN_DIR/inputs/challenger-key.json"'
 
@@ -208,7 +208,7 @@ CERTIFIED = "certified-io.json"
 TRACED = ("arrive", "step", "finish")
 #: or a record with one of these fields: the trace's, requests.jsonl's and the certified I/O's request values
 VALUED = ("prompt_len", "sampling", "seed", "rows", "emitted", "prompt_ids", "streamed_ids", "prompt", "output")
-HAND_START = ("serve-openai run directly, not demos/vllm/serve.sh: serve.sh's serve-openai line (--required-manifest "
+HAND_START = ("serve-openai run directly, not adapters/vllm/tools/served_run/serve.sh: serve.sh's serve-openai line (--required-manifest "
               "ROW/manifest.json, the int8 B4 row's Build of record, with the served node's own taps as "
               "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
               "under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start); serve.sh refuses on "
@@ -319,7 +319,7 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
                 "chain": f"research run --on {on} --source . --project verity --as network-accounting "
                          f"--cwd clone --timeout 270m --store-read --send challenger-key.json {host} -- "
                          "env CHECK_SLOTS=/workspace/research/locks/network/slots "
-                         "python3 tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 "
+                         "python3 tools/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 "
                          "-- nice -n 19 bash -c 'python3 benchmarks/network_traces/served_session.py chain --run RUN "
                          f"--endpoint ART --draw 8 --coins gate{coin_peer} "
                          "--challenger-key \"$RESEARCH_RUN_DIR/inputs/challenger-key.json\"'"}}

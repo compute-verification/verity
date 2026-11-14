@@ -38,53 +38,53 @@ class _Arena:
 
 
 def _capture():
-    cap = C.Capture.__new__(C.Capture)
-    cap.cfg = SimpleNamespace(snapshot_steps=frozenset({3}), snapshot_max_bytes=1 << 20, snapshot_max_bytes_op=None)
-    cap._cur = SimpleNamespace(step=3, n_snap=0)
-    cap.storage = SimpleNamespace(view_of=lambda t: _View())
-    cap.root_allocs, cap._snap_index, cap._snap_pending, cap.errors = set(), [], [], []
-    cap._arena, cap._kv_num_blocks = _Arena(), None
-    return cap
+    capture = C.Capture.__new__(C.Capture)
+    capture.cfg = SimpleNamespace(snapshot_steps=frozenset({3}), snapshot_max_bytes=1 << 20, snapshot_max_bytes_op=None)
+    capture._cur = SimpleNamespace(step=3, n_snap=0)
+    capture.storage = SimpleNamespace(view_of=lambda t: _View())
+    capture.root_allocs, capture._snap_index, capture._snap_pending, capture.errors = set(), [], [], []
+    capture._arena, capture._kv_num_blocks = _Arena(), None
+    return capture
 
 
 def test_an_identity_alias_call_is_not_snapshotted(monkeypatch):
-    cap, t = _capture(), torch.arange(4, dtype=torch.uint8)
+    capture, t = _capture(), torch.arange(4, dtype=torch.uint8)
     monkeypatch.setattr(C, "device_backed", lambda x: pytest.fail("an alias call's tensors were inspected"))
     for op in pinned.IDENTITY_ALIAS_OPS:
-        cap._after_call(7, op, (t,), {}, t)
-    assert cap.errors == [] and cap._arena.taken == [] and cap._snap_pending == [] and cap._snap_index == []
+        capture._after_call(7, op, (t,), {}, t)
+    assert capture.errors == [] and capture._arena.taken == [] and capture._snap_pending == [] and capture._snap_index == []
 
 
 def test_a_device_backed_cpu_tensor_is_listed_as_skipped(monkeypatch):
-    cap, t = _capture(), torch.arange(4, dtype=torch.uint8)
+    capture, t = _capture(), torch.arange(4, dtype=torch.uint8)
     monkeypatch.setattr(C, "device_backed", lambda x: x is t)
     other = torch.ones(4, dtype=torch.uint8)
-    cap._after_call(8, "aten.add.Tensor", (t, other), {}, other)
-    assert [e["path"] for e in cap._snap_index] == ["args[0]"] and cap._snap_index[0]["skipped"] == pinned.DEVICE_BACKED
-    assert cap._arena.taken == [4, 4] and [p["entry"]["path"] for p in cap._snap_pending] == ["args[1]", "outs"]
+    capture._after_call(8, "aten.add.Tensor", (t, other), {}, other)
+    assert [e["path"] for e in capture._snap_index] == ["args[0]"] and capture._snap_index[0]["skipped"] == pinned.DEVICE_BACKED
+    assert capture._arena.taken == [4, 4] and [p["entry"]["path"] for p in capture._snap_pending] == ["args[1]", "outs"]
 
 
 def test_other_calls_are_copied():
-    cap, t = _capture(), torch.arange(4, dtype=torch.uint8)
-    cap._after_call(9, "aten.mul.Tensor", (t, t), {}, t)
-    assert cap._snap_index == [] and len(cap._snap_pending) == 3 and cap.errors == []
+    capture, t = _capture(), torch.arange(4, dtype=torch.uint8)
+    capture._after_call(9, "aten.mul.Tensor", (t, t), {}, t)
+    assert capture._snap_index == [] and len(capture._snap_pending) == 3 and capture.errors == []
 
 
 def test_a_step_that_fills_the_arena_writes_it_out_and_reuses_it(monkeypatch, tmp_path):
-    cap, syncs = _capture(), []
+    capture, syncs = _capture(), []
     arena = pinned.PinnedArena.__new__(pinned.PinnedArena)
     arena.buf, arena.off, arena.overflow = torch.empty(512, dtype=torch.uint8), 0, 0
-    cap._arena, cap.cfg.snapshot_dir = arena, tmp_path
-    cap._snap_files, cap._snap_bytes, cap.timing = {}, 0, {"flush_s": 0.0, "snapshot_s": 0.0, "sync_s": 0.0}
-    monkeypatch.setattr(torch.cuda, "synchronize", lambda: syncs.append(len(cap._snap_pending)))
+    capture._arena, capture.cfg.snapshot_dir = arena, tmp_path
+    capture._snap_files, capture._snap_bytes, capture.timing = {}, 0, {"flush_s": 0.0, "snapshot_s": 0.0, "sync_s": 0.0}
+    monkeypatch.setattr(torch.cuda, "synchronize", lambda: syncs.append(len(capture._snap_pending)))
     ts = [torch.full((200,), i, dtype=torch.uint8) for i in range(5)]
     for i, t in enumerate(ts):
-        cap._after_call(10 + i, "aten.mul.Tensor", (t,), {}, None)
-    assert syncs == [2, 2] and arena.overflow == 0 and len(cap._snap_pending) == 1
-    cap._flush_snapshots(cap._cur)
-    assert [e["event"] for e in cap._snap_index] == [10, 11, 12, 13, 14] and cap.errors == []
-    assert [(tmp_path / e["file"]).read_bytes() for e in cap._snap_index] == [t.numpy().tobytes() for t in ts]
-    assert {e["file"].split("/")[1] for e in cap._snap_index} == {"3"} and cap._snap_bytes == 1000
+        capture._after_call(10 + i, "aten.mul.Tensor", (t,), {}, None)
+    assert syncs == [2, 2] and arena.overflow == 0 and len(capture._snap_pending) == 1
+    capture._flush_snapshots(capture._cur)
+    assert [e["event"] for e in capture._snap_index] == [10, 11, 12, 13, 14] and capture.errors == []
+    assert [(tmp_path / e["file"]).read_bytes() for e in capture._snap_index] == [t.numpy().tobytes() for t in ts]
+    assert {e["file"].split("/")[1] for e in capture._snap_index} == {"3"} and capture._snap_bytes == 1000
 
 
 class _Runtime:

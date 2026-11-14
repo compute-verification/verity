@@ -32,7 +32,7 @@ The compiled `--zk` count curve (`ZkLink.zk_flock_countC_execOS_cr`) takes each 
 table's statement (`place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u`). This is the `--zk` form of
 `Placed.Sites.progPlaces_keyProg`, for plans of `TabZK` tables:
 
-* `acceptsZK_accepted`: flock-verify `--zk`'s acceptance (`ZkExec.AcceptsZK`), on the untyped path without hidden
+* `acceptsZK_accepted`: verity-verify-proof `--zk`'s acceptance (`ZkExec.AcceptsZK`), on the untyped path without hidden
   outputs, gives for every table of the session an `Placed.Accepted` statement: `Stmt.setupH`'s run under the table's
   `--zk` tags (`tagsAt (zkTags I) I.count j`), on the session's circuit file and tables, at any regions.
 * `SitesZ`: each sampled proof block's site, an acceptance whose statement is its `--zk` table's, with its template instance and
@@ -52,7 +52,7 @@ open Model Audit Placed ZkSession Exec ZkExec
 
 /-! ## Every table of a `--zk` acceptance is an accepted untyped statement -/
 
-/-- **flock-verify `--zk`'s acceptance gives an `Accepted` statement per table**: on the untyped path without hidden
+/-- **verity-verify-proof `--zk`'s acceptance gives an `Accepted` statement per table**: on the untyped path without hidden
 outputs, every table `j` of the session passes `Zk.shapeOk`, and at any regions there is an acceptance of `Stmt.setupH`
 under the table's `--zk` tags on the session's circuit file and tables, whose run returned the session's `j`-th
 statement (at the record's sample, for one table). -/

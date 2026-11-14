@@ -68,7 +68,7 @@ Files:
   `cover_count.py` on a small hand-written cover record,
   `ks_form.py` on synthetic circuit heads,
   `stage.py`'s `census:NAME`, `full/D`, its bound default, `--unbound` and its retired names on a stub stager, `stage_window.py`'s member choice and public-body
-  check, and `window.py`'s `name()` and `KEY` held to `prove_time.sh`'s, with the paths the key hashes (`KEY_PATHS` in
+  check, `job.sh`'s `stage_one` handing a census name with several statics to a stub stager as one argument, and `window.py`'s `name()` and `KEY` held to `prove_time.sh`'s, with the paths the key hashes (`KEY_PATHS` in
   each) held to the tree.
 - `ks_form.py FLOCK_WORK...`: whether `verify --zk` takes each staged statement, before proving: the Python mirror of
   the Lean verifier's `ks-form` on the circuit file's head. The loopback `serve --zk` the timings run is Flock's own verifier and
@@ -108,7 +108,7 @@ uv run -q python benchmarks/served_units/cover_count.py cover.json --check  # ex
 
 - **Provides:** `stage.py`, which stages a served proof block's statement, and the runners and scripts around it.
 - **Loaded by:** `benchmarks/one_stage`, which imports `stage`. Nothing else.
-- **Loads:** `verity.definitions`, `verity.circuits` with the primitive circuits (`verity.circuits.ops`),
+- **Loads:** `verity_vllm.definitions`, `verity.circuits` with the primitive circuits (`verity.circuits.ops`),
   `verity.commitments`, `verity.protocols.proofs.spot.verifier`, `verity.hardware`, Flock (`verity_flock`),
   `circuit_check.targets` and `verity_vllm.pipeline`; the scripts build and run Flock's circuit prover and its Lean
   verifier.

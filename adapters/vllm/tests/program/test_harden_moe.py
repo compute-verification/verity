@@ -35,10 +35,10 @@ import pytest
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from verity.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.numerics.serve3_reference import materialize
 
 from verity_vllm.program.frontend import derive_examples as ex
-from verity_vllm.program.frontend.derive import derive_report
+from verity_torch.frontend.derive import derive_report
 
 REF = dict(mode="reference")
 T, H, INTER, E, K = 4, 8, 16, 4, 2
