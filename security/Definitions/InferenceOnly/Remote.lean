@@ -13,7 +13,7 @@ residual `r̂ = 1 − W_cert/C` (`residualShare`) against what the developer can
 
 * the certificate slack `ε'`: PoUW certifies each window, and a window's certificate may be wrong, so the work certified
   correctly falls short of `W_cert` by at most the capacity of the windows whose certificates are wrong
-  (`wrongCapacity`), which is at most `ε' C` outside an event of probability (core's `Game.prPMFReal`) at most `p/ε'`;
+  (`incorrectCapacity`), which is at most `ε' C` outside an event of probability (core's `Game.prPMFReal`) at most `p/ε'`;
 * the verdict lag `JΔ/H` (`lagShare`): from an identity's first detected incorrect proof block until the halt `Δ` later,
   its developer skips declared work, once for each of its `J` identities, over the horizon `H`;
 * the escape slack `θ`: under SPOT (tier T5) a faulty block that isn't sampled is accepted, so the faulty blocks
@@ -36,7 +36,7 @@ namespace InferenceOnly.Slowdown
 
 /-- **The capacity of the windows whose certificates are wrong**: `∑_{i : wrong i} c_i`, window `i` of `N` having
 capacity `c_i`. -/
-noncomputable def wrongCapacity {N : ℕ} (c : Fin N → ℝ) (wrong : Fin N → Prop) : ℝ :=
+noncomputable def incorrectCapacity {N : ℕ} (c : Fin N → ℝ) (wrong : Fin N → Prop) : ℝ :=
   open scoped Classical in ∑ i, if wrong i then c i else 0
 
 /-- **The verdict lag's share** `JΔ/H`: `J` identities, each skipping declared work for at most `Δ` of the horizon

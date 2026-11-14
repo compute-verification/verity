@@ -59,20 +59,20 @@ structure Commit where
   ticket : Codes
   useful : Codes
 
-/-- A committed transcript: unit `u`'s commitment, or a blank, which is never correct. -/
-abbrev Transcript : Type := ℕ → Option Commit
+/-- A committed trace: unit `u`'s commitment, or a blank, which is never correct. -/
+abbrev Trace : Type := ℕ → Option Commit
 
 /-- An abstract cost model for the online phase (the named instance: W1 at the measured H100 prices, one unit = one dense
 FP8 multiply-accumulate). The model fixes `cost` and `calls`; an adversary only chooses a program. -/
 structure CostModel (Q R S : Type) where
   Prog : Type
-  run : Prog → (Q → R) → Workload → (ℕ → Codes) → State → S → Transcript
+  run : Prog → (Q → R) → Workload → (ℕ → Codes) → State → S → Trace
   cost : Prog → (Q → R) → Workload → (ℕ → Codes) → State → S → ℝ
   calls : Prog → (Q → R) → Workload → (ℕ → Codes) → State → S → ℕ
 
 /-- The model's programs reach `H` only through counted queries. -/
 def CostModel.Queries {Q R S : Type} (CM : CostModel Q R S) : Prop :=
-  ∀ (prog : CM.Prog) (U : Workload) (act : ℕ → Codes) (σ : State) (s : S), ∃ t : QTree Q R Transcript,
+  ∀ (prog : CM.Prog) (U : Workload) (act : ℕ → Codes) (σ : State) (s : S), ∃ t : QTree Q R Trace,
     ∀ H : Q → R, CM.run prog H U act σ s = t.eval H ∧ CM.calls prog H U act σ s = t.calls H
 
 /-- An output-ticket protocol: the FP32 values of its reference ticket and useful words (`none` for a non-finite word),
@@ -82,7 +82,7 @@ its domain rules on committed activations and on each fixed-operand row, and its
   columns, on the fixed-operand rows it opens (`TileCheck.Accepts`).
 - `credit H s U u act`: what the named assumption credits for unit `u`. The reference computes it from the committed
   activations `act`, the fixed operands and the realized noise `(H, s)`, by the same replay that checks the unit; it never reads
-  the transcript's claimed ticket or useful words.
+  the trace's claimed ticket or useful words.
 - `capOK H s U u act`: the unit's replayed debit is within the cap. It is part of `Correct`: a unit above the cap is
   rejected, so it is in neither TT_OUT's credit sum nor `GGap`'s win sum. `Correct` is the game's idealized check of every
   unit; a verifier that checks sampled tiles decides the cap per tile (`Tile.lean`: `TileGood`, `GGapSampled`).
@@ -120,11 +120,11 @@ def Correct (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (u : ℕ) 
 
 open Classical in
 /-- `K`: the correct units of `τ`. -/
-noncomputable def correctSet (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) : Finset ℕ :=
+noncomputable def correctSet (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Trace) : Finset ℕ :=
   (range U.layout.N).filter fun u => ∃ c, τ u = some c ∧ Correct P U H s u c
 
 /-- The activations unit `u` committed in `τ` (zero for a blank, which is never correct). -/
-def actOf (τ : Transcript) (u : ℕ) : Codes :=
+def actOf (τ : Trace) (u : ℕ) : Codes :=
   match τ u with
   | some c => c.act
   | none => fun _ _ => 0
@@ -133,20 +133,20 @@ open Classical in
 /-- An FP32 word with value `v` (some word, when one exists; `0` otherwise). -/
 noncomputable def wordOf (v : Option ℚ) : ℕ := if h : ∃ w, wordQ w = v then Classical.choose h else 0
 
-/-- The honest transcript on activations `act`. -/
-noncomputable def honestTranscript (P : Protocol Q R S) (H : Q → R) (s : S) (U : Workload) (act : ℕ → Codes) :
-    Transcript :=
+/-- The honest trace on activations `act`. -/
+noncomputable def honestTrace (P : Protocol Q R S) (H : Q → R) (s : S) (U : Workload) (act : ℕ → Codes) :
+    Trace :=
   fun u => if u < U.layout.N then
     some ⟨act u, fun i j => wordOf (P.ticket H s U u (act u) i j), fun i j => wordOf (P.useful H s U u (act u) i j)⟩
   else none
 
-/-- The cost model runs the honest reference: one program outputs the honest transcript on every in-domain workload
+/-- The cost model runs the honest reference: one program outputs the honest trace on every in-domain workload
 whose weights pass the rules and admissible activations, with no preprocessing, at cost at most `∑_u W_ref(u)` and at
 most `qref U` calls. -/
 def AdmitsRef (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (qref : Workload → ℕ) : Prop :=
   ∃ prog : CM.Prog, ∀ U : Workload, U.InDomain P D → U.FixedOK P → ∀ act : ℕ → Codes,
     (∀ u < U.layout.N, P.actOK (U.layout.shape u) (act u)) → ∀ (H : Q → R) (s : S),
-      CM.run prog H U act [] s = honestTranscript P H s U act ∧
+      CM.run prog H U act [] s = honestTrace P H s U act ∧
       CM.cost prog H U act [] s ≤ ∑ u ∈ range U.layout.N, P.Wref U.layout u ∧
       CM.calls prog H U act [] s ≤ qref U
 
@@ -156,8 +156,8 @@ structure Adversary (CM : CostModel Q R S) where
   online : CM.Prog
   act : ℕ → Codes
 
-/-- The transcript the adversary commits on oracle `H` and salt `s`. -/
-def Adversary.transcript {CM : CostModel Q R S} (A : Adversary CM) (U : Workload) (H : Q → R) (s : S) : Transcript :=
+/-- The trace the adversary commits on oracle `H` and salt `s`. -/
+def Adversary.trace {CM : CostModel Q R S} (A : Adversary CM) (U : Workload) (H : Q → R) (s : S) : Trace :=
   CM.run A.online H U A.act (A.pre.eval H) s
 
 /-- The online phase costs at most `T`, and all oracle calls number at most `q`, for every oracle and salt. -/
@@ -166,7 +166,7 @@ def Adversary.Bounded {CM : CostModel Q R S} (A : Adversary CM) (U : Workload) (
     A.pre.calls H + CM.calls A.online H U A.act (A.pre.eval H) s ≤ q
 
 /-- The adversary wins: the honest work of its correct units exceeds `T / (1 − g)`. -/
-def Wins (P : Protocol Q R S) (U : Workload) (g T : ℝ) (τ : Transcript) (H : Q → R) (s : S) : Prop :=
+def Wins (P : Protocol Q R S) (U : Workload) (g T : ℝ) (τ : Trace) (H : Q → R) (s : S) : Prop :=
   T / (1 - g) < ∑ u ∈ correctSet P U H s τ, P.Wref U.layout u
 
 /-- **The gap property** `G_g` at the gap `g` (an adversary's advantage `ε = g/(1 − g)`) with failure probability
@@ -174,7 +174,7 @@ def Wins (P : Protocol Q R S) (U : Workload) (g T : ℝ) (τ : Transcript) (H : 
 def GGap [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
     (D : Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
-    pr (fun x : (Q → R) × S => Wins P U g T (A.transcript U x.1 x.2) x.1 x.2) ≤ δ q U.layout.N
+    pr (fun x : (Q → R) × S => Wins P U g T (A.trace U x.1 x.2) x.1 x.2) ≤ δ q U.layout.N
 
 /-! ## Pearl-C's accounting and domain (H100 units) -/
 

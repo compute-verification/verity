@@ -17,7 +17,7 @@ import Proofs.Flock.Claims.Witnesses.SamplingTwoRegMiss
   `twoTwo_secondRate`).
 * `periodTwoReg_nontrivial`: at `sksLTwo`'s windows, which accept after one round and sample nothing, `PeriodTwoReg`
   fails at both rates `1`. One window, played by `twoStrat` at the silent prover, leaves its replay block, wrong at the
-  committed boundary (`toy_wrongAtBoundaryAt`), undetected surely, while the bound is `0`: `ε_reg,2` is `0` at every
+  committed boundary (`toy_incorrectAtBoundaryAt`), undetected surely, while the bound is `0`: `ε_reg,2` is `0` at every
   prover.
 -/
 
@@ -83,11 +83,11 @@ theorem periodTwoReg_nontrivial :
     exact h1
   have hcnt : 1 ≤ regCount FlockDeploy.sha512 (sksLTwo Bool) [] silentP := by
     have hval : regCount FlockDeploy.sha512 (sksLTwo Bool) [] silentP =
-        (wrongAtBoundaryAt toyStmt toyPart toyTwo.part
+        (incorrectAtBoundaryAt toyStmt toyPart toyTwo.part
           ((sksLTwo Bool).regVal FlockDeploy.sha512 silentP [] ())).card :=
       ite_eq_left inScopeTwo_toy
     rw [hval]
-    exact Finset.card_pos.2 ⟨0, toy_wrongAtBoundaryAt (val := (sksLTwo Bool).regVal FlockDeploy.sha512 silentP [] ())
+    exact Finset.card_pos.2 ⟨0, toy_incorrectAtBoundaryAt (val := (sksLTwo Bool).regVal FlockDeploy.sha512 silentP [] ())
       (sksL_regVal _ silentP [] () 0)⟩
   have hund : ∀ w : Served Unit Unit Unit Unit, ¬ w.sampledIncorrect → 1 ≤ w.incorrect →
       Served.Undetected 1 [w] :=

@@ -46,7 +46,7 @@ theorem flock_e2e_sampled_exec
     (σ : Strategy (audit (SamplingDesign.execStratified St Ls) Reg (batchedSession H E plan)))
     (hCRs : LinkCRStrict P H E plan tab vb (reg σ) (cont σ) k Rw M t' q) :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint (P.wrong (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))) o.2)
+        ¬ Disjoint (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))) o.2)
         (audit (SamplingDesign.execStratified St Ls) Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := SamplingDesign.execStratified St Ls) plan tab vb k Rw M ρ (strictRunCost t' q) :=
   P.flock_e2e_sampled_exec H E plan tab St Ls hExec dp ones hConst zeros hZero vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le σ
@@ -66,7 +66,7 @@ theorem flock_e2e_count_exec (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks :
     (K : ℕ) (σ : Strategy (audit (SamplingDesign.execStratified St Ls) Reg (batchedSession H E plan)))
     (hCRs : LinkCRStrict P H E plan tab vb (reg σ) (cont σ) k Rw M t' q) :
     prob (fun o => execAccept o ∧
-        K ≤ (P.wrong (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))).card)
+        K ≤ (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))).card)
         (audit (SamplingDesign.execStratified St Ls) Reg (batchedSession H E plan)) σ ≤
       (SamplingDesign.stratified σs ks hks).miss K + ksAvgBE H E plan k (reg σ) (cont σ) +
         P.linkBoundE (L := SamplingDesign.execStratified St Ls) plan tab vb k Rw M ρ (strictRunCost t' q) :=
@@ -96,7 +96,7 @@ theorem uprog_e2e_count
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCRs : LinkCRStrict (p.P hone) H E plan tab vb (reg σ) (cont σ) k Rw M t' q) :
     prob (fun o => execAccept o ∧
-        K ≤ ((p.PB hone).wrong
+        K ≤ ((p.PB hone).incorrect
           (Xpub {p.oneOf hone} ∅ ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ (strictRunCost t' q) :=
@@ -116,7 +116,7 @@ theorem uprog_e2e_sampled
     (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCRs : LinkCRStrict (p.P hone) H E plan tab vb (reg σ) (cont σ) k Rw M t' q) :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint ((p.PB hone).wrong
+        ¬ Disjoint ((p.PB hone).incorrect
           (Xpub {p.oneOf hone} ∅ ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ (strictRunCost t' q) :=
@@ -140,7 +140,7 @@ theorem uprog_e2e_count_classes
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCRs : LinkCRStrict (p.P hone) H E plan tab vb (reg σ) (cont σ) k Rw M t' q) :
     prob (fun o => execAccept o ∧
-        K ≤ ((p.PB hone).wrong
+        K ≤ ((p.PB hone).incorrect
           (Xpub {p.oneOf hone} ∅ ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ (strictRunCost t' q) :=
@@ -164,7 +164,7 @@ theorem uprog_e2e_sampled_classes
     (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCRs : LinkCRStrict (p.P hone) H E plan tab vb (reg σ) (cont σ) k Rw M t' q) :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint ((p.PB hone).wrong
+        ¬ Disjoint ((p.PB hone).incorrect
           (Xpub {p.oneOf hone} ∅ ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ (strictRunCost t' q) :=
@@ -191,7 +191,7 @@ theorem uprog_e2e_count_classes_zero
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCRs : LinkCRStrict (p.P hone) H E plan tab vb (reg σ) (cont σ) k Rw M t' q) :
     prob (fun o => execAccept o ∧
-        K ≤ ((p.PB hone).wrong (Xpub {p.oneOf hone} {⟨zer, Nat.lt_of_lt_of_le hzk p.k_le_rowsN⟩}
+        K ≤ ((p.PB hone).incorrect (Xpub {p.oneOf hone} {⟨zer, Nat.lt_of_lt_of_le hzk p.k_le_rowsN⟩}
           ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ (strictRunCost t' q) :=
@@ -218,7 +218,7 @@ theorem uprog_e2e_sampled_classes_zero
     (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCRs : LinkCRStrict (p.P hone) H E plan tab vb (reg σ) (cont σ) k Rw M t' q) :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint ((p.PB hone).wrong (Xpub {p.oneOf hone} {⟨zer, Nat.lt_of_lt_of_le hzk p.k_le_rowsN⟩}
+        ¬ Disjoint ((p.PB hone).incorrect (Xpub {p.oneOf hone} {⟨zer, Nat.lt_of_lt_of_le hzk p.k_le_rowsN⟩}
           ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ (strictRunCost t' q) :=

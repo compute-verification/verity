@@ -99,7 +99,7 @@ def h1Items : Json := Json.mkObj h1ItemList
 
 /-- The loop's honest registration in context `context`, for any record bytes, format, Program and partition: a served
 window registering `h1Items`, the population 144 sampled `subset:24`, the check's query and scheme, and no roots. -/
-def h1Reg (context format program partition : String) (bytes : ByteArray) : WindowCommitmentRecord where
+def h1Reg (context format program partition : String) (bytes : ByteArray) : ExecutionPhaseCommitmentRecord where
   bytes := bytes
   format := format
   program := program
@@ -123,7 +123,7 @@ def h1Profile (program partition : String) : Core.Integrity where
   drawn := #[(unitLevel, 24)]
 
 /-- One-stage's answer accepting registration `c` with the rule's profile and a `subset:24` sample of `units` over 144. -/
-def h1Evidence (c : WindowCommitmentRecord) (units : Array Nat) : Evidence where
+def h1Evidence (c : ExecutionPhaseCommitmentRecord) (units : Array Nat) : Evidence where
   protocol := oneStage
   commitment := some (Flock.hexOf c.digest)
   said := .accept (h1Profile c.program c.partition) { samplingDesign := .subset 24, population := 144, units }
@@ -174,7 +174,7 @@ def period : (n : ℕ) → ExecutionPhasePlay Bool Ω1 (Fin 144) circuit.rounds 
 def prm : Params := h1Params ""
 
 /-- Every window's registration: the loop's honest one. -/
-def reg : PouwCheck.WindowCommitmentRecord := h1Reg "" "" "" "" ByteArray.empty
+def reg : PouwCheck.ExecutionPhaseCommitmentRecord := h1Reg "" "" "" "" ByteArray.empty
 
 /-- The units of the model's sample at permutation coin `β`, ascending. -/
 noncomputable def unitsOf (β : Equiv.Perm (Fin 144) × Unit) : Array ℕ :=

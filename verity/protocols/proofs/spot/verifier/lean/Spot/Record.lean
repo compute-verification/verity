@@ -130,22 +130,22 @@ def checks (reg receipt draw samplingDesign : Json) (units : Array Int) (provedU
         ("drawn", intsJson (units.extract 0 16))]))
   if let some roots := sessionRoots then
     let registered := byPort reg
-    let wrong := sortStrings (roots.filterMap fun (p, r) =>
+    let incorrect := sortStrings (roots.filterMap fun (p, r) =>
       match registered.find? (·.1 == p) with
       | some (_, x) => if jeq (getD x "root") r then none else some p
       | none => some p)
-    if roots.isEmpty || !wrong.isEmpty then
-      out := out.push ("roots", failed "roots" (obj [("ports", Json.arr (wrong.map Json.str))]))
+    if roots.isEmpty || !incorrect.isEmpty then
+      out := out.push ("roots", failed "roots" (obj [("ports", Json.arr (incorrect.map Json.str))]))
   let want := registeredRoots reg
   let opened := sessionRegistered.getD #[]
   if !subDict opened want then
-    let wrong := opened.filterMap fun (v, o) => match want.find? (·.1 == v) with
+    let incorrect := opened.filterMap fun (v, o) => match want.find? (·.1 == v) with
       | some (_, r) => if jeq o r then none else some v
       | none => some v
     out := out.push ("registered", failed "registered" (obj [
       ("registered", Json.arr ((sortStrings (want.map (·.1))).map Json.str)),
       ("opened", Json.arr ((sortStrings (opened.map (·.1))).map Json.str)),
-      ("wrong", Json.arr ((sortStrings wrong).map Json.str))]))
+      ("wrong", Json.arr ((sortStrings incorrect).map Json.str))]))
   return out
 
 /-- `audit_record`'s check `certified`, present only when it fails: each value the verifier holds a certified entry
@@ -227,22 +227,22 @@ def checksFast (reg receipt draw samplingDesign : Json) (units : Array Int) (pro
         ("drawn", intsJson (units.extract 0 16))]))
   if let some roots := sessionRoots then
     let registered := lastRoots reg
-    let wrong := sortStrings (roots.filterMap fun (p, r) =>
+    let incorrect := sortStrings (roots.filterMap fun (p, r) =>
       match registered[p]?.map (p, ·) with
       | some (_, x) => if jeq (getD x "root") r then none else some p
       | none => some p)
-    if roots.isEmpty || !wrong.isEmpty then
-      out := out.push ("roots", failed "roots" (obj [("ports", Json.arr (wrong.map Json.str))]))
+    if roots.isEmpty || !incorrect.isEmpty then
+      out := out.push ("roots", failed "roots" (obj [("ports", Json.arr (incorrect.map Json.str))]))
   let want := registeredRoots reg
   let opened := sessionRegistered.getD #[]
   if !subDict opened want then
-    let wrong := opened.filterMap fun (v, o) => match want.find? (·.1 == v) with
+    let incorrect := opened.filterMap fun (v, o) => match want.find? (·.1 == v) with
       | some (_, r) => if jeq o r then none else some v
       | none => some v
     out := out.push ("registered", failed "registered" (obj [
       ("registered", Json.arr ((sortStrings (want.map (·.1))).map Json.str)),
       ("opened", Json.arr ((sortStrings (opened.map (·.1))).map Json.str)),
-      ("wrong", Json.arr ((sortStrings wrong).map Json.str))]))
+      ("wrong", Json.arr ((sortStrings incorrect).map Json.str))]))
   return out
 
 @[csimp] theorem checks_eq_checksFast : @checks = @checksFast := by
