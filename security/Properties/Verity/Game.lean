@@ -34,8 +34,8 @@ verdict in a composite that lists Pearl+'s id and H1's period credit in any othe
 the rows check in a composite that lists its id and v0 in any other (`Subprotocol.protocolAt`, `component`). So a
 composite's subprotocols are read off its list (`subprotocols`): onsite's seven and remote's three of them, and the
 three of remote's plain sibling (`Composite.plain`). No compiled check carries the rows check's id yet: the game reads
-it as `rowsCheck`, whose behavior nothing here states (`rowsUnbuilt`), and the code refuses the plain sibling's list
-(`Core.Composites.ofIds`). The five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAudit`):
+it as `rowsCheck`, whose behavior nothing here states (`rowsUnbuilt`), its claim is `rowsHeld`, which nothing here
+states either, and the code refuses the plain sibling's list (`Core.Composites.ofIds`). The five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAudit`):
 
 | subprotocol | `Audit` | its compiled check | onsite | remote | plain |
 | --- | --- | --- | --- | --- | --- |
@@ -297,6 +297,12 @@ def PolicyCase (k : Verity.Registration.Composite) (s : Sent) (p : NciCheck.Prot
     ∃ x ∈ Properties.Composition.triples (s.components k) ps ev, x.1 = NciCheck.Protocol.protocol ∧
       (canonicalJson x.2.1.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok p ∧
       NciCheck.Protocol.commitmentOf x.2.2.commitment = .ok c ∧ NciCheck.Protocol.evidenceOf x.2.2.evidence = .ok e
+
+/-- **The inference-only policy's clause where composite `k` lists no v0** (remote's plain sibling, which lists the rows
+check): the clause in rows on the record's circuit, which the rows check's guarantee states. Nothing here says what it
+is (`opaque`). v0's clause there would read no case and hold of every play, so the policy's target at such a
+composite is neither empty nor proved by computing it. -/
+opaque rowsHeld : Verity.Registration.Composite → Sent → Prop
 
 /-- Subprotocol `a`'s compiled check at composite `k` accepts its own case in what the prover sent. -/
 def ComponentAccepts (k : Verity.Registration.Composite) (a : Subprotocol) (s : Sent) : Prop :=
@@ -905,15 +911,17 @@ its passes credit), `ρ` its cap share `rho` and `ε` its `epsilon`, the miss ta
 landed on tiles over their inert-work bound (credited nothing under `over_cap` `uncredited`; `X_O = 0` in a run
 `reject` accepts).
 
-The inference-only policy's is on the Program its compiled check judges: every case of the policy in the play's
-messages (`PolicyCase`) is `Properties.Remote.PolicyHeld`. The record names, by its SHA-512, the Program the parameters
+The inference-only policy's, where `k` lists no v0 (remote's plain sibling), is `rowsHeld`, the clause in rows that the
+rows check's guarantee states; v0's clause there would read no case. Where `k` lists v0 (onsite, remote), it is on the
+Program v0's compiled check judges: every case of the policy in the play's messages (`PolicyCase`) is
+`Properties.Remote.PolicyHeld`. The record names, by its SHA-512, the Program the parameters
 carry; θ holds what the log's first record registers; and that Program lays out a registered circuit whose inference
 blocks each have at most `Γ` gates and read at most `α` fresh input bits per gate, on every parse and layout, with
 `Γ` and `α` the parameters the composite names for the policy. It reads no field of the vocabulary.
 
-The clause is proved of the case as sent (`Vocab.inferenceOnlySound`), and of nothing more: what links that case to the
-committed files is two checks the verifier lacks, which no code enforces, so the clause says nothing of the committed
-files until both exist. Neither is a premise of the claim.
+v0's clause is proved of the case as sent, at the composites that list v0 (`Vocab.inferenceOnlySound`), and of
+nothing more: what links that case to the committed files is two checks the verifier lacks, which no code enforces, so
+the clause says nothing of the committed files until both exist. Neither is a premise of the claim.
 
 1. **The case's wires are the committed record's wires.** The circuit the clause speaks of is the Program's own layout.
    SPOT's claim is on the committed files' units, and no check holds the rows a unit commits to the Program's gates or
@@ -943,7 +951,9 @@ def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteAr
   | .pous, o => (V.live k θ F c).Holds (V.certOf θ) σ .pous o
   | .poub, o => (V.live k θ F c).Holds (V.certOf θ) σ .poub o
   | .network, o => (V.live k θ F c).Holds (V.certOf θ) σ .network o
-  | .inferenceOnly, o => ∀ p r e, PolicyCase k o.sent p r e → Properties.Remote.PolicyHeld p r e
+  | .inferenceOnly, o =>
+    if NciCheck.Protocol.protocolId ∈ k then ∀ p r e, PolicyCase k o.sent p r e → Properties.Remote.PolicyHeld p r e
+    else rowsHeld k o.sent
   | .wipe, o => ¬ (V.wipeRun θ F c σ).Kept (V.foreignBits θ) o
 
 /-- **The log subprotocol `a`'s check read is the device's whole log**: every release, in order, and no other

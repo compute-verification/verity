@@ -13,8 +13,12 @@ play's messages, decoded, meets `Properties.Remote.PolicyHeld`. A composite's ac
 check's, and the three byte strings decode to one composition, so the case the claim reads is the case the policy's
 check accepted (`policyHeld_of_same`), and what that check accepts is `PolicyHeld`
 (`Properties.Remote.SecurityProofs.policyHeld`). The target's event, the composite accepting while the claim fails, is
-therefore empty, and the target holds of every vocabulary, device and strategy with no premise
-(`Vocab.inferenceOnlySound`). It reads no coin and no committed file.
+therefore empty, and the target holds of every vocabulary, device and strategy with no premise, at every composite
+that lists v0 (`Vocab.inferenceOnlySound`). It reads no coin and no committed file.
+
+Remote's plain sibling lists no v0 (`v0_not_mem_plain`, `v0_not_mem_componentsOf_plain`): there v0's clause would read
+no case and hold of every play, so the policy's claim is `rowsHeld` (`Vocab.holds_plain`), which nothing states, and
+`InferenceOnlySound .plain` stays the hypothesis `Verity.PlainSoundness` takes until the rows check's guarantee.
 
 The claim is not empty of content on an accepted play: the policy's component accepting gives the case the claim reads
 (`policyCase_of_component`), so there `PolicyHeld` holds of a case that exists.
@@ -63,20 +67,40 @@ theorem policyCase_of_component {k : Verity.Registration.Composite} {s : Sent}
   obtain ⟨p, r, e, hp, hr, he, -⟩ := hacc
   exact ⟨p, r, e, ps, c, ev, hdec, _, hx, rfl, hp, hr, he⟩
 
+/-- **Remote's plain sibling lists no v0**, so `Vocab.inferenceOnlySound`'s hypothesis fails there. -/
+theorem v0_not_mem_plain : NciCheck.Protocol.protocolId ∉ Verity.Registration.Composite.plain := by decide
+
+/-- **Remote's plain sibling has no v0 component**: no case of its play is v0's. -/
+theorem v0_not_mem_componentsOf_plain : NciCheck.Protocol.protocol ∉ componentsOf .plain := by
+  intro h
+  have h' := List.mem_map_of_mem (f := BlobProtocol.id) h
+  rw [componentsOf_plain] at h'
+  revert h'
+  decide
+
 namespace Vocab
 
 variable {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
 
-/-- **The inference-only policy's target, at every composite**: for any names `V` and composite `k`, the probability
-that `k`'s verifier accepts registered files while the policy's case fails `PolicyHeld` is `0`, so it is within the
-policy's error. -/
-theorem inferenceOnlySound (k : Verity.Registration.Composite) : V.InferenceOnlySound k := by
+/-- **The inference-only policy's target, at every composite that lists v0**: for any names `V` and composite `k` that
+lists v0, the probability that `k`'s verifier accepts registered files while the policy's case fails `PolicyHeld` is
+`0`, so it is within the policy's error. -/
+theorem inferenceOnlySound (k : Verity.Registration.Composite) (hk : NciCheck.Protocol.protocolId ∈ k) :
+    V.InferenceOnlySound k := by
   intro θ F c σ
   calc Game.prob (fun o => V.Verdict k .inferenceOnly o ∧ ¬ V.Holds k θ F c σ .inferenceOnly o) (V.game θ F c) σ
       ≤ Game.prob (fun _ => False) (V.game θ F c) σ :=
-        Game.prob_mono (fun _ ⟨⟨_, hsame, _⟩, hfail⟩ => hfail fun _ _ _ hc => policyHeld_of_same hsame hc) _ σ
+        Game.prob_mono (fun _ ⟨⟨_, hsame, _⟩, hfail⟩ => hfail <| by
+          simp only [Holds, if_pos hk]
+          exact fun _ _ _ hc => policyHeld_of_same hsame hc) _ σ
     _ = 0 := Game.prob_false _ σ
     _ ≤ V.error .inferenceOnly θ F c σ := zero_le
+
+/-- **The policy's claim at remote's plain sibling is `rowsHeld`'s**, not v0's clause, which `inferenceOnlySound`
+reads. -/
+theorem holds_plain (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c))
+    (o : Exchange) : V.Holds .plain θ F c σ .inferenceOnly o = rowsHeld .plain o.sent := by
+  simp only [Holds, if_neg v0_not_mem_plain]
 
 end Vocab
 
