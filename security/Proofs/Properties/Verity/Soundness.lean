@@ -17,9 +17,10 @@ composition and every component's on its own case (`accepts_same`, `accepts_comp
 `Properties.Composition`'s `answerAccepts` at the composite, `acceptTied` at its ties and `acceptSame`), and the event
 `Verity.SoundnessOf` bounds at a composite lies inside the union of its subprotocols' events, each at most its target's
 error at the strategy: the union bound over the composite's subprotocols in one game (`soundness_at_of_targets`).
-`soundness_of_subprotocols` is it at onsite's list, and `remote_soundness_of_subprotocols` at remote's, whose three
-subprotocols are among onsite's seven: each takes its list's targets by name, which are the target of each subprotocol
-the list names (`Vocab.targets_onsite`, `Vocab.targets_remote`).
+`soundness_of_subprotocols` is it at onsite's list, `remote_soundness_of_subprotocols` at remote's, whose three
+subprotocols are among onsite's seven, and `plain_soundness_of_subprotocols` at remote's plain sibling's, the rows check
+in v0's place: each takes its list's targets by name, which are the target of each subprotocol the list names
+(`Vocab.targets_onsite`, `Vocab.targets_remote`, `Vocab.targets_plain`).
 
 Beside it, the two checks every guarantee carries, for any names `V`: `soundness_honest_of`, at the honest deployment
 (the deployment's honest prover at registered files, each subprotocol's honest lemma `Vocab.HonestHolds`) every target's
@@ -38,10 +39,12 @@ The premises at a subprotocol's further finders (`Vocab.finderCR`) are what each
 with probability at most its budget over `2^256`, and under `cr/sha-512` the premise is `Claims.StrictBirthday` itself
 (`finderCROf_of_expectedCR`).
 
-The witnesses of each of the three theorems are at the idle deployment (`Properties.Verity.Idle`), at the compiled
-composites: its hypotheses hold at `Idle.unbounded` (`soundness_at_of_targets_honest`, `soundness_of_subprotocols_honest`,
-`remote_soundness_of_subprotocols_honest`), and its conclusion fails at `Idle.exact` for a verifier that accepts everything
-(`soundness_at_of_targets_nontrivial`, `soundness_of_subprotocols_nontrivial`, `remote_soundness_of_subprotocols_nontrivial`): there
+The witnesses of each of the four theorems are at the idle deployment (`Properties.Verity.Idle`), at the composites:
+its hypotheses hold at `Idle.unbounded` (`soundness_at_of_targets_honest`, `soundness_of_subprotocols_honest`,
+`remote_soundness_of_subprotocols_honest`, `plain_soundness_of_subprotocols_honest`), and its conclusion fails at
+`Idle.exact` for a verifier that accepts everything (`soundness_at_of_targets_nontrivial`,
+`soundness_of_subprotocols_nontrivial`, `remote_soundness_of_subprotocols_nontrivial`,
+`plain_soundness_of_subprotocols_nontrivial`): there
 every error is `0` and PoUW's claim fails on every play after the empty commitment, at files that pass the commit
 phase's check.
 -/
@@ -134,6 +137,18 @@ theorem targets_remote (V : Vocab d α) (hS : V.SpotSound .remote) (hW : V.PouwS
   · exact hI
   all_goals exact absurd hm (by decide)
 
+/-- **The plain sibling's targets, by name**: its three subprotocols' named targets are the target of each subprotocol
+it lists. -/
+theorem targets_plain (V : Vocab d α) (hS : V.SpotSound .plain) (hW : V.PouwSound .plain)
+    (hI : V.InferenceOnlySound .plain) : ∀ a ∈ subprotocols .plain, V.Target .plain a := by
+  intro a ha
+  have hm := mem_subprotocols.1 ha
+  cases a
+  · exact hS
+  · exact hW
+  · exact hI
+  all_goals exact absurd hm (by decide)
+
 end Vocab
 
 theorem soundness_of_subprotocols : Soundness :=
@@ -142,6 +157,9 @@ theorem soundness_of_subprotocols : Soundness :=
 
 theorem remote_soundness_of_subprotocols : RemoteSoundness :=
   fun ι α _ d V hS hW hI => soundness_at_of_targets ι α d V .remote (V.targets_remote hS hW hI)
+
+theorem plain_soundness_of_subprotocols : PlainSoundness :=
+  fun ι α _ d V hS hW hI => soundness_at_of_targets ι α d V .plain (V.targets_plain hS hW hI)
 
 open Classical in
 /-- **The close's sample**: from the prover's close, an event's probability is its probability over the device's sample, at
@@ -536,5 +554,16 @@ theorem remote_soundness_of_subprotocols_honest :
 the idle deployment whose errors are all `0`. -/
 theorem remote_soundness_of_subprotocols_nontrivial : ¬ Idle.exact.SoundnessFor .remote fun _ => True :=
   Idle.nontrivial_at .remote (mem_subprotocols.2 (by decide))
+
+/-- **`PlainSoundness`'s honest lemma**: its three targets hold at the idle deployment, at the plain sibling. -/
+theorem plain_soundness_of_subprotocols_honest :
+    Idle.unbounded.SpotSound .plain ∧ Idle.unbounded.PouwSound .plain ∧
+      Idle.unbounded.InferenceOnlySound .plain :=
+  ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
+
+/-- **`PlainSoundness`'s nontrivial lemma**: its conclusion fails at the plain sibling for a verifier that accepts
+everything, at the idle deployment whose errors are all `0`. -/
+theorem plain_soundness_of_subprotocols_nontrivial : ¬ Idle.exact.SoundnessFor .plain fun _ => True :=
+  Idle.nontrivial_at .plain (mem_subprotocols.2 (by decide))
 
 end Verity

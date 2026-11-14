@@ -27,22 +27,26 @@ remote are two lists (`Composite.onsite`, `Composite.remote`), whose verifiers a
 (`Core.Composites.composites`): `Core.Onsite.protocol` (`verity/onsite/v0`) and remote's composite of record
 `Core.Remote.V1.protocol` (`verity/remote/v1`). Remote's development composite, `Core.Remote.protocol`
 (`verity/remote/v0`, H1's period as its work), is no composite's verifier, and `Core.Composites.ofIds` refuses its
-subprotocols. A subprotocol is listed by its compiled check's id (`Subprotocol.idAt`): every subprotocol but PoUW has
-one compiled check, the same in every composite that lists it, and PoUW's is Pearl+'s run verdict in a composite that
-lists Pearl+'s id and H1's period credit in any other (`Subprotocol.protocolAt`, `component`). So a composite's
-subprotocols are read off its list (`subprotocols`): onsite's seven and remote's three of them. The five that decide a
-period are one per `Accounting.Audit` (`Subprotocol.ofAudit`):
+subprotocols. A subprotocol is listed by its compiled check's id (`Subprotocol.idAt`): every subprotocol but PoUW and
+the inference-only policy has one compiled check, the same in every composite that lists it; PoUW's is Pearl+'s run
+verdict in a composite that lists Pearl+'s id and H1's period credit in any other, and the inference-only policy's is
+the rows check in a composite that lists its id and v0 in any other (`Subprotocol.protocolAt`, `component`). So a
+composite's subprotocols are read off its list (`subprotocols`): onsite's seven and remote's three of them, and the
+three of remote's plain sibling (`Composite.plain`). No compiled check carries the rows check's id yet: the game reads
+it as `rowsCheck`, whose behavior nothing here states (`rowsUnbuilt`), and the code refuses the plain sibling's list
+(`Core.Composites.ofIds`). The five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAudit`):
 
-| subprotocol | `Audit` | its compiled check | onsite | remote |
-| --- | --- | --- | --- | --- |
-| SPOT | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit; one-stage v1 and the recursive audit refused) | yes | yes |
-| PoUW | `.pouw` | `PouwCheck.Period.protocol` (`verity/pouw/period/v1`, its period credit) | yes | |
-| | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`: Pearl+'s run verdict, its credit at Pearl's assumption) | | yes |
-| the inference-only policy | | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes |
-| PoUS | `.pous` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | yes | |
-| PoUB-P2 | `.poub` | `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | yes | |
-| the network certifier | `.network` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | yes | |
-| the wipe | | `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) | yes | |
+| subprotocol | `Audit` | its compiled check | onsite | remote | plain |
+| --- | --- | --- | --- | --- | --- |
+| SPOT | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit; one-stage v1 and the recursive audit refused) | yes | yes | yes |
+| PoUW | `.pouw` | `PouwCheck.Period.protocol` (`verity/pouw/period/v1`, its period credit) | yes | | |
+| | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`: Pearl+'s run verdict, its credit at Pearl's assumption) | | yes | yes |
+| the inference-only policy | | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes | |
+| | | `rowsCheck` (`verity/inference-only/rows/v1`, the rows check, not yet compiled) | | | yes |
+| PoUS | `.pous` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | yes | | |
+| PoUB-P2 | `.poub` | `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | yes | | |
+| the network certifier | `.network` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | yes | | |
+| the wipe | | `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) | yes | | |
 
 The statement's form is the causal game, the committed files, one fixed extractor and one adversary form:
 
@@ -119,7 +123,8 @@ Each subprotocol's target (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `Pous
 `NetworkCertifierSound`, `WipeSound`) is `Target k a`: at every `θ`, `F`, `c` and strategy, the probability that `a`'s
 verdict at `k` accepts while its claim fails is at most its error there: one function of the subprotocol, so a composite's
 targets are those of the subprotocols it lists. `Verity.SoundnessOf` (`Properties.Verity.Soundness`) composes them at
-any composite, and `Verity.Soundness` and `Verity.RemoteSoundness` are it at onsite's seven and remote's three.
+any composite, and `Verity.Soundness`, `Verity.RemoteSoundness` and `Verity.PlainSoundness` are it at onsite's seven,
+remote's three and the plain sibling's three.
 
 The names a subprotocol defines are `Vocab`'s fields: `read` (v2's reading of the committed files), `place`,
 `programDigest`, `publicDigest` and `registered`, `families`, `signer` and `coinsRead`, `extract`, the finders and the
@@ -166,15 +171,28 @@ def Subprotocol.ofAudit : Audit → Subprotocol
   | .poub => .poub
   | .network => .network
 
+/-- **The inference-only policy's rows check's id**: the check that reads the run's record, its blocks in the clear,
+and holds each block to its budgets in rows of the committed circuit. Remote's plain sibling lists it in v0's place
+(`Verity.Registration.Composite.plain`). -/
+def rowsId : String := "verity/inference-only/rows/v1"
+
+/-- **What the rows check does, until a compiled check carries its id**: nothing here says (`opaque`), so no statement
+about the rows check holds by computing it, and its target at a composite that lists it is proved only from the compiled
+check that replaces this. -/
+opaque rowsUnbuilt : BlobProtocol := NciCheck.Protocol.protocol
+
+/-- **The rows check**: `rowsUnbuilt` under the rows check's id. -/
+def rowsCheck : BlobProtocol := { rowsUnbuilt with id := rowsId }
+
 /-- **The compiled check that decides subprotocol `a` in composite `k`**: PoUW's is Pearl+'s run verdict where `k`
-lists Pearl+'s id and H1's period credit elsewhere; every other subprotocol's is one check, the same in every
-composite. -/
+lists Pearl+'s id and H1's period credit elsewhere; the inference-only policy's is the rows check where `k` lists its id
+and v0 elsewhere; every other subprotocol's is one check, the same in every composite. -/
 def Subprotocol.protocolAt : Subprotocol → Verity.Registration.Composite → BlobProtocol
   | .sampled, _ => VStar.Recursive.Sampled.protocol
   | .pouw, k =>
     if PouwCheck.PearlPlus.Protocol.protocolId ∈ k then PouwCheck.PearlPlus.Protocol.protocol
     else PouwCheck.Period.protocol
-  | .inferenceOnly, _ => NciCheck.Protocol.protocol
+  | .inferenceOnly, k => if rowsId ∈ k then rowsCheck else NciCheck.Protocol.protocol
   | .pous, _ => PousCheck.RunProtocol.protocol
   | .poub, _ => RemoteAudit.P2Protocol.protocol
   | .network, _ => NetworkCheck.Period.protocol
