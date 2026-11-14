@@ -1411,8 +1411,8 @@ def test_a_part_on_cpus_alone_adds_no_gpu_seconds_and_says_so_beside_its_0(tmp_p
 #: the sha256 of the print and of the `--json` document on the fixtures' runs with no verdicts of record: the command's
 #: output where no run carries the stop class's record, the calculator's rows as with no record read. A change
 #: elsewhere that moves the print on purpose pins the new digests here
-NO_VERDICTS = {"text": "a7ed277cc34a2cf35e3ac22e250977636a3d745ee858ac8189a81b24801d4391",
-               "json": "916b9cbc406260536f53195a1b4f70cfea13980201539924e6230c6d9c9323ba"}
+NO_VERDICTS = {"text": "d2d310b06c95cd51c053b853e04ccfecba77fa510f104759a903b78a2c15bb07",
+               "json": "a4b52d174f80ad02cc077faa1f713682ff0c7c39e52643e29b0c23de324e980c"}
 #: made-up verdicts: a verifier, what stands between its verdicts and proved, the run that holds the records, and each
 #: verdict's own run
 VERIFIER = {"module": "made_up.stop_verifier", "commit": "0123456789ab" * 3 + "0123"}
