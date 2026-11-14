@@ -655,6 +655,7 @@ def test_under_a_stop_rule_the_serves_hook_gives_a_stop_class_of_the_greedy_sele
 
     got = TS.first(pub, BR.check_template(check), rule_of, FC.Challenger("first", label=TS.family_of(L)), stop=rule)
     assert [r["port"] for r in got.registration.record["roots"]] == [*BR.PARTS, "o0"]
-    s = TS.stop_first(pub, BR.check_template(check), rule, f"rate:{Q}/{spans}", FC.Challenger("stop"), got.record)
+    s = TS.stop_first(pub, BR.check_template(check), rule, f"rate:{Q}/{spans}",
+                      FC.Challenger("stop", label=TS.family_of(L, blocks=True)), got.record)
     assert s["record"]["previous"] == got.registration.digest and s["record"]["population"] == spans
     assert [r["port"] for r in s["record"]["roots"]] == [BR.STOP] and len(s["units"]) == Q
