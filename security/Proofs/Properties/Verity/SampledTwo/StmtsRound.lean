@@ -33,14 +33,14 @@ round leave no choice in.
   `StmtsFixed` follows from the statements' count (`StmtsCount`) and the same fact template by template
   (`StmtAtFixed`).
 
-**Not established here**: `StmtsCount` and `StmtAtFixed`. Template `t`'s statement on a case
-(`SessionMsgs.stmtAtCase`) is its member's, at the circuit and public files the parameters name, the blobs' lookup
-tables and the session's record's sample as printed; its member is the one the `t`-th session's statement names
-(`SessionMsgs.memberAt`). Between two accepted plays with one parameters' bytes the parameters' members are one list,
-and a member's files are one or two blobs with one SHA-512. What is left is the member each statement names, the
-tables and the sample: that the two plays' stage coins are one where their logs before the round are one, that the
-statements name the same members in the same order where the sample is one, that a sample of one canonical text
-prints to the same bytes, and that a statement decodes back to its fields, none of which is shown.
+**Not established here**: `StmtsCount` and `StmtAtFixed`. `StmtsCount` is a theorem in `FormCount.lean`
+(`stmtsCount_of`). Template `t`'s statement on a case (`SessionMsgs.stmtAtCase`) is its member's, at the circuit and
+public files the parameters name, the blobs' lookup tables and the session's record's sample as printed; its member is
+the one the `t`-th session's statement names (`SessionMsgs.memberAt`). `FormStmts.lean` gives `StmtAtFixed` from the
+member each statement names and the sample each record prints (`stmtAtFixed_of`): the files and the tables are one
+or two blobs with one SHA-512. What is left is those two: that the two plays' stage coins are one where their logs
+before the round are one, that the statements name the same members in the same order where the sample is one, and
+that a sample of one canonical text prints to the same bytes, none of which is shown.
 -/
 
 @[expose] public section
