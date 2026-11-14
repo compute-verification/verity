@@ -6,8 +6,8 @@ row's by its index in the member's tree, so the tree of a member whose every pro
 its n rows `OK_ROW` under salts 0 … n − 1, at the member's ``o0`` frame domain (`binding`), which is its template's
 and its proof blocks' count's and names no run, round or execution phase. One execution phase's scan has the members
 `members` gives, a function of the schedule's T alone, so the roots are constants of T (`constants`). A scan has at
-least two ticks: at T = 1 its one bucket's next state would be no row of the scan's state, a shape no scan is staged
-in, so `constants` refuses a T below 2 (`FewTicks`).
+least two ticks: at T = 1 its one bucket would be ``last`` and ``ingress-0`` a member of no proof block, a shape no
+scan is staged in, so `constants` refuses a T below 2 (`FewTicks`).
 
 The scan's start unit, the member ``start``, is none of them: it has no ok bit, and its ``o0`` (`START`) is the state
 it copies, a row of the scan's state.
@@ -80,7 +80,7 @@ def members(T: int) -> tuple[tuple[str, str, int], ...]:
     """One execution phase's scan's members with an ok bit, (name, template, proof blocks), in its Program's order
     after the start unit: ``ingress-0``, buckets 0 … T − 2, and ``last``, bucket T − 1, whose next state no state
     leaf holds, so it is a member of its own; and ``egress-0``, the T egress buckets. 2T proof blocks. Read at T ≥ 2,
-    where bucket 0 is not bucket T − 1 (`constants`)."""
+    where ``ingress-0`` has a proof block (`constants`)."""
     T = int(T)
     return (("ingress-0", "ingress", T - 1), ("last", "ingress", 1), ("egress-0", "egress", T))
 
@@ -117,8 +117,8 @@ def constant(name: str, template: str, n: int) -> Constant:
 
 def constants(T: int) -> tuple[Constant, ...]:
     """Each member's constant at the schedule's `T` (`members`, `constant`), in order: what one period check computes
-    once. A `T` below 2 is refused (`FewTicks`): its one bucket's next state would be no row of the scan's state,
-    and no scan is staged so."""
+    once. A `T` below 2 is refused (`FewTicks`): ``ingress-0`` would be a member of no proof block, and no scan is
+    staged so."""
     if int(T) < 2:
         raise FewTicks(int(T))
     return tuple(constant(*m) for m in members(T))

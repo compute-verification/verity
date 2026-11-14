@@ -232,8 +232,8 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   its proof blocks' ok words at the root its registration names, so each is the row `[1]` the verifier computed, not a
   row the prover's registered file states. The start unit has no ok bit: its `o0` is the state it copies, a row of
   the scan's state (`stateRead`), and `ScanOk.held` leaves that port, `start/o0`, alone. A schedule of fewer than two
-  ticks has no constants (`ScanOk.consts` refuses it: its one bucket's next state would be no row of the scan's
-  state), so every execution phase under one is refused.
+  ticks has no constants (`ScanOk.consts` refuses it: `ingress-0` would be a member of no proof block), so every
+  execution phase under one is refused.
 
 **Public**, on acceptance: `K` and its terms, each a ceiling of `log2` of `MonitoringPeriodLeakAccepted`'s factor:
 

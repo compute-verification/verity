@@ -16,8 +16,8 @@ tree, so the tree of a member whose every proof block is ok is one anyone comput
 `0 … n − 1`, at the member's `o0` frame domain (`domain`), which is its template's and its proof blocks' count's and
 names no run, round or execution phase. One execution phase's scan has the members `members` gives, a function of the
 schedule's `T` alone, so the roots are constants of `T` (`consts`). A scan has at least two ticks: at `T = 1` its one
-bucket's next state would be no row of the scan's state, a shape no scan is staged in, so `consts` refuses a `T`
-below 2.
+bucket would be `last` and `ingress-0` a member of no proof block, a shape no scan is staged in, so `consts` refuses
+a `T` below 2.
 
 The scan's start unit, the member `start`, is none of them: it has no ok bit, and its `o0` (`START`) is the state it
 copies, a row of the scan's state, which the period check holds by the scan's state reads (`Period.stateRead`).
@@ -91,7 +91,7 @@ def root (dom : ByteArray) (n : Nat) : ByteArray :=
 /-- `scan_ok.members`: one execution phase's scan's members with an ok bit, (name, template, proof blocks), in its
 Program's order after the start unit: `ingress-0`, buckets `0 … T − 2`, and `last`, bucket `T − 1`, whose next state
 no state leaf holds, so it is a member of its own; and `egress-0`, the `T` egress buckets. `2T` proof blocks. Read at
-`T ≥ 2`, where bucket 0 is not bucket `T − 1` (`consts`). -/
+`T ≥ 2`, where `ingress-0` has a proof block (`consts`). -/
 def members (T : Nat) : Array (String × String × Nat) :=
   #[("ingress-0", "ingress", T - 1), ("last", "ingress", 1), ("egress-0", "egress", T)]
 
@@ -112,7 +112,7 @@ def constOf (m : String × String × Nat) : V Const := do
          root := Flock.hexOf (root dom m.2.2) }
 
 /-- `scan_ok.constants`: each member's constant at the schedule's `T` (`members`, `constOf`), in order. A `T` below 2
-is refused: its one bucket's next state would be no row of the scan's state, and no scan is staged so. -/
+is refused: `ingress-0` would be a member of no proof block, and no scan is staged so. -/
 def consts (T : Nat) : V (Array Const) :=
   if T < 2 then throw s!"T = {T}: a scan has at least two ticks, its first bucket and its last"
   else (members T).mapM constOf

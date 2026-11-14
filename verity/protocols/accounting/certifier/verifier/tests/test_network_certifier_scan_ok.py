@@ -1,6 +1,6 @@
 """The scan's ok bits at public content (`scan_ok`): the salt rule and each schedule's constants are the vectors
-`NetworkCheck.ScanOk`'s guards hold Lean to; the members are the schedule's 2T proof blocks; a registration is held at
-its own schedule's constants and at no other's; two members of one template and one count are at one domain and root;
+`NetworkCheck.ScanOk`'s guards hold Lean to; the members are the schedule's 2T proof blocks with an ok bit; a
+registration is held at its own schedule's constants and at no other's, its start unit's port at any root; two members of one template and one count are at one domain and root;
 a schedule of fewer than two ticks has no constants; and the hashes are the constants' alone, counted, none in the
 comparison."""
 
@@ -17,16 +17,11 @@ from verity.protocols.accounting.certifier.verifier import scan_ok as K
 
 # `NetworkCheck.ScanOk`'s guards' vectors: (port, leaves, domain, root) at T = 16, and the roots at T = 3
 T16 = (
-    ("first/o0", 1,
-     "1869079531de0b5f5c6c82aef245cf962330686d1159be75846964951b9b9fc5"
-     "2d06e0e32279179fca53c1d8433efc97117a2e41a6eabaf0a18ee97fa3c8502a",
-     "9bec79dfd837efbec7f7aa545b501fe70855da55deb2a30dc44d4d7ef16c9d4f"
-     "dc1cef2d9fa41f30c5d1ab31a248122cc3e8cf2ca685cdbc376aaad95b042ffd"),
-    ("ingress-0/o0", 14,
-     "ae8f5db18319a8705006fc0a7ec7110f33c8057bc8cd313bbdc131964871ece9"
-     "6bfd08ea2c50cdc25cdfdb2cad8fe493c53072a5f46bc7d1177c619b784b4c46",
-     "62fa9f50974b20a025cc4a049bbbf227eeb663dab1cb7b11a1bbb89c68f72b96"
-     "139b7aaa0719f596b3e18dd9e6ae7a47a6afe5d14557d96589dd820ebbd7d78a"),
+    ("ingress-0/o0", 15,
+     "d85575918fa7f47e3539edee110443d3b8a548c64c291c23b45b3043ce7b9283"
+     "11f74c668f91d782ee01485a04c20797e0001cf41ab5942bded8aa4dc566deef",
+     "970dca820db7995e32ba5fd9cf48f02c8cafe07b9b6a6d8d28f64d35a67f7478"
+     "669096a154227e1a8f3b1b8773ac2e887626ec60301aecce4535f32790376fa3"),
     ("last/o0", 1,
      "fd35975d6bafaf188590e3dd6a0648bc174821e81a7593ee9346bd01fc5546fe"
      "b2e3d4a45bb7cf9fe6a363b31a5e5c8088ec201d487a39d25f07c0a288236a91",
@@ -39,7 +34,10 @@ T16 = (
      "0c6b93cc47827632e333a23251c142ebf53526fc904e3a7395b48e8b8ed42419"),
 )
 T3 = (
-    ("first/o0", 1, T16[0][3]), ("ingress-0/o0", 1, T16[2][3]), ("last/o0", 1, T16[2][3]),
+    ("ingress-0/o0", 2,
+     "3ff491826e963c3a7caa145c82f587b7591900c650757544118ca82b11fc9254"
+     "8e258b7a12cf2d3794ca09d48abc4b6b4bf1b7f2cac48389f63699a17b111a4e"),
+    ("last/o0", 1, T16[1][3]),
     ("egress-0/o0", 3,
      "f9b478b82e457b566f32ac528e447b185d1df3ba42eb792fed539e61867b9272"
      "e2161f725b83ad09aeb6fd947d5a14c9e5caacff5129b9c4f6ef73e5cd788a53"),
@@ -87,24 +85,23 @@ def test_the_known_content_is_the_ok_row_under_the_public_salts():
 def test_the_members_are_the_schedules_proof_blocks(T):
     members = K.members(T)
     assert sum(n for _, _, n in members) == 2 * T and all(n >= 1 for _, _, n in members)
-    assert [name for name, _, _ in members] == [
-        "first", *(["ingress-0"] if T >= 3 else []), *(["last"] if T >= 2 else []), "egress-0"]
-    assert {name: template for name, template, _ in members}.items() <= {
-        "first": "first", "ingress-0": "ingress", "last": "ingress", "egress-0": "egress"}.items()
+    assert [name for name, _, _ in members] == ["ingress-0", "last", "egress-0"]
+    assert {name: template for name, template, _ in members} == {
+        "ingress-0": "ingress", "last": "ingress", "egress-0": "egress"}
     assert [c.port for c in K.constants(T)] == [f"{name}/o0" for name, _, _ in members]
     assert [c.leaves for c in K.constants(T)] == [n for _, _, n in members]
 
 
 @pytest.mark.parametrize("T", [1, 0, -3])
 def test_a_schedule_of_fewer_than_two_ticks_has_no_constants(T, sha512_calls):
-    """At T = 1 the scan's one bucket would be its first and its last, a member no scan is staged with, so the
-    constants refuse it, in the words `NetworkCheck.ScanOk`'s guard holds Lean's refusal to, before any hash; T = 2,
-    the least a scan is staged at, has its three members' constants."""
+    """At T = 1 the scan's one bucket would be its last, and `ingress-0` a member of no proof block, a shape no scan
+    is staged in, so the constants refuse it, in the words `NetworkCheck.ScanOk`'s guard holds Lean's refusal to,
+    before any hash; T = 2, the least a scan is staged at, has its three members' constants."""
     with pytest.raises(K.FewTicks) as refused:
         K.constants(T)
     assert str(refused.value) == f"T = {T}: a scan has at least two ticks, its first bucket and its last"
     assert isinstance(refused.value, ValueError) and not sha512_calls
-    assert [c.port for c in K.constants(2)] == ["first/o0", "last/o0", "egress-0/o0"]
+    assert [c.port for c in K.constants(2)] == ["ingress-0/o0", "last/o0", "egress-0/o0"]
 
 
 def test_the_constants_are_the_vectors_lean_is_held_to():
@@ -132,39 +129,40 @@ def test_a_constant_is_the_frame_root_of_its_ok_rows_under_the_public_salts():
 
 
 def test_two_members_of_one_template_and_count_are_at_one_domain_and_root():
-    """At T = 3 `ingress-0` and `last` are one proof block of the ingress template each: one input set, one count,
+    """At T = 2 `ingress-0` and `last` are one proof block of the ingress template each: one input set, one count,
     so one frame domain and one root, under two ports. The rule holds each port to its own constant, which here are
-    equal; at T = 4 they differ, and swapping them is refused."""
-    first, ingress, last, egress = K.constants(3)
+    equal; at T = 3 they differ, and swapping them is refused."""
+    ingress, last, egress = K.constants(2)
     assert (ingress.domain, ingress.root, ingress.leaves) == (last.domain, last.root, last.leaves)
-    assert ingress.port != last.port and len({c.root for c in (first, ingress, egress)}) == 3
-    assert K.held(K.constants(3), registration([entry(c) for c in K.constants(3)]))
-    assert K.held(K.constants(3), registration([entry(first), entry(last, port=ingress.port),
-                                                entry(ingress, port=last.port), entry(egress)]))
-    first, ingress, last, egress = four = K.constants(4)
+    assert ingress.port != last.port and ingress.root != egress.root
+    assert K.held(K.constants(2), registration([entry(c) for c in K.constants(2)]))
+    assert K.held(K.constants(2), registration([entry(last, port=ingress.port), entry(ingress, port=last.port),
+                                                entry(egress)]))
+    ingress, last, egress = three = K.constants(3)
     assert ingress.root != last.root and ingress.domain != last.domain
-    assert not K.held(four, registration([entry(first), entry(last, port=ingress.port),
-                                          entry(ingress, port=last.port), entry(egress)]))
+    assert not K.held(three, registration([entry(last, port=ingress.port), entry(ingress, port=last.port),
+                                           entry(egress)]))
 
 
 def test_a_registration_is_held_at_its_schedules_constants_and_no_other():
-    cs, other = K.constants(3), K.constants(4)
+    cs, other, two = K.constants(3), K.constants(4), K.constants(2)
     es = [entry(c) for c in cs]
     assert K.held(cs, registration(es)) and K.held(cs, registration(es + es))
     assert K.held(cs, registration([*es, entry(cs[0], port="other/o1")]))
     refused = {
         "another schedule's constants": (other, es),
         "another schedule's registration": (cs, [entry(c) for c in other]),
-        "a member at another's root": (cs, [*es[:3], entry(cs[3], root=cs[0].root)]),
-        "a member at other leaves": (cs, [*es[:3], entry(cs[3], leaves=4)]),
-        "a member at another's domain": (cs, [*es[:3], entry(cs[3], domain=cs[0].domain)]),
+        "a member at another's root": (cs, [*es[:2], entry(cs[2], root=cs[0].root)]),
+        "a member at other leaves": (cs, [*es[:2], entry(cs[2], leaves=4)]),
+        "a member at another's domain": (cs, [*es[:2], entry(cs[2], domain=cs[0].domain)]),
         "a member missing": (cs, es[1:]),
-        "a member missing whose root another member is at": (cs, [es[0], es[1], es[3]]),
-        "a member named twice, once at another root": (cs, [*es, entry(cs[3], root=cs[0].root)]),
+        "a member missing whose root another member is at": (two, [entry(two[0]), entry(two[2])]),
+        "a member named twice, once at another root": (cs, [*es, entry(cs[2], root=cs[0].root)]),
         "a port ending /o0 that is no member's": (cs, [*es, entry(cs[0], port="other/o0")]),
-        "leaves a boolean": (K.constants(2), [entry(K.constants(2)[0], leaves=True), *map(entry, K.constants(2)[1:])]),
-        "a root in upper case": (cs, [*es[:3], entry(cs[3], root=cs[3].root.upper())]),
-        "leaves a string": (cs, [*es[:3], entry(cs[3], leaves="3")]),
+        "the start unit's port and a member missing": (cs, [*es[1:], entry(cs[0], port=K.START)]),
+        "leaves a boolean": (two, [entry(two[0], leaves=True), *map(entry, two[1:])]),
+        "a root in upper case": (cs, [*es[:2], entry(cs[2], root=cs[2].root.upper())]),
+        "leaves a string": (cs, [*es[:2], entry(cs[2], leaves="3")]),
     }
     for what, (consts, entries) in refused.items():
         assert not K.held(consts, registration(entries)), what
@@ -173,9 +171,20 @@ def test_a_registration_is_held_at_its_schedules_constants_and_no_other():
     assert K.held(cs, {"roots": [*es, "o0", 7, None, {"port": 3}, {"root": "r"}]})
 
 
+def test_the_start_units_port_is_held_to_no_constant():
+    """The start unit's `o0` is the state it copies, a row of the scan's state and no ok bit: a registration names
+    it at any root, leaves and domain, once or twice, and is held as it is without it."""
+    cs = K.constants(3)
+    es = [entry(c) for c in cs]
+    assert K.START == "start/o0" and K.ok_port(K.START) and K.START not in {c.port for c in cs}
+    for start in ({"root": "r", "domain": "d", "leaves": 1}, {"root": cs[0].root, "leaves": 7}, {"root": None}):
+        assert K.held(cs, registration([*es, entry(cs[0], port=K.START) | start]))
+        assert K.held(cs, registration([entry(cs[1], port=K.START) | start, *es, entry(cs[0], port=K.START)]))
+
+
 def test_the_ports_the_rule_reads_end_in_the_public_word():
-    assert all(K.ok_port(p) for p in ("first/o0", "egress-0/o0", "a/b/o0", "/o0"))
-    assert not any(K.ok_port(p) for p in ("o0", "first/o1", "first/o00", "first/O0", "first/o0/", "", None, 3))
+    assert all(K.ok_port(p) for p in ("last/o0", "egress-0/o0", "a/b/o0", "/o0"))
+    assert not any(K.ok_port(p) for p in ("o0", "last/o1", "last/o00", "last/O0", "last/o0/", "", None, 3))
 
 
 @pytest.mark.parametrize("T", [2, 3, 16, 32])
@@ -193,13 +202,13 @@ def test_the_hashes_are_the_constants_alone(T, sha512_calls):
     assert len(sha512_calls) == 2 * once
 
 
-def test_the_trees_are_512_hashes_of_a_row_at_32_ticks():
+def test_the_trees_are_511_hashes_at_32_ticks():
     """Lean's count (`NetworkCheck.ScanOk.rootCalls`): a row is its salt's three hashes, its row digest, its salt
-    digest, its hm96 leaf and its frame leaf; then the frame's pads and nodes. The four trees at T = 32 are 512."""
+    digest, its hm96 leaf and its frame leaf; then the frame's pads and nodes. The three trees at T = 32 are 511."""
     def root_calls(n: int) -> int:
         width = 1 << (n - 1).bit_length()
         return 7 * n + (width - n) + (width - 1)
 
-    assert [root_calls(n) for n in (1, 14, 16, 30, 32)] == [7, 115, 127, 243, 255]
-    assert sum(root_calls(n) for _, _, n in K.members(16)) == 256
-    assert sum(root_calls(n) for _, _, n in K.members(32)) == 512
+    assert [root_calls(n) for n in (1, 15, 16, 31, 32)] == [7, 121, 127, 249, 255]
+    assert sum(root_calls(n) for _, _, n in K.members(16)) == 255
+    assert sum(root_calls(n) for _, _, n in K.members(32)) == 511

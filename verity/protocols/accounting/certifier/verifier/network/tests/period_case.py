@@ -1750,8 +1750,7 @@ UNOKS = ("root", "domain", "leaves", "missing", "renamed", "extra", "other", "un
 #: The T `rows-ok-equal` runs at: where two members, `ingress-0` and `last`, are one proof block of one template
 #: each, so their ok bits are at one domain and one root
 EQUAL_T = 2
-#: The T `rows-one-tick` runs at: its one bucket's next state would be no row of the scan's state, so it has no
-#: constants
+#: The T `rows-one-tick` runs at: `ingress-0` would be a member of no proof block, so it has no constants
 ONE_TICK = 1
 
 
