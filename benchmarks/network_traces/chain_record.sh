@@ -53,9 +53,10 @@
 # state, a gate run's witness/ (custody uploads all of $OUT; a network certifier run's witness is its lane key's only)
 # nor a rehearsal's request values (plan.json's and probe.json's requests, io.json's certified I/O, out-witness.jsonl's rows),
 # nor a file that holds a row registration whole, its wiring's digest with it: the registrations a verifier takes
-# (warden-registration*.json) and the scan's answers, which carry them (answers.json). Those are witness, kept on the
-# chain's private side, $Q/witness/STEP (0700, outside the run dir and the hold), where the period's case reads the
-# answers (certifier_piece.py), and never released.
+# (warden-registration*.json) and the scan's answers, which carry them (answers.json), nor what the certificates step
+# found of the traffic (which execution phases were certified or refused, and how many problems: warden_chain's
+# WITNESS_KEYS). Those are witness, kept on the chain's private side, $Q/witness/STEP (0700, outside the run dir and
+# the hold), where the period's case reads the answers (certifier_piece.py), and never released.
 # Custody publishes the whole run dir once this exits (out/, the runner's logs, and undeclared files, inputs/ among
 # them), so none of it may hold the gates' witness. Every step writes to the hold, $Q/held (0700, outside the run dir),
 # and so does the job's own stdout and stderr (released as out/stdout.log), so nothing it writes reaches the record
@@ -153,7 +154,8 @@ setup
   > "$OUT/build-network-records.log" 2>&1 || { tail -40 "$OUT/build-network-records.log"; exit 7; }
 export VERITY_NETWORK_RECORDS_EXE=$SRC/verity/protocols/accounting/certifier/verifier/lean/.lake/build/bin/network-records
 "$PY" "$CR" custody --gates "$G" --out "$OUT/custody.json" 2>&1 | tee -a "$OUT/job.log" | cut -c1-2000
-"$PY" "$CR" certs --warden-run "$WARDEN" ${CR_DEPLOYED:+--deployed} --out "$OUT/certs.json" 2>&1 \
+"$PY" "$CR" certs --warden-run "$WARDEN" ${CR_DEPLOYED:+--deployed} --out "$OUT/certs.json" \
+  --witness "$Q/witness/certs/certs.json" 2>&1 \
   | tee -a "$OUT/job.log" | cut -c1-2000
 if [ -n "${CR_ENDPOINT:-}" ]; then
   unpack "$CR_ENDPOINT" "$W/endpoint"

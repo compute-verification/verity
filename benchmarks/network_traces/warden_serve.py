@@ -180,14 +180,17 @@ every execution phase that has connection rows to a registration that verifies a
 the records. Under `--lengths 2` every execution phase of the run ends, its last at the run's last close: in its
 head, or in the network certifier's signed word that it has none, a line of `rows.jsonl` too, and `check` holds each
 to the one that is due. The network certifier then admits nothing in the run's last `WardenParams.span` buckets, so
-`rehearse` runs long enough for its last request to be admitted before them (`closing_windows`). With `--head-offset
-N --head-wait W` beside `--lengths` (`warden`'s "The head's tick") the publisher process writes no line: it hands
-each one back, and the network certifier's tick appends it to `rows.jsonl` at the tick the schedule gives it, N
-buckets after the close that handed its execution phase or up to W ticks later. A line not back by then is never
-written, and the tick writes its note that the line missed. The run ticks on past its last window until its last line
-has left or missed. A line holds no tick: the tick it left at is the network certifier's own note, in `warden.json`
-alone (`heads`). No check and no verifier reads it. Nothing holds the head's time yet: that is the auditor's side,
-which is not built. `check` counts the execution phases whose line missed, which have no head.
+`rehearse` runs long enough for its last request to be admitted before them (`closing_windows`). An arrival in them
+is turned away (`warden`'s "The lengths rows"): no refusal, so no window's records are withheld for it. Its client
+reads the one `REFUSED` cell a refused one does, `warden.json` counts it on its own (`turned_away`, `counts`), and
+`check`'s summary has that count beside the clients' refused outcomes, which hold it. With `--head-offset N
+--head-wait W` beside `--lengths` (`warden`'s "The head's tick") the publisher process writes no line: it hands each
+one back, and the network certifier's tick appends it to `rows.jsonl` at the tick the schedule gives it, N buckets
+after the close that handed its execution phase or up to W ticks later. A line not back by then is never written, and
+the tick writes its note that the line missed. The run ticks on past its last window until its last line has left or
+missed. A line holds no tick: the tick it left at is the network certifier's own note, in `warden.json` alone
+(`heads`). No check and no verifier reads it. Nothing holds the head's time yet: that is the auditor's side, which is
+not built. `check` counts the execution phases whose line missed, which have no head.
 """
 
 from __future__ import annotations
@@ -1050,8 +1053,7 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
                 lines.close()
             stalls = sampler and stall_probe.stop(sampler, out / "stalls.json")
     lateness = [x * 1000 for x in warden.lateness]
-    log = {"connections": warden.log, "ordinals": warden.ordinals, "refused": warden.refused,
-           "refused_windows": sorted(warden.refused_windows), "ticks": warden.ticks,
+    log = {"connections": warden.log, **counts(warden),
            "lateness_ms": _quantiles(lateness) | {"over_slack": sum(x > slack * 1000 for x in lateness)},
            "issuer_refused": [[link, d.value, w] for link, d, w in refused], "usage": _usage(),
            "publisher_usage": publish.usage, "process": process, "stalls": stalls, "loop_errors": errors,
@@ -1071,6 +1073,14 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
 
 def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def counts(device: Warden) -> dict:
+    """What `warden.json` counts of a run: the connections that took an ordinal, the refusals and their windows, the
+    arrivals turned away, which are neither, those of them whose client reset its link after the cell, and the
+    ticks."""
+    return {"ordinals": device.ordinals, "refused": device.refused, "refused_windows": sorted(device.refused_windows),
+            "turned_away": device.turned_away, "turned_away_reset": device.turned_away_reset, "ticks": device.ticks}
 
 
 def connection_log(index: int, at: float, sent: float, request: bytes, shim: Shim, origin: float,
@@ -1127,7 +1137,8 @@ def table(result: dict) -> str:
     load = "" if "load" not in s else (f"load {s['load']['registered']}/{s['load']['values']} values registered"
                                        f"{'' if s['load'].get('relayed') else ', not the relay heads'}; ")
     return (f"{'ACCEPTED' if result['accepted'] else 'REFUSED'}: {load}{s['ended']}/{s['requests']} ended, "
-            f"{s['refused']} refused, failed {s['failed']}; {s['certified_windows']}/{len(CERTIFIED) * s['windows']} "
+            f"{s['refused']} refused or turned away ({s['turned_away']} turned away), failed {s['failed']}; "
+            f"{s['certified_windows']}/{len(CERTIFIED) * s['windows']} "
             f"link-windows "
             f"certified; cells in their bucket {s['cells_in_their_bucket'][0]}/{s['cells_in_their_bucket'][1]}; "
             f"cells {s['cells']}; start at {s['start']['base_ms']} ms of the key's life; tick lateness "
