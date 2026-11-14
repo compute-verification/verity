@@ -51,7 +51,8 @@ STAND_IN = ("check", "per_prompt", "per_output")
 #: the kind of verdict that is the Lean verifier's on a session's proof
 PROOFS = "lean-verify"
 #: what a verdict's record names beside its verdict, so that a reader can hold four verdicts to one class of one serve
-#: under one registration: the class, the served run it came from and the digest of the registration it was decided
+#: under one registration: the class as the serve files it (`served_record.served_class`, the name
+#: `exfiltration.CLASS_NAME` reads), the served run it came from and the digest of the registration it was decided
 #: under
 NAMES = ("class", "serve", "registration")
 #: the piece of the stop class's verdicts of record this audit's verdict is (`exfiltration.PIECES`), and the command's
@@ -308,7 +309,7 @@ def account(record: Mapping[str, Any], root: Path | None = None, *, kinds: Mappi
     proved = (not items and final["final"] == "given" and final[PROVED]
               and all(holes.get(h) == spot_status.CLOSED for h in spot_status.HOLES))
     doc = {"schema": SCHEMA, "run": record.get("run"), "commit": record.get("commit"), "runs": record.get("runs"),
-           "named": {"class": shown.get("class"), "serve": ((record.get("runs") or {}).get("serve") or {}).get("run"),
+           "named": {"class": shown.get("served_class"), "serve": ((record.get("runs") or {}).get("serve") or {}).get("run"),
                      "registration": shown.get("registration")},
            "ties": shown.get("ties") or [], "first_stage": shown.get("first_stage"), "covered": cover,
            "verdicts": by_kind, "checks": audit_checks, "outcome": final,

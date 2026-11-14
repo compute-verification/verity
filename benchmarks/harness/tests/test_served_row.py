@@ -22,7 +22,7 @@ GIVEN = {"accepted": True, "complete": True, "interior": [], "replay_sample": []
 OWN = {k: v for k, v in LAYOUT.items() if k not in W.STAND_IN} | {"replay": "Request_v1{L=2}"}
 CLOSED = dict.fromkeys(spot_status.HOLES, spot_status.CLOSED)
 #: what the fixture's four runs name a verdict's class, serve and registration by
-NAMED = {"class": "p4-o2", "serve": "r20261113-000001-0001", "registration": REGISTRATION}
+NAMED = {"class": "w1/p4-o2", "serve": "r20261113-000001-0001", "registration": REGISTRATION}
 #: a made-up table in which a Lean verifier decides every verdict and every check, each under a lock entry
 ALL_LEAN = {
     "verdicts": {k: {"what": f"each session's {k}", "verifier": f"lean-{k}", "decided_by": "lean", "proved_by": "Made.up"}
@@ -53,7 +53,8 @@ def reads(record):
     """Whether the command's own reader of a verdict's record takes the section's, field for field, and the record
     names its class, its serve and its registration beside them."""
 
-    return (E.verdict(record, "the section's record") == {k: record[k] for k in E.VERDICT_FIELDS}
+    return (E.verdict(record, "the section's record") == {k: record[k] for k in (*E.VERDICT_FIELDS, *E.CLASS_FIELDS)
+                                                          if k in record}
             and set(record) == {*E.VERDICT_FIELDS, *W.NAMES})
 
 
@@ -174,8 +175,8 @@ def test_an_accept_the_verifier_withheld_is_never_said_to_be_given(tmp_path):
     # where the served run's files give one of them none, the section says which
     assert "The record names no" not in out
     alone = W.account(R.read(served(tmp_path / "alone")["second"])[0], tree(tmp_path), holes=CLOSED)
-    assert {k: alone["verdict_record"][k] for k in W.NAMES} == NAMED | {"serve": None}
-    assert "The record names no `serve`: the served run's files give none, so a reader that holds four verdicts to one " \
+    assert {k: alone["verdict_record"][k] for k in W.NAMES} == NAMED | {"class": None, "serve": None}
+    assert "The record names no `class` and `serve`: the served run's files give none, so a reader that holds four verdicts to one " \
            "class of one serve under one registration cannot count it." in W.render(alone)
     assert "  - the replay block's inputs are committed after the sample: the interior registers `logits` after the " \
            "first stage's sample" in out
