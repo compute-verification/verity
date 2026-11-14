@@ -22,7 +22,8 @@ refused at the cell that takes it past; a window
 circuit's state rows (`window_state`) are the scan's from t0 − 1, the empty state's first; the first bucket's circuit
 is the ingress circuit at the empty state, bit for bit; the egress circuit is its reference on the views;
 `scan_traffic.serve`, the zk run's driver, ticks the same rows as the network certifier; and the w63 class's state is
-the scan's sized layout, with the outputs N2's view reads."""
+the scan's sized layout, with the outputs N2's view reads; and the carried start's unit (`IngressScanStart`) outputs
+the state row it is given, bit for bit."""
 from __future__ import annotations
 
 import asyncio
@@ -51,6 +52,7 @@ PARAMS = WardenParams(cell_bytes=B, slots=2, bucket_ms=100, delay=5, lanes=2, qu
 CLS = IS.Class(B=B, r=2, lanes=2, C=4, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
 UNIT = bind(IS.IngressScanBucket, B=B, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
 FIRST = bind(IS.IngressScanFirst, B=B, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
+START = bind(IS.IngressScanStart, B=B, r=2, lanes=2, C=4, IDB=17, EVERY=2, WITHIN=3, D=5, KO=8, KI=100)
 SHAPE = CLS.egress
 EGRESS = bind(EG.EgressBucket, B=B, R=SHAPE.R, r=SHAPE.r, NR=SHAPE.NR, K=SHAPE.K, IB=SHAPE.IB, D=SHAPE.D)
 #: request 3's prompt is KI ids
@@ -350,6 +352,19 @@ def test_each_negative_is_refused_by_the_reference_or_computes_another_state(run
     for name in ("prog-off-anchor", "over-KO-off-anchor", "entry-padding"):
         t = 10 if "anchor" in name else 4
         assert IS.reference(CLS, *ignored[name][0]) == (1, *run.chain.outputs(t)), name
+
+
+def test_the_carried_start_s_unit_outputs_its_state_row_bit_for_bit(run):
+    """`IngressScanStart`, the unit of a scan's carried start: one input, ``sin``, and one output, each a state row of
+    the class, and the output is ``sin`` on the empty state's row, every state of the run and random rows, so the row
+    it commits is the state it was given and no other."""
+    NS = IS.state_bits(CLS)
+    (name, ty), ret = START.signature()[0][0], START.signature()[1]
+    assert (name, ty.n) == ("sin", NS) and [t.n for t in ret.fields] == [NS]
+    rng = random.Random(11)
+    rows = [IS.encode(CLS, IS.empty(CLS)), *run.chain.states, *([rng.randrange(2) for _ in range(NS)] for _ in range(8))]
+    assert len({tuple(r) for r in rows}) > len(run.chain.states) // 2
+    assert _circuit(START, [rows]) == [list(r) for r in rows]
 
 
 @pytest.mark.slow

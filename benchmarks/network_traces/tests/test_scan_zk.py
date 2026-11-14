@@ -201,6 +201,183 @@ def test_a_group_of_link_windows_is_one_registration_a_member_a_window(tmp_path)
         sz.link(tmp_path / "none", setup=sz.TEST, group=0)
 
 
+def _carried_program(cls, T: int) -> tuple:
+    """The carried shape's Program and query at class ``cls`` with the scan's own start unit and stand-in bucket
+    templates (the scan's parameters, `_lanes`): what a record of the shape is checked against without lowering a
+    bucket."""
+    defs = {"start": sz._defs(cls)["start"],
+            "ingress": _lanes("ScanZkTestCarriedBucket", ("row", "sin"), cls.NR, sz.IS.entry_bits(cls)),
+            "egress": _lanes("ScanZkTestCarriedEgress", ("state",), 0, sz.IS.entry_bits(cls))}
+    counts = sz.counts_of(sz.members_of(sz.CARRIED, 1, T))
+    root = sz.scan_root([(defs[t], counts[t], sz.FIXED[t]) for t in sz.CARRIED], T // cls.EVERY, cls.EVERY)
+    return root, sz.PA.template_instances_query([defs[t] for t in sz.CARRIED]), defs
+
+
+def test_the_carried_shapes_program_is_a_start_unit_then_every_bucket_and_its_start_one_registered_row():
+    """The carried shape's Program (`scan_zk.CARRIED`, `scan_root`): the start unit, then T ingress units, bucket 0's
+    too, the last a member of its own, then T egress units, 2T + 1 units; its parameters the start's ``0.sin``, then
+    the bucket templates' own and each lane's ``prog<j>``; one-stage's reads of the slot entries each ingress unit's at
+    its boundary and none of the start unit's; and its read of the carried start (`scan_zk.CARRY`, one row/v2 row of
+    the state's words) the start unit's alone, at row 0."""
+    cls, T = sz.TEST2.cls, sz.TEST2.params.window
+    root, query, _defs = _carried_program(cls, T)
+    members = sz.members_of(sz.CARRIED, 1, T)
+    assert [(m.name, m.template, m.base, list(m.buckets)) for m in members] == [
+        ("start", "start", 0, [0]), ("ingress-0", "ingress", 1, list(range(T - 1))), ("last", "ingress", T, [T - 1]),
+        ("egress-0", "egress", T + 1, list(range(T)))]
+    assert [(m.name, m.base, list(m.buckets)) for m in sz.members_of(sz.STALE, 1, T)] == [("start", 0, [0])]
+    assert [(lo, n) for _t, lo, n in sz.PA.ranges(root, query)] == [(0, 1), (1, T), (T + 1, T)]
+    assert [n for n, _t in root.fn.signature()[0]] == [sz.CARRY, "1.row", "1.sin", "2.state",
+                                                      *sz.lane_kinds(cls)]
+    nb = T // cls.EVERY
+    assert sz.entry_reads(root, query, members, cls, nb) == {
+        p: (p, [None, *[t // cls.EVERY for t in range(T)], *[None] * T]) for p in sz.lane_kinds(cls)}
+    words, v2 = sz.IS.state_bits(cls) // 16, sz.BitRowLeaf.hiding_schema
+    got = sz.REG.reads(root, query, {sz.CARRY: words}, {sz.CARRY: v2})
+    assert {p: (r["value"], r["rows"]) for p, r in got.items()} == {"sin": (sz.CARRY, [0, *[None] * 2 * T])}
+    assert sz.REG.registered_entries(root, {sz.CARRY: words}, {sz.CARRY: v2})[sz.CARRY]["leaves"] == 1
+
+
+def test_a_link_windows_carried_start_is_the_record_before_its_last_state_leaf_for_leaf(tmp_path):
+    """The carried shape as the host reads it (`scan_zk.carried`, ``--carried``; nothing here lowers a bucket or
+    proves, the run on a node does) on test2's two link-windows, a request admitted in the first and anchored at the
+    second's first boundary, so the state carried across holds it live.
+
+    Each link-window is a round of its own, accepted, its chains wired from the start unit's o0, which is state leaf 0.
+    The first's start is the empty state's row at the root the verifier computes (`empty_start`). The second's start
+    reads the first's ``last/o1``: the port of the first's record at its root and domain, one leaf, its b‖c the first
+    statement's own row's under the same salt; and the leaf a registered read frames from that b‖c at position 0 of
+    the frame port's domain (`registered.leaf`, the mirror of the Lean verifier's read) is, byte for byte, the leaf
+    the first statement's frame commits (`Frame`, `rowleaf.row_leaf`), which a one-leaf port's root is. The stale
+    round's start, given the state the last link-window started from, opens no leaf of the last record's port."""
+    s, cls = sz.TEST2, sz.TEST2.cls
+    T, words, v2 = s.params.window, sz.IS.state_bits(cls) // 16, sz.BitRowLeaf.hiding_schema
+    root, _query, _defs = _carried_program(cls, T)
+    digest = sz.PA.program_digest(root)
+    h = sz.carried(tmp_path, setup=s, group=2, program=digest)
+    ch = h.whole.chain
+    assert h.whole.admitted == {1: 0, 2: 1, 3: 7, 4: 12} and cls.anchor(12, 12 % cls.EVERY) == T
+    assert 4 in [x.q for x in ch.scan[T].slots if x.live]
+    assert [(r.name, r.templates, r.stale) for r in h.rounds] == [
+        ("carried-0", sz.CARRIED, False), ("carried-1", sz.CARRIED, False), ("stale-2", sz.STALE, True)]
+    rounds = [{m.name: m for m in r.members} for r in h.rounds]
+    for w, (r, ms) in enumerate(zip(h.rounds[:2], rounds)):
+        assert [(k, m.base, m.n) for k, m in ms.items()] == [("start", 0, 1), ("ingress-0", 1, T - 1), ("last", T, 1),
+                                                             ("egress-0", T + 1, T)]
+        assert all(m.refused is None for m in ms.values()) and sz.wired(r.members) == []
+        assert ms["start"].outputs is None and all(m.outputs == [1] * m.n for k, m in ms.items() if k != "start")
+        assert [sz._bits(r.trees["state"], t) for t in range(T)] == sz.IS.window_state(cls, ch.states[1:], w * T, T)
+        start, state = ms["start"], r.trees["state"]
+        assert sz._bits(r.start, 0) == sz._bits(state, 0) == ch.states[w * T]
+        assert (start.ports["o0"]["root"], start.ports["o0"]["reads"]) == (state.root.hex(), [0])
+        assert start.bcs["o0"] == ms["ingress-0"].bcs["sin"][:1] and start.framed == [] and start.frames == {}
+        assert ms["last"].ports["o1"]["value"] == sz.value("frame") and list(ms["last"].frames) == ["o0", "o1"]
+        assert sz._bits(ms["last"].frames["o1"], 0) == ch.states[(w + 1) * T]
+    first = sz.empty_start(digest, cls)
+    assert rounds[0]["start"].ports["sin"] == {
+        "value": sz.CARRY, "root": first.root.hex(), "leaves": 1, "words": words, "word_bits": 16,
+        "domain": first.domain.domain_id.hex(), sz.REG.SCHEMA_KEY: v2, "reads": [0]}
+    assert first.rows == (tuple(sz._words(sz.IS.encode(cls, sz.IS.empty(cls)))),)
+    assert first.salts == tuple(sz.REG.supplied_salts(digest, sz.CARRY, 1))
+    last, start = rounds[0]["last"], rounds[1]["start"]
+    frame = last.frames["o1"]
+    dom = sz.ADV.domain(sz.frame_binding(last.set_name, 1, "o1"), 1)
+    assert start.ports["sin"] == {
+        "value": sz.CARRY, "root": last.ports["o1"]["root"], "leaves": 1, "words": words, "word_bits": 16,
+        "domain": last.ports["o1"]["domain"], sz.REG.SCHEMA_KEY: v2, "reads": [0]}
+    assert (last.ports["o1"]["root"], last.ports["o1"]["domain"]) == (frame.root.hex(), dom.domain_id.hex())
+    assert start.bcs["sin"] == last.bcs["o1"] and start.salts["sin"] == last.salts["o1"]
+    assert start.entries["sin"] == {"value": sz.CARRY, "positions": [0], "paths": [""]}
+    read = sz.REG.leaf(dom, 0, start.bcs["sin"][0], v2)
+    assert read == frame.leaves[0] == frame.root
+    assert read == sz.row_leaf(dom, 0, sz.ADV.INST.tree_leaf(sz.ADV.INST.default_key, last.bcs["o1"][0]), v2)
+    assert sz.REG.verify_read(dom, frame.root, 0, start.bcs["sin"][0], b"", v2)
+    assert sz._bits(frame, 0) != sz._bits(h.rounds[0].start, 0)
+    (stale,) = h.rounds[2].members
+    assert stale.refused == "registered reads: table row 0 does not open the registered root at position 0"
+    assert stale.ports["sin"]["root"] == rounds[1]["last"].ports["o1"]["root"] != start.ports["sin"]["root"]
+    assert h.rounds[2].at.claimed == ch.states[T] != sz._bits(h.rounds[2].start, 0)
+    assert not sz.REG.verify_read(sz.tree_domain(h.rounds[2].start), h.rounds[2].start.root, 0, stale.bcs["sin"][0],
+                                  b"", v2)
+
+
+def test_a_carried_starts_record_is_held_to_the_log_s_last_record_and_refused_at_another_root(tmp_path):
+    """The records of the carried shape under one-stage's registration check (`registration.check`, the Python the
+    verifier's Lean is held to; the run on a node checks both), over the carried shape's Program with stand-in bucket
+    templates: each link-window's record names the carried start (`scan_zk.CARRY`) with its root and domain. The
+    first's is held to the root the verifier pins, the empty state's; each later one's ``previous`` is the record
+    before it and its start that record's ``last/o1``, which the verifier names in the window-history form
+    ``{"port": P}`` (`carry_of`), and whose ``--registered`` port is one-stage's own (`registered.reads_file`, its
+    ``domains``). A start at another root is refused (`R7-held`), as is one checked on a log with no earlier record
+    (`R7-output`) and a start member's port that isn't the verifier's (by name, before any record). One-stage accepts a
+    start that names the record before the last in the explicit form ``{"record": D, "port": P}``: that refusal is
+    not its."""
+    s, cls = sz.TEST2, sz.TEST2.cls
+    T, v2 = s.params.window, sz.BitRowLeaf.hiding_schema
+    root, query, defs = _carried_program(cls, T)
+    h = sz.carried(tmp_path, setup=s, group=2, program=sz.PA.program_digest(root))
+    alone = sz.PA.mixed_population_program([(defs["start"], 1)])
+    programs = {sz.CARRIED: (root, query, sz.DR.parse_design(f"stratified:{2 * T + 1}"), sz.lane_kinds(cls)),
+                sz.STALE: (alone, sz.PA.template_instances_query([defs["start"]]), sz.DR.parse_design("stratified:1"),
+                           None)}
+    assert [n for n, _t in alone.fn.signature()[0]] == [sz.CARRY]
+    log, seen = [], {}
+    for r in h.rounds:
+        program, q, law, tied = programs[r.templates]
+        ms = {m.name: m for m in r.members}
+        carry = sz.carry_of(SimpleNamespace(program=program, query=q), cls, log, ms["start"].ports["sin"])
+        ports = {f"scan/{k}": {"root": t.root.hex(), "leaves": len(t.rows),
+                               "domain": sz.tree_domain(t).domain_id.hex()} for k, t in r.trees.items()}
+        if not r.stale:
+            ports[sz.CARRY_PORT] = {x: ms["last"].ports["o1"][x] for x in ("root", "leaves", "domain")}
+        want = {p: {"leaves": e["leaves"], "domain": e["domain"]} for p, e in ports.items()}
+        rec = R.record(program, q, law, sz.S.SCHEME, [{"port": p, **e} for p, e in sorted(ports.items())],
+                       {"kind": "stand-in", "of": r.name}, leaf_layer="ee" * 64, **carry.record)
+
+        def check(record, given, program=program, q=q, law=law, want=want, tied=tied):
+            return R.check(record, program, q, law, sz.S.SCHEME, want, leaf_layer="ee" * 64, tied=tied, **given)
+
+        verdict = check(rec, carry.check)
+        assert verdict.ok, (r.name, verdict.codes, verdict.detail)
+        seen[r.name] = {k: (check(x, given).codes, code) for k, (x, given, code) in carry.negatives(rec).items()}
+        assert rec["previous"] == (R.digest(log[-1]) if log else None)
+        assert rec["registered"] == [{"value": sz.CARRY, "root": ms["start"].ports["sin"]["root"], "leaves": 1,
+                                      "words": sz.IS.state_bits(cls) // 16,
+                                      "domain": ms["start"].ports["sin"]["domain"]}]
+        if log:
+            before = next(e for e in log[-1]["roots"] if e["port"] == sz.CARRY_PORT)
+            assert (carry.root, carry.domain) == (before["root"], before["domain"])
+            assert carry.check["outputs"] == {sz.CARRY: {"port": sz.CARRY_PORT}} and "pinned" not in carry.check
+            assert carry.check["log"] == log
+            explicit = {**carry.check, "outputs": {sz.CARRY: {"record": R.digest(log[-1]), "port": sz.CARRY_PORT}}}
+            assert check(rec, explicit).ok
+            with pytest.raises(SystemExit, match="isn't the verifier's own"):
+                sz.carry_of(SimpleNamespace(program=program, query=q), cls, log,
+                            {**ms["start"].ports["sin"], "root": "00" * 64})
+        else:
+            first = sz.empty_start(sz.PA.program_digest(program), cls)
+            assert carry.check["pinned"] == {sz.CARRY: first.root.hex()} == {sz.CARRY: carry.root}
+            assert "outputs" not in carry.check and carry.check["log"] == []
+        assert carry.check["registered"] == {sz.CARRY: sz.IS.state_bits(cls) // 16}
+        assert carry.check["schemas"] == {sz.CARRY: v2}
+        log.append(rec)
+    assert {k: sorted(v) for k, v in seen.items()} == {
+        "carried-0": ["another-root"], "carried-1": ["another-root", "no-earlier-record"],
+        "stale-2": ["another-root", "explicit-older", "no-earlier-record"]}
+    for name, negatives in seen.items():
+        for k, (codes, code) in negatives.items():
+            assert (code in codes) if code else codes == (), (name, k, codes)
+    assert [seen[r]["another-root"][1] for r in seen] == ["R7-held"] * 3
+    assert seen["stale-2"]["no-earlier-record"][1] == "R7-output" and seen["stale-2"]["explicit-older"][1] is None
+    older = sz.carry_of(SimpleNamespace(program=alone, query=programs[sz.STALE][1]), cls, log[:2],
+                        h.rounds[2].members[0].ports["sin"])
+    assert older.root == next(e["root"] for e in log[1]["roots"] if e["port"] == sz.CARRY_PORT) != next(
+        e["root"] for e in log[0]["roots"] if e["port"] == sz.CARRY_PORT)
+    with pytest.raises(SystemExit, match="names no last/o1"):
+        sz.carry_of(SimpleNamespace(program=alone, query=programs[sz.STALE][1]), cls, log,
+                    h.rounds[2].members[0].ports["sin"])
+
+
 def test_every_port_of_every_member_is_registered_a_ports_own_rows_at_its_frame_root(tmp_path):
     """The verifier's registered reads name every port of every member's circuit, inputs and output rows, as Lean's
     `Flock.Registered.checkComplete` asks of every statement of a ``--registered`` file. A port no scan tree or network

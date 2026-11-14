@@ -1148,20 +1148,23 @@ def carried_window(whole: SimpleNamespace, w: int, start, claimed: list[int] | N
                            block_sets=[block_set([side.head], whole.session, j) for j in range(cls.NR)])
 
 
-def carried(out: Path, run: Path | None = None, setup: Setup = TEST2, group: int = 2) -> SimpleNamespace:
+def carried(out: Path, run: Path | None = None, setup: Setup = TEST2, group: int = 2,
+            program: str | None = None) -> SimpleNamespace:
     """The carried shape's rounds as the host reads them (no lowering, no proof), ``--carried``: `link`'s run of
     ``group`` link-windows, each a round of its own (``carried-<w>``, `CARRIED`'s members of `carried_window`), its
     start unit's ``sin`` the first's `empty_start` and each later one's the round before's ``last`` member's o1, the
     `Frame` that round's record names `CARRY_PORT`; each accepted, every read held, every output 1 and its chains
     wired from the start unit's o0. Then the stale round (``stale-<group>``, `STALE`): a start unit alone, as a
     link-window after the group's last would register it, its ``sin`` given the state the last link-window started
-    from in place of the one it ended in, which opens no leaf of the last record's port ("does not open")."""
+    from in place of the one it ended in, which opens no leaf of the last record's port ("does not open").
+    ``program``: the digest of the Program the link-windows are registered under, the scan's own (`scan_program`) by
+    default, which the first start's domain and salt bind."""
     whole = link(out, run, setup, group)
     if whole.void:
         raise SystemExit(f"--carried: the warden failed a connection in buckets {whole.void}; the carried shape is "
                          "read on a run it didn't")
     cls, T, ch = setup.cls, whole.T, whole.chain
-    first = empty_start(PA.program_digest(scan_program(cls, CARRIED, 1, T)), cls)
+    first = empty_start(program or PA.program_digest(scan_program(cls, CARRIED, 1, T)), cls)
     start = Held(first.domain, IS.state_bits(cls), (bit_row((list(first.rows[0]), 16))[0],), first.salts)
     if start.root != first.root or _bits(start, 0) != ch.states[0]:
         raise SystemExit("--carried: the empty state's row under one-stage's registered domain isn't the root the "
@@ -2228,8 +2231,11 @@ def main(argv=None) -> int:
     p.add_argument("--dry", action="store_true", help="the run and the host's read of every round: nothing proved")
     p.add_argument("--class", dest="setup", choices=sorted(SETUPS), default=W63.name,
                    help="the class and the network certifier's schedule (default w63's, PARAMS; w63k4: w63's at KO 4 "
-                        "and KI 32, its certifier's at egress cells 5; test: the certifier tests', a CPU window)")
-    p.add_argument("--group", type=int, default=1, help="G: link-windows 0 .. G - 1 in one registration (default 1)")
+                        "and KI 32, its certifier's at egress cells 5; test: the certifier tests', a CPU window; "
+                        "test2: test's over two link-windows, a request anchored at the second's first boundary)")
+    p.add_argument("--group", type=int, default=1,
+                   help="G: link-windows 0 .. G - 1 in one registration (default 1); with --carried, each a "
+                        "registration of its own")
     p.add_argument("--warden-run", type=Path,
                    help="a warden_serve run's directory (rehearse --ids at the class's schedule): its group's "
                         "execution phases, verified under its deployment's key, in place of the synthetic run")
@@ -2279,6 +2285,8 @@ def main(argv=None) -> int:
         raise SystemExit("prove needs --bin and --lean, or --dry")
     if a.carried and (a.draw is not None or a.v3c is not None):
         p.error("--carried samples every unit of its own trees: give neither --draw nor --v3c")
+    if a.carried and a.group < 2:
+        p.error("--carried carries a start from one link-window's record to the next: --group 2 or more")
     return prove_carried(a) if a.carried else prove(a)
 
 
