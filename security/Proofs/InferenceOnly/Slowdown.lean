@@ -4,7 +4,7 @@ public import Definitions.InferenceOnly.Guarantees.Slowdown
 public import Proofs.InferenceOnly.Threads
 
 /-!
-# Proofs of the compute dampener
+# Proofs of the slowdown
 
 The arithmetic core is `sources_le`: the four sources' bounds, summed, with the memory cap taken over the residual and
 the declared computation together, give `η ≤ s + (1 − s) min(r, μ) + ν + χ`; the guarantee drops the factor `1 − s`.
@@ -20,7 +20,7 @@ namespace InferenceOnly.SecurityProofs
 
 open Verity InferenceOnly.Slowdown
 
-/-- **The four sources, summed** (the dampener's arithmetic core, its tight form): with the residual and the declared
+/-- **The four sources, summed** (the slowdown's arithmetic core, its tight form): with the residual and the declared
 computation under the memory cap together, `η ≤ s + (1 − s) min(r, μ) + ν + χ`. -/
 theorem sources_le {κ C U W ρ μ χ M Mu Mr Md Mx : ℝ} (hκ : 0 < κ) (hC : 0 < C) (hU : 0 ≤ U) (hMd : 0 ≤ Md)
     (hM : M ≤ Mu + Mr + Md + Mx) (hu : Mu ≤ κ * U / 2) (hr : Mr ≤ κ * (C - W) / 2) (hd : Md ≤ C / ρ)
@@ -86,7 +86,7 @@ theorem Slowdown : Guarantees.Slowdown := by
   intro κ C U W ρ μ χ M Mu Mr Md Mx hκ hC hU hM hu hr hd hx hμ
   exact slowdown_core hκ hC hU (Nat.cast_nonneg Mr) (Nat.cast_nonneg Md) (by exact_mod_cast hM) hu hr hd hx hμ
 
-/-- **The window optimization, quadratic regime** (the dampener's memory cap): a server's horizon `H ≥ 0` cut into
+/-- **The window optimization, quadratic regime** (the slowdown's memory cap): a server's horizon `H ≥ 0` cut into
 windows of length `L = R/λ`, each reading `R + λL = 2R` bits and holding at most `(2R)²/(2 d b_w b_a)` counted
 multiplications (`K Λ(K)/b_a` with `Λ(K) = K/(2 d b_w)`, `D = d b_w b_a`), holds at most `2 R λ H/D` of them in all, plus
 the rounding term `2 R²/D`: one window more, the last one, cut at `H`. -/
@@ -193,7 +193,7 @@ theorem bound_eq_Lambda {c : RegisteredCircuit} (T : Threading c) (S b_w : ℝ) 
     T.bound S b_w d e = Lambda T.reuse e d b_w S := rfl
 
 /-- **The declared computation at the inference-only policy's thread bound, per parameter slot**: `ThreadedThrottledSlots`'s
-`b_a |M| ≤ α Λ size(d)`, with `size(d) ≤ C`, is the dampener's `M_d ≤ C/ρ_T`. -/
+`b_a |M| ≤ α Λ size(d)`, with `size(d) ≤ C`, is the slowdown's `M_d ≤ C/ρ_T`. -/
 theorem declared_le_slots {Γ : ℕ} {α b_w b_a C : ℝ} {c d : RegisteredCircuit} {T : Threading c} {σ : T.Slots} {dd e : ℕ}
     {Mc : Containment c.D d.D} (hα : 0 ≤ α) (hbw : 0 < b_w) (hba : 0 < b_a) (hdd : 0 < dd) (hcomp : CompliesRate Γ α d)
     (hB : Assumptions.ThetaRegistered c d (PartialContainment.ofContainment Mc))

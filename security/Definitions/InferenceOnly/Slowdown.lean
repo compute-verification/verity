@@ -35,13 +35,13 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The compute dampener: the vocabulary
+# The slowdown: the vocabulary
 
 The training-efficiency bound of `benchmarks/nci/tiers.py`. A developer spends `C` FLOP on monitored hardware and `U` on
 unmonitored hardware, and must still compute the counted multiplications `M` of training (an updated weight times an
 activation or an activation gradient). Each stands for `2/κ` FLOP of an unconstrained run, `κ` being the share of
 training FLOP that are counted multiplications at 2 FLOP each, so the compute efficiency is `η = (2/κ) M / (C + U)`
-(`efficiency`). The dampener bounds it by `s + min(r, μ) + ν + χ` (`InferenceOnly.Guarantees.Slowdown`), with:
+(`efficiency`). The slowdown bounds it by `s + min(r, μ) + ν + χ` (`InferenceOnly.Guarantees.Slowdown`), with:
 
 * `s = U/(C + U)`, the unmonitored compute share (`unregisteredShare`);
 * `r = 1 − W_cert/C`, the monitored compute residual (`residualShare`);
