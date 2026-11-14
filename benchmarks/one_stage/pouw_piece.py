@@ -61,7 +61,7 @@ from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import credit as Cr
 from verity.protocols.accounting.pouw.verifier import period_check as PC
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
-from verity_vllm.protocols.pouw.h1 import answers as A
+from verity.protocols.accounting.pouw.prover.serving.h1 import answers as A
 
 V1, PERIOD = CC.ID, PC.ID
 NO_EXE = (f"no {PERIOD} executable (--exe, the pouw-period of PouwCheck/Period.lean's package): the period's case is "
@@ -277,7 +277,7 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
     if live is None:
         raise Missing(f"no live evidence for window {k}'s rounds (--live-evidence: h1_prove/live.sh on the run's "
                       "--h1-prover dump)")
-    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+    from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
     key = PHC.pinned_key(tree / "key.json", key_sha512)
     ev = PHC.window_evidence(rec, tree, {"root": rec["commitment"]["session"]["root"]},
                              json.loads(statements.read_text()), gzip.decompress(program.read_bytes()),

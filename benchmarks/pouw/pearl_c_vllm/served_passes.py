@@ -172,7 +172,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from verity_config.settings import of
-from verity_vllm.protocols.pouw.pearl_c.window import KEEP, SERVED_SCHEMA, coins_of, served_passes as passes_of
+from verity.protocols.accounting.pouw.prover.serving.pearl_c.window import KEEP, SERVED_SCHEMA, coins_of, served_passes as passes_of
 
 HERE = Path(__file__).resolve().parent
 settings = of(__file__)
@@ -259,7 +259,7 @@ def seed_install(pouw: dict) -> None:
     """`serve --seeded`: the PoUW settings' in-process challenger sampling from `seeded` coins, and the hm96 salt key the
     install's commitment of the fixed operands takes (`pearl_c.new_salt_key`) a `seeded` one, in this process."""
     from verity.protocols.accounting.pouw.verifier.coins import Challenger
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 
     pouw["coins"] = Challenger(0, seeded("coins"))
     key = seeded("salt key")(32)
@@ -296,7 +296,7 @@ def serve(args: argparse.Namespace) -> int:
         (passes / "coins.json").write_text(json.dumps(config["pouw"]["coins"].commitment.to_json()) + "\n")
     engine_env.apply_engine(None)
     from verity_vllm import LLM
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
     from vllm import SamplingParams
 
     llm = LLM(preset.model, revision=preset.revision, protocols=",".join(arm.protocols), protocols_config=config, **engine)
@@ -549,7 +549,7 @@ def retain(args: argparse.Namespace) -> int:
         return 1
     if args.window_record:
         from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
-        from verity_vllm.protocols.pouw.pearl_c import window as PWR
+        from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
         try:
             before = REG.digest(json.loads(Path(args.previous_record).read_text())) if args.previous_record else None

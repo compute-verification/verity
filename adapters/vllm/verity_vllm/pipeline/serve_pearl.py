@@ -142,7 +142,7 @@ def live(gate: str, peer: str, lane: str, run: Any = None) -> Callable[[int], di
     reserve answer), ``gate`` and ``period``. ``run`` replaces the gate's subprocess (tests). A refusal is `CoinError`
     (a ValueError), the window's failure."""
     from verity_vllm.pipeline.commit_coins import ChallengerGate
-    from verity_vllm.protocols.pouw.h1 import window as PHW
+    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
     g = ChallengerGate(gate, run)
 
@@ -187,7 +187,7 @@ class PearlWindows:
         (`pearl_c.Kernel.load`, once a process) and, for in-process coins, the Lean verifier built
         (`verifier.executable`, their entropy); ``readied``, with each part's time."""
         from verity.protocols.accounting.pouw.verifier import verifier
-        from verity_vllm.protocols.pouw import pearl_c as PPD
+        from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 
         pw, t0 = self.config["pouw"], self.clock()
         PPD.Kernel.load(pw["kernel"], pw.get("cubin"))
@@ -265,7 +265,7 @@ class PearlWindows:
         """Window ``window``'s ``coins.json`` and ``served.json`` from its closed option ``opt``, whose Commit committed
         ``steps`` steps, and its outcome: ``error`` (``error`` given, or the passes with calls not the Commit's steps, a
         pass short of a linear's call or without its manifest) when it isn't one Pearl+ round a step."""
-        from verity_vllm.protocols.pouw.pearl_c import window as PWR
+        from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
         d, c = self.dir_of(window), opt.commitment()
         passes = [p for p in PWR.served_passes(opt.details["passes"]) if p["units"]]

@@ -19,7 +19,7 @@ from verity_vllm.engine import int8_exact as E, int8_ops
 from verity_vllm.engine.build import build_engine, target_mismatches
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 print("imports ok", round(time.perf_counter() - t, 1), "s; linear types", pouw.linear_types())
 import torch
 g = torch.Generator().manual_seed(1)

@@ -1,4 +1,4 @@
-"""``native_rows.cu``'s lead kernels (``StepHasher.lead_stream``, ``lead_leaves``) compute what ``verity_vllm.commit.lead_rows`` does,
+"""``native_rows.cu``'s lead kernels (``StepHasher.lead_stream``, ``lead_leaves``) compute what ``verity.protocols.accounting.pouw.prover.serving.lead.rows`` does,
 bit for bit: the committed stream of random exports at ragged and served shapes, the inline leaves of chunks and segments at ranks
 across every position width, both schemas and short last values, whole subtrees with the rows-sha512 pads and nodes, and the tops
 ``DeviceWords`` and ``device_a_top`` hand ``words_top`` and ``a_top``, keyed as the CPU's."""
@@ -14,7 +14,7 @@ torch = pytest.importorskip("torch")
 if not torch.cuda.is_available():
     pytest.skip("the lead kernels need a GPU", allow_module_level=True)
 
-from verity_vllm.commit import lead_rows as L  # noqa: E402
+from verity.protocols.accounting.pouw.prover.serving.lead import rows as L  # noqa: E402
 from verity_vllm.commit import step_rows as R  # noqa: E402
 from verity_vllm.commit.committer import native_collect as NC  # noqa: E402
 from verity_vllm.errors import Refused  # noqa: E402

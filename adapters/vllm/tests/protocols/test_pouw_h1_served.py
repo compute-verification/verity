@@ -52,14 +52,14 @@ from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity_vllm.engine import hooks
 from verity_vllm.engine import int8_experts as X
 from verity_vllm.engine import int8_ops as OPS
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import handoff as HO
-from verity_vllm.protocols.pouw.h1 import hooks as PHK
-from verity_vllm.protocols.pouw.h1 import records as ZR
-from verity_vllm.protocols.pouw.h1 import registered as NR
-from verity_vllm.protocols.pouw.h1 import registered_device as D
-from verity_vllm.protocols.pouw.h1 import requests as RQ
-from verity_vllm.protocols.pouw.h1 import served as SV
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving.h1 import handoff as HO
+from verity_vllm.protocols.pouw import h1_hooks as PHK
+from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
+from verity.protocols.accounting.pouw.prover.serving.h1 import registered as NR
+from verity.protocols.accounting.pouw.prover.serving.h1 import registered_device as D
+from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
 TILE = PH.TILE
 T, STEPS, SERVED = 64, 2, 5

@@ -12,11 +12,11 @@ if not torch.cuda.is_available():
     pytest.skip("the lead's device words need a GPU", allow_module_level=True)
 
 from tests.protocols import test_pouw_lead as T  # noqa: E402
-from verity_vllm.commit import lead_rows as L  # noqa: E402
+from verity.protocols.accounting.pouw.prover.serving.lead import rows as L  # noqa: E402
 from verity_vllm.commit.committer import native_collect as NC  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.errors import Refused  # noqa: E402
-from verity_vllm.protocols.pouw import lead as PL  # noqa: E402
+from verity.protocols.accounting.pouw.prover.serving import lead as PL  # noqa: E402
 
 BN = 128
 

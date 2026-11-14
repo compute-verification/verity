@@ -45,10 +45,10 @@ from verity.protocols.accounting.pouw.verifier.protocol import (
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import h1 as pouw_h1
-from verity_vllm.protocols.pouw import lead as pouw_lead
-from verity_vllm.protocols.pouw import pearl_c as PPD
-from verity_vllm.protocols.pouw.pearl_c import kernel as PPK
+from verity.protocols.accounting.pouw.prover.serving import h1 as pouw_h1
+from verity.protocols.accounting.pouw.prover.serving import lead as pouw_lead
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import kernel as PPK
 
 K, N = 1088, 1600            # inside ncp-v1's domain: 1,088 <= k, 1,600 <= n
 

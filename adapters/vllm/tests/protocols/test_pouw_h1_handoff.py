@@ -44,13 +44,13 @@ from tests.protocols.test_pouw_h1 import (
 from verity_vllm import protocols as PO
 from verity_vllm.engine import int8_ops
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
-from verity_vllm.protocols.pouw.h1 import handoff as HO
-from verity_vllm.protocols.pouw.h1 import kept as KP
-from verity_vllm.protocols.pouw.h1 import prover as PV
-from verity_vllm.protocols.pouw.h1 import served as SV
-from verity_vllm.protocols.pouw.h1 import window as PHW
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.accounting.pouw.prover.serving.h1 import handoff as HO
+from verity.protocols.accounting.pouw.prover.serving.h1 import kept as KP
+from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
+from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
 
 @pytest.fixture(autouse=True)
@@ -278,7 +278,7 @@ def test_the_stream_outlives_the_process_that_handed_it_over(opened, socket_dir)
     holder = HO.Holder(socket_dir / "stream.sock")
     opened.callback(holder.take)
     child = ("import socket, sys\nfrom types import SimpleNamespace as N\n"
-             "from verity_vllm.protocols.pouw.h1 import handoff as HO\n"
+             "from verity.protocols.accounting.pouw.prover.serving.h1 import handoff as HO\n"
              "s = socket.socket(fileno=int(sys.argv[1]))\n"
              "HO.send_stream(N(_wire=N(sock=s)), sys.argv[2])\n")
     subprocess.run([sys.executable, "-c", child, str(here.fileno()), str(holder.path)], check=True,
