@@ -868,7 +868,7 @@ def case(args: argparse.Namespace) -> int:
         return refuse("the Lean verdict is not on the coin record's run and source")
     if any(k not in coin for k in CASE_RECORD):
         return refuse(f"the coin record lacks {', '.join(k for k in CASE_RECORD if k not in coin)}")
-    from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+    from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
     try:
         if not doc.get("tie_record"):

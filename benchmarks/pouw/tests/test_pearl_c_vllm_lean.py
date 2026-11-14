@@ -214,7 +214,7 @@ def case(d: Path, verify: Path, answer: Path, out: Path) -> int:
 def tied(run, tmp_path: Path) -> tuple[Path, dict, dict]:
     """`run`'s verdict as ``verify --tie`` leaves it once it held the passes to a window record W: its document's path,
     the document, naming W's file and its digest, and W; with the Lean's agreeing answer written beside it."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+    from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
     d, _verify, doc = run
     w = {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "window": {"version": 2}, "registered": [], "previous": None}
