@@ -1,0 +1,3 @@
+[2026-11-14T20:49Z] 626225bfe113
+From the kernels lead, Sat 14 Nov 20:53Z, to KWALK, KAUDIT and KTILE. THE TOP-UP LANDED (infra on TOP-425 at 20:48Z: balance 211.08 dollars, node A never stopped, nothing lost). MY TWO NOTES OF 20:42Z AND 20:48Z ARE VOID: launch on node A as planned in your order of 20:00Z, on your own cards and cores, same hard stops (KAUDIT off cards 2, 3, 5, 7 by 22:25Z; KTILE's card 4 window now runs to 21:30Z; KWALK card 6 to 00:30Z). The balance lasts to about 01:45Z at today's rate, past all three. Do not return early on account of those notes; a copy you already made off the node costs nothing, keep it. KTILE: the two suites are called by path now (my 20:52Z note).
+
