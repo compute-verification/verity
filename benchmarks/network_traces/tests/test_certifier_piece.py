@@ -46,13 +46,15 @@ import pytest
 HERE = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(HERE), str(Path(__file__).resolve().parent), str(ROOT / "benchmarks" / "one_stage")]
+sys.path.append(str(ROOT))  # for benchmarks.network_traces
 
 import certifier_piece as CP  # noqa: E402
 import chain_record as CR  # noqa: E402
-import scan_period as SP  # noqa: E402
+from benchmarks.network_traces import scan_period as SP  # noqa: E402
 import served_verdicts as S  # noqa: E402
 from test_served_session import CHALLENGER_HOST, LIVE_GATE, RUN, STUB  # noqa: E402
 from test_warden_chain import WC, gate_run  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.certificate import Direction  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
@@ -104,7 +106,7 @@ def warden(tmp_path_factory):
             tar.add(run, arcname=RUN)
     cells = [json.loads(x)["registration"] for x in (run / "out" / "cells.jsonl").read_text().splitlines()]
     registrations = [r for d_ in (Direction.INGRESS, Direction.EGRESS) for r in cells
-                     if (r["link"], r["direction"], r["window"]) == (WC.WS.LINK, d_.value, w)]
+                     if (r["link"], r["direction"], r["window"]) == (RC.LINK, d_.value, w)]
     return {**fetches, "w": w, "records": by[w][:4], "others": [r for x, rs in by.items() if x != w for r in rs],
             "windows": WC.deployment(run)[0]["windows"], "registrations": registrations,
             "deployment": json.loads((run / "out" / "deployment.json").read_text())}
@@ -241,8 +243,8 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     assert signed["rows"] == [{"link": r["link"], "direction": r["direction"], "window": r["window"],
                                "key_id": r["certificate"]["key"], "digest": r["certificate"]["digest"],
                                "signature": r["certificate"]["signature"]} for r in window["registrations"]]
-    key, session = WC.cs.read_public(warden["deployment"]["key"]), bytes.fromhex(warden["deployment"]["session"])
-    assert all(WC.cs.certificate_from_json(c).verify(key, session) for c in signed["records"] + signed["rows"])
+    key, session = RF.read_public(warden["deployment"]["key"]), bytes.fromhex(warden["deployment"]["session"])
+    assert all(RF.certificate_from_json(c).verify(key, session) for c in signed["records"] + signed["rows"])
     assert {(c["direction"], c["window"]) for c in signed["rows"]} == {(Direction.INGRESS.value, warden["w"]),
                                                                        (Direction.EGRESS.value, warden["w"])}
     log = (piece / "piece.log").read_text()

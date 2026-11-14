@@ -22,6 +22,7 @@ import pytest
 
 # test_certifier_serve puts the benchmark on the path
 from test_certifier_serve import VARIED_TOKENS, _answer, _no_sleep, _Varied, _varied_runs, ar, cs
+from verity.protocols.accounting.certifier.verifier import record_files as RF
 from test_compact_phase10 import _as_id_events
 from verity.protocols.accounting.certifier.verifier import active
 from verity.protocols.accounting.certifier.verifier.grid import row_count
@@ -40,8 +41,8 @@ def run(tmp_path_factory):
                                                     ("honest",))
     setup = ar.Setup(report)
     e, i = setup.egress_params, setup.ingress_params
-    ins = [ar.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(tmp / "honest" / "requests.records")]
-    outs = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(tmp / "honest" / "responses.records")]
+    ins = [RF.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(tmp / "honest" / "requests.records")]
+    outs = [RF.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(tmp / "honest" / "responses.records")]
     honest = cs.certified_io(plan, setup, ins, outs)
     target = next(r for r in honest["records"] if r["finish"] == "length" and len(r["output"]) >= 4)
     return SimpleNamespace(plan=plan, setup=setup, ins=ins, outs=outs, check=runs["honest"]["check"], honest=honest,

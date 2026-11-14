@@ -10,6 +10,7 @@ from pathlib import Path
 
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.certifier.verifier.certificate import LmsKey, LmsSigner
+from verity.protocols.accounting.certifier.verifier.record_files import public_json
 
 HEIGHT = 10
 #: the processes `load_key` makes a key above `HEIGHT` in (at H = 20, about two minutes on eight cores); at or below
@@ -61,9 +62,3 @@ def signer(directory: Path, height: int = HEIGHT) -> LmsSigner:
     return LmsSigner(load_key(directory, height), directory / "state.json")
 
 
-def public_json(key: LmsKey) -> dict:
-    return {"params": [key.params.N, key.params.W, key.params.H], "public": key.public.hex(), "key_id": key.key_id.hex()}
-
-
-def read_public(doc: dict) -> LmsKey:
-    return LmsKey(lms.Params(*doc["params"]), bytes.fromhex(doc["public"]))

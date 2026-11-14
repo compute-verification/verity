@@ -74,8 +74,9 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "network_traces"))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-import warden_serve as ws  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
 from warden_zk import WardenRowIdentity, flip  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
@@ -94,7 +95,7 @@ from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 ROOT = hashlib.sha512(b"verity/a5/warden-stand-in/v1").hexdigest()
 RULE = "work-rate:1/8"
 #: each chunk's registered port, by the warden record it opens: the ingress cells are the circuit's input, the egress its output
-LINKS = {ws.INGRESS: ("c0", "row"), ws.EGRESS: ("c1", "o0")}
+LINKS = {RC.INGRESS: ("c0", "row"), RC.EGRESS: ("c1", "o0")}
 #: the egress chunk's statement made for another units' wiring (`made_for`), and what Lean's registered reads, and the host's
 #: read of them (`warden_rows.refusal`), refuse it by
 MADE_FOR = {"pad": "not another value", "pad-named": "reads position", "swapped": "not another value"}
@@ -103,7 +104,7 @@ MADE_FOR = {"pad": "not another value", "pad-named": "reads position", "swapped"
 def first_cells(params: WardenParams) -> dict[str, int]:
     """Each link's first cell the Program's units read of a connection admitted in the link-window: ingress its cell 0, egress
     its cell D·r (the D buckets before are its delay's pads, the schedule's)."""
-    return {ws.INGRESS: 0, ws.EGRESS: params.delay * params.slots}
+    return {RC.INGRESS: 0, RC.EGRESS: params.delay * params.slots}
 
 
 def links(run: Path, n: int) -> dict[str, SimpleNamespace]:
@@ -115,14 +116,14 @@ def links(run: Path, n: int) -> dict[str, SimpleNamespace]:
     unit's cell at, and how many of those cells hold the server's bytes (`data_units`, reported, never read to choose)."""
     dep = json.loads((run / "deployment.json").read_text())
     params = WardenParams(**dep["params"])
-    key, session = ws.ck.read_public(dep["key"]), bytes.fromhex(dep["session"])
-    records = ws.read_records(run, params)
+    key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    records = RC.read_records(run, params)
     cells = {(d["registration"]["direction"], d["registration"]["window"]): (d["registration"], salts, wiring_salt)
-             for d, salts, wiring_salt in ws.read_cells(run) if "registration" in d}
+             for d, salts, wiring_salt in RC.read_cells(run) if "registration" in d}
     start = first_cells(params)
     found: dict[str, dict[int, BlockGrid]] = {}
     for name in LINKS:
-        link, direction = ws.CERTIFIED[name]
+        link, direction = RC.CERTIFIED[name]
         found[name] = {}
         for record in records[name]:
             w = record.window
@@ -133,10 +134,10 @@ def links(run: Path, n: int) -> dict[str, SimpleNamespace]:
     both = sorted(set.intersection(*(set(f) for f in found.values())))
     if not both:
         raise SystemExit(f"no connection of {run} is admitted in link-windows the warden registered with {n} ingress cells and "
-                         f"D·r + n = {start[ws.EGRESS]} + {n} egress cells")
+                         f"D·r + n = {start[RC.EGRESS]} + {n} egress cells")
     q, out, B = both[0], {}, params.cell_bytes
     for name, f in found.items():
-        link, direction = ws.CERTIFIED[name]
+        link, direction = RC.CERTIFIED[name]
         record = f[q]
         doc, salts, wiring_salt = cells[direction.value, record.window]
         head, dom = WR.check_registration(doc, key, session, params, link, direction, record.window)
@@ -163,7 +164,7 @@ def templates(params: WardenParams) -> tuple:
 
 def window(at: dict[str, SimpleNamespace], n: int, rest: int) -> CS.Binding:
     """The verifier's window: the transfer-gate template's two chunks of n units (ingress, egress), then the rest."""
-    params = at[ws.INGRESS].params
+    params = at[RC.INGRESS].params
     tg, other = templates(params)
     program, query = CS.population_program([(tg, 2 * n), (other, rest)])
     (tid, _, _), (rid, _, _) = P.ranges(program, query)
@@ -185,7 +186,7 @@ def chunks(mine: CS.Binding) -> dict[str, CS.Member]:
 def provenance(at: dict[str, SimpleNamespace]) -> dict:
     """What the window's registration names of the warden's cells: per link, its value, root, certificate digest, the
     registration's SHA-512, and the units' reads (q, k) and the rows they open."""
-    return {"stand-in": "benchmarks/one_stage/a5_warden.py", "connection": at[ws.INGRESS].connection,
+    return {"stand-in": "benchmarks/one_stage/a5_warden.py", "connection": at[RC.INGRESS].connection,
             "links": {name: {"value": x.head.value, "root": x.head.root.hex(), "certificate": x.registration["certificate"]["digest"],
                              "registration_sha512": hashlib.sha512(json.dumps(x.registration, sort_keys=True).encode()).hexdigest(),
                              "units": x.units.digest().hex(), "reads": [list(r) for r in x.reads], "rows": list(x.positions)}
@@ -246,9 +247,9 @@ def commit(out: Path, mine: CS.Binding, at: dict[str, SimpleNamespace], altered:
             entries.append([[m.base, m.base + m.n, "rest", 0, 0, "rest", m.key, 0, 0]])
             continue
         x, port = at[name], LINKS[name][1]
-        st = made_for(x, made if name == ws.EGRESS else None)
+        st = made_for(x, made if name == RC.EGRESS else None)
         unit_rows = list(st.rows)
-        if altered and name == ws.INGRESS:
+        if altered and name == RC.INGRESS:
             unit_rows[0] = flip(unit_rows[0], byte=(st.slots[0] + 1) * x.params.cell_bytes - 1, bit=1)
         rows = np.asarray([WR.words(r) for r in unit_rows], dtype=np.uint16)
         data.append({"rows": {"row": rows}, "outs": {"o0": rows}, "refs": np.arange(m.n)[:, None]})
@@ -332,7 +333,7 @@ def negatives(at: dict[str, SimpleNamespace], source, rec: dict) -> dict[str, di
     read past the connection's cells; and the egress chunk's statement made for another units' wiring (`made_for`: a pad in
     a data cell's place, its rows under the Program's value, two units swapped), each refused by the host's read of Lean's
     registered reads by name (`MADE_FOR`)."""
-    x = at[ws.INGRESS]
+    x = at[RC.INGRESS]
     p, B, w = x.params, x.params.cell_bytes, x.opening.wiring
     rows = list(x.opening.rows)
     rows[x.positions[0]] = flip(rows[x.positions[0]], byte=(x.slots[0] + 1) * B - 1)
@@ -344,7 +345,7 @@ def negatives(at: dict[str, SimpleNamespace], source, rec: dict) -> dict[str, di
                     "doesn't sign its head")
     win = rec["window"]
     of = json.loads(json.dumps(win["of"]))
-    of["links"][ws.INGRESS]["root"] = own.head.root.hex()
+    of["links"][RC.INGRESS]["root"] = own.head.root.hex()
     s = source({**win, "of": of})
 
     def port(wiring: WR.Wiring, reads: list) -> None:
@@ -358,7 +359,7 @@ def negatives(at: dict[str, SimpleNamespace], source, rec: dict) -> dict[str, di
     pad, (g, _), (tp, jp) = padded(x)
     q, k0 = x.reads[0]
     cells = next(n for c, _, n in w.connections if c == q)
-    e = at[ws.EGRESS]
+    e = at[RC.EGRESS]
     if (why := refused(e, made_for(e))) is not None:
         raise SystemExit(f"{e.head.value}: the host's read refuses the Program's own statement: {why}")
     made = {}
@@ -416,7 +417,7 @@ def expected(a: argparse.Namespace, s: dict, ok: bool) -> bool:
     Lean's verify of chunk c0 (c1) refused at its registered reads by its named reason, so the audit isn't accepted."""
     if not (a.altered or a.made_for):
         return ok
-    name, reason = (ws.INGRESS, "does not open") if a.altered else (ws.EGRESS, MADE_FOR[a.made_for])
+    name, reason = (RC.INGRESS, "does not open") if a.altered else (RC.EGRESS, MADE_FOR[a.made_for])
     why = ((s.get("audit") or {}).get("why") or {}).get(f"lean-verify/m{list(LINKS).index(name)}") or ""
     return all((s.get("checks_before_draw") or {}).values()) and (s.get("audit") or {}).get("accepted") is False \
         and "registered reads" in why and reason in why
@@ -453,7 +454,7 @@ def main(argv=None) -> int:
     commit(out / "window", mine, at, a.altered, a.made_for)
     source = source_of(mine, at)
     rec = json.loads((out / "window" / "registration.json").read_text())
-    params = at[ws.INGRESS].params
+    params = at[RC.INGRESS].params
     B, row = params.cell_bytes, WR.row_bytes(params)
     tg, rid = mine.members[0].template, mine.members[-1].template
     sets = {t: (composer(d, bits), d) for t, d, bits in zip((tg, rid), templates(params), (8 * row, 16 * B))}

@@ -64,9 +64,10 @@ from types import SimpleNamespace
 HERE = Path(__file__).resolve().parent
 ONE_STAGE = HERE.parent / "one_stage"
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 import leak_scan as LS  # noqa: E402
-import warden_serve as ws  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
 from verity.circuits import boolean as BL  # noqa: E402
 from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.circuits.types import Array  # noqa: E402
@@ -114,10 +115,10 @@ def attestation(run: Path, n: int) -> SimpleNamespace:
     how many of them hold the server's bytes (`data_rows`, reported, never read to choose)."""
     dep = json.loads((run / "deployment.json").read_text())
     params = WardenParams(**dep["params"])
-    key, session = ws.ck.read_public(dep["key"]), bytes.fromhex(dep["session"])
-    link, direction = ws.CERTIFIED[ws.EGRESS]
-    records = {r.window: r for r in ws.read_records(run, params)[ws.EGRESS]}
-    cells = {(d["registration"]["window"]): (d, salts, wiring_salt) for d, salts, wiring_salt in ws.read_cells(run)
+    key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    link, direction = RC.CERTIFIED[RC.EGRESS]
+    records = {r.window: r for r in RC.read_records(run, params)[RC.EGRESS]}
+    cells = {(d["registration"]["window"]): (d, salts, wiring_salt) for d, salts, wiring_salt in RC.read_cells(run)
              if "registration" in d and d["registration"]["direction"] == direction.value}
     pads = params.delay * params.slots
     best = None
@@ -453,7 +454,7 @@ def prove(a) -> int:
                      "pads": at.pads, "reads": at.reads, "positions": at.positions, "slots": at.slots,
                      "data_rows": at.data_rows, "units_bytes": len(at.units.encode()), "warden_cost": at.cost,
                      "registration": at.registration}
-    summary["warden_costs"] = ws.check_cells(run, at.dep, at.params, ws.read_records(run, at.params))[0]
+    summary["warden_costs"] = RC.check_cells(run, at.dep, at.params, RC.read_records(run, at.params))[0]
     own = member_rows("unsigned", at).own
     c = at.registration["certificate"]
     forged = WR.registration(own.head, Certificate(bytes.fromhex(c["key"]), at.link, at.direction, at.window,

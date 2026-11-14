@@ -96,6 +96,7 @@ PATHS = [str(HERE), str(ROOT / "benchmarks" / "network_traces"), str(ROOT / "ben
 sys.path[:0] = PATHS
 
 import active_replay as ar  # noqa: E402
+import runner_parts as rp  # noqa: E402
 import graph  # noqa: E402
 import records  # noqa: E402
 from datacenter import (Carried, Datacenter, Fleet, Interval, Maintenance, Plan, Profile, Refused,  # noqa: E402
@@ -337,7 +338,7 @@ ROLES = {
 
 
 def role(args) -> None:
-    ar._quiet_runtime()
+    rp._quiet_runtime()
     asyncio.run(ROLES[args.name](json.loads(Path(args.config).read_text()), Pipe()))
 
 

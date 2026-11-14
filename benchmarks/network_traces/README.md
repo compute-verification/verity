@@ -46,7 +46,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   period by `network-period check` and writes its accepted answer as the block record's certifier entry.
   `demo_chain.sh` runs the one-H200 demo by the certifier-only path, and `served_session.py` is the served session's
   runbook (below).
-- **The weights' load:** `load_relay.py` and `load_commit.py` (below).
+- **The weights' load:** `load_relay.py`, `load_bench.py` and `load_commit.py` (below).
 - **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
 - **A cheating server:** `deviations.py` puts a deviating process between the relay and the server's id front, plants
   a random string, and tries six ways to send it out, each with a network certifier process of its own;
@@ -380,7 +380,7 @@ members aren't scanned) is no find, nor is a piece those files hold, as they are
 false positives are declared data, `leak_guard.json`'s `allow`, each entry written only after its find was read by
 counts and digests. Its entries excuse the stall probe's cgroup counters and cgroup path in the runner's own records,
 and, by key path in the witness file (`keys`), the certifier's own CPU list wherever an indented list of integers
-repeats it and its ticker's stalls in `out/certs.json`, which `warden_serve.check` publishes. The
+repeats it and its ticker's stalls in `out/certs.json`, which `relay_check.check` publishes. The
 guard's cost is linear in the bytes it reads, and past its budget (`--budget-s`) it stops. A signal (before or during
 the guard), a guard past its budget, or one that can't run releases nothing and withholds `out/`, `inputs/` and the logs
 whole; a SIGKILL leaves the hold where it is, out of the record.
@@ -388,7 +388,7 @@ whole; a SIGKILL leaves the hold where it is, out of the record.
 **The relay path** (`CR_PATH=warden`, `chain_record.WARDEN`). Every step reads the relay's own run (the gate's
 `warden-rehearse`, its witness under `witness/`; `warden_chain.py`), and a proxy rehearsal's run, whose records come
 through `active.Proxy` in front of the endpoint, is refused by name wherever it is given. The certificates step reruns
-the relay's own offline check on its witness (`warden_serve.check`) and holds the public `certificates.jsonl` to the
+the relay's own offline check on its witness (`relay_check.check`) and holds the public `certificates.jsonl` to the
 certified lines. The relay signs no clock certificate, so none is read. The endpoint step binds the endpoint's own
 advice to the certified I/O read off the relay's cells (`chain_record.py endpoint`, with `CR_EOS_IDS` the model's EOS
 ids). N2 is the plain proof block on the relay's link (`n2_zk.py prove --warden-run`: both heads at the relay's grid and
@@ -439,7 +439,7 @@ The terms, in the generator reading of the scan's statement (each proof block's 
   (`ingress_scan.entry_bits`) an execution phase; or an entry's 33 + KO·IDB bits a request if `prog` is an input only at
   its anchored entries.
 - No term for incorrect proof blocks with every proof block sampled.
-- The jitter term is charged at D_j = 2 (`leak_bounds.JITTER_BOUND`): one bit a bucket, T bits an execution phase (the
+- The jitter term is charged at D_j = 2 (`scan_answer.JITTER_BOUND`): one bit a bucket, T bits an execution phase (the
   record's `terms.jitter_per_block`). J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel). J is
   one bound over every step (`NetTiming.JitterBounded`), so every bucket pays its bit. The certifier hands each bucket
   to a pacer that releases it at a time fixed before the bucket is made (`warden.Warden(paced=…)`, `warden_serve.py

@@ -40,6 +40,7 @@ PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "accounting" / "certifi
 
 def _load():
     sys.path.insert(0, str(HERE))
+    sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces
     spec = importlib.util.spec_from_file_location("network_traces_scan_zk", HERE / "scan_zk.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -47,7 +48,9 @@ def _load():
 
 
 sz = _load()
-import warden_serve as WS
+from benchmarks.network_traces import warden_serve as WS
+from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import scan_answer as SA  # noqa: E402
 
 
 def test_each_rounds_host_read_is_the_rounds(tmp_path):
@@ -407,10 +410,10 @@ def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the
     run = published(tmp_path / "run", sz.TEST, windows=G)
     h = sz.host(tmp_path / "host", run, setup=sz.TEST, group=G)
     dep = json.loads((run / "deployment.json").read_text())
-    key, session, params = WS.ck.read_public(dep["key"]), bytes.fromhex(dep["session"]), sz.W.WardenParams(**dep["params"])
+    key, session, params = RF.read_public(dep["key"]), bytes.fromhex(dep["session"]), sz.W.WardenParams(**dep["params"])
     signed = {}
     for (d, w), doc in _cells(run).items():
-        head, dom = sz.WR.check_registration(doc, key, session, params, WS.LINK, sz.Direction(d), w)
+        head, dom = sz.WR.check_registration(doc, key, session, params, RC.LINK, sz.Direction(d), w)
         signed[f"rows/{d}/{w}"] = (head.root.hex(), dom.domain_id.hex())
     assert len(signed) == 2 * G
     honest = h.rounds["honest"]
@@ -462,20 +465,20 @@ def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
                    {"kind": "stand-in"}, leaf_layer="ee" * 64)
     draw = {**sz.DR.derive(program, query, law), "population": N, "units": list(range(N))}
     record = {"accepted": True, "registration": reg, "draw": draw, "proved_units": list(range(N))}
-    a = sz.window_answer(reg, record, sz.Fraction(1, 100), "unused")
+    a = SA.window_answer(reg, record, sz.Fraction(1, 100), "unused")
     assert CC.answer_of(a)["verdict"] == "accept" and a["commitment"] == R.digest(reg) and a["protocol"] == R.PROTOCOL
     assert a["public"]["bound"] == 0 and a["public"]["drawn"] == a["public"]["proved"] == list(range(N))
     assert "rests_on_period_check" not in a["public"]
-    tied = sz.window_answer(reg, record, sz.Fraction(1, 100), "unused", ["prog"])
+    tied = SA.window_answer(reg, record, sz.Fraction(1, 100), "unused", ["prog"])
     assert CC.answer_of(tied)["verdict"] == "accept"
     assert tied["public"] == {**a["public"], "rests_on_period_check": ["prog"]}
     (level,) = CC.integrity(a["profile"])["levels"]
     assert level["draw"]["law"] == "stratified" and sum(s["k"] for s in level["draw"]["strata"]) == N == level["size"]
     why = "the scan's audit of link-windows [0, 1] refused: egress-1: registered reads: table row 3 does not open"
-    r = sz.window_answer(reg, None, sz.Fraction(1, 100), why)
+    r = SA.window_answer(reg, None, sz.Fraction(1, 100), why)
     assert CC.answer_of(r)["verdict"] == "reject" and r["reason"] == why and r["commitment"] == a["commitment"]
     with pytest.raises(SystemExit, match="another registration"):
-        sz.window_answer(reg, {**record, "registration": {**reg, "population": 1}}, sz.Fraction(1, 100), "")
+        SA.window_answer(reg, {**record, "registration": {**reg, "population": 1}}, sz.Fraction(1, 100), "")
 
 
 def test_an_audit_refused_with_every_member_held_answers_each_link_window_naming_its_failed_checks(tmp_path):
@@ -550,7 +553,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     egress form, are refused by name. Slow
     (the test class's Program, about 30 s): the period check reads the scan's templates' signatures, which no stand-in
     can stand for."""
-    import scan_period as SP
+    from benchmarks.network_traces import scan_period as SP
 
     PC = SP.mirror(PERIOD_CASE)
     run = published(tmp_path / "run", sz.TEST, windows=1)
@@ -580,7 +583,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         (scan / name / "registration.json").write_text(json.dumps(r))
     draw = {**sz.DR.derive(program, query, law), "population": 2 * T, "units": list(range(2 * T))}
     record = {"accepted": True, "registration": reg, "draw": draw, "proved_units": list(range(2 * T))}
-    answer = sz.window_answer(reg, record, sz.Fraction(1, 100), "unused")
+    answer = SA.window_answer(reg, record, sz.Fraction(1, 100), "unused")
     block = sz.PA.mixed_population_program([(defs["block"], E)])
     bquery, blaw = sz.PA.template_instances_query([defs["block"]]), sz.DR.parse_design(f"stratified:{E}")
     entries = [PC.entries_port(sz.PA.template_id(defs["block"]), j) for j in range(cls.NR)]
@@ -597,7 +600,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         units = list(range(sampled or E))
         bdraw = {**sz.DR.derive(block, bquery, law), "population": E, "units": units}
         brec = {"accepted": True, "registration": breg, "draw": bdraw, "proved_units": units}
-        return {"answer": sz.window_answer(breg, brec, sz.Fraction(1, 100), "unused"),
+        return {"answer": SA.window_answer(breg, brec, sz.Fraction(1, 100), "unused"),
                 "free": E * sz.IS.entry_bits(cls), "program": encode_program(block), "registration": breg, "steps": 0}
 
     registrations = [h.at.sides[s][0].registration for s in ("ingress", "egress")]
@@ -612,7 +615,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     p = case["params"]
     assert sorted(p) == PC.ROWS_PARAMS_KEYS
     schedule = {k: dep["params"][k] for k in sz.W.INTEGER_FIELDS}
-    assert (p["key"], p["session"], p["schedule"], p["link"]) == (dep["key"]["public"], dep["session"], schedule, WS.LINK)
+    assert (p["key"], p["session"], p["schedule"], p["link"]) == (dep["key"]["public"], dep["session"], schedule, RC.LINK)
     assert (p["program"], p["windows"], p["first"]) == (reg["program"], 1, 0)
     assert p["audits"] == [{"free": E * sz.IS.entry_bits(cls), "program": encode_program(block), "steps": 0}]
     key = sz.PA.template_id(defs["block"])
@@ -620,7 +623,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     assert PC.params(p).audits[0].entries == ((key, E, digest),) and E == T // cls.EVERY * cls.NR
     assert digest not in PC.SLOT_ENTRY_PINS
     assert p["scan"] == json.loads((scan / "joint" / "program.json").read_text())
-    assert p["jitter"] == SP.LB.JITTER_BOUND
+    assert p["jitter"] == SA.JITTER_BOUND
     assert json.loads(bytes.fromhex(case["commitment"])) == {"audits": [audit["registration"]], "windows": [reg]}
     ev = json.loads(bytes.fromhex(case["evidence"]))
     (x,) = ev["windows"]
@@ -826,13 +829,13 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
     run = published(tmp_path / "run")
     B = sz.PARAMS.cell_bytes
     blobs = WS.bf.read_blobs(run / "responses.records")
-    rec = WS.unpack_record(blobs[0], B)
+    rec = RF.unpack_record(blobs[0], B)
     t, j = next((t, j) for t, row in enumerate(rec.grid) for j, f in enumerate(row) if f is not None and f[0] == sz.DATA)
     frame = bytearray(rec.grid[t][j])
     frame[sz.IT.ID_AT + sz.IT.ID_DIGITS - 1] ^= 1
     grid = [list(row) for row in rec.grid]
     grid[t][j] = bytes(frame)
-    _rewrite(run / "responses.records", [WS.pack_record(replace(rec, grid=tuple(tuple(r) for r in grid))),
+    _rewrite(run / "responses.records", [RF.pack_record(replace(rec, grid=tuple(tuple(r) for r in grid))),
                                          *blobs[1:]])
     with pytest.raises(SystemExit, match="egress link-window 0's record under cells.salts isn't the rows whose root "
                                          "the warden signed"):
@@ -861,18 +864,18 @@ def test_a_fails_reason_outside_its_fails_bucket_is_refused_by_name_and_one_outs
     is refused, naming the run's ``check.json`` problems that say a connection failed closed; one in an execution phase
     past the group is another group's, and the group is read as if it weren't there."""
     run = published(tmp_path / "run")
-    rec = WS.unpack_record(WS.bf.read_blobs(run / "responses.records")[0], sz.PARAMS.cell_bytes)
+    rec = RF.unpack_record(WS.bf.read_blobs(run / "responses.records")[0], sz.PARAMS.cell_bytes)
     t, j = next((t, j) for t, row in enumerate(rec.grid) for j, f in enumerate(row) if f is not None)
     grid = tuple(tuple(f if (u, k) == (t, j) else None for k, f in enumerate(row)) for u, row in enumerate(rec.grid))
     (run / "check.json").write_text(json.dumps({"problems": ["audit: connection 7 failed closed (late) at egress cell 2",
                                                              "connection 7: fail, HTTP None, complete False"]}))
-    _rewrite(run / "fails.records", [WS.pack_record(replace(rec, grid=grid, window=0))])
+    _rewrite(run / "fails.records", [RF.pack_record(replace(rec, grid=grid, window=0))])
     with pytest.raises(SystemExit, match=re.escape(f"egress buckets [] hold a FAIL and the warden's fails record has a "
                                                    f"reason in buckets [{t}], not the same: a failed connection's "
                                                    "reason is in its FAIL's bucket (connection 7 failed closed (late) "
                                                    "at egress cell 2)")):
         sz.host(tmp_path / "h", run)
-    _rewrite(run / "fails.records", [WS.pack_record(replace(rec, grid=grid, window=3))])
+    _rewrite(run / "fails.records", [RF.pack_record(replace(rec, grid=grid, window=3))])
     at = sz.host(tmp_path / "h2", run).at
     assert (at.void, at.failed, at.failed_why) == ([], 0, [])
 

@@ -12,7 +12,7 @@ certifier path none of its records enters the chain.
   certifier runs no shaper clock and signs none, so no clock certificate enters N2 here).
 * `pairs`: each execution phase's certified (egress, ingress) records, ``certified.jsonl``'s, from window 0 until the
   first window missing one.
-* `certificates`: the network certifier's own offline check (`warden_serve.check`: every execution phase of the three
+* `certificates`: the network certifier's own offline check (`relay_check.check`: every execution phase of the three
   records certified under the network certifier's key and session with its head the record's, its rows' registration,
   the audit, and the client's view) rerun on the witness, and the public ``certificates.jsonl`` (the gate's,
   `auditor.warden_outcome`) exactly the certified lines' certificates and refusals, in order.
@@ -31,9 +31,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-import certifier_serve as cs
-import warden_serve as WS
+from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
 
 from verity.protocols.accounting.certifier.verifier import io_tie as IT
 from verity.protocols.accounting.certifier.verifier import service as SVC
@@ -76,7 +76,7 @@ def deployment(run: Path) -> tuple[dict, W.WardenParams]:
         if hit := next((d / f for f in CERTIFIER_FILES if (d / f).is_file()), None):
             raise SystemExit(f"{run}: {PROXY} ({hit} is there)")
     dep = json.loads(found(run, "deployment.json").read_text())
-    if "certifier_key" in dep or "links" in dep or "params" not in dep or dep.get("link") != WS.LINK:
+    if "certifier_key" in dep or "links" in dep or "params" not in dep or dep.get("link") != RC.LINK:
         raise SystemExit(f"{run}: {PROXY} (its deployment.json isn't a warden's)")
     params = W.WardenParams(**dep["params"])
     if params.digest.hex() != dep.get("digest"):
@@ -89,8 +89,8 @@ def deployment(run: Path) -> tuple[dict, W.WardenParams]:
 def link(run: Path) -> tuple[SVC.LinkWindows, dict, W.WardenParams]:
     """N2's link on the run (the module docstring's `link`), its deployment and the network certifier's schedule."""
     dep, params = deployment(run)
-    lw = SVC.LinkWindows(dep["link"], params.grid, UNREAD_SYNCS, cs.read_public(dep["key"]), dep["run_id"],
-                         bytes.fromhex(dep["session"]), ingress=params.grid, proof_deadline=cs.PROOF_DEADLINE_S,
+    lw = SVC.LinkWindows(dep["link"], params.grid, UNREAD_SYNCS, RF.read_public(dep["key"]), dep["run_id"],
+                         bytes.fromhex(dep["session"]), ingress=params.grid, proof_deadline=RC.PROOF_DEADLINE_S,
                          warden=SVC.WardenProfile(dep["windows"], params.digest))
     return lw, dep, params
 
@@ -98,10 +98,10 @@ def link(run: Path) -> tuple[SVC.LinkWindows, dict, W.WardenParams]:
 def pairs(run: Path, dep: dict) -> tuple[list[tuple], list]:
     """Each execution phase's certified (egress, ingress) records, from window 0 until the first missing one, and the
     execution phases the signer refused."""
-    certified, refused = WS.read_certified(witness(run) / "certified.jsonl")
+    certified, refused = RC.read_certified(witness(run) / "certified.jsonl")
     out = []
     for w in range(dep["windows"]):
-        pair = certified.get((WS.LINK, Direction.EGRESS, w)), certified.get((WS.LINK, Direction.INGRESS, w))
+        pair = certified.get((RC.LINK, Direction.EGRESS, w)), certified.get((RC.LINK, Direction.INGRESS, w))
         if None in pair:
             break
         out.append(pair)
@@ -113,8 +113,8 @@ def certificates(run: Path, deployed: bool = False) -> dict:
     when each of its three records is, complete. ``deployed`` refuses a key that isn't LMS at `lms.DEPLOYED`."""
     dep, _ = deployment(run)
     wit = witness(run)
-    check = WS.check(wit)
-    _, refused = WS.read_certified(wit / "certified.jsonl")
+    check = RC.check(wit)
+    _, refused = RC.read_certified(wit / "certified.jsonl")
     rows = [{"window": w, "certified": all(r["certified"] and r["status"] is None
                                            for r in check["windows"] if r["window"] == w)}
             for w in range(dep["windows"])]
@@ -126,7 +126,7 @@ def certificates(run: Path, deployed: bool = False) -> dict:
     key = dep["key"]
     out = {"warden_run": dep["run_id"], "link": dep["link"], "session": dep["session"], "windows": dep["windows"],
            "key": {"params": list(key["params"]), "key_id": key.get("key_id"),
-                   "public": cs.read_public(key).public.hex(),
+                   "public": RF.read_public(key).public.hex(),
                    "deployed": tuple(key["params"]) == (lms.DEPLOYED.N, lms.DEPLOYED.W, lms.DEPLOYED.H)},
            "parameters": dep["digest"], "records_file": "certified.jsonl",
            "public_file": None if public is None else public.name, "clock_certificates": 0, "sync_bits": 0.0,
@@ -147,9 +147,9 @@ def io(run: Path) -> dict:
     of a connection released by its bucket."""
     _, params = deployment(run)
     B, T = params.cell_bytes, params.window
-    recs = WS.read_records(witness(run), params)
+    recs = RC.read_records(witness(run), params)
     data, end, violations = defaultdict(bytes), {}, []
-    for rec in sorted(recs[WS.INGRESS], key=lambda r: r.window):
+    for rec in sorted(recs[RC.INGRESS], key=lambda r: r.window):
         for t, row in enumerate(rec.grid):
             for f in row:
                 if f is None:
@@ -179,7 +179,7 @@ def io(run: Path) -> dict:
         by[q] = fields | {"stream": q, "release": end.get(q), "output": [], "frames": [], "finish": None}
         requests.append(by[q])
     position = 0
-    for rec in sorted(recs[WS.EGRESS], key=lambda r: r.window):
+    for rec in sorted(recs[RC.EGRESS], key=lambda r: r.window):
         for t, row in enumerate(rec.grid):
             for f in row:
                 if f is None:

@@ -27,6 +27,7 @@ def _load():
 
 
 rp = _load()
+import runner_parts  # noqa: E402
 
 
 class _Stub:
@@ -68,7 +69,7 @@ def test_a_url_that_is_not_http_is_refused_by_name_and_nothing_is_opened(tmp_pat
     (tmp_path / "v1" / "models").write_text(json.dumps({"data": [{"id": "from-a-file"}]}))
     for url in (tmp_path.as_uri(), "ftp://127.0.0.1/x", "127.0.0.1:8000", "http://"):
         with pytest.raises(SystemExit, match=r"an endpoint is http\(s\)://HOST\[:PORT\]\[/PREFIX\], not "):
-            rp.served_model(url)
+            runner_parts.served_model(url)
 
 
 @pytest.mark.parametrize("status", [302, 404, 503])
@@ -76,17 +77,17 @@ def test_an_answer_that_is_not_a_2xx_raises_with_its_status_and_is_asked_once(st
     """A redirect isn't followed: the endpoint is where its URL says, and it was asked once."""
     stub = _Stub({"data": [{"id": "m"}]}, status)
     with pytest.raises(OSError, match=rf"/v1/models answered {status} stub"):
-        _ask(stub, rp.served_model)
+        _ask(stub, runner_parts.served_model)
     assert len(stub.heads) == 1
 
 
 def test_a_get_and_a_post_reach_the_endpoint_under_its_prefix():
     models = _Stub({"data": [{"id": "m"}]})
-    assert _ask(models, rp.served_model, "/prefix/") == "m"
+    assert _ask(models, runner_parts.served_model, "/prefix/") == "m"
     assert models.heads[0].startswith(b"GET /prefix/v1/models HTTP/1.1\r\n") and models.bodies == [b""]
     tokens = _Stub({"tokens": [1, 2]})
     body = {"model": "m", "prompt": "p"}
-    assert _ask(tokens, lambda url: rp._call(url, "/tokenize", body)) == {"tokens": [1, 2]}
+    assert _ask(tokens, lambda url: runner_parts._call(url, "/tokenize", body)) == {"tokens": [1, 2]}
     head = tokens.heads[0].lower()
     assert head.startswith(b"post /tokenize http/1.1\r\n") and json.loads(tokens.bodies[0]) == body
     assert b"\r\ncontent-type: application/json\r\n" in head and b"\r\nconnection: close\r\n" in head
@@ -97,9 +98,9 @@ def test_the_bearer_key_is_sent_when_given_and_its_variable_is_read_in_one_place
     """`_call` and `served_model` take the key itself and read no environment. `bearer` reads the variable that holds
     it: None when no variable is named, and a failure by the variable's name when it isn't set."""
     stub = _Stub({"data": [{"id": "m"}]})
-    assert _ask(stub, lambda url: rp.served_model(url, "dummy")) == "m"
+    assert _ask(stub, lambda url: runner_parts.served_model(url, "dummy")) == "m"
     assert b"\r\nauthorization: Bearer dummy\r\n" in stub.heads[0]
-    for call in (rp._call, rp.served_model):
+    for call in (runner_parts._call, runner_parts.served_model):
         assert "environ" not in inspect.getsource(call)
     name = "ENDPOINT_KEY_OF_THIS_TEST"
     monkeypatch.setenv(name, "dummy")
@@ -111,4 +112,4 @@ def test_the_bearer_key_is_sent_when_given_and_its_variable_is_read_in_one_place
 
 def test_an_endpoint_that_serves_two_models_is_refused_by_name():
     with pytest.raises(SystemExit, match=r"serves \['a', 'b'\]: name the model \(--model\)"):
-        _ask(_Stub({"data": [{"id": "a"}, {"id": "b"}]}), rp.served_model)
+        _ask(_Stub({"data": [{"id": "a"}, {"id": "b"}]}), runner_parts.served_model)

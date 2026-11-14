@@ -23,17 +23,19 @@ from verity.commitments.crypto import lms
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/compose/device/live_challenger"))
+sys.path.append(str(Path(__file__).resolve().parents[3]))  # the root, for benchmarks.network_traces
 import auditor as G  # noqa: E402
-import certifier_serve as cs  # noqa: E402
-import warden_serve as ws  # noqa: E402
-import wipe_egress as E  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import record_files as RF  # noqa: E402
+from benchmarks.network_traces import warden_serve as ws  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
+from benchmarks.network_traces import wipe_egress as E  # noqa: E402
 
 SCAN = WardenParams(**{flag[2:].replace("-", "_"): value for flag, value in G.SCAN.items()})
 #: the origin of the rehearsal the record was first read off
 ORIGIN = 1793035442.0242794
 WINDOWS = 6
 SESSION = bytes(range(32))
-LINK, FAILS = ws.LINK, f"{ws.LINK}-fails"
+LINK, FAILS = RC.LINK, f"{RC.LINK}-fails"
 #: the device the gate's `end.json` names for a network certifier run
 DEVICE = "warden"
 MS = 1_000_000
@@ -53,7 +55,7 @@ def _certificate(link: str, w: int, q: int, session: bytes = SESSION) -> dict:
     key, digest = _key(), hashlib.sha512(b"record %s %d" % (link.encode(), w)).digest()
     message = certificate_message(key.I, session, link, Direction.EGRESS, w, digest)
     c = Certificate(key.I, link, Direction.EGRESS, w, digest, lms.sign_at(key, q, message).encode())
-    return {"certificate": cs.certificate_json(c)}
+    return {"certificate": RF.certificate_json(c)}
 
 
 def gate_run(root: Path, *, forged: frozenset = frozenset(), missing: frozenset = frozenset(),
@@ -94,7 +96,7 @@ def test_a_link_window_carries_the_scan_schedules_cells() -> None:
 def test_a_window_within_the_session_is_covered(tmp_path: Path) -> None:
     doc = egress(gate_run(tmp_path), at(4_000), at(9_000))
     assert doc == {"format": "wipe-egress/v1", "gate_run": "c-test", "pinned": "0" * 40, "link": LINK,
-                   "key": cs.public_json(LmsKey(_key().params, lms.public_key(_key()))), "session": SESSION.hex(),
+                   "key": RF.public_json(LmsKey(_key().params, lms.public_key(_key()))), "session": SESSION.hex(),
                    "parameters": SCAN.digest.hex(), "origin_unix_ns": E.origin_ns(ORIGIN), "window_ns": 3_200_000_000,
                    "session_windows": WINDOWS, "t0_unix_ns": at(4_000), "t1_unix_ns": at(9_000),
                    "pad_ns": 1_000_000_000, "windows": [0, 4], "certificates": 8, "covered": True, "why": [],

@@ -18,6 +18,7 @@ from verity.protocols.accounting.certifier.verifier import calibration
 from verity.protocols.accounting.certifier.verifier import active
 from verity.protocols.accounting.certifier.verifier.active import DATA, encode_frame
 from verity.protocols.accounting.certifier.verifier.grid import COMPLETE, GridParams, Reason, BlockGrid, Status, Certifier
+from verity.protocols.accounting.certifier.verifier import record_files as RF
 
 HERE = Path(__file__).resolve().parents[1]
 T = 60
@@ -98,7 +99,7 @@ def test_records_round_trip_through_their_packing():
     assert record.status == Status(Reason.MONITOR_UNAVAILABLE)
     clean = BlockGrid("requests", 4, ((None, None),) * 3, COMPLETE)
     for r in (record, clean):
-        assert ar.unpack_record(ar.pack_record(r), 64) == r
+        assert RF.unpack_record(RF.pack_record(r), 64) == r
 
 
 def test_a_slot_that_is_not_a_frame_is_packed_as_its_bytes():
@@ -108,8 +109,8 @@ def test_a_slot_that_is_not_a_frame_is_packed_as_its_bytes():
     frame = encode_frame(DATA, 9, b"id: 0\n\n", 64)
     claims_more = ar.HEADER.pack(DATA, 9, 1000) + bytes(64 - ar.HEADER.size)
     record = BlockGrid("responses", 0, ((frame, claims_more, frame[:-1] + b"\x01", b"\x01\x02"),), COMPLETE)
-    blob = ar.pack_record(record)
-    assert ar.unpack_record(blob, 64) == record
+    blob = RF.pack_record(record)
+    assert RF.unpack_record(blob, 64) == record
     data = zlib.decompress(blob)
     at, as_bytes = 8 + struct.unpack_from(">I", data)[0] + 4, []
     for _ in record.grid[0]:
@@ -195,7 +196,7 @@ def test_a_certifier_down_for_a_window_publishes_nothing_for_it_and_the_rest_as_
     assert c["wire_is_the_records"] and c["frames_read"] == c["frames_meant"] == 24
     for name, params in (("responses.records", s.egress_params), ("requests.records", s.ingress_params)):
         assert ar.read_blobs(down / name) == [b for b in ar.read_blobs(never / name)
-                                              if ar.unpack_record(b, params.frame_bytes).window != 1]
+                                              if RF.unpack_record(b, params.frame_bytes).window != 1]
     assert sorted((down / "committed.jsonl").read_text().splitlines()) == \
         sorted(line for line in (never / "committed.jsonl").read_text().splitlines()
                if json.loads(line)["window"] != 1)
@@ -229,14 +230,14 @@ def test_a_released_frame_that_isnt_the_programs_is_counted_not_a_crash(setup, r
     run = tmp_path / "honest"
     shutil.copytree(results["honest"][0], run)
     e = s.egress_params
-    records = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
+    records = [RF.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
     (run / "responses.records").unlink()
     for r in records:
         if r.window == 1:
             t = next(t for t, row in enumerate(r.grid) if row[0] is not None)
             row = (encode_frame(DATA, 99, b"id: 999\n\n", e.frame_bytes), *r.grid[t][1:])
             r = BlockGrid(r.link, r.window, r.grid[:t] + (row,) + r.grid[t + 1 :], r.status)
-        ar.write_blobs(run / "responses.records", ar.pack_record(r))
+        ar.write_blobs(run / "responses.records", RF.pack_record(r))
     audit = ar.audit_configuration(plan, report, run)
     assert audit["comparisons"]["released_not_the_programs"] == 1
     assert [(r["link"], r["window"], r["raw"], r["committed"]) for r in audit["rows"]] == \

@@ -41,6 +41,7 @@ from verity.commitments.crypto import lms
 from verity.protocols.accounting.certifier.verifier import active
 from verity.protocols.accounting.certifier.verifier.certificate import Issuer
 from verity.protocols.accounting.certifier.verifier.release import release_of
+from verity.protocols.accounting.certifier.verifier import record_files as RF
 
 HERE = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parents[3]
@@ -50,6 +51,7 @@ SESSION = bytes(range(32))
 
 def _load():
     sys.path.insert(0, str(HERE))
+    sys.path.append(str(ROOT))  # for benchmarks.network_traces
     spec = importlib.util.spec_from_file_location("network_traces_certifier_serve",
                                                   ROOT / "benchmarks/network_traces/certifier_serve.py")
     mod = importlib.util.module_from_spec(spec)
@@ -170,7 +172,7 @@ def _released_as_signed(out: dict) -> list[int]:
     0 … n − 1, under the run id `deployment.json` names; no ingress frame holds a release header. Each N in arrival
     order."""
     run = out["run"]
-    records = [ar.unpack_record(b, cs.FRAME_BYTES) for b in ar.read_blobs(run / "requests.records")]
+    records = [RF.unpack_record(b, cs.FRAME_BYTES) for b in ar.read_blobs(run / "requests.records")]
     signed = {name: stream - 1 for name, stream in ar.released_sessions(records).items()}
     run_id = bytes.fromhex(json.loads((run / "deployment.json").read_text())["run_id"])
     assert out["released"] == signed and sorted(signed.values()) == list(range(len(signed)))
@@ -269,7 +271,7 @@ def test_a_window_that_faults_drops_its_requests_and_the_audit_follows_the_relea
         return report, plan, list(RELEASES)
 
     report, plan, releases = asyncio.run(go())
-    records = [ar.unpack_record(b, cs.FRAME_BYTES) for b in ar.read_blobs(tmp_path / "requests.records")]
+    records = [RF.unpack_record(b, cs.FRAME_BYTES) for b in ar.read_blobs(tmp_path / "requests.records")]
     assert ar.released_sessions(records) == {"served.0": 1, "served.2": 2, "served.3": 3}
     released = dict(json.loads((tmp_path / "server.json").read_text())["released"])
     assert released == {"served.0": 0, "served.2": 1, "served.3": 2}
@@ -451,7 +453,7 @@ def test_the_certifier_process_keeps_and_signs_as_the_inline_publisher_does(serv
     own fresh salt, and salted clock certificates of the syncs handed with the egress records, the same leaves too,
     each opening under its own fresh salt; a reveal signed between two records takes the same leaf: its calls run in
     the order they are made."""
-    import certifier_serve  # by name, so that the spawned process finds its functions
+    from benchmarks.network_traces import certifier_serve  # by name, so that the spawned process finds its functions
 
     _, report, _, runs = served
     published = runs["honest"]["published"]
@@ -492,7 +494,7 @@ def test_the_certifier_process_keeps_and_signs_as_the_inline_publisher_does(serv
     assert [d["head"] for d in process_docs] == [d["head"] for d in inline_docs]
     leaves = [[bytes.fromhex(d["certificate"]["signature"])[:4] for d in docs] for docs in (inline_docs, process_docs)]
     assert leaves[0] == leaves[1] and len(set(leaves[0])) == len(published)
-    assert all(cs.certified_from_json(d).verify(process.public_key(), SESSION) for d in process_docs)
+    assert all(RF.certified_from_json(d).verify(process.public_key(), SESSION) for d in process_docs)
     clocks = [cs.read_clocks(tmp_path / run / "clocks.jsonl") for run in ("inline-run", "process-run")]
     egress = [r for r, _ in published if r.link == setup.egress_link]
     assert [[(c.window, c.sync) for c in k] for k in clocks] == [[(r.window, sync(r)) for r in egress]] * 2
@@ -913,7 +915,7 @@ def test_a_request_in_a_windows_first_bucket_is_released_behind_the_salt_frame_a
     the window's egress counts derive from its ingress counts and N2 accepts it."""
     tmp, report, plan, runs = served_profile
     setup = ar.Setup(report)
-    records = sorted((ar.unpack_record(b, cs.FRAME_BYTES) for b in ar.read_blobs(tmp / "honest" / "requests.records")),
+    records = sorted((RF.unpack_record(b, cs.FRAME_BYTES) for b in ar.read_blobs(tmp / "honest" / "requests.records")),
                      key=lambda r: r.window)
     first = records[1]
     kinds = [[active.decode_frame(f)[0] for f in row[:active.row_count(row)]] for row in first.grid[:4]]
@@ -1517,7 +1519,7 @@ def test_a_frame_other_than_the_certified_one_is_refused_by_the_tie_on_the_cells
     pytest.importorskip(negatives.IO_TIE_MODULE)
     tmp, _, report, plan, _, _ = varied
     run, e = shutil.copytree(tmp / "honest", tmp_path / "frame"), ar.Setup(report).egress_params
-    records = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
+    records = [RF.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
     k = next(k for k, r in enumerate(records) if any(row[0] is not None for row in r.grid))
     t = next(t for t, row in enumerate(records[k].grid) if row[0] is not None)
     q, x = active.id_event_data(active.decode_frame(records[k].grid[t][0])[2])
@@ -1526,7 +1528,7 @@ def test_a_frame_other_than_the_certified_one_is_refused_by_the_tie_on_the_cells
     records[k] = replace(records[k], grid=records[k].grid[:t] + (row,) + records[k].grid[t + 1:])
     (run / "responses.records").unlink()
     for r in records:
-        ar.write_blobs(run / "responses.records", ar.pack_record(r))
+        ar.write_blobs(run / "responses.records", RF.pack_record(r))
     got = negatives.tie_run(run, negatives.read_ids(_ids(tmp_path, plan)))
     w = records[k].window
     assert got["held"] == {"egress": plan["windows"] - 1, "ingress": plan["windows"]}
@@ -1565,8 +1567,8 @@ def test_the_certified_io_reads_each_response_by_its_ordinal_wherever_its_frames
     tmp, _, report, plan, _, _ = varied
     run, setup = tmp / "honest", ar.Setup(report)
     e, i = setup.egress_params, setup.ingress_params
-    ins = [ar.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
-    outs = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
+    ins = [RF.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
+    outs = [RF.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
     frames = [s for rec in sorted(outs, key=lambda r: r.window) for row in rec.grid for s in row if s is not None]
     by_ordinal: dict = defaultdict(list)
     for f in frames:
@@ -1599,8 +1601,8 @@ def test_the_certified_io_refuses_two_requests_with_one_user(varied):
     tmp, _, report, plan, _, _ = varied
     run, setup = tmp / "honest", ar.Setup(report)
     e, i = setup.egress_params, setup.ingress_params
-    ins = [ar.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
-    outs = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
+    ins = [RF.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
+    outs = [RF.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
     first, second = (json.dumps(q["session"]).encode() for q in plan["requests"][:2])
     shared = [SimpleNamespace(window=r.window, grid=[[f if f is None else f.replace(second, first) for f in row]
                                                      for row in r.grid]) for r in ins]
@@ -1720,7 +1722,7 @@ def test_the_gates_compact_rehearsal_runs_compact_cells_and_its_check_reads_them
         differs = {u for u, r in g["io"].items() if r["output"] != recorded[u]}
         assert differs == (set() if tamper is None else window0) and (tamper is None or differs)
         e = ar.Setup(json.loads((g["dir"] / "calibration.json").read_text())).egress_params
-        outs = sorted((ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(g["dir"] / "responses.records")),
+        outs = sorted((RF.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(g["dir"] / "responses.records")),
                       key=lambda r: r.window)
         cells = [s for r in outs for row in r.grid for s in row[:active.row_count(row)]]
         sampled = {r["stream"]: recorded[u] for u, r in g["io"].items()}

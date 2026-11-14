@@ -70,274 +70,34 @@ from __future__ import annotations
 import argparse
 import json
 import pickle
-import statistics
+import sys
 import tempfile
 import time
-from collections.abc import Iterator, Mapping, Sequence
-from dataclasses import replace
+from collections.abc import Sequence
 from pathlib import Path
 
-import blob_files as bf
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+
 import certifier_key as ck
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.id_form import id_request
-from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer
-from verity.protocols.accounting.certifier.verifier.grid import BlockGrid
 from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.certifier.verifier.warden import LENGTHS_FORMS, Released, Warden, WardenParams, _Connection
+from runner_parts import _class, hand
+from verity.protocols.accounting.certifier.verifier.connection_rows_check import ROWS, _spread
 
-#: the publisher queue's name for a hand's items, where a record's rows have their link's
-HAND = "connection-rows"
-ROWS, SALTS = "rows.jsonl", "rows.salts"
-#: a line's key for the word that its execution phase has no head, where a head's line has `registration`
-NO_HEAD = "no_head"
 #: the classes the cost is measured at by default: each (P, O) a power of four apart, 16 rows each under form 1
 CLASSES = tuple((size, size, 16) for size in (2, 16, 64, 256, 1024, 4096))
 
 
 # The schedule's flags.
 
-def _class(text: str) -> tuple[int, ...]:
-    refusal = argparse.ArgumentTypeError(f"a class is P,O,ROWS under --lengths 1 and P,O under --lengths 2, integers, "
-                                         f"not {text!r}")
-    try:
-        numbers = tuple(int(x) for x in text.split(","))
-    except ValueError:
-        raise refusal from None
-    if len(numbers) not in (2, 3):
-        raise refusal
-    return numbers
-
-
-def flags(q: argparse.ArgumentParser) -> None:
-    """The connection rows as `q`'s flags, beside its schedule's."""
-    q.add_argument("--lengths", type=int, choices=LENGTHS_FORMS, default=None,
-                   help="the lengths rows' form (warden's \"The lengths rows\"): the network certifier hands each "
-                        "execution phase's releases, and the publisher commits and signs their tables; under 2 "
-                        "every execution phase of the run ends, the last included, in its head or in the network "
-                        "certifier's signed word that it has none (default: none)")
-    q.add_argument("--content", type=_class, nargs="+", default=None, metavar="P,O[,ROWS]",
-                   help="with --lengths: the content rows' classes, in order (content_rows' \"The classes\"): a "
-                        "class's size of prompt ids, its size of ids released and, under --lengths 1 and only "
-                        "there, its tables' rows; under --lengths 2 its tables hold a row a release filed in it "
-                        "(default: none)")
-    q.add_argument("--request-words", action="store_true",
-                   help="with --lengths 2, --content and --max-tokens-cap: the request words (content_rows' \"A "
-                        "request's words\"), a fourth table a class of each released request's max_tokens "
-                        "and count of prompt ids as the network certifier reads them (default: none)")
-
-
-def schedule(params: WardenParams, args: argparse.Namespace) -> WardenParams:
-    """`params` with the connection rows `args` names (`flags`); the same schedule where it names none."""
-    content = getattr(args, "content", None)
-    return replace(params, lengths=getattr(args, "lengths", None), content=content and tuple(content),
-                   request_words=True if getattr(args, "request_words", False) else None)
-
-
-def flags_of(params: WardenParams) -> list[str]:
-    """The flags that give a schedule `params`' connection rows: none for a schedule without them."""
-    out = [] if params.lengths is None else ["--lengths", str(params.lengths)]
-    out += [] if params.content is None else ["--content", *(",".join(map(str, c)) for c in params.content)]
-    return out + (["--request-words"] if params.request_words else [])
-
 
 # The hand, and the publisher's keep of it.
 
-def hand(window: int, strides: Sequence[Sequence[Released]] | None) -> Iterator[tuple]:
-    """An execution phase's hand as the publisher queue's items: one a slot stride that holds a release, then its
-    close with the strides' count; for an execution phase that ends without releases (`strides` None), its close
-    alone, with no count."""
-    for j, stride in enumerate(strides or ()):
-        if stride:
-            yield HAND, (window, j), stride
-    yield HAND, (window, None), None if strides is None else len(strides)
-
-
-class Keeper:
-    """The publisher's keep of the hands (the module docstring's "The hand"): called with each item of `hand`, less
-    its name, it lays, commits and signs an execution phase's tables at its close, or signs the word that it has no
-    head. `keep` takes a whole hand, or None, as `Warden(lengths=…)` gives it to a publisher in the network
-    certifier's own process."""
-
-    def __init__(self, out: Path, issuer: Issuer, params: WardenParams, link: str) -> None:
-        self.out, self.issuer, self.params, self.link = out, issuer, params, link
-        self.open: dict[int, dict[int, Sequence[Released]]] = {}
-
-    def __call__(self, at: tuple[int, int | None], data) -> None:
-        window, j = at
-        if j is not None:
-            self.open.setdefault(window, {})[j] = data
-            return
-        got = self.open.pop(window, {})
-        self.keep(window, None if data is None else tuple(tuple(got.get(j, ())) for j in range(data)))
-
-    def keep(self, window: int, strides: Sequence[Sequence[Released]] | None) -> None:
-        if strides is None:
-            t0 = time.perf_counter()
-            cert = CR.attest_no_head(self.issuer, self.link, window, self.params)
-            line = ({"refused": [self.link, Direction.EGRESS.value, window]} if cert is None
-                    else {NO_HEAD: CR.no_head(cert, self.params)})
-            bf.write_blobs(self.out / SALTS, b"")
-            with open(self.out / ROWS, "a") as fh:
-                fh.write(json.dumps(line | {"cost": {"sign_ms": round((time.perf_counter() - t0) * 1000, 3)}}) + "\n")
-            return
-        t0 = time.perf_counter()
-        tables = CR.tables(self.params, strides)
-        t1 = time.perf_counter()
-        rows = CR.Rows.commit(self.link, window, tables, self.params, self.issuer.session)
-        head = rows.head
-        t2 = time.perf_counter()
-        cert = self.issuer.sign(self.link, Direction.EGRESS, window, head.digest())
-        t3 = time.perf_counter()
-        cost = {"tables": len(tables), "rows": sum(len(t) for t in tables.values()),
-                "row_bytes": sum(len(r) for t in tables.values() for r in t),
-                "build_ms": round((t1 - t0) * 1000, 3), "commit_ms": round((t2 - t1) * 1000, 3),
-                "sign_ms": round((t3 - t2) * 1000, 3)}
-        line = ({"refused": [self.link, Direction.EGRESS.value, window]} if cert is None
-                else {"registration": CR.registration(head, cert, self.params)})
-        bf.write_blobs(self.out / SALTS, rows.witness)
-        with open(self.out / ROWS, "a") as fh:
-            fh.write(json.dumps(line | {"cost": cost}) + "\n")
-
 
 # The offline check.
-
-def read(run: Path, params: WardenParams) -> list[tuple[dict, dict[str, list[bytes]]]]:
-    """`rows.jsonl` and `rows.salts`, line by line: each execution phase's registration (or the word that it has no
-    head, or a refusal) and cost, and its rows' salts by table, none where no table was committed. A table's salts
-    are one a row: the schedule's rows, or where a class's rows are a count (`content_rows.counted`) the rows the
-    line's registration gives the table, and there a line without a registration has no salts read."""
-    path = run / ROWS
-    lines = [json.loads(x) for x in path.read_text().splitlines()] if path.exists() else []
-    blobs = bf.read_blobs(run / SALTS)
-    listed = [(name, rows) for name, rows, _ in CR.tables_of(params)]
-    size = WR.SALT_BYTES * sum(rows for _, rows in listed)
-    counted = CT.counted(params) and params.content is not None
-    if len(blobs) != len(lines) or not (counted or all(len(b) == size or (not b and "registration" not in doc)
-                                                       for doc, b in zip(lines, blobs))):
-        raise ValueError(f"{ROWS} has {len(lines)} lines and {SALTS} {len(blobs)} blobs, each of {size} bytes or, "
-                         f"for a line without a registration, of none")
-    out = []
-    for doc, blob in zip(lines, blobs):
-        salts, at = {}, 0
-        for name, rows in (_counted(doc, blob, listed) if counted else listed if blob else ()):
-            salts[name] = [blob[at + k * WR.SALT_BYTES:at + (k + 1) * WR.SALT_BYTES] for k in range(rows)]
-            at += rows * WR.SALT_BYTES
-        out.append((doc, salts))
-    return out
-
-
-def _counted(doc: Mapping, blob: bytes, listed: Sequence[tuple[str, int]]) -> list[tuple[str, int]]:
-    """Each table's rows in a line's blob of salts where a class's rows are a count: the rows the line's
-    registration gives the table, and no table for a line without one. ValueError for a registration that doesn't
-    list the schedule's tables, a blob that isn't a salt a row of them, or salts beside the word that the execution
-    phase has no head."""
-    if "registration" not in doc:
-        if blob and NO_HEAD in doc:
-            raise ValueError(f"execution phase {_phase(doc)} has the network certifier's word that it has no head, "
-                             f"and {len(blob)} bytes of {SALTS}")
-        return []
-    mine = [(t["name"], t["rows"]) for t in doc["registration"]["tables"]]
-    if [name for name, _ in mine] != [name for name, _ in listed] or \
-            not all(type(rows) is int and rows >= 0 for _, rows in mine) or \
-            len(blob) != WR.SALT_BYTES * sum(rows for _, rows in mine):
-        raise ValueError(f"execution phase {_phase(doc)}'s blob of {SALTS} isn't a salt a row of the schedule's "
-                         f"tables as its registration counts them")
-    return mine
-
-
-def _phase(doc: Mapping) -> int:
-    """The execution phase a line of `rows.jsonl` is of."""
-    if "refused" in doc:
-        return doc["refused"][2]
-    return doc["registration" if "registration" in doc else NO_HEAD]["window"]
-
-
-def _spread(xs: list[float]) -> dict:
-    return {"n": len(xs), "p50": round(statistics.median(xs), 3) if xs else None,
-            "max": round(max(xs), 3) if xs else None}
-
-
-def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[BlockGrid],
-          egress: Sequence[BlockGrid], fails: Sequence[BlockGrid], link: str) -> tuple[dict | None, list[str]]:
-    """The module docstring's check of a run's connection rows under its deployment record `dep`: the summary (the
-    registered execution phases, of those that have connection rows, the cost, and under form 2 the execution phases
-    with the word that they have no head, of those that have none) and the problems. None, and no problem, for a
-    schedule without lengths rows."""
-    if params.lengths is None:
-        return None, []
-    key, session, windows = ck.read_public(dep["key"]), bytes.fromhex(dep["session"]), dep["windows"]
-    kept_records = run / "certified.jsonl"
-    withheld = {doc["refused"][2] for doc in map(json.loads, kept_records.read_text().splitlines())
-                if doc.get("withheld")} if kept_records.exists() else set()
-    whole = {w for w in range(windows) if w not in withheld
-             and all(any(r.window == w and r.status.reason is None for r in records)
-                     for records in (ingress, egress, fails))}
-    if params.closes:
-        want = [w for w in range(windows) if all(v in whole for v in (w - 1, w, w + 1) if 0 <= v < windows)]
-    else:
-        want = [w for w in range(windows - 1) if w in whole and w + 1 in whole]
-    without = [w for w in range(windows) if w not in want] if params.closes else []
-    problems: list[str] = []
-    kept: dict[int, tuple[dict, dict]] = {}
-    try:
-        for doc, salts in read(run, params):
-            if _phase(doc) in kept:
-                problems.append(f"execution phase {_phase(doc)} has two lines of connection rows")
-            kept[_phase(doc)] = (doc, salts)
-    except (ValueError, KeyError, TypeError) as e:
-        kept = {}
-        problems.append(f"connection rows: {ROWS} and {SALTS} don't read: {e}")
-    log = run / "warden.json"
-    order = {c["ordinal"]: c["release"] for c in json.loads(log.read_text())["connections"]
-             if c["release"] is not None} if log.exists() else None
-    try:
-        held = CR.of_records(params, ingress, egress, order)
-    except ValueError as e:
-        held = {}
-        problems.append(f"connection rows: the records don't read as releases: {e}")
-    costs, registered, worded = [], 0, 0
-    for w in sorted(set(want) | set(kept) | set(without)):
-        doc, salts = kept.get(w, (None, None))
-        if w not in want and not params.closes:
-            problems.append(f"execution phase {w} has connection rows, and its records or the next one's weren't "
-                            f"published complete")
-            continue
-        if w not in want:
-            if doc is not None and "registration" in doc:
-                problems.append(f"execution phase {w} has connection rows, and it or an execution phase beside it "
-                                f"wasn't published complete")
-            elif doc is None or NO_HEAD not in doc:
-                problems.append(f"execution phase {w} has neither connection rows nor the network certifier's word "
-                                f"that it has none")
-            else:
-                try:
-                    CR.check_no_head(doc[NO_HEAD], key, session, params, link, w)
-                    worded += 1
-                except ValueError as e:
-                    problems.append(f"execution phase {w}'s word that it has no head: {e}")
-            continue
-        ok = False
-        if doc is not None and "registration" in doc and w in held:
-            costs.append(doc["cost"])
-            try:
-                head, _ = CR.check_registration(doc["registration"], key, session, params, link, w)
-                mine = CR.tables(params, held[w])
-                ok = all(len(salts.get(name, ())) == len(rows) for name, rows in mine.items()) and \
-                    CR.Rows.commit(link, w, mine, params, session, salts).head == head
-                if not ok:
-                    problems.append(f"execution phase {w}'s connection rows aren't its records' releases")
-            except ValueError as e:
-                problems.append(f"execution phase {w}'s connection rows: {e}")
-        registered += ok
-        if not ok:
-            problems.append(f"execution phase {w}'s connection rows aren't registered")
-    summary = {"registered": registered, "of": len(want), "tables": sorted({c["tables"] for c in costs}),
-               "rows": sorted({c["rows"] for c in costs}), "row_bytes": sorted({c["row_bytes"] for c in costs}),
-               **{k: _spread([c[k] for c in costs]) for k in ("build_ms", "commit_ms", "sign_ms")}}
-    return summary | ({NO_HEAD: {"signed": worded, "of": len(without)}} if params.closes else {}), problems
 
 
 # The cost of a close.
@@ -416,7 +176,7 @@ def _device(params: WardenParams, releases: Sequence[tuple[int, int]], lengths) 
 
 def cost(params: WardenParams, load: str, phases: int, height: int) -> dict:
     """The module docstring's cost of a close of `params` under `load`, over `phases` execution phases."""
-    import warden_serve as ws  # at its use: it imports this module
+    from benchmarks.network_traces import warden_serve as ws  # at its use: it imports this module
 
     releases = loaded(params, load)
     hands, pickles, longest = [], [], []

@@ -26,7 +26,7 @@ bucket of the first cell that isn't padding and whether the connection failed, w
 trailer. `score` sets the reading beside the planted bits: how many it has right, and the mutual information between
 the two over the try.
 
-**The checks.** The relay's is `warden_serve.check`, whose refusal's words are its audit's (`warden.audit`). The I/O
+**The checks.** The relay's is `relay_check.check`, whose refusal's words are its audit's (`warden.audit`). The I/O
 tie's is its content part (`io_tie.cells_match`, `IoTieContent`'s reference) on each bucket of the egress record
 (`tie`), with two stand-ins for what a try doesn't have: the map is the certified placement, each data cell its
 stream's next output, and the Commit is the ids given (``--ids``, the server's record of each request's sampled ids),
@@ -122,11 +122,13 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-import certifier_serve as cs  # noqa: E402
+from benchmarks.network_traces import certifier_serve as cs  # noqa: E402
 import leak_bounds as LB  # noqa: E402
 import negatives as N  # noqa: E402
-import warden_serve as ws  # noqa: E402
+from benchmarks.network_traces import warden_serve as ws  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import io_tie as IT  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import release as REL  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.active import DATA, PAD  # noqa: E402
@@ -367,7 +369,7 @@ def keep(cls: str, run: Path, *, stand_in: bool = False, seconds: float | None =
     whole = {d["release"]: bool(d.get("whole")) for d in lines if d.get("release") is not None}
     data: dict[int, bytearray] = defaultdict(bytearray)
     egress = []
-    for record in sorted(ws.read_records(run, params)[ws.EGRESS], key=lambda r: r.window):
+    for record in sorted(RC.read_records(run, params)[RC.EGRESS], key=lambda r: r.window):
         cells = []
         for t, slots in enumerate(record.grid):
             for i, frame in enumerate(slots):
@@ -465,7 +467,7 @@ def reading(cls: str, conn: dict, params: WardenParams) -> list:
         return [x & 1 for x in ids]
     if cls == "length":
         return [len(ids) % 2]
-    failed = int(ws.KIND_CHARS[FAIL] in kinds)
+    failed = int(RC.KIND_CHARS[FAIL] in kinds)
     if cls == "bucket":
         return [(first_bucket(conn, params), failed)]
     if cls == "fail":
@@ -477,7 +479,7 @@ def reading(cls: str, conn: dict, params: WardenParams) -> list:
 def first_bucket(conn: dict, params: WardenParams) -> int:
     """The bucket of the first cell a connection's client got that isn't padding, counted from its first cell."""
     kinds = conn["kinds"]
-    return next((i for i, k in enumerate(kinds) if k != ws.KIND_CHARS[PAD]), len(kinds)) // params.slots
+    return next((i for i, k in enumerate(kinds) if k != RC.KIND_CHARS[PAD]), len(kinds)) // params.slots
 
 
 def decoded(cls: str, symbols: Sequence) -> list[int | None]:

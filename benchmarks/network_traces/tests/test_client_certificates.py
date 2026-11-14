@@ -20,6 +20,7 @@ import pytest
 from verity.protocols.accounting.certifier.verifier import active
 from verity.protocols.accounting.certifier.verifier.certificate import Certificate, Direction, Issuer, clock_commitment
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync
+from verity.protocols.accounting.certifier.verifier import record_files as RF
 
 HERE = Path(__file__).resolve().parents[1]
 TOKENS, REQUESTS = 4, 8
@@ -118,13 +119,13 @@ def _lines(path: Path) -> list[dict]:
 def test_the_client_keeps_every_windows_certificates_verified_and_nothing_of_a_head(honest):
     tmp, out = honest
     deployment, windows = out["deployment"], out["deployment"]["windows"]
-    key, session = cs.read_public(deployment["certifier_key"]), bytes.fromhex(deployment["session"])
+    key, session = RF.read_public(deployment["certifier_key"]), bytes.fromhex(deployment["session"])
     assert out["refused"] == [] and windows >= 2
     kept = _lines(tmp / "client" / "certificates.jsonl")
     certified = _lines(tmp / "run" / "certified.jsonl")
     assert len(kept) == len(certified) == 2 * windows
     assert all(set(d) == {"session", *Certificate.__slots__} and d["session"] == SESSION.hex() for d in kept)
-    assert all(cs.certificate_from_json(d).verify(key, session) for d in kept)
+    assert all(RF.certificate_from_json(d).verify(key, session) for d in kept)
     assert sorted(map(json.dumps, (d["certificate"] for d in certified))) == \
         sorted(json.dumps({f: d[f] for f in Certificate.__slots__}) for d in kept)
     text = (tmp / "client" / "certificates.jsonl").read_text()
@@ -134,8 +135,8 @@ def test_the_client_keeps_every_windows_certificates_verified_and_nothing_of_a_h
     assert len({c.salt for c in signed}) == windows
     assert all(set(d) == {"session", *Certificate.__slots__} and d["session"] == SESSION.hex() for d in clocks)
     assert [{f: d[f] for f in Certificate.__slots__} for d in clocks] == \
-        [cs.certificate_json(c.certificate) for c in signed]
-    assert all(cs.certificate_from_json(d).verify(key, session) for d in clocks)
+        [RF.certificate_json(c.certificate) for c in signed]
+    assert all(RF.certificate_from_json(d).verify(key, session) for d in clocks)
     assert all(set(d) == set(Certificate.__slots__) for a in out["answers"] for d in a["clocks"])
     text = (tmp / "client" / "clocks.jsonl").read_text()
     assert not any(c.salt.hex() in text for c in signed)
@@ -211,14 +212,14 @@ def test_a_clock_certificate_under_a_reused_salt_is_refused_by_name(tmp_path):
         issuer, sync, salt = Issuer(own, SESSION), ClockSync(1, Fraction(1)), bytes(range(64))
         reused = [issuer.sign(cs.N2_LINK, Direction.EGRESS, w, clock_commitment(salt, sync)) for w in (0, 1)]
         fresh = [issuer.salted_clock(cs.N2_LINK, w, sync).certificate for w in (0, 1)]
-        public = cs.public_json(own.public_key())
+        public = RF.public_json(own.public_key())
     finally:
         own.close()
     deployment = {"certifier_key": public, "session": SESSION.hex(), "links": {"n2": cs.N2_LINK}, "windows": 2,
                   "reveal": None}
 
     def answers(certificates):
-        return [{"window": w, "session": SESSION.hex(), "certificates": [], "clocks": [cs.certificate_json(c)],
+        return [{"window": w, "session": SESSION.hex(), "certificates": [], "clocks": [RF.certificate_json(c)],
                  "unsigned": []} for w, c in enumerate(certificates)]
 
     (tmp_path / "reused").mkdir()

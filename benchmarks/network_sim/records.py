@@ -24,6 +24,7 @@ for _p in (str(HERE), str(HERE.parent / "network_traces")):
         sys.path.insert(0, _p)
 
 import active_replay as ar  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import record_files as RF  # noqa: E402
 import graph  # noqa: E402, F401  (puts `datacenter` on the path)
 from datacenter import Cadence, Datacenter, Interval, Plan, Port, PortRecord  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import active  # noqa: E402
@@ -84,7 +85,7 @@ def published(run: Path, setup: ar.Setup, dc: Datacenter, block: str) -> list[Po
     out = []
     for path, params in ((run / "responses.records", setup.egress_params), (run / "requests.records", setup.ingress_params)):
         for blob in ar.read_blobs(path):
-            r = ar.unpack_record(blob, params.frame_bytes)
+            r = RF.unpack_record(blob, params.frame_bytes)
             out.append(to_record(r, by[r.link]))
     return out
 

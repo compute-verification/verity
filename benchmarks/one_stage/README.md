@@ -315,8 +315,9 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   `served_verdicts.py pearlplus`: the verdict, the linears' declared and credited shares
   (`served_shares.pearlplus_shares`), and why it credits nothing.
 - `served_compare.py`: the served compare, `served_verdicts.sh`'s step under `PEARLPLUS_TIE` once Pearl+'s piece wrote W
-  and before the record, on the CPU. It holds the serve to the row of record: serve.json's φ is the row's declared φ and
-  lowers the same window circuit (PHI), predict row's Build is the row's Build of record, `BUILD_OF_RECORD` (BUILD), and
+  and before the record, on the CPU. It holds the serve to the row of record: serve.json's φ is the row's declared φ,
+  taken at the run's `REV` (`--revision`; another revision the manifests pin of the row's model, its PHI line and last
+  line naming both), and lowers the same window circuit (PHI), predict row's Build is the row's Build of record, `BUILD_OF_RECORD` (BUILD), and
   W registers exactly that circuit's Pearl+ values (CUT). Its last line, `SERVED-COMPARE: EQUAL` or `NOT EQUAL`, is the
   one the record names (`served_verdicts.py record --served-compare`); `served_verdicts.sh served-compare K` reruns it.
 

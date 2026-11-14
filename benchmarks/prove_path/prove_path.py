@@ -1481,6 +1481,7 @@ def network_traces() -> Iterator[None]:
     its ``replay``, which its ``active_replay`` imports, isn't one_stage's, which ``a5`` imports."""
     path, replay = list(sys.path), sys.modules.pop("replay", None)
     sys.path.insert(0, str(HERE.parent / "network_traces"))
+    sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces
     try:
         yield
     finally:
@@ -1503,8 +1504,8 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
 
     with network_traces():
         import certifier_piece as CP
-        import warden_chain as WCH
-        import warden_serve as WSV
+        from benchmarks.network_traces import warden_chain as WCH
+        from verity.protocols.accounting.certifier.verifier import relay_check as RC
 
     if not any((serve_dir / CP.PRIVATE).glob("*/fetch.tar.gz")):
         return None
@@ -1514,7 +1515,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
         unpacked, kept = CP.unpack(serve_dir / CP.PRIVATE / run / "fetch.tar.gz")
         _, params = WCH.deployment(kept)
         io = WCH.io(kept)
-        records = WSV.read_records(WCH.witness(kept), params)
+        records = RC.read_records(WCH.witness(kept), params)
     except (SystemExit, CP.NotRun) as e:
         raise ValueError(f"the certifier front's kept run: {e}") from None
     finally:
@@ -1533,10 +1534,10 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
                          "served traffic the network certifier didn't see")
     if None in (release := [by[u]["release"] for u in users]):
         raise ValueError("a request of the window has no END in the kept run's ingress")
-    windows = sorted(r.window for r in records[WSV.INGRESS])
+    windows = sorted(r.window for r in records[RC.INGRESS])
     if windows != list(range(len(windows))):
         raise ValueError(f"the kept run's ingress records are link-windows {windows[:8]}, not 0, 1, …")
-    ingress = [x for r in sorted(records[WSV.INGRESS], key=lambda r: r.window) for x in WRW.window_rows(r, params)]
+    ingress = [x for r in sorted(records[RC.INGRESS], key=lambda r: r.window) for x in WRW.window_rows(r, params)]
     outputs = {r["stream"]: r["output"] for r in io["records"]}
     anchors = SS.scan_anchors(cls, ingress[:max(release, default=0) + cls.scan.D + 1], outputs)
     at = {anchors[by[u]["stream"]] // T if by[u]["stream"] in anchors else None for u in users}

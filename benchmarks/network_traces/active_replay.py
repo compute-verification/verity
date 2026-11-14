@@ -81,7 +81,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import bisect
-import gc
 import gzip
 import hashlib
 import itertools
@@ -91,14 +90,12 @@ import multiprocessing
 import os
 import random
 import re
-import resource
 import signal
 import ssl
 import struct
 import subprocess
 import sys
 import time
-import zlib
 from collections import Counter, defaultdict
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -107,7 +104,7 @@ from pathlib import Path
 
 import covert
 import replay
-from blob_files import read_blobs, write_blobs
+from verity.protocols.accounting.certifier.verifier.blob_files import read_blobs, write_blobs
 from verity.protocols.accounting.certifier.verifier import online
 from verity.protocols.accounting.certifier.verifier.active import (
     CANONICAL_STREAM,
@@ -165,6 +162,8 @@ from verity.protocols.accounting.certifier.verifier.schedule import (
 from verity.protocols.accounting.certifier.verifier.served import Admission, ServedProfile, admits
 from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 from verity.protocols.proofs.spot.verifier.service import WindowCommitmentRecord
+from runner_parts import _quiet_runtime, _usage
+from verity.protocols.accounting.certifier.verifier.record_files import pack_record, unpack_record
 
 MODEL = "llama-3.1-8b-instruct"
 HTTP_HEAD = b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncache-control: no-cache\r\n\r\n"
@@ -249,52 +248,6 @@ def live_request_bytes(session: str, body: dict, frames: int | None, frame_bytes
 
 # Records on disk: the reference's `BlockGrid`, each slot that is a link frame stored as (kind, stream, payload) and any
 # other slot as its bytes, then zlib. `unpack_record` gives back the same `BlockGrid`.
-
-def pack_record(record: BlockGrid) -> bytes:
-    allocation = len(record.grid[0]) if record.grid else 0
-    head = json.dumps({"link": record.link, "window": record.window, "allocation": allocation,
-                       "reason": record.status.reason.value if record.status.reason else None}).encode()
-    parts = [struct.pack(">II", len(head), len(record.grid)), head]
-    for row in record.grid:
-        n = row_count(row)
-        if any(slot is not None for slot in row[n:]):
-            raise ValueError("a row that isn't left-packed")
-        parts.append(struct.pack(">I", n))
-        for slot in row[:n]:
-            same = False
-            if len(slot) >= HEADER.size:
-                kind, stream, payload = decode_frame(slot)  # the payload is cut from the slot, so it fits its length
-                same = encode_frame(kind, stream, payload, len(slot)) == slot
-            if same:
-                parts += [struct.pack(">BBII", 0, kind, stream, len(payload)), payload]
-            else:
-                parts += [struct.pack(">BI", 1, len(slot)), slot]
-    return zlib.compress(b"".join(parts), 1)
-
-
-def unpack_record(blob: bytes, frame_bytes: int, intern: dict[bytes, bytes] | None = None) -> BlockGrid:
-    data = zlib.decompress(blob)
-    head_len, rows = struct.unpack_from(">II", data)
-    i = 8 + head_len
-    head = json.loads(data[8:i])
-    grid = []
-    for _ in range(rows):
-        (n,), i = struct.unpack_from(">I", data, i), i + 4
-        slots = []
-        for _ in range(n):
-            if data[i] == 0:
-                _, kind, stream, length = struct.unpack_from(">BBII", data, i)
-                i += 10
-                slot = encode_frame(kind, stream, data[i : i + length], frame_bytes)
-            else:
-                (length,) = struct.unpack_from(">I", data, i + 1)
-                i += 5
-                slot = data[i : i + length]
-            i += length
-            slots.append(intern.get(slot, slot) if intern is not None else slot)
-        grid.append(tuple(slots) + (None,) * (head["allocation"] - n))
-    status = Status(Reason(head["reason"])) if head["reason"] else COMPLETE
-    return BlockGrid(head["link"], head["window"], tuple(grid), status)
 
 
 def committed_line(record: CommittedRecord) -> str:
@@ -664,23 +617,6 @@ def served(plan: dict) -> list[tuple[int, int]]:
 
 
 # The three processes.
-
-def peak_rss_mb() -> float:
-    """This process's peak resident set (`VmHWM`; `ru_maxrss` survives exec, so a spawned child reports its parent's)."""
-    status = Path("/proc/self/status").read_text()
-    return int(re.search(r"VmHWM:\s+(\d+) kB", status).group(1)) / 1024
-
-
-def _quiet_runtime() -> None:
-    gc.disable()
-    sys.setswitchinterval(0.001)
-    _, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-    resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))  # a live run holds two sockets per stream in flight
-
-
-def _usage() -> dict:
-    return {"max_rss_mb": peak_rss_mb(), "cpu_s": sum(os.times()[:2]), "nice": os.getpriority(os.PRIO_PROCESS, 0),
-            "cpus": sorted(os.sched_getaffinity(0))}
 
 
 class Server:

@@ -11,7 +11,7 @@ runs against it as against the demo's loop, and the loop's endpoint builds again
 connection, each answered and the connection closed:
 
 - ``GET /v1/models``: its one model, ``demo-stub/p{prompt_ids}-g{tokens}-v{vocab}``, which the rehearsal names in
-  every request (`certifier_serve.served_model`).
+  every request (`runner_parts.served_model`).
 - **A network certifier's id request of the class** (`warden_request`): the network certifier's copy of the client's
   bytes, its release headers right after the request line (`release.with_release`: ``x-verity-release: N`` and
   ``x-verity-release-run: HEX``), around exactly `id_form.id_request` of its own fields in the scan's B = P + 9-byte
