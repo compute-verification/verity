@@ -48,8 +48,9 @@
 # On the served node itself (SERVED_NODE unset or its own host), which the prover controls, a composite claims no record:
 # it is refused (COMPOSITE refused, exit 1) unless COMPOSE_OFF_NODE=0, and then composed as a development check, its
 # first line COMPOSITE DEVELOPMENT and each product's composite.json and verdicts.txt led by it (composite.py
-# --development). The cases under the serve dir's private/compose and private/deferred (a hand-off's or a deferral's
-# copies) are no product's.
+# --development). COMPOSE_DEVELOPMENT=WHY composes it as a development check anywhere, WHY its reason: a deferral's
+# follow-on sets it, since it composes on a prover node. The cases under the serve dir's private/compose and
+# private/deferred (a hand-off's or a deferral's copies) are no product's.
 set -uo pipefail
 D=${1:?usage: served_composite.sh SERVE_DIR OUT}
 OUT=${2:?usage: served_composite.sh SERVE_DIR OUT}
@@ -60,7 +61,10 @@ TPY=${TPY:-$TREE/.venv/bin/python}
 P=$D/private/composite
 say() { echo "$*" | tee -a "$OUT/verdicts.txt"; }
 dev=()
-if [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
+if [ -n "${COMPOSE_DEVELOPMENT:-}" ]; then
+  dev=(--development "$COMPOSE_DEVELOPMENT")
+  say "COMPOSITE DEVELOPMENT: ${dev[1]}"
+elif [ "${SERVED_NODE:-$(hostname)}" = "$(hostname)" ]; then
   if [ "${COMPOSE_OFF_NODE:-1}" != 0 ]; then
     say "COMPOSITE refused: this is the served node $(hostname -s), which the prover controls, so a composite here claims" \
         "no record; served_verdicts.sh composes it off the node from its compose hand-off (COMPOSE_OFF_NODE=0 composes it" \
