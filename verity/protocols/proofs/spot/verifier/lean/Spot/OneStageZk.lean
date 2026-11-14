@@ -1395,54 +1395,105 @@ def WIRES_DRAWN : String :=
 `port#r`. -/
 def rowName (port : String) (r k : Nat) : String := if k == 1 then port else s!"{port}#{r}"
 
-/-- The member holding the population's unit `g`, and `g`'s slot in its public file: members laid over the population
-(`laidHeld`) are each one range, so the slot is `g` less the member's first unit. -/
-def memberAt (ms : Array Member) (g : Nat) : Option (Member × Nat) :=
-  (ms.find? fun m => decide (m.first ≤ g) && decide (g < m.first + m.count)).map fun m => (m, g - m.first)
+/-- The member holding the population's unit `g`, of the members `ms` (each its name, first unit and count), and `g`'s
+slot in its public file: members laid over the population (`laidHeld`) are each one range, so the slot is `g` less
+the member's first unit. -/
+def memberAt (ms : Array (String × Nat × Nat)) (g : Nat) : Option (String × Nat) :=
+  (ms.find? fun (_, lo, n) => decide (lo ≤ g) && decide (g < lo + n)).map fun (name, lo, _) => (name, g - lo)
 
-/-- A member's circuit and public file as its sessions' verdicts parse them (`Flock.ProvedScope.circuitOf`,
-`Flock.ProvedScope.publicOf`), from the blobs its parameters name. -/
-def Member.loaded (m : Member) (bs : Core.Blobs) : V (Flock.Circuit × Flock.Public) := do
-  let a ← statementOf m.own (fun _ => pure ()) bs
-  let tags := Flock.Witness.zkTags a.I
-  let c ← Flock.ProvedScope.circuitOf tags a.I.circuitFile a.I.tables
-  pure (c, ← Flock.ProvedScope.publicOf tags c a.I.publicFile)
+/-- A member's rows as `wiresOn` reads them: its circuit's ports' names, in order, and the `b ‖ c` of slot `i`'s port
+`k` in its public file. -/
+abbrev Rows := Array String × (Nat → Nat → ByteArray)
 
-/-- **The sampled units' wires held to the members' public files**, where the parameters name a wiring (`wiringOf`):
-each template of the wiring is one range of the verifier's partition (`Partition.evaluate` on the verifier's program
-and query) of exactly its units, so its unit `u` is the population's unit `first + u` (else `WIRES_TEMPLATE`); and
-every wired row of every sampled unit (`drawn`, the evidence's `proved_units`, which v1's check holds to the sample)
-is its writer's output row (`Spot.Wires.Summary.drawnOk`, the reference's check on the sampled units by
-`Spot.Wires.drawnOk_iff`): the row's `b ‖ c` in its member's public file, at the unit's slot and the port the row
-names (`rowName`), is the writer's output row's in the writer's member's (else `WIRES_DRAWN`). It reads the public
-files of the members a sampled unit or one of its writers is in, and no session. -/
-def wiresHeld (p : Params) (ms : Array Member) (drawn : Array Nat) (bs : Core.Blobs) : V Unit := do
-  let some (W, S) := p.wiring | pure ()
-  let rs ← Partition.evaluate (← Program.parse p.own.program) (getD p.own.partition "query")
+/-- **The sampled units' wires held to the members' rows**, on the wiring `W` with SPOT's summary `S`, the partition's
+ranges `rs` (each its template, first unit and count), the members `ms` (each its name, first unit and count), the
+sampled units `drawn` and each member's rows (`load`, by name): each template of the wiring is one range of `rs` of
+exactly its units, so its unit `u` is the population's unit `first + u` (else `WIRES_TEMPLATE`); and every wired row
+of every sampled unit is its writer's output row (`Spot.Wires.Summary.drawnOk`, the reference's check on the sampled
+units by `Spot.Wires.drawnOk_iff`): the row's `b ‖ c` in its member's public file, at the unit's slot and the port the
+row names (`rowName`), is the writer's output row's in the writer's member's, neither empty (else `WIRES_DRAWN`). It
+loads the members a sampled unit with a wired row, or one of its writers, is in. -/
+def wiresOn (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (rs : Array (String × Nat × Nat))
+    (ms : Array (String × Nat × Nat)) (drawn : Array Nat) (load : String → V Rows) : V Unit := do
   let spans ← W.templates.mapM fun (tid, t) =>
-    match (rs.filter (·.template == tid)).toList with
-    | [r] => if r.count == t.units then pure (tid, r.first, r.count) else throw WIRES_TEMPLATE
+    match (rs.filter (·.1 == tid)).toList with
+    | [(_, first, count)] => if count == t.units then pure (tid, first, count) else throw WIRES_TEMPLATE
     | _ => throw WIRES_TEMPLATE
-  let at? : String → Int → Option (Member × Nat) := fun tid u => do
+  let at? : String → Int → Option (String × Nat) := fun tid u => do
     let (_, lo, n) ← spans.find? (·.1 == tid)
     if decide (0 ≤ u) && decide (u < (n : Int)) then memberAt ms (lo + u.toNat) else none
   let sampled := drawn.toList.filterMap fun g =>
     (spans.find? fun (_, lo, n) => decide (lo ≤ g) && decide (g < lo + n)).map fun (tid, lo, _) => (tid, g - lo)
   let need := sampled.flatMap fun (tid, u) => match S.rowsAt tid u with
     | [] => []
-    | rws => ((at? tid u).toList ++ rws.filterMap fun (_, (wt, wu, _)) => at? wt wu).map (·.1.name)
-  let files ← (ms.toList.filter (need.contains ·.name)).mapM fun m => do pure (m.name, ← m.loaded bs)
+    | rws => ((at? tid u).toList ++ rws.filterMap fun (_, (wt, wu, _)) => at? wt wu).map (·.1)
+  let files ← (ms.toList.filter (need.contains ·.1)).mapM fun (name, _) => do pure (name, ← load name)
   let bc : String → Int → String → Option ByteArray := fun tid u row => do
-    let (m, i) ← at? tid u
-    let (c, pub) ← files.lookup m.name
-    let k ← c.ports.findIdx? (·.name == row)
-    let d := pub.digest i k c.ports.size
+    let (name, i) ← at? tid u
+    let (ports, digest) ← files.lookup name
+    let k ← ports.findIdx? (· == row)
+    let d := digest i k
     if d.isEmpty then none else some d
   let same := fun ((tid, u, port, r) : String × Nat × String × Nat) ((wt, wu, out) : String × Int × String) =>
     match bc tid u (rowName port r (W.cutsOf tid port)), bc wt wu out with
     | some a, some b => a == b
     | _, _ => false
   if !S.drawnOk same sampled then throw WIRES_DRAWN
+
+/-- A member's rows as its sessions' verdicts parse its files (`Flock.ProvedScope.circuitOf`,
+`Flock.ProvedScope.publicOf`), from the blobs its parameters name: its circuit's ports' names and its public file's
+`b ‖ c` (`Flock.Public.digest`). -/
+def Member.rows (m : Member) (bs : Core.Blobs) : V Rows := do
+  let a ← statementOf m.own (fun _ => pure ()) bs
+  let tags := Flock.Witness.zkTags a.I
+  let c ← Flock.ProvedScope.circuitOf tags a.I.circuitFile a.I.tables
+  let pub ← Flock.ProvedScope.publicOf tags c a.I.publicFile
+  pure (c.ports.map (·.name), fun i k => pub.digest i k c.ports.size)
+
+/-- **The sampled units' wires held to the members' public files**, where the parameters name a wiring (`wiringOf`):
+`wiresOn` at the ranges of the verifier's partition (`Partition.evaluate` on the verifier's program and query), the
+sampled units `drawn` (the evidence's `proved_units`, which v1's check holds to the sample) and each member's rows read
+off its files on the blobs (`Member.rows`). It reads no session. -/
+def wiresHeld (p : Params) (ms : Array Member) (drawn : Array Nat) (bs : Core.Blobs) : V Unit := do
+  let some (W, S) := p.wiring | pure ()
+  let rs ← Partition.evaluate (← Program.parse p.own.program) (getD p.own.partition "query")
+  wiresOn W S (rs.map fun r => (r.template, r.first, r.count)) (ms.map fun m => (m.name, m.first, m.count)) drawn
+    fun name => match ms.find? (·.name == name) with
+      | some m => m.rows bs
+      | none => throw "the parameters name no such member"
+
+/-- **The `members_wires` piece**: `wiresOn` on an instance `{"drawn", "members", "ranges", "wiring"}`: `wiring` as
+the parameters' (`wiringOf`), `ranges` the partition's `[template, first, count]`, `members` each exactly
+`{"count", "first", "name", "ports", "rows"}` (its ports' names, and per slot its ports' strings, each string's UTF-8
+bytes a `b ‖ c`, the empty string none), `drawn` the sampled units. The output is `{"refusal"}`: null, or the
+refusal of `wiringOf` or `wiresOn`. -/
+def membersWiresPiece (j : Json) : V Json := do
+  exactly j #["drawn", "members", "ranges", "wiring"] "an instance"
+  let .arr rs := getD j "ranges" | throw "ranges is not a list"
+  let rs ← rs.mapM fun
+    | .arr #[.str t, a, n] => match nat? a, nat? n with
+      | some a, some n => pure (t, a, n)
+      | _, _ => throw "a range is [template, first, count]"
+    | _ => throw "a range is [template, first, count]"
+  let .arr ms := getD j "members" | throw "members is not a list"
+  let ms ← ms.mapM fun m => do
+    exactly m #["count", "first", "name", "ports", "rows"] "a member"
+    let (.str name, some first, some count, .arr ports, .arr rows) :=
+        (getD m "name", nat? (getD m "first"), nat? (getD m "count"), getD m "ports", getD m "rows")
+      | throw "a member is {name, first, count, ports, rows}"
+    let ports ← ports.mapM fun | .str p => pure p | _ => throw "a port is a name"
+    let rows ← rows.mapM fun
+      | .arr r => r.mapM fun | .str s => pure s.toUTF8 | _ => throw "a row's string is a string"
+      | _ => throw "a slot's rows are a list"
+    pure (name, first, count, ports, rows)
+  let .arr ds := getD j "drawn" | throw "drawn is not a list"
+  let drawn ← ds.mapM fun d => match nat? d with | some n => pure n | none => throw "a drawn unit is a natural"
+  let out := wiringOf (getD j "wiring") >>= fun (W, S) =>
+    wiresOn W S rs (ms.map fun (n, f, c, _, _) => (n, f, c)) drawn fun name =>
+      match ms.find? (·.1 == name) with
+      | some (_, _, _, ports, rows) => pure (ports, fun i k => (rows.getD i #[]).getD k ByteArray.empty)
+      | none => throw "no such member"
+  pure (Json.mkObj [("refusal", match out with | .ok () => Json.null | .error why => .str why)])
 
 /-- **The per-member form's sessions' verdicts** on the parameters `p`, its members `ms`, the registration `c`, the
 evidence `e` and its statements `sts`: the form's structure (`membersStructure`), the registration's roots each one

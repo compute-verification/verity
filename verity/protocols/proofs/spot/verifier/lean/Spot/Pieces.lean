@@ -1015,6 +1015,7 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_inner_trees", Challenger.innerTreesPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
    ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef),
+   ("members_wires", OneStageZk.membersWiresPiece),
    ("public_units", PublicUnits.piece),
    ("link_points", LinkPoints.piece),
    ("history_root", HistoryTable.rootPiece), ("history_check", HistoryTable.checkPiece),
