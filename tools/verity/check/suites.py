@@ -234,7 +234,7 @@ AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-chec
               "verity/tests", "verity-core-evaluate", "verity-core-zk-server",
               "verity/protocols/proofs/recursion/verifier/vstar_cli", "verity/protocols/proofs/flock/verifier/sigma", "verity-core-sampled-proofs",
               "verity/protocols/accounting/registration/verifier/lean",
-              "verity/protocols/accounting/poub/verifier/lean",
+              "verity/protocols/accounting/poub/verifier/lean", "verity/protocols/accounting/poub/verifier",
               "verity/protocols/accounting/certifier/verifier/network", "verity-pouw-window-difftest",
               "verity-pouw-check-difftest", "verity/protocols/accounting/pouw/verifier/lean/commit", "benchmarks/pouw/pearlplus_lean",
               "memory-challenger-lean", "benchmarks/pous",
