@@ -39,7 +39,7 @@ separately so that each can be rejected alone:
 
 1. `pous-ring-device` (the model): the deployed server is a `Server`: a ring-model server whose state is bounded between
    setup, the session and its rounds, with one session per audit (the memory challenger's `SessionLog`, of which its
-   host never restores an earlier copy: `trusted-host`) and the coins flipped online, after its state is fixed. It
+   host never restores an earlier copy: `trusted-device`) and the coins flipped online, after its state is fixed. It
    names no number.
 2. `pous-ring-speed` (the numbers, by measurement): no allowed hardware finishes a `(D + 1)`-th sequential
    multiplication round, `Q + 1` key queries or `L + 1` ring operations within `Δ + RTT`, at the corollary's
@@ -63,7 +63,7 @@ code (`pous-ring-device`), not by an early commitment.
 Two gaps stood between these statements and the deployed verifier:
 
 * **G-1**: the check's half is fixed in code; one session per id is the memory challenger's `SessionLog` under its host
-  presumption, which `trusted-host` covers once it is widened to the challenger's host. The check's half: a session's
+  presumption, which `trusted-device` covers once it is widened to the challenger's host. The check's half: a session's
   `binding` is required and is the setup's root (`Run.check` refuses any other), so a session names the setup it audits,
   and its id is the one the
   auditor designated for the audit (`Run.check` refuses any other); `RunCheckAccepts` states it. The memory challenger
@@ -322,7 +322,7 @@ It speaks of the deployed system only through the four claims of this module's h
 `pous-ring-speed` (the hardware's `D`, `Q` and `L` within `Δ + RTT`, by measurement), `pous-ring-instantiation` (P2 with
 `φ = id`, SHA-512-CTR keys and its public root is no easier than `p2ring` with uniform `ω`) and `prf/sha-512` (the
 derived streams are as good as uniform bytes). G-1: the check's half is fixed in code; one session per id is the memory
-challenger's `SessionLog` under its host presumption, which `trusted-host` covers once it is widened to the challenger's
+challenger's `SessionLog` under its host presumption, which `trusted-device` covers once it is widened to the challenger's
 host. G-2 (the composed check) is fixed in code. What the deployed
 verifier's acceptance gives is `RunCheckAccepts` (this module's header). -/
 def EndToEndRing : Prop :=

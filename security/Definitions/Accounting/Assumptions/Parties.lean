@@ -41,7 +41,7 @@ An auditor party (a network certifier, the memory challenger) is a program the a
 state it keeps, coins of its own, and declared channels it sends messages on, each to the auditor in the clear (a public
 message) or to the prover only (witness: what the prover's zero-knowledge proofs read). These are what a protocol that
 reads a party's messages takes of one party `p`, each a named `Prop` about one run of it (`Run`), in place of
-`trusted-host` (`Verity.Assumptions.TrustedDevice`) and no-state-rollback. That the party runs on a machine the auditor
+`trusted-device` (`Verity.Assumptions.TrustedDevice`) and no-state-rollback. That the party runs on a machine the auditor
 owns and the prover doesn't control is why we believe them, not an assumption.
 
 * `Faithful` (`faithful`): `p` runs its code on its true inputs, each step's input being what was delivered to it, its

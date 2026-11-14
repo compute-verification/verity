@@ -1923,7 +1923,7 @@ def main(argv: list[str] | None = None) -> int:
                    "(a5.PLAIN_SCOPE)")
     p.add_argument("--challenger", help="draw each window on the auditor's challenger's coins, the run root's one session "
                    "(a5_coins): local (a development session on this machine), or gate:USER@HOST "
-                   "(the auditor host through its SSH gate, with --peer and --challenger-key)")
+                   "(the auditor device through its SSH gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
                    "127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
