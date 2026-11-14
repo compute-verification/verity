@@ -228,10 +228,9 @@ def test_a_scan_whose_state_is_not_its_wired_audits_is_refused(server, monkeypat
     (`PC.UNSTATES`): a `SCAN_STATE` that skips or alters one of the scan's transitions (the scan's state entry, or the
     audit's, at another root or domain), no state entry on either side or the scan's under another name, the state of
     an audit the scan's `prog` isn't wired to, a root that is no string, a second state entry at another root on
-    either side, the scan's held in its window's `activations.values` alone (where an audit's may be, a scan's never
-    is), and the audit's held there alone under another name; and a mirror that skips the tie accepts what Lean
-    refuses, on the audit's side (the scan's own state entry broken also leaves its row 0's opening under no root it
-    states, which the mirror then refuses)."""
+    either side, and the audit's held in its window's `activations.values` alone; and a mirror that skips the tie
+    accepts what Lean refuses, on the audit's side (the scan's own state entry broken also leaves its row 0's opening
+    under no root it states, which the mirror then refuses)."""
     unstate = PC.UNSTATES
     for u in unstate:
         monkeypatch.setattr(PC, "UNSTATES", (u,))
@@ -240,36 +239,33 @@ def test_a_scan_whose_state_is_not_its_wired_audits_is_refused(server, monkeypat
             assert PC.UNSTATED in reference(case)["reason"], (u, n, reference(case))
             verdict, out = D.replay(PORT, case, server)
             assert verdict == REJECT and PC.UNSTATED in json.loads(out)["reason"], (u, n, out)
-    monkeypatch.setattr(PC, "UNSTATES", ("audit", "audit-root", "audit-extra", "audit-misnamed"))
+    monkeypatch.setattr(PC, "UNSTATES", ("audit", "audit-root", "audit-extra", "audit-activations"))
     monkeypatch.setattr(PC, "_state_tied", lambda p, audits, reg: True)
     for n in range(2):
         refused_by_lean_alone(build("rows-state-untied", n, small=True), server, PC.UNSTATED)
 
 
-def test_a_tied_audit_whose_state_is_in_its_windows_activations_alone_is_tied(server, monkeypatch):
+def test_a_tied_audit_whose_state_is_in_its_windows_activations_alone_is_refused(server, monkeypatch):
     """A window circuit's registration commits the scan's state rows its slots read as a per-window value, its window's
-    `activations.values` entry of `SCAN_STATE`, with no `roots` or `registered` entry of it (`PC.STATE_PLACES`): a
-    period whose every tied audit holds its state there alone passes, and Lean accepts it with the mirror's public;
-    one whose aimed audit's entry there is at another root, beside a second state entry at another root, or under
-    another name (its `value` another or none, or under another value's key), is refused, in Lean and in the mirror
-    and by name."""
-    monkeypatch.setattr(PC, "STATE_PLACES", ("activations",))
+    `activations.values` entry of `SCAN_STATE`, with no `roots` or `registered` entry of it. The check reads an audit's
+    state entry in those two places alone (`stateEntries`), so a period that is honest but for that place, its tied
+    audit's entry there under its own name and at the scan's state's root and domain, is refused at the state tie, in
+    Lean and in the mirror and by name."""
+    monkeypatch.setattr(PC, "UNSTATES", ("audit-activations",))
     for n in range(3):
-        case = build("rows-honest", n, small=n % 2 == 0)
+        case = build("rows-state-untied", n, small=n % 2 == 0)
         c = PC.commitment(bytes.fromhex(case["commitment"]))
-        tied = {i for reg in c.windows for i in PC._tied_audits(c.audits, reg)}
-        assert tied and all(not PC._states(c.audits[i]) and PC._audit_states(c.audits[i]) for i in tied), n
+        held = [(i, a["window"]["activations"]["values"]) for i, a in enumerate(c.audits)
+                if "activations" in a["window"]]
+        assert len(held) == 1 and list(held[0][1]) == [PC.SCAN_STATE], (n, held)
+        i, e = held[0][0], held[0][1][PC.SCAN_STATE]
+        assert e["value"] == PC.SCAN_STATE and not PC._states(c.audits[i]), (n, e)
+        assert any(i in PC._tied_audits(c.audits, reg) and PC._states(reg) and all(
+            (s["root"], s["domain"]) == (e["root"], e["domain"]) for s in PC._states(reg)) for reg in c.windows), n
         out = reference(case)
-        assert out["verdict"] == ACCEPT, (n, out)
+        assert out["verdict"] == REJECT and PC.UNSTATED in out["reason"], (n, out)
         verdict, got = D.replay(PORT, case, server)
-        assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
-    for u in ("audit-root", "audit-extra", "audit-misnamed"):
-        monkeypatch.setattr(PC, "UNSTATES", (u,))
-        for n in range(2):
-            case = build("rows-state-untied", n, small=n % 2 == 0)
-            assert PC.UNSTATED in reference(case)["reason"], (u, n, reference(case))
-            verdict, out = D.replay(PORT, case, server)
-            assert verdict == REJECT and PC.UNSTATED in json.loads(out)["reason"], (u, n, out)
+        assert verdict == REJECT and PC.UNSTATED in json.loads(got)["reason"], (n, got)
 
 
 def test_a_tied_audit_that_runs_another_circuit_is_refused(server, monkeypatch):

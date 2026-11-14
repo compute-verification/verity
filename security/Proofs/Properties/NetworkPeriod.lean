@@ -301,12 +301,24 @@ def activationsReg (root : String) : Lean.Json :=
       ("verity/certifier/scan-state/v1", Lean.Json.mkObj
         [("value", "verity/certifier/scan-state/v1"), ("root", root), ("domain", "e")])])])])]
 
-/-- An audit's state entry in its window's activations alone ties it (`auditStateEntries`), at the scan's root and at
-no other. -/
-theorem rowsStateTied_activations :
-    stateTied #[slotAudit] slotSchedule #[activationsReg "s"] stateExecutionPhase = true ∧
-      stateTied #[slotAudit] slotSchedule #[activationsReg "t"] stateExecutionPhase = false := by
+/-- An audit's state entry in its window's activations alone is no state entry of its registration (`stateEntries`
+reads its `roots` and its `registered`): it ties no scan's state, at the scan's state's root and domain as at any
+other. -/
+theorem activationsReg_untied : stateTied #[slotAudit] slotSchedule #[activationsReg "s"] stateExecutionPhase = false := by
   decide +kernel
+
+/-- **The rows form refuses a tied audit whose state entry is in its window's activations alone**: a period whose one
+execution phase's scan is wired to the slot audit and reads its state on the chain, and whose audit's registration holds
+its `SCAN_STATE` at the scan's state's root and domain in its `window.activations.values` and nowhere else
+(`activationsReg`), is accepted by no evidence (`rowsStateTied`). -/
+theorem rowsStateTied_activations {p : Params} {sd : ByteArray} {scan : Scan} (e : Evidence) (pub : Public)
+    (prof : Profile) (hform : p.form = .rows slotSchedule sd scan) (ha : p.audits = #[slotAudit]) :
+    check p ⟨#[activationsReg "s"], #[stateExecutionPhase], .empty⟩ e ≠ .accept pub prof := by
+  intro hacc
+  have hs : stateTied p.audits slotSchedule #[activationsReg "s"] stateExecutionPhase = true :=
+    rowsStateTied p _ e pub prof hacc slotSchedule sd scan hform 0 stateExecutionPhase rfl
+  rw [ha, activationsReg_untied] at hs
+  cases hs
 
 /-- A slot audit whose `SCAN_STATE` skips or alters one of the scan's transitions: a tree of other rows, at another
 root (`t`) than the scan's state's, so its Programs compute on states the scan never reached. -/
