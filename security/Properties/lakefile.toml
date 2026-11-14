@@ -98,7 +98,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Pous.TimedAudit", "Properties.Pous.MemoryChallenger", "Properties.Pous.Wipe", "Properties.Pous.EndToEnd",
   "Properties.Pous.Period", "Properties.Pous.EndToEndAt", "Properties.Pous.PeriodAt", "Properties.Pous.PeriodDeployed",
   "Properties.Pous.Pooled", "Properties.Pous.PeriodGame", "Properties.Accounting.JointBridge.SpaceOfPeriodHeld",
-  "Properties.Pous.Component", "Properties.Pous.InProofs",
+  "Properties.Pous.Component", "Properties.Pous.SetupProof", "Properties.Pous.InProofs",
   "Properties.Certifier.Check", "Properties.Certifier.Check.TransferBlocks",
   "Properties.Certifier.DeviceOutput", "Properties.Certifier.DeviceOutput.Runs",
   "Properties.Hash.Identity", "Properties.Attest", "Properties.Annot", "Properties.Nci.Desc",

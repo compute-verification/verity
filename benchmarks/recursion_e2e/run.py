@@ -55,7 +55,7 @@ RELEASE_LEAD_MIN = 25
 SETUP_MIN = 5  # the job's start, its retention record and its result
 OTHER_MIN = {"build": 6, "inner": 3, "icheck": 1, "vstage": 6, "vcap": 1, "oreplay": 2, "lean": 12, "forge-after": 15,
              "negative": 30}
-#: the forgeries the ZK server stops before release (FIREWALL-REFUSED, no release for Lean), which forge-after makes on the
+#: the forgeries the ZK server stops before release (ZK-SERVER-REFUSED, no release for Lean), which forge-after makes on the
 #: honest releases after proving instead (forge_after.CASES)
 FORGE_AFTER = ("coef", "dirs", "message")
 #: rec_vstage.FORGERIES, each with the V* statements it stages under forged-<kind>/ and oprove proves one release each, named
