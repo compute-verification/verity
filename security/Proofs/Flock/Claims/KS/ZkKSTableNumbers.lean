@@ -79,8 +79,9 @@ and a word of `2^10` to `2^23` symbols (`Numbers.κ_le` at the table's record). 
 theorem κTable_le_of {Coin Col T : Type} (D : Claims.Flock.Deploy Coin Col T) (N : Claims.Msg → ℕ → ℕ)
     (ε : Claims.Msg → ℕ → ℝ) (j : ℕ) (x : Claims.Msg) (hε : ε x j ≤ 2 ^ (-(205 : ℝ))) (hw : 210 ≤ D.waits x)
     (hK : D.cap x = Claims.Flock.Numbers.cap) (hN : (2 : ℝ) ^ 10 ≤ (N x j : ℝ)) (hN' : (N x j : ℝ) ≤ 2 ^ 23) :
-    Claims.Flock.κTable D N ε j x ≤ 2 ^ (-(202.98 : ℝ)) :=
-  Claims.Flock.Numbers.κ_le { D with εtable := fun y => ε y j, N₀ := fun y => (N y j : ℝ) } x hε hw hK hN hN'
+    Claims.Flock.κTable D N ε j x ≤ 2 ^ (-(202.98 : ℝ)) := by
+  rw [κTable_eq_κ]
+  exact Claims.Flock.Numbers.κ_le { D with εtable := fun y => ε y j, N₀ := fun y => (N y j : ℝ) } x hε hw hK hN hN'
 
 /-- `λ_j ≥ 201.98` from the table's numbers and the session's `γ ≤ 2^105` (`Numbers.lam_ge` at the table's
 record). -/
@@ -88,9 +89,10 @@ theorem lamTable_ge_of {Coin Col T : Type} (D : Claims.Flock.Deploy Coin Col T) 
     (ε : Claims.Msg → ℕ → ℝ) (j : ℕ) (x : Claims.Msg) (hε0 : 0 ≤ ε x j) (hε : ε x j ≤ 2 ^ (-(205 : ℝ)))
     (hw : 210 ≤ D.waits x) (hK : D.cap x = Claims.Flock.Numbers.cap) (hN : (2 : ℝ) ^ 10 ≤ (N x j : ℝ))
     (hN' : (N x j : ℝ) ≤ 2 ^ 23) (hγ : Claims.Flock.γ D x ≤ 2 ^ (105 : ℝ)) :
-    201.98 ≤ Claims.lamOf (Claims.Flock.κTable D N ε j x) (Claims.Flock.γ D x) :=
-  Claims.Flock.Numbers.lam_ge { D with εtable := fun y => ε y j, N₀ := fun y => (N y j : ℝ) } x hε0 hε hw hK hN
-    hN' hγ
+    201.98 ≤ Claims.lamOf (Claims.Flock.κTable D N ε j x) (Claims.Flock.γ D x) := by
+  rw [κTable_eq_κ]
+  exact Claims.Flock.Numbers.lam_ge { D with εtable := fun y => ε y j, N₀ := fun y => (N y j : ℝ) } x hε0 hε hw hK
+    hN hN' hγ
 
 /-- A table's own error at a table of the statement. -/
 theorem tableErrJ_eq {x : Claims.Msg} {j : ℕ} {spec : SessionSpec} {st : Stmt}
