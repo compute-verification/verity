@@ -848,7 +848,7 @@ def test_a_row_whose_error_is_above_2_to_the_minus_100_says_so_in_its_verdict(le
 
 
 def test_a_declared_error_at_the_bound_is_preferred_to_the_ledgers_own_and_holds_no_premise():
-    """The declared error (the ledger's with the sketch's and the draw's) decides where the record holds it: a ledger's
+    """The declared error (the ledger's with the sketch's and the sample's) decides where the record holds it: a ledger's
     own error above the bound beside a declared one at it adds nothing; the declared one above it, beside a ledger's own
     under it, does."""
     doc = {"value": 0.127, "unit": M.UNIT, "run": RUN, "bound": True}
