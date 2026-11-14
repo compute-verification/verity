@@ -63,11 +63,11 @@ def test_a_target_that_does_not_lower_is_an_error_by_name():
     assert "AttributeError" in r["failures"][0]["name"]
 
 
-def test_no_word_primitive_is_lowered_by_whichever_builder_registered_first():
+def test_no_word_primitive_is_built_by_two_builders():
     assert A.ambiguous_words() == {}, (
         "these word primitives are built by two registered Boolean Definitions with different builders, so "
-        "`ir_lower._boolean_build` lowers each by whichever module was imported first: give each word one Boolean "
-        "Definition, or its own piece in `ir_lower.PIECES`")
+        "`ir_lower._boolean_build` refuses each (`AmbiguousWord`): give each word one Boolean Definition, or its own piece "
+        "in `ir_lower.PIECES`")
 
 
 def _traced(name, fn):

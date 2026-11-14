@@ -75,7 +75,6 @@ untraced = [
 inputs_only = true
 inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
           "verity/claims/__init__.py",
-          "verity/hardware/record.py",
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/accounting/pouw/verifier", "verity/protocols/proofs/spot",
           "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/certifier/prover",
           "verity/protocols/accounting/certifier",

@@ -20,6 +20,10 @@ What code outside this directory may use. Everything else here is internal.
 
 Nothing imports this directory: every entry point is `host.py` run by its path.
 
+`party_log wipe|pous|bw [LOG]` answers root on the host alone (`sudo vy-verifier-gate party_log ...`): the gate refuses
+it over ssh to every key, named or not, since a party's log holds what its device received and signed. The parties write
+their files as before.
+
 ## A run
 
 ~~~text
