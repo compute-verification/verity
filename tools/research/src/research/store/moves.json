@@ -2844,6 +2844,15 @@
       "paths": {
         "tools/verity/check/": "tools/check/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/verifier/one_stage/check_memo.py": "verity/protocols/proofs/spot/prover/audit/check_memo.py",
+        "verity/protocols/proofs/spot/verifier/one_stage/records_audit.py": "verity/protocols/proofs/spot/prover/audit/records_audit.py",
+        "verity/protocols/proofs/spot/verifier/one_stage/compose_circuit.py": "verity/protocols/proofs/spot/prover/audit/compose_circuit.py",
+        "verity/protocols/proofs/spot/verifier/tests/test_check_memo.py": "verity/protocols/proofs/spot/prover/tests/test_check_memo.py",
+        "verity/protocols/proofs/spot/verifier/tests/test_records_audit.py": "verity/protocols/proofs/spot/prover/tests/test_records_audit.py"
+      }
     }
   ]
 }

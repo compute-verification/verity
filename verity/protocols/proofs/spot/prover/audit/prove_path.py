@@ -207,7 +207,7 @@ from typing import Any
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path")
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from verity.protocols.proofs.spot.verifier.one_stage.records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots  # noqa: E402, F401
+from verity.protocols.proofs.spot.prover.audit.records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots  # noqa: E402, F401
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, partition as P, docket as R  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402

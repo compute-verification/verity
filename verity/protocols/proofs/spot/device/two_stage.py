@@ -1070,7 +1070,7 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
     allowed, and the outcome is the stream's (`outcome_of`). The report names what the proof
     server refused, in flock-circuit's words, where a session never ran."""
     a5 = _a5()
-    from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA
+    from verity.protocols.proofs.spot.prover.audit import records_audit as RA
 
     a.coins, a.rule, a.window_root, a.compose_cache, a.transfer_gate = None, None, None, None, []
     a.tie = {"log": [brec], **(tie or {})}

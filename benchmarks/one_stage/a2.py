@@ -29,7 +29,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-COMPOSE = HERE.parents[1] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "one_stage" / "compose_circuit.py"
+COMPOSE = HERE.parents[1] / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "compose_circuit.py"
 sys.path.insert(0, str(HERE))
 
 from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402

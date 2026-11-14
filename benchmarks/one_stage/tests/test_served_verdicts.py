@@ -2756,7 +2756,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
               d / "advice" / "w7" / "private", tmp_path / "row"):
         p.mkdir(parents=True, exist_ok=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(prove_path)
-    (tree / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "one_stage" / "records_audit.py").write_text(records_audit)
+    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "records_audit.py").write_text(records_audit)
     (tree / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod" / "60-circuit.sh").write_text("exit 0\n")
     for f in (d / "advice" / "w7" / "private" / "advice.bin", tmp_path / "row" / "manifest.json",
               tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
