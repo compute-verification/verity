@@ -38,7 +38,8 @@ out of order or with one start, one session twice, two keys under one key identi
 identifier twice), a period that starts before the first entry, or the earlier forms `"key"`, `"session"` and
 `"sessions"`. A rows-form period's evidence shows each listed entry's session's signed start, its base on its key's life
 sampled for a key's first listed entry and, for a later one, as many of the schedule's execution phases on as its start
-is. `restart` lists the signer's key in two sessions, each stretch holding some of the period, and is accepted. Refused:
+is, and its ordinal among its key's sessions, sampled for a key's first listed entry and the next for each later one.
+`restart` lists the signer's key in two sessions, each stretch holding some of the period, and is accepted. Refused:
 that list with the second session's base another (`start-not-signed`); a shown start that is not its session's certified
 start, by each code of `CertifiedStart.refusal` (`start-uncertified`, `UNCERTIFIED_BY`); evidence that shows a start too
 few or too many, or none (`start-count`); and a clock-form period whose evidence shows one (`start-shown`). In the clock
@@ -181,7 +182,7 @@ UNCERTIFIED = "a start its session did not certify"
 NOT_SIGNED = "a start that is not the one its session signed"
 STARTS_COUNT = "listed entries: show each listed entry's session's signed start"
 STARTS_CLOCK = "starts: the clock form reads no session's signed start"
-START_KEYS = ["base_ms", "certificate", "schedule"]
+START_KEYS = ["base_ms", "certificate", "ordinal", "schedule"]
 SCHEDULE_KEYS = sorted(INTEGER_FIELDS)
 CAPPED_SCHEDULE_KEYS = sorted([*INTEGER_FIELDS, "max_tokens_cap"])
 CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
@@ -897,7 +898,7 @@ def _window(j, ctx: str) -> Window:
 def _start(j, ctx: str) -> CertifiedStart:
     """`startOf`: a session's signed start, as the run's `deployment.json` holds it (`"start"`)."""
     _exactly(j, START_KEYS, ctx)
-    return CertifiedStart(_nat(j["base_ms"], ctx), P.unhex(_of(j["schedule"], str, ctx)),
+    return CertifiedStart(_nat(j["base_ms"], ctx), _nat(j["ordinal"], ctx), P.unhex(_of(j["schedule"], str, ctx)),
                           _certificate(j["certificate"], f"{ctx}.certificate"))
 
 
@@ -1608,7 +1609,7 @@ RESTARTS = ("restart", "start-not-signed")
 #: under another schedule's digest; shown with another base than the one signed, or naming the period's schedule over
 #: a digest signed for another; and with a signature changed, or signed in another session
 UNCERTIFIED_BY = {"start": ("link", "direction", "window"), "key": ("key",), "schedule": ("schedule",),
-                  "opening": ("base", "digest"), "signature": ("forged", "session")}
+                  "opening": ("base", "ordinal", "digest"), "signature": ("forged", "session")}
 #: The changes whose parameters list two entries, the period's execution phases all in the second's stretch, the
 #: signer's: its start is at least 1, so the session's numbers are not the period's
 SECOND = ("second-key", "two-signers", "cert-other-session", "reg-other-session", "cert-outside-stretch",
@@ -2736,23 +2737,26 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     c_json = {"audits": audit_regs, "windows": window_regs}
     # each listed entry's session's signed start, which the rows form's evidence shows: its base on its key's life, a
     # key's first listed entry's sampled and each later one's as many of the period's schedule's execution phases on
-    # as its start is (`_held_to`), signed under the entry's key in its session; the clock form's evidence shows none
+    # as its start is (`_held_to`), and its ordinal among its key's sessions, a key's first listed entry's sampled and
+    # each later one's the next, signed under the entry's key in its session; the clock form's evidence shows none
     rs = random.Random(f"network-period starts {m} {seed}")
     L = bound.window * bound.bucket_ms if rows else 1
     anchors: dict[bytes, tuple[int, int]] = {}
-    bases = []
+    bases, ordinals, last = [], [], {}
     for entry in listed:
         sampled = rs.choice([0, rs.randrange(1 << 20), rs.randrange(1 << 62)])
         anchor, base = anchors.setdefault(entry.key.I, (entry.start, sampled))
         bases.append(base + (entry.start - anchor) * L)
+        last[entry.key.I] = last[entry.key.I] + 1 if entry.key.I in last else rs.choice([0, rs.randrange(1 << 62)])
+        ordinals.append(last[entry.key.I])
     if m == "start-not-signed":
         # the second session's base is not the one its start is read off: an execution phase on or back, a
         # millisecond on, or the first session's own
         bases[1] = rs.choice([bases[1] + L, bases[1] - L, bases[1] + 1, bases[0]])
 
     def signed_start(i: int, how: str | None = None) -> dict:
-        """Listed entry `i`'s session's signed start, as a run's `deployment.json` holds it: its base and the
-        period's schedule's digest (a stand-in's in the clock form, which has none), signed for the link's start
+        """Listed entry `i`'s session's signed start, as a run's `deployment.json` holds it: its base, its ordinal and
+        the period's schedule's digest (a stand-in's in the clock form, which has none), signed for the link's start
         name, egress, window 0; or one that is not its session's certified start, as `how` says (`UNCERTIFIED_BY`)."""
         e = listed[i]
         named = bound.digest if rows else hashlib.sha512(b"no schedule").digest()
@@ -2760,13 +2764,14 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         k = _key(ki, 1) if how == "key" else e.key
         c = Certificate(k.I, link if how == "link" else start_link(link), INGRESS if how == "direction" else EGRESS,
                         1 if how == "window" else 0,
-                        start_digest(bases[i], _flip(named, seed + 1) if how == "digest" else named), b"")
+                        start_digest(bases[i], ordinals[i], _flip(named, seed + 1) if how == "digest" else named),
+                        b"")
         ses = _flip(e.session, seed) if how == "session" else e.session
         sig = lms.sign_at(k, i % 2 ** k.params.H, c.message(ses)).encode()
         if how == "forged":
             sig = rs.choice([_flip(sig, seed), sig[:-1], b""])
         return {"base_ms": bases[i] + (how == "base"), "certificate": _cert_json(dataclasses.replace(c, signature=sig)),
-                "schedule": named.hex()}
+                "ordinal": ordinals[i] + (how == "ordinal"), "schedule": named.hex()}
 
     shown_starts = []
     if rows:
@@ -3148,7 +3153,8 @@ def _bad_evidence(e: dict, b: bytes) -> list[bytes]:
         s, later = e["starts"][0], e["starts"][1:]
         bad_starts = [[], "x", [1], *([y, *later] for y in (
             {k: v for k, v in s.items() if k != "schedule"}, s | {"x": 0}, s | {"base_ms": -1}, s | {"base_ms": True},
-            s | {"base_ms": str(s["base_ms"])}, s | {"schedule": s["schedule"][:-1]}, s | {"schedule": 0},
+            s | {"base_ms": str(s["base_ms"])}, {k: v for k, v in s.items() if k != "ordinal"}, s | {"ordinal": -1},
+            s | {"ordinal": True}, s | {"schedule": s["schedule"][:-1]}, s | {"schedule": 0},
             s | {"certificate": s["certificate"] | {"x": 0}}, s | {"certificate": "x"},
             s | {"certificate": {k: v for k, v in s["certificate"].items() if k != "signature"}}))]
     return [b[:-1], b"\xff" + b, json.dumps(e).encode(), enc(e | {"x": 1}), enc({"windows": e["windows"]}),

@@ -132,7 +132,7 @@ registrations (`warden_rows.registration`, `cells.jsonl`'s); an execution phase 
 is refused. The rows form's evidence has one key more, the listed entries' sessions' signed starts, one an entry, in
 the entries' order:
 
-    "starts": [{"base_ms": b, "certificate": certificate, "schedule": hex}, …]
+    "starts": [{"base_ms": b, "certificate": certificate, "ordinal": n, "schedule": hex}, …]
 
 each as the network certifier's run publishes it (`certificate.CertifiedStart`, `deployment.json`'s `"start"`):
 where the session starts on its key's life, in milliseconds on the network
@@ -156,7 +156,8 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   `i`'s is its session's certified start (`startRefusal`, `certificate.CertifiedStart.refusal`'s checks in its
   order): an egress certificate of window 0 under the link `<link>-origin`, which no record's certificate names; the
   entry's key's; under the period's schedule, by its parameters digest; signing
-  `tagged_sha512("verity-network-certifier/start/v1", u64be base_ms ‖ schedule)` (`startDigest`); and verifying under
+  `tagged_sha512("verity-network-certifier/start/v2", u64be base_ms ‖ u64be ordinal ‖ schedule)` (`startDigest`),
+  `ordinal` being the number of the key's sessions its device state started before it; and verifying under
   the entry's key in the entry's session. An entry whose start is not the one its session signed is then refused by
   name (`heldTo`): tick t of a session is millisecond `base_ms + t · bucket_ms` of its key's life, so with `L` =
   `window · bucket_ms`, an execution phase's milliseconds, two listed entries of one key, starting at `a` and `a'` with
@@ -368,7 +369,7 @@ def domainTag : String := "verity-network-warden/cells-domain/v2"
 def cellsTag : String := "verity-network-warden/cells/v2"
 /-- The tag of the digest a session's start's certificate signs (`certificate.START_TAG`): its base is in milliseconds
 of the key's life on the host's raw clock. -/
-def startTag : String := "verity-network-certifier/start/v1"
+def startTag : String := "verity-network-certifier/start/v2"
 def rowsFormat : String := "verity-network-warden/registration/v2"
 def rowSchema : String := "hm96-sha512/row/v2"
 /-- The cell kinds (`PAD`, `DATA`, `END`, `FAIL`, `REFUSED`) and the fail reasons the schedule's digest binds. -/
@@ -548,10 +549,11 @@ def ExecutionPhase.clockDigest? (x : ExecutionPhase) : Option ByteArray :=
 
 /-- A certifier session's signed start as the evidence shows it (`certificate.CertifiedStart`, as the run's
 `deployment.json` holds it): where the session starts on its key's life, in milliseconds on the network
-certifier's clock; the parameters digest of the schedule it runs under; and the certificate, which signs their start
-digest (`startDigest`). -/
+certifier's clock; its ordinal, the number of the key's sessions its device state started before it; the parameters
+digest of the schedule it runs under; and the certificate, which signs their start digest (`startDigest`). -/
 structure Start where
   baseMs : Nat
+  ordinal : Nat
   schedule : ByteArray
   certificate : Certificate
 
@@ -1177,8 +1179,9 @@ def executionPhaseOf (j : Json) (ctx : String) : V ExecutionPhase := do
 
 /-- A session's signed start, as the run's `deployment.json` holds it (`"start"`). -/
 def startOf (j : Json) (ctx : String) : V Start := do
-  exactly j ["base_ms", "certificate", "schedule"] ctx
-  pure { baseMs := ← Flock.J.nat j "base_ms" ctx, schedule := ← hexAt j "schedule" ctx,
+  exactly j ["base_ms", "certificate", "ordinal", "schedule"] ctx
+  pure { baseMs := ← Flock.J.nat j "base_ms" ctx, ordinal := ← Flock.J.nat j "ordinal" ctx,
+         schedule := ← hexAt j "schedule" ctx,
          certificate := ← certificateOf (← Flock.J.get j "certificate" ctx) s!"{ctx}.certificate" }
 
 /-- The evidence: the audits' answers and the execution phases', and the listed entries' sessions' signed starts where
@@ -1650,25 +1653,25 @@ def stateChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × S
 record's or clock's certificate names. -/
 def startLink (link : String) : String := link ++ "-origin"
 
-/-- `certificate.start_digest`: `tagged_sha512("verity-network-certifier/start/v1", u64be base_ms ‖ schedule)` of a
-session's base on its key's life and its schedule's parameters digest; none for a base past a u64 or a digest that is
-not 64 bytes. -/
-def startDigest (baseMs : Nat) (schedule : ByteArray) : Option ByteArray :=
+/-- `certificate.start_digest`: `tagged_sha512("verity-network-certifier/start/v2", u64be base_ms ‖ u64be ordinal ‖
+schedule)` of a session's base on its key's life, its ordinal among its key's sessions and its schedule's parameters
+digest; none for a base or an ordinal past a u64 or a digest that is not 64 bytes. -/
+def startDigest (baseMs ordinal : Nat) (schedule : ByteArray) : Option ByteArray :=
   if schedule.size = digestBytes then
-    (do Identity.taggedSha512 startTag ((← uBE 8 baseMs "base_ms") ++ schedule)).toOption
+    (do Identity.taggedSha512 startTag ((← uBE 8 baseMs "base_ms") ++ (← uBE 8 ordinal "ordinal") ++ schedule)).toOption
   else none
 
-/-- Why the start `x` shown for the listed entry `e` is not its session's certified start, by the codes and in the
-order of `certificate.CertifiedStart.refusal`, or none: it is an egress certificate of window 0 under the link's start
-link (`start`); the entry's key's (`key`); names the period's schedule, whose parameters digest is `sd` (`schedule`);
-signs the start digest of its base and that schedule (`opening`); and verifies under the entry's key in the entry's
-session (`signature`). -/
+/-- Why the start `x` shown for the listed entry `e` is not its session's certified start, by the codes and in the order
+of `certificate.CertifiedStart.refusal`, or none: it is an egress certificate of window 0 under the link's start link
+(`start`); the entry's key's (`key`); names the period's schedule, whose parameters digest is `sd` (`schedule`); signs
+the start digest of its base, its ordinal and that schedule (`opening`); and verifies under the entry's key in the
+entry's session (`signature`). -/
 def startRefusal (p : Params) (sd : ByteArray) (e : Entry) (x : Start) : Option String :=
   let c := x.certificate
   if !(c.direction == .egress && c.window == 0 && c.link == startLink p.link) then some "start"
   else if c.keyId != e.key.extract 0 16 then some "key"
   else if x.schedule != sd then some "schedule"
-  else if startDigest x.baseMs x.schedule != some c.digest then some "opening"
+  else if startDigest x.baseMs x.ordinal x.schedule != some c.digest then some "opening"
   else if !c.signs p.lms e.key e.session then some "signature"
   else none
 
@@ -1712,16 +1715,17 @@ def startChecks (p : Params) (e : Evidence) : Array (Option (Core.Verdict × Str
     if e.starts.isEmpty then #[] else
       #[some (.reject, "starts: the clock form reads no session's signed start: its certifier signs none")]
 
--- the Python's `start_digest` under the default schedule's parameters digest, at base 0 and at 36,000,000 ms; none
--- past a u64, or for a digest that is not 64 bytes
-#guard ((defaultSchedule.digest.toOption.bind (startDigest 0 ·)).map Flock.hexOf) == some
-  "601a25606f257809574fc5bbd78155a21953467341fc3bee7bc2801a0c7caaa9\
-    ab73aa83183a2e889c341777342a71877d6d3501c4ad35e5e042ca75799a3872"
-#guard ((defaultSchedule.digest.toOption.bind (startDigest 36000000 ·)).map Flock.hexOf) == some
-  "dd7ebcee76b7b2db1c8595c6e67b955fd9c4dfbe1efe6035096ad005dd98ecb1\
-    c8886483c32026f6b368655e0cc6507e5f1c797b948fe0fec8f8ed3c955b8ae2"
-#guard (startDigest (2 ^ 64 - 1) ⟨Array.replicate 64 0⟩).isSome &&
-  (startDigest (2 ^ 64) ⟨Array.replicate 64 0⟩).isNone && (startDigest 0 ⟨Array.replicate 63 0⟩).isNone
+-- the Python's `start_digest` under the default schedule's parameters digest, at base 0 and ordinal 0 and at
+-- 36,000,000 ms and ordinal 3; none past a u64, or for a digest that is not 64 bytes
+#guard ((defaultSchedule.digest.toOption.bind (startDigest 0 0 ·)).map Flock.hexOf) == some
+  "8c80a001285a4f38bfd795aeafefd99c2399d04a8876e4cf5c278189b0a21785\
+    47e8557d3611708f3a712abe52d2d87a7acf78e1745c5114a99ac7fea5b09f43"
+#guard ((defaultSchedule.digest.toOption.bind (startDigest 36000000 3 ·)).map Flock.hexOf) == some
+  "96ee177d18f57caee25a43b6db9b51708e23faf05d3d101617a7aae0be93a490\
+    011a0375c128d1fc1887c646f3648c5c45a6d71696c0e66965c5d9d8e32a46bb"
+#guard (startDigest (2 ^ 64 - 1) (2 ^ 64 - 1) ⟨Array.replicate 64 0⟩).isSome &&
+  (startDigest (2 ^ 64) 0 ⟨Array.replicate 64 0⟩).isNone && (startDigest 0 (2 ^ 64) ⟨Array.replicate 64 0⟩).isNone &&
+  (startDigest 0 0 ⟨Array.replicate 63 0⟩).isNone
 -- a start is refused by `CertifiedStart.refusal`'s codes, in its order: no egress certificate of window 0 under the
 -- link's start link; another key's; another schedule's; a digest that is not its base's and its schedule's; and,
 -- with those four held, a signature that does not verify. A key's entries are held to its first listed one by their
@@ -1738,15 +1742,16 @@ def startChecks (p : Params) (e : Evidence) : Array (Option (Core.Verdict × Str
     entries := #[e, ⟨key 2, session 8, 4⟩, later], program := "",
     form := .rows defaultSchedule sd ⟨0, 0, 0, 0, 0⟩, windows := 1 }
   let cert := fun (link : String) (d : Direction) (w : Nat) (id : UInt8) (base : Nat) =>
-    ({ keyId := (key id).extract 0 16, link, direction := d, window := w, digest := (startDigest base sd).getD .empty,
+    ({ keyId := (key id).extract 0 16, link, direction := d, window := w, digest := (startDigest base 0 sd).getD .empty,
        signature := .empty } : Certificate)
-  let start := fun (base : Nat) (id : UInt8) => (⟨base, sd, cert "a-origin" .egress 0 id base⟩ : Start)
-  startRefusal p sd e ⟨0, sd, cert "a" .egress 0 1 0⟩ == some "start" &&
-    startRefusal p sd e ⟨0, sd, cert "a-origin" .ingress 0 1 0⟩ == some "start" &&
-    startRefusal p sd e ⟨0, sd, cert "a-origin" .egress 1 1 0⟩ == some "start" &&
+  let start := fun (base : Nat) (id : UInt8) => (⟨base, 0, sd, cert "a-origin" .egress 0 id base⟩ : Start)
+  startRefusal p sd e ⟨0, 0, sd, cert "a" .egress 0 1 0⟩ == some "start" &&
+    startRefusal p sd e ⟨0, 0, sd, cert "a-origin" .ingress 0 1 0⟩ == some "start" &&
+    startRefusal p sd e ⟨0, 0, sd, cert "a-origin" .egress 1 1 0⟩ == some "start" &&
     startRefusal p sd e (start 0 2) == some "key" &&
-    startRefusal p sd e ⟨0, ⟨Array.replicate 64 6⟩, cert "a-origin" .egress 0 1 0⟩ == some "schedule" &&
-    startRefusal p sd e ⟨1, sd, cert "a-origin" .egress 0 1 0⟩ == some "opening" &&
+    startRefusal p sd e ⟨0, 0, ⟨Array.replicate 64 6⟩, cert "a-origin" .egress 0 1 0⟩ == some "schedule" &&
+    startRefusal p sd e ⟨1, 0, sd, cert "a-origin" .egress 0 1 0⟩ == some "opening" &&
+    startRefusal p sd e ⟨0, 1, sd, cert "a-origin" .egress 0 1 0⟩ == some "opening" &&
     startRefusal p sd e (start 0 1) == some "signature" &&
     defaultSchedule.windowMs == 60000 &&
     heldTo 60000 e (start 7 1) later (start 180007 1) && heldTo 60000 e (start 7 1) e (start 7 1) &&

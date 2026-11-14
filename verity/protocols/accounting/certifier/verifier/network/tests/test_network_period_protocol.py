@@ -456,10 +456,10 @@ def test_a_key_listed_in_two_sessions_is_held_to_its_signed_starts(server, monke
 
 def test_a_start_its_session_did_not_certify_is_refused_by_name(server, monkeypatch):
     """A rows-form period shows one signed start for each listed entry, each its session's certified start as the
-    network certifier's own verifier reads it. A shown start that is no egress certificate of window 0 under the
-    link's start name, that names a key other than its entry's, that names another schedule's digest than the
-    period's, whose base and schedule do not open the digest it signs, or whose signature does not verify under its
-    entry's key in its entry's session is refused by Lean and by the mirror, by name (`PC.UNCERTIFIED`) and by the
+    network certifier's own verifier reads it. A shown start that is no egress certificate of window 0 under the link's
+    start name, that names a key other than its entry's, that names another schedule's digest than the period's, whose
+    base, ordinal and schedule do not open the digest it signs, or whose signature does not verify under its entry's key
+    in its entry's session is refused by Lean and by the mirror, by name (`PC.UNCERTIFIED`) and by the
     same code. So is evidence that shows a start too few or too many, or none (`PC.STARTS_COUNT`): parameters that
     list a key again in a session whose start the evidence does not show read, and the period is refused there. So is
     a clock-form period whose evidence shows a start (`PC.STARTS_CLOCK`): its certifier signs none. A mirror that
