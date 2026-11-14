@@ -23,6 +23,7 @@ from verity.definitions.registry import bf16_gemm_check as BC
 
 from verity_vllm.acquire import served as SV
 from verity_vllm.acquire.inductor_templates import Unmodelled
+from verity_vllm.commit import challenge as CH
 
 Shape = tuple[int, int, int]
 Route = dict[str, Any]
@@ -55,12 +56,14 @@ def _words(t: torch.Tensor) -> np.ndarray:
 
 class Gpu:
     """What the test gives the stand-in: a shape's route (`routes`) and where the device leaves it (`off`: the route of one row of
-    a shape's n-th product, by (n, row)).  What the stand-in was asked: the shape of each product (`products`)."""
+    a shape's n-th product, by (n, row)).  What the stand-in was asked: the shape of each product (`products`) and the words of
+    its operands (`operands`: x, and W whole)."""
 
     def __init__(self) -> None:
         self.routes: dict[Shape, Route] = {}
         self.off: dict[tuple[int, int], Route] = {}
         self.products: list[Shape] = []
+        self.operands: list[tuple[np.ndarray, np.ndarray]] = []
         self._storages: set[int] = set()
 
     def holds(self, t: torch.Tensor) -> torch.Tensor:
@@ -75,6 +78,7 @@ class Gpu:
         nth = self.products.count(shape)
         self.products.append(shape)
         xs, ws = _words(x), _words(wt.t())
+        self.operands.append((xs.copy(), ws.copy()))
         y = np.ascontiguousarray(BC.cublas_route_rows(self.routes[shape], xs, ws))
         for (n, row), route in self.off.items():
             if n == nth:
@@ -116,13 +120,18 @@ def _refused() -> dict[str, int]:
 
 def test_the_probe_names_the_devices_route_at_each_shape(gpu: Gpu) -> None:
     """Each kind of route is read back from the device's words alone, under its shape's key, beside what the device reports of
-    itself; the probe asks three products a shape (the split counts' rows, then the spread and the cancelling rows), each at the
-    shape whole and of operands on the device."""
+    itself; the probe asks three products a shape, each at the shape whole and of operands on the device: the builder's split
+    count rows against rows of ones, then the spread and the cancelling rows the generator of the shape's seed gives, each
+    product's rows at the top of a W that is zero below them."""
     gpu.routes.update(ROUTES)
     got = SV.probe_routes([list(shape) for shape in ROUTES])
     assert got == {"device": "a stand-in", "versions": {"torch": torch.__version__, "cuda": torch.version.cuda},
                    "routes": {",".join(map(str, shape)): route for shape, route in ROUTES.items()}}
     assert gpu.products == [shape for shape in ROUTES for _ in range(3)]
+    asked = [pair for M, K, N in ROUTES for pair in [(np.full((M, K), 0x3F80, np.uint16), BC.splitk_count_probe(K, N)),
+                                                     *BC.route_probe_rows(M, K, min(N, 256), CH.generator([M, K, N]))]]
+    for (x, rows), (xs, ws) in zip(asked, gpu.operands, strict=True):
+        assert np.array_equal(xs, x) and np.array_equal(ws[:len(rows)], rows) and not ws[len(rows):].any()
 
 
 @pytest.mark.parametrize("route", UNNAMED, ids=json.dumps)
