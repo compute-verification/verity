@@ -21,8 +21,12 @@ import pytest
 
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as REG, registration as R, \
-    verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    partition as P,
+    registered as REG,
+    docket as R,
+    verifier as V,
+)
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.program import Program
@@ -255,7 +259,7 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
     def check(sample, refs, verified=verified, ref_reads=ref_reads, wires=wires, rows=rows) -> dict:
         own = SS.Own(tuple(sample), parts, irec, brec, tuple(drawn), links, SS.statement_reads(stmts),
                      verified=verified, refs=refs, ref_reads=ref_reads, wires=wires, rows=rows)
-        return SS.check(True, own, stmts).to_json()
+        return SS.check_twin(True, own, stmts).to_json()
     assert check(SAMPLE, refs) == {"ok": True, "codes": [], "detail": {}}
     assert check(SAMPLE, ())["codes"] == ["second-header"]
     assert check(SAMPLE, refs, ref_reads=())["codes"] == ["second-values"]

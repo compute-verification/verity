@@ -122,7 +122,7 @@ def test_register_with_the_statements_partition_binds_the_circuit_registration(s
     beside the circuit, its digest META's ``registration`` and both files' headers the rewritten circuit's (its SHA-512 and
     class); the rows, salts and roots are the staged ones. A partition object META doesn't name, or a program without its
     partition object, is refused."""
-    from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 
     text, program, part = partitioned(staged)
     d = stage(staged, "bound", text=text)

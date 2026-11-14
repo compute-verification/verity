@@ -36,7 +36,7 @@ from verity.protocols.accounting.pouw.verifier import salt as PS
 from verity.protocols.accounting.pouw.verifier.audit import HM96_WEIGHTS, Epoch, Workload, commit_rows, weight_binding, weights_root
 from verity.protocols.accounting.pouw.verifier.coins import coin_reason
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Matmul, Shape
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.service import WindowCommitmentRecord
 
 EGRESS = GridParams(buckets=6, allocation=3, frame_bytes=512)
