@@ -47,7 +47,7 @@ ART = "art:" + "ab" * 32
 KEYED = {BUILD: BUILD_SRC, "tools/verity/check/check.py": "# check\n", "tools/verity/check/settings.py": "# settings\n",
          ".agents/skills/using-slack/registry.json": "{}\n", "uv.lock": "version = 1\n", "pyproject.toml": "[project]\n",
          "tools/x/pyproject.toml": "[project]\n", "verity/protocols/flock/agreement/ci.py": "# ci\n",
-         "verity/protocols/flock/verifier/Main.lean": "-- main\n", "fixtures/artifacts.json": json.dumps({ART: "fixtures/golden/a.json"}),
+         "verity/protocols/flock/verifier/Main.lean": "-- main\n", "artifacts.json": json.dumps({ART: "fixtures/golden/a.json"}),
          "fixtures/golden/a.json": "{}\n", "docs/notes.md": "notes\n"}
 #: each step the run judges whose reads are bounded, with files of `KEYED` it reads and files it doesn't
 BOUNDED = {"preflight-lock": (("uv.lock", "tools/x/pyproject.toml", "tools/verity/check/check.py", ".python-version"),
@@ -55,7 +55,7 @@ BOUNDED = {"preflight-lock": (("uv.lock", "tools/x/pyproject.toml", "tools/verit
            "lean-agreement": (("verity/protocols/flock/agreement/ci.py", "verity/protocols/flock/verifier/Main.lean",
                                "tools/verity/check/settings.py", ".agents/skills/using-slack/registry.json", "uv.lock"),
                               ("tools/x/pyproject.toml", "fixtures/golden/a.json", "tools/verity/check/other.py")),
-           "preflight-fixtures": (("fixtures/artifacts.json", "fixtures/golden/a.json", "tools/research/src/research/x.py",
+           "preflight-fixtures": (("artifacts.json", "fixtures/golden/a.json", "tools/research/src/research/x.py",
                                    "tools/verity/check/check.py"), ("fixtures/golden/b.json", "tools/x/pyproject.toml"))}
 
 
