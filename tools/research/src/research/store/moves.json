@@ -4476,6 +4476,11 @@
       "paths": {
         "verity/protocols/accounting/pous/prover/wipe_on_node.py": "benchmarks/pous/streamed_wipe/wipe_on_node.py"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/acquire/fa2_tap_src/apply_v8.py": "adapters/vllm/verity_vllm/acquire/fa2_tap_src/apply_fa2_tap.py"
+      }
     }
   ]
 }

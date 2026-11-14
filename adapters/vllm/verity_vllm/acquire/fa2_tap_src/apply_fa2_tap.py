@@ -44,7 +44,7 @@ def main(args: Options):
     # 1. v7 patch
     if not os.path.exists(os.path.join(src, 'verity_tap.h')):
         subprocess.run(['git', 'apply', os.path.join(mine, 'verity_tap_v7.patch')], cwd=tree, check=True)
-        logger.info('[apply_v8] verity_tap_v7.patch applied')
+        logger.info('[fa2_tap] verity_tap_v7.patch applied')
 
     # 2. v8 tap header
     shutil.copy(os.path.join(mine, 'verity_tap.h'), os.path.join(src, 'verity_tap.h'))
@@ -57,7 +57,7 @@ def main(args: Options):
         assert old in s, 'flash.h: Verity_tap.tag line not found'
         s = s.replace(old, old + '    int BN, D;            // v8: host-declared kernel tile (kBlockN, kHeadDim) the M1 layout is arithmetic in; must equal the selected kernel\'s\n')
         Path(p).write_text(s)
-        logger.info('[apply_v8] flash.h: Verity_tap.BN/D added')
+        logger.info('[fa2_tap] flash.h: Verity_tap.BN/D added')
 
     # 4. kernel macro: templated ctx
     p = os.path.join(src, 'flash_fwd_kernel.h')
@@ -68,7 +68,7 @@ def main(args: Options):
         assert old in s, 'flash_fwd_kernel.h: mode-3 VERITY_TAP_INIT not found'
         s = s.replace(old, new)
         Path(p).write_text(s)
-        logger.info('[apply_v8] flash_fwd_kernel.h: Verity_mat_ctx<kBlockM, kBlockN, kHeadDim>')
+        logger.info('[fa2_tap] flash_fwd_kernel.h: Verity_mat_ctx<kBlockM, kBlockN, kHeadDim>')
 
     # 5. launch template: declared tile must match
     p = os.path.join(src, 'flash_fwd_launch_template.h')
@@ -83,7 +83,7 @@ def main(args: Options):
         assert old in s, 'flash_fwd_launch_template.h: mode-3 arm condition not found'
         s = s.replace(old, new)
         Path(p).write_text(s)
-        logger.info('[apply_v8] flash_fwd_launch_template.h: arm iff (kBlockN, kHeadDim) == (vt.BN, vt.D)')
+        logger.info('[fa2_tap] flash_fwd_launch_template.h: arm iff (kBlockN, kHeadDim) == (vt.BN, vt.D)')
 
     # 6. the MS class: softmax.h keeps max_scaled, the mode-3 VERITY_TAP_P stores it (both only with VERITY_MAT_SRC & 64)
     MS_ON = '#if defined(VERITY_MAT_SRC) && (VERITY_MAT_SRC & 64)\n'
@@ -127,7 +127,7 @@ __forceinline__ __device__ void scale_apply_exp2_ms(Tensor<Engine0, Layout0> &te
         assert s.count(call) == 2, f'softmax.h: {s.count(call)} scale_apply_exp2 calls in softmax_rescale_o (expected 2)'
         s = s.replace(call, '            VERITY_SCALE_APPLY_EXP2(scores, row_max, softmax_scale_log2);\n')
         Path(p).write_text(s)
-        logger.info('[apply_v8] softmax.h: tap_max_scaled via scale_apply_exp2_ms (VERITY_MAT_SRC & 64)')
+        logger.info('[fa2_tap] softmax.h: tap_max_scaled via scale_apply_exp2_ms (VERITY_MAT_SRC & 64)')
     p = os.path.join(src, 'flash_fwd_kernel.h')
     s = Path(p).read_text()
     if 'VERITY_MAT_MS' not in s:
@@ -135,5 +135,5 @@ __forceinline__ __device__ void scale_apply_exp2_ms(Tensor<Engine0, Layout0> &te
         assert s.count(old) == 1, 'flash_fwd_kernel.h: mode-3 VERITY_TAP_P rowstat line not found'
         s = s.replace(old, old[:-1] + ' \\\n    VERITY_MAT_MS(vmat, softmax, n_block)\n')
         Path(p).write_text(s)
-        logger.info('[apply_v8] flash_fwd_kernel.h: VERITY_TAP_P stores the MS class')
+        logger.info('[fa2_tap] flash_fwd_kernel.h: VERITY_TAP_P stores the MS class')
     write(f'APPLY-V8-OK {src}')
