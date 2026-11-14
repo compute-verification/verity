@@ -150,7 +150,7 @@ theorem flock_e2e_drawn_hm96
 
 variable {m : ℕ} (St : Fin m → Flock.Draw.Stratum) (Ls : Fin m → ℕ)
 
-/-- **The e2e drawn-unit bound at the executable's law, with the rows' value binding, under `cr/sha-512` alone**:
+/-- **The e2e drawn-unit bound at the executable's sampling design, with the rows' value binding, under `cr/sha-512` alone**:
 `Binding.flock_e2e_drawn_exec_hm96` with `LinkCRStrict` for `LinkCR`. -/
 theorem flock_e2e_drawn_exec_hm96
     {execAccept : Bool × Finset (Fin n) → Prop}
@@ -178,7 +178,7 @@ theorem flock_e2e_drawn_exec_hm96
     (strictRunCost_pos ht hq).le σ (linkCR_of_strict P H E plan tab (rs.binding hHm) (reg σ) (cont σ) ht hq hCRs)
     hKS tr hT
 
-/-- **The e2e count curve at the executable's law, with the rows' value binding, under `cr/sha-512` alone**:
+/-- **The e2e count curve at the executable's sampling design, with the rows' value binding, under `cr/sha-512` alone**:
 `Binding.flock_e2e_count_exec_hm96` with `LinkCRStrict` for `LinkCR`. -/
 theorem flock_e2e_count_exec_hm96 (σs : Fin n → Fin m) (ks : Fin m → ℕ)
     (hks : ∀ s, ks s ≤ (Law.stratum σs s).card) (hS : Law.ExecStrata σs ks St)

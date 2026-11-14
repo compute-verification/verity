@@ -110,7 +110,7 @@ def groupOf (A : Live₂) (i : ℕ) : Group :=
   else if i = A.h.stage + 1 then .stmt
   else .sessions
 
-/-- **The coin map's law** (piece: the coin map and the coin trees' hiding): the period's play is distributed as the
+/-- **The coin map's distribution** (piece: the coin map and the coin trees' hiding): the period's play is distributed as the
 frame's play at a uniform tape and uniform run coins, and there the device's releases agree with the run's coins
 (`Ag`), up to `hide`. The agreement holds only up to `hide`, not at every tape: an opening whose tree has no round
 beginning with the run's coin's elements releases a round of its own, and nothing in the log shows it. -/
@@ -204,7 +204,7 @@ def ProjectionBound (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
 
 /-- **The projection from its pieces** (piece: the assembly; its theorem is `projection_of`): the sampled verdict, on
 a play of the parameters `θ`, only where the form's check accepts (`Acc`, which the composite's wiring owes; at other
-parameters the sampled verdict also accepts other forms), the coin map's law at an agreement `Ag` and the releases'
+parameters the sampled verdict also accepts other forms), the coin map's distribution at an agreement `Ag` and the releases'
 agreement at it, the coins read at the first stage's, the second stage's and the sessions' rounds, no coin read at the
 statements', the messages, the cut, the accept and the statement read give the projection's bound at
 `hide + miss + terms`. -/

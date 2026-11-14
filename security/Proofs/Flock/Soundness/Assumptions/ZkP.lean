@@ -39,7 +39,7 @@ def RecordCustodyZKJP {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (o
 (`live-verifier`, as `RecordCustodyZKJP`): the record `verify --zk --session-tables J --public-inputs` reads is the one
 the challenger wrote for the live session (`RecordsLiveZKJA` at that command's acceptance and setup), and its sample file at
 each sample `S` the one `verity-verify-proof draw` printed for the verifier's own sample of `S` under the sampling design `law S` it drew `S` by
-over the `n` proof blocks (`ZkLink.drawOf`): the registration's law at every sample (`recordCustodyZKJPLaw_const`), or
+over the `n` proof blocks (`ZkLink.drawOf`): the registration's sampling design at every sample (`recordCustodyZKJPLaw_const`), or
 `subset |S|` for a member's part `S` of a window's sample. Provisional. -/
 def RecordCustodyZKJPLaw {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (own : Option ByteArray)
     (dj : Finset (Fin n) → Lean.Json) (Jf : Finset (Fin n) → Reg → ℕ)

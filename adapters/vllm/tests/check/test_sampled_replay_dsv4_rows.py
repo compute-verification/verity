@@ -80,7 +80,7 @@ CASES = [
 
 #: the families whose operands are sampled with their twin's sampler (indices, lengths, e4m3 / e8m0 bytes and edge words a uniform sample
 #: rarely makes)
-DRAWN = ("FlashMlaDecode_v1", "FlashMlaPrefill_v1", "FlashMlaGatherRow_v1", "Dsv4QNormRopeKvInsert_v1", "MoeRouterSqrtSoftplus_v1",
+SAMPLED = ("FlashMlaDecode_v1", "FlashMlaPrefill_v1", "FlashMlaGatherRow_v1", "Dsv4QNormRopeKvInsert_v1", "MoeRouterSqrtSoftplus_v1",
          "MoeRouterHash_v1", "SiluMulClamp_v1", "Dsv4CompressorScore_v1", "Dsv4InvRopeQuantHead_v1")
 
 
@@ -112,7 +112,7 @@ def test_the_row_kernel_on_spec_text_statics_is_the_definition(spec, d):
     family, statics = RM.spec_family(spec), RM.spec_statics(spec)
     params, _ = signature_of(d)
     rng = np.random.default_rng(len(spec))
-    sample = dsv4_rows.SAMPLES.get(family) if family in DRAWN else None
+    sample = dsv4_rows.SAMPLES.get(family) if family in SAMPLED else None
     for k in range(3):
         args = [a[0] for a in sample()(rng, 1, params, **statics_of(d))] if sample else [_words(rng, p) for p in params]
         if family.startswith("GatherI32x"):

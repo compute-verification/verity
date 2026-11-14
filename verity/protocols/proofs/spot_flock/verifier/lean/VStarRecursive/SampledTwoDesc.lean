@@ -71,7 +71,7 @@ def cellsOf (i : Spot.Run.Input) (it : Spot.Run.Interior) : Option (Array Nat ×
 /-- **The requests of a boundary layout**: its proof blocks that are a unit's. -/
 def requests (l : Spot.Slots.SlotOrder) : Nat := (l.blocks.filter fun b => b.unit.isSome).size
 
-/-- **The first stage's law**, as `Select.select` samples on the boundary registration: none for the `All` rule, else
+/-- **The first stage's sampling design**, as `Select.select` samples on the boundary registration: none for the `All` rule, else
 the sampling design it derives over the program's population, or the one the rule names where it derives none. -/
 def firstLaw (rule : Spot.Select.Rule) (d : Spot.Program) (query : Json) (table : Option Json) :
     V (Option Draw.Law) := do
@@ -94,7 +94,7 @@ def lawOk (ns : List Nat) : Option Draw.Law → Bool
       (ws.toList.map (·.floor)).length == ns.length && (ws.toList.map (·.floor)).all (1 ≤ ·) &&
       0 < ((ns.zip (ws.toList.map (·.work))).map fun p => p.1 * p.2).sum && ns.all (1 ≤ ·)
 
-/-- **The first stage's design on the replay layout's strata**: its two rules, the first stage's law and the input
+/-- **The first stage's design on the replay layout's strata**: its two rules, the first stage's sampling design and the input
 class's `All`, one a class of `l`, each well formed over its class's strata sizes in slots. -/
 def designOk (law : Option Draw.Law) (l : Spot.Slots.SlotOrder) : Bool :=
   [law, none].length == l.classes.size &&

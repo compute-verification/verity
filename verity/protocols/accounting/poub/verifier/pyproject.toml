@@ -15,7 +15,7 @@ inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proo
           # one_stage's registration, which core_check imports, and its draw and verdict
           "verity/protocols/proofs/spot/verifier/one_stage/__init__.py",
           "verity/protocols/proofs/spot/verifier/one_stage/draw.py",
-          "verity/protocols/proofs/spot/verifier/one_stage/registration.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/docket.py",
           "verity/protocols/proofs/spot/verifier/one_stage/verdict.py",
           "verity/circuits", "verity/commitments",
           "verity/commitments/crypto", "verity/commitments/randomness",

@@ -36,7 +36,7 @@ from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as PT
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 ROOT = Path(__file__).resolve().parents[6]
 PKG = ROOT / "verity/protocols/accounting/pouw/verifier/lean/check"

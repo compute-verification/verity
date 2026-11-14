@@ -8,7 +8,7 @@ public import Proofs.Properties.Verity.Sampled.SpecTie
 /-!
 # `MovesReach`, clause by clause
 
-On the joint law's support off the held-off events (`ReachesOff`), each outcome is the writer's at the widened sample's
+On the joint distribution's support off the held-off events (`ReachesOff`), each outcome is the writer's at the widened sample's
 sample, the decoded registration and a live session's outcome (`reachesOff_out`). What v2's files decode to in the play on
 the tape beside it, clause by clause of `MovesOf`:
 
@@ -64,7 +64,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-/-- **An outcome on the joint law's support off `BL` and `B` is the writer's, beside a play the first stop reaches**
+/-- **An outcome on the joint distribution's support off `BL` and `B` is the writer's, beside a play the first stop reaches**
 (`reachesOff_out`, `firstStop_playReaches`). -/
 theorem ReachesOff.out_reaches {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {A : Live}
     {rd : Reading A.rounds} {σ : Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg}
@@ -82,8 +82,8 @@ theorem ReachesOff.out_reaches {V : Vocab d α} {θ : ByteArray} {F : Array Byte
   obtain ⟨_, h1, -⟩ := hr.out
   exact ⟨ω, pts, _, hL, h1, firstStop_playReaches V θ F c A rd σ M ω hr⟩
 
-/-- **The record's sample on the joint law's support** (`MovesOf`'s clause (i)): at the sample-coupled coin map, an
-outcome on the joint law's support off `BL` and `B` is the writer's at the widened sample `ω`, and where the play beside
+/-- **The record's sample on the joint distribution's support** (`MovesOf`'s clause (i)): at the sample-coupled coin map, an
+outcome on the joint distribution's support off `BL` and `B` is the writer's at the widened sample `ω`, and where the play beside
 it ends where the sampled verdict accepts, the log v2 read is the device's, v2 reads the sample's coins of the family
 `label` answering `after`, and every release of that family precedes every opening, its record decodes to the session's
 sample file at `ω`'s sample (`ReachesOff.out_reaches`, `recordDraw_firstStop`). -/
@@ -437,7 +437,7 @@ theorem rep_rounds {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : 
     rw [hfil, hR, hnil]
     all_goals rfl
 
-/-- **The rep rounds at a sample the joint law's support is reached at** (`MovesOf`'s clause (iv) at a `ReachesOff`
+/-- **The rep rounds at a sample the joint distribution's support is reached at** (`MovesOf`'s clause (iv) at a `ReachesOff`
 witness): at the readings and the decoders at a layout `L`, injective, of distinct tables, whose rep slots are of a
 plan's one table and which has a link slot, and at the sample-coupled coin map under `fieldEnc`, an outcome with a
 widened sample `ω` and link points `pts` off the link's empty class, with a trace off the rounds' empty class from the

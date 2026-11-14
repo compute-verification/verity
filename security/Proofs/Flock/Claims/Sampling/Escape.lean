@@ -56,7 +56,7 @@ Here each is the `Claims.Pr` that a model sample misses `B`:
   `strataDraw`) miss `B` with probability `strataPa`; `strataPa_append`, `strataPa_window`.
 * `OneStage.Pa_all`, `Pa_subset`, `Pa_bernoulli`: the `all`, uniform-subset and Bernoulli samples miss `B` with
   probability `P_a(B)`; `OneStage.Pa_strata`: every design but Bernoulli's is a strata sample (`OneStage.strata`: the
-  stratified and work laws by definition, `all` and `subset` one stratum), with `OneStage.strata_sum`,
+  stratified and work sampling designs by definition, `all` and `subset` one stratum), with `OneStage.strata_sum`,
   `OneStage.strata_le`.
 * `classesPa_eq_prod`, `classesPa_eq_Pr`, `Design.Pa_eq_Pr`: **the classes' product**: `P_a` on the partition is the
   product over its classes of each rule's `P_a` on the class's window (`classPa`), the probability that independent
@@ -257,7 +257,7 @@ theorem OneStage.Pa_bernoulli (ns : List ℕ) {num den : ℕ} [NeZero den] (h : 
   rfl
 
 /-- The strata `(n_s, k_s)` a one-stage design samples uniform subsets of, all but Bernoulli's: the stratified and work
-laws' own, and one stratum of every slot for `all` (sampling all of it) and `subset`. -/
+sampling designs' own, and one stratum of every slot for `all` (sampling all of it) and `subset`. -/
 def OneStage.strata (ns : List ℕ) : OneStage → Option (List (ℕ × ℕ))
   | .all => some [(ns.sum, ns.sum)]
   | .subset K => some [(ns.sum, K)]

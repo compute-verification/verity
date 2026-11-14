@@ -1,4 +1,4 @@
-"""The ZK server's session loop in Lean (`Flock/Firewall/Session.lean`, `flock-firewall session`), which owns the auditor's
+"""The ZK server's session loop in Lean (`Flock/ZkServer/Session.lean`, `flock-zk-server session`), which owns the auditor's
 connection: a prover connects to it as it would to the auditor, and each connection is one session it relays on its own
 connection to the auditor. Here a scripted auditor stands on the far side. What crosses is held to the loop's rules:
 every frame that leaves the loop's own encoding (a `Proof` dropped, a frame it does not serve refused), the `Hello`
@@ -124,7 +124,7 @@ class Auditor:
 
 
 class Loop:
-    """A running `flock-firewall session` against `auditor`, on the statement flags `args`."""
+    """A running `flock-zk-server session` against `auditor`, on the statement flags `args`."""
 
     def __init__(self, auditor: Auditor, args: list[str]):
         self.p = subprocess.Popen([str(BIN), "session", "--verifier", auditor.addr, *args], stdin=subprocess.PIPE,
@@ -189,7 +189,7 @@ def loop(junk):
 
 def test_usage(junk):
     p = subprocess.run([str(BIN), "session", *junk], input=b"", capture_output=True, check=False)
-    assert p.returncode == 2 and p.stderr.decode().startswith("usage: flock-firewall session")
+    assert p.returncode == 2 and p.stderr.decode().startswith("usage: flock-zk-server session")
 
 
 def test_every_frame_leaves_as_the_loops_own(loop):
@@ -297,7 +297,7 @@ def test_a_request_it_cannot_read_ends_the_session(loop):
 
 
 class TcpFrame:
-    """A rep's frame on a connection to the loop's frames port, asked as `test_firewall_frame.Frame` asks its own."""
+    """A rep's frame on a connection to the loop's frames port, asked as `test_zk_server_frame.Frame` asks its own."""
 
     def __init__(self, lp: Loop):
         self.s = socket.create_connection(lp.frames)
@@ -325,7 +325,7 @@ class TcpFrame:
 ])
 def test_a_frame_starts_only_as_a_live_sessions_rep(loop, line, why):
     """The loop drives the reps' frames itself: a frame starts on its frames port only as `rep SESSION TABLE REP`, for a
-    session it is serving, at the statement's start. A start the prover brings (`flock-firewall frame`'s layout line) is
+    session it is serving, at the statement's start. A start the prover brings (`flock-zk-server frame`'s layout line) is
     refused, as is a rep of a session the loop isn't serving, and so is a rep's place or values (`place`, `vals`)."""
     _, lp = loop
     f = TcpFrame(lp)
@@ -765,7 +765,7 @@ def test_each_request_leaves_once_at_its_place(zk):
     `Commit` before the first `Open` and a `Link` before `Commit`'s coins are refused without reaching the auditor, and so
     is every request after them, a `Ping` alone answered by the loop. The `Open` that leaves is the loop's own, at its
     stream's domain, whatever the prover's carried. The places past `Commit`, whose coins only a coin tree opens, are
-    `Flock.Test.SessionPlace`'s, and the honest session end to end `flock-circuit`'s firewalled selftests'."""
+    `Flock.Test.SessionPlace`'s, and the honest session end to end `flock-circuit`'s zk_served selftests'."""
     args = _args(zk, "pub-16.bin")
     a, b = _streams(args)[:2]
     S = Sessions(args)
@@ -844,7 +844,7 @@ HM = hm96.SHA512
 
 class CoinTree:
     """The verifier's coin tree, `coin-tree/hm96-sha512/v2` (`live/src/coin_tree.rs`'s `CoinTree`, checked by
-    `Flock/Firewall/Coins.lean`): sampled at `Hello` under the prover's nonce `nonce` and a fresh session key, per stream and
+    `Flock/ZkServer/Coins.lean`): sampled at `Hello` under the prover's nonce `nonce` and a fresh session key, per stream and
     round a block of `spec["block"]` coins, `edit(stream, round, block)` choosing some first (`CoinTree::draw_with`). Every
     SHA-512 input is prefixed by the nonce; a block commits through its chain `T_i = H(CHAIN ‖ c_i ‖ T_{i+1})` from
     `T_block = H(TAIL)` into a keyed hm96 leaf, each stream's rounds are a subtree, and the streams' roots, padded to a power
