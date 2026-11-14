@@ -113,7 +113,7 @@ def test_held_layers_takes_the_best_whole_number_of_layers():
 
 def _held(name):
     """The scenario's server block, its first family's profile, and the forward products a block holding whole layers
-    finishes over E1's Proposition 3's limit on its activation rate, by the block's novel bits."""
+    finishes over E1's Proposition 3's limit on its activation rate, by the block's fresh input bits."""
     s = build(Registry.load(), name)
     p = s.families[0].profile(s.model, s.run)
     products = p.kappa_forward * p.flops_per_token / (2 * p.layers)
