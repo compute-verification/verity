@@ -36,7 +36,7 @@ PROTOCOL SUMMARY (Commit phase entry: the instrumented runs + the fail-closed X-
   Outputs (--out DIR): runs.jsonl, steps.jsonl, summary.json/.md, verdict.json, versions.json, source_identity.json,
     binding_map_p<k>.json, sampled_replay_p<k>.json, host_admission_<kind>.json, weights_of_record.json, declaration_<committer>.json, protocols.json.
   Invariants: the Program/source identity precheck (`identity`) runs before any engine (exit 3 PRECHECK_FAIL_SOURCE_IDENTITY); a
-    required-value manifest whose program_digest is not the Build's is refused before the engine starts; the population is Q(P) at the max_tokens shape -- EOS-stopped
+    required-value manifest whose program_digest is not the Build's is refused before the engine starts; the population is Q(P) at the CAP shape -- EOS-stopped
     positions are classified not-executed by rule, never cut out; control and instrumented tokens must be equal; PASS only when
     every commit_verdict check holds (the first failing reason is the verdict; never "PASS with errors recorded").
 """
@@ -292,15 +292,15 @@ def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
     return out
 
 
-def engine_schedule(request_rows: dict[int, list[tuple[str, int, int]]] | None, declared: dict[str, int], expected: dict[str, int]) -> dict:
+def engine_schedule(request_rows: dict[int, list[tuple[str, int, int]]] | None, declared: dict[str, int], caps: dict[str, int]) -> dict:
     """The engine's schedule of record vs the declaration.  `request_rows` is the scheduler's per-committed-step row
     order as the collector recorded it (which requests ran in which step); a request's OBSERVED arrival is the first committed step it ran
     in.  The serving loop admits a request once the engine's forwards reach its declared arrive_step (`arrivals.ForwardCounter`: the
     bookkeeping iteration after the last request finishes runs no forward pass) OR immediately when the engine is idle (nothing running),
-    so on a workload with gaps (r0's max_tokens shorter than the next arrival) the committed-step axis and the declared arrive_steps drift apart --
+    so on a workload with gaps (r0's cap shorter than the next arrival) the committed-step axis and the declared arrive_steps drift apart --
     the required population must be placed on the axis the record is written on.  It is USED only when every declared request was
     observed, each ran a contiguous run of steps (no preemption) of exactly its expected count; otherwise the declaration stands and coverage
-    fails by name.  `expected` = the EXPECTED steps per request = its executed prefix of record (max_tokens on a length stop,
+    fails by name.  `caps` = the EXPECTED steps per request = its executed prefix of record (the cap on a length stop,
     served + LAG on an EOS stop -- executed_prefix.executed_prefix_of_record)."""
     observed: dict[str, int] = {}
     steps_of: dict[str, list[int]] = {}
@@ -310,7 +310,7 @@ def engine_schedule(request_rows: dict[int, list[tuple[str, int, int]]] | None, 
             observed.setdefault(str(rid), int(st))
             steps_of.setdefault(str(rid), []).append(int(st))
     contiguous = {r: v == list(range(v[0], v[0] + len(v))) for r, v in steps_of.items()}
-    count_eq = {r: len(steps_of.get(r, [])) == int(expected[r]) for r in expected}
+    count_eq = {r: len(steps_of.get(r, [])) == int(caps[r]) for r in caps}
     complete = bool(declared) and set(observed) >= set(declared)
     use = "observed" if (request_rows and complete and all(contiguous.values()) and all(count_eq.values())) else "declared"
     why = (None if use == "observed" else
@@ -502,7 +502,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     structure = B.structure_of(com, stochastic=stochastic)
     collector = {"variant": com.name, "retention": getattr(com, "retain", None), "window_mb": args.window_mb, "window_slots": getattr(args, "window_slots", None),
                  "arena_mb": args.arena_mb, "layout": "chunk-leaf-v1", **PT.partition_entry(_hdr if getattr(args, "required_manifest", None) else None)}
-    # the FA2 tap's bounded-residency record (its bound, the one allocation, peaks, split counts) beside the collector variant
+    # the FA2 tap's bounded-residency record (cap, the one allocation, peaks, split counts) beside the collector variant
     for _s in getattr(com, "sources", []) or []:
         if hasattr(_s, "tap_cap_bytes"):
             with contextlib.suppress(Exception):
@@ -517,24 +517,24 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
         return B.logical_request(rid, order)
 
     request_rows = {int(s): [(_logical(rid), lo, hi) for rid, lo, hi in rows] for s, rows in step_rows.items()} if n_req > 1 else None
-    max_tokens = {f"r{int(r.get('index', i))}": int(r.get("max_tokens") or sampling.get("max_tokens") or 1) for i, r in enumerate(reqs)}
-    # the EXECUTED PREFIX OF RECORD of every request: max_tokens on a length stop; served + LAG on an EOS stop
+    caps = {f"r{int(r.get('index', i))}": int(r.get("max_tokens") or sampling.get("max_tokens") or 1) for i, r in enumerate(reqs)}
+    # the EXECUTED PREFIX OF RECORD of every request: cap on a length stop; served + LAG on an EOS stop
     # (the driver's served tokens of THIS run; the Program's declared EOS set and LAG -- stop_rule_of_record; nothing from the trace).
     # Every consumer below counts on it: the required population, the composition, engine_schedule's expected steps.  The first B>=2
     # record with an EOS stop (OLMoE B2 i32/o32 mixedstop) had r0 committed over 12 = 11 + 1 steps and r1 over 32, and the
-    # max_tokens-shaped population required r0's 20 unexecuted steps (bound 13808/19988).  A problem (early stop without a declared EOS / LAG, a
-    # non-EOS last token, served > max_tokens) leaves the population at max_tokens and fails coverage by name.
+    # cap-shaped population required r0's 20 unexecuted steps (bound 13808/19988).  A problem (early stop without a declared EOS / LAG, a
+    # non-EOS last token, served > cap) leaves the population the cap's and fails coverage by name.
     served_by_rid = None if served_tokens is None else {_logical(str(k)): [int(t) for t in v] for k, v in served_tokens.items()}
-    epr = EP.executed_prefix_of_record(sorted(max_tokens, key=lambda k: int(k[1:])), served_by_rid, caps=max_tokens,
+    epr = EP.executed_prefix_of_record(sorted(caps, key=lambda k: int(k[1:])), served_by_rid, caps=caps,
                                        eos_of_record=(stop or {}).get("eos"), lag=(stop or {}).get("lag"))
-    n_exec = {k: int(epr["requests"][k]["executed_prefix_len"]) for k in max_tokens}
+    n_exec = {k: int(epr["requests"][k]["executed_prefix_len"]) for k in caps}
     if epr["any_eos_stop"] or not epr["ok"]:
         print(f"[delta] execution_extent: executed prefix of record (pair {pair}): " + ", ".join(
-            f"{k} served {v['served_output_len']} / executed {v['executed_prefix_len']} / max_tokens {v['cap']}" + (" (EOS stop)" if v.get("eos_stop") else "")
+            f"{k} served {v['served_output_len']} / executed {v['executed_prefix_len']} / cap {v['cap']}" + (" (EOS stop)" if v.get("eos_stop") else "")
             for k, v in epr["requests"].items()) + f"; LAG {epr['lag']}; EOS {epr['eos_of_record']}"
               + (f"; PROBLEMS {epr['problems'][:3]}" if epr["problems"] else ""), flush=True)
     # the population is placed on the committed-step axis by the engine's schedule of record (engine_schedule);
-    # the declared arrive_steps are recorded beside it and the difference is named.  'exactly its expected count' = exactly its executed prefix.
+    # the declared arrive_steps are recorded beside it and the difference is named.  'exactly its cap' = exactly its executed prefix.
     schedule = engine_schedule(request_rows, arrivals, n_exec)
     if schedule["use"] == "observed":
         arrivals = {**arrivals, **{k: int(v) for k, v in schedule["observed_arrive_steps"].items() if k in arrivals}}
@@ -550,9 +550,9 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
             collector = dict(collector, promoted_inputs={"names": {k: list(v) for k, v in binder.rebind.items()}, "rule": "binding.PROMOTED_INPUT_RULE"})
     bmap = B.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, request_id="r0", rank=0, layout_version=collector["layout"], chunk=com.chunk,
                                weight_registration=rc.weight_registration, collector=collector, request_rows=request_rows, binder=binder)
-    horizon = max(arrivals[k] + n_exec[k] for k in max_tokens)
+    horizon = max(arrivals[k] + n_exec[k] for k in caps)
     request_steps = EP.request_steps_of_record(epr, arrivals)
-    workload: dict[str, Any] = {"program_digest": pd, "requests": sorted(max_tokens, key=lambda k: int(k[1:])), "steps": horizon, "ranks": [0], "request_steps": request_steps}
+    workload: dict[str, Any] = {"program_digest": pd, "requests": sorted(caps, key=lambda k: int(k[1:])), "steps": horizon, "ranks": [0], "request_steps": request_steps}
     man_hdr = None
     comp = None
     if getattr(args, "required_manifest", None):
@@ -614,7 +614,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
         ops = com.open(held) if held else []
         ok = [com.verify(rc, o) for o in ops]
         if po_deferred:
-            po_skipped = (f"retain=host excluding {sorted(com.retain_exclude)}: {len(po_deferred)} of {len(want)} population-sampled leaves lie in "
+            po_skipped = (f"retain=host excluding {sorted(com.retain_exclude)}: {len(po_deferred)} of {len(want)} population-drawn leaves lie in "
                           "excluded families -> opened by replay (openings_after_release)")
             com._oar_deferred = list(getattr(com, "_oar_deferred", []) or []) + po_deferred
     elif bound:
@@ -905,7 +905,7 @@ class Options:
     label: str = option("--label", default="")
     hidden_so: str | None = option("--hidden-so", default=None, help="CMT-2 M1 tap FA2 extension (.so): bind the FA2 hidden stream (rows R5-R8) into the same run root")
     hidden_ns: str | None = option("--hidden-ns", default=None, help="torch.ops namespace of the tapped .so (default verity_fa2_matAll; verity_fa2_matReq for the src-59 build)")
-    tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="bound (MiB) on the FA2 M1 tap's device buffer: a multi-sequence launch whose padded tap buffer exceeds it is split into sequence groups tapped one after another into ONE bounded buffer (names/bytes/roots unchanged); default 2048 (VERITY_FA2_TAP_CAP_MB); 0 = the unbounded per-geometry buffers (B64 llama 1024: 24.53 GiB, which OOMs)")
+    tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="cap (MiB) on the FA2 M1 tap's device buffer: a multi-sequence launch whose padded tap buffer exceeds it is split into sequence groups tapped one after another into ONE bounded buffer (names/bytes/roots unchanged); default 2048 (VERITY_FA2_TAP_CAP_MB); 0 = the unbounded per-geometry buffers (B64 llama 1024: 24.53 GiB, which OOMs)")
     tap_sources: TAPS.TapSources = group(TAPS.TapSources)
     value_check: bool = option("--value-check", default=False, action="store_true", help="one extra instrumented run with reference taps + re-execution (value_check.json)")
     arms: str | None = option("--arms", default=None, help="comma-separated committer kinds run as separate treatment arms in one process, interleaved with the control (order rotates per round)")
@@ -940,7 +940,7 @@ class Options:
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / --programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
     replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all (sampled by --replay-draw) in place of the row's per-stratum sample")
     replay_draw: str = option("--replay-draw", default="uniform", choices=("uniform", "family"), help="with --replay-k: uniform over every unit, or stratified by family (one stratum per family, round-robin, at least one each)")
-    replay_max: int = option("--replay-max", type=int, default=2000, help="sampled replay: the largest stratified sample per pair (never below one VU per stratum; recorded)")
+    replay_max: int = option("--replay-max", type=int, default=2000, help="sampled replay: cap on the stratified sample per pair (never below one VU per stratum; recorded)")
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
     vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark input sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
     serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: after pair 0's roots are final and before its seed, commit every unit of the verifier's partition in M0's serving row format (verity_vllm.pipeline.serving_rows; the row stage writes the request: dir, partition, run, committer); with --replay-deferred (not slim) at the C2 site, before the bundle is sealed (c2_replay.serving_rows)")
@@ -954,7 +954,7 @@ class Options:
     remote_step_ms: float = option("--remote-step-ms", type=float, default=0.0, help="the engine step a paced session's pass waits on, in ms: added to the calibration's pass times so the verifier's allowance covers it (a verifier at --paced 1:T_MS:DRAWS:WINDOWS runs each pass's step inside its coin's window); 0 for a session in stated windows")
     plan: str | None = option("--plan", default=None, metavar="JSON", help="the Commit's plan, derived before the GPU (verity_vllm.pipeline.commit_plan; the row's `plan` stage): the producer facts are taken from it when its key (Program digest, manifest, workload, Programs, code identity, vLLM version) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json plan)")
     call_boundary_plan: str | None = option("--call-boundary-plan", default=None, metavar="JSON", help="the call-boundary source's host plan, derived at the Build's call-boundary check (verity_vllm.pipeline.boundary_plan): taken when its key (as --plan's) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json call_boundary_plan)")
-    replay_target: list[str] | None = option("--replay-target", action="append", default=None, metavar="OP_PATH[@STEP]", help="sampled replay: add EVERY VU of a module (at a request-local step) to the sample, outside --replay-max -- the targeted negatives of record (a single-identity fault at a mid-phase step); repeatable; recorded under sample.targeted")
+    replay_target: list[str] | None = option("--replay-target", action="append", default=None, metavar="OP_PATH[@STEP]", help="sampled replay: add EVERY VU of a module (at a request-local step) to the sample, outside the cap -- the targeted negatives of record (a single-identity fault at a mid-phase step); repeatable; recorded under sample.targeted")
     program_digest: str | None = option("--program-digest", default=None, help="the Build's Program digest of record (B=1: build_request's program_digest; B>=2: gprog's workload digest): the required manifest's program_digest must equal it or the Commit fails closed as wrong-Program; also the binding map's key digest")
     required_manifest: str | None = option("--required-manifest", default=None, help="the Program/query-derived required-value manifest (verity_vllm.pipeline.cli build ...): every identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed tensor of every instrumented run (coverage_check); replaces the counts+classes source, which is the labelled fallback")
     tensor_digests: bool = option("--tensor-digests", default=False, action="store_true", help="diagnostic: per-tensor digests of the retained host bytes per instrumented run, diffed across pairs")
@@ -962,7 +962,7 @@ class Options:
     compiled_taps: str = option("--compiled-taps", choices=["off", "served"], default="off", help="served = the "
                                 "served-compiled row: every value of every engine step at vLLM's defaults (ServedCompiledSource), the served Build "
                                 "(--required-manifest, verity-vllm served-match) checked word for word on the committed values (served_check) with a "
-                                "seed sampled after commitment, the Build rederived in this process (build_rebuilt.json); control: --compiled-taps off "
+                                "seed drawn after commitment, the Build rederived in this process (build_rebuilt.json); control: --compiled-taps off "
                                 "--only-arm control (verity_vllm/ops/served_commit.sh)")
     only_arm: str | None = option("--only-arm", choices=["control", "instrumented"], default=None, help="run only this arm (`--pairs` runs of it); the paired summary is produced by `verity-vllm compiled-merge` from both processes")
 
@@ -1551,12 +1551,12 @@ def manifest_coverage(row: dict[str, Any], com: Any, rc: Any, r: dict, _ids_full
     # engine_schedule the binding-map coverage and the kernel check use): engine_step = request step + observed arrival
     _man_cov, _cov_sched, _epr_cov, _ne_class, _ids_all_n = required_manifest, None, None, None, None
     # the placement below ran at B >= 2 ONLY (`len(reqs) > 1`):
-    # at B=1 the max_tokens-length manifest (row_pod's Program of record at Commit is the max_tokens-shape build_request on this tree, the
+    # at B=1 the cap-length manifest (row_pod's Program of record at Commit is the CAP-shape build_request on this tree, the
     # served-shape rule retired there) was required IN FULL and the never-executed steps of an EOS-stopped request were
     # 'uncovered' instead of the named class -- measured: 8,295 identities of r0's steps 11..31
     # {fa2_hidden_m1_stream 630, instance_outputs 7,623, ids 21+21}, COMMIT FAIL at MANIFEST COVERAGE.  The single request
     # is r0 (index order, the manifest's request_id), the same executed_prefix_of_record / request_steps_of_record /
-    # restrict_* run -- as at B >= 2, nothing new; a request that ran to its max_tokens drops nothing.
+    # restrict_* run -- as at B >= 2, nothing new; a request that ran to its cap drops nothing.
     if reqs and isinstance(required_manifest, dict) and required_manifest.get("identities"):
         _o = {str(q.get("request_id")): f"r{i}" for i, q in enumerate(reqs)}
         _a = {f"r{i}": int(q.get("arrive_step") or 0) for i, q in enumerate(reqs)}
@@ -1669,7 +1669,7 @@ def match_record_compare(row: dict[str, Any], com: Any, rc: Any, components: dic
     the Programs of record, derived by the first run that needs them: `oracle_producers` as given after that."""
     # LIVE C2 = oracle-compare: every bound identity's committed bytes against the Match phase's
     # value record of the SAME attempt (separate process + acquisition path); any mismatch fails the verdict naming the identity.
-    # the oracle must be THIS workload's Match record: request ids / prompt lengths / max_tokens are checked by name
+    # the oracle must be THIS workload's Match record: request ids / prompt lengths / caps are checked by name
     # before any value compare (a foreign oracle = FAIL 'foreign oracle', never a value mismatch that happens to point the right way).
     TL.start("validate.oracle_compare", pair=pair)
     try:
@@ -1931,7 +1931,7 @@ def bounded_admission(com: Any, asz: dict[str, Any], *, args: Options, reqs: lis
     # the dominant contributor by name, on the print and on any refusal -- never merely "predicted OOM"
     print(f"[delta] bounded staging DOMINANT CONTRIBUTOR ({kind}): {(_admit.get('dominant_contributor') or {}).get('text')}", flush=True)
     (out / f"host_admission_{kind}.json").write_text(json.dumps(_admit, indent=1, default=str) + "\n")
-    (out / f"arena_sizing_{kind}.json").write_text(json.dumps(asz, indent=1, default=str) + "\n")   # + its limit, admission_of_record, bound
+    (out / f"arena_sizing_{kind}.json").write_text(json.dumps(asz, indent=1, default=str) + "\n")   # + cap, admission_of_record, bound
     if getattr(args, "host_admit", None) is not None:
         if host_limit is None:
             print("[delta] REFUSE (--host-admit): no cgroup memory limit readable to admit against", flush=True)
