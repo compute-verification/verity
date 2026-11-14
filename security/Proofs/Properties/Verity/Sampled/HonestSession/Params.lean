@@ -140,6 +140,13 @@ private theorem canon_ascii_bytes {j : Json} {s : String} (hc : Flock.canon j = 
 hypothesis `hpp : ProgramPlain` by every lemma below that reads `programJ`. -/
 def ProgramPlain : Prop := Firewall.plain programJ = true
 
+/-- The parser's rebuild (`norm`) of these two plain, ascending-key JSON literals is the literal itself. `canonicalJson`
+returns `norm` of the parsed value, and the decoders must then read that value's fields as a concrete object; but `norm`
+is well-founded-recursive, so the kernel does not reduce it (`canon_norm` only gives `canon (norm j) = canon j`, not
+`norm j = j`). A concrete-JSON fact of this instance, taken as a hypothesis `hN : NormFacts` by `params_full` and the
+exports that depend on it. -/
+def NormFacts : Prop := jnorm θJ = θJ ∧ jnorm paramsJ = paramsJ
+
 /-- The session's query is plain. -/
 private theorem plain_query : Firewall.plain query = true := by
   rw [query]
@@ -278,22 +285,11 @@ private theorem canon_θ₀ (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) :
   hJ.canonicalJson_canon (plain_θJ hpp) (canon_ascii_bytes (hJ.canon_plain (plain_θJ hpp)))
     (hJ.canon_plain (plain_θJ hpp))
 
-/-- `canon` of the parsed component parameters is their text. -/
-private theorem canon_normParams (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) :
-    Flock.canon (jnorm paramsJ) = .ok (Firewall.printJson paramsJ) :=
-  (hJ.canon_norm (plain_paramsJ hpp)).trans (hJ.canon_plain (plain_paramsJ hpp))
-
 /-- `canonicalJson` of the component parameters' text reads them back. -/
 private theorem canon_params (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) :
     Core.canonicalJson (Firewall.printJson paramsJ).toUTF8 = .ok (jnorm paramsJ) :=
   hJ.canonicalJson_canon (plain_paramsJ hpp) (canon_ascii_bytes (hJ.canon_plain (plain_paramsJ hpp)))
     (hJ.canon_plain (plain_paramsJ hpp))
-
-/-- `canon` of the parsed program descriptor is its text. -/
-private theorem canon_normProgram (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) :
-    Flock.canon (jnorm programJ) = .ok (Firewall.printJson programJ) := by
-  have hp : Firewall.plain programJ = true := hpp
-  exact (hJ.canon_norm hp).trans (hJ.canon_plain hp)
 
 /-- The program file is the descriptor's text. -/
 private theorem programFile_eq (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) :
@@ -319,33 +315,38 @@ private theorem parse_program (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) :
 /-! ## v2's parameters, with every field named -/
 
 /-- The parameters `θ₀` decodes to, with each field `paramsOfJson` reads. -/
-private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) : ∃ p : Spot.OneStageZk.Params,
+private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN : NormFacts) :
+    ∃ p : Spot.OneStageZk.Params,
     ParamsAt θ₀ p ∧ p.own.partition = partitionObj ∧ p.own.program = programFile ∧
     p.own.circuit = hexOf circuitSha ∧ p.own.pub = hexOf (Sha512.hash publicFile) ∧
     p.base.verifier.program = program ∧ p.base.verifier.query = query ∧ p.base.verifier.law = law ∧
     p.base.verifier.workTable = none ∧ p.base.challenger = some (key₀, label₀) := by
   have hA := canon_θ₀ hJ hpp
-  have hB := canon_normParams hJ hpp
   have hC := canon_params hJ hpp
-  have hD := canon_normProgram hJ hpp
   have hE := parse_program hJ hpp
   have hU := Flock.Hex.unhex_hexOf keyPub
   have hpf := programFile_eq hJ hpp
+  -- `canon` of each plain literal directly (the decoders read the literal's fields, not `norm`'s).
+  have hBp : Flock.canon paramsJ = .ok (Firewall.printJson paramsJ) := hJ.canon_plain (plain_paramsJ hpp)
+  have hDp : Flock.canon programJ = .ok (Firewall.printJson programJ) :=
+    hJ.canon_plain (show Firewall.plain programJ = true from hpp)
+  obtain ⟨hNθ, hNp⟩ := hN
   refine ⟨?p, ⟨[{ id := VStar.Recursive.Sampled.PROTOCOL, params := Firewall.printJson paramsJ }], ?decode,
       { id := VStar.Recursive.Sampled.PROTOCOL, params := Firewall.printJson paramsJ }, ?find, ?pchain⟩,
       ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9⟩
   case decode =>
-    -- Rewrite the outer `canonicalJson` by its equation (`hA`) first; the walk then only reads `decodeParams`.
+    -- Rewrite the outer `canonicalJson` by `hA`, then `norm θJ` to the literal `θJ` so field lookups are on a concrete
+    -- object (`norm` is well-founded-recursive and does not reduce in the kernel).
     show (Core.canonicalJson θ₀ >>= Core.Composition.decodeParams) = .ok
       [({ id := VStar.Recursive.Sampled.PROTOCOL, params := Firewall.printJson paramsJ } : Core.Composition.Named)]
-    rw [hA]
-    fwd_walk [hB] block [Flock.canon] shallow []
+    rw [hA, hNθ]
+    fwd_walk [hBp] block [Flock.canon] shallow []
   case find => kernel_rfl'
   case pchain =>
-    -- Likewise rewrite the outer `canonicalJson` by `hC`; the walk then reads only `paramsOfJson`.
+    -- Likewise rewrite the outer `canonicalJson` by `hC`, then `norm paramsJ` to the literal `paramsJ`.
     show (Core.canonicalJson (Firewall.printJson paramsJ).toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = _
-    rw [hC]
-    fwd_walk [hD, hE, hU] block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
+    rw [hC, hNp]
+    fwd_walk [hDp, hE, hU] block [Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
   case f1 => kernel_rfl'            -- own.partition = partitionObj
   case f2 => rw [hpf]               -- own.program = programFile
   case f3 => kernel_rfl'            -- own.circuit
@@ -356,17 +357,17 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) : �
   case f8 => rfl                    -- verifier.workTable = none
   case f9 => kernel_rfl'            -- challenger = some (key₀, label₀)
 
-theorem params_spec (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) : ∃ p, ParamsAt θ₀ p ∧
+theorem params_spec (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN : NormFacts) : ∃ p, ParamsAt θ₀ p ∧
     p.own.partition = partitionObj ∧ p.own.program = programFile ∧ p.base.verifier.program = program ∧
     p.base.verifier.query = query ∧ p.base.verifier.law = law ∧ p.base.verifier.workTable = none ∧
     p.base.challenger = some (key₀, label₀) := by
-  obtain ⟨p, hpat, hpart, hprog, _, _, hvp, hvq, hvl, hvt, hch⟩ := params_full hJ hpp
+  obtain ⟨p, hpat, hpart, hprog, _, _, hvp, hvq, hvl, hvt, hch⟩ := params_full hJ hpp hN
   exact ⟨p, hpat, hpart, hprog, hvp, hvq, hvl, hvt, hch⟩
 
-theorem digests (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) :
+theorem digests (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) (hN : NormFacts) :
     programDigestOf θ₀ = some (Verity.sha512 circuitFile.data.toList) ∧
       publicDigestOf θ₀ = some (Verity.sha512 publicFile.data.toList) := by
-  obtain ⟨p, hpat, _, _, hc, hpub, _⟩ := params_full hJ hpp
+  obtain ⟨p, hpat, _, _, hc, hpub, _⟩ := params_full hJ hpp hN
   refine ⟨?_, ?_⟩
   · rw [programDigestOf, paramsOf_eq hpat, Option.bind_some, hc]
     simp only [digestOf, Flock.Hex.unhex_hexOf, circuitSha]
