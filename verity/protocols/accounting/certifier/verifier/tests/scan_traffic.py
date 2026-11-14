@@ -1,6 +1,6 @@
 """Network-certifier-form id requests and their responses served through the network certifier's own ingress and egress,
 both links' rows and the scan of the ingress rows: the joint scan's traffic (`test_network_certifier_ingress_scan.py`'s
-cross-check of the network certifier, and `benchmarks/network_traces/scan_zk.py`'s). It imports no test framework, so a
+cross-check of the network certifier, and `verity/protocols/accounting/certifier/prover/scan_zk.py`'s). It imports no test framework, so a
 node's bare venv runs it."""
 
 from __future__ import annotations
@@ -98,7 +98,7 @@ def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[
 class Chain:
     """The scan of a run's ingress rows (`ingress_scan.scan`, the Programs' rows its outputs): the states S_{−1} (the
     empty state) … S_{T−1} as bit rows, the Programs' rows and the egress views; proof block t reads (ingress[t],
-    states[t], progs[t]), the first proof block no state, and computes (states[t + 1], views[t])."""
+    states[t], progs[t]), states[0] the empty state's row, and computes (states[t + 1], views[t])."""
 
     cls: IS.Class
     ingress: list[bytes]
@@ -107,11 +107,6 @@ class Chain:
     states: list[list[int]]
     progs: list[list[int]]
     views: list[list[int]]
-
-    def unit(self, t: int) -> tuple[bytes, list[int], list[int]] | tuple[bytes, list[int]]:
-        """Unit t's arguments: (row, prog) for t = 0 (`IngressScanFirst`), (row, sin, prog) after it
-        (`IngressScanBucket`)."""
-        return (self.ingress[0], self.progs[0]) if t == 0 else (self.ingress[t], self.states[t], self.progs[t])
 
     def outputs(self, t: int) -> tuple[list[int], list[int]]:
         """Unit t's o1 and o2: S_t and its egress view."""

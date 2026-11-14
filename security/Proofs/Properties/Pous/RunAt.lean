@@ -139,9 +139,9 @@ theorem runCheckAcceptsAt : RunCheckAcceptsAt := by
   · exact absurd (.inr hforge) hR
   left
   have hrsc : run.commitment = r.commitment := hrc.trans hcom
-  have hk : run.coins.k = r.commitment.k := congrArg SessionCommitment.k hrsc
-  have hlim : run.limitNs = r.commitment.limitNs := congrArg SessionCommitment.limitNs hrsc
-  have hbb : run.blockBytes = r.commitment.blockBytes := congrArg SessionCommitment.blockBytes hrsc
+  have hk : run.coins.k = r.commitment.k := congrArg ChallengePhaseCommitment.k hrsc
+  have hlim : run.limitNs = r.commitment.limitNs := congrArg ChallengePhaseCommitment.limitNs hrsc
+  have hbb : run.blockBytes = r.commitment.blockBytes := congrArg ChallengePhaseCommitment.blockBytes hrsc
   refine ⟨run, hrun, hrsc, ?_⟩
   obtain ⟨hle, -, hent⟩ := inv_recorded run
   have hrs : run.recorded.rounds.size = run.coins.k := by rw [hrr, hsize, hk]

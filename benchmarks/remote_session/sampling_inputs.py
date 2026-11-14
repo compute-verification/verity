@@ -10,7 +10,7 @@ the closed form below against the same arithmetic on uniform sessions, and only 
 `COST_MODEL_JSON` is a `spot.costfit` record whose observations include `BlockOpeningCheck_v1`'s sessions.
 
 With o openings proved a second, d of them a group of k passes at r passes a second, and β = B/d, where
-B = −S·expm1(ln δ/S) ≈ ln(1/δ) is `audit.pooled`'s budget over S draws, the line loses this many blocks over a span
+B = −S·expm1(ln δ/S) ≈ ln(1/δ) is `audit.pooled`'s budget over S samples, the line loses this many blocks over a span
 Θ, as a fraction of the store's N blocks:
 
     sampling, snapshot        B / S_Θ                                     S_Θ the openings sampled over Θ
@@ -107,7 +107,7 @@ def span_line(g: SimpleNamespace, lo: int, hi: int, *, wrong: float, blocks: int
 
 
 def record_of(windows: list[tuple[int, int]], per_coin: int = 1) -> SimpleNamespace:
-    """What `audit.pooled` reads of a record: each window's receipts and draws, and the windows an openings coin
+    """What `audit.pooled` reads of a record: each window's receipts and samples, and the windows an openings coin
     selects over (`groups_per_coin`)."""
     return SimpleNamespace(groups_per_coin=per_coin, windows=[SimpleNamespace(receipts=u, profile=SimpleNamespace(
         delta=audit.DELTA, drawn={"receipt": d})) for u, d in windows])
@@ -348,8 +348,8 @@ def solve(p: dict, prices: dict, eps: float, *, theta: float, line_rule: bool, f
 def coin_check(p: dict, s: dict) -> dict:
     """A plan `s` sampled g = `s["per_coin"]` groups a coin, read by the code: its closed form's held-over-time sampling
     term against `span_line`'s arithmetic on the uniform session it describes (whole coins over Θ, then one more),
-    whose wrong receipts are `audit.pooled`'s on a record of each group's receipts and draws naming `groups_per_coin`
-    (all of a coin's draws on its last group, as `AuditRun.close` may share them: the code pools them over the coin's
+    whose wrong receipts are `audit.pooled`'s on a record of each group's receipts and samples naming `groups_per_coin`
+    (all of a coin's samples on its last group, as `AuditRun.close` may share them: the code pools them over the coin's
     groups). At one group in flight (`s["flight"]` 1) each group's root comes `least_period` after its coin, before the
     next coin as a record naming f = 1 must have it. Refuses to go on unless they agree."""
     g, k, r, N, f = s["per_coin"], s["k"], s["r"], p["blocks"], s.get("flight", 2)

@@ -69,14 +69,14 @@ def test_incorrect_outputs_capacity_is_where_detection_reaches_one_minus_delta()
         assert f.detect(1e8) < f.detect(1e12) < f.detect(1e16) < 1
 
 
-def test_incorrect_outputs_are_the_same_in_either_regime_and_undetected_unmonitored():
+def test_incorrect_outputs_are_the_same_in_either_regime_and_undetected_unregistered():
     onsite = operating.incorrect(REG, build(REG, "reference-onsite-nvl72"))
     assert operating.incorrect(REG, build(REG, "reference-remote-h200")) == onsite
     # every unit proved: the first incorrect block is sampled, so the channel carries J ln(1/δ) (1 + floor) blocks' bits,
     # each the widest public size class of a block's outputs
     assert onsite.q == 1 and math.isclose(onsite.capacity, math.log(1e6) * 2 * partition_v2.UNIT_CLASS_MAX)
-    unmonitored = operating.incorrect(REG, build(REG, "unmonitored-h200-kimi"))
-    assert unmonitored.capacity == math.inf and set(unmonitored.detect.values()) == {0.0}
+    unregistered = operating.incorrect(REG, build(REG, "unregistered-h200-kimi"))
+    assert unregistered.capacity == math.inf and set(unregistered.detect.values()) == {0.0}
 
 
 def test_human_units():

@@ -4,7 +4,7 @@ public import Definitions.Accounting.Remote.Held
 public import Definitions.Accounting.Remote.Draw
 
 /-!
-# PoUB's sampled draw: the instances its witnesses are stated at
+# PoUB's sample: the instances its witnesses are stated at
 
 The witnesses of the five sampled guarantees (`Accounting.SecurityProofs.Remote.PooledSample`, `LiveCoinsSampled`,
 `HeldSampled`, `HeldOverTimeSampled`, `HeldOverTimeLinksSampled`; `Proofs/Accounting/RemoteHeld/DrawMeets.lean`) are
@@ -12,10 +12,10 @@ stated at these instances.
 
 * `burst`: two passes of `D` ticks, every receipt correct, on a node whose first `Br + Bd + Bl` registered blocks are
   absent until tick `t₁` and all come back at `t₁`, by rebuilds, disk reads and links. `burstPace` gives its groups.
-* `honest`: a draw whose window `t` registers `U t` receipts, every one correct, whatever the coins.
+* `honest`: a sample whose window `t` registers `U t` receipts, every one correct, whatever the coins.
 * W2's session, `w2Session` over `w2Draw`: one window of `130,023,424` receipts, sampled `33,273` times on 256-bit keys,
   its node at W2's numbers. Its coin stream (`zeroStream`) and receipts (`w2Receipts`) are fixed arbitrarily: the honest
-  draw meets its premises at every stream and every receipts structure.
+  sample meets its premises at every stream and every receipts structure.
 * The toy, `toy`: one window of one receipt, none correct, sampled once. It is checked by an audit that accepts every
   outcome (`acceptAll`), with receipts no opening verifies (`unsalted`), over the span `[0, 1)` (`toyPace`).
 -/
@@ -59,9 +59,9 @@ def burstPace {Ω : Type} (D : ℕ) : Pace Ω where
   released := fun _ g => g * D
   ended := fun _ g => (g + 1) * D
 
-/-! ## The honest draw and W2's session -/
+/-! ## The honest sample and W2's session -/
 
-/-- **The honest draw**: window `t` registers `U t` receipts, every one correct, whatever the coins. -/
+/-- **The honest sample**: window `t` registers `U t` receipts, every one correct, whatever the coins. -/
 def honest {n m : ℕ} (k : Fin n → ℕ) (κ : ℕ) (X : Type) (U : Fin n → Fin (m + 1)) : Run n m k κ X where
   size t _ := U t
   correct t _ := range (U t)

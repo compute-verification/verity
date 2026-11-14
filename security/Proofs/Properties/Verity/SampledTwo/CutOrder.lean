@@ -454,7 +454,7 @@ theorem order_binds (dev : Exchange → History) (θ : ByteArray) (hF : FirstRea
     exact h
   have hk₂ : d₂.key = key := key_second h1 h2 h5 h6
   have hm₂ : (d₂, e.interior.base.coins) ∈ records o.sent := by rw [records_eq h1 h2, h3, h6]; simp
-  have hw : windowsOf θ = some (d₁.window, d₂.window) := by rw [← hθ]; exact windowsOf_eq h1 h3 h5 h6
+  have hw : windowsOf θ = some (d₁.window, d₂.window) := by rw [← hθ]; exact executionPhasesOf_eq h1 h3 h5 h6
   obtain ⟨raw, hraw, -⟩ := oneStageZk_reads p.audit c₂ d₂ hd₂ e.interior ξ₂ h7
   have hPT : PrintsTwo (dev o) d₁.window d₂.window o.log ∨
       Break (dev o) d₂.key d₂.label e.interior.base.coins := by

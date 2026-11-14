@@ -86,7 +86,7 @@ one C5 gives, so that against `H` it commits what the original commits against `
 theorem exists_relabel_adversary {CM : CostModel Q R S} (hCM : CM.RelabelClosed) (π : Q ≃ Q) (A : Adversary CM)
     (U : Workload) {T : ℝ} {q : ℕ} (hA : A.Bounded U T q) :
     ∃ A' : Adversary CM, A'.Bounded U T q ∧
-      ∀ (H : Q → R) (s : S), A'.transcript U H s = A.transcript U (H ∘ π.symm) s := by
+      ∀ (H : Q → R) (s : S), A'.trace U H s = A.trace U (H ∘ π.symm) s := by
   obtain ⟨prog', hrun⟩ := hCM π.symm A.online U A.act
   refine ⟨⟨relabelTree π.symm A.pre, prog', A.act⟩, fun H s => ?_, fun H s => ?_⟩
   · have hb := hA (H ∘ π.symm) s

@@ -173,10 +173,11 @@ _caller_server = _Server(CALLER_EXE, CALLER_PACKAGE)
 atexit.register(_caller_server.close)
 
 
-def lean(fn: str, value: Any, server: _Server = _server) -> dict[str, Any]:
-    """The Lean's answer (`server`'s, by default `sampled-proofs-verifier`'s): its output, or `{"refused": reason}` where
-    it refuses the input. Where it can't be built or run, or answers outside its protocol, `{"refused": reason,
-    "answered": False}`: a refusal that is not the Lean's."""
+def lean(fn: str, value: Any) -> dict[str, Any]:
+    """The Lean's answer (`spot-flock-caller`'s for ``caller``, else `sampled-proofs-verifier`'s): its output, or
+    `{"refused": reason}` where it refuses the input. Where it can't be built or run, or answers outside its protocol,
+    `{"refused": reason, "answered": False}`: a refusal that is not the Lean's."""
+    server = _caller_server if fn == "caller" else _server
     try:
         kind, body = server.call(fn, value)
     except LeanError as e:
@@ -366,7 +367,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sa
     py = C.check(rec, program, query, sampling_design, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
                  supplied, pinned, binding, outputs, schemas, window_root, held, members, day, declarations, seed_salt,
                  pool, tied, history, compiler, certified, verdicts)
-    caller = _decide(_codes(lean("caller", {"params": params, "record": dict(rec)}, _caller_server)), py, whole=False)
+    caller = _decide(_codes(lean("caller", {"params": params, "record": dict(rec)})), py, whole=False)
     return C.gate(spot, caller)
 
 

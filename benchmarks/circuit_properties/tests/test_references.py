@@ -1,4 +1,4 @@
-"""The properties of the declared reference circuits: the Boolean GEMM against the gate-by-gate definitions, and one served
+"""The properties of the registered circuits: the Boolean GEMM against the gate-by-gate definitions, and one served
 layer (SmolLM2-135M's) against the shapes its GEMMs read and benchmarks/slowdown's for the model."""
 
 from __future__ import annotations
@@ -102,7 +102,7 @@ def test_tiny_layer_matches_flat():
 @pytest.mark.slow
 def test_smollm2_layer():
     """The served SmolLM2-135M layer on bits (5.6e9 gates; building its Definitions takes most of the time): what only a
-    real layer shows, its four GEMMs' products and the MLP input's fan-out, and that they are the `fanout`, `legs` and
+    real layer shows, its four GEMMs' products and the MLP input's fan-out, and that they are the `fanout`, `fanin` and
     layer products benchmarks/slowdown reads for the model (its `models.toml` row, and derived from the config's matrices)."""
     import run
     from verity_vllm.definitions.registry import b1
@@ -114,9 +114,9 @@ def test_smollm2_layer():
     assert m.activation_values == 16 * (3 * H + I) and m.excluded == {}
     shapes = run.slowdown_shapes("smollm2-135m", C)
     row = shapes["models.toml"]
-    assert (row["fanout"], row["legs"], row["layer_products"]) == (m.a_out, m.a_in, m.products)
-    assert (row["derived_fanout"], row["derived_legs"]) == (m.a_out, m.a_in)
-    assert (shapes["config"]["fanout"], shapes["config"]["legs"], shapes["config"]["layer_products"]) == (m.a_out, m.a_in, m.products)
+    assert (row["fanout"], row["fanin"], row["layer_products"]) == (m.a_out, m.a_in, m.products)
+    assert (row["derived_fanout"], row["derived_fanin"]) == (m.a_out, m.a_in)
+    assert (shapes["config"]["fanout"], shapes["config"]["fanin"], shapes["config"]["layer_products"]) == (m.a_out, m.a_in, m.products)
 
 
 def test_a_run_of_every_configuration_writes_the_least_s_x_under_the_metrics_id(tmp_path, monkeypatch, capsys):

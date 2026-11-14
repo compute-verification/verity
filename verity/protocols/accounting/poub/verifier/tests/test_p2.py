@@ -11,7 +11,7 @@ import struct
 from pathlib import Path
 
 import pytest
-from remote_bandwidth_fakes import Clock, Entropy
+from poub_fakes import Clock, Entropy
 
 from verity.commitments.randomness import frame
 from verity.protocols.accounting.poub.prover import p2_prover

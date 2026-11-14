@@ -192,7 +192,7 @@ def PI.mergeStep (st : Array (Nat × Nat) × Option PI) (x : PI) : Array (Nat ×
     else (PI.emit st.1 c, some x)
   | none => (st.1, some x)
 
-/-- The pieces' elements as intervals of naturals (an order-free view), not necessarily disjoint. Periodic intervals of one
+/-- The pieces' elements as intervals of naturals (an order-free view), not necessarily disjoint. Intervals that repeat with one
 period and count are sorted and those that abut or overlap merged: the rows of a transposed or of a row-strided part,
 read part by part, become one run per period, one interval when the runs fill the period. -/
 def ivsOf (qs : Array Piece) : Array (Nat × Nat) :=

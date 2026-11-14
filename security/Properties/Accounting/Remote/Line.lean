@@ -39,39 +39,39 @@ import Mathlib.Topology.Sheaves.Init
 public import Definitions.Pouw.Basic.Prob
 
 /-!
-# The memory line of record, over what the Lean verifier accepts (`RemoteAudit.Line.lineOfRecordAt`)
+# The memory line of record, over what the Lean verifier accepts (`Poub.Line.lineOfRecordAt`)
 
-The line a gate run publishes (`RemoteAudit.Line.lineOfRecordAt`, `line.py`'s `line_of_record`) reads a paced session's
+The line a gate run publishes (`Poub.Line.lineOfRecordAt`, `line.py`'s `line_of_record`) reads a paced session's
 groups and its wrong receipts' bound W off the Lean verifier's record of it. What it says of the bandwidth audit's
 claim, bits read (`Accounting.PeriodRun.Holds` at `.poub`), is that its passes, `P` of them over its groups, read every
 one of the `N` registered blocks but the W wrong: `8·b·(P·N − W)` bits read on the node (`ReadAt`, `Trace.reads`).
 `LineHeld` is the one statement that this is true of the trace that produced the record wherever the network
-certifiers observed nothing but the verifier's messages entering the node, at any windows a draw (`Node.groupsPerCoin`
+certifiers observed nothing but the verifier's messages entering the node, at any windows a sample (`Node.groupsPerCoin`
 g, `groups_per_coin`: one openings coin over windows `c·g … (c + 1)·g − 1`, the session run by `Shared.run g`, which at
 g = 1 is `Session.run`):
 
 * **LineHeld**: on any node, trace and correct receipts, with the prover's records read through the coin commitment
   (`recordCommitted`: holding commitment `c` its record at `ω` is `recs c ω`, and the session it plays that record's
-  opening draw `recordSample`, one draw for each of the session's `⌈W/g⌉` (`Node.samples`, a window each at g = 1), draw
+  opening sample `recordSample`, one sample for each of the session's `⌈W/g⌉` (`Node.samples`, a window each at g = 1), sample
   `c` with the receipts its windows have in the state the record's session reaches, sampling `min(s, U_c)` at the
   session's `samples` s) and the record of outcome `ω` the prover's holding the deployed commitment `com ω`
   (`played`), whose trace of record (`ofRecord`, the trace over the registration's blocks with the Lean verifier's
   verdict on the record as its own) meets the line's premises (`Paced` at the record's groups `recordPace`, `Covers`,
   `SketchBoundAt` at `δs`, the certifiers' coverage of the node's uplinks `Covered` and their count of what enters
-  `IngressCounted` at δ_net, and the draw's `Live` at every fixed coin commitment, `Refused` at the receipts `R`,
+  `IngressCounted` at δ_net, and the sample's `Live` at every fixed coin commitment, `Refused` at the receipts `R`,
   `Counted`, of the session the prover plays holding `com`, `play com`), the probability that the Lean verifier
   accepts the record's session, the
   certifiers sign nothing but the verifier's messages entering the node over the credited passes (`Quiet` at
-  `Ingress.counted`), and the line it reads off the Lean verifier's record (`lineOf`: its groups, draws and registered
+  `Ingress.counted`), and the line it reads off the Lean verifier's record (`lineOf`: its groups, samples and registered
   blocks the record's) credits more bits read than the trace's passes read (`ReadAt`) is at most
   `δs + δ_net + (δ + Σ_c s / 2^256 + Σ_c adv_c + Σ_c hide_c + bind)`, `δ` the one the line reads its pooled bound at
   (`Node.delta`, a nonnegative rational; the line computes at none outside `(0, 1)`), `adv_c` the advantage on `prf c`
-  of draw `c`'s distinguisher at that `δ` (`Session.distinguisher`) with openings coin `c`'s commitment leaf committing
-  zeros (`Committed.junk`), `hide_c` draw `c`'s hiding term (`Committed.hide`, hm96's, at most `n·2^-191` over the
-  session's `n` draws in all), and `bind` the receipts' binding term over the session's draws (`Receipts.binding`:
+  of sample `c`'s distinguisher at that `δ` (`Session.distinguisher`) with openings coin `c`'s commitment leaf committing
+  zeros (`Committed.junk`), `hide_c` sample `c`'s hiding term (`Committed.hide`, hm96's, at most `n·2^-191` over the
+  session's `n` samples in all), and `bind` the receipts' binding term over the session's samples (`Receipts.binding`:
   some opened receipt presented with an accepted row other than the one its root holds). The openings are the
-  deployed draw's (`Accounting.Remote.Draw`: `Key.subset` on the first blocks `prf c` gives draw `c`'s coin, at most
-  `receiptMax = 2^64 − 1 < 2^64` receipts a draw, the verifier's `RECEIPT_LIMIT` less one, the sampler's fallbacks
+  deployed sample's (`Accounting.Remote.Draw`: `Key.subset` on the first blocks `prf c` gives sample `c`'s coin, at most
+  `receiptMax = 2^64 − 1 < 2^64` receipts a sample, the verifier's `RECEIPT_LIMIT` less one, the sampler's fallbacks
   `rest` free), at the error `Accounting.Guarantees.Remote.PooledSample` states.
 
 It takes no device model: bits read need none. The memory the line's stretches credit, `span · (N − lost)` registered
@@ -79,13 +79,13 @@ blocks held over each stretch's span and `max(0, w − lost)` weights bytes a ti
 the bits read under the device model (the links' ceiling `Links` or `Identity`, `SquaringCeiling`, `Disks`,
 `ChipCeiling`, `Routed`, at the node's rates in the model's units, a tick a nanosecond, `Node.squarings` …
 `Node.chipBlocks`), by the model's argument for `Accounting.Guarantees.Remote.HeldOverTimeLinksSampled`, in a lemma of
-the proofs (`Properties.RemoteAudit.Line.SecurityProofs.heldAt_of_read`).
+the proofs (`Properties.Poub.Line.SecurityProofs.heldAt_of_read`).
 
-The bound follows from the line's W covering the session's pooled bound (`Properties.RemoteAudit.LineCoversRun`,
-at the record's draws, whose draws the line holds to `min(s, U_c)` and whose receipts on an accepted record are
+The bound follows from the line's W covering the session's pooled bound (`Properties.Poub.LineCoversRun`,
+at the record's samples, whose samples the line holds to `min(s, U_c)` and whose receipts on an accepted record are
 `recordSample`'s sizes: the reached state is the run's, a window's receipts are below `RECEIPT_LIMIT`,
-`Properties.RemoteAudit.ReceiptsBelowLimit`, and the line refuses a draw of `g` > 1 windows with `RECEIPT_LIMIT` or
-more, `RemoteAudit.Line.ofSummaryAt`), the line's groups being one for each of the session's windows on an accepted
+`Properties.Poub.ReceiptsBelowLimit`, and the line refuses a sample of `g` > 1 windows with `RECEIPT_LIMIT` or
+more, `Poub.Line.ofSummaryAt`), the line's groups being one for each of the session's windows on an accepted
 record (its parameters' `windows`, `Session.State.outcome`, which `Shared.run` keeps at every g). The held lemma also
 reads two properties of the line's code, proved of it:
 
@@ -114,10 +114,10 @@ holds from any start in `[s_0, e_0]`, which the held lemma uses.
 
 @[expose] public section
 
-namespace Properties.RemoteAudit.Line
+namespace Properties.Poub.Line
 
 open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions _root_.RemoteAudit.Line
+  Accounting.Remote.Draw.Assumptions _root_.Poub.Line
 
 /-- **LineChecked**: a line the code computes had a block of one or more bytes, a block's encode of one or more
 squarings, nonnegative rates and bursts, and read a nonnegative wrong receipts' bound. -/
@@ -134,8 +134,8 @@ sampled `g` windows a coin (`lineOfRegistered`), is of a record of the registrat
 registration's digest, its registered blocks, which the line credits, are the registration's, and the line is the
 record's (`lineOfRecordOn`). -/
 def LineRegistered : Prop :=
-  ∀ (onRecord : Bool) (g : ℕ) (reg : RemoteAudit.Registration) (digest : ByteArray)
-    (sm : RemoteAudit.Session.Summary) (samples : ℕ) (seen : Array Seen) (per blockBytes chipBytes nodeBytes : ℕ)
+  ∀ (onRecord : Bool) (g : ℕ) (reg : Poub.Registration) (digest : ByteArray)
+    (sm : Poub.Session.Summary) (samples : ℕ) (seen : Array Seen) (per blockBytes chipBytes nodeBytes : ℕ)
     (δ : ℚ) (rates : Rates) (l : Line),
     lineOfRegistered onRecord g reg digest sm samples seen per blockBytes chipBytes nodeBytes δ rates = .ok l →
     digest = reg.digest ∧ sm.blocks = reg.blocks ∧
@@ -197,17 +197,17 @@ def ReadAt {Ω : Type} (T : Trace Ω) (ω : Ω) (node : Node) (r : Record) : Pro
     (8 * node.blockBytes : ℝ) * (((firstPass (r.groups node) (r.groups node).size * node.blocks : ℕ) : ℝ) - l.wrong) ≤
       (8 * node.blockBytes : ℝ) * T.reads ω (firstPass (r.groups node) (r.groups node).size)
 
-/-- **The memory line of record, in bits read.** On a trace over a session's coins, one for each of its draws
+/-- **The memory line of record, in bits read.** On a trace over a session's coins, one for each of its samples
 (`Node.samples`, a window each at g = 1), the prover's records read through the coin commitment (`recordCommitted`,
-each record's opening draw at its `samples` s) and the record of each outcome the one played holding the deployed
+each record's opening sample at its `samples` s) and the record of each outcome the one played holding the deployed
 commitment (`played`), whose trace of record (`ofRecord`: over the registration's blocks, its verdict the Lean
 verifier's on the record) meets the line's premises at the record's groups, the network certifiers' coverage of the
 node's uplinks (`Covered`) and count of what enters (`IngressCounted` at `δnet`), the probability that the Lean
 verifier accepts the record's session, the certifiers sign nothing but the verifier's messages entering the
 node over the credited passes, and the record's line credits more bits read than the passes read is at most
 `δs + δnet + (δ + Σ_c s / 2^256 + Σ_c adv_c + Σ_c hide_c + bind)`, `δ` the line's, `adv_c` the advantage on `prf c` of
-draw `c`'s distinguisher at it with leaf `c` of the coin commitment committing zeros, `hide_c` draw `c`'s hiding term
-and `bind` the receipts' binding term at `R`, over the session's draws. -/
+sample `c`'s distinguisher at it with leaf `c` of the coin commitment committing zeros, `hide_c` sample `c`'s hiding term
+and `bind` the receipts' binding term at `R`, over the session's samples. -/
 def LineHeld : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
     (rest : DrawCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → DrawCoins node.samples κ X → Record)
@@ -227,4 +227,4 @@ def LineHeld : Prop :=
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
         (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
 
-end Properties.RemoteAudit.Line
+end Properties.Poub.Line

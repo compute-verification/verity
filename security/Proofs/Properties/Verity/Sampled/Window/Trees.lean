@@ -18,7 +18,7 @@ releases the `u`-th session's rounds pick.
   is of the last tree opened, which `OpensInOrder` gives where the sessions' trees are the log's opened trees in
   order.
 * **The sessions' rounds in a log** (`SessionPicks`): what the lemmas below read of the readings, which the window's
-  readings have in a log that serves each opening (`sessionPicks_windowReadingAt`).
+  readings have in a log that serves each opening (`sessionPicks_executionPhaseReadingAt`).
 * **What the walk has answered is the sessions before the `u`-th** (`SessDone`): it holds with nothing answered
   (`sessDone_nil`); while it holds and the `u`-th tree is opened, not every pick is answered (`SessDone.not_all`);
   the next release picked is the `u`-th session's link's (`SessDone.first_stop`), the ones a session's trace answers
@@ -443,12 +443,12 @@ end Sessions
 whose trees each name their streams distinctly and are no more than the sessions the readings' rounds hold: round `j`
 is session `j / per`'s, the link's at the session's first place. The closing round's pick, as a rep round's, is an
 opening of the tree the session's link opened. -/
-theorem sessionPicks_windowReadingAt {R : ℕ} {tables : Array String} (ht : tables.toList.Nodup)
+theorem sessionPicks_executionPhaseReadingAt {R : ℕ} {tables : Array String} (ht : tables.toList.Nodup)
     (hT : 0 < tables.size) {per : ℕ} (hper : 1 < per) (reveal : ℕ → Slot → Exchange → Option Claims.Msg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {Lg : List Release}
     (hn : ∀ sp ∈ helloSpecs Lg, sp.streams.toList.Nodup) (hS : LogServed Lg)
     (hR : (openedTrees Lg).length * per ≤ R) :
-    SessionPicks (windowReadingAt (R := R) tables per reveal record recordDigest).round (fun j => j.val / per)
+    SessionPicks (executionPhaseReadingAt (R := R) tables per reveal record recordDigest).round (fun j => j.val / per)
       (fun j => slotOf tables.size per (j.val % per) = .link) Lg where
   link j L₁ hl := by
     rintro ⟨x, L₂, he, hp⟩
@@ -485,13 +485,13 @@ theorem sessionPicks_windowReadingAt {R : ℕ} {tables : Array String} (ht : tab
   unique j j' L₁ := by
     rintro ⟨x, L₂, he, hp⟩ ⟨x', L₂', he', hp'⟩
     obtain rfl : x = x' := (List.cons.inj (List.append_cancel_left (he.symm.trans he'))).1
-    exact windowReadingAt_unique ht hT (by omega) reveal record recordDigest hp hp'
+    exact executionPhaseReadingAt_unique ht hT (by omega) reveal record recordDigest hp hp'
   link_inj j j' hl hl' hsu := by
     have hper0 : 0 < per := by omega
     have hm : j.val % per = j'.val % per :=
       slotOf_inj hT (Nat.mod_lt _ hper0) (Nat.mod_lt _ hper0) (hl.trans hl'.symm)
     have hd : j.val / per = j'.val / per := hsu
     exact Fin.ext (by rw [← Nat.div_add_mod j.val per, ← Nat.div_add_mod j'.val per, hd, hm])
-  once := picksOnce_windowReadingAt tables per reveal record recordDigest hn
+  once := picksOnce_executionPhaseReadingAt tables per reveal record recordDigest hn
 
 end Verity.Sampled

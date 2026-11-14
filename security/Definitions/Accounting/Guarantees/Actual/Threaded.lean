@@ -1,8 +1,8 @@
 module
 
 public import Definitions.Accounting.Guarantees.Actual
-public import Definitions.InferenceOnly.Assumptions.Threads
-public import Definitions.InferenceOnly.Dark
+public import Definitions.Slowdown.Assumptions.Threads
+public import Definitions.Slowdown.Dark
 
 /-!
 # The memory cap over threads (trusted)

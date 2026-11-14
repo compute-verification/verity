@@ -49,7 +49,7 @@ builds from that list (`Verity.ofIds_onsite`, `Verity.ofIds_remote`,
 | | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`): Pearl+'s run verdict, its claim in MACs | yes | |
 | the inference-only policy | `InferenceOnlySound` | `InferenceOnlyCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes |
 | PoUS | `PousSound` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | | yes |
-| PoUB-P2, on PoUS's store | `BandwidthAuditSound` | `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | | yes |
+| PoUB-P2, on PoUS's store | `BandwidthAuditSound` | `Poub.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | | yes |
 | the network certifier | `NetworkCertifierSound` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | | yes |
 | the wipe | `WipeSound` | `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) | | yes |
 

@@ -11,11 +11,11 @@ public import Definitions.Core.Interaction
 **The session.** The memory challenger's signed record never reaches the auditor. The auditor's session decides by
 SESSUNITS' `MemoryChallenger.sessionInProofs` (`MemoryChallenger/InProofs.lean`, memory-accounting/pous-session-inside-proof):
 the clear checks on what the device releases (the commitment, the coin openings, the scheme and key), the carried rows'
-leaves agreeing across the session's `c.k + 2` proof blocks, and every block's proof accepted. `SessionInProofsDeployed`
+leaves agreeing across the session's `c.k + 2` proof blocks, and every block's proof accepted. `RunInProofsDeployed`
 says that a fixed extractor, rerunning any prover, recovers a signed session that today's `verdict` accepts, except
 `(c.k + 2) · (ε_ks + ε_bind)` and the collision term `Claims.KS` carries. `sessionInProofs` and its `UnitOutcome` are not
 on this branch yet, so the statement takes them as parameters at the signature its issue gives; the deployed instance is
-`SessionInProofsDeployed H UnitOutcome sessionInProofs`.
+`RunInProofsDeployed H UnitOutcome sessionInProofs`.
 
 **The setup.** `C*` and `W` never reach the auditor. The auditor decides by SETUPUNIT's `PousCheck.SetupInProofs.check`
 (`PousCheck/SetupInProofs.lean`, memory-accounting/pous-setup-as-proof) on the setup's claim: the sampled audit at
@@ -29,7 +29,7 @@ Both are stated and not proved. What closes them is proofs' two forms, through t
 - for the session, `Flock.Guarantees.IntegrityAllProvedCarried` at `I` the session's statements (every unit proved),
   whose conclusion is `Verity.InProofs.Gives` at `K₀ = 1` with each carried leaf (the digest `m`, each round's record)
   read at its one value in every statement that shares it, which is `Carried`;
-- for the setup, the sampled period form with carried leaves, `Flock.Guarantees.IntegrityHorizonCarried` at
+- for the setup, the sampled period form with carried leaves, `Flock.Guarantees.IntegrityPooledCarried` at
   `q = 8828/B`, whose conclusion gives `Gives` at `K₀ = ⌊B/100⌋ + 1` with `W`'s rows carried, which is `CarriedW`.
 -/
 
@@ -46,10 +46,10 @@ as the round units `PousRound_v1` read them), the commitment `c`, the coin openi
 verifier `V` that accepts only outcomes (`outsOf`) that `sessionInProofs` accepts: a fixed extractor `E` recovers, by
 rerunning any prover, a signed session under `c`, `scheme` and `pk` that `verdict` accepts, except
 `(c.k + 2) · (εKs + εBind)` and `Claims.KS`'s collision term at `γ`. -/
-def SessionInProofsDeployed (H : Claims.Msg → Claims.Msg) (UnitOutcome : Type)
-    (sessionInProofs : Schemes → List ByteArray → (c : SessionCommitment) → Array CoinOpening → String → ByteArray →
+def RunInProofsDeployed (H : Claims.Msg → Claims.Msg) (UnitOutcome : Type)
+    (sessionInProofs : Schemes → List ByteArray → (c : ChallengePhaseCommitment) → Array CoinOpening → String → ByteArray →
       (Fin (c.k + 2) → UnitOutcome) → Bool) (εKs εBind γ : ℝ) : Prop :=
-  ∀ (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray) (c : SessionCommitment)
+  ∀ (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray) (c : ChallengePhaseCommitment)
     (openings : Array CoinOpening) (scheme : String) (pk : ByteArray)
     {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (V : Claims.Verifier Coin)
     (outsOf : List Claims.Msg → Option (Fin (c.k + 2) → UnitOutcome)),
@@ -57,7 +57,7 @@ def SessionInProofsDeployed (H : Claims.Msg → Claims.Msg) (UnitOutcome : Type)
       (Claims.run H P V x ω r).out = .acc →
         ∃ outs, outsOf ((Claims.run H P V x ω r).msgs.map Prod.fst) = some outs ∧
           sessionInProofs schemes trusted c openings scheme pk outs = true) →
-    ∃ E : Claims.Extractor Coin SignedSession V,
+    ∃ E : Claims.Extractor Coin SignedChallengePhase V,
       Claims.KS H V (fun _ s => s.commitment = c ∧ s.scheme = scheme ∧ s.publicKey = pk ∧
           (verdict schemes trusted expected s c openings).accepted = true) E
         (fun _ => (c.k + 2) * (εKs + εBind)) fun _ => γ
@@ -76,7 +76,7 @@ noncomputable def undecoded (q : P2.Params) (salt W : ByteArray) (cs : Fin q.blo
   Finset.univ.filter fun u => ¬ BlockDecodes q salt (u.val / q.blocksPerSegment) (u.val % q.blocksPerSegment) (cs u)
     (W.extract (u.val * q.payloadBytes) (u.val * q.payloadBytes + q.payloadBytes))
 
-/-- **PoUS's setup checked inside proofs, as deployed: stated and unproved**; proofs' `IntegrityHorizonCarried` at
+/-- **PoUS's setup checked inside proofs, as deployed: stated and unproved**; proofs' `IntegrityPooledCarried` at
 `q = 8828/B` closes it through `setupGives`. For the parameters `q`, the commitment `c`, the registered weights `W` (each row
 padded to its slots, SETUPUNIT's `padded`), and a setup verifier `V` that accepts only a claim (`claimOf`) that
 `SetupInProofs.check` accepts: a fixed

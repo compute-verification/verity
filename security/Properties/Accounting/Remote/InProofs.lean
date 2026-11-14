@@ -1,6 +1,6 @@
 module
 
-public import RemoteAudit.Span
+public import Poub.Span
 public import Definitions.Core.Interaction
 public import Properties.Verity.Sha512
 
@@ -8,8 +8,8 @@ public import Properties.Verity.Sha512
 # PoUB's read session proved in zero knowledge, as deployed: stated, unproved
 
 The memory-read session once its openings stay inside proofs. The auditor's session decides window `w` by
-`RemoteAudit.Span.checkSpan` on the span the prover sends: the sampled proof system's accepted one-stage statements, one
-opening unit a draw. `checkSpan` reads three rows of each unit, `pub`, `signs` and `o0`, none in the clear: it computes
+`Poub.Span.checkSpan` on the span the prover sends: the sampled proof system's accepted one-stage statements, one
+opening unit a sample. `checkSpan` reads three rows of each unit, `pub`, `signs` and `o0`, none in the clear: it computes
 the `pub` and `signs` rows itself (`publicWords`, `signWords`) and takes the verdict word the prover sends, and holds
 each to the unit's `b ‖ c` in the accepted public file by opening it under a salt the prover sends (`rowBc`: hm96-sha512
 over the row's `sha512/row/v2` digest). So the statement reads those rows as committed rows opened by salt, as the
@@ -17,23 +17,23 @@ session's and the setup's statements read their carried rows: it takes a premise
 rows that open to one `b ‖ c` are one row under one salt, or their SHA-512 inputs collide), and its bad event excludes a
 collision among the SHA-512 inputs those openings read (`spanInputs`).
 
-`SpanInProofsDeployed` says that a fixed extractor, rerunning any prover, recovers each draw's unit (its opening, and its
+`SpanInProofsDeployed` says that a fixed extractor, rerunning any prover, recovers each sample's unit (its opening, and its
 rows and salts as the proof binds them) such that `checkWindow` accepts the openings, except when those SHA-512 inputs
 hold a collision, `n · (ε_ks + ε_bind)` over the span's `n` statements and the collision term `Claims.KS` carries.
 
 It is stated and not proved. What closes it is proofs' period form of V5 with every unit proved:
 `Flock.Guarantees.IntegrityAllProvedCarried` at `I` the window's statements (each proves all its units, `kd = n`, and no
 leaf is carried), whose conclusion is `Verity.InProofs.Gives` at `K₀ = 1` for the run whose failing units are the game's
-wrong ones. `Properties.RemoteAudit.InProofs.SecurityProofs.spanGives` (`Proofs.Properties.Accounting.Remote.InProofs`)
+wrong ones. `Properties.Poub.InProofs.SecurityProofs.spanGives` (`Proofs.Properties.Accounting.Remote.InProofs`)
 then carries it from the opening unit's circuit to `checkWindow`, once `RowsBind` holds each unit's bound `pub` and `signs`
 rows to the verifier's own.
 -/
 
 @[expose] public section
 
-namespace Properties.RemoteAudit.SpanDeployed
+namespace Properties.Poub.SpanDeployed
 
-open _root_.RemoteAudit _root_.RemoteAudit.Span
+open _root_.Poub _root_.Poub.Span
 
 /-- **One opening unit's values, as its proof binds them**: the opening it checks, the words of its `pub`, `signs` and
 `o0` rows, and the salts those rows are committed under. -/
@@ -47,7 +47,7 @@ structure UnitVals where
   verdictSalt : ByteArray
 deriving Inhabited
 
-/-- The span's instances, its statements' in order: the window's draws, one each. -/
+/-- The span's instances, its statements' in order: the window's samples, one each. -/
 def instances (sp : Span) : Array Instance := sp.statements.foldl (fun acc st => acc ++ st.instances) #[]
 
 /-- **The SHA-512 input of a row's `sha512/row/v2` digest**, the inner digest `rowBc` commits: the tag and the row's bit
@@ -68,7 +68,7 @@ def RowsBind : Prop :=
       Hash.CollisionIn Verity.sha512 [(rowInput bits u).toList, (rowInput bits v).toList, (saltInput s).toList,
         (saltInput t).toList]
 
-/-- **The SHA-512 inputs a span's openings read**, at the units `us`: for each draw (i, p) and each of its `pub`,
+/-- **The SHA-512 inputs a span's openings read**, at the units `us`: for each sample (i, p) and each of its `pub`,
 `signs` and `o0` rows (of the bits the auditor's layout gives), the unit's row and the row `checkSpan` holds it to (the
 verifier's own, or the verdict word sent), and the two salts. -/
 def spanInputs (a : Auditor) (reg : Registration) (w : WindowRecord) (drawn : Array (Nat × Nat)) (sp : Span)
@@ -86,9 +86,9 @@ def spanInputs (a : Auditor) (reg : Registration) (w : WindowRecord) (drawn : Ar
 
 /-- **PoUB's read session proved in zero knowledge, as deployed: stated and unproved**; proofs'
 `IntegrityAllProvedCarried` (the period form of V5, every unit proved) closes it through `spanGives`. For the auditor `a`,
-the registration `reg`, window `w` and its draws `drawn`, a session verifier `V` that accepts only a span (`spanOf`) of
+the registration `reg`, window `w` and its samples `drawn`, a session verifier `V` that accepts only a span (`spanOf`) of
 at most `n` statements that `checkSpan` accepts, and the premise `RowsBind` for the rows it opens: a fixed extractor `E`
-recovers, by rerunning any prover, one unit a draw such that `checkWindow` accepts their openings, except when the
+recovers, by rerunning any prover, one unit a sample such that `checkWindow` accepts their openings, except when the
 SHA-512 inputs the span's openings read at those units hold a collision, `n · (εKs + εBind)` and `Claims.KS`'s collision
 term at `γ`. -/
 def SpanInProofsDeployed (H : Claims.Msg → Claims.Msg) (εKs εBind γ : ℝ) : Prop :=
@@ -111,4 +111,4 @@ def SpanInProofsDeployed (H : Claims.Msg → Claims.Msg) (εKs εBind γ : ℝ) 
                 ¬ Hash.CollisionIn Verity.sha512 (spanInputs a reg w drawn sp us)) ≤
           n * (εKs + εBind) + Real.sqrt (γ * Claims.PrB H V P x)
 
-end Properties.RemoteAudit.SpanDeployed
+end Properties.Poub.SpanDeployed

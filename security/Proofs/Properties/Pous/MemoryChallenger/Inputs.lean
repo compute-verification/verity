@@ -15,7 +15,7 @@ import Mathlib.Tactic.SetLike
 
 `message`, `recordsDigest` and `memoryChallengerMessage` unfolded to the SHA-512 inputs they hash (`message_ok`,
 `recordsDigest_ok`, `signedMessage_ok`), and each input split back into what it frames: the session input into its
-header and records digest (`session_split`), the signed message's input into its record (`signed_split`), the records'
+header and records digest (`challengePhase_split`), the signed message's input into its record (`signed_split`), the records'
 stream into its rounds (`stream_inj`: every value is `RECORD_BYTES` wide, `value_size`), a round's value into its round
 (`value_inj`, `rounds_inj`).
 -/
@@ -200,7 +200,7 @@ theorem stream_inj {rounds rounds' : Array Round} {s s' : ByteArray} (h : record
   obtain rfl : vs = vs' := Array.toList_inj.mp (flat_inj w w' hl e)
   exact rounds_inj hv hv'
 
-theorem message_ok {c : SessionCommitment} {e : String} {rounds : Array Round} {rec : ByteArray}
+theorem message_ok {c : ChallengePhaseCommitment} {e : String} {rounds : Array Round} {rec : ByteArray}
     (h : message c e rounds = .ok rec) :
     ∃ d, recordsDigest rounds = .ok d ∧
       rec = Sha512.hash (SESSION_TAG ++ be64 (header c e rounds.size).toUTF8.size.toUInt64 ++
@@ -222,7 +222,7 @@ theorem signedMessage_ok {I session rec m : ByteArray} (h : memoryChallengerMess
     exact ⟨not_not.mp hI, h.symm⟩
 
 /-- The session input, with records digests of one width, determines the header and the digest. -/
-theorem session_split {h h' r r' : ByteArray} (hr : r.size = r'.size)
+theorem challengePhase_split {h h' r r' : ByteArray} (hr : r.size = r'.size)
     (e : SESSION_TAG ++ be64 h.size.toUInt64 ++ h ++ r = SESSION_TAG ++ be64 h'.size.toUInt64 ++ h' ++ r') :
     h = h' ∧ r = r' := by
   have e := congrArg bs e
