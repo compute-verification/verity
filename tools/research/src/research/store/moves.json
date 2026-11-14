@@ -2415,6 +2415,12 @@
       "paths": {
         "verity/hardware/registration.py": "verity/protocols/accounting/registration/verifier/registration.py"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/properties/kernel_allowlist.py": "adapters/vllm/verity_vllm/observe/fold/profiles/kernel_allowlist.py",
+        "adapters/vllm/verity_vllm/properties/quarantine_lint.py": "adapters/vllm/tests/properties/quarantine_lint.py"
+      }
     }
   ]
 }
