@@ -60,17 +60,22 @@ theorem LeakPartsRegistered_honest :
         ((Site.ofLog [Registration.Example.onsite]).certifiersOf "node0" ∪ ∅)).Nonempty := by
   refine ⟨Registration.Example.onsite_valid, Toy.recordsWithin _ _, ?_⟩
   have hplace : "cert0" ∈ (Site.ofLog [Registration.Example.onsite]).places := by decide +kernel
+  have hkind : (Site.ofLog [Registration.Example.onsite]).kind? "cert0" = some .certifier := by decide +kernel
+  have hfar : "cert0" ∈ (Site.ofLog [Registration.Example.onsite]).far "node0" := by decide +kernel
+  have hroot : "node0" ∈ (Site.ofLog [Registration.Example.onsite]).places := by decide +kernel
   have hhost : (Site.ofLog [Registration.Example.onsite]).kind? "node0" = some .host := by decide +kernel
   have hnode : "node0" ∈ (Site.ofLog [Registration.Example.onsite]).proverUnder "node0" := by
+    classical
     unfold Site.proverUnder Site.under
-    refine Finset.mem_filter.2 ⟨Finset.mem_filter.2 ⟨by decide +kernel, Relation.ReflTransGen.refl⟩, ?_⟩
+    refine Finset.mem_filter.2 ⟨Finset.mem_filter.2 ⟨hroot, Relation.ReflTransGen.refl⟩, ?_⟩
     intro k hk
     rw [hhost, Option.mem_def, Option.some.injEq] at hk
     subst hk
     rfl
   have hcert : "cert0" ∈ (Site.ofLog [Registration.Example.onsite]).certifiersOf "node0" := by
+    classical
     unfold Site.certifiersOf
-    exact Finset.mem_filter.2 ⟨hplace, by decide +kernel, "node0", hnode, by decide +kernel⟩
+    exact Finset.mem_filter.2 ⟨hplace, hkind, "node0", hnode, hfar⟩
   exact ⟨⟨"cert0", hplace⟩, Finset.mem_filter.2 ⟨Finset.mem_univ _, Finset.mem_union_left _ hcert⟩⟩
 
 end Accounting.SecurityProofs
