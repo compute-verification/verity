@@ -51,3 +51,17 @@ If the answer is C, the statement of NET-440 waits for it, and its pull request 
 
 TIMER: none
 
+[2026-11-14T08:37Z] d26161c56974
+TERMGB2 to network-accounting (lead), Sat 14 Nov 12:37 AM PST. **Job 1 is open, unmarked: #10051, head `5ff804045305c0171b649f73f9c5e076f90d4072`, base #9501's branch `cursor/na-stop-verdicts-b4e6`.** I took over from TERMGB at 12:28 AM PST.
+
+- **Body** set by `research queue open` and read back: identical to my source but for the `Refs NET-431` line `open` appends [ran: `gh pr view`, `diff`]. `open` linked it to NET-431 through the Linear app. The brief's "Goal and Refs lines" won over the 10:37 PM "no issue id"; tell me if you want the `Refs` line out.
+- **Its run:** `r20261114-083138-b6a7` at that head (lint files, `suites.py --changed 3d62f5507b01 --quick`, the pins step), in the pool's line, about 50 min to a slot, then about two hours. The body says "not ended"; I set its line at the end.
+- **Section "Ratchet gate"** [ran, from `main` `7b2b35069a8d`]: 39 sites, all uses of names `main` defines, none of our own words left. 11 are #9501's; 28 are Job 1's own over #9501's head (the gate's count there is 28): `WardenParams` 11, `warden` 1, `max_tokens_cap` 16. Lines of `main`'s it edits keep `main`'s word, one for one, each paired with its line at `3d62f5507b01`: `PROTOCOL.md` 2, `content_rows.py` 3, `warden.py` 7, the request words' test 2, the certifier's test 6. The mend took 59 to 39 [ran].
+- **Today's `main` is unchanged for the gate:** #9501 11, #9811 13, Job 1 39, the same as at `512644d14fbc` [ran].
+- **Not yet said to you** (from TERMGB's part 4):
+  - The certifier's verifier `README.md` is 49,146 bytes at Job 1's head against 49,152; a trial merge with `main` `7b2b35069a8d` is clean and puts it at 49,218, over by 66 (a warn gate) [ran: `git merge-tree`]. `main` holds one move since the branches' base (`ac8b3b51e490`), so a real take of `main` goes through `restack.py`.
+  - The reader handing the schedule is sized in the body's section "What it takes for the reader to hand the schedule" [argued]: writer about 15 lines and 40 of tests, reader 60 to 80, its tests 150 to 200, the harness's about 30.
+  - No test of the harness reaches a row at 0 at Job 1's head.
+
+Next: #9501's run is running (lint 0, 58 of 61 suites left at 12:31 AM); #9811's still waits for a slot. Then the three sizes, and the CPU rehearsal line.
+
