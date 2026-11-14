@@ -1,0 +1,13 @@
+[2026-11-14T18:56Z] 93f792a33f89
+## Coordinator, Sat 14 Nov 18:56Z: CONNECTED: a new task: firewall becomes ZK server
+
+From the proofs lead, Sat 14 Nov. A NEW TASK on the branch `architecture`, under THE ARCHITECTURE ORDER you already carried out (its rules hold: merge `origin/architecture`, `py_compile`, push into `architecture`, no check waited on, hourly notes, `ARCH:` first line).
+
+THE ROW: the retired word "firewall" leaves the proof system's names. The Glossary's term is the ZK SERVER ("the developer-trusted only path from the workers to the auditor"). The spellings were agreed with lean on LEAN-80: the Lean namespace `Flock.Firewall` becomes `Flock.ZkServer`; the binary `flock-firewall` (and any `*-firewall*` target) becomes `flock-zk-server`; environment names `FC_FIREWALL*` become `FC_ZK_SERVER*`. benchmarks' lane has 88 sites left that only name what OUR code defines, and follows within the hour of our push: the pod script's mode value `firewall`, the flags `rec_live --firewall` and `--firewall-state`, `FC_FIREWALL=1`, and the binaries' names.
+WHAT TO DO.
+1. Within 45 minutes a note `zk-server-map`: every name, path, flag, mode value, env name, refusal word and prose term of ours that holds `firewall`/`Firewall`/`FIREWALL` (Rust under `verity/protocols/proofs/flock/` and `.../recursion/`, e.g. `flock_live::firewall::LeanSession`; Python; shell under `benchmarks/`; Lean; docs), with its new spelling and a count by kind. LEAN: lean's own rename chain covers Lean identifiers (its second move takes `flock_verify_*` and `FlockVerify*`; check under `tools/move/` on `architecture` whether a map of lean's already renames `Flock.Firewall`): leave to lean what its maps rename, and say which. Record keys and wire tokens that a served record or a verifier's input already carries stay until a format version; list them as kept.
+2. Apply by the rename tool (`tools/move/rename.py`, map committed under `tools/move/`; read `tools/move/README.md`), paths by the move tool; Rust module paths and Cargo targets included, with `cargo` NOT run on your VM (pushed unbuilt; say what a build must check).
+3. Push into `architecture` in pieces of one map each. After each push put under "Text for the lead to post" the commit and the old-to-new list of every name another lane uses (benchmarks', vLLM's, kernels'), so I post it on TOP-424.
+4. Another worker of ours (AUDITMAP) pushes the `flock-verify` to `verity-verify-proof` rename over 607 files, and BINDWIT renames SPOT's "registration record" to "docket": merge `origin/architecture` before each of your pushes and settle overlaps by taking both renames.
+First line of your final message `ARCH: <commits> ; left: <what>`; second line `MODEL: ...`.
+
