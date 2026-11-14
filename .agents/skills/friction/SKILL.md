@@ -189,7 +189,8 @@ Protocols and claims:
   are for the whole node. PoUB treats the developer's resources as one pool (conservation, no identity
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
-- PoUW's bar is T1–T3, not Dither or SAK; the lead (`verity/pouw/v2`) is next (`verity/protocols/accounting/pouw/verifier/README.md`).
+- Dither and SAK are not PoUW's bar. PoUW's lead is Pearl+, the remote protocol's PoUW
+  (`PouwCheck.PearlPlus.Protocol.protocol`, `verity/pouw/pearl-plus/v1`; `verity/protocols/accounting/pouw/verifier/README.md`).
 - PoUW's guarantees, and only PoUW's, may rest on random-oracle assumptions for SHA-512
   (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. Flock's
   knowledge soundness keeps the collision form.
