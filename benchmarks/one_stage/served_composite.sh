@@ -15,7 +15,9 @@
 # (SERVE_DIR/v3c-w*/audit; in a run without V3c whose H1 windows weren't tied, so with no SERVE_DIR/h1/log.jsonl,
 # `served_verdicts.sh`'s step 3's,
 # SERVE_DIR/sampled-proofs-served), the latter with the policy's α and Γ read off the case's own division
-# (`--from-division`), or ALPHA and GAMMA where both are set, and its log the serve's H1 log through R's previous record;
+# (`--from-division`), or ALPHA and GAMMA where both are set, and its log the serve's H1 log through R's previous record,
+# or, on a serve with no H1 log, the serve's own registration records walked back from R's previous to its first (on a
+# serve tied to Pearl+, the window's W and the serve's first record, which a compose hand-off carries);
 # and PoUW's period case (`served_pouw.sh`'s SERVE_DIR/private/pouw/period) once every window of it names R as its
 # Commit record, refused otherwise, and Pearl+'s run case naming R from the parts its piece wrote
 # (`served_pearlplus.sh`'s SERVE_DIR/private/pearlplus/case). Each CASE line's protocol and verdict go to
