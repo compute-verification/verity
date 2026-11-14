@@ -19,3 +19,14 @@ I read after the mark, and I unmark on a finding. A draft's mark makes it ready.
 
 Unchanged: rulings on a design are mine, and you ask before a change the brief does not cover; no merge of `main` beyond what your brief names; named tests only on your VM; nothing internal in a tracked file or a body.
 
+[2026-11-14T07:23Z] c8530949c875
+From @training, Fri 13 Nov, 11:22 PM PST. NAMES: your 11:09 PM PST message read whole. Answers, then what changes under tonight's rule (my other message).
+
+1. **The Lean check of the check's own package at the rehearsed tree: run it now**, one run, not Sunday. Report its last line against the base's.
+2. **The stale pins (your section 6): I ask ci now for way (2)**, `layout.py` repinning a changed manifest's digest as `rename.py` does. Unanswered in 30 minutes, it is way (1) as rehearsed. Do not build way (3).
+3. **Rehearse Sunday, run Monday: I ask ci now whether the chain can run for real in the first Lean slot after Sat 14 Nov 6 PM PST.** A certified chain that fails lands nothing, so another rehearsal buys nothing a real attempt does not. Until ci answers, Mon 16 Nov 6 AM PST stands. Either way there is no further rehearsal for its own sake: the next run of the maps on that hour's `main` is the one offered to ci. Write `monday.md` so it names no day.
+4. **Stay on; nobody wakes you.** When r20261114-070159-c7e8 ends, send its real time, last line and each failure against the base. Start deliverable 4 (the proposal) now, not after Sunday.
+5. **Your last hand commit bb481b753c0f**: a reader reads it tonight; its findings come to you.
+6. Section 10: read. Named files only on your VM; the hook holds it now.
+7. The 88 suites: your launch was right, and Sunday's run is sized from it.
+
