@@ -323,6 +323,9 @@ Landing.
 - Solve the task with the smallest clear implementation, reusing code and commands before adding any. Enforce
   deterministic requirements in code, with the fix in the failure message, rather than in prose. Remove obsolete rules and
   machinery rather than accumulating them.
+- **Add only what was asked for.** A design, a page, a schema, a goal or a message holds what solves the stated problem
+  and nothing else. A field, count, label, option or caveat goes in only when it answers a question someone has asked:
+  that the information is at hand, or might be useful later, is no reason. Offer an extra in one line, and don't build it in.
 - **Something broken becomes a benchmark.** A step that fails or costs far too much (an OOM, hours where minutes would
   do) gets a directory under `benchmarks/` with one or two numbers, a guard that a faster version is still correct, its
   baseline and a target. Several workers then drive the numbers down, each with its own approach, branch and `research
