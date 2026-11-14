@@ -25,6 +25,7 @@ import pytest
 
 import verity_vllm.pipeline.row_records as R
 from tests.pipeline.test_row import PD, STAGE_START, _record_manifest, _summary_row
+from tests.pipeline.test_row_match import _match_row
 from verity_vllm.config import CHECKPOINTS, WORKLOADS, workload_file
 from verity_vllm.pipeline import row_json
 from verity_vllm.query.manifest.format import components_fold_digest
@@ -45,6 +46,15 @@ def _put(path: Path, doc: Any) -> str:
 
 def _read(path: Path) -> Any:
     return json.loads(path.read_text())
+
+
+@pytest.fixture
+def shape_names(tmp_path_factory, monkeypatch) -> list[str]:
+    """The names ``match_shape.json``'s writer gives LP, the served T and the row's T, in that order: a single request's Match
+    (`test_row_match`'s row, its commands stood in) writes the record, and its reader looks each up by that name."""
+    r, _ = _match_row(tmp_path_factory.mktemp("writer"), monkeypatch)
+    r.compare(60)
+    return list(_read(Path(r.d, "match_shape.json")))[:3]
 
 
 def test_a_block_that_lists_nothing_is_walked_as_nothing():
@@ -326,17 +336,18 @@ def test_a_batch_rows_match_summary_states_each_document_it_read_and_returns_its
         "control_vs_instrumented_tokens_equal": True, "stages": {"capture": RAN, "control": {**RAN, "reason": "r" * 200}, "fold": RAN}, "pass": True}
 
 
-def test_a_single_requests_match_summary_names_the_comparison_inside_it_and_the_shape_it_was_served_at(tmp_path):
+def test_a_single_requests_match_summary_names_the_comparison_inside_it_and_the_shape_it_was_served_at(tmp_path, shape_names):
     """A single request's row that passes, its summary whole: the comparison's own counts and steps, the differing histogram rows it
     lists, the shape the request was served at, and a comparator that is the global Match's first version where its document names
     none."""
     d = _single_row(tmp_path)
-    _put(d / "match_shape.json", {"LP": 8, "T": 2, "cap_T": 3})
+    shape = dict(zip(shape_names, (8, 2, 3), strict=True))
+    _put(d / "match_shape.json", shape)
     said, s = _verdict(d)
     assert said == "PASS"
     assert s == {
         "run_config_rc": 0, "compare_rc": 0, "compare_verdict": "PASS", "canonical_equal": True, "steps": [3, 3],
-        "totals": {"operands_different": 0, "operands_equal": 9}, "request_shape": {"LP": 8, "T": 2, "cap_T": 3},
+        "totals": {"operands_different": 0, "operands_equal": 9}, "request_shape": shape,
         "record": {"fresh": True, "log_mtime_utc": STAGE_START_UTC, "stage_start_utc": STAGE_START_UTC, "resumed": False,
                    "resumed_record_complete": None, "stage_record_absent": False, "capture_rc": 0, "control_rc": 0, "reason": None},
         "stoch_value_check": None, "histogram_diff_T_normalised": ["x"], "fold_ok": True,
@@ -728,7 +739,8 @@ def test_a_weights_record_without_its_program_or_its_schema_says_so_with_a_quest
         assert R.wor_stale(record, result, "s/v2") == "schema ?" + other and R.wor_stale(record, result, "") == "", schema
 
 
-@pytest.mark.parametrize(("t", "said"), [(1, "LP=8 T_r=1 cap_T=3"), (2, "LP=8 T_r=2 cap_T=3"), (3, ""), (0, ""), (-1, ""), (4, "LP=8 T_r=4 cap_T=3")])
-def test_a_served_shape_is_said_for_a_request_that_generated_something_and_did_not_reach_its_cap(tmp_path, t, said):
-    _put(tmp_path / "match_shape.json", {"LP": 8, "T": t, "cap_T": 3})
-    assert R.served_shape(str(tmp_path)) == said
+@pytest.mark.parametrize(("t", "said"), [(1, True), (2, True), (3, False), (0, False), (-1, False), (4, True)])
+def test_a_served_shape_is_said_for_a_request_that_generated_something_and_did_not_reach_its_token_limit(tmp_path, shape_names, t, said):
+    lp, served, row_t = shape_names
+    _put(tmp_path / "match_shape.json", {lp: 8, served: t, row_t: 3})
+    assert R.served_shape(str(tmp_path)) == (f"LP=8 T_r={t} {row_t}=3" if said else "")
