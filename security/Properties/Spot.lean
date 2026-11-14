@@ -134,9 +134,12 @@ let through (`Registration.tiedThrough`, published as `rests_on_period_check`). 
 `Properties.NetworkPeriod.RowsProgWired` equates the scan's `scan/prog` entry's root and domain with an audit's entries
 port. It accepts that audit at any sample and charges one sampled in part: `Properties.NetworkPeriod.RowsTiedCharged`
 has its δ in the period's ε and, where its bound is at least one incorrect proof block, every slot entry bit of each
-link-window whose scan's `prog` is its output counted as faulty. That the rows under that root are the outputs of the
-proof blocks that computed them (one-stage's ports and the commitment's binding) is not composed with those into a
-theorem: unproved. -/
+link-window whose scan's `prog` is its output counted as faulty. `Properties.NetworkPeriod.RowsTiedInputWired` holds
+the names an answer carries to the ones the check ties: every name an accepted period's scan's answer carries under
+`rests_on_period_check` is one of that scan's lanes' `prog<j>`; that the answer carries every Input the registration
+piece let through, and that the name `prog<j>` is the Input the entry `scan/prog<j>` registers, are not said there.
+That the rows under that root are the outputs of the proof blocks that computed them (one-stage's ports and the
+commitment's binding) is not composed with those into a theorem: unproved. -/
 def R8 (v : Registration.Verifier) : Prop :=
   (Registration.tiedBad v).isEmpty = true ∧
     Partition.readAlone v.program v.query (Registration.heldGates v ++ Registration.tiedGates v) = true
