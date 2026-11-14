@@ -195,13 +195,15 @@ def runFailures (rs : Ranks) (regs : Array Registered) (root : String) (logged :
   if ok then [] else [("ranks-run", Json.str RUN_WHY)]
 
 /-- `ranks-members` of registrations `regs`: each rank's members of each template it names tile its units in key order
-(`tiles`) and agree on their output ports' leaves a unit (`leavesAgree`), and each member is of a template it names. -/
+(`tiles`), every rank's members of a template agree on their output ports' leaves a unit (`leavesAgree`), and each
+member is of a template its rank names. -/
 def membersFailures (rs : Ranks) (regs : Array Registered) : List (String × Json) :=
   let ok := (List.range rs.of.size).all fun r =>
     match regs.find? (·.rank == r), rs.of[r]? with
     | some reg, some q =>
       reg.members.all (fun h => q.units.any fun tn => (indexOf tn.1 h.key).isSome) &&
-        q.units.all fun tn => tiles (membersOf reg tn.1) tn.2 && leavesAgree (membersOf reg tn.1)
+        q.units.all fun tn =>
+          tiles (membersOf reg tn.1) tn.2 && leavesAgree (regs.foldl (fun acc g => acc ++ membersOf g tn.1) #[])
     | _, _ => false
   if ok then [] else [("ranks-members", Json.str MEMBERS_WHY)]
 
