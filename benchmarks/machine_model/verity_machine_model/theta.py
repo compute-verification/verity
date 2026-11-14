@@ -270,7 +270,11 @@ def theta(data: Path) -> Theta:
             raise SystemExit(f"{p}: two units {v['key']}")
         units[v["key"]] = Unit(v["key"], v["what"], v["verdict"], tuple(v.get("rates", ())), v.get("bound"),
                                v.get("against"), v["why"], v.get("gap", ""))
-    public = tuple(Public(v["impl"], v["form"], v["gps"], v["card"], v["sms"], v["mhz"], v["source"])
+    def value(x):
+        """A `[[public]]` figure's SMs or clock: a number, or `{ card = "EXPR" }` where it ran on the device's card."""
+        return read(x, "")[0] if isinstance(x, dict) else x
+
+    public = tuple(Public(v["impl"], v["form"], v["gps"], v["card"], value(v["sms"]), value(v["mhz"]), v["source"])
                    for v in t.get("public", ()))
     sms, _, sms_source = read({"card": "sm.count"}, "sms")
     th = Theta(gpu=t["gpu"], sms=sms, sms_source=sms_source, honest=tuple(t["honest"]),

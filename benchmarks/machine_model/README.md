@@ -61,7 +61,9 @@ own and changes with it.
 
 What it uses: scipy (pinned: a vector's margin is read at the vertex its LP solver returns) and numpy; a device's card
 file through `verity.device`, imported only where a ceiling is read (`model.card`, the card table, the opcode
-table), so only `theta`, `cover` and `render`'s `theta` section need `verity`; and nothing else of the workspace. A
+table, a data sheet's `card` lines, a device table route with no clock of its own, and the Lean headline families'
+f_max, pipes and peaks), so only `theta`, `cover`, `sheet`, `lean-headline`, `eps --lookups` on sm_90 and sm_100 and
+`render`'s `theta` and `table` sections need `verity`; and nothing else of the workspace. A
 design's perplexity arm and a sheet's Lean module are named in the data by path and never read by a computation. It
 measures nothing: no command starts a process, reads the environment or the network, or needs a GPU.
 
@@ -132,7 +134,7 @@ data-centre families' readings to `F`.
 - `data/forms.toml`: the MMA forms the cheater's tensor route mixes: each census kind's shape, split, sparsity, why its
   product is exact, and its SASS.
 - `data/table.toml`: the cheater's table route: lane instructions and L2 bytes a word, and the L2 bandwidth it is bound
-  by.
+  by, with the SMs and the clock it was measured at (the node's lock, not the card file's `clock.sm`).
 - `data/headline.toml`: each GPU family's design of record, the vector each reading prices it on, the conditions no
   computation shows, and its scope.
 - `data/theta.toml`: the card table: every tensor rate by format and shape, every lane pipe, the register file, shared
@@ -444,7 +446,8 @@ directory follows these rules:
   - `honest/`: its honest kernel at each L. `[mma] class` names the MMA's census class (sm_120's is `MMA`).
   - `designs.toml` and `designs/`: each design at each L, with the device's honest kernel, operand floor φ_del, clock
     and ε_clock, luck budget and baseline. The noise, ε_skip and ε_mand are sm_120's design's.
-  - `table.toml`: the table route at the device's SMs and f_max. Without an `l2`, the route is bound by its slots alone.
+  - `table.toml`: the table route, at the card file's `sm.count` and `clock.sm`. Without an `l2`, the route is bound by
+    its slots alone.
 
   `data/adapt.toml` holds for every device. A census with no uniform-datapath line (`UNI`) closes the uniform route.
 
@@ -457,7 +460,8 @@ the sheet's uniform pipe is the census's UP line. `eps --vector DS-NN` prices a 
 sm_120's is `DS-120`, an epoch of its own whose lines close where they open, so it moves no other vector; sm_90's and
 sm_100's are in `data/devices/sm_90/census/DS-90.csv` and `data/devices/sm_100/census/DS-100.csv`.
 
-A device's data-sheet constants are its `sheet.toml`, each with the document that states it and its grade:
+A device's data-sheet constants are its `sheet.toml`, each with the document that states it and its grade, and its
+value read from the card file (`card = "EXPR"`) where the card holds it:
 
 - `machine-model --device sm_90 sheet` derives every DS line from it, checks them against the census file, and checks
   each per-clock peak against the figure its document prints at the clock it's quoted at.
