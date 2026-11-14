@@ -91,7 +91,7 @@ NO_DATE_OR_REASON = ("verity/protocols/compose/device/live_challenger", "verity/
 #: file's text: it reads no other distribution at run time and names no path of the census, and each of its
 #: directories is a package.  The code that came from ``benchmarks/``, and the Lean check of σ beside Flock's prover.
 #: It only shrinks, as a directory becomes part of ``verity``, which is held whole.
-HELD_AS_VERITY = ("verity/protocols/compose/device/live_challenger", "verity/protocols/proofs/flock/sigma",
+HELD_AS_VERITY = ("verity/protocols/compose/device/live_challenger", "verity/protocols/proofs/flock/verifier/sigma",
                   "verity/protocols/accounting/poub/device/live_verifier", "verity/protocols/accounting/pouw/prover/clear",
                   "verity/protocols/accounting/pouw/verifier/receipts")
 #: SPOT[Flock] stands on its own, and the network certifier is a layer beside it: SPOT reads the certifier's stamp as a
