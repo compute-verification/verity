@@ -7,7 +7,7 @@
 # Before the card: libp2v1.so built for it (benchmarks/torch_gpu/p2_stage/build.sh at ARCH, default sm_90a) into a
 # scratch directory removed on exit, unless P2_LIB names one, as a node that refuses `setarch -R` needs, since the build
 # doesn't run there; the library loaded once by the sessions' Python, with no card to see; and the two Lean verifiers
-# that decide, pous-run-protocol (PoUS's case) and remote-audit-p2-protocol (PoUB-P2's), built in a scratch copy of
+# that decide, pous-run-protocol (PoUS's case) and poub-p2-protocol (PoUB-P2's), built in a scratch copy of
 # verity/, never in this tree's .lake, which served_verdicts.sh's Lean builds write meanwhile, unless POUS_EXE and
 # BW_CASE_EXE name ones built already.
 #
@@ -24,7 +24,7 @@
 # After the card, the answers (served_piece.py --answers), with no lease and at most ANSWERS_MEM_GB GiB of host memory
 # (default 128, in a systemd scope where this user can make one: PoUS's case is held by the Python and written as its
 # line, four times C*, to the Lean, which works in a few times that line): PoUB-P2's case answered by
-# remote-audit-p2-protocol, its answer to DIR's sibling bandwidth, which BANDWIDTH_CMD collects (served_bandwidth.py
+# poub-p2-protocol, its answer to DIR's sibling bandwidth, which BANDWIDTH_CMD collects (served_bandwidth.py
 # collect), and its case to SERVE_DIR/private/bandwidth; then PoUS's case answered by pous-run-protocol, which must
 # agree with the Python. This part starts only when the sessions' part exits 0. A run that ended in it, or whose Lean
 # didn't answer or agree (the window is then undecided), keeps what the sessions left and can be answered again by
@@ -73,7 +73,7 @@ if [ -z "$POUS_EXE" ] || [ -z "$BW_CASE_EXE" ]; then
   command -v lake > /dev/null 2>&1 || bash "$ROOT/tools/verity/lean/setup.sh" "$S/$CHECK" > "$DIR/lake-setup.log" 2>&1
   : > "$DIR/lake-build.log"
   [ -n "$POUS_EXE" ] || { built "$CHECK" pous-run-protocol; POUS_EXE=$EXE; }
-  [ -n "$BW_CASE_EXE" ] || { built verity/protocols/accounting/poub/verifier/lean remote-audit-p2-protocol; BW_CASE_EXE=$EXE; }
+  [ -n "$BW_CASE_EXE" ] || { built verity/protocols/accounting/poub/verifier/lean poub-p2-protocol; BW_CASE_EXE=$EXE; }
 fi
 # shellcheck disable=SC2206
 ARGS=("$ROOT/benchmarks/pous/served_piece.py" "$SERVE_DIR" "$WINDOW" "$DIR" --hf-home "${HF_HOME:-/workspace/hf}"

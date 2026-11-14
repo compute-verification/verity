@@ -57,65 +57,65 @@ def test_every_parameter_has_a_slider_and_its_default_is_in_range():
         assert s["min"] <= v <= s["max"] or (v == 0 and s.get("zero")), s["key"]
 
 
-def test_without_memory_mechanisms_the_residual_trains_at_full_efficiency():
+def test_without_memory_mechanisms_free_compute_trains_at_full_efficiency():
     p = T.DEFAULTS | {"lag_s": 0.0}
     r = T.evaluate(p, T.TIERS["T1"])
-    assert r["largest"] == "residual" and not r["memory_caps_residual"]
-    assert r["residual"] == pytest.approx(T.residual_share(p), rel=1e-3)
+    assert r["largest"] == "free" and not r["memory_caps_free"]
+    assert r["free"] == pytest.approx(T.free_share(p), rel=1e-3)
 
 
-def test_the_residual_charges_pouws_deficit_on_the_certified_work():
-    """r = r̂ + ε_W W_cert/C + ε′, the residual inside `InferenceOnly.Guarantees.SlowdownRemote`'s bounds: a certificate
+def test_free_compute_charges_pouws_deficit_on_the_certified_work():
+    """r = r̂ + ε_W W_cert/C + ε′, the residual inside `Slowdown.Guarantees.SlowdownRemote`'s bounds: a certificate
     that isn't wrong may credit up to ε_W of its work without its running. At r̂ = 1/2, so W_cert = C/2, and ε_W = 2%,
     the deficit adds 0.01: r = 0.5 + 0.02 x 0.5 + 0.001 = 0.511. Nothing certified, nothing is in deficit."""
-    p = T.DEFAULTS | {"residual": 0.3, "host_share": 0.1, "clock_share": 0.1, "eps_w": 0.02, "eps_agg": 1e-3}
+    p = T.DEFAULTS | {"free": 0.3, "host_share": 0.1, "clock_share": 0.1, "eps_w": 0.02, "eps_agg": 1e-3}
     C = p["nodes"] * p["node_flops"] * p["years"] * T.YEAR
-    W_cert = (1 - T.audited_residual(p)) * C
+    W_cert = (1 - T.audited_free(p)) * C
     assert W_cert == pytest.approx(C / 2, rel=1e-12)
     lean = (1 - W_cert / C) + p["eps_w"] * W_cert / C + p["eps_agg"]
     assert lean == pytest.approx(0.511, rel=1e-12)
-    assert T.residual_share(p) == pytest.approx(lean, rel=1e-12)
-    assert T.residual_share(p) - T.residual_share(p | {"eps_w": 0.0}) == pytest.approx(0.01, rel=1e-9)
-    assert T.residual_share(p | {"residual": 0.8}) == 1.0
+    assert T.free_share(p) == pytest.approx(lean, rel=1e-12)
+    assert T.free_share(p) - T.free_share(p | {"eps_w": 0.0}) == pytest.approx(0.01, rel=1e-9)
+    assert T.free_share(p | {"free": 0.8}) == 1.0
     lagless = p | {"lag_s": 0.0}
-    assert T.evaluate(lagless, T.TIERS["T1"])["residual"] == pytest.approx(0.511, rel=1e-3)
+    assert T.evaluate(lagless, T.TIERS["T1"])["free"] == pytest.approx(0.511, rel=1e-3)
 
 
-def test_the_gpus_residual_leaves_pouws_deficit_to_eps_w():
+def test_the_gpus_free_compute_leaves_pouws_deficit_to_eps_w():
     """The C7 dossier's GPU residual 1 − (1 − ε)((1 − φ)/q_sched + φ)/q_clock (Notion, "Monitored compute residual")
-    takes PoUW's deficit off the credited time; `eps_w` charges it in `residual_share`, so the default is that form at
+    takes PoUW's deficit off the credited time; `eps_w` charges it in `free_share`, so the default is that form at
     ε = 0 (0.323 at the locked clock, against C7's 0.326 at its ε = 0.54%), and the deficit is charged once."""
     q_sched, q_clock, phi = 1.482, 1.162, 0.345
-    assert T.DEFAULTS["residual"] == pytest.approx(1 - ((1 - phi) / q_sched + phi) / q_clock, abs=5e-4)
+    assert T.DEFAULTS["free"] == pytest.approx(1 - ((1 - phi) / q_sched + phi) / q_clock, abs=5e-4)
 
 
-def test_unmonitored_compute_trains_at_full_efficiency():
-    r = T.evaluate(T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "unmonitored": 0.3}, T.TIERS["T5"])
-    assert r["unmonitored"] == pytest.approx(0.3, rel=1e-6)
+def test_unregistered_compute_trains_at_full_efficiency():
+    r = T.evaluate(T.DEFAULTS | {"free": 0.0, "host_share": 0.0, "clock_share": 0.0, "unregistered": 0.3}, T.TIERS["T5"])
+    assert r["unregistered"] == pytest.approx(0.3, rel=1e-6)
 
 
 def test_the_declared_computation_trains_at_the_thread_bound():
-    p = T.DEFAULTS | {"residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
+    p = T.DEFAULTS | {"free": 0.01, "host_share": 0.05, "clock_share": 0.0}
     r = T.evaluate(p, T.TIERS["T4"])
     assert r["declared"] == pytest.approx(2 / p["kappa"] / r["rho_T"])
 
 
 def test_the_wipe_floor_is_the_closed_form():
     """With every gate windowed and the wipe period below R / r, efficiency is 4 R r / (kappa b_a b_w d Phi)."""
-    p = KEYED | {"residual": 1.0, "unfilled_gb": 1.0, "pous_rounds": 1e6, "pous_floor": 0.0, "sigma": 0.0, "wipe_s": 1.0}
+    p = KEYED | {"free": 1.0, "unfilled_gb": 1.0, "pous_rounds": 1e6, "pous_floor": 0.0, "sigma": 0.0, "wipe_s": 1.0}
     r = T.evaluate(p, T.TIERS["T3"])
     rate = p["tau"] + p["K"] / p["Gamma"] * p["node_flops"]
     closed = 4 * r["wipe_state_bits"] * rate / (p["kappa"] * p["b_a"] * p["b_w"] * p["d"] * p["node_flops"])
-    assert r["memory_caps_residual"]
+    assert r["memory_caps_free"]
     assert r["efficiency"] == pytest.approx(closed, rel=1e-3)
 
 
-def test_memory_caps_the_residual_below_the_state_threshold():
+def test_memory_caps_free_compute_below_the_state_threshold():
     threshold = T.state_threshold(KEYED, T.TIERS["T3"]) / T.GB
     tight = KEYED | {"pous_rounds": 1e6, "pous_floor": 0.0}
     below = T.evaluate(tight | {"unfilled_gb": threshold / 2}, T.TIERS["T3"])
     above = T.evaluate(tight | {"unfilled_gb": threshold * 2}, T.TIERS["T3"])
-    assert below["memory_caps_residual"] and not above["memory_caps_residual"]
+    assert below["memory_caps_free"] and not above["memory_caps_free"]
 
 
 def test_proof_of_space_rounds_set_the_slack():
@@ -131,15 +131,15 @@ def test_proof_of_space_rounds_set_the_slack():
 def test_unbounded_ingress_makes_wipes_cap_nothing():
     """Until the count check is in the ZK flow, declared ingress is bounded only by line rate,
     and then even a small wipe residual caps nothing."""
-    tight = T.DEFAULTS | {"residual": 0.9, "pous_rounds": 1e6, "pous_floor": 0.0, "unfilled_gb": 0.001}
-    assert T.evaluate(tight, T.TIERS["T3"])["memory_caps_residual"]
-    assert not T.evaluate(tight | {"intake_x": 1.3e6}, T.TIERS["T3"])["memory_caps_residual"]
+    tight = T.DEFAULTS | {"free": 0.9, "pous_rounds": 1e6, "pous_floor": 0.0, "unfilled_gb": 0.001}
+    assert T.evaluate(tight, T.TIERS["T3"])["memory_caps_free"]
+    assert not T.evaluate(tight | {"intake_x": 1.3e6}, T.TIERS["T3"])["memory_caps_free"]
 
 
 def test_disks_left_in_place_count_as_state():
     """An unwiped disk is state a wipe leaves (8 TB of NVMe undoes the memory cap)."""
-    p = KEYED | {"residual": 0.5, "pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 1.83}
-    assert T.evaluate(p, T.TIERS["T3"])["memory_caps_residual"]
+    p = KEYED | {"free": 0.5, "pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 1.83}
+    assert T.evaluate(p, T.TIERS["T3"])["memory_caps_free"]
     assert T.evaluate(p | {"disk_gb": 8000.0}, T.TIERS["T3"])["efficiency"] > T.evaluate(p, T.TIERS["T3"])["efficiency"]
 
 
@@ -224,7 +224,7 @@ def test_the_amplifier_multiplies_every_term():
     for tier in ("T1", "T5"):
         base = T.evaluate(T.DEFAULTS, T.TIERS[tier])
         amped = T.evaluate(T.DEFAULTS | {"g": 10.0}, T.TIERS[tier])
-        for term in ("efficiency", "unmonitored", "residual", "declared", "cheat"):
+        for term in ("efficiency", "unregistered", "free", "declared", "cheat"):
             assert amped[term] == pytest.approx(10 * base[term], rel=1e-9)
 
 
@@ -234,29 +234,29 @@ def test_the_verdict_lag_adds_a_lag_of_skipped_work_per_identity():
     no_lag = T.evaluate(p | {"lag_s": 0.0}, T.TIERS["T1"])
     lag = T.evaluate(p | {"identities": 3.0}, T.TIERS["T1"])
     extra = 3 * p["lag_s"] / (p["years"] * T.YEAR)
-    assert lag["residual"] - no_lag["residual"] == pytest.approx(extra, rel=1e-6)
+    assert lag["free"] - no_lag["free"] == pytest.approx(extra, rel=1e-6)
 
 
 def test_the_recipe_multiplier_scales_only_the_constrained_terms():
-    """m scales nu, chi and the memory cap but not the residual or unmonitored compute (C2 dossier)."""
-    p = KEYED | BATCHED | {"unmonitored": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
+    """m scales nu, chi and the memory cap but not the residual or unregistered compute (C2 dossier)."""
+    p = KEYED | BATCHED | {"unregistered": 0.01, "free": 0.01, "host_share": 0.05, "clock_share": 0.0}
     base, amped = T.evaluate(p, T.TIERS["T5"]), T.evaluate(p | {"m": 3.0}, T.TIERS["T5"])
     assert amped["declared"] == pytest.approx(3 * base["declared"], rel=1e-6)
     assert 1 > amped["cheat"] == pytest.approx(3 * base["cheat"], rel=1e-6)
-    assert amped["residual"] == pytest.approx(base["residual"], rel=1e-6)
-    assert amped["unmonitored"] == pytest.approx(base["unmonitored"], rel=1e-6)
-    capped = p | {"residual": 0.9, "pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 0.83}
-    assert T.evaluate(capped | {"m": 3.0}, T.TIERS["T3"])["residual"] == pytest.approx(
-        3 * T.evaluate(capped, T.TIERS["T3"])["residual"], rel=0.02)
+    assert amped["free"] == pytest.approx(base["free"], rel=1e-6)
+    assert amped["unregistered"] == pytest.approx(base["unregistered"], rel=1e-6)
+    capped = p | {"free": 0.9, "pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 0.83}
+    assert T.evaluate(capped | {"m": 3.0}, T.TIERS["T3"])["free"] == pytest.approx(
+        3 * T.evaluate(capped, T.TIERS["T3"])["free"], rel=0.02)
 
 
 def test_reference_layered_at_kimi_k2():
-    """The falsification test of the conjecture `InferenceOnly.Assumptions.ReferenceLayered`: the parameters it states are Kimi
-    K2's shapes' in the declared BF16 GEMM's steps, and tiers.py's (d, e) is what `InferenceOnly.SecurityProofs.ReferenceThreaded`
+    """The falsification test of the conjecture `Slowdown.Assumptions.ReferenceLayered`: the parameters it states are Kimi
+    K2's shapes' in the declared BF16 GEMM's steps, and tiers.py's (d, e) is what `Slowdown.SecurityProofs.ReferenceThreaded`
     derives from them at S = K. A keyed reference circuit written as the declarations are computes each matrix-product
     entry, forward and backward, as a chain of the step `GEMM_HOPPER` binds (`HopperBF16WgmmaDot16_v2`, the BF16 GEMM's
     on sm_90 and sm_120), whose width is the activations it reads; its roots are each chain's steps after the first,
-    whose legs are the previous accumulator and the step's activations, so every inner dimension is a whole number of
+    whose terms are the previous accumulator and the step's activations, so every inner dimension is a whole number of
     steps, at least two. A value's reach is its forward or gradient fan-out in products, over kappa.MODELS' top-k and
     shared experts at `CAPACITY_FACTOR`, a step's width of them to a step with the activations designated round-robin,
     and the most is an MoE input value's; a lookup's column is an embedding column, vocab x `EMBED_BITS`; and at S = K
@@ -292,4 +292,4 @@ def test_reference_layered_at_kimi_k2():
     assert T.DEFAULTS["K"] == 2e7 and f"S ≤ 2 * 10 ^ 7 → T.Threaded Γ S {d0 - E} {e + E * e_lk}" in stated
     entry = json.loads((ROOT / "security" / "lean-audit.json").read_text())["shape"]["conjectures"]
     test = f"benchmarks/nci/tests/{Path(__file__).name}::test_reference_layered_at_kimi_k2"
-    assert entry["InferenceOnly.Assumptions.ReferenceLayered"] | {"why": ""} == {"status": "open", "test": test, "why": ""}
+    assert entry["Slowdown.Assumptions.ReferenceLayered"] | {"why": ""} == {"status": "open", "test": test, "why": ""}

@@ -112,7 +112,7 @@ block, a `CompileSlice_v7` unit, is proved by Flock `prove --zk` behind the Lean
 the proof blocks' b‖c. What the verifier received holds no witness piece: the ``wit`` and ``srv`` rows, every row's
 salt, and the ``cin`` and ``cout`` rows whole. With ``--plain`` the same statement is proved on Flock's plain path
 (``FC_COINS=tree``, Lean `verify --coins tree`), whose guarantee is soundness alone.
-- The scan's rule is the lane's one, field-aligned (`leak_scan.scan`, `benchmarks/network_traces/leak_scan.py`). It
+- The scan's rule is the lane's one, field-aligned (`leak_scan.scan`, `verity/protocols/accounting/certifier/prover/leak_scan.py`). It
   replaces the phase-18 attack's rule.
   - A find of a witness piece or carry row counts only if it lies inside one field: one read Flock's proof format
     makes of a repetition's stream (`circuit.rep*.bin`, `redigest.layout`), or one record of a round message

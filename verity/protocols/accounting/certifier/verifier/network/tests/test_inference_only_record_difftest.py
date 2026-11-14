@@ -1,8 +1,8 @@
 """The inference-only policy's check of an execution phase's circuit record (`InferenceOnlyCheck.Record`) against the Python
 reference: the Python half.
 
-`verity/protocols/policy/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 702 cases (600 random circuits,
-two in five broken in one way, and 102 shaped ones, most in the shape of a served class) and, on each,
+`verity/protocols/policy/inference_only/verifier/lean/scripts/record_difftest_vectors.py` writes 708 cases (600 random circuits,
+two in five broken in one way, and 108 shaped ones, most in the shape of a served class) and, on each,
 `scripts/inference_only_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyCheck/RecordDifftestMain.lean` fails unless
 `Record`, `RecordCount`, `RecordRows` and `RecordChosen` give Python's results on every case, and unless SPOT's reader reads the
@@ -34,7 +34,9 @@ whatever pins and registers the rest. The sixteenth is what the prover chose of 
 rows no declaration fills, the reads of a parameter that is not θ and the ports of an opening that is not held, over
 every slot's units, with an opening's ports off the count only where the opening is held. The seventeenth is that a row
 format is held to the registration log: a value read in leaves of another width than 16 bits is registered in leaves of
-that width.
+that width. The eighteenth is the row an opening may declare: the first of its reader's two outputs, the second
+its verdict, of a reader of six input rows, by which nothing is filled or counted. The nineteenth is the opening whose
+row is its verdict's own output: refused with the declarations, under its reader's pin and under none.
 
 The tenth holds to `input_count` only where every opening it counts registered is one the form holds (`held`: the
 reader's Definition pinned, with table reads of the table's root and domain id over the opening's units). Where one is
@@ -108,6 +110,9 @@ HISTORIES = {f"2x3 {what}": stage for what, (stage, _) in vectors.HISTORIES.item
 LOOSE, OPENED = f"2x3 {vectors.LOOSE}", "2x3 the opening against a history"
 #: the cases on a row format, each with the stage that refuses it, or None
 FORMATS = {(f"2x3 {what}" if shape is None else what): stage for what, (stage, shape, _) in vectors.FORMATS.items()}
+#: the cases on an opening that declares its row, each with the stage that refuses it, None where the form takes it
+ROW_ROLE = {f"2x3 {what}": stage for what, (stage, _) in vectors.ROW_ROLE.items()} | {
+    f"2x3 {vectors.ROW_UNPINNED}": vectors.ROW_ROLE[vectors.ROW_VERDICT][0]}
 
 
 @pytest.fixture(scope="module")
@@ -122,7 +127,7 @@ def shaped() -> dict[str, dict]:
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 702 cases and the reference's results, byte for byte as the record pins them."""
+    """All 708 cases and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", str(vectors.total())]
@@ -173,7 +178,7 @@ def test_the_served_shape(shaped):
     with none registered or committed, under another root, with an opening that reads no root, with an opening whose
     reader is another Definition under the pinned one's name, and with one wire from the next slot."""
     got = {what: vectors.results(m["case"]) for what, m in shaped.items()
-           if what not in LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS}
+           if what not in LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS | ROW_ROLE}
     verdicts = {what: (r["detail"]["failure"], r["count"]["failure"]) for what, r in got.items()}
     refused = ("nci", "fresh")
     assert verdicts == {
@@ -242,7 +247,8 @@ def test_a_pinned_readers_layout(shaped, monkeypatch):
     The layout's stage alone refuses them: without it the reference refuses none, and accepts the token among the
     ports with a block's fresh bits those of the case that wires it."""
     assert {what for what, m in shaped.items() if m["broken"]} == {
-            what for what, v in (LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS).items() if isinstance(v, str)}
+            what for what, v in (LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES | FORMATS | ROW_ROLE).items()
+            if isinstance(v, str)}
     got = {what: vectors.results(shaped[what]["case"]) for what in LAYOUT}
     for what, want in LAYOUT.items():
         detail, count, m = got[what]["detail"], got[what]["count"], shaped[what]
@@ -1066,3 +1072,64 @@ def test_what_the_prover_chose_of_an_execution_phase(random_cases, shaped):
     assert crossing == {**held, "cross_wires": wired, "inside": held["inside"] - wired}
     assert (ref.check_detail(case["instance"], case["trusted"])["fresh"]
             > ref.check_detail(accepted["case"]["instance"], accepted["case"]["trusted"])["fresh"])
+
+
+def test_an_opening_may_declare_its_row(shaped):
+    """An opening may declare its `row`, the output of its reader that returns the row opened. The form holds it to
+    the row a table read returns, the first of its reader's two outputs, the second its verdict, of a reader of six
+    input rows, and reads nothing else of it: the served shape's record with its opening declaring that output counts
+    as the accepted record does, row by row, and no row is of another kind for it. One whose row is the verdict's own
+    output, no output of the reader, an input row of it or no string is refused with the declarations. A record that declares no row is read as before: the accepted
+    record is each of these with the key dropped. `verity.commitments.periods.interface` takes and refuses the same,
+    and reads the row back as the record states it."""
+    accepted = shaped["2x3 registered"]
+    held = vectors.results(accepted["case"])
+    built = json.loads(accepted["case"]["instance"]["record"])
+    assert all("row" not in o for o in built["registered"]["openings"])
+    embed = next(fn for fn, _ in accepted["circuit"].templates if codec.descriptor_id(fn) == vectors.EMBED)
+    lay = IF.layout(embed)
+    assert set(ROW_ROLE.values()) == {None, "inputs"}
+    for what, (stage, row) in vectors.ROW_ROLE.items():
+        m = shaped[f"2x3 {what}"]
+        r = vectors.results(m["case"])
+        doc = json.loads(m["case"]["instance"]["record"])
+        opening, = doc["registered"]["openings"]
+        assert opening.pop("row") == row and doc == built, what
+        assert m["case"]["instance"]["pins"] == accepted["case"]["instance"]["pins"] != [], what
+        returned = len(lay.rows) == 6 and [q for q, _ in lay.outs] == [row, opening["verdict"]]
+        assert (stage is None) == (isinstance(row, str) and returned), what
+        assert _interface(m)[0] == stage, what
+        if stage is not None:
+            assert r["detail"] == r["public"] == r["kinds"] == r["exported"] == r["count"] == r["block_rows"] == {"error": stage}, what
+            continue
+        assert (r["detail"], r["count"], r["block_rows"]) == (held["detail"], held["count"], held["block_rows"]), what
+        inst, tr = m["case"]["instance"], m["case"]["trusted"]
+        units = dict(built["templates"])[vectors.EMBED]
+        rows = [[vectors.EMBED, p, u, 0] for p, _ in lay.rows for u in range(units)]
+        before = accepted["case"]["instance"], accepted["case"]["trusted"]
+        assert ref.kinds(inst, tr, rows) == ref.kinds(*before, rows), what
+        assert ref.exported(inst, tr, rows) == ref.exported(*before, rows), what
+        read, = IF.Registered.of(json.loads(inst["record"])["registered"]).openings
+        assert read.row == row and read.doc()["row"] == row, what
+
+
+def test_an_opening_whose_row_is_its_verdicts_output_is_refused(shaped):
+    """An opening whose `row` is its verdict's own output is refused with the declarations, under its reader's pin and
+    under none: the row an opening declares is the one a table read returns, the first of its reader's two outputs,
+    and the verdict is the second. `verity.commitments.periods.interface` refuses it too. The record is the accepted
+    one with the key added, so the refusal is the row's alone."""
+    accepted, pinned = shaped["2x3 registered"], shaped[f"2x3 {vectors.ROW_VERDICT}"]
+    loose = shaped[f"2x3 {vectors.ROW_UNPINNED}"]
+    built = json.loads(accepted["case"]["instance"]["record"])
+    stage = vectors.ROW_ROLE[vectors.ROW_VERDICT][0]
+    assert stage == "inputs"
+    for m, pins in ((pinned, accepted["case"]["instance"]["pins"]), (loose, [])):
+        doc = json.loads(m["case"]["instance"]["record"])
+        opening, = doc["registered"]["openings"]
+        assert opening["row"] == opening["verdict"] == "o1" and tuple(opening["ports"]) == ("row", "salt", "path")
+        assert opening.pop("row") and doc == built
+        assert m["case"]["instance"]["pins"] == pins
+        r = vectors.results(m["case"])
+        assert m["broken"] == stage
+        assert r["detail"] == r["public"] == r["kinds"] == r["exported"] == r["count"] == r["block_rows"] == {"error": stage}
+        assert _interface(m)[0] == stage

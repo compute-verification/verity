@@ -1,4 +1,4 @@
-"""The store a checkpoint lays out, end to end (its layout is core's `remote_bandwidth.store`, whose own tests are beside
+"""The store a checkpoint lays out, end to end (its layout is core's `poub.store`, whose own tests are beside
 it). On a small synthetic checkpoint (`store_layout.synthetic`): the arena is the engine's packing (`engine.pack`); a
 prover that registers that store under the verifier's payload key is accepted, with the store's regions; the node's
 layout names its host tier as one region; verifier.py takes no checkpoint; `store_layout`'s pin is the one core reads,

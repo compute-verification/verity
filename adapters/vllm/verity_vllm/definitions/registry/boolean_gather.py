@@ -35,7 +35,7 @@ token, share no gate, and since its body reads only its parameters and returns e
 (`verity.circuits.cut.separable`): each gather one unit of 16 output bits under `Q_word_v1{X=16,W=32}`.
 
 The i32 and f32 gathers are the same tree over 32-bit words with -1 (0xFFFFFFFF) and the quiet NaN 0x7FC00000 for the word past
-the end, each made on demand as its word primitive is (`verity_vllm.definitions.boolean._families`). `GatherF32x{V}_v2` is one
+the end, each made on demand as its word primitive is (`verity.circuits.ops.boolean.versions._families`). `GatherF32x{V}_v2` is one
 Definition at every V: the vocabulary's and `boolean_fp8_moe`'s expert gathers (`boolean_fp8_moe.gather_f32`) alike.
 
 `GatherF32Chunked_v1{V, W}` is that gather with its column cut so that each part is one proof block: c = ceil(V / W)

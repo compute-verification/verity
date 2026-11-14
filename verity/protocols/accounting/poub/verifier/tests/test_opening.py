@@ -13,7 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from remote_bandwidth_fakes import Clock, Entropy
+from poub_fakes import Clock, Entropy
 
 from verity.commitments import gates
 from verity.protocols.accounting.poub.prover import audit_prover

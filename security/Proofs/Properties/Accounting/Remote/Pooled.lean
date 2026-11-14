@@ -41,7 +41,7 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# The verifier's pooled bound covers the draw's (`PooledCovers`)
+# The verifier's pooled bound covers the sample's (`PooledCovers`)
 
 The budget: `powUp` is at least the power it rounds (`powUp_ge`, each product rounded up), so a numerator `below`
 accepts has `(m/2^64)^S ≤ δ` (`below_le`), and since `x ↦ x^S` is monotone on `[0, ∞)`, the root is at most `δ^(1/S)`
@@ -56,9 +56,9 @@ sorts them (`List.pairwise_mergeSort`), so every share vector `Draw.pooled` rang
 
 @[expose] public section
 
-open RemoteAudit Pooled
+open Poub Pooled
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 namespace Greedy
 
@@ -407,4 +407,4 @@ theorem lineCoversRun : LineCoversRun := by
   rw [hw]
   exact pooledCoversRun n _ _ _ _ D ω δ b hb
 
-end Properties.RemoteAudit
+end Properties.Poub

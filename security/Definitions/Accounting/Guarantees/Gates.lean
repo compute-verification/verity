@@ -52,7 +52,7 @@ on, from the most general to the one 6a's carrier lemma takes as its `q`:
   floor). `SquaringFloor` adds to it at `c = 0` the square's data products, and `ChainSum` composes it over the chain.
 * `RhoPairs`: the parity-free target's symmetry. `ρ(p − x) = p − ρ(x)`, and `ρ(x)`'s parity, the bit the target
   drops, is the Legendre symbol of `x`.
-* `EncodeBudget`: the connection. For a declared circuit `W` that satisfies the stacking property `P` and is in the
+* `EncodeBudget`: the connection. For a registered circuit `W` that satisfies the stacking property `P` and is in the
   restricted class, the words of fresh encodings `W`'s values hold on more than `ε` of the samples number at most
   `(budget)/E + (run-input bits)/(n − 1)`, under `SquaringFloor` at `e` and `ChainSum` with `E ≤ k · S · e`: the
   budget is the caps (rational nonlinear units per certified byte, data products among them) times the
@@ -181,7 +181,7 @@ bits of that (63 at p1024), not units. The claimed instance is p1024 with `d₀ 
 **`d₀` is not absolute, so the floor.** A circuit with no budgeted gate (`a`'s bytes as coin inputs declared `[0, D_l]`,
 `a²`'s column sums as s8-family steps, folded mod `p`) is exact on every `a` whose column sums don't carry, and such
 families grow with `L` faster than any fixed `d₀` covers: `2^33.30` members at `p = 256^27 − 377` (`d₀ ≥ 4.16`),
-`2^101.85` at p1024 (`d₀ ≥ 12.73`), and, sampled, at least `2^159.4` at p1024 (64 digits from a geometric law;
+`2^101.85` at p1024 (`d₀ ≥ 12.73`), and, sampled, at least `2^159.4` at p1024 (64 digits from a geometric distribution;
 `d₀ ≥ 19.9`), which refutes the slope `1/7` too (`d = 4 + log₂(1/ε)/7` allows at most `2^156`). Every one sits at
 `ε ≤ 2^−182`, and none can reach the floor at p1024: a column holds `a_l²`, so a non-carrying `a` has digits below 16
 and `ε ≤ 16^L/p ≈ 2^−512`. Above the floor every family found is within `d₀ = 4`: the exhaustive toy fields (implied
@@ -209,7 +209,7 @@ def RhoPairs : Prop :=
   ∀ p x : ℕ, p.Prime → p % 4 = 3 → 0 < x → x < p →
     rho p (p - x) = p - rho p x ∧ (rho p x % 2 = 1 ↔ ¬ ∃ y, y ^ 2 % p = x)
 
-/-- **The encode budget: what the stacking property bounds.** For a declared circuit `W` in the restricted class
+/-- **The encode budget: what the stacking property bounds.** For a registered circuit `W` in the restricted class
 (`Restricted B`) whose census satisfies the stacking property `P` (`Property caps A W`), whose registered and coin
 inputs are the codec's (`CodecInputs`), and whose values hold, byte for byte less parity, the encodings of the `q`
 distinct words `words` on more than `ε` of the fresh samples, its inputs and budgeted gates but gathers there in

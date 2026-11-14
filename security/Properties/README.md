@@ -22,7 +22,7 @@ from the registry, path by path: `research msg owners PATH`.
 
 | Area | What it states |
 |---|---|
-| `Accounting/` | `RemoteAudit`'s verdicts, the joint period's bridges, a registered circuit's units and space |
+| `Accounting/` | `Poub`'s verdicts, the joint period's bridges, a registered circuit's units and space |
 | `Core/` | The evaluator's primitives and the Site's fold and check are `Definitions.Core`'s |
 | `Flock/` | The circuit a registered Flock circuit file describes; the verifier's two fixed nets build |
 | `Hash/` | Core's identity hash is Flock's SHA-512 |
