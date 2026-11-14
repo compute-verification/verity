@@ -30,7 +30,7 @@ local instance instLawfulBEqByteArray_properties : LawfulBEq ByteArray where
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
 
 /-- `verdict`'s reasons before the rounds. -/
-private def pre (schemes : Schemes) (trusted : List ByteArray) (s : SignedSession) (c : SessionCommitment) :
+private def pre (schemes : Schemes) (trusted : List ByteArray) (s : SignedChallengePhase) (c : ChallengePhaseCommitment) :
     Array String := Id.run do
   let mut reasons : Array String := #[]
   match schemes.lookup s.scheme with
@@ -49,8 +49,8 @@ private def pre (schemes : Schemes) (trusted : List ByteArray) (s : SignedSessio
   return reasons
 
 /-- `verdict` from the rounds on, after the reasons `r0`. -/
-private def tail (expected : Nat → Option ByteArray) (s : SignedSession)
-    (c : SessionCommitment) (openings : Array CoinOpening) (r0 : Array String) : Verdict := Id.run do
+private def tail (expected : Nat → Option ByteArray) (s : SignedChallengePhase)
+    (c : ChallengePhaseCommitment) (openings : Array CoinOpening) (r0 : Array String) : Verdict := Id.run do
   let mut reasons := r0
   let byJ := fun (j : Nat) => openings.findRev? (·.j == j)
   let mut late := 0
@@ -68,7 +68,7 @@ private def tail (expected : Nat → Option ByteArray) (s : SignedSession)
   return (Findings.mk reasons late wrong, acceptIf reasons.isEmpty)
 
 private theorem verdict_eq (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray)
-    (s : SignedSession) (c : SessionCommitment) (openings : Array CoinOpening) :
+    (s : SignedChallengePhase) (c : ChallengePhaseCommitment) (openings : Array CoinOpening) :
     verdict schemes trusted expected s c openings = tail expected s c openings (pre schemes trusted s c) := by
   unfold verdict tail pre
   cases schemes.lookup s.scheme with
@@ -112,7 +112,7 @@ theorem forIn'_measure_eq {α σ : Type} {l : List α} {f : (a : α) → a ∈ l
     μ init ≤ μ L.run ∧ (μ L.run = μ init → ∀ a ∈ l, Good a) := hL ▸ forIn'_measure l f μ Good hf init
 
 /-- Round `j` passes: its index is its committed coin, its digest the expected one, and it is on time. -/
-private def Good (expected : Nat → Option ByteArray) (s : SignedSession) (c : SessionCommitment)
+private def Good (expected : Nat → Option ByteArray) (s : SignedChallengePhase) (c : ChallengePhaseCommitment)
     (openings : Array CoinOpening) (j : Nat) : Prop :=
   ∀ hj : j < s.rounds.size,
     (∃ o, openings.findRev? (·.j == j) = some o ∧ (s.rounds[j].j == j && o.index == s.rounds[j].index &&
@@ -124,7 +124,7 @@ private theorem accepted_acceptIf (f : Findings) (b : Bool) :
     Verdict.accepted (pure (f, acceptIf b) : Id Verdict) = b := by
   cases b <;> rfl
 
-private theorem tail_accepted (expected : Nat → Option ByteArray) (s : SignedSession) (c : SessionCommitment)
+private theorem tail_accepted (expected : Nat → Option ByteArray) (s : SignedChallengePhase) (c : ChallengePhaseCommitment)
     (openings : Array CoinOpening) (r0 : Array String) (h : (tail expected s c openings r0).accepted = true) :
     r0 = #[] ∧ ∀ j < s.rounds.size, Good expected s c openings j := by
   unfold tail at h
@@ -157,7 +157,7 @@ private theorem tail_accepted (expected : Nat → Option ByteArray) (s : SignedS
   simp at m1
   exact Array.eq_empty_of_size_eq_zero (by omega)
 
-private theorem pre_empty (schemes : Schemes) (trusted : List ByteArray) (s : SignedSession) (c : SessionCommitment)
+private theorem pre_empty (schemes : Schemes) (trusted : List ByteArray) (s : SignedChallengePhase) (c : ChallengePhaseCommitment)
     (h : pre schemes trusted s c = #[]) :
     (∃ p, schemes.lookup s.scheme = some p ∧ s.publicKey ∈ trusted ∧
       ∃ m, s.message = .ok m ∧ lmsVerify p s.publicKey s.commitment.session m s.signature = .ok true) ∧
@@ -183,10 +183,10 @@ private theorem pre_empty (schemes : Schemes) (trusted : List ByteArray) (s : Si
       | error e => simp [hs, bind, Except.bind] at hm
       | ok m => exact ⟨m, rfl, by simpa [hs, bind, Except.bind] using hm⟩
 
-private theorem commitment_eq {a b : SessionCommitment} (h : (a == b) = true) : a = b := by
+private theorem commitment_eq {a b : ChallengePhaseCommitment} (h : (a == b) = true) : a = b := by
   cases a; cases b
   simp only [BEq.beq] at h
-  simp only [instBEqSessionCommitment.beq, Bool.and_eq_true, beq_iff_eq] at h
+  simp only [instBEqChallengePhaseCommitment.beq, Bool.and_eq_true, beq_iff_eq] at h
   obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8⟩ := h
   subst h1 h2 h3 h4 h5 h6 h7 h8
   rfl
