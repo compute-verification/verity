@@ -7,8 +7,8 @@ SHA-512's padding (`holds_message`); and `shaW` from the IV over a padded messag
 -/
 module
 
-public import Proofs.Poub.ReadUnit.Frame.Gadgets
-public import Proofs.Poub.ReadUnit.Sha
+public import Proofs.Accounting.ReadUnit.Frame.Gadgets
+public import Proofs.Accounting.ReadUnit.Sha
 public import Proofs.Flock.Soundness.Discharge.Hm.Hm96
 public import Proofs.Flock.Soundness.Discharge.Hm.Hash
 
