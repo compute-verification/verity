@@ -23,3 +23,6 @@ LINEAR_BASE, COLUMN_LINEAR, ROW_LINEAR = "LinearBase", "ColumnParallelLinear", "
 #: The norms and the gated activations, each a family the step bound gives one width.
 NORMS = frozenset({RMS_NORM, GEMMA_RMS_NORM, LAYER_NORM})
 GATED_ACTS = frozenset({SILU_AND_MUL, GELU_AND_MUL, "GeluAndMulSparse", "MulAndSilu", "SiluAndMulWithClamp"})
+#: The endings of a class name by which a tensor-parallel rank picks the modules it lists with their sharding attributes:
+#: vLLM's parallel linears, its embeddings and its LM head.  ``LOGITS`` is picked by its whole name, beside these.
+SHARDED_ENDINGS = ("ParallelLinear", "Embedding", "LMHead")
