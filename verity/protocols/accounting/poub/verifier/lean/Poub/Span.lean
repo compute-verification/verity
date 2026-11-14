@@ -6,24 +6,27 @@ public import Spot.OneStageZk
 /-!
 # A window decided from accepted proofs: the span in place of the opened blocks
 
-`checkSpan` decides window t from the proof system's accepted runs of PoUB's opening unit (`BlockOpeningCheck_v2`,
+`checkSpan` decides window t from the proof system's accepted runs of PoUB's opening unit (`BlockOpeningUnit_v2`,
 `block_check.py`), one unit a sample, in place of the openings `checkWindow` reads; it never reads a block, a payload, a
 receipt leaf or a path. A span is one or more statements of the sampled proof system's one-stage audit
-(`Spot.OneStageZk`, every unit proved), each its docket, its evidence and its public file, with each
-instance's verdict word and the salts of its three opened rows; the blobs hold the files the evidence names.
+(`Spot.OneStageZk`, every unit proved), each its docket, its evidence and its public file, with each instance's verdict
+word and the salt of its `o0` row; the blobs hold the files the evidence names.
 
-The auditor's side (`Auditor`) is its own: the one-stage audit's parameters (its challenger, delta, program, partition
-and the registered opening circuit's SHA-512) and that circuit's ports in order, each with its row's bits (`Layout`). Of
-a statement only its public file's SHA-512 is the prover's, which the audit holds to the docket.
+The auditor's side (`Auditor`) is its own: the one-stage audit's parameters (its challenger, delta, program, partition,
+the registered opening circuit's SHA-512 and the values it expects registered, `pub` and `signs` among them) and that
+circuit's ports in order, each with its row's bits (`Layout`). Of a statement only its public file's SHA-512 is the
+prover's, which the audit holds to the docket.
 
-The window rejects `malformed`, at no sample, unless every statement's audit accepts (`accepted`) with every instance of
-its public file proved and the statements' instances, in order, are the window's samples, one each. Then each sample
-(i, p), in order, is held (`unitFails`): its pass's plan the identity and its block j = p registered (v2 has no plan
-row and this check no appended block); its `pub` and `signs` rows the verifier's own (`publicWords`, `signWords`:
-`block_check.opening_public_v2`'s) opening under their salts to its instance's `b ‖ c` in the public file; and its `o0`
-row the verdict word under its salt. Else the window rejects `malformed` at (i, p). The word then fails the sample as
-`block_check.verdict` names it (`verdictFailure`), and the first sample that fails rejects the window there, as
-`checkWindow` does.
+Each sample (i, p), in order, is first a unit's (`sampleOk`): its pass's plan the identity and its block j = p registered
+(v2 has no plan row and this check no appended block); else the window rejects `malformed` at (i, p). Unit k's `pub` and
+`signs` rows are then the verifier's own: sample k's (`publicWords`, `signWords`: `block_check.opening_public_v2`'s),
+which it gives every statement's audit as the supplied values `pub` and `signs`, row k each (`supplied`,
+`Spot.Supplied`), so R7 holds the record's entries for them to the root it commits them to under public salts, and no
+salt of theirs is the prover's. The window rejects `malformed`, at no sample, unless every statement's audit accepts
+(`accepted`) with every instance of its public file proved and the statements' units, in order, are the population's
+units 0, 1, … one a sample. Then unit k's `o0` row must open to its verdict word under the salt the prover sends, else
+the window rejects `malformed` at sample k. The word then fails the sample as `block_check.verdict` names it
+(`verdictFailure`), and the first sample that fails rejects the window there, as `checkWindow` does.
 
 `Session.verifySpan` is `Session.verifyBy` with `checkSpan`. It is no `Session.Event`: `Session.step`, `Session.run` and
 the verifier's process don't reach it, and `poub-difftest` (`span`, `span_held`, `span_public`) is its one
@@ -47,11 +50,9 @@ structure Auditor where
   params : Json
   layout : Layout
 
-/-- One proof block's unit as the prover sends it: its verdict word and the salts of its `pub`, `signs` and `o0` rows. -/
+/-- One proof block's unit as the prover sends it: its verdict word and its `o0` row's salt. -/
 structure Instance where
   verdict : Nat
-  pubSalt : ByteArray
-  signsSalt : ByteArray
   verdictSalt : ByteArray
 deriving Inhabited
 
@@ -96,6 +97,28 @@ def publicWords (reg : Registration) (w : WindowRecord) (i j : Nat) : Array Nat 
 def signWords (reg : Registration) (w : WindowRecord) (i : Nat) : Array Nat :=
   (signBits (w.seedOf i) reg.rows).foldl (fun acc r => acc ++ u16s r) #[]
 
+/-- Sample (i, p) is a unit's: its pass's plan the identity, p a position of it and a registered block, under
+sketch-sha512. -/
+def sampleOk (reg : Registration) (w : WindowRecord) (i p : Nat) : Bool :=
+  match w.passes[i]? with
+  | some pr => pr.plan.runs == #[(0, pr.plan.length)] && p < pr.plan.length && p < reg.blocks && reg.receipt == .sketch
+  | none => false
+
+/-- u16 words w0, w1, … as big-endian 32-bit halves w1·2^16 + w0, …: the bytes `Spot.Supplied.bytesLeaves` reads back
+as 16-bit leaves w0, w1, …; `none` for an odd count. -/
+def halves (ws : Array Nat) : Option ByteArray :=
+  if ws.size % 2 ≠ 0 then none
+  else some ((Array.range (ws.size / 2)).foldl (fun acc k => acc ++ be 4 (ws[2 * k + 1]! * 65536 + ws[2 * k]!)) .empty)
+
+/-- The supplied values the verifier gives each statement's audit (`Spot.Supplied.sources`' form): `pub` and `signs`,
+row k each sample k's, its words' `halves` as one `bytes` source; `none` where a row's words are odd. -/
+def supplied (reg : Registration) (w : WindowRecord) (drawn : Array (Nat × Nat)) : Option Json := do
+  let row (ws : Array Nat) : Option Json := do
+    pure (.arr #[Json.mkObj [("bytes", .str (Flock.hexOf (← halves ws)))]])
+  let pub ← drawn.mapM fun (i, p) => row (publicWords reg w i p)
+  let signs ← drawn.mapM fun (i, _) => row (signWords reg w i)
+  pure (Json.mkObj [("pub", .arr pub), ("signs", .arr signs)])
+
 /-- A row's `b ‖ c` as the proof system commits a unit's row: hm96-sha512 over the `sha512/row/v2` digest of the row of
 `bits` bits its words hold (u16, low bit first, zero words to fill it), under `salt`. `none` for words past the row,
 a word past 16 bits, a bit set past the row, or a salt not 192 bytes. -/
@@ -136,57 +159,54 @@ def bcsOf (pubB : ByteArray) (np : Nat) : V (Nat × Array ByteArray) := do
 def Layout.port? (l : Layout) (name : String) : Option (Nat × Nat) :=
   (l.ports.findIdx? (·.1 == name)).map fun q => (q, l.ports[q]!.2)
 
-/-- One unit's rows, as the public file holds them: `pub`, `signs` and `o0`'s `b ‖ c`. -/
+/-- The first sample that is no unit's (`sampleOk`), if any. -/
+def firstNoUnit (reg : Registration) (w : WindowRecord) (drawn : Array (Nat × Nat)) : Option (Nat × Nat) :=
+  drawn.find? fun (i, p) => !sampleOk reg w i p
+
+/-- Unit k's `o0` row's `b ‖ c` as the public file holds it, and what the prover sends of the unit. -/
 structure Held where
-  pub : ByteArray
-  signs : ByteArray
   verdict : ByteArray
   inst : Instance
 deriving Inhabited
 
-/-- Sample (i, p)'s unit: `none` if it opens to the verifier's own rows and its word says accepted, else its failure. -/
-def unitFails (l : Layout) (reg : Registration) (w : WindowRecord) (i p : Nat) (u : Held) : Option Failure := Id.run do
-  let some (_, pubBits) := l.port? "pub" | return some .malformed
-  let some (_, signsBits) := l.port? "signs" | return some .malformed
-  let some (_, verdictBits) := l.port? "o0" | return some .malformed
-  let some pr := w.passes[i]? | return some .malformed
-  if pr.plan.runs != #[(0, pr.plan.length)] || p ≥ pr.plan.length || p ≥ reg.blocks || reg.receipt != .sketch then
-    return some .malformed
-  let pubW := publicWords reg w i p
-  let signsW := signWords reg w i
-  if 16 * pubW.size ≠ pubBits || 16 * signsW.size ≠ signsBits then return some .malformed
-  if rowBc pubBits pubW u.inst.pubSalt != some u.pub || rowBc signsBits signsW u.inst.signsSalt != some u.signs
-      || rowBc verdictBits #[u.inst.verdict] u.inst.verdictSalt != some u.verdict then
-    return some .malformed
-  return verdictFailure u.inst.verdict
+/-- A unit's failure: `none` if its `o0` row opens to its verdict word under its salt and the word says accepted. -/
+def unitFails (verdictBits : Nat) (u : Held) : Option Failure :=
+  if rowBc verdictBits #[u.inst.verdict] u.inst.verdictSalt != some u.verdict then some .malformed
+  else verdictFailure u.inst.verdict
 
-/-- The accepted public files' units, in order, held to the window's samples: `malformed` at no sample for a file that
-isn't one `b ‖ c` a port an instance, another count of instances than its statement sends, or another count of units
-than samples; else the first sample whose unit fails (`unitFails`), there, or accept. -/
+/-- The accepted public files' units, in order, held to the window's samples: `malformed` at the first sample that is no
+unit's (`firstNoUnit`); `malformed` at no sample for a layout with no `o0`, a file that isn't one `b ‖ c` a port an
+instance, another count of instances than its statement sends, or units that are not the population's 0, 1, … one a
+sample; else the first sample whose unit fails (`unitFails`), there, or accept. -/
 def spanHeld (l : Layout) (reg : Registration) (w : WindowRecord) (drawn : Array (Nat × Nat))
     (held : Array (ByteArray × Array Instance)) : Verdict := Id.run do
-  let (some (qp, _), some (qs, _), some (qo, _)) := (l.port? "pub", l.port? "signs", l.port? "o0")
-    | return .reject .malformed none
+  if let some ip := firstNoUnit reg w drawn then return .reject .malformed (some ip)
+  let some (qo, verdictBits) := l.port? "o0" | return .reject .malformed none
   let np := l.ports.size
   let mut units : Array Held := #[]
+  let mut indices : Array Nat := #[]
   for (pubB, insts) in held do
-    match bcsOf pubB np with
-    | .error _ => return .reject .malformed none
-    | .ok (n, bcs) =>
+    match bcsOf pubB np, Spot.FilePart.unitIndices pubB with
+    | .ok (n, bcs), .ok is =>
       if n ≠ insts.size then return .reject .malformed none
+      indices := indices ++ is
       for u in [0:n] do
-        units := units.push ⟨bcs[u * np + qp]!, bcs[u * np + qs]!, bcs[u * np + qo]!, insts[u]!⟩
-  if units.size ≠ drawn.size then return .reject .malformed none
+        units := units.push ⟨bcs[u * np + qo]!, insts[u]!⟩
+    | _, _ => return .reject .malformed none
+  if units.size ≠ drawn.size || indices != Array.range drawn.size then return .reject .malformed none
   for k in [0:drawn.size] do
-    let (i, p) := drawn[k]!
-    if let some f := unitFails l reg w i p units[k]! then return .reject f (some (i, p))
+    if let some f := unitFails verdictBits units[k]! then return .reject f (some drawn[k]!)
   return .accept
 
-/-- A statement's public file, once its one-stage audit accepts at the auditor's parameters with the statement's public
-file (`Spot.OneStageZk.checkBlobs`, its record and evidence read by `Spot.OneStage.commitmentOf` and
-`Spot.OneStageZk.evidenceOf`) and proves every instance the file holds; else why not. -/
-def accepted (a : Auditor) (st : Statement) (bs : Core.Blobs) : V ByteArray := do
-  let p ← Spot.OneStageZk.paramsOfJson a.params
+/-- A statement's public file, once its one-stage audit accepts at the auditor's parameters, with the statement's public
+file and the verifier's `supplied` values `sup` in place of any of the same names (`Spot.OneStageZk.checkBlobs`, its
+record and evidence read by `Spot.OneStage.commitmentOf` and `Spot.OneStageZk.evidenceOf`), and proves every instance
+the file holds; else why not. -/
+def accepted (a : Auditor) (sup : Json) (st : Statement) (bs : Core.Blobs) : V ByteArray := do
+  let theirs := match a.params.getObjValD "supplied" with | .obj kvs => kvs.toArray | _ => #[]
+  let ours := match sup with | .obj kvs => kvs.toArray | _ => #[]
+  let merged := theirs.filter (fun (k, _) => !ours.any (·.1 == k)) ++ ours
+  let p ← Spot.OneStageZk.paramsOfJson (a.params.setObjVal! "supplied" (Json.mkObj merged.toList))
   let p := { p with own := { p.own with pub := st.pub } }
   match Spot.OneStageZk.checkBlobs p (← Spot.OneStage.commitmentOf st.record) (← Spot.OneStageZk.evidenceOf st.evidence) bs with
   | .accept pub _ =>
@@ -196,14 +216,16 @@ def accepted (a : Auditor) (st : Statement) (bs : Core.Blobs) : V ByteArray := d
   | .reject why => throw why
   | .undecided why => throw why
 
-/-- **Window `w`'s verdict from the span**: `malformed` at no sample unless every statement is `accepted`, else
-`spanHeld` on their public files. -/
+/-- **Window `w`'s verdict from the span**: `malformed` at the first sample that is no unit's; else `malformed` at no
+sample unless every statement is `accepted` with the window's `supplied` rows; else `spanHeld` on their public files. -/
 def checkSpan (a : Auditor) (reg : Registration) (w : WindowRecord) (drawn : Array (Nat × Nat)) (sp : Span) :
     Verdict := Id.run do
+  if let some ip := firstNoUnit reg w drawn then return .reject .malformed (some ip)
+  let some sup := supplied reg w drawn | return .reject .malformed none
   let bs := Core.Blobs.ofArray sp.blobs
   let mut held := #[]
   for st in sp.statements do
-    match accepted a st bs with
+    match accepted a sup st bs with
     | .ok pubB => held := held.push (pubB, st.instances)
     | .error _ => return .reject .malformed none
   return spanHeld a.layout reg w drawn held

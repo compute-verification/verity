@@ -1,20 +1,20 @@
 """PoUB's window decided from a span (`Poub.Span`, `Session.verifySpan`), at 16 sketch rows on a p512 store whose
 passes read it whole (the identity plan), against `poub-difftest`.
 
-The verifier's own copy of each sample's two public rows (`span_public`) is held to the Python the prover commits them
-by (`span.public_rows`, `block_check.opening_public_v2`'s), at an unmasked and a masked codec. The rest is the Lean's
-alone, which the Python never decides: a window decided on public files taken as accepted (`span_held`), each built
-here with the honest unit's rows committed as the proof system commits them (`opening.commit`), is accepted on the
-honest span; is rejected at the sample whose unit says it failed; and is rejected `malformed` on a span of another window's
-samples, of another store, of a unit missing, with a verdict word or a salt changed, or of a pass whose plan is not the
-identity. The whole check (`span`) rejects `malformed` a span of those same files when the proof system's audit doesn't
-accept its statements: here, statements that are no audit's at all. No staged statement of the opening unit exists for
-an audit to accept, so no test here reaches `span`'s acceptance."""
+The verifier's own copy of each sample's two public rows, and of the supplied values it gives the audit (`span_public`),
+is held to the Python the prover's window commits them by (`span.public_rows`, `block_check.opening_public_v2`'s, and
+`span.supplied`), at an unmasked and a masked codec. The rest is the Lean's alone, which the Python never decides: a
+window decided on public files taken as accepted (`span_held`), each built here with the honest unit's `o0` row committed
+as the proof system commits it (`opening.commit`), is accepted on the honest span; is rejected at the sample whose unit
+says it failed; and is rejected `malformed` on a span of units in another order or not the population's from 0, of a
+unit missing, with a verdict word or its salt changed, or of a pass whose plan is not the identity. That the units'
+`pub` and `signs` rows are the window's is the audit's R7 against the supplied values, which only `span` reaches: it
+rejects `malformed` a span of those same files when the proof system's audit doesn't accept its statements, here
+statements that are no audit's at all. No staged statement of the opening unit exists for an audit to accept, so no
+test here reaches `span`'s acceptance."""
 
 from __future__ import annotations
 
-import copy
-import dataclasses
 import hashlib
 import json
 import shutil
@@ -44,7 +44,7 @@ def statics(reg: audit.Registration, d: audit.PositionSample):
 
 
 def span_public(v: Any) -> dict:
-    """`spanPublicFn`: the case's session through `audit.AuditRun`, then window t's samples and each one's rows."""
+    """`spanPublicFn`: the case's session through `audit.AuditRun`, then window t's samples, each one's rows and the supplied values."""
     with M.decoding():
         reg = M.registration_of(M._get(v, "registration"))
         kw, committed, appends, not_before = M.session_of(v)
@@ -60,8 +60,10 @@ def span_public(v: Any) -> dict:
         ds = s.drawn(t)
     except SessionError as e:
         raise D.Reject(str(e)) from None
+    sup = span.supplied(ds, reg.codec_seed, statics(reg, ds[0])) if ds else None
     return {"draws": [[d.index, d.position] for d in ds],
-            "rows": [span.public_rows(d, reg.codec_seed, statics(reg, d)) for d in ds]}
+            "rows": [span.public_rows(d, reg.codec_seed, statics(reg, d)) for d in ds],
+            "supplied": None if sup is None else {r: [[{"bytes": b.hex()}] for b in rows] for r, rows in sup.items()}}
 
 
 PUBLIC = D.Port(M.EXE, "span_public", span_public, st.nothing(), package=M.PACKAGE, of_record=M.OF_RECORD)
@@ -80,49 +82,43 @@ def drawn(world: M.World, plans: tuple = (None, None)) -> M.Run:
     return r
 
 
-def salts(label: bytes) -> dict[str, bytes]:
-    return {row: hashlib.shake_256(label + row.encode()).digest(receipts.SALT_BYTES) for row in span.OPENED}
+def salt(label: bytes) -> bytes:
+    return hashlib.shake_256(label + b"o0").digest(receipts.SALT_BYTES)
 
 
-def public_file(rows: list[dict], words: list[int], ss: list[dict], ports: list[list]) -> bytes:
-    """A public file of one instance a unit: each opened row's ``b || c`` under its salt, every other row's a stand-in."""
+def public_file(words: list[int], ss: list[bytes], ports: list[list], indices: range) -> bytes:
+    """A public file of one instance a unit, its units ``indices``: each `o0` row's ``b || c`` under its salt, every other
+    row's a stand-in."""
     body = b""
-    for k, (rw, w, s) in enumerate(zip(rows, words, ss, strict=True)):
-        mine = {"pub": rw["pub"], "signs": rw["signs"], "o0": [w]}
+    for k, (w, s) in enumerate(zip(words, ss, strict=True)):
         for name, bits in ports:
-            body += O.commit(bits, mine[name], s[name]) if name in mine else hashlib.sha512(b"%d/%s" % (k, name.encode())).digest() * 2
-    header = {"instances": len(rows), "units": {"indices": list(range(len(rows)))}}
+            body += O.commit(bits, [w], s) if name == "o0" else hashlib.sha512(b"%d/%s" % (k, name.encode())).digest() * 2
+    header = {"instances": len(words), "units": {"indices": list(indices)}}
     return json.dumps(header, sort_keys=True).encode() + b"\n" + body
 
 
 class Span:
-    """A sampled window, its honest units' rows (`span.public_rows`) and words, and what the prover sends of them."""
+    """A sampled window, its honest units' words, and what the prover sends of them."""
 
     def __init__(self, r: M.Run) -> None:
         self.r, reg = r, r.store.registration
         self.ds = r.s.drawn(0)
-        self.S = statics(reg, self.ds[0])
-        self.ports = span.layout(self.S, VERDICT_BITS)
-        self.rows = [span.public_rows(d, reg.codec_seed, statics(reg, d)) if d.block == d.position else self.zeros()
-                     for d in self.ds]
+        self.ports = span.layout(statics(reg, self.ds[0]), VERDICT_BITS)
         self.words = [OK] * len(self.ds)
-        self.salts = [salts(b"unit %d " % k) for k in range(len(self.ds))]
+        self.salts = [salt(b"unit %d " % k) for k in range(len(self.ds))]
 
-    def zeros(self) -> dict[str, list[int]]:
-        bits = dict(self.ports)
-        return {"pub": [0] * (bits["pub"] // 16), "signs": [0] * (bits["signs"] // 16)}
-
-    def held(self, cut: tuple[int, ...] = (), rows=None, words=None, sent=None, ss=None) -> list[dict]:
-        """The statements' public files and instances, the units cut into statements at ``cut``; ``rows``, ``words`` and
-        ``ss`` what the files commit, ``sent`` the words the prover sends (each the committed one unless given)."""
-        rows, words = rows or self.rows, words or self.words
-        ss, sent = ss or self.salts, sent or words
+    def held(self, cut: tuple[int, ...] = (), words=None, sent=None, ss=None, indices=None) -> list[dict]:
+        """The statements' public files and instances, the units cut into statements at ``cut``; ``words`` and ``ss``
+        what the files commit, ``sent`` the words the prover sends (each the committed one unless given), ``indices``
+        the units' population indices (0, 1, … unless given)."""
+        words, ss = words or self.words, ss or self.salts
+        sent, indices = sent or words, indices or list(range(len(words)))
         out, at = [], 0
-        for end in [*cut, len(rows)]:
+        for end in [*cut, len(words)]:
             ks = range(at, end)
             out.append({"instances": [span.instance(sent[k], self.salts[k]) for k in ks],
-                        "public": public_file([rows[k] for k in ks], [words[k] for k in ks], [ss[k] for k in ks],
-                                              self.ports).hex()})
+                        "public": public_file([words[k] for k in ks], [ss[k] for k in ks], self.ports,
+                                              indices[at:end]).hex()})
             at = end
         return out
 
@@ -172,39 +168,25 @@ def test_a_unit_that_says_it_failed_rejects_the_window_there(server) -> None:
     assert held(server, s.case(s.held(words=words))) == rejected(tuple(s.r.draws[0][3]))
 
 
-def test_a_verdict_word_or_a_salt_changed_is_malformed_at_its_draw(server) -> None:
+def test_a_verdict_word_or_its_salt_changed_is_malformed_at_its_sample(server) -> None:
     s = Span(drawn(WORLD))
     words = list(s.words)
     words[2] = CODEC
     sent = list(s.words)
     assert held(server, s.case(s.held(words=words, sent=sent))) == rejected(tuple(s.r.draws[0][2]))
-    ss = copy.deepcopy(s.salts)
-    ss[4]["signs"] = bytes(receipts.SALT_BYTES)
+    ss = list(s.salts)
+    ss[4] = bytes(receipts.SALT_BYTES)
     assert held(server, s.case(s.held(ss=ss))) == rejected(tuple(s.r.draws[0][4]))
 
 
-def test_a_span_of_other_draws_is_malformed(server) -> None:
-    """This window's units in another order, or a unit of the same position in another window (its pass's seed
-    another)."""
+def test_units_not_the_populations_in_order_are_malformed(server) -> None:
+    """Unit k reads the supplied rows' row k, so a span whose units are not 0, 1, … in order is no window's: two units
+    swapped, or a second statement's units counted from 0 again."""
     s = Span(drawn(WORLD))
-    swapped = list(s.rows)
-    swapped[0], swapped[1] = swapped[1], swapped[0]
-    assert held(server, s.case(s.held(rows=swapped))) == rejected(tuple(s.r.draws[0][0]))
-    rows = list(s.rows)
-    rows[5] = span.public_rows(dataclasses.replace(s.ds[5], seed=hashlib.sha512(b"another window").digest()),
-                               s.r.store.registration.codec_seed, s.S)
-    assert held(server, s.case(s.held(rows=rows))) == rejected(tuple(s.r.draws[0][5]))
-
-
-def test_a_span_of_another_store_is_malformed(server) -> None:
-    """The same window's samples, their rows derived under another registration's codec seed, or payload root."""
-    s = Span(drawn(WORLD))
-    seed = hashlib.sha256(b"another codec seed").digest()
-    rows = [span.public_rows(d, seed, s.S) for d in s.ds]
-    assert held(server, s.case(s.held(rows=rows))) == rejected(tuple(s.r.draws[0][0]))
-    root = audit.Commitment(hashlib.sha512(b"another payload root").digest(), s.r.store.registration.blocks)
-    rows = [span.public_rows(dataclasses.replace(d, commitment=root), s.r.store.registration.codec_seed, s.S) for d in s.ds]
-    assert held(server, s.case(s.held(rows=rows))) == rejected(tuple(s.r.draws[0][0]))
+    order = list(range(len(s.ds)))
+    order[0], order[1] = order[1], order[0]
+    assert held(server, s.case(s.held(indices=order))) == rejected(None)
+    assert held(server, s.case(s.held(cut=(6,), indices=[*range(6), *range(len(s.ds) - 6)]))) == rejected(None)
 
 
 def test_a_missing_unit_or_statement_is_malformed_at_no_draw(server) -> None:
@@ -218,8 +200,8 @@ def test_a_missing_unit_or_statement_is_malformed_at_no_draw(server) -> None:
 
 
 def test_a_pass_whose_plan_is_not_the_identity_is_malformed(server) -> None:
-    """v2's unit has no plan row: a sample of a pass that reads the store in another order is no unit's, whatever its rows
-    (here zeros of their widths)."""
+    """v2's unit has no plan row: a sample of a pass that reads the store in another order is no unit's, whatever its
+    statements."""
     s = Span(drawn(WORLD, plans=(None, Plan(((1, 3), (0, 1)), 6))))
     k = next(k for k, d in enumerate(s.ds) if d.index == 1)
     assert held(server, s.case(s.held())) == rejected(tuple(s.r.draws[0][k]))

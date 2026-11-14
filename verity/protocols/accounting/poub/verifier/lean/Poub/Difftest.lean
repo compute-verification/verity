@@ -694,21 +694,22 @@ private def layoutOf (j : Json) : V Span.Layout := do
   pure ⟨ps⟩
 
 private def instanceOf (j : Json) : V Span.Instance := do
-  pure { verdict := ← nat j "verdict", pubSalt := ← hex j "pub_salt", signsSalt := ← hex j "signs_salt",
-         verdictSalt := ← hex j "verdict_salt" }
+  pure { verdict := ← nat j "verdict", verdictSalt := ← hex j "verdict_salt" }
 
 private def instancesOf (j : Json) : V (Array Span.Instance) := do (← J.arr j "instances" "input").mapM instanceOf
 
 private def spanResultJ (x : Session.Result × Session.State) : Json :=
   Json.mkObj [("result", resultJ x.1), ("outcome", match x.2.outcome with | some o => .str o | none => .null)]
 
-/-- `{session…, "t"}`: window t's samples and, for each, the `pub` and `signs` rows the verifier derives
-(`Span.publicWords`, `Span.signWords`); refused for a window with no samples awaiting their check. -/
+/-- `{session…, "t"}`: window t's samples, for each the `pub` and `signs` rows the verifier derives
+(`Span.publicWords`, `Span.signWords`), and the supplied values it gives the audit (`Span.supplied`, null where there are
+none); refused for a window with no samples awaiting their check. -/
 def spanPublicFn (j : Json) : V Json := do
   let (s, t) ← drawnRun j
   let some (w, drawn) := s.awaiting t | throw "the window has no draws awaiting their check"
   pure (Json.mkObj [("draws", .arr (drawn.map pairJ)), ("rows", .arr (drawn.map fun (i, p) =>
-    Json.mkObj [("pub", toJson (Span.publicWords s.reg w i p)), ("signs", toJson (Span.signWords s.reg w i))]))])
+    Json.mkObj [("pub", toJson (Span.publicWords s.reg w i p)), ("signs", toJson (Span.signWords s.reg w i))])),
+    ("supplied", (Span.supplied s.reg w drawn).getD .null)])
 
 /-- `{session…, "t", "layout", "held": [{"public", "instances"}]}`: window t decided by `Span.spanHeld` on the public
 files given, taken as accepted (`Session.verifyHeld`). -/
