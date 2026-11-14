@@ -51,6 +51,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator
 
+from . import settings
 from .remote import MemoryNotAvailable
 from .telemetry.cgroup import _int_or_kind, _kv_file, _read
 from .telemetry.job import write_json_atomic
@@ -62,8 +63,8 @@ TERMINAL = ("done", "failed", "cancelled")
 
 
 def _cgroup_dirs() -> list[Path]:
-    if os.environ.get("RESEARCH_CGROUP_DIR"):
-        return [Path(os.environ["RESEARCH_CGROUP_DIR"])]
+    if settings.get("RESEARCH_CGROUP_DIR"):
+        return [Path(settings.need("RESEARCH_CGROUP_DIR"))]
     from .telemetry.cgroup import Cgroup
 
     cg = Cgroup("self")
@@ -81,7 +82,7 @@ def _with_ancestors(dirs: list[Path]) -> list[Path]:
 
 
 def _proc() -> Path:
-    return Path(os.environ.get("RESEARCH_PROC_ROOT", "/proc"))
+    return Path(settings.get("RESEARCH_PROC_ROOT", "/proc"))
 
 
 def readings() -> list[dict[str, Any]]:
@@ -370,7 +371,7 @@ def release(path: str | Path | None, run_id: str | None = None) -> None:
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research mem", description="this machine's memory reading for admission (research.mem)")
-    ap.add_argument("--ramlock", default=os.environ.get("RESEARCH_RAMLOCK_DIR", RAMLOCK_DIR), metavar="DIR")
+    ap.add_argument("--ramlock", default=settings.get("RESEARCH_RAMLOCK_DIR", RAMLOCK_DIR), metavar="DIR")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     s = snapshot(Path(ns.ramlock))

@@ -20,17 +20,17 @@ refusal names the app's way to do it (the using-slack skill). Reads pass, and so
 among them. These verdicts aren't logged.
 """
 import json
-import os
 import re
 import sys
 from pathlib import Path
 
+import settings
 from settings import record_event
 
 #: the Slack registry of the checkout this file is in; `hook.sh` names origin/main's copy in its place
 OWN_REGISTRY = Path(__file__).resolve().parents[2] / ".agents/skills/using-slack/registry.json"
-REGISTRY = Path(os.environ.get("AGENT_GUARD_REGISTRY", OWN_REGISTRY))
-LOG = Path(os.environ.get("AGENT_GUARD_TASK_LOG", "/tmp/agent-guard-task.jsonl"))
+REGISTRY = Path(settings.get("AGENT_GUARD_REGISTRY", OWN_REGISTRY))
+LOG = Path(settings.get("AGENT_GUARD_TASK_LOG", "/tmp/agent-guard-task.jsonl"))
 LOOKUPS = {"explore", "cursor-guide", "ci-investigator", "videoReview"}
 AGENT_ID = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 LINEAR_READS = ("get_", "list_", "search_", "extract_")

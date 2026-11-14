@@ -24,6 +24,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from . import settings
+
 SCHEMA = "research/binary-provenance/v1"
 SUFFIX = ".provenance.json"
 BIN_DIRS_ENV = "RESEARCH_BIN_DIRS"
@@ -82,7 +84,7 @@ def record(binary: Path, source: Path | None = None) -> dict[str, Any]:
 
 
 def bin_dirs() -> list[Path]:
-    env = os.environ.get(BIN_DIRS_ENV)
+    env = settings.get(BIN_DIRS_ENV)
     return [Path(x) for x in (env.split(":") if env else DEFAULT_BIN_DIRS) if x]
 
 

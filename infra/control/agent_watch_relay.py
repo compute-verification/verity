@@ -64,7 +64,6 @@ $AGENT_WATCH_OFFSET the offset's file, default ~/agent-watch/offset):
 import hashlib
 import http.client
 import json
-import os
 import re
 import shlex
 import string
@@ -73,13 +72,13 @@ import sys
 import time
 from pathlib import Path
 
-from research import slack
+from research import settings, slack
 from research.pods import budgets, connect
 
 EVENTS = "/data/agent-watch/events.jsonl"
 BELLS = "/data/agent-watch/doorbells.json"
 BELLS_WINDOW_S = 24 * 3600
-OFFSET = Path(os.environ.get("AGENT_WATCH_OFFSET") or Path.home() / "agent-watch/offset")
+OFFSET = Path(settings.get("AGENT_WATCH_OFFSET") or Path.home() / "agent-watch/offset")
 SENT_KEEP_S = 3 * 86400     # the sent-set beside OFFSET (`sent_path`) keeps each line posted this long
 EVERY_S = 2 * 60
 DRY = "--dry-run" in sys.argv
@@ -384,7 +383,7 @@ def text(rec: dict) -> str:
 
 def pod(cmd: str, data: str | None = None) -> str:
     """`cmd` on the control pod: over ssh, or in a local shell when $AGENT_WATCH_ON_POD is set (the watchers supervisor's loop)."""
-    argv = ["sh", "-c", cmd] if os.environ.get("AGENT_WATCH_ON_POD") else [*connect.ssh_base(budgets.GUARD_HOST), cmd]
+    argv = ["sh", "-c", cmd] if settings.get("AGENT_WATCH_ON_POD") else [*connect.ssh_base(budgets.GUARD_HOST), cmd]
     return subprocess.run(argv, input=data, capture_output=True, text=True, timeout=120, check=True).stdout
 
 
@@ -445,7 +444,7 @@ def bells(api: slack.Slack, now: float) -> dict:
 
 def once() -> None:
     try:
-        b = json.dumps(bells(slack.Slack(os.environ.get("SLACK_BOT_TOKEN")), time.time()))
+        b = json.dumps(bells(slack.Slack(settings.get("SLACK_BOT_TOKEN")), time.time()))
         if DRY:
             log(f"would write {BELLS}: {b}")
         else:
@@ -473,7 +472,7 @@ def once() -> None:
         elif DRY:
             log(f"would post: {text(rec)}" + (f" and ring @{to}" if (to := rung(rec)) else ""))
         else:
-            api = slack.Slack(os.environ.get("SLACK_BOT_TOKEN"))
+            api = slack.Slack(settings.get("SLACK_BOT_TOKEN"))
             ts = slack._post(api, ALERTS, "infra", post := text(rec))
             sent[key] = time.time()
             save_sent(sent)

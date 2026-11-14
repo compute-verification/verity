@@ -65,10 +65,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
 
+import settings
 from settings import CONVERSATION_ID, EVENT_LOG, PUSH_REMOTES, recorded_runs
 from task_hook import OWN_REGISTRY, REGISTRY, holders
 
-STATE = Path(os.environ.get("AGENT_GUARD_STATE", "/tmp/agent-guard"))
+STATE = Path(settings.get("AGENT_GUARD_STATE", "/tmp/agent-guard"))
 OWNER_FILE = "agent-owner"
 #: an owner with no hook run for this long is gone: six times the longest the shell hook lets one command block, so an agent
 #: that is waiting on a command never reads as gone
