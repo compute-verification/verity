@@ -33,6 +33,17 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
            "adapters/vllm/manifests/definitions.json"]
 
+[rewrite.keep_in]
+# The relative paths of a toy tree or a docstring's example in a moved file of the check (`"../.."`, `"../../verity/lean"`),
+# which from its old place or its package's happen to name a directory of `tools/`: they name a toy's, and stay as written.
+"tools/check/anchors.py" = ["tools"]
+"tools/check/move_check.py" = ["tools"]
+"tools/check/tests/test_anchors.py" = ["tools"]
+"tools/check/tests/test_move_check.py" = ["tools", "tools/verity", "tools/verity/lean"]
+"tools/check/tests/test_node_keys.py" = ["tools"]
+"tools/check/tests/test_records.py" = ["tools/verity"]
+"tools/check/tests/test_tasks.py" = ["tools/verity"]
+
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`)
 "tools.verity.check" = "tools.check"
