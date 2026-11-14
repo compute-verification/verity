@@ -9,8 +9,8 @@
 //!   flock-ir-sampling selftest --instances FILE --netlist FILE [--tables DIR] [--gpu] [--only CASE]
 //!
 //! Before anything the verifier checks its own instance file (`verity_flock.ir_sampling.stage`, never a producer's): the unit
-//! netlist's order, the block table against the plan (IR6: derived, not read), the frame-v3 roots recomputed from its row
-//! digests, public port words and token, and the row words against the public temperature (on the sha256-pinned rcp table
+//! circuit description's order, the block table against the plan (IR6: derived, not read), the frame-v3 roots recomputed from its
+//! row digests, public port words and token, and the row words against the public temperature (on the sha256-pinned rcp table
 //! under `--tables`); `serve` also needs `--native-checked`, the file's public sha256 once `verity_flock.ir_sampling.check_native`
 //! has recomputed its lane words. Session: `Hello(Σ)`, `Commit(root_f = Σ, root_B, publics = every real block's run output
 //! values)` (the verifier chains them into its regions and folds each row's chunk values into its digest), two verifier points
