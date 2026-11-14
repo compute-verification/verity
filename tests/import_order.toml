@@ -148,13 +148,6 @@ files = [
 ]
 
 [[against]]
-loader = "verity/protocols/compose"
-loaded = "benchmarks"
-files = [
-    "verity/protocols/compose/device/live_challenger/auditor.py",
-]
-
-[[against]]
 loader = "tools"
 loaded = "benchmarks"
 files = [
