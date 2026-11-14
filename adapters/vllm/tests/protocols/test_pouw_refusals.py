@@ -3,7 +3,9 @@ a transcript directory that is no string; `refusals`' of a tensor-parallel world
 that counts its own, and of a schedule Pearl-C's path can't run; `_layers`' of a model with no linear layer and of two
 layers that share a quant method; and H1's install's of a layout without its rows or its steps.  Under the option,
 `circuit`'s of a scheme without a circuit and of an input group of another length than its Definition's, the
-quantizer's of a value that is not finite, and the native prover's of a unit outside a call's population."""
+quantizer's of a value that is not finite, and the native prover's of a unit outside a call's population.  Pearl-C's of
+a kernel directory without one cubin, of a pass whose coins don't parse and of B̃'s prefetch on a kernel without it,
+and the in-process certifier's of fewer coin bytes than it asks for."""
 from __future__ import annotations
 
 import random
@@ -15,7 +17,9 @@ import numpy as np
 import pytest
 from verity.protocols.accounting.pouw.prover.circuit import SCHEMES
 from verity.protocols.accounting.pouw.prover.circuit.ncp2 import Shape
+from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier.coins import Challenger
+from verity.protocols.accounting.pouw.verifier.protocol import DomainError
 from verity.protocols.accounting.pouw.verifier.serving import SCHEDULES, Schedule
 
 from verity_vllm.protocols import pouw as P
@@ -23,8 +27,10 @@ from verity_vllm.protocols.interface import Context
 from verity_vllm.protocols.pouw import circuit as PC
 from verity_vllm.protocols.pouw import native as PN
 from verity_vllm.protocols.pouw import pearl_c as PPD
+from verity_vllm.protocols.pouw.lead import feed as PF
 from verity_vllm.protocols.pouw.operands import quantize
-from verity_vllm.protocols.pouw.pearl_c.lanes import schedule_of
+from verity_vllm.protocols.pouw.pearl_c import kernel as PK
+from verity_vllm.protocols.pouw.pearl_c.lanes import schedule_of, whole_options
 
 HOST = ("ncp-v1", "ncp-v1-shift24", "ncp-v2")
 #: the least (n, k) of a linear the host schemes' domain takes
@@ -219,3 +225,47 @@ def test_a_unit_outside_a_calls_population_or_its_weight_sides_is_refused():
         with pytest.raises(IndexError, match=f"^Y unit {u} outside 0..2$"):
             nat.side.outputs(u)
     assert [nat.side.outputs(u).shape for u in (0, 2)] == [(3088,), (3088,)]
+
+
+def test_a_kernel_directory_without_one_cubin_is_refused_and_its_one_cubin_is_taken(tmp_path):
+    with pytest.raises(ValueError, match=f"^{re.escape(str(tmp_path))}: 0 cubins, not one: name the cubin$"):
+        PK._the_cubin(tmp_path)
+    (tmp_path / "b.cubin").write_bytes(b"")
+    assert PK._the_cubin(tmp_path) == tmp_path / "b.cubin"
+    (tmp_path / "a.cubin").write_bytes(b"")
+    with pytest.raises(ValueError, match=f"^{re.escape(str(tmp_path))}: 2 cubins, not one: name the cubin$"):
+        PK._the_cubin(tmp_path)
+
+
+def test_a_certifier_given_fewer_coin_bytes_than_it_asks_for_opens_no_window():
+    """The refusal is held from its counts on: the words before them are a retired term, which this file doesn't add."""
+    with pytest.raises(PF.FeedError, match=f" gave {PF.ROOT_BYTES - 1} bytes for {PF.ROOT_BYTES}$"):
+        PF.InProcessCertifier(lambda n: bytes(n - 1)).open(0, bytes(PF.ROOT_BYTES), bytes(PF.ROOT_BYTES), 1)
+    cert = PF.InProcessCertifier(bytes)
+    assert cert.open(0, bytes(PF.ROOT_BYTES), bytes(PF.ROOT_BYTES), 1) == bytes(PF.ROOT_BYTES)
+    assert list(cert.windows) == [0]
+
+
+def test_a_pass_whose_coins_do_not_parse_is_refused_in_those_words():
+    """A coin commitment or a salt coin that its parser refuses is refused as malformed, with the parser's words; the
+    same pass with both parsed goes on to the coins' own checks, here that its salt coin was opened after zeros."""
+    ch = Challenger(0, random.Random(0).randbytes)
+    man = {"schema": CC.MANIFEST_SCHEMA, "matmuls": [], "weights": {}, "coins": ch.commitment.to_json(),
+           "salt_opening": ch.open("salt", bytes(PF.ROOT_BYTES)).to_json()}
+    malformed = "the pass's coins are malformed: "
+    cases: tuple[tuple[str, str], ...] = (("coins", f"{malformed}a coin commitment's scheme is 'verity/pouw/epoch-coins/v1'"),
+                                          ("salt_opening", f"{malformed}'epoch'"))
+    for key, said in cases:
+        with pytest.raises(DomainError, match=f"^{re.escape(said)}$"):
+            PPD.manifest_epoch({**man, key: {}}, ch.commitment)
+    with pytest.raises(DomainError, match="^the salt's coin was not opened after what the verifier recorded$"):
+        PPD.manifest_epoch(man, ch.commitment)
+
+
+def test_a_prefetch_of_b_is_refused_on_a_kernel_whose_pipeline_lacks_it():
+    said = "e: whole_prefetch_b runs the kernel's B̃ prefetch (`Pipeline.prefetch_b`), which it lacks"
+    lacks = SimpleNamespace(run=SimpleNamespace(Pipeline=type("Pipeline", (), {})))
+    with pytest.raises(ValueError, match=f"^{re.escape(said)}$"):
+        whole_options("e", lacks, True, False, False, False, whole_prefetch_b=True)
+    has = SimpleNamespace(run=SimpleNamespace(Pipeline=type("Pipeline", (), {"prefetch_b": None})))
+    assert whole_options("e", has, True, False, False, False, whole_prefetch_b=True) is None
