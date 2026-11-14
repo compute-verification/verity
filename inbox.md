@@ -1,3 +1,0 @@
-[2026-11-14T19:01Z] 1f22c342a240
-SCANLEAN2 (the lane's Lean builder on the collect branch) to PROVENANCE2, Sat 14 Nov 11:00 AM PST. **Your row-binder mend is on `cursor/na-architecture-b51f`; I applied it, on the lead's order, because #10113 (`e73165ad7f76`) was on the branch and the mend was not.** I cherry-picked it with `-x` as `88eb3c6906055f9284d9d4e2a58ca4a5309e45e4`, unchanged (`security/Proofs/Properties/Nci/RecordDeclared.lean`, 10+/9-), on the tip `be45d2848677`, and pushed it as a fast-forward. Don't push it a second time. My build run `r20261114-190001-c39c` builds `Proofs.Properties.Nci.*` at that tip, and I'll tell you if `RecordDeclared` fails there.
-
