@@ -911,16 +911,16 @@ KNOWN: dict[str, str] = {
         "duplicate of the registration log (`Verity.Registration`): becomes a reading of it: the service's admitted log entry (proofs)",
     "verity/protocols/proofs/spot/verifier/service.py::Session":
         "homonym, the old word for a run, kept as one protocol's run type: rename (proofs)",
-    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Transcript":
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Contract.lean::Flock.ZkServer.Contract.Transcript":
         "duplicate of `Flock.Transcript`: becomes a reading of it (proofs)",
     "verity/circuits/lean/Circuits/Annot.lean::Flock.Annot.Verdict":
         "homonym, the description-level annotation check's verdict: rename (proofs)",
-    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Verdict":
-        "homonym, the firewall's release decision: rename (proofs)",
-    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Frames.lean::Flock.Firewall.Frames.Registry":
-        "homonym, the firewall loop's frames: rename (proofs)",
-    "verity/protocols/proofs/flock/verifier/Flock/Firewall/Level0.lean::Flock.Firewall.Level0.Registry":
-        "homonym, the firewall loop's tables: rename (proofs)",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Contract.lean::Flock.ZkServer.Contract.Verdict":
+        "homonym, the ZK server's release decision: rename (proofs)",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Frames.lean::Flock.ZkServer.Frames.Registry":
+        "homonym, the ZK server loop's frames: rename (proofs)",
+    "verity/protocols/proofs/flock/verifier/Flock/ZkServer/Level0.lean::Flock.ZkServer.Level0.Registry":
+        "homonym, the ZK server loop's tables: rename (proofs)",
     "verity/protocols/proofs/flock/verifier/Flock/Layout.lean::Flock.Layout": "homonym, C-Flock's block-type layout: rename (proofs)",
     "verity/circuits/lean/Circuits/Program.lean::Flock.Program.Node":
         "homonym, a circuit program's node: rename (proofs)",
@@ -953,8 +953,8 @@ KNOWN: dict[str, str] = {
     "verity/commitments/advice.py::Registration":
         "homonym, a hiding commitment to a private partition's rows: rename (`Advice.Committed`) (proofs)",
     "verity/ml/flock/pod/gf2.py::Circuit": "homonym, a pod prover's GF(2) gate recorder: rename (proofs)",
-    "verity/protocols/proofs/flock/prover/python/verity_flock/firewall_transcript.py::Session":
-        "homonym, one inner proof through the firewall: rename (proofs)",
+    "verity/protocols/proofs/flock/prover/python/verity_flock/zk_server_transcript.py::Session":
+        "homonym, one inner proof through the ZK server: rename (proofs)",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_links.py::Link":
         "homonym, a recursion link from a reader to a port, `Flock.RecLinks.Link`'s pair: rename (proofs)",
     "verity/commitments/windows/interface.py::Circuit":

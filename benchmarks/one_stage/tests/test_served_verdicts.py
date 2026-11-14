@@ -3653,7 +3653,7 @@ def test_under_pearlplus_tie_with_a_gate_the_window_serve_runs_inside_a_pearl_c_
 
     def steps(calls: Path) -> list[str]:
         return [c.split("one_stage/served_verdicts.py ", 1)[-1] if "served_verdicts.py" in c
-                else c.split("prove_path/prove_path.py ", 1)[-1].split()[0] if "prove_path.py" in c
+                else c.split("/prove_path.py ", 1)[-1].split()[0] if "prove_path.py" in c
                 else "inference_only.py " + c.split()[1] if "inference_only.py" in c else c.split()[2]
                 for c in calls.read_text().splitlines()]
     assert steps(tmp_path / "calls")[-6:] == [

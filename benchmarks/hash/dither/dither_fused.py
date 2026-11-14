@@ -59,7 +59,8 @@ import serve as SV  # noqa: E402
 
 import forms as F  # noqa: E402
 from h1c import H1C, Dom, Tab, unwords, words  # noqa: E402
-from benchmarks.hash.dither.h1r import H1R, Call  # noqa: E402
+from h1r_torch import H1R  # noqa: E402
+from verity.protocols.experimental.dither.prover.h1r import Call  # noqa: E402
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

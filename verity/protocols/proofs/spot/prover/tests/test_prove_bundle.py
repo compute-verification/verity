@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
-PUBLIC = HERE / "fixtures" / "bundle-window-public"
+PUBLIC = Path(__file__).resolve().parent / "fixtures" / "bundle-window-public"
 E2E = HERE.parents[2] / "benchmarks" / "one_stage" / "interfaces" / "tests" / "fixtures"
 sys.path.insert(0, str(HERE.parent))
 from verity.protocols.proofs.spot.prover.audit import prove_bundle as PB  # noqa: E402

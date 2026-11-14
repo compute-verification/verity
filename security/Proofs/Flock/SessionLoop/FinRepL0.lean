@@ -231,41 +231,41 @@ theorem repFwC_open0 {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp 
     (salt : ℕ → ℕ → ByteArray) (hm : 14 ≤ st.m) (hn : sch.n ≠ 0) (hk0 : 1 ≤ sch.k0) (hL : 2 ≤ sch.levels.size)
     (hq : ∀ j < sch.levels.size, (sch.levels.getD j default).q ≠ 0) {t t' : _root_.Flock.Transcript} (ht : t.k = 0)
     {l l' : Array Msg} {P : _root_.Flock.Zk.ZkProof}
-    (h : ((_root_.Flock.Firewall.Finish.repFwC (asksCut coin n)
+    (h : ((_root_.Flock.ZkServer.Finish.repFwC (asksCut coin n)
       (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) st sch tPad rep dom g cm0 extras pads ic vals extra
       lanePad salt).run t).go l = (.ok (P, t'), l')) :
     P.proof.ligerito.initialProof = openP _root_.Flock.MerkleScheme.hm96Sha512 cm0 (sch.levels.getD 0 default)
       (_root_.Flock.positions (sch.levels.getD 0 default) ((Array.range (sch.levels.getD 0 default).q).map
         (coinOf (resp (l.size + (piopZk st extras + sch.k0 + 8)))))) := by
-  dsimp only [_root_.Flock.Firewall.Finish.repFwC] at h
-  obtain ⟨⟨zp, zc⟩, t₁, l₁, h₁, h⟩ := _root_.Flock.Firewall.Finish.run_bind_ok h
+  dsimp only [_root_.Flock.ZkServer.Finish.repFwC] at h
+  obtain ⟨⟨zp, zc⟩, t₁, l₁, h₁, h⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨⟨lp, lc⟩, t₂, l₂, h₂, h⟩ := _root_.Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨lp, lc⟩, t₂, l₂, h₂, h⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨⟨ss, T, sws⟩, t₃, l₃, h₃, h⟩ := _root_.Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨ss, T, sws⟩, t₃, l₃, h₃, h⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨⟨lg, zl, rec⟩, t₄, l₄, h₄, h⟩ := _root_.Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨lg, zl, rec⟩, t₄, l₄, h₄, h⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨tr', t₅, l₅, h₅, hg⟩ := _root_.Flock.Firewall.Finish.run_bind_ok h
-  rw [_root_.Flock.Firewall.Finish.get_run_go] at h₅
+  obtain ⟨tr', t₅, l₅, h₅, hg⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
+  rw [_root_.Flock.ZkServer.Finish.get_run_go] at h₅
   simp only [Prod.mk.injEq, Except.ok.injEq] at h₅
   obtain ⟨⟨htr, ht₅⟩, hl₅⟩ := h₅
   subst tr' t₅ l₅
   try dsimp only at hg
-  obtain ⟨⟨rp, tt⟩, t₆, l₆, h₆, hr₆⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hg
-  obtain ⟨-, ht₆, hl₆⟩ := _root_.Flock.Firewall.Finish.liftV_run_ok h₆
+  obtain ⟨⟨rp, tt⟩, t₆, l₆, h₆, hr₆⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok hg
+  obtain ⟨-, ht₆, hl₆⟩ := _root_.Flock.ZkServer.Finish.liftV_run_ok h₆
   subst t₆ l₆
   try dsimp only at hr₆
-  obtain ⟨lgc, t₇, l₇, h₇, hc⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hr₆
-  obtain ⟨-, ht₇, hl₇⟩ := _root_.Flock.Firewall.Finish.liftV_run_ok h₇
+  obtain ⟨lgc, t₇, l₇, h₇, hc⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok hr₆
+  obtain ⟨-, ht₇, hl₇⟩ := _root_.Flock.ZkServer.Finish.liftV_run_ok h₇
   subst t₇ l₇
   try dsimp only at hc
   split at hc
-  · obtain ⟨_, _, _, h', _⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hc
-    rw [_root_.Flock.Firewall.Finish.throw_run_go] at h'
+  · obtain ⟨_, _, _, h', _⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok hc
+    rw [_root_.Flock.ZkServer.Finish.throw_run_go] at h'
     cases h'
   have hpl : P.proof.ligerito = lg ∧ P.level0 = zl := by
-    obtain ⟨_, _, _, -, hp⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hc
+    obtain ⟨_, _, _, -, hp⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok hc
     simp only [StateT.run_pure, FlockComplete.JsonRT.go_pure, Prod.mk.injEq, Except.ok.injEq] at hp
     obtain ⟨⟨rfl, -⟩, -⟩ := hp
     exact ⟨rfl, rfl⟩
@@ -393,13 +393,13 @@ theorem tabSrcView_l0 (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.C
 
 end Claims.ZKMal.Masked
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 /-- **A table from a level 0 keeps `commitOf` of it** as its level-0 commitment. -/
-theorem tabOfLevel0_commitOf {st : _root_.Flock.Setup} {l : _root_.Flock.Firewall.Level0.Level0}
-    {t : _root_.Flock.Firewall.Finish.Tab} (h : _root_.Flock.Firewall.Finish.tabOfLevel0 st l = .ok t) :
+theorem tabOfLevel0_commitOf {st : _root_.Flock.Setup} {l : _root_.Flock.ZkServer.Level0.Level0}
+    {t : _root_.Flock.ZkServer.Finish.Tab} (h : _root_.Flock.ZkServer.Finish.tabOfLevel0 st l = .ok t) :
     t.cm0 = commitOf l := by
-  unfold _root_.Flock.Firewall.Finish.tabOfLevel0 at h
+  unfold _root_.Flock.ZkServer.Finish.tabOfLevel0 at h
   simp only [bind, Except.bind] at h
   split at h
   · cases h
@@ -417,7 +417,7 @@ theorem tabOfLevel0_commitOf {st : _root_.Flock.Setup} {l : _root_.Flock.Firewal
     subst h
     rfl
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish
 
 namespace Claims.ZKServer
 
@@ -435,11 +435,11 @@ theorem Loop.Level0Src.realOf_rows0 {src : Msg → Flock.Wit →
       ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg} {w : Flock.Wit}
     (hS : Loop.Level0Src src x w) (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce)
     (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape) (j : Fin (Masked.jOf x)) (r : Fin 2)
-    {tb : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray}
+    {tb : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray}
     (h : Loop.realOf src x w (ν, t) (2 * j.val + r.val) = .ok (tb, hi)) :
-    ∃ l : _root_.Flock.Firewall.Level0.Level0, l.toIn = Masked.linkIn x w t j ∧
-      tb.cm0 = _root_.Flock.Firewall.Finish.commitOf l ∧ l.lv = Masked.lv0 x j ∧ l.tPad = (Masked.zkTab x j).tPad ∧
-      l.rows = _root_.Flock.Firewall.Link.rows l.lv l.tPad l.toIn.g l.toIn.extra l.toIn.lanePad := by
+    ∃ l : _root_.Flock.ZkServer.Level0.Level0, l.toIn = Masked.linkIn x w t j ∧
+      tb.cm0 = _root_.Flock.ZkServer.Finish.commitOf l ∧ l.lv = Masked.lv0 x j ∧ l.tPad = (Masked.zkTab x j).tPad ∧
+      l.rows = _root_.Flock.ZkServer.Link.rows l.lv l.tPad l.toIn.g l.toIn.extra l.toIn.lanePad := by
   obtain ⟨l, hl, hin⟩ := hS ν t j r
   obtain ⟨s0, spec, hsx⟩ := Masked.setupOf_of_pos (lt_of_le_of_lt (Nat.zero_le _) (Masked.lt_of_jOf j))
   unfold Loop.realOf at h
@@ -458,7 +458,7 @@ theorem Loop.Level0Src.realOf_rows0 {src : Msg → Flock.Wit →
     · rename_i tb' htb
       simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
       obtain ⟨rfl, -⟩ := h
-      obtain ⟨hm, -, ⟨s, hz, hlv⟩, hrows, -, -⟩ := _root_.Flock.Firewall.Level0.ofDraws_ok hl
+      obtain ⟨hm, -, ⟨s, hz, hlv⟩, hrows, -, -⟩ := _root_.Flock.ZkServer.Level0.ofDraws_ok hl
       have hm' : l.m = (Masked.stAt x j).m := by
         rw [show l.m = l.toIn.m from rfl, hin]
         rfl
@@ -466,11 +466,11 @@ theorem Loop.Level0Src.realOf_rows0 {src : Msg → Flock.Wit →
         rw [show l.wideLeaf = l.toIn.wideLeaf from rfl, hin]
         rfl
       rw [hm] at hm'
-      rw [_root_.Flock.Firewall.Level0.ofDraws_wideLeaf hl] at hw'
+      rw [_root_.Flock.ZkServer.Level0.ofDraws_wideLeaf hl] at hw'
       rw [hm', hw'] at hz
       obtain ⟨hs', ht'⟩ := Prod.mk.inj (Except.ok.inj (hz.symm.trans (Masked.zkTab x j).hz))
       have hlv' : l.lv = Masked.lv0 x j := by rw [hlv, hs']; rfl
-      exact ⟨l, hin, _root_.Flock.Firewall.Finish.tabOfLevel0_commitOf htb, hlv', ht', hrows⟩
+      exact ⟨l, hin, _root_.Flock.ZkServer.Finish.tabOfLevel0_commitOf htb, hlv', ht', hrows⟩
 
 namespace Loop
 
@@ -492,7 +492,7 @@ theorem finSrc_l0 (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce)
 
 variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
-  (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+  (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
 /-- **`FinRepL0` holds where the loop samples the tape's level 0**: at a statement in the masked scope with a witness
@@ -545,11 +545,11 @@ theorem finRepL0 (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Re
   have hq0 : ((Masked.zkTab x ⟨k / 2, hj⟩).sch.levels.getD 0 default).q ≠ 0 := (hlv 0 (by omega)).q_ne_zero
   -- the extra claims and the slot
   have hxs := finRepXs L₀ src real wk x w hsc hR ν t κ m₀ ρ₀ ops hctx s0 spec hsx k hk extras hxe tb hi q f hRep
-  have hpz : FlockComplete.piopZk tb.st (_root_.Flock.Firewall.Finish.claimsOf q.xs) =
+  have hpz : FlockComplete.piopZk tb.st (_root_.Flock.ZkServer.Finish.claimsOf q.xs) =
       FlockComplete.piopZk tb.st extras := by
     unfold FlockComplete.piopZk
     rw [← hxs]
-    simp [_root_.Flock.Firewall.Finish.claimsOf]
+    simp [_root_.Flock.ZkServer.Finish.claimsOf]
   have hes : extras.size = spec.points * (Masked.stsOf x)[k / 2]!.regions.size := by
     have hex := hxe
     rw [htab] at hex
@@ -619,15 +619,15 @@ theorem finRepL0 (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Re
     refine ⟨?_, ?_⟩
     · rw [hcr, FlockSoundness.Refine.getElem!_range_map _ hpd', hf1, hrow, hcm0]
       show _ = l0.rows[p]!
-      rw [hrows0, hlv0, htp0, hin0, Masked.rows_linkIn x w t ⟨k / 2, hj⟩, _root_.Flock.Firewall.Link.rows_eq, hgk,
+      rw [hrows0, hlv0, htp0, hin0, Masked.rows_linkIn x w t ⟨k / 2, hj⟩, _root_.Flock.ZkServer.Link.rows_eq, hgk,
         FlockComplete.tablesP, FlockSoundness.Refine.getElem!_range_map _ hjT]
       all_goals rfl
     · rw [hcs, FlockSoundness.Refine.getElem!_range_map _ hpd', hf2, hsalt, hcm0]
       show _ = ((Array.range (2 ^ l0.lv.d)).map fun q =>
-        _root_.Flock.Firewall.Finish.fitBytes 192 (l0.salt q))[p]!
+        _root_.Flock.ZkServer.Finish.fitBytes 192 (l0.salt q))[p]!
       rw [hlv0, FlockSoundness.Refine.getElem!_range_map _ hpd]
       have hsl : l0.salt p = (Masked.linkIn x w t ⟨k / 2, hj⟩).salt p :=
-        congrFun (congrArg _root_.Flock.Firewall.Link.In.salt hin0) p
+        congrFun (congrArg _root_.Flock.ZkServer.Link.In.salt hin0) p
       rw [hsl, Masked.salt_linkIn x w t ⟨k / 2, hj⟩ hpd']
       all_goals rfl
   rw [hP, hQ]

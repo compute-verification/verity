@@ -868,7 +868,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         else:
             src = ["--template", m.template, *(["--cache", a.compose_cache] if a.compose_cache else [])] if chunked else \
                 ["--input-set", str(sets[m.template][0])]
-            p = a0.run([sys.executable, str(HERE / "compose_circuit.py"), *src, "--out", str(st_dir / "circuit.txt"),
+            compose = Path(__file__).resolve().parents[2] / "verifier" / "one_stage" / "compose_circuit.py"
+            p = a0.run([sys.executable, str(compose), *src, "--out", str(st_dir / "circuit.txt"),
                         "--partition", pd, "--program", part["program"]], st_dir / "compose.log", {"PYTHONPATH": a.m0_pythonpath},
                        timeout=a.session_timeout)
             if p.returncode != 0:
@@ -1270,7 +1271,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             wrong = {**hist, "registered": {**hist["registered"], name: root[:-1] + format(int(root[-1], 16) ^ 1, "x")}}
             v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, history=wrong,
                         **tie(a))
-            neg["history-root-not-its-writers-strings"] = a0.history_negative(v)
+            neg["history-root-not-its-writers-strings"] = a0.negative(v)
         v = outside_the_partition(union_draw, rec, drawn_law, n_all)
         neg["draw-outside-the-partition"] = a0.negative(v)
         neg.update(wiring_negatives(mine.members, publics))
