@@ -238,7 +238,10 @@ class _Site:
         return None
 
 
-def _layer_ok(m: Any, rope_cls: type, attn_cls: type, impl_cls: type, decoder: Any) -> bool:
+def _layer_ok(m: Any, rope_cls: Any, attn_cls: Any, impl_cls: Any, decoder: Any) -> bool:
+    rope: Any
+    attn: Any
+    impl: Any
     rope, attn = getattr(m, "rotary_emb", None), getattr(m, "attn", None)
     impl = getattr(attn, "impl", None)
     return (isinstance(rope, rope_cls) and type(rope).forward_cuda is rope_cls.forward_cuda

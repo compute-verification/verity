@@ -449,7 +449,7 @@ def probability(p) -> bool:
 
 
 def rule(law) -> dict:
-    """`OneStage.rule`: the agreed law, `{"law": "bernoulli", "p"}` or `{"law": "subset" | "stratified" | "work", "k"}`."""
+    """`OneStage.rule`: the agreed sampling design, `{"law": "bernoulli", "p"}` or `{"law": "subset" | "stratified" | "work", "k"}`."""
     kind = law.get("law") if isinstance(law, dict) else None
     if kind == "bernoulli":
         _exactly(law, {"law", "p"}, "the law")
@@ -523,7 +523,7 @@ def decode_params(j) -> dict:
     keys = keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
-    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool")
+    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool", "compiler")
                    if isinstance(j, dict) and k in j}
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
@@ -614,6 +614,7 @@ def decode_params(j) -> dict:
         raise D.Reject(str(e)) from None
     try:
         R._seed_salt(j.get("seed_salt"), window)
+        R._registered_compiler(j.get("compiler", R.UNREAD))
     except ValueError as e:
         raise D.Reject(str(e)) from None
     if "challenger" in j:
@@ -674,7 +675,8 @@ def _registration_verdict(p: dict, rec) -> Verdict:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
-                   p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"))
+                   p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"),
+                   compiler=p.get("compiler", R.UNREAD))
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
@@ -721,7 +723,8 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
     """The outcome `OneStage.check` gives, from `one_stage`'s own checks: reject when the sample's coins don't read
     (`_coins_of`), on R1-R7, the sample's checks (with coins, that they sample it: `_coins_problem`), the record's checks or a
     verdict that ran and did not accept; undecided when only the verifier is missing or has not run; accept
-    exactly when `audit_record` accepts, with the sampled and proved units, the bounds and the profile."""
+    exactly when `audit_record` accepts, with the sampled and proved units, the bounds, whether every verdict ran (the
+    record's ``complete``) and the profile."""
     rec, _ = c
     try:
         coins = _coins_of(p, c, e)
@@ -744,7 +747,7 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
         return ("undecided", "verifier of record") if all(v["accepted"] is True for v in ran) else ("reject", "verdict")
     profile = audit.profile(rec, e["draw"], p["delta"]).to_json()
     wrong = out["wrong_units"]
-    public = {"bound": wrong["bound"], "drawn": list(e["draw"]["units"]),
+    public = {"bound": wrong["bound"], audit.COMPLETE: out["complete"], "drawn": list(e["draw"]["units"]),
               "per_template": wrong.get("per_template"), "proved": DR.proved(e["draw"])}
     return "accept", public, {**profile, "delta": str(profile["delta"])}
 
@@ -761,7 +764,7 @@ def _ran_out(p: dict, rec: dict, src: bytes) -> bool:
 
 
 def covered_params(j) -> dict:
-    """`OneStage.paramsOfJson`: `decode_params` (`paramsParsed`), and every bernoulli law refused, at any p
+    """`OneStage.paramsOfJson`: `decode_params` (`paramsParsed`), and every bernoulli sampling design refused, at any p
     (`service.bernoulli`)."""
     p = decode_params(j)
     if service.bernoulli(p["law"]):
@@ -1787,7 +1790,7 @@ def agreed_laws(draw, n: int):
 
 
 def _worked(law) -> bool:
-    """Whether an agreed law is expanded over a work table: `work` or a work rate."""
+    """Whether an agreed sampling design is expanded over a work table: `work` or a work rate."""
     return (law.get("law") == "work") if isinstance(law, dict) else str(law).startswith("work-rate:")
 
 
@@ -1806,7 +1809,7 @@ def work_tables(draw, s: Setup):
 
 
 def drawn(draw, law: dict, n: int) -> dict:
-    """The verifier's sample under its expanded law; a work sample's closure, which the audit refuses, one time in four."""
+    """The verifier's sample under its expanded sampling design; a work sample's closure, which the audit refuses, one time in four."""
     kind = law["law"]
     if kind == "subset":
         return {"k": law["k"], "law": "subset", "population": n, "units": sorted(draw(st.permutations(range(n)))[:law["k"]])}
@@ -2451,6 +2454,31 @@ def test_an_accepted_case_is_compared_whole(server):
         case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
         verdict_, line = D.replay(ONE_STAGE, case, server)
         assert verdict_ == "accept" and json.loads(line) == answer(case) | {"reason": None}, (law, line)
+
+
+def test_an_accept_says_whether_every_verdict_ran(server):
+    """An accept's public ``complete``, Lean's and the Python's alike: true when every verdict ran, and false beside
+    one that is not of record and did not run (its ``accepted`` null or absent), which the accept does not wait on."""
+    s, design = SETUPS[3], {"k": 2, "law": "subset"}
+    mine = DR.derive(s.program, s.query, design, None)
+    rec = R.record(s.program, s.query, design, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF, work_table=None)
+    d = {**mine, "population": s.population, "units": [0, 3]}
+    params = {"anchors": [], "delta": "1/20", "law": design, "leaf_layer": LEAF, "log": [], "partition": None,
+              "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
+              "work_table": None}
+    for other, complete in (({}, True), ({"upstream": {"accepted": True, "of_record": False}}, True),
+                            ({"upstream": {"accepted": None, "of_record": False}}, False),
+                            ({"upstream": {"of_record": False}}, False)):
+        evidence = {"draw": d, "instances": 2, "proved_units": DR.proved(d),
+                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                    "sessions": [], "statement": {},
+                    "verdicts": {"lean": {"accepted": True, "of_record": True}, **other}}
+        case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
+        verdict_, line = D.replay(ONE_STAGE, case, server)
+        got = json.loads(line)
+        assert verdict_ == "accept" and got == answer(case) | {"reason": None}, (other, line)
+        assert got["public"]["complete"] is complete and audit.answer_complete(got) is complete, (other, line)
 
 
 ONE_STAGE_V2 = D.ProtocolPort("sampled-proofs-one-stage-zk", answer, CASES, package=PACKAGE)
@@ -6574,6 +6602,45 @@ def test_a_seed_salt_the_server_chose_is_refused_by_name(pieces):
     for bad in (SEED_SALT.upper(), SEED_SALT[:-2], SEED_SALT + "\n", "", 5):
         assert codes(rec["window"], {**params, "seed_salt": bad}) == "reject", bad
     assert codes(rec["window"], {**params, "window_root": None}) == "reject"
+
+
+def test_advice_no_registered_compiler_reads_is_refused_by_name(pieces):
+    """Lean and Python agreeing on the registered compiler (`compiler`, the registration log's item, with the public
+    length ℓ of the advice it reads): a window naming it by its digest with advice of at most ℓ bits is accepted, one
+    naming another compiler or none is refused by name (`R6-compiler`), and advice over ℓ, in another form or none too
+    (`R6-advice-length`). Where the log registers none (`compiler` null), a window naming a compiler or advice is refused
+    (`R6-compiler`); a verifier that reads no log's compiler holds the window to nothing. A compiler in another form
+    refuses the verifier's inputs."""
+    s, values = REGISTERED_SETUPS[0], {"D": 1, "W": 3}
+    design = {"k": 1, "law": "subset"}
+    digest, other = "c1" * 64, "c2" * 64
+    item = {"advice": "verity/advice/v1", "cap": 32, "digest": digest, "kind": "builder"}
+
+    def named(d, bits):
+        return {**WINDOW, "compiler": {"digest": d, "name": "c"}, "advice": {"bits": bits, "root": "ad" * 64}}
+
+    rec = _record_of(s, values, design, named(digest, 8), leaf_layer=LEAF, window_root=WROOT)
+    params = {"anchors": [], "compiler": item, "delta": "1/10", "law": design, "leaf_layer": LEAF, "log": [],
+              "parameters": s.signature, "partition": None, "ports": s.ports, "program": s.desc, "query": s.query,
+              "registered": values, "scheme": SCHEME, "window_root": WROOT, "work_table": None}
+    unread = {k: v for k, v in params.items() if k != "compiler"}
+    none = {**params, "compiler": None}
+
+    def codes(window, p=params):
+        kind, out = D.replay(REGISTRATION, _json({"params": p, "record": {**rec, "window": window}}), pieces)
+        return json.loads(out)["codes"] if kind == "output" else kind
+
+    cases = [(named(digest, b), params, []) for b in (0, 32)]
+    cases += [(named(digest, b), params, ["R6-advice-length"]) for b in (33, -1, "8", None, True)]
+    cases += [(named(other, 8), params, ["R6-compiler"]), (WINDOW, params, ["R6-compiler", "R6-advice-length"]),
+              (named(digest, 8), none, ["R6-compiler"]),
+              ({**WINDOW, "advice": {"bits": 0, "root": "ad" * 64}}, none, ["R6-compiler"]), (WINDOW, none, []),
+              (named(other, 99), unread, []), (WINDOW, unread, [])]
+    for window, p, want in cases:
+        assert codes(window, p) == want, (window, p.get("compiler"))
+    for bad in ({**item, "kind": "theta"}, {**item, "digest": 5}, {**item, "digest": digest.upper()},
+                {k: v for k, v in item.items() if k != "advice"}, {**item, "extra": 1}, "c"):
+        assert codes(rec["window"], {**params, "compiler": bad}) == "reject", bad
 
 
 def test_a_window_opens_the_pool_its_chain_left(pieces):

@@ -33,7 +33,7 @@ configs, Definitions) or advice charged at its width. A value the served hardwar
 atomics order, a split choice) is never among them as a free witness: serving makes it canonical so a block computes it,
 or it is advice.
 
-Under a two-stage sampling design the same three roles run `parties.SPOT_TWO_PROTOCOL`. The sample samples replay blocks.
+Under a two-stage sampling design the same three roles run `parties.SPOT_TWO_PROTOCOL`. The first stage samples replay blocks.
 The proof server replays them and sends the verifier their interior registration (`Interior`). Once it is in, the
 verifier samples the second stage on fresh coins (`Second`). The proof server then proves the second stage's proof
 blocks, one session a template, and the verifier audits both stages.
@@ -51,7 +51,7 @@ Its guarantee is soundness, and it rests on:
 - an honest verifier: the challenger flips its coins after the registration is recorded and logs them, the verifier
   reads that log and the record the challenger wrote (`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`,
   `RecordCustodyZKJ`), and it runs the Lean verifier;
-- where it reads the certifier's stamp, the certifier's own assumptions, which that layer states (`trusted-host` among
+- where it reads the certifier's stamp, the certifier's own assumptions, which that layer states (`trusted-device` among
   them, `verity/protocols/accounting/certifier/verifier/PROTOCOL.md`).
 
 ## Guarantee and assumptions
@@ -194,7 +194,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   exits 0 (`refusal_exit`). A window's sessions run on its challenger's session, each closed there after its evidence
   (`one_stage.closing`, `challenger.members_tree_reason`).
 - **The challenger** (`challenger`, Lean of record `Spot/Challenger.lean`): every protocol's live coins, by
-  label and index, each opened once, after its root is recorded. On the auditor host its coins reach the developer's
+  label and index, each opened once, after its root is recorded. On the auditor device its coins reach the developer's
   machine only through that machine's certifier coin link (`verity/protocols/compose/device/live_challenger/auditor.py`, the coins' path).
   A remote prover reads them the same way: one TCP stream at its own `127.0.0.1` port (`RemoteChallenger`), deployed
   as the far end of that coin link (`verity/protocols/compose/device/live_challenger/coin_link.py`).
@@ -208,11 +208,11 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   - `CoinsConfidential` is `Pouw.Assumptions.CoinsConfidential` (`security/Definitions/Pouw/Assumptions/Dither.lean`,
     in the lock), whose docstring is its statement, and ACCEL's pooled guarantee
     `Pouw.Guarantees.Dither.FleetSound` takes it. A path across a host the developer controls would need an encrypted,
-    authenticated channel, which the challenger doesn't have. Deployed, one auditor host runs the challenger and the
+    authenticated channel, which the challenger doesn't have. Deployed, one auditor device runs the challenger and the
     certifier, and a run's coins leave it only on the peer's certifier coin link, which the gate refuses to open
     without (`auditor.coin_ports`).
-  - `OneClock`, an assumption under the trusted auditor host, with no Lean statement yet: the challenger's release times and the certifier's
-    ingress and receipt times are read on one clock. Deployed, that is the auditor host's. A challenger on a device of its own would have to keep its clock within
+  - `OneClock`, an assumption under the trusted auditor device, with no Lean statement yet: the challenger's release times and the certifier's
+    ingress and receipt times are read on one clock. Deployed, that is the auditor device's. A challenger on a device of its own would have to keep its clock within
     1.03 s of the certifier's, the offset ACCEL's timing allows.
 - **The Python.** `verity.protocols.proofs.spot.verifier.one_stage` is the one-stage audit's reference and `service` the
   proof system over it; `optimize`, `candidates` and `costfit` plan a sampling design (`benchmarks/sampling_plan`).
@@ -459,7 +459,17 @@ The audit record (`audit.audit_record`) is `{"format": "verity/one-stage/audit/v
   `sessions` being the session records' SHA-512 and `verdict` the verifier's digest (a list when the sampled
   proof blocks were proved in several sessions). Its ε terms come from the soundness analysis, not from the run, so the run leaves them null.
 
-Pinned by `tests/test_one_stage.py` (the profile, audit record and incorrect-block bound tests, under each sampling design).
+One-stage's answer of an accepted record (`audit.answer`, as Lean's `OneStage.check` gives it) publishes `{"bound",
+"complete", "per_template", "proved"}` and the sample's units under the integrity profile's key for them. `complete`
+is the record's own: whether every verdict ran. An accept waits on the verdicts of record and on those that ran, so an
+accept can say `complete` is false, and then a verdict that is not of record did not run. A reader that wants a
+complete audit reads `audit.answer_complete`, never the verdict alone: it is true only of an accept whose `complete`
+is true, so an answer without the field (one written before it, a reject, an undecided) is not complete. A two-stage
+outcome says it only under `second_stage.complete`: the two-stage form allowed, the replay block the registered
+request Definition, and each audit record accepted and complete.
+
+Pinned by `tests/test_one_stage.py` (the profile, audit record, answer and incorrect-block bound tests, under each
+sampling design).
 
 ### The consumers
 
@@ -543,3 +553,12 @@ At the window's open, before it serves, the stream samples its seed salt (`Strea
 challenger's `seed-salt` family after the open root, which no sample reads. The record names it (`window.seed_salt`), a
 certified input its circuits read, public as coins. A verifier reads it from the challenger's log (`coins.seed_salt_of`,
 Lean `Challenger.seedSaltOf`), and R6 holds the window to it (`R6-seed-salt`, `tests/test_registered.py`).
+
+### The registered compiler
+
+A verifier that reads the registration log's registered compiler (`compiler`: the log's item as its view publishes it,
+with its digest and the public length ℓ of the advice it reads, or null when the log registers none) holds the record's
+window to name that compiler by its digest (`window.compiler.digest`, `R6-compiler`) and advice of at most ℓ bits
+(`window.advice.bits`, `R6-advice-length`); where the log registers none, a window naming a compiler or advice is
+`R6-compiler`. Lean `Registration.compilerOk` and `adviceOk`, in `RunCompiler` of R6; `tests/test_registered.py` and
+the difftest's `test_advice_no_registered_compiler_reads_is_refused_by_name`.

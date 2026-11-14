@@ -22,7 +22,7 @@ def unfused_norm_boundaries(se, by_key: dict, s: int, rec: dict, problems: list[
         logits      := outs of the last dispatch in module logits_processor (replaces the raw lm_head GEMM output above)."""
     from verity_vllm.observe.events import DispatchEnter
 
-    last: dict[str, object] = {}
+    last: dict = {}                           # module -> its last dispatch node
     adds: dict[int, int] = {}                 # layer -> alloc of the fp32 residual sum
     for node in se.all_nodes():
         ev = node.enter
@@ -35,7 +35,7 @@ def unfused_norm_boundaries(se, by_key: dict, s: int, rec: dict, problems: list[
         if m:
             L = int(m.group(1))
             outs = node.exit.outs if node.exit is not None else None
-            if ev.op == "aten.add.Tensor" and sum(hasattr(a, "alloc") for a in ev.args) == 2 and hasattr(outs, "alloc"):
+            if ev.op == "aten.add.Tensor" and sum(hasattr(a, "alloc") for a in ev.args) == 2 and outs is not None and hasattr(outs, "alloc"):
                 adds[L] = outs.alloc
             elif ev.op == "aten.to.dtype" and ev.args and getattr(ev.args[0], "alloc", None) == adds.get(L) and L not in rec["residual"]:
                 sha = by_key.get((s, ev.id, "outs"))
@@ -74,7 +74,7 @@ def parallel_residual_boundaries(se, by_key: dict, s: int, rec: dict, problems: 
         logits      := the lm_head GEMM output recorded above (Pythia's `logits_processor` applies no softcap)."""
     from verity_vllm.observe.events import DispatchEnter
 
-    last_add: dict[int, object] = {}
+    last_add: dict = {}                       # layer -> its last aten.add.Tensor node
     final_node = None
     for node in se.all_nodes():
         ev = node.enter

@@ -1,13 +1,14 @@
 module
 
 public import Proofs.Pouw.PearlC.DeviceCapGap
-public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.Lemmas.PearlCRecords
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.DeviceRev1Gap
 import Proofs.Pouw.PearlC.TTOutW1Variants
 import Proofs.Pouw.PearlC.TileGap
 import Proofs.Pouw.Prob
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # The cap on the chain's share: what it admits, that it asserts less, and g

@@ -4,7 +4,7 @@
 
 The replay is the prover's pre-flight check: it reads committed values, the requests and the weights in the clear on the
 prover's node, so neither it nor its keep is verifier-facing.  A verifier checks the sampled proof blocks' proofs
-(`verity.protocols.spot.verifier.one_stage`).
+(`verity.protocols.proofs.spot.verifier.one_stage`).
 
 The bundle is opened against its manifest and against the Commit's record beside it: the manifest sha256 the Commit's verdict names,
 the run root of the instrumented run's row (`runs.jsonl`), the dumped store's step roots folding to it, the binding map, the
@@ -224,7 +224,7 @@ def slim_tree(tree: dict[str, Any], opened: Iterable[str]) -> dict[str, Any]:
     at, keep_ = {e[0]: i for i, e in enumerate(tree["names"])}, set(opened)
     keys: dict[str, str] = {}
     for n in sorted(keep_ & at.keys(), key=at.__getitem__):
-        ks: Any = tensor_key_of(tree, at[n])  # typed Any: a tree that carries no key for the tensor raises AttributeError here, as on main
+        ks: Any = tensor_key_of(tree, at[n])  # typed Any: a tree that carries no key for the tensor raises AttributeError here
         keys[str(at[n])] = ks.hex()
     return {k: v for k, v in tree.items() if k not in ("key", "tensor_keys", "extra")} | {
         "tensor_keys": keys, "extra": {n: i for n, i in tree["extra"].items() if str(i) in keys}}
