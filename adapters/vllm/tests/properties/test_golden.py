@@ -219,7 +219,11 @@ def test_main_records_with_a_log_and_a_profile_and_prints_the_entry(monkeypatch,
     def record(*a, **kw):
         calls.append((a, kw))
         return {"name": "one", "digest": "d1"}
+
+    def check(**kw):
+        raise AssertionError("--record goes on to no check of the corpus")
     monkeypatch.setattr(golden, "record", record)
+    monkeypatch.setattr(golden, "check", check)
     for argv in (["--record", "one"], ["--record", "one", "--log", "one.jsonl.gz"], ["--record", "one", "--profile", "prof"]):
         with pytest.raises(UsageError) as refused:
             golden.main(cli.parse("golden", argv, {}))
