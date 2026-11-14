@@ -15,8 +15,8 @@ import Mathlib.Data.NNRat.Floor
   `NciCheck.Desc.evaluate`'s verdict, on the expansion. The converse is not claimed: `NciCheck.Desc.evaluate` refuses
   some instances whose expansion `NciCheck.evaluate` accepts (its module docstring, "Refusals"), and its codes may differ.
   `SecurityProofs.DescAgrees` (`Proofs.Properties.Nci.Agrees`) proves it from the three statements
-  `descAgrees_of_open` (`Proofs.Properties.Nci.Novel`) takes: `Resolve.bodiesOk` proves `Resolve.BodiesOk`,
-  `operandsResolve_of` `Walk.OperandsResolve` from it, and `Novel.readsExact` `Novel.ReadsExact`.
+  `descAgrees_of_open` (`Proofs.Properties.Nci.Fresh`) takes: `Resolve.bodiesOk` proves `Resolve.BodiesOk`,
+  `operandsResolve_of` `Walk.OperandsResolve` from it, and `Fresh.readsExact` `Fresh.ReadsExact`.
   `Properties.Nci.Desc.Verdict` restates `Reports`, `Witnesses` and the thread bounds of `NciCheck.Desc.evaluate` from it,
   and `Properties.Nci.Desc.Cover` states the cover theorem's factor of the check of record's verdict.
 -/

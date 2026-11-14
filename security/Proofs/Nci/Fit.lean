@@ -155,7 +155,7 @@ slots it uses in the windows it entered. It needs `ReachSlots` only for a thread
 start window: one without has every slot it uses in a window it entered. -/
 theorem token_bound {c : RegisteredCircuit} {T : Threading c} (σ : T.Slots) {k : ℕ} (P : Partition c.D k)
     (start : Fin T.m → Fin k) (Nstar : ℕ) (S b_w w_e : ℝ) (hbw : 0 < b_w) (hwe : 0 ≤ w_e) (hgap : S < Nstar * b_w)
-    (hS : ∀ j, (novelReads c (P.gates j) : ℝ) ≤ S) (t : Fin T.m)
+    (hS : ∀ j, (freshInput c (P.gates j) : ℝ) ≤ S) (t : Fin T.m)
     (hR : (T.threadMults (P.gates (start t)) t).Nonempty → Nstar ≤ (σ.threadSlots univ t).card)
     (hF : Assumptions.FitsSlots c T σ P start b_w w_e) :
     (∑ j, ((T.threadMults (P.gates j) t).card : ℝ)) * (Nstar * b_w - S) ≤
@@ -282,7 +282,7 @@ multiplications in their start window (`token_bound`). With no counted multiplic
 some window exists, so `S ≥ 0` and `b_w > 0`, and at `w_e ≤ 0` the left side is not positive. -/
 theorem fitBoundSlots_start {c : RegisteredCircuit} {T : Threading c} (σ : T.Slots) {k : ℕ} (P : Partition c.D k)
     (start : Fin T.m → Fin k) (Nstar : ℕ) (S b_w w_e : ℝ) (hgap : S < Nstar * b_w)
-    (hS : ∀ j, (novelReads c (P.gates j) : ℝ) ≤ S)
+    (hS : ∀ j, (freshInput c (P.gates j) : ℝ) ≤ S)
     (hR : ∀ t, (T.threadMults (P.gates (start t)) t).Nonempty → Nstar ≤ (σ.threadSlots univ t).card)
     (hF : Assumptions.FitsSlots c T σ P start b_w w_e) :
     4 * w_e * (Nstar * b_w - S) * T.M.card ≤ k * T.reuse * Nstar * S ^ 2 := by

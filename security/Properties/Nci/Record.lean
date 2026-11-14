@@ -339,7 +339,7 @@ so alone it holds of a check none of whose records lays one out: that each does 
 (`Proofs.Properties.Nci.Record`) takes beside it. -/
 def Counts (F : Form) : Prop :=
   ∀ (j tr : Json) (c : F.Case), F.read j tr = .ok c → ∀ d, Served F c d → ∀ u,
-    Nci.novelReads d (d.𝓘.gates u) ≤ (F.summarize c).fresh ∧
+    Nci.freshInput d (d.𝓘.gates u) ≤ (F.summarize c).fresh ∧
       (d.D.size (d.𝓘.gates u) = (F.summarize c).gates ∨ d.𝓘.gates u = ∅)
 
 /-- **The rate rule on a summary**: where it complies, a block's gates are at most `Γ` and its fresh bits at most

@@ -10,7 +10,7 @@ another width), `Prog.orderViolation`, the layout checks, `walkable`, `analyze` 
 Definition's summary (`summarize`, callees first, the `TOP` slowest named with their body nodes and return pieces, and
 the `TOP` with the most return pieces; one of at least `BIG` body nodes, 2^17 unless given, step by step, with its
 return's pieces before and after `coalesce`: `summarizeTimed`) and the
-root's reads (`nodeReads`), and the verdict (θ, the owners, `intoOf`, `novelWidth`). The last line is the verdict, which
+root's reads (`nodeReads`), and the verdict (θ, the owners, `intoOf`, `freshWidth`). The last line is the verdict, which
 `nci_cost.sh` holds to `nci-check --policy`'s. A measurement, not a verifier: it runs what `NciCheck.Desc.evaluate`
 runs, in its order.
 -/
@@ -197,7 +197,7 @@ def main (args : List String) : IO UInt32 := do
   let n := NciCheck.iuCount own
   let size := sizes offs own n
   let into := intoOf offs own theta reads n
-  let r := (Array.range n).map fun u => (size[u]!, novelWidth into[u]!)
+  let r := (Array.range n).map fun u => (size[u]!, freshWidth into[u]!)
   let mine := NciCheck.verdict (P.defs[P.root]!).gates r (NciCheck.failure i.gamma i.num i.den r)
   report "verdict" t [("ius", toJson n)]
   IO.println mine.compress

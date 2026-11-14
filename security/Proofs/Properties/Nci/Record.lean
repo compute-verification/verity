@@ -48,14 +48,14 @@ theorem complies_of {F : Form} (hown : Owns F) (hlaid : LaidOut F) (hcount : Cou
     · unfold Meets
       rw [hsize]
       refine ⟨hΓ, ?_⟩
-      have h1 : (Nci.novelReads d (d.𝓘.gates u) : ℝ) ≤ (F.summarize c).fresh := by exact_mod_cast hfresh
+      have h1 : (Nci.freshInput d (d.𝓘.gates u) : ℝ) ≤ (F.summarize c).fresh := by exact_mod_cast hfresh
       have h2 : ((F.summarize c).fresh : ℝ) * (F.inst c).den ≤ (F.inst c).num * (F.summarize c).gates := by
         exact_mod_cast hα
       rw [div_mul_eq_mul_div, le_div_iff₀ hden]
       exact (mul_le_mul_of_nonneg_right h1 hden.le).trans h2
     · unfold Meets
       rw [hempty]
-      simp [Nci.novelReads, Verity.Circuit.size, Verity.Circuit.into, Verity.Circuit.width]
+      simp [Nci.freshInput, Verity.Circuit.size, Verity.Circuit.into, Verity.Circuit.width]
   exact ⟨hmeets, by unfold Nci.CompliesRate; exact ⟨d.n, d.𝓘, hmeets⟩⟩
 
 /-- One Definition has one signature. -/
