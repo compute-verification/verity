@@ -123,7 +123,7 @@ inputs = ["verity", "hardware/cards", "verity/README.md", "tools/config/verity_c
           "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "verity/protocols/accounting/pouw/verifier/lean/check/lakefile.toml",
           "verity/protocols/accounting/poub/verifier/lean/lakefile.toml",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",
-          "benchmarks/ppl/windows.py", "benchmarks/ppl/datasets.json", "benchmarks/pouw/edited_gemm/fattn_ref.py",
+          "benchmarks/ppl/windows.py", "benchmarks/ppl/datasets.json", "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattn_ref.py",
           "benchmarks/remote_session/prover.py", "verity/protocols/accounting/poub/verifier/session/verifier.py", "verity/protocols/accounting/poub/verifier/session/wire.py",
           "verity/protocols/accounting/poub/verifier/session/checks.py", "verity/protocols/accounting/poub/verifier/session/lean_verifier.py", "verity/protocols/accounting/poub/verifier/session/challengers.py",
           "benchmarks/remote_session/store_layout.py", "verity/protocols/compose/device/live_challenger/auditor.py", "verity/protocols/compose/device/live_challenger/host.json",
@@ -146,7 +146,7 @@ inputs = ["verity", "hardware/cards", "verity/README.md", "tools/config/verity_c
           "benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/live.py",
           "benchmarks/pouw/hidden_zk/fast_stage.py", "benchmarks/pouw/hidden_zk/compact_stage.py"]
 parallel = true
-# benchmarks/pouw/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
+# verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
 # tests/engine/int8_attention_sass.py reads the int8 attention kernels' SASS with the PoUW SASS gate's nvdisasm parser
 # (verity/protocols/accounting/pouw/prover/sass_gate.py)
 # a worker's peak grows with its share of the suite, since what its tests leave held isn't returned: 6.2 GB on 14 workers, 12 GB on

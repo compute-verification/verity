@@ -160,7 +160,7 @@ BENCHMARKS_IMPORTERS = {
                     "compute-accounting: H1's prover, producer and the live challenger's auditor "
                     "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/protocols/compose/device/live_challenger`)"),
     **dict.fromkeys(("adapters/vllm/tests/engine/ppl_oracle.py", "adapters/vllm/tests/engine/fattn_oracle.py"),
-                    "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`)"),
+                    "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `verity/protocols/accounting/pouw/prover/kernels/edited_gemm`)"),
     # brought out of benchmarks/ by the layout move, each with a load of benchmarks/ by path
     "verity/protocols/compose/device/live_challenger/auditor.py":
         "proofs: the relay's load (`benchmarks/network_traces/load_relay.py`), "
