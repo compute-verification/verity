@@ -86,7 +86,7 @@ class AttentionScopeSoftcap(AttentionScopeInertWindow):
                 return c
             return dataclasses.replace(c, spec=TG.softcapped(c.spec, softcap), pattern=self.name)
         if isinstance(r, ComputeGroup):
-            primary = one(r)
+            primary: Any = one(r)   # the group's own Compute, softcapped: a ComputeGroup still
             return dataclasses.replace(primary, also=tuple(one(x) for x in r.also))
         return one(r)
 
