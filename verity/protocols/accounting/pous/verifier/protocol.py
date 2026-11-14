@@ -230,11 +230,6 @@ def challenge_key(source: bytes, vk: VerifierKey) -> Key:
     return audit.challenge_key(source, vk)
 
 
-def responder(scheme: Scheme, block: Callable[[int], bytes]) -> Callable[[int], bytes]:
-    """The honest responder: challenge `i` answered by `scheme.respond` from the stored labels."""
-    return lambda i: scheme.respond(block, i)
-
-
 @dataclass(frozen=True)
 class StorageProfile:
     """What an accepted audit establishes about the server, and what that rests on.
@@ -368,4 +363,4 @@ class TimedAudit:
 
 
 __all__ = ["PRIVATE", "PUBLIC", "CapacityBound", "Scheme", "StorageProfile", "TimedAudit", "challenge_key", "commit",
-           "decode", "decode_tensor", "draw_salt", "encode", "responder", "verifier_key"]
+           "decode", "decode_tensor", "draw_salt", "encode", "verifier_key"]

@@ -18,10 +18,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # The cases are built from the circuits IR and evaluated by its reference evaluator, from core's registered primitives (ops,
-# PoUW's words) and the Definitions' integer, gather and cast primitives (`verity.definitions.registry`, which imports
-# their twins in `verity.definitions.numerics`; both read `verity.definitions.evidence` and its `evidence.json`).
-# `demo.py`'s registry walk reads `verity.definitions.boolean` too.
-# The key-binding test reads the remote audit, on the commitments, the randomness, the profile and the kernels' plans.
+# PoUW's words) and the Definitions' integer, gather and cast primitives (`verity_vllm.definitions.registry`, which imports
+# their twins in `verity_vllm.definitions.numerics`; both read `verity_vllm.definitions.evidence` and its `evidence.json`).
+# `demo.py`'s registry walk reads `verity_vllm.definitions.boolean` too.
+# The key-binding test reads PoUB, on the commitments, the randomness, the profile and the kernels' plans.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits",
           "verity/channel.py",
           "verity/circuits/kernels", "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
@@ -30,12 +30,12 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits",
           "verity/protocols/proofs/spot/device/challenger.py", "verity/protocols/proofs/spot/device/remote.py",
           "verity/protocols/accounting/pouw/verifier/__init__.py",
           "verity/protocols/accounting/pouw/prover/__init__.py", "verity/protocols/accounting/pouw/prover/circuit",
-          "verity/definitions/__init__.py",
-          "verity/definitions/registry",
-          "verity/definitions/numerics", "verity/definitions/evidence.py",
-          "verity/definitions/evidence.json", "verity/definitions/boolean.py",
+          "adapters/vllm/verity_vllm/definitions/__init__.py",
+          "adapters/vllm/verity_vllm/definitions/registry",
+          "adapters/vllm/verity_vllm/definitions/numerics", "adapters/vllm/verity_vllm/definitions/evidence.py",
+          "adapters/vllm/verity_vllm/definitions/evidence.json", "adapters/vllm/verity_vllm/definitions/boolean.py",
           "verity/circuits/ops", "verity/circuits/silicon", "verity/protocols/__init__.py",
           "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py",
           "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/pouw/__init__.py",
-          "verity/hardware/__init__.py", "verity/protocols/proofs/spot/__init__.py",
+          "verity/protocols/proofs/spot/__init__.py",
           "verity/protocols/proofs/spot/device/__init__.py"]

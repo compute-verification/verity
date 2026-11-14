@@ -57,7 +57,7 @@ opened like any other, but not credited.
 | \(\mu_{\text{timing}}\) | \(1 - \sum_t U^{c}_t b / (R\Sigma)\), \(U^{c}_t\) window \(t\)'s credited receipts: the span the credited receipts don't fill (the gap \(g\) after each pass, the session's two ends, blocks a plan leaves out, post-seed blocks without a verdict) | the record |
 | \(\mu_{\text{sample}}\) | \(\sum_t m^*_t\, b / (R\Sigma)\) read per window (`GammaTerms.sample`), or the pooled bound's wrong receipts \(\cdot\, b / (R\Sigma)\) read over the horizon (`GammaTerms.horizon`, §10) | the record's profiles, at \(\delta + \sum_t \mathrm{adv}_t\) (SHA-512 stream as PRF: not priced, not assumed) |
 | \(\mu_{\text{chip}}\) | \(\sum_t P_t S_{\text{chip}} / (R\Sigma)\): each pass, what is held on chip needn't be read again | \(S_{\text{chip}}\), measured |
-| \(\lambda\) | AuditRO's slack: per pass of \(k\) receipts (every certified one, in either reading), `named_bits(k)`, a whole number of bits at least \(\log_2(q^k/k!) \ge \log_2 C(q, k)\) at \(q = 2^{64}\) (`queries_log2`), and `slack_log2` (`SLACK_LOG2`, 67: the failure probability's \(2^{-\text{slack}}\) a pass, below, adds at most \(2^{-50}\) up to \(2^{17}\) passes, more than an hour of the node's 41.2 ms passes over gate runs 8 and 9's 532.6 GB store); 0.116% at the node's 192.6M 4 KiB blocks a pass over every tier (37.9 bits a block), more than \(\mu_{\text{sample}}\) | `Accounting.Guarantees.Remote.AuditRO`, proved for one pass; the ledger applies it per pass (§8, "Lean") |
+| \(\lambda\) | AuditRO's slack: per pass of \(k\) receipts (every certified one, in either reading), `named_bits(k)`, a whole number of bits at least \(\log_2(q^k/k!) \ge \log_2 C(q, k)\) at \(q = Q = 2^{80}\) (`queries_log2`, `QUERIES_LOG2`: the prover's budget of SHA-512 compressions, the one every bound that counts its hashing reads), and `slack_log2` (`SLACK_LOG2`, 140: the failure probability's \(2^{-\text{slack}}\) a pass, below, adds at most \(2^{-110}\) up to \(2^{30}\) passes, about 1.4 years of the node's 41.2 ms passes); 0.164% at the node's 192.6M 4 KiB blocks a pass over every tier (53.9 bits a block) | `Accounting.Guarantees.Remote.AuditRO`, proved for one pass; the ledger applies it per pass (§8, "Lean") |
 | \(\mu_{\text{rebuild}}\) | \(C_{\text{sq}} b / (E_{\text{sq}} R)\): blocks re-encoded from their payloads in place of reads, each at least the record's codec's \(E_{\text{sq}}\) squarings (`Codec.encode_squarings`: 98,016 at p1024/k3/masked, 65,344 at k = 2, 65,152 at p512/k2) at the node's stated ceiling of \(C_{\text{sq}}\) squarings a second at that width (`Rebuild`) | the record's codec, and assumption 5 stated per width (`WorkHardness(p, k)`) |
 | \(\mu_{\text{host}}\) | the host tier's own shortfall, and host DRAM bandwidth PCIe can't carry | a model, measured capacities |
 | \(\mu_{\text{link}}\) | under a registration that binds \(z\) only (0 otherwise): relays that meet \(z\) and a copy of the block over a link (§4) | a model |
@@ -75,7 +75,7 @@ codec than the record's, or a bare fraction. The stated ceiling is the node's, t
 \(\delta\) read over the horizon, plus \(2^{-\text{slack}}\) per pass, plus \(s/2^{512}\) per window for guessing a
 receipt, plus the deployed sample's terms beyond \(\delta\) (`ledger.draw`, `PooledSample`'s): \(\sum_t s'_t/2^{64}\) for
 a rejected first word (`ledger.rejection`) and the receipts' binding term, \(\sum_t \sqrt{|L_t| s_t} \cdot q_t/2^{256.5}\)
-under `cr/sha-512` for window \(t\)'s fork finder of \(q_t = 2FC + 2 \cdot 69 \, s_t\) SHA-512 calls, which runs the prover twice from the
+under `cr/sha-512` for window \(t\)'s fork finder of \(q_t = 2Q + 2 \cdot 69 \, s_t\) SHA-512 calls, which runs the prover twice from the
 cut before the window's coin (`ledger.binding`). It is charged at the session's bounds, not at one record's \(U_t\)
 and \(s'_t\), which follow the prover's play: \(|L_t|\), the most receipts a window of the session can have, is its
 pass cap (the pace's \(k\), unpaced `STEP_LIMIT` − 1) times its extent (\(N\), or the codec's `max_blocks` when the
@@ -89,15 +89,15 @@ sample's third term, which nothing prices and no guarantee assumes: named with t
 `ledger.PRF_CLAIM`) beside every δ, with no value and in none. The memory line's \(\delta\) carries the
 binding term and, while `LineHeld` reads the prover's records through the commitment, the commitment's hiding terms
 (\(n \cdot 2^{-191}\) over \(n\) windows, `ledger.hiding`), beside its \(2^{-\text{slack}}\) a pass. Under the default
-receipt kind, sketch-sha512, a receipt also rests on the receipts' sketch (`SketchBound`,
-derived by `Accounting.Guarantees.Remote.SketchBoundDeployed`), which adds at most \(Q \cdot 2^{-95.12}\) a session
-at 16 rows for a prover of \(Q = F \cdot C\) SHA-512 compressions, \(C\) the node's own over the span and \(F\) the
-outside-compute factor (\(2^{20}\), provisional), and \((Q + P) N \cdot 2^{-512}\) for a receipt right without its
-hash, and \((Q + P)^2 \cdot 2^{-257}\) for the keys' distance from uniform (two seeds whose 256-bit sign keys collide
-share their signs; `timing.sketch_failure`, §4): no more than \(2^{-40}\) up to \(Q = 2^{55.12}\), and
-\(2^{-30.19}\) for one node's 10-minute session at \(F = 2^{20}\). At 64 rows, a registration's other row count, it
-is \(Q \cdot 2^{-215.85} + (Q + P)^2 \cdot 2^{-257}\). block-sha512, kept for comparison, adds nothing. Neither adds
-to γ.
+receipt kind, sketch-sha512, a receipt also rests on the receipts' sketch (`SketchBound`), which adds at most
+\(Q \cdot 2^{-95.12}\) a session at 16 rows for a prover of \(Q = 2^{80}\) SHA-512 compressions, its budget on any
+hardware it reaches (`QUERIES_LOG2`), and \((Q + P) N \cdot 2^{-512}\) for a receipt right without its hash, and
+\((Q + P)^2 \cdot 2^{-257}\) for the keys' distance from uniform (two seeds whose 256-bit sign keys collide share
+their signs; `timing.sketch_failure`, §4): \(2^{-15.12}\) a session (`Accounting.Guarantees.Remote.SketchBoundRun` at
+\(r = 12\)). At 64 rows, under 512-bit sign keys, it is \(Q \cdot 2^{-215.85} + (Q + P)^2 \cdot 2^{-513}\) beside the
+receipt-right term, the deployed statement (`Accounting.Guarantees.Remote.SketchBoundDeployed`, at \(r = 27\)):
+\(2^{-135.85}\) at \(Q = 2^{80}\).
+block-sha512, kept for comparison, adds nothing. Neither adds to γ.
 
 **Each window alone.** The same terms over window \(t\)'s own span \(\Sigma_t = D_t - b_{t-1}\) (`WindowRecord.span_ns`),
 with its \(U_t\), \(P_t\) and \(m^*_t\) (or the pooled bound's \(f_t U_t\)) in place of the session's sums, give
@@ -113,19 +113,19 @@ once, so its \(\mu_{\text{timing}}\) is up to about \((A + t_{\text{pass}})/(T +
 
 The window is stated: \(T\) = 60 s (`Params.window_ns`, §2), with 33,273 openings a window (`Params.samples`), 555 a
 second. There, on one node whose store spans every tier (94 GB of each GPU's HBM and host DRAM's share, 789 GB,
-`timing.spanning`), every window's whole \(\gamma_t\) is under 1% at the measured \(R\): 0.896–0.927% in the worst
-window at RTT 1–20 ms. The horizon's 0.15% over 10 minutes is stated for its pooled \(\mu_{\text{sample}}\)
-(0.0083%), with its whole γ (0.67%) reported beside it: \(\mu_{\text{chip}}\) exceeds 0.15% by itself, and λ with
-\(\mu_{\text{rebuild}}\) (§10, `timing.stated`). Below about 380 GB over every tier (45 GB a GPU) no \(T\) meets 1%
-(§10, `timing.store_floor`). 20 s and 1 s are options with their own readings: at 20 s and 11,091 openings every
-window's \(\mu_{\text{sample}}\) is 0.25% and its whole \(\gamma_t\) 1.27–1.36%, and at 1 s and 2,773 its
-\(\mu_{\text{sample}}\) is under 1% and its whole \(\gamma_t\) 5–11%.
+`timing.spanning`), every window's whole \(\gamma_t\) at the measured \(R\) is 1.071–1.102% in the worst window at
+RTT 1–20 ms, over 1%: at \(\delta = 2^{-101}\) its \(\mu_{\text{sample}}\) is 0.210% and λ 0.164%. The horizon's 0.15%
+over 10 minutes is stated for its pooled \(\mu_{\text{sample}}\) (0.021%), with its whole γ (0.73%) reported beside
+it: \(\mu_{\text{chip}}\) exceeds 0.15% by itself, and λ does (§10, `timing.stated`). Below about 487 GB over every
+tier (58 GB a GPU) no \(T\) meets 1% (§10, `timing.store_floor`). 20 s and 1 s are options with their own readings:
+at 20 s and 28,004 openings every window's \(\mu_{\text{sample}}\) is 0.25% and its whole \(\gamma_t\) 1.32–1.41%,
+and at 1 s and 7,001 its \(\mu_{\text{sample}}\) is under 1% and its whole \(\gamma_t\) 5–11%.
 
 **The node, and its one \(R\)**. The prover is the whole node (below), so every capacity a ledger takes is
 the node's, the sum over its devices, whatever share of the node the store is on:
 
 - \(R\) is the node's read capacity over every registered tier: its 8 GPUs' HBM plus its host's DRAM. Measured, that
-  is 8 × 1,539 + 606.8 = 12,918.8 GB/s (`timing.READ_BYTES_PER_S`); specified, 8 × 1,597 + 819.2 = 13,595.2 GB/s
+  is 8 × 1,539 + 606.8 = 12,918.8 GB/s (`timing.READ_BYTES_PER_S`); specified, 8 × 1,597.568 + 819.2 = 13,599.744 GB/s
   (`timing.SPEC_BYTES_PER_S`).
 - \(S_{\text{chip}}\) is every GPU's on-chip storage and the host's: 8 × 263,163,904 + 1,000,341,504 =
   3,105,652,736 B (`timing.CHIP_BYTES`). The host's part bounds the whole host, two Xeon 6776P sockets of 64 cores,
@@ -143,9 +143,9 @@ DRAM holding its share.
 
 **Which \(R\) is the headline.** γ is reported twice: against the node's specified read bandwidth,
 which is the headline, and against the measured one beside it. The figures above are at the measured \(R\) = 12.92
-TB/s. The node is specified at 13.60 TB/s (the RTX PRO 6000 Server Edition's 1.597 TB/s a GPU and 16 channels of
+TB/s. The node is specified at 13.60 TB/s (the RTX PRO 6000 Server Edition's 1.598 TB/s a GPU and 16 channels of
 DDR5-6400), which no measured kernel reaches, so at spec every reading also carries that gap:
-\(\gamma_{\text{spec}} = 1 - (1 - \gamma_{\text{meas}})\,R_{\text{meas}}/R_{\text{spec}}\), 5.82–5.85% for the worst
+\(\gamma_{\text{spec}} = 1 - (1 - \gamma_{\text{meas}})\,R_{\text{meas}}/R_{\text{spec}}\), 5.86–5.89% for the worst
 stated window. The 1% per window holds at the measured \(R\) only. The two-machine sessions so far are one GPU's, over
 an 85 GiB store: both honest sessions accepted and a prover dropping 1/16 of its blocks rejected in its first window.
 As the verifier recorded them, at one
@@ -158,7 +158,8 @@ term is a fixed byte count over \(R\Sigma\), and a prover reporting a slower rea
 bytes read (0.066 read as 0.0057 at the slowest calibration still accepted). The measured reading takes each
 tier's fastest measured read: 1,539 GB/s a GPU (an honest session's, `timing.GPU_READ_BYTES_PER_S`) and
 606.8 GB/s of host DRAM (`timing.HOST_READ_BYTES_PER_S`), which
-`verity/protocols/accounting/poub/verifier/session/verifier.py`'s ledgers take as `timing.READ_BYTES_PER_S`. \(R\) is the rate of plain, incompressible reads,
+`verity/protocols/accounting/poub/verifier/session/verifier.py`'s ledgers take from the node's figures its caller hands
+in (`timing.Figures`; the measured node's, `timing.RTX_PRO_6000_NODE`, sums them to `timing.READ_BYTES_PER_S`). \(R\) is the rate of plain, incompressible reads,
 which the store's encoded blocks are: the GPU's compression engine reads a compressible buffer faster
 (7.55 TB/s against 1.536 TB/s plain), but the encoded store reads at 1.515 TB/s under a
 compressible allocation, since the hardware compresses 128-byte units, one codec word, and no encoded word is constant
@@ -190,9 +191,9 @@ session's two ends (§5). The live-coin design needs a trusted floor to be affor
 | `deadline_ns` | \(A\): window \(t\)'s roots are due by \(b_t + A\) |
 | `windows` | \(W\), the windows in a session |
 | `samples` | \(s\), the openings per window: 33,273 (`SAMPLES`, 555 a second of the stated window) unless another count is named |
-| `delta` | δ of each window's profile: \(2^{-40}\) (`DELTA`) unless another is named |
+| `delta` | δ of each window's profile: \(2^{-101}\) (`DELTA`, PoUB's own, half of an error of \(2^{-100}\)) unless another is named |
 | `min_passes` | the fewest passes a window may certify |
-| `window_ns` | \(T\), the stated window: no boundary message leaves sooner than this after its window's challenge (`AuditRun.boundary` refuses one). 60 s (`WINDOW_NS`) unless another is named; 20 s at 11,091 openings and 1 s at 2,773 are options, read in §10 |
+| `window_ns` | \(T\), the stated window: no boundary message leaves sooner than this after its window's challenge (`AuditRun.boundary` refuses one). 60 s (`WINDOW_NS`) unless another is named; 20 s at 28,004 openings and 1 s at 7,001 are options, read in §10 |
 | `codec` | the store's codec, the one its registration names (§3): `p1024/k3/masked` unless another is named |
 | `receipt` | the receipt kind, the one its registration names (§4): `sketch-sha512` unless `block-sha512` is named |
 | `bind` | whether receipts bind PoUW's tile output \(z\), as its registration says (§4): no unless it binds them |
@@ -401,7 +402,7 @@ first-parent line is refused.
 
 The verifier releases \(\text{chal}_0\) at the session's start (`AuditRun.start`). At window \(t\)'s end it sends the
 boundary message, which is \(\text{chal}_{t+1}\), or the close after the last window (`AuditRun.boundary`). Each is
-one-way: no round trip waits on it. The prover refuses an openings coin as a challenge (`Prover.run`). Pass \(i\) of
+one-way: no round trip waits on it. The prover refuses an openings coin as a challenge (`audit_prover.Prover.run`). Pass \(i\) of
 window \(t\) (`receipts.py`):
 
 ~~~text
@@ -420,9 +421,14 @@ y_(i,p)     sketch-sha512, the default: SHA512(Z("verity/remote-bandwidth/sketch
             u64be j ‖ σ_(i,j)),  j = plan_(t,i)[p]
             block-sha512, for comparison: SHA512(Z("verity/remote-bandwidth/receipt/v0\0" ‖ frame(seed_(t,i))) ‖ u64be j ‖
             e_(i,j))
-S_(t,i)     sketch-sha512's k_s × 4096 signs, k_s the registration's rows (16 or 64): K = derive(seed_(t,i),
-            "verity/remote-bandwidth/sketch-signs/v0", {"tag": "sketch-sha512", "k": k_s, "n": 4096}), row c the first
-            512 bytes of K.stream(("row", c)), bit u (byte u // 8, LSB first) 1 → −1 and 0 → +1
+S_(t,i)     sketch-sha512's k_s × 4096 signs, k_s the registration's rows (16 or 64), ctx = {"tag": "sketch-sha512",
+            "k": k_s, "n": 4096}: at 16, K = derive(seed_(t,i), "verity/remote-bandwidth/sketch-signs/v0", ctx), 32
+            bytes; at 64, K = derive_wide(seed_(t,i), "verity/remote-bandwidth/sketch-signs/v1", ctx), all 64 bytes
+            of SHA512("verity/randomness/derive-wide/v1\0" ‖ frame(seed_(t,i)) ‖ frame(domain) ‖ frame(ctx)), a
+            238-byte message (two compressions); row c the first 512 bytes of K.stream(("row", c)), at 64 a
+            WideKey's: block b = SHA512("verity/randomness/stream-wide/v1\0" ‖ K ‖ frames(("row", c)) ‖ u64be b), a
+            136-byte message (two compressions) whose 128-byte head before the counter is one SHA-512 block at every
+            row 0 to 63; bit u (byte u // 8, LSB first) 1 → −1 and 0 → +1
 σ_(i,j)     S_(t,i) · e, e the 4096 bytes of e_(i,j) as int8, over the integers (|σ[c]| ≤ 2^19): k_s int32
             little-endian, 64 bytes at 16 rows and 256 at 64
 spread(z)   z over 4096 bytes: byte u of z XORed into byte u mod 4096 (folded), or a shorter z repeated
@@ -464,7 +470,7 @@ verifier → prover   {"type": "appended", "first": j, "coin": hex(c_a)}      c_
 So each block's index, and with \(d_j\) and \(c_a\) its bound key and its encoding (§3), is fixed before any pass whose
 plan holds it: a plan received before the append that commits one of its blocks rejects with `plan`. Only then does
 the prover encode the append's blocks, each under its bound key \(b_j(c_a)\), keeping \(d_j\) beside it
-(`Store.append` commits, `Store.encode` encodes under the coin). The timing follows the free convention (§8, "The
+(`audit_prover.Store.append` commits, `audit_prover.Store.encode` encodes under the coin). The timing follows the free convention (§8, "The
 pass and its step"), with residency deferred to the encode, so the coin's round trip is off serving's critical path.
 A block completed at step \(s\) is appended once it is complete, and stays plaintext in its slot, which serving reads
 in the clear, until its coin arrives and the device encodes it in place. Its write is recorded at the step before the
@@ -503,7 +509,7 @@ sketches of other blocks (64 bytes a block at 16 rows, 64 blocks a page), and th
 page's bytes without reading them, a red-team finding whose
 test is `test_append_order.py`. A page that relayed any receipt of a pass whose seed binds it would be a fixed point
 of SHA-512. The prover therefore sends a pass's appends before its root and computes the seed after they're sent
-(`Store.head`, `Prover.run(..., head=...)`). A seed computed without an append the verifier received before the root
+(`audit_prover.Store.head`, `audit_prover.Prover.run(..., head=...)`). A seed computed without an append the verifier received before the root
 fails every receipt of the pass. While a session has no appends the seeds are unchanged, so the GPU passes, which
 append nothing, derive them as before.
 
@@ -553,14 +559,14 @@ residency would let it lengthen the life the term has to charge.
 grind: re-salting a leaf gives a new root and a new next seed, at the cost of a leaf and its path and no read. A
 chosen seed buys nothing against the block-sha512 receipt, because no seed makes a receipt cheaper to compute without
 the block's bytes after the seed. The queries a grinding prover makes are counted by AuditRO's \(q\), at most
-\(2^{64}\) a pass (`queries_log2`), whose \(C(q, k)\) λ charges. Other users of the seed must hold for a seed the prover chose: sketch-sha512's signs (below),
+\(Q = 2^{80}\) (`queries_log2`, the prover's budget), whose \(C(q, k)\) λ charges. Other users of the seed must hold for a seed the prover chose: sketch-sha512's signs (below),
 and under a registration that binds \(z\), PoUW's noise for the pass (§8).
 
 **The two receipt kinds.** The registration names one (`receipts.KINDS`), and `Params.receipt` must name the same.
 Every receipt of its sessions is of that kind, the weights' and the KV pages' alike (§8). sketch-sha512 is the default (`receipts.DEFAULT`) and the stated receipt: the receipt the guarantee is stated for.
 block-sha512 is kept as a second kind, for comparison only; it is not the stated receipt.
 The GPU kernels' sketch-sha512 receipts are held byte for byte to `receipts.SketchReceipter`
-(`benchmarks/codec_tensor/sketch_receipt.py` lays its signs out for them), and the suite pins its outputs at both row counts.
+(`verity/protocols/accounting/poub/prover/codec_tensor/sketch_receipt.py` lays its signs out for them), and the suite pins its outputs at both row counts.
 Each kind's receipt is 64 bytes, so leaves, salts and the tree don't change. The difference is what is hashed after
 the seed's block: sketch-sha512 hashes \(j\) and the sketch, one compression at 16 rows (64 bytes) and three at 64
 (256 bytes); block-sha512 hashes \(j\) and the 4,096 bytes, 33 SHA-512 compressions. The sketch's signs come from the
@@ -642,40 +648,37 @@ and \(3 \times 5\). At 16 rows it is loose at full rank: \(2^{-16}\), where two 
 about \(\binom{16}{2} 2^{-31} = 2^{-24.1}\). Where it is read, it costs under one bit (next).
 
 **Grinding, and \(r^*\).** Every key is a fresh oracle output, the derive of a fresh seed, so its signs are uniform
-whatever the prover did to reach it, unless two seeds' 256-bit sign keys collide, which shares their signs. A prover of
+whatever the prover did to reach it, unless two seeds' sign keys collide, which shares their signs: \(b\) = 256 bits
+at 16 rows, 512 at 64 (`receipts.sign_key_bits`). A prover of
 \(Q\) SHA-512 compressions over a session sees at most \(Q + P\) keys, \(P\) the session's passes, and makes at most
 \(Q\) guesses. Read at rank \(r\), by the union bound over keys, guesses and the block's 128 sectors, and the keys'
 birthday (`SketchHashRandom`'s ε), the session's failure is
 
 \[
-\delta_s(r) \;\le\; Q \cdot 2^{-8r} + (Q + P) \cdot 128 \cdot \Pr[\text{rank} \le r - 1] + (Q + P)^2 \cdot 2^{-257} ,
+\delta_s(r) \;\le\; Q \cdot 2^{-8r} + (Q + P) \cdot 128 \cdot \Pr[\text{rank} \le r - 1] + (Q + P)^2 \cdot 2^{-(b + 1)} ,
 \]
 
 (the receipt guessed without its hash, \((Q + P) N \cdot 2^{-512}\), aside), so its cost a compression is \(\rho(r) = 2^{-8r} + 128 \Pr[\text{rank} \le r - 1]\), and \(r^*\) minimizes it. At 16
 rows \(r^* = 12\): the guess's \(2^{-96}\) beside \(128 \cdot 2^{-103.25} = 2^{-96.25}\), so \(\rho(r^*) =
 2^{-95.12}\). At \(r = 11\), \(\rho = 2^{-88}\); at 13, \(2^{-71.30}\). At 64 rows \(r^* = 27\) and \(\rho(r^*) =
-2^{-215.85}\). The birthday term doesn't move 16 rows' thresholds; at 64 rows it is what binds them.
+2^{-215.85}\). The birthday term doesn't move 16 rows' thresholds, and at 64 rows, under 512-bit keys, it moves
+them by under \(2^{-100}\) of their value.
 
-| rows | \(r^*\) | \(\rho(r^*)\) | \(Q\) at \(\delta_s = 2^{-40}\) | \(Q\) at \(\delta_s = 2^{-64}\) |
+| rows | \(r^*\) | \(\rho(r^*)\) | \(\delta_s\) at \(Q = 2^{80}\) | \(Q\) at \(\delta_s = 2^{-100}\) |
 | --- | --- | --- | --- | --- |
-| 16 | 12 | \(2^{-95.12}\) | \(2^{55.12}\): 8.1 days of 8 GPUs | \(2^{31.12}\): 42 ms of 8 GPUs |
-| 64 | 27 | \(2^{-215.85}\) | \(2^{108.5}\) | \(2^{96.5}\) |
+| 16 | 12 | \(2^{-95.12}\) | \(2^{-15.12}\) | none: one compression's guess is \(2^{-95.12}\) |
+| 64 | 27 | \(2^{-215.85}\) | \(2^{-135.85}\) | \(2^{115.85}\) |
 
 The GPUs are RTX PRO 6000s at \(7.0 \cdot 10^9\) SHA-512 compressions a second each, block-sha512's measured rate
 (below). \(Q\) counts every compression the prover makes, on any hardware: the grinding needs no access to the
-store, so it can run off the node. The ledger charges \(Q = F \cdot C\): \(C\) the node's own compressions over the
-session's span, at its GPUs' rate, and \(F\) the outside-compute factor the node states (`Node.sketch_outside`,
-`timing.SKETCH_OUTSIDE` = \(2^{20}\) by default: \(2^{20}\) nodes' SHA-512, about 8.4M RTX PRO 6000s), which the
-verifier records with δs (`sketch_failure`'s `outside`) and the auditor's line reads back (`verifier.sketch_at`).
-\(F = 2^{20}\) is provisional, under the sketch's random-oracle ask. Each factor of 2 in \(F\) costs a bit: at 16 rows
-a session stays below \(2^{-40}\) up to \(Q = 2^{55.12}\) compressions, 0.67 s of one node's hashing at \(F = 2^{20}\)
-(8.1 days at \(F = 1\)). One node's 10-minute session reads \(2^{-30.19}\) (\(2^{-50.19}\) at \(F = 1\)), a node-day
-\(2^{-23.02}\), and gate run 8's 227 s session \(2^{-31.59}\) (\(2^{-51.59}\) at \(F = 1\), \(2^{-41.59}\) at
-\(2^{10}\)). The memory line barely feels it, since AuditRO's \(2^{-41}\) a pass dominates its δ: gate run 8's 2,118
-passes put it at \(2^{-29.95}\) at \(F = 1\) and \(2^{-29.55}\) at \(2^{20}\), 0.4 bits. 64 rows brings δs under
-\(2^{-50}\) at \(F = 2^{20}\) (\(2^{-127.13}\) for 10 minutes, the keys' birthday) at τ 1.226 a pass on the reader, the option if that
-slack is ever cut; \(2^{-64}\) is out of reach at 16 rows and needs it too. The fused GEMM's cost at 64 rows isn't
-measured yet.
+store, so it can run off the node. The ledger charges the prover's budget, \(Q = 2^{80}\) (`audit.QUERIES_LOG2`),
+the one AuditRO's count and the receipts' binding term read too, whatever the session's length or the node's rate;
+the verifier records it with δs (`sketch_failure`'s `queries_log2`) and the auditor's line reads it back
+(`verifier.sketch_at`, which reads a record written before as the \(F \cdot C\) it charged: \(C\) the node's
+compressions over the span and \(F\) an outside-compute factor). At 16 rows every session reads \(2^{-15.12}\), the
+guesses' \(Q \cdot 2^{-95.12}\), and it dominates the memory line's δ. 64 rows, under 512-bit sign keys, read
+\(2^{-135.85}\), under \(2^{-100}\) at the budget, at τ 1.226 a pass on the reader. The fused GEMM's cost at 64
+rows isn't measured yet.
 
 A grinding try is not a pass's commitment. It reads no block: re-salting one receipt leaf changes the root without
 changing any receipt. As the reference computes it, a try is 15 + 3⌈log₂ n⌉ compressions over \(n\) leaves
@@ -689,9 +692,9 @@ any of these counts: it charges a key to every compression.
 
 None of this moves γ: \(\delta_s\) adds to the failure probability, not to the reads certified. The ledger adds
 \(\delta_s\) to the memory line's δ and to γ's error (`ledger.sketch`), not to a term of γ. That δ is the profile's
-δ, AuditRO's \(2^{-41}\) a pass and \(\delta_s\): over one node's 10-minute horizon at 50 passes a second,
-\(2^{-40} + 2^{-26.13} + 2^{-30.19} = 2^{-26.04}\) (\(2^{-26.13}\) at \(F = 1\)). The stated claim at \(2^{-40}\) (§10) is
-the openings' δ; the line's total is above it on the slack alone, whatever \(F\). Both leave out
+δ, AuditRO's \(2^{-140}\) a pass and \(\delta_s\): over one node's 10-minute horizon at 50 passes a second,
+\(2^{-101} + 2^{-125.13} + 2^{-15.12} = 2^{-15.12}\). The stated claim at \(2^{-101}\) (§10) is the openings' δ; the
+line's total is above it on \(\delta_s\) alone. Both leave out
 \(\sum_t \mathrm{adv}_t\) (SHA-512 stream as PRF: not priced, not assumed; §1).
 
 What each costs on the GPU: one RTX PRO 6000 (sm_120, 2,092 MHz), an 8 GiB pass of 2,097,152 blocks, best of
@@ -834,21 +837,21 @@ last leaf re-rolls the samples for the price of a leaf and its path, so a prover
 and keeps one whose samples miss them. By the union bound the window's δ becomes \(Q\delta\), so \(s\) must rise to the
 count at \(\delta/Q\) (`timing.samples_for`). A try reads no block and costs a few to a few tens of compressions (§4
 counts a seed's), so the stated 60 s window affords one node of 8 GPUs about \(2^{35.6}\) to \(2^{39.3}\) of them.
-At the stated window's 33,273 openings (\(\varepsilon_s = \ln(2^{40})/s\) = 0.083%) and δ = \(2^{-40}\), the count at
-\(\delta/Q\) is \(\lceil s\,(40 + \log_2 Q)/40 \rceil\):
+At the stated window's 33,273 openings (\(\varepsilon_s = \ln(2^{101})/s\) = 0.210%) and δ = \(2^{-101}\), the count
+at \(\delta/Q\) is \(\lceil s\,(101 + \log_2 Q)/101 \rceil\):
 
 | grinding \(Q\) | \(s\) | × the coin's |
 | --- | --- | --- |
 | none (the coin) | 33,273 | 1.00 |
-| \(2^{20}\) | 49,910 | 1.50 |
-| \(2^{40}\) | 66,546 | 2.00 |
-| \(2^{64}\) (λ's budget) | 86,510 | 2.60 |
+| \(2^{20}\) | 39,862 | 1.20 |
+| \(2^{40}\) | 46,451 | 1.40 |
+| \(2^{80}\) (the prover's budget) | 59,628 | 1.79 |
 
 It would also void the horizon reading (§10), whose proof takes each window's sample to be independent of what the
 prover did in that window, unless that is re-proved for a grinding prover. The coin costs one message a window, sent
 after the roots, which the verifier is waiting for anyway. So the protocol keeps it.
 
-The prover opens each sample (`Prover.open`, `Opening`): the block \(E_j\) at \(j = \text{plan}_{(t,i)}[p]\), its receipt
+The prover opens each sample (`audit_prover.Prover.open`, `Opening`): the block \(E_j\) at \(j = \text{plan}_{(t,i)}[p]\), its receipt
 leaf's receipts \(v_c\) with the leaf's salt and path to \(\text{root}_{(t,i)}\), the payload's salt and path to the
 payload root (to its append's root, for a block appended after the seed, which also carries its payload's digest
 \(d_j\)), and under a registration that binds \(z\), PoUW's evidence for \(z_{(i,j)}\). Openings aren't timed,
@@ -1029,9 +1032,7 @@ its structure, its outputs, the verifier's coins and samples, and hiding commitm
   `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins). `Covered` (`certifier-coverage`) is
   the deployment's half: every uplink of the prover's server passes through an active certifier, so an outside device
   computing for the node sends its result over a counted link. Memory held follows from the bits read under the
-  device model (`heldAt_of_read`). `auditor_line.py --boundary`, off by default, refuses a session's credit when the
-  certifiers' records of the boundary links over its span show other ingress; without it the line of record says it
-  is conditional on C, under the label vocabulary's name `NoOutsideCompute` (`auditor_line.json`'s `conditional_on`,
+  device model (`heldAt_of_read`). The line of record says it is conditional on C, under the label vocabulary's name `NoOutsideCompute` (`auditor_line.json`'s `conditional_on`,
   `credit.md`; the `memory-line-of-record` label names the field's names, and `research data label` holds it to the
   file). `auditor_line.py --lockdown`, infra's record of the provider's lockdown of the gate node, grounds C for a
   session whose signed span lies inside an applied interval: the line is then conditional on `ProviderLockdown`
@@ -1149,7 +1150,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
     (I4). The verifier here checks only that each pass names a step above the last.
   - *The timing.* The step says which reads a pass stands for, not when serving made them: nothing yet shows that the
     pass at \(s\) ran while serving executed \(s\). A certifier that stamps each step's record and each pass's root
-    on one clock would. A prover may run serving ahead of its passes (`Ahead` in `benchmarks/remote_session/prover.py`),
+    on one clock would. A prover may run serving ahead of its passes (`Ahead` in `verity/protocols/accounting/poub/prover/remote_session/prover.py`),
     at most \(k\) steps past the pass in flight, \(k\) its own choice: each pass covers the newest step serving has
     handed, the steps serving ran past in between have no pass and are credited nothing, and the pass at \(s\) reads
     the store resident at \(s\) while serving executes later steps. That store must still be in place as the pass
@@ -1280,7 +1281,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
     heads, the stale bounds it keeps and the hook.
 - **KV registered mid-session.** A KV page's payload is chosen after the codec seed, so registration order can't bind
   its encoding the way it binds the weights' and filler's. Its bound key stops its writer picking its encoding (§3),
-  but not stacking: sampled proofs show a payload is the circuit's actual computation, and an arbitrary circuit that
+  but not stacking: SPOT shows a payload is the circuit's actual computation, and an arbitrary circuit that
   can learn the key can compute another registered block's encoding as that payload. So a KV page is credited only
   on the property's verdict on its writers (§3, `credit_post_seed`), and then \(\mu_{\text{carrier}}\) charges what
   its carriers can hold (§1). Only bound blocks may be registered after the seed. The reference appends them (§4):
@@ -1289,7 +1290,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   under with the coin, and releases that keep a block out of every later plan. Open:
   - *The verdict's binding.* `ledger` takes the verdict as given (`PostSeedVerdict`: whether it holds, and its carrier
     bytes for a window's certified reads). That it is of the circuits that wrote this session's appends, and that
-    their payloads are those circuits' values (sampled proofs), are I2's and I4's to check. That no appended block is
+    their payloads are those circuits' values (SPOT), are I2's and I4's to check. That no appended block is
     credited past \(L\) the session checks itself (§4, `lifetime`); that the verdict was computed at the record's
     \(L\) is the verdict's to say.
   - *Appends across sessions.* A session's appends end with it, and the next session starts again from \(N\), so a
@@ -1350,7 +1351,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   arithmetic, which no Lean property covers. The statements γ is modelled on are the lock's `deployed` entries,
   `RemoteRunConservationSketchDeployed` (sketch receipts, provers that keep sectors verbatim) and
   `RemoteRunConservationDeployed` (whole-block receipts). `RemoteMonitoringPeriodConservation` is the whole-block
-  statement at every parameter, read as a run of the remote audit. They take n windows of P passes, one sample of 2,773
+  statement at every parameter, read as a run of PoUB. They take n windows of P passes, one sample of 2,773
   a window and no clock; a paced session's groups, the receipts it samples a group and its timing term are not shown to
   be an instance. The one deployed statement on a paced session's record is the memory line's,
   `Properties.RemoteAudit.Line.LineHeld`. The conservation statements' openings are
@@ -1450,12 +1451,12 @@ before, and its own chain starts only when that pass ends. So a window is charge
 (20 ms passes) and 0.25–0.33% (50 ms). At the 20 s option it is 0.41–0.65% (20 ms) and 0.50–0.75% (50 ms), and at
 the 1 s option 4.03–8.42% (20 ms) and 9.62–13.65% (50 ms).
 
-**Openings** at the stated \(T\) = 60 s and δ = \(2^{-40}\): \(s = 33{,}273\) per window (555 a second,
-\(\varepsilon_s = \ln(2^{40})/s\) = 0.083%), each about 8.5–9.1 KB (block, leaf, both salts, both paths). That is
-282–303 MB a window per node, or 38–40 Mb/s. The 20 s option's \(\varepsilon_s\) = 0.25% takes 11,091 a window at the
-same rate: 94–101 MB, the same 38–40 Mb/s. The 1 s option's 1% takes 2,773: 23–25 MB, or 0.19–0.20 Gb/s. Under a
-registration that binds \(z\), PoUW's tile evidence comes on top unless PoUW's own sampled check covers the same
-tiles. A Fiat–Shamir sample would multiply all of this by 1.5–2.6 (§6).
+**Openings** at the stated \(T\) = 60 s and δ = \(2^{-101}\): \(s = 33{,}273\) per window (555 a second,
+\(\varepsilon_s = \ln(2^{101})/s\) = 0.210%), each about 8.5–9.1 KB (block, leaf, both salts, both paths). That is
+282–303 MB a window per node, or 38–40 Mb/s. The 20 s option's \(\varepsilon_s\) = 0.25% takes 28,004 a window:
+237–255 MB, or 95–102 Mb/s. The 1 s option's 1% takes 7,001: 59–64 MB, or 0.47–0.51 Gb/s. Under a registration that
+binds \(z\), PoUW's tile evidence comes on top unless PoUW's own sampled check covers the same tiles. A Fiat–Shamir
+sample would multiply all of this by 1.2–1.8 (§6).
 
 That is the per-window reading, each window's profile at its own δ, \(W\delta\) in all. Read over the horizon, the
 windows' samples pool (`RateRunSample`, §8). Each window samples its \(s_t\) after its own roots from its own openings
@@ -1467,12 +1468,12 @@ correct receipts. The same event bounds every window's share by itself: \(f_t < 
 \(\ln(1/\delta)/s_t\), with no union over the windows.
 
 The stated claim is that hybrid: short by under 0.15% over a 10-minute horizon (for \(\mu_{\text{sample}}\),
-below) and by under 1% in every window (for the whole \(\gamma_t\)), at \(\delta = 2^{-40}\), which reads
+below) and by under 1% in every window (for the whole \(\gamma_t\)), at \(\delta = 2^{-101}\), which reads
 \(\delta + \sum_t \mathrm{adv}_t\) (SHA-512 stream as PRF: not priced, not assumed; §1), with the window stated at
 \(T\) = 60 s and 33,273 openings. For \(\mu_{\text{sample}}\) it
-needs \(d \ge 2{,}773\) openings a window and \(d \cdot n \ge 18{,}470\) over the horizon's \(n\) windows. The stated
-window's 33,273 give each window a floor of 0.083%, and the horizon's 10 windows \(\ln(2^{40})/(d\,n)\) = 0.0083%.
-The 20 s option's 11,091 give each window 0.25%, and over its 30 windows the same 0.0083%. The 1 s option's 2,773
+needs \(d \ge 7{,}001\) openings a window and \(d \cdot n \ge 46{,}637\) over the horizon's \(n\) windows. The stated
+window's 33,273 give each window a floor of 0.210%, and the horizon's 10 windows \(\ln(2^{101})/(d\,n)\) = 0.021%.
+The 20 s option's 28,004 give each window 0.25%, and over its 30 windows 0.0083%. The 1 s option's 7,001
 give each window 1%, and over its 600 windows 0.0017%.
 
 `ledger` reports μ_sample both ways: `sample`, the per-window reading, and `horizon`, the pooled one (`pooled`: the
@@ -1494,50 +1495,50 @@ a GPU, 789 GB over every tier with 61 ms passes, is best except at \(T\) = 1 s. 
 
 | \(T\) | openings a window | store, GB a GPU | \(\mu_{\text{timing}}\) | \(\mu_{\text{sample}}\) | \(\mu_{\text{chip}}\) | λ | \(\mu_{\text{rebuild}}\) | worst \(\gamma_t\) | at spec | \(W\) | pooled \(\mu_{\text{sample}}\) | horizon γ |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 60 s | 33,273 | 789 GB, 94, every tier | 0.24–0.27% | 0.083% | 0.39% | 0.115% | 0.065% | 0.896–0.927% | 5.827–5.856% | 10 | 0.0083% | 0.668–0.671% |
-| 60 s | 33,273 | 520 GB, 62, every tier | 0.23–0.26% | 0.083% | 0.595% | 0.117% | 0.065% | 1.088–1.119% | 6.009–6.038% | 10 | 0.0083% | 0.911–0.914% |
-| 60 s | 33,273 | 252 GB, 30, every tier | 0.29–0.33% | 0.083% | 1.23% | 0.120% | 0.065% | 1.792–1.823% | 6.678–6.708% | 10 | 0.0083% | 1.680–1.684% |
-| 60 s | 33,273 | 752 GB, 94, HBM | 4.93–4.96% | 0.079% | 0.39% | 0.110% | 0.065% | 5.573–5.602% | 10.271–10.299% | 10 | 0.0079% | 5.355–5.358% |
-| 20 s | 11,091 | 789 GB, 94, every tier | 0.45–0.54% | 0.25% | 0.39% | 0.115% | 0.065% | 1.267–1.360% | 6.179–6.268% | 30 | 0.0083% | 0.668–0.671% |
-| 20 s | 11,091 | 520 GB, 62, every tier | 0.50–0.59% | 0.25% | 0.59% | 0.117% | 0.065% | 1.522–1.616% | 6.422–6.511% | 30 | 0.0083% | 0.911–0.914% |
-| 20 s | 11,091 | 252 GB, 30, every tier | 0.40–0.49% | 0.25% | 1.23% | 0.120% | 0.065% | 2.057–2.150% | 6.930–7.019% | 30 | 0.0083% | 1.680–1.684% |
-| 1 s | 2,773 | 252 GB, 30, every tier | 2.60–4.38% | 0.95–0.97% | 1.18–1.20% | 0.115–0.118% | 0.065% | 4.948–6.687% | 9.677–11.329% | 600 | 0.0017% | 1.674–1.677% |
-| 1 s | 2,773 | 789 GB, 94, every tier | 8.00–9.62% | 0.90–0.92% | 0.356–0.362% | 0.105–0.106% | 0.065% | 9.448–11.040% | 13.953–15.466% | 600 | 0.0017% | 0.661–0.664% |
-| 90 s | 11,091 | 789 GB, 94, every tier | 0.17–0.19% | 0.25% | 0.39% | 0.116% | 0.065% | 0.994–1.015% | 5.920–5.940% | 6 | 0.042% | 0.707–0.710% |
+| 60 s | 33,273 | 789 GB, 94, every tier | 0.240–0.271% | 0.210% | 0.393% | 0.164% | 0.065% | 1.071–1.102% | 6.025–6.054% | 10 | 0.0210% | 0.729–0.732% |
+| 60 s | 33,273 | 520 GB, 62, every tier | 0.227–0.259% | 0.210% | 0.595% | 0.166% | 0.065% | 1.263–1.294% | 6.207–6.236% | 10 | 0.0210% | 0.973–0.976% |
+| 60 s | 33,273 | 252 GB, 30, every tier | 0.294–0.326% | 0.209–0.210% | 1.229–1.230% | 0.169% | 0.065% | 1.967–1.998% | 6.876–6.905% | 10 | 0.0210% | 1.742–1.745% |
+| 60 s | 33,273 | 752 GB, 94, HBM | 4.926–4.956% | 0.200% | 0.393% | 0.157% | 0.065% | 5.740–5.769% | 10.459–10.488% | 10 | 0.0200% | 5.414–5.417% |
+| 20 s | 28,004 | 789 GB, 94, every tier | 0.446–0.540% | 0.248–0.249% | 0.391–0.392% | 0.164% | 0.065% | 1.315–1.409% | 6.256–6.345% | 30 | 0.0083% | 0.717–0.720% |
+| 20 s | 28,004 | 520 GB, 62, every tier | 0.499–0.593% | 0.248% | 0.593–0.594% | 0.165–0.166% | 0.065% | 1.571–1.664% | 6.499–6.588% | 30 | 0.0083% | 0.960–0.963% |
+| 20 s | 28,004 | 252 GB, 30, every tier | 0.395–0.490% | 0.248–0.249% | 1.227–1.228% | 0.169% | 0.065% | 2.106–2.199% | 7.008–7.096% | 30 | 0.0083% | 1.729–1.732% |
+| 1 s | 7,001 | 252 GB, 30, every tier | 2.596–4.376% | 0.951–0.969% | 1.179–1.201% | 0.162–0.165% | 0.065% | 4.996–6.733% | 9.753–11.403% | 600 | 0.0017% | 1.723–1.726% |
+| 1 s | 7,001 | 789 GB, 94, every tier | 7.999–9.616% | 0.899–0.915% | 0.356–0.362% | 0.149–0.151% | 0.065% | 9.493–11.085% | 14.025–15.537% | 600 | 0.0017% | 0.710–0.713% |
+| 90 s | 28,004 | 789 GB, 94, every tier | 0.172–0.193% | 0.249% | 0.393% | 0.164% | 0.065% | 1.043–1.064% | 5.998–6.017% | 6 | 0.0416% | 0.755–0.759% |
 
-At the stated \(T\) = 60 s, then, every window is under 1% for the whole \(\gamma_t\) at the measured \(R\):
-0.896–0.927% with 94 GB a GPU over every tier, and 1.09–1.12% at 62 GB a GPU. At spec it is 5.8% at best, the
-measured kernels' shortfall from the datasheets. The same 94 GB a GPU in HBM alone is 5.57–5.60%, host DRAM's idle
-4.7% of \(R\) in \(\mu_{\text{timing}}\). At the 20 s option, every window under 1% holds for \(\mu_{\text{sample}}\)
-(0.25%) and not for the whole \(\gamma_t\), which is 1.27% at best. At \(T\) = 90 s with 11,091 a window it is
-0.994–1.015%. The 1 s option's per-window claim is \(\mu_{\text{sample}}\) alone. Its whole \(\gamma_t\) is 5–11%,
+At the stated \(T\) = 60 s, then, every window is under 1% for \(\mu_{\text{sample}}\) (0.210%) and not for the
+whole \(\gamma_t\) at the measured \(R\): 1.071–1.102% with 94 GB a GPU over every tier, and 1.26–1.29% at 62 GB a
+GPU. At spec it is 6.0% at best, the measured kernels' shortfall from the datasheets. The same 94 GB a GPU in HBM alone
+is 5.74–5.77%, host DRAM's idle 4.7% of \(R\) in \(\mu_{\text{timing}}\). At the 20 s option, every window under 1%
+holds for \(\mu_{\text{sample}}\) (0.25%) and not for the whole \(\gamma_t\), which is 1.32% at best. At \(T\) = 90 s
+with 28,004 a window it is 1.043–1.064%. The 1 s option's per-window claim is \(\mu_{\text{sample}}\) alone. Its whole \(\gamma_t\) is 5–11%,
 nearly all \(\mu_{\text{timing}}\): the window's idle ends, which the record states exactly.
 
 **The store floor.** No \(T\) brings every window under 1% on too small a store. As \(T\) grows, a window's
 \(\mu_{\text{sample}}\) (at 555 openings a second) and its ends vanish, and its \(\gamma_t\) tends to
 \((g + (S_{\text{chip}} + \Lambda)/R + \mu_{\text{rebuild}}(t_{\text{pass}} + g))/(t_{\text{pass}} + g)\),
 where \(t_{\text{pass}}\) is the store's read at \(R\) and \(\Lambda\) a pass's `named_bits` and `slack_log2` in bytes,
-whose share a block depends on the store's size (`timing.store_floor` solves for it). Below 380.5 GB over every tier
-(45.3 GB a GPU), \(\mu_{\text{chip}}\), λ and \(\mu_{\text{rebuild}}\) alone exceed 1%. With the chain's steady state
-at \(g\) = 50 µs, no \(T\) meets 1% below 458.4 GB (54.6 GB a GPU). The suite checks the closed form against `ledger`
+whose share a block depends on the store's size (`timing.store_floor` solves for it). Below 404.5 GB over every tier
+(48.2 GB a GPU), \(\mu_{\text{chip}}\), λ and \(\mu_{\text{rebuild}}\) alone exceed 1%. With the chain's steady state
+at \(g\) = 50 µs, no \(T\) meets 1% below 487.4 GB (58.1 GB a GPU). The suite checks the closed form against `ledger`
 on a 20-minute window, 2% either side of it.
 
 **The horizon's 0.15%** is stated for its pooled \(\mu_{\text{sample}}\), with the whole γ reported beside it. The pooled
-\(\mu_{\text{sample}}\) is 0.0083% at every stated and optional \(T\), and the whole γ 0.67% at best.
+\(\mu_{\text{sample}}\) is 0.021% at the stated \(T\) (0.0083% at 20 s, 0.0017% at 1 s), and the whole γ 0.71% at best.
 \(\mu_{\text{chip}}\) (the node's \(S_{\text{chip}}\) over its store, 0.39% at 94 GB a GPU over every tier) exceeds
-0.15% by itself, and λ (37.9 bits a 4 KiB block, 0.116%) does with \(\mu_{\text{rebuild}}\). Neither λ nor
+0.15% by itself, and so does λ (53.9 bits a 4 KiB block, 0.164%). Neither λ nor
 \(\mu_{\text{chip}}\) shrinks with more openings or longer windows. The whole γ meets 0.15% at no
-\(T\) and no count of openings today. Even with λ and \(\mu_{\text{chip}}\) at 0 it would be 0.159–0.162%: the
+\(T\) and no count of openings today. Even with λ and \(\mu_{\text{chip}}\) at 0 it would be 0.172–0.175%: the
 chain's steady state (0.082% at \(g\) = 50 µs and 61 ms passes, 0.086–0.089% with the session's ends),
 \(\mu_{\text{rebuild}}\) (0.065%) and the pooled \(\mu_{\text{sample}}\).
 
 **What λ and \(\mu_{\text{chip}}\) would take** (the grid's last sections, at 789 GB over every tier and 61 ms
 passes). λ is AuditRO's \(C(q, k)\) for a pass's \(k\) receipts, bounded by \(q^k/k!\), which takes no assumption:
-about \(\log_2(e q/k)\) a receipt, 37.9 bits at 4 KiB (0.116%). Under 0.05% it may be 16.4 bits a 4 KiB receipt. Two
+about \(\log_2(e q/k)\) a receipt, 53.9 bits at 4 KiB (0.164%). Under 0.05% it may be 16.4 bits a 4 KiB receipt. Two
 ways get there:
 
-- **Wider receipts.** A receipt of \(m\) blocks gives 0.059%, 0.040% and 0.030% at 8, 12 and 16 KiB (bounded by
-  \(q^k\) instead, 64 bits a receipt, 0.098%, 0.065% and 0.049%). On the GPU a receipt's sketch is the same work a byte, and
+- **Wider receipts.** A receipt of \(m\) blocks gives 0.084%, 0.056% and 0.043% at 8, 12 and 16 KiB (bounded by
+  \(q^k\) instead, 80 bits a receipt, 0.122%, 0.081% and 0.061%). On the GPU a receipt's sketch is the same work a byte, and
   its hash and share of the tree are \(1/m\). The device reader's τ of 1.26 a pass scales to about 1.09 at 16 KiB
   (from its measured parts; the whole isn't measured). The openings pay instead. Each carries \(m\) blocks: 20.9 KB at
   16 KiB with a payload leaf a receipt, or 27.0 KB with PoUS's 4 KiB leaf. That is 2.4–3.0 times today's, or
@@ -1566,9 +1567,9 @@ into the next pass. That needs three things:
 - **The GPU's time.** At least one write and one read of \(S_{\text{chip}}\): 26–105 µs at 5–20 TB/s on chip
   (unmeasured). That adds 0.04–0.17% to the steady state.
 
-At the stated \(T\) = 60 s with 789 GB over every tier and RTT 1 ms, the horizon's whole γ is 0.67% (0.75% bounded
-by \(q^k\)). 16 KiB receipts make it 0.58%, and a 26 µs flush with them 0.23%. The worst window's \(\gamma_t\) goes
-from 0.896% to 0.81% and 0.46%. With λ and \(\mu_{\text{chip}}\) at 0 the horizon's γ is 0.16%, because the chain's
+At the stated \(T\) = 60 s with 789 GB over every tier and RTT 1 ms, the horizon's whole γ is 0.73% (0.81% bounded
+by \(q^k\)). 16 KiB receipts make it 0.61%, and a 26 µs flush with them 0.26%. The worst window's \(\gamma_t\) goes
+from 1.071% to 0.95% and 0.60%. With λ and \(\mu_{\text{chip}}\) at 0 the horizon's γ is 0.17%, because the chain's
 steady state and \(\mu_{\text{rebuild}}\) alone exceed 0.15%.
 
 ## 11. The P2 store
@@ -1599,7 +1600,8 @@ Per pass \(i\), after root \(i-1\):
 ~~~text
 seed_i     the audit's (receipts.seed): SHA512(SEED_DOMAIN ‖ chal_t ‖ u32be i ‖ root_(t,i−1)), 64 bytes
 S_i        k_s rows (16) of 1,028 bytes, from seed_i on the host: K = derive(seed_i,
-           "verity/remote-bandwidth/sketch-signs/v0", {"tag": "sketch-sha512", "k": k_s, "n": 8224}), row c =
+           "verity/remote-bandwidth/sketch-signs/v0", {"tag": "sketch-sha512", "k": k_s, "n": 8224}) (at 64 rows,
+           derive_wide under ".../sketch-signs/v1" and its WideKey's stream, as S_(t,i)'s; receipts.sign_key), row c =
            K.stream(("row", c), 1028) (verity.commitments.randomness); bit x of a row (byte x // 8, bit x % 8, LSB first) is
            the sign of the unit's byte x: 1 → −1, 0 → +1
 ~~~
@@ -1621,7 +1623,7 @@ y_g        SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be g ‖ σ_
            one compression after the pass's 128-byte prefix, whose midstate every unit shares
 ~~~
 
-The host commits the \(y_g\) in plan order as §4's tree (`p2.Prover.commit`). The partial is a function of the bytes
+The host commits the \(y_g\) in plan order as §4's tree (`p2_prover.Prover.commit`). The partial is a function of the bytes
 the decode read, so the receipt binds the read the decode made; computing it from the decoded `W`, or from a second
 read, is another protocol. Per block it is \(16 \times 2056\) sign-and-add steps beside the decode's two 16,448-bit
 squarings. The fixture kernels build against comes from the serving loop over the toy `C*` (`serve.py fixture`,
@@ -1635,17 +1637,22 @@ path check, `PousCheck.Merkle`), and \(y_g\) recomputed from the four blocks (`p
 path is `C*`'s block, by SHA-512's collision resistance. A P2 store is fixed at setup, so a session over it appends
 nothing (`append`).
 
-**Of record** (`lean/RemoteAudit/P2Session.lean`). The Lean verifier's process decides a P2 session (`p2_party.py`):
+**Of record** (`lean/RemoteAudit/P2Session.lean`). The Lean verifier's process decides a P2 session (`p2_parties.py`):
 it holds the registration file's bytes (its digest recomputed from its fields, a stated `digest` refused unless it is
 theirs) and reads the prover's request and each root and openings line as sent, a line out of form rejecting the
 session `malformed` at the window filling. Its bookkeeping is §4–§6's over the U units, and its openings are checked
 as above, on the registered vk root. `audit.AuditRun` over the P2 codec runs beside it as a veto: where the two
 differ the session is rejected `disagreement`. The session's parameters (W, the passes a window, s, T and A) are the auditor's
-(`p2_party.SESSION`), never the prover's: the request restates them, and the veto refuses one that carries other
-values, by name, before the first coin, and so does the Lean, naming each in `p2_party.params_of`'s words
+(`p2_parties.SESSION`), never the prover's: the request restates them, and the veto refuses one that carries other
+values, by name, before the first coin, and so does the Lean, naming each in `p2_parties.params_of`'s words
 (`P2Session.heldTo`). The process holds its pinned `P2Session.SESSION` unless the auditor's party names a toy's
 (`p2_hold`'s `session`), and the session's core case (`p2_case.py`), whose request no digest binds, is replayed under
-`SESSION` alone (`P2Protocol.replay`), so a toy party's case is refused there.
+`SESSION` alone (`P2Protocol.replay`), so a toy party's case is refused there. The case is signed: the memory
+challenger's key closes it (`p2_parties.Closer`, its line count and its chain, `RemoteAudit.P2Close`) under the session id
+the auditor gave it, which its session log records before the first coin. The chain runs over the case's head (the
+commitment's digest and the clock floor, `P2Protocol.headOf`) and then every entry of its log, and it is the one
+SHA-512 the verifier's device keeps of the case (`p2_parties.case_digest`). The check refuses a close that doesn't sign
+the case under a key and a session its params name before it replays any entry (`P2Protocol.closeRefusal`).
 
 **What it rests on, and what is open.**
 

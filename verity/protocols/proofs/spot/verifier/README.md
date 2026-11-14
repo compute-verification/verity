@@ -1,6 +1,6 @@
-# Sampled proofs (`verity-sampled-proofs`)
+# SPOT (`verity-sampled-proofs`)
 
-Sampled proofs spot-check a committed computation. While serving, the developer commits every value that crosses a
+SPOT spot-checks a committed computation. While serving, the developer commits every value that crosses a
 proof-block boundary of a partition of the program and registers the commitment roots. The verifier then samples proof blocks
 on the auditor's challenger's coins, the developer proves the sampled proof blocks, and the verifier checks the proofs. It never runs any part
 of the computation. An accepted audit yields an integrity profile (`verity.protocols.proofs.spot.verifier.profile.IntegrityProfile`): except with
@@ -271,7 +271,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The benchmark.** `benchmarks/one_stage` runs the one-stage audit end to end with Flock's circuit prover and the Lean
   verifier.
 - **The users.** Flock samples and checks the sample in its Lean verifier and proves the sampled proof blocks. The vLLM integration
-  commits serving rows with the docket and served domains of `one_stage` (`verity.commitments.windows.rows`, in the
+  commits serving rows with the docket and served domains of `one_stage` (`verity.commitments.periods.rows`, in the
   Commit or from a deferred Commit's bundle by `verity_vllm.pipeline.deferred_rows`); its replay challenge is its own
   (`verity_vllm.commit.challenge`).
 
@@ -294,8 +294,19 @@ refusal (`DISAGREE`). A verdict whose Lean no interface here reaches yet raises
 | A two-stage outcome's completeness | `second_stage.complete` | none yet | `complete_twin` |
 
 A two-stage run whose stages read no coin bytes gives `Run.run` nothing to read, so `_audit_two` raises rather than
-join its records. `parties`' `_held` and `one_stage.proofs`' `ks_form_why`, `template_why` and `population_why` are
-guards: they only turn an accept into a refusal, never accept.
+join its records.
+
+### Guards
+
+Each takes a verdict of record or files Lean then checks, and can only refuse: none returns an accept a Lean verdict did
+not give.
+
+| Guard | Why it can only refuse |
+| --- | --- |
+| `parties`' `_held` | returns a reject answer unchanged, and turns an accept into a reject when its commitment or interior is not the registration sent; otherwise returns the answer it was given |
+| `one_stage.proofs.ks_form_why` | a reason or None for a circuit outside the form `verify --zk` covers (`Flock.KsScope.filesWhy`); a reason refuses a session, None leaves the binary's verdict |
+| `one_stage.proofs.template_why` | a reason or None for a circuit the template refuses, read only before `members.files_why`'s other refusals; None decides nothing |
+| `one_stage.proofs.population_why` | a reason or None for a public file whose units are not the docket's population in order (`Spot.FilePart.why`); None leaves `verify`'s verdict |
 
 ## Core API
 
@@ -385,7 +396,7 @@ Its digest is `SHA-512(format ‖ 0 ‖ canon(record))`, canon being canonical J
 `verity.circuits.codec.canonical_json`).
 
 The verifier holds the record to its own copies with R1 to R8 (`check`). The Lean verifier runs the same check
-(`Spot.Registration.check`), `Properties.Spot.R1` to `R8` state what each accepts, and
+(`Spot.Docket.check`), `Properties.Spot.R1` to `R8` state what each accepts, and
 `verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py` holds the Python to the Lean.
 
 It then writes a receipt (`receipt`, `verity/registration-receipt/v1`), and only then samples. It also holds its own public
@@ -628,5 +639,5 @@ A verifier that reads the registration log's registered compiler (`compiler`: th
 with its digest and the public length ℓ of the advice it reads, or null when the log registers none) holds the record's
 window to name that compiler by its digest (`window.compiler.digest`, `R6-compiler`) and advice of at most ℓ bits
 (`window.advice.bits`, `R6-advice-length`); where the log registers none, a window naming a compiler or advice is
-`R6-compiler`. Lean `Registration.compilerOk` and `adviceOk`, in `RunCompiler` of R6; `tests/test_registered.py` and
+`R6-compiler`. Lean `Docket.compilerOk` and `adviceOk`, in `RunCompiler` of R6; `tests/test_registered.py` and
 the difftest's `test_advice_no_registered_compiler_reads_is_refused_by_name`.

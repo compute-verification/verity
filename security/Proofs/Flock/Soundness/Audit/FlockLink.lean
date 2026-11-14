@@ -106,7 +106,7 @@ structure ValueBinding (decode : DecoderB (C := C) (Reg := Reg) plan tab) {Dh : 
 attribute [instance] ValueBinding.finPos ValueBinding.decPos ValueBinding.finVal
   ValueBinding.decVal ValueBinding.inhVal ValueBinding.inhOp
 
-variable {L : Law n} {decode : DecoderB (C := C) (Reg := Reg) plan tab} {Dh : Type}
+variable {L : SamplingDesign n} {decode : DecoderB (C := C) (Reg := Reg) plan tab} {Dh : Type}
   {Hc : List UInt8 → Dh} (vb : P.ValueBinding plan tab decode Hc)
   (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R)
 
@@ -154,14 +154,14 @@ noncomputable def readsAt (ω : L.Ω) (bs : List (List (OutC 𝔽 D))) (c : vb.P
   Finset.univ.filter fun v => ∃ o, P.OpensAt H E plan tab vb R τ ω bs c v o
 
 /-- The samples that read `c`. -/
-abbrev Ωc (L : Law n) (c : vb.Pos) : Type := {ω : L.Ω // P.ReadsSample plan tab vb c ω}
+abbrev Ωc (L : SamplingDesign n) (c : vb.Pos) : Type := {ω : L.Ω // P.ReadsSample plan tab vb c ω}
 
 open Classical in
-noncomputable instance instFintypeΩc (L : Law n) (c : vb.Pos) : Fintype (P.Ωc plan tab vb L c) :=
+noncomputable instance instFintypeΩc (L : SamplingDesign n) (c : vb.Pos) : Fintype (P.Ωc plan tab vb L c) :=
   Subtype.fintype _
 
 /-- A trial's outcome: the sample, the fresh run, and the waits' runs. -/
-abbrev TrialOut (L : Law n) (D : Type) := L.Ω × List (OutC 𝔽 D) × List (List (List (OutC 𝔽 D)))
+abbrev TrialOut (L : SamplingDesign n) (D : Type) := L.Ω × List (OutC 𝔽 D) × List (List (List (OutC 𝔽 D)))
 
 /-- **The trial for commit string `c`**: a sample that reads `c`, a fresh session, and `k` waits of at
 most `Rw` reruns each. -/

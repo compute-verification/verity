@@ -20,13 +20,14 @@ from types import SimpleNamespace as NS
 import pytest
 
 from verity.circuits.codec import canonical_json
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier import service as S
 from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "device" / "tests"))
 T = importlib.import_module("test_two_stage_driver")
 SA = importlib.import_module("verity.protocols.proofs.spot.prover.audit.stop_audit")
 SMALL = importlib.import_module("stop_audit_small")

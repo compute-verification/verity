@@ -15,6 +15,10 @@ judged through the proof system (`spot.service`, P1: a `Stream`'s `register`, `s
   python served_commit.py check PARAMS REGISTRATION DRAW UNIT PUB OPENING     the verifier: the proof's rows are the unit's
   python served_commit.py shape DIR DIR                                       two staged units' proofs have one shape
 
+Each command runs as `benchmarks/pouw/served_zk/served_commit_run.py COMMAND ...`, which passes `main` the checks of
+record's Lean side (`of_record_lean.Record`) and the commit's batch tile checks (`fast_tile.install`), neither of which
+verity imports; run from this file, the commands that reach either refuse (NotImplementedError).
+
 - **The execution phase** is SZ_CALLS of the pass's ``o_proj``-shaped calls (k = n = `K`), picked from ``os.urandom`` unless
   ``--call`` names them.  Each call's A rows (the pass's retained activations, BF16 widened to FP32) and its weight's B rows
   are formed on the CPU as `pearl_c` forms them under the pass's execution phase (`PearlC.noise`, forming v1, the peel factors), and
@@ -86,9 +90,8 @@ judged through the proof system (`spot.service`, P1: a `Stream`'s `register`, `s
   `register` refuses every certified execution phase first (``unsalted``), before the stream receives it or the certifier is
   asked anything.  Past that rule, `register` has the stream receive the execution phase, reads the certifier's `committed` on
   that registration, refuses a pass whose weights, stream or prover it doesn't bind, and only then calls `reveal`,
-  failing closed (``certifier``), each through the certifier's client (`CertifierClient`: a signed request, a signed
-  answer it verifies): the certifier gives p's salt once, within its reveal deadline on its own clock, so its
-  parameters carry no ``registration_deadline``.  The execution phase registers once per PoUW execution phase, stream and prover
+  failing closed (``certifier``): the certifier's own rules (its signed answers and when it reveals) bound the
+  execution phase's timing, so its parameters carry no ``registration_deadline``.  The execution phase registers once per PoUW execution phase, stream and prover
   (`salt.WindowOpens`, ``reregistered``), and its sampling coin is its sample session's ``pouw/draw`` coin 0, checked against
   the commitment the challenger reads from its challenger's signed record (`challenger.trusted_commitment`), which the
   sample's check of record verifies again, both under the challenger key the execution phase's deployment pins (`Deployment`,
@@ -126,7 +129,6 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.randomness import Key, derive
 from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
-from verity.protocols.accounting.certifier.verifier.active import RUN_ID_BYTES
 from verity.protocols.accounting.pouw.prover.circuit import leaves as L
 from verity.protocols.accounting.pouw.prover.circuit import pc8
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
@@ -143,11 +145,11 @@ from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import partition as PT
+from verity.protocols.proofs.spot.verifier.one_stage import caller as CA
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict, _Collect
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import of_record as OR
+from verity.protocols.accounting.pouw.prover.kernels.served_zk import of_record as OR
 
 SCHEMA = "verity-pouw/served-zk-window/v1"
 CHALLENGER = "served-zk/challenger"
@@ -167,10 +169,12 @@ PROOF_DEADLINE = 86400.0
 REGISTRATION_DEADLINE = 3600.0
 NO_DEADLINE = ("the window's parameters name no registration_deadline, so the service would accept a window EndToEndWindow "
                "doesn't cover: write them with `served_commit.py params` (REGISTRATION_DEADLINE, or --registration-deadline)")
-CERTIFIED_DEADLINE = ("a certified window's time bound is the network certifier's reveal deadline on its own clock "
-                      "(`Proxy(reveal_deadline=…)`), so its parameters carry no registration_deadline and it replays none")
+CERTIFIED_DEADLINE = ("a certified window's time bound is the network certifier's reveal deadline on its own clock, "
+                      "so its parameters carry no registration_deadline and it replays none")
 #: a certified execution phase's stream as the PoUW salt binds it (`stream_id`)
 STREAM_ID = "verity/pouw/served-zk/stream/v3"
+#: a network certifier's run id, sampled when its run starts
+RUN_ID_BYTES = 32
 #: the frame's owner, as Flock's statement domains have it (`verity_flock.ir_frame.OWNER`)
 OWNER = -1
 SALT_BYTES = 192
@@ -284,9 +288,8 @@ def certified(params: Mapping[str, Any]) -> bool:
 
 def certifier_run(certifier: Any) -> dict[str, str]:
     """The network certifier's run as a certified execution phase's stream names it: its `certifier_run`, (key id, run id, ingress
-    link), the identity every signed `Revealed` binds, which a `Proxy` and its `CertifierClient` give alike (key id and
-    run id as hex). A proxy started again samples another run id, and a second link has another name; a proxy without a
-    signer has no key id, so no run."""
+    link), the identity the certifier's answers bind (key id and run id as hex). A certifier started again samples
+    another run id, and a second link has another name; a certifier without a signing key has no key id, so no run."""
     try:
         key_id, run_id, link = certifier.certifier_run
     except (AttributeError, TypeError, ValueError) as e:
@@ -311,14 +314,21 @@ NOT_PINNED = (f"the challenger key record's public key is not the one pinned ({C
               f"{CHALLENGER_KEY_SHA512[:8]}…)")
 
 
-def pinned_challenger_key(record: Path | None = None) -> Ch.ChallengerKey:
-    """The verifier's challenger key, read from infra's published pin (`CHALLENGER_KEY_PIN`, fetched from the store
-    unless `record` is its file): refused (ValueError) unless the record is a challenger-key/v1 record whose public key's
-    SHA-512 is `CHALLENGER_KEY_SHA512`, both the one the record names and the one the public key hashes to."""
-    if record is None:
-        # only the verifier's own reading fetches
-        from research.store.local import LocalStore
-        record = LocalStore().fetch(CHALLENGER_KEY_PIN)
+NEEDS_BENCHMARK = ("{} is benchmark-side code, which verity does not import (compute-accounting/pouw-package-holds-kernels): "
+                   "{} passes it")
+
+
+def install_tiles(scheme: Any) -> Callable[[], None]:
+    """The batch forms of `scheme`'s tile checks installed for one commit, and what undoes them
+    (`benchmarks/pouw/pearl_c_vllm/fast_tile.py`'s `install`), which `main` takes as `tiles`."""
+    raise NotImplementedError(NEEDS_BENCHMARK.format("fast_tile.install", "benchmarks/pouw/served_zk/served_commit_run.py"))
+
+
+def pinned_challenger_key(record: Path) -> Ch.ChallengerKey:
+    """The verifier's challenger key, read from `record`, the file of infra's published pin (`CHALLENGER_KEY_PIN`), which
+    the caller fetches from the evidence store and hands in: verity reads no store. Refused (ValueError) unless the record
+    is a challenger-key/v1 record whose public key's SHA-512 is `CHALLENGER_KEY_SHA512`, both the one the record names and
+    the one the public key hashes to."""
     try:
         doc = json.loads(Path(record).read_bytes())
     except (OSError, ValueError) as e:
@@ -339,8 +349,7 @@ def pinned_challenger_key(record: Path | None = None) -> Ch.ChallengerKey:
 @dataclass(frozen=True, slots=True)
 class Deployment:
     """What a certified execution phase's verifier pins of its deployment: the network certifier's public key and its run's id,
-    the only ones whose answers the challenger takes (its client, `certifier.active.CertifierClient`, must be for them,
-    and refuses any other), and the key of the verifier's own challenger, under which the challenger reads the execution phase's
+    the only ones whose answers the challenger takes (the certifier it reads must be for them), and the key of the verifier's own challenger, under which the challenger reads the execution phase's
     coin record and the sample's check of record verifies it (`core_check.draw_twin`, ``coin-key``), so no record a prover
     signs over coins it holds is read.  `pinned` takes the challenger key from infra's published pin."""
 
@@ -358,8 +367,9 @@ class Deployment:
             raise ValueError(DEPLOYMENT_FORM)
 
     @classmethod
-    def pinned(cls, certifier_key: Any, run_id: bytes, record: Path | None = None) -> Deployment:
-        """The deployment whose challenger key is the pinned one (`pinned_challenger_key`, from `record` or the store)."""
+    def pinned(cls, certifier_key: Any, run_id: bytes, record: Path) -> Deployment:
+        """The deployment whose challenger key is the pinned one (`pinned_challenger_key`, from `record`, the pin's file
+        the caller fetched from the evidence store)."""
         return cls(certifier_key, run_id, pinned_challenger_key(record))
 
 
@@ -654,8 +664,8 @@ def core_params(params: dict) -> dict:
 def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, drawn: bool = True,
           record: OR.Record | None = None, salt: bytes | None = None) -> str | None:
     """None if the proof's public file opens unit `unit`'s rows under the registered execution phase root, else why not: PoUW's
-    rule on the opening (`core_check.opening_twin`, the unit sampled unless not `drawn`), of record (`record`, Lean's by
-    default), beside this reading of the registration (its level the execution phase's, its entries' domain the execution phase's served
+    rule on the opening (`core_check.opening_twin`, the unit sampled unless not `drawn`), of record (`record`: an
+    `of_record.Record`, whose Lean side `of_record_lean.Record` supplies), beside this reading of the registration (its level the execution phase's, its entries' domain the execution phase's served
     one), which may refuse only what the rule refuses (`Record.prelude`).  `salt` is a certified execution phase's salt, the one
     its pass was checked against (`core_check.certified_salt`, which `Challenger.check` passes); the opening refuses
     every unit of a certified execution phase without it."""
@@ -668,9 +678,9 @@ def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, 
         roots = {r["port"]: r for r in rec["roots"]}
         pre = None if roots.get(PORT, {}).get("domain") == window_domain(params, ell).domain_id.hex() else \
             "the registered window domain is not the window's served domain"
-    x = {"params": core_params(params), "commitment": OR.hexed(rec), "units": list(draw.get("units", ())) if drawn else None,
-         "unit": unit, "pub": pub.hex(), "opening": op, **({} if salt is None else {"salt": salt.hex()})}
     r = OR.Record() if record is None else record
+    x = {"params": core_params(params), "commitment": r.hexed(rec), "units": list(draw.get("units", ())) if drawn else None,
+         "unit": unit, "pub": pub.hex(), "opening": op, **({} if salt is None else {"salt": salt.hex()})}
     try:
         out = r.opening(x)
         return r.prelude(pre, f"opening: {out['refused']}" if isinstance(out, dict) else out)
@@ -868,13 +878,13 @@ class Challenger:
     `predates_deadline` replays a record whose parameters predate the deadline as it ran, untimed.  The clock counts the
     challenger's reads of it unless `clock` is given.
 
-    With `certifier` the execution phase is certified (module docstring): `certifier` is the network certifier's client
-    (`certifier.active.CertifierClient`), whose `certifier_run` names the stream (`stream_id`) and whose `committed` and
-    `reveal` are the certifier's signed answers to the challenger's signed requests, verified; `prover` is its 64-byte
+    With `certifier` the execution phase is certified (module docstring): `certifier` is the network certifier as the
+    challenger reads it, whose `certifier_run` names the stream (`stream_id`), whose `certifier_key` and `run_id` the
+    deployment pins, and whose `committed` and `reveal` are its answers (`salt.committed`, `salt.revealed`); `prover` is its 64-byte
     id (`salt.prover_id`), `coins` the execution phase's sampling session's challenger (`window.draw_challenger`) whose ``pouw/draw``
     coin 0 the sample opens, `coin_record` the path of the record that challenger signed and wrote on its own host
     (`challenger.write_record`), and `deployment` what the verifier pins of its deployment (`Deployment`): the network
-    certifier's key and run id, which `certifier` must be the client for, and its challenger's key, under which the
+    certifier's key and run id, which `certifier` must be for, and its challenger's key, under which the
     challenger reads its trusted commitment itself (`challenger.trusted_commitment`).  Every opening is checked against
     it, and the sample's check of record verifies the record again under the key the deployment pins, not the one the
     record's coins name (``coin-key``).  `opens` is the deployment's `salt.WindowOpens`,
@@ -903,7 +913,7 @@ class Challenger:
             self.run = certifier_run(certifier)
             if (getattr(certifier, "certifier_key", None) != deployment.certifier_key
                     or getattr(certifier, "run_id", None) != deployment.run_id):
-                raise ValueError("a certified window's certifier client is for the certifier key and run id its "
+                raise ValueError("a certified window's certifier is for the certifier key and run id its "
                                  "deployment pins (`Deployment`)")
             self.trusted, self.signed = _signed_coins(coin_record, deployment.challenger_key)
             self.deployment = deployment
@@ -984,7 +994,7 @@ class Challenger:
     def registered(self, name: str, rec: Mapping[str, Any]) -> None:
         """PoUW's rule over the registration (`core_check.registered_twin`), of record.  Raises `Refused`."""
         try:
-            x = {"params": self.core, "commitment": OR.hexed(rec)}
+            x = {"params": self.core, "commitment": self.record.hexed(rec)}
         except TypeError as e:
             raise _refused("registration", f"the registration is not canonical JSON: {e}") from None
         out = self._of_record(name, self.record.registered, x)
@@ -1007,16 +1017,18 @@ class Challenger:
         return out["how"]
 
     def r1_r6(self, name: str, st: S.Stream, rec: Mapping[str, Any], ports_: dict) -> None:
-        """One-stage's R1-R6 against the challenger's own copies and the service's public-items rule over the Stream's
-        Spec, as `Stream.register` runs them, each of record.  Raises `Refused`."""
+        """One-stage's R1-R6 against the challenger's own copies, then where they pass the caller's check
+        (`caller.check`, `Caller.gate`), and the service's public-items rule over the Stream's Spec, as `Stream.register`
+        runs them, each of record.  Raises `Refused`."""
         n = rec["population"]
         law = S.selection_law(st.spec.selection, n)
         prog = PT.population_program(st.unit, n)
         q = st.spec.check.query
-        codes = self._of_record(name, self.record.registration,
-                                OR.registration_params(prog, q, law, S.SCHEME, ports_, list(st.log), self.params["delta"]),
-                                dict(rec), lambda: R.check(rec, prog, q, law, S.SCHEME, ports_, None, (), list(st.log), None,
-                                                          None, None))
+        params = OR.registration_params(prog, q, law, S.SCHEME, ports_, list(st.log), self.params["delta"])
+        args = (rec, prog, q, law, S.SCHEME, ports_, None, (), list(st.log), None, None, None)
+        codes = self._of_record(name, self.record.registration, params, dict(rec), lambda: R.check(*args))
+        if not codes:
+            codes = self._of_record(name, self.record.caller, params, dict(rec), lambda: CA.check(*args))
         public = self._of_record(name, self.record.public, OR.public_params(st.spec, rec, S.SCHEME),
                                  lambda: S.check_public(st.spec, rec).to_json())
         codes = list(codes) + [c for c in public.get("codes", ["public"]) if c not in codes]
@@ -1201,8 +1213,8 @@ class Challenger:
         body = st.records[-1]
         ans = OR.service_answer(o.accepted, list(o.verdict.codes), o.profile.to_json() if o.profile else None, reg.digest,
                                 (body.get("audit") or {}).get("draw"), self.params["delta"])
-        a = self._of_record(name, self.record.answer, {"params": self.core, "commitment": OR.hexed(reg.record),
-                                                       "evidence": OR.hexed(ans)})
+        a = self._of_record(name, self.record.answer, {"params": self.core, "commitment": self.record.hexed(reg.record),
+                                                       "evidence": self.record.hexed(ans)})
         if o.accepted:
             if a["verdict"] != "accept":
                 raise _refused("pouw-check", a["reason"])
@@ -1333,7 +1345,6 @@ def cmd_params(a) -> int:
 def cmd_commit(a) -> int:
     pass_dir = Path(a.pass_dir)
     PD, man, sha, calls = _pass(pass_dir)
-    import fast_tile as FT
     params = _json(a.params)
     scheme = PD.scheme_of(man["scheme"])
     if tuple(scheme.tile) != (Wd.TILE, Wd.TILE):
@@ -1349,7 +1360,7 @@ def cmd_commit(a) -> int:
         tile0[u["index"]] = at
         at += -(-u["m"] // Wd.TILE) * -(-u["n"] // Wd.TILE)
     chosen = sorted(chosen, key=lambda u: tile0[u["index"]])
-    undo = FT.install(scheme)
+    undo = a.tiles(scheme)
     window = []
     try:
         for u in chosen:
@@ -1479,7 +1490,7 @@ def cmd_challenger(a) -> int:
     coins = Coins(a.epoch, entropy)
     (log / "coins.json").write_text(json.dumps(coins.commitment.to_json(), sort_keys=True))
     ch = Challenger(_json(a.params), coins, lean_sampler(a.lean, log / "draws.jsonl") if a.lean else python_sampler,
-                    record=OR.Record(lean=False if a.python_record else None))
+                    record=a.record(lean=False if a.python_record else None))
     for line in sys.stdin:
         if not line.strip():
             continue
@@ -1537,7 +1548,7 @@ def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler
 
 def cmd_replay(a) -> int:
     diffs = replay(_json(a.params), Path(a.log), Path(a.out), lean_sampler(a.lean) if a.lean else python_sampler,
-                   OR.Record(lean=False if a.python_record else None))
+                   a.record(lean=False if a.python_record else None))
     n = len((Path(a.log) / "requests.jsonl").read_text().splitlines())
     out = {"requests": n, "diffs": diffs[:8], **({"predates_deadline": True} if "registration_deadline" not in _json(a.params) else {})}
     print(f"{'SAME' if not diffs else 'DIFFERENT'} {json.dumps(out)}", flush=True)
@@ -1576,7 +1587,7 @@ def cmd_coin_variant(a) -> int:
 
 def cmd_check(a) -> int:
     params, reg, d = _json(a.params), _json(a.registration), _json(a.draw)
-    record = OR.Record(lean=False if a.python_record else None)
+    record = a.record(lean=False if a.python_record else None)
     why = check(params, reg, d, a.unit, Path(a.pub).read_bytes(), _json(a.opening), drawn=not a.undrawn, record=record)
     record.close()
     if a.out:
@@ -1644,7 +1655,11 @@ PYTHON_RECORD = ("PoUW's checks by their Python references alone, undoing the sw
                  "(`of_record`)")
 
 
-def main(argv=None) -> int:
+def main(argv=None, *, record: type[OR.Record] = OR.Record, tiles: Callable[[Any], Callable[[], None]] = install_tiles
+         ) -> int:
+    """The commands below; `record` is the checks of record the challenger, `replay` and `check` take (`of_record.Record`,
+    whose Lean side `of_record_lean.Record` supplies), and `tiles` installs a commit's batch tile checks
+    (`install_tiles`): `benchmarks/pouw/served_zk/served_commit_run.py` passes both."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("params")
@@ -1710,6 +1725,7 @@ def main(argv=None) -> int:
     p.add_argument("b")
     p.add_argument("--out")
     a = ap.parse_args(argv)
+    a.record, a.tiles = record, tiles
     return {"params": cmd_params, "commit": cmd_commit, "register": cmd_register, "edit": cmd_edit,
             "challenger": cmd_challenger, "replay": cmd_replay, "coin-variant": cmd_coin_variant, "check": cmd_check,
             "shape": cmd_shape}[a.cmd](a)

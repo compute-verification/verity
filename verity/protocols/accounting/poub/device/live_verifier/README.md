@@ -14,7 +14,7 @@ What code outside this directory may use. Everything else here is internal.
 | Entry point | What it is |
 |---|---|
 | `host.py gate VERB ...` (on the host, `vy-verifier-gate VERB ...`) | The gate, the one way into the host's verifier. `run` starts a run from its whitelisted parameters (A run, below); `status [RUN]`, `fetch RUN [--transcripts]`, `replay RUN`, `stop RUN` and `close NODE_HEX` read, replay, stop a run or close a node's registration. It answers on stdout, and a refusal is exit 3 with `{"refused": WHY}`. |
-| `host.py gate wipe_party [--reads K] [--native [--threads T]]`, `challenger_party`, `bw_party (--pous-session SID \| --fixture) [--minutes M]`, `party_key wipe\|pous`, `party_log wipe\|pous [LOG]` | The memory challenger's two parties and the party of PoUB over PoUS's P2 store, each run as `auditor` from the pinned tree, one session per connection: the request line on the gate's stdin, then `{"listening": PORT}` and the signed report on its stdout. `party_key` prints a party's public key and `party_log` its sessions as the host kept them. |
+| `host.py gate wipe_party [--reads K] [--native [--threads T]]`, `challenger_party`, `bw_party (--pous-session SID \| --fixture) [--session SID] [--minutes M]`, `party_key wipe\|pous`, `party_log wipe\|pous [LOG]` | The memory challenger's two parties and the party of PoUB over PoUS's P2 store, each run as `auditor` from the pinned tree, one session per connection: the request line on the gate's stdin, then `{"listening": PORT}` and the signed report on its stdout; `bw_party --session SID` has the PoUS challenger's key sign the session's close under SID. `party_key` prints a party's public key and `party_log` its sessions as the host kept them. |
 | `host.py run RUN`, `host.py replay RUN`, `host.py publish RUN` | What the host's units run as `auditor`. A run is the verifier's process with the request's parameters and the host's own, and leaves `runs/RUN/out/` (`verifier.json`, `challenger/`, `verifier.log`, `registry.json`, and the transcripts gzipped with their `SHA256SUMS`) and `end.json`. A replay checks the transcripts against what the run recorded and replays them through both verifiers into `runs/RUN/replay/`. `publish` puts `runs/RUN/` in the evidence store as a tree of kind `verifier-run/v1`. |
 | `host.py pinned COMMIT` and `host.py close NODE_HEX` | `pinned` appends a pin (the commit and the UTC time) to the host's pins log, which a run starts from, and prints it. `close` closes a node's registration in the verifier's registry. |
 
@@ -98,7 +98,7 @@ tar --create --files-from=private/compose/inputs.txt --file=- | $COMPOSE_GATE co
 `COMPOSE_GATE` is the sender's setting: `ssh` with the lane's gate key, as `research` on that address.
 
 At pin time, as `auditor`, infra builds the tree's venv (`uv sync --all-packages --extra torch-cpu`) and the Lean
-packages the compose runs (`verity/protocols/proofs/spot_flock/verifier/lean`, whose `vstar-recursive` the record runs, and the
+packages the compose runs (`verity/protocols/proofs/spot_flock_recursion/verifier/lean`, whose `vstar-recursive` the record runs, and the
 composite's), and records the pin with the branch it is on (`host.py pinned COMMIT BRANCH`). The compose runs as
 `auditor` with `HOME=/var/lib/vy-compose`, so `lake` and `elan` resolve from `/usr/local/bin` or that home's
 `.elan/bin`. The docstring says what the gate refuses and what it answers.

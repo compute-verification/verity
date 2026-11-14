@@ -24,9 +24,9 @@ read: the accepted wipe is the game's accepted session at the run's labels and r
 wipe's guarantees (`Pous.Guarantees.StreamedWipe` and its instances at 2152 reads) bound it, with nothing between the
 code and the game but the game's shape (C5, C6 and every tier declared), which the challenger's deployment makes true.
 
-## The memory challenger, as `wipe_party` runs a wipe
+## The memory challenger, as `wipe_challenger` runs a wipe
 
-`streamed_wipe.Challenger`, as `wipe_party.serve` drives it (their module docstrings): it claims the session id and
+`wipe_challenger.WipeMemoryChallenger`, as `wipe_challenger.serve` drives it (their module docstrings): it claims the session id and
 publishes the commitment (`__init__`); it takes its start mark, the SHA-512 of the start certificate its mark source
 returns for the commitment's start message, empty with no source; it reads its clock, streams the labels
 `L_i = SHA-512(LABEL_TAG ‖ K ‖ u64 i)` of its key `K` (`fill`, or `fill_by` through the native streamer) and reads its
@@ -44,8 +44,8 @@ The wipe party reveals one index a batch (`wipe_party.params_of`): a wipe at ano
 the model. The model takes the challenger's clock readings and the answers it receives as they came, and assumes
 nothing of them. It takes the start mark as the bytes the challenger held, and does not model the certificate or who
 made it. It does not model what refuses a session before it starts. The challenger may run any number of wipes
-under a key, each signed once, and the key signs PoUS's sessions too: `wipe_party.main` signs with
-`period.challenger`, the memory challenger's key, in PoUS's role (`memory-challenger-record`). So
+under a key, each signed once, and the key signs PoUS's sessions too: `wipe_challenger.main` signs with
+`onsite.device_key`, the memory challenger's key, in PoUS's role (`memory-challenger-record`). So
 `SignedWipeParty.Signed`, all the model's key signs, holds both. A key also used for another role is outside the model, and the forgery disjunct
 is an EUF-CMA break only under that one-role reading, as for PoUS's sessions (`Challengers`).
 -/

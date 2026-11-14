@@ -1,6 +1,6 @@
 """A served window's cases, each on the window's docket R and beside its own Lean answer, in the directory
-form a composition of the window's subprotocols reads as a case: sampled proofs' one-stage v1 case (no composite's),
-both composites' sampled proofs case (one-stage v2's in the form ``one-stage``) and the inference-only case from its
+form a composition of the window's subprotocols reads as a case: SPOT's one-stage v1 case (no composite's),
+both composites' SPOT case (one-stage v2's in the form ``one-stage``) and the inference-only case from its
 records audit, PoUW's period case held to the same record, Pearl+'s run case naming it, and with ``--v2`` one-stage v2's
 bare case too:
 
@@ -20,16 +20,16 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
 * **`verity/sampled-proofs/one-stage/v1`** (`window_case`, `V1`): a5's ``window/case.json`` as a5 wrote it
   (`a5.write_case`: the docket, the evidence the audit's record was handed, the sessions' verdicts among
   it, and the verifier's params), exactly those three, and none when a5 wrote its ``case-error.txt`` instead (which says
-  why). No composite takes it: both name sampled proofs (`VStar.Recursive.Sampled`) among their subprotocols
+  why). No composite takes it: both name SPOT (`VStar.Recursive.Sampled`) among their subprotocols
   (`Core.Onsite.components`, `Core.Remote.components`), which refuses it by name (`VStar.Recursive.Sampled.V1_REFUSED`).
   It is written because the other cases are read off it (v2's, the inference-only case's), and its answer,
   `sampled-proofs-one-stage check` on the case, goes to the verdicts alone.
-* **`verity/sampled-proofs/v1`** (`sampled_case`, `SAMPLED`): both composites' sampled proofs subprotocol
+* **`verity/sampled-proofs/v1`** (`sampled_case`, `SAMPLED`): both composites' SPOT subprotocol
   (`Core.Remote.components`, `Core.Onsite.components`, `VStar.Recursive.Sampled`), v2's case (`v2_case`, below) with
   ``form`` ``one-stage`` in its params and its evidence (`with_form`), which the dispatcher splits off before one-stage
   v2's decoders read the rest:
   its params name ``proofs`` and its evidence the proofs' files in place of v1's verdicts, as the dispatcher requires.
-  None when v2's case is refused, which the refusal says, and each composite then names sampled proofs missing. a5
+  None when v2's case is refused, which the refusal says, and each composite then names SPOT missing. a5
   writes v2's case only for a `--zk` audit that drew exactly one member (`a5.v2_proof`), and v2 refuses a windowed
   docket (`a5.case_v2`), so a served window of several members has none: under H1's tie its audit's sampling design is
   `stratified:1`, a sampled reader of each table W registers. Its answer is `vstar-recursive sampled check` on the case
@@ -86,10 +86,10 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
 
 Each case goes to its own directory under ``--private`` (``sampled-proofs-v1/``, ``sampled-proofs/``,
 ``inference-only/``, ``pouw-period/``, ``pouw-pearl-plus/``, ``sampled-proofs-v2/``; 0700, files 0600): ``case.json``
-(``{"params", "commitment", "evidence"}``, hex commitment and evidence, and sampled proofs', v2's, the period's and
+(``{"params", "commitment", "evidence"}``, hex commitment and evidence, and SPOT's, v2's, the period's and
 Pearl+'s ``blobs``) and ``answer.json``, its Lean answer line (and, given ``--from-division``, the inference-only case's
 ``policy.json``). A composition is handed only the directories whose answer's protocol is one of its product's
-subprotocols: remote's are sampled proofs', the inference-only case's and the period's (v1's, Pearl+'s in the period's
+subprotocols: remote's are SPOT's, the inference-only case's and the period's (v1's, Pearl+'s in the period's
 place), onsite's the same three among its own, and neither's one-stage v1's case or v2's bare case. The Lean runs on
 files in a 0700 scratch directory under ``--private``; the period's answer is the one `pouw_piece.py` wrote, and
 Pearl+'s the Lean verdict of record's.
@@ -129,10 +129,10 @@ ROOT = Path(__file__).resolve().parents[2]
 V1 = R.PROTOCOL
 V1_LEAN = (VF.PACKAGE, "sampled-proofs-one-stage")
 SAMPLED = "verity/sampled-proofs/v1"
-SAMPLED_LEAN = (ROOT / "verity/protocols/proofs/spot_flock/verifier/lean", "vstar-recursive")
-#: `vstar-recursive`'s command for sampled proofs (`VStar.Recursive.Sampled.main`), ahead of ``check``
+SAMPLED_LEAN = (ROOT / "verity/protocols/proofs/spot_flock_recursion/verifier/lean", "vstar-recursive")
+#: `vstar-recursive`'s command for SPOT (`VStar.Recursive.Sampled.main`), ahead of ``check``
 SAMPLED_CMD = ("sampled",)
-#: The form remote's sampled proofs case names: one-stage v2's audit (`VStar.Recursive.Sampled.ONE_STAGE`)
+#: The form remote's SPOT case names: one-stage v2's audit (`VStar.Recursive.Sampled.ONE_STAGE`)
 ONE_STAGE = "one-stage"
 V2 = PF.V2
 INFERENCE_ONLY = "verity/inference-only/v0"
@@ -202,7 +202,7 @@ def window_case(audit: Path) -> dict[str, Any]:
 
 
 def v2_case(audit: Path) -> dict[str, Any]:
-    """Sampled proofs' v2 case (module docstring): a5's ``case-v2.json`` held to v1's record and to its blobs."""
+    """SPOT's v2 case (module docstring): a5's ``case-v2.json`` held to v1's record and to its blobs."""
     w = audit / "window"
     v1 = window_case(audit)
     if not (w / "case-v2.json").is_file():
@@ -221,7 +221,7 @@ def v2_case(audit: Path) -> dict[str, Any]:
 
 
 def with_form(case: Mapping[str, Any], form: str = ONE_STAGE) -> dict[str, Any]:
-    """``case`` as sampled proofs reads it (`VStar.Recursive.Sampled`): its params and its evidence each with ``form``,
+    """``case`` as SPOT reads it (`VStar.Recursive.Sampled`): its params and its evidence each with ``form``,
     which the dispatcher splits off before that form's decoders read the rest."""
     try:
         evidence = json.loads(bytes.fromhex(case["evidence"]))
@@ -235,7 +235,7 @@ def with_form(case: Mapping[str, Any], form: str = ONE_STAGE) -> dict[str, Any]:
 
 
 def sampled_case(audit: Path) -> dict[str, Any]:
-    """Remote's sampled proofs case (module docstring): v2's (`v2_case`) in the form ``one-stage``."""
+    """Remote's SPOT case (module docstring): v2's (`v2_case`) in the form ``one-stage``."""
     return with_form(v2_case(audit))
 
 
@@ -312,7 +312,7 @@ def __getattr__(name: str) -> Any:
 
 
 def _reference():
-    """`nci_reference`, the Python the policy's Lean check is held to, for the Program's root nodes."""
+    """`inference_only_reference`, the Python the policy's Lean check is held to, for the Program's root nodes."""
     return policy().reference()
 
 

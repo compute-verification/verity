@@ -58,8 +58,8 @@ from verity_vllm.program.predict.window_circuit import WindowClass
 from verity.protocol import MONITORING_PERIODS
 from verity.protocols.proofs.spot.prover.optimize import SHA512_ROWS
 from verity.circuits.defs import bind
-from verity.definitions.registry import io_shell as IO
-from verity.commitments.windows import interface as IF
+from verity_vllm.definitions.registry import io_shell as IO
+from verity.commitments.periods import interface as IF
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path")
 sys.path.insert(0, str(HERE))
@@ -340,7 +340,7 @@ def window_units(rest: list[Unit], heads: Heads, levers: frozenset[str]) -> list
     return us
 
 
-#: b || c, a row's public commit string (hm96 at SHA-512), and a row's salt (`verity.commitments.windows.rows`)
+#: b || c, a row's public commit string (hm96 at SHA-512), and a row's salt (`verity.commitments.periods.rows`)
 BC_BYTES, SALT_BYTES = 128, 192
 #: a member's entry in the leaf layer's canonical JSON: its name and 128 hex
 LEAF_JSON_BYTES = 150
@@ -348,7 +348,7 @@ LEAF_JSON_BYTES = 150
 
 @dataclass(frozen=True)
 class DocketSize:
-    """The window's docket as `verity.commitments.windows.rows.write` makes it, members of `CAP` units: ``members``, port
+    """The window's docket as `verity.commitments.periods.rows.write` makes it, members of `CAP` units: ``members``, port
     ``roots`` (a unit's rows each a port, the cut rows ``p#j`` included), the public bodies' bytes (b || c a row a unit) and
     the private bodies' (every row's words and salt), the compressions (each public body's SHA-512 twice, for the leaf layer
     and for its member's entry, and one over the leaf layer's canonical JSON), the JSON's bytes and the files (a member's
@@ -564,7 +564,7 @@ def project(census: dict, slots: int, prompt: int, outputs: int, target: str = "
         raise ValueError(f"the probe's token selects are group units of {sorted(groups)} logits, not one count")
     out = []
     for u in rest:
-        lab, n = CS.projected(u.label, u.n, at, to)
+        lab, n = CS.projected(u.label, u.n, at, to, CS.label(SS.bridge(to.scan, to.prompt)))
         if CS.placed(u.label, 1, at.positions) is not None:
             u = _slot_unit(u, lab, at, to, next(iter(groups), None))
         out.append(replace(u, label=lab, n=slots * n))

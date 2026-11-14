@@ -519,8 +519,8 @@ theorem checkPartition_cost (c : Circuit) (obj : Option Json) :
     | none => simp only; exact countC.mono (countC.pure _) (Nat.zero_le _)
     | some o => simp only; exact countC.throw _ _
 
-theorem templateStrata_cost (law : String) (obj : Json) (program : ByteArray) :
-    countC.P (HmRow.templateStrataWith (Hashes.counted h) law obj program) 1 := by
+theorem templateStrata_cost (samplingDesign : String) (obj : Json) (program : ByteArray) :
+    countC.P (HmRow.templateStrataWith (Hashes.counted h) samplingDesign obj program) 1 := by
   apply countC.mono
   · unfold HmRow.templateStrataWith
     repeat (first
@@ -584,10 +584,10 @@ theorem templateStrata_cost (law : String) (obj : Json) (program : ByteArray) :
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · omega
 
-theorem stratifiedLaw_cost (obj : Json) (program : ByteArray) (k : Nat) :
-    countC.P (HmRow.stratifiedLawWith (Hashes.counted h) obj program k) 1 := by
+theorem stratifiedSamplingDesign_cost (obj : Json) (program : ByteArray) (k : Nat) :
+    countC.P (HmRow.stratifiedSamplingDesignWith (Hashes.counted h) obj program k) 1 := by
   apply countC.mono
-  · unfold HmRow.stratifiedLawWith
+  · unfold HmRow.stratifiedSamplingDesignWith
     repeat (first
       | extract_lets
       | (with_reducible apply throwBind)
@@ -649,10 +649,10 @@ theorem stratifiedLaw_cost (obj : Json) (program : ByteArray) (k : Nat) :
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · omega
 
-theorem workLaw_cost (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) :
-    countC.P (HmRow.workLawWith (Hashes.counted h) obj program k table) 1 := by
+theorem workSamplingDesign_cost (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) :
+    countC.P (HmRow.workSamplingDesignWith (Hashes.counted h) obj program k table) 1 := by
   apply countC.mono
-  · unfold HmRow.workLawWith
+  · unfold HmRow.workSamplingDesignWith
     repeat (first
       | extract_lets
       | (with_reducible apply throwBind)
@@ -1765,7 +1765,7 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
   -- `if let some d := draw` binds its own `d`; only once that match reduces is the sampling design's `Except.map` at the theorem's
   -- `d`, where `generalize` finds it. A `split` the walk leaves unreduced shares one bound between its arms.
   try simp -zeta only
-  generalize Except.map (fun x => x.law) (Draw.UnitSample.ofJson d) = s
+  generalize Except.map (fun x => x.samplingDesign) (Draw.UnitSample.ofJson d) = s
   cases hb : tags.bindings <;> cases partition <;> cases program <;>
     rcases s with e | (k | ⟨num, den⟩ | ⟨k, strata⟩ | ⟨k, strata⟩)
   all_goals
@@ -1787,7 +1787,7 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
         | (with_reducible apply hCP)
         | (with_reducible apply map_cost)
         | (with_reducible apply checkPartition_cost h)
-        | (with_reducible apply stratifiedLaw_cost h)
+        | (with_reducible apply stratifiedSamplingDesign_cost h)
         | (with_reducible apply deriveTemplate_cost h)
         | (with_reducible apply linksCheck_cost h)
         | (with_reducible apply qwordFinding_cost h)
@@ -1831,7 +1831,7 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
           | (with_reducible apply hCP)
           | (with_reducible apply map_cost)
           | (with_reducible apply checkPartition_cost h)
-          | (with_reducible apply stratifiedLaw_cost h)
+          | (with_reducible apply stratifiedSamplingDesign_cost h)
           | (with_reducible apply deriveTemplate_cost h)
           | (with_reducible apply linksCheck_cost h)
           | (with_reducible apply qwordFinding_cost h)
@@ -1863,8 +1863,8 @@ theorem setupHidden_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tabl
     · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); first | omega
 
 
-theorem workLaw_cost' (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) :
-    countC.P (HmRow.workLawWith (Hashes.counted h) obj program k table) 1 := workLaw_cost h obj program k table
+theorem workSamplingDesign_cost' (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) :
+    countC.P (HmRow.workSamplingDesignWith (Hashes.counted h) obj program k table) 1 := workSamplingDesign_cost h obj program k table
 
 -- a cost combinator per bind and loop of `Stmt.setupTablesWith`'s unfolded body (`repeat (first ...)`), `omega` at each
 -- leaf
@@ -1883,9 +1883,9 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
   unfold Stmt.setupTablesWith
   simp -zeta only [hc, hh, ↓reduceIte, decide_true, Bool.not_true, Bool.and_false, Bool.false_eq_true]
   generalize Draw.UnitSample.ofJson d = r
-  rcases r with e | ⟨law, population, units, cl⟩
+  rcases r with e | ⟨samplingDesign, population, units, cl⟩
   rotate_left
-  · cases law
+  · cases samplingDesign
     all_goals
       dsimp -zeta only
       apply countC.mono
@@ -1895,8 +1895,8 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
           | (with_reducible apply Cost.bind)
           | (with_reducible apply bindAny)
           | (with_reducible apply hS)
-          | (with_reducible apply stratifiedLaw_cost h)
-          | (with_reducible apply workLaw_cost' h)
+          | (with_reducible apply stratifiedSamplingDesign_cost h)
+          | (with_reducible apply workSamplingDesign_cost' h)
           | (with_reducible apply sha_cost h)
           | (with_reducible intro _)
           | (with_reducible apply Cost.pure)
@@ -1928,8 +1928,8 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
             | (with_reducible apply Cost.bind)
             | (with_reducible apply bindAny)
             | (with_reducible apply hS)
-            | (with_reducible apply stratifiedLaw_cost h)
-            | (with_reducible apply workLaw_cost' h)
+            | (with_reducible apply stratifiedSamplingDesign_cost h)
+            | (with_reducible apply workSamplingDesign_cost' h)
             | (with_reducible apply sha_cost h)
             | (with_reducible intro _)
             | (with_reducible apply Cost.pure)
@@ -1964,8 +1964,8 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
         | (with_reducible apply Cost.bind)
         | (with_reducible apply bindAny)
         | (with_reducible apply hS)
-        | (with_reducible apply stratifiedLaw_cost h)
-        | (with_reducible apply workLaw_cost' h)
+        | (with_reducible apply stratifiedSamplingDesign_cost h)
+        | (with_reducible apply workSamplingDesign_cost' h)
         | (with_reducible apply sha_cost h)
         | (with_reducible intro _)
         | (with_reducible apply Cost.pure)
@@ -1997,8 +1997,8 @@ theorem setupTables_cost (tags : Tags) (cf pf : ByteArray) (coins : Coins) (coun
           | (with_reducible apply Cost.bind)
           | (with_reducible apply bindAny)
           | (with_reducible apply hS)
-          | (with_reducible apply stratifiedLaw_cost h)
-          | (with_reducible apply workLaw_cost' h)
+          | (with_reducible apply stratifiedSamplingDesign_cost h)
+          | (with_reducible apply workSamplingDesign_cost' h)
           | (with_reducible apply sha_cost h)
           | (with_reducible intro _)
           | (with_reducible apply Cost.pure)

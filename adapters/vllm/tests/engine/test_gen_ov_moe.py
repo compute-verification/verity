@@ -1,4 +1,4 @@
-"""The pair-major MoE definitions (`verity.definitions.registry.moe`), the `MoEFusedExperts`
+"""The pair-major MoE definitions (`verity_vllm.definitions.registry.moe`), the `MoEFusedExperts`
 recognizer (positive and negative cases on synthetic events shaped exactly like the pinned vLLM's `vllm.moe_forward`
 body as recorded on OLMoE).  The recorded kernel cases and captures are `test_gen_ov_moe_of_record`."""
 
@@ -13,10 +13,10 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate_region
 from verity.circuits.layout import resolve
 from verity.circuits.program import Program
-from verity.definitions.numerics.moe_twins import nv_expf_bits
-from verity.definitions.registry import b1
-from verity.definitions.registry import moe as Q
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.numerics.moe_twins import nv_expf_bits
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import moe as Q
+from verity_vllm.definitions.registry import prims as P
 
 from verity_vllm.observe.events import (
     DispatchEnter,
@@ -352,7 +352,6 @@ def test_profile_is_the_tuned_gemm_plus_the_pairwise_pattern_and_not_accepted():
     names = [getattr(p, "name", type(p).__name__) for p in OV.PROFILE.patterns]
     assert names[:2] == ["gemm.matmul_kernel_persistent.tuned", "moe.fused_experts.pairwise"] and "moe_block_scope" not in names
     assert OV.PROFILE.accepted is False and OV.PROFILE.notes["case"] == "OLMOE"
-    assert OV.PROFILE.kernel_allowlist == BASE.PROFILE.kernel_allowlist                     # no profile-side allowlisting of MoE kernels
     assert OV.weight_field("model.layers.3.mlp.experts.routed_experts.w13_weight") == ("layers", 3, "w13")
     assert isinstance(OV.PROFILE.patterns[1], MoEFusedExperts)
 

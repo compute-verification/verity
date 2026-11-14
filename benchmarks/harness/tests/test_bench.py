@@ -19,10 +19,10 @@ from typing import Any
 
 import pytest
 from verity_config import Admission
+from verity_vllm.engine.env import INDUCTOR_DIR_MARK
 
 import verity_bench.cli as cli
 from verity_bench import jobs, served_table, settings, steady_spec
-from verity_bench.adapter import INDUCTOR_DIR_MARK, pearl_c_device_run, pearl_c_schemes, pouw_refusals
 from verity_bench.cli import _parser, main
 from verity_bench.tool import VLLM_BENCH_POINT
 from verity_bench.vllm import presets
@@ -1098,6 +1098,7 @@ def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_s
 
     from verity.protocols.accounting.pouw.verifier import verifier
     from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment
+    from verity_vllm.protocols import refusals
     from verity_vllm.protocols.interface import Context
 
     spec = resolve_spec("llama31-8b-1gpu-pouw-protocol-served")
@@ -1119,8 +1120,8 @@ def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_s
     assert config["pouw"]["cubin"] == "/run/out/setup/pearl_c_sm120.cubin"
     assert isinstance(config["pouw"]["coins"].commitment, CoinCommitment)
     ctx = Context(stage="serve", enabled=arm.protocols, settings=config)
-    assert pouw_refusals("pearl-c-sm120-v1-h3", ctx) == ()
-    assert "device only" in pouw_refusals("pearl-c-sm120-v1-h3", Context(stage="serve", enabled=arm.protocols))[0]
+    assert refusals(ctx) == ()
+    assert "device only" in refusals(Context(stage="serve", enabled=arm.protocols))[0]
 
 
 def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kernel_from_its_setup(monkeypatch):
@@ -1129,6 +1130,7 @@ def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kerne
     adapter's refusals accept it."""
 
     from verity.protocols.accounting.pouw.verifier import verifier
+    from verity_vllm.protocols import refusals
     from verity_vllm.protocols.interface import Context
 
     spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served-h200")
@@ -1146,7 +1148,7 @@ def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kerne
                                     "PEARLC_CUBIN": "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"})
     assert (config["pouw"]["kernel"], config["pouw"]["cubin"]) == ("/tree/benchmarks/pouw/pearl_c_sm90",
                                                                    "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin")
-    assert pouw_refusals("pearl-c-h100-v1-h3", Context(stage="serve", enabled=arm.protocols, settings=config)) == ()
+    assert refusals(Context(stage="serve", enabled=arm.protocols, settings=config)) == ()
 
 
 def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(monkeypatch, tmp_path):
@@ -1197,8 +1199,9 @@ def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_
 def test_a_pearl_c_protocol_arms_passes_are_the_adapters_and_the_harness_only_reads_them():
     """The adapter ends a Pearl-C pass at each ``execute_model`` (`pouw.install`); the harness wraps nothing, finds the
     device run through the option's ``end_pass`` and reports the running totals of the passes it ended."""
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import PearlCDeviceRun
 
-    class Run(pearl_c_device_run()):
+    class Run(PearlCDeviceRun):
         def __init__(self):
             self.details = {"passes": []}
 
@@ -1306,9 +1309,9 @@ def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_ll
     from the run's step bound, and the LLM fills the model runner and in-process coins after the build; a spec can't
     supply them, nor S."""
 
-    from verity_vllm import protocols as PO
     from verity_vllm.llm import protocol_context, resolve_options
-    from verity_vllm.pipeline.serve_h1 import SCHEME as H1_SCHEME
+    from verity.errors import Refused
+    from verity.protocols.accounting.pouw.prover.serving import H1_SCHEME
 
     spec = resolve_spec("llama31-8b-1gpu-pouw-h1")
     control, arm = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
@@ -1332,7 +1335,7 @@ def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_ll
     for steps in (H1_OPENING_STEPS, 294):
         ctx = protocol_context(resolve_options({"protocols": H1, "protocols_config": h1_config(config, steps)}))
         assert ctx.settings_of("pouw")["steps"] == steps and ctx.filled == {"pouw": ("runner", "coins", "rounds")}
-    with pytest.raises(PO.Refused, match=r"'rows' \(T"):
+    with pytest.raises(Refused, match=r"'rows' \(T"):
         protocol_context(resolve_options({"protocols": H1, "protocols_config": config}))
     for named in ({"steps": 10}, {"coins": object()}, {"runner": object()}):
         with pytest.raises(ValueError, match="each window's"):
@@ -1344,7 +1347,7 @@ def test_each_h1_run_opens_its_own_window_through_the_llm_and_closes_it_after_se
     (`pouw.h1_run`) and closes it with `LLM.close` after serving, even when serving fails; each window's summary is the
     arm's gate, and a timed rep's is its `extras.h1_window`."""
 
-    from verity_bench.vllm import engine as bench_engine
+    from verity_vllm.protocols import pouw
 
     calls: list[tuple[Any, ...]] = []
     window = SimpleNamespace(verdicts={0: {"credit": True}}, refused=[], order_ok=True, steps=130, rows=64, calls=[0],
@@ -1364,7 +1367,7 @@ def test_each_h1_run_opens_its_own_window_through_the_llm_and_closes_it_after_se
             raise RuntimeError("serving failed")
         return {}, {"extras": {}}
 
-    monkeypatch.setattr(bench_engine, "h1_run", lambda entry: calls.append(("h1_run", entry)) or window)
+    monkeypatch.setattr(pouw, "h1_run", lambda entry: calls.append(("h1_run", entry)) or window)
     engine = object.__new__(_VllmEngine)
     engine.llm, engine.h1 = LLM(), {"config": {"pouw": {"rows": 64, "admission": "per-round"}}, "rows": 64,
                                     "windows": []}
@@ -1444,6 +1447,8 @@ def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the
     """`llama31-8b-1gpu-pearl-c-whole-served-h200` is the whole-served spec's preset on one H200, the whole-step arm beside
     compiled stock, its setup building pearl_c_sm90's cubin; with PEARLC_KERNEL that directory, the arm takes its record
     (`pearl-c-h100-v1-h3`, a scheme the device path runs) and its build.sh cubin, and builds the same engine."""
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import SCHEMES
+
     root = Path(__file__).resolve().parents[3]
     monkeypatch.syspath_prepend(str(root))
     spec, rtx = resolve_spec("llama31-8b-1gpu-pearl-c-whole-served-h200"), resolve_spec("llama31-8b-1gpu-pearl-c-whole-served")
@@ -1454,7 +1459,7 @@ def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the
     assert [(a.id, a.execution, a.experimental) for a in arms] == [("stock-fp8@compiled", "compiled", False),
                                                                    ("pouw-pearl-c-whole", None, True)]
     from benchmarks.pouw.pearl_c_vllm import bench_arm
-    assert set(bench_arm.KERNEL_SCHEMES.values()) <= set(pearl_c_schemes())
+    assert set(bench_arm.KERNEL_SCHEMES.values()) <= set(SCHEMES)
     assert all((root / "benchmarks/pouw" / d).is_dir() for d in bench_arm.KERNEL_SCHEMES)
     monkeypatch.setenv("PEARLC_KERNEL", str(root / "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90"))
     monkeypatch.delenv("PEARLC_SCHEME", raising=False)

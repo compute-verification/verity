@@ -41,9 +41,10 @@ parameters the form's parser returned, which are two-stage by `paramsOfJson_twoS
 theorem acceptedTwo_of_parsed {form : Bool} {j : Json} {p : VStar.Recursive.SampledTwo.Params}
     {c : Spot.OneStage.Commitment} {ξ : ByteArray} {e : VStar.Recursive.SampledTwo.Evidence} {bs pub prof}
     (hj : VStar.Recursive.SampledTwo.paramsOfJson j = .ok p)
+    (hsn : SampledNoneOf p c ξ e bs)
     (h : VStar.Recursive.SampledTwo.checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
     form = true ∧ ∃ c₂ ξ₂ r i it run, VStar.Recursive.SampledTwo.inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧
       AcceptedTwo i it run ∧ VStar.Recursive.SampledTwo.sourceRead ξ run = .ok () :=
-  acceptedTwo_of_check (paramsOfJson_twoStage hj) h
+  acceptedTwo_of_check (paramsOfJson_twoStage hj) hsn h
 
 end SpotFlock.RunsAs

@@ -54,11 +54,11 @@ import numpy as np
 
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 from verity.commitments import history as HT
-from verity.definitions.numerics.rows import SAMPLED_MEMBER
-from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
-from verity.definitions.registry import greedy_stages as GS
-from verity.definitions.registry.dead_free import CHUNK
-from verity.commitments.windows import links as LK, rows as CS
+from verity_vllm.definitions.numerics.rows import SAMPLED_MEMBER
+from verity_vllm.definitions.numerics.token_select_rows import token_select_chunk_bests
+from verity_vllm.definitions.registry import greedy_stages as GS
+from verity_vllm.definitions.registry.dead_free import CHUNK
+from verity.commitments.periods import links as LK, rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, ProgramIndex
 from verity_vllm.check.replay.request_replay import Replay
 from verity_vllm.engine.sampler_capture import CAPTURE
@@ -589,9 +589,8 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
             data[k]["rows"][x.port] = CS.ValueRows(v, at)
         linked = {window.members[k].port(x.port) for x, k, _at in placed}
         _as_served(data, cells, back, "outs")
-        wired = CS.wired_ports(window)
         fresh = {} if salt_key is not None else {p: os.urandom(v["leaves"] * CS.SALT_BYTES) for p, v in ports.items()
-                                                 if p not in linked and p not in wired}
+                                                 if p not in linked}
         fresh |= {window.members[k].port(x.port): v.salts_at(at) for x, v, k, at in (*back, *took_in)}
         c = CS.commit(window, data, salt_key=salt_key, salts_of=fresh or None)
     provenance = {"row": row, "interior": True, "replay_sample": [int(u) for u in sample],

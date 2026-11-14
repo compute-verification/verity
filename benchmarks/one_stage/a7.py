@@ -1,5 +1,5 @@
-"""One-stage audit, run A7: the requirement's two proof blocks (I4), sampled in one audit and wired to the remote bandwidth
-audit's ledger as its requirement link. `PlanMatch_v1` (each pass's plan is exactly the blocks its step reads, which gives
+"""One-stage audit, run A7: the requirement's two proof blocks (I4), sampled in one audit and wired to PoUB's
+ledger as its requirement link. `PlanMatch_v1` (each pass's plan is exactly the blocks its step reads, which gives
 `PlanMatches`) and
 `MemoryMapStep_v3` (the blocks a step writes carry its values, written at their step and freed at their last structural
 reader, each registered block freed at its values' last structural reader, and each re-key's old block written below
@@ -48,8 +48,8 @@ the cap the committed pass row and the public lifetime cap give), one instance o
   credits each pass the bits its step reads from complete blocks, less a block for each planned block it credits no
   receipt of (`audit.linked_bits` on `RequirementLink`, `UnitsLink`), the session 1 − ε of their sum, ε the share of
   it the incorrect proof blocks the sample allows can carry (`uncertified`), its δ added to the ledger's error.
-* **Check 3.** The session samples ``--samples`` receipts a window, and nothing is opened: each sample goes through the
-  remote audit's opening unit (`remote_bandwidth.opening`, `verity.protocols.accounting.poub.verifier.commitments.gates.block_check`, §8's checks 1-3
+* **Check 3.** The session samples ``--samples`` receipts a window, and nothing is opened: each sample goes through
+  PoUB's opening unit (`remote_bandwidth.opening`, `verity.protocols.accounting.poub.verifier.commitments.gates.block_check`, §8's checks 1-3
   and 5 as one unit): the receipt leaf on its path to the pass's receipt root and the step's plan row holding the block
   at the sampled position, the block decoding to its payload under b_j(c_a), the payload on its path to its append's root (the
   docket's payload root for a registered block) and to the canonical payload commitment at the row the memory-map
@@ -57,7 +57,7 @@ the cap the committed pass row and the public lifetime cap give), one instance o
   second statement (`check3_audit`: every unit sampled, --zk, Lean). The verifier sees the units' roots, its own public
   rows (the codec seed, the block, the coin, the pass's prefix and signs, the roots with their domains, ranks and depths)
   and each unit's verdict, and holds the one other row, the plan row, to the canonical plan row by ``b || c``. The
-  negatives' sessions decide check 3 by the unit's reference (`opening.reference`).
+  negatives' sessions decide check 3 by the unit's reference (`opening_prover.reference`).
 """
 from __future__ import annotations
 
@@ -80,6 +80,8 @@ sys.path.insert(0, str(HERE))
 
 from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
 from verity.protocols.proofs.spot.verifier.tests import other_population as R2  # noqa: E402
+from verity.protocols.accounting.poub.prover import audit_prover  # noqa: E402
+from verity.protocols.accounting.poub.prover import opening_prover  # noqa: E402
 from verity.protocols.accounting.poub.verifier import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
 from verity.protocols.accounting.poub.verifier import schedule as SC  # noqa: E402
 from verity.protocols.accounting.poub.verifier.receipts import Plan  # noqa: E402
@@ -314,7 +316,7 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
     the later plans and its free naming that index), ``drop`` (the last step that writes: its append never sent, and its
     blocks in no later plan and no release). Each window samples ``c3.samples`` receipts, and check 3 decides them
     (``c3``, `check3_inputs`) in place of their openings: by its unit's reference on the prover's witness
-    (`opening.reference`), or, ``defer``, not yet: the caller proves them (`check3_audit`) and decides each window.
+    (`opening_prover.reference`), or, ``defer``, not yet: the caller proves them (`check3_audit`) and decides each window.
     Returns the session, the prover's store and passes, its record and the verifier's v0 view: each pass's plan and step,
     its (window, step) in order, each appended index's write step and each block's release step."""
     steps = req.steps
@@ -322,13 +324,13 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
     payloads = [store.payload.get(j, 0).to_bytes(RQ.BLOCK_BITS // 8, "little") for j in range(NR)]
     ys = [Entropy(b"a7 payload salts %d" % j)(receipts.SALT_BYTES) for j in range(NR)]
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
-    rs = audit.Store(audit.register(SOURCE, NODE, NR, root, P512, nonce=bytes(32)), payloads, ys)
+    rs = audit_prover.Store(audit.register(SOURCE, NODE, NR, root, P512, nonce=bytes(32)), payloads, ys)
     p = audit.Params(blocks=NR, deadline_ns=10**6, windows=WINDOWS, samples=c3.samples, delta=1e-6, window_ns=10, codec=P512,
                      lifetime=LIFE, schedule_cap=SCHEDULE_CAP)
     clock = Clock()
     s = audit.AuditRun(p, rs.registration, None, coins.local(rs.registration.digest, 0, p.windows, Entropy(b"a7 coins")),
                        not_before_ns=0, clock=clock)
-    prover = audit.Prover(rs, None, entropy=Entropy(b"a7 receipt salts"))
+    prover = audit_prover.Prover(rs, None, entropy=Entropy(b"a7 receipt salts"))
     head = MM.Header(rs.registration.digest, NR)
     replay = MM.Replay(head, rs.registration)
     slot_of, free_slots, nxt_slot, record, index = {}, [], NR, [], {}
@@ -430,7 +432,7 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
                 break
     by_check3 = None
     if out is None and not defer:
-        verdicts = C3.reference(s, rs, passes, c3)
+        verdicts = opening_prover.reference(s, rs, passes, c3)
         out = by_check3 = next((v for v in verdicts if not v.accepted), None)
     accepted = out is None and len(verdicts) == WINDOWS and all(v.accepted for v in verdicts)
     return SimpleNamespace(session=s, store=rs, passes=passes, verdicts=verdicts, refused=out, by_check3=by_check3,
@@ -651,7 +653,7 @@ def statement_checks(m: dict, rec: dict, want: dict) -> dict:
 # --- check 3 ----------------------------------------------------------------------------------------------------------------
 
 def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
-    """The remote session's check 3 by proofs: each sample's opening unit (`opening.witness`), one member a receipt-leaf
+    """The remote session's check 3 by proofs: each sample's opening unit (`opening_prover.witness`), one member a receipt-leaf
     size, its plan row under the canonical plan's salt of the sample's step and every other row under a fresh salt,
     registered, every unit sampled by the verifier's Lean and each member proved --zk and held by Lean `verify --zk
     --partition --program`. The verifier opens each sampled proof block's public rows to its own copy (`opening.public`) and its
@@ -662,7 +664,7 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
     draws = [d for t in range(len(sess.windows)) for d in sess.drawn(t)]
     seed = st_.registration.codec_seed
     Ss = [C3.statics(c3.codec, d.leaf_size, c3.P, c3.DR, c3.DP, c3.DV) for d in draws]
-    wits = [C3.witness(d, rs.passes[d.window, d.index], st_, c3.plan_rows[d.step], S, c3.values) for d, S in zip(draws, Ss)]
+    wits = [opening_prover.witness(d, rs.passes[d.window, d.index], st_, c3.plan_rows[d.step], S, c3.values) for d, S in zip(draws, Ss)]
     prover = [C3.check(d, w, seed, S, c3.values, c3.plan_salts[d.step], c3.plan_bcs[d.step]) for d, w, S in zip(draws, wits, Ss)]
     if any(prover):
         raise SystemExit(f"the honest prover's check-3 units are refused by their reference: {prover}")
@@ -1265,9 +1267,9 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
               want, leaf_layer, publics, session_roots, served, n_all, common, salts, link, rrec, c3, rs0) -> dict[str, dict]:
     """Each re-decides one input altered. The clause negatives are a cheating prover consistent everywhere (its canonical
     commitments and its session agree with the altered witness), so only the unit can refuse it: its ok row commits 0.
-    The appends negatives are a session the remote audit accepts whose appends aren't the map units' writes: the
+    The appends negatives are a session PoUB accepts whose appends aren't the map units' writes: the
     record's chain or a pass's head isn't the units' (`mapped`), and the ledger refuses the link. Their sessions' check 3
-    is decided by its unit's reference (`opening.reference`), the run's own (``rs0``) by proofs. The stale negatives
+    is decided by its unit's reference (`opening_prover.reference`), the run's own (``rs0``) by proofs. The stale negatives
     are map units whose lifetime cap isn't the record's (`mapped`, and the opening of their public rows) and a re-key the
     unit holds to the cap its committed pass row gives (`rekey_negatives`)."""
     neg: dict[str, dict] = {}
@@ -1371,7 +1373,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     neg["written-block-without-a-value (dummy append or re-key)"] = {
         "refused": f["ok_output"] == 0 and not f["opens_to_1"], "step": tz, "unit": f}
 
-    # the appends: sessions the remote audit accepts whose appends aren't the map units' writes
+    # the appends: sessions PoUB accepts whose appends aren't the map units' writes
     def unmapped(name: str, **kw) -> None:
         rs = remote_session(req, layout, store, plans, salts, c3=c3, **kw)
         if not rs.accepted:

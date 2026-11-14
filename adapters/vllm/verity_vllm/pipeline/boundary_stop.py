@@ -37,7 +37,7 @@ from typing import Any
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import served as RS
 
@@ -78,8 +78,8 @@ def egress_stop(outputs: int, stops: Sequence[int], max_model_len: int) -> Speci
     the constants' and that choice's: the registered stop ids and model length are statics, public in its id, where the
     rule takes them as inputs, since a population reads each parameter as one value's whole rows (`stop_registration`)
     and the registered model's are no value."""
-    from verity.definitions.registry import stop_check as SC
-    from verity.definitions.registry import stop_rule as X
+    from verity_vllm.definitions.registry import stop_check as SC
+    from verity_vllm.definitions.registry import stop_rule as X
 
     I32 = X.WORDS.I32
 
@@ -144,8 +144,8 @@ class Stop:
         stop id where the span sets ``ignore_eos``), where that is how the span was served: n the ids it was served and
         its finish a stop on 1 or a length on 2 or 3, with a ``min_tokens`` of 0, which the rule doesn't read. None
         otherwise: a span no stop class holds."""
-        from verity.definitions.registry import stop_check as SC
-        from verity.definitions.registry import stop_rule as X
+        from verity_vllm.definitions.registry import stop_check as SC
+        from verity_vllm.definitions.registry import stop_rule as X
 
         s = span.sampling
         mt = s.get("max_tokens") or 0

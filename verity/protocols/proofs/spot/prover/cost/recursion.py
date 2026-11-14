@@ -1,16 +1,18 @@
 """One recursive session's cost per monitoring period: a `recursion_e2e` result's measured parts, one session's (its inner
-run, V*'s staging, V*'s firewalled releases one at a time, and the Lean step that checks every release), scaled to every
+run, V*'s staging, V*'s zk_served releases one at a time, and the Lean step that checks every release), scaled to every
 machine-window of a deployment over a week, a month and a year.
 
-    python verity/protocols/proofs/spot/prover/cost/recursion.py --result recursion_e2e.json [--sessions-per-window 1] [--out DIR]
+    python verity/protocols/proofs/spot/prover/cost/recursion.py --result recursion_e2e.json \
+        --census benchmarks/census/deployments.json --fleet benchmarks/slowdown/data/reference.toml \
+        [--sessions-per-window 1] [--out DIR]
 
 * **Measured**: each part's wall on the run's CPU node, as `recursion_e2e result` reads it (`headline.pipeline`), and
   beside it the same units' non-recursive `--zk` session (the row `baseline --zk`), from the same run.
 * **Scaled**: every machine-window of the deployment holds ``sessions-per-window`` sessions of that shape, each at the
   measured cost. A period's sessions are machines x period / window; its node-hours are sessions x a part's wall; the
   nodes the deployment keeps busy are those node-hours over the period.
-* **Deployments**: the census's datacenter (`benchmarks/census/deployments.json`, `dc-12500-machines-600s`) and the
-  world: `benchmarks/rho/data/reference.toml`'s `world-h200` fleet (HGX servers, derived from the census's
+* **Deployments**, which the caller hands in: the census's datacenter (`--census`, `benchmarks/census/deployments.json`'s
+  `dc-12500-machines-600s`) and the world: `--fleet`, `benchmarks/slowdown/data/reference.toml`'s `world-h200` fleet (HGX servers, derived from the census's
   world-inference-2027), audited in the datacenter's windows (assumed: the census has no world cadence).
 """
 from __future__ import annotations
@@ -22,7 +24,6 @@ from pathlib import Path
 
 from verity.protocols.proofs.spot.prover.cost.cpu_budget import PERIODS
 
-ROOT = Path(__file__).resolve().parents[6]
 DEPLOYMENT = "dc-12500-machines-600s"
 WORLD = "world-h200"
 #: the result's measured parts (`rec_profile.summary`'s pipeline), by the side that pays them
@@ -30,12 +31,13 @@ PROVER = ("inner M0 e2e_s", "V* staging_s (vstage + vcap steps)")
 AUDITOR = ("Lean step_s",)
 
 
-def deployments(root: Path = ROOT) -> list[dict]:
-    dc = next(d for d in json.loads((root / "benchmarks/census/deployments.json").read_text()) if d["id"] == DEPLOYMENT)
-    world = tomllib.loads((root / "benchmarks/rho/data/reference.toml").read_text())["fleet"][WORLD]["count"]
+def deployments(census: Path, fleet: Path) -> list[dict]:
+    """The census's datacenter, from its deployments file ``census``, and the world's fleet, from the reference ``fleet``."""
+    dc = next(d for d in json.loads(census.read_text()) if d["id"] == DEPLOYMENT)
+    world = tomllib.loads(fleet.read_text())["fleet"][WORLD]["count"]
     return [{"id": dc["id"], "machines": dc["machines"], "window_s": dc["window_s"], "status": "census (stated)"},
             {"id": WORLD, "machines": world["value"], "window_s": dc["window_s"],
-             "status": f"benchmarks/rho {WORLD} ({world['status']}: {world['source']}); windows assumed {dc['window_s']} s"}]
+             "status": f"{fleet.name} {WORLD} ({world['status']}: {world['source']}); windows assumed {dc['window_s']} s"}]
 
 
 def session(result: dict) -> dict:
@@ -93,10 +95,12 @@ def render(s: dict, deps: list[dict], rows: list[dict], per_window: float) -> st
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--result", type=Path, required=True, help="recursion_e2e result (`run.py result --out`)")
+    ap.add_argument("--census", type=Path, required=True, help="the census's deployments file")
+    ap.add_argument("--fleet", type=Path, required=True, help="the reference whose fleet holds the world's machines")
     ap.add_argument("--sessions-per-window", type=float, default=1.0)
     ap.add_argument("--out", type=Path)
     a = ap.parse_args(argv)
-    s, deps = session(json.loads(a.result.read_text())), deployments()
+    s, deps = session(json.loads(a.result.read_text())), deployments(a.census, a.fleet)
     rows = periods(s, deps, a.sessions_per_window)
     text = render(s, deps, rows, a.sessions_per_window)
     if a.out:

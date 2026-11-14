@@ -1,7 +1,7 @@
 """verity_vllm.program.predict.block_counts: a day's (c, k)-inference blocks from its served windows' circuit records,
 judged against its declared c, k and n. On a small circuit (two catalog templates over two slots) its count, a block's
-gates, its gate table and its verdict agree with `NciCheck.Count`'s Python reference (`nci_reference.check_count_detail`
-and `check_count`, which `nci-count-difftest` holds the Lean to) on the session Program, m activations of the block
+gates, its gate table and its verdict agree with `InferenceOnlyCheck.Count`'s Python reference (`inference_only_reference.check_count_detail`
+and `check_count`, which `inference-only-count-difftest` holds the Lean to) on the session Program, m activations of the block
 Definition; the public judgment holds only its record's fields and no count, so days of different counts under n publish
 the same bytes, and a refusal past n names n; the exact counts are in the private file alone (0600); a block reaching an
 unpriced primitive leaves the gates undecided; on `test_window_circuit`'s TINY window a block's fresh bits are B's k
@@ -22,14 +22,15 @@ from verity.circuits import codec
 from verity.circuits import partition_v2 as PV2
 from verity.circuits.defs import REGISTRY
 from verity.circuits.population import population_program
-from verity.commitments.windows import interface as IF
-from verity.definitions.boolean import gate_table
+from verity.commitments.periods import interface as IF
+from verity_vllm.definitions.boolean import gate_table
+import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
 from verity_vllm.program.predict import block_counts as BC
 from verity_vllm.records import block_counts as RBC
 from verity_vllm.records.fields import RecordError, UnknownField
 
-REFERENCE = Path(__file__).resolve().parents[5] / "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/nci_reference.py"
+REFERENCE = Path(__file__).resolve().parents[5] / "verity/protocols/policy/inference_only/verifier/lean/scripts/inference_only_reference.py"
 GEMM = 'Gemm_v2{K=64,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
 ROPE = "RoPEHead_v1{D=16}"
 DAY = "2026-11-01"
@@ -48,7 +49,7 @@ def asked(fid):
         return None
 
 
-loaded = sorted(m for m in sys.modules if m.startswith("verity.definitions.registry"))
+loaded = sorted(m for m in sys.modules if m.startswith("verity_vllm.definitions.registry"))
 before = asked(sys.argv[1])
 BC.resolve(sys.argv[2])
 print(json.dumps({"loaded": loaded, "before": before, "after": asked(sys.argv[1])}))
@@ -56,7 +57,7 @@ print(json.dumps({"loaded": loaded, "before": before, "after": asked(sys.argv[1]
 
 
 def _reference():
-    spec = importlib.util.spec_from_file_location("nci_reference", REFERENCE)
+    spec = importlib.util.spec_from_file_location("inference_only_reference", REFERENCE)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -74,7 +75,7 @@ def small() -> dict:
 
 
 def test_the_count_is_ncicheck_counts_on_the_session_program(small):
-    """The session Definition activated m times is the block Definition `NciCheck.Count` counts: its row's gates, by the
+    """The session Definition activated m times is the block Definition `InferenceOnlyCheck.Count` counts: its row's gates, by the
     judgment's own table, are the judgment's gates a block, its blocks the private judgment's, and its verdict against the
     same c, k and n the judgment's."""
     pub, private = BC.judgment(DAY, [(small, None)], {"c": 10 ** 12, "k": 10 ** 12, "n": 2})
@@ -207,7 +208,7 @@ def test_on_the_tiny_window_a_blocks_fresh_bits_are_bs_k():
 
 
 def test_the_import_alone_loads_no_registry_module():
-    """A process that has imported the module and called nothing has loaded no module of `verity.definitions.registry`, so
+    """A process that has imported the module and called nothing has loaded no module of `verity_vllm.definitions.registry`, so
     `codec` holds none of the catalog's on-demand families and refuses an id of one (`ON_DEMAND`); `resolve` loads the
     catalog on its first call, and the same id then answers."""
     r = subprocess.run([sys.executable, "-c", ALONE, ON_DEMAND, ROPE], capture_output=True, text=True, check=False,

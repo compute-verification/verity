@@ -112,7 +112,7 @@ from verity.commitments import history as HT
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
-from verity.commitments.windows import links as LK, rows as CS
+from verity.commitments.periods import links as LK, rows as CS
 from verity_vllm.pipeline import boundary_tables as BT
 from verity_vllm.records.boundary_commit import FILE as COMMIT, SCHEMA as FORMAT, BoundaryCommit
 from verity_vllm.records.boundary_tables import TableRoots
@@ -513,7 +513,7 @@ class Layout:
         None for a class that doesn't."""
         if not self.logits:
             return None
-        from verity.definitions.registry import greedy_stages as GS
+        from verity_vllm.definitions.registry import greedy_stages as GS
 
         fn, t = self.check, P.template_id(self.check)
         V, N = (int(fn.bindings[k]) for k in ("V", "N")) if getattr(fn, "defn", None) is GS.GreedySelect else (0, 0)

@@ -27,7 +27,7 @@ proved.
 * The verdict lag: from its first incorrect proof block until the halt (a window plus the verdict delay), a developer can skip
   the whole registered circuit, once per identity, in every tier; that capacity joins the residual. Detection must end the
   identity and take its hardware out of use, or the capacity after the halt is unmonitored.
-* chi, the cheating share: with sampled proofs at a budget, the incorrect proof blocks the sampling design accepts number
+* chi, the cheating share: with SPOT at a budget, the incorrect proof blocks the sampling design accepts number
   A ln(1/delta) / q per identity over the whole deployment, q = share / (overhead + replay)
   (``Population.Exfil.tail_cumPrev``), where A, the luck factor, turns incorrect outputs into skipped work. A block that
   injects a chosen output fails its proof whenever it is sampled, so luck doesn't multiply those: ln(1/delta) / q of them
@@ -41,8 +41,8 @@ multiplications per unit of loss is a compute amplifier, multiplying eta by g; i
 against off. A recipe better at working under the mechanisms, m times more progress per counted multiplication, scales
 only the constrained terms (nu, mu and chi), not the residual or unmonitored compute. The slowdown D, the
 hardware multiple over an unconstrained developer with the same recipe on the same hardware at model-FLOP utilization
-mfu, isn't computed here: it is the overhead calculator's ``rho.theorem.multiple_bound`` in Lean's form
-(``Nci.Dampener.remoteDampener``) on these terms (``remote_terms``) with the residual at MFU_0.
+mfu, isn't computed here: it is the slowdown calculator's ``slowdown.theorem.multiple_bound`` in Lean's form
+(``InferenceOnly.Slowdown.remoteSlowdown``) on these terms (``remote_terms``) with the residual at MFU_0.
 
 The canvas "Compute efficiency under the verification stack" renders this model.
 
@@ -69,10 +69,9 @@ BLOCK_NAME_BITS = 25
 #: products; the default d is 1 until Layered's lookups may read weight columns (a trained embedding)
 REFERENCE_THREADED = (10.0, 37248.0)
 
-#: the ACCEL model's card table, the one hardware source for the GPUs here: the RTX PRO 6000 Server Edition at its
-#: firmware's maximum (``Verity.Accel.Sm120.card``, 188 SMs, 1024 tensor units an SM clock, a FP8 E4M3 MAC one unit,
-#: the clock's ceiling 2430 MHz), pinned from security/Definitions/Core/Accel/Sm120.lean;
-#: tests/test_tiers.py holds the pin to the file
+#: the card file, the one hardware source for the GPUs here: the RTX PRO 6000 Server Edition at its firmware's maximum
+#: (188 SMs, 1024 tensor units an SM clock, a FP8 E4M3 MAC one unit, the tensor clock's ceiling 2430 MHz), pinned from
+#: hardware/cards/rtx-pro-6000-server.toml; tests/test_tiers.py holds the pin to the file
 CARD = {"sms": 188, "tensor": 1024, "clock_hz": 2430e6}
 #: the clock PoUW credits on sm_120, the card file's clock.sm (hardware/cards/rtx-pro-6000-server.toml: 2430 MHz);
 #: tests/test_tiers.py holds the literal to it
@@ -184,7 +183,7 @@ STATUS = [
      "the open conjecture ReferenceLayered, whose lookups need the embedding columns to be inputs: a run that trains its "
      "embedding reads them as updated weights, so the default is the structural d = 1 until Layered's lookups may read "
      "weight columns."),
-    ("Monitored compute residual", "r = r-hat + epsilon_W W_cert/C + eps', as Nci.Guarantees.DampenerRemote states it "
+    ("Monitored compute residual", "r = r-hat + epsilon_W W_cert/C + eps', as InferenceOnly.Guarantees.SlowdownRemote states it "
      "in Lean. PoUW's deficit epsilon_W = 0.744% (CircuitCredit) is a share of credited work, evaluated "
      "with its premises granted. Under the floor credit r-hat = 0.449: GPU floor time 0.323 (honest kernels at 1.72 "
      "times the floor, unpublished), the clock 0 (PoUW credits the card "
@@ -240,7 +239,7 @@ def block_cap(p: dict, S: float, threaded: bool) -> float:
 
 
 def chord(p: dict, bits: float = math.inf) -> float:
-    """Counted multiplications per injected bit when ``bits`` of them go into inference blocks reading ``K`` novel bits
+    """Counted multiplications per injected bit when ``bits`` of them go into inference blocks reading ``K`` fresh input bits
     each: the steepest secant from ``K`` of ``block_cap``, out to ``K + bits``, with (d, e)-threading only up to
     ``thread_bits``. The cap is convex between its kinks, so the secants peak at their ends, and concentrating the bits
     on few blocks is the adversary's best. At the defaults the steepest secant is to ``S_1 = sqrt(2 b_w b_a block_mults
@@ -285,7 +284,7 @@ def audited_residual(p: dict) -> float:
 
 
 def residual_share(p: dict) -> float:
-    """r = r-hat + eps_W W_cert/C + eps', the residual inside ``Nci.Guarantees.DampenerRemote``'s bounds,
+    """r = r-hat + eps_W W_cert/C + eps', the residual inside ``InferenceOnly.Guarantees.SlowdownRemote``'s bounds,
     ``residualShare W C + εW * W / C + ε``: the audited residual r-hat = 1 - W_cert/C, PoUW's deficit on the certified
     work (a certificate that isn't wrong may credit up to eps_W of its work without its running, so what was certified
     and run is (1 - eps_W) W_cert), and the share whose certificates may be wrong."""
@@ -362,7 +361,7 @@ def evaluate(p: dict, mech: dict, residual_mfu: float = 1.0) -> dict:
 
 
 def remote_terms(p: dict, r: dict) -> tuple[float, float]:
-    """``evaluate``'s terms as the ``s`` and ``x`` of ``Nci.Dampener.remoteDampener mfu s x``: the unmonitored share,
+    """``evaluate``'s terms as the ``s`` and ``x`` of ``InferenceOnly.Slowdown.remoteSlowdown mfu s x``: the unmonitored share,
     which trains like the unconstrained developer, and the rest in counted multiplications (so at a = 1/MFU_0,
     ``multiple_bound``'s ``reference_efficiency=False``; the assumption is in ``r``'s residual, ``evaluate`` at
     ``residual_mfu`` = MFU_0), each per the compute amplifier g (which cancels against the unconstrained developer's)."""

@@ -1,4 +1,4 @@
-"""`one_stage`'s Python held to sampled proofs' one-stage audit in Lean (`core_spot`), its definition and verifier (`one_stage.verifier.RECORD_VERDICT`): the whole protocol through its own `serve` (`sampled-proofs-one-stage`, a
+"""`one_stage`'s Python held to SPOT's one-stage audit in Lean (`core_spot`), its definition and verifier (`one_stage.verifier.RECORD_VERDICT`): the whole protocol through its own `serve` (`sampled-proofs-one-stage`, a
 `ProtocolPort`), and its pieces through `sampled-proofs-difftest` (`Port`s), on sampled programs, sampling designs, records, samples and
 verdicts, valid ones and one or two changes to each. A disagreement is the Python's to fix, unless it finds the Lean wrong.
 
@@ -539,7 +539,7 @@ def decode_params(j) -> dict:
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
     keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool", "compiler",
-                               "certified")
+                               "certified", "verdicts")
                    if isinstance(j, dict) and k in j}
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
@@ -560,8 +560,7 @@ def decode_params(j) -> dict:
     if not isinstance(j["scheme"], str):
         raise D.Reject("scheme is not a string")
     for p, v in _obj(j["ports"], "ports").items():
-        wired = isinstance(v, dict) and isinstance(v.get("wired"), str)
-        _exactly(v, {"domain", "leaves", "wired"} if wired else {"domain", "leaves"}, f"port {p}")
+        _exactly(v, {"domain", "leaves"}, f"port {p}")
         if not _nat(v["leaves"]) or not isinstance(v["domain"], str):
             raise D.Reject(f"port {p}: leaves or domain")
     if j["leaf_layer"] is not None and not isinstance(j["leaf_layer"], str):
@@ -581,6 +580,11 @@ def decode_params(j) -> dict:
     if tied and not (j["tied"] is None or isinstance(j["tied"], list) and all(isinstance(t, str) for t in j["tied"])):
         raise D.Reject("tied values are a list of the program's parameters")
     raw = j
+    if "verdicts" in j:
+        try:
+            R._verdicts(j["verdicts"])
+        except ValueError as e:
+            raise D.Reject(str(e)) from None
     if "pool" in j:
         try:
             pool = R._pool(j["pool"], j["registered"] or {}, j.get("supplied"), j.get("pinned"), j.get("outputs"),
@@ -700,7 +704,7 @@ def _docket_verdict(p: dict, rec) -> Verdict:
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
                    p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"),
-                   compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"))
+                   compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"), verdicts=p.get("verdicts"))
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
@@ -712,7 +716,8 @@ def _caller_verdict(p: dict, rec) -> Verdict:
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
                    day=p.get("day"), declarations=p.get("declarations"), seed_salt=p.get("seed_salt"),
-                   pool=p.get("pool"), compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"))
+                   pool=p.get("pool"), compiler=p.get("compiler", R.UNREAD), certified=p.get("certified"),
+                   verdicts=p.get("verdicts"))
 
 
 def _coins_of(p: dict, c: tuple[dict, bytes], e: dict) -> bytes | None:
@@ -2499,38 +2504,6 @@ CERTIFIED = [
 ]
 
 
-#: the name a wired port takes in `_wired`
-WIRED_PORT = "in"
-
-
-def _wired(a, x, of=lambda rs, e, x: None) -> None:
-    """Port `x` of the audit named a second time, as a port wired to it (`WIRED_PORT`): the parameters' entry at its
-    leaves and domain names it (`wired`), and the record registers its root under both names. `of(roots, entry, x)` then
-    changes the record's roots or that entry."""
-    held = sorted(a["params"]["ports"])[x % len(a["params"]["ports"])]
-    a["params"]["ports"][WIRED_PORT] = e = {**a["params"]["ports"][held], "wired": held}
-    r = [r for r in a["record"]["roots"] if r["port"] == held][-1]
-    a["record"]["roots"].append({**r, "port": WIRED_PORT})
-    of(a["record"]["roots"], e, x)
-
-
-def _wired_root(value):
-    return lambda rs, e, x: rs[-1].update(root=value(rs, x) if callable(value) else value)
-
-
-#: A wired port, unchanged or with one change R3 reads: its root another's, its own port's root moved from under it, not
-#: hex or not a string, no root under its name, or under the port it names; and an entry the parameters refuse.
-WIRED = [
-    _wired, _wired,
-    functools.partial(_wired, of=_wired_root("ef" * 64)),
-    functools.partial(_wired, of=_wired_root(lambda rs, x: ["EF" * 64, 5, None, "", rs[-1]["root"] + "0"][x % 5])),
-    functools.partial(_wired, of=lambda rs, e, x: next(r for r in rs if r["port"] == e["wired"]).update(root="ef" * 64)),
-    functools.partial(_wired, of=lambda rs, e, x: rs.pop()),
-    functools.partial(_wired, of=lambda rs, e, x: e.update(wired=["nowhere", WIRED_PORT, ""][x % 3])),
-    functools.partial(_wired, of=lambda rs, e, x: e.update(wired=[5, None, ["x"]][x % 3])),
-    functools.partial(_wired, of=lambda rs, e, x: e.update(extra=1)),
-    functools.partial(_wired, of=lambda rs, e, x: rs.insert(0, {**rs[-1], "root": "ef" * 64})),
-]
 GROUPS = [RECORD, PARAMS, DRAW, EVIDENCE, VERDICTS_OF, ENTRIES, REGISTERED_PARAMS, REGISTERED_EVIDENCE, SUPPLIED, BINDINGS,
           WINDOWS, SEED_SALTS]
 
@@ -3366,8 +3339,6 @@ _REGISTRATION_OF = lambda a: {"params": a["params"], "record": a["record"]}  # n
 REGISTRATION = D.Port(PIECES, "registration", registration, st.one_of(
     changed_audits(most=1, setups=READER_SETUPS).map(_REGISTRATION_OF),
     changed_audits([TIED], 1, 1, READER_SETUPS).map(_REGISTRATION_OF),
-    changed_audits([WIRED], 1, 1).map(_REGISTRATION_OF),
-    changed_audits([WIRED, RECORD], 2, 2).map(_REGISTRATION_OF),
     changed_audits([TIED, REGISTERED_PARAMS], 2, 1, REGISTERED_SETUPS).map(_REGISTRATION_OF),
     _audit_inputs(_REGISTRATION_OF, [RECORD, PARAMS, ENTRIES, REGISTERED_PARAMS, SUPPLIED], 2),
     changed_audits([ENTRIES], 1, 1, REGISTERED_SETUPS).map(_REGISTRATION_OF),
@@ -4099,6 +4070,40 @@ MATCHES_PUBLIC = D.Port(PIECES, "matches_public", matches_public, st.one_of(
     st.builds(_public, changed_audits(most=0), st.sampled_from(PUBLIC_CHANGES), st.integers(0, 63)),
     st.builds(_public, changed_audits([RECORD], most=1, least=1), st.sampled_from(PUBLIC_CHANGES[:2]), st.integers(0, 63)),
     st.builds(lambda a, x: _public(a, PUBLIC_CHANGES[0], x), changed_audits([ENTRIES], 1, 1, REGISTERED_SETUPS), st.integers(0, 3)),
+    JSON), package=PACKAGE)
+
+
+def public_ports(j):
+    j = _json(j)
+    rec = j.get("record") if isinstance(j, dict) else None
+    roots = rec.get("roots") if isinstance(rec, dict) else None
+    if not isinstance(roots, list):
+        raise D.Reject("the record's roots are not a list")
+    if not all(isinstance(r, dict) and isinstance(r.get("port"), str) for r in roots):
+        raise D.Reject("a registered root is not an object with a string port")
+    try:
+        return _json(R.public_ports(rec))
+    except ValueError as e:
+        raise D.Reject(str(e)) from None
+
+
+def _roots(ports: list[str], x: int) -> list[dict]:
+    """A docket's roots at `ports`, every fifth with no domain or leaves."""
+    return [{"domain": f"d{i}", "leaves": i + x % 3, "port": p, "root": f"r{i}"} if (x + i) % 5 else
+            {"port": p, "root": f"r{i}"} for i, p in enumerate(ports)]
+
+
+#: Port names a member's roots carry (one holding a `/`), and members' names (one template's two chunks, another's, one
+#: with no `/`)
+OWN_PORTS = st.sampled_from(["x", "sx", "o0", "w/row"])
+MEMBER_NAMES = st.sampled_from(["T{K=1}/c0", "T{K=1}/c1", "A/c0", "T"])
+PUBLIC_PORTS = D.Port(PIECES, "public_ports", public_ports, st.one_of(
+    st.builds(lambda ps, x: {"record": {"roots": _roots(ps, x)}}, st.lists(OWN_PORTS, max_size=4), st.integers(0, 63)),
+    st.builds(lambda m, ps, x: {"record": {"roots": _roots([f"{m}/{p}" for p in ps], x)}}, MEMBER_NAMES,
+              st.lists(OWN_PORTS, min_size=1, max_size=4), st.integers(0, 63)),
+    st.builds(lambda ps, x: {"record": {"roots": _roots(ps, x)}}, st.lists(st.one_of(
+        OWN_PORTS, st.builds("{}/{}".format, MEMBER_NAMES, OWN_PORTS), st.sampled_from(["row-table", "row-table/s0/t"])),
+        min_size=1, max_size=4), st.integers(0, 63)),
     JSON), package=PACKAGE)
 
 
@@ -6405,7 +6410,8 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATE
               (CHECK_SAMPLE, 500), (DRAW, 500), (RAN_OUT, 300), (SELECT, 600), (DESIGN, 300), (SLOTS, 400),
               (FILE_POPULATION, 400), (TABLES_HELD, 300), (OWN_TABLES, 300), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
-              (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
+              (MATCHES_PUBLIC, 400), (PUBLIC_PORTS, 300), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500),
+              (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300), (PUBLIC_UNITS, 300),
               (LINK_POINTS, 500), (SELECT_SECOND, 300), (SECOND_STATEMENTS, 400), (SECOND_INTERIOR_READS, 200),
               (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (REPLAY_WIDTHS, 300), (REPLAY_RETURNS, 200), (REPLAY_RETURNED, 300),
@@ -6428,7 +6434,7 @@ def test_the_callers_check_agrees(callers):
 
 def test_link_points_holds_the_per_member_forms_members_as_the_python_does(pieces):
     """The docket's `link-points` on the per-member form's members, Lean's answers the Python's (the piece's
-    ``members``, which `Registration.check` reads as it reads the ones `OneStageZk.membersParamsOfJson` hands it from a
+    ``members``, which `Docket.check` reads as it reads the ones `OneStageZk.membersParamsOfJson` hands it from a
     case's parameters; `registration.check`'s ``members``). Two windows of two members at one unit a proof block:
     PAIR's two proof blocks and TRIPLE's eighteen, a template each, and one template's twenty-four cut in half. A row
     is a sampling design with each member's fewest and most sampled proof blocks over the samples that end, the members
@@ -6724,8 +6730,8 @@ def test_the_unit_gates_by_range_are_the_walks_on_real_templates(pieces, n):
     Lean's unit gates laid out a range at a time are its walk's unit by unit. Python's `partition.unit_gates` isn't asked:
     its partition over these templates takes more memory than a suite has."""
     from verity.circuits.population import mixed_population_program
-    from verity.definitions.registry.catalog import load
-    from verity.commitments.windows import interface as IF
+    from verity_vllm.definitions.registry.catalog import load
+    from verity.commitments.periods import interface as IF
 
     load()
     total = sum(c for _t, c in REAL_TEMPLATES)
@@ -7306,6 +7312,40 @@ def test_a_window_opens_the_pool_its_chain_left(pieces, callers):
         assert codes({**then, **extra}, record(WINDOW, pout1, carried, [first])) == "reject", extra
 
 
+def test_a_start_is_carried_only_past_a_record_the_verdict_log_accepted(pieces, callers):
+    """Lean and Python agreeing on the caller's verdicts: with the verifier's verdict log (`verdicts`, the pool's form),
+    `W` read from an earlier record's port carries where the log names that record accepted or doesn't name it, and is
+    `R7-output-refused` where it names it refused, in the history form and the explicit one alike, after SPOT's R7
+    codes; `W` reusing that record's registered value is not held to it, and a log in another form refuses the
+    verifier's inputs."""
+    s, values, law = REGISTERED_SETUPS[0], {"D": 1, "W": 3}, {"k": 1, "law": "subset"}
+    output = {"root": "c1" * 64, "domain": EARLIER_OUT_DOMAIN}
+    w = s.committed["W", 3].entry()
+    roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
+    log = [R.record(s.program, s.query, law, SCHEME, [*roots, {"port": EARLIER_OUT, "leaves": w["leaves"], **output}],
+                    EARLIER, leaf_layer=LEAF, registered=[{**w, "value": EARLIER_VALUE, **output}])]
+    d = R.digest(log[0])
+    rec = _record_of(s, values, law, WINDOW, log, output=output, fixed=["W"], leaf_layer=LEAF, previous=d)
+    params = {"anchors": [], "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": log, "parameters": s.signature,
+              "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": values,
+              "scheme": SCHEME, "work_table": None}
+
+    def codes(outputs, verdicts=(), r=rec):
+        """The codes with `outputs` and the verdict log `verdicts`, or none where it is `()`."""
+        p = {**params, "outputs": outputs, **({} if verdicts == () else {"verdicts": verdicts})}
+        return _codes_of(_json({"params": p, "record": r}), pieces, callers)
+
+    moved = {**rec, "registered": [{**e, "root": "ef" * 64} if e["value"] == "W" else e for e in rec["registered"]]}
+    for out in ({"W": {"port": EARLIER_OUT}}, {"W": {"record": d, "port": EARLIER_OUT}}):
+        for verdicts in ((), {}, {d: True}, {"ee" * 64: False}):
+            assert codes(out, verdicts) == [], (out, verdicts)
+        assert codes(out, {d: False}) == ["R7-output-refused"], out
+        assert codes(out, {d: False}, moved) == ["R7-held", "R7-output-refused"], out
+    assert codes({"W": {"record": d, "value": EARLIER_VALUE}}, {d: False}) == []
+    for bad in ([], {d: 0}, {d.upper(): False}, {d[:-2]: False}, None, "x"):
+        assert codes({"W": {"port": EARLIER_OUT}}, bad) == "reject", bad
+
+
 def test_an_arrival_cut_at_a_windows_edge_continues_from_the_pool_it_left(pieces, callers):
     """Lean and Python agreeing on cut and continue over three windows. Each window's certified arrivals are the root the
     network certifier signed for it, which the verifier pins (`ing`: the arrivals open at the last window's edge first,
@@ -7400,7 +7440,7 @@ def _many_ports(a: dict, n: int, seed: int = 0) -> dict:
 
 
 def test_a_many_port_registration_agrees(pieces):
-    """R3 over a window of 4096 ports, the shape whose quadratic walk `Registration.portIndex` replaced, Lean and Python
+    """R3 over a window of 4096 ports, the shape whose quadratic walk `Docket.portIndex` replaced, Lean and Python
     agreeing: accepted as registered, and each change to one port reaches its code and no other."""
     a = _many_ports(_REGISTRATION_OF(_v1_audit("subset")), 4096)
 
@@ -7419,33 +7459,6 @@ def test_a_many_port_registration_agrees(pieces):
     assert codes(lambda rs: rs[3000].update(port=7)) == ["R3-ports"]
     assert codes(lambda rs: bump(rs[123], "leaves")) == ["R3-leaves"]
     assert codes(lambda rs: bump(rs[4000], "domain")) == ["R3-domain"]
-
-
-def test_a_wired_port_is_held_to_the_root_of_the_port_that_holds_it(pieces):
-    """R3 of a port the layout wires to another's tree (`"wired"`), Lean and Python agreeing: a record naming one root
-    under both names is accepted; one whose root under the wired name is another, or whose root under the port that
-    holds it is, is refused by `R3-wired` alone; so is a layout naming a port the record has no root for; a record with
-    no root under the wired name is refused by it after `R3-ports`; roots that are not well formed give `R3-roots` and
-    no second code; and the parameters refuse a `wired` that is not a string."""
-    a = _REGISTRATION_OF(_v1_audit("subset"))
-
-    def codes(of=lambda rs, e, x: None, x=0, then=lambda b: None):
-        b = copy.deepcopy(a)
-        _wired(b, 1, lambda rs, e, _x: of(rs, e, x))
-        then(b)
-        kind, out = D.replay(REGISTRATION, _json(b), pieces)
-        return json.loads(out)["codes"] if kind == "output" else kind
-
-    assert sorted(a["params"]["ports"])[1] == "x" and codes() == []
-    assert codes(_wired_root("ef" * 64)) == ["R3-wired"]
-    assert codes(lambda rs, e, x: next(r for r in rs if r["port"] == "x").update(root="ef" * 64)) == ["R3-wired"]
-    assert codes(lambda rs, e, x: e.update(wired="nowhere")) == ["R3-wired"]
-    assert codes(lambda rs, e, x: e.update(wired=WIRED_PORT)) == []
-    assert codes(lambda rs, e, x: rs.pop()) == ["R3-ports", "R3-wired"]
-    assert codes(_wired_root(5)) == ["R3-root", "R3-wired"]
-    assert codes(lambda rs, e, x: rs.insert(0, {**rs[-1], "root": "ef" * 64})) == ["R3-ports"]
-    assert codes(then=lambda b: b["record"]["roots"][0].pop("domain")) == ["R3-roots"]
-    assert codes(lambda rs, e, x: e.update(wired=5)) == "reject"
 
 
 def test_every_public_items_code_is_reached(pieces):

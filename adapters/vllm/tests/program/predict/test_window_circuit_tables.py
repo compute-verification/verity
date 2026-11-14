@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 from verity.circuits.evaluation import evaluate_batch
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity.protocols.accounting.pouw.verifier import credit
 from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as CR

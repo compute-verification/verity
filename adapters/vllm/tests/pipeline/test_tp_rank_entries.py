@@ -25,7 +25,7 @@ import torch
 
 from verity_vllm.engine import vllm_adapter as va
 from verity_vllm.observe import capture, events
-from verity_vllm.pipeline import m1_capture
+from verity_vllm.pipeline import match_capture as m1_capture
 from verity_vllm.pipeline.tp import rank_worker as RW
 
 NATIVE = "verity_vllm.commit.committer.native_collect"

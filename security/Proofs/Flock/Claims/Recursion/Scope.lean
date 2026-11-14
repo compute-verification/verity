@@ -45,7 +45,7 @@ the inner statement's files where it holds them (`RecCoins.Source`), its own inn
 `RecVStar.statements` refuses, at candidate 3's sparse shape one whose inner statement `RecCoins.checkAtC3`
 refuses (`checkInnerRange`), and where it holds the inner statement's files one that is not the inner statement's, or an
 inner statement set up otherwise than its files set it up (`RecSetup.checkShape`, `RecSetup.checkForm`); every V*
-statement carries those files (`RecCoins.filesInput` refuses them in part). Its verdict refuses a V* session whose record holds no sample (`ProvedScope.sampleLaw`) or
+statement carries those files (`RecCoins.filesInput` refuses them in part). Its verdict refuses a V* session whose record holds no sample (`ProvedScope.sampleDesign`) or
 whose sample is not every unit of its population (`RecSetup.fullSample`), and a session over an inner session whose
 record holds no sample (`RecSetup.innerSampled`), and a holo or sparse inner shape (`RecSetup.denseOnly`); the compiled
 statement's reader refuses an inner statement without a sample (`RecDeploy.innerOk`). There is no other recursion-level refusal.
@@ -96,7 +96,7 @@ def rangeOk (sp : RecSparse.Shape) (st : Stmt) : Bool :=
 
 /-- A sample, readable: its `subset` sampling design's `k`, population, units and closure. -/
 def drawOf (D : Draw.UnitSample) : Claims.Recursion.DrawRecord where
-  subset := match D.law with
+  subset := match D.samplingDesign with
     | .subset k => some k
     | _ => none
   population := D.population
@@ -145,7 +145,7 @@ def parseOf (decode : Claims.Msg → Option Read) (x : Claims.Msg) : Option Clai
   (parseBytes decode x).map toStmt
 
 /-- **A V* session's sample passes the verdict's refusals** under the verifier's inner shape `i`: its record holds a sample
-(`ProvedScope.sampleLaw` refuses a session without one), and `RecSetup.fullSample` takes it, as `verify` calls it in a
+(`ProvedScope.sampleDesign` refuses a session without one), and `RecSetup.fullSample` takes it, as `verify` calls it in a
 recursive session (under an inner shape its `rec` flag changes nothing, `fullSample_some`). -/
 def fullSampleOk (i : RecVStar.Inner) (record : String) : Bool :=
   match Witness.recordDraw record with
@@ -305,7 +305,7 @@ theorem fullSampleOk_iff (i : RecVStar.Inner) (record : String) :
   unfold Witness.fullSample
   simp only [hd, hD, bind, Except.bind]
   unfold Claims.Recursion.DrawRecord.Full drawOf
-  rcases hl : D.law with k | _ | _ | _
+  rcases hl : D.samplingDesign with k | _ | _ | _
   · simp only [Option.some.injEq, true_and]
     rw [← Array.toList_range, Array.toList_inj, Array.toList_eq_nil_iff]
     by_cases hc : k = D.population ∧ D.units = Array.range D.population ∧ D.closure = #[]

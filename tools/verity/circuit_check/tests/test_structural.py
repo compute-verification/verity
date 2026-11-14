@@ -64,7 +64,7 @@ def test_constants_and_repeats_fold():
     assert K_.next == 2
 
 
-def test_a_verdict_does_not_depend_on_the_labels_draw():
+def test_a_verdict_does_not_depend_on_how_the_labels_are_sampled():
     tm = _emitted(SB.E4m3ToF32)
     a, b = (ST.check(SB.E4m3ToF32, tm)["structural"] for _ in range(2))
     assert a["verdict"] == b["verdict"] == "syntactic" and a["canonical_nodes"] == b["canonical_nodes"]

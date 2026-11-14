@@ -99,7 +99,7 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, MerkleTree, merkle_depth
 from verity.commitments.row_table import ROOTS_SCHEMA, RootOpening, RootTree, verify_roots
 from verity.commitments.window import window_domain
-from verity.commitments.windows import interface as IF, rows as CS
+from verity.commitments.periods import interface as IF, rows as CS
 
 COMMIT_SLOTS = Path(__file__).resolve().parents[4] / "verity" / "commitments" / "cuda" / "commit_slots"
 if str(COMMIT_SLOTS) not in sys.path:

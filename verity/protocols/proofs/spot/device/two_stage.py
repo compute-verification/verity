@@ -115,7 +115,7 @@ Usage::
         [--proof-deadline S] [--stop RULE [--stop-design rate:NUM/DEN]] [--challenger-host HOST]
     two_stage.py second --stage1 OUT/<class>/stage1.json --boundary DIR --capture CAPTURE --challenger local --main FILE \\
         --challenger-host HOST --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --out OUT2 [--proofs PARAMS.json] \\
-        [--rids IDS.json] [--firewall F] [--unlinked] [--stop RULE] [--kept PRIVATE] [--devices 0,1] [--replay-record REPLAY.json]
+        [--rids IDS.json] [--zk-server F] [--unlinked] [--stop RULE] [--kept PRIVATE] [--devices 0,1] [--replay-record REPLAY.json]
 
 Each DIR a class's (``w<window>/p<P>-o<O>/``), every one of one window (``second``: one class's, with its private
 files); COUNTS.json each check template's own count in place of one for all, ``{descriptor id: k_t}`` (`counts`);
@@ -170,7 +170,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.program import Program
-from verity.commitments.windows import links as LK, rows as CS
+from verity.commitments.periods import links as LK, rows as CS
 from verity_vllm.pipeline import boundary_logits as BL, boundary_rows as BR, boundary_stop as BS, boundary_tables as BT
 from verity_vllm.pipeline import interior_links as IL, interior_rows as IR
 
@@ -202,7 +202,7 @@ PROOF_DEADLINE_S = 86400.0
 def interior_values(member: CS.Member) -> tuple[tuple[str, str], ...]:
     """The interior values of a replay side that commits the check template's units as one window member
     (`ml.windows.rows`): each port's name and schema, in the member's order."""
-    return tuple((member.port(p), member.schema(p)) for p, _w in member.all_rows)
+    return tuple((member.port(p), member.schema(p)) for p in CS.port_leaves(member))
 
 
 @dataclass(frozen=True)
@@ -1070,7 +1070,7 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
     allowed, and the outcome is the stream's (`outcome_of`). The report names what the proof
     server refused, in flock-circuit's words, where a session never ran."""
     a5 = _a5()
-    from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA
+    from verity.protocols.proofs.spot.prover.audit import records_audit as RA
 
     a.coins, a.rule, a.window_root, a.compose_cache, a.transfer_gate = None, None, None, None, []
     a.tie = {"log": [brec], **(tie or {})}
@@ -1467,10 +1467,12 @@ def _second(a: argparse.Namespace, clock: Callable[[], float] = time.monotonic) 
         (out / "coins.json").write_text(json.dumps({"evidence": evidence, "read": [handoff["read"], coins.read.hex()]},
                                                    indent=1, sort_keys=True))
         if "handed" in s:
-            import sampled_two_case as SC
-            with SC.capture(out / "run-input.json") if getattr(a, "form_case", False) else contextlib.nullcontext():
+            form_case = getattr(a, "form_case", False)
+            if form_case:
+                import sampled_two_case as SC
+            with SC.capture(out / "run-input.json") if form_case else contextlib.nullcontext():
                 summary["outcome"] = outcome_of(again.stream, r.draw, s["handed"], evidence, stmts, proofs)
-            if getattr(a, "form_case", False):
+            if form_case:
                 summary["form_case"] = SC.from_run(out)
         ok = held(s, summary.get("round_two"), summary.get("outcome"), summary.get("pins"))
         return done(0 if ok else 1, held=ok)
@@ -1539,12 +1541,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     g.add_argument("--m0-pythonpath", required=True)
     g.add_argument("--bin", required=True, help="flock-circuit")
     g.add_argument("--lean", required=True, help="verity-verify-proof")
-    g.add_argument("--firewall", help="Lean's flock-firewall: every session behind the ZK server; without it each runs "
+    g.add_argument("--zk-server", help="Lean's flock-zk-server: every session behind the ZK server; without it each runs "
                                       "prove --zk itself, as SPOT[Flock]'s proof server does")
     g.add_argument("--stop", help=STOP_HELP)
     g.add_argument("--devices", help="the audit's proof server's cards, their indices comma-separated (0,1): a prover a "
                                      "card (`flock-circuit prove --zk --gpu`, a device build); without it one CPU prover. "
-                                     "Never with --firewall, whose sessions prove on the CPU")
+                                     "Never with --zk-server, whose sessions prove on the CPU")
     g.add_argument("--replay-record", help="the record the replay wrote beside --capture (replay.json): its seconds and "
                                            "cards go in the summary's `replay`, which this command has no clock over")
     g.add_argument("--delta", type=float, default=0.5)

@@ -92,7 +92,7 @@ theorem coversAt_zsOf {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B C D : Type}
     exact coversAt_refuse _
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 namespace C3Family
 
@@ -291,7 +291,7 @@ theorem find_of_names {c : Flock.Circuit} (hN : NamesOnce c) (q : Fin c.ports.si
 section Honest
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv}
+  {Lv : SamplingDesign nv}
 
 /-- **The registrant holds the rows `own` names**: at each typing of the session, a record of registered reads holding
 every row of a port `own` names, at every unit, under the first port of its name, at the position that port gives the

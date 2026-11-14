@@ -79,7 +79,7 @@ def _built(layout: Layout, kept: dict[int, tuple[SpecializedDefinition, dict[int
 def _greedy_select(t: str) -> bool:
     """Whether serving template ``t``'s check is the greedy select: read from the Definition ``t`` names, as
     `Layout.logit_rows` reads it, never from how ``t`` is spelled. A ``t`` that names no Definition is not."""
-    from verity.definitions.registry import greedy_stages as GS
+    from verity_vllm.definitions.registry import greedy_stages as GS
 
     try:
         fn = check_template(t)

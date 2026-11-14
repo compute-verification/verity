@@ -1,4 +1,4 @@
-"""verity_vllm.program.prune: a body's dead units (the nodes no output reads) and the body without them, each reference renumbered
+"""verity_torch.prune: a body's dead units (the nodes no output reads) and the body without them, each reference renumbered
 in its own form; on one rank, the request wrapper's dead units are the last layer's rows before the prefill's last, its
 RMSNormTriton and TokenSelect Calls are at their versions without dead gates (on bits, at the v1s their lift reads), and those rows'
 fused qkv is narrowed to their keys and values (`dead_free`)."""
@@ -15,14 +15,14 @@ from verity.circuits.ops.prims import BF16
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided
 from verity.circuits.types import Array
-from verity.definitions.boolean import boolean_version
-from verity.definitions.registry import b1, gemm_bias
-from verity.definitions.registry import topp_words as TW
+from verity_vllm.definitions.boolean import boolean_version
+from verity_vllm.definitions.registry import b1, gemm_bias
+from verity_vllm.definitions.registry import topp_words as TW
 
-from verity_vllm.program import prune as PR
+from verity_torch import prune as PR
 from verity_vllm.program.predict import build as PB
 from verity_vllm.program.predict.phi import Phi
-from verity_vllm.program.prune import (
+from verity_torch.prune import (
     _read,
     _renumbered,
     batched_form,

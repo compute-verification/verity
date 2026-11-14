@@ -137,14 +137,15 @@ def test_a_session_without_each_reps_stream_and_proof_is_refused(have, streams, 
     public, private, _, _ = _session()
     public |= {"hello": {"reps": 2}, "streams": {f"circuit/rep{r}": {} for r in range(streams)}}
     with pytest.raises(ValueError, match="ZK-SERVER-REFUSED: proofs"):
-        V.check(public, private, {r: b"" for r in have})
+        V.check_twin(public, private, {r: b"" for r in have})
     (tmp_path / "session").mkdir()
     (tmp_path / "public.json").write_text(json.dumps(public))
     (tmp_path / "private.json").write_text(json.dumps(private))
     for r in have:
         (tmp_path / "session" / f"circuit.rep{r}.bin").write_bytes(b"")
-    assert V.main([str(tmp_path)]) == 1
-    assert json.loads(capsys.readouterr().out)["refused"].startswith("ZK-SERVER-REFUSED: proofs")
+    assert V.session_twin(tmp_path)["refused"].startswith("ZK-SERVER-REFUSED: proofs")
+    with pytest.raises(NotImplementedError, match=V.GOAL):
+        V.main([str(tmp_path)])
 
 
 def test_query_rounds_follow_the_levels_in_order():

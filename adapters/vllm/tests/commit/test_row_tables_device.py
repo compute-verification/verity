@@ -167,7 +167,7 @@ def test_the_device_build_is_called_as_its_source_declares_it(monkeypatch):
 
 def _cuda():
     torch = pytest.importorskip("torch")
-    if not torch.cuda.is_available() or D.nvcc() is None:
+    if not torch.cuda.is_available() or K.nvcc() is None:
         pytest.skip("the device path needs CUDA and nvcc")
     return torch
 

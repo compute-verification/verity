@@ -34,7 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# Per-stage coins with sampled proofs (trusted)
+# Per-stage coins with SPOT (trusted)
 
 STEER-PROOF's route A over PoUW's rounds (`Pouw.RelativeSecurity.RoundGame`, `Paths`, `prob`): a round runs its stages
 in order, and stage `c`'s coin is released after stage `c`'s operands are committed (with whole dot products for units),

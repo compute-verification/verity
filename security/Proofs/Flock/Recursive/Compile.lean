@@ -212,7 +212,7 @@ open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink 
   DecodeZL Composed ZkReg
 open scoped ENNReal
 
-variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type}
+variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type}
 
 /-- **The inner transcript V*'s layers decode** at an outcome `o` of V*'s outer proof at the history `(R, ω, t)`: the
 messages `wmsg` reads from the sessions' layers, beside the rounds' coins. -/
@@ -262,7 +262,7 @@ theorem zk_sessions_recursive_fork_inner
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
           (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
         expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).samplingDesign.model k Rw M ρ τ) s) +
           (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin := by
   by_cases hf : InnerForkRec zs dg N k Rw σ x wmsg H pick
@@ -288,7 +288,7 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D Sl : Type}
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : Law n} {Reg : Type} {Cm : Type}
+variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : SamplingDesign n} {Reg : Type} {Cm : Type}
 
 /-- **The recursive audit is sound at Flock's compiled inner protocol.** `RecursiveSound` at `I := flockInnerCL`
 (the compiled table on the class's hidden statements, the schedule `(T, CT)` with live coins), V*'s bridge as VBridge G
@@ -322,7 +322,7 @@ theorem recursive_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D] 
             ¬ (flockInnerCL T CT A H E Lf cls regs sch).holds (x o.1 o.2.1))
           (recGame L Reg (flockInnerCL T CT A H E Lf cls regs sch) Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
         expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).samplingDesign.model k Rw M ρ τ) s) +
           ((flockInnerCL T CT A H E Lf cls regs sch).r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal (Accounting.tableError sch ⟨cls.kLog, regs.length, cls.mPts⟩) :=
@@ -357,7 +357,7 @@ theorem recursive_sound_compiled_fast100 (A : Arith F K) (hA : A.Correct) [Inhab
             ¬ (flockInnerCL T CT A H E Lf cls regs sch).holds (x o.1 o.2.1))
           (recGame L Reg (flockInnerCL T CT A H E Lf cls regs sch) Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
         expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).samplingDesign.model k Rw M ρ τ) s) +
           ((flockInnerCL T CT A H E Lf cls regs sch).r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) +
           ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=

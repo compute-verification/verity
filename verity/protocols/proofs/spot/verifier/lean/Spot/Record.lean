@@ -73,8 +73,9 @@ def registeredRoots (rec : Json) : Array (String × Json) :=
     | .str v => (acc.filter fun (q : String × Json) => q.1 != v).push (v, getD e "root")
     | _ => acc) #[]
 
-def matchesPublic (rec scheme roots domains population : Json) : Check := Id.run do
-  let reg := byPort rec
+/-- `matchesPublic` at the registration's roots by port `reg`, as the public file names its ports: the record `rec`'s
+own (`byPort`), or a window's one member's with its name taken off (`OneStageZk.publicPorts`). -/
+def matchesPublicBy (reg : Array (String × Json)) (rec scheme roots domains population : Json) : Check := Id.run do
   let regRoots := reg.map fun (p, r) => (p, getD r "root")
   let regDomains := reg.map fun (p, r) => (p, getD r "domain")
   let mut c : Check := {}
@@ -87,6 +88,9 @@ def matchesPublic (rec scheme roots domains population : Json) : Check := Id.run
   if !jeq population (getD rec "population") then
     c := c.fail "population" (obj [("registered", getD rec "population"), ("public", population)])
   return c
+
+def matchesPublic (rec scheme roots domains population : Json) : Check :=
+  matchesPublicBy (byPort rec) rec scheme roots domains population
 
 def sessionRegistered (verdicts : Array (String × Json)) : Option (Array (String × Json)) := Id.run do
   let mut out : Option (Array (String × Json)) := none
@@ -113,10 +117,10 @@ private def failed (code : String) (detail : Json) : Check := { codes := #[code]
 
 /-- `audit_record`'s checks, in its order: `draw` and `proved` always, then `receipt`, `served`, `roots` and `registered`
 only when they fail. `digest` is the registration's, `units` the sample's. -/
-def checks (reg receipt draw law : Json) (units : Array Int) (provedUnits : Array Json) (instances : Json) (digest : String)
+def checks (reg receipt draw samplingDesign : Json) (units : Array Int) (provedUnits : Array Json) (instances : Json) (digest : String)
     (served : Option (Array Int)) (sessionRoots : Option (Array (String × Json)))
     (sessionRegistered : Option (Array (String × Json))) : Array (String × Check) := Id.run do
-  let mut out := #[("draw", Draw.checkSampleFull draw (getD reg "population") law),
+  let mut out := #[("draw", Draw.checkSampleFull draw (getD reg "population") samplingDesign),
     ("proved", Draw.checkProvedFull draw provedUnits instances)]
   if !jeq (getD receipt "registration") (Json.str digest) then
     out := out.push ("receipt", failed "receipt" (obj [("receipt", getD receipt "registration")]))
@@ -210,10 +214,10 @@ def ownRegisteredFast (rec : Json) (opened : Option (Array (String × Json))) : 
   simp only [ownRegistered, ownRegisteredFast, Array.contains_append, contains_byPort]
 
 /-- `checks`, each session root's registered root a hash lookup. -/
-def checksFast (reg receipt draw law : Json) (units : Array Int) (provedUnits : Array Json) (instances : Json)
+def checksFast (reg receipt draw samplingDesign : Json) (units : Array Int) (provedUnits : Array Json) (instances : Json)
     (digest : String) (served : Option (Array Int)) (sessionRoots : Option (Array (String × Json)))
     (sessionRegistered : Option (Array (String × Json))) : Array (String × Check) := Id.run do
-  let mut out := #[("draw", Draw.checkSampleFull draw (getD reg "population") law),
+  let mut out := #[("draw", Draw.checkSampleFull draw (getD reg "population") samplingDesign),
     ("proved", Draw.checkProvedFull draw provedUnits instances)]
   if !jeq (getD receipt "registration") (Json.str digest) then
     out := out.push ("receipt", failed "receipt" (obj [("receipt", getD receipt "registration")]))
@@ -242,19 +246,19 @@ def checksFast (reg receipt draw law : Json) (units : Array Int) (provedUnits : 
   return out
 
 @[csimp] theorem checks_eq_checksFast : @checks = @checksFast := by
-  funext reg receipt draw law units provedUnits instances digest served sessionRoots sessionRegistered
+  funext reg receipt draw samplingDesign units provedUnits instances digest served sessionRoots sessionRegistered
   simp only [checks, checksFast, find?_byPort]
 
 /-- The profile's sample of the sampling design a sample names (`audit.profile`): a work sampling design is the stratified sampling design at its sizes. -/
-def profileSample (law : Json) : Option Core.SamplingDesign :=
-  match getD law "law" with
-  | .str "subset" => (nat? (getD law "k")).map .subset
+def profileSample (samplingDesign : Json) : Option Core.SamplingDesign :=
+  match getD samplingDesign "law" with
+  | .str "subset" => (nat? (getD samplingDesign "k")).map .subset
   | .str "bernoulli" => do
-    let .str p := getD law "p" | none
+    let .str p := getD samplingDesign "p" | none
     let (a, b) ← Draw.probability? p
     return .bernoulli (← Core.Ratio.mk' a b)
   | .str "stratified" | .str "work" => do
-    let .arr ss := getD law "strata" | none
+    let .arr ss := getD samplingDesign "strata" | none
     let strata ← ss.mapM fun s => do
       let .str t := getD s "template" | none
       let rs ← Draw.ranges? (getD s "units")
@@ -283,7 +287,7 @@ structure Input where
   receipt : Json
   draw : Json
   units : Array Int
-  law : Json
+  samplingDesign : Json
   provedUnits : Array Json
   instances : Json
   statement : Json
@@ -347,8 +351,8 @@ def inputOf (j : Json) : V Input := do
   if let some c := field? draw "closure" then need (ints? c).isSome "the draw's closure is not integers"
   if let some n := field? draw "population" then need (int? n).isSome "the draw's population is not an integer"
   if jeq (getD draw "law") "subset" then need (field? draw "k").isSome "a subset draw has no k"
-  let law := getD j "law"
-  need (law matches .obj _) "the law is not an object"
+  let samplingDesign := getD j "law"
+  need (samplingDesign matches .obj _) "the law is not an object"
   let .arr provedUnits := getD j "proved_units" | throw "the proved units are not integers"
   need (provedUnits.all (int? · |>.isSome)) "the proved units are not integers"
   need (int? (getD j "instances")).isSome "instances is not an integer"
@@ -374,7 +378,7 @@ def inputOf (j : Json) : V Input := do
   let .str d := getD j "delta" | throw "delta is not a ratio"
   let delta ← Core.Ratio.ofString d "delta"
   need (delta.num != 0 && delta.num < delta.den) "delta is not in (0, 1)"
-  return { registration := reg, receipt, draw, units, law, provedUnits, instances := getD j "instances",
+  return { registration := reg, receipt, draw, units, samplingDesign, provedUnits, instances := getD j "instances",
            statement := getD j "statement", verdicts, delta, sessions, served, sessionRoots, certified }
 
 private def strataSampled (draw : Json) (units : Array Int) : Json :=
@@ -409,7 +413,7 @@ def record (i : Input) : V Json := do
   let get := getD reg
   let digest ← Flock.WindowRecord.digestHex reg
   let opened := lessOwnReads reg (ownRegistered reg (sessionRegistered i.verdicts))
-  let cs := checks reg i.receipt i.draw i.law i.units i.provedUnits i.instances digest i.served i.sessionRoots opened
+  let cs := checks reg i.receipt i.draw i.samplingDesign i.units i.provedUnits i.instances digest i.served i.sessionRoots opened
     ++ certifiedCheck i.certified opened
   let accepted' := fun (v : Json) => jeq (getD v "accepted") (.bool true)
   let ran := i.verdicts.filter fun (_, v) => !(getD v "accepted" matches .null)
@@ -461,7 +465,7 @@ def record (i : Input) : V Json := do
         [("per_template", obj ((strata.getD #[]).toList.map fun s => (s.name, Lean.toJson (Bound.stratumBound s i.delta))))]
       else [])
   return obj [("format", Json.str FORMAT), ("registration", reg), ("registration_digest", Json.str digest),
-    ("receipt", i.receipt), ("draw", i.draw), ("law", Draw.lawOf i.draw), ("proved_units", Json.arr i.provedUnits),
+    ("receipt", i.receipt), ("draw", i.draw), ("law", Draw.samplingDesignOf i.draw), ("proved_units", Json.arr i.provedUnits),
     ("statement", i.statement), ("checks", obj (cs.toList.map fun (n, c) => (n, c.toJson))),
     ("verdicts", obj i.verdicts.toList), ("accepted", Json.bool accepted), ("complete", Json.bool (allRan i.verdicts)),
     ("profile", profile), ("integrity_profile", integrity), ("wrong_units", wrongUnits)]

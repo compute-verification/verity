@@ -796,7 +796,7 @@ def attention_call(shape: str) -> Any:
     ``CUT_TARGETS`` target (`targets.attention_spec`, one query row), cut as `window_circuit.CUTS` cuts it, and its first
     visited block (keys (nb - 1) BN ... T - 1), the full block below it (T > BN) or its epilogue."""
     from verity.circuits.defs import bind
-    from verity.definitions.registry import dead_free as DF
+    from verity_vllm.definitions.registry import dead_free as DF
     from verity_vllm import TargetProfile
     from verity_vllm.program.frontend import targets as TG
     from verity_vllm.program.predict.window_circuit import CUTS
@@ -841,7 +841,7 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
     from verity.circuits.defs import bind
     from verity_vllm import TargetProfile
     from verity_vllm.program.frontend import targets as TG
-    from verity.definitions.registry import b1, dead_free as DF
+    from verity_vllm.definitions.registry import b1, dead_free as DF
 
     fam, model, *arg = shape.split(":")
     L = LLAMA[model]
@@ -984,7 +984,7 @@ def served_member(shape: str, seed: int, n: int = 1, reads: str | None = None) -
     hidden, values seeded by ``seed``, its table reads laid out by ``reads`` (`Member`), by default its template's own
     (`chunk_rows.reads`)."""
     from verity.circuits.codec import descriptor_id
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
     from verity_vllm.pipeline import chunk_rows as CR, serving_rows as SRW
 
     fn, gen = served(shape)

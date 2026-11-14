@@ -3,7 +3,7 @@ module
 public import Definitions.Accounting.Remote.Held
 
 /-!
-# What the memory line held under the remote audit assumes (trusted)
+# What the memory line held under PoUB assumes (trusted)
 
 The premises of `Accounting.Guarantees.Remote.Held` and its time-held forms, each a named `Prop` on a trace
 (`Accounting.Remote.Held.Trace`) taken as a hypothesis:

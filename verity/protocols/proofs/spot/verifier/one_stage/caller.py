@@ -7,7 +7,8 @@ the verifier read from the challenger's log (Seed salt: `R6-seed-salt`), the poo
 one reset a week (Pool chain: `R6-pool-reset`, `R6-pool-week`, `R6-pool-spent`, `R6-pool-reset-week`), and the
 registration log's compiler and advice within its length (Registered compiler: `R6-compiler`, `R6-advice-length`); and,
 when the verifier expects values registered, the record's entry for the pool's `pin` is the pool its window opens
-(`R7-pool-chain`). The sections named are `docket`'s.
+(`R7-pool-chain`), and no output value reads a port of a record the verifier's verdict log names refused
+(Verdicts: `R7-output-refused`). The sections named are `docket`'s.
 
 `check` takes `docket.check`'s arguments and reads them as it does (ValueError where it raises), and returns the
 caller's codes in `Caller.check`'s order, whatever SPOT's check made of the record. `gate` is `Caller.gate`: SPOT's
@@ -67,6 +68,20 @@ def _pool_chain(c: _Collect, rec: Mapping[str, Any], pool: Mapping[str, Any], wa
         c.fail("R7-pool-chain", {"value": pool["pin"], "registered": mine, "verifier": opens})
 
 
+PORTS_REFUSED_WHY = ("an output value reads a port of an earlier record whose run the verifier refused, so nothing the "
+                     "verifier accepted computed it")
+
+
+def _ports_refused(c: _Collect, outs: Mapping[str, tuple[str, str, str]], verdicts: Mapping[str, bool]) -> None:
+    """The verdicts (`Docket.portsAccepted`): no output value reads a port of an earlier record the verdict log
+    names refused (`docket.refused`), else
+    one `R7-output-refused` naming those values and records. A reused registered value (`value`) is not held to it."""
+    bad = sorted(v for v, (d, kind, _) in outs.items() if kind == "port" and R.refused(verdicts, d))
+    if bad:
+        c.fail("R7-output-refused", {"values": bad, "records": sorted({outs[v][0] for v in bad}),
+                                     "why": PORTS_REFUSED_WHY})
+
+
 def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,
@@ -79,7 +94,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
           history: Mapping[str, Any] | None = None, compiler: Any = R.UNREAD,
-          certified: Mapping[str, Mapping[str, Any]] | None = None) -> Verdict:
+          certified: Mapping[str, Mapping[str, Any]] | None = None,
+          verdicts: Mapping[str, bool] | None = None) -> Verdict:
     """The caller's codes for `rec` against `docket.check`'s arguments (`Caller.check`). The arguments it doesn't read
     are `docket.check`'s, so a caller hands both the same."""
     c = _Collect()
@@ -96,6 +112,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     window, fixed = R._window(window_root, held, registered or {}, sup, pins, outs)
     salt = R._seed_salt(seed_salt, window)
     reads = R._registered_compiler(compiler)
+    verdicts = R._verdicts(verdicts) if verdicts is not None else {}
     rec_ = rec if isinstance(rec, Mapping) else {}
     w = rec_.get("window") if isinstance(rec_.get("window"), Mapping) else {}
     if days is not None:
@@ -123,6 +140,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     if v2 and pool is not None:
         _pool_chain(c, rec_, pool, lambda: R.pool_open(pool, rec_, program, registered, formats, window, fixed, sup, log,
                                                        bound))
+    if v2:
+        _ports_refused(c, outs, verdicts)
     return c.verdict()
 
 

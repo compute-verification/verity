@@ -25,24 +25,31 @@ from pathlib import Path
 import numpy as np
 import pytest
 from verity_flock.class_statement import UnitStager
-from verity.commitments.windows import rows as CS
-from verity.commitments.windows import wiring as WI
+from verity.commitments.periods import rows as CS
+from verity.commitments.periods import wiring as WI
 from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
-from verity.definitions import boolean as BB
-from verity.definitions.numerics import sparse_mla_split_twins as TW
-from verity.definitions.registry import boolean_sparse_mla as BM
-from verity.definitions.registry import boolean_sparse_mla_split as BX
-from verity.definitions.registry import hopper
-from verity.definitions.registry import sparse_mla as M
+from verity_vllm.definitions import boolean as BB
+from verity_vllm.definitions.numerics import sparse_mla_split_twins as TW
+from verity_vllm.definitions.registry import boolean_sparse_mla as BM
+from verity_vllm.definitions.registry import boolean_sparse_mla_split as BX
+from verity_vllm.definitions.registry import hopper
+from verity_vllm.definitions.registry import sparse_mla as M
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.program_view import spec_statics
 
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
-from verity.circuits.codec import descriptor_id
+from verity_flock.class_statement import UnitStager
+
+from verity_vllm.pipeline import chain_rows as CH
+from verity_vllm.pipeline import chunk_rows as CR
+from verity_vllm.pipeline import serving_rows as SRW
+from verity_vllm.query.manifest import format as MF
+from verity_vllm.query.program_view import spec_statics
 from verity.circuits.defs import bind
+from verity.circuits.codec import descriptor_id
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}

@@ -14,7 +14,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from verity.circuits.codec import canonical_json
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 from .build import Unexpressible
 from .node_window import _GRAIN, NAME, Free, Lowering, _ingress_census, _peer, node_window

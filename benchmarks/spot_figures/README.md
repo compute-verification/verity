@@ -73,7 +73,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
   requests waited with room in the KV pool and the record does not tell the GPUs' arithmetic from a step's token
   budget; the KV pool; or unknown). No figure reads it by its presence. `--serving measured` plans every scope at it:
   a scope's requests are its GPU-seconds times the rate over a request's tokens, a replay takes its request's tokens
-  over the rate, the scope's GPUs stay rho's, and each exfiltration row names the rate and the rate at which its bound
+  over the rate, the scope's GPUs stay the slowdown calculator's, and each exfiltration row names the rate and the rate at which its bound
   would reach 300 GB by proportion (`tokens_per_gpu_second_at_goal_by_proportion`: the bound is taken to go as the
   requests, which a line planned again at that rate need not do). Under a rate that is a lower bound each caption says
   its bounds are lower bounds too. Every two-stage row, at a rate assumed or measured, holds at its verification phase's size: the first
@@ -83,7 +83,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
   under
   `serving` (Figure 1's two forms, Figure 3, Figure 4 and the break-even, whose table starts with the same sentence),
   and `figures.py` and `total_cost.py breakeven` write a measured reading into `measured/` under `--out`, never over
-  the default's files. Without it every figure is planned at rho's fleet utilization, as before the card. The
+  the default's files. Without it every figure is planned at the slowdown calculator's fleet utilization, as before the card. The
   `serve_tax` card stays as priced; `total_cost.py priced-card --serving measured` prices one at the card's rate.
 
   A `partition` card is another cut of the model's circuit: its strata take the place of the `workload` card's strata
@@ -165,6 +165,16 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     (A″) are plotted at each of the three sizes, dark to light, and (B) at one machine's; each series gives K, its
     sessions and the shares of its proving in the phase's statements and on padding. No code builds a verification
     phase of a datacenter's size, one committer over every machine's boundary rows: that line is the cost model's.
+  - A two-stage point's bound is for a deployment whose second stage has the coins its cells read first: on fewer it
+    refuses every honest run. Each two-stage exfiltration series carries them at every β that has a design
+    (`second_stage.at_design`): a sampled replay block's cells, the proof blocks sampled of them and the bytes they
+    read first; the rounds of 2^20 bytes and the challenger's 64-byte coins that hold the first reads of the K replay
+    blocks a verification phase samples, and the replay blocks whose first reads one commitment of the challenger's
+    holds (`challenger.MAX_COINS` coins); Lean's bound on the chance the second stage then refuses an honest run at a
+    first-stage coin the first stage accepts, K·Σ_t k_t·2^−64 (`SpotFlock.secondDraw_refused_le_first`); and that
+    bound added up over the replay blocks the scope samples. `total_cost.limits`' second draw is the same read with a
+    block type of under one proof block a replay block counted at the chance a replay block has it; `at_design`
+    counts every cell, the theorem's condition.
   - Exfiltration: (A) and (A′) in the patterns' form (`card_influenceTwo_le_patterns`), under its two modeling
     conditions (each request serves at most S bits, and no proof block is shared across requests), with the capped
     sets' form (`card_influenceTwo_le_served_min`) at one machine's verification phase beside each, thin and dashed;
@@ -187,7 +197,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     layer's boundary bits under (B); (C)'s is the K incorrect blocks its plan detects, each the widest block's bits.
 - **The bounds against proof overhead** (`figure1.py`, `render.py`): the same model against marginal proof overhead,
   a curve per share of compute spent on replays, interior commitments and proofs.
-  - Scopes are the world (rho's `world-h200` fleet, which computes the census's `world-inference-2027`) and a
+  - Scopes are the world (the slowdown calculator's `world-h200` fleet, which computes the census's `world-inference-2027`) and a
     datacenter (the census's `dc-12500-machines-600s`), each over a week, a month and a year
     (`verity.protocol.MONITORING_PERIODS`).
   - Costs are the scope's GPU-seconds: a replay costs the `replay` card's factor times what it re-runs at serving's
@@ -235,7 +245,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
       serve time, outside the budget, and the JSON gives that hashing's share of the scope's compute
       (`serve_hash_share`).
   - The vertical line is the `proof_overhead` card's `model_overhead`, the marginal: a token's per-block proving
-    seconds, statements' fixed costs excluded, over its MACs at the peak. The reference lines come from rho's reference
+    seconds, statements' fixed costs excluded, over its MACs at the peak. The reference lines come from the slowdown calculator's reference
     (its reference model's, SparseLoCo's syncs scaled to the served model's parameters), the model's checkpoint and
     every `references` card. A line at 0 runs along the axis's floor and is named in the caption, lines that coincide
     are plotted once, and one far above the headline curves is named at the axis's top. Each line's label wraps to stay inside its axis, beside its
