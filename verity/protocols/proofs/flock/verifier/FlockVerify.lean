@@ -1623,7 +1623,7 @@ def registeredSamplingDesign (args : List String) : IO (Except String (Option (L
 def heldToRegistration (samplingDesign : Draw.SamplingDesign) (pop : Nat) : Lean.Json × Nat → Option String
   | (reg, n) =>
     if samplingDesign.toJson.compress != reg.compress then
-      some s!"the law {samplingDesign.toJson.compress} is not the registered samplingDesign {reg.compress}"
+      some s!"the law {samplingDesign.toJson.compress} is not the registered law {reg.compress}"
     else if pop != n then some s!"the population {pop} is not the registered {n}"
     else none
 

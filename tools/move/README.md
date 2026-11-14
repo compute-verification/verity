@@ -140,7 +140,12 @@ a branch behind `main` merges `main` up to the window's base before the window: 
 merge's conflicts, which are the branch's own. Before a branch crosses a move, `restack.py` checks that the move's commit
 is what its script writes on its base, which takes as long as the script. With `--kept` a check that passed is kept in the
 check's cache (under `~/.cache/verity-check/restack-generated/`), so on one machine only the first restack across a move
-runs it. A word move that renames declarations a lock records leaves
+runs it. Where a move's own commit does not say what it ran, or holds hand changes beside its script's output, its record
+is corrected in `tools/move/move_lines.toml`, under the commit's full id: `line`, the move line it ran by, `hand`, the
+paths where it differs from its script's output, and a `reason`. Every reader of a move line reads that table first; a
+move with `hand` passes the check only where it differs in exactly those paths, and its crossing still runs the script
+on the branch, then merges the hand changes in (step `hand`, `conflicted` where the branch changed the same lines). A
+word move that renames declarations a lock records leaves
 those records for a commit of their own: `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves`
 prints. `stage.py` makes the move's commits alone: it makes no records commit and runs no records run.
 

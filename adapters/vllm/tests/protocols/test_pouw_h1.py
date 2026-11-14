@@ -953,11 +953,11 @@ def test_the_batch_order_is_model_runner_v2s():
     has one."""
     so = SimpleNamespace(num_scheduled_tokens={"p": 5, "d": 1, "v": 3, "x": 2, "e": 1},
                          scheduled_spec_decode_tokens={"v": [7, 8]})
-    assert RQ.batch_order(Runner(), so) == [("v", 3), ("d", 1), ("e", 1), ("x", 2), ("p", 5)]
+    assert PHK.batch_order(Runner(), so) == [("v", 3), ("d", 1), ("e", 1), ("x", 2), ("p", 5)]
     own = type("ModelRunner", (), {"__module__": __name__, "decode_query_len": 1})()
     globals()["sort_batch_req_ids"] = lambda tokens, drafts, q: sorted(tokens)
     try:
-        assert [r for r, _n in RQ.batch_order(own, so)] == ["d", "e", "p", "v", "x"]
+        assert [r for r, _n in PHK.batch_order(own, so)] == ["d", "e", "p", "v", "x"]
     finally:
         del globals()["sort_batch_req_ids"]
 

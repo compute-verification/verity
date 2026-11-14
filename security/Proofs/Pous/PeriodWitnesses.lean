@@ -150,7 +150,7 @@ def honestChallengerRun (root block : ByteArray) : MemoryChallenger.Properties.R
   ⟨honestCoins, PousCheck.Run.DEPLOYED.limitNs, PousCheck.P2.Params.deployed.blockBytes, root,
     List.replicate 105 ⟨0, 0, block⟩⟩
 
-noncomputable def certifiedBlock : ByteArray := (flat certifiedStore)[0]!
+noncomputable def certifiedStoreBlock : ByteArray := (flat certifiedStore)[0]!
 
 /-- The closed honest audit: setup's honest store and output under the zero salt, one trusted LMS key and its accepted
 session, and that key's challenger record of 105 timely answers to block 0. -/
@@ -164,7 +164,7 @@ noncomputable def certifiedAudit : Audits Unit Unit where
   W _ _ := false
   session _ := certifiedRecord
   device _ := ⟨fun pk =>
-    if pk = certifiedPrivateKey.publicKey then [honestChallengerRun certifiedPublic.root certifiedBlock] else []⟩
+    if pk = certifiedPrivateKey.publicKey then [honestChallengerRun certifiedPublic.root certifiedStoreBlock] else []⟩
 
 theorem certified_setup_accepts (hP : Pous.P2.Assumptions.PrimeP16448)
     (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
@@ -251,9 +251,9 @@ theorem certifiedStore_shaped
     PousCheck.Properties.SecurityProofs.beOfNat_size]
   rfl
 
-theorem certifiedBlock_eq
+theorem certifiedStoreBlock_eq
     (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
-    certifiedBlock =
+    certifiedStoreBlock =
       PousCheck.Properties.SecurityProofs.Accepts.honestBlock (keyPrefix certifiedSalt) 0 0 := by
   have hflat := Pous.EndToEnd.SecurityProofs.flat_getElem? (certifiedStore_shaped hk) 0 0 (by decide)
   have hseg : certifiedStore[0]? =
@@ -278,28 +278,28 @@ theorem certifiedBlock_eq
       rw [PousCheck.Properties.SecurityProofs.Accepts.honestSegment_size]
       decide)
   simp only [Nat.zero_mul, Nat.zero_add, hseg, Option.bind_some, hblock] at hflat
-  rw [certifiedBlock, Pous.EndToEnd.SecurityProofs.getElem!_of_some hflat]
+  rw [certifiedStoreBlock, Pous.EndToEnd.SecurityProofs.getElem!_of_some hflat]
 
-theorem certifiedBlock_size
+theorem certifiedStoreBlock_size
     (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
-    certifiedBlock.size = P2.Params.deployed.blockBytes := by
-  rw [certifiedBlock_eq hk]
+    certifiedStoreBlock.size = P2.Params.deployed.blockBytes := by
+  rw [certifiedStoreBlock_eq hk]
   obtain ⟨k, t, -, hkey⟩ := hk 0 0 (by decide) (by decide)
   rw [PousCheck.Properties.SecurityProofs.Accepts.honestBlock_eq hkey,
     PousCheck.Properties.SecurityProofs.beOfNat_size]
   rfl
 
-theorem certifiedBlock_digest
+theorem certifiedStoreBlock_digest
     (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
-    MemoryChallenger.blockDigest certifiedBlock =
+    MemoryChallenger.blockDigest certifiedStoreBlock =
       PousCheck.Run.row (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt) 0 := by
-  rw [certifiedBlock_eq hk, PousCheck.Properties.SecurityProofs.Accepts.setupDigests,
+  rw [certifiedStoreBlock_eq hk, PousCheck.Properties.SecurityProofs.Accepts.setupDigests,
     PousCheck.Properties.SecurityProofs.Accepts.digestTable_row
       (fun _ => PousCheck.Properties.SecurityProofs.Accepts.rowDigest_size _)
       P2.Params.deployed.blocks 0 (by decide)]
   rfl
 
-noncomputable def certifiedObserved : MemoryChallenger.Properties.Observed := ⟨0, 0, certifiedBlock⟩
+noncomputable def certifiedObserved : MemoryChallenger.Properties.Observed := ⟨0, 0, certifiedStoreBlock⟩
 
 theorem honest_recorded_prefix
     (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
@@ -319,13 +319,13 @@ theorem honest_recorded_prefix
       have hidx : (Array.replicate 105 0)[n]! = 0 := by
         rw [getElem!_pos _ n (by simp; omega)]
         simp
-      simp [MemoryChallenger.Properties.Recorded.round, certifiedObserved, certifiedBlock_size hk,
-        honestCoins, MemoryChallenger.CoinTree.k, hidx, certifiedBlock_digest hk, honestRound,
+      simp [MemoryChallenger.Properties.Recorded.round, certifiedObserved, certifiedStoreBlock_size hk,
+        honestCoins, MemoryChallenger.CoinTree.k, hidx, certifiedStoreBlock_digest hk, honestRound,
         MemoryChallenger.Round.elapsedNs, Array.range_succ]
 
 theorem honestChallengerRun_recorded
     (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
-    (honestChallengerRun certifiedPublic.root certifiedBlock).recorded =
+    (honestChallengerRun certifiedPublic.root certifiedStoreBlock).recorded =
       ⟨honestRounds (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt),
         some MemoryChallenger.COMPLETE⟩ := by
   unfold MemoryChallenger.Properties.Run.recorded honestChallengerRun
@@ -336,7 +336,7 @@ theorem certified_signed
     (ω : Unit × Unit × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
     {m : ByteArray} (hm : MemoryChallenger.Properties.challengePhaseMessage (certifiedAudit.session ω).signed = some m) :
     MemoryChallenger.Properties.Signed (certifiedAudit.device ω) certifiedPrivateKey.publicKey m := by
-  let run := honestChallengerRun certifiedPublic.root certifiedBlock
+  let run := honestChallengerRun certifiedPublic.root certifiedStoreBlock
   refine ⟨run, ?_, MemoryChallenger.COMPLETE, certifiedRecordMessage, ?_, ?_, ?_⟩
   · simp [certifiedAudit, run]
   · simpa [run] using congrArg MemoryChallenger.Properties.Recorded.ended (honestChallengerRun_recorded hk)
