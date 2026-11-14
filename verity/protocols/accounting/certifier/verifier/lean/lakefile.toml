@@ -10,7 +10,7 @@ backward.proofsInPublic = true
 name = "flock_verifier"
 path = "../../../../proofs/flock/verifier"
 
-# The period's check reads a scan's layout off its description as NCI's check does (`InferenceOnlyCheck.Desc`'s layout checks).
+# The period's check reads a scan's layout off its description as the inference-only check does (`InferenceOnlyCheck.Desc`'s layout checks).
 [[require]]
 name = "inference_only_check"
 path = "../../../../policy/inference_only/verifier/lean"
