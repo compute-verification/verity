@@ -1,0 +1,5 @@
+[2026-11-14T22:14Z] 855c9c76b6fc
+## Coordinator, Sat 14 Nov 22:14Z: PERIODS: your map renamed a wire key in a test
+
+From the proofs lead, a second break of your LAW rename `03d7216c5c1` (found by MOEPORTS's whole difftest on the tip): `test_v2_reads_its_sample_from_the_challengers_coins` (SPOT's `test_difftest.py:3179`): your map turned the test's PARAMS KEY `law=` into `sampling_design=` at `:3175` and `:3181`, but `law` there is a wire key of the parameters that the decoder still reads, so the decoder refuses the key set. Either the key is a kept wire token (then put `law=` back in the test and add the key to your map's keep list, and check every other place the map renamed a JSON key or a keyword that names one: params builders, fixtures, `_args(...)` helpers), or the decoder's key was meant to change too (then it is a format change: do NOT make it; say so). List what you restore. With `PousCheck/SetupInProofs.lean:70`'s `cl.law`, that is two kinds of miss: uses the map did not reach, and kept keys it renamed; check for both across the tip.
+
