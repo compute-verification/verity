@@ -9,8 +9,9 @@
 #
 # Env: CLASSES (default "s8 s2 u2 u4 zero"), ENCODINGS (wgmma's, default "s8s8 u8u8"; u8u8 runs on s8 and s2, the classes
 # an offset changes), KERNELS (default "wgmma lt"), RATIOS (default "0 1.70 2.3", 0 first), SECS (15), LT_SECS (10),
-# ROUNDS (2), CLOCK (1830), LEASE_MIN (30). cuBLASLt runs alone only: beside it the hash's resident CTAs, though paced,
-# hold the SMs its GEMM's CTAs need, which measures scheduling, not the rate.
+# ROUNDS (2), CLOCK (required: the SM clock to lock, in MHz; the H200 card's clock.tensor), LEASE_MIN (30). cuBLASLt
+# runs alone only: beside it the hash's resident CTAs, though paced, hold the SMs its GEMM's CTAs need, which measures
+# scheduling, not the rate.
 # Writes $OUT/rates.jsonl (class_rate's lines, each with its round), card.json and summary.txt (summarize.py's reading
 # of this card).
 set -uo pipefail
@@ -19,7 +20,8 @@ R=$(cd "$D/../.." && pwd)
 O=${OUT:?}
 export PATH=/usr/local/cuda/bin:$PATH CUDA_MODULE_LOADING=EAGER
 export CLASSES=${CLASSES:-s8 s2 u2 u4 zero} ENCODINGS=${ENCODINGS:-s8s8 u8u8} KERNELS=${KERNELS:-wgmma lt}
-export RATIOS=${RATIOS:-0 1.70 2.3} SECS=${SECS:-15} LT_SECS=${LT_SECS:-10} ROUNDS=${ROUNDS:-2} CLOCK=${CLOCK:-1830}
+export RATIOS=${RATIOS:-0 1.70 2.3} SECS=${SECS:-15} LT_SECS=${LT_SECS:-10} ROUNDS=${ROUNDS:-2}
+export CLOCK=${CLOCK:?set CLOCK to the SM clock to lock in MHz, clock.tensor of the H200 card}
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 nvcc --version > "$O/nvcc.txt" 2>&1
@@ -64,4 +66,4 @@ json.dump({"card": os.environ.get("CARD") or os.uname().nodename, "uuid": gpu[1]
            "name": gpu[2] if len(gpu) > 2 else None, "clock_mhz": int(os.environ["CLOCK"]),
            "clock_locked": bool(lock) and lock[-1].split()[-1] == "0"}, open(f"{o}/card.json", "w"), indent=1)
 EOF
-python3 "$D/summarize.py" "$O" | tee "$O/summary.txt"
+PYTHONPATH="$R" python3 "$D/summarize.py" "$O" | tee "$O/summary.txt"
