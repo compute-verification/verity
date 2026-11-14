@@ -513,7 +513,7 @@ class Layout:
         None for a class that doesn't."""
         if not self.logits:
             return None
-        from verity.definitions.registry import greedy_stages as GS
+        from verity_vllm.definitions.registry import greedy_stages as GS
 
         fn, t = self.check, P.template_id(self.check)
         V, N = (int(fn.bindings[k]) for k in ("V", "N")) if getattr(fn, "defn", None) is GS.GreedySelect else (0, 0)

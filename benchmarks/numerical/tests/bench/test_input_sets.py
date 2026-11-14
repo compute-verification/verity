@@ -20,7 +20,7 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm
 from verity.circuits.silicon import models
 from verity.circuits.silicon.models import BLACKWELL_SM120_NVF4 as M
-from verity.definitions.registry import prims as VP
+from verity_vllm.definitions.registry import prims as VP
 from verity_flock import input_sets as IS
 from verity_flock import subcircuit_templates as TM
 from verity_flock import synthetic as SY

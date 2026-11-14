@@ -29,7 +29,7 @@ untraced = ["tests/test_difftest.py"]
 inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/program/__init__.py",
           # `verity_difftest`, which builds and drives the evaluator
           "tools/difftest/python/verity_difftest",
-          "verity/definitions/registry", "security/Definitions/Pouw/PearlC/RowPrimVectors.lean",
+          "adapters/vllm/verity_vllm/definitions/registry", "security/Definitions/Pouw/PearlC/RowPrimVectors.lean",
           "adapters/vllm/tests/regression/store_io.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/__main__.py",
           "tools/research/src/research/cli.py", "tools/research/src/research/waitcap.py", "tools/research/src/research/clone.py", "tools/research/src/research/compare.py",
