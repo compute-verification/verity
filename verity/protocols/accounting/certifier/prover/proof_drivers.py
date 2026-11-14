@@ -15,7 +15,7 @@ from typing import Any, Protocol
 
 
 class ProofDrivers(Protocol):
-    #: the one-stage audit's driver: ``SCHEME``, ``run``, ``lean_verify``, ``proved_units``, ``challenger_draw``, ...
+    #: the one-stage audit's driver: ``SCHEME``, ``run``, ``lean_verify``, ``proved_units``, ``challenger_sample``, ...
     a0: Any
     #: the requirement audit's driver: ``M_MAX``, ``statement_checks``, ``frame_ports``, ``opens``, ``public_bcs``
     a7: Any

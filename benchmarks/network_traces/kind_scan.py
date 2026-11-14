@@ -124,7 +124,7 @@ ANSWER = {
     **{f"profile.placement.{k}": S for k in ("kind", "trusted-device", "uncounted")},
     "profile.placement.parties.*": S,
     **{f"profile.placement.links[].{k}": S for k in ("name", "from", "to", "counted", "via")},
-    **{f"public.{k}": O for k in ("K", "eps", "cells", "schedules", "windows")}, "public.held[]": O,
+    **{f"public.{k}": O for k in ("K", "eps", "cells", "schedules", "windows", "start")}, "public.held[]": O,
     "public.scans[].tied[]": O, **{f"public.charged[].{k}": O for k in ("delta", "drawn", "units", "wrong_units")},
     **{f"public.{f}[].{k}": O for f in ("audits", "scans")
        for k in ("delta", "drawn", "faulty_bits", "faulty_entries", "faulty_sets", "free", "jitter", "units",

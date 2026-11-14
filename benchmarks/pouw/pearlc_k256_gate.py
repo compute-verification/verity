@@ -5,7 +5,7 @@ scheme ``pearl-c-h100-v1-h3`` itself (its forming, chain, peel and debit, bit fo
 At k = 256 a word is 8 atoms in two promotion groups of 4, so both searches are exhaustive:
 
 * **Cross-group cancellation.** For every word, every one of the 2^8 sets of skipped atoms (each group from +0 under its
-  mask, promoted into the total) that leaves the ticket word unchanged.  The served debit (`pearl_c_debit.word_debit`, P1's
+  mask, promoted into the total) that leaves the ticket word unchanged.  The served debit (`pearl_c_inert_work.word_inert_work`, P1's
   `jointFlags`) flags only sets inside one group; an atom of a kept set it doesn't flag is the residual.
 * **Peel shortcuts.**  U is C̃ through four BF16 k16 steps (`pearl_c.peel`); for every word, every one of the 2^4 sets of
   skipped steps that leaves U unchanged (U = C̃ is the whole peel skipped).  The debit charges none of them.  Also counted:
@@ -16,8 +16,8 @@ when it holds for every word of a fragment: the smallest, mma.sync m16n8 (16 row
 saving per word (an existence count, P1's convention) and per fragment (what the cost model prices), as shares of the
 cells' credit (`PearlC.credit_of` at n = 6,144, GLM-5.3's down projections); an undebited atom costs `atom_units` (40), a
 peel step 16 BF16 MACs (32).  A cell is the tile's credited words (rows passing the noise floor and liveness).  Each cell
-also reports whether the verifier accepts it: its replayed debit within ρ of its credit (`tile_cap_ok`), and every
-credited row's within its row cap of its own (-h3's, `clear_work.check_opened`): 4ρ at k = 256 (`PearlC.row_cap_at`),
+also reports whether the verifier accepts it: its replayed debit within ρ of its credit (`tile_inert_bound_ok`), and every
+credited row's within its row cap of its own (-h3's, `clear_work.check_opened`): 4ρ at k = 256 (`PearlC.row_inert_share_at`),
 under seven flagged atom-words over a 64-column tile, where ρ would allow under two.
 
 The gate passes when every in-domain cell's fragment saving (cross-group residual plus peel), accepted or not, is at most
@@ -50,7 +50,7 @@ import run_result
 
 from verity.protocols.accounting.pouw.prover.schemes import get
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c_debit as D
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_inert_work as D
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape, Tile
 
@@ -160,20 +160,20 @@ def cell(fam: str, run: int, rows: int = 64, cols: int = 64) -> dict:
     assert (final[0] == c_words.view(np.float32)).all(), "the census's atom disagrees with the served chain"
     keeps = final == final[0]
     flags_k, _ = K.debit(A, B, 4)
-    served = [D.word_debit(ops.a.codes[i], ops.b.codes[j], s.device) for i in range(rows) for j in range(cols)]
+    served = [D.word_inert_work(ops.a.codes[i], ops.b.codes[j], s.device) for i in range(rows) for j in range(cols)]
     flags = np.array([f for f, _ in served], dtype=bool)
     zeros = np.array([z for _, z in served], dtype=np.int64)
-    assert (flags == flags_k).all(), "pearlc_census.debit disagrees with the served word_debit"
+    assert (flags == flags_k).all(), "pearlc_census.debit disagrees with the served word_inert_work"
     au = D.atom_units(s.device, s.prices)
-    word_debit = [D.debit_units(int(f.sum()), 0, s.prices, s.device, zeros=int(z)) for f, z in zip(flags, zeros)]
-    debit = sum((d for d, c in zip(word_debit, cred) if c), Fraction(0))
+    word_inert_work = [D.inert_work_units(int(f.sum()), 0, s.prices, s.device, zeros=int(z)) for f, z in zip(flags, zeros)]
+    debit = sum((d for d, c in zip(word_inert_work, cred) if c), Fraction(0))
     cap = s.cap * credit * int(cred.sum())
     row_over = []
     for i in range(rows):
         sel = cred.reshape(rows, cols)[i]
         if sel.any():
-            d_i = sum((word_debit[i * cols + j] for j in np.flatnonzero(sel)), Fraction(0))
-            row_over.append(d_i > s.row_cap_at(k) * credit * int(sel.sum()))
+            d_i = sum((word_inert_work[i * cols + j] for j in np.flatnonzero(sel)), Fraction(0))
+            row_over.append(d_i > s.row_inert_share_at(k) * credit * int(sel.sum()))
     tile_ok = bool(cred.any()) and debit <= cap
     accepted = tile_ok and not any(row_over)
     fb = (flags.astype(np.int64) << np.arange(8)).sum(1)
@@ -326,7 +326,7 @@ def main() -> None:
         f["rows_over_row_cap"] += r["rows_over_row_cap"]
     falsified = [r for r in rows if r.get("falsifier")]
     doc = {"tool": "pouw_pearlc_k256_gate", "scheme": SCHEME, "k": K_, "n_credit": N_CREDIT, "fragment": list(FRAG),
-           "tile_cap": str(get(SCHEME).cap), "row_cap": str(get(SCHEME).row_cap_at(K_)),
+           "tile_cap": str(get(SCHEME).cap), "row_cap": str(get(SCHEME).row_inert_share_at(K_)),
            "threshold": float(THRESHOLD), "selftest_mismatches": bad, "cells": rows, "in_domain_cells": len(scored),
            "accepted_in_domain_cells": sum(r["accepted"] for r in scored), "acceptance_by_family": by_family,
            "worst_fragment_share": worst and {x: worst[x] for x in ("family", "run", "fragment_share_of_credit",
