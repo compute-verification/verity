@@ -148,10 +148,13 @@ sha256sum "$BIN" "$LEAN" "$LOOP" | tee "$O/binaries.sha256" | tee -a "$O/job.log
 
 ARMS=${COLD_ARMS:-gpu,cpu}
 case ",$ARMS," in *,gpu,*) card_free || exit 11 ;; esac
-trap 'rm -rf "$SCR"' EXIT
+# the stamping wrappers are scripts: on /workspace, since a node may mount /dev/shm noexec
+STAMPED=$FLOCK_WORK/cold-stamped/${RESEARCH_RUN_ID:-$$}
+trap 'rm -rf "$SCR" "$STAMPED"' EXIT
 unpack || exit 1
 S=$SCR/sessions; mkdir -p "$S"
-read -r WBIN WLEAN WLOOP < <("$PY" benchmarks/one_stage/member_seconds.py wrap "$SCR/stamped" "$BIN" "$LEAN" "$LOOP" | tr '\n' ' ')
+read -r WBIN WLEAN WLOOP < <("$PY" benchmarks/one_stage/member_seconds.py wrap "$STAMPED" "$BIN" "$LEAN" "$LOOP" | tr '\n' ' ')
+findmnt -no OPTIONS --target "$STAMPED" | grep -qw noexec && { log "$STAMPED is on a noexec mount: its wrappers can't run"; exit 1; }
 export GPU_LEASE_WHO=${GPU_LEASE_WHO:-proofs/cold-sessions/${RESEARCH_RUN_ID:-local}}
 END=${COLD_END:-$(( $(date +%s) + 86400 ))}
 est() { local v="COLD_EST_$1_$2" w="COLD_EST_$1"; echo "${!v:-${!w:-1800}}"; }
@@ -159,7 +162,7 @@ end_of() { local v="COLD_END_$1"; echo "${!v:-$END}"; }
 keep() {
   (cd "$S" && find . -type f -size -8M ! -name circuit.txt ! -name 'inst*.bin' ! -name 'pub*.bin' ! -path '*/archive/*' \
     \( ! -path '*/sessions/*/*' -o -name session.json \) -print0 | xargs -0 -r -I{} cp --parents {} "$O/sessions/")
-  cp "$SCR/stamped/stamps.txt" "$O/" 2>/dev/null
+  cp "$STAMPED/stamps.txt" "$O/" 2>/dev/null
 }
 mkdir -p "$O/sessions"
 VQ=$SCR/verify.lock
@@ -180,14 +183,16 @@ for arm in ${ARMS//,/ }; do
       card_free || { rc=11; break; }
       "${LEASE[@]}" 1 --on "$COLD_CARD" --cores "$CPUS" --max-min "$mm" -- bash -c '"$@" --device "$CUDA_VISIBLE_DEVICES" --card "$GPU_LEASE_UUID"' _ \
         "$PY" benchmarks/one_stage/cold_sessions.py prove "${args[@]}" --bin "$WBIN" --zk-server "$WLOOP" \
-        --stamps "$SCR/stamped/stamps.txt" --timeout $(( mm * 60 - 30 )) >> "$O/cold.log" 2>> "$O/cold.err"
+        --stamps "$STAMPED/stamps.txt" --timeout $(( mm * 60 - 30 )) >> "$O/cold.log" 2>> "$O/cold.err"
       x=$?
     else
       taskset -c "$CPUS" "$PY" benchmarks/one_stage/cold_sessions.py prove "${args[@]}" --bin "$WBIN" --zk-server "$WLOOP" \
-        --stamps "$SCR/stamped/stamps.txt" --timeout $(( mm * 60 )) >> "$O/cold.log" 2>> "$O/cold.err"
+        --stamps "$STAMPED/stamps.txt" --timeout $(( mm * 60 )) >> "$O/cold.log" 2>> "$O/cold.err"
       x=$?
     fi
-    log "m$k $arm: exit $x; $(grep -c "^COLD .*\"k\": $k, .*\"arm\": \"$arm\"" "$O/cold.log") record"
+    n=$(grep -c "^COLD .*\"k\": $k, .*\"arm\": \"$arm\"" "$O/cold.log")
+    log "m$k $arm: exit $x; $n record"
+    [ "$n" = 0 ] && [ "$rc" = 0 ] && rc=1
     [ "$x" = 75 ] && { log "the lease refused card $COLD_CARD (75)"; rc=11; break; }
     # the verdict on the Lean CPUs, one at a time, beside the next session
     ( flock 7; VERDICT "${args[@]}" --lean "$WLEAN" >> "$O/cold.log" 2>> "$O/cold.err" ) 7> "$VQ" &
