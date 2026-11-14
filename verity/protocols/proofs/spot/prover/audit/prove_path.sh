@@ -206,7 +206,7 @@ print(json.dumps({c["name"]: {"digest": c["digest"], "argv": sys.argv[2:]}}))' $
   root=$($PY -c 'import json, sys
 print(next(w["run_root"] for w in map(json.loads, open(sys.argv[1])) if int(w["window"]) == int(sys.argv[2])))' $REC_RUN/windows.jsonl $REC_K) || return 1
   law=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["law"])' $part) || return 1
-  $TIME $PY verity/protocols/proofs/spot/verifier/one_stage/records_audit.py audit --window $W/$name-windows/rank0 --law $law --run $root \
+  $TIME $PY verity/protocols/proofs/spot/prover/audit/records_audit.py audit --window $W/$name-windows/rank0 --law $law --run $root \
     --opening $REC_RUN/advice/w$REC_K/private/opening.json --compilers $O/$name/compilers.json --template-sets $W/sets \
     ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
     --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
@@ -278,7 +278,7 @@ elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
     run=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["run"])' $O/$name/verifier/tie.json) || return 1
     units=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["units"])' $O/$name/verifier/tie.json) || return 1
     mkdir -p $O/$name/window && cp $W/$name-window/{registration,window,index,circuit}.json $W/$name-window/m*-public.bin $O/$name/window/
-    $TIME $PY verity/protocols/proofs/spot/verifier/one_stage/records_audit.py audit --window $W/$name-window --law work-rate:$units/$units --circuit $c --run $run \
+    $TIME $PY verity/protocols/proofs/spot/prover/audit/records_audit.py audit --window $W/$name-window --law work-rate:$units/$units --circuit $c --run $run \
       --registered $O/$name/verifier/registered.json \
       ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
       --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
