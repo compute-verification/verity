@@ -21,6 +21,9 @@
     "benchmarks/network_traces/certifier_key.py": [
      "public_json",
      "read_public"
+    ],
+    "benchmarks/network_traces/warden_serve.py": [
+     "start_from_json"
     ]
    }
   },
@@ -36,6 +39,7 @@
      "_counted",
      "_phase",
      "_spread",
+     "FILED",
      "CHECKED",
      "UNHANDED",
      "key_sha512",
@@ -72,6 +76,7 @@
      "CELLS_TIMING",
      "TIMINGS",
      "cell_timing",
+     "check_start",
      "check"
     ]
    }
@@ -127,6 +132,7 @@
     "benchmarks/network_traces/active_replay.py": [
      "peak_rss_mb",
      "_quiet_runtime",
+     "cpu_ranges",
      "_usage"
     ],
     "benchmarks/network_traces/certifier_serve.py": [
