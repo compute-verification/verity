@@ -62,7 +62,7 @@ COMPOSE_KD = 96000
 # The Sm120 headlines' window (`security/Definitions/Accounting/Guarantees/Headline.lean`): checks·(√δ_fork + n_π·δ_ZK) ≤ 2^-41.
 SM120_CHECKS, SM120_BUDGET = 48000, -41.0
 
-# Dither's design point (`verity/protocols/accounting/pouw/verifier/dither/PROTOCOL.md`; q at `Guarantees/Dither.lean`).
+# Dither's design point (`verity/protocols/experimental/dither/PROTOCOL.md`; q at `Guarantees/Dither.lean`).
 DITHER = {"delta_coin": 1e-6, "G": 1.15e7, "q": 13816}
 
 # SPOT's binding error ε_bind as its one-stage audit states it, at k = ⌈2^24/e⌉ and M, R_w at 2^192.
