@@ -1926,12 +1926,12 @@ def bounded_admission(com: Any, asz: dict[str, Any], *, args: Options, reqs: lis
     print(f"[delta] bounded staging DOMINANT CONTRIBUTOR ({kind}): {(_admit.get('dominant_contributor') or {}).get('text')}", flush=True)
     (out / f"host_admission_{kind}.json").write_text(json.dumps(_admit, indent=1, default=str) + "\n")
     (out / f"arena_sizing_{kind}.json").write_text(json.dumps(asz, indent=1, default=str) + "\n")   # + cap, admission_of_record, bound
-    if getattr(args, "host_admit", None) is not None:
+    if (host_admit := getattr(args, "host_admit", None)) is not None:
         if host_limit is None:
             print("[delta] REFUSE (--host-admit): no cgroup memory limit readable to admit against", flush=True)
             sys.exit(3)
-        if _bound > host_limit * (1.0 - float(args.host_admit)):
-            print(f"[delta] REFUSE (--host-admit {args.host_admit}): host peak bound {_bound >> 20} MiB > {(1.0 - float(args.host_admit)):.2f} x cgroup "
+        if _bound > host_limit * (1.0 - float(host_admit)):
+            print(f"[delta] REFUSE (--host-admit {host_admit}): host peak bound {_bound >> 20} MiB > {(1.0 - float(host_admit)):.2f} x cgroup "
                   f"{host_limit >> 20} MiB -- predicted OOM, not launched; dominant contributor: "
                   f"{(_admit.get('dominant_contributor') or {}).get('text')}", flush=True)
             sys.exit(3)
@@ -2071,9 +2071,9 @@ def weights_of_record_digests(args: Options, eng: va.Engine, *, engine_args: dic
         from verity_vllm.check import weights_of_record as WR
         TL.start("validate.weights_of_record_digests", kind=kind)
         try:
-            if getattr(args, "weights_of_record", None):
-                _wor_rec = json.loads(Path(args.weights_of_record).read_text())
-                _wor_rec["source"] = str(args.weights_of_record)
+            if wor := getattr(args, "weights_of_record", None):
+                _wor_rec = json.loads(Path(wor).read_text())
+                _wor_rec["source"] = str(wor)
             elif served is not None:
                 _wor_rec = WR.served_record(required_manifest, args.checkpoint_dir, checkpoints_manifest=args.checkpoints,
                                             kv_cache_dtype=str(engine_args.get("kv_cache_dtype") or "auto"))
@@ -2081,11 +2081,11 @@ def weights_of_record_digests(args: Options, eng: va.Engine, *, engine_args: dic
                 (Path(args.out) / "weights_of_record.json").write_text(json.dumps(_wor_rec, indent=1) + "\n")
             else:
                 _pd = args.program_dir
-                if not _pd and getattr(args, "programs_root", None):
+                if not _pd and (programs_root := getattr(args, "programs_root", None)):
                     # prefer a COMPONENT Program (build_request_LP*_T*) over the default wrapper shape build_request: at
                     # B>=2 only the components are of record (the record binds to the manifest's component digests)
-                    _cands = sorted(p for p in Path(args.programs_root).glob("build_request_LP*_T*") if (p / "instances.json.gz").exists()) or \
-                             sorted(p for p in Path(args.programs_root).glob("build_request*") if (p / "instances.json.gz").exists())
+                    _cands = sorted(p for p in Path(programs_root).glob("build_request_LP*_T*") if (p / "instances.json.gz").exists()) or \
+                             sorted(p for p in Path(programs_root).glob("build_request*") if (p / "instances.json.gz").exists())
                     _pd = str(_cands[0]) if _cands else None
                 if not _pd:
                     raise RuntimeError("--checkpoint-dir needs the Program of record (--program-dir / --programs-root)")
