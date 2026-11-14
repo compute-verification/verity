@@ -28,14 +28,16 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 and it then publishes the sampled and proved units with the exact bounds at δ and whether every verdict ran, those not
 of record too (`publicOf`), and the profile of one level
 `unit`, the partition's units, sampled by the sampling design at δ (`profileOf`). That the check accepts every such commitment and
-evidence that keeps the caller's facts too is completeness, `Properties.Spot.acceptMeans_complete`.
+evidence is completeness, `Properties.Spot.acceptMeans_complete`.
 
-**The caller's facts** (`CallerHeld`) are not `AcceptMeans`'s. The registration check also holds the record to what
-SPOT's caller hands the verifier beside the record and SPOT's own log: the day's declared program (`DeclaredDay`), the
+**The caller's facts** (`CallerHeld`) are not `AcceptMeans`'s, and SPOT's check doesn't hold them. The caller's check
+(`VStar.Recursive.Caller.check`) holds the record to what SPOT's caller hands the verifier beside the record and SPOT's
+own log: the day's declared program (`DeclaredDay`), the
 window's stream and prover, its seed salt, its registered compiler and advice length, its pool's reset, once a week,
 and its window opening the pool the previous window of record left, or the empty pool where the public rule or its
-reset restarts it, for a verifier with a pool (`PoolChained`). They are stated where SPOT is called, of the case the caller's check accepted
-(`Properties.Remote.StageHeld`), and proved of this check as `Properties.Spot.callerHeld_of_accept`.
+reset restarts it, for a verifier with a pool (`PoolChained`). They are stated where SPOT is called, of the case the
+caller's check accepted (`Properties.Remote.StageHeld`), which reads them off that check's emptiness
+(`Properties.Remote.CallerCheckMeans`).
 
 The digest the receipt is held to is the commitment's own (`Commitment.digest`), which `OneStage.commitmentOf` computes
 as the window record's digest of the record it decodes (`Flock.WindowRecord.digest`, `DigestIsRecord's`). A Bernoulli law is accepted as the code accepts
@@ -270,7 +272,7 @@ def R7 (rec : Json) (v : Registration.Verifier) : Prop :=
     SuppliedIs es mine' v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)) v.schemas)
 
-/-- The pool chain R7's check holds (`Registration.poolChained`), a caller's fact (`CallerHeld`): for a verifier with a
+/-- The pool chain the caller's check holds (`VStar.Recursive.Caller.poolChained`), a caller's fact (`CallerHeld`): for a verifier with a
 pool, the record's entry for the value its window
 opens the pool from (`pin`; `Registration.entryOf`, the last entry naming it) has the domain and root of the pool the
 window opens (`Registration.poolOpen`): the previous record's entry for the value the pool was left in (`pout`) when the
@@ -310,8 +312,8 @@ def Registered (v : Registration.Verifier) (rec law : Json) : Prop :=
   R1 rec v law ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧
     (ExpectsV2 v → R7 rec v ∧ PinnedHeld rec v) ∧ R8 v ∧ RL v
 
-/-- The caller's facts: what the registration check holds the record to against what SPOT's caller hands the verifier
-beside the record and SPOT's own log. The record names its day's declared program (`DeclaredDay`, the registration
+/-- The caller's facts: what the caller's check (`VStar.Recursive.Caller.check`) holds the record to against what SPOT's
+caller hands the verifier beside the record and SPOT's own log. The record names its day's declared program (`DeclaredDay`, the registration
 log's declarations); its window names the stream and the prover a verifier is bound to (`binding`), the seed salt the
 verifier read from the challenger's log (`RunSeedSalt`) and its pool's reset, week and spent mark (`RunPoolReset`,
 `RunPoolWeek`, `RunPoolSpent`), at most one reset a week (`PoolResetOnce`), and the registration log's compiler and

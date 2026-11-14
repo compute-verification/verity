@@ -76,7 +76,7 @@
   window that opens before UTC midnight and closes after is a window of its open's day. R2 refuses a day with no
   declaration (`R2-undeclared`), a day declared twice (`R2-declared-twice`, which the log's own check refuses as
   `duplicate-declaration`), and a record whose program is not the day's declared one (`R2-declared`), as R2's Lean does
-  (`Spot.Registration.declaredCode`), which `verifier.check` runs beside it.
+  (`VStar.Recursive.Caller.declaredCode`, the caller's check), which `verifier.check` runs beside it.
 * **Binding** (`binding`: `{"stream", "prover"}`, the verifier's stream digest and the identity it registered the prover
   under): R6 also holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them,
   so a tile seeded for one prover's stream is refused in any other's, in the same window or not.

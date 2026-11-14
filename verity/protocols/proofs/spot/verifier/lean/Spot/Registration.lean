@@ -27,6 +27,10 @@ now (`unwindowed`, `OneStage.paramsOfJson`). A value it fills itself (`supplied`
 window and its own bytes, under public salts) is held to the root it recomputes from this record and the log instead
 (`R7-supplied`), never to the log's.
 
+The binding, the seed salt, the registered compiler, the declarations and the pool below are what SPOT's caller hands
+the verifier beside the record and SPOT's own log. `check` reads none of them: the caller's check
+(`VStar.Recursive.Caller.check`, in `spot_flock`) refuses by the codes named here, after SPOT's check accepts.
+
 A verifier bound to a stream and a prover (`binding`: its stream's digest and the identity it registered the prover under)
 holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them, so a tile seeded
 for one prover's stream is refused in any other's.
@@ -42,7 +46,7 @@ where the log registers none, to name neither a compiler nor advice (`R6-compile
 reads is refused by name.
 
 A verifier that reads the registration log's declarations (`declared`: the window's day and the log's `(day, program)`
-declarations) holds R2's program to the day's one declared circuit (`declaredCode`): `R2-undeclared` when the day has no
+declarations) holds the record's program to the day's one declared circuit (`declaredCode`): `R2-undeclared` when the day has no
 declaration, `R2-declared-twice` when it has more than one, and `R2-declared` when the record's program is not the
 day's.
 
@@ -67,11 +71,11 @@ refused the window `lag` windows of record before (`Pool.refused`, read from its
 lag at which serving learns a verdict), and by serving's own reset (`reset`), which an engine crash needs, at most one a
 week. The record's window names that reset (`pool_reset`; `R6-pool-reset` otherwise), its week (`pool_week`;
 `R6-pool-week`) and whether the week's reset is spent at it (`pool_spent`; `R6-pool-spent`): that it resets, or that
-the previous record, of its week, named it spent (`Pool.spentBefore`). R6 refuses a reset where the week's is spent
+the previous record, of its week, named it spent (`Pool.spentBefore`). The caller refuses a reset where the week's is spent
 before it (`R6-pool-reset-week`). The resets are serving's choice, so they are advice: the records name, of a week's n
 windows, the one serving reset at or none, log₂(n + 1) bits a week (log₂ 1009, 9.98 bits, for 600-second windows),
-which leakage charges; the spent marks and weeks are a function of the resets and the verifier's clock. R7 refuses a
-record whose entry for `pin` is not the pool its window opens (`poolOpen`) by name (`R7-pool-chain`).
+which leakage charges; the spent marks and weeks are a function of the resets and the verifier's clock. The caller
+refuses a record whose entry for `pin` is not the pool its window opens (`poolOpen`) by name (`R7-pool-chain`).
 
 Under a template query that applies, R8 refuses a run Input node whose leaves the proof blocks don't each read alone,
 unless it is a parameter's the verifier expects registered (`heldGates`), which is a registered value, or a tied value's
@@ -208,7 +212,8 @@ structure Verifier where
   challenger's log (`Challenger.seedSaltOf`), which the window must name; none when it read none -/
   seedSalt : Option String := none
   /-- the pool its windows carry, whose `pin` its parameters add to `outputs` or `supplied` (`OneStage.paramsParsed`)
-  and R7 holds to the chain (`poolChained`), and whose reset R6 holds the window to name, once a week; none for a
+  and the caller's check holds to the chain (`VStar.Recursive.Caller.poolChained`) and its window to name its reset,
+  once a week; none for a
   program that carries none -/
   pool : Option Pool := none
   /-- run Inputs, by parameter name, whose rows a later check ties to the registrations that computed them, which R8 lets
@@ -241,37 +246,9 @@ def adviceOk (w : Json) : Option (Option (String × Nat)) → Bool
 def declaredOf (day : Nat) (ds : Array (Nat × String)) : List String :=
   (ds.filter (·.1 == day)).toList.map (·.2)
 
-/-- R2's declared day (`registration._declared`): `R2-undeclared` when the window's day has no declaration,
-`R2-declared-twice` when it has more than one, `R2-declared` when the record's `program` is not the day's declared one,
-and none when it is or the verifier reads no declarations. -/
-def declaredCode (program : Json) : Option (Nat × Array (Nat × String)) → Option String
-  | none => none
-  | some (day, ds) => match declaredOf day ds with
-    | [] => some "R2-undeclared"
-    | [p] => if jeq program (Json.str p) then none else some "R2-declared"
-    | _ => some "R2-declared-twice"
-
-private def optStr : Option String → Json
+def optStr : Option String → Json
   | some s => Json.str s
   | none => Json.null
-
-private def optReset : Option Pool → Json
-  | some p => Json.bool p.reset
-  | none => Json.null
-
-private def optWeek : Option Pool → Json
-  | some p => Lean.toJson p.week
-  | none => Json.null
-
-private def optSpent (pool : Option Pool) (log : Array Json) : Json :=
-  match pool with
-  | some p => Json.bool (p.reset || p.spentBefore log)
-  | none => Json.null
-
-private def onceOk (pool : Option Pool) (log : Array Json) : Bool :=
-  match pool with
-  | some p => !(p.reset && p.spentBefore log)
-  | none => true
 
 /-- The Input gates `(first, count)` of the parameters `v` expects registered, which R8 reads as registered values
 (`registered.held_gates`). -/
@@ -497,15 +474,6 @@ def entryOf (rec : Json) (value : String) : Option Json :=
   | .arr es => es.reverse.find? fun e => jeq (getD e "value") (Json.str value)
   | _ => none
 
-/-- R7's pool chain (`registration._pool_chain`): with a pool, the record's entry for `pin` (`entryOf`) has the domain and
-root of the pool its window opens (`poolOpen`); `R7-pool-chain` otherwise. -/
-def poolChained (rec : Json) (v : Verifier) : Bool :=
-  match v.pool with
-  | none => true
-  | some p => match entryOf rec p.pin, poolOpen rec v p with
-    | some e, some (d, r) => jeq (getD e "domain") (Json.str d) && jeq (getD e "root") (Json.str r)
-    | _, _ => false
-
 /-- R3's index of the record's roots, each root's port canonicalized once: the last root naming each canonical port, and
 how many distinct ports the roots name, a port with no canonical form counting as one of its own (`jeq` equals it to
 nothing). -/
@@ -547,25 +515,10 @@ def linkRefused (v : Verifier) : Bool :=
 twice, so `check_eq_checkRef`'s `simp`, which leaves it folded, doesn't copy the codes before it into both cases. -/
 def kept (ok : Bool) (c : Array String) (code : String) : Array String := if ok then c else addCode c code
 
-/-- R6's pool codes added to `c`: the window `w` names the pool's reset, week and spent mark (`R6-pool-reset`,
-`R6-pool-week`, `R6-pool-spent`), and a reset where the week's is spent before it is refused (`R6-pool-reset-week`).
-One term rather than four lines, since `check_eq_checkRef`'s `simp` copies every line after `check`'s `binding` block
-into each branch of its join points. -/
-def poolMarks (w : Json) (pool : Option Pool) (log : Array Json) (c : Array String) : Array String :=
-  kept (onceOk pool log)
-    (kept (jeq (getD w "pool_spent") (optSpent pool log))
-      (kept (jeq (getD w "pool_week") (optWeek pool))
-        (kept (jeq (getD w "pool_reset") (optReset pool)) c "R6-pool-reset") "R6-pool-week") "R6-pool-spent")
-    "R6-pool-reset-week"
-
-/-- R6's compiler codes added to `c` (`compilerOk`, `R6-compiler`; `adviceOk`, `R6-advice-length`). One term, as
-`poolMarks` is, for `check_eq_checkRef`'s `simp`. -/
-def compilerMarks (w : Json) (rc : Option (Option (String × Nat))) (c : Array String) : Array String :=
-  kept (adviceOk w rc) (kept (compilerOk w rc) c "R6-compiler") "R6-advice-length"
-
 /-- R8's codes added to `c`: a tied name it can't let through (`R8-tied`, `tiedBad`), then a run Input node the proof
 blocks don't each read alone outside the registered and tied parameters' gates (`R8-shared-input`,
-`Partition.readAlone`). One term, as `poolMarks` is, for `check_eq_checkRef`'s `simp`. -/
+`Partition.readAlone`). One term rather than two lines, since `check_eq_checkRef`'s `simp` copies every line after a
+join point into each of its branches. -/
 def r8Codes (v : Verifier) (c : Array String) : Array String :=
   kept (Partition.readAlone v.program v.query (heldGates v ++ tiedGates v)) (kept (tiedBad v).isEmpty c "R8-tied")
     "R8-shared-input"
@@ -600,8 +553,6 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   match Partition.units v.program v.query with
   | .error _ => c := addCode c "R2-query"
   | .ok population => if !jeq (get "population") (Lean.toJson population) then c := addCode c "R2-population"
-  if (declaredCode (get "program") v.declared).isSome then
-    c := addCode c ((declaredCode (get "program") v.declared).getD "")
   -- R3
   if !jeq (get "scheme") v.scheme then c := addCode c "R3-scheme"
   let roots := match get "roots" with | .arr rs => rs | _ => #[]
@@ -626,20 +577,12 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
     | none => Json.null
   if !jeq (get "previous") previous then c := addCode c "R6-previous"
   if v.log.any (fun e => jeq (getD e "window") (get "window")) then c := addCode c "R6-window"
-  if let some (stream, prover) := v.binding then
-    if !jeq (getD (get "window") "stream") (Json.str stream) then c := addCode c "R6-stream"
-    if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
-  -- `kept` terms, not statements: a statement's join point doubles what `check_eq_checkRef`'s `simp` unfolds
-  c := kept (jeq (getD (get "window") "seed_salt") (optStr v.seedSalt)) c "R6-seed-salt"
-  c := poolMarks (get "window") v.pool v.log c
-  c := compilerMarks (get "window") v.compiler c
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1))
         v.schemas)
       v.outputs v.log
-    c := kept (poolChained rec v) c "R7-pool-chain"
   -- R8
   c := r8Codes v c
   return if linkRefused v then addCode c "link-points" else c
@@ -674,8 +617,6 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
   match Partition.units v.program v.query with
   | .error _ => c := addCode c "R2-query"
   | .ok population => if !jeq (get "population") (Lean.toJson population) then c := addCode c "R2-population"
-  if (declaredCode (get "program") v.declared).isSome then
-    c := addCode c ((declaredCode (get "program") v.declared).getD "")
   -- R3
   if !jeq (get "scheme") v.scheme then c := addCode c "R3-scheme"
   let roots := match get "roots" with | .arr rs => rs | _ => #[]
@@ -702,19 +643,12 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
     | none => Json.null
   if !jeq (get "previous") previous then c := addCode c "R6-previous"
   if v.log.any (fun e => jeq (getD e "window") (get "window")) then c := addCode c "R6-window"
-  if let some (stream, prover) := v.binding then
-    if !jeq (getD (get "window") "stream") (Json.str stream) then c := addCode c "R6-stream"
-    if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
-  c := kept (jeq (getD (get "window") "seed_salt") (optStr v.seedSalt)) c "R6-seed-salt"
-  c := poolMarks (get "window") v.pool v.log c
-  c := compilerMarks (get "window") v.compiler c
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1))
         v.schemas)
       v.outputs v.log
-    c := kept (poolChained rec v) c "R7-pool-chain"
   -- R8
   c := r8Codes v c
   return if linkRefused v then addCode c "link-points" else c
@@ -810,7 +744,7 @@ theorem portIndex_find (roots : Array Json) (p : String) :
     rw [(inv_portIndex roots).2.2 k, ← Array.find?_toList, Array.toList_reverse]
     congr 1; funext r; rw [jeq_of_canon hp]; rfl
 
--- `simp` unfolds both whole bodies, R2's declared day and the link-points step included, and each join point of
+-- `simp` unfolds both whole bodies, the link-points step included, and each join point of
 -- both checks into both of its branches. The link-points step names `c` in both of its branches, so the steps before
 -- it are rewritten twice, past `simp`'s default step limit
 set_option maxHeartbeats 1600000 in

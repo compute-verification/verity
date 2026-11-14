@@ -302,7 +302,9 @@ theorem accepted_case {k : Verity.Registration.Composite} (hk : ReadsV2 k) {s : 
   · cases hch
   have hc' : Spot.OneStage.commitmentOf x.2.2.commitment = .ok c := hc
   have he' : VStar.Recursive.Sampled.evidenceOf x.2.2.evidence = .ok (Sum.inl e) := he
-  have hch' : Spot.OneStageZk.checkBlobs p c e (_root_.Core.Blobs.ofArray s.blobs) = .accept pub prof := hch
+  have hch' : Spot.OneStageZk.checkBlobs p c e (_root_.Core.Blobs.ofArray s.blobs) = .accept pub prof :=
+    (VStar.Recursive.Caller.gate_accept (show VStar.Recursive.Caller.gate c.record p.base.verifier
+      (Spot.OneStageZk.checkBlobs p c e (_root_.Core.Blobs.ofArray s.blobs)) = .accept pub prof from hch)).2
   cases hξ : Spot.OneStageZk.coinsOf p c e with
   | error r =>
     unfold Spot.OneStageZk.checkBlobs at hch'

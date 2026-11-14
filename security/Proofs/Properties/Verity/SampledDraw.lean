@@ -471,7 +471,8 @@ theorem case_drew {k : Verity.Registration.Composite} {s : Verity.Sent} (hS : Ve
   subst hP
   change VStar.Recursive.Sampled.checkBlobs (.inl p₀) c E (Core.Blobs.ofArray s.blobs) = .accept pub prof at hck
   rcases E with ev | e'
-  · change _root_.Spot.OneStageZk.checkBlobs p₀ c ev (Core.Blobs.ofArray s.blobs) = .accept pub prof at hck
+  · have hck := (VStar.Recursive.Caller.gate_accept (show VStar.Recursive.Caller.gate c.record p₀.base.verifier
+      (_root_.Spot.OneStageZk.checkBlobs p₀ c ev (Core.Blobs.ofArray s.blobs)) = .accept pub prof from hck)).2
     unfold _root_.Spot.OneStageZk.checkBlobs at hck
     cases hξ : _root_.Spot.OneStageZk.coinsOf p₀ c ev with
     | error r => rw [hξ] at hck; simp [Core.atCoins] at hck
