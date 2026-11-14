@@ -111,13 +111,13 @@ by its path too: the repository's lane text, in the prose of code, Lean and Mark
 to git, work to Linear, rulings to Notion, results to the store), and its retired terms, whose fix is the term the glossary gives.
 
 Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR title starts ``Revert``) and a pure move that
-BASE's ``tools/verity/check/move_check.py`` certifies.
+BASE's ``tools/check/move_check.py`` certifies.
 
 It runs on git, in the repository of the current directory, and runs no code but the base's (its lints and the ruff it pins,
 and BASE's move_check, beside the scripts it loads).  The ready mark's preflight runs it on the PR's merge, as BASE has it,
 and only warns (``research.queue``'s ``PREFLIGHT_RATCHET``), since a moved line or a module the PR adds can read as a new
 violation; what judges a PR is the check's ``ratchet-gate`` step
-(``tools/verity/check/check.py``'s ``ratchet_gate``, ci.toml's job), off the merge gate (policy.toml's ``off_gate``), which
+(``tools/check/check.py``'s ``ratchet_gate``, ci.toml's job), off the merge gate (policy.toml's ``off_gate``), which
 drive's after-landing run of `checked`'s tip runs as ``ratchet_gate.py BASE TIP`` with BASE's copy of this file, which no
 change it judges can weaken, BASE a commit below the tip that drive sends (``check.py`` says which).  Each `Queue: #N` merge
 above BASE is judged against the one below it, so a failure names its PR, which drive takes as the red's culprit.  The red
@@ -218,10 +218,10 @@ RUFF_CONFIGS = (RUFF_CONFIG, REPO_RUFF_CONFIG, RUFF_VLLM_CONFIG)
 INTEGRATION_RUFF = (RUFF_LINT, RUFF_VLLM_LINT)
 #: where a ruff lint runs ruff, when that isn't its first config's directory: its config's paths are relative to there
 RUFF_FROM = {RUFF_VLLM_LINT: INTEGRATION}
-MOVE_CHECK = "tools/verity/check/move_check.py"
+MOVE_CHECK = "tools/check/move_check.py"
 #: what move_check imports from its own checkout, as `research.queue`'s `move_scripts` lists it: the move scripts (the
 #: directory's own files) and the pins list
-MOVE_CHECK_READS = ("tools/move/", "tools/verity/check/pins.py")
+MOVE_CHECK_READS = ("tools/move/", "tools/check/pins.py")
 QUEUE_SUBJECT = re.compile(r"^Queue: #(\d+) ?(.*)$")
 RULE_NUMBER = re.compile(r"^p\d+_")
 #: a comment ruff reads as a ``noqa``: the hash, then ``noqa`` or ``noqa: CODE, ...``, or a file's ``ruff: noqa`` (or ``flake8:``)

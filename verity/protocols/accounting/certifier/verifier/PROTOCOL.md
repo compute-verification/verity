@@ -2012,7 +2012,7 @@ sealed under an AEAD built from SHA-512 alone.
   - **What it changes:** A1's units are then the facility, not each block.
 ## Tests
 
-`uv run tools/verity/check/suites.py verity/protocols/accounting/certifier`. The tests enumerate small monitoring periods, so they
+`uv run tools/check/suites.py verity/protocols/accounting/certifier`. The tests enumerate small monitoring periods, so they
 check the Lean statements on examples and prove nothing. A test that mirrors a statement of the analysis carries its
 name, and each test module's docstring says what it holds.
 

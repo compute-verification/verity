@@ -48,7 +48,7 @@ def world(tmp_path, monkeypatch):
     monkeypatch.setattr(Q, "MERGED_ROOT", tmp_path / "scratch")
     w = World(tmp_path)
     w.with_store_remote()
-    _push_main(w, w.change({**{p: (ROOT / p).read_text() for p in SCRIPTS}, "tools/verity/check/pins.py": "PINS = ()\n",
+    _push_main(w, w.change({**{p: (ROOT / p).read_text() for p in SCRIPTS}, "tools/check/pins.py": "PINS = ()\n",
                             "tools/research/src/research/store/moves.json": '{"moves": []}\n',
                             MAP: '[rewrite]\nexclude = ["tools/move/**", "tools/research/src/research/store/moves.json"]\n\n'
                                  '[words]\n"old_proto" = "new_proto"\n',
@@ -600,7 +600,7 @@ def test_only_an_old_head_a_reviewer_passed_runs_a_moves_script_so_a_head_marked
     the clone, which the queue's next fetch would run with its credentials: no script runs on it, so nothing is planted, and
     its mark carries to no head across the move.  Its owner's own land verdict changes nothing (``owners``); a reviewer's
     lets the script run, and the mapping, not the new head's own change, carries nothing."""
-    world.gh.put(2, old := world.change({"tools/verity/check/pins.py": PLANT, "b.py": B + "W = 1\n"}), ready=False)
+    world.gh.put(2, old := world.change({"tools/check/pins.py": PLANT, "b.py": B + "W = 1\n"}), ready=False)
     world.store.add_label(label_target(2, old), vocab.READY, True, "ci", ts="2026-11-10T10:00:00Z")
     _land(world, _move(world))
     world.gh.put(2, new := world.change({"d.txt": "d\n"}), ready=False)
@@ -634,7 +634,7 @@ def test_a_head_marked_alone_runs_no_script_so_its_code_forges_no_mapping_that_c
     key, target = Q.mapped_key(h0, Q.moves_between(q.workdir, onto, h0)), q.own_change(h2)
     forge = (GIT_DIR + "d = c / 'mapped-changes.d'\nd.mkdir(exist_ok=True)\n"
              f"(d / 'x.json').write_text(json.dumps({{{key!r}: {target!r}}}))\nPINS = ()\n")
-    world.gh.put(2, k1 := world.change({"tools/verity/check/pins.py": forge}, base=f"{before}^"), ready=False)
+    world.gh.put(2, k1 := world.change({"tools/check/pins.py": forge}, base=f"{before}^"), ready=False)
     world.store.add_label(label_target(2, k1), vocab.READY, True, "lane-2", ts="2026-11-10T10:00:00Z")
     q.fetch(world.gh.open_prs())
     world.gh.put(2, k2 := world.change({"f.txt": "f\n"}), ready=False)

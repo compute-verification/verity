@@ -28,7 +28,7 @@ assert _SPEC is not None and _SPEC.origin is not None
 REG = Path(_SPEC.origin).parent
 FIXTURE = Path(__file__).resolve().parent / "data" / "sampling_split_digests.json"
 REWRITE = ("a change meant to move the family's Definitions rewrites the pins with "
-           "`uv run python tools/verity/check/pins.py --write adapters/vllm/tests/program/data/sampling_split_digests.json`")
+           "`uv run python tools/check/pins.py --write adapters/vllm/tests/program/data/sampling_split_digests.json`")
 PKG = "verity.definitions.registry"
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.circuits"

@@ -192,7 +192,7 @@ def lean_slot(repo: Path) -> int | None:
     `lean_slot.py` (a copy of this directory elsewhere)."""
     import importlib.util
 
-    path = repo / "tools" / "verity" / "check" / "lean_slot.py"
+    path = repo / "tools" / "check" / "lean_slot.py"
     if not path.is_file():
         if LEAN_SLOTS.exists() and not os.environ.get("LEAN_SLOT"):
             raise RuntimeError(f"{LEAN_SLOTS} caps this node's Lean audits, and {path} is missing to take a slot: "

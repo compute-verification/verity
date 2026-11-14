@@ -52,7 +52,7 @@ this package adds the primitives. It is code, so it requires nothing of `securit
 ~~~sh
 cd verity/circuits/evaluate && lake build      # .lake/build/bin/verity-evaluate
 python tools/verity/lean/check.py verity/circuits/evaluate   # the Lean check, from the repository root
-uv run tools/verity/check/suites.py verity-core-evaluate           # the difftest against the Python
+uv run tools/check/suites.py verity-core-evaluate           # the difftest against the Python
 ~~~
 
 `tests/test_difftest.py` holds it to the Python reference through `verity_difftest`, output for output and refusal for

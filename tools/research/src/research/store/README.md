@@ -87,7 +87,7 @@ steward/lease.json                   REMOTE ONLY, not a store record: the stewar
                                      PUT only (research/steward.py); the store never reads, lists or indexes it
 packs/labels/latest.{tar.gz,json}    REMOTE ONLY, not a store record: the labels pack (§8), replaced in place
 live/<run id>/<seq>.json             REMOTE ONLY, not a store record: a running check's live record, a new immutable object per
-                                     write with the run's custody key (tools/verity/check/live.py, read by `verity ci`); the store
+                                     write with the run's custody key (tools/check/live.py, read by `verity ci`); the store
                                      never reads, lists or indexes it, and gc leaves it
 ~~~
 

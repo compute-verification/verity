@@ -40,5 +40,5 @@ It runs as a local research run, from a checkout on an agent VM with the team's 
 (`research pods ssh vy-control-verity`), GitHub (`gh`, for restacks) and the evidence store's labels, and a CPU node reaches
 none of the three. It reads for about a minute and computes nothing heavy.
 
-`uv run tools/verity/check/suites.py benchmarks/landing` runs its tests: the computation on a small fixture, with stand-ins
+`uv run tools/check/suites.py benchmarks/landing` runs its tests: the computation on a small fixture, with stand-ins
 for the pod, GitHub, the store and git.

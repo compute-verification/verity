@@ -235,7 +235,7 @@ def test_the_runners_say_what_circuit_check_and_check_say():
     assert '"bindings": sets' in cli and '"incomplete": missing' in cli and '"loaded": sorted(' in cli
     assert CB.PINS == f"{F.SUFFIX}.json" and 'return base.parent / f"{base.name}{SUFFIX}.{kind}"' in (
         ROOT / F.SIDECARS).read_text()
-    check = (ROOT / "tools" / "verity" / "check" / "check.py").read_text()
+    check = (ROOT / "tools" / "check" / "check.py").read_text()
     assert f'CC_RECORDS = "{F.RECORDS["path"]}"' in check and f't.add(d / "cache", "{CB.TOP}")' in check
     assert f'print(f"{CB.REFUSED}{{e}}", file=sys.stderr)' in (ROOT / F.SOURCE / "cli.py").read_text()
     assert F.slice_of("n")["name"] == f"{circuit_catalog.SLICE}n"

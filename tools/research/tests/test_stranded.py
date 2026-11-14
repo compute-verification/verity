@@ -300,7 +300,7 @@ def test_the_program_read_sends_names_each_machine_s_own_slot_py():
 
 
 def test_a_tree_without_slot_py_says_how_to_add_it(tmp_path):
-    with pytest.raises(RuntimeError, match="add `tools/verity/check/slot.py` and `tools/verity/check/lean_slot.py` to the deploy's"):
+    with pytest.raises(RuntimeError, match="add `tools/check/slot.py` and `tools/check/lean_slot.py` to the deploy's"):
         stranded.program(tmp_path / "nowhere")
 
 

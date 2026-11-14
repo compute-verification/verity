@@ -47,7 +47,7 @@ SETTINGS = of(__file__)
 WORKER_GB = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text())["tool"]["verity"]["tests"]["worker_gb"]
 
 #: where `check`'s circuit-check keeps the catalog bindings' records (`--cache cache_dir()/circuit-check --catalog-units`, with
-#: `cache_dir` of tools/verity/check/common.py at its default), or `CIRCUIT_CHECK_RECORDS`: not `CHECK_CACHE`, which the suite
+#: `cache_dir` of tools/check/common.py at its default), or `CIRCUIT_CHECK_RECORDS`: not `CHECK_CACHE`, which the suite
 #: guard points at an empty directory of its own (`HOST_CACHES`).  The session reads the records there and writes the ones it
 #: has built.  A record counts only for inputs identical to the ones it was made from (`units.plan`, as `check`'s
 #: circuit-check takes it), so it changes how long the catalog takes, not what it holds.
@@ -297,7 +297,7 @@ def _records_argv(cache: Path, jobs: int, mem_gb: int, out: Path, listed: str | 
 
 def _untraced(env: Mapping[str, str]) -> dict[str, str]:
     """``env`` without the suite's read tracer on its PYTHONPATH: each directory there that holds `verity_suite_reads.py`
-    (tools/verity/check/guard/child, whose `sitecustomize` every Python started with it loads).  That directory is in the
+    (tools/check/guard/child, whose `sitecustomize` every Python started with it loads).  That directory is in the
     tree, so a build that looks for its loaded modules' sources (`inspect`, as torch's do) holds that `sitecustomize` by its
     name, which resolves in no process without the directory on its path: `check`'s circuit-check would take no record such a
     build stored.  The records are built as it builds them."""

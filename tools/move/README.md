@@ -1,7 +1,7 @@
 # tools/move
 
 Codemods that move or rename part of the tree and rewrite every reference to it, so a move is one generated commit that
-`tools/verity/check/move_check.py` can certify as a pure move. Each is stdlib and git, run as a file from the repository
+`tools/check/move_check.py` can certify as a pure move. Each is stdlib and git, run as a file from the repository
 root, and refuses a dirty worktree; a second run changes nothing.
 
 | Tool | What it does |
@@ -115,7 +115,7 @@ change did: a path no pass of the rewrite reads stays as written, and its commit
 checks it itself: `layout.py` stops (exit 1) a move after which a Lake package's path to another package (a requirement's
 `path` in a `lakefile.toml`, a path package's `dir` in a `lake-manifest.json`) names no package where it named one
 before, and names the file and the path. A path of any other kind that a move leaves behind is found by the check on
-its candidate. Both movers give a pin of `tools/verity/check/pins.py` (a JSON pin or a `sha256sum` listing) the new
+its candidate. Both movers give a pin of `tools/check/pins.py` (a JSON pin or a `sha256sum` listing) the new
 digest of a Lake manifest the move rewrites, where it held the old one (`layout.repin_manifests`), and `move_check.py`
 certifies that edit; any other digest a pin holds of a file the move changes is left for the pin's command, and
 `layout.py` stops on a rewrite that would change a digest in a pin file the map rewrites.
@@ -179,4 +179,4 @@ refusal gives the command that carries the branch against the move's own commit,
 Its owner then merges today's `main` into that result, a merge inside the new layout, and checks that the merge's tree
 holds the branch's own files at the new paths.
 
-    uv run tools/verity/check/suites.py tools/move     # the tests (remotely: AGENTS.md "Tests")
+    uv run tools/check/suites.py tools/move     # the tests (remotely: AGENTS.md "Tests")

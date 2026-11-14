@@ -39,7 +39,7 @@ which only `Checks.finish` asks, for where the verdict and the run's result go, 
   - Solving: `solve`, `models(over, limit)` and `value`.
 
 Every primitive is cross-checked in `tests/`, against brute force on small cases and against sympy's linear algebra over
-GF(2). Run them from the repository root, with `uv run tools/verity/check/suites.py exact_kit`. Inside this directory uv
+GF(2). Run them from the repository root, with `uv run tools/check/suites.py exact_kit`. Inside this directory uv
 stops at `benchmarks/pouw`'s project, takes the kit for a workspace of its own, and builds it a separate `.venv` and
 `uv.lock`.
 

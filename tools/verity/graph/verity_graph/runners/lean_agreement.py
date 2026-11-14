@@ -17,7 +17,7 @@ from ..graph import LOG
 from . import call
 
 PIN = "verity/protocols/proofs/flock/prover/agreement/upstream.json"
-CHECK = "tools/verity/check/check.py"
+CHECK = "tools/check/check.py"
 #: how check.py says this machine can't run the agreement (too little memory, an older glibc, a build for another CPU)
 CANNOT = "check: lean-agreement: error: cannot run here:"
 SETS = "flock-agreement/ci/sets.json"

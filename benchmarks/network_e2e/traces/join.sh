@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # run.sh's join on a CPU node, for a GPU run made with JOIN=0, from the shipped tree's root, as a job that reads the
 # store, in one of the network slots:
-#   env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
+#   env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/check/slot.py --by LANE -- \
 #     bash benchmarks/network_e2e/traces/join.sh art:RUN_RECORD [art:CORPUS[:TRACE,...]...]
 # art:RUN_RECORD is the GPU run's record (its custody artifact): each of its out/corpus/* is summarized into
 # OUT/corpus/ (a warden trace's `warden_serve.py check` first), and compared request by request into OUT/compare/ with each

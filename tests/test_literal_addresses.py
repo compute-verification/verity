@@ -112,7 +112,7 @@ ALLOWED: dict[str, int] = {
     "benchmarks/one_stage/interfaces/tests/test_report.py": 1,
     "verity/circuits/ops/tests/fixtures/tc-sm100-f8-2026-10-19/records.json": 1,
     # stand-ins that predate the documentation ranges
-    "tools/verity/check/tests/test_verdicts.py": 2,
+    "tools/check/tests/test_verdicts.py": 2,
     # version numbers the scan reads as addresses
     "benchmarks/pouw/dc/dc.cuh": 1,
     "benchmarks/pouw/harness/README.md": 1,

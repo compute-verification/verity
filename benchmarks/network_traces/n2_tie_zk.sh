@@ -3,7 +3,7 @@
 # Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean frame and the sampled-proofs verifier
 # built in the tree, as n2_zk.sh runs n2_zk.py. From a clone, in one of the network slots, as a job of at most 180
 # minutes:
-#   env N2_MEM_GB=56 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
+#   env N2_MEM_GB=56 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/n2_tie_zk.sh
 # On a GPU node with N2_GPU=1, the prover is a8_gpu.sh's CUDA build (70-class-sweep.sh BUILD_ONLY=1, kept under
 # FLOCK_WORK) on the GPU the run leased, as a job of one GPU, 32 CPUs and 96 GB:

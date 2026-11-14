@@ -30,10 +30,10 @@ import sys
 import tomllib
 from pathlib import Path
 
-SUITES_PY = "tools/verity/check/suites.py"
+SUITES_PY = "tools/check/suites.py"
 #: slot.py's option that gives a run its budget where it reserves less: the launcher sends it only to a tree whose slot.py
 #: names it (one from before the option refuses it, so that tree's run reserves its budget whole)
-SLOT_PY, BUDGET_OPT = "tools/verity/check/slot.py", "--budget-gb"
+SLOT_PY, BUDGET_OPT = "tools/check/slot.py", "--budget-gb"
 #: suites.py's options that take a value
 VALUED = {"--changed", "--skip", "--jobs", "-j", "--mem-gb", "--logs", "--json", "--run", "--per-test-min-s", "--explain"}
 #: suites.py's SUITE_TIMEOUT_S: an undeclared suite's bound
@@ -52,7 +52,7 @@ AUTO_CPUS, AUTO_MEM_GB, AUTO_MAX_S = 4, 16, 3600
 
 def _words(command: list[str]) -> list[str]:
     """``command``'s words, a shell string that runs suites.py split into its own (`bash -lc "uv sync && uv run
-    tools/verity/check/suites.py --changed REV"`, the lane run `research queue` names), so that run is sized as well."""
+    tools/check/suites.py --changed REV"`, the lane run `research queue` names), so that run is sized as well."""
     out: list[str] = []
     for a in command:
         if SUITES_PY in a and a != SUITES_PY and not a.endswith("/" + SUITES_PY):

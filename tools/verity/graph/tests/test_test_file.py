@@ -93,7 +93,7 @@ LIB = ["lib/toy_lib/__init__.py", "lib/toy_lib/core.py", "lib/toy_lib/helper.py"
 
 def test_its_tasks_are_the_test_files_suites_py_runs():
     """HEAD's, which both read: `suites.worktree()` would read git's index, which is no file of the tree."""
-    spec = importlib.util.spec_from_file_location("graph_suites", ROOT / "tools" / "verity" / "check" / "suites.py")
+    spec = importlib.util.spec_from_file_location("graph_suites", ROOT / "tools" / "check" / "suites.py")
     suites = sys.modules["graph_suites"] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(suites)
     pkgs = suites.members()

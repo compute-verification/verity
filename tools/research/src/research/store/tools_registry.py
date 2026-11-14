@@ -27,7 +27,7 @@ REGISTRY: dict[str, str] = {
     "flock_pure": "verity.protocols.proofs.flock.prover.tool:FLOCK_PURE",
     "flock_agreement": "verity.protocols.proofs.flock.prover.agreement.tool:FLOCK_AGREEMENT",
     "flock_class_sweep": "verity.protocols.proofs.flock.prover.tool:FLOCK_CLASS_SWEEP",
-    "check": "tools.verity.check.tool:CHECK",
+    "check": "tools.check.tool:CHECK",
     "lean_audit": "tools.verity.lean.tool:LEAN_AUDIT",
     "lean_upstream": "tools.verity.lean.tool:LEAN_UPSTREAM",
     # vLLM integration sweep stages (integration-owned declarations).

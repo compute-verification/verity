@@ -85,7 +85,7 @@ if [ "$STAGE" = launch ]; then
   SLOTS=${SLOTS-/workspace/research/locks/gpu/slots} SLOT_WAIT_S=${SLOT_WAIT_S:-300}
   CMD=(uv run research run --on "${MACHINE:?the machine}" --project verity --source . --cwd source --no-sampler
     --timeout "$((SLOT_WAIT_S + run_s))" "${E[@]}" --)
-  [ -z "$SLOTS" ] || CMD+=(env "CHECK_SLOTS=$SLOTS" python3 tools/verity/check/slot.py --by "${BY:?who holds the slot}"
+  [ -z "$SLOTS" ] || CMD+=(env "CHECK_SLOTS=$SLOTS" python3 tools/check/slot.py --by "${BY:?who holds the slot}"
     --wait-max "$SLOT_WAIT_S" --run-max "$run_s" --)
   CMD+=(bash "$RS/host_read_tiers.sh")
   [ -n "${DRY:-}" ] || exec "${CMD[@]}"

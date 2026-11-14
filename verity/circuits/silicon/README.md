@@ -22,4 +22,4 @@ reference and the hardware disagree, open until its resolution names its evidenc
 
 ## Tests
 
-`verity/circuits/ops`'s suite tests this package (`uv run tools/verity/check/suites.py verity/circuits/ops`).
+`verity/circuits/ops`'s suite tests this package (`uv run tools/check/suites.py verity/circuits/ops`).

@@ -11,7 +11,7 @@ turns the rates into x₁ and γ tables.
 `sq.cu`, and the audit's `timing.py` cites `gamma.py`. Decided by `rg rate_squaring` over `verity/`, `benchmarks/`,
 `demos/`, `tests/` and `adapters/`. `gamma.py` is a finished study.
 
-**Run:** `uv run tools/verity/check/suites.py benchmarks/rate_squaring` runs the GPU forms' CPU twins, the IFMA build's
+**Run:** `uv run tools/check/suites.py benchmarks/rate_squaring` runs the GPU forms' CPU twins, the IFMA build's
 gate (with `gcc`), and `gamma.py`. `sq.sh` needs one GPU and `ifma.sh` an AVX-512 IFMA host.
 
 **Reads and writes:** `sq.sh` and `ifma.sh` write `time.jsonl`, the gate outputs, `sass-mix.json`, Nsight Compute's

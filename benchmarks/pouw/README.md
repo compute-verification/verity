@@ -43,7 +43,7 @@ CUDA graphs, `e2e.py`'s ``fp8-graphs`` mode (``--fp8-graphs``).
 ## Where the filler's tools live
 
 Each has one copy, in `filler/`; change it there. A new arm is a class in an arm module, and a new tile or fold is a flag
-of `pfill.cuh`, not a copy of the kernel. Its tests are one suite: `uv run tools/verity/check/suites.py benchmarks/pouw/filler`.
+of `pfill.cuh`, not a copy of the kernel. Its tests are one suite: `uv run tools/check/suites.py benchmarks/pouw/filler`.
 
 `contents.py filler` lists each tool with its files, one entry a file in `contents/filler/`.
 

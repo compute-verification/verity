@@ -20,14 +20,14 @@ from pathlib import Path
 
 #: a run directory's name
 RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}$")
-#: slot.py's line when what it waits behind changes (tools/verity/check/slot.py)
+#: slot.py's line when what it waits behind changes (tools/check/slot.py)
 WAITS = re.compile(r"^slot: (.+); retrying every \d+ s$", re.M)
 #: how much of stderr.log is read for it (slot.py writes there before the job does)
 STDERR_HEAD = 1 << 18
 KINDS = ("quick suites", "Lean records", "check shards", "GPU jobs", "other")
 #: a pool's slots file in a command (research.pods.nebius.slot_only.POOL, with the pool's name captured)
 POOL = re.compile(r"CHECK_SLOTS=/workspace/research/locks/([A-Za-z0-9_-]+)/slots")
-SLOT_PY, OWN_POOL, NO_POOL = "tools/verity/check/slot.py", "check", "-"
+SLOT_PY, OWN_POOL, NO_POOL = "tools/check/slot.py", "check", "-"
 STATUS = ("state", "started_utc", "ended_utc", "rc", "timed_out")
 SLOT = ("state", "since", "took", "left", "slot", "why", "priority", "twin")
 REFUSED = ("at_utc", "fault", "reason")
@@ -40,11 +40,11 @@ def kind(command: list[str]) -> str:
     text = " ".join(command)
     if "gpu-lease" in text:
         return "GPU jobs"
-    if "tools/verity/check/check.py" in text:
+    if "tools/check/check.py" in text:
         return "check shards"
     if "lean_changed.py" in text and "--records" in command:
         return "Lean records"
-    if "quick_tier.py" in text or ("tools/verity/check/suites.py" in text and "--quick" in text):
+    if "quick_tier.py" in text or ("tools/check/suites.py" in text and "--quick" in text):
         return "quick suites"
     return "other"
 

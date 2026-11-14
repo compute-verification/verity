@@ -87,7 +87,7 @@ def moved(tmp_path: Path) -> Path:
     repo = tmp_path / "moved"
     repo.mkdir()
     git(repo, "init", "-q", "-b", "main")
-    commit(repo, {**{p: (ROOT / p).read_text() for p in MOVE_SCRIPTS}, "tools/verity/check/pins.py": "PINS = ()\n",
+    commit(repo, {**{p: (ROOT / p).read_text() for p in MOVE_SCRIPTS}, "tools/check/pins.py": "PINS = ()\n",
                   "tools/research/src/research/store/moves.json": '{"moves": []}\n',
                   MAP: '[rewrite]\nexclude = ["tools/move/**", "tools/research/src/research/store/moves.json"]\n\n'
                        '[words]\n"old_proto" = "new_proto"\n',
@@ -333,9 +333,9 @@ def test_a_move_never_reruns_on_a_tree_that_another_commit_of_the_line_leaves_un
     old, main = git(moved, "rev-parse", "pr"), git(moved, "rev-parse", "main")
     planted = tmp_path / "planted"
     git(moved, "checkout", "-q", "pr")
-    commit(moved, {"tools/verity/check/pins.py": f"import pathlib\npathlib.Path({str(planted)!r}).touch()\nPINS = ()\n"}, "more")
+    commit(moved, {"tools/check/pins.py": f"import pathlib\npathlib.Path({str(planted)!r}).touch()\nPINS = ()\n"}, "more")
     new = cross(moved)
     assert planted.exists()
     planted.unlink()
     d = carry.delta(moved, old, new, landed(moved), restack=main)
-    assert d.kind == "authored" and "tools/verity/check/pins.py" in d.why and not planted.exists()
+    assert d.kind == "authored" and "tools/check/pins.py" in d.why and not planted.exists()

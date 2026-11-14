@@ -21,7 +21,7 @@ from circuit_check import targets as TG
 
 FIXTURE = Path(__file__).parent / "fixtures" / "split" / "prims_serve.json"
 REWRITE = ("a change meant to add or move a family Definition rewrites the fixture with "
-           "`uv run python tools/verity/check/pins.py --write tools/verity/circuit_check/tests/fixtures/split/prims_serve.json`")
+           "`uv run python tools/check/pins.py --write tools/verity/circuit_check/tests/fixtures/split/prims_serve.json`")
 #: the fixture's ``family``, which no test reads
 FAMILY = "primitives, composites and serving"
 REG = "verity.definitions.registry"

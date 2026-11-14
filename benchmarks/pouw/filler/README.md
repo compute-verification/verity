@@ -89,7 +89,7 @@ byte changed in one is a new variant of every arm that lists it.
 nothing beyond the standard library, numpy, the receipts reference and `verity_machine_model`; `score.py` and the
 three arm runners build with `nvcc` and take a lease.
 
-The tests are one suite, `uv run tools/verity/check/suites.py benchmarks/pouw/filler`, on a machine with no GPU.
+The tests are one suite, `uv run tools/check/suites.py benchmarks/pouw/filler`, on a machine with no GPU.
 A test imports the directory's modules and the harness's `ledger` by name: the suite's `pyproject.toml` puts both
 directories on pytest's `pythonpath`. The harness has a `report.py` too, so `test_comm_report.py` takes
 `comm/report.py` from `load` in the suite's `tests/conftest.py`, as the module `comm_report`.

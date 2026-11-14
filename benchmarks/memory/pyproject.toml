@@ -2,7 +2,7 @@
 # at the data sheet's read bandwidth, read from the session's verifier's record. Not a package: the suite holds the
 # printer, the three ways in and the references to records built in the tests, with a stand-in for the evidence store
 # and one for the processes the command starts, so no session runs in it
-# (`uv run tools/verity/check/suites.py benchmarks/memory`).
+# (`uv run tools/check/suites.py benchmarks/memory`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

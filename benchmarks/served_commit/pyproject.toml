@@ -1,6 +1,6 @@
 # The served Commit's benchmark arms: not a package. Its arms and runners run in a node's pinned vLLM venv; the served arm's
 # (`served_arm.py`, `served_arm.sh`) run here as a suite over stand-ins for the arms they build on
-# (`uv run tools/verity/check/suites.py benchmarks/served_commit`).
+# (`uv run tools/check/suites.py benchmarks/served_commit`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

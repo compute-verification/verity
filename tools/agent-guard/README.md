@@ -142,7 +142,7 @@ python3 tools/agent-guard/worktree_guard.py reclaim DIR            a coordinator
 python3 tools/agent-guard/worktree_guard.py list                   each registered branch's owner
 python3 tools/agent-guard/oom_watch.py scan                        the OOM kills still in the kernel's buffer
 tmux new-session -d -s vm-secrets                                  the session this VM keeps, by hand (boot starts it)
-uv run tools/verity/check/suites.py tools/agent-guard              its tests
+uv run tools/check/suites.py tools/agent-guard              its tests
 ~~~
 
 A heavy command the shell hook refuses runs under `research run --on auto` instead.

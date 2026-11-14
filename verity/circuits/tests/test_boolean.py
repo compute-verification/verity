@@ -22,7 +22,7 @@ from verity.circuits.types import Array, RecordType, Tuple, Value, type_from_jso
 
 PATH = Path(__file__).parent / "boolean_vectors.json"
 REWRITE = ("the vectors differ from the reference implementation's; a change meant to move them rewrites them with "
-           "`uv run python tools/verity/check/pins.py --write verity/circuits/tests/boolean_vectors.json`")
+           "`uv run python tools/check/pins.py --write verity/circuits/tests/boolean_vectors.json`")
 BIT = BL.BIT
 
 

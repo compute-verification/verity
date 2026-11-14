@@ -28,7 +28,7 @@ from verity.circuits.ops.scalar import BitAnd, Bf16GtStrict, F32BitsShl23, F32Fa
 
 PATH = Path(__file__).parent / "qword_vectors.json"
 REWRITE = ("the vectors differ from the tree's; a change meant to move them rewrites them with "
-           "`uv run python tools/verity/check/pins.py --write verity/circuits/tests/qword_vectors.json`")
+           "`uv run python tools/check/pins.py --write verity/circuits/tests/qword_vectors.json`")
 BIT, BF16, V32, V64 = Value(1), Value(16), Value(32), Value(64)
 
 TWide = PrimitiveDefinition("TWide", 1, (("x", Array(cut.WIDE_FAN_IN, V32)), ("a", V32)), V32, lambda *a: sum(a) & 0xFFFFFFFF, register=False)

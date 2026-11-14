@@ -10,7 +10,7 @@
 # Those fixtures (`tests/fixtures/`; `tests/fixtures_draft/`, `vllm_trace.py`'s with a draft) and the certifier's
 # vectors these modules write are fetched fixtures (`artifacts.json`), which `suites.py` fetches before the
 # suites that read them; one a module rewrote is registered there again. Not a package: the modules load by path (the directory's name shadows the stdlib's
-# `encodings`), and they run here as a suite (`uv run tools/verity/check/suites.py benchmarks/network_e2e/encodings`).
+# `encodings`), and they run here as a suite (`uv run tools/check/suites.py benchmarks/network_e2e/encodings`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

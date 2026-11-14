@@ -1923,7 +1923,7 @@ def test_the_cache_key_is_the_same_under_two_builds_of_one_python_release(monkey
 
 
 def test_the_cache_key_is_the_same_in_every_check_slot(monkeypatch):
-    """Each check slot keeps its tests' results apart (`VERITY_TEST_CACHE`, `tools/verity/check/slot.py`); a report one slot
+    """Each check slot keeps its tests' results apart (`VERITY_TEST_CACHE`, `tools/check/slot.py`); a report one slot
     stored must count in another, while a variable that can change what a check computes still keys it."""
     from circuit_check import cache as CC
 
@@ -1938,7 +1938,7 @@ def test_the_cache_key_is_the_same_in_every_check_slot(monkeypatch):
 def test_the_cache_key_is_the_same_on_every_node(monkeypatch, tmp_path):
     """A report one node stored counts on every other node of the image (`check.py --plan`, `research merge --verdicts`): the key
     names no host, kernel, working directory, home, PATH or check slot (each slot sets its own `VERITY_TEST_CACHE`,
-    `tools/verity/check/slot.py`), while the CPU, a variable that can change what a check computes and the request still key it."""
+    `tools/check/slot.py`), while the CPU, a variable that can change what a check computes and the request still key it."""
     import platform
 
     from circuit_check import cache as CC

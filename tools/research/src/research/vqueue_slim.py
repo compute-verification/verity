@@ -92,7 +92,7 @@ from .vqueue_records import FAULT_RE
 ORDER = (FAIL, INFRA, PENDING, LIST_FAILED, PASS)
 #: the train.sh a candidate's check launches with: the loop's own, deployed with its pin, so a candidate's tree doesn't decide
 #: how its launch is waited for
-OWN_TRAIN = Path(__file__).resolve().parents[4] / "tools" / "verity" / "check" / "train.sh"
+OWN_TRAIN = Path(__file__).resolve().parents[3] / "check" / "train.sh"
 #: a line of the loop's deselect list (`deselection`) that is a test's node id, its file's path from the repository's root
 DESELECT_RE = re.compile(r"(?!/|\.\./)[\w./-]+\.py::\S+")
 #: what declares lean-agreement's reads: the graph build family, whose lean-agreement task reads `VERIFIER`'s files and
@@ -129,7 +129,7 @@ STORE_SAYS = re.compile(r"^\s*tamper: |the evidence store is not reachable", re.
 #: would leave without a memory limit (`telemetry.cgroup.uncapped`)
 MACHINE_SAYS = re.compile(r"refused to start the workload: this machine caps each login session")
 #: the code that decides every suite's verdict, which every suite's key holds (`suites.RUNNER`)
-SUITE_RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/settings.py", "tools/verity/check/guard")
+SUITE_RUNNER = ("tools/check/suites.py", "tools/check/settings.py", "tools/check/guard")
 #: a Lean file's imports: each module of each `import` line (`public`, `meta`, `private` and `all` as Lean 4 writes them),
 #: and each file it reads as it is compiled (`include_str`, relative to it)
 IMPORT_RE = re.compile(r"^\s*(?:public\s+|private\s+)?(?:meta\s+)?import\s+(?:all\s+)?([^\n]+)", re.M)
@@ -146,7 +146,7 @@ LEAN_FILES = "**/*.lean"
 #: runs them as the step does, so a change to one that took the verdict of the candidate below would land unrun and fail in
 #: the next candidate that audits, on that one's members.  What they load that every candidate's check runs (`settings.py`,
 #: `slot.py`) is no Lean input.  `tests/test_gate_paths.py` holds these to the step `check.py` declares
-LEAN_AUDIT_STEP = ("tools/verity/check/check.py", "tools/verity/check/lean_slot.py")
+LEAN_AUDIT_STEP = ("tools/check/check.py", "tools/check/lean_slot.py")
 #: the files whose directory is a Lean package's: a Lake package's lakefile, an audited one's lock
 LEAN_PACKAGE_FILES = ("lakefile.toml", "lakefile.lean", "lean-audit.json")
 #: the part of a check that replays every module of the security analysis's proofs, which `start`'s ``heavy_on`` sends to its
@@ -246,18 +246,18 @@ def deselection(driver: Landing, listed: Path | None) -> Path | None:
 
 
 def declared_steps(driver: Landing, sha: str, steps: list[str]) -> list[str]:
-    """``steps`` but those candidate ``sha``'s own `tools/verity/check/ci.toml` declares no job of (`merge.declared`), one line
+    """``steps`` but those candidate ``sha``'s own `tools/check/ci.toml` declares no job of (`merge.declared`), one line
     logged naming them: check.py refuses a `--deferred` naming a job its tree doesn't declare, so sending one would fail the
     candidate's own check.  Every one of ``steps``, logged, when that ci.toml can't be read."""
     from .merge import declared
 
     if (jobs := declared(driver.repo, sha)) is None:
-        driver.q.log(f"research queue vqueue: candidate {sha[:12]}'s tools/verity/check/ci.toml can't be read: its --deferred "
+        driver.q.log(f"research queue vqueue: candidate {sha[:12]}'s tools/check/ci.toml can't be read: its --deferred "
                      f"keeps every step ({','.join(steps)})")
         return steps
     names = {t["name"] for t in jobs}
     if gone := [s for s in steps if s not in names]:
-        driver.q.log(f"research queue vqueue: candidate {sha[:12]}'s tools/verity/check/ci.toml declares no job "
+        driver.q.log(f"research queue vqueue: candidate {sha[:12]}'s tools/check/ci.toml declares no job "
                      f"{', '.join(gone)}, which check.py refuses: left out of its --deferred")
     return [s for s in steps if s in names]
 

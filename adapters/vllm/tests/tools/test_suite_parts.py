@@ -79,7 +79,7 @@ def test_launch_runs_each_part_as_a_suites_run_of_its_modules():
         assert cmd[:at] == ["research", "run", "--on", "auto", "--mem-gb", str(SP.JOB_MEM_GB), "--cwd", "source"]
         assert cmd[at + 1:at + 3] == ["bash", "-lc"] and len(cmd) == at + 4
         assert f"P=$(python3 adapters/vllm/tools/suite_parts.py {k}/3) && test -n \"$P\" && " in cmd[-1]
-        assert cmd[-1].endswith("tools/verity/check/suites.py verity-vllm"
+        assert cmd[-1].endswith("tools/check/suites.py verity-vllm"
                                 " --jobs \"$(nproc)\" --logs \"$OUT/logs\" --fresh -- $P")
 
 

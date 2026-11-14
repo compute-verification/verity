@@ -141,7 +141,7 @@ marks, `mark`), never its own.  An entry reused only where its modules moved is 
 An entry holds in itself only the reads no other entry is likely to hold (its pins, and each read that names its Definition); the
 rest are records under ``<dir>/<version>/reads/`` that any number of entries share, each stored once under the SHA-512 of its
 bytes and checked against it when read (`_hold`).  An entry and each record name the records they are read with (``needs``),
-which a verdict pack carries with them (`tools/verity/check/verdicts.py`).
+which a verdict pack carries with them (`tools/check/verdicts.py`).
 
 A run's reads, declared as the inputs of a task keyed on them (`declared`: a catalog binding's, in its report's ``reads``),
 are the paths of the tree whose bytes, listing or kind `lookup` takes of them, a kind under a path that is no directory as
@@ -2098,7 +2098,7 @@ def version() -> str:
 #: how long a cache keeps a version of the checker that no run has used (`expire`)
 EXPIRE_S = 72 * 3600
 #: a cache's marks, one empty file per version named by it, whose mtime is when a run last used that version or first saw it
-#: unmarked: beside the versions, and hidden, so a verdict pack never walks it (tools/verity/check/verdicts.py's `entries`)
+#: unmarked: beside the versions, and hidden, so a verdict pack never walks it (tools/check/verdicts.py's `entries`)
 USED = ".used"
 #: what a version's directory is renamed to before it is deleted, ``<EXPIRED><version>.<pid>.<random>``: hidden for the same
 #: reason, and taken by `sweep` wherever a run left one
@@ -2230,13 +2230,13 @@ def _sweep_apart(top: Path) -> Any:
 
 
 #: variables of the keyed prefixes that say where test results are kept, not what a check computes: a check slot sets its own
-#: `VERITY_TEST_CACHE` (`tools/verity/check/slot.py`), which would keep one slot's reports from counting in another
+#: `VERITY_TEST_CACHE` (`tools/check/slot.py`), which would keep one slot's reports from counting in another
 UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S"})
 #: and those only this package's suite reads: where its session reads and lists the catalog bindings' records (its
 #: ``tests/conftest.py``), and which of its tests run (a ``skipif``).  With them keyed, a record the suite's session has built
 #: would never count in `check`'s circuit-check, nor that one's in the session
 UNKEYED |= {"CIRCUIT_CHECK_RECORDS", "CIRCUIT_CHECK_RECORDS_MANIFEST", "VERITY_CIRCUIT_CHECK_SLOW"}
-#: the suite runner's own variables (tools/verity/check/suites.py and its guard set them for a suite's tests and every Python
+#: the suite runner's own variables (tools/check/suites.py and its guard set them for a suite's tests and every Python
 #: they start): how a suite runs, which only the runner and tests read
 UNKEYED_PREFIXES = ("VERITY_SUITE_",)
 
@@ -2245,7 +2245,7 @@ def key(request: dict) -> dict:
     _INTERNAL.append(True)                             # the tracer's own work (`platform` runs `uname`): no input of a check
     try:
         # the system, the CPU and the C library, not `platform.platform()`: that names the host's kernel release, which differs
-        # between pods and would keep one pod's reports from ever counting on another (`tools/verity/check/verdicts.py`)
+        # between pods and would keep one pod's reports from ever counting on another (`tools/check/verdicts.py`)
         plat = "-".join([platform.system(), platform.machine(), *platform.libc_ver()])
         # the interpreter and its release, as suites.py keys a pass, not `sys.version`: that names its build's date, which
         # differs between two machines' builds of one release

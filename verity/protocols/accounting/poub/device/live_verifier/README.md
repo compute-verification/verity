@@ -109,4 +109,4 @@ composite's), and records the pin with the branch it is on (`host.py pinned COMM
 parser, including a bound run's binding to a `models.json`-shaped pin and the host's main list, and the compose gate's
 receive and compose on toy hand-offs (`benchmarks/one_stage/tests/test_served_verdicts.py` sends one through it with
 `gate-compose`). It also runs one session through `tests/stub_verifier.py` (slow). Run the suite as
-`uv run tools/verity/check/suites.py verity/protocols/accounting/poub/device/live_verifier`, on a node (the testing skill).
+`uv run tools/check/suites.py verity/protocols/accounting/poub/device/live_verifier`, on a node (the testing skill).

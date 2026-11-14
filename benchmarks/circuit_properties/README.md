@@ -134,4 +134,4 @@ declares (`run.write_metric`); without either it writes no file.
 The training benchmark's suite loads `work` by path, to hold it beside its own reading. What it measured of a training step (`s_×`, `a_out`, `a_in`) sits in
 `benchmarks/rho/data/circuits.toml` as data, each number with its source.
 
-The suite: `uv run tools/verity/check/suites.py benchmarks/circuit_properties`.
+The suite: `uv run tools/check/suites.py benchmarks/circuit_properties`.

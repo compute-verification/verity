@@ -12,7 +12,7 @@ What code outside this directory may use. Everything else here is internal.
 
 | Entry point | What it is |
 |---|---|
-| `uv run tools/verity/check/suites.py benchmarks/codec_tensor` | The suite, on the CPU: `wide.py`, `sketch_receipt.py` and `sketching.py` against PoUB's code and `tests/vectors.json`, and the decode step's plan. It writes no result. |
+| `uv run tools/check/suites.py benchmarks/codec_tensor` | The suite, on the CPU: `wide.py`, `sketch_receipt.py` and `sketching.py` against PoUB's code and `tests/vectors.json`, and the decode step's plan. It writes no result. |
 | `step.py`, with `--model`, `--batch` and a build of each of `wt.cu`, `step.cu` and `reader.cu` (`--wt-lib`, `--kv-lib`, `--reader-lib`) | One decode step at HBM exhaustion on one GPU. It writes `step.json` and `step.log` under `--out`. Nothing in the tree builds `step.cu`, whose build takes `-DKV_FIELD`, `-DKV_MASK` and `-DKV_FOLD6` at `wt.cu`'s field and codec, and `-DKV_QHEADS` at the model's query heads. |
 
 Nothing outside `benchmarks/` reads this directory by its path. `reader.cu` leaves it inside
@@ -23,7 +23,7 @@ Nothing outside `benchmarks/` reads this directory by its path. `reader.cu` leav
 `sha512.cuh`; and the audit's `PROTOCOL.md` and vectors test name `sketch_receipt.py`. Decided by `rg codec_tensor` over
 `verity/`, `benchmarks/`, `demos/`, `tests/` and `adapters/`.
 
-**Run:** `uv run tools/verity/check/suites.py benchmarks/codec_tensor` checks `wide.py`, `sketch_receipt.py`
+**Run:** `uv run tools/check/suites.py benchmarks/codec_tensor` checks `wide.py`, `sketch_receipt.py`
 and `sketching.py` against the audit's code and `tests/vectors.json`, and the decode step's plan, on the CPU.
 
 **Reads and writes:** the suite reads `benchmarks/word_codec`'s KV codec and the bandwidth audit's code; `bench.py`

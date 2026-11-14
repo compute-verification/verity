@@ -2,7 +2,7 @@
 
 The fine-grained check: Verity's checks as a graph of tasks that depends only on the commit. An executor runs any part of it
 with one result cache, one artifact store and one event stream; the verified queue only reads results. This package is Verity's side:
-the listing (graph/v2), one task's run (result/v1) and a serial reference executor. `verity tasks` (`tools/verity/check/
+the listing (graph/v2), one task's run (result/v1) and a serial reference executor. `verity tasks` (`tools/check/
 tasks.py`, tasks/v1) is the coarse graph `check` runs today.
 
 ~~~sh
@@ -179,7 +179,7 @@ retried; a task whose read didn't pass is cancelled. Each task's last result/v1 
 
 ## The build family
 
-The check's steps that build the Flock verifier and run what it built, and Flock's Rust, as `tools/verity/check/check.py`
+The check's steps that build the Flock verifier and run what it built, and Flock's Rust, as `tools/check/check.py`
 runs them, one task a step:
 
 | task | env | runs | inputs | outputs |

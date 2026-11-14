@@ -232,7 +232,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   Commit or from a deferred Commit's bundle by `verity_vllm.pipeline.deferred_rows`); its replay challenge is its own
   (`verity_vllm.commit.challenge`).
 
-Tests: `uv run tools/verity/check/suites.py protocols/spot`.
+Tests: `uv run tools/check/suites.py protocols/spot`.
 
 ## Core API
 

@@ -372,7 +372,7 @@ def _pinned_tree(tmp_path: Path, json_pins: dict[str, dict], more: dict[str, str
              "README.md": PINNED_README,
              "pous/TRUSTED.sha256": f"{_sha(PINNED_MANIFEST)}  ../sec/Proofs/lake-manifest.json\n"
                                     f"{_sha(chr(10))}  ../sec/Proofs/lakefile.toml\n",
-             "tools/verity/check/pins.py":
+             "tools/check/pins.py":
                  "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Pin:\n"
                  "    path: str\n    key: str | None\n    under: str\n\n\n"
                  f'PINS = (Pin("pous/TRUSTED.sha256", None, "pous"), {listed})\n',
@@ -542,7 +542,7 @@ def test_a_failed_uv_lock_fails_the_move(tmp_path, monkeypatch):
     """A move whose `uv lock` failed left a lock `uv sync` fails on, and exited 0, so `stage.py` certified a commit no suite
     could start on. It exits 1 with uv's reason, which `stage.py` and `restack.py` refuse on."""
     r = tmp_path / "repo"
-    files = {"old/a.txt": "", "tools/verity/check/pod_setup.sh": "UV_VERSION=${UV_VERSION:-9.9.9}\n",
+    files = {"old/a.txt": "", "tools/check/pod_setup.sh": "UV_VERSION=${UV_VERSION:-9.9.9}\n",
              "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
     for p, t in files.items():
         (r / p).parent.mkdir(parents=True, exist_ok=True)
@@ -844,7 +844,7 @@ CODE = "from verity.hardware.site import S\n\n\ndef load(name):\n    return {nam
 def _certify(r: Path, base: str) -> dict:
     """`move_check.py`'s verdict on the mover's run, committed on ``base``."""
     git(r, "commit", "-q", "-m", "move")
-    spec = importlib.util.spec_from_file_location("layout_move_check", HERE.parents[2] / "tools/verity/check/move_check.py")
+    spec = importlib.util.spec_from_file_location("layout_move_check", HERE.parents[2] / "tools/check/move_check.py")
     mc = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mc)
     return mc.certify(base.strip(), git(r, "rev-parse", "HEAD").strip(), cwd=str(r))

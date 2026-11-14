@@ -141,7 +141,7 @@ def takes_bookkeeping(repo: Path) -> bool:
     """Whether ``repo``'s train.sh, which a records run launches from, takes `--bookkeeping-warn` (the run repairs bookkeeping
     and warns); one that predates it would refuse every records run."""
     try:
-        return "--bookkeeping-warn" in (repo / "tools" / "verity" / "check" / "train.sh").read_text()
+        return "--bookkeeping-warn" in (repo / "tools" / "check" / "train.sh").read_text()
     except OSError:
         return False
 
@@ -163,7 +163,7 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
     password at the tty).  ``rank`` is its check's `slot.py --rank` (CHECK_SLOT_RANK), none for an unranked one.
     ``bookkeeping_warn`` (a records run) has its lean-audit repair the locks' bookkeeping and warn (`--bookkeeping-warn`).
     ``script_from``, detached, is the train.sh that runs instead of the clone's (the loop's own)."""
-    argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--cc-records"] if cc_records else [])]
+    argv = ["bash", "tools/check/train.sh", commit, machine, *(["--cc-records"] if cc_records else [])]
     if not cc_records:
         argv += [*(["--agreement"] if agreement else []),
                  *(["--deferred", deferred] if deferred else []), *(["--no-cache"] if no_cache else []),
@@ -307,7 +307,7 @@ PLAN_JOB = ('set -e; d=$1 r=$PWD; t="${TRAIN_TREES:-${1%/*}}/plan-${1##*/}"; mkd
             'export UV_PROJECT_ENVIRONMENT="${t%/*}/plan-venv"; git worktree add -q --detach "$t" "$2"; '
             'trap \'s=$?; set +e; cd "$r"; git worktree remove --force "$t" 2>/dev/null || rm -rf "$t" 2>/dev/null || '
             'rm -rf "$t"; git worktree prune; exit $s\' EXIT; cd "$t"; shift 2; '
-            'uv run -q python tools/verity/check/check.py --shard-plan --out "$d/' + AUTO_PLAN + '" "$@"')
+            'uv run -q python tools/check/check.py --shard-plan --out "$d/' + AUTO_PLAN + '" "$@"')
 
 
 def plan_shards(repo: Path, tip: str, steps: str, max_shards: int | None = None, n: int | None = None) -> dict:
@@ -340,9 +340,9 @@ def planned(rec: dict) -> tuple[dict | None, str | None]:
 #: what a running check has written of its steps and suites so far (check.py's `STEPS_LOG`, suites.py's `failing_path` of each
 #: `--json`), fetched with its records
 PROGRESS = ("steps.jsonl", "suites.failed.json", "suites-lean.failed.json")
-#: a check's trace/v1 spans (`tools/verity/check/spans.py`), whose root span opens as the check starts its steps
+#: a check's trace/v1 spans (`tools/check/spans.py`), whose root span opens as the check starts its steps
 SPANS = "spans.jsonl"
-#: a check's live record (`tools/verity/check/live.py`): each step it planned, pending until it starts and running until it ends
+#: a check's live record (`tools/check/live.py`): each step it planned, pending until it starts and running until it ends
 LIVE = "check-live.json"
 #: the steps a check runs first, one after another, before its groups start (check.py's `preflight`)
 PREFLIGHT = tuple(s for s in CHECK_STEPS if s.startswith("preflight-"))

@@ -13,12 +13,12 @@ from research import run_records, run_times as R
 from research.store.local import LocalStore
 
 NOW = datetime(2026, 10, 28, 12, 0, tzinfo=UTC)
-POOLED = ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/verity/check/slot.py", "--by", "proofs",
+POOLED = ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/check/slot.py", "--by", "proofs",
           "--wait-max", "1800", "--", "nice", "-n", "19"]
-QUICK = [*POOLED, "bash", "-lc", "uv sync -q && uv run tools/verity/check/suites.py --changed abc --quick"]
+QUICK = [*POOLED, "bash", "-lc", "uv sync -q && uv run tools/check/suites.py --changed abc --quick"]
 RECORDS = [*POOLED, "python3", "tools/verity/lean/lean_changed.py", "--records", "security"]
-SHARD = ["python3", "tools/verity/check/slot.py", "--priority", "--rank", "3", "--", "uv", "run", "--locked", "python",
-         "tools/verity/check/check.py", "--keep-going"]
+SHARD = ["python3", "tools/check/slot.py", "--priority", "--rank", "3", "--", "uv", "run", "--locked", "python",
+         "tools/check/check.py", "--keep-going"]
 DIRECT = ["bash", "-lc", "python3 measure.py"]
 WAITED, AT_ONCE, REFUSED, CANCELLED = ("r20261028-100000-aaaa", "r20261028-100100-bbbb", "r20261028-100200-cccc",
                                        "r20261028-100300-dddd")
@@ -151,7 +151,7 @@ def test_a_command_is_read_for_its_kind_its_pool_and_whom_it_is_for():
     assert [run_records.kind(c) for c in (QUICK, RECORDS, SHARD, DIRECT)] == ["quick suites", "Lean records", "check shards", "other"]
     assert run_records.kind([*POOLED, "sh", "-c", 'exec python3 "$RESEARCH_RUN_DIR/inputs/quick_tier.py" --lean Security']) == "quick suites"
     assert run_records.kind(["gpu-lease", "1", "--wait", "--mem-gb", "0", "--", "python3", "bench.py"]) == "GPU jobs"
-    assert run_records.kind([*POOLED, "uv", "run", "tools/verity/check/suites.py", "verity/core"]) == "other", "not the quick tier"
+    assert run_records.kind([*POOLED, "uv", "run", "tools/check/suites.py", "verity/core"]) == "other", "not the quick tier"
     assert [run_records.pool(c) for c in (QUICK, SHARD, DIRECT)] == ["research", "check", "-"]
     assert (run_records.asked_by(QUICK), run_records.asked_by(DIRECT), run_records.asked_by(["x", "--by"])) == ("proofs", None, None)
 

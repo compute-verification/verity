@@ -24,7 +24,7 @@ outside every zone, and `two_sites` joins two leaf-spines by a WAN between their
   verdicts.
 - `tests/`: the exports' tests, the declared tensor-core rates pinned to the census, the records adapter's tests on an
   injected clock, and `run.py`'s summary and expected verdicts
-  (`uv run tools/verity/check/suites.py verity-network-sim`). The mock datacenter is a script, not a test: it runs in
+  (`uv run tools/check/suites.py verity-network-sim`). The mock datacenter is a script, not a test: it runs in
   real time.
 
 ## The mock datacenter

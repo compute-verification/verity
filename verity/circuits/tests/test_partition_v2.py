@@ -34,7 +34,7 @@ from verity.circuits.ops.scalar import Bf16GtStrict, SelectBf16
 
 PATH = Path(__file__).parent / "partition_v2_vectors.json"
 REWRITE = ("the vector differs from the tree's; a change meant to move it rewrites it with "
-           "`uv run python tools/verity/check/pins.py --write verity/circuits/tests/partition_v2_vectors.json`")
+           "`uv run python tools/check/pins.py --write verity/circuits/tests/partition_v2_vectors.json`")
 V1 = json.loads((Path(__file__).parent / "partition_vectors.json").read_text())
 BF16 = Value(16)
 

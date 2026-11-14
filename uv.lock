@@ -2378,7 +2378,7 @@ requires-dist = [
 [[package]]
 name = "verity-check"
 version = "0.0.0"
-source = { virtual = "tools/verity/check" }
+source = { virtual = "tools/check" }
 dependencies = [
     { name = "research" },
 ]

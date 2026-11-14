@@ -15,7 +15,7 @@ The import order is one listing, ``tests/import_order.toml``, and the checks at 
     by name;  ``infra/`` is the last row, which no file of another row loads, a test included, but the ties it lists.
 
 The listing's tables (``against`` and each place's lists) are generated from the tree by
-``tools/verity/check/import_order.py``, and the listing is byte for byte what it writes.
+``tools/check/import_order.py``, and the listing is byte for byte what it writes.
 
 Beside the order:
 
@@ -805,7 +805,7 @@ def test_a_benchmarks_import_is_found() -> None:
                         "    def named(n):\n        return n\n"
                         "    return importlib.util.spec_from_file_location(named(name), directory / f'{name}.py')\n"),
         "x/caller.py": "from x import config, loader\nloader.load('paged', config.SESSION.parent / 'vllm_encoded')\n",
-        "x/clean.py": ("import sys\nsys.path.insert(0, 'tools/verity/check')\nimport suites\n"
+        "x/clean.py": ("import sys\nsys.path.insert(0, 'tools/check')\nimport suites\n"
                        "NOTE = 'the numbers come from benchmarks/ppl'\nimport verity_vllm\n"),
         "benchmarks/y/run.py": "import verity_bench\nimport sys\nsys.path.insert(0, '../benchmarks/z')\n",
     }
@@ -928,7 +928,7 @@ def test_core_never_reads_the_census() -> None:
 ORDER = ROOT / "tests" / "import_order.toml"
 #: The command that writes the listing's generated tables from the tree, and the line of the listing they start at: what
 #: is above it (the order, the distributions) is kept by hand, as are each place's ``paths`` and its ``trusted`` mark.
-REGENERATE = "`uv run tools/verity/check/import_order.py`"
+REGENERATE = "`uv run tools/check/import_order.py`"
 GENERATED = "# The ties against the order"
 #: The files the order reads as loaders: Python, Lean, and a Lake package's requirements.
 LOADERS = (".py", ".lean", "lakefile.toml")
@@ -1051,15 +1051,15 @@ def _source(path: str, listing: Listing) -> bool:
 
 @functools.cache
 def _tracked_tree() -> Any:
-    """``tools/verity/check/tracked_tree.py``, whose ``Tree`` resolves a Python import and a Lake package among the tracked
+    """``tools/check/tracked_tree.py``, whose ``Tree`` resolves a Python import and a Lake package among the tracked
     files.  Loaded on first use."""
-    return _load_tool("tracked_tree_of_the_order", ROOT / "tools/verity/check/tracked_tree.py")
+    return _load_tool("tracked_tree_of_the_order", ROOT / "tools/check/tracked_tree.py")
 
 
 def _path_roots(tree: Any, f: str, parsed: ast.AST, text: str) -> tuple[str, ...]:
     """Where a bare import of ``f`` resolves beyond its package's and its suite's roots: its own directory (a script's), and,
     when it changes ``sys.path``, each tracked directory a path anchored on ``__file__`` reaches in it
-    (``tools/verity/check/anchors.py``), whether or not that path is the one put there."""
+    (``tools/check/anchors.py``), whether or not that path is the one put there."""
     roots = {posixpath.dirname(f)}
     if "sys.path" in text and "__file__" in text:
         anchors = _tracked_tree().ANCHORS
@@ -1730,7 +1730,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     stub = ORDER.read_text(encoding="utf-8")
     stub = stub[:stub.index(GENERATED)] + GENERATED + "".join(
         f"\n[[place]]\npaths = {list(e['paths'])!r}\n".replace("'", '"') for e in split.values())
-    tool = _load_tool("import_order", ROOT / "tools/verity/check/import_order.py")
+    tool = _load_tool("import_order", ROOT / "tools/check/import_order.py")
     text, back = tool.tables(sys.modules[__name__], stub, loads, grow=True)
     assert not back and _generated(text, loads) == text and tool.tables(sys.modules[__name__], text, loads) == (text, [])
     bare, back = tool.tables(sys.modules[__name__], stub, loads)

@@ -461,9 +461,9 @@ def test_the_long_window_is_the_last_day_and_a_shard_still_running_is_never_outs
 def test_a_change_of_the_lean_checks_own_code_is_a_lean_change():
     rule = qt.LEAN_FILE
     for f in ("security/Proofs/A.lean", "x/lakefile.toml", "lake-manifest.json", "a/lean-toolchain", "security/lean-audit.json",
-              "tools/verity/lean/check.py", "tools/verity/check/common.py"):
+              "tools/verity/lean/check.py", "tools/check/common.py"):
         assert rule.search(f), f
-    for f in ("tools/verity/check/suites.py", "verity/ml/circuits/lean.py", "docs/tools/verity/lean/x.md", "a/leanish.py",
+    for f in ("tools/check/suites.py", "verity/ml/circuits/lean.py", "docs/tools/verity/lean/x.md", "a/leanish.py",
               "tools/verity/lean/tests/test_audit.py", "tools/verity/lean/README.md"):
         assert not rule.search(f), f
 
@@ -482,7 +482,7 @@ def test_the_low_risk_heads_are_the_marked_ones_with_no_verdict_and_no_hold(monk
     asked = []
     monkeypatch.setattr(qt, "pr_files", lambda pr: asked.append(pr) or files[pr])
     monkeypatch.setattr(qt, "CHECKOUT", tmp_path)
-    flags = tmp_path / "tools/verity/check/drive.toml"
+    flags = tmp_path / "tools/check/drive.toml"
     flags.parent.mkdir(parents=True)
     d = doc()
     for n in ("7", "8"):

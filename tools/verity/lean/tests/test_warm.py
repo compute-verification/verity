@@ -41,7 +41,7 @@ DEP = {"name": "dep", "type": "git", "rev": "abc"}
 #: names `b` as its prover
 FILES = {
     "tools/verity/lean/check.py": "", "tools/verity/lean/lean_audit.py": "", "tools/verity/lean/merge.py": "",
-    "tools/verity/lean/README.md": "", "tools/verity/lean/tests/test_x.py": "", "tools/verity/check/common.py": "",
+    "tools/verity/lean/README.md": "", "tools/verity/lean/tests/test_x.py": "", "tools/check/common.py": "",
     LA.CONTRACT: "", "docs/note.md": "",
     "pkg/a/lakefile.toml": _lakefile("a", "A"), "pkg/a/lean-toolchain": TOOLCHAIN, "pkg/a/lean-audit.json": "{}",
     "pkg/a/lake-manifest.json": json.dumps({"name": "a", "packages": [DEP]}),
@@ -128,7 +128,7 @@ def test_the_names_warm_reads_are_the_auditors_and_the_verdict_packs_own():
     (["pkg/a/lake-manifest.json"], ALL, 5),                     # a's env as a root, and which of b's pins a's modules take there
     (["pkg/a/A/Leaf.lean", "pkg/c/C.lean"], ALL, 5),
     (["tools/verity/lean/check.py"], ALL, 0),                   # the auditor is in every package's key and in no module's
-    (["tools/verity/check/common.py"], ALL, 0),
+    (["tools/check/common.py"], ALL, 0),
     (["tools/verity/lean/merge.py", "tools/verity/lean/README.md", "tools/verity/lean/tests/test_x.py", "docs/note.md"], [], 0),
     ([], [], 0),
 ])
@@ -166,7 +166,7 @@ def test_the_audit_runs_for_the_reached_packages_alone_in_an_audit_slot_and_pack
     assert W.audit_merge(tree, BASE, out, run=audit, log=said.append) is None
     [(argv, cwd)] = audit.calls
     assert cwd == tree
-    assert argv == [sys.executable, str(tree / "tools/verity/check/lean_slot.py"), "--pool", "audit", "--",
+    assert argv == [sys.executable, str(tree / "tools/check/lean_slot.py"), "--pool", "audit", "--",
                     sys.executable, str(tree / "tools/verity/lean/lean_audit.py"), "--out", str(out),
                     "--cache", str(cache / "lean-audit"), "--deps", str(cache / "lean-deps"), "--bundle",
                     "--package", "pkg/b", "--package", "pkg/c"]

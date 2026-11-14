@@ -25,7 +25,7 @@ FACTS = HERE / "fixtures" / "unread.facts.jsonl"
 #: ``MAIN``'s code the gate runs (`unread_gate.CODE`), copied into the test's repository
 TOOLS = [*(f"tools/verity/lean/{f}" for f in ("unread.py", "modules.py", "headers.py", "lean_audit.py", "module_keys.py",
                                                  "settings.py")),
-         "tools/verity/check/common.py", "tools/verity/graph/verity_graph/contract.py"]
+         "tools/check/common.py", "tools/verity/graph/verity_graph/contract.py"]
 #: a tool that keeps `Definitions.Dead` (and the aggregator `Definitions.Gone` over it) by one declaration's name, line 2
 LONELY = '"""A tool that reads one declaration by its name."""\nNAME = "Dead.lonely"\nWHERE = here.joinpath("x")\n'
 

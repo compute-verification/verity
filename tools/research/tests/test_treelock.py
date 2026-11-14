@@ -32,8 +32,8 @@ open(os.path.join(d, "lake.txt"), "w").write(" ".join([held, os.getcwd(), *sys.a
 @pytest.mark.parametrize("command, builds", [
     (["bash", "-lc", "uv sync -q && lake build Flock"], True),
     (["python3", "tools/verity/lean/lean_changed.py", "--base", "x"], True),
-    (["python3", "tools/verity/check/slot.py", "--by", "t", "--", "nice", "-n", "19", "python3", "tools/verity/check/check.py"], True),
-    (["bash", "-lc", "uv sync -q --all-packages && uv run tools/verity/check/suites.py --quick"], True),
+    (["python3", "tools/check/slot.py", "--by", "t", "--", "nice", "-n", "19", "python3", "tools/check/check.py"], True),
+    (["bash", "-lc", "uv sync -q --all-packages && uv run tools/check/suites.py --quick"], True),
     (["uv", "run", "--extra", "torch-cpu", "verity", "check", "lean"], True),
     (["/home/research/.elan/bin/lake", "env", "lean", "X.lean"], True),
     (["python", "bench.py", "--out", "o"], False),

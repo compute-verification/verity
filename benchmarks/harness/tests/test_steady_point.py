@@ -986,7 +986,7 @@ def test_run_launches_each_point_without_a_passing_run_through_a_gpu_slot_of_the
         assert [flags[i + 1] for i, token in enumerate(flags) if token == "--env"] == [
             "RUST_MIN_STACK=1073741824", f"VERITY_BENCH_SETUP={SETUP}"]
         assert through_slot(workload) and "gpu-lease" not in command
-        assert workload[:4] == ["env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/verity/check/slot.py"]
+        assert workload[:4] == ["env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/check/slot.py"]
         assert workload[workload.index("--run-max") + 1] == "5400"
         assert workload[workload.index("--", 4) + 1:] == [
             "bash", "benchmarks/harness/steady_point.sh", "--spec", path, "--point", item.point.id,

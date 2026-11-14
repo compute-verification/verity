@@ -23,7 +23,7 @@ from verity_graph import ROOT, contract, graph, runners
 from verity_graph.families import build
 from verity_graph.runners import flock_circuit_build, flock_rust_tests, lean_agreement, lean_build, lean_suites, lean_unit_cut
 
-spec = importlib.util.spec_from_file_location("graph_check", ROOT / "tools" / "verity" / "check" / "check.py")
+spec = importlib.util.spec_from_file_location("graph_check", ROOT / "tools" / "check" / "check.py")
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
 

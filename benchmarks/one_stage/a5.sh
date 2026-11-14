@@ -6,7 +6,7 @@
 # which A5 takes only over a SHA-512 run root of record. The fixture's members are committed under rows-sha512, which the window
 # names as its record's; COMMIT_SCHEME, if set, must say so (vllm-v1 is kept only to read recorded runs, and A5 over one is a5.py on
 # its bundle). M0's flock-circuit and Lean's flock-verify are built from this tree, in scratch (A5_FLOCK_WORK=DIR keeps M0's build).
-#   python3 tools/verity/check/slot.py --by LANE -- bash benchmarks/one_stage/a5.sh
+#   python3 tools/check/slot.py --by LANE -- bash benchmarks/one_stage/a5.sh
 #   (a job run from a clone of the tree, 16 GB)
 # A5_ROW_DIR=D: a single-GPU deferred Commit's row dir in place of the fixture (its sealed D/commit/replay_bundle_p0 and the Build's
 # Programs of record in D, as a5_llama1b_h200.sh leaves them), with A5_PARTITION the partition its --serving-rows named and, with

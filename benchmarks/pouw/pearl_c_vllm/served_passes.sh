@@ -2,11 +2,11 @@
 # served_passes.py on a node, from the run tree's root, in the harness's environment (benchmarks/harness/env.sh):
 # (the GPU node takes a run only through a slot of its gpu pool, and its GPUs from gpu-lease):
 #   research run --on MACHINE --source . --project verity --mem-gb 96 -- \
-#     env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by LANE -- \
+#     env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/check/slot.py --by LANE -- \
 #     /workspace/pouw/infra/bin/gpu-lease 1 --wait --max-min 90 --mem-gb 96 -- env VERITY_BENCH_VENV=/workspace/jobs/venv312 \
 #     bash benchmarks/pouw/pearl_c_vllm/served_passes.sh serve [served_passes.py serve's options]
 #   research run --on MACHINE --source . --project verity --mem-gb 64 -- \
-#     env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by LANE -- \
+#     env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/check/slot.py --by LANE -- \
 #     env VERITY_BENCH_VENV=/workspace/jobs/venv312 PASSES=<the serve run's passes directory> \
 #     bash benchmarks/pouw/pearl_c_vllm/served_passes.sh verify [--fast]
 # serve builds the cubin (benchmarks/harness/setup/pearl_c.sh), gives $PASSES_ROOT/<run id> a retention record (owned by

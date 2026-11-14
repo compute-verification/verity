@@ -176,7 +176,7 @@ def test_the_low_risk_lane_excludes_what_runs_with_the_control_pods_or_every_age
     import tomllib
 
     root = Path(__file__).resolve().parents[3]
-    excludes = tomllib.loads((root / "tools/verity/check/drive.toml").read_text())["lowrisk_excludes"]
+    excludes = tomllib.loads((root / "tools/check/drive.toml").read_text())["lowrisk_excludes"]
     for path in ("infra/", "tools/research/", "tools/move/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"):
         assert path in excludes, f"drive.toml's lowrisk_excludes lacks {path}"
 

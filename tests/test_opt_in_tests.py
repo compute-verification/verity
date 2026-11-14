@@ -7,7 +7,7 @@ import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CHECK = ROOT / "tools" / "verity" / "check" / "check.py"
+CHECK = ROOT / "tools" / "check" / "check.py"
 
 
 def opt_in() -> dict[str, dict[str, tuple[str, ...]]]:

@@ -14,7 +14,7 @@ tree's root:
 
 ```bash
 uv sync --all-packages --extra torch-cpu
-uv run tools/verity/check/suites.py benchmarks/torch_gpu/DIR
+uv run tools/check/suites.py benchmarks/torch_gpu/DIR
 ```
 
 Each GPU script's header gives its command and the hardware it needs: CUDA's nvcc (12.8 or later), a GPU taken through

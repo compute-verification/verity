@@ -1128,7 +1128,7 @@ def _stream_forced() -> bool:
 #: the programs of a shipped tree that refuse a tree without .git (suites are keyed from git's view of the tree, check runs them,
 #: lean_changed.py reads its commits): a command naming one is refused at launch from a tree git can't reach (`needs_git`), not
 #: after it has waited for a slot.  A list of the known ones, not a test of what a command does
-NEEDS_GIT = ("tools/verity/check/suites.py", "tools/verity/check/check.py", "tools/verity/lean/lean_changed.py", "verity check")
+NEEDS_GIT = ("tools/check/suites.py", "tools/check/check.py", "tools/verity/lean/lean_changed.py", "verity check")
 
 
 def needs_git(command: list[str]) -> str | None:
@@ -2587,7 +2587,7 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
 
 #: slot.py and lean_slot.py, beside this package in the caller's checkout, which NODE_PROGRAM loads on the machine (as `check.py
 #: --slots` does) for the check and Lean slots a run holds or waits on; without them the reading has no slots
-CHECK_DIR = Path(__file__).resolve().parents[3] / "verity" / "check"
+CHECK_DIR = Path(__file__).resolve().parents[3] / "check"
 #: what `node_readings` runs on a machine as `python3 - RUN_DIR...`, after `SRC = {...}`: research.scopemem's `node`
 NODE_PROGRAM = '''
 import json, sys, types
@@ -2602,8 +2602,8 @@ def load(name, src, file):
 
 
 mem = load("research_scopemem", SRC["scopemem"], "research/scopemem.py")
-mods = (load("check_slot_for_lean_slot", SRC["slot"], "tools/verity/check/slot.py"),
-        load("check_lean_slot", SRC["lean"], "tools/verity/check/lean_slot.py")) if SRC.get("slot") and SRC.get("lean") else None
+mods = (load("check_slot_for_lean_slot", SRC["slot"], "tools/check/slot.py"),
+        load("check_lean_slot", SRC["lean"], "tools/check/lean_slot.py")) if SRC.get("slot") and SRC.get("lean") else None
 print(json.dumps(mem.node(sys.argv[1:], slot_mods=mods)))
 '''
 

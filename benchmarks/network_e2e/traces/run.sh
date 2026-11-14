@@ -2,7 +2,7 @@
 # The trace corpus (corpus.py's docstring) on one leased GPU of a node, from the shipped tree's root, as a job whose
 # input is the C4 shard benchmarks/ppl/datasets.json pins (c4-validation.00000-of-00008.json.gz), in a GPU slot:
 #   [CORPORA="llama32_1b/seeded;llama32_1b/async-greedy:heavy,smallkv"] [REQUESTS=1000] [MAX_MIN=45] [JOIN=0] \
-#     env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by LANE -- \
+#     env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/check/slot.py --by LANE -- \
 #     bash benchmarks/network_e2e/traces/run.sh
 # JOIN=0 leaves the summaries and the comparison to join.sh on a CPU node.
 # CORPORA's entries, apart by spaces or ";", are MODEL/VARIANT[:TRACE,...] (corpus.MODELS, corpus.VARIANTS, corpus.TRACES;

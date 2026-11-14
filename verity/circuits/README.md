@@ -75,12 +75,12 @@ Definitions' fast evaluators are `verity.definitions.numerics`'s, registered the
 with the reference on every realization, the declared port intervals, redundant and dead gates, and the partition. A
 change that adds or modifies a circuit passes `uv run circuit-check <definition|template|row>`, with its report in the PR.
 
-- `check` runs it as its `circuit-check` step (`tools/verity/check/check.py`): `circuit-check --all`, every registered
+- `check` runs it as its `circuit-check` step (`tools/check/check.py`): `circuit-check --all`, every registered
   Definition and template, each target's pass kept in check's cache (`--cache`, `--catalog-units`) and reused while
   everything it read is unchanged. A shard of the check runs only its shards of the targets (`--shard K/N`), and
   `circuit-check --combine` joins them. A sharded check can first build every catalog binding's record once, in check's
   records step (`--cc-records`: `circuit-check --all --records-only`), and give each shard those records
-  (`--cc-records-from`). The step is off the merge gate (`off_gate` in `tools/verity/check/policy.toml`): a candidate's
+  (`--cc-records-from`). The step is off the merge gate (`off_gate` in `tools/check/policy.toml`): a candidate's
   check runs it, and its red holds nothing. The session of circuit-check's own test suite takes the bindings' records from
   that same cache and has the ones it lacks built and stored there once (`tools/verity/circuit_check/tests/conftest.py`);
   either can list the records its catalog rests on (`--records-manifest FILE`, `CIRCUIT_CHECK_RECORDS_MANIFEST`), by which
@@ -91,12 +91,12 @@ change that adds or modifies a circuit passes `uv run circuit-check <definition|
   holds the bindings circuit-check makes to the ones the tasks list
   (`tools/verity/graph/verity_graph/families/circuit_binding.py`).
 
-### Regenerating pins and fixtures: `tools/verity/check/pins.py`
+### Regenerating pins and fixtures: `tools/check/pins.py`
 
-`python tools/verity/check/pins.py` lists every tracked file a command regenerates from the tree, with its command, and
+`python tools/check/pins.py` lists every tracked file a command regenerates from the tree, with its command, and
 `--stale` and `--regen` find and rewrite the stale pins. This package's test vectors (`tests/format_vectors.json`,
 `tests/boolean_vectors.json` and the others its `WRITERS` lists) are each rewritten only by
-`uv run python tools/verity/check/pins.py --write PATH`, the command a failing test names. A lowering pin in a
+`uv run python tools/check/pins.py --write PATH`, the command a failing test names. A lowering pin in a
 `.circuit-check.json` is circuit-check's own: `uv run circuit-check TARGET --update-pins` writes what the target measures
 now, and the diff is reviewed.
 
@@ -213,5 +213,5 @@ Pure functions of a Program, read by the resource audits:
 
 ## Tests
 
-`tests/` is this package's suite (`uv run tools/verity/check/suites.py verity/circuits`), and `./ops/tests/` is a suite
+`tests/` is this package's suite (`uv run tools/check/suites.py verity/circuits`), and `./ops/tests/` is a suite
 of its own.

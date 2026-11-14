@@ -42,11 +42,11 @@ One distribution, one module per concern. Import from the module that owns an ob
 row or an earlier one, no verifier loads prover code, a place of `verity` imports only the places its `loads` lists,
 what the verifiers' side loads and reaches (the lists of its trusted places) only shrinks, and `verity` imports no
 other distribution. To allow an import between two places, write it and run
-`uv run tools/verity/check/import_order.py`, which writes the line. The test keeps the plain-integer references
+`uv run tools/check/import_order.py`, which writes the line. The test keeps the plain-integer references
 (`STDLIB_ONLY`: `verity/circuits`, `verity/commitments/randomness`, `verity/claims` among them) free of numpy.
 
 ~~~sh
-uv run tools/verity/check/suites.py   # each directory's tests are a suite of their own; `check` runs them all
+uv run tools/check/suites.py   # each directory's tests are a suite of their own; `check` runs them all
 ~~~
 
 Build, evaluate and query a circuit from the primitive library:

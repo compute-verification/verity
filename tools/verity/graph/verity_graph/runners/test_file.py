@@ -1,4 +1,4 @@
-"""A test-file task (`families/test_file.py`): pytest on its one test file as `tools/verity/check/suites.py` runs the file's suite,
+"""A test-file task (`families/test_file.py`): pytest on its one test file as `tools/check/suites.py` runs the file's suite,
 from the suite's directory (the task's `vars` `suite`) with the suite's configuration, the read guard (`-p verity_suite_guard`),
 no cache provider and a fresh `--basetemp`, in one process (`-p no:xdist`), after fetching the registered fixtures `suites.py`
 would fetch for the suite.
@@ -33,7 +33,7 @@ from pathlib import Path
 from .. import ROOT, graph
 from . import call
 
-GUARD = ROOT / "tools" / "verity" / "check" / "guard"
+GUARD = ROOT / "tools" / "check" / "guard"
 #: on the tests' PYTHONPATH: its `sitecustomize` makes every Python a test starts trace what it reads
 CHILD = GUARD / "child"
 REGISTRY = "artifacts.json"

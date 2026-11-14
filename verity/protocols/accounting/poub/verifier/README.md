@@ -204,6 +204,6 @@ A transcript that doesn't name its session's pace replays only with the pace its
 - `pooled.py`: the openings' pooled bound in exact rationals, beside `lean/RemoteAudit/Pooled.lean`.
 - `line.py`: the memory line a paced session shows held over time, beside `lean/RemoteAudit/Line.lean`.
 
-Tests: `uv run tools/verity/check/suites.py verity/protocols/accounting/poub/verifier` (the Python), and
+Tests: `uv run tools/check/suites.py verity/protocols/accounting/poub/verifier` (the Python), and
 `verity/protocols/accounting/poub/verifier/lean` (the difftest, the replay and the P2 party's sessions on the Lean of
 record, which build the Lean).

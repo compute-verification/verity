@@ -2,7 +2,7 @@
 # `verity/protocols/accounting/poub/verifier/session/verifier.py`, their wire `wire.py` beside it) and the prover's
 # (`prover.py`, its GPU backend `device.py` and `session.cu`). Not a package: `run.sh` runs both on a GPU node, and the suite
 # runs both over a loopback socket with the driver's reference as the prover's backend
-# (`uv run tools/verity/check/suites.py benchmarks/remote_session`). `serve.py` is vLLM serving as the prover, which
+# (`uv run tools/check/suites.py benchmarks/remote_session`). `serve.py` is vLLM serving as the prover, which
 # `tests/test_vllm_serve.py` runs where vLLM, a GPU and the vLLM integration's `StoreBackend` are. `sampling_inputs.py`
 # reads a run's `verifier.json` for the audit's side of a sampling plan: ε, the line and the serving cost. `auditor_line.py`
 # reads a gate run's memory line on the auditor's clock, computed by the Lean verifier (its `line` request) and held

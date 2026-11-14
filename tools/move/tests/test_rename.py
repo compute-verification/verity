@@ -521,8 +521,8 @@ def test_a_json_pin_follows_a_manifest_the_move_rewrites(toy, toy_map):
     def sha(t: str) -> str:
         return hashlib.sha256(t.encode()).hexdigest()
     pin = {"inputs": {"README.md": sha(readme), "Sec/Proofs/lake-manifest.json": sha(manifest)}, "out": [1]}
-    (toy / "tools/verity/check").mkdir(parents=True)
-    (toy / "tools/verity/check/pins.py").write_text(
+    (toy / "tools/check").mkdir(parents=True)
+    (toy / "tools/check/pins.py").write_text(
         "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Pin:\n"
         "    path: str\n    key: str | None\n"
         '    under: str\n\n\nPINS = (Pin("fix/vec.json", "inputs", ""), Pin("pous/TRUSTED.sha256", None, "pous"))\n')
@@ -691,8 +691,8 @@ def test_a_data_file_under_a_prose_map_is_left_as_it_is():
 
 def test_a_prose_move_moves_nothing_and_leaves_what_a_json_pin_records(toy, capsys):
     """A prose move renames no path and no declaration, and leaves a file a JSON pin records for the pin's command."""
-    (toy / "tools/verity/check").mkdir(parents=True)
-    (toy / "tools/verity/check/pins.py").write_text(
+    (toy / "tools/check").mkdir(parents=True)
+    (toy / "tools/check/pins.py").write_text(
         "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Pin:\n"
         '    path: str\n    key: str | None\n    under: str\n\n\nPINS = (Pin("fix/vec.json", "inputs", ""),)\n')
     (toy / ".gitignore").write_text("__pycache__/\n")

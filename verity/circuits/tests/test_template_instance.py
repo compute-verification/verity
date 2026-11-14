@@ -18,7 +18,7 @@ from verity.circuits.types import Array, Tuple, Value
 
 PATH = Path(__file__).parent / "template_instance_vectors.json"
 REWRITE = ("the vectors differ from the tree's; a change meant to move them rewrites them with "
-           "`uv run python tools/verity/check/pins.py --write verity/circuits/tests/template_instance_vectors.json`")
+           "`uv run python tools/check/pins.py --write verity/circuits/tests/template_instance_vectors.json`")
 V32 = Value(32)
 M32 = (1 << 32) - 1
 

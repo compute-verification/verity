@@ -55,7 +55,7 @@ LEAN_TOOL = "tools/verity/lean/"
 #: what a Lean check reads (drive's `lean_reads`): a change to any of it is the Lean check's to judge
 LEAN_READS = (".lean", "lakefile.toml", "lakefile.lean", "lean-toolchain", "lake-manifest.json", "lean-audit.json")
 #: ``MAIN``'s code the gate runs: the Lean tools (not their tests) and what `lean_audit.py` loads
-COMMON = "tools/verity/check/common.py"
+COMMON = "tools/check/common.py"
 CODE = (f":(glob){LEAN_TOOL}*", COMMON, "tools/verity/graph/verity_graph/contract.py")
 #: what a kept verdict's key holds of ``MAIN``: `CODE`'s trees (the Lean tools with their tests: a superset)
 CODE_TREES = (LEAN_TOOL.rstrip("/"), *CODE[1:])

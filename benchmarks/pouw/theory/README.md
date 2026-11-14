@@ -43,7 +43,7 @@ where its command says (`--verdict`, `--json`, `--out`).
 - **An sm_120 probe** (`*.sh` beside its `*.cu`) runs from a pushed commit through `research run` on an RTX PRO 6000.
   Its header has the command; the `*_count.py` beside it counts the SASS and sets the device's timings beside the count.
 - **The tests** are `tests/test_theory_*.py`, in the `verity-pouw-benchmarks` suite:
-  `uv run tools/verity/check/suites.py` runs them when their inputs change.
+  `uv run tools/check/suites.py` runs them when their inputs change.
 
 ## The scripts
 

@@ -1172,7 +1172,7 @@ def test_a_task_the_verdict_needs_holds_it_on_graph2_s_fail_or_infra_but_one_off
     holds it as its fail does, wherever the loop reads the task passed.  A task off the gate that no gating task reads holds
     nothing: graph2's verdict fails on circuit-check's tasks, which the loop doesn't gate on.  A `ready_verdict` label, which a
     rerun leaves standing, holds nothing either."""
-    env.put(1, {"a.txt": "1\n", "tools/verity/check/policy.toml": OFF_GATE})
+    env.put(1, {"a.txt": "1\n", "tools/check/policy.toml": OFF_GATE})
     loop = env.loop(policy)
     script = env.graph2_script(loop)
     (built,) = loop.tick()
@@ -2723,8 +2723,8 @@ def test_a_failure_an_allowance_of_the_candidate_s_base_covers_is_passed_as_driv
     (`Landing._task_units`, `Landing._task_allowed`), and so does the verdict, by policy.toml at the candidate's base: an
     allowance the candidate adds itself (``own``) never covers its own failure."""
     if not own:
-        _main_to(env, {"tools/verity/check/policy.toml": ALLOWED})
-    env.put(1, {"a.txt": "1\n", **({"tools/verity/check/policy.toml": ALLOWED} if own else {})})
+        _main_to(env, {"tools/check/policy.toml": ALLOWED})
+    env.put(1, {"a.txt": "1\n", **({"tools/check/policy.toml": ALLOWED} if own else {})})
     loop = env.loop(vqueue.decide)
     (built,) = loop.tick()
     sha, w = built["sha"], loop.world
@@ -3520,7 +3520,7 @@ def test_a_pr_changing_a_lean_input_waits_while_a_batch_is_staged_and_is_built_o
     main = env.main()
     loop, records, sha, one, _ = _records_loop(env)
     env.put(2, {"pkg/notes.py": "2\n"})
-    env.put(3, {"tools/verity/check/common.py": "3\n"})
+    env.put(3, {"tools/check/common.py": "3\n"})
     env.put(4, {"b.txt": "4\n"})
     (four,) = loop.tick()
     assert (four["members"], four["base"], four["enqueued"]) == ([4], main, True), four
@@ -3593,7 +3593,7 @@ def test_at_lean_0_a_pin_puts_no_lean_batch_ahead_of_a_pr_changing_a_lean_input_
     sha = staged["sha"]
     assert (staged["members"], staged["heads"], staged["records_first"], started["action"]) == ([1], [head], True, "regenerate")
     pins.write_text("1\n2\n")
-    env.put(3, {"tools/verity/check/common.py": "3\n"})
+    env.put(3, {"tools/check/common.py": "3\n"})
     assert loop.tick() == [] and records.started == [("drive", sha)]
     records.verdicts["regen-1"] = RecordsRun(PASS)
     judged, fixed, built = loop.tick()
@@ -4582,8 +4582,8 @@ def test_under_gate_check_a_candidate_changing_no_lean_input_takes_lean_audit_fr
 
     main = env.main()
     env.put(1, {"a.txt": "1\n"})
-    common = env.put(2, {"tools/verity/check/common.py": "# the auditor imports this\n"})
-    env.put(3, {"tools/verity/check/slot.py": "# slots\n", "tools/verity/lean/tests/test_cache.py": "# a test\n",
+    common = env.put(2, {"tools/check/common.py": "# the auditor imports this\n"})
+    env.put(3, {"tools/check/slot.py": "# slots\n", "tools/verity/lean/tests/test_cache.py": "# a test\n",
                 "security/README.md": "# the Lean tree\n"})
     loop, runs = _check(env, monkeypatch, batch=1, depth=3)
     _, built, _ = loop.tick()
@@ -4592,7 +4592,7 @@ def test_under_gate_check_a_candidate_changing_no_lean_input_takes_lean_audit_fr
     assert [_steps(runs, c) for c in (main, one, two, three)] == [[every] * 3] * 3 + [[free] * 3]
     started = {r["sha"]: r for r in env.lines() if r["action"] == "slim" and r["why"] == "started"}
     assert [started[c]["record"].get("lean_audit_from") for c in (one, two, three)] == [None, None, two]
-    assert loop.world._changed(main, common) == {"tools/verity/check/common.py"}
+    assert loop.world._changed(main, common) == {"tools/check/common.py"}
 
 
 @pytest.mark.parametrize("main_says", ["passed", "nothing yet", "failed pytest"])
@@ -4639,7 +4639,7 @@ def test_under_gate_check_a_candidate_that_left_suites_to_its_base_s_check_lands
     started again with no lender, its runs still running cancelled, and it lands on that check."""
     main = env.main()
     env.put(1, {"a.txt": "1\n"})
-    env.put(2, {"tools/verity/check/common.py": "# the auditor imports this\n"})     # so it audits itself: no other wait
+    env.put(2, {"tools/check/common.py": "# the auditor imports this\n"})     # so it audits itself: no other wait
     loop, runs = _check(env, monkeypatch, batch=1, depth=2)
     loop.tick()
     runs.end(main)
@@ -5009,7 +5009,7 @@ def test_under_gate_check_a_heavy_candidate_s_shard_auditing_security_proofs_and
     from test_landing import CI_TOML
 
     plan = [["pytest"], ["lean-audit:security/Proofs", "lean-audit:security/Properties"], ["lean-audit:*"]]
-    main = _main_to(env, {"tools/verity/check/ci.toml": CI_TOML + f"[[plan]]\nshards = {json.dumps(plan)}\n"})
+    main = _main_to(env, {"tools/check/ci.toml": CI_TOML + f"[[plan]]\nshards = {json.dumps(plan)}\n"})
     env.put(1, {"a.txt": "1\n"})
     loop, runs = _check(env, monkeypatch)
     (env.tmp / "heavy").write_text(heavy)
@@ -5108,11 +5108,11 @@ HEAD, ROPE, DEAD, BIG = "NetworkHeadCheck_v2{L=6,T=32,COUNTS=0}", "RopeHead_v1{D
 #: allows `DEAD`'s failure, drive.toml makes two steps warn steps, ci.toml gives each job but lean-audit an owner, the registry
 #: holds the PRs' lanes, heads, who owns the head check's sidecar, whose pins file pins `HEAD`, and the owner of a fixture
 #: naming `HEAD` that is no pins file
-OFF_TREE = {"tools/verity/check/policy.toml": 'schema = "policy/v0"\noff_gate = ["circuit-check", "ratchet-gate"]\n'
+OFF_TREE = {"tools/check/policy.toml": 'schema = "policy/v0"\noff_gate = ["circuit-check", "ratchet-gate"]\n'
                                               '[[allow]]\nid = "circuit-check lowering/dead Callee_v1"\nowner = "circuits"\n'
                                               'expires = "2030-06-01T00:00:00Z"\nreason = "red until its fix lands"\n',
-            "tools/verity/check/drive.toml": 'warn_steps = ["flock-rust-tests", "lean-audit"]\n',
-            "tools/verity/check/ci.toml": "".join(f'[[job]]\nname = "{j}"\nowner = "{o}"\n' for j, o in (
+            "tools/check/drive.toml": 'warn_steps = ["flock-rust-tests", "lean-audit"]\n',
+            "tools/check/ci.toml": "".join(f'[[job]]\nname = "{j}"\nowner = "{o}"\n' for j, o in (
                 ("pytest", "ci"), ("circuit-check", "circuits"), ("ratchet-gate", "vllm"), ("flock-rust-tests", "proofs"))),
             Q.REGISTRY.as_posix(): json.dumps({"handles": [
                 *({"handle": h} for h in ("ci", "circuits", "vllm", "lane-1", "lane-2")),
@@ -5511,10 +5511,10 @@ def test_under_gate_check_the_steps_off_the_gate_are_its_bases_and_the_allowance
     owners its own, as the check after it lands reads them (an allowance it adds covers its failure, one expired covers
     nothing, and the ratchet gate's new owner is rung of a merge whose lane is unknown, #3's)."""
     allow = '[[allow]]\nid = "circuit-check lowering/dead {}"\nowner = "circuits"\nexpires = "{}"\nreason = "red for now"\n'
-    pol = (OFF_TREE["tools/verity/check/policy.toml"].replace('"ratchet-gate"]', '"ratchet-gate", "pytest"]')
+    pol = (OFF_TREE["tools/check/policy.toml"].replace('"ratchet-gate"]', '"ratchet-gate", "pytest"]')
            + allow.format("New_v1", "2030-06-01T00:00:00Z") + allow.format("Old_v1", "2020-06-01T00:00:00Z"))
-    jobs = OFF_TREE["tools/verity/check/ci.toml"].replace('"vllm"', '"ratchets"')
-    loop, runs, main, sha = _off(env, monkeypatch, {"tools/verity/check/policy.toml": pol, "tools/verity/check/ci.toml": jobs},
+    jobs = OFF_TREE["tools/check/ci.toml"].replace('"vllm"', '"ratchets"')
+    loop, runs, main, sha = _off(env, monkeypatch, {"tools/check/policy.toml": pol, "tools/check/ci.toml": jobs},
                                  {"b.txt": "2\n"}, {"c.txt": "3\n"})
     runs.end(main)
     runs.end(sha, 3, "pytest", "error: no\n", also={"circuit-check": _circuit("lowering/dead New_v1", "lowering/dead Old_v1"),

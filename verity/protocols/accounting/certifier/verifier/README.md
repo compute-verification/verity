@@ -496,4 +496,4 @@ a hiding commitment to R, and the LMS check (`Certificate.verify`) reads only th
 Each end's head check holds R to the head it opens and D to R under `salt_c`, so the certificates' check reads nothing
 of the heads; the in-the-clear check also checks that link over the opening (`CertifiedRecord.verify`).
 
-Tests: `uv run tools/verity/check/suites.py verity/protocols/accounting/certifier`.
+Tests: `uv run tools/check/suites.py verity/protocols/accounting/certifier`.

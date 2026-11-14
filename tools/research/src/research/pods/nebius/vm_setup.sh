@@ -143,7 +143,7 @@ apt-get install -y -q git rsync fio jq python3-venv python3-numpy python3.12-dev
 # trusts a distrusted root.
 apt-get install -y -q --only-upgrade ca-certificates 'libnss3*'
 systemctl enable --now apt-daily.timer apt-daily-upgrade.timer
-UV_VERSION=0.12.20        # tools/verity/check/pod_setup.sh's pin, the only uv check's preflight accepts (tests/test_uv_pin.py)
+UV_VERSION=0.12.20        # tools/check/pod_setup.sh's pin, the only uv check's preflight accepts (tests/test_uv_pin.py)
 [ "$(uv --version 2> /dev/null | cut -d' ' -f2)" = "$UV_VERSION" ] \
   || curl -LsSf "https://astral.sh/uv/$UV_VERSION/install.sh" | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
 if [ ! -x /usr/local/bin/nebius ]; then

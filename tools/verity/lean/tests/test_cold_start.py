@@ -3,7 +3,7 @@
 `.lake` anywhere, under the runner's environment (`remote._runner_env`), until it audits the package. The other tests here run
 this directory's check.py on a copy of a fixture, so one that breaks only in a shipped tree (a path it resolves from the tree, a
 file it needs that a fresh checkout lacks, an import the runner's PYTHONPATH shadows) passes them and fails every run.
-`tools/verity/check/tests/test_cold_start.py` holds the other entry points' smokes."""
+`tools/check/tests/test_cold_start.py` holds the other entry points' smokes."""
 from __future__ import annotations
 
 import io

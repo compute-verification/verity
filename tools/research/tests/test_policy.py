@@ -66,14 +66,14 @@ def test_a_circuit_check_failure_is_covered_by_its_check_code_and_family_and_eac
 def test_merge_requires_every_job_but_those_off_the_gate_and_refuses_an_unreadable_policy(tmp_path):
     world = World(tmp_path)
     ci = 'schema = "ci/v0"\n' + "".join(f'[[job]]\nname = "{s}"\nowner = "ci"\ngroup = 1\n' for s in ("pytest", "circuit-check"))
-    _move_main(world, {"tools/verity/check/ci.toml": ci})
+    _move_main(world, {"tools/check/ci.toml": ci})
     assert merge.declared_jobs(world.origin, _main(world)) == ["pytest", "circuit-check"]
-    _move_main(world, {"tools/verity/check/policy.toml": _policy()})
+    _move_main(world, {"tools/check/policy.toml": _policy()})
     assert merge.declared_jobs(world.origin, _main(world)) == ["pytest"]
-    _move_main(world, {"tools/verity/check/policy.toml": None,                   # ci.toml's own `gate = false`
-                       "tools/verity/check/ci.toml": ci.replace('name = "circuit-check"\n', 'name = "circuit-check"\ngate = false\n')})
+    _move_main(world, {"tools/check/policy.toml": None,                   # ci.toml's own `gate = false`
+                       "tools/check/ci.toml": ci.replace('name = "circuit-check"\n', 'name = "circuit-check"\ngate = false\n')})
     assert merge.declared_jobs(world.origin, _main(world)) == ["pytest"]
-    _move_main(world, {"tools/verity/check/policy.toml": "not toml ["})
+    _move_main(world, {"tools/check/policy.toml": "not toml ["})
     assert "not TOML" in merge.declared_jobs(world.origin, _main(world))
 
 
@@ -86,7 +86,7 @@ def test_the_quick_tier_passes_a_run_whose_every_failure_mains_policy_allows(tmp
     row = {"name": "pkg", "status": "failed", "failed_tests": [TEST], "beyond_tests": False}
     other = {"name": "other", "status": "failed", "failed_tests": ["tests/test_o.py::test_o"], "beyond_tests": False}
     assert Q.allowed(world.origin, _main(world)) is None                         # no policy.toml: nothing is allowed
-    _move_main(world, {"tools/verity/check/policy.toml": _policy((f"suite pkg::{TEST}", "ci", LIVE))})
+    _move_main(world, {"tools/check/policy.toml": _policy((f"suite pkg::{TEST}", "ci", LIVE))})
     covers = Q.allowed(world.origin, _main(world))
     assert quick_tier.judge(_tier(row), "h" * 40, covers=covers) is None
     assert quick_tier.judge(_tier(row, other), "h" * 40, covers=covers).startswith("pkg: ")
@@ -95,5 +95,5 @@ def test_the_quick_tier_passes_a_run_whose_every_failure_mains_policy_allows(tmp
     assert Q.judge_report(res, "r", "m", "h" * 40, {"state": "done", "rc": 1}, covers) is None
     assert "ended done (exit 0)" in Q.judge_report(res, "r", "m", "h" * 40, {"state": "done", "rc": 0}, covers)
     assert Q.judge_report(res, "r", "m", "h" * 40, {"state": "done", "rc": 1}) is not None
-    _move_main(world, {"tools/verity/check/policy.toml": _policy((f"suite pkg::{TEST}", "ci", EXPIRED))})
+    _move_main(world, {"tools/check/policy.toml": _policy((f"suite pkg::{TEST}", "ci", EXPIRED))})
     assert quick_tier.judge(_tier(row), "h" * 40, covers=Q.allowed(world.origin, _main(world))) is not None

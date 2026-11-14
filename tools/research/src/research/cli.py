@@ -1418,7 +1418,7 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
 
 
 #: a Lean records run (`lean_changed.py --records PKG`), which `_run_remote` sends the URLs of the Lean bundles its node may restore
-#: from, presigned by the shipped tree's `LEAN_AUDIT` (`url_file`), as `tools/verity/check/check.py --record` sends a check them
+#: from, presigned by the shipped tree's `LEAN_AUDIT` (`url_file`), as `tools/check/check.py --record` sends a check them
 LEAN_RECORDS = re.compile(r"lean_changed\.py\b.*\s--records\b")
 LEAN_AUDIT = "tools/verity/lean/lean_audit.py"
 

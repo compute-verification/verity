@@ -24,7 +24,7 @@ from verity.circuits.types import Array, RecordType, Tuple, Value, type_from_jso
 
 PATH = Path(__file__).parent / "format_vectors.json"
 REWRITE = ("the vectors differ from the reference implementation's; a change meant to move them rewrites them with "
-           "`uv run python tools/verity/check/pins.py --write verity/circuits/tests/format_vectors.json`")
+           "`uv run python tools/check/pins.py --write verity/circuits/tests/format_vectors.json`")
 V16, V32 = Value(16), Value(32)
 M32 = (1 << 32) - 1
 

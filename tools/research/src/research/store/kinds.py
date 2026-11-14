@@ -57,7 +57,7 @@ KINDS: dict[str, str] = {
     "verity-graph/v2": "a graph/v2 of one commit (`verity graph --json`), listed on a worker by the executor; its tasks' keys (or, "
                        "for a task that reads others, the key rule's) are the ones their results are labelled under",
     "check/v1": "a repository check run's result.json (each step's status and seconds); what `research merge` reads is its attempt",
-    "check-shard/v1": "one shard's result.json (tools/verity/check/check.py --shard K/N): its steps, each with the plan's parts it ran, and "
+    "check-shard/v1": "one shard's result.json (tools/check/check.py --shard K/N): its steps, each with the plan's parts it ran, and "
                       "meta.shard {k, n, parts, all, commit, config}; no gate takes it alone, only a `check.py --combine` check of "
                       "its set (research.merge.shard_set)",
     "lean-fast/v1": "a Lean fast-path run's result.json (tools/verity/lean/lean_changed.py --records): one package's records audited without "

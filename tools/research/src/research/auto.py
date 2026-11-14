@@ -5,7 +5,7 @@ no pool fits.
 Node 2's share is 48 cores that queued runs claim whole (research.cores) in one first-come line, so two large runs (a 16-job
 quick tier and a 32-core Lean check) can hold all 48 for hours while dozens of small runs wait behind them, with cpu-1's idle
 cores unused. So before queueing, `read` asks each machine at once, over the ssh `research run
---on` uses, as `python3 -` with research.cores and the source tree's tools/verity/check/slot.py inlined (both stdlib only):
+--on` uses, as `python3 -` with research.cores and the source tree's tools/check/slot.py inlined (both stdlib only):
 node 2 for its share's live claims and waiters, and each CPU node (`spill`) for its pool's `slot.py --status --json` and the
 memory slot.py finds free there (`free_gb`, read once a pool). A pool is read by the machine's own slot.py where it has one
 (slot_only.NODE_SLOT), the copy its runs wait by, and by the inlined one where it has none. `choose` then takes, in order:
@@ -78,7 +78,7 @@ SPILL_POOL = "research"
 #: a CPU node's name in the launcher's registry of machines; `spill` takes them by number
 CPU_NODE = re.compile(r"vy-nebius-cpu-([0-9]+)")
 DESCRIPTION = Path("infra/cluster/descriptions/nebius.toml")
-SLOT_PY = Path("tools/verity/check/slot.py")
+SLOT_PY = Path("tools/check/slot.py")
 READ_TIMEOUT_S = 30
 #: ssh's ConnectTimeout for node 2's probe: a stopped node 2 costs a launch this long, not remote.ssh_argv's default
 NODE_CONNECT_S = 5
@@ -120,7 +120,7 @@ LEAN_SLOTS = "/workspace/research/locks/lean-slots"
 #: the machines a machine reaches, one a line with its ssh options (slot.py's PEERS): a twin claims its pair on its home
 #: through it, so a late twin goes only where the first's machine is named (`elsewhere`)
 PEERS_FILE = "/etc/vy/peers"
-LEAN_SLOT_PY = Path("tools/verity/check/lean_slot.py")
+LEAN_SLOT_PY = Path("tools/check/lean_slot.py")
 #: the files of a source tree `read` reads: all a caller that has a commit and no checkout of it need hand it (research.asker)
 READS = (DESCRIPTION, SLOT_PY, LEAN_SLOT_PY)
 
