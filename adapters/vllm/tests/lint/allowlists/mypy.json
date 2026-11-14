@@ -209,7 +209,6 @@
     {"file": "verity_vllm/pipeline/serve_h1.py", "kind": "arg-type", "symbol": "H1Windows.kept", "detail": ""},
     {"file": "verity_vllm/pipeline/serve_h1.py", "kind": "arg-type", "symbol": "H1Windows.open", "detail": "", "count": 2},
     {"file": "verity_vllm/pipeline/serve_h1.py", "kind": "operator", "symbol": "H1Windows._outcome", "detail": ""},
-    {"file": "verity_vllm/pipeline/serve_h1.py", "kind": "return-value", "symbol": "H1Windows.draw_of", "detail": ""},
     {"file": "verity_vllm/pipeline/serve_h1.py", "kind": "union-attr", "symbol": "H1Windows._release", "detail": "", "count": 2},
     {"file": "verity_vllm/pipeline/serve_h1.py", "kind": "union-attr", "symbol": "H1Windows.draw_of", "detail": ""},
     {"file": "verity_vllm/pipeline/serve_h1.py", "kind": "union-attr", "symbol": "H1Windows.kept", "detail": ""},

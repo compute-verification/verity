@@ -11,7 +11,7 @@ public import Proofs.Pouw.TS.Tensor
 public import Proofs.Pouw.TS.Sheet
 public import Proofs.Pouw.TS.ProofsSound
 public import Proofs.Pouw.TS.Fork
-public import Proofs.Pouw.TS.Drawn
+public import Proofs.Pouw.TS.Sampled
 public import Proofs.Pouw.TS.Keyed
 public import Proofs.Pouw.RelativeSecurity
 public import Proofs.Accounting.Lemmas.TS

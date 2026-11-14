@@ -40,7 +40,7 @@ import Proofs.Pous.Prob
 P3 with a concrete `H`, the band, the dense chain scheme and the public encoder: the modules of their proofs outside
 Mathlib and `Pous`, in import order, each in its own `section`. The definitions the
 trusted layer provides (`security/Definitions/Pous/Model/P3Chain.lean`,
-`security/Definitions/Pous/Model/BandChain.lean`, `Security/Definitions/Pous/Model/PubEncoder.lean`,
+`security/Definitions/Pous/Model/BandChain.lean`, `security/Definitions/Pous/Model/PubEncoder.lean`,
 `security/Definitions/Pous/Accounting/PubMeets.lean`) are removed from their source modules, and each source
 namespace `PousX` of those copies is renamed `Pous.X`, so the proofs are about the trusted constants.
 `security/Proofs/Pous.lean` states the pinned forms.

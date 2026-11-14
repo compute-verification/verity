@@ -1,13 +1,13 @@
 module
 
-public import Definitions.Pouw.TS.Drawn
+public import Definitions.Pouw.TS.Sampled
 public import Definitions.Hash.RowLeaf
 public import Definitions.Core.Interaction
 
 /-!
 # A sampled window's openings as frame-v3-sha512 paths (trusted)
 
-`Drawn`'s openings with the hash underneath. A `SampledLayer` compares the values accepted proofs open (`opened`) with no
+`Sampled`'s openings with the hash underneath. A `SampledLayer` compares the values accepted proofs open (`opened`) with no
 commitment under them. Here each position is an hm96 row (`Hash.RowLeaf`: `hm96-sha512/row-seg/v1` or
 `hm96-sha512/row/v2`) of a frame-v3-sha512 tree, and an accepted proof's opening of a slot is an hm96 opening of its
 position's leaf (the row's bits, its salt and the path's siblings), as Flock's knowledge extractor takes it from the
