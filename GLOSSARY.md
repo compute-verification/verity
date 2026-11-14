@@ -326,6 +326,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   - **Window**: the code's windows (`verity.commitments.windows`, a served window circuit and its window record, PoUW's window and
     its salt) are one period's served steps, and keep the word until renamed. A span of time is a period, a
     server's gates between two memory wipes are a server block, and a sliding window is a model's term (above).
+    PoUB's window keeps the word: the span one challenge of the remote bandwidth audit covers.
   - **Escape**: an incorrect proof block's chance to pass the sample is its miss probability (Older names); the
     integrity profile's `escape` method keeps the old word. In vLLM's Program frontend, a host escape
     (`E_OPAQUE_HOST`) is a value read on the host, such as `.item()`, which the frontend refuses.
