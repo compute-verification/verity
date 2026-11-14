@@ -34,7 +34,7 @@ DIR`` stages from them without the fold, which is most of a run's time on a shar
   committed) is registered and proved on its own (``subset:2``), and the Lean verifier must refuse its session: its
   proof, or, where the prover's self-check stopped it and no proof left, the session for want of one, which the
   negative names (``lean_read_no_proof``; `benchmarks/one_stage/forged_proofs.py` hands Lean the forged proof).
-* **Statement form.** Each template is a flat statement (its unit's whole netlist in the circuit file, which the verifier
+* **Statement form.** Each template is a flat statement (its unit's whole circuit description in the circuit file, which the verifier
   reads line by line), or with ``--layout MODE`` (``iv/hybrid/4``) a templated one (`UnitStager`'s ``layout``, statement
   ``verity/flock-circuit/tmpl``; with ``--structural``, `struct_lower`'s template, which not every Definition lowers yet),
   which `verify --zk` takes (`ProvedScope.served`): its scope and the sampled audit's knowledge-soundness form are

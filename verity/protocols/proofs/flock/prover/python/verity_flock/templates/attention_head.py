@@ -93,7 +93,7 @@ def class_manifest(subcircuit, lo: int, hi: int) -> bytes:
         nets[str(T)] = low.sha256
         rows.add(unit_rows_sha256(low.text))
     if len(rows) != 1:
-        raise ValueError(f"{subcircuit.id}: the netlists of T in [{lo}, {hi}] do not share their unit rows")
+        raise ValueError(f"{subcircuit.id}: the circuit descriptions of T in [{lo}, {hi}] do not share their unit rows")
     D = int(subcircuit.params["D"])
     m = {"format": CLASS_FORMAT, "template": subcircuit.id, "T": [lo, hi], "key_port": "k", "words_per_key": D, "unit_rows": rows.pop(),
          "nets": nets}

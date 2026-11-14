@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Compose.Remote.Window
-public import Proofs.Properties.Compose.Remote.Draw
+public import Proofs.Properties.Compose.Remote.Sample
 public import Proofs.Properties.Compose.Remote.Plan
 public import Proofs.Properties.Compose.Remote.Run
 public import Proofs.Properties.Compose.Remote.Released

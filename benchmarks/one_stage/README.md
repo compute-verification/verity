@@ -36,7 +36,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   go to the store by SHA-512 (`sha512/<hex>`, the Lean verifier's `--archive` layout) through
   `adapters/vllm/verity_vllm/ops/store_trees.sh`, epoch_store.sh's put, and the run is labelled `circuits` with each tree's
   art id, so the run can be verified again from the store.
-- `expert_tables_tp.sh`: the committer's per-expert tables docket of a TP model, one file a rank (`verity-vllm
+- `expert_tables_tp.sh`: the committer's per-expert tables registration of a TP model, one file a rank (`verity-vllm
   tp-register-tables --served`): each rank's expert stacks composed from the checkpoint of record, held to a capture's served
   SHA-512s and committed under the committer's key, which never leaves the node. A window's per-expert table reads count
   registered against these files (`records_audit.py audit --registered`).

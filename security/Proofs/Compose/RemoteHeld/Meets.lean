@@ -146,7 +146,7 @@ theorem burst_meets_held [Fintype Ω] {s E β : ℝ} (hs : 0 ≤ s) (hE : 0 ≤ 
 
 /-- W2's session in this form, at the nanosecond tick: `N = 130,023,424` registered blocks, passes of 85 ms, and one
 rebuild batch (`B_r = S = 743,590` blocks, what the chips hold in flight), one disk read (`B_d = 1,054,688` blocks,
-4.32·10⁹ B, the disks' ceiling over the one-second window it is measured in) and one link window (`B_l = 1,536`
+4.32·10⁹ B, the disks' ceiling over the one-second window it is measured in) and one link burst (`B_l = 1,536`
 blocks, 6 MiB, the node's largest TCP receive window) coming back at tick 0. -/
 def w2 : Trace Unit := burst 130023424 85000000 0 743590 1054688 1536
 

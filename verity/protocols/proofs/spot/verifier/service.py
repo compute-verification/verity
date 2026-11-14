@@ -885,7 +885,7 @@ def template_circuits(proofs: Mapping[str, Any] | None, query: Mapping[str, Any]
     registered) in the order the check's template query `query` names the templates, which is REPLAY_c's first-instance
     order (`replay_cells`). An entry may also record its template as a table read, ``"read": {"V": <rows>, "H":
     <words a row>}`` (`template_reads`), and the params may add ``"tables": {<parameter>: <entry>, ...}``, the
-    registered tables the auditor pinned before any coin, each the entry the tables' docket names for it
+    registered tables the auditor pinned before any coin, each the entry the tables' registration names for it
     (`_table_entry`, `pinned_tables`). None names no file and gives none. Raises `ValueError` for any other form, a
     circuit that isn't 128 lowercase hex digits, a header that isn't an object, registered reads neither an object nor
     null, a read that isn't two positive counts, a pinned table that isn't such an entry, and a list that doesn't name
@@ -934,7 +934,7 @@ def _read_of(j: Any) -> tuple[int, int] | None:
 
 
 def _table_entry(p: str, e: Any) -> bool:
-    """A pinned table's entry under parameter `p`, the entry the tables' docket names for it: exactly `value`,
+    """A pinned table's entry under parameter `p`, the entry the tables' registration names for it: exactly `value`,
     `root`, `leaves`, `words` and `domain`, and `word_bits` where its words are not 16-bit; `value` is `p`, `root` and
     `domain` 128 lowercase hex digits, and `leaves`, `words` and `word_bits` positive integers. The Lean verifier's
     `Run.tableEntry?` is this."""
@@ -947,7 +947,7 @@ def _table_entry(p: str, e: Any) -> bool:
 
 def pinned_tables(proofs: Mapping[str, Any] | None) -> tuple[tuple[str, Any], ...]:
     """The registered tables the auditor's params ``proofs`` pin, ``(parameter, entry)`` each, in the parameters' order,
-    for params `template_circuits` accepted: the entries the tables' docket names, which the auditor pinned
+    for params `template_circuits` accepted: the entries the tables' registration names, which the auditor pinned
     before any coin and round 2 takes a read's table from beside round 1's record (`second_stage.Own.tables`,
     `second_stage._one_table`). The Lean verifier's `Run.pinnedTables` is this."""
     ts = (proofs or {}).get("tables")
