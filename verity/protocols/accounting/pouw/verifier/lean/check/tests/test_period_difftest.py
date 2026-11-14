@@ -79,22 +79,22 @@ def test_an_honest_period_is_its_credit():
     assert not {"registration_head", "place", "part", "head"} & set(a["public"]), "the period names no device"
     assert p["sessions"] == [w["session"] for w in close["body"]["windows"]] != []
     assert a["commitment"] == PC.digest({"bytes": bytes.fromhex(case["commitment"])}).hex()
-    for name, what in (("params-missing", "params"), ("params-head", "params"), ("params-sessions", "params"),
+    for name, what in (("params-missing", "params"), ("params-device", "params"), ("params-sessions", "params"),
                        ("sessions-unlisted", "sessions"), ("ledger-object", "commitment"), ("evidence-list", "evidence")):
         got = PC.case(cases.instance(random.Random(f"{name}/credit"), name))
         assert got["verdict"] == "reject" and got["reason"].startswith(f"{what}: "), (name, got)
 
 
-def test_the_registration_comes_all_or_none():
-    """Parameters naming some but not all of the registration's head, place and sessions are refused, and with none
-    of them the period runs alone, with the same answer."""
+def test_the_parameters_name_no_device():
+    """Parameters naming a device's head or place are refused, and without `sessions` the period runs with no session
+    list, with the same answer."""
     for seed in range(4):
-        got = PC.case(cases.instance(random.Random(f"params-partial/{seed}"), "params-partial"))
+        got = PC.case(cases.instance(random.Random(f"params-device/{seed}"), "params-device"))
         assert got["verdict"] == "reject" and got["reason"] == f"params: {PC.KEYS_FORM}", got
     alone = PC.case(cases.instance(random.Random("honest/credit"), "alone"))
-    registered = PC.case(cases.instance(random.Random("honest/credit")))
+    listed = PC.case(cases.instance(random.Random("honest/credit")))
     assert alone["verdict"] == "accept", alone["reason"]
-    assert alone["public"] == registered["public"]
+    assert alone["public"] == listed["public"]
 
 
 @pytest.mark.parametrize("name,why", [("form-pass", "is a Pearl-C pass"),

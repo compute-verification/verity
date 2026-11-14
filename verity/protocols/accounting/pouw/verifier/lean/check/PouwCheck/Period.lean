@@ -17,16 +17,14 @@ windows is credited (`Credit.window`), and a refused window refuses the period. 
 
 **Params**, canonical JSON with exactly these keys, the verifier's own:
 
-    {"head": registration head, "key": challenger key, "main": [commit, …], "name": period, "place": location,
-     "sessions": [session, …]}
+    {"key": challenger key, "main": [commit, …], "name": period, "sessions": [session, …]}
 
-the head of the registration log the period is accounted against (a SHA-512 digest, 128 lowercase hex), the
-challenger key the verifier pins (`Spot.Challenger.ChallengerKey`), its own copy of main's first-parent history (newest
-first), the name of the period it credits (a string), the id the registration log registered the period's device under
-(a nonempty string, which the check reads only for its form) and the ordered ids of the sessions the challenger's
-ledger opened for the period's windows (each window's and its sample's, `sessionId?`; the empty list names none). The registration's three (`head`, `place`, `sessions`,
-`Registered`) come all or none: parameters with none of them, `{"key", "main", "name"}` (`aloneKeys`), run the period
-alone, against no registration log, and parameters with some but not all are refused (`KEYS_FORM`).
+the challenger key the verifier pins (`Spot.Challenger.ChallengerKey`), its own copy of main's first-parent history
+(newest first), the name of the period it credits (a string) and the ordered ids of the sessions the challenger's
+ledger opened for the period's windows (each window's and its sample's, `sessionId?`; the empty list names none).
+Parameters without `sessions`, `{"key", "main", "name"}` (`aloneKeys`), run the period with no session list to check
+its close against; any other key set is refused (`KEYS_FORM`). They name no device: the accounting layer binds the
+challenger key to a registered device.
 
 **Commitment**, canonical JSON: the auditor's ledger, the list of the lines the challenger signed (`ledgerEntry?`). Its
 period's open commits the period's circuit, its sample K, its table rows T, its weights' root and model and its fixed
@@ -43,7 +41,7 @@ window (a per-tile protocol's tile, a Pearl-C leaf), a template over per-unit no
 J10-R unit over a tile other than `PouwH1Tile_v5` (v6), or units at more than one K (more than one stratum). Then it is
 `Credit.periodCredit` on them: it accepts with the period's credit, or rejects with the first refusal, `code: why`.
 Last it reads the challenge phases (sessions) the period's close lists (`ledgerChallengePhases`) and refuses
-(`sessions: why`) a ledger it can't read them from, and, where the parameters name the registration, a session they
+(`sessions: why`) a ledger it can't read them from, and, where the parameters list the sessions, a session they
 don't list or that repeats one before it (`challengePhasesRefusal`). It never leaves a period undecided.
 
 **Public**, on acceptance (`Published.toJson`), what `account` reads: `Credit.PeriodCredit.toJson`, each window's
@@ -69,25 +67,18 @@ open Flock (V)
 
 def protocolId : String := "verity/pouw/period/v1"
 def commitmentTag : String := "verity/pouw/period/ledger/v1"
-def paramsKeys : List String := ["head", "key", "main", "name", "place", "sessions"]
-/-- The keys of a period's parameters run alone, against no registration log: `paramsKeys` without the
-registration's. -/
+def paramsKeys : List String := ["key", "main", "name", "sessions"]
+/-- The keys of a period's parameters with no session list: `paramsKeys` without `sessions`. -/
 def aloneKeys : List String := ["key", "main", "name"]
 def evidenceKeys : List String := ["pins", "windows"]
 
-/-- What a period's parameters name of the registration log it is accounted against, all or none: its head, the id
-its device is registered under, and the challenge phases (sessions, under the key `sessions`) the challenger's ledger
-opened for the period's windows. -/
-structure Registered where
-  head : String
-  place : String
-  challengePhases : List String
-
+/-- A period's parameters: the challenger key, main's history, the period's name and, where they list them, the
+challenge phases (sessions, under the key `sessions`) the challenger's ledger opened for the period's windows. -/
 structure Params where
   key : Json
   main : Json
   name : String
-  registered : Option Registered
+  challengePhases : Option (List String)
 
 structure Commitment where
   ledger : Json
@@ -101,31 +92,25 @@ structure Profile where
   period : String
   windows : Nat
 
-def HEAD_FORM : String := "head is not the registration log's head (a SHA-512 digest, 128 lowercase hex)"
-def PLACE_FORM : String :=
-  "place is not the id the registration log registered the period's device under (a nonempty string)"
 def CHALLENGE_PHASES_FORM : String :=
   "sessions is not a list of the ids of the sessions the challenger's ledger opened for the period (1 to 64 of " ++
   "[A-Za-z0-9._:-] each, the first alphanumeric)"
 
 def KEYS_FORM : String :=
-  s!"keys are not {", ".intercalate paramsKeys}, or {", ".intercalate aloneKeys} alone: head, place and sessions " ++
-  "come all or none"
+  s!"keys are not {", ".intercalate paramsKeys}, or {", ".intercalate aloneKeys} alone"
 
-def registeredOf (j : Json) : V Registered := do
-  let some head := (str? (get j "head")).filter (fun h => (Credit.digest? (.str h)).isSome) | throw HEAD_FORM
-  let some place := (str? (get j "place")).filter (· != "") | throw PLACE_FORM
+def challengePhasesOf (j : Json) : V (List String) := do
   let some sessions := (match get j "sessions" with
       | .arr a => a.toList.mapM fun s => (str? s).filter sessionId?
       | _ => none) | throw CHALLENGE_PHASES_FORM
-  pure { head, place, challengePhases := sessions }
+  pure sessions
 
 def paramsOf (j : Json) : V Params := do
   let ks := keys j
   unless ks == some paramsKeys || ks == some aloneKeys do throw KEYS_FORM
   let some name := str? (get j "name") | throw "name is not a string"
-  let registered ← if ks == some paramsKeys then some <$> registeredOf j else pure none
-  pure { key := get j "key", main := get j "main", name, registered }
+  let challengePhases ← if ks == some paramsKeys then some <$> challengePhasesOf j else pure none
+  pure { key := get j "key", main := get j "main", name, challengePhases }
 
 def commitmentOf (b : ByteArray) : V Commitment := do
   let ledger ← Core.canonicalJson b
@@ -293,7 +278,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Published 
     | .ok pc =>
       match ledgerChallengePhases c.ledger p.name, spanOf c.ledger p.name with
       | some got, some s =>
-        match p.registered.bind fun r => challengePhasesRefusal p.name r.challengePhases got with
+        match p.challengePhases.bind fun listed => challengePhasesRefusal p.name listed got with
         | some why => .reject s!"sessions: {why}"
         | none => .accept ⟨pc, p.key, s.roots, s.start, s.stop + 1 - s.start⟩
             { period := p.name, windows := pc.windows.length }
@@ -330,26 +315,22 @@ def protocol : Core.Protocol where
   publicJson := Published.toJson
   profileJson := profileJson
 
-private def HEAD : String := "".pushn 'a' 128
-private def paramsWith (head place sessions name : String) : ByteArray :=
-  s!"\{\"head\":{head},\"key\":null,\"main\":[],\"name\":{name},\"place\":{place},\"sessions\":{sessions}}".toUTF8
-private def wellFormed : ByteArray := paramsWith s!"\"{HEAD}\"" "\"gpu0\"" "[\"s0\",\"s1\"]" "\"p\""
+private def paramsWith (sessions name : String) : ByteArray :=
+  s!"\{\"key\":null,\"main\":[],\"name\":{name},\"sessions\":{sessions}}".toUTF8
+private def wellFormed : ByteArray := paramsWith "[\"s0\",\"s1\"]" "\"p\""
 private def reason (ps : ByteArray) : Option String := (protocol.answer ps "[]".toUTF8 "{}".toUTF8).reason
 
 -- every input gets a verdict: parameters, a commitment or evidence of another shape is refused, naming the input
 #guard reason "{}".toUTF8 == some s!"params: {KEYS_FORM}"
-#guard KEYS_FORM == "keys are not head, key, main, name, place, sessions, or key, main, name alone: head, place and " ++
-  "sessions come all or none"
--- the registration's fields come all or none: parameters naming some of them are refused, and none runs alone
-#guard reason s!"\{\"head\":\"{HEAD}\",\"key\":null,\"main\":[],\"name\":\"p\"}".toUTF8 == some s!"params: {KEYS_FORM}"
-#guard reason "{\"key\":null,\"main\":[],\"name\":\"p\",\"sessions\":[]}".toUTF8 == some s!"params: {KEYS_FORM}"
+#guard KEYS_FORM == "keys are not key, main, name, sessions, or key, main, name alone"
+-- the parameters name no device, and without `sessions` the period runs with no session list
+#guard reason ("{\"head\":\"" ++ "".pushn 'a' 128 ++
+  "\",\"key\":null,\"main\":[],\"name\":\"p\",\"place\":\"gpu0\",\"sessions\":[]}").toUTF8 ==
+  some s!"params: {KEYS_FORM}"
 #guard reason "{\"key\":null,\"main\":[],\"name\":\"p\"}".toUTF8 == some "evidence: keys are not pins, windows"
-#guard reason (paramsWith s!"\"{HEAD}\"" "\"gpu0\"" "[]" "1") == some "params: name is not a string"
-#guard reason (paramsWith "\"ab\"" "\"gpu0\"" "[]" "\"p\"") == some s!"params: {HEAD_FORM}"
-#guard reason (paramsWith s!"\"{HEAD.toUpper}\"" "\"gpu0\"" "[]" "\"p\"") == some s!"params: {HEAD_FORM}"
-#guard reason (paramsWith s!"\"{HEAD}\"" "\"\"" "[]" "\"p\"") == some s!"params: {PLACE_FORM}"
-#guard reason (paramsWith s!"\"{HEAD}\"" "\"gpu0\"" "\"s0\"" "\"p\"") == some s!"params: {CHALLENGE_PHASES_FORM}"
-#guard reason (paramsWith s!"\"{HEAD}\"" "\"gpu0\"" "[\"-s\"]" "\"p\"") == some s!"params: {CHALLENGE_PHASES_FORM}"
+#guard reason (paramsWith "[]" "1") == some "params: name is not a string"
+#guard reason (paramsWith "\"s0\"" "\"p\"") == some s!"params: {CHALLENGE_PHASES_FORM}"
+#guard reason (paramsWith "[\"-s\"]" "\"p\"") == some s!"params: {CHALLENGE_PHASES_FORM}"
 #guard (protocol.answer wellFormed "{}".toUTF8 "{}".toUTF8).reason ==
   some "commitment: the auditor's ledger is not a list of its lines"
 #guard reason wellFormed == some "evidence: keys are not pins, windows"
@@ -374,7 +355,7 @@ private def reason (ps : ByteArray) : Option String := (protocol.answer ps "[]".
 #guard challengePhasesNamed "{}" "[]".toUTF8 == none
 
 -- the account reads what an accepted period publishes: its work with its ε, its challenger key, and its span's entries;
--- it names no device, no head and no place
+-- it names no device
 private def credit : Credit.PeriodCredit := ⟨[[0], [1, 2]], [10, 20], 4, Credit.DELTA, [some (1 / 2), none]⟩
 private def published : Json := Published.toJson ⟨credit, .str "k", ["r0", "r1"], 3, 5⟩
 private def accepted : Core.Answer :=

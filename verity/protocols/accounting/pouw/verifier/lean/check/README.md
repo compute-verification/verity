@@ -21,7 +21,7 @@ execution phase of the credit period's close is credited.
 
 | field | here |
 | --- | --- |
-| `Params` | the verifier's own `{head, key, main, name, place, sessions}`: the registration log's head it accounts against, the challenger key it pins, its copy of main's first-parent history, the credit period's name, the id the registration log registered its device under, and the ordered ids of the sessions the challenger's ledger opened for its execution phases; head, place and sessions come all or none, and with none (`{key, main, name}`) the credit period runs alone, against no registration log |
+| `Params` | the verifier's own `{key, main, name, sessions}`: the challenger key it pins, its copy of main's first-parent history, the credit period's name, and the ordered ids of the sessions the challenger's ledger opened for its execution phases; without `sessions` (`{key, main, name}`) the credit period's close is checked against no session list. They name no device |
 | `Commitment` | the auditor's ledger, the lines the challenger signed, as canonical JSON: its credit period's open commits the circuit, K, T, the weights and the fixed length before any coins are flipped |
 | `digest` | SHA-512(`verity/pouw/period/ledger/v1` ‖ 0 ‖ the ledger's bytes) |
 | `Evidence` | `{pins, windows}`: the challenger host's pins log, and each execution phase's evidence in the close's order (`Credit.PERIOD_KEYS`, each sampled proof block's and each round's proof outcome the verifier's verdict) |

@@ -22,8 +22,7 @@
 # env: served_verdicts.sh's (H1_GATE, H1_KEY_SHA512, MAIN_FILE, PY), drawn.sh's and live.sh's (H1_CIRCUITS, H1_MODEL,
 #      H1_CHECKPOINT or H1_WEIGHTS, H1_DRAWN_MEM_GB, H1_ZK_SERVER_GB, H1_MEM_GB, H1_DRAW_K, ...)  HZ_CACHE (both jobs'
 #      builds, default /workspace/research/cache/pouw-hidden-zk)  FLOCK_VERIFY (default the tree's, which
-#      served_verdicts.sh builds)  VERIFIER_TMP (default /tmp)  POUW_HEAD, POUW_PLACE (the registration head and the id
-#      it registered the period's device under, both or neither: without them the period runs alone)
+#      served_verdicts.sh builds)  VERIFIER_TMP (default /tmp)
 # Its lines name no window. Exit 0 once step 3 wrote the piece; a failed step 1, 2 or 4 leaves its evidence or the
 # period's case out, which step 3's piece and served_composite.sh then name.
 set -uo pipefail
@@ -75,8 +74,7 @@ EXE=$TREE/verity/protocols/accounting/pouw/verifier/lean/check/.lake/build/bin/p
 [ -x "$EXE" ] || EXE=
 rm -rf "$Q/period"
 "$TPY" benchmarks/one_stage/pouw_piece.py period --out "$Q/period" ${EXE:+--exe "$EXE"} --serve-run "$SD" --window "$WIN" \
-  --pouw "$P" --key-sha512 "${H1_KEY_SHA512:?}" --main "${MAIN_FILE:?}" ${POUW_HEAD:+--head "$POUW_HEAD"} \
-  ${POUW_PLACE:+--place "$POUW_PLACE"} "${ev[@]}" --lean-answers "$LA" > "$Q/period.log" 2>&1
+  --pouw "$P" --key-sha512 "${H1_KEY_SHA512:?}" --main "${MAIN_FILE:?}" "${ev[@]}" --lean-answers "$LA" > "$Q/period.log" 2>&1
 prc=$?
 case $prc in 0) v=accept ;; 1) v=reject ;; 2) v=missing ;; *) v=error ;; esac
 say "period: $v (pouw_piece.py period exit $prc after $(took "$t"); its lines in the serve dir's private/pouw/period.log)$(

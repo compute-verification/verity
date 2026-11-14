@@ -300,9 +300,8 @@ private def sampledOn (log : Array Json) (outputs : Option Json) (rec : Json) : 
   { id := VStar.Recursive.Sampled.protocol.id, params := textOf (sampledParams log outputs),
     commitment := (textOf rec).toUTF8, evidence := (textOf (sampledEvidence rec)).toUTF8 }
 
-/-- The period's parameters: period `p` on location `gpu0`, against a registration head, naming no session. -/
-private def periodParams : String :=
-  s!"\{\"head\":\"{"".pushn 'a' 128}\",\"key\":null,\"main\":[],\"name\":\"p\",\"place\":\"gpu0\",\"sessions\":[]}"
+/-- The period's parameters: period `p`, naming no session. -/
+private def periodParams : String := r#"{"key":null,"main":[],"name":"p","sessions":[]}"#
 
 /-- A period of one window per record of `recs`, each naming it as its Commit record, under an empty ledger. -/
 private def monitoringPeriodNaming (recs : List Json) : Case :=
