@@ -18,6 +18,10 @@
 # `verity/commitments/lean/Commitments/Draw.lean` (the pin in the randomness vectors, `tests/lean/generate.sh`'s) and
 # `security/Proofs/Flock/Claims/Recursion/IrDepSession.lean` (its `compile_time` entry in the proofs' lock). Each names
 # the program only in a comment.
+#
+# The Lean locks keep their text too: none spells the word in a record the Lean check writes, and the reasons that do
+# (a trust-base premise's, the frozen shapes', the upstream watches') say what a guarantee rests on, which their owners
+# reword.
 
 [words]
 "flock-verify" = "verity-verify-proof"
@@ -40,3 +44,4 @@ strings = []
 [keep_in]
 "verity/commitments/lean/Commitments/Draw.lean" = ["flock-verify"]
 "security/Proofs/Flock/Claims/Recursion/IrDepSession.lean" = ["flock-verify"]
+"**/lean-audit.json" = ["flock-verify"]
