@@ -192,7 +192,7 @@ theorem SlowdownWindows : Guarantees.SlowdownWindows := by
 theorem bound_eq_Lambda {c : RegisteredCircuit} (T : Threading c) (S b_w : ℝ) (d e : ℕ) :
     T.bound S b_w d e = Lambda T.reuse e d b_w S := rfl
 
-/-- **The declared computation at NCI's thread bound, per parameter slot**: `ThreadedThrottledSlots`'s
+/-- **The declared computation at the inference-only policy's thread bound, per parameter slot**: `ThreadedThrottledSlots`'s
 `b_a |M| ≤ α Λ size(d)`, with `size(d) ≤ C`, is the dampener's `M_d ≤ C/ρ_T`. -/
 theorem declared_le_slots {Γ : ℕ} {α b_w b_a C : ℝ} {c d : RegisteredCircuit} {T : Threading c} {σ : T.Slots} {dd e : ℕ}
     {Mc : Containment c.D d.D} (hα : 0 ≤ α) (hbw : 0 < b_w) (hba : 0 < b_a) (hdd : 0 < dd) (hcomp : CompliesRate Γ α d)
