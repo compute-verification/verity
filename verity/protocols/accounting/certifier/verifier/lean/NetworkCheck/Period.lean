@@ -963,7 +963,7 @@ def executionPhaseCheck (p : Params) (clear : List ByteArray) (earlier : Array B
     (x : ExecutionPhase) : Found Unit := do
   let what := s!"window {w}"
   let .clock clock := x.shown | refuse s!"{what}: registrations, not a clock certificate: the rows form's"
-  unless reg.getObjValD "program" == .str p.program &&
+  unless ScanOk.named "program" p.program reg &&
       canonText (reg.getObjValD "window") == canonText (served w) do
     refuse s!"{what}: registration: not the link's Program at window {w}"
   unless x.certificates.size == 2 && (x.certificates.zip #[Direction.egress, .ingress]).all
@@ -1030,7 +1030,7 @@ def rowsCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (d : Direct
 def holds (reg : Json) (r : Rows) : Bool :=
   let entries := fun (k : String) => match reg.getObjValD k with | .arr xs => xs | _ => #[]
   (entries "roots" ++ entries "registered").any fun e =>
-    e.getObjValD "root" == .str (Flock.hexOf r.root) && e.getObjValD "domain" == .str r.domain
+    ScanOk.named "root" (Flock.hexOf r.root) e && ScanOk.named "domain" r.domain e
 
 /-- The scan's Programs' rows in its registration, one tree a lane: lane `j`'s is the entry of its `roots` whose port,
 or of its `registered` whose value, is `scan/prog<j>`. -/
@@ -1186,7 +1186,7 @@ def rowsExecutionPhaseCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits
     (reg : Json) (x : ExecutionPhase) : Found (Facts × Nat) := do
   let what := s!"window {w}"
   let .rows rs := x.shown | refuse s!"{what}: a clock certificate, not registrations: the clock form's"
-  unless reg.getObjValD "program" == .str p.program do refuse s!"{what}: registration: not the scan's Program"
+  unless ScanOk.named "program" p.program reg do refuse s!"{what}: registration: not the scan's Program"
   unless x.certificates.size == 3 && (x.certificates.zip (records p.link)).all
       (fun (c, l, d) => certifiesOn p l d w c) do
     refuse s!"{what}: certificates: the requests', responses' and fails' records', each the key's (the network \
@@ -1207,7 +1207,7 @@ blocks are the Program's, at any sample; a tied audit sampled in part is charged
 (`chargedOf`, `faultyEntries`). -/
 def auditCheck (i : Nat) (a : Audit) (reg : Json) (x : Core.Answer) : Found Facts := do
   let what := s!"audit {i}"
-  unless reg.getObjValD "program" == .str a.program do refuse s!"{what}: registration: not its Program"
+  unless ScanOk.named "program" a.program reg do refuse s!"{what}: registration: not its Program"
   let (prof, pub) ← answered what reg x
   let f ← factsOf what prof pub
   unless f.units == a.units do refuse s!"{what}: profile: {f.units} units, not its Program's {a.units}"
