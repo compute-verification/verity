@@ -36,3 +36,4 @@
 - 2026-11-14T05:14Z DRAFTKERNELS: base with empty records r20261114-035410-ad25 passed circuit-check's suite (448; all 883 built, no read outside its inputs), so the guard's read of verity/channel.py comes with this branch. Tracing which catalog build imports verity.channel at the head: r20261114-051352-6875.
 - 2026-11-14T06:16Z DRAFTKERNELS: trace r20261114-051352-6875: the records-only build of all 894 bindings at the head never imports verity.channel (audit hook). The read is in the traced session. Rerunning circuit-check's suite alone at the head with empty records and --fresh, as the base rerun: see next line.
 - 2026-11-14T06:17Z DRAFTKERNELS: waiting on circuit-check's suite alone at the head (empty records, --fresh): r20261114-061636-54bc.
+- 2026-11-14T07:34Z DRAFTKERNELS: PR #9993 opened, unmarked, at 08d6acdced2231eafdf6b10bf0245d6e0d2a8ef0. CIR-263 comment refused: @circuits is held by another agent; draft in comment-pr.md.
