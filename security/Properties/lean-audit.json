@@ -949,7 +949,7 @@
  },
  "open_seed": {
   "Properties.Poub.Remote.HonestLog": {
-   "issue": "MEM-332",
+   "issue": "MEM-353",
    "due": "2026-11-30",
    "owner": "@memory-accounting"
   }
@@ -2305,7 +2305,7 @@
   }
  },
  "witnesses_assumed": {
-  "Properties.Poub.Subprotocol.HonestLogAccepted": "not an assumption about the world but an unproved fact about code: the compiled check (`poub-protocol`) and the Python verifier both accept the honest one-window log `HonestLog.Case` holds (`test_honest_log.py`), and the kernel doesn't evaluate it, since `Flock.unhex` is quadratic on a list-backed array and `Session.close`'s `receiptSample` fails `decide +kernel` for a cause not yet found; until Lean proves it, the honest witnesses of `lineHeld` and `lineHeldAtSubprotocol` take it."
+  "Properties.Poub.Subprotocol.HonestLogAccepted": "not an assumption about the world but an unproved fact about code: the compiled check (`poub-protocol`) and the Python verifier both accept the honest one-window log `HonestLog.Case` holds (`test_honest_log.py`), and the kernel doesn't evaluate it, since `Flock.unhex` is quadratic on a list-backed array and `Session.close`'s `receiptSample` fails `decide +kernel` for a cause not yet found; until Lean proves it, the honest witness of `lineHeldAtSubprotocol` takes it."
  },
  "layers": {
   "Properties.Pouw": {
