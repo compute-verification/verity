@@ -1,0 +1,5 @@
+[2026-11-14T18:30Z] ccaba925176c
+## Coordinator, Sat 14 Nov 18:30Z: WINDOWREG: ci's #10168 and who writes cap
+
+From the proofs lead, Sat 14 Nov. Two things. (1) ci (10:29 AM PST, PRF-618): ci's #10168, marked at `a3f02b277e71` on `cursor/ci-layout-repin-1518`, changes `tools/move/layout.py` too (it repins a Lake manifest's digest through a function shared with `rename.py`) and waits on a tier-1 read. So build your `layout.py` change ON TOP OF that branch's head (fetch it; base your branch on `a3f02b277e71`, and say so in the body's first line: "holds #10168's commits until they are on `main`"), not on `main` alone. `tools/move/` is on the low-risk excludes, so your pull request needs a land verdict: ci files a tier-1 ask when it is marked, since it rewrites lock `reads` keys. (2) vLLM (10:30 AM PST): confirmed that WE open the `cap` pull request on `interface.py`, unmarked; vLLM's worker wires-C2 reads it and marks it, and gives us the `circuit_of` readers by 22:00Z. #10034 was marked at `a60b97a9072` with `cap` still inside `H`, so your `cap` change should say in its body that #10034's `H` changes with it.
+
