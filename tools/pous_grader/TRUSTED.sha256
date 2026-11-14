@@ -8,7 +8,7 @@ b4325d3d238395398ac9b0951e1fa7d3a44c5349625ebfef00ac3167481a23ef  Grader/Registr
 5a2e06a3f0ac3d9566d2296f5f9c725d81ac0ad7b59bf82bd6afffad6e069d6c  ../../security/lakefile.toml
 519a4aef7e29047739fa3a52bedfe931e32c4b37528dce19f4ff10491522dc6f  ../../security/lake-manifest.json
 1df6d3d9bd77895ead9f98a044cb085a2c44cb21b2554a1168c02348d246701f  ../../security/Proofs/lakefile.toml
-40242635d655734db2aabfa9b9a651606ff0bca96034d9cf839d5735c4e595d4  ../../security/Proofs/lake-manifest.json
+f79de717c01e91f97adf055a4cbee06f9483edfa06900df6cba9347bb9e4d495  ../../security/Proofs/lake-manifest.json
 7da1a650e183252b7b361dcc355b023cab8a858e021b73f5cdd341c99d1b7873  ../../security/Definitions/Pous.lean
 004fecb2ad265eb15d7e55aef8350790d4eb66fe7e24038153637a8db8a5d066  ../../security/Definitions/Core/Game.lean
 1f3066f54f873a4ce22cbd07956b486c8cb25d9b9de6785466248c742265b32d  ../../security/Proofs/Pous/Statements.lean
