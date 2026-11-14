@@ -25,8 +25,9 @@ its per-test form, `UniformRandomBytesTest`, is one about the same source's byte
 server's tape, up to a slack `η`. The round coins' uniformity (A6, `uniform/flock-coin-server`) is not a `Prop` here:
 the session game flips its coins itself, so the model embodies it (`ASSUMPTIONS.md`).
 
-The rest are not soundness's hardness assumptions. Assumption 4 is a hypothesis about one test of `verity.randomness`'s
-keyed streams, for the PoUW window sample, and Assumption 5 one about the window's secret. `HmRowComputes` is not
+The rest are not soundness's hardness assumptions. Assumption 4 is a hypothesis about one test of a keyed SHA-512
+function, `verity.randomness`'s keyed streams for the PoUW window sample or the streamed wipe's labels, and Assumption 5
+one about the window's secret. `HmRowComputes` is not
 cryptographic: it says the circuit's row-hashing slots compute SHA-512, a fact about the circuit that is still to prove
 (phase 2i), named here so that the value binding's theorems take it as a hypothesis. Zero knowledge's are hm96 leaf hiding
 (T1, the spec's `Claims.Hm96Hiding`, read here by `hm96Hiding_apply`) and `X_L + κ ≠ 0` on the level-0 domain
@@ -46,32 +47,72 @@ namespace FlockSoundness.Assumptions
 open Game
 open scoped ENNReal
 
-/-- **Assumption 4 (`prf/sha-512`): `verity.randomness`'s keyed streams at distinct indices pass a test as independent
-uniform bytes do, up to `η`**, for the PoUW window sample.
+/-- The keyed SHA-512 functions Assumption 4 is about, each at `m` outputs computed from a key: `verity.randomness`'s
+keyed streams at the indices `idx`, read to `L i` bytes (`Randomness.stream`, the PoUW window sample's), and the streamed
+wipe's labels at the indices `idx`, `SHA-512(tag ‖ key ‖ u64 (idx i))` whole (`streamed_wipe.label`, the memory
+challenger's fill). -/
+inductive Keyed (m : ℕ) where
+  | streams (idx : Fin m → List Randomness.Part) (L : Fin m → ℕ)
+  | labels (tag : ByteArray) (idx : Fin m → ℕ)
 
-A verifier secret `source` of `S` bytes gives the key `Randomness.derive source domain context`. The key's stream at
-index `idx i` is `Randomness.stream key (idx i) (L i)`, its first `L i` bytes, the spec of `Key.stream` that
-`backends/flock/tests/lean/RandomnessVectors.lean` ties to the Python. The streams pass the test `E` with at most the
-probability that independent uniform streams of those lengths do, plus `η`, when the source is uniform and the indices'
-framings (`Randomness.frames`, the bytes each stream hashes after the key) are pairwise distinct.
+/-- Each output's length in bytes: a label is a whole SHA-512 digest. -/
+def Keyed.len {m : ℕ} : Keyed m → Fin m → ℕ
+  | .streams _ L => L
+  | .labels _ _ => fun _ => 64
+
+/-- The `i`-th output under `key`. -/
+def Keyed.out {m : ℕ} : Keyed m → ByteArray → Fin m → ByteArray
+  | .streams idx L, key, i => Randomness.stream key (idx i) (L i)
+  | .labels tag idx, key, i => Flock.Sha512.hash (tag ++ key ++ Randomness.be8 (idx i))
+
+/-- The outputs' inputs after the key are pairwise distinct: the streams' framings (`Randomness.frames`), and the labels'
+indices, each a u64. -/
+def Keyed.Distinct {m : ℕ} : Keyed m → Prop
+  | .streams idx _ => ∀ i j, Randomness.frames (idx i) = Randomness.frames (idx j) → i = j
+  | .labels _ idx => (∀ i j, idx i = idx j → i = j) ∧ ∀ i, idx i < 2 ^ 64
+
+/-- **Assumption 4 (`prf/sha-512`): a keyed SHA-512 function's outputs at distinct inputs pass a test as independent
+uniform bytes do, up to `η`**, for `verity.randomness`'s keyed streams (the PoUW window sample, `KeyedStreamsUniform`) and
+the streamed wipe's labels (`WipeLabelsUniform`).
+
+A verifier secret `source` of `S` bytes gives the key `Randomness.derive source domain context`. The function `F`'s
+outputs under that key (`F.out`, of `F.len i` bytes; the streams' spec is that of `Key.stream`, which
+`backends/flock/tests/lean/RandomnessVectors.lean` ties to the Python) pass the test `E` with at most the probability that
+independent uniform byte strings of those lengths do, plus `η`, when the source is uniform and the inputs each output
+hashes after the key are pairwise distinct (`F.Distinct`).
 
 It is a predicate on one test, as `SHA512CRExpected` is on one finder. A statement for every test would be refutable, since `2^(8S)`
-sources give at most that many stream tuples. The theorems take it for the test they need, whether the sample computed
-from the streams misses a given set, and `η` enters their bound.
+sources give at most that many output tuples. The theorems take it for the test they need, whether the sample computed
+from the streams misses a given set, or what a server holds of the labels, and `η` enters their bound.
 
 What A4 assumes of SHA-512 is that its compression function `f` (a 1024-bit message block, a 512-bit chaining value) is a
 pseudorandom function in two ways. Keyed by its chaining value, it makes the cascade a PRF on prefix-free inputs
 (Bellare, Canetti and Krawczyk 1996). Keyed by the secret bytes in its first message block, after a fixed public tag (28
-bytes for `stream`, 37 for `derive` with the source's frame header; a 32-byte secret sits whole in that block), it is a
-dual PRF, as the HMAC analyses use. The inputs are prefix-free: `frames` is length-framed and the counter is 8 bytes, so
-length extension doesn't apply. The key `derive` returns is SHA-512 truncated to 32 bytes, which costs a test nothing: a
-test of the truncated output is one of the full output. The secret's uniformity is not A4's: it is A5 (`UniformSecret`). -/
+bytes for `stream`, 37 for `derive` with the source's frame header, 35 for the wipe's label tag; a 32-byte secret sits
+whole in that block), it is a dual PRF, as the HMAC analyses use. The inputs are prefix-free: `frames` is length-framed and
+the counter is 8 bytes, and a label's input is 75 bytes, one block, for every index, so length extension doesn't apply.
+The key `derive` returns is SHA-512 truncated to 32 bytes, which costs a test nothing: a test of the truncated output is
+one of the full output. The secret's uniformity is not A4's: it is A5 (`UniformSecret`). -/
+def KeyedUniform (S : ℕ) (domain : String) (context : List (String × Randomness.Part)) {m : ℕ} (F : Keyed m)
+    (E : (Fin m → ByteArray) → Prop) (η : ℝ≥0∞) : Prop :=
+  F.Distinct →
+    prCoin (fun src : Fin S → Fin 256 => E fun i =>
+        F.out (Randomness.derive ⟨Array.ofFn fun b => UInt8.ofFin (src b)⟩ domain context) i) ≤
+      prCoin (fun f : (i : Fin m) → Fin (F.len i) → Fin 256 => E fun i => ⟨Array.ofFn fun b => UInt8.ofFin (f i b)⟩) + η
+
+/-- **Assumption 4 (`prf/sha-512`) for `verity.randomness`'s keyed streams** (`KeyedUniform` at `Keyed.streams`): the
+key's streams at indices `idx`, each its first `L i` bytes, pass the test `E` as independent uniform streams do, up to
+`η`, when the indices' framings are pairwise distinct. The PoUW window sample takes it. -/
 def KeyedStreamsUniform (S : ℕ) (domain : String) (context : List (String × Randomness.Part)) {m : ℕ}
     (idx : Fin m → List Randomness.Part) (L : Fin m → ℕ) (E : (Fin m → ByteArray) → Prop) (η : ℝ≥0∞) : Prop :=
-  (∀ i j, Randomness.frames (idx i) = Randomness.frames (idx j) → i = j) →
-    prCoin (fun src : Fin S → Fin 256 => E fun i =>
-        Randomness.stream (Randomness.derive ⟨Array.ofFn fun b => UInt8.ofFin (src b)⟩ domain context) (idx i) (L i)) ≤
-      prCoin (fun f : (i : Fin m) → Fin (L i) → Fin 256 => E fun i => ⟨Array.ofFn fun b => UInt8.ofFin (f i b)⟩) + η
+  KeyedUniform S domain context (.streams idx L) E η
+
+/-- **Assumption 4 (`prf/sha-512`) for the streamed wipe's labels** (`KeyedUniform` at `Keyed.labels`): the labels
+`SHA-512(tag ‖ key ‖ u64 (idx i))` at distinct u64 indices pass the test `E` as independent uniform 64-byte strings do, up
+to `η`. -/
+def WipeLabelsUniform (S : ℕ) (domain : String) (context : List (String × Randomness.Part)) {m : ℕ} (tag : ByteArray)
+    (idx : Fin m → ℕ) (E : (Fin m → ByteArray) → Prop) (η : ℝ≥0∞) : Prop :=
+  KeyedUniform S domain context (.labels tag idx) E η
 
 /-- **Assumption 5 (`uniform/python-secrets`): the PoUW window's secret is `S` uniform bytes**, sampled fresh for the
 window. A source is a finite probability space `Ω` (`prCoin` weighs its outcomes evenly) and, on outcome `ω`, the secret
