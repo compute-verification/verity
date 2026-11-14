@@ -50,11 +50,12 @@ from typing import Any, NamedTuple
 
 from verity import config as K
 from verity.config import Component, Workload
-from verity.protocol import Channel, Manifest, ProtocolDef, Role
+from verity.protocol import Channel, Manifest, ProtocolDef, Role, Starter
 from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.accounting.poub.verifier import p2_parties as P2
 from verity.protocols.accounting.pous.device import challenger_session as CS
+from verity.protocols.accounting.pous.device import onsite
 from verity.protocols.accounting.registration.verifier import registration as RL
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
@@ -261,7 +262,8 @@ class Session:
     (``roles``); for each role that reads a clock, the read and the name its header gives (``clocks``); the
     configuration party that listens (``listener``, the auditor's), and whether the run ends before the served window
     starts (``before``) or runs beside it. ``reads`` gives a configuration party's start, beside its bindings, the state
-    directory of another party's run on the same machine: binding name -> (component, party)."""
+    directory of another party's run on the same machine: binding name -> (component, party). ``starts`` are a role's
+    starts the table makes, over its halves': a start handed what its protocol's code may not load."""
 
     halves: tuple[str, ...]
     roles: Mapping[str, str]
@@ -269,13 +271,14 @@ class Session:
     listener: str
     before: bool = False
     reads: Mapping[str, Mapping[str, tuple[str, str]]] = field(default_factory=dict)
+    starts: Mapping[str, Starter] = field(default_factory=dict)
 
     def protocol(self) -> ProtocolDef:
         defs = [_protocol_def(h) for h in self.halves]
         if any(d.manifest != defs[0].manifest for d in defs):
             raise ValueError(f"{', '.join(self.halves)} are halves of more than one manifest")
         return ProtocolDef(defs[0].manifest, {r: f for d in defs for r, f in d.parties.items()},
-                           {r: f for d in defs for r, f in d.starts.items()})
+                           {**{r: f for d in defs for r, f in d.starts.items()}, **self.starts})
 
     def absent(self) -> list[str]:
         """The halves' modules that aren't in this tree."""
@@ -397,11 +400,13 @@ POUS = Session(("verity.protocols.accounting.pous.device.challenger_party:PROTOC
                MEMORY_CHALLENGER)
 #: onsite PoUB over PoUS's P2 store (`p2_parties`' verifier, `p2_party_prover`'s prover), beside the served window, on
 #: the verifier's monotonic clock; the verifier reads the memory challenger's PoUS key from that party's run beside it
-#: on the auditor's host (``challenger``)
+#: on the auditor's host (``challenger``), checked against the configuration's pin by PoUS's device (`onsite.pin`,
+#: `onsite.signer`), which the table hands its start
 POUB = Session(("verity.protocols.accounting.poub.verifier.p2_parties:PROTOCOLS",
                 "verity.protocols.accounting.poub.prover.p2_party_prover:PROTOCOL"),
                {BANDWIDTH_VERIFIER: P2.VERIFIER, PROVER: P2.PROVER}, {P2.VERIFIER: (time.monotonic_ns, MONOTONIC)},
-               BANDWIDTH_VERIFIER, reads={BANDWIDTH_VERIFIER: {"challenger": ("pous", MEMORY_CHALLENGER)}})
+               BANDWIDTH_VERIFIER, reads={BANDWIDTH_VERIFIER: {"challenger": ("pous", MEMORY_CHALLENGER)}},
+               starts=P2.starts(onsite.pin, onsite.signer))
 
 
 #: what the certifier's front asks of serve-openai: its id-form requests answered in the id form, an id event the

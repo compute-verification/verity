@@ -95,7 +95,14 @@ A link's alphabet is counted once at the host, over every leaf `Site.linkPlace` 
 a host is charged whichever device inside reads it, and a signal between two leaves of one host crosses no link and is
 charged nothing, which is right only because the host is inside the prover's boundary: the certifiers and the location
 are asked to hold each leaf with its host, and the host's routing is never trusted. On a Site whose every place is its
-own link end it is `B4` at the Site's places and links (`B4UnderId`). -/
+own link end it is `B4` at the Site's places and links (`B4UnderId`).
+
+**What the rated hypothesis costs.** `B4Under` chooses the location and the certifiers inside, so `β` is asked to be
+the registered rate at every link, and of a registered Site with any unrated link this says nothing. The registration's
+check does not discharge it: it asks a rate only of a link with no `unmediated` (stated beside `Properties.Core.Site`,
+not proved), the network check's `registered` holds only the one certifier link it is named to a rate
+(`Properties.Certifier.Registered.RegisteredLinkRated`), and an unmediated link may be unrated, and then no limit is
+stated across it. -/
 def B4Via : Prop :=
   ∀ (T : Verity.Site) (β : Fin T.links.length → ℕ), T.RatedOn β Set.univ →
     B4Under.{0, 0, w} T.linkPlace T.placeEnds β

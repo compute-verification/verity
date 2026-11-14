@@ -49,7 +49,7 @@ class Static:
         return utilization(self.schedule(), self.rows, self.steps)
 
     def engine_args(self) -> dict[str, Any]:
-        """vLLM's scheduler limits for the declaration: every request in flight at once, T tokens a step, no prefix cache."""
+        """The engine's scheduler limits for the declaration: every request in flight at once, T tokens a step, no prefix cache."""
         return {"max_num_seqs": self.slots, "max_num_batched_tokens": self.rows, "enable_chunked_prefill": True,
                 "enable_prefix_caching": False}
 
@@ -75,7 +75,7 @@ def bind_all(calls: Sequence[Any], bound: Mapping[int, Mapping[str, Any]]) -> li
 
 def graph_pad(m: int, batch: int, sizes: Sequence[int]) -> int:
     """The rows a CUDA graph pads a step of ``batch`` scheduled rows with, when the call ran ``m``: m - batch when m is the
-    smallest capture size (``sizes``) at least the batch, vLLM's padding, else 0, so any other mismatch stays a gap."""
+    smallest capture size (``sizes``) at least the batch, the engine's padding, else 0, so any other mismatch stays a gap."""
     fit = [z for z in sorted(sizes) if z >= batch]
     return m - batch if batch < m and fit and fit[0] == m else 0
 
