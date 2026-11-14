@@ -17,8 +17,9 @@ other audits' coins. It implies the sure-bound form.
 
 PoUW's guarantee becomes per-run by truncation: the adversary that runs `A` but stops before its cost would exceed a
 budget `b` costs at most `b` on every coin, and commits `A`'s transcript wherever `A` costs at most `b`. PoUW's cost
-model is abstract, so whether that adversary exists is a property of the model (`BudgetAbort`), not a theorem: a model
-whose cost reads what its programs cannot see (the oracle at points they never query, say) has no aborting program.
+model is abstract, so whether that adversary exists is a property of the model (`BudgetAbort`, a named hypothesis in
+`Definitions.Assumptions.Accounting`), not a theorem: a model whose cost reads what its programs cannot see (the oracle
+at points they never query, say) has no aborting program.
 
 **Pricing.** The machine prices a PoUW run in two parts: its arithmetic, at W1's
 instruction prices with no fetch charge and no refund, is charged to the compute account, and every first fetch of a
@@ -44,20 +45,6 @@ section Pouw
 
 variable {Q R S : Type}
 
-/-- **PoUW's cost model truncates.** Its costs are nonnegative, and it is closed under budget-abort: for every program,
-workload, activation input and budget `b ≥ 0` there is one program, fixed before the oracle, the preprocessed state and
-the salt, that runs the program and stops before its cost would exceed `b`. On every oracle, preprocessed state and salt
-it costs at most `b` and makes at most the program's oracle calls, and wherever the program costs at most `b` it
-commits the program's transcript and hashes the program's inputs. -/
-def BudgetAbort (CM : CostModel Q R S) : Prop :=
-  (∀ (prog : CM.Prog) (H : Q → R) (U : Workload) (act : ℕ → Mat) (σ : State) (s : S),
-      0 ≤ CM.cost prog H U act σ s) ∧
-    ∀ (prog : CM.Prog) (U : Workload) (act : ℕ → Mat) (b : ℝ), 0 ≤ b → ∃ prog' : CM.Prog,
-      ∀ (H : Q → R) (σ : State) (s : S),
-        CM.cost prog' H U act σ s ≤ b ∧ CM.calls prog' H U act σ s ≤ CM.calls prog H U act σ s ∧
-          (CM.cost prog H U act σ s ≤ b → CM.run prog' H U act σ s = CM.run prog H U act σ s ∧
-            CM.hashed prog' H U act σ s = CM.hashed prog H U act σ s)
-
 /-- The adversary's realized online cost on workload `U`, oracle `H` and salt `s`. -/
 def onlineCost {CM : CostModel Q R S} (A : Adversary CM) (U : Workload) (H : Q → R) (s : S) : ℝ :=
   CM.cost A.online H U A.act (A.pre.eval H) s
@@ -72,18 +59,6 @@ end Pouw
 section PearlC
 
 variable {Q R S : Type}
-
-/-- **Pearl-C's cost model truncates**: `BudgetAbort`'s statement over Pearl-C's `CostModel`, whose programs take
-activation codes. Its costs are nonnegative, and for every program, workload, activation input and budget `b ≥ 0` there
-is one program, fixed before the oracle, the preprocessed state and the salt, that costs at most `b`, makes at most the
-program's oracle calls, and commits the program's transcript wherever the program costs at most `b`. -/
-def BudgetAbortPearlC (CM : PearlC.CostModel Q R S) : Prop :=
-  (∀ (prog : CM.Prog) (H : Q → R) (U : PearlC.Workload) (act : ℕ → PearlC.Codes) (σ : PearlC.State) (s : S),
-      0 ≤ CM.cost prog H U act σ s) ∧
-    ∀ (prog : CM.Prog) (U : PearlC.Workload) (act : ℕ → PearlC.Codes) (b : ℝ), 0 ≤ b → ∃ prog' : CM.Prog,
-      ∀ (H : Q → R) (σ : PearlC.State) (s : S),
-        CM.cost prog' H U act σ s ≤ b ∧ CM.calls prog' H U act σ s ≤ CM.calls prog H U act σ s ∧
-          (CM.cost prog H U act σ s ≤ b → CM.run prog' H U act σ s = CM.run prog H U act σ s)
 
 /-- A Pearl-C adversary's realized online cost on workload `U`, oracle `H` and salt `s`. -/
 def onlineCostPearlC {CM : PearlC.CostModel Q R S} (A : PearlC.Adversary CM) (U : PearlC.Workload) (H : Q → R)

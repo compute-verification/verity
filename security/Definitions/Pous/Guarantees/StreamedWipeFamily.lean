@@ -1,12 +1,14 @@
 module
 
+public import Definitions.Core.Accel.Card
 public import Definitions.Pous.Model.StreamedWipe
 
 /-!
 # The streamed-label wipe at 2152 reads: what `verity/wipe/v0` publishes
 
 `Pous.Guarantees.StreamedWipe` at the figure the wipe port publishes for an accepted session, `⌈M/19⌉ + E` bits at
-`2^-128` with 2152 sequential timed reads, for every fill of at least one 32 MiB segment, and at 96 GiB.
+`2^-128` with 2152 sequential timed reads, for every fill of at least one 32 MiB segment, and at a card's device
+memory (`Verity.Accel.Card`, handed in).
 The game is `Security/Definitions/Pous/Model/StreamedWipe.lean`, the proofs
 `Security/Proofs/Pous/StreamedWipe/Family.lean`.
 
@@ -50,19 +52,21 @@ def StreamedWipeMeetsFamily : Prop :=
       StreamedWipe.winReal prf P ≤
         (2⁻¹ : ℝ≥0∞) ^ 128 + StreamedWipe.prfAdvantage prf (StreamedWipe.wipeDistinguisher P)
 
-/-- **The streamed wipe of 96 GiB at 2152 reads.** `StreamedWipeMeetsFamily` at `n = 1,610,612,736` labels, `3072`
-segments of 32 MiB (`M = 824,633,720,832` bits): a prover with `E` bits of egress that keeps at least
-`43,401,774,781 + E` bits (`⌈M/19⌉ + E`, about 5.05 GiB plus the egress) of uniform prior content through the reads is
-accepted with probability at most `2^-128` plus the PRF's advantage. 96 GiB is an RTX PRO 6000's GDDR7, which no fill
-covers whole (software sees about 95 GiB); for one device, cite the family at the `n` its fill reaches, with the
-memory outside the fill added to what a prover can keep. Same footing as the family. Proof:
-`PousStreamedWipe.streamed_wipe_meets_96GiB`.
+/-- **The streamed wipe of a card's device memory at 2152 reads.** `StreamedWipeMeetsFamily` on a card `c` handed in
+(`Verity.Accel.Card`), its device memory filled whole: `n = c.size .dram / 16` labels of 64 bytes (`size .dram` is in
+32-bit words), at least one 32 MiB segment, and `M = n · 512` bits. The card it is stated for is the RTX PRO 6000's,
+`hardware/cards/rtx-pro-6000-server.toml`, whose `store.dram` is its device memory. A prover with `E` bits of egress
+that keeps at least `⌈M/19⌉ + E` bits of uniform prior content through the reads is accepted with probability at most
+`2^-128` plus the PRF's advantage. No fill covers the device memory whole (software sees less of it); for one device,
+cite the family at the `n` its fill reaches, with the memory outside the fill added to what a prover can keep. Same
+footing as the family. Proof: `PousStreamedWipe.streamed_wipe_meets_96GiB`.
 
 Frozen (no-function): a bound in the wipe game's model, which no Lean function computes. -/
 def StreamedWipeMeets96GiB : Prop :=
-  ∀ (q E κ : ℕ) (prf : Bits κ → Fin 1610612736 → Bits 512)
-    (P : StreamedWipe.Prover 1610612736 2152 512 q (1610612736 * 512) E),
-    43401774781 + E ≤ q →
+  ∀ c : Verity.Accel.Card, 2 ^ 19 ≤ c.size .dram / 16 →
+  ∀ (q E κ : ℕ) (prf : Bits κ → Fin (c.size .dram / 16) → Bits 512)
+    (P : StreamedWipe.Prover (c.size .dram / 16) 2152 512 q (c.size .dram / 16 * 512) E),
+    (c.size .dram / 16 * 512 + 18) / 19 + E ≤ q →
     StreamedWipe.winReal prf P ≤
       (2⁻¹ : ℝ≥0∞) ^ 128 + StreamedWipe.prfAdvantage prf (StreamedWipe.wipeDistinguisher P)
 

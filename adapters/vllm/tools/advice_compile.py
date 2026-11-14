@@ -119,8 +119,8 @@ def carry_of(run: Path, window: int, data: bytes) -> dict:
     from verity_vllm.pipeline import window_advice as WA
 
     a = WA.decode(data)
-    lines = (run / "windows.jsonl").read_text().splitlines() if (run / "windows.jsonl").exists() else []
-    before = [int(d["window"]) for d in map(json.loads, filter(str.strip, lines)) if not d.get("empty") and int(d["window"]) < window]
+    lines = M.lines(run / "windows.jsonl", "Run") if (run / "windows.jsonl").exists() else []
+    before = [int(d["window"]) for d in map(json.loads, lines) if not d.get("empty") and int(d["window"]) < window]
     last = max(before, default=None)
     path = None if last is None else run / "advice" / f"w{last}" / "private" / "advice.bin"
     carry = {"in": [q.id for q in a.requests[:len(a.carried)]], "out": [a.requests[c.request].id for c in WA.close(a) if c.must],

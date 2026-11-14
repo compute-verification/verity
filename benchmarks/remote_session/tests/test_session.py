@@ -13,6 +13,7 @@ import random
 import socket
 import sys
 import threading
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -28,6 +29,7 @@ from verity.protocols.accounting.poub.verifier import codec as rcodec  # noqa: E
 import prover  # noqa: E402
 from verity.protocols.accounting.poub.verifier.session import verifier  # noqa: E402
 from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
+import lean_stands_in  # noqa: E402
 
 P512 = rcodec.Codec(rcodec.P512, 2, False)
 FIGURES = timing.RTX_PRO_6000_NODE
@@ -207,6 +209,19 @@ def test_an_honest_session_is_accepted_with_its_ledger(monkeypatch):
     assert set(lg["terms"]) == set(audit.LEDGER_SOURCES) and lg["gamma"] > 0
     assert all(len(d) == 6 for d in r["draws"].values())
     assert all(w["slack_ns"] >= 0 for w in r["windows_seen"])
+
+
+def test_without_its_lean_an_accepted_sessions_gamma_is_undecided(monkeypatch):
+    """With the real interface (`lean_stands_in.unwritten`), an accepted session's γ terms have no Lean answer, so each
+    reading is undecided, with the goal's id, as a refused one is refused: no γ, no certified bytes, the session
+    declares that alone, and its memory line carries no error."""
+    lean_stands_in.unwritten(monkeypatch)
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (r,), _ = run("honest")
+    lg, why = r["ledger"], coins.undecided("γ terms")
+    assert r["accepted"] and all(lg[n] == {"capacity_bytes_per_s": lg["inputs"][f], "undecided": why}
+                                 for n, f in (("spec", "spec_bytes_per_s"), ("measured", "measured_read_bytes_per_s")))
+    assert lg["declared"] == {"undecided": why} and verifier.memory_error(lg) is None
 
 
 @pytest.mark.parametrize("outcome", ["rejected", None, "error"])
@@ -859,12 +874,13 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
 
     lg = r["ledger"]
     reading = next(lg[n] for n in ("spec", "measured") if "error" in lg[n])
+    d = {k: Fraction(v) for k, v in lg["delta"].items()}
     assert lg["memory"]["error"] == verifier.memory_error(lg) == (
-        reading["error"]["horizon"] + 2.0 ** lg["sketch_failure"]["log2"] + lg["delta"]["hiding"]
-        + lg["delta"]["binding"] + lg["delta"]["rejection"])
-    assert lg["delta"]["hiding"] == ledger.hiding_over(len(record.windows)) > 0
-    assert lg["delta"]["binding"] > 0
-    assert lg["delta"]["rejection"] == len(record.windows) * record.samples / 2 ** 64 > 0
+        reading["error"]["horizon"] + 2.0 ** lg["sketch_failure"]["log2"]
+        + sum(float(d[k]) for k in ("hiding", "binding", "rejection")))
+    assert d["hiding"] == ledger.hiding_over(len(record.windows)) > 0
+    assert d["binding"] > 0
+    assert d["rejection"] == Fraction(len(record.windows) * record.samples, 2 ** 64) > 0
     assert record.samples == r["samples"] == 200 and record.public()["samples"] == 200
     assert lg["memory"]["error"] > lg["memory"]["delta"] + record.passes * 2.0 ** -audit.SLACK_LOG2 * 0.99
     assert lg["named"] == lg["memory"]["named"] == reading["named"] == ledger.NAMED_TERMS, (

@@ -1,4 +1,5 @@
-"""The Site in code (`Core.Site`, `CoreProtocol/Site.lean`, served by `site-difftest`) held to its Python mirror,
+"""The Site in code (`Core.Site`, `CoreProtocol/Site.lean`, and its check, `RegistrationLog/SiteCheck.lean`, served by
+`site-difftest`) held to its Python mirror,
 `verity.device`: an entry's refusal against the log before it (`site_refusal`, `Registration.Entry.refusal`), a whole
 log's check and fold (`site_check`, `Registration.check`), and the views of a log's site, unchecked (`site_views`), its
 devices' models read against an auditor at the site's unit of time. Both sides take the digests that are deployed, so
