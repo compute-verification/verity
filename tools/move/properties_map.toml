@@ -22,5 +22,9 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 "adapters/vllm/verity_vllm/properties/kernel_allowlist.py" = "adapters/vllm/verity_vllm/observe/fold/profiles/kernel_allowlist.py"
 "adapters/vllm/verity_vllm/properties/quarantine_lint.py" = "adapters/vllm/tests/properties/quarantine_lint.py"
 
+[modules]
+"verity_vllm.properties.kernel_allowlist" = "verity_vllm.observe.fold.profiles.kernel_allowlist"
+"verity_vllm.properties.quarantine_lint" = "tests.properties.quarantine_lint"
+
 [retired]
 paths = ["adapters/vllm/verity_vllm/properties/kernel_allowlist.py", "adapters/vllm/verity_vllm/properties/quarantine_lint.py"]
