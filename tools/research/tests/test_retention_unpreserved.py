@@ -751,6 +751,16 @@ def test_an_empty_claim_and_a_directory_that_cannot_show_it_is_a_refused_launchs
     assert record(written(kept_above), root) is None and R.find(kept_above, root).source == "sidecar", "a record above it wins"
 
 
+def test_a_directory_is_a_refused_launch_only_by_its_own_refused_json(tmp_path):
+    """`_refused_launch` itself requires the refusal's record, whatever else also reads it: with its request and a runner gone,
+    a directory without refused.json is no refused launch."""
+    root = tmp_path / "ws"
+    d = refused(root, runner=PID)
+    assert R._refused_launch(d) == (HOST, str(root / "research" / R.REQUESTS / RUN / "request.json"))
+    (d / "refused.json").unlink()
+    assert R._refused_launch(d) is None, "nothing says the launch was refused: its runner may have died as it started"
+
+
 @pytest.mark.skipif(os.geteuid() == 0, reason="root reads every file")
 def test_a_refused_launch_whose_records_cannot_be_read_is_listed_with_what_could_not_be_read_and_is_never_deleted(tmp_path):
     root = tmp_path / "ws"
@@ -807,3 +817,4 @@ def test_the_readme_states_the_rule_with_the_constants_value_and_both_ways_to_ke
     assert f"{days} d after its last write" in R.UNPRESERVED_HEAD and f"expires {R.UNPRESERVED_RUN_EXPIRY.days} days" in rule
     assert f"one whose clone stands waits (`{R.CLONES}/<run id>` goes first)" in " ".join(section.split())
     assert "(`UNPRESERVED_RUN_EXPIRY`). So does a refused launch." in " ".join(section.split())
+    assert "or `research data custody RUN --publish` if it ran." in " ".join(section.split()), "a refused launch has no job.json to publish"
