@@ -1309,9 +1309,9 @@ def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_ll
     from the run's step bound, and the LLM fills the model runner and in-process coins after the build; a spec can't
     supply them, nor S."""
 
-    from verity_vllm import protocols as PO
     from verity_vllm.llm import protocol_context, resolve_options
-    from verity_vllm.pipeline.serve_h1 import SCHEME as H1_SCHEME
+    from verity.errors import Refused
+    from verity.protocols.accounting.pouw.prover.serving import H1_SCHEME
 
     spec = resolve_spec("llama31-8b-1gpu-pouw-h1")
     control, arm = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
@@ -1335,7 +1335,7 @@ def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_ll
     for steps in (H1_OPENING_STEPS, 294):
         ctx = protocol_context(resolve_options({"protocols": H1, "protocols_config": h1_config(config, steps)}))
         assert ctx.settings_of("pouw")["steps"] == steps and ctx.filled == {"pouw": ("runner", "coins", "rounds")}
-    with pytest.raises(PO.Refused, match=r"'rows' \(T"):
+    with pytest.raises(Refused, match=r"'rows' \(T"):
         protocol_context(resolve_options({"protocols": H1, "protocols_config": config}))
     for named in ({"steps": 10}, {"coins": object()}, {"runner": object()}):
         with pytest.raises(ValueError, match="each window's"):

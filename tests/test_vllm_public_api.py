@@ -188,7 +188,7 @@ PUBLIC = {
                                      "(step_roots, StepRoots, table_key), which benchmarks/commitments times and "
                                      "benchmarks/one_stage registers",
     "verity_vllm.commit.row_tables_device": "I7: a step's row tables hashed on the GPU on a side stream, and their host twin "
-                                            "(step_roots, host_step, plan, DeviceLibrary), which benchmarks/commitments times and "
+                                            "(step_roots, host_step, plan), which benchmarks/commitments times and "
                                             "benchmarks/serve_tax's plugin installs",
     "verity_vllm.commit.scheme": "I7: the Commit path's vllm-v1 commitment scheme: its leaves, folds and roots (pos_leaf, "
                                  "POS_LEAF_TAG), which benchmarks/commitments prices",
@@ -214,7 +214,7 @@ PUBLIC = {
                                  "cos_sin_table, INT8_EXACT_QUANT), which benchmarks/prove_path and benchmarks/inference_only "
                                  "build under",
     "verity_vllm.protocols": "I1: the protocol options of a vLLM run (PoUW, PoUS and SPOT, each enabled on its own): "
-                             "their selector, context, install and refusals (parse, adapter, Context, install, Refused, "
+                             "their selector, context, install and refusals (parse, adapter, Context, install, refused, "
                              "requires_build, commit_guard), which the harness's arms and the served benchmarks of PoUW, PoUS and "
                              "the Commit install",
     "verity_vllm.protocols.interface": "I1: what every protocol option implements, and what the selector hands it (Option, "
