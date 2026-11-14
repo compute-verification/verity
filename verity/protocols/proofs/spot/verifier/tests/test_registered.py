@@ -1066,7 +1066,7 @@ def test_a_history_source_is_the_root_the_verifier_computes():
 
     def lean(**change) -> dict:
         args = {**check, "supplied": sup, "history": hist, **change}
-        params = V._params(args["program"], args["query"], args["law"], args["scheme"], args["ports"], args["leaf_layer"],
+        params = V._params(args["program"], args["query"], args["sampling_design"], args["scheme"], args["ports"], args["leaf_layer"],
                            (), [], None, None, args["registered"], args["supplied"], history=args["history"])
         return V.lean("registration", {"params": params, "record": rec})
 

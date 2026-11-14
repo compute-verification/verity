@@ -236,7 +236,8 @@ def test_the_verifiers_start_refuses_a_closer_key_the_configuration_does_not_pin
         pin = {"party": "memory-challenger", "protocol": "pous", "key-sha512": hashlib.sha512(key).hexdigest()}
         return {"pin": [pin]}
 
-    start = p2_parties.PROTOCOLS[p2_parties.ID].starts[p2_parties.VERIFIER]
+    assert p2_parties.VERIFIER not in p2_parties.PROTOCOLS[p2_parties.ID].starts
+    start = p2_parties.starts(onsite.pin, onsite.signer)[p2_parties.VERIFIER]
     bound = {"challenger": str(tmp_path)}
     with pytest.raises(Refused, match="pin"):
         start({}, bound, None)
