@@ -65,10 +65,10 @@ lowrisk_per_tick = 20
 # `/` before its end), or a file name glob (no `/`: any directory).
 # Lean, its locks and Lake files, the trusted hashes, the verifiers and the trusted places of tests/import_order.toml with
 # their tests, and the soundness-path Python (AGENTS.md's soundness path); the auditor's devices (every `device/`: the
-# network certifier, the memory challenger, the challenger service and the verifier's auditor host) and what an auditor
-# host runs as `auditor` from its pinned tree outside them (the certifier and warden rehearsals' programs and the files
-# they load, the checkpoint manifest the challenger's model registry reads); and the guards that hold everything else to
-# those rules: the Lean check (tools/verity/lean/), the
+# network certifier, the memory challenger, the challenger service and the verifier's auditor host) and what the
+# challenger's host pins beside them and runs as `auditor` (benchmarks/network_traces/, the network certifier's
+# rehearsals; the checkpoint manifest its model registry reads); and the guards that hold everything else to those
+# rules: the Lean check (tools/verity/lean/), the
 # whole-tree invariants (root tests/: the import order and its listing, verifier cost), the check and this file
 # (tools/verity/check/), the graph lister that lists the executor's gating tasks (tools/verity/graph/), the merge drivers
 # (.gitattributes), and the landing rules themselves (queue.py); and what
@@ -78,8 +78,7 @@ lowrisk_per_tick = 20
 lowrisk_excludes = ["*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-manifest.json", "TRUSTED.sha256",
                     "verity/claims/", "verity/runtime/", "verity/circuits/evaluate/", "verity/circuits/requirement/", "tools/difftest/", "verity/protocols/interface/world/", "record.py", "registration.py", "verity/protocols/accounting/certifier/device/", "verity/protocols/accounting/certifier/verifier/", "verity/protocols/proofs/flock/sigma/", "verity/protocols/proofs/flock/verifier/", "verity/protocols/policy/inference_only/verifier/", "verity/protocols/interface/", "verity/protocols/compose/verifier/onsite/", "verity/protocols/accounting/poub/verifier/", "verity/protocols/accounting/pous/device/", "tools/pous_grader/", "verity/protocols/accounting/pous/verifier/", "verity/protocols/accounting/pouw/verifier/", "verity/protocols/proofs/recursion/verifier/", "verity/protocols/compose/verifier/remote/", "verity/protocols/compose/verifier/lean/", "verity/protocols/proofs/spot/", "verity/protocols/tests/",
                     "verity/party.py", "verity/protocol.py", "verity/config.py", "verity/channel.py", "verity/device.py", "verity/tests/",
-                    "verity/protocols/compose/device/", "verity/protocols/accounting/poub/device/", "adapters/vllm/manifests/checkpoints-int8.json",
-                    "benchmarks/network_traces/certifier_serve.py", "benchmarks/network_traces/warden_serve.py", "benchmarks/network_traces/load_relay.py", "benchmarks/network_traces/active_replay.py", "benchmarks/network_traces/connection_rows_run.py", "benchmarks/network_traces/covert.py", "benchmarks/network_traces/load_commit.py", "benchmarks/network_traces/record.py", "benchmarks/network_traces/replay.py", "benchmarks/network_traces/stall_probe.py",
+                    "verity/protocols/compose/device/", "verity/protocols/accounting/poub/device/", "benchmarks/network_traces/", "adapters/vllm/manifests/checkpoints-int8.json",
                     "__init__.py",
                     "verity/circuits/", "verity/circuits/ops/", "verity/circuits/silicon/", "verity/circuits/kernels/", "verity/commitments/", "adapters/vllm/verity_vllm/commitments/", "adapters/vllm/tests/commitments/", "verity/commitments/crypto/", "verity/commitments/randomness/",
                     "tools/verity/lean/", "tests/", "tools/verity/check/", "tools/verity/graph/", ".gitattributes",
