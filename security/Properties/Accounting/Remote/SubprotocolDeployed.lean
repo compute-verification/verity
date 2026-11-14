@@ -109,11 +109,11 @@ of record and bytes verbatim, and of its premises the samples' three alone (`Liv
 `Refused` at the receipts `R` and `Counted`): the probability that the subprotocol accepts bytes that play the record of
 `ω` on the node with public outputs `pub` while `pub.qBytes` and the trace's wrong receipts, a block each, together
 exceed the record's receipts (the event `∃ pub, Publishes … pub ∧ ¬ QBytesAt … pub`, written as the acceptance and then
-what fails) is at most `δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind` over the run's samples at
+what fails) is at most `δ + Σ_c s / 2^256 + Σ_c adv_c + Σ_c hide_c + bind` over the run's samples at
 `δ = RemoteAudit.Protocol.DELTA`, the δ `certify` reads its pooled bound at: the samples' part of
-`LineHeldAtSubprotocol`'s bound. Its first two terms are the `eps` the subprotocol publishes (`PublishedEps`); the PRF
-advantages, the hiding terms and the receipts' binding term are in no published figure. A hiding term is 0 where the
-records and their correct receipts read no commitment.
+`LineHeldAtSubprotocol`'s bound. Its first two terms are at most the `eps` the subprotocol publishes
+(`PublishedEps`); the PRF advantages, the hiding terms and the receipts' binding term are in no published figure. A
+hiding term is 0 where the records and their correct receipts read no commitment.
 
 **What it says.** On acceptance, except with the bound, `q_bytes ≤ BLOCK_BYTES × (U − the trace's wrong receipts)`
 (`BLOCK_BYTES` is 4096): `U` is the verifier's own count of the receipts in its record, and the wrong receipts are those
@@ -132,7 +132,7 @@ def QBytesAtSubprotocol : Prop :=
     Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
     Pouw.pr (fun ω => (∃ pub, Publishes node (r ω) (a ω) (b ω) (e ω) pub) ∧
         ¬ ∀ pub, Publishes node (r ω) (a ω) (b ω) (e ω) pub → QBytesAt (ofRecord T node r) ω node (r ω) pub) ≤
-      (RemoteAudit.Protocol.DELTA : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
+      (RemoteAudit.Protocol.DELTA : ℝ) + ((∑ _t : Fin node.samples, node.params.samples : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (RemoteAudit.Protocol.DELTA : ℝ) t)).toReal +
         (∑ t, F.hide com prf (RemoteAudit.Protocol.DELTA : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal

@@ -1,8 +1,8 @@
 """PoUB over a monitoring period: a week, a month and a year of every machine of a
 deployment, at δ = 1% and 10⁻⁶, the pooled total first and the per-window figure beside it, from one accepted session's
 answer as `RemoteAudit.Protocol.certify` publishes it: `q_bytes`, the receipts not shown wrong in bytes, at `eps` =
-δ₀ + ⌈W/g⌉·s/2^64 (δ₀ the openings' pooled bound's δ, 2^-40, and ⌈W/g⌉·s/2^64 the sample term, the session's openings
-coins at its `samples` s each, `LineHeldAtSubprotocol`'s).
+δ₀ + ⌈W/g⌉·s/2^64 (δ₀ the openings' pooled bound's δ, 2^-40, and ⌈W/g⌉·s/2^64 at least the sample term, the session's
+openings coins at its `samples` s each, `LineHeldAtSubprotocol`'s ⌈W/g⌉·s/2^256).
 
 A deployment of `machines` machines, each running one session every `window_s` seconds audited as this one was, has
 T = machines·⌊period/window_s⌋ sessions in a period (the core's `block_count`), each on its own live coins, against one
