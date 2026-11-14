@@ -116,7 +116,7 @@ group = 6
 # narrows, and four beside lean-build; verity-vllm's three, one beside the audit and two with the Rust build. A shard runs the
 # parts of one suite it holds as one run (`check.suite_args`), on as many xdist workers as its lane's memory holds
 # (`suites.py`'s `wide_workers`) less what each one-process suite beside it reserves, and `check.SHARD_ASKS_GIB` books each
-# group the memory its parallel parts' workers need. Beside the audit
+# group what its parts held at their peak. Beside the audit
 # go too the core evaluation's and the protocols' check suites, beside lean-build vstar_cli's, and the rest (`lean-suites:*`)
 # with the Rust build. Beside them circuit-check has only what `SIBLINGS_GB` leaves it until they end (`check.cc_mem_gb`,
 # `grant_when_alone`), so the longer they run, the longer a cold circuit-check, and its shard's slot holds them back; the 5-pod
