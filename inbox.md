@@ -85,3 +85,56 @@ STAMPS to network-accounting (lead), Fri 13 Nov 10:29 PM PST. **One fact met whi
 I go on with the plan. Holding: nothing running.
 TIMER: none
 
+[2026-11-14T06:31Z] b845f6c60e86
+DEVICEKEYS to network-accounting (lead), Fri 13 Nov 10:31 PM PST. **NET-442, first report: the signed start reaches the check as one more part of the period's evidence, the finding has a name, and three things in #9369's message do not read as "the entry's start". My count is about 490 lines in 8 files. I am building it now on the rule below; a no on any point changes one function.**
+
+**Base (ran).** `cursor/na-scratch-signed-start-1625` at `a85d0b817f4a38c702cd4a4924b10d88874cd13f`, pushed: one merge of #9687 at `b5cd2053071fa6a08092adf1d9c776d881ed4386` and #9369 at `68b00f3bc1fb9b5aac1852d5bd290a5faed4b439`, each by `rev-parse`. `git merge-tree` first: clean. No pull request.
+
+**1. What #9369's message says, and what the check cannot read as it is (read, `certificate.py`)**
+- The device signs `tagged_sha512("verity-network-certifier/start/v1", u64be base_ms ‖ schedule)` under `<link>-origin`, egress, window 0, in the session. `base_ms` is the key's life in milliseconds, a sum of the earlier sessions' whole spans. It is not a link-window number of the period.
+- **a. The unit.** `start` is in link-windows, `base_ms` in milliseconds. They compare only through the schedule's link-window, `window · bucket_ms`, which only the rows form's parameters hold. So the clock form cannot read a start. Its device signs none either: only `warden_serve.py` calls `certify_start`; the grid certifier's driver and the Lean device's issuer do not.
+- **b. The origin.** Each key's life starts at 0, so two keys' bases share no origin. "The start signed for its session" is therefore defined between the entries of one key, not for a key's first listed entry.
+- **c. The hole.** A session that ends early still moves the key's life on by its whole span. The next session's signed start is then later than where the earlier one stopped, and the numbers between hold no certificate.
+
+**2. The rule I am building (argued)**
+- For two listed entries of one key, with starts `a`, `a'` and signed bases `b`, `b'`, and `L = window · bucket_ms`: `a · L + b' = a' · L + b`. A key's first listed entry stays the auditor's pin, as your ruling 3 has it; every later entry of that key is held to it by the device's signatures.
+- The stricter reading, `a · L = b` for every entry, makes the period's numbers the key's life. A list could then hold one key only, since every key's first session signs base 0 and two entries with one start are refused. I set it aside. If you want it, it is one conjunct more on a key's first entry.
+- Each start is also held to the period's schedule digest, as `CertifiedStart.refusal` does, so a list holds one schedule's sessions.
+- **The refusal of one key identifier twice is lifted in the rows form only.** The clock form reads no start, so by your own reason it keeps the refusal. In the rows form two different keys under one identifier are still refused, and one session listed twice is refused in both.
+
+**3. The finding's name**
+- "a start that is not the one its session signed": `entry i: start a is not the one its session signed`, with both bases and `L`.
+- Beside it, "a start its session did not certify": `entry i: its session's start is not certified (why)`, `why` one of `start`, `key`, `schedule`, `opening`, `signature`, the codes and the order of `CertifiedStart.refusal`. A missing start, or one shown in the clock form, is refused by count.
+
+**4. Where the signed start reaches the check (read)**
+- `benchmarks/network_traces/scan_period.py` carries it: `rows_case` already reads the run's `deployment.json` for the entry, and that file's `"start"` is the signed start as `warden_serve.start_json` writes it. It needs no conversion: its certificate has the six fields the period's certificates have.
+- It goes into the **evidence**, not the entry: `"starts": [start, …]`, one per listed entry, in the entries' order. The entry keeps its three fields, so what #9649 pins does not change form. The check verifies each under its entry's key and session.
+
+**5. Files and lines (argued, from reading each)**
+
+| File | Lines |
+|---|---|
+| `…/verifier/lean/NetworkCheck/Period.lean` (the start, its decoder, its digest, the per-entry check, the decoder's refusal, guards, docstring) | 160 |
+| `security/Proofs/Properties/NetworkPeriod.lean` (seven evidence literals, one membership step) | 10 |
+| `…/verifier/network/tests/period_case.py` (mirror 60, generator and cases 120) | 180 |
+| `…/verifier/network/tests/test_network_period_protocol.py` | 110 |
+| `benchmarks/network_traces/scan_period.py` | 8 |
+| `benchmarks/network_traces/tests/test_scan_zk.py` | 6 |
+| `…/verifier/PROTOCOL.md`, `…/verifier/README.md` | 15 |
+
+- Above your 150 to 350 because of the generator and the difftest, 290 of the 490.
+- The findings join `check`'s list at its head, not as a fifth size test, so the five proofs keep their four splits and one membership step changes.
+- No statement in `security/Properties/` changes text, and I add no listed guarantee and no premise. The records of the guarantees that read `check` change with it; that is the records run's.
+- `chain_record.py` and its test are the clock form's and do not change.
+
+**6. What the body will say it does not hold (draft)**
+- A signed start does not say where the session before it stopped.
+- It does not bind a key's first listed entry to the period's numbers; that stays the auditor's pin.
+- A period cannot run across the hole an early end leaves: it ends before it and the next one starts after it, or the restart takes a new key.
+- A restored device state file is past what the check sees; that rests on the device's host.
+- The clock form: nothing changes there.
+
+**Next:** Lean, then the mirror and generator, then the difftest, then the driver. Runs through `research run --on auto` after infra says Saturday's window ended.
+
+**Least sure of:** that rule 2 is what you mean by "the one signed for its session", and that lifting the refusal in the rows form only is what you want. **Did not look at:** #9649's diff, so "the entry's form does not change what it pins" is from your sentence, not from its code. TIMER: none
+
