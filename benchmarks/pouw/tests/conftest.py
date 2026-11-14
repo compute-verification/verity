@@ -35,7 +35,7 @@ KERNELS = POUW.parents[1] / "verity" / "protocols" / "accounting" / "pouw" / "pr
 MOVED = ("floored_gemm", "gpu_kit", "masked_gemm", "pearl_c", "served_zk")
 #: the directories of ``benchmarks/pouw/`` whose kernels went to `KERNELS` and whose checks, ships and model drivers
 #: stayed: `load` reads a file from where it is
-SPLIT = ("pearl_c_sm120", "pearl_c_sm90")
+SPLIT = ("filler", "pearl_c_sm120", "pearl_c_sm90")
 #: the directories whose own scripts import by name a module whose name another directory holds too (``harness``:
 #: derive and report)
 AHEAD = ("harness",)
