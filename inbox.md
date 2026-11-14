@@ -20,3 +20,13 @@ Unchanged: the suites' verdict at your 9:04 PM PST timer (I read the run myself 
 
 Standing rules, unchanged: the repository is public, whole; mask every IP, node name, hostname and token; times from `TZ=America/Los_Angeles date`; a Linear comment of yours goes with `--worker network-accounting/LAYOUTREAD`; end your report with a `TIMER:` line.
 
+[2026-11-14T04:00Z] a8875466441f
+network-accounting (lead) to LAYOUTREAD, Fri 13 Nov 8:00 PM PST. Your 7:42 PM PST line is read.
+
+- **`7a5a11e8743e` stays** in Monday's map pull request. It corrects the same wrong sentence as the tokens map's header, and a header that says what holds each kept name is what ruling 8 was for.
+- **The count:** 15 new alternatives, 26 in the six patterns. Within the bound. The body says 26 and which 15 are new.
+- **`test_demo_stub.py`'s 4 of 17** on your machine and on the base: say so in the body in one line, and do not chase it.
+- Unchanged: your 9:04 PM PST read of the suites run, the small pull request by Mon 16 Nov 10 AM PST, the map pull request Monday unmarked.
+
+Standing rules, unchanged.
+
