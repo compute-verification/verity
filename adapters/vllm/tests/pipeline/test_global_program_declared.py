@@ -7,7 +7,8 @@ component is held to it and to the pinned vLLM, and the first that disagrees is 
 block under the conditions the Program models: eager for an eager label, the agreed compilation facts for a compiled one, and a
 refusal by name where the components disagree, cache prefixes or state the other execution.  The stop rule is the set of the
 ids given, the checkpoint's and the manifest's, each under its source; a manifest that switches EOS off or a row with no id says
-so, and a manifest's set that is not the checkpoint's is refused."""
+so, a manifest's set that is not the checkpoint's is refused, and a checkpoint file that cannot be read is named with 120
+characters of its error."""
 from __future__ import annotations
 
 import copy
@@ -267,3 +268,12 @@ def _decode_error(text):
     except json.JSONDecodeError as e:
         return e
     raise AssertionError(f"{text!r} is JSON")
+
+
+def test_a_checkpoint_file_that_cannot_be_read_is_named_with_120_characters_of_its_error(tmp_path):
+    (tmp_path / "config.json").write_bytes(b"\xff" * 64)
+    with pytest.raises(UnicodeDecodeError) as error, open(tmp_path / "config.json") as f:
+        json.load(f)
+    whole = f"unreadable: {error.value!r}"
+    assert len(whole) > 120
+    assert GP.stop_rule(str(tmp_path), None)["source"] == {"config.json": whole[:120]}
