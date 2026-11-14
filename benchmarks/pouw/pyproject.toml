@@ -73,6 +73,9 @@ untraced = [
 # site and wire) and PoUB's block size (its codec.py); its census imports the Boolean versions' lookup
 # (verity_vllm.definitions' boolean.py), which loads no registry module for a Program already Boolean.
 # test_pearl_c_vllm holds a Pearl+ answer's named assumption to its def in Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean.
+# test_lane_refs (through served_h1's partials) and test_pearl_c_sm90_grouped import verity_torch.pouw's packages, the
+# latter its Pearl-C device run (run_device, lanes_device, served_y_device); Pearl-C4's and dither's tests import
+# verity.protocols.experimental's package files above the modules named below.
 inputs_only = true
 inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/accounting/pouw/verifier", "verity/protocols/proofs/spot",
@@ -108,6 +111,10 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
           "verity/protocols/accounting/pouw/prover/serving/h1/records.py",
           "verity/protocols/accounting/pouw/prover/serving/h1/registered.py",
+          "adapters/torch/verity_torch/__init__.py", "adapters/torch/verity_torch/pouw/__init__.py",
+          "adapters/torch/verity_torch/pouw/h1/__init__.py", "adapters/torch/verity_torch/pouw/pearl_c/__init__.py",
+          "adapters/torch/verity_torch/pouw/pearl_c/lanes_device.py", "adapters/torch/verity_torch/pouw/pearl_c/run_device.py",
+          "adapters/torch/verity_torch/pouw/pearl_c/served_y_device.py",
           "adapters/torch/verity_torch/pouw/h1/registered_device.py",
           "verity/protocols/accounting/pouw/prover/serving/h1/requests.py",
           "verity/protocols/accounting/pouw/prover/serving/h1/served.py",
@@ -174,7 +181,8 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/forms.py", "benchmarks/hash/dither/h1c.py",
           "verity/protocols/experimental/dither/prover/h1r.py", "benchmarks/hash/dither/h1r_torch.py",
           # pearl_c4/replay.py, hidden_zk/stage.py and test_pearl_c4_replay load Pearl-C4's scheme, circuit and vectors
-          "verity/protocols/experimental/pearl_c4",
+          "verity/protocols/experimental/pearl_c4", "verity/protocols/experimental/__init__.py",
+          "verity/protocols/experimental/dither/__init__.py", "verity/protocols/experimental/dither/prover/__init__.py",
           "benchmarks/hash/dither/j10r_units.py",
           "benchmarks/hash/dither/settings.py",
           "benchmarks/served_units/summarize.py", "benchmarks/harness/verity_bench/overhead.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/settings.py",
