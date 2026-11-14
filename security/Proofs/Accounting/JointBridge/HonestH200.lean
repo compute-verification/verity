@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Assumptions.CreditedWords
+public import Definitions.Pouw.Assumptions.CreditedWords
 public import Mathlib.CategoryTheory.Types.Basic
 public import Mathlib.RingTheory.WittVector.IsPoly
 public import Mathlib.Tactic.Polynomial.Basic
@@ -8,7 +8,7 @@ public import Mathlib.Tactic.ReduceModChar
 public import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod
 public import Proofs.Pouw.Period.Honest
 public import Proofs.Pouw.Prob
-import Definitions.Accounting.TS
+import Definitions.Pouw.TS
 import Definitions.Claims
 import Proofs.Pouw.PearlC.Records
 import Base.Sizes
@@ -52,13 +52,13 @@ import Proofs.Accounting.Compose.ServiceCovers
 import Proofs.Accounting.Compose.SplitRateClosed
 import Proofs.Accounting.Compose.SplitRateExp
 import Proofs.Accounting.ComposeMonitoringPeriod
-import Proofs.Accounting.HMu
-import Proofs.Accounting.Headline.Luck
+import Proofs.Pouw.HMu
+import Proofs.Pouw.Headline.Luck
 import Proofs.Accounting.JointBridge.WorkOfCreditedWords
-import Proofs.Accounting.TS
-import Proofs.Accounting.TS.ReceiptDuoCP
-import Proofs.Accounting.TS.ReceiptLi
-import Proofs.Accounting.TS.Stages
+import Proofs.Pouw.TS
+import Proofs.Pouw.TS.ReceiptDuoCP
+import Proofs.Pouw.TS.ReceiptLi
+import Proofs.Pouw.TS.Stages
 import Proofs.Accounting.Tag.Basic
 import Proofs.Accounting.Tag.LittlewoodOfford
 import Proofs.Accounting.Tag.Signs

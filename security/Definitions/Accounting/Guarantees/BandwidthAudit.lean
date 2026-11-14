@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.BandwidthAudit
-public import Definitions.Accounting.PerRun
+public import Definitions.Pouw.PerRun
 import Mathlib.Basic.ENNReal.Real
 
 /-!

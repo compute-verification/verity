@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.PouwWork
+public import Definitions.Pouw.PouwWork
 public import Definitions.Accounting.Requirement.Placed
 
 /-!
@@ -8,7 +8,7 @@ public import Definitions.Accounting.Requirement.Placed
 
 These are steps of proofs, not guarantees: they sit with the proofs, and no record of the lock pins them.
 
-PoUW's work statement (`Definitions/Accounting/Guarantees/PouwWork.lean`) reads a run's credits and help
+PoUW's work statement (`Definitions/Pouw/Guarantees/PouwWork.lean`) reads a run's credits and help
 (`Accounting.PouwWork.credits`, `help`). On the actual run of a registered circuit `W`'s placed execution
 (`Placement.actual`, `Definitions/Accounting/Requirement/Placed.lean`), the run of a node that runs `W` as placed, they
 are `W`'s: the credits are the gates `W`'s execution runs on the node in the window, the run's inputs aside, priced at
@@ -16,7 +16,7 @@ the credit pricing (a gate's credit, the target multiply-adds its class stands f
 those gates and the verifier's use of values placed on neither. These are completeness: `Placement.actual` takes the
 placement's leaf and ticks as given, its operations are constants, it has no outputs and the coins aren't its gates, so
 they say what a node that runs `W` as placed is credited and helped, not what a node that passes PoUW ran. Their proofs
-are in `Security/Proofs/Accounting/RequirementPouw.lean`.
+are in `Security/Proofs/Pouw/RequirementPouw.lean`.
 
 * `RequirementCredits`: the node's credits at a coin are the work of `W`'s region `W[X, [ts, td))` outside the marking.
 * `RequirementHelp`: the help the node takes in at a coin is `W`'s ingress `in_{X ∪ V}([ts, td))`, for a topological

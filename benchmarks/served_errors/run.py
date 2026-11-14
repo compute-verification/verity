@@ -62,7 +62,7 @@ WINDOW_DELTA = Fraction(1, 2**40)
 SERVED_DELTA = Fraction(1, 100)
 # A K_d that `security/Definitions/Accounting/Guarantees/Compose.lean`'s docstring takes as its example; not served.
 COMPOSE_KD = 96000
-# The Sm120 headlines' window (`security/Definitions/Accounting/Guarantees/Headline.lean`): checks·(√δ_fork + n_π·δ_ZK) ≤ 2^-41.
+# The Sm120 headlines' window (`security/Definitions/Pouw/Guarantees/Headline.lean`): checks·(√δ_fork + n_π·δ_ZK) ≤ 2^-41.
 SM120_CHECKS, SM120_BUDGET = 48000, -41.0
 
 # Dither's design point (`verity/protocols/experimental/dither/PROTOCOL.md`; q at `Guarantees/Dither.lean`).

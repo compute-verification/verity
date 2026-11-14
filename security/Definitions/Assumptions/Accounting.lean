@@ -14,7 +14,7 @@ guarantees that use it, never an `axiom`. No proof in the gate or ideal models r
 conjectures about the codec and the sketch's keys; the last two are a property a cost model has or lacks. The rate
 audit's, stacking's and the receipts' sketch bound's assumption modules (`Definitions.Accounting.Assumptions.RateAudit`,
 `.Stacking`, `.RemoteSketch`) re-export this module, and the per-run guarantees
-(`Definitions.Accounting.Guarantees.PerRun`) import it:
+(`Definitions.Pouw.Guarantees.PerRun`) import it:
 
 * `WorkHardness b rounds c_root cost` (claim `rate-codec-work`): completing `x` of a word's `b` bits costs at least
   `x/b` of a word's price `rounds · c_root`.

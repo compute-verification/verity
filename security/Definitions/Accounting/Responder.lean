@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Confidence
+public import Definitions.Pouw.Confidence
 public import Definitions.Pous.Model.Audit
 import Mathlib.Basic.ENNReal.Real
 

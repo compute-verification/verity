@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.Bandwidth.Game
-public import Definitions.Accounting.Confidence
+public import Definitions.Pouw.Confidence
 import Mathlib.Basic.ENNReal.Real
 
 /-!

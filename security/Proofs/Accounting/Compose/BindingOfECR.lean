@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.Guarantees.Compose
-public import Proofs.Accounting.TS.Drawn
+public import Proofs.Pouw.TS.Drawn
 public import Proofs.Accounting.Lemmas.Compose
 public import Proofs.Accounting.Lemmas.TS
 

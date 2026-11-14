@@ -35,7 +35,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.PouwWork
+import Proofs.Pouw.PouwWork
 import Proofs.Pouw.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 
