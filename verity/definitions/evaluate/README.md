@@ -39,7 +39,7 @@ this package adds the primitives. It is code, so it requires nothing of `securit
   Python's on the same host and may differ on another. Security defines none of these but six of `Words`.
 - `Evaluate/Walk.lean`: the gate walk (`Evaluate.evaluate`).
 - `Evaluate/Serve.lean`: `Evaluate.evaluateFn`, which `verity-evaluate` serves through the difftest harness's line protocol
-  (`Difftest.serve`, [harness](../../difftest/README.md)): `{"fn": "evaluate", "input": {"program": <descriptor>, "inputs":
+  (`Difftest.serve`, [harness](../../../tools/difftest/README.md)): `{"fn": "evaluate", "input": {"program": <descriptor>, "inputs":
   [arg, ...]}}` gives `{"output": [word, ...]}` or `{"reject": "<reason>"}`, with one argument per parameter of the program
   function: its words in leaf order, or `{"table": "gelu_tanh_bf16" | "tanh_rn"}` for a registered table, which the evaluator
   computes where a gate reads it (`tanh_rn`'s 2^28 words never enter the request). `gate` (`{"program", "gate"}`) gives a
