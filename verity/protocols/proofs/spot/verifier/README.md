@@ -507,8 +507,11 @@ is the record's own: whether every verdict ran. An accept waits on the verdicts 
 accept can say `complete` is false, and then a verdict that is not of record did not run. A reader that wants a
 complete audit reads `audit.answer_complete`, never the verdict alone: it is true only of an accept whose `complete`
 is true, so an answer without the field (one written before it, a reject, an undecided) is not complete. A two-stage
-outcome says it only under `second_stage.complete`: the two-stage form allowed, the replay block the registered
-request Definition, and each audit record accepted and complete.
+outcome says it only under `second_stage.complete`, which raises until its Lean is written (`verifier.not_written`,
+goal `proofs/spot-two-stage-sound`); its twin `complete_twin` holds when the two-stage form is allowed, the replay block
+is the registered request Definition, and each audit record accepted and is complete. A two-stage outcome's accept is
+`Run.run`'s symbol alone: round 2's check (`second_stage.check`) raises the same way, and its twin `check_twin` is the
+Python side the run is held to.
 
 Pinned by `tests/test_one_stage.py` (the profile, audit record, answer and incorrect-block bound tests, under each
 sampling design).

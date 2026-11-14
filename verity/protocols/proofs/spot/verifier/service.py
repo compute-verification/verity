@@ -2391,8 +2391,8 @@ class Stream:
         circuit file and the reference header and registered reads round 2 holds its statements to (`template_circuits`;
         without them every statement fails ``second-header`` and ``second-values``), which the run of record reads from
         its interior params. The outcome accepts
-        when the registration's audit record (over the replay sample) and the interior registration's (over the sample)
-        both do, and the run of record checks both. Raises `Refused` for `statements` on a one-stage outcome, and
+        when the run of record (`Run.run`) accepts, which the registration's audit record (over the replay sample) and
+        the interior registration's (over the sample) are held to; no Python joins them into a verdict (`_audit_two`). Raises `Refused` for `statements` on a one-stage outcome, and
         (`proofs`) for `proofs` on a one-stage stream or in any form `template_circuits` refuses, before anything is
         decided."""
         if statements is not None and self.n_rho is None:
@@ -2422,10 +2422,10 @@ class Stream:
             if not v.ok:
                 return list(v.codes)
             if self.n_rho is not None:
-                got.update(zip(("audit", "public", "replay"), self._audit_two(e, verdicts, statement, proved_units,
-                                                                              instances, served, session_roots, coins,
-                                                                              interior_coins, statements, proofs)))
-                op["accepted"] = got["audit"]["accepted"] and got["replay"]["accepted"]
+                got.update(zip(("audit", "public", "replay", "accepted"),
+                               self._audit_two(e, verdicts, statement, proved_units, instances, served, session_roots,
+                                               coins, interior_coins, statements, proofs)))
+                op["accepted"] = got["accepted"]
                 return None
             got.update(zip(("audit", "public"), self._audit(e, draw, verdicts, statement, proved_units, instances, served,
                                                             session_roots, coins)))
@@ -2495,9 +2495,9 @@ class Stream:
                    session_roots: Mapping[str, str] | None, coins: Mapping[str, Any] | None,
                    interior_coins: Mapping[str, Any] | None, statements: Sequence[Mapping[str, Any]] | None,
                    proofs: Mapping[str, Any] | None = None
-                   ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+                   ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], bool]:
         """`outcome`'s audit records under a two-stage design, once the verdicts hold: the interior registration's over
-        the second stage's sample, with round 2's check of `statements` (`second_stage.check`, over the parts the
+        the second stage's sample, with round 2's check of `statements` (`second_stage.check_twin`, over the parts the
         interior program's strata make, the design's links and wires and their rows, which it derives from the replay
         block's Definition (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`), the
         reads the verdicts report, what they name of each session they accepted (`second_stage.verified_of`), the
@@ -2508,7 +2508,10 @@ class Stream:
         reads, `template_reads`), and the registration's over the replay sample,
         each taking the sessions' reads of its own ports at their own roots (`audit.less_own_reads`), both failing `run`
         where the whole run isn't the verifier's, the registration's holding each value its certified entries name to
-        have a reported read; and the public outputs."""
+        have a reported read; the public outputs; and whether the outcome accepts, which is `Run.run`'s symbol alone
+        (`verifier.run`, held whole to the records above, their join the Python side it is compared with). A run whose
+        stages read no coin bytes gives `Run.run` nothing to read, so it raises (`verifier.not_written`): no Python
+        decides a two-stage outcome."""
         assert e.sessions is not None and e.draw is not None and e.interior is not None and e.second is not None
         reg, first, ireg, second = e.registration, e.draw, e.interior, e.second
         outputs = self.spec.check.public_outputs
@@ -2537,17 +2540,19 @@ class Stream:
                      supplied=SS.supplied_of(R.resolved(e.interior_copies[5], e.interior_history)),
                      fixed=(*(e.interior_copies[6] or ()), *(e.interior_copies[10] or ())),
                      reads=template_reads(proofs))
-        rec = SS.attach(rec, SS.check(SS.FORM, own, statements), SS.interior_reads(own, statements or ()))
+        rec = SS.attach(rec, SS.check_twin(SS.FORM, own, statements), SS.interior_reads(own, statements or ()))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
                                   verdicts, self.delta, e.sessions, None, replay_session_roots,
                                   certified=sorted(e.certified or ()))
-        accepted = rec["accepted"] and boundary["accepted"]
-        if e.read is not None and e.second_read is not None and rec["verifiers"]["agree"] and \
-                boundary["verifiers"]["agree"]:
+        joined = rec["accepted"] and boundary["accepted"]
+        if e.read is None or e.second_read is None:
+            V.not_written("_audit_two", "Spot.Run.run")
+        accepted = False
+        if rec["verifiers"]["agree"] and boundary["verifiers"]["agree"]:
             ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas, window_root, held, given = e.copies
             within = {k: x for k, x in rec.items() if k != "verifiers"}
             v = V.run({"receipt": dict(reg.receipt), "draw": dict(first.draw), "read": len(e.read),
-                       "symbol": ACCEPT if accepted else REJECT, "public": public if accepted else {},
+                       "symbol": ACCEPT if joined else REJECT, "public": public if joined else {},
                        "audit": {k: x for k, x in boundary.items() if k != "verifiers"},
                        "interior": {"receipt": dict(ireg.receipt), "draw": dict(second.draw),
                                     "read": len(e.second_read), "audit": within}},
@@ -2574,7 +2579,8 @@ class Stream:
                                 "proofs": proofs})
             if not v.ok:
                 rec, boundary = _run_failed(rec, v), _run_failed(boundary, v)
-        return rec, public, boundary
+            accepted = v.ok and v.verifiers["lean"].get("symbol") == ACCEPT
+        return rec, public, boundary, accepted
 
     def _finish(self, e: _Entry, symbol: str, audit: Mapping[str, Any] | None, public: Mapping[str, Any], *,
                 halt: Mapping[str, Any] | None = None, replay_audit: Mapping[str, Any] | None = None) -> Outcome:
