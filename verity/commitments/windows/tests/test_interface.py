@@ -1191,6 +1191,81 @@ def test_every_input_row_is_wired_registered_ingress_or_free_and_counted_from_th
         I.input_count({**rec, "registered": {**rec["registered"], "openings": [opening]}}, pins=PIN, roots=PIN)
 
 
+#: the third token read from the replay Definition's input ``ids``, and the three positions' ``o0`` rows its output ``o0``,
+#: 16 leaves a position
+BOUNDARY = (I.Read(EID, "tok", "ids", at=2, radix=(1,), base=0, step=(0,)),
+            I.Read(GID, "o0", "o0", at=0, radix=(3,), base=0, step=(16,)))
+
+
+def test_a_record_without_boundary_reads_keeps_its_bytes():
+    """The records of circuits that declare no boundary reads, a stated one with every other declaration, a plain window's
+    and one with registered reads, are the bytes they were before `Circuit.boundary_reads` (their SHA-512s pinned)."""
+    for doc, digest in [
+        (declared().description(), "d35073408e1e86b57c9d7babbf974e1e4a970bb88df064ed1e604ed0d1da2440f99cd9f27f2262f53f971aecf15bb"
+                                   "a219271260bd8a6726c2d614c04256d4816"),
+        (window()[0].circuit_record(), "ef353529124da950c7a39602f6538af3c918ba8076f420baafbacb808fd5144b0986c95efbf0c01da48c7916"
+                                       "37b1a5983631e639d9b542c2089ff3a9540a3810"),
+        (registered()[0].circuit_record(), "4bd67fc5d44ffbf2de4be9b788a8360ca2daeb24516db815fefdb8e96c384c2ab72b8585f2e86a579651"
+                                           "4bea6512f77deccc65db8fcf772b9aa9c95d7e330bfe")]:
+        assert "boundary_reads" not in doc and hashlib.sha512(I.circuit_bytes(doc)).hexdigest() == digest
+
+
+def test_a_circuit_declares_its_boundary_reads_and_no_row_twice():
+    """`Circuit.boundary_reads` records as the record's ``boundary_reads`` (`Circuit.declared`, one of `DECLARED`) and reads
+    back (`boundary_reads_of`); `input_count` counts the input rows they read apart, which ``free`` still holds. A boundary
+    read on a row another declaration fills (wired, registered, ingress or another boundary read, an output's included),
+    outside its port or units, or from a negative leaf, is refused, and so is an empty list, which has a record of its
+    own: a circuit without them declares none."""
+    c = declared(boundary_reads=BOUNDARY)
+    rec = json.loads(json.dumps(c.description()))
+    assert "boundary_reads" in I.DECLARED and rec["boundary_reads"] == [r.doc() for r in BOUNDARY]
+    assert I.boundary_reads_of(rec) == BOUNDARY and I.boundary_reads_of(declared().description()) == ()
+    assert {k: v for k, v in rec.items() if k != "boundary_reads"} == declared().description()
+    plain = I.input_count(declared().description(), pins=PIN, roots=PIN)
+    assert "boundary" not in plain and I.input_count(rec, pins=PIN, roots=PIN) == {**plain, "boundary": 32, "free": 32}
+    out_only = {**rec, "boundary_reads": [BOUNDARY[1].doc()]}
+    assert I.input_count(out_only, pins=PIN, roots=PIN) == {**plain, "boundary": 0}
+    for reads, why in [
+        ((I.Read(EID, "tok", "ids", 0, (1,), 0, (0,)),), "both fill rows"),
+        ((I.Read(G8ID, "w", "w", 0, (1,), 0, (0,)),), "both fill rows"),
+        ((I.Read(G8ID, "x", "x", 0, (1,), 0, (0,)),), "both fill rows"),
+        ((BOUNDARY[1], I.Read(GID, "o0", "y", 2, (1,), 0, (0,))), "both fill rows"),
+        ((I.Read("other", "tok", "ids", 2, (1,), 0, (0,)),), "names no parameter of a template"),
+        ((I.Read(EID, "frames", "ids", 2, (1,), 0, (0,)),), "names no parameter of a template"),
+        ((I.Read(EID, "tok", "ids", 2, (2,), 0, (2,)),), r"units \[2, 4\)"),
+        ((I.Read(EID, "tok", "ids", 2, (1,), -1, (0,)),), "from 0 on"),
+    ]:
+        with pytest.raises(ValueError, match=why):
+            declared(boundary_reads=reads)
+        with pytest.raises(ValueError, match=why):
+            I.input_count({**rec, "boundary_reads": [r.doc() for r in reads]})
+    for bad, why in [([], "at least one read"), ({}, "at least one read"), ([{**BOUNDARY[0].doc(), "x": 0}], "a read's record")]:
+        with pytest.raises(ValueError, match=why):
+            I.input_count({**rec, "boundary_reads": bad})
+    with pytest.raises(ValueError, match="are `Read`s"):
+        declared(boundary_reads=(BOUNDARY[0].doc(),))
+
+
+def test_the_verifiers_window_is_the_same_with_boundary_reads_and_a_listed_record_declares_none():
+    """Boundary reads add the record's ``boundary_reads`` and nothing else: the verifier's window from the record
+    (`window_of_record`) is the one without them, and a record that reads one row twice is refused. A record that lists its
+    members declares none."""
+    reads = (I.Read(TID, "x", "x", 0, (10,), 0, (32,)), I.Read(TID, "o0", "o0", 0, (10,), 0, (1,)))
+    with_reads = I.Window(I.Circuit("rec", ((COORD, 10),), boundary_reads=reads), RUN, LAW, 4)
+    plain = I.Window(I.Circuit("rec", ((COORD, 10),)), RUN, LAW, 4)
+    doc, base = (json.loads(I.circuit_bytes(w.circuit_record())) for w in (with_reads, plain))
+    assert doc["boundary_reads"] == [r.doc() for r in reads] and {k: v for k, v in doc.items() if k != "boundary_reads"} == base
+    mine = I.window_of_record(doc, LAW, BY_ID.__getitem__)
+    assert all(getattr(mine, x) == getattr(plain.window, x) for x in ("members", "partition_digest", "run", "context"))
+    with pytest.raises(ValueError, match="both fill rows"):
+        I.window_of_record({**doc, "boundary_reads": doc["boundary_reads"] * 2}, LAW, BY_ID.__getitem__)
+    listed = json.loads(I.circuit_bytes(I.circuit_record(plain.window, "rec", [(TID, 10)])))
+    with pytest.raises(ValueError, match="one or the other"):
+        I.window_of_record({**listed, "boundary_reads": doc["boundary_reads"]}, LAW, BY_ID.__getitem__)
+    with pytest.raises(ValueError, match="declares only its registered reads"):
+        I.input_count({**listed, "boundary_reads": doc["boundary_reads"]})
+
+
 def test_a_registered_read_is_registered_only_where_the_windows_root_is_the_one_the_verifier_pinned_before_the_run():
     """The third token read from ``acts``, a parameter whose root the prover commits in the window, is free; the same read
     at a pinned root the window's registration records is registered. A window whose ``weights`` root is another than the

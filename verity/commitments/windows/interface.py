@@ -77,6 +77,15 @@ registered reads and ingress are refused by the committer until it commits them.
 may also name an output row ``o<j>``: that row's words are the parameter's leaves at the pattern's positions (a value the
 circuit sends out). It fills no input row, and wires may read the row too.
 
+A circuit replayed by a sampled block's Definition also declares its boundary (`Circuit.boundary_reads`, the record's
+``boundary_reads``): `Read`s whose ``param`` names a field of the replay Definition's signature, an input parameter by its
+name or an output ``o<j>``, and whose positions are leaves of that field (16-bit leaves, the field's leaf order). A read
+of an input port fills the rows it covers from that input field; one of an output port ties the rows to that output
+field's leaves. `check_inputs` holds each to its template's port and units, and no row to two declarations; the
+Definition's fields, and the coverage of each, are round 1's to check, from the Definition the verifier holds. A record
+declares them only where the circuit has some, so a record without them keeps its bytes, and only a stated record
+declares them.
+
 The circuit's blocks (`Blocks`, ``verity/blocks/v1``, the record's ``blocks``) are stated per template and step, never per
 unit: ``proof``, the partition into proof blocks (its units and partition digest, which the verifier holds to the record's,
 and the planner's ``plan`` digest, carried and never read); ``inference``, the slot and step of every unit (`InferenceEntry`:
@@ -995,10 +1004,13 @@ def _disjoint(rects: Sequence[tuple[str, str, int, int, int, int, Any]], what: s
 
 
 def check_inputs(templates: Mapping[str, tuple[RowLayout, int]], cuts: Mapping[str, Mapping[str, int]], wires: Sequence[Wire],
-                 registered: Registered | None, ingress: Sequence[Ingress]) -> None:
-    """Refuse (ValueError) a registered read, table read, opening or ingress that names no port of its template, reads
-    outside its units, its parameter or its table, or whose rows are another's: every input row is wired, registered,
-    ingress or free, at most one of them. The work is per declaration, never per unit."""
+                 registered: Registered | None, ingress: Sequence[Ingress], boundary: Sequence[Read] = ()) -> None:
+    """Refuse (ValueError) a registered read, table read, opening, ingress or boundary read that names no port of its
+    template, reads outside its units, its parameter or its table, or whose rows are another's: every input row is wired,
+    registered, ingress, read at the boundary or free, at most one of them, and every output row is read by at most one
+    registered or boundary read. A boundary read's field and its leaves are round 1's to check, against the replay
+    Definition (`Circuit.boundary_reads`); here its leaves are only from 0 on. The work is per declaration, never per
+    unit."""
     def port(tid: str, p: str, what: Any, outs: bool = False) -> tuple[int, int]:
         lay = templates[tid][0] if tid in templates else None
         ports = {} if lay is None else dict(lay.rows + (lay.outs if outs else ()))
@@ -1054,6 +1066,13 @@ def check_inputs(templates: Mapping[str, tuple[RowLayout, int]], cuts: Mapping[s
         if not _ints(g.step) or g.step < 0:
             raise ValueError(f"ingress {g.doc()}: at a step, a natural")
         rects.append((g.reader, g.port, g.at, g.at + g.units, 0, k, g.doc()))
+    for r in boundary:
+        _words, k = port(r.reader, r.port, r.doc(), outs=True)
+        _cut_ok(r, k, "boundary read")
+        units(r.reader, r.at, r.reader_units, r.doc())
+        if r.span()[0] < 0:
+            raise ValueError(f"boundary read {r.doc()}: leaves of its field from {r.span()[0]}, not from 0 on")
+        rects.append((r.reader, r.port, r.at, r.at + r.reader_units, r.cut[0], r.cut[0] + r.cut[1], r.doc()))
     _disjoint(rects, "inputs")
 
 
@@ -1343,7 +1362,8 @@ class Circuit:
     layout (the network certifier's, ``verity/boundary/v1``), a JSON object carried as given; ``cuts``, by template, the
     ports read as several rows (`RowLayout.cut`); ``registered`` and ``ingress``, what fills its other inputs
     (`check_inputs`); ``blocks``, its proof and inference blocks (`Blocks`); ``order``, the order of its units'
-    ranges its wires follow (`check_order`), or None for each template one range."""
+    ranges its wires follow (`check_order`), or None for each template one range; ``boundary_reads``, its rows read from or
+    written to the fields of its replay Definition's signature (`Read`, each ``param`` a field: `check_inputs`)."""
     name: str
     templates: tuple[tuple[Any, int], ...]
     external: tuple[str, ...] = ()
@@ -1354,11 +1374,13 @@ class Circuit:
     ingress: tuple[Ingress, ...] = ()
     blocks: Blocks | None = None
     order: tuple[tuple[str, int, int], ...] | None = None
+    boundary_reads: tuple[Read, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "templates", tuple((fn, int(n)) for fn, n in self.templates))
         object.__setattr__(self, "external", tuple(self.external))
         object.__setattr__(self, "wires", tuple(self.wires))
+        object.__setattr__(self, "boundary_reads", tuple(self.boundary_reads))
         object.__setattr__(self, "cuts", _cuts(self.cuts))
         object.__setattr__(self, "ingress", tuple(self.ingress))
         object.__setattr__(self, "order", order_of({"order": self.order} if self.order is not None else {}))
@@ -1375,8 +1397,10 @@ class Circuit:
             raise ValueError(f"{self.name}: external ports {bad} are no template's port")
         if not all(isinstance(w, Wire) for w in self.wires):
             raise ValueError(f"{self.name}: its wires are `Wire`s")
+        if not all(isinstance(r, Read) for r in self.boundary_reads):
+            raise ValueError(f"{self.name}: its boundary reads are `Read`s")
         check_wires(self.layouts, self.wires, self.cuts, self.order)
-        check_inputs(self.layouts, self.cuts, self.wires, self.registered, self.ingress)
+        check_inputs(self.layouts, self.cuts, self.wires, self.registered, self.ingress, self.boundary_reads)
         program_values(self.registered)
         if self.boundary is not None:
             if not isinstance(self.boundary, Mapping):
@@ -1422,12 +1446,13 @@ class Circuit:
         return self.registered.reads if self.registered is not None else ()
 
     def declared(self) -> dict[str, Any]:
-        """The record's fields for its cuts, registered reads, ingress and order, each only when the circuit has one, so a
-        circuit without them records as before."""
+        """The record's fields for its cuts, registered reads, ingress, order and boundary reads, each only when the circuit
+        has one, so a circuit without them records as before."""
         return {**({"cuts": self.cuts} if self.cuts else {}),
                 **({"registered": self.registered.doc()} if self.registered is not None else {}),
                 **({"ingress": [g.doc() for g in self.ingress]} if self.ingress else {}),
-                **({"order": [list(b) for b in self.order]} if self.order is not None else {})}
+                **({"order": [list(b) for b in self.order]} if self.order is not None else {}),
+                **({"boundary_reads": [r.doc() for r in self.boundary_reads]} if self.boundary_reads else {})}
 
     def description(self) -> dict[str, Any]:
         """The record's fields `input_count` reads: its templates, wires and declarations, none of its program."""
@@ -1968,7 +1993,7 @@ def circuit_bytes(doc: Mapping[str, Any]) -> bytes:
 
 #: a stated record's optional fields beside its cap and wires (`Circuit.declared`), of which a listed record declares only
 #: its registered reads, tables, table reads and openings (`listed_reads`)
-DECLARED = ("cuts", "registered", "ingress", "order")
+DECLARED = ("cuts", "registered", "ingress", "order", "boundary_reads")
 #: a listed record's optional field beside its members for its window's ingress (`listed_ingress`)
 WINDOW_INGRESS = "window_ingress"
 
@@ -1982,6 +2007,19 @@ def declarations(doc: Mapping[str, Any]) -> tuple[tuple[Wire, ...], dict[str, di
     cuts = _cuts(doc.get("cuts", {}))
     registered = Registered.of(doc["registered"]) if "registered" in doc else None
     return wires, cuts, registered, _ingress_of(doc, "ingress")
+
+
+def boundary_reads_of(doc: Mapping[str, Any]) -> tuple[Read, ...]:
+    """A stated record's boundary reads (`Circuit.boundary_reads`), none where it declares none, refused (ValueError) unless
+    a list of at least one read, so a circuit without them has one record (`Circuit.declared`); checked against the
+    templates by `check_inputs`."""
+    if "boundary_reads" not in doc:
+        return ()
+    got = doc["boundary_reads"]
+    if not isinstance(got, list) or not got:
+        raise ValueError(f"a circuit's boundary reads are a list of at least one read, declared only when it has some, not "
+                         f"{got!r}")
+    return tuple(Read.of(x) for x in got)
 
 
 def order_of(doc: Mapping[str, Any]) -> tuple[tuple[str, int, int], ...] | None:
@@ -2054,8 +2092,10 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
     parameters, a model's weights one a weight and row width), whose committed root nothing ties to ``P``'s. A read of
     any other parameter, or a table read or opening of a table over one, is free, since a root the prover commits after
     serving, or another root than the pinned one, constrains nothing; with no pins (a bare string is none) every
-    registered read is free. Refused unless the declarations are well-formed for the record's templates (`check_wires`,
-    `check_inputs`), so no row counts twice."""
+    registered read is free. A stated record's boundary reads of input rows count apart (``boundary``, only where the
+    record declares some, `Circuit.boundary_reads`), which ``free`` still holds: only round 1's link checks, against the
+    replay Definition, bind those rows. Refused unless the declarations are well-formed for the record's templates
+    (`check_wires`, `check_inputs`), so no row counts twice."""
     if "members" in doc:
         return _listed_count(doc, pins, roots)
     if "wires" not in doc:
@@ -2063,8 +2103,9 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
     defs = [(resolve(t), int(n)) for t, n in doc["templates"]]
     lays = {descriptor_id(fn): (layout(fn), n) for fn, n in defs}
     wires, cuts, reg, ingress = declarations(doc)
+    boundary = boundary_reads_of(doc)
     check_wires(lays, wires, cuts, order_of(doc))
-    check_inputs(lays, cuts, wires, reg, ingress)
+    check_inputs(lays, cuts, wires, reg, ingress, boundary)
 
     def row_bits(tid: str, port: str) -> int:
         return 16 * dict(lays[tid][0].rows)[port] // int(cuts.get(tid, {}).get(port, 1))
@@ -2080,7 +2121,9 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
                         for p in o.ports))
     ingress_bits = sum(g.units * 16 * dict(lays[g.reader][0].rows)[g.port] for g in ingress)
     units = sum(n for _, n in lays.values())
+    read_in = [r for r in boundary if r.port in dict(lays[r.reader][0].rows)]
     return {"units": units, "inputs": inputs, "wired": wired, "registered": registered, "ingress": ingress_bits,
+            **({"boundary": sum(r.units * row_bits(r.reader, r.port) for r in read_in)} if boundary else {}),
             "free": inputs - wired - registered - ingress_bits}
 
 
@@ -2174,7 +2217,7 @@ def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Ca
         lays = {descriptor_id(fn): (layout(fn), n) for fn, n in defs}
         order = order_of(doc)
         check_wires(lays, wires, cuts, order)
-        check_inputs(lays, cuts, wires, registered, ingress)
+        check_inputs(lays, cuts, wires, registered, ingress, boundary_reads_of(doc))
         if "blocks" in doc:
             Blocks.of(doc["blocks"], {t: n for t, (_, n) in lays.items()}, doc["partition"])
         ms = _members(defs, program, query, doc["cap"], wires, cuts, committed_reads(registered),
