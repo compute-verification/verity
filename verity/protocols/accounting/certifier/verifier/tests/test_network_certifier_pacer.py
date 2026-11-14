@@ -1,22 +1,25 @@
 """The egress pacer (`pacer`): a process of its own that releases each bucket it is handed to its links' sockets, in
 order, and reports each bucket's release and then its writes; a link that refuses a write gets nothing more. A link
 slow to read holds its own bytes and nothing else: never a later bucket's release, nor another link's bytes. Every
-bucket here is handed a time long past on the host's monotonic clock, so the pacer releases it at once and the test
-reads no clock."""
+bucket here is handed a time long past on the pacer's clock, the host's monotonic one or its raw one, so the pacer
+releases it at once and the test reads no clock."""
 
 import asyncio
 import socket
 
-from verity.protocols.accounting.certifier.verifier.pacer import Pacer
+import pytest
+
+from verity.protocols.accounting.certifier.verifier import pacer as pacer_module
+from verity.protocols.accounting.certifier.verifier.pacer import CLOCKS, ClockRefused, Pacer, raw_clock
 
 
-async def _paced(buckets: list[tuple[int, bytes]], refuse: bool = False):
+async def _paced(buckets: list[tuple[int, bytes]], refuse: bool = False, clock: str = "monotonic"):
     """Run a pacer on one end of a socket pair, hand it `buckets` (bucket t's time t ms after the clock's start), and
     return its exit, its reports, `behind` just after the last hand at two times, and the pair's other end. With
     `refuse`, the other end is closed first."""
     link, peer = socket.socketpair()
     link.setblocking(False)
-    pacer = await Pacer.start({0: link.fileno()})
+    pacer = await Pacer.start({0: link.fileno()}, clock=clock)
     link.close()
     if refuse:
         peer.close()
@@ -52,12 +55,13 @@ def _pair(buffer: int | None = None) -> tuple[socket.socket, socket.socket]:
     return link, peer
 
 
-def test_the_pacer_writes_every_bucket_in_order_and_reports_each():
+@pytest.mark.parametrize("clock", sorted(CLOCKS))
+def test_the_pacer_writes_every_bucket_in_order_and_reports_each(clock):
     """The link carries every bucket's bytes in order and nothing else; each bucket is reported released, then
     written, in order: it reached the pacer after its time, so its release started then, and the link took it. Until
-    its writes are reported, a bucket whose time has come is behind."""
+    its writes are reported, a bucket whose time has come is behind. So on each clock a starter names."""
     buckets = [(t, bytes([t]) * (512 + t)) for t in range(4)]
-    code, reports, behind, peer = asyncio.run(_paced(buckets))
+    code, reports, behind, peer = asyncio.run(_paced(buckets, clock=clock))
     assert code == 0 and behind == (0, 2)
     assert _read(peer) == b"".join(data for _, data in buckets)
     released = [r for r in reports if r.end is None]
@@ -202,3 +206,29 @@ def test_a_link_past_the_backlog_is_closed_and_its_parts_are_unwritten():
     assert [(r.t, r.end is None, r.written) for r in got] == [(0, True, True), (1, True, True), (0, False, False),
                                                                 (1, False, False)]
     assert fast_got == b"ab" and len(slow_got) < 1 << 20
+
+
+def test_a_pacer_runs_on_a_clock_its_starter_names_and_the_raw_clock_refuses_where_the_host_has_none(monkeypatch):
+    """The clocks are the two named, and a pacer on any other is not started. The raw clock is the host's
+    `CLOCK_MONOTONIC_RAW` and nothing else: where the host refuses the read, or has no such clock, it refuses by name
+    and gives no other clock's reading."""
+    assert sorted(CLOCKS) == ["monotonic", "raw"] and CLOCKS["raw"] is raw_clock
+
+    async def start():
+        await Pacer.start(clock="realtime")
+
+    with pytest.raises(ValueError, match="a pacer's clock is one of"):
+        asyncio.run(start())
+    asked = []
+    monkeypatch.setattr(pacer_module.time, "clock_gettime", lambda clock_id: asked.append(clock_id) or 7.25)
+    assert raw_clock() == 7.25 and asked == [pacer_module.time.CLOCK_MONOTONIC_RAW]
+
+    def refuse(clock_id):
+        raise OSError(22, "Invalid argument")
+
+    monkeypatch.setattr(pacer_module.time, "clock_gettime", refuse)
+    with pytest.raises(ClockRefused, match=r"no raw monotonic clock \(OSError\)"):
+        raw_clock()
+    monkeypatch.delattr(pacer_module.time, "CLOCK_MONOTONIC_RAW")
+    with pytest.raises(ClockRefused, match=r"no raw monotonic clock \(AttributeError\)"):
+        raw_clock()

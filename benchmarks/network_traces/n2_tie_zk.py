@@ -429,7 +429,7 @@ def stage(M, sg: SimpleNamespace, tie: TS.IngressTie, rounds: dict[str, SimpleNa
             (d / "pub.bin").rename(d / f"pub-{T}.bin")
             (d / "tables").mkdir(exist_ok=True)
             os.link(sg.circuit, d / "circuit.txt")
-            (d / "registered.json").write_text(json.dumps(tie.registered(x.head, x.own), sort_keys=True))
+            (d / "registered.json").write_text(WR.reads_text(tie.registered(x.head, x.own)))
             for u in range(T):
                 bcs = SVC._commitments(d / f"pub-{T}.bin", u)
                 mine = None if x.mine[u] is None else tie.row(x.mine[u], "pub")

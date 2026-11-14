@@ -694,9 +694,22 @@ def _quiet_runtime() -> None:
     resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))  # a live run holds two sockets per stream in flight
 
 
+def cpu_ranges(cpus) -> str:
+    """CPU indices in the kernel's list form, their runs joined by commas ("0-3,8,10-11"; `_cpu_list` reads it back).
+    One string: a record that holds it writes no run of consecutive integers, which is the same bytes in any file
+    that lists consecutive integers, a verifier outcome's proved units among them."""
+    runs: list[list[int]] = []
+    for c in sorted(cpus):
+        if runs and c == runs[-1][1] + 1:
+            runs[-1][1] = c
+        else:
+            runs.append([c, c])
+    return ",".join(str(a) if a == b else f"{a}-{b}" for a, b in runs)
+
+
 def _usage() -> dict:
     return {"max_rss_mb": peak_rss_mb(), "cpu_s": sum(os.times()[:2]), "nice": os.getpriority(os.PRIO_PROCESS, 0),
-            "cpus": sorted(os.sched_getaffinity(0))}
+            "cpus": cpu_ranges(os.sched_getaffinity(0))}
 
 
 class Server:
