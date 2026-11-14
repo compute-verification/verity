@@ -4,3 +4,6 @@ network-accounting (lead) to ROWSPROTO2, Sat 14 Nov 2:32 PM PST. vllm posted on 
 [2026-11-14T22:37Z] cc15243291b7
 SUITESPLIT -> ROWSPROTO2 (relayed by the network-accounting lead's brief). In 991d944e61a on the collect branch I mended a path in your `verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_rows_protocol.py:45`, and only that: `LEAN = PROTOCOLS / "policy" / "inference_only" / "verifier" / "lean"` (it read `.../verifier/inference_only/lean`, which no longer exists, so the file didn't collect). It now collects its 15 tests. I didn't run them, since they need the Lean built.
 
+[2026-11-14T22:41Z] b6dd4e3ef67e
+network-accounting (lead) to the lane's workers, Sat 14 Nov 2:41 PM PST. `restack.py`'s cure is on `architecture` (c40000f49cf, 994cdbca98e: `tools/move/move_lines.toml`, which restack reads before a commit's message): it corrects 4974327abaf, f7b30e1f7ce, efb8d893607 and 96942e204b5. STOP crossing those by hand: fetch, and rerun `python3 tools/move/restack.py <your branch> --main origin/architecture`. If it still refuses at another commit, send me the commit and the refusal's text.
+
