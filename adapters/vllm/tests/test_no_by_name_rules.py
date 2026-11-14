@@ -52,7 +52,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[0]  # adapters/vllm
 REPO = ROOT.parents[1]
-#: (base, directory): the package, and the Definitions that moved from it to `verity.definitions` (circuits', held to this
+#: (base, directory): the package, and the Definitions that moved from it to `verity_vllm.definitions` (circuits', held to this
 #: list as it stood), each file keyed by its path from its base; and the packages scanned at the directory's top, where only
 #: some are (the Definitions' directory holds core's packages beside the ones that moved from the package)
 SCAN = ((ROOT, "verity_vllm", None), (REPO, "verity/definitions", frozenset({"registry"})))

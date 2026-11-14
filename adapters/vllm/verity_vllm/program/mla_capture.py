@@ -328,7 +328,7 @@ def _bits_groups(d: Path, man: dict, tmin: int | None, tmax: int | None) -> dict
 
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import bits as BS
-    from verity.definitions.registry import mla as M
+    from verity_vllm.definitions.registry import mla as M
 
     G = M.GLM47_FLASH
     groups: dict = {}
@@ -483,7 +483,7 @@ def main(a: ProduceOptions | CheckOptions | CheckBitsOptions) -> int:
                          done_keys([Path(p) for p in a.skip]), a.fresh)
         print(json.dumps({k: rep[k] for k in ("rows", "mismatched_rows", "words_bad", "first_mismatch")}), file=sys.stderr)
         return 0 if rep["mismatched_rows"] == 0 else 1
-    from verity.definitions.registry import mla_check
+    from verity_vllm.definitions.registry import mla_check
 
     rep = mla_check.check(Path(a.dir), INPUTS)
     if a.out:
