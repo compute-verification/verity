@@ -327,7 +327,6 @@
     {"file": "verity_vllm/pipeline/serve_seal.py", "kind": "I001", "symbol": "retention_refusal", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/serve_tie.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/served_match.py", "kind": "T201", "symbol": "ServedCommit.rebuild", "detail": "`print` found", "count": 2},
-    {"file": "verity_vllm/pipeline/served_match.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/serving_rows.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/serving_rows.py", "kind": "T201", "symbol": "after_commit", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/serving_rows.py", "kind": "T201", "symbol": "readers", "detail": "`print` found"},
@@ -472,6 +471,7 @@
     {"file": "verity_vllm/pipeline/serving_templates.py", "kind": "I001", "symbol": "chain_ways", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/predict/weights_tie.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 4},
     {"file": "verity_vllm/protocols/pouw/lead/__init__.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "tests/program/test_boolean_marlin_moe.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"}
+    {"file": "tests/program/test_boolean_marlin_moe.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
+    {"file": "verity_vllm/pipeline/served_match.py", "kind": "T201", "symbol": "main.log", "detail": "`print` found"}
   ]
 }
