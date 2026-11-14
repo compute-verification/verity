@@ -13,7 +13,7 @@ import json
 import shlex
 import sys
 import tarfile
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 import pytest
@@ -27,8 +27,8 @@ sys.path.insert(0, str(HERE.parent))
 import auditor as A  # noqa: E402
 
 P = lms.Params(64, 4, 4)
-T0 = datetime(2026, 10, 20, 9, 30, 0, tzinfo=timezone.utc)
-T1 = datetime(2026, 10, 20, 9, 40, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 20, 9, 30, 0, tzinfo=UTC)
+T1 = datetime(2026, 10, 20, 9, 40, 0, tzinfo=UTC)
 COMMIT = "ab" * 64
 PIN = "c" * 40
 FAMILIES = [["positions", 2], ["replay", 1]]
@@ -136,9 +136,9 @@ def test_an_open_is_refused_unless_its_session_is_reserved_unopened_unexpired_an
     mine = reserve(host, signer, "--minutes", "10")
     rc, out = opens(mine, COMMIT, by="kernels")
     assert rc == 3 and f"session {mine} is vllm's reserve, not kernels's" in json.loads(out)["refused"]
-    rc, out = opens(mine, COMMIT, now=datetime(2026, 10, 20, 9, 40, 1, tzinfo=timezone.utc))
+    rc, out = opens(mine, COMMIT, now=datetime(2026, 10, 20, 9, 40, 1, tzinfo=UTC))
     assert rc == 3 and "reserve expired at 2026-10-20T09:40:00Z" in json.loads(out)["refused"]
-    rc, out = opens(mine, COMMIT, now=datetime(2026, 10, 20, 9, 40, 0, tzinfo=timezone.utc))
+    rc, out = opens(mine, COMMIT, now=datetime(2026, 10, 20, 9, 40, 0, tzinfo=UTC))
     assert rc == 0, out
     rc, out = opens(mine, "cd" * 64)
     assert rc == 3 and "is opened already: a reserve opens once" in json.loads(out)["refused"]

@@ -16,7 +16,7 @@ import re
 import shlex
 import signal
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 import pytest
@@ -25,8 +25,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import auditor as A  # noqa: E402
 
-T0 = datetime(2026, 10, 26, 4, 0, 0, tzinfo=timezone.utc)
-T1 = datetime(2026, 10, 26, 4, 30, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 26, 4, 0, 0, tzinfo=UTC)
+T1 = datetime(2026, 10, 26, 4, 30, 0, tzinfo=UTC)
 PIN = "c" * 40
 LANE = "network-accounting"
 PROGRAM = "9e" * 64

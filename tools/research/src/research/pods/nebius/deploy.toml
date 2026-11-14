@@ -1361,6 +1361,20 @@ src = "tools/research/store.pod.toml"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-4"]
 owner = "infra"
 
+# the node file and the card pods/nebius/check.py reads its figures from, beside the copy above as in the repository: the
+# node's python3 has no verity package, so the check reads them by path
+[[file]]
+path = "/workspace/custody/hardware/nodes/rtx-pro-6000-server-x8.toml"
+src = "hardware/nodes/rtx-pro-6000-server-x8.toml"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+owner = "infra"
+
+[[file]]
+path = "/workspace/custody/hardware/cards/rtx-pro-6000-server.toml"
+src = "hardware/cards/rtx-pro-6000-server.toml"
+nodes = ["vy-nebius-1", "vy-nebius-2"]
+owner = "infra"
+
 [[file]]
 path = "/workspace/pouw/infra/bin/backup.sh"
 src = "tools/research/src/research/pods/nebius/backup.sh"

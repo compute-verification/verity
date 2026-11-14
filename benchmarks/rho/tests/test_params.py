@@ -70,6 +70,7 @@ def test_what_another_file_states_is_read_from_it_and_no_file_restates_it(tmp_pa
     want |= {
         "regime.remote.window_delta_coin": (window, None, None),
         "regime.remote.window_delta_crypto": (2 * window, None, None),
+        "regime.remote.window_ks": (2 * window, None, None),
         "regime.remote-sampled.p_evade": (window, 1e-15, 2.0 ** -20),
         "incorrect.delta": (min(deltas), min(deltas), max(deltas)),
         "policy.kimi-k2-1m-raw.gamma": (raw["Gamma"], None, None),

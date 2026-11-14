@@ -64,11 +64,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[5]))
 
-from verity.protocols.proofs.spot.device import remote  # noqa: E402
-from verity.protocols.proofs.spot.device.challenger import (ChallengerKey, CoinError, LiveChallenger,  # noqa: E402
+from verity.protocols.proofs.spot.device import remote
+from verity.protocols.proofs.spot.device.challenger import (ChallengerKey, CoinError, LiveChallenger,
                                                              served_claim)
-from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
-from verity.commitments.crypto import lms  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
+from verity.commitments.crypto import lms
 
 KEY = Path.home() / ".local" / "state" / "live-challenger" / "key"
 HELLO_SECONDS = 10.0

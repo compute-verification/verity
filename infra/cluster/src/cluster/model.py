@@ -44,16 +44,15 @@ def instant(value: str | int | None) -> int | None:
 
 
 def iso(t: int) -> str:
-    return dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.datetime.fromtimestamp(t, dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def read_deadline(path: str | Path = DEADLINE_FILE) -> int | None:
     """A node's live stop: the epoch in its deadline file (`EPOCH ISO BY`, root's, rewritten by infra on each renewal; the
     vy-deadline timer stops the VM at it). None when there is no file; 0 when it doesn't parse, as vy-deadline-check reads it."""
-    try:
-        words = Path(path).read_text().split()
-    except FileNotFoundError:
+    if not Path(path).exists():
         return None
+    words = Path(path).read_text().split()
     return int(words[0]) if words and words[0].isdigit() else 0
 
 
