@@ -4,8 +4,8 @@ public import Proofs.Properties.Verity.SampledTwo.FormSetup
 public import Proofs.Properties.Verity.SampledTwo.FormStmts
 public import Proofs.Properties.Verity.SampledTwo.FormPrint
 public import Proofs.Properties.Verity.SampledTwo.PortsOfParams
-public import Proofs.Properties.Challenger.CanonLine
-public import Proofs.Properties.Challenger.CanonWf
+public import Proofs.Flock.Claims.CanonLine
+public import Proofs.Flock.Claims.CanonWf
 
 /-!
 # The sample each record prints, from the stage coins
