@@ -99,7 +99,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Pous.Pooled", "Properties.Pous.PeriodGame", "Properties.Pous.Period.Witnesses",
   "Properties.Accounting.JointBridge.SpaceOfPeriodHeld",
   "Properties.Pous.Component",
-  "Properties.NetworkCertifier.Check", "Properties.NetworkCertifier.Check.LinkWindow",
+  "Properties.NetworkCertifier.Check", "Properties.NetworkCertifier.Check.TransferBlocks",
   "Properties.NetworkCertifier.DeviceOutput", "Properties.NetworkCertifier.DeviceOutput.Runs",
   "Properties.Hash.Identity", "Properties.Attest", "Properties.Annot", "Properties.Nci.Desc",
   "Properties.Nci.Desc.Verdict", "Properties.Nci.Desc.Cover", "Properties.Nci.Baseline", "Properties.Nci.Count",
