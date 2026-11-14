@@ -25,6 +25,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from verity_vllm.config import option
+from verity_vllm.log import init_logger
+from verity_vllm.pipeline.cli import write
+
+logger = init_logger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -36,7 +40,7 @@ class Options:
 def patch(path, pairs, marker):
     s = Path(path).read_text()
     if marker in s:
-        print(f"[fa3_tap] {os.path.basename(path)}: already patched")
+        logger.info("[fa3_tap] %s: already patched", os.path.basename(path))
         return
     for old, new, count in pairs:
         n = s.count(old)
@@ -44,7 +48,7 @@ def patch(path, pairs, marker):
         s = s.replace(old, new)
     assert marker in s
     Path(path).write_text(s)
-    print(f"[fa3_tap] {os.path.basename(path)}: patched")
+    logger.info("[fa3_tap] %s: patched", os.path.basename(path))
 
 
 def _headers(hop, mine):
@@ -181,9 +185,9 @@ def _mainloop(hop):
             mid = mid.replace(old, new)
         s = head + mid + tail
         Path(ml).write_text(s)
-        print("[fa3_tap] mainloop_fwd_sm90_tma_gmma_ws.hpp: patched")
+        logger.info("[fa3_tap] mainloop_fwd_sm90_tma_gmma_ws.hpp: patched")
     else:
-        print("[fa3_tap] mainloop_fwd_sm90_tma_gmma_ws.hpp: already patched")
+        logger.info("[fa3_tap] mainloop_fwd_sm90_tma_gmma_ws.hpp: already patched")
 
     # 3b. mainloop, the MS class: VERITY_FA3_P also stores softmax.tap_max_scaled (VERITY_MAT_SRC & 64)
     patch(ml, [
@@ -304,7 +308,7 @@ REGISTER_EXTENSION(TORCH_EXTENSION_NAME);
     assert src.count(c) == 1
     src = src.replace(c, impls.lstrip("\n"))
     Path(os.path.join(hop, "fa3_torch_lib_verity.cpp")).write_text(src)
-    print("[fa3_tap] fa3_torch_lib_verity.cpp: written")
+    logger.info("[fa3_tap] fa3_torch_lib_verity.cpp: written")
 
 
 def main(args: Options):
@@ -314,4 +318,4 @@ def main(args: Options):
     _mainloop(hop)
     _launch_template(hop)
     _torch_lib(hop)
-    print("[fa3_tap] OK")
+    write("[fa3_tap] OK")

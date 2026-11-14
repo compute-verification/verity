@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import difflib
 import hashlib
+import logging
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -96,6 +97,18 @@ def _read(root: Path) -> dict[str, str]:
     return {name: (root / SRC / name).read_text() for name in FILES}
 
 
+@pytest.fixture(autouse=True)
+def _info(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO, logger="verity_vllm")
+
+
+def _said(caplog: pytest.LogCaptureFixture) -> list[str]:
+    """What the script logged since the last read; the log is read empty."""
+    said = [r.getMessage() for r in caplog.records]
+    caplog.clear()
+    return said
+
+
 def _apply(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(root)
     cli.main(["fa2-tap-apply", "--src", str(SRC), "--src-dir", str(MINE)])
@@ -116,9 +129,9 @@ def programs(monkeypatch: pytest.MonkeyPatch) -> list[tuple[list[str], dict[str,
 
 
 def test_the_script_makes_the_v8_tree_of_a_v7_tree_line_by_line_and_starts_no_program(
-        programs: list[Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+        programs: list[Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> None:
     """A tree that has the tap header is not patched again. The header becomes this directory's; in the other four files
-    the script takes out and puts in the lines written here and no other; and it says each edit, then `APPLY-V8-OK`."""
+    the script takes out and puts in the lines written here and no other; and it logs each edit, then writes `APPLY-V8-OK`."""
     root = _tree(tmp_path / "tree")
     before = _read(root)
 
@@ -126,7 +139,7 @@ def test_the_script_makes_the_v8_tree_of_a_v7_tree_line_by_line_and_starts_no_pr
 
     after = _read(root)
     assert programs == []
-    assert capsys.readouterr().out.splitlines() == [*SAID, f"APPLY-V8-OK {root / SRC}"]
+    assert capsys.readouterr().out == f"APPLY-V8-OK {root / SRC}\n" and _said(caplog) == SAID
     assert after["verity_tap.h"] == (MINE / "verity_tap.h").read_text() != before["verity_tap.h"]
 
     gone, new = _changed(before["flash.h"], after["flash.h"])
@@ -157,21 +170,22 @@ def test_the_script_makes_the_v8_tree_of_a_v7_tree_line_by_line_and_starts_no_pr
 
 
 def test_a_second_run_changes_no_byte_and_says_only_that_it_is_done(
-        programs: list[Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+        programs: list[Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> None:
     """Each edit stands behind a mark of its own in the file it edits, so the script may be run on its own result."""
     root = _tree(tmp_path / "tree")
     _apply(root, monkeypatch)
     once = _read(root)
     capsys.readouterr()
+    _said(caplog)
 
     _apply(root, monkeypatch)
 
     assert _read(root) == once and programs == []
-    assert capsys.readouterr().out == f"APPLY-V8-OK {root / SRC}\n"
+    assert capsys.readouterr().out == f"APPLY-V8-OK {root / SRC}\n" and _said(caplog) == []
 
 
 def test_a_tree_without_the_tap_header_gets_the_v7_patch_by_git_at_its_root_first(
-        programs: list[Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+        programs: list[Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> None:
     """The one program the script starts: `git apply` of this directory's patch, three directories above the source
     directory, and a failure of it is the script's (`check=True`). It is said before any edit. The recorder applies
     nothing: the tree is the patched one already, less the header."""
@@ -181,8 +195,8 @@ def test_a_tree_without_the_tap_header_gets_the_v7_patch_by_git_at_its_root_firs
     _apply(root, monkeypatch)
 
     assert programs == [(["git", "apply", str(MINE / "verity_tap_v7.patch")], {"cwd": str(root), "check": True})]
-    assert capsys.readouterr().out.splitlines() == [
-        "[apply_v8] verity_tap_v7.patch applied", *SAID, f"APPLY-V8-OK {root / SRC}"]
+    assert capsys.readouterr().out == f"APPLY-V8-OK {root / SRC}\n"
+    assert _said(caplog) == ["[apply_v8] verity_tap_v7.patch applied", *SAID]
     assert (root / SRC / "verity_tap.h").read_text() == (MINE / "verity_tap.h").read_text()
 
 
@@ -201,9 +215,9 @@ def test_a_tree_without_the_tap_header_gets_the_v7_patch_by_git_at_its_root_firs
 ], ids=["no-tag-line", "no-context-line", "no-arming-line", "two-members", "no-function-after", "one-call", "two-rowstat-lines"])
 def test_the_script_refuses_a_tree_that_lacks_a_line_it_edits_and_finishes_once_the_line_is_back(
         name: str, old: str, new: str, refusal: str, said: int, programs: list[Any], tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+        monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> None:
     """Each refusal is an `AssertionError` that names the file and the line. The refused edit writes nothing, the edits
-    before it stand and are said, and `APPLY-V8-OK` is not. With the line back, a second run makes the tree that a run
+    before it stand and are logged, and `APPLY-V8-OK` is not written. With the line back, a second run makes the tree that a run
     on a whole tree makes."""
     text = _after_v7()[name + ".h"]
     assert text.count(old) == 1
@@ -214,7 +228,7 @@ def test_the_script_refuses_a_tree_that_lacks_a_line_it_edits_and_finishes_once_
         _apply(root, monkeypatch)
 
     assert str(refused.value) == refusal
-    assert capsys.readouterr().out.splitlines() == SAID[:said]
+    assert capsys.readouterr().out == "" and _said(caplog) == SAID[:said]
     kept = (root / SRC / (name + ".h")).read_text()
     assert kept.replace(TEMPLATED, CONTEXT) == lacking  # the kernel file's first edit stands when its second is refused
 

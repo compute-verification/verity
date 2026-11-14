@@ -25,6 +25,7 @@ from dataclasses import dataclass
 
 from verity_vllm import settings
 from verity_vllm.config import option
+from verity_vllm.pipeline.cli import write
 
 
 def sha256(path):
@@ -116,4 +117,4 @@ def main(args: Options):
     info['ops'] = ops
     with open(os.path.join(args.build_dir, 'build_info.json'), 'w') as f:
         json.dump(info, f, indent=1)
-    print('BUILD-OK', args.name, info['compile_seconds'], 's', so, ops)
+    write(f"BUILD-OK {args.name} {info['compile_seconds']} s {so} {ops}")
