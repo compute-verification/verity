@@ -741,3 +741,14 @@ def test_a_pool_job_starts_at_nice_0_in_a_scope_holding_its_cores_and_inherits_i
         assert fr.header(fill / "queue" / "v-b.sh")["cpus"] == want
     queue(fill, "v-b.sh", "owner=a gpus=0 project=verity cpus=eight")
     assert fr.header(fill / "queue" / "v-b.sh")["bad"] == "cpus=eight"
+
+
+def test_timing_owners_it_cannot_read_let_nobody_time_and_say_so_but_no_file_is_quiet(node2, capsys):
+    load, fill, _ = node2
+    fr = load()
+    (fill / "timing-owners").unlink()
+    assert fr.timing_owners() == []
+    assert capsys.readouterr().err == ""
+    (fill / "timing-owners").mkdir()
+    assert fr.timing_owners() == []
+    assert "fill: " in (err := capsys.readouterr().err) and "nobody's job may be a timing job (IsADirectoryError" in err

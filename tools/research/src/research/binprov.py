@@ -24,6 +24,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from . import settings
+
 SCHEMA = "research/binary-provenance/v1"
 SUFFIX = ".provenance.json"
 BIN_DIRS_ENV = "RESEARCH_BIN_DIRS"
@@ -74,7 +76,7 @@ def record(binary: Path, source: Path | None = None) -> dict[str, Any]:
     """Write `<binary>.provenance.json` (atomically) and return it."""
     binary = Path(binary)
     doc = {"schema": SCHEMA, "path": str(binary.resolve()), "sha256": sha256_file(binary), "bytes": binary.stat().st_size,
-           "source": source_identity(source), "built_utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+           "source": source_identity(source), "built_utc": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
            "host": socket.gethostname()}
     out = binary.with_name(binary.name + SUFFIX)
     tmp = out.with_name(f".{out.name}.tmp-{os.getpid()}")
@@ -84,7 +86,7 @@ def record(binary: Path, source: Path | None = None) -> dict[str, Any]:
 
 
 def bin_dirs() -> list[Path]:
-    env = os.environ.get(BIN_DIRS_ENV)
+    env = settings.get(BIN_DIRS_ENV)
     return [Path(x) for x in (env.split(":") if env else DEFAULT_BIN_DIRS) if x]
 
 

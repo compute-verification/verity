@@ -37,19 +37,23 @@ COMPOSITION = tuple(f"lean-suites:verity-core-composition:{k}/3" for k in (1, 2,
 POUW = tuple(f"lean-suites:verity-pouw-benchmarks:{k}/3" for k in (1, 2, 3))
 VLLM = tuple(f"lean-suites:verity-vllm:{k}/3" for k in (1, 2, 3))
 FLOCK = tuple(f"lean-suites:verity-flock:{k}/6" for k in range(1, 7))
+ONE_STAGE = tuple(f"lean-suites:benchmarks/one_stage:{k}/7" for k in range(1, 8))
 #: the one-process suites in three parts, one in each group
-ONE_PROCESS = ("verity/protocols/accounting/certifier/verifier", "verity-pouw-check-difftest", "benchmarks/one_stage",
-               "verity-lean-audit")
+ONE_PROCESS = ("verity/protocols/accounting/certifier/verifier", "verity-pouw-check-difftest", "verity-lean-audit")
 THIRDS = tuple(tuple(f"lean-suites:{s}:{k}/3" for s in ONE_PROCESS) for k in (1, 2, 3))
 #: the suites in parts, each its parts
 SPLIT = {"verity-core-composition": COMPOSITION, "verity-pouw-benchmarks": POUW, "verity-vllm": VLLM, "verity-flock": FLOCK,
-         **{s: tuple(t[i] for t in THIRDS) for i, s in enumerate(ONE_PROCESS)}}
+         **{s: tuple(t[i] for t in THIRDS) for i, s in enumerate(ONE_PROCESS)}, "benchmarks/one_stage": ONE_STAGE}
 #: the lean-suites every plan runs beside the security analysis's audit, and beside lean-build; the rest go with the Rust build
 BESIDE_AUDIT = (VLLM[0], *FLOCK[:2], "lean-suites:verity-core-evaluate", "lean-suites:pous-check", *THIRDS[0],
-                COMPOSITION[2], POUW[2])
+                COMPOSITION[2], POUW[2], ONE_STAGE[1])
 BESIDE_BUILD = (*FLOCK[2:], "lean-suites:verity/protocols/proofs/recursion/verifier/vstar_cli", *THIRDS[1], COMPOSITION[0],
                 POUW[1])
 WITH_RUST = (COMPOSITION[1], POUW[0], *VLLM[1:], *THIRDS[2], "lean-suites:*")
+#: pytest's suites the 3-pod plan runs beside lean-build; the rest (`pytest:*`) go beside the security analysis's audit
+PYTEST_BESIDE_BUILD = tuple(f"pytest:{s}" for s in (
+    "research", "verity/definitions", "verity/circuits/ops", "verity-graph",
+    "benchmarks/training_slowdown", "repository", "verity/protocols/accounting/pous/verifier"))
 
 
 @pytest.fixture(autouse=True)
@@ -70,8 +74,8 @@ def _resolved(n: int, packages=PACKAGES) -> list[list[str]]:
 def test_the_plans_are_the_documented_ones():
     build = ("lean-build", "lean-unit-cut")
     assert D.plans() == {
-        3: ((*NAMED, "pytest", *BESIDE_AUDIT),
-            (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement"),
+        3: ((*NAMED, "pytest:*", *BESIDE_AUDIT),
+            (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement", *PYTEST_BESIDE_BUILD),
             ("flock-circuit-build", "circuit-check", "flock-rust-tests", *WITH_RUST)),
         4: ((*NAMED, "circuit-check:1/4", *BESIDE_AUDIT),
             (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement", "circuit-check:2/4"),
@@ -108,7 +112,7 @@ def test_the_5_pod_plan_runs_pytest_in_two_shards_by_suite_and_the_others_run_it
     for k in (1, 4):
         [argv] = [argv for g in CHECK.groups(tmp_path, 16, only=shards[k - 1]) for name, argv, _ in g if name == "pytest"]
         assert argv[2:2 + len(held[k - 1])] == held[k - 1] and argv[2 + len(held[k - 1])] == "--json", argv
-    for n in (3, 4):
+    for n in (4,):
         assert "pytest" in CHECK.shard(f"1/{n}")["all"] and not any(p.startswith("pytest:") for p in CHECK.shard(f"1/{n}")["all"])
     assert CHECK.shard("1/5")["all"] == D.all_parts(D.gated(CHECK.JOBS), _parts(n=5))
     assert "pytest" not in CHECK.shard("1/5")["all"] and "pytest" in CHECK.gated_parts(), "an unsharded check's parts are as they were"
@@ -116,16 +120,36 @@ def test_the_5_pod_plan_runs_pytest_in_two_shards_by_suite_and_the_others_run_it
         D.resolve((("pytest:nowhere", "pytest:*"),), CHECK.JOBS, _parts(n=5))
 
 
+def test_the_3_pod_plan_runs_pytest_in_two_shards_by_suite_neither_beside_a_build(tmp_path):
+    """Whole beside the security analysis's audit, pytest was the 3-pod plan's first shard's longest test step: its parallel
+    suites one at a time beside verity/commitments, its one-process suites nine at a time.  The plan names seven of its
+    suites beside lean-build, whose shard holds no build to share cores with (`check.groups`), and the rest (`pytest:*`)
+    beside the audit; the two cover every suite of pytest's once, and the second shard books pytest beside lean-suites' ask
+    (`check.SHARD_ASKS_GIB`), not lean-build's."""
+    names = [s.name for s in CHECK.SUITES.discover() if s.name not in CHECK.AFTER_LEAN]
+    shards = [CHECK.shard(f"{k}/3")["parts"] for k in range(1, 4)]
+    held = [[p.partition(":")[2] for p in s if p.partition(":")[0] == "pytest"] for s in shards]
+    beside_build = [p.partition(":")[2] for p in PYTEST_BESIDE_BUILD]
+    assert sorted(held[1]) == sorted(beside_build) and not held[2]
+    assert sorted(held[0]) == sorted(n for n in names if n not in beside_build)
+    for k, jobs in ((1, "16"), (2, "16")):
+        [argv] = [argv for g in CHECK.groups(tmp_path, 16, only=shards[k - 1]) for name, argv, _ in g if name == "pytest"]
+        assert argv[2:2 + len(held[k - 1])] == held[k - 1] and argv[argv.index("--jobs") + 1] == jobs, argv
+    assert CHECK.shard_ask_gib(shards[0], []) == 330 and CHECK.shard_ask_gib([p for p in shards[0] if "lean-audit" not in p], []) == 280
+    assert CHECK.shard_ask_gib(shards[1], []) == 240 and CHECK.shard_ask_gib(shards[1], ["lean-agreement"]) == 460
+
+
 @pytest.mark.parametrize("n", sorted(D.plans()))
 def test_every_plan_runs_each_suite_in_parts_on_more_than_one_shard(n):
     """The suites that declare parts by test id: lean-suites' parts are its suites with each of those as its parts, and every
     plan's shards, gated and after landing, hold each part once and no shard all of a suite's, so no shard runs one whole:
     the one-process suites, the composition and PoUW suites one part on each of three shards, vLLM's one beside the security
-    analysis's audit and two beside the Rust build, Flock's two beside the audit and four beside lean-build."""
+    analysis's audit and two beside the Rust build, Flock's two beside the audit and four beside lean-build, and the one-stage
+    benchmark's part holding its longest test beside the audit and its other six with the Rust build."""
     assert CHECK.suite_parts() == {s: len(parts) for s, parts in SPLIT.items()}
     assert SUITES == [x for s in CHECK.AFTER_LEAN
                       for x in ([p.removeprefix("lean-suites:") for p in SPLIT[s]] if s in SPLIT else [s])]
-    most = {"verity-vllm": 2, "verity-flock": 4}
+    most = {"verity-vllm": 2, "verity-flock": 4, "benchmarks/one_stage": 6}
     for gated in (True, False):
         shards = [CHECK.shard(f"{k}/{n}", gated)["parts"] for k in range(1, n + 1)]
         for suite, parts in SPLIT.items():
@@ -137,6 +161,8 @@ def test_every_plan_runs_each_suite_in_parts_on_more_than_one_shard(n):
         rust = next(s for s in shards if "flock-circuit-build" in s)
         assert [p for p in audit if p in VLLM] == [VLLM[0]] and [p for p in rust if p in VLLM] == list(VLLM[1:])
         assert [p for p in audit if p in FLOCK] == list(FLOCK[:2]) and [p for p in build if p in FLOCK] == list(FLOCK[2:])
+        assert [p for p in audit if p in ONE_STAGE] == [ONE_STAGE[1]]
+        assert [p for p in rust if p in ONE_STAGE] == [p for p in ONE_STAGE if p != ONE_STAGE[1]]
 
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
@@ -171,6 +197,23 @@ def test_every_shard_runs_lean_suites_after_the_lean_build_they_need(tmp_path, n
                 f"shard {k}/{n} runs lean-suites with no lean-build before it ({ran}): keep lean-build in "
                 f"`DECLARATION.needed`'s closure of the shard's jobs (`check.groups`), or name it in that shard of "
                 f"tools/verity/check/ci.toml's {n}-pod plan")
+
+
+def test_the_one_stage_benchmarks_two_longest_tests_run_on_two_shards():
+    """benchmarks/one_stage ran in one process for most of the Rust build's shard, its two longest tests most of that.  Of its
+    seven parts by test id they hash to parts 2 and 4, and every plan runs part 2 beside the security analysis's audit and the
+    rest with the Rust build, so neither shard runs both; a rename that moves either fails here, and the plans are placed
+    again."""
+    GUARD = _module("verity_suite_guard_for_shards", ROOT / "tools" / "verity" / "check" / "guard" / "verity_suite_guard.py")
+    longest = ("tests/test_served_cases.py::test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets",
+               "tests/test_two_stage_driver.py::test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_blocks_name")
+    for nodeid in longest:
+        path, _, name = nodeid.partition("::")
+        assert f"def {name}(" in (ROOT / "benchmarks" / "one_stage" / path).read_text(), nodeid
+    assert [GUARD.id_part(n, 7) for n in longest] == [2, 4]
+    for n in sorted(D.plans()):
+        shards = [CHECK.shard(f"{k}/{n}", False)["parts"] for k in range(1, n + 1)]
+        assert len({k for k, s in enumerate(shards) for p in (ONE_STAGE[1], ONE_STAGE[3]) if p in s}) == 2, n
 
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
@@ -843,7 +886,7 @@ def test_a_train_shards_launch_asks_its_slot_for_what_its_steps_take(monkeypatch
                       (["--deferred", steps, "--shard", "1/5"], 330), (["--deferred", reused, "--shard", "1/5"], 280),
                       (["--deferred", steps, "--shard", "2/5"], 260), (["--deferred", reused, "--shard", "2/5"], 260),
                       (["--deferred", steps, "--shard", "4/5"], 160),
-                      (["--deferred", steps, "--shard", "3/5"], 190), (["--deferred", steps, "--shard", "2/3"], 190),
+                      (["--deferred", steps, "--shard", "3/5"], 190), (["--deferred", steps, "--shard", "2/3"], 240),
                       (["--deferred", steps, "--shard", "3/3"], 340), (["--deferred", "lean-audit"], 330)):
         sent = env("--priority", *args)
         assert sent[CHECK.SLOT.MIN_MEM_ENV] == str(CHECK.TRAIN_GB), args
