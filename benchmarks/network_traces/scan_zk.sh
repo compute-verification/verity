@@ -80,7 +80,7 @@ fi
 if [ -n "${SC_REHEARSE:-}" ]; then
   log "sczk: rehearsing the network certifier at scan_zk's schedule"
   # shellcheck disable=SC2046
-  "$PY" benchmarks/network_traces/network_certifier_serve.py rehearse --fake --ids --out "$W/warden" \
+  "$PY" benchmarks/network_traces/network_certifier_serve.py rehearse --fake --ids --out "$W/network_certifier" \
     --requests "${SC_REQUESTS:-12}" --rate "${SC_RATE:-2}" --tail "${SC_TAIL:-6}" --start-in 2 \
     ${SC_FIRST_MS:+--first-ms "$SC_FIRST_MS"} ${SC_PROMPT_MAX:+--prompt-max "$SC_PROMPT_MAX"} \
     ${SC_MAX_TOKENS:+--max-tokens "$SC_MAX_TOKENS"} \
@@ -89,9 +89,9 @@ if [ -n "${SC_REHEARSE:-}" ]; then
   log "sczk: rehearsal rc ${PIPESTATUS[0]}"
   mkdir -p "$OUT/warden"
   for f in deployment.json cells.jsonl certified.jsonl check.json warden.json serve.log; do
-    [ -f "$W/warden/$f" ] && cp "$W/warden/$f" "$OUT/warden/"
+    [ -f "$W/network_certifier/$f" ] && cp "$W/network_certifier/$f" "$OUT/warden/"
   done
-  SC_WARDEN_RUN=$W/warden
+  SC_WARDEN_RUN=$W/network_certifier
 fi
 CH=()
 if [ -n "${SC_CHALLENGER:-}" ]; then   # the verifier's own copy of the first-parent history the session's pin must be on

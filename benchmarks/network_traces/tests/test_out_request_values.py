@@ -119,8 +119,8 @@ def test_scan_zk_publishes_a_network_certifier_rehearsals_public_files_and_not_i
     public = {"deployment.json": {"windows": 2}, "cells.jsonl": [{"registration": {"root": "ab"}}],
               "certified.jsonl": [{"window": 0, "head": "cd"}], "check.json": {"accepted": True},
               "warden.json": {"process": {}}, "serve.log": "serving\n"}
-    put(w / "warden", {**public, "traffic.json": [{"at": 0, "body": {"prompt": PROMPT}}],
-                       "client.json": {"connections": [{"index": 0, "response": {"ids": PROMPT}}]}})
+    put(w / "network_certifier", {**public, "traffic.json": [{"at": 0, "body": {"prompt": PROMPT}}],
+                                  "client.json": {"connections": [{"index": 0, "response": {"ids": PROMPT}}]}})
     out.mkdir()
     got = run(block("scan_zk.sh", '  mkdir -p "$OUT/warden"', "  done"), W=w, OUT=out)
     assert got.returncode == 0, got.stderr
