@@ -57,7 +57,7 @@ def test_a_pooled_record_waits_in_the_pools_slots_and_stays_a_check_the_gate_rea
     assert slot_only.through_slot(tail) and unlike(tail, TOOL) is None
 
 
-def test_a_pooled_deferred_record_is_a_post_landing_run_of_those_steps(launched):
+def test_a_pooled_deferred_record_is_an_after_landing_run_of_those_steps(launched):
     assert CHECK.record(["--base", "HEAD", "--on", CPU1, "--pool", "research", "--deferred", "lean-agreement"]) == 0
     [cmd] = launched
     head, tail = _split(cmd)

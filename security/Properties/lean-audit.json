@@ -1914,10 +1914,6 @@
    "type_hash": "baaa8304c869d70386cf7d64a46ddc411d7472889b13de6cad574939ad9976dd",
    "unfolded_hash": "954bba068784062bf7ae8a7f433d76af1b1e9ca859912b76ca68d9a45b9fd348"
   },
-  "Properties.Pouw.Window.drawMisses": {
-   "type_hash": "ee88fb3fee0d31b09d380ff1de1a5cb7ae97730168a6ea9a36ab70f24c9b5389",
-   "unfolded_hash": "3c6da1ce22737558b799737bac2b5c880b8742b0efa8c15f0fc8fddbfbefa3d0"
-  },
   "Properties.Pouw.Window.floorPointGreatest": {
    "type_hash": "afe73b1ea23134dac58880fb9ef88e285709653a31536f16a088d9230a2c05c1",
    "unfolded_hash": "a3249482b4e0fbd3a6f53f8e70e56a25abdc7bb31262db15cee58b7651af7d8a"
@@ -1957,6 +1953,10 @@
   "Properties.Pouw.Window.pointRefuses": {
    "type_hash": "6b3249983259aa1e4b30cdf04a812d8542728e4123f82ff71ade2e0143d81c75",
    "unfolded_hash": "82809a3351d5ae875daddd9071727f9abcea0193ccf3d75e7a3df64aa8784215"
+  },
+  "Properties.Pouw.Window.sampleMisses": {
+   "type_hash": "ee88fb3fee0d31b09d380ff1de1a5cb7ae97730168a6ea9a36ab70f24c9b5389",
+   "unfolded_hash": "3c6da1ce22737558b799737bac2b5c880b8742b0efa8c15f0fc8fddbfbefa3d0"
   },
   "Properties.Pouw.Window.workAtRefuses": {
    "type_hash": "106f9eeb8a719c5b3bdc75b1580cd548d065c3f5d3b7d429eb3709f3b281ee09",
@@ -2122,7 +2122,7 @@
    "type_hash": "acbb6080f1cd957386c50b95fde7e961d541958f674278973716c53b2c47099e",
    "unfolded_hash": "270fdff67c7dd662bb2376b054888ac1b4589aed97d2db688b6dbf4e80764033"
   },
-  "Properties.Spot.SecurityProofs.drawMisses": {
+  "Properties.Spot.SecurityProofs.sampleMisses": {
    "type_hash": "3f87a355ae74af656383010355fd73d01ba49126bc986f32fe55c0b1b87d2d0f",
    "unfolded_hash": "66e517579a3fe102af3a9855df35f6955639e35dce8dbe08ae7184d53f38247a"
   },
@@ -2307,7 +2307,7 @@
   "Properties.Accounting.Served": {
    "imports": ["Definitions.Accounting", "Spot", "Properties.Spot.Draw", "Properties.Accounting.Compose"],
    "except": [],
-   "why": "the served window's units and draw (`Definitions.Accounting.Served`) are stated against each call's Program's partition (`Spot.Slots.layout`, `Spot.Partition.units`) and the verifier's population draw (`Spot.Draw.drawUnits`, from bytes as `Properties.Spot.bytesOf` reads them), beside `Properties.Compose.UnitsOfLayout`, never a proof"
+   "why": "the served window's units and draw (`Definitions.Accounting.Served`) are stated against each call's Program's partition (`Spot.Slots.layout`, `Spot.Partition.units`) and the verifier's population draw (`Spot.Draw.sampleUnits`, from bytes as `Properties.Spot.bytesOf` reads them), beside `Properties.Compose.UnitsOfLayout`, never a proof"
   },
   "Properties.Pouw.Credit": {
    "imports": ["Definitions.Pouw.RelativeSecurity", "Properties.Pouw.Strata", "Properties.Spot.Draw"],
@@ -2383,7 +2383,7 @@
   "Properties.Challenger": {
    "imports": ["CoreProtocol", "Spot", "Flock", "Lms", "Lean"],
    "except": [],
-   "why": "the challenger's binding is stated against the code's own functions (the interface's `Live`, the challenger's reader `drawCoins`, its record, close and ledger messages) and a model of the device's log on Lean core: nothing of Mathlib or of `security`, never a proof"
+   "why": "the challenger's binding is stated against the code's own functions (the interface's `Live`, the challenger's reader `sampleCoins`, its record, close and ledger messages) and a model of the device's log on Lean core: nothing of Mathlib or of `security`, never a proof"
   },
   "Properties.Pouw.ServedWork": {
    "imports": ["Definitions.Pouw.Dither", "Definitions.Pouw.Assumptions.ServedWork", "Properties.Pouw.PeriodJ10R"],
@@ -12989,10 +12989,6 @@
     "function": "PouwWindow.bucket?",
     "outcome": "accept"
    },
-   "Properties.Pouw.Window.drawMisses": {
-    "function": "PouwWindow.kPrime",
-    "outcome": "accept"
-   },
    "Properties.Pouw.Window.floorPointGreatest": {
     "function": "PouwWindow.floorPoint?",
     "outcome": "accept"
@@ -13183,10 +13179,6 @@
    },
    "Properties.Spot.SecurityProofs.designWellFormed": {
     "function": ["Spot.Slots.layout", "Properties.Spot.slotDesign"],
-    "outcome": "accept"
-   },
-   "Properties.Spot.SecurityProofs.drawMisses": {
-    "function": "Spot.Slots.select",
     "outcome": "accept"
    },
    "Properties.Requirement.topological": {
@@ -13822,7 +13814,7 @@
     "outcome": "accept"
    },
    "Properties.Challenger.Drawn.familyOneCommitment": {
-    "function": "Spot.Challenger.drawCoins",
+    "function": "Spot.Challenger.sampleCoins",
     "outcome": "accept"
    },
    "Properties.Challenger.Drawn.familyOneCommitmentRead": {
@@ -13932,6 +13924,14 @@
       "outcome": "none"
      }
     ]
+   },
+   "Properties.Pouw.Window.sampleMisses": {
+    "function": "PouwWindow.kPrime",
+    "outcome": "accept"
+   },
+   "Properties.Spot.SecurityProofs.sampleMisses": {
+    "function": "Spot.Slots.select",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -13962,8 +13962,7 @@
    "Pous.Period.SecurityProofs.periodHeldDeployed": "frozen (premise): periodHeld at the deployed ring budget (RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64), the one pous-ring-speed derives from Delta + RTT = 854,000 ns and the measured round floor ROUND_NS = 361.55 / 3.490 ns: DEADLINE_ROUNDS = 8,243 <= RING_D, and RING_D + 1 rounds take 1.995 x the limit; outside both regions where P2RingAuditSecure is refuted (D >= 32,894; L >= 2^169 at k = 105). Its premises are periodHeld's at that budget (P2RingAuditSecure, Pous.Period.DeviceModel, Pous.Period.Instantiates), none under shape.premises.",
    "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (SampledLayer.Good under monitoringPeriodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's SampledLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileSampleIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest).",
    "Properties.Challenger.LiveAnswer": "unstated: a live check's answer at the coins its evidence reads is its answer, proved in security_proofs by Properties.Challenger.liveAnswer; a draft statement, which gets a guarantee entry once the one theorem reads it",
-   "Properties.Challenger.DrawnByDevice": "unstated: Challenger.drawCoins accepts only coins a withheld session of the key's device released for that window and label, or the fixed finder findBreak outputs a break from the run (an LMS forgery or a SHA-512 collision), proved with no premise in security_proofs by Properties.Challenger.Drawn.drawnByDevice; euf-cma/lms-sha512-n64 and ecr/sha-512 bound that finder where a guarantee reads it; a draft statement, which gets a guarantee entry once the one theorem reads it",
-   "Properties.Challenger.CoinsFromLog": "unstated: an accepted answer is the live answer at the coins the challenger's device released, or a break, proved from DrawnByDevice in security_proofs by Properties.Challenger.coinsFromLog, and so with no premise by Properties.Challenger.Drawn.coinsFromLog_holds; a draft statement, which gets a guarantee entry once the one theorem reads it",
+   "Properties.Challenger.CoinsFromLog": "unstated: an accepted answer is the live answer at the coins the challenger's device released, or a break, proved from SampledByDevice in security_proofs by Properties.Challenger.coinsFromLog, and so with no premise by Properties.Challenger.Drawn.coinsFromLog_holds; a draft statement, which gets a guarantee entry once the one theorem reads it",
    "Properties.Pouw.Served.SecurityProofs.servedWork": "frozen (no-function,world-unlisted): ServedWork, the served PoUW protocol's work in the remote form: H1J10RCheckedCreditPeriod's fixed words priced on the prover's inventory, one machine of the accelerator model (Pouw.Dither.Accel) at its device premises G1, G2, P1 and P2, wherever it ran (no network certifier, wipe or latency check), except with probability delta_s + n(delta_bind + delta_ks) + n kappa_deg(B); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its new premises, each listed under assumptions: Pouw.Assumptions.SAKServed, SakLb.SAKResidual's claim at the served words, proposed, whose truth on the accelerator model as Definitions.Core.Accel writes it is open (it prices register reductions, so the four Russians' method pays at least an alu lane a MAC, but SAKMatmul as written still fails at a dual price that leaves those pipes cheap), so whether the guarantee is non-vacuous there is open; FixedAreRight, the bridge from the play's fixed words to the inventory's right words, to be made provable with UnitFixed's adaptive model; FixedBeforeSalt, a protocol-code fact (each window's instance, advice and program fixed before its salt, which SaltIsLiveCoin's discharge orders). The inventory's closure (ext = 0) and the advice bound are the statement's framing. Its honest and nontrivial lemmas are Proofs.Pouw.ServedWork.Honest's served_honest and served_nontrivial. Proved from h1J10RCheckedCreditPeriod (Proofs.Pouw.ServedWork).",
    "Properties.Pouw.Served.SecurityProofs.servedFreed": "frozen (no-function,world-unlisted): ServedFreed, the served PoUW protocol's freed compute in the onsite form: an accepted period whose network certifier counted it in (cert) frees at most eps(x) C + beta K_c of the registered devices' capacity C = sum_r mu_r H_r at the period's dual price mu (Pouw.Dither.FreedWithin at W = 1, Period.DualOpt), with eps(x) = max 0 (C - ServedWork's credit at the period's accepted prefix + beta K_c) / C, except with probability ServedWork's delta_s + n(delta_bind + delta_ks) + n kappa_deg(B) plus the certifier's delta; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. It is ServedWork's premises less the inventory's closure (ext = 0), which OutsourceWithinEgressServed supplies, and adds two premises, each listed under assumptions: OutsourceWithinEgressServed, the price of an exchanged bit over the period's programs together, implied by the per-program Pouw.Assumptions.OutsourceWithinEgress (outsourceServed_of_perProgram); CertifiedExchange, the network certifier's guarantee at the period (its count in, K_c, exceeded with probability at most delta), the form network accounting's certifier is to instantiate, on a trusted-device device whose coins are witness (WitnessPathPrivate discharges CoinsConfidential). DualOpt and the capacity's positivity are the statement's framing. Whether SAKServed holds on the accelerator model as Definitions.Core.Accel writes it, which prices register reductions, is open, as for ServedWork. Its honest and nontrivial lemmas are Proofs.Pouw.ServedFreed.Honest's servedFreed_honest and servedFreed_nontrivial. Proved from servedWork and Pouw.SecurityProofs.Dither.FreedOfFloor (Proofs.Pouw.ServedFreed).",
    "Pous.Component.SecurityProofs.runAccepts_by": "frozen (witness): a witness guarantee_lemmas names for its guarantee, in a role (fails, meets, by, break) witnesses doesn't hold yet: RunAccepts is RunAcceptsBy at PoUS's compiled run check (Iff.rfl), which ties runAccepts_fails to the guarantee",
@@ -14015,7 +14014,8 @@
    "Properties.Spot.MonitoringPeriod.AuditedSession": "unstated: the session the period's check audits at a window (Spot.Challenger.auditedIn on the window's root) is the session the window names, for every ledger the ledger's half reads and every window it returns; proved with no premise in security_proofs by Properties.Spot.MonitoringPeriod.auditedChallengePhase; a lemma about the ledger's half that a reader of Properties.Spot.MonitoringPeriod.AuditedAt takes beside it, no guarantee's statement",
    "Properties.Spot.MonitoringPeriod.LedgerLinesOfDevice": "unstated: each line of a ledger the period's check reads (Spot.MonitoringPeriod.read) is an entry under its place's number that says, its signature aside, what a line of the device's own ledger under the verifier's key says, or the fixed finder outputs a break (an LMS forgery or a SHA-512 collision); proved with no premise in security_proofs by Properties.Spot.MonitoringPeriod.ledgerLinesOfDevice; it does not say the presented ledger is whole; a draft statement, which gets a guarantee entry with its honest and nontrivial witnesses",
    "Properties.Spot.MonitoringPeriod.LedgerOfDevice": "unstated: the ledger the period's check reads (Spot.MonitoringPeriod.read) is the device's own from its first line, none dropped and none added, up to a line stamped at or after the monitoring period's end, or a break; it takes Properties.Spot.MonitoringPeriod.Numbered (a line of the device's ledger that is an entry numbered i is its line i), a hypothesis of this statement alone that no guarantee takes, and a lemma of the modelled device once the model builds its whole ledger; proved from that hypothesis in security_proofs by Properties.Spot.MonitoringPeriod.ledgerOfDevice; no guarantee entry while it takes it",
-   "Properties.Spot.MonitoringPeriod.LedgerOfDeviceSigned": "unstated: every line of the ledger the period's check reads (Spot.MonitoringPeriod.read) but the last is the device's own line whole, its signature included, so the LMS leaf read from each is the device's, or the finder at the lines' whole texts (Properties.Spot.MonitoringPeriod.findLineBreak: Properties.Challenger.findBreak on the ledger, else a SHA-512 collision among the presented lines' and the device's whole texts) outputs a break; the last presented line's signature stays free; it takes Properties.Spot.MonitoringPeriod.Numbered and Properties.Spot.MonitoringPeriod.Chained (the device's line after a line names as prev the SHA-512 of that line's whole text), hypotheses of this statement alone that no guarantee takes, and lemmas of the modelled device once the model builds its whole ledger; proved from them in security_proofs by Properties.Spot.MonitoringPeriod.ledgerOfDeviceSigned; no guarantee entry while it takes them"
+   "Properties.Spot.MonitoringPeriod.LedgerOfDeviceSigned": "unstated: every line of the ledger the period's check reads (Spot.MonitoringPeriod.read) but the last is the device's own line whole, its signature included, so the LMS leaf read from each is the device's, or the finder at the lines' whole texts (Properties.Spot.MonitoringPeriod.findLineBreak: Properties.Challenger.findBreak on the ledger, else a SHA-512 collision among the presented lines' and the device's whole texts) outputs a break; the last presented line's signature stays free; it takes Properties.Spot.MonitoringPeriod.Numbered and Properties.Spot.MonitoringPeriod.Chained (the device's line after a line names as prev the SHA-512 of that line's whole text), hypotheses of this statement alone that no guarantee takes, and lemmas of the modelled device once the model builds its whole ledger; proved from them in security_proofs by Properties.Spot.MonitoringPeriod.ledgerOfDeviceSigned; no guarantee entry while it takes them",
+   "Properties.Challenger.SampledByDevice": "unstated: Challenger.sampleCoins accepts only coins a withheld session of the key's device released for that window and label, or the fixed finder findBreak outputs a break from the run (an LMS forgery or a SHA-512 collision), proved with no premise in security_proofs by Properties.Challenger.Drawn.sampledByDevice; euf-cma/lms-sha512-n64 and ecr/sha-512 bound that finder where a guarantee reads it; a draft statement, which gets a guarantee entry once the one theorem reads it"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -28025,7 +28025,7 @@
    }
   },
   "Spot.OneStageZk": {
-   "digest": "3b49161c3d524dfb09c998871ad1b9ef85f3522e510f00aedcc3cb28b7d404eb",
+   "digest": "a08e0a86a6bf4ea65297635e17bd35117f1dcde29aff37bb8eb4e0c63e58e95e",
    "definitions": {
     "Spot.OneStageZk.EVIDENCE_FITS": "33f8f6fbb586fcb57dae3c7bed6c76ad5db01ca4720f43a6ca18ab4f9dd6d705",
     "Spot.OneStageZk.Evidence": "f5fc59dc0b4a0d0d0732da27e636afe6ec207cbbf2bbe5666d18c048c5459e52",
@@ -28055,6 +28055,7 @@
     "Spot.OneStageZk.Member.slice": "2a3c790d5a655d8876ca9a414792460781acb34bfcecb4e73922cac83cb1cbdb",
     "Spot.OneStageZk.Member.statement": "4392042dfb712c3a9a74235891962cb58c51e65d4b664c2dd49c1e79718a6f3a",
     "Spot.OneStageZk.Member.units": "dd005d06e519bda7d52b15749294ce030cd25dafbc83f4b5787d56fb77384d8d",
+    "Spot.OneStageZk.NOT_ONE_MEMBER": "fa3a42b41a04b1ffbd9718efe633a88ba4e9c19afdc7450e46207d67ee8fd5a5",
     "Spot.OneStageZk.NO_CHALLENGER": "e162a96e930d08f9754dac695c52dafc52cfd3daf4b4792302f54b06244b1df8",
     "Spot.OneStageZk.NO_ROW_WHY": "bdb3c1dcd200ed424ffe254184c9b7cfd1e66da41f66c6808dfba2643fd103e6",
     "Spot.OneStageZk.NO_TABLES": "89a604bf3f3fab6ba56c515638fc1c6011ccaeb7feeab9bfa86e992a1c058ad0",
@@ -28118,6 +28119,7 @@
     "Spot.OneStageZk.classTwo": "cb9cce8f01cfbc699e1c82e8f47c64e05009271f397de991ce0e0290ac1a3268",
     "Spot.OneStageZk.coinKeyOf": "75d567137e40c17596f9dfb67bf48fe264148fefb140d156a9813bd3ce77c27e",
     "Spot.OneStageZk.coinsOf": "88cf42ea035ecf852e33f3506fa92ac5e737865c6a3767290bba9686cd56f656",
+    "Spot.OneStageZk.commonMember": "e3b2acefb98b4d0e61f722e8142f4207da0697c0aebec93daa90af76918ecf05",
     "Spot.OneStageZk.deployedKey": "202c89dd7909f7870179e8b48ec9f5ee421a7d536afd94c9ad007da6788b3615",
     "Spot.OneStageZk.drawFitsWhy": "0601f5e7ed692426e12be62da22f53b5e8581916dc0151a6b461f8f473048817",
     "Spot.OneStageZk.evidenceBytes": "ee22e17150755c25c7db5daa18c38317350755b1577ac10bdf8eb52f89edca2a",
@@ -28150,7 +28152,8 @@
     "Spot.OneStageZk.proofsOf": "d3d287adf010a8bdafb5ce8c84499ba5131815bfc3668e27387360071c33eaf9",
     "Spot.OneStageZk.provedHeld": "f4a6fef08d959aabe27fa2769e3b8dac75f7fa4b8f0c66b835c33f38fb36df9a",
     "Spot.OneStageZk.provedUnits": "03307c2d6b665cda9871cd823a6c4f28a122ca6e10e6085528c12986c789a939",
-    "Spot.OneStageZk.publicHeld": "bd875a81f27bc151c3cabcb637e12d9b90790cb4c209b897969ff3e394d3e06b",
+    "Spot.OneStageZk.publicHeld": "54737c753b0d30d8f1fd0aa31daa18127a4fc01a464649ad775a3f234cc58a78",
+    "Spot.OneStageZk.publicPorts": "79739e797603d619c85ffad05ca3765d9d9dbf3d46aea8d26606b12761da7026",
     "Spot.OneStageZk.push": "4a5d257d303daf1313a70fa2ca7e4f3d481cbcd3f12fd9c5d6c38550cca75dba",
     "Spot.OneStageZk.readsOf": "c9bb76d08b011e4961a1df2aa8c7c4d53771e0967c6fbf9add4a30b102294b95",
     "Spot.OneStageZk.readsRegistered": "4aaef956c03d73417875972b6a59378569bd404b5653c71508966b837e1a3bfa",
@@ -28302,7 +28305,7 @@
    }
   },
   "Spot.Record": {
-   "digest": "e505b6487c5a5820049de70e073c240bb6b44204ecf0dcc8695cc349ac6f682b",
+   "digest": "7f80d5bf56c2cd48a0d64c39e5dd644e2c841c99dab2355c63744fca63aba291",
    "definitions": {
     "Spot.Record.LEVEL": "543751b14b271912e0fe9a6f2605542d4a14d342e5c2194177433aed58d48227",
     "Spot.Record.allRan": "0bf32581414fd8f94a209b656c4c2c35fd2208a80af73d07a40b44b8d24b8d10",
@@ -28310,7 +28313,8 @@
     "Spot.Record.certifiedCheck": "a115ebd7643f1f3f4542a998d247f5d5995cf9a55211b52859260464ba2ad301",
     "Spot.Record.checks": "b42822058c307232f68e6a3813318013a1b12903ff6d670d422b0d90014c0282",
     "Spot.Record.lessOwnReads": "ea085bdf365ba55b29e27544378953f1fda747915dbcfb96e2ab00659935cd51",
-    "Spot.Record.matchesPublic": "5de1bd56b8d6a840f9a559c86835a74cb4da804de8d82f1b7a6ca7f5be3fa505",
+    "Spot.Record.matchesPublic": "1643e079f9ea7c3fd55f2c247b0cb138b0c8f7594e0888b87781c29728a67b30",
+    "Spot.Record.matchesPublicBy": "3aca7a4ccaa709691501538f4a95e94deaf29c0e89705ac737115ab0bd5a23e5",
     "Spot.Record.ownRegistered": "c03c7e82007dc6ab74231e65106159ac61cb6b9298b162f53c8660713912aade",
     "Spot.Record.profileDraw": "f7a6fc1ab1e8055e2a1e933f3d5c50187688bda0439a73c28b0ba75412dcdf22",
     "Spot.Record.registeredRoots": "ca7ef2ef9ae75a22514ae05bdde77d50484dd042185e0ed93cbca6a993002e3e",

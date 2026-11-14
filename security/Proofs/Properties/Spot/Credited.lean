@@ -15,7 +15,7 @@ public import Proofs.Flock.SpotFlock.SampleInts
 Where one-stage v2 (`Spot.OneStageZk.checkBlobsAt`) accepts, at the coins `ξ`, evidence it parsed
 (`Spot.OneStageZk.evidenceOf`), the units its one session proves (`Spot.OneStageZk.provedUnits` on the
 session's record) are the units `ξ` samples under the verifier's sampling design as derived, over the registered population
-(`Spot.OneStage.drawnFrom`), ascending (`credited_of_checkBlobsAt`); at the public file's load and the record's
+(`Spot.OneStage.sampledFrom`), ascending (`credited_of_checkBlobsAt`); at the public file's load and the record's
 sample, `Units.unitsAt` reads them (`unitsAt_of_checkBlobsAt`).
 
 * **v1 at the coins** (`provedUnits_of_checkAt`): v1's `checkAt` refuses a sample other than the coins' (`coinsWhy`), and
@@ -109,14 +109,14 @@ theorem nonneg_of_ascending {xs : Array Int} (ha : Ascending xs) (h0 : ∀ (h : 
 /-! ## v1 at the coins -/
 
 /-- **v1 at the coins `ξ`, on a sample without a closure.** Where `checkAt` accepts, the verifier's sampling design derives (`law`), the
-record names a population `n`, the coins sample `units` under `law` over `n` (`drawnFrom`), and the evidence's
+record names a population `n`, the coins sample `units` under `law` over `n` (`sampledFrom`), and the evidence's
 `proved_units` are those units, ascending. -/
 theorem provedUnits_of_checkAt {p : OneStage.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStage.Evidence} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : OneStage.checkAt p c (some ξ) e = .accept pub prof) (hcl : field? e.draw "closure" = none) :
     ∃ law n units read,
       Draw.derive p.verifier.program p.verifier.query p.verifier.law p.verifier.workTable = .ok law ∧
-      nat? (getD c.record "population") = some n ∧ OneStage.drawnFrom p.verifier law n ξ = .ok (units, read) ∧
+      nat? (getD c.record "population") = some n ∧ OneStage.sampledFrom p.verifier law n ξ = .ok (units, read) ∧
       e.provedUnits = units.qsort (· < ·) := by
   cases hw : OneStage.coinsWhy p c e ξ with
   | some why =>
@@ -132,7 +132,7 @@ theorem provedUnits_of_checkAt {p : OneStage.Params} {c : OneStage.Commitment} {
     unfold OneStage.coinsReason at hw
     rw [hn] at hw
     dsimp only at hw
-    cases hd : OneStage.drawnFrom p.verifier law n ξ with
+    cases hd : OneStage.sampledFrom p.verifier law n ξ with
     | error why => rw [hd] at hw; cases hw
     | ok r =>
       obtain ⟨units, read⟩ := r
@@ -206,7 +206,7 @@ theorem provedUnits_sorted {pubB : ByteArray} {record : String} {us : Array Nat}
 /-- **v2 credits its one session with the coins' sample.** Where v2 accepts evidence it parsed at the coins `ξ`: the
 evidence names one session `s`, whose record is on the blobs as UTF-8 (`record`), and the parameters' public file is on
 the blobs (`pubB`); the verifier's sampling design derives (`law`) and the record names a population `n`; and the units the session
-proves (`provedUnits`) are the units `ξ` samples under `law` over `n` (`drawnFrom`), ascending. -/
+proves (`provedUnits`) are the units `ξ` samples under `law` over `n` (`sampledFrom`), ascending. -/
 theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (he : OneStageZk.evidenceOf b = .ok e) (hm : p.members = none)
@@ -215,7 +215,7 @@ theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : On
       bs.get s.record s!"session {s.name}'s record" = .ok B ∧ String.fromUTF8? B = some record ∧
       Draw.derive p.base.verifier.program p.base.verifier.query p.base.verifier.law p.base.verifier.workTable =
         .ok law ∧
-      nat? (getD c.record "population") = some n ∧ OneStage.drawnFrom p.base.verifier law n ξ = .ok (units, read) ∧
+      nat? (getD c.record "population") = some n ∧ OneStage.sampledFrom p.base.verifier law n ξ = .ok (units, read) ∧
       OneStageZk.provedUnits pubB record = .ok (units.qsort (· < ·)) := by
   replace h := (OneStageZk.checkBlobsAt_accept_one hm h).1
   unfold OneStageZk.checkOneAt at h
@@ -319,7 +319,7 @@ theorem unitsAt_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : One
       bs.get s.record s!"session {s.name}'s record" = .ok B ∧ String.fromUTF8? B = some record ∧
       Draw.derive p.base.verifier.program p.base.verifier.query p.base.verifier.law p.base.verifier.workTable =
         .ok law ∧
-      nat? (getD c.record "population") = some n ∧ OneStage.drawnFrom p.base.verifier law n ξ = .ok (units, read) ∧
+      nat? (getD c.record "population") = some n ∧ OneStage.sampledFrom p.base.verifier law n ξ = .ok (units, read) ∧
       ∀ (tags : Flock.Tags) (cc : Flock.Circuit) (pi : Flock.HmIn.Ports) (P : Flock.Public) (D : Json),
         Flock.HmIn.loadPublic tags cc pi pubB = .ok P → Flock.Witness.recordDraw record = some D →
           Units.unitsAt P.header D = some (units.qsort (· < ·)) := by
@@ -335,9 +335,9 @@ theorem bool_of_not_not {b : Bool} (h : ¬ (!b) = true) : b = true := by
 
 /-- The registration's checks against a public file pass only at the file's population: the last is the registration's
 `population` against the one the file names. -/
-theorem population_of_matchesPublic {rec s r d pop : Json}
-    (h : (Record.matchesPublic rec s r d pop).codes = #[]) : jeq pop (getD rec "population") = true := by
-  unfold Record.matchesPublic at h
+theorem population_of_matchesPublic {reg : Array (String × Json)} {rec s r d pop : Json}
+    (h : (Record.matchesPublicBy reg rec s r d pop).codes = #[]) : jeq pop (getD rec "population") = true := by
+  unfold Record.matchesPublicBy at h
   try dsimp only at h
   repeat' split at h
   all_goals first
@@ -427,6 +427,8 @@ theorem population_of_checkBlobsAt {p : OneStageZk.Params} {c : OneStage.Commitm
     obtain ⟨hd, hhd, hph⟩ := bind_ok hph
     rw [Units.headerOf_loadPublic hl] at hhd
     obtain rfl := Except.ok.inj hhd
+    try dsimp only at hph
+    obtain ⟨_, -, hph⟩ := bind_ok hph
     try dsimp only at hph
     split at hph
     · first

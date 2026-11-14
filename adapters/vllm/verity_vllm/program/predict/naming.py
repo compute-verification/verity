@@ -217,9 +217,9 @@ def _forward(w: _Walk, S: Any, C: Any, M: int, p0: int) -> None:
             w.call(lambda f: id(f) in attn, "attention", occ, hint, w.slots(views, r, True), hint=hint)
         linear(S.o, p + "self_attn.o_proj", qw, H)
         fused(p + "post_attention_layernorm")
-        linear(S.gate_up, p + "mlp.gate_up_proj", H, 2 * C.I)
-        w.rows(S.silu, "SiluMul", "silu_and_mul", p + "mlp.act_fn", M, [_view((M, C.I), bf)], ((0, "other"),))
-        linear(S.down, p + "mlp.down_proj", C.I, H)
+        linear(S.gate_up, p + "mlp.gate_up_proj", H, 2 * C.INTER)
+        w.rows(S.silu, "SiluMul", "silu_and_mul", p + "mlp.act_fn", M, [_view((M, C.INTER), bf)], ((0, "other"),))
+        linear(S.down, p + "mlp.down_proj", C.INTER, H)
     fused(f"{WRAPPER}model.norm")
 
 

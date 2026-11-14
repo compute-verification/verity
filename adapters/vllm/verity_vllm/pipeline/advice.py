@@ -67,7 +67,7 @@ from typing import Any
 
 import verity.protocols.accounting.certifier.verifier.advice as I1
 from verity.protocols.accounting.registration.verifier import registration as REG
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine import step_trace as ST
 

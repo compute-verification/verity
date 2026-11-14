@@ -76,7 +76,7 @@ theorem agreed_form (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F
     (tab : ℕ → String) (ℓ₁ ℓ₂ : String) (Good : Verity.Exchange → Prop) (L : CoinMap.Locate)
     (hL : L = SessionCoins.runLocate A (CoinMap.stageLocate ℓ₁ ℓ₂) tab) (q : ℕ) (hne : ℓ₁ ≠ ℓ₂)
     (hSecond : SecondShown C Good)
-    (hDraw : CoinMap.StageDraws (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind secondDraw) ℓ₂)
+    (hDraw : CoinMap.StageSamples (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind secondDraw) ℓ₂)
     (hsz : SessionCoins.HeldSize) (hlog : SessionCoins.InteriorLogged C Good)
     (hθ : ∀ o, FormAccepts C o → Good o → o.params = θ) (hRise : SessionCoins.LogRising A C Good tab)
     (hcov : SessionCoins.RecordsCover A C Good) (hmsgs : SessionCoins.MsgsOfRecords A C S Good tab)

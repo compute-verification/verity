@@ -214,7 +214,7 @@ theorem step_all {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} 
     (ha : r'.all = true) :
     r.all = true ∧ ∃ b record, bs.get s.record s!"session {s.name}'s record" = .ok b ∧
       String.fromUTF8? b = some record ∧
-      _root_.Spot.OneStageZk.drawFitsWhy _root_.Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none ∧
+      _root_.Spot.OneStageZk.sampleFitsWhy _root_.Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) = none ∧
       _root_.Spot.OneStageZk.verdictOf I scope ksFiles population r.coinKeys record (Flock.Witness.recordDraw record)
         (_root_.Spot.OneStageZk.setupAt I rd (Flock.Witness.recordDraw record))
         (_root_.Spot.OneStageZk.filesOf bs s (_root_.Spot.OneStageZk.setupAt I rd (Flock.Witness.recordDraw record)))
@@ -237,7 +237,7 @@ theorem step_all {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} 
       obtain ⟨units, -, h⟩ := bind_ok h
       obtain rfl := Except.ok.inj h
       refine ⟨ha, b, record, hb, hrec, ?_, hv⟩
-      cases hd : _root_.Spot.OneStageZk.drawFitsWhy _root_.Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) with
+      cases hd : _root_.Spot.OneStageZk.sampleFitsWhy _root_.Spot.OneStageZk.WORD (Flock.Witness.recordDraw record) with
       | none => rfl
       | some what =>
         rw [hd] at hfit

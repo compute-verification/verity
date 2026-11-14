@@ -25,7 +25,7 @@ work (`work_design`) sampling designs meet it.
 `round L B k` node is a round whose incorrect proof blocks `B` and sampling design `L` are fixed by the history before its
 coin, `coin` nodes are the session's other coins, and `stop acc` ends the session. `Play n N` has at
 most `N` rounds, and the prover may stop after any of them. `Drawn err` is the per-round drawn-unit
-bound, `Pr[D_t ∩ B_t ≠ ∅ ∧ round t passes] ≤ err_t`, which `audit_drawn` gives with
+bound, `Pr[D_t ∩ B_t ≠ ∅ ∧ round t passes] ≤ err_t`, which `audit_sampled` gives with
 `err_t = ε_ks,t + δ_link,t` (`HarmBudgetLife`).
 
 **The theorem** (`harm_budget`): for harms `h ≥ 0` and any `λ ≥ 0` with `λ h_u ≤ π_u`, in
@@ -438,7 +438,7 @@ theorem oneShot_laws {S : Law n → Prop} {L : Law n} (hS : S L) (B : Finset (Fi
     (oneShot L B).Laws S :=
   ⟨hS, fun _ => trivial⟩
 
-theorem oneShot_drawn (L : Law n) (B : Finset (Fin n)) : (oneShot L B).Drawn (fun _ => 0) := by
+theorem oneShot_sampled (L : Law n) (B : Finset (Fin n)) : (oneShot L B).Drawn (fun _ => 0) := by
   refine ⟨le_of_eq ?_, fun _ => trivial⟩
   refine Eq.trans ?_ (avg_const (C := L.Ω) (0 : ℝ≥0∞))
   refine congrArg avg (funext fun ω => ?_)

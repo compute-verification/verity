@@ -22,8 +22,8 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import Builder, bind
 from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import Array
-from verity.commitments.windows import interface as I
-from verity.commitments.windows import wiring as WI
+from verity.commitments.periods import interface as I
+from verity.commitments.periods import wiring as WI
 from verity.circuits.ops import gemm as GE
 from verity.definitions.registry import moe
 from verity.definitions.registry import tp_allreduce as TA

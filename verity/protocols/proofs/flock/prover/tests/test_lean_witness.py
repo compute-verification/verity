@@ -310,7 +310,7 @@ def f1_inner(f1_gate, once) -> dict[str, dict]:
         _f1_inner, g, g / "stage" / "pub-2.bin", "--record", str(g / "inner" / "s0" / "session" / "session.json")))
 
 
-def _f1_draw() -> dict:
+def _f1_sample() -> dict:
     """The verifier's sample of the gate's inner session (`rec_live.full_draw`, as `rec_reprice.py partition` writes it):
     the stratified sampling design at K = the population over its own population program and template query, every unit."""
     t = bind(G.GemmCoordinate, K=4096, **G.GEMM_HOPPER)
@@ -336,7 +336,7 @@ def f1(f1_gate, f1_inner, once):
 
     def inputs(d):
         (d / "inner.json").write_text(json.dumps(f1_inner["accepts_stmt"]["shape"]))
-        (d / "draw.json").write_text(json.dumps(_f1_draw()))
+        (d / "draw.json").write_text(json.dumps(_f1_sample()))
         tops = [g / "v" / p for p in F1_PARTS if not p.startswith("alg/")]
         (d / "rows.json").write_text(json.dumps(S.shared_rows([g / "v" / p for p in F1_PARTS if p.startswith("alg/")], (),
                                                               tops)))
@@ -413,11 +413,11 @@ def test_f1_the_session_is_accepted_as_the_verifiers_statement(f1, part):
 def test_f1_verify_accepts_the_session(built, f1_gate, f1, once, part):
     """`verity-verify-proof verify --zk`, the verifier, accepts level 3 (`rec-open/l16-h4`, 106 units, the smallest
     level) and RecCap (`rec-cap/n128`, `RecCoins.checkCap`) with the verifier's own V* inputs, the inner statement and
-    session its coefficients are checked against, the verifier's full sample of that session (`_f1_draw`), and the challenger's
+    session its coefficients are checked against, the verifier's full sample of that session (`_f1_sample`), and the challenger's
     live-coin part's inner transcript (`inner/s0/public.json`), whose link points, level-3 tops and `root_B` the unit is held to
     (`RecVStar.checkTopRows`, `RecCoins.checkLink`), as `85-rec-reprice.sh`'s STEP=lean runs it: through every check and
     every refusal the verdict runs last (the form's, a sample-less session's, a V* session's short of every unit,
-    `RecSetup.fullDraw`, and one over an inner session whose record holds no sample, `RecSetup.innerDrawn`), and not as a
+    `RecSetup.fullSample`, and one over an inner session whose record holds no sample, `RecSetup.innerSampled`), and not as a
     private circuit's. The checks above are the model's predicates; this is the shipped verdict, so a refusal added to it
     that an honest V* session meets fails here and nowhere else. About two minutes, beside the gate's witness runs."""
     g, d = f1_gate, f1["inputs"]

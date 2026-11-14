@@ -18,7 +18,7 @@ from verity.circuits.evaluation import reference as REF
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Concat, Explicit, Strided
 from verity.circuits.types import axis_runs
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity.definitions.registry import dead_free as DF
 from verity.protocols.proofs.spot.verifier import second_stage as SS
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P

@@ -92,8 +92,8 @@ theorem sched_slot_at {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx 
     rw [hz, Except.ok.injEq, Prod.mk.injEq] at e
     exact e.1.symm
   have hcn : (_root_.Flock.ZkServer.Finish.flat tr.cm0.cap).size < 2 ^ 64 := by
-    obtain ⟨s, tp, hs', -⟩ := Count.ofDraws_gsize hl
-    obtain ⟨-, -, ⟨s1, hs1, hlv⟩, -⟩ := _root_.Flock.ZkServer.Level0.ofDraws_ok hl
+    obtain ⟨s, tp, hs', -⟩ := Count.ofSamples_gsize hl
+    obtain ⟨-, -, ⟨s1, hs1, hlv⟩, -⟩ := _root_.Flock.ZkServer.Level0.ofSamples_ok hl
     rw [hs'] at hs1
     obtain ⟨rfl, -⟩ := Prod.mk.inj (Except.ok.inj hs1)
     have hd : 64 * 2 ^ l.lv.d < 2 ^ 64 := by

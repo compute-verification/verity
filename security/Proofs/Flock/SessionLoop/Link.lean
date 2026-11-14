@@ -36,10 +36,10 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The link at the session loop's own level 0
 
-The loop's `Commit` carries each table's level-0 root that `Level0.ofDraws` drew for the session (`Session.relay`'s
+The loop's `Commit` carries each table's level-0 root that `Level0.ofSamples` drew for the session (`Session.relay`'s
 `commitFrame` of `Level0.ofSession`'s roots). Here that link is held to `LeanRelease.LinkIs` at the deployed tables:
 
-* `Loop.level0Of_root`: a sampled level 0's root is `Link.root` of its own inputs (`Level0.ofDraws_ok`).
+* `Loop.level0Of_root`: a sampled level 0's root is `Link.root` of its own inputs (`Level0.ofSamples_ok`).
 * **`LeanRelease.linkIs_ofLoop`**: at a `Live` statement, where the release's link is the loop's (`Loop.linkOf src`,
   `Statement`) and `src` samples the tape's level 0 (`Loop.LinkLevel0`), the ZK server's link is `linkMsg` (`LinkIs`), so
   `LinkRoundEq` holds (`linkRoundEq_ofLoop`, by `linkRoundEq_of_linkIs`).
@@ -58,7 +58,7 @@ open _root_.Flock (V F128 Stmt)
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
 
-/-- A sampled level 0's root is `Link.root` of its own inputs (`Level0.ofDraws_ok`). -/
+/-- A sampled level 0's root is `Link.root` of its own inputs (`Level0.ofSamples_ok`). -/
 theorem Loop.level0Of_root {R : Type} {src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray)}
     {x : Msg} {w : Flock.Wit} {ρ : R} {sts : Array Stmt} {j : ℕ} {l : _root_.Flock.ZkServer.Level0.Level0}
     (h : Loop.level0Of src x w ρ sts j = .ok l) : l.root = _root_.Flock.ZkServer.Link.root l.toIn := by
@@ -66,7 +66,7 @@ theorem Loop.level0Of_root {R : Type} {src : Msg → Flock.Wit → R → ℕ →
   rcases hs : src x w ρ (2 * j) with e | ⟨g, d, hi⟩
   · rw [hs] at h; cases h
   · rw [hs] at h
-    exact (_root_.Flock.ZkServer.Level0.ofDraws_ok h).2.2.2.2.2
+    exact (_root_.Flock.ZkServer.Level0.ofSamples_ok h).2.2.2.2.2
 
 /-- The link's level 0 is rep stream `2j`'s (`Loop.level0At`). -/
 theorem Loop.level0Of_eq_level0At {R : Type}

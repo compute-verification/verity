@@ -55,10 +55,10 @@ conflict is `F0`'s:
   `t ≥ 0` on the tapes with `𝔼 t ≤ k(x)·Pr[BAbort] + W(x)·(Pr[FC] + 1/(M+1))`, such that every table of `Ok` columns
   that does not extract leaves a run accepting as it aborts at most `ε_table + t(ω)` more often than accepting so and
   opening a position off the table.
-* **One wait over samples, linearly** (`oneWaitD_lin`): `joint_acc_le_lin` at `drawGame`, as `oneWaitD` is
+* **One wait over samples, linearly** (`oneWaitD_lin`): `joint_acc_le_lin` at `sampleGame`, as `oneWaitD` is
   `joint_acc_le`, and level 0's conflict among the `k + 1` accepted runs as the conflict finder's success
   (`conflict_succ_ge`, `(k+1)/(R+1)` at every `R`).
-* **The conflict finder is `F0`** (`expect_conflictG_drawGame`, `Ex_conflictSucc_le_PrF0`): at `drawGame` its runs are
+* **The conflict finder is `F0`** (`expect_conflictG_sampleGame`, `Ex_conflictSucc_le_PrF0`): at `sampleGame` its runs are
   `F0`'s coins, a wait's first accepted run is `F0`'s pick (`find?_finRange_map`), and two accepted runs that open a
   position to two columns collide in their calls (`ConflictTied`), which `F0`'s `findColl` finds.
 * **KS** (`KSFlockLin_of_tableBoundAbortLin`): `PrBadAbort_trunc` with `a = ε_table + t + Pr[conflict finder] +
@@ -76,7 +76,7 @@ open Claims Claims.Flock FlockSoundness FlockSoundness.Game FlockSoundness.Extra
 
 /-! ## Samples as runs of games -/
 
-section DrawRuns
+section SampleRuns
 
 variable {Dr : Type} [Fintype Dr] [Nonempty Dr]
 
@@ -95,21 +95,21 @@ theorem expectN_of_expect {α U : Type} [Fintype U] [Nonempty U] (g : Game α) (
     refine congrArg Ex (funext fun r => ?_)
     simp [List.finRange_succ, List.map_cons, List.map_map, Function.comp_def]
 
-/-- **`R` runs of `drawGame`** are `R` independent samples. -/
-theorem expect_runsG_drawGame (R : ℕ) (f : List Dr → ℝ) :
-    expect f (runsG (drawGame Dr) R) (runsStrat (drawGame Dr) (drawS Dr) R) =
+/-- **`R` runs of `sampleGame`** are `R` independent samples. -/
+theorem expect_runsG_sampleGame (R : ℕ) (f : List Dr → ℝ) :
+    expect f (runsG (sampleGame Dr) R) (runsStrat (sampleGame Dr) (drawS Dr) R) =
       Ex fun u : Fin R → Dr => f ((List.finRange R).map u) := by
-  rw [expect_runsG, expectN_drawGame]
+  rw [expect_runsG, expectN_sampleGame]
 
-/-- **The conflict finder at `drawGame`**: a sample, and `k` waits of `R` samples each, all independent. -/
-theorem expect_conflictG_drawGame (R k : ℕ) (F : Dr × List (List Dr) → ℝ) :
-    expect F (conflictG (drawGame Dr) R k) (conflictStrat (drawGame Dr) (drawS Dr) R k) =
+/-- **The conflict finder at `sampleGame`**: a sample, and `k` waits of `R` samples each, all independent. -/
+theorem expect_conflictG_sampleGame (R k : ℕ) (F : Dr × List (List Dr) → ℝ) :
+    expect F (conflictG (sampleGame Dr) R k) (conflictStrat (sampleGame Dr) (drawS Dr) R k) =
       Ex fun s : Dr × (Fin k → Fin R → Dr) =>
         F (s.1, (List.finRange k).map fun i => (List.finRange R).map (s.2 i)) := by
-  rw [expect_conflictG, expect_drawGame, Claims.Bridge.Ex_prod]
+  rw [expect_conflictG, expect_sampleGame, Claims.Bridge.Ex_prod]
   refine congrArg Ex (funext fun a => ?_)
   exact expectN_of_expect _ _ (fun u : Fin R → Dr => (List.finRange R).map u)
-    (fun f => expect_runsG_drawGame R f) k _
+    (fun f => expect_runsG_sampleGame R f) k _
 
 omit [Fintype Dr] [Nonempty Dr] in
 open Classical in
@@ -150,7 +150,7 @@ theorem mem_of_firsts (acc : Dr → Prop) : ∀ (bl : List (List Dr)) (bs : List
         · obtain ⟨l', hl', hf⟩ := mem_of_firsts acc bl cs hr b hb'
           exact ⟨l', List.mem_cons_of_mem _ hl', hf⟩
 
-end DrawRuns
+end SampleRuns
 
 /-! ## One wait over samples, linearly -/
 
@@ -207,14 +207,14 @@ theorem oneWaitD_lin (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (
     (k : ℕ) (hk : 1 ≤ k) (R : ℕ) :
     accPrD tr * (accFailD tr k (Extracts D x) / accPrD tr ^ k) ≤
       εc + N x * accPrD tr / (Real.exp 1 * k) +
-        (expect (ind (ConflictSucc (AccD tr) (opD D N x tr))) (conflictG (drawGame Dr) R k)
-          (conflictStrat (drawGame Dr) (drawS Dr) R k) + (k + 1) / ((R : ℝ) + 1)) := by
+        (expect (ind (ConflictSucc (AccD tr) (opD D N x tr))) (conflictG (sampleGame Dr) R k)
+          (conflictStrat (sampleGame Dr) (drawS Dr) R k) + (k + 1) / ((R : ℝ) + 1)) := by
   classical
   set Xt : List Dr → Prop := fun bs =>
     (∀ b ∈ bs, AccD tr b) → Extracts D x (bs.map fun d => (tr d).seen) with hXt
-  have hXb : ∀ bs, ¬ Xt bs → expect (ind (AccD tr)) (drawGame Dr) (drawS Dr) ≤
+  have hXb : ∀ bs, ¬ Xt bs → expect (ind (AccD tr)) (sampleGame Dr) (drawS Dr) ≤
       εc + expect (ind fun d => AccD tr d ∧
-        ∃ p, Off (opD D N x tr) (firstTable (opD D N x tr) (fun _ => 0) bs) d p) (drawGame Dr) (drawS Dr) := by
+        ∃ p, Off (opD D N x tr) (firstTable (opD D N x tr) (fun _ => 0) bs) d p) (sampleGame Dr) (drawS Dr) := by
     intro bs hnX
     simp only [hXt, Classical.not_imp] at hnX
     obtain ⟨hall, hnot⟩ := hnX
@@ -234,7 +234,7 @@ theorem oneWaitD_lin (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (
         rw [List.flatMap_map] at hl
         obtain ⟨b, hb', hu⟩ := lookCol_flatMap_some (fun d => D.cols (tr d).seen 0) p.val u bs hl
         exact hok b p.val u (hall b hb') p.isLt hu
-    rw [← accPrD_eq, expect_drawGame, ← Claims.Bridge.Pr_eq_Ex]
+    rw [← accPrD_eq, expect_sampleGame, ← Claims.Bridge.Pr_eq_Ex]
     refine (hb _ hOk hgood).trans (le_of_eq ?_)
     congr 1
     refine Pr_congr fun d => ?_
@@ -248,11 +248,11 @@ theorem oneWaitD_lin (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (
       rw [ite_eq_left ha] at h1 h2
       obtain ⟨u, hu⟩ := Option.isSome_iff_exists.1 h1
       exact ⟨ha, p, u, hu, fun h => h2 (by rw [hu, h])⟩
-  have hj := joint_acc_le_lin (opD D N x tr) (fun _ => 0) (drawGame Dr) (drawS Dr) (AccD tr) Xt εc hεc hXb k hk
-  have hc := conflict_succ_ge' (drawGame Dr) (drawS Dr) (AccD tr) (opD D N x tr) R k
+  have hj := joint_acc_le_lin (opD D N x tr) (fun _ => 0) (sampleGame Dr) (drawS Dr) (AccD tr) Xt εc hεc hXb k hk
+  have hc := conflict_succ_ge' (sampleGame Dr) (drawS Dr) (AccD tr) (opD D N x tr) R k
   have hlhs : accPrD tr * (accFailD tr k (Extracts D x) / accPrD tr ^ k) =
-      expect (ind (AccD tr)) (drawGame Dr) (drawS Dr) *
-        expectAcc (drawGame Dr) (drawS Dr) (AccD tr) k (ind fun bs => ¬ Xt bs) := by
+      expect (ind (AccD tr)) (sampleGame Dr) (drawS Dr) *
+        expectAcc (sampleGame Dr) (drawS Dr) (AccD tr) k (ind fun bs => ¬ Xt bs) := by
     rw [oneWaitD_lhs_eq]
     congr 1
     unfold expectAcc
@@ -304,10 +304,10 @@ theorem Ex_conflictSucc_le_PrF0 (H : Msg → Msg) (D : Flock.Deploy Coin Col T) 
     (P : Prover Ω) (keep : Ω → (Fin (D.V.k x) → Coin) → A → Bool) (k R : ℕ) :
     (Ex fun ω => expect (ind (ConflictSucc (AccD (abortRun H P D.V x keep ω))
         (opD D N x (abortRun H P D.V x keep ω))))
-      (conflictG (drawGame ((Fin (D.V.k x) → Coin) × A)) R k)
-      (conflictStrat (drawGame ((Fin (D.V.k x) → Coin) × A)) (drawS _) R k)) ≤
+      (conflictG (sampleGame ((Fin (D.V.k x) → Coin) × A)) R k)
+      (conflictStrat (sampleGame ((Fin (D.V.k x) → Coin) × A)) (drawS _) R k)) ≤
       PrF0 H D.V P x keep k R := by
-  simp only [expect_conflictG_drawGame]
+  simp only [expect_conflictG_sampleGame]
   unfold PrF0 Finder.Pr
   rw [Claims.Bridge.Pr_eq_Ex]
   refine le_of_le_of_eq ?_ (Claims.Bridge.Ex_prod (α := Ω)
@@ -430,8 +430,8 @@ theorem KSFlockLin_of_tableBoundAbortLin (H : Msg → Msg) (D : Flock.Deploy Coi
   obtain ⟨t, ht0, hEt, hb⟩ := htab x Ω P A keep M
   set cs : Ω → ℝ := fun ω => expect (ind (ConflictSucc (AccD (abortRun H P D.V x keep ω))
       (opD D N x (abortRun H P D.V x keep ω))))
-    (conflictG (drawGame ((Fin (D.V.k x) → Coin) × A)) R (D.k x))
-    (conflictStrat (drawGame ((Fin (D.V.k x) → Coin) × A)) (drawS _) R (D.k x)) with hcs
+    (conflictG (sampleGame ((Fin (D.V.k x) → Coin) × A)) R (D.k x))
+    (conflictStrat (sampleGame ((Fin (D.V.k x) → Coin) × A)) (drawS _) R (D.k x)) with hcs
   have hcs0 : ∀ ω, 0 ≤ cs ω := fun ω => expect_nonneg (ind_nonneg _) _ _
   set a : Ω → ℝ := fun ω => D.εtable x + t ω + cs ω + ((D.k x : ℝ) + 1) / ((R : ℝ) + 1) with ha
   have ha0 : ∀ ω, 0 ≤ a ω := fun ω => by

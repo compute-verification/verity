@@ -38,7 +38,7 @@ it is sampled into (`sitesPHJI`, `tabPHJ`) and bound to the rows it commits, out
 
 Each is `PlainJ.plain_session_soundJ` with the hidden-output tables and rows in place of the public ones
 (`Prog.flock_headline_live_tables_subset_missX`). The tags, the record and the samples are `TagsOkZHJ` (hidden outputs,
-retained rounds, `hm96-sha512/v1` leaves), `DecodeZLJ.RecordsLiveJ` and `DrawOkPHJ`, the challenger's live-coin part's sample setting each
+retained rounds, `hm96-sha512/v1` leaves), `DecodeZLJ.RecordsLiveJ` and `SampleOkPHJ`, the challenger's live-coin part's sample setting each
 table up with setupHidden at its part.
 
 The assumptions are `flock_headline_exec`'s: A3 (`hA3`), `cr/sha-512` for the knowledge finders (`hKS`) and
@@ -63,7 +63,7 @@ outputs: at the unit's key program. -/
 theorem plain_session_soundHJ
     (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (x₀ : DrawSetupH (inputsPJ I 0) mPts S₀ d₀)
+    (x₀ : SampleSetupH (inputsPJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPHJ (Reg := Reg) dj x₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the session's circuit and public file, and the circuit condition
@@ -73,7 +73,7 @@ theorem plain_session_soundHJ
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, DrawOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
+    (hDraw : ∀ ω, SampleOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
     -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZHJ I) (hRec : RecordsLiveJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr)
     -- the count curve's parameters
@@ -122,7 +122,7 @@ theorem plain_session_soundHJ
 theorem plain_session_soundHJI
     (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (x₀ : DrawSetupH (inputsPJ I 0) mPts S₀ d₀)
+    (x₀ : SampleSetupH (inputsPJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planPHJ (Reg := Reg) dj x₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the session's circuit and public file, and the circuit conditions
@@ -133,7 +133,7 @@ theorem plain_session_soundHJI
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, DrawOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
+    (hDraw : ∀ ω, SampleOkPHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
     -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZHJ I) (hRec : RecordsLiveJ I dj (fun S R => (planPHJ (Reg := Reg) dj x₀ S R).length) wr)
     -- the count curve's parameters

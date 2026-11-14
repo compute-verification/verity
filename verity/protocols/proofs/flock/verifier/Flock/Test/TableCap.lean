@@ -65,8 +65,8 @@ def progSha : String :=
 #guard ProvedScope.programWhyP (bound none) (some prog) ==
   some "refused: a circuit whose META binds no program_sha512 under --plain-tables: the verifier cannot hold its program to the circuit"
 
-def subsetD : Draw.UnitDraw := { law := .subset 2, population := 8, units := #[1, 6] }
-def stratD : Draw.UnitDraw := { law := .stratified 2 #[], population := 8, units := #[1, 6] }
+def subsetD : Draw.UnitSample := { law := .subset 2, population := 8, units := #[1, 6] }
+def stratD : Draw.UnitSample := { law := .stratified 2 #[], population := 8, units := #[1, 6] }
 
 #guard ProvedScope.lawWhy false Tags.circuit967b8d06 true subsetD == none
 #guard ProvedScope.lawWhy false Tags.circuit967b8d06 true stratD == some "a stratified draw under --plain-tables"

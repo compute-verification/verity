@@ -15,7 +15,7 @@ and the verifier checks only the reads of the units it samples. So:
 
 * `rowIn S`: a commit string that is a row of a unit of `S`; `ReadsX.restrict`: the reads at the positions `A` keeps;
 * `ReadsX.prob_offOn_le`: `prob_off_le` with the reads, the registration and the paths read off the outcome;
-* `prob_auditLive_draw`: an event of the live audit's sample alone has the sampling design's probability (implications at every
+* `prob_auditLive_sample`: an event of the live audit's sample alone has the sampling design's probability (implications at every
   outcome of the session bound probabilities: `prob_auditLive_liveOfZJ_mono`, `Proofs.Flock.Recursive.Flock`);
 * `reg_cast`: a strategy's registration survives a cast along an equation of sessions.
 -/
@@ -93,7 +93,7 @@ open Game Audit Exec Refine
 open scoped ENNReal
 
 /-- **An event of the live audit's sample alone has the sampling design's probability.** -/
-theorem prob_auditLive_draw {n : ℕ} {L : Law n} {Reg : Type} (live : Finset (Fin n) → Reg → Game Exec.Transcript)
+theorem prob_auditLive_sample {n : ℕ} {L : Law n} {Reg : Type} (live : Finset (Fin n) → Reg → Game Exec.Transcript)
     (τ : Strategy (auditLive L Reg live)) (Q : Finset (Fin n) → Prop) :
     prob (fun o => Q o.2.1) (auditLive L Reg live) τ = prCoin fun ω => Q (L.draw ω) := by
   show avg (fun ω => prob (fun o => Q o.2.1) ((live (L.draw ω) τ.1).map fun t => (τ.1, L.draw ω, t)) (τ.2 ω)) = _

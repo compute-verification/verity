@@ -34,13 +34,13 @@ private theorem ite_ite_none {c₁ c₂ : Bool} {s₁ s₂ : String}
 many whole challenger coins as those bytes reach. -/
 theorem coinsReason_read {v : Registration.Verifier} {law rec_ draw : Json} {src : ByteArray}
     (h : OneStage.coinsReason v law rec_ draw src = none) :
-    ∃ n units read, nat? (getD rec_ "population") = some n ∧ OneStage.drawnFrom v law n src = .ok (units, read) ∧
+    ∃ n units read, nat? (getD rec_ "population") = some n ∧ OneStage.sampledFrom v law n src = .ok (units, read) ∧
       (read + Challenger.COIN_BYTES - 1) / Challenger.COIN_BYTES = src.size / Challenger.COIN_BYTES := by
   unfold OneStage.coinsReason at h
   cases hn : nat? (getD rec_ "population") with
   | none => simp [hn] at h
   | some n =>
-    cases hdf : OneStage.drawnFrom v law n src with
+    cases hdf : OneStage.sampledFrom v law n src with
     | error why => simp [hn, hdf] at h
     | ok ur =>
       obtain ⟨units, read⟩ := ur
@@ -53,7 +53,7 @@ theorem secondCheck_read {v : Registration.Verifier} {delta : Core.Ratio} {c : O
     {ξ : ByteArray} {e : OneStage.Evidence} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : secondCheck v delta c law ξ e = .accept pub prof) :
     ∃ n units read, nat? (getD c.record "population") = some n ∧
-      OneStage.drawnFrom { v with law := subsetDesign n } law n ξ = .ok (units, read) ∧
+      OneStage.sampledFrom { v with law := subsetDesign n } law n ξ = .ok (units, read) ∧
       (read + Challenger.COIN_BYTES - 1) / Challenger.COIN_BYTES = ξ.size / Challenger.COIN_BYTES := by
   unfold secondCheck at h
   cases hm : nat? (getD c.record "population") with
@@ -78,7 +78,7 @@ theorem second_read {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : B
     (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
     ∃ c₂ ξ₂ run law n units read, OneStageZk.coinsOf p.audit c₂ e.interior = .ok ξ₂ ∧ secondDesignOf p run = .ok law ∧
       nat? (getD c₂.record "population") = some n ∧
-      OneStage.drawnFrom { p.audit.base.verifier with law := subsetDesign n } law n ξ₂ = .ok (units, read) ∧
+      OneStage.sampledFrom { p.audit.base.verifier with law := subsetDesign n } law n ξ₂ = .ok (units, read) ∧
       (read + Challenger.COIN_BYTES - 1) / Challenger.COIN_BYTES = ξ₂.size / Challenger.COIN_BYTES := by
   obtain ⟨-, c₂, ξ₂, r, i, run, hi, -, -, -, -, law, hl, htwo⟩ := accepted_steps h
   obtain ⟨-, hξ, -⟩ := inputAt_ok hi

@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.KS.PlainClashL
-public import Proofs.Flock.Claims.KS.PlainDrawSim
+public import Proofs.Flock.Claims.KS.PlainSampleSim
 public import Proofs.Flock.Claims.KS.PlainSlackFit
 public import Proofs.Flock.Claims.KS.PlainStep
 import Mathlib.Algebra.Order.Floor.Extended

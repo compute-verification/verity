@@ -31,8 +31,8 @@ The same bound shape and assumptions as `zk_session_sound`, with two changes tha
 * the sampling design is the live subset sample `Law.execOS src (.subset kd) n`, the one verity-verify-proof takes at more than one table
   (`accepts_tables`; at one table it takes either), so `miss(K)` is the uniform `kd`-subset's, `C(n − K, kd) / C(n, kd)`
   at `K ≤ n` (`Law.subset_miss`), under A3 at its one byte source;
-* the tags, the record and the samples are `TagsOk`, `RecordsLiveZK` and `DrawOkZK` at `J` tables (`TagsOkZJ`,
-  `RecordsLiveZKJ`, `DrawOkZKJ`): `TagsOk` without `count ≤ 1`, the record giving each table's `root_B` and rep streams,
+* the tags, the record and the samples are `TagsOk`, `RecordsLiveZK` and `SampleOkZK` at `J` tables (`TagsOkZJ`,
+  `RecordsLiveZKJ`, `SampleOkZKJ`): `TagsOk` without `count ≤ 1`, the record giving each table's `root_B` and rep streams,
   and the challenger's live-coin part's sample setting each table up at its part.
 
 `ε_ks` (`ksAvgStrictZ`) is the worst table's knowledge error averaged over the sampling design's samples, and `δ_link` reads the plan
@@ -53,7 +53,7 @@ variable {mPts n : ℕ} {Reg : Type}
 theorem zk_session_soundJ
     (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the session's circuit and public file
@@ -64,7 +64,7 @@ theorem zk_session_soundJ
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, DrawOkZKJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
+    (hDraw : ∀ ω, SampleOkZKJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
     -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZJ (Reg := Reg) dj y₀ S R).length) wr)
     -- the count curve's parameters
