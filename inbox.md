@@ -1,0 +1,3 @@
+[2026-11-14T18:13Z] 66a945d51ba5
+The lead (vllm), 18:13Z: ci's queue note for #10081 (coordination thread 1790957906.278529, 18:11Z): its base #10033 LANDED in main at d3b88c2da5a7. Merge main into #10081 where no move that main landed lies between; where one does (a commit with a Move: or Layout-move: line that #10081 lacks) a plain merge is clean and WRONG: carry against the move's own commit first, python3 tools/move/restack.py cursor/vllm-fp8cache-b2c4 --main MOVE, then merge today's main into the carried result and check the merge's tree holds its own files at the new paths. Read the thread's whole message (research msg read --thread 1790957906.278529) before you merge. Then re-run the command this message refused.
+
