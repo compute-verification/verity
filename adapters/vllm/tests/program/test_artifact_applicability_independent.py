@@ -20,7 +20,7 @@ Run (pod, venv with the pinned vLLM, SmolLM2 snapshot under $HF_HOME):
       python -m pytest tests/program/test_artifact_applicability_independent.py -q -rA
 Env: CBTEST_OUT (build outputs; default a tmp dir), CBTEST_REUSE=1 (reuse finished builds under CBTEST_OUT), CBTEST_JOBS (parallel
 builds, default 6), CBTEST_GPU_HOST=1 (also run the GPU-visible host-mismatch build), CBTEST_SKIP_BUILDS=1 (static tests only).
-The reference hosts' recorded manifests are `test_artifact_applicability_independent_of_record`.
+The reference hosts' recorded manifests (`R9_REFERENCE_MANIFESTS`) are read only where a checkout holds them.
 """
 
 from __future__ import annotations
@@ -300,13 +300,13 @@ class Harness:
     def _load(self, b: Build) -> None:
         for attr, fn in (("result", "result.json"), ("manifest", "construction_manifest.json")):
             try:
-                setattr(b, attr, json.load(open(b.out / fn)))
+                setattr(b, attr, json.loads((b.out / fn).read_text()))
             except Exception:  # noqa: BLE001
                 setattr(b, attr, {})
         if b.rc == -1:  # reused build: recover rc / mutations / log from the files the first run left behind
             b.rc = 0 if b.result.get("ok") else 1
             try:
-                b.mutations = json.load(open(self.work / b.name / "mutations.json"))
+                b.mutations = json.loads((self.work / b.name / "mutations.json").read_text())
                 b.log = (self.work / b.name / "build.log").read_text()
             except Exception:  # noqa: BLE001
                 pass
@@ -541,7 +541,7 @@ def test_v_program_digest_unchanged_by_the_patch(builds):
     refs = []
     for p in R9_REFERENCE_MANIFESTS:
         if p.exists():
-            d = (json.load(open(p)).get("program") or {}).get("digest")
+            d = (json.loads(p.read_text()).get("program") or {}).get("digest")
             refs.append((str(p.relative_to(REPO)), d))
             assert d == b.digest, f"reference host manifest {p} has digest {d} != {b.digest}"
     print(f"\n[cb-test] digest {b.digest} == {len(refs)} reference host manifests: {refs}")
@@ -694,7 +694,7 @@ def test_iii_two_hosts_same_profile_same_identity(builds):
     # the baseline hosts (one with a GPU, one without) built the same Program; their pre-fix manifests carry only the digest
     for p in R9_REFERENCE_MANIFESTS:
         if p.exists():
-            assert (json.load(open(p)).get("program") or {}).get("digest") == a.digest
+            assert (json.loads(p.read_text()).get("program") or {}).get("digest") == a.digest
 
 
 @needs_builder
@@ -1158,7 +1158,7 @@ def test_gpu_visible_construction_equals_the_baseline_hosts(builds):
         pytest.skip("baseline reference manifests not in this checkout")
     unrecorded = None
     for p in refs:
-        m = json.load(open(p))
+        m = json.loads(p.read_text())
         assert (m.get("program") or {}).get("digest") == gpu.digest, (str(p), (m.get("program") or {}).get("digest"))
         rec = _r9_recorded_applicability(m)
         assert rec.get("vllm_flash_attn_version") and rec.get("torch_version"), f"{p}: recorded facts too thin: {rec}"

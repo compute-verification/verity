@@ -23,7 +23,7 @@ uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/
 
 { (cd verity/protocols/proofs/flock/verifier && lake build flock-verify flock-firewall) \
     && (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier sampled-proofs-difftest) \
-    && (cd verity/protocols/proofs/recursion/verifier/recursive && lake build sampled-two sampled-two-on); } > "$O/build-lean.log" 2>&1 &
+    && (cd verity/protocols/proofs/spot_flock/verifier/lean && lake build sampled-two sampled-two-on); } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
 RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
@@ -31,7 +31,7 @@ RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/protocol
 BIN=$W/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
 LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify
-FORM_BIN=$REPO/verity/protocols/proofs/recursion/verifier/recursive/.lake/build/bin
+FORM_BIN=$REPO/verity/protocols/proofs/spot_flock/verifier/lean/.lake/build/bin
 sha256sum "$BIN" "$LEAN" "$FORM_BIN/sampled-two" "$FORM_BIN/sampled-two-on" | tee "$O/binaries.sha256"
 
 kept=0; n=0

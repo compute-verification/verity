@@ -1,4 +1,4 @@
-"""The pouw settings of H1's static window and of the auditor host's challenger (`pouw.Settings`): their parsing (`of`),
+"""The pouw settings of H1's static window and of the auditor device's challenger (`pouw.Settings`): their parsing (`of`),
 the refusals of a scheme that sets them wrongly (`refusals`), and the ones `verity_vllm.LLM` takes from its built engine
 (`fills`, `from_engine`)."""
 from __future__ import annotations
@@ -18,7 +18,7 @@ from verity_vllm.protocols.pouw.h1 import challenger as PHC
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 from verity_vllm.protocols.pouw.h1 import window as PHW
 
-#: The schemes whose coins the auditor host's challenger can sample (the setting ``challenger``): H1's salt and rounds,
+#: The schemes whose coins the auditor device's challenger can sample (the setting ``challenger``): H1's salt and rounds,
 #: ncp-v2's and Pearl-C's salt
 CHALLENGED = (PH.SCHEME, "ncp-v2", *PPD.SCHEMES)
 #: The challenged schemes whose install opens the session the gate reserved itself (``session`` the gate's reserve
@@ -131,7 +131,7 @@ def refusals(scheme: str, settings: Any, stage: str, filled: tuple[str, ...] = (
     if scheme == PH.SCHEME and stage != "capture" and (not runner or (not rounds and settings.challenger is None)):
         out.append(f"{scheme}: each admitted request's entry goes under the root of the round that admits it, before "
                    "that round's coin: the pouw settings 'runner' (the engine's model runner, where its scheduler's "
-                   "admissions arrive) and 'challenger' (the auditor host's, HOST:PORT) or, in tests, 'rounds' (the "
+                   "admissions arrive) and 'challenger' (the auditor device's, HOST:PORT) or, in tests, 'rounds' (the "
                    "window's round coins, a LiveRecord)")
     elif scheme != PH.SCHEME:
         if settings.runner is not None and scheme not in PPD.SCHEMES:

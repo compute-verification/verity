@@ -117,7 +117,7 @@
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
   "PouwCheck.Period": {
-   "imports": ["CoreProtocol.Cli", "PouwCheck.Credit"],
+   "imports": ["CoreProtocol.Account", "CoreProtocol.Cli", "PouwCheck.Credit"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   }

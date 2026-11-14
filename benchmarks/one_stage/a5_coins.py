@@ -2,7 +2,7 @@
 of record, from whose coins each rank's registration samples once (`spot.coins.ChallengerCoins` over a
 `remote.RemoteChallenger`), and the evidence its verifier checks every sample's coins against once the session has ended.
 
-* **The session.** ``local``: a development session on this machine, run by the auditor host's own service
+* **The session.** ``local``: a development session on this machine, run by the auditor device's own service
   (`verity/protocols/compose/device/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an
   LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what the challenger host
   writes, and its key is this run's alone (or, where its caller keeps the host's root, `start`'s ``host``, that of every
@@ -67,7 +67,7 @@ import tempfile
 import threading
 import time
 from collections.abc import Callable, Mapping
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from multiprocessing import get_context
 from multiprocessing.managers import BaseManager
 from pathlib import Path
@@ -621,7 +621,7 @@ def opened_reason(got: dict, withhold: bool) -> str | None:
 
 
 class Local:
-    """A development session on this machine (module docstring), its auditor host's root in scratch `root`, pinned on the
+    """A development session on this machine (module docstring), its auditor device's root in scratch `root`, pinned on the
     verifier's copy of main's first-parent line `main`, its key at `params` (W, H), made in `workers` processes. A
     `root` that holds a host already is reopened: its key, with the leaves it has signed at, its ledger and its pins
     log are kept, so a session opened on it is the same challenger's as the ones before it, under the same key (`key`)."""
@@ -638,7 +638,7 @@ class Local:
         pins = lines(self.host.pins) if self.host.pins.exists() else []
         if not pins or json.loads(pins[-1]).get("commit") != self.pin:  # the pins log only grows, as the host's does
             with open(self.host.pins, "a", encoding="utf-8") as log:
-                log.write(A.pin_line(self.pin, main[0] if main else self.pin, A.utc(datetime.now(timezone.utc))) + "\n")
+                log.write(A.pin_line(self.pin, main[0] if main else self.pin, A.utc(datetime.now(UTC))) + "\n")
         self.params = lms.Params(64, *params)
         self.signer = A.key_signer(self.host, self.params, workers=workers)
         self.key = Ch.ChallengerKey(self.params.W, self.params.H, (self.host.key / "public").read_bytes())
@@ -651,14 +651,14 @@ class Local:
         argv = A.serve_argv(host, session, body)
         argv[argv.index("--port") + 1] = "0"
         argv += ["--params", f"{self.params.W},{self.params.H}", "--keygen-workers", "1"]
-        A.run(host, session, signer=self.signer, pinned=self.pin, now=lambda: datetime.now(timezone.utc), argv=argv)
+        A.run(host, session, signer=self.signer, pinned=self.pin, now=lambda: datetime.now(UTC), argv=argv)
 
     def open(self, root: str, layout: list, minutes: int = MINUTES, scheme: str = SCHEME,
              withhold: bool = False) -> tuple[str, str, str | None]:
         """Reserve and open the session on `root` with the coins `layout` of `scheme`, as the gate does, a withheld one
         when `withhold`: (address, secret, commitment), the commitment None on a withheld session (the gate holds its
         root until the session's end)."""
-        A, host, now = self.A, self.host, datetime.now(timezone.utc)
+        A, host, now = self.A, self.host, datetime.now(UTC)
         hooks = dict(by=self.by, now=now, own=lambda p: None, token=secrets.token_hex(2),
                      reserve=lambda s: A.reserve(host, s, signer=self.signer, pinned=self.pin, now=now))
         rc, out = A.gate(["reserve", "--peer", LOCAL_PEER, "--scheme", scheme, "--families", json.dumps(layout),
