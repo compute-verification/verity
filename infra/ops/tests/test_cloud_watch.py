@@ -163,9 +163,9 @@ R2_ENV = {"R2_BUCKET": "dummy-bucket", "R2_ENDPOINT": "https://dummy.r2.example"
           "AWS_SECRET_ACCESS_KEY": "dummy"}
 
 
-def r2_pass(tmp_path, state, now, bucket, page_cap=2):
+def r2_pass(tmp_path, state, now, bucket, pages=2):
     cfg = config(tmp_path)
-    cfg["r2"] = {**cfg["r2"], "page_cap": page_cap, "bucket": cfg["r2"]["bucket"][:1]}
+    cfg["r2"] = {**cfg["r2"], "page_cap": pages, "bucket": cfg["r2"]["bucket"][:1]}
     rep = W.Report()
     W.check_r2(ctx(cfg, state, now, R2_ENV, http=bucket, clock=lambda: now), rep)
     return rep
@@ -271,7 +271,7 @@ BUDGETS = """
 """
 
 
-def test_runpod_lines_near_their_cap_and_a_short_runway_are_anomalies(tmp_path):
+def test_runpod_lines_near_their_limit_and_a_short_runway_are_anomalies(tmp_path):
     (tmp_path / "budgets.toml").write_text(BUDGETS)
     month = float(calendar.timegm((2026, 10, 1, 0, 0, 0)))
     pods = {"a": {"first_seen": month - 10 * 3600, "last_seen": month + 10 * 3600, "spent": 20.0},     # half of it in October
@@ -299,7 +299,7 @@ def test_a_short_runway_above_the_auto_top_up_is_not_an_anomaly(tmp_path):
     assert not rep.findings, "RunPod tops the balance up at $100, so 2 h of runway at $125 is no failure"
 
 
-def test_a_nebius_vm_on_no_line_past_its_line_or_over_a_daily_cap_is_an_anomaly(tmp_path):
+def test_a_nebius_vm_on_no_line_past_its_line_or_over_a_daily_limit_is_an_anomaly(tmp_path):
     (tmp_path / "budgets.toml").write_text(BUDGETS)
     md = tmp_path / "machines.d"
     md.mkdir()
