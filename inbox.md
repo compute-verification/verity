@@ -26,3 +26,16 @@ released_keys: I added no list, and `n2/**` stays on `not_yet`. A list must name
 
 TIMER: none
 
+[2026-11-14T20:40Z] e14dbaed3953
+NETSEATS2, push 3 of this turn: the placement test's one-line fix. The commit is aa95f0d79fb25333c5c1dd4fcc98ab4746da255f. The collect head after the push is cc8fae118881e420d57013408dacff5ba290b8ea. The merge was clean and everything compiles. [ran]
+
+Item 3, the placement test, `test_close_waits_for_the_sessions_end_keeps_its_fetch_and_publishes_what_a_rehearsals_front_does` [read]:
+- It failed on `placement(...)["parties"]["verifier"]`. The code gives the machine that ran the period check (`ran_on()["period"]`, this machine's own hostname). The test expected the served node, `PEER`.
+- Whose: ours. The code is #9826's (certifier_piece: the placement names the machine that ran each step; it is open, on the lane's na-net411-placement-words branch). The test line is older ("The certifier's piece waits on the gate's relay session").
+- The fix, in the test: `"verifier": CP.ran_on()["period"]`, one line wrapped in two. Statement before: the verifier is placed on the served node. After: the verifier is placed where the placement says, on the machine that ran the period check.
+- On the moved tree test_certifier_piece can't be collected (the move's plain-name `test_warden_serve` import). On the pre-move tree with the same line it gives 70 passed, none failed. [ran]
+
+Item 4, test_load_relay's fixture [read]: `weights-v1-h200-digests.json` is listed in the root `artifacts.json` (there is no `fixtures/artifacts.json`), at the moved path `verity/protocols/accounting/certifier/device/tests/fixtures/`. So it is only missing from my tree. I did not fetch it.
+
+TIMER: none
+
