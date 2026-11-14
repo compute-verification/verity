@@ -354,8 +354,8 @@ def started_by(commits: list[str] | tuple[str, ...]) -> float:
 def evidence_store(since: float):
     """This machine's evidence store, with the attempts started after ``since`` (seconds since the epoch) refreshed from its
     remote, once a run unless a later lookup asks for older ones. A lookup reads checks of commits (`started_by`) or the
-    newest: the remote holds every attempt ever started, and listing them all and fetching those this machine lacks takes
-    longer than a ready mark's preflight gives the gate."""
+    newest: the remote holds every attempt ever started, and listing them all and fetching those this machine lacks grows
+    with the store past what a ready mark's preflight gives the gate."""
     if not _STORE:
         from research.store.local import LocalStore
         _STORE[:] = [LocalStore(), None]

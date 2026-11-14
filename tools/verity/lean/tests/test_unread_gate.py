@@ -277,9 +277,10 @@ class Refreshed:
 
 
 def test_the_store_is_refreshed_only_from_the_oldest_commit_looked_up_less_the_skew(repo, monkeypatch):
-    """The remote holds every attempt ever started (over a hundred thousand), and a refresh with no bound lists them all and
-    fetches each this machine lacks, which took the gate past a ready mark's 600 s.  A check of a commit starts after it, so a
-    lookup refreshes from its oldest commit's committer time less `SKEW_S`, once, and again only for an older one."""
+    """The remote holds every attempt ever started, and a refresh with no bound lists them all and fetches each this machine
+    lacks, a cost that grows with the store past what a ready mark's preflight gives the gate.  A check of a commit starts
+    after it, so a lookup refreshes from its oldest commit's committer time less `SKEW_S`, once, and again only for an older
+    one."""
     store = Refreshed()
     monkeypatch.setattr(G, "_STORE", [store, None])
     at = {}
@@ -296,9 +297,9 @@ def test_the_store_is_refreshed_only_from_the_oldest_commit_looked_up_less_the_s
 
 
 def test_the_git_calls_do_not_grow_with_the_seed_files_a_change_takes_names_from(repo, tmp_path, monkeypatch):
-    """A change of 224 seed files ran 51 git calls; one per file or per name would take a large change past the preflight's
-    600 s.  Ten times as many changed seed files, each losing a name, run the same git calls, on both of the gate's paths:
-    only git (no name went that the Lean could hold) and the ratchet on the facts."""
+    """A git call per changed file or per name would take a large change past what a ready mark's preflight gives the gate.
+    Ten times as many changed seed files, each losing a name, run the same git calls, on both of the gate's paths: only git
+    (no name went that the Lean could hold) and the ratchet on the facts."""
     base = git(repo, "rev-parse", "HEAD")
     keep_facts(repo, base, tmp_path / "keys")
     real = subprocess.run
