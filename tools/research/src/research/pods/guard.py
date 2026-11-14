@@ -627,7 +627,7 @@ def main(argv: list[str]) -> int:
     if ns.detach:
         return detach(argv, ns.dry_run, ns.log)
 
-    def on_term(signum, frame):  # noqa: ARG001
+    def on_term(signum, frame):
         Recorder(paths(cfg.dry_run, ns.log), time.time).log(f"guard pid {os.getpid()} stopped (signal {signum})")
         raise SystemExit(0)
 

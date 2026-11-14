@@ -173,6 +173,18 @@ class Node:
                 "sketch_outside": self.sketch_outside, "spec_bytes_per_s": self.spec_bytes_per_s,
                 "squarings_per_s": dict(self.squarings_per_s)}
 
+    @classmethod
+    def of_json(cls, j: object) -> Node:
+        """The node's capacities handed in as a parameter, in `to_json`'s form, which the ledger publishes them in:
+        exactly its keys, each value as `__post_init__` holds it.  `to_json` states no tiers, so the node read states
+        none."""
+        keys = sorted(cls.stated().to_json())
+        if type(j) is not dict or sorted(j) != keys:
+            raise ValueError(f"a node's capacities are an object of exactly {', '.join(keys)}")
+        if type(j["squarings_per_s"]) is not dict:
+            raise ValueError("squarings_per_s maps each codec width to its squaring ceiling")
+        return cls(**j)
+
 
 def sketch(record: audit.Record, node: Node) -> float:
     """`SketchBound`'s δ for a sketch-sha512 record (`Accounting.Guarantees.Remote.SketchBoundDeployed`), every

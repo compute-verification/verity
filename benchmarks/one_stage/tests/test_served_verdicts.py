@@ -38,7 +38,9 @@ endpoint."""
 from __future__ import annotations
 
 import argparse
+import ast
 import contextlib
+import functools
 import gzip
 import hashlib
 import importlib.util
@@ -964,7 +966,7 @@ def _recorded(tmp_path: Path, argv: list[str], capsys) -> tuple[int, dict, dict]
     {"summary.json": "{}", "window/audit.json": json.dumps({"accepted": False, "checks": {"proved": {"ok": False}}})},
     {"summary.json": None},
 ])
-def test_an_edit_to_the_served_nodes_sampled_proofs_answer_leaves_the_row_recomputed_here_unchanged(
+def test_an_edit_to_the_served_nodes_spot_answer_leaves_the_row_recomputed_here_unchanged(
         tmp_path, monkeypatch, capsys, edit):
     """Off the served node, `record --sampled-lean` takes sampled proofs' row from this host's own run of its Lean on the
     hand-off's v2 case in the form ``one-stage``, handed the case's files and its proof blob, the answer tied to the
@@ -1015,7 +1017,7 @@ def test_an_edit_to_the_served_nodes_sampled_proofs_answer_leaves_the_row_recomp
     ("no-blob", "error", "blob(s) that aren't files"),
     ("no-line", "error", "answered no line"),
 ])
-def test_a_sampled_proofs_row_the_lean_here_cant_recompute_says_so_and_never_takes_the_nodes_word_for_a_bad_case(
+def test_a_spot_row_the_lean_here_cant_recompute_says_so_and_never_takes_the_nodes_word_for_a_bad_case(
         tmp_path, monkeypatch, capsys, change, verdict, said):
     """With no v2 case the hand-off holds no proofs to recompute from, so the row is the served node's, its answer_from
     saying so; a v2 case naming a missing blob, a Lean answer about another record, or one that answers no line is the
@@ -1744,7 +1746,7 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live)
-    row = S.piece_row("work", pieces, sampled_proofs=audit, key_sha512=pin, lane=lane)
+    row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
     assert (row["protocol"], row["verdict"], row["commitment"], row["delta"]) == (S.PEARLPLUS_PROTOCOL, "accept",
                                                                                   "c1" * 64, "1/100")
     assert row["quantity"]["work"] == PEARL_LEAN_WORK and row["quantity"]["tie"]["record"] == PEARL_W
@@ -1841,7 +1843,7 @@ def test_pearlpluss_accepted_piece_that_fails_a_condition_of_record_stays_a_deve
     document, its ``why`` the development verdict and the condition, in `pearlplus_of_record`'s order, so remote's record
     composes pending and names it."""
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live, case)
-    row = S.piece_row("work", pieces, sampled_proofs=audit, key_sha512=pin, lane=lane)
+    row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
     assert (row["verdict"], row["development"]["piece"]) == ("missing", "pearlplus"), row
     assert row["why"].startswith(f"{S.DEV_VERDICT}: {why}"), row["why"]
     _report, rec, line = S.record({"integrity": _accepted(), "work": row}, window=1, steps=(0, 4), node="vy-dc-h200",
@@ -6189,3 +6191,57 @@ def test_serve_load_varied_writes_each_requests_timings_beside_its_record(tmp_pa
         assert 0 < t["send_s"] < t["first_token_s"] < t["done_s"]
         assert r["response"] == {"token_ids": list(range(500, 500 + r["max_tokens"])), "finish_reason": "length"}
         assert t["tokens"] == r["max_tokens"]
+
+
+@functools.cache
+def _workspace_reach(*modules: str) -> dict[str, str]:
+    """Each workspace package an import statement reaches from `modules`, theirs or a reached module's, in a function
+    too, by top-level name: its import root relative to the workspace's root (where `verity` is), as this environment
+    imports it. A name this environment doesn't import from the workspace is not followed."""
+    repo = Path(importlib.util.find_spec("verity").origin).parents[1]
+    roots: dict[str, Path | None] = {}
+
+    def root(top: str) -> Path | None:
+        if top not in roots:
+            # `__main__` has no spec where pytest runs as a script, and find_spec refuses it
+            spec = None if top in sys.stdlib_module_names or top == "__main__" else importlib.util.find_spec(top)
+            where = (Path(spec.origin).parent if spec and spec.origin else None)
+            where = where.parent if where and spec.submodule_search_locations else where
+            roots[top] = where if where and where.is_relative_to(repo) and "site-packages" not in where.parts else None
+        return roots[top]
+
+    def source(mod: str) -> Path | None:
+        top = root(mod.split(".")[0])
+        base = top.joinpath(*mod.split(".")) if top else None
+        return next((f for f in (base.with_suffix(".py"), base / "__init__.py") if f.is_file()), None) if base else None
+
+    seen: set[str] = set()
+    todo = list(modules)
+    while todo:
+        mod = todo.pop()
+        if mod in seen or not (f := source(mod)):
+            continue
+        seen.add(mod)
+        pkg = mod if f.name == "__init__.py" else mod.rpartition(".")[0]
+        for node in ast.walk(ast.parse(f.read_text())):
+            if isinstance(node, ast.Import):
+                todo += [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                base = ".".join([*pkg.split(".")[:len(pkg.split(".")) - node.level + 1]] * bool(node.level)
+                                + [node.module] * bool(node.module))
+                todo += [base, *(f"{base}.{a.name}" for a in node.names)]
+    return {top: str(roots[top].relative_to(repo)) for top in {m.split(".")[0] for m in seen}}
+
+
+@pytest.mark.parametrize("script", ["served_verdicts.sh", "served_util.sh", "served_stock.sh"])
+def test_the_serve_steps_python_path_names_the_import_root_of_every_workspace_package_it_reaches(script):
+    """The serve step runs `verity_vllm.pipeline.cli serve-openai` under vLLM's venv, which holds none of the workspace,
+    so it imports each workspace package from the PYTHONPATH the script exports: that path names the import root of every
+    package serve-openai's imports reach, a function's included (`verity_vllm.engine.spec`'s `verity_config`, which it
+    reaches only once it serves, and the `verity_flock` of H1's sampled proof blocks)."""
+    m = re.search(r"^export PYTHONPATH=(\S+)$", (HERE.parent / script).read_text(), re.M)
+    assert m, f"{script} exports no PYTHONPATH"
+    named = {p.removeprefix("$TREE").lstrip("/") or "." for p in m.group(1).split(":")}
+    reached = _workspace_reach("verity_vllm.pipeline.cli", "verity_vllm.pipeline.serve_openai")
+    assert {"verity", "verity_vllm", "verity_config"} <= set(reached), reached
+    assert sorted(f"{top} ({where})" for top, where in reached.items() if where not in named) == []

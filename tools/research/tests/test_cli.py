@@ -533,10 +533,12 @@ def test_pss_flags_for_a_source_tree_that_predates_them_are_refused_before_place
     monkeypatch.setattr(remote, "launch", launch)
     monkeypatch.setattr(remote, "queue_placement", place)
     runs = str(tmp_path / "runs")
-    on = lambda src, *flags: main(["run", "--runs-dir", runs, "--on", "m", "--project", "p", "--source", str(src), "--no-custody-r2", *flags,
-                                   "--", "true"])
-    queue = lambda src, *flags: main(["run", "--runs-dir", runs, "--queue", "--project", "p", "--source", str(src), "--max-min", "1", *flags,
-                                      "--", "true"])
+    def on(src, *flags):
+        return main(["run", "--runs-dir", runs, "--on", "m", "--project", "p", "--source", str(src), "--no-custody-r2", *flags,
+                     "--", "true"])
+    def queue(src, *flags):
+        return main(["run", "--runs-dir", runs, "--queue", "--project", "p", "--source", str(src), "--max-min", "1", *flags,
+                     "--", "true"])
     for flags, asked in ((["--pss-every", "0"], "--pss-every 0"), (["--pss-every=-1"], "--pss-every -1"),
                          (["--pss-max-rss-gb", "4"], "--pss-max-rss-gb 4"),
                          (["--pss-max-rss-gb=4", "--pss-every", "0"], "--pss-every 0 and --pss-max-rss-gb 4")):
@@ -607,7 +609,8 @@ def test_an_unknown_command_says_how_old_the_checkout_is(tmp_path, capsys, monke
 
     env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
            "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
-    git = lambda *a: subprocess.run(["git", "-C", str(tmp_path), *a], check=True, capture_output=True, text=True, env=env).stdout
+    def git(*a):
+        return subprocess.run(["git", "-C", str(tmp_path), *a], check=True, capture_output=True, text=True, env=env).stdout
     git("init", "-q")
     for i in range(3):
         git("commit", "-q", "--allow-empty", "-m", str(i))

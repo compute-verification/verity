@@ -248,9 +248,12 @@ def parse_expires(s: str, now: datetime) -> str | None:
 
 
 def _utc_or_none(s: Any) -> datetime | None:
+    if s is None:
+        return None
     try:
         return parse_utc(s)
-    except ValueError:
+    except ValueError as e:
+        print(f"retention: {e}, read as none", file=sys.stderr, flush=True)
         return None
 
 
@@ -350,9 +353,12 @@ def write(path: Path, record: dict) -> Path:
 
 
 def _read_json(p: Path) -> dict | None:
+    if not p.exists():
+        return None
     try:
         d = json.loads(p.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"retention: {p} unread, read as none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     return d if isinstance(d, dict) else None
 
@@ -599,7 +605,8 @@ def keep(path: Path | str, *, owner: str, expires: str | None, priority: str, ro
     rel = target(p, root)
     try:
         old = load(p) or {}
-    except RecordError:
+    except RecordError as e:
+        print(f"retention: {p}'s record unread, so it is written afresh ({e})", file=sys.stderr, flush=True)
         old = {}
     given = {"regenerate": regenerate, "preserved": preserved, "why": why, "by": by}
     rec = {"schema": SCHEMA, "path": rel, "node": node or socket.gethostname(), "owner": owner,

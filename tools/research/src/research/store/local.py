@@ -836,7 +836,8 @@ class LocalStore:
                 try:
                     if not self._blobs_local(self._read_manifest(self.manifest_path(h), h)):
                         continue
-                except (IntegrityError, ValueError, json.JSONDecodeError):
+                except (IntegrityError, ValueError, json.JSONDecodeError) as e:
+                    _warn(f"artifact {h[:20]}'s manifest unread, so it is not listed as held here ({type(e).__name__}: {e})")
                     continue
             arts.append(a)
         mine, theirs = LS.local_labels(self), LS.remote_labels(r)

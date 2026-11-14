@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import sys
 import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
@@ -67,7 +68,8 @@ def n1_limit(lease_dir: str, n: int, waits: list[dict], limits: str | None, now:
         name, pool = next((k, p) for k, p in pools.items() if p.get("dir", DEFAULT_LEASE_DIR) == lease_dir)
         queue = pool.get("queue", name)
         quota = next(int(w["gpus"]) for w in doc["workstreams"] if w["name"] == queue and w["node"] == NODE1)
-    except (OSError, KeyError, StopIteration, ValueError, tomllib.TOMLDecodeError):
+    except (OSError, KeyError, StopIteration, ValueError, tomllib.TOMLDecodeError) as e:
+        print(f"research holds: node 1's GPU limit for {lease_dir} not read from {desc} ({type(e).__name__}: {e})", file=sys.stderr)
         return None
     every = bool(waits) and all(w.get("preempt") == "1" for w in waits)
     lim = dict(tok.split("=", 1) for tok in (limits or "").split() if "=" in tok)

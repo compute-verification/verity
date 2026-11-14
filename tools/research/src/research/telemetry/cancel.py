@@ -32,7 +32,7 @@ from .job import read_status, write_json_atomic
 from .procs import list_pids, stat_fields
 from .scope import CONTROL_CANCEL, Sweep, cancel_request, cgroup_of, claim, cmdline_of, run_dir_of, runner_alive
 
-#: the group members a marker names: a whole group's list can pass the record cap (events.MAX_RECORD_BYTES), and the writer then drops
+#: the group members a marker names: a whole group's list can pass the record size limit (events.MAX_RECORD_BYTES), and the writer then drops
 #: `target`, pgid included, so the classifier can't match the marker to the job it stopped
 MEMBERS_KEPT = 16
 DEFAULT_FALLBACK = os.environ.get("TELEMETRY_CANCEL_FALLBACK") or (
