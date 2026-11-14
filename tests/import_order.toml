@@ -566,6 +566,10 @@ loaded_by = [
     "verity/protocols/accounting/pouw/prover/schemes/pearl_c4.py",
     "verity/protocols/accounting/pouw/prover/schemes/pearl_c_work.py",
     "verity/protocols/accounting/pouw/prover/schemes/pearl_kw.py",
+    "verity/protocols/experimental/pearl_c4/prover/kernels/fixture.py",
+    "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_f1_fast.py",
+    "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_fixture.py",
+    "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_twin.py",
     "verity/protocols/proofs/flock/prover/tests/test_lean_registered_bit_rows.py",
 ]
 
@@ -595,9 +599,12 @@ paths = [
 ]
 loads = [
     "verity/circuits",
+    "verity/circuits/kernels",
     "verity/circuits/silicon",
     "verity/commitments",
+    "verity/commitments/crypto",
     "verity/protocols/accounting/pouw/prover",
+    "verity/protocols/accounting/pouw/verifier",
 ]
 
 [[place]]
