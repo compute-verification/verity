@@ -320,7 +320,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--window", type=Path, required=True, help="the piece's public directory (its answer.json)")
     ap.add_argument("--private", type=Path, help="its private directory (default: the one the run kept)")
     ap.add_argument("--hf-home", type=Path, help="PoUS (required): the HF cache the serve read its snapshot from")
-    ap.add_argument("--p2-lib", help="PoUS: libp2v1.so's directory (benchmarks/torch_gpu/p2_stage/build.sh's lib/)")
+    ap.add_argument("--p2-lib", help="PoUS: libp2v1.so's directory (verity/protocols/accounting/pous/prover/p2/p2_store/build.sh's lib/)")
     ap.add_argument("--device", default="cuda", help="PoUS: where C* is encoded again")
     ap.add_argument("--exe", help="the component's Lean (pous-run-protocol, wipe-protocol), whose answer is written")
     a = ap.parse_args(argv)
