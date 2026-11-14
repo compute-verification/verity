@@ -1,16 +1,16 @@
 """PoUB-P2's session over the ``C*`` the PoUS piece holds (`served_piece.py`): the remote bandwidth audit's prover
-(`p2_party.prove`) over PoUS's store as the vLLM adapter encoded it on the card, run by the same process after PoUS's
+(`p2_party_prover.prove`) over PoUS's store as the vLLM adapter encoded it on the card, run by the same process after PoUS's
 session and before the store is released, so both audits are of one store that one process holds, and no second store
 is encoded.
 
 **The registration** is the auditor's, never the prover's: the bandwidth party (the auditor gate's ``bw_party
 --pous-session SID``) builds it from the memory challenger's own record of PoUS session SID on its host
-(`challenger_party.keep`, `p2_party.pous_record`): the node, P2's parameters, setup's commitment and salt as the request
+(`challenger_party.keep`, `p2_parties.pous_record`): the node, P2's parameters, setup's commitment and salt as the request
 declared them before that session, and the root the session bound. Its plan is the whole store. The prover's `Held`
 refuses a registration that isn't its store's (`hold`), and the session's case names the root (`p2_case.store_root`),
 which `p2_case.same_store` holds to PoUS's run case. The party is given a fresh session id (``--session``), which the
 memory challenger claims in its session log before the first coin and under which it signs the case's close of the
-verifier's log (`p2_party.Closer`).
+verifier's log (`p2_parties.Closer`).
 
 **A pass** reads every unit of the plan from ``C*``'s rows on their device: σ by the exact int8 product against the
 pass's signs (`p2_v1.bandwidth.Sketch`), y on the device (`receipts_of`), a few units held to `p2.Sketcher` (`spot`), and
@@ -24,9 +24,9 @@ form under a hiding commitment to the case's digest (one ``hm96-sha512/row/v2`` 
 `verity.commitments.advice`, bound to the window), its profile without the registration's digest.
 
 **The session's length** is the request's: ``windows`` of ``window_s`` each (`WINDOWS`, `WINDOW_S`: two minutes), each of
-``passes`` passes (`PASSES`) and ``samples`` openings (`SAMPLES`), by default the auditor's (`p2_party.SESSION`, which
+``passes`` passes (`PASSES`) and ``samples`` openings (`SAMPLES`), by default the auditor's (`p2_parties.SESSION`, which
 its party holds every request to). At δ = 2^-40 an accepted session's ε is δ + Σ samples/2^64, which leaves out
-Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed; `p2_party.EPS_TERMS`), and the pooled bound leaves at most
+Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed; `p2_parties.EPS_TERMS`), and the pooled bound leaves at most
 0.45% of its receipts wrong at those defaults over a store of 2^17
 units (6 windows of 4 passes, 1,024 draws each; `pooled.bound`), so q_bytes is at least 99.5% of the reads.
 """
@@ -53,14 +53,14 @@ from p2_v1 import bandwidth as B
 
 from verity.protocols.accounting.pous.verifier import period
 from verity.protocols.accounting.pous.verifier import verifier as V
-from verity.protocols.accounting.poub.verifier import coins, ledger, p2, p2_case, p2_party, receipts
+from verity.protocols.accounting.poub.verifier import coins, ledger, p2, p2_case, p2_parties, receipts
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
 
 UNIT, BLOCK, DIGEST = p2.UNIT_BLOCKS, p2.BLOCK_BYTES, receipts.DIGEST_BYTES
 SALT, PER_LEAF = receipts.SALT_BYTES, receipts.PER_LEAF
-WINDOWS, PASSES, SAMPLES = (p2_party.SESSION[k] for k in ("windows", "passes", "samples"))
-WINDOW_S, DEADLINE_S = p2_party.SESSION["window_ns"] / 1e9, p2_party.SESSION["deadline_ns"] / 1e9
+WINDOWS, PASSES, SAMPLES = (p2_parties.SESSION[k] for k in ("windows", "passes", "samples"))
+WINDOW_S, DEADLINE_S = p2_parties.SESSION["window_ns"] / 1e9, p2_parties.SESSION["deadline_ns"] / 1e9
 #: an H200's specified HBM read rate, bytes a second: what γ is against
 R_BYTES_PER_S = 4_800_000_000_000
 BINDING_TAG = b"verity/remote-bandwidth/served-window/v1"
@@ -70,7 +70,7 @@ SCOPE = ("beside the served window: the session ran on the card after window {k}
 
 
 class Held:
-    """`p2_party.Prover` over the adapter's store ``store`` (`verity_vllm.protocols.pous._Store`): ``C*``'s rows on
+    """`p2_party_prover.Peer` over the adapter's store ``store`` (`verity_vllm.protocols.pous._Store`): ``C*``'s rows on
     their device, the challenger's table of their digests, setup's salt, commitment and root, under the node ``node``."""
 
     def __init__(self, store: Any, node: bytes, *, chunk: int = 1 << 16, spot: int = 16,
@@ -96,9 +96,9 @@ class Held:
         self.kept = doc
 
     def hold(self, registration: Mapping[str, Any]) -> None:
-        if p2_party.registration_of(registration) != self.registration:
+        if p2_parties.registration_of(registration) != self.registration:
             raise ValueError("the verifier's registration is not the held store's")
-        self.plan = p2_party.plan_of(registration, self.registration)
+        self.plan = p2_parties.plan_of(registration, self.registration)
 
     def end(self, commitment: coins.LiveCommitment, openings: Sequence[coins.LiveOpening]) -> None:
         why = coins.received_reason(commitment, [self.received[t] for t in sorted(self.received)], openings)
@@ -180,12 +180,12 @@ def binding(model: str, revision: str, window: int) -> bytes:
 
 def request(node: bytes, *, windows: int = WINDOWS, passes: int = PASSES, samples: int = SAMPLES,
             window_s: float = WINDOW_S, deadline_s: float = DEADLINE_S) -> dict[str, Any]:
-    return p2_party.request_of(node, windows=windows, passes=passes, samples=samples, window_ns=int(window_s * 1e9),
+    return p2_parties.request_of(node, windows=windows, passes=passes, samples=samples, window_ns=int(window_s * 1e9),
                                deadline_ns=int(deadline_s * 1e9))
 
 
 def _no(verdict: str, reason: str) -> dict[str, Any]:
-    return {"commitment": None, "profile": None, "protocol": p2_party.PROTOCOL, "public": None, "reason": reason,
+    return {"commitment": None, "profile": None, "protocol": p2_parties.PROTOCOL, "public": None, "reason": reason,
             "verdict": verdict}
 
 
@@ -223,7 +223,7 @@ def public_answer(judged: Mapping[str, Any], bind: bytes, scope: str, r_bytes_pe
 
         public |= {"gamma": str(1 - Fraction(public["q_bytes"] * 10**9, r_bytes_per_s * public["span_ns"])),
                    "r_bytes_per_s": r_bytes_per_s}
-        profile["gamma_terms"] = p2_party.GAMMA_TERMS
+        profile["gamma_terms"] = p2_parties.GAMMA_TERMS
     return out | {"public": public, "profile": profile}
 
 
@@ -268,7 +268,7 @@ def session(store: Any, *, node: str, party: str, party_host: str, sid: bytes, r
     kept = prover.kept if prover is not None else None
     _write(private / "session.json", {
         "answer": answer, "verifier_record": record, "verifier_rc": rc, "request": dict(request_),
-        "registration": None if prover is None else p2_party.registration_json(prover.registration, prover.plan),
+        "registration": None if prover is None else p2_parties.registration_json(prover.registration, prover.plan),
         "steps": None if prover is None else prover.steps, "opened": None if prover is None else prover.opened,
         "pous_session": sid.hex(), "session": p2_session.hex(), "party": command, "party_host": party_host}, 0o600)
     summary |= {"setup_s": None if setup_s is None else round(setup_s, 3), "session_wall_s": round(wall, 3),
