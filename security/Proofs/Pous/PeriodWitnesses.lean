@@ -186,14 +186,16 @@ theorem certified_run_accepts :
     unfold MemoryChallenger.lmsVerify MemoryChallenger.memoryChallengerMessage
     simp only [hps, hpI, hIs, hdec, ne_eq, not_true_eq_false, ↓reduceIte, bind, Except.bind, pure, Except.pure]
     exact certifiedSignature_spec.2
+  have hd : (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt).size =
+      P2.Params.deployed.blocks * Merkle.DIGEST := by
+    rw [PousCheck.Properties.SecurityProofs.Accepts.setupDigests]
+    exact PousCheck.Properties.SecurityProofs.Accepts.digestTable_size
+      (fun _ => PousCheck.Properties.SecurityProofs.Accepts.rowDigest_size _) _
   unfold PousCheck.Run.check
   unfold certifiedRecord
   refine checkAt_of (beq_self_eq_true _)
     (by simp [certifiedPublic, certifiedSalt, PousCheck.Run.SALT, zeros_size])
-    (by
-      rw [PousCheck.Properties.SecurityProofs.Accepts.setupDigests]
-      exact PousCheck.Properties.SecurityProofs.Accepts.digestTable_size
-        (fun _ => PousCheck.Properties.SecurityProofs.Accepts.rowDigest_size _) _)
+    (by simp [hd, PousCheck.Run.DEPLOYED])
     ?_ (beq_self_eq_true _) (beq_self_eq_true _)
     (by simp [certifiedRecord, honestCommitment]) (beq_self_eq_true _)
     (beq_self_eq_true _) (beq_self_eq_true _) ?_
@@ -314,11 +316,12 @@ theorem honest_recorded_prefix
       simp only [List.foldl_cons, List.foldl_nil]
       have hn105 : n ≠ 105 := by omega
       simp only [hn105, ↓reduceIte]
-      by_cases hlast : n + 1 = 105
-      · simp [MemoryChallenger.Properties.Recorded.round, certifiedObserved, certifiedBlock_size hk,
-          honestCoins, certifiedBlock_digest hk, honestRound, Array.range_succ, hlast]
-      · simp [MemoryChallenger.Properties.Recorded.round, certifiedObserved, certifiedBlock_size hk,
-          honestCoins, certifiedBlock_digest hk, honestRound, Array.range_succ, hlast]
+      have hidx : (Array.replicate 105 0)[n]! = 0 := by
+        rw [getElem!_pos _ n (by simp; omega)]
+        simp
+      simp [MemoryChallenger.Properties.Recorded.round, certifiedObserved, certifiedBlock_size hk,
+        honestCoins, MemoryChallenger.CoinTree.k, hidx, certifiedBlock_digest hk, honestRound,
+        Array.range_succ]
 
 theorem honestChallengerRun_recorded
     (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
@@ -352,12 +355,9 @@ theorem certified_signed
     simp only [bind, Except.bind] at hm
     change MemoryChallenger.memoryChallengerMessage (certifiedPrivateKey.publicKey.extract 0 16)
       honestSid certifiedRecordMessage = .ok m
-    cases he : MemoryChallenger.memoryChallengerMessage (certifiedPrivateKey.publicKey.extract 0 16)
-        honestSid certifiedRecordMessage with
-    | error e => cases hm
-    | ok x =>
-      cases hm
-      exact he
+    have toOption_eq_ok {ε α : Type} {e : Except ε α} {a : α} (h : e.toOption = some a) : e = .ok a := by
+      cases e <;> simp_all [Except.toOption]
+    exact toOption_eq_ok hm
 
 theorem playCollision_of_run {P : Audits Unit Unit}
     {ω : Unit × Unit × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)}
