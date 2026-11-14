@@ -132,7 +132,7 @@ def _window(design: dict, counts=(2, 18)) -> tuple:
 
 
 def test_the_per_member_forms_link_points_are_held_by_both():
-    """`link-points` by the verifier (`registration.check`'s ``members``, `Registration.linkRefused`), after R8, on a
+    """`link-points` by the verifier (`registration.check`'s ``members``, `Docket.linkRefused`), after R8, on a
     window of two members at one unit a proof block, PAIR's proof blocks then OTHER's: two and eighteen, or ten each.
     A row is a sampling design with each member's fewest and most sampled proof blocks over the samples that end, the
     members a sample that ends misses (fewest none) and the members whose fewest and most open different link points
@@ -238,7 +238,7 @@ def test_a_disagreement_is_refused_naming_both(monkeypatch):
     assert not out.accepted and out.verdict.detail["reject"]["checks"] == ["verifiers"]
 
 
-def test_the_draw_of_record_is_the_leans_on_the_bytes_the_python_read(monkeypatch):
+def test_the_sample_of_record_is_the_leans_on_the_bytes_the_python_read(monkeypatch):
     seen = []
     real = V.lean
     monkeypatch.setattr(V, "lean", lambda f, value: (seen.append(value) if f == "select" else None) or real(f, value))

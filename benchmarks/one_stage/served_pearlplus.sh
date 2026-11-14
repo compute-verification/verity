@@ -48,7 +48,7 @@
 #      and `served_passes.py retain` then drops, still before the coin, each pass it didn't finish or left over a cap:
 #      those credit nothing and stay in the declared share;
 #   4. `served_passes.py verify` takes Pearl+'s verdict over every retained pass on the CPU in PEARLPLUS_JOBS processes (default
-#      nproc): one sample of PEARLPLUS_DRAWS work-weighted tiles (default its own, 459) over all the passes, and each pass's
+#      nproc): one sample of PEARLPLUS_SAMPLES work-weighted tiles (default its own, 459) over all the passes, and each pass's
 #      exclusion tiles, replayed on fast_tile's batch forms, the first and every 256th after it on the scalar reference
 #      too (a scalar replay takes minutes a tile at the 1B's K), or with PEARLPLUS_FAST set empty on the scalar reference
 #      alone, under PEARLPLUS_OVER_CAP's rule where it is set. Its document goes to PIECE_DIR/verify.json and its core
@@ -77,7 +77,7 @@
 #      coin (`pearlplus_coin`), its load, the replay's node and the rounds dropped, the give-up's document (which
 #      `served_verdicts.py publish` holds on the node, with its counts in this log's lines), Pearl+'s verdict's credit,
 #      its shares (with the unretained serve's beside them) and why it credits nothing (served_verdicts.PEARLPLUS_WHY: its
-#      passes are not the window sampled proofs audited, so WINDOW names nothing here).
+#      passes are not the window SPOT audited, so WINDOW names nothing here).
 # With PEARLPLUS_TIE set (served_verdicts.sh's PEARLPLUS_TIE: the window itself served under serve-openai's Pearl+ arm,
 # `serve_pearl`, one Pearl+ epoch a Commit window in SERVE_DIR/pearl/w<k>/), the piece serves nothing of its own: step 1
 # takes the window serve's cubin (PEARLC_CUBIN) where it is set; step 2 takes window WINDOW's own epoch, passes/ a
@@ -340,7 +340,7 @@ if [ -n "$GO" ]; then
   TA=()
   [ -n "$TIE" ] && [ -s "$W" ] && TA=(--tie "$W" ${PEARLPLUS_CLASS:+--class "$PEARLPLUS_CLASS"})
   "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py verify --passes "$Q/passes" --out "$P/verify.json" \
-    --answer "$P/pearlplus-answer.json" --jobs "${PEARLPLUS_JOBS:-$(nproc)}" ${PEARLPLUS_DRAWS:+--draws "$PEARLPLUS_DRAWS"} \
+    --answer "$P/pearlplus-answer.json" --jobs "${PEARLPLUS_JOBS:-$(nproc)}" ${PEARLPLUS_SAMPLES:+--draws "$PEARLPLUS_SAMPLES"} \
     ${PEARLPLUS_OVER_CAP:+--over-cap "$PEARLPLUS_OVER_CAP"} ${FAST:+--fast} ${TA[@]+"${TA[@]}"} > "$Q/verify.log" 2>&1 &
   V=$!
   # the coin record leaves the passes the moment verify samples it, before its replay: a deleted one would sample afresh

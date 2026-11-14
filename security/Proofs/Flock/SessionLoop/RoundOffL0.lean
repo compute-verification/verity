@@ -136,12 +136,12 @@ theorem release_sched_l0_st (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wi
   have hex := (Loop.Level0Src.realOf_lanes hS0 ν t j r hre').1
   -- the frame's pads are the tape's
   have hlay := LeanRelease.lay_ofLoopLink (L₀ := L₀) src real j r hds
-  have hzD := Loop.RepSrc.size hRS (ofLoopLink L₀ src real) (LeanRelease.draws_ofLoopLink src real) ν t j r hlay
+  have hzD := Loop.RepSrc.size hRS (ofLoopLink L₀ src real) (LeanRelease.samples_ofLoopLink src real) ν t j r hlay
   have hH : ((ofLoop Masked.dataE (withFiles (withLink L₀ src) src) real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).h =
       (FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j)).h := by
-    have e := (cfg_tapeOfDraws (ofLoopLink L₀ src real) x (ν, t) ((m₀, ρ₀) :: ops) (Masked.UE.tapeZk t)
+    have e := (cfg_tapeOfSamples (ofLoopLink L₀ src real) x (ν, t) ((m₀, ρ₀) :: ops) (Masked.UE.tapeZk t)
       Loop.frepOf j.val r.val hrep hzD).1
-    rw [hlay, ← Loop.RepSrc.pads hRS (ofLoopLink L₀ src real) (LeanRelease.draws_ofLoopLink src real) ν t j r hlay
+    rw [hlay, ← Loop.RepSrc.pads hRS (ofLoopLink L₀ src real) (LeanRelease.samples_ofLoopLink src real) ν t j r hlay
       (Masked.UE.tapeZk t)] at e
     exact e
   -- the openings' words are the opened coins

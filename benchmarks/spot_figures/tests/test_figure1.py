@@ -97,7 +97,7 @@ def test_every_references_card_adds_its_lines(out):
             assert card["art"] in {r.get("art") for r in out["panels"][panel]["references"]}, (card["art"], panel)
 
 
-def test_a_line_at_zero_is_drawn_on_the_floor_and_captioned_and_coincident_lines_plotted_once():
+def test_a_line_at_zero_is_sampled_on_the_floor_and_captioned_and_coincident_lines_plotted_once():
     refs = [{"label": "a", "value": 100.0}, {"label": "b", "value": 101.0}, {"label": "zero", "value": 0.0},
             {"label": "c", "by_scope": {"world year": 1e4}}, {"label": "elsewhere", "by_scope": {"world week": 1.0}}]
     assert _lines(refs, "world year", 1.0) == [(100.0, "a", "dashed"), (1e4, "c", "dashed")]
@@ -190,7 +190,7 @@ def test_the_design_card_picks_the_main_panels_lines(out):
     assert all(s["main"] == (s["design"] in f.MAIN["exfiltration"]) for s in out["panels"]["exfiltration"]["series"])
 
 
-def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
+def test_the_infiltration_panel_samples_its_card(card_dir, tmp_path):
     vertical = cards.load("proof_overhead", "GLM-5.3")["value"]["model_overhead"]
     xs = [1.0, vertical, 1e14]
     card = envelope("infiltration", "GLM-5.3", {

@@ -666,7 +666,7 @@ KNOWN: dict[str, str] = {
     "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py::Draw":
         "homonym, one synthetic benchmark draw: rename (compute-accounting)",
     "verity/protocols/proofs/spot/device/challenger_session.py::Gate": "homonym, infra's challenger gate (an SSH host): rename (proofs)",
-    "benchmarks/pous/p2_v1/store.py::Store":
+    "verity/protocols/accounting/pous/prover/p2/p2_store/store.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a client of it (memory-accounting)",
     "verity/protocols/accounting/pouw/prover/clear/clear_audit.py::Transcript":
         "homonym, what a clear audit's prover publishes: rename (compute-accounting)",
@@ -727,19 +727,19 @@ KNOWN: dict[str, str] = {
     # demos/
     "benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":
         "duplicate of `merkle.Commitment`: becomes a client of it (the run's step commitments) (compute-accounting)",
-    "demos/lifecycle/lifecycle.py::Block":
+    "tools/verity/cli/tests/lifecycle/lifecycle.py::Block":
         "duplicate of the execution block (no canonical yet): becomes a client of it (top)",
-    "demos/lifecycle/lifecycle.py::Card": "duplicate of `Verity.Accel.Card`: becomes a client of it (top)",
-    "demos/lifecycle/lifecycle.py::Layout":
+    "tools/verity/cli/tests/lifecycle/lifecycle.py::Card": "duplicate of `Verity.Accel.Card`: becomes a client of it (top)",
+    "tools/verity/cli/tests/lifecycle/lifecycle.py::Layout":
         "duplicate of the Site (`Verity.Site`): becomes a client of it (top)",
-    "demos/lifecycle/lifecycle.py::Link":
+    "tools/verity/cli/tests/lifecycle/lifecycle.py::Link":
         "duplicate of the Site (`Verity.Site`): becomes a client of its link (top)",
-    "demos/lifecycle/lifecycle.py::Placement":
+    "tools/verity/cli/tests/lifecycle/lifecycle.py::Placement":
         "duplicate of `CircuitRequirement.Placement`: becomes a client of it (top)",
-    "demos/lifecycle/lifecycle.py::Registration":
+    "tools/verity/cli/tests/lifecycle/lifecycle.py::Registration":
         "duplicate of the registration log (`Verity.Registration`): becomes a client of it (top)",
-    "demos/lifecycle/lifecycle.py::Statement": "homonym, a drawn unit's public statement in the demo: rename (top)",
-    "demos/lifecycle/onsite.py::Challenger": "duplicate of `parties.Challenger`: becomes a client of the memory challenger's (top)",
+    "tools/verity/cli/tests/lifecycle/lifecycle.py::Statement": "homonym, a drawn unit's public statement in the demo: rename (top)",
+    "tools/verity/cli/tests/lifecycle/onsite.py::Challenger": "duplicate of `parties.Challenger`: becomes a client of the memory challenger's (top)",
     # infra/
     "infra/cluster/src/cluster/ledger.py::Ledger": "homonym, the shared machines' spend ledger: rename (infra)",
     "infra/cluster/src/cluster/model.py::Node": "homonym, a shared machine in the cluster's model: rename (infra)",
@@ -751,7 +751,7 @@ KNOWN: dict[str, str] = {
     "adapters/vllm/verity_vllm/commit/memory_map.py::Layout": "homonym, the engine's KV pool map: rename (circuits)",
     "adapters/vllm/verity_vllm/pipeline/advice_code/codec.py::Record":
         "duplicate of `NetworkCheck.Check.Certificate`: becomes its certified record (vllm)",
-    "adapters/vllm/verity_vllm/program/frontend/registration.py::Registration":
+    "adapters/torch/verity_torch/frontend/registration.py::Registration":
         "homonym, the builder's allocation of registered inputs: rename (circuits)",
     "verity/protocols/accounting/pouw/prover/serving/credit_gate.py::Trace":
         "homonym, one linear call's recorded ops and their writers: rename (vllm)",
@@ -886,9 +886,9 @@ KNOWN: dict[str, str] = {
     "verity/protocols/accounting/poub/verifier/opening.py::Draw":
         "homonym, a PoUB position draw: rename (memory-accounting)",
     "verity/protocols/accounting/poub/verifier/opening.py::Session":
-        "duplicate of `remote_bandwidth`'s own type: becomes `audit.Session`, `audit.Store` (folded) (memory-accounting)",
+        "duplicate of `remote_bandwidth`'s own type: becomes `audit.Session`, `audit_prover.Store` (folded) (memory-accounting)",
     "verity/protocols/accounting/poub/verifier/opening.py::Store":
-        "duplicate of `remote_bandwidth`'s own type: becomes `audit.Session`, `audit.Store` (folded) (memory-accounting)",
+        "duplicate of `remote_bandwidth`'s own type: becomes `audit.Session`, `audit_prover.Store` (folded) (memory-accounting)",
     "verity/protocols/accounting/poub/verifier/p2.py::Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes it (one opening type, parameterised by codec) (memory-accounting)",
     "verity/protocols/accounting/poub/verifier/p2.py::Registration":
@@ -957,10 +957,10 @@ KNOWN: dict[str, str] = {
         "homonym, one inner proof through the ZK server: rename (proofs)",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_links.py::Link":
         "homonym, a recursion link from a reader to a port, `Flock.RecLinks.Link`'s pair: rename (proofs)",
-    "verity/commitments/windows/interface.py::Circuit":
+    "verity/commitments/periods/interface.py::Circuit":
         "duplicate of `Flock.Circuit`: becomes a reading of it in proof blocks (proofs)",
-    "verity/commitments/windows/interface.py::Opening": "homonym, a template's open read of a table row: rename (proofs)",
-    "verity/commitments/windows/interface.py::Window":
+    "verity/commitments/periods/interface.py::Opening": "homonym, a template's open read of a table row: rename (proofs)",
+    "verity/commitments/periods/interface.py::Window":
         "duplicate of the execution block (no canonical yet): becomes the builder's output for it (proofs)",
     # verity/
     "tools/config/verity_config/verity_settings.py::Registry": "homonym, one distribution's settings from the environment: rename (proofs)",

@@ -506,7 +506,7 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
         (sdir / "draw.json").write_text(json.dumps({"law": "subset", "population": n, "k": len(local), "units": local},
                                                    sort_keys=True))
         t = time.time()
-        record, live = a0.session(a.bin, m, n, f"subset:{len(local)}", port, sdir, draw_file=sdir / "draw.json", env=env)
+        record, live = a0.session(a.bin, m, n, f"subset:{len(local)}", port, sdir, sample_file=sdir / "draw.json", env=env)
         proc = {"wall_s": round(time.time() - t, 1)}
         lv = a0.lean_verify(a.lean, m, n, sdir, flags=("--coins", "tree"))
         tool = "verity-verify-proof verify --coins tree --archive --partition --program"

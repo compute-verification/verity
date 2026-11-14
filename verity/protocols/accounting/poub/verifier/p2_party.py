@@ -25,10 +25,12 @@ padding past the last tensor, which is PoUS's and which the decode never reads; 
   [opening_json, ...]}`, and verifies them while the prover serves on.
 - Once the session has its outcome, `{"end": {"commitment", "openings"}}`: the session's coin commitment and every
   released coin's opening (`audit.AuditRun.disclose`), against which the prover checks each challenge it was sent
-  (`audit.Prover.end`). The commitment is a function of every coin, so the prover gets it only after its last root.
+  (`audit_prover.Prover.end`). The commitment is a function of every coin, so the prover gets it only after its last root.
 - `{"case": {...}}`: the session's core case (`p2_case`), the log of every request the Lean answered with the
-  registration, the request and the verifier's clock floor, which `RemoteAudit.P2Protocol` replays; it is witness, which
-  the prover keeps private. A session the books vetoed has none.
+  registration, the request, the verifier's clock floor, the session id and the memory challenger's close of the case
+  (its registration's digest, its clock floor and its log), signed with its key (`Closer`), which
+  `RemoteAudit.P2Protocol` checks and replays; it is witness, which the prover
+  keeps private. A session the books vetoed, or one with no memory challenger to sign it, has none.
 - `{"answer": {...}}` ends the session (`answer`): the verdict, the failure and where, and on acceptance the credited
   reads `q_bytes`, the receipts less the wrong ones the pooled bound leaves (`pooled.bound` at δ = 2^-40), a unit's
   8,224 bytes each, over the session's span. `core_answer` puts it in the core interface's form.
@@ -44,14 +46,16 @@ it. What the
 Lean takes as given is the clock's readings and the coins the challenger (`coins.local`, on this host) releases.
 
 `python -m verity.protocols.accounting.poub.verifier.p2_party (--registration FILE | --pous-record DIR --pous-session SID)
-(--stdio | --listen HOST:PORT [--sessions N]) [--answer FILE | --device DIR] [--lean-exe EXE]` is the verifier's side
-(`main`), each session with fresh coins, the
+(--stdio | --listen HOST:PORT [--sessions N]) [--answer FILE | --device DIR] [--lean-exe EXE] [--challenger DIR
+--session SID]` is the verifier's side (`main`), each session with fresh coins, the memory challenger's key and session
+log in `--challenger`'s directory (`pous.verifier.period.challenger`) signing the close of the one session the auditor
+named `--session SID`, which is claimed in its log before the session's first coin, the
 Lean built in its package (`lake build remote-audit-verifier`) unless `--lean-exe` names a built one, or, without `lake`
 on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints `{"listening": port}` and then each
 session's `{"answer"}` on stdout, the shape of a party the auditor's gate starts over ssh with its `--device` directory
 (`verity/protocols/accounting/poub/device/live_verifier/host.py`'s party verbs), where it keeps each session's case's
-digest too, a line of `private/case-digests.txt` (`CASE_DIGESTS`, `case_digest`; 0700, the file 0600), and none of the
-case's values. `prove(reader, writer, prover)` is the prover's: it answers each
+digest too, the chain its signed close signs, a line of `private/case-digests.txt` (`CASE_DIGESTS`, `case_digest`;
+0700, the file 0600), and none of the case's values. `prove(reader, writer, prover)` is the prover's: it answers each
 message with `prover`'s `hold`, `run`, `open` and `end` until the answer, which it returns, and hands the case to its
 `case`, if it has one. It also reads a verifier that
 sends each challenge as the coin's whole opening and discloses no coins at the end, the form before `Released`: the
@@ -61,7 +65,6 @@ challenge is read as its released part, and `end` never comes.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -75,6 +78,7 @@ from pathlib import Path
 from typing import Any, BinaryIO, Protocol
 
 from verity.protocols.accounting.pous.device import challenger_session as CS
+from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
 
 from . import audit, p2, p2_lean, pooled
@@ -445,7 +449,8 @@ class Twin:
         self.request, self.not_before_ns = request, not_before_ns
         self.disagreement: dict[str, Any] | None = None
         self.log: list[dict[str, Any]] = []
-        """Every request after the session opened, as `RemoteAudit.P2Protocol` replays them (`p2_case`)."""
+        """Every request after the session opened, as `RemoteAudit.P2Protocol` replays them (`p2_case`), each coin
+        whole, as the challenger released it, where the Lean is sent its first `coins.COIN_BYTES`."""
 
     @classmethod
     def open(cls, lean: Lean, registration: p2.Registration, plan: Plan, line: bytes, secret: bytes,
@@ -489,7 +494,7 @@ class Twin:
     def _event(self, t: int, event: dict[str, Any], mine: dict[str, Any]) -> dict[str, Any]:
         c = self.books.released
         coin = None if c is None else C.coin(c).hex()
-        self.log.append({"coin": coin, "event": event, "op": "p2_event"})
+        self.log.append({"coin": None if c is None else c.coin.hex(), "event": event, "op": "p2_event"})
         got = self._ask({"op": "p2_event", "session": self.k, "event": event, "coin": coin})
         return self._settle(t, event["kind"], got, mine)
 
@@ -590,28 +595,55 @@ def hold(lean: Lean, data: bytes, chunk: int = CHUNK,
     return reg, plan
 
 
+class Closer:
+    """The memory challenger that signs a session's close (`p2_case.close_of`): its `signer`
+    (`memory_challenger.Signer`, the key it signs PoUS's sessions and the wipe's with), its session log (`log`,
+    `memory_challenger.SessionLog`), and the session id the auditor gave it for this session (`session`, 32 bytes),
+    which `claim` records in the log before the session's first coin and refuses once it is there."""
+
+    def __init__(self, signer: Any, log: Any, session: bytes) -> None:
+        if len(session) != 32:
+            raise ValueError("a session id is 32 bytes")
+        self.signer, self.log, self.session = signer, log, bytes(session)
+
+    def claim(self) -> str | None:
+        """The id claimed in the log: None, or why it is refused."""
+        try:
+            self.log.claim(self.session)
+        except mc.SessionLogError as e:
+            return f"the memory challenger refuses the session id: {e}"
+        return None
+
+
 def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, coins: bytes, lean: Lean,
             plan: Plan | None = None, clock: Callable[[], int] = time.monotonic_ns,
             sleep_until: Callable[[Callable[[], int], int], None] = P._sleep_until,
             log: Callable[[str], None] = lambda _m: None, host: str | None = None,
             keep: Callable[[dict[str, Any]], None] | None = None,
-            auditor: Mapping[str, int] = SESSION) -> dict[str, Any]:
+            auditor: Mapping[str, int] = SESSION, closer: Closer | None = None) -> dict[str, Any]:
     """The verifier's side of one session over the channel (`f_in`, `f_out`), decided by `lean`, which holds
     `registration` and `plan` (`hold`; every unit by default), with the books beside it (`Twin`): the prover's
     request, refused unless it carries the auditor's parameters `auditor` (`params_of`), the registration, each pass
     asked for in order under `plan`, each window's openings sampled once its roots
     are final and verified, the session's coins disclosed, its case (`p2_case.case_of`, which `keep` is given too)
-    unless the books vetoed it, and the answer, sent last and returned, naming the verifier's `host` (this one's name
-    by default). A line out of form or a closed channel rejects the session (its answer says why)."""
+    unless the books vetoed it or no `closer` signs its close, and the answer, sent last and returned, naming the
+    verifier's `host` (this one's name by default). The `closer`'s session id is claimed before the request is read,
+    and the session refused when the claim is. A line out of form or a closed channel rejects the session (its answer
+    says why)."""
     host = host or socket.gethostname()
     plan = Plan.whole(registration.blocks) if plan is None else plan
+
+    def refused(why: str) -> dict[str, Any]:
+        return _last(f_out, {"protocol": PROTOCOL, "registration": registration.digest.hex(), "verdict": "refused",
+                             "reason": why, "host": host})
+
+    if closer is not None and (why := closer.claim()) is not None:
+        return refused(why)
     line = f_in.readline()
     try:
         twin = Twin.open(lean, registration, plan, line, coins, clock(), auditor)
     except _Refused as e:
-        out = {"protocol": PROTOCOL, "registration": registration.digest.hex(), "verdict": "refused",
-               "reason": str(e), "host": host}
-        return _last(f_out, out)
+        return refused(str(e))
     W, passes = twin.books.s.params.windows, twin.books.s.params.min_passes
 
     def opened(t: int) -> None:
@@ -657,10 +689,16 @@ def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, c
     commitment, openings = twin.books.s.disclose()
     out = twin.answer(reason) | {"host": host}
     case = None
-    if twin.disagreement is None:
+    if twin.disagreement is None and closer is not None:
+        from verity.commitments.identity import canonical_json_bytes
+
         from . import p2_case
 
-        case = p2_case.case_of(registration_json(registration, plan), twin.request, twin.not_before_ns, twin.log)
+        held = registration_json(registration, plan)
+        head = p2_case.head(canonical_json_bytes(held), twin.not_before_ns)
+        close = p2_case.close_of(closer.signer, closer.session, head, twin.log)
+        case = p2_case.case_of(held, twin.request, twin.not_before_ns, twin.log,
+                               session=closer.session, trusted=[closer.signer.public_key], close=close)
         if keep is not None:
             keep(case)
     return _last(f_out, out, {"commitment": commitment.to_json(), "openings": [o.to_json() for o in openings]}, case)
@@ -735,13 +773,15 @@ def prove(f_in: BinaryIO, f_out: BinaryIO, prover: Prover, request: Mapping[str,
 
 
 def case_digest(case: Mapping[str, Any]) -> str:
-    """The SHA-512, as 128 lowercase hex digits, of `case`'s JSON line: its keys sorted, then a newline."""
-    return hashlib.sha512((json.dumps(dict(case), sort_keys=True) + "\n").encode()).hexdigest()
+    """The one SHA-512 a verifier's device keeps of `case` (`p2_case`), as 128 lowercase hex digits: its close's
+    chain, which the memory challenger's signed close signs, over the case's head (its registration's digest and its
+    clock floor) and every entry of its log (`p2_case.chain`)."""
+    return str(json.loads(bytes.fromhex(case["evidence"]))["close"]["chain"])
 
 
 def _keep(path: Path, case: Mapping[str, Any]) -> None:
     """`case_digest(case)` appended to `path` as one line, its directory 0700 and the file 0600: the verifier's own
-    record of the case, which holds none of its values."""
+    record of the case, the digest its signed close signs, which holds none of its values."""
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(path.parent, 0o700)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
@@ -773,9 +813,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--lean-exe", type=Path, help=f"the built {p2_lean.EXE}, the Lean verifier (default: built "
                                                   "in its Lake package, or without lake on the PATH, the one built "
                                                   "there)")
+    ap.add_argument("--challenger", type=Path, help="the memory challenger's device on this host: its LMS key and "
+                                                    "session log (`pous.verifier.period.challenger`), which sign the "
+                                                    "session's close (`Closer`)")
+    ap.add_argument("--session", help="with --challenger: the session id (64 hex) the auditor gave the memory "
+                                      "challenger for this session; without them, no session has a case")
     a = ap.parse_args(argv)
     if (a.pous_record is None) != (a.pous_session is None):
         ap.error("--pous-record and --pous-session go together")
+    if (a.challenger is None) != (a.session is None):
+        ap.error("--challenger and --session go together")
+    if a.session is not None and not re.fullmatch(r"[0-9a-f]{64}", a.session):
+        ap.error("--session is a session id, 64 lowercase hex digits")
+    if a.session is not None and a.listen is not None and a.sessions != 1:
+        ap.error("--session names one session: --sessions 1")
     data = a.registration.read_bytes() if a.registration is not None else pous_record(a.pous_record, a.pous_session)
     cases = None
     if a.device is not None:
@@ -806,12 +857,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         if cases is not None:
             _keep(cases, case)
 
+    closer = None
+    if a.challenger is not None:
+        from verity.protocols.accounting.pous.verifier import period
+
+        signer = period.challenger(a.challenger)
+        closer = Closer(signer, mc.SessionLog(a.challenger / "sessions"), bytes.fromhex(a.session))
+
     def served(r: BinaryIO, w: BinaryIO) -> dict[str, Any]:
         """One session on a Lean process of its own, so that one the prover crashes ends only its session."""
         with Lean(exe) as lean:
             hold(lean, data, auditor=auditor)
             return session(r, w, reg, coins=secrets.token_bytes(64), lean=lean, plan=plan, log=log, keep=kept,
-                           auditor=auditor)
+                           auditor=auditor, closer=closer)
 
     if a.stdio:
         done(served(sys.stdin.buffer, sys.stdout.buffer))
@@ -828,8 +886,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["Books", "CASE_DIGESTS", "EPS_TERMS", "GAMMA_TERMS", "PROTOCOL", "Prover", "SESSION", "Twin", "answer",
-           "case_digest", "core_answer", "held_json", "hold", "main", "message", "opening_json", "opening_of",
+__all__ = ["Books", "CASE_DIGESTS", "Closer", "EPS_TERMS", "GAMMA_TERMS", "PROTOCOL", "Prover", "SESSION", "Twin",
+           "answer", "case_digest", "core_answer", "held_json", "hold", "main", "message", "opening_json", "opening_of",
            "params_of", "plan_of", "pous_record", "prove", "registration_json", "registration_of",
            "registration_of_setup", "released_of", "request_of", "session", "verdict_json"]
 

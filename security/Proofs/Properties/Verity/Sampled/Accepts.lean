@@ -10,7 +10,7 @@ public import Proofs.Properties.Certifier.Check.Bytes
 public import Proofs.Properties.Spot.Tables
 
 /-!
-# Sampled proofs' acceptance: v2's verdict is verity-verify-proof `--zk`'s on the session's files
+# SPOT's acceptance: v2's verdict is verity-verify-proof `--zk`'s on the session's files
 
 The decoders' premise of the logged coupling (`Decodes`) asks that on the joint distribution's support, off the events at the
 stops it is held off, an accepted play is beside an outcome verity-verify-proof `--zk` accepts (`LiveAcceptsZKP`), which

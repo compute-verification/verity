@@ -429,7 +429,7 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as i
 
 /-- **The loop's table keeps `commitOf` of the tape's level 0**: where `src` samples the tape's level 0, at rep stream
 `2j + r` the loop's table's level-0 commitment is `commitOf` of a `Level0` on `Masked.linkIn`, at level 0 of table
-`j`'s `--zk` schedule and its `t_pad`, whose rows are `Link.rows` of its own inputs (`Level0.ofDraws_ok`). -/
+`j`'s `--zk` schedule and its `t_pad`, whose rows are `Link.rows` of its own inputs (`Level0.ofSamples_ok`). -/
 theorem Loop.Level0Src.realOf_rows0 {src : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
       ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg} {w : Flock.Wit}
@@ -458,7 +458,7 @@ theorem Loop.Level0Src.realOf_rows0 {src : Msg → Flock.Wit →
     · rename_i tb' htb
       simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
       obtain ⟨rfl, -⟩ := h
-      obtain ⟨hm, -, ⟨s, hz, hlv⟩, hrows, -, -⟩ := _root_.Flock.ZkServer.Level0.ofDraws_ok hl
+      obtain ⟨hm, -, ⟨s, hz, hlv⟩, hrows, -, -⟩ := _root_.Flock.ZkServer.Level0.ofSamples_ok hl
       have hm' : l.m = (Masked.stAt x j).m := by
         rw [show l.m = l.toIn.m from rfl, hin]
         rfl
@@ -466,7 +466,7 @@ theorem Loop.Level0Src.realOf_rows0 {src : Msg → Flock.Wit →
         rw [show l.wideLeaf = l.toIn.wideLeaf from rfl, hin]
         rfl
       rw [hm] at hm'
-      rw [_root_.Flock.ZkServer.Level0.ofDraws_wideLeaf hl] at hw'
+      rw [_root_.Flock.ZkServer.Level0.ofSamples_wideLeaf hl] at hw'
       rw [hm', hw'] at hz
       obtain ⟨hs', ht'⟩ := Prod.mk.inj (Except.ok.inj (hz.symm.trans (Masked.zkTab x j).hz))
       have hlv' : l.lv = Masked.lv0 x j := by rw [hlv, hs']; rfl

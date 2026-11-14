@@ -237,7 +237,7 @@ logs = [x for i, x in enumerate(a[1:], 1) if x not in flags and x not in flags.v
 inner = open(flags["--rec-inner"], "rb").read()
 links = flags.get("--rec-links")
 links = None if links is None else (bytes.fromhex(links.split(":")[0]), int(links.split(":")[1]))
-ok, why = RC.check(json.loads(inner)["n"], RC.digest(open(flags["--rec-rows"], "rb").read()), RC.digest(inner),
+ok, why = RC.check_twin(json.loads(inner)["n"], RC.digest(open(flags["--rec-rows"], "rb").read()), RC.digest(inner),
                    open(flags["--rec-run"]).read(), [(f, open(f).read()) for f in logs], links)
 print("REC-COMPOSE " + json.dumps({"accepted": ok, "why": why, "parts": len(logs)}))
 sys.exit(0 if ok else 1)

@@ -50,12 +50,14 @@ keyed by the seed (`SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)`) read as a function
 SHA-512 is one fixed function, and for it the premise is false in Lean at small `ε`: a fixed function's outputs are one
 family, not a spread of them (with `Hs` a point, `keys b D` takes one value). So it is a premise, read in the
 random-oracle model, and not a lemma. There `Hs` is SHA-512 sampled as a uniform function and `keys b D x` its outputs at
-the seeds the prover's run tries. Distinct seeds' receipt hashes and 256-bit sign keys
-`K = derive(seed_i, SIGN_DOMAIN, …)` are fresh queries, uniform and independent, chosen adaptively or not. The signs are
-`K.stream` rows, `k_s × 4096` bits expanded from `K`'s 256, so two candidates whose `K` collide share their signs, and
-exact uniformity (`ε = 0`) is false at two or more candidates. Off a collision the signs are fresh too, so the keys' law
-is within the collision's probability of uniform: over at most `Q + P` candidate seeds, at most `(Q + P)²/2^257`, the
-`ε` `SketchBoundDeployed` reads and `timing.sketch_failure`'s last term. The premise fails for a run that tries one seed
+the seeds the prover's run tries. Distinct seeds' receipt hashes and sign keys `K = receipts.sign_key(seed_i, k_s)`
+are fresh queries, uniform and independent, chosen adaptively or not: 512-bit keys at 64 rows
+(`derive_wide(seed_i, SIGN_DOMAIN_WIDE, …)`, all of SHA-512's output) and 256-bit keys at 16 (`derive(seed_i,
+SIGN_DOMAIN, …)`). The signs are `K.stream` rows, `k_s × 4096` bits expanded from `K`'s `b` bits, so two candidates
+whose `K` collide share their signs, and exact uniformity (`ε = 0`) is false at two or more candidates. Off a collision
+the signs are fresh too, so the keys' law is within the collision's probability of uniform: over at most `Q + P`
+candidate seeds, at most `(Q + P)²/2^(b+1)`, `timing.sketch_failure`'s last term: `(Q + P)²/2^513` at 64 rows, the `ε`
+`SketchBoundDeployed` reads, and `(Q + P)²/2^257` at 16. The premise fails for a run that tries one seed
 under two candidates (their keys are equal, not independent): the model gives each candidate its own key, and
 `timing.sketch_failure` charges each candidate a compression of its own. -/
 def SketchHashRandom [Fintype Hs] (A : Remote.Sketch.Run β Hs P N m h S L q ks G) (ε : ℝ) : Prop :=

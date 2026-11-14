@@ -526,9 +526,9 @@ def roundCommitment (value : String) : Bool :=
 
 /-- Whether every sample by `d`'s sampling design samples unit `u`: a subset sample of the whole population, a `p = 1` sample, or a unit whose
 stratum samples all of its units (`k_s = n_s`). -/
-def drawsInFull (d : Draw.UnitDraw) (u : Nat) : Bool :=
+def samplesInFull (d : Draw.UnitSample) (u : Nat) : Bool :=
   let full (s : Draw.Stratum) := s.units.any (fun (lo, hi) => lo ≤ u && u < hi) && s.k == s.size
-  match d.law with
+  match d.samplingDesign with
   | .subset k => k == d.population
   | .bernoulli a b => a == b
   | .stratified _ strata => strata.any full
@@ -536,10 +536,10 @@ def drawsInFull (d : Draw.UnitDraw) (u : Nat) : Bool :=
 
 /-- The first port of `own` and unit that reads a round's commitment (`roundCommitment`) by `own`'s reads, and that `d`
 does not sample in full. -/
-def fullMiss (own : Array Port) (d : Draw.UnitDraw) : Option (Port × Nat) :=
+def fullMiss (own : Array Port) (d : Draw.UnitSample) : Option (Port × Nat) :=
   own.findSome? fun p =>
     if roundCommitment p.value then
-      ((List.range p.reads.size).find? fun u => p.reads[u]!.isSome && !drawsInFull d u).map (p, ·)
+      ((List.range p.reads.size).find? fun u => p.reads[u]!.isSome && !samplesInFull d u).map (p, ·)
     else none
 
 /-- U4 (`Flock.HmRow`): a sampled statement samples in full every unit that reads a round's commitment by the verifier's
@@ -547,7 +547,7 @@ own reads `own` (`fullMiss`), so no stage's message is read off a sample. `draw`
 sample proves its whole population. -/
 def checkFull (own : Option (Array Port)) (draw : Option Json) : V Unit := do
   let (some own, some j) := (own, draw) | pure ()
-  let d ← Draw.UnitDraw.ofJson j
+  let d ← Draw.UnitSample.ofJson j
   match fullMiss own d with
   | none => pure ()
   | some (p, u) =>

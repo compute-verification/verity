@@ -10,7 +10,7 @@ import itertools
 import math
 
 import pytest
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity_vllm.program.predict import node_window as NW
 from verity_vllm.program.predict import node_window_join as NJ
 from verity_vllm.program.predict import node_window_dense as ND

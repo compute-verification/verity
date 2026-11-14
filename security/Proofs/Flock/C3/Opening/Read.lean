@@ -142,9 +142,9 @@ theorem plays_opening {m : ℕ} (hm : 7 ≤ m) (c : Fin 2 → Model.Claim GF128 
     PlaysT (opening execArith hm [c 0, c 1]) (openSteps s ρ γ)
       (opResult execArith hm [c 0, c 1] [(c 0, s 0, ρ 0), (c 1, s 1, ρ 1)] γ) := by
   have h₀ : PlaysT (opStep (c 0)) [.inl ⟨Fin 128 → GF128, s 0⟩, .inr ⟨Fin 7 → GF128, ρ 0⟩] (c 0, s 0, ρ 0) :=
-    playsT_recv_bind (playsT_draw_bind (.ret _))
+    playsT_recv_bind (playsT_sample_bind (.ret _))
   have h₁ : PlaysT (opStep (c 1)) [.inl ⟨Fin 128 → GF128, s 1⟩, .inr ⟨Fin 7 → GF128, ρ 1⟩] (c 1, s 1, ρ 1) :=
-    playsT_recv_bind (playsT_draw_bind (.ret _))
+    playsT_recv_bind (playsT_sample_bind (.ret _))
   have hm₁ : PlaysT ([c 1].mapM opStep)
       ([.inl ⟨Fin 128 → GF128, s 1⟩, .inr ⟨Fin 7 → GF128, ρ 1⟩] ++ ([] ++ [])) [(c 1, s 1, ρ 1)] := by
     rw [List.mapM_cons, List.mapM_nil]
@@ -208,7 +208,7 @@ theorem packed_check {m : ℕ} (hm : 7 ≤ m) {c : Flock.Claim} {c' : Model.Clai
 /-! ## The read fact -/
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 /-- **(n4's read fact) R's opening steps are the opening's prover's**, at every accepted outcome: on the tape of V*'s
 layers' messages and the rounds' coins, the part past both sparse phases begins with the opening's steps, whose ring

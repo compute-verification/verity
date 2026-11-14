@@ -765,7 +765,7 @@ theorem ofLoop_answered_inner (T : CoinLayer.TableData)
   rw [hss] at hsz
   have hrow : ((ofLoop T L₀ real).cfg x ρ ((m0, r0) :: h1)).rowH.size < 2 ^ 64 := by
     obtain ⟨-, hH, -, -⟩ := ofLoop_cfg_place T L₀ real x ρ ((m0, r0) :: h1) hx hq2 hki hph'
-    rw [hH, hc', ofDraws_rowH_size]
+    rw [hH, hc', ofSamples_rowH_size]
     exact hlay lay mask hst
   obtain ⟨i, rfl⟩ : ∃ i, j = sched.size + i := ⟨j - sched.size, by omega⟩
   rw [show sched.size + i - rsched.size = i by omega]
@@ -875,7 +875,7 @@ theorem release_innerAt
       rfl
     have hcfg : (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).cfg x (ν, t) ((m₀, ρ₀) :: ops) =
         (withFrames Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops) := by
-      unfold cfg drawsAt
+      unfold cfg samplesAt
       rfl
     rw [hco, hcfg] at hc'
     have hst : 0 < i - rsched.size → m.on = false ∧

@@ -81,7 +81,7 @@ def AccHolds (sh : Shape) (d : RepData) : Prop :=
 
 section outer
 
-variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
 
 /-- **An accepted outer proof**: at the history `(R, ω, t)` and registration `R₂`, every session's outcome
 `verity-verify-proof --zk --registered` accepts and every session's value layer is `Good`, no two sessions' registrant
@@ -141,7 +141,7 @@ from the pieces still open: the algebra decoded from V*'s layers (`AlgebraDecode
 (`VCommits`, `VDecodesR`, `VFullR`). -/
 theorem vbridge_compiled (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog)))
-    (sch : FlockSoundness.Accounting.Schedule) {n : ℕ} {L : Law n} {Reg : Type} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
+    (sch : FlockSoundness.Accounting.Schedule) {n : ℕ} {L : SamplingDesign n} {Reg : Type} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     (zs : Reg → L.Ω → List (Cm × (flockInnerCL T CT A H E Lf cls regs sch).Coin) → Reg₂ → (j : Fin S) →
       (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (x : Reg → L.Ω → Hidden cls)

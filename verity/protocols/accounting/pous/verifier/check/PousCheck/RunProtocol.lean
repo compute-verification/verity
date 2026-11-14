@@ -1,9 +1,11 @@
 module
 
+public import CoreProtocol.Account
 public import CoreProtocol.Cli
 public import CoreProtocol.Ratio
 public import PousCheck.Certificate
 public import PousCheck.Run
+meta import CoreProtocol.Account
 meta import CoreProtocol.Cli
 meta import CoreProtocol.Ratio
 meta import PousCheck.Certificate
@@ -306,6 +308,20 @@ def protocol : Core.Protocol := mkProtocol ID SCHEMES
 /-- The same check under the test signers' schemes alone, its id `test/verity/pous/p2/v4/run`. -/
 def testProtocol : Core.Protocol := mkProtocol (TEST_PREFIX ++ ID) TEST_SCHEMES
 
+/-- **What a run accounts for** (`Core.Account`): the bits of `C*` a node held in its GPUs' memory (`.hbm`, where PoUS
+keeps `C*`) when the challenges arrived (`s_bits`), verified from below at the error its certificate states (`eps`), at
+a moment. A run off every certificate publishes `certified` false, and its rows say so.
+
+Its answers name no auditor's device's key, so they are of the whole site (`witness`): the memory challenger's key the
+session was signed under is in the parameters' `trusted` list, not in the answer. They name no step the bits were held
+at (`held`). The figure a run is computed at, its certificate's `call_ns` (`Certificate.ROOT_CALL_NS`), is in the
+profile's `certificate` object, which no `Core.Account.Key` reaches, so it is no `params` entry. -/
+def account : Core.Account :=
+  { protocol := ID, witness := none
+    amounts := [{ metric := "held", part := .memory [.hbm], key := .published "s_bits", unit := Core.Account.bits,
+                  side := .verified, time := .moment, error := .published "eps",
+                  uncertified := .flagged (.published "certified") }] }
+
 /-- **The protocol accepts exactly when `accepts` does**, on the case's point, keys, setup, table, session and id. -/
 theorem protocol_accepts (p : Params) (pub : SetupProtocol.Public) (e : Evidence) :
     protocol.Accepts p pub e ↔
@@ -376,5 +392,6 @@ private def TIE_PUB : SetupProtocol.Public :=
   s!"{2 ^ 126 + 25}/{25 * 2 ^ 128}"
 #guard ((wide320Certificate 16448 21065 (2 ^ 19)).map (·.theoremName)) == some "Pous.SecurityProofs.ObligationWide320"
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason.map (·.startsWith "params: ") == some true
+#guard account.Formed ∧ account.protocol = protocol.id
 
 end PousCheck.RunProtocol

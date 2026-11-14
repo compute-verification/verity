@@ -52,7 +52,7 @@ sample `selectSecond_coin0` fixes. Until then the two-stage guarantee's non-vacu
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-open private Spot.Draw.STRATUM_KEYS Spot.Draw.WORK_STRATUM_KEYS Spot.Draw.lawKeys Spot.Draw.stratum? from Spot.Draw
+open private Spot.Draw.STRATUM_KEYS Spot.Draw.WORK_STRATUM_KEYS Spot.Draw.samplingDesignKeys Spot.Draw.stratum? from Spot.Draw
 
 namespace SpotFlock.Instance
 
@@ -109,39 +109,39 @@ theorem toOption_eq {ε α : Type} {x : Except ε α} {a : α} (h : x.toOption =
 
 /-- **The first stage's sample on 82 zero bytes**: `subset:1` over one unit samples it, reading the 82 bytes. -/
 theorem drawFirst_zeros :
-    (Spot.Draw.drawUnits (.subset 1) 1 ⟨Array.replicate 82 0⟩).toOption = some (#[0], 82) := by
-  unfold Spot.Draw.drawUnits _root_.Flock.Draw.drawWith
+    (Spot.Draw.sampleUnits (.subset 1) 1 ⟨Array.replicate 82 0⟩).toOption = some (#[0], 82) := by
+  unfold Spot.Draw.sampleUnits _root_.Flock.Draw.drawWith
   simp only [onWith_fuel _ _ _ 2, subset_fn]
   decide +kernel
 
-theorem drawFirst_coin0 : Spot.Draw.drawUnits (.subset 1) 1 (SpotFlock.src coin0) = .ok (#[0], 82) := by
+theorem drawFirst_coin0 : Spot.Draw.sampleUnits (.subset 1) 1 (SpotFlock.src coin0) = .ok (#[0], 82) := by
   rw [src_coin0_split]
-  exact Properties.Spot.SecurityProofs.drawUnits_append (toOption_eq drawFirst_zeros)
+  exact Properties.Spot.SecurityProofs.sampleUnits_append (toOption_eq drawFirst_zeros)
 
 /-- **The boundary's first stage on 82 zero bytes** proves its one unit. -/
 theorem select_zeros :
-    (Spot.Select.select (.law "subset:1") program0 query0 none none ⟨Array.replicate 82 0⟩).toOption.map (·.2.1) =
+    (Spot.Select.select (.samplingDesign "subset:1") program0 query0 none none ⟨Array.replicate 82 0⟩).toOption.map (·.2.1) =
       some #[0] := by
   simp only [Spot.Select.select, units0, bind, Except.bind, designOver0, deriveDesign0, Option.map_none,
     Option.getD_none, flockDesign0, toOption_eq drawFirst_zeros]
-  unfold Spot.Draw.checkDraw Spot.Draw.checkDrawFull Spot.Draw.sameLaw Spot.Draw.lawOf Spot.Draw.lawKeys Spot.keys?
+  unfold Spot.Draw.checkDraw Spot.Draw.checkSampleFull Spot.Draw.sameSamplingDesign Spot.Draw.samplingDesignOf Spot.Draw.samplingDesignKeys Spot.keys?
     Spot.sortStrings Spot.jeq
   simp only [canon_fuel 16, qsort_fuel]
   decide +kernel
 
 /-- **The boundary's first stage reads only the bytes its sample reads.** -/
 theorem select_append_subset {ξ t : ByteArray} {r : Array ℕ × ℕ}
-    (h : Spot.Draw.drawUnits (.subset 1) 1 ξ = .ok r) :
-    Spot.Select.select (.law "subset:1") program0 query0 none none (ξ ++ t) =
-      Spot.Select.select (.law "subset:1") program0 query0 none none ξ := by
+    (h : Spot.Draw.sampleUnits (.subset 1) 1 ξ = .ok r) :
+    Spot.Select.select (.samplingDesign "subset:1") program0 query0 none none (ξ ++ t) =
+      Spot.Select.select (.samplingDesign "subset:1") program0 query0 none none ξ := by
   simp only [Spot.Select.select, units0, bind, Except.bind, designOver0, deriveDesign0, Option.map_none,
-    Option.getD_none, flockDesign0, h, Properties.Spot.SecurityProofs.drawUnits_append h]
+    Option.getD_none, flockDesign0, h, Properties.Spot.SecurityProofs.sampleUnits_append h]
 
 /-- **The boundary's first stage at the zero coin** proves its one unit. -/
 theorem select_coin0 :
     (Spot.Select.select (reg bnd0).first.rule (reg bnd0).first.program (reg bnd0).first.query
       (reg bnd0).first.table (reg bnd0).first.closure (SpotFlock.src coin0)).toOption.map (·.2.1) = some #[0] := by
-  show (Spot.Select.select (.law "subset:1") program0 query0 none none (SpotFlock.src coin0)).toOption.map (·.2.1) =
+  show (Spot.Select.select (.samplingDesign "subset:1") program0 query0 none none (SpotFlock.src coin0)).toOption.map (·.2.1) =
     some #[0]
   rw [src_coin0_split, select_append_subset (toOption_eq drawFirst_zeros)]
   exact select_zeros
@@ -162,7 +162,7 @@ theorem sample_coin0 : (reg bnd0).sample (SpotFlock.src coin0) = #[0] := by
 /-- **The second stage reads only the bytes it needs**: an accepted second stage on `ξ` is the same on `ξ ++ t`. -/
 theorem selectSecond_append {sample ns ks : Array ℕ} {ξ t : ByteArray} {r : Json × ℕ}
     (h : Spot.Select.selectSecond sample ns ks ξ = .ok r) : Spot.Select.selectSecond sample ns ks (ξ ++ t) = .ok r := by
-  unfold Spot.Select.selectSecond Spot.Draw.drawFirstRead at h ⊢
+  unfold Spot.Select.selectSecond Spot.Draw.sampleFirstRead at h ⊢
   cases hq : Spot.Select.secondProblem sample ns ks with
   | some e => rw [hq] at h; dsimp only at h; exact absurd h (throw_bind_ne _ _ _)
   | none =>
@@ -173,17 +173,17 @@ theorem selectSecond_append {sample ns ks : Array ℕ} {ξ t : ByteArray} {r : J
     obtain ⟨parsed, hp, hd⟩ := bind_eq_ok.1 hd
     obtain ⟨⟨units, read'⟩, hu, hd⟩ := bind_eq_ok.1 hd
     exact bind_eq_ok.2 ⟨parsed, hp, bind_eq_ok.2 ⟨(units, read'),
-      Properties.Spot.SecurityProofs.drawUnits_append hu, hd⟩⟩
+      Properties.Spot.SecurityProofs.sampleUnits_append hu, hd⟩⟩
 
 /-- **The second stage on 82 zero bytes**: over one sampled replay block of two proof blocks sampling one, it proves
 the first. -/
 theorem second_zeros :
     ((Spot.Select.selectSecond #[0] #[2] #[1] ⟨Array.replicate 82 0⟩).toOption.map fun r => Spot.Draw.proved r.1) =
       some #[0] := by
-  unfold Spot.Draw.proved Spot.Select.selectSecond Spot.Draw.drawFirstRead Spot.Draw.drawUnits
-    _root_.Flock.Draw.drawWith _root_.Flock.Draw.stratifiedWith Spot.Draw.flockLaw Spot.Draw.strataProblem
-    _root_.Flock.Draw.workProblem Spot.Draw.checkDraw Spot.Draw.checkDrawFull Spot.Draw.strataMessage
-    Spot.Draw.sameLaw Spot.Draw.lawOf Spot.Draw.lawKeys Spot.Draw.stratum? Spot.Draw.STRATUM_KEYS
+  unfold Spot.Draw.proved Spot.Select.selectSecond Spot.Draw.sampleFirstRead Spot.Draw.sampleUnits
+    _root_.Flock.Draw.drawWith _root_.Flock.Draw.stratifiedWith Spot.Draw.flockSamplingDesign Spot.Draw.strataProblem
+    _root_.Flock.Draw.workProblem Spot.Draw.checkDraw Spot.Draw.checkSampleFull Spot.Draw.strataMessage
+    Spot.Draw.sameSamplingDesign Spot.Draw.samplingDesignOf Spot.Draw.samplingDesignKeys Spot.Draw.stratum? Spot.Draw.STRATUM_KEYS
     Spot.Draw.WORK_STRATUM_KEYS Spot.keys? Spot.sortStrings Spot.jeq
   simp only [onWith_fuel _ _ _ 2, canon_fuel 16, qsort_fuel, subset_fn]
   decide +kernel

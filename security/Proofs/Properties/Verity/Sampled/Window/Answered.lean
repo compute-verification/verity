@@ -3,7 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.Window.Logged
 
 /-!
-# Sampled proofs' coupling over a window: the members' answered stops, in order in the play's log
+# SPOT's coupling over a window: the members' answered stops, in order in the play's log
 
 The members' sessions' traces run one after another, each from where the one before it ended, and the play the
 sampled verdict accepts is the one on the tape of the position the last ends at. This module says where in that one

@@ -26,8 +26,8 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
 public import Proofs.Flock.Soundness.Discharge.ZkLink.M1
-public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
-public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
+public import Proofs.Flock.Soundness.Discharge.ZkLink.SampleOk
+public import Proofs.Flock.Soundness.Discharge.ZkLink.SampleOkJson
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Live
@@ -129,7 +129,7 @@ variable (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (T : Finset (Fin n) → Reg 
   (opn : ∀ (_ : Finset (Fin n)) (_ : Reg), Array ByteArray → OpensZ 𝔽 D Sl) (dg : ByteArray → ByteArray)
   (dec : Finset (Fin n) → Reg → ℕ → ByteArray → List Msg) (one : Finset (Fin n) → Reg → ℕ → Bool)
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
-  (capOf : ∀ (_ : Finset (Fin n)) (_ : Reg), ByteArray → Fin 1 → Cap D) (N : ℕ) (L : Law n)
+  (capOf : ∀ (_ : Finset (Fin n)) (_ : Reg), ByteArray → Fin 1 → Cap D) (N : ℕ) (L : SamplingDesign n)
 
 /-- **The decoder is right at the sampling design's samples** (`DecodesZK` at `L.draw ω` only): on every live outcome verity-verify-proof
 `--zk` accepts at a sample the sampling design makes, each rep's game runs on the tape decoded from its stream and proof file, and

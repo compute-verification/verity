@@ -376,7 +376,7 @@ def test_a_design_names_the_first_limit_of_the_second_stages_code_it_meets(monke
              Cell(4.0, 4096.0, prove=1e-2, fixed=5.0, cap=8, commit_bytes=512.0, table=4)]
     row = {"merged": "template", "form": "statements", "registration_sample": 3, "k": {0: 10, 1: 2}, "tables": 2.0}
     got = t.limits(cells, row)
-    assert t.draw_width(100) == (7 + 64 + 7) // 8 == 9 and t.draw_width(4) == (3 + 64 + 7) // 8
+    assert t.sample_width(100) == (7 + 64 + 7) // 8 == 9 and t.sample_width(4) == (3 + 64 + 7) // 8
     assert got["draw_bytes"] == 3 * ((2 * 10 * 9 + 64) + (2 * 2 * 9 + 64))
     # each type's sampled blocks of the phase are one session: 30 blocks within a table of 64, 6 blocks 1.5 tables of 4
     assert got["lines"] == pytest.approx(2 * 2 + t.TABLE_LINES * (1 + 1.5))
@@ -482,7 +482,9 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     a whole count of its requests or, where one is over the budget, none, at the served bits with no plan, and the
     patterns' form below the sets' wherever it doesn't reach the served bits;
     both infiltration lines plotted, and (C)'s falling with β; skipped work only for (C); the captions name what each
-    rests on and the lines the served bits bound at β = 1%; and it renders.  It plans every
+    rests on and the lines the served bits bound at β = 1%; each two-stage point with a design carries its second
+    stage's coins and Lean's bound on its refusing an honest run, and one with none carries none; and it renders.  It
+    plans every
     configuration at four shares, about a minute on four workers, the only test of the series end to end."""
     out, scope = measured, "datacenter week"
     served = out["scopes"][scope]["served_bits"]
@@ -561,6 +563,12 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
             f"session {table['largest']:,} proof blocks, within one table") in parts
     assert "forms" in lines["tokens"] and "forms" not in lines.get("every_block", {})
     assert all(c["design"] == "two-stage, by template" for n, c in out["configurations"].items() if n != "every_block")
+    for n in ("tokens", "tokens_datacenter", "per_expert_datacenter", "head_units_datacenter", "layer_of_token"):
+        for k, c in zip(lines[n]["registration_sample"], lines[n]["second_stage"], strict=True):
+            assert (c is None) == (k == 0), n
+            assert c is None or c["sample"] == k and (c["whole"] or (
+                c["stages"] >= 1 and 0 < c["refusal"] == k * c["sampled"] / 2.0 ** 64
+                and c["read"] > 64 * c["cells"])), n
     assert "everything the scope serves (" not in caps["infiltration"]
     assert "priced, not measured, a lower bound: the hashing alone" in caps["skipped_work"]
     assert "Replay is full-batch" in caps["exfiltration"] and "batch-invariant kernels (dotted" in caps["exfiltration"]

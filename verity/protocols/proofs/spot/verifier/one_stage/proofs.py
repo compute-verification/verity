@@ -22,7 +22,7 @@ soundness (`SampledKSLiveV3`, and `SampledKSLiveV5` at a shared-row public file)
 ``form`` refusal, so the mirror can only refuse more.
 
 `fits_why` and `draw_fits_why` mirror v2's refusal of a length a session's statement can't hold, since it writes each in
-an 8-byte word (`OneStageZk.fitsWhy`, `drawFitsWhy`, at `WORD`): a file, a lookup table, the program, or the partition
+an 8-byte word (`OneStageZk.fitsWhy`, `sampleFitsWhy`, at `WORD`): a file, a lookup table, the program, or the partition
 object, the registered reads or a session's sample as `printed` prints them, at ``2^64`` bytes or more.
 
 `population_why` mirrors the v2 audit's check that the public file's units are the docket's population in order
@@ -338,7 +338,7 @@ def fits_why(limit: int, circuit: bytes, public: bytes, tables: Sequence[tuple[s
 
 
 def draw_fits_why(limit: int, draw: Any) -> str | None:
-    """`OneStageZk.drawFitsWhy`: ``"the draw"`` when a session's statement would hold its record's sample ``draw`` (None
+    """`OneStageZk.sampleFitsWhy`: ``"the draw"`` when a session's statement would hold its record's sample ``draw`` (None
     for none) at ``limit`` bytes or more."""
     return "the draw" if draw is not None and limit <= printed_size(draw) else None
 
@@ -681,8 +681,9 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
     record must be on the one coin tree it shows the challenger sampled and opened, its link opened after the roots of
     exactly `STATEMENT`'s one table, its ``root_B`` of the length the statement fixes (`challenger.sessions_tree_reason`,
     `challenger.LINK_ROOT_LEN`), the program's proof blocks must be `record`'s population in order (`partition.in_order`), and the public file's header
-    must be `record`'s (`registration.matches_public`), its ``units.indices`` the population's units in order, before
-    the session is verified."""
+    must be `record`'s (`registration.matches_public` at `registration.public_ports`: a window of one member's roots
+    read bare, several members' refused), its ``units.indices`` the population's units in order, before the session is
+    verified."""
     pr, blobs = evidence_v2(proof, evidence["sessions"])
     p2 = {**params, "proofs": {"circuit": circuit_sha512, "public": public_sha512, "registered": registered}}
     e2 = {k: v for k, v in evidence.items() if k != "verdicts"} | {"proofs": pr}

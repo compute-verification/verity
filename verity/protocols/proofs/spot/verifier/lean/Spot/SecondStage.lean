@@ -8,7 +8,7 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
   query (`Partition.strata`, which `population-order` holds to the population's units, template by template), each one
   range of `Q·n_t` slots from `off_t`, `Q` the replay sample's size (`parts`). Template `t`'s cell in the sample's
   `i`-th replay block `S[i]` is its `n_t` slots from `off_t + i·n_t` (`Part.span`). One template's cells are
-  `Select.secondLaw`'s strata.
+  `Select.secondSamplingDesign`'s strata.
 * **A statement** (`Stmt`) is one second-stage session's, as its files state it: the template its circuit is an
   instance of (its stratum's name), its public file's header, its session record's sample (`unit_draw`), and the
   registered reads it was verified against (`--registered`), null for none.
@@ -21,7 +21,7 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
     `Checked`, `verifiedOf`). So the checks below read only a header, reads and a sample that were verified;
   - `second-tables`: an accepted verdict of record naming its header, registered reads and sample set its session up as
     other than one Flock table (`session_tables`, `tablesOk`): round 2 reads one session of one table for each part, so
-    a session split across tables (Flock's `tableDraw`) is refused, as one split across statements is
+    a session split across tables (Flock's `tableSample`) is refused, as one split across statements is
     (`second-template`);
   - `second-header`: its header is not the reference header the auditor's params give its template (`Own.refs`, the
     registered reference statement's, fixed before the run) placed in the run (`atRun`), both with the run's fields
@@ -43,7 +43,7 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
     reads aside, are not the record's for its template's ports (port `p` of template `t` is the record's `t/p` when the
     record names its ports by template, else `p`), each of which it roots or reads;
   - `second-sample`: its sample is not the verifier's own, the second sample's units in its part as a subset of its slots
-    (`ownDraw`); or, for a statement of only its part's sampled proof blocks, not every unit of the statement
+    (`ownSample`); or, for a statement of only its part's sampled proof blocks, not every unit of the statement
     (`wholeSample`);
   - `second-read`: a port's registered read (`readOk`) is not, for a port a link names, the boundary port it names,
     each slot reading only its unit's row of its cell's replay block's (`S[i]·r + ρ(j)`, `r` the port's rows a block
@@ -460,10 +460,10 @@ template's statement and the registered reads it reads (`refReads`, null for non
 wires (`replayWires`, none when the Definition makes none), the rows of the ports they and the links name
 (`replayRows`), the names the replay block's return has in the boundary registration's record (`replayReturns`), and,
 of the values the interior registration registers, the verifier's own copies of those it holds without the prover:
-each one it fills itself, with its rows of sources (`Registration.Verifier.supplied`, `Supplied.Rows`), and the names
-of those it pinned or holds to an earlier record (`fixed`: `Registration.Verifier.pinned` and `outputs`); the
+each one it fills itself, with its rows of sources (`Docket.Verifier.supplied`, `Supplied.Rows`), and the names
+of those it pinned or holds to an earlier record (`fixed`: `Docket.Verifier.pinned` and `outputs`); the
 templates the auditor's params record as reads, each with its table's rows, `(template, V)` (`Run.templateReads`); the
-registered tables the auditor's params pin before any coin (`tables`: `Registration.Verifier.tables`),
+registered tables the auditor's params pin before any coin (`tables`: `Docket.Verifier.tables`),
 `(parameter, entry)` each, the entry the tables' registration names; the words of the rows each wire joins
 (`replayWidths`); and the wired key's switch, by default `WIRED_KEY`, which no executable of record sets otherwise. -/
 structure Own where
@@ -991,7 +991,7 @@ def rootsOk (named : Bool) (rec : Json) (t : String) (h : Json) (reads : Array S
 
 /-- **The verifier's own sample** for part `p`'s session: the second sample's units among its slots, counted from its
 first, as `unit_draw` writes a subset of its population. -/
-def ownDraw (q : Nat) (p : Part) (drawn : Array Nat) : Json :=
+def ownSample (q : Nat) (p : Part) (drawn : Array Nat) : Json :=
   let units := (drawn.filter (p.holds q)).map (· - p.lo)
   Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson (q * p.n)), ("k", Lean.toJson units.size),
     ("units", natsJson units)]
@@ -1231,7 +1231,7 @@ def stmtCodes (own : Own) (named : Bool) (k : Nat) (p : Part) (s : Stmt) : List 
    ("second-header", headerOk own named k s.template s.header),
    ("second-population", populationOk q p s.header),
    ("second-roots", rootsOk named own.interior s.template s.header (reads.map (·.1))),
-   ("second-sample", jeq s.draw (ownDraw q p own.drawn)),
+   ("second-sample", jeq s.draw (ownSample q p own.drawn)),
    ("second-read", reads.all (fun (port, e) => readOk own named p port e) && linkedRead own p.template reads &&
      wiredRead own p.template reads),
    ("second-refs", refsOk s),
@@ -1875,7 +1875,7 @@ theorem stmtCodes_nil {own : Own} {named : Bool} {k : Nat} {p : Part} {s : Stmt}
     verifiedOk own s = true ∧ tablesOk own s = true ∧
       headerOk own named k s.template s.header = true ∧ populationOk own.sample.size p s.header = true ∧
       rootsOk named own.interior s.template s.header ((entries (getD s.registered "ports")).map (·.1)) = true ∧
-      jeq s.draw (ownDraw own.sample.size p own.drawn) = true ∧
+      jeq s.draw (ownSample own.sample.size p own.drawn) = true ∧
       (entries (getD s.registered "ports")).all (fun (port, e) => readOk own named p port e) = true ∧
       linkedRead own p.template (entries (getD s.registered "ports")) = true ∧
       wiredRead own p.template (entries (getD s.registered "ports")) = true ∧ refsOk s = true ∧
@@ -2133,7 +2133,7 @@ theorem tablesOk_one {own : Own} {s : Stmt} {c : Checked} (h : tablesOk own s = 
 /-- A passing statement of only its part's sampled proof blocks: `stmtCodes_nil`'s checks, with its header its
 template's reference's placed at the part's sampled slots (`sampledHeaderOk`), its population those slots
 (`sampledOk`) and its session's sample every unit of it (`wholeSample`) where `stmtCodes_nil` has `headerOk`,
-`populationOk` and `ownDraw`. -/
+`populationOk` and `ownSample`. -/
 theorem sampledCodes_nil {own : Own} {named : Bool} {k : Nat} {p : Part} {s : Stmt}
     (h : sampledCodes own named k p s = []) :
     verifiedOk own s = true ∧ tablesOk own s = true ∧

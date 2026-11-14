@@ -58,7 +58,7 @@ CATALOG_PACKAGES: set[str] = set()
 def catalog_package(name: str) -> None:
     """Name package ``name`` a catalog package. A package of modules that register Definitions calls this with its own
     ``__name__`` as it loads, so a reader that takes only a catalog's Definitions (a window's templates,
-    `verity.commitments.windows.interface`) knows them by the catalog that registered them, wherever its files are."""
+    `verity.commitments.periods.interface`) knows them by the catalog that registered them, wherever its files are."""
     CATALOG_PACKAGES.add(name)
 
 

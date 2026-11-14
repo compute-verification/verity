@@ -23,7 +23,7 @@ it.
 * **The docket** (`registration.record`): each statement's frame-v3 ports, the sampling design, the scheme and the
   leaf layer, checked by the verifier (R1-R7) and against each statement's header before the sample.
 * **The sample** (``coins``): ``"lean"``, the verifier's Lean (`verity-verify-proof draw --stratified K`) on a development
-  challenger's coins opened after the docket (`a0.challenger_draw`);
+  challenger's coins opened after the docket (`a0.challenger_sample`);
   a mapping ``{member: [unit, ...]}`` of each member's sampled proof blocks, a sample the proof system made on live coins; or a
   callable that takes the docket and returns that mapping (a `service.Stream`'s register and select).
 * **Proving.** Each sampled member's units are one `--zk` session on SPOT's proof server (`verity_flock.proof_server`):
@@ -292,9 +292,9 @@ def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: 
 def _draw(coins, rec: dict, program_file: Path, partition_file: Path, k: int, lean: str, out: Path,
           bases: dict[str, tuple[int, int]]) -> dict:
     """The verifier's sample as one sample object over global units: its Lean's on a development challenger's coins
-    opened after the docket (``coins == "lean"``, `a0.challenger_draw`), or the caller's."""
+    opened after the docket (``coins == "lean"``, `a0.challenger_sample`), or the caller's."""
     if coins == "lean":
-        p = a0.challenger_draw(lean, ["--program", str(program_file), "--partition", str(partition_file),
+        p = a0.challenger_sample(lean, ["--program", str(program_file), "--partition", str(partition_file),
                                       "--stratified", str(k)], rec["law"], rec["population"], R.digest(rec),
                                out / "draw.log")
         line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
@@ -366,7 +366,7 @@ def _session(m: Member, s: dict, h: Any, local: list[int], tools: Tools, sdir: P
             env["FC_ZK_SELF_CHECK"] = "skip"
         t = time.time()
         record, live = a0.session(tools.bin, s, s["n"], f"subset:{len(local)}", free_port(), sdir,
-                                  draw_file=sdir / "draw.json", zk=True, env=env)
+                                  sample_file=sdir / "draw.json", zk=True, env=env)
         session_s = round(time.time() - t, 1)
         return record, live, a0.lean_verify(tools.lean, s, s["n"], sdir, zk=True), session_s
     try:
@@ -984,7 +984,7 @@ def served_member(shape: str, seed: int, n: int = 1, reads: str | None = None) -
     hidden, values seeded by ``seed``, its table reads laid out by ``reads`` (`Member`), by default its template's own
     (`chunk_rows.reads`)."""
     from verity.circuits.codec import descriptor_id
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
     from verity_vllm.pipeline import chunk_rows as CR, serving_rows as SRW
 
     fn, gen = served(shape)

@@ -123,7 +123,7 @@ def test_v2_case_is_the_sampled_members_one_statement_whatever_the_windows_other
     assert held["proof"] == got["proof"]
 
 
-def test_v2_names_the_public_file_as_it_was_staged_before_the_draw(tmp_path):
+def test_v2_names_the_public_file_as_it_was_staged_before_the_sample(tmp_path):
     """The case's public digest is the one a5 took when it staged the member, before the sample, never the file's digest
     read after it: a public file changed since names another file, which v2 finds in no blob."""
     (tmp_path / "pub-4.bin").write_bytes(b"public, changed after the draw")
@@ -204,7 +204,7 @@ def test_a_tied_case_names_its_values_parameters_and_row_formats_as_the_lean_rea
 
 
 def test_spot_case_is_the_v2_case_in_its_one_stage_form(tmp_path, monkeypatch, stub_case):
-    """Sampled proofs refuses one-stage v1's case, so its case is v2's with the form, never v1's."""
+    """SPOT refuses one-stage v1's case, so its case is v2's with the form, never v1's."""
     zk = {"blobs": ["b"], "commitment": "ab", "evidence": stub_case.DT.canonical({"proofs": {}}).encode().hex(),
           "params": {"proofs": {"circuit": "cc" * 64, "registered": None}}}
     monkeypatch.setattr(a5, "case_v2", lambda case, sessions, **k: zk)
@@ -342,7 +342,7 @@ def test_a5_records_the_members_whose_link_points_the_registration_refuses():
     assert a5.members_proof(ms[:1], [], True) is None and isinstance(a5.members_proof(ms, [], False), str)
 
 
-def test_a5_records_a_law_none_of_whose_draws_ends(monkeypatch):
+def test_a5_records_a_law_none_of_whose_samples_ends(monkeypatch):
     """`a5.link_points` records the docket's refusal of a sampling design no sample of which ends (`link_points.NEVER_ENDS`),
     which `coins.law_problem` refuses first for every sampling design it reads: past it, `subset:41` over 40 units is refused for
     every member."""
@@ -353,7 +353,7 @@ def test_a5_records_a_law_none_of_whose_draws_ends(monkeypatch):
     assert a5.link_points({"k": 41, "law": "subset"}, 40, [m]) == {"members": 1, "error": LP.NEVER_ENDS}
 
 
-def test_a5_records_whether_the_draw_ran_out_of_the_challengers_coins():
+def test_a5_records_whether_the_sample_ran_out_of_the_challengers_coins():
     """`a5.draw_ran_out`, which fails the window: `subset:9` over 10 units first reads a stream
     of 226 bytes (`2 k · width(n) + 64`), so it runs out of one coin's 64 bytes and not of 256 zero bytes, which reject
     no word; a sampling design that doesn't apply records why."""

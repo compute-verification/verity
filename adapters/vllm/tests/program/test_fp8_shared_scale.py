@@ -198,7 +198,7 @@ def test_the_frontend_rule_binds_a_ragged_n(monkeypatch):
     columns and a K that ends mid-group are refused."""
     import torch
 
-    from verity_vllm.program.frontend.derive import Alloc
+    from verity_torch.frontend.derive import Alloc
     from verity_vllm.program.frontend.rules.vllm_bindings import (
         clear_observations,
         observe_target_profile,
