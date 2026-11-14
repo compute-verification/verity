@@ -1,0 +1,17 @@
+# The declarations that leave the inference-only policy's mixed files for the slowdown bound's area: what
+# `tools/move/rename.py --map tools/move/slowdown_split_map.toml` renames outside the Lean that moved them. A declaration
+# moved into `Slowdown` takes its namespace from its new file (`InferenceOnly.Guarantees.Inference` becomes
+# `Slowdown.Guarantees.Inference`); this map renames the other places that name it in full. Whole words only: each word
+# is a full declaration name.
+
+[words]
+
+[[words_in]]
+files = ["*"]
+
+[words_in.words]
+"InferenceOnly.Guarantees.Inference" = "Slowdown.Guarantees.Inference"
+"InferenceOnly.SecurityProofs.Inference" = "Slowdown.SecurityProofs.Inference"
+
+[rewrite]
+exclude = ["tools/move/**", "**/lean-audit.json"]
