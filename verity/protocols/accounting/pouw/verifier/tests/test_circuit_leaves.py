@@ -21,7 +21,7 @@ from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_S
                                         sha512_row_v2_digest)
 from verity.circuits.ops.scalar import BitAnd, SelectBf16
 from verity.protocols.accounting.pouw.prover.circuit import leaves as L
-from verity.protocols.accounting.pouw.prover.circuit import cap, pc4, pc8, rowk
+from verity.protocols.accounting.pouw.prover.circuit import cap, pc8, rowk
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 
 PINNED = json.loads(V.OUT.read_text())
@@ -79,26 +79,25 @@ def test_a_rows_commit_string_is_cores_at_every_padding_edge(row, role, sizes):
 
 
 def test_every_per_call_row_but_ok_the_tile_the_caps_and_the_cuts_is_a_row_seg_row():
-    """The units' committed rows (`pc4.PORTS`, `pc8.PORTS`, the execution phase tile's `pc8.SIDE_PORTS`, `cap.PORTS`, and the
-    row_k cut's `rowk.PORTS4`, `rowk.PORTS8`) are exactly the rows with a schema, and the row-seg ones are the per-call
-    rows (role X) but ok, the tile
+    """The units' committed rows (`pc8.PORTS`, the execution phase tile's `pc8.SIDE_PORTS`, `cap.PORTS`, and the row_k
+    cut's `rowk.PORTS8`; with Pearl-C4's, `test_circuit_pc4_leaves`) are rows with a schema, and the row-seg ones are the
+    per-call rows (role X) but ok, the tile
     digest, the cap's rows and the cut's six: A_i, A′_i ‖ P_A,i of both checks and A's salt-dead counts.  Every other row,
     each registered row (role W) and the cap's chunk digests and strip row (64 words, one whole block, so a unit that reads
     or writes one hashes a block before its last) included, is a `sha512/row/v2` row: no row is `sha512/row/v1`."""
-    used = {(row, role) for ports in (pc4.PORTS, pc8.PORTS, {"side": pc8.SIDE_PORTS}, cap.PORTS, rowk.PORTS4,
-                                      rowk.PORTS8)
-            for unit in ports.values() for row, role, _ in unit["rows"]}
-    assert used == set(L.ROW_SCHEMA)
+    assert rows_used(pc8.PORTS, {"side": pc8.SIDE_PORTS}, cap.PORTS, rowk.PORTS8) <= set(L.ROW_SCHEMA)
     seg = {(row, ROLE_X) for row in ("bf16", "fp32", "nvfp4-p", "fp8-p", "fp8-pi", "sd")}
     assert {k for k, s in L.ROW_SCHEMA.items() if s == SCHEMA_HM96_SHA512_ROW_SEG} == seg
     assert {k for k, s in L.ROW_SCHEMA.items() if s == SCHEMA_HM96_SHA512_ROW_V2} == set(L.ROW_SCHEMA) - seg
 
 
+def rows_used(*ports) -> set:
+    """The (row, role) pairs the units of ``ports`` commit."""
+    return {(row, role) for unit_ports in ports for unit in unit_ports.values() for row, role, _ in unit["rows"]}
+
+
 #: each unit's statement rows: its input rows' (row, role) by read, then each output row's (row, role) and run of outputs
 STATEMENTS = {
-    (pc4, "row_a"): ([("bf16", ROLE_X)], [(("nvfp4-p", ROLE_X), 3), (("ok", ROLE_X), 1)]),
-    (pc4, "row_b"): ([("bf16", ROLE_W)], [(("nvfp4-p", ROLE_W), 3), (("ok", ROLE_W), 1)]),
-    (pc4, "tile"): ([("nvfp4-p", ROLE_X)] * 2 + [("nvfp4-p", ROLE_W)] * 3, [(("tile", ROLE_X), 1)]),
     (pc8, "row_a"): ([("fp32", ROLE_X)], [(("fp8-p", ROLE_X), 2), (("ok", ROLE_X), 1)]),
     (pc8, "row_b"): ([("fp32", ROLE_W)], [(("fp8-p", ROLE_W), 2), (("ok", ROLE_W), 1)]),
     (pc8, "tile"): ([("fp8-p", ROLE_X)] * 2 + [("fp8-p", ROLE_W)] * 3, [(("tile", ROLE_X), 1)]),
@@ -113,10 +112,13 @@ def test_a_units_statement_rows_are_its_ports_schemas(mod, role):
     writes as its codes, scales and P (A′_i ‖ P_A,i, B̃_j ‖ P_B,j, the fp8-p rows) is one run of output ports, and META
     names the runs only then: a tile's one output row, its digest, is one port's.  Every schema is one META's
     ``row_schemas`` accepts, v2 or row-seg."""
+    statement_rows_are_ports_schemas(mod.PORTS[role], role, *STATEMENTS[mod, role])
+
+
+def statement_rows_are_ports_schemas(ports, role, ins, outs):
     k, (tm, tn) = 128, (2, 3)
     reads = {p: tm for p in ("ac", "as", "pa")} | {p: tn for p in ("bc", "bs", "pb")}
-    got = L.statement_rows(mod.PORTS[role], k, reads)
-    ins, outs = STATEMENTS[mod, role]
+    got = L.statement_rows(ports, k, reads)
     want = [[L.ROW_SCHEMA[r], 16 * L.ROW_WORDS[r[0]](k)] for r in ins + [r for r, _n in outs]]
     runs = {"out_row_ports": [n for _r, n in outs]} if role != "tile" else {}
     assert got == {"row_schemas": want, **runs}
@@ -249,14 +251,13 @@ def test_an_ok_row_with_a_bit_set_above_bit_0_is_refused(case):
             L.commit("ok", role, bad, salt)
 
 
-ROW_UNITS = ([pc4.templates(64)[r] for r in ("row_a", "row_b")]
-             + [pc8.templates(128, dev=d)[r] for d in ("h100", "sm120") for r in ("row_a", "row_b")])
+ROW_UNITS = [pc8.templates(128, dev=d)[r] for d in ("h100", "sm120") for r in ("row_a", "row_b")]
 
 
 @pytest.mark.parametrize("fn", ROW_UNITS, ids=lambda fn: fn.id)
 def test_a_row_unit_fixes_its_ok_words_bits_1_to_15_in_gates(fn):
     """The circuit can't write an ok row `ok_of` refuses: a row unit's last output, its ok row's one word (`leaves.OK`), is
-    `SelectBf16` of its admission bit between the constants 1 and 0 (`pc4.ok_word`), so every bit of the word is a gate's
+    `SelectBf16` of its admission bit between the constants 1 and 0 (`tile_units.ok_word`), so every bit of the word is a gate's
     and bits 1-15 are zero whatever the bit, not free bits of the committed row."""
     b = fn.body
     _space, k, _leaf = b.ret[len(b.ret) - 1]
