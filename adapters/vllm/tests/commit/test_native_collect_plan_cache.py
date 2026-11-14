@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import gc
 import hashlib
+import json
 import pickle
 import types
 from types import SimpleNamespace
@@ -617,3 +618,31 @@ def test_a_windowed_hit_step_exports_the_hinted_plan_the_worker_has_not_absorbed
     assert (key, 1) not in com._metas_cache and job.plan_hint == (key, 1) and job.hint_entries is not None
     got = com._metas_for(job, (*job.plan_hint, job.hint_entries))
     assert [(m.name, m.dev_off, m.nbytes) for m in got] == [(com._names[nid], off, nb) for nid, _dt, _sz, nb, off, _gap in entries]
+
+
+def test_a_footprint_takes_each_step_the_worker_absorbs_with_its_bytes_by_value_family(monkeypatch, tmp_path):
+    """A committer with a footprint writes three events a step: `begin_step` and `end_step` from the serving thread's side, then the
+    worker's `absorbed`. That one holds the step's stream length, its length in whole rows, where its bytes are kept, and the bytes
+    and the tensor count of each value family the step staged."""
+    com = committer(monkeypatch)
+    path = tmp_path / "footprint.jsonl"
+    com.footprint = nh._Footprint(str(path))
+    sched = schedule(40, 2)
+    run(com, sched)
+    events = [json.loads(line) for line in path.read_text().splitlines()]
+    kinds = ("begin_step", "end_step", "absorbed")
+    assert [(e["event"], e["step"]) for e in events] == [(kind, step) for step in range(len(sched)) for kind in kinds]
+    family_of = {"embed_tokens/in": "input_ids", "qkv_proj": "gemm_qkv", "fa2.m1/": "fa2_hidden_m1", "down_proj": "gemm_down",
+                 "logits": "logits", "sampled_token_ids": "sampled_ids"}
+    for absorbed, kv in zip(events[2::3], sched, strict=True):
+        want: dict[str, dict[str, int]] = {}
+        for name, t in step_tensors(kv):
+            (family,) = [f for part, f in family_of.items() if part in name]
+            of_family = want.setdefault(family, {"bytes": 0, "tensors": 0})
+            of_family["bytes"] += t.numel() * t.element_size()
+            of_family["tensors"] += 1
+        used = sum(f["bytes"] for f in want.values())
+        assert absorbed["families"] == want and sum(f["tensors"] for f in want.values()) == TENSORS
+        assert (absorbed["used"], absorbed["padded"]) == (used, -(-used // R.ROW_BYTES) * R.ROW_BYTES)
+        kept = (absorbed["retain"], absorbed["keep_bytes"], absorbed["keep_device"], absorbed["arena_block_bytes"])
+        assert kept == ("none", 0, None, None)
