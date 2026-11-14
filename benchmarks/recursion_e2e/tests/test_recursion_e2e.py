@@ -232,6 +232,55 @@ def test_result_command_writes_both_files(tmp_path: Path) -> None:
     assert doc["schema"] == RP.SCHEMA and (tmp_path / "t.md").read_text().startswith("Recursion bench: K = 4096")
 
 
+def test_under_a_research_run_the_result_records_its_metrics(tmp_path: Path, monkeypatch, capsys) -> None:
+    """Under a research run, `run.py result` (the job's last step) writes `METRICS` into the run's result through the
+    harness kit: the headline's seconds of one recursive run and its Lean step, partial while a step one recursive run
+    needs didn't run and measured once every one did, with the run's validation its verdict. Outside a run it writes
+    nothing; a second result in one run (job.sh's TERM trap after a whole one) leaves the first standing and exits 1."""
+    from verity_bench import kit
+
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "none", "gpus": [], "driver": None, "cuda": None,
+                                                    "node": "cpu-node-0", "commit": "c" * 40, "why": "no nvidia-smi"})
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261114-000000-0000")
+    assert RUN.METRICS == {"benchmarks/recursion-run-seconds": "pipeline_sum_s",
+                           "benchmarks/recursion-lean-verifier-seconds": "Lean step_s"}
+
+    def result(run_dir: Path, whole: bool = False) -> dict:
+        o = job(run_dir)
+        if whole:
+            vcap = o / "steps" / "vcap" / "r1"
+            (vcap / "out").mkdir(parents=True)
+            (vcap / "rc").write_text("0\n")
+            (vcap / "time-step.txt").write_text(timev("0:05.00"))
+        monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+        assert RUN.main(["result", "--dir", str(o), "--out", str(o / "recursion_e2e.json")]) == 0
+        capsys.readouterr()
+        return json.loads((run_dir / kit.RESULT).read_text())
+
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    outside = job(tmp_path / "outside")
+    assert RUN.main(["result", "--dir", str(outside)]) == 0 and not list(tmp_path.rglob(kit.RESULT))
+
+    got = result(tmp_path / "run")
+    doc = json.loads((tmp_path / "run" / "out" / "recursion_e2e.json").read_text())
+    h = doc["headline"]
+    assert not h["complete"] and [m["name"] for m in got["measurements"]] == list(RUN.METRICS)
+    run_s, lean_s = got["measurements"]
+    assert (run_s["value"], run_s["unit"], run_s["mark"]) == (h["pipeline_sum_s"], "s", "partial")
+    assert (lean_s["value"], lean_s["mark"]) == (h["pipeline"]["Lean step_s"], "partial") and lean_s["value"] > 0
+    assert run_s["shape"] == "K = 4096, N = 2" and got["measurement_files"] == ["out/recursion_e2e.json"]
+    assert got["validation"] == {"status": "failed", "checker": "rec_profile.headline", "evidence": ["out/recursion_e2e.json"],
+                                 "detail": RT.verdict(h, "?")}
+    assert got["validation"]["detail"].startswith("**not a whole recursive run**")
+    assert RUN.main(["result", "--dir", str(tmp_path / "run" / "out")]) == 1
+    assert "the run's result isn't recorded again" in capsys.readouterr().err
+    assert json.loads((tmp_path / "run" / kit.RESULT).read_text()) == got
+
+    got = result(tmp_path / "whole", whole=True)
+    assert [m["mark"] for m in got["measurements"]] == ["measured", "measured"]
+    assert got["validation"]["status"] == "failed" and "not accepted" in got["validation"]["detail"]
+
+
 def test_a_gpu_run_is_a_gpu_host_job_on_node_1s_queue(capsys) -> None:
     assert RUN.main(["run", "--dry-run", "--N", "16", "--steps", "lean,build", "--modes", "dev"]) == 0
     cmd = capsys.readouterr().out.split()
