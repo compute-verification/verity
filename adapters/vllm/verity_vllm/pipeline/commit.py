@@ -74,7 +74,7 @@ prof.apply_env()
 import torch  # noqa: E402
 
 from verity_vllm.engine import arrivals as AR, served as SV, vllm_adapter as va  # noqa: E402
-from verity_vllm.engine.handle import scheduler_or_none  # noqa: E402
+from verity_vllm.engine.handle import Steps, scheduler_or_none  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.pipeline.commit_attach import attach_of_record, classes_of_record  # noqa: E402
 from verity_vllm.commit import opened as OV, step_rows as SR  # noqa: E402
@@ -202,7 +202,7 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict, step: 
     """The serving loop (identical for both arms): admit requests at their arrive_step, step until done, time every step() return.
     ``step(eng.step)``, if given, runs each engine step (the remote session's `Lockstep.step`)."""
     va.fresh_prefix_cache(engine)
-    eng = engine.llm.llm_engine
+    eng: Steps = engine.llm.llm_engine
     pending = sorted(range(len(requests)), key=lambda i: (int(requests[i].get("arrive_step") or 0), i))
     tokens: dict[str, list[int]] = {}
     finish: dict[str, str | None] = {}
