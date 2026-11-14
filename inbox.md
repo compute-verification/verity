@@ -34,3 +34,64 @@ Not looked at: the slow tests of any suite locally; the other 84 suites the chan
 Held running: `r20261113-231315-f4ad` (#9867's suites), `r20261114-024714-f559`, `r20261114-024813-9266`.
 TIMER: one, NETSEATS's own, Fri 13 Nov 8:00 PM PST, to read the three runs.
 
+[2026-11-14T02:51Z] 4648c30268b6
+LAYOUTREAD to network-accounting (lead), Fri 13 Nov 6:51 PM PST. NET-100: **the kept tokens, at `2de57f84fd3e`.** Your five rulings of 6:41 PM PST are read and saved. The suites (`r20261114-022506-e158`) run on; their verdict comes at the 9:04 PM PST timer.
+
+**The 251 kept sites, in 31 rows** [ran: every site grouped by the `[keep]` entry that holds it, then read]. 167 are held outside the tree, 20 sit in kept runs that no program reads back, 6 are a test's spelling of a made message, 48 nothing outside the tree holds, 10 are the two documents.
+
+Marks: **M** nothing outside the tree holds it. **?** kept runs hold it, and no program in the tree reads it back. **T** a test spells whole a message that code makes from a kept value; the literal is the test's own.
+
+| # | Token | Sites / files | Kind | What outside this change holds it | Mark |
+|---|---|---|---|---|---|
+| 1 | `warden.json` | 55 / 21 | recorded | A kept run's file: the relay's log in every network certifier run. `network_certifier_serve.py` writes it, the deployed gate's tree with it; the trace summary, the flow capture, the connection rows, the tick load and the leak guard's declared names read kept and fetched runs by it [read] | |
+| 2 | `"warden_run"`, quoted, a key | 37 / 10 | recorded | A report's key: each step's summary of a chain run holds it, and `chain_record.py` reads it back from kept and fetched summaries, the served node's report among them, to hold every step to one run [read] | |
+| 3 | `warden/` and `/warden`, a path's segment | 30 / 5 | recorded | A kept run's directory: `<trace>/warden/` in the trace corpus (16), a rehearsal's `$OUT/warden` and `$W/warden` (9), `$OUT/honest/warden` and `$OUT/late/warden` (5) [read] | |
+| 4 | `--class warden`, `N2_CLASS=warden`, "served or warden)" | 14 / 5 | a caller's | A launch line's value: `n2_tie_zk.py`'s class, which `chain_record.sh` passes and `N2_CLASS` sets [read] | |
+| 5 | `CR_PATH=warden`, `"${CR_PATH:-}" = warden` | 10 / 3 | a caller's | A launch line's setting of `chain_record.sh` [read] | |
+| 6 | `warden/egress/0`, `warden/ingress/0`, `warden/<direction>/<w>` | 8 / 5 | kind | A row registration's value, made of the link's name: signed registrations in kept runs, and the name the Lean check reports [read] | |
+| 7 | `warden-smallkv` | 5 / 3 | recorded | The trace corpus's second label, beside `warden-heavy`: kept traces' names [read] | |
+| 8 | `warden-fails` | 3 / 2 | kind | The link name of a window's fails certificate, `<link>-fails` (`NetworkCheck/Period.lean`): signed certificates in kept runs [read]. The tokens map's header calls it the gate's refusal; it is the certificate's link | |
+| 9 | `"warden:PID"` (2), `meta['warden']` (1) | 3 / 2 | recorded | The host sampler's watch label and the trace's meta key: kept traces hold both [read] | |
+| 10 | "client or warden" | 1 / 1 | recorded | The refusal of an `ingress` value, beside `ingress="warden"` [read] | |
+| 11 | `negatives.py warden` | 1 / 1 | a caller's | The subcommand on a launch line, in its usage line [read] | |
+| 12 | `warden-registration.json`, `warden-registration-<side>-<w>.json` | 6 / 3 | recorded | A kept run's file that three programs write; nothing in the tree opens it by name [ran: grep] | ? |
+| 13 | `"warden_check"` | 3 / 3 | recorded | `certs.json`'s key; only two tests read it [ran] | ? |
+| 14 | `"warden_cost"`, `"warden_costs"` | 2 / 1 | recorded | `network_certifier_zk.py`'s summary keys; nothing reads them [ran] | ? |
+| 15 | `"warden_cores_busy"`, `"warden_cpu_s"`, `"warden_invol"` | 4 / 2 | recorded | The trace summary's keys; one test reads one [ran] | ? |
+| 16 | the a5 negatives' names: "prover-root-under-the-wardens-certificate (check_registration)", "window-naming-another-warden-root (source)" | 3 / 2 | recorded | Keys of the a5 report's negatives; its test reads one [ran] | ? |
+| 17 | `b"verity/a5/warden-stand-in/v1"`, `b"a5-warden/rest/%d"` | 2 / 1 | domain tag | A digest: the a5 stand-in's window root and the seed of its rows. Kept a5 runs hold the digests; no pin in the tree does [ran: no hex pin in its test] | ? |
+| 18 | "warden thread", "warden ticker" | 3 / 1 | recorded | Made from the process label `warden` that the serve program gives the stall probe; kept runs' stall records hold the made key [read] | T |
+| 19 | "device warden" | 1 / 1 | a caller's | Made from the gate's `end.json` value `device` [read] | T |
+| 20 | "on the warden path" | 1 / 1 | a caller's | Made from `CR_PATH`'s value [read] | T |
+| 21 | "this key reads only: a warden rehearsal" | 1 / 1 | a caller's | Made from the gate's verb `warden-rehearse` [read] | T |
+| 22 | `a.warden_run`, `a.warden`, and the tests' stand-ins for the parsed arguments | 22 / 7 | | Nothing: argparse's attribute of a flag | M |
+| 23 | `scan_zk.warden_run`, a function | 5 / 2 | | Nothing: `scan_zk.py` (4), one mention in `n2_tie_zk.py` | M |
+| 24 | `chain_record.scan_step`'s parameter `warden_run` | 3 / 1 | | Nothing | M |
+| 25 | `CLEAR`'s keys `"warden_certificates"`, `"warden_endpoint"`, `"warden_endpoint_served"` | 10 / 4 | | Nothing: a dictionary inside `chain_record.py`; a record holds the value's sentence, never the key [read] | M |
+| 26 | `"unit/warden-row"`, `"unit/a5-warden"` | 2 / 2 | | Nothing: a stager's label, which `UnitStager` puts only in its messages [read: `class_statement.py`] | M |
+| 27 | `"g1/warden"` | 3 / 1 | | Nothing: a test's own path for a run (`test_chain_record.py`) | M |
+| 28 | `"not-the-wardens"` | 1 / 1 | | Nothing: a test's own user name | M |
+| 29 | `cursor/allp-cert-warden-form-061a` | 2 / 1 | | Nothing now: `scan_period.sh`'s default ref, a branch the remote no longer has [ran: `ls-remote`], so the default is dead | M |
+| | The Glossary's row | 8 / 1 | said | The row itself, as one spelling (your ruling 5) | |
+| | `an *active warden*`, `a passive warden` in ARCHITECTURE.md | 2 / 1 | said | Network steganography's terms (your ruling 5) | |
+
+Sums: rows 1 to 11, 167; rows 12 to 17, 20; rows 18 to 21, 6; rows 22 to 29, 48; the documents, 10; 251. `WARDEN_DEFAULTS` (3 sites) is apart, ruled.
+
+**Renaming the flags' attributes by `dest=`** [read]. 22 sites in 7 files:
+- 8 declarations gain `dest=`: `--warden-run` in `chain_record.py` (4 subcommands), `n2_tie_zk.py`, `n2_zk.py` and `scan_zk.py`; `--warden` in `tick_load.py`. The flag strings stay and still count under a caller's.
+- 16 reads change: `a.warden_run` in those four programs (10), `a.warden` in `tick_load.py` (6).
+- 6 sites in two tests change: `test_chain_record.py` and `test_network_certifier_chain.py` hand `chain_record.report` a namespace with the field `warden_run` in place of parsed arguments.
+- No launch line changes, and no record: no program writes its parsed arguments out [ran: grep], and `tick_load.py` still writes the key `"warden"` from the flag.
+- The tokens map today keeps every `warden_run` that stands as a word, and `a.warden`. Renaming these needs that keep narrowed to the quoted key, plus rows for the attribute, the function (row 23) and the parameter (row 24).
+
+**The number of spellings** (your ruling 4: stop past about a dozen). I have written none.
+- **14** if every marked row (M, ?, T) becomes a map row or a hand edit: 12 for rows 1 to 11 (row 3 takes two, row 9 two, row 7 only widens `warden-heavy`) and 2 for the documents (the Glossary's row; "a passive warden", with the asterisks let into the spelling that holds "an active warden").
+- **24** if the ? and T rows are held by spellings instead: 6 more for rows 12 to 17 and 4 for rows 18 to 21.
+- For the T rows there is a third way: each test builds its expected text from the kept constant, a hand edit in four tests and no spelling.
+
+**One thing I did not split** [ran]. The quoted word `"warden"` is one spelling for 210 sites over the whole tree, and it holds more than a link window's kind: a run directory's name (`d / "warden"`), a class value, a subcommand, a watch label's key. The kind's name fits only the first. Say if you want that table too.
+
+**`WARDEN_DEFAULTS`** (your ruling 1): I add the row to the third step's map in scratch now, as its own commit on the trial's branch, and run the map again for its three sites. Monday's map pull request then holds the map edit (5 in, 9 out) and this row (1 in). The same map's edit for the outside callers' names (14 in, 15 out) stays in the rename's own pull request unless you say it goes Monday too.
+
+**Next:** the suites' verdict by suite at 9:04 PM PST. The test's whole-tree form waits for your ruling on the marked rows, then the root suite alone on it.
+
