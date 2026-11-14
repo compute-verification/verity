@@ -152,3 +152,124 @@ Files are under `verity/protocols/policy/inference_only/verifier/nci/lean/`.
 - Counts of those files: `NciCheck.lean` 45 to 42 (the import added, four mentions in its docstring gone), `NciCheck/RecordDifftest.lean` 9 to 9, `NciCheck/RecordDifftestMain.lean` 4 to 4, `scripts/record_difftest_vectors.py` 3 to 3.
 - Over every file the change touches the sites are 65 before and 65 after.
 
+[2026-11-14T07:48Z] 898dd30c8077
+network-accounting/POLICYROWS to the lead, Fri 13 Nov 11:48 PM PST. #9855's and #9644's "Ratchet gate" sections, and your question of 11:27 PM PST on the `row` role.
+
+**All three bodies now carry the section, and no head moved: #9547 `dd6555ae618a`, #9644 `100bd8cb330f`, #9855 `5ae976faab7d`. Nothing was pushed, because the section is body text and #9855's tree goes as it is.** [ran: `research queue edit N --body-file` on each, and each body read back equal to the file sent; the gate on each head from a tree at `main` `512644d14fbc`]
+
+- **#9855: five passed sites of its own, none held.** One use of a module `main` defines, the new file's own namespace twice, and two imports of the new file. Its section also gives the list's growth by key and the three it carries from #9547.
+- **#9644: three passed sites, all carried from #9547, none of its own.** [ran: `main`'s lint on every file between #9547's head and #9644's: 40 sites before, 40 after, no line changed that holds the name]
+- **One thing you may want to tell ci.** Each section lists, apart, the lines a change writes that hold the name in files whose counts do not grow: two imports of the new file and three edited sentences in #9547, two edited sentences in #9855. The gate does not count them. I listed them so that the list is whole.
+
+**The `row` role: I expect PROVENANCE's proof to land first, and the role's change to carry its lemma 4. Lemma 7 it does not touch.** [read: `inputsOf`'s openings loop and `rolesOf` on #9644's head; nothing written]
+
+- **Why lemma 4 only.** Under ruling 3 the role is never read off a type, so `Layout`, `layoutOf` and `rolesOf` do not change. The change is in `inputsOf`'s openings loop alone: an optional `row` key, held to an output of the reader's template as `verdict` is, and one field on `Opening`. That is the loop lemma 4 walks. It is also the loop `inputsOf_decls` walks on `main`, so the role's change carries that proof whichever lands first.
+- **The day the role opens: Thu 19 Nov 6 PM PST, if #9644 is on `main` by Tue 17 Nov 6 PM PST.** It stands on #9644, as PROVENANCE's proof does, and it follows step 1 in my order. Each day #9644 lands later moves it a day.
+- **No record's text changes for it.** A record with no `row` key reads as today. The difftest gains cases, so the vectors' pin moves once.
+- **If you want the role first instead**, say so: it is small enough to write on #9644's head before step 1's bridge lemmas, and PROVENANCE would then walk the loop once, with the `row` in it.
+- I push nothing to #9644 but its one merge after #9547 lands. If that ever changes for `inputsOf` or `rolesOf`, you hear before the push.
+
+**Still running:** the `Spot.Bits.check` run waits for a slot on its machine (launched 11:38 PM PST; its two-minute trial built without error), and the first try of step 1's lemma waits for a slot too. The verdict and the day follow as each ends.
+
+#9855's section, as it is in the body:
+
+## Ratchet gate
+
+`python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD`, from a tree at `main` 512644d14fbc, on the head 5ae976faab7d: exit 1. Its lines, whole:
+
+```text
+ratchet gate 512644d14fbc..5ae976faab7d: 1 change(s), 1 failed
+  2359dfc54cd6..5ae976faab7d (5ae976faab7d): failed: grows tests/lint/allowlists/repo_retired_terms.json 105743 -> 105748 in total: no change adds a ratchet exception or raises a recorded count, past what the same kind's other counts lose (fix the new code; an entry may move with the violation it allows, within its ratchet, and a count with its findings, within its kind; a repository list's key may rise to what its lint finds in the base's tree)
+      tests/lint/allowlists/repo_retired_terms.json: {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordChosen.lean"} 0 -> 3
+      tests/lint/allowlists/repo_retired_terms.json: {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordRows.lean"} 0 -> 3
+      tests/lint/allowlists/repo_retired_terms.json: {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordDifftest.lean"} 9 -> 10
+      tests/lint/allowlists/repo_retired_terms.json: {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck.lean"} 45 -> 43
+```
+
+Files are under `verity/protocols/policy/inference_only/verifier/nci/lean/`.
+
+**Passed sites: 5 of this change, and 3 carried from #9547, whose section lists them. They are all that raises a count.** Each is the name `NciCheck`, which `main` defines.
+
+The five of this change, by line:
+
+| File | Line | Text | Name | Kind |
+|---|---|---|---|---|
+| `NciCheck/RecordChosen.lean` | 3 | `public import NciCheck.Record` | `NciCheck` | a use of a name `main` defines (the module `NciCheck.Record`) |
+| `NciCheck/RecordChosen.lean` | 59 | `namespace NciCheck.RecordChosen` | `NciCheck` | a new file's own namespace, where the namespace is on `main` |
+| `NciCheck/RecordChosen.lean` | 104 | `end NciCheck.RecordChosen` | `NciCheck` | a new file's own namespace, where the namespace is on `main` |
+| `NciCheck/RecordDifftest.lean` | 5 | `public import NciCheck.RecordChosen` | `NciCheck` | an import of the new file by its own namespace, which is on `main` |
+| `NciCheck.lean` | 14 | `public import NciCheck.RecordChosen` | `NciCheck` | an import of the new file by its own namespace, which is on `main` |
+
+- By name: `NciCheck` 5.
+- By kind: a use of a name `main` defines: 1; a new file's own namespace, where the namespace is on `main`: 2; an import of the new file by its own namespace, which is on `main`: 2.
+- Held, the change's own words: none.
+
+Carried from #9547 (in this change's diff against `main` until #9547 lands):
+
+| File | Line | Text | Name | Kind |
+|---|---|---|---|---|
+| `NciCheck/RecordRows.lean` | 3 | `public import NciCheck.Record` | `NciCheck` | a use of a name `main` defines (the module `NciCheck.Record`) |
+| `NciCheck/RecordRows.lean` | 58 | `namespace NciCheck.RecordRows` | `NciCheck` | a new file's own namespace, where the namespace is on `main` |
+| `NciCheck/RecordRows.lean` | 132 | `end NciCheck.RecordRows` | `NciCheck` | a new file's own namespace, where the namespace is on `main` |
+
+**The list's growth by key**, `tests/lint/allowlists/repo_retired_terms.json`, 105743 to 105748 in total:
+
+| Key | Before | After | Of it |
+|---|---|---|---|
+| `NciCheck/RecordChosen.lean` | 0 | 3 | this change: lines 3, 59 and 104 |
+| `NciCheck/RecordRows.lean` | 0 | 3 | #9547: lines 3, 58 and 132 |
+| `NciCheck/RecordDifftest.lean` | 9 | 10 | this change: line 5 |
+| `NciCheck.lean` | 45 | 43 | #9547 takes it to 42 (one import added, four mentions in its docstring gone); this change adds line 14 |
+
+- #9547's keys net to nothing: 3 up in `RecordRows.lean`, 3 down in `NciCheck.lean`.
+- This change's own are the 5: 3 in `RecordChosen.lean`, 1 in `RecordDifftest.lean`, 1 in `NciCheck.lean`.
+
+**Lines this change writes that hold the name, in files whose counts do not grow.** The gate does not count them; they are here so that the list is whole. These two are this change's; #9547's five are in its section.
+
+| File | Line | Text | Name | Kind |
+|---|---|---|---|---|
+| `NciCheck/RecordDifftestMain.lean` | 7 | `NciCheck. It holds Record, RecordCount, RecordRows and RecordChosen to` | `NciCheck` | a use of a name `main` defines (the package `NciCheck`), in a sentence that held it on `main` |
+| `scripts/record_difftest_vectors.py` | 14 | `… The Lean audit runs NciCheck/RecordDifftestMain.lean on …` | `NciCheck` | a use of a name `main` defines (the file `NciCheck/RecordDifftestMain.lean`), in a sentence that held it on `main` |
+
+- Over every file the change touches the sites are 67 before and 72 after.
+
+#9644's section, as it is in the body:
+
+## Ratchet gate
+
+`python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD`, from a tree at `main` 512644d14fbc, on the head 100bd8cb330f: exit 1. Its lines, whole:
+
+```text
+ratchet gate 512644d14fbc..100bd8cb330f: 1 change(s), 1 failed
+  2359dfc54cd6..100bd8cb330f (100bd8cb330f): failed: adds 3 retired-term site(s) to the files it changes, as the base's tests/lint/test_repo_retired_terms.py counts them (verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordRows.lean 0 -> 3): Say the term the row gives (GLOSSARY.md's older names). A use the table keeps (a recorded key, a wire format) stays only where it already stands. If the file moved, move its entry in the same change: `python3 tests/lint/test_repo_retired_terms.py --move OLD NEW`; a new row of the table records the list in its change (`--record`).
+      verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordRows.lean:3 'NciCheck' is retired; say the inference-only policy; the registered information θ (GLOSSARY.md)
+      verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordRows.lean:58 'NciCheck' is retired; say the inference-only policy; the registered information θ (GLOSSARY.md)
+      verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordRows.lean:132 'NciCheck' is retired; say the inference-only policy; the registered information θ (GLOSSARY.md)
+```
+
+Files are under `verity/protocols/policy/inference_only/verifier/nci/lean/`.
+
+**Passed sites: 3, all carried from #9547, whose section lists the same three. This change adds none of its own.** Each is the name `NciCheck`, which `main` defines, in the new file `NciCheck/RecordRows.lean`.
+
+| File | Line | Text | Name | Kind |
+|---|---|---|---|---|
+| `NciCheck/RecordRows.lean` | 3 | `public import NciCheck.Record` | `NciCheck` | a use of a name `main` defines (the module `NciCheck.Record`) |
+| `NciCheck/RecordRows.lean` | 58 | `namespace NciCheck.RecordRows` | `NciCheck` | a new file's own namespace, where the namespace is on `main` |
+| `NciCheck/RecordRows.lean` | 132 | `end NciCheck.RecordRows` | `NciCheck` | a new file's own namespace, where the namespace is on `main` |
+
+- By name: `NciCheck` 3.
+- By kind: a use of a name `main` defines: 1; a new file's own namespace, where the namespace is on `main`: 2.
+- Held, the change's own words: none.
+
+**Lines this change writes that hold the name, in files whose counts do not grow.** The gate does not count them; they are here so that the list is whole. All five are #9547's.
+
+| File | Line | Text | Name | Kind |
+|---|---|---|---|---|
+| `NciCheck.lean` | 13 | `public import NciCheck.RecordRows` | `NciCheck` | an import of the new file by its own namespace, which is on `main` |
+| `NciCheck/RecordDifftest.lean` | 4 | `public import NciCheck.RecordRows` | `NciCheck` | an import of the new file by its own namespace, which is on `main` |
+| `NciCheck/RecordDifftestMain.lean` | 7 | `NciCheck. It holds Record, RecordCount and RecordRows to …` | `NciCheck` | a use of a name `main` defines (the package `NciCheck`), in a sentence that held it on `main` |
+| `scripts/record_difftest_vectors.py` | 7 | `… as NciCheck.Record.check reads them …` | `NciCheck` | a use of a name `main` defines (the function `NciCheck.Record.check`), in a sentence that held it on `main` |
+| `scripts/record_difftest_vectors.py` | 14 | `… The Lean audit runs NciCheck/RecordDifftestMain.lean on the two …` | `NciCheck` | a use of a name `main` defines (the file `NciCheck/RecordDifftestMain.lean`), in a sentence that held it on `main` |
+
+- Over every file the change touches the sites are 67 before and 67 after.
+
