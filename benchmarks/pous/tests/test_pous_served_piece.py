@@ -582,7 +582,9 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
                     for k, v in SP.HB.p2_party.SESSION.items())
     assert lean == own | {"profile": None, "public": None, "reason": f"the request is refused: {why}", "verdict": "reject"}
     assert own["commitment"] == p2_case.digest(case).hex() and own["profile"]["units"] == 2
-    assert _jsonl(tmp_path / "parties" / "bw" / "private" / "cases.jsonl") == [case]
+    kept = tmp_path / "parties" / "bw" / "private"
+    assert (kept / SP.HB.p2_party.CASE_DIGESTS).read_text().splitlines() == [SP.HB.p2_party.case_digest(case)]
+    assert sorted(p.name for p in kept.iterdir()) == [SP.HB.p2_party.CASE_DIGESTS]
     assert _jsonl(tmp_path / "parties" / "bw" / "answers.jsonl")[-1]["verdict"] == "accept"
 
     assert {k: v for k, v in bw["public"].items() if k not in ("gamma", "r_bytes_per_s")} == own["public"]

@@ -49,7 +49,7 @@ def test_a_steps_units_are_numbered_in_order_without_overlap() -> None:
 
 @pytest.mark.parametrize("linear", list(S.LINEARS))
 @pytest.mark.parametrize("m", S.MS)
-def test_the_sampled_units_hold_the_grids_corners_and_middle(linear: str, m: int) -> None:
+def test_the_picked_units_hold_the_grids_corners_and_middle(linear: str, m: int) -> None:
     nrb, ncb = m // S.T, S.LINEARS[linear][0] // S.T
     got = S.picks(linear, m)
     assert got == S.picks(linear, m) and got == sorted(set(got)) and len(got) == S.PICKS
