@@ -20,8 +20,8 @@ from verity.protocols.accounting.pouw.verifier import credit as CR
 
 from tests.protocols import pouw_h1_credit as PC
 from verity_vllm.engine import int8_ops as OPS
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import served as SV
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
 SALT = hashlib.sha512(b"salt").digest()
 

@@ -5785,7 +5785,7 @@ def _declared(tmp_path: Path, files: dict | None = None, live=(32, 2)) -> tuple[
     """A serve dir whose serve-openai declared a window Program of digest `DIGEST` at T 32, S 2 (serve.json and
     ``h1/window-program.meta.json``, its layout `served.declared_layout`'s over two linears at K 32 and 64), and a
     circuit-files directory for it whose manifest holds `files` (default the live file and k32's, not k64's)."""
-    from verity_vllm.protocols.pouw.h1 import served as SV
+    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
     d, c = tmp_path / "serve", tmp_path / "circuits"
     (d / "h1").mkdir(parents=True)
     c.mkdir()
@@ -5806,7 +5806,7 @@ def test_the_period_opens_on_the_served_programs_digest_and_files_as_cores_credi
     It names no weights without ``--model`` (the gate refuses a root its registry lacks). ``period close`` closes it."""
     from verity.protocols.accounting.pouw.verifier import credit as CR
     from verity.commitments.crypto import lms
-    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+    from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
 
     A = _auditor()
     (tmp_path / "var" / "sessions").mkdir(parents=True)
@@ -5889,8 +5889,8 @@ def test_the_program_is_built_off_the_server_as_serve_openai_declares_and_writes
     S, and writes them with serve-openai's own `served.write_program`; ``--like`` takes model, T and S from a serve
     dir and refuses a digest other than the one that run declared. The declaration and its digest are stand-ins here
     (a real one takes minutes); the node job checks the real one against a recorded run's digest."""
-    from verity_vllm.protocols.pouw import h1 as PH
-    from verity_vllm.protocols.pouw.h1 import served as SV
+    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
     seen = []
     monkeypatch.setattr(SV, "declared", lambda shapes, modules, rows, steps, unit=None: ("program", shapes, modules, rows,
@@ -5964,8 +5964,8 @@ def test_the_offline_program_is_the_one_serve_openai_declares_under_the_same_pro
     from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT, h1window as HW
     from verity_vllm.pipeline import serve_h1 as SH
     from verity_vllm.protocols import pouw
-    from verity_vllm.protocols.pouw import h1 as PH
-    from verity_vllm.protocols.pouw.h1 import served as SV
+    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+    from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
     model, j10r = "verity-int8/Llama-3.2-1B-INT8", {"pouw": {"unit": "j10r", "ks": [2048]}}
     llama, linear = _llama(torch, model)

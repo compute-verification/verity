@@ -126,8 +126,8 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.Sampled.Target", "Proofs.Properties.Verity.Assembled",
   "Proofs.Properties.Verity.Sampled.Place", "Proofs.Properties.Verity.Sampled.Instance",
   "Proofs.Properties.Verity.Sampled.SessionAt", "Proofs.Properties.Verity.Sampled.OpensRecorded",
-  "Proofs.Properties.Verity.Sampled.OpensAt", "Proofs.Properties.Challenger.Steps",
-  "Proofs.Properties.Challenger.Plain", "Proofs.Properties.Challenger.Entry", "Proofs.Properties.Challenger.Signer",
-  "Proofs.Properties.Challenger.Built", "Proofs.Properties.Challenger.Files", "Proofs.Properties.Challenger.Bodies",
-  "Proofs.Properties.Challenger.Logs", "Proofs.Properties.Challenger.Messages", "Proofs.Properties.Challenger.Ledger",
-  "Proofs.Properties.Challenger.Withheld", "Proofs.Pouw.Credit.Withheld"]
+  "Proofs.Properties.Verity.Sampled.OpensAt", "Proofs.Properties.Verity.InferenceOnly",
+  "Proofs.Properties.Challenger.Steps", "Proofs.Properties.Challenger.Plain", "Proofs.Properties.Challenger.Entry",
+  "Proofs.Properties.Challenger.Signer", "Proofs.Properties.Challenger.Built", "Proofs.Properties.Challenger.Files",
+  "Proofs.Properties.Challenger.Bodies", "Proofs.Properties.Challenger.Logs", "Proofs.Properties.Challenger.Messages",
+  "Proofs.Properties.Challenger.Ledger", "Proofs.Properties.Challenger.Withheld", "Proofs.Pouw.Credit.Withheld"]

@@ -58,8 +58,8 @@ from verity.protocols.accounting.pouw.verifier.protocol import DomainError
 
 from verity_vllm.check.replay.delegate import Place, delegated
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import circuit as PC
-from verity_vllm.protocols.pouw import native as PN
+from verity.protocols.accounting.pouw.prover.serving import circuit as PC
+from verity.protocols.accounting.pouw.prover.serving import native as PN
 from verity_vllm.records.schema_ids import POUW_CIRCUIT_REPLAY_SCHEMA
 
 M32 = 0xFFFFFFFF

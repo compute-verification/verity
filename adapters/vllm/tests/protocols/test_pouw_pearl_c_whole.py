@@ -20,14 +20,14 @@ from verity.protocols.accounting.pouw.verifier.serving import DEFERRED_A, SERIAL
 
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols.linear.api import Arm, PassSpec, Stack
-from verity_vllm.protocols.pouw import pearl_c as PPD
-from verity_vllm.protocols.pouw.pearl_c import graphs as PG
-from verity_vllm.protocols.pouw.pearl_c import lanes as L
-from verity_vllm.protocols.pouw.pearl_c import passes as PP
-from verity_vllm.protocols.pouw.pearl_c import served_y as SY
-from verity_vllm.protocols.pouw.pearl_c.ends import PassEnds
-from verity_vllm.protocols.pouw.pearl_c.host import joined
-from verity_vllm.protocols.pouw.pearl_c.whole import VLLM, WholeStep
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import graphs as PG
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import lanes as L
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import passes as PP
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.accounting.pouw.prover.serving.pearl_c.ends import PassEnds
+from verity.protocols.accounting.pouw.prover.serving.pearl_c.host import joined
+from verity.protocols.accounting.pouw.prover.serving.pearl_c.whole import VLLM, WholeStep
 
 NONE, FULL = "NONE", "FULL"
 
