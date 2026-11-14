@@ -1,4 +1,4 @@
-"""Pearl-C's grouped call on sm_90a off the card (benchmarks/pouw/pearl_c_sm90/grouped.py, and the vLLM call over it,
+"""Pearl-C's grouped call on sm_90a off the card (verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/grouped.py, and the vLLM call over it,
 `pouw_pearl_c_grouped.gemm_grouped`), on a recording stand-in for the device: each expert's rows cut into units of at most
 pd_commit's 256 rows; each unit's record in the call's table is the launch `run.Pipeline` makes for that unit's rows called
 alone, at the unit's offsets; a call is eight launches whatever its experts; and the vLLM call's matmuls, tiles, keys, screen
@@ -24,7 +24,8 @@ from verity_vllm.protocols.pouw.pearl_c import grouped as PG  # noqa: E402
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY  # noqa: E402
 from verity_vllm.protocols.pouw.pearl_c.host import joined  # noqa: E402
 
-HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm90"
+HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
+POUW = Path(__file__).resolve().parents[1]
 SCHEME = "pearl-c-h100-v1-h3"
 SALT_KEY = bytes(range(100, 132))
 STEPS = ["pd_commit_gm_851", "stats_s5", "eprime", "form_s5_g", "gemm_words_g_d", "pa", "gemm_pearlc_g_d", "pd_tiles_g_979"]
@@ -39,7 +40,7 @@ def load(name: str, path: Path):
 
 
 R = load("pearl_c_sm90_run", HERE / "run.py")
-F = load("pearl_c_sm90_fixture", HERE / "fixture.py")
+F = load("pearl_c_sm90_fixture", POUW / "pearl_c_sm90" / "fixture.py")
 G = load("pearl_c_sm90_grouped", HERE / "grouped.py")
 
 
@@ -412,7 +413,7 @@ def test_grouped_checks_pass_diff_counts_what_is_committed_not_the_schedule(tmp_
     serial schedule: their manifests (each unit's y root too) differ in the schedule they ran under alone, which it doesn't
     count, and a changed A rows file it does.  The recording stand-in runs no GEMM, so a call alone's y is whatever
     ``torch.empty`` left: zeroed, as the grouped call's buffers start."""
-    C = load("pearl_c_sm90_grouped_check", HERE / "grouped_check.py")
+    C = load("pearl_c_sm90_grouped_check", POUW / "pearl_c_sm90" / "grouped_check.py")
     empty = torch.empty
     monkeypatch.setattr(torch, "empty", lambda *a, **kw: empty(*a, **kw).zero_())
     ws, counts, n, k = (1, 3), [3, 20], 128, 1024

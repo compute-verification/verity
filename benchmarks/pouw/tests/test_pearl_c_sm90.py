@@ -1,4 +1,4 @@
-"""Pearl-C's sm_90a tree off the card (benchmarks/pouw/pearl_c_sm90): the GEMMs within the H100's 227 KB with their
+"""Pearl-C's sm_90a tree off the card (verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90): the GEMMs within the H100's 227 KB with their
 tiles the runner's, the kernel's constants the scheme's, the SASS gate refusing a lowered or spilling build, the check
 fixture against the scheme on the H100 record, and run.py's identity refusal and dry run on a CPU stand-in for libcuda
 (pearl_c/fake_cuda.c, with pearl_c_sm120/fake_tma.c's tensor maps; an H200's name, SM count, compute capability, UUID
@@ -23,7 +23,8 @@ import pytest
 from verity.protocols.accounting.pouw.verifier.audit import weights_root
 from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
 
-HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm90"
+HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
+POUW = Path(__file__).resolve().parents[1]
 SM120_DIR = HERE.parent / "pearl_c_sm120"
 
 
@@ -35,7 +36,7 @@ def load(name: str, path: Path):
     return mod
 
 
-F = load("pearl_c_sm90_fixture", HERE / "fixture.py")
+F = load("pearl_c_sm90_fixture", POUW / "pearl_c_sm90" / "fixture.py")
 S = load("pearl_c_sm90_sass_gate", HERE / "sass_gate.py")
 RUN = load("pearl_c_sm90_run", HERE / "run.py")
 
@@ -194,7 +195,7 @@ def test_bf16_rows_are_off_unless_pearlc_bf16_rows_is_1(monkeypatch):
         else:
             monkeypatch.setenv("PEARLC_BF16_ROWS", raw)
         assert load("pearl_c_sm90_run_bf16_rows", HERE / "run.py").BF16_ROWS is on
-        assert of(HERE.parent / "settings.py").PEARLC_BF16_ROWS is on
+        assert of(POUW / "settings.py").PEARLC_BF16_ROWS is on
     sys.modules.pop("pearl_c_sm90_run_bf16_rows")
 
 
@@ -227,9 +228,9 @@ def test_the_resident_debit_body_is_words_launches_with_nothing_copied(monkeypat
             self.log.append(("sync",))
 
     monkeypatch.setattr(sys, "path", list(sys.path))
-    monkeypatch.setitem(sys.modules, "run", RUN)
+    monkeypatch.setitem(sys.modules, "pearl_c_sm90_kernel_run", RUN)
     monkeypatch.setattr(RUN, "Dev", Dev)
-    deb = load("pearl_c_sm90_debit", HERE / "debit.py")
+    deb = load("pearl_c_sm90_debit", POUW / "pearl_c_sm90" / "debit.py")
     rng = np.random.default_rng(7)
     a, b, k = deb.codes(rng, 150, 256), deb.codes(rng, 40, 256), 256
     budget = 12 * 64 * (k // deb.WINDOW) * deb.BLOCK_ROWS
@@ -374,7 +375,7 @@ def test_the_whole_check_refuses_a_capture_forking_a_tree_and_a_scales_where_a_c
     races, so `e2e.whole_check` fails it before capturing anything (the stand-in run has nothing to capture with), naming
     the race and the setting that serves without it (`e2e.BF16_RACE`).  Without either option, hashing, the mark,
     BF16_ROWS or a kernel that has BF16 rows at all, nothing is refused."""
-    E2E = load("pearl_c_vllm_e2e_bf16_race", HERE.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm_e2e_bf16_race", POUW / "pearl_c_vllm" / "e2e.py")
     marked = SimpleNamespace(has=lambda name: name == RUN.BF16_ROWS_MARK)
     kernel = SimpleNamespace(run=RUN, dev=marked)
 
