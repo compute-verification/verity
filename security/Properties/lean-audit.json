@@ -21839,7 +21839,7 @@
    }
   },
   "NetworkCheck.Period": {
-   "digest": "36650d7b12e1c58633d880544d1bfa85be25e8f6f248c8eab6e2e7b9293fdfa5",
+   "digest": "6df38c34baefe370c2eeb056e50a56860eb277c2fcde120b15d8902571364978",
    "definitions": {
     "NetworkCheck.Period.Audit": "0d641bb152e911020e01f254af27bca6b76ff4e2cb57994e3121b4fcb8e976f4",
     "NetworkCheck.Period.Audit.bits": "e933e5e70e66fbf6d1a3f868d294c6a0cfc6be8b835a4d117602235327ee4af1",
@@ -21969,7 +21969,6 @@
     "NetworkCheck.Period.auditCheck": "e6f73e4d15a6469e786454e34a75dc5dc89d4be19c6397825aecbce7e26c7d00",
     "NetworkCheck.Period.auditChecks": "b7deac9ac717541d4f249c3227e8f1a4816ee5b7e0dfac8286ecd47861fd6b92",
     "NetworkCheck.Period.auditOf": "01d0626ec0cd525b7ecd47cbc32b58acc1209037801bd2c4118f1b202ee129cd",
-    "NetworkCheck.Period.auditStateEntries": "bbd0d0de91d83a0ef73aa5a51ff1f13d810463e230634e4735cd4bcf804091af",
     "NetworkCheck.Period.bitsOf": "bfa24d57cf13db4bdb0032e9d460ef313ca29a96afa96396acb0b72642570cd8",
     "NetworkCheck.Period.canonText": "f3f56595df2de44e1a87807d7066086208c80a22fdfffa9044b637fa3f43e82e",
     "NetworkCheck.Period.capReason": "79d36632afa13638ec2b76495e3a792912cd10f97614c58091af830196c02a14",
@@ -22075,7 +22074,7 @@
     "NetworkCheck.Period.stateEntries": "8d4a7a66881c4242ff8c4369d24b6d4ee442ee704a1ea259e352723a10e6fef1",
     "NetworkCheck.Period.stateName": "d4a0d1b2f034d66eabb427424fdb2398ed17d6426b838438552f05fd58440d17",
     "NetworkCheck.Period.stateRead": "97b90a46698d8eb4f232859b185cecac03fc8135fdebed629b08797d4675d9ce",
-    "NetworkCheck.Period.stateTied": "44f46e44ca20311eb72281c4a655e356799a85e2e23b2b0c06ca05ab29c947af",
+    "NetworkCheck.Period.stateTied": "189ff757c459ae5966100492a86e15be54cec50c769423d7c427d0ba0a2d76ee",
     "NetworkCheck.Period.stateValue": "63dac99dda2ed22004eb242aca27e62efa0d2209fb416e4313afdd52cf162a76",
     "NetworkCheck.Period.syncSetOf": "346ada140c55631212c4cfbb0688fb06225626064c5a3af7fc2a43454e994155",
     "NetworkCheck.Period.templateNodes": "0e5acec667f1eb0086e977788a889c1e431b7b5d7bf77dcf7c57150c1d35ed33",
