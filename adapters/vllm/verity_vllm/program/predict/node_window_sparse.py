@@ -24,7 +24,7 @@ from __future__ import annotations
 from typing import Any
 
 from verity.circuits.codec import descriptor_id
-from verity.circuits.refs import runs
+from verity.circuits.refs import Affine, runs
 from verity.commitments.windows import interface as IF
 from verity.definitions.registry import sparse_mla_split as SMS
 
@@ -98,10 +98,16 @@ def entry(w: NodeWindow, refs: Any, K: int) -> str:
     or another read gave the name other words."""
     label = _label_at(w, refs)
     first, n = next((f, k) for x, f, k in w.b.weights if x == label)
-    if any(s[:2] != ("p", WEIGHTS) or not first <= s[2] < s[3] <= first + n for s in w.segments(refs)):
+    rs = runs(refs)
+    if any(s != "p" or w.params[i] != WEIGHTS for s, i, _lo, _hi in rs):
+        raise Unexpressible(f"{label}: a batched GEMM's weight reads past the weight")
+    lo, hi = min(r[2] for r in rs), max(r[3] for r in rs)
+    (s,) = w.segments(Affine("p", rs[0][1], lo, hi - lo))
+    if not first <= s[2] < s[3] <= first + n:
         raise Unexpressible(f"{label}: a batched GEMM's weight reads past the weight")
     param = f"{weight_param(label, K)}/bnk"
-    if list(runs(w.entries.setdefault(param, refs))) != list(runs(refs)):
+    prev = w.entries.setdefault(param, refs)
+    if prev is not refs and runs(prev) != rs:
         raise Unexpressible(f"{param}: read at two layouts of the weights record")
     w.b.params[param] = len(refs)
     return param

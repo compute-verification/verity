@@ -167,6 +167,7 @@ class NodeWindow:
         weights = dict(fn.signature()[0])[WEIGHTS]
         labels = [label for label, _ in weights.fields]
         self.fields = _spans(f"{name}: weight", weights.fields)
+        self._firsts = [f[0] for f in self.fields]
         self.b.weights = tuple((label, s[1], e[1] - s[1]) for label, s, e in zip(labels, self.fields, self.fields[1:]))
         nodes = fn.body.nodes
         ends = [j for j, n in enumerate(nodes) if _family(n) in SELECTS]
@@ -274,7 +275,7 @@ class NodeWindow:
                         out.append(("n", idx, m, _word(spans, lo - m * L, what), _word(spans, e - m * L, what)))
                     lo, m = e, m + 1
             elif self.params[idx] == WEIGHTS:
-                k = bisect.bisect_right([f[0] for f in self.fields], lo) - 1
+                k = bisect.bisect_right(self._firsts, lo) - 1
                 if hi > self.fields[k + 1][0]:
                     raise Unexpressible(f"{self.name}: a weight read of leaves [{lo}, {hi}) spans two weights")
                 out.append(("p", WEIGHTS, _word(self.fields, lo, f"{self.name}: a weight read"),

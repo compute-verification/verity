@@ -31,7 +31,7 @@ import numpy as np
 
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.batch import evaluate_batch
-from verity.circuits.refs import runs
+from verity.circuits.refs import Strided, runs
 from verity.commitments import randomness as RND
 from verity.commitments.windows import interface as IF
 
@@ -174,6 +174,9 @@ class Values:
         L = len(refs) // node.n
         return refs.slice(t * L, (t + 1) * L)
 
+    def _end(self, lo: int) -> int:
+        return self._fields[bisect.bisect_right(self._firsts, lo)][0]
+
     def _weight(self, lo: int, hi: int) -> np.ndarray:
         k = bisect.bisect_right(self._firsts, lo) - 1
         first, word, bits = self._fields[k]
@@ -185,6 +188,12 @@ class Values:
 
     def leaves(self, refs: Any) -> np.ndarray:
         """``refs``' leaves (refs, or ``(space, idx, lo, hi)`` runs), each in its own width, widened to the widest."""
+        if isinstance(refs, Strided) and refs.count > 1 and refs.inner > 1 and refs.inner_stride != 1:
+            j = np.arange(refs.count)
+            at = refs.base + j // refs.inner * refs.outer_stride + j % refs.inner * refs.inner_stride
+            lo, hi = int(at.min()), int(at.max()) + 1
+            if refs.space == "n" or self.names[refs.idx] != WEIGHTS or hi <= self._end(lo):
+                return self.leaves([(refs.space, refs.idx, lo, hi)])[at - lo]
         parts = []
         for space, idx, lo, hi in (refs if isinstance(refs, list) else runs(refs)):
             if space == "n":
