@@ -127,7 +127,7 @@ def _window(details: dict[str, Any], tables: dict[int, Any]) -> Any:
     (1) that was not served, under the challenger's coins and with every request entered; its `details` and its calls'
     `tables`."""
     calls = [SimpleNamespace(index=0, m=1, module="q"), SimpleNamespace(index=1, m=0, module="r")]
-    run = SimpleNamespace(calls=calls, details=details, tables=tables, coin_source=CHALLENGER, request_gaps=list,
+    run = SimpleNamespace(calls=calls, details=details, tables=tables, coins_from=CHALLENGER, request_gaps=list,
                           verdict=lambda call: dict(CREDITED))
     run.gated = lambda: H1Run.gated(run)
     return run
