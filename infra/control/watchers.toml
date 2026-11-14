@@ -143,6 +143,6 @@ env = { RESEARCH_STORE = "/root/watchers-labels-pack-store" }
 name = "metrics-rerun"
 argv = ["python3.12", "-s", "{src}/infra/control/metrics_rerun.py", "--tree", "/root/fast/metrics-rerun-tree",
         "--state", "{dir}/metrics-rerun.json", "--stop", "{dir}/metrics-rerun.stop", "--plan", "{dir}/gpu-plan.toml",
-        "--on", "vy-nebius-cpu-15", "--pool", "research", "--max", "2"]
+        "--on", "vy-nebius-cpu-12", "--pool", "research", "--max", "2"]
 env_files = ["/root/.config/verity/r2.env", "{dir}/metrics-rerun.env"]
 env = { RESEARCH_STORE = "/root/watchers-metrics-rerun-store", RESEARCH_LANE = "infra" }

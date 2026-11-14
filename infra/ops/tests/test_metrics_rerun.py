@@ -70,7 +70,7 @@ def setup(tmp_path, files, **kw):
     for where, rows in files.items():
         (tree / where).mkdir(parents=True, exist_ok=True)
         (tree / where / "metrics.toml").write_text(toml(rows))
-    cfg = R.Settings(tree, tmp_path / "state.json", tmp_path / "stop", tmp_path / "plan.toml", "vy-nebius-cpu-15", "research", **kw)
+    cfg = R.Settings(tree, tmp_path / "state.json", tmp_path / "stop", tmp_path / "plan.toml", "vy-nebius-cpu-12", "research", **kw)
     return cfg
 
 
@@ -85,12 +85,12 @@ def test_a_stale_cpu_number_is_launched_on_the_named_machine_and_pool_and_record
     cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/share", CPU)]})
     pod = Pod(ages={"compute-accounting/share": 8 * DAY_MS})
     state, saved = run(cfg, pod)
-    assert pod.launched == [["research", "run", "--on", "vy-nebius-cpu-15", "--pool", "research", "--project", "verity",
+    assert pod.launched == [["research", "run", "--on", "vy-nebius-cpu-12", "--pool", "research", "--project", "verity",
                              "--source", ".", "--cwd", "source", "--store-read", "--", "uv", "run", "python",
                              "benchmarks/compute/run.py"]]
     (e,) = state["launches"]
     assert (e["metrics"], e["run"], e["at"], e["machine"], e["state"]) == (
-        ["compute-accounting/share"], "r20261114-120001-ab12", "2026-11-14T12:00:00Z", "vy-nebius-cpu-15", "submitted")
+        ["compute-accounting/share"], "r20261114-120001-ab12", "2026-11-14T12:00:00Z", "vy-nebius-cpu-12", "submitted")
     assert saved[0]["launches"][0]["state"] == "launching", "the record holds the launch before it starts"
 
 
@@ -149,6 +149,16 @@ def test_a_command_that_failed_twice_is_held_until_its_declaration_changes(tmp_p
     assert len(pod.launched) == 3
 
 
+def test_a_run_its_pool_never_started_is_no_failure_and_counts_as_no_launch(tmp_path):
+    cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/share", CPU)]})
+    pod = Pod()
+    state, _ = run(cfg, pod)
+    for n in range(1, 4):
+        pod.states[f"r20261114-1200{n:02d}-ab12"] = ("failed", 75)
+        run(cfg, pod, state, now=NOW + n * 900)
+    assert len(pod.launched) == 4 and [e["state"] for e in state["launches"]] == ["unrun"] * 3 + ["submitted"]
+
+
 def test_the_stop_file_stops_every_launch(tmp_path):
     cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/share", CPU)]})
     cfg.stop.write_text("")
@@ -163,8 +173,8 @@ def test_a_dry_run_says_what_it_would_launch_and_why_and_launches_nothing(tmp_pa
     pod = Pod(ages={"compute-accounting/share": 9 * DAY_MS})
     state, saved = run(cfg, pod, dry_run=True)
     assert pod.launched == [] and saved == [] and state["launches"] == []
-    assert pod.lines[-1].startswith("would launch compute-accounting/share on vy-nebius-cpu-15: compute-accounting/share's newest "
-                                    "reading is 9.0 d old, past its every 7d: research run --on vy-nebius-cpu-15 --pool research")
+    assert pod.lines[-1].startswith("would launch compute-accounting/share on vy-nebius-cpu-12: compute-accounting/share's newest "
+                                    "reading is 9.0 d old, past its every 7d: research run --on vy-nebius-cpu-12 --pool research")
 
 
 def test_a_gpu_command_runs_only_on_a_machine_the_plan_lists_free_for_it_now(tmp_path):

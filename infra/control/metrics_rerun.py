@@ -25,7 +25,8 @@ A pass:
     launch    in the tree, `research run --on MACHINE [--pool POOL] --project verity --source .`, then the row's own options
               but its `--on`, then its workload. The record holds the launch before it starts (its numbers, command,
               declaration, machine and time) and its run id once the launch names one; a launch that names none has failed.
-              Each pass reads how the record's running launches stand (`research.runs`) before it judges.
+              Each pass reads how the record's running launches stand (`research.runs`) before it judges. A run its pool
+              never started (exit 75) is no failure and counts as no launch.
 
 The plan, written by the lead for the week (TOML; a missing file lists no machine):
 
@@ -75,6 +76,8 @@ GPU_FLAGS = ("--gpus", "--gpu-model", "--gpu-ids", "--gpu-host")
 OWNERS = "NODE"                                         # `--on NODE`: a machine its owner picks
 PLACEHOLDER = re.compile(r"^\[?([A-Z][A-Z0-9_]+)\]?$")  # FIRE_RUN, [RUN: what the command's owner fills in
 ENDED = ("done", "failed", "cancelled", "refused", "launcher-exited", "runner-gone")    # research.runs.ENDED
+NOT_STARTED = 75                                        # a pool run that never took a slot: no failure of its command, and no launch
+OVER = ("passed", "failed", "unrun")
 LAUNCH_S = dispatch.LAUNCH_TIMEOUT_S                    # a launch that names no run by then has failed
 KEEP = 400                                              # launches the record keeps
 URL = "https://github.com/compute-verification/verity.git"
@@ -223,13 +226,14 @@ def failed(e: dict) -> bool:
 
 
 def last_of(record: list[dict], metric: str) -> dict | None:
-    return next((e for e in reversed(record) if metric in e.get("metrics", [])), None)
+    """The newest launch of `metric` that ran or still may: one its pool never started counts as none."""
+    return next((e for e in reversed(record) if metric in e.get("metrics", []) and e.get("state") != "unrun"), None)
 
 
 def refresh(record: list[dict], status: Callable[[str], tuple[str, int | None]], now: float, say: Callable[[str], None]) -> None:
     """How each launch the record holds as under way stands now: ended (passed or failed), or still going."""
     for e in record:
-        if e.get("state") in ("passed", "failed"):
+        if e.get("state") in OVER:
             continue
         if not e.get("run"):
             if now - at(e["at"]) >= LAUNCH_S:
@@ -241,8 +245,9 @@ def refresh(record: list[dict], status: Callable[[str], tuple[str, int | None]],
             say(f"run {e['run']} ({', '.join(e['metrics'])}): not read ({type(x).__name__}: {x}); it counts as running")
             continue
         if state in ENDED:
-            e.update(state="passed" if state == "done" and rc == 0 else "failed", ended=iso(now), rc=rc, how=state)
-            say(f"run {e['run']} ({', '.join(e['metrics'])}): {e['state']} ({state}, rc {rc})")
+            ok = "passed" if state == "done" and rc == 0 else "unrun" if rc == NOT_STARTED else "failed"
+            e.update(state=ok, ended=iso(now), rc=rc, how=state)
+            say(f"run {e['run']} ({', '.join(e['metrics'])}): {ok} ({state}, rc {rc})")
         else:
             e["state"] = state
 
@@ -270,7 +275,7 @@ def plan_rows(path: Path, say: Callable[[str], None]) -> list[dict]:
 def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], cfg: Settings, now: float) -> list[Decision]:
     """What a pass does with each job that is due or that a bound stops; a job with no due number is left out."""
     readings = {str(m.get("id")): m for m in door.get("metrics") or [] if isinstance(m, dict)}
-    busy = {e.get("machine") for e in record if e.get("state") not in ("passed", "failed")}
+    busy = {e.get("machine") for e in record if e.get("state") not in OVER}
     out, launched = [], 0
     for job in jobs:
         def skip(why: str, job: Job = job) -> None:
@@ -300,7 +305,7 @@ def decide(jobs: list[Job], door: dict, record: list[dict], plan: list[dict], cf
             blocked = None
             for r in job.rows:
                 last = last_of(record, str(r.get("id")))
-                if last and last.get("state") not in ("passed", "failed"):
+                if last and last.get("state") not in OVER:
                     blocked = f"its last launch, run {last.get('run') or '(not yet named)'} at {last['at']}, still runs"
                 elif last and now - at(last["ended"]) < (every_s(r) or 0):
                     blocked = (f"its last launch, run {last.get('run') or '(none named)'}, {last['state']} at {last['ended']}, "
