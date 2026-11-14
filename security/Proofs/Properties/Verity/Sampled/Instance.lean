@@ -144,7 +144,7 @@ structure Instance (d : Accounting.Device ι) (α : Type) [Fintype α] where
   base : Vocab d α
   deployment : Device.Deployment
   signer : ∀ θ, base.signer θ = deployment.signer base.families θ
-  pinned : Pinned
+  pinned : PinnedTables
   read : ∀ θ F, base.read θ F = readOf pinned θ F
   programDigest : ∀ θ, base.programDigest θ = programDigestOf θ
   publicDigest : ∀ θ, base.publicDigest θ = publicDigestOf θ
@@ -506,12 +506,12 @@ theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFind
 
 /-! ## `Covers` -/
 
-/-- **The registered files pass the file check wherever some files do**, at parameters naming the one-stage form
-that the deployment runs a session at (`session`, the instance's own data: the deployment's session at `θ`, which no
-strategy picks): where some committed files hold a file with each digest the parameters hold, as the verifier's check
-of an accepting play's files finds them (`Vocab.Verdict`), the registered files hold one too. No check of the verifier
-reads the registered files: this is the registration's, whose parameters hold the SHA-512s of the files it registers.
-At parameters the deployment runs no session at it says nothing, and the published `δ` there is `⊤` (`deltaOf`). -/
+/-- **The registered files pass the file check wherever some files do**, at parameters `θ` naming the one-stage form
+(`ParamsAt`) at which the deployment runs a session (`session θ = some A`): where some committed files hold a file
+with each digest the parameters hold (`Vocab.Registered`), as the verifier's check of an accepting play's files finds
+them (`Vocab.Verdict`), the registered files (`Vocab.registered θ`) hold one too. No check of the verifier reads the
+registered files: this is the registration's, whose parameters hold the SHA-512s of the files it registers. At
+parameters the deployment runs no session at it says nothing. -/
 def RegisteredFiles : Prop :=
   ∀ θ F A, I.session θ = some A → (∃ p, ParamsAt θ p) → I.base.Registered θ F →
     I.base.Registered θ (I.base.registered θ)
@@ -723,15 +723,16 @@ noncomputable def cost (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
       (Verity.Game.Tape.out _ σ t).sent.blobs.size
 
 /-- **The idle deployment at v2's reading**: `Idle.vocab δ 1` with the idle deployment's signer (`signer`) and its
-signature count, v2's reading of the committed files at no pinned table registered (`Pinned.empty`) and its digests,
-the declared calls `cost`, and every name that reads the committed circuit or a strategy of the play at them. -/
+signature count, v2's reading of the committed files at no pinned table registered (`PinnedTables.empty`) and its
+digests, the declared calls `cost`, and every name that reads the committed circuit or a strategy of the play at
+them. -/
 noncomputable def base (δ : ℝ≥0∞) : Vocab Verity.Idle.device Unit :=
   { Verity.Idle.vocab δ 1 with
     signer := signer
-    read := readOf Pinned.empty
+    read := readOf PinnedTables.empty
     programDigest := programDigestOf
     publicDigest := publicDigestOf
-    place := fun θ F _ g => placeOfRead (readOf Pinned.empty θ F) g
+    place := fun θ F _ g => placeOfRead (readOf PinnedTables.empty θ F) g
     extract := fun _ _ _ _ _ => 0
     finder := fun _ _ _ _ _ => Verity.Idle.finder
     cost := cost
@@ -750,9 +751,9 @@ noncomputable def base (δ : ℝ≥0∞) : Vocab Verity.Idle.device Unit :=
     world_capacity := fun _ _ _ _ _ => rfl
     theta := fun _ _ => ∅
     theta_input := fun _ _ _ h => absurd h (Finset.notMem_empty _)
-    schedule := fun θ F => blocks (readOf Pinned.empty θ F).circuit
-    wipe := fun θ F => wipe (readOf Pinned.empty θ F).circuit
-    wipeRun := fun θ F c _ => ofRun (readOf Pinned.empty θ F).circuit (Verity.play [] (signer θ) θ F c)
+    schedule := fun θ F => blocks (readOf PinnedTables.empty θ F).circuit
+    wipe := fun θ F => wipe (readOf PinnedTables.empty θ F).circuit
+    wipeRun := fun θ F c _ => ofRun (readOf PinnedTables.empty θ F).circuit (Verity.play [] (signer θ) θ F c)
     honest := fun θ F c =>
       Verity.requestThen [] (signer θ) θ F c .empty ⟨.empty, fun _ => ⟨(.empty, #[]), ⟨⟩⟩⟩ }
 
@@ -767,7 +768,7 @@ noncomputable def inst (δ : ℝ≥0∞) (session : ByteArray → Option Live) :
   base := base δ
   deployment := deployment
   signer _ := rfl
-  pinned := Pinned.empty
+  pinned := PinnedTables.empty
   read _ _ := rfl
   programDigest _ := rfl
   publicDigest _ := rfl

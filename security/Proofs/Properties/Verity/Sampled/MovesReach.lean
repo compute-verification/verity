@@ -759,7 +759,7 @@ statement `rep_rounds`'s premise `hans` is an instance of (`verdict_read`, `Sets
 (`verdict_opens`, `verdict_nodup`), its premises `hsome` and `hkey` from the record `sessionTreeReason` accepts
 (`recordRound_isSome`, `keyAt_of_record`), and the layout's slot for each round the log opens of a stream of the
 record's tree from the session's coin tree, which `Record.decode` holds the record's to (`SetsUp.covers_logged`). -/
-theorem firstStop_reps_verdict {V : Vocab d α} {T : Pinned} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+theorem firstStop_reps_verdict {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (reg : Option Claims.Msg → A.Reg) (record : Exchange → Option Claims.Msg)
     (recordDigest : Claims.Msg) {rd : Reading A.rounds} (hrd : rd = readingAt A.tables A.layout record recordDigest)

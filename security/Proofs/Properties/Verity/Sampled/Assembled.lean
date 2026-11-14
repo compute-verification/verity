@@ -229,7 +229,8 @@ registered files `T` and the device's history `dev`, the bound digests' finder a
 the readings `rd`, the decoders `D` and the sample-coupled coin maps at the sample's family `label`, its digest
 `after` and the coins `κ`, and the messages' two-continuation finders at `rd`. -/
 noncomputable def Constructions.assembled (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α} (K : Constructions V)
-    (T : Pinned) (dev : Exchange → Properties.Challenger.History) (k : Verity.Registration.Composite) (rd : Readings)
+    (T : PinnedTables) (dev : Exchange → Properties.Challenger.History) (k : Verity.Registration.Composite)
+    (rd : Readings)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)
     (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String)
@@ -257,7 +258,7 @@ most the hiding term (`hε`, which four gaps a stop meet wherever `2(1 + A.N) �
 an accepted transcript's view (`hW`), and on the joint law's support off the empty classes the outcomes beside accepted
 plays whose log v2 read is the device's, whose blobs sent hold each pinned table at its registered file and whose sample
 answers the strategy's `afterAt` are the writer's at the moves v2's files decode to (`hM`). -/
-theorem couplingTarget_assembled (K : Constructions V) (T : Pinned)
+theorem couplingTarget_assembled (K : Constructions V) (T : PinnedTables)
     (dev : Exchange → Properties.Challenger.History) (rd : Readings)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)

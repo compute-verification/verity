@@ -404,7 +404,7 @@ the log's first opening (`RoundsReach.stop_frame`, `firstOpened_noPick`), of the
 which asks for `A.mP + A.mP` coins (`link_frameCount`, at the record's sample, `recordDraw_firstStop`); each answered
 stop's frame is round `k` of the first table's rep stream at its fixed round's slot (`stop_slot`), which asks for its
 message's count (`stop_count`). So no stop off the first events is in the second (`RoundsReach.weaken`). -/
-theorem ReachesOff.counts {V : Vocab d α} {T : Pinned} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+theorem ReachesOff.counts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (reg : Option Claims.Msg → A.Reg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
@@ -500,7 +500,7 @@ theorem ReachesOff.counts {V : Vocab d α} {T : Pinned} {θ : ByteArray} {F : Ar
 the device's log and each pinned table at its registered file (`TablesSent`) and that v2 samples at `after`
 (`SampledDigest`), with what it takes of each accepted play the cut holds
 of stated for every tape, as `movesReach_layout` takes it. -/
-theorem countsReach_layout {V : Vocab d α} {T : Pinned} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+theorem countsReach_layout {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (reg : Option Claims.Msg → A.Reg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
@@ -525,7 +525,7 @@ theorem countsReach_layout {V : Vocab d α} {T : Pinned} {θ : ByteArray} {F : A
 
 /-- **`CountsReach` at the deployment**: `countsReach_layout` at `movesReachAt`'s readings, decoders, family, digest
 and coins, its premises on the sample closed as `movesReachAt` closes them. -/
-theorem countsReachAt {V : Vocab d α} {T : Pinned} {k : Verity.Registration.Composite} {θ : ByteArray}
+theorem countsReachAt {V : Vocab d α} {T : PinnedTables} {k : Verity.Registration.Composite} {θ : ByteArray}
     {F : Array ByteArray} {A : Live} (reg : Option Claims.Msg → A.Reg)
     (record : ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : ByteArray → Claims.Msg) (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
@@ -551,7 +551,7 @@ deployed device's history and `movesReachAt`'s readings, decoders, family, diges
 `movesReachAt` and the count match (`countsReachAt`, `movesReach_at`). It holds wherever the vocabulary's signer at
 `θ` is the deployment's (`hD`) and `movesReachAt`'s premises hold, with no bound on the stops' term. -/
 theorem couplingTargetAt_counts {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V)
-    (T : Pinned) (P : Device.Deployment) {θ : ByteArray} {F : Array ByteArray} {A : Live}
+    (T : PinnedTables) (P : Device.Deployment) {θ : ByteArray} {F : Array ByteArray} {A : Live}
     (reg : (A : Live) → Option Claims.Msg → A.Reg)
     (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)

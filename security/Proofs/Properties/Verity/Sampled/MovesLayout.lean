@@ -192,7 +192,7 @@ trees name their streams distinctly come from the verdict (`verdict_opens`, `ver
 stream answers the record's round's digest from v2's read and the record (`rep_answers`), and the session's one link
 round and its `N` live rounds from `Live.rounds_eq`. The roots (`firstStop_rootB`) and the link points (`link_pts`) read
 the same first opening. -/
-theorem ReachesOff.movesOf {V : Vocab d α} {T : Pinned} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+theorem ReachesOff.movesOf {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (reg : Option Claims.Msg → A.Reg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
@@ -257,7 +257,7 @@ map, with `after` the strategy's `afterAt`): `ReachesOff.movesOf` at every outco
 device's log and that v2 samples at `after` (`SampledDigest`), where what it takes of a play holds of every tape whose
 play the sampled verdict accepts and whose log v2's check read is the device's, and v2's family and digest (`hN`) of
 those whose sample answers `after`. -/
-theorem movesReach_layout {V : Vocab d α} {T : Pinned} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+theorem movesReach_layout {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (reg : Option Claims.Msg → A.Reg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}

@@ -48,7 +48,7 @@ coins `srcCoinsAt MAX_COINS`. It holds wherever:
   `MAX_COINS` frames' bytes (`hL`);
 * the device's log opens only the record's rounds at every accepted play whose log v2 read is the device's (`hO`,
   `OpenedRecorded`). -/
-theorem movesReachAt {V : Vocab d α} {T : Pinned} {k : Verity.Registration.Composite} {θ : ByteArray}
+theorem movesReachAt {V : Vocab d α} {T : PinnedTables} {k : Verity.Registration.Composite} {θ : ByteArray}
     {F : Array ByteArray} {A : Live} (reg : Option Claims.Msg → A.Reg)
     (record : ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : ByteArray → Claims.Msg) (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)

@@ -673,9 +673,9 @@ def forgeryOf : Finding → Option (Hash.Msg × Hash.Msg)
 
 open Classical in
 /-- **A pinned table v2 reads on the blobs sent at other bytes than its registered file**, of one SHA-512 with it: the
-first pinned table whose first blob sent with its digest (`tableFile`) and registered file (`Pinned.file`, the
+first pinned table whose first blob sent with its digest (`tableFile`) and registered file (`PinnedTables.file`, the
 deployment's `T`) differ. -/
-noncomputable def tableCollision (T : Pinned) (s : Sent) : Option (Claims.Msg × Claims.Msg) :=
+noncomputable def tableCollision (T : PinnedTables) (s : Sent) : Option (Claims.Msg × Claims.Msg) :=
   Flock.MUFU_TABLES.findSome? fun t =>
     match tableFile t.sha512 s.blobs, T.file t.sha512 with
     | some a, some b => if a ≠ b ∧ Flock.Sha512.hash a = Flock.Sha512.hash b then
@@ -690,7 +690,7 @@ first collision `findBreak` finds in one of the play's records, else a pinned ta
 bytes than its registered file (`tableCollision`), else the first round opened whose coins v2's read, without the
 sample's coins, shows other than the device released (`Lines.opensRead`, `Lines.openCollision`). The read hashes each
 blob sent once (`Core.Blobs.ofArray`). -/
-noncomputable def readFinder (V : Vocab d α) (T : Pinned) (dev : Exchange → History) (θ : ByteArray)
+noncomputable def readFinder (V : Vocab d α) (T : PinnedTables) (dev : Exchange → History) (θ : ByteArray)
     (F : Array ByteArray)
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) : Claims.Finder where
   S := Verity.Game.Tape (V.game θ F c) σ
@@ -704,7 +704,7 @@ noncomputable def readFinder (V : Vocab d α) (T : Pinned) (dev : Exchange → H
     let o := Verity.Game.Tape.out _ σ t
     V.cost θ F c σ + breakCalls (dev o) o.sent + o.sent.blobs.size
 
-theorem readFinder_out (V : Vocab d α) (T : Pinned) (dev : Exchange → History) (θ : ByteArray)
+theorem readFinder_out (V : Vocab d α) (T : PinnedTables) (dev : Exchange → History) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (t : Verity.Game.Tape (V.game θ F c) σ) :
     (readFinder V T dev θ F c σ).out t =
@@ -736,7 +736,7 @@ noncomputable def forger (V : Vocab d α) (dev : Exchange → History) (θ : Byt
 
 /-- **The leg's constructions with this read finder and forger**, at the pinned tables' registered files `T` and the
 device's history at each play `dev`: `K`'s projection and two-continuation finders, and `readFinder` and `forger`. -/
-noncomputable def withBinding {V : Vocab d α} (K : Constructions V) (T : Pinned) (dev : Exchange → History) :
+noncomputable def withBinding {V : Vocab d α} (K : Constructions V) (T : PinnedTables) (dev : Exchange → History) :
     Constructions V :=
   { K with readFinder := readFinder V T dev, forger := forger V dev }
 
@@ -873,7 +873,7 @@ def Binds (V : Vocab d α) (k : Verity.Registration.Composite) (reads : Sent →
 /-- **A run with a break under the parameters' key in one of its records is one where the read finder or the
 forger succeeds**, the parameters' key being at the deployed LMS parameters (`keyOf_deployed`), where the device's
 history at each play signed what the play's signatures are on (`SignsPlay`). -/
-theorem finders_of_break (V : Vocab d α) (T : Pinned) (dev : Exchange → History) (θ : ByteArray)
+theorem finders_of_break (V : Vocab d α) (T : PinnedTables) (dev : Exchange → History) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (t : Verity.Game.Tape (V.game θ F c) σ) (hs : SignsPlay V dev θ F c) {x : Draws × Json}
     (hx : x ∈ records (Verity.Game.Tape.out _ σ t).sent) (hk : keyOf θ = some x.1.key)
@@ -924,7 +924,7 @@ theorem finders_of_break (V : Vocab d α) (T : Pinned) (dev : Exchange → Histo
       exact hv
 
 /-- What `tableCollision` outputs is a collision of `sha512Msg`. -/
-theorem tableCollision_valid {T : Pinned} {s : Sent} {u v : Claims.Msg} (h : tableCollision T s = some (u, v)) :
+theorem tableCollision_valid {T : PinnedTables} {s : Sent} {u v : Claims.Msg} (h : tableCollision T s = some (u, v)) :
     Claims.Collision Verity.sha512Msg u v := by
   obtain ⟨t, -, ht⟩ := List.exists_of_findSome?_eq_some h
   split at ht
@@ -937,7 +937,7 @@ theorem tableCollision_valid {T : Pinned} {s : Sent} {u v : Claims.Msg} (h : tab
 
 /-- **A run whose read without the sample's coins shows a round opened's coins other than the device's, of one SHA-512
 with them, is one where the read finder succeeds.** -/
-theorem finder_of_open (V : Vocab d α) (T : Pinned) (dev : Exchange → History) (θ : ByteArray)
+theorem finder_of_open (V : Vocab d α) (T : PinnedTables) (dev : Exchange → History) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (t : Verity.Game.Tape (V.game θ F c) σ)
     {u v : ByteArray} (h : ((Lines.opensRead (Verity.Game.Tape.out _ σ t).sent).bind fun l =>
@@ -963,7 +963,7 @@ theorem finder_of_open (V : Vocab d α) (T : Pinned) (dev : Exchange → History
 
 /-- **A run whose blobs sent hold a pinned table at other bytes than its registered file is one where the read finder
 succeeds** (`TablesSent`, `tableCollision`): the two files' SHA-512s have the table's pinned hex digest. -/
-theorem finder_of_tables (V : Vocab d α) (T : Pinned) (dev : Exchange → History) (θ : ByteArray)
+theorem finder_of_tables (V : Vocab d α) (T : PinnedTables) (dev : Exchange → History) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (t : Verity.Game.Tape (V.game θ F c) σ) (h : ¬ TablesSent T (Verity.Game.Tape.out _ σ t).sent) :
     ∃ u v, (readFinder V T dev θ F c σ).out t = some (u, v) ∧ Claims.Collision Verity.sha512Msg u v := by
@@ -995,7 +995,7 @@ them (`Binds`), and the device's history at each play signed what the play's sig
 key is at the deployed LMS parameters (`keyOf_deployed`), and each finder spends on a play the strategy's calls and at
 most `recordCalls` per record beside the strings the device hashes (`breakCalls_le`), the read finder one more per blob
 sent. -/
-theorem logged_le (V : Vocab d α) (T : Pinned) (k : Verity.Registration.Composite)
+theorem logged_le (V : Vocab d α) (T : PinnedTables) (k : Verity.Registration.Composite)
     (reads : Sent → Option (List Read)) (dev : Exchange → History) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (hb : Binds V k reads dev θ) (hs : SignsPlay V dev θ F c) :
     Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ Logged reads o) (V.game θ F c) σ ≤
@@ -1019,7 +1019,7 @@ theorem logged_le (V : Vocab d α) (T : Pinned) (k : Verity.Registration.Composi
 pinned table at other bytes than its registered file (`TablesSent`), is at most as likely as the read finder's collision
 plus the forger's forgery**, under `logged_le`'s premises: the second is a SHA-512 collision the read finder outputs
 (`finder_of_tables`). -/
-theorem logged_tables_le (V : Vocab d α) (T : Pinned) (k : Verity.Registration.Composite)
+theorem logged_tables_le (V : Vocab d α) (T : PinnedTables) (k : Verity.Registration.Composite)
     (reads : Sent → Option (List Read)) (dev : Exchange → History) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (hb : Binds V k reads dev θ) (hs : SignsPlay V dev θ F c) :
     Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ (Logged reads o ∧ TablesSent T o.sent)) (V.game θ F c) σ ≤
@@ -1042,7 +1042,7 @@ theorem logged_tables_le (V : Vocab d α) (T : Pinned) (k : Verity.Registration.
     _ = _ := congrArg₂ (· + ·) (Verity.Game.prCoin_eq_ofReal_pr _) (Verity.Game.prCoin_eq_ofReal_pr _)
 
 /-- **(a) at the leg's constructions with this read finder and forger** (`withBinding`). -/
-theorem logged_le_withBinding {V : Vocab d α} (K : Constructions V) (T : Pinned)
+theorem logged_le_withBinding {V : Vocab d α} (K : Constructions V) (T : PinnedTables)
     (k : Verity.Registration.Composite) (reads : Sent → Option (List Read)) (dev : Exchange → History)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hb : Binds V k reads dev θ) (hs : SignsPlay V dev θ F c) :
