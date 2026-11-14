@@ -12,8 +12,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from verity.definitions.silicon import models as S, term as T
-from verity.definitions.silicon.errors import InvalidArtifact
+from verity.circuits.silicon import models as S, term as T
+from verity.circuits.silicon.errors import InvalidArtifact
 from verity_numerical import settings
 from verity_numerical.bench import contract
 from verity_numerical.bench import instances as I

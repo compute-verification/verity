@@ -23,8 +23,8 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
 from verity.definitions import boolean as SW
-from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
 from verity.definitions.registry import boolean_fp8 as BF
 from verity.definitions.registry import deepgemm as DG
 from verity.definitions.registry import fp8 as F

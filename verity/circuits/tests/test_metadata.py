@@ -11,7 +11,7 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity.definitions.ops.scalar import F32Fabs, F32Fmaxf, I32Add
+from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, I32Add
 
 F32 = I32 = Value(32)
 
