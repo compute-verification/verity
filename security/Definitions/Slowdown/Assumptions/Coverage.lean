@@ -15,7 +15,7 @@ task-level hypothesis, separate from every local premise, and stated over the ta
 
 @[expose] public section
 
-namespace InferenceOnly.Assumptions
+namespace Slowdown.Assumptions
 
 open scoped ENNReal
 
@@ -39,4 +39,4 @@ def CoversEfficientMethods {In L : Type} {m : ℕ} (G : Accounting.Slowdown.Task
   ∀ (C : In → Accounting.Actual.Run L) (pos : Fin m → L × ℕ × ℕ),
     G.prob (fun x 𝒴 => (C, x) ∈ 𝒜 ∧ Accounting.Slowdown.Succeeds (C x) pos 𝒴 ∧ cost (C x) < Tmax ∧ ¬ Core C x) ≤ η
 
-end InferenceOnly.Assumptions
+end Slowdown.Assumptions
