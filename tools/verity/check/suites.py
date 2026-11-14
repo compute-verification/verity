@@ -212,7 +212,7 @@ RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/settings.py", "too
           "tools/verity/check/guard/child/sitecustomize.py", "tools/verity/check/guard/child/verity_suite_reads.py")
 #: the check's own code, which decides the suites a check runs and what it hands the runner: `--lend-from` lends nothing
 #: across a change to it (`lent_by`)
-CHECK_CODE = "tools/verity/check"
+OWN_CODE = "tools/verity/check"
 XDIST = importlib.util.find_spec("xdist") is not None
 TOOLS = ("lake", "cargo")
 #: the variables a pass is keyed on: those of these prefixes whose role isn't `where` (`settings.py`: not where results are kept,
@@ -1030,7 +1030,7 @@ def lent_by(commit: str, tree: str, asked: dict[Suite, dict[str, str]], inputs: 
     same there when everything it hashes is: the suite's inputs, the runner and its fixtures by the same ids, its build outputs
     from the same sources (`built_alike`), and, since the workspace's metadata decides every suite's inputs, nested suites and
     resolved dependencies, every pyproject.toml and the lockfile as they are here; with one of those changed it lends none.
-    Nor with the check's own code changed (`CHECK_CODE`): it decides which suites a check runs and how, so only the same
+    Nor with the check's own code changed (`OWN_CODE`): it decides which suites a check runs and how, so only the same
     code runs there every suite it would run here, with this run's environment and pytest arguments."""
     base = subprocess.run(["git", "rev-parse", "--verify", "-q", f"{commit}^{{tree}}"], cwd=ROOT, capture_output=True,
                           text=True).stdout.strip()
@@ -1038,7 +1038,7 @@ def lent_by(commit: str, tree: str, asked: dict[Suite, dict[str, str]], inputs: 
         return [], f"{commit} names no commit here"
     there = {f for f in _git("ls-tree", "-r", "-z", "--name-only", base).split("\0")
              if f in ("uv.lock", "pyproject.toml") or f.endswith("/pyproject.toml")}
-    meta = sorted({*metadata(), *there, CHECK_CODE})
+    meta = sorted({*metadata(), *there, OWN_CODE})
     was, now = object_ids(base, meta), object_ids(tree, meta)
     if moved := [f for f in meta if was[f] != now[f]]:
         return [], (f"{', '.join(moved[:3])}{f' and {len(moved) - 3} more' if len(moved) > 3 else ''} changed since: the "
