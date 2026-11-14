@@ -23,7 +23,7 @@ The luck premise (I7) `LuckAt` split at the receipt (LEDGER §1.3–§1.5), each
 * `LuckCaseACube`: case (a) with such rounds, (I7) at ¾ outright.
 * `LiSegmentsBind`: li units (LI-CP-W) bind their words: when every segment's warp checkpoint is the honest one, every
   segment's deficient word is right (`Pouw.Guarantees.Receipt.LiCheckpointWordInjective`, segment by segment).
-* `LiWindowUnbound`: without the checkpoint a segment it fails: the window's last checkpoint alone keeps the honest
+* `LiExecutionPhaseUnbound`: without the checkpoint a segment it fails: the window's last checkpoint alone keeps the honest
   value when a persistent skip flips the top bit of a word in two segments, whatever the keys.
 * `DuoSegmentsBind`, `Fx1SegmentsBind`: duo and fx1 checkpoint units (DUO-CP-W) bind their words: when every
   segment's warp checkpoint of the chains' full states is the honest one, every segment's deficient word is right
@@ -90,10 +90,10 @@ def LiSegmentsBind : Prop :=
 one chain absorbing one half step a segment over two segments, whatever its keys, odd multipliers, pinned start and
 honest words: when the run flips the top bit of each segment's first word (a persistent skip's two copies), the
 window's last checkpoint is the honest one though both words are wrong, and the first segment's checkpoint is not. -/
-def LiWindowUnbound : Prop :=
+def LiExecutionPhaseUnbound : Prop :=
   ∀ {Ω U : Type} (n : ℕ) (D : LiUnits Ω U (n + 1) 2 1 1 1) (ω : Ω),
     (∀ u, ∀ s < 2, D.pos ω u s = 0 ∧ D.value ω u s = D.honest ω u s 0 ^^^ BitVec.twoPow (n + 1) n) →
-      D.sameWindow ω ∧ ∀ u, (∀ s < 2, D.value ω u s ≠ D.honest ω u s (D.pos ω u s)) ∧
+      D.sameExecutionPhase ω ∧ ∀ u, (∀ s < 2, D.value ω u s ≠ D.honest ω u s (D.pos ω u s)) ∧
         D.checkpoint ω u (D.word ω u) 0 ≠ D.checkpoint ω u (D.honest ω u) 0
 
 /-- **duo units bind their words, a full-state checkpoint a segment** (DUO-CP-W). For every width, every duo unit's
