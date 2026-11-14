@@ -5,7 +5,7 @@ comes from, who owns it (a Slack handle), and the patterns (`managed`) under whi
 
   research deploy drift [--on N ...] [--ref origin/main] [--json] [--no-fetch]
   research deploy install NODE --by WHO [--ref REF] [PATH ...] [--apply] [--allow-shrink] [--no-fetch] [--login USER]
-  research deploy roll PATH --by WHO [--on N ...] [--ref REF] [--apply] [--allow-shrink] [--no-fetch] [--login USER]
+  research deploy roll PATH --by WHO [--on N ...] [--ref REF] [--keys-only] [--apply] [--allow-shrink] [--no-fetch] [--login USER]
   research deploy attic NODE --by WHO [PATH ...] [--backups] [--ref REF] [--apply] [--no-fetch] [--login USER]
 
 `drift` reads each node over ssh, as `research run --on` reaches it (a node whose `staged` says why its machine doesn't exist
@@ -86,7 +86,9 @@ time: it reads every node first and changes nothing if one refuses; then each no
 already takes the key from every node; then each node's file is installed and read back, and the roll stops at the first node
 whose file doesn't read `ok`. A node that can't be reached is passed by and named last, with the install that brings it up to
 date (exit 1); a node with no machine (one the register marks released, or a staged one it doesn't hold) is passed by and is
-no failure. So a machine joins the others in three steps: register it, copy the key to it, and `roll`.
+no failure. So a machine joins the others in three steps: register it, copy the key to it, and `roll`. `--keys-only` stops
+once each node has taken the key and writes no list: it takes nothing away and changes no route, so it goes first where the
+lists were made by hand, and one node's list can then be rolled alone (`--on`) and tried before the rest.
 """
 from __future__ import annotations
 
@@ -1055,7 +1057,8 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
     [{unit, why, state}]}: a file's `run` is what still runs its old version, and a path a whole tree's directory holds that
     `ref` lacks is among the files, its `changed` "dropped" ("would drop" without `apply`). A register-made file's entry has
     `machines` too (`listed`'s) and, when its entry names a key, `accept` (`accept`'s); `part` "accept" stops once each such
-    key is taken, before any file is written, and "list" writes the files and leaves the keys (`roll`'s two passes)."""
+    key is taken, before any file is written and so whatever a file would lose, and "list" writes the files and leaves the
+    keys (`roll`'s two passes)."""
     commit = git("rev-parse", f"{ref}^{{commit}}", repo=repo).strip()
     if not origin_branches(commit, repo, most=1):
         raise Refused(f"{ref} ({commit[:12]}) is on no origin branch: push it first, so what runs is in a pushed commit")
@@ -1092,7 +1095,7 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
 
     seen = probe(node, sorted(gen) if apply else [f["path"] for f in files], run,
                  {p: reg.names() for p in gen}) if gen or not apply else {"files": {}}
-    lists = {p: listed(node, want[p][3], seen["files"].get(p), g, reg, allow_shrink) for p, g in gen.items()}
+    lists = {p: listed(node, want[p][3], seen["files"].get(p), g, reg, allow_shrink or part == "accept") for p, g in gen.items()}
     made_of = {p: {"machines": lists[p], **({"accept": accept(node, want[p][3], g.sources, commit, ref, by, run, apply)}
                                             if want[p][3].accept and part != "list" else {})} for p, g in gen.items()}
     if part == "accept":
@@ -1163,11 +1166,12 @@ def told(f: dict) -> list[str]:
 
 
 def roll(nodes: dict[str, Node], path: str, ref: str, by: str, run: Runner, apply: bool = False, repo: Path = REPO,
-         allow_shrink: bool = False, only: list[str] | None = None, say: Callable[[str], None] = print) -> int:
+         allow_shrink: bool = False, only: list[str] | None = None, say: Callable[[str], None] = print,
+         keys_only: bool = False) -> int:
     """Put the register-made `path` on every node that lists it (the admin-only ones only when `only` names them), one node at
-    a time (the docstring's `roll`). 0 when every node that has a machine holds the register's text, 1 when one couldn't be
-    reached; Refused before anything changed when a node's install would refuse; RuntimeError at the first node whose file
-    doesn't read ok."""
+    a time (the docstring's `roll`); with `keys_only`, only have each take the file's key. 0 when every node that has a machine
+    holds the register's text, 1 when one couldn't be reached; Refused before anything changed when a node's install would
+    refuse; RuntimeError at the first node whose file doesn't read ok."""
     if missing := [n for n in only or [] if n not in nodes]:
         raise Refused(f"no node {missing[0]!r} in deploy.toml")
     picked = [nodes[n] for n in sorted(only or (n for n, nd in nodes.items() if not nd.admin), key=natural)
@@ -1175,6 +1179,12 @@ def roll(nodes: dict[str, Node], path: str, ref: str, by: str, run: Runner, appl
     if not picked:
         raise Refused(f"no node {'of those named ' if only else ''}lists {path} as a file made from the register "
                       "(`register = true` in deploy.toml)")
+    if keys_only and not any(e.accept for node in picked for e in node.entries if e.path == path and e.register):
+        raise Refused(f"{path}'s entry names no key for a node to take (`accept` in deploy.toml): --keys-only has nothing to do")
+
+    def line(f: dict) -> str:
+        return "; ".join(told({"accept": f.get("accept")} if keys_only else f))
+
     reg, none, away, refused, todo = register(), {}, {}, {}, []
     for node in picked:
         if node.name in reg.gone or (node.staged and node.name not in reg.live):
@@ -1182,7 +1192,7 @@ def roll(nodes: dict[str, Node], path: str, ref: str, by: str, run: Runner, appl
                 f"staged ({node.staged}) and not in the register"
             continue
         try:
-            f = install(node, ref, by, [path], run, False, repo, allow_shrink)["files"][0]
+            f = install(node, ref, by, [path], run, False, repo, allow_shrink, "accept" if keys_only else "all")["files"][0]
         except Unreachable:
             away[node.name] = "unreachable"
             continue
@@ -1192,8 +1202,9 @@ def roll(nodes: dict[str, Node], path: str, ref: str, by: str, run: Runner, appl
             refused[node.name] = str(e)
             continue
         todo.append(node)
-        say(f"{node.name}  {'unchanged' if f['changed'] is False else 'would install'}  {'; '.join(told(f))}")
-    later = f"`research deploy install NODE {path} --by {by} --apply`"
+        say(f"{node.name}  {'' if keys_only else 'unchanged  ' if f['changed'] is False else 'would install  '}{line(f)}")
+    later = f"`research deploy roll {path} --by {by} --on NODE --keys-only --apply`" if keys_only else \
+        f"`research deploy install NODE {path} --by {by} --apply`"
     for name, why in {**none, **away}.items():
         say(f"{name}  passed by: {why}")
     if refused:
@@ -1209,12 +1220,17 @@ def roll(nodes: dict[str, Node], path: str, ref: str, by: str, run: Runner, appl
 
     for node in todo:
         try:
-            install(node, ref, by, [path], run, True, repo, allow_shrink, part="accept")
+            f = install(node, ref, by, [path], run, True, repo, allow_shrink, part="accept")["files"][0]
         except Unreachable:
             away[node.name] = "unreachable"
+            say(f"{node.name}  passed by: unreachable")
+            continue
         except (Refused, RuntimeError) as e:
             raise stop(node, f"its key was not taken ({e})") from None
-    for node in [n for n in todo if n.name not in away]:
+        if keys_only:
+            done.append(node.name)
+            say(f"{node.name}  {line(f)}")
+    for node in [] if keys_only else [n for n in todo if n.name not in away]:
         try:
             f = install(node, ref, by, [path], run, True, repo, allow_shrink, part="list")["files"][0]
             read = next(e for e in drift(node, ref, run, repo)["entries"] if e["path"] == path)
@@ -1227,7 +1243,7 @@ def roll(nodes: dict[str, Node], path: str, ref: str, by: str, run: Runner, appl
         if read["state"] != "ok":
             raise stop(node, f"{path} reads {read['state']} after its install ({read['detail']})")
         done.append(node.name)
-        say(f"{node.name}  {'installed' if f['changed'] else 'unchanged'}, reads ok  {'; '.join(told(f))}".rstrip())
+        say(f"{node.name}  {'installed' if f['changed'] else 'unchanged'}, reads ok  {line(f)}".rstrip())
     if away:
         say(f"not done: {', '.join(away)}: {later} on each once it is there")
     return 1 if away else 0
@@ -1281,6 +1297,8 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
     o.add_argument("--ref", default="origin/main")
     o.add_argument("--by", required=True, help="who installs: goes into each node's record")
     o.add_argument("--apply", action="store_true", help="install (else only say what would change on each node)")
+    o.add_argument("--keys-only", action="store_true",
+                   help="only have each node take the file's key from the machines it will name; no file is written")
     for p in (i, o):
         p.add_argument("--allow-shrink", action="store_true",
                        help="install a file made from the register though it names fewer machines than the one it replaces")
@@ -1335,7 +1353,7 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
         return rc
     if ns.cmd == "roll":
         try:
-            rc = roll(nodes, ns.path, ns.ref, ns.by, run, ns.apply, repo, ns.allow_shrink, ns.only)
+            rc = roll(nodes, ns.path, ns.ref, ns.by, run, ns.apply, repo, ns.allow_shrink, ns.only, keys_only=ns.keys_only)
         except Refused as e:
             print(f"research deploy: {e}", file=sys.stderr)
             return 3
@@ -1343,7 +1361,8 @@ def main(argv: list[str] | None = None, run: Runner | None = None, manifest: Pat
             print(f"research deploy: {e}", file=sys.stderr)
             return 1
         if not ns.apply:
-            print("nothing changed: --apply has each node take the key, then installs each node's file, one at a time")
+            print("nothing changed: --apply has each node take the key" + ("" if ns.keys_only else
+                                                                         ", then installs each node's file, one at a time"))
         return rc
     if ns.node not in nodes:
         print(f"research deploy: no node {ns.node!r} in {manifest}", file=sys.stderr)

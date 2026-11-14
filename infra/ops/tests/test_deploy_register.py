@@ -375,6 +375,32 @@ def test_bringing_up_a_machine_gives_it_the_list_and_the_key_and_puts_it_in_ever
     assert _main(fleet, *roll, "--apply") == 0 and "unchanged, reads ok" in capsys.readouterr().out
 
 
+def test_keys_only_has_every_node_take_the_key_and_writes_no_list_whatever_a_list_would_lose(fleet, capsys):
+    """The first step over lists made by hand. It adds to what each node takes the key from and takes nothing away, so the
+    rule that holds a list back doesn't hold it; one node's list can then be rolled alone and tried before the rest."""
+    tmp, calls, roll = fleet["tmp"], fleet["calls"], ("roll", "/NODE/etc/peers", "--by", "lane-x")
+    hand = LIST + "vy-n-1 research@192.0.2.1\n"
+    for n in "abc":
+        (tmp / n / "etc" / "peers").write_text(hand)
+    assert _main(fleet, *roll, "--apply") == 3 and "Nothing changed on any node (3 of 3 refuse)" in capsys.readouterr().err
+
+    assert _main(fleet, *roll, "--keys-only") == 0
+    out = capsys.readouterr().out
+    assert out.count("its key is taken from 4 more address(es), 4 in all") == 3 and "names 5 machines" not in out
+    assert out.endswith("nothing changed: --apply has each node take the key\n") and all(_keys(fleet, n) == [OTHER] for n in "abc")
+
+    calls.clear()
+    assert _main(fleet, *roll, "--keys-only", "--apply") == 0
+    assert {k for _, k in calls} == {"probe", "accept?", "accept"}
+    for n in "abc":
+        assert len(_keys(fleet, n)) == 2 and "192.0.2.20" in _keys(fleet, n)[1] and (tmp / n / "etc" / "peers").read_text() == hand
+
+    assert _main(fleet, *roll, "--on", "b", "--allow-shrink", "--apply") == 0
+    assert [(tmp / n / "etc" / "peers").read_text() for n in "abc"] == [hand, LIST, hand]
+    assert _main(fleet, "roll", "/NODE/etc/conf.json", "--by", "lane-x", "--keys-only") == 3
+    assert "names no key for a node to take" in capsys.readouterr().err
+
+
 def test_a_roll_changes_nothing_when_a_node_refuses_stops_at_the_first_that_fails_and_passes_by_one_it_cannot_reach(fleet, capsys):
     tmp, calls, faults = fleet["tmp"], fleet["calls"], fleet["faults"]
     assert _main(fleet, "roll", "/NODE/etc/peers", "--by", "lane-x", "--apply") == 0
