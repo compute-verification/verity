@@ -108,7 +108,7 @@ def store(tmp_path: Path, monkeypatch) -> FakeStore:
     """A store holding the two references' runs, which `references.json` is pointed at; no `research run` around
     the command; and the kit's writer stamping with `STAMP` rather than asking this machine."""
     for name in ("RESEARCH_RUN_DIR", "RESEARCH_RUN_ID", "RESEARCH_SOURCE_SHA", "PACED", "UNPACED", "ROLE", "SERVE",
-                 "HOST_GIB", "LEAF_CTAS", "BIND", *WINDOWED):
+                 "HOST_GIB", "LEAF_CTAS", *WINDOWED):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(M.kit, "host_stamp", lambda: dict(STAMP))
     s = FakeStore(tmp_path / "store")
@@ -460,8 +460,7 @@ def test_the_node_run_is_a_gate_run_of_one_honest_session_read_from_its_fire_run
     ((argv, env),) = seen
     assert argv == ["bash", str(ROOT / "benchmarks/remote_session/gate_run.sh"), "some-period"]
     assert (env["ROLE"], env["PLAN"], env["PACED"], env["COMMIT"]) == ("LLAMA32_1B_BF16", "honest", PACED, "d" * 40)
-    assert env["BIND"] == "0", "the verifier binds the store to no checkpoint unless BIND=1 asks"
-    assert not {"HOST_GIB", "LEAF_CTAS", "UNPACED", *WINDOWED} & set(env)
+    assert not {"HOST_GIB", "LEAF_CTAS", "UNPACED", "BIND", *WINDOWED} & set(env)
     assert len(PACED.split()) == 1 and waits == [60, 60]
     text, doc, err = printed(capsys)
     assert (doc["value"], doc["run"], doc["commit"], doc["loopback"]) == (0.375, FIRE, COMMIT, False)
@@ -491,13 +490,12 @@ def test_the_node_runs_role_and_pace_can_be_named_and_a_pace_of_several_sessions
     ({"HOST_GIB": "8"}, {"HOST_GIB": "8", "PACED": PACED}),
     ({"UNPACED": "2:1000.5:2773"}, {"SESSIONS": "1", "WINDOWS": "2", "WINDOW_MS": "1000.5", "SAMPLES": "2773"}),
     ({"UNPACED": ""}, {"PACED": PACED}),
-    ({"HOST_GIB": "8", "UNPACED": "7:60000:33273", "LEAF_CTAS": "160", "BIND": "1"},
-     {"HOST_GIB": "8", "LEAF_CTAS": "160", "BIND": "1", "SESSIONS": "1", "WINDOWS": "7", "WINDOW_MS": "60000",
-      "SAMPLES": "33273"}),
-], ids=["both", "host-memory", "one-coin-a-window", "an-empty-word", "leaf-pass-and-bound"])
+    ({"HOST_GIB": "8", "UNPACED": "7:60000:33273", "LEAF_CTAS": "160"},
+     {"HOST_GIB": "8", "LEAF_CTAS": "160", "SESSIONS": "1", "WINDOWS": "7", "WINDOW_MS": "60000", "SAMPLES": "33273"}),
+], ids=["both", "host-memory", "one-coin-a-window", "an-empty-word", "leaf-pass"])
 def test_the_node_run_can_put_host_memory_in_the_store_and_ask_for_one_coin_a_window(store, capsys, monkeypatch,
                                                                                     tmp_path, given, want):
-    """HOST_GIB and LEAF_CTAS pass through to `gate_run.sh`, which sends them to the node, and BIND=1 to its verifier.
+    """HOST_GIB and LEAF_CTAS pass through to `gate_run.sh`, which sends them to the node.
     UNPACED's word is one session of that many windows, each that long with that many openings, as `gate_run.sh`'s
     variables for the host's run, and then no PACED goes with it; without it the session is PACED's, and no variable of
     the other form is set."""
@@ -508,9 +506,7 @@ def test_the_node_run_can_put_host_memory_in_the_store_and_ask_for_one_coin_a_wi
     store.add(FIRE, {"out/host-run.txt": "v1", "out/host/v1/out/verifier.json": a_record(a_session(gamma=0.15))})
     assert bench(store, "p", run=gate_run(tmp_path, seen)) == 0
     ((argv, env),) = seen
-    assert {k: env[k] for k in ("HOST_GIB", "LEAF_CTAS", "PACED", *WINDOWED) if k in env} == \
-        {k: v for k, v in want.items() if k != "BIND"}
-    assert env["BIND"] == want.get("BIND", "0")
+    assert {k: env[k] for k in ("HOST_GIB", "LEAF_CTAS", "PACED", *WINDOWED) if k in env} == want
     assert (env["ROLE"], env["PLAN"]) == ("LLAMA32_1B_BF16", "honest")
     assert printed(capsys)[1]["value"] == 0.15
 
@@ -524,9 +520,7 @@ def test_the_node_run_can_put_host_memory_in_the_store_and_ask_for_one_coin_a_wi
     ({"UNPACED": "0:60000:33273"}, "one word WINDOWS:WINDOW_MS:SAMPLES"),
     ({"UNPACED": "7:60000.0005:33273"}, "one word WINDOWS:WINDOW_MS:SAMPLES"),
     ({"UNPACED": "7:a minute:33273"}, "one word WINDOWS:WINDOW_MS:SAMPLES"),
-    ({"BIND": "yes"}, "BIND is 'yes': 0 binds the node's store to no model, 1 to LLAMA32_1B_BF16's pinned checkpoint"),
-], ids=["both-forms", "two-sessions", "two-numbers", "a-paced-word", "no-window", "a-fourth-place", "not-numbers",
-        "a-bind-not-0-or-1"])
+], ids=["both-forms", "two-sessions", "two-numbers", "a-paced-word", "no-window", "a-fourth-place", "not-numbers"])
 @pytest.mark.parametrize("dry", [(), ("--dry-run",)], ids=["run", "dry-run"])
 def test_both_forms_or_a_word_that_is_not_one_session_of_windows_starts_nothing_and_exits_2(store, capsys, monkeypatch,
                                                                                            given, why, dry):

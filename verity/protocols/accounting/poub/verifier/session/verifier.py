@@ -48,21 +48,8 @@ process that ended early stays live, refusing the node, until `--close NODE` clo
 the one in flight unended.
 
 The payload's salts are the verifier's: its first message (`payload-key`) carries a fresh key, and the prover salts its
-payload tree's leaves under it (`store.store_salt`). With `--model ROLE --checkpoint DIR --pin FILE
---arena-blocks A [--engines E]` the registered store is bound to a pinned model (`store.Binding`, the
-remote audit's own code, so the circuit a period commits to names it): at startup
-every file the pin names is held to its SHA-512 and the arena the checkpoint lays out is digested; a hello's store is
-then E arenas of A blocks, weights and zero filler each, and the rest host filler, and its payload root must be that
-store's under the key sent, else the hello is refused with the reason before the registry samples anything. The
-Lean verifier decides it: it takes the pin's bytes and the weights blocks' digests at
-startup (`bind_lean`, `RemoteAudit.Store.bind`) and holds the hello to them (`hold_store`, `Store.hold`, its root's
-subtrees on `--layout-workers` threads), `Binding.hold` beside it as the reference (its root in as many processes),
-the two computing their roots at once on the same cores and the hello decided once both have answered, and a hello on
-which the two differ is refused as `disagreement`. The regions
-are then the binding's, and verifier.json keeps the binding (`binding`: the pin's name and checkpoint_sha512, the
-store's shape, both roots, the Lean's answer and `bound`), which `benchmarks/remote_session/auditor_line.py` credits
-on. A process takes one hello, so its sessions share the one root it held; another process's payload key is fresh, so
-its root is another.
+payload tree's leaves under it (`store.store_salt`). The verifier holds no checkpoint: what the store holds is the
+developer's choice, and a hello's layout is the regions it declares (`regions_of`).
 
 The verdicts are the Lean verifier's, the process `remote-audit-verifier` (`lean_verifier.py`): it holds
 the registry and every session, and each registration, session, event and window goes to it and to `audit.AuditRun`
@@ -113,7 +100,6 @@ serve` starts.
                                [--groups-per-coin G]
                                [--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
                                 --challenger-period P --challenger-main FILE [--challenger-minutes M]]
-                               [--model ROLE --checkpoint DIR --pin FILE --arena-blocks A [--engines E]]
     python verifier_process.py --registry REGISTRY.json --close NODE_HEX
     python verifier_process.py --memory-of VERIFIER_JSON [--host-bytes N]
 """
@@ -669,54 +655,6 @@ def start_lean(source: bytes, registry: audit.Registry, exe: Path | None, done) 
     return lean
 
 
-def bind_lean(lean: lv.Lean, b: rstore.Binding) -> dict:
-    """The store binding started in the Lean verifier (`bind`, `RemoteAudit.Store.bind`): the pin from the bytes
-    `b` read of its file, the store's shape, and the weights blocks' digests `b` computed, which the Lean's `hold`
-    salts and climbs on `b.workers` threads. Its answer, `{"pin", "weights_blocks"}` or `{"refused": why}`, or
-    `{"error": why}`."""
-    digests = b.digests.read_bytes()
-    try:
-        return lean.call({"op": "bind", "bytes": len(digests), "pin": b.pin_data.hex(), "path": str(b.pin_path),
-                          "role": b.role, "engines": b.engines, "arena_blocks": b.arena_blocks, "workers": b.workers},
-                         digests)
-    except lv.LeanError as e:
-        return {"error": str(e)}
-
-
-def hold_store(lean: lv.Lean, bound: dict | None, b: rstore.Binding, node: bytes, blocks, root: bytes,
-               key: bytes, layout) -> tuple[tuple[str, str, int, int], ...]:
-    """The hello's store held to the pinned model's under the payload key `key`: the binding's regions, else
-    `store.Refused` with why. The Lean verifier decides (`hold`, on the binding
-    `bind_lean` started and answered `bound`), `Binding.hold` beside it as the reference: the Lean's request goes out
-    first and its root is computed on its threads while `Binding.hold` computes store.py's in its processes, and the
-    hello is decided once both have answered, whichever is first. Where the two answer otherwise, the regions, the
-    reason or the expected root, the hello is refused as `disagreement`, and `bound` is the Lean's only where they
-    agree. The binding's record keeps the Lean's answer (`lean`) and its time from request to answer (`lean_s`)."""
-    answer: queue.SimpleQueue = queue.SimpleQueue()
-    t0 = time.monotonic()
-    if bound != {"pin": b.pin, "weights_blocks": b.arena.weights_blocks}:
-        answer.put(({"bind": bound}, t0))
-    else:
-        lean.send({"op": "hold", "node": node.hex(), "blocks": blocks, "payload_root": root.hex(), "key": key.hex(),
-                   "layout": None if layout is None else [list(r) for r in layout]},
-                  answered=lambda got: answer.put((got, time.monotonic())))
-    regions = None
-    try:
-        regions = b.hold(node, blocks, root, key, layout)
-        mine = {"regions": [list(r) for r in regions], "expected_root": b.state["expected_root"]}
-    except ValueError as e:
-        mine, why = {"refused": str(e), "expected_root": b.state.get("expected_root")}, e
-    got, t1 = answer.get()
-    b.state.update(lean=got, lean_s=t1 - t0)
-    if got != mine:
-        b.state["bound"] = False
-        raise rstore.Refused(f"disagreement: the Lean verifier's binding is {json.dumps(got)}, store.py's "
-                             f"{json.dumps(mine)}")
-    if regions is None:
-        raise why
-    return regions
-
-
 class Pair:
     """Session k through the verifiers, with `audit.AuditRun`'s interface: each event goes to `s`, the driver's books,
     and to the Lean process's session k, at one reading of the verifier's clock. The result is the one
@@ -946,13 +884,11 @@ class Verifier:
                  transcript: Path | None = None, disk_bytes_per_s: float = 0.0, link_bytes_per_s: float = 0.0,
                  disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None,
                  challenger: challengers.Local | challengers.Serve | challengers.ChallengerGate | None = None,
-                 appends: int | None = None, payload_key: bytes | None = None,
-                 binding: rstore.Binding | None = None, groups_per_coin: int = 1) -> None:
+                 appends: int | None = None, payload_key: bytes | None = None, groups_per_coin: int = 1) -> None:
         coins.openings_coins(1, groups_per_coin)
         self.groups_per_coin = groups_per_coin
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
         self.payload_key = secrets.token_bytes(rstore.KEY_BYTES) if payload_key is None else payload_key
-        self.binding = binding
         self.transcript = transcript
         self.challenger, self.appends = challengers.Local() if challenger is None else challenger, appends
         self.hbm_bytes, self.host_bytes, self.regions, self.deferred = hbm_bytes, host_bytes, None, False
@@ -969,7 +905,6 @@ class Verifier:
         self._stamp: int | None = None
         self._check = 0
         self.lean = start_lean(source, self.registry, lean_exe, self._lean_done)
-        self.bound = None if binding is None else bind_lean(self.lean, binding)
         threading.Thread(target=self._read, daemon=True).start()
 
     def _now(self) -> int:
@@ -1029,8 +964,7 @@ class Verifier:
         the registry: refused, with `bye` and the reason, for a node with a live registration (`audit.RegistryError`,
         raised), with a malformed layout (`regions_of`'s ValueError), deferring residency under a lifetime of one
         window (`audit.Params`'s ValueError), asking for receipts that bind PoUW's tile outputs (`bind`, which the Lean
-        covers none of: ValueError), or, with a `binding`, a store that isn't the pinned model's under that key
-        (`hold_store`'s Refused), all before the registry samples anything. Both registries sample it
+        covers none of: ValueError), all before the registry samples anything. Both registries sample it
         under one nonce: one on which they differ is refused as `disagreement` (`audit.RegistryError`), and closed
         where it went live."""
         self.conn.send({"type": "payload-key", "key": self.payload_key.hex()})
@@ -1041,10 +975,6 @@ class Verifier:
             if type(hello.get("appends", True)) is not bool:
                 raise ValueError("the hello's appends says whether the prover's sessions append, true or false")
             self.appending = hello.get("appends", True)
-            if self.binding is not None:
-                self.regions = hold_store(self.lean, self.bound, self.binding, bytes.fromhex(hello["node"]),
-                                          hello["blocks"], bytes.fromhex(hello["payload_root"]), self.payload_key,
-                                          self.regions)
         except ValueError as e:
             self.conn.send({"type": "bye", "why": f"refused: {e}"})
             raise
@@ -1624,25 +1554,6 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
                     help="print each accepted session's memory line in both forms from a verifier.json written "
                          "before the average form (`recorded_memory`, with --host-bytes the node line), and a paced "
                          "session's paced line with --ingress-bytes-per-s (`recorded_paced`), and exit")
-    ap.add_argument("--model", metavar="ROLE",
-                    help="bind the registered store to this pinned model (`store.Binding`): a hello whose "
-                         "payload root isn't the root of the store the pinned checkpoint lays out, under the payload "
-                         "key this verifier sends, is refused before the registry samples anything")
-    ap.add_argument("--checkpoint", type=Path, metavar="DIR",
-                    help="--model's checkpoint on this machine, every file the pin names held to its SHA-512 first")
-    ap.add_argument("--pin", type=Path, metavar="FILE",
-                    help="--model's pin: a local JSON in the auditor's model registry's shape ({name, checkpoint: "
-                         "{file: SHA-512 hex}, checkpoint_sha512}), the registry's models.jsonl and its lines "
-                         "of ROLE, or core's models.json ({ROLE: {checkpoint_sha512, files, ...}}) and its entry "
-                         "of ROLE")
-    ap.add_argument("--engines", type=int, default=timing.GPUS,
-                    help="--model's store: its arenas, an engine's at one GPU each, in GPU order")
-    ap.add_argument("--arena-blocks", type=int, metavar="A",
-                    help="--model's store: each arena's blocks, its weights then zero filler; the store's blocks "
-                         "past the arenas are host filler")
-    ap.add_argument("--layout-workers", type=int, default=len(os.sched_getaffinity(0)),
-                    help="processes hashing the pinned files and recomputing the expected payload root, and the Lean "
-                         "verifier's threads recomputing it at the same time")
     a = ap.parse_args(argv)
     if a.memory_of is not None:
         v = json.loads(a.memory_of.read_text())
@@ -1685,22 +1596,6 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
                                     minutes=a.challenger_minutes)
     except ValueError as e:
         ap.error(str(e))
-    binding = None
-    if a.model is not None:
-        if a.checkpoint is None or a.pin is None or a.arena_blocks is None:
-            ap.error("--model needs --checkpoint DIR, --pin FILE and --arena-blocks A")
-        try:
-            binding = rstore.Binding(a.model, a.checkpoint, a.pin, a.engines, a.arena_blocks,
-                                     workers=a.layout_workers, log=lambda m: print(m, flush=True))
-        except rstore.Refused as e:
-            print(f"verifier: refused the pinned model: {e}", flush=True)
-            (a.out / "verifier.json").write_text(json.dumps(
-                {"schema": "verity/remote-session/verifier/v0", "verdict": "lean", "refused": str(e),
-                 "binding": {"name": a.model, "pin": str(a.pin), "checkpoint": str(a.checkpoint), "bound": False}},
-                indent=1))
-            return 3
-    elif a.checkpoint is not None or a.pin is not None or a.arena_blocks is not None:
-        ap.error("--checkpoint, --pin and --arena-blocks bind the store to --model ROLE")
     save_registry(a.registry, registry)
     sys.setswitchinterval(2e-4)
     w0 = time.monotonic_ns()
@@ -1719,7 +1614,7 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
                  lean_exe=a.lean_exe, transcript=a.transcript, disk_bytes_per_s=a.disk_bytes_per_s,
                  link_bytes_per_s=a.link_bytes_per_s, disk_burst_bytes=a.disk_burst_bytes,
                  link_burst_bytes=a.link_burst_bytes,
-                 challenger=challenger, appends=a.appends, binding=binding, groups_per_coin=a.groups_per_coin)
+                 challenger=challenger, appends=a.appends, groups_per_coin=a.groups_per_coin)
     c0 = time.process_time_ns()
     try:
         reg, cal = v.register()
@@ -1729,7 +1624,7 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
         save_registry(a.registry, kept)
         (a.out / "verifier.json").write_text(json.dumps(
             {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "verdict": "lean",
-             "refused": str(e), "registry": kept} | ({"binding": binding.record()} if binding else {}), indent=1))
+             "refused": str(e), "registry": kept}, indent=1))
         if checks:
             checks.close(wait=True)
         v.stop()
@@ -1747,8 +1642,7 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
         (a.out / "verifier.json").write_text(json.dumps(
             {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "registration": wire.registration_json(reg),
              "verdict": "lean", "calibration": cal, "rtt": rtt, "allowance_ns": allowance, "sessions": results,
-             "process_cpu_ns": time.process_time_ns() - c0, "wire": conn.totals(), "registry": kept}
-            | ({"binding": binding.record()} if binding else {}), indent=1))
+             "process_cpu_ns": time.process_time_ns() - c0, "wire": conn.totals(), "registry": kept}, indent=1))
         save_registry(a.registry, kept)
 
     record()

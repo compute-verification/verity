@@ -152,12 +152,11 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int | None = None,
         layout: list | None = None, host_bytes: int = 0, paces: list | None = None, then=None,
         transcript: Path | None = None, challenger=None, appends: int | None = None, store=None,
-        binding=None, groups_per_coin: int = 1, **kv):
+        groups_per_coin: int = 1, **kv):
     """The verifier's sessions and the prover's over one registration, each paced by its entry in
     `paces` if given, its coins from `challenger` (the verifier's own by default), `appends` append coins a session
     (by default as the prover's hello says, `Verifier.appends_of`), `groups_per_coin` windows a sample; `then(v)` once
-    they end. With `store` (a `remote_bandwidth.store.Store`) the prover's blocks are that store's, and with `binding`
-    the verifier binds the registration to its pinned model."""
+    they end. With `store` (a `remote_bandwidth.store.Store`) the prover's blocks are that store's."""
     clock = PassClock()
     vconn, pconn = clock.conns()
     backend = TickingBackend(clock, store.blocks if store else blocks, random.Random(7),
@@ -176,7 +175,7 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
                           lifetime=lifetime, host_bytes=host_bytes, transcript=transcript,
-                          challenger=challenger, appends=appends, binding=binding, groups_per_coin=groups_per_coin)
+                          challenger=challenger, appends=appends, groups_per_coin=groups_per_coin)
     try:
         v.register()
         allowance = v.allowance(v.ping(4))

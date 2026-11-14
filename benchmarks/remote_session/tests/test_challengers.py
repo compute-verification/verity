@@ -495,8 +495,7 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
     assert not other["credit"]["credited_sessions"] and zero(other)[0][0] == "not credited"
     assert "the one period p-1 committed" in other["sessions"][0]["credit"]["credited"]["reason"]
     for bound, model, why in (
-            (None, MODEL, "the verifier bound the store to no model (verifier.py --model ROLE --checkpoint DIR --pin "
-                          "FILE), so its payload root is the prover's choice"),
+            (None, MODEL, "the verifier holds no checkpoint, so the store's payload root is the developer's choice"),
             (None, None, "no model to bind the store to: the audit's period signs none and no --model-pin names one"),
             (MODEL, None, "no model to bind the store to: the audit's period signs none and no --model-pin names one")):
         unbound = analysed(out, host, sessions, reg, desc, bound=bound, model=model)
@@ -538,8 +537,8 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
 
 def test_an_unbound_sessions_line_credits_it_conditional_on_the_developers_store_and_exits_0(host, tmp_path,
                                                                                            monkeypatch, capsys):
-    """A gate run under `BIND=0` (`gate.sh`): its period signs no model (`period-open` without `--model`) and its
-    verifier bound the store to none. `auditor_line.py` prints a line that credits the session on its four checks,
+    """A gate run (`gate.sh`): its period signs no model (`period-open` without `--model`) and its verifier holds no
+    checkpoint. `auditor_line.py` prints a line that credits the session on its four checks,
     conditional on DeveloperStore, printing that the verifier held no checkpoint, so the store's bytes are the
     developer's choice, and why (no model is there to bind the store to), with `"model": null, "bound": false,
     "store": "the developer's choice"` in its JSON, and exits 0."""

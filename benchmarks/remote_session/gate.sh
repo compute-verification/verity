@@ -10,14 +10,12 @@
 #          repository main is pushed to (in a run's clone, the node's bare repository behind the source root, never the
 #          source root's copy; main.probe.txt; a fetch that fails refuses), since a session credits only under a verifier
 #          there. Writes probe.json; exit 3 on any mismatch, before anything is written to either host.
-#   open   `period-open --name PERIOD --cap CAP --circuit CIRCUIT --model MODEL`, the ledger read before and after;
-#          with BIND=0 no `--model`, so the period signs no model and the auditor's line finds none to bind the store to.
+#   open   `period-open --name PERIOD --cap CAP --circuit CIRCUIT`, the ledger read before and after: the period signs
+#          no model.
 #   host   the verifier gate's `run`, gate run 7's request (PROVER_NODE as its peer, PORT, PERIOD, PIN, PACED at
-#          PACE_PASS_MS, MINUTES, JITTER_MS, QUANTILE, and with BIND=1, the default, MODEL with ENGINES arenas of
-#          ARENA_BLOCKS: the store bound to MODEL's pinned checkpoint); its `status` every 30 s until it ends, then the
-#          run's directory without its transcripts (`fetch`) into host/RUN. Exits with the run's rc. BIND=0 asks for a
-#          run that binds the store to no model: the verifier holds no checkpoint, and the store is the developer's
-#          choice. BIND other than 0 or 1 is refused (exit 2) before any request, whatever the VERB.
+#          PACE_PASS_MS, MINUTES, JITTER_MS, QUANTILE); its `status` every 30 s until it ends, then the run's directory
+#          without its transcripts (`fetch`) into host/RUN. Exits with the run's rc. The verifier holds no checkpoint:
+#          the store is the developer's choice.
 #          With SESSIONS the request asks for that many sessions of one coin a window in place of PACED's paced ones:
 #          WINDOWS windows of WINDOW_MS, SAMPLES openings a window (each the verifier's own default where unset). The
 #          host's run takes one form, so SESSIONS beside PACED or PACE_PASS_MS, or one of the three without SESSIONS, is
@@ -40,11 +38,6 @@
 # the verifier host's host key). A dry fire that can't read PROVER_NODE's leases (a stopped node) says so and goes on.
 set -u
 VERB=${1:?probe, open, host, close, audit, fire or form}
-BIND=${BIND:-1}
-case $BIND in
-  0 | 1) ;;
-  *) echo "BIND is $BIND: 1 binds the store to MODEL's pinned checkpoint, 0 to none"; exit 2 ;;
-esac
 if [ -n "${SESSIONS:-}" ]; then
   [ -z "${PACED:-}${PACE_PASS_MS:-}" ] || {
     echo "SESSIONS asks for sessions of one coin a window and PACED or PACE_PASS_MS for paced ones: the host's run" \
@@ -62,7 +55,7 @@ GATE_KEY=${GATE_KEY:-$HOME/.ssh/vy-gate-memory-accounting}
 CHALLENGER=${CHALLENGER:-research@${VY_CHALLENGER_1_HOST:?the address of the challenger host, or CHALLENGER as USER@HOST}}
 AUDITOR=${AUDITOR:-research@${VY_AUDITOR_1_HOST:?the address of the verifier host, or AUDITOR as USER@HOST}}
 AUDITOR_FP=${AUDITOR_FP:-SHA256:s8UdOpJZGMXJR1DjgmOyTsWpTqQX7GDJq/yQCYhSJhs}
-LANE=${LANE:-memory-accounting} MODEL=${MODEL:-QWEN25_32B_BF16} ENGINES=${ENGINES:-8} ARENA_BLOCKS=${ARENA_BLOCKS:-16252928}
+LANE=${LANE:-memory-accounting} ENGINES=${ENGINES:-8}
 PORT=${PORT:-7951} CAP=${CAP:-4} PACE_PASS_MS=${PACE_PASS_MS:-85} MINUTES=${MINUTES:-30}
 PACED=${PACED:-1:60000:33273:2 1:60000:33273:2 1:1000:2773:7 1:1000:2773:7}
 JITTER_MS=${JITTER_MS:-50} QUANTILE=${QUANTILE:-max} PROVER_NODE=${PROVER_NODE:-vy-nebius-2}
@@ -166,10 +159,8 @@ EOF
 }
 
 open_period() {
-  local model=()
-  [ "$BIND" = 0 ] || model=(--model "$MODEL")
   gate "$CHALLENGER" ledger > "$OUT/ledger.before.jsonl"
-  gate "$CHALLENGER" period-open --name "${PERIOD:?}" --cap "$CAP" --circuit "${CIRCUIT:?}" "${model[@]}" \
+  gate "$CHALLENGER" period-open --name "${PERIOD:?}" --cap "$CAP" --circuit "${CIRCUIT:?}" \
     > "$OUT/period-open.out" 2> "$OUT/period-open.err"
   local r=$?
   echo "period-open rc $r"
@@ -180,8 +171,7 @@ open_period() {
 }
 
 host_run() {
-  local form words r run bound=()
-  [ "$BIND" = 0 ] || bound=(--model "$MODEL" --engines "$ENGINES" --arena-blocks "$ARENA_BLOCKS")
+  local form words r run
   if [ -n "${SESSIONS:-}" ]; then
     form=(--sessions "$SESSIONS" ${WINDOWS:+--windows "$WINDOWS"} ${WINDOW_MS:+--window-ms "$WINDOW_MS"}
       ${SAMPLES:+--samples "$SAMPLES"})
@@ -190,7 +180,7 @@ host_run() {
     form=(--paced "${words[@]}" --pace-pass-ms "$PACE_PASS_MS")
   fi
   gate "$AUDITOR" run --peer "$PROVER_NODE" --port "$PORT" --period "${PERIOD:?}" --pin "${PIN:?}" "${form[@]}" \
-    --minutes "$MINUTES" --jitter-ms "$JITTER_MS" --quantile "$QUANTILE" "${bound[@]}" \
+    --minutes "$MINUTES" --jitter-ms "$JITTER_MS" --quantile "$QUANTILE" \
     > "$OUT/host-run.json" 2> "$OUT/host-run.err"
   r=$?
   echo "host run rc $r"
