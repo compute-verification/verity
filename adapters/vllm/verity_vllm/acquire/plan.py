@@ -516,6 +516,9 @@ def confirm_modules(values: Iterable[ValuePlan], corr: AcquireCorrespondence) ->
 
 def acquisition_plan(manifest: Mapping[str, Any], correspondence: AcquireCorrespondence, *,
                      tables: Mapping[str, Any] | None = None) -> AcquisitionPlan:
+    """The plan of `manifest`'s required Values over `correspondence`: each Value's legal sites and the one the policy chooses,
+    with the residuals.  `tables` is a test seam: lifetime tables to read in place of the committer's own (`_lifetime_tables`).
+    No library call passes it."""
     values = value_classes(manifest)
     for v in values:
         legal, refused = sites_of(v, correspondence)

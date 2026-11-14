@@ -6,8 +6,10 @@ from __future__ import annotations
 import pytest
 
 from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.query.manifest import format as fmt
+from verity_vllm.query.module_body import Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
-from verity_vllm.query.required import _profile, request_manifest
+from verity_vllm.query.required import Q_WORD_ID, Q_WORD_TEXT, _profile, query_header, request_manifest
 from verity_vllm.query.units import ValueRef as R
 
 
@@ -27,6 +29,34 @@ def test_the_observed_version_decides():
     assert _profile(_res((9, 0), fa=2), None)[0] == "ampere"
     assert _profile(_res((12, 0), fa=3), None)[0] == "hopper"
     assert _profile(_res((12, 0)), "hopper")[0] == "hopper"
+
+
+def test_the_first_observed_layer_gives_the_version():
+    """Of several observed attention layers, the first in the record's order gives the version; the later ones are not read."""
+    res = {"attention_impls_observed": {"model.layers.0.self_attn.attn": {"vllm_flash_attn_version": 3},
+                                        "model.layers.1.self_attn.attn": {"vllm_flash_attn_version": 2}}}
+    assert _profile(res, None) == ("hopper", 3)
+
+
+@pytest.mark.parametrize("query, text, engine, boundary", [(Q_WORD_ID, Q_WORD_TEXT, "q-word", "call"),
+                                                           (Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, "v2-query", "module-body")])
+def test_the_header_is_its_querys(query, text, engine, boundary):
+    """The header's text opens with its query's own text, and its engine and boundary are the query's; a partition goes in under
+    Q_word alone, whatever is passed under Q_module_body."""
+    partition = {"format": "verity/partition/v1", "digest": "p0"}
+    q = query_header("ampere", return_slots=True, query=query, partition=partition)
+    assert q["query_id"] == query and q["query_text"].startswith(text + "; policy: ")
+    assert q["query_id_digest"] == fmt.query_id_digest(q["query_text"])
+    assert (q["engine"], q["boundary"]) == (engine, boundary)
+    assert q.get("partition") == (partition if query == Q_WORD_ID else None)
+
+
+def test_the_return_slot_policies_are_said_only_where_they_hold():
+    on, off = (query_header("ampere", return_slots=rs) for rs in (True, False))
+    assert " + recorded return slots + returned tensors" in on["query_text"]
+    assert "return slots" not in off["query_text"] and on["query_id_digest"] != off["query_id_digest"]
+    assert off["policy"]["protocol_required"] == ["sampling-event outputs"]
+    assert on["policy"]["protocol_required"][0] == "sampling-event outputs" and len(on["policy"]["protocol_required"]) == 4
 
 
 def _attention_program(attention: str):

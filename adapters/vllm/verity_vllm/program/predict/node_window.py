@@ -630,7 +630,7 @@ def _stands(rows: Sequence[Row]) -> bool:
 
 
 def _peer(name: str) -> int:
-    return int(name[len(PEERS):]) if name[len(PEERS):].isdigit() else -1
+    return int(name[len(PEERS):]) if name[len(PEERS):].isdecimal() else -1
 
 
 def _lead(grid: Sequence[tuple[Row, ...]], shape: Sequence[int]) -> tuple[tuple[int, int], ...] | None:

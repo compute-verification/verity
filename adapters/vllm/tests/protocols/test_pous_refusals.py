@@ -269,3 +269,23 @@ def test_a_setup_the_lean_refuses_fails_the_first_period_whatever_the_python_sai
             _subprotocol(comp.get("pous"), tmp_path, 0)
         assert runs[0].answer["verdict"] == "accept" and [exe for exe, _ in served] == ["RUN", "SETUP"]
         assert not (tmp_path / "out0").exists()
+
+
+def test_an_option_that_holds_no_store_or_is_closed_refuses_a_subprotocol_at_its_audit_and_writes_no_output(toy, tmp_path, monkeypatch):
+    """The tools are stand-ins (`_lean`).  The option's subprotocol reads the store only after its audit, so the
+    refusal a caller sees is the audit's."""
+    _, runs, served = _lean(monkeypatch, tmp_path)
+    refusal = re.escape(f"{ENTRY} is closed: nothing is held to audit") + "$"
+    with PO.install(toy, _ctx(ENTRY)) as comp:
+        opt = comp.get("pous")
+        held, opt.store = opt.store, None
+        try:
+            with pytest.raises(RuntimeError, match=refusal):
+                _subprotocol(opt, tmp_path, 0)
+        finally:
+            opt.store = held
+    assert opt.closed and opt.store is held
+    with pytest.raises(RuntimeError, match=refusal):
+        _subprotocol(opt, tmp_path, 1)
+    assert not runs and not served and opt.periods == 0
+    assert not (tmp_path / "out0").exists() and not (tmp_path / "out1").exists()
