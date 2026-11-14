@@ -781,7 +781,7 @@ trees pass so nor a bit of them.
 The list is the verifier's word only where the answer to `Register` is the auditor's. That holds under two things the
 texts state of the deployment. The first is that the ZK server is the only exit: nothing of the workers', which run
 the serving stack, reaches the verifier except in the ZK server's release (the reference deployment's element of that
-name in `verity/protocols/recursion/verifier/zk_server/README.md`, which says none of its elements is in place yet, and
+name in `verity/protocols/proofs/recursion/verifier/zk_server/README.md`, which says none of its elements is in place yet, and
 ARCHITECTURE.md's "The reference deployment"). The second is the salt key's limit: the release side checks a
 statement's value commitments only where it is given the key, and nothing yet requires the key of a deployment's loop
 (the first of the three limits below). With both, a stack that answered `Register` in the auditor's place would have
