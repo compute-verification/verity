@@ -76,6 +76,7 @@ ON_DISK = {
     "REALIZED_PROGRAM_SCHEMA": "verity-gen/program/v1",
     "REBASELINE_DIGESTS_SCHEMA": "verity-vllm/rebaseline-digests/v1",
     "RECORDS_INDEX_SCHEMA": "verity-vllm/records-index/v1",
+    "REMOTE_SESSION_SCHEMA": "verity-vllm/remote-session/v0",
     "REPLAY_BUNDLE_SCHEMA": "verity-vllm/replay-bundle/v1",
     "REPLAY_SLIM_SCHEMA": "verity-vllm/replay-slim/v1",
     "ROW_ATTEMPTS_SCHEMA": "verity-sweep/row-v2/v1",
