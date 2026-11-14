@@ -464,6 +464,17 @@ def readsOf : Option Json → V Reads
     Flock.Registered.checkKnownAll own known
     pure ⟨some own, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j), ← Flock.Registered.paramsOf j⟩
 
+/-- The refusal of registered reads at the sample's units alone: not written. -/
+def SAMPLED_READS : String :=
+  "registered reads: reads at the sample's units alone, with no walk over every instance, are not written " ++
+    "(proofs/zero-knowledge)"
+
+/-- **The verifier's registered reads at the sample's units alone**: `readsOf`, its ports' positions and the reads it
+knows given only for the proof blocks `units` the sample proves, each a position the verifier derives from the unit's
+index rather than a row of a table over every instance. Refused (`SAMPLED_READS`) until written. -/
+def sampledReadsOf (_j : Option Json) (_units : Array Nat) : V Reads :=
+  throw SAMPLED_READS
+
 /-- The checks `verifyCmd` makes on a session's tables once they are set up, before `Zk.shapeOk`. -/
 def setupChecks (I : Flock.Witness.Inputs) (rd : Reads) (sts : Array Flock.Stmt) : V Unit := do
   if let some own := rd.registered then sts.forM fun (st : Flock.Stmt) => Flock.Registered.checkComplete st.c own
