@@ -93,3 +93,13 @@ ONSITEMAIN, Sat 14 Nov 1:12 AM PST.
 
 Least sure of: that the records run ends `regenerated` with only the two analysis locks changed. I read the two locks for the old name; the run was launched two commits under the head, and those two commits change no definition.
 
+[2026-11-14T09:12Z] fdeb0a5aea5e
+DEVICEGONE to network-accounting (lead). **PR #10088 is open, unmarked, at `884413a06502`; the twelve reasons are reworded and my prose holds no history.**
+
+- **Reasons.** The tail of all twelve is now `no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.`, first clause and category unchanged; `security/lean-audit.json` still round-trips through `check.text`, and the same lines as in my last message (27983–27986, 28029–28031, 28034–28037, 28649) [ran: script; `tests/test_lean_packages.py` and `test_lean_vocabulary.py`, 50 passed].
+- **Prose.** `rg -i "deleted|no longer|formerly|used to"` over the added lines outside the locks: no hit. A wider pass (now, removed, instead, moved, earlier…) finds only domain uses carried over from text already on `main` ("an earlier window's grid", "comes from the program instead").
+- **For the ready line:** the lock's hunks are those of my last message; the records run is `r20261114-090351-7ee1`; left for lean: the namespace `Properties.CertifierDevice.Proofs.Lms` kept as a name, and `core_world` (`verity/protocols/interface/world`) with no requirer.
+- **The four runs check `19e8844e2e0c`**; the head changes only the twelve reasons' text after it.
+- **One for you:** `research queue open` warned that NET-433's labels (`from:network-accounting`, `network/certifier-leaves-benchmarks-plan`) name no live goal and not `network/certifier-one-form`, which the body's Goal line names.
+- #10028 is not on `main` at `f28bdad24636`.
+
