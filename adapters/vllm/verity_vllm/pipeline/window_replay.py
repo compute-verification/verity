@@ -23,8 +23,7 @@ member of a batch reads at one writer row is a shared argument; any other is map
 member whose port's rows come from more than one source reads a concat of them, a part a source a member.
 
 **The id** names the window by its record: ``window`` is the SHA-512 of its ``circuit.json`` less the fields its run
-fixes (`interface.RUN_FIELDS`: ``run`` and ``context``), in canonical JSON, so every run of one circuit gives one
-Definition. The Definition is a reference a test evaluates; no verifier reads it.
+fixes (`interface.RUN_FIELDS`), in canonical JSON, so every run of one circuit gives one Definition. The Definition is a reference a test evaluates; no verifier reads it.
 
 Refused (ValueError): a wire whose reader row isn't its writer's output field leaf for leaf (the same words at another
 leaf width, as a Boolean template's bits read as words: a body's argument names each leaf at its own width); a
