@@ -3,10 +3,10 @@ module
 /-!
 # The certifier program: advice v1's charge
 
-The executable forms of `Security/Definitions/NetworkCertifier/AdviceV1.lean` that the charge's difftest runs, under the
+The executable forms of `Security/Definitions/Certifier/AdviceV1.lean` that the charge's difftest runs, under the
 same names in `NetworkCertifier.AdviceV1`. Lean core only: `bitlen` is Lean core's `Nat.log2` plus one where the reference
 reads Mathlib's `Nat.size`, and `charges` takes the windows' decision streams as a list where the reference takes them as
-a function on `Fin W`. `Proofs.NetworkCertifier.Code` (`CodeChargesV1`) proves `charges` equal to the reference's.
+a function on `Fin W`. `Proofs.Certifier.Code` (`CodeChargesV1`) proves `charges` equal to the reference's.
 -/
 
 @[expose] public section

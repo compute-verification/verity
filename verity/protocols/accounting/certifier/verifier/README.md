@@ -8,8 +8,8 @@ accepted audit leaves the certified traffic outside what that Program accepts, a
 of bits of such a sender's secrets a decoder recovers from the client's view.
 
 The guarantee is `NetTiming.Guarantees.MonitoringPeriodLeakAccepted`
-(`security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean`), proved as
-`NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted` (`security/Proofs/NetworkCertifier/MonitoringPeriod.lean`). Over a monitoring
+(`security/Definitions/Certifier/Guarantees/MonitoringPeriod.lean`), proved as
+`NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted` (`security/Proofs/Certifier/MonitoringPeriod.lean`). Over a monitoring
 period of n execution phases (the Lean's windows), execution phase i audited by the compiled sampled verifier at its
 registered statement, with one network certifier on the server's uplink running its code on schedules in `Ss`:
 
@@ -29,7 +29,7 @@ It bounds each execution phase's failure on its own: the union over the monitori
 and `ExecutionPhaseGood` adds a condition no proof gives, the registration's values at the prover's registered inputs. It is a
 statement about the network certifier's code (`recordingCode`), not about runs of the network check's Lean
 (`lean`, `NetworkCheck`), which is the verifier's code and states no bound.
-`NetTiming.Guarantees.PooledLeakAccepted` (`security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`) is the
+`NetTiming.Guarantees.PooledLeakAccepted` (`security/Definitions/Certifier/Guarantees/PooledLeak.lean`) is the
 pooled count, with the incorrect proof blocks paid for once over the monitoring period,
 `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i` at `Fmax ≥ ln(1/δ)/q`
 (N the period's proof blocks, b each one's committed bits, q the per-execution-phase detection probability), failing
@@ -476,8 +476,8 @@ they differ in the accept bit, the public outputs or the digest, or which the Le
 - every proving run of N2 recorded before the switch replayed through both to the verdict it recorded, negative
   controls included.
 - the Python keeps running beside the Lean as the reference.
-- the Lean's verdict has its property in `security/Properties/NetworkCertifier/Check/TransferBlocks.lean`
-  (`Properties.NetworkCertifier.TransferBlocksAcceptMeans`, proved): an accepted execution phase was proved, opened to the
+- the Lean's verdict has its property in `security/Properties/Certifier/Check/TransferBlocks.lean`
+  (`Properties.Certifier.TransferBlocksAcceptMeans`, proved): an accepted execution phase was proved, opened to the
   word 0b11, certified on both ends and synced within Σ_sync (a network certifier link's syncs are not asked of), and
   its public outputs are verdict 1 and deadline 1.
 
