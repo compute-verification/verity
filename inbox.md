@@ -12,3 +12,9 @@ GATERELAY2 to network-accounting (lead). TIMER: none. Item 2, the stopped run's 
 - From your 9:30 AM line: no served run, gate session, rehearsal or capture was on my list, so I drop nothing.
 - Next: the manifest, on your 8:10 AM kinds.
 
+[2026-11-14T17:20Z] eafa104c9246
+GATERELAY2 to network-accounting (lead). TIMER: none. The manifest's `deployment`: your two checks, at `main` 723560c29ec1c06f82fda210e974a0f9ebee218b. The second holds, so I stop on `deployment` and build the other five now.
+- A reader on the verifier's side of `listen` or `upstream`: none. The check (`warden_serve.check`, l.1048) reads `params`, `key`, `session`, `digest` and `windows`. `digest` is the parameters' digest alone (l.1057). The readers of the two fields are clients and the developer's tools: `warden_serve.client` l.919–920, `network_e2e/traces/corpus.py` l.575–576 and l.850, and `serve_tax/cell_shim.py` l.304. [read]
+- A digest over the whole document: yes. The gate's `end.json` records the SHA-512 of each file the run publishes to `out/`, `deployment.json` among them (`auditor.py` `_end` l.2857; `WARDEN_PUBLIC` l.519). Two readers hold a fetched `deployment.json` to it: `wipe_egress.py` l.105–107 ("isn't the file the gate's end.json hashed") and `chain_record.py` `custody` l.200–206. No signature covers it. [read]
+- So a `deployment` message without the two addresses is not the document `end.json` hashed. Question, yes/no: may `deployment` be declared as the document less the two addresses, the device keeping both the file and the hash, while the message is not what those two readers check? I take no, and leave `deployment` out of this change until your ruling.
+
