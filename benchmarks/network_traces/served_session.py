@@ -157,6 +157,8 @@ from datetime import datetime, UTC
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+#: the record's leak guard, which chain_record.sh runs on its way out and `release` runs on a session's record
+LEAK_GUARD = "verity.protocols.accounting.certifier.device.leak_guard"
 TREE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(TREE / "verity/protocols/compose/device/live_challenger"))
 import auditor as A  # noqa: E402
@@ -503,7 +505,7 @@ def _session(a: argparse.Namespace, data: bytes, ps: list[list[int]], keep: Path
 def release(out: Path, hold: Path, quarantine: Path, kept: Path | None) -> int:
     """The record's leak guard on `out` and `hold` against the kept fetch, which releases the hold to `out` once it
     passes (0 when it found nothing, 3 when it moved a find to `quarantine`)."""
-    got = subprocess.run([sys.executable, str(HERE / "leak_guard.py"), str(out), str(quarantine),
+    got = subprocess.run([sys.executable, "-m", LEAK_GUARD, str(out), str(quarantine),
                           *(["--gates", str(kept)] if kept is not None and kept.is_file() else []),
                           "--hold", str(hold), "--release-to", str(out), "--report", str(out / "leak-guard.json")],
                          capture_output=True, text=True)
@@ -760,8 +762,8 @@ def endpoint(a: argparse.Namespace) -> int:
 
 
 def chain(a: argparse.Namespace) -> int:
-    if not (HERE / "leak_guard.py").is_file():
-        raise Refused("this tree has no record leak guard (leak_guard.py), which chain_record.sh runs on its "
+    if importlib.util.find_spec(LEAK_GUARD) is None:
+        raise Refused(f"this tree has no record leak guard ({LEAK_GUARD}), which chain_record.sh runs on its "
                       "way out: run the chain from a tree with it")
     fetch = a.keep / a.run / "fetch.tar.gz"
     if not fetch.is_file():
