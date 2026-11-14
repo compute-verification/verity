@@ -45,13 +45,13 @@ import tempfile
 import threading
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping, NoReturn, Sequence
 
 from verity.circuits import codec
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
-from . import audit, draw as D, hello as H, link_points as LP, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, hello as H, link_points as LP, docket as R
 from .verdict import Verdict
 
 RECORD_VERDICT = "lean"
@@ -168,6 +168,16 @@ def lean(fn: str, value: Any) -> dict[str, Any]:
     except LeanError as e:
         return {"refused": str(e)}
     return body if kind == "output" else {"refused": body}
+
+
+#: the goal under which a check `not_written` stands for gets its Lean interface
+GOAL = "proofs/spot-two-stage-sound"
+
+
+def not_written(fn: str, lean: str) -> NoReturn:
+    """The verdict of record of `fn`, the Lean `lean`'s, which no interface here reaches yet: raises
+    `NotImplementedError` naming `GOAL`. The Python twin beside `fn` answers the difftest only, never in its place."""
+    raise NotImplementedError(GOAL)
 
 
 #: The most bytes one `coins` request takes (the Lean's `COINS_MAX`).
@@ -602,6 +612,6 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     return rec
 
 
-__all__ = ["BUILD_LOCK", "COINS_MAX", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record",
+__all__ = ["BUILD_LOCK", "COINS_MAX", "DISAGREE", "EXE", "GOAL", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record",
            "check", "check_draw", "check_proved", "check_public", "check_verdicts", "coins", "executable", "fleet", "lean",
-           "matches_public", "run", "select", "select_second", "stream"]
+           "matches_public", "not_written", "run", "select", "select_second", "stream"]

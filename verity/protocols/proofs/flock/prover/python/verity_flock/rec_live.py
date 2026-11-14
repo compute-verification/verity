@@ -993,7 +993,7 @@ def top_entry(program: str, table: str, top: list[bytes]) -> dict:
 
 def registered_entry(registration: dict | None, table: str) -> dict | None:
     """The private circuit's ``verity/registration/v2`` record's one registered entry named ``table``, or None."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+    from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
     if not isinstance(registration, dict) or registration.get("format") != R.FORMAT_V2:
         return None
@@ -1139,7 +1139,7 @@ class Proxy:
         """``table``'s registered top (`register_top`'s opening), before Hello and any coin: a table the schedule gives no
         root at ``Commit``, registered once, whose opening opens its ``top`` and whose ``top`` makes the entry named
         ``table`` of the registration whose digest META binds (``bound``, `top_entry`)."""
-        from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+        from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
         if self.hello is not None or self.coins.hello is not None or self.coins.committed is not None:
             raise ValueError(f"{table}: a top is registered before the session, never after Hello or a coin")

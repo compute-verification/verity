@@ -1,7 +1,7 @@
 """PoUW's verifier. Lean is the definition and the verifier (AGENTS.md "Design
 rules"), and PoUW has switched to it: the served execution phase's checks
 are its Lean's, `lean/check` (`pouw-check`), `lean/commit` (`pouw-commit`) and `lean/window` (`pouw-window`), whose
-verdicts `benchmarks/pouw/served_zk/of_record.py` publishes. The Python beside them (`core_check`, `coins`, `window`) is kept
+verdicts `verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py` publishes. The Python beside them (`core_check`, `coins`, `window`) is kept
 as the reference, and the difftests hold it to the Lean: a disagreement fails with the Lean's verdict. A served H1
 execution phase's statements are judged here too: `credit.window` and `credit.period_credit` take each sampled proof block's outcome from
 `lean("credit-verified", …)` (`PouwCheck.Verified`), with `credit._verified` the reference, and each round's live
@@ -162,9 +162,9 @@ def of_record(fn: str, value: Any, python: Any) -> Any:
     try:
         got = lean(fn, value)
     except (LeanError, TypeError, ValueError) as e:
-        return {"refused": [DISAGREE, f"the Lean verifier of record gave no answer to {fn}, so it stands refused: {e}"]}
+        return {"refused": [DISAGREE, f"the Lean verifier gave no answer to {fn}, so it stands refused: {e}"]}
     if got != json.loads(json.dumps(python)):
-        return {"refused": [DISAGREE, f"the Lean verifier of record and its Python twin disagree on {fn}, so it "
+        return {"refused": [DISAGREE, f"the Lean verifier and its Python twin disagree on {fn}, so it "
                                       f"stands refused: the Lean answered {_said(got)}, the Python {_said(python)}"]}
     return got
 
@@ -181,10 +181,10 @@ def serve_of_record(exe: str, case: Any, python: dict) -> dict:
     try:
         got = _serves[exe].exchange(case, "a serve case")
     except (LeanError, TypeError, ValueError) as e:
-        return {**refuse, "reason": f"{DISAGREE}: the Lean verifier of record ({exe} serve) gave no answer, so the "
+        return {**refuse, "reason": f"{DISAGREE}: the Lean verifier ({exe} serve) gave no answer, so the "
                                     f"case stands refused: {e}"}
     if _canonical(got) != _canonical(python):
-        return {**refuse, "reason": f"{DISAGREE}: the Lean verifier of record ({exe} serve) and its Python twin "
+        return {**refuse, "reason": f"{DISAGREE}: the Lean verifier ({exe} serve) and its Python twin "
                                     f"disagree, so the case stands refused: the Lean answered {_said(got)}, the "
                                     f"Python {_said(python)}"}
     return got

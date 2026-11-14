@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import j10r_ws as JWS
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+import benchmarks.hash.dither.j10r_ws as JWS
 
 if TYPE_CHECKING:
     from collections.abc import Callable

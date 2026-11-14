@@ -212,7 +212,7 @@ from verity.protocols.accounting.certifier.verifier.online import Prover, Refuse
 from verity.protocols.accounting.certifier.verifier.pacer import Pacer, Report
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, LogicalFrame, SyncSet, eligible
 from verity.protocols.accounting.certifier.verifier.served import Admission, ServedProfile, admits
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.service import WindowCommitmentRecord
 
 HEADER = struct.Struct(">BII")

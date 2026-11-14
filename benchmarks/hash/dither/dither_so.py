@@ -116,7 +116,7 @@ import dither_manifest as MF
 import dither_one as DO
 import forms as F
 import h1c as H1CM
-import j10r_ws as JWS
+import benchmarks.hash.dither.j10r_ws as JWS
 from dither_a import auto_j
 from dither_fused import CM, CO, H1R, Call, Dom, Tab, unwords, words
 

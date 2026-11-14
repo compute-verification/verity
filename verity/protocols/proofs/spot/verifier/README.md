@@ -149,9 +149,9 @@ params are; round 2 runs no template check.
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).
 
-Serving's record is not yet the scheme the audit proves: the benchmark's first run (`benchmarks/one_stage/a0.py`)
+Serving's record is not yet the scheme the audit proves: the benchmark's first run (`verity/protocols/proofs/spot/prover/audit/template_audit.py`)
 registers a stand-in, a fresh commitment to values captured from serving, and says so (`window.kind = "stand-in"`). Its
-served run (`benchmarks/one_stage/a5.py`) registers a stand-in too: a deferred Commit's serving rows, written after serving from its sealed replay bundle opened against the run's record
+served run (`verity/protocols/proofs/spot/prover/audit/window_audit.py`) registers a stand-in too: a deferred Commit's serving rows, written after serving from its sealed replay bundle opened against the run's record
 (`verity-vllm serving-rows`), whose `of` names the record's vllm-v1 run root and the bundle's manifest digest; the link from
 those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the in-Commit hook writes before any sample are
 `served`: serving's own commitment, with no claim that they hold the values under the Commit's roots. A deferred run's serving becomes
@@ -278,7 +278,7 @@ Tests: `uv run tools/verity/check/suites.py protocols/spot`.
 
 ~~~python
 from verity.protocols.proofs.spot.verifier import service
-from verity.protocols.proofs.spot.verifier.one_stage import audit, draw, partition, registration
+from verity.protocols.proofs.spot.verifier.one_stage import audit, draw, partition, docket as registration
 from verity.protocols.proofs.spot.device.coins import OwnRandomness, closure_of, draw_first
 from verity.protocols.proofs.spot.verifier.consumers import compute_bound, exfiltration_bound, infiltration_bound, location_bits
 from verity.protocols.proofs.spot.prover.optimize import Candidate, CostModel, Objective, frontier, for_budget
@@ -507,8 +507,11 @@ is the record's own: whether every verdict ran. An accept waits on the verdicts 
 accept can say `complete` is false, and then a verdict that is not of record did not run. A reader that wants a
 complete audit reads `audit.answer_complete`, never the verdict alone: it is true only of an accept whose `complete`
 is true, so an answer without the field (one written before it, a reject, an undecided) is not complete. A two-stage
-outcome says it only under `second_stage.complete`: the two-stage form allowed, the replay block the registered
-request Definition, and each audit record accepted and complete.
+outcome says it only under `second_stage.complete`, which raises until its Lean is written (`verifier.not_written`,
+goal `proofs/spot-two-stage-sound`); its twin `complete_twin` holds when the two-stage form is allowed, the replay block
+is the registered request Definition, and each audit record accepted and is complete. A two-stage outcome's accept is
+`Run.run`'s symbol alone: round 2's check (`second_stage.check`) raises the same way, and its twin `check_twin` is the
+Python side the run is held to.
 
 Pinned by `tests/test_one_stage.py` (the profile, audit record, answer and incorrect-block bound tests, under each
 sampling design).

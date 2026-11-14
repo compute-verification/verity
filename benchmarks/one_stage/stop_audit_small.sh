@@ -54,7 +54,7 @@ CHECK=$(field check); STOP=$(field stop); CLASS=$(field class); WRONG=$(field wr
 NAME=$(basename "$CLASS")
 
 first() {  # NAME CLASSDIR: the class's boundary and stop registrations and their samples
-  "${PY[@]}" benchmarks/one_stage/two_stage.py first --boundary "$2" --check "$CHECK" --replay "$DESIGN" --k 1 --stop "$STOP" \
+  "${PY[@]}" verity/protocols/proofs/spot/device/two_stage.py first --boundary "$2" --check "$CHECK" --replay "$DESIGN" --k 1 --stop "$STOP" \
     --challenger local --main "$O/main.txt" --out "$W/$1" > "$O/$1.log" 2>&1 || { tail -20 "$O/$1.log"; exit 3; }
   tail -2 "$O/$1.log"
 }
@@ -62,7 +62,7 @@ audit() {  # NAME FIRST HANDOFF CLASSDIR [more]: one audit of the stop populatio
   # challenger the first stage FIRST kept; its exit code beside its records
   local name=$1 kept=$2 handoff=$3 class=$4 rc=0; shift 4
   # shellcheck disable=SC2086
-  "${PY[@]}" benchmarks/one_stage/stop_audit.py --handoff "$handoff" --boundary "$class" --stop "$STOP" --design "$DESIGN" \
+  "${PY[@]}" verity/protocols/proofs/spot/prover/audit/stop_audit.py --handoff "$handoff" --boundary "$class" --stop "$STOP" --design "$DESIGN" \
     --main "$O/main.txt" --challenger-host "$W/$kept/challenger-host" \
     --bin "$BIN" --lean "$LEAN" --out "$W/$name" "$@" ${SMALL_AUDIT:-} > "$O/$name.log" 2>&1 || rc=$?
   grep '^STOP ' "$O/$name.log" || tail -30 "$O/$name.log"
