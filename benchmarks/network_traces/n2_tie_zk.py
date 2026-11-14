@@ -67,14 +67,16 @@ from typing import NamedTuple
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-import certifier_serve as cs  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
 import leak_scan as LS  # noqa: E402
 import n2_zk as Z  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import advice as ADV, head_check as HC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import io_request as Q, service as SVC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import tie_service as TS, warden as W, warden_rows as WR  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, ID_DIGITS, id_request  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.id_form import ID_DIGITS, id_request  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.certificate import Direction  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
 
@@ -183,41 +185,42 @@ def warden_link(run: Path, windows: int) -> SimpleNamespace:
     certifier's run"): each window's rows under the network certifier's salts, held to the head the verifier read off
     its signed registration, the windows' release and their requests' prompt lengths, refused by name where any of it
     doesn't hold."""
-    import warden_serve as WS
+    from benchmarks.network_traces import warden_serve as WS
+    from verity.protocols.accounting.certifier.verifier import record_files as RF
 
     dep = json.loads(_found(run, "deployment.json").read_text())
     params = W.WardenParams(**dep["params"])
     if params.digest.hex() != dep["digest"]:
         raise SystemExit(f"--warden-run {run}: deployment.json's digest isn't its parameters'")
-    key, session = WS.cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
-    records = {r.window: r for r in (WS.ar.unpack_record(b, params.cell_bytes)
-                                     for b in WS.ar.read_blobs(_found(run, f"{WS.INGRESS}.records")))}
+    key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    records = {r.window: r for r in (RF.unpack_record(b, params.cell_bytes)
+                                     for b in WS.bf.read_blobs(_found(run, f"{RC.INGRESS}.records")))}
     lines = [json.loads(x) for x in _found(run, "cells.jsonl").read_text().splitlines()]
-    salts = WS.ar.read_blobs(_found(run, "cells.salts"))
+    salts = WS.bf.read_blobs(_found(run, "cells.salts"))
     if len(salts) != len(lines):
         raise SystemExit(f"--warden-run {run}: cells.jsonl has {len(lines)} lines and cells.salts {len(salts)} blobs")
     regs = {doc["registration"]["window"]: (doc["registration"], blob) for doc, blob in zip(lines, salts)
             if "registration" in doc and (doc["registration"]["link"], doc["registration"]["direction"])
-            == (WS.LINK, Direction.INGRESS.value)}
+            == (RC.LINK, Direction.INGRESS.value)}
     cells = []
     for w in range(windows):
         if w not in regs or w not in records:
             raise SystemExit(f"--warden-run {run}: ingress link-window {w} has no registration or no record")
         registration, blob = regs[w]
         try:
-            head, _dom = WR.check_registration(registration, key, session, params, WS.LINK, Direction.INGRESS, w)
+            head, _dom = WR.check_registration(registration, key, session, params, RC.LINK, Direction.INGRESS, w)
         except ValueError as e:
             raise SystemExit(f"--warden-run {run}: ingress link-window {w}'s registration doesn't verify under the "
                              f"deployment's key and session: {e}")
         row_salts, wiring_salt = WR.read_witness(blob)
-        c = WR.Cells.of(WS.LINK, Direction.INGRESS, records[w], params, session, row_salts, wiring_salt)
+        c = WR.Cells.of(RC.LINK, Direction.INGRESS, records[w], params, session, row_salts, wiring_salt)
         if c.head != head:
             raise SystemExit(f"--warden-run {run}: ingress link-window {w}'s record under cells.salts isn't the rows "
                              "whose root the warden signed")
         cells.append(c)
     releases, lens = _released(params, cells)
     return SimpleNamespace(source=f"warden run {dep.get('run_id')} (warden_serve.py, its deployment's key)",
-                           run_id=dep.get("run_id"), params=params, session=session, link=WS.LINK, cells=cells,
+                           run_id=dep.get("run_id"), params=params, session=session, link=RC.LINK, cells=cells,
                            records=tuple(records[w] for w in range(windows)), releases=releases, prompt_lens=lens)
 
 
@@ -268,7 +271,7 @@ class Forge(NamedTuple):
     row: bytes
 
 
-#: an id request's prompt field (`active.ID_FIELD_BYTES`): `[` or `,`, then the id right-aligned in ten characters
+#: an id request's prompt field (`id_form.ID_FIELD_BYTES`): `[` or `,`, then the id right-aligned in ten characters
 PROMPT_FIELD = re.compile(rb"[\[,] *[0-9]+")
 
 
@@ -452,7 +455,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
     selects, the prover proves the statement live behind the ZK server and delivers, and the verifier decides
     on the proof (`IngressTie.outcome`); then the tie from the stream's outcomes of record (`IngressTie.tie`). Writes
     what the verifier receives under ``out / "verifier"`` (`RECEIVED`), each window's files prefixed by its window."""
-    stream = tie.stream(budget=len(rd.windows), delta=cs.DELTA, challenger="n2-tie-zk", coins=cs._no_coins,
+    stream = tie.stream(budget=len(rd.windows), delta=Z.DELTA, challenger="n2-tie-zk", coins=Z._no_coins,
                         clock=time.monotonic)
     # the ZK server rechecks a witness the host computed, so a device prover takes the host's (flock-circuit's
     # FIREWALL-REFUSED otherwise), as a8's fw arm does
@@ -578,7 +581,7 @@ def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     t = time.time()
-    tie = TS.IngressTie(LINK, PARAMS, SESSION, proof_deadline=cs.PROOF_DEADLINE_S)
+    tie = TS.IngressTie(LINK, PARAMS, SESSION, proof_deadline=RC.PROOF_DEADLINE_S)
     plan = members()
     rounds = {name: link_windows(tie, link, adv, edit) for name, (link, adv, edit, _) in plan.items()}
     summary: dict = {"class": a.cls, "gpu": a.gpu,

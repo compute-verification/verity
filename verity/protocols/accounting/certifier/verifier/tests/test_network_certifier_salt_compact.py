@@ -21,6 +21,8 @@ from fractions import Fraction
 import pytest
 
 from verity.protocols.accounting.certifier.verifier import active as A
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, SALT, decode_frame, encode_frame
+from verity.protocols.accounting.certifier.verifier.audit import Audit
 from verity.protocols.accounting.certifier.verifier import served as SV
 from verity.protocols.accounting.certifier.verifier.grid import COMPLETE, Certifier, GridParams, BlockGrid, row_count
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync
@@ -39,12 +41,12 @@ def _salt_frame() -> bytes:
 
 
 def _data_frame() -> bytes:
-    return A.encode_frame(A.DATA, A.CANONICAL_STREAM, b"q", B)
+    return encode_frame(DATA, A.CANONICAL_STREAM, b"q", B)
 
 
 def _salt_verdict(record: BlockGrid) -> str | None:
     revealed = {0: secrets.token_bytes(A.SALT_BITS // 8)}
-    return A.check_salts(A.Audit(), "ingress", [record], windows=1, salts=revealed)[0].violation
+    return A.check_salts(Audit(), "ingress", [record], windows=1, salts=revealed)[0].violation
 
 
 # --- a. the salt at the head of the queue ----------------------------------------------------------------------------
@@ -56,8 +58,8 @@ def test_honest_bucketer_places_salt_at_bucket0_slot0():
     for _ in range(2):
         buck.arrive(_data_frame(), 0)
     row, _ = buck.tick()
-    kind, stream, _ = A.decode_frame(row[0])
-    assert kind == A.SALT and stream == A.SALT_STREAM
+    kind, stream, _ = decode_frame(row[0])
+    assert kind == SALT and stream == A.SALT_STREAM
     assert buck.own == {0: 0}
     rows = [row] + [buck.tick()[0] for _ in range(3)]
     assert _salt_verdict(_raw_record(rows)) is None

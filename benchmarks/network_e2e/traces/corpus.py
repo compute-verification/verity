@@ -551,7 +551,7 @@ def warden_modules():
             sys.path.insert(0, str(p))
     from verity.protocols.accounting.certifier.verifier import warden
 
-    import warden_serve
+    from benchmarks.network_traces import warden_serve
     return warden, warden_serve
 
 

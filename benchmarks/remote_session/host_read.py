@@ -48,6 +48,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str((HERE.parents[1] / "verity/protocols/accounting/poub/prover/remote_session/device.py").parent))
 
 import device  # noqa: E402
 import sketching  # noqa: E402

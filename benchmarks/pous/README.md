@@ -17,10 +17,8 @@ What code outside this directory may use. Everything else here is internal.
 | `bash benchmarks/pous/streamed_wipe/served_wipe.sh SERVE_DIR WINDOW DIR` | The wipe's piece of the same run: one streamed wipe of the card before its engine loads (`streamed_wipe/demo.sh`). It writes its core answer, `verity/wipe/v0`'s, to `DIR/answer.json`. |
 | `onsite_pieces.sh`, sourced | Two shell functions: `onsite_piece_commands` sets the two pieces above as a served run's defaults, each kept where its variable is already set, and `onsite_cases` names PoUS's and the wipe's cases for the composite as their pieces wrote them, each beside its Lean's answer, with no card and no case made, and writes each one's line (`CASE`, `NOT_WRITTEN` or `LEFT_OUT`) to the run's `verdicts.txt`. |
 
-Read from outside `benchmarks/`: P2's reference, wire and store layout (`p2_v1/reference.py`, `p2_v1/wire.py`,
-`p2_v1/store.py`), imported with this directory on `sys.path`; `band_gpu/harness.py`, imported by a test; and
-`served_piece.sh`, `streamed_wipe/served_wipe.sh` and `onsite_pieces.sh`, named by their paths where a served run is
-configured.
+Read from outside `benchmarks/`: `band_gpu/harness.py`, imported by a test; and `served_piece.sh`,
+`streamed_wipe/served_wipe.sh` and `onsite_pieces.sh`, named by their paths where a served run is configured.
 
 - `weight_sets.json` (`pous-weight-sets/v1`) is the dataset. It holds the weight sets as the serving engine holds them,
   with their checkpoint pins:
@@ -75,7 +73,9 @@ Implementations:
     CUDA and nvcc versions (`pod.sh` pins torch and records the CPU topology, the NVMe mount and the installed packages).
 
 - `p2-v1-gpu`: P2 v4 (`verity/protocols/accounting/pous/verifier/README.md`, "P2"), in `p2_v1/`, with
-  the same steps, controls and metrics as `band-gpu` so the two compare side by side (`side_by_side.py`):
+  the same steps, controls and metrics as `band-gpu` so the two compare side by side (`side_by_side.py`). Its
+  reference, wire and vectors are the verifier's (`verity/protocols/accounting/pous/verifier/p2_v1/`), and its GPU library and
+  the store are P2's prover (`verity/protocols/accounting/pous/prover/p2/`: the package `p2_store`, with `p2_gpu/` beside it):
   - `reference.py`: the scheme on the CPU in its own setup framing (the counter-mode SHA-512 keys and the maps, both
     `schemes.p2`'s, and the RFC 6962 tree over v4's leaves, `verity.protocols.accounting.pous.verifier.verifier`'s; v4's leaves and the
     mode-0 audit derivation on `verity.commitments.randomness`), pinned by `vectors.json` (`VECTORS_SHA512`);

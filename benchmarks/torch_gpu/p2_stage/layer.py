@@ -4,12 +4,12 @@
                     --salt HEX) --lib LIB --out OUT [--layer 0] [--steps toy,encode,stage,gemm] [--toy TOY]
                     [--encode-budget S] [--encode-blocks N] [--m 4096,16384]
 
-- `LAYOUT` is the store's layout, p2_v1's fixture (`p2_v1/store.py layout`'s JSON), read by
+- `LAYOUT` is the store's layout, p2_v1's fixture (`p2_store/store.py layout`'s JSON), read by
   `layout.store_layout`. `M` is the weights stream's manifest (`benchmarks.torch_gpu.p2_stage.served_weights manifest`; with `--digests`,
   each tensor's SHA-256, which every loaded tensor is held to) and `W` a file holding the stream's bytes at their stream
   offsets (`weights write`), at least the layer's; without `W`, the few stream bytes a run reads (the scales, a
   matrix's last label) come from the seeded generator (`--generator`, `--shape`, `--weights-seed`).
-- `ENC` is an encoded store (`p2_v1/store.py encode`'s directory, memory-accounting's, read only): the layer's rows from
+- `ENC` is an encoded store (`p2_store/store.py encode`'s directory, memory-accounting's, read only): the layer's rows from
   its `seg/<s>.c` files, each held to its `seg/<s>.json`'s SHA-512, under the salt `setup.draw_salt` of the coin and
   commitment its `setup.json` is held to (`layout.store_salt`). `DIR` is a development store instead: `c.bin`, the
   encoded rows of the layer's blocks, and `c.json` (the first block, the count, how many are encoded so far, and the
@@ -58,8 +58,8 @@ import layout as L
 import stage as S
 
 # isort: split
-# p2_v1 is importable once layout has put benchmarks/pous on sys.path
-from p2_v1 import gpu
+# the store's package is importable once layout has put its import root on sys.path
+from p2_store import gpu
 
 LAYERS = 52
 DEVICE = torch.device("cuda")
@@ -131,7 +131,7 @@ class DevStore:
 
 
 class EncodedStore:
-    """An encoded store's blocks (`p2_v1/store.py encode`'s directory, memory-accounting's, read only): the layer's rows
+    """An encoded store's blocks (`p2_store/store.py encode`'s directory, memory-accounting's, read only): the layer's rows
     from its `seg/<s>.c` files, each file held to the SHA-512 its `seg/<s>.json` records."""
 
     def __init__(self, root: Path, lay: L.StoreLayout, blocks: range, setup: dict) -> None:
@@ -418,7 +418,7 @@ def gemm(args: argparse.Namespace, staged: dict, out: Out) -> tuple[dict[int, fl
 def main(argv: list[str] | None = None) -> int:
     global DEVICE
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--layout", type=Path, required=True, help="the store's layout JSON (p2_v1/store.py layout)")
+    ap.add_argument("--layout", type=Path, required=True, help="the store's layout JSON (p2_store/store.py layout)")
     ap.add_argument("--weights", type=Path, required=True, help="the weights stream's manifest")
     ap.add_argument("--w", type=Path, help="the weights stream's bytes at their stream offsets (else the generator's)")
     ap.add_argument("--generator", default="benchmarks.torch_gpu.p2_stage.served_weights", help="the seeded generator, without --w")
@@ -426,7 +426,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--weights-seed", default="text:verity/cmp92/h200/weights/v1", help="its seed")
     store = ap.add_mutually_exclusive_group(required=True)
     store.add_argument("--store", type=Path, help="the development store")
-    store.add_argument("--encoded", type=Path, help="an encoded store's directory (p2_v1/store.py encode's), read only")
+    store.add_argument("--encoded", type=Path, help="an encoded store's directory (p2_store/store.py encode's), read only")
     ap.add_argument("--salt", help="the development store's public test salt, 24 bytes hex")
     ap.add_argument("--source", help="the encoded store's coin (hex), flipped after its commitment")
     ap.add_argument("--commitment", help="the encoded store's commitment (hex)")

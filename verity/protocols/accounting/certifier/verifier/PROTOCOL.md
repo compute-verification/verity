@@ -431,7 +431,7 @@ certifier"), and it charges a `format` failure the same.
 **Refused.** Any field not in the record: logprobs, n > 1, tool calls, stop strings, error bodies, and every header.
 None of them has a place in a cell, so a response that carries one fails the gate, and the run fails visibly instead
 of leaking it.
-- A request that asks for one isn't an id request: `active.id_request` fixes every field an id request carries.
+- A request that asks for one isn't an id request: `id_form.id_request` fixes every field an id request carries.
 - serve-openai answers such a request in vLLM's framing, which fails at its first cell.
 
 **The OpenAI server's fields.** Every field vLLM's OpenAI-compatible server emits falls into one of four classes:
@@ -662,7 +662,7 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
 1. each cell is a `PAD` on q, or a request cell on q: a `DATA` of exactly B − 9 bytes that doesn't end its request,
    or its `END` with the bytes left (`warden.cells`' cut, which the network certifier makes of the client's bytes), and no
    request cell follows a pad or its request's `END`;
-2. every request cell is that cell of a canonical id request (`active.id_request` at offset 0, since the cells carry
+2. every request cell is that cell of a canonical id request (`id_form.id_request` at offset 0, since the cells carry
    the bytes alone). The head and the fixed fields are at their places, a first cell's length is its
    content-length plus `BODY_AT`, the prompt fields are 11 bytes (`[` or `,`, then a u32 in 10 characters), gap
    spaces come only where the next piece would straddle a cell, and `]}` then zero fill ends the request at its last
@@ -1752,9 +1752,8 @@ them.
       `Config.ordinals` and `Config.compact`), and its difftest holds it to this proxy on honest, salted and restarted
       compact runs at B of 8, 12 and 48 and on each malformed form. The device's Lean properties are stated for every
       configuration, compact ones included. The head model takes a frame as B opaque bytes, which a compact cell is.
-      The gate's rehearsal runs compact framing on the auditor's host
-      (`certifier-rehearse --traffic varied --compact B`), so with this coverage a compact run there gives a verdict of
-      record.
+      The proxy's rehearsal runs compact framing (`certifier_serve.py rehearse --traffic varied --compact B`), off the
+      gate's machine.
   - **Anchor, index and ready bucket.** A frame is anchored at the egress bucket in which ingress released its
     request's last frame. Its logical index is its position in its stream. Read at time s, it is ready at ⌊s/τ_b⌋ + 1.
   - **Handing.** `Shaper` hands it at `max(h(k), ready(k), last)`, `run_shaper`'s rule under the declared sync of its
@@ -2069,7 +2068,7 @@ never rewrites. An honest id-form server writes one `io_tie.id_event` of exactly
 the cut gives one event a `DATA` cell and the `END` holds the trailer; any other byte stream fails at its first cell.
 
 **The response cap** (`WardenParams.max_tokens_cap`, id form only, none by default) bounds every response in tokens. The
-network certifier reads each request's `max_tokens` from its first request cell (`active.id_request_max_tokens`) before
+network certifier reads each request's `max_tokens` from its first request cell (`id_form.id_request_max_tokens`) before
 cutting it. A request whose field isn't a u32 at its place, or exceeds the cap, is refused (`cap`): none of its bytes is
 cut into a cell or reaches the server, and it fails at once. It is never clamped. Every other response is held to its
 request's `max_tokens`: a whole `DATA` cell past that many fails the connection (`limit`) in its slot. So each

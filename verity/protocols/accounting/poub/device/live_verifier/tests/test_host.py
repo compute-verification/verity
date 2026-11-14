@@ -781,7 +781,7 @@ def test_bw_party_runs_with_the_registration_the_host_names_and_no_lane_flag(svc
     (rc, _), ran = party(svc, ["bw_party", "--fixture", "--minutes", "10"])
     assert rc == 0 and ran[0][-9:] == ["-m", "verity.protocols.accounting.poub.verifier.p2_party", "--device", str(svc.parties / "bw"),
                                        "--listen", "0.0.0.0:47612", "--registration",
-                                       "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json", "minutes=10"]
+                                       "verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json", "minutes=10"]
     assert "bw_party takes --pous-session SID | --fixture" in refused(party(svc, ["bw_party", "--registration", "/tmp/x"])[0])
 
 

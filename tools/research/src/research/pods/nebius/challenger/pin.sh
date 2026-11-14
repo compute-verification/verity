@@ -3,7 +3,7 @@
 # origin/next's first-parent history, which this script fetches from GitHub itself (a commits-only partial clone in
 # /var/cache/vy-challenger/main.git), so the host pins only what drive landed or put on next. TAR is infra's `git archive COMMIT verity verity/protocols/compose/device/live_challenger benchmarks/network_traces
 # adapters/vllm/manifests/checkpoints-int8.json` of that commit (the manifest pins the checkpoints `model-register` takes, and
-# network_traces is the certifier rehearsal's, `certifier-rehearse`); it is
+# network_traces is the certifier rehearsal's); it is
 # unpacked root-owned at /opt/vy-challenger/COMMIT, never changed after. The Lean toolchain its spot package names is
 # installed under /opt/elan (root's) and linked as COMMIT/.lean-bin; elan itself is release ELAN, its archive checked against
 # ELAN_SHA256 before it runs. Each Lake package's .lake is auditor's, and `lake build sampled-proofs-verifier` (and
@@ -75,7 +75,7 @@ done
 runuser -u auditor -- env -i HOME=/var/lib/vy-challenger PATH="$T/.lean-bin:/usr/bin:/bin" sh -c "cd '$pkg' && lake build sampled-proofs-verifier" \
   | tail -1
 net=$T/verity/protocols/accounting/certifier/verifier/lean
-if [ -d "$net" ] && [ -f "$T/benchmarks/network_traces/certifier_serve.py" ]; then
+if [ -d "$net" ]; then
   runuser -u auditor -- env -i HOME=/var/lib/vy-challenger PATH="$T/.lean-bin:/usr/bin:/bin" sh -c "cd '$net' && lake build network-records" \
     | tail -1
 fi

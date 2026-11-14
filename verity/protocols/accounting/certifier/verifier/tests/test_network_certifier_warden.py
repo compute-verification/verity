@@ -8,15 +8,19 @@ id-form server's cells and fails any other at its first cell (format), none of w
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import dataclasses
 import hashlib
+import inspect
 import socket
+from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier import active, io_tie as IT
-from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, PAD, VirtualClock, encode_frame
+from verity.protocols.accounting.certifier.verifier import active, id_form as IDF, io_tie as IT
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD, encode_frame
+from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.certifier.verifier.grid import Reason
 from verity.protocols.accounting.certifier.verifier.pacer import Report
 from verity.protocols.accounting.certifier.verifier.release import (WATERMARK_END, one_request, read_watermark, release_head,
@@ -245,6 +249,61 @@ def expected_egress(s: int, n: int, last: int = END) -> list[tuple[int, int]]:
     kinds = [PAD] * (D * R) + [DATA] * (n - 1) + [last]
     kinds += [PAD] * (-len(kinds) % R)
     return [(s + i // R, k) for i, k in enumerate(kinds)]
+
+
+# --- the relay's files and the older form's --------------------------------------------------------------------------
+
+#: what a file of the relay still imports from the older form's file, by the file: the relay's own its sleep. It leaves
+#: that file in a change of its own, so this only shrinks.
+OLDER_FORM_READS = {Path(inspect.getfile(audit)).stem: {"precise_sleep"}}
+
+
+def package_imports(path: Path, package: str) -> dict[str, set[str]]:
+    """{a module of `package`: the names `path` imports from it, "*" for the module itself}, the imports inside its
+    functions included."""
+    out: dict[str, set[str]] = {}
+    for node in ast.walk(ast.parse(path.read_text())):
+        if isinstance(node, ast.ImportFrom):
+            module = ".".join(filter(None, (package, node.module))) if node.level == 1 else node.module or ""
+            if module == package:
+                for a in node.names:
+                    out.setdefault(a.name, set()).add("*")
+            elif module.startswith(package + "."):
+                out.setdefault(module[len(package) + 1:].partition(".")[0], set()).update(a.name for a in node.names)
+        elif isinstance(node, ast.Import):
+            for a in node.names:
+                if a.name.startswith(package + "."):
+                    out.setdefault(a.name[len(package) + 1:].partition(".")[0], set()).add("*")
+    return out
+
+
+def test_a_file_of_the_relay_imports_from_the_older_forms_file_only_what_is_listed():
+    """A file of the relay is a module of this package that reaches the relay's by its imports, or one such a module
+    reaches, the older form's file left out. Of the older form's file they import `OLDER_FORM_READS` and no more, so
+    once that is empty the older form can go without the relay; and the list names nothing they no longer import."""
+    older, relay = Path(active.__file__), Path(inspect.getfile(audit))
+    imports = {p.stem: package_imports(p, active.__package__) for p in older.parent.glob("*.py") if p != older}
+
+    def reached(start: str) -> set[str]:
+        seen, todo = set(), [start]
+        while todo:
+            if (m := todo.pop()) in imports and m not in seen:
+                seen.add(m)
+                todo += imports[m]
+        return seen
+
+    files = set().union(*(r for m in imports if relay.stem in (r := reached(m))))
+    assert {relay.stem, *OLDER_FORM_READS} <= files, sorted(files)
+    found = {m: imports[m].get(older.stem, set()) for m in files}
+    more = {m: sorted(names - OLDER_FORM_READS.get(m, set())) for m, names in found.items()}
+    assert not any(more.values()), (
+        "\n".join(f"{m}.py imports {', '.join(names)} from {older.name}" for m, names in sorted(more.items()) if names)
+        + f"\nA file of the relay reads nothing of the older form's file. Move the definition to a module of the relay's "
+          f"own, or to one named for what it holds, beside {relay.name}, and have {older.name} import it from there, so "
+          f"that it keeps one definition.")
+    stale = {m: sorted(names - found[m]) for m, names in OLDER_FORM_READS.items() if names - found[m]}
+    assert not stale, (f"OLDER_FORM_READS lists what its file no longer imports from {older.name}: {stale}. Delete it "
+                       f"from the list, which only shrinks.")
 
 
 # --- the schedule ----------------------------------------------------------------------------------------------------
@@ -591,7 +650,7 @@ CAPPED = dataclasses.replace(GATED, max_tokens_cap=4)
 
 def id_req(max_tokens: int) -> bytes:
     """An id request in the network certifier's cells (offset 0), of two cells at GB."""
-    return active.id_request(model="m", user="u", prompt=[1, 2, 3], max_tokens=max_tokens, frame_bytes=GB, offset=0)
+    return IDF.id_request(model="m", user="u", prompt=[1, 2, 3], max_tokens=max_tokens, frame_bytes=GB, offset=0)
 
 
 def capped(request_bytes: bytes, response: bytes, params: WardenParams = CAPPED):
@@ -612,7 +671,7 @@ def test_a_request_at_the_cap_passes_and_its_response_is_released():
         verdict = audit(CAPPED, *records(warden))
         assert verdict["accepted"], verdict["windows"]
         assert verdict["max_tokens_cap"] == 4 and [c["max_tokens"] for c in verdict["connections"]] == [4]
-    assert active.id_request_max_tokens(id_req(4)) == 4 and len(id_req(4)) > GP
+    assert IDF.id_request_max_tokens(id_req(4)) == 4 and len(id_req(4)) > GP
 
 
 def refused(request_bytes: bytes) -> None:
@@ -638,12 +697,12 @@ def test_a_request_past_the_cap_is_refused_at_ingress_with_its_own_reason_never_
 
 
 def malformed_requests() -> dict[str, bytes]:
-    """Requests whose `max_tokens` the network certifier can't read as `active.id_request` writes one."""
-    good, at = id_req(4), active.MAX_TOKENS_AT
-    field = lambda f: good[:at] + f + good[at + active.ID_DIGITS:]  # noqa: E731
+    """Requests whose `max_tokens` the network certifier can't read as `id_form.id_request` writes one."""
+    good, at = id_req(4), IDF.MAX_TOKENS_AT
+    field = lambda f: good[:at] + f + good[at + IDF.ID_DIGITS:]  # noqa: E731
     return {
         "a leading zero": field(b"0000000004"), "a sign": field(b"        -4"), "not digits": field(b"      four"),
-        "past a u32": field(b"4294967296"), "no digits": field(b" " * active.ID_DIGITS),
+        "past a u32": field(b"4294967296"), "no digits": field(b" " * IDF.ID_DIGITS),
         "another key": good.replace(b'{"max_tokens":', b'{"max_tokenz":'), "not an id request": request(300),
         "a short request": good[:at + 4], "no request": b"",
         "a content-length that isn't a u32": good.replace(b"content-length:", b"content-length:x", 1)[:len(good)],
@@ -654,7 +713,7 @@ def malformed_requests() -> dict[str, bytes]:
 def test_a_request_whose_max_tokens_field_does_not_parse_is_refused(name):
     """A request whose field isn't a u32 at its place is refused (cap) as one past the cap is."""
     request_bytes = malformed_requests()[name]
-    assert active.id_request_max_tokens(request_bytes[:GP]) is None
+    assert IDF.id_request_max_tokens(request_bytes[:GP]) is None
     refused(request_bytes)
 
 

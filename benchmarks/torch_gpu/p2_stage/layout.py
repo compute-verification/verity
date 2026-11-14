@@ -1,19 +1,19 @@
 """Where a layer's matrices' plaintext comes from in the P2-encoded weights store, and P2's decode of one block on the CPU
 (the check's reference). No torch.
 
-The store's layout is p2_v1's fixture (`benchmarks/pous/p2_v1/store.py`, schema `verity-pous/p2-store-layout/v1`), as
-`p2_v1.load` holds it: `StoreLayout` over its `Tensor`s, a layer's `MATRICES`, the codec's `PARAMS` and the sizes of a
-block's row and payload (`ROW`, `PAYLOAD`, `LEAD`). They are defined there and read here by this directory's modules.
-`store_layout` reads the fixture's JSON, the real store's (`store.py layout`, pinned by its `LAYOUT_SHA512`) or the toy's
-(`store-toy/toy.json`'s `layout`), with the key prefix: K and t from counter-mode SHA-512 after `schemes.p2.expand_prefix`
-of the protocol's 24-byte salt (`registered_prefix`).
+The store's layout is p2_v1's fixture (`verity/protocols/accounting/pous/prover/p2/p2_store/store.py`, schema
+`verity-pous/p2-store-layout/v1`), as `p2_store.load` holds it: `StoreLayout` over its `Tensor`s, a layer's `MATRICES`,
+the codec's `PARAMS` and the sizes of a block's row and payload (`ROW`, `PAYLOAD`, `LEAD`). They are defined there and
+read here by this directory's modules. `store_layout` reads the fixture's JSON, the real store's (`store.py layout`,
+pinned by its `LAYOUT_SHA512`) or the toy's (`store-toy/toy.json`'s `layout`), with the key prefix: K and t from
+counter-mode SHA-512 after `schemes.p2.expand_prefix` of the protocol's 24-byte salt (`registered_prefix`).
 
 `Weights` is where the plaintext comes from: the seeded weights stream (`benchmarks.torch_gpu.p2_stage.served_weights manifest`), every tensor
 at its stream offset, QKV being wq, wk and wv one after another, each with its f32 scales, and the head the stream's
 `head` (`Tensor.stream_names`). `payloads` lays it out as the store's W.
 
-`check_blocks` holds rows to W's payloads by memory-accounting's reference decode of one block (`p2_v1/store.py`'s
-`decode_block`: `p2_v1.reference.decode` under `reference.keys_after`), which refuses a row not below p, or a decode
+`check_blocks` holds rows to W's payloads by memory-accounting's reference decode of one block (`p2_store/store.py`'s
+`decode_block`: `verity.protocols.accounting.pous.verifier.p2_v1.reference.decode` under `reference.keys_after`), which refuses a row not below p, or a decode
 wider than the payload.
 """
 from __future__ import annotations
@@ -30,10 +30,10 @@ from pathlib import Path
 from verity.protocols.accounting.pous.verifier.schemes import p2 as S
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "benchmarks" / "pous"))
-from p2_v1 import reference as R  # noqa: E402
-from p2_v1.load import (COLUMNS, LEAD, MATRICES, PARAMS, PARTS, PAYLOAD, ROW, SPEC, StoreLayout, Tensor,  # noqa: E402, F401
-                        blocks_of, matrix_name)
+sys.path.insert(0, str((ROOT / "verity/protocols/accounting/pous/prover/p2/p2_store/store.py").parents[1]))
+from verity.protocols.accounting.pous.verifier.p2_v1 import reference as R  # noqa: E402
+from p2_store.load import (COLUMNS, LEAD, MATRICES, PARAMS, PARTS, PAYLOAD, ROW, SPEC, StoreLayout,  # noqa: E402, F401
+                           Tensor, blocks_of, matrix_name)
 
 SCHEMA = "verity-pous/p2-store-layout/v1"
 SCHEME = "p2-16448/v4"
@@ -160,7 +160,7 @@ def payloads(lay: StoreLayout, src: Weights, read: Read, j0: int, n: int) -> byt
 
 
 def store_salt(setup: dict, layout_doc: dict, layout_sha512: str, source: bytes, commitment: bytes) -> bytes:
-    """The salt an encoded store is under (`p2_v1/store.py encode`'s directory, whose `setup.json` is `setup`):
+    """The salt an encoded store is under (`p2_store/store.py encode`'s directory, whose `setup.json` is `setup`):
     `setup.draw_salt(source, commitment)`, the auditor's coin `source` flipped after the store's commitment. Refused unless
     the store commits to `commitment` in this layout (`layout_sha512`, its JSON's SHA-512) under its parameters, and
     under this coin and salt where `setup.json` records them."""
@@ -235,9 +235,9 @@ def segment_rows(root: Path, spec: R.Params, j0: int, n: int) -> bytes:
 
 def check_blocks(params: S.P2Params, prefix: bytes, first: int, rows: bytes | memoryview,
                  payloads: bytes | memoryview) -> list[tuple[int, str]]:
-    """The blocks `first ..` of `rows` (2,056 bytes each) whose reference decode (`p2_v1/store.py`'s `decode_block`) is
+    """The blocks `first ..` of `rows` (2,056 bytes each) whose reference decode (`p2_store/store.py`'s `decode_block`) is
     refused or differs from their 2,054 bytes of `payloads`, with why."""
-    from p2_v1.store import decode_block
+    from p2_store.store import decode_block
 
     n = len(rows) // ROW
     if len(rows) != n * ROW or len(payloads) != n * PAYLOAD:

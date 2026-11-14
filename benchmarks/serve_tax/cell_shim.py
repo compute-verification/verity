@@ -2,7 +2,7 @@
 
 vLLM's client (``vllm bench serve``) speaks HTTP: a streamed ``POST /v1/completions`` whose prompt is text or token ids.
 The network certifier (the module this one imports `cells` from) speaks fixed-size cells, one request a connection, and
-in its id egress form takes a canonical token-id request (`active.id_request`) and answers one id event a ``DATA``
+in its id egress form takes a canonical token-id request (`id_form.id_request`) and answers one id event a ``DATA``
 cell (`io_tie.id_event`), then an ``END`` that holds `io_tie.TRAILER`. `HttpShim` listens between them on the client's
 side of the certifier, the client's thin shim (that module's `cells` and `Shim`) with an HTTP face:
 
@@ -44,7 +44,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(ROOT))
 from verity.protocols.accounting.certifier.verifier import io_tie as IT  # noqa: E402 (the tree's, put on sys.path above)
-from verity.protocols.accounting.certifier.verifier.active import id_request  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.id_form import id_request  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.warden import (DATA, END, FAIL, KIND_NAMES, PAD, REFUSED, cells,  # noqa: E402
                                                         read_cell)
 
@@ -73,7 +73,7 @@ class Refused(Exception):
 
 
 def id_fields(body: Any, request_id: str | None, encode: Callable[[str], list[int]]) -> dict[str, Any]:
-    """`active.id_request`'s keywords (but its frame) for a completion's body, or `Refused` (400) for a body the id
+    """`id_form.id_request`'s keywords (but its frame) for a completion's body, or `Refused` (400) for a body the id
     request can't carry as it is: one that isn't a streamed greedy completion of one prompt to its ``max_tokens``
     (``ignore_eos``), or that names a field that changes its answer and that the id request has no place for. A greedy
     body is one whose ``temperature`` is 0: a body that names none leaves it to the server's default, which the id

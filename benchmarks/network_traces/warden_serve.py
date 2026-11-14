@@ -29,15 +29,15 @@ its own, which it never reads; `warden.json` keeps its last line, the lost relea
 - TLS is not terminated: both legs are plain TCP.
 - The rehearsal's client is on the same host, so its link is loopback, and its arrival times are read on the network
   certifier's host clock (`origin_unix`).
-- The keys are LMS at H = `cs.HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the deployed key's
+- The keys are LMS at H = `ck.HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the deployed key's
   is H = 20 (the auditor gate's default, `verity/protocols/compose/device/live_challenger/auditor.py`).
 
-**Traffic** (`traffic`, `varied_traffic`): varied, as `certifier_serve`'s: Poisson arrivals at `--rate` a second,
+**Traffic** (`traffic`, `varied_traffic`): varied: Poisson arrivals at `--rate` a second,
 prompts of 16–1024 tokens (log-uniform; words at 0.75 a token, so approximately), `max_tokens` of 16 … `--max-tokens`
 (log-uniform) under real EOS, temperature 0, 0.7 or 1, and a seed on about half the requests. `--temperature` and
 `--top-p` put the same on every request instead (the gate's `warden-rehearse` always gives both): an endpoint applies
 its own generation config to a request that omits them. `rehearse --ids` sends the scan's traffic instead (`id_traffic`,
-at the same sampling when given): network-certifier-form id requests (`active.id_request`, offset 0), each answered by
+at the same sampling when given): network-certifier-form id requests (`id_form.id_request`, offset 0), each answered by
 the fake endpoint as an id-form response (`id_response`: one `io_tie.id_event` cell an output id, then `io_tie.TRAILER`,
 at most `egress_cells` − 1 ids), what `scan_zk.py prove --warden-run` proves; the gate's `warden-rehearse --scan` sends
 it to the peer's endpoint, at scan_zk's schedule. `--prompts FILE` (with `--ids`) gives the id requests' prompts instead
@@ -185,25 +185,31 @@ import traceback
 from dataclasses import asdict, replace
 from pathlib import Path
 
-import active_replay as ar
-import certifier_serve as cs
-import connection_rows_run as crr
-import load_relay as lr
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+
+from verity.protocols.accounting.certifier.verifier import blob_files as bf
+import certifier_key as ck
+from verity.protocols.accounting.certifier.verifier import record_files as RF
+import runner_parts as rp
+from benchmarks.network_traces import load_relay as lr
+from verity.protocols.accounting.certifier.verifier import load_check as LK
+import runner_cli as cli
 import stall_probe
+from runner_parts import _quiet_runtime, _usage
+from verity.protocols.accounting.certifier.verifier.record_files import pack_record
+from runner_parts import served_model
+from verity.protocols.accounting.certifier.verifier.record_files import certified_json
 from verity.protocols.accounting.certifier.verifier import io_tie as IT, warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import DATA, PAD, id_request
-from verity.protocols.accounting.certifier.verifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
+from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer, LmsKey
 from verity.protocols.accounting.certifier.verifier.grid import GridParams, BlockGrid, Status, row_count
 from verity.protocols.accounting.certifier.verifier.release import WATERMARK_PATH
-from verity.protocols.accounting.certifier.verifier.warden import (EGRESS_FORMS, END, FAIL, INTEGER_FIELDS, REFUSED, Shim, Warden,
-                                                    WardenParams, audit, cells)
+from verity.protocols.accounting.certifier.verifier.warden import (EGRESS_FORMS, INTEGER_FIELDS, Shim, Warden,
+    WardenParams, cells)
+from verity.protocols.accounting.certifier.verifier.relay_check import (CERTIFIED, EGRESS, FAILS, INGRESS, KIND_CHARS,
+    LINK, _quantiles, check)
 
 HERE = Path(__file__).resolve().parent
-INGRESS, EGRESS, FAILS, LINK = "requests", "responses", "fails", "warden"
-#: each record's certified link name and direction: the wire's two under `LINK`, the reasons under their own name
-CERTIFIED = {INGRESS: (LINK, Direction.INGRESS), EGRESS: (LINK, Direction.EGRESS),
-             FAILS: (f"{LINK}-{FAILS}", Direction.EGRESS)}
-KIND_CHARS = {PAD: "p", DATA: "d", END: "e", FAIL: "f", REFUSED: "r"}
 #: the heap `prepare_process` grows and touches before the origin, a lane's and at least: heavy's opening burst through
 #: the network certifier (1000 connections at 300 a second, 1 KiB cells) grew its heap by about 35 KB a connection
 RESERVE_PER_LANE, RESERVE_MIN = 256 << 10, 64 << 20
@@ -262,7 +268,7 @@ def varied_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prom
 def id_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prompt_tokens: tuple[int, int] = (16, 1024),
                max_tokens: tuple[int, int] = (1, 64), start_s: float = 0.0, temperature: float | None = None,
                top_p: float | None = None, users: str = "user") -> list[dict]:
-    """n network-certifier-form id requests (`active.id_request`'s fields), each {"at": seconds after the origin, "ids":
+    """n network-certifier-form id requests (`id_form.id_request`'s fields), each {"at": seconds from the origin, "ids":
     its fields}: Poisson arrivals at `rate`, prompts of log-uniform length of ids below 2^17, `max_tokens` log-uniform,
     and the sampling parameters picked as `varied_traffic` picks them (top_p 1), or `temperature` and `top_p`, when
     given, every request's; the arrivals, prompts, lengths and seeds are the seed's either way. Request i's `user` is
@@ -300,7 +306,7 @@ def closing_windows(params: WardenParams, at: float) -> int:
 
 def read_prompts(data: bytes, params: WardenParams) -> list[list[int]]:
     """``--prompts``: a JSON array of prompts, each a non-empty array of token ids below 2^`PROMPT_ID_BITS` (the
-    scan's IDB), each prompt's id request (`active.id_request`, offset 0) within the schedule's ingress bound."""
+    scan's IDB), each prompt's id request (`id_form.id_request`, offset 0) within the schedule's ingress bound."""
     try:
         prompts = json.loads(data)
     except ValueError as e:
@@ -546,12 +552,12 @@ class Publisher:
         self.keep(record, grid, withheld=True)
 
     def keep(self, record: BlockGrid, grid: GridParams, withheld: bool = False) -> None:
-        ar.write_blobs(self.out / f"{record.link}.records", ar.pack_record(record))
+        bf.write_blobs(self.out / f"{record.link}.records", pack_record(record))
         link, direction = CERTIFIED[record.link]
         certified = None if withheld else \
             self.issuer.certify(replace(record, link=link), direction, grid, self.params.digest)
         line = (_refused(link, direction, record.window, withheld) if certified is None
-                else cs.certified_json(certified))
+                else certified_json(certified))
         with open(self.out / "certified.jsonl", "a") as fh:
             fh.write(json.dumps(line) + "\n")
         if record.link != FAILS:
@@ -571,7 +577,7 @@ class Publisher:
                 "sign_ms": round((t2 - t1) * 1000, 3)}
         line = (_refused(link, direction, record.window, withheld) if cert is None
                 else {"registration": WR.registration(head, cert, self.params)})
-        ar.write_blobs(self.out / "cells.salts", cells_.witness)
+        bf.write_blobs(self.out / "cells.salts", cells_.witness)
         with open(self.out / "cells.jsonl", "a") as fh:
             fh.write(json.dumps(line | {"cost": cost}) + "\n")
 
@@ -604,7 +610,7 @@ def sign_load(issuer: Issuer, key: LmsKey, heads: Path, out: Path) -> dict:
     pins, under the key and session that then certify the run's windows. Raises `load_relay.Refused` when the signer
     refuses."""
     shape, heads_ = lr.heads_of(json.loads(heads.read_text()))
-    doc = lr.load_doc(shape, heads_, lr.sign_heads(issuer, heads_), cs.public_json(key), issuer.session)
+    doc = lr.load_doc(shape, heads_, lr.sign_heads(issuer, heads_), RF.public_json(key), issuer.session)
     (out / "load.json").write_text(json.dumps(doc, indent=1) + "\n")
     return doc
 
@@ -616,13 +622,13 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
     released rows, keeps it as `Publisher` does at its close once the rebuilt grid's digest is the close marker's, and
     at the end sends the issuer's refusals and its own usage."""
     try:
-        own = cs.signer(key)
+        own = ck.signer(key)
         issuer = Issuer(own, session)
         if load_heads is not None:
             sign_load(issuer, own.public_key(), load_heads, out)
         results.send(("key", own.public_key()))
         publisher = Publisher(out, issuer, params, commit or WR.Cells.of)
-        keeper = crr.Keeper(out, issuer, params, LINK)
+        keeper = rp.Keeper(out, issuer, params, LINK)
         grids = {INGRESS: params.grid, EGRESS: params.grid, FAILS: params.fails_grid}
         filling: dict[str, list] = {link: [] for link in grids}
         B = params.cell_bytes
@@ -630,7 +636,7 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
             link, n, data = item
             if link is None:
                 continue
-            if link == crr.HAND:
+            if link == rp.HAND:
                 keeper(n, data)
                 continue
             grid = grids[link]
@@ -644,7 +650,7 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
                 raise ValueError(f"{link} window {window}: the rows rebuilt aren't the grid the warden closed")
             publisher.keep(BlockGrid(link, window, got, Status(reason)), grid, withheld=withheld)
             filling[link] = []
-        results.send(("done", {"refused": publisher.close(), "usage": ar._usage()}))
+        results.send(("done", {"refused": publisher.close(), "usage": _usage()}))
         own.close()
     except BaseException:
         results.send(("error", traceback.format_exc()))
@@ -735,17 +741,11 @@ class PublisherProcess:
 
     def lengths(self, window: int, strides) -> None:
         """The network certifier's `lengths`: an execution phase's hand, queued a slot stride an item
-        (`connection_rows_run.hand`); the process lays its tables, commits them and signs their head
-        (`connection_rows_run.Keeper`), or, for one that ends without releases (`strides` None), signs the word
+        (`runner_parts.hand`); the process lays its tables, commits them and signs their head
+        (`runner_parts.Keeper`), or, for one that ends without releases (`strides` None), signs the word
         that it has no head."""
-        for item in crr.hand(window, strides):
+        for item in rp.hand(window, strides):
             self.rows.put(item)
-
-
-def _quantiles(xs: list[float]) -> dict:
-    xs = sorted(xs)
-    pick = (lambda q: round(xs[min(len(xs) - 1, int(q * len(xs)))], 3)) if xs else (lambda q: None)
-    return {"n": len(xs), "p50": pick(0.5), "p99": pick(0.99), "max": pick(1.0)}
 
 
 def deployment_record(params: WardenParams, key: LmsKey, session: bytes, *, origin_unix: float, windows: int,
@@ -753,7 +753,7 @@ def deployment_record(params: WardenParams, key: LmsKey, session: bytes, *, orig
                       run_id: bytes | None = None) -> dict:
     """`deployment.json`, the auditor's record of a run: the network certifier's public key and session, the schedule's
     parameters and their digest, the origin and where it listened, and the run id its server's requests carry."""
-    return {"key": cs.public_json(key), "session": session.hex(), "link": LINK,
+    return {"key": RF.public_json(key), "session": session.hex(), "link": LINK,
             "params": asdict(params), "digest": params.digest.hex(), "slack_ms": slack * 1000,
             "origin_unix": origin_unix, "windows": windows, "listen": list(listen), "upstream": list(upstream),
             "run_id": None if run_id is None else run_id.hex()}
@@ -839,8 +839,8 @@ async def listening(handle, listen: tuple[str, int], sock: socket.socket | None 
 
 async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], listen: tuple[str, int], key: Path,
                 session: bytes, windows: int, start_in: float = 5.0, slack: float = 0.025,
-                announce=cs._announce, probe: bool = False, process: dict | None = None,
-                load_heads: Path | None = None, paced_ms: float = cs.PACED_MS, watermark: bool = False,
+                announce=cli._announce, probe: bool = False, process: dict | None = None,
+                load_heads: Path | None = None, paced_ms: float = cli.PACED_MS, watermark: bool = False,
                 sock: socket.socket | None = None) -> dict:
     """One run of the network certifier on the host's clock (the module docstring's `serve`), on the listening socket
     `sock` when given (its caller's, bound at `listen`: "A session") and else one it binds at `listen`, its records
@@ -880,7 +880,7 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
     log = {"connections": warden.log, "ordinals": warden.ordinals, "refused": warden.refused,
            "refused_windows": sorted(warden.refused_windows), "ticks": warden.ticks,
            "lateness_ms": _quantiles(lateness) | {"over_slack": sum(x > slack * 1000 for x in lateness)},
-           "issuer_refused": [[link, d.value, w] for link, d, w in refused], "usage": ar._usage(),
+           "issuer_refused": [[link, d.value, w] for link, d, w in refused], "usage": _usage(),
            "publisher_usage": publish.usage, "process": process, "stalls": stalls, "loop_errors": errors,
            "ticks_ms": [round(x, 3) for x in lateness],
            "paced": {"ms": paced_ms, "columns": ["bucket", "arrived_ms", "start_ms", "end_ms", "written"],
@@ -914,7 +914,7 @@ def connection_log(index: int, at: float, sent: float, request: bytes, shim: Shi
 async def client(deployment: dict, traffic: list[dict], out: Path, clock=time.time) -> dict:
     """Each request of `traffic` on a connection of its own at its time after the deployment's origin, through the
     shim; returns what `client.json` holds. An item with ``ids`` (`id_traffic`) is sent as its network-certifier-form id
-    request (`active.id_request`, offset 0) and its response read as id-form."""
+    request (`id_form.id_request`, offset 0) and its response read as id-form."""
     params = WardenParams(**deployment["params"])
     origin, listen = deployment["origin_unix"], tuple(deployment["listen"])
     host = "%s:%d" % tuple(deployment["upstream"])
@@ -943,195 +943,6 @@ async def client(deployment: dict, traffic: list[dict], out: Path, clock=time.ti
 
 
 # The offline check.
-
-def read_records(run: Path, params: WardenParams) -> dict[str, list[BlockGrid]]:
-    return {name: [ar.unpack_record(b, params.cell_bytes) for b in ar.read_blobs(run / f"{name}.records")]
-            for name in CERTIFIED}
-
-
-def read_certified(path: Path) -> tuple[dict[tuple[str, Direction, int], CertifiedRecord], list]:
-    """`certified.jsonl`: the certified records by (link, direction, window), and the execution phases the signer
-    refused (not those the network certifier withheld, `Publisher.withhold`)."""
-    got, refused = {}, []
-    for line in path.read_text().splitlines() if path.exists() else []:
-        doc = json.loads(line)
-        if "refused" in doc:
-            if not doc.get("withheld"):
-                refused.append(doc["refused"])
-        else:
-            record = cs.certified_from_json(doc)
-            got[(record.link, record.direction, record.window)] = record
-    return got, refused
-
-
-def read_cells(run: Path) -> list[tuple[dict, list[bytes], bytes]]:
-    """`cells.jsonl` and `cells.salts`, line by line: each execution phase's registration (or refusal) and cost, its
-    rows' salts and its wiring's (`warden_rows.read_witness`)."""
-    path = run / "cells.jsonl"
-    lines = [json.loads(x) for x in path.read_text().splitlines()] if path.exists() else []
-    salts = ar.read_blobs(run / "cells.salts")
-    if len(salts) != len(lines):
-        raise ValueError(f"cells.jsonl has {len(lines)} lines and cells.salts {len(salts)} blobs")
-    return [(doc, *WR.read_witness(s)) for doc, s in zip(lines, salts)]
-
-
-def check_cells(run: Path, dep: dict, params: WardenParams, records: dict[str, list[BlockGrid]]) -> tuple[dict, list]:
-    """Every link-window of the wire's two records has a registration that `warden_rows.check_registration` accepts
-    under the network certifier's key and session, whose head is the record's rows and wiring under their salts; the
-    per-window cost."""
-    key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
-    got = {}
-    for doc, salts, wiring_salt in read_cells(run):
-        if "registration" in doc:
-            r = doc["registration"]
-            got[(r["link"], r["direction"], r["window"])] = (doc, salts, wiring_salt)
-    problems, costs, ok_n = [], [], 0
-    for name in (INGRESS, EGRESS):
-        link, direction = CERTIFIED[name]
-        by_window = {r.window: r for r in records[name]}
-        for w in range(dep["windows"]):
-            doc, salts, wiring_salt = got.get((link, direction.value, w), (None, None, None))
-            ok = False
-            if doc is not None and w in by_window:
-                costs.append(doc["cost"])
-                try:
-                    head, _ = WR.check_registration(doc["registration"], key, session, params, link, direction, w)
-                    ok = WR.Cells.of(link, direction, by_window[w], params, session, salts, wiring_salt).head == head
-                except ValueError as e:
-                    problems.append(f"{name} window {w}'s cells: {e}")
-            ok_n += ok
-            if not ok:
-                problems.append(f"{name} window {w}'s cells aren't registered")
-    summary = {"registered": ok_n, "of": 2 * dep["windows"], "rows": sorted({c["rows"] for c in costs}),
-               "row_bytes": sorted({c["row_bytes"] for c in costs}),
-               "commit_ms": _quantiles([c["commit_ms"] for c in costs]),
-               "sign_ms": _quantiles([c["sign_ms"] for c in costs])}
-    return summary, problems
-
-
-def egress_cells(records: list[BlockGrid], params: WardenParams) -> dict[int, list[tuple[int, int]]]:
-    """Each connection's egress cells as (bucket, kind), in the records' order."""
-    out: dict[int, list[tuple[int, int]]] = {}
-    for record in sorted(records, key=lambda r: r.window):
-        for b, row in enumerate(record.grid):
-            for f in row:
-                if f is not None:
-                    out.setdefault(int.from_bytes(f[1:5], "big"), []).append((record.window * params.window + b, f[0]))
-    return out
-
-
-def check_load(run: Path, dep: dict, key: LmsKey, session: bytes) -> tuple[dict | None, list[str]]:
-    """A run's load read as the verifier reads it, None when it carried none: ``load.json`` signed under the
-    deployment's own key and session, every value's registration accepted (`load_relay.check_load`), each at the root
-    the relay committed (``load-heads.json``)."""
-    doc_path, heads_path = run / "load.json", run / "load-heads.json"
-    if not doc_path.exists() and not heads_path.exists():
-        return None, []
-    try:
-        doc = json.loads(doc_path.read_text())
-    except (OSError, ValueError):
-        return {"values": 0, "registered": 0, "relayed": False}, ["load: the relay's heads aren't signed (no load.json)"]
-    problems = [] if (doc.get("key"), doc.get("session")) == (dep["key"], dep["session"]) else \
-        ["load: not signed under the deployment's key and session"]
-    summary, found = lr.check_load(doc, key, session)
-    try:
-        heads = json.loads(heads_path.read_text())
-        relayed = (heads.get("program"), heads.get("link"), list(heads.get("roots", {}).items())) == \
-            (doc.get("program"), doc.get("link"), [(r.get("value"), r.get("root")) for r in doc.get("values", [])])
-    except (OSError, ValueError, AttributeError):
-        relayed = False
-    if not relayed:
-        problems.append("load: its registrations aren't the relay's heads (load-heads.json)")
-    return summary | {"relayed": relayed}, problems + found
-
-
-def check(run: Path) -> dict:
-    """The offline check of a served run (the module docstring's `check`). `audit_windows` is the audit's verdict of
-    each execution phase that has a record, whole: whether the audit accepted it, and its problems, which `problems`
-    gives as ``audit: PROBLEM`` without their execution phase, among its first 50."""
-    dep = json.loads((run / "deployment.json").read_text())
-    params = WardenParams(**dep["params"])
-    key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
-    certified, refused = read_certified(run / "certified.jsonl")
-    records = read_records(run, params)
-    problems = [] if params.digest.hex() == dep["digest"] else ["the deployment's digest isn't its parameters'"]
-    load, load_problems = check_load(run, dep, key, session)
-    problems += load_problems
-    windows = []
-    for name, (link, direction) in CERTIFIED.items():
-        got = {r.window: r for r in records[name]}
-        grid = params.fails_grid if name == FAILS else params.grid
-        for w in range(dep["windows"]):
-            r, c = got.get(w), certified.get((link, direction, w))
-            ok = (r is not None and c is not None and c.verify(key, session)
-                  and c.head == record_head(link, direction, w, r.grid, r.status, grid, params.digest))
-            windows.append({"record": name, "direction": direction.value, "window": w, "certified": ok,
-                            "status": None if r is None else r.status.reason and r.status.reason.value,
-                            "cells": None if r is None else sum(f is not None for row in r.grid for f in row)})
-            if not ok:
-                problems.append(f"{name} window {w} isn't certified")
-            elif r.status.reason is not None:
-                problems.append(f"{name} window {w}: {r.status.reason.value}")
-    cells_summary, cells_problems = check_cells(run, dep, params, records)
-    problems += cells_problems
-    rows_summary, rows_problems = crr.check(run, dep, params, records[INGRESS], records[EGRESS], records[FAILS], LINK)
-    problems += rows_problems
-    verdict = audit(params, records[INGRESS], records[EGRESS], records[FAILS])
-    if not verdict["accepted"]:
-        problems += [f"audit: {p}" for w in verdict["windows"] for p in w["problems"]]
-    audited = {c["ordinal"]: c for c in verdict["connections"]}
-    schedule = egress_cells(records[EGRESS], params)
-    client_doc = json.loads((run / "client.json").read_text()) if (run / "client.json").exists() else {}
-    tau, rows, lags = params.bucket_ms, [], []
-    for conn in client_doc.get("connections", []):
-        if "error" in conn or conn["outcome"] == "refused":
-            rows.append({"index": conn["index"], "outcome": conn.get("outcome") or conn["error"]})
-            if "error" in conn:
-                problems.append(f"client connection {conn['index']}: {conn['error']}")
-            continue
-        o, a = conn["ordinal"], audited.get(conn["ordinal"], {})
-        sched = schedule.get(o, [])
-        lag = [ms - t * tau for (t, _), ms in zip(sched, conn["arrivals_ms"])]
-        lags += lag
-        row = {"index": conn["index"], "ordinal": o, "outcome": conn["outcome"], "cells": len(sched),
-               "same_cells": "".join(KIND_CHARS[k] for _, k in sched) == conn["kinds"],
-               "in_bucket": sum(0 <= x < tau for x in lag), "request_certified":
-                   a.get("ingress_sha256") == conn["request_sha256"],
-               "response_certified": a.get("egress_sha256") == conn["data_sha256"], **conn["response"]}
-        rows.append(row)
-        if not (row["same_cells"] and row["in_bucket"] == row["cells"] and row["request_certified"]
-                and row["response_certified"]):
-            keys = ("same_cells", "in_bucket", "cells", "request_certified", "response_certified")
-            problems.append(f"connection {o}: { {k: row[k] for k in keys} }")
-        if conn["outcome"] != "end" or not row["complete"] or (row["status"] != 200 and row.get("ids") is None):
-            problems.append(f"connection {o}: {conn['outcome']}, HTTP {row['status']}, complete {row['complete']}")
-    warden_log = json.loads((run / "warden.json").read_text()) if (run / "warden.json").exists() else {}
-    served = [r for r in rows if "ordinal" in r]
-    B = params.cell_bytes
-    summary = {
-        "requests": len(rows), "ended": sum(r["outcome"] == "end" for r in rows),
-        "refused": sum(r["outcome"] == "refused" for r in rows),
-        "failed": sorted({r["outcome"] for r in rows} - {"end", "refused"}),
-        "windows": dep["windows"], "certified_windows": sum(w["certified"] for w in windows),
-        "certificates": len(certified), "signer_refused": refused,
-        "withheld_windows": warden_log.get("refused_windows", []), "cell_rows": cells_summary,
-        "cells": verdict["cells"], "wire_bits": {k: n * B * 8 for k, n in verdict["cells"].items()},
-        "data_bytes": {"ingress": sum(c["ingress_bytes"] for c in verdict["connections"]),
-                       "egress": sum(c["egress_bytes"] for c in verdict["connections"])},
-        "cells_in_their_bucket": [sum(r["in_bucket"] for r in served), sum(r["cells"] for r in served)],
-        "arrival_lag_ms": _quantiles(lags), "tick_lateness_ms": warden_log.get("lateness_ms"),
-        "ticker_stalls": None if not warden_log.get("stalls") else
-        warden_log["stalls"]["by_label"].get("ticker", {"episodes": 0, "max_ms": 0.0, "wchan": {}}),
-        "completion_tokens": sum(r.get("completion_tokens") or 0 for r in served),
-        "prompt_tokens": [min((r.get("prompt_tokens") or 0 for r in served), default=None),
-                          max((r.get("prompt_tokens") or 0 for r in served), default=None)],
-        "finish_reasons": {f: sum(r.get("finish_reason") == f for r in served)
-                           for f in sorted({str(r.get("finish_reason")) for r in served})},
-        **({} if load is None else {"load": load}),
-        **({} if rows_summary is None else {"connection_rows": rows_summary}),
-    }
-    return {"accepted": not problems, "problems": problems[:50], "summary": summary, "windows": windows,
-            "audit_windows": verdict["windows"], "connections": rows}
 
 
 def table(result: dict) -> str:
@@ -1198,12 +1009,12 @@ def _flags(args) -> list[str]:
 
 
 def await_model(url: str, seconds: float, poll: float = 5.0) -> str:
-    """The endpoint's one model (`cs.served_model`), asked again each `poll` seconds while it doesn't answer, for at most
+    """The endpoint's one model (`served_model`), asked again each `poll` seconds while it doesn't answer, for at most
     `seconds`: after the load the prover starts its server on the weights its sink wrote."""
     deadline = time.monotonic() + seconds
     while True:
         try:
-            return cs.served_model(url)
+            return served_model(url)
         except (OSError, ValueError, http.client.HTTPException) as e:
             if time.monotonic() >= deadline:
                 raise SystemExit(f"{url} didn't answer within {seconds:g} s of the load: {e}") from None
@@ -1211,7 +1022,7 @@ def await_model(url: str, seconds: float, poll: float = 5.0) -> str:
 
 
 def _addresses(text: str) -> list[tuple[str, int]]:
-    return [cs._address(a) for a in text.split(",")]
+    return [cli._address(a) for a in text.split(",")]
 
 
 def traffic_windows(args, params: WardenParams, model: str, out: Path) -> int:
@@ -1255,15 +1066,15 @@ def rehearse(args) -> int:
         raise SystemExit("--load-store: with --load-sinks and --load-program, the reading program's digest in hex")
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
-    params = crr.schedule(_params(args), args)
+    params = rp.schedule(_params(args), args)
     me = [sys.executable, str(HERE / "warden_serve.py")]
     scratch = Path(tempfile.mkdtemp(prefix="warden-serve-"))
     procs: list[subprocess.Popen] = []
     try:
-        cs.load_key(scratch / "network_certifier", args.height)
+        ck.load_key(scratch / "network_certifier", args.height)
         if load:
             try:
-                lr.relay_load(args.load_store, lr.SHAPES[args.load_shape], args.load_sinks, args.load_program, out,
+                lr.relay_load(args.load_store, LK.SHAPES[args.load_shape], args.load_sinks, args.load_program, out,
                               workers=args.load_workers, progress=lr.progress_lines())
             except lr.Refused as e:
                 (out / "check.json").write_text(json.dumps({"accepted": False, "problems": [f"load: {e}"],
@@ -1280,7 +1091,7 @@ def rehearse(args) -> int:
         else:
             upstream, url = args.upstream, "http://%s:%d" % args.upstream
             model = None if kept else \
-                args.model or (await_model(url, args.load_ready_s) if load else cs.served_model(url))
+                args.model or (await_model(url, args.load_ready_s) if load else served_model(url))
         windows = args.windows if kept else traffic_windows(args, params, model, out)
         with open(out / "serve.log", "w") as log:
             serving = subprocess.Popen(me + ["serve", "--upstream", "%s:%d" % upstream, "--listen",
@@ -1288,7 +1099,7 @@ def rehearse(args) -> int:
                                              "--out", str(out), "--key", str(scratch / "network_certifier"), "--session",
                                              secrets.token_hex(32), "--windows", str(windows), "--start-in",
                                              str(args.start_in), "--slack", str(args.slack), "--paced-ms",
-                                             str(args.paced_ms), *_flags(args), *crr.flags_of(params),
+                                             str(args.paced_ms), *_flags(args), *rp.flags_of(params),
                                              *(["--watermark"] if args.watermark else []),
                                              *(["--load-heads", str(out / "load-heads.json")] if load else []),
                                              *(["--listen-fd", str(held)] if held is not None else [])],
@@ -1326,7 +1137,7 @@ def parser() -> argparse.ArgumentParser:
     for q in (k,):
         q.add_argument("--dir", required=True, type=Path)
     for q in (k, r, se):
-        q.add_argument("--height", type=int, default=cs.HEIGHT, help="the LMS key's tree height")
+        q.add_argument("--height", type=int, default=ck.HEIGHT, help="the LMS key's tree height")
     for q in (t, s, c, r, se, pr):
         q.add_argument("--out", required=True, type=Path)
     for q in (t, r, pr):
@@ -1341,7 +1152,7 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--users", default="user", help="the id requests' `user` names: request i's is USERS-i")
     t.set_defaults(model="model")
     for q in (f, s, se):
-        q.add_argument("--listen", required=True, type=cs._address, help="HOST:PORT (port 0: any)")
+        q.add_argument("--listen", required=True, type=cli._address, help="HOST:PORT (port 0: any)")
     for q in (s, se):
         q.add_argument("--listen-fd", type=int, metavar="FD",
                        help="serve on the listening socket inherited as descriptor FD, which the caller bound at "
@@ -1354,7 +1165,7 @@ def parser() -> argparse.ArgumentParser:
     for q in (s, r, se):
         q.add_argument("--start-in", type=float, default=5.0, help="the origin, seconds after the network certifier is up")
         q.add_argument("--slack", type=float, default=0.025, help="seconds a tick may run late before it faults")
-        q.add_argument("--paced-ms", type=float, default=cs.PACED_MS,
+        q.add_argument("--paced-ms", type=float, default=cli.PACED_MS,
                        help="when the warden's pacer releases each bucket, ms after its boundary (past the slack, "
                             "before the next boundary): the warden always paces")
         q.add_argument("--watermark", action="store_true",
@@ -1365,8 +1176,8 @@ def parser() -> argparse.ArgumentParser:
     schedule_flags(r, None)
     schedule_flags(se, "id")
     for q in (s, r):
-        crr.flags(q)
-    s.add_argument("--upstream", required=True, type=cs._address, help="the server's HOST:PORT")
+        rp.flags(q)
+    s.add_argument("--upstream", required=True, type=cli._address, help="the server's HOST:PORT")
     s.add_argument("--key", required=True, type=Path, help="the network certifier's key directory (keys)")
     s.add_argument("--session", required=True, help="the certifier session, 32 bytes in hex")
     for q in (s, se):
@@ -1379,7 +1190,7 @@ def parser() -> argparse.ArgumentParser:
     r.add_argument("--load-store", type=Path,
                    help="relay the load first: the store's directory (load_relay.py write), its stream sent to "
                         "--load-sinks and committed as it crosses, its heads signed by the network certifier before it serves")
-    r.add_argument("--load-shape", choices=sorted(lr.SHAPES), default="h200")
+    r.add_argument("--load-shape", choices=sorted(LK.SHAPES), default="h200")
     r.add_argument("--load-sinks", type=_addresses, help="the H200 sink's HOST:PORT, one a stream, comma-separated")
     r.add_argument("--load-program", help="the reading program's digest, 64 bytes in lowercase hex")
     r.add_argument("--load-workers", type=int, default=os.cpu_count() or 1, help="processes committing the load")
@@ -1387,9 +1198,9 @@ def parser() -> argparse.ArgumentParser:
                    help="seconds the endpoint has after the load to answer /v1/models")
     for q in (r, se):
         up = q.add_mutually_exclusive_group(required=True)
-        up.add_argument("--upstream", type=cs._address, help="the server's HOST:PORT (an OpenAI endpoint)")
+        up.add_argument("--upstream", type=cli._address, help="the server's HOST:PORT (an OpenAI endpoint)")
         up.add_argument("--fake", action="store_true", help="start the fake endpoint and use it")
-    pr.add_argument("--upstream", required=True, type=cs._address, help="the server's HOST:PORT (an OpenAI endpoint)")
+    pr.add_argument("--upstream", required=True, type=cli._address, help="the server's HOST:PORT (an OpenAI endpoint)")
     pr.add_argument("--in-flight", type=int, default=4)
     r.add_argument("--tail", type=float, default=60.0,
                    help="seconds the run lasts past the last request's time; under --lengths 2 the network certifier "
@@ -1416,14 +1227,14 @@ def main(argv=None) -> int:
     args = parser().parse_args(argv)
 
     if args.command == "keys":
-        cs.load_key(args.dir, args.height)
+        ck.load_key(args.dir, args.height)
         print((args.dir / "public.json").read_text())
         return 0
     if args.command == "traffic":
         args.out.write_text(json.dumps(traffic_of(args, args.model)))
         return 0
     if args.command == "probe":
-        model = args.model or cs.served_model("http://%s:%d" % args.upstream)
+        model = args.model or served_model("http://%s:%d" % args.upstream)
         result = asyncio.run(probe(args.upstream, traffic_of(args, model), args.in_flight))
         args.out.write_text(json.dumps(result, indent=1))
         print(json.dumps({k: result[k] for k in ("first_s", "bytes_per_s", "statuses")}))
@@ -1433,7 +1244,7 @@ def main(argv=None) -> int:
             server = await asyncio.start_server(lambda rd, wr: fake_endpoint(rd, wr, first_s=args.first_ms / 1000,
                                                                              token_s=args.token_ms / 1000,
                                                                              id_payload=args.id_payload), *args.listen)
-            cs._announce({"listening": [args.listen[0], server.sockets[0].getsockname()[1]]})
+            cli._announce({"listening": [args.listen[0], server.sockets[0].getsockname()[1]]})
             await server.serve_forever()
         asyncio.run(fake())
         return 0
@@ -1449,8 +1260,8 @@ def main(argv=None) -> int:
         if own and os.environ.get("PYTHONMALLOC") != "malloc" and C_ALLOCATOR not in os.environ:
             os.execve(sys.executable, [sys.executable, *sys.orig_argv[1:]],
                       os.environ | {"PYTHONMALLOC": "malloc", C_ALLOCATOR: "1"})
-        params = crr.schedule(_params(args), args)
-        ar._quiet_runtime()
+        params = rp.schedule(_params(args), args)
+        _quiet_runtime()
         process = prepare_process(params)
         for name in ("PYTHONMALLOC", C_ALLOCATOR):
             os.environ.pop(name, None)
@@ -1461,7 +1272,7 @@ def main(argv=None) -> int:
                           sock=None if args.listen_fd is None else socket.socket(fileno=args.listen_fd)))
         return 0
     if args.command == "client":
-        ar._quiet_runtime()
+        _quiet_runtime()
         traffic = json.loads(args.traffic.read_text())
         reserve_fds(len(traffic) + FD_MARGIN)
         asyncio.run(client(json.loads(args.deployment.read_text()), traffic, args.out))

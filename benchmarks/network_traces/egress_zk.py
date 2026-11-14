@@ -57,7 +57,7 @@ from verity.circuits.defs import bind  # noqa: E402
 from verity.commitments.crypto import lms  # noqa: E402
 from verity.protocols.accounting.certifier.prover import egress as EG  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import io_tie as IT, warden as W, warden_rows as WR  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.active import DATA  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
 

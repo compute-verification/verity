@@ -1,5 +1,5 @@
-"""The encoded weights store (`p2_v1/store.py`): the real store's layout JSON and the toy fixture
-(`p2_v1/store-toy/`) regenerate as pinned, the layout, `W` and the staging buffers by their digests; the toy's `C*` decodes,
+"""The encoded weights store (`p2_store/store.py`): the real store's layout JSON and the toy fixture
+(`p2_store/store-toy/`) regenerate as pinned, the layout, `W` and the staging buffers by their digests; the toy's `C*` decodes,
 layer by layer, to its `W`'s tensors by `reference.decode`, by the registered codec and by `layout.decode_tensor`,
 passes the public-encoder setup with the pinned root, and refuses each negative block with its flag; the spot vectors
 decode at the real store's indices. The driver (`commit`, `encode`, `finish`, `verify`, `spot`, `tie`) runs on the CPU at a
@@ -23,8 +23,9 @@ pytest.importorskip("verity")
 
 BENCH = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BENCH))
-from p2_v1 import reference  # noqa: E402
-from p2_v1 import store as S  # noqa: E402
+sys.path.insert(0, str((BENCH.parents[1] / "verity/protocols/accounting/pous/prover/p2/p2_store/store.py").parents[1]))
+from verity.protocols.accounting.pous.verifier.p2_v1 import reference  # noqa: E402
+from p2_store import store as S  # noqa: E402
 
 from verity.protocols.accounting.pous.verifier import protocol, setup, verifier  # noqa: E402
 from verity.protocols.accounting.pous.verifier.layout import TensorLayout, decode_tensor  # noqa: E402

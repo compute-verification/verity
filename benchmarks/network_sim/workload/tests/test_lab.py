@@ -4,13 +4,11 @@ import pytest
 
 from verity.protocols.accounting.certifier.verifier.active import (
     CANONICAL_STREAM,
-    DATA,
     EVENT_BYTES,
-    HEADER,
-    encode_frame,
     event_body,
     request_frames,
 )
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, encode_frame
 from workload import framing as F
 from workload import lab as L
 from workload.block import Context

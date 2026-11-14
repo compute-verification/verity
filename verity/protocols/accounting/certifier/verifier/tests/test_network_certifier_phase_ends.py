@@ -17,7 +17,7 @@ import pytest
 import signers
 from verity.commitments.identity import tagged_sha512
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
-from verity.protocols.accounting.certifier.verifier.active import VirtualClock
+from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.certifier.verifier.certificate import Issuer
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_content_tables import (
     CON, GONE, HELD, LEN_DIGEST, LINK, leaves, leaving, mixed, registered)

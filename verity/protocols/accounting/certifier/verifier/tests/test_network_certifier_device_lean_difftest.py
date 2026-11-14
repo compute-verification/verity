@@ -23,6 +23,7 @@ from collections import Counter
 from pathlib import Path
 
 from verity.protocols.accounting.certifier.verifier import active
+from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
 
 LEAN = Path(__file__).resolve().parents[2] / "device" / "lean"
 SCRIPT = LEAN / "scripts" / "difftest_vectors.py"
@@ -96,7 +97,7 @@ def test_the_generator_covers_what_it_says():
         values = [bytes.fromhex(v) for v in i["config"]["salt"]["values"]]
         frames = [bytes.fromhex(a[1]) for a in r["actions"] if a[0] == "salt"]
         first = -(-i["config"]["start"] // i["config"]["salt"]["pouw_window"])
-        assert frames == [active.salt_frame(p, values[p], active.HEADER.size + 8 + len(values[p]))
+        assert frames == [active.salt_frame(p, values[p], HEADER.size + 8 + len(values[p]))
                           for p in range(first, first + len(frames))]
         assert r["salts_delivered"] <= len(frames) <= r["salts_released"]
     assert any(r["salts_delivered"] > 1 for _, r in salted)
@@ -117,7 +118,7 @@ def test_the_generator_covers_what_it_says():
         for a in r["actions"]:
             if a[0] == "upstream":
                 firsts.setdefault(a[1], a[2])
-        header = lambda s: active.HEADER.pack(active.ORDINAL, s, 0).hex()  # noqa: E731
+        header = lambda s: HEADER.pack(active.ORDINAL, s, 0).hex()  # noqa: E731
         assert all((h == header(s)) == i["config"]["ordinals"] for s, h in firsts.items())
     compact = [(i, r) for i, r in zip(insts, results) if i["config"]["compact"]]
     assert {i["config"]["egress"]["B"] for i, _ in compact} == {8, 12, 48}

@@ -119,6 +119,7 @@ from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.accounting.certifier.verifier import calibration
 from verity.protocols.accounting.certifier.verifier import warden as W
 from verity import protocol
+from verity.protocols.accounting.certifier.verifier.scan_answer import JITTER_BOUND
 
 #: the monitoring periods' seconds, by name
 PERIODS: dict[str, int] = dict(protocol.MONITORING_PERIODS)
@@ -130,11 +131,6 @@ SCAN_DELTA = Fraction(1, 2 ** 20)
 #: the error a row at a scope's load is to carry at most over its monitoring period: where a caller gives no δ, each
 #: execution phase's scan is at the δ at which the row that pools the most execution phases carries it (`period_delta`)
 PERIOD_ERROR = Fraction(1, 2 ** 20)
-#: the jitter bound D_j that K is charged at (`NetTiming.JitterBounded`, one bound over every step): a statement of k
-#: steps, one a bucket, pays ⌈log2 D_j^k⌉ = k bits. Each bucket leaves at a time fixed before it is made
-#: (`warden.Warden(paced=…)`, `active.Proxy(paced=…)`), yet the host's state after the server's writes for the next
-#: bucket still moves a bucket's arrival offset, so J isn't met at D_j = 1
-JITTER_BOUND = 2
 JITTER = "J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel)"
 ROOT = Path(__file__).resolve().parents[2]
 CENSUS = ROOT / "benchmarks" / "census"

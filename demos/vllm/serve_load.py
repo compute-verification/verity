@@ -12,7 +12,7 @@ distinct token ids (BOS, then 16 to 200 ids, so no two share a cached block), to
 the stochastic ones with a client seed) and ``max_tokens`` 4 to 40; the next burst starts once every request of this one has
 finished and the engine has idled. One JSON line a request goes to ``--out``: its user, body and response.
 
-``--varied N`` samples N requests as `benchmarks/network_traces/certifier_serve.varied_requests` does: Poisson arrivals at
+``--varied N`` samples N requests: Poisson arrivals at
 ``--rate`` a second; each prompt one chat turn (Llama 3's header, one of six questions, filler, the assistant header, in the
 endpoint's tokens from ``/tokenize``) cut to a length log-uniform in ``--prompt-range``, so prompts share cached prefixes;
 ``max_tokens`` uniform in 1 … ``--max-tokens``, greedy, a seed of its own, streamed; ``user`` ``varied.<j>``. With

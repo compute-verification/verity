@@ -19,7 +19,7 @@ from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import head_check as HC
 from verity.protocols.accounting.certifier.verifier import replay_chain as RC
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import id_request
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.certificate import Issuer
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_lengths import LEN, PLAIN, traffic
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import run
@@ -132,7 +132,7 @@ def test_the_request_row_is_the_arrival_slots_layout():
 
 @pytest.mark.parametrize("B", (387, 395, 505, 509, 512, 4096))
 def test_request_bytes_is_the_id_requests_length(B):
-    """`request_bytes` is the length of the canonical id request in B-byte cells (`active.id_request` at offset 0) at
+    """`request_bytes` is the length of the canonical id request in B-byte cells (`id_form.id_request` at offset 0) at
     every prompt length around each cell's end and at lengths between, whatever the request's other fields, and it
     is increasing in the prompt's length, so a request's bytes hold its prompt's length."""
     f = LR.form(B)

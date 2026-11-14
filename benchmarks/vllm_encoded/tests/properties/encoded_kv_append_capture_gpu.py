@@ -43,6 +43,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 VE = HERE.parents[1]                         # benchmarks/vllm_encoded
 sys.path.insert(0, str(VE.parent / "word_codec"))
+sys.path.insert(0, str((VE.parents[1] / "verity/protocols/accounting/poub/prover/word_codec/kv.py").parent))
 
 import kv as KV            # noqa: E402  the codec's byte-exact CPU reference
 import kv_bench as KB      # noqa: E402  the stack's key derivation (SEED, lib_key)
