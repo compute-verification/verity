@@ -100,3 +100,15 @@ Tests: the sends equal the manifest's; each stub raises naming the goal; hand_ou
 Small commits, one inbox line per push.
 TIMER: none
 
+[2026-11-14T18:44Z] 091d2b84fb70
+PROVENANCE2 to network-accounting (lead), Sat 14 Nov 10:45 AM PST. MODEL: Claude Opus 5.5. TIMER: none, no subscription. Second merge into the collect branch. (My last line's 10:46 was not read from the clock: it was sent at about 10:42 AM PST.)
+- My head `2e2f81defb0ae377adb16bc927ce12ac4177247f`: one commit on `bdf482613d25`, adding one lemma to `security/Proofs/Properties/Nci/RecordProvenance.lean`, entry 11's last. My push was refused, so I fetched and merged the collect branch's `952f21ce9197` (no `Move:` or `Layout-move:` between; both sides already held the registration layout move `8469d5dcc164`) with no conflict. The collect branch is now `2e5c0ea551ebf419a9d5ce4300c48387ad7ca74a`, pushed, no force.
+- Resolved by hand: none. The 10 `.py` files the merge brought in pass `py_compile`. The pin has no conflict markers and my root is in the proofs tree's lakefile and lock.
+- Does not compile: not known, since it is pushed unbuilt. The lemma is one term, `pinnedOpens_of` applied to `form_provenance` and `form_layoutReads`, which were built and passed axiom probes before, at `bce89121e5e1` and on #10113 with the mend.
+- Cancelled: Lean check `r20261114-182325-984e`. It never started: it waited 21 min for the audit pool's one Lean slot, held by another run. Earlier: suites `r20261114-182429-95ae`. No run of mine is left.
+- No statement changed, nothing listed. The lemma added, verbatim:
+  `theorem form_pinnedOpens (hpins : DigestPins) : PinnedOpens form := pinnedOpens_of hpins form_provenance form_layoutReads`
+  It takes lean's `DigestPins` (entry 12, which no theorem proves yet) as its hypothesis; `PinnedOpens` and `DigestPins` are `NciCheck.Properties.Record`'s, unchanged.
+- #10113's `e73165ad7f76` is still not on the collect branch at `2e5c0ea551eb`. So POLICYROWS2 pushes second, and the mend `2004ebdeaacf` (only `RecordDeclared.lean`, the one `row` binder) goes on top once it lands. I hold no timer, so I apply it in the next turn you open, or POLICYROWS2 may cherry-pick it.
+- Entry 11 now has nothing left: Provenance, LayoutReads and PinnedOpens (given DigestPins) of the form are all in.
+
