@@ -41,10 +41,11 @@ from typing import Any
 from verity_vllm import config as C
 from verity_vllm.config import option
 from verity_vllm.pipeline.tp import run_root as RT
+from verity_vllm.records.schema_ids import TP_SERVING_ROWS_SCHEMA
 
 __all__ = ["BINDING", "Options", "ROWS_SCHEME", "from_bundle", "main", "record", "source", "window_of", "window_of_record"]
 
-SCHEMA = "verity-vllm/tp-serving-rows/v1"
+SCHEMA = TP_SERVING_ROWS_SCHEMA
 ROWS_SCHEME = "rows-sha512"
 ROWS = "verity-vllm tp-serving-rows: a rank's sealed replay bundle -> rows"
 LINK = ("provenance, not proof: verity-vllm tp-serving-rows opened the rank's sealed replay bundle against the TP Commit's record and "

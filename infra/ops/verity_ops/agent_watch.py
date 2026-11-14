@@ -3275,10 +3275,10 @@ class Publisher:
 def rate_wait(e: urllib.error.HTTPError, last: float) -> float:
     """Seconds to wait after a sweep the API refused with 429: its Retry-After when it gives one, else double the last wait
     (from `RATE_WAIT_S[0]`), at most `RATE_WAIT_S[1]`. A sweep every minute into a rate limit kept it shut for 3.5 h."""
-    first, cap = RATE_WAIT_S
+    first, limit = RATE_WAIT_S
     given = str((e.headers or {}).get("Retry-After") or "")
     asked = float(given) if re.fullmatch(r"\d+(?:\.\d+)?", given) else 0.0   # an HTTP-date form doubles instead
-    return min(cap, asked if asked > 0 else max(first, 2 * last))
+    return min(limit, asked if asked > 0 else max(first, 2 * last))
 
 
 def pump(watch: Watch, r: Run) -> None:

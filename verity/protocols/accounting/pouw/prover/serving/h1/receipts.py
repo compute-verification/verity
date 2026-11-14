@@ -113,15 +113,15 @@ def noise_blocks_cpu(seeds: list[bytes], n: int) -> torch.Tensor:
 
 def noise_cubin(arch: str) -> Path:
     """`NOISE_CU` built with the nvcc on the path for ``sm_<arch>`` (``"90"``: an H200, ``"120"``: an RTX PRO 6000) into a
-    cubin, with `verity.circuits.kernels`' ``sha512.cuh``, in the row-table build cache (`row_table_kernels.built`)."""
-    from verity.circuits import kernels
+    cubin, with `verity.commitments.cuda`' ``sha512.cuh``, in the row-table build cache (`row_table_kernels.built`)."""
+    from verity.commitments import cuda
 
     from verity.protocols.accounting.pouw.prover.serving import row_table_kernels as RTD
 
     tool = RTD.nvcc()
     if tool is None:
         raise RuntimeError(f"no nvcc on the path: the receipts' noise kernel ({NOISE_CU}) is built with it")
-    inc = Path(kernels.__file__).resolve().parent
+    inc = Path(cuda.__file__).resolve().parent
     return RTD.built(tool, (NOISE_CU,), ("-O3", "-std=c++17", f"-I{inc}", f"-gencode=arch=compute_{arch},code=sm_{arch}",
                                          "-cubin"), "noise.cubin", headers=(inc / "sha512.cuh",))
 

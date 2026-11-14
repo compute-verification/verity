@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 from research import cli, jobuser, result
 
-NAME, CAP = result.ONEDNN_ISA
+NAME, LIMIT = result.ONEDNN_ISA
 #: a workload that writes down the variable as its process starts with it
 SEES = f"import json, os; json.dump({{'isa': os.environ.get({NAME!r})}}, open('result.json', 'w'))"
 
@@ -23,15 +23,15 @@ def _run(runs: Path, *flags: str, command: tuple[str, ...] = (sys.executable, "-
     return seen, json.loads((run_dir / "job.json").read_text())["store"]["params"].get("env")
 
 
-def test_the_default_is_the_cap_unless_the_environment_names_the_variable_and_a_job_users_unit_keeps_its_name():
-    assert result.env_defaults({}) == {NAME: CAP} == {"ONEDNN_MAX_CPU_ISA": "AVX512_CORE_BF16"}
+def test_the_default_is_the_limit_unless_the_environment_names_the_variable_and_a_job_users_unit_keeps_its_name():
+    assert result.env_defaults({}) == {NAME: LIMIT} == {"ONEDNN_MAX_CPU_ISA": "AVX512_CORE_BF16"}
     assert result.env_defaults({NAME: "AVX2", "OTHER": "1"}) == {NAME: "AVX2"}
     assert set(result.env_defaults({})) <= jobuser.PASS_NAMES and not jobuser.CREDENTIAL.search(NAME)
 
 
 def test_a_job_starts_with_onednn_held_off_amx_and_its_record_says_so(tmp_path, monkeypatch):
     monkeypatch.delenv(NAME, raising=False)
-    assert _run(tmp_path / "runs") == (CAP, {NAME: CAP})
+    assert _run(tmp_path / "runs") == (LIMIT, {NAME: LIMIT})
     names = set(os.environ)
     assert NAME not in names, "set for the workload: the runner's own environment is as it was"
 
@@ -40,7 +40,7 @@ def test_a_value_the_job_or_the_runners_environment_names_stays(tmp_path, monkey
     monkeypatch.delenv(NAME, raising=False)
     assert _run(tmp_path / "env", "--env", f"{NAME}=AVX2") == ("AVX2", {NAME: "AVX2"})
     own = ("env", f"{NAME}=AVX512_CORE", sys.executable, "-c", SEES)
-    assert _run(tmp_path / "command", command=own) == ("AVX512_CORE", {NAME: CAP}), "the job's own command decides last"
+    assert _run(tmp_path / "command", command=own) == ("AVX512_CORE", {NAME: LIMIT}), "the job's own command decides last"
     monkeypatch.setenv(NAME, "AVX512_CORE_VNNI")
     assert _run(tmp_path / "inherited") == ("AVX512_CORE_VNNI", {NAME: "AVX512_CORE_VNNI"})
     assert _run(tmp_path / "both", "--env", f"{NAME}=AVX2") == ("AVX2", {NAME: "AVX2"})
@@ -51,7 +51,7 @@ def test_a_value_the_job_or_the_runners_environment_names_stays(tmp_path, monkey
 def test_a_run_a_machine_claimed_gets_it_under_its_requests_env(tmp_path, monkeypatch):
     """Machine side, the launch request's env is the run's --env: a request that names the variable keeps its value."""
     monkeypatch.delenv(NAME, raising=False)
-    for case, env, want in (("plain", {"RSEC_ROW": "1"}, CAP), ("named", {NAME: "AVX2"}, "AVX2")):
+    for case, env, want in (("plain", {"RSEC_ROW": "1"}, LIMIT), ("named", {NAME: "AVX2"}, "AVX2")):
         runs, req = tmp_path / case, tmp_path / f"{case}.json"
         (runs / "q1").mkdir(parents=True)
         req.write_text(json.dumps({"env": env}))
@@ -87,6 +87,6 @@ def test_a_job_users_unit_gets_it_and_a_value_the_run_names_wins(tmp_path, monke
     for cmd, environ in spawned:
         passed = [cmd[i + 1] for i, x in enumerate(cmd) if x == "--pass"]
         units.append((passed, jobuser.job_env(environ, passed)[NAME]))
-    assert units == [([], CAP), ([NAME], "AVX2")]
+    assert units == [([], LIMIT), ([NAME], "AVX2")]
     names = set(os.environ)
     assert NAME not in names

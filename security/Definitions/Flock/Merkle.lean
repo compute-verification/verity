@@ -13,10 +13,12 @@ column and the `d − c` siblings from the leaf up to the cap entry `pos >> (d �
 one function on byte strings (SHA-512 in the target, `ASSUMPTIONS.md`), so every collision
 is a pair of distinct byte strings with the same hash (`Hash.HasCollision`).
 
-**Salted leaves.** A leaf scheme (`Leaf`) gives each column a leaf under a salt, and binds it: two columns with one
-leaf give a collision. `VerifiesL` is `Verifies` for any leaf scheme, and `Leaf.plain` is the unsalted leaf above.
-hm96's leaf (`Leaf.hm96`) binds its column with no assumption beyond `H`'s collisions (`hm96Leaf_bind`, its proof
-field). The binding of a whole opening is in `Proofs.Flock.Soundness.Merkle`.
+**Salted leaves.** A leaf scheme (`Leaf`) gives each column a leaf under a salt, and binds it: for two columns and
+salts it gives two byte strings (`pair`), which collide under `H` when the columns differ and the leaves agree
+(`pair_spec`). `VerifiesL` is `Verifies` for any leaf scheme, and `Leaf.plain` is the unsalted leaf above. hm96's leaf
+(`Leaf.hm96`) binds its column with no assumption beyond `H`'s collisions: its pair is `hm96LeafPair`, and
+`hm96LeafPair_spec` is its proof field. The pair of two whole openings is in `Definitions.Flock.MerklePair`, and that
+it is a collision in `Proofs.Flock.Soundness.MerklePair`.
 -/
 
 @[expose] public section
@@ -39,9 +41,12 @@ structure Enc (Col D : Type) where
 
 variable (H : List UInt8 → D) (E : Enc Col D)
 
-/-- One step up the tree: `H(acc ‖ sib)` at an even index, `H(sib ‖ acc)` at an odd one. -/
-def up (idx : ℕ) (acc sib : D) : D :=
-  if idx % 2 = 0 then H (E.dig acc ++ E.dig sib) else H (E.dig sib ++ E.dig acc)
+/-- The bytes one step up the tree hashes: `acc ‖ sib` at an even index, `sib ‖ acc` at an odd one. -/
+def upIn (idx : ℕ) (acc sib : D) : List UInt8 :=
+  if idx % 2 = 0 then E.dig acc ++ E.dig sib else E.dig sib ++ E.dig acc
+
+/-- One step up the tree: `H` of the step's input (`upIn`). -/
+def up (idx : ℕ) (acc sib : D) : D := H (upIn E idx acc sib)
 
 /-- Walk from a node up through the siblings (`Flock.Merkle`). -/
 def walk : ℕ → D → List D → D
@@ -57,16 +62,20 @@ def Verifies (cap : ℕ → D) (depth : ℕ) (pos : ℕ) (column : Col) (sibs : 
 
 /-! ## Leaf schemes: salted leaves (hm96) -/
 
-/-- **A leaf scheme**: a column's leaf under a salt of type `S`, such that two columns with one leaf, under any salts,
-give a collision of `H`. The unsalted leaf `H(encode column)` is `Leaf.plain`, with `S = Unit`. -/
+/-- **A leaf scheme**: a column's leaf under a salt of type `S`, and for two columns and salts the two byte strings
+`pair` that collide under `H` when the columns differ and the leaves agree. The pair is a function of the two columns
+and salts alone, so a collision finder can output it. The unsalted leaf `H(encode column)` is `Leaf.plain`, with
+`S = Unit`. -/
 structure Leaf (Col S D : Type) (H : List UInt8 → D) where
   leaf : Col → S → D
-  bind : ∀ c c' s s', c ≠ c' → leaf c s = leaf c' s' → Collision H
+  pair : Col → S → Col → S → List UInt8 × List UInt8
+  pair_spec : ∀ c c' s s', c ≠ c' → leaf c s = leaf c' s' → Hash.Collision H (pair c s c' s').1 (pair c s c' s').2
 
-/-- The unsalted leaf, `H(encode column)`. -/
+/-- The unsalted leaf, `H(encode column)`. Its pair is the two columns' encodings. -/
 def Leaf.plain : Leaf Col Unit D H where
   leaf c _ := H (E.col c)
-  bind _ _ _ _ hc h := ⟨_, _, fun e => hc (E.col_inj e), h⟩
+  pair c _ c' _ := (E.col c, E.col c')
+  pair_spec _ _ _ _ hc h := ⟨fun e => hc (E.col_inj e), h⟩
 
 /-- hm96's leaf parameters: the leaf and salt prefixes, and a salt's mask `y ↦ M·y`, `L` bytes long. -/
 structure Hm96Key where
@@ -95,28 +104,48 @@ variable {H E} in
 def hm96Leaf (K : Hm96Key) (c : Col) (y : List UInt8) : D :=
   H (K.leafPrefix ++ (xorBytes (E.dig (H (E.col c))) (K.mask y) ++ E.dig (H (K.saltPrefix ++ y))))
 
-/-- **hm96's leaf binds its column**, with no assumption beyond `H`'s collisions: equal leaves collide in the outer hash
-when `b ‖ c` differ, in the salt hash when the salts differ, and in the inner hash when the salts agree (then the masks
-agree, so the `x`s do). It uses only the fixed lengths, and that `x ↦ x ⊕ M·y` is injective for a fixed `y`. -/
-theorem hm96Leaf_bind (K : Hm96Key) (hL : ∀ d, (E.dig d).length = K.L) (c c' : Col) (y y' : List UInt8)
-    (hc : c ≠ c') (h : hm96Leaf (H := H) (E := E) K c y = hm96Leaf (H := H) (E := E) K c' y') : Collision H := by
-  by_cases ho : K.leafPrefix ++ (xorBytes (E.dig (H (E.col c))) (K.mask y) ++ E.dig (H (K.saltPrefix ++ y))) =
-      K.leafPrefix ++ (xorBytes (E.dig (H (E.col c'))) (K.mask y') ++ E.dig (H (K.saltPrefix ++ y')))
-  · have hbl : (xorBytes (E.dig (H (E.col c))) (K.mask y)).length =
-        (xorBytes (E.dig (H (E.col c'))) (K.mask y')).length := by
-      simp only [xorBytes, List.length_zipWith, hL, K.mask_len]
-    obtain ⟨hb, hs⟩ := List.append_inj (List.append_cancel_left ho) hbl
+/-- The input of the outer hash of hm96's leaf: `LP ‖ b ‖ c`. -/
+def hm96LeafIn (K : Hm96Key) (c : Col) (y : List UInt8) : List UInt8 :=
+  K.leafPrefix ++ (xorBytes (E.dig (H (E.col c))) (K.mask y) ++ E.dig (H (K.saltPrefix ++ y)))
+
+/-- **The pair of hm96's leaf**, for two columns and salts: the two outer inputs when they differ; else the two salt
+hashes' inputs when the salts differ; else the two columns' encodings. -/
+def hm96LeafPair (K : Hm96Key) (c : Col) (y : List UInt8) (c' : Col) (y' : List UInt8) : List UInt8 × List UInt8 :=
+  if hm96LeafIn H E K c y = hm96LeafIn H E K c' y' then
+    if y = y' then (E.col c, E.col c') else (K.saltPrefix ++ y, K.saltPrefix ++ y')
+  else (hm96LeafIn H E K c y, hm96LeafIn H E K c' y')
+
+/-- **hm96's leaf binds its column**, with no assumption beyond `H`'s collisions: when two different columns have one
+leaf, `hm96LeafPair` is a collision. The two outer inputs collide when `b ‖ c` differ, the salt hash's inputs when the
+salts differ, and the inner hash's when the salts agree (then the masks agree, so the `x`s do). It uses only the fixed
+lengths, and that `x ↦ x ⊕ M·y` is injective for a fixed `y`. -/
+theorem hm96LeafPair_spec (K : Hm96Key) (hL : ∀ d, (E.dig d).length = K.L) (c c' : Col) (y y' : List UInt8)
+    (hc : c ≠ c') (h : hm96Leaf (H := H) (E := E) K c y = hm96Leaf (H := H) (E := E) K c' y') :
+    Hash.Collision H (hm96LeafPair H E K c y c' y').1 (hm96LeafPair H E K c y c' y').2 := by
+  have hbl : (xorBytes (E.dig (H (E.col c))) (K.mask y)).length =
+      (xorBytes (E.dig (H (E.col c'))) (K.mask y')).length := by
+    simp only [xorBytes, List.length_zipWith, hL, K.mask_len]
+  unfold hm96LeafPair
+  by_cases ho : hm96LeafIn H E K c y = hm96LeafIn H E K c' y'
+  · have ho' : K.leafPrefix ++ (xorBytes (E.dig (H (E.col c))) (K.mask y) ++ E.dig (H (K.saltPrefix ++ y))) =
+        K.leafPrefix ++ (xorBytes (E.dig (H (E.col c'))) (K.mask y') ++ E.dig (H (K.saltPrefix ++ y'))) := ho
+    obtain ⟨hb, hs⟩ := List.append_inj (List.append_cancel_left ho') hbl
+    rw [ite_eq_left ho]
     by_cases hy : y = y'
-    · subst hy
+    · rw [ite_eq_left hy]
+      rw [← hy] at hb
       have hx := xorBytes_inj (by rw [hL, K.mask_len]) (by rw [hL, K.mask_len]) hb
-      exact ⟨_, _, fun e => hc (E.col_inj e), E.dig_inj hx⟩
-    · exact ⟨_, _, fun e => hy (List.append_cancel_left e), E.dig_inj hs⟩
-  · exact ⟨_, _, ho, h⟩
+      exact ⟨fun e => hc (E.col_inj e), E.dig_inj hx⟩
+    · rw [ite_eq_right hy]
+      exact ⟨fun e => hy (List.append_cancel_left e), E.dig_inj hs⟩
+  · rw [ite_eq_right ho]
+    exact ⟨ho, h⟩
 
 /-- hm96's salted leaf scheme (`hm96Leaf`), for digests of the mask's length. -/
 def Leaf.hm96 (K : Hm96Key) (hL : ∀ d, (E.dig d).length = K.L) : Leaf Col (List UInt8) D H where
   leaf := hm96Leaf (H := H) (E := E) K
-  bind := hm96Leaf_bind H E K hL
+  pair := hm96LeafPair H E K
+  pair_spec := hm96LeafPair_spec H E K hL
 
 variable {S : Type}
 

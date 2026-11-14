@@ -12,9 +12,17 @@ A v2 record (`verity/registration/v2`) adds `"registered": [{"value", "root", "l
 `"word_bits"` for a value whose leaves are not 16 bits), and R7 holds it to the verifier's own entries
 (`Registered.entries`), a value the verifier pinned before the record to its root (`pinned`: the weights' root recorded
 before the salt), and each value an earlier record of the log registered under the domain it takes now to that record's
-root (`heldRoots`). The verifier expects a v2 record exactly when it expects values registered. Its entry for a value
+root (`heldRoots`). The verifier expects a v2 record exactly when it expects values registered or holds certified
+entries (`Verifier.v2`). Its entry for a value
 counts the value's rows in the row format the verifier holds for it (`schemas`; a bit row's `words` hold as many of its
 leaves as their bits do), and in `row/v1` rows when it names none.
+
+A verifier may hold certified entries (`certified`): the entry and root of a value that is none of its program's
+parameters, which it built from a registration it read under the deployment's key (the certified rows of a link). R7
+then holds the record's registered values to be its own and the certified ones, each once (`R7-values`), a certified
+value's entry to the verifier's leaves, words, word bits and domain as its own values', and its root to the
+verifier's (`certifiedHeld`, `R7-certified`). A certified value is not an output value, and no pinned root or root of
+the log is read for it: its entries join the verifier's own after the output values' steps (`checkOutputs`).
 
 A verifier that names its window's open root R (`windowRoot`, which it reads from the challenger's signed open of the
 window, never from the record) takes every registered value's domain under R (`Registered.domainAt`) but the ones it
@@ -26,6 +34,10 @@ now (`unwindowed`, `OneStage.paramsOfJson`). A value it fills itself (`supplied`
 `Supplied.root`: rows of the record's roots, positions after the log's, its coin bound to its binding and the record's
 window and its own bytes, under public salts) is held to the root it recomputes from this record and the log instead
 (`R7-supplied`), never to the log's.
+
+The binding, the seed salt, the registered compiler, the declarations and the pool below are what SPOT's caller hands
+the verifier beside the record and SPOT's own log. `check` reads none of them: the caller's check
+(`VStar.Recursive.Caller.check`, in `spot_flock`) refuses by the codes named here, after SPOT's check accepts.
 
 A verifier bound to a stream and a prover (`binding`: its stream's digest and the identity it registered the prover under)
 holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them, so a tile seeded
@@ -42,7 +54,7 @@ where the log registers none, to name neither a compiler nor advice (`R6-compile
 reads is refused by name.
 
 A verifier that reads the registration log's declarations (`declared`: the window's day and the log's `(day, program)`
-declarations) holds R2's program to the day's one declared circuit (`declaredCode`): `R2-undeclared` when the day has no
+declarations) holds the record's program to the day's one declared circuit (`declaredCode`): `R2-undeclared` when the day has no
 declaration, `R2-declared-twice` when it has more than one, and `R2-declared` when the record's program is not the
 day's.
 
@@ -67,11 +79,11 @@ refused the window `lag` windows of record before (`Pool.refused`, read from its
 lag at which serving learns a verdict), and by serving's own reset (`reset`), which an engine crash needs, at most one a
 week. The record's window names that reset (`pool_reset`; `R6-pool-reset` otherwise), its week (`pool_week`;
 `R6-pool-week`) and whether the week's reset is spent at it (`pool_spent`; `R6-pool-spent`): that it resets, or that
-the previous record, of its week, named it spent (`Pool.spentBefore`). R6 refuses a reset where the week's is spent
+the previous record, of its week, named it spent (`Pool.spentBefore`). The caller refuses a reset where the week's is spent
 before it (`R6-pool-reset-week`). The resets are serving's choice, so they are advice: the records name, of a week's n
 windows, the one serving reset at or none, log₂(n + 1) bits a week (log₂ 1009, 9.98 bits, for 600-second windows),
-which leakage charges; the spent marks and weeks are a function of the resets and the verifier's clock. R7 refuses a
-record whose entry for `pin` is not the pool its window opens (`poolOpen`) by name (`R7-pool-chain`).
+which leakage charges; the spent marks and weeks are a function of the resets and the verifier's clock. The caller
+refuses a record whose entry for `pin` is not the pool its window opens (`poolOpen`) by name (`R7-pool-chain`).
 
 Under a template query that applies, R8 refuses a run Input node whose leaves the proof blocks don't each read alone,
 unless it is a parameter's the verifier expects registered (`heldGates`), which is a registered value, or a tied value's
@@ -82,11 +94,19 @@ a parameter of the program, neither registered nor held, whose gates are one int
 and the registration piece publishes, beside the fan-out, the tied names it let through (`tiedThrough`), since
 acceptance rests on that later check.
 
+A port whose rows are the leaves of another port's tree (a member's port wired to its writer's output, with no tree of
+its own) is named in the verifier's layout with the port it is wired to (`"wired"`), at that port's leaves and domain.
+The record names a root under both names, and R3 refuses one whose two roots differ or that lacks either (`R3-wired`,
+`wiredHeld`): one tree named at two ports is the wire itself, checked and not a name. It is a second check of what the
+second stage holds each session's read of a wired port to (`SecondStage.readOk_wired`), and only as good as the
+layout's `wired` entries: where the parameters come from is the composite's to hold, not R3's.
+
 A verifier of the per-member form (`OneStageZk`) names its members (`members`: each its units and its circuit's units a
 proof block, META `vus_per_block`), and after R8 the check refuses a member whose fewest and most sampled proof blocks under the
-sampling design the sample runs on, over the samples that end, give different link points, a sampling design it can't sample on, or one no sample of
-which ends (`link-points`, `linkRefused`): some sample ends, a sample that ends gives each member one count, and one that
-runs out of coins fails the window (`OneStageZk.RAN_OUT`).
+sampling design the sample runs on, over the samples that end, give different link points, a member some sample that
+ends misses (its fewest is none), a sampling design it can't sample on, or one no sample of which ends (`link-points`,
+`linkRefused`): some sample ends, a sample that ends holds a proof block of each member and gives each one count, and
+one that runs out of coins fails the window (`OneStageZk.RAN_OUT`).
 -/
 module
 
@@ -173,7 +193,8 @@ structure Verifier where
   law : Json
   workTable : Option Json
   scheme : String
-  /-- each port its layout derives, with its `{"leaves", "domain"}` -/
+  /-- each port its layout derives, with its `{"leaves", "domain"}`, and, for a port whose rows are the leaves of another
+  port's tree, that port's name (`"wired"`) -/
   ports : Array (String × Json)
   leafLayer : Option String
   anchors : Array Json
@@ -208,19 +229,28 @@ structure Verifier where
   challenger's log (`Challenger.seedSaltOf`), which the window must name; none when it read none -/
   seedSalt : Option String := none
   /-- the pool its windows carry, whose `pin` its parameters add to `outputs` or `supplied` (`OneStage.paramsParsed`)
-  and R7 holds to the chain (`poolChained`), and whose reset R6 holds the window to name, once a week; none for a
+  and the caller's check holds to the chain (`VStar.Recursive.Caller.poolChained`) and its window to name its reset,
+  once a week; none for a
   program that carries none -/
   pool : Option Pool := none
   /-- run Inputs, by parameter name, whose rows a later check ties to the registrations that computed them, which R8 lets
   through though several proof blocks read them, on that later check alone (`tiedThrough`) -/
   tied : Array String := #[]
-  /-- the per-member form's members, each its units as `[lo, hi)` ranges and its circuit's units a proof block, whose
-  link points `link-points` holds to one count (`linkRefused`); none in the one-statement form -/
+  /-- the per-member form's members, each its units as `[lo, hi)` ranges and its circuit's units a proof block, which
+  `link-points` holds to a sampled proof block at every sample that ends and to one count of link points
+  (`linkRefused`); none in the one-statement form -/
   members : Array (Array (Nat × Nat) × Nat) := #[]
   /-- the registration log's registered compiler, its digest and the public length ℓ in bits of the advice it reads,
   from the log it holds when it samples: `some none` when the log registers none; none when it reads no log's
   compiler -/
   compiler : Option (Option (String × Nat)) := none
+  /-- the certified entries, `(entry, root)` each: values that are none of `registered`, whose entry and root the
+  verifier built from a registration it read under the deployment's key, which R7 holds the record's entry for the
+  value to (`checkOutputs`, `certifiedHeld`) -/
+  certified : Array (Registered.Entry × String) := #[]
+
+/-- Whether the verifier expects a v2 record: it expects values registered or holds certified entries. -/
+def Verifier.v2 (v : Verifier) : Bool := !(v.registered.isEmpty && v.certified.isEmpty)
 
 /-- R6's registered compiler (`registration._compiler`): the window names the log's compiler by its digest, and names
 neither a compiler nor advice where the log registers none; anything when the verifier reads no log's compiler. -/
@@ -241,37 +271,9 @@ def adviceOk (w : Json) : Option (Option (String × Nat)) → Bool
 def declaredOf (day : Nat) (ds : Array (Nat × String)) : List String :=
   (ds.filter (·.1 == day)).toList.map (·.2)
 
-/-- R2's declared day (`registration._declared`): `R2-undeclared` when the window's day has no declaration,
-`R2-declared-twice` when it has more than one, `R2-declared` when the record's `program` is not the day's declared one,
-and none when it is or the verifier reads no declarations. -/
-def declaredCode (program : Json) : Option (Nat × Array (Nat × String)) → Option String
-  | none => none
-  | some (day, ds) => match declaredOf day ds with
-    | [] => some "R2-undeclared"
-    | [p] => if jeq program (Json.str p) then none else some "R2-declared"
-    | _ => some "R2-declared-twice"
-
-private def optStr : Option String → Json
+def optStr : Option String → Json
   | some s => Json.str s
   | none => Json.null
-
-private def optReset : Option Pool → Json
-  | some p => Json.bool p.reset
-  | none => Json.null
-
-private def optWeek : Option Pool → Json
-  | some p => Lean.toJson p.week
-  | none => Json.null
-
-private def optSpent (pool : Option Pool) (log : Array Json) : Json :=
-  match pool with
-  | some p => Json.bool (p.reset || p.spentBefore log)
-  | none => Json.null
-
-private def onceOk (pool : Option Pool) (log : Array Json) : Bool :=
-  match pool with
-  | some p => !(p.reset && p.spentBefore log)
-  | none => true
 
 /-- The Input gates `(first, count)` of the parameters `v` expects registered, which R8 reads as registered values
 (`registered.held_gates`). -/
@@ -448,16 +450,18 @@ def checkRegistered (c : Array String) (got : Json) (mine : V (Array Registered.
         | .ok r => if !jeq (getD e "root") (Json.str r) then c := addCode c "R7-supplied"
   return c
 
-/-- R7 with output values: `checkRegistered` on the entries and held roots `applyOutputs` leaves, after its codes. -/
+/-- R7 with output values: `checkRegistered` on the entries and held roots `applyOutputs` leaves, then the certified
+entries (`certified`), which no output step reads, after its codes. -/
 def checkOutputs (c : Array String) (got : Json) (mine : V (Array Registered.Entry))
     (held : Array (String × String)) (supplied : Array (String × Supplied.Rows))
     (rootOf : String → Supplied.Rows → Registered.Entry → V String)
-    (outputs : Array (String × String × Earlier)) (log : Array Json) : Array String :=
+    (outputs : Array (String × String × Earlier)) (log : Array Json)
+    (certified : Array Registered.Entry := #[]) : Array String :=
   match mine with
   | .error _ => addCode c "R7-registered"
   | .ok mine =>
     let (c, mine, held) := applyOutputs c mine held outputs log
-    checkRegistered c got (.ok mine) held supplied rootOf
+    checkRegistered c got (.ok (mine ++ certified)) held supplied rootOf
 
 /-- **Whether a window carries the previous window's pool** (`registration.pool_chains`): neither the verifier refused
 the window the public lag back (`Pool.refused`) nor serving reset it (`reset`), and the log's last record, the previous
@@ -497,14 +501,12 @@ def entryOf (rec : Json) (value : String) : Option Json :=
   | .arr es => es.reverse.find? fun e => jeq (getD e "value") (Json.str value)
   | _ => none
 
-/-- R7's pool chain (`registration._pool_chain`): with a pool, the record's entry for `pin` (`entryOf`) has the domain and
-root of the pool its window opens (`poolOpen`); `R7-pool-chain` otherwise. -/
-def poolChained (rec : Json) (v : Verifier) : Bool :=
-  match v.pool with
-  | none => true
-  | some p => match entryOf rec p.pin, poolOpen rec v p with
-    | some e, some (d, r) => jeq (getD e "domain") (Json.str d) && jeq (getD e "root") (Json.str r)
-    | _, _ => false
+/-- R7's certified roots (`registration._certified_held`): the record's entry for each certified value (`entryOf`) has
+the root the verifier holds for it; `R7-certified` otherwise. -/
+def certifiedHeld (rec : Json) (v : Verifier) : Bool :=
+  v.certified.all fun x => match entryOf rec x.1.value with
+    | some e => jeq (getD e "root") (Json.str x.2)
+    | none => false
 
 /-- R3's index of the record's roots, each root's port canonicalized once: the last root naming each canonical port, and
 how many distinct ports the roots name, a port with no canonical form counting as one of its own (`jeq` equals it to
@@ -535,7 +537,7 @@ def PortIndex.has (ix : PortIndex) (p : String) : Bool := (ix.find p).isSome
 
 /-- `registration.link_refused`: the verifier names members, and the sampling design the sample runs on doesn't derive, no sample under
 it ends, or some member's fewest and most sampled proof blocks under it, over the samples that end, give different link points
-(`LinkPoints.refused`). -/
+or its fewest is none, a sample that ends missing it (`LinkPoints.refused`). -/
 def linkRefused (v : Verifier) : Bool :=
   !v.members.isEmpty &&
     match LinkPoints.lawOf v.program v.query v.law v.workTable >>= fun (l, n) => LinkPoints.refused l n v.members with
@@ -547,33 +549,41 @@ def linkRefused (v : Verifier) : Bool :=
 twice, so `check_eq_checkRef`'s `simp`, which leaves it folded, doesn't copy the codes before it into both cases. -/
 def kept (ok : Bool) (c : Array String) (code : String) : Array String := if ok then c else addCode c code
 
-/-- R6's pool codes added to `c`: the window `w` names the pool's reset, week and spent mark (`R6-pool-reset`,
-`R6-pool-week`, `R6-pool-spent`), and a reset where the week's is spent before it is refused (`R6-pool-reset-week`).
-One term rather than four lines, since `check_eq_checkRef`'s `simp` copies every line after `check`'s `binding` block
-into each branch of its join points. -/
-def poolMarks (w : Json) (pool : Option Pool) (log : Array Json) (c : Array String) : Array String :=
-  kept (onceOk pool log)
-    (kept (jeq (getD w "pool_spent") (optSpent pool log))
-      (kept (jeq (getD w "pool_week") (optWeek pool))
-        (kept (jeq (getD w "pool_reset") (optReset pool)) c "R6-pool-reset") "R6-pool-week") "R6-pool-spent")
-    "R6-pool-reset-week"
-
-/-- R6's compiler codes added to `c` (`compilerOk`, `R6-compiler`; `adviceOk`, `R6-advice-length`). One term, as
-`poolMarks` is, for `check_eq_checkRef`'s `simp`. -/
-def compilerMarks (w : Json) (rc : Option (Option (String × Nat))) (c : Array String) : Array String :=
-  kept (adviceOk w rc) (kept (compilerOk w rc) c "R6-compiler") "R6-advice-length"
-
 /-- R8's codes added to `c`: a tied name it can't let through (`R8-tied`, `tiedBad`), then a run Input node the proof
 blocks don't each read alone outside the registered and tied parameters' gates (`R8-shared-input`,
-`Partition.readAlone`). One term, as `poolMarks` is, for `check_eq_checkRef`'s `simp`. -/
+`Partition.readAlone`). One term rather than two lines, since `check_eq_checkRef`'s `simp` copies every line after a
+join point into each of its branches. -/
 def r8Codes (v : Verifier) (c : Array String) : Array String :=
   kept (Partition.readAlone v.program v.query (heldGates v ++ tiedGates v)) (kept (tiedBad v).isEmpty c "R8-tied")
     "R8-shared-input"
 
+/-- One port of the layout against the record's roots (`wiredHeld`): where its entry names the port it is wired to
+(`wired`, a string), the record has a root under its own name and one under that port's (`find`: the record's last root
+of a name), each root a string, and the two are one string. A port whose entry names none holds. -/
+def wiredOk (find : String → Option Json) (p : String) (want : Json) : Bool :=
+  match getD want "wired" with
+  | .str q =>
+    match find p, find q with
+    | some r, some h =>
+      match getD r "root", getD h "root" with
+      | .str a, .str b => a == b
+      | _, _ => false
+    | _, _ => false
+  | _ => true
+
+/-- R3 of the wired ports: a port of the layout whose rows are the leaves of another port's tree names that port
+(`wired`), and the record registers one tree at both names (`wiredOk`, of every port). The clause is only as good as
+the layout's `wired` entries, which the verifier's parameters bring: a layout that leaves `wired` out of a port is not
+refused by R3 for it. So `R3-wired` is a second check of what `SecondStage.readOk_wired` gives, which holds each
+session's read of a wired port to its writer's root whatever the layout names; where the parameters come from is the
+composite's to hold, not R3's. -/
+def wiredHeld (find : String → Option Json) (ports : Array (String × Json)) : Bool :=
+  ports.all fun pw => wiredOk find pw.1 pw.2
+
 /-- `registration.check`'s failure codes, R1–R8 in order, then `link-points` (`linkRefused`): empty when the record
 holds. -/
 def check (rec : Json) (v : Verifier) : Array String := Id.run do
-  let v2 := !v.registered.isEmpty
+  let v2 := v.v2
   if keys? rec != some (if v2 then KEYS_V2 else KEYS) then return #["keys"]
   let get := getD rec
   let mut c : Array String := #[]
@@ -600,14 +610,12 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   match Partition.units v.program v.query with
   | .error _ => c := addCode c "R2-query"
   | .ok population => if !jeq (get "population") (Lean.toJson population) then c := addCode c "R2-population"
-  if (declaredCode (get "program") v.declared).isSome then
-    c := addCode c ((declaredCode (get "program") v.declared).getD "")
   -- R3
   if !jeq (get "scheme") v.scheme then c := addCode c "R3-scheme"
   let roots := match get "roots" with | .arr rs => rs | _ => #[]
+  let ix := portIndex roots
   if roots.isEmpty || !roots.all (keys? · == some ROOT_KEYS) then c := addCode c "R3-roots"
   else
-    let ix := portIndex roots
     if ix.count != roots.size || ix.count != v.ports.size || !v.ports.all (fun (p, _) => ix.has p) then
       c := addCode c "R3-ports"
     for (p, want) in v.ports do
@@ -616,6 +624,9 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
       if !(match getD r "root" with | .str s => isHex s | _ => false) then c := addCode c "R3-root"
       if !jeq (getD r "leaves") (getD want "leaves") then c := addCode c "R3-leaves"
       if !jeq (getD r "domain") (getD want "domain") then c := addCode c "R3-domain"
+  -- one tree at two names, read where the roots are well formed; a `kept` term, as R8's below is
+  c := kept (roots.isEmpty || !roots.all (keys? · == some ROOT_KEYS) || wiredHeld ix.find v.ports) c
+    "R3-wired"
   -- R4: when the verifier holds the leaf layer, the record must name it (a null leaf layer is refused)
   if !jeq (get "leaf_layer") (optStr v.leafLayer) then c := addCode c "R4-leaf-layer"
   -- R5
@@ -626,20 +637,13 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
     | none => Json.null
   if !jeq (get "previous") previous then c := addCode c "R6-previous"
   if v.log.any (fun e => jeq (getD e "window") (get "window")) then c := addCode c "R6-window"
-  if let some (stream, prover) := v.binding then
-    if !jeq (getD (get "window") "stream") (Json.str stream) then c := addCode c "R6-stream"
-    if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
-  -- `kept` terms, not statements: a statement's join point doubles what `check_eq_checkRef`'s `simp` unfolds
-  c := kept (jeq (getD (get "window") "seed_salt") (optStr v.seedSalt)) c "R6-seed-salt"
-  c := poolMarks (get "window") v.pool v.log c
-  c := compilerMarks (get "window") v.compiler c
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1))
         v.schemas)
-      v.outputs v.log
-    c := kept (poolChained rec v) c "R7-pool-chain"
+      v.outputs v.log (v.certified.map (·.1))
+    c := kept (certifiedHeld rec v) c "R7-certified"
   -- R8
   c := r8Codes v c
   return if linkRefused v then addCode c "link-points" else c
@@ -647,7 +651,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
 /-- `check` as first written, R3 quadratic in the ports: each root's port compared, re-canonicalized, with every port
 before it and every verifier port with every root. The reference `check` is proved equal to (`check_eq_checkRef`). -/
 def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
-  let v2 := !v.registered.isEmpty
+  let v2 := v.v2
   if keys? rec != some (if v2 then KEYS_V2 else KEYS) then return #["keys"]
   let get := getD rec
   let mut c : Array String := #[]
@@ -674,8 +678,6 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
   match Partition.units v.program v.query with
   | .error _ => c := addCode c "R2-query"
   | .ok population => if !jeq (get "population") (Lean.toJson population) then c := addCode c "R2-population"
-  if (declaredCode (get "program") v.declared).isSome then
-    c := addCode c ((declaredCode (get "program") v.declared).getD "")
   -- R3
   if !jeq (get "scheme") v.scheme then c := addCode c "R3-scheme"
   let roots := match get "roots" with | .arr rs => rs | _ => #[]
@@ -692,6 +694,8 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
       if !(match getD r "root" with | .str s => isHex s | _ => false) then c := addCode c "R3-root"
       if !jeq (getD r "leaves") (getD want "leaves") then c := addCode c "R3-leaves"
       if !jeq (getD r "domain") (getD want "domain") then c := addCode c "R3-domain"
+  c := kept (roots.isEmpty || !roots.all (keys? · == some ROOT_KEYS)
+    || wiredHeld (fun p => roots.reverse.find? (fun r => jeq (getD r "port") (Json.str p))) v.ports) c "R3-wired"
   -- R4: when the verifier holds the leaf layer, the record must name it (a null leaf layer is refused)
   if !jeq (get "leaf_layer") (optStr v.leafLayer) then c := addCode c "R4-leaf-layer"
   -- R5
@@ -702,19 +706,13 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
     | none => Json.null
   if !jeq (get "previous") previous then c := addCode c "R6-previous"
   if v.log.any (fun e => jeq (getD e "window") (get "window")) then c := addCode c "R6-window"
-  if let some (stream, prover) := v.binding then
-    if !jeq (getD (get "window") "stream") (Json.str stream) then c := addCode c "R6-stream"
-    if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
-  c := kept (jeq (getD (get "window") "seed_salt") (optStr v.seedSalt)) c "R6-seed-salt"
-  c := poolMarks (get "window") v.pool v.log c
-  c := compilerMarks (get "window") v.compiler c
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1))
         v.schemas)
-      v.outputs v.log
-    c := kept (poolChained rec v) c "R7-pool-chain"
+      v.outputs v.log (v.certified.map (·.1))
+    c := kept (certifiedHeld rec v) c "R7-certified"
   -- R8
   c := r8Codes v c
   return if linkRefused v then addCode c "link-points" else c
@@ -810,12 +808,17 @@ theorem portIndex_find (roots : Array Json) (p : String) :
     rw [(inv_portIndex roots).2.2 k, ← Array.find?_toList, Array.toList_reverse]
     congr 1; funext r; rw [jeq_of_canon hp]; rfl
 
--- `simp` unfolds both whole bodies, R2's declared day and the link-points step included, and each join point of
+theorem portIndex_find_fun (roots : Array Json) :
+    (portIndex roots).find = fun p => roots.reverse.find? (fun r => jeq (getD r "port") (Json.str p)) :=
+  funext (portIndex_find roots)
+
+-- `simp` unfolds both whole bodies, the link-points step included, and each join point of
 -- both checks into both of its branches. The link-points step names `c` in both of its branches, so the steps before
 -- it are rewritten twice, past `simp`'s default step limit
 set_option maxHeartbeats 1600000 in
 /-- **R3 at `O(n)` hash-map operations is R3 as first written**: everything a guarantee reads of `check` is `checkRef`'s. -/
 theorem check_eq_checkRef (rec : Json) (v : Verifier) : check rec v = checkRef rec v := by
-  simp (maxSteps := 800000) only [check, checkRef, portIndex_count, portIndex_has, portIndex_find]
+  simp (maxSteps := 800000) only [check, checkRef, portIndex_count, portIndex_has, portIndex_find,
+    portIndex_find_fun]
 
 end Spot.Registration

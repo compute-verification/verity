@@ -1,6 +1,7 @@
 module
 
 public import Properties.Verity.Game
+public import Proofs.Properties.Verity.Soundness.Composite
 public import Properties.Spot.Draw
 public import Proofs.Flock.Bridge.V5.Statement
 public import Proofs.Flock.Bridge.CircuitOf
@@ -50,9 +51,9 @@ files and at the strategy a strategy of the period's game projects to. This modu
   game as verity-verify-proof `--zk`'s acceptance in the live audit at the projected strategy, plus the two-continuation
   finders' terms, the coin trees' hiding term at every leaf, the read finder's collision and the forger's forgery.
 * **The component** (`ReadsV2`): the composite's `.sampled` component is `VStar.Recursive.Sampled.protocol`, whose
-  one-stage form is v2 and which refuses v1 (whose verdicts are the prover's). Both composites name it
-  (`composite_readsV2`). The parameters fix the form before any coin; this leg covers the one-stage form, and the
-  recursive form (`VStar.Recursive`) is not this leg's (`Covers`).
+  one-stage form is v2 and which refuses v1 (whose verdicts are the prover's). Every composite that lists SPOT
+  names it (`readsV2_of_component`). The parameters fix the form before any coin; this leg covers the one-stage
+  form, and the recursive form (`VStar.Recursive`) is not this leg's (`Covers`).
 * **The session v2 sets up on the parameters and the committed files** (`SetsUp`): v2's parameters in the composite's,
   the first under the sampled component's id, as v2's case finds them (`ParamsAt`, at most one), the session's inputs
   as v2 hands them to verity-verify-proof (the statement, one table, the verifier's partition object and program, no
@@ -72,15 +73,16 @@ files and at the strategy a strategy of the period's game projects to. This modu
   the read shows no log; a record that doesn't parse reads as `null`, as `treesHeld` reads it, and v2 refuses its
   session.
 * **The vocabulary's sampled fields at the deployment's sessions** (`Deployed`, `Covers`): at most one session at each
-  parameters and committed files, each one v2 sets up, with the deployment's device bytes and bound parameters. Soundness's `Vocab` reads the files at the digests v2's parameters name and the lookup tables the circuit file
-  registers (`DigestsAt`), v2's log (`coinsRead`), the constructions' read finder and forger at `.sampled`,
+  parameters and committed files, each one v2 sets up, with the deployment's device bytes and bound parameters.
+  Soundness's `Vocab` reads v2's log (`coinsRead`), the constructions' read finder and forger at `.sampled`,
   no loss term, and at each session the extractor at the projected strategy, openings that hold wherever the session's
   deployed commitment opens under its roots (`Live.OpensUnder`), the leg's per-finder premises in `error`'s condition,
   and a published `δ` at least the session's. Where there is no session and the parameters name the one-stage form,
   the sampled verdict accepts with probability at most the published `δ`.
 * **The deployed digests and reading** (`programDigestOf`, `publicDigestOf`, `readOf`): the digests v2's parameters
   name (`paramsOf`), and the files they name, the lookup tables the circuit file registers (`pinnedTables`: each
-  pinned table its META looks up, at a file with the table's pinned digest, `pinnedFile`) and `verify --zk`'s tags.
+  pinned table its META looks up, at the file the deployment registers at the table's pinned digest, `PinnedTables`) and
+  `verify --zk`'s tags.
   They give `DigestsAt` at every parameters (`digestsAt_of`), and at a session whose inputs are v2's the reading is the
   session's (`readOf_eq`).
 * **The per-finder SHA-512 premises at a strategy and a budget** (`Live.FinderCR`): `cr/sha-512` at each table's
@@ -549,7 +551,7 @@ noncomputable def extract (τ : FlockSoundness.Game.Strategy A.game) : A.fileRea
 /-- **The openings `op` of the committed files `r` hold wherever the session's deployed commitment opens**: at each
 gate `r` doesn't fix to a constant, a bit the deployed commitment opens at the gate's claims position under the
 session's roots (`Flock.Bridge.posOf`, `Cd`, `roots`) opens the gate to every value whose first bit it is. -/
-def OpensUnder (r : Verity.FileRead) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) : Prop :=
+def OpensUnder (r : Verity.WindowFiles) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) : Prop :=
   ∀ (h : r.circuit.N = A.Cc.N) (g : Fin r.circuit.N) (b : Bool) (d : Claims.Msg), r.consts g = none →
     A.Cd.Opens Claims.Sampling.sha512Msg A.roots ⟨Flock.Bridge.posOf A.Cc (Fin.cast h g), b, d⟩ = true →
       ∀ v : BitVec (r.circuit.w g), v.getLsbD 0 = b → op g v
@@ -633,9 +635,11 @@ verdict from the session's files; one-stage v1, whose verdicts are the prover's,
 def ReadsV2 (k : Verity.Registration.Composite) : Prop :=
   Verity.component k .sampled = some VStar.Recursive.Sampled.protocol
 
-/-- Both composites read sampled proofs at v2. -/
-theorem composite_readsV2 (k : Verity.Registration.Composite) : ReadsV2 k := by
-  cases k <;> rfl
+/-- **Every composite with a sampled component reads SPOT at v2**: the component is SPOT's own
+compiled check, the same in every composite that lists it. -/
+theorem readsV2_of_component {k : Verity.Registration.Composite} {P : _root_.Core.BlobProtocol}
+    (h : Verity.component k .sampled = some P) : ReadsV2 k :=
+  h.trans (congrArg some (Verity.component_eq_some.1 h).2)
 
 /-- **v2's parameters in the composite's parameters `θ`**: the first component parameters the composition's format
 decodes under the sampled component's id, as `caseOf` finds them, read by its decoder in its one-stage form. The
@@ -656,6 +660,11 @@ theorem ParamsAt.unique {θ : ByteArray} {p p' : _root_.Spot.OneStageZk.Params} 
   obtain rfl : x = x' := Option.some.inj (hx.symm.trans hx')
   exact Sum.inl.inj (Except.ok.inj (hp.symm.trans hp'))
 
+/-- **The parameters `θ` name no members**: v2's parameters in them, where they name SPOT's one-stage form
+(`ParamsAt`), are of the one statement's form, so what v2 accepts on them the one statement's check accepts. -/
+def OneStatement (θ : ByteArray) : Prop :=
+  ∀ p, ParamsAt θ p → p.members = none
+
 /-- **The Flock law the sample reads over `n` units** under the verifier `v`'s agreed law: the sampling design
 `Spot.Draw.deriveLaw` derives, or else the expanded rule's (`Spot.Draw.flockLaw` at
 `Spot.Draw.derive`'s), as `Spot.OneStage.drawnFrom` reads it before `Spot.Draw.drawUnits`
@@ -666,7 +675,8 @@ def lawAt (v : _root_.Spot.Registration.Verifier) (n : ℕ) : Flock.V Flock.Draw
   pure (derived.getD (← _root_.Spot.Draw.flockLaw lawJ n))
 
 /-- **`A` is the session v2 sets up on the parameters `θ` and the committed files `F`**: v2's parameters in the
-composite's (`ParamsAt`), with the verifier's partition object and program as verity-verify-proof's inputs, the sampling design the sample
+composite's (`ParamsAt`), which name no members, so the session is the one statement's (`single`, `OneStatement`; a
+window of members is `Window`'s), with the verifier's partition object and program as verity-verify-proof's inputs, the sampling design the sample
 reads over the population (`lawAt`), and the statement's descriptor and the registration's query the verifier's program
 (`Spot.Program.parse`) and query, so the registration's population is the verifier's, and the sample's bytes
 the coins of the parameters' challenger family, as many as the coin commitment's families give it (`Vocab.families`),
@@ -690,8 +700,9 @@ structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Li
   own : A.own = none
   circuit : A.I.circuitFile = V.circuitFile θ F
   publicFile : A.I.publicFile = V.publicFile θ F
-  read : V.read θ F = A.fileRead
+  read : V.read θ F = Verity.WindowFiles.one A.fileRead
   share : (V.certOf θ).ε = A.ε
+  single : OneStatement θ
 
 /-- **The first of `F` whose SHA-512's hex is `sha`**, as `Spot.OneStageZk.tablesOf` finds a pinned table
 on the blobs (`tablesOf_ofArray`). -/
@@ -713,46 +724,43 @@ theorem tableFile_hash {sha : String} {F : Array ByteArray} {a : ByteArray} (h :
   have h' := Array.find?_some h
   exact beq_iff_eq.1 h'
 
-open Classical in
-/-- **A pinned table's registered file**: a file whose SHA-512's hex is the table's pinned digest `sha`
-(`Flock.MUFU_TABLES`), where some file has it. -/
-noncomputable def pinnedFile (sha : String) : Option ByteArray :=
-  if hx : ∃ b : ByteArray, Flock.hexOf (Flock.Sha512.hash b) = sha then some hx.choose else none
+/-- **The pinned tables' registered files**: the file the deployment registers at a pinned digest `sha`
+(`Flock.MUFU_TABLES`), where it registers one, each of that digest. It is the deployment's data, as the files a
+registration names by digest are: no definition here picks a file from its digest. -/
+structure PinnedTables where
+  file : String → Option ByteArray
+  hash : ∀ sha b, file sha = some b → Flock.hexOf (Flock.Sha512.hash b) = sha
 
-theorem pinnedFile_hash {sha : String} {b : ByteArray} (h : pinnedFile sha = some b) :
-    Flock.hexOf (Flock.Sha512.hash b) = sha := by
-  unfold pinnedFile at h
-  split at h
-  · rename_i hx
-    cases h
-    exact hx.choose_spec
-  · cases h
+/-- **No pinned table registered**: the registered files of a deployment that registers none. -/
+def PinnedTables.empty : PinnedTables where
+  file _ := none
+  hash _ _ h := by cases h
 
 /-- **The lookup tables a circuit file registers**: each pinned table its META looks up
-(`Spot.OneStageZk.lookupsOf`, none where it refuses), at its registered file (`pinnedFile`). -/
-noncomputable def pinnedTables (circuitFile : ByteArray) : List (String × ByteArray) :=
+(`Spot.OneStageZk.lookupsOf`, none where it refuses), at its registered file (`PinnedTables.file`). -/
+def pinnedTables (T : PinnedTables) (circuitFile : ByteArray) : List (String × ByteArray) :=
   let names := match _root_.Spot.OneStageZk.lookupsOf circuitFile with
     | .ok ns => ns
     | .error _ => []
   Flock.MUFU_TABLES.filterMap fun t =>
-    if names.contains t.name then (pinnedFile t.sha512).map (fun b => (t.name, b)) else none
+    if names.contains t.name then (T.file t.sha512).map (fun b => (t.name, b)) else none
 
 /-- **v2's tables on the blobs sent are the registered ones**: each pinned table the blobs sent hold, at the first blob
 whose SHA-512's hex is its digest (`tableFile`, as `Spot.OneStageZk.tablesOf` finds it), is its registered
-file (`pinnedFile`). -/
-def TablesSent (s : Verity.Sent) : Prop :=
-  ∀ t ∈ Flock.MUFU_TABLES, ∀ a b, tableFile t.sha512 s.blobs = some a → pinnedFile t.sha512 = some b → a = b
+file (`PinnedTables.file`). -/
+def TablesSent (T : PinnedTables) (s : Verity.Sent) : Prop :=
+  ∀ t ∈ Flock.MUFU_TABLES, ∀ a b, tableFile t.sha512 s.blobs = some a → T.file t.sha512 = some b → a = b
 
 /-- **v2's parameters name the vocabulary's digests, and the vocabulary reads the registered lookup tables**: under
 v2's parameters in `θ`, the bytes v2's hex digests of the circuit file and the public file decode to are the
 vocabulary's `programDigest θ` and `publicDigest θ`, and the vocabulary reads, of the committed files, the lookup tables
 their circuit file registers (`pinnedTables`). -/
-structure DigestsAt (V : Vocab d α) (θ : ByteArray) : Prop where
+structure DigestsAt (V : Vocab d α) (T : PinnedTables) (θ : ByteArray) : Prop where
   circuit : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.circuit = .ok dg →
     V.programDigest θ = some fun i => dg.data.getD i.val 0
   publicFile : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.pub = .ok dg →
     V.publicDigest θ = some fun i => dg.data.getD i.val 0
-  tables : ∀ F, (V.read θ F).tables = pinnedTables (V.circuitFile θ F)
+  tables : ∀ F, (V.read θ F).first.tables = pinnedTables T (V.circuitFile θ F)
 
 /-- **v2's parameters in `θ`**, as `ParamsAt` reads them, where they decode (`paramsOf_eq`). -/
 def paramsOf (θ : ByteArray) : Option _root_.Spot.OneStageZk.Params :=
@@ -792,18 +800,19 @@ def zkTagsOf (tags : Flock.Tags) (circuitFile : ByteArray) : Flock.Tags :=
 parameters name (`programDigestOf`, `publicDigestOf`), the lookup tables the circuit file registers (`pinnedTables`),
 and `verify --zk`'s tags at the statement's tags and the circuit file (`zkTagsOf`). Where the statement has no tags v2
 refuses, and the tags read are a default. -/
-noncomputable def readOf (θ : ByteArray) (F : Array ByteArray) : Verity.FileRead :=
+noncomputable def readOf (T : PinnedTables) (θ : ByteArray) (F : Array ByteArray) : Verity.FileRead :=
   ⟨zkTagsOf ((Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT).getD default)
       (Verity.namedFile (programDigestOf θ) F),
-    Verity.namedFile (programDigestOf θ) F, pinnedTables (Verity.namedFile (programDigestOf θ) F),
+    Verity.namedFile (programDigestOf θ) F, pinnedTables T (Verity.namedFile (programDigestOf θ) F),
     Verity.namedFile (publicDigestOf θ) F⟩
 
 /-- **The deployed digests and reading give `DigestsAt`**: at every parameters, a vocabulary whose digests are the
 ones v2's parameters name (`programDigestOf`, `publicDigestOf`) and whose reading of the committed files is v2's
 (`readOf`) reads the files at those digests and the lookup tables the circuit file registers. -/
-theorem digestsAt_of (V : Vocab d α) (hc : ∀ θ, V.programDigest θ = programDigestOf θ)
-    (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ) (hr : ∀ θ F, V.read θ F = readOf θ F) (θ : ByteArray) :
-    DigestsAt V θ where
+theorem digestsAt_of (V : Vocab d α) (T : PinnedTables) (hc : ∀ θ, V.programDigest θ = programDigestOf θ)
+    (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ)
+    (hr : ∀ θ F, V.read θ F = Verity.WindowFiles.one (readOf T θ F)) (θ : ByteArray) :
+    DigestsAt V T θ where
   circuit p hθ dg hdg := by
     rw [hc, programDigestOf, paramsOf_eq hθ]
     simp only [Option.bind, digestOf, hdg]
@@ -815,12 +824,12 @@ theorem digestsAt_of (V : Vocab d α) (hc : ∀ θ, V.programDigest θ = program
 /-- **The deployed reading is the session's** (`SetsUp.read`) at a session whose inputs are the ones v2 hands
 `verity-verify-proof` on `θ` and `F`: the statement's tags, one table, the committed circuit and public files, and the lookup
 tables the circuit file registers. -/
-theorem readOf_eq (V : Vocab d α) (hc : ∀ θ, V.programDigest θ = programDigestOf θ)
+theorem readOf_eq (V : Vocab d α) (T : PinnedTables) (hc : ∀ θ, V.programDigest θ = programDigestOf θ)
     (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ) {θ : ByteArray} {F : Array ByteArray} {A : Live}
     (htags : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some A.I.tags) (hcount : A.I.count = 1)
     (hcirc : A.I.circuitFile = V.circuitFile θ F) (hpub : A.I.publicFile = V.publicFile θ F)
-    (htab : A.I.tables = pinnedTables (V.circuitFile θ F)) :
-    readOf θ F = A.fileRead := by
+    (htab : A.I.tables = pinnedTables T (V.circuitFile θ F)) :
+    readOf T θ F = A.fileRead := by
   have hc' : V.circuitFile θ F = Verity.namedFile (programDigestOf θ) F := by rw [Vocab.circuitFile, hc]
   have hp' : V.publicFile θ F = Verity.namedFile (publicDigestOf θ) F := by rw [Vocab.publicFile, hp]
   simp only [readOf, Live.fileRead, zkTagsOf, FlockSoundness.Discharge.ZkExec.zkTags, htags, Option.getD_some, hcount,
@@ -1063,19 +1072,17 @@ def Covers (V : Vocab d α) (k : Verity.Registration.Composite) (S : ByteArray �
       Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ ≤ V.delta θ .sampled (V.cost θ F c σ)
 
 /-- **Soundness's vocabulary at `.sampled` reads the constructions `K` at the deployment's sessions `S`**: each session
-`S` holds is the one v2 sets up (`SetsUp`); the files the vocabulary reads are v2's, by the digests v2's parameters
-name and the lookup tables the circuit file registers (`DigestsAt`); the device's log as the sampled check reads
-it is v2's (`coinsRead`); the finder is `K`'s read finder and the forger `K`'s, with no loss term; and at each session
-the extractor is the
+`S` holds is the one v2 sets up (`SetsUp`); the device's log as the sampled check reads it is v2's (`coinsRead`); the
+finder is `K`'s read finder and the forger `K`'s, with no loss term; and at each session the extractor is the
 session's at the projected strategy (`Live.extract`), the vocabulary's openings hold wherever the session's deployed
 commitment opens (`Live.OpensUnder`), `error`'s condition holds SPOT's per-finder premises (`FinderCR`), the
 vocabulary's session premises (`Vocab.premises`) are exactly the session's at the projected strategy
 (`Live.FinderCR`), and `True` where `S` holds no session, and the published `δ` is at least the session's at the read
-finder's published bound (`Live.delta`). -/
+finder's published bound (`Live.delta`). That the files the vocabulary reads are v2's (`DigestsAt`) is no field here:
+the lemmas that need it take it, and a deployment whose digests and reading are v2's gives it (`digestsAt_of`). -/
 structure Deployed (V : Vocab d α) (K : Constructions V) (S : ByteArray → Array ByteArray → Option Live) :
     Prop where
   setsUp : ∀ θ F A, S θ F = some A → SetsUp V θ F A
-  digests : ∀ θ, DigestsAt V θ
   coinsRead : ∀ s, V.coinsRead .sampled s = Verity.Sampled.coinsRead s
   finder : ∀ θ F c σ, V.finder .sampled θ F c σ = K.readFinder θ F c σ
   forger : ∀ θ F c σ, V.forger .sampled θ F c σ = K.forger θ F c σ

@@ -197,8 +197,8 @@ def DESCRIPTOR_HEX : String :=
 /-- A sampled proof block's proof outcome: the verifier's verdict for the session that proved it. -/
 def PROOF_KEYS : List String := ["program", "registered", "unit", "verdict"]
 def PROOFS_FORM : String :=
-  "the drawn units' proof outcomes are not a list of {program, registered, unit, verdict}, each the verifier of " ++
-  "record's verdict for a drawn unit's session: verdict accept or reject, program the SHA-512 of the circuit's " ++
+  "the drawn units' proof outcomes are not a list of {program, registered, unit, verdict}, each the verifier" ++
+  "'s verdict for a drawn unit's session: verdict accept or reject, program the SHA-512 of the circuit's " ++
   "descriptor it verified the session against, and registered its finding, each registered port's {value, root}, " ++
   "port and value printable ASCII and root a SHA-512 digest"
 def LOG_FORM : String := "the round log is not a nonempty list"
@@ -313,10 +313,10 @@ def commitOf? (commit : Json) : Option (ByteArray × Array Json) :=
   if isHexBytes s then
     (hex? commit).bind fun raw =>
     (String.fromUTF8? raw).bind fun text =>
-    (Json.parse text).toOption.bind fun j =>
+    (Flock.JsonParse.parse text).toOption.bind fun j =>
     (Spot.PyJson.canonical j).toOption.bind fun t =>
     (Json.getArr? (get j "registered")).toOption.bind fun xs =>
-    if t == text && isObj j && get j "format" == Json.str COMMIT_FORMAT && xs.all isObj then
+    if t == text && isObj j && jsonStrIs (get j "format") COMMIT_FORMAT && xs.all isObj then
       some (Flock.Sha512.hash ((COMMIT_FORMAT.toUTF8.push 0) ++ raw), xs)
     else none
   else none
@@ -1678,13 +1678,13 @@ def LENGTH_KEYS : List String := ["max_tokens", "stop"]
 
 def noFixedLength (name : String) : String :=
   s!"no-fixed-length: period {name}'s open commits no fixed length ({LENGTH_FIELD}, \{max_tokens, stop}), so " ++
-  "its windows are not of record: a row of record serves each request's public max_tokens whatever it " ++
+  "its windows are not of record: a workload of record serves each request's public max_tokens whatever it " ++
   "samples (ignore_eos; Daniel, 19 Oct, ASK-39). Open the period with the row's max_tokens and stop " ++
   STOP_FIXED
 
 def eosKeyedRow (name stop : String) : String :=
   s!"eos-keyed-row: period {name}'s open commits the stop mode {stop}, not {STOP_FIXED} (ignore_eos, " ++
-  "circuits' public-cap done source): a row of record is done only at each request's public max_tokens, " ++
+  "circuits' public-cap done source): a workload of record is done only at each request's public max_tokens, " ++
   "never at an EOS token"
 
 def lengthForm (name : String) : String :=
@@ -1809,8 +1809,8 @@ def LIVE_BODY : String :=
   "PouwLiveSlots_v2{T=…}, a composite of that id bound to its record's T alone, S its record's " ++
   "(circuit.live.program_v2's body)"
 def LIVE_PROOFS_FORM : String :=
-  "the window's live proof outcomes are not a list of {program, registered, unit, verdict}, each the verifier of " ++
-  "record's verdict for round s's live@<s> session, unit s: verdict accept or reject, program the SHA-512 of the " ++
+  "the window's live proof outcomes are not a list of {program, registered, unit, verdict}, each the verifier" ++
+  "'s verdict for round s's live@<s> session, unit s: verdict accept or reject, program the SHA-512 of the " ++
   "live descriptor, registered its finding"
 def LIVE_PREFIX : String :=
   "the window's live Program's PREFIX is not its circuit's, so the tables its units read are not the window's: " ++

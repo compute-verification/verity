@@ -67,6 +67,7 @@ public import Definitions.Pouw.PearlC.Game
 public import Definitions.Pouw.PearlC.Hidden
 public import Definitions.Pouw.PearlC.HiddenTileGame
 public import Definitions.Pouw.PearlC.Instance
+public import Definitions.Pouw.PearlC.Mend
 public import Definitions.Pouw.PearlC.NoiseSha512
 public import Definitions.Pouw.PearlC.PeelExact
 public import Definitions.Pouw.PearlC.PeelExactP

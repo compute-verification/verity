@@ -19,8 +19,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.circuits.kernels import ROW_COMMIT, SHA512
 from verity.commitments import row_table as RT
+from verity.commitments.cuda import ROW_COMMIT, SHA512
 from verity.protocols.accounting.pouw import prover
 
 __all__ = ["CFLAGS", "CUDA_DIR", "DEVICE_SOURCES", "HOST_SOURCES", "NVCC_FLAGS", "SEG_BYTES", "SHARED", "TAB_WORDS", "Args",

@@ -10,9 +10,9 @@ import Proofs.Flock.Soundness.Merkle
 /-!
 # Zero knowledge: T6's extraction as an algorithm
 
-`coin_opening_binding` (T6) proves that two openings of one coin position that disagree on a coin and reach one root give
-a collision of `H`; its conclusion is that a collision exists. The simulator's `⊥_bind` term needs the collision computed,
-so that a finder can output it and `SHA512CRStrict` bound its probability. This file computes it.
+T6: two openings of one coin position (`Proofs.Flock.Soundness.ZK.CoinBinding`'s model) that disagree on a coin and reach
+one root give a collision of `H`. The simulator's `⊥_bind` term needs the collision computed, so that a finder can output
+it and `SHA512CRStrict` bound its probability. This file computes it, and states T6 only of the computed pair.
 
 The extraction lines up the hash inputs of the two openings node by node, `coinPairs`: the Merkle path's steps
 (`walkPairs`), the hm96 leaf, the salt hash, the round digest, and the chain from `T_0` down (`chainPairs`, bottom up, one
@@ -21,8 +21,7 @@ exists (`coinPairs_coll`), so the output is a collision (`coinColl_isColl`). It 
 `2·(|path| + 3 + n)` evaluations of `H` for openings of `n` coins (`coinPairs_length_le`).
 
 * `findColl`, `findColl_isColl`: the first colliding pair of a list;
-* `walkPairs_coll`, `chainPairs_coll`: `walk_binding` and `chain_binding` with the collision located among the aligned
-  inputs;
+* `walkPairs_coll`, `chainPairs_coll`: two walks, or two chains, that meet collide at one of the aligned inputs;
 * `coinColl`, `coinColl_isColl`: T6's collision, computed; `coinCollKeyed`, `coinCollKeyed_isColl` for the keyed tree
   (`coin-tree/hm96-sha512/v2`, the hash `fun m => H (ν ++ m)`);
 * `CoinTree`, `CoinOpening`, `Conflict`, `conflicts`, `bindColl`, `bindColl_isColl`: the same at the level of two views'
@@ -64,14 +63,6 @@ section Walk
 
 variable {D Col : Type} (H : List UInt8 → D) (E : Enc Col D)
 
-/-- The input of one step up the tree: `acc ‖ sib` at an even index, `sib ‖ acc` at an odd one. -/
-def upIn (idx : ℕ) (acc sib : D) : List UInt8 :=
-  if idx % 2 = 0 then E.dig acc ++ E.dig sib else E.dig sib ++ E.dig acc
-
-theorem up_eq (idx : ℕ) (acc sib : D) : up H E idx acc sib = H (upIn E idx acc sib) := by
-  unfold up upIn
-  split_ifs <;> rfl
-
 /-- The inputs of two walks' steps, side by side, from the leaves up. -/
 def walkPairs : ℕ → D → D → List D → List D → List (List UInt8 × List UInt8)
   | idx, a, a', s :: r, s' :: r' =>
@@ -86,7 +77,7 @@ theorem walkPairs_length_le : ∀ (idx : ℕ) (a a' : D) (sibs sibs' : List D),
       simp only [walkPairs, List.length_cons]
       exact Nat.succ_le_succ (walkPairs_length_le _ _ _ r r')
 
-/-- **`walk_binding`, located**: two walks from different nodes that meet collide at a step, and the colliding inputs are
+/-- **A walk binds, located**: two walks from different nodes that meet collide at a step, and the colliding inputs are
 one of the aligned pairs. -/
 theorem walkPairs_coll : ∀ (sibs sibs' : List D) (idx : ℕ) (a a' : D),
     sibs.length = sibs'.length → a ≠ a' → walk H E idx a sibs = walk H E idx a' sibs' →
@@ -104,8 +95,7 @@ theorem walkPairs_coll : ∀ (sibs sibs' : List D) (idx : ℕ) (a a' : D),
           split_ifs at hin
           · exact hne (append_inj E hin).1
           · exact hne (append_inj E hin).2
-        · rw [← up_eq H E idx a s, ← up_eq H E idx a' s']
-          exact hup
+        · exact hup
       · obtain ⟨p, hp, hc⟩ := walkPairs_coll rest rest' (idx / 2) _ _ (by simpa using hlen) hup heq
         exact ⟨p, Or.inr hp, hc⟩
 
@@ -144,7 +134,7 @@ theorem chainPairs_length_le (tag : List UInt8) : ∀ (cs cs' : List Coin) (Tn T
       simp only [chainPairs, List.length_cons]
       exact Nat.succ_le_succ (chainPairs_length_le tag r r' Tn Tn')
 
-/-- **`chain_binding`, located**: two chains of equally many coins that disagree on a coin and reach one `T_0` collide at
+/-- **A chain binds, located**: two chains of equally many coins that disagree on a coin and reach one `T_0` collide at
 a link, and the colliding inputs are one of the aligned pairs. -/
 theorem chainPairs_coll (tag : List UInt8) : ∀ (cs cs' : List Coin) (Tn Tn' : D), cs.length = cs'.length → cs ≠ cs' →
     chainTop H E tag Tn cs = chainTop H E tag Tn' cs' →
@@ -201,7 +191,8 @@ theorem coinPairs_length_le (mix : D → Salt → D) (chainTag roundTag pos lp s
   have h2 := chainPairs_length_le H E chainTag cs cs' Tn Tn'
   omega
 
-/-- **T6, located**: under `coin_opening_binding`'s hypotheses, one of the aligned pairs is a collision of `H`. -/
+/-- **T6, located**: where two openings of one position, with equally many coins and a coin on which they disagree, both
+walk from their leaves to one root, one of the aligned pairs is a collision of `H`. -/
 theorem coinPairs_coll (mix : D → Salt → D) (hmix : ∀ y, Function.Injective (fun x => mix x y))
     (chainTag roundTag pos lp sp : List UInt8) (root : D) (idx : ℕ)
     (cs cs' : List Coin) (Tn Tn' : D) (y y' : Salt) (sibs sibs' : List D)
@@ -247,7 +238,7 @@ def coinColl (mix : D → Salt → D) (chainTag roundTag pos lp sp : List UInt8)
     (cs cs' : List Coin) (Tn Tn' : D) (y y' : Salt) (sibs sibs' : List D) : Pair :=
   findColl H (coinPairs H E mix chainTag roundTag pos lp sp MerkleE idx cs cs' Tn Tn' y y' sibs sibs')
 
-/-- **T6 as an algorithm**: under `coin_opening_binding`'s hypotheses, `coinColl` outputs a collision of `H`. -/
+/-- **T6 as an algorithm**: under `coinPairs_coll`'s hypotheses, `coinColl` outputs a collision of `H`. -/
 theorem coinColl_isColl (mix : D → Salt → D) (hmix : ∀ y, Function.Injective (fun x => mix x y))
     (chainTag roundTag pos lp sp : List UInt8) (root : D) (idx : ℕ)
     (cs cs' : List Coin) (Tn Tn' : D) (y y' : Salt) (sibs sibs' : List D)
@@ -266,8 +257,8 @@ def coinCollKeyed (ν : List UInt8) (mix : D → Salt → D) (chainTag roundTag 
   (coinColl (fun m => H (ν ++ m)) E mix chainTag roundTag pos lp sp MerkleE idx cs cs' Tn Tn' y y' sibs sibs').map
     fun p => (ν ++ p.1, ν ++ p.2)
 
-/-- **T6 as an algorithm, keyed tree**: under `coin_opening_binding_keyed`'s hypotheses, `coinCollKeyed` outputs a
-collision of `H`. -/
+/-- **T6 as an algorithm, keyed tree**: under `coinPairs_coll`'s hypotheses at the hash `fun m => H (ν ++ m)`,
+`coinCollKeyed` outputs a collision of `H`. -/
 theorem coinCollKeyed_isColl (ν : List UInt8) (mix : D → Salt → D) (hmix : ∀ y, Function.Injective (fun x => mix x y))
     (chainTag roundTag pos lp sp : List UInt8) (root : D) (idx : ℕ)
     (cs cs' : List Coin) (Tn Tn' : D) (y y' : Salt) (sibs sibs' : List D)

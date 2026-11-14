@@ -27,12 +27,16 @@ registration) at one position open it there, so their leaves are one or SHA-512 
 session's `boundIf` (each sees one session's record) outputs it. A finder of the whole recursive audit does: it plays
 the audit once and outputs the pair where the outcome's history has one.
 
-* `ReadsX.Clash`, `ReadsX.Clash.collision`: two records' registered reads whose openings (`TwoOpenings.pair`) or hm96
-  leaves over their commit strings' encodings (`hm96Pair`) collide, a collision of `H512`;
-* `RegColl`, `regFinder`, `prob_regColl_le`: some two of V*'s sessions at a history clash; the finder that plays the
-  recursive audit once and outputs that collision; under `cr/sha-512` (`Finder.CR` at `qX`), the audit's outcome has
+* `ReadsX.Clash`, `ReadsX.clashCands`: two records' registered reads whose openings (`TwoOpenings.pair`) or hm96
+  leaves over their commit strings' encodings (`hm96Pair`) collide, a collision of `H512`; the candidates are the two
+  pairs at each two positions (`ReadsX.clashCands_spec`, `ReadsX.Clash.cand`);
+* `RegColl`, `regCands`, `regFinder`, `prob_regColl_le`: some two of V*'s sessions at a history clash; the finder
+  that plays the recursive audit once and outputs the pair of the first candidate of the history that collides, a
+  search of the sessions and their positions; under `cr/sha-512` (`Finder.CR` at `qX`), the audit's outcome has
   such a history with probability at most `qX²/2^513`, once per audit;
 * `VBridgeOff`, `VBridge.off`: `VBridge` at the histories and registrations where `Bad` fails; `VBridge` gives it;
+* `VBridgeOffOut`, `VBridgeOff.out`, `outerV_le_out`: the same with `Bad` reading the sessions' outcomes, for a bad
+  event that an outcome's own registration and transcript state (`LeafColl`);
 * `zk_sessions_recursive_upto_off`, `zk_sessions_recursive_read_off`: `zk_sessions_recursive_upto` and
   `zk_sessions_recursive_read` on `VBridgeOff`, with `Bad`'s probability (for `RegColl`, `qX²/2^513`) added to the
   outer term;
@@ -69,11 +73,42 @@ def ReadsX.Clash (rd : ReadsX lay rs) (rd' : ReadsX lay' rs') : Prop :=
     (Collides (⟨rd.port p, rd.readAt p, rd.leaf p, rd.wpath p, rd'.leaf p', rd'.wpath p'⟩ : TwoOpenings).pair ∨
       Collides (hm96Pair (rs.enc p (rd.wv p)) (rd.ws p) (rs'.enc p' (rd'.wv p')) (rd'.ws p')))
 
-theorem ReadsX.Clash.collision {rd : ReadsX lay rs} {rd' : ReadsX lay' rs'} (h : rd.Clash rd') :
-    Merkle.Collision H512 := by
-  obtain ⟨_, _, _, _, ⟨h1, h2⟩ | ⟨h1, h2⟩⟩ := h
-  · exact ⟨_, _, h1, h2⟩
-  · exact ⟨_, _, h1, h2⟩
+/-- **Two registrant records' candidates**: at each two positions `p` of `rd` and `p'` of `rd'`, in the order of the
+lists `ps` and `ps'`, the openings' pair (`TwoOpenings.pair`, under `p`'s root and position) and the hm96 leaves' pair
+(`hm96Pair`), each with the test that both are registered reads and the pair collides. -/
+noncomputable def ReadsX.clashCands (rd : ReadsX lay rs) (rd' : ReadsX lay' rs') (ps : List lay.Pos)
+    (ps' : List lay'.Pos) : List (Prop × (List UInt8 × List UInt8)) :=
+  ps.flatMap fun p => ps'.flatMap fun p' =>
+    [(rd.isRead p ∧ rd'.isRead p' ∧
+        Collides (⟨rd.port p, rd.readAt p, rd.leaf p, rd.wpath p, rd'.leaf p', rd'.wpath p'⟩ : TwoOpenings).pair,
+        (⟨rd.port p, rd.readAt p, rd.leaf p, rd.wpath p, rd'.leaf p', rd'.wpath p'⟩ : TwoOpenings).pair),
+      (rd.isRead p ∧ rd'.isRead p' ∧
+        Collides (hm96Pair (rs.enc p (rd.wv p)) (rd.ws p) (rs'.enc p' (rd'.wv p')) (rd'.ws p')),
+        hm96Pair (rs.enc p (rd.wv p)) (rd.ws p) (rs'.enc p' (rd'.wv p')) (rd'.ws p'))]
+
+/-- **A clash is a collision**: a candidate whose test passes is one. -/
+theorem ReadsX.clashCands_spec {rd : ReadsX lay rs} {rd' : ReadsX lay' rs'} {ps : List lay.Pos}
+    {ps' : List lay'.Pos} {c : Prop × (List UInt8 × List UInt8)} (hc : c ∈ rd.clashCands rd' ps ps') (h : c.1) :
+    Hash.Collision H512 c.2.1 c.2.2 := by
+  obtain ⟨p, -, hc⟩ := List.mem_flatMap.1 hc
+  obtain ⟨p', -, hc⟩ := List.mem_flatMap.1 hc
+  rcases List.mem_cons.1 hc with rfl | hc
+  · have hw : rd.isRead p ∧ rd'.isRead p' ∧
+        Collides (⟨rd.port p, rd.readAt p, rd.leaf p, rd.wpath p, rd'.leaf p', rd'.wpath p'⟩ : TwoOpenings).pair := h
+    exact hw.2.2
+  · obtain rfl := List.mem_singleton.1 hc
+    have hw : rd.isRead p ∧ rd'.isRead p' ∧
+        Collides (hm96Pair (rs.enc p (rd.wv p)) (rd.ws p) (rs'.enc p' (rd'.wv p')) (rd'.ws p')) := h
+    exact hw.2.2
+
+/-- Two records that clash have a candidate whose test passes, at lists that hold every position. -/
+theorem ReadsX.Clash.cand {rd : ReadsX lay rs} {rd' : ReadsX lay' rs'} {ps : List lay.Pos} {ps' : List lay'.Pos}
+    (h : rd.Clash rd') (hps : ∀ p, p ∈ ps) (hps' : ∀ p, p ∈ ps') : ∃ c ∈ rd.clashCands rd' ps ps', c.1 := by
+  obtain ⟨p, p', hp, hp', h | h⟩ := h
+  · exact ⟨_, List.mem_flatMap.2 ⟨p, hps p, List.mem_flatMap.2 ⟨p', hps' p', List.mem_cons_self⟩⟩,
+      hp, hp', h⟩
+  · exact ⟨_, List.mem_flatMap.2 ⟨p, hps p,
+      List.mem_flatMap.2 ⟨p', hps' p', List.mem_cons_of_mem _ List.mem_cons_self⟩⟩, hp, hp', h⟩
 
 end Clash
 
@@ -94,19 +129,38 @@ def RegColl (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S
     (t : List (Cm × I.Coin)) (R₂ : Reg₂) : Prop :=
   ∃ j j', (zs R ω t R₂ j).rd.Clash (zs R ω t R₂ j').rd
 
-theorem RegColl.collision {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {R : Reg}
-    {ω : L.Ω} {t : List (Cm × I.Coin)} {R₂ : Reg₂} (h : RegColl zs R ω t R₂) : Merkle.Collision H512 := by
-  obtain ⟨_, _, h⟩ := h
-  exact h.collision
+/-- **A history's candidates**: each two sessions' registrant records' (`ReadsX.clashCands`), at the sessions' commit
+strings in their written-out order (`ZkOuterD.posList`). -/
+noncomputable def regCands (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (R : Reg)
+    (ω : L.Ω) (t : List (Cm × I.Coin)) (R₂ : Reg₂) : List (Prop × (List UInt8 × List UInt8)) :=
+  (List.finRange S).flatMap fun j => (List.finRange S).flatMap fun j' =>
+    (zs R ω t R₂ j).rd.clashCands (zs R ω t R₂ j').rd (zs R ω t R₂ j).posList (zs R ω t R₂ j').posList
 
-/-- **The registrant records' finder**: one run of the recursive audit against the prover `σ`, output the collision of
-two clashing sessions at the outcome's history and registration (`RegColl`), else nothing. Its SHA-512 evaluations are
-the audit's and the two openings' recomputation. -/
+/-- **Two sessions' clash is a collision**: a candidate whose test passes is one. -/
+theorem regCands_spec {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {R : Reg}
+    {ω : L.Ω} {t : List (Cm × I.Coin)} {R₂ : Reg₂} {c : Prop × (List UInt8 × List UInt8)}
+    (hc : c ∈ regCands zs R ω t R₂) (h : c.1) : Hash.Collision H512 c.2.1 c.2.2 := by
+  obtain ⟨j, -, hc⟩ := List.mem_flatMap.1 hc
+  obtain ⟨j', -, hc⟩ := List.mem_flatMap.1 hc
+  exact Registered.ReadsX.clashCands_spec hc h
+
+/-- A history where two sessions clash has a candidate whose test passes. -/
+theorem RegColl.cand {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {R : Reg}
+    {ω : L.Ω} {t : List (Cm × I.Coin)} {R₂ : Reg₂} (h : RegColl zs R ω t R₂) :
+    ∃ c ∈ regCands zs R ω t R₂, c.1 := by
+  obtain ⟨j, j', h⟩ := h
+  obtain ⟨c, hc, hp⟩ := h.cand (zs R ω t R₂ j).mem_posList (zs R ω t R₂ j').mem_posList
+  exact ⟨c, List.mem_flatMap.2 ⟨j, List.mem_finRange j, List.mem_flatMap.2 ⟨j', List.mem_finRange j', hc⟩⟩, hp⟩
+
+/-- **The registrant records' finder**: one run of the recursive audit against the prover `σ`, output the pair of the
+first of the history's candidates (`regCands`, at the outcome's history and registration) whose test passes, a
+collision when two sessions clash there (`RegColl`); else nothing. Its SHA-512 evaluations are the audit's and the
+candidates' recomputation. -/
 noncomputable def regFinder (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ) (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N)) :
     Finder Pair :=
-  oneRun _ σ (onePick H512 (fun o : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) =>
-    RegColl zs o.1 o.2.1 o.2.2.1 o.2.2.2.1) fun _ h => RegColl.collision h)
+  oneRun _ σ (onePick fun o : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) =>
+    regCands zs o.1 o.2.1 o.2.2.1 o.2.2.2.1)
 
 /-- **Two sessions clash at most `qX²/2^513` likely** under `cr/sha-512` for `regFinder` at the budget `qX`: once per
 audit, whatever the number of sessions. -/
@@ -119,7 +173,8 @@ theorem prob_regColl_le (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ �
       (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ).toReal ≤ qX ^ 2 / 2 ^ (513 : ℝ) := by
     rw [prob_toReal]
     exact (expect_one_le H512 _ σ (fun o : Reg × L.Ω × List (Cm × I.Coin) × (Reg₂ × VRec Vs Reg' dg N) =>
-      RegColl zs o.1 o.2.1 o.2.2.1 o.2.2.2.1) fun _ h => RegColl.collision h).trans hX.le
+      RegColl zs o.1 o.2.1 o.2.2.1 o.2.2.2.1) (fun o => regCands zs o.1 o.2.1 o.2.2.1 o.2.2.2.1)
+      (fun _ h => h.cand) fun _ _ hc hp => regCands_spec hc hp).trans hX.le
   exact (ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (prob_le_one _ _ _))
     (by positivity)).2 hev
 
@@ -143,6 +198,48 @@ theorem VBridge.off {Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → P
     {N k Rw : ℕ} {x : Reg → L.Ω → I.Stmt} {wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg}
     (h : Recursion.VBridge zs dg N k Rw x wmsg) : VBridgeOff Bad zs dg N k Rw x wmsg :=
   fun R ω t R₂ _ τ o _ => h R ω t R₂ τ o
+
+/-- **`VBridgeOff` at a `Bad` of the sessions' outcomes**: as `VBridgeOff`, with `Bad` reading the record `o` of
+genuine session-game outcomes too, so asked only at the records where `Bad R ω t R₂ o` fails. -/
+def VBridgeOffOut
+    (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ →
+      ((j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript) → Prop)
+    (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
+    (dg : ByteArray → ByteArray) (N k Rw : ℕ) (x : Reg → L.Ω → I.Stmt)
+    (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg) : Prop :=
+  ∀ R ω t R₂ (τ : (j : Fin S) → Strategy ((zs R ω t R₂ j).game dg N))
+    (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
+    (∀ j, Game.Outcome ((zs R ω t R₂ j).game dg N) (τ j) (o j)) → ¬ Bad R ω t R₂ o →
+    (∀ j, LiveAcceptsZKR (zs R ω t R₂ j).I (zs R ω t R₂ j).own (o j) ∧
+      (zs R ω t R₂ j).Good ((zs R ω t R₂ j).layer dg N k Rw (τ j))) →
+    I.accepts (x R ω) ((wmsg fun j => (zs R ω t R₂ j).layer dg N k Rw (τ j)).zip (t.map Prod.snd))
+
+/-- `VBridgeOff` is `VBridgeOffOut` at a `Bad` that reads no outcome. -/
+theorem VBridgeOff.out {Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → Prop}
+    {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'} {dg : ByteArray → ByteArray}
+    {N k Rw : ℕ} {x : Reg → L.Ω → I.Stmt} {wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg}
+    (h : VBridgeOff Bad zs dg N k Rw x wmsg) :
+    VBridgeOffOut (fun R ω t R₂ _ => Bad R ω t R₂) zs dg N k Rw x wmsg :=
+  fun R ω t R₂ τ o hout hb => h R ω t R₂ hb τ o hout
+
+/-- `outerV_le` with `Q` reading the registration the prover sends and the sessions' outcomes. -/
+theorem outerV_le_out
+    (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ)
+    {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
+    (hr : ∀ R₂ j S' R' i, rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R₂ j).dj (zs R₂ j).y₀ S' R') i k ≤ ρ)
+    {t' : ℝ} (ht' : 0 ≤ t') (qF qS qW qR : ℝ)
+    (Q : Reg₂ → ((j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript) →
+      ((j : Fin S) → (Vs j).Bits) → Prop)
+    (hQ : ∀ R₂ (τ : (j : Fin S) → Strategy ((zs R₂ j).game dg N))
+      (o : (j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × Exec.Transcript),
+      (∀ j, Game.Outcome ((zs R₂ j).game dg N) (τ j) (o j)) →
+      (∀ j, LiveAcceptsZKR (zs R₂ j).I (zs R₂ j).own (o j) ∧ (zs R₂ j).Good ((zs R₂ j).layer dg N k Rw (τ j))) →
+      Q R₂ o fun j => (zs R₂ j).layer dg N k Rw (τ j))
+    (s : Strategy (outerV zs dg N)) :
+    prob (fun o => AcceptsV zs o ∧ ¬ Q o.1 (fun j => (o.2 j).2) (layers (zs o.1) dg N k Rw o.2)) (outerV zs dg N) s ≤
+      sumV zs dg N (fun R₂ j τ => (zs R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s := by
+  rw [prob_outerV]
+  exact sessions_le_out (zs s.1) dg N hk hRw hM hρ (hr s.1) ht' qF qS qW qR (Q s.1) (hQ s.1) (sessOf zs dg N s)
 
 /-- `outerV_le` with `Q` reading the registration the prover sends. -/
 theorem outerV_le_dep

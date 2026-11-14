@@ -5,8 +5,8 @@ ceilings, and nothing ran the product.
 
     uv run python benchmarks/compute/h200_share.py --from RUN --duty RUN
 
-The number, at each reading r of `READINGS` (the card's `clock.tensor`, 1830 MHz, and `clock.sm`, 1980 MHz, the
-reading credit defaults to):
+The number, at each reading r of `READINGS` (the card's `clock.tensor` and `clock.sm`, the reading credit defaults to,
+each the card file's value):
 
     value(r) = rate / ceiling(r) * share
     rate       an honest H200's e4m3 MACs a second: `benchmarks/tensor_duty`'s `--arms fp32-beside` arm A (the e4m3
@@ -19,8 +19,8 @@ reading credit defaults to):
 
 Credit counts each MAC at its pipe's data-sheet ceiling, so a span of T seconds holds ceiling(r) * T MACs of capacity,
 and a prover that computes every MAC of the served model at `rate` is credited share * rate * T of them. So the goal's
-target is the honest rate's share of each ceiling (77% at `clock.sm`, 83% at `clock.tensor`) times the verified share
-(95.44% on the run of record): 73% and 79%. What the model leaves out makes the number an upper bound on the served
+target is the honest rate's share of each reading's ceiling times the verified share, one value a reading, the higher
+at the lower clock. What the model leaves out makes the number an upper bound on the served
 share: Pearl+'s own work beside its matmuls (its commitments' hashing, the overhead `benchmarks/overhead/run.py table`
 measures on the H200) takes time and earns nothing; attention, the norms and the rest run below the dense loop's rate;
 and a served matmul's operands are not uniform bytes. Uniform operands are the goal's stated case: of the duty run's

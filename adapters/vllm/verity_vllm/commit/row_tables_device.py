@@ -10,8 +10,8 @@ step waits on; the next step's compute does not wait on it.
 
 The kernels compute each row's ``sha512/row-seg/v1`` digest, its salt from the step's ChaCha20 stream (`serving_rows.segment_salts`),
 its ``hm96-sha512`` string and tree leaf and its ``frame-v3-sha512`` leaf, then each table's tree and the step's tree over their
-roots (`row_table.step_tree`): the row's digests with the GPU's one SHA-512 (`verity.circuits.kernels.SHA512`, through `ncp2.cuh`),
-the hm96 leaf and the frame's leaf, pad and node with the GPU's one row commitment (`verity.circuits.kernels.ROW_COMMIT`).  The host
+roots (`row_table.step_tree`): the row's digests with the GPU's one SHA-512 (`verity.commitments.cuda.SHA512`, through `ncp2.cuh`),
+the hm96 leaf and the frame's leaf, pad and node with the GPU's one row commitment (`verity.commitments.cuda.ROW_COMMIT`).  The host
 computes the domain ids, the rows' rank order and the tables' layout (`plan`).  `host_step` runs the same functions on the CPU
 (`row_table_host.cpp`, built with the system C++ compiler), the twin the CPU tests hold to `row_tables.step_roots` on machines
 without a GPU.  The kernels' builds, libraries and device streams are PoUW's
