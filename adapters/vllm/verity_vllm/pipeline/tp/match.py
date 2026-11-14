@@ -126,11 +126,18 @@ def _engine_main(args) -> None:
     print(f"[tp2match:{args.arm}] run {run_s:.2f}s {timing.get('engine_steps')} steps; recorder={closed}", flush=True)
 
 
+def _campaign() -> str:
+    """The campaign label a check's record carries: `VERITY_CAMPAIGN` as the environment holds it, the empty string included, and
+    its declared default where the name is not set."""
+    label = settings.raw("VERITY_CAMPAIGN")
+    return settings.setting("VERITY_CAMPAIGN").default if label is None else label
+
+
 def _check_main(args) -> int:
     run = Path(args.out)
     cap, ctl = run / "capture", run / "control"
     res: dict = {"schema": "tp2-match/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "run": str(run),
-                 "campaign": settings.VERITY_CAMPAIGN,
+                 "campaign": _campaign(),
                  "what": "collective-level TP-aware Match (structure + cross-rank provenance + tokens); NOT the instance-sequence Match"}
     # the world is the number of rank Builds given (--build-rank in rank order; --build-rank0/1 are the two-rank spelling)
     builds = _build_dirs(args)

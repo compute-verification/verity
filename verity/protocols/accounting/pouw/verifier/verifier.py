@@ -164,3 +164,6 @@ def coins(n: int) -> bytes:
 #: the claim instance naming `coins`'s bytes, which a served challenger reads (`spot.challenger.coin_claim`)
 CLAIM = "uniform/io-getrandombytes"
 coins.claim = CLAIM  # type: ignore[attr-defined]
+
+
+__all__ = ["CLAIM", "COINS_MAX", "RECORD_VERDICT", "LeanError", "coins", "executable", "lean"]
