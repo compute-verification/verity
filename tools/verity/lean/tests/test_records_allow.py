@@ -81,23 +81,26 @@ def lane(tmp_path, monkeypatch):
     def run(argv, **kw):
         if argv[1:2] != [str(LC.AUDIT_PY)]:
             return real(argv, **kw)
-        at, out, update = Path(argv[-1]), Path(argv[argv.index("--out") + 1]), "--update" in argv
-        p = os.path.relpath(at, kw["cwd"])
-        calls.append((p, update))
-        fails, regen = list(standing.get(p, [])), {}
-        if update:
-            (at / LC.LOCK).write_text(BUILT[p])
-        elif (at / LC.LOCK).read_text() != BUILT[p]:
-            fails.append(DIFFERS)
-            if len(fails) == 1:
-                (kept := out / "audit-x" / LC.LOCK).parent.mkdir(parents=True, exist_ok=True)
-                kept.write_text(BUILT[p])
-                regen = {"regenerated": str(kept)}
-        reps = [AUDIT.reported({"package": str(at.resolve()), "failures": fails, **regen}),
-                *(AUDIT.reported({"package": str((Path(kw["cwd"]) / q).resolve()), "failures": list(fs)})
-                  for q, fs in beside.get(p, {}).items())]
+        out, update = Path(argv[argv.index("--out") + 1]), "--update" in argv
+        reps = []
+        for at in map(Path, argv[argv.index("--out") + 2:]):
+            p = os.path.relpath(at, kw["cwd"])
+            calls.append((p, update))
+            fails, regen = list(standing.get(p, [])), {}
+            if update:
+                (at / LC.LOCK).write_text(BUILT[p])
+            elif (at / LC.LOCK).read_text() != BUILT[p]:
+                fails.append(DIFFERS)
+                if len(fails) == 1:
+                    (kept := out / f"audit-{at.name}" / LC.LOCK).parent.mkdir(parents=True, exist_ok=True)
+                    kept.write_text(BUILT[p])
+                    regen = {"regenerated": str(kept)}
+            reps += [AUDIT.reported({"package": str(at.resolve()), "failures": fails, **regen}),
+                     *(AUDIT.reported({"package": str((Path(kw["cwd"]) / q).resolve()), "failures": list(fs)})
+                       for q, fs in beside.get(p, {}).items())]
         out.mkdir(parents=True, exist_ok=True)
-        (out / "audit.json").write_text(json.dumps({"passed": not any(r["failures"] for r in reps), "packages": reps}) + "\n")
+        failed = [r["package"] for r in reps if r["failures"]]
+        (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reps}) + "\n")
         return type("P", (), {"returncode": 1 if any(r["failures"] for r in reps) else 0})()
 
     monkeypatch.setattr(LC.subprocess, "run", run)
@@ -277,17 +280,20 @@ def test_a_sampled_mismatch_beside_an_allowed_failure_is_still_compiled_again_an
     """check.py's sampled recompile can fail a package (a module the slot tree kept compiles to other outputs, which
     Lean's nondeterminism does) whose only other failure is one `--allow` names. The run then forgets the module and
     audits the package once more, as it does beside a record difference, and the second audit's failures are the
-    package's: the allowed one alone, so the run ends `allowed`, the first audit's reports apart from the verdict.
-    Without the allowance that failure is one like any other, and nothing is audited again."""
+    package's: the allowed one alone, so the run ends `allowed`, the first audit's reports apart from the verdict. `s` and
+    its requirer share one check.py, which runs once more for both. Without the allowance that failure is one like any
+    other, and nothing is audited again."""
     root, run_dir, calls, standing, _ = lane
     sampled = AUDIT.Failure("sampled", "S.M", "sampled: S.M: the build's S/M.olean differs from what its source compiles to")
     fake, left = LC.subprocess.run, []
 
     def run(argv, **kw):
         got = fake(argv, **kw)
-        if argv[1:2] == [str(LC.AUDIT_PY)] and sampled in standing.get(S, []) and Path(argv[-1]).name == S:
+        if argv[1:2] == [str(LC.AUDIT_PY)] and sampled in standing.get(S, []) and \
+                S in [os.path.relpath(a, kw["cwd"]) for a in argv[argv.index("--out") + 2:]]:
             doc = json.loads((f := Path(argv[argv.index("--out") + 1]) / "audit.json").read_text())
-            doc["packages"][0]["sampled"] = {"mismatched": {"S.M": doc["packages"][0]["package"]}}
+            rep = next(r for r in doc["packages"] if os.path.relpath(r["package"], kw["cwd"]) == S)
+            rep["sampled"] = {"mismatched": {"S.M": rep["package"]}}
             f.write_text(json.dumps(doc) + "\n")
             standing[S] = left
         return got
@@ -296,16 +302,52 @@ def test_a_sampled_mismatch_beside_an_allowed_failure_is_still_compiled_again_an
     standing[S], left[:] = [READS, sampled], [READS]
     said = []
     assert LC.audit_records(S, tmp_path / "deps", log=said.append, allow=["trees.reads:Proofs.Sampled"]) == LC.ALLOWED_RC
-    assert calls == [(S, False), (S, False), (P, False)], "one audit more of the package, never a third"
+    assert calls == [(S, False), (P, False)] * 2, "one run more of the check.py they share, never a third"
     aside = json.loads((run_dir / "lean-audit" / "mismatched" / "s" / "audit.json").read_text())["packages"][0]
     assert aside["failure_codes"] == ["trees.reads", "sampled"]
     doc = result(run_dir)
     assert doc["records"][S]["outcome"] == LC.ALLOWED and doc["stale_allowances"] == [] and not keys(root, S) & set(doc["passes"])
-    assert any("audits s once more" in s for s in said)
+    assert any("audits s and s/props once more" in s for s in said)
     calls.clear()
     standing[S], left[:] = [READS, sampled], [READS, sampled]
     assert LC.audit_records(S, tmp_path / "deps", log=lambda _s: None, rebuild=True) == 1
-    assert calls[:2] == [(S, False), (P, False)], "without the allowance the other failure keeps it from a second audit"
+    assert calls == [(S, False), (P, False)], "without the allowance the other failure keeps it from a second audit"
+
+
+def test_a_sampled_mismatch_sets_aside_every_report_of_the_check_py_a_batch_shares(lane, tmp_path, monkeypatch):
+    """`s` and `s/props` share one check.py, so their reports are one directory's: `audit.json` and an `audit-*` directory
+    each. When the sample of `s` alone differs, the first audit's reports all go to `mismatched/s/`, its requirer's
+    `audit-*` directory beside its own, and what is left where the run's verdict is read is the second audit's alone."""
+    _, run_dir, calls, standing, _ = lane
+    sampled = AUDIT.Failure("sampled", "S.M", "sampled: S.M: the build's S/M.olean differs from what its source compiles to")
+    fake, rounds = LC.subprocess.run, []
+
+    def run(argv, **kw):
+        got = fake(argv, **kw)
+        if argv[1:2] == [str(LC.AUDIT_PY)]:
+            rounds.append(out := Path(argv[argv.index("--out") + 1]))
+            for at in map(Path, argv[argv.index("--out") + 2:]):
+                (d := out / f"audit-{at.name}").mkdir(parents=True, exist_ok=True)
+                (d / "round").write_text(f"{len(rounds)}\n")
+            if sampled in standing.get(S, []):
+                doc = json.loads((f := out / "audit.json").read_text())
+                rep = next(r for r in doc["packages"] if os.path.relpath(r["package"], kw["cwd"]) == S)
+                rep["sampled"] = {"mismatched": {"S.M": rep["package"]}}
+                f.write_text(json.dumps(doc) + "\n")
+                standing[S] = []
+        return got
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+    standing[S] = [sampled]
+    assert LC.audit_records(S, tmp_path / "deps", log=lambda _s: None) == 0
+    assert calls == [(S, False), (P, False)] * 2 and rounds[0] == rounds[1] == run_dir / "lean-audit"
+    aside, here = run_dir / "lean-audit" / "mismatched" / "s", run_dir / "lean-audit"
+    assert sorted(f.name for f in aside.iterdir()) == ["audit-props", "audit-s", "audit.json"]
+    assert [(aside / d / "round").read_text() for d in ("audit-s", "audit-props")] == ["1\n", "1\n"]
+    first = json.loads((aside / "audit.json").read_text())["packages"]
+    assert [os.path.basename(r["package"]) for r in first] == ["s", "props"] and first[0]["failure_codes"] == ["sampled"]
+    assert [(here / d / "round").read_text() for d in ("audit-s", "audit-props")] == ["2\n", "2\n"]
+    assert json.loads((here / "audit.json").read_text())["passed"]
 
 
 def test_an_allowance_names_a_failure_by_its_code_and_entry_never_its_text(lane, tmp_path):
@@ -493,5 +535,5 @@ def test_check_py_takes_no_allowance_and_the_fast_path_gives_it_none(tmp_path, c
     for update in (False, True):
         for own in (False, True):
             for dev in (False, True):
-                argv = LC.check_argv(tmp_path / "p", tmp_path / "out", update, None, own, dev=dev)
+                argv = LC.check_argv([tmp_path / "p"], tmp_path / "out", update, None, own, dev=dev)
                 assert not any(a.startswith("--allow") for a in argv), argv

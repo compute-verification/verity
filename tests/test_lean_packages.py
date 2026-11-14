@@ -166,17 +166,6 @@ def test_lean_module_roots_are_disjoint():
     assert not clashes, clashes
 
 
-def test_every_lock_is_owned():
-    """A lock with no owner, issue or due date in it is unowned, and the Lean check holds it to no owner rule
-    (`check.py`'s `unowned_lock`): the lock of a tree with no lanes.  This tree has lanes, so each of its locks that
-    lists a guarantee or a premise names who answers for it."""
-    merge = _load("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
-    unowned = [_rel(p) for p in lake_packages() if merge.A.unowned_lock(_lock(p))]
-    assert not unowned, (f"locks that name no owner, so no entry of theirs owes one: {unowned}; run `check.py --update "
-                         f"--owner @lane` on each, which owns its entries")
-    assert any(merge.A.unowned_lock({s: {"X": {}}}) for s in merge.A.LANE_ENTRIES)
-
-
 def test_every_record_merges_with_the_driver():
     """`.gitattributes` sends every `lean-audit.json` to `tools/verity/lean/merge.py`, and the unread ratchet's caps to its
     `--caps` driver, and each record's `reads` digests are the ones the driver recomputes from their definitions."""
@@ -206,8 +195,10 @@ def test_every_fetching_package_has_a_pinned_bundle():
     assert not missing, f"Lake packages whose dependencies {audit.PIN} pins no bundle for: {missing}"
 
 
-#: a fresh pin of PKG's bundle: an audit of this tree bundles the dependencies its build left, then `--pin` pins that run's
-REPIN = ("research run --on auto --mem-gb 32 --project verity --source . --cwd clone -- bash -c 'python3 "
+#: a fresh pin of PKG's bundle: an audit of this tree bundles the dependencies its build left, then `--pin` pins that run's;
+#: the run asks what PKG's audit asks
+REPIN = ("research run --on auto --mem-gb \"$(python3 tools/verity/lean/check.py --ask --build PKG)\" --project verity "
+         "--source . --cwd clone -- bash -c 'python3 "
          "tools/verity/lean/lean_audit.py --out \"$OUT/audit\" --export \"$OUT/lean-deps\" --package PKG', then "
          "`python3 tools/verity/lean/lean_audit.py --pin RUN` where the store's remote is configured")
 

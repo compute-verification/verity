@@ -196,6 +196,63 @@ def test_a_trains_audit_passes_on_regenerated_records_names_them_and_keeps_no_su
     assert rc == 0 and ran == ["pkg/b"], "a pass on a regenerated record is not kept"
 
 
+#: a stand-in for check.py where the sources of a package whose policy says "stopped" fail before its build
+#: (`unbuilt_by_sources`): its report holds its failures and nothing of a build, and nothing is built in its directory;
+#: every other package builds in the sandbox and passes with the replay
+STOPPED_AUDIT = r'''
+import json, sys
+from pathlib import Path
+a = sys.argv[1:]
+root, out = Path.cwd(), Path(a[a.index("--out") + 1])
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--facts-cache"))]
+out.mkdir(parents=True, exist_ok=True)
+reps, failed = [], []
+for pkg in named:
+    with open(out / "ran.txt", "a") as f:
+        f.write(f"{pkg.relative_to(root)}\n")
+    if json.loads((pkg / "lean-audit.json").read_text()).get("stopped"):
+        reps.append({"package": str(pkg), "seconds": {}, "failures": ["orphan: Planted.lean is not imported by the roots"],
+                     "failure_codes": ["orphan.file"]})
+        failed.append(str(pkg))
+    else:
+        (pkg / ".lake" / "build" / "lib" / "lean").mkdir(parents=True, exist_ok=True)
+        reps.append({"package": str(pkg), "seconds": {"build": 1.0, "replay": 2.0}, "failures": [], "failure_codes": [],
+                     "sandbox": True})
+(out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reps}))
+sys.exit(1 if failed else 0)
+'''
+
+
+def test_a_package_its_sources_stopped_before_its_build_fails_the_run_and_leaves_nothing_of_a_build(tmp_path, monkeypatch):
+    """check.py builds no package whose sources already fail, and its report then holds `package`, `seconds` (empty),
+    `failures` and `failure_codes`, nothing of a build. Beside a package that built and passed, the stopped one fails the
+    run with that report as check.py left it; `--regenerate` regenerates no record for it; only the built package's build
+    is offered to the artifact cache; and the built package's pass is kept while the stopped one is audited again."""
+    root = _tree(tmp_path, monkeypatch)
+    (root / "tools/verity/lean/check.py").write_text(STOPPED_AUDIT)
+    (root / "pkg/b/lean-audit.json").write_text(json.dumps({"stopped": True}))
+    cache, deps = tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps"
+    put: list[list[str]] = []
+    monkeypatch.setattr(LA.LakeArtifacts, "put",
+                        lambda self, reports, since=None, log=print: put.append(sorted(p.name for p in reports)) or 0)
+
+    def go(n: int) -> tuple[int, list[str], dict, list[str]]:
+        out, said = tmp_path / f"run{n}" / "lean-audit", []
+        rc = LA.run(out, cache, deps, log=said.append, regenerate=True)
+        return rc, (out / "ran.txt").read_text().split(), json.loads((out / "audit.json").read_text()), said
+    rc, ran, doc, said = go(1)
+    assert rc == 1 and sorted(ran) == ["pkg/a", "pkg/b"] and doc["failed"] == ["pkg/b"] and not doc["passed"]
+    assert [r for r in doc["packages"] if r["package"] == "pkg/b"] == [
+        {"package": "pkg/b", "seconds": {}, "failures": ["orphan: Planted.lean is not imported by the roots"],
+         "failure_codes": ["orphan.file"]}], "the report as check.py left it: its failures and their codes, nothing added"
+    assert doc["regenerated"] == {} and doc["rekeyed"] == {}, "no record is regenerated for a package that was not built"
+    assert put == [["a"]], "the stopped package says nothing of a build (`built`), so none of it is indexed"
+    assert "lean-audit: FAIL (pkg/b): 0 of 2 packages reused" in said
+    assert CHECK.lean_fast(tmp_path / "run1") is None, "a stopped package's report is a failure, not a pass without the replay"
+    rc, ran, doc, _ = go(2)
+    assert rc == 1 and ran == ["pkg/b"] and list(doc["cached"]) == ["pkg/a"], "a's pass is kept; b keeps none and runs again"
+
+
 #: a stand-in for check.py --regenerate [--bookkeeping warn]: pkg/b's lock fails on bookkeeping, which only the flag repairs,
 #: in a regenerated lock listing two guarantees under `unwitnessed` and one warning
 BOOK_AUDIT = r'''
@@ -654,7 +711,8 @@ def test_the_controls_and_the_docs_are_no_input(tmp_path, monkeypatch):
     """No audit reads `tools/verity/lean/README.md`, `tools/verity/lean/tests/` or the pin file `lean-deps.json`
     (preflight's, read before the audit), so an edit to them audits no package again. Nor the directory's other files that
     `NOT_READ` lists, such as `merge.py` and `lean_changed.py`, which would otherwise audit every package again on every
-    node. They stay out of the scratch tree too, so an audit that read one would fail."""
+    node. They stay out of the scratch tree too, so an audit that read one would fail, but for `CARRIED` (`reserve.py`,
+    which check.py plans its run by), which every scratch tree carries."""
     root = _tree(tmp_path, monkeypatch)
     (root / "pkg/b/lean-audit.json").write_text("{}")
     assert _run(tmp_path, 1)[0] == 0
@@ -679,7 +737,9 @@ def test_the_controls_and_the_docs_are_no_input(tmp_path, monkeypatch):
     (root / "pkg/b/lean-audit.json").write_text(json.dumps({"reads": [f"tools/verity/lean/{n}" for n in sorted(LA.NOT_READ)]}))
     rc, _ran, doc = _run(tmp_path, 99)
     assert rc == 1 and doc["failed"] == ["pkg/b"]
-    assert doc["packages"][1]["failures"] == [f"reads tools/verity/lean/{n}" for n in sorted(LA.NOT_READ)]
+    assert LA.CARRIED and set(LA.CARRIED) <= set(LA.NOT_READ)
+    assert doc["packages"][1]["failures"] == [f"reads tools/verity/lean/{n}" for n in sorted(LA.NOT_READ)
+                                              if n not in LA.CARRIED]
 
 
 def test_a_packages_prose_and_pytest_files_are_no_input(tmp_path, monkeypatch):
@@ -803,6 +863,40 @@ def test_what_a_failed_or_a_killed_audit_compiled_goes_into_the_artifact_cache_o
     assert LA.run(tmp_path / "out2", tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps",
                   log=lambda s: None) == 1
     assert put_with[1:] == [{"a": {"sandbox": True}, "b": {"sandbox": False}}], "killed: no report, so what each build began with"
+
+
+def test_a_build_whose_sampled_recompile_differs_stores_nothing_though_check_py_is_killed(tmp_path, monkeypatch):
+    """The one build a sandboxed audit keeps out of this node's cache: one whose sampled recompile differs. check.py writes
+    that failure beside what the build began with, so a check.py killed before its report hands it to `_audit`'s `finally`,
+    whose `put` refuses it."""
+    root = _tree(tmp_path, monkeypatch)
+    real, handed = LA.LakeArtifacts.put, []
+    monkeypatch.setattr(LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: handed.append(
+        {p.name: {k: v for k, v in rep.items() if k != "package"} for p, rep in reports.items()}) or 0)
+    sampled = {"sandbox": True, "failures": ["sampled: P: the build's olean differs from its recompile"]}
+    (root / "tools/verity/lean/check.py").write_text(FAKE_AUDIT.replace(
+        'reps, failed = [], []', 'reps, failed = [], []\nfor n, pkg in enumerate(named):\n'
+        '    (out / f"audit-{n}").mkdir()\n'
+        f'    (out / f"audit-{{n}}" / "{LA.BUILDING}").write_text(json.dumps({{"package": str(pkg), **{sampled!r}}}))\n'
+        'sys.exit(137)'))
+    assert LA.run(tmp_path / "out", tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps",
+                  log=lambda s: None) == 1
+    assert handed == [{"a": sampled, "b": sampled}]
+    pkg = _package(tmp_path / "built")
+    assert real(LA.LakeArtifacts(tmp_path / "store"), {pkg: sampled}, log=lambda s: None) == 0
+    assert real(LA.LakeArtifacts(tmp_path / "store"), {pkg: SANDBOXED}, log=lambda s: None) == 3, "without it, all three go in"
+
+
+def test_a_build_whose_sample_has_not_ended_stores_nothing_though_check_py_is_killed(tmp_path):
+    """check.py writes that the sample is pending as the build begins and takes it back only once the sample has ended, so
+    a check.py killed during its build, its replay or its sample leaves a word `put` refuses: the modules it compiled are
+    on top of restored ones nothing has sampled yet."""
+    pkg, said = _package(tmp_path / "built"), []
+    assert LA.LakeArtifacts(tmp_path / "store").put({pkg: SANDBOXED | LA.SAMPLE_PENDING}, log=said.append) == 0
+    assert said == [f"lean-audit: {pkg}: check.py ended before the sampled recompile of what its build restored did, so "
+                    "none of the modules compiled on top of those go into the artifact cache"]
+    assert LA.LakeArtifacts(tmp_path / "store").put({pkg: SANDBOXED}, log=lambda s: None) == 3
+    assert AUDIT.SAMPLE_PENDING == LA.SAMPLE_PENDING
 
 
 def test_what_check_py_said_of_a_build_is_its_report_or_what_it_wrote_as_the_build_began(tmp_path):
@@ -1123,6 +1217,51 @@ def test_an_artifact_was_last_used_when_an_entry_that_names_it_was(tmp_path):
         "written first and used last, 0 stays; 2 stays for the later entry that names it too"
     assert sorted(f.name for f in (store / "keys").iterdir()) == ["0.json", "also.json"], \
         "2's first entry was used no later than what went, so it goes: a miss, and the module is built"
+
+
+def test_a_prune_waits_for_a_build_that_stages_from_the_artifact_cache(tmp_path, monkeypatch):
+    """`--prune` removed index entries, the records of modules `put` couldn't index and artifacts without the store's
+    lock, while a build's `module_keys.stage` read them under it (shared): the build then took an entry whose artifacts
+    were gone, or reported a refusal whose record was. It now takes that lock (`LakeArtifacts._lock`), as `put` and
+    `take` do around their prunes. The test holds the lock as a stage does: the prune asks for it and waits, and runs,
+    holding it, once the stage lets go."""
+    root, store = tmp_path / "cache", tmp_path / "cache" / "lean-artifacts"
+    store.mkdir(parents=True)
+    lock, real = store / LA.MK.LOCK, LA.fcntl.flock
+    waits, pruned, rc = threading.Event(), [], []
+
+    def flock(f, op):
+        if getattr(f, "name", None) == str(lock) and op == LA.fcntl.LOCK_EX:
+            waits.set()
+        return real(f, op)
+
+    def prune(self):
+        with open(lock, "a") as other:
+            try:
+                real(other, LA.fcntl.LOCK_SH | LA.fcntl.LOCK_NB)
+                pruned.append("unlocked")
+            except BlockingIOError:
+                pruned.append("held")
+        waits.set()
+        return 0
+
+    def run():
+        try:
+            rc.append(LA.main(["--prune", "--cache", str(root / "lean-audit")]))
+        finally:
+            waits.set()
+
+    monkeypatch.setattr(LA.fcntl, "flock", flock)
+    monkeypatch.setattr(LA.LakeArtifacts, "prune", prune)
+    monkeypatch.setattr(LA.signal, "signal", lambda *a: None)       # `main` sets its SIGTERM handler: main thread only
+    with open(lock, "a") as stage:
+        real(stage, LA.fcntl.LOCK_SH)
+        t = threading.Thread(target=run)
+        t.start()
+        waits.wait()
+        assert not pruned, "the prune ran while a build's stage held the store's lock"
+    t.join()
+    assert rc == [0] and pruned == ["held"], "once the stage let go, the prune ran holding the lock"
 
 
 TAKEN = "taken-v4"
