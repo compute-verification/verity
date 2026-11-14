@@ -1095,36 +1095,38 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
 
 
 def rounds_of(at: SimpleNamespace) -> dict[str, tuple[tuple[str, ...], str]]:
-    """The rounds a run is proved in, each with its templates and outcome: `ROUNDS`, the unread round where a request
-    is anchored in the group past bucket 0; a void run's (the warden failed a connection closed, a `FAIL` in the
-    egress row it signed) the block and its honest round alone, refused by Lean's registered reads ("does not open")
-    at the egress members of its FAIL cells, where the scan renders the connection's end. With V3c's trees
-    (``--v3c``) no block round: V3c's own audit proves its slot entries."""
+    """The rounds link-window `at` (`window_of`) is proved in, by kind, each with its templates and outcome: the block
+    and the honest round (`ROUNDS`), and the group's negatives placed in it (`link`): chain, tampered and unread. A
+    void link-window's (the warden failed a connection closed, a `FAIL` in the egress row it signed) the block and
+    its honest round alone, refused by Lean's registered reads ("does not open") at its egress member, where the scan
+    renders the connection's end. With V3c's trees (``--v3c``) no block round: V3c's own audit proves its slot
+    entries. The stale round's link-window (``at.claimed``, `host`) has that round alone."""
+    if at.claimed is not None:
+        return {"stale": ROUNDS["stale"]}
+    placed = {"chain": at.swapped, "tampered": at.tampered, "unread": at.unread}
     rounds = {"block": ROUNDS["block"], "honest": (TEMPLATES, "does not open")} if at.void else \
-        {k: v for k, v in ROUNDS.items() if k != "unread" or at.unread is not None}
+        {k: v for k, v in ROUNDS.items() if k != "stale" and (k not in placed or placed[k] is not None)}
     return {k: v for k, v in rounds.items() if k != "block" or at.v3c is None}
 
 
 def targets(at: SimpleNamespace, name: str) -> list[str]:
-    """The members a refused round's refusal names: chain's, those of ingress units A, A + 1 and A + 2 whose o1 opens a
-    state leaf (the group's last unit's opens none); tampered's, the egress member of the re-signed link-window;
-    unread's, its one ingress unit's; a void run's honest round, the egress member of each FAIL's link-window."""
-    if name == "chain":
-        A, n = at.setup.A, at.G * at.T
-        return sorted({mb.name for mb in members_of(TEMPLATES, at.G, at.T) if mb.template != "egress"
-                       for b in mb.buckets if A <= b <= A + 2 and b + 1 < n})
-    if name == "tampered":
-        return [f"egress-{at.tampered.window}"]
-    if name == "unread":
-        return [f"ingress-{at.unread.bucket // at.T}"]
-    return sorted({f"egress-{t // at.T}" for t in at.void})
+    """The members a refused round's refusal names: chain's, those of ingress units a, a + 1 and a + 2 (a the swap's
+    bucket in the link-window) whose o1 opens a state leaf (the link-window's last unit's opens none); stale's, the
+    start unit's; unread's, its one ingress unit's; tampered's and a void link-window's honest round's, the egress
+    member."""
+    kind = kind_of(name)
+    if kind == "chain":
+        a = at.setup.A % at.T
+        return sorted({mb.name for mb in members_of(TEMPLATES, at.T) if mb.template == "ingress"
+                       for b in mb.buckets if a <= b <= a + 2 and b + 1 < at.T})
+    return [{"stale": "start", "unread": "ingress-0"}.get(kind, "egress-0")]
 
 
 def predicted(at: SimpleNamespace, name: str, members: list[SimpleNamespace]) -> bool:
     """The host's read of a round before any proof, as the round's: accepted, every read held and every output 1 (the
-    slot entries' none: their o0 is no public word); unread's, every read held and its one unit's output 0; refused,
-    its target members' reads refused ("does not open") and every other member's held."""
-    outcome = rounds_of(at)[name][1]
+    slot entries' and the start's none: their o0 is no public word); unread's, every read held and its one unit's
+    output 0; refused, its target members' reads refused ("does not open") and every other member's held."""
+    outcome = rounds_of(at)[kind_of(name)][1]
     if outcome == "accepted":
         return all(m.refused is None and (m.outputs is None or set(m.outputs) == {1}) for m in members)
     if outcome == "ok 0":
@@ -1136,8 +1138,8 @@ def predicted(at: SimpleNamespace, name: str, members: list[SimpleNamespace]) ->
 def wired(members) -> list[str]:
     """Where a round's chains don't hold, on its members' b‖c (`member`'s ``bcs``, port to each proof block's): bucket b's
     o1 is bucket b + 1's ``sin`` and its o2 egress bucket b's ``state``, the one leaf of the registered roots both
-    commit to (the group's last bucket's o1 none). A carried start's unit (`CARRIED`) stands where the bucket before
-    bucket 0 would: its o0 is bucket 0's ``sin``. Empty when they hold."""
+    commit to (the link-window's last bucket's o1 none). The start unit stands where the bucket before bucket 0
+    would: its o0 is bucket 0's ``sin``. Empty when they hold."""
     o1, o2, sin, state = {}, {}, {}, {}
     for m in members:
         for k, b in enumerate(m.buckets):
