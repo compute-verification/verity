@@ -710,10 +710,10 @@ def params(j) -> Params:
         raise D.Reject("windows: a period has at least one link-window")
     if schedule is not None and not rows_wf(schedule, windows):
         raise D.Reject(rows_wf_refusal(schedule, windows))
-    if schedule is not None and list(cells) != schedule.caps(windows):
+    if schedule is not None and list(cells) != schedule.rows_cells(windows):
         raise D.Reject(f"cells: the rows form's cells are egress_cells = {schedule.egress_cells} for each of the "
                        f"lanes · windows · window = {schedule.lanes * windows * schedule.window} connections the "
-                       f"schedule can carry (Schedule.caps), not these {len(cells)}")
+                       f"schedule can carry (Schedule.rowsCells), not these {len(cells)}")
     circuit = None
     if "circuit" in j and not DIGEST.fullmatch(circuit := _of(j["circuit"], str, "circuit")):
         raise D.Reject("circuit: not a SHA-512 digest")
@@ -2339,7 +2339,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                    "lms": {"H": H, "N": N, "W": W, "toy": toy}, "program": program, "session": session.hex(),
                    "windows": n_windows}
     if rows:
-        case_params |= {"cells": bound.caps(n_windows), "circuit": circuit, "scan": scan,
+        case_params |= {"cells": bound.rows_cells(n_windows), "circuit": circuit, "scan": scan,
                         "schedule": schedule_json(bound)}
         if unhold == "params":
             case_params["circuit"] = r.choice([hashlib.sha512(b"another class circuit").hexdigest(), program, *untied])
@@ -2352,7 +2352,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     elif m == "count-windows":
         case_params["windows"] = n_windows + r.choice([1, -1] if n_windows > 1 else [1])
         if rows:
-            case_params["cells"] = bound.caps(case_params["windows"])
+            case_params["cells"] = bound.rows_cells(case_params["windows"])
     elif m == "count-audits":
         case_params["audits"] = r.choice([audit_params[1:], [*audit_params, {
             "free": 0, "program": json.loads(audit_descriptor(((1, 2),))), "steps": 0}]])
@@ -2403,7 +2403,7 @@ def _bad_params(p: dict, n: int) -> list:
 
 
 def bad_cells(p: dict) -> list[dict]:
-    """Rows-form parameters whose `cells` aren't the schedule's (`Schedule.caps`), each one change to `p`: none,
+    """Rows-form parameters whose `cells` aren't the schedule's (`Schedule.rowsCells`), each one change to `p`: none,
     one connection short, one more, and one cap below `egress_cells`."""
     caps = p["cells"]
     return [p | {"cells": []}, p | {"cells": caps[1:]}, p | {"cells": [*caps, caps[0]]},

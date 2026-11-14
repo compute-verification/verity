@@ -772,17 +772,17 @@ def test_a_profile_that_is_no_sample_of_its_level_is_refused(server):
 
 
 def test_the_rows_forms_cells_are_the_schedules(server):
-    """The rows form's `cells` are the schedule's own (`Schedule.caps`, `WardenParams.caps`): `egress_cells` for each of
-    the `lanes · m · window` connections the network certifier can carry, so an accepted period's schedules and cells
-    terms are each that many `⌈log2 (egress_cells + 1)⌉`, never 0 for cells that miss its connections; no cells, one
-    connection short or over, and a cell count below `egress_cells` are refused as parameters by Lean and the mirror
-    alike; and a schedule of 4 lanes over a 32-bucket execution phase, 5 egress cells a connection, charges 384 bits for
-    each over one execution phase (Lean's `#guard`)."""
+    """The rows form's `cells` are the schedule's own (`Schedule.rowsCells`, `WardenParams.rows_cells`): `egress_cells`
+    for each of the `lanes · m · window` connections the network certifier can carry, so an accepted period's schedules
+    and cells terms are each that many `⌈log2 (egress_cells + 1)⌉`, never 0 for cells that miss its connections; no
+    cells, one connection short or over, and a cell count below `egress_cells` are refused as parameters by Lean and the
+    mirror alike; and a schedule of 4 lanes over a 32-bucket execution phase, 5 egress cells a connection, charges 384
+    bits for each over one execution phase (Lean's `#guard`)."""
     for n in range(4):
         case = build("rows-honest", n, small=n % 2 == 0)
         p, out = PC.params(case["params"]), reference(case)
         s = p.schedule
-        assert list(p.cells) == s.caps(p.windows) == [s.egress_cells] * (s.lanes * p.windows * s.window)
+        assert list(p.cells) == s.rows_cells(p.windows) == [s.egress_cells] * (s.lanes * p.windows * s.window)
         term = s.lanes * p.windows * s.window * clog2(s.egress_cells + 1)
         assert out["verdict"] == ACCEPT and term > 0, (n, out)
         assert (out["public"]["schedules"], out["public"]["cells"]) == (term, term), (n, out["public"])
@@ -795,7 +795,7 @@ def test_the_rows_forms_cells_are_the_schedules(server):
             assert verdict == REJECT and json.loads(got)["reason"].startswith("params: cells:"), (n, bad, got)
     four = WardenParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4, window=32,
                         ingress_cells=47, ingress_buckets=12, egress_cells=5, every=16)
-    assert len(four.caps(1)) == 128 and sum(clog2(c + 1) for c in four.caps(1)) == 384
+    assert len(four.rows_cells(1)) == 128 and sum(clog2(c + 1) for c in four.rows_cells(1)) == 384
 
 
 def test_a_period_whose_frames_overrun_a_u32_is_refused(server):
