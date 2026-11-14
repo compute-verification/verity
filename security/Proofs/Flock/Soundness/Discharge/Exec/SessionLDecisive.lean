@@ -671,7 +671,7 @@ theorem walk_unode (x : D) : ∀ d k idx : ℕ,
   | 0, _, _ => rfl
   | d + 1, k, idx => by
       have hup : Merkle.up H E idx (unode H E x k) (unode H E x k) = unode H E x (k + 1) := by
-        unfold Merkle.up
+        unfold Merkle.up Merkle.upIn
         split_ifs <;> rfl
       rw [List.range'_succ, List.map_cons, Merkle.walk, hup, walk_unode x d (k + 1) (idx / 2)]
       congr 1

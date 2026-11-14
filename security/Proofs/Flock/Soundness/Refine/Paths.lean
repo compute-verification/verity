@@ -165,7 +165,7 @@ theorem walk_val (msId : String) : ∀ (sibs : List Dig) (idx : ℕ) (acc : Dig)
       simp only [Merkle.walk, List.map_cons, climb]
       rw [walk_val msId rest (idx / 2)]
       congr 1
-      unfold Merkle.up
+      unfold Merkle.up Merkle.upIn
       split_ifs <;> rw [H512_append] <;> rfl
 
 theorem climb_size (msId : String) : ∀ (sibs : List ByteArray) (idx : ℕ) (acc : ByteArray), acc.size = 64 →

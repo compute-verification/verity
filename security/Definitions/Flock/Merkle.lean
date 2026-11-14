@@ -39,9 +39,12 @@ structure Enc (Col D : Type) where
 
 variable (H : List UInt8 → D) (E : Enc Col D)
 
-/-- One step up the tree: `H(acc ‖ sib)` at an even index, `H(sib ‖ acc)` at an odd one. -/
-def up (idx : ℕ) (acc sib : D) : D :=
-  if idx % 2 = 0 then H (E.dig acc ++ E.dig sib) else H (E.dig sib ++ E.dig acc)
+/-- The bytes one step up the tree hashes: `acc ‖ sib` at an even index, `sib ‖ acc` at an odd one. -/
+def upIn (idx : ℕ) (acc sib : D) : List UInt8 :=
+  if idx % 2 = 0 then E.dig acc ++ E.dig sib else E.dig sib ++ E.dig acc
+
+/-- One step up the tree: `H` of the step's input (`upIn`). -/
+def up (idx : ℕ) (acc sib : D) : D := H (upIn E idx acc sib)
 
 /-- Walk from a node up through the siblings (`Flock.Merkle`). -/
 def walk : ℕ → D → List D → D

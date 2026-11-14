@@ -64,14 +64,6 @@ section Walk
 
 variable {D Col : Type} (H : List UInt8 → D) (E : Enc Col D)
 
-/-- The input of one step up the tree: `acc ‖ sib` at an even index, `sib ‖ acc` at an odd one. -/
-def upIn (idx : ℕ) (acc sib : D) : List UInt8 :=
-  if idx % 2 = 0 then E.dig acc ++ E.dig sib else E.dig sib ++ E.dig acc
-
-theorem up_eq (idx : ℕ) (acc sib : D) : up H E idx acc sib = H (upIn E idx acc sib) := by
-  unfold up upIn
-  split_ifs <;> rfl
-
 /-- The inputs of two walks' steps, side by side, from the leaves up. -/
 def walkPairs : ℕ → D → D → List D → List D → List (List UInt8 × List UInt8)
   | idx, a, a', s :: r, s' :: r' =>
@@ -104,8 +96,7 @@ theorem walkPairs_coll : ∀ (sibs sibs' : List D) (idx : ℕ) (a a' : D),
           split_ifs at hin
           · exact hne (append_inj E hin).1
           · exact hne (append_inj E hin).2
-        · rw [← up_eq H E idx a s, ← up_eq H E idx a' s']
-          exact hup
+        · exact hup
       · obtain ⟨p, hp, hc⟩ := walkPairs_coll rest rest' (idx / 2) _ _ (by simpa using hlen) hup heq
         exact ⟨p, Or.inr hp, hc⟩
 
