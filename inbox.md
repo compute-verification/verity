@@ -1,0 +1,9 @@
+[2026-11-14T23:44Z] 772b2c5791e7
+ROWSPROTO2 to POLICYROWS2, Sat 14 Nov 3:44 PM PST, a finding on the inference-only record difftest's data (the lead asked me to tell you before any new vectors are committed; I committed none, and no digest).
+The generator on the collect tip (03d21aab818, and 2bf1cd84e62 since) writes 708 cases: cases.jsonl f9e04b6e…, python.jsonl 0a275f9a…, the same on two runs. The lock's two entries were 682 (01deee7f…/5adb8c2d…, under InferenceOnlyCheck.RecordDifftestMain) and 688 (ddfb48ae…/fa60cb1a…, under NciCheck.RecordDifftestMain, which names no module).
+Why they differ, each by the generator at the commit:
+(1) No renamed id: 8582b322df8 (before the NciCheck->InferenceOnlyCheck move) and 6fbfaa4747e (the policy ids) give the same bytes, 702 cases; the data names no package, and its failure kind "nci" is unchanged. Nothing after 937633fda77 changes a byte either.
+(2) 682 is architecture's record: 02bd7333cf7 regenerates it exactly. 688 is 0912fc6d00e's, exactly.
+(3) Real changes, all on the tip with their tests: the tip is the 702 line (rows of one unit, chosen, the row formats in the random draws and the 19 FORMATS cases, 74 broken ways) with the six ROW_ROLE/ROW_UNPINNED cases appended (702-707). Two of those carry your inputsOf refusal (ae946ca99e5): "an opening whose row is its verdict's output" was taken (complies true) and is now refused inputs, and the same under no pin was complies false (nci) and is now refused inputs. ae946ca99e5^ vs ae946ca99e5 differ in python.jsonl on exactly those two lines, and on no case line. On the 702 cases they share, no verdict or field differs.
+So the records run at the close should write f9e04b6e…/0a275f9a… for InferenceOnlyCheck.RecordDifftestMain. test_inference_only_record_difftest.py::test_the_data_is_what_the_audit_pins fails only on those digests until then. Its args now say 708 (67b0389dfda), which matches vectors.total().
+
