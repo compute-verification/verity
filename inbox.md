@@ -65,3 +65,23 @@ TERMGB2 to network-accounting (lead), Sat 14 Nov 12:37 AM PST. **Job 1 is open, 
 
 Next: #9501's run is running (lint 0, 58 of 61 suites left at 12:31 AM); #9811's still waits for a slot. Then the three sizes, and the CPU rehearsal line.
 
+[2026-11-14T08:37Z] 0ffb6f9d80b2
+CROSSTICK2 to network-accounting (lead), Sat 14 Nov 12:37 AM PST. Step 3, the pair composite in `CoreOnsite.lean`: not built. **Build it? No, my answer, and I go on without it.**
+
+**What it would say.** A composite of two subprotocols only, the count over a wipe's span (`hostSpan`) and the counted wipe (`countedWipe`), with no record or store tie and only the wipe's five ties (`wipeNode` and the four of `wipeCount`). It accepts exactly when both accept and the five ties hold. Its one use would be as a difftest port: with no sampled proofs' case beside it, a case can reach a tie's verdict at acceptance, which no case of `counted` can [read: the composition difftest's docstring says every sampled proofs' case rejects, and `holdTies` passes a rejection through before any tie is read].
+
+**Its Lean signature** (in `Core.Onsite`, with a one-line executable `onsite-counted-pair` beside `onsite-counted`):
+
+```lean
+def wipeTies : List Tie := wipeNode :: wipeCount
+def countedTies : List Tie := ties ++ wipeTies
+def COUNTED_PAIR_ID : String := "verity/onsite/counted-pair/v0"
+def countedPair : BlobProtocol := tiedSameB COUNTED_PAIR_ID [] wipeTies [hostSpan, countedWipe]
+```
+
+**What breaks without it: nothing a verdict or a statement reads.** What is lost is a difftest that holds Lean's ties to the Python reference's ties on one case at acceptance. Without it, each side is checked alone: the Lean ties by `CoreOnsite`'s `#guard`s on made cases (one tie at a time, each stray rejected), the Python ties by a Python-only test on made pairs. A disagreement between the two (say, how the count is spelled as the bytes the egress tie compares) would pass both. That costs nothing on soundness: Lean is the verifier, and the Python reference serves only the difftest. Remote's `windows` tie lives with the same gap today: the difftest never reaches it and `CoreRemote`'s `#guard`s check it [read]. So I follow that precedent. The pair would add a protocol id and an executable that no configuration lists, which the tree should not grow for a test alone.
+
+If you say yes, it is about 15 lines of Lean, one exempt entry in the onsite lock, and one difftest port. I would build it on the account's side branch.
+
+Steps 4 and 5 go on meanwhile. The wipe's half is carried onto #9061's marked head `b6b0e12816f4` by a merge: the move's own script (`tools/move/layout.py --map tools/move/memory_provers_map.toml`), run on the wipe branch, rewrites none of its 11 files [ran], and `restack.py` named that merge as the way to carry it. The branch is `cursor/na-wipe-count-fe4c` at `06ccb1fa671e`. No definition, format, answer or lock record of memory accounting's changes in that carry: the diff against #9061's head is the same 11 files, 436 lines added and 12 removed, as before [ran].
+
