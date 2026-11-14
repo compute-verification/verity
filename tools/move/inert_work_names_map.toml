@@ -150,7 +150,6 @@ files = ["verity/protocols/accounting/pouw/prover/schemes/pearl_c4.py",
 "test_the_cap_refuses_a_short_tile_row"                                                                     = "test_the_inert_bound_refuses_a_short_tile_row"
 "pearlCGapSm120v1Cast8p72Rev1Cap_8192"                                                                      = "pearlCGapSm120v1Cast8p72Rev1InertShare_8192"
 "pearlCGapUnpromotedCap1000Loop_16384"                                                                      = "pearlCGapUnpromotedInertShare1000Loop_16384"
-"test_the_hidden_and_clear_caps_agree"                                                                      = "test_the_hidden_and_clear_inert_bounds_agree"
 "pearlCGapUnpromotedCap1000Loop_8192"                                                                       = "pearlCGapUnpromotedInertShare1000Loop_8192"
 "ttOutTilePearlCDevRev1_cap_transfer"                                                                       = "ttOutTilePearlCDevRev1_inert_bound_transfer"
 "pearlCSampledDevRev1KShapes_of_cap"                                                                        = "pearlCSampledDevRev1KShapes_of_inert_bound"
