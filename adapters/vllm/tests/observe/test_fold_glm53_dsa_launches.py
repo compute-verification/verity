@@ -1,5 +1,10 @@
 """GLM-5.3's DSA indexer launches in a multi-request step, folded as vLLM d9105ea80 issues them on cc 9.0 (`sparse_attn_indexer`):
 
+* the fused norm/RoPE launch is held to its pinned source, geometry and constexprs, then to its pointers, the step's positions and
+  rows, bf16, its weights' and rotary table's shapes, the latent cache's slot rows, the step's slots and its two static epsilons; an
+  indexer layer's index-K is held to its pointers, dimensions, shapes and the index cache's layout and slots, and an IndexShare layer
+  to its dummy dimensions; last the top-k allocation is held to its layout and to the one an earlier layer established; the launch
+  folds as the two RMSNorms and the k rotation a token and, on an indexer layer, one index-K row a token;
 * the fused-q launch is held to its pinned source, geometry and constexprs, then to its RoPE pointers, the step's positions and its
   bf16 head rows; an indexer layer's index-Q is held to its pointers, dimensions, shapes and scales, and an IndexShare layer to its
   dummy dimensions; the launch folds as one RoPE row a head and, on an indexer layer, one index-Q row a token;
@@ -33,6 +38,7 @@ from verity_vllm.observe.fold.resolver import (
     Gather,
     Group,
     PerRow,
+    Shared,
     StepContext,
     Transparent,
     Unsupported,
@@ -60,8 +66,9 @@ def view(alloc, shape, dtype="float32", offset=0, strides=None):
     return ViewDesc(alloc, offset, tuple(shape), tuple(strides), dtype, CUDA)
 
 
-def _ctx(requests):
-    """A step over `requests` = [(request, positions this step)] in row order, each request in its own run of 64-slot blocks."""
+def _ctx(requests, slots=None):
+    """A step over `requests` = [(request, positions this step)] in row order, each request in its own run of 64-slot blocks; `slots`
+    are its rows' KV slots, slot 0 for each when not given."""
     rows = [(r, p) for r, ps in requests for p in ps]
     hdr = RunHeader("verity-capture/log/v1", "2026-10-18T00:00:00Z", "pid", {}, {"repo": "zai-org/GLM-5.3", "config": {}}, {"requests": []})
     seq = {r: ps[-1] + 1 for r, ps in requests}
@@ -69,7 +76,7 @@ def _ctx(requests):
     for r, n in seq.items():
         tables[r], nb = list(range(nb, nb + -(-n // 64))), nb + -(-n // 64)
     start = StepStart(0, rows, [0] * len(rows), [p for _, p in rows], seq, {r: ps[0] for r, ps in requests}, tables, 64,
-                      [0] * len(rows), [], [], len(requests), len(rows), len(rows))
+                      [0] * len(rows) if slots is None else list(slots), [], [], len(requests), len(rows), len(rows))
     p = profile_for_case("QWEN3_4B_FP8")
     ctx = StepContext(hdr, start, None, [], {}, p.config, p)
     M = len(rows)
@@ -168,6 +175,118 @@ def test_each_top_k_writes_the_rows_of_its_launch():
                 [view(31018, (1, 288), strides=(512, 1)), view(3, (1, 1), "int32"), view(TOPK_ALLOC, (1, 2048), "int32", offset=12 * 2048),
                  view(4, (1048576,), "uint8"), 2048, 20])
     assert isinstance(D.DsaTopK().match(off, ctx), Unsupported)
+
+
+NORM_PINS = {"Q_DIM": 2048, "Q_BLOCK_SIZE": 2048, "KV_DIM": 512, "KPE_HALF_ROT_DIM": 32, "MLA_CACHE_BLOCK_SIZE": 64,
+             "MLA_CACHE_FP8": False, "MLA_CACHE_DS_MLA": False, "MLA_NUM_TILES": 1, "MLA_TILE_DIM": 1, "TOPK": 2048,
+             "TOPK_BLOCK_SIZE": 1024, "INDEX_ROPE_INTERLEAVE": True}
+NORM_OFF_PIN = "fused norm/RoPE source or launch geometry differs from the recorded GLM-5.3 pin"
+CS, TWO = view(76, (4096, 64), "bfloat16"), [("a", [5]), ("b", [9])]
+
+
+def _norm(rows=2, indexer=True, consts=None, warps=4, fn="vllm.models.glm." + D.NORM_KERNEL, **args):
+    """The fused norm/RoPE launch over `rows` rows and caches of two 64-slot blocks, of an indexer layer (which also normalizes, rotates
+    and quantizes its index-K into the index cache) or of an IndexShare layer; `args` replaces bound arguments by name."""
+    bound = {"q_c_ptr": view(70, (rows, 2048), "bfloat16"), "q_c_out_ptr": view(71, (rows, 2048), "bfloat16"),
+             "q_rms_norm_w_ptr": view(72, (2048,), "bfloat16"), "q_rms_eps": 1e-6, "kv_ptr": view(73, (rows, 512), "bfloat16"),
+             "kv_rms_norm_w_ptr": view(74, (512,), "bfloat16"), "kv_rms_eps": 1e-5, "kpe_ptr": view(75, (rows, 64), "bfloat16"),
+             "kpe_rope_cos_sin_cache_ptr": CS, "mla_cache_ptr": view(77, (2, 64, 576), "bfloat16"), "pos_ptr": view(63, (rows,), "int64"),
+             "topk_indices_ptr": view(TOPK_ALLOC, (16, 2048), "int32")}
+    dims = {"HAS_INDEXER": False, "INDEX_K_DIM": 1, "INDEX_K_BLOCK_SIZE": 1}
+    if indexer:
+        bound.update({"index_k_ptr": view(78, (rows, 128), "bfloat16"), "index_k_layer_norm_w_ptr": view(79, (128,)),
+                      "index_k_layer_norm_bias_ptr": view(80, (128,)), "index_k_layer_norm_eps": 1e-4,
+                      "index_k_rope_cos_sin_cache_ptr": CS, "indexer_cache_ptr": view(81, (2, 64, 132), "uint8"),
+                      "indexer_cache_scale_ptr": view(81, (2, 64, 33)), "indexer_cache_block_size": 64, "indexer_cache_stride": 132})
+        dims = {"HAS_INDEXER": True, "INDEX_K_DIM": 128, "INDEX_K_BLOCK_SIZE": 128, "INDEX_K_HALF_ROT_DIM": 32}
+    bound.update(args)
+    consts = {**NORM_PINS, **dims, **(consts or {})}
+    launch = TritonLaunch(31, None, 0, "forward", fn, D.NORM_SRC_SHA, {**bound, **consts}, consts, [rows, 1, 1], warps, 3, 7, LAYER)
+    return build_trees([launch])[0][0]
+
+
+def test_a_fused_norm_rope_of_an_indexer_layer_is_two_norms_the_k_rotation_and_one_index_k_row_a_token():
+    ctx = _ctx(TWO, slots=[5, 70])
+    assert D.DsaNormRope().match(_norm(fn="vllm.models.glm.another_kernel"), ctx) is None, "another kernel is not this pattern's"
+    r = D.DsaNormRope().match(_norm(), ctx)
+    assert isinstance(r, Group) and (r.consumed, r.hint, r.pattern) == ((31,), LAYER, "dsa.fused_norm_rope")
+    q_norm, kv_norm, k_pe, index_k = r.parts
+    assert all(isinstance(p, Compute) and p.rows == 2 and p.pattern == "dsa.fused_norm_rope" for p in r.parts)
+    assert [spec_label(p.spec) for p in r.parts] == [
+        "DsaRMSNorm_v1{N=2048,EPS=1e-06}", "DsaRMSNorm_v1{N=512,EPS=1e-05}", "RoPEHeadGptJ_v2{D=64}",
+        "DsaIndexerKRow_v1{D=128,ROPE=64,EPS=0.0001}"], "each epsilon is its own argument's"
+    kv_cache, kpe_cache = view(77, (128, 512), "bfloat16", strides=(576, 1)), view(77, (128, 64), "bfloat16", offset=512, strides=(576, 1))
+    assert q_norm.operands == (PerRow(view(70, (2, 2048), "bfloat16")), Shared(view(72, (2048,), "bfloat16")))
+    assert q_norm.outputs == (PerRow(view(71, (2, 2048), "bfloat16")),)
+    assert (q_norm.consumed, q_norm.hint, q_norm.kernels) == ((31,), f"{LAYER}/q_a_layernorm", (D.NORM_KERNEL,))
+    assert q_norm.attribution == (("a", 5), ("b", 9))
+    assert kv_norm.operands == (PerRow(view(73, (2, 512), "bfloat16")), Shared(view(74, (512,), "bfloat16")))
+    assert kv_norm.outputs == (Gather(kv_cache, (5, 70)),) and (kv_norm.consumed, kv_norm.hint) == ((), f"{LAYER}/kv_a_layernorm")
+    assert k_pe.operands == (PerRow(view(75, (2, 64), "bfloat16")), Gather(CS, (5, 9)))
+    assert k_pe.outputs == (Gather(kpe_cache, (5, 70)),) and (k_pe.consumed, k_pe.hint) == ((), f"{LAYER}/k_pe")
+    ix = D._index_cache(view(81, (2, 64, 132), "uint8"), view(81, (2, 64, 33)), 64, 132, 128)
+    assert index_k.operands == (PerRow(view(78, (2, 128), "bfloat16")), Shared(view(79, (128,))), Shared(view(80, (128,))), Gather(CS, (5, 9)))
+    assert index_k.outputs == (Gather(ix.rows, (ix.row(5), ix.row(70))), Gather(ix.scales, (ix.scale(5), ix.scale(70))))
+    assert (index_k.consumed, index_k.hint) == ((), f"{LAYER}/indexer_k")
+    assert [p.roots for p in r.parts] == [(None, None), (None, None), (None, None), (None, None, None, None)]
+    state = D._state(ctx)["modules"][LAYER]
+    assert (state["latent"], state["kv"], state["kpe"]) == (view(77, (128, 576), "bfloat16"), kv_cache, kpe_cache)
+    assert (state["slots"], state["index_cache"]) == ((5, 70), ix)
+    assert D._state(ctx)["topk"] == (TOPK_ALLOC, 0, 2048, (2048, 1))
+
+
+def test_a_fused_norm_rope_of_an_index_share_layer_is_the_two_norms_and_the_k_rotation_alone():
+    ctx = _ctx(TWO, slots=[5, 70])
+    before = D._state(ctx)["modules"][LAYER]["index_cache"]
+    r = D.DsaNormRope().match(_norm(indexer=False), ctx)
+    assert isinstance(r, Group) and [p.hint for p in r.parts] == [f"{LAYER}/q_a_layernorm", f"{LAYER}/kv_a_layernorm", f"{LAYER}/k_pe"]
+    state = D._state(ctx)["modules"][LAYER]
+    assert state["slots"] == (5, 70) and state["index_cache"] is before, "an IndexShare layer leaves the indexer's cache as it was"
+    dims = D.DsaNormRope().match(_norm(indexer=False, consts={"INDEX_K_DIM": 128}), ctx)
+    assert isinstance(dims, Unsupported) and dims.reason == "IndexShare layer has unexpected dummy index-K dimensions"
+    assert (dims.detail["INDEX_K_DIM"], dims.detail["INDEX_K_BLOCK_SIZE"]) == (128, 1)
+
+
+NARROW_LATENT, SHORT_INDEX = view(77, (2, 64, 512), "bfloat16"), view(81, (1, 64, 132), "uint8")
+OFF_STRIDE = (f"index-K cache {view(81, (2, 64, 132), 'uint8')!r} at block size 64 and stride 136 is not D=128 bytes and a 4-byte scale a "
+              "slot in whole D-byte rows")
+
+
+@pytest.mark.parametrize("kw,slots,reason,detail", [
+    ({"warps": 8}, (5, 70), NORM_OFF_PIN, {"src_sha": D.NORM_SRC_SHA, "num_warps": 8, "num_stages": 3}),
+    ({"consts": {"MLA_CACHE_FP8": True}}, (5, 70), "fused norm/RoPE constexprs differ from the recorded GLM-5.3 pin",
+     {"mismatches": {"MLA_CACHE_FP8": (True, False)}}),
+    ({"kv_ptr": None}, (5, 70), "fused norm/RoPE pointer arguments are not bound", {}),
+    ({"pos_ptr": 3}, (5, 70), "positions argument is not a tensor view", {"positions": "3"}),
+    ({"kv_ptr": view(73, (2, 256), "bfloat16")}, (5, 70), "fused norm/RoPE rows or GLM-5.3 dimensions differ",
+     {"kv": repr(view(73, (2, 256), "bfloat16")), "step_rows": 2}),
+    ({"kpe_ptr": view(75, (2, 64))}, (5, 70), "fused norm/RoPE is not entirely bf16", {}),
+    ({"q_rms_norm_w_ptr": view(72, (1024,), "bfloat16")}, (5, 70), "norm weights or GPT-J rotary table have the wrong shape",
+     {"qw": repr(view(72, (1024,), "bfloat16"))}),
+    ({"kpe_rope_cos_sin_cache_ptr": view(76, (8, 64), "bfloat16")}, (5, 70), "a position is outside the GPT-J rotary table",
+     {"positions": (5, 9), "table_rows": 8}),
+    ({"mla_cache_ptr": NARROW_LATENT}, (5, 70), f"cache is not [blocks, block, physical-width] row-major: {NARROW_LATENT!r}", {}),
+    ({}, (5,), "StepStart slot_mapping does not cover the kernel rows", {"rows": 2, "slots": 1}),
+    ({}, (5, 128), "a current-token slot is outside the cache", {"slots": (5, 128), "cache_slots": 128}),
+    ({"q_rms_eps": None}, (5, 70), "norm epsilons are not static floats", {"q_eps": "None", "kv_eps": "1e-05"}),
+    ({"kv_rms_eps": "small"}, (5, 70), "norm epsilons are not static floats", {"q_eps": "1e-06", "kv_eps": "'small'"}),
+    ({"index_k_layer_norm_bias_ptr": None}, (5, 70), "indexer-layer norm/RoPE pointers are not bound", {}),
+    ({"consts": {"INDEX_K_DIM": 64}}, (5, 70), "index-K dimensions differ from the recorded GLM-5.3 pin", {}),
+    ({"index_k_layer_norm_bias_ptr": view(80, (64,))}, (5, 70), "index-K inputs have the wrong shape", {"bias": repr(view(80, (64,)))}),
+    ({"indexer_cache_stride": 136}, (5, 70), OFF_STRIDE, {}),
+    ({"indexer_cache_ptr": SHORT_INDEX, "indexer_cache_scale_ptr": view(81, (1, 64, 33))}, (5, 70),
+     "a current-token slot is outside the index-K cache", {"slots": (5, 70), "cache_slots": 64}),
+    ({"topk_indices_ptr": view(TOPK_ALLOC, (16, 1024), "int32")}, (5, 70), "topk_indices_ptr is not a contiguous i32 [capacity,2048] view",
+     {"topk": repr(view(TOPK_ALLOC, (16, 1024), "int32"))}),
+    ({"topk_indices_ptr": view(99, (16, 2048), "int32")}, (5, 70), "IndexShare layer does not use the indexer layers' top-k allocation",
+     {"observed": (99, 0, 2048, (2048, 1)), "established": (TOPK_ALLOC, 0, 2048, (2048, 1))}),
+], ids=["warps", "constexpr", "pointer", "positions", "dimensions", "dtype", "weight-shape", "position-range", "latent-cache", "slots-short",
+        "slot-range", "eps-absent", "eps-text", "index-pointer", "index-dims", "index-shapes", "index-cache", "index-slot", "topk-layout",
+        "topk-allocation"])
+def test_a_fused_norm_rope_off_its_pins_its_views_or_the_step_is_refused_with_what_differs(kw, slots, reason, detail):
+    off = D.DsaNormRope().match(_norm(**kw), _ctx(TWO, slots=slots))
+    assert isinstance(off, Unsupported) and off.reason == reason and off.consumed == (31,)
+    assert {k: off.detail[k] for k in detail} == detail
 
 
 Q_PINS = {"NUM_Q_HEADS": 8, "Q_PE_HALF_ROT_DIM": 32, "QL_NOPE_DIM": 512, "QL_NOPE_BLOCK": 512, "INDEX_ROPE_INTERLEAVE": True,
