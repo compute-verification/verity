@@ -169,7 +169,8 @@ where a class's tables hold a row a release filed in it), and with `--lengths 2`
 `max_tokens` and count of prompt ids), which `rehearse` passes to its `serve`; without them a
 run is what it was. With them the network certifier hands each execution phase's releases once the next one's records
 are published, and the publisher process lays that execution phase's tables, commits them and signs their one head:
-`rows.jsonl` (the registration and the cost) and `rows.salts` (witness). `check` holds every execution phase that has
+`rows.jsonl` (the registration and the cost) and `rows.salts` (witness), and with `--content` `filed.jsonl` (witness:
+the releases filed in each class, for the prover's serve). `check` holds every execution phase that has
 connection rows to a registration that verifies and whose head is the tables laid from the records. Under
 `--lengths 2` every execution phase of the run ends, its last at the run's last close: in its head, or in the network
 certifier's signed word that it has none, a line of `rows.jsonl` too, and `check` holds each to the one that is due.
