@@ -1931,7 +1931,7 @@ def main(argv=None) -> int:
                    help="the class and the network certifier's schedule (default w63's, PARAMS; w63k4: w63's at KO 4 "
                         "and KI 32, its certifier's at egress cells 5; test: the certifier tests', a CPU window)")
     p.add_argument("--group", type=int, default=1, help="G: link-windows 0 .. G - 1 in one registration (default 1)")
-    p.add_argument("--warden-run", type=Path,
+    p.add_argument("--warden-run", dest="network_certifier_run", type=Path,
                    help="a network_certifier_serve run's directory (rehearse --ids at the class's schedule): its group's "
                         "execution phases, verified under its deployment's key, in place of the synthetic run")
     p.add_argument("--draw", type=int,

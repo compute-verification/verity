@@ -662,8 +662,9 @@ def main(argv=None) -> int:
     p.add_argument("--lean")
     p.add_argument("--out", required=True)
     p.add_argument("--class", dest="cls", choices=sorted(CLASSES), default="test", help="the size class (`CLASSES`)")
-    p.add_argument("--warden-run", type=Path, help="--class warden: a network_certifier_serve run's directory (the gate's "
-                                                   "warden-rehearse's, its witness under witness/)")
+    p.add_argument("--warden-run", dest="network_certifier_run", type=Path,
+                   help="--class warden: a network_certifier_serve run's directory (the gate's warden-rehearse's, its "
+                        "witness under witness/)")
     p.add_argument("--windows", type=int, default=1, help="--class warden: its first execution phases proved")
     p.add_argument("--gpu", action="store_true", help="each session's prover on the GPU (`flock-circuit prove --gpu`)")
     p.add_argument("--port", type=int, default=7981)
