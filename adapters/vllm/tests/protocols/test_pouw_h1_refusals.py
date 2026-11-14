@@ -18,7 +18,15 @@ producer's launches, run, codes, weight and roots (`pouw_h1_receipts.Receipts`),
 weights, weights' key and sessions (`drawn.window_of`, `linear_weights`, `weights_key`, `statements`, `check`), a
 multiprocess window's ranks (`pouw_h1_ranks.install`, `ingest`, `RankExtension`), a call that committed nothing
 (`pouw_h1_served.Served.close`, `pouw_h1_kept.kept_row`), and the host's libraries and table roots
-(`pouw_h1_registered_device.host_lib`, `zy_host_lib`, `pouw_h1_tables_device.host_roots`)."""
+(`pouw_h1_registered_device.host_lib`, `zy_host_lib`, `pouw_h1_tables_device.host_roots`).
+
+And what is left of those parts where no test went: a compiled call shape off its tiles or its one seed group
+(`pouw_h1.check_tiles`, `H1Run.check`), a linear of a window that commits nothing (`pouw_h1_hooks.traced`), a saved
+window's sampling coin (`pouw_h1_handoff.suspend`, `resume`), a call's rows of the Commit and a table a named record
+reuses (`pouw_h1_commit.CommitTap.arow`, `reused`), a value's rows in a host tensor (`pouw_h1_registered.commit`), the
+tables of a call that served no rows and a port that reads no row (`drawn.zy_value`, `a_value`, `call_rows`), the
+host's salts (`pouw_h1_registered_device.host_commit`), and records that say they are on a CUDA device
+(`pouw_h1_words.zy_words`, `pouw_h1_tables_device.take_z`)."""
 from __future__ import annotations
 
 import dataclasses
@@ -85,6 +93,7 @@ import verity_vllm.protocols.pouw.h1.window as PHW
 import verity_vllm.protocols.pouw.h1.words as W
 from tests.protocols import challenger_host as CH
 from tests.protocols import test_pouw_h1_commit as TC
+from tests.protocols import test_pouw_h1_handoff as TH
 from tests.protocols import test_pouw_h1_ranks as TR
 from tests.protocols import test_pouw_h1_served as TS
 from tests.protocols import test_pouw_pearl_c_served as PCS
@@ -1635,3 +1644,243 @@ def test_the_hosts_libraries_are_refused_where_no_cxx_compiler_is_on_the_path(mo
         with pytest.raises(RuntimeError, match=r"^no C\+\+ compiler on the path$"):
             lib.__wrapped__()
     assert asked == ["g++", "c++", "clang++"] * 2
+
+
+def test_a_compiled_call_shape_is_whole_tiles_and_its_units_in_one_seed_group(window, monkeypatch):
+    """`check_tiles` refuses a compiled Program with a proof block off the 32 x 32 grid, counting each shape that is
+    off it, and `H1Run.check` one whose proof blocks are not its call shape's units, or not in one seed group."""
+    def block(r, c, grid=True):
+        return SimpleNamespace(tile=SimpleNamespace(r=r, c=c, grid=grid))
+    served = SimpleNamespace(fn=SimpleNamespace(id="Linear_v1"))
+    assert PH.check_tiles(SimpleNamespace(units=[block(*PH.TILE)] * 3, served=served)) is None
+    off = [block(32, 16), block(*PH.TILE), block(32, 16), block(32, 32, grid=False)]
+    with pytest.raises(PH.C.CompileError) as refused:
+        PH.check_tiles(SimpleNamespace(units=off, served=served))
+    assert str(refused.value) == "scheme: Linear_v1: units off the 32 x 32 grid: {(32, 16, True): 2, (32, 32, False): 1}"
+    run, _coins = window
+    k, n, t = run.shapes()[0]
+    want = PH.units(k, n, t)
+    for units, groups in ((want + 1, ((0,),)), (want, ((0,), (1,)))):
+        monkeypatch.setattr(PH, "compiled", lambda *shape, units=units, groups=groups: SimpleNamespace(
+            units=[None] * units, groups=groups))
+        with pytest.raises(PH.C.CompileError) as refused:
+            run.check()
+        assert str(refused.value) == (f"position: {k} x {n} at T = {t}: {units} units in {len(groups)} groups, not "
+                                      f"{want} in one")
+
+
+def test_a_linear_of_a_window_that_commits_nothing_applies_as_its_arm_does():
+    """`traced` puts a linear's ``apply`` under the credit gate's trace only for a window that commits. With
+    ``commit`` off it hands the layer, its input and its bias to the arm's own, returns what that returns and reads
+    nothing else of the run."""
+    asked = []
+
+    def arm(layer, x, bias):
+        asked.append((layer, x, bias))
+        return "y"
+    run = SimpleNamespace(commit=False)
+    apply = PHK.traced(run, 0, arm)
+    assert apply("layer", "x") == "y" and apply("layer", "x", "bias") == "y"
+    assert asked == [("layer", "x", None), ("layer", "x", "bias")] and vars(run) == {"commit": False}
+
+
+def test_a_saved_window_keeps_a_sampling_coin_held_in_process_or_none_and_an_asked_session_does_not_hand_off(
+        tmp_path, monkeypatch):
+    """`suspend` saves a window's sampling coin by what it is. A window with none resumes with none. One held in the
+    serving process is saved as its record without its challenger, and `resume` puts it on the resumed session's
+    client. A reserved sample session is saved only unasked: once its one open was asked, here of a gate that
+    refuses, the window does not hand off, and nothing is saved."""
+    monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
+    host = _host(tmp_path, monkeypatch)
+    run = TH._served(_remote())
+    ends = [socket.socketpair() for _ in range(2)]
+    clients = [run.rounds.challenger]
+    try:
+        session = run.draw
+        assert isinstance(session, PHW.DrawSession)
+        run.draw = None
+        HO.suspend(run, tmp_path / "none")
+        resumed, client = HO.resume(tmp_path / "none", ends[0][0].detach())
+        clients.append(client)
+        assert resumed.draw is None and resumed.rounds.challenger is client
+        held = LiveRecord(Wd.draw_challenger(run.rounds.challenger.commitment.epoch, lambda n: bytes(n)), Wd.DRAW)
+        run.draw = held
+        HO.suspend(run, tmp_path / "held")
+        resumed, client = HO.resume(tmp_path / "held", ends[1][0].detach())
+        clients.append(client)
+        assert isinstance(resumed.draw, LiveRecord) and resumed.draw.challenger is client
+        state = {name: value for name, value in vars(held).items() if name != "challenger"}
+        assert {name: value for name, value in vars(resumed.draw).items() if name != "challenger"} == state
+        assert state["label"] == Wd.DRAW
+
+        def shut(*args, **kw):
+            raise ValueError("the gate is shut")
+        run.draw, session.gate = session, shut
+        with pytest.raises(CoinError) as refused:
+            session.record(bytes(64))
+        assert str(refused.value) == (f"{session.entry}: the window's draw session {session.reserved['session']}: the "
+                                      "gate is shut")
+        with pytest.raises(ValueError) as unsaved:
+            HO.suspend(run, tmp_path / "asked")
+        assert str(unsaved.value) == f"{session.entry}: a window hands off before its draw session opens"
+        assert not (tmp_path / "asked").exists()
+    finally:
+        for client in clients:
+            client._wire.sock.close()
+        for _mine, theirs in ends:
+            theirs.close()
+    assert host.ended() is not None
+
+
+def test_a_calls_rows_of_the_commit_off_its_k_or_past_its_slots_are_refused_and_a_table_is_registered_once():
+    """`CommitTap.arow` takes a call's rows of the Commit from its site at the call's engine step. An x_q and an s_a
+    there that are not one row a scale of the call's K give the call no rows, and rows past the window's slots are
+    cut to them: each is refused by the call. A step's table of K the Commit registers a second time is refused by
+    its name."""
+    k, trees = 8, []
+
+    class Tree:
+        def entry(self):
+            return {"root": "r", "domain": "d", "leaves": 2}
+
+    def tree(run, call, words):
+        trees.append((call.index, len(words)))
+        return Tree()
+    served = SimpleNamespace(m=2, registered={}, step_calls=lambda index: [index], a_tree=tree,
+                             a_words=lambda call, codes, scales: np.zeros((len(codes), 1), np.uint16))
+
+    def call(index, step, module):
+        return SimpleNamespace(index=index, step=step, module=module, k=k, m=1)
+
+    def acquired(tap, module, step, rows, scales, codes=k):
+        tap.take(f"{module}/row_quant/0", np.zeros((rows, codes), np.int8), step)
+        tap.take(f"{module}/row_quant/1", np.ones(scales, "<f4"), step)
+    tap = CT.CommitTap()
+    for index, (rows, scales, codes) in enumerate(((3, 2, k), (2, 2, k + 2))):
+        acquired(tap, "m", 4 + index, rows, scales, codes)
+        tap.arow(None, served, call(index, index, "m"), f"a@{index}", None)
+        assert tap.refused == [f"call {i}: the Commit's x_q and s_a at m/row_quant are not one row a scale of K {k}"
+                               for i in range(index + 1)]
+        assert tap.where[CR.commit_rows(index, k)]["rows"] == [0]
+    acquired(tap, "m", 6, 3, 3)
+    tap.arow(None, served, call(2, 2, "m"), "a@2", None)
+    assert tap.refused[2:] == ["call 2: the Commit's 3 rows are past its 2 slots"]
+    assert tap.where[CR.commit_rows(2, k)] == {"round": 2, "calls": [2], "steps": [6], "sites": ["m/row_quant"], "rows": [2]}
+    assert trees == [(0, 0), (1, 0), (2, 2)] and tap.own == 3
+    tap.arow(None, served, call(3, 2, "n"), "another a@2", None)
+    assert tap.refused[3:] == [f"the Commit registers {CR.commit_rows(2, k)} twice"]
+    assert tap.own == 4 and sorted(tap.values) == [CR.commit_rows(s, k) for s in range(3)]
+
+
+def test_a_window_that_holds_no_tree_of_a_rounds_table_has_none_a_named_record_reuses(tmp_path, monkeypatch):
+    """`reused` holds a named record to the window's tree of each round's A table of K and input-ids table. A window
+    whose served trees hold none of one of them, here taken out after its close, has no such table for a record to
+    reuse: it is refused by the round, the table and the Commit's name of it."""
+    monkeypatch.setattr(pouw, "linear_types", lambda: (TC.Linear,))
+    _record, run, _tap = TC._window(tmp_path, monkeypatch)
+    served, previous = run.served, "12" * 64
+    record = TC._reusing(CT.registration(run, previous), lambda rec: rec)
+    assert CT.reused(run, CT.registration(run, previous), record) is None
+
+    def refusal():
+        window = CT.registration(run, previous)
+        return CT.reused(run, window, {**record, "previous": CT.REG.digest(window)})
+    ids = served.ids.pop(1)
+    assert refusal() == (f"the window registers no round 1's input-ids table, so no Commit record reuses it as "
+                         f"{CR.commit_ids(1)}")
+    served.ids[1] = ids
+    assert refusal() is None
+    step, k, calls = CR.step_tables({"calls": served.calls, "linears": served.linears, "m": served.m}, served.steps)[0]
+    table = served.a_table(calls[0])
+    del served.registered[table]
+    assert refusal() == (f"the window registers no round {step}'s A table {table}, so no Commit record reuses it as "
+                         f"{CR.commit_rows(step, k)}")
+
+
+def test_a_values_rows_in_a_host_tensor_are_committed_as_the_same_rows_in_an_array():
+    """`pouw_h1_registered.commit` reads a tensor's rows on the host wherever it doesn't hash them on a CUDA device:
+    u16 words in a host tensor register the tree their array does, and a tensor of another type is refused as an
+    array of it is."""
+    circuit = hashlib.sha512(b"a declared Program").hexdigest()
+    words: np.ndarray = np.arange(12, dtype=np.uint16).reshape(3, 4)
+    tensor = torch.from_numpy(words.view(np.uint8).copy()).view(torch.uint16)
+    assert tensor.dtype == torch.uint16 and tuple(tensor.shape) == (3, 4)
+    of_array = NR.commit(circuit, "v", words, KEY, 7, keep_rows=True)
+    of_tensor = NR.commit(circuit, "v", tensor, KEY, 7, keep_rows=True)
+    assert isinstance(of_array, DN.G.Registered) and isinstance(of_tensor, DN.G.Registered)
+    assert of_tensor.root == of_array.root and of_tensor.leaves == 3
+    assert [bytes(row) for row in of_tensor.rows] == [bytes(row) for row in of_array.rows]
+    for other in (tensor.view(torch.int16), tensor.view(torch.uint8), tensor[0]):
+        with pytest.raises(ValueError, match="^a registered value is at least one row of 16-bit words, every row the "
+                                             "same width$"):
+            NR.commit(circuit, "v", other, KEY, 7)
+
+
+def test_the_tables_of_a_call_that_served_no_rows_are_rebuilt_from_no_record_and_read_no_kept_file(tmp_path):
+    """`zy_value` and `a_value` rebuild a call's ``zy@<c>`` and its step's ``a/<K>@<s>`` from what the prover kept. A
+    call that served no rows kept nothing, so no file of it is read: its z table is the rows of no record over the
+    window's slots, at the call's zy nonce, and its A table zero codes of scale 0 over them, at its a nonce, each
+    bound to the window's root."""
+    circuit, root = hashlib.sha512(b"a declared Program").hexdigest(), "ab" * 64
+    layout = {"m": 32, "tile": PH.TILE, "linears": [("q", K, 32)], "calls": [("q",)]}
+    win = {"layout": layout, "shape": {"prefix": "h1/"}, "program": circuit, "root": root,
+           "record": {"calls": [{"index": 0, "n": 32, "k": K, "served": 0, "rows": 0}]}}
+    value = DN.zy_value(win, tmp_path, KEY, 0)
+    no_z: np.ndarray = np.zeros((0, 32), "<i4")
+    no_y: np.ndarray = np.zeros((0, 32), np.int16)
+    words = SV.record_words(no_z, no_y, 32, PH.TILE)
+    same = NR.commit(circuit, "h1/zy@0", words, KEY, SV.nonce(0, "zy"), keep_rows=True, window=root)
+    assert isinstance(same, DN.G.Registered) and (value.value, value.leaves, value.root) == ("h1/zy@0", 1, same.root)
+    assert value.root != NR.commit(circuit, "h1/zy@0", words, KEY, SV.nonce(0, "zy")).root
+    assert not np.count_nonzero(words)
+    no_codes: np.ndarray = np.zeros((0, K), np.int8)
+    zero = SV.Served.a_words(SimpleNamespace(m=32), SimpleNamespace(k=K), no_codes, np.zeros(0, "<f4"))
+    table = DN.a_value(win, tmp_path, KEY, 0)
+    same = NR.commit(circuit, f"h1/a/{K}@0", zero, KEY, SV.nonce(0, "a"), keep_rows=True, window=root)
+    assert isinstance(same, DN.G.Registered) and (table.value, table.root) == (f"h1/a/{K}@0", same.root)
+    assert table.leaves == same.leaves == len(zero) and not np.count_nonzero(zero)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_a_statements_port_that_reads_no_row_at_a_sampled_unit_is_refused():
+    """`call_rows` takes each port's row at each sampled unit from credit's file. A port whose reads begin past a
+    sampled unit reads no row there: the call's rows are refused by the port and the call, before a value is read."""
+    reg = {"ports": {CR.PUB_PORT: {DN.G.READS_FROM: 2, "reads": [0, 1], "value": "pub"}}}
+    with pytest.raises(Refused, match=f"^port {CR.PUB_PORT} reads no row at a drawn unit of call 3$"):
+        DN.call_rows({}, 3, [2, 1], reg, {}, None, None)
+
+
+def test_the_hosts_commit_of_a_value_takes_one_192_byte_salt_a_row():
+    """`host_commit` takes a value's given salts as 192 bytes a row, and refuses any other length by its bytes and
+    the value's rows, before the host's library is asked for."""
+    words: np.ndarray = np.zeros((3, 4), np.uint16)
+    for salts in (b"", b"s" * 191, b"s" * 192, b"s" * (3 * 192 + 1)):
+        with pytest.raises(ValueError, match=f"^one 192-byte salt per row: {len(salts)} bytes for 3 rows$"):
+            RGD.host_commit(words, KEY, 7, salts, bytes(64))
+
+
+def test_records_said_to_be_on_a_cuda_device_are_viewed_where_they_are_and_only_that_view_takes_their_z_table():
+    """`zy_words` of records on a CUDA device (here a host tensor that says it is on one) that are the Program's
+    tiles over every slot is a u16 view of them where they are, the words the host path builds. `take_z` hands a
+    call's waiting z table to its value's registration only for that view: for another call, for rows on the host,
+    of another type, not contiguous, at another address or of another shape it gives none and the table still waits;
+    for the view it gives the table's domain id and nonce, once."""
+    rows, n = 64, 32
+    records = (torch.arange(2 * W.ZR.ZY_BYTES) % 251).to(torch.uint8).reshape(2, W.ZR.ZY_BYTES)
+    on = records.as_subclass(TS._OnDevice)
+    words = W.zy_words(on, rows, n, rows, W.ZR.UNIT)
+    host = W.zy_words(records, rows, n, rows, W.ZR.UNIT)
+    assert words.dtype == torch.uint16 and words.is_cuda and words.data_ptr() == records.data_ptr()
+    assert isinstance(host, np.ndarray) and np.array_equal(words.view(torch.uint8).numpy().view("<u2"), host)
+    call, did = SimpleNamespace(index=3), hashlib.sha512(b"the z table's domain").digest()
+    held = (3, on, did, 9)
+    run = SimpleNamespace(_zy=held)
+    assert TBD.take_z(SimpleNamespace(), call, words) is None
+    assert TBD.take_z(run, SimpleNamespace(index=4), words) is None and run._zy is held
+    copy = words.clone()
+    assert copy.is_cuda and copy.data_ptr() != words.data_ptr()
+    others: list[Any] = [host, words.as_subclass(torch.Tensor), words.view(torch.uint8), words[:, ::2], copy, words[:1]]
+    for other in others:
+        assert TBD.take_z(run, call, other) is None and run._zy is held
+    assert TBD.take_z(run, call, words) == (did, 9) and run._zy is None
+    assert TBD.take_z(run, call, words) is None
