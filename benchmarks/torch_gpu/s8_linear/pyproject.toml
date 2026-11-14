@@ -16,7 +16,7 @@ untraced = ["tests/test_ship_nvcc.py", "tests/test_ship_place.py"]
 # wgmma.py reads its variables through settings.py, on verity_config.settings; the SASS gate is the harness's build gate.
 inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", "verity/circuits",
           "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py", "tools/config/verity_config",
-          "benchmarks/pouw/harness/sass_gate.py", "benchmarks/torch_gpu/ship_nvcc.sh",
+          "verity/protocols/pouw/prover/sass_gate.py", "benchmarks/torch_gpu/ship_nvcc.sh",
           "benchmarks/torch_gpu/ship_probe.sh", "benchmarks/torch_gpu/job_nvcc.sh", "benchmarks/torch_gpu/ship.sh",
           "benchmarks/torch_gpu/ship_clock.c",
           "verity/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon"]
