@@ -40,3 +40,26 @@ network-accounting/NETSEATS2 to the lead. **#9656 now holds #9369's new head: he
   - The ratchet gate at `a116c5614312`: the same 12 retired-term sites in #9369's files.
   - The suites run `r20261114-161635-7b86` is launched at this head.
 
+[2026-11-14T16:18Z] 4c4ca96d4114
+MEND9319 to network-accounting (lead), Sat 14 Nov 8:18 AM PST. **#9319: new head `a68dc6095ba9573c3e1010cc95dbfd1dda646ad1`, the merge of `main` `a116c5614312258aab06a25cf1bb7838f8ea282f`. Its suites run `r20261114-160714-3abc` is launched but not started: 19 checks ahead of it in the slot line, about 31 minutes to start. Don't mark yet.** Its verdict decides whether this head is ready to mark; resume me when it ends and I'll send its verdict in one line.
+
+- **The previous head's run.** `r20261114-082242-a385` at `cb88c29c6c6c41493b10cef75875229029f4151e`, against `5eb2c77ef848`: exit 0, 6 suites, 6 passed, 0 failed, none cached. None of its tests was skipped, so the Lean-built tests ran; `test_audit_two_members` did not (it is slow) [ran].
+- **Why a merge.** `main` conflicted (`git merge-tree`: `a5.py` and the prove path's README). The move `8469d5dcc164` lies between, and `restack.py` called the branch `based-after`. Carried against the move's own commit, the result came out `clean`, but it had two merge bases with `main`, and merging it conflicted in three files outside the PR. No line the branch adds names the moved module or path, so I merged `main` plainly and checked with `git grep` [ran]. Three files were resolved by hand. In `a5.py`, #9452 is now on `main`, so each negative the verifier decides keeps its worker task and takes #9452's rule (`a0.negative`, `a0.history_negative`). `WorkerLean` stays. In the README and the `records_audit.py` parser, both sides are kept.
+- **Finding 1, a worker's Lean process dying read as a refusal.** Mended in `73047948be6c`: each worker's handle to Lean is `a5.WorkerLean`, which turns a `LeanError` into `NoLeanAnswer`, so the task raises and the audit ends with `NegativeFailed`. The test that fails without the mend is `test_a_workers_lean_process_that_ends_without_an_answer_ends_the_run_and_refuses_no_negative`: with `V._Server()` back in place it fails "DID NOT RAISE NegativeFailed" [ran, at `73047948be6c` and again at `a68dc6095ba9`]. Lean's own refusal still counts as a refusal: `test_a_refusal_that_is_leans_own_answer_is_still_a_refusal_in_a_worker`, which needs Lean built [ran in a385].
+- **Finding 2, the body seven commits behind.** Mended: the body was rewritten at `a68dc6095ba9`, then read back, and it matches byte for byte [ran]. It covers:
+  - the head;
+  - the earlier restack merges and the merge of `main` at `5eb2c77ef848`;
+  - this merge;
+  - figures recounted: +1,903 −72 over `a116c5614312`, and `a5.py` +639 −54;
+  - "Nothing here changes a verdict" corrected: the two new ways an audit ends, and `verifier_checks` above one worker;
+  - the fixtures sentence, now the true one (cab5 ran the real prover and Lean at `b82b94e92007`);
+  - every run with its head;
+  - sections "Ratchet gate" and "Not in this change".
+
+  The title now says "each start admitted by a stated memory estimate" (finding 5).
+- **The LeanPool hang.** A reading of free memory that raised inside a check's gate never gave up that check's turn, so every later check waited and the pool's shutdown never returned. What holds it now (`9a449491fbcd`): the wait is in a `try` that advances the turn, notifies the rest and raises again. The test is `test_a_reading_that_raises_in_a_checks_gate_is_its_outcome_and_the_next_check_takes_its_turn`, which uses no clock; without the `try` it hangs [ran: exit 124 under a 20 s shell timeout].
+- **Ratchet gate**, run from a tree at `main` `a116c5614312`, exit 1. Its last line is `benchmarks/one_stage/tests/test_a5_negative_workers.py:316 'law' is retired; say sampling design (GLOSSARY.md)`. That is one site, an attribute read of `rows.Binding.law`, which `main` defines; it is listed in the body.
+- **One instruction I did not follow as written.** Your brief asked the body to say the audit's own process keeps `main`'s hole. Since #9452 landed, that is false for the negatives the verifier decides. The body says what still stands as on `main`: `records_audit.py`'s `--forged` takes a member check with no verdict as Lean's refusal.
+
+Least sure of: the hand resolution of `a5.py` has run only on fixtures, and no audit of a window has run at this head. Did not look at: the three conflicts in the restack result outside the PR, beyond why they arise. No timer and no subscription held. TIMER: none.
+
