@@ -85,7 +85,7 @@ the day from the challenger's signed ledger instead (`device_day`, the challenge
 the window's signed open and the declarations its lane signed before it, so a window that opens before UTC midnight
 and closes after is its open's day's.
 It reads the device's own ledger whole: a copy PoUS cut to a window's sessions
-(`pous.period.cite`) drops the declarations and the chain, and is refused. A window opened before its day's declaration,
+(`pous.period_prover.cite`) drops the declarations and the chain, and is refused. A window opened before its day's declaration,
 or of a lane that never declares, has no declaration of its day, so R2 refuses it (``R2-undeclared``).
 
 The negatives (`negatives` before the sample, a5's after it) cost Lean verifies of their own; ``--skip-negatives`` leaves

@@ -3197,6 +3197,12 @@
       "paths": {
         "verity/protocols/interface/CoreProtocol/SiteV2Guards.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog/SiteV2Guards.lean"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/tests/program/test_train_step.py": "adapters/torch/tests/frontend/test_train_step.py",
+        "adapters/vllm/tests/program/train_step_lf.py": "adapters/torch/tests/frontend/train_step_lf.py"
+      }
     }
   ]
 }
