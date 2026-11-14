@@ -48,7 +48,7 @@ def rho_models() -> dict:
 
 
 def shape(model) -> dict:
-    """A rho model's shape in b1's configuration keys: a dense model with grouped-query attention and a SwiGLU MLP."""
+    """The shape of one of the slowdown calculator's models in b1's configuration keys: a dense model with grouped-query attention and a SwiGLU MLP."""
     from slowdown import instances
     a = model.attention
     if a.get("kind") != "gqa" or set(model.matrices) != {"attention", "dense", "head"}:
