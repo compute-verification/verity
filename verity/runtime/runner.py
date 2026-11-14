@@ -45,7 +45,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.channel import Int, Message, MessageTypes, Refused, Schema, Str, canonical, parse, split
+from verity.channel import Int, Message, MessageTypes, Refused, Schema, Str, canonical
+from verity.runtime.framing import decode, encode, parse, split
 from verity.runtime.handshake import NONCE_BYTES, Handshake, Key, Verify
 
 from . import sources as S
@@ -151,9 +152,9 @@ class Host:
             self.early.append((channel, raw, at))
             return
         if at is not None:
-            self.transcript.append("arrived", channel, "private", ARRIVED.encode(Message("Arrived", {"ns": at})))
+            self.transcript.append("arrived", channel, "private", encode(ARRIVED, Message("Arrived", {"ns": at})))
         try:
-            msg = ep.accepts.decode(raw)
+            msg = decode(ep.accepts, raw)
         except Refused as e:
             self.transcript.append("in", channel, "private", raw)
             ep.closed = True
@@ -171,7 +172,7 @@ class Host:
         if self.finished is not None or ep.closed:
             return
         ep.closed = True
-        self.transcript.append("event", channel, "structure", RUNTIME.encode(msg))
+        self.transcript.append("event", channel, "structure", encode(RUNTIME, msg))
         if not self.started:
             self._end(_refused("closed", channel=channel, detail=f"{channel} closed before {self.name} started"))
             return
@@ -202,7 +203,7 @@ class Host:
                                    detail=f"{self.name} sent {m.type} on {a.channel}, which its manifest doesn't declare"))
                 return
             try:
-                f = ep.sends.encode(m)
+                f = encode(ep.sends, m)
             except Refused as e:
                 self._end(_refused(e.name, channel=a.channel, detail=e.detail))
                 return
@@ -233,13 +234,13 @@ class _Source:
 
     def _send(self, actions: list[Action]) -> None:
         for a in actions:
-            self.pipe.send(S.ANSWERS[self.need].encode(a.message))
+            self.pipe.send(encode(S.ANSWERS[self.need], a.message))
 
     def pump(self) -> bool:
         raw = self.pipe.take()
         if raw is None:
             return False
-        self._send(self.source.on(Received(S.OWNER, S.ASKS[self.need].decode(raw))))
+        self._send(self.source.on(Received(S.OWNER, decode(S.ASKS[self.need], raw))))
         return True
 
 
@@ -469,7 +470,7 @@ def replay(protocol: ProtocolDef, name: str, party: Party, recorded: PartyLog, i
                 break
             k, at = j, None
             if old[j].dir == "arrived" and j + 1 < len(old) and old[j + 1].dir == "in":
-                k, at = j + 1, ARRIVED.decode(old[j].data).fields["ns"]
+                k, at = j + 1, decode(ARRIVED, old[j].data).fields["ns"]
             nxt = old[k]
             if nxt.elided and nxt.dir in ("in", "event"):
                 raise Refused("elided", f"entry {k} of {name}'s transcript keeps only its frame's digest, which a replay "
@@ -477,7 +478,7 @@ def replay(protocol: ProtocolDef, name: str, party: Party, recorded: PartyLog, i
             if nxt.dir == "in":
                 host.receive(nxt.channel, nxt.data, at)
             elif nxt.dir == "event":
-                host.event(nxt.channel, RUNTIME.decode(nxt.data))
+                host.event(nxt.channel, decode(RUNTIME, nxt.data))
             else:
                 why = f"entry {j}: recorded {_describe(nxt)}, which the replayed party doesn't make"
     outcomes = {name: _plain(host.finished) if host.finished else {"outcome": None, "refused": None}}

@@ -17,6 +17,7 @@ from verity import protocol as M
 from verity.runtime.channels import Playback, dial
 from verity.runtime.runner import ARRIVED, RUNTIME, run
 from verity.runtime.transcript import PartyLog
+from verity.runtime.framing import decode
 from verity.channel import PUBLIC, REFUSALS, Message, Refused
 from verity.runtime import handshake
 
@@ -30,7 +31,7 @@ def simulated(state, protocol=X.PROTOCOL, conf=None, **kw):
 
 
 def stamps(t: PartyLog) -> list[int]:
-    return [ARRIVED.decode(e.data).fields["ns"] for e in t if e.dir == "arrived"]
+    return [decode(ARRIVED, e.data).fields["ns"] for e in t if e.dir == "arrived"]
 
 
 def watching(party, seen: list):
@@ -192,7 +193,7 @@ def test_a_peer_that_resets_its_stream_is_recorded_in_the_transcript_and_the_res
     server.close()
     how = r.ended["challenger"]["responder"]
     assert how.startswith(("ConnectionResetError on ", "BrokenPipeError on ")), how
-    told = [RUNTIME.decode(e.data) for e in r.transcripts["challenger"] if e.dir == "event"]
+    told = [decode(RUNTIME, e.data) for e in r.transcripts["challenger"] if e.dir == "event"]
     assert told == [Message("Closed", {"how": how})]
     assert r.outcomes["challenger"]["refused"] == "closed" and r.summary()["ended"] == r.ended
 
@@ -207,7 +208,7 @@ def test_a_connect_that_fails_is_recorded_not_raised(tmp_path):
             verify=X.verify, seed=SEED, dial_to={"responder": address})
     how = r.ended["challenger"]["responder"]
     assert how.startswith("ConnectionRefusedError on connecting: "), how
-    told = [RUNTIME.decode(e.data) for e in r.transcripts["challenger"] if e.dir == "event"]
+    told = [decode(RUNTIME, e.data) for e in r.transcripts["challenger"] if e.dir == "event"]
     assert told == [Message("Closed", {"how": how})]
     assert r.outcomes["challenger"]["refused"] == "closed"
 
@@ -254,7 +255,7 @@ def test_an_undeclared_message_is_refused():
     assert r.outcomes["responder"]["refused"] == "undeclared"
     assert "Verdict" in r.outcomes["responder"]["outcome"]["detail"]
     assert r.outcomes["challenger"]["refused"] == "closed"
-    told = [RUNTIME.decode(e.data) for e in r.transcripts["challenger"] if e.dir == "event"]
+    told = [decode(RUNTIME, e.data) for e in r.transcripts["challenger"] if e.dir == "event"]
     assert told == [Message("Closed", {"how": "end"})] and r.ended == {}
     sent = [e for e in r.transcripts["responder"] if e.dir == "out" and e.channel == "challenger"]
     assert sent == []

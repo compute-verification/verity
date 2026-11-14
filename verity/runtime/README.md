@@ -2,7 +2,7 @@
 
 The party runtime runs a protocol's parties on the machines a configuration assigns them, over channels between them,
 and keeps each party's log of the run. It knows no protocol: a protocol hands it a manifest and its parties' code, and it
-reads no message's meaning (the frames and the handshake are `verity.channel`'s). A party does no I/O and reads no
+reads no message's meaning (what a message declares is `verity.channel`'s; its frame is `framing`'s). A party does no I/O and reads no
 ambient clock or randomness: its clock readings and coins are messages from sources the runtime attaches, so the same
 party code runs live, simulated, replayed, or live against recorded counterparts, and a replay reproduces it exactly.
 Nothing is retried: every failure the runtime sees finishes the party refused by name, and a party that dies fails its run.
@@ -37,6 +37,9 @@ Internal, which no code outside this directory imports and `runtime.run` reaches
 - the rest of `sources` (`sources.py`, clocks and coins as parties on the same machine): their messages, and
   `RealClock` and `OsCoins`, which a run with no seed attaches itself.
 - `process.spawn` (`process.py`): a party in a process of its own on this machine, over TCP to the run that spawned it.
+- `framing` (`framing.py`): a message's frame under its registry (`encode`) and the parse of one as adversarial
+  (`decode`, `split`, `parse`, `FrameReader`, `frames`), each rule broken refused by name; and `handshake`
+  (`handshake.py`), the signed exchange that opens every channel between parties.
 
 The served table of `verity run` doesn't go through `runtime.run`: it runs `served_verdicts.sh`.
 

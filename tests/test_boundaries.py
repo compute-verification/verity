@@ -209,7 +209,7 @@ PROVER_ONLY = {
 #: ``verity/runtime/``, ``tests/tree.toml``).
 RUNTIME = ("verity.runtime.channels", "verity.runtime.process", "verity.runtime.runner",
            "verity.runtime.sources", "verity.runtime.stream", "verity.runtime.transcript",
-           "verity.runtime.handshake")
+           "verity.runtime.handshake", "verity.runtime.framing")
 #: The trees whose files import no module of the runtime: only what starts a run does (a demo, a benchmark, the `verity`
 #: command), and it hands a protocol's file the stream, the side or the driver it needs.
 RUNTIME_FREE = ("verity/protocols/", "adapters/")

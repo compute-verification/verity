@@ -3,7 +3,7 @@ interface a protocol's parties implement; `manifest` what a protocol declares (i
 the placement check; `config` the deployment configuration, the public file a run starts from; `runtime` what runs the
 parties, live, simulated, replayed or mixed (`run`); `stream` a party's side as another process or machine runs it;
 `sources` the clocks and coins. Outside code imports from those six, the names the README's Interface section lists.
-Internal: `transcript`, a party's view and the record, its public projection; `channels`, the pipes; and `process`, a
-party in a process of its own. The layer reads no message's meaning and imports no protocol: the frames are
-`verity.channel`'s.
+Internal: `transcript`, a party's view and the record, its public projection; `channels`, the pipes; `process`, a party
+in a process of its own; `framing`, a message's frame and its parse; and `handshake`, the exchange that opens every
+channel. The layer reads no message's meaning and imports no protocol: what a message declares is `verity.channel`'s.
 """

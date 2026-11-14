@@ -22,7 +22,8 @@ import hashlib
 from collections.abc import Callable
 from typing import Any, Protocol
 
-from verity.channel import NAME, WIRE_VERSION, Body, Hex, Int, Message, MessageTypes, Phase, Refused, Schema, Str
+from verity.channel import NAME, Body, Hex, Int, Message, MessageTypes, Phase, Refused, Schema, Str
+from verity.runtime.framing import WIRE_VERSION, decode, encode
 
 HELLO = Schema("Hello", 1, "structure", {"wire": Int(1, (1 << 16) - 1), "party": Str(64, NAME.pattern),
                                          "peer": Str(64, NAME.pattern), "protocol": Str(128),
@@ -81,7 +82,7 @@ class Handshake:
     def start(self) -> list[bytes]:
         if self.frames:
             raise RuntimeError("a handshake starts once")
-        out = REGISTRY.encode(self.hello)
+        out = encode(REGISTRY, self.hello)
         self.frames.append(out)
         self.phase.expect("Hello")
         return [out]
@@ -93,12 +94,12 @@ class Handshake:
     def on(self, data: bytes) -> list[bytes]:
         if self.done or not self.frames:
             raise Refused("out-of-phase", "a frame outside the handshake's exchange")
-        msg = self.phase.check(REGISTRY.decode(data))
+        msg = self.phase.check(decode(REGISTRY, data))
         if msg.type == "Hello":
             self._check(msg.fields)
             self.frames.append(bytes(data))
             self.peer_hello = dict(msg.fields)
-            sig = REGISTRY.encode(Message("Signature", body=bytes(self.key.sign(signed(self.party, *self._hellos())))))
+            sig = encode(REGISTRY, Message("Signature", body=bytes(self.key.sign(signed(self.party, *self._hellos())))))
             self.frames.append(sig)
             self.phase.expect("Signature")
             return [sig]

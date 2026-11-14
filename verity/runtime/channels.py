@@ -8,7 +8,7 @@ and channel:
   the live party sends must be what it received, or the run stops at the first divergence (`Refused('divergence')`);
 - `Adversary`: drops, delays, reorders or corrupts what one end sends, each by its seed.
 
-A pipe never parses: the runtime parses what `take` returns with the wire (`verity.channel`), as adversarial. A stream
+A pipe never parses: the runtime parses what `take` returns (`framing`), as adversarial. A stream
 that ends inside a frame, or announces one past its bounds, yields the bytes it has as the frame, which the wire refuses
 by name, and the pipe ends there. A stream that fails (a reset, a send to a peer gone, a connect reset or refused)
 keeps what failed as `ended`, which the runtime records: in the `Closed` it tells the party, so in its transcript, and in
@@ -24,8 +24,9 @@ import socket
 from collections import deque
 from typing import Protocol
 
-from verity.channel import HEADER, MAX_HEAD, FrameReader, Refused
+from verity.channel import MAX_HEAD, Refused
 
+from .framing import HEADER, FrameReader
 from .sources import VirtualTime
 from .transcript import PartyLog
 
