@@ -1992,8 +1992,9 @@ def test_h1_hashes_with_numpy_and_says_why_where_cuda_is_there_and_its_kernels_d
     monkeypatch.setattr(RGD, "nvcc", lambda: None)
     with pytest.warns(RuntimeWarning) as said:
         assert RGD.available.__wrapped__() is False
-    assert [str(w.message) for w in said] == ["H1's registered values hash with NumPy: the GPU path doesn't build here "
-                                              "(RuntimeError: no nvcc (pouw_device.TOOLCHAIN, or on the path))"]
+    why = ("H1's registered values hash with NumPy: the GPU path doesn't build here "
+           "(RuntimeError: no nvcc (pouw_device.TOOLCHAIN, or on the path))")
+    assert [str(w.message) for w in said] == [why]
     monkeypatch.setattr(RGD.RTD.DeviceLibrary, "of", lambda *asked: built.append(asked[1:]))
     assert RGD.available.__wrapped__() is True and built == [(0, RGD.device_lib, "rr_midstates")]
 
