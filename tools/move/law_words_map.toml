@@ -95,5 +95,5 @@ exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.p
            "tests/test_lean_vocabulary.py", "tools/verity/check/tests/test_move_check.py"]
 
 [keep]
-patterns = ['"[a-z0-9_./-]*laws?[a-z0-9_./-]*"', "'[a-z0-9_./-]*laws?[a-z0-9_./-]*'", 'note:[\w./-]+', 'art:[0-9a-f]+',
+patterns = ['"[a-z0-9_-]*laws?[a-z0-9_-]*"', "'[a-z0-9_-]*laws?[a-z0-9_-]*'", 'note:[\w./-]+', 'art:[0-9a-f]+',
             'cursor/[\w./-]+']
