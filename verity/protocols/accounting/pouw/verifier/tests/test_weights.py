@@ -10,15 +10,17 @@ import struct
 import numpy as np
 import pytest
 
-from verity.hardware import registration as Reg
-from verity.protocols.accounting.pouw.verifier import weights as Wt
-from verity.protocols.accounting.pouw.verifier.audit import chacha20_block, hm96_salt
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.commitments import hm96
+from verity.commitments.crypto import chacha20
 from verity.commitments.hm96 import batch as hm96_batch
 from verity.commitments.merkle import tree_levels
 from verity.commitments.rowleaf import sha512_row_v2_digest
-from verity.commitments.crypto import chacha20
+from verity.hardware import registration as Reg
+from verity.protocols.accounting.pouw.verifier import audit, core_check
+from verity.protocols.accounting.pouw.verifier import weights as Wt
+from verity.protocols.accounting.pouw.verifier.audit import chacha20_block, hm96_salt
+from verity.protocols.accounting.pouw.verifier.protocol import fold_roots, tagged
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 CIRCUIT = "ab" * 64
 PREFIX = "h1/"
@@ -103,13 +105,17 @@ def test_the_weights_root_is_pouws_view_of_theta():
 
 def test_a_changed_code_scale_or_key_moves_the_root():
     shapes, rows = model()
-    base = Wt.weights_root(Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY))
+
+    def root(rows_of: list[list[bytes]], key: bytes) -> bytes:
+        return Wt.weights_root(Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows_of[w], key))
+
+    base = root(rows, KEY)
     code = [list(r) for r in rows]
     code[1][2] = bytes([code[1][2][0] ^ 1]) + code[1][2][1:]
     scale = [list(r) for r in rows]
     scale[3][0] = scale[3][0][:-1] + bytes([scale[3][0][-1] ^ 0x80])
     for other, key in ((code, KEY), (scale, KEY), (rows, bytes(32))):
-        assert Wt.weights_root(Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: other[w], key)) != base
+        assert root(other, key) != base
 
 
 def test_refuses_rows_of_another_width_or_count():
@@ -238,9 +244,6 @@ def test_every_weights_root_is_one_fold():
     """H1's `weights_root`, an epoch's `audit.weights_root` and `core_check.weights_root` under each coin scheme are
     `protocol.fold_roots` at their own tag (truncated as the scheme keeps it): one fold of registered roots, at the same
     bytes as each one's own spelling of it."""
-    from verity.protocols.accounting.pouw.verifier import audit, core_check
-    from verity.protocols.accounting.pouw.verifier.protocol import fold_roots, tagged
-
     roots = {12: bytes(range(64)), 8: bytes(64), 30: b"\x7f" * 64}
 
     def spelled(tag: str) -> bytes:

@@ -423,9 +423,12 @@ y_(i,p)     sketch-sha512, the default: SHA512(Z("verity/remote-bandwidth/sketch
             e_(i,j))
 S_(t,i)     sketch-sha512's k_s × 4096 signs, k_s the registration's rows (16 or 64), ctx = {"tag": "sketch-sha512",
             "k": k_s, "n": 4096}: at 16, K = derive(seed_(t,i), "verity/remote-bandwidth/sketch-signs/v0", ctx), 32
-            bytes; at 64, K = derive_wide(seed_(t,i), "verity/remote-bandwidth/sketch-signs/v1", ctx), all 64 of
-            SHA-512's; row c the first 512 bytes of K.stream(("row", c)), bit u (byte u // 8, LSB first) 1 → −1 and
-            0 → +1
+            bytes; at 64, K = derive_wide(seed_(t,i), "verity/remote-bandwidth/sketch-signs/v1", ctx), all 64 bytes
+            of SHA512("verity/randomness/derive-wide/v1\0" ‖ frame(seed_(t,i)) ‖ frame(domain) ‖ frame(ctx)), a
+            238-byte message (two compressions); row c the first 512 bytes of K.stream(("row", c)), at 64 a
+            WideKey's: block b = SHA512("verity/randomness/stream-wide/v1\0" ‖ K ‖ frames(("row", c)) ‖ u64be b), a
+            136-byte message (two compressions) whose 128-byte head before the counter is one SHA-512 block at every
+            row 0 to 63; bit u (byte u // 8, LSB first) 1 → −1 and 0 → +1
 σ_(i,j)     S_(t,i) · e, e the 4096 bytes of e_(i,j) as int8, over the integers (|σ[c]| ≤ 2^19): k_s int32
             little-endian, 64 bytes at 16 rows and 256 at 64
 spread(z)   z over 4096 bytes: byte u of z XORed into byte u mod 4096 (folded), or a shorter z repeated
@@ -1605,7 +1608,7 @@ Per pass \(i\), after root \(i-1\):
 seed_i     the audit's (receipts.seed): SHA512(SEED_DOMAIN ‖ chal_t ‖ u32be i ‖ root_(t,i−1)), 64 bytes
 S_i        k_s rows (16) of 1,028 bytes, from seed_i on the host: K = derive(seed_i,
            "verity/remote-bandwidth/sketch-signs/v0", {"tag": "sketch-sha512", "k": k_s, "n": 8224}) (at 64 rows,
-           derive_wide under ".../sketch-signs/v1", as S_(t,i)'s; receipts.sign_key), row c =
+           derive_wide under ".../sketch-signs/v1" and its WideKey's stream, as S_(t,i)'s; receipts.sign_key), row c =
            K.stream(("row", c), 1028) (verity.commitments.randomness); bit x of a row (byte x // 8, bit x % 8, LSB first) is
            the sign of the unit's byte x: 1 → −1, 0 → +1
 ~~~

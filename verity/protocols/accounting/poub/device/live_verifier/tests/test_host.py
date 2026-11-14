@@ -738,15 +738,20 @@ def test_a_party_is_killed_when_its_minutes_run_out_and_its_log_says_so(tmp_path
     assert json.loads(log.read_bytes().splitlines()[-1]) == {"killed": "the session's 2 min ran out"}
 
 
-def test_party_log_reads_the_sessions_and_each_ones_stdout_as_the_host_kept_it_for_any_key(svc):
+def test_party_log_is_refused_over_ssh_to_every_key_and_read_by_root_on_the_host(svc):
     (rc, _), _ = party(svc, ["wipe_party", "--reads", "64"], out=b'{"listening": 47611}\n{"window": {"t0": "a", "t1": "b"}}\n')
-    rc, out = call(svc, ["party_log", "wipe"], key="-")
+    log = json.loads((svc.parties / "wipe" / "requests.jsonl").read_text().splitlines()[0])["log"]
+    for name, _, _ in H.PARTIES.values():
+        for key in ("-", LANE):
+            for words in (["party_log", name], ["party_log", name, log]):
+                assert refused(call(svc, words, key=key)) == H.PARTY_LOG_REFUSED
+    rc, out = gate(svc, ["party_log", "wipe"])
     sessions = json.loads(out)["sessions"]
-    assert rc == 0 and [s.get("rc") for s in sessions] == [None, 0]
-    rc, out = call(svc, ["party_log", "wipe", sessions[0]["log"]], key="-")
+    assert rc == 0 and [s.get("rc") for s in sessions] == [None, 0] and sessions[0]["log"] == log
+    rc, out = gate(svc, ["party_log", "wipe", log])
     assert rc == 0 and json.loads(out)["lines"] == [{"listening": 47611}, {"window": {"t0": "a", "t1": "b"}}]
-    assert "party_log" in refused(call(svc, ["party_log", "wipe", "../../etc/passwd"], key="-"))
-    assert "no session log" in refused(call(svc, ["party_log", "pous", "20261026T000000Z.jsonl"], key="-"))
+    assert "party_log" in refused(gate(svc, ["party_log", "wipe", "../../etc/passwd"]))
+    assert "no session log" in refused(gate(svc, ["party_log", "pous", "20261026T000000Z.jsonl"]))
 
 
 def test_bw_party_runs_with_the_registration_the_host_names_and_no_lane_flag(svc):

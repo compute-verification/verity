@@ -93,7 +93,7 @@ def Registration.checkPath (r : Registration) (j : Nat) (block : ByteArray) (pat
 /-- `receipts.sign_bits(seed, rows, 8224)`: S_i's rows of 1,028 bytes. -/
 def unitSigns (seed : ByteArray) (rows : Nat) : Array ByteArray :=
   let key := signKey seed rows UNIT_BYTES
-  (Array.range rows).map fun c => FlockSoundness.Randomness.stream key [.str "row", .int c] (UNIT_BYTES / 8)
+  (Array.range rows).map fun c => signStream rows key [.str "row", .int c] (UNIT_BYTES / 8)
 
 private def int8 (x : UInt8) : Int := if x.toNat ≥ 128 then (x.toNat : Int) - 256 else x.toNat
 

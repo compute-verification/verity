@@ -29,6 +29,7 @@ order = [
     ["verity/protocols/accounting/pous"],
     ["verity/protocols/accounting/poub"],
     ["verity/protocols/accounting/pouw"],
+    ["verity/protocols/experimental"],
     ["verity/protocols/policy/inference_only"],
     ["verity/protocols/accounting/certifier"],
     ["verity/protocols/compose/verifier"],
@@ -123,13 +124,6 @@ loader = "verity/protocols/compose"
 loaded = "benchmarks"
 files = [
     "verity/protocols/compose/device/live_challenger/auditor.py",
-]
-
-[[against]]
-loader = "adapters"
-loaded = "tools"
-files = [
-    "adapters/vllm/tools/migrate/superseded_quarantine.py",
 ]
 
 [[against]]
@@ -336,19 +330,20 @@ reaches = [
     "verity/channel.py",
 ]
 loaded_by = [
+    "verity/hardware/lean.py",
+    "verity/hardware/tests/test_cards.py",
+    "verity/hardware/tests/test_lean.py",
     "verity/hardware/tests/test_nodes.py",
+    "verity/hardware/tests/test_policy.py",
 ]
 
 [[place]]
 paths = [
     "verity/hardware",
 ]
-
-[[place]]
-paths = [
-    "verity/hardware/record.py",
+loads = [
+    "verity/device.py",
 ]
-trusted = true
 
 [[place]]
 paths = [
@@ -363,12 +358,6 @@ reaches = [
     "verity/channel.py",
     "verity/device.py",
 ]
-
-[[place]]
-paths = [
-    "verity/periods",
-]
-trusted = true
 
 [[place]]
 paths = [
@@ -391,10 +380,12 @@ paths = [
     "verity/protocols/accounting/certifier/verifier",
 ]
 loads = [
+    "verity/channel.py",
     "verity/circuits",
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/protocols/proofs/spot/verifier",
+    "verity/runtime",
 ]
 reaches = [
     "verity/channel.py",
@@ -403,7 +394,6 @@ reaches = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/hardware/record.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/runtime",
@@ -437,7 +427,6 @@ loads = [
     "verity/protocols/accounting/pous/verifier",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
-    "verity/protocols/reporting.py",
     "verity/runtime",
 ]
 reaches = [
@@ -447,12 +436,9 @@ reaches = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/hardware/record.py",
-    "verity/periods",
     "verity/protocols/accounting/pous/verifier",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
-    "verity/protocols/reporting.py",
     "verity/runtime",
 ]
 loaded_by = [
@@ -482,13 +468,10 @@ reaches = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/hardware/record.py",
-    "verity/periods",
     "verity/protocols/accounting/poub/verifier",
     "verity/protocols/accounting/pous/verifier",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
-    "verity/protocols/reporting.py",
     "verity/runtime",
 ]
 
@@ -508,9 +491,7 @@ reaches = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/periods",
     "verity/protocols/accounting/pous/verifier",
-    "verity/protocols/reporting.py",
     "verity/runtime",
 ]
 
@@ -535,8 +516,6 @@ loads = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/periods",
-    "verity/protocols/reporting.py",
     "verity/runtime",
 ]
 reaches = [
@@ -546,8 +525,6 @@ reaches = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/periods",
-    "verity/protocols/reporting.py",
     "verity/runtime",
 ]
 loaded_by = [
@@ -593,7 +570,6 @@ reaches = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/hardware/record.py",
     "verity/protocols/proofs/spot/verifier",
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/runtime",
@@ -634,7 +610,25 @@ trusted = true
 
 [[place]]
 paths = [
+    "verity/protocols/experimental",
+]
+loads = [
+    "verity/circuits",
+    "verity/circuits/silicon",
+    "verity/commitments",
+    "verity/protocols/accounting/pouw/prover",
+]
+
+[[place]]
+paths = [
     "verity/protocols/policy/inference_only/verifier",
+]
+loads = [
+    "verity/runtime",
+]
+reaches = [
+    "verity/channel.py",
+    "verity/runtime",
 ]
 
 [[place]]
@@ -666,7 +660,6 @@ loads = [
     "verity/claims",
     "verity/commitments",
     "verity/commitments/randomness",
-    "verity/hardware/record.py",
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/runtime",
 ]
@@ -677,7 +670,6 @@ reaches = [
     "verity/commitments",
     "verity/commitments/crypto",
     "verity/commitments/randomness",
-    "verity/hardware/record.py",
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/runtime",
 ]
@@ -751,12 +743,6 @@ loaded_by = [
 
 [[place]]
 paths = [
-    "verity/protocols/reporting.py",
-]
-trusted = true
-
-[[place]]
-paths = [
     "verity/protocols/tests",
 ]
 trusted = true
@@ -767,6 +753,8 @@ paths = [
     "verity/config.py",
     "verity/party.py",
     "verity/protocol.py",
+    "verity/tests/tests/test_periods.py",
+    "verity/tests/tests/test_periods_difftest.py",
 ]
 trusted = true
 loads = [

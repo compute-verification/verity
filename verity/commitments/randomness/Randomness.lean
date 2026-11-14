@@ -15,11 +15,13 @@ FIPS 180-4 SHA-512 (`Flock.Sha512.hash`). The Python is tied to them by vectors:
   concatenates them, and frames the result as bytes.
 * `derive`: the first 32 bytes of `SHA-512("verity/randomness/derive/v2\0" || frame(source) || frame(domain) ||
   frame(ctx))`, `ctx` the context's `frame(key) || frame(value)` sorted by key.
-* `deriveWide`: `derive_wide`, all 64 bytes of `derive`'s SHA-512.
 * `block`, `stream`: block `c` of index `ι` is `SHA-512("verity/randomness/stream/v2\0" || key || frames(ι) || c as 8
-  bytes big-endian)`, all 64 bytes, and `stream key ι n` the first `n` bytes of the blocks' concatenation; `key` is
-  `derive`'s 32 bytes or `deriveWide`'s 64.
+  bytes big-endian)`, all 64 bytes, and `stream key ι n` the first `n` bytes of the blocks' concatenation.
 * `shard`: the first 32 bytes of `SHA-512("verity/randomness/shard/v2\0" || key || frames(ι))`.
+* `deriveWide`, `blockWide`, `streamWide`: `derive_wide` and a `WideKey`'s `stream`, all 64 bytes of
+  `SHA-512("verity/randomness/derive-wide/v1\0" || frame(source) || frame(domain) || frame(ctx))`, and block `c` of index
+  `ι` `SHA-512("verity/randomness/stream-wide/v1\0" || key || frames(ι) || c as 8 bytes big-endian)`: `derive`, `block`
+  and `stream` under tags of their own, a wide key's 64 bytes in the key's place.
 * `uniformOn n s`: `Key._uniform`'s reduction, which is `Flock.Draw.uniform` from the start of `s`: `none` when `s` runs
   out, which the Python's unbounded stream never does.
 * `subsetOn k n streams`, `subset`: `Key.subset`'s sparse partial Fisher–Yates, swap `i` drawing `uniformOn (n − i)` on
@@ -58,19 +60,14 @@ def frames (index : List Part) : ByteArray := frame (.bytes (index.foldl (fun ac
 def DERIVE : ByteArray := "verity/randomness/derive/v2".toUTF8.push 0
 def STREAM : ByteArray := "verity/randomness/stream/v2".toUTF8.push 0
 def SHARD : ByteArray := "verity/randomness/shard/v2".toUTF8.push 0
+def DERIVE_WIDE : ByteArray := "verity/randomness/derive-wide/v1".toUTF8.push 0
+def STREAM_WIDE : ByteArray := "verity/randomness/stream-wide/v1".toUTF8.push 0
 
 /-- `derive(source, domain, context)`: the context's pairs framed in key order, the 32-byte key SHA-512's first half. -/
 def derive (source : ByteArray) (domain : String) (context : List (String × Part)) : ByteArray :=
   let ctx := ((context.toArray.qsort fun a b => a.1 < b.1).toList.foldl
     (fun acc kv => acc ++ frame (.str kv.1) ++ frame kv.2) ByteArray.empty)
   (Flock.Sha512.hash (DERIVE ++ frame (.bytes source) ++ frame (.str domain) ++ frame (.bytes ctx))).extract 0 32
-
-/-- `derive_wide(source, domain, context)`: `derive`'s SHA-512 uncut, a 64-byte key, which `block` and `stream` take
-in the key's place. -/
-def deriveWide (source : ByteArray) (domain : String) (context : List (String × Part)) : ByteArray :=
-  let ctx := ((context.toArray.qsort fun a b => a.1 < b.1).toList.foldl
-    (fun acc kv => acc ++ frame (.str kv.1) ++ frame kv.2) ByteArray.empty)
-  Flock.Sha512.hash (DERIVE ++ frame (.bytes source) ++ frame (.str domain) ++ frame (.bytes ctx))
 
 /-- Block `c` of the counter-mode stream at `index`, 64 bytes. -/
 def block (key : ByteArray) (index : List Part) (c : Nat) : ByteArray :=
@@ -82,6 +79,20 @@ def stream (key : ByteArray) (index : List Part) (n : Nat) : ByteArray :=
 
 /-- `Key.shard(index)`: a 32-byte key, SHA-512's first half. -/
 def shard (key : ByteArray) (index : List Part) : ByteArray := (Flock.Sha512.hash (SHARD ++ key ++ frames index)).extract 0 32
+
+/-- `derive_wide(source, domain, context)`: `derive`'s message under `DERIVE_WIDE`, a 64-byte key, SHA-512 whole. -/
+def deriveWide (source : ByteArray) (domain : String) (context : List (String × Part)) : ByteArray :=
+  let ctx := ((context.toArray.qsort fun a b => a.1 < b.1).toList.foldl
+    (fun acc kv => acc ++ frame (.str kv.1) ++ frame kv.2) ByteArray.empty)
+  Flock.Sha512.hash (DERIVE_WIDE ++ frame (.bytes source) ++ frame (.str domain) ++ frame (.bytes ctx))
+
+/-- Block `c` of a `WideKey`'s counter-mode stream at `index`, 64 bytes. -/
+def blockWide (key : ByteArray) (index : List Part) (c : Nat) : ByteArray :=
+  Flock.Sha512.hash (STREAM_WIDE ++ key ++ frames index ++ be8 c)
+
+/-- `WideKey.stream(index, n)`: the first `n` bytes of the wide stream at `index`. -/
+def streamWide (key : ByteArray) (index : List Part) (n : Nat) : ByteArray :=
+  ((List.range ((n + 63) / 64)).foldl (fun acc c => acc ++ blockWide key index c) ByteArray.empty).extract 0 n
 
 /-- `Key._uniform`'s reduction on the stream `s`, from its start. -/
 def uniformOn (n : Nat) (s : ByteArray) : Option Nat := (Flock.Draw.uniform n s (s.size + 1) 0).map (·.1)

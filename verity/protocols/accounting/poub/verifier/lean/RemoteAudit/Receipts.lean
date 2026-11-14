@@ -16,7 +16,7 @@ y_(i,p)       sketch-sha512: SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed)) ‖
               block-sha512: SHA512(Z(RECEIPT_DOMAIN ‖ frame(seed)) ‖ u64be j ‖ E_j)
 S_i           k_s rows of 4096 signs: K = derive(seed, SIGN_DOMAIN, ctx) at 16 rows, deriveWide(seed, SIGN_DOMAIN_WIDE,
               ctx) at 64, ctx = {"tag": "sketch-sha512", "k": k_s, "n": 4096}; row c the first 512 bytes of
-              K.stream(("row", c)), bit u (byte u / 8, LSB first) 1 → −1
+              K.stream(("row", c)) (streamWide at 64), bit u (byte u / 8, LSB first) 1 → −1
 σ_(i,j)       S_i · E_j over the block's bytes as int8, k_s int32 little-endian
 leaf c        y_(16c) ‖ … ‖ y_(16c+15) (the last leaf short), committed as hm96-sha512/row/v2:
               hm96 tree_leaf(key, commit_string(key, sha512/row/v2(leaf), salt))
@@ -94,10 +94,15 @@ def signKey (seed : ByteArray) (rows width : Nat) : ByteArray :=
   if rows = WIDE_ROWS then FlockSoundness.Randomness.deriveWide seed SIGN_DOMAIN_WIDE ctx
   else FlockSoundness.Randomness.derive seed SIGN_DOMAIN ctx
 
+/-- `sign_key(seed, rows, width).stream(index, n)`: a `WideKey`'s stream at `WIDE_ROWS`, a `Key`'s else. -/
+def signStream (rows : Nat) (key : ByteArray) (index : List FlockSoundness.Randomness.Part) (n : Nat) : ByteArray :=
+  if rows = WIDE_ROWS then FlockSoundness.Randomness.streamWide key index n
+  else FlockSoundness.Randomness.stream key index n
+
 /-- `sign_bits(seed, rows)`: `rows` rows of 512 bytes. -/
 def signBits (seed : ByteArray) (rows : Nat) : Array ByteArray :=
   let key := signKey seed rows Codec.BLOCK_BYTES
-  (Array.range rows).map fun c => FlockSoundness.Randomness.stream key [.str "row", .int c] (Codec.BLOCK_BYTES / 8)
+  (Array.range rows).map fun c => signStream rows key [.str "row", .int c] (Codec.BLOCK_BYTES / 8)
 
 private def int8 (x : UInt8) : Int := if x.toNat ≥ 128 then (x.toNat : Int) - 256 else x.toNat
 
