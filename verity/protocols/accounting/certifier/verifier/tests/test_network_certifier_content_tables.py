@@ -510,6 +510,78 @@ def test_an_execution_phase_a_longer_request_reached_releases_only_what_its_clas
     assert phases() == [(2, [0, 0, 1, 0], 0)]
 
 
+#: the form-2 schedule with each P listed once, one O for every class and a response cap: one that can be tied
+ONCE = ((4, 8), (16, 8), (128, 8))
+TIED = dataclasses.replace(HELD, content=ONCE, max_tokens_cap=8)
+
+
+def test_a_schedule_can_be_tied_with_each_p_once_one_o_and_a_response_cap_and_is_a_schedule_without_them():
+    """The word a tie and a charge read of a schedule (`content_rows.can_be_tied`): each P listed once, one O for
+    every class and a response cap, under either form of the lengths rows and in any order of the classes.
+    `untied` says which of them a schedule lacks. The word refuses no schedule: one that can't be tied is built
+    and its hand laid as it was. A cap past the one O is no schedule's, by the schedule's own check of its
+    largest class, so the word has no such case."""
+    assert CT.can_be_tied(TIED) and CT.untied(TIED) is None
+    for other in (dataclasses.replace(TIED, max_tokens_cap=3), dataclasses.replace(TIED, content=ONCE[::-1]),
+                  dataclasses.replace(CON, content=tuple((*c, 2) for c in ONCE), max_tokens_cap=8)):
+        assert CT.can_be_tied(other), other.content
+    twice = "it lists P=128 prompt ids in classes 2, 3, and a release's class is told by its request's length alone"
+    for schedule, why in ((LEN, "it has no content rows, so no class to tie"),
+                          (dataclasses.replace(TIED, content=(*ONCE, (16, 8))), "it lists P=16 prompt ids in classes 1, 3"),
+                          (dataclasses.replace(TIED, content=((4, 4), (16, 8), (128, 8))),
+                           "its classes hold O=4, 8 ids, and a tied schedule's response rows have one width"),
+                          (dataclasses.replace(TIED, max_tokens_cap=None), "it has no response cap (max_tokens_cap)"),
+                          (HELD, twice), (CON, twice)):
+        assert not CT.can_be_tied(schedule) and CT.untied(schedule).startswith(why), why
+    with pytest.raises(ValueError, match="hold at most O=4 ids, and a response of the schedule releases up to 8"):
+        dataclasses.replace(TIED, content=tuple((P, 4) for P, _ in ONCE))
+    assert CT.classes(HELD) == HELD.content and CT.classes(CON) == CON.content
+
+
+def test_a_ties_shape_is_taken_only_from_a_schedule_that_can_be_tied_and_is_its_one_os():
+    """The response tie reads the word where it takes a shape from a schedule (`response_tie.tied`): a tied
+    class's proof block has the one O every class of the schedule has, in a stop class or a no-stop class. No
+    shape is taken from a schedule that can't be tied, and the refusal says what keeps the schedule from it."""
+    for stop in (True, False):
+        assert RT.tied(TIED, stop) == RT.Shape(8, stop)
+        assert RT.tied(dataclasses.replace(TIED, content=tuple((P, 4) for P, _ in ONCE), max_tokens_cap=4),
+                       stop) == RT.Shape(4, stop)
+        for schedule in (HELD, CON, LEN, dataclasses.replace(TIED, max_tokens_cap=None)):
+            with pytest.raises(ValueError) as refused:
+                RT.tied(schedule, stop)
+            assert str(refused.value) == f"no class of the schedule is tied: {CT.untied(schedule)}"
+    with pytest.raises(ValueError, match="a stop class \\(True\\) or a no-stop class \\(False\\)"):
+        RT.tied(TIED, 1)
+
+
+def test_a_class_of_a_schedule_that_cant_be_tied_is_charged_its_whole_schedule_where_the_schedule_is_handed(loads):
+    """`class_charge.charge` reads the word where it is handed the head's schedule. A class of a schedule that can
+    be tied is charged below its schedule on its four verdicts, as it is with no schedule handed. A class of one
+    that can't be is at its whole schedule on the same four, and the line says what keeps the schedule from it. A
+    schedule that is not the head's is refused, by the parameters' digest the head holds."""
+    for schedule, why in ((TIED, ""), (HELD, CT.untied(HELD)), (dataclasses.replace(TIED, max_tokens_cap=None),
+                                                                "it has no response cap (max_tokens_cap), so a "
+                                                                "released request may ask for more ids than a class "
+                                                                "holds")):
+        head = CR.Rows.commit(LINK, 0, CR.tables(schedule, loads["first"]), schedule, signers.SESSION).head
+        cls = next(i for i in range(len(schedule.content)) if CC.count(head, i))
+        got, bare = CC.charge(head, cls, four(cls, head), schedule), CC.charge(head, cls, four(cls, head))
+        assert (bare.below, bare.untied) == (True, "")
+        assert (got.below, got.untied, got.owed, got.differ) == (not why, why, (), ())
+        assert got.schedules == (got.count if why else 0) and got.read == bare.read
+        if why:
+            assert got.why() == (f"class {cls}: charged its whole schedule on each of its {got.count} rows: its "
+                                 f"schedule can't be tied: {why}")
+        # a verdict that doesn't count is named beside it, and a class of no row owes nothing either way
+        less = CC.charge(head, cls, {k: v for k, v in four(cls, head).items() if k != CC.RESPONSE_TIE}, schedule)
+        assert (less.below, less.untied, less.owed) == (False, why, ((CC.RESPONSE_TIE, CC.MISSING, ()),))
+        empty = next(i for i in range(len(schedule.content)) if not CC.count(head, i))
+        assert (CC.charge(head, empty, {}, schedule).below, CC.charge(head, empty, {}, schedule).untied) == (False, "")
+        with pytest.raises(ValueError, match="the schedule handed has the parameters' digest .* a class is charged "
+                                             "by its own head's schedule"):
+            CC.charge(head, cls, four(cls, head), dataclasses.replace(schedule, max_tokens_cap=2))
+
+
 def test_a_schedule_is_refused_unless_a_class_of_its_largest_p_holds_the_most_ids_a_response_releases():
     """A release is filed in the first class that holds its request and its ids, and the longest request ingress
     admits is one that only a class of the largest P holds. So a schedule is refused unless such a class holds the

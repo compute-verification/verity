@@ -2186,6 +2186,11 @@ prompt ids and a size of ids released, each a power of two.
   bound", below), and a release filed in it past them is refused, naming the release, the class and R
   (`content_rows.tables`): releases with one past R are no execution phase's of the schedule, so none of their
   tables is laid and no head is signed over them.
+- **A schedule that can be tied** (`content_rows.can_be_tied`) lists each P once, has one O for every class and
+  has a response cap, which is then at most that O. It is a word about a schedule and no refusal of one: a schedule
+  that fails it is built and served as any other, and none of its classes is tied. The response tie takes a shape
+  from a schedule only by it (`response_tie.tied`), and the rule that charges a class leaves a class of such a
+  schedule at its whole schedule where it is handed the schedule (`class_charge.charge`).
 - **A row of zero bytes** is what every row past the held ones is under form 1 (`content_rows.empty_rows`). As a
   request row it reads as no request: a held row's byte count is at least 1, and `request_of` refuses it. As a
   response row it reads as no ids, and as an end row as an `END` after no `DATA` cell. So an unheld row and a held

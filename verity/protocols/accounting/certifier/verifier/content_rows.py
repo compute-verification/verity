@@ -120,6 +120,22 @@ network certifier that has no content row. The rule reads the release's end as t
 no server can compute: which releases a class holds is the network certifier's to say. Under form 1 the rule reads
 no end, and such a release has its rows.
 
+**A schedule that can be tied** (`can_be_tied`; `untied` says what keeps one from it). A class is tied where a
+response tie's proof block returns each of its response rows (`certifier.prover.response_tie`). Three things of
+the schedule are needed for that, whatever a run holds:
+
+- each P is listed once, so a release's class is told by its request's length alone;
+- every class has one O, so a response row has one width, the one the compute side commits its ids at. The
+  schedule doesn't know that width: that the O is it is held where a tie's statement is made, since a row of
+  another width is another committed value;
+- it has a response cap, so a released request asks for at most the cap. The cap is then at most that O: a
+  schedule whose response releases more ids than a class of its largest P holds is refused ("The classes").
+
+This is a word about a schedule and no refusal of one: a schedule that fails it is built and served as any other,
+none of its classes is tied, and each is charged its whole schedule. It is read where a tie's shape is taken from
+a schedule (`response_tie.tied`) and where a class is charged by the schedule its head names
+(`class_charge.charge`).
+
 **A row of zero bytes** is what every table of form 1 holds where no release is filed (`empty_rows`, the one
 statement of it), and each table's decoder reads it its own way. `request_of` refuses it: its count is 0, and a
 released request has a byte. `response_of` reads a response of no id, and `end_of` an `END` after no `DATA` cell. So
@@ -391,6 +407,32 @@ def classes(params: WardenParams) -> tuple[tuple[int, ...], ...]:
     return tuple(out)
 
 
+def untied(params: WardenParams) -> str | None:
+    """What keeps the schedule's classes from being tied (the module docstring's "A schedule that can be tied"), or
+    None where nothing does: it has no content rows, it lists a P in two classes, its classes have two O's, or it
+    has no response cap."""
+    listed = sized(params)
+    if not listed:
+        return "it has no content rows, so no class to tie"
+    sizes = [P for P, _, _ in listed]
+    if twice := [P for P in dict.fromkeys(sizes) if sizes.count(P) > 1]:
+        at = ", ".join(str(i) for i, P in enumerate(sizes) if P == twice[0])
+        return (f"it lists P={twice[0]} prompt ids in classes {at}, and a release's class is told by its "
+                f"request's length alone only where each P is listed once")
+    if len(widths := sorted({O for _, O, _ in listed})) > 1:
+        return (f"its classes hold O={', '.join(map(str, widths))} ids, and a tied schedule's response rows have "
+                f"one width, one O for every class")
+    if params.max_tokens_cap is None:
+        return ("it has no response cap (max_tokens_cap), so a released request may ask for more ids than a "
+                "class holds")
+    return None
+
+
+def can_be_tied(params: WardenParams) -> bool:
+    """Whether the schedule can be tied: nothing keeps its classes from it (`untied`)."""
+    return untied(params) is None
+
+
 def most_classes(params: WardenParams) -> int:
     """The most classes a schedule lists: the head counts its tables in a u16, and after `lengths` and `fails` a
     class has three of them (`MOST_CLASSES`), or four in a schedule with request words."""
@@ -541,8 +583,8 @@ def filed(params: WardenParams, released: Sequence[Released],
 
 
 __all__ = ["END", "END_BYTES", "END_SLOT", "ENDED", "FAILED", "MIN_SIZE", "MOST_CLASSES", "NO_COUNT", "REQUEST",
-           "RESPONSE", "TIE_WORDS", "U32_BYTES", "WORDS", "WORDS_BYTES", "WORDS_ROW", "check_ids", "check_size",
-           "classes", "counted", "empty_rows", "end_of", "end_row", "file", "filed", "held", "ids_of", "layout",
-           "most_classes", "most_ids", "names", "names_of", "request_bytes", "request_of", "request_room",
+           "RESPONSE", "TIE_WORDS", "U32_BYTES", "WORDS", "WORDS_BYTES", "WORDS_ROW", "can_be_tied", "check_ids",
+           "check_size", "classes", "counted", "empty_rows", "end_of", "end_row", "file", "filed", "held", "ids_of",
+           "layout", "most_classes", "most_ids", "names", "names_of", "request_bytes", "request_of", "request_room",
            "request_row", "request_words", "response_bytes", "response_of", "response_row", "sized", "tables",
-           "tables_of", "words_name", "words_of", "words_row"]
+           "tables_of", "untied", "words_name", "words_of", "words_row"]

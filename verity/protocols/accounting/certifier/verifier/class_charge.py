@@ -67,6 +67,13 @@ Where the records name two of either, the class is at its whole schedule and `ch
 0 has no connection to charge and owes no verdict. Where the schedule fixes a class's rows whatever the load, the
 head states those rows, and the class owes its verdicts whatever it holds.
 
+**A schedule that can't be tied.** Where `charge` is handed the schedule the head names, a class of a schedule that
+can't be tied (`content_rows.can_be_tied`) is at its whole schedule whatever its verdicts say, and the line says
+what keeps the schedule from it: no tie of such a class has a statement, so a verdict that says one was accepted is
+of something else. A schedule that is not the head's, by the parameters' digest the head holds, is refused. A
+caller that hands no schedule is not held to this: the head holds the schedule's digest and none of its classes'
+sizes or its cap, so `charge` can't read the word from the head alone.
+
 `head` is the verifier's read of the registration (`connection_rows.check_registration`), which holds it to the
 network certifier's certificate; `charge` checks no signature."""
 
@@ -78,6 +85,7 @@ from typing import Any
 
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
 from verity.protocols.accounting.certifier.verifier.connection_rows import Head
+from verity.protocols.accounting.certifier.verifier.warden import WardenParams
 
 #: the four verdicts a class owes before it is charged below its schedule
 STOP_RECORD, RESPONSE_TIE, CERTIFIED_READ, COMPUTE_AUDIT = "stop record", "response tie", "certified read", "compute audit"
@@ -109,7 +117,8 @@ class ClassCharge:
     what it lacks, the runs of the records that lack it), a verdict some records refused and others withheld or
     stopped once for each; empty where `below` and where the count is 0. `read`: the class's records on this head, counted or
     not, each with the verdict it is of, in `VERDICTS`' order. `differ`: each of `ONE` that those records name more
-    than one of, with the names; empty where `below`."""
+    than one of, with the names; empty where `below`. `untied`: what keeps the schedule handed from being tied
+    (`content_rows.untied`); empty where `below`, where the count is 0 and where no schedule was handed."""
 
     cls: int
     count: int
@@ -117,6 +126,7 @@ class ClassCharge:
     owed: tuple[tuple[str, str, tuple[str, ...]], ...]
     read: tuple[tuple[str, Mapping[str, Any]], ...]
     differ: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    untied: str = ""
 
     @property
     def schedules(self) -> int:
@@ -133,6 +143,8 @@ class ClassCharge:
         lacks = [f"the {kind} is {lack}" + (f" ({', '.join(runs)})" if runs else "") for kind, lack, runs in self.owed]
         lacks += [f"its verdicts on this head name {len(names)} `{key}`s, not one ({', '.join(names)})"
                   for key, names in self.differ]
+        if self.untied:
+            lacks.append(f"its schedule can't be tied: {self.untied}")
         return f"class {self.cls}: charged its whole schedule on each of its {self.count} rows: {'; '.join(lacks)}"
 
 
@@ -228,11 +240,16 @@ A_RECORD = (f"a verdict record is an object with the fields {', '.join(FIELDS)},
             f"{', '.join(FIELDS[:3])} named, its verifier by its {' and '.join(NAMES)}, and its proved_by a name or null")
 
 
-def charge(head: Head, cls: int, records: Mapping[str, Iterable[Mapping[str, Any]]]) -> ClassCharge:
+def charge(head: Head, cls: int, records: Mapping[str, Iterable[Mapping[str, Any]]],
+           schedule: WardenParams | None = None) -> ClassCharge:
     """How class `cls` of the execution phase `head` is signed for is charged, from the verdict records given, by
     verdict: a map from each of `VERDICTS` to its records, a verdict with none left out (the module docstring's
-    "All four or none"). ValueError for a head without the class, a key that is none of the four, or a record
-    that is no verdict record (`reads`)."""
+    "All four or none"). With `schedule`, the schedule the head names, a class of one that can't be tied is at its
+    whole schedule ("A schedule that can't be tied"). ValueError for a head without the class, a key that is none
+    of the four, a record that is no verdict record (`reads`), or a schedule that is not the head's."""
+    if schedule is not None and schedule.digest != head.parameters:
+        raise ValueError(f"the schedule handed has the parameters' digest {schedule.digest.hex()}, and the head "
+                         f"names {head.parameters.hex()}: a class is charged by its own head's schedule")
     n = count(head, cls)
     other = [k for k in records if k not in VERDICTS] if isinstance(records, Mapping) else [type(records).__name__]
     if other:
@@ -261,4 +278,5 @@ def charge(head: Head, cls: int, records: Mapping[str, Iterable[Mapping[str, Any
         elif partial := [r for r in ours if r[VERDICT].get(COMPLETE) is not True]:
             owed.append((kind, NOT_COMPLETE, _runs(partial)))
     differ = tuple((key, names) for key in ONE if len(names := tuple(sorted({r[key] for _, r in read}))) > 1)
-    return ClassCharge(cls, n, not owed and not differ, tuple(owed), tuple(read), differ)
+    untied = (CT.untied(schedule) or "") if schedule is not None else ""
+    return ClassCharge(cls, n, not owed and not differ and not untied, tuple(owed), tuple(read), differ, untied)
