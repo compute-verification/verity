@@ -26,7 +26,7 @@ namespace Verity
 inductive Role where
   /-- SPOT's live challenger: sampled proofs' coins and PoUW's salts -/
   | challenger
-  /-- the memory challenger: PoUS's challenges, PoUB's draws, the wipe's labels and reads -/
+  /-- the memory challenger: PoUS's challenges, PoUB's samples, the wipe's labels and reads -/
   | memoryChallenger
   /-- a network certifier: the rows it stamps -/
   | networkCertifier

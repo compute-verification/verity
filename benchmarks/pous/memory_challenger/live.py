@@ -22,7 +22,7 @@ against C's leaf).
   (`CoinTree.draw`), and both come from `os.urandom`.  `--seed HEX` derives them from the seed instead (`seeded_session`),
   so a CPU test's samples, and with them its controls' verdicts, are the same on every run: a control's gate is a
   statistical test that real samples fail now and then.  It is refused, before any session, key or connection, unless the
-  clock is logical and the signer is the test one: a timed or LMS-signed session draws from the OS, always.  The hm96 key and
+  clock is logical and the signer is the test one: a timed or LMS-signed session samples from the OS, always.  The hm96 key and
   the salts stay fresh, and the record names the seed (`seed`).  A seeded run's session ids repeat, so a session log that
   outlives the run refuses its second one.
 - **The session log** (`--session-log FILE`, with `--signer lms`) is the memory challenger's `memory_challenger.SessionLog`:

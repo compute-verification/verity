@@ -9,10 +9,10 @@ public import PouwPearlPlus.Run
 At Pearl's Assumption 1 (`pearl_kw`), a tile that passes the rule cost its credited cells' MACs, (1 − ρ) of them at the
 scheme's cap. Over every pass's records, a record whose tiles credit any cell is one unit: its MACs are its credited cells
 at its kept width |K|, its ticket weight is those cells at the cell's ticket `wref(1, |K|, n)/n` (`clear_work.ticket_cell`
-at the H100's record), and its MACs a ticket are |K|·n/`wref(1, |K|, n)`. Of t draws by ticket weight, X_O landed on tiles
+at the H100's record), and its MACs a ticket are |K|·n/`wref(1, |K|, n)`. Of t samples by ticket weight, X_O landed on tiles
 over their inert-work bound, which are credited nothing (`over_cap` `uncredited`; under `reject` an accepted run has
 X_O = 0). Except with δ, the tiles that are wrong or over the bound hold at most ε of the tickets' weight, where ε is the
-least share such a set can hold and still draw at most X_O times with chance δ (`epsilon`; at X_O = 0, (1 − ε)^t ≤ δ). The
+least share such a set can hold and still sample at most X_O times with chance δ (`epsilon`; at X_O = 0, (1 − ε)^t ≤ δ). The
 most MACs that weight can hold, filled from the units with the most MACs a ticket, are taken off:
 
     credited = ⌊(1 − ρ) · max(macs − wrong, 0)⌋
@@ -25,10 +25,10 @@ Every quantity is exact (`Rat`), as the Python's `Fraction`s are, ε among them:
 
 namespace PouwCheck.PearlPlus
 
-/-- δ, the draw's miss probability the run is credited at (`verify_run.DELTA`). -/
+/-- δ, the sample's miss probability the run is credited at (`verify_run.DELTA`). -/
 def DELTA : Rat := mkRat 1 100
 
-/-- Σ_{i ≤ x} C(t, i) · k^i · (g − k)^(t − i): g^t times the chance that t draws at k/g land at most x times. -/
+/-- Σ_{i ≤ x} C(t, i) · k^i · (g − k)^(t − i): g^t times the chance that t samples at k/g land at most x times. -/
 def missMass (t x k g : Nat) : Nat := Id.run do
   let mut c := 1
   let mut s := 0
@@ -37,7 +37,7 @@ def missMass (t x k g : Nat) : Nat := Id.run do
     c := c * (t - i) / (i + 1)
   return s
 
-/-- `verify_run.epsilon`: the least ε on the 10⁻⁹ grid at which t draws land on a set of ε of the tickets' weight at most
+/-- `verify_run.epsilon`: the least ε on the 10⁻⁹ grid at which t samples land on a set of ε of the tickets' weight at most
 `over` times with chance at most δ (at `over` = 0, (1 − ε)^t ≤ δ), plus 10⁻⁹. -/
 def epsilon (t over : Nat) (delta : Rat) : Rat := Id.run do
   let g : Nat := 10 ^ 9
@@ -58,7 +58,7 @@ structure Credit where
   epsilon : Rat
   overCapDraws : Nat
 
-/-- `credit_at_assumption(passes, t, δ, over)`: `over` is X_O, how many of the t draws landed on a tile over its inert-work
+/-- `credit_at_assumption(passes, t, δ, over)`: `over` is X_O, how many of the t samples landed on a tile over its inert-work
 bound. -/
 def creditAtAssumption (passes : List Pass) (t over : Nat) (delta : Rat) : Credit := Id.run do
   let mut macs := 0
