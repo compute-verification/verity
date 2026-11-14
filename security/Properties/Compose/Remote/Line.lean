@@ -70,7 +70,7 @@ g = 1 is `Session.run`):
   committing zeros (`Committed.junk`), `hide_c` sample `c`'s hiding term (`Committed.hide`, hm96's, at most `n·2^-191`
   over the session's `n` samples in all), and `bind` the receipts' binding term over the session's samples
   (`Receipts.binding`: some opened receipt presented with an accepted row other than the one its root holds). The
-  openings are the deployed sample's (`Accounting.Remote.Draw`: `Key.subset` on the first blocks `prf c` gives sample
+  openings are the deployed sample's (`Accounting.Remote.Sample`: `Key.subset` on the first blocks `prf c` gives sample
   `c`'s coin, at most `receiptMax = 2^64 − 1 < 2^64` receipts a sample, the verifier's `RECEIPT_LIMIT` less one, the
   sampler's fallbacks `rest` free), at the error `Accounting.Guarantees.Remote.PooledSample` states.
 
@@ -116,8 +116,8 @@ holds from any start in `[s_0, e_0]`, which the held lemma uses.
 
 namespace Properties.Poub.Line
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions _root_.Poub.Line
+open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
+  Accounting.Remote.Sample.Assumptions _root_.Poub.Line
 
 /-- **LineChecked**: a line the code computes had a block of one or more bytes, a block's encode of one or more
 squarings, nonnegative rates and bursts, and read a nonnegative wrong receipts' bound. -/
@@ -210,12 +210,13 @@ sample `c`'s distinguisher at it with leaf `c` of the coin commitment committing
 term and `bind` the receipts' binding term at `R`, over the session's samples. -/
 def LineHeld : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
-    (rest : DrawCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → DrawCoins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → DrawCoins node.samples κ X → Finset ℕ) (com : DrawCoins node.samples κ X → Cm)
-    (T : Trace (DrawCoins node.samples κ X)) (R : Receipts node.samples κ X) (δs δnet : ℝ),
+    (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → SampleCoins node.samples κ X → Record)
+    (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
+    (com : SampleCoins node.samples κ X → Cm)
+    (T : Trace (SampleCoins node.samples κ X)) (R : Receipts node.samples κ X) (δs δnet : ℝ),
     let r := played recs com
     let F := recordCommitted node recs correct
-    ∀ (O : Outside (ofRecord T node r)) (I : Ingress (DrawCoins node.samples κ X)),
+    ∀ (O : Outside (ofRecord T node r)) (I : Ingress (SampleCoins node.samples κ X)),
     Paced (ofRecord T node r) (recordPace node r) → Covers (ofRecord T node r) →
     SketchBoundAt (ofRecord T node r) O δs → Covered (ofRecord T node r) O I →
     IngressCounted (ofRecord T node r) I δnet → (∀ c, Live (F.view c)) →

@@ -406,19 +406,19 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Remote.Draw.Assumptions.Counted": {
+  "Accounting.Remote.Sample.Assumptions.Counted": {
    "owner": "@memory-accounting",
    "digest": "7a8c819fae43610cbc75553dce53068663b261f469c9c15658421a40cbeb18e8",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Remote.Draw.Assumptions.Live": {
+  "Accounting.Remote.Sample.Assumptions.Live": {
    "owner": "@memory-accounting",
    "digest": "a8f18ca134c7c35043aacd9f71b0f2679da98d3cd7894f71707fc8d2438c0241",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Remote.Draw.Assumptions.Refused": {
+  "Accounting.Remote.Sample.Assumptions.Refused": {
    "owner": "@memory-accounting",
    "digest": "56944d0dddbb3a9e4d270e9e0e39a5c350c516cbb49a2525f7a2f68193e6408d",
    "issue": "LEAN-186",
@@ -965,9 +965,9 @@
   "Pous.Period.SecurityProofs.periodHeld": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.Instantiates"],
   "Pous.Period.SecurityProofs.periodHeldDeployed": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.Instantiates"],
   "Properties.Poub.Line.SecurityProofs.lineHeld": [
-   "Accounting.Remote.Draw.Assumptions.Counted",
-   "Accounting.Remote.Draw.Assumptions.Live",
-   "Accounting.Remote.Draw.Assumptions.Refused",
+   "Accounting.Remote.Sample.Assumptions.Counted",
+   "Accounting.Remote.Sample.Assumptions.Live",
+   "Accounting.Remote.Sample.Assumptions.Refused",
    "Accounting.Remote.Held.Assumptions.Covered",
    "Accounting.Remote.Held.Assumptions.Covers",
    "Accounting.Remote.Held.Assumptions.IngressCounted",
@@ -1071,7 +1071,7 @@
   "Evaluate.TC.Spec",
   "Evaluate.TC.Dots",
   "Evaluate.TC.Fp8Atom",
-  "VStarRecursive.Protocol",
+  "VStarRecursion.Protocol",
   "VStarRecursive.Sampled",
   "Evaluate.Prims",
   "Definitions.Core.Scalar",
@@ -2580,7 +2580,7 @@
   "Properties.Certifier.Check": {
    "imports": ["NetworkCheck.Check", "NetworkCheck.TransferBlocks", "Properties.Hash.Identity", "Lms.Sign"],
    "except": [],
-   "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
+   "why": "the properties are stated against the code's own functions, the check's and N2's execution phase verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
   },
   "Properties.Certifier.Records": {
    "imports": ["NetworkCheck.RecordsGrid", "Properties.Certifier.Check"],
@@ -2707,7 +2707,7 @@
   "Properties.Compose.Remote.Pooled": {
    "imports": ["Definitions.Accounting", "Poub"],
    "except": [],
-   "why": "the pooled bound the verifier computes (`Poub.Pooled`) and the W the memory line reads (`Poub.Line`) are stated against the draw's model they cover (`Definitions.Compose.Remote.Draw`), never a proof"
+   "why": "the pooled bound the verifier computes (`Poub.Pooled`) and the W the memory line reads (`Poub.Line`) are stated against the draw's model they cover (`Definitions.Compose.Remote.Sample`), never a proof"
   },
   "Properties.Compose.Remote.Line": {
    "imports": [
@@ -29522,7 +29522,7 @@
     "VStar.rowLine": "ab93587c702fbaa39c07489ba4bea6c2afc786fd4db8544e4db97136c0f577c1"
    }
   },
-  "VStarRecursive.Protocol": {
+  "VStarRecursion.Protocol": {
    "digest": "24c25e7e86c7a9b3f7c1147bc75bef036012f248ffa0b1416223d26adf00d5f5",
    "definitions": {
     "VStar.Recursive.Evidence": "750759ed94774839b812282e5b64d4c4f9cdff16ee8b980a1089dba40596a8f0",

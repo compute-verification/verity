@@ -128,7 +128,7 @@ theorem readUnitBinds (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) (const
 
 /-- **At an accepted run's sampled reads, each returns its table's row at its index, or SHA-512 collides on what its
 check and the table's hashed**, but with probability at most the layer below's bound. Over the run's coins `Ω`, with its
-acceptance `acc`, its sampled proof blocks `drawn` and the extractor's transcript `X`: where each read's gates compute its
+acceptance `acc`, its sampled proof blocks `sampled` and the extractor's transcript `X`: where each read's gates compute its
 reference in its unit (`GatesRefine`, a hypothesis), each read's table is committed under its root, and the run accepts
 with a sampled read's unit wrong or the read's registered rows failing in `X` with probability at most `ε`, it accepts
 with a sampled read that returns, in its unit's local evaluation of `X`, another row than its table's at its index, where
@@ -136,12 +136,12 @@ no two messages the read's check and the table's check hashed collide under `H`,
 is sampled when its unit is. -/
 theorem readUnitSampled {Ω : Type} [Fintype Ω] (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
     (consts : Fin C.N → Option Bool) {n : ℕ} {ι : Type} (P : Verity.Partition C n) (R : Reads C n ι)
-    (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (X : Ω → C.Trace) (ε : ℝ)
+    (acc : Ω → Prop) (sampled : Ω → Finset (Fin n)) (X : Ω → C.Trace) (ε : ℝ)
     (hgates : ∀ i ∈ R.reads, GatesRefine H H key consts P (R.unit i) (R.port i)) (hcommitted : R.Committed H H key)
-    (below : Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+    (below : Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
       ¬ (P.Correct (X ω) (R.unit i) ∧
         RegisteredRows consts P (R.unit i) (R.port i) (R.root i) (R.domain i) (X ω))) ≤ ε) :
-    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
       R.index i (P.localEval (X ω) (R.unit i)) < (R.port i).count ∧
       (R.port i).hOf (P.localEval (X ω) (R.unit i)) ≠
         (R.table i (R.index i (P.localEval (X ω) (R.unit i)))).row ∧
@@ -164,44 +164,44 @@ finder outputs two messages the sampled reads hashed that collide under `H`, if 
 reader's to state from the adversary it runs. -/
 theorem readUnitSampledCR {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
     (consts : Fin C.N → Option Bool) {n : ℕ} {ι : Type} (P : Verity.Partition C n) (R : Reads C n ι)
-    (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (X : Ω → C.Trace) (cost : Ω → ℕ) (ε : ℝ)
+    (acc : Ω → Prop) (sampled : Ω → Finset (Fin n)) (X : Ω → C.Trace) (cost : Ω → ℕ) (ε : ℝ)
     (hgates : ∀ i ∈ R.reads, GatesRefine H H key consts P (R.unit i) (R.port i)) (hcommitted : R.Committed H H key)
-    (below : Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+    (below : Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
       ¬ (P.Correct (X ω) (R.unit i) ∧
         RegisteredRows consts P (R.unit i) (R.port i) (R.root i) (R.domain i) (X ω))) ≤ ε)
-    (hcr : Claims.ExpectedCR (fun m => (H m).bytes) (R.finder P H key drawn X cost)) :
-    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+    (hcr : Claims.ExpectedCR (fun m => (H m).bytes) (R.finder P H key sampled X cost)) :
+    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
       R.index i (P.localEval (X ω) (R.unit i)) < (R.port i).count ∧
       (R.port i).hOf (P.localEval (X ω) (R.unit i)) ≠
         (R.table i (R.index i (P.localEval (X ω) (R.unit i)))).row) ≤
       ε + Claims.Ex (fun ω => (cost ω : ℝ)) / 2 ^ (256 : ℝ) := by
   classical
-  have hsplit : ∀ ω, (acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+  have hsplit : ∀ ω, (acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
       R.index i (P.localEval (X ω) (R.unit i)) < (R.port i).count ∧
       (R.port i).hOf (P.localEval (X ω) (R.unit i)) ≠
         (R.table i (R.index i (P.localEval (X ω) (R.unit i)))).row) →
-      (acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+      (acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
         R.index i (P.localEval (X ω) (R.unit i)) < (R.port i).count ∧
         (R.port i).hOf (P.localEval (X ω) (R.unit i)) ≠
           (R.table i (R.index i (P.localEval (X ω) (R.unit i)))).row ∧
           ¬ Hash.CollisionIn H (R.hashedAt H key i (P.localEval (X ω) (R.unit i)))) ∨
-      Hash.CollisionIn H (R.drawnHashed P H key drawn X ω) := by
+      Hash.CollisionIn H (R.sampledHashed P H key sampled X ω) := by
     rintro ω ⟨hacc, i, hi, hd, hlt, hne⟩
     by_cases hc : Hash.CollisionIn H (R.hashedAt H key i (P.localEval (X ω) (R.unit i)))
     · exact Or.inr (collisionIn_mono hc fun m hm =>
         List.mem_flatMap.2 ⟨i, Finset.mem_toList.2 (Finset.mem_filter.2 ⟨hi, hd⟩), hm⟩)
     · exact Or.inl ⟨hacc, i, hi, hd, hlt, hne, hc⟩
-  have hfind : Claims.Pr (fun ω => Hash.CollisionIn H (R.drawnHashed P H key drawn X ω)) ≤
-      (R.finder P H key drawn X cost).Pr (fun m => (H m).bytes) := by
+  have hfind : Claims.Pr (fun ω => Hash.CollisionIn H (R.sampledHashed P H key sampled X ω)) ≤
+      (R.finder P H key sampled X cost).Pr (fun m => (H m).bytes) := by
     unfold Claims.Finder.Pr
     apply Claims.Pr_mono
     intro ω h
     obtain ⟨x, hx, y, hy, hxy⟩ := h
-    have h' : ∃ x ∈ R.drawnHashed P H key drawn X ω, ∃ y ∈ R.drawnHashed P H key drawn X ω,
+    have h' : ∃ x ∈ R.sampledHashed P H key sampled X ω, ∃ y ∈ R.sampledHashed P H key sampled X ω,
         Hash.Collision (fun m => (H m).bytes) x y := ⟨x, hx, y, hy, hxy⟩
     refine ⟨h'.choose, h'.choose_spec.2.choose, ?_, h'.choose_spec.2.choose_spec.2⟩
     simp [Reads.finder, h']
   exact (Claims.Pr_mono hsplit).trans ((pr_or_le _ _).trans
-    (add_le_add (readUnitSampled H key consts P R acc drawn X ε hgates hcommitted below) (hfind.trans hcr)))
+    (add_le_add (readUnitSampled H key consts P R acc sampled X ε hgates hcommitted below) (hfind.trans hcr)))
 
 end Accounting.SecurityProofs

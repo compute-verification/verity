@@ -33,8 +33,8 @@ open private Poub.Session.live Poub.Session.cover from Poub.Session
 
 namespace Properties.Poub.Line.Honest
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions
+open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
+  Accounting.Remote.Sample.Assumptions
 
 attribute [local irreducible] zeroRoot
 
@@ -322,7 +322,7 @@ theorem groups_one : record1.groups node1 = #[group1] := by
     show record1.seen = seen1 from rfl, ofSummary_one sm hw]
 
 /-- The play: `record1` at every commitment and every coin. -/
-abbrev recs1 : Unit → DrawCoins node1.samples 0 Unit → Record := fun _ _ => record1
+abbrev recs1 : Unit → SampleCoins node1.samples 0 Unit → Record := fun _ _ => record1
 
 /-- **`record1`'s schedule is honest**: one window, one pass over `[0, 1)`, the sample's receipts the same at every
 coin, and the record's one group, of one pass from coin 0 to last root 1, spans it. -/
@@ -361,12 +361,12 @@ every coin. -/
 theorem lineHeld_accepted :
     ∃ (node : Node) (κ : ℕ) (X Cm : Type) (_ : Fintype X)
       (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
-      (rest : DrawCoins node.samples κ X → Fin node.samples → ℕ → ℕ)
-      (recs : Cm → DrawCoins node.samples κ X → Record)
-      (correct : Cm → Fin node.samples → DrawCoins node.samples κ X → Finset ℕ)
-      (com : DrawCoins node.samples κ X → Cm) (T : Trace (DrawCoins node.samples κ X))
+      (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ)
+      (recs : Cm → SampleCoins node.samples κ X → Record)
+      (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
+      (com : SampleCoins node.samples κ X → Cm) (T : Trace (SampleCoins node.samples κ X))
       (R : Receipts node.samples κ X) (δs δnet : ℝ)
-      (O : Outside (ofRecord T node (played recs com))) (I : Ingress (DrawCoins node.samples κ X)),
+      (O : Outside (ofRecord T node (played recs com))) (I : Ingress (SampleCoins node.samples κ X)),
       Paced (ofRecord T node (played recs com)) (recordPace node (played recs com)) ∧
       Covers (ofRecord T node (played recs com)) ∧
       SketchBoundAt (ofRecord T node (played recs com)) O δs ∧

@@ -39,7 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 # The openings' pooled bound (trusted)
 
 The memory line's `LiveCoins` premise (`Accounting.Remote.Held.Assumptions.LiveCoins`), derived from the verifier's
-opening sample as it runs it (`Accounting.Remote.Draw`): a session of windows `D`, each window's size and correct
+opening sample as it runs it (`Accounting.Remote.Sample`): a session of windows `D`, each window's size and correct
 receipts fixed before its own openings coin (`Live`), whose opened receipts an accepted session found correct or moved
 off the rows their roots hold (`Refused`, at the receipts `R`), and whose wrong receipts count the trace's (`Counted`).
 The prover is sent each coin as it is released, and the challenger's commitment to the session's coins only once the
@@ -89,8 +89,8 @@ coin, but that the receipts' roots read only the cut is not a premise here (the 
 
 namespace Accounting.Guarantees.Remote
 
-open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions
+open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
+  Accounting.Remote.Sample.Assumptions
 
 /-- **The openings' pooled bound.** On a session whose windows' sizes and correct receipts are fixed before their
 openings coins (`Live`), whose accepted outcomes found every opened receipt correct or moved off the row its root holds
@@ -101,8 +101,8 @@ most `δ + Σ_t s_t / 2^256`, plus the windows' distinguishers' advantages on `p
 (`R.binding`: some opened receipt moved off the row its root holds). -/
 def PooledSample : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Remote.Draw.Run n m k κ X)
-    (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X)
+    (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (D : Remote.Sample.Run n m k κ X)
+    (T : Trace (SampleCoins n κ X)) (R : Receipts n κ X)
     (δ : ℝ), 0 ≤ δ → m < 18446744073709551616 → Live D → Refused D prf rest T R → Counted D T →
     T.Holds (δ + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 256 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δ t)).toReal +
@@ -114,8 +114,8 @@ them, `LiveCoins W` at `PooledSample`'s error holds for every `W` at least the r
 accepted outcome. -/
 def LiveCoinsSampled : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Remote.Draw.Run n m k κ X)
-    (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X)
+    (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (D : Remote.Sample.Run n m k κ X)
+    (T : Trace (SampleCoins n κ X)) (R : Receipts n κ X)
     (W δ : ℝ), 0 ≤ δ → m < 18446744073709551616 → Live D → Refused D prf rest T R → Counted D T →
     (∀ ω, T.accepts ω → D.pooled δ ω ≤ W) →
     LiveCoins T W (δ + ((∑ t, k t : ℕ) : ℝ) / 2 ^ 256 +
@@ -127,8 +127,8 @@ def LiveCoinsSampled : Prop :=
 `δc`, on windows of `m < 18446744073709551616` (2^64) receipts. -/
 def HeldSampled : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Remote.Draw.Run n m k κ X)
-    (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X) (S s₀ e : ℕ) (s E β Br Bd δs δc : ℝ),
+    (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (D : Remote.Sample.Run n m k κ X)
+    (T : Trace (SampleCoins n κ X)) (R : Receipts n κ X) (S s₀ e : ℕ) (s E β Br Bd δs δc : ℝ),
     0 < E → 0 ≤ s → 0 ≤ β → 0 ≤ δc → m < 18446744073709551616 →
     Identity T → SquaringCeiling T s E Br → Disks T β Bd → ChipCeiling T S → Routed T → Causal T s₀ e →
     SketchBound T δs → Live D → Refused D prf rest T R → Counted D T →
@@ -142,9 +142,9 @@ sample's premises and `W` by the record's pooled bound at `δc`, on windows of `
 receipts. -/
 def HeldOverTimeSampled : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Remote.Draw.Run n m k κ X)
-    (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X)
-    (K : Pace (DrawCoins n κ X)) (S : ℕ) (s E β Br Bd δs δc : ℝ),
+    (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (D : Remote.Sample.Run n m k κ X)
+    (T : Trace (SampleCoins n κ X)) (R : Receipts n κ X)
+    (K : Pace (SampleCoins n κ X)) (S : ℕ) (s E β Br Bd δs δc : ℝ),
     0 < E → 0 ≤ s → 0 ≤ β → 0 ≤ δc → m < 18446744073709551616 →
     Identity T → SquaringCeiling T s E Br → Disks T β Bd → ChipCeiling T S → Routed T → Paced T K → Covers T →
     SketchBound T δs → Live D → Refused D prf rest T R → Counted D T →
@@ -161,9 +161,9 @@ def HeldOverTimeSampled : Prop :=
 `m < 18446744073709551616` (2^64) receipts. -/
 def HeldOverTimeLinksSampled : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Remote.Draw.Run n m k κ X)
-    (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X)
-    (K : Pace (DrawCoins n κ X)) (S : ℕ) (s E β βl Br Bd Bl δs δc : ℝ),
+    (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (D : Remote.Sample.Run n m k κ X)
+    (T : Trace (SampleCoins n κ X)) (R : Receipts n κ X)
+    (K : Pace (SampleCoins n κ X)) (S : ℕ) (s E β βl Br Bd Bl δs δc : ℝ),
     0 < E → 0 ≤ s → 0 ≤ β → 0 ≤ βl → 0 ≤ δc → m < 18446744073709551616 →
     Links T βl Bl → SquaringCeiling T s E Br → Disks T β Bd → ChipCeiling T S → Routed T → Paced T K → Covers T →
     SketchBound T δs → Live D → Refused D prf rest T R → Counted D T →

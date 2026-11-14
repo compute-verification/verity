@@ -15,9 +15,9 @@ from verity.protocols.proofs.spot.prover.audit import prove_path
 
 
 def ingress(run: Path, params: Any) -> list:
-    """The kept run's certified ingress records, one a link-window."""
+    """The kept run's certified ingress records, one an execution phase."""
     return relay_check.read_records(run, params)[relay_check.INGRESS]
 
 
 if __name__ == "__main__":
-    raise SystemExit(prove_path.main(sys.argv[1:], window_rows=warden_rows.window_rows, ingress=ingress))
+    raise SystemExit(prove_path.main(sys.argv[1:], window_rows=warden_rows.window_rows, ingress_records=ingress))

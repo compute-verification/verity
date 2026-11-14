@@ -152,7 +152,7 @@ def test_each_scan_class_the_gate_takes_is_scan_zks_setup_of_its_name_at_its_sch
         sz.W63K4.cls.serves(sz.PARAMS)
 
 
-def test_the_gates_warden_windows_are_at_least_every_request_counts_link_windows_which_its_key_signs(tmp_path):
+def test_the_gates_warden_windows_are_at_least_every_request_counts_phases_which_its_key_signs(tmp_path):
     """The gate sizes a network certifier rehearsal's key on `warden_windows` of its requests (`warden_height`), so for
     every request count it takes, those are at least the execution phases `rehearse` runs (its traffic's last arrival
     and tail): at the scan's schedule on the gate's id traffic and on `--prompts`' arrivals, and at `warden_serve.py`'s

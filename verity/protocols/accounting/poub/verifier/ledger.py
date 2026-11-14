@@ -45,7 +45,7 @@ FORMS = (SNAPSHOT, *line.FORMS)
 """The memory line's forms, in order: `Held`'s, `HeldOverTime`'s and `HeldOverTimeLinks`'s."""
 REJECTION_LOG2 = 64
 """The sample's rejection a sample, in bits: a sample below U reads a word of `bitlen(U) + 64` bits or more (`Key._uniform`,
-`Accounting.Remote.Draw.width`), so a uniform first word is rejected with probability below 2^-64."""
+`Accounting.Remote.Sample.width`), so a uniform first word is rejected with probability below 2^-64."""
 DELTA_PARTS = ("profile", "slack", "hiding", "binding", "sketch", "rejection")
 """The memory line's δ parts (`delta_parts`), in the order `memory` adds them."""
 PRF_CLAIM = "prf/sha-512"
@@ -145,11 +145,11 @@ class Node:
         """The node of `figures`: R measured is the larger of its `read_bytes_per_s` and the prover's reported read, R
         at spec the larger of its `spec_bytes_per_s` and that, so a prover reporting a slower read can't shrink a term.
         Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one second at the disks'
-        rate, which is a highest second; its link burst `figures.link_window_bytes` when the links are charged.  Its
+        rate, which is a highest second; its link burst `figures.phase_bytes` when the links are charged.  Its
         tiers are every GPU's HBM and the host's DRAM, which no reported read raises."""
         f = figures
         disk = disk_bytes_per_s if disk_burst_bytes is None else disk_burst_bytes
-        link = (f.link_window_bytes if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
+        link = (f.phase_bytes if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
         tiers = {"hbm": Tier(f.gpus, f.gpu_spec_bytes_per_s, f.gpu_read_bytes_per_s, f.gpu_chip_bytes),
                  "dram": Tier(1, f.host_spec_bytes_per_s, f.host_read_bytes_per_s, f.host_chip_bytes)}
         return cls(f.spec_bytes_per_s, f.read_bytes_per_s, f.chip_bytes, f.squarings_per_s,
@@ -268,7 +268,7 @@ def binding_over(draws: int, receipts: int, samples: int, queries: int) -> Fract
 
 
 def binding(record: audit.Record) -> Fraction:
-    """The receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`): the probability that some opened
+    """The receipts' binding term (`Accounting.Remote.Sample.Receipts.binding`): the probability that some opened
     receipt was presented with an accepted row other than the one its root holds (`Receipts.held`, the plurality of
     the rows it shows over its window's continuations from the cut before its coin).  Window t's fork finder runs the
     prover twice from that cut on independent openings coins and checks both runs' openings, q_t = 2·Q +

@@ -3,7 +3,7 @@ from the ingress counts under the declared clock sync, zero-knowledge. A Boolean
 served proof block (`service`'s `NetworkServedTransferBlocks` v4), which runs on every execution phase; its one output is
 the ok bit. That proof block's Program holds it as one gate that names its circuit digest (`gate`), pinned in this
 module's sidecar and held to the Definition by circuit-check; N2's verifier reads its output from the proof
-block's proof, and the in-the-clear check (`LinkWindows.clear`) runs its `reference`, which the tests hold to the
+block's proof, and the in-the-clear check (`TransferBlocks.clear`) runs its `reference`, which the tests hold to the
 circuit.
 
     NetworkServedCounts_v1{T, FOUT, FIN, R, RIN, OWN}
@@ -35,7 +35,7 @@ counts are `derive`'s, of the ingress counts with bucket 0's OWN own frames take
 **Carry-over.** Nothing carries between windows: each window's derivation starts with an empty egress queue, no request
 frame pending and no earlier hand, and checks that it ends the same way. So by induction from the run's first window,
 whose certifier starts empty (and from a certifier back from maintenance, which carries nothing), on a link whose every
-window is accepted (`service.LinkWindows.network_verdict`'s AND) each window's egress counts are the Program's under the
+window is accepted (`service.TransferBlocks.network_verdict`'s AND) each window's egress counts are the Program's under the
 premises below, and they depend on that window's ingress counts and sync alone. A proxy meets it with its admission rule
 (`Admission`, `active.Bucketer(served=…)`): it admits a request only while the window, with it, still ends idle
 (`admits`), and holds the rest, in order, for the next window, so each response is released in its request's window. A
@@ -89,7 +89,7 @@ SYNC_MAX = (1 << SYNC_BITS) - 1
 @dataclass(frozen=True)
 class ServedProfile:
     """A served link's public sizes: every response's frames (FIXLEN), every request's frames (a power of two), the
-    link's windows, which `service.LinkWindows.network_verdict` takes by default, and `own`, the ingress certifier's own
+    link's windows, which `service.TransferBlocks.network_verdict` takes by default, and `own`, the ingress certifier's own
     frames at the head of every window's first bucket: 1 with its salt on (`active.Proxy(salt=…)`, a PoUW window of
     one certifier window), else 0."""
 
@@ -462,7 +462,7 @@ def unit(T: int, F: int, FIN: int, R: int, RIN: int, OWN: int):
 
 @lru_cache(maxsize=None)
 def gate(T: int, F: int, FIN: int, R: int, RIN: int, OWN: int) -> PrimitiveDefinition:
-    """`unit(…)` as one gate of N2's served proof block (`service.LinkWindows.unit`) that names the Definition and its
+    """`unit(…)` as one gate of N2's served proof block (`service.TransferBlocks.unit`) that names the Definition and its
     pinned circuit digest, `Gate[NetworkServedCounts_v1{…}@<digest>]_v2`, as `head_check.gate` holds the head check."""
     d = unit(T, F, FIN, R, RIN, OWN)
     return gate_of(d, pinned_digest(d, PINS), "N2's served counts")

@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Compose.Remote.Held
-public import Definitions.Compose.Remote.Draw
+public import Definitions.Compose.Remote.Sample
 public import Poub.Line
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -58,12 +58,12 @@ What a gate run's memory line (`Poub.Line.lineOfRecordAt`) reads of one session,
   blocks; `Record.groups` and `Record.receipts` are its groups, one a window, and its samples' receipts.
 * `Record.reached`: the state the record's session reaches in the Lean verifier, its run's last or the one before the
   first event that throws; `Record.receiptsAt` its windows' receipts and `Record.sampleReceiptsAt` its samples'.
-* `recordSample`: the record's opening sample (`Accounting.Remote.Draw.Run`), one sample for each of the session's
+* `recordSample`: the record's opening sample (`Accounting.Remote.Sample.Run`), one sample for each of the session's
   (`Node.samples`), sample `c`'s size at `ω` its receipts in the state the record reaches at `ω`, at most `receiptMax`
   (`2^64 − 1`, the verifier's `RECEIPT_LIMIT` less one). It reads the reached state rather than the record's summary so
   that `Live`, a sample's size fixed by the coins before it, can hold of a session whose acceptance turns on later
   coins.
-* `recordCommitted`: the prover's records read through the coin commitment (`Accounting.Remote.Draw.Committed`):
+* `recordCommitted`: the prover's records read through the coin commitment (`Accounting.Remote.Sample.Committed`):
   holding commitment `c` its record at `ω` is `recs c ω`, and the session it plays is that record's `recordSample`;
   `played` is the record of outcome `ω`, the prover's holding the deployed commitment `com ω`.
 * `ofRecord`: a trace over the registration's blocks (`overBlocks`) with the Lean verifier's verdict on the record as
@@ -217,9 +217,9 @@ def receiptMax : ℕ := Poub.Session.RECEIPT_LIMIT - 1
 /-- **The record's opening sample**: the session's samples, sample `c` of outcome `ω` with the receipts its windows have
 in the state the record's session reaches at `ω` (at most `receiptMax`), sampling `min(s, U_c)` at the session's
 `samples`, with the correct receipts `correct`. -/
-def recordSample {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Draw.DrawCoins node.samples κ X → Record)
-    (correct : Fin node.samples → Accounting.Remote.Draw.DrawCoins node.samples κ X → Finset ℕ) :
-    Accounting.Remote.Draw.Run node.samples receiptMax (fun _ => node.params.samples) κ X where
+def recordSample {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Sample.SampleCoins node.samples κ X → Record)
+    (correct : Fin node.samples → Accounting.Remote.Sample.SampleCoins node.samples κ X → Finset ℕ) :
+    Accounting.Remote.Sample.Run node.samples receiptMax (fun _ => node.params.samples) κ X where
   size c ω := ⟨min ((rec ω).sampleReceiptsAt node c) receiptMax, Nat.lt_succ_of_le (min_le_right _ _)⟩
   correct := correct
 
@@ -227,9 +227,9 @@ def recordSample {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Dr
 `ω` is `recs c ω`, and the session it plays is that record's opening sample (`recordSample`), with the correct receipts
 `correct c`. -/
 def recordCommitted {κ : ℕ} {X Cm : Type} (node : Node)
-    (recs : Cm → Accounting.Remote.Draw.DrawCoins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → Accounting.Remote.Draw.DrawCoins node.samples κ X → Finset ℕ) :
-    Accounting.Remote.Draw.Committed node.samples receiptMax (fun _ => node.params.samples) κ X Cm where
+    (recs : Cm → Accounting.Remote.Sample.SampleCoins node.samples κ X → Record)
+    (correct : Cm → Fin node.samples → Accounting.Remote.Sample.SampleCoins node.samples κ X → Finset ℕ) :
+    Accounting.Remote.Sample.Committed node.samples receiptMax (fun _ => node.params.samples) κ X Cm where
   view c := recordSample node (recs c) (correct c)
 
 /-- The record of outcome `ω`: the prover's, holding the deployed commitment `com ω`. -/
@@ -253,7 +253,7 @@ noncomputable def Node.rebuildBurst (n : Node) : ℝ := (n.rates.rebuildBurstByt
 /-- `B_d`, one maximal disk read in blocks. -/
 noncomputable def Node.diskBurst (n : Node) : ℝ := (n.rates.diskBurstBytes : ℝ) / n.blockBytes
 
-/-- `B_l`, one link window in blocks. -/
+/-- `B_l`, one link burst in blocks. -/
 noncomputable def Node.linkBurst (n : Node) : ℝ := (n.rates.linkBurstBytes : ℝ) / n.blockBytes
 
 /-- `S`, the registered blocks the node's chips can hold any byte of: `chipBytes / blockBytes` rounded up, so a block

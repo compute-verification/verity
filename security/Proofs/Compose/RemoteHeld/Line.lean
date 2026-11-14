@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Compose.RemoteHeld.Draw
+public import Proofs.Compose.RemoteHeld.Sample
 public import Proofs.Compose.RemoteHeld.Outside
 public import Proofs.Compose.RemoteHeld.Window
 public import Proofs.Properties.Compose.Remote.Line
@@ -78,8 +78,8 @@ to the line's W, and on it every stretch of the line credits what the trace held
 
 namespace Properties.Poub.Line.SecurityProofs
 
-open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions _root_.Poub.Line Accounting.SecurityProofs.Remote Properties.Poub.Line
+open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
+  Accounting.Remote.Sample.Assumptions _root_.Poub.Line Accounting.SecurityProofs.Remote Properties.Poub.Line
 
 /-- What `ofSummary` reads of a record it accepts: one group a window, and each window's receipts and samples, its
 samples `min(s, U_t)`. -/
@@ -498,9 +498,9 @@ theorem receiptMax_lt : receiptMax < 2 ^ 64 := by
 below the W every line of the record reads (`LineCoversRun`): the line reads each sample's receipts and samples off
 the record and refuses any samples but `min(s, U_c)`, the sample's at the session's `samples`, and the receipts are the
 sample's sizes (`receipts_of_line`). -/
-theorem incorrect_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (DrawCoins node.samples κ X)}
-    {rec : DrawCoins node.samples κ X → Record} {correct : Fin node.samples → DrawCoins node.samples κ X → Finset ℕ}
-    {ω : DrawCoins node.samples κ X} (hv : Verified node (rec ω))
+theorem incorrect_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (SampleCoins node.samples κ X)}
+    {rec : SampleCoins node.samples κ X → Record} {correct : Fin node.samples → SampleCoins node.samples κ X → Finset ℕ}
+    {ω : SampleCoins node.samples κ X} (hv : Verified node (rec ω))
     (hw : (T.incorrect ω : ℝ) ≤ (recordSample node rec correct).pooled node.delta ω) :
     ∀ l, lineOf node (rec ω) = .ok l → (T.incorrect ω : ℝ) ≤ l.wrong := fun l hline => by
   obtain ⟨sm, gs, ws, hsm, hs, -, hl⟩ := lineOf_ok hline

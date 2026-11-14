@@ -19,7 +19,7 @@ public import Proofs.Properties.Verity.SampledTwo.BlobFinder
 public import Proofs.Properties.Verity.SampledTwo.FormDraw
 
 /-!
-# The two-stage leg's projection at the form's accept, from the coin map's distribution
+# The two-stage subprotocol's projection at the form's accept, from the coin map's distribution
 
 `joined` (`Joined.lean`) is the projection's bound over any acceptance. This module is the one place the two-stage
 form's check comes in: the acceptance is the form's (`FormAccepts C`), the check read a log of both sessions, the log
@@ -248,7 +248,7 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
     (P' : Verity.Exchange → ℕ → Claims.Prover Unit) : Prop where
   /-- On two windows, the two setups' ledger lines are two sessions' in the device's order (`Sessions.LedgerInOrder`).
   Taken as a hypothesis; a lemma of the modelled device after soundness's device pull request (PRF-490). -/
-  ledgerInOrder : ∀ o : Verity.Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
+  ledgerInOrder : ∀ o : Verity.Exchange, o.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
     Sessions.LedgerInOrder (P.setup₁ fs₁ cut o) (P.setup₂ fs₂ cut o)
   /-- The two stages' families differ. -/
   distinctFamilies : ℓ₁ ≠ ℓ₂

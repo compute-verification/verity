@@ -4,12 +4,12 @@ public import Proofs.Properties.Verity.Sampled.Target
 public import Proofs.Flock.SamplingGeneric.Guarantees
 
 /-!
-# SPOT's target at the two-stage form: the leg's statements
+# SPOT's target at the two-stage form: the subprotocol's statements
 
-`Verity.Vocab.SpotSound` reads the composite's sampled component, whose parameters name a form. The one-stage leg
+`Verity.Vocab.SpotSound` reads the composite's sampled component, whose parameters name a form. The one-stage subprotocol
 (`Verity.Sampled.spotSound_of_targets`) proves the target at the one-stage form and reads every other form as refused
 (`Verity.Sampled.recursiveForm_refused`). A two-stage form of the component makes that split three-way: this module
-states the target form by form and the two-stage form's leg, from the two-stage verifier's knowledge soundness at the
+states the target form by form and the two-stage form's subprotocol, from the two-stage verifier's knowledge soundness at the
 auditor's held copies (`Live₂.KS`, a hypothesis, which `Flock.Guarantees.SpotKSTwo` concludes under its two premises:
 `Live₂.ks_of_connected`) to SPOT's target on the parameters that name the two-stage form.
 
@@ -32,7 +32,7 @@ auditor's held copies (`Live₂.KS`, a hypothesis, which `Flock.Guarantees.SpotK
   (the claim's units at the two-stage form, and the witness fixed at registration), and the bound's bookkeeping.
 * **The deployment's sessions cover the form** (`CoversTwo`): where the deployment holds no session and the parameters
   name the two-stage form, the sampled verdict accepts with probability at most the published `δ`.
-* **The leg** (`TwoLeg`, `twoLeg`): from the knowledge soundness at each session of record in scope, the cover and the
+* **The subprotocol** (`TwoSubprotocol`, `twoSubprotocol`): from the knowledge soundness at each session of record in scope, the cover and the
   coupling at each session, SPOT's target on the two-stage form's parameters.
 
 Statements and their bookkeeping only: no guarantee reads it. The two-stage form's
@@ -91,7 +91,7 @@ noncomputable abbrev L (A : Live₂) :=
     SpotFlock.iroots (SpotFlock.twoConnected A.h) (SpotFlock.rsConnected A.h) (SpotFlock.cap A.h)
 
 /-- **The session's knowledge soundness**: `CompiledTwo.KS` at SHA-512 of the compiled two-stage verifier at the
-connected program of the held copies (`Live₂.L`). The leg takes it as a hypothesis. It is
+connected program of the held copies (`Live₂.L`). The subprotocol takes it as a hypothesis. It is
 `Flock.Guarantees.SpotKSTwo`'s conclusion at the held copies, so it holds where the frame is SPOT's own at the wired
 program (`SpotFlock.BuiltWired`) and each gate's value sits where the second stage reads it
 (`SpotFlock.AddressesConnected`): `Live₂.ks_of_connected`.
@@ -170,17 +170,17 @@ def CoversTwo (V : Vocab d α) (k : Verity.Registration.Composite) (TwoAt : Byte
     V.finderCR .sampled θ F c σ →
       Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ ≤ V.delta θ .sampled (V.cost θ F c σ)
 
-/-- **The two-stage leg**: where each session of record `S₂` holds is knowledge sound at `δ ≥ 0`, the
+/-- **The two-stage subprotocol**: where each session of record `S₂` holds is knowledge sound at `δ ≥ 0`, the
 sessions cover the two-stage form, and the coupling holds at each session at some `terms`, SPOT's target holds on the
 two-stage form's parameters. -/
-def TwoLeg (V : Vocab d α) (k : Verity.Registration.Composite) (TwoAt : ByteArray → Prop)
+def TwoSubprotocol (V : Vocab d α) (k : Verity.Registration.Composite) (TwoAt : ByteArray → Prop)
     (S₂ : ByteArray → Array ByteArray → Option Live₂) : Prop :=
   (∀ θ F A, S₂ θ F = some A → A.KS ∧ 0 ≤ A.δ) → CoversTwo V k TwoAt S₂ →
     (∀ θ F A, S₂ θ F = some A → ∃ terms, CouplingTargetTwo V k A θ F terms) → TargetOn V k TwoAt
 
-/-- **The two-stage leg holds**: its bookkeeping, at the coupling and the cover. -/
-theorem twoLeg (V : Vocab d α) (k : Verity.Registration.Composite) (TwoAt : ByteArray → Prop)
-    (S₂ : ByteArray → Array ByteArray → Option Live₂) : TwoLeg V k TwoAt S₂ := by
+/-- **The two-stage subprotocol holds**: its bookkeeping, at the coupling and the cover. -/
+theorem twoSubprotocol (V : Vocab d α) (k : Verity.Registration.Composite) (TwoAt : ByteArray → Prop)
+    (S₂ : ByteArray → Array ByteArray → Option Live₂) : TwoSubprotocol V k TwoAt S₂ := by
   intro hKS hCov hC θ F c σ hP
   unfold Vocab.error Accounting.condError
   beta_reduce

@@ -63,7 +63,7 @@ public import Proofs.Pouw.PerRunStop
 public import Proofs.Compose.RemoteHeld
 public import Proofs.Compose.RemoteHeld.Meets
 public import Proofs.Compose.RemoteHeld.OverTime
-public import Proofs.Compose.RemoteHeld.Draw
+public import Proofs.Compose.RemoteHeld.Sample
 public import Proofs.Compose.RemoteHeld.DrawMeets
 public import Proofs.Compose.RemoteHeld.Binding
 public import Proofs.Compose.RemoteHeld.Sketch
@@ -135,7 +135,7 @@ behind them, and the proofs of resource accounting's properties, the bridges tha
 guarantee as the joint period's input (`JointBridge/`, such as `Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld`,
 locked in `Security/Properties/lean-audit.json`). `Defs` holds the proof-only vocabulary no guarantee reads,
 `Sanity` shows the joint guarantee's hypotheses hold, and `Coverage` proves the inference-only policy's
-`InferenceOnly.SecurityProofs.CapabilityFloor`. `Security/lean-audit.json` pins each guarantee's theorem, so a
+`Slowdown.SecurityProofs.CapabilityFloor`. `Security/lean-audit.json` pins each guarantee's theorem, so a
 change to the guarantee, or to a definition it reads, changes its record.
 
 ## Where the top guarantees are proved

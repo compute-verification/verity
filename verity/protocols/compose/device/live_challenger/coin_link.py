@@ -11,7 +11,7 @@ session's coin commitment from that record, listens on a port of this host's loo
 only then opens `ssh -N -R 127.0.0.1:PORT:127.0.0.1:LISTEN` to `--peer`'s line of `--peers` (/etc/vy/peers), so the
 prover's client on the peer connects to its own 127.0.0.1:PORT; without `--peer` (a test) no tunnel opens and the client
 connects to LISTEN. It prints `listening 127.0.0.1:LISTEN` and relays each connection to serve.py's port, one at a time,
-until SIGTERM, the tunnel's end or `--minutes`; then it runs to the end of its link-window and writes `coin-link.json` to
+until SIGTERM, the tunnel's end or `--minutes`; then it runs to the end of its execution phase and writes `coin-link.json` to
 `--out` (`CoinLink.summary`, with PORT, LISTEN, the peer and how the tunnel ended), which the window's `end` entry seals.
 The defaults are D7's parameters (`CoinLinkParams`). The link's origin is read on the clock its ticks read, the network
 certifier's (`pacer.raw_clock`); on a host that gives no such clock the link refuses to start.
@@ -20,7 +20,7 @@ The tunnel goes straight to the peer: `ProxyJump` and `ProxyCommand` are `none`,
 or a proxy is refused, so the coins leave this host encrypted to the peer's own sshd and are read on no other host
 (WitnessPathPrivate).
 
-Exit 0 when every link-window is complete and no cell was dropped, 1 otherwise, 2 when it refuses to start.
+Exit 0 when every execution phase is complete and no cell was dropped, 1 otherwise, 2 when it refuses to start.
 """
 from __future__ import annotations
 

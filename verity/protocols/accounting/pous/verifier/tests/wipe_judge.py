@@ -1,5 +1,5 @@
-"""A stand-in `wipe-protocol` for the leg's tests: the period's Lean judge, answering each case as the Python answered
-it (`wipe_run.run`'s `answer`), so a test of the leg's accept runs without a Lean build."""
+"""A stand-in `wipe-protocol` for the subprotocol's tests: the period's Lean judge, answering each case as the Python answered
+it (`wipe_run.run`'s `answer`), so a test of the subprotocol's accept runs without a Lean build."""
 
 from __future__ import annotations
 

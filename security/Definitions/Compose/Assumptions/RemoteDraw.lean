@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Compose.Remote.Draw
+public import Definitions.Compose.Remote.Sample
 public import Definitions.Compose.Remote.Held
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -38,7 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 # What PoUB's opening sample assumes (trusted)
 
 The premises of `Accounting.Guarantees.Remote.PooledSample`, which derives the memory line's `LiveCoins` from the
-verifier's opening sample (`Accounting.Remote.Draw`), each a named `Prop` on a session and the trace over its coins:
+verifier's opening sample (`Accounting.Remote.Sample`), each a named `Prop` on a session and the trace over its coins:
 
 * `Live`: window `t`'s size and correct receipts are fixed before its openings coin is released, by the other coins and
   the earlier windows' openings coins, never by its own or a later one. The verifier releases the coin after the
@@ -60,12 +60,12 @@ verifier's opening sample (`Accounting.Remote.Draw`), each a named `Prop` on a s
 
 The sample is the deployed one, not a premise: each window's openings are `Key.subset` on the first blocks its coin
 gives (`Run.opened`), the sampler exact on each sample's first block and the rest free. The openings coins are uniform
-and independent of the other coins, as the challenger flips them (the trace's uniform measure on `DrawCoins`).
+and independent of the other coins, as the challenger flips them (the trace's uniform measure on `SampleCoins`).
 -/
 
 @[expose] public section
 
-namespace Accounting.Remote.Draw.Assumptions
+namespace Accounting.Remote.Sample.Assumptions
 
 open Accounting.Remote.Held
 
@@ -76,19 +76,19 @@ windows' openings coins give window `t` the same size and the same correct recei
 the later ones. The guarantees read it of the session the prover plays, which holds no coin commitment while it runs;
 the memory line over the prover's records reads it of `Committed.view c` at every commitment `c`. -/
 def Live (D : Run n m s κ X) : Prop :=
-  ∀ t (ω ω' : DrawCoins n κ X), ω.1 = ω'.1 → (∀ j, j < t → ω.2 j = ω'.2 j) →
+  ∀ t (ω ω' : SampleCoins n κ X), ω.1 = ω'.1 → (∀ j, j < t → ω.2 j = ω'.2 j) →
     D.size t ω = D.size t ω' ∧ D.correct t ω = D.correct t ω'
 
 /-- **Refused**: on every accepting outcome, every receipt a window opens, on the first blocks `prf` and the
 fallbacks `rest`, is among its correct ones or moved: presented, accepted at its root and rank, with a row other than
 the one its root holds. -/
 def Refused [Fintype X] (D : Run n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X) : Prop :=
+    (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (T : Trace (SampleCoins n κ X)) (R : Receipts n κ X) : Prop :=
   ∀ ω, T.accepts ω → ∀ t, ∀ p ∈ D.opened prf rest t ω, p ∈ D.correct t ω ∨ R.Moved D prf rest t ω p
 
 /-- **Counted**: on every accepting outcome, the credited passes' wrong receipts of registered blocks are at most the
 windows' wrong receipts. -/
-def Counted (D : Run n m s κ X) (T : Trace (DrawCoins n κ X)) : Prop :=
+def Counted (D : Run n m s κ X) (T : Trace (SampleCoins n κ X)) : Prop :=
   ∀ ω, T.accepts ω → T.incorrect ω ≤ D.incorrect ω
 
-end Accounting.Remote.Draw.Assumptions
+end Accounting.Remote.Sample.Assumptions

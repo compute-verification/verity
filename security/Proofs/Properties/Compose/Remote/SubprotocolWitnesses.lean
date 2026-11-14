@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Compose.RemoteHeld.Subprotocol
-public import Proofs.Compose.RemoteHeld.Draw
+public import Proofs.Compose.RemoteHeld.Sample
 public import Proofs.Pouw.Prob
 import Proofs.Pous.Prob
 import all Init.Data.Array.DecidableEq
@@ -62,8 +62,8 @@ deriving instance DecidableEq for Poub.Line.Group
 
 namespace Properties.Poub.Subprotocol
 
-open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions Properties.Poub.Line
+open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Sample
+  Accounting.Remote.Sample.Assumptions Properties.Poub.Line
 
 theorem acceptIsVerified_iff : AcceptIsVerified ↔ AcceptIsVerifiedFor Poub.Protocol.check := Iff.rfl
 
@@ -116,8 +116,8 @@ theorem sketch_zero {Ω : Type} [Fintype Ω] (T : Trace Ω) (O : Outside T)
   obtain ⟨t, h1, h2, h3⟩ := h ω p hp
   exact ⟨t, h1, h2, mem_union_left _ (h3 ▸ mem_univ j)⟩
 
-theorem counted_of {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Accounting.Remote.Draw.Run n m s κ X)
-    (T : Trace (DrawCoins n κ X)) (h : ∀ ω p, T.plan ω p ⊆ T.correct ω p) : Counted D T := fun ω _ => by
+theorem counted_of {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Accounting.Remote.Sample.Run n m s κ X)
+    (T : Trace (SampleCoins n κ X)) (h : ∀ ω p, T.plan ω p ⊆ T.correct ω p) : Counted D T := fun ω _ => by
   have hw : T.incorrect ω = 0 := by
     unfold Trace.incorrect
     exact Finset.sum_eq_zero fun p _ => by rw [Finset.sdiff_eq_empty_iff_subset.2 (h ω p), card_empty]
@@ -143,17 +143,17 @@ theorem offsets_zero_lt {m U k : ℕ} (b : Blocks m) (hk : k ≤ U) (hkm : k ≤
 /-- With the sampler's fallbacks 0, every receipt a sample opens is among its receipts, so at correct receipts that
 hold all of them nothing is refused. -/
 theorem refused_honest {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X]
-    (D : Accounting.Remote.Draw.Run n m s κ X)
+    (D : Accounting.Remote.Sample.Run n m s κ X)
     (hc : ∀ t ω, range (D.size t ω : ℕ) ⊆ D.correct t ω) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X) : Refused D prf (fun _ _ _ => 0) T R := by
+    (T : Trace (SampleCoins n κ X)) (R : Receipts n κ X) : Refused D prf (fun _ _ _ => 0) T R := by
   intro ω _ t p hp
   left
   apply hc t ω
-  unfold Accounting.Remote.Draw.Run.opened openings at hp
+  unfold Accounting.Remote.Sample.Run.opened openings at hp
   obtain ⟨q, hq, rfl⟩ := mem_image.1 hp
   have hk : D.samples t ω ≤ D.size t ω := min_le_right _ _
-  exact mem_range.2 (Accounting.SecurityProofs.Remote.Draw.arrange_lt hk
-    (offsets_zero_lt (prf t (ω.2 t)) hk (Accounting.SecurityProofs.Remote.Draw.samples_le D t ω)) q
+  exact mem_range.2 (Accounting.SecurityProofs.Remote.Sample.arrange_lt hk
+    (offsets_zero_lt (prf t (ω.2 t)) hk (Accounting.SecurityProofs.Remote.Sample.samples_le D t ω)) q
     (lt_of_lt_of_le (mem_range.1 hq) hk))
 
 /-- **The premises of `LineHeld` and `LineHeldAtSubprotocol` hold at the honest node.** On any node, at any records of
@@ -165,9 +165,9 @@ every receipt a sample can have and the sampler's fallbacks 0, every premise hol
 and `Counted`; and the bound's terms the prover could raise are 0: each sample's distinguisher has no advantage on its
 coin function and each hiding term is 0. -/
 theorem lineHeldAtSubprotocol_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X]
-    (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax) (recs : Cm → DrawCoins node.samples κ X → Record)
-    (com : DrawCoins node.samples κ X → Cm) (R : Receipts node.samples κ X) (passes : ℕ)
-    (tick : DrawCoins node.samples κ X → ℕ → ℕ) (hS : HonestSchedule node passes tick recs com) :
+    (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax) (recs : Cm → SampleCoins node.samples κ X → Record)
+    (com : SampleCoins node.samples κ X → Cm) (R : Receipts node.samples κ X) (passes : ℕ)
+    (tick : SampleCoins node.samples κ X → ℕ → ℕ) (hS : HonestSchedule node passes tick recs com) :
     Paced (ofRecord (honestTrace node passes tick) node (played recs com)) (recordPace node (played recs com)) ∧
     Covers (ofRecord (honestTrace node passes tick) node (played recs com)) ∧
     SketchBoundAt (ofRecord (honestTrace node passes tick) node (played recs com))
@@ -186,7 +186,7 @@ theorem lineHeldAtSubprotocol_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fin
     ∀ t, (recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).hide com prf (node.delta : ℝ) t = 0 := by
   obtain ⟨hW, htick, hsize, hgs⟩ := hS
   rw [ofRecord_honest]
-  have hc : ∀ D : Accounting.Remote.Draw.Run node.samples receiptMax (fun _ => node.params.samples) κ X,
+  have hc : ∀ D : Accounting.Remote.Sample.Run node.samples receiptMax (fun _ => node.params.samples) κ X,
       (∀ t ω, D.correct t ω = Finset.range (receiptMax + 1)) → ∀ t ω, range (D.size t ω : ℕ) ⊆ D.correct t ω :=
     fun D h t ω => by
       rw [h]
@@ -195,7 +195,7 @@ theorem lineHeldAtSubprotocol_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fin
     sketch_zero _ _ fun ω p _ => ⟨tick ω p, le_refl _, htick ω p, Finset.union_empty _⟩, covered_noOutside _ _,
     ingressCounted_quiet _, fun c t ω ω' _ _ => ⟨Fin.ext (congrArg (min · receiptMax) (hsize c c ω ω' t)), rfl⟩,
     refused_honest _ (hc _ fun _ _ => rfl) prf _ R, counted_of _ _ fun _ _ => Finset.Subset.refl _,
-    fun t => Accounting.SecurityProofs.Remote.Draw.prfAdvantage_honest _ (hc _ fun _ _ => rfl) prf _ t,
+    fun t => Accounting.SecurityProofs.Remote.Sample.prfAdvantage_honest _ (hc _ fun _ _ => rfl) prf _ t,
     fun t => ?_⟩
   · intro ω hv
     obtain ⟨hsz, hpass, hmono, hfp, hrun⟩ := hgs ω hv _ rfl
@@ -237,9 +237,9 @@ theorem lineHeldAtSubprotocol_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fin
 and at `Poub.Protocol.DELTA`, the δ the subprotocol's bound is at, each sample's distinguisher has no advantage
 on its coin function and each hiding term is 0. -/
 theorem qBytesAtSubprotocolBy_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X]
-    (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax) (recs : Cm → DrawCoins node.samples κ X → Record)
-    (com : DrawCoins node.samples κ X → Cm) (R : Receipts node.samples κ X) (passes : ℕ)
-    (tick : DrawCoins node.samples κ X → ℕ → ℕ) (hS : HonestSchedule node passes tick recs com) :
+    (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax) (recs : Cm → SampleCoins node.samples κ X → Record)
+    (com : SampleCoins node.samples κ X → Cm) (R : Receipts node.samples κ X) (passes : ℕ)
+    (tick : SampleCoins node.samples κ X → ℕ → ℕ) (hS : HonestSchedule node passes tick recs com) :
     (∀ c, Live ((recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).view c)) ∧
     Refused ((recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).play com) prf (fun _ _ _ => 0)
       (ofRecord (honestTrace node passes tick) node (played recs com)) R ∧
@@ -252,7 +252,7 @@ theorem qBytesAtSubprotocolBy_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fin
       (Poub.Protocol.DELTA : ℝ) t = 0 := by
   obtain ⟨-, -, -, -, -, hL, hR, hC, -, -⟩ := lineHeldAtSubprotocol_honest node κ X Cm prf recs com R passes tick hS
   obtain ⟨-, -, hsize, -⟩ := hS
-  refine ⟨hL, hR, hC, fun t => Accounting.SecurityProofs.Remote.Draw.prfAdvantage_honest _ (fun _ _ => ?_) prf _ t,
+  refine ⟨hL, hR, hC, fun t => Accounting.SecurityProofs.Remote.Sample.prfAdvantage_honest _ (fun _ _ => ?_) prf _ t,
     fun t => ?_⟩
   · exact Finset.range_subset_range.2 (Fin.isLt _).le
   · have e : (recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).play com =
@@ -616,8 +616,8 @@ theorem toy_sketch {Ω : Type} [Fintype Ω] (ver : Node → Record → Prop)
       exact Finset.mem_univ j
 
 theorem binding_empty {n κ : ℕ} {X : Type} [Fintype X] [IsEmpty (Fin n)] {m : ℕ} {s : Fin n → ℕ}
-    (D : Accounting.Remote.Draw.Run n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) : R.binding D prf rest = 0 := by
+    (D : Accounting.Remote.Sample.Run n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
+    (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) : R.binding D prf rest = 0 := by
   simp [Receipts.binding, Pous.pr_eq_card]
 
 theorem toy_delta : (Toy.node.delta : ℝ) = 1 / 2 := by
