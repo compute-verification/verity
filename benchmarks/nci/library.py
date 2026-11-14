@@ -38,7 +38,7 @@ import catalog  # noqa: E402
 import bracket  # noqa: E402
 
 TRAITS = {
-    "theorem_applies": "the thread theorem covers it (end-to-end training of the reference circuit)",
+    "theorem_applies": "the thread theorem covers it (end-to-end training by the reference training algorithm)",
     "updated_fraction": "fraction of the model's parameters updated",
     "state_bits_per_param": "bits of state a reader needs per updated parameter",
     "state_splits": "a slice of the model needs only its own share of the state (false for seeds)",

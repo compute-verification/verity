@@ -32,7 +32,7 @@ sys.path.insert(0, str(HERE))
 import catalog  # noqa: E402
 
 INPUTS = {
-    "kappa": "share of the reference circuit's work in multiplications of an updated weight by an activation",
+    "kappa": "share of the reference training algorithm's work in multiplications of an updated weight by an activation",
     "b_w": "bits a block must read per updated weight it uses (a rate)",
     "b_a": "bits a block must read per activation it uses (a rate)",
     "d": "entry fee: activations of a thread a block reads before it can finish a product (inner dimension, or rank)",
@@ -44,7 +44,7 @@ INPUTS = {
     "decode_flops": "work to decode the update's description inside a block (0 if stored plainly)",
     "w_cut": "bits per token crossing a shard boundary (residual width times b_a for a standard transformer)",
     "crossings": "boundary crossings per token per shard (1 forward only, 2 with a backward pass)",
-    "flops_per_token": "the reference circuit's work per token",
+    "flops_per_token": "the reference training algorithm's work per token",
 }
 
 THREAD_THEOREM = "InferenceOnly.SecurityProofs.ThreadedTraining"

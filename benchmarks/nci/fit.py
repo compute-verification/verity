@@ -168,7 +168,7 @@ def fit_rate(p: dict, wipe_bits: float, N: float, w_e: float, b: float | None = 
 
 
 def share(p: dict, rate: float) -> float:
-    """Counted multiplications per server-second as a share of server FLOP, the unit of ``tiers``' efficiency terms."""
+    """Counted multiplications per server-second as a share of server FLOP, the unit of ``tiers``' counted-share terms."""
     return rate * 2 / p["kappa"] / p["node_flops"]
 
 
@@ -184,7 +184,7 @@ def left_out(p: dict, periods: int) -> float:
 
 
 def fit_mu(p: dict, wipe_bits: float, N: float, w_e: float, b: float | None = None) -> float:
-    """The fit bound's cap on registered efficiency: ``fit_rate``'s share plus ``left_out``; ``inf`` where it's void."""
+    """The fit bound's cap on the registered counted share: ``fit_rate``'s share plus ``left_out``; ``inf`` where it's void."""
     rate, periods = fit_rate(p, wipe_bits, N, w_e, b)
     return share(p, rate) + left_out(p, periods)
 
@@ -198,15 +198,16 @@ def free_with_lag(p: dict) -> float:
 
 
 def slowdown(p: dict, mu: float, declared: float, cheat: float = 0.0) -> float:
-    """D under a memory cap ``mu``, with nothing unregistered: ``multiple_bound`` in Lean's form at
-    x = min(MFU_0 r + declared, m mu) + cheat, the residual training at MFU_0 (reference efficiency) and the rest counted
+    """The slowdown under a memory cap ``mu``, with nothing unregistered: ``multiple_bound`` in Lean's form at
+    x = min(MFU_0 r + declared, m mu) + cheat, free compute training at MFU_0 (reference efficiency) and the rest counted
     multiplications."""
     x = min(p["mfu"] * free_with_lag(p) + declared, p["m"] * mu) + cheat
     return multiple_bound(p["mfu"], 0.0, x, reference_efficiency=False)
 
 
 def attack_slowdown(p: dict, counted_share: float) -> float:
-    """D of a developer whose only route to the target is an attack of this counted share; ``inf`` when it never gets there."""
+    """The slowdown of a developer whose only route to the target is an attack of this counted share; ``inf`` when it
+    never gets there."""
     return multiple_bound(p["mfu"], 0.0, counted_share, reference_efficiency=False)
 
 
@@ -214,7 +215,7 @@ def replica(p: dict, S: float, L: float, b_train: float, fit: str = "besiroglu",
             multiplier: float = DILOCO, b_sync: float = 4.0) -> dict:
     """The replica attack: each server trains the largest model it holds at ``b_train`` bits per weight (worth ``gain``
     dense weights each, for a path composition) and syncs a pseudo-gradient of ``b_sync`` bits per weight through
-    intake, its residual capacity at MFU_0 (reference efficiency). Between syncs a replica trains
+    intake, its free compute at MFU_0 (reference efficiency). Between syncs a replica trains
     MFU_0 r F b_sync / (6 lambda_in) tokens, whatever its size."""
     N = S / b_train
     lam = intake(p)
