@@ -107,7 +107,7 @@ class _Program:
             subs = [self.best(child, n * count) for child, count in parts]
             options.append((sum(p for p, _ in subs), tuple(u for _, us in subs for u in us)))
         if not options:
-            why = ("it is past C-Flock's block (cap 0)" if s.cap < 1 else
+            why = ("it is past Flock's block (cap 0)" if s.cap < 1 else
                    f"its {s.out_bits} bits out fit no size class (at most {UNIT_CLASS_MAX})")
             raise ValueError(f"{s.id} has no legal cut: {why} and it has no parts or ways to descend into")
         self.memo[key] = min(options, key=lambda o: o[0])

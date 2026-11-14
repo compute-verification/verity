@@ -1238,7 +1238,7 @@ def _spine(reg: CircuitTypeTable, sub, base: dict, walker: "Walker", spec: str |
     mod = lowerings.registry("C-Flock").module(sub.template.id)
     if hasattr(mod, "width") and mod.width(int(sub.params["N"])) is None:
         rec = _walked(base, walker, spec, walked_name)
-        rec["note"] = (f"at N = {sub.params['N']} the kernel's warps differ, so there is no single C-Flock unit "
+        rec["note"] = (f"at N = {sub.params['N']} the kernel's warps differ, so there is no single Flock unit "
                        f"(verity_flock.templates.{Path(mod.__file__).stem}.width); its Definition is walked instead, every "
                        f"primitive with its piece, none in a proof block")
         return rec

@@ -258,7 +258,7 @@ RANK_PORTS = 16
 PLAIN_SCOPE = ("plain covers one table (a window of one member, its one session) under a stratified draw, hidden outputs "
                "included (SoundExecH); J tables and the subset draw, hidden outputs past one table, and registered reads and "
                "shared rows wait for proofs' PRs A, B and C")
-PLAIN_ZK_SERVER = "none: C-Flock's ZK server checks only a --zk statement's sends (flock-circuit `zk_served`)"
+PLAIN_ZK_SERVER = "none: Flock's ZK server checks only a --zk statement's sends (flock-circuit `zk_served`)"
 
 
 def template_sets(root: Path) -> dict[str, tuple[Path, object]]:

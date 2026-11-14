@@ -365,7 +365,7 @@ def _ms(seconds: float) -> str:
 
 
 def render(out: dict) -> str:
-    lines = [f"# int8 {out['model']} under C-Flock, PoUW scheme {out['scheme']}"
+    lines = [f"# int8 {out['model']} under Flock, PoUW scheme {out['scheme']}"
              + (", KV credited" if out["kv"] else "") + ": the sampling plan", ""]
     r = out["rates"]
     lines.append(f"rates (GPU-s): a0 {r['statement_fixed']:.3g} + {r['statement_per_and']:.3g}/AND a statement, "

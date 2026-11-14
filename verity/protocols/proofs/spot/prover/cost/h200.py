@@ -113,7 +113,7 @@ class Template:
         """The least number of parts a unit proves in within Flock's block (`inputs.cap`), each its share of the ANDs and
         of every row's bytes: a unit past the block is sampled whole and proved as its parts."""
         if cap(0, [1] * len(self.rows)) < 1:
-            raise ValueError(f"{self.id}: its {len(self.rows)} rows alone fill a C-Flock block: cut its ports fewer ways")
+            raise ValueError(f"{self.id}: its {len(self.rows)} rows alone fill a Flock block: cut its ports fewer ways")
         p = 1
         while cap(*self._part(p)) < 1:
             p += 1
@@ -185,7 +185,7 @@ def templates(m: Shape, pins: dict[str, int] | None = None, *, tiles: bool = Fal
 
 @dataclass(frozen=True)
 class Rates:
-    """C-Flock's fitted rates (`transformer.costs`) and the commitment rate."""
+    """Flock's fitted rates (`transformer.costs`) and the commitment rate."""
 
     statement_fixed: float
     statement_per_and: float

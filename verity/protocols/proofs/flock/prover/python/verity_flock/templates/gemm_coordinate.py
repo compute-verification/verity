@@ -27,7 +27,7 @@ def chunks(subcircuit) -> int | None:
 def supports(subcircuit, scheme):
     sem = subcircuit.params.get("semantics")
     if sem not in RELATIONS:
-        return f"C-Flock lowers the semantics {sorted(RELATIONS)} (verity_flock.lowering.PIPES), not {sem}"
+        return f"Flock lowers the semantics {sorted(RELATIONS)} (verity_flock.lowering.PIPES), not {sem}"
     k = int(subcircuit.params["K"])
     if k != K:
         row = k * (1 if "e4m3" in sem else 2)
