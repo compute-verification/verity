@@ -532,11 +532,11 @@ def test_bw_party_holds_the_store_the_block_challenger_kept_for_a_pous_session_o
     whose forced command dropped `--pous-session`, so the party held the fixture's store and refused the session's node."""
     sid = "0f" * 32
     (rc, _), ran = party(svc, ["bw_party", "--pous-session", sid, "--minutes", "8"])
-    assert rc == 0 and ran[0][-11:] == ["-m", H.PARTIES["bw_party"][1], "--device", str(svc.parties / "bw"),
+    assert rc == 0 and ran[0][-11:] == ["-c", H.PARTY_CODE["bw_party"], "--device", str(svc.parties / "bw"),
                                         "--listen", "0.0.0.0:47612", "--pous-record", str(svc.parties / "pous"),
                                         "--pous-session", sid, "minutes=8"]
     (rc, _), ran = party(svc, ["bw_party", "--fixture"])
-    assert rc == 0 and ran[0][-9:] == ["-m", H.PARTIES["bw_party"][1], "--device", str(svc.parties / "bw"),
+    assert rc == 0 and ran[0][-9:] == ["-c", H.PARTY_CODE["bw_party"], "--device", str(svc.parties / "bw"),
                                        "--listen", "0.0.0.0:47612", *H.PARTY_FIXED["bw_party"], "minutes=60"]
     assert (H.TREE / H.PARTY_FIXED["bw_party"][1]).is_file()
     for words in (["bw_party"], ["bw_party", "--minutes", "10"]):
@@ -604,6 +604,9 @@ def test_the_wipe_party_and_its_key_import_on_a_python_with_no_site_packages():
             "print('ok')")
     p = subprocess.run([sys.executable, "-S", "-s", "-E", "-c", code], capture_output=True, text=True, cwd=ROOT)
     assert p.returncode == 0 and p.stdout.strip() == "ok", p.stderr[-2000:]
+    p = subprocess.run([sys.executable, "-S", "-s", "-E", "-c", H.PARTY_CODE["bw_party"], "--help"], capture_output=True,
+                       text=True, cwd=ROOT)
+    assert p.returncode == 0 and "--challenger" in p.stdout, p.stderr[-2000:]
 
 
 def test_a_party_is_killed_when_its_minutes_run_out_and_its_log_says_so(tmp_path, monkeypatch):
@@ -668,7 +671,7 @@ def test_a_party_answers_only_a_caller_from_a_registered_node(svc):
 
 def test_bw_party_runs_with_the_registration_the_host_names_and_no_lane_flag(svc):
     (rc, _), ran = party(svc, ["bw_party", "--fixture", "--minutes", "10"])
-    assert rc == 0 and ran[0][-9:] == ["-m", "verity.protocols.accounting.poub.verifier.p2_parties", "--device", str(svc.parties / "bw"),
+    assert rc == 0 and ran[0][-9:] == ["-c", H.PARTY_CODE["bw_party"], "--device", str(svc.parties / "bw"),
                                        "--listen", "0.0.0.0:47612", "--registration",
                                        "verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json", "minutes=10"]
     assert "bw_party takes (--pous-session SID | --fixture) [--session SID]" in refused(
