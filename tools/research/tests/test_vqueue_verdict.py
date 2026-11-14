@@ -244,6 +244,21 @@ def test_under_gate_verdict_a_red_of_main_s_check_naming_one_pr_reverts_it_and_h
     assert len([r for r in env.lines() if r["action"] == "revert"]) == 1 and len(env.posts) == 1
 
 
+def test_under_gate_verdict_a_ready_pr_held_for_main_s_red_has_a_leave_line_as_any_marked_pr_left_out_has(env, monkeypatch):
+    """A ready PR whose change meets what `main`'s red check read is held out of every candidate, and the loop logs it as it
+    logs any marked PR its candidates leave out: one `leave` line at its head, with a cause that stays the same while the
+    red holds and the reason its owner reads, so the time it waits is counted under that cause."""
+    loop, runs, quick, below, sha = _landed(env, monkeypatch, {1: {"a.txt": "1\n"}, 2: FAILING}, left_out=vqueue.left_out)
+    runs.end(sha, 2, "pytest", rows=(_row(NEW),))
+    h3 = env.put(3, {"pkg/tests/test_z.py": "def test_z():\n    pass\n"})
+    env.put(4, {"c.txt": "1\n"})
+    loop.tick()
+    loop.tick()
+    (leave,) = [r for r in env.lines() if r["action"] == "leave"]
+    assert (leave["number"], leave["heads"], leave["cause"]) == (3, [h3], L.MAIN_FAILED)
+    assert leave["why"].startswith(f"held: `main`'s check at {sha[:12]} failed step pytest")
+
+
 @pytest.mark.parametrize("how", ["two PRs meet what it read", "nothing bounds what it read"])
 def test_under_gate_verdict_a_red_of_main_s_check_naming_no_one_pr_reverts_none_and_sends_plain_candidates_through_the_check(
         env, monkeypatch, how):

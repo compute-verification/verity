@@ -270,6 +270,8 @@ GATES = GRAPH2_GATE, CHECK_GATE, VERDICT_GATE = "graph2", "check", "verdict"
 CHECKS = (CHECK_GATE, VERDICT_GATE)
 #: how many commits of `main`'s first-parent line the land verdicts' gate reads back for `main`'s own checks (`Loop._main_red`)
 MAIN_WALK = 64
+#: the cause of a ready PR held while `main`'s own check is red on what its change meets (`Loop.held`), in its `leave` line
+MAIN_FAILED = "main's check failed"
 SHARDS = 3
 #: how long after its enqueue the loop still reads, in shadow, the graph2 check of a dropped candidate (`Loop._followed`), and
 #: a compare line's ``graph2`` when it stopped reading one that hadn't ended
@@ -2617,6 +2619,8 @@ class Loop:
         #: their heads (`_plain`)
         self.red: MainRed | None = None
         self.plain: dict[int, str] = {}
+        #: the ready PRs this tick's snapshot holds for that red, as `World.held_out` names one: {number: (head, cause, why)}
+        self.held: dict[int, tuple[str, str, str]] = {}
         if world is not None:
             world.reads = self.reads
         self.g2_fresh = self.fresh_left = g2_fresh
@@ -2664,13 +2668,14 @@ class Loop:
             below = self._below(past, whole, n, main, origin, wrote)
             steps.lap("below")
             if self.gate == VERDICT_GATE:
-                self.red = self._main_red(past, whole, n, main, origin, below[0], wrote)
+                self.red, self.held = self._main_red(past, whole, n, main, origin, below[0], wrote), {}
                 if self.red is not None and self.red.holds:
                     held = {x.number: (x.head, f"held: `main`'s check at {self.red.tip[:12]} failed {self.red.steps()}, which read "
                                                "what its change meets; it waits until `main`'s check passes again")
                             for x in ready if vqueue.meets(x.files, self.red.holds)}
                     ready = [x for x in ready if x.number not in held]
                     left.update(held)
+                    self.held = {k: (head, MAIN_FAILED, why) for k, (head, why) in held.items()}
                 self.plain = self._plain(ready, main)
                 steps.lap("main_red")
             lent = _lent(judged, below[0], main)
@@ -3177,10 +3182,12 @@ class Loop:
 
     def _leaves(self, t: Tick) -> list[dict]:
         """A `leave` line for each PR marked ready that this tick's candidates leave out: of those `World.ready` admits and
-        takes no further (`World.held_out`), then of the PRs it took (`left_out`), each (PR, head, cause) once."""
+        takes no further (`World.held_out`), of those held for a red of `main`'s check (`held`), then of the PRs it took
+        (`left_out`), each (PR, head, cause) once."""
         seen = {(r.get("number"), h, r.get("cause")) for r in t.past.of("leave") for h in r.get("heads") or ()}
         out = []
         for n, head, cause, why in [*((n, *x) for n, x in sorted(self.world.held_out.items())),
+                                    *((n, *x) for n, x in sorted(self.held.items())),
                                     *((x.number, x.head, x.cause, x.why) for x in self.left_out(t.snap))]:
             if (n, head, cause) not in seen:
                 seen.add((n, head, cause))
