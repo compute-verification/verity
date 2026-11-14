@@ -153,10 +153,10 @@ def test_a_capped_point_reads_the_fan_out_as_its_classes_n():
 @pytest.mark.parametrize("cells,k", SMALL)
 def test_a_patterns_point_reads_the_replay_blocks_of_a_group_as_one_request(cells, k):
     """A replay grain of fan-out F in the patterns' form: the replay blocks that read one another's values are one
-    request, so the class's N is 1 and the point's S is F times the cap, what a group of F replay blocks serves: the
-    point at F = 1 with a cap of F S.  On one group of two replay blocks and on two of them, the bits Lean certifies
-    at the θ it finds from the planner's are at least log2 of the patterns' count by enumeration, each group one
-    request, with fewer sets admissible than there are."""
+    request, so the class's N is 1 and the point's S is F times `served`, what a group of F replay blocks serves: the
+    point at F = 1 whose replay blocks return F times as much.  On one group of two replay blocks and on two of them,
+    the bits Lean certifies at the θ it finds from the planner's are at least log2 of the patterns' count by
+    enumeration, each group one request, with fewer sets admissible than there are."""
     points, counts = [], []
     for replay_blocks in (2, 4):
         _, theta = two_stage_rankin(cells, k, replay_blocks, .9, .3, 3, True, fanout=2)

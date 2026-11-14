@@ -110,8 +110,8 @@ def two(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: float, q: 
     (`Verdict.fanout`, `WindowCommitmentRecord.fanout`, `partition.fanout`), and has no default (`ValueError` without
     it); the sets' form reads none.  So is `returned`, the bits one replay block of the registered Program returns, as
     its registration publishes them (`WindowCommitmentRecord.returned`, `second_stage.returned_bits`): they are what
-    its request is served, so a cap below them is refused, and so is the patterns' form at any other cap, since it
-    reads each replay block as returning exactly the cap (`ValueError`, ``served-cover``:
+    its request is served, so a cap below them is refused, and so is the patterns' form at any other `served`, since
+    it reads each replay block as returning exactly `served` bits rounded up (`ValueError`, ``served-cover``:
     `Properties.Spot.ServedCover`, `RequestsCover`).  Lean searches θ from `theta` unless `search` is None."""
     if served is not None and fanout is None:
         raise ValueError("a served cap is charged at the registered Program's fan-out: pass the one its registration "
