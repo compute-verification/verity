@@ -9,6 +9,7 @@ public import PouwCheck.Opening
 public import PouwCheck.Pass
 public import PouwCheck.Rounds
 public import PouwCheck.Credit
+public import PouwCheck.CreditUnwritten
 public import PouwCheck.Period
 public import PouwCheck.Chunks
 public import PouwCheck.LeafOwn

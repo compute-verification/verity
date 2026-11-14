@@ -245,7 +245,7 @@ def SampleDesign (D : Deploy Coin Col T) : Prop :=
   ∀ x s Pt, D.parse x = some s → D.partition s = some Pt → InScope Pt s →
     ∀ B ⊆ range Pt.blocks.length, ∃ esc : (Fin (D.V.k x) → Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
       (∀ r, Pr (fun d : Fin (D.V.k x) → Coin => ∀ v ∈ B, ∀ p : Fin (nPU D x),
-          (D.checked x (forkOn (D.stage2 x) r d))[p.val]? ≠ some v) ≤ esc r) ∧
+          (D.checked x (forkOn (D.secondStage x) r d))[p.val]? ≠ some v) ≤ esc r) ∧
       Ex esc ≤ s.design.Pa Pt B
 
 /-- **The verifier refuses what is out of scope**: an accepted run's statement parses, its query evaluates, and the
@@ -258,7 +258,7 @@ def Refuses (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
 interior values are the same at fresh second-stage coins. -/
 def InteriorFixed (H : Msg → Msg) (D : Deploy Coin Col T) (iroots : Msg → Seen → ℕ → List Msg) : Prop :=
   ∀ x (Ω : Type) (P : Prover Ω) ω r d v,
-    iroots x (run H P D.V x ω (forkOn (D.stage2 x) r d)).seen v = iroots x (run H P D.V x ω r).seen v
+    iroots x (run H P D.V x ω (forkOn (D.secondStage x) r d)).seen v = iroots x (run H P D.V x ω r).seen v
 
 /-- **A checked unit's Flock witness makes it correct**: on a statement in scope, at an accepted run that checks slot
 `u` and shows its session, a Flock witness in the session's relation reveals openings such that any values `val` and
@@ -427,12 +427,12 @@ theorem run_msgs_take {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (V : Verifie
 interior roots a run shows are read off its first `t₀ x` messages (the interiors are registered after the sample and
 before any proof), fresh second-stage coins keep them. -/
 theorem interiorFixed_of_prefix {Col T : Type} (H : Msg → Msg) (D : Deploy Coin Col T)
-    (iroots : Msg → Seen → ℕ → List Msg) (t₀ : Msg → ℕ) (hst : ∀ x, ∀ t ∈ D.stage2 x, t₀ x ≤ t.val)
+    (iroots : Msg → Seen → ℕ → List Msg) (t₀ : Msg → ℕ) (hst : ∀ x, ∀ t ∈ D.secondStage x, t₀ x ≤ t.val)
     (hread : ∀ x (s s' : Seen) v, s.msgs.take (t₀ x) = s'.msgs.take (t₀ x) → iroots x s v = iroots x s' v) :
     InteriorFixed H D iroots := by
   intro x Ω P ω r d v
   refine hread x _ _ v (run_msgs_take H P D.V x ω (t₀ x) _ _ fun t ht => ?_)
-  have hn : t ∉ D.stage2 x := fun hmem => absurd (hst x t hmem) (not_le.2 ht)
+  have hn : t ∉ D.secondStage x := fun hmem => absurd (hst x t hmem) (not_le.2 ht)
   simp [forkOn, hn]
 
 end Interior

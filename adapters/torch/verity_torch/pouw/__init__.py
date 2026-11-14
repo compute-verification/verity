@@ -12,6 +12,8 @@ The rest is the workload's device code, which `serving` names nowhere:
 - `h1`: the receipts (`Receipts`), and the device halves of the registered rows, the call tables (`h1_tables_available`)
   and the records;
 - `lead.rows_device`: the lead's words and A_j hashed on the device;
+- `row_table_device`: a CUDA device's copy of the row-table kernels with its side streams (`RowTableLibrary`,
+  `row_table_side_stream`), which H1's device halves and the vLLM adapter's Commit build on;
 - `credit_gate_device`: the credit gate's trace of the dispatcher's ops.
 """
 from __future__ import annotations
@@ -21,7 +23,8 @@ from typing import Any
 
 from verity.protocols.accounting.pouw.prover.serving import tensors as _tensors
 
-__all__ = ["PearlCDeviceRun", "Receipts", "h1_tables_available", "hook_steps", "pearl_c_weight_roots"]
+__all__ = ["PearlCDeviceRun", "Receipts", "RowTableLibrary", "h1_tables_available", "hook_steps", "pearl_c_weight_roots",
+           "row_table_side_stream"]
 
 _LAZY = {
     "PearlCDeviceRun": ("verity_torch.pouw.pearl_c.run_device", "PearlCDeviceRun"),
@@ -29,6 +32,8 @@ _LAZY = {
     "hook_steps": ("verity_torch.pouw.pearl_c.passes", "hook_steps"),
     "Receipts": ("verity_torch.pouw.h1.receipts", "Receipts"),
     "h1_tables_available": ("verity_torch.pouw.h1.tables_device", "available"),
+    "RowTableLibrary": ("verity_torch.pouw.row_table_device", "DeviceLibrary"),
+    "row_table_side_stream": ("verity_torch.pouw.row_table_device", "side_stream"),
 }
 
 

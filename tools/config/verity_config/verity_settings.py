@@ -429,6 +429,10 @@ REGISTRY = EnvSettings(
     Setting("VERITY_SAMPLED_TWO_CASE", stripped, "", WHERE, "a directory holding one honest two-stage play's case "
             "(sampled_two_small.sh's $OUT/form), which the composition suite's opt-in accept test reads: which tests run, "
             "never what a verdict says"),
+    # ---- PoUW's prover suite
+    Setting("VERITY_SUITE_ROOT", stripped, "", WHERE, "the tree the suite runner (tools/check/suites.py) runs a suite in, "
+            "set under check, where test_pouw_device's CPU build runs and fails without a C++ compiler instead of skipping: "
+            "which tests run, never what a commitment holds"),
     schema=RECORD_SCHEMA)
 
 
