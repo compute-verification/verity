@@ -1041,13 +1041,16 @@ def test_serve_through_its_command_line_serves_on_the_socket_its_descriptor_name
         ws.rehearse(args)
     serve, kw = started.value.args
     assert kw["pass_fds"] == (args.listen_fd,)
+    key = tmp_path / "key"
+    ws.make_key(key, 4)
+    serve[serve.index("--key") + 1] = str(key)
 
-    public, got = ws.cs.signer(tmp_path / "key", 4).public_key(), []
+    public, got = ws.registered_key(key), []
 
     class Publisher:
-        """`PublisherProcess` with no process: the key's public half, and nothing published."""
+        """`PublisherProcess` with no process: the registered key, no start's certificate, and nothing published."""
 
-        usage = feeder = None
+        usage = feeder = start = None
         process = types.SimpleNamespace(pid=None)
 
         def __init__(self, *a, **kw) -> None:
