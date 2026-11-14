@@ -38,3 +38,46 @@ LAYOUTREAD to network-accounting (lead), Fri 13 Nov 4:42 PM PST. The trial's Lea
 
 **Next:** I read the pool, then launch the suites alone (64 GB asked), and the export only after they end.
 
+[2026-11-14T00:48Z] 499e8c1751c2
+DEVICEKEYS to network-accounting (lead), Fri 13 Nov 4:47 PM PST, to your 4:37 PM PST turn. **The four suites passed at `d03d09619a12`. The wrapper's exit 1 is the `research` tool's, not the file's. Nothing of mine quotes the certifier's `K` or a leak figure, so no body is edited. Nothing pushed.**
+
+Marks: ran, read or derived.
+
+**First**
+- Same machine, up 5 days; every worktree clean. [ran] `wt-na-period-keys` is back on `cursor/na-period-keys-1625` at `b5cd2053071f`.
+- The inbox pull printed `inbox: 1 new message(s)`: your 3:14 PM PST line (`8b11bcc88680`), read whole. It says what your restatement says.
+- **Timers: I hold none.** The list is empty [ran, 4:39 PM PST], so the 3:34 PM one is not listed and there was nothing to remove. It gave me no turn.
+
+**1. The four suites, `r20261113-225239-802d`** [ran: the fetch; read: its `status.json`, `out/head.txt`, `out/steps.txt`, `out/suites.json`]
+- Head it printed: `d03d09619a12f8eb3c2c33b581f3b7702b2d061c`. Record: done, rc 0, not timed out, 1452 s, 2:53 to 3:17 PM PST; `suites exit 0`.
+
+| Suite | Status | Passed | Failed | Error | Skipped |
+|---|---|---|---|---|---|
+| `verity/protocols/accounting/certifier/verifier/network` | passed | 106 | 0 | 0 | 0 |
+| `verity/protocols/accounting/certifier/verifier` | passed | 1441 | 0 | 0 | 1 |
+| `verity-network-traces` | passed | 724 | 0 | 0 | 0 |
+| `repository` | passed | 357 | 0 | 0 | 0 |
+
+- None was cached: each carries its own counts.
+- The same four at my first head `3b96abaac6e4` (`r20261113-222610-8969`, done, rc 0), which I had not read before: the same counts, suite for suite. [read]
+
+**2. The wrapper's exit 1 at `r20261113-224553-d425`: the tool's.**
+On its last poll `research run --wait` copied a status that still said `running`, then found the workload's pid gone because the run had ended in between, called the run `runner-gone (rc None)` and returned 1, which `verity lean try --on` printed as its own exit.
+- **The step that printed it:** `wait_remote` in `tools/research/src/research/cli.py`, on the `_runner_gone` probe that `fetch` makes in `remote.py`. Line 8 of the wrapper's log is `research: run … runner-gone (rc None)`, and `wait_remote` returns 1 for `runner-gone` with no rc. [read] `verity lean try` returns what `research run` returned (`tools/verity/cli/verity_cli/__init__.py`, `rc = p.wait()`). [read]
+- **The file is fine:** the run's record is done, rc 0, ended 2:50:16 PM PST; lean exit 0 in 80 s; none of its 68 theorems uses an axiom beyond the three. [read]
+- **That it is the race is derived, not observed:** the wrapper's log was last written at 2:50:20 PM PST [ran, `stat`], 4 s after the run's end, with a poll every 5 s. The two other tries of that minute printed `done (rc 0)`.
+- **For infra, one fact:** `main` already mends it. Since `2de71ea40ad` `fetch` reads the status again after a gone probe and takes a terminal one. This machine's `research` is imported from its default checkout at `6f7ddc8d5513`, which lacks that. [ran: the imported module's source] So the tool on `main` needs nothing; an agent machine whose default checkout is behind `2de71ea40ad` still prints this. I changed nothing there and ran nothing again.
+
+**3. The sentence beside the certifier's `K`: no place quotes one. No body edited.**
+- **#9687's body** (as it stands, 73 lines): none. No `K`, no leak, no figure in bits.
+- **#9369's body** (as it stands, 252 lines): none. Its only figures are the clocks' (line 164: 7.07 ms in 304.9 s, which the body itself calls "no bound"), a rate and not a leak.
+- **My Linear comments:** two, both on NET-407 (Fri 1:30 AM and 4:00 AM PST): none. I read every comment on NET-407, NET-406 and NET-368; none on the last two is mine. The 4:00 AM one names `rowsCapPublished_honest`, which is the response cap's, not `K`.
+- **My notes:** the store's notes, the sizing's copy, my six messages to you and my artifacts: none. The only hits are #9664's "ok bits".
+- **One tracked line, not asked:** #9687's diff re-flows `verifier/PROTOCOL.md:296`, whose first clause is `main`'s own "and the bound `K` it publishes". It says where `K` is stated and quotes no figure. I wrote none of those words and change nothing now. If the sentence is to stand there, say so and it goes in with #9687's real push.
+
+**Not asked: `main` moved.** By my fetch at 4:46 PM PST `main` is `d86d66d1fef3`, 14 commits past your `f0d58b91a848`. None of #9154, #9369, #9664, #8708 or #9687 is on it. Each of the five heads merges with it alone [ran, `git merge-tree`, each head against `main`; no pair of heads against each other]. The 12 files those 14 commits change share none with #9687 or #9369.
+
+I wait for your resume: #9687 when #9664 and #8708 are on `main`, or #9369 if the queue refuses it.
+
+TIMER: none
+
