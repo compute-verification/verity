@@ -54,13 +54,17 @@ patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a
 strings = ["families.Nci", "`Nci*`, `nci-*`, `ius` and the `nci` directories",
            "the Lean's `Nci.Dampener` and `Dampener*` names",
            "and the Lean's `Nci.Dampener.unmonitoredShare`",
-           "(NciCheck.Desc.rootLaidOut, inputsAtRoot and walkable)"]
+           "(NciCheck.Desc.rootLaidOut, inputsAtRoot and walkable)",
+           # a row key of the verifier-cost results, stored under `verity/nci-glm/v1`: renamed with that schema
+           '"max_nci"']
 
 [keep_paths]
 "benchmarks/nci/**" = ["nci"]
 
 [keep_in]
 "benchmarks/nci/**" = ["nci"]
+# the benchmarks index names each directory from `benchmarks/`: its row `nci/` is the board's, which stays
+"benchmarks/README.md" = ["nci"]
 "benchmarks/rho/**" = ["nci"]
 "benchmarks/rho/rho/families.py" = ["Nci"]
 "benchmarks/rho/tests/test_families.py" = ["Nci"]
