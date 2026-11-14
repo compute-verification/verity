@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The WP1 exhaustive comparison as one recorded pod run (stage wp1.exhaustive).  Run from the root of the shipped checkout:
+# The exhaustive comparison of the reference evaluators as one recorded pod run (stage wp1.exhaustive).  Run from the root of the shipped checkout:
 #
 #   uv run research run --on vy-sp1 --project verity --source . --exclusive --stage wp1.exhaustive --require-result \
 #     -- bash benchmarks/numerical/tests/reference/exhaustive_pod.sh
