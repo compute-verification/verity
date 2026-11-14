@@ -149,7 +149,8 @@ theorem find_same {bs bs' : Core.Blobs} {nm nm' n : String} :
     obtain ⟨b₀', hb₀', rfl⟩ := h'
     simp only [List.map_cons, List.flatten_cons, List.cons_append, List.nil_append, List.cons.injEq] at hfl
     obtain ⟨hname, hb, hrest⟩ := hfl
-    have hn : fd₀.1 = fd₀'.1 := String.toByteArray_inj.1 hname
+    have hn : fd₀.1 = fd₀'.1 :=
+      String.toByteArray_inj.1 (String.toUTF8_eq_toByteArray.symm.trans (hname.trans String.toUTF8_eq_toByteArray))
     rw [List.find?_cons] at hf hf'
     by_cases hc : (fd₀.1 == n) = true
     · have hc' : (fd₀'.1 == n) = true := by rw [← hn]; exact hc
