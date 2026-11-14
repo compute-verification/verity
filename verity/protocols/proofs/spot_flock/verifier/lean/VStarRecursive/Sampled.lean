@@ -17,9 +17,9 @@ verifier refuses every form its soundness doesn't cover.
 * **evidence**: `{"form", ...}`, the rest that form's evidence; the two-stage form reads the evidence's whole bytes
   (`SampledTwo.evidenceOf`). One-stage evidence naming no `proofs` is v1's, and refused; evidence naming one is v2's, in
   either of its forms (`OneStageZk.evidenceEitherOf`);
-* **check**: that form's check on the blobs; evidence of another form than the params' rejects, so with the recursive
-  params refused only one-stage v2's check and the two-stage form's run, and the two-stage form's refuses every audit
-  while its switch is off.
+* **check**: that form's check on the blobs, its acceptance held to the caller's check (`Caller.gate`) against that
+  form's verifier; evidence of another form than the params' rejects, so with the recursive params refused only one-stage
+  v2's check and the two-stage form's run, and the two-stage form's refuses every audit while its switch is off.
 -/
 module
 
@@ -97,7 +97,7 @@ first, so that a mismatch of outer forms rejects without the inner ones read. -/
 def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   match p, e with
-  | .inl p, .inl e => OneStageZk.checkBlobs p c e bs
+  | .inl p, .inl e => Caller.gate c.record p.base.verifier (OneStageZk.checkBlobs p c e bs)
   | .inr q, .inr f =>
     match q, f with
     | .inl p, .inl e => Recursive.checkBlobs p c e bs

@@ -86,7 +86,7 @@ def test_every_check_runs_both_and_records_them():
 
 
 def test_the_declared_day_is_held_by_both():
-    """R2's declared day (`registration._declared`, `Registration.declaredCode`) by the verifier: the day's own program,
+    """R2's declared day (`registration._declared`, `VStar.Recursive.Caller.declaredCode`) by the verifier: the day's own program,
     another day's, a day with no declaration, an empty log and a day declared twice give the same codes in the Lean and the
     Python; and the Lean refuses the parameters the Python refuses (`registration._declarations`): a day without
     declarations or the other way round, a day that isn't a natural number, and a declaration not of the view's form."""
