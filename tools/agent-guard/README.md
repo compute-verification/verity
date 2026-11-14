@@ -11,7 +11,7 @@ side by side; it is not a package.
 |---|---|---|
 | `boot.sh` | Puts the guard on a VM whatever branch is checked out: it writes `.cursor/hooks.json` where the branch tracks none, copies origin/main's guard out of the checkout, runs `install.sh`, and starts `oom_watch.py` and the tmux session the VM keeps (`kept_session.py start`). | The Cloud Agent environment's start, on every boot; the team skill; `infra/cursor` |
 | `hook.sh` | `hook.sh NAME` runs origin/main's copy of the hook NAME on Cursor's event, so a branch cut before a guard landed still runs it. | `.cursor/hooks.json`, for every hook |
-| `shell_hook.py` | The shell hook. It refuses a command that would print secrets (the environment, a key or env file, or any process's full command line, whatever it is piped into), a local build or unselected test run, a call that would block more than 20 minutes, a branch switch that belongs to another agent, a push to verity or infra that updates `main`, `checked`, `next` or another agent's branch, a `git` in a checkout of verity or infra that names an author or committer of its own, a `git config --global` that writes the machine's identity, a command that leaves an author's or committer's name set in the shell (`export GIT_AUTHOR_NAME=...`), and a `tmux kill-server` or `tmux kill-session` that would end the VM's tmux server or the session it keeps; each rule also reads what the command has another program run: what tmux types into a pane (`send-keys`) or starts (`new-session`, `new-window`, `split-window`, `respawn-pane`, `run-shell` and the like), and what `bash -c`, `env`, `xargs`, `eval`, `watch`, `nohup`, `setsid` or `timeout` runs. A script file's contents are not read. A listing that another machine runs over `ssh` or `research pods ssh` is refused unfiltered and passes when piped straight into a `grep` that keeps only matching lines. It delivers a waiting inbox message by refusing the next command once. | `hook.sh`; the root's tests |
+| `shell_hook.py` | The shell hook. It refuses a command that would print secrets (the environment, a key or env file, or any process's full command line, whatever it is piped into), a local build or unselected test run, a call that would block more than 20 minutes, a branch switch that belongs to another agent, a push to verity or infra that updates `main`, `checked`, `next` or another agent's branch, a `git` in a checkout of verity or infra that names an author or committer of its own, a `git config --global` that writes the machine's identity, a command that leaves an author's or committer's name set in the shell (`export GIT_AUTHOR_NAME=...`), and a `tmux kill-server` or `tmux kill-session` that would end the VM's tmux server or the session it keeps; each rule also reads what the command has another program run: what tmux types into a pane (`send-keys`) or starts (`new-session`, `new-window`, `split-window`, `respawn-pane`, `run-shell` and the like), and what `bash -c`, `env`, `xargs`, `eval`, `watch`, `nohup`, `setsid` or `timeout` runs. A script file's contents are not read. A listing that another machine runs over `ssh` or `research pods ssh` is refused unfiltered and passes when piped straight into a `grep` that keeps only matching lines. It delivers a waiting inbox message by refusing the next command once. It tells an agent whose turn runs on another model than it was launched on, by refusing that turn's first command once (the model rule, below), and refuses every command of a worker's turn on Fable 5.2 (the Fable rule, below). | `hook.sh`; the root's tests |
 | `pre_push.py` | git's `pre-push` hook: the branch rule a typed push meets, applied to every branch a push updates, so a push from a script or a child process meets it too. It judges a push to `compute-verification/verity` or `compute-verification/infra`, the repositories whose `main`, `checked` and `next` drive lands, by an agent's process (one with `CURSOR_CONVERSATION_ID`, which every agent's shell sets and its children inherit): refused when it updates `main`, `checked` or `next`, or a branch registered to another agent (`worktree_guard.py hand` hands one over); an unregistered branch passes. A push without that id (a person's, the queue's) and one to any other repository (the notes, whose `main` every agent's `research notes sync` pushes, a fork, a node) are not judged. It then runs the hook the push would have run without it. | `install.sh` writes `/usr/local/lib/agent-guard/hooks/pre-push`, which `git_guard.sh` sets as `core.hooksPath` for every `git push`, through `--no-verify` and a caller's own `core.hooksPath` |
 | `kept_session.py` | The tmux session a VM keeps, `vm-secrets`, so that its tmux server never ends: the server's environment holds the secrets it started with, and a shell that lost them takes them back from it. `start` starts it; the shell hook's rule against ending it is here too. | `boot.sh`; the shell hook; `research doctor`, whose `secrets` check names the session |
 | `procs.py` | This machine's processes, with each command line's token-like runs cut out: what the shell hook's refusal of a listing points to, beside `ps -eo pid,etimes,comm` and `pgrep -l`. | The shell hook's refusal |
@@ -30,9 +30,39 @@ which `install.sh` puts ahead of the system's), and `settings.py` (every environ
 The event log (`settings.record_event`; `$AGENT_GUARD_EVENT_LOG`, default `/tmp/agent-guard-events.jsonl`) holds one line
 for each run of the shell, Task and stop hooks: when, which hook, the event's name, its conversation id and tool name, the
 payload's key names, and of the payload's other values only `model` and `generation_id` (the turn's id), each where the
-payload has it as a string, cut at 64 characters; never the command, a path or an address. Past about 4 MB it is renamed
-to `.1` and started again. `inbox.py check`, `selftest` and `guard` read from it whether a shell hook has run for an agent,
-and `inbox.py turns` the model each of an agent's turns names there. Each VM's log is its own.
+payload has it as a string, cut at 64 characters; never the command, a path or an address. The model rule adds a line
+for each turn it settles: the event `model_refusal` or `model_ok`, with the turn's id, its model and the launch model
+(`launch_model`). Past about 4 MB it is renamed to `.1` and started again. `inbox.py check`, `selftest` and `guard` read
+from it whether a shell hook has run for an agent, and `inbox.py turns` the model each of an agent's turns names there.
+Each VM's log is its own.
+
+The model rule (`shell_hook.model_reason`) tells an agent whose turn runs on another model than it was launched on. A
+turn an agent's own timer or a subscription starts can take another model than its launcher named, and nothing in the
+turn says so. The launch model is the model the agent's first turn in this machine's event log names
+(`settings.launch_model`). Models are compared by family, never by effort (`settings.model_family`: `claude-fable-5-2`
+of `claude-fable-5-2-xhigh`), so a lead moved to another effort is not told. In a turn whose commands name another
+family, the first command the hook would otherwise pass is refused, once, with the turn's model, the launch model and
+the two ways on: hand the turn's job to a child started with `Task` and `claude-opus-5-5-high` (or
+`claude-sonnet-5-5-high` for a fully specified task; never Fable 5.2), local, so that it runs on this machine and has
+the checkout; or end the turn and be
+resumed by the lead, which keeps the launch model. The rest of the turn's commands pass, so the agent can read its
+notes, start the child and push: it is told, not locked out. `AGENT_GUARD_MODEL_OK=1` in that first command passes it
+and settles the turn the same way, for a lead that has decided the turn stays on its model. Never refused: an agent
+whose turns all name one family; a turn whose payload names no model or no turn; a local session, whose id has no
+`bc-`; and an agent with no launch model on record (its first line in the log names no turn, or its first turn names
+no model). The log is one machine's. Where it starts after the agent's launch (it rotated the launch out, or a wake
+or a resume put the agent on a new machine, which holds none of its earlier turns), the first turn it holds stands
+for the launch: the rule refuses nothing in that turn, and a refusal in a later one names the model on record and
+says to go by the brief where the brief names another.
+
+The Fable rule (`shell_hook.fable_reason`): no worker runs Fable 5.2; a worker runs `claude-opus-5-5-high`, or
+`claude-sonnet-5-5-high` for a fully specified task. In a cloud worker's turn whose payload names Fable 5.2 at any effort
+(`claude-fable-5-2-*`), every command is refused, each time, saying to end the turn, say what started it, and be resumed
+by the lead or launched again naming `claude-opus-5-5-high`. A lead is an agent that holds a handle in the Slack registry
+(a `holder`), or has the id `infra/cursor/launch_coordinator.py` gives a registered handle at a generation from 1 to 50
+(`task_hook.leads`); every other agent, a lead's child included, is a worker. Never refused: a lead's turn at any effort,
+a turn whose payload names no model, a local session, and every turn while the registry can't be read (which the hook
+says on stderr). A worker launched on Fable is not told, by the model rule, that its other turns run on another model.
 
 A checkout belongs to the first agent that runs git in it, and the stamp outlives the agent. `worktree_guard.py reclaim
 DIR` gives the checkout holding DIR, and every branch registered to its owner, to the VM's coordinator once that owner
