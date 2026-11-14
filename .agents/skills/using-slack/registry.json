@@ -641,7 +641,6 @@
         "tests/",
         "fixtures/",
         "demos/README.md",
-        "demos/lifecycle/",
         "benchmarks/tree/",
         "pyproject.toml",
         "uv.lock",
