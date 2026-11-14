@@ -341,7 +341,8 @@
 # commit, held to W (WINDOW-COMMIT), with records_audit's --tie W (V3C-TIE), and the record reads R and that audit's
 # summary from pearlplus/w<k>/tie (`record --window-tie`), where `pearlplus_of_record` holds them to W.
 # Once Pearl+'s piece wrote W, before the record, the served compare holds the serve to the row of record on the CPU
-# (`served_compare.py`, within SERVED_COMPARE_TIMEOUT, default 30m): PHI, serve.json's φ is ROW_ID's declared φ and lowers
+# (`served_compare.py`, within SERVED_COMPARE_TIMEOUT, default 30m): PHI, serve.json's φ is ROW_ID's declared φ at REV
+# (`--revision`, which the manifests must pin of the row's model when it isn't the row's own) and lowers
 # the same window circuit at V3C's class cut at Pearl+'s linears; BUILD, PRED is the row's Build of record BUILD_OF_RECORD
 # (PROGRAM_DIGEST:MANIFEST_DIGEST); CUT, W registers exactly that circuit's Pearl+ values. Its last line, SERVED-COMPARE:
 # EQUAL or NOT EQUAL, is the one the record names (`record --served-compare`, its served-compare/served_compare.json
@@ -481,7 +482,7 @@ PRED=${PRED:-$D/predicted}
 SERVED_COMPARE=$D/served-compare/served_compare.json
 FW=${FLOCK_WORK:-$ROOT/flock-work}
 export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
-export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/research/src
+export PYTHONPATH=$TREE:$TREE/adapters/vllm:$TREE/tools/config:$TREE/verity/protocols/proofs/flock/prover/python:$TREE/tools/research/src
 export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
@@ -679,7 +680,7 @@ served_compare() {  # under PEARLPLUS_TIE, once Pearl+'s piece wrote W and befor
   mkdir -p "$dir" "$OUT/served-compare" && rm -f "$SERVED_COMPARE" "$dir/circuit_facts.json"
   (cd "$TREE" && CUDA_VISIBLE_DEVICES='' timeout -k 1m "${SERVED_COMPARE_TIMEOUT:-30m}" "$PY" benchmarks/one_stage/served_compare.py \
     --serve "$D" --row "$ROW_ID" --class "$V3C" --pearl-tables "${PEARLPLUS_ARM#pouw:}" --pred "$PRED" \
-    --of-record "$BUILD_OF_RECORD" --window-record "$(pearl_dir)/registration.json" --out "$dir") 2> "$dir/compare.err" \
+    --of-record "$BUILD_OF_RECORD" --window-record "$(pearl_dir)/registration.json" --revision "$REV" --out "$dir") 2> "$dir/compare.err" \
     | publish_lines
   rc=${PIPESTATUS[0]}
   [ "$rc" -le 1 ] || say "SERVED-COMPARE: NOT EQUAL (served_compare.py exit $rc: $(tail -1 "$dir/compare.err" | cut -c1-400))"
@@ -973,7 +974,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     # session (`serve_h1.arm_of`): a reserve joins only a period already open, so it's opened on the offline Program
     say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" program "$D/h1" --model "$REPO" --rows "$T" \
       --steps "$WINDOW_STEPS" "${pc[@]}" 2>&1 | tail -1)"
-    (cd "$TREE/adapters/vllm" && PYTHONPATH=$PYTHONPATH:$TREE/verity/protocols/proofs/flock/prover/python "$PY" -m tests.protocols.pouw_h1_circuits \
+    (cd "$TREE/adapters/vllm" && "$PY" -m tests.protocols.pouw_h1_circuits \
       --program "$D/h1" --out "$H1_CIRCUITS" --live "$T,$WINDOW_STEPS" --strata "${H1_STRATA:-none}" \
       ${H1_LANES:+--lanes "$H1_LANES"}) \
       > "$OUT/h1-circuits.log" 2>&1 || say "H1-CIRCUITS refused (exit $?): $(tail -1 "$OUT/h1-circuits.log" | cut -c1-400)"

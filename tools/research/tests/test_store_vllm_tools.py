@@ -3,7 +3,9 @@ durability gate (`research data preserved`, store/preserved.py), against a Local
 from __future__ import annotations
 
 import json
+import runpy
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -321,6 +323,13 @@ def test_lookup_computes_the_derivation_the_runner_records(tmp_path, monkeypatch
     assert doc["derivation"] == sec["derivation"], (doc["key_conditions"], {k: sec["conditions"].get(k) for k in doc["key_conditions"]})
     assert doc["key_conditions"] == _pinned("build"), "lookup fills hw.family and the Tool's own probe"
     assert doc["attempts"] == [] and doc["key_params"]["row"] == ROW
+
+
+def test_running_the_file_directly_exits_with_pytests_status(monkeypatch):
+    monkeypatch.setattr(pytest, "main", lambda args: 5)
+    with pytest.raises(SystemExit) as e:
+        runpy.run_path(__file__, run_name="__main__")
+    assert e.value.code == 5
 
 
 if __name__ == "__main__":

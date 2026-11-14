@@ -1,0 +1,18 @@
+{
+ "held": {
+  "a served Call with no cut in serving_templates, past the block whole even at these statics: no partition may name it until its chunked form, which is to come": [
+   "MhcPostPreTf32_v1{HC=4,H=1024,NS=4,TN=64,REPEAT=20,EPS=1e-06,HC_EPS=1e-06}",
+   "MhcPost_v1{HC=4,N=1024}",
+   "MhcPreBroadcast_v1{HC=4,H=7168,NS=28,TN=64,REPEAT=20,EPS=1e-06,HC_EPS=1e-06}"
+  ],
+  "neither a Call of a served Program (targets.call_families), a serving cut (serving_templates) nor PoUW's: a subcircuit proved inside its callers' units, or a whole step's composition, which no window stages whole": [
+   "MhcFusedSplit_v1{HC=4,N=256,OUT=24,TH=256}",
+   "MhcPreBigFuseBroadcast_v1{HC=4,H=7168,NS=28,TN=64,REPEAT=20,EPS=1e-06,HC_EPS=1e-06}",
+   "MhcPreBigFuse_v1{HC=4,H=7168,NS=4,TN=64,REPEAT=20,EPS=1e-06,HC_EPS=1e-06}",
+   "MhcPreNormBroadcast_v1{HC=4,H=7168,TN=64,EPS=1e-06}",
+   "MhcPreNorm_v1{HC=4,H=7168,TN=64,EPS=1e-06}",
+   "MhcPrenormTf32_v1{K=4096,NS=4,OUT=24}",
+   "MhcPrenormTf32_v1{K=7168,NS=28,OUT=24}"
+  ]
+ }
+}
