@@ -52,11 +52,26 @@ One H200 card, each run read on its node, Fri 13 Nov 15:45Z to 15:52Z, one lease
 
 ## Checks at this head
 
-<suites, gate, retired terms, pins>
+All at `08d6acdced2231eafdf6b10bf0245d6e0d2a8ef0`, against the `main` this branch merged, `f479876a87581c572c7b7b74ba2f23aa95785851`.
+
+- **Suites.** `suites.py --changed f479876a8758` names 64 suites [run: `r20261113-213643-9f06`]. That run ended at its three-hour limit with 53 passed and none failed, `verity-vllm` among them (17,910 passed, 565 skipped) [run]. The eleven it never reached were run by name:
+  - `verity-flock`: 2,102 passed, 69 skipped [run: `r20261114-013424-7b75`, the twin that ran `r20261114-013250-e04e`'s job].
+  - Nine passed in `r20261114-013209-983d`: `verity/definitions` 1,136; `verity/circuits` 1,125; `verity/circuits/ops` 985; `verity/commitments` 649; `verity/commitments/windows` 103; `verity-core-evaluate` 67; `verity-numerical` 662; `research` 5,086; `verity/protocols/accounting/pouw/verifier` 2,114 [run].
+  - circuit-check's own suite (`tools/verity/circuit_check/tests`), in the same run: its 448 tests passed (5 skipped), and the suite failed its input guard: "its tests read 1 files outside its inputs, for example verity/channel.py (read by a conftest or session fixture)" [run]. <BASE>
+- **The adapter's ratchet gate**, `python3 adapters/vllm/tools/ratchet_gate.py f479876a8758 HEAD --json`: one change, verdict passed, 0 failures [run: `r20261114-013321-78ad`].
+- **Pins**, `python3 tools/verity/check/pins.py --stale`: exit 0, no pin named, both at the merge `3e9855683f6c` [run: `r20261113-194328-88d1`] and at this head [run: `r20261114-013321-78ad`].
+- **Retired terms**, `tests/test_retired_terms.py` and `tests/lint/test_repo_retired_terms.py`: 40 passed, with 5 bookkeeping warnings [run: `r20261114-013321-78ad`]. None of the files they name is one this branch changes, and no line it adds holds a retired term [run; the overlap is mine, from the run's log]. The gate says the same for the files it reads [run].
 
 ## Runs
 
-<runs at this head; earlier runs with their heads>
+Each read on its node; every head below is in this branch's history [run: `git merge-base --is-ancestor`].
+
+- At this head, `08d6acdced22`: circuit-check `r20261113-210950-1125`; suites `r20261113-213643-9f06` (cut at its limit), `r20261114-013209-983d` and `r20261114-013424-7b75`; gate, pins and retired terms `r20261114-013321-78ad`; `research.carry` `r20261114-015101-b9b2`.
+- At `7c96ba47aed0`, which differs from this head only in the sidecar's two slice bindings: circuit-check on both sidecars `r20261113-194646-9c64` (12 targets in the update pass, 13 in the report, 0 failures, empty pins diff), and on the whole rows by id `r20261113-201855-8dbc` (the 4 failures above) [run].
+- At the merge `3e9855683f6c`: pins `r20261113-194328-88d1`.
+- At the merged `main` `f479876a8758`: circuit-check's own suite <BASE_RUNS>.
+- At `ce09de03c318`: the three captures of record above.
+- Earlier, before the carry: `r20261112-141330-0ffd` at `0fbd2a35cb3c` (the whole norm row past range); `r20261113-031522-215e` at `920597d5ca7f` (the split-K probe that raised); `r20261113-040826-9fec` at `78884a1b8aa7` (the 18 sibling tests that saw a third model).
 
 ## Not stated
 
