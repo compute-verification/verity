@@ -28,7 +28,10 @@ import all Std.Data.DTreeMap.Internal.Def
 
 `tablesHeld` reads the circuit file, its lookups and the blobs' tables, and throws where the two lists of names differ,
 so its acceptance is their equality (`tablesHeld_ok`). `run` binds it first (`run_tables`), and `checkBlobsAt` accepts
-only where its chain of refusals ends in `run`'s acceptance (`checkBlobsAt_run`).
+only where its chain of refusals ends in `run`'s acceptance (`checkBlobsAt_run`). A member's statement binds its own
+tables first, the blobs' pinned tables among the names its circuit looks up (`ownTables_ok`), and holds them to its
+circuit's lookups by name (`tablesMatch_ok`, `statementOf_tables`), so its inputs hold those tables and no other
+(`statement_tables`).
 
 `tablesRegistered_honest` is its honest lemma: blobs holding a circuit file that looks up `rcp` and `rcp`'s table, as
 the served path hands v2 (`honestBlobs`), pass the refusal. `tablesRegistered_nontrivial` is its nontrivial lemma: blobs
@@ -90,8 +93,79 @@ theorem checkBlobsAt_run {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ :
     obtain ⟨-, -, h7⟩ := bind_ok h6
     exact ⟨r, h7⟩
 
+/-- What `tablesMatch` accepts: the tables handed are, by name and in order, the ones wanted. -/
+theorem tablesMatch_ok {tables : List (String × ByteArray)} {want : List String}
+    (h : OneStageZk.tablesMatch tables want = .ok ()) : tables.map (·.1) = want := by
+  unfold OneStageZk.tablesMatch at h
+  try dsimp only at h
+  split at h
+  · cases h
+  · rename_i hne
+    simp only [bne_iff_ne, ne_eq, Decidable.not_not] at hne
+    exact hne
+
+/-- What `ownTables` returns: the circuit file is among the blobs, and the tables are the blobs' pinned tables among
+the names it looks up. -/
+theorem ownTables_ok {p : OneStageZk.Own} {bs : Core.Blobs} {tables : List (String × ByteArray)}
+    (h : OneStageZk.ownTables p bs = .ok tables) :
+    ∃ circuitB names, bs.get p.circuit "circuit" = .ok circuitB ∧ OneStageZk.lookupsOf circuitB = .ok names ∧
+      tables = OneStageZk.tablesAmong names bs := by
+  unfold OneStageZk.ownTables at h
+  obtain ⟨circuitB, hc, h⟩ := bind_ok h
+  obtain ⟨names, hl, h⟩ := bind_ok h
+  have ht : OneStageZk.tablesAmong names bs = tables := Except.ok.inj h
+  exact ⟨circuitB, names, hc, hl, ht.symm⟩
+
+/-- **What a statement holds of the tables it is handed**: where `statementOf` returns a statement, the circuit file
+is among the blobs, the tables handed are, by name, exactly the ones it looks up, and the statement's inputs hold
+those tables and no other. -/
+theorem statementOf_tables {p : OneStageZk.Own} {population : ByteArray → Flock.V Unit}
+    {tables : List (String × ByteArray)} {bs : Core.Blobs} {a : OneStageZk.StepAt}
+    (h : OneStageZk.statementOf p population tables bs = .ok a) :
+    ∃ circuitB names, bs.get p.circuit "circuit" = .ok circuitB ∧ OneStageZk.lookupsOf circuitB = .ok names ∧
+      tables.map (·.1) = names ∧ a.I.tables = tables := by
+  unfold OneStageZk.statementOf at h
+  obtain ⟨circuitB, hc, h⟩ := bind_ok h
+  obtain ⟨names, hl, h⟩ := bind_ok h
+  obtain ⟨⟨⟩, hm, h⟩ := bind_ok h
+  split at h
+  · cases h
+  · rename_i tags0 _
+    split at h
+    · cases h
+    · split at h
+      · cases h
+      · obtain ⟨pubB, _, h⟩ := bind_ok h
+        split at h
+        · cases h
+        · obtain ⟨rd, _, h⟩ := bind_ok h
+          have ha : OneStageZk.StepAt.ofOwn p tags0 circuitB pubB tables rd (population pubB) = a := Except.ok.inj h
+          subst ha
+          exact ⟨circuitB, names, hc, hl, tablesMatch_ok hm, rfl⟩
+
+/-- **A member's statement holds its own circuit's lookup tables, and only those**: where a member's statement reads,
+its circuit file is among the blobs, and the lookup tables its inputs hold are the blobs' pinned tables among the
+names its circuit looks up (`Spot.OneStageZk.tablesAmong`), every one of those names, whatever other pinned table the
+blobs hold. -/
+theorem statement_tables {m : OneStageZk.Member} {slice : Lean.Json} {bs : Core.Blobs} {a : OneStageZk.StepAt}
+    (h : m.statement slice bs = .ok a) : HandedOwnTables m.own bs a.I.tables := by
+  unfold OneStageZk.Member.statement at h
+  obtain ⟨tables, ht, h⟩ := bind_ok h
+  obtain ⟨a', hs, h⟩ := bind_ok h
+  obtain ⟨⟨⟩, _, h⟩ := bind_ok h
+  have ha : a' = a := Except.ok.inj h
+  subst ha
+  obtain ⟨circuitB, names, hc, hl, hta⟩ := ownTables_ok ht
+  obtain ⟨circuitB', names', hc', hl', hn, hI⟩ := statementOf_tables hs
+  have hcc : circuitB' = circuitB := Except.ok.inj (hc'.symm.trans hc)
+  subst hcc
+  have hnn : names' = names := Except.ok.inj (hl'.symm.trans hl)
+  subst hnn
+  exact ⟨circuitB', names', hc, hl, hI.trans hta, (congrArg (List.map (·.1)) hI).trans hn⟩
+
 theorem tablesRegistered : TablesRegistered :=
-  ⟨fun _ _ => tablesHeld_ok, fun _ _ _ _ _ _ _ h => (checkBlobsAt_run h).elim fun _ hr => run_tables hr⟩
+  ⟨fun _ _ => tablesHeld_ok, fun _ _ _ _ _ _ _ h => (checkBlobsAt_run h).elim fun _ hr => run_tables hr,
+    fun _ _ _ _ h => statement_tables h⟩
 
 private theorem ok_of_toOption {ε α : Type} {x : Except ε α} {a : α} (h : x.toOption = some a) : x = .ok a := by
   cases x with

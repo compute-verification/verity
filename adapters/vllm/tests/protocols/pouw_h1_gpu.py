@@ -131,7 +131,11 @@ import torch
 from verity.protocols.accounting.pouw.verifier import verifier
 from verity.protocols.accounting.pouw.verifier import window as Wd
 from verity.protocols.accounting.pouw.verifier.audit import salt_of
-from verity.protocols.accounting.pouw.verifier.coins import Challenger, CoinCommitment, CoinOpening
+from verity.protocols.accounting.pouw.verifier.coins import (
+    Challenger,
+    CoinCommitment,
+    CoinOpening,
+)
 from verity.protocols.proofs.spot.device.challenger import LiveRecord
 
 from tests.engine.int8_exact_gpu import PROMPTS as SERVE_H1_PROMPTS

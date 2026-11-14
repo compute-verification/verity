@@ -8,6 +8,7 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.KernelWrefGap
 import Proofs.Pouw.PearlC.TTOutW1
 import Proofs.Pouw.PearlC.TTOutW1Variants
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # g at the RTX PRO 6000 (sm_120) records against the kernel as it runs (staged)
