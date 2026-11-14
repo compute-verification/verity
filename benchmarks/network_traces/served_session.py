@@ -139,6 +139,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -159,6 +160,11 @@ HERE = Path(__file__).resolve().parent
 TREE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(TREE / "verity/protocols/compose/device/live_challenger"))
 import auditor as A  # noqa: E402
+
+#: this directory's settings registry, by its path: a bare ``settings`` is whichever one sys.path has first
+_spec = importlib.util.spec_from_file_location("network_traces_settings", HERE / "settings.py")
+settings = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(settings)
 
 #: the scan's class (`scan_zk.W63`, the gate's class of record): at most KI prompt ids in, at most KO ids out a request
 (_, KI), (_, KO) = A.scan_bounds()
@@ -228,7 +234,7 @@ def gate_at(gate: str) -> str:
     """`gate` (USER@HOST, or ``local``) with each ``${NAME}`` filled from the environment: `GATE` names the challenger
     host's address that way, which no file here holds. A NAME the environment doesn't hold is refused by name."""
     def held(m: re.Match) -> str:
-        if not (value := os.environ.get(m[1])):
+        if not (value := settings.host(m[1])):
             raise Refused(f"{m[1]} is unset: the gate is {gate}, so set it to the challenger host's address, or give "
                           "--gate USER@HOST")
         return value
