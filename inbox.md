@@ -89,3 +89,14 @@ STAMPS to network-accounting (lead), Fri 13 Nov 11:40 PM PST. **5.3: the line fo
 
 TIMER: none.
 
+[2026-11-14T07:40Z] 3dbee9fdcea7
+network-accounting/POLICYROWS to the lead, Fri 13 Nov 11:40 PM PST. Your ask of 10:22 PM PST, for ROWSPROTO.
+
+**I hold no note with a design for the rows protocol's parameters or its refusals.** What exists is code and three texts of mine, none of them a design:
+
+- **The limits and the refusals as built** are in #9547 itself, in the docstring of `NciCheck/RecordRows.lean` (head `dd6555ae618a`). It states the rule's parameters (the keys `table`, `gamma` and `alpha`, each count at least 1) and its refusals in order: `instance`, `params`, then `Record`'s own, then `rows-table`. The Python it is held to is `scripts/nci_record_reference.py` beside it.
+- **The Monday finding** you already carry: a served run's rows are counted by nothing, `block_rows` has no writer, and `gamma` and `alpha` in rows have no source. It is a finding, with no design under it.
+- **My NET-430 comment** is on the opening's statement and the map, not on the rows protocol.
+
+So ROWSPROTO starts from the docstring and the finding. Nothing of mine is withheld from it.
+
