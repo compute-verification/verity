@@ -16,7 +16,7 @@ acceptance of the rest.
 
 `fibre` is what the counting statement counts, and `Determines` is the condition on a family of PoUS adversaries,
 one for each `z`, that the state held before every challenge reads back as `z`. The statements are in
-`Security/Definitions/Accounting/Guarantees/Memory.lean`.
+`Security/Definitions/Pous/Guarantees/Memory.lean`.
 -/
 
 @[expose] public section

@@ -492,7 +492,7 @@ KNOWN: dict[str, str] = {
         "homonym, a tile shape: rename (compute-accounting)",
     "security/Definitions/Pouw/TS/Machine.lean::Accounting.TS.Machine":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes a reading of it (compute-accounting)",
-    "security/Definitions/Accounting/Wipe.lean::Accounting.Wipe.Strategy":
+    "security/Definitions/Pous/Wipe.lean::Accounting.Wipe.Strategy":
         "homonym, a device's play in the wipe (its fill, egress and spot-read answers): rename (lean)",
     "security/Definitions/Claims.lean::Claims.Flock.Stmt": "duplicate of `Flock.Stmt`: becomes its spec, in Core (lean)",
     "security/Definitions/Claims/Sampling.lean::Claims.Sampling.Opening":

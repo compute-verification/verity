@@ -59,9 +59,9 @@ import Proofs.Pouw.TS
 import Proofs.Pouw.TS.ReceiptDuoCP
 import Proofs.Pouw.TS.ReceiptLi
 import Proofs.Pouw.TS.Stages
-import Proofs.Accounting.Tag.Basic
-import Proofs.Accounting.Tag.LittlewoodOfford
-import Proofs.Accounting.Tag.Signs
+import Proofs.Pous.Tag.Basic
+import Proofs.Pous.Tag.LittlewoodOfford
+import Proofs.Pous.Tag.Signs
 import Proofs.Pouw.Period
 import Proofs.Pouw.Period.Sort
 import Proofs.Pouw.Receipt

@@ -30,7 +30,7 @@ public import Definitions.Accounting.Guarantees.JointBridge.BandwidthOfAuditPerR
 public import Definitions.Accounting.Guarantees.JointBridge.CommOfMonitoringPeriodLeakAccepted
 public import Definitions.Accounting.Guarantees.JointBridge.CommOfPooledLeakAccepted
 public import Definitions.Accounting.Guarantees.Localization
-public import Definitions.Accounting.Guarantees.Memory
+public import Definitions.Pous.Guarantees.Memory
 public import Definitions.Pouw.Guarantees.PerRun
 public import Definitions.Accounting.Guarantees.PeriodBinding
 public import Definitions.Pouw.Guarantees.Pouw
@@ -42,7 +42,7 @@ public import Definitions.Poub.Guarantees.RateAuditPartial
 public import Definitions.Poub.Guarantees.RateAuditPooled
 public import Definitions.Poub.Guarantees.RateAuditRemote
 public import Definitions.Poub.Guarantees.RateAuditSketch
-public import Definitions.Accounting.Guarantees.Responder
+public import Definitions.Pous.Guarantees.Responder
 public import Definitions.Accounting.Guarantees.ServingBlocks
 public import Definitions.Accounting.Guarantees.ServingBlocks.Witnesses
 public import Definitions.Accounting.Guarantees.RemoteHeld

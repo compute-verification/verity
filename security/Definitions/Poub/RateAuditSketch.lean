@@ -2,7 +2,7 @@ module
 
 public import Mathlib.Data.ZMod.Basic
 public import Definitions.Pous.Game.Prob
-public import Definitions.Accounting.Tag.Sketch
+public import Definitions.Pous.Tag.Sketch
 public import Definitions.Core.Draw
 
 /-!

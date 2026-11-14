@@ -30,7 +30,7 @@ public import Definitions.Accounting.JointBridge.CommOfMonitoringPeriodLeakAccep
 public import Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted
 public import Definitions.Accounting.JointBridge.CommOfPooledLeakAcceptedWitness
 public import Definitions.Accounting.JointLive
-public import Definitions.Accounting.Memory
+public import Definitions.Pous.Memory
 public import Definitions.Pouw.PerRun
 public import Definitions.Accounting.PeriodBinding
 public import Definitions.Accounting.Physical
@@ -58,16 +58,16 @@ public import Definitions.Accounting.Remote.Deployed
 public import Definitions.Accounting.Remote.DrawInstances
 public import Definitions.Accounting.Requirement
 public import Definitions.Accounting.Requirement.Placed
-public import Definitions.Accounting.Responder
+public import Definitions.Pous.Responder
 public import Definitions.Accounting.Schedule
 public import Definitions.Accounting.Served
 public import Definitions.Accounting.ServingBlocks
 public import Definitions.Accounting.ServingBlocks.Instances
-public import Definitions.Accounting.Tag
+public import Definitions.Pous.Tag
 public import Definitions.Pouw.TS
 public import Definitions.Pouw.TS.Fixed
 public import Definitions.Accounting.Window
-public import Definitions.Accounting.Wipe
+public import Definitions.Pous.Wipe
 
 /-!
 # Resource accounting's definitions (trusted)

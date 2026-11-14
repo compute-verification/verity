@@ -342,7 +342,7 @@
     {"file": "security/Proofs/Accounting/RemoteHeld/Line.lean", "count": 52},
     {"file": "security/Proofs/Accounting/RemoteHeld/Meets.lean", "count": 1},
     {"file": "security/Proofs/Accounting/RemoteHeld/SketchLine.lean", "count": 1},
-    {"file": "security/Proofs/Accounting/Responder/Latency.lean", "count": 18},
+    {"file": "security/Proofs/Pous/Responder/Latency.lean", "count": 18},
     {"file": "security/Proofs/Accounting/Served.lean", "count": 15},
     {"file": "security/Proofs/Accounting/ServingBlocks.lean", "count": 15},
     {"file": "security/Proofs/Accounting/ServingBlocks/Witnesses.lean", "count": 51},

@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Accounting.Tag.Basic
+public import Proofs.Pous.Tag.Basic
 public import Definitions.Accounting.Guarantees.Sketch
 
 /-!

@@ -18,7 +18,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
-import Proofs.Accounting.Tag.Signs
+import Proofs.Pous.Tag.Signs
 
 /-!
 # Exactness of integer ±1 sketches on sm_120's E4M3 tensor cores

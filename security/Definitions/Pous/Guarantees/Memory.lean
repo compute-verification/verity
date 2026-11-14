@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Memory
+public import Definitions.Pous.Memory
 public import Definitions.Pous.Assumptions.P2
 import Mathlib.Basic.ENNReal.Real
 
@@ -36,7 +36,7 @@ instantiate the state once the actual circuit's definitions land.
 
 The probability is over `z`, uniform over `q` bits, and PoUS's outcome (the primitive, the encoder's coins and the
 challenges), independently: `z` is fixed before setup, as `W` is, and `W` does not depend on it. The proofs are in
-`Security/Proofs/Accounting/Memory/`.
+`Security/Proofs/Pous/Memory/`.
 -/
 
 @[expose] public section

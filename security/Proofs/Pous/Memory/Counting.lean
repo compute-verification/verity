@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Memory
+public import Definitions.Pous.Memory
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Basic.ENNReal.Real
 import Mathlib.Data.Fintype.BigOperators

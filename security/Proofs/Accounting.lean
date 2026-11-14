@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Accounting.Memory
+public import Proofs.Pous.Memory
 public import Proofs.Accounting.Device
 public import Proofs.Accounting.Gates
 public import Proofs.Pouw.FillerLuck
@@ -109,8 +109,8 @@ public import Proofs.Pouw.TS.Session.Tile.Computes
 public import Proofs.Pouw.TS.TileSound
 public import Proofs.Pouw.TS.PeriodSound
 public import Proofs.Accounting.Actual
-public import Proofs.Accounting.Responder
-public import Proofs.Accounting.Responder.Latency
+public import Proofs.Pous.Responder
+public import Proofs.Pous.Responder.Latency
 public import Proofs.Pouw.HMu
 public import Proofs.Pouw.CoinFlow
 public import Proofs.Accounting.Compose

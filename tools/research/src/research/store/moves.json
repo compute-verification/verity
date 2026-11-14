@@ -3824,6 +3824,26 @@
         "security/Proofs/Accounting/ReadUnit/Tie.lean": "security/Proofs/Poub/ReadUnit/Tie.lean",
         "security/Proofs/Accounting/ReadUnit/Witnesses.lean": "security/Proofs/Poub/ReadUnit/Witnesses.lean"
       }
+    },
+    {
+      "paths": {
+        "security/Definitions/Accounting/Guarantees/Memory.lean": "security/Definitions/Pous/Guarantees/Memory.lean",
+        "security/Definitions/Accounting/Guarantees/Responder.lean": "security/Definitions/Pous/Guarantees/Responder.lean",
+        "security/Definitions/Accounting/Memory.lean": "security/Definitions/Pous/Memory.lean",
+        "security/Definitions/Accounting/Responder.lean": "security/Definitions/Pous/Responder.lean",
+        "security/Definitions/Accounting/Tag.lean": "security/Definitions/Pous/Tag.lean",
+        "security/Definitions/Accounting/Tag/Sketch.lean": "security/Definitions/Pous/Tag/Sketch.lean",
+        "security/Definitions/Accounting/Wipe.lean": "security/Definitions/Pous/Wipe.lean",
+        "security/Proofs/Accounting/Memory.lean": "security/Proofs/Pous/Memory.lean",
+        "security/Proofs/Accounting/Memory/Adds.lean": "security/Proofs/Pous/Memory/Adds.lean",
+        "security/Proofs/Accounting/Memory/Counting.lean": "security/Proofs/Pous/Memory/Counting.lean",
+        "security/Proofs/Accounting/Responder.lean": "security/Proofs/Pous/Responder.lean",
+        "security/Proofs/Accounting/Responder/Latency.lean": "security/Proofs/Pous/Responder/Latency.lean",
+        "security/Proofs/Accounting/Tag/Basic.lean": "security/Proofs/Pous/Tag/Basic.lean",
+        "security/Proofs/Accounting/Tag/LittlewoodOfford.lean": "security/Proofs/Pous/Tag/LittlewoodOfford.lean",
+        "security/Proofs/Accounting/Tag/Signs.lean": "security/Proofs/Pous/Tag/Signs.lean",
+        "security/Proofs/Accounting/Tag/SketchExact.lean": "security/Proofs/Pous/Tag/SketchExact.lean"
+      }
     }
   ]
 }

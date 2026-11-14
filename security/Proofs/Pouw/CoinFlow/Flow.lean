@@ -41,9 +41,9 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.Tag.Basic
-import Proofs.Accounting.Tag.LittlewoodOfford
-import Proofs.Accounting.Tag.Signs
+import Proofs.Pous.Tag.Basic
+import Proofs.Pous.Tag.LittlewoodOfford
+import Proofs.Pous.Tag.Signs
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
