@@ -21,7 +21,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 /-!
-# The challenger's sample at every sample of the live law, at hidden-output `--zk`
+# The challenger's sample at every sample of the live sampling design, at hidden-output `--zk`
 
 `zk_session_soundH` takes `DrawOkZKH I dj mPts` at each of `Law.execOS`'s samples: the sample file `dj S` proves `S`'s units,
 and setupHidden, under the `--zk` tags, sets up at `mPts` link points. As at public outputs (`ZkLink/DrawOk.lean`), the
@@ -31,7 +31,7 @@ first half is custody (`DrawFileZK`) and the second is verity-verify-proof's own
   `g` and the units the sample proves, as setupH's (`Exec.setupH_mPts_drawn`, `Exec.setupH_mPts_of_proved`), from
   `Hidden.setupHidden_spec`. `setupHidden_mPts_of_provedG` reads `g` off the session, and
   `setupHidden_mPts_of_provedSt` off the statement circuit (`HmOut.parseStmt`, a templated file's template unrolled).
-* `drawOkZKH_of_exec`: from `DrawFileZK` at the live law's own stratified sampling design, `DrawOkZKH` at every sample of
+* `drawOkZKH_of_exec`: from `DrawFileZK` at the live sampling design's own stratified sampling design, `DrawOkZKH` at every sample of
   `Law.execOS`, at `mPtsOf c.g (∑ s, ks s)`: `ZkLink.drawOkZK_of_exec`'s proof at setupHidden. `drawOkZKH_of_execG` is
   it at any `g` every session has, and `drawOkZKH_of_execSt` at the statement circuit's.
 -/
@@ -81,9 +81,9 @@ theorem setupHidden_mPts_of_provedSt {c : Circuit} {d : Json} {N₀ : ℕ} (ht :
 
 variable {n : ℕ}
 
-/-- **The challenger's sample is `DrawOkZKH` at every sample of the live law, at any `g` every session under the `--zk`
+/-- **The challenger's sample is `DrawOkZKH` at every sample of the live sampling design, at any `g` every session under the `--zk`
 tags has.** With the executable strata `St` describing `σs`'s, each sampling `ks s` of its units: when the record's sample
-file is the verifier's sample under the live law's own stratified sampling design (`DrawFileZK`), `DrawOkZKH` holds at
+file is the verifier's sample under the live sampling design's own stratified sampling design (`DrawFileZK`), `DrawOkZKH` holds at
 `mPtsOf g (∑ s, ks s)` link points at every sample of `Law.execOS`, the run that reads past the source's bytes (every
 unit) included. -/
 theorem drawOkZKH_of_execG (I : Inputs) {g : ℕ}
@@ -105,9 +105,9 @@ theorem drawOkZKH_of_execG (I : Inputs) {g : ℕ}
       rw [hdj _ ud hud, huniv] at hud
       rw [huniv, card_univ, Fintype.card_fin, sum_ks_of_univ σs ks hks St hS Kd pop hud]
 
-/-- **The challenger's sample is `DrawOkZKH` at every sample of the live law.** On tags whose circuit file `HmOut.parse`
+/-- **The challenger's sample is `DrawOkZKH` at every sample of the live sampling design.** On tags whose circuit file `HmOut.parse`
 accepts under the `--zk` tags as `c`, with the executable strata `St` describing `σs`'s, each sampling `ks s` of its
-units: when the record's sample file is the verifier's sample under the live law's own stratified sampling design (`DrawFileZK`),
+units: when the record's sample file is the verifier's sample under the live sampling design's own stratified sampling design (`DrawFileZK`),
 `DrawOkZKH` holds at `mPtsOf c.g (∑ s, ks s)` link points at every sample of `Law.execOS`, the run that reads past the
 source's bytes (every unit) included. -/
 theorem drawOkZKH_of_exec (I : Inputs) {c : Flock.Circuit}

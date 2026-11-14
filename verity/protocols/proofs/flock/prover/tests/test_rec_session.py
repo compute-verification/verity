@@ -518,7 +518,7 @@ def test_rs_top_is_registered_at_staging_and_meta_binds_its_registration(tmp_pat
     its root reaches the challenger only at ``stacked/rep0``'s binding round. So R's top is registered with the statement
     at staging (`rec_live.register_top`, `inner_registered.bind`): one more registered value, ``stacked``, of the circuit
     registration, the ``verity/registration/v2`` record one-stage ``registration.record`` writes over the partition object
-    META names (one-stage's ``stratified`` law, the statement's scheme, no roots, window ``stand-in``), beside the other
+    META names (one-stage's ``stratified`` sampling design, the statement's scheme, no roots, window ``stand-in``), beside the other
     values registered at staging (a description's): 128 rows of 64 words, one a node, each under its own salt, which only
     the prover's file holds. META's ``registration`` is the record's digest, so the circuit's SHA-512 (both files' headers)
     and the statement digest bind it, and the same circuit and salts give the same record. The ZK server refuses a

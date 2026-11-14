@@ -72,7 +72,7 @@ open scoped ENNReal
 variable {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type}
 
 /-- **Gap 1, the window's sampling design** (open): at each round `w` and
-proof `i`, the window's coins, read through the session proof `i` runs and its outcome, have the sessions' law
+proof `i`, the window's coins, read through the session proof `i` runs and its outcome, have the sessions' sampling design
 (`SessionLaw`): the session's coins are the path's, fresh and uniform given its setting and its prover. -/
 def WindowLaw (sess : Paths Ω S → Fin S → Fin nπ → RowsSession) (out : ∀ x w i, (sess x w i).Out) : Prop :=
   ∀ w i, SessionLaw (Out := fun s : RowsSession => s.Out) (fun s => s.G) (fun s => s.τ) (fun x => sess x w i)

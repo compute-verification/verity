@@ -2436,7 +2436,7 @@ table `j` is `setupH`'s statement of part `j` as a subset sample of the populati
 stratified sample, whose sampling design is held to the verifier's own derivation once, for the session, before it is split. Every part
 comes from `draw`, the session's, never from a table's header. The
 session's Σ covers every table's; its `unitDraw` is `draw`. `work` is the verifier's own `K` and work table, which a work
-sample's law is held to, `stratified` its own `K`, at which a stratified sample's law is its own derivation, `closure` its
+sample's sampling design is held to, `stratified` its own `K`, at which a stratified sample's sampling design is its own derivation, `closure` its
 own closure map, which a work sample's closure is held to, and `publicInputs` its own recomputation of the public input
 words (`HmIn.checkOwn`). A table with pinned outputs (`HmRow.pinnedCount`) is refused, as `ProvedScope.check` refuses
 it, until a soundness theorem covers that form. -/
@@ -2492,7 +2492,7 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   if count > Tags.MAX_TABLES then throw s!"tables: at most {Tags.MAX_TABLES} per session, not {count}"
   let splits := fun (n : Nat) => if n == 0 || n % count != 0 then throw s!"tables: {n} units do not split into {count} equal tables"
     else (pure () : V Unit)
-  -- the sample's law and count are refused before the circuit is read
+  -- the sample's sampling design and count are refused before the circuit is read
   let u? ← draw.mapM Draw.UnitDraw.ofJson
   if let some u := u? then
     match u.law with
@@ -2650,7 +2650,7 @@ def Stmt.setupTablesOf (parsed : V Circuit) (tags : Tags) (circuitFile publicFil
   if count > Tags.MAX_TABLES then throw s!"tables: at most {Tags.MAX_TABLES} per session, not {count}"
   let splits := fun (n : Nat) => if n == 0 || n % count != 0 then throw s!"tables: {n} units do not split into {count} equal tables"
     else (pure () : V Unit)
-  -- the sample's law and count are refused before the circuit is read
+  -- the sample's sampling design and count are refused before the circuit is read
   let u? ← draw.mapM Draw.UnitDraw.ofJson
   if let some u := u? then
     match u.law with
