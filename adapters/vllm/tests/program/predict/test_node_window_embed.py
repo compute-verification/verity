@@ -83,16 +83,17 @@ def test_wired_to_allreduce(window):
 
 def test_census(window, without):
     """`EmbeddingShard` is gone from the unlowered families and its port from the free ones; its ``tok`` port is the
-    request's ingress at the prefill (the prompt) and free under the token select, which is not lowered."""
+    prompt's at the prefill, free under the prompt (which no window declares), and free under the token select, which is
+    not lowered."""
     circuit, w = window
     census, before = w.census(circuit), without[1].census(without[0])
     assert before["unlowered"]["EmbeddingShard"] == 2 and before["free"]["EmbeddingShard"]["words"] == (LP + 1) * WIDTH
     assert "EmbeddingShard" not in census["unlowered"] and "EmbeddingShard" not in census["free"]
     assert census["units"]["EmbeddingShard"] == BLOCKS * (LP + 1)
     read = _tid(circuit, READ)
-    assert {(f.port, f.kind, f.family) for f in w.free if f.tid == read} == {("tok", "node", "TokenSelect")}
-    assert [(g.reader, g.port, g.at, g.units, g.step) for g in circuit.ingress] == [(read, "tok", 0, LP * BLOCKS, 0)]
-    assert census["ingress"] == {"ports": 1, "unit_ports": LP * BLOCKS, "words": 2 * LP * BLOCKS}
+    assert {(f.port, f.kind, f.family) for f in w.free if f.tid == read} == {("tok", "node", "TokenSelect"),
+                                                                              ("tok", "param", NW.PROMPT)}
+    assert circuit.ingress == () and "ingress" not in census
 
 
 def test_tables_declared(window):
