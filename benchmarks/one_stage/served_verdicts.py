@@ -157,8 +157,8 @@ $OUT/composite, `composite_answer`); a Lean rejection there rejects whatever the
 product's check, one whose Lean answered, or with a development one (composed on the served node or on a prover node),
 no Lean answer is the record's, so it is ``undecided``, which the window report (``-window/v1``) and the ``RECORD`` line
 name ``pending``; each says, as ``lean``, where its answer was read or why there is none. A composite not of the
-record's window is refused (`composite_tie`): its sampled proofs case must name the digest of the registration record
-R that ``--sampled-proofs``'s audit sampled against (`window_digest`), and its commitment must bind its cases' digests.
+record's window is refused (`composite_tie`): its SPOT case must name the digest of the registration record R that
+the SPOT audit the record reads sampled against (`window_digest`), and its commitment must bind its cases' digests.
 Python accepts nothing here: the exit is 0 only for the Lean's accept, 1 for a reject, a refused composite or a block
 record `block_record.check` refuses, 2 for pending.
 The subprotocols are those of ``--product`` (default onsite; `block_record.PRODUCTS`): each one the
@@ -233,9 +233,6 @@ WINDOW_VERDICT = {"undecided": "pending"}
 RECORD_EXIT = {"accept": 0, "reject": 1, "pending": 2}
 #: sampled proofs' owner, its row's
 INTEGRITY_OWNER = "compute-accounting"
-#: the composite's case that names the window: sampled proofs', which commits to its registration record R
-#: (`served_cases.SAMPLED`)
-WINDOW_CASE = "verity/sampled-proofs/v1"
 
 #: each subprotocol after sampled proofs, by its runner name: (its name, its component, its verifier's owner, what its piece
 #: does), in the chain's order
@@ -2066,7 +2063,7 @@ class CompositeRefused(ValueError):
 
 
 def window_digest(audit: Path) -> tuple[str | None, str]:
-    """The digest of the window's registration record R, the record the sampled proofs audit ``audit`` sampled against
+    """The digest of the window's registration record R, the record SPOT's audit ``audit`` sampled against
     and every case of the window commits to (`served_cases.window_case`, `served_cases.record_of`), and where it was
     read; or None and why there is none."""
     import served_cases as SC
@@ -2074,24 +2071,30 @@ def window_digest(audit: Path) -> tuple[str | None, str]:
     try:
         return SC.record_of(SC.window_case(audit))[1], f"{audit}/window/case.json"
     except SC.Refused as e:
-        return None, f"the sampled proofs audit {audit} names no window record: {e}"
+        return None, f"SPOT's audit {audit} names no window record: {e}"
 
 
 def composite_tie(doc: Mapping[str, Any], window: str | None, read: str) -> str | None:
     """Why the public composite ``doc`` is not of the window whose registration record has digest ``window`` (read
-    from ``read``), or None when it is: its sampled proofs case (`WINDOW_CASE`) names that digest, and its commitment is
+    from ``read``), or None when it is: its SPOT case (`served_cases.SAMPLED`) names that digest, and its commitment is
     `composite.bind` of its cases' digests, so the commitment its Lean judged binds that window. The Lean ties the other
-    cases to the same record (`Core.Composition.same`, `Core.Remote.windows`)."""
+    cases to the same record (`Core.Composition.same`, `Core.Remote.windows`), and accepts only where every case names
+    its digest and the commitment binds them (`Core.Composition.judge`); a composite that accepts with a case naming no
+    digest is refused here too."""
     import composite as C
+    import served_cases as SC
 
     if window is None:
         return f"there is no window record to tie it to ({read})"
     cases = [c for c in doc.get("cases") or [] if isinstance(c, dict)]
-    named = [c["commitment"] for c in cases if c.get("id") == WINDOW_CASE and c.get("commitment")]
+    named = [c["commitment"] for c in cases if c.get("id") == SC.SAMPLED and c.get("commitment")]
     if named != [window]:
-        return (f"its {WINDOW_CASE} case names {named or 'no record'}, not this window's record R "
+        return (f"its {SC.SAMPLED} case names {named or 'no record'}, not this window's record R "
                 f"{window[:16]}… ({read})")
-    if all(c.get("commitment") for c in cases):
+    if not all(c.get("commitment") for c in cases):
+        if (doc.get("verdict") or {}).get("verdict") == "accept":
+            return "it accepts with a case that names no digest, so its commitment binds no digest of that case"
+    else:
         bound = C.bind(str(doc.get("product")), [(str(c.get("id")), bytes.fromhex(c["commitment"]))
                                                   for c in sorted(cases, key=lambda c: str(c.get("id")))]).hex()
         if doc.get("commitment") != bound:
@@ -2524,12 +2527,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         ap.error("--sampled-exe is sampled proofs' Lean, which only --sampled-lean runs")
     if a.tree_on and not a.tree:
         ap.error("--tree-on names the branch of the tree --tree names")
-    integrity = (lean_sampled_row(a.sampled_proofs, a.serve_run / "private" / "scratch", a.sampled_exe, run)
-                 if a.sampled_lean else spot_row(a.sampled_proofs, run))
+    audit = a.sampled_proofs
+    integrity = (lean_sampled_row(audit, a.serve_run / "private" / "scratch", a.sampled_exe, run)
+                 if a.sampled_lean else spot_row(audit, run))
     rows = {"integrity": integrity, **{k: row for k, (row, _) in got.items()}}
     refused = False
     try:
-        answer, lean = (composite_answer(a.composite, a.product, *window_digest(a.sampled_proofs)) if a.composite
+        answer, lean = (composite_answer(a.composite, a.product, *window_digest(audit)) if a.composite
                         else (None, "no composite was read"))
     except CompositeRefused as e:
         answer, lean, refused = None, str(e), True

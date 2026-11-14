@@ -908,13 +908,13 @@ def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, 
     assert (line["product"], line["composed"], line["by"]) == ("onsite", "reject", ["the wipe"])
 
 
-#: the toy registration record R of the window the record tests' sampled proofs audit sampled against
+#: the toy registration record R of the window the record tests' SPOT audit sampled against
 WINDOW_RECORD = {"format": "toy-registration", "window": 1}
 WINDOW_DIGEST = REG.digest(WINDOW_RECORD)
 
 
 def _window_case(audit: Path, rec: Mapping[str, Any] = WINDOW_RECORD) -> Path:
-    """The sampled proofs audit ``audit``'s v1 case, committing to the registration record ``rec``."""
+    """SPOT's audit ``audit``'s v1 case, committing to the registration record ``rec``."""
     from verity.circuits import codec
 
     (audit / "window").mkdir(parents=True, exist_ok=True)
@@ -926,13 +926,14 @@ def _window_case(audit: Path, rec: Mapping[str, Any] = WINDOW_RECORD) -> Path:
 def _composite(public: Path, x: str, product: str, verdict: str | None, window: str | None = WINDOW_DIGEST,
                **more) -> str:
     """composite.py's public composite.json of ``product`` under ``public/x``, its Lean answering ``verdict`` (its
-    ``none`` when None), its sampled proofs case naming ``window`` and PoUW's its period, and its commitment their
+    ``none`` when None), its SPOT case naming ``window`` and PoUW's its period, and its commitment their
     `composite.bind`, which it returns."""
     import composite as C
+    import served_cases as SC
 
     out = {"id": product, "verdict": verdict or "none", **({"refusal": "components"} if verdict != "accept" else {})}
     cases = [{"id": i, "commitment": d, "params_sha512": "00" * 64, "verdict": "accept"}
-             for i, d in (("verity/pouw/period/v1", "ef" * 64), (S.WINDOW_CASE, window))]
+             for i, d in (("verity/pouw/period/v1", "ef" * 64), (SC.SAMPLED, window))]
     commitment = C.bind(product, [(c["id"], bytes.fromhex(c["commitment"] or "")) for c in cases]).hex()
     (public / x).mkdir(parents=True, exist_ok=True)
     (public / x / "composite.json").write_text(json.dumps(
@@ -954,12 +955,27 @@ def test_a_composite_that_doesnt_parse_gives_no_answer_and_a_directory_without_o
     assert answer is None and why.startswith("remote-v1/composite.json doesn't parse"), why
 
 
-def test_the_window_record_is_the_one_the_sampled_proofs_audit_sampled_against(tmp_path):
+def test_the_window_record_is_the_one_spots_audit_sampled_against(tmp_path):
     """`window_digest` is the digest of the registration record R the audit's v1 case commits to, and None, saying
     why, for an audit with no case."""
     assert S.window_digest(_window_case(tmp_path / "audit"))[0] == WINDOW_DIGEST
     digest, why = S.window_digest(tmp_path / "none")
-    assert digest is None and why.startswith(f"the sampled proofs audit {tmp_path / 'none'} names no window record"), why
+    assert digest is None and why.startswith(f"SPOT's audit {tmp_path / 'none'} names no window record"), why
+
+
+#: a composite's cases where PoUW's commitment didn't decode, so its answer names no digest
+UNDIGESTED = [{"id": "verity/pouw/period/v1", "commitment": None, "params_sha512": "00" * 64, "verdict": "reject"},
+              {"id": "verity/sampled-proofs/v1", "commitment": WINDOW_DIGEST, "params_sha512": "00" * 64,
+               "verdict": "accept"}]
+
+
+def test_a_rejection_with_a_case_naming_no_digest_is_taken(tmp_path):
+    """A composite whose Lean rejects, a case naming no digest (its commitment didn't decode), is the window's
+    rejection: only an accept needs the bind Python can't check there."""
+    c = tmp_path / "composite"
+    _composite(c, "remote-v1", "verity/remote/v1", "reject", cases=UNDIGESTED)
+    answer, lean = S.composite_answer(c, "remote", WINDOW_DIGEST, "the audit")
+    assert answer is not None and answer["verdict"] == "reject", (answer, lean)
 
 
 @pytest.mark.parametrize("change, why", [
@@ -968,11 +984,13 @@ def test_the_window_record_is_the_one_the_sampled_proofs_audit_sampled_against(t
     ({"window": None}, "its verity/sampled-proofs/v1 case names no record, not this window's"),
     ({"commitment": "ab" * 64}, "its commitment is not the bind of its cases' digests"),
     ({"cases": []}, "its verity/sampled-proofs/v1 case names no record, not this window's"),
+    ({"cases": UNDIGESTED}, "it accepts with a case that names no digest"),
 ])
 def test_a_composite_of_another_window_is_refused_whatever_its_lean_said(tmp_path, change, why):
-    """A composite whose sampled proofs case names another window's record, or none, or whose commitment doesn't bind
-    its cases' digests, is refused (`CompositeRefused`), its Lean's accept not taken; one that names this window's
-    record R and binds it is taken."""
+    """A composite whose SPOT case names another window's record, or none, or whose commitment doesn't bind
+    its cases' digests, or that accepts with a case naming no digest (whose bind Python can't check, and the Lean
+    never accepts: `Core.Composition.judge`), is refused (`CompositeRefused`), its Lean's accept not taken; one that
+    names this window's record R and binds it is taken."""
     c = tmp_path / "composite"
     window = change.pop("window", WINDOW_DIGEST)
     _composite(c, "remote-v1", "verity/remote/v1", "accept", window=window, **change)
@@ -1015,7 +1033,7 @@ def test_the_records_verdict_is_the_compiled_lean_composites_and_its_exit_0_only
     the Lean says (Python only refuses). No composite of the product's check, two, one whose Lean gave no answer, an
     undecided one or a development one (composed on the served node, which claims no record) leaves it pending, exit 2,
     and the line and the report say, as ``lean``, where the answer was read or why there is none. A composite of
-    another window than the one the sampled proofs audit sampled against is refused: pending, exit 1."""
+    another window than the one SPOT's audit sampled against is refused: pending, exit 1."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     (p := tmp_path / "pieces" / "pouw").mkdir(parents=True)
@@ -4154,7 +4172,7 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     the served node's sums, then no window circuit or commit of its own (the served node's record at the class, its
     tree's, and the commit H1 bound, held as there), V3c's audit and period, the composite, told the served node, so it
     says it composed elsewhere, and then the final record about the served node from the pieces it read, V3c's audit,
-    the sampled-proofs audit of record and that composite. This node is a prover node, which the prover controls, so the
+    SPOT's audit of record and that composite. This node is a prover node, which the prover controls, so the
     composite is a development check (COMPOSE_DEVELOPMENT) and no Lean answer of it is the record's, whatever it says:
     the record is pending and the run's exit 2. Another tree runs only under FOLLOW_ANY_TREE, which its line names.
     $OUT names no window."""

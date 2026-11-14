@@ -87,7 +87,7 @@
 #     wrote to the composite's public output, which the record reads (--composite) where the composite ran before it,
 #     and takes only where it is of record, composed on an auditor host off the served node (`compose`; the deferral's
 #     follow-on composes on a prover node, so its composite is a development check), and names the window's
-#     registration record R that the record's sampled proofs audit sampled against: one of another window, or bound to
+#     registration record R that the record's SPOT audit sampled against: one of another window, or bound to
 #     no record, is refused, exit 1; any other server's answer is carried as elsewhere. The certifier's chain files
 #     that list or count the window's requests (CERTIFIER_PRIVATE) then move to the serve dir's private/pieces/certifier. Then, unless COMPOSITE is set empty, remote's and onsite's Lean
 #     verdicts on the run's cases (`served_composite.sh`'s docstring): a composite that didn't run (a tree without
@@ -161,7 +161,7 @@
 # holding any witness, needs no row dir, vLLM venv, card or gpu-lease, and composes the composite (`served_composite.sh`,
 # SERVED_NODE the served node, COMPOSE_HANDOFF set) and then the final record, whose verdict is that composite's Lean
 # answer (`record --off-node --steps --sampled-lean --composite`: composed_on the host it ran on, served_node false, from
-# the hand-off, sampled proofs' row this host's own run of its Lean verifier on the case's proofs, each other row's answer
+# the hand-off, SPOT's row this host's own run of its Lean verifier on the case's proofs, each other row's answer
 # as the served node wrote it, and each row naming which in its answer_from); its exit is the record's verdict (step 5),
 # and its $OUT is published as every run's is. PRODUCT=onsite's composite
 # reads PoUS's and the wipe's cases, which only the served node's card writes, so under COMPOSE_OFF_NODE=1 the preflight
