@@ -103,7 +103,8 @@ count over its whole request table is m, is not proved yet.
 from __future__ import annotations
 
 import functools
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import (NOT, OR, ZERO, add, and_reduce, compress_columns, const_bits, or_reduce,

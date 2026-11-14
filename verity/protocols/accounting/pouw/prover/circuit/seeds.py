@@ -41,7 +41,7 @@ Each Definition has a word form (`_v1`, over `Value<32>` halves, with `hashes.Sh
 from __future__ import annotations
 
 import hashlib
-from typing import Sequence
+from collections.abc import Sequence
 
 from verity.circuits import boolean as BL
 from verity.circuits import ports as _ports

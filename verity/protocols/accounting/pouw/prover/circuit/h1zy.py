@@ -122,7 +122,8 @@ lane and combine, and J10-R's lane, lane chunks and combine (`chunkPorts`, `comb
 """
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from verity.circuits import boolean as BL
 from verity.circuits import ports as _ports
