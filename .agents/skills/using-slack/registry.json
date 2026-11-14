@@ -758,7 +758,7 @@
       ],
       "owns": [
         "tools/config/",
-        "tools/verity/check/",
+        "tools/check/",
         "tools/verity/cli/",
         "tools/verity/graph/",
         "tools/verity/landq/",

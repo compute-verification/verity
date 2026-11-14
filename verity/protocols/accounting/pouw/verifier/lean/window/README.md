@@ -44,6 +44,6 @@ are in `security/Proofs/Properties/Pouw.lean`.
 
 ~~~text
 lake build                                                         the library and pouw-window-difftest
-uv run tools/verity/check/suites.py verity-pouw-window-difftest    the difftest
+uv run tools/check/suites.py verity-pouw-window-difftest    the difftest
 python tools/verity/lean/check.py verity/protocols/accounting/pouw/verifier/lean/window   the Lean check
 ~~~
