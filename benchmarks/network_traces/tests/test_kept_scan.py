@@ -37,7 +37,7 @@ from verity.protocols.accounting.certifier.verifier.certificate import Issuer, L
 from verity.commitments.crypto import lms
 from verity_vllm.program.predict.window_circuit import WindowClass
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path" / "tests")
+HERE = (Path(__file__).resolve().parent.parent.parent / "prove_path" / "tests")
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(HERE.parent))
 from verity.protocols.proofs.spot.prover.audit import prove_path as PP  # noqa: E402

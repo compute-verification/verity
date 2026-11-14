@@ -3181,6 +3181,11 @@
       "paths": {
         "benchmarks/vllm_encoded/paged.cu": "verity/protocols/accounting/poub/prover/word_codec/paged.cu"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/prover/tests/test_kept_scan.py": "benchmarks/network_traces/tests/test_kept_scan.py"
+      }
     }
   ]
 }

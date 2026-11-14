@@ -4526,7 +4526,7 @@
     {"file": "verity/protocols/proofs/spot/prover/audit/class_size.py", "count": 1},
     {"file": "verity/protocols/proofs/spot/prover/audit/prove_path.py", "count": 117},
     {"file": "verity/protocols/proofs/spot/prover/audit/prove_path.sh", "count": 24},
-    {"file": "verity/protocols/proofs/spot/prover/tests/test_kept_scan.py", "count": 28},
+    {"file": "benchmarks/network_traces/tests/test_kept_scan.py", "count": 28},
     {"file": "verity/protocols/proofs/spot/prover/tests/test_prove_path.py", "count": 80},
     {"file": "verity/protocols/proofs/spot/prover/cost/window_cost.py", "count": 11},
     {"file": "verity/protocols/proofs/spot/prover/cost/cpu_budget.py", "count": 7},
