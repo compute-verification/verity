@@ -64,8 +64,7 @@ What the certifier signs is witness: the sync and its salt never reach the audit
 certificate, a signature over a hiding commitment, is public. A verifier reads each window's sync only through its
 opening against the salted digest its certificate signs (`CertifiedClock.refusal`, `SignedClocks`). A record
 certificate signs a record digest salted and a clock certificate a clock digest,
-each under its own tag, so one opens as the other only on a SHA-512 collision. The Lean device's issuer
-(`CertifierDevice.Issuer.clock`) signs the same, and its difftest holds it to `Issuer.salted_clock`.
+each under its own tag, so one opens as the other only on a SHA-512 collision.
 
 The scheme is LMS over SHA-512 (`lms.DEPLOYED`: n = 64, w = 1, h = 20, the whole SHA-512 output, not truncated), whose
 unforgeability is ``euf-cma/lms-sha512-n64``. The certifier's signing step (`Issuer`) is handed it as a `Signer`

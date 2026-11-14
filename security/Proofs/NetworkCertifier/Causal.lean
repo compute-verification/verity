@@ -1,9 +1,9 @@
 module
 
-public import Proofs.NetworkCertifier.Accepted
 public import Proofs.NetworkCertifier.Advice
 public import Proofs.NetworkCertifier.Code
-public import Proofs.Properties.NetworkCertifier.DeviceOutput.Instance
+public import Proofs.NetworkCertifier.Schedule
+public import Properties.NetworkCertifier.Syncs
 
 /-!
 # A later window's sync never changes an earlier window's rows (5c)
@@ -23,15 +23,12 @@ At the reference's constant-rate Program of one execution block of the `W` windo
 (`programFrames`), a step's rows read the content advice and the syncs of the windows up to its own
 (`tiedRows_causal`). So an accepted sequence of the first `m` windows is fixed by the content advice, the syncs of its
 windows below `min W m` and its jitter classes, and those sequences number at most `#Ac · |Σ_sync|^min(W, m) · D^(m·T)`,
-by the injection of `NetTiming.encard_accSeqs_le_constantRate_executionPhases` (`encardProgramRunsLeWindows`). An accepted run of
-the check is a run of that Program (`acceptedRunsAreProgramRuns`), whose first `m·T` buckets it accepts
-(`NetTiming.accepted_take`), so the check's accepted runs over their first `m ≤ W` windows number at most
-`#Ac · |Σ_sync|^m · D^(m·T)`, or one carries a break (`encard_acceptedObservations_take_le`).
+by the injection of `NetTiming.encard_accSeqs_le_constantRate_executionPhases` (`encardProgramRunsLeWindows`).
 
-The honest lemma counts the honest network certifier's record at `Instance.config`, one window of one bucket: the
+The honest lemma counts the honest network certifier's record at one window of one bucket (`Instance.honestObs`): the
 Program's own row of one frame anchored at bucket 0. The nontrivial lemma takes the prediction that reads its rows off
 the advice, which accepts every sequence with complete statuses: there two sequences of the one bucket differ in the
-payload of its one slot, against the bound's one at `Instance.config`'s parameters.
+payload of its one slot, against the bound's one at those parameters.
 -/
 
 @[expose] public section
@@ -39,7 +36,7 @@ payload of its one slot, against the bound's one at `Instance.config`'s paramete
 open NetworkCheck.Check (expectedGrid noSync)
 open NetworkCertifier (ClockSync LogicalFrame expectedRow)
 open Properties.NetworkCertifier
-open Properties.CertifierNetwork.Instance (config oneFrame oneAdvice honestObs)
+open Properties.CertifierNetwork.Instance (syncSet oneFrame oneAdvice honestObs)
 
 namespace Proofs.NetworkCertifier
 
@@ -177,63 +174,88 @@ theorem expectedGridCausal : ExpectedGridCausal := by
 
 /-! ## The first `m` windows -/
 
+theorem code_handingFrom_length (T W : ℕ) (syncs : Fin W → ClockSync) :
+    ∀ (last : ℕ) (fs : List LogicalFrame),
+      (_root_.NetworkCertifier.handingFrom T W syncs last fs).length = fs.length
+  | _, [] => rfl
+  | _, _ :: fs => by
+    simp only [_root_.NetworkCertifier.handingFrom, List.length_cons, code_handingFrom_length T W syncs _ fs]
+
+/-- `programFrames` keeps the opened frames' payloads, and sends them at the program's hand ticks. -/
+theorem programFrames_fields (T W : ℕ) (ss : _root_.NetworkCertifier.SyncSet) {In Ac : Type}
+    (frames : List In → Ac → Fin 1 → List LogicalFrame) (ins : List In) (i : Fin 1) (c : Ac)
+    (σ : Fin W → SyncValue ss) (ℓ : Fin 1) :
+    (programFrames T W ss frames ins i (c, σ) ℓ).map NetTiming.LogicalFrame.payload =
+        (frames ins c ℓ).map LogicalFrame.payload ∧
+      (programFrames T W ss frames ins i (c, σ) ℓ).map NetTiming.LogicalFrame.send =
+        _root_.NetworkCertifier.handingBuckets T W (fun w => (σ w).sync) (frames ins c ℓ) := by
+  have hl := code_handingFrom_length T W (fun w => (σ w).sync) 0 (frames ins c ℓ)
+  simp only [programFrames, List.map_map]
+  refine ⟨?_, ?_⟩
+  · have : (NetTiming.LogicalFrame.payload ∘ fun p : LogicalFrame × ℕ =>
+        (⟨p.1.payload, p.2⟩ : NetTiming.LogicalFrame)) = LogicalFrame.payload ∘ Prod.fst := rfl
+    rw [this, ← List.map_map, List.map_fst_zip (by simp only [_root_.NetworkCertifier.handingBuckets]; omega)]
+  · have : (NetTiming.LogicalFrame.send ∘ fun p : LogicalFrame × ℕ =>
+        (⟨p.1.payload, p.2⟩ : NetTiming.LogicalFrame)) = Prod.snd := rfl
+    rw [this, List.map_snd_zip (by simp only [_root_.NetworkCertifier.handingBuckets]; omega)]
+
 /-- The tied Program's rows at bucket `t` under the content advice `c` read the syncs of windows `0 … t / T` only. -/
-theorem tiedRows_causal (cfg : _root_.CertifierDevice.Config) {In Ac : Type}
+theorem tiedRows_causal (S T W : ℕ) (ss : _root_.NetworkCertifier.SyncSet) {In Ac : Type}
     (frames : List In → Ac → Fin 1 → List LogicalFrame) (t : ℕ) (ins : List In) (c : Ac)
-    (σ σ' : Fin cfg.windows → SyncValue cfg.syncSet)
-    (hσ : ∀ w : Fin cfg.windows, (w : ℕ) ≤ t / cfg.egress.buckets → σ w = σ' w) :
-    (NetTiming.constantRate (S := cfg.egress.allocation) cfg.egress.buckets cfg.windows 1
-        (programFrames cfg frames)).rows t ins (fun _ => (c, σ)) =
-      (NetTiming.constantRate (S := cfg.egress.allocation) cfg.egress.buckets cfg.windows 1
-        (programFrames cfg frames)).rows t ins (fun _ => (c, σ')) := by
+    (σ σ' : Fin W → SyncValue ss)
+    (hσ : ∀ w : Fin W, (w : ℕ) ≤ t / T → σ w = σ' w) :
+    (NetTiming.constantRate (S := S) T W 1
+        (programFrames T W ss frames)).rows t ins (fun _ => (c, σ)) =
+      (NetTiming.constantRate (S := S) T W 1
+        (programFrames T W ss frames)).rows t ins (fun _ => (c, σ')) := by
   funext ℓ
   simp only [NetTiming.constantRate]
   split_ifs with h
-  · have h0 : t / (cfg.windows * cfg.egress.buckets) = 0 := Nat.lt_one_iff.mp h
-    have hmod : t % (cfg.windows * cfg.egress.buckets) = t := by
-      rcases Nat.eq_zero_or_pos (cfg.windows * cfg.egress.buckets) with hz | hz
+  · have h0 : t / (W * T) = 0 := Nat.lt_one_iff.mp h
+    have hmod : t % (W * T) = t := by
+      rcases Nat.eq_zero_or_pos (W * T) with hz | hz
       · rw [hz, Nat.mod_zero]
       · have := (Nat.div_lt_iff_lt_mul hz).mp h
         exact Nat.mod_eq_of_lt (by omega)
-    have e : ∀ v, programFrames cfg frames ins ⟨t / (cfg.windows * cfg.egress.buckets), h⟩ v ℓ =
-        programFrames cfg frames ins 0 v ℓ := fun _ => rfl
+    have e : ∀ v, programFrames T W ss frames ins ⟨t / (W * T), h⟩ v ℓ =
+        programFrames T W ss frames ins 0 v ℓ := fun _ => rfl
     rw [e, e, h0, Nat.zero_mul, hmod]
-    obtain ⟨hp, hs⟩ := programFrames_fields cfg frames ins 0 c σ ℓ
-    obtain ⟨hp', hs'⟩ := programFrames_fields cfg frames ins 0 c σ' ℓ
+    obtain ⟨hp, hs⟩ := programFrames_fields T W ss frames ins 0 c σ ℓ
+    obtain ⟨hp', hs'⟩ := programFrames_fields T W ss frames ins 0 c σ' ℓ
     rw [← NetTiming.SecurityProofs.CodeExpectedRow _ _ _ _ _ _ hp hs t,
       ← NetTiming.SecurityProofs.CodeExpectedRow _ _ _ _ _ _ hp' hs' t]
     exact expectedRow_congr_syncs _ _ _ _ _ _ _ fun w hw => congrArg SyncValue.sync (hσ w hw)
   · rfl
 
 theorem encardProgramRunsLeWindows : EncardProgramRunsLeWindows := by
-  intro cfg K In Ac _ frames op m D
+  intro S T W ss K In Ac _ frames op m D
   classical
-  by_cases hne : Nonempty (Fin 1 → Ac × (Fin cfg.windows → SyncValue cfg.syncSet))
+  by_cases hne : Nonempty (Fin 1 → Ac × (Fin W → SyncValue ss))
   swap
-  · have : NetTiming.AccSeqs (NetTiming.constantRate (S := cfg.egress.allocation) cfg.egress.buckets cfg.windows 1
-        (programFrames cfg frames)) op (m * cfg.egress.buckets) D = ∅ := by
+  · have : NetTiming.AccSeqs (NetTiming.constantRate (S := S) T W 1
+        (programFrames T W ss frames)) op (m * T) D = ∅ := by
       ext o; simp only [Set.mem_empty_iff_false, iff_false]
       rintro ⟨-, -, a, -⟩; exact hne ⟨a⟩
     rw [this, Set.encard_empty]; exact bot_le
-  let a0 : Fin 1 → Ac × (Fin cfg.windows → SyncValue cfg.syncSet) := Classical.choice hne
-  let adv : List (NetTiming.Obs 1 K cfg.egress.allocation) → Fin 1 → Ac × (Fin cfg.windows → SyncValue cfg.syncSet) :=
-    fun o => if h : NetTiming.AcceptedUpTo (NetTiming.constantRate (S := cfg.egress.allocation) cfg.egress.buckets
-      cfg.windows 1 (programFrames cfg frames)) op (m * cfg.egress.buckets) o then h.choose else a0
-  have adv_spec : ∀ o ∈ NetTiming.AccSeqs (NetTiming.constantRate (S := cfg.egress.allocation) cfg.egress.buckets
-      cfg.windows 1 (programFrames cfg frames)) op (m * cfg.egress.buckets) D,
-      NetTiming.Accepted (NetTiming.constantRate (S := cfg.egress.allocation) cfg.egress.buckets cfg.windows 1
-        (programFrames cfg frames)) op (m * cfg.egress.buckets) o (adv o) := by
+  let a0 : Fin 1 → Ac × (Fin W → SyncValue ss) := Classical.choice hne
+  let adv : List (NetTiming.Obs 1 K S) → Fin 1 → Ac × (Fin W → SyncValue ss) :=
+    fun o => if h : NetTiming.AcceptedUpTo (NetTiming.constantRate (S := S) T
+      W 1 (programFrames T W ss frames)) op (m * T) o then h.choose else a0
+  have adv_spec : ∀ o ∈ NetTiming.AccSeqs (NetTiming.constantRate (S := S) T
+      W 1 (programFrames T W ss frames)) op (m * T) D,
+      NetTiming.Accepted (NetTiming.constantRate (S := S) T W 1
+        (programFrames T W ss frames)) op (m * T) o (adv o) := by
     intro o ho; simp only [adv, ho.2.2, ↓reduceDIte]; exact ho.2.2.choose_spec
-  let cut : (Fin 1 → Ac × (Fin cfg.windows → SyncValue cfg.syncSet)) →
-      Ac × (Fin (min cfg.windows m) → SyncValue cfg.syncSet) :=
+  let cut : (Fin 1 → Ac × (Fin W → SyncValue ss)) →
+      Ac × (Fin (min W m) → SyncValue ss) :=
     fun a => ((a 0).1, fun i => (a 0).2 ⟨i, lt_of_lt_of_le i.2 (min_le_left _ _)⟩)
-  let code : List (NetTiming.Obs 1 K cfg.egress.allocation) →
-      (Ac × (Fin (min cfg.windows m) → SyncValue cfg.syncSet)) × (Fin (m * cfg.egress.buckets) → ℕ) :=
+  let code : List (NetTiming.Obs 1 K S) →
+      (Ac × (Fin (min W m) → SyncValue ss)) × (Fin (m * T) → ℕ) :=
     fun o => (cut (adv o), NetTiming.jitterCode o)
   have hone : ∀ o, adv o = fun _ => ((adv o 0).1, (adv o 0).2) :=
     fun o => funext fun i => by rw [Subsingleton.elim i 0]
-  have hinj : Set.InjOn code (NetTiming.AccSeqs (NetTiming.constantRate (S := cfg.egress.allocation)
-      cfg.egress.buckets cfg.windows 1 (programFrames cfg frames)) op (m * cfg.egress.buckets) D) := by
+  have hinj : Set.InjOn code (NetTiming.AccSeqs (NetTiming.constantRate (S := S)
+      T W 1 (programFrames T W ss frames)) op (m * T) D) := by
     intro o ho o' ho' h
     simp only [code, Prod.mk.injEq] at h
     obtain ⟨hσ, hj⟩ := h
@@ -255,10 +277,10 @@ theorem encardProgramRunsLeWindows : EncardProgramRunsLeWindows := by
       simpa only [cut, Fin.eta] using this
     · exact NetTiming.jitter_eq_of_jitterCode hj ht h1 h2
     · funext κ; rw [hs κ, hs' κ]
-  calc (NetTiming.AccSeqs (NetTiming.constantRate (S := cfg.egress.allocation) cfg.egress.buckets cfg.windows 1
-        (programFrames cfg frames)) op (m * cfg.egress.buckets) D).encard
-      ≤ (((Finset.univ : Finset (Ac × (Fin (min cfg.windows m) → SyncValue cfg.syncSet))) ×ˢ
-          Fintype.piFinset fun _ : Fin (m * cfg.egress.buckets) => Finset.range D).card : ℕ∞) := by
+  calc (NetTiming.AccSeqs (NetTiming.constantRate (S := S) T W 1
+        (programFrames T W ss frames)) op (m * T) D).encard
+      ≤ (((Finset.univ : Finset (Ac × (Fin (min W m) → SyncValue ss))) ×ˢ
+          Fintype.piFinset fun _ : Fin (m * T) => Finset.range D).card : ℕ∞) := by
         apply NetTiming.encard_le_card_of_injOn code hinj
         intro o ho
         simp only [code, Finset.mem_product, Finset.mem_univ, true_and]
@@ -266,70 +288,22 @@ theorem encardProgramRunsLeWindows : EncardProgramRunsLeWindows := by
     _ = _ := by
         rw [Finset.card_product, Fintype.card_piFinset]
         simp only [Finset.card_univ, Finset.card_range, Finset.prod_const, Fintype.card_prod, Fintype.card_fun,
-          Fintype.card_fin, Fintype.card_coe, List.toFinset_card_of_nodup cfg.syncSet.deltas_nodup,
-          List.toFinset_card_of_nodup cfg.syncSet.rhos_nodup]
-
-section Check
-
-open NetworkCheck hiding Params
-open NetworkCheck.Check
-open _root_.CertifierDevice
-
-/-- **The check's accepted runs over their first `m` windows.** For a device that runs as built, the first `m ≤ W`
-windows of the observation sequences of its accepted runs number at most `#Ac · |Σ_sync|^m · D^(m·T)`, or some accepted
-run carries a break (`ObservationsBounded`'s): an accepted run is a run of the tied Program
-(`acceptedRunsAreProgramRuns`), the Program accepts its first `m·T` buckets (`NetTiming.accepted_take`), and those
-number at most `encardProgramRunsLeWindows`'s count. -/
-theorem encard_acceptedObservations_take_le (device : DeviceInput → DeviceOutput) (cfg : Config)
-    (key : Lms.PrivateKey) {K : ℕ} {In Ac : Type} [Fintype Ac]
-    (frames : List In → Ac → Fin 1 → List _root_.NetworkCertifier.LogicalFrame)
-    (op : ℕ → List (NetTiming.Obs 1 K cfg.egress.allocation) → In) (linkOf : Fin K → String) (m D : ℕ)
-    (hm : m ≤ cfg.windows) (hint : NetTiming.DeviceIntact device deviceCode) :
-    ((List.take (m * cfg.egress.buckets)) '' AcceptedObservations cfg key device frames op linkOf D).encard ≤
-        ((Fintype.card Ac * (cfg.syncSet.deltas.length * cfg.syncSet.rhos.length) ^ m *
-          D ^ (m * cfg.egress.buckets) : ℕ) : ℕ∞) ∨
-      ∃ o x c e a, AcceptedRun cfg key device frames op linkOf o x c e a ∧
-        ((∃ y ∈ runStrings x (device x) c e, ∃ z ∈ runStrings x (device x) c e, y ≠ z ∧
-            Flock.Sha512.hash y = Flock.Sha512.hash z) ∨
-          ∃ r ∈ c.records.toList, ∃ msg, certMessage x.issuer.session r = some msg ∧
-            LmsVerifies (deviceParams x) msg r.certificate.signature ∧ ¬ Signed x.issuer.session (device x) msg) := by
-  by_cases hb : ∃ o x c e a, AcceptedRun cfg key device frames op linkOf o x c e a ∧
-      ((∃ y ∈ runStrings x (device x) c e, ∃ z ∈ runStrings x (device x) c e, y ≠ z ∧
-          Flock.Sha512.hash y = Flock.Sha512.hash z) ∨
-        ∃ r ∈ c.records.toList, ∃ msg, certMessage x.issuer.session r = some msg ∧
-          LmsVerifies (deviceParams x) msg r.certificate.signature ∧ ¬ Signed x.issuer.session (device x) msg)
-  · exact Or.inr hb
-  have hbound := encardProgramRunsLeWindows cfg frames op m D
-  rw [min_eq_right hm] at hbound
-  refine Or.inl (le_trans (Set.encard_le_encard ?_) hbound)
-  rintro _ ⟨o, ⟨hlen, hjit, x, c, e, a, hrun⟩, rfl⟩
-  obtain ⟨hx, hk, hacc, hlink, hobs, hopen⟩ := hrun
-  subst hx hk
-  rcases acceptedRunsAreProgramRuns device x c e hacc hint with hr | hbr
-  · obtain ⟨σ, -, hA⟩ := hr frames a op o linkOf hlink hlen hobs hopen
-    have hmT : m * x.config.egress.buckets ≤ x.config.windows * x.config.egress.buckets :=
-      Nat.mul_le_mul_right _ hm
-    exact ⟨by rw [List.length_take, hlen]; exact Nat.min_eq_left hmT,
-      fun y hy => hjit y (List.mem_of_mem_take hy), fun _ => (a, σ), NetTiming.accepted_take _ op hmT hA⟩
-  · exact (hb ⟨o, x, c, e, a, ⟨rfl, rfl, hacc, hlink, hobs, hopen⟩, hbr⟩).elim
-
-end Check
+          Fintype.card_fin, Fintype.card_coe, List.toFinset_card_of_nodup ss.deltas_nodup,
+          List.toFinset_card_of_nodup ss.rhos_nodup]
 
 /-! ## Its honest and nontrivial lemmas -/
 
-/-- **The program's honest run is counted**: at `Instance.config` (one window of one bucket, allocation 1, Σ_sync of
-one value), the honest record of one frame anchored at bucket 0 is among the sequences `EncardProgramRunsLeWindows`
-counts over the first window. -/
+/-- **The program's honest run is counted**: at one window of one bucket, allocation 1 and Σ_sync of one value
+(`Instance.syncSet`), the honest record of one frame anchored at bucket 0 is among the sequences
+`EncardProgramRunsLeWindows` counts over the first window. -/
 theorem encardProgramRunsLeWindows_honest :
-    honestObs ∈ NetTiming.AccSeqs (NetTiming.constantRate (S := config.egress.allocation)
-      config.egress.buckets config.windows 1 (programFrames config oneFrame))
-      (fun _ _ => ()) (1 * config.egress.buckets) 1 := by
+    honestObs ∈ NetTiming.AccSeqs (NetTiming.constantRate (S := 1) 1 1 1 (programFrames 1 1 syncSet oneFrame))
+      (fun _ _ => ()) (1 * 1) 1 := by
   refine ⟨rfl, fun x hx => ?_, oneAdvice, fun t ht => ?_⟩
   · simp only [honestObs, List.mem_singleton] at hx
     subst hx
     exact Nat.one_pos
-  · have hb : config.egress.buckets = 1 := rfl
-    obtain rfl : t = 0 := by omega
+  · obtain rfl : t = 0 := by omega
     exact ⟨Nat.one_pos, rfl, fun _ => rfl⟩
 
 /-- At the prediction that reads its rows off the advice, which accepts every sequence whose statuses are complete,
@@ -354,22 +328,20 @@ theorem two_le_acceptAll {S : ℕ} (hS : 0 < S) :
   rw [← Set.encard_pair hne]
   exact Set.encard_le_encard (by rintro x (rfl | rfl) <;> exact hmem _)
 
-/-- **`EncardProgramRunsLeWindows`'s bound fails at the verifier that accepts everything**: there, at
-`Instance.config`'s parameters (one window of one bucket, allocation 1, Σ_sync of one value, the content advice `Unit`,
-`D = 1`), the bucket's one slot carries `[true]` or `[false]`, two sequences against the bound's one. -/
+/-- **`EncardProgramRunsLeWindows`'s bound fails at the verifier that accepts everything**: there, at the honest
+lemma's parameters (one window of one bucket, allocation 1, Σ_sync of one value, the content advice `Unit`, `D = 1`),
+the bucket's one slot carries `[true]` or `[false]`, two sequences against the bound's one. -/
 theorem encardProgramRunsLeWindows_nontrivial :
-    ¬ (NetTiming.AccSeqs (L := 1) (K := 1) (S := config.egress.allocation) (In := Unit)
-        (Adv := ℕ → Fin 1 → Fin config.egress.allocation → Option (List Bool)) ⟨fun t _ a => a t⟩
-        (fun _ _ => ()) (1 * config.egress.buckets) 1).encard ≤
-      ((Fintype.card Unit * (config.syncSet.deltas.length * config.syncSet.rhos.length) ^
-        min config.windows 1 * 1 ^ (1 * config.egress.buckets) : ℕ) : ℕ∞) := by
-  have hb : Fintype.card Unit * (config.syncSet.deltas.length * config.syncSet.rhos.length) ^
-      min config.windows 1 * 1 ^ (1 * config.egress.buckets) = 1 := by
-    simp [config, Properties.CertifierNetwork.Instance.syncSet]
-  have hn : 1 * config.egress.buckets = 1 := rfl
+    ¬ (NetTiming.AccSeqs (L := 1) (K := 1) (S := 1) (In := Unit)
+        (Adv := ℕ → Fin 1 → Fin 1 → Option (List Bool)) ⟨fun t _ a => a t⟩
+        (fun _ _ => ()) (1 * 1) 1).encard ≤
+      ((Fintype.card Unit * (syncSet.deltas.length * syncSet.rhos.length) ^ min 1 1 * 1 ^ (1 * 1) : ℕ) : ℕ∞) := by
+  have hb : Fintype.card Unit * (syncSet.deltas.length * syncSet.rhos.length) ^ min 1 1 * 1 ^ (1 * 1) = 1 := by
+    simp [Properties.CertifierNetwork.Instance.syncSet]
+  have hn : 1 * 1 = 1 := rfl
   rw [hb, hn]
   intro h
-  have := le_trans (two_le_acceptAll (S := config.egress.allocation) Nat.one_pos) h
+  have := le_trans (two_le_acceptAll (S := 1) Nat.one_pos) h
   norm_num at this
 
 end Proofs.NetworkCertifier

@@ -12,8 +12,7 @@ doesn't reject; for the undecided outcome, is undecided), its named conclusion h
 check refuse, what an acceptance establishes about each link-window and what an undecided outcome means.
 `Proofs.Properties.NetworkCertifier.Check` proves them; the converses (that the check accepts, or is undecided on, what
 these conclusions describe) and the honest transcript's acceptance are completeness, at the end of
-`Proofs.Properties.NetworkCertifier.Check.Outcomes`, each with one instance in `Proofs.Properties.NetworkCertifier.Check.Instance`. What an accepted run of the certifier device is, is
-`Properties.NetworkCertifier.DeviceOutput.Runs`.
+`Proofs.Properties.NetworkCertifier.Check.Outcomes`.
 
 The predicates below say what a link-window's records, certificate and digests are, in the check's own terms; none
 restates the check. A link-window is a direction, a link of the unit in that direction and a window `w < W`.
@@ -186,7 +185,7 @@ def UndecidedPending : Prop :=
 
 /-! ## The strings the check hashes
 
-What an accepted run's claims search for a SHA-512 collision (`Properties.NetworkCertifier.DeviceOutput.Runs`): the check's part. -/
+What a claim about an accepted run searches for a SHA-512 collision: the check's part. -/
 
 /-- The message a record's certificate signs in certifier session `session`, `certificateMessage` of its own fields. -/
 def certMessage (session : ByteArray) (r : Certified) : Option ByteArray :=

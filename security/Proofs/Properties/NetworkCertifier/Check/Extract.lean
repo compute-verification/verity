@@ -19,7 +19,7 @@ import Std.Data.TreeMap.Raw.Lemmas
 # The strings the check hashes, listed
 
 `checkStrings` lists every string the check hashes (`mem_checkStrings`): what a run without a SHA-512 collision among
-the strings it hashes rules out (`Proofs.Properties.NetworkCertifier.DeviceOutput.Runs`).
+the strings it hashes rules out.
 -/
 
 @[expose] public section

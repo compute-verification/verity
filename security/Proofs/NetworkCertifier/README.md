@@ -183,14 +183,10 @@ PeriodWitnesses.lean  two more instances of PooledLeakAccepted: its schedule pre
     false at one incorrect proof block
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
     definitions above: five theorems, not guarantees (below)
-Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program
-    (`security_properties`' `AcceptedRunsAreProgramRuns`, through Code.lean), and
-    Theorem 3's count of what accepted runs can carry (`EncardAcceptedObservationsLe`),
-    each unless the run yields a SHA-512 collision or an LMS forgery
 Causal.lean     a later window's sync never changes an earlier window's grid (`ExpectedGridCausal`, from
     the program's hand ticks), and the count over the first `m` windows of the
     Program's runs (`EncardProgramRunsLeWindows`, with its honest and nontrivial
-    lemmas) and of the check's accepted runs (encard_acceptedObservations_take_le)
+    lemmas)
 ../../lean-audit.json          the guarantee records (`security`'s lock) for tools/verity/lean/check.py
 ~~~
 
@@ -287,8 +283,8 @@ last two by `pooledIncorrectBlocks` and `pooledLeak`). All 28 are under `shape.f
 `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `EgressPrediction`'s `AccSeqs`,
 `expectedRow`, or the grids themselves; the sampled charge over the sequences the circuit's Program accepts with a
 possible incorrect set; the period's also over the network certifier's code as `Definitions` states it, which no compiled
-program implements yet), not over the network check's code, and an accepted run reaches the first 18 through
-`AcceptedRunsAreProgramRuns`. Three are the
+program implements yet), not over the network check's code, and no Lean states that an accepted run of the check is
+a run the first 18 count. Three are the
 theorems whose bounds the calibration reports (`verity.protocols.accounting.certifier.verifier.calibration`, `PROTOCOL.md`'s
 "Capacity"):
 
@@ -298,9 +294,9 @@ theorems whose bounds the calibration reports (`verity.protocols.accounting.cert
   `EncardIngressObsDecodableLe` and `EncardIngressObsDecodableLePerExecutionPhase`.
 
 The calibration's egress bits per window (`clock_sync.bits_per_window`, held by `test_network_certifier_calibration.py`)
-are the check's bound over its first `m` windows, `security_properties`' `EncardProgramRunsLeWindows` (`Causal.lean`),
+are the Program's bound over its first `m` windows, `security_properties`' `EncardProgramRunsLeWindows` (`Causal.lean`),
 not one of these: the check is the reference Program as one execution block of its `W` windows, where the per-block
-forms give only the `W`-window total, `EncardAcceptedObservationsLe`'s, so the finer count comes from the program's
+forms give only the `W`-window total, so the finer count comes from the program's
 hand ticks, which a window's sync moves only at or after the window's start (`ExpectedGridCausal`). A window's bits
 given the run before it have no Lean statement for the check: the queue and the hand ticks carry across windows.
 
@@ -313,8 +309,7 @@ The other 25 are the rest of the Capacity table's bounds and the schedule's caus
   Program, and for the constant-rate Program `EncardAccSeqsLeConstantRate`, `ExpectedRowCausal`,
   `EncardAccSeqsLeConstantRateExecutionPhases`, `EncardAccSeqsLeConstantRatePerExecutionPhase` and, through the wire,
   `EncardDecodableLeConstantRatePerExecutionPhase`. Advice of any finite type is
-  `EncardAccSeqsLeAdvice` (`Lemmas.lean`), which the check's count (`EncardAcceptedObservationsLe`) reads at its clock
-  syncs.
+  `EncardAccSeqsLeAdvice` (`Lemmas.lean`).
 - **The ingress bound** (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressDecodableLe`, `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`,
   `EncardIngressObsDecodableLeContentsPerExecutionPhase`.

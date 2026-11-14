@@ -178,8 +178,7 @@ theorem undecidedPending : UndecidedPending := fun p c e => (undecided_iff p c e
 /-! ## Completeness
 
 Not properties: each says the check accepts (or is undecided on) what an honest unit sends, the converse of a property
-above, or the honest transcript. `Proofs.Properties.NetworkCertifier.Check.Instance` gives each one instance whose
-hypotheses hold. -/
+above, or the honest transcript. -/
 
 /-- **`answer` accepts bytes that decode to a unit the check accepts** (the converse of `AnswerAccepts`). -/
 theorem answer_of_decodedAccepted (a b c : ByteArray) (h : DecodedAccepted a b c) :

@@ -3575,7 +3575,6 @@
   "NciCheck.DefinitionDigest",
   "NetworkCheck",
   "NetworkCertifier",
-  "CertifierDevice",
   "RemoteAudit",
   "CircuitRequirement",
   "Evaluate.Scalar",
