@@ -4,10 +4,12 @@ A `Population` refuses a query it does not know and a Program with no sampling e
 `unmodelled`, and so calls incomplete, a manifest whose Program has bodies sharing a parameter that not exactly one of
 them owns, a required member of no width, a member two Definitions produce, or a rank Program's collective with a
 rank-local operand it cannot name.  A Value of no single width is spelt `mixed`, and a warm Program's cached rows are no
-token ids.
+token ids.  Of what a `Population` reports: a literal is no boundary Value, a returned Value is one unless it is a check, and
+inside a MoE module with router rows only the Values of a plane's kind feed the planes.
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -143,6 +145,63 @@ def test_a_parameter_is_a_record_by_its_type_or_by_its_ports_and_a_supplied_inpu
     assert [x["op_path"] for x in _rows(m, "weights")] == ["0", "1", f"{IMPL}.a.weight", f"{IMPL}.embed.weight", f"{IMPL}.only.weight"]
     assert [x["op_path"] for x in _rows(m, "input_token_ids")] == [f"{IMPL}.a", f"{IMPL}.embed"]
     assert [x["op_path"] for x in _rows(_manifest(program(*others)), "input_token_ids")] == [f"{IMPL}.embed"], "without the tuple of one field"
+
+
+def _from_calls(pop: Population) -> set[ValueRef]:
+    return {v for v in pop.B.values if v.call >= 0}
+
+
+def test_a_literal_is_no_boundary_value_whichever_body_reads_it():
+    """A Call that reads no Value is a literal, written in the Program.  Under either query its Value is no boundary Value and
+    is not required, though another module's body reads it."""
+    P = _program(_weights(EMBED_W, A_W), (_call(1, "Const_v1", f"{W}.c/const[0]", []),
+                                          _call(2, "Gemm_v1", f"{W}.a/linear[0]", [R(0, "out"), R(1, "out"), R(-1, A_W)])))
+    for q in (Q_WORD_ID, Q_MODULE_BODY_ID):
+        pop = Population(P, _corr(P), query=q)
+        assert pop.literals == {1}
+        assert _from_calls(pop) == {R(0, "out"), R(2, "out"), R(3, "out")} and R(1, "out") not in pop.required.values
+
+
+def test_a_returned_value_is_a_boundary_value_unless_it_is_a_check():
+    """Of the Values a Program returns, one that is not a check is a boundary Value though no Call reads it, and a check is
+    none.  With the same Values returned and none marked a check, each is one."""
+    P = _program(_weights(EMBED_W, A_W), (_call(1, "Gemm_v1", f"{W}.a/linear[0]", [R(0, "out"), R(-1, A_W)]),
+                                          _call(2, "Gemm_v1", f"{W}.b/linear[0]", [R(1, "out"), R(-1, A_W)]),
+                                          _call(3, "I32Eq_v1", f"{W}.b/eq[0]", [R(1, "out")], n=1),
+                                          _call(4, "Gemm_v1", f"{W}.a/linear_1[0]", [R(1, "out"), R(-1, A_W)])))
+    unmarked = replace(P, outputs=(*P.outputs, R(2, "out"), R(3, "out")))
+    checked = replace(unmarked, checks=(R(3, "out"),))
+    others = {R(cid, "out") for cid in (0, 1, 2, 4, 5)}
+    for q in (Q_WORD_ID, Q_MODULE_BODY_ID):
+        assert _from_calls(Population(checked, _corr(checked), query=q)) == others
+        assert _from_calls(Population(unmarked, _corr(unmarked), query=q)) == others | {R(3, "out")}
+
+
+def _moe(module: str, first: str = "MoeRouterTopK_v1") -> ProgramView:
+    """Under `module`: a row of `first` with two ports, an `Add_v1`, the up launch, the SiluMul, the down launch and the sum; then
+    the logits.  Each row but the sum is read under `module` alone."""
+    return _program(_weights(EMBED_W, A_W), (_call(1, first, f"{module}/router[0]", [R(0, "out")], ports=("w", "ids")),
+                                             _call(2, "Add_v1", f"{module}/add[0]", [R(0, "out")]),
+                                             _call(3, "MoeExpertGemm_v1", f"{module}/up[0]", [R(2, "out"), R(1, "ids")]),
+                                             _call(4, "SiluMul_v1", f"{module}/act[0]", [R(3, "out")]),
+                                             _call(5, "MoeExpertGemmW_v1", f"{module}/down[0]", [R(4, "out"), R(1, "w")]),
+                                             _call(6, "MoeSum_v1", f"{module}/moe_sum[0]", [R(5, "out")]),
+                                             _call(7, "Gemm_v1", f"{W}.lm_head/linear[0]", [R(6, "out"), R(-1, A_W)])))
+
+
+def test_inside_a_moe_module_with_router_rows_only_a_planes_kind_feeds_the_planes():
+    """Under the word query the Values a module's body keeps to itself are its interior, but for those that feed the MoE planes:
+    the rows of a plane's kind under a module that has router rows.  A SiluMul is of a plane's kind under the runner module
+    (`...experts`) alone, and a module with no router row has no plane.  Under the module-body query no Value is inside a body."""
+    router, kept = {R(1, "w"), R(1, "ids")}, {R(2, "out")}
+    up, act, down = R(3, "out"), R(4, "out"), R(5, "out")
+    runner, parent = f"{W}.layers.3.mlp.experts", f"{W}.layers.3.mlp"
+    for P, fed, interior in ((_moe(runner), router | {up, act, down}, kept),
+                             (_moe(parent), router | {up, down}, kept | {act}),
+                             (_moe(runner, first="Add_v1"), set(), router | kept | {up, act, down})):
+        word, body = Population(P, _corr(P), query=Q_WORD_ID), Population(P, _corr(P), query=Q_MODULE_BODY_ID)
+        assert (word.plane_fed, word.interior) == (fed, interior)
+        assert (body.plane_fed, body.interior) == (frozenset(), frozenset())
 
 
 @pytest.mark.parametrize(("read", "owners"), [((TIED_W,), 0), ((A_W, B_W), 2)])
