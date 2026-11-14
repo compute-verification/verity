@@ -166,7 +166,7 @@
     {"file": "benchmarks/nci/tests/test_kappa.py", "rule": "RUF100", "count": 3},
     {"file": "benchmarks/nci/tests/test_statement.py", "rule": "RUF100", "count": 4},
     {"file": "verity/protocols/accounting/certifier/prover/ingress_scan.py", "rule": "B018", "count": 1},
-    {"file": "verity/protocols/accounting/certifier/verifier/replay_step.py", "rule": "F841", "count": 1},
+    {"file": "adapters/vllm/verity_vllm/compiler/replay_step.py", "rule": "F841", "count": 1},
     {"file": "verity/protocols/accounting/certifier/verifier/tests/scan_traffic.py", "rule": "F841", "count": 1},
     {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_service.py", "rule": "E731", "count": 1},
     {"file": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_warden_adversarial.py", "rule": "E731", "count": 2},

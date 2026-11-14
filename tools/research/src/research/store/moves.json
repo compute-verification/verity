@@ -4507,6 +4507,18 @@
         "security/Definitions/Pouw/TS/Drawn.lean": "security/Definitions/Pouw/TS/Sampled.lean",
         "security/Proofs/Pouw/TS/Drawn.lean": "security/Proofs/Pouw/TS/Sampled.lean"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/certifier/verifier/replay_step.py": "adapters/vllm/verity_vllm/compiler/replay_step.py",
+        "verity/protocols/accounting/certifier/verifier/replay_step.circuit-check.py": "adapters/vllm/verity_vllm/compiler/replay_step.circuit-check.py",
+        "verity/protocols/accounting/certifier/verifier/replay_step.circuit-check.json": "adapters/vllm/verity_vllm/compiler/replay_step.circuit-check.json",
+        "verity/protocols/accounting/certifier/verifier/replay_chain.py": "adapters/vllm/verity_vllm/compiler/replay_chain.py",
+        "verity/protocols/accounting/certifier/verifier/replay_chain.circuit-check.py": "adapters/vllm/verity_vllm/compiler/replay_chain.circuit-check.py",
+        "verity/protocols/accounting/certifier/verifier/replay_chain.circuit-check.json": "adapters/vllm/verity_vllm/compiler/replay_chain.circuit-check.json",
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_replay_step.py": "adapters/vllm/tests/compiler/test_network_certifier_replay_step.py",
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_replay_chain.py": "adapters/vllm/tests/compiler/test_network_certifier_replay_chain.py"
+      }
     }
   ]
 }
