@@ -454,8 +454,9 @@ NUMBERED = frozenset({"window", "steps", "window_steps", "requests", "refused"})
 #: written, and with it the policy digest its verdict cites.
 OWN_AT = frozenset({("loads", "tokens"), ("loads", "span_s")})
 #: A window's number, step range or count in text, each with what the published text says in its place; and its
-#: population where a stream's rule states it, the denominator of a rate written from the window's own N
-#: (`records_audit.rule_of`), which is no sampling rate and says only the design, K of each N
+#: population where a stream's rule states it, the denominator of a rate stated as K over the N proof blocks the window
+#: registers (the form `served_verdicts.sh`'s preflight asks for, which a refusal quotes): the published text keeps
+#: only the design, K of each N
 WINDOW_TEXT = (
     (re.compile(r'\\?"(?:%s)\\?": ?(?:-?\d+(?:\.\d+)?|\[[^\]]*\]|\{[^{}]*\}|true|false)(?:, ?)?'
                 % "|".join(sorted(OWN | NUMBERED))), ""),

@@ -135,6 +135,12 @@ _OWN = "windows|users|engine_steps|every_slot|population|bits_by_window|advice_b
 _NUMBERED = "window|steps|window_steps|requests|refused"
 
 
+def _published(rule: str) -> str:
+    """A rule as a published line says it, a refusal that quotes the launch's own among them: a rate keeps its design
+    and not its denominator (`served_verdicts.WINDOW_TEXT`); any other text stays."""
+    return re.sub(r"(rate:\d+)/\d+", r"\1/N", rule)
+
+
 def _window_data(out: Path, k: int) -> list[str]:
     """Each place under ``out``, by path or in a file's text, that names window ``k`` or counts a window's own."""
     pat = re.compile(rf"(?<![A-Za-z0-9])w{k}(?![A-Za-z0-9])|(?i:\bwindows?)[ :=]+{k}\b|(?i:\bsteps?) \[\d|"
@@ -163,7 +169,7 @@ LINES = [
      'THE NETWORK CERTIFIER {"rc": 1, "reason": "window K: the scan\'s prog is no audit\'s", "verdict": "reject"}'),
     ("SAMPLED-PROOFS (run.sh exit 0): over SiluMul_v2{I=8192} at model.layers.0.mlp. steps [13, 19] (law rate:2/4), "
      'drawn members [5, 42]: RECORDS {"accepted": true}',
-     "SAMPLED-PROOFS (run.sh exit 0): over SiluMul_v2{I=8192} at model.layers.0.mlp. steps (law rate:2/4), "
+     "SAMPLED-PROOFS (run.sh exit 0): over SiluMul_v2{I=8192} at model.layers.0.mlp. steps (law rate:2/N), "
      'drawn members [5, 42]: RECORDS {"accepted": true}'),
     ('RECORD {"by": ["PoUS"], "composed": "reject", "node": "n", "steps": [13, 19], "window": 7}',
      'RECORD {"by": ["PoUS"], "composed": "reject", "node": "n"}'),
@@ -4056,7 +4062,7 @@ NO_TIE = ("PREFLIGHT: under H1_TIE V3c's audit is tied to H1's W, whose tables t
 
 def _no_reader(law: str) -> str:
     return ("PREFLIGHT: under H1_TIE every table H1's W registers needs a sampled reader, which only a stratified rate "
-            f"(stratified-rate:NUM/DEN), a stratum of each table's readers, gives: V3C_LAW is {law}")
+            f"(stratified-rate:NUM/DEN), a stratum of each table's readers, gives: V3C_LAW is {_published(law)}")
 
 
 @pytest.mark.parametrize("args, extra, records_audit, line", [
@@ -4084,7 +4090,8 @@ def test_the_preflight_refuses_a_v3c_rule_that_is_no_rate_with_the_rate_to_state
     runs, in the serve's run and in `served_verdicts.sh v3c` alike, with the rate to state in its place."""
     rc, lines, order, _limits = _v3c(tmp_path, args, V3C_LAW=rule)
     assert (rc, order) == (3, []) and len(lines) == 1, (lines, order)
-    assert lines[0].startswith("PREFLIGHT: V3C_LAW is the rate") and f"not {rule}: " in lines[0] and "rate:K/N" in lines[0]
+    assert lines[0].startswith("PREFLIGHT: V3C_LAW is the rate") and f"not {_published(rule)}: " in lines[0]
+    assert "rate:K/N" in lines[0]
 
 
 VTAG = W63K4.replace(",", "-")
