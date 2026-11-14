@@ -40,7 +40,7 @@ roots gets `X`'s values up to that opening's own binding term, which the audit d
 - `Partition.oracle_count`, `oracle_profile`, `oracle_sampled`, `oracle_cone`: the same at the oracle layer, from
   `SessionSound ε` and `InputsSound δ_in`, with $\delta_{link} = 0$.
 
-**Theorems, sampling designs** (`Audit/Law.lean`): `bernoulli_escape`, a Bernoulli($p$) sample's miss probability
+**Theorems, sampling designs** (`Audit/SamplingDesign.lean`): `bernoulli_escape`, a Bernoulli($p$) sample's miss probability
 $(1-p)^{|B|}$; `subset_escape`, the uniform $k$-subset's miss probability $\binom{n-|B|}{k}/\binom{n}{k}$;
 `subset_miss`, its count curve $\binom{n-K}{k}/\binom{n}{k}$; `subset_escape_le_prod`, the product bound
 $e(B) \le \prod_{u \in B}(1 - \pi_u) = (1 - k/n)^{|B|}$, so inclusion probabilities alone give a consumer a valid bound;

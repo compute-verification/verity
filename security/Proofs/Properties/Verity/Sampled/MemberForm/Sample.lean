@@ -178,23 +178,23 @@ theorem WindowOn.population {ι : Type} {d : Accounting.Device ι} {α : Type} [
 
 /-- **A session whose verdict passes has a record whose sample decodes by the subset sampling design**: the verdict
 refuses a record without a sample (`verdictOf_sampled`), the setup at the record's own sample refuses a sampling
-design a soundness claim doesn't sample by at `--zk` (`setupAt_sampleLaw`, `lawWhy_zk`), and a session set up without
+design a soundness claim doesn't sample by at `--zk` (`setupAt_sampleDesign`, `samplingDesignWhy_zk`), and a session set up without
 a stratified input refuses a stratified sample (`setupTables_stratified`). -/
 theorem sessionVerdict_subset {a : StepAt} {bs : _root_.Core.Blobs} {keys : Array String}
     {s : _root_.Spot.OneStageZk.RunFiles} {record : String} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup}
     {rest : Json × Json} {proofs : Array ByteArray} {units : Array ℕ}
     (h : SessionVerdict a bs keys s record spec tabs rest proofs units) :
     ∃ dj D kd, Flock.Witness.recordDraw record = some dj ∧ Flock.Draw.UnitSample.ofJson dj = .ok D ∧
-      D.law = .subset kd ∧
+      D.samplingDesign = .subset kd ∧
       ∃ sts, Flock.Stmt.setupTables (Flock.Witness.zkTags a.I) a.I.circuitFile a.I.publicFile
         (Flock.Witness.zkCoins a.I) a.I.count a.I.tables (some dj) a.I.partition a.I.program = .ok (spec, sts) := by
   obtain ⟨dj, hdj⟩ := Option.isSome_iff_exists.1 (verdictOf_sampled h.verdict)
   have hst := h.setup
   rw [hdj] at hst
-  obtain ⟨D, hD, hw⟩ := sampleLaw_ok (setupAt_sampleLaw hst)
+  obtain ⟨D, hD, hw⟩ := sampleDesign_ok (setupAt_sampleDesign hst)
   obtain ⟨sts, hss, -⟩ := setupAt_ok hst
   obtain ⟨hset, -⟩ := sessionAt_ok hss
-  rcases lawWhy_zk hw with ⟨kd, hk⟩ | ⟨K, St, hk⟩
+  rcases samplingDesignWhy_zk hw with ⟨kd, hk⟩ | ⟨K, St, hk⟩
   · exact ⟨dj, D, kd, hdj, hD, hk, sts, hset⟩
   · exact (setupTables_stratified hset hD hk).elim
 

@@ -566,7 +566,7 @@ omit [Inhabited D] in
 /-- **The knowledge term under `SHA512CRStrict`**: after each sample, the largest over the plan's tables of
 `ksStrict/(1 − N₀/(ek))`, averaged over the sample. It reads no prover: the budgets stand in for its finders. -/
 noncomputable def ksAvgStrict {n : ℕ} {Reg : Type} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
-    (L : Audit.Law n) (k : ℕ) (qF qS : ℝ) (R : Reg) : ℝ≥0∞ :=
+    (L : Audit.SamplingDesign n) (k : ℕ) (qF qS : ℝ) (R : Reg) : ℝ≥0∞ :=
   avg fun ω : L.Ω => ⨆ j : Fin (plan (L.draw ω) R).length,
     ENNReal.ofReal (ksStrict (plan (L.draw ω) R) j k qF qS / (1 - rateB (plan (L.draw ω) R) j k))
 
@@ -576,7 +576,7 @@ end Session
 at a prover each of whose tables' finders, after each sample, satisfies `SHA512CRStrict` at budgets `qF`, `qS`
 (`TableCR`). -/
 theorem ksAvgBE_le_strict {n : ℕ} {Reg D : Type} [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
-    {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) {L : Audit.Law n} (k : ℕ) {qF qS : ℝ} (R : Reg)
+    {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) {L : Audit.SamplingDesign n} (k : ℕ) {qF qS : ℝ} (R : Reg)
     (τ : Audit.Cont L Reg (Audit.Partition.batchedSession H E plan) R)
     (hCR : ∀ ω j, TableCR execArith H E (plan (L.draw ω) R) j (Audit.Partition.batchStrat H E plan (τ ω)) qF qS) :
     Audit.Partition.ksAvgBE H E plan k R τ ≤ ksAvgStrict plan L k qF qS R := by

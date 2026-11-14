@@ -120,7 +120,7 @@ statement (`HmOut.drawn` at `drawJ`) labels it `idx`, and `reg ∈ own` is the c
 position `x` for `u`'s label, the public file's `b ‖ c` of `u`'s row `q` opens `reg`'s root at `x` through the header's
 path. -/
 theorem opens_of_acceptsZKR {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
-    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) {tr : Exec.Transcript}
+    {hscope : Layout.scopeOk c = true} {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) {tr : Exec.Transcript}
     (hacc : AcceptsZKR zo.I zo.own tr) {reg : Registered.Port} (hmem : reg ∈ zo.own) {u : Fin nv}
     {q : Fin c.ports.size} (hfind : (List.range c.ports.size).find? (fun p => c.ports[p]!.name == reg.name) = some q.val)
     {d : Lean.Json} {D : Draw.UnitSample} {dp : Public} {idx : Array ℕ} (hd : recordDraw tr.record = some d)
@@ -191,7 +191,7 @@ section family
 
 variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
-variable {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 

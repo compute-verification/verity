@@ -167,7 +167,7 @@ variable {n : ℕ} {Reg : Type} {mPts : ℕ} {P Cp Op Out : Finset (Fin n) → R
   (opn : ∀ S R, Array ByteArray → Op S R) (dg : ByteArray → ByteArray)
   (dec : Finset (Fin n) → Reg → ℕ → ByteArray → List Msg) (one : Finset (Fin n) → Reg → ℕ → Bool)
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
-  (capOf : ∀ S R, ByteArray → Cp S R) (N : ℕ) (L : Law n)
+  (capOf : ∀ S R, ByteArray → Cp S R) (N : ℕ) (L : SamplingDesign n)
 
 /-- **The refinement at `--zk`, one table**: against any live prover `τ` of the live audit (`liveTable` written out by
 `wr`), verity-verify-proof `--zk`'s acceptance is no likelier than the compiled `--zk` table's acceptance against the simulated

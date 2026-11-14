@@ -257,7 +257,7 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
     rcases D with _ | d
     · simp only [Option.isNone_none, ↓reduceIte] at hv
       obtain ⟨⟨⟩, hdl, -⟩ := bind_ok hv
-      first | cases hdl | simp [Flock.ProvedScope.sampleLaw] at hdl
+      first | cases hdl | simp [Flock.ProvedScope.sampleDesign] at hdl
     simp only [Option.isNone_some, Bool.false_eq_true, ↓reduceIte] at hv
     obtain ⟨⟨⟩, hfd, hv⟩ := bind_ok hv
     obtain ⟨⟨⟩, hid, hv⟩ := bind_ok hv
@@ -354,7 +354,7 @@ theorem decide_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartP
       unfold Flock.Readable.Read.check
       rw [htags, hzk, htables, hcount, hpi, hreadReg]
       exact hsc
-    have hdl : (if s.read.draw.isNone then Flock.ProvedScope.sampleLaw true s.read.tags false none else pure ()) =
+    have hdl : (if s.read.draw.isNone then Flock.ProvedScope.sampleDesign true s.read.tags false none else pure ()) =
         (.ok () : V Unit) := by
       obtain ⟨d, hd⟩ := Option.isSome_iff_exists.1 hds
       rw [hdraw, hd]

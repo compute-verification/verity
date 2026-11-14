@@ -121,9 +121,8 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from verity.config import COMPOSITES
-from verity.protocol import Channel, Manifest, Role
+from verity.protocol import Channel, Manifest, ProtocolDef, Role
 from verity.party import Finish, Identity, Received, LogEntry, Send
-from verity.runtime.runner import ProtocolDef
 from verity.channel import Body, Hex, Int, Message, Schema, Str
 
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
@@ -516,7 +515,7 @@ class Verifier(_Verifier):
         return self._start(params, _params)
 
     def _take(self, m: Message) -> str | None:
-        if m.type != "ZkServer":
+        if m.type != "Firewall":
             return super()._take(m)
         if self.zk_server is not None:
             return "out-of-phase"

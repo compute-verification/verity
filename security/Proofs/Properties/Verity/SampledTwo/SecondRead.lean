@@ -32,15 +32,15 @@ private theorem ite_ite_none {c₁ c₂ : Bool} {s₁ s₂ : String}
 
 /-- **A sample the check finds no fault in reads every coin opened**: it read `read` bytes of `src`, and `src` holds as
 many whole challenger coins as those bytes reach. -/
-theorem coinsReason_read {v : Registration.Verifier} {law rec_ draw : Json} {src : ByteArray}
-    (h : OneStage.coinsReason v law rec_ draw src = none) :
-    ∃ n units read, nat? (getD rec_ "population") = some n ∧ OneStage.sampledFrom v law n src = .ok (units, read) ∧
+theorem coinsReason_read {v : Registration.Verifier} {samplingDesign rec_ draw : Json} {src : ByteArray}
+    (h : OneStage.coinsReason v samplingDesign rec_ draw src = none) :
+    ∃ n units read, nat? (getD rec_ "population") = some n ∧ OneStage.sampledFrom v samplingDesign n src = .ok (units, read) ∧
       (read + Challenger.COIN_BYTES - 1) / Challenger.COIN_BYTES = src.size / Challenger.COIN_BYTES := by
   unfold OneStage.coinsReason at h
   cases hn : nat? (getD rec_ "population") with
   | none => simp [hn] at h
   | some n =>
-    cases hdf : OneStage.sampledFrom v law n src with
+    cases hdf : OneStage.sampledFrom v samplingDesign n src with
     | error why => simp [hn, hdf] at h
     | ok ur =>
       obtain ⟨units, read⟩ := ur
@@ -48,19 +48,19 @@ theorem coinsReason_read {v : Registration.Verifier} {law rec_ draw : Json} {src
       exact ⟨n, units, read, rfl, hdf, by simpa using ite_ite_none h⟩
 
 /-- **The form's last step at the coins `ξ` accepts only where its sample read every coin of `ξ`**, under the second
-stage's sampling design `law` at the verifier whose sampling design is a subset of all the record's population. -/
-theorem secondCheck_read {v : Registration.Verifier} {delta : Core.Ratio} {c : OneStage.Commitment} {law : Json}
+stage's sampling design `samplingDesign` at the verifier whose sampling design is a subset of all the record's population. -/
+theorem secondCheck_read {v : Registration.Verifier} {delta : Core.Ratio} {c : OneStage.Commitment} {samplingDesign : Json}
     {ξ : ByteArray} {e : OneStage.Evidence} {pub : OneStage.Public} {prof : Core.Integrity}
-    (h : secondCheck v delta c law ξ e = .accept pub prof) :
+    (h : secondCheck v delta c samplingDesign ξ e = .accept pub prof) :
     ∃ n units read, nat? (getD c.record "population") = some n ∧
-      OneStage.sampledFrom { v with law := subsetDesign n } law n ξ = .ok (units, read) ∧
+      OneStage.sampledFrom { v with samplingDesign := subsetDesign n } samplingDesign n ξ = .ok (units, read) ∧
       (read + Challenger.COIN_BYTES - 1) / Challenger.COIN_BYTES = ξ.size / Challenger.COIN_BYTES := by
   unfold secondCheck at h
   cases hm : nat? (getD c.record "population") with
   | none => simp [hm] at h
   | some m =>
     simp only [hm] at h
-    cases hr : OneStage.coinsReason { v with law := subsetDesign m } law c.record e.draw ξ with
+    cases hr : OneStage.coinsReason { v with samplingDesign := subsetDesign m } samplingDesign c.record e.draw ξ with
     | some why => simp [hr] at h
     | none =>
       obtain ⟨n, units, read, hn, hdf, hsz⟩ := coinsReason_read hr
@@ -76,13 +76,13 @@ sample read, and `ξ₂` holds as many whole challenger coins as those bytes rea
 theorem second_read {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
-    ∃ c₂ ξ₂ run law n units read, OneStageZk.coinsOf p.audit c₂ e.interior = .ok ξ₂ ∧ secondDesignOf p run = .ok law ∧
+    ∃ c₂ ξ₂ run samplingDesign n units read, OneStageZk.coinsOf p.audit c₂ e.interior = .ok ξ₂ ∧ secondDesignOf p run = .ok samplingDesign ∧
       nat? (getD c₂.record "population") = some n ∧
-      OneStage.sampledFrom { p.audit.base.verifier with law := subsetDesign n } law n ξ₂ = .ok (units, read) ∧
+      OneStage.sampledFrom { p.audit.base.verifier with samplingDesign := subsetDesign n } samplingDesign n ξ₂ = .ok (units, read) ∧
       (read + Challenger.COIN_BYTES - 1) / Challenger.COIN_BYTES = ξ₂.size / Challenger.COIN_BYTES := by
-  obtain ⟨-, c₂, ξ₂, r, i, run, hi, -, -, -, -, law, hl, htwo⟩ := accepted_steps h
+  obtain ⟨-, c₂, ξ₂, r, i, run, hi, -, -, -, -, samplingDesign, hl, htwo⟩ := accepted_steps h
   obtain ⟨-, hξ, -⟩ := inputAt_ok hi
   obtain ⟨n, units, read, hn, hdf, hsz⟩ := secondCheck_read htwo
-  exact ⟨c₂, ξ₂, run, law, n, units, read, hξ, hl, hn, hdf, hsz⟩
+  exact ⟨c₂, ξ₂, run, samplingDesign, n, units, read, hξ, hl, hn, hdf, hsz⟩
 
 end VStar.Recursive.SampledTwo

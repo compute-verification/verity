@@ -54,29 +54,29 @@ open Finset
 /-- **The converse, exactly.** A sampling design under which every set of at least `K` of its `n` units escapes with probability at
 most `δ` samples at least `(n − K + 1)(1 − δ^{1/K})` units in expectation. -/
 def ConverseExact : Prop :=
-  ∀ (n K : ℕ) (L : Law n) (δ : ℝ), 0 < K → K ≤ n → (L.miss K).toReal ≤ δ →
+  ∀ (n K : ℕ) (L : SamplingDesign n) (δ : ℝ), 0 < K → K ≤ n → (L.miss K).toReal ≤ δ →
     ((n : ℝ) - K + 1) * (1 - δ ^ ((K : ℝ)⁻¹)) ≤ meanSamples L
 
 /-- **The converse, asymptotically**: `(n − K + 1)(1 − δ^{1/K}) ≥ (n − K + 1)/K · Λ · (1 − Λ/(2K))`, so a sampling design meeting
 `ConverseExact`'s hypothesis samples about `(n/K) · ln(1/δ)` units when `K ≫ ln(1/δ)`. -/
 def ConverseAsymptotic : Prop :=
-  ∀ (n K : ℕ) (L : Law n) (δ : ℝ), 0 < K → K ≤ n → 0 < δ → δ ≤ 1 → (L.miss K).toReal ≤ δ →
+  ∀ (n K : ℕ) (L : SamplingDesign n) (δ : ℝ), 0 < K → K ≤ n → 0 < δ → δ ≤ 1 → (L.miss K).toReal ≤ δ →
     ((n : ℝ) - K + 1) / K * Real.log δ⁻¹ * (1 - Real.log δ⁻¹ / (2 * K)) ≤ meanSamples L
 
 /-- **Achievability**: for any `ε > 0`, some sampling design meets the free-compute target while sampling unit `u` with probability
 at most `min(1, Λ/C · w u) + ε`. -/
 def Achievability : Prop :=
   ∀ (n : ℕ) (w : Fin n → ℝ) (C δ ε : ℝ), (∀ u, 0 ≤ w u) → 0 < C → 0 < δ → δ ≤ 1 → 0 < ε →
-    ∃ L : Law n, MeetsTarget L w C δ ∧ ∀ u, (L.incl u).toReal ≤ min 1 (Real.log δ⁻¹ / C * w u) + ε
+    ∃ L : SamplingDesign n, MeetsTarget L w C δ ∧ ∀ u, (L.incl u).toReal ≤ min 1 (Real.log δ⁻¹ / C * w u) + ε
 
 /-- **The granularity optimum.** With `n` units of work `s` each, every sampling design meeting the free-compute target costs at
 least `c(s) · (ns/C) · Λ · (1 − s/C − C/(ns) − sΛ/(2C))`, and some sampling design costs at most `c(s) · (ns/C) · Λ + ε`. -/
 def GranularityOptimum : Prop :=
   ∀ (n : ℕ) (s C f o δ : ℝ), 0 < s → 0 < C → 0 ≤ f → 0 ≤ o → 0 < δ → δ ≤ 1 →
-    (∀ L : Law n, MeetsTarget L (fun _ => s) C δ →
+    (∀ L : SamplingDesign n, MeetsTarget L (fun _ => s) C δ →
       unitCost f o s * (n * s / C * Real.log δ⁻¹) * (1 - s / C - C / (n * s) - s * Real.log δ⁻¹ / (2 * C)) ≤
         cost L fun _ => unitCost f o s) ∧
-    ∀ ε > 0, ∃ L : Law n, MeetsTarget L (fun _ => s) C δ ∧
+    ∀ ε > 0, ∃ L : SamplingDesign n, MeetsTarget L (fun _ => s) C δ ∧
       cost L (fun _ => unitCost f o s) ≤ unitCost f o s * (n * s / C * Real.log δ⁻¹) + ε
 
 /-- **The best granularity minimizes `c(s)`.** Divide the same work into `n` units of size `s` or `n'` of size `s'`.
@@ -84,7 +84,7 @@ For every sampling design meeting the target at `s'`, some sampling design meets
 the factor `1 − s'/C − C/(n's') − s'Λ/(2C)` and any `ε`. Stated cross-multiplied. -/
 def GranularityChoice : Prop :=
   ∀ (n n' : ℕ) (s s' C f o δ : ℝ), 0 < s → 0 < s' → (n : ℝ) * s = n' * s' → 0 < C → 0 ≤ f → 0 ≤ o → 0 < δ →
-    δ ≤ 1 → ∀ L' : Law n', MeetsTarget L' (fun _ => s') C δ → ∀ ε > 0, ∃ L : Law n, MeetsTarget L (fun _ => s) C δ ∧
+    δ ≤ 1 → ∀ L' : SamplingDesign n', MeetsTarget L' (fun _ => s') C δ → ∀ ε > 0, ∃ L : SamplingDesign n, MeetsTarget L (fun _ => s) C δ ∧
       unitCost f o s' * ((1 - s' / C - C / (n' * s') - s' * Real.log δ⁻¹ / (2 * C)) *
           cost L fun _ => unitCost f o s) ≤
         unitCost f o s * cost L' (fun _ => unitCost f o s') + ε
@@ -95,11 +95,11 @@ def GranularityChoice : Prop :=
 `c(s) · (ns/C) · Λ + w·n·β·h + ε`. -/
 def ServedGranularityOptimum : Prop :=
   ∀ (n : ℕ) (s C f o δ w β h : ℝ), 0 < s → 0 < C → 0 ≤ f → 0 ≤ o → 0 < δ → δ ≤ 1 →
-    (∀ L : Law n, MeetsTarget L (fun _ => s) C δ →
+    (∀ L : SamplingDesign n, MeetsTarget L (fun _ => s) C δ →
       unitCost f o s * (n * s / C * Real.log δ⁻¹) * (1 - s / C - C / (n * s) - s * Real.log δ⁻¹ / (2 * C)) +
           w * (n * β * h) ≤
         cost L (fun _ => unitCost f o s) + w * (n * β * h)) ∧
-    ∀ ε > 0, ∃ L : Law n, MeetsTarget L (fun _ => s) C δ ∧
+    ∀ ε > 0, ∃ L : SamplingDesign n, MeetsTarget L (fun _ => s) C δ ∧
       cost L (fun _ => unitCost f o s) + w * (n * β * h) ≤
         unitCost f o s * (n * s / C * Real.log δ⁻¹) + w * (n * β * h) + ε
 
@@ -113,14 +113,14 @@ def ServedGranularityChoice : Prop :=
 /-- **A heavy unit is sampled almost surely**: under a sampling design meeting the free-compute target, a unit doing work at least
 `C` is sampled with probability at least `1 − δ`. -/
 def HeavyUnit : Prop :=
-  ∀ (n : ℕ) (w : Fin n → ℝ) (C δ : ℝ) (L : Law n), MeetsTarget L w C δ → ∀ u, C ≤ w u → 1 - δ ≤ (L.incl u).toReal
+  ∀ (n : ℕ) (w : Fin n → ℝ) (C δ : ℝ) (L : SamplingDesign n), MeetsTarget L w C δ → ∀ u, C ≤ w u → 1 - δ ≤ (L.incl u).toReal
 
 /-- **The converse for unequal units, in samples.** With every unit's work in `[a, A]`, `A · Λ ≤ C` and `ρ > 1`, every sampling design
 meeting the free-compute target samples at least `Λ (1 − AΛ/(2C)) (F/(ρC) · (1 − A/C) − J)` units in expectation, where
 `F` is the total work and `J = ⌊log_ρ (A/a)⌋ + 1` the number of classes `[aρ^j, aρ^{j+1})`. -/
 def UnequalSamples : Prop :=
   ∀ (n : ℕ) (w : Fin n → ℝ) (ρ a A C δ : ℝ), 1 < ρ → 0 < a → (∀ u, a ≤ w u ∧ w u ≤ A) → 0 < C → 0 < δ → δ ≤ 1 →
-    A * Real.log δ⁻¹ ≤ C → ∀ L : Law n, MeetsTarget L w C δ →
+    A * Real.log δ⁻¹ ≤ C → ∀ L : SamplingDesign n, MeetsTarget L w C δ →
       Real.log δ⁻¹ * (1 - A * Real.log δ⁻¹ / (2 * C)) *
           ((∑ u, w u) / (ρ * C) * (1 - A / C) - (⌊Real.logb ρ (A / a)⌋₊ + 1)) ≤ meanSamples L
 
@@ -130,7 +130,7 @@ target pays at least `Λ (1 − AΛ/(2C)) (∑_u w u · c(w u)/(ρ²C) · (1 −
 negative `A` makes `c(A)` negative and the bound positive while every sampling design costs `0`. -/
 def UnequalCost : Prop :=
   ∀ (n : ℕ) (w : Fin n → ℝ) (ρ a A C δ f o : ℝ), 1 < ρ → 0 < a → a ≤ A → (∀ u, a ≤ w u ∧ w u ≤ A) → 0 < C →
-    0 < δ → δ ≤ 1 → 0 ≤ f → 0 ≤ o → A * Real.log δ⁻¹ ≤ C → ∀ L : Law n, MeetsTarget L w C δ →
+    0 < δ → δ ≤ 1 → 0 ≤ f → 0 ≤ o → A * Real.log δ⁻¹ ≤ C → ∀ L : SamplingDesign n, MeetsTarget L w C δ →
       Real.log δ⁻¹ * (1 - A * Real.log δ⁻¹ / (2 * C)) *
           ((∑ u, w u * unitCost f o (w u)) / (ρ ^ 2 * C) * (1 - A / C) -
             (⌊Real.logb ρ (A / a)⌋₊ + 1) * unitCost f o A) ≤ cost L fun u => unitCost f o (w u)
@@ -141,8 +141,8 @@ least `(n − K)(1 − δ^{1/(K+1)})` units in expectation, and some sampling de
 def ExfiltrationOptimum : Prop :=
   ∀ (n b K : ℕ) (δ ℓ : ℝ), 0 < δ → δ ≤ 1 → (b : ℝ) * K + locBits n K ≤ ℓ →
     ℓ < (b : ℝ) * (K + 1) + locBits n (K + 1) →
-    (∀ L : Law n, CertifiesLeak L (fun _ => b) δ ℓ → ((n : ℝ) - K) * (1 - δ ^ ((K + 1 : ℝ)⁻¹)) ≤ meanSamples L) ∧
-    ∀ ε > 0, ∃ L : Law n, CertifiesLeak L (fun _ => b) δ ℓ ∧ meanSamples L ≤ n * Real.log δ⁻¹ / (K + 1) + ε
+    (∀ L : SamplingDesign n, CertifiesLeak L (fun _ => b) δ ℓ → ((n : ℝ) - K) * (1 - δ ^ ((K + 1 : ℝ)⁻¹)) ≤ meanSamples L) ∧
+    ∀ ε > 0, ∃ L : SamplingDesign n, CertifiesLeak L (fun _ => b) δ ℓ ∧ meanSamples L ≤ n * Real.log δ⁻¹ / (K + 1) + ε
 
 /-- **The refinement rule, for the bound.** Split each of `n` units of work `s` and width `b` into `r` units of work
 `s/r` and width `b'`, with `K` as in `ExfiltrationOptimum` and `2(K + 1) ≤ n`. If `b + log₂(K+2)/(K+1) ≤ b' + log₂ r`,
@@ -153,9 +153,9 @@ def RefinementRule : Prop :=
   ∀ (n r b b' K : ℕ) (s f o δ ℓ : ℝ), 1 ≤ r → 0 < s → 0 ≤ f → 0 ≤ o → 0 < δ → δ ≤ 1 → 2 * (K + 1) ≤ n →
     (b : ℝ) * K + locBits n K ≤ ℓ → ℓ < (b : ℝ) * (K + 1) + locBits n (K + 1) →
     (b : ℝ) + Real.logb 2 (K + 2) / (K + 1) ≤ b' + Real.logb 2 r →
-    (∀ ε > 0, ∃ L : Law n, CertifiesLeak L (fun _ => b) δ ℓ ∧
+    (∀ ε > 0, ∃ L : SamplingDesign n, CertifiesLeak L (fun _ => b) δ ℓ ∧
       cost L (fun _ => unitCost f o s) ≤ unitCost f o s * (n * Real.log δ⁻¹ / (K + 1)) + ε) ∧
-    ∀ L' : Law (r * n), CertifiesLeak L' (fun _ => b') δ ℓ →
+    ∀ L' : SamplingDesign (r * n), CertifiesLeak L' (fun _ => b') δ ℓ →
       (1 - K / n) * (1 - Real.log δ⁻¹ / (2 * (K + 1))) * (unitCost f o s * (n * Real.log δ⁻¹ / (K + 1))) ≤
         cost L' fun _ => unitCost f o (s / r)
 

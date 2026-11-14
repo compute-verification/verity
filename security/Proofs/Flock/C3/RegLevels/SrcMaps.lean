@@ -126,7 +126,7 @@ theorem decodedO_rs_size {sh : Flock.Shape} (w : Array F128) (cons : ℕ → ℕ
   simp only [Array.size_map, Array.size_range]
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
+  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {Vs : Fin S → VStmt}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
@@ -180,7 +180,7 @@ open FlockSoundness.Refine (capAt)
 open Flock (sibsOf)
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
   {S : ℕ} {stmt : Fin S → VStar.Stmt} {Vs : Fin S → VStmt}
 
 local notation "ℐ" => holoInnerAt T CT st hp
