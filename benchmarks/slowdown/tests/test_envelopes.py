@@ -20,7 +20,7 @@ T = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(T)
 
 #: our envelope field: tiers' DEFAULTS key
-TIERS_KEYS = {"residual": "residual", "clock_share": "clock_share", "eps_w": "eps_w", "eps_agg": "eps_agg",
+TIERS_KEYS = {"residual": "free", "clock_share": "clock_share", "eps_w": "eps_w", "eps_agg": "eps_agg",
               "identities": "identities", "lag_s": "lag_s", "proof_share": "share", "overhead": "overhead",
               "replay": "replay", "step_flop": "step_flop", "p_evade": "p_evade", "luck": "luck",
               "step_bits": "step_bits", "floor_steps": "floor_steps", "chord_kappa": "kappa"}
@@ -63,8 +63,8 @@ def test_the_remote_uncertified_share_is_tiers_residual_term():
     ctx = tiers_context()
     p = tiers_params(ctx)
     remote = envelopes.regime(REG, "remote")
-    assert remote.pouw.audited(ctx.location) == pytest.approx(T.audited_residual(p), rel=1e-12)
-    assert remote.uncertified(ctx) == pytest.approx(T.evaluate(p, T.TIERS["T1"])["residual"], rel=1e-9)
+    assert remote.pouw.audited(ctx.location) == pytest.approx(T.audited_free(p), rel=1e-12)
+    assert remote.uncertified(ctx) == pytest.approx(T.evaluate(p, T.TIERS["T1"])["free"], rel=1e-9)
 
 
 def test_with_spot_it_adds_tiers_escape_and_cheating_shares():
@@ -81,7 +81,7 @@ def test_with_spot_it_adds_tiers_escape_and_cheating_shares():
         slack = sampled.slack(ctx)
         assert sampled.detection.injected() == pytest.approx(t5["cheat_bits"], rel=1e-12)
         assert sampled.detection.chord == pytest.approx(T.chord(p, t5["cheat_bits"]), rel=1e-7)
-        assert math.fsum(v for k, v in slack.items() if k != "exfil.incorrect") == pytest.approx(t5["residual"], rel=1e-9)
+        assert math.fsum(v for k, v in slack.items() if k != "exfil.incorrect") == pytest.approx(t5["free"], rel=1e-9)
         assert slack["exfil.incorrect"] == pytest.approx(t5["cheat"], rel=1e-7)
         shares.append(slack["exfil.incorrect"])
     assert shares[0] == 1 > shares[1] > 0
@@ -110,8 +110,8 @@ def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_slowdown_remot
     assert pad <= 1 / (s + (1 - s) * u) and pad == pytest.approx(1 / (s + (1 - s) * u), rel=1e-4)
 
 
-#: `InferenceOnly.Slowdown.remoteSlowdown` as security/Definitions/InferenceOnly/Remote.lean defines it, and the conclusion of
-#: `InferenceOnly.Guarantees.SlowdownRemote` (security/Definitions/InferenceOnly/Guarantees/Remote.lean), which bounds the slowdown by it
+#: `InferenceOnly.Slowdown.remoteSlowdown` as security/Definitions/Slowdown/Remote.lean defines it, and the conclusion of
+#: `InferenceOnly.Guarantees.SlowdownRemote` (security/Definitions/Slowdown/Guarantees/Remote.lean), which bounds the slowdown by it
 REMOTE_SLOWDOWN = "noncomputable def remoteSlowdown (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))"
 REMOTE_CONCLUSION = "remoteSlowdown mfu (unregisteredShare C U)"
 
@@ -133,13 +133,13 @@ def test_the_remote_overhead_is_lean_remote_slowdown_at_the_references_mfu():
 
     ctx = tiers_context()
     t1 = T.evaluate(tiers_params(ctx), T.TIERS["T1"])
-    x = t1["residual"] + t1["declared"] + t1["cheat"]
+    x = t1["free"] + t1["declared"] + t1["cheat"]
     assert x / T.DEFAULTS["mfu"] < 1
     peak = REG.override({"task.reference_efficiency": False})
     # tiers counts no unregistered share (s = 0) where the slowdown calculator's fleet has 0.1%
     for reg, ref, want in ((REG, True, 3.040), (peak, False, 1.218)):
         lo = evaluate_named(reg, "remote-tiers-kimi").lo
-        assert lo == pytest.approx(multiple_bound(T.DEFAULTS["mfu"], t1["unmonitored"], x, ref), rel=5e-3)
+        assert lo == pytest.approx(multiple_bound(T.DEFAULTS["mfu"], t1["unregistered"], x, ref), rel=5e-3)
         assert lo == pytest.approx(want, abs=1e-3)
     hosts = peak.override({"regime.remote.host": 1.0})
     assert evaluate_named(hosts, "remote-tiers-kimi").lo == 1.0
@@ -245,7 +245,7 @@ def test_the_declared_io_bound_at_w63_is_the_per_server_bounds_per_window_honest
     `user` at 406), and its prompt is K0 + (C − 1) K = 12 + 46 · 45 = 2,082 ids: 36,382 bits in. A bucket is
     4 ⌈log₂ 6⌉ = 12 bits, and a request 1,095 out (1,088 id bits and the count). A link-window holds `4 ⌈32 / 28⌉ = 8`
     requests, so a server takes at most 291,440 bits in a 3.2 s window, 91.1 kbit/s in and 2.7 kbit/s out, against the
-    warden's line rate of 655 kbit/s each way. That is never less than the rate over many windows, 52.1 kbit/s, which it
+    network certifier's line rate of 655 kbit/s each way. That is never less than the rate over many windows, 52.1 kbit/s, which it
     equals only at T = D + 1. An incorrect ingress unit, which this honest-δ form excludes, would add 356,592 bits
     (8 · 512 · 16 + 2 · 4 · 36,382), 122% of a window. `regime.onsite` doesn't take it."""
     assert envelopes.REQUEST_HEAD == {"connection ordinal": 32, "content-length": 32, "max_tokens": 32, "seed": 32,
@@ -255,8 +255,8 @@ def test_the_declared_io_bound_at_w63_is_the_per_server_bounds_per_window_honest
     assert (c.request_in, c.bucket_in, c.request_out, c.hold, c.window_buckets) == (36_382, 12, 1_095, 27, 32)
     assert c.window_bits(32) == (291_440, 8_760) == (8 * 36_382 + 32 * 12, 8 * 1_095)
     assert (c.r_in, c.r_out) == (pytest.approx(91_075), pytest.approx(8_760 / 3.2))
-    assert (round(c.r_in / 1e3, 1), round(c.r_out / 1e3, 1), c.warden_rate) == (91.1, 2.7, 655_360)
-    assert c.faulty_unit_bits == 356_592 and round(c.faulty_unit_bits / c.window_bits(32)[0], 2) == 1.22
+    assert (round(c.r_in / 1e3, 1), round(c.r_out / 1e3, 1), c.line_rate) == (91.1, 2.7, 655_360)
+    assert c.incorrect_block_bits == 356_592 and round(c.incorrect_block_bits / c.window_bits(32)[0], 2) == 1.22
     # a slot is held D + 1 = 28 buckets from its admission, so the ceiling steps past 28
     assert c.window_bits(28) == (4 * 36_382 + 28 * 12, 4 * 1_095)
     assert c.window_bits(29) == (8 * 36_382 + 29 * 12, 8 * 1_095)
@@ -418,7 +418,7 @@ def test_pouws_delta_splits_into_coins_and_cryptography():
     assert "windows" not in envelopes.regime(REG, "onsite").delta(ctx).by
     assert sampled.detection.p_evade == window
     assert sampled.delta(ctx).coin == pytest.approx(d.coin + sampled.detection.p_evade)
-    assert (envelopes.regime(REG, "unmonitored").delta(ctx).coin, envelopes.regime(REG, "unmonitored").delta(ctx).crypto) \
+    assert (envelopes.regime(REG, "unregistered").delta(ctx).coin, envelopes.regime(REG, "unregistered").delta(ctx).crypto) \
         == (0.0, 0.0)
 
 

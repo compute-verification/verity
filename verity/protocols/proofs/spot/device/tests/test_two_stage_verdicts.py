@@ -33,7 +33,7 @@ from verity_vllm.pipeline import interior_rows as IR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST
 
-TS = importlib.import_module("verity.protocols.proofs.spot.device.two_stage")
+TS = importlib.import_module("verity.protocols.proofs.spot.prover.audit.two_stage")
 
 #: experts a table, a block's K e4m3 bytes, a table row's u16 words; the tables a span reads and the blocks on each
 E, K, H, T, W = 4, 32, 16, 2, 2

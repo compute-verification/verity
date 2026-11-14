@@ -63,7 +63,7 @@ def declared(digest: str, **more: Any) -> Record:
 
 
 class Clock:
-    """`m1_capture`'s `time`: seconds the stand-ins move."""
+    """`match_capture`'s `time`: seconds the stand-ins move."""
 
     def __init__(self) -> None:
         self.now = 1000.0
@@ -248,7 +248,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
 
 @pytest.fixture
 def said(capsys: pytest.CaptureFixture[str]) -> Lines:
-    """The lines `m1_capture` has printed since the last call."""
+    """The lines `match_capture` has printed since the last call."""
     return lambda: capsys.readouterr().out.splitlines()
 
 

@@ -1,7 +1,7 @@
 module
 
 public import Properties.InferenceOnly.Count
-public import Proofs.InferenceOnly.Cut
+public import Proofs.Slowdown.Cut
 
 /-!
 # A published count bounds the day's work

@@ -88,7 +88,7 @@ theorem flock_headline_exec_hiddenG
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execHI hs.typed (hs.parseH hh) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ) ω)) qF qS) :
     prob (fun o => LiveVerifies I o ∧ ∀ hs : Scope I,
-        K ≤ (((instProg (circS I) n).partition (outsOfI (circS I) n)).wrong
+        K ≤ (((instProg (circS I) n).partition (outsOfI (circS I) n)).incorrect
           (Xpub {instOneG (c := circS I) (n := n)} {instZeroG (c := circS I) (n := n)}
             (XplurL ((instProg (circS I) n).partition (outsOfI (circS I) n)) H512 enc512 (leafOfId I.tags.merkleLeaf) (planAtH dj x₀)
               (tabAtH dj x₀)
@@ -160,7 +160,7 @@ theorem zk_session_soundHG
     prob (fun o => LiveVerifiesZK I o ∧ ∀ hs : ScopeZ I,
         let σ := simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
           (runsZC_liveHI I hs.typed (hs.parseHG hh hf) dj y₀ wr _ tablesAtZKH_liveI (hs.tagsOkH hh hn) hRec hDraw)) τ
-        K₀ ≤ (((instProg (circZ I) n).partition (outsOfI (circZ I) n)).wrong
+        K₀ ≤ (((instProg (circZ I) n).partition (outsOfI (circZ I) n)).incorrect
           (XplurZC execArith hs512 ((instProg (circZ I) n).partition (outsOfI (circZ I) n)) (planAtZKH dj y₀)
             (tabAtZKH dj y₀)
             ((rsZG dj y₀ hs.typed (hs.parseHG hh hf) (hs.scopeGen hh hf) (hs.loadH hh) hs.built).bindingZ
@@ -216,7 +216,7 @@ theorem zk_session_soundHJG
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_liveI I hs.typed (hs.parseHG hh hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
-        K₀ ≤ (((instProg (circZ I) n).partition (outsOfI (circZ I) n)).wrong
+        K₀ ≤ (((instProg (circZ I) n).partition (outsOfI (circZ I) n)).incorrect
           (XplurZC execArith hs512 ((instProg (circZ I) n).partition (outsOfI (circZ I) n)) (planZHJ dj y₀)
             (tabZHJ dj y₀)
             ((rsZHJG dj y₀ hs.typed (hs.parseHG hh hf) (hs.scopeGen hh hf) (hs.loadH hh) hs.built).bindingZ
@@ -276,7 +276,7 @@ theorem zk_session_soundHJRG
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_liveI I hs.typed (hs.parseHG hh hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
-        K₀ ≤ (((instProg (circZ I) n).partition (outsOfI (circZ I) n)).wrong
+        K₀ ≤ (((instProg (circZ I) n).partition (outsOfI (circZ I) n)).incorrect
           (XplurZC execArith hs512 ((instProg (circZ I) n).partition (outsOfI (circZ I) n)) (planZHJ dj y₀)
             (tabZHJ dj y₀)
             ((rsZHJG dj y₀ hs.typed (hs.parseHG hh hf) (hs.scopeGen hh hf) (hs.loadH hh) hs.built).bindingZ

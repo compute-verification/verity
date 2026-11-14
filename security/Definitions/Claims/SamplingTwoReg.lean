@@ -10,9 +10,9 @@ sample them, so that the misses of a monitoring period's windows multiply. `Comp
 boundary trace, which the extractor outputs after it has seen the judged run's coins; this file is about the committed
 ones.
 
-1. **The footprint at values** (`wrongInAt`, `footprintAt`): `wrongIn` and `footprint` read a witness only through its
+1. **The footprint at values** (`incorrectInAt`, `footprintAt`): `incorrectIn` and `footprint` read a witness only through its
    values (`Wit.val`); these read the boundary values themselves, so a trace with no openings has a footprint.
-   `wrongAtBoundaryAt`: the replay blocks wrong at their boundary under those values, each holding an incorrect proof
+   `incorrectAtBoundaryAt`: the replay blocks wrong at their boundary under those values, each holding an incorrect proof
    block at every interior. It reads the boundary values only.
 2. **The committed traces.** The boundary's is `Compiled.regVal`: at each gate, what the run's extractions open there
    under the statement's roots most often, over the run's coins and the extractor's; it reads the statement, the prover
@@ -41,32 +41,32 @@ namespace Claims.Sampling
 
 open Classical in
 /-- **The incorrect proof blocks of cell `(ρ, t)` at boundary values `val` and interior values `ι`**: each is incorrect
-on replay block `ρ`'s values, its boundary's `val` and its interior's `ι` (`Prog.refIn` at the replay block). `wrongIn`
+on replay block `ρ`'s values, its boundary's `val` and its interior's `ι` (`Prog.refIn` at the replay block). `incorrectIn`
 is its case at a witness's values, `val = w.val H Cm s`. -/
-noncomputable def wrongInAt (s : AuditStatement) (Pt Pρ : Partition) (val : ℕ → Option Bool) (ρ t : ℕ)
+noncomputable def incorrectInAt (s : AuditStatement) (Pt Pρ : Partition) (val : ℕ → Option Bool) (ρ t : ℕ)
     (ι : ℕ → Bool) : Finset ℕ :=
   (cell Pt Pρ ρ t).filter fun v => ¬ ∃ u r, Pt.blocks[v]? = some u ∧ Pρ.blocks[ρ]? = some r ∧
     s.prog.Correct (s.prog.refIn r val ι) u
 
 /-- **The footprint at boundary values `val`** and interior values `ι`, one interior per replay block: cell `(ρ, t)`'s
-incorrect proof blocks (`wrongInAt`). `footprint` is its case at a witness's values. -/
+incorrect proof blocks (`incorrectInAt`). `footprint` is its case at a witness's values. -/
 noncomputable def footprintAt (s : AuditStatement) (Pt Pρ : Partition) (val : ℕ → Option Bool) (ι : ℕ → ℕ → Bool)
     (ρ t : ℕ) : ℕ :=
-  (wrongInAt s Pt Pρ val ρ t (ι ρ)).card
+  (incorrectInAt s Pt Pρ val ρ t (ι ρ)).card
 
 open Classical in
 /-- **The replay blocks wrong at their boundary** under boundary values `val`: each holds an incorrect proof block at
 every interior, so no interior committed after the first stage's coins hides it from the second stage. -/
-noncomputable def wrongAtBoundaryAt (s : AuditStatement) (Pt Pρ : Partition) (val : ℕ → Option Bool) : Finset ℕ :=
+noncomputable def incorrectAtBoundaryAt (s : AuditStatement) (Pt Pρ : Partition) (val : ℕ → Option Bool) : Finset ℕ :=
   (Finset.range Pρ.blocks.length).filter fun ρ =>
-    ∀ i : ℕ → Bool, ∃ t < Pt.strata.length, (wrongInAt s Pt Pρ val ρ t i).Nonempty
+    ∀ i : ℕ → Bool, ∃ t < Pt.strata.length, (incorrectInAt s Pt Pρ val ρ t i).Nonempty
 
 end Claims.Sampling
 
 namespace Claims.SamplingGeneric
 
 open Claims
-open Claims.Sampling (AuditStatement Partition InScopeTwo forkOn ownLog wrongInAt footprintAt wrongAtBoundaryAt)
+open Claims.Sampling (AuditStatement Partition InScopeTwo forkOn ownLog incorrectInAt footprintAt incorrectAtBoundaryAt)
 
 namespace CompiledTwo
 
@@ -115,7 +115,7 @@ noncomputable def FregTwo (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type}
     match L.partition s, L.two s with
     | some Pt, some d =>
       (Finset.range d.part.blocks.length ×ˢ Finset.range Pt.strata.length).biUnion fun p =>
-        wrongInAt s Pt d.part (L.regVal H P x ω) p.1 p.2 (L.iregVal H P x ω r p.1)
+        incorrectInAt s Pt d.part (L.regVal H P x ω) p.1 p.2 (L.iregVal H P x ω r p.1)
     | _, _ => ∅
 
 /-! ## 4. The error -/
@@ -186,12 +186,12 @@ def HeadlineTwo (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop :=
 /-- **The miss at the replay blocks wrong at the committed boundary**: on a statement in scope whose first stage
 catches each replay block at rate `r₁` and whose second stage samples each cell at rate `r₂`, at every prover and tape,
 the run's sample holds no proof block of the committed incorrect set with probability at most `(1 − r₁·r₂)^{|W|}`, `W`
-the replay blocks wrong at the committed boundary trace (`wrongAtBoundaryAt`), which the tape fixes before any coin. -/
+the replay blocks wrong at the committed boundary trace (`incorrectAtBoundaryAt`), which the tape fixes before any coin. -/
 def MissTwo (H : Msg → Msg) (L : CompiledTwo Coin A) (r₁ r₂ : ℝ) : Prop :=
   ∀ x s Pt d, L.Scope x → L.parse x = some s → L.partition s = some Pt → L.two s = some d →
     d.FirstRate r₁ → d.SecondRate Pt r₂ → ∀ (Ω : Type) (P : Prover Ω) (ω : Ω),
       Pr (fun r : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x r, u ∉ L.FregTwo H P x ω r) ≤
-        (1 - r₁ * r₂) ^ (wrongAtBoundaryAt s Pt d.part (L.regVal H P x ω)).card
+        (1 - r₁ * r₂) ^ (incorrectAtBoundaryAt s Pt d.part (L.regVal H P x ω)).card
 
 end CompiledTwo
 

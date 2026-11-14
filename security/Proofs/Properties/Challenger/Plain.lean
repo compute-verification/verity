@@ -257,13 +257,13 @@ theorem mapM_ok {α β : Type} {f : α → Flock.V β} : ∀ {l : List α} {ts :
 /-! ## A plain value's text -/
 
 /-- A text with no backslash. -/
-def NoEscape (t : String) : Prop := ∀ c ∈ t.toList, c ≠ '\\'
+def NoMissProb (t : String) : Prop := ∀ c ∈ t.toList, c ≠ '\\'
 
-theorem noEscape_append {a b : String} (ha : NoEscape a) (hb : NoEscape b) : NoEscape (a ++ b) := fun c hc => by
+theorem noEscape_append {a b : String} (ha : NoMissProb a) (hb : NoMissProb b) : NoMissProb (a ++ b) := fun c hc => by
   rw [String.toList_append, List.mem_append] at hc
   exact hc.elim (ha c) (hb c)
 
-theorem noEscape_intercalate {ts : List String} (h : ∀ t ∈ ts, NoEscape t) : NoEscape (",".intercalate ts) :=
+theorem noEscape_intercalate {ts : List String} (h : ∀ t ∈ ts, NoMissProb t) : NoMissProb (",".intercalate ts) :=
   fun c hc => by
     rw [String.toList_intercalate] at hc
     rcases mem_intercalate hc with hc | ⟨l, hl, hc⟩
@@ -271,14 +271,14 @@ theorem noEscape_intercalate {ts : List String} (h : ∀ t ∈ ts, NoEscape t) :
     · obtain ⟨t, ht, rfl⟩ := List.mem_map.1 hl
       exact h t ht c hc
 
-theorem noEscape_str {s : String} (h : PlainStr s) : NoEscape (Flock.canonStr s) := by
+theorem noEscape_str {s : String} (h : PlainStr s) : NoMissProb (Flock.canonStr s) := by
   rw [canonStr_plain h]
   refine noEscape_append (noEscape_append (fun c hc => ?_) fun c hc => (h c hc).2.2.2) fun c hc => ?_ <;>
     · rintro rfl; simp at hc
 
 /-- **A plain value's text has no backslash.** -/
 theorem noEscape_canon {d : Nat} {j : Json} (h : PlainAt d j) :
-    ∀ {t : String}, Flock.canon j = .ok t → NoEscape t := by
+    ∀ {t : String}, Flock.canon j = .ok t → NoMissProb t := by
   induction h with
   | null d => intro t ht; rw [Flock.canon] at ht; cases ht; intro c hc; rintro rfl; simp at hc
   | bool d b => intro t ht; rw [Flock.canon] at ht; cases ht; cases b <;> (intro c hc; rintro rfl; simp at hc)
@@ -348,7 +348,7 @@ theorem forIn_none {cs : Array Char} (h : ∀ c ∈ cs, c ≠ '\\') : ∀ (l : L
     exact forIn_none h l fun j hj => hl j (List.mem_cons_of_mem _ hj)
 
 /-- A text with no backslash escapes no surrogate. -/
-theorem escapesSurrogate_false {text : String} (h : NoEscape text) : escapesSurrogate text = false := by
+theorem escapesSurrogate_false {text : String} (h : NoMissProb text) : escapesSurrogate text = false := by
   unfold escapesSurrogate
   simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range']
   rw [forIn_none (cs := text.toList.toArray) (fun c hc => h c (by simpa using hc))]

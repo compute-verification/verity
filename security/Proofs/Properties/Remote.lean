@@ -7,7 +7,7 @@ public import Proofs.Properties.InferenceOnly.Theta
 public import Proofs.Properties.InferenceOnly.ThetaSteps
 public import Proofs.Properties.InferenceOnly
 public import Proofs.Properties.InferenceOnly.Agrees
-public import Proofs.InferenceOnly.FitWitness
+public import Proofs.Slowdown.FitWitness
 public import Proofs.Properties.Spot
 public import Proofs.InferenceOnly.CompliesCK
 public import Proofs.Core.Expand
@@ -156,7 +156,7 @@ theorem strays_none {ss : List String} {cs : List Protocol} {ev : List Case} {s 
 /-- Remote's check on the caller's blobs is its tie held over `checkSame` over its components on them. -/
 theorem remote_check (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) :
     (Core.Remote.protocol.on blobs).check ps c ev =
-      holdTies [Core.Remote.windows] ev (checkSame "verity/remote/v0"
+      holdTies [Core.Remote.executionPhases] ev (checkSame "verity/remote/v0"
         ["verity/inference-only/v0", "verity/sampled-proofs/v1"]
         [InferenceOnlyCheck.Protocol.protocol, PouwCheck.Period.protocol,
           VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)] ps c ev) := rfl
@@ -232,9 +232,9 @@ that meet the policy, `InferenceOnly.SecurityProofs.FitWitness`'s five-gate circ
 `α = 3`. -/
 theorem policyMet_honest : ∃ (d : RegisteredCircuit) (n : ℕ) (U : Partition d.D n) (Γ : ℕ) (α : ℝ),
     0 < n ∧ (∀ u, (U.gates u).Nonempty) ∧ PolicyMet d U Γ α := by
-  have hs : ∀ u, InferenceOnly.SecurityProofs.FitWitness.decl.D.size (InferenceOnly.SecurityProofs.FitWitness.windows.gates u) = 1 := by
+  have hs : ∀ u, InferenceOnly.SecurityProofs.FitWitness.decl.D.size (InferenceOnly.SecurityProofs.FitWitness.serverBlocks.gates u) = 1 := by
     decide +kernel
-  refine ⟨InferenceOnly.SecurityProofs.FitWitness.decl, 2, InferenceOnly.SecurityProofs.FitWitness.windows, 1, 3, by norm_num,
+  refine ⟨InferenceOnly.SecurityProofs.FitWitness.decl, 2, InferenceOnly.SecurityProofs.FitWitness.serverBlocks, 1, 3, by norm_num,
     by decide +kernel, policyMet_of_meets fun u => ⟨(hs u).le, ?_⟩⟩
   rw [hs u, Nat.cast_one, mul_one]
   exact InferenceOnly.SecurityProofs.FitWitness.reads_le u
@@ -243,9 +243,9 @@ theorem policyMet_honest : ∃ (d : RegisteredCircuit) (n : ℕ) (U : Partition 
 nonempty inference blocks, the same windows at `Γ = 0`, at every `α`: each block is a gate of width 1. -/
 theorem policyMet_nontrivial : ∃ (d : RegisteredCircuit) (n : ℕ) (U : Partition d.D n),
     (∀ u, (U.gates u).Nonempty) ∧ ∀ α : ℝ, ¬ PolicyMet d U 0 α := by
-  refine ⟨InferenceOnly.SecurityProofs.FitWitness.decl, 2, InferenceOnly.SecurityProofs.FitWitness.windows, by decide +kernel,
+  refine ⟨InferenceOnly.SecurityProofs.FitWitness.decl, 2, InferenceOnly.SecurityProofs.FitWitness.serverBlocks, by decide +kernel,
     fun α h => ?_⟩
-  have hs : InferenceOnly.SecurityProofs.FitWitness.decl.D.size (InferenceOnly.SecurityProofs.FitWitness.windows.gates 0) = 1 := by
+  have hs : InferenceOnly.SecurityProofs.FitWitness.decl.D.size (InferenceOnly.SecurityProofs.FitWitness.serverBlocks.gates 0) = 1 := by
     decide +kernel
   have h0 := (h.1 0).1
   omega
@@ -422,7 +422,7 @@ theorem strays_two_none {P₁ P₂ P₃ : Protocol} {k₁ k₂ k₃ : Case} {c�
 named by their ids. -/
 theorem remote_check_ids (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) :
     (Core.Remote.protocol.on blobs).check ps c ev =
-      holdTies [Core.Remote.windows] ev (checkSame "verity/remote/v0"
+      holdTies [Core.Remote.executionPhases] ev (checkSame "verity/remote/v0"
         [InferenceOnlyCheck.Protocol.protocol.id, (VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)).id]
         [InferenceOnlyCheck.Protocol.protocol, PouwCheck.Period.protocol,
           VStar.Recursive.Sampled.protocol.onBlobs (Blobs.ofArray blobs)] ps c ev) := by
@@ -441,7 +441,7 @@ they decode, has the policy's record's digest. -/
 theorem executionPhases_tied {kI kW kS : Case} {cI : InferenceOnlyCheck.Protocol.Commitment}
     (hI : kI.id = InferenceOnlyCheck.Protocol.protocol.id) (hW : kW.id = PouwCheck.Period.protocol.id)
     (hcI : InferenceOnlyCheck.Protocol.protocol.commitment kI.commitment = .ok cI)
-    (ht : Properties.Composition.Tied Core.Remote.windows [kI, kW, kS]) :
+    (ht : Properties.Composition.Tied Core.Remote.executionPhases [kI, kW, kS]) :
     ∀ ds, Core.Remote.executionPhaseRecords kW = some ds → ∀ d ∈ ds, d = InferenceOnlyCheck.Protocol.protocol.digest cI := by
   intro ds hds d hd
   rw [id_policy] at hI
@@ -456,12 +456,12 @@ theorem executionPhases_tied {kI kW kS : Case} {cI : InferenceOnlyCheck.Protocol
     have hI' : (kI.id == PouwCheck.Period.protocolId) = false := by rw [hI]; decide
     have hW' : (kW.id == PouwCheck.Period.protocolId) = true := by rw [hW]; decide
     simp [Properties.Composition.named, List.find?, hI', hW', hds]
-  have mI : (InferenceOnlyCheck.Protocol.protocolId, Core.Remote.policyRecord) ∈ Core.Remote.windows.names := by
-    simp [Core.Remote.windows]
-  have mW : (PouwCheck.Period.protocolId, Core.Remote.executionPhaseRecords) ∈ Core.Remote.windows.names := by
-    simp [Core.Remote.windows]
+  have mI : (InferenceOnlyCheck.Protocol.protocolId, Core.Remote.policyRecord) ∈ Core.Remote.executionPhases.names := by
+    simp [Core.Remote.executionPhases]
+  have mW : (PouwCheck.Period.protocolId, Core.Remote.executionPhaseRecords) ∈ Core.Remote.executionPhases.names := by
+    simp [Core.Remote.executionPhases]
   rcases ht with ⟨n, hn, e⟩ | ⟨r, hr⟩
-  · simp only [Core.Remote.windows, List.mem_cons, List.not_mem_nil, or_false] at hn
+  · simp only [Core.Remote.executionPhases, List.mem_cons, List.not_mem_nil, or_false] at hn
     rcases hn with rfl | rfl
     · rw [nI] at e; cases e
     · rw [nW] at e; cases e

@@ -674,7 +674,7 @@ theorem pooledLeakChecked_of_carried {L K S : ℕ} (lay : AuditStatement → Bou
     (hch : MonitoringPeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
     (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop) (W : Z → (Fin m → Ω) → Fin m → Finset ℕ)
     (had : MonitoringPeriodAdaptive n acc W) (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i) (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
-    (hesc : MonitoringPeriodEscapes Zs acc W q e)
+    (hesc : MonitoringPeriodMissProb Zs acc W q e)
     (hleak : MonitoringPeriodLeaksChecked lay k reg valid Dj sw Pw ρ op Zs acc W
       (fun z ω => (run tap (schedOf z ω, srvOf z ω)).2) e')
     (Fmax : ℕ) :

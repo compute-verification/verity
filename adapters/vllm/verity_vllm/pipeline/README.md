@@ -77,7 +77,7 @@ challenger, one challenge phase a Commit; `gpu_lease` runs a leased Commit, whos
 `c2_replay` is the C2 of record of one instrumented run, the sampled replay and the boundary linkage over its
 committed store, in the Commit's process or on CPU. A Commit with `--replay-deferred` leaves a sealed bundle instead
 (`replay_bundle`; `replay_plan` is the slim bundle's planner process), which `cpu_replay` opens against the Commit's
-record and replays without the engine (`verity-vllm commit-replay`). Beside them are `m1_capture`, the observation log
+record and replays without the engine (`verity-vllm commit-replay`). Beside them are `match_capture`, the observation log
 of a workload under the observer; `admission_bound`, the bound on what a `--retain host` Commit retains on the host,
 and `telemetry.admission`, the row planner's reservation model; `compiled_merge`, a compiled row's two arms merged
 into one summary; `source_identity`, the precheck that a job runs the tree it names; and `spans`, the commitment's
@@ -91,7 +91,7 @@ the VU export's hook), `commit_attach` (`attach_of_record`, `classes_of_record`)
 gate, the challenge phase, the coins' families, positions and identities, and what samples by them; two benchmarks
 import `ChallengerGate`), `commit_plan` (`key`, `keyed`, `write`), `cpu_replay` (`OnRead`, `Refused`, `WORDS`,
 `manifest_of`, `of_record`, `open_weights`, `opener`, `provider`, `registered_roles`, `replay_args`, `tensor_root_of`,
-`tree_refusal`, `weights_attest`, `worker_peak`), `m1_capture` (`dump_cos_sin`), `replay_bundle` (`ARGS`, `HASHED`,
+`tree_refusal`, `weights_attest`, `worker_peak`), `match_capture` (`dump_cos_sin`), `replay_bundle` (`ARGS`, `HASHED`,
 `MANIFEST`, `NOT_RETAINED`, `PENDING`, `deferred_records`, `discard`, `open_bundle`, `partial`, `path`, `seal`,
 `seal_all`, `weights_extra`, `write_store`, `write_store_files`), `replay_plan` (its command alone), `source_identity`
 (`TREE`, `code_identity`, `code_identity_of`, `precheck`), `spans` (`Spans`) and `telemetry.admission` (`predict`,

@@ -23,7 +23,7 @@ private def hex4 (n : Nat) : String :=
   let d := fun (k : Nat) => let x := (n >>> (4 * k)) % 16; if x < 10 then Char.ofNat (48 + x) else Char.ofNat (87 + x)
   String.ofList [d 3, d 2, d 1, d 0]
 
-private def escape (c : Char) : String :=
+private def missProb (c : Char) : String :=
   match c with
   | '"' => "\\\""
   | '\\' => "\\\\"
@@ -38,7 +38,7 @@ private def escape (c : Char) : String :=
     else if n < 0x10000 then "\\u" ++ hex4 n
     else "\\u" ++ hex4 (0xD800 + (n - 0x10000) / 0x400) ++ "\\u" ++ hex4 (0xDC00 + (n - 0x10000) % 0x400)
 
-def pyStr (s : String) : String := "\"" ++ String.join (s.toList.map escape) ++ "\""
+def pyStr (s : String) : String := "\"" ++ String.join (s.toList.map missProb) ++ "\""
 
 def pyStrs (xs : Array String) : String := "[" ++ ", ".intercalate (xs.toList.map pyStr) ++ "]"
 

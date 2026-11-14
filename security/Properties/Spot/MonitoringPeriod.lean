@@ -19,7 +19,7 @@ session on it (`Committed`); the session can be sampled when its open's layout h
 the ledger opened that period (`Spot.MonitoringPeriod.registrationOf`). A root is committed under this registration when that
 digest is the verifier's own parameter `registration`, and under another registration when it is another digest.
 
-* `LedgerMeans`: what the ledger's half returns (`Spot.MonitoringPeriod.windowsOf`). The ledger verifies under the verifier's
+* `LedgerMeans`: what the ledger's half returns (`Spot.MonitoringPeriod.runsOf`). The ledger verifies under the verifier's
   key and reaches the monitoring period's end. Every root the lane committed in the monitoring period is one of the
   returned windows, when its session can be sampled, and one of the other sessions returned, when it cannot; nothing
   else is returned; and no root and no session is returned twice. Each window's session has ended, in a closed
@@ -105,7 +105,7 @@ def Committed (p : Params) (ledger : Json) (x : Win) : Prop :=
 def Sampled (p : Params) (x : Win) : Prop :=
   holds p.label (getD x.opened.body "families") = true
 
-/-- **What the ledger's half returns.** For every ledger whose windows `windowsOf` returns under the verifier's
+/-- **What the ledger's half returns.** For every ledger whose windows `runsOf` returns under the verifier's
 parameters: the ledger passes `checked` under the verifier's key and reaches the monitoring period's end; every root
 the lane committed in the monitoring period is a returned window, when its session can be sampled, and a returned
 other session, when it cannot; every returned window is such a root whose session has ended, in a closed period that
@@ -113,7 +113,7 @@ lists it and lists only windows; every returned other session is such a root tha
 least one window; no root and no session is returned twice, among the windows and the others together; and a
 window's phase is its place among the windows. -/
 def LedgerMeans : Prop :=
-  ∀ (p : Params) (ledger : Json) (ws : Windows), windowsOf p ledger = .ok ws →
+  ∀ (p : Params) (ledger : Json) (ws : Runs), runsOf p ledger = .ok ws →
     ∃ wins periods, checked ledger p.key = .ok (wins, periods) ∧ Reaches p ledger ∧
       (∀ x ∈ wins, Committed p ledger x →
         (Sampled p x → ∃ w ∈ ws.windows, w.root = x.root ∧ w.session = x.opened.session) ∧
@@ -142,7 +142,7 @@ are one-stage v2's; that public file's header names no `shared_rows`; the case's
 ledger, pins log and session files for its coins (`evidenceAt`), is one-stage v2's; and the audit `inner` accepted
 them, publishing what `a` holds. -/
 def AuditedAt (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) (r : Read)
-    (w : Window) (we : WindowEvidence) (before : Array Json) (record : Json) (a : Audit) : Prop :=
+    (w : Window) (we : RunEvidence) (before : Array Json) (record : Json) (a : Audit) : Prop :=
   ∃ (au : Audited) (opened : Json) (lc : LiveCommitment) (roots : Roots) (k : Case) (cm : OneStage.Commitment)
       (q : OneStageZk.Params) (ev : OneStageZk.Evidence),
     auditedIn r.wins r.periods (Json.mkObj [("root", Json.str w.root)]) = .ok (au, opened) ∧
@@ -174,7 +174,7 @@ def AcceptMeans : Prop :=
     checkWith inner p c e bs = .accept pub prof →
       pub.lane = p.ledger.lane ∧ pub.start = p.ledger.start ∧ pub.stop = p.ledger.stop ∧
       pub.registration = p.registration ∧
-      ∃ r ws, read p.ledger c.ledger = .ok r ∧ windowsIn p.ledger r = .ok ws ∧
+      ∃ r ws, read p.ledger c.ledger = .ok r ∧ runsIn p.ledger r = .ok ws ∧
         registeredIn p r ws = .ok pub.others ∧
         pub.windows.map (·.window) = ws.windows ∧ e.windows.size = ws.windows.size ∧
         prof = pub.windows.flatMap (fun x => x.audits.map (·.profile)) ∧
@@ -243,8 +243,8 @@ it returns: the session `auditedIn` reads on the window's root, which is the ses
 of an audit to, is the session the window names. `checked` refuses a second open of a root, so the ledger opens the
 window's root on one session. -/
 def AuditedSession : Prop :=
-  ∀ (p : Params) (ledger : Json) (r : Read) (ws : Windows) (w : Window) (au : Audited) (opened : Json),
-    read p ledger = .ok r → windowsIn p r = .ok ws → w ∈ ws.windows →
+  ∀ (p : Params) (ledger : Json) (r : Read) (ws : Runs) (w : Window) (au : Audited) (opened : Json),
+    read p ledger = .ok r → runsIn p r = .ok ws → w ∈ ws.windows →
       auditedIn r.wins r.periods (Json.mkObj [("root", Json.str w.root)]) = .ok (au, opened) →
         au.session = w.session
 

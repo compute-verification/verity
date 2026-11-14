@@ -49,7 +49,7 @@ theorem audit_exfiltration_delivered {M : Type} [Fintype M] [Nonempty M] [Decida
   refine (P.audit_exfiltration_influenceSet hks hlink hin δ σ g).trans ?_
   have hcount := (P.card_influenceSet_le_harm (a := a) hD hb K hK hsep hw hH).trans
     (Nat.mul_le_mul_left _ (card_admissible_le hk))
-  have hall : (P.influenceSet D L.escape a δ).card ≤ 2 ^ D.card :=
+  have hall : (P.influenceSet D L.missProb a δ).card ≤ 2 ^ D.card :=
     (card_le_univ _).trans (le_of_eq (by rw [Fintype.card_fun, Fintype.card_bool, Fintype.card_coe]))
   have hmin := le_min hcount hall
   gcongr

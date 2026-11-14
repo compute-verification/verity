@@ -7,13 +7,13 @@ import dataclasses
 import importlib.util
 import json
 
+import adapter as A
 import built as B
 import policy as P
 import pytest
 import report
 import tied as T
 from slowdown import lean, min_cut
-from verity_vllm.check.weights_of_record import PARAM
 from verity_vllm.program.predict import block_counts as BC
 
 from verity.commitments.periods import interface as IF
@@ -30,13 +30,13 @@ def small() -> IF.Circuit:
     the step before (so its first step's units read a registered row outside θ instead, one row a slot)."""
     fns = {t: BC.resolve(t) for t in (ROPE, SILU, NORM)}
     r, s, n = (IF.descriptor_id(fn) for fn in fns.values())
-    reads = (IF.Read(r, "x", f"{PARAM}/x", 0, (6,), 0, (0,)), IF.Read(r, "cs", f"{PARAM}/cs", 0, (6,), 0, (0,)),
-             IF.Read(n, "w", f"{PARAM}/norm", 0, (2,), 0, (0,)), IF.Read(n, "x", "state", 0, (2,), 0, (8,)))
+    reads = (IF.Read(r, "x", f"{A.PARAM}/x", 0, (6,), 0, (0,)), IF.Read(r, "cs", f"{A.PARAM}/cs", 0, (6,), 0, (0,)),
+             IF.Read(n, "w", f"{A.PARAM}/norm", 0, (2,), 0, (0,)), IF.Read(n, "x", "state", 0, (2,), 0, (8,)))
     return IF.Circuit(
         "test/small", tuple((fn, 6) for fn in fns.values()),
         wires=(IF.Wire(s, "gu", r, "o0", 0, (6,), 0, (1,)), IF.Wire(n, "x", s, "o0", 2, (4,), 0, (1,)),
                IF.Wire(n, "w", s, "o0", 2, (4,), 0, (1,))),
-        registered=IF.Registered({f"{PARAM}/x": 16, f"{PARAM}/cs": 16, f"{PARAM}/norm": 8, "state": 16}, reads=reads),
+        registered=IF.Registered({f"{A.PARAM}/x": 16, f"{A.PARAM}/cs": 16, f"{A.PARAM}/norm": 8, "state": 16}, reads=reads),
         blocks=IF.Blocks(slots=2, steps=3, inference=tuple(IF.InferenceEntry(t, 0, (3, 2), ("step", "slot"), 0)
                                                            for t in (r, s, n))))
 
@@ -83,8 +83,7 @@ def test_the_served_file_is_what_the_tree_computes_of_its_class() -> None:
 def test_a_model_pinned_at_several_revisions_has_a_shape_only_under_one_config(monkeypatch) -> None:
     """A model the manifests pin at several revisions of one config.json is taken at its first pin; at two configs its
     shape isn't known."""
-    from verity_vllm.engine.profiles import dense_generic as DG
-
+    DG = A.dense_generic
     base = next(e for e in DG.checkpoint_entries(DG.MANIFEST) if e.get("repo") == "unsloth/Llama-3.2-1B")
     for config, ok in ((base["config_sha256"], True), ("0" * 64, False)):
         pins = [base, {**base, "revision": "ab" * 20, "config_sha256": config}]
@@ -223,13 +222,10 @@ def test_stated_only_builds_nothing_and_another_division_is_the_built_number(cap
 
 
 def test_a_class_the_integration_refuses_is_an_error_that_says_why(monkeypatch, capsys) -> None:
-    from verity_vllm.program.predict import window_circuit
-    from verity_vllm.program.predict.common import Unexpressible
-
     def refuse(*_a, **_k):
-        raise Unexpressible("a template the composer wouldn't prove")
+        raise A.Unexpressible("a template the composer wouldn't prove")
 
-    monkeypatch.setattr(window_circuit, "class_circuit", refuse)
+    monkeypatch.setattr(A, "class_circuit", refuse)
     monkeypatch.setattr(B, "registered", lambda _model: None)
     with pytest.raises(SystemExit) as e:
         report.main(["--class", "2,8,2"], check=reference, commit=lambda: None)
