@@ -2,7 +2,7 @@
 (`verity_vllm.pipeline.boundary_rows`) on its two-stage stream, sampled on a test's own challenger (`fake_challenger`);
 the replay side's stream again from ``stage1.json`` alone, sampling the same spans on the bytes the first stage read; the
 interior registration over the sampled spans' proof blocks and the second stage on the next challenger's coins; and what
-`resume` refuses. A toy check template of one gate's worth."""
+`resume` refuses. A toy check template of one gate's worth, and the long row's check over a 131,072-id prompt."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import importlib
 import itertools
 import json
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -33,7 +34,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import partition as P, regi
 from verity.commitments import history as HT
 from verity.commitments.gates import embedding as E
 from verity_vllm.pipeline import (boundary_rows as BR, boundary_stop as BS, boundary_tables as BT, chunk_rows as CR,
-                                  interior_rows as IR, serving_rows as SRW)
+                                  interior_rows as IR, long_row as LR, serving_rows as SRW)
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -883,3 +884,36 @@ def test_the_second_stage_reads_the_first_stages_coins_under_its_own_challengers
     (tmp_path / "empty").mkdir()
     got = second("empty-host", first, challenger="local", challenger_host=str(tmp_path / "empty"))
     assert AC.NO_HOST in got["refused"] and len(opened) == sessions, "no challenger of the second stage's own was started"
+
+
+def test_the_command_finds_the_long_rows_check_by_its_id_in_a_process_that_never_imported_it():
+    """The command looks a class's check up by the descriptor id its ``commit.json`` names (`template_fn`): the long
+    row's (`long_row`'s `DsaTopKReadRowsCut_v1`, which no registry module registers) is found in a process of its own,
+    since this one has imported `long_row`."""
+    t = descriptor_id(bind(LR.DsaTopKReadRowsCut, N=12, TOPK=2, BLOCK=4, READ=E.read(16, 1)))
+    code = ("import sys\nsys.path.insert(0, sys.argv[2])\nimport two_stage\nfrom verity.circuits.codec import descriptor_id\n"
+            "assert 'verity_vllm.pipeline.long_row' not in sys.modules\nprint(descriptor_id(two_stage.template_fn(sys.argv[1])))")
+    got = subprocess.run([sys.executable, "-c", code, t, str(HERE.parent)], capture_output=True, text=True, check=False)
+    assert got.returncode == 0, got.stderr[-2000:]
+    assert got.stdout.strip() == t
+
+
+@pytest.mark.slow
+def test_the_long_rows_class_over_a_131072_id_prompt_has_its_rule_from_its_replay_block():
+    """The rule the command's first stage gives a class when none is named (`rule_of`), on the record of the long row's
+    class (`long_row.layout`: a prompt of 2^17 ids, 2 outputs) at small statics: its digit picks are wired to a writer
+    of two units a block, which the interior window places by the replay block's rows (`second_stage.replay_rows`), as
+    round 2 reads them; the same design without its rows is refused as before. The draw itself is not run here: at this
+    prompt `first` takes ten minutes on a CPU. Over a minute, nearly all of it building the check's body; the cheaper
+    tests here have no wire to a writer of several units a block."""
+    t = bind(LR.DsaTopKReadRowsCut, N=12, TOPK=2, BLOCK=4, READ=E.read(16, 1))
+    span = BR.Span("r0", tuple(i % 1000 for i in range(1 << 17)), {**GREEDY, "max_tokens": 2}, (7, 8), "length")
+    pub = json.loads(json.dumps(BR.commit([span], LR.layout(ROOT, t), 0).public()))
+    assert (pub["prompt"], pub["values"]["b.ingress"]["words"]) == (1 << 17, 262172)
+    layout = BR.layout_of(pub, t, None)
+    rule = TS.rule_of(layout, "rate:1/1", 1)
+    d = TS.design(layout, unlinked=True)
+    assert d.rows == tuple(SS.replay_rows(layout.program, d.key)) and d.rows
+    assert rule.interior == tuple(v for m in d.window("00", [0]).members for v in TS.interior_values(m)) and rule.interior
+    with pytest.raises(ValueError, match="reads a writer of 2 units a block.*give the replay block's rows"):
+        replace(d, rows=()).window("00", [0])

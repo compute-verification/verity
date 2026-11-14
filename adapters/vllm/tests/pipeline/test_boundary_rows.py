@@ -5,13 +5,16 @@ and laid out as round 2 links it, a class's Definition whose parameters and retu
 round 2 links, the serving path's hook on a stand-in for vLLM's V1 scheduler committing each window's
 finished requests by class as it closes, and a serve's stop rule: a stop class's rows, its stop word the stop block's
 output over the committed rows, the stop blocks' own registration over the class's boundary record, a response one id
-shorter or longer than the rule's refused, and a class that holds the rule and verdicts together."""
+shorter or longer than the rule's refused, a class that holds the rule and verdicts together, and the long row's check
+found by its descriptor id."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 import struct
+import subprocess
+import sys
 from types import SimpleNamespace as NS
 
 import numpy as np
@@ -27,10 +30,11 @@ from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value as Bits
 from verity.commitments import history as HT
+from verity.commitments.gates.embedding import read
 from verity.commitments.windows import rows as CS
 from verity.definitions.registry import stop_check, stop_rule
 from verity_vllm.engine.hooks import Hooks
-from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS, boundary_windows as BW
+from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS, boundary_windows as BW, long_row as LR
 
 XOR8 = PrimitiveDefinition("BoundaryRowsTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
@@ -1241,3 +1245,18 @@ def test_a_stop_class_is_handed_its_stop_population_and_a_class_without_a_stop_b
         with pytest.raises(ValueError, match="only a stop class has stop blocks"):
             _ = unheld.stop_program
     assert at(4, spans=3).stop_program is not first.stop_program
+
+
+def test_a_serve_finds_the_long_rows_check_by_its_id_in_a_process_that_never_imported_it(tmp_path):
+    """A serve's hook (`BoundaryWindows.of`) finds the long row's check (`long_row`'s `DsaTopKReadRowsCut_v1`, which no
+    registry module registers) by the descriptor id its configuration names: in a process of its own, since this one
+    has imported `long_row`."""
+    t = descriptor_id(bind(LR.DsaTopKReadRowsCut, N=12, TOPK=2, BLOCK=4, READ=read(16, 1)))
+    code = ("import sys\nfrom pathlib import Path\nfrom verity.circuits.codec import descriptor_id\n"
+            "from verity_vllm.pipeline.boundary_windows import BoundaryWindows\n"
+            "assert 'verity_vllm.pipeline.long_row' not in sys.modules\n"
+            "hook = BoundaryWindows.of({'check': sys.argv[1], 'inline': True, 'verdicts': True}, Path(sys.argv[2]))\n"
+            "print(descriptor_id(hook.check))\nhook.stop()")
+    got = subprocess.run([sys.executable, "-c", code, t, str(tmp_path)], capture_output=True, text=True, check=False)
+    assert got.returncode == 0, got.stderr[-2000:]
+    assert got.stdout.strip() == t
