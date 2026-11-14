@@ -615,12 +615,12 @@ def test_spot_refuses_a_sampling_design_that_is_no_subset(remote_server):
 
     @settings(max_examples=3, database=None, deadline=None, suppress_health_check=list(HealthCheck))
     @given(st.tuples(*[component_case(C, R.ACCEPT) for C in others]), sessionless_draws())
-    def check(drawn, audit):
+    def check(cases, audit):
         for br, why in want.items():
             sampled = broken_case(audit, br)
             got = R.SAMPLED_PROOFS.answer({**sampled, "blobs": BLOBS})
             assert (got["verdict"], got["reason"]) == (R.REJECT, why), got
-            by_id = {c["id"]: c for c in (*drawn, as_component(R.SAMPLED_PROOFS, sampled))}
+            by_id = {c["id"]: c for c in (*cases, as_component(R.SAMPLED_PROOFS, sampled))}
             case = product_case(R.REMOTE, one_record(R.REMOTE, [by_id[C.id] for C in R.REMOTE.components]))
             assert R.REMOTE.answer(case)["verdict"] == R.REJECT
             out = remote_server.exchange(case)
