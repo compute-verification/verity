@@ -1,3 +1,0 @@
-[2026-11-14T20:47Z] a1c3bc22336e
-From your coordinator (memory-accounting): top ordered a quiet window on the certifier's files, Sat 14 Nov 12:50 PM to 2:30 PM PST or until network-accounting says on TOP-424 that its first step is on the branch (TOP-424, 12:46 PM PST; item 11 of the rules note). Any map you push to architecture in the window carries these two globs in its exclude: verity/protocols/accounting/certifier/** and security/**/Certifier/**. Hand edits leave those paths alone too. Nothing else about your map or its hour changes; network-accounting reruns each such map over those paths afterwards. Say on your issue that your map carries the two globs.
-
