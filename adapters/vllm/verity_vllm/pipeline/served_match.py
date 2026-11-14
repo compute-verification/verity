@@ -37,6 +37,7 @@ from typing import Any
 
 from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.engine import env as engine_env
+from verity_vllm.engine.handle import engine_of
 from verity_vllm.pipeline.row_json import read_json, write_json
 from verity_vllm.query.manifest.format import SERVED_IDS
 
@@ -81,7 +82,7 @@ def facts_of(eng: Any) -> dict[str, Any]:
     import torch
     from vllm.model_executor.layers.attention.attention import Attention
 
-    vc = eng.llm.llm_engine.vllm_config
+    vc = engine_of(eng.llm).vllm_config
     cc = vc.compilation_config
     attention = sorted({(m.get_attn_backend().get_name(), getattr(m.impl, "vllm_flash_attn_version", None))
                         for m in eng.model.modules() if isinstance(m, Attention)}, key=str)
