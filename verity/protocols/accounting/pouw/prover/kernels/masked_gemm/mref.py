@@ -1,6 +1,7 @@
 """CPU reference for mgemm.cu's gate dump: every formed operand, product and receipt, bit for bit, from the dumped values.
 
-python3 mref.py DIR [--no-receipts] prints one JSON line of checks and exits 0 only if every check passes.
+PYTHONPATH=. python3 verity/protocols/accounting/pouw/prover/kernels/masked_gemm/mref.py DIR [--no-receipts], from the repository root,
+prints one JSON line of checks and exits 0 only if every check passes.
 
 Recomputed independently of the device, per format (int8, E4M3's integer grid): the full-rank operands [A+R | R | A] and
 [B+S | -(B+S) | -S] (R and S hashed as the kernel hashes them), the low-rank operands [A~ | -w_l U | -Q_l] and
@@ -16,8 +17,14 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
-from ref import key_mul, key_xor, mix32, rot_of, rotl, tbc_receipts
+from verity.protocols.accounting.pouw.prover.kernels.floored_gemm.ref import (
+    key_mul,
+    key_xor,
+    mix32,
+    rot_of,
+    rotl,
+    tbc_receipts,
+)
 
 #: what the later kernels' references import
 __all__ = ["decode", "duo_receipts", "words"]

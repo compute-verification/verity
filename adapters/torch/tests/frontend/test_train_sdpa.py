@@ -19,9 +19,9 @@ import torch.nn.functional as F
 from torch.fx.experimental.proxy_tensor import make_fx
 from torch.nn.attention import SDPBackend, sdpa_kernel
 from verity.circuits.evaluation.reference import evaluate
-from verity.definitions.numerics.serve3_reference import materialize
-from verity.definitions.registry import fa2_train as FT
-from verity.definitions.registry import fa2_train_bwd as FTB
+from verity_vllm.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.registry import fa2_train as FT
+from verity_vllm.definitions.registry import fa2_train_bwd as FTB
 
 from tests.program.test_train_step import (
     CC,

@@ -20,10 +20,9 @@ interval a network certifier counts the session's egress over.
 "node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover (`serve`) and prints its report.
 With `--streamer` the fill is `wipe_stream`'s, native on this host's CPUs and gated before the side listens, and the
 report adds the streamer's gate (`streamer`) and its figures for the fill (`fill`). `command(device, extra)` is the argv
-that starts that side on this machine, `Side` the side as what starts a run hands it over, wherever `period.json` puts
-it, and `session(side, request, prover)` is the prover's: one session with the side, answered from `prover` (`answer`),
-with the connection's two addresses as it saw them. The wipe's two parties as the deployment layer runs them speak
-`wipe_parties`'s messages: `pous/device/wipe_challenger.py` and `pous/prover/wipe_prover.py`.
+that starts that side on this machine; the prover's end of the session, which answers it, is `pous/prover/wipe_run.py`'s
+(`session`, `answer`). The wipe's two parties as the deployment layer runs them speak `wipe_parties`'s messages:
+`pous/device/wipe_challenger.py` and `pous/prover/wipe_prover.py`.
 """
 
 from __future__ import annotations
@@ -36,9 +35,9 @@ import secrets
 import socket
 import sys
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from pathlib import Path
-from typing import Any, BinaryIO, Protocol, TypeVar
+from typing import Any, BinaryIO
 
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 
@@ -47,13 +46,9 @@ from . import streamed_wipe as sw
 
 MODULE = "verity.protocols.accounting.pous.verifier.wipe_party"
 logger = logging.getLogger(__name__)
-PREMISE = "trusted-device"
-AUDITOR_KEYS = {"vy-auditor-2": "c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb41"
-                                "98fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252"}
-"""Each auditor device's wipe party's public key, by its SHA-512 in 128 lowercase hex digits: the one key under which
-`placement` says `trusted-device` holds for a challenger on that host. A run's own pin (`--trusted-sha512`) decides only
-which session the verifier accepts, never this."""
-REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
+PREMISE = mc.PREMISE
+PARTY = "memory-challenger"
+"""The configuration's party whose `[[pin]]` entries for the wipe name the keys `placement` reads."""
 FILL, DONE, ACK, CHALLENGE, END = b"F", b"D", b"A", b"C", b"E"
 CHUNK = 1 << 14
 """Labels a fill frame: 1 MiB."""
@@ -113,36 +108,6 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc
     return c
 
 
-def answer(f: BinaryIO, prover: sw.Prover, stop_after: int | None = None) -> int:
-    """The prover's side over the connection `f`: each fill frame kept by `prover` (read straight into its store when
-    it has `receive_into`, as `wipe_store.StoreProver`), the fill acknowledged once it is in the store (after the
-    prover's `sync`, when it has one: a disk's writes on the media), each batch answered from it until the challenger
-    ends the session (or, with `stop_after`, the prover leaves after that many batches); the batches answered."""
-    n = 0
-    into, sync = getattr(prover, "receive_into", None), getattr(prover, "sync", None)
-    while (tag := _read(f, 1)) != END:
-        if tag == FILL:
-            first, count = int.from_bytes(_read(f, 8), "big"), int.from_bytes(_read(f, 4), "big")
-            if into is not None:
-                into(first, count, f)
-            else:
-                prover.receive(first, _read(f, sw.LABEL_BYTES * count))
-        elif tag == DONE:
-            if sync is not None:
-                sync()
-            f.write(ACK)
-            f.flush()
-        elif tag == CHALLENGE:
-            if stop_after is not None and n >= stop_after:
-                return n
-            count = int.from_bytes(_read(f, 4), "big")
-            f.write(prover.answer([int.from_bytes(_read(f, 8), "big") for _ in range(count)]))
-            f.flush()
-            n += 1
-        else:
-            raise ValueError(f"the challenger sent the frame tag {tag!r}")
-    return n
-
 
 def utc(unix_ns: int) -> str:
     """A real-time clock reading as ISO 8601 UTC, to the microsecond."""
@@ -182,18 +147,6 @@ def signed_of(j: Mapping[str, Any]) -> sw.SignedWipe:
                          bytes.fromhex(j["signature"]))
 
 
-T = TypeVar("T")
-
-
-class Side(Protocol):
-    """The wipe challenger's side as what starts a run hands it over (the runtime's `Side` is one): the machine it runs
-    on, and `talk(request, drive)`, one session with it: `request` sent, `drive` handed the connected socket, the side's
-    report back with what `drive` returned."""
-
-    host: str
-
-    def talk(self, request: Mapping[str, Any], drive: Callable[[socket.socket], T]) -> tuple[dict[str, Any], T]: ...
-
 
 def command(device: str | Path, extra: Sequence[str] = ()) -> tuple[str, ...]:
     """The argv that starts the challenger's side as a process on this machine, its key and session log in `device`,
@@ -209,13 +162,15 @@ def link(name: str, node: str, to: str, via: str, *, mbps: int | None = None,
     return {"name": name, "ends": [node, to], "via": via, "mbps": mbps, "counted_by": counted_by}
 
 
-def placement(node: str, host: str, key_sha512: str | None, *, verifier: str | None = None,
+def placement(node: str, host: str, key_sha512: str | None, *, pins: Sequence[Mapping[str, str]] = (),
+              configuration: str | None = None, committed: Collection[str] = frozenset(), verifier: str | None = None,
               store_gaps: Sequence[str] = (), simulated: bool = False, links: Sequence[Mapping[str, Any]] = (),
               undeclared: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """Which host ran each party, and whether `trusted-device`'s premise holds: that the memory challenger ran on a
-    machine the developer doesn't control. It holds (`holds: …`) only when `key_sha512`, the SHA-512 of the key the
-    session was signed under, is `AUDITOR_KEYS`' pin for `host`; under any other key, a run's own pin included, it reads
-    `REHEARSAL`, whatever the names say. `kind` is what the two names say, a label and never the reason: `own-host`,
+    machine the developer doesn't control (`memory_challenger.trusted_device`). It holds (`holds: …`) only under a
+    configuration whose hash `configuration` is one of `committed`, when `key_sha512`, the SHA-512 of the key the
+    session was signed under, is a key that configuration's `pins` (its `[[pin]]` entries) give `PARTY` for the wipe;
+    under any other configuration or key, a run's own pin included, it reads rehearsal, whatever the names say. `kind` is what the two names say, a label and never the reason: `own-host`,
     `simulated` (the challenger a process of its own on the developer's node, standing in for its own host) or
     `prover-node`. `store_gaps` is what the memory the prover kept the fill in leaves outside the bound
     (`wipe_period.store_gaps`), by tier and never by device: the placement names no device. `links` are the links
@@ -228,16 +183,16 @@ def placement(node: str, host: str, key_sha512: str | None, *, verifier: str | N
              "simulated": f"the memory challenger ran as a process of its own on the developer's node {node}, standing "
                           "in for a host the developer doesn't control",
              "prover-node": f"the memory challenger ran on the developer's node {node}"}[kind]
-    premise = (f"holds: the session is signed under {host}'s pinned key; {names}"
-               if key_sha512 is not None and AUDITOR_KEYS.get(host) == key_sha512 else f"{REHEARSAL}; {names}")
+    premise = mc.trusted_device(pins, PARTY, "wipe", key_sha512, names, configuration=configuration,
+                                committed=committed)
     return {"kind": kind, "parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
             PREMISE: premise, "links": [dict(e) for e in links], "undeclared_tiers": [dict(u) for u in undeclared],
             "store_gaps": list(store_gaps)}
 
 
 def holds(where: Mapping[str, Any]) -> bool:
-    """Whether a placement's `trusted-device` holds: the session signed under the challenger host's pinned key."""
-    return where[PREMISE].startswith("holds: ")
+    """Whether a placement's `trusted-device` holds: the session signed under a key the committed configuration pins."""
+    return mc.holds(where)
 
 
 def request_of(node: str, params: sw.WipeParams) -> dict[str, Any]:
@@ -246,21 +201,6 @@ def request_of(node: str, params: sw.WipeParams) -> dict[str, Any]:
     return {"labels": params.labels, "limit_ns": params.limit_ns, "node": node,
             "tiers": [[t, b] for t, b in params.tiers]}
 
-
-def session(side: Side, request: Mapping[str, Any], prover: sw.Prover, *,
-            stop_after: int | None = None) -> dict[str, Any]:
-    """One wipe with the challenger's side `side` starts: `request` sent, the fill kept and each batch answered by
-    `prover`, the side's report back, with `answered`, the batches the prover answered, and `connection`, the
-    socket's `local` and `peer` addresses (`HOST:PORT`) on the prover's side."""
-
-    def drive(s: socket.socket) -> tuple[int, dict[str, str]]:
-        s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        connection = {k: f"{a[0]}:{a[1]}" for k, a in (("local", s.getsockname()), ("peer", s.getpeername()))}
-        with s.makefile("rwb") as f:
-            return answer(f, prover, stop_after), connection
-
-    out, (answered, connection) = side.talk(request, drive)
-    return out | {"answered": answered, "connection": connection}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -304,8 +244,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["CHUNK", "PREMISE", "READS", "REQUEST_KEYS", "answer", "command", "commitment_of", "link",
-           "main", "params_of", "placement", "report", "request_of", "serve", "session", "signed_of", "utc"]
+__all__ = ["CHUNK", "PREMISE", "READS", "REQUEST_KEYS", "command", "commitment_of", "link",
+           "main", "params_of", "placement", "report", "request_of", "serve", "signed_of", "utc"]
 
 if __name__ == "__main__":
     sys.exit(main())

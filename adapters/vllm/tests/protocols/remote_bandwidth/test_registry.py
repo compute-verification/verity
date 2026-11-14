@@ -12,7 +12,7 @@ from verity.commitments.merkle import Opening
 from verity.protocols.accounting.poub.verifier import audit
 from verity.protocols.accounting.poub.verifier import receipts as rb
 
-from verity_vllm.protocols.remote_bandwidth.interface import (
+from verity.protocols.accounting.poub.prover.node_store.interface import (
     IDENTITY,
     Append,
     Lifecycle,
@@ -20,7 +20,7 @@ from verity_vllm.protocols.remote_bandwidth.interface import (
     Stale,
     StoreView,
 )
-from verity_vllm.protocols.remote_bandwidth.registry import (
+from verity.protocols.accounting.poub.prover.node_store.registry import (
     ArrayBacking,
     KindReceipt,
     NodeMemory,
@@ -31,7 +31,7 @@ from verity_vllm.protocols.remote_bandwidth.registry import (
     distinct,
     runs_of,
 )
-from verity_vllm.protocols.remote_bandwidth.verify import verify_opening
+from verity.protocols.accounting.poub.prover.node_store.verify import verify_opening
 
 WORD = 64
 BLOCK = 256

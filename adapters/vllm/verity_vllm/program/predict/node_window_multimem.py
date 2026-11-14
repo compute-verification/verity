@@ -33,9 +33,9 @@ from typing import Any
 
 from verity.circuits.defs import bind
 from verity.circuits.refs import runs
-from verity.definitions.registry import b1_tp2 as B1T
-from verity.definitions.registry import tp_allreduce as TA
-from verity.definitions.registry import tp_combine as TC
+from verity_vllm.definitions.registry import b1_tp2 as B1T
+from verity_vllm.definitions.registry import tp_allreduce as TA
+from verity_vllm.definitions.registry import tp_combine as TC
 from verity_vllm.pipeline.tp import grain as GR
 
 from .build import Unexpressible
