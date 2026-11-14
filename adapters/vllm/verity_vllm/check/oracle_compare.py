@@ -35,8 +35,8 @@ from collections.abc import Callable
 from typing import Any
 
 # handed on: other modules and tests read the Match record's reader and the producers through this module
-from verity_vllm.check.match_oracle import _ITEMSIZE, MatchOracle
 from verity_vllm.check.match_oracle import _ROPE_MEMBER as _ROPE_MEMBER
+from verity_vllm.check.match_oracle import MatchOracle
 from verity_vllm.check.match_oracle import _contiguous as _contiguous
 from verity_vllm.check.match_oracle import _port_view as _port_view
 from verity_vllm.check.match_oracle import _prod as _prod
@@ -61,6 +61,7 @@ from verity_vllm.commit.opened import (  # noqa: F401  -- re-exported
     OpeningNotVerified,
     meta_by_name,
 )
+from verity_vllm.observe.events import DTYPE_BYTES
 from verity_vllm.records.schema_ids import ORACLE_COMPARE_SCHEMA
 
 __all__ = ["MatchOracle", "OpenedReader", "OpeningNotVerified", "SCHEMA", "entry_read_name", "merge_producers",
@@ -179,7 +180,7 @@ def _walk(oracle: MatchOracle, bmap: dict[str, Any], committed: Callable[[int, s
             pairs_seen.add((step, rid))
         enc = e.get("encoding")   # the member's dtype and shape; an entry that states no dtype has no byte range to read
         dtype = str(enc.get("dtype") or "") if enc else ""
-        isz = _ITEMSIZE.get(dtype)
+        isz = DTYPE_BYTES.get(dtype)
         lo, hi = ident.get("element_range") or [0, None]
         if isz is None or hi is None or int(hi) <= int(lo):
             not_cmp["identity without a byte range (dtype/range)"] += 1

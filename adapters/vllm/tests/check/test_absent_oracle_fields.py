@@ -23,6 +23,7 @@ from tests.check.test_absent_link_fields import NOTHING, left_out
 from tests.check.test_oracle_compare import U0, U1, H, make_bmap, make_match, reader
 from verity_vllm.check import match_oracle as MO
 from verity_vllm.check import oracle_compare as OC
+from verity_vllm.observe.events import DTYPE_BYTES
 from verity_vllm.records.fields import RecordError
 
 EMBED, NORM = "model.embed_tokens", "model.layers.0.post_attention_layernorm"
@@ -306,6 +307,56 @@ def test_a_producer_whose_first_view_leaves_its_allocation_or_offset_out_is_foun
     with pytest.raises(RecordError) as e:
         null.member_bytes(0, "top", "in", "r1", producer=PROMOTED)
     assert refused(e, field, None)
+
+
+# ------------------------------------------------------------------------------------------------------------ a view's dtype
+
+def in_dtype(dtype: str) -> Callable[[list[dict[str, Any]]], None]:
+    """The norm's second output view of every instance, stated in `dtype` over the bytes it has: a row's `H` two-byte elements as
+    `2 * H / size` elements of the dtype's size."""
+    size = DTYPE_BYTES[dtype]
+
+    def change(lines: list[dict[str, Any]]) -> None:
+        for m in lines[1:]:
+            if m["hint"].startswith(NORM + "/"):
+                view = m["output_views"][1]
+                view.update(dtype=dtype, shape=[2 * H // size], offset=view["offset"] * 2 // size)
+    return change
+
+
+def bound_in_dtype(bmap: dict[str, Any], dtype: str) -> dict[str, Any]:
+    """`bmap` with the norm's second output bound in `dtype`, over the bytes its entries have."""
+    size = DTYPE_BYTES[dtype]
+    for e in bmap["entries"]:
+        if e["name"] == NORM + "/1":
+            e["identity"]["element_range"] = [x * 2 // size for x in e["identity"]["element_range"]]
+            e["element_offset"] = e["element_offset"] * 2 // size
+            e["encoding"] = {"dtype": dtype, "shape": [e["encoding"]["shape"][0], 2 * H // size]}
+    return bmap
+
+
+@pytest.mark.parametrize("dtype", sorted(DTYPE_BYTES))
+def test_a_member_is_read_through_a_view_of_any_dtype_the_recorder_writes(tmp_path, dtype):
+    whole = oracle(tmp_path / "whole").member_bytes(0, NORM, "1", "r1")
+    assert whole[0] is not None and len(whole[0]) == 3 * 2 * H and whole[1:] == (None, 3)
+    assert oracle(tmp_path / "stated", "instances", in_dtype(dtype)).member_bytes(0, NORM, "1", "r1") == whole
+    size = DTYPE_BYTES[dtype]
+    view = {"alloc": 1, "offset": 2, "dtype": dtype, "shape": [3, 2], "strides": [4, 1]}
+    assert MO.MatchOracle._view_bytes_range(view) == (1, 2 * size, 12 * size)      # strided: a span of 10 elements
+
+
+@pytest.mark.parametrize("dtype", sorted(DTYPE_BYTES))
+def test_a_member_bound_in_any_dtype_the_recorder_writes_is_compared(tmp_path, dtype):
+    bmap, committed = make_bmap(make_match(str(tmp_path / "values"))[1])
+    whole = OC.oracle_compare(oracle(tmp_path / "whole"), bmap, reader(committed))
+    assert (whole["result"], whole["complete"], whole["mismatch_n"]) == (True, True, 0)
+    o, bmap = oracle(tmp_path / "stated", "instances", in_dtype(dtype)), bound_in_dtype(bmap, dtype)
+    equal = OC.oracle_compare(o, bmap, reader(committed))
+    assert (equal["result"], equal["complete"], equal["compared"], equal["mismatch_n"]) == (True, True, whole["compared"], 0)
+    member = (0, NORM + "/1")
+    committed[member] = bytes([committed[member][0] ^ 1]) + committed[member][1:]                # a byte of request r1's rows
+    differs = OC.oracle_compare(o, bmap, reader(committed))
+    assert (differs["result"], differs["compared"], differs["mismatch_n"]) == (False, whole["compared"], 1)
 
 
 # ------------------------------------------------------------------------------------------------------------ the capture's log

@@ -16,10 +16,9 @@ from collections import defaultdict
 from collections.abc import Mapping
 from typing import Any
 
+from verity_vllm.observe.events import DTYPE_BYTES
 from verity_vllm.records.fields import RecordError
 
-_ITEMSIZE = {"bfloat16": 2, "float16": 2, "float32": 4, "float64": 8, "int32": 4, "int64": 8, "int16": 2, "int8": 1, "uint8": 1, "bool": 1,
-             "float8_e4m3fn": 1, "float8_e5m2": 1}
 VIEW = "a fold instance's view"
 _ROPE_MEMBER = {"query": "rope.q", "key": "rope.k"}                # RoPE's members (the Build's hints) -> the Match fold's hint suffixes
 
@@ -258,7 +257,7 @@ class MatchOracle:
         allocation or no offset, or one that is no number, is refused by name."""
         alloc, off = _number(view, "alloc"), _number(view, "offset")
         shape, strides, dtype = list(view["shape"]), list(_listed(view, "strides")), str(view["dtype"])
-        isz = _ITEMSIZE.get(dtype)
+        isz = DTYPE_BYTES.get(dtype)
         if isz is None:
             return None, f"dtype {dtype} unknown itemsize"
         numel = _prod(shape) if shape else 1
@@ -293,7 +292,7 @@ class MatchOracle:
         if not isinstance(view, Mapping):
             return None
         alloc, off = _stated_number(view, "alloc"), _stated_number(view, "offset")
-        isz = _ITEMSIZE.get(str(view.get("dtype")))
+        isz = DTYPE_BYTES.get(str(view.get("dtype")))
         if alloc is None or off is None or isz is None:
             return None
         shape, strides = _stated_numbers(view, "shape"), _stated_numbers(view, "strides")
