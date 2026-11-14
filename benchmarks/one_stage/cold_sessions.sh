@@ -159,6 +159,8 @@ keep() {
 }
 mkdir -p "$O/sessions"
 VQ=$SCR/verify.lock
+# Lean's verdict (`a0.lean_verify`, which starts the verifier in `verifier_env`) on the Lean CPUs
+VERDICT() { taskset -c "$LCPUS" "$PY" benchmarks/one_stage/cold_sessions.py verify "$@"; }
 rc=0
 log "run: members $COLD_MEMBERS, arms ${COLD_ARMS:-gpu,cpu}, card $COLD_CARD, until $(date -u -d "@$END" +%H:%MZ)"
 for k in ${COLD_MEMBERS//,/ }; do
@@ -183,8 +185,7 @@ for k in ${COLD_MEMBERS//,/ }; do
     log "m$k $arm: exit $x; $(grep -c "^COLD .*\"k\": $k, .*\"arm\": \"$arm\"" "$O/cold.log") record"
     [ "$x" = 75 ] && { log "the lease refused card $COLD_CARD (75)"; rc=11; break 2; }
     # the verdict on the Lean CPUs, one at a time, beside the next session
-    ( flock 7; taskset -c "$LCPUS" "$PY" benchmarks/one_stage/cold_sessions.py verify "${args[@]}" --lean "$WLEAN" \
-        >> "$O/cold.log" 2>> "$O/cold.err" ) 7> "$VQ" &
+    ( flock 7; VERDICT "${args[@]}" --lean "$WLEAN" >> "$O/cold.log" 2>> "$O/cold.err" ) 7> "$VQ" &
   done
 done
 log "sessions done; waiting for the verdicts"
