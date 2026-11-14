@@ -1,7 +1,7 @@
 module
 
 public import Properties.Nci
-public import Definitions.Nci.Assumptions.Baseline
+public import Definitions.Nci.Assumptions.Theta
 public import Definitions.Nci.Assumptions.Threads
 
 /-!

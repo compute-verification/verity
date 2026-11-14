@@ -1,7 +1,7 @@
 module
 
 public import Properties.Nci
-public import Properties.Nci.Baseline
+public import Properties.Nci.Theta
 public import NciCheck.DefinitionDigest
 public import NciCheck.RecordText
 public import Flock.TemplateQuery
@@ -96,7 +96,7 @@ namespace NciCheck.Properties.Record
 open Lean (Json)
 open Flock.Program (Prog Scope Ref Ty Defn Node)
 open Flock.TemplateQuery (TRange)
-open NciCheck.Baseline (getD strAt digest lastWith)
+open NciCheck.Theta (getD strAt digest lastWith)
 open NciCheck.RecordText (Row Held fieldsOf outerOf)
 open Spot.Bits (bitsOf)
 open NciCheck.DefinitionDigest (canonicalEntry definitionDigest closureDigest)
