@@ -104,20 +104,20 @@ to = "workers"
 messages = ["H1Coins"]
 
 [[channel]]
-from = "prover"
-to = "memory-challenger"
-messages = ["Setup", "Response", "FillAck", "Answer"]
-
-[[channel]]
 from = "memory-challenger"
 to = "prover"
-messages = ["Challenge", "Fill", "FillDone", "Read", "End"]
+messages = ["Warmup", "Index", "End", "Fill", "FillDone", "Read"]
+
+[[channel]]
+from = "prover"
+to = "memory-challenger"
+messages = ["Block", "FillAck", "Answer"]
 
 [[channel]]
 from = "memory-challenger"
 to = "verifier"
 messages = ["SignedRun", "WipeReport"]
-after = ["Response", "End"]
+after = ["End"]
 
 [[channel]]
 from = "prover"

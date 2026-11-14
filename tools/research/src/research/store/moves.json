@@ -3298,6 +3298,22 @@
       "paths": {
         "verity/protocols/policy/inference_only/verifier/inference_only/": "verity/protocols/policy/inference_only/verifier/"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/program/dsa_table.circuit-check.py": "adapters/torch/verity_torch/dsa_table.circuit-check.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot_flock/verifier/lean/VStarRecursiveMain.lean": "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursiveMain.lean"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/pipeline/m1_capture.py": "adapters/vllm/verity_vllm/pipeline/match_capture.py",
+        "adapters/vllm/tests/pipeline/test_m1_capture_main.py": "adapters/vllm/tests/pipeline/test_match_capture_main.py"
+      }
     }
   ]
 }
