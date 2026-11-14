@@ -3,7 +3,7 @@ module
 public import Definitions.InferenceOnly.Assumptions.Fit
 
 /-!
-# NCI over windows: the fit bound
+# The inference-only policy over windows: the fit bound
 
 A window that reads at most `S` bits uses at most `S / b_w` weights under F1, so when `S < N* b_w` no window holds a
 model that reaches the target loss. Each thread's work then spans several windows, and each window it enters other than

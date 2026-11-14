@@ -3,7 +3,7 @@
 must be `nci-check --policy`'s.
 
   suite --out DIR --phases EXE --scratch DIR
-      the NCI package's own vectors: each `runs` entry of its lean-audit.json generated and its exe timed, the largest
+      the inference-only check's own vectors: each `runs` entry of its lean-audit.json generated and its exe timed, the largest
       Program the difftests' references give a verdict on, and each liveness case's big instance (`n` past `WALK`)
   serve --out DIR --phases EXE --scratch DIR [--config NAME ...]
       Serve_v1 (`run.serve`) at each config, word-level and on bits (`lift.on_bits`), θ its registered inputs, one IU

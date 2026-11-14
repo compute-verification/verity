@@ -5,7 +5,7 @@ public import Definitions.Accounting.Physical
 public import Definitions.InferenceOnly.Assumptions.Fit
 
 /-!
-# NCI over windows: the fit bound on a physical run
+# The inference-only policy over windows: the fit bound on a physical run
 
 `FitBound` on the windows a run's cuts make. The servers `X i` of an actual circuit `A` (`Accounting.Placed`), cut at
 `0 = τ 0 ≤ … ≤ τ J = t` (`Accounting.Cuts`), divide the developer's region over `[0, t)` into `n J` windows

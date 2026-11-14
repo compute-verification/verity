@@ -3,7 +3,7 @@ module
 public import Definitions.InferenceOnly.Fit
 
 /-!
-# NCI over windows: the fit bound's named assumptions
+# The inference-only policy over windows: the fit bound's named assumptions
 
 The fit bound rests on two empirical premises about the reference training circuit `c` and its division into windows,
 measured rather than proved: `Reach`, the loss premise F3, and `Fits`, the capacity premise F1 with the boundary premise

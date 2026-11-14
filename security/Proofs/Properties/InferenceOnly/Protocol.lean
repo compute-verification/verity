@@ -6,7 +6,7 @@ import all Init.Data.Ord.String
 import Proofs.Properties.InferenceOnly.ThetaSteps
 
 /-!
-# NCI's core protocol's property, proved
+# The inference-only policy's core protocol's property, proved
 
 `ProtocolAccepts` (`Properties.InferenceOnly.Protocol`) by unfolding `InferenceOnlyCheck.Protocol.check` past its `names` check, with the policy check's verdict
 from `ThetaSteps.evaluate_ok`: `InferenceOnlyCheck.Theta.evaluate` returns the verdict `InferenceOnlyCheck.Desc.evaluate` gives.
