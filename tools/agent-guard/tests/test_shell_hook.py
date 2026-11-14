@@ -477,7 +477,7 @@ def test_a_command_that_plainly_blocks_past_twenty_minutes_is_refused(command):
     "tail --pid=4242 -f /dev/null", "while kill -0 4242; do sleep 30; done", "research run --on auto --wait -- sleep 5000",
     "research run --on auto --wait --wait-max 600 -- true", "tmux send-keys -t s:0.0 'sleep 3000' C-m", "rg 'sleep 3000' tools/",
 ])
-def test_a_wait_within_the_cap_or_off_this_shell_passes(command):
+def test_a_wait_within_the_limit_or_off_this_shell_passes(command):
     assert verdict(command) == "allow", command
 
 

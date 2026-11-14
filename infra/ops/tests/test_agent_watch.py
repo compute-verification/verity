@@ -1197,7 +1197,7 @@ def test_a_watch_state_outside_the_enum_is_refused_and_leaves_the_last_status(tm
 
 
 def test_every_kind_the_watch_records_is_a_watch_state():
-    """A new finding (a new `self.record("...")`) must join WATCH_STATES, or status.json refuses it in production."""
+    """A new finding (a new `self.record("...")`) must join WATCH_STATES, or status.json refuses it in the deployed watcher."""
     kinds = set(re.findall(r'self\.record\("(\w+)"', open(W.__file__).read()))
     assert kinds and kinds <= set(W.WATCH_STATES), sorted(kinds - set(W.WATCH_STATES))
 
@@ -4606,7 +4606,7 @@ def test_a_holder_whose_worker_went_quiet_is_not_held_unread(tmp_path):
     assert api.posts == [] and "held_unread" not in [r["kind"] for r in records(tmp_path)]
 
 
-def test_a_platform_outage_is_retried_uncapped_rings_a_person_and_clears_the_cap_once_coordinators_are_back(tmp_path):
+def test_a_platform_outage_is_retried_uncapped_rings_a_person_and_clears_the_limit_once_coordinators_are_back(tmp_path):
     """Most coordinators ended in ERROR over a few hours while every restart failed. The watch spent each one's restarts within
     minutes and left them for a person, nobody was rung, and after a ring revived them they stayed 'left for a person' until
     state.json was cleared by hand. Replayed: one coordinator down every 20 minutes."""
@@ -4618,7 +4618,7 @@ def test_a_platform_outage_is_retried_uncapped_rings_a_person_and_clears_the_cap
                   {f"ok-{i}": {"status": "FINISHED"} for i in range(len(ids))})
     clock = Clock(T0)
     w = W.Watch(api, tmp_path / "events.jsonl", clock, registry=reg, routes=routes)
-    w.errors[ids[0]], w.left = W.MAX_RESTARTS, {ids[0]}          # its cap already spent
+    w.errors[ids[0]], w.left = W.MAX_RESTARTS, {ids[0]}          # its limit already spent
     refused = []
 
     def down(path, body=None):
@@ -4639,7 +4639,7 @@ def test_a_platform_outage_is_retried_uncapped_rings_a_person_and_clears_the_cap
     tries = [t for path, t in refused if path == f"/v1/agents/{ids[0]}/runs"]
     outage_tries = [t for t in tries if t >= T0 + 40 * 60]
     assert len(outage_tries) >= 12 and all(b - a >= W.OUTAGE_RETRY_S for a, b in zip(outage_tries, outage_tries[1:])), \
-        "in the outage the first coordinator is still tried every 15 min, its spent cap notwithstanding"
+        "in the outage the first coordinator is still tried every 15 min, its spent limit notwithstanding"
     assert not any(r["kind"] == "relaunch" for r in records(tmp_path) if r["agent"] == ids[0] and r["t"] >= W.iso(T0 + 2400))
     assert all(w.errors.get(a, 0) == 0 for a in ids[2:]), "a restart in an outage is not counted"
     assert not any(r["kind"] in ("erroring", "relaunch") for r in records(tmp_path) if r["agent"] in ids[2:])
@@ -4652,7 +4652,7 @@ def test_a_platform_outage_is_retried_uncapped_rings_a_person_and_clears_the_cap
     assert w.errors[ids[0]] and w.down, "seeing a restart running is not enough: one reads RUNNING a minute before it errors"
     clock.t += W.STICK_S
     w.sweep(lambda r: None)
-    assert not w.left and not any(w.errors.values()) and not w.down, "back STICK_S: every cap cleared, no person needed"
+    assert not w.left and not any(w.errors.values()) and not w.down, "back STICK_S: every limit cleared, no person needed"
     api._agents[3]["latestRunId"] = "err-again"
     api._runs["err-again"] = {"status": "ERROR"}
     clock.t += 60
@@ -4661,7 +4661,7 @@ def test_a_platform_outage_is_retried_uncapped_rings_a_person_and_clears_the_cap
         "one coordinator down alone is restarted and counted as before"
 
 
-def test_a_sweep_refused_with_429_waits_retry_after_or_doubles_to_a_cap():
+def test_a_sweep_refused_with_429_waits_retry_after_or_doubles_to_a_limit():
     def refused(retry_after=None):
         return W.urllib.error.HTTPError("/v1/agents", 429, "Too Many Requests",
                                         {"Retry-After": retry_after} if retry_after else {}, None)

@@ -590,7 +590,7 @@ def units(node: str) -> Callable[[Ctx], list[Finding]]:
             span = f"`{sessions[0]}`" + (f" to `{sessions[-1]}`" if len(sessions) > 1 else "")
             out.append(Finding("system:session-*.scope", f"*{name}: {len(sessions)} login session scope"
                                f"{'s have' if len(sessions) > 1 else ' has'} failed* ({span}): those logins (ssh, and the runs sent "
-                               "over it) got no scope of their own, so no per-run memory cap. `journalctl -u UNIT` names the cause; once it's fixed, "
+                               "over it) got no scope of their own, so no per-run memory limit. `journalctl -u UNIT` names the cause; once it's fixed, "
                                "`systemctl reset-failed 'session-*.scope'`.",
                                cleared=f"*Cleared:* no failed login session scope on {name.lower()}."))
         return out
@@ -1123,8 +1123,8 @@ FAILED_RECENT_S = 6 * 3600
 CLASSIFY_S = 120
 TRAIN_RE = re.compile(r"^Merge #(\d+) \(([0-9a-f]+)\)")
 TRAIN_MAIN_RE = re.compile(r"^Merge main \([0-9a-f]+\)")
-#: drive's reason when it cancels a landed train's check (drive.py, `postland`): its deferred steps run in the after-landing run, so
-#: the step it killed did not fail
+#: drive's reason when it cancels a landed candidate's check (drive.py, in the platform repository): its deferred steps run in the
+#: after-landing run, so the step it killed did not fail
 DRIVE_LANDED_CANCEL = "deferred steps run in the post-landing run"
 BC_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 LANE_RE = re.compile(r"-([0-9a-f]{4})$")
@@ -1509,11 +1509,11 @@ MONITORS: list[Monitor] = [
     Monitor("units-n2", "infra", "warn", "node", units("n2"), UNITS_ACTION, every_s=300, clear_s=UNITS_CLEAR_S, n2="units"),
     Monitor("memory-pressure", "infra", "page", "machine", memory_pressure,
             "Find what is growing (`systemd-cgtop -m` on the machine; the alert names the biggest runs) and tell its sender; a "
-            "run past its scope's cap is OOM-killed whole, so pressure that holds means the caps or the slice's headroom are too "
+            "run past its scope's limit is OOM-killed whole, so pressure that holds means the limits or the slice's headroom are too "
             "loose for what runs there.", for_s=300, clear_s=300),
     Monitor("oom-kills", "infra", "warn", "machine", oom_kills,
-            "Tell the run's sender why it died (the alert names both) and what its scope's cap is; if a check, size its "
-            "parallelism from memory (check.py's memory_gb) rather than raising the cap.", events=True),
+            "Tell the run's sender why it died (the alert names both) and what its scope's limit is; if a check, size its "
+            "parallelism from memory (check.py's memory_gb) rather than raising the limit.", events=True),
     Monitor("answering", "infra", "page", "machine", answering,
             "`nebius compute instance get` for its state; preserve what it can (its runs' custody), then restart it "
             "(`nebius compute instance stop` and `start`), and tell the owners of the runs it had.", for_s=180, clear_s=120),
@@ -1527,7 +1527,7 @@ MONITORS: list[Monitor] = [
             "unit); `systemctl enable --now UNIT` once its cause is fixed. A unit off there by design goes in EXPECTED_OFF in research/monitors.py with "
             "the reason, or out of that machine's `nodes` in deploy.toml.", every_s=300, for_s=300, clear_s=300),
     Monitor("lost-checks", "infra", "warn", "machine", lost_checks,
-            "Read each lost check's failure.json; fix the cause on the machine (memory caps, disk, the runner) and tell its "
+            "Read each lost check's failure.json; fix the cause on the machine (memory limits, disk, the runner) and tell its "
             "sender to resend it.", every_s=3600, events=True),
     Monitor("drift", "infra", "warn", "relay", deploy_drift,
             "`research deploy drift --on N` for the detail; install main's version (`research deploy install N --by WHO "
