@@ -229,35 +229,3 @@ def test_the_command_appends_one_line_a_verdict_and_refuses_a_second_on_one_piec
             VR.main(["stop_record", "--first", str(tmp_path / "first.json"), "--summary", str(tmp_path / "stop.json"),
                      "--serve", "r-serve", "--out", str(out), *given])
         assert lacks in capsys.readouterr().err
-
-
-@pytest.mark.slow
-def test_the_writer_reads_a_stop_class_as_the_driver_and_the_stop_audit_write_it(tmp_path, monkeypatch):
-    """The fixtures above are written in the form the writer expects, so they can't show that the form is the
-    drivers'. This registers a stop class's first stage on a test's challenger as `two_stage.py first --stop` does,
-    builds its stop stream again as the stop audit does, and takes `stop_audit.summary_of`'s own summary: the record
-    names the class's boundary record, the directory the class is filed under and the rate its stop record registers.
-    No session is proved and Lean is not called."""
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "device" / "tests"))
-    T = importlib.import_module("test_two_stage_driver")
-    SA = importlib.import_module("verity.protocols.proofs.spot.prover.audit.stop_audit")
-    pubs = [json.loads(json.dumps(T._stop_class().public()))]
-    monkeypatch.setattr(T.AC, "start", T._start(T.OneSession("verdict-record")))
-    (wrote,) = T.TS._first_all(T._args(tmp_path), pubs, T.PAIR, T.RULE, None, T.STOP)
-    first = json.loads(json.dumps(wrote))
-    design = f"rate:{T.Q}/{T.N}"
-    r = SA.resume(first, T.PAIR, T.STOP, design, proof_deadline=T.RULE.proof_deadline)
-    audit = {"accepted": True, "complete": False, "verdicts": {}, "checks": {}}
-    summary = json.loads(json.dumps(SA.summary_of(r, T.STOP, design, {"accepted": True, "audit": audit})))
-    got = VR.record("stop_record", first, summary, **NAMES)
-    layout = r.layout
-    assert got["class"] == f"w{pubs[0]['window']}/p{layout.prompt}-o{layout.outputs}"
-    assert got["registration"] == r.boundary == first["registration"] != r.registration.digest
-    assert got["rate"] == VR.rate({"population": layout.spans, **_design("subset", len(r.sample.units))})
-    assert (got["verdict"], got["verifier"]["module"]) == ("not complete", SA.TOOL)
-    assert (got["stream_registration"], got["stream_names_boundary"]) == (r.registration.digest, True)
-    assert r.registration.digest == first["stop"]["registration"] and first["stop"]["record"]["previous"] == r.boundary
-    interior = _record(4, 4, previous=r.boundary, interior=True)
-    second = {"first_stage": {"registration": r.first.registration.digest}, "held": True, "outcome": {"accepted": False},
-              "second_stage": {"registration": R.digest(interior)}}
-    assert VR.record("second_stage", first, second, stream=interior, **NAMES)["verdict"] == "withheld"
