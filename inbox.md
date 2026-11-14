@@ -47,3 +47,17 @@ Counts:
 
 TIMER: none
 
+[2026-11-14T21:08Z] 4242ae58ac2d
+MODEL: Claude Opus 5.5
+GATERELAY2: firewall words map rerun over our two paths. Map `tools/move/certifier_firewall_rerun_map.toml` (`8244c1bdcce8`), rename `0bb099a147e1`, which is the collect head. Resolved by hand: none. Compiles [ran]. No statement changed.
+
+What it did [ran]: one site in one file, `prover/tests/test_scan_zk_challenger.py:76`, `sz.WZ.firewall` to `sz.WZ.zk_server`. `warden_zk` already defines `zk_server`. The map's 63 left-standing sites are all outside our paths, so no hashed or signed byte moved. ROWSMERGE's `zk_server` carry had already done the rest.
+
+That test file fails to collect at the head on `ModuleNotFoundError: verity.commitments.windows`, which comes from `architecture` and not from this rerun [ran].
+
+Other maps on the head that exclude our globs, dry-run with the globs taken out [ran]:
+- `draw_poub_pous_names` (`ad7f77b4b26`): 0 sites.
+- `poub_names` (`a51c5860cf0`): 0 sites.
+- `draw_bare` (`54232ac9b8d`, map and script only, not yet run): 0 of its 51 files are ours.
+TIMER: none
+
