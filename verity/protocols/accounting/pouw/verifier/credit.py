@@ -3190,11 +3190,27 @@ def _period_outcomes(key: Any, ledger: Any, pins: Any, main: Any, name: Any, win
     return _period_of(key, ledger, pins, main, name, windows, verify, None)
 
 
+def _once(verify: Ch.Verify) -> Ch.Verify:
+    """`verify`, each answer held by its key, message and signature: a period's check reads its ledger 5W + 1 times
+    (`period`, then each window's two `credited_session`s, `_credited`, the rounds and `_period_weights`), all at the
+    verifier's one key, so each entry's signature is verified once. Lean's `PouwCheck.Credit.Once.periodCreditOnce`
+    replays the ledger once."""
+    held: dict[tuple[Ch.ChallengerKey, bytes, bytes], bool] = {}
+
+    def once(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
+        at = (key, message, signature)
+        if at not in held:
+            held[at] = verify(key, message, signature)
+        return held[at]
+    return once
+
+
 def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify,
                run: Run | None, kept: list[_Outcomes] | None = None, files_of: Any = None
                ) -> tuple[dict | None, tuple[str, str] | None]:
     """`_period_outcomes`, or with `run` `period_credit`'s Python twin, each window's statement runs appended to `kept`
     and the committed circuit files' refusal set on `files_of` (``.refused``)."""
+    verify = _once(verify)
     keys, form = (PROVED_KEYS, WINDOWS_FORM) if run is None else (PERIOD_KEYS, PERIOD_FORM)
     if not _formed(windows, keys):
         return None, ("period", form)
