@@ -72,7 +72,7 @@ open Verity Slowdown.Slowdown
 
 /-- **The slowdown, remote protocol, over a monitoring period.** A monitoring period of `T` windows, window `t`
 with its own uniform coins `Ω t`, independent of the others' (a window is a round of live coins: the deployment's
-window, or a finer cut of it where its PoUW and sampled-proofs coins are flipped at different times). Every bound on a
+window, or a finer cut of it where its PoUW and SPOT coins are flipped at different times). Every bound on a
 window holds at any value `ξ` of the other windows' coins, over its own (`ξ[t ↦ a]`, `a` uniform on `Ω t`).
 
 * PoUW certifies window `t` at capacity `cap_t ≥ 0`, `∑ cap_t ≤ C`, its certificate incorrect (`incorrect t`) with probability

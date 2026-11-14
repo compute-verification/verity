@@ -48,7 +48,7 @@ The one theorem's form:
 * **One adversary form.** For every prover `τ`,
   $$\Pr[\text{accept} \wedge \text{the claim fails on } E^\tau\text{'s values}] \le
     \delta + f(\Pr[B^\tau \text{ finds a SHA-512 collision}]),$$
-  with the extractor `E` and the finder `B` fixed constructions. The sampled-proofs claim reads the transcript the
+  with the extractor `E` and the finder `B` fixed constructions. The SPOT claim reads the transcript the
   period's extractor `E` (`PeriodLive.extract`) reads off the strategy: at most an `ε` share of the circuit's units are
   unbound in it (`unbound`: wrong in it, or with a committed value the commitment doesn't open to its value there).
   Under zero knowledge a run shows no value, so the values a claim reads are an extractor's; the deployed one is

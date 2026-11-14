@@ -44,12 +44,12 @@ from verity_vllm.pipeline import serve_pearl as SPL
 from verity_vllm.program.predict.window_class import PearlTables, WindowClass
 from verity_vllm.protocols import pouw
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
+from verity_torch.pouw.pearl_c import run_device as PPDR
 from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import passes as PP
+from verity_torch.pouw.pearl_c import passes as PP
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.ends import PassEnds, _Pass
+from verity_torch.pouw.pearl_c.ends import PassEnds, _Pass
 
 CLASS, PEARL = WindowClass(1, 27, 2), PearlTables(SPL.SCHEME, words=64)
 #: a round's calls: the layer's q/k/v, o, gate/up and down

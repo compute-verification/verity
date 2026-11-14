@@ -6,7 +6,7 @@
 # network_traces is the certifier rehearsal's); it is
 # unpacked root-owned at /opt/vy-challenger/COMMIT, never changed after. The Lean toolchain its spot package names is
 # installed under /opt/elan (root's) and linked as COMMIT/.lean-bin; elan itself is release ELAN, its archive checked against
-# ELAN_SHA256 before it runs. Each Lake package's .lake is auditor's, and `lake build sampled-proofs-verifier` (and
+# ELAN_SHA256 before it runs. Each Lake package's .lake is auditor's, and `lake build spot-verifier` (and
 # `network-records`, the certifier rehearsal's check) runs there as auditor, so a session's first coin doesn't wait on a build. The pin (COMMIT, the main it was checked against, UTC time) is
 # appended to /opt/vy-challenger/pins.jsonl, root's and append-only (auditor.py `record_pin`, `chattr +a`), which each ledger
 # open seals (RT4-INT-40). Last, /opt/vy-challenger/current -> COMMIT. A session runs from the tree it was admitted at:
@@ -72,7 +72,7 @@ ln -sfn "$bin" "$T/.lean-bin"
 find "$T" \( -name lakefile.toml -o -name lakefile.lean \) -printf '%h\n' | while read -r d; do
   install -d -m 0755 -o auditor -g auditor "$d/.lake"
 done
-runuser -u auditor -- env -i HOME=/var/lib/vy-challenger PATH="$T/.lean-bin:/usr/bin:/bin" sh -c "cd '$pkg' && lake build sampled-proofs-verifier" \
+runuser -u auditor -- env -i HOME=/var/lib/vy-challenger PATH="$T/.lean-bin:/usr/bin:/bin" sh -c "cd '$pkg' && lake build spot-verifier" \
   | tail -1
 net=$T/verity/protocols/accounting/certifier/verifier/lean
 if [ -d "$net" ]; then
