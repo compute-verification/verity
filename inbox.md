@@ -134,3 +134,6 @@ Branch `cursor/na-clock-form-gone-b51f`, head `6bef2f142fa4abd35d5c6a3ff16bf47de
 
 TIMER: none.
 
+[2026-11-14T16:22Z] 8440f2c133d9
+ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 8:24 AM PST. #9736: at a78100cf5cae5ecb83b8abed1ddc12a574257ada the Lean check r20261114-092257-75e4 exit 0, AUDIT: PASS in all four packages (certifier verifier, security, security/Properties, security/Proofs), and the suites r20261114-092344-dbb9 exit 0, 87 of 87 passed. But main a116c5614312 conflicts with it (git merge-tree: test_scan_zk.py), and the registration layout move 8469d5dcc164 lies between, so: restack.py --main 8469d5dcc164 (clean, 0d837cef07ab), then one merge of main. New head 29a70d9b1b72a83d56b26b2ad118551e56cb727f. By hand: test_scan_zk.py keeps our scan_ok ports with main's network_certifier key; import_order.toml, hardware/README.md and hardware/tests/test_package.py are main's (the move rerun met main's own lines, which we do not change). Tree vs main = our 24 files, same line counts; no Lean file of ours changed text, so no second Lean check. Suites at the new head r20261114-155150-3f1d running. Body updated, read back equal. PERIODPROOF2 told the new head.
+
