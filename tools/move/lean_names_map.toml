@@ -349,14 +349,14 @@ words = { "Credit.window" = "Credit.executionPhase" }
 
 [[words_in]]
 files = [
-    "security/Properties/Pouw/PeriodJ10R.lean",
+    "security/Properties/Pouw/MonitoringPeriodJ10R.lean",
     "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean",
 ]
 words = { "Credit.window" = "Credit.executionPhase" }
 
 [[words_in]]
 files = [
-    "security/Proofs/InferenceOnly/FitWitness.lean",
+    "security/Proofs/Slowdown/FitWitness.lean",
     "security/Proofs/Properties/Remote.lean",
     "verity/protocols/compose/verifier/remote/CoreRemote.lean",
 ]
@@ -461,7 +461,7 @@ files = [
     "security/Proofs/Pouw/Credit.lean",
     "security/Proofs/Properties/Spot/PlanCheck.lean",
     "security/Proofs/WeightSecurity/TwoProd.lean",
-    "security/Proofs/WeightSecurity/TwoProdPeriod.lean",
+    "security/Proofs/WeightSecurity/TwoProdMonitoringPeriod.lean",
     "security/Proofs/WeightSecurity/TwoProdWitnesses.lean",
     "verity/protocols/proofs/recursion/verifier/zk_server/ZkServer/PyJson.lean",
 ]
@@ -535,13 +535,13 @@ words = { "windowFailures" = "servedFailures" }
 # proofs, compute-accounting, top
 [[words_in]]
 files = [
-    "security/Proofs/Accounting/JointBridge/HonestH200.lean",
-    "security/Proofs/Accounting/TS/PeriodSound.lean",
-    "security/Proofs/InferenceOnly/FitSlotsWitness.lean",
-    "security/Proofs/InferenceOnly/FitWitness.lean",
-    "security/Proofs/Pouw/Period/Honest.lean",
-    "security/Proofs/Pouw/PeriodJ10R/Honest.lean",
-    "security/Proofs/Pouw/PeriodJ10RStrata/Honest.lean",
+    "security/Proofs/Certifier/JointBridge/HonestH200.lean",
+    "security/Proofs/Pouw/TS/PeriodSound.lean",
+    "security/Proofs/Slowdown/FitSlotsWitness.lean",
+    "security/Proofs/Slowdown/FitWitness.lean",
+    "security/Proofs/Pouw/MonitoringPeriod/Honest.lean",
+    "security/Proofs/Pouw/MonitoringPeriodJ10R/Honest.lean",
+    "security/Proofs/Pouw/MonitoringPeriodJ10RStrata/Honest.lean",
     "security/Proofs/Pouw/ServedFreed/Honest.lean",
     "security/Proofs/Pouw/ServedValues/Honest.lean",
     "security/Proofs/Pouw/ServedWork/Honest.lean",
@@ -562,20 +562,20 @@ words = { "windowsOf" = "runsOf" }
 # proofs, compute-accounting, memory-accounting, top, lean
 [[words_in]]
 files = [
-    "security/Definitions/Accounting/JointPeriod.lean",
+    "security/Definitions/Compose/JointPeriod.lean",
     "security/Definitions/Core/Guarantees/Circuit.lean",
     "security/Definitions/Core/Partition.lean",
     "security/Definitions/Flock/Circuit.lean",
-    "security/Definitions/InferenceOnly/Guarantees/Remote.lean",
-    "security/Definitions/InferenceOnly/Guarantees/RemotePeriod.lean",
-    "security/Definitions/InferenceOnly/Guarantees/Witnesses.lean",
-    "security/Definitions/InferenceOnly/Witness.lean",
+    "security/Definitions/Slowdown/Guarantees/Remote.lean",
+    "security/Definitions/Slowdown/Guarantees/RemoteMonitoringPeriod.lean",
+    "security/Definitions/Slowdown/Guarantees/Witnesses.lean",
+    "security/Definitions/Slowdown/Witness.lean",
     "security/Definitions/Pouw/Guarantees/Window.lean",
     "security/Definitions/Pouw/Window.lean",
-    "security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean",
-    "security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityMonitoringPeriod.lean",
-    "security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityBlock.lean",
-    "security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityMonitoringPeriod.lean",
+    "security/Proofs/Certifier/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean",
+    "security/Proofs/Certifier/JointBridge/Guarantees/IntegrityOfIntegrityMonitoringPeriod.lean",
+    "security/Proofs/Certifier/JointBridge/IntegrityOfIntegrityBlock.lean",
+    "security/Proofs/Certifier/JointBridge/IntegrityOfIntegrityMonitoringPeriod.lean",
     "security/Proofs/Core/Circuit.lean",
     "security/Proofs/Flock/Bridge/CircuitOf.lean",
     "security/Proofs/Flock/Bridge/RatePeriod.lean",
@@ -693,9 +693,9 @@ files = [
     "security/Proofs/Flock/Soundness/Registered/E2E.lean",
     "security/Proofs/Flock/Soundness/Types/ProgramE2E.lean",
     "security/Proofs/Flock/VBridge/Keyed.lean",
-    "security/Proofs/InferenceOnly/Remote.lean",
-    "security/Proofs/InferenceOnly/RemotePeriod.lean",
-    "security/Proofs/InferenceOnly/Witnesses.lean",
+    "security/Proofs/Slowdown/Remote.lean",
+    "security/Proofs/Slowdown/RemoteMonitoringPeriod.lean",
+    "security/Proofs/Slowdown/Witnesses.lean",
     "security/Proofs/Pouw/EndToEnd*/Statement.lean",
     "security/Proofs/Pouw/PearlC/RowCircuit.lean",
     "security/Proofs/Pouw/PearlC/Tile4Circuit.lean",
@@ -705,7 +705,7 @@ files = [
     "security/Proofs/Pouw/Window/Served.lean",
     "security/Proofs/Properties/Spot.lean",
     "security/Proofs/Properties/Verity/Sampled/UnboundBridge.lean",
-    "security/Proofs/Properties/Verity/WindowFiles.lean",
+    "security/Proofs/Properties/Verity/ExecutionPhaseFiles.lean",
     "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Check.lean",
     "verity/protocols/accounting/pouw/verifier/lean/pearlplus/PouwPearlPlus/Credit.lean",
     "verity/protocols/proofs/spot/verifier/lean/Spot/Draw.lean",
@@ -726,8 +726,8 @@ words = { "wrong" = "incorrect" }
 # compute-accounting
 [[words_in]]
 files = [
-    "security/Definitions/Accounting/CostModel.lean",
-    "security/Definitions/Accounting/Guarantees/Bridges.lean",
+    "security/Definitions/Pouw/CostModel.lean",
+    "security/Definitions/Pouw/Guarantees/Bridges.lean",
     "security/Definitions/Pouw/Assumptions/PearlC/HiddenTile.lean",
     "security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean",
     "security/Definitions/Pouw/Assumptions/PearlC/TTOutUOnly.lean",
@@ -740,33 +740,33 @@ files = [
     "security/Definitions/Pouw/PearlC/Hidden.lean",
     "security/Definitions/Pouw/PearlC/HiddenTileGame.lean",
     "security/Definitions/Pouw/PearlC/Tile.lean",
-    "security/Definitions/Pouw/PearlC/TileDraw.lean",
+    "security/Definitions/Pouw/PearlC/TileSample.lean",
     "security/Definitions/Pouw/PearlC/W1.lean",
     "security/Definitions/Pouw/Witness/Honest.lean",
     "security/Definitions/Pouw/Witness/Model.lean",
     "security/Proofs/Accounting/Actual/Bridges.lean",
-    "security/Proofs/Accounting/PerRunPriced.lean",
-    "security/Proofs/Accounting/PouwWitness.lean",
+    "security/Proofs/Pouw/PerRunPriced.lean",
+    "security/Proofs/Pouw/PouwWitness.lean",
     "security/Proofs/Pouw/Barrier/Proofs.lean",
     "security/Proofs/Pouw/BudgetAbort.lean",
     "security/Proofs/Pouw/EndToEnd*/Statement.lean",
     "security/Proofs/Pouw/NCP/GameProofs.lean",
     "security/Proofs/Pouw/NCP/RouteUProofs.lean",
-    "security/Proofs/Pouw/PearlC/DeviceCapGap.lean",
-    "security/Proofs/Pouw/PearlC/DeviceCapRev1Gap.lean",
-    "security/Proofs/Pouw/PearlC/DeviceChainCapGap.lean",
+    "security/Proofs/Pouw/PearlC/DeviceInertBoundGap.lean",
+    "security/Proofs/Pouw/PearlC/DeviceInertBoundRev1Gap.lean",
+    "security/Proofs/Pouw/PearlC/DeviceChainInertBoundGap.lean",
     "security/Proofs/Pouw/PearlC/DeviceRev1Gap.lean",
     "security/Proofs/Pouw/PearlC/FlockTile/Audit.lean",
     "security/Proofs/Pouw/PearlC/HiddenTileGame.lean",
-    "security/Proofs/Pouw/PearlC/RowCapAtGap.lean",
+    "security/Proofs/Pouw/PearlC/RowInertBoundAtGap.lean",
     "security/Proofs/Pouw/PearlC/RowSeedGap.lean",
-    "security/Proofs/Pouw/PearlC/TileCapRev1Gap.lean",
-    "security/Proofs/Pouw/PearlC/TileDrawGap.lean",
+    "security/Proofs/Pouw/PearlC/TileInertBoundRev1Gap.lean",
+    "security/Proofs/Pouw/PearlC/TileSampleGap.lean",
     "security/Proofs/Pouw/PearlC/TileGap.lean",
     "security/Proofs/Pouw/PearlC/TileGapTol.lean",
     "security/Proofs/Pouw/PearlC/UOnlyGap.lean",
     "security/Proofs/Pouw/PearlC/W1BudgetAbort.lean",
-    "security/Proofs/Pouw/PearlPlus/Draw.lean",
+    "security/Proofs/Pouw/PearlPlus/Sample.lean",
     "security/Proofs/Pouw/Reduction.lean",
     "security/Proofs/Pouw/Sanity.lean",
     "security/Proofs/Pouw/Theorem1.lean",
@@ -812,11 +812,11 @@ words = { "idx_session" = "idx_challengePhase" }
 # compute-accounting, lean
 [[words_in]]
 files = [
-    "security/Definitions/Accounting/Guarantees/BoundReceipt.lean",
-    "security/Definitions/Accounting/Guarantees/Bridges.lean",
-    "security/Definitions/Accounting/Guarantees/PerRun.lean",
-    "security/Definitions/Accounting/PerRun.lean",
-    "security/Definitions/Accounting/Pouw.lean",
+    "security/Definitions/Poub/Guarantees/BoundReceipt.lean",
+    "security/Definitions/Pouw/Guarantees/Bridges.lean",
+    "security/Definitions/Pouw/Guarantees/PerRun.lean",
+    "security/Definitions/Pouw/PerRun.lean",
+    "security/Definitions/Pouw/Pouw.lean",
     "security/Definitions/Assumptions/Pouw.lean",
     "security/Definitions/Pouw/Advantage.lean",
     "security/Definitions/Pouw/Assumptions/Deadline.lean",
@@ -840,12 +840,12 @@ files = [
     "security/Definitions/Pouw/PearlC/Game.lean",
     "security/Definitions/Pouw/PearlC/Hidden.lean",
     "security/Definitions/Pouw/PearlC/Tile.lean",
-    "security/Definitions/Pouw/PearlC/TileDraw.lean",
-    "security/Proofs/Accounting/BoundReceipt/Tile.lean",
-    "security/Proofs/Accounting/PerRunNecessity.lean",
-    "security/Proofs/Accounting/PerRunPouw.lean",
-    "security/Proofs/Accounting/PerRunPriced.lean",
-    "security/Proofs/Accounting/Stacking.lean",
+    "security/Definitions/Pouw/PearlC/TileSample.lean",
+    "security/Proofs/Poub/BoundReceipt/Tile.lean",
+    "security/Proofs/Pouw/PerRunNecessity.lean",
+    "security/Proofs/Pouw/PerRunPouw.lean",
+    "security/Proofs/Pouw/PerRunPriced.lean",
+    "security/Proofs/Poub/Stacking.lean",
     "security/Proofs/Pouw/Advantage.lean",
     "security/Proofs/Pouw/Barrier/Proofs.lean",
     "security/Proofs/Pouw/Deadline.lean",
@@ -857,12 +857,12 @@ files = [
     "security/Proofs/Pouw/PearlC/Gap.lean",
     "security/Proofs/Pouw/PearlC/HiddenGap.lean",
     "security/Proofs/Pouw/PearlC/Rev1Witness.lean",
-    "security/Proofs/Pouw/PearlC/RowCapAtGap.lean",
+    "security/Proofs/Pouw/PearlC/RowInertBoundAtGap.lean",
     "security/Proofs/Pouw/PearlC/RowSeedCode.lean",
     "security/Proofs/Pouw/PearlC/RowSeedGap.lean",
     "security/Proofs/Pouw/PearlC/TTOutW1Item1.lean",
-    "security/Proofs/Pouw/PearlC/TileCapRev1Gap.lean",
-    "security/Proofs/Pouw/PearlC/TileDrawGap.lean",
+    "security/Proofs/Pouw/PearlC/TileInertBoundRev1Gap.lean",
+    "security/Proofs/Pouw/PearlC/TileSampleGap.lean",
     "security/Proofs/Pouw/PearlC/TileGap.lean",
     "security/Proofs/Pouw/PearlC/TileGapTol.lean",
     "security/Proofs/Pouw/PearlC/UOnlyGap.lean",
@@ -933,8 +933,8 @@ files = [
     "security/Properties/Pous/InProofs.lean",
     "security/Properties/Pous/MemoryChallenger.lean",
     "security/Properties/Pous/MemoryChallenger/Session.lean",
-    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/P2Close.lean",
-    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/P2Protocol.lean",
+    "verity/protocols/accounting/poub/verifier/lean/Poub/P2Close.lean",
+    "verity/protocols/accounting/poub/verifier/lean/Poub/P2Protocol.lean",
     "verity/protocols/accounting/pous/device/lean/MemoryChallenger/Difftest.lean",
     "verity/protocols/accounting/pous/device/lean/MemoryChallenger/InProofs.lean",
     "verity/protocols/accounting/pous/device/lean/MemoryChallenger/Judge.lean",
@@ -992,7 +992,7 @@ files = ["verity/protocols/accounting/pous/verifier/check/PousCheck/Run.lean"]
 words = { "decodeSession" = "decodeRecord" }
 
 [[words_in]]
-files = ["verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Difftest.lean"]
+files = ["verity/protocols/accounting/poub/verifier/lean/Poub/Difftest.lean"]
 words = { "drawnSession" = "drawnRun" }
 
 [[words_in]]
@@ -1014,7 +1014,7 @@ files = ["security/Proofs/Properties/Pous/InProofs.lean"]
 words = { "noSession" = "noRun" }
 
 [[words_in]]
-files = ["verity/protocols/accounting/poub/verifier/lean/RemoteAudit/P2Protocol.lean"]
+files = ["verity/protocols/accounting/poub/verifier/lean/Poub/P2Protocol.lean"]
 words = { "otherSession" = "otherRun" }
 
 [[words_in]]
@@ -1087,7 +1087,7 @@ words = { "session_split" = "signedWipe_split" }
 [[words_in]]
 files = [
     "security/Proofs/Properties/Pous/Component.lean",
-    "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/P2Protocol.lean",
+    "verity/protocols/accounting/poub/verifier/lean/Poub/P2Protocol.lean",
 ]
 words = { "toySession" = "toyRecord" }
 
@@ -1106,7 +1106,7 @@ words = { "wipeSessionStrings" = "signedWipeStrings" }
 [[words_in]]
 files = [
     "security/Proofs/WeightSecurity/TwoProd.lean",
-    "security/Proofs/WeightSecurity/TwoProdPeriod.lean",
+    "security/Proofs/WeightSecurity/TwoProdMonitoringPeriod.lean",
     "security/Proofs/WeightSecurity/TwoProdWitnesses.lean",
 ]
 words = { "leadEscape" = "leadMissProb" }
@@ -1126,9 +1126,9 @@ words = { "windows_of" = "executionPhases_of" }
 # lean
 [[words_in]]
 files = [
-    "security/Definitions/Accounting/Guarantees/Responder.lean",
-    "security/Definitions/Accounting/Responder.lean",
-    "security/Proofs/Accounting/Responder.lean",
+    "security/Definitions/Pous/Accounting/Guarantees/Responder.lean",
+    "security/Definitions/Pous/Accounting/Responder.lean",
+    "security/Proofs/Pous/Accounting/Responder.lean",
 ]
 words = { "window" = "period" }
 
