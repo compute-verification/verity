@@ -65,7 +65,7 @@ inputs, each named by its SHA-512 (``from``), and the period's parameters, held 
 (the composite of record's), never the prover's node or its deployment.json; `certifier-key` closes only where it
 holds and the lock holds that guarantee taking them. The registration's link figures (beta, latency) are stated, not
 measured, and nothing here reads them; that the node has no egress but the uplink the network certifier splits, which
-the registration asserts, is the auditor's placement under trusted-host (`STANDING`), which no file establishes.
+the registration asserts, is the auditor's placement under trusted-device (`STANDING`), which no file establishes.
 `auditor-listing` (`auditor_listing`): each circuit file the period lists is, by SHA-512, the file its audit's
 sessions were verified against (`PERIOD`); and the remote theorem's registered-files condition (`registered_files`):
 each statement's circuit file is, by SHA-512, the one remote's sampled proofs case's (``--sampled-proofs-case``) params
@@ -552,7 +552,7 @@ RESTS_ON: dict[str, dict[str, Any]] = {
         "statement": "41de25b3444487593edcbd858f2daee2767204c6475b0aa1ae05516f315d1772",
         "takes": {"Claims.SamplingGeneric.Compiled.KS": "sampled-leg-bridge",
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge",
-                  "Verity.Assumptions.TrustedHost": "Verity.Assumptions.TrustedHost",
+                  "Verity.Assumptions.TrustedDevice": "Verity.Assumptions.TrustedDevice",
                   "hPw": "windows-placed", "hβ": "windows-placed", "hcap": "schedules-held",
                   "hfit": "schedules-held", "hs": "schedules-covered", "hdz": "client-decodes",
                   "NetTiming.ScopeAcc": "wires-fit", "NetTiming.CertifierRegisters": "certifiers-open"}},
@@ -560,7 +560,7 @@ RESTS_ON: dict[str, dict[str, Any]] = {
         "statement": "808274afd667f0e04b4758786bf29fedb31a024e4a2a92147a7003fa9cc4d59f",
         "takes": {"Claims.Sampling.KSBy": "sampled-leg-bridge", "Claims.Flock.ListWithin": "sampled-leg-bridge",
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge",
-                  "Verity.Assumptions.TrustedHost": "Verity.Assumptions.TrustedHost",
+                  "Verity.Assumptions.TrustedDevice": "Verity.Assumptions.TrustedDevice",
                   "NetTiming.WindowsPlaced": "windows-placed", "NetTiming.SchedulesCovered": "schedules-covered",
                   "NetTiming.SenderDecodes": "client-decodes", "NetTiming.ScopeAcc": "wires-fit",
                   "NetTiming.RegOpensAt": "reg-opens-at", "NetTiming.CertifiersOpen": "certifiers-open",
@@ -570,7 +570,7 @@ RESTS_ON: dict[str, dict[str, Any]] = {
         "restate": RESTATE_TIED,
         "takes": {"NetTiming.SharedRootsParsed": "shared-roots-parsed",
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge", "NetTiming.RWired": "sampled-leg-bridge",
-                  "Verity.Assumptions.TrustedHost": "Verity.Assumptions.TrustedHost",
+                  "Verity.Assumptions.TrustedDevice": "Verity.Assumptions.TrustedDevice",
                   "NetTiming.RowsTiesOrdered": "rows-ties-ordered", "NetTiming.CircuitCounts": "free-count",
                   "NetTiming.WindowsPlaced": "windows-placed", "NetTiming.TiedExposed": "tied-exposed",
                   "NetTiming.SchedulesHeld": "schedules-held", "NetTiming.SchedulesCovered": "schedules-covered",
@@ -752,7 +752,7 @@ NOT_CHECKED = "no run's inputs were checked"
 DISCHARGES: dict[str, dict[str, Any]] = {}
 #: the named assumptions that may stand under the figure of record, each on an auditor-trusted device or the auditor's
 #: placement of one, named beside the bound
-STANDING = {"Verity.Assumptions.TrustedHost": "trusted-host: the network certifier and its host are the auditor's, "
+STANDING = {"Verity.Assumptions.TrustedDevice": "trusted-host: the network certifier and its host are the auditor's, "
                                               "which covers that the records it signs are the traffic that crossed, "
                                               "at the times it crossed, not what the device's code computes, and, "
                                               "with the auditor's placement of it (certifier-coverage), that the "

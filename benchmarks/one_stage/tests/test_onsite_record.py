@@ -653,12 +653,12 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
 @pytest.mark.parametrize("given, open_", [
     ({}, []),
     ({"Properties.NetworkPeriod.rowsHeld": ["NetTiming.Assumptions.SampledCodeRuns"]}, ["held-performed"]),
-    ({"Properties.NetworkPeriod.rowsHeld": ["Verity.Assumptions.TrustedHost"]}, []),
+    ({"Properties.NetworkPeriod.rowsHeld": ["Verity.Assumptions.TrustedDevice"]}, []),
     ({COUNTED: None}, ["free-count"]),
     ({COVERED: None}, ["schedules-covered"]),
-    ({COVERED: ["Verity.Assumptions.TrustedHost"]}, []),
+    ({COVERED: ["Verity.Assumptions.TrustedDevice"]}, []),
     ({ACCEPTED: ["NetTiming.Assumptions.SampledCodeRuns"]}, ["NetTiming.Assumptions.SampledCodeRuns"]),
-    ({ACCEPTED: ["Verity.Assumptions.TrustedHost"]}, []),
+    ({ACCEPTED: ["Verity.Assumptions.TrustedDevice"]}, []),
     ({ACCEPTED: ["Accounting.Covered"]}, []),
     ({ACCEPTED: ["NetTiming.CertifierRegisters"]}, []),
     ({ACCEPTED: None}, [ACCEPTED])])
@@ -667,9 +667,9 @@ def test_the_tight_K_is_of_record_only_where_every_premise_is_discharged_and_non
     """Both checks held: a premise whose discharge the lock doesn't list, or lists taking an assumption that doesn't
     stand (SampledCodeRuns, a premise about our own Python), is open, and so is an assumption of a guarantee the tight
     K rests on that is neither standing nor named in what it takes, by its name, and that guarantee where the lock
-    doesn't list it. trusted-host and certifier-coverage stand, and a premise its takes names is that premise's: so
+    doesn't list it. trusted-device and certifier-coverage stand, and a premise its takes names is that premise's: so
     schedules-covered is open by its name until the Lean audit's Property is in the lock, and discharged once it is,
-    resting on trusted-host alone. With one check open too, both are open under the figure of record."""
+    resting on trusted-device alone. With one check open too, both are open under the figure of record."""
     write_lock(lock, given)
     rec = held_both(tmp_path / "held")
     of = rec["bound"]["of_record"]
