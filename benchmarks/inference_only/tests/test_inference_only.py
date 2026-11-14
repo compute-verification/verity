@@ -12,7 +12,7 @@ import policy as P
 import pytest
 import report
 import tied as T
-from rho import lean, min_cut
+from slowdown import lean, min_cut
 from verity_vllm.check.weights_of_record import PARAM
 from verity_vllm.program.predict import block_counts as BC
 
