@@ -325,7 +325,7 @@ class PassEnds(_RunState):
         once every file is: its records, its weights' files and its manifest, ``out``'s ``excluded_rows`` and ``manifest``.
         A weight's files are written from the device by the first retained pass, on this thread, and hard-linked after."""
         import torch
-        d, nb = cur.retain, self.nb
+        d, nb = cast(Path, cur.retain), self.nb
         wd = d / "weights"
         wd.mkdir(mode=0o700, parents=True, exist_ok=True)
         last = write_behind(((d / "leaves", self.leaves[:nb * count], True), (d / "tree_t", tree, True)), cur.writes)
@@ -355,8 +355,8 @@ class PassEnds(_RunState):
                 **session_head(self.commits), "cubin_sha256": self.kernel.cubin_sha256,
                 "kernel_source_sha256": self.kernel.source_sha256, "kernel_files": dict(self.kernel.files),
                 "schedule": copy.deepcopy(self.details["schedule"]),
-                "records_root": None, "commitment": {"root": root.hex(), "count": count}, "hm96_salt_key": self.salt_key.hex(),
-                "leaves": last[0], "tree_t": last[1]}
+                "records_root": None, "commitment": {"root": root.hex(), "count": count},
+                "hm96_salt_key": cast(bytes, self.salt_key).hex(), "leaves": last[0], "tree_t": last[1]}
         splits = {w: PW.Split(self.weights[w].k) for w in epoch.workload.weights()}
 
         def complete() -> None:
