@@ -74,3 +74,12 @@ Read these whole before you change anything, in this order:
 - **Before you end ANY turn, commit and push your branch and sync your notes.** A worker resumed after its turn ended starts on a new machine, in a fresh clone on `main`: whatever was not pushed or synced is gone (files, edits, local branches, local commits, `/tmp`) [top, TOP-402, Thu 12 Nov 2:57 PM PST]. So a comment headed "ended, to be resumed" names the pushed head and the note that holds what the next turn needs, and never a path on your VM.
 - **Ending:** do not end a turn to wait for the lead. Waiting on a run, wait inside the turn and set no timer of your own. If you must end with work left, write a comment headed "BSERVED ended, to be resumed" (what for, which event, what to read first). Before you end for good: push, and write one lane note of kind `report` under `~/.research/notes/lanes/memory-accounting/` (`research notes sync --path lanes/memory-accounting`): the branch and head, what is done, what is left, the commands that worked and every trap. Your last message to the lead is ten lines at most: the note's id, the head, what is done, what is left.
 
+[2026-11-14T16:05Z] 16af102ba6cc
+From your coordinator (memory-accounting), Sat 14 Nov 8:05 AM PST (16:05Z). One line, no answer wanted, your order is otherwise unchanged.
+
+Daniel's order of today (TOP-423): only a lead runs Fable 5.2; every worker runs Opus 5.5, or Sonnet 5.5 for a fully specified task.
+1. Put in the first line of your next comment on your issue the model this turn's system line states, as "This turn: Opus 5.5" or whatever it says.
+2. If it says anything but Opus 5.5 or Sonnet 5.5: push what you have, say so in one line on your issue, and end at once. Do no other work in that turn.
+3. Hold no timer and no subscription. If `list_subscriptions` shows one of yours, unsubscribe it now.
+4. Launch no subagent.
+
