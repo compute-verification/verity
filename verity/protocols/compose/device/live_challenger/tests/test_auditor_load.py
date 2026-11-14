@@ -120,6 +120,26 @@ def test_a_store_write_whose_unit_is_stopped_stops_its_writer_and_writes_its_end
     assert end["store"] is None and set(end["files"]) == {"rehearse.log"}
 
 
+def test_a_store_write_whose_unit_is_stopped_fails_though_its_writer_exits_0_on_the_signal(host, stop_held, tmp_path):
+    """A stopped run is a failed one whatever its writer returns: a writer that exits 0 on the unit's SIGTERM still
+    leaves the run's rc nonzero."""
+    host.store.mkdir()
+    rc, out = gate(host, ["weights-write", "--shape", "tiny"])
+    ready = tmp_path / "ready"
+    os.mkfifo(ready)
+
+    def wait(proc, seconds):
+        open(ready).close()
+        os.kill(os.getpid(), signal.SIGTERM)
+        return proc.wait()
+
+    writer = ("import signal, sys\nsignal.signal(signal.SIGTERM, lambda *_: sys.exit(0))\n"
+              f"open({str(ready)!r}, 'w').close()\nsignal.pause()")
+    end = A.certifier_run(host, json.loads(out)["run"], pinned=PIN, now=lambda: T1, wait=wait,
+                          command=lambda req, out, store: [sys.executable, "-c", writer])
+    assert end["rc"] == 2 and end["ended"] == A.STOPPED
+
+
 @pytest.mark.parametrize("bad, why", [
     (["--program", "9E" * 64], "the reading program's digest, 128 lowercase hex digits"),
     (["--program", "9e" * 63], "the reading program's digest, 128 lowercase hex digits"),

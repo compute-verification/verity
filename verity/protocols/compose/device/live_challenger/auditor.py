@@ -301,7 +301,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     first execution phase, its key is sized to it and the check counts it. A unit stopped at `--minutes` first is a
     failed run, as a rehearsal's, and so is one whose unit is stopped (`systemctl stop`, its `RuntimeMaxSec`): the
     unit's SIGTERM goes to `certifier-run` alone (`KillMode=mixed`), which passes it to the runner and, once the runner
-    has exited, closes the ssh, then the listener, and writes `end.json` (`_Stop`).
+    has exited, closes the ssh, then the listener, and writes `end.json` (`_Stop`), its rc the runner's or 2 where
+    the runner exited 0.
   - *What it publishes* is a rehearsal's, by the same code (`warden_outcome`): to `out/`, the relay's key, session
     and schedule and each execution phase's certificates and registrations, and in `end.json` the check's verdict and
     counts; in `witness/`, for the run's own lane and vy-admin alone, the three records, their heads and salts, the
@@ -2823,7 +2824,7 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
                 threading.Thread(target=_stop_with, args=(tunnels[0], proc), daemon=True).start()
             rc = (wait or _wait)(proc, req["minutes"] * 60)
             if stop.signalled:
-                why = STOPPED
+                rc, why = rc or 2, STOPPED
             elif kept and tunnels[0].poll() is not None:
                 rc, why = rc or 2, (f"the tunnel to {req['peer']} closed before the session ended, and with it the "
                                     "clients' way to the relay and the relay's to the endpoint (tunnel.log)")
@@ -2878,7 +2879,7 @@ def _weights_run(host: Host, d: Path, req: dict, *, pinned: str, now: Callable[[
                                                    start_new_session=True))
     rc = (wait or _wait)(proc, req["minutes"] * 60)
     if stop.signalled:
-        why = STOPPED
+        rc, why = rc or 2, STOPPED
     elif rc == -signal.SIGTERM:
         why = f"stopped at {req['minutes']} minutes"
     try:

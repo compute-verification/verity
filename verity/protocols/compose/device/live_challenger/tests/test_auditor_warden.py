@@ -722,6 +722,26 @@ def test_a_relay_session_whose_unit_is_stopped_stops_its_runner_then_its_ssh_the
     assert signal.getsignal(signal.SIGTERM) is before
 
 
+def test_a_relay_session_whose_unit_is_stopped_fails_though_its_runner_exits_0_on_the_signal(host, stop_held, tmp_path):
+    """A stopped session is a failed run whatever its runner returns: a runner that exits 0 on the unit's SIGTERM still
+    leaves the run's rc nonzero."""
+    rc, out = gate(host, SESSION, started=[])
+    ready = tmp_path / "ready"
+    os.mkfifo(ready)
+
+    def wait(proc, seconds):
+        open(ready).close()
+        os.kill(os.getpid(), signal.SIGTERM)
+        return proc.wait()
+
+    runner = ("import signal\nsignal.signal(signal.SIGTERM, lambda *_: sys.exit(0))\n"
+              f"open({str(ready)!r}, 'w').close()\nsignal.pause()")
+    end = A.certifier_run(host, json.loads(out)["run"], pinned=PIN, now=lambda: T1,
+                          tunnel_argv=lambda s, l, back: TUNNEL, up=lambda tunnel, port: True,
+                          command=session(runner, []), wait=wait)
+    assert end["rc"] == 2 and end["ended"] == A.STOPPED
+
+
 def test_a_relay_session_whose_unit_is_stopped_before_its_tunnel_is_up_runs_nothing_and_writes_its_end(
         host, stop_held):
     rc, out = gate(host, SESSION, started=[])
