@@ -108,7 +108,7 @@ uv run -q python benchmarks/served_units/cover_count.py cover.json --check  # ex
 
 - **Provides:** `stage.py`, which stages a served proof block's statement, and the runners and scripts around it.
 - **Loaded by:** `benchmarks/one_stage`, which imports `stage`. Nothing else.
-- **Loads:** `verity.definitions`, `verity.circuits` with the primitive circuits (`verity.circuits.ops`),
+- **Loads:** `verity_vllm.definitions`, `verity.circuits` with the primitive circuits (`verity.circuits.ops`),
   `verity.commitments`, `verity.protocols.proofs.spot.verifier`, `verity.hardware`, Flock (`verity_flock`),
   `circuit_check.targets` and `verity_vllm.pipeline`; the scripts build and run Flock's circuit prover and its Lean
   verifier.

@@ -76,7 +76,7 @@ C = protocol.encode(scheme, w, salt)                                           #
 vk = protocol.verifier_key(scheme, commitment, salt, w=w)                      # PRIVATE: the verifier encodes
 # vk = protocol.verifier_key(scheme, commitment, salt, mode=protocol.PUBLIC, encoded=C)   # the same guarantee
 v = protocol.TimedAudit(scheme, vk, protocol.challenge_key(audit_secret, vk), rtt_allowance_ns=rtt)
-v.run(protocol.responder(scheme, blocks.__getitem__))
+v.run(responder(scheme, blocks.__getitem__))                                    # the prover's: pous/prover/responder.py
 print(v.profile().statement())                                                 # Pous.SecurityProofs.BandMultiMeetsFamily
 ~~~
 
@@ -174,7 +174,8 @@ publish once it ties `E` to the certifier's count between the session's marks. `
 `wipe_monitoring` reports one accepted wipe over a week, a month and a year of a deployment's machines, each wiped
 every `cadence_s` seconds (a day by default), at δ = 1% and 10⁻⁶: the T wipes, at most M − 1 of them failing their bound
 except with δ (`prCoin_count_le_choose`'s count bound, which PoUB's period shares), every one
-meeting it except with T·`eps`, and what each certifies (`foreign_bits` of `memory_bits`, its tiers and devices).
+meeting it except with T·`eps`, and what each certifies (`foreign_bits` of `memory_bits`, its tiers by label and
+bytes; it names no device).
 `wipe_parties` declares the same memory challenger and prover as parties of the deployment layer (`verity.runtime`),
 the challenger's party in `verity/protocols/accounting/pous/device/wipe_challenger.py` and the prover's in
 `verity/protocols/accounting/pous/prover/wipe_prover.py`; the challenger times the reads its machine gives it: on the
@@ -187,14 +188,19 @@ and gated on the challenger's host by `wipe_stream`); `benchmarks/pous/streamed_
 past the published figure, which must reject), its `reads` the reads the wipe expects, and its `placement` `simulated` names a challenger on the developer's node the stand-in for
 one on its own host. Its `trusted_sha512` pins the one memory-challenger key the verifier trusts, by the SHA-512 of its
 public key: a session signed under another key is rejected, and a challenger on its own host with no key pinned is
-refused before its session. That pin decides only what is accepted. The record's `trusted-device` holds only when the
-session's key is the one `wipe_party.AUDITOR_KEYS` pins for the challenger's host, and otherwise reads "rehearsal: key
-not the auditor's pinned key, no bound", whatever the host names say; the placement's `kind` (`own-host`, `simulated`,
+refused before its session. That pin decides only what is accepted. The record's `trusted-device` holds only under a
+committed configuration (`tools/verity/cli/verity_cli/configurations.toml`), when the session's key is one its `[[pin]]` entries give the
+memory challenger for the wipe (`period.json`'s `deployment`: the configuration's hash and its pins), and otherwise
+reads rehearsal, no bound, whatever the host names say (`memory_challenger.trusted_device`, which PoUS's placement
+reads too); the placement's `kind` (`own-host`, `simulated`,
 `prover-node`) is what the names say, a label. The wipe's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
 no network certifier counts (the placement's `links`: `wipe.links`, and the challenger's as the prover connected to it),
 the node's memory outside the declared tier (`undeclared_tiers`: the device's past the declared tier, which a GPU's wipe
-declares whole, the host's DRAM, its disks), a GPU's driver reserve when NVML gave no total (the wipe declares the larger
-of CUDA's and NVML's totals, and NVML's counts the reserve: `wipe_store.Cuda.info`) and an uncounted egress (the check given no count). It
+declares whole, the host's DRAM, its disks), what the prover's store leaves out (the placement's `store_gaps`, by
+tier: a GPU's driver reserve when NVML gave no total, as the wipe declares the larger of CUDA's and NVML's totals and
+NVML's counts the reserve, `wipe_store.Cuda.info`; what its disks leave outside the boundary) and an uncounted egress
+(the check given no count). The placement names no device: the store as the prover measured it (the GPU's name, uuid
+and bus id among it) stays in the prover's own record, `wipe.json`'s `prover`. The record
 also carries the session's window, `t0` (the prover connected) and `t1` (the session signed) on the challenger's clock,
 which a network certifier counts the egress over.
 `wipe.disk` puts the node's disks in the same session (`wipe_store.Disk`, laid ahead of the card or host memory by

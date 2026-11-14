@@ -88,14 +88,14 @@ theorem policy_of {b : ByteArray} {c : NciCheck.Protocol.Commitment} (h : NciChe
   subst h
   exact ⟨rfl, hd⟩
 
-/-- The one-stage audit's commitment: the record its bytes are, and `Registration.digest` of it. -/
+/-- The one-stage audit's commitment: the record its bytes are, and `Docket.digest` of it. -/
 theorem stage_of {b : ByteArray} {c : Spot.OneStage.Commitment}
     (h : Spot.OneStage.commitmentOf b = .ok c) :
-    canonicalJson b = .ok c.record ∧ Spot.Registration.digest c.record = .ok c.digest := by
+    canonicalJson b = .ok c.record ∧ Spot.Docket.digest c.record = .ok c.digest := by
   unfold Spot.OneStage.commitmentOf at h
   rcases hj : canonicalJson b with e | j
   · simp [hj, Bind.bind, Except.bind] at h
-  rcases hg : Spot.Registration.digest j with e | d
+  rcases hg : Spot.Docket.digest j with e | d
   · cases j <;> simp [hj, hg, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   cases j <;> simp [hj, hg, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   subst h

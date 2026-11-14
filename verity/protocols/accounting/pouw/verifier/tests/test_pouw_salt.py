@@ -1,33 +1,29 @@
-"""PoUW's read of the network certifier's salt (`verity.protocols.accounting.pouw.verifier.salt`) against the certifier itself
-(`certifier.active.Proxy`, driven tick by tick on an injected clock): the salt's form, the record's and the prover id's
-are pinned; a context names its PoUW execution phase; `revealed` gives PoUW execution phase p's salt on p's registration once p is
-published, once, and fails closed when it is unregistered, early, late, revealed already or missing; `pouw_window` takes
-one whole PoUW execution phase aligned at 0 and nothing else; `Epoch.certified` applies `pouw_salt` of the reveal, the execution phase,
-the stream and the prover, 64 bytes, which the seeds and the identifier take, with the challenger's sampling coin; two
-registrations of one execution phase are salted apart; `core_check.pass_epoch_twin` passes a certified execution phase's pass only when its
-salt is that of the certifier's reveal and its weights, stream and prover those the prover recorded with the certifier,
-signed, before it drew that salt (`Proxy.commit_weights`, read back by `committed`); `WindowOpens` admits an execution phase
-once per stream and prover; a certified execution phase credits only units that read its salt (`unit_reason`); and a live
-execution phase's open root (`window_open_root`) is pinned. The prover salts its pass from the salt it receives in-band (`certifier`'s `sampled`), so the
-verifier's one reveal comes after the registration that names the pass."""
+"""PoUW's read of the network certifier's salt (`verity.protocols.accounting.pouw.verifier.salt`) against a certifier as PoUW
+reads it (`certified_salt.Certifier`: the salts it sampled and the records the prover made before them, by PoUW execution
+phase): the salt's form, the record's and the prover id's are pinned; a context names its PoUW execution phase; `revealed`
+gives PoUW execution phase p's salt on p's registration and fails closed when it is unregistered, refused by the certifier
+or missing; `pouw_window` takes one whole PoUW execution phase aligned at 0 and nothing else; `Epoch.certified` applies
+`pouw_salt` of the reveal, the execution phase, the stream and the prover, 64 bytes, which the seeds and the identifier take,
+with the challenger's sampling coin; two registrations of one execution phase are salted apart;
+`core_check.pass_epoch_twin` passes a certified execution phase's pass only when its salt is that of the certifier's reveal
+and its weights, stream and prover those the prover recorded with the certifier before it drew that salt (read back by
+`committed`); `WindowOpens` admits an execution phase once per stream and prover; a certified execution phase credits only
+units that read its salt (`unit_reason`); and a live execution phase's open root (`window_open_root`) is pinned. The
+certifier's own rules (when a salt is published, its reveal deadline, one reveal per execution phase, a signed record)
+are its device's, not PoUW's, and aren't tested here."""
 
 from __future__ import annotations
 
 import dataclasses
 import hashlib
-import itertools
 import json
 import random
 
 import pytest
 
+import certified_salt as CS
 import epoch_coins as E
 from verity.commitments.crypto import lms
-from verity.protocols.accounting.certifier.verifier import active
-from verity.protocols.accounting.certifier.verifier.active import Proxy
-from verity.protocols.accounting.certifier.verifier.certificate import LmsKey
-from verity.protocols.accounting.certifier.verifier.grid import GridParams
-from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, SyncSet
 from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
 from verity.protocols.accounting.pouw.prover.schemes import ncp
 from verity.protocols.accounting.pouw.verifier import core_check as CC
@@ -39,33 +35,18 @@ from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Matm
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.service import WindowCommitmentRecord
 
-EGRESS = GridParams(buckets=6, allocation=3, frame_bytes=512)
-INGRESS = GridParams(buckets=6, allocation=2, frame_bytes=512)
-SYNC_SET = SyncSet((0, 1), (1, 2))
-SYNCS = [ClockSync(0, 1)] * 4
 MANIFEST = hashlib.sha512(b"the pass's manifest").hexdigest()
 STREAM = hashlib.sha512(b"a stream").digest()
-#: a certifier window's seconds: PoUW execution phase p of k ends at (p + 1)·k·W, and its reveal deadline is k·W after
-W = INGRESS.buckets * INGRESS.bucket_ms / 1000
 #: the deployed LMS scheme (N = 64, W = 1) on 2^6 leaves, so a key takes a fraction of a second
 SIGNING = lms.Params(64, 1, 6)
 
 
-def prover_key(seed: bytes):
-    """A prover's LMS key as the certifier registers it (`LmsKey`), and a signer at one-time keys 0, 1, ... in turn."""
-    k, leaves = lms.keygen(SIGNING, hashlib.sha512(seed).digest()), itertools.count()
-    return LmsKey(SIGNING, lms.public_key(k)), lambda message: lms.sign_at(k, next(leaves), message).encode()
+def prover_key(seed: bytes) -> bytes:
+    """A prover's LMS public key."""
+    return lms.public_key(lms.keygen(SIGNING, hashlib.sha512(seed).digest()))
 
 
-KEY, SIGN = prover_key(b"the prover")
-_, FORGE = prover_key(b"someone else")
-PROVER = PS.prover_id(KEY.public)
-
-
-def signed(c: Proxy, p: int, record: bytes, sign=SIGN, context: bytes | None = None) -> bytes:
-    """`sign`'s signature of `record` for PoUW execution phase p behind `c`, under `context` (by default `c`'s, the stream)."""
-    ctx = c.prover_context if context is None else context
-    return sign(active.weights_message(c.bucketer.certifier.link, p, record, ctx))
+PROVER = PS.prover_id(prover_key(b"the prover"))
 
 
 def registration(p: int, ctx: str | None = None, window: dict | None = None) -> WindowCommitmentRecord:
@@ -76,24 +57,11 @@ def registration(p: int, ctx: str | None = None, window: dict | None = None) -> 
     return WindowCommitmentRecord(record, R.receipt(record, "test", received=str(p)), R.digest(record), p)
 
 
-def certifier(windows: int, records: dict[int, bytes] | None = None, clock=lambda: 0.0,
-              **kwargs) -> tuple[Proxy, dict[int, bytes]]:
-    """The certifier with PoUW's reader and the prover's key, the stream its context, on clock `clock`, handed `records`
-    by PoUW execution phase before its first tick (`commit_weights`, signed by the prover), after `windows` certifier windows of
-    ingress ticks, and the salts it sampled by PoUW execution phase: what the developer's server receives in-band."""
-    sampled: dict[int, bytes] = {}
-
-    def source(p: int, n: int) -> bytes:
-        sampled[p] = hashlib.shake_256(b"certifier salt %d" % p).digest(n)
-        return sampled[p]
-
-    c = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests", clock=clock,
-              **{"salt": source, "registered": PS.registered, "prover_key": KEY, "prover_context": STREAM, **kwargs})
-    for p, record in (records or {}).items():
-        c.commit_weights(p, record, signed(c, p, record))
-    for _ in range(windows * INGRESS.buckets):
-        c.bucketer.tick()
-    return c, sampled
+def certifier(windows: int, records: dict[int, bytes] | None = None) -> tuple[CS.Certifier, dict[int, bytes]]:
+    """A certifier that sampled the salts of PoUW execution phases 0 … `windows` − 1 and holds the prover's `records`
+    by PoUW execution phase, and those salts: what the developer's server receives in-band."""
+    c = CS.Certifier(CS.salts(windows), dict(records or {}))
+    return c, c.salts
 
 
 def test_pouw_salt_form():
@@ -220,30 +188,16 @@ def test_a_context_names_its_pouw_window():
         PS.context("run", -1, MANIFEST)
 
 
-def test_the_certifier_reveals_a_pouw_window_on_its_registration():
-    """With PoUW execution phases of two certifier windows and PoUW's reader, the certifier reveals PoUW execution phase 0's salt once
-    execution phases 0 and 1 are published, on PoUW's registration of execution phase 0, and `revealed` gives it whole; PoUW execution phase 1's
-    after execution phases 2 and 3."""
-    c, sampled = certifier(4, pouw_window=2)
-    assert sorted(sampled) == [0, 1] and {len(s) for s in sampled.values()} == {PS.SALT_BYTES}
-    for p in (0, 1):
-        assert PS.registered(registration(p)) == p
-        assert PS.revealed(c, p, registration(p)) == sampled[p]
-
-
 def test_revealed_fails_closed():
-    """`revealed` refuses (`Unrevealed`) an execution phase that is unregistered: no registration, another execution phase's, the network
-    certifier's own provenance, a context that names no execution phase, an execution phase with another key; and, through the
-    certifier, a receipt or digest that isn't the record's, and PoUW's registration to a certifier without PoUW's
-    reader. It refuses one that is early: before its last certifier window is published. One that is late: its reveal
-    deadline, one PoUW execution phase after its end on the certifier's clock, has passed (the same reveal at the deadline is
-    given). One revealed already: a second reveal on the same registration or another naming the execution phase, so behind one
-    certifier one registration of an execution phase gets its salt. And one whose salt is missing: never sampled (a certifier back
-    from maintenance after its first execution phase), the salt off, or a salt of another width. The certifier's refusals of
-    time and the once are matched by PoUW's words only, so its own wording isn't pinned here."""
-    c, _ = certifier(2, pouw_window=2)
+    """`revealed` gives PoUW execution phase p's salt whole on p's registration, and refuses (`Unrevealed`) an execution
+    phase that is unregistered: no registration, another execution phase's, the network certifier's own provenance, a
+    context that names no execution phase, an execution phase with another key. It refuses one the certifier refuses,
+    (``doesn't reveal``, a salt it never sampled), and so does `committed` one it holds no record for; and one whose salt
+    is missing: what the certifier gives isn't 64 bytes. The certifier's own refusals (early, late, revealed already) are
+    its device's rules, matched here by PoUW's words only."""
+    c, sampled = certifier(1)
     reg = registration(0)
-    other = {"window": {"kind": "served", "context": PS.context("served-zk/test", 1, MANIFEST), "public": {}}}
+    assert PS.registered(reg) == 0 and PS.revealed(c, 0, reg) == sampled[0] and len(sampled[0]) == PS.SALT_BYTES
     unregistered = [None, registration(1), registration(0, window={"kind": "served", "window": 0}),
                     registration(0, ctx=f"served-zk/test/{MANIFEST}"),
                     registration(0, window={**reg.record["window"], "row": 3}),
@@ -253,45 +207,12 @@ def test_revealed_fails_closed():
     for r in unregistered:
         with pytest.raises(PS.Unrevealed, match="unregistered"):
             PS.revealed(c, 0, r)
-    receipts = [dataclasses.replace(reg, receipt={**reg.receipt, "registration": R.digest(other)}),
-                dataclasses.replace(reg, digest=R.digest(other)), dataclasses.replace(reg, receipt=None),
-                dataclasses.replace(reg, receipt={**reg.receipt, "format": "verity/registration-receipt/v0"})]
-    for r in receipts:
-        with pytest.raises(PS.Unrevealed, match="no registration"):
-            PS.revealed(c, 0, r)
-    network, _ = certifier(2, pouw_window=2, registered=active.served_window)
-    with pytest.raises(PS.Unrevealed, match="no registration"):
-        PS.revealed(network, 0, reg)
-
-    early, _ = certifier(1, pouw_window=2)
-    with pytest.raises(PS.Unrevealed, match="published"):
-        PS.revealed(early, 0, reg)
-    with pytest.raises(PS.Unrevealed, match="published"):
+    with pytest.raises(PS.Unrevealed, match="the certifier doesn't reveal PoUW window 1's salt"):
         PS.revealed(c, 1, registration(1))
-
-    refused, record = "the certifier doesn't reveal PoUW window 0's salt", PS.pouw_record(bytes(64), STREAM, PROVER)
-    late, _ = certifier(2, {0: record}, clock=lambda: 4 * W + 1e-3, pouw_window=2)
-    with pytest.raises(PS.Unrevealed, match=refused):
-        PS.revealed(late, 0, reg)
     with pytest.raises(PS.Unrevealed, match="the certifier doesn't give what PoUW recorded for window 0"):
-        PS.committed(late, 0, reg)
-    timely, sampled = certifier(2, {0: record}, clock=lambda: 4 * W, pouw_window=2)
-    assert PS.revealed(timely, 0, reg) == sampled[0]
-    for again in (reg, registration(0, ctx=PS.context("served-zk/another", 0, MANIFEST))):
-        with pytest.raises(PS.Unrevealed, match=refused):
-            PS.revealed(timely, 0, again)
-    assert PS.committed(timely, 0, reg) == record
-
-    back, sampled = certifier(2, pouw_window=2, start=1)
-    assert sorted(sampled) == [1]
-    with pytest.raises(PS.Unrevealed, match="wasn't drawn"):
-        PS.revealed(back, 0, reg)
-    off, _ = certifier(2, pouw_window=2, salt=None)
-    with pytest.raises(PS.Unrevealed, match="salt is off"):
-        PS.revealed(off, 0, reg)
-    narrow, _ = certifier(2, pouw_window=2, salt_bits=256)
-    with pytest.raises(PS.Unrevealed, match="missing"):
-        PS.revealed(narrow, 0, reg)
+        PS.committed(c, 0, reg)
+    record = PS.pouw_record(bytes(64), STREAM, PROVER)
+    assert PS.committed(certifier(1, {0: record})[0], 0, reg) == record
 
     @dataclasses.dataclass
     class Gives:
@@ -333,7 +254,7 @@ def test_a_certified_epoch_applies_its_pouw_windows_salt():
     identifier names it whole, and the challenger's sampling coin opens against its coins. Misaligned execution phases, a reveal,
     stream or prover of another width and weights that aren't the workload's are refused."""
     work, roots = setup()
-    c, sampled = certifier(4, pouw_window=2)
+    c, sampled = certifier(2)
     reveal = PS.revealed(c, 1, registration(1))
     ch = E.challenger()
     epoch = Epoch.certified(work, roots, [2, 3], 2, reveal, STREAM, PROVER, coins=ch.commitment)
@@ -382,7 +303,7 @@ def test_a_certified_window_passes_only_a_pass_salted_by_its_certifiers_reveal()
     (``certifier``). Salted by execution phase 0's execution phase, by the raw reveal, or checked against execution phase 0's reveal, it doesn't, nor
     does it pass at a verifier without the reveal."""
     work, roots = setup()
-    c, sampled = certifier(4, {1: PS.pouw_record(weights_root(roots), STREAM, PROVER)}, pouw_window=2)
+    c, sampled = certifier(2, {1: PS.pouw_record(weights_root(roots), STREAM, PROVER)})
 
     raw, ctx = manifest(work, roots, 1, Epoch.certified(work, roots, [2, 3], 2, sampled[1], STREAM, PROVER).salt)
     reveal = PS.revealed(c, 1, registration(1, ctx=ctx))
@@ -403,17 +324,13 @@ def test_two_registrations_of_one_window_are_salted_apart():
     """Two registrations of PoUW execution phase 1 behind one certifier, of the same weights and the same operands, differing only
     in their stream or only in their prover, get different salts, and so a different seed and receipt seed at every
     matmul index: to a unit that reads its seed, a tile computed once is no other registration's. Each one's pass is
-    refused at the other's verifier, whichever the certifier recorded. The certifier reveals the execution phase once, so its
-    second registration gets no salt at all. Each certifier samples its own salts, so two certifiers' salts for execution phase 1
-    (two proxies' lifetimes, each counting from its origin) differ too, with no execution phase bound."""
+    refused at the other's verifier, whichever the certifier recorded."""
     work, roots = setup()
     root = weights_root(roots)
-    other_stream, other_prover = hashlib.sha512(b"another stream").digest(), PS.prover_id(prover_key(b"another")[0].public)
+    other_stream, other_prover = hashlib.sha512(b"another stream").digest(), PS.prover_id(prover_key(b"another"))
     bindings = [(STREAM, PROVER), (other_stream, PROVER), (STREAM, other_prover)]
-    c, _ = certifier(4, pouw_window=2)
+    c, _ = certifier(2)
     reveal = PS.revealed(c, 1, registration(1))
-    with pytest.raises(PS.Unrevealed, match="the certifier doesn't reveal PoUW window 1's salt"):
-        PS.revealed(c, 1, registration(1, ctx=PS.context("served-zk/another", 1, MANIFEST)))
     salts = [Epoch.certified(work, roots, [2, 3], 2, reveal, *b).salt for b in bindings]
     assert len(set(salts)) == 3
     operands = [hashlib.sha512(b"A %d" % j).digest() for j in range(4)]
@@ -430,42 +347,22 @@ def test_two_registrations_of_one_window_are_salted_apart():
                 assert CC.pass_epoch_twin(None, raw, ctx, reveal=reveal, committed=PS.pouw_record(root, stream, prover),
                                      stream=s2, prover=v2)[1][1].startswith("the pass's weights, stream and prover are not")
 
-    lives = [certifier(4, pouw_window=2, salt=active.fresh_salt)[0] for _ in range(2)]
-    assert PS.pouw_salt(PS.revealed(lives[0], 1, registration(1)), 1, STREAM, PROVER) != \
-        PS.pouw_salt(PS.revealed(lives[1], 1, registration(1)), 1, STREAM, PROVER)
 
 
 def test_a_certified_window_passes_only_weights_and_a_binding_recorded_before_its_salt():
     """The certifier's salt binds no weights, so a certified execution phase passes only weights, a stream and a prover the
-    prover recorded with the certifier before it sampled the execution phase's salt (`pouw_record`, through `Proxy.commit_weights`,
-    signed by the prover's registered key over `weights_message` under the stream), which `committed` reads on
-    `reveal`'s conditions. End to end against the certifier, PoUW execution phases of two certifier windows: execution phase 0's record
-    is refused unsigned, signed by another key, signed for another execution phase or under another stream's context; signed,
-    made before its sample, it is read back and its pass passes, and a second record for it is refused. Execution phase 1's, made
-    after its sample, is refused, so `committed` refuses execution phase 1 and its pass, salted by its own salt, is refused. A pass
-    over other weights, salted the same since the salt doesn't read them, is refused, as are a stream or prover other
-    than those recorded, a registration that isn't the execution phase's and a certifier that gives anything but 64 bytes.
-    `recorded_reason`, the record's rule short of the reveal, which a challenger runs before it asks for one, refuses
-    what `pass_epoch` refuses of the record, in its words. The certifier's refusals are matched by type and PoUW's by
-    its own words, so neither's wording is pinned to the other's."""
+    prover recorded with the certifier before it sampled the execution phase's salt (`pouw_record`), which `committed` reads
+    on the execution phase's registration. Execution phase 0's record, made before its sample, is read back and its pass
+    passes. Execution phase 1 has none (the certifier takes no record after the sample, a rule of its own), so
+    `committed` refuses it and its pass, salted by its own salt, is refused. A pass over other weights, salted the same
+    since the salt doesn't read them, is refused, as are a stream or prover other than those recorded, a registration
+    that isn't the execution phase's and a certifier that gives anything but 64 bytes. `recorded_reason`, the record's
+    rule short of the reveal, which a challenger runs before it asks for one, refuses what `pass_epoch` refuses of the
+    record, in its words."""
     work, roots = setup()
     root = weights_root(roots)
     record = PS.pouw_record(root, STREAM, PROVER)
-    c, sampled = certifier(0, pouw_window=2)
-    for bad in (b"", None, signed(c, 0, record, sign=FORGE), signed(c, 1, record),
-                signed(c, 0, record, context=hashlib.sha512(b"another stream").digest())):
-        with pytest.raises(RuntimeError):
-            c.commit_weights(0, record, bad)
-    c.commit_weights(0, record, signed(c, 0, record))
-    other = PS.pouw_record(root, STREAM, PS.prover_id(prover_key(b"another")[0].public))
-    with pytest.raises(RuntimeError):
-        c.commit_weights(0, other, signed(c, 0, other))
-    for _ in range(2 * INGRESS.buckets + 1):   # execution phases 0 and 1, then execution phase 2's first tick: PoUW execution phase 1's salt
-        c.bucketer.tick()
-    with pytest.raises(RuntimeError):
-        c.commit_weights(1, record, signed(c, 1, record))
-    for _ in range(2 * INGRESS.buckets - 1):
-        c.bucketer.tick()
+    c, sampled = certifier(2, {0: record})
 
     raw, ctx = manifest(work, roots, 0, Epoch.certified(work, roots, [0, 1], 2, sampled[0], STREAM, PROVER).salt)
     reveal = PS.revealed(c, 0, registration(0, ctx=ctx))

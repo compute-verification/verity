@@ -19,7 +19,7 @@ meta import RemoteAudit.Verifier
 /-!
 # A session over PoUS's P2 store as a core protocol
 
-PoUB-P2's session (`P2Session`, as the verifier's process decides it live, `p2_party.py`) behind the core interface
+PoUB-P2's session (`P2Session`, as the verifier's process decides it live, `p2_parties.py`) behind the core interface
 (`Core.Protocol`), so that onsite can take it as its bandwidth component: its registered store is PoUS's `C*`, so the
 store it audits is the one PoUS's setup published. Its bytes are canonical JSON (`p2_case.py` writes them):
 
@@ -181,7 +181,7 @@ def UNSIGNED : String := "the close's signature does not verify on the params' s
 
 /-- The case's head, the chain's first entry: the commitment's digest (`Commitment.digest`), then the params' clock
 floor in decimal ASCII. So the close binds the registration, its plan and the clock floor with the log, and its chain
-is the one SHA-512 a verifier's device keeps of the case (`p2_party.case_digest`). -/
+is the one SHA-512 a verifier's device keeps of the case (`p2_parties.case_digest`). -/
 def headOf (p : Params) (c : Commitment) : ByteArray := c.digest ++ (toString p.notBeforeNs).toUTF8
 
 /-- Why the close doesn't sign the case whose head is `head` (`headOf`) under `lp`, none when it does: its key isn't
@@ -290,15 +290,14 @@ def protocol : Core.Protocol where
   profileJson := id
 
 /-- **What a session over P2's store accounts for** (`Core.Account`): the credited reads of PoUS's `C*` (`q_bytes`),
-verified from below at `eps`, over the session's span (`span_ns`, in nanoseconds). A session that credits nothing
-publishes 0 reads, a true lower bound, so nothing is flagged.
+from the GPUs' memory where `C*` is kept (`.hbm`), verified from below at `eps`, over the session's span (`span_ns`, in
+nanoseconds). A session that credits nothing publishes 0 reads, a true lower bound, so nothing is flagged.
 
-It names no device and no registration's head. What it would say beyond what `Core.Account` holds: the tier the reads
-came from, which the answer doesn't publish (`C*` is in the GPUs' memory, `.hbm`); where in the period the span lies
-(the span has a length and no start); and the bytes the node held through the span, an amount of memory over a span,
-not an answer of this protocol. -/
+Its answers name no auditor's device's key, so they are of the whole site (`witness`), and the span's length but not
+its steps, so where in the period it lies is not stated. The bytes the node held through the span are the ledger's
+line, not this answer. -/
 def account : Core.Account :=
-  { protocol := ID, head := none
+  { protocol := ID, witness := none
     amounts := [{ metric := "reads", part := .read [.hbm], key := .published "q_bytes", unit := Core.Account.bytes,
                   side := .verified, time := .span (.published "span_ns") ⟨1, 1000000000⟩,
                   error := .published "eps", uncertified := .safe }] }

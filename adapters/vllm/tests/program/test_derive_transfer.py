@@ -523,7 +523,7 @@ def test_audit_s3_derived_b0_serve_digest_and_kv_ownership():
     """Independent reproduction of the importer's S3 claim: `GreedyServe(B0, steps=15)` on a 32-token prompt derives, the
     family rule claims `Serve_v1{B0,LP=32,STEPS=15}`, the digest equals the certificate of record's, and this file's
     name-independent KV-ownership oracle holds on the derived program (30 layers x 47 positions)."""
-    from verity.definitions.registry.b1 import B0_CONFIG
+    from verity_vllm.definitions.registry.b1 import B0_CONFIG
 
     from tests.program.test_derive_negative import (
         check_cache_ownership,

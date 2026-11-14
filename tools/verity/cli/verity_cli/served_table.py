@@ -37,6 +37,7 @@ import shlex
 import subprocess
 import sys
 import time
+import tomllib
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -44,7 +45,6 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from verity import config as K
-from verity.commitments.domains import LMS_SHA512_N64_W1_H20
 from verity.config import Component, Workload
 from verity.protocol import Channel, ProtocolDef, Role
 from verity.protocols.accounting.certifier.verifier import parties as NC
@@ -165,29 +165,24 @@ PROVER_NODE, AUDITOR_HOST, GATE_HOST = "prover-node", "auditor-host", "gate-host
 PLACEMENT = {WORKERS: PROVER_NODE, ZK_SERVER: PROVER_NODE, PROVER: PROVER_NODE, CHALLENGER: GATE_HOST,
              NETWORK_CERTIFIER: GATE_HOST, MEMORY_CHALLENGER: AUDITOR_HOST, BANDWIDTH_VERIFIER: AUDITOR_HOST,
              VERIFIER: AUDITOR_HOST}
-#: the memory challenger's keys the auditor pinned, one for each subprotocol whose sessions it signs: the SHA-512 of
-#: each public key
-PINS = {"pous": "39cd635aea2e124a0fcae035e416b107de27955118914642bb8d9d06814a17a2"
-                "f73014a3b9229bf1293ce4703ccc52a5f3119d22789db6778f34e237dfa631bb",
-        "wipe": "c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb41"
-                "98fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252"}
+#: the configuration this table's demo runs, whose `[[pin]]` entries are the only statement of the keys the auditor pinned
+CONFIG = ROOT / "demos" / "onsite_full.toml"
 HEADER = ("The onsite run of the served window: onsite's seven subprotocols, each party on its machine, and the keys",
           "the auditor pinned for its devices. Run it on each machine with `verity run THIS --on MACHINE --bindings",
           "FILE` (tools/verity/cli/README.md); the deploy bindings hold every host and address, this file none.",
           "`verity run THIS --dry-run` resolves it all.")
 
 
-def configuration(commit: str) -> dict[str, Any]:
+def configuration(commit: str, pins: Sequence[Mapping[str, str]] | None = None) -> dict[str, Any]:
     """The configuration `demos/onsite_full.toml` holds, at program ``commit``: `config new`'s over
-    `PROTOCOLS`, each party at its `PLACEMENT`, the workload's and PoUS's parameters stated, and the memory challenger's
-    `PINS`."""
+    `PROTOCOLS`, each party at its `PLACEMENT`, the workload's and PoUS's parameters stated, and ``pins``, the keys the
+    auditor pinned for its devices (by default `CONFIG`'s own `[[pin]]` entries: no code states a key)."""
     cfg = K.new(SERVED_WINDOW, list(PROTOCOLS), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
     cfg["workload"]["params"] = dict(SERVED.default_params)
     cfg["params"] = {SP.IDS["pous"]: {"challenges": 320}}
     for p in cfg["party"]:
         p["machine"] = PLACEMENT[p["name"]]
-    cfg["pin"] = [{"party": MEMORY_CHALLENGER, "protocol": c, "scheme": LMS_SHA512_N64_W1_H20, "key-sha512": h}
-                  for c, h in sorted(PINS.items())]
+    cfg["pin"] = [dict(p) for p in (tomllib.loads(CONFIG.read_text()).get("pin", []) if pins is None else pins)]
     K.check(cfg, MANIFESTS, {SERVED_WINDOW: SERVED})
     return cfg
 
@@ -464,10 +459,12 @@ JOINED = ("SERVE_ARGS",)
 
 
 def variables(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> dict[str, str]:
-    """The served window's runner's variables: every listed piece's hooks, whichever party's they are, since the
-    prover's pieces reach the auditor's sides through their bindings. A variable of `JOINED` is every piece's flags,
+    """The served window's runner's variables: the configuration's hash and its `[[pin]]` entries
+    (``VERITY_CONFIGURATION``, ``VERITY_PINS``), which every device's `trusted-device` premise reads, and every listed
+    piece's hooks, whichever party's they are, since the prover's pieces reach the auditor's sides through their
+    bindings. A variable of `JOINED` is every piece's flags,
     in the pieces' order; any other is one piece's."""
-    out: dict[str, str] = {}
+    out = {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": json.dumps(cfg.get("pin", []), sort_keys=True)}
     for p in [SERVE, *(x for c in cfg["protocols"] for x in PARTIES.get(c, {}).values())]:
         for k, v in p.variables(cfg, bindings).items():
             out[k] = f"{out[k]} {v}" if k in JOINED and k in out else v
@@ -562,6 +559,14 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
             or (f"no row for {absent}" if absent else None),
             "registration": None, "coins": coins_of(cfg),
             "verdict": "undecided" if verdict == "accept" and absent else verdict}
+
+
+def registration(cfg: Mapping[str, Any], state: Path) -> str:
+    """The digest of the run's registration, the VERDICT line's ``registration``: a registration log
+    (`verity.protocols.accounting.registration`) whose entries name the configuration's hash, ``K.digest(cfg)``, the
+    ``configuration`` of ``state``'s ``run.json``, which `verity run` writes before any party starts and so before any
+    coin; a ``run.json`` under another hash is refused. Until it is written the line's ``registration`` is ``None``."""
+    raise NotImplementedError("MEM-300")
 
 
 def coins_of(cfg: Mapping[str, Any]) -> str:
