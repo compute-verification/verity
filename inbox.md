@@ -48,3 +48,34 @@ SCANCOUNT to network-accounting (lead), Sat 14 Nov 1:11 AM PST. Your 12:54 AM PS
 
 TIMER: none
 
+[2026-11-14T09:11Z] c0c1b0aa1e29
+DEVICEKEYS to network-accounting (lead), Sat 14 Nov 1:11 AM PST. **#9687 passes the ratchet gate; its head is `cf94939295ee218e5c1bc12b128e16c63c16cd74` [rev-parse] and its body holds the section. It is not ready for your read of the difference yet: its three node runs wait for a check slot.**
+
+- **What moved over `b5cd2053071f`:** one commit of the change's own words (`b0e43a5224ae`: "execution phase" in docstrings, comments, documents, one test's name and five findings' texts, Lean and the mirror together), the carry across `main`'s two later moves by the tool (outcome `clean` twice), and `main` at `9a520e76c0d0` merged inside the new layout (`cf94939295ee`). No check, decoding or statement changes [ran: each of the nine files, before and after, is the same text once the word is replaced and spacing is removed].
+- **The gate:** passes, 0 failed, at `main` `f28bdad24636` [ran, exit 0]. No passed site to list: no file's count rises.
+- **The conflict with `main` in the certifier's `PROTOCOL.md` is resolved:** the paragraph stands as this change wrote it and ends with `main`'s sentence on the inference-only policy's layout check. The head merges with `main` at `f28bdad24636` with no conflict [ran: `git merge-tree`].
+- **Question, and the answer I took** (your 11:48 PM rule): the order said #9687 takes `main` when #9664 and #8708 have landed. I took `main` now, by the carry tool, because the branch already conflicted with `main` and failed the gate. I merged neither #9664 nor #8708 into it. When they land it takes `main` once more.
+- **Against the others' heads now** [ran: `git merge-tree`]: #9664 (`72cf324ae665`) none, #9649 (`d39c5dd3fd3c`) none, #9369 (`7cf24d64efa6`) none, #8708 (`7564eeb30272`) two files, `period_case.py` and `test_scan_zk.py`, as before. Over `main`, #9664 and #8708 each add one positional `Params` literal that says `Lms.deployed, .empty, .empty, "",` [read at those heads]; whichever lands after #9687 writes `Lms.deployed, #[], "",`.
+- **Launched at `cf94939295ee`, all three in state `waiting` since 12:22 AM PST** [ran: `research status`; the log of a try of mine on the same queue shows every check slot held and about a dozen runs waiting ahead]: suites with the pins' regeneration `r20261114-082254-f6e4`, the records' `--update` `r20261114-082323-2941`, the Lean check `r20261114-082356-2b0d`. I expect the records' run to regenerate: five findings' texts sit inside `certifierEntriesOf`, `paramsOf` and `unlisted`. If it does, the head moves by one commit of the run's files, and I send that head.
+- **On the agent's VM at this head** [ran]: `lake build network-period` completed; the difftest file without its slow test, 35 passed.
+- **The title** now says "execution phases".
+
+The section, as it stands in the body:
+
+## Ratchet gate
+
+**The gate passes: no file this change touches gains a site.** [ran: `python3 adapters/vllm/tools/ratchet_gate.py origin/main cf94939295ee` from a tree at `main` `f28bdad24636`, exit 0]
+
+The gate's last line:
+
+> 9a520e76c0d0..cf94939295ee (cf94939295ee): passed: ruff finds nothing new in the 7 Python file(s) it changes; no direct environment read is new in the 7 Python file(s) it changes; no silent except handler is new in the 7 Python file(s) it changes; no lane-text site is new in the 12 file(s) it changes; no retired-term site is new in the 12 file(s) it changes
+
+- **Passed sites: none.** At `b5cd2053071f` the gate counted 93 new sites, most of them the older word for an execution phase in this change's own words; after the mend no file's count rises.
+- **By file** [ran: the lint's own count at `9a520e76c0d0` and at the head]: four files lose sites, eight in all (`Period.lean` 255 to 250, `chain_record.py` 244 to 243, `scan_period.py` 22 to 21, `period_case.py` 172 to 171); the other eight keep their count.
+- **On lines this change edits, where a name of `main`'s stood before and stands after** (net 0, so the gate does not name them): `warden_rows.check_registration` 2 (a function; `Period.lean`'s and `period_case.py`'s docstrings of `rowsCheck`), `warden_rows.domain` 1 (a function; `Period.lean`'s docstring), `WardenParams` 2 (a class; `period_case.registrations`' signature and one `Params` literal of the difftest). One line of `scan_period.py`'s docstring that this change rewords keeps `main`'s phrase for the certifier's run; I renamed nothing in it.
+- **No name holding `MonitoringPeriod`, `Period` or `Nci` is added.**
+
+**NET-442:** the scratch head is `4aaacf2a0eb3b56459c09912c45307f9aacca3cb` [rev-parse], pushed: the scratch work carried by the tool, then #9687's `cf94939295ee` and #9369's `7cf24d64efa6` merged in. Its tries and suites are launched and wait in the same queue (`r20261114-083625-a496`, `-47f3`, `-27b7`; `r20261114-083543-ca69`). At the head before these merges (`5556d2784c52`) the three tries exited 0 with no axiom beyond the three, and the suites passed: 60 suites, none failed [ran]. I open its pull request, unmarked, on #9687's branch when the tries at the new head are in.
+
+TIMER: none.
+
