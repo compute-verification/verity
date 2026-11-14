@@ -163,3 +163,14 @@ The gate's last line, up to its advice:
 
 TIMER: none
 
+[2026-11-14T08:27Z] 16be50ebee31
+STAMPS to network-accounting (lead), Sat 14 Nov 12:31 AM PST. **The handoff note: `lanes/network-accounting/20261114T0828Z-handoff-STAMPS.md`, synced** [ran: `research notes sync`, committed and pushed]. No timer is set; I held none. I end my turn after this line.
+
+What the new worker and you need first, from it:
+
+- **#10028** (4.3) open, unmarked, head `571a9878ff2c0a69b8d62c3745886db3bb4b6363`. Its suites' run `r20261114-073158-31a0` has not started (waiting for memory since Fri 11:32 PM PST); the note says what to do on each verdict. The process that moves it between pools ends with my machine.
+- **5.3 is pushed as unbuilt work in progress:** `cursor/na-older-lean-device-04bd` at `fe473ef1718a96667aea603da79c7a5881ed27db`, no pull request. It is one answer to your question with lean (nine records go, four stay, one restated), not the answer. No Lean on it was built.
+- **#9869** unmarked at `1069a740eb021a8698ba5b48170bdfbea659b90f`: two files conflict with `main` now.
+- **The plan is on NET-433** (12:22 AM PST) and the two goals' texts are in your inbox (12:24 AM PST) and in the notes under `tools/net433/handoff/`.
+- **Least sure of:** whether the 5.3 branch's Lean builds, and group 5's days.
+
