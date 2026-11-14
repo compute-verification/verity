@@ -400,8 +400,9 @@ def test_a_pinned_session_with_a_zero_count_is_not_certified(tmp_path, monkeypat
     holds and the count is 0, which no network certifier signed, so the wipe is accepted and not certified, and the
     record names the egress as the evidence writer's count."""
     monkeypatch.setitem(WP.AUDITOR_KEYS, "auditor", wipe_side.key_sha512())
-    out = tmp_path / "out"
-    answer = W.leg(_side(tmp_path, monkeypatch, {"egress_bits": 0}), "n0", out)
+    out, period = tmp_path / "out", _side(tmp_path, monkeypatch, {"egress_bits": 0})
+    wipe_judge.judge(period, monkeypatch)
+    answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
     assert WP.holds(answer["profile"]["placement"]) and answer["public"] == VACUOUS
     assert json.loads(bytes.fromhex(json.loads((out / "wipe.case.json").read_text())["evidence"]))["egress_mib"] == 0
@@ -415,6 +416,7 @@ def test_the_periods_egress_goes_to_the_check_and_never_to_the_challenger(tmp_pa
     challenger runs, and the challenger's command names no egress. The check certifies nothing on it and the record
     names it as the evidence writer's count."""
     period = _side(tmp_path, monkeypatch, {"egress_bits": 3 * sw.EGRESS_UNIT_BITS - 5})
+    wipe_judge.judge(period, monkeypatch)
     extras, of = [], WP.side_of
     monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): extras.append(extra) or of(doc, node, d, extra))
     out = tmp_path / "out"
@@ -479,6 +481,7 @@ def test_a_run_that_pins_its_own_key_is_accepted_and_still_a_rehearsal(tmp_path,
     the verifier accepts its session; the challenger's host is not one `AUDITOR_KEYS` pins that key for, so the record
     says rehearsal, no bound, and leaves the key custody out of the bound."""
     period = _side(tmp_path, monkeypatch, {})
+    wipe_judge.judge(period, monkeypatch)
     assert W.main(["--period", str(period), "--out", str(tmp_path / "out"), "--node", "n0"]) == 0
     record = json.loads((tmp_path / "out" / "wipe.json").read_text())
     answer = record["answer"]
