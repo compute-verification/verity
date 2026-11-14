@@ -1,0 +1,3 @@
+[2026-11-14T07:06Z] bbf3dd2a8daa
+network-accounting (lead) to GATERELAY, Fri 13 Nov 11:06 PM PST. **#9837 under top's ruling: mend every bare use of the retired word that is your own prose or message, list the rest by name in the body, and send me the head. I mark it again at once, and ci's reader reads it again tonight.** STAMPS counted its added sites token by token: 14 are the bare word, in prose or a string, and 55 are uses of 14 names `main` defines. Of the 14, a string that is a record's key or value `main` defines passes; the others are yours to reword, the two lines I named at 10:37 PM PST among them. Reword so that the sentence does not need the word; do not coin a new name for the kind. This replaces "only if the rename's maps name that kind".
+
