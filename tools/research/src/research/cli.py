@@ -125,7 +125,9 @@ tree other runs of the commit share), `--cwd clone` (or `clone/SUB`) in a privat
 outside the run dir and removed when the workload exits (research/clone.py), an absolute --cwd as given; job.json run.cwd /
 run.cwd_basis record it.  A `--cwd source` workload that builds Lean waits for the tree's lock (research/treelock.py, job.json
 run.lean_tree_lock), so two Lean builds never share a `.lake` at once.  It exits with the workload's status; with
---require-result, a zero exit and a missing or invalid result.json exits 65 instead.  Harness flags pass through unchanged
+--require-result, a zero exit and a missing or invalid result.json exits 65 instead.  So a workload shell script that pipes
+without `pipefail`, which exits with the pipe's last command's status, is refused (exit 2) unless --allow-pipe (research/pipefail.py).
+Harness flags pass through unchanged
 (--tree-sha, --workload-digest, --input name=path, --declared-output, --policy, --no-sampler, ...).  `run` and `fetch --all` refuse
 (exit 3) while the runs root's filesystem has less than $RESEARCH_DISK_FLOOR_GB free (default 1.5; 0 turns it off), and name the
 eviction that frees it (runs.disk_floor_refusal).
@@ -158,7 +160,7 @@ from pathlib import Path
 
 from . import clone
 from . import compare as C
-from . import record, remote, result, treelock
+from . import pipefail, record, remote, result, treelock
 from . import runs as R
 from . import waitcap
 from .timefmt import both
@@ -218,12 +220,13 @@ def cmd_run(argv: list[str]) -> int:
 
 def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     started = time.monotonic()                   # --wait's cap counts the launch too: it bounds the whole tool call
-    if "--" not in argv:
+    asks_help = "--" not in argv and not {"-h", "--help"}.isdisjoint(argv)
+    if "--" not in argv and not asks_help:
         print("research run: the workload command goes after `--`", file=sys.stderr)
         return 2
-    i = argv.index("--")
+    i = argv.index("--") if "--" in argv else len(argv)
     opts, command = argv[:i], argv[i + 1 :]
-    if not command:
+    if not command and not asks_help:
         print("research run: empty command after `--`", file=sys.stderr)
         return 2
     ap = argparse.ArgumentParser(prog="research run", add_help=True, allow_abbrev=False, description=__doc__.split("\n\n")[1])
@@ -367,8 +370,15 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "would preserve them. REASON says what does instead; it is printed and recorded in job.json (default "
                          "$RESEARCH_LOCAL_ONLY). A usable remote is pushed to either way; --on MACHINE gets custody on the remote instead")
     ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)   # machine side: JSON {commit, tree, dirty} of the shipped source
+    ap.add_argument("--allow-pipe", action="store_true",
+                    help="run a workload whose shell script pipes without `pipefail` (`bash -lc 'a | tee f'`), which is refused "
+                         "otherwise: the run's exit code is then the pipe's last command's, whatever failed before it "
+                         "(research/pipefail.py)")
     ns, harness_opts = ap.parse_known_args(opts)
     ns.started = started
+    if not ns.claimed and not ns.allow_pipe and (why := pipefail.refusal(command)):
+        print(f"research run: refused: {why}", file=sys.stderr)
+        return 2
     if ns.id is not None and not ns.claimed:
         from .store import ids as store_ids
 

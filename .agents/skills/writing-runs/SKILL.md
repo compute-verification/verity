@@ -65,6 +65,10 @@ research run --on auto --cwd source -- \
   bash -c 'd=$(mktemp -d); trap "rm -rf $d" EXIT; python bench.py --scratch "$d" --out "$OUT"'
 ~~~
 
+A shell script that pipes (`a 2>&1 | tee "$OUT/a.log"`) exits with the pipe's last command's status, so `research run`
+refuses it unless `pipefail` is on: start the script with `set -o pipefail;`, or drop the `| tee FILE` (the run's
+`stdout.log` already keeps the output), or pass `--allow-pipe` when the pipe's own exit code is meant.
+
 Try a long run's command on its machine for a minute first (`--timeout 2m --wait`), never on an agent VM (AGENTS.md
 "Tests"), and check that the run dir holds only your output directory beside the harness's files. A run waiting in a
 pool's line, `--on auto` or sent by name with `--pool research` (no GPUs, no `--stay`), moves by itself to another
