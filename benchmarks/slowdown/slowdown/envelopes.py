@@ -25,7 +25,7 @@ cryptography's advantage:
   `r_in` the certified prompt ingress and `r_side` the timing and side channels no certifier reads. `r_in` is
   `intake · α Φ`, at most `α Φ` since a server's ingress carries only its inference blocks' declared inputs;
   with `declared` (`regime.onsite-w63`), each server's declared inputs at a cadence the network certifier form's public parameters
-  set. Its δ is 0: the certifier is the auditor's device (`trusted-device`), and the side channels an assumed cap.
+  set. Its δ is 0: the certifier is the auditor's device (`trusted-device`), and the side channels an assumed bound.
 * The inference-only check is a registration check, not an envelope: the registered circuit's `(c, k)`-partition into inference
   blocks (`Policy`), registered once.
 
@@ -524,7 +524,7 @@ class Remote:
         return Blocks("inference", Budget(ctx.c, ctx.policy.k), n)
 
     def inference(self, ctx: Context, gates: float) -> Cut:
-        """`n_S q_T(c, k) + q_U(U_S)`: the inference blocks and free compute by route."""
+        """`n_S q(c, k) + q_U(U_S)`: the inference blocks and free compute by route."""
         return Cut("inference", (self.blocks(ctx, gates),), {k: v * gates for k, v in self.slack(ctx).items()},
                    self.CITES + self.BOUND)
 
@@ -559,7 +559,7 @@ FORMS = ("certified", "links")
 @dataclass(frozen=True)
 class Onsite(Remote):
     """The remote audit's envelopes plus the wipe and the certifier: each server block, one server between two wipes,
-    gets the serving cut `q_T(c_S, k_S) + ω_max μ k_S` as well, and contributes the lesser."""
+    gets the serving cut `q(c_S, k_S) + ω_max μ k_S` as well, and contributes the lesser."""
 
     #: the server-block bound, both its cuts' minimum
     BOUND = ("Accounting.Guarantees.ServingBlocks.ServingBlockBound",)
