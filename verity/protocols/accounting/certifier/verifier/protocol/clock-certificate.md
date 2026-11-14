@@ -30,7 +30,7 @@ window under its signed record, so a reader holds the declared syncs to the cert
   openings sharing a salt, and the client, holding no salt, refuses a clock certificate whose signed digest an earlier
   window's signs.
 - **A certificate of its own, not a head field.** Signing the sync inside the egress head (`RecordHead.encode`) would
-  change the head encoding that the head check's circuit, the Lean records and the CertifierDevice pin. The record
+  change the head encoding that the head check's circuit and the Lean records pin. The record
   certificate, the head and `active.py` are unchanged.
 - **Domain separation.** The record certificate of the same execution phase signs SHA-512("verity/net-cert/v1" ‖ salt_c ‖
   R), R a record digest, and the clock certificate the same over a clock digest, each digest under its own tag. So one
@@ -51,8 +51,7 @@ window under its signed record, so a reader holds the declared syncs to the cert
   opening as witness, check it against the certificate's signed digest (the clock digest and its salted digest, two
   SHA-512s of a few blocks, as the head check computes a head's signed digest), and compute the floor from the opened
   syncs inside the unit, so the floor leaves the public row and the verifier reads no sync. That is a circuit change,
-  with its `circuit-check` report, not a Lean one: the network certifier's Lean issuer already signs the salted form
-  (`CertifierDevice.Issuer.clock`).
+  with its `circuit-check` report.
 - **What it rests on** is what the record certificate rests on: LMS's unforgeability (`euf-cma/lms-sha512-n64`), and a
   certifier that is the auditor's device, on a host the developer doesn't control. A certifier run on the developer's own
   machine (a rehearsal's against an endpoint on its own loopback) signs whatever that machine runs, so there its signed
@@ -66,15 +65,4 @@ window under its signed record, so a reader holds the declared syncs to the cert
   shaper's syncs, and that the certifier process signs them as the inline publisher does, each under its own salt;
   `test_client_certificates.py` that the client keeps every clock certificate's public part and nothing of a sync or
   salt, and refuses a forged signature, an altered digest, a wrong window and a reused salt by name.
-- **The Lean device** signs the same salted form: `CertifierDevice.Issuer.clock`, and `clockWith` against the world,
-  which samples `salt_c` from the issuer's coins as `certifyWith` does, beside `certify` in
-  `verity/protocols/accounting/certifier/device/lean/CertifierDevice/Issuer.lean`. It signs `clockCommitment salt sync`
-  (`certificateDigest salt (clockDigest sync)`), refuses a salt one of its signed clock certificates took
-  (`clockSalts`, carried beside the `Issuer`, whose structure `Properties.CertifierDevice.issuerVerifies` reads), and
-  its `ClockCertificate` holds the sync and the salt, witness, with the certificate; `ClockCertificate.verify` checks
-  egress, the key, that the sync and salt open the signed digest, and the signature. A salt is taken once signed
-  under, in both: a refused reservation signed nothing, so nothing public shares its salt. The issuer difftest holds
-  it to `Issuer.salted_clock` and `CertifiedClock` (`verity/protocols/accounting/certifier/device/lean/scripts/issuer_vectors.py`):
-  clock calls under their own salts, some taking an earlier call's, the salt among the tampers and a salt not 64
-  bytes among the refusals.
 - **Not yet:** a run made before the salted form has no salted clock certificates, so `SignedClocks` gives it no sync.

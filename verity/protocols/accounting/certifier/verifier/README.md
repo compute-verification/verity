@@ -66,7 +66,7 @@ Open premises (`open`):
   `../../../proofs/recursion` import none.
 - **Command**: `network-certifier-calibrate` (`calibration:main`), a console script of the root `pyproject.toml`.
 - **Lean here**: `lean/` is the Lake package `network_check`, whose library `NetworkCheck` the
-  packages at `../device/lean`, `../../../compose/verifier/onsite` and `security/Properties` require by path. Its executables:
+  packages at `../../../compose/verifier/onsite` and `security/Properties` require by path. Its executables:
   - `network-check`, `network-records` and `network-period`, each `id | check PARAMS COMMITMENT EVIDENCE | serve`: the
     core protocols `verity/network-certificate/v4`, `verity/network-records/v3` and `verity/certifier/v0`. The public
     tree has no `network-period`: it runs the period check, which reads the inference-only policy's layout check, which
@@ -77,7 +77,7 @@ Open premises (`open`):
   - `network-check-difftest INSTANCES PYTHON N`, which holds `certificate.py`'s encodings to
     `NetworkCheck.Certificate`'s.
 - **Lean beside it**: `../device/program/lean/`, the certifier program, is the Lake package `certifier_program`, whose
-  library `NetworkCertifier` the packages at `lean`, `../device/lean` and `security/Proofs` require by path. Its
+  library `NetworkCertifier` the packages at `lean` and `security/Proofs` require by path. Its
   executables (`lake exe`): `certifier-difftest`, `certifier-charge-difftest` and `certifier-window-difftest`, each
   `INSTANCES PYTHON N`. The Lean check runs each `../device/program/lean/scripts` script, then its difftest
   (`../device/program/lean/lean-audit.json`).

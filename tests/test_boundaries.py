@@ -107,7 +107,7 @@ SPOT_LEAN = ("verity/protocols/proofs/spot/verifier/lean", "verity/protocols/pro
 SPOT_SECURITY = ("security/*/Flock", "security/*/Flock.lean", "security/*/Spot", "security/*/Spot.lean",
                  "security/Definitions/Claims/Sampling*")
 CERTIFIER_MODULES = ("verity.protocols.accounting.certifier.verifier", "verity.protocols.accounting.certifier.prover", "verity.protocols.accounting.certifier.device")
-CERTIFIER_LEAN = ("verity/protocols/accounting/certifier/device/program/lean", "verity/protocols/accounting/certifier/device/lean",
+CERTIFIER_LEAN = ("verity/protocols/accounting/certifier/device/program/lean",
                   "verity/protocols/accounting/certifier/verifier/lean", "security/*/NetworkCertifier", "security/*/NetworkCertifier.lean")
 SPOT_NOT_CERTIFIER = ("SPOT[Flock] never imports the network certifier, which composes with it only above both and whose "
                       "stamp SPOT reads as a certified input")

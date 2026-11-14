@@ -36,9 +36,7 @@ An egress tick hands the frames read and writes a whole bucket to the link, and 
 boundaries read their link past the slack on a loaded host and failed honest windows closed; an ingress tick releases a
 bucket's few request frames, so the egress tick after it is late by little, more only at a window's last bucket, where
 the ingress tick publishes its record. Two tickers wake together when their
-boundaries meet (both timers expire in one turn of the loop, or one `VirtualClock.advance` passes both); the device
-difftest's harness wakes one ticker a tick event, so there each step runs that tick alone, as `CertifierDevice.step`
-takes one event, and the trace orders a shared boundary's two ticks either way.
+boundaries meet (both timers expire in one turn of the loop, or one `VirtualClock.advance` passes both).
 
 **The pacer** (`Proxy(paced=…)`, off by default): a bucket written on the loop leaves when its tick runs, so when the
 server writes within a bucket, which the prover chooses, moves when the bucket reaches the client. With `paced`, a
@@ -1077,7 +1075,7 @@ async def wait_until(deadline: float, clock: Callable[[], float],
 
 async def precise_sleep(delay: float) -> None:
     """`asyncio.sleep(delay)` in waits of at most `MAX_WAIT_S` against the loop's clock: the proxy's sleep unless its
-    caller injects one. An injected sleep (a `VirtualClock`, the device difftest's harness) gets one wait a tick."""
+    caller injects one. An injected sleep (a `VirtualClock`) gets one wait a tick."""
     loop = asyncio.get_running_loop()
     await wait_until(loop.time() + delay, loop.time)
 
@@ -1172,8 +1170,7 @@ class Proxy:
     - with `compact` (which takes `ordinals`), each server connection is compact records (`CompactUnits`: an HTTP
       response head, then (position, record) units, `compact_unit`), and each egress frame is a record zero-filled to
       B (`compact_cell`), B ≥ 8: a record that isn't one (`compact_record_data`) or names another request than its
-      connection's is malformed. The Lean certifier device models it (`CertifierDevice`'s `Config.compact`), and the
-      gate's rehearsal runs it (`certifier-rehearse --traffic varied --compact B`);
+      connection's is malformed. The gate's rehearsal runs it (`certifier-rehearse --traffic varied --compact B`);
     - with `pair` (off by default), the link is a sealed pair link to another of the auditor's certifiers: each egress
       slot, frame or padding, is written sealed (`Pair.sealer`) after the egress certifier records it, and each unit
       read is opened (`Pair.opener`) before the ingress certifier takes it, so every record is the unsealed run's. A
