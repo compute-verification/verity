@@ -54,10 +54,12 @@ With a `statement` enabled (and hashing), a whole capture also copies each call'
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
+import numpy as np
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
 
+from verity_vllm.protocols.pouw.pearl_c.ends import _RunState, _Stages
 from verity_vllm.protocols.pouw.pearl_c.passes import call_index
 
 #: a deferred-a whole capture's side steps join the A trees forked so far only before the scatter, the one step that reads
@@ -93,7 +95,7 @@ class _Slots:
     after: tuple[int, int, int]
 
 
-class WholeCalls:
+class WholeCalls(_RunState):
     """`GraphCalls`' whole-forward half, as its base class: a call made inside vLLM's capture of a whole forward
     (`_into`, which `GraphCalls._graph_call` sends it to, over the call's graph), and the forward's capture and replay
     around it, on the run's attributes `GraphCalls` names."""
@@ -110,6 +112,8 @@ class WholeCalls:
     #: the slots the last `whole_replay` uploaded, and those `whole_replayed` staged for the forward after it
     _uploaded: _Slots | None = None
     _next: _Slots | None = None
+    #: the event after the last upload of slots, which the run sets with its slots
+    _slots_copied: Any
     #: whether a whole capture defers each call's tile hashing beside the next call (with hashing)
     whole_defer: bool = False
     #: inside a deferred whole capture, the calls whose side steps the capturing stream hasn't joined yet, oldest first: each
@@ -154,7 +158,7 @@ class WholeCalls:
         if not self.graphs or self.cur is None or self.schedule.side or self.schedule.main_priority == "greatest":
             return None
         retained = self.cur.retain is not None if retained is None else retained
-        key = (self.hashing, self.omit, self.schedule.name, self.hashing and retained, self._defers())
+        key: tuple = (self.hashing, self.omit, self.schedule.name, self.hashing and retained, self._defers())
         key = (*key, "a_tree") if self._defers_a() else key
         key = (*key, "tree_sm") if self._defers_a() and self.whole_tree_sm else key
         key = (*key, "stats") if self._forks_stats() else key
@@ -236,13 +240,12 @@ class WholeCalls:
         alone keeps them."""
         cur = self.cur
         for mm, c in zip(cur.matmuls[len(cur.matmuls) - len(calls):], calls, strict=True):
-            xa, tree, y = self._stages[c.w, c.m16]
+            xa, tree, y = cast("_Stages", self._stages)[c.w, c.m16]
             self._retained(cur, mm, c.m, self.flag_buf[flags_at:flags_at + c.m], xa, tree, y=y[:c.m])
             flags_at += c.m
 
     def _slots(self, calls: tuple[WholeCall, ...], at: tuple[int, int, int]) -> _Slots:
-        import numpy as np
-        base = self.cur.base
+        base = cast(int, self.cur.base)
         index, tiles_at, flags_at = base + at[0], at[1], at[2]
         offs, predicted = np.empty((len(calls), 3), np.int64), {}
         for i, c in enumerate(calls):
@@ -265,7 +268,7 @@ class WholeCalls:
             return False
         at, s = (len(cur.matmuls), cur.tiles, cur.flag_rows), self._next
         staged = s is not None and s.calls is calls and s.at == at and s.base == cur.base
-        if not staged:
+        if s is None or not staged:
             s = self._slots(calls, at)
         if s.after[1] > self.capacity or self.nb * s.after[0] > len(self.roots_buf) or s.after[2] > len(self.flag_buf):
             raise RuntimeError(f"{self.entry}: the pass is over its capacity; end it and begin another")
@@ -286,11 +289,11 @@ class WholeCalls:
         rows, appended to the pass, as `_after` appends them for a call made alone; in a retained pass, each call's record and
         files; and with hashing, the next forward's slots for the same calls, staged while the GPU runs this one."""
         cur = self.cur
-        index = cur.base + len(cur.matmuls)
+        index = cast(int, cur.base) + len(cur.matmuls)
         cur.matmuls.extend(Matmul(index + i, Shape(c.m16, c.k, c.n), c.w) for i, c in enumerate(calls))
         if not self.hashing or not calls:
             return
-        s, self._uploaded = self._uploaded, None
+        s, self._uploaded = cast("_Slots", self._uploaded), None
         self._predicted = dict(s.predicted)    # the upload rewrote the uncalled weights' slots from the host copy
         cur.tiles, cur.flag_rows = s.after[1], s.after[2]
         if self._statement_on():
@@ -367,7 +370,7 @@ class WholeCalls:
                     self._fork(sh, g.steps[b:], raw)
                 finally:
                     pipe.tiles_group = False
-                if len(self._whole) == len(self.order):
+                if len(cast("list[WholeCall]", self._whole)) == len(self.order):
                     self._join()
                     self._join_tree()
                     self._join_prefetch()
@@ -466,7 +469,7 @@ class WholeCalls:
                     f()
         finally:
             self.kernel.dev.stream = raw
-        self._pending.append((sh, side.record_event() if self.whole_shape_joins else None))
+        cast(list, self._pending).append((sh, side.record_event() if self.whole_shape_joins else None))
 
     def _join(self) -> None:
         """The capturing stream waits for the side steps no call has joined yet, if any."""

@@ -410,7 +410,7 @@ def _period(one, exe: Path, d: Path, commits: list[dict]) -> None:
     proofs."""
     evidence = {"pins": [], "windows": [{"commit": canonical_json(r).hex()} for r in commits]}
     case = {"blobs": [], "commitment": canonical_json([]).hex(), "evidence": canonical_json(evidence).hex(),
-            "params": {"key": None, "main": [], "name": "toy"}}
+            "params": {"key": None, "main": [], "name": "toy", "sessions": []}}
     _answer, line = one.SC.lean_answer(exe, case, d.parent / "scratch")
     one.SC.write(d, case, line)
 

@@ -52,6 +52,22 @@ def test_the_local_minimum_beats_the_minimum_of_global_bounds_when_blocks_bind_d
     assert loc.padded == pytest.approx(1 / 0.195) and agg.padded == pytest.approx(1 / 0.35) and loc.padded > agg.padded
 
 
+def test_the_serving_cut_adds_its_boundary_term_and_still_sets_the_share():
+    """`ServingBlockBound`'s serving argument is `q(c_S, k_S) + ω_max μ k_S`: the term raises the share the serving
+    cut sets, and a cut with a boundary term needs `per_bit`."""
+    cap, w = (lambda bud: bud.inputs), 1.0
+    inference = Cut("inference", (Blocks("inference", Budget(100, 10), 9),), {"undecl.gpu": 100})
+    serving = Cut("serving", (Blocks("serving", Budget(1000, 100), 1),), boundary=100)
+    s = local(block(inference, serving), cap, w, per_bit=0.5)
+    # inference: 9·10/1000 + 100/1000 = 0.19; serving: q = 100, and ω_max μ k_S = 0.5·100 = 50, so 150/1000 = 0.15
+    assert s.cut == "serving" and s.value == pytest.approx(0.15) and s.terms["boundary"] == pytest.approx(0.05)
+    without = local(block(inference, Cut("serving", serving.blocks)), cap, w)
+    assert without.cut == "serving" and without.value == pytest.approx(0.10)
+    assert overhead(Partition((block(inference, serving),), 0.0), cap, w, per_bit=0.5).padded == pytest.approx(1 / 0.15)
+    with pytest.raises(ValueError, match="per_bit"):
+        local(block(inference, serving), cap, w)
+
+
 def test_the_aggregate_bound_is_never_tighter_than_the_local_one():
     cap = lambda bud: bud.inputs ** 1.5
     blocks = tuple(block(Cut("inference", (Blocks("inference", Budget(100, k), 9),), {"undecl.gpu": 50}),

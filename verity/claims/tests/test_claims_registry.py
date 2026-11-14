@@ -132,7 +132,7 @@ def test_the_session_premises_state_their_scope() -> None:
     assert all(s in live.name for s in ("plain flock-verify --zk", "only one_stage/a0.py passes --registered",
                                         "no served path meets it"))
     law = get("accounting-ts-window-law").name
-    assert all(s in law for s in ("five facts", "coin tree", "trusted-host", "Under full checking",
+    assert all(s in law for s in ("five facts", "coin tree", "trusted-device", "Under full checking",
                                   "serve --zk --operator loopback", "doesn't meet the fifth fact"))
 
 
@@ -175,8 +175,8 @@ def test_the_registrant_premise_is_a_model_of_the_provers_covered() -> None:
     assert "its own workers behind the firewall hold the salts they committed R's level-0 top rows under" in e.name
 
 
-def test_the_trusted_host_keeps_the_devices_persistent_state() -> None:
-    e = get("trusted-host")
+def test_the_trusted_device_keeps_the_devices_persistent_state() -> None:
+    e = get("trusted-device")
     assert (e.kind, e.standing) == ("assumption", "standard")
     assert e.name == ("The auditor's device runs its stated code, timing included, on a host the prover doesn't control, "
                       "with its CPU isolated from other tenants and a monotonic clock; the host never restores its earlier "
