@@ -26,14 +26,16 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.circuits import Program, bind
-from verity.circuits.defs import REGISTRY
-from verity.definitions.registry import b1, lifted as L, pad_prims as PP, prims as P
-from verity_vllm.program.lifting import lifted_records
-from verity_vllm.program.lifting import lifted_compose
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry.b1 import weights_type
-from tests.program.test_serve3 import D_MAX, LP, TINY, _inputs
 from verity.circuits.types import Array, Value
+from verity.definitions.numerics import serve3_reference as ref
+from verity.definitions.registry import b1
+from verity.definitions.registry import lifted as L
+from verity.definitions.registry import pad_prims as PP
+from verity.definitions.registry import prims as P
+from verity.definitions.registry.b1 import weights_type
+
+from tests.program.test_serve3 import D_MAX, LP, TINY, _inputs
+from verity_vllm.program.lifting import lifted_compose, lifted_records
 from verity_vllm.program.workload import eos_lag_rows_declared
 
 I32, BF16 = Value(32), Value(16)
@@ -335,7 +337,7 @@ def test_a4_true_widths_admissibility_is_the_unchanged_validator_at_w_max_lifted
 
 def test_a2_lag_from_header_is_gp01s_rule_on_the_attested_engine_block():
     for knob, want in ((True, 1), (False, 0)):
-        hdr = {"$e": "RunHeader", "profile": {"engine_kwargs": {"async_scheduling": knob}}}
+        hdr: dict = {"$e": "RunHeader", "profile": {"engine_kwargs": {"async_scheduling": knob}}}
         assert lifted_records.lag_from_header(hdr) == (want, lifted_records.LAG_FIELD) == (eos_lag_rows_declared(hdr["profile"]["engine_kwargs"]), lifted_records.LAG_FIELD)
     for bad in (None, 1, 0, "yes"):  # GP-01 returns None for these: refused by name, never defaulted
         hdr = {"$e": "RunHeader", "profile": {"engine_kwargs": {"async_scheduling": bad}}}
@@ -384,6 +386,7 @@ def test_a2_declared_lag_of_row_reads_the_builds_declaration_through_the_same_ru
         assert wp["workload_fn"].startswith("Workload_v1{") and lifted_records.declared_lag_of_row(wp) == (None, None), p
     # the compose passes the lag as the Workload_v1 static exactly when the tree's WorkloadProgram takes one; inspected, not guessed
     import inspect
+
     from verity_vllm.program import workload as W
     takes_lag = "lag" in inspect.signature(W.WorkloadProgram.__init__).parameters
     assert callable(lifted_compose.workload_program) and isinstance(takes_lag, bool)

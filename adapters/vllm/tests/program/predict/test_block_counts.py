@@ -14,15 +14,16 @@ import re
 from pathlib import Path
 
 import pytest
+from verity.circuits import codec
+from verity.circuits import partition_v2 as PV2
+from verity.circuits.defs import REGISTRY
+from verity.circuits.population import population_program
+from verity.commitments.windows import interface as IF
+from verity.definitions.boolean import gate_table
+
 from verity_vllm.program.predict import block_counts as BC
 from verity_vllm.records import block_counts as RBC
 from verity_vllm.records.fields import RecordError, UnknownField
-
-from verity.circuits import codec, partition_v2 as PV2
-from verity.circuits.defs import REGISTRY
-from verity.circuits.population import population_program
-from verity.definitions.boolean import gate_table
-from verity.commitments.windows import interface as IF
 
 REFERENCE = Path(__file__).resolve().parents[5] / "verity/protocols/inference_only/verifier/nci/lean/scripts/nci_reference.py"
 GEMM = 'Gemm_v2{K=64,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
@@ -32,6 +33,7 @@ DAY = "2026-11-01"
 
 def _reference():
     spec = importlib.util.spec_from_file_location("nci_reference", REFERENCE)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

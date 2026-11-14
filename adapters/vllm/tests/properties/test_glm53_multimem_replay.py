@@ -8,11 +8,11 @@ import json
 
 import numpy as np
 import pytest
+from verity.definitions.registry import tp_allreduce as T
+from verity.definitions.registry import tp_allreduce_check as K
 
 from tests.properties import glm53_multimem_replay as R
 from tests.properties import glm53_tp8_allreduce_capture_gpu as X
-from verity.definitions.registry import tp_allreduce as T
-from verity.definitions.registry import tp_allreduce_check as K
 
 H = 512
 TREE = T.GLM53_H200_TREE

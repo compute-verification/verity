@@ -83,11 +83,14 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.definitions.numerics import mhc_twin as W
+from verity.definitions.registry import mhc as R
+from verity.definitions.silicon.models import GroupSum
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity.definitions.silicon.models import GroupSum
-from verity.definitions.numerics import mhc_twin as W
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-mhc-capture/v1"
@@ -308,7 +311,7 @@ def probe_launch(rng: np.random.Generator, family: str) -> dict[str, Any]:
     """One probe launch of `tf32_hc_prenorm_gemm`: a [PROBE_M, K] bf16, b [PROBE_N, K] f32, NS splits (module docstring)."""
     M, N, K, NS = PROBE_M, PROBE_N, 64, 1
     if family == "round":
-        a = np.zeros((M, K), np.uint16)
+        a: np.ndarray = np.zeros((M, K), np.uint16)
         a[np.arange(M), np.arange(M) % K] = 0x3F80
         low = rng.choice(np.array([0x1000, 0x1FFF, 0x0FFF, 0x1001, 0x0001, 0x1800]), (N, K))
         low = np.where(rng.random((N, K)) < 0.25, rng.integers(0, 1 << 13, (N, K)), low)
@@ -344,7 +347,7 @@ def probe_launch(rng: np.random.Generator, family: str) -> dict[str, Any]:
             k = 64 * s
             a[:half, k:k + 2] = _pow2_bf16(rng.integers(0, 2, (half, 1)), -60)
             a[half:, k:k + 8] = _pow2_bf16(rng.integers(0, 2, (M - half, 8)), rng.integers(-62, -59, (M - half, 1)))
-            t = -160 + (np.arange(N) + s) % 6
+            t: np.ndarray = -160 + (np.arange(N) + s) % 6
             sign = rng.integers(0, 2, N)
             b[:, k] = _f32_parts(sign, -91, (1 << (t + 161)) << 13)
             b[:, k + 1] = _f32_parts(sign, -90, (512 - (1 << (t + 160))) << 13)
@@ -355,8 +358,8 @@ def probe_launch(rng: np.random.Generator, family: str) -> dict[str, Any]:
             small = rng.integers(0, 2, M) << 15 | rng.integers(0, 128, M) | (rng.integers(-75, -66, M) + 127) << 7
             big = rng.integers(0, 2, M) << 15 | rng.integers(0, 128, M) | (rng.integers(-62, -60, M) + 127) << 7
             swap = rng.integers(0, 2, M).astype(bool)
-            k = 64 * s + (np.arange(M) + s) % 4
-            a[np.arange(M), k], a[np.arange(M), k + 4] = np.where(swap, small, big), np.where(swap, big, small)
+            col: np.ndarray = 64 * s + (np.arange(M) + s) % 4
+            a[np.arange(M), col], a[np.arange(M), col + 4] = np.where(swap, small, big), np.where(swap, big, small)
         b = _b_tf32(rng, (N, K), -10, 10)
     elif family == "special":
         a = bf16_words(rng.standard_normal((M, K)))
@@ -460,10 +463,10 @@ def _asm(src: str, x):
 
 
 def mufu_inputs() -> dict[str, np.ndarray]:
-    j = np.arange(1 << 23, dtype=np.uint32)
+    j: np.ndarray = np.arange(1 << 23, dtype=np.uint32)
     specials = np.array([0, 0x80000000, 1, 0x7FFFFF, 0x800000, 0x7F7FFFFF, 0x7F800000, 0xFF800000, 0x7FC00000, 0xBF800000,
                          0x3F800000, 0x00400000, 0x0000F000], dtype=np.uint32)
-    sweep = splitmix(np.arange(RSQ_SWEEP, dtype=np.uint64) + (np.uint64(0xD54) << np.uint64(40))).astype(np.uint32)
+    sweep: np.ndarray = splitmix(np.arange(RSQ_SWEEP, dtype=np.uint64) + (np.uint64(0xD54) << np.uint64(40))).astype(np.uint32)
     rng = np.random.default_rng(SEED)
     expf = np.concatenate([f32_words(rng.uniform(-110, 92, EXPF_SWEEP // 2)), sweep[:EXPF_SWEEP // 2], specials])
     return {"rsq_table": np.concatenate([np.uint32(0x3F800000) | j, np.uint32(0x40000000) | j]),
@@ -504,9 +507,10 @@ class Spy:
     given (its first two arguments, [NS, T, OUT] and [NS, T]) and calls the kernel."""
 
     def __init__(self, module, name: str):
-        self.module, self.name, self.kernel, self.calls = module, name, getattr(module, name), []
+        self.module, self.name, self.kernel = module, name, getattr(module, name)
+        self.calls: list[tuple[Any, Any]] = []
 
-    def __enter__(self) -> "Spy":
+    def __enter__(self) -> Spy:
         setattr(self.module, self.name, self)
         return self
 
@@ -567,6 +571,7 @@ def _splits_for(phase: str, T: int) -> int | None:
 
 def reference_pieces(phase: str, NS: int | None) -> list[dict[str, Any]]:
     if phase == "fused":
+        assert NS is not None
         return [{"piece": "split", "s": s} for s in range(NS)] + [{"piece": "bigfuse"}]
     if phase == "tf32":
         return [{"piece": "post"}, {"piece": "prenorm"}, {"piece": "bigfuse"}]
@@ -673,9 +678,6 @@ def compare_layer(job: dict[str, Any], rec: dict[str, Any]) -> None:
 def reference_call(job: dict[str, Any], a: dict[str, np.ndarray]):
     """The piece's Definition at the job's statics and its arguments on token ``job["token"]``, and the kernel's words it
     states."""
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import mhc as R
-
     S, NS, t, piece = job["statics"], job["NS"], job["token"], job["piece"]
     hc, h = S["HC"], S["H"]
     out = hc * (2 + hc)
@@ -704,8 +706,6 @@ def reference_call(job: dict[str, Any], a: dict[str, np.ndarray]):
 
 def compare_ref(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """One piece through the evaluator on one token's kernel words."""
-    from verity.circuits.evaluation import evaluate
-
     d, args, want = reference_call(job, _load(job["paths"]))
     y = np.array(evaluate(d, *[np.asarray(v).reshape(-1).astype(np.int64).tolist() for v in args]), dtype=np.int64)
     w = np.concatenate([np.asarray(v).reshape(-1).astype(np.int64) for v in want])
@@ -763,10 +763,8 @@ def sources(outdir: Path) -> dict[str, Any]:
 
 
 def served_bindings() -> dict[str, Any]:
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import mhc as R
-
     norm = {"REPEAT": REPEAT, "EPS": EPS, "HC_EPS": HC_EPS}
+    out: dict[str, Any]
     out = {"HopperTf32WgmmaDot8_v1": lambda: R.HopperTf32WgmmaDot8, "MhcSigmoid_v1": lambda: bind(R.MhcSigmoid),
            "MhcSinkhorn_v1{4,20}": lambda: bind(R.MhcSinkhorn, HC=HC, REPEAT=REPEAT, EPS=HC_EPS),
            "MhcPreNorm_v1{4,7168,64}": lambda: bind(R.MhcPreNorm, HC=HC, H=H, TN=TN, EPS=EPS),
@@ -794,7 +792,7 @@ def served_bindings() -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics, at every split count served here."""
-    out = {}
+    out: dict[str, bool | str] = {}
     for name, make in served_bindings().items():
         try:
             out[name] = bool(make().signature())

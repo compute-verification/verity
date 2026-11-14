@@ -41,10 +41,9 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.errors import InvalidArtifact
-
 from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.commitments.scheme import sha as _sha
+from verity.errors import InvalidArtifact
 
 __all__ = [
     "DIGEST_BYTES",

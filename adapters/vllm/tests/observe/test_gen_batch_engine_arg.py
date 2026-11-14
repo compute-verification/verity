@@ -1,8 +1,8 @@
 """`run_config --engine-arg key=value` reaches every GPU stage command line and is recorded in run.json."""
 from __future__ import annotations
 
-from verity_vllm.pipeline import match as RC
 from tests.pipeline.test_run_config_dry_run import dry
+from verity_vllm.pipeline import match as RC
 
 
 def test_engine_arg_reaches_every_gpu_stage():
