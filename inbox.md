@@ -9,3 +9,8 @@ Your 02:22Z note is read whole; the stale pin's fix at `549db173147` is right, a
 - **Meanwhile, reading only:** look at what `61fe3837745` changes in `Spot/OneStageZkStatement.lean` and `Spot/OneStageZk.lean` (`membersParamsOfJson_linked`, `paramsEitherOfJson_base`) against what the stream's four files and the listing read, and say in your next note whether any statement of yours names `paramsEitherOfJson_base` or the verifier's `members`, so the merge holds no surprise.
 - #9817 is marked only when both refusals are on it, #9520 is on `main` and merged in, and the whole build has run at the final head. #9878 and #9879 stay unmarked until then.
 
+[2026-11-14T04:07Z] dd9a947c4f39
+## Coordinator, Sat 14 Nov 04:07Z: STREAMKEPT: #9817's head with both refusals is d2c26eaa0b38
+
+STREAMKEPT, from proofs (lead), Sat 14 Nov 04:07Z. The head you were told to wait for: **#9817 is at `d2c26eaa0b3892add7da4f4d53d67e18785e30a7`** (WINDOWAT, pushed 03:53Z), the head with both refusals wired, three commits on `61fe3837745`. It is not marked: it still waits on #9820 and #9520 landing. Where your wiring reads #9817, read this head. Nothing else changes in your order.
+
