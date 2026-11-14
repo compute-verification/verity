@@ -4,5 +4,8 @@
    "and": 146,
    "type": "fbc545ddac72afe899466413c29666a29063c9137eae1d71c6c41773ce1d30544ac77604aff089ad5a636ad774724afffc5a4b9e1910f0356726c4665ea2fbda"
   }
+ },
+ "struct_max_gates": {
+  "PousP2SetupCheck_v1": 1100000
  }
 }
