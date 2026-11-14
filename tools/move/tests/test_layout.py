@@ -427,6 +427,67 @@ def test_a_pinned_digest_the_rewrite_changes_other_than_a_manifests_stops_the_mo
     assert json.loads((r / "runs/vec.json").read_text()) == {"inputs": vec}
 
 
+LEAN_MOVE_MAP = """[roots]
+old = {}
+new = {}
+
+[paths]
+"a/lean/A/M.lean" = "b/lean/B/M.lean"
+
+[modules]
+
+[rewrite]
+exclude = []
+include = []
+"""
+LEAN_M = "namespace A.M\n\ndef foo : Nat := 1\n\nend A.M\n"
+LEAN_B = "module\n\npublic import A.M -- the moved module\nmeta import A.Mx\n\nopen A.M in\ndef bar : Nat := A.M.foo\n"
+
+
+def _lean_lock(signature: str) -> str:
+    return json.dumps({"guarantees": {"B.G": {"owner": "@x", "signature": [signature]}}, "layers": ["A.M", "B"],
+                       "reads": {"A.M": {"definitions": {"A.M.foo": "00"}, "digest": "11"}}}, indent=1) + "\n"
+
+
+def _lean_tree(tmp_path: Path, signature: str = "B.G : A.M.foo = 1") -> tuple[Path, subprocess.CompletedProcess]:
+    """The mover's run on two Lake packages, `a` and `b`, moving module `A.M` of `a` to `B.M` of `b`: `a`'s root and `b`'s
+    module import it, and `b`'s lock reads it."""
+    return _run(tmp_path, {"a/lean/lakefile.toml": 'name = "a"\n', "a/lean/A.lean": "import A.M\n", "a/lean/A/M.lean": LEAN_M,
+                           "b/lean/lakefile.toml": 'name = "b"\n', "b/lean/B.lean": LEAN_B,
+                           "b/lean/lean-audit.json": _lean_lock(signature)}, LEAN_MOVE_MAP)
+
+
+def test_a_lean_modules_move_rewrites_its_importers_and_a_locks_module_names_and_nothing_else(tmp_path):
+    """A `.lean` file moved to another package is another module: each `import` of it names the new module, and a lock's
+    `reads` key and other whole module names follow it. Its declarations keep their namespace, so `open A.M` and `A.M.foo`
+    stay, as does a module whose name only starts with the moved one's; `move_check.py` certifies the commit."""
+    r, p = _lean_tree(tmp_path)
+    assert p.returncode == 0, p.stderr
+    assert not (r / "a/lean/A/M.lean").exists() and (r / "b/lean/B/M.lean").read_text() == LEAN_M
+    assert (r / "a/lean/A.lean").read_text() == "import B.M\n"
+    assert (r / "b/lean/B.lean").read_text() == LEAN_B.replace("public import A.M", "public import B.M")
+    lock = json.loads((r / "b/lean/lean-audit.json").read_text())
+    assert lock["layers"] == ["B.M", "B"] and lock["reads"] == {"B.M": {"definitions": {"A.M.foo": "00"}, "digest": "11"}}
+    assert lock["guarantees"] == json.loads(_lean_lock("B.G : A.M.foo = 1"))["guarantees"]
+    git(r, "add", "-A")
+    cert = _certify(r, git(r, "rev-parse", "HEAD"))
+    assert cert["certified"], cert["refusals"]
+
+
+def test_a_lean_modules_move_it_could_not_certify_is_still_refused(tmp_path):
+    """A guarantee's record that names the moved module whole would change with it, and a pure move keeps the records byte
+    for byte: the move stops and names the lock. An edit of a Lean line other than an import, after the move, is refused
+    by `move_check.py`."""
+    r, p = _lean_tree(tmp_path, signature="B.G : A.M")
+    assert p.returncode == 1, p.stdout
+    assert p.stderr.strip().endswith("b/lean/lean-audit.json: the rewrite would change a guarantee or reads record"), p.stderr
+    r, p = _lean_tree(tmp_path / "edited")
+    assert p.returncode == 0, p.stderr
+    (r / "b/lean/B.lean").write_text((r / "b/lean/B.lean").read_text().replace("open A.M in", "open B.M in"))
+    git(r, "add", "-A")
+    assert not _certify(r, git(r, "rev-parse", "HEAD"))["certified"]
+
+
 def test_a_subpackage_renamed_under_the_same_parent_is_renamed_where_it_is_imported_from_that_parent(tmp_path):
     """`from pkg import old as O`, where `pkg.old` becomes `pkg.new`: the statement's module stays `pkg`, only the imported
     name changes, and an unchanged module is no reason to leave the statement as it was (the vLLM move left 30 such
