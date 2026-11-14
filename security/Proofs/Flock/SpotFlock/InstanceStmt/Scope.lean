@@ -82,7 +82,7 @@ open Properties.Flock.Nets (sparseOf FixedNetsBuild)
 open FlockDeploy.Concrete (shaB hmB bne_self plainStr_hexOf)
 open Lean (Json)
 
-set_option maxHeartbeats 0 -- the closed checks below leave the circuit's, its rows' and the table's reads to the kernel
+set_option maxHeartbeats 200000000 -- the closed checks below leave the circuit's, its rows' and the table's reads to the kernel
 set_option maxRecDepth 200000
 
 namespace SpotFlock.InstanceStmt

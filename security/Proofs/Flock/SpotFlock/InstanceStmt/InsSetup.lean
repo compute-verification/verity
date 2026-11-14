@@ -83,7 +83,7 @@ open Properties.Flock.Nets (sparseOf FixedNetsBuild)
 open FlockDeploy.Concrete (shaB hmB)
 open Lean (Json)
 
-set_option maxHeartbeats 0 -- the walk below steps through `Ins.setup` and leaves closed checks to the kernel
+set_option maxHeartbeats 500000000 -- the walk below steps through `Ins.setup` and leaves closed checks to the kernel
 set_option maxRecDepth 200000
 
 namespace SpotFlock.InstanceStmt

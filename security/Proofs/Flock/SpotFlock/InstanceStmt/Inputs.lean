@@ -59,7 +59,7 @@ open FlockSoundness.Refine
 open Properties.Flock.Nets (FixedNetsBuild)
 open Lean (Json)
 
-set_option maxHeartbeats 0 -- the walk below steps through `Raw.ins` and leaves closed checks to the kernel
+set_option maxHeartbeats 100000000 -- the walk below steps through `Raw.ins` and leaves closed checks to the kernel
 set_option maxRecDepth 200000
 
 /-! ## The masked tags -/

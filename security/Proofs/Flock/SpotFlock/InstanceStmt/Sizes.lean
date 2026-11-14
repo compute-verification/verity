@@ -65,7 +65,7 @@ open FlockSoundness.Discharge.Recursion.FirewallJson (jsonCharsObj_eq jsonCharsL
 open Std.DTreeMap.Internal (Impl)
 open Lean (Json)
 
-set_option maxHeartbeats 0 -- the `decide +kernel` steps below evaluate META's and the header's closed parts
+set_option maxHeartbeats 500000000 -- the `decide +kernel` steps below evaluate META's and the header's closed parts
 set_option maxRecDepth 200000
 
 namespace SpotFlock.InstanceStmt

@@ -75,7 +75,7 @@ open FlockDeploy.Concrete (unitLaid startsWith_append drop_append trim_of getD_t
 open FlockSoundness.Refine
 open Lean (Json)
 
-set_option maxHeartbeats 0 -- the walks below step through `HmRow.parse` and leave closed checks to the kernel
+set_option maxHeartbeats 200000000 -- the walks below step through `HmRow.parse` and leave closed checks to the kernel
 set_option maxRecDepth 200000
 
 namespace SpotFlock.InstanceStmt

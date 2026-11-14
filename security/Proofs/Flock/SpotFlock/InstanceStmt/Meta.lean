@@ -53,7 +53,7 @@ open FlockSoundness.Discharge.Recursion.FirewallJson (parse_printJson)
 open FlockSoundness.Refine
 open Lean (Json)
 
-set_option maxHeartbeats 0 -- the `kernel_rfl` steps below evaluate META's tree
+set_option maxHeartbeats 20000000 -- the `kernel_rfl` steps below evaluate META's tree
 set_option maxRecDepth 200000
 
 namespace SpotFlock.InstanceStmt

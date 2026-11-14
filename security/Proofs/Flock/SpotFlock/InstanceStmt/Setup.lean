@@ -79,7 +79,7 @@ open Flock Flock.Firewall RecDeploy.VStarNets
 open FlockDeploy.Concrete (shaB hmB bne_self unit_eq plainStr_hexOf)
 open Lean (Json)
 
-set_option maxHeartbeats 0 -- the walks below step through `Stmt.setupHidden` and leave closed checks to the kernel
+set_option maxHeartbeats 200000000 -- the walks below step through `Stmt.setupHidden` and leave closed checks to the kernel
 set_option maxRecDepth 200000
 
 namespace SpotFlock.InstanceStmt
