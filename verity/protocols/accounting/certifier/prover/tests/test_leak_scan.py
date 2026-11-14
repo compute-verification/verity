@@ -7,14 +7,15 @@ from __future__ import annotations
 import json
 import random
 import struct
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-sys.path.insert(0, str((Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")))
-import leak_scan as LS  # noqa: E402
+from verity.protocols.accounting.certifier.prover import leak_scan as LS, proof_drivers
+
+#: Flock's proof-format reader `leak_scan.reads` reads with, the suite's installed one (conftest.py)
+RD = proof_drivers.drivers().redigest
 
 REPS = ("s-circuit.rep0.bin", "s-circuit.rep1.bin")
 # The routed tie's switch row as served_tie_zk.blobs_of writes it: four values, u16 little-endian.
@@ -180,11 +181,11 @@ def test_reads_are_the_formats_fields_and_its_nonces():
 def test_reads_swaps_the_reader_under_its_lock_and_restores_it(monkeypatch):
     """`reads` reads through its own recorder in place of `transcript_check.R` only while it holds ``_SWAP`` (n2_zk scans
     its members in threads), and puts the reader back even when the format refuses the stream."""
-    seen, layout, R = [], LS.RD.layout, LS.RD.tc.R
-    monkeypatch.setattr(LS.RD, "layout", lambda b, zk: seen.append((LS._SWAP.locked(), LS.RD.tc.R)) or layout(b, zk=zk))
+    seen, layout, R = [], RD.layout, RD.tc.R
+    monkeypatch.setattr(RD, "layout", lambda b, zk: seen.append((LS._SWAP.locked(), RD.tc.R)) or layout(b, zk=zk))
     assert LS.reads.__wrapped__(b"\x01") is None
     assert len(seen) == 1 and seen[0][0] and issubclass(seen[0][1], R) and seen[0][1] is not R
-    assert LS.RD.tc.R is R and not LS._SWAP.locked()
+    assert RD.tc.R is R and not LS._SWAP.locked()
 
 
 def _framed(*records: tuple[int, int, int, bytes]) -> bytes:
@@ -266,7 +267,7 @@ def test_the_ligerito_grinding_nonces_are_not_reader_fixed(tmp_path):
     its bytes also written across two grinding nonces as a ``public`` alibi, is still leaked (which a nonce-blind scan lets
     through)."""
     stream = _zk_stream()
-    off = LS.RD.layout(stream, zk=True)
+    off = RD.layout(stream, zk=True)
     _fields, nonces = LS.reads(stream)
     pieces = {"sw_route 0 @0": SW}
     (tmp_path / "s-session.json").write_text("{}")
@@ -288,7 +289,7 @@ def test_a_zero_ring_switch_nonce_is_reader_fixed(tmp_path):
     (tmp_path / "s-session.json").write_text("{}")
     for nonce, want in ((0, ([], {k: "public"})), (5, ([k], {}))):
         stream = _zk_stream(rs=((1, nonce), (3, 0)))
-        off = LS.RD.layout(stream, zk=True)
+        off = RD.layout(stream, zk=True)
         at, e0 = off["rs.0.nonce"][0], off["zk.e0"][0]
         piece = stream[at:at + 16]
         assert piece == struct.pack("<QQ", nonce, 3)

@@ -747,8 +747,7 @@ def n2_member(name: str, key: tuple[int, int, int], insts: Sequence, pubs: Seque
     member: instance i's ``pub`` and ``wit`` rows (`n2_zk.rows_of`), ``pub`` held to ``pubs[i]`` (the verifier's own
     `n2_zk.public_words`: the registered root, the link-window, the signed digest), ``o0`` required to ``oks[i]`` (default
     every check passes)."""
-    sys.path.insert(0, str(HERE.parent / "network_traces"))
-    import n2_zk as N
+    from verity.protocols.accounting.certifier.prover import n2_zk as N
 
     bits = N.row_bits(N.HC.unit(key[0], key[1], bool(key[2])))
     words = [N.rows_of(i) for i in insts]

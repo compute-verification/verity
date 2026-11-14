@@ -36,7 +36,7 @@ starts at +0, and a nearest-even sum is −0 only of two −0s.
 The reference rejects a non-finite accumulator where these compute on (a NaN is 0x7FFFFFFF throughout); the row's
 admission (`Pc8RowA`'s ``ok``) is not one of these Definitions.
 
-On bits each is σ of its word form (`verity_vllm.definitions.boolean.sigma_lift`): the same Calls, each of the Boolean version
+On bits each is σ of its word form (`verity.circuits.ops.boolean.versions.sigma_lift`): the same Calls, each of the Boolean version
 of its Definition. `PearlCSqrt_v2` is `verity.circuits.ops.boolean.sqrt.f32_sqrt_rn` traced, and `PearlCBf16Neg_v2` one
 NOT.
 """
@@ -55,7 +55,7 @@ from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Neg, I32Le, SelectI
 from verity.circuits.ops.sqrt import PouwF32SqrtRn
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity_vllm.definitions.boolean import sigma_lift
+from verity.circuits.ops.boolean.versions import sigma_lift
 
 __all__ = ["PearlCBf16Neg", "PearlCBf16NegV2", "PearlCChain", "PearlCChainV2", "PearlCForm", "PearlCFormCode",
            "PearlCFormCodeV2", "PearlCFormV2", "PearlCGram", "PearlCGramV2", "PearlCPeel", "PearlCPeelV2", "PearlCPeelA",
@@ -302,7 +302,7 @@ def bindings() -> list:
     read calls it; and the peel at rank 32. But for the forming of a row, each is within the size circuit-check lowers a
     Definition whole at."""
     from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
-    from verity_vllm.definitions.boolean import boolean_version
+    from verity.circuits.ops.boolean.versions import boolean_version
 
     out = []
     for bits in (False, True):

@@ -36,7 +36,7 @@ from verity.circuits.requirement import (
     from_census,
     upper_bound,
 )
-from verity_vllm.definitions.boolean import boolean_version, lift
+from verity.circuits.ops.boolean.versions import boolean_version, lift
 from verity_vllm.definitions.registry import b1, b1_tp2
 from verity_vllm.definitions.registry import cublas_bf16 as CB
 from verity_vllm.definitions.registry import tp_allreduce as TA

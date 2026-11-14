@@ -12,7 +12,7 @@ from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.bits import evaluate_words
-from verity_vllm.definitions import boolean as SW
+from verity.circuits.ops.boolean import versions as SW
 from verity_vllm.definitions.registry import stop_rule as X
 from verity_vllm.definitions.registry.boolean_stop_rule import StopRuleV2
 

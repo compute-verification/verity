@@ -20,7 +20,7 @@ from verity.protocols.accounting.certifier.verifier.certificate import DeviceSta
 from verity.protocols.accounting.certifier.verifier.pacer import ClockRefused
 from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 
-from test_warden_serve import PARAMS, SESSION
+from verity.protocols.accounting.certifier.device.tests.relay_runs import PARAMS, SESSION
 
 from verity.protocols.accounting.certifier.device import warden_serve as ws  # by name, so that the spawned process finds its functions
 

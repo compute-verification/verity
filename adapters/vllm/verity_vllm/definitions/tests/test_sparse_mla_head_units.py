@@ -21,7 +21,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import evaluate
-from verity_vllm.definitions import boolean as SW
+from verity.circuits.ops.boolean import versions as SW
 from verity_vllm.definitions.numerics import sparse_mla_split_twins as TW
 from verity_vllm.definitions.registry import boolean_sparse_mla as BM
 from verity_vllm.definitions.registry import sparse_mla as M

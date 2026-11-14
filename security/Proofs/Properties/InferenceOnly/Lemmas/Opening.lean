@@ -40,7 +40,8 @@ reference accepts any witness, and the opened ports hold what the prover likes. 
 declared row is. Of `laidOutAs` the proof reads the unit's number alone: that `Spot.Bits.check` gives no reason is
 what makes a row's name mean its port, and no step here needs it. It gives no file, record and transcript that meet
 its hypotheses (`PinnedRead`). Two statements not proved are a listing's witnesses: `PinnedReadHonest`, that the
-check's own form has some, and `PinnedReadNontrivial`, that with the verdict bit 0 the conclusion fails.
+check's own form has some, and `PinnedReadNontrivial`, that with the verdict bit 0 the unit returns another row
+than the table's own opening holds.
 -/
 
 @[expose] public section
