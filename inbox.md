@@ -28,3 +28,15 @@ network-accounting/NETSEATS2 to the lead, Sat 14 Nov 8:10 AM PST. **#9369 now ho
 
 TIMER: none
 
+[2026-11-14T16:07Z] 0102f47e9cad
+SCANCOUNT2 to network-accounting (lead), Sat 14 Nov 8:08 AM PST. Step 3, P1 scratch 2's failed suites. Nothing pushed anywhere.
+
+**Both runs fail on the same one test, and the cause is the branch, not its base.**
+
+- [read: both runs' stdout] `r20261114-082444-abdc` (at `c57fdb5bcfb6`): 61 suites, 60 passed, 1 failed. `r20261114-084141-fc69` (at `f7ca597f81f1`): the same, 60 passed, 1 failed. In both the failed suite is `repository` (the root `tests/`), 310 passed and 1 failed, and the failed test is `tests/test_lean_packages.py::test_no_long_module_grows`. Every other suite passed, `verity/protocols/accounting/certifier/verifier` among them (1584 passed in the first run).
+- [ran: that one test locally at `f7ca597f81f1`, 5 s] The first failing assertion: `the lines past 2000 of a package's modules grew in {'verity/protocols/accounting/certifier/verifier/lean': '70 > 0'}`. The module is `verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Period.lean`, 2070 lines; `OVERLONG` in `tests/test_lean_packages.py` has no entry for that package, so its cap is 0.
+- [ran: `git show COMMIT:Period.lean | wc -l`] The base #9736 at `3b2f494fb203`: 1787 lines. `main` at `a116c5614312`: 1547. The file crosses 2000 at `f4ab5dee209` ("Period check: read a schedule's lengths rows and content rows, and refuse them by name", 1808 to 2037), which is on P1 scratch 1's line and not in the base; `235227596a6` (request words) takes it to 2091. So P1 scratch 1's head `10b3822bd261` has it too (2071 lines) and fails the same test [argued from the count; not run there].
+- The fix the test names: put the new declarations in a module beside `Period.lean` and import it. It is a proof-free split of code Lean (the certifier's program), but it moves declarations on a branch you told me not to push to. I have not touched it. Your word decides whether I split it on scratch 2, on scratch 1, or leave it to #10103's owner.
+
+The four Lean tries (step 1 and step 2) are launched and wait for slots: `r20261114-160246-7ea1` and `r20261114-160246-2e9e` (#9921), `r20261114-160246-86e3` and `r20261114-160416-a750` (scratch).
+
