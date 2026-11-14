@@ -14,10 +14,11 @@ from verity.circuits import cut
 from verity.circuits.defs import bind
 from verity.circuits import word as W
 from verity.circuits.call_scope import specialization
+from verity.definitions.registry.catalog import load
 
 
 def _spec(fam: str, **statics):
-    return lambda: specialization(fam, statics)
+    return lambda: specialization(fam, statics, load()[0])
 
 
 def _bound(module: str, name: str, **statics):
