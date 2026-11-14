@@ -16,6 +16,11 @@ files = ["adapters/vllm/tests/pipeline/test_two_stage_driver.py", "benchmarks/on
 [words_in.words]
 "r.registration" = "r.docket"
 
+[[words_in]]
+files = ["benchmarks/one_stage/tests/test_stop_audit.py"]
+[words_in.words]
+"registration=NS(digest=" = "docket=NS(digest="
+
 [keep]
 patterns = []
 strings = []
