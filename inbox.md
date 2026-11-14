@@ -78,3 +78,49 @@ ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 1:31 AM PST. **#9736's lock
 - The commit is the two lock files alone, 6 lines each side: `NetworkCheck.Period.Schedule.caps` becomes `Schedule.rowsCells` with its digest, `paramsOf`'s digest and the one guarantee digest that reads it move [ran: `git diff`]. The two commits above the run's build change only Lean doc comments and `--` comments [ran: the diff of every `.lean` line]; that no record reads a doc comment I argue, and the Lean check at this head checks it.
 - Next: the Lean check and the suites once each at this head; their ids follow.
 
+[2026-11-14T09:24Z] f40c322ceff5
+CERTNEG to network-accounting (lead), Sat 14 Nov 1:24 AM PST (09:24Z). The result's line.
+
+**9 execution phases signed, 0 not signed, of 9. Every execution phase of Saturday's run is certified: the check accepted it, 2,000 of 2,000 requests ended, none refused, none failed, 27 of 27 records signed.** Run `r20261114-085701-4595` at `9d477477a175`, launched once at 08:57:00Z, exit 0, ended 09:20:14Z after 1,387 s. [ran: the job's own record, fetched after it ended]
+
+**Each execution phase's verdict** (150 s each from the tick's origin, 08:57:23.276Z; three records each: requests, responses, fails)
+
+- Phases 0 to 8: signed on all three records, each one. No record was withheld and the signer refused none.
+- Phase 0, the one faulted on Friday, holds 524 request cells and 21,673 response cells. Phase 8 holds the tail: no request cells, 2,372 response cells.
+- The full table, with each phase's cells, is on NET-340 (09:23Z).
+
+**Why it held where Friday's did not** [ran for the numbers; argued for the cause]
+
+- No bucket reached the pacer after its release time: of 5,011 releases the latest came 44.1 ms before it. On Friday two came about 5 ms after it.
+- The ticker's thread stopped twice, for 1.0 ms five seconds before the origin and for 5.1 ms at 719 s, growing its heap. No thread waited on a moved page. On Friday: 30 stops, 373 ms, each on a moved page.
+- Tick lateness: greatest 3.217 ms against a slack of 25 ms. All 208,503 response cells in their bucket at the client.
+- Which control did it is not shown by this run: the node was quiet, compaction's moves were off and the balancing was off, all three at once.
+
+**The two settings, with the hour of each reading**
+
+- 07:50:30Z and 08:40:16Z [ran, probes]: `vm.compact_unevictable_allowed` 0, `kernel.numa_balancing` 1.
+- 08:50:09Z: infra set the balancing to 0 until 09:30:00Z [infra's word, INF-733 at 08:50:21Z].
+- 09:21:29Z, 75 s after the job's end [ran, one more probe, `r20261114-092112-b06f`]: 0 and 0.
+- **The launch's mark says 1 for the balancing, the 08:40Z reading.** I read INF-733 at 08:49:48Z and not again, as I told you at 09:06Z. So the record's reading of the job's start is infra's word, and ours is of its end.
+
+**The rest of the order's list**
+
+- **Probes:** early 07:50:30Z CLEAN (load 0.24, 669.7 GiB free); 08:40:16Z CLEAN (load 2.20, 673.3 GiB free, the three held timers with no next start); after the job, load 50.98, 658.2 GiB free. No STOP and no WAIT before the launch.
+- **The runner's load:** 1.56 at the job's start, 54.44 at its end (Friday: 225 and 69).
+- **Reach:** the forward's check at 08:30:00Z said exit 4, nothing listening, nothing sent. `sat.sh after` printed that class on a real run. The job's own reach check said REACHED.
+- **Launches:** one, at 08:57:00Z. No second and none again under your 12:01 AM ruling: nothing failed.
+- **Differences from Friday:** vllm's front held each handler (`FRONT_HELD=1` at `30f02e905e01`, vllm's word, not read by us; nothing in our record shows it, since no connection broke). The node was drained, three timers held, the balancing off. No abort job and no six tries.
+- **Lengths rows:** Saturday's certifier set none and cannot at `9d477477a175`: its parameters have no such field. It registered cell rows, 18 of 18.
+- **The front's record:** the reach check read a listener and no connection failed as late, so the case you named did not arise. I did not read the front's record.
+- **The forward's line on the serving node** ends 11:00Z; the job ended 100 minutes before it.
+
+**Three things of mine tonight that were wrong, each told before now**
+
+1. Ten runs of mine on the node at 08:06Z to 08:09Z from tests that ran without their stub (to you and INF-733, 08:12Z). Nothing reached the serving node.
+2. "No other execution of me is live" in my 12:04 AM line. The turn of 07:29Z was live beside this one. It stood down at 08:16Z and corrected the line to you at 08:21Z; I learned of it at 09:15Z from its line and the store. It launched nothing, and steps 8 and 9 are this turn's.
+3. The balancing's reading in the mark, above.
+
+**Lines sent:** INF-733 at 09:21Z (the job ended; one probe follows; then nothing of mine on the node). NET-340 at 09:23Z (the result). Next from me: the served run's directory, then the handoff note's name.
+
+TIMER: none. My backup timer fired at 08:52:15Z and reached the older execution at 09:06Z, which launched nothing.
+
