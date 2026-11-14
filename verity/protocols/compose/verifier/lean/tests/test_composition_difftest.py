@@ -785,29 +785,6 @@ def test_remote_v1_ties_pearl_plus_window_record_to_the_one_the_policys_record_i
         assert R.run_window(undecoded, b"") is None and strays(record(0), undecoded) is None, undecoded
 
 
-@functools.cache
-def _empty_audit(i: int, after: str | None = None) -> tuple[dict, dict, dict]:
-    """One-stage v2's audit of `OS.SETUPS[i]`, a program that reads no registered value, its params but δ, its record
-    and its evidence: its sample at its challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin
-    tree) drew no unit (a subset of none), so it has no session and no proved unit, and `BLOBS` hold its circuit and
-    public files. Its log is empty, or with `after` (a record's canonical JSON) that one record, which its record is
-    chained right after. Made once each: a challenger's signed session is slow to make."""
-    s, law = OS.SETUPS[i], {"k": 0, "law": "subset"}
-    part = {"program": s.sha512, "query": s.query}
-    log = [json.loads(after)] if after else []
-    rec = OS.R.record(s.program, s.query, law, OS.SCHEME, [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports],
-                      OS.WINDOW, leaf_layer=OS.LEAF, previous=OS.R.digest(log[-1]) if log else None, partition=part)
-    ch, d, coins = OS._challenger_draw(random.Random(f"composition/empty/{i}"), s, law, rec, trees=0)
-    evidence = {"coins": coins, "draw": d, "instances": 0, "proofs": {"public": _sha(PUBLIC), "sessions": []},
-                "proved_units": [], "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": None,
-                "session_roots": None, "sessions": [], "statement": {}}
-    params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "law": law,
-              "leaf_layer": OS.LEAF, "log": log, "partition": part, "ports": s.ports, "program": s.desc,
-              "proofs": {"circuit": _sha(CIRCUIT), "registered": None}, "query": s.query, "registered": None,
-              "scheme": OS.SCHEME, "window_root": ch.ledger.window["root"], "work_table": None}
-    return params, rec, evidence
-
-
 def _window_audit(made: tuple[dict, dict, dict], w: dict) -> tuple[dict, dict, bytes]:
     """SPOT's audit `made` (its params but δ, its record and its evidence, its log W alone) as a composite's entry at δ
     1/2, the policy's entry on its record and registered circuit (`policy_on`), and that record R, chained after W."""
@@ -841,9 +818,10 @@ def _paths(j) -> list[str]:
 @pytest.mark.skipif(not SERVED, reason="VERITY_COMPOSITION_SERVED names no served run (its Lean check hashes 2.1 GB of "
                                        "distinct pass files and replays 470 tiles: about an hour on a CPU node)")
 def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
-    """Remote v1 on a served Pearl+ run with live coins and the challenger's sample: Pearl+ accepts in Lean, both ties
-    hold, and the composite is undecided only because sampled proofs is (`_empty_audit`, as everywhere here), in Lean
-    as in Python. The run is the dress rehearsal r20261105-082550-ed23's (development, never the record): its four
+    """Remote v1 on a served Pearl+ run with live coins and the challenger's sample: Pearl+ accepts in Python and doesn't
+    reject in Lean, both ties hold in Python, and the composite rejects only because SPOT does, in Lean as in Python:
+    SPOT's audit is `_sessionless_audit`'s, one proof block and no session, which SPOT refuses at its challenger's
+    coins, as it refuses every audit this suite makes on a CPU. The run is the dress rehearsal r20261105-082550-ed23's (development, never the record): its four
     retained passes, the epoch coins, the coin record and the window record W the passes are tied to, with the verdict
     ``served_passes.py verify`` recorded on them (``verify.json``), which is Pearl+'s Python answer here
     (`reference.pearl_plus_answer`); the Lean replays the passes. `VERITY_COMPOSITION_SERVED` names a directory holding
@@ -851,13 +829,14 @@ def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
     out/served`` lays them out under ``out/served`` (run r20261105-155828-663b's record): ``passes/pass-0000{0..3}/``,
     ``passes/coins.json``, ``coin.json``, ``verify.json`` and ``window-record.json``.
 
-    The registration record R the policy and sampled proofs commit to is constructed here, the empty audit's record
-    chained right after W (``previous`` = digest(W), W the one record of its log), because the dress ran no follow-on
+    The registration record R the policy and SPOT commit to is constructed here, that audit's record chained right
+    after W (``previous`` = digest(W), W the one record of its log), because the dress ran no follow-on
     and so registered no R. The run of record's own R, with its own run, replaces it.
 
-    It catches what no sampled case can: the composite's `run` and `window` ties and Pearl+'s Lean decoder, opener and
-    check on a real run's commitment, coin record and files handed over as blobs, which the synthetic cases (Pearl+'s
-    commitments that don't decode, the ties' unit tests) never reach."""
+    It catches what no sampled case can: Pearl+'s Lean decoder, opener and check on a real run's commitment, coin record
+    and files handed over as blobs, which the synthetic cases (Pearl+'s commitments that don't decode) never reach, and
+    the `run` and `window` ties holding on that run in Python. The Lean's ties are not reached here: they hold only where
+    no subprotocol rejects (`Core.Composition.holdTies`), and SPOT rejects; their unit tests and `#guard`s hold them."""
     d = Path(SERVED)
     w = json.loads((d / "window-record.json").read_bytes())
     coin, verified = json.loads((d / "coin.json").read_bytes()), json.loads((d / "verify.json").read_bytes())
@@ -866,7 +845,7 @@ def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
         "verity-pouw/pearl-plus-coin/v2", "challenger", SERVED_RUN, SERVED_RUN)
     assert verified["answer"]["verdict"] == R.ACCEPT, verified["answer"]
 
-    audit, policy, record = _window_audit(_empty_audit(0, canonical(w)), w)
+    audit, policy, record = _window_audit(_sessionless_audit(0, canonical(w)), w)
 
     passes = sorted((d / "passes").glob("pass-*"))
     manifests = [(p / "manifest.json").read_bytes() for p in passes]
@@ -888,10 +867,10 @@ def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
     monkeypatch.setitem(R.PEARL_PLUS.cases, "served", (pearl, R.pearl_plus_answer(commitment, verified)))
 
     case = product_case(R.REMOTE_V1, [policy, as_component(R.PEARL_PLUS, pearl), audit])
-    assert R.REMOTE_V1.verdicts(case) == [R.ACCEPT, R.ACCEPT, R.UNDECIDED]
+    assert R.REMOTE_V1.verdicts(case) == [R.ACCEPT, R.ACCEPT, R.REJECT]
     assert R.REMOTE_V1.tied(case) == [("record", True), ("window", True)]
     want = R.REMOTE_V1.answer(case)
-    assert want["verdict"] == R.UNDECIDED, want
+    assert want["verdict"] == R.REJECT, want
 
     blobs = [tmp_path / "circuit", tmp_path / "public"]
     for b, data in zip(blobs, BLOBS):
@@ -902,9 +881,9 @@ def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
     p = subprocess.run([D.build(REMOTE_PACKAGE, "remote-v1"), "check", tmp_path / "params", tmp_path / "commitment",
                         tmp_path / "evidence", *blobs, *files.values()], capture_output=True, text=True)
     got = json.loads(p.stdout)
-    assert p.returncode == 2 and {k: v for k, v in got.items() if k != "reason"} == {
+    assert p.returncode == 1 and {k: v for k, v in got.items() if k != "reason"} == {
         k: v for k, v in want.items() if k != "reason"}, (p.returncode, got, p.stderr)
-    assert got["reason"].startswith(f"{R.SAMPLED_PROOFS.id} undecided") and R.PEARL_PLUS.id not in got["reason"], got
+    assert got["reason"].startswith(f"{audit['id']} reject") and R.PEARL_PLUS.id not in got["reason"], got
 
 
 NCI_PACKAGE = ROOT / "verity/protocols/policy/inference_only/verifier/nci/lean"
