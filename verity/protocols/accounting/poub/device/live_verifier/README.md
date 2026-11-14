@@ -1,4 +1,4 @@
-# The verifier's auditor host
+# The verifier's auditor device
 
 `host.py` is vy-auditor-1's verifier service: the verifier of PoUB
 (`verity/protocols/accounting/poub/verifier/session/verifier.py`) run only as `auditor`, from a tree infra pinned, one run at a time, behind the
@@ -87,7 +87,7 @@ pin, not because of where they came from. A run binds to a role once the pinned 
 The same `host.py`, pinned under `/opt/vy-compose/<commit>` (its `pins.jsonl`, `/var/lib/vy-compose`), is
 `vy-compose-gate`, which serves one verb: `compose`, a served run's final record and composite composed off the served
 node from its compose hand-off. The lane's own gate key is forced to `vy-compose-gate --ssh "$SSH_ORIGINAL_COMMAND"
---key LANE` for `research` on the auditor host's public address (`restrict`, and `from=` the hosts that send
+--key LANE` for `research` on the auditor device's public address (`restrict`, and `from=` the hosts that send
 hand-offs), and the compose itself runs as `auditor`, and the sender is
 `served_verdicts.sh gate-compose`, which runs:
 

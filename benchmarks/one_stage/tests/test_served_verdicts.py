@@ -614,7 +614,7 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
 
 def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_on(tmp_path):
     """The network certifier's answer as its piece writes it when it ran on the gate's machine and the piece's steps on
-    the served node: its accept's clause says the piece establishes no trusted-host and gives no bound, and which
+    the served node: its accept's clause says the piece establishes no trusted-device and gives no bound, and which
     machine ran what, so the ``RECORD`` line's accept isn't read as the auditor's devices having placed it."""
     premise = ("unmet: this piece establishes no trusted-host and gives no bound on that ground; the network certifier "
                "ran on 192.0.2.84, not the developer's vy-dc-h200; the chain's checks and samples ran on vy-dc-h200, and "

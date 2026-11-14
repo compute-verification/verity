@@ -3,7 +3,7 @@ does not give: seven types, one for each question to the runtime's owner, each t
 
 None is implemented. The runtime's owner gives each, or refuses it and the device keeps doing that part in its own
 processes outside the runtime, as it does today: the relay (`warden.Warden`), its pacer (`pacer`), the publisher
-process that holds the key, and the auditor host's relay session, which starts the relay on a listener it holds.
+process that holds the key, and the auditor device's relay session, which starts the relay on a listener it holds.
 
 1. `HeldSession`: a listener that outlives one call. A caller starts the party's run, leaves it, asks about it and
    collects it. The run listens on a socket it was handed, and says where it listens in a local file.

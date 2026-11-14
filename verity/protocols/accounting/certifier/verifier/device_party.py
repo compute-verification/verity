@@ -17,7 +17,7 @@ Its life is the methods its turns call:
 keeps. `open_session`, `certify`, `sign` and `collect` raise `NotImplementedError` naming the goal
 `network/certifier-device-is-a-party`. Each is done today by the device's own processes outside the runtime, whose I/O
 the runtime has no form for yet (`device_needs`): the relay (`warden.Warden`), its pacer and its publisher process,
-started by the auditor host's relay session.
+started by the auditor device's relay session.
 """
 
 from __future__ import annotations
@@ -116,7 +116,7 @@ class NetworkCertifier:
 
     def open_session(self, identity: Identity) -> Opened:
         """Start the relay on its listener and the publisher on the key (`identity.capabilities["signing-key"]`), and
-        return the run's deployment and load. Seam: the relay listens on a socket the auditor host's relay session
+        return the run's deployment and load. Seam: the relay listens on a socket the auditor device's relay session
         holds and binds its own connections, I/O done outside the runtime (`device_needs.HeldSession`)."""
         raise NotImplementedError(f"{GOAL}: open_session, the relay's session on its held listener")
 

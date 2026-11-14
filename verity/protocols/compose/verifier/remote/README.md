@@ -32,16 +32,16 @@ overhead, `*Horizon` a monitoring period's pooled bound, `Session*` a run of a s
 - **The developer** (the prover) runs the datacenter. It registers, reports its advice, commits its values and proves the sampled
   proof blocks behind the ZK server. Nothing it runs or hosts is trusted, and neither is the audited hardware or its
   vendor.
-- **The auditor** has two parts, both on auditor hosts that the developer doesn't control: its **challenger** (the
+- **The auditor** has two parts, both on auditor devices that the developer doesn't control: its **challenger** (the
   live coins, which sample what must be proved) and its **verifier** (the Lean verifier: `flock-verify` for each sampled
   proof block, and `remote check` for the verdict). The challenger is the one auditor-trusted device remote relies on
   (`trusted-host`); the verifier is the auditor's own check. The verifier may also use its own coins
   (`IO.getRandomBytes`) instead of the challenger's.
 - **How the coins reach the developer.** The challenger opens each coin only after the developer's commitment is
   recorded, over one TCP stream that the developer's client opens at its own `127.0.0.1` port (`RemoteChallenger`).
-  Deployed, on an auditor host, that port is the far end of a coin link the auditor host opens to the
+  Deployed, on an auditor device, that port is the far end of a coin link the auditor device opens to the
   developer's machine: `ssh -N -R` straight to that machine's sshd, relayed and counted by network certification's
-  code running on the auditor host (`verity/protocols/compose/device/live_challenger/coin_link.py`). No coin path of remote's own, with no
+  code running on the auditor device (`verity/protocols/compose/device/live_challenger/coin_link.py`). No coin path of remote's own, with no
   network certifier anywhere, is specified yet.
 - **No auditor devices at the site.** There are no network certifiers or memory challengers. So network certification,
   PoUS and PoUB are onsite's, not remote's, and memory wipes are neither composite's yet. For network certification,
@@ -246,7 +246,7 @@ expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `DampenerThreaded` 
 
 - *By whom.* Not by remote yet: the policy isn't one of its subprotocols (Subprotocols, above). Its check runs on its
   own, as `nci-check` (`NciCheck.Baseline.check`, `verity/protocols/policy/inference_only/verifier/nci/lean`); once composed, the
-  verifier runs it on an auditor host in each verification phase.
+  verifier runs it on an auditor device in each verification phase.
 - *On what.* The registered circuit's description, its inference partition and θ's provenance, against the registration
   log. No hardware at the site is involved.
 - *From which coins.* None. The check is deterministic, so it adds no failure probability of its own. What is to bind
@@ -466,8 +466,8 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
   table and link finders as `TableCRZAt` and `LinkCRZCAt`.
 - `trusted-host` (`Verity.Assumptions.TrustedHost`, `Definitions/Core/Assumptions.lean`): the challenger is
   the auditor's device on a host the developer doesn't control, and the custody above rests on it; the verifier runs
-  on an auditor host too. In Lean, only onsite's guarantees (network certification's) read `TrustedHost`.
-- `CoinsAfterCommitment`: the challenger's coins reach the developer's machine only over paths the auditor's hosts
+  on an auditor device too. In Lean, only onsite's guarantees (network certification's) read `TrustedHost`.
+- `CoinsAfterCommitment`: the challenger's coins reach the developer's machine only over paths the auditor's devices
   control, and only after the commitment. Prose only: no guarantee takes it. Onsite's `CoinsConfidential`
   (`Pouw.Assumptions.CoinsConfidential`, which `Pouw.Guarantees.Dither.FleetSound` takes) is another premise: a
   replica's coins reach no machine outside its certifier's boundary before it has them.

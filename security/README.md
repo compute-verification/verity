@@ -191,7 +191,7 @@ Remote, for each execution block E_j, in five steps:
 
 1. **Commitment.** The developer commits E_j's values under hiding leaves (every value crossing a proof-block boundary,
    its inputs and outputs), a_j, 𝒫_j and 𝓘_j, before any of E_j's coins.
-2. **Challenge.** The challenger, on an auditor host, flips live coins: the sample of proof blocks (by size class) and
+2. **Challenge.** The challenger, on an auditor device, flips live coins: the sample of proof blocks (by size class) and
    PoUW's noise and check coins.
 3. **Proof.** The developer proves each sampled proof block in zero knowledge and answers PoUW's challenges in time.
 4. **Validation.** The verifier checks the proofs, the partitions' public rules, 𝓘_j's budgets (c, k) and PoUW's
@@ -556,7 +556,7 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
 - **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `SHA512CRStrict`,
   `SHA512CRExpected`, `TileServiceSound`, `TileSampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `UnitFixed` and
   `SharedNoiseLucks`. Trust model: nothing the developer runs or hosts is trusted, and every coin is live,
-  with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger, which
+  with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor devices. The challenger, which
   flips each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
   (`trusted-host`); the verifier is the auditor's own check. Two premises about where the challenger runs are
   onsite's (`verity/protocols/proofs/spot/verifier/README.md`): `CoinsConfidential`, the named Prop

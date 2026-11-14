@@ -1816,7 +1816,7 @@ them.
     or epoch, gets none. Nothing else publishes the salt.
   - **Asked for and answered under LMS** (`Proxy(challenger_key=…, signer=…)`, both or neither). Deployed, the
     certifier runs on the link, off the developer's node, and the proof system's challenger, which is the
-    auditor's, on an auditor host. `challenger_key` comes from the auditor's deployment record, never from the
+    auditor's, on an auditor device. `challenger_key` comes from the auditor's deployment record, never from the
     prover's configuration, and `trusted-host` covers that record's custody. Each proxy samples a run id at
     construction, 32 bytes of the certifier's own randomness (`Proxy.run_id`; `run_nonce`, `secrets.token_bytes` by
     default, is the tests' hook), and the record gives it to the challenger beside the certifier's key, written when
@@ -2319,7 +2319,7 @@ client's view read back from the certifier's record (`SecurityProofs.MonitoringP
   make a tick late and so choose which windows fault (about 1 bit a window otherwise);
 - a monotonic clock that nothing the prover runs can step or slew by more than the slack: buckets are read from it.
 
-Both are part of the named assumption `trusted-host` (the auditor's host and its provider are trusted). Neither is
+Both are part of the named assumption `trusted-host` (the auditor's device and its provider are trusted). Neither is
 checked here.
 
 **What it attests.** Each direction's records hold exactly the cells sent that way, padding included, so |T| is the
@@ -2330,7 +2330,7 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   the egress form's), whose `FAIL` cells and reasons don't match one for one, or in which a connection failed.
 - `benchmarks/network_traces/warden_serve.py` runs the network certifier live and checks that each client got exactly its egress
   record's cells, each in its bucket. The auditor gate's `warden-rehearse` (`verity/protocols/compose/device/live_challenger/auditor.py`)
-  runs the same rehearsal on the auditor's host.
+  runs the same rehearsal on the auditor's device.
 - The server's copy of each request carries its release order (`release`), so that `serve-openai --admit
   release-order` adds requests to the engine in the order they were released: `x-verity-release: N`, N its `END`'s
   index among the ingress records' `END` cells, `x-verity-release-run:` the network certifier's `run_id` (in
@@ -2374,7 +2374,7 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
 **Named gaps:**
 - TLS isn't terminated: both sides are plain TCP.
 - Every recorded run had the network certifier on the server's host, and the server gets the ingress bytes over loopback, with no
-  shim on its side. `warden-rehearse` puts the network certifier and its client on the auditor's host and reaches the server
+  shim on its side. `warden-rehearse` puts the network certifier and its client on the auditor's device and reaches the server
   through the gate's ssh tunnel to the peer's loopback. No run of it is recorded yet, and the tunnel's far end is still
   loopback on the developer's host.
 - **The cells' wiring is open to the verifier.** A proof block's read is (q, k), connection q's

@@ -1,4 +1,4 @@
-"""The auditor host's service (`auditor.py`) on a test key, with the gate's root steps (chown, systemctl) and the clock injected:
+"""The auditor device's service (`auditor.py`) on a test key, with the gate's root steps (chown, systemctl) and the clock injected:
 a window is reserved, then opened at its root (one session a root), its entries signed before serve.py runs; the session's end entry seals its out/
 and counts the coins each family released; a session whose pin moved doesn't run; the gate refuses what it can't check; and the
 reference check refuses a ledger that was edited, cut, reordered or given a second session for a root. The
