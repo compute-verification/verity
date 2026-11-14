@@ -365,6 +365,7 @@
         "verity/protocols/accounting/pous/device/",
         "verity/protocols/accounting/pous/",
         "verity/protocols/accounting/pous/prover/",
+        "verity/protocols/accounting/poub/prover/",
         "verity/protocols/accounting/poub/verifier/",
         "verity/circuits/requirement/",
         "security/Definitions/Accounting/Bandwidth.lean",
@@ -564,7 +565,8 @@
         "tools/verity/lean/",
         "tools/lean/",
         ".agents/skills/lean-proofs/",
-        "security/"
+        "security/",
+        "benchmarks/proof_status/"
       ],
       "branch_suffixes": [
         "741b",
