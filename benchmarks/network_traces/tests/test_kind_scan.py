@@ -139,7 +139,7 @@ def test_the_chains_endpoint_rebuild_or_any_other_step_is_a_finding(tmp_path, pe
             "negatives_refused": {"n2/tampered": True, "scan/forged": True}, "steps": steps}))
         return [(f.file, f.path, f.why) for f in KS.scan(d)[0]]
     step = {"verdict": "accepted", "in_the_clear": "the certificates", "eps_at_delta": None}
-    assert found(dict.fromkeys(KS.STEPS, step), "warden") == []
+    assert found(dict.fromkeys(KS.STEPS, step), "declared") == []
     rel = "chain/report/report.json"
     assert found({**dict.fromkeys(KS.STEPS, step), "endpoint": step}, "endpoint") == [
         (rel, "steps.endpoint", KS.ENDPOINT.why)]
