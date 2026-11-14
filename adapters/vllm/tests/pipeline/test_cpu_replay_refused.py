@@ -149,6 +149,15 @@ def test_the_required_manifest_is_the_one_the_command_names_else_the_commit_s_ow
     assert of(named, recorded) == (str(named), manifest)
 
 
+@pytest.mark.parametrize("want", [ABSENT, None, ""])
+def test_a_commit_that_recorded_no_required_manifest_gives_the_replay_none_and_reads_no_file(tmp_path: Path, want: object) -> None:
+    """A Commit that recorded no required manifest's sha256 (left out, null or empty) has none to replay under: `manifest_of` gives
+    no path and no manifest, and reads no file, not one the command names nor one the Commit recorded."""
+    o = CPU.Options(bundle="B", row_dir=str(tmp_path / "row"), checkpoint_dir="CK", required_manifest=str(tmp_path / "named.json"))
+    ctx = with_({"args": {"required_manifest": str(tmp_path / "recorded.json")}}, "required_manifest_sha256", want)
+    assert CPU.manifest_of(o, ctx, SimpleNamespace(programs_root=None, program_dir=None)) == (None, None)
+
+
 # ---------------------------------------------------------------------------------------------- the decided run's components
 
 def test_a_decided_run_s_components_end_on_the_weights_pin_and_the_replay_and_its_why_names_each_failure_in_that_order(

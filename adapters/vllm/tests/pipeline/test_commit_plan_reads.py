@@ -4,6 +4,7 @@ CPU only, over stand-ins for the Program loaders and the oracle's reading; the p
 `test_commit_plan.py`."""
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -199,6 +200,24 @@ def test_a_plan_that_holds_no_producer_facts_gives_the_commit_none_and_an_empty_
 def test_a_plan_s_facts_with_no_record_of_them_come_with_an_empty_one(tmp_path: Path) -> None:
     got, record = CP.use(plan(tmp_path, producer_facts={"facts": [["op", "m0", {}]]}), None)
     assert got == ({("op", "m0"): {}}, {}) and record["members"] == 1
+
+
+@pytest.mark.usefixtures("code_versions_stood_in")
+@pytest.mark.parametrize("named", [ABSENT, None, ""])
+def test_a_commit_that_names_no_required_manifest_keys_its_plan_by_none_for_the_manifest_s_bytes(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, named: object) -> None:
+    """`key` reads no manifest for a Commit that names none (the option left out, null or empty) and keys the plan by None for its
+    bytes, where a Commit that names one is keyed by the file's sha256; every other field of the key is the same either way."""
+    monkeypatch.setattr(CP, "_version", lambda dist: "0.11.0")
+    workload, required = tmp_path / "workload.json", tmp_path / "manifest.json"
+    workload.write_text("{}")
+    required.write_text(json.dumps(manifest()))
+    args = vars(options(workload=str(workload)))
+    unnamed = CP.key(SimpleNamespace(**with_(args, "required_manifest", named)))
+    named_one = CP.key(SimpleNamespace(**args, required_manifest=str(required)))
+    assert unnamed["required_manifest_sha256"] is None
+    assert named_one["required_manifest_sha256"] == hashlib.sha256(required.read_bytes()).hexdigest()
+    assert with_(unnamed, "required_manifest_sha256", ABSENT) == with_(named_one, "required_manifest_sha256", ABSENT)
 
 
 def test_the_commit_plan_command_writes_the_plan_it_derived_where_out_names_and_prints_its_record_and_key(
