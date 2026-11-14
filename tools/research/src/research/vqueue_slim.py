@@ -399,8 +399,8 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
 
 def start_quick(driver: Landing, sha: str, base: str, avoid: Iterable[str] = ()) -> dict | None:
     """Launch candidate ``sha``'s quick tier since ``base`` (`Landing.launch_quick`: `queue.QUICK_TIER` on its own merge, as a
-    `research run`) on one of the queue's machines, the one its sha picks of those but ``avoid`` (the machine its tier before
-    ended in infra on, ``erred_on``; all of them when that leaves none), so a start again takes the same one.  The record to
+    `research run`) on one of the queue's machines, the one its sha picks, so a start again takes the same one, but of those
+    ``avoid`` doesn't name (the machine its tier before ended in infra on, ``erred_on``) where that leaves any.  The record to
     keep: ``ids`` (none while its detached launch runs, ``launch`` then), ``tip``, ``base``, ``at``, ``on``, ``steps``
     (`QUICK_STEP`) and ``gate`` (`QUICK`), which `judge` reads by `_quick`.  None, logged, when it registered no run or
     ``driver`` launches nothing (a dry run, or its queue's shadow)."""

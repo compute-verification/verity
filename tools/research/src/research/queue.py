@@ -2,9 +2,10 @@
 PRs ready to land (marked ready at their heads, with a reviewer's land verdict or under the low-risk rule, drive.toml's
 `lowrisk_lane`) onto `main` as candidates, and moves `main` only to a candidate with no new failure (`research.vqueue`): each
 gating task passed, failed only where an unexpired allowance of policy.toml at its base covers, or fails on its base too, so
-`main`'s reds only shrink; under the loop's `--gate verdict` a plain candidate lands on its members' land verdicts and the quick
-tier, and a red of `main`'s whole check after it reverts the one culprit (`vqueue_loop.Loop._plain`, `_main_red`).  A failure the candidate's base doesn't share ejects its lone suspect, or bisects several, and the
-candidate and those above it are built again without them in the same tick.
+`main`'s reds only shrink; under the loop's `--gate verdict` a plain candidate lands on its members' land verdicts and the
+quick tier, and a red of `main`'s whole check after it reverts the one culprit (`vqueue_loop.Loop._plain`, `_main_red`).  A
+failure the candidate's base doesn't share ejects its lone suspect, or bisects several, and the candidate and those above it
+are built again without them in the same tick.
 
     research queue status [--json]                 each open PR as the verified queue admits it onto `main` (no `next`): what
                                                    it waits for, why it was refused, or that its head is on `main`;
@@ -259,8 +260,9 @@ across a move, and a land verdict carries to the restacked head when its own cha
 Landing.  The verified queue's loop (`research queue vqueue`, `research.vqueue_loop`) is the one landing path: it builds each
 candidate from `main` and the PRs ready to land, commits the lock records the candidate's records run regenerates
 (`research.vqueue_records`), and fast-forwards `main` only to a candidate with no new failure (of the quick tier alone, for a
-plain candidate under `--gate verdict`, whose whole check follows on `main`); it tells each owner what it refuses.  What reaches `main` and changes what a guarantee says sends the spec-change DM of what
-changed (`spec_alert`, after each move of `main`: `Landing._on_main`).
+plain candidate under `--gate verdict`, whose whole check follows on `main`); it tells each owner what it refuses.  What
+reaches `main` and changes what a guarantee says sends the spec-change DM of what changed (`spec_alert`, after each move of
+`main`: `Landing._on_main`).
 
 Signed verdicts.  A label's `by` is whatever its writer said.  With drive.toml's `signed_verdicts` on at `main`, the loop counts a
 ready mark or land verdict only beside a `label_auth` label that authenticates it (`research.labelauth`, `StoreLabels`): a
