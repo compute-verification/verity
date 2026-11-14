@@ -51,14 +51,14 @@ def host_leaf(host, C, s, i):
     return host[s][i * C:(i + 1) * C]
 
 
-def test_the_release_keeps_exactly_the_drawn_leaves_byte_equal_to_host(tmp_path):
+def test_the_release_keeps_exactly_the_sampled_leaves_byte_equal_to_host(tmp_path):
     host, rc, dev = committed()
     C = dev.chunk
-    drawn = {0: [1, 2], 2: [0, 5]}
+    sampled = {0: [1, 2], 2: [0, 5]}
     assert leaf_bytes(dev, 0, 3) == host_leaf(host, C, 0, 3)
     with pytest.raises(ValueError, match="held on the device until their window's draw-gated release"):
         SD.dump(dev, rc, tmp_path / "early")
-    rec = DP.release(dev, drawn)
+    rec = DP.release(dev, sampled)
     assert rec["drawn_leaves"] == 4 and rec["kept_bytes"] == 4 * C == sum(b.retained_bytes for b, _u in dev._gpu_blocks.values())
     assert rec["dropped_bytes"] == sum(len(b) for b in host.values()) - 4 * C
     assert rec["device_freed_bytes"] > 0 and dev.device_pool.held == 0
@@ -67,7 +67,7 @@ def test_the_release_keeps_exactly_the_drawn_leaves_byte_equal_to_host(tmp_path)
     store, run = SD.load(tmp_path / "w")
     assert [s.root for s in run.steps] == [s.root for s in rc.steps]
     for com in (dev, store):
-        for s, leaves in drawn.items():
+        for s, leaves in sampled.items():
             for i in leaves:
                 assert leaf_bytes(com, s, i) == host_leaf(host, C, s, i)
     assert sum((tmp_path / "w" / "raw" / f"s{s}.bin").stat().st_size for s in range(3)) == 4 * C
@@ -97,6 +97,7 @@ def test_a_released_window_dumps_slim_to_its_sampled_leaves(tmp_path):
     DP.release(dev, {0: [i for a, b in runs for i in range(a, b)]})
     doc = SD.dump(dev, rc, tmp_path / "w")
     st = doc["steps"][0]
+    assert st["drawn_only"] is True, "the mark a slim dump's reader takes a dropped step by: a dump written under it loads"
     assert st["ranges"] == [[a * C, b * C] for a, b in runs]
     assert 0 < len(st["nodes"]) < sum(st["levels"]) // 3
     assert (tmp_path / "w" / "levels" / "s0.bin").stat().st_size == SD.NODE * len(st["nodes"])
