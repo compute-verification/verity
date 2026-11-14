@@ -5,6 +5,7 @@ class by class (`boundary_rows.commit`, `write`), under the serve's stop rule wh
 from __future__ import annotations
 
 import atexit
+import importlib
 import queue
 import secrets
 import struct
@@ -130,7 +131,7 @@ class BoundaryWindows:
         ``stop`` (`Stop.of`: the registered model's stop ids and length and T, the most ids a response has). A stop rule
         the serve can't register (a T the word can't hold, or one beside history tables) is refused here, as the serve
         starts, and so is a configuration that says both ``verdicts`` and ``ids``."""
-        from verity_vllm.pipeline import long_row  # noqa: F401  registers DsaTopKReadRowsCut_v1, the long row's check
+        importlib.import_module("verity_vllm.pipeline.long_row")  # registers DsaTopKReadRowsCut_v1, the long row's check
 
         t, tc, stop = str(cfg["check"]), cfg.get("tables"), Stop.of(cfg.get("stop"))
         if stop is not None and tc:
