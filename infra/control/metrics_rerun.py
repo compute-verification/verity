@@ -10,7 +10,7 @@ A pass:
     due       a number is due when the door holds no reading of it or its newest is older than its `every`. The rows of one
               file that share a command are one launch, which measures each of them.
     bounds    a due command is launched only when each of these holds, and the pass says which one stopped it:
-              - the stop file (`--stop`) is absent: it stops every launch;
+              - the stop file (`--stop`) is absent: it stops every launch (a dry run judges all the same);
               - it is no loop's: a row whose command's script is under infra/, or that has no command, is a loop's number,
                 which the loop sends itself;
               - it names no placeholder but its machine's (a run id such as FIRE_RUN, which only its owner picks);
@@ -353,7 +353,8 @@ def step(state: dict, cfg: Settings, fx, now: float, save: Callable[[dict], None
     say = fx.log
     if cfg.stop.exists():
         say(f"stopped: {cfg.stop} exists, so nothing is launched; remove it to go on")
-        return []
+        if not dry_run:
+            return []
     state.setdefault("schema", SCHEMA)
     record = state.setdefault("launches", [])
     refresh(record, fx.status, now, say)

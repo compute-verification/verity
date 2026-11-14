@@ -231,7 +231,8 @@ loop's still runs or ended less than its `every` ago, whatever the door says; ne
 owner picks (FIRE_RUN); never a loop's own number (a row whose command's script is under `infra/`); and never a command that
 failed twice running under its rows as they are, until a change to them. While `/data/watchers/metrics-rerun.stop` exists, a
 pass launches nothing. Each pass's log says what it launched and what it skipped, and why; `--dry-run` added to the loop's
-arguments, under `$W metrics-rerun --`, makes one pass that launches nothing and writes no record:
+arguments, under `$W metrics-rerun --`, makes one pass that launches nothing and writes no record, and judges while the stop
+file stands:
 
 ~~~sh
 $CP "touch /data/watchers/metrics-rerun.stop"     # stop every launch; rm it to go on

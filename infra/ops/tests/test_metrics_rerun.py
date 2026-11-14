@@ -175,6 +175,11 @@ def test_a_dry_run_says_what_it_would_launch_and_why_and_launches_nothing(tmp_pa
     assert pod.launched == [] and saved == [] and state["launches"] == []
     assert pod.lines[-1].startswith("would launch compute-accounting/share on vy-nebius-cpu-12: compute-accounting/share's newest "
                                     "reading is 9.0 d old, past its every 7d: research run --on vy-nebius-cpu-12 --pool research")
+    cfg.stop.write_text("")
+    pod.lines.clear()
+    run(cfg, pod, dry_run=True)
+    assert pod.launched == [] and pod.lines[0].startswith("stopped: ") and pod.lines[-1].startswith("would launch "), (
+        "a dry run judges while the stop file stands, so the lead sees what removing it would launch")
 
 
 def test_a_gpu_command_runs_only_on_a_machine_the_plan_lists_free_for_it_now(tmp_path):
