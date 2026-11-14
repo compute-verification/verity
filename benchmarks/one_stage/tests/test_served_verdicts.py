@@ -65,6 +65,7 @@ from verity.hardware import site as SITE
 from verity.hardware import registration as RL
 from verity.protocols.pous.verifier import wipe_period as W
 from verity.protocols.spot.verifier.one_stage import registration as REG
+from verity.protocols.poub.verifier import ledger
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -384,22 +385,33 @@ def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
 
 def test_the_certifiers_chain_files_that_count_requests_move_to_the_serve_dirs_private_after_the_record(tmp_path):
     """`served_verdicts.sh private-pieces` moves CERTIFIER_PRIVATE out of $OUT/pieces/certifier into the serve dir's
-    private/, 0700, and leaves the piece's answer, case and verdict where the record and its reader find them."""
+    private/, 0700, and leaves the piece's answer, its certificates and its verdict where the record and its reader
+    find them. The piece's case is in that private directory already, where the piece keeps it (0600): the move
+    leaves it as it is, and no case is under $OUT."""
     piece, d = tmp_path / "out" / "pieces" / "certifier", tmp_path / "serve"
     moved = ["chain/certs.json", "chain/report/report.json", "chain/tie/summary.json", "chain/n2/summary.json", "piece.log",
              "chain.log", "period.log"]
-    kept = ["answer.json", "case.json", "chain/scan/answers.json"]
+    kept = ["answer.json", "certificates.json"]
     for f in moved + kept:
         (piece / f).parent.mkdir(parents=True, exist_ok=True)
         (piece / f).write_text(f)
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "D": str(d), "OUT": str(tmp_path / "out")}
-    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "private-pieces"], cwd=tmp_path, env=env,
-                        check=False).returncode
-    assert rc == 0
+    run = lambda: subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "private-pieces"],  # noqa: E731
+                                 cwd=tmp_path, env=env, check=False).returncode
+    assert run() == 0
     assert sorted(str(p.relative_to(piece)) for p in piece.rglob("*") if p.is_file()) == sorted(kept)
     private = d / "private" / "pieces" / "certifier"
     assert sorted(str(p.relative_to(private)) for p in private.rglob("*") if p.is_file()) == sorted(moved)
     assert (private / "chain/tie/summary.json").read_text() == "chain/tie/summary.json"
+    (private / "case.json").write_text("the case")
+    (private / "case.json").chmod(0o600)
+    (piece / "period.log").write_text("a later step's")
+    assert run() == 0 and (private / "period.log").read_text() == "a later step's"
+    assert sorted(str(p.relative_to(piece)) for p in piece.rglob("*") if p.is_file()) == sorted(kept)
+    assert sorted(str(p.relative_to(private)) for p in private.rglob("*") if p.is_file()) == sorted(
+        moved + ["case.json"])
+    assert (private / "case.json").read_text() == "the case" and (private / "case.json").stat().st_mode & 0o777 == 0o600
+    assert not list((tmp_path / "out").rglob("case.json"))
     assert all((d / p).stat().st_mode & 0o777 == 0o700 for p in ("private", "private/pieces", "private/pieces/certifier"))
 
 
@@ -546,6 +558,59 @@ def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and
     assert line["reason"].startswith("sampled proofs: accept; ")
 
 
+def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it(tmp_path):
+    """The answer the bandwidth session's piece writes of an accepted session (`served_bandwidth.answer`) names the term
+    its eps leaves out, PoUB's ledger's object (`ledger.NAMED_TERMS`). The block record, which `block_record.check`
+    holds, carries it beside the error sum under the bandwidth audit's name, the sum's number the answer's eps, and the
+    accept's clause in the composed reason says the error with the term beside it in the ledger's own words
+    (`ledger.DELTA_FORM` with the error for δ). At an eps the record establishes at neither δ, the clause that says so
+    prints the error the same way. The same answer with the term struck from its profile is the bandwidth audit's
+    error: the composed verdict is ``reject``, with no block record."""
+    import served_bandwidth as SB
+
+    beside = ledger.DELTA_FORM.removeprefix("δ")
+    (d := tmp_path / "bandwidth").mkdir()
+    (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
+
+    def written(delta: str, samples: int) -> dict:
+        """The piece's answer of an accepted session at ``delta`` that sampled ``samples`` openings: its eps is
+        ``delta`` + ``samples``/2^64."""
+        session = {"registration": {"digest": "cd" * 64},
+                   "answer": {"verdict": "accept", "delta": delta, "span_ns": 16448, "q_bytes": 8224, "draws": [samples],
+                              "receipts": 1, "unit_bytes": 8224, "units": 1, "windows": [0], "wrong_at_most": 0}}
+        return SB.answer(session, "beside the served window", 1000)
+
+    def composed(answer: dict) -> tuple:
+        (d / "answer.json").write_text(json.dumps(answer))
+        return S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                        servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
+
+    a = written("1/1099511627776", 0)
+    assert a["verdict"] == "accept" and a["profile"]["named_terms"] == ledger.NAMED_TERMS
+    report, rec, line = composed(a)
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert BR.check(rec) == {}
+    sums = rec["composed"]["joint_horizon"]
+    assert sums["terms"]["bandwidth"] == a["public"]["eps"] == "1/1099511627776"
+    assert sums["named_terms"] == {"bandwidth": ledger.NAMED_TERMS}
+    assert all(x["not_established"] == [] for x in sums["at"].values())
+    assert f"; the bandwidth audit: accept (its error reads 1/1099511627776{beside}); " in line["reason"]
+    assert line["reason"] == report["composed"]["reason"]
+
+    _, rec, line = composed(written("1/100", 1))
+    assert BR.check(rec) == {}
+    assert all(x["not_established"] == ["bandwidth"] for x in rec["composed"]["joint_horizon"]["at"].values())
+    assert ("; the bandwidth audit: accept (its quantity is not established at δ = 1/100 or 1/1000000: the run established "
+            f"it except with 1/100 + 2^-64{beside}); ") in line["reason"]
+
+    silent = {**a, "profile": {k: v for k, v in a["profile"].items() if k != "named_terms"}}
+    report, rec, line = composed(silent)
+    assert rec is None and (line["composed"], line["by"], line["block_record"]) == ("reject", ["the bandwidth audit"], None)
+    assert "ValueError: bandwidth: its answer's profile names no term its error leaves out; its piece writes them in its " \
+           "answer's profile as named_terms (PoUB's ledger.NAMED_TERMS)" in report["protocols"]["bandwidth"]["reason"]
+    assert "; the bandwidth audit: error: " in line["reason"]
+
+
 def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_on(tmp_path):
     """The network certifier's answer as its piece writes it when the warden ran on the gate's host and its checks, samples
     and coins on the served node: its accept's clause says the premise is assumed and why, so the ``RECORD`` line's
@@ -656,11 +721,13 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
         assert line["missing"]["the wipe"] == "its piece refused to run: WIPE REFUSED: the card has a compute process"
 
 
-#: an accepted core answer of each piece's subprotocol, its public outputs the block record's leg certificate
+#: an accepted core answer of each piece's subprotocol, its public outputs the block record's leg certificate, the
+#: bandwidth audit's profile naming the term its error leaves out, as its piece writes it
 ACCEPTS = {
     "pouw": {"protocol": "verity/pouw/v1", "public": {"work": {"level": 3, "n": 4, "credited_tiles": 2, "credited": 8192}},
              "profile": {"delta": "1/1000000"}},
-    "bandwidth": {"protocol": "verity/remote-bandwidth/v0", "public": {"eps": "1/1000000", "q_bytes": 6963200}, "profile": {}},
+    "bandwidth": {"protocol": "verity/remote-bandwidth/v0", "public": {"eps": "1/1000000", "q_bytes": 6963200},
+                  "profile": {"named_terms": ledger.NAMED_TERMS}},
     "pous": {"protocol": "verity/pous/p2/v4/run", "public": {"certified": True, "eps": "1/1000000", "s_bits": 1 << 30},
              "profile": {}},
     "certifier": {"protocol": "verity/certifier/v0", "public": {"K": 15764, "eps": "1/100", "windows": 1}, "profile": {}},
@@ -670,15 +737,17 @@ COMPONENTS = ("pouw", "bandwidth", "pous", "certifier", "wipe")
 
 
 @pytest.mark.parametrize("case, piece", [("accept", None)] + [
-    (case, piece) for case in ("missing", "reject", "elsewhere", "malformed") for piece in COMPONENTS])
+    (case, piece) for case in ("missing", "reject", "elsewhere", "malformed") for piece in COMPONENTS] + [
+    ("unnamed", "bandwidth")])
 def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_that_does_not_accept(
         tmp_path, monkeypatch, capsys, case, piece):
     """Every piece's answer accepted on the record's node (each piece's `RAN`, which a `SERVED` naming no server leaves it
     about, and the wipe's `SERVED`): the composed verdict is ``pending``, the block record's ``undecided``, since its
     verdict is the Lean check's answer and none ran, with nothing missing, and its reason names each subprotocol's
-    accept. One piece with no answer leaves it ``pending`` and names that piece missing with
+    accept, the bandwidth audit's with its error and the term it leaves out beside it. One piece with no answer leaves it ``pending`` and names that piece missing with
     why; one that rejects, or accepts with outputs that are not its leg's certificate, makes it ``reject`` naming it, with
-    no block record; one about another server leaves it ``pending``, carried and named as elsewhere."""
+    no block record, and so does a bandwidth answer whose profile names no term its error leaves out; one about another
+    server leaves it ``pending``, carried and named as elsewhere."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces = tmp_path / "pieces"
@@ -691,6 +760,8 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
             a = {**a, "verdict": "reject", "reason": "a read came back late", "public": None, "profile": None}
         if comp == piece and case == "malformed":
             a = {**a, "public": {"unrelated": 1}}
+        if comp == piece and case == "unnamed":
+            a = {**a, "profile": {}}
         (d / "answer.json").write_text(json.dumps(a))
         server = "vy-dc-h200-2" if comp == piece and case == "elsewhere" else "vy-dc-h200"
         if comp == "wipe" or server != "vy-dc-h200":
@@ -706,13 +777,15 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
     leg, runner = piece, {v[1]: k for k, v in S.PIECES.items()} | {"wipe": "wipe"}
     name = S.NAMES[runner[piece]] if piece else None
-    if case in ("reject", "malformed"):
+    if case in ("reject", "malformed", "unnamed"):
         assert rc == 1 and (line["composed"], line["by"], line["block_record"]) == ("reject", [name], None)
         assert line["verdicts"][name] == ("reject" if case == "reject" else "error")
         assert not (tmp_path / "record" / "block-record.json").exists()
         report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
         row = next(r for k, r in report["protocols"].items() if S.NAMES[k] == name)
-        assert case == "reject" or row["reason"].startswith(f"its answer is not the block record's {leg} leg: KeyError")
+        why = {"malformed": "KeyError", "unnamed": "ValueError: bandwidth: its answer's profile names no term its error "
+                                                   "leaves out; its piece writes them in its answer's profile as named_terms"}
+        assert case == "reject" or row["reason"].startswith(f"its answer is not the block record's {piece} leg: {why[case]}")
         return
     rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
@@ -722,7 +795,8 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
         assert (rec["composed"]["verdict"], rec["composed"]["answer"]) == ("undecided", None)
         assert rec["composed"]["legs"] == {k: "accept" for k in BR.LEGS}
         late = {"the network certifier": " (its quantity is not established at δ = 1/1000000: the run established it "
-                                         "except with 1/100)"}
+                                         "except with 1/100)",
+                "the bandwidth audit": f" (its error reads 1/1000000{ledger.DELTA_FORM.removeprefix('δ')})"}
         assert line["reason"] == "; ".join(
             f"{n}: accept{late.get(n, '')}" for n in S.NAMES.values())
         return
@@ -5140,6 +5214,62 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
         assert [c["id"] for c in json.loads((made / "evidence.json").read_text())["components"]] == want
         assert json.loads((out / "composite" / x / "composite.json").read_text())["missing"] == [
             p for p in C.COMPONENTS[x] if p not in want]
+
+
+def test_the_composite_takes_no_case_from_the_certifier_pieces_private_directory_which_holds_no_answer(tmp_path):
+    """The certifier's piece keeps its case in the serve dir's private/pieces/certifier, beside the chain files
+    `private-pieces` moves there and no answer: its answer is the run's, under OUT/pieces. served_composite.sh, with
+    onsite_pieces.sh's `onsite_cases` and composite.py as they are and a stand-in for each product's Lean (`NO_LEAN`),
+    takes a directory for a case beside an answer, so it composes every other subprotocol's case and nothing of that
+    directory: no product's case has a component of it, onsite names the certifier missing (NOT_ESTABLISHED), and
+    remote, which doesn't compose it, misses nothing. What reads the certifier's private case into a composite is not
+    shown here."""
+    import composite as C
+    certifier = "verity/certifier/v0"
+    tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
+    (tmp_path / "lean").write_text(f"#!{sys.executable}\n{NO_LEAN}")
+    (tmp_path / "lean").chmod(0o755)
+    _script(bin_ / "lake", f'mkdir -p .lake/build/bin && cp {tmp_path}/lean ".lake/build/bin/$2"')
+    _script(bin_ / "systemd-run", "exit 1")
+    for pkg in ("protocols/remote/verifier", "protocols/onsite/verifier"):
+        (tree / "verity" / pkg).mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+    shutil.copy(HERE.parent / "composite.py", tree / "benchmarks" / "one_stage")
+    own = {p: ONSITE_OWN[p][0] if p in ONSITE_OWN else f"piece{n}" for n, p in enumerate(C.COMPONENTS["onsite"])
+           if p != certifier}
+    for p, where in own.items():
+        (d / "private" / where).mkdir(parents=True)
+        (d / "private" / where / "case.json").write_text(json.dumps(
+            {"commitment": "c0", "evidence": "beef", "params": {"in": where}}))
+        (d / "private" / where / "answer.json").write_text(json.dumps({"protocol": p, "verdict": "accept"}))
+    for _, summary, lean, _ in ONSITE_OWN.values():
+        (out / "pieces" / summary).parent.mkdir(parents=True)
+        (out / "pieces" / summary).write_text(json.dumps(
+            {"window": 0, "verdict": "accept", "decided_by": {"program": lean, "host": "the-served-node"}}))
+    kept = d / "private" / "pieces" / "certifier"
+    case = json.dumps({"commitment": "ce", "evidence": "f00d", "params": {"in": "pieces/certifier"}})
+    for f, text in (("case.json", case), ("chain/report/report.json", "{}"), ("piece.log", "")):
+        (kept / f).parent.mkdir(parents=True, exist_ok=True)
+        (kept / f).write_text(text)
+    (out / "pieces" / "certifier").mkdir(parents=True)
+    (out / "pieces" / "certifier" / "answer.json").write_text(json.dumps({"protocol": certifier, "verdict": "accept"}))
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
+           "ONSITE_PIECES": str(ONSITE_PIECES), "SERVED_NODE": "the-served-node"}
+    r = subprocess.run(["bash", str(HERE.parent / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,
+                       check=False, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert certifier in C.COMPONENTS["onsite"] and certifier not in C.COMPONENTS["remote"]
+    said = [x for x in (out / "verdicts.txt").read_text().splitlines() if "NOT_ESTABLISHED" in x or "LEFT_OUT" in x]
+    assert said == [f"COMPOSITE onsite: NOT_ESTABLISHED missing {certifier}"]
+    for x in ("remote", "onsite"):
+        want = [p for p in C.COMPONENTS[x] if p != certifier]
+        made = d / "private" / "composite" / x / "private"
+        assert [(c["id"], c["params"]) for c in json.loads((made / "params.json").read_text())["components"]] == [
+            (p, {"in": own[p]}) for p in want]
+        assert [c["id"] for c in json.loads((made / "evidence.json").read_text())["components"]] == want
+        assert json.loads((out / "composite" / x / "composite.json").read_text())["missing"] == [
+            p for p in C.COMPONENTS[x] if p not in want]
+    assert (kept / "case.json").read_text() == case and not list(out.rglob("case.json"))
 
 
 DIGEST = "5e" * 64

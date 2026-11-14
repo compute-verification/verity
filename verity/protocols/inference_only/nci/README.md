@@ -51,7 +51,7 @@ Topics: `weights`, `updates`, `seed-based`, `gradients`, `activations`, `tokens`
 
 ## What loads it
 
-This directory has an import root of its own (`SEPARATE` in `tests/test_boundaries.py`). Three things outside it read
+This directory has an import root of its own (`distribution` in `tests/import_order.toml`). Three things outside it read
 it:
 
 - `verity/protocols/inference_only/rho` reads data files of this directory by path (the algorithm library,

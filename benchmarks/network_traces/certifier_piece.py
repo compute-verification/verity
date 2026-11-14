@@ -59,21 +59,26 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
      with its ``placement`` (`placement`): the certifier on the gate's host, and the chain, the period check and
      their proofs' coins in this piece on the developer's node, so `trusted-host` is assumed with the auditor's devices
      not placed.
-  DIR also gets the chain's public part (`PUBLIC`: its report's verdicts and ε at δ, and the scan's answers; never the
-  endpoint's report, the report's counts or a step's summary, which are private) and the check's three input files in
-  DIR/period. All of them and the answer are written to a fresh hold under SERVE_DIR/`PRIVATE`/held (0700) and reach
-  DIR only through the record's leak guard (`leak_guard.py`), which reads DIR and the hold against the warden run's
-  witness, DIR declared to hold those files, the split's `CHAINED` and the logs alone (`PIECE_FILES`), moves what
-  holds a piece of it or lies at another path to SERVE_DIR/`PRIVATE`/quarantine and only then releases the rest. The
-  period files it releases become DIR/`CASE` (`write_case`), the case as `composite.py` reads a piece's:
-  ``{"commitment", "evidence", "params"}``, the commitment and evidence hex and the params ``params.json``'s canonical
-  JSON, all inline, since certifier/v0 reads no blob (about 83 MB on a served window, nearly all of it the params).
-  DIR/period then goes, so the case has one copy; the guard reads the files before they are hex, which it searches
-  only for a binary witness file's pieces. Only the protocol rejects: a step that can't run (no kept run, a rehearsal
-  the gate's check didn't pass, a build, a tool or the chain failing without a report, an input missing, the leak
-  guard failing, or SIGTERM from the piece's time limit) is `NotRun`, and the piece then refuses, releasing nothing
-  from the hold: DIR keeps only its logs (`LOGS`) and gets DIR/`REFUSED` naming why, with no answer, which
-  `served_verdicts.py` reads as the certifier missing. Each step it runs (the build, the chain, the check and the leak
+  DIR also gets the chain's public part (`PUBLIC`: its report's verdicts and ε at δ; never the scan's answers, the
+  endpoint's report, the report's counts or a step's summary, which are private) and the link-window's five
+  certificates (`CERTIFICATES`, `certificates`: the three records' certificates and the two row registrations' of the
+  case's evidence, each with its own fields alone). They and the answer are written to a fresh hold under
+  SERVE_DIR/`PRIVATE`/held (0700) and reach DIR only through the record's leak guard (`leak_guard.py`), which reads DIR
+  and the hold against the warden run's witness, DIR declared to hold those files, the split's `CHAINED` and the logs
+  alone (`PIECE_FILES`), moves what holds a piece of it or lies at another path to SERVE_DIR/`PRIVATE`/quarantine and
+  only then releases the rest. The check's three input files are the piece's case, and a case's evidence and params
+  are witness (`composite.py`), as the scan's answers are, that evidence less its certificates: neither is ever in
+  DIR. Before the guard reads the hold, its period files become SERVE_DIR/`CASES`/`CASE` (`write_case`; the directory
+  0700, the file 0600), the case as `composite.py` reads a piece's: ``{"commitment", "evidence", "params"}``, the
+  commitment and evidence hex and the params ``params.json``'s canonical JSON, all inline, since certifier/v0 reads no
+  blob (about 83 MB on a served window, nearly all of it the params); the certificates are cut from that evidence, and
+  the hold's period files then go, so the case has one copy. It is there only where the step ended with its files
+  released (`settle`), and no answer is beside it: the answer is DIR's. Only the protocol rejects: a step that can't
+  run (no kept run, a rehearsal the gate's check didn't pass, a build, a tool or the chain failing without a report,
+  an input missing, the leak guard failing, or SIGTERM from the piece's time limit) is `NotRun`, and the piece then
+  refuses, releasing nothing from the hold and keeping no case: DIR keeps only its logs (`LOGS`) and gets
+  DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the certifier missing.
+  Each step it runs (the build, the chain, the check and the leak
   guard) is a process group of its own, which the piece ends however the step ends (`run_group`: SIGTERM, `GRACE_S`,
   SIGKILL), so nothing a step started outlives it; a SIGTERM while a step runs is held until the step's group has
   ended, so a step never outlives the refusal either. ``--draw K`` is the scan's sample, K proof blocks (every proof
@@ -130,19 +135,22 @@ SESSION = "session.json"
 #: What DIR/chain gets of the chain's out/, by file: its JSON with only the key paths named (``a.b`` b under a, ``*``
 #: every key at its level). Each is public as the protocol's output, its sample or its structure: the chain's and each
 #: step's verdict, ε at δ (the sample's law, population and size) and where it runs in the clear, what the path stubs
-#: and how its negatives came out; and the scan's answers, each link-window's answer and the registrations it is
-#: checked against (hiding commitments), the period check's evidence. Everything else stays in the kept run: the
-#: endpoint's report (each Commit window's request, carried, step and output counts, its opening time and its advice's
-#: bits), of which only a padded count may be public, report.md and the report's other keys (the certified I/O's
-#: counts, the advice's bits as K's term), and the steps' summaries (the scan's admissions and response lengths, the
-#: tie's prompt lengths and releases, the warden's check of its witness).
+#: and how its negatives came out. Everything else stays in the kept run: the scan's answers (its registration and
+#: each link-window's answer and row registrations, the period check's evidence less its certificates: witness, as a
+#: case's evidence is), the endpoint's report (each Commit window's request, carried, step and output counts, its
+#: opening time and its advice's bits), of which only a padded count may be public, report.md and the report's other
+#: keys (the certified I/O's counts, the advice's bits as K's term), and the steps' summaries (the scan's admissions
+#: and response lengths, the tie's prompt lengths and releases, the warden's check of its witness).
 PUBLIC = {"report/report.json": ("schema", "verdict", "path", "scope", "stubbed", "negatives_refused",
-                                 "steps.*.verdict", "steps.*.eps_at_delta", "steps.*.in_the_clear"),
-          "scan/answers.json": ("format", "delta", "registration", "windows")}
+                                 "steps.*.verdict", "steps.*.eps_at_delta", "steps.*.in_the_clear")}
 #: a piece's refusal to run, which `served_verdicts.py` reads as the subprotocol missing
 REFUSED = "refused.txt"
-#: the piece's case, as `composite.py` reads it
+#: the piece's case, as `composite.py` reads it, and where it is kept under the serve dir: a case's evidence and
+#: params are witness, so it is never in DIR
 CASE = "case.json"
+CASES = Path("private") / "pieces" / "certifier"
+#: the link-window's five certificates in DIR (`certificates`): the case's evidence's, and nothing else of it
+CERTIFICATES = "certificates.json"
 #: the scan class of V3c's default window class (`served_verdicts.sh`'s V3C_CLASS)
 V3C_SCAN_CLASS = "w63k4"
 #: the split piece's chain step's accept, which its period step reads
@@ -150,9 +158,8 @@ CHAINED = "chain.json"
 #: the logs `served_verdicts.sh` and `served_verdicts.py` write in DIR, which a refusal keeps
 LOGS = ("piece.log", "chain.log", "period.log")
 #: every file DIR may hold when the leak guard reads it and the hold (its ``--public``): the answer, the logs, the
-#: split's `CHAINED`, the period check's three input files and `PUBLIC`'s
-PIECE_FILES = ("answer.json", *LOGS, CHAINED, "period/commitment.bin", "period/evidence.json", "period/params.json",
-               *(f"chain/{rel}" for rel in PUBLIC))
+#: split's `CHAINED`, the certificates and `PUBLIC`'s
+PIECE_FILES = ("answer.json", *LOGS, CHAINED, CERTIFICATES, *(f"chain/{rel}" for rel in PUBLIC))
 LEAN_DIR = TREE / "verity" / "protocols" / "certifier" / "verifier" / "lean"
 #: the window circuit's class (4 slots, prompts of at most 32 ids, 4 outputs) and the scan's lanes
 PROMPTS, PROMPT_IDS, TOKENS = 4, 24, 4
@@ -610,19 +617,47 @@ def guard(d: Path, hold: Path, unpacked: Path | None, quarantine: Path) -> int:
     return got.returncode
 
 
-def write_case(d: Path) -> None:
-    """DIR/`CASE` from DIR/period's three files, when the leak guard left all three, and DIR/period gone."""
-    p = d / "period"
+def certificates(evidence: bytes) -> dict:
+    """The certificates of a case's ``evidence``, what the network certifier signed where the period check accepts
+    them, each with its own fields alone (`scan_period.CERTIFICATE_KEYS`): ``records``, each link-window's three
+    records' certificates (requests, responses, fails), and ``rows``, its two row registrations' (ingress, egress),
+    with the link, direction and window its registration names, which the certificate's message signs. Nothing else of
+    the evidence is here: no registration's head, no answer and no audit."""
+    from scan_period import CERTIFICATE_KEYS
+    windows = json.loads(evidence)["windows"]
+    rows = [{"link": r["link"], "direction": r["direction"], "window": r["window"], "key_id": r["certificate"]["key"],
+             "digest": r["certificate"]["digest"], "signature": r["certificate"]["signature"]}
+            for x in windows for r in x["registrations"]]
+    return {"records": [{k: c[k] for k in CERTIFICATE_KEYS} for x in windows for c in x["certificates"]],
+            "rows": [{k: r[k] for k in CERTIFICATE_KEYS} for r in rows]}
+
+
+def write_case(hold: Path, case: Path) -> None:
+    """The hold's period files, the three `network-period` read, made the case ``case`` (its directory 0700, the file
+    0600) and the hold's `CERTIFICATES`, and gone from the hold: the case is under no path the leak guard releases.
+    Nothing where the period check wrote none. The certificates are written compact, as the evidence holds them."""
+    p = hold / "period"
     commitment, evidence, params = p / "commitment.bin", p / "evidence.json", p / "params.json"
     if not all(f.is_file() for f in (commitment, evidence, params)):
         return
-    with open(d / CASE, "wb") as out, open(params, "rb") as src:
+    raw = evidence.read_bytes()
+    try:
+        signed = certificates(raw)
+    except (KeyError, TypeError) as e:
+        raise NotRun(f"the period's evidence names no certificates: {type(e).__name__}: {e}") from None
+    case.parent.parent.mkdir(mode=0o700, exist_ok=True)
+    case.parent.mkdir(mode=0o700, exist_ok=True)
+    case.parent.chmod(0o700)
+    with open(case, "wb", opener=lambda path, flags: os.open(path, flags, 0o600)) as out, open(params, "rb") as src:
+        os.fchmod(out.fileno(), 0o600)
         out.write(b'{"commitment":"%s","evidence":"%s","params":' % (commitment.read_bytes().hex().encode(),
-                                                                     evidence.read_bytes().hex().encode()))
+                                                                     raw.hex().encode()))
         shutil.copyfileobj(src, out, 1 << 24)
         out.write(b"}\n")
+    (hold / CERTIFICATES).write_text(json.dumps(signed, sort_keys=True, separators=(",", ":")) + "\n")
     rm(p)
-    print(f"case: {CASE}, {(d / CASE).stat().st_size} bytes", flush=True)
+    print(f"case: the serve dir's {CASES / CASE}, {case.stat().st_size} bytes; {CERTIFICATES}: "
+          f"{len(signed['records'])} records' and {len(signed['rows'])} rows' certificates", flush=True)
 
 
 def rm(*paths: Path) -> None:
@@ -665,10 +700,15 @@ def said(got: dict) -> int:
 def settle(serve_dir: Path, window: int, d: Path, limit: str,
            step: Callable[[Path], tuple[dict | None, Path | None]]) -> dict | None:
     """``step``'s answer: its files written to a fresh hold under SERVE_DIR/`PRIVATE`/held (``step`` is given it), an
-    accept's profile with its `placement`, all released to DIR by the leak guard and the case written; None where the
-    split's chain step accepted. `NotRun` (SIGTERM included, naming ``limit``) for a step that can't run."""
+    accept's profile with its `placement`, the hold's period files made the case under SERVE_DIR/`CASES` and the
+    hold's certificates (`write_case`), and the hold then released to DIR by the leak guard; None where the split's
+    chain step accepted. The case is this step's: one an earlier step left goes first, and one written here goes
+    unless the step ends with its files released. `NotRun` (SIGTERM included, naming ``limit``) for a step that can't
+    run."""
     was, unpacked, hold = signal.signal(signal.SIGTERM, ended(limit)), None, None
+    case, released = serve_dir / CASES / CASE, False
     try:
+        case.unlink(missing_ok=True)
         if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
             raise NotRun(f"no warden run kept under {serve_dir / PRIVATE}: the run's load didn't go through the "
                          "certifier's front (CERTIFIER_FRONT unset, or the gate, its tunnel or ssh failed)")
@@ -679,15 +719,18 @@ def settle(serve_dir: Path, window: int, d: Path, limit: str,
             if isinstance(got.get("profile"), dict):
                 got = got | {"profile": got["profile"] | {"placement": placement(serve_dir, kept_run(serve_dir))}}
             (hold / "answer.json").write_text(json.dumps(got, indent=1, sort_keys=True) + "\n")
+        write_case(hold, case)
         g = guard(d, hold, unpacked, serve_dir / PRIVATE / "quarantine")
         if g not in (0, 3) or got is not None and not (d / "answer.json").is_file():
             raise NotRun(f"the leak guard failed (exit {g}): DIR withheld, the piece's files left in {hold}")
-        write_case(d)
+        released = True
         return got
     except (OSError, ValueError, tarfile.TarError) as e:
         traceback.print_exc()
         raise NotRun(f"the piece failed on a file: {type(e).__name__}: {e}") from None
     finally:
+        if not released:
+            case.unlink(missing_ok=True)
         if unpacked is not None:
             rm(unpacked)
         if hold is not None and hold.is_dir() and not any(p.is_file() for p in hold.rglob("*")):
@@ -735,8 +778,8 @@ def v3c_scan(v3c: Path, cls: str, sets: list[str]) -> list[str]:
 def chain_step(a: argparse.Namespace) -> int:
     serve_dir, d, v3c = a.serve_dir.resolve(), a.dir.resolve(), a.v3c.resolve()
     d.mkdir(parents=True, exist_ok=True)
-    for f in ("answer.json", CHAINED, REFUSED, CASE):
-        (d / f).unlink(missing_ok=True)
+    for f in (d / "answer.json", d / CHAINED, d / REFUSED, d / CERTIFICATES, serve_dir / CASES / CASE):
+        f.unlink(missing_ok=True)
     if not sets_ok(a.set):
         return 2
     try:

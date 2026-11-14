@@ -81,6 +81,15 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   that request at the roots each owner registered, every registration read before any rank's coin. A received row moved one
   bit (`--altered`), two tokens' rows swapped, another collective's partial, another request's, and the receiving rank's own
   partial read as its peer's (`--made-for`) are each refused by Lean's registered reads on rank 1, rank 0 accepted.
+- `member_seconds.py` (`a5_tp.sh` with `A5_MEMBER_SECONDS=1`): an audit's seconds a member outside its prover's clock and
+  in Lean's verify before its first check, split by what is read. The audit runs on stamping wrappers of its three
+  programs (the prover, Lean's verifier and the ZK server's Lean loop); each member's seconds are its own processes'
+  starts and ends and its logs' lines, and each reader of its files is then run alone (the verifier's and the prover's
+  load, the ZK server's Lean loop's start with and without the window's partition and program, `archive-put` of each
+  file). Behind the ZK server (`ZK_SERVER=1`) one kept process of Lean's verifier (`verify-members`) verifies an audit's
+  members in turn (`a0.VerifyMembers`), and a member's seconds there are from its line to its answer. Among the readers
+  run alone is `verify` on each member's session, a process of its own: it must print the audit's verdict line for that
+  member, byte for byte, or the measurement fails, and its seconds are beside the audit's in one record.
 - `a5_glm53_commit.sh`, `a5_glm53_cpu.sh`: A5 on GLM-5.3 in its two halves. The first is the GPU job, from the source tree
   (`bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
@@ -109,7 +118,7 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   node and names each one missing, rejecting or about another server, with its reason (PoUW's development piece: development
   run, credits nothing). `PRODUCT=remote` composes sampled proofs and PoUW alone: the onsite pieces are dropped, not run
   and not composed, and the preflight refuses any onsite piece's command. An accept's clause says when its weights were held and their share of the checkpoint, where its
-  profile says so (PoUS's), and each δ of the block record's at which its quantity is not established. V3c runs last, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`, since nothing before it reads it, and writes its audit as the network
+  profile says so (PoUS's), each δ of the block record's at which its quantity is not established, and the bandwidth audit's error with the term it leaves out beside it (the block record's `named_terms`). V3c runs last, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`, since nothing before it reads it, and writes its audit as the network
   certifier's period reads it (`period.json`). With `V3C_WARM_JOBS` its warm step (`records_audit.py warm`) composes the
   window's templates before the audit's coins, into the window's own directory or, with `V3C_COMPOSE_CACHE`, into the
   directory that names: a kept compose cache, from which a later window under the same tree takes the circuits it
@@ -193,13 +202,17 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   CPUs its processes could run on (the script's own affinity, which every process of the row runs within: unplaced, each
   inherits it; with `FC_VERIFIER_CPUS`, the verifiers run on `verifier_cpus` and the provers on the rest), as their
   `count`, their `list` and the `numa_nodes` that hold them. With `--lean`, the last sessions at
-  K = 1 also get the Lean verdict inside the server's verdict pool, with its CPU seconds and peak RSS. A proof block's
-  verdict is the `NO_PROGRAM` refusal, as in `served_units`. With `--wide-leaf` every prover and verifier of the run
-  carries `flock-circuit --wide-leaf`, the wide level-0 leaf's statement version, and its rows say so (`wide_leaf`); the
-  script's docstring has the rest: the two statement names their Lean verdict is asked under, what `flock-verify`
-  takes and refuses under them, and how a row is held to the version its sessions ran. A row with a refused session, a
-  server process that exited nonzero, a prover out of device memory, or a session that ran another statement version
-  than the row's is void: no rate, its reasons in `void`, a `VOID` line, and the run exits 1.
+  K = 1 also get the Lean verdict inside the server's verdict pool, with its CPU seconds and peak RSS. Without
+  `--lean-program` a proof block's verdict is the `NO_PROGRAM` refusal, as in `served_units`. With it, the row's
+  Program's descriptor is handed to `verify` (`--program`) and the row keeps what the verdict says of it:
+  `program_sha512` only when the Program is held to the circuit, else `program_handed_sha512` and `program_note`, which
+  on a statement under the provisional unit cover says the Program was handed and not held to the circuit. With
+  `--wide-leaf` every prover and verifier of the run carries `flock-circuit --wide-leaf`, the wide level-0 leaf's
+  statement version, and its rows say so (`wide_leaf`); the script's docstring has the rest: the two statement names
+  their Lean verdict is asked under, what the Lean verifier takes and refuses under them, and how a row is held to the
+  version its sessions ran. A row with a refused session, a server process that exited nonzero, a prover out of device
+  memory, or a session that ran another statement version than the row's is void: no rate, its reasons in `void`, a
+  `VOID` line, and the run exits 1.
 - `zk_cost_cpu.sh`: the same sessions on a CPU node (`zk_cost.py prove --cpu`), proved by the CPU prover that
   `prove_path/run.sh` builds, with the ZK server's send check. It runs in a proofs slot, one point at a time. Each session's
   record carries its wall time and its summed peak memory (prover, live verifier and ZK server), which is what a CPU node
