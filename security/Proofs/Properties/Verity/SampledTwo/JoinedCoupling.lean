@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.SampledTwo.Binding
 public import Proofs.Properties.Verity.SampledTwo.CouplingOf
 
 /-!
-# The two-stage leg's coupling at the form's accept, from the coin map's distribution
+# The two-stage subprotocol's coupling at the form's accept, from the coin map's distribution
 
 `coupling_at` (`CouplingOf.lean`) gives `CouplingTargetTwo`'s body (`CouplingTwoAt`) from a projection's bound and a
 majority's at one commitment and strategy. Here the projection's is the join's (`joinedOfDistribution`, at the join's frame
@@ -117,7 +117,7 @@ structure CouplesAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
           (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg) openOf dColl) ≤
       V.delta θ .sampled (V.cost θ F c σ)
 
-/-- **The two-stage leg's coupling at one commitment and strategy, from the coin map's distribution**: `coupling_at` at the
+/-- **The two-stage subprotocol's coupling at one commitment and strategy, from the coin map's distribution**: `coupling_at` at the
 join's frame, with the join's projection bound (`joinedOfDistribution`, its blob term under `blobCR`) and MAJORITY's majority
 bound there (`majorityBound_opens`), from the coin map's distribution and `CouplesAt` there. -/
 theorem joinedCouplingAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)
@@ -153,7 +153,7 @@ theorem joinedCouplingAt (V : Vocab d α) (k : Verity.Registration.Composite) (A
       s Pt dd readX openOf dColl h.extract h.parse h.partition h.two h.units h.caps h.opens h.collisionResistant)
     rfl h.delta hI
 
-/-- **The two-stage leg's coupling at the form's accept, from the coin map's distribution**: `joinedCouplingAt` at each
+/-- **The two-stage subprotocol's coupling at the form's accept, from the coin map's distribution**: `joinedCouplingAt` at each
 commitment and strategy, from the coin map's distribution and one `CouplesAt` at each. -/
 theorem joinedCouplingOfDistribution (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)
     (F : Array ByteArray) (x : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → Msg) (C : CaseOf)

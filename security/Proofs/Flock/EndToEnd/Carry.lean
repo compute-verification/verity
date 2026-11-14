@@ -539,7 +539,7 @@ theorem integrity_on_units (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
       (outOf (rdSig fun _ => (S.leaf x).rd) (S.leaf x).op (S.leaf x).col)
       (finderCost (rdSig fun _ => (S.leaf x).rd) (S.leaf x).costMix)) (M : ℕ) :
     value (fun l => (∀ r ∈ l, r.idx ∈ I → r.accepted) ∧
-        M ≤ ((l.filter fun r => r.idx ∈ I).map WindowRec.incorrect).sum) (S.run s) ≤
+        M ≤ ((l.filter fun r => r.idx ∈ I).map SamplingBlockRec.incorrect).sum) (S.run s) ≤
       ENNReal.ofReal (1 - q) ^ M + ∑ t ∈ I, ((S.W t).ks + (S.W t).link) + ∑ x, (S.leaf x).carryOn I := by
   classical
   set xq : ℝ≥0∞ := ENNReal.ofReal (1 - q)
@@ -577,7 +577,7 @@ theorem integrity_on_units (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
     rw [← Finset.sum_filter]
     exact Finset.sum_le_sum_of_subset fun t ht => (Finset.mem_filter.1 ht).2
   calc value (fun l => (∀ r ∈ l, r.idx ∈ I → r.accepted) ∧
-        M ≤ ((l.filter fun r => r.idx ∈ I).map WindowRec.incorrect).sum) (S.run s)
+        M ≤ ((l.filter fun r => r.idx ∈ I).map SamplingBlockRec.incorrect).sum) (S.run s)
       ≤ value (fun l => (∃ r ∈ l, r.idx ∈ I ∧ r.accepted ∧ r.sampledWrong) ∨
           ((∀ r ∈ l, r.idx ∈ I → ¬ r.sampledWrong) ∧
             M ≤ (l.map fun r => if r.idx ∈ I then r.incorrect else 0).sum)) (S.run s) := by
@@ -606,7 +606,7 @@ theorem integrity_on (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
       (outOf (rdSig fun _ => (S.leaf x).rd) (S.leaf x).op (S.leaf x).col)
       (finderCost (rdSig fun _ => (S.leaf x).rd) (S.leaf x).costMix)) (M : ℕ) :
     value (fun l => (∀ r ∈ l, r.idx ∈ I → r.accepted) ∧
-        M ≤ ((l.filter fun r => r.idx ∈ I).map WindowRec.incorrect).sum) (S.run s) ≤
+        M ≤ ((l.filter fun r => r.idx ∈ I).map SamplingBlockRec.incorrect).sum) (S.run s) ≤
       ENNReal.ofReal (1 - q) ^ M + ∑ t ∈ I, ((S.W t).ks + (S.W t).link) + ∑ x, (S.leaf x).carryOn I :=
   S.integrity_on_units s I hq (fun t ht _ => hqt t ht) hA3 hs hA2 M
 
@@ -659,7 +659,7 @@ theorem IntegrityPooledCarried : Flock.Guarantees.IntegrityPooledCarried := by
       exact S.stage_le s t τ hτ.2) S.T 0 s hgood
   -- every sample misses, with at least `M` incorrect proof blocks in all
   have hB := monitoringPeriod_monitoringPeriod (fun t => (S.W t).game) (fun t => S.record s t) (fun r => ¬ r.sampledWrong)
-    WindowRec.incorrect (fun t τ => t < S.T ∧ (S.W t).CR τ) xq hx
+    SamplingBlockRec.incorrect (fun t τ => t < S.T ∧ (S.W t).CR τ) xq hx
     (fun t τ hτ => ⟨(S.incorrectSet s t τ).card, fun _ => rfl,
       ((S.W t).sampleMiss_le (hA3 t hτ.1) _ τ).trans (hfac t hτ.1 _)⟩) S.T 0 s M hgood
   have hxM : xq ^ M ≤ ENNReal.ofReal δ := one_sub_pow_le_of_log hq hδ (Nat.le_ceil _)
@@ -667,16 +667,16 @@ theorem IntegrityPooledCarried : Flock.Guarantees.IntegrityPooledCarried := by
       ∑ b ∈ Finset.range S.B, S.err b := by
     simp only [zero_add]
     exact sum_range_start S.toServerBlocks (fun t => (S.W t).ks + (S.W t).link) S.B
-  calc value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map WindowRec.incorrect).sum : ℝ)) (S.run s)
+  calc value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map SamplingBlockRec.incorrect).sum : ℝ)) (S.run s)
       ≤ value (fun l => (∃ r ∈ l, r.accepted ∧ r.sampledWrong) ∨
-          ((∀ r ∈ l, ¬ r.sampledWrong) ∧ M ≤ (l.map WindowRec.incorrect).sum)) (S.run s) := by
+          ((∀ r ∈ l, ¬ r.sampledWrong) ∧ M ≤ (l.map SamplingBlockRec.incorrect).sum)) (S.run s) := by
         refine value_mono (fun l hl => ?_) _
         by_cases hd : ∃ r ∈ l, r.sampledWrong
         · obtain ⟨r, hr, hdr⟩ := hd
           exact Or.inl ⟨r, hr, hl.1 r hr, hdr⟩
         · exact Or.inr ⟨fun r hr hdr => hd ⟨r, hr, hdr⟩, Nat.ceil_le.2 hl.2⟩
     _ ≤ value (fun l => ∃ r ∈ l, r.accepted ∧ r.sampledWrong) (S.run s) +
-          value (fun l => (∀ r ∈ l, ¬ r.sampledWrong) ∧ M ≤ (l.map WindowRec.incorrect).sum) (S.run s) :=
+          value (fun l => (∀ r ∈ l, ¬ r.sampledWrong) ∧ M ≤ (l.map SamplingBlockRec.incorrect).sum) (S.run s) :=
         value_or_le _ _ _
     _ ≤ (∑ b ∈ Finset.range S.B, S.err b + ∑ x, (S.leaf x).carry) + ENNReal.ofReal δ := by
         refine add_le_add ?_ (hB.trans hxM)

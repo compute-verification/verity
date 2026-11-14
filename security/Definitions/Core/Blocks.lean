@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Core.Circuit
-public import Definitions.Accounting.Device
+public import Definitions.Registration.Device
 public import Definitions.Core.Game
 public import Mathlib.Data.Fintype.Pi
 public import Mathlib.Data.Fintype.Prod

@@ -464,11 +464,11 @@ theorem returns₀ (i : Unit) :
   decide
 
 /-- What the sampled read hashed at the counterexample: `L₀`, its opening's and its table's checks. -/
-theorem drawnHashed₀ (ω : Unit) :
-    R₀.drawnHashed (Flock.Bridge.partsOf D₀ hU₀ 1) Verity.sha512 key₀ (fun _ : Unit => Finset.univ) (fun _ => tr₀) ω =
+theorem sampledHashed₀ (ω : Unit) :
+    R₀.sampledHashed (Flock.Bridge.partsOf D₀ hU₀ 1) Verity.sha512 key₀ (fun _ : Unit => Finset.univ) (fun _ => tr₀) ω =
       L₀ := by
   have hr : R₀.reads = {()} := rfl
-  unfold Reads.drawnHashed
+  unfold Reads.sampledHashed
   simp only [hr, Finset.mem_univ, Finset.filter_true, Finset.toList_singleton, List.flatMap_cons, List.flatMap_nil,
     List.append_nil]
   unfold Reads.hashedAt Reads.index
@@ -480,7 +480,7 @@ noncomputable abbrev finder₀ : Claims.Finder :=
   R₀.finder (Flock.Bridge.partsOf D₀ hU₀ 1) Verity.sha512 key₀ (fun _ : Unit => Finset.univ) (fun _ => tr₀) fun _ => 0
 
 theorem out₀ (ω : finder₀.S) : finder₀.out ω = none := by
-  have h := drawnHashed₀ ω
+  have h := sampledHashed₀ ω
   exact dif_neg (by rw [h]; exact no_collision₀)
 
 theorem cost₀ (ω : finder₀.S) : finder₀.cost ω = 0 := rfl

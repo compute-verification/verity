@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The wipe's piece of a served window (served_verdicts.sh): one streamed wipe (`demo.sh`) of the card the
 # window is served on, before its engine loads, the fill taking the whole HBM. A piece as served_verdicts.py runs one, from
-# the tree's root, writing its core answer (verity/wipe/v0's, `wipe_run.leg`'s) to DIR/answer.json:
+# the tree's root, writing its core answer (verity/wipe/v0's, `wipe_run.subprotocol`'s) to DIR/answer.json:
 #
 #   WIPE_CMD='bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'   # bash -c "$WIPE_CMD" _ SERVE_DIR WINDOW DIR
 #
@@ -22,7 +22,7 @@
 #                    no such pin, no key is pinned and the piece refuses. It decides only which session is accepted:
 #                    the record says trusted-device holds only under a committed configuration, for a key its pins
 #                    give the wipe (period.json's deployment), and otherwise reads a rehearsal with no bound
-#   WIPE_READS       the reads the gate's verb runs, which the leg holds the session to (5500)
+#   WIPE_READS       the reads the gate's verb runs, which the subprotocol holds the session to (5500)
 #   WIPE_NODE        the wiped server's id (this host's name, as served_verdicts.py record's --node defaults to)
 # Further arguments go to demo.sh. The Lean judge (wipe-protocol) is built before the card is checked, in a
 # scratch copy of verity/, which holds every package it requires (WIPE_PROTOCOL_EXE names one built already), never in
@@ -31,9 +31,9 @@
 # the session was signed under, `key_sha512`, and whether it is the pinned one, `key_pinned`), lake-build.log,
 # answer.json (wipe.json's answer, whatever its verdict), served.json (the serve dir and window the wipe precedes,
 # the server, the card, the lease, the run) and stamps.txt (the piece's timeline, a line `UTC EVENT` each: its start,
-# the Lean build's end, the card asked for and leased, a refusal, the wipe's exit and the piece's). The leg's case, which holds the challenger's signed session, goes to
+# the Lean build's end, the card asked for and leased, a refusal, the wipe's exit and the piece's). The subprotocol's case, which holds the challenger's signed session, goes to
 # SERVE_DIR/private/wipe (0700) instead, and there served_case.py (with PY, default python3) writes the composite's
-# piece beside it: case.json and the leg's own answer.json. Its last line is `WIPE {...}`.
+# piece beside it: case.json and the subprotocol's own answer.json. Its last line is `WIPE {...}`.
 # Exit: demo.sh's (0 on accept, 1 on another verdict), 3 on a refusal, 7 when wipe-protocol doesn't build or verity/
 # doesn't copy for its build.
 set -euo pipefail

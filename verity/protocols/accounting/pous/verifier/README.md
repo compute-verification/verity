@@ -88,7 +88,7 @@ answer after reading its receipt time (`block_digest`, its `sha512/row/v2` diges
 to the setup's root of `C*`. A session's id is the auditor's for one audit, and its `SessionLog` refuses an id it has
 used. `verdict` checks a signed session in the clear and publishes only the verdict. It accepts S1's LMS over SHA-512 at
 `lms.DEPLOYED` (`memory_challenger.LMS`) and nothing else: a test-signed or unsigned record is refused.
-A leg's record says `trusted-device` holds only under a committed configuration, for a session signed under a key its
+A subprotocol's record says `trusted-device` holds only under a committed configuration, for a session signed under a key its
 `[[pin]]` entries give the memory challenger (`memory_challenger.trusted_device`, read by `challenger_session.placement`,
 with `kind` for what the host names say): the names
 are the run's own, and a session under any other key, a pin the run passes itself among them, is a rehearsal's, with
@@ -175,7 +175,7 @@ session (`egress_mib`, whole MiB; none given is `EGRESS_MAX_UNITS`; one out of r
 nothing, so it certifies no wipe on it (`wipe_period.uncounted`) and names it as the evidence writer's
 (`writer_gap`). `certify` gives `StreamedWipeMeetsReads`' `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `2^-128`
 (`R` the declared memory past the fill), which the check that composes the wipe with the network certifier is to
-publish once it ties `E` to the certifier's count between the session's marks. `wipe_run.leg(period_dir, node, out, side_of=...)` is the wipe's run in the all-protocols period runner.
+publish once it ties `E` to the certifier's count between the session's marks. `wipe_run.subprotocol(period_dir, node, out, side_of=...)` is the wipe's run in the all-protocols period runner.
 `wipe_monitoring` reports one accepted wipe over a week, a month and a year of a deployment's machines, each wiped
 every `cadence_s` seconds (a day by default), at δ = 1% and 10⁻⁶: the T wipes, at most M − 1 of them failing their bound
 except with δ (`prCoin_count_le_choose`'s count bound, which PoUB's period shares), every one

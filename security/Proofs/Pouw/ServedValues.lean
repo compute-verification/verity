@@ -1,12 +1,12 @@
 module
 
 public import Properties.Pouw.ServedValues
-public import Proofs.Pouw.PeriodJ10R
+public import Proofs.Pouw.MonitoringPeriodJ10R
 
 /-!
 # Proof of `RightValues`
 
-`H1J10RCheckedCreditPeriod` at the play whose fixed words are the right blocks' words (`rightWords`) and whose folded
+`H1J10RCheckedCreditMonitoringPeriod` at the play whose fixed words are the right blocks' words (`rightWords`) and whose folded
 words are the blocks not skipped whole. There `UnitFixed` holds with equality, so H1 bounds the right blocks' words
 below `(1 − ε(j))₊·N_live` with no premise on the play's anatomy. The step to size is deterministic: a right block is
 live in a credited window (`good_live`, through `credited_iff`), so the size the right blocks miss of `S` is at most
@@ -18,7 +18,7 @@ live in a credited window (`good_live`, through `credited_iff`), so the size the
 
 namespace Properties.Pouw.ServedValues.SecurityProofs
 
-open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs Properties.Pouw.ServedValues
+open Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs Properties.Pouw.ServedValues
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-- **The blocks' sizes sum to at most the credit** of the registered declaration under its pinned lowering: the
@@ -169,7 +169,7 @@ theorem rightValues : RightValues := by
   have hUF : UnitFixed Pl' pf mode (fun _ t => (tileWords Sc Cd (tileCount σ sT) t : ℝ))
       (fun x => (∑ w, ∑ j, if mode x (w, j) = .whole then 0 else (tileWords Sc Cd (tileCount σ sT) j : ℝ)) / n) :=
     fun _ _ _ => ⟨le_rfl, le_rfl⟩
-  have hH1 := h1J10RCheckedCreditPeriod σ k hk sT unitOf Sc Cd hn hN hr hM hKd ws opened enc place tile Wp Pl' _
+  have hH1 := h1J10RCheckedCreditMonitoringPeriod σ k hk sT unitOf Sc Cd hn hN hr hM hKd ws opened enc place tile Wp Pl' _
     ρ δs δbind δks hS hρ hρ1 hρN hwmax hlk hG hDD hPre hMoved hReg hDraw hServ hSalt hLucks hUF
   refine le_trans (prob_mono ?_) hH1
   intro x hx

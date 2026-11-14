@@ -10,7 +10,7 @@ GOAL = "network/check-reads-verified-answers"
 
 
 def verified_answer(answer: Mapping[str, Any], params: bytes, commitment: bytes, evidence: bytes) -> dict[str, Any]:
-    """The period evidence's entry for one answer the check reads (a compute audit's, or a link-window's `answer`): the
+    """The period evidence's entry for one answer the check reads (a compute audit's, or an execution phase's `answer`): the
     answer with the one-stage parameters, commitment and evidence it was given on, on which the period check runs
     `Spot.OneStage.protocol.answer` and refuses an answer it does not give back."""
     raise NotImplementedError(GOAL)

@@ -1,7 +1,7 @@
 """zk-drivers: the command line of the network certifier's zero-knowledge drivers, which live in the certifier's prover
 (`verity/protocols/accounting/certifier/prover/`) and take the proof system's benchmark drivers as one
 `proof_drivers.ProofDrivers`. This builds it from SPOT's template audit and challenger session (`a0`, `a5_coins`),
-`benchmarks/one_stage/` (`a7`, `a8`, `prove_leg`), Flock's distribution (`verity_flock.circuit`,
+`benchmarks/one_stage/` (`a7`, `a8`, `prove_subprotocol`), Flock's distribution (`verity_flock.circuit`,
 `verity_flock.class_statement`), Flock's proof-format reader (`redigest`) and the chain's reader (`warden_chain`),
 installs it, and runs the driver's `main`:
 
@@ -27,14 +27,14 @@ def proof_drivers() -> SimpleNamespace:
         sys.path.append(str(ROOT))
     import a7
     import a8
-    import prove_leg
+    import prove_subprotocol
     import redigest
     from verity_flock import circuit, class_statement
     from verity.protocols.proofs.spot.device import challenger_session as a5_coins
     from verity.protocols.proofs.spot.prover.audit import template_audit as a0
     from benchmarks.network_traces import warden_chain
 
-    return SimpleNamespace(a0=a0, a5_coins=a5_coins, a7=a7, a8=a8, prove_leg=prove_leg, circuit=circuit, class_statement=class_statement,
+    return SimpleNamespace(a0=a0, a5_coins=a5_coins, a7=a7, a8=a8, prove_subprotocol=prove_subprotocol, circuit=circuit, class_statement=class_statement,
                            redigest=redigest, warden_chain=warden_chain)
 
 

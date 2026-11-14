@@ -460,7 +460,7 @@ def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
     assert S.main(["front-line", str(tmp_path / "session.json")]) == 0
     said = json.loads(capsys.readouterr().out)
     assert list(said) == list(S.FRONT_PUBLIC) and said == {k: session[k] for k in S.FRONT_PUBLIC}
-    (tmp_path / "session.json").write_text(json.dumps({"refused": "4 prompts of 64 ids: past one link-window"}))
+    (tmp_path / "session.json").write_text(json.dumps({"refused": "4 prompts of 64 ids: past one execution phase"}))
     assert S.main(["front-line", str(tmp_path / "session.json")]) == 0
     assert "64" not in capsys.readouterr().out
     assert S.main(["front-line", str(tmp_path / "absent.json")]) == 1
@@ -807,7 +807,7 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
         assert line["missing"]["the wipe"] == "its piece refused to run: WIPE REFUSED: the card has a compute process"
 
 
-#: an accepted core answer of each piece's subprotocol, its public outputs the block record's leg certificate, the
+#: an accepted core answer of each piece's subprotocol, its public outputs the block record's subprotocol certificate, the
 #: bandwidth audit's profile naming the term its error leaves out, as its piece writes it
 ACCEPTS = {
     "pouw": {"protocol": "verity/pouw/v1", "public": {"work": {"level": 3, "n": 4, "credited_tiles": 2, "credited": 8192}},
@@ -831,7 +831,7 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
     about, and the wipe's `SERVED`): the composed verdict is ``pending``, the block record's ``undecided``, since its
     verdict is the Lean check's answer and none ran, with nothing missing, and its reason names each subprotocol's
     accept, the bandwidth audit's with its error and the term it leaves out beside it. One piece with no answer leaves it ``pending`` and names that piece missing with
-    why; one that rejects, or accepts with outputs that are not its leg's certificate, makes it ``reject`` naming it, with
+    why; one that rejects, or accepts with outputs that are not its subprotocol's certificate, makes it ``reject`` naming it, with
     no block record, and so does a bandwidth answer whose profile names no term its error leaves out; one about another
     server leaves it ``pending``, carried and named as elsewhere."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
@@ -861,7 +861,7 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
                  "--sampled-proofs", str(tmp_path / "audit"), "--pieces", str(pieces), "--out", str(tmp_path / "record"),
                  "--node", "vy-dc-h200"])
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
-    leg, runner = piece, {v[1]: k for k, v in S.PIECES.items()} | {"wipe": "wipe"}
+    subprotocol, runner = piece, {v[1]: k for k, v in S.PIECES.items()} | {"wipe": "wipe"}
     name = S.NAMES[runner[piece]] if piece else None
     if case in ("reject", "malformed", "unnamed"):
         assert rc == 1 and (line["composed"], line["by"], line["block_record"]) == ("reject", [name], None)
@@ -871,7 +871,7 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
         row = next(r for k, r in report["protocols"].items() if S.NAMES[k] == name)
         why = {"malformed": "KeyError", "unnamed": "ValueError: bandwidth: its answer's profile names no term its error "
                                                    "leaves out; its piece writes them in its answer's profile as named_terms"}
-        assert case == "reject" or row["reason"].startswith(f"its answer is not the block record's {piece} leg: {why[case]}")
+        assert case == "reject" or row["reason"].startswith(f"its answer is not the block record's {piece} subprotocol: {why[case]}")
         return
     rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
@@ -879,21 +879,21 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
     if case == "accept":
         assert (line["composed"], line["record_missing"], line["missing"], line["elsewhere"]) == ("pending", [], {}, {})
         assert (rec["composed"]["verdict"], rec["composed"]["answer"]) == ("undecided", None)
-        assert rec["composed"]["legs"] == {k: "accept" for k in BR.LEGS}
+        assert rec["composed"]["legs"] == {k: "accept" for k in BR.SUBPROTOCOLS}
         late = {"the network certifier": " (its quantity is not established at δ = 1/1000000: the run established it "
                                          "except with 1/100)",
                 "the bandwidth audit": f" (its error reads 1/1000000{ledger.DELTA_FORM.removeprefix('δ')})"}
         assert line["reason"] == "; ".join(
             f"{n}: accept{late.get(n, '')}" for n in S.NAMES.values())
         return
-    assert line["composed"] == "pending" and line["record_missing"] == [leg]
+    assert line["composed"] == "pending" and line["record_missing"] == [subprotocol]
     if case == "missing":
         what = S.WIPE[3] if piece == "wipe" else S.PIECES[runner[piece]][3]
         assert line["missing"] == {name: f"{piece.upper()}_CMD unset: {what}"}
-        assert rec["legs"][leg] is None and line["elsewhere"] == {}
+        assert rec["legs"][subprotocol] is None and line["elsewhere"] == {}
     else:
         assert line["missing"] == {} and line["elsewhere"] == {name: "vy-dc-h200-2"}
-        assert rec["legs"][leg]["server"] == "vy-dc-h200-2" and rec["composed"]["elsewhere"] == [leg]
+        assert rec["legs"][subprotocol]["server"] == "vy-dc-h200-2" and rec["composed"]["elsewhere"] == [subprotocol]
 
 
 def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, monkeypatch, capsys):

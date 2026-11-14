@@ -17,7 +17,7 @@ they sit in `prover/`: a file under `verifier/` loads none under `prover/`.
 - `compose_circuit.py`: a template's circuit composed by Flock's prover (`verity_flock`), the verifier's own copy;
   run in the circuit prover's tree.
 
-They still load scripts under `benchmarks/`: `stop_audit.py` the proof leg (`one_stage/prove_leg.py`), `prove_path.py`
+They still load scripts under `benchmarks/`: `stop_audit.py` the proof subprotocol (`one_stage/prove_subprotocol.py`), `prove_path.py`
 the network certifier's pieces (`network_traces/`), `window_audit.py` the one-stage replay (`one_stage/replay.py`),
 `template_audit.py` the tampered stagings it runs (`one_stage/stage_tampered.py`) and `prove_bundle.py` the bundle's
 format (`one_stage/interfaces/verity_e2e_demo`); and they read the measured data there

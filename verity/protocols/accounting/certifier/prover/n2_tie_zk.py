@@ -35,7 +35,7 @@ through `tie_service.Ties`, the verifier's tie source).
   swaps, proved on the cells' own lanes, which the verifier refuses in every window, the release not being the
   swapped advice's schedule, so it has no lanes to register (`EXPECT`).
 * **The statement and the rounds** follow `warden_zk`'s: one circuit, `IngressTie.proof_block` lowered once (the gate
-  the Definition its pinned digest names), and each link-window a statement of T instances, unit t bucket t, on rows
+  the Definition its pinned digest names), and each execution phase a statement of T instances, unit t bucket t, on rows
   ``pub`` and ``wit`` (`IngressTie.layout`) and the output row ``o0``, the verdict bit: a shared-row file every port
   of which is a registered read, ``wit`` the window's bucket rows under the warden's salts and paths, and ``pub`` and
   ``o0`` the prover's rows under the known values' public salts (`known`). A round registers, selects, proves live
@@ -124,7 +124,7 @@ def use(name: str, run: Path | None = None, windows: int = 1) -> None:
     global B, PARAMS, T, PROFILE, MEMBERS, EXPECT, RECEIVED, WINDOWS, LINK, SESSION, REAL
     if name == "warden":
         if run is None or windows < 1:
-            raise SystemExit("--class warden reads a warden run's first link-windows: --warden-run RUN [--windows K]")
+            raise SystemExit("--class warden reads a warden run's first execution phases: --warden-run RUN [--windows K]")
         REAL = warden_link(Path(run), windows)
         B, PARAMS, LINK, SESSION, WINDOWS = REAL.params.cell_bytes, REAL.params, REAL.link, REAL.session, windows
         EXPECT = {"honest": (True,) * windows, "forged": (False,) + (True,) * (windows - 1)}
@@ -198,17 +198,17 @@ def warden_link(run: Path, windows: int) -> SimpleNamespace:
     cells = []
     for w in range(windows):
         if w not in regs or w not in records:
-            raise SystemExit(f"--warden-run {run}: ingress link-window {w} has no registration or no record")
+            raise SystemExit(f"--warden-run {run}: ingress execution phase {w} has no registration or no record")
         registration, blob = regs[w]
         try:
             head, _dom = WR.check_registration(registration, key, session, params, RC.LINK, Direction.INGRESS, w)
         except ValueError as e:
-            raise SystemExit(f"--warden-run {run}: ingress link-window {w}'s registration doesn't verify under the "
+            raise SystemExit(f"--warden-run {run}: ingress execution phase {w}'s registration doesn't verify under the "
                              f"deployment's key and session: {e}")
         row_salts, wiring_salt = WR.read_witness(blob)
         c = WR.Cells.of(RC.LINK, Direction.INGRESS, records[w], params, session, row_salts, wiring_salt)
         if c.head != head:
-            raise SystemExit(f"--warden-run {run}: ingress link-window {w}'s record under cells.salts isn't the rows "
+            raise SystemExit(f"--warden-run {run}: ingress execution phase {w}'s record under cells.salts isn't the rows "
                              "whose root the warden signed")
         cells.append(c)
     releases, lens = _released(params, cells)
@@ -241,7 +241,7 @@ def _released(params: W.WardenParams, cells: list) -> tuple[list[Q.Release], tup
     if sorted(seen) != list(range(1, len(seen) + 1)):
         raise SystemExit(f"the windows' connections are {sorted(seen)}, not ordinals 1 … {len(seen)}")
     if past := [q for q, d in seen.items() if d["end"] is None]:
-        raise SystemExit(f"connections {past} don't end their ingress in link-windows 0 … {len(cells) - 1}: "
+        raise SystemExit(f"connections {past} don't end their ingress in execution phases 0 … {len(cells) - 1}: "
                          "take a --windows they end in")
     releases, lens = [], []
     for q in sorted(seen):
@@ -283,7 +283,7 @@ def forge(link: SimpleNamespace) -> Forge:
                     k, x = m.end() - 1, bytearray(row)
                     x[k] = ord("0") + (x[k] - ord("0") + 1) % 10
                     return Forge(0, t, k, bytes(x))
-    raise SystemExit("link-window 0 holds no whole prompt field to forge")
+    raise SystemExit("execution phase 0 holds no whole prompt field to forge")
 
 
 def _carried(w: int, lanes):
@@ -312,8 +312,8 @@ def members() -> dict[str, tuple]:
     return {name: plan[name] for name in MEMBERS}
 
 
-def link_windows(tie: TS.IngressTie, link: Q.ServedIngress, adv: TS.LinkAdvice, edit=None) -> SimpleNamespace:
-    """Every link-window of the member as the warden and the prover hold it before it registers: the warden's cells
+def phases(tie: TS.IngressTie, link: Q.ServedIngress, adv: TS.LinkAdvice, edit=None) -> SimpleNamespace:
+    """Every execution phase of the member as the warden and the prover hold it before it registers: the warden's cells
     (`warden_rows.Cells`: a network certifier run's own, else fresh salts) and its head, the verifier's lanes of `adv`
     (``own``, None where the release isn't its schedule) and the prover's (``lanes``: `edit` of the verifier's, or, a
     tuple, the lanes of those prompt lengths), the prover's rows (the network certifier's, or a `Forge`'s), each proof
@@ -396,7 +396,7 @@ def known(tie: TS.IngressTie, x: SimpleNamespace) -> dict:
 
 
 def stage(M, sg: SimpleNamespace, tie: TS.IngressTie, rounds: dict[str, SimpleNamespace], out: Path) -> dict:
-    """Every link-window's statement on the one circuit, T instances each, unit t bucket t (`UnitStager.stage`: the
+    """Every execution phase's statement on the one circuit, T instances each, unit t bucket t (`UnitStager.stage`: the
     outputs the lowering's, held to the IR reference): a shared-row file every port of which is a registered read, its
     ``wit`` table the window's bucket rows under the warden's salts and paths (`warden_rows.Cells.statement`), and its
     ``pub`` and ``o0`` rows under the prover's known values' public salts and paths (`known`). Each staged ``o0`` row
@@ -576,7 +576,7 @@ def prove(a) -> int:
     t = time.time()
     tie = TS.IngressTie(LINK, PARAMS, SESSION, proof_deadline=RC.PROOF_DEADLINE_S)
     plan = members()
-    rounds = {name: link_windows(tie, link, adv, edit) for name, (link, adv, edit, _) in plan.items()}
+    rounds = {name: phases(tie, link, adv, edit) for name, (link, adv, edit, _) in plan.items()}
     summary: dict = {"class": a.cls, "gpu": a.gpu,
                      **({"source": REAL.source, "warden_run": REAL.run_id, "windows": WINDOWS,
                          "prompt_lens": list(REAL.prompt_lens), "releases": [list(r) for r in REAL.releases]}
@@ -637,7 +637,7 @@ def prove(a) -> int:
     summary["tie"] = {name: res["tie"]["accepted"] for name, res in done.items()}
     costs = [r for res in done.values() for r in res["windows"]]
     summary["per_window"] = {
-        "of": f"each of the {len(costs)} link-windows, its {T} bucket units proved together and decided by the "
+        "of": f"each of the {len(costs)} execution phases, its {T} bucket units proved together and decided by the "
               "verifier of record",
         **{k: [r["prove"][k] for r in costs] for k in ("session_s", "prove_total_s", "e2e_s", "proof_bytes",
                                                        "max_child_rss_gb")},

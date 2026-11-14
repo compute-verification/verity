@@ -38,7 +38,7 @@ def run(a: argparse.Namespace) -> dict:
     from vllm.inputs import TokensPrompt
 
     from verity_vllm.engine.build import build_engine, target_mismatches
-    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm import TargetProfile
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)

@@ -751,8 +751,8 @@ def test_spot_reads_the_two_stage_form(remote_server):
     assert set(seen) == set(want), dict(seen)
 
 
-#: `reusing`'s R's law: a subset of one, so v2's audit of R samples R's one proof block at its challenger's coins
-REUSING_LAW = {"k": 1, "law": "subset"}
+#: `reusing`'s R's sampling design: a subset of one, so v2's audit of R samples R's one proof block at its challenger's coins
+REUSING_SAMPLING_DESIGN = {"k": 1, "law": "subset"}
 
 
 def reusing(made: list[dict]):
@@ -772,7 +772,7 @@ def reusing(made: list[dict]):
         s = OS.RegisteredSetup(OS._registered_program("CoreRemoteReuse", 1, params, tuple(n for n, _ in named)),
                                [{n: true[v]["words"] for n, v in named}])
         OS.PROGRAMS[s.sha512] = s.program
-        rec = OS._json(OS.R.record(s.program, s.query, REUSING_LAW, OS.SCHEME,
+        rec = OS._json(OS.R.record(s.program, s.query, REUSING_SAMPLING_DESIGN, OS.SCHEME,
                                    [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports], OS.WINDOW,
                                    registered=[{**true[v], "value": n} for n, v in named], leaf_layer=OS.LEAF,
                                    anchors=[], previous=OS.R.digest(w),
@@ -789,13 +789,13 @@ def reusing_audit(m: dict) -> dict:
     proved unit, and it names no session, its params name the circuit and public files `BLOBS` hold, and its registered
     file names R's tables, which no proof block of R's program reads."""
     s, rec = m["setup"], m["record"]
-    ch, d, coins = OS._challenger_sample(random.Random("remote/reusing"), s, REUSING_LAW, rec, trees=0)
+    ch, d, coins = OS._challenger_sample(random.Random("remote/reusing"), s, REUSING_SAMPLING_DESIGN, rec, trees=0)
     proved = OS.DR.proved(d)
     reads = {"format": "verity/registered-reads/v1", "ports": {
         e["value"]: {k: e[k] for k in ("domain", "leaves", "root", "value", "words")} | {"reads": [None]}
         for e in rec["registered"]}}
     params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/10",
-              "law": REUSING_LAW, "leaf_layer": OS.LEAF, "log": [m["w"]], "outputs": m["outputs"],
+              "law": REUSING_SAMPLING_DESIGN, "leaf_layer": OS.LEAF, "log": [m["w"]], "outputs": m["outputs"],
               "parameters": s.signature, "partition": {"program": s.sha512, "query": s.query}, "ports": s.ports,
               "program": s.desc, "proofs": {"circuit": _sha(CIRCUIT), "public": _sha(PUBLIC), "registered": reads},
               "query": s.query, "registered": s.values[0], "scheme": OS.SCHEME,
