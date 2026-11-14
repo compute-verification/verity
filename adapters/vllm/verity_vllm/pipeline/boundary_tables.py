@@ -474,9 +474,11 @@ def private_root(directory: Path, *public: Path | None) -> Path:
 
 def layers_of(spec: int | Sequence[int]) -> tuple[int, ...]:
     """The tables' layers from a serve's configuration: a count (the first that many) or the layers themselves."""
-    if type(spec) is int:
-        return tuple(range(spec))
-    return tuple(int(x) for x in spec)
+    if not isinstance(spec, int):
+        return tuple(int(x) for x in spec)
+    if type(spec) is not int:
+        raise TypeError(f"layers {spec!r}: a count or the layers themselves, and a {type(spec).__name__} is neither")
+    return tuple(range(spec))
 
 
 def _bytes(path: Path, data: bytes) -> None:

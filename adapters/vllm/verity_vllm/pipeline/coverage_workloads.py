@@ -255,10 +255,9 @@ def simulate_schedule_chunked(reqs: list[dict], budget: int, max_num_seqs: int =
         for i, t in sched:
             plen = int(reqs[i]["prompt_len"])
             if computed[i] < plen:
-                before = computed[i]
                 computed[i] += t
                 complete = computed[i] >= plen
-                chunks[i].append({"step": step, "tokens": t, "computed_before": before, "prompt_complete": complete})
+                chunks[i].append({"step": step, "tokens": t, "prompt_complete": complete})
                 any_prefill = True
                 any_partial = any_partial or not complete
                 if complete:

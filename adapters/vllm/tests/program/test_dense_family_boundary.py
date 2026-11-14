@@ -12,6 +12,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.lint._imports import core_less_definitions as _core
+
 REGISTRY = "verity.definitions.registry"
 _SPEC = importlib.util.find_spec(REGISTRY)
 assert _SPEC is not None and _SPEC.origin is not None
@@ -23,7 +25,7 @@ FAMILY = ("dense", "act", "boolean_dense", "boolean_dense_norm", "boolean_norms"
 READS = ("prims", "b1", "sampling", "value_inputs", "tables")
 THIRD_PARTY = ("numpy",)
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = ("verity.circuits", "verity.definitions.circuits", "verity.circuits.ops", "verity.circuits.silicon")
+CATALOG = ("verity.circuits", "verity.circuits.ops", "verity.circuits.silicon")
 #: `evidence.json`'s ids, read with the standard library only
 EVIDENCE = "verity.definitions.evidence"
 MOVED = ("verity_vllm.properties.difftests.rope_difftest", "verity_vllm.properties.difftests.rope_gptj_difftest",
@@ -41,19 +43,6 @@ def _imports(path: Path) -> list[tuple[int, str, tuple[str, ...]]]:
             mod = ".".join(p for p in (base, n.module or "") if p)
             out.append((n.lineno, mod, tuple(a.name for a in n.names)))
     return out
-
-
-def _core(name: str) -> bool:
-    """`name` is core as it was before the platform move: under `verity`, except what moves since put there from outside it
-    (the catalog, the kernels, Flock, verity_experimental's multiproofs, private circuits and ports), with core's own
-    protocols and claims, which are under `verity.core` now."""
-    def under(prefix: str) -> bool:
-        return name == prefix or name.startswith(prefix + ".")
-    moved_in = ("verity.core", "verity.commitments.multiproof", "verity.circuits.private_circuits", "verity.circuits.ops",
-                "verity.circuits.silicon", "verity.circuits.targets", "verity.circuits.kernels", "verity.ml.flock",
-                "verity.definitions")
-    return under("verity") and (not any(map(under, moved_in))
-                                or any(map(under, ("verity.core.protocols", "verity.claims"))))
 
 
 def _foreign(mod: str, names: tuple[str, ...]) -> list[str]:

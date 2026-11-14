@@ -3,7 +3,9 @@ nothing, key material and big files never leave the machine."""
 from __future__ import annotations
 
 import datetime as dt
+import os
 import subprocess
+import sys
 import threading
 from pathlib import Path
 
@@ -240,6 +242,83 @@ def _note(repo: Path, rel: str, created: str | None = None) -> Path:
 
 def _tree(origin: Path) -> list[str]:
     return _git(origin, "ls-tree", "-r", "--name-only", "main").split()
+
+
+#: what a script exported and its shell kept; the author's and the committer's differ, so a commit says which git took
+EXPORTED = {"GIT_AUTHOR_NAME": "trial", "GIT_AUTHOR_EMAIL": "trial@invalid",
+            "GIT_COMMITTER_NAME": "scratch", "GIT_COMMITTER_EMAIL": "scratch@example.invalid"}
+AS_EXPORTED = ["trial <trial@invalid>", "scratch <scratch@example.invalid>"]
+DATES = {"GIT_AUTHOR_DATE": "2026-01-02T03:04:05+00:00", "GIT_COMMITTER_DATE": "2026-01-02T06:07:08+00:00"}
+
+
+def _research(clone: Path, *argv: str, **env: str) -> subprocess.CompletedProcess:
+    """`research notes ARGV` on the scratch ``clone``, one process: its environment is this one's less the four identity
+    variables (a check's tests run with them set) plus ``env``, as a shell that exported ``env`` starts it.  The notes it
+    knows are ``clone``, whose remote is the test's."""
+    shell = {k: v for k, v in os.environ.items() if k not in NS.IDENTITY_ENV}
+    return subprocess.run([sys.executable, "-m", "research", "notes", *argv, "--root", str(clone)], capture_output=True, text=True,
+                          env={**shell, "RESEARCH_NOTES": str(clone), NS.SYNC_ENV: "1", NS.CITE_ENV: "0", **env})
+
+
+def _who(repo: Path, rev: str = "HEAD") -> list[str]:
+    """``rev``'s author, committer, author date and committer date."""
+    return _git(repo, "log", "-1", "--format=%an <%ae>%n%cn <%ce>%n%aI%n%cI", rev).splitlines()
+
+
+def _edit(a: Path, lane: str) -> list[str]:
+    (a / "kb" / f"{lane}.md").write_text("an edit\n")
+    return []
+
+
+def _old_note(a: Path, lane: str) -> list[str]:
+    """A note stamped long ago, committed: what `archive --apply` moves in a commit of its own."""
+    _note(a, f"lanes/{lane}/20260920T0100Z-note-w.md")
+    _git(a, "add", "-A")
+    _git(a, "commit", "-qm", "a note")
+    return [lane, "--apply"]
+
+
+@pytest.mark.parametrize("command, change", [
+    ("sync", _edit), ("checkpoint", lambda a, lane: [lane, "open", "started", "--commit", "none"]), ("snapshot", _edit),
+    ("archive", _old_note)], ids=["sync", "checkpoint", "snapshot", "archive"])
+def test_a_notes_commit_is_the_clones_whatever_names_the_shell_exported(machines, command, change):
+    """`research notes sync`, `checkpoint` (which syncs its lane), `snapshot` and `archive` commit as the author and committer
+    the clone's configuration names, with the four identity variables exported in the calling shell and without them; the
+    dates the shell pins are the commit's either way."""
+    _, a, _ = machines
+    for lane, exported in (("x", EXPORTED), ("y", {})):
+        argv, before = change(a, lane), _git(a, "rev-parse", "HEAD")
+        r = _research(a, command, *argv, **exported, **DATES)
+        assert r.returncode == 0 and _git(a, "rev-parse", "HEAD") != before, r.stderr
+        assert _who(a) == ["a <a@t>", "a <a@t>", DATES["GIT_AUTHOR_DATE"], DATES["GIT_COMMITTER_DATE"]], sorted(exported)
+
+
+def test_a_commit_the_rebase_replays_keeps_its_author_and_is_committed_by_the_clone(machines):
+    """A commit made under an exported name earlier, which a sync replays onto the remote's branch, keeps the author it was
+    made with, as git replays any commit; its committer is the clone's."""
+    origin, a, b = machines
+    (b / "kb" / "local.md").write_text("made earlier\n")
+    _git(b, "add", "-A")
+    subprocess.run(["git", "-C", str(b), "commit", "-qm", "made earlier"], check=True, capture_output=True, env={**os.environ, **EXPORTED})
+    assert _who(b)[:2] == AS_EXPORTED
+    _edit(a, "x")
+    assert _research(a, "sync").returncode == 0
+    r = _research(b, "sync", **EXPORTED)
+    assert r.returncode == 0 and "pushed" in r.stdout, r.stderr
+    assert _who(b)[:2] == _who(origin, "main")[:2] == [AS_EXPORTED[0], "b <b@t>"]
+
+
+@pytest.mark.parametrize("unset", [("user.name", "user.email"), ("user.email",)], ids=["no user", "a name without an address"])
+def test_a_clone_whose_configuration_names_no_whole_user_commits_as_the_variables_say(machines, tmp_path, unset):
+    """Where the configuration git reads in the clone lacks a name or an address, nothing is taken out of the environment:
+    the commit is the variables', all four, as it was (never the clone's name beside an exported address)."""
+    _, a, _ = machines
+    for key in unset:
+        _git(a, "config", "--unset", key)
+    (tmp_path / "gitconfig").write_text("")
+    _edit(a, "x")
+    r = _research(a, "sync", GIT_CONFIG_GLOBAL=str(tmp_path / "gitconfig"), **EXPORTED)
+    assert r.returncode == 0 and _who(a)[:2] == AS_EXPORTED, r.stderr
 
 
 def test_evidence_and_renders_stay_out_of_the_notes_and_their_removal_syncs(machines):

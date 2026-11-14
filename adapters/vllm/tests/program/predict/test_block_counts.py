@@ -4,13 +4,17 @@ gates, its gate table and its verdict agree with `NciCheck.Count`'s Python refer
 and `check_count`, which `nci-count-difftest` holds the Lean to) on the session Program, m activations of the block
 Definition; the public judgment holds only its record's fields and no count, so days of different counts under n publish
 the same bytes, and a refusal past n names n; the exact counts are in the private file alone (0600); a block reaching an
-unpriced primitive leaves the gates undecided; and on `test_window_circuit`'s TINY window a block's fresh bits are B's k
-(`inference_blocks.budgets`)."""
+unpriced primitive leaves the gates undecided; on `test_window_circuit`'s TINY window a block's fresh bits are B's k
+(`inference_blocks.budgets`); and the module's import alone loads no registry module, which `resolve` loads on its first
+call."""
 from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -29,6 +33,26 @@ REFERENCE = Path(__file__).resolve().parents[5] / "verity/protocols/policy/infer
 GEMM = 'Gemm_v2{K=64,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
 ROPE = "RoPEHead_v1{D=16}"
 DAY = "2026-11-01"
+ON_DEMAND = "LEnable_v1"
+ALONE = """
+import json, sys
+from verity_vllm.program.predict import block_counts as BC
+from verity.circuits import codec
+from verity.circuits.defs import REGISTRY
+
+
+def asked(fid):
+    try:
+        return codec.lookup_primitive(REGISTRY, fid).id
+    except KeyError:
+        return None
+
+
+loaded = sorted(m for m in sys.modules if m.startswith("verity.definitions.registry"))
+before = asked(sys.argv[1])
+BC.resolve(sys.argv[2])
+print(json.dumps({"loaded": loaded, "before": before, "after": asked(sys.argv[1])}))
+"""
 
 
 def _reference():
@@ -180,3 +204,13 @@ def test_on_the_tiny_window_a_blocks_fresh_bits_are_bs_k():
     (cls,) = pub.classes
     assert (cls.slots, private["total"], cls.fresh) == (2, 2, IB.budgets(circuit)[1]) and cls.fresh > 0
     assert not cls.unpriced and cls.gates > IB.budgets(circuit)[0]
+
+
+def test_the_import_alone_loads_no_registry_module():
+    """A process that has imported the module and called nothing has loaded no module of `verity.definitions.registry`, so
+    `codec` holds none of the catalog's on-demand families and refuses an id of one (`ON_DEMAND`); `resolve` loads the
+    catalog on its first call, and the same id then answers."""
+    r = subprocess.run([sys.executable, "-c", ALONE, ON_DEMAND, ROPE], capture_output=True, text=True, check=False,
+                       env=dict(os.environ))
+    assert r.returncode == 0, r.stderr[-4000:]
+    assert json.loads(r.stdout.splitlines()[-1]) == {"loaded": [], "before": None, "after": ON_DEMAND}

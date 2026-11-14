@@ -8,9 +8,9 @@ import shutil
 
 import numpy as np
 import pytest
-
 from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+
 from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import registered_device as D
 from verity_vllm.protocols.pouw.h1.nodes import Nodes

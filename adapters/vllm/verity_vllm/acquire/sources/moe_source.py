@@ -94,11 +94,12 @@ from collections.abc import Mapping
 from functools import partial
 from typing import Any
 
+from verity.definitions.registry.moe import router_kernel
+
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources.partial_source import _moe_reduces
 from verity_vllm.engine import hooks
 from verity_vllm.log import init_logger
-from verity.definitions.registry.moe import router_kernel
 from verity_vllm.query.manifest.bind import Port
 from verity_vllm.query.manifest.format import MOE_FP8_PLANES, MOE_PLANES
 
@@ -539,8 +540,9 @@ class MoeBlockSource:
                               "flushed off the device right after staging (its workspace is the block's own w2 output: cache1/cache3 alias), "
                               "and on Marlin act and down after the w2 launch (moe_sum's output is carved from act's workspace) -- "
                               f"{self.stats['plane_flushes']} flushes; identity_check requires exactly "
-                              f"{per_layer} per layer per step; value correspondence: verity_vllm/ops/moe_kernel_xcheck.py "
-                              f"(registry.moe Definitions bit-exact vs the same kernels); shapes seen {self.stats['shapes']}")}]
+                              f"{per_layer} per layer per step; shapes seen {self.stats['shapes']}; value correspondence, the block's "
+                              "registry.moe Definitions bit-exact vs vLLM's fused_experts (Triton experts, bf16, routing given): "
+                              "verity_vllm.program.moe_difftest")}]
 
 
 __all__ = ["MoeBlockSource", "moe_layers_of", "plane_layer", "router_kernel", "grouped_topk_args", "binds_planes", "claims",

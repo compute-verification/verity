@@ -98,20 +98,25 @@ for a new benchmark.
 
 ## Metrics
 
-`metrics.toml` declares the numbers a lead is held to, one `[[metric]]` each, and the console's Metrics tab shows each
-one's history from the evidence store. A metric's value is a measurement in a run's `result.json` named by its `id`,
-`OWNER/NAME`, which the benchmark records it under (`serve_tax`'s `Model.metric`), so a value without a run doesn't
-exist. Its keys:
+Each benchmark declares the numbers a lead is held to in a `metrics.toml` beside the script its command runs (the first
+`.py` or `.sh` under `benchmarks/`, `demos/` or `tools/` the command names: `benchmarks/serve_tax/run.sh`'s in
+`benchmarks/serve_tax/metrics.toml`), one `[[metric]]` table per number. The file is its directory owner's. The
+console's Metrics tab and `research metrics show` read every such file on `main` and show each number's history from
+the evidence store. A metric's value is a measurement in a run's `result.json` named by its `id`, which the benchmark
+records it under (`serve_tax`'s `Model.metric`), so a value without a run doesn't exist. Its keys:
 
-- `id`, `title`, `owner` (a handle in `.agents/skills/using-slack/registry.json`, the id's prefix) and `unit`, the
-  unit its measurements carry.
+- `id`: `OWNER/NAME`, under its owner's prefix.
+- `title`, `owner` (a handle in `.agents/skills/using-slack/registry.json`) and `unit`, the unit its measurements
+  carry.
 - `better`: `lower` or `higher`.
 - `command`: the one command that measures it, whose script's directory records it under `id`.
 - `every`: how often it is measured (`7d`, `12h`); a value older than that is stale.
 - Optional: `floor`, the number it must not cross; `goal`, the plan's goal it serves; `tags`, a list of words.
 
-`tests/test_metrics_registry.py` refuses a repeated id, an unknown owner, an id outside its owner's prefix, a `better`
-other than `lower` or `higher`, and a command whose script is missing or whose directory never names the id.
+`tests/test_metrics_registry.py` refuses an id declared twice across all the files, an unknown owner, an id outside its
+owner's prefix, a `better` other than `lower` or `higher`, a command whose script is missing or whose directory never
+names the id, a row whose command's first script is outside the directory of the file declaring it, and a shared
+`metrics.toml` directly under `benchmarks/`.
 
 ## Index
 

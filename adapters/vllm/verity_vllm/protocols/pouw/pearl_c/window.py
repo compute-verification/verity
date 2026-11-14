@@ -36,13 +36,22 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.protocols.accounting.pouw.verifier.audit import HM96, activation_binding, hm96_salt, rows_domain, weight_binding
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G, registration as REG
 from verity.commitments import CommitmentDomain
 from verity.commitments.merkle import tree_levels
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier.audit import (
+    HM96,
+    activation_binding,
+    hm96_salt,
+    rows_domain,
+    weight_binding,
+)
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
 
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
+from verity_vllm.protocols.pouw.pearl_c.manifest import session_head
 from verity_vllm.records.pearl_served import SCHEMA as SERVED_SCHEMA
 
 #: the width of a word of A's and y's committed rows: each BF16 word widened to FP32
@@ -75,15 +84,11 @@ def served_passes(passes: Sequence[Mapping[str, Any]], warm: int = 0) -> list[di
 
 
 def coins_of(option: Any, reserved: Any = None) -> dict[str, Any]:
-    """Where the PoUW option ``option`` took its salt coin: its ``coin_source``, the gate's answer it carries (``session``,
+    """Where the PoUW option ``option`` took its salt coin: its ``source``, the gate's answer it carries (``session``,
     no secret), its salt epoch's number (``pass_index``) and the root its salt coin follows (that epoch's root over the
     weights' root, `salt.epoch_open_root`; the weights' root for a coin held in-process), its salt, how its session closed
     (``details.challenger``, once the engine has closed) and the session head a retained pass's manifest names
     (``manifest_head``, `pearl_c.manifest.session_head`); ``reserved`` the gate's reserve answer, when one was taken."""
-    from verity.protocols.accounting.pouw.verifier import salt as PS
-
-    from verity_vllm.protocols.pouw.pearl_c.manifest import session_head
-
     c = option.commitment()
     k, w = c.get("pass_index"), c.get("weights_root")
     after = w if k is None or w is None else PS.epoch_open_root(bytes.fromhex(w), k).hex()
