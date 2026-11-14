@@ -43,7 +43,7 @@ COINS = {"coin-tree": "coin-tree: every round's coins the challenger's keyed coi
 PREPROCESSING = ("the population is lowered and staged once for every B (fixed.setup_seconds); every timed session builds "
                  "its drawn statement and witness and proves both reps afresh")
 CONFIGS = {"plain": "C-Flock native prover, ZK off (flock-circuit prove --gpu), live coins and the stratified draw of B units "
-                    "from a loopback flock-circuit serve --draw-law; then the compiled Lean verifier (verity-verify-proof verify "
+                    "from a loopback flock-circuit serve --sample-design; then the compiled Lean verifier (verity-verify-proof verify "
                     "--coins tree --stratified B) on each timed session"}
 
 
