@@ -122,8 +122,8 @@ recorded checks hold). A stop mid-run (SIGINT) still keeps the passes of runs th
 
 `--lend-from COMMIT` is for a check of a commit that can count only after COMMIT's own check (the verified queue's candidate
 built on a candidate still in flight): a suite with no pass here whose inputs, runner, fixtures and Lake build sources read
-the same in COMMIT's tree, every `pyproject.toml` and the lockfile being as they are here, would only run again what COMMIT's
-check is running. It is reported `lent`, a row with `"lent": COMMIT`, and counts as passed for whoever holds this check's
+the same in COMMIT's tree, every `pyproject.toml`, the lockfile and the check's own code being as they are here, would only run
+again what COMMIT's check is running. It is reported `lent`, a row with `"lent": COMMIT`, and counts as passed for whoever holds this check's
 verdict until COMMIT's is in; it earns no pass, so none is kept or packed for it and a run without the flag runs it.
 
 Each suite's pytest runs in a process group of its own, and whatever is left in the group when pytest ends (a multiprocessing
@@ -209,6 +209,9 @@ CACHE = Path(SETTINGS.VERITY_TEST_CACHE or Path(SETTINGS.XDG_CACHE_HOME or Path.
 #: variables, the tools on the PATH), and its own suite (verity-check) keys it as its own file.
 RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/settings.py", "tools/verity/check/guard/verity_suite_guard.py",
           "tools/verity/check/guard/child/sitecustomize.py", "tools/verity/check/guard/child/verity_suite_reads.py")
+#: the check's own code, which decides the suites a check runs and what it hands the runner: `--lend-from` lends nothing
+#: across a change to it (`lent_by`)
+CHECK_CODE = "tools/verity/check"
 XDIST = importlib.util.find_spec("xdist") is not None
 TOOLS = ("lake", "cargo")
 #: the variables a pass is keyed on: those of these prefixes whose role isn't `where` (`settings.py`: not where results are kept,
@@ -1026,18 +1029,20 @@ def lent_by(commit: str, tree: str, asked: dict[Suite, dict[str, str]], inputs: 
     same there when everything it hashes is: the suite's inputs, the runner and its fixtures by the same ids, its build outputs
     from the same sources (`built_alike`), and, since the workspace's metadata decides every suite's inputs, nested suites and
     resolved dependencies, every pyproject.toml and the lockfile as they are here; with one of those changed it lends none.
-    The environment and the pytest arguments are this run's, which the check of ``commit`` is launched with too."""
+    Nor with the check's own code changed (`CHECK_CODE`): it decides which suites a check runs and how, so only the same
+    code runs there every suite it would run here, with this run's environment and pytest arguments."""
     base = subprocess.run(["git", "rev-parse", "--verify", "-q", f"{commit}^{{tree}}"], cwd=ROOT, capture_output=True,
                           text=True).stdout.strip()
     if not base:
         return [], f"{commit} names no commit here"
     there = {f for f in _git("ls-tree", "-r", "-z", "--name-only", base).split("\0")
              if f in ("uv.lock", "pyproject.toml") or f.endswith("/pyproject.toml")}
-    meta = sorted({*metadata(), *there})
+    meta = sorted({*metadata(), *there, CHECK_CODE})
     was, now = object_ids(base, meta), object_ids(tree, meta)
     if moved := [f for f in meta if was[f] != now[f]]:
         return [], (f"{', '.join(moved[:3])}{f' and {len(moved) - 3} more' if len(moved) > 3 else ''} changed since: the "
-                    "workspace's metadata decides every suite's inputs and dependencies")
+                    "workspace's metadata decides every suite's inputs and dependencies, and the check's own code which "
+                    "suites a check runs")
     registry = None
     if (r := object_ids(base, [REGISTRY])[REGISTRY]) != object_ids(tree, [REGISTRY])[REGISTRY]:
         registry = "{}" if r == "absent" else _git("cat-file", "blob", r)

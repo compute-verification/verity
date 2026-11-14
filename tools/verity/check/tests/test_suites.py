@@ -2447,6 +2447,13 @@ def test_a_suite_whose_key_is_its_bases_is_lent_and_one_the_change_touches_runs(
     _git(root, "commit", "-q", "-am", "the runner")
     p = _run_suite(root, tmp_path, "--lend-from", head, "--skip", "b")
     assert p.returncode == 0 and "passed  a" in p.stdout, p.stdout
+    assert "answers for 0 of the 1 suites with no pass here: tools/verity/check changed since" in p.stdout, p.stdout
+
+    head = _git(root, "rev-parse", "HEAD")
+    edit("a", 5)
+    _git(root, "commit", "-q", "-am", "a alone")
+    p = _run_suite(root, tmp_path, "--lend-from", head, "--skip", "b")
+    assert p.returncode == 0 and "passed  a" in p.stdout, p.stdout
     assert "answers for 0 of the 1 suites with no pass here: each one's inputs, fixtures or build sources changed since" in p.stdout
 
     for flag in (["--fresh"], ["--quick"], ["--changed", head]):
