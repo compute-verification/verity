@@ -8,12 +8,12 @@ public import MemoryChallenger.Verdict
 `pous.verifier.session_proofs`: the session's verdict from the outcomes of `k + 2` proofs, linked only by their committed
 rows, so that the memory challenger's signed record never reaches the verifier in the clear. Unit 0 is the signature's
 (`PousSessionSig_v1{N, W, H}`: key, m, sig; ok), unit 1 the signed digest's (`PousSessionDigest_v1{k, HEAD, LIMIT}`:
-head, domain, ctx, the `T = ⌈k/2⌉` records rows; ok, m, the records rows) and unit `j + 2` round `j`'s
+head, ctx, the `T = ⌈k/2⌉` records rows; ok, m, the records rows) and unit `j + 2` round `j`'s
 (`PousRound_v1{blockBytes, j % 2}`: row, records, j, i; ok). A unit's rows are its parameters' committed rows, then its
 outputs'. The verifier checks in the clear the scheme, the key and every round's coin opening (`clearReasons`), each
 proof accepted and of its program, each public input against the value it computes (`knownReasons`), and the links,
-which the window's wires make: unit 0's `m` is unit 1's output m (row `4 + T`), and round `j`'s records row is unit 1's
-records output `j / 2` (row `5 + T + j / 2`) (`linkReasons`). The reasons are the Python's, word for word.
+which the window's wires make: unit 0's `m` is unit 1's output m (row `3 + T`), and round `j`'s records row is unit 1's
+records output `j / 2` (row `4 + T + j / 2`) (`linkReasons`). The reasons are the Python's, word for word.
 -/
 
 @[expose] public section
@@ -88,15 +88,15 @@ output `j / 2`. -/
 def linkReasons (c : SessionCommitment) (proofs : SessionProofs) : Array String := Id.run do
   let d := proofs.digest.rows
   let t := recordsRows c.k
-  if proofs.rounds.size != c.k || d.size != 5 + 2 * t || proofs.signature.rows.size != 4 then
+  if proofs.rounds.size != c.k || d.size != 4 + 2 * t || proofs.signature.rows.size != 4 then
     return #[s!"the session's proofs are not one signature's, one signed digest's over {recordsRows c.k} records rows " ++
       s!"and {c.k} rounds'"]
   let mut reasons : Array String := #[]
-  if proofs.signature.rows[1]! != d[4 + t]! then
+  if proofs.signature.rows[1]! != d[3 + t]! then
     reasons := reasons.push "the signed message is not the signed digest's"
   for j in [0:proofs.rounds.size] do
     let out := proofs.rounds[j]!
-    if out.rows.size != 5 || out.rows[1]! != d[5 + t + j / 2]! then
+    if out.rows.size != 5 || out.rows[1]! != d[4 + t + j / 2]! then
       reasons := reasons.push s!"round {j}'s record is not the signed digest's"
   return reasons
 
@@ -110,7 +110,7 @@ def knownReasons (c : SessionCommitment) (openings : Array CoinOpening) (publicK
   let mut want : Array (UnitOutcome × String × Array (Nat × ByteArray)) :=
     #[(proofs.signature, "the signature's", #[(0, publicKey)]),
       (proofs.digest, "the signed digest's",
-        #[(0, headRow c), (1, (domain RECORD_BINDING c.session c.k).id), (2, ctxOf c publicKey)])]
+        #[(0, headRow c), (1, ctxOf c publicKey)])]
   for j in [0:proofs.rounds.size] do
     let out := proofs.rounds[j]!
     match byJ openings j with
