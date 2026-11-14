@@ -16,8 +16,8 @@ algorithm, and `contradictions` names it.
 
 The overhead is the hardware multiple over the reference training algorithm at its MFU, `MFU₀` (the scenario's `mfu`),
 at least 1: Lean's `hardwareMultiple`, and for a remote regime `InferenceOnly.Guarantees.SlowdownRemote`'s `ρ`
-(`theorem.Overhead`). The padded size ratio `|A| / T_0`, each server block padded to its capacity, is the intermediate
-the bound gives (`Overhead.padded`), and a contradiction compares it. The time to the target, wall-clock, is reported
+(`theorem.Slowdown`). The padded size ratio `|A| / T_0`, each server block padded to its capacity, is the intermediate
+the bound gives (`Slowdown.padded`), and a contradiction compares it. The time to the target, wall-clock, is reported
 beside the overhead: at least the overhead times `T_0 / (MFU₀ Φ_total)`, the reference's own time (`Scenario.seconds`).
 
 A scenario's `structure` (else `structure.default`, `reference`; `data/exclusion.toml`) is the elementary uncertified
@@ -50,7 +50,7 @@ from slowdown.families import Family, family
 from slowdown.instances import Model, Run
 from slowdown.params import PERIODS, Registry
 from slowdown.profile import Profile
-from slowdown.theorem import Budget, Cap, Overhead, Partition, least, overhead
+from slowdown.theorem import Budget, Cap, Slowdown, Partition, least, slowdown
 
 #: core's monitoring period of a year, in seconds
 YEAR = float(PERIODS["year"])
@@ -125,7 +125,7 @@ class Estimate:
     side: str
     #: the weakest status (`lean.weakest`) among `cites`, or `outside`
     status: str
-    overhead: Overhead | None
+    parts: Slowdown | None
     outside: str = ""
     #: what it rests on: the argument's citations and those of the cuts that bound it
     cites: tuple[str, ...] = ()
@@ -140,14 +140,14 @@ class Estimate:
     drafts: tuple[str, ...] = ()
 
     @property
-    def rho(self) -> float:
+    def slowdown(self) -> float:
         """The overhead: the hardware multiple over the reference at its MFU."""
-        return self.overhead.rho if self.overhead else math.nan
+        return self.parts.value if self.parts else math.nan
 
     @property
     def padded(self) -> float:
         """The padded size ratio `|A| / T_0`."""
-        return self.overhead.padded if self.overhead else math.nan
+        return self.parts.padded if self.parts else math.nan
 
 
 @dataclass(frozen=True)
@@ -161,25 +161,25 @@ class FamilyResult:
     @property
     def lo(self) -> float:
         """The overhead's lower bound: every bound met at once."""
-        return self.combined.rho
+        return self.combined.slowdown
 
     @property
     def best_attack(self) -> Estimate | None:
         """The best known attack: the construction with the least overhead (None: none applies)."""
-        return min((a for a in self.attacks if a.overhead), key=lambda a: (a.rho, a.padded), default=None)
+        return min((a for a in self.attacks if a.parts), key=lambda a: (a.slowdown, a.padded), default=None)
 
     @property
     def attack(self) -> float:
         """The best known attack's overhead (∞: none applies), beside the lower bound and not an end of it."""
         best = self.best_attack
-        return best.rho if best else math.inf
+        return best.slowdown if best else math.inf
 
     @property
     def contradictions(self) -> tuple[str, ...]:
         """The bounds above the best known attack, in the padded size ratio the bound states: one of each one's premises
         is false for this family."""
         best = self.best_attack
-        return tuple(b.argument for b in self.bounds if b.overhead and best and b.padded > best.padded * (1 + 1e-9))
+        return tuple(b.argument for b in self.bounds if b.parts and best and b.padded > best.padded * (1 + 1e-9))
 
 
 @dataclass(frozen=True)
@@ -202,14 +202,14 @@ def _cuts(partition: Partition) -> dict:
     return {(b.name, c.name): c for b in partition.serving for c in (*b.cuts, *((b.layout,) if b.layout else ()))}
 
 
-def _cut_cites(partition: Partition, s: Overhead) -> tuple[str, ...]:
+def _cut_cites(partition: Partition, s: Slowdown) -> tuple[str, ...]:
     """The citations of the cut that set each server block's share (none where its capacity did)."""
     cuts = _cuts(partition)
     return tuple(dict.fromkeys(c for name, share in s.serving.items() if (name, share.cut) in cuts
                                for c in cuts[name, share.cut].cites))
 
 
-def _binding_ks(partition: Partition, s: Overhead) -> tuple[float, ...]:
+def _binding_ks(partition: Partition, s: Slowdown) -> tuple[float, ...]:
     """The fresh input bits of each block in the cuts that set the server blocks' shares, least first: where premises must
     hold."""
     cuts = _cuts(partition)
@@ -217,17 +217,17 @@ def _binding_ks(partition: Partition, s: Overhead) -> tuple[float, ...]:
                          for b in cuts[name, share.cut].blocks}))
 
 
-def _binding_k(partition: Partition, s: Overhead) -> float:
+def _binding_k(partition: Partition, s: Slowdown) -> float:
     """The most fresh input bits of any block in the cuts that set the server blocks' shares."""
     return max(_binding_ks(partition, s), default=0.0)
 
 
-def _uncertified(s: Overhead) -> bool:
+def _uncertified(s: Slowdown) -> bool:
     """Whether the bound counts any gate at `q_U`: the unregistered leaves, or a cut's uncertified routes."""
     return s.unregistered > 0 or any(t.split(".")[0] in ROUTES and v > 0 for t, v in s.terms.items())
 
 
-def _rated(name: str, side: str, cites: tuple[str, ...], s: Overhead, partition: Partition, declared: float,
+def _rated(name: str, side: str, cites: tuple[str, ...], s: Slowdown, partition: Partition, declared: float,
            table: Mapping[str, Mapping], st: Structure) -> Estimate:
     cites = tuple(dict.fromkeys(cites + _cut_cites(partition, s)
                                 + (st.cites() if side == "bound" and _uncertified(s) else ())))
@@ -242,7 +242,7 @@ def _estimate(arg: Argument, p: Profile, ctx: Context, partition: Partition, blo
     except Outside as e:
         return Estimate(arg.name, arg.side, "outside", None, str(e)), None
     w = weight_per_gate(p, ctx.units)
-    s = overhead(partition, cap, w, p.efficiency, arg.side, u=st.weight(w), mfu=mfu, reference_efficiency=ref)
+    s = slowdown(partition, cap, w, p.efficiency, arg.side, u=st.weight(w), mfu=mfu, reference_efficiency=ref)
     return _rated(arg.name, arg.side, arg.cites, s, partition, _declared(cap, w, block), table, st), cap
 
 
@@ -278,7 +278,7 @@ def _combine(args: tuple[Argument, ...], bounds: list[tuple[Estimate, Cap | None
     met = [m for m in met if m[0].name not in drafts]
     cap = least(*(_admitted(c, a.cites, table) for a, c in met))
     w = weight_per_gate(p, ctx.units)
-    s = overhead(partition, cap, w, p.efficiency, u=st.weight(w), mfu=mfu, reference_efficiency=ref)
+    s = slowdown(partition, cap, w, p.efficiency, u=st.weight(w), mfu=mfu, reference_efficiency=ref)
     ks = _binding_ks(partition, s) or (0.0,)
     refuted = {a.name: [_refuted(a.cites, k, table) for k in ks] for a, _ in met}
     used = [a for a, _ in met if not all(refuted[a.name])]
