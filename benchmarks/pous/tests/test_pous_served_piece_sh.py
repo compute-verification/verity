@@ -206,7 +206,7 @@ def test_where_setarch_r_is_refused_no_library_is_built_and_the_piece_names_p2_l
     assert r.returncode == 3, r.stdout + r.stderr
     said = r.stdout.strip()
     assert said.startswith("POUS: no answer: setarch -R is refused on this node, so libp2v1.so doesn't build here")
-    assert said.endswith("(benchmarks/torch_gpu/p2_stage/build.sh) and name its directory in P2_LIB")
+    assert said.endswith("(verity/protocols/accounting/pous/prover/p2/p2_store/build.sh) and name its directory in P2_LIB")
     assert _log(node) == [] and _stamps(d) == ["start"] and not (d / "build.log").exists()
 
 
