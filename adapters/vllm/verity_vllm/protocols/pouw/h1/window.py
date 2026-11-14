@@ -1,4 +1,4 @@
-"""H1's, ncp-v2's and Pearl-C's session on the proof system's challenger on its auditor host
+"""H1's, ncp-v2's and Pearl-C's session on the proof system's challenger on its auditor device
 (`verity.protocols.proofs.spot.device.remote`), as the serving process opens and closes it; `pouw_h1_challenger` is
 the verifier's check of what it served.
 
@@ -18,7 +18,7 @@ from a sample session of its own (`DrawSession`, the pouw setting ``draw_session
 `window.DRAW_FAMILIES`: ``reserve --withhold``), which the gate opens on the window's sample root once the prover's
 commitment is in, its open answering no root (`gate_of`), so its challenger releases its coin commitment only after
 that commitment. The challenger is auditor-trusted
-(`trusted-host`): it runs on a machine the prover doesn't control, and the serving process reaches it on its own
+(`trusted-device`): it runs on a machine the prover doesn't control, and the serving process reaches it on its own
 127.0.0.1, through its certifier coin link.
 
 A reserve joins its lane's open period, and a Pearl-C salt-only session is a window H1's checks refuse
@@ -84,10 +84,10 @@ def refusals(scheme: str, settings: Any, stage: str, opens: str | None = None) -
         out.append(f"{scheme}: the pouw setting 'gate' opens a reserved session on the root its window commits first, and "
                    "this window's 'session' is the gate's open answer")
     if settings.coins is not None or settings.rounds is not None:
-        out.append(f"{scheme}: the window's coins come from one source: the pouw setting 'challenger' (the auditor host's "
+        out.append(f"{scheme}: the window's coins come from one source: the pouw setting 'challenger' (the auditor device's "
                    "salt and round coins) or, in tests, 'coins' and 'rounds' held in this process, not both")
     if stage == "capture":
-        out.append(f"{scheme}: a capture records nothing, so it opens no session on the auditor host's challenger (the pouw "
+        out.append(f"{scheme}: a capture records nothing, so it opens no session on the auditor device's challenger (the pouw "
                    "setting 'challenger' is a served window's)")
     return out
 

@@ -198,11 +198,13 @@ def test_another_checkpoints_words_are_refused(x, tmp_path):
     forged.write(fc, tmp_path / "f", {"tie": WT.TIE_TAG}, registrar=R)
     assert _unopened(forged, fc, tmp_path / "f", pins) == set()
     roots = WW.WeightsRegistration.of(registration, "r").roots
-    for bad, why in [({"ok": False}, "didn't accept"), ({"forged": {"ok": True}}, "didn't accept"),
-                     ({"run_root": "00" * 64}, "another circuit or run"),
-                     ({"draw": list(range(1, t.units()))}, "not every one"),
-                     ({"population": t.units() + 1, "draw": list(range(t.units() + 1))}, "not every one"),
-                     ({"registered": {}}, "held no registered pins")]:
+    refused: list[tuple[dict[str, object], str]] = [
+        ({"ok": False}, "didn't accept"), ({"forged": {"ok": True}}, "didn't accept"),
+        ({"run_root": "00" * 64}, "another circuit or run"),
+        ({"draw": list(range(1, t.units()))}, "not every one"),
+        ({"population": t.units() + 1, "draw": list(range(t.units() + 1))}, "not every one"),
+        ({"registered": {}}, "held no registered pins")]
+    for bad, why in refused:
         with pytest.raises(ValueError, match=why):
             WT.checked_pins(registration, record, t, _summary(t, registration, record, roots, **bad), DESIGN, CAP)
     other = {**roots, next(iter(roots)): "ab" * 64}
@@ -298,10 +300,10 @@ def test_a_shard_the_tie_cant_read_is_refused_by_name(x, change, why):
     reg, (d, man) = S._registered(), x
     ck = WR.CheckpointIndex(d, verify_shards=False)
     tensors = {n: (ck.dtype(n), ck.array(n)) for n in sorted(ck.tensors, key=lambda n: ck.tensors[n][3])}
-    norm, kw = "model.norm.weight", {}
+    norm, record = "model.norm.weight", None
     if change == "narrow":
-        kw["record"] = rec = WW.weights_record(reg, d, man, grain=GRAIN)
-        p, e = min((p, e) for p, e in rec["registered_entries"].items() if e["words"] == 512)
+        record = WW.weights_record(reg, d, man, grain=GRAIN)
+        p, e = min((p, e) for p, e in record["registered_entries"].items() if e["words"] == 512)
         e["words"], e["leaves"] = 32, e["leaves"] * 16
         why = why.format(p=p)
     elif change == "extra":
@@ -321,4 +323,4 @@ def test_a_shard_the_tie_cant_read_is_refused_by_name(x, change, why):
         p = Path(d) / "model.safetensors"
         p.write_bytes(p.read_bytes()[:-1] + bytes([p.read_bytes()[-1] ^ 1]))
     with pytest.raises(ValueError, match=re.escape(why)):
-        WT.tie(reg, d, man, grain=GRAIN, **kw)
+        WT.tie(reg, d, man, grain=GRAIN, record=record)

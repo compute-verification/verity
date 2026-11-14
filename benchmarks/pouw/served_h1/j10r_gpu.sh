@@ -23,7 +23,7 @@ if [ -z "${J10R_GPU_S:-}" ]; then
   S=$(mktemp -d)
   trap 'rm -rf "$S"' EXIT
   nice -n 10 "$NVCC" -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GENCODE" -Xcompiler -fPIC \
-    -shared -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 -o "$S/h1u_hbc.so" benchmarks/hash/dither/h1u.cu \
+    -shared -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 -o "$S/h1u_hbc.so" verity/protocols/experimental/dither/prover/kernels/h1u.cu \
     > "$OUT/build-hbc.log" 2>&1 || { echo "j10r_gpu: NVCC_FAIL h1u.cu"; tail -30 "$OUT/build-hbc.log"; exit 11; }
   nice -n 10 "$NVCC" -O3 -std=c++17 -I verity/circuits/kernels -gencode "$GENCODE" -cubin \
     -o "$S/noise.cubin" verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/noise.cu > "$OUT/build-noise.log" 2>&1 \

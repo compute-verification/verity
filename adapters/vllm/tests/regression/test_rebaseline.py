@@ -67,14 +67,16 @@ def test_a_result_that_cannot_be_recorded_is_not_recorded_and_nothing_raises(mon
 
 
 def test_results_skips_a_file_it_cannot_read_and_keeps_the_rest(tmp_path, capsys):
-    """A result file that is no JSON, is not text, or is nested deeper than `json.load` reads is named on stderr and left out."""
+    """A result file that is no JSON, is not text, is nested deeper than `json.load` reads or cannot be opened (a directory of the
+    name) is named on stderr and left out."""
     (tmp_path / ROW).mkdir()
     (tmp_path / ROW / "no_json.json").write_text("{")
     (tmp_path / ROW / "not_text.json").write_bytes(b"\xff\xfe{}")
     (tmp_path / ROW / "nested.json").write_text('{"a":' * 200_000 + "1" + "}" * 200_000)
+    (tmp_path / ROW / "a_directory.json").mkdir()
     (tmp_path / ROW / "kept.json").write_text(json.dumps(_result("kept", {}, {}, [], matched="frozen")))
     assert list(RB.results(tmp_path)[ROW]) == ["kept"]
-    assert capsys.readouterr().err.count("[rebaseline] unreadable") == 3
+    assert capsys.readouterr().err.count("[rebaseline] unreadable") == 4
 
 
 def test_write_takes_v2_values_keeps_shape_and_records_the_decision():
