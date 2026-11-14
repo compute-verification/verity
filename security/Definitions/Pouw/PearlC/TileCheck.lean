@@ -6,8 +6,7 @@ public import Definitions.Core.Partition
 /-!
 # The tile check as a circuit, and what it computes (trusted; L3's statement)
 
-A proof system's accepted run on a tile (`TileGame.good_of_accept`) has to end on a good or blank tile of `τ`. Sampled
-proofs gives less: every sampled proof block of the tile-check Program is correct in the witness `X`, and `X` holds the
+A proof system's accepted run on a tile (`TileGame.good_of_accept`) has to end on a good or blank tile of `τ`. SPOT gives less: every sampled proof block of the tile-check Program is correct in the witness `X`, and `X` holds the
 registered values. L3 is the step between: the tile check computes the good-tile predicate. It is stated here over a
 **tile check** (`TileCheck`), the Program as a core circuit for each unit shape (`Verity.Circuit`, cut into proof blocks
 by a `Verity.Partition`), with
@@ -23,7 +22,7 @@ by a `Verity.Partition`), with
   which is completeness, not L3;
 * `reg sh`, the registered wires, at `rowsOf U u c`: the values unit `u`'s commitment `c` gives them, its activation
   rows, its weight's rows and its tiles' checked words (under hiding, their digests). These are `valueAt`, the values
-  `τ`'s commitment binds. Some are outputs of a unit (a tile's words or digest), so the agreement sampled proofs gives
+  `τ`'s commitment binds. Some are outputs of a unit (a tile's words or digest), so the agreement SPOT gives
   has to cover registered outputs, not only the circuit's inputs (`Verity.Circuit.InputsAgree`);
 * `Collides`: the event outside which the registered values bind the words the circuit computes. It is `False` for the
   plain Program, whose checked words are registered wires. The hiding Program registers a tile by its TurboSHAKE128 leaf

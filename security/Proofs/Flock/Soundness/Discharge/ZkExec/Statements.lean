@@ -56,7 +56,7 @@ def ZkVerifyOk : Prop :=
       Record.decode spec record = .ok sess ∧ tabs.size = spec.tables.size ∧ 0 < tabs.size ∧
       proofs.size = spec.repStreams.size ∧ schs.size = tabs.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (hs : i < schs.size) (c : ByteArray),
-        Flock.Zk.schedule tabs[i].m = .ok schs[i] ∧
+        Flock.Zk.schedule tabs[i].wideLeaf tabs[i].m = .ok schs[i] ∧
         Flock.Zk.verifyRep spec tabs[i] schs[i].1 schs[i].2 sess i 0 proofs[2 * i]! = .ok c ∧
         Flock.Zk.verifyRep spec tabs[i] schs[i].1 schs[i].2 sess i 1 proofs[2 * i + 1]! = .ok c
 
