@@ -603,8 +603,8 @@ def _member_scan(M, sg, rd, out: Path, received=None) -> dict:
 def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    network_certifier = a.warden_run is not None
-    run = Path(a.warden_run if network_certifier else a.run)
+    network_certifier = a.network_certifier_run is not None
+    run = Path(a.network_certifier_run if network_certifier else a.run)
     summary: dict = {"run": str(run), "extra": a.extra and str(a.extra), "late": a.late and str(a.late),
                      "debug_clear": a.debug_clear, "gpu": a.gpu, "received": RECEIVED}
     t = time.time()
@@ -746,7 +746,7 @@ def main(argv=None) -> int:
         return 0
     one_session(a.jobs)
     a.rounds = tuple(x for x in a.rounds.split(",") if x)
-    if a.warden_run is not None and (a.extra or a.late):
+    if a.network_certifier_run is not None and (a.extra or a.late):
         raise SystemExit("--extra and --late are certifier-serve's runs: a network certifier run's members are honest and "
                          "tampered")
     if not a.dry and not (a.bin and a.lean):

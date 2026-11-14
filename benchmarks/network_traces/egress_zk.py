@@ -335,10 +335,10 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
     (out / "verdicts.json").write_text(json.dumps(sent, indent=1))
     vdir = out / "verifier"
     vdir.mkdir(exist_ok=True)
-    (out / "warden-registration.json").write_text(json.dumps(at.registration, indent=1, sort_keys=True))
+    (out / "network-certifier-registration.json").write_text(json.dumps(at.registration, indent=1, sort_keys=True))
     for f in (out / "registration.json", sg.partition_file, sg.program_file, m["dir"] / "circuit.txt",
               m["dir"] / f"pub-{n}.bin", m["registered_file"], sdir / "draw.json", out / "audit.json",
-              out / "warden-registration.json", out / "verdicts.json"):
+              out / "network-certifier-registration.json", out / "verdicts.json"):
         os.link(f, vdir / f.name)
     for f in sorted((sdir / "sessions").rglob("*")):
         if f.is_file():

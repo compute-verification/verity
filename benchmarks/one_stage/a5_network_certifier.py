@@ -369,8 +369,8 @@ def negatives(at: dict[str, SimpleNamespace], source, rec: dict) -> dict[str, di
         made[f"{name} (registered reads)"] = {"refused": why.startswith("registered reads:") and MADE_FOR[kind] in why,
                                              "why": why, "units": st.units.digest().hex(), "reads": [list(c) for c in st.units.cells[:2]],
                                              "rows": st.positions[:2], "program_rows": e.positions[:2]}
-    return {"prover-root-under-the-wardens-certificate (check_registration)": check,
-            "window-naming-another-warden-root (source)": {"refused": not s["ok"], "codes": s["codes"]},
+    return {"prover-root-under-the-network-certifiers-certificate (check_registration)": check,
+            "window-naming-another-network-certifier-root (source)": {"refused": not s["ok"], "codes": s["codes"]},
             "foreign-read-under-a-crossed-wiring (port)": foreign | {
                 "read": [q2, k2], "opens": [q1, k1], "row": t, "slot": j, "cell_of": HEADER.unpack_from(cell_at(t, j))[1]},
             "duplicate-read (port)": refusal(lambda: port(w, [x.reads[0], x.reads[0]]), f"cell {k0} is read twice")

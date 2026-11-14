@@ -104,7 +104,7 @@ def test_the_provenance_is_the_verifiers_read_and_the_negatives_are_refused_by_n
     assert source({**rec["window"], "run": "00" * 64})["codes"] == ["run"]
     neg = AW.negatives(at, source, rec)
     assert all(x["refused"] for x in neg.values()), neg
-    assert "doesn't sign its head" in neg["prover-root-under-the-wardens-certificate (check_registration)"]["why"]
+    assert "doesn't sign its head" in neg["prover-root-under-the-network-certifiers-certificate (check_registration)"]["why"]
     x = at[AW.ws.INGRESS]
     foreign = neg["foreign-read-under-a-crossed-wiring (port)"]
     assert foreign["cell_of"] == foreign["opens"][0] != foreign["read"][0]

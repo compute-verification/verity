@@ -266,7 +266,7 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
 
 
 def test_a_window_request_the_network_certifier_didnt_certify_is_rejected_before_any_chain(tmp_path, network_certifier, capsys, monkeypatch):
-    stranger = {"user": "not-the-wardens", "prompt": [1, 2], "output": [3]}
+    stranger = {"user": "not-the-network-certifiers", "prompt": [1, 2], "output": [3]}
     d = _serve_dir(tmp_path / "serve", network_certifier, [*network_certifier["records"][:1], stranger])
     env = dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, tmp_path / "none", {}))
     got = S.pieces(d, K, tmp_path / "pieces", env=env)
@@ -571,7 +571,7 @@ def _private_chain_out(out: Path) -> Path:
         "custody.json": {"verdict": "accepted", "gate_runs": [{"gate_run": RUN, "strategies": {}}]},
         "certs.json": {"warden_run": RUN, "verdict": "accepted", "windows": 1, "sync_bits": 0.0,
                        "rows": [{"window": 0, "certified": True}],
-                       "warden_check": {"accepted": True, "summary": {"requests": REQUESTS, "outputs": OUTPUTS}}},
+                       "network_certifier_check": {"accepted": True, "summary": {"requests": REQUESTS, "outputs": OUTPUTS}}},
         "endpoint/report.json": {
             "warden_run": RUN, "at": CR.SERVED_NODE, "verdict": "accepted",
             "io": {"accepted": True, "requests": REQUESTS, "tokens": OUTPUTS, "violations": []},
@@ -624,7 +624,7 @@ def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_
     report = json.loads(published["chain/report/report.json"].read_text())
     assert report["verdict"] == "accepted" and set(report["steps"]) == {
         "custody", "certificates", "endpoint", "tie", "n2", "scan", "lean"}
-    assert report["steps"]["endpoint"] == {"verdict": "accepted", "in_the_clear": CR.CLEAR["warden_endpoint_served"]}
+    assert report["steps"]["endpoint"] == {"verdict": "accepted", "in_the_clear": CR.CLEAR["network_certifier_endpoint_served"]}
     assert report["steps"]["scan"]["eps_at_delta"]["units"] == 60
     assert report["stubbed"] == list(CR.NETWORK_CERTIFIER_SERVED_STUBBED)
     for rel in ("endpoint/report.json", "scan/answers.json"):

@@ -26,7 +26,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   three (the third in the first's slot past its egress). Each link-window of each link is committed by the network certifier and
   its head signed by a test-size LMS key (`network_certifier_rows.attest`); each registration is read back by the verifier
   (`network_certifier_rows.check_registration`).
-* **A network certifier's run** (``--warden-run RUN``, `warden_run`) in its place: a network_certifier_serve run's directory
+* **A network certifier's run** (``--warden-run RUN``, `network_certifier_run`) in its place: a network_certifier_serve run's directory
   (``serve``'s, or the gate's ``warden-rehearse --scan``'s with its witness under ``witness/``) at the setup's schedule
   (w63's: ``scan_zk.py schedule``) carrying the scan's traffic (``rehearse --ids``). The verifier reads
   ``deployment.json`` (the network certifier's public key, the session, the schedule and its digest) and each link's
@@ -598,7 +598,7 @@ def _found(run: Path, name: str) -> Path:
     raise SystemExit(f"--warden-run {run}: no {name} there or in its witness/ (network_certifier_serve.py serve writes it)")
 
 
-def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> SimpleNamespace:
+def network_certifier_run(run: Path, setup: Setup, windows: list[int], out: Path) -> SimpleNamespace:
     """A network_certifier_serve run's execution phases `windows` as the verifier reads them, refused by name where they don't
     hold: the deployment's schedule (its digest, and the class serving it) and public key; each link's registration of
     each execution phase in ``cells.jsonl`` verified under that key and session (`network_certifier_rows.check_registration`: the
@@ -822,7 +822,7 @@ def v3c_trees(window: Path, cls: IS.Class, states: list[list[int]],
 
 def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1, start: int = 0,
          v3c: Path | None = None) -> SimpleNamespace:
-    """The run (`synthetic`, or `warden_run`'s of a network_certifier_serve run), link-windows start … start + group − 1 of each
+    """The run (`synthetic`, or `network_certifier_run`'s of a network_certifier_serve run), link-windows start … start + group − 1 of each
     link registered by the network certifier and read back by the verifier, the scan's chain over their rows from the empty state
     (`scan_traffic.chain`), the prover's three registrations (the state tree the group's `ingress_scan.window_state`),
     the chain round's state tree, the unread round's unit and slot entries' tree (`_unread`) and the tampered round's
@@ -833,7 +833,7 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
     if v3c is not None and (group, start) != (1, 0):
         raise SystemExit(f"--v3c: V3c's window is link-window 0's, a group of 1, not {group} from {start}")
     windows = list(range(start, start + group))
-    got = synthetic(out, setup, windows) if run is None else warden_run(run, setup, windows, out)
+    got = synthetic(out, setup, windows) if run is None else network_certifier_run(run, setup, windows, out)
     cls, T = setup.cls, got.params.window
     ingress, egress = ([x for w in got.sides[s] for x in w.cells.rows] for s in ("ingress", "egress"))
     try:
@@ -1586,10 +1586,10 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     (vdir / "openings.json").write_text(json.dumps(sent, indent=1))
     for side, ws in at.sides.items():
         for w, s in zip(at.windows, ws):
-            (vdir / f"warden-registration-{side}-{w}.json").write_text(json.dumps(s.registration, indent=1,
+            (vdir / f"network-certifier-registration-{side}-{w}.json").write_text(json.dumps(s.registration, indent=1,
                                                                                   sort_keys=True))
     if name == "tampered":
-        (vdir / f"warden-registration-egress-{at.windows[at.tampered.window]}-tampered.json").write_text(
+        (vdir / f"network-certifier-registration-egress-{at.windows[at.tampered.window]}-tampered.json").write_text(
             json.dumps(at.tampered.registration, indent=1, sort_keys=True))
     streamed = (out / "receipt.json", out / "segment.json", out / "coins.json") if stream is not None else ()
     for f in (out / "registration.json", pg.partition_file, pg.program_file, out / "draw.json", out / "audit.json",
@@ -1802,7 +1802,7 @@ def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     setup = SETUPS[a.setup]
-    h = host(out / "warden", a.warden_run, a.draw, setup, a.group, v3c=a.v3c)
+    h = host(out / "warden", a.network_certifier_run, a.draw, setup, a.group, v3c=a.v3c)
     at, T, G = h.at, h.at.T, h.at.G
     ch, cls, N = at.chain, setup.cls, 2 * G * T
     if a.draw is not None and not 3 <= a.draw <= N:

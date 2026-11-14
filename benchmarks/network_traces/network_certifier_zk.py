@@ -399,10 +399,10 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
     vdir = out / "verifier"
     vdir.mkdir(exist_ok=True)
-    (out / "warden-registration.json").write_text(json.dumps(at.registration, indent=1, sort_keys=True))
+    (out / "network-certifier-registration.json").write_text(json.dumps(at.registration, indent=1, sort_keys=True))
     for f in (out / "registration.json", sg.partition_file, sg.program_file, m["dir"] / "circuit.txt",
               m["dir"] / f"pub-{n}.bin", m["registered_file"], sdir / "draw.json", out / "audit.json",
-              out / "warden-registration.json"):
+              out / "network-certifier-registration.json"):
         os.link(f, vdir / f.name)
     for f in sorted((sdir / "sessions").rglob("*")):
         if f.is_file():
@@ -451,9 +451,9 @@ def prove(a) -> int:
     summary: dict = {"run": str(run), "link_window": at.head.value, "value": at.units.value(at.head),
                      "connection": at.connection, "rows": N, "row_bytes": B, "cell_bytes": at.params.cell_bytes,
                      "pads": at.pads, "reads": at.reads, "positions": at.positions, "slots": at.slots,
-                     "data_rows": at.data_rows, "units_bytes": len(at.units.encode()), "warden_cost": at.cost,
+                     "data_rows": at.data_rows, "units_bytes": len(at.units.encode()), "network_certifier_cost": at.cost,
                      "registration": at.registration}
-    summary["warden_costs"] = ws.check_cells(run, at.dep, at.params, ws.read_records(run, at.params))[0]
+    summary["network_certifier_costs"] = ws.check_cells(run, at.dep, at.params, ws.read_records(run, at.params))[0]
     own = member_rows("unsigned", at).own
     c = at.registration["certificate"]
     forged = WR.registration(own.head, Certificate(bytes.fromhex(c["key"]), at.link, at.direction, at.window,

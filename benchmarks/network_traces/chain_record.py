@@ -104,14 +104,14 @@ CLEAR = {
     "scan": "at the verifier: each unit's o0 output opened from the salts the prover sends; the I/O tie "
             "(IoTieRequest) stays in the clear, outside the proofs",
     "lean": "nothing: each proof is decided by the verifier's own Lean `flock-verify verify --zk` run",
-    "warden_certificates": "at the auditor, on the network certifier's witness: the network certifier's own offline check "
+    "network_certifier_certificates": "at the auditor, on the network certifier's witness: the network certifier's own offline check "
                            "(network_certifier_serve.check: each record's certificate and its rows' registration under the "
                            "network certifier's key and session, the audit and the client's view), and the public "
                            "certificates.jsonl held to the certified lines",
-    "warden_endpoint": "at the auditor, on the endpoint's records and the network certifier's certified I/O (network_certifier_chain.io, off "
+    "network_certifier_endpoint": "at the auditor, on the endpoint's records and the network certifier's certified I/O (network_certifier_chain.io, off "
                        "the records' cells): each Commit window's advice opened to its registered root and rebuilt "
                        "from the certified I/O",
-    "warden_endpoint_served": "on the served node, the prover's, whose records hold request values and stay there: "
+    "network_certifier_endpoint_served": "on the served node, the prover's, whose records hold request values and stay there: "
                               "each Commit window's advice opened to its registered root and rebuilt from the network certifier's "
                               "certified I/O sent to it (served_session.py endpoint); the chain reads its report",
     "tie": "at the verifier: each ingress bucket unit's pub row opened to the verifier's own copy (the advice's prompt "
@@ -400,7 +400,7 @@ def network_certifier_endpoint_step(e: dict | None) -> dict:
     endpoint's own advice is bound to it and rebuilt from it, in the clear."""
     if e is None:
         return {"verdict": "not run", "why": "no endpoint records (CR_ENDPOINT)",
-                "in_the_clear": CLEAR["warden_endpoint"]}
+                "in_the_clear": CLEAR["network_certifier_endpoint"]}
     b, io = (e.get("chain") or {}).get("bits") or {}, e.get("io") or {}
     windows = b.get("commit_windows") or []
     advice = {"bound": b.get("bound"), "rebuilt": b.get("rebuilt"), "why": b.get("bound_why") or b.get("why"),
@@ -411,7 +411,7 @@ def network_certifier_endpoint_step(e: dict | None) -> dict:
            else advice["why"] or "the endpoint's advice isn't bound to the certified I/O or rebuilt from it")
     return {"verdict": "refused" if why else "accepted", "why": why, "warden_run": e.get("warden_run"), "io": io,
             "advice": advice, "advice_bits": advice_bits(b), "at": e.get("at"),
-            "in_the_clear": CLEAR["warden_endpoint_served" if e.get("at") == SERVED_NODE else "warden_endpoint"]}
+            "in_the_clear": CLEAR["network_certifier_endpoint_served" if e.get("at") == SERVED_NODE else "network_certifier_endpoint"]}
 
 
 def tie_step(t: dict | None, job: dict | None = None) -> dict:
@@ -526,7 +526,7 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
             "eps_at_delta": eps_at_delta(n, drawn, law), "stager": s.get("stager"), "in_the_clear": CLEAR["n2"]}
 
 
-def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -> dict:
+def scan_step(s: dict | None, network_certifier_run: str | None, job: dict | None = None) -> dict:
     """`scan_zk.py prove`'s summary: accepted when the honest and block rounds' windows are accepted (`SCAN_ACCEPTS`),
     every other round's (chain, forged) refused, no witness piece was found at the verifier, and scan_zk's own ``ok``
     holds; `RESTS` in place of accepted when the honest round's registration verdict let tied values through
@@ -557,9 +557,9 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
             "why": "; ".join(wrong) or (RESTS_WHY.format(tied=tied) if verdict == RESTS else
                                         (job.get("why") or {}).get("scan")), "ok": s.get("ok"), "rounds": rounds,
             "negatives": {k: not v.get("window_accepted") for k, v in rounds.items() if k not in SCAN_ACCEPTS},
-            "stand_in": None if warden_run else "scan_zk's own synthetic network certifier run (scan_traffic), not the gate's "
+            "stand_in": None if network_certifier_run else "scan_zk's own synthetic network certifier run (scan_traffic), not the gate's "
                                                 "rows: its --warden-run takes those",
-            "warden_run": warden_run, "eps_at_delta": eps_at_delta(units, int(k or s.get("drawn") or units),
+            "warden_run": network_certifier_run, "eps_at_delta": eps_at_delta(units, int(k or s.get("drawn") or units),
                                                                     f"stratified:{k}" if k else s.get("law") or "all"),
             "in_the_clear": CLEAR["scan"]}
 
@@ -1061,7 +1061,7 @@ def report(a) -> dict:
     n2 = ({"verdict": "not given", "why": SCAN_ONLY, "in_the_clear": CLEAR["n2"]} if scan_only
           else n2_step(merged, cert, job))
     scan = ({"verdict": "not run", "why": STUBBED[0], "in_the_clear": CLEAR["scan"]} if certifier_only
-            else scan_step(_json(a.scan), a.warden_run, job))
+            else scan_step(_json(a.scan), a.network_certifier_run, job))
     certificates = {k: v for k, v in cert.items() if k != "rows"}
     tie = None
     if network_certifier:
@@ -1205,17 +1205,17 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if a.command == "custody":
         doc = custody(a.gates)
-    elif a.command == "certs" and a.warden_run:
+    elif a.command == "certs" and a.network_certifier_run:
         import network_certifier_chain as WC
-        doc = WC.certificates(a.warden_run, a.deployed) | {"in_the_clear": CLEAR["warden_certificates"]}
+        doc = WC.certificates(a.network_certifier_run, a.deployed) | {"in_the_clear": CLEAR["network_certifier_certificates"]}
     elif a.command == "certs":
         doc = certs(a.run, a.client or a.run, a.deployed)
     elif a.command == "endpoint":
-        doc = network_certifier_endpoint(a.warden_run, a.endpoint, [int(x) for x in a.eos.split(",")])
+        doc = network_certifier_endpoint(a.network_certifier_run, a.endpoint, [int(x) for x in a.eos.split(",")])
         doc["verdict"] = network_certifier_endpoint_step(doc)["verdict"]
         a.out.parent.mkdir(parents=True, exist_ok=True)
     elif a.command == "leak":
-        doc = leak(a.warden_run, _json(a.scan))
+        doc = leak(a.network_certifier_run, _json(a.scan))
         a.out.write_text(json.dumps(doc, indent=1, sort_keys=True))
         a.out.with_suffix(".md").write_text(leak_markdown(doc))
         print(leak_markdown(doc))

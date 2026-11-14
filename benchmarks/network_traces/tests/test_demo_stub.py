@@ -296,4 +296,4 @@ def test_on_the_served_node_the_endpoint_step_binds_its_records_to_the_certified
     assert sorted(p.name for p in out.iterdir()) == ["report.json", "serve.json", "windows.jsonl"]
     published = b"".join(p.read_bytes() for p in out.iterdir())
     assert not any(n in published for n in [*SS.needles(prompts), b'"prompt_len"', b'"sampling"', b'"emitted"'])
-    assert CR.network_certifier_endpoint_step(rep)["in_the_clear"] == CR.CLEAR["warden_endpoint_served"]
+    assert CR.network_certifier_endpoint_step(rep)["in_the_clear"] == CR.CLEAR["network_certifier_endpoint_served"]

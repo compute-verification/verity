@@ -62,7 +62,7 @@ def test_a_network_certifier_runs_certificates_io_and_link_are_its_own(tmp_path)
     assert (got["verdict"], got["why"], got["certified_windows"], got["windows"]) == ("accepted", None, sz.W63.windows,
                                                                                     sz.W63.windows)
     assert got["public_is_the_records"] is True and got["clock_certificates"] == 0 and got["sync_bits"] == 0.0
-    assert got["warden_run"] == "00" * 32 and got["warden_check"]["accepted"]
+    assert got["warden_run"] == "00" * 32 and got["network_certifier_check"]["accepted"]
     io = WC.io(run)
     assert io["accepted"] and io["requests"] == len(sz.W63.prompts) and not io["violations"]
     assert [r["output"] for r in io["records"]] == [list(r) for r in sz.W63.responses]
@@ -171,7 +171,7 @@ def _steps(tmp_path, run: Path) -> SimpleNamespace:
                          "ok": True}}}),
         scan=put("scan.json", {"ok": True, "T": 32, "warden_run": rid, "rounds": {
             "honest": {"audit": {"window_accepted": True}}, "forged": {"audit": {"window_accepted": False}}}}),
-        job=put("job.json", {"path": cr.NETWORK_CERTIFIER, "rc": {"n2": "0", "scan": "0", "tie": "0"}}), warden_run=str(run))
+        job=put("job.json", {"path": cr.NETWORK_CERTIFIER, "rc": {"n2": "0", "scan": "0", "tie": "0"}}), network_certifier_run=str(run))
 
 
 def test_the_network_certifier_path_requires_every_step_on_one_network_certifier_run_and_refuses_a_certifier_rehearsals(tmp_path,
@@ -188,7 +188,7 @@ def test_the_network_certifier_path_requires_every_step_on_one_network_certifier
     Path(steps.endpoint).write_text(json.dumps(ep | {"at": cr.SERVED_NODE}))
     served = cr.report(steps)
     assert served["verdict"] == "accepted" and served["stubbed"] == list(cr.NETWORK_CERTIFIER_SERVED_STUBBED)
-    assert served["steps"]["endpoint"]["in_the_clear"] == cr.CLEAR["warden_endpoint_served"]
+    assert served["steps"]["endpoint"]["in_the_clear"] == cr.CLEAR["network_certifier_endpoint_served"]
     Path(steps.endpoint).write_text(json.dumps(ep))
 
     def refused(name: str, edit, why: str) -> None:
