@@ -92,7 +92,7 @@ theorem boundary_W {s : State} {c a : Array ByteArray} {now : Nat} {r : Result} 
 
 theorem append_W {s : State} {c a : Array ByteArray} {root : ByteArray} {count : Int} {r : Result} {s' : State}
     (he : append s root count = .ok (r, s'))
-    (h : ∀ x, s.appendCoins[s.appendDrawn]? = some x → a[s.appendDrawn]? = some x) :
+    (h : ∀ x, s.appendCoins[s.appendSampled]? = some x → a[s.appendSampled]? = some x) :
     append (W c a s) root count = .ok (r, W c a s') := by
   unfold append State.fail at he ⊢
   simp only [live_W] at he ⊢
@@ -170,7 +170,7 @@ theorem step_W {s : State} {e : Event} {r : Result} {s₁ : State} {c a : Array 
     (hs : ∀ k, (∃ now, e = .start now ∨ e = .boundary now) → r = .released (some k) → c[k]! = s.coins[k]!)
     (hd : ∀ t now d, e = .close t now → r = .drew d →
       c[s.params.windows + t.toNat]! = s.coins[s.params.windows + t.toNat]!)
-    (ha : ∀ x, s.appendCoins[s.appendDrawn]? = some x → a[s.appendDrawn]? = some x) :
+    (ha : ∀ x, s.appendCoins[s.appendSampled]? = some x → a[s.appendSampled]? = some x) :
     Session.step (W c a s) e = .ok (r, W c a s₁) := by
   cases e with
   | start now =>
@@ -339,7 +339,7 @@ theorem sstep_W {g : Nat} (hg : 1 ≤ g) {s : State} {e : Event} {r : Result} {s
     (hs : ∀ k, (∃ now, e = .start now ∨ e = .boundary now) → r = .released (some k) → c[k]! = s.coins[k]!)
     (hd : ∀ t now d, e = .close t now → r = .drew d →
       c[s.params.windows + t.toNat / g]! = s.coins[s.params.windows + t.toNat / g]!)
-    (ha : ∀ x, s.appendCoins[s.appendDrawn]? = some x → a[s.appendDrawn]? = some x) :
+    (ha : ∀ x, s.appendCoins[s.appendSampled]? = some x → a[s.appendSampled]? = some x) :
     Shared.step g (W c a s) e = .ok (r, W c a s₁) := by
   rcases Nat.lt_or_ge g 2 with hg2 | hg2
   · obtain rfl : g = 1 := by omega

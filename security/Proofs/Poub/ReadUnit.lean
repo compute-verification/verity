@@ -185,19 +185,19 @@ theorem readUnitSampledCR {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Hash.Msg �
         (R.port i).hOf (P.localEval (X ω) (R.unit i)) ≠
           (R.table i (R.index i (P.localEval (X ω) (R.unit i)))).row ∧
           ¬ Hash.CollisionIn H (R.hashedAt H key i (P.localEval (X ω) (R.unit i)))) ∨
-      Hash.CollisionIn H (R.drawnHashed P H key drawn X ω) := by
+      Hash.CollisionIn H (R.sampledHashed P H key drawn X ω) := by
     rintro ω ⟨hacc, i, hi, hd, hlt, hne⟩
     by_cases hc : Hash.CollisionIn H (R.hashedAt H key i (P.localEval (X ω) (R.unit i)))
     · exact Or.inr (collisionIn_mono hc fun m hm =>
         List.mem_flatMap.2 ⟨i, Finset.mem_toList.2 (Finset.mem_filter.2 ⟨hi, hd⟩), hm⟩)
     · exact Or.inl ⟨hacc, i, hi, hd, hlt, hne, hc⟩
-  have hfind : Claims.Pr (fun ω => Hash.CollisionIn H (R.drawnHashed P H key drawn X ω)) ≤
+  have hfind : Claims.Pr (fun ω => Hash.CollisionIn H (R.sampledHashed P H key drawn X ω)) ≤
       (R.finder P H key drawn X cost).Pr (fun m => (H m).bytes) := by
     unfold Claims.Finder.Pr
     apply Claims.Pr_mono
     intro ω h
     obtain ⟨x, hx, y, hy, hxy⟩ := h
-    have h' : ∃ x ∈ R.drawnHashed P H key drawn X ω, ∃ y ∈ R.drawnHashed P H key drawn X ω,
+    have h' : ∃ x ∈ R.sampledHashed P H key drawn X ω, ∃ y ∈ R.sampledHashed P H key drawn X ω,
         Hash.Collision (fun m => (H m).bytes) x y := ⟨x, hx, y, hy, hxy⟩
     refine ⟨h'.choose, h'.choose_spec.2.choose, ?_, h'.choose_spec.2.choose_spec.2⟩
     simp [Reads.finder, h']

@@ -73,7 +73,7 @@ def PooledCovers : Prop :=
 (`Draw.Run.pooled`). -/
 def PooledCoversRun : Prop :=
   ∀ (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X : Type) (D : Accounting.Remote.Draw.Run n m s κ X)
-    (ω : Accounting.Remote.Draw.DrawCoins n κ X) (δ : ℚ) (b : Pooled.Bound),
+    (ω : Accounting.Remote.Draw.SampleCoins n κ X) (δ : ℚ) (b : Pooled.Bound),
     Pooled.pooled (Array.ofFn fun t => ((D.size t ω : ℕ), D.samples t ω)) δ = .ok b →
       D.pooled δ ω ≤ b.wrong
 
@@ -81,7 +81,7 @@ def PooledCoversRun : Prop :=
 wrong receipts it reads are at least the session's pooled bound at `δ` (`Draw.Run.pooled`). -/
 def LineCoversRun : Prop :=
   ∀ (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X : Type) (D : Accounting.Remote.Draw.Run n m s κ X)
-    (ω : Accounting.Remote.Draw.DrawCoins n κ X) (δ : ℚ) (gs : Array Line.Group)
+    (ω : Accounting.Remote.Draw.SampleCoins n κ X) (δ : ℚ) (gs : Array Line.Group)
     (per blocks blockBytes chipBytes nodeBytes : ℕ) (rates : Line.Rates) (l : Line.Line),
     Line.line gs per blocks blockBytes chipBytes nodeBytes (Array.ofFn fun t => ((D.size t ω : ℕ), D.samples t ω)) δ
       rates = .ok l →

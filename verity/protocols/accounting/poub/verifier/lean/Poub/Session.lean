@@ -87,7 +87,7 @@ structure State where
   digest : ByteArray
   coins : Array ByteArray
   appendCoins : Array ByteArray
-  appendDrawn : Nat := 0
+  appendSampled : Nat := 0
   notBeforeNs : Nat
   windows : Array Win := #[]
   filling : Nat := 0
@@ -175,12 +175,12 @@ def append (s : State) (root : ByteArray) (count : Int) : Except String (Result 
     return s.fail s.filling .append
   if s.appends.any (·.root == root) || (s.windows.size == s.params.windows && (s.windows.back?.map (·.final)).getD false)
   then return s.fail s.filling .coin
-  let some coin := s.appendCoins[s.appendDrawn]? | throw "the append coins ran out"
+  let some coin := s.appendCoins[s.appendSampled]? | throw "the append coins ran out"
   let first := s.extent
   let n := count.toNat
   return (.appended first coin,
     { s with
-      appendDrawn := s.appendDrawn + 1
+      appendSampled := s.appendSampled + 1
       appends := s.appends.push ⟨first, n, root, coin⟩
       head := some (appendHead s.head first n root)
       extent := first + n })
