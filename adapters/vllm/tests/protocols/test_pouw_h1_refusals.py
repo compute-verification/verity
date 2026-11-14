@@ -6,12 +6,16 @@ declaration and the gate's ``model-key`` answer are parsed from, a hand-off's so
 window (`pouw_h1_handoff.Holder`, `send_stream`, `client_of`, `resume`), a Pearl-C pass's salt session
 (`pouw_h1_challenger.salt_session_reason`), a period's weights and a value's held rows
 (`pouw_h1_served.register_weights`, `pouw_h1_registered.commit`), an unclosed window's trees
-(`pouw_h1_served_files.trees`), and the Commit's input ids and a named Commit record
-(`pouw_h1_commit.CommitTap.input_ids`, `reused`)."""
+(`pouw_h1_served_files.trees`), the Commit's input ids and a named Commit record
+(`pouw_h1_commit.CommitTap.input_ids`, `reused`), and a window's served trees off its Program: its period's weights,
+a call's weight, a linear its forward skips, its receipt producer and round 0's input ids (`pouw_h1_served.Served`).
+Beside them, two paths only a large file takes: a file's digest kept for the process (`pouw_h1_answers.file_digest`)
+and a file past zip's 32-bit sizes written by ``np.savez`` (`pouw_h1_prover.savez`)."""
 from __future__ import annotations
 
 import dataclasses
 import hashlib
+import io
 import json
 import os
 import pickle
@@ -44,6 +48,7 @@ from verity.protocols.accounting.pouw.verifier.coins import Challenger
 from verity.protocols.proofs.spot.device import challenger as LC
 from verity.protocols.proofs.spot.device.challenger import LiveRecord
 
+import verity_vllm.protocols.pouw.h1.answers as AN
 import verity_vllm.protocols.pouw.h1.challenger as PHC
 import verity_vllm.protocols.pouw.h1.commit as CT
 import verity_vllm.protocols.pouw.h1.draw as PHD
@@ -62,6 +67,7 @@ import verity_vllm.protocols.pouw.h1.static as ST
 import verity_vllm.protocols.pouw.h1.words as W
 from tests.protocols import challenger_host as CH
 from tests.protocols import test_pouw_h1_commit as TC
+from tests.protocols import test_pouw_h1_served as TS
 from tests.protocols import test_pouw_pearl_c_served as PCS
 from tests.protocols.test_pouw_h1 import (
     KEY,
@@ -779,6 +785,32 @@ def test_only_a_window_on_the_auditor_hosts_coins_hands_off_and_only_a_saved_win
     assert str(refused.value) == f"{tmp_path}: not a {HO.SCHEMA} window"
 
 
+def test_a_window_with_the_commit_in_its_engine_does_not_hand_off(tmp_path, monkeypatch):
+    """`client_of`, and so `suspend`, refuses an open, unclosed window on the auditor host's session whose served trees
+    hold the Commit's tap, asked here inside its first forward: the tap holds the engine's committer, which no other
+    process resumes, so the window closes where it served, nothing is saved, and it closes as it would have."""
+    monkeypatch.setattr(pouw, "linear_types", lambda: (TC.Linear,))
+    said: list[str] = []
+
+    def asked(observe):
+        def once(*args, **kw):
+            if not said:
+                run = pouw.h1_run(TC.ENTRY)
+                for hand_off in (lambda: HO.client_of(run), lambda: HO.suspend(run, tmp_path / "saved")):
+                    try:
+                        said.append(f"handed off: {hand_off()}")
+                    except ValueError as e:
+                        said.append(str(e))
+            return observe(*args, **kw)
+        return once
+
+    _record, run, _tap = TC._window(tmp_path, monkeypatch, lie=asked)
+    refusal = (f"{TC.ENTRY}: a window with the Commit in its engine (pouw_h1_commit) closes where it served: its tap "
+               "holds the committer")
+    assert said == [refusal, refusal]
+    assert not (tmp_path / "saved").exists() and run.details["roots1"]["tied"]
+
+
 def test_an_unclosed_windows_trees_are_not_read_as_its_registered_values():
     """A window's served trees are all committed at its close: before it, `pouw_h1_served_files` reads none of them."""
     run = _driven(served=SV.Served(window=bytes(64)))
@@ -786,6 +818,86 @@ def test_an_unclosed_windows_trees_are_not_read_as_its_registered_values():
     for read in (lambda: SF.trees(run), lambda: SF.reads_file(run, 0)):
         with pytest.raises(ValueError, match="^t: the window isn't closed, so its tables aren't all committed$"):
             read()
+
+
+def test_served_trees_with_no_program_yet_say_so_where_one_is_read():
+    """A window's Program is declared at its first call: its tables and a call's receipt shape, read before then,
+    raise, naming what the window doesn't hold."""
+    served = SV.Served(window=bytes(64))
+    for read in (served.tables, lambda: served.receipt_shape(0)):
+        with pytest.raises(RuntimeError, match="^the window holds no Program where one is read$"):
+            read()
+
+
+def test_a_rounds_slot_table_is_not_registered_live_before_the_windows_open_root():
+    """A round's live slot table is bound to the window's open root: with the tap and the Program declared and the
+    window not yet open there is none, and nothing is refused."""
+    served = SV.Served(PH.TILE, TS._unit(), tap=object())
+    served.declare([(32, K), (32, K)], {0: "q", 1: "o"}, 32, 2)
+    assert served.program is not None and served.root is None
+    run = SimpleNamespace(session=None, owners={0: [0]}, rows=32)
+    assert served.live_table(run, LV.SLOTS, 0) is None and served.refused == [] and served.live == {}
+
+
+def test_a_window_whose_periods_weights_are_registered_under_another_program_is_refused():
+    """The period's weights are registered under its declared Program's digest. A window that declares another
+    Program, here the same linears over J10-R proof blocks, has no ``b/<K>`` its statements read: its served trees are
+    refused at its first call, nothing is registered, and `trees` says why."""
+    period = TS._period(TS._weights(), defn=TS.StandInJ10R)
+    run, _ws, _got = TS._window(TS.W1, weights=period)
+    refusal = ("the period's registered weights are under another Program than the window's: register each K's b/<K> "
+               "under the period's declared Program")
+    assert run.served.refused == [refusal]
+    assert run.served.program_digest != period.circuit and run.served.registered == {}
+    with pytest.raises(ValueError, match="trees were refused"):
+        SV.trees(run)
+
+
+@pytest.mark.parametrize("off", ["int16-codes", "five-scales", "no-scales"])
+def test_a_served_weight_that_is_not_its_linears_int8_codes_and_scales_refuses_the_windows_trees(off):
+    """A served call's weight is its linear's n × K int8 codes and n scales, the rows ``b/<K>`` holds. Codes of another
+    type, scales of another count and no scales make no such rows: the window's served trees are refused at that call,
+    by its index, and nothing is registered."""
+    (n, k), (codes, scales) = TS.SHAPES[0], TS._weights()[0]
+    weight, scale = {"int16-codes": (codes.to(torch.int16), scales), "five-scales": (codes, scales[:5]),
+                     "no-scales": (codes, None)}[off]
+    run = PH.H1Run("t", TS.SALT, TS.MODULES, TS.SHAPES, TS.T, TS.STEPS, key=KEY,
+                   served=SV.Served(TS.TILE, TS._unit(), TS.BLOCKS, window=TS.W1))
+    call = run.record(0, TS._codes(np.random.default_rng(3), TS.SERVED, k), torch.ones(TS.SERVED), weight, scale)
+    assert call is not None and call.index == 0
+    assert run.served.refused == [f"call 0: its weight is not its {n} × {k} int8 codes and {n} scales"]
+    assert run.served.registered == {}
+
+
+def test_a_window_whose_forward_skips_a_linear_is_not_static_and_has_no_trees():
+    """The declared Program has every (step, linear) call of the window. A window whose forward never runs one of its
+    linears closes with fewer: it isn't static, its served trees are refused at its close, and `trees` says why."""
+    run, _ws, _got = TS._window(TS.W1, order=[0, 1])
+    assert not run.static() and run.order_ok and run.refused == []
+    refusal = ("the window isn't static: a call off its public position or refused, so the Program's calls aren't the "
+               "window's")
+    assert run.served.refused == [refusal]
+    with pytest.raises(ValueError, match="trees were refused"):
+        SV.trees(run)
+
+
+def _no_receipt(call, codes, s_a, w, s_w):
+    raise ValueError(f"no receipt of a call of {len(codes)} rows")
+
+
+@pytest.mark.parametrize("producer,said", [(lambda: _no_receipt, f"no receipt of a call of {TS.SERVED} rows"),
+                                           (lambda: TS._Receipts(dtype=np.uint8),
+                                            "a call's receipts are (units, words) u32 or u16 words, not uint8 (4, 1)")],
+                         ids=["refused", "u8-words"])
+def test_a_receipt_producer_that_refuses_a_call_or_hands_back_no_receipt_words_refuses_the_windows_trees(producer, said):
+    """A call's receipt table is its producer's receipts of the call's own served codes. A producer that refuses the
+    call, or whose receipts are no u16 or u32 words, makes no table: the window's served trees are refused at that
+    call, by its index, with the producer's reason, no receipt table is registered, and `trees` says why."""
+    run, _ws, _got = TS._window(TS.W1, receipts=producer())
+    assert run.served.refused == [f"call 0: {said}"]
+    assert not any("receipt@" in value for value in run.served.registered)
+    with pytest.raises(ValueError, match="trees were refused"):
+        SV.trees(run)
 
 
 def test_a_periods_weights_are_each_linears_int8_codes_and_scales_at_an_even_k():
@@ -902,14 +1014,35 @@ def test_step_0s_input_ids_in_the_commit_that_are_no_rows_of_token_ids_are_its_t
     assert {v["reason"] for v in run.gated().values()} == {CT.UNTIED}
 
 
+#: what `reused` says of a window with no served trees
+_NO_TABLES = "the window's served trees were refused, so it has no tables a Commit record can reuse"
+
+
 def test_a_later_rounds_input_ids_that_are_no_token_ids_refuse_the_windows_served_trees(tmp_path, monkeypatch):
     """After round 0 a round's input-ids table is built from the Commit's ids of its step: ids that are no token ids
-    make no table, the window's served trees are refused with the round's name, and the window credits nothing."""
+    make no table, the window's served trees are refused with the round's name, no Commit record reuses a table of
+    it, and the window credits nothing."""
     monkeypatch.setattr(pouw, "linear_types", lambda: (TC.Linear,))
     _record, run, tap = TC._window(tmp_path, monkeypatch, ids=lambda s, honest: [-1, *honest[1:]] if s == 1 else honest)
     assert run.served.refused == [f"round 1's input ids: {_NO_TOKEN_ID}"]
     assert tap.refused == [] and sorted(run.served.ids) == [0]
     assert run.details["roots1"]["reason"] == "roots1: the window's served trees were refused, so no table is the Commit's"
+    assert CT.reused(run, None, None) == _NO_TABLES
+    assert {v["reason"] for v in run.gated().values()} == {CT.UNTIED}
+
+
+def test_a_prompt_token_that_is_no_token_id_refuses_the_windows_served_trees_before_it_opens(tmp_path, monkeypatch):
+    """Round 0's input-ids table is the window's own, its prompts' tokens, registered before the window opens. A
+    prompt token that is no token id (the empty slot's word) makes no table: the served trees are refused with the
+    round's name before any is registered, no table is the Commit's or a Commit record's to reuse, and the window
+    credits nothing."""
+    monkeypatch.setattr(pouw, "linear_types", lambda: (TC.Linear,))
+    monkeypatch.setitem(TC.PROMPTS, "a", [W.EMPTY_ID, 6, 7])
+    _record, run, tap = TC._window(tmp_path, monkeypatch)
+    assert run.served.refused == [f"round 0's input ids: {_NO_TOKEN_ID}"]
+    assert tap.refused == [] and run.served.ids == {} and run.served.registered == {}
+    assert run.details["roots1"]["reason"] == "roots1: the window's served trees were refused, so no table is the Commit's"
+    assert CT.reused(run, None, None) == _NO_TABLES
     assert {v["reason"] for v in run.gated().values()} == {CT.UNTIED}
 
 
@@ -926,3 +1059,38 @@ def test_a_named_record_that_is_no_json_object_or_has_no_canonical_json_is_not_t
     for value in (b"bytes", {1, 2}):
         assert CT.reused(run, window, {**record, "query": value}) == (
             f"the named record has no canonical JSON: Object of type {type(value).__name__} is not JSON serializable")
+
+
+def test_a_file_of_the_cached_size_is_hashed_once_while_its_stat_is_unchanged(tmp_path, monkeypatch):
+    """`file_digest` hashes a file below `CACHED_BYTES` each time it is asked, and one of at least that size once,
+    however its path is given, while its size and times are unchanged: rewritten longer, it is hashed again."""
+    hashed: list[Any] = []
+
+    def counted(path):
+        hashed.append(path)
+        return hashlib.sha512(path.read_bytes()).hexdigest()
+
+    monkeypatch.setattr(AN, "PF", SimpleNamespace(file_sha512=counted))
+    monkeypatch.setattr(AN, "CACHED_BYTES", 4)
+    monkeypatch.setattr(AN, "_DIGESTS", {})
+    small, large = tmp_path / "small", tmp_path / "large"
+    small.write_bytes(b"abc")
+    large.write_bytes(b"abcd")
+    assert AN.file_digest(small) == AN.file_digest(small) == hashlib.sha512(b"abc").hexdigest() and len(hashed) == 2
+    assert AN.file_digest(large) == AN.file_digest(str(large)) == hashlib.sha512(b"abcd").hexdigest()
+    assert hashed[2:] == [large]
+    large.write_bytes(b"abcde")
+    assert AN.file_digest(large) == hashlib.sha512(b"abcde").hexdigest() and hashed[2:] == [large, large]
+
+
+def test_a_file_past_zips_32_bit_sizes_is_the_one_np_savez_writes(tmp_path, monkeypatch):
+    """`savez` writes the bytes ``np.savez`` writes: itself below zip's 32-bit sizes and counts, and through
+    ``np.savez`` past them (here with the limit lowered to nothing), the same file either way, 0600."""
+    arrays: dict[str, np.ndarray] = {"a": np.arange(6, dtype="<u2").reshape(2, 3), "s_a": np.zeros(0, "<f4")}
+    want = io.BytesIO()
+    np.savez(want, **arrays)  # type: ignore[arg-type]
+    own = PV.savez(tmp_path / "own.npz", arrays)
+    monkeypatch.setattr(PV, "zipfile", SimpleNamespace(ZIP64_LIMIT=0))
+    past = PV.savez(tmp_path / "past.npz", arrays)
+    assert own.read_bytes() == past.read_bytes() == want.getvalue()
+    assert past == tmp_path / "past.npz" and past.stat().st_mode & 0o777 == 0o600
