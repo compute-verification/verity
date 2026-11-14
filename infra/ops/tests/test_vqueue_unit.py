@@ -360,6 +360,18 @@ def test_the_lean_publish_pushes_the_full_sha_to_the_cache_s_machine_then_starts
     assert pushed[3] == started[2] == "vy-other"
 
 
+def test_the_lean_publish_s_push_and_ssh_end_inside_the_time_merge_gives_the_script():
+    """merge.lean_publish stops waiting at LEAN_PUBLISH_TIMEOUT_S and kills the script alone, so a push or an ssh still
+    running would outlive it: each runs under `timeout` (which ends its whole process group), and the two bounds together
+    fit inside merge's."""
+    text = (VQ / "lean_publish.sh").read_text()
+    bounds = {k: int(v) for k, v in re.findall(r"\b(push_s|start_s)=(\d+)\b", text)}
+    assert set(bounds) == {"push_s", "start_s"} and sum(bounds.values()) < merge.LEAN_PUBLISH_TIMEOUT_S, bounds
+    assert re.search(r"""timeout "\$push_s" "\$py" -c 'import .*push_mirror""", text)
+    assert re.search(r'timeout "\$start_s" "\$py" -m research pods ssh "\$node" --', text)
+    assert len(re.findall(r"\btimeout\b", "\n".join(ln for ln in text.splitlines() if not ln.lstrip().startswith("#")))) == 2
+
+
 def started(unit: Path) -> set[str]:
     """What `systemctl is-active` says of ``unit`` once started and still running: a oneshot is `activating` until its command
     exits, and `active` only after it, with RemainAfterExit=yes; a unit of any other type is `active`."""
