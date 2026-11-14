@@ -193,9 +193,9 @@ def test_under_pearlplus_tie_a_window_whose_epoch_failed_or_is_missing_gets_no_r
 
 
 @pytest.mark.parametrize("case", ["tie fails", "no W"])
-def test_under_pearlplus_tie_a_window_whose_commit_tied_to_w_fails_gets_no_draw_verdict_or_line(tmp_path, case):
+def test_under_pearlplus_tie_a_window_whose_commit_tied_to_w_fails_gets_no_sample_verdict_or_line(tmp_path, case):
     """The window commit tied to W is what holds the window to its class's fixed load, so where PEARLPLUS_TIE_CMD fails,
-    or `retain` wrote no W to tie, the piece says so and stops before the coin: no draw, no `verify` (tied or not), no
+    or `retain` wrote no W to tie, the piece says so and stops before the coin: no sample, no `verify` (tied or not), no
     Lean, and a piece written over a verdict document that isn't there, which `served_verdicts.pearlplus` rejects, so no
     Pearl+ line is published for a window nothing holds to its class."""
     extra = ({"PEARLPLUS_TIE_CMD": 'echo "PEARL-TIE: window-commit class 4,32,4 refused: its rows by step"; exit 16'}
@@ -213,9 +213,9 @@ def test_under_pearlplus_tie_a_window_whose_commit_tied_to_w_fails_gets_no_draw_
         assert any(x.startswith("POUW tie: served_verdicts.sh pearl-tie exit 16 after ") and
                    x.endswith(": PEARL-TIE: window-commit class 4,32,4 refused: its rows by step") for x in lines), lines
         assert ("POUW draw: refused before it: the window's commit tied to W failed (pearl-tie exit 16), so nothing holds "
-                "the passes to the window's class and no draw or Pearl+ line follows it") in lines
+                "the passes to the window's class and no sample or Pearl+ line follows it") in lines
     else:
-        assert ("POUW W: retain wrote no window record, so nothing ties the passes to the window and no draw or Pearl+ "
+        assert ("POUW W: retain wrote no window record, so nothing ties the passes to the window and no sample or Pearl+ "
                 "line follows") in lines
     assert not any(x.startswith(("POUW verdict: ", "POUW coin: ", "POUW lean: ")) for x in lines), lines
 

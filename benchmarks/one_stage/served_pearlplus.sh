@@ -320,9 +320,9 @@ if [ -n "$GO" ] && [ -n "$TIE" ]; then
     rc=$?
     say "tie: served_verdicts.sh pearl-tie exit $rc after $(took "$t"): $(tail -1 "$Q/tie.log" | cut -c1-600)"
     [ "$rc" = 0 ] || { say "draw: refused before it: the window's commit tied to W failed (pearl-tie exit $rc), so" \
-      "nothing holds the passes to the window's class and no draw or Pearl+ line follows it"; GO=; }
+      "nothing holds the passes to the window's class and no sample or Pearl+ line follows it"; GO=; }
   else
-    say "W: retain wrote no window record, so nothing ties the passes to the window and no draw or Pearl+ line follows"
+    say "W: retain wrote no window record, so nothing ties the passes to the window and no sample or Pearl+ line follows"
     GO=
   fi
 fi

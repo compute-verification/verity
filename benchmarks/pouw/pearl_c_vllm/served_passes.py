@@ -108,7 +108,7 @@ of one salt and, but under ``--test-instance`` (a test instance's passes, whose 
 alone (`timed_credit`), and the core answer (`answer_of`'s form, ``public.work.credited`` the MACs credited at Pearl's Assumption 1 at ``--delta``) to ``--answer``
 (default ``answer.json`` beside ``--out``, the file `served_verdicts.sh` reads as a piece's core answer), prints one line
 and exits 0 only on accept.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof,
-PouwCheck).  The document's ``check_cost`` is the check's own (`check_cost`): its wall seconds, from the draw through the
+PouwCheck).  The document's ``check_cost`` is the check's own (`check_cost`): its wall seconds, from the sample through the
 last replayed tile, on the node it ran on and in how many processes.
 
 ``lean`` is the Lean verdict of record on the run `verify` judged (`PouwCheck.PearlPlus`, ``--exe`` its ``pouw-pearlplus``):
@@ -144,7 +144,7 @@ padding takes off past the totals' credit is the cause ``grid``.
 remote's composite of record reads it (`PouwCheck.PearlPlus.Protocol`, ``verity/pouw/pearl-plus/v1``) that need no
 registration record, to ``--out`` (0700, its files 0600: the manifests carry the passes' salt key, and the files their
 values): ``parts.json`` (`CASE_SCHEMA`: the params, of the epoch's ``DIR/coins.json``, the document's samples and its coin
-record's run commitment, source, schema and draw (`CASE_RECORD`); the retained manifests, in order; the window, the
+record's four fields the protocol's params name (`CASE_RECORD`); the retained manifests, in order; the window, the
 record W the document held the passes to with the coin record's rounds and dropped rounds (``{"dropped", "record",
 "rounds"}``: rounds null and none dropped where the verdict read no retention); the evidence, each pass's files the
 Lean's opened tiles read (`tile_files`), by path, under the SHA-512 of their bytes; the Lean's verdict, reason, tiles

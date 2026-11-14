@@ -11,7 +11,7 @@
 #                         $OUT/steps.txt, and the exit status is 0 only where every step's is. The steps: this tree's
 #                         environment (uv sync); the filter around a stand-in harness (a made-up secret, an exit status
 #                         carried, a TERM waited out); the settings file as `serve` holds it (a one-output class needs
-#                         its own PP_PARTITION: its window has no step 1; the tied window's rule is stated, V3C_LAW a
+#                         its own PP_PARTITION: its window has no step 1; the tied window's sampling design is stated, a
 #                         stratified-rate:NUM/DEN, which the harness gives no default); `serve` around a stand-in
 #                         harness (the deferral's copy asked once, only after a serve that exited 0 or 2, pending,
 #                         and never after one that exited 1 or any other status); the class's
@@ -28,7 +28,7 @@
 #                         the audit and the compose run (Flock's verifier and ZK server, Pearl+'s check, remote's
 #                         composite); that verifier on a circuit file linked into its archive (`a0.lean_verify` under
 #                         `a0.ARCHIVE_LINK`): the same answer as on one it put, and a refusal once the linked bytes
-#                         change; the probe around a stand-in gate; Pearl+'s period, salt session, draw, coin and
+#                         change; the probe around a stand-in gate; Pearl+'s period, salt session, sample, coin and
 #                         piece against this tree's own gate code (`pearlplus_local_e2e.py`), whose piece then holds
 #                         the execution phase and each check's cost.
 #                         The whole verb runs inside one memory scope (MEM_GB, default 64) where the node makes one.
@@ -102,10 +102,10 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
     # the tied window's rule, which the harness gives no default: its preflight refuses a launch that states none, or one
     # that is no stratified rate, on the serve node. NUM and DEN are compared as digits, whatever their length
     if [ -n "${PEARLPLUS_TIE-}" ]; then
-      num='' den=''
-      [[ ${V3C_LAW-} =~ ^stratified-rate:0*([0-9]*)/0*([0-9]*)$ ]] && num=${BASH_REMATCH[1]} den=${BASH_REMATCH[2]}
+      num='' den='' design=${V3C_LAW-}
+      [[ $design =~ ^stratified-rate:0*([0-9]*)/0*([0-9]*)$ ]] && num=${BASH_REMATCH[1]} den=${BASH_REMATCH[2]}
       [ -n "$num" ] && { [ "${#num}" -lt "${#den}" ] || { [ "${#num}" = "${#den}" ] && [[ ! $num > $den ]]; }; } \
-        || no "V3C_LAW is ${V3C_LAW:-unset}: under PEARLPLUS_TIE V3C_LAW has no default, and the launch states it, a" \
+        || no "the sampling design is ${design:-unset}: under PEARLPLUS_TIE it has no default, and the launch states it, a" \
           "stratified rate, stratified-rate:NUM/DEN (0 < NUM <= DEN): stratified-rate:1/DEN samples one proof block of" \
           "each template while none holds more than DEN"
     fi
@@ -307,7 +307,7 @@ EOF
   return "$ok"
 }
 
-link_test() {  # LEAN DIR: the real flock-verify at LEAN on a circuit file linked into its archive, in the tree
+link_test() {  # LEAN DIR: the real Lean verifier at LEAN on a circuit file linked into its archive, in the tree
   "${PY:-$HERE/../../.venv/bin/python}" - "$1" "$2" "$HERE" <<'EOF'
 import hashlib, json, os, subprocess, sys
 from pathlib import Path
@@ -526,7 +526,7 @@ piece, phase, checks = e2e["piece"], e2e["piece"]["execution_phase"], e2e["piece
 lean, row = e2e["lean"], e2e["row"]
 assert piece["verdict"] == "accept", piece
 assert lean["rc"] == 0 and lean["lean"]["verdict"] == "accept" and not lean["differ"], lean
-# a test instance credits nothing, so on the toy every condition of a row of record holds up to its last, the credit
+# a test instance credits nothing, so on the toy every condition of a workload of record holds up to its last, the credit
 assert row["verdict"] == "missing" and "the Lean verdict credits 0 MACs" in row["why"], row
 period = phase["period"]
 assert phase["start_utc"] and phase["end_utc"] and period["opened_utc"] and period["closed_utc"], phase
@@ -551,6 +551,6 @@ case ${1:-} in
   serve-test) serve_test "${2:?a scratch directory}" ;;
   probe) probe ;;
   probe-test) probe_test "${2:?a scratch directory}" ;;
-  link-test) link_test "${2:?flock-verify}" "${3:?a scratch directory}" ;;
+  link-test) link_test "${2:?the Lean verifier}" "${3:?a scratch directory}" ;;
   *) refuse "rehearsal.sh check|serve|audit|compose|probe|filter CMD..., not ${1:-nothing}" ;;
 esac

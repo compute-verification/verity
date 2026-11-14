@@ -29,11 +29,11 @@ def v1_case(program, query, previous: str | None = None) -> dict:
     """v1's case as a5 writes it (`replay.Case.case`'s params, a v2 record, its evidence) for ``program``."""
     part = P.partition(program, query)
     ports = {"x": {"leaves": 8, "domain": "02" * 64}}
-    law = {"law": "stratified", "k": 1}
-    rec = R.record(program, query, law, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
+    design = {"law": "stratified", "k": 1}
+    rec = R.record(program, query, design, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
                    {"kind": "served", "run": "r-served-cases", "row": 0}, previous=previous,
                    registered=[{"value": "weights/w", "root": "ab" * 64, "leaves": 8, "words": 4, "domain": "cd" * 64}])
-    params = RP.params(program, query, law, ports, None, "1/100", partition=part)
+    params = RP.params(program, query, design, ports, None, "1/100", partition=part)
     evidence = {"draw": {"units": [0]}, "sessions": ["5e" * 64], "verdicts": {"m0": {"accepted": True}}}
     return {"commitment": codec.canonical_json(rec).hex(), "evidence": codec.canonical_json(evidence).hex(),
             "params": params}

@@ -1058,7 +1058,7 @@ def test_a_sampled_proofs_row_the_lean_here_cant_recompute_says_so_and_never_tak
 
 
 @pytest.mark.parametrize("why", ["past-limit", "no-scope", "per-member"])
-def test_a_sampled_proofs_check_that_was_not_started_leaves_the_audits_own_row_naming_the_sum_and_the_limit(
+def test_a_spot_check_that_was_not_started_leaves_the_audits_own_row_naming_the_sum_and_the_limit(
         tmp_path, monkeypatch, capsys, why):
     """A v2 case whose check this host does not start (its blob files sum past the limit, the host makes no memory
     scope, or its proofs are in the per-member form, which the Lean is known to refuse) is not handed to the Lean: the
@@ -1098,7 +1098,7 @@ def test_a_sampled_proofs_check_that_was_not_started_leaves_the_audits_own_row_n
         "blobs": 1, "blob_bytes": size, "limit_bytes": limit}
     assert row["answer_from"] == (f"{S.AS_WRITTEN} ({S.WRITTEN['integrity']}): this host's Lean check of the audit's v2 "
                                   f"case was not started: {row['not_started']['reason']}")
-    assert line["answers"]["sampled proofs"] == row["answer_from"]
+    assert line["answers"][S.NAMES["integrity"]] == row["answer_from"]
 
 
 SID = "s20261026T221500Z-ab12"
@@ -3846,22 +3846,22 @@ def test_under_pearlplus_tie_v3c_goes_on_at_the_stratified_rate_its_launch_state
     assert _audited(tmp_path, ("--law",)) == {"--law": stated}
 
 
-@pytest.mark.parametrize("law, held", [
+@pytest.mark.parametrize("design, held", [
     (None, False), ("", False), (RULE, False), ("stratified:1", False), ("stratified-rate:0/977", False),
     ("stratified-rate:978/977", False), ("stratified-rate:1/977", True), ("stratified-rate:977/977", True)])
-def test_the_rehearsals_settings_state_the_tied_windows_rule_a_stratified_rate(tmp_path, law, held):
+def test_the_rehearsals_settings_state_the_tied_windows_sampling_design_a_stratified_rate(tmp_path, design, held):
     """`rehearsal.sh settings FILE`, what `rehearsal.sh serve` holds its settings to before the harness runs, refuses a
-    Pearl+-tied serve's settings that state no V3C_LAW, or one that is no ``stratified-rate:NUM/DEN`` with 0 < NUM <= DEN:
-    the tied window's rule has no default, and the harness's preflight refuses such a launch (`NO_PEARL_RULE`), which the
-    rehearsal would learn only on the serve node. The refusal names V3C_LAW and the form in the preflight's words;
-    settings that state one are held."""
+    Pearl+-tied serve's settings that state no sampling design, or one that is no ``stratified-rate:NUM/DEN`` with
+    0 < NUM <= DEN: the tied window's sampling design has no default, and the harness's preflight refuses such a launch
+    (`NO_PEARL_RULE`), which the rehearsal would learn only on the serve node. The refusal names the design and the form
+    in the preflight's words; settings that state one are held."""
     for name in ("main.txt", "key.json", "day-params.json"):
         (tmp_path / name).write_text("x\n")
     settings = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote", "ROW": "stand-in",
                 "PP_CHALLENGER": "gate:nobody@gate.invalid", "PP_PEER": "stand-in", "MAIN_FILE": tmp_path / "main.txt",
                 "PP_CHALLENGER_KEY": tmp_path / "key.json", "ALPHA": "1/2", "GAMMA": "4", "LIMITS_UNIT": "a unit",
                 "LIMITS_PROVE": "what they prove", "DAY": "0", "DAY_PROGRAM": "00" * 64, "DAY_LOG": tmp_path / "day-log.json",
-                "DAY_PARAMS": tmp_path / "day-params.json", **({} if law is None else {"V3C_LAW": law})}
+                "DAY_PARAMS": tmp_path / "day-params.json", **({} if design is None else {"V3C_LAW": design})}
     (tmp_path / "record.env").write_text("".join(f"{k}={shlex.quote(str(v))}\n" for k, v in settings.items()))
     run = subprocess.run(["bash", str(HERE.parent / "rehearsal.sh"), "settings", str(tmp_path / "record.env")],
                          env={"PATH": os.defpath}, capture_output=True, text=True, check=False)
@@ -3870,8 +3870,8 @@ def test_the_rehearsals_settings_state_the_tied_windows_rule_a_stratified_rate(t
         assert run.returncode == 0 and len(said) == 1 and said[0].startswith("SETTINGS held: "), (run.returncode, said, run.stderr)
     else:
         assert (run.returncode, said) == (3, [
-            f"SETTINGS refused: V3C_LAW is {law or 'unset'}: under PEARLPLUS_TIE V3C_LAW has no default, and the launch "
-            "states it, a stratified rate, stratified-rate:NUM/DEN (0 < NUM <= DEN): stratified-rate:1/DEN samples one "
+            f"SETTINGS refused: the sampling design is {design or 'unset'}: under PEARLPLUS_TIE it has no default, and the "
+            "launch states it, a stratified rate, stratified-rate:NUM/DEN (0 < NUM <= DEN): stratified-rate:1/DEN samples one "
             "proof block of each template while none holds more than DEN"]), (run.returncode, said, run.stderr)
 
 
@@ -5061,7 +5061,7 @@ def _gate_composed(tmp_path: Path, edit: Mapping[str, str | None] | None = None,
     `served_verdicts.sh gate-compose` to `GATE_DRIVER`, pinned at GATE_PIN on remote, where the compose runs this tree's
     `served_verdicts.sh compose` and record on vy-auditor-2 with a `FAKE_SAMPLED_LEAN`, no composite and no git (as the
     pinned archive has none), its checks under no memory scope (the gate's environment says ``CHECK_SCOPE=none``: it is
-    built afresh, so `no_scope` doesn't reach it). ``edit`` replaces the served node's sampled-proofs files before the hand-off (None deletes);
+    built afresh, so `no_scope` doesn't reach it). ``edit`` replaces the served node's SPOT files before the hand-off (None deletes);
     ``extra`` adds to the sender's environment. The sender's run and $OUT."""
     from verity.circuits import codec
 

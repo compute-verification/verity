@@ -4,7 +4,7 @@ no gate and no checkpoint (`rehearsal.sh check`):
     rehearsal_window.py SERVE_PHI CLASS SCHEME MAX_MODEL_LEN,T OUT
 
 The window is the class's fixed load as the harness sends it: SLOTS requests of PROMPT prompt ids, each kept to OUTPUTS
-outputs by its cap, all admitted at step 0. Its serve dir is a stand-in holding what the three reads read: serve.json,
+outputs by its output limit, all admitted at step 0. Its serve dir is a stand-in holding what the three reads read: serve.json,
 SERVE_PHI's fields with the engine record a serve at the settings' engine args states (``--max-model-len``
 MAX_MODEL_LEN, ``--max-num-batched-tokens`` T); requests.jsonl, each request's body as the load brings it; and the
 window's advice, I1's for that schedule. Its prompt ids, roots and salt are made up: no read here opens a value.

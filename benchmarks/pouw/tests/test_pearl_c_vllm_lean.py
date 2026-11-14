@@ -223,8 +223,8 @@ def tied(run, tmp_path: Path) -> tuple[Path, dict, dict]:
 
 
 def test_case_writes_the_runs_case_parts_and_each_file_its_opened_tiles_read_privately(run, tmp_path, capsys):
-    """The params are the epoch's coins, the sample count and the coin record's run, source, schema and draw, the four
-    the protocol's params name; the manifests the retained passes' in order; the window the record W the verdict held
+    """The params are the epoch's coins, the sample count and the coin record's four fields the protocol's params name,
+    its source this run's; the manifests the retained passes' in order; the window the record W the verdict held
     the passes to, with the coin record's rounds and dropped rounds; the evidence, per pass, each file the Lean's
     opened tiles read (`tile_files`, sampled and exclusion tiles alike) under the SHA-512 of its bytes, and the blobs
     exactly those files, each once, 0700 with files 0600."""
@@ -238,8 +238,7 @@ def test_case_writes_the_runs_case_parts_and_each_file_its_opened_tiles_read_pri
     paths = [Path(p["manifest"]) for p in json.loads((d / "served.json").read_text())["passes"]]
     assert (parts["schema"], parts["delta"]) == (SP.CASE_SCHEMA, doc["delta"])
     assert parts["params"] == {"coins": json.loads((d / "coins.json").read_text()), "draws": 3,
-                               "record": {"commitment": coin["commitment"], "source": SOURCE.hex(),
-                                          "schema": coin["schema"], "draw": coin["draw"]}}
+                               "record": {**{k: coin[k] for k in SP.CASE_RECORD}, "source": SOURCE.hex()}}
     assert sorted(parts["params"]["record"]) == ["commitment", "draw", "schema", "source"]
     assert parts["manifests"] == [json.loads(p.read_text()) for p in paths]
     assert parts["window"] == {"dropped": coin["dropped"], "record": w, "rounds": coin["rounds"]}

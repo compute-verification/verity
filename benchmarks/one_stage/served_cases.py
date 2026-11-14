@@ -105,7 +105,7 @@ Each check is its own process in a systemd user scope of its own (``MemoryMax`` 
 `CHECK_MEM_GB`, no swap), and on a host with no such scope it is not started (``CHECK_SCOPE=none`` runs it under no
 limit, a development host's choice, which its line then says). The executables read every blob file into memory before
 they check anything (`Core.BlobProtocol`), so a case whose blob files sum past ``CHECK_BLOBS_GB`` (default
-`CHECK_BLOBS_GB`) is not started either. And a v2 case, remote's sampled proofs' or the bare one, is not asked where
+`CHECK_BLOBS_GB`) is not started either. And a v2 case, remote's SPOT case or the bare one, is not asked where
 its proofs are not one statement's sessions (the per-member form, `proofs.statements_v2`): one-stage v2 refuses that
 form when it parses the evidence (`OneStageZk.proofsOf`), after it has read every blob, so its answer is known and the
 check is not run.
@@ -308,7 +308,7 @@ PER_MEMBER = ("the case's proofs are not one statement's sessions but the per-me
 
 
 def v2_case(audit: Path, env: Mapping[str, str] | None = None) -> dict[str, Any]:
-    """Sampled proofs' v2 case (module docstring): a5's ``case-v2.json`` held to v1's record and to its blobs. One
+    """SPOT's v2 case (module docstring): a5's ``case-v2.json`` held to v1's record and to its blobs. One
     whose proofs are in the per-member form is not asked (`PER_MEMBER`: `NotStarted`, with its blobs' sum and the limit
     of ``env``, default the environment)."""
     w = audit / "window"

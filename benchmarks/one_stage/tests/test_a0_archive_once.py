@@ -222,7 +222,7 @@ def test_under_archive_link_a_members_own_circuit_is_linked_into_its_archive_and
     """Each member has a circuit file of its own, so none is archived by an earlier one. Under `a0.ARCHIVE_LINK` the
     archive's object is the member's file under a second name (one inode), `archive-put` is given no circuit, and the
     verifier still reads the object under its key and accepts; with or without the members' shared record."""
-    lean, puts = tmp_path / "flock-verify", tmp_path / "puts.jsonl"
+    lean, puts = tmp_path / "lean", tmp_path / "puts.jsonl"
     lean.write_text(FAKE.format(python=sys.executable, puts=str(puts)))
     lean.chmod(0o755)
     archived: dict | None = {} if shared else None
@@ -237,7 +237,7 @@ def test_under_archive_link_a_window_put_before_its_sessions_links_each_members_
     """The window's one put before its sessions is given the members' circuits to link: each is in the window's archive
     under a second name, the put's process reads only the public files, and a member's verify then links the window's
     object and puts nothing."""
-    lean, puts = tmp_path / "flock-verify", tmp_path / "puts.jsonl"
+    lean, puts = tmp_path / "lean", tmp_path / "puts.jsonl"
     lean.write_text(FAKE.format(python=sys.executable, puts=str(puts)))
     lean.chmod(0o755)
     archived: dict = {}
@@ -258,7 +258,7 @@ def test_under_archive_link_a_circuit_that_cannot_be_linked_is_put_as_without_it
     """Where the link can't be made (the archive on another filesystem), the member's circuit is put, a copy, the
     verdict is the same and a line says which file was not linked and why; a wrong key would be the verifier's to
     refuse, since it holds each object to its key."""
-    lean, puts = tmp_path / "flock-verify", tmp_path / "puts.jsonl"
+    lean, puts = tmp_path / "lean", tmp_path / "puts.jsonl"
     lean.write_text(FAKE.format(python=sys.executable, puts=str(puts)))
     lean.chmod(0o755)
     st, out, key = own(tmp_path, 0, {})
