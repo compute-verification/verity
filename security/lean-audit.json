@@ -52854,13 +52854,13 @@
    }
   },
   "Proofs.Flock.Recursive.Compile": {
-   "digest": "6f0a25b9e01d92d414bad3a9bd6c5531cfab5ef8e6e4b3507d866607c03747b2",
+   "digest": "2ece8ea7ffeed2ee58d550e073916e81dc7844dede052806a237cbfcab309005",
    "definitions": {
     "FlockSoundness.Discharge.Recursion.InnerForkRec": "987ff0abda868e996b4c38d28674b611ade824ba3c12589bc907fba7f069ae64",
     "FlockSoundness.Discharge.Recursion.clashCandsCL": "67c33db19fafc5f00f253e548ea9814dfc291cb7b1e87a4aedda229950e6b973",
     "FlockSoundness.Discharge.Recursion.clashPickCL": "3a01254a7793586e3eb15e7b84edcb932d2a5b13460b0a7b43db7379566b944a",
     "FlockSoundness.Discharge.Recursion.decodedV": "942342a0feee0f6f6d2224b12bf4c52caae8873ff53a16f523b1dde109e7f816",
-    "FlockSoundness.Discharge.Recursion.outCL": "1cf169a11c069e9636552157f17a6b93a50bc3bcae940b6accae89d8433cf128"
+    "FlockSoundness.Discharge.Recursion.outCL": "52d7dcac8b89e47ebc7d78a7d2ec29d7b3a3e1297f5b473c2cd551af662f40cd"
    }
   },
   "Proofs.Flock.Recursive.Defs": {
@@ -53273,6 +53273,12 @@
     "FlockSoundness.Discharge.Recursion.regFinder": "618abcdb5f9d6eea4e098b4ef1f89434eeec44f8349780686efa7fc3505170a7",
     "FlockSoundness.Registered.ReadsX.Clash": "c8623626186e62a82c785b86732504145f116381ddf723720a4fac1acc7c469d",
     "FlockSoundness.Registered.ReadsX.clashCands": "d0c2a25ba1313b1892a3aefc2185b550ecc493e7740d9b954f936e6e52cb1bfa"
+   }
+  },
+  "Proofs.Flock.Recursive.Replay": {
+   "digest": "fecbea545d6aaaa837c244b65bad2c934849d352e0e27b44cddf6494ec0b562d",
+   "definitions": {
+    "FlockSoundness.Game.playT": "40d0f85744903e28e632f3c1d700a19254f266c781647665a5f0fabb4c29af04"
    }
   },
   "Proofs.Flock.Recursive.Schedule": {
