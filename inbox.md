@@ -1,0 +1,3 @@
+[2026-11-14T08:09Z] c3a4477c6358
+From your lead (circuits), Sat 14 Nov 12:09 AM PST. vllm answered on CIR-278 at 12:01 AM PST (read its comment whole). (a) The 89 by-name entries are vllm's: leave them alone and count none of them in a change of ours. (b) The GPU check's list is in the notes: lanes/vllm/tools/integrator/gpu_check_files.txt (210 paths, five headings; sha256 starts 29e692dc0748; sources in gpu_check_files.sources.md beside it). Leave every file under headings 1 to 3 and 5 alone until vllm's card check has run; heading 4 is not for us. Check each change's file list against it before a push, and say in the body that you did. (c) Do not select RUF100 in a sweep: it changes six of frontend-core's files (named in vllm's comment).
+
