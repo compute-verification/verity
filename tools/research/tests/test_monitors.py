@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from research import monitors as M
+from research import settings
 
 T0 = 1791060000.0           # 2026-10-03T20:40:00Z
 SRC = Path(__file__).resolve().parents[1] / "src"
@@ -316,7 +317,7 @@ def guard(tmp_path, line, now=T0) -> str:
     (bin_ / "date").write_text(f'#!/bin/sh\nif [ "$1" = "+%s" ]; then echo {int(now)}; else exec {shutil.which("date")} "$@"; fi\n')
     (bin_ / "date").chmod(0o755)
     return subprocess.run(["sh", "-c", M.N2_GUARD.replace(M.FILL_STATUS, str(f)) + "echo ran"], capture_output=True, text=True,
-                          env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}"}).stdout
+                          env={**os.environ, "PATH": f"{bin_}:{settings.need('PATH')}"}).stdout
 
 
 @pytest.mark.parametrize("line, why", [
@@ -1422,7 +1423,7 @@ def test_the_files_deploy_toml_installs_on_node_2_run_every_node_side_check(tmp_
     code = ("import research.monitors as M; M._probe(); "
             "print(','.join(m.id for m in M.MONITORS if m.where == 'node'))")
     r = subprocess.run([sys.executable, "-S", "-c", code], capture_output=True, text=True, cwd=tmp_path,
-                       env={"PYTHONPATH": str(tmp_path), "PATH": os.environ.get("PATH", "")})
+                       env={"PYTHONPATH": str(tmp_path), "PATH": settings.get("PATH", "")})
     assert r.returncode == 0, r.stderr
     assert set(r.stdout.strip().split(",")) == {m.id for m in M.MONITORS if m.where == "node"}
     unit = (REPO / files[lib + "research/monitors.py"]).parent / "pods/nebius/monitoring/vy-monitors.service"
@@ -1653,7 +1654,7 @@ def test_every_nebius_machine_runs_the_watchdog_from_the_monitoring_lib_with_its
     rows = {e["path"]: e for e in manifest["file"]}
     for path in ("/etc/systemd/system/vy-watchdog.service", "/etc/systemd/system/vy-watchdog.timer",
                  "/usr/local/lib/vy-monitoring/research/monitors.py", "/usr/local/lib/vy-monitoring/research/__init__.py",
-                 "/usr/local/lib/vy-monitoring/research/pods/nebius/deploy.toml"):
+                 "/usr/local/lib/vy-monitoring/research/settings.py", "/usr/local/lib/vy-monitoring/research/pods/nebius/deploy.toml"):
         assert {"vy-nebius-2", "vy-nebius-cpu-1"} <= set(rows[path]["nodes"]), path
     text = (SRC / "research/pods/nebius/monitoring/vy-watchdog.service").read_text()
     assert "-m research.monitors run --where machine $VY_WATCHDOG_ARGS" in text

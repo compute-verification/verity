@@ -88,6 +88,8 @@ import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 
+from . import settings
+
 SYNC_ENV = "RESEARCH_NOTES_SYNC"
 TOKEN_ENV = "RESEARCH_NOTES_TOKEN"
 SOURCE_ENV, EXPIRES_ENV = "RESEARCH_NOTES_TOKEN_SOURCE", "RESEARCH_NOTES_TOKEN_EXPIRES"
@@ -190,7 +192,7 @@ _SET_ASIDE: list[str] = []                          # non-empty once the broker'
 
 def _held() -> tuple[str | None, bool, float]:
     """(the token in the environment, whether `notes_token` put it there from the broker, when that one expires)."""
-    tok, source, expires = (os.environ.get(k) for k in (TOKEN_ENV, SOURCE_ENV, EXPIRES_ENV))
+    tok, source, expires = (settings.get(k) for k in (TOKEN_ENV, SOURCE_ENV, EXPIRES_ENV))
     return tok or None, source == "broker", float(expires or 0) if source == "broker" else 0.0
 
 
@@ -576,7 +578,7 @@ def outgoing_citations(root: Path, base: str | None) -> dict[str, list[str]]:
 
 
 def cite_check_on() -> bool:
-    return os.environ.get(CITE_ENV, "").strip().lower() not in ("0", "off", "no", "false")
+    return settings.get(CITE_ENV, "").strip().lower() not in ("0", "off", "no", "false")
 
 
 def missing_citations(cited: list[str], remote=None, workers: int = 8, wait_s: float = CITE_WAIT_S) -> tuple[set[str], str | None]:
@@ -699,7 +701,7 @@ def _who() -> str:
     lane or the user, and when it took the lock."""
     from .remote import sender
 
-    who = sender() or os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "an unnamed caller"
+    who = sender() or settings.get("RESEARCH_LANE") or settings.get("USER") or "an unnamed caller"
     return f"pid {os.getpid()} on {socket.gethostname()}, {who}, since {_utcnow():%H:%M:%SZ}"
 
 
@@ -1095,7 +1097,7 @@ def auto_sync(root: Path, lanes: list[str]) -> tuple[str | None, int]:
     """After a notes write command: `sync` the lane directories it wrote, when `RESEARCH_NOTES_SYNC=1`.  (report lines, FUTURE_RC
     when a note was left out for its stamp or its front matter, else 0; other failures stay advisory, the next sync retries them);
     (None, 0) when off."""
-    if os.environ.get(SYNC_ENV, "").strip() not in ("1", "true", "yes", "on"):
+    if settings.get(SYNC_ENV, "").strip() not in ("1", "true", "yes", "on"):
         return None, 0
     rep = sync(root, paths=[f"lanes/{x}" for x in lanes if x], message=f"notes: {', '.join(x for x in lanes if x)}")
     return "\n".join([render_sync(rep), *refused_lines(rep)]), FUTURE_RC if rep.get("future") or rep.get("header") else 0

@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from research import runs as R
+from research import settings
 from research.cli import main
 from research.result import env_defaults
 
@@ -54,7 +55,7 @@ def test_local_env_is_applied_to_the_workload_recorded_and_scoped(tmp_path, monk
     seen = json.loads((run_dir / "result.json").read_text())
     assert seen["foo"] == "bar" and seen["tok"] == "s3cret", "the workload sees --env"
     assert Path(seen["cwd"]).resolve() == run_dir.resolve() and list(src.iterdir()) == [], "default cwd is the run dir: the checkout stays clean"
-    assert "RSEC_FOO" not in os.environ and os.environ["RSEC_API_TOKEN"] == "callers", "--env is scoped to the workload"
+    assert settings.named("RSEC_FOO") is None and settings.named("RSEC_API_TOKEN") == "callers", "--env is scoped to the workload"
     params = json.loads((run_dir / "job.json").read_text())["store"]["params"]
     defaults = env_defaults(os.environ)
     assert params["env"] == {**defaults, "RSEC_FOO": "bar", "RSEC_API_TOKEN": "<redacted>"}

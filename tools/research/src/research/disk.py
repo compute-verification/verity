@@ -29,6 +29,8 @@ import time
 from pathlib import Path
 from typing import Callable
 
+from . import settings
+
 HOLD_PCT = 80
 RELEASE_PCT = 75   # retention gc's low-water mark (retention.py); not a release mark here (module docstring)
 POLL_S = 30
@@ -192,7 +194,7 @@ def main(argv: list[str], *, usage: Callable[[Path], tuple[int, int, int]] = shu
 
             ack_launch(ns.ack, "disk-hold")
 
-    pct = float(os.environ.get("RESEARCH_DISK_HOLD_PCT", HOLD_PCT))
+    pct = float(settings.get("RESEARCH_DISK_HOLD_PCT", HOLD_PCT))
     hold(ns.gb, Path(ns.path), hold_pct=pct, usage=usage, sleep=sleep, on_hold=on_hold)
     execvp(cmd[0], cmd)
     return 127

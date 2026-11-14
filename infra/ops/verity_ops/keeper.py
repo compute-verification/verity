@@ -40,7 +40,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from research import remote
+from research import remote, settings
 
 MAX_AHEAD_H = 48
 NODE_KEEPER = "/usr/local/bin/vy-keeper"
@@ -111,12 +111,12 @@ def cmd_set(argv: list[str]) -> int:
     ap.add_argument("--max-min", type=int, required=True, metavar="M",
                     help="each chunk's lease ends it M minutes after its grant (gpu-lease --max-min)")
     ap.add_argument("--seed-from", type=int, default=None, metavar="S", help="raise the seed counter to S (it never goes down)")
-    ap.add_argument("--owner", default=os.environ.get("RESEARCH_LANE"), help="the lane the target is (default $RESEARCH_LANE)")
+    ap.add_argument("--owner", default=settings.get("RESEARCH_LANE"), help="the lane the target is (default $RESEARCH_LANE)")
     ap.add_argument("--source", default=None, metavar="GITDIR", help="the tree each chunk runs from (shipped as `research run --on` ships it)")
     ap.add_argument("--env", action="append", default=[], metavar="K=V")
     ap.add_argument("--stage", default="run")
     ap.add_argument("--tool", default=None, metavar="NAME|module:NAME")
-    ap.add_argument("--campaign", default=os.environ.get("RESEARCH_CAMPAIGN"))
+    ap.add_argument("--campaign", default=settings.get("RESEARCH_CAMPAIGN"))
     ns, harness_opts = ap.parse_known_args(opts)
     if not command or not any("{seed}" in a for a in command):
         print("research keeper set: the command after `--` has no {seed}; each chunk gets the next seed there", file=sys.stderr)
@@ -200,7 +200,7 @@ def cmd_stop(argv: list[str]) -> int:
     ap.add_argument("--on", required=True, metavar="MACHINE")
     ap.add_argument("--cancel", action="store_true", help="also SIGTERM each live chunk's workload, recorded as a manual cancel")
     ap.add_argument("--reason", default="stopped")
-    ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "-")
+    ap.add_argument("--by", default=settings.get("RESEARCH_LANE") or settings.get("USER") or "-")
     ns = ap.parse_args(argv)
     try:
         m, _, ssh = _connect(ns.on)

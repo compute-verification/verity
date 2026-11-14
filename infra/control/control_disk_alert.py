@@ -13,17 +13,16 @@ over ssh from a machine with the RunPod key.
 usage (research importable, $SLACK_BOT_TOKEN set, $RESEARCH_SLACK_REGISTRY when not run from a checkout):
   python3 infra/control/control_disk_alert.py [--once] [--dry-run]"""
 import json
-import os
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-from research import slack
+from research import settings, slack
 from research.pods import budgets, connect
 
-SEEN = Path(os.environ.get("CONTROL_DISK_SEEN", Path.home() / "control-disk/seen.json"))
-LOCAL = os.environ.get("CONTROL_POD_LOCAL") == "1"
+SEEN = Path(settings.get("CONTROL_DISK_SEEN", Path.home() / "control-disk/seen.json"))
+LOCAL = settings.get("CONTROL_POD_LOCAL") == "1"
 #: graph2's ready checks take ~2 GB each, several an hour, so 85% leaves about an hour to act
 LEVELS = (85, 90, 95)
 CLEAR = 80
@@ -63,7 +62,7 @@ def post(text: str) -> bool:
     """A top-level post in #agent-alerts (`msg send` posts top-level only in #agent-coordination)."""
     try:
         alerts = slack.channel_id_for(slack.load_registry(slack.registry_path()), "agent-alerts")
-        ts = slack._post(slack.Slack(os.environ.get("SLACK_BOT_TOKEN"), dry_run=DRY), alerts, "infra", text)
+        ts = slack._post(slack.Slack(settings.get("SLACK_BOT_TOKEN"), dry_run=DRY), alerts, "infra", text)
     except Exception as e:  # noqa: BLE001
         log(f"post failed: {type(e).__name__}: {e}")
         return False

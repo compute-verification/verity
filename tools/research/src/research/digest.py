@@ -42,6 +42,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from . import settings
+
 #: How far back a first digest reads doorbells and threads.
 FIRST_LOOKBACK_S = 3600
 #: The landing rate's window.
@@ -85,7 +87,7 @@ class Sources:
 
 
 def state_path(lane: str, explicit: str | None = None) -> Path:
-    return Path(explicit or os.environ.get("RESEARCH_DIGEST_STATE") or Path.home() / ".research" / "digest" / f"{lane}.json")
+    return Path(explicit or settings.get("RESEARCH_DIGEST_STATE") or Path.home() / ".research" / "digest" / f"{lane}.json")
 
 
 def load(path: Path) -> dict:

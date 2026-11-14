@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 def load(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "dont_write_bytecode", True)     # no __pycache__ in tools/agent-guard, which boot.sh copies file by file
+    monkeypatch.syspath_prepend(str(ROOT / "tools/agent-guard"))     # its `import settings`, as running it from there finds it
     spec = importlib.util.spec_from_file_location("oom_watch_under_test", ROOT / "tools/agent-guard/oom_watch.py")
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)

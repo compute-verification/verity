@@ -136,6 +136,7 @@ import sys
 import time
 from pathlib import Path
 
+import settings
 from settings import INBOX, INBOX_POLL_S, record_event
 
 PATTERN = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|PRIVATE", re.I)
@@ -184,7 +185,7 @@ PROC_ARGV = re.compile(r"/proc/\S*cmdline|\$\{?\w+\}?/cmdline\b|\.cmdline\(|psut
 
 
 def secret(name: str) -> bool:
-    listed = set(re.split(r"[,\s]+", os.environ.get("CLOUD_AGENT_ALL_SECRET_NAMES", ""))) - {""}
+    listed = set(re.split(r"[,\s]+", settings.get("CLOUD_AGENT_ALL_SECRET_NAMES", ""))) - {""}
     return name in listed or bool(PATTERN.search(name))
 
 
@@ -1092,7 +1093,7 @@ def available() -> tuple[float, float] | None:
     (/proc/vmstat beside it), or, where this process's cgroup's limit is tighter, that limit and the lesser of that and what the
     limit leaves over the cgroup's working set. The working set is memory.current less memory.stat's inactive_file, the file cache
     the kernel reclaims on demand, as container runtimes count it; all of memory.current where memory.stat can't be read."""
-    meminfo = Path(os.environ.get("AGENT_GUARD_MEMINFO", "/proc/meminfo"))
+    meminfo = Path(settings.get("AGENT_GUARD_MEMINFO", "/proc/meminfo"))
     try:
         info = dict(re.findall(r"^(\w+):\s+(\d+) kB", meminfo.read_text(), re.M))
         avail, total = int(info["MemAvailable"]) * 1024, int(info["MemTotal"]) * 1024
@@ -1105,7 +1106,7 @@ def available() -> tuple[float, float] | None:
         avail = min(total, avail + max(0, int(v.get("balloon_inflate", 0)) - int(v.get("balloon_deflate", 0))) * 4096)
     try:
         rel = open("/proc/self/cgroup").read().partition("::")[2].strip()
-        cg = os.environ.get("AGENT_GUARD_CGROUP") or f"/sys/fs/cgroup{rel}"
+        cg = settings.get("AGENT_GUARD_CGROUP") or f"/sys/fs/cgroup{rel}"
         limit = open(f"{cg}/memory.max").read().strip() if rel and os.path.exists(f"{cg}/memory.max") else "max"
         if limit != "max" and int(limit) < total:
             meminfo_avail, used, total = avail, int(open(f"{cg}/memory.current").read()), int(limit)
@@ -1137,7 +1138,7 @@ def local_work_reason(command: str) -> str | None:
     if w != PRESSURE:
         return None
     mem = available()
-    floor = float(os.environ.get("AGENT_GUARD_MIN_AVAIL", "0.25"))
+    floor = float(settings.get("AGENT_GUARD_MIN_AVAIL", "0.25"))
     if mem is None or mem[0] >= floor * mem[1]:
         return None
     return (f"this VM has {mem[0] / 2**30:.1f} GiB of {mem[1] / 2**30:.1f} GiB available (under {floor:.0%}), and this command runs "

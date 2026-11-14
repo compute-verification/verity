@@ -109,7 +109,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
-from . import remote
+from . import remote, settings
 from .pythonpath import tree_pythonpath
 from .pods import POD_SUFFIXES, strip_pod_suffix
 from .runs import new_run_id
@@ -143,7 +143,7 @@ f=$(timeout 10 find /workspace -xdev {FIND_PRUNE} -o -type f -printf '%T@\n' 2>/
 
 
 def default_root() -> Path:
-    return Path(os.environ.get("RESEARCH_NOTES", Path.home() / ".research" / "notes"))
+    return Path(settings.get("RESEARCH_NOTES", Path.home() / ".research" / "notes"))
 
 
 def _utcnow() -> dt.datetime:
@@ -491,7 +491,7 @@ def _git(repo: Path, *args: str, timeout: float = 20) -> str | None:
 
 
 def repo_default() -> Path | None:
-    env = os.environ.get("RESEARCH_REPO")
+    env = settings.get("RESEARCH_REPO")
     if env:
         return Path(env).expanduser()
     top = _git(Path.cwd(), "rev-parse", "--show-toplevel")
@@ -1584,7 +1584,7 @@ def save_uncommitted(wt: Path, dest: Path, stamp: str, max_file_mb: float = 100)
 def relaunch_dir(lane: str) -> Path:
     """Where `relaunch` saves a lane's uncommitted work: `$RESEARCH_RELAUNCH/<lane>`, else ~/.research/relaunch/<lane>.  On the
     worktree's machine, never in the notes: a copy of code is not evidence, and the notes are Git."""
-    return Path(os.environ.get("RESEARCH_RELAUNCH") or Path.home() / ".research" / "relaunch").expanduser() / lane
+    return Path(settings.get("RESEARCH_RELAUNCH") or Path.home() / ".research" / "relaunch").expanduser() / lane
 
 
 def successor_name(root: Path, lane: str, succ: dict[str, str] | None = None) -> str:

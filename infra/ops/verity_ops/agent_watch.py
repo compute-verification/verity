@@ -301,6 +301,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import IO, Callable, Iterator
 
+from research import settings
+
 API = "https://api.cursor.com"
 POLL_S = 60
 HELD_S = 15 * 60
@@ -3338,7 +3340,7 @@ def main(argv: list[str] | None = None) -> int:
     ns = ap.parse_args(argv)
     if ns.cmd == "runs":
         return print_runs(ns.nodes, ns.notes, ns.hours)
-    key = os.environ.get("CURSOR_API_KEY")
+    key = settings.get("CURSOR_API_KEY")
     if not key:
         print("agent_watch: no CURSOR_API_KEY in the environment", file=sys.stderr)
         return 2
@@ -3353,7 +3355,7 @@ def main(argv: list[str] | None = None) -> int:
             return {"run": {"id": "dry-run"}}
         api.post = post
     publish = None
-    if url := os.environ.get("AGENT_WATCH_PG_URL"):
+    if url := settings.get("AGENT_WATCH_PG_URL"):
         publish = Publisher(url) if not ns.dry_run else (
             lambda body, t: print(f"dry-run: would publish {len(body)} bytes to {STATUS_TABLE}", file=sys.stderr, flush=True))
     launcher = ns.launcher or (ns.registry.resolve().parents[3] / "infra/cursor/launch_coordinator.py" if ns.registry else None)

@@ -136,6 +136,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterator, Sequence
 
+from . import settings
 from .disk import HOLD_PCT, RELEASE_PCT
 from .store import custody as CU
 from .store import evict as EV
@@ -1767,7 +1768,7 @@ def main(argv: list[str]) -> int:
         ap.add_argument("--approved-by", required=True, metavar="@OWNER", help="the owner who said yes; every record covering a PATH or "
                         "beneath it must name this handle")
         ap.add_argument("--ref", required=True, metavar="REF", help="where the owner said yes (a Slack permalink or thread ts)")
-        ap.add_argument("--by", default=os.environ.get("RESEARCH_AGENT_URL"), metavar="URL",
+        ap.add_argument("--by", default=settings.get("RESEARCH_AGENT_URL"), metavar="URL",
                         help="who deletes (default $RESEARCH_AGENT_URL); --apply needs it")
         ap.add_argument("--root", default=str(DEFAULT_ROOT))
         ap.add_argument("--jobs-dir", action="append", default=[], metavar="D", help="more job-script directories (beside "

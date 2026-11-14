@@ -34,7 +34,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable, Iterable
 
-from . import carry, policy
+from . import carry, policy, settings
 from .notes import ART_RE
 from .queue import CHECK_STEPS, PR, Member, Queue, QueueError, StoreLabels, _git, _who, merge_main, unreviewed
 from .reds import CIRCUIT_KILLED, RATCHET_STEP, job_owner
@@ -112,7 +112,7 @@ def auth_env(auth: tuple[str, ...]) -> dict[str, str]:
     """The queue's `git -c` options (`credential_args`) as GIT_CONFIG_* variables, after any the caller carries, so every git a
     child runs in the queue's clone authenticates as the queue's own does."""
     pairs = [o.split("=", 1) for flag, o in zip(auth[::2], auth[1::2]) if flag == "-c"]
-    n = int(os.environ.get("GIT_CONFIG_COUNT") or 0)
+    n = int(settings.get("GIT_CONFIG_COUNT") or 0)
     env = {"GIT_CONFIG_COUNT": str(n + len(pairs))}
     for i, (k, v) in enumerate(pairs, n):
         env[f"GIT_CONFIG_KEY_{i}"], env[f"GIT_CONFIG_VALUE_{i}"] = k, v
@@ -125,7 +125,7 @@ def authed(auth: tuple[str, ...]):
     (`merge.caught_up`, `_sweep_after`), whose git children read os.environ (a git that prompts, as `caught_up`'s `ls-remote` in the
     queue's clone would, waits on a password at the tty and holds the queue)."""
     extra = {**auth_env(auth), "GIT_TERMINAL_PROMPT": "0"}
-    was = {k: os.environ.get(k) for k in extra}
+    was = {k: settings.named(k) for k in extra}
     os.environ.update(extra)
     try:
         yield

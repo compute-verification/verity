@@ -10,6 +10,7 @@ import pytest
 
 from research import remote
 from research import runs as R
+from research import settings
 from waits import Gate, wait_runner
 
 PY = sys.executable
@@ -123,7 +124,7 @@ def test_a_direct_run_on_a_gpu_lease_host_gets_gpus_only_through_gpu_lease(tmp_p
     (bin_dir / "gpu-lease").write_text('#!/bin/sh\necho "$*" > "$RESEARCH_RUN_DIR/lease-args"\nwhile [ "$1" != -- ]; do shift; done; shift\n'
                                        'CUDA_VISIBLE_DEVICES=4,5 exec "$@"\n')
     (bin_dir / "gpu-lease").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{settings.need('PATH')}")
     show = [PY, "-c", "import os; print(repr(os.environ['CUDA_VISIBLE_DEVICES']))"]
     req, runs_root = _request(tmp_path, "g0", show, env={"CUDA_VISIBLE_DEVICES": "0"})
     out = remote.launch_request(req)

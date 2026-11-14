@@ -48,6 +48,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from research import settings as research_settings
+
 SCHEMA = "verity/watchers-status/v1"
 RESTART_S = 60.0
 HEARTBEAT_S = 60.0
@@ -365,7 +367,7 @@ def cmd_check(ns: argparse.Namespace) -> int:
         miss = lp.missing()
         print(f"{lp.name}: {' '.join(lp.argv)}\n    env {', '.join(names)}" + (f"\n    waits for {', '.join(miss)}" if miss else ""))
         if not Path(lp.argv[0]).is_absolute() and not any((Path(p) / lp.argv[0]).exists()
-                                                           for p in lp.env.get("PATH", os.environ["PATH"]).split(":")):
+                                                           for p in lp.env.get("PATH", research_settings.need("PATH")).split(":")):
             print(f"    {lp.argv[0]} is not on its PATH")
             bad = 1
     if ns.replaces is None:

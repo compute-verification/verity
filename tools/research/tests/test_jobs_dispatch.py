@@ -12,6 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from research import settings
 from research.jobs import dispatch as D
 from research.jobs import model
 from research.jobs.cli import main as jobs_main
@@ -510,7 +511,7 @@ def test_the_probe_reads_the_lease_the_tools_and_live_runs(tmp_path):
     lease.write_text("4102444800 2100-01-01T00:00:00Z pods-create\n")
     (tmp_path / ".research").mkdir()
     (tmp_path / ".research" / "pod-setup.json").write_text(json.dumps({"done_utc": "2026-09-29T22:00:00Z", "uv": "0.12.20"}))
-    env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path)}
+    env = {"PATH": settings.need("PATH"), "HOME": str(tmp_path)}
 
     def probe(r, e=env):
         return json.loads(subprocess.run([sys.executable, "-c", D.PROBE, str(r), str(lease), D.SETUP_MARKER], capture_output=True,

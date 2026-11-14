@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from research import notes
+from research import notes, settings
 
 NOW = dt.datetime(2026, 9, 23, 21, 0, tzinfo=dt.timezone.utc)
 FRONT = "---\nlane: {lane}\nkind: report\ncreated: 2026-09-23T17:00Z\nstatus: {status}\n---\n\n"
@@ -295,7 +295,7 @@ def test_the_pod_probe_reports_the_busiest_gpu_even_at_zero_percent(tmp_path, gp
     fake.parent.mkdir()
     fake.write_text(f"#!/bin/sh\ncase \"$*\" in *query-gpu*) printf '{gpus}';; *query-compute-apps*) printf '{apps}';; esac\n")
     fake.chmod(0o755)
-    out = subprocess.run(["sh", "-c", notes.POD_PROBE], capture_output=True, text=True, env={**os.environ, "PATH": f"{fake.parent}:{os.environ['PATH']}"})
+    out = subprocess.run(["sh", "-c", notes.POD_PROBE], capture_output=True, text=True, env={**os.environ, "PATH": f"{fake.parent}:{settings.need('PATH')}"})
     p = notes.parse_pod_probe(out.stdout)
     assert (p["gpu_util"], p["gpu_mem_mb"], p["gpu_apps"], p["serve"]) == (*want, 0)
 

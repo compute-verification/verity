@@ -68,6 +68,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from . import settings
+
 SCHEMA = "research/monitors-{}/v1"
 STAMP = "%Y-%m-%dT%H:%M:%SZ"
 ALERTS = "/workspace/monitoring/alerts"
@@ -1040,7 +1042,7 @@ def unit_states(ctx: Ctx, scope: str, names: list[str]) -> dict[str, dict[str, s
     """`systemctl show`'s load, unit-file and active state of each of `names` in `scope` (`systemd`, or research's user manager)."""
     argv = ["systemctl", *(["--user"] if scope == "user-systemd" else []), "show", "--no-pager",
             "-p", "LoadState", "-p", "UnitFileState", "-p", "ActiveState", "-p", "SubState", *names]
-    env = {**os.environ, "XDG_RUNTIME_DIR": os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"}
+    env = {**os.environ, "XDG_RUNTIME_DIR": settings.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"}
     r = ctx.run(argv, capture_output=True, text=True, timeout=ctx.bound(30), env=env)
     if r.returncode:
         raise RuntimeError(f"`{' '.join(argv[:3])}` exited {r.returncode}: {(r.stderr or '').strip()[-200:]}")
@@ -2028,7 +2030,7 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
     from . import slack
 
     reg = slack.load_registry(slack.registry_path())
-    api = slack.Slack(os.environ.get("SLACK_BOT_TOKEN"), dry_run=dry)
+    api = slack.Slack(settings.get("SLACK_BOT_TOKEN"), dry_run=dry)
     alerts, front, routes = slack.channel_id_for(reg, "agent-alerts"), slack.channel_id_for(reg, slack.FRONT_DOOR), slack.Routes()
 
     def tag(h: str) -> str:
@@ -2078,7 +2080,7 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
 # ---- the command line -----------------------------------------------------------------------------------------------------------
 
 def _ctx_for(ns: argparse.Namespace, now: float, act: bool = False) -> Callable[[dict], Ctx]:
-    return lambda memo: Ctx(now=now, memo=memo, act=act, n2_host=os.environ.get("VY_N2", "vy-n2"), node=getattr(ns, "node", "n2"),
+    return lambda memo: Ctx(now=now, memo=memo, act=act, n2_host=settings.get("VY_N2", "vy-n2"), node=getattr(ns, "node", "n2"),
                             node_state=getattr(ns, "node_state", STATE), machine=getattr(ns, "machine", None) or os.uname()[1],
                             peers=tuple(getattr(ns, "peer", None) or ()))
 
@@ -2133,7 +2135,7 @@ def run_once(ns: argparse.Namespace, where: str, state_path: Path, alerts: Path,
     try:
         state = load(state_path)
         evs = step(state, select(where, ns.only), _ctx_for(ns, now, act=True), now, AlertDir(alerts), by=ns.by,
-                   webhook=os.environ.get(WEBHOOK_ENV) or None, checkpoint=lambda: save(state_path, state),
+                   webhook=settings.get(WEBHOOK_ENV) or None, checkpoint=lambda: save(state_path, state),
                    pass_s=PASS_S if where in ("node", "machine") else None)
         save(state_path, state)
         return state, evs
