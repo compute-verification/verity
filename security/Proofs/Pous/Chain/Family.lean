@@ -8,7 +8,7 @@ public import Proofs.Pous.Chain.Flat
 The generator flattens with `flatten_chain.py`, the generator of `Flat.lean`.
 
 The modules `BandMultiFamily` and `BandMultiFamilyFinal`, each in its own `section`, flattened as `Flat.lean`'s band
-modules are. `Security/Proofs/Pous.lean` states the pinned form, `BandMultiMeetsFamily`.
+modules are. `security/Proofs/Pous.lean` states the pinned form, `BandMultiMeetsFamily`.
 -/
 
 @[expose] public section

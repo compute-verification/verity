@@ -78,7 +78,7 @@ def test_the_config_run_s_commit_is_one_instrumented_run_under_bounded_staging(t
     row = _row(tmp_path / "row")
     row.hidden_so, row.B = "/x/verity_fa2_matReqG.so", 1
     plain = row.commit_cmd([])
-    assert "--only-arm" not in plain and plain[plain.index("--pairs") + 1] == "3", "a row of record keeps its pairs"
+    assert "--only-arm" not in plain and plain[plain.index("--pairs") + 1] == "3", "a workload of record keeps its pairs"
 
 
 def test_the_commit_s_own_parser_takes_every_flag_the_config_run_passes(tmp_path):
@@ -320,7 +320,7 @@ def test_the_tp2_config_run_s_commit_is_one_instrumented_run_with_no_match(tmp_p
     plain = row.commit_cmd([])
     i = plain.index("--required-manifest")
     assert plain[i + 2:i + 4] == ["--match-dir", row.M] and plain[plain.index("--pairs") + 1:plain.index("--pairs") + 6] == ["3", "--warmup", "2", "--value-check", "--replay-workers"]
-    assert "--only-arm" not in plain and plain[-1] == "--require-fold-match", "a TP row of record keeps its Match, pairs and value check"
+    assert "--only-arm" not in plain and plain[-1] == "--require-fold-match", "a TP workload of record keeps its Match, pairs and value check"
 
 
 def test_tp_commit_s_own_parser_takes_every_flag_the_tp2_config_run_passes(tmp_path):
@@ -416,7 +416,7 @@ def test_a_config_run_that_failed_says_why_first(tmp_path, kw, why):
 
 
 @pytest.mark.parametrize("gm, outcome, why", [("PASS", "PASS", None), ("FAIL", "PASS", "match FAIL"), ("PASS", "FAIL", "commit FAIL")])
-def test_a_single_gpu_row_of_record_is_its_global_matchs_verdict_and_its_commits_decision_document(tmp_path, gm, outcome, why):
+def test_a_single_gpu_workload_of_record_is_its_global_matchs_verdict_and_its_commits_decision_document(tmp_path, gm, outcome, why):
     """GM-01 writes ``verdict`` (`check.match.global_match`), never the ``ok`` the record read, and a single-GPU Commit's summary
     decides nothing (its decision document is the row dir's verdict.json): a row chain is never refused as "match FAIL" or
     "commit FAIL" over a passing Match and Commit."""

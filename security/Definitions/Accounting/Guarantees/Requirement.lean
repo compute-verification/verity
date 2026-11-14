@@ -13,7 +13,7 @@ turn one into the other, at each engine step, once the store and the plan hold `
 nothing. The audit credits the live values in complete blocks (`credited`): a KV block later steps fill, or one whose
 append's coin is still out (deferred residency, `Store.Placement.encoded`), is in no record yet. The first four bound
 what it credits, and the last two bound what it leaves out. Their proofs are in
-`Security/Proofs/Accounting/Requirement.lean`.
+`security/Proofs/Accounting/Requirement.lean`.
 
 * `RequirementHeld`: a device holding resident blocks `H` holds all of `W`'s credited live bits but at most a block's
   `b` bits for each resident block outside `H`.

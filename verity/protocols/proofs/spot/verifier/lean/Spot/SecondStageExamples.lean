@@ -1,6 +1,7 @@
 module
 
 public import Spot.SecondStage
+public import Spot.SecondStagePass
 meta import Spot.SecondStage
 
 /-!

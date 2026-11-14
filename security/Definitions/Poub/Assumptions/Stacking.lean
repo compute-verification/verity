@@ -89,7 +89,7 @@ most `2^a` values as the codec and the append coins `y` vary, and the pass's dev
 
 **Why it should hold.** The layout is the memory map's schedule: which blocks are resident and planned when the pass's
 step begins. The memory map makes it a function of the served steps (frees at the values' last structural reader,
-writes at production, re-keys at the life cap only). What the prover chose after an append's coin can follow that append's encodings, and the
+writes when produced, re-keys at the life cap only). What the prover chose after an append's coin can follow that append's encodings, and the
 summary is the part of it the layout reads. The prover that steers the layout knows that part, so its devices are told
 it, and this premise is only that the layout reads nothing more of `y`. It holds of every layout at `a = |Y|`, so `a`
 is what the schedule check bounds (`Accounting.ScheduleDeterministic`): the verifier credits nothing after the seed

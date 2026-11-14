@@ -26,7 +26,7 @@ from verity_vllm.pipeline import serve_admit as sa
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline.serve_openai import SSE_DONE
-from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
+from verity_vllm.protocols.pouw import h1_hooks as PHK
 
 
 class Timers:
@@ -143,7 +143,7 @@ def runner_module() -> types.ModuleType:
     """Model Runner V2's module as the step reads it (vllm/v1/worker/gpu/model_runner.py at d9105ea8): its runner's
     ``gather_batch_req_state`` lays the step out by the module's ``sort_batch_req_ids``, looked up when the step runs."""
     mod = types.ModuleType(RUNNER_MODULE)
-    mod.sort_batch_req_ids = RQ.sort_batch_req_ids
+    mod.sort_batch_req_ids = PHK.sort_batch_req_ids
 
     class GPUModelRunner:
         decode_query_len = 1
@@ -208,7 +208,7 @@ def test_release_order_keeps_the_schedulers_rows(v2):
         assert runner.gather_batch_req_state(W220) == ["varied.00008", "varied.00009", "varied.00010"]
         assert runner.gather_batch_req_state(W237_DECODING) == [*DECODES, "varied.00035", "varied.00036"]
         # H1's batch order reads the runner module's sort, so its tables follow the same order
-        assert [r for r, _ in RQ.batch_order(runner, W237_DECODING)] == [*DECODES, "varied.00035", "varied.00036"]
+        assert [r for r, _ in PHK.batch_order(runner, W237_DECODING)] == [*DECODES, "varied.00035", "varied.00036"]
     finally:
         rows.uninstall()
     assert v2.sort_batch_req_ids is vllms and not hooks.live("admit-rows")
@@ -254,7 +254,7 @@ def test_the_pinned_runner_orders_rows_as_its_mirror_and_takes_the_schedulers_or
     `keep_scheduler_rows` replaces it in Model Runner V2's module."""
     mr = pytest.importorskip("vllm.v1.worker.gpu.model_runner")
     for step in (W237, W220):
-        assert mr.sort_batch_req_ids(step.num_scheduled_tokens, {}, 1) == RQ.sort_batch_req_ids(step.num_scheduled_tokens, {}, 1)
+        assert mr.sort_batch_req_ids(step.num_scheduled_tokens, {}, 1) == PHK.sort_batch_req_ids(step.num_scheduled_tokens, {}, 1)
     runner = type("GPUModelRunner", (), {"__module__": mr.__name__, "attn_groups": []})()
     with sa.keep_scheduler_rows(runner, FCFS):
         assert mr.sort_batch_req_ids(W237.num_scheduled_tokens, {}, 1) == list(W237.num_scheduled_tokens)

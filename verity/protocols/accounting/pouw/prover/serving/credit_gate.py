@@ -79,7 +79,7 @@ def outside() -> AbstractContextManager[None]:
 
 
 def verdict(trace: Any, y: Any, z: Any) -> dict[str, Any]:
-    """The credit rule on one call: y, the tensor the linear handed back to vLLM, and z, the credited kernel's output (None if
+    """The credit rule on one call: y, the tensor the linear handed back to the serving engine, and z, the credited kernel's output (None if
     the path computed none)."""
     yp, zp = trace.producer(y), trace.producer(z) if z is not None else None
     y_from = yp.name if yp else UNTRACED

@@ -21,7 +21,7 @@ import all Lean.Data.Json.Basic
 /-!
 # Pearl+'s properties say something
 
-Each Pearl+ property's witnesses (`Security/Properties/lean-audit.json`'s `witnesses`): an `honest` one, its premises at an
+Each Pearl+ property's witnesses (`security/Properties/lean-audit.json`'s `witnesses`): an `honest` one, its premises at an
 instance the code accepts, and a `nontrivial` one, its conclusion false at a verifier that accepts everything.
 
 `OpeningBinds`: an hm96 tile tree of two positions accepts an opening of position 0 against the node over its two leaves

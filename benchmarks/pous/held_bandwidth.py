@@ -14,7 +14,7 @@ memory challenger claims in its session log before the first coin and under whic
 verifier's log (`p2_parties.Closer`).
 
 **A pass** reads every unit of the plan from ``C*``'s rows on their device: σ by the exact int8 product against the
-pass's signs (`p2_v1.bandwidth.Sketch`), y on the device (`receipts_of`), a few units held to `p2.Sketcher` (`spot`), and
+pass's signs (`bandwidth.Sketch`), y on the device (`receipts_of`), a few units held to `p2.Sketcher` (`spot`), and
 the receipt tree (`ReceiptTree`). An opening is the unit's four rows from the device with their PoUS vk paths, from the
 tree over the challenger's table (`row_leaf` of each row digest), whose root must be setup's.
 
@@ -48,10 +48,9 @@ from typing import Any
 
 import numpy as np
 
-if str(Path(__file__).resolve().parent) not in sys.path:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py").parent))
 
-from p2_v1 import bandwidth as B
+import bandwidth as B
 
 from verity.protocols.accounting.pous.verifier import period
 from verity.protocols.accounting.pous.verifier import verifier as V

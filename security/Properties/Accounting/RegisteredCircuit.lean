@@ -13,7 +13,7 @@ pass's plan) with that premise replaced by what the verifier checks: the schedul
 at the steering cap the session committed before its first coin (`audit.Params.schedule_cap`,
 `audit.Ledger.steering`) accepts each pass of the session. It is stated here because it reads the verifier's code,
 which the spec doesn't; its theorem, `Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement` in
-`Security/Proofs/Accounting/RegisteredCircuit/Scheduled.lean`, is `G`'s argument on the coins the check accepts, with the
+`security/Proofs/Accounting/RegisteredCircuit/Scheduled.lean`, is `G`'s argument on the coins the check accepts, with the
 layout steered there by `Properties.Poub.steered_of_checked` (`ScheduleLayoutGap` holding of the verifier's
 layout, `Properties.Poub.scheduleLayoutGap_code`).
 -/

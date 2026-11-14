@@ -6,7 +6,7 @@ public import Circuits.Program
 /-!
 # The inference-only policy's check of a declared division
 
-`InferenceOnly.CompliesRate Γ α` (`Security/Definitions/InferenceOnly.lean`) holds of a declaration `(D, θ)` when `D`'s computed gates
+`InferenceOnly.CompliesRate Γ α` (`security/Definitions/InferenceOnly.lean`) holds of a declaration `(D, θ)` when `D`'s computed gates
 divide into inference blocks of at most `Γ` gates, each reading at most `α` fresh input bits per gate:
 `freshInput R = width(into(R) \ θ) ≤ α · size R`. The verifier's side is the check of one declared division: `evaluate`
 decides that it is a partition of the computed gates into inference blocks (`Verity.Partition`) and that every inference block meets both bounds,
@@ -15,7 +15,7 @@ and reports per inference block its size and fresh input bits, and the first inf
 ## The input, and how descriptor v1 is the definition's circuit
 
 An instance is one JSON object:
-* `program`: the declaration's circuit `D`, a `verity-ir/descriptor/v1` Program as text (`verity/ml/circuits/PROTOCOL.md`),
+* `program`: the declaration's circuit `D`, a `verity-ir/descriptor/v1` Program as text (`verity/circuits/PROTOCOL.md`),
   read with Flock's decoder (`Flock.Program.decode`). Its canonical layout (§6) is `D`: gate `g` of the layout is
   `Fin D.N` gate `g`, one primitive call returning one `Value<w>`, and `w g` is that `w`, in bits (`Circuit.w`, which
   the definition calls `verity.ir`'s `Value<w>`). The input gates are the input nodes, `Input<w>_v1` and

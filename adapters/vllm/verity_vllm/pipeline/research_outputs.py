@@ -66,6 +66,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from verity_vllm.config import option, row_batch
+from verity_vllm.pipeline.cli import write
 from verity_vllm.query.manifest.format import tp_ranks_fold_digest
 
 __all__ = ["COMMANDS", "main"]
@@ -352,7 +353,7 @@ COMMANDS = {"write": WriteOptions, "digest": DigestOptions}
 
 def main(a: WriteOptions | DigestOptions) -> int:
     if isinstance(a, DigestOptions):
-        print(program_digest(Path(a.evidence_dir), a.row).get("program_digest") or "")
+        write(program_digest(Path(a.evidence_dir), a.row).get("program_digest") or "")
         return 0
     if not a.run_dir:
         print("research_outputs: RESEARCH_RUN_DIR not set; nothing written", file=sys.stderr)
@@ -369,7 +370,7 @@ def main(a: WriteOptions | DigestOptions) -> int:
         tmp.write_text(json.dumps(doc, indent=1, sort_keys=True))
         os.replace(tmp, run_dir / "outputs.json")
         names = ", ".join(f"{e['name']}={e['kind']}({e['meta'].get('files', 0)} files)" for e in doc["outputs"])
-        print(f"research_outputs: {run_dir / 'outputs.json'}: {names}")
+        write(f"research_outputs: {run_dir / 'outputs.json'}: {names}")
     except Exception as e:  # noqa: BLE001 -- never mask the stage's own exit status
         print(f"research_outputs: FAILED to write outputs.json: {type(e).__name__}: {e}", file=sys.stderr)
     return 0

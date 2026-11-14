@@ -36,8 +36,8 @@ least 1 (the chain's own G = 0, the unpromoted record, is refused here); the sch
 **The served y** is the Pearl-C kernels' epilogue (`store_y` in ``verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90`` and ``pearl_c_sm120``): each
 output word ``__float2bfloat16_rn(__fmul_rn(__fmul_rn(u, ia_i), ib_j))``, where ia = ``__frcp_rn(α)``, a correctly rounded
 reciprocal (RN_f32(1/α), F32Div_v2 of 1.0), is what the stats kernel writes for each row of A and of the weight.  Its final
-BF16 store rounds to nearest even (NaN 0x7FFF, F2FP's).  The vLLM integration takes the first m of the call's 16-aligned rows
-(the rest are zero filler rows), and adds a bias in BF16 after it, torch's ``y + bias`` (Bf16Add_v1, NaN 0x7FC0); ``BIAS``
+BF16 store rounds to nearest even (NaN 0x7FFF, F2FP's).  The serving engine's adapter takes the first m of the call's 16-aligned rows
+(the rest are zero filler rows), and adds a bias in BF16 after it, the device library's ``y + bias`` (Bf16Add_v1, NaN 0x7FC0); ``BIAS``
 is that add.  α is `pearl_c.s5_stats`' (the rows' FP32 words), which `Pc8RowA` and `Pc8RowB` compute and don't output.
 
 `verity.protocols.accounting.pouw.verifier.circuit.pc8`'s `Pc8Tile` is the same function as TileRead at the same device: core can't read
@@ -126,7 +126,7 @@ def _unscale_sig(S):
 @composite("PearlCUnscale", 1, ["TM", "TN", "BIAS"], _unscale_sig, conformance=UNSCALE_CONFORMANCE, refuse=_refuse)
 def PearlCUnscale(B, S, u, alpha_a, alpha_b, *bias):
     """The served y of a TM × TN tile from its U: each row's and column's reciprocal RN_f32(1/α) once, then each word
-    RN_bf16(RN_f32(RN_f32(U_ij · ia_i) · ib_j)), and with ``BIAS`` torch's BF16 add of bias_j after it."""
+    RN_bf16(RN_f32(RN_f32(U_ij · ia_i) · ib_j)), and with ``BIAS`` the device library's BF16 add of bias_j after it."""
     one = B.call(const(32, ONE_BITS))
     ia = [B.call(F32DivV2, one, alpha_a[i]) for i in range(S.TM)]
     ib = [B.call(F32DivV2, one, alpha_b[j]) for j in range(S.TN)]
