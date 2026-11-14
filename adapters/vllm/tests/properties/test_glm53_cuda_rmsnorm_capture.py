@@ -13,7 +13,7 @@ from tests import fake_vllm
 from tests.properties import glm53_cuda_rmsnorm_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
 from verity_vllm.pipeline.cli import MACHINE
-from verity_vllm.properties.record import REGISTRY, digest_of
+from verity_vllm.records.property_record import REGISTRY, digest_of
 
 
 def _case(kind: str = "rms_norm", m: int = 1, n: int = 6144) -> dict:

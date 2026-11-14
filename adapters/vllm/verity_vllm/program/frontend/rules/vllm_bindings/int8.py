@@ -26,7 +26,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     _norm_attn,
     attn_kind_for,
 )
-from verity_vllm.program.frontend.torch_frontend import _tensor_type
+from verity_vllm.program.frontend.strided_views import _tensor_type
 
 #: `engine.int8_attention_vllm.Int8AttentionImpl`, by name: the frontend reads the instantiated layers, never the engine
 INT8_ATTENTION_IMPL = "Int8AttentionImpl"

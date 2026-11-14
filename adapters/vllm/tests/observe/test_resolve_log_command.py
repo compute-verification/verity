@@ -14,6 +14,9 @@ import io
 import json
 import re
 from pathlib import Path
+from typing import Any
+
+import pytest
 
 from verity_vllm.observe.events import (
     DispatchEnter,
@@ -189,6 +192,32 @@ def test_a_report_without_a_header_or_without_a_gpu_document_names_no_target_and
     # a profile module with no `root_class`: a weight is one the profile gives a field
     bare = type("Module", (), {})()
     assert RL.build_report(None, [], roots, {}, Q3.PROFILE, bare, "x.jsonl.gz", [])["roots"] == rep["roots"]
+
+
+def _with_profile(where: str, value: Any) -> RunHeader:
+    """The recorded header with `value` as its profile, or as its profile's `gpu` document."""
+    recorded = next(e for e in read_log(FIXTURE) if isinstance(e, RunHeader))
+    return dataclasses.replace(recorded, profile=value if where == "profile" else {"gpu": value})
+
+
+@pytest.mark.parametrize("where", ["profile", "gpu"])
+@pytest.mark.parametrize("value", [None, 0, "", [], ()], ids=["None", "zero", "an empty string", "an empty list", "an empty tuple"])
+def test_the_target_of_a_header_whose_profile_or_gpu_document_is_empty_names_no_device(where, value):
+    """The target's facts test the header's profile and its `gpu` document for truth, so an empty value of any type reads as
+    a header that carried no device."""
+    assert RL._target_facts(_with_profile(where, value), []) == {
+        "host_gpu": {"name": None, "compute_capability": None, "multi_processor_count": None}, "target_profile": None,
+        "num_sms_pinned_from_target": {"launches": 0, "steps": 0}, "gemm_target": None}
+
+
+@pytest.mark.parametrize("where", ["profile", "gpu"])
+@pytest.mark.parametrize("value", [[("name", "x")], (("name", "x"),), "abc", 7],
+                         ids=["pairs in a list", "pairs in a tuple", "a string", "a number"])
+def test_the_target_of_a_header_whose_profile_or_gpu_document_is_no_mapping_raises_for_its_get(where, value):
+    """A profile or a `gpu` document that is not empty is asked for `get` as it is: it is not copied into a dict first, so
+    pairs raise like a string or a number."""
+    with pytest.raises(AttributeError, match=f"^'{type(value).__name__}' object has no attribute 'get'$"):
+        RL._target_facts(_with_profile(where, value), [])
 
 
 def test_the_trees_of_the_recorded_decode_step_are_dumped_with_what_each_root_resolved_to():

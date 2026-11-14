@@ -26,6 +26,7 @@ __all__ = ["HIDDEN_CLASS_BY_FA", "REQUIRED_CLASSES_DEFAULT", "class_coverage", "
            "required_classes_default"]
 
 BINDING = "the run's Commit block"
+DECLARATION = "the run's coverage declaration"
 
 # The interim required-value manifest for the native committer + FA2 hidden tap on an FA2 dense model: the canary rows' `required_classes`
 # minus the two derived-from-bound norm classes (protocol clauses with no leaves, checked for presence only when declared).  When a model's
@@ -78,7 +79,7 @@ def required_classes_check(declaration: dict | None, required: tuple[str, ...] |
     for cls, d in cov.items():
         if d["how"] in LEAF_HOWS:
             n = d.get("tensors")
-            if n is None or int(n) <= 0:
+            if n is None or _int(n, f"classes[{cls!r}].tensors", DECLARATION) <= 0:
                 return False, f"class {cls!r} declared {d['how']} with tensors={n}: producer never fired (R-14 omitted producer)"
     return True, "PASS"
 
@@ -159,12 +160,12 @@ def _d(x: Any) -> dict:
     return x if isinstance(x, dict) else {}
 
 
-def _int(x: Any, default: int = 0) -> int:
-    """A count as its record states it; `default` where the record states none, or one that is no number."""
+def _int(x: Any, field: str, where: str = BINDING) -> int:
+    """The count `where` states at `field`.  One that is no number is refused by name, where `commit_pass` raises on it unnamed."""
     try:
         return int(x)
-    except (TypeError, ValueError):
-        return default
+    except (TypeError, ValueError, OverflowError) as e:
+        raise RecordError(where, field, f"is {x!r}, not a number") from e
 
 
 def _first(seq: Any) -> Any:
@@ -265,10 +266,10 @@ def rule_reference_integrity(commit: dict, ctx: dict) -> CheckResult:
     if n_exp is None or n_com is None:
         out, diffs, reason = INSUFFICIENT, [{"name": "counters_missing", "expected_tensors": n_exp, "committed_tensors": n_com}], \
             "reference integrity counters missing (expected_tensors/committed_tensors): committer does not report them"
-    elif _int(n_exp) <= 0:
-        out, diffs, reason = FAIL, [{"name": "nothing_bound", "expected_tensors": _int(n_exp)}], "expected_tensors == 0: the required-value manifest bound nothing"
-    elif _int(n_exp) != _int(n_com):
-        out, diffs, reason = FAIL, [{"name": "acquisitions_lost", "expected_tensors": _int(n_exp), "committed_tensors": _int(n_com)}], \
+    elif _int(n_exp, "extra.expected_tensors") <= 0:
+        out, diffs, reason = FAIL, [{"name": "nothing_bound", "expected_tensors": _int(n_exp, "extra.expected_tensors")}], "expected_tensors == 0: the required-value manifest bound nothing"
+    elif _int(n_exp, "extra.expected_tensors") != _int(n_com, "extra.committed_tensors"):
+        out, diffs, reason = FAIL, [{"name": "acquisitions_lost", "expected_tensors": _int(n_exp, "extra.expected_tensors"), "committed_tensors": _int(n_com, "extra.committed_tensors")}], \
             f"expected_tensors {n_exp} != committed_tensors {n_com} (refused/lost acquisitions -> incomplete root)"
     else:
         out, diffs, reason = PASS, [], None
@@ -282,8 +283,8 @@ def rule_fa2_zero_rows(commit: dict, ctx: dict) -> CheckResult:
     z = commit.get("fa2_zero_rows")
     if z is None:
         out, diffs, reason = NOT_RUN, [], None
-    elif _int(z) > 0:
-        out, diffs, reason = FAIL, [{"name": "fa2_zero_rows", "rows": _int(z)}], f"{z} FA2 hidden rows bound as all-zero bytes (tap staged after it was zeroed: ordering fault)"
+    elif _int(z or 0, "fa2_zero_rows") > 0:
+        out, diffs, reason = FAIL, [{"name": "fa2_zero_rows", "rows": _int(z or 0, "fa2_zero_rows")}], f"{z} FA2 hidden rows bound as all-zero bytes (tap staged after it was zeroed: ordering fault)"
     else:
         out, diffs, reason = PASS, [], None
     return _mk("runtime_match/fa2_zero_rows", "FA2 tap ordering", "No attention hidden-value row was bound as all-zero bytes (the tap was staged before it was zeroed).",
@@ -293,22 +294,22 @@ def rule_fa2_zero_rows(commit: dict, ctx: dict) -> CheckResult:
 def rule_collector_errors(commit: dict, ctx: dict) -> CheckResult:
     ex = _d(commit.get("extra"))
     errors = ex.get("errors")   # what the collector recorded: its length is the count where the record states none
-    errs_n = ex.get("errors_n")
+    errs_n, field = ex.get("errors_n"), "extra.errors_n"
     if errs_n is None:
-        errs_n = (len(errors) if errors else 0) if "errors" in ex else commit.get("errors_n")
+        errs_n, field = (len(errors) if errors else 0) if "errors" in ex else commit.get("errors_n"), "errors_n"
     if errs_n is None:
         errs_n = 0
     failure = ex.get("collector_failure")
     diffs: list[dict[str, Any]]
     if failure:
         out, diffs, reason = FAIL, [{"name": "collector_failure", "first": str(failure)[:200]}], f"collector failed: {str(failure)[:200]}"
-    elif _int(errs_n) > 0:
+    elif _int(errs_n, field) > 0:
         first = _first(errors) or "?"
-        out, diffs, reason = FAIL, [{"name": "collector_errors", "n": _int(errs_n), "first": str(first)[:160]}], f"{errs_n} collector error(s): {str(first)[:160]}"
+        out, diffs, reason = FAIL, [{"name": "collector_errors", "n": _int(errs_n, field), "first": str(first)[:160]}], f"{errs_n} collector error(s): {str(first)[:160]}"
     else:
         out, diffs, reason = PASS, [], None
     return _mk("runtime_match/collector_errors", "X-03 errors", "No collector, arena or hook error was recorded during the instrumented run.",
-               ["extra.errors_n", "extra.errors", "extra.collector_failure"], commit, ctx, outcome=out, differences=diffs, reason=reason, scope={"errors_n": _int(errs_n)})
+               ["extra.errors_n", "extra.errors", "extra.collector_failure"], commit, ctx, outcome=out, differences=diffs, reason=reason, scope={"errors_n": _int(errs_n, field)})
 
 
 def rule_bounded_staging(commit: dict, ctx: dict) -> CheckResult:
@@ -333,7 +334,7 @@ def rule_openings(commit: dict, ctx: dict, min_openings: int) -> CheckResult:
     """v1: skipped and no after-release record -> FAIL; not skipped: n < min -> FAIL, verified != n -> FAIL; skipped (host share): verified != n -> FAIL."""
     ops = _d(commit.get("openings"))
     oar = commit.get("openings_after_release")
-    n_open, n_ok = _int(ops.get("n")), _int(ops.get("verified"))
+    n_open, n_ok = _int(ops.get("n") or 0, "openings.n"), _int(ops.get("verified") or 0, "openings.verified")
     claim = "Every challenge-drawn opening of the committed bytes verified against the run root, and at least min_openings were drawn (C3)."
     compat = ["openings.n", "openings.verified", "openings.skipped", "openings.deferred_replay_n", "commit_summary.openings"]
     scope = {"sample_size": n_open, "verified": n_ok, "min_openings": min_openings, "skipped": ops.get("skipped"), "challenge_n": ops.get("challenge_n"),
@@ -369,14 +370,14 @@ def rule_openings_after_release(commit: dict, ctx: dict, min_openings: int) -> C
     compat = ["openings_after_release.n", "openings_after_release.verified", "openings_after_release.source", "openings_after_release.replay_root_equal",
               "openings_after_release.replay_errors_n", "openings_after_release.retained_device_after", "openings_after_release.deferred_received_positions"]
     name, rule = "runtime_match/openings_after_release", "openings after release"
-    def_a, def_b = _int(ops.get("deferred_replay_n")), _int(po.get("deferred_replay_n"))
+    def_a, def_b = _int(ops.get("deferred_replay_n") or 0, "openings.deferred_replay_n"), _int(po.get("deferred_replay_n") or 0, "binding.openings_population.deferred_replay_n")
     if oar is None:
         if def_a or def_b:
             return _mk(name, rule, claim, compat, commit, ctx, outcome=INSUFFICIENT, differences=[{"name": "deferred_picks_unopened", "challenge": def_a, "population": def_b}],
                        reason="picks deferred to replay (excluded families) and no openings-after-release record", scope={"deferred": def_a + def_b})
         return _mk(name, rule, claim, compat, commit, ctx, outcome=NOT_RUN)
     oar = _d(oar)
-    n_a, ok_a = _int(oar.get("n")), _int(oar.get("verified"))
+    n_a, ok_a = _int(oar.get("n") or 0, "openings_after_release.n"), _int(oar.get("verified") or 0, "openings_after_release.verified")
     scope = {"sample_size": n_a, "verified": ok_a, "source": oar.get("source"), "replay_root_equal": oar.get("replay_root_equal"),
              "retained_device_after": oar.get("retained_device_after"), "deferred_received_n": oar.get("deferred_received_n"), "forced_n": oar.get("forced_n")}
 
@@ -392,10 +393,10 @@ def rule_openings_after_release(commit: dict, ctx: dict, min_openings: int) -> C
     if "replay" in src and oar.get("replay_root_equal") is not True:
         return fail({"name": "replay_root_differs", "replay_root_equal": oar.get("replay_root_equal")},
                     "replay run root differs from the original run root (replay-to-open is not reproducing the committed bytes)")
-    if "replay" in src and _int(oar.get("replay_errors_n")) > 0:
-        return fail({"name": "replay_collector_errors", "n": _int(oar.get("replay_errors_n"))}, f"replay run recorded {oar.get('replay_errors_n')} collector error(s)")
-    if _int(oar.get("retained_device_after")) > 0:
-        return fail({"name": "raw_bytes_retained_on_device", "bytes": _int(oar.get("retained_device_after"))},
+    if "replay" in src and _int(oar.get("replay_errors_n") or 0, "openings_after_release.replay_errors_n") > 0:
+        return fail({"name": "replay_collector_errors", "n": _int(oar.get("replay_errors_n") or 0, "openings_after_release.replay_errors_n")}, f"replay run recorded {oar.get('replay_errors_n')} collector error(s)")
+    if _int(oar.get("retained_device_after") or 0, "openings_after_release.retained_device_after") > 0:
+        return fail({"name": "raw_bytes_retained_on_device", "bytes": _int(oar.get("retained_device_after") or 0, "openings_after_release.retained_device_after")},
                     f"raw/level bytes still on the device after release: {oar.get('retained_device_after')}")
     if def_a or def_b:
         pa, pb = deferred_positions(ops), deferred_positions(po)
@@ -411,8 +412,8 @@ def rule_openings_after_release(commit: dict, ctx: dict, min_openings: int) -> C
                 return fail({"name": "deferred_picks_not_received", "n": len(miss), "first": [list(m) for m in miss[:4]]},
                             f"{def_a} challenge + {def_b} population pick(s) deferred to replay; {len(miss)} position(s) not received by openings after release "
                             f"(first: {miss[:4]}) -- every deferred pick must be opened by replay")
-        elif _int(oar.get("deferred_received_n")) < max(def_a, def_b):
-            return fail({"name": "deferred_picks_not_received", "expected": max(def_a, def_b), "received": _int(oar.get("deferred_received_n"))},
+        elif _int(oar.get("deferred_received_n") or 0, "openings_after_release.deferred_received_n") < max(def_a, def_b):
+            return fail({"name": "deferred_picks_not_received", "expected": max(def_a, def_b), "received": _int(oar.get("deferred_received_n") or 0, "openings_after_release.deferred_received_n")},
                         f"{def_a} challenge + {def_b} population pick(s) deferred to replay, openings after release received {oar.get('deferred_received_n')} "
                         "(every deferred pick must be opened by replay)")
     return _mk(name, rule, claim, compat, commit, ctx, outcome=PASS, scope=scope)
@@ -557,22 +558,22 @@ def rule_openings_population(commit: dict, ctx: dict, min_openings: int) -> Chec
     po = _d(b.entry.get("openings_population"))
     scope = {"sample_size": po.get("n"), "bound": po.get("bound"), "opened": po.get("opened"), "verified": po.get("verified"), "skipped": po.get("skipped"),
              "families": po.get("families"), "deferred_replay_n": po.get("deferred_replay_n"), "late_step_in_sample": po.get("late_step_in_sample")}
-    if _int(po.get("unbound_n")) > 0:
+    if _int(po.get("unbound_n") or 0, "binding.openings_population.unbound_n") > 0:
         return _mk(name, rule, claim, compat, commit, ctx, outcome=FAIL, scope=scope,
-                   differences=[{"name": "population_openings_unbound", "n": _int(po.get("unbound_n")), "first": _first(po.get("unbound"))}],
+                   differences=[{"name": "population_openings_unbound", "n": _int(po.get("unbound_n") or 0, "binding.openings_population.unbound_n"), "first": _first(po.get("unbound"))}],
                    reason=f"{po['unbound_n']} population-drawn openings had no binding (first: {json_short(_d(_first(po.get('unbound'))))})")
-    want = min(min_openings, _int(po.get("n")))
     if not po.get("skipped"):
-        if _int(po.get("opened")) < want:
-            return _mk(name, rule, claim, compat, commit, ctx, outcome=FAIL, scope=scope, differences=[{"name": "population_openings_too_few", "opened": _int(po.get("opened")), "min": want}],
+        want = min(min_openings, _int(po.get("n") or 0, "binding.openings_population.n"))
+        if _int(po.get("opened") or 0, "binding.openings_population.opened") < want:
+            return _mk(name, rule, claim, compat, commit, ctx, outcome=FAIL, scope=scope, differences=[{"name": "population_openings_too_few", "opened": _int(po.get("opened") or 0, "binding.openings_population.opened"), "min": want}],
                        reason=f"population openings opened {po.get('opened')} < {want}")
-        if _int(po.get("verified")) != _int(po.get("opened")):
+        if _int(po.get("verified") or 0, "binding.openings_population.verified") != _int(po.get("opened") or 0, "binding.openings_population.opened"):
             return _mk(name, rule, claim, compat, commit, ctx, outcome=FAIL, scope=scope,
-                       differences=[{"name": "population_openings_unverified", "opened": _int(po.get("opened")), "verified": _int(po.get("verified"))}],
+                       differences=[{"name": "population_openings_unverified", "opened": _int(po.get("opened") or 0, "binding.openings_population.opened"), "verified": _int(po.get("verified") or 0, "binding.openings_population.verified")}],
                        reason=f"population openings verified {po.get('verified')} != opened {po.get('opened')}")
-    elif _int(po.get("verified")) != _int(po.get("opened")):
+    elif _int(po.get("verified") or 0, "binding.openings_population.verified") != _int(po.get("opened") or 0, "binding.openings_population.opened"):
         return _mk(name, rule, claim, compat, commit, ctx, outcome=FAIL, scope=scope,
-                   differences=[{"name": "population_openings_unverified", "opened": _int(po.get("opened")), "verified": _int(po.get("verified")), "share": "host"}],
+                   differences=[{"name": "population_openings_unverified", "opened": _int(po.get("opened") or 0, "binding.openings_population.opened"), "verified": _int(po.get("verified") or 0, "binding.openings_population.verified"), "share": "host"}],
                    reason=f"population openings (host share) verified {po.get('verified')} != opened {po.get('opened')}")
     return _mk(name, rule, claim, compat, commit, ctx, outcome=PASS, scope=scope)
 
@@ -667,7 +668,7 @@ def rule_required_classes(commit: dict, ctx: dict, declaration: dict | None, req
     inputs = {"required_classes": list(req)}
     if not ok:
         missing = [c for c in req if c not in cov]
-        empty = [c for c, d in cov.items() if d.get("how") in LEAF_HOWS and (d.get("tensors") is None or _int(d.get("tensors")) <= 0)]
+        empty = [c for c, d in cov.items() if d.get("how") in LEAF_HOWS and (d.get("tensors") is None or _int(d.get("tensors"), f"classes[{c!r}].tensors", DECLARATION) <= 0)]
         diff = {"name": "declaration_missing"} if declaration is None else {"name": "required_class_undeclared", "classes": missing} if missing else {"name": "class_bound_nothing", "classes": empty}
         return _mk(name, rule, claim, compat, commit, ctx, outcome=INSUFFICIENT if declaration is None else FAIL, scope=scope, inputs=inputs, notes=notes, differences=[diff], reason=why)
     return _mk(name, rule, claim, compat, commit, ctx, outcome=PASS, scope=scope, inputs=inputs, notes=notes)

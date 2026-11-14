@@ -1,4 +1,4 @@
-"""(T0) The sampler VALUE check of a stochastic row reproduces (row_pod.sh's `rcs`, `match_summary.json` `stoch_value_check`):
+"""(T0) The sampler VALUE check of a stochastic row reproduces (a row's Match's `rcs`, `match_summary.json` `stoch_value_check`):
 `match_stoch.json` -- every sampled row of the record recomputed with the Program's own sampler Definition (`GumbelTopPTokenSelect_v1{V,S}`,
 the registry interpreter walking the V lanes) from the Match record's snapshots of the device sampler chain, under the DECLARED seed /
 temperature / top-p.  Lifted: its verdict and reasons, the summary (engine steps in the record, sampled rows, rows checked, the row tally,
@@ -9,12 +9,12 @@ check is complete only when every sampled row is snapshotted).
 
 Recomputed: `verity_vllm.check.replay.stoch_recompute.recompute_run` with the CURRENT code over the record's capture (`match/capture/
 log.jsonl.gz` + `snapshots.json` + the value files the sampler chain reads -- files.toml pins exactly those, not the 870 MB of every
-snapshot), the in-repo workload manifest and the row's Build documents (`build_request*/result.json`: the Program's S;
+snapshot), the row's workload manifest and the row's Build documents (`build_request*/result.json`: the Program's S;
 `build_workload/workload_program.json`: the stop rule); the snapshot steps are the steps the capture's `snapshots.json` dumped.  In
 candidate mode the candidate's own `match_stoch.json` + `match/run.json` are lifted the same way.  STRONG: a sampler Definition that moves
 a lane, a sample read at another counter, an S derived differently, an unsnapshotted step -- each moves a status, a count or the verdict.
 
-Applies to stochastic rows only (a greedy row has no match_stoch.json: row_pod's rcs = -1).
+Applies to stochastic rows only (a greedy row has no match_stoch.json: its Match's rcs = -1).
 """
 from __future__ import annotations
 

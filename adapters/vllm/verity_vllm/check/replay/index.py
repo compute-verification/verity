@@ -40,10 +40,16 @@ _RUN_PARAM = re.compile(r"^run(_\d+)?$")
 _CONST_ROW = re.compile(r"^Const(32|64)\[0x([0-9a-fA-F]+)\]_v\d+$")
 
 
+def file_args(r: dict) -> list:
+    """A row's operand groups as the Program file states them; a row that states none reads no operand."""
+    args = r.get("args")
+    return args if args else []
+
+
 def row_args(r: dict | None) -> list:
     """A row's operands as per-leaf run lists, whether its args are as `format.load_program` expands them or as the file stores them
     (a v2 row's "N"/"P" progressions, `load_program(expand=False)`): how the replay reads every argument it evaluates."""
-    return expanded_file_args((r or {}).get("args") or [])
+    return expanded_file_args(file_args(r or {}))
 
 
 def node_runs(group) -> list[tuple]:
@@ -207,14 +213,18 @@ class ProgramIndex:
         self.pnames = [p[0] for p in self.params]
         # the supplied inputs' layout as the build states it (instances header `supplied`): parameter index -> (binding, {leaf offset: field})
         self.supplied: dict[int, tuple[str, dict[int, dict]]] = {}
-        sup = inst.get("supplied") or {}
-        for binding, ents in (("registration", [sup["registration"]] if sup.get("registration") else []), ("run", sup.get("run") or [])):
+        stated = inst.get("supplied")                                            # an instances document without the header supplies no input
+        sup = stated if stated else {}
+        registration = [sup["registration"]] if sup.get("registration") else []
+        run = sup.get("run")                                                     # the header may state the registration's entry alone
+        for binding, ents in (("registration", registration), ("run", run if run else [])):
             for ent in ents:
                 a = int(ent["param"])
                 if a >= len(self.pnames) or self.pnames[a] != ent["name"]:
                     raise ValueError(f"supplied {binding} parameter {ent['name']!r} at index {a} is not the Program's parameter "
                                      f"{self.pnames[a] if a < len(self.pnames) else None!r}")
-                self.supplied[a] = (binding, {int(f["offset"]): _supplied_field(binding, f, impl) for f in ent.get("fields") or []})
+                stated_fields = ent.get("fields")                                # an entry without fields supplies no leaf of its parameter
+                self.supplied[a] = (binding, {int(f["offset"]): _supplied_field(binding, f, impl) for f in (stated_fields if stated_fields else [])})
         del impl
         self._supplied_offs = {a: sorted(fields) for a, (_b, fields) in self.supplied.items()}
         for a, n in enumerate(self.pnames):
@@ -306,7 +316,7 @@ class ProgramIndex:
             self._embed_op = None
             ids = self.ids_params()
             for r in self.rows:
-                if any(i in ids for g in (r.get("args") or []) for sl in g if sl for i in p_item_indices(sl)):
+                if any(i in ids for g in file_args(r) for sl in g if sl for i in p_item_indices(sl)):
                     d = self.describe(r)
                     self._embed_op = d["op_path"] if d else None
                     break
@@ -432,7 +442,7 @@ class ProgramIndex:
         the activation quant row p reads act row p (up row p when fused with the SiLU).  A Program whose MoE rows are not in that order (or not
         of that shape) is named here -- the replay never reads a plane word of another pair.
         (Measured on the OLMoE B1 256/32 request Program: 119,392 MoE rows, 0 inconsistencies.)"""
-        ops = self.by_i[i].get("args") or []
+        ops = file_args(self.by_i[i])
         args: dict[int, list] = {}
 
         def arg(gi: int) -> list:                                     # an operand's runs, expanded only when read (not the weight reads)

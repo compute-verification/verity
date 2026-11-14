@@ -42,6 +42,7 @@ from verity.circuits.refs import coll_concat, runs
 from verity.circuits.types import Array, RecordType, Value
 
 from verity_vllm.check.match import batch_decomp as bd
+from verity_vllm.check.match import dag_form
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.pipeline import global_program as gp
 from verity_vllm.program import workload as W
@@ -334,7 +335,7 @@ def test_dag_multiset_is_permutation_invariant_and_operand_order_sensitive():
     different DAGs.  The sequence criterion (canonical sha over the emission sequence) differs under the permutation, as it must."""
     P_ab = _prog_of(_two_chain_def("PrDagAB"), "ab")
     P_ba = _prog_of(_two_chain_def("PrDagBA", order="ba"), "ba")
-    assert bd.dag_multiset(P_ab) == bd.dag_multiset(P_ba)                                         # same DAG, other emission order
+    assert dag_form.dag_multiset(P_ab) == dag_form.dag_multiset(P_ba)                                         # same DAG, other emission order
     assert C.compare_steps(P_ab, P_ba)["canonical_sha256"]["equal"] is False                     # the sequence criterion sees the permutation
     # positive control: the same Program twice is sequence-equal
     assert C.compare_steps(P_ab, _prog_of(_two_chain_def("PrDagAB2"), "ab2"))["canonical_sha256"]["equal"] is True
@@ -354,9 +355,9 @@ def test_dag_multiset_is_permutation_invariant_and_operand_order_sensitive():
             return coll_concat(Array(1, Value(32)), [tok])
         return CompositeDefinition("PrDagSubBA", 1, (), sig, body, register=False)
 
-    assert bd.dag_multiset(P_sub_ab) != bd.dag_multiset(_prog_of(swapped_sub(), "sub-ba"))
+    assert dag_form.dag_multiset(P_sub_ab) != dag_form.dag_multiset(_prog_of(swapped_sub(), "sub-ba"))
     # a REPEATED operand is a different computation from two distinct operands ([v, v] is two positions of one value)
-    assert bd.dag_multiset(P_ab) != bd.dag_multiset(_prog_of(_two_chain_def("PrDagAA", second_operand="a"), "aa"))
+    assert dag_form.dag_multiset(P_ab) != dag_form.dag_multiset(_prog_of(_two_chain_def("PrDagAA", second_operand="a"), "aa"))
     # the live cone covers every instance of a Program whose only output is the sampled token's dependency chain
     assert bd.live_cone(P_ab) == set(range(len(P_ab.inst)))
 

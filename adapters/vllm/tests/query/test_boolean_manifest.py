@@ -6,7 +6,7 @@ node index and word leaf.  The Build writes the Boolean Program's instance seque
 as the row's `bits`), so `ProgramView`, the population, the protocol declarations (`SAMPLING_EVENTS`, ...) and the word check read
 the word Program's Calls: the same units, boundaries and committed values whichever profile (word or Boolean) the Program is in.  The word check counts the
 Boolean Program's size in Boolean gates beside its word gates.  The Build writes the word Program beside the Boolean one
-(`program.boolean.write_word`), and the workload composition and the Match read the dir through it (`word_descriptor`).  The row is
+(`verity.definitions.boolean.write_word`), and the workload composition and the Match read the dir through it (`word_descriptor`).  The row is
 a tiny registered-values greedy serve of B0.
 """
 from __future__ import annotations

@@ -11,7 +11,7 @@ A Build vouches for its own device only.  What the served Program binds is the d
   * the Triton kernels' compile target (`inductor_templates.FLAGS`).
 
 A device without one of them is refused with every missing binding by name (`device_of`), never bound to another device's.  A served
-target is held to its card file first (`card_of`: `engine.profiles.devices.CARD`, `verity.hardware.cards`): a device whose compute
+target is held to its card file first (`card_of`: `engine.profiles.devices.CARD`, `verity.device.load_card`): a device whose compute
 capability or SM count is not its card's is refused, naming each field, both values and the card file.  Only a target
 `engine.profiles.devices.NO_CARD` lists is held to none, and any other is refused.
 
@@ -29,16 +29,16 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-from verity_vllm.definitions.numerics import derived_rows as DR
-from verity_vllm.definitions.numerics import fa3_model as FA3
-from verity_vllm.definitions.registry import attention_vocab
-from verity_vllm.definitions.registry import fa2_check_inf as F2
-from verity_vllm.definitions.registry import fa2_split as W
-from verity_vllm.definitions.registry import fa3_check_inf as F3
-from verity_vllm.definitions.registry import inductor as IR
-from verity_vllm.definitions.registry.hopper import Fa3InvSum
-from verity_vllm.definitions.registry.prims import Fa2InvSum
-from verity.hardware.cards import load
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.numerics import fa3_model as FA3
+from verity.definitions.registry import attention_vocab
+from verity.definitions.registry import fa2_check_inf as F2
+from verity.definitions.registry import fa2_split as W
+from verity.definitions.registry import fa3_check_inf as F3
+from verity.definitions.registry import inductor as IR
+from verity.definitions.registry.hopper import Fa3InvSum
+from verity.definitions.registry.prims import Fa2InvSum
+from verity.device import load_card
 
 from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
@@ -114,7 +114,7 @@ def card_of(name: str) -> str | None:
 
 def check_card(cc: tuple[int, int], sms: int, sku: str) -> None:
     """Refuse a device whose compute capability or SM count is not that of card `sku` (its `arch` and `sm.count`)."""
-    c = load(sku)
+    c = load_card(sku)
     arch = re.fullmatch(r"sm_(\d+)(\d)[af]?", c["arch"])
     if arch is None:
         raise Unmodelled(f"hardware/cards/{sku}.toml: arch {c['arch']!r} names no compute capability")
