@@ -1,6 +1,6 @@
 # masked_gemm: what hiding the operands costs the served GEMM
 
-Each kernel here is `../../verity/protocols/accounting/pouw/prover/kernels/floored_gemm/fgemm.cu`'s GEMM with its operands hidden one way, timed against one plain GEMM
+Each kernel here is `floored_gemm/fgemm.cu`'s GEMM with its operands hidden one way, timed against one plain GEMM
 (cuBLASLt's, or the plain mainloop) on the same shapes. The directory measures, for each way:
 
 - **time over the plain GEMM** for each arm, at the served linears' shapes and the attention products' (Q Kᵀ and P V
@@ -82,7 +82,7 @@ one lease, so their `STAGE` is `build` or `all`.
 
 ## What other code reads
 
-Later kernels are built on these: `../../verity/protocols/accounting/pouw/prover/kernels/edited_gemm/egemm.cu` and `prof.cu` include `lpgemm.cu`, and `../../verity/protocols/accounting/pouw/prover/kernels/floored_gemm/fgemm.cu`
+Later kernels are built on these: `edited_gemm/egemm.cu` and `prof.cu` include `lpgemm.cu`, and `floored_gemm/fgemm.cu`
 includes `sha_noise.cuh` for its own noise. `mgemm.cu` includes `fgemm.cu`, and the other four kernels include
 `mgemm.cu`. Among the references, `eref.py`, `sref.py`, `pvref.py` and `lpref.py` import `mref.py`'s `decode`, `words`
 and `duo_receipts`, and `pvref.py` and `lpref.py` import `sref.py`'s `sigma`, `noise` and `fold`; each runs with this
