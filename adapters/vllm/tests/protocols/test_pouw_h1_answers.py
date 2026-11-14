@@ -1,6 +1,6 @@
 """`answers`: the verifier's answers on a window's statements, each run once as credit asks for it and shared
 by the steps that judge them (credit's window check and the period's, ``--lean-answers``). Over the statements kit of
-core's credit tests (`test_pouw_credit_statements`: periods of proof files and a stand-in ``flock-verify`` that accepts
+core's credit tests (`test_pouw_credit_statements`: periods of proof files and a stand-in ``verity-verify-proof`` that accepts
 a session only when it proves every file credit hands it), under the Lean verdict of record and the Python reference:
 two steps over the same statements run the verifier once a statement, the second taking every answer by key; an input
 changed between them is another key, which the verifier answers afresh; and a statement the verifier rejects, refuses
@@ -15,10 +15,10 @@ import stat
 from pathlib import Path
 
 import pytest
-
 from verity.protocols.accounting.pouw.verifier import credit as Cr
 from verity.protocols.accounting.pouw.verifier import verifier as V
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+
 from verity_vllm.protocols.pouw.h1 import answers as A
 
 STATEMENTS = Path(__file__).resolve().parents[4] / "verity/protocols/accounting/pouw/verifier/tests/test_pouw_credit_statements.py"
@@ -29,6 +29,7 @@ SEEDS = range(2)
 def kit():
     """credit's statements kit (`test_pouw_credit_statements`), as ``benchmarks/one_stage``'s pouw_piece tests load it."""
     spec = importlib.util.spec_from_file_location("pouw_credit_statements", STATEMENTS)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -43,7 +44,7 @@ def record(request, monkeypatch):
 
 @pytest.fixture
 def exe(tmp_path, monkeypatch) -> Path:
-    exe = tmp_path / "flock-verify"
+    exe = tmp_path / "verity-verify-proof"
     exe.write_text(kit().FAKE)
     exe.chmod(0o755)
     monkeypatch.setattr(PF, "executable", lambda: exe)
@@ -107,7 +108,8 @@ def test_two_steps_over_the_same_statements_run_the_verifier_once_a_statement(se
     assert want[1][1] is None and all(why is None for _got, why in want[0])
     assert sorted(plain.runs) == sorted(every * 2)
 
-    ran, said = Counted(), []
+    ran = Counted()
+    said: list[str] = []
     if memo == "scratch directory":
         scratch = tmp_path / "scratch" / "answers"
         piece = A.Answers(scratch, by="the challenger check", verify=ran, say=said.append)
@@ -130,12 +132,13 @@ def test_two_steps_over_the_same_statements_run_the_verifier_once_a_statement(se
         assert (piece.ran, piece.taken) == (n, {"the verifier": n})
 
 
-def _flip(p: Path, at: int = -2) -> None:
-    """One byte of the file at `p` changed in place, its size kept."""
+def _flip(p: Path, at: int = -2) -> Path:
+    """One byte of the file at `p` changed in place, its size kept; `p` back."""
     b = bytearray(p.read_bytes())
     b[at] ^= 1
     with open(p, "r+b") as f:
         f.write(b)
+    return p
 
 
 #: each input of a run changed: its files in place (each keeping its size), its files at other paths, the verifier's
@@ -205,7 +208,7 @@ FAILURES = {
     "refused": (lambda s: None, lambda public: lambda proof: (
         (None, ("registered", "the registered file names no port")) if str(proof.public) == public else None)),
     "LeanError": (lambda s: None, lambda public: lambda proof: (
-        _raise(PF.LeanError("lake build flock-verify failed"))(proof) if str(proof.public) == public else None)),
+        _raise(PF.LeanError("lake build verity-verify-proof failed"))(proof) if str(proof.public) == public else None)),
     "KeyError": (lambda s: None, lambda public: lambda proof: (
         _raise(KeyError("ports"))(proof) if str(proof.public) == public else None)),
     "missing": (lambda s: shutil.rmtree(s["sessions"][0]), lambda public: None),
@@ -219,14 +222,15 @@ def test_a_statement_the_verifier_refuses_refuses_both_steps(failure, record, ex
     running the verifier, except for a session that is missing, which has no key and which each step's verifier meets."""
     d, windows = kit()._period(0, tmp_path / "proofs")
     target = windows[0]["statements"][-1]
-    change, answer = FAILURES[failure]
+    change, answer_for = FAILURES[failure]
     change(target)
-    answer = answer(target["public"])
+    answer = answer_for(target["public"])
     want = steps(d, windows, Counted(answer), Counted(answer))
     assert want[0][0][0] is None and want[1][0] is None and want[1][1][0] == "window", want
     assert all(why is None for _got, why in want[0][1:])
 
-    scratch, ran, said = tmp_path / "scratch", Counted(answer), []
+    scratch, ran = tmp_path / "scratch", Counted(answer)
+    said: list[str] = []
     piece = A.Answers(scratch, by="the challenger check", verify=ran, say=said.append)
     got = [window_check(d, w, piece) for w in windows]
     assert got == want[0]
@@ -238,6 +242,6 @@ def test_a_statement_the_verifier_refuses_refuses_both_steps(failure, record, ex
     else:
         assert ran.runs[before:] == [] and period.ran == 0 and period.unkeyed == 0
         verdicts = {"rejected": "rejected session ", "refused": "refused registered: the registered file names no port",
-                    "LeanError": "error LeanError: lake build flock-verify failed", "KeyError": "error KeyError: 'ports'"}
+                    "LeanError": "error LeanError: lake build verity-verify-proof failed", "KeyError": "error KeyError: 'ports'"}
         assert said[-1].split(": ", 1)[1].startswith(verdicts[failure]) and " by key from the challenger check: " in said[-1]
 

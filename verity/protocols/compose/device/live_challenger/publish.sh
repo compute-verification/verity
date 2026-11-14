@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Publish the auditor host's pins log, its ledger and every ended session to the store (auditor.py's "The ledger"). The control pod runs it as
+# Publish the auditor device's pins log, its ledger and every ended session to the store (auditor.py's "The ledger"). The control pod runs it as
 # the watchers loop `challenger-publish` (infra/control/watchers.toml), so no agent VM has to be up for it:
 #
-#   verity/protocols/compose/device/live_challenger/publish.sh [--every SECONDS] [DEST]     # DEST: the auditor host's gate, research@204.12.178.84
+#   verity/protocols/compose/device/live_challenger/publish.sh [--every SECONDS] [DEST]     # DEST: the auditor device's gate, USER@HOST
 #
+# Without DEST the gate is research@ the address $VY_CHALLENGER_1_HOST holds; with neither, it ends at once and says so.
 # It reads both through the gate's `ledger` and `fetch SESSION` verbs: as research, with a key the host forces to the gate (the
 # pod's RunPod key, which reads only), or as vy-admin, through `sudo vy-challenger-gate`. $VY_CHALLENGER_SSH_KEY is the ssh key
 # when set, else ssh's config picks it (the pod's bin/ssh). The ledger is put in the store (kind challenger-ledger/v2,
@@ -20,9 +21,11 @@
 # the last put one extended refused, exit 4), so no published open seals lines the store lacks; `pinned_session` reads it.
 # The model registry (the gate's `models`) follows it the same way (`--kind challenger-models/v1`, `challenger-models head`).
 set -euo pipefail
+need="the auditor device's address, or DEST as an argument"
 if [ "${1:-}" = --every ]; then
   every=$2
   shift 2
+  : "${1:-${VY_CHALLENGER_1_HOST:?$need}}"   # a loop with neither ends here, not once a pass
   while :; do
     bash "$0" "$@" || { rc=$?; echo "$(date -u +%FT%TZ) pass failed (rc=$rc); next in ${every}s"; }
     # every session's tree stays in the local store after its put, and the control pod's root is a 20 GiB overlay
@@ -31,7 +34,7 @@ if [ "${1:-}" = --every ]; then
     sleep "$every"
   done
 fi
-DEST=${1:-research@204.12.178.84}
+DEST=${1:-research@${VY_CHALLENGER_1_HOST:?$need}}
 ST=${VY_CHALLENGER_STATE:-$HOME/.local/state/vy-challenger}
 SSH=(ssh -o BatchMode=yes)
 [ -z "${VY_CHALLENGER_SSH_KEY:-}" ] || SSH+=(-i "$VY_CHALLENGER_SSH_KEY" -o IdentitiesOnly=yes)

@@ -40,8 +40,8 @@
 * **Receipt**: `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier", "received": "<UTC,
   %Y-%m-%dT%H:%M:%SZ>"}`, and the sample names it.
 * **The public file** (`matches_public`): the verifier holds its own (scheme, roots, their domains, its instance count)
-  to the record. That they are the proved rows' is `flock-verify`'s check of the public file (`checkPublic`), stated by
-  the Lean guarantee `FailClosed.flock_verify_public_ties`; `flock-verify` reads no `scheme` from the header, only META's.
+  to the record. That they are the proved rows' is `verity-verify-proof`'s check of the public file (`checkPublic`), stated by
+  the Lean guarantee `FailClosed.flock_verify_public_ties`; `verity-verify-proof` reads no `scheme` from the header, only META's.
 * **`window`** is provenance, apart from the binding and the seed salt it names (Binding, Seed salt). `kind` says whether the roots are what the integration
   committed as it ran (`served`) or a fresh commitment to values captured from its run (`stand-in`, whose link to the run's
   root is provenance, not proof).
@@ -68,7 +68,8 @@
   record's own, so no earlier record holds it. The window is otherwise provenance: R6 takes one record a window, so a
   salt bound to it is one salt a window.
 * **Declared day** (`day`, `declarations`): the prover declares one circuit a day, before the day's first coin, in the
-  registration log (`verity/registration/declaration/v1`, `verity.hardware.registration`). The verifier passes
+  registration log (`verity/registration/declaration/v1`,
+  `verity.protocols.accounting.registration.verifier.registration`). The verifier passes
   the window's day and the declarations it holds when it samples (its view's `declarations`: `{"day", "program",
   "blocks"}` each): of record, the UTC day of the window open's `started_utc` and the declarations its lane signed
   before that open, both from the challenger's ledger checked under the auditor's key (`challenger.declared_day`), so a
@@ -85,6 +86,13 @@
   session, so only beside `window_root`. The record's window names it (`SEED_SALT`), a certified input the window's
   circuits read, and R6 refuses a window that names another or none, or names one where the verifier read none
   (`R6-seed-salt`), so a salt the server chose is refused by name.
+* **Registered compiler** (`compiler`): the registration log's registered compiler as its view publishes it
+  (`verity.hardware.registration`): its item, with its digest and the public length ℓ of the advice it reads, or None
+  when the log registers none. R6 holds the record's window to name that compiler by its digest
+  (`window.compiler.digest`; `R6-compiler`) and advice of at most ℓ bits (`window.advice.bits`; `R6-advice-length`),
+  and, where the log registers none, to name neither a compiler nor advice (`R6-compiler`), so advice no registered
+  compiler reads is refused by name. A verifier that reads no log's compiler passes `UNREAD`, the default, and R6 holds
+  the window to nothing here.
 * **Output values**: a registered value that is an output of an earlier run (`outputs`: `{value: {"record": D, "port":
   P}}`; never the inference-only check's θ, which holds registered public data only) reuses that output's commitment instead of
   committing it afresh: its entry takes port P's domain and root from the `roots` of the log's record with digest D, and
@@ -155,6 +163,8 @@ POOL_RESET = "pool_reset"
 POOL_WEEK = "pool_week"
 #: the window's field naming whether its week's one reset is spent at it (Pool chain)
 POOL_SPENT = "pool_spent"
+#: `compiler` when the verifier reads no registration log's compiler (Registered compiler): R6 holds the window to nothing
+UNREAD: Any = object()
 TIED_WHY = ("a tied value is a run Input of the program whose rows a later check ties to the registrations that computed "
             "them: a parameter of the program, neither registered nor held, whose gates are one interval of run Input nodes")
 SHARED_WHY = ("a run Input node whose leaves two proof blocks read, or a batch broadcasts, could hold rows one of them "
@@ -226,6 +236,19 @@ class HistoryRefused(ValueError):
     """History tables `check` can't read, or whose roots it can't hold to the ones the window registers."""
 
 
+def resolved(supplied: Any, history: Mapping[str, Any] | None) -> Any:
+    """``supplied`` as `check` read it under the history tables ``history``, for a registration `check` accepted: each
+    source ``{"history": "H/root"}`` or ``{"history": "H/domain"}`` the bytes of table ``H``'s root or domain id
+    (`history.resolve`), as the Lean's params hold them. It computes no table's root: `check` held each registered
+    root to its table (`history.roots_of`), so the root is the registered one and the domain id the table's own."""
+    if history is None or supplied is None:
+        return supplied
+    roots = {t["name"]: (bytes.fromhex(history["registered"][t["name"]]),
+                         HT.domain(t["program"], t["name"], t["words"], t["capacity"]).domain_id)
+             for t in history["tables"]}
+    return HT.resolve(roots, supplied)
+
+
 def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,
@@ -237,7 +260,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           held: Sequence[str] | None = None, members: Sequence[LP.Member] = (), day: int | None = None,
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
-          history: Mapping[str, Any] | None = None) -> Verdict:
+          history: Mapping[str, Any] | None = None, compiler: Any = UNREAD) -> Verdict:
     """R1-R8 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
@@ -265,6 +288,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     window's day and the registration log's declarations (Declared day), both or neither; R2 holds the record's program
     to the day's one declaration (`_declared`).  `seed_salt`: the window's seed salt the verifier read from its
     challenger (Seed salt), which R6 holds the window to name; ValueError in another form or without `window_root`.
+    `compiler`: the registration log's registered compiler, its item or None when it registers none (Registered
+    compiler, `_registered_compiler`), whose digest R6 holds the window's compiler to and whose length ℓ its advice's
+    bits; `UNREAD` holds the window to nothing; ValueError in another form.
     `pool`: the values a window opens and leaves its pool in, the empty pool's root, whether the verifier refused the
     window the public lag back, the window's own reset, which R6 holds it to name, and whether its week's one reset is
     spent (Pool chain, `_pool`), whose `pin` it adds to `outputs` or `supplied` (`pool_values`) and R7 holds to the
@@ -312,6 +338,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     bound = _binding(binding)
     window, fixed = _window(window_root, held, registered or {}, sup, pins, outs)
     salt = _seed_salt(seed_salt, window)
+    reads = _registered_compiler(compiler)
     refuse_unwindowed(unwindowed(program, registered or {}, formats, window, fixed, log))
     fan, shared, through, bad = _readers(program, query, registered or {}, held or (), tied or ())
     keys = _KEYS | {"registered"} if v2 else _KEYS
@@ -402,6 +429,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         c.fail("R6-pool-spent", {"registered": w.get(POOL_SPENT), "verifier": spent})
     if pool is not None and pool["reset"] and before:
         c.fail("R6-pool-reset-week", {"registered": True, "verifier": "the week's reset is spent before this window"})
+    if reads is not UNREAD:
+        _compiler(c, w, reads)
     # R7
     if v2:
         _check_registered(c, rec["registered"], program, registered, pins, rec, sup, earlier, bound, outs, formats, window,
@@ -649,6 +678,41 @@ def _seed_salt(seed_salt: str | None, window: str | None) -> str | None:
     if window is None:
         raise ValueError("a seed salt is read on the window's session: it needs the window's open root (window_root)")
     return seed_salt
+
+
+def _registered_compiler(item: Any) -> Any:
+    """The registered compiler the verifier read (Registered compiler): `UNREAD`; None, a log that registers none; or the
+    log's item as its view publishes it (`verity.hardware.registration`), its digest lowercase hex of 64 bytes, its
+    advice format a string and its length ℓ a natural, as `(digest, ℓ)`; ValueError otherwise, which the Lean verifier
+    refuses too (`OneStage.paramsOfJson`)."""
+    if item is UNREAD or item is None:
+        return item
+    cap_bits = item.get("cap") if isinstance(item, Mapping) else None
+    if not (isinstance(item, Mapping) and set(item) == {"advice", "cap", "digest", "kind"} and item["kind"] == "builder"
+            and isinstance(item["digest"], str) and isinstance(item["advice"], str)
+            and type(cap_bits) is int and cap_bits >= 0):
+        raise ValueError("the registered compiler is the registration log's item: its kind, a digest, an advice format and "
+                         f"a natural length, not {item!r}")
+    if not (len(item["digest"]) == 128 and _HEX.fullmatch(item["digest"])):
+        raise ValueError(f"the registered compiler's digest is not lowercase hex of 64 bytes: {item['digest']!r}")
+    return item["digest"], cap_bits
+
+
+def _compiler(c: _Collect, w: Mapping[str, Any], reads: tuple[str, int] | None) -> None:
+    """R6's registered compiler: the window names the log's compiler by its digest (`R6-compiler`) and advice of at most
+    its length ℓ in bits (`R6-advice-length`), and names neither where the log registers none (`R6-compiler`), as R6's
+    Lean does (`Spot.Registration.compilerOk`, `adviceOk`)."""
+    named, advice = w.get("compiler"), w.get("advice")
+    if reads is None:
+        if named is not None or advice is not None:
+            c.fail("R6-compiler", {"registered": {"compiler": named, "advice": advice}, "verifier": None})
+        return
+    digest, cap_bits = reads
+    if not (isinstance(named, Mapping) and named.get("digest") == digest):
+        c.fail("R6-compiler", {"registered": named, "verifier": digest})
+    bits = advice.get("bits") if isinstance(advice, Mapping) else None
+    if not (type(bits) is int and 0 <= bits <= cap_bits):
+        c.fail("R6-advice-length", {"registered": bits, "verifier": cap_bits})
 
 
 #: a pool's fields (Pool chain)

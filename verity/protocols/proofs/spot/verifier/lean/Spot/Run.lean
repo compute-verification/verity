@@ -44,7 +44,8 @@ check the stream ran on it, in the stream's order.
   names of what the block returns, which the verifier derives from the replay block's Definition in the challenger's
   program (`SecondStage.replayLinks`, `SecondStage.replayWires`, `SecondStage.replayRows`,
   `SecondStage.replayReturns`), as its `statements` check
-  (`SecondStage.check`, the two-stage form allowed only when `SecondStage.FORM` is); the symbol accepts when every audit
+  (`SecondStage.checkAny`, the two-stage form allowed only when `run`'s `form` is, by default `SecondStage.FORM`); the
+  symbol accepts when every audit
   record does. Under a two-stage rule each audit record takes the sessions' reads of its registration's own ports at
   their own roots (`own_reads`), whose rows round 2 holds.
 
@@ -101,6 +102,7 @@ structure Interior where
   sessionRoots : Json
   statements : Option (Array Json) := none
   circuits : Array (String × String × Json × Json) := #[]
+  reads : Array (String × Nat) := #[]
 
 /-- `values` are the Spec's values, a two-stage rule's boundary values. `key` is the verifier's challenger key and
 `main` its copy of main's first-parent history, which the coins' evidence is read under (`coinsCode`): they are the
@@ -140,31 +142,55 @@ def digest? : Json → Bool
   | .str s => (s.length == 128 || (s.length == 129 && s.endsWith "\n")) && (s.toList.take 128).all hexDigit
   | _ => false
 
+/-- `service._read_of`: a params entry's `read`, `{"V": <rows>, "H": <words a row>}` of two positive integers, as
+`(V, H)`; none for anything else. -/
+def readOf? (j : Json) : Option (Nat × Nat) :=
+  match keys? j, nat? (getD j "V"), nat? (getD j "H") with
+  | some #["H", "V"], some v, some h => if 0 < v && 0 < h then some (v, h) else none
+  | _, _, _ => none
+
 /-- `service.template_circuits`: the auditor's params naming each template's circuit file and its registered reference
 statement's header and registered reads, a two-stage run's `interior.params.proofs`, `{"templates": [{"template":
 <descriptor id>, "circuit": <SHA-512, lowercase hex>, "header": <the registered reference statement's header>,
 "registered": <the registered reads it reads, null for none>}, ...]}`, as (template, circuit, header,
 registered) in the order the check's template query `query` names the templates (`Select.templateIds`), which is
-REPLAY_c's first-instance order (`Select.replayCells`); `null` names no file and gives none. An error for any other
+REPLAY_c's first-instance order (`Select.replayCells`); `null` names no file and gives none. An entry may also record
+its template as a table read, `"read": {"V": <rows>, "H": <words a row>}` (`templateReads`). An error for any other
 form, a circuit that isn't 128 lowercase hex digits, a header that isn't an object, registered reads neither an object
-nor null, and a list that doesn't name each of the check's templates once, in its order. -/
+nor null, a read that isn't two positive counts, and a list that doesn't name each of the check's templates once, in
+its order. -/
 def templateCircuits (proofs query : Json) : V (Array (String × String × Json × Json)) := do
   if proofs matches .null then return #[]
   let ids ← Select.templateIds query
   let form := "the params' proofs are {\"templates\": [{\"template\": <descriptor id>, \"circuit\": <SHA-512>, " ++
-    "\"header\": <object>, \"registered\": <object or null>}, ...]}"
+    "\"header\": <object>, \"registered\": <object or null>}, ...]}, an entry's \"read\" {\"V\": <rows>, " ++
+    "\"H\": <words>}"
   let (some #["templates"], .arr es) := (keys? proofs, getD proofs "templates") | throw form
   let named ← es.mapM fun e =>
-    let bad := s!"{form}, each circuit a SHA-512 in lowercase hex, each header an object and each registered " ++
-      s!"an object or null: {e.compress}"
-    match keys? e, getD e "template", getD e "circuit", getD e "header", getD e "registered" with
+    let bad := s!"{form}, each circuit a SHA-512 in lowercase hex, each header an object, each registered " ++
+      s!"an object or null and each read two positive counts: {e.compress}"
+    let keys := (keys? e).map fun ks => ks.filter (· != "read")
+    let read := (field? e "read").all fun r => (readOf? r).isSome
+    match keys, getD e "template", getD e "circuit", getD e "header", getD e "registered" with
     | some #["circuit", "header", "registered", "template"], .str t, .str c, .obj h, r =>
-      if c.length == 128 && c.all hexDigit && ((r matches .obj _) || (r matches .null)) then pure (t, c, Json.obj h, r)
+      if c.length == 128 && c.all hexDigit && ((r matches .obj _) || (r matches .null)) && read then
+        pure (t, c, Json.obj h, r)
       else throw bad
     | _, _, _, _, _ => throw bad
   if named.map (·.1) != ids then
     throw s!"the params name the circuits of {named.map (·.1)}, not the check's templates {ids}, each once, in its order"
   return named
+
+/-- `service.template_reads`: the templates the auditor's params `proofs` record as table reads, each with its
+table's rows, `(template, V)`, for params `templateCircuits` accepted: an entry's `"read": {"V", "H"}` is the auditor's
+record that the template check (`flock-read-tmpl check V H CIRCUIT`, `Flock.ReadNet.check`) accepted the circuit file
+whose SHA-512 the entry names as the read of a table of `V` rows of `H` 16-bit words. The check ran where the params
+were made; the verifier runs none, and takes a template with no such record as no read. -/
+def templateReads (proofs : Json) : Array (String × Nat) :=
+  (match getD proofs "templates" with | .arr es => es | _ => #[]).filterMap fun e =>
+    match getD e "template", (field? e "read").bind readOf? with
+    | .str t, some (v, _) => some (t, v)
+    | _, _ => none
 
 /-- The receipt the stream writes for an accepted registration: its digest, the challenger and its place in the log. -/
 def receipt (record : Json) (challenger received : String) : V Json := do
@@ -189,7 +215,7 @@ def coinsCode (key : Option Challenger.ChallengerKey) (main coins record : Json)
 
 /-- The audit record over `draw` (`Record.record`) with the run's statement, verdicts, δ and sessions, taking reads of
 the registration's own ports at their own roots under a two-stage rule. -/
-private def audit (i : Input) (record receipt draw law : Json) (proved : Array Int) (instances : Int)
+def audit (i : Input) (record receipt draw law : Json) (proved : Array Int) (instances : Int)
     (served sessionRoots : Json) : V Json :=
   do Record.record (← Record.inputOf (Json.mkObj [("registration", record), ("receipt", receipt),
     ("draw", draw), ("law", law), ("proved_units", Json.arr (proved.map Lean.toJson)),
@@ -214,7 +240,7 @@ def interiorWindowOk (boundary interior : Option String) (digest : String) (samp
 /-- The interior registration and the second stage over the first stage's replay sample `sample`, the rule's counts `k`
 in each cell: the interior, its receipt, the second stage's sample and law, and the bytes it read; or the refusal's step
 and codes. -/
-private def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sample : Array Nat) :
+def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sample : Array Nat) :
     V (Except (String × Array String) (Interior × Json × Json × Json × Nat)) := do
   let v := it.params.verifier
   let pub ← Service.checkPublic it.record (Json.str v.scheme) (← Registration.queryDigest v.query) it.values i.declared
@@ -238,7 +264,7 @@ private def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sampl
 
 /-- The second stage, under a two-stage rule, over the first stage's replay sample `sample`; none under a one-stage
 rule. -/
-private def secondStage (i : Input) (sample : Array Nat) :
+def secondStage (i : Input) (sample : Array Nat) :
     V (Except (String × Array String) (Option (Interior × Json × Json × Json × Nat))) :=
   match i.rule, i.interior with
   | .twoStage _ _ k, some it => return (← interiorSteps i it k sample).map some
@@ -247,9 +273,9 @@ private def secondStage (i : Input) (sample : Array Nat) :
   | _, none => return .ok none
 
 /-- The interior registration's audit record over the second stage's proved units, with round 2's statement check
-(`SecondStage.check`) over the first stage's replay sample `sample`: whether it accepts, and the run's `interior` entry;
-nothing under a one-stage rule. -/
-private def interiorAudit (i : Input) (sample : Array Nat) :
+(`SecondStage.checkAny`, the two-stage form allowed where `form` is) over the first stage's replay sample `sample`: whether
+it accepts, and the run's `interior` entry; nothing under a one-stage rule. -/
+private def interiorAudit (form : Bool) (i : Input) (sample : Array Nat) :
     Option (Interior × Json × Json × Json × Nat) → V (Bool × List (String × Json))
   | none => return (true, [])
   | some (it, receipt, draw, law, read) => do
@@ -264,14 +290,18 @@ private def interiorAudit (i : Input) (sample : Array Nat) :
         refs := it.circuits.map fun (t, _, h, _) => (t, h), refReads := it.circuits.map fun (t, _, _, r) => (t, r),
         wires := SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn,
         rows := SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn,
-        returns := SecondStage.replayReturns i.params.verifier.program.prog it.replay.prog.programFn i.record }
-    let rec_ := SecondStage.attach rec_ (SecondStage.check SecondStage.FORM own it.statements)
+        returns := SecondStage.replayReturns i.params.verifier.program.prog it.replay.prog.programFn i.record,
+        supplied := it.params.verifier.supplied,
+        fixed := it.params.verifier.pinned.map (·.1) ++ it.params.verifier.outputs.map (·.1),
+        reads := it.reads }
+    let rec_ := SecondStage.attach rec_ (SecondStage.checkAny form own it.statements)
       (SecondStage.interiorReads own ((it.statements.getD #[]).toList))
     return (jeq (getD rec_ "accepted") (.bool true), [("interior", Json.mkObj [("receipt", receipt), ("draw", draw),
       ("read", Lean.toJson read), ("audit", Json.str (← PyJson.canonical rec_))])])
 
-/-- The run, step by step; an error where the Python raises. -/
-def run (i : Input) : V Json := do
+/-- The run, step by step; an error where the Python raises. Round 2 allows the two-stage form where `form` does, by
+default the switch (`SecondStage.FORM`); a caller that decides last by the switch itself runs it at `form := true`. -/
+def run (i : Input) (form : Bool := SecondStage.FORM) : V Json := do
   let v := i.params.verifier
   if !grainHolds i.rule v.query then return refused "register" #["grain"]
   let qd ← Registration.queryDigest v.query
@@ -308,7 +338,7 @@ def run (i : Input) : V Json := do
     let proved := i.provedUnits.getD drawn
     let instances := i.instances.getD proved.size
     let rec_ ← audit i i.record receipt draw derived proved instances i.served i.sessionRoots
-    let (accepted₂, staged) ← interiorAudit i (drawn.map Int.toNat) inner
+    let (accepted₂, staged) ← interiorAudit form i (drawn.map Int.toNat) inner
     let accepted := jeq (getD rec_ "accepted") (.bool true) && accepted₂
     return Json.mkObj ([("receipt", receipt), ("draw", draw), ("read", Lean.toJson read),
       ("symbol", Json.str (if accepted then "accept" else "reject")),

@@ -31,7 +31,7 @@ ZK server runs, the analysis's masked prover (`Flock.Firewall.Finish`'s copies, 
   release it themselves, and its coins are held to the ones the stream answered (`serve`'s `inner` and `own`). Only the
   `Asks` is live: the code that computes each round is `repFw`'s.
 
-* `serve`: the requests, on the statement of `flock-verify verify --zk`: each table's level 0, each rep's salts for levels
+* `serve`: the requests, on the statement of `verity-verify-proof verify --zk`: each table's level 0, each rep's salts for levels
   ≥ 1, which this code samples itself from the operating system and hands the prover (`salts`), in the session loop only
   once the rep's frame took its algebraic phase's last coins (`Own.algebraEnded`), and
   each rep's proof file on them and on the rep's samples, which never come from the prover: its frame's in the session
@@ -663,8 +663,8 @@ def parseRep (t : Tab) (draws : Frame.Draws) (hiSalts : Array ByteArray) (b : By
 /-- **A table's state** from a table's request bytes (`Link.parse`) at the statement `st`. -/
 def tabOf (st : Setup) (b : ByteArray) : V Tab := do
   if st.merkle.id != MerkleScheme.hm96Sha512.id then throw s!"finish: a {st.merkle.id} statement: --zk commits hm96-sha512/v1"
-  let (sch, tPad) ← Zk.schedule st.m
-  let i ← Link.parse st.m b
+  let (sch, tPad) ← Zk.schedule st.wideLeaf st.m
+  let i ← Link.parse st.wideLeaf st.m b
   return { st, sch, tPad, g := i.g, extra := i.extra, lanePad := i.lanePad
            cm0 := commit0 (sch.levels.getD 0 default) tPad i }
 
@@ -673,7 +673,8 @@ witness, hiding and commitment (`commitOf`), at level 0 of `st`'s `--zk` schedul
 def tabOfLevel0 (st : Setup) (l : Level0.Level0) : V Tab := do
   if st.merkle.id != MerkleScheme.hm96Sha512.id then throw s!"finish: a {st.merkle.id} statement: --zk commits hm96-sha512/v1"
   if l.m != st.m then throw s!"finish: a level 0 drawn at m = {l.m} for a table at m = {st.m}"
-  let (sch, tPad) ← Zk.schedule st.m
+  if l.wideLeaf != st.wideLeaf then throw "finish: a level 0 sampled for the other statement version's schedule"
+  let (sch, tPad) ← Zk.schedule st.wideLeaf st.m
   if l.tPad != tPad then throw s!"finish: a level 0 with t_pad {l.tPad} for a table whose schedule's is {tPad}"
   let i := l.toIn
   return { st, sch, tPad, g := l.g, extra := i.extra, lanePad := i.lanePad, cm0 := commitOf l }
@@ -1067,7 +1068,7 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
   return 0
 
 /-- **`flock-firewall finish --circuit F --public F [--statement ID] [--session-tables J] [--tables DIR] [--partition F]
-[--program F] [--draw F]`**: the ZK server's proof files, `serve`d on stdin and stdout, on the statement `flock-verify verify
+[--program F] [--draw F]`**: the ZK server's proof files, `serve`d on stdin and stdout, on the statement `verity-verify-proof verify
 --zk` sets up (`Witness.setupOf`, at the `unit_draw` of the JSON object in `--draw`), every salt and every rep's samples
 sampled from the operating system. With no session loop beside it, it holds no level 0 of its own: a table comes as
 `table I LEN`. -/

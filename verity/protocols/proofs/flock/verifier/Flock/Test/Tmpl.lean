@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.Tmpl
+meta import Flock.Tmpl
+
+/-!
 `Tmpl.unroll` against `Net.parse`: a templated unit (two copies of a pair, each two copies of a two-input AND and their
 sum, bound to input bits that step by one, and two output bits) unrolls to the net `Net.parse` reads from its flat text,
 written out here by hand, and `Tmpl.flatLines` prints that text byte for byte, sorted and reduced over GF(2) as
@@ -8,10 +13,6 @@ copies, a callee that is not an earlier definition, segments that don't cover th
 caller's references, a column written twice, a root with inputs, a copy reading a later column, a Definition of `2^64`
 columns.
 -/
-module
-
-public import Flock.Tmpl
-meta import Flock.Tmpl
 
 @[expose] public section
 

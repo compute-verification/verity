@@ -303,3 +303,20 @@ def test_an_entry_overrides_the_registry_and_the_checked_in_config_names_known_r
                                                                        ("i-b", "1.2.3.4", "2026-10-20T04:00:00Z")]
     for e in tomllib.loads((CONTROL / "vm_stop.toml").read_text())["vm"]:
         assert set(e["rules"]) <= {"idle", "deadline", "lease"} and e["rules"], e["name"]
+
+
+def test_a_commit_file_that_cannot_be_read_is_reported_as_none_and_logged(tmp_path, capsys):
+    sup, clock, _ = supervisor(tmp_path, [])
+    (tmp_path / "src" / "COMMIT").mkdir(parents=True)
+    assert sup.status(clock())["commit"] is None
+    assert f"status: {tmp_path / 'src' / 'COMMIT'} unreadable, so the commit is reported as none (IsADirectoryError" in \
+        capsys.readouterr().out
+
+
+def test_an_ssh_probe_that_times_out_is_no_probe_and_says_so(tmp_path, monkeypatch, capsys):
+    def slow(argv, **kw):
+        raise V.subprocess.TimeoutExpired(argv, 90)
+
+    monkeypatch.setattr(V.subprocess, "run", slow)
+    assert V.ssh_probe({"name": "vm-x", "user": "u", "host": "h"}, tmp_path / "known_hosts") is None
+    assert "vm-x: ssh probe timed out after 90 s; read as no probe" in capsys.readouterr().err

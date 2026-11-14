@@ -26,7 +26,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   instances of template `t`), from given bytes of the challenger's coins, with the number of bytes it read
   (`Select.selectSecond`);
 * `second_statements`: round 2's statement check of second-stage sessions' statements against the interior
-  registration and the second stage's cells, the two-stage form allowed or not (`SecondStage.check`);
+  registration and the second stage's cells, the two-stage form allowed or not (`SecondStage.checkAny`);
 * `second_interior_reads`: of that check's input, the statements' reads that rest on the interior's own values
   (`SecondStage.interiorReads`);
 * `replay_links`: the design's links, from the replay block's Definition in a program (`SecondStage.replayLinks`);
@@ -49,6 +49,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   (`FilePart.why`);
 * `tables_held`: v2's refusal of blobs whose pinned MUFU tables are not a circuit's lookups, on a META's `lookups` and
   the blobs' digests (`OneStageZk.tablesHeld`);
+* `own_tables`: a member's own lookup tables among the blobs' and their refusal, on the same (`OneStageZk.ownTables`,
+  `OneStageZk.tablesMatch`);
 * `bound`: the exact bounds on incorrect proof blocks at δ;
 * `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`);
 * `max_harm`: a certificate's bracket around `Flock.Guarantees.JointStratified`'s exact supremum of that harm
@@ -97,6 +99,12 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   (`sample_link_first`).
 * `challenger_inner_trees`: a recursive session's inner coins (`ChallengerInnerTrees`): `rec_live`'s live-coin part
   records held to the trees a release log shows, one tree a session, every opening read (`rec_live.tree_held_reason`).
+* `period_windows`: a lane's sessions of a monitoring period as the auditor's ledger opens them, and which of them
+  are SPOT's windows (`MonitoringPeriod.read`, `MonitoringPeriod.windowsIn`).
+* `period_asked`, `period_check`, `period_check_stub`: what the period's check asks one-stage v2 at a case
+  (`MonitoringPeriod.paramsAt`, `MonitoringPeriod.evidenceAt`), the period's check's answer on a ledger and its evidence
+  (`MonitoringPeriod.checkBlobs`), and that answer with a stand-in for one-stage v2 that accepts when told to
+  (`MonitoringPeriod.checkWith`, `MonitoringPeriod.stubInner`).
 * `wires`, `wires_unrolled`: a window circuit's wires checked at the size of their description (`Wires.check`) and by
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and sampled rows' writers.
 * `wires_drawn`, `wires_drawn_unrolled`: the wire check on the sampled proof blocks alone (`Wires.Summary.drawnOk`, each sampled
@@ -135,6 +143,8 @@ public import Spot.ChallengerSession
 public import Spot.ChallengerCoins
 public import Spot.ChallengerTrees
 public import Spot.ChallengerInnerTrees
+public import Spot.MonitoringPeriod
+public import Spot.MonitoringPeriodAudit
 public import Spot.Produced
 public import Spot.HiddenDraw
 public import Spot.PartitionRef
@@ -763,6 +773,7 @@ def run (j : Json) : V Json := do
       let ipj := getD it "params"
       let ip ← params (Json.mkObj ((entries ipj).filter (·.1 != "proofs")).toList)
       let circuits ← Run.templateCircuits (getD ipj "proofs") ip.verifier.query
+      let reads := Run.templateReads (getD ipj "proofs")
       let replay ← Program.parse (← Flock.canon (getD it "replay")).toUTF8
       let values ← valuesOf (getD it "values") "an interior's values"
       let source ← Flock.unhex (← Flock.J.str it "source" "the interior")
@@ -781,7 +792,7 @@ def run (j : Json) : V Json := do
         throw "an interior names no returns: the verifier derives them from the replay block's Definition"
       pure (some ({ params := ip, replay, values, record := getD it "record", received, source, coins := getD it "coins",
                     provedUnits, instances, served := getD it "served", sessionRoots := getD it "session_roots",
-                    statements, circuits } : Run.Interior))
+                    statements, circuits, reads } : Run.Interior))
   Run.run { params := p, record := getD j "record", rule, values, declared, challenger, received,
             source := ← Flock.unhex (← Flock.J.str j "source" "the run"), closure, sessions, verdicts, outputs,
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
@@ -797,7 +808,10 @@ rows their units read (`replayRows`'), null for none, the names of what the repl
 reads (`Record.sessionRegistered`) and name the header, registered reads and sample each checked
 (`SecondStage.verifiedOf`), the reference header of each template's statement (`refs`, `{template: header}`, null for
 none) and the registered reads it reads (`ref_reads`, `{template: registered}`, each null for none, null for no
-template's), and the statements, null for none. -/
+template's), the verifier's own copies of the interior registration's values it fills, with their sources
+(`supplied`, `SecondStage.suppliedOf?`), and the names of those it pinned or holds to an earlier record (`fixed`), each
+null for none, the templates the auditor's params record as table reads with their tables' rows (`reads`, `{template:
+V}`, null for none), and the statements, null for none. -/
 private def secondOwn (j : Json) : V (Bool × SecondStage.Own × Option (Array Json)) := do
   let .bool allow := getD j "allow" | throw "allow is not a boolean"
   let .arr ss := getD j "sample" | throw "sample is not a list"
@@ -846,16 +860,31 @@ private def secondOwn (j : Json) : V (Bool × SecondStage.Own × Option (Array J
     | .null => pure #[]
     | rs@(.obj _) => pure (entries rs)
     | _ => throw "ref_reads is not an object"
+  let supplied ← match SecondStage.suppliedOf? (getD j "supplied") with
+    | some vs => pure vs
+    | none => throw "supplied is null or an object of rows, each a list of sources, each a kind naming a string"
+  let fixed ← match getD j "fixed" with
+    | .null => pure #[]
+    | .arr vs => match vs.mapM (fun v => match v with | .str x => some x | _ => none) with
+      | some vs => pure vs
+      | none => throw "fixed is null or a list of strings"
+    | _ => throw "fixed is null or a list of strings"
+  let reads ← match getD j "reads" with
+    | .null => pure #[]
+    | rs@(.obj _) => match (entries rs).mapM (fun (t, v) => (nat? v).map fun v => (t, v)) with
+      | some rs => pure rs
+      | none => throw "reads is null or an object of naturals"
+    | _ => throw "reads is null or an object of naturals"
   let own : SecondStage.Own :=
     { sample, parts := SecondStage.parts sample.size strata, interior := getD j "interior",
       boundary := getD j "boundary", drawn, links, reported := Record.sessionRegistered verdicts,
-      verified := SecondStage.verifiedOf verdicts, refs, refReads, wires, rows, returns }
+      verified := SecondStage.verifiedOf verdicts, refs, refReads, wires, rows, returns, supplied, fixed, reads }
   return (allow, own, stmts)
 
-/-- `second_stage.check`'s input (`secondOwn`) to its verdict (`SecondStage.check`). -/
+/-- `second_stage.check`'s input (`secondOwn`) to its verdict (`SecondStage.checkAny`). -/
 def secondStatements (j : Json) : V Json := do
   let (allow, own, stmts) ← secondOwn j
-  return (SecondStage.check allow own stmts).toJson
+  return (SecondStage.checkAny allow own stmts).toJson
 
 /-- `second_stage.check`'s input (`secondOwn`) to the reads that rest on the interior's own values
 (`SecondStage.interiorReads`), each `{"template", "port", "value"}`. -/
@@ -949,12 +978,16 @@ def fits (j : Json) : V Json := do
     ("inputs", why (OneStageZk.fitsWhy limit circuit pub tables program (given "partition") (given "registered"))),
     ("draw", why (OneStageZk.drawFitsWhy limit (given "draw")))]
 
-/-- `{"proofs", "query"}` to `{"circuits": [[template, circuit, header, registered], ...]}`: a two-stage run's params
-naming each template's circuit file and its statements' reference header and registered reads, in the order the check's
-template query names the templates (`Run.templateCircuits`); refused where the Python raises. -/
+/-- `{"proofs", "query"}` to `{"circuits": [[template, circuit, header, registered], ...], "reads": [[template, V],
+...]}`: a two-stage run's params naming each template's circuit file and its statements' reference header and
+registered reads, in the order the check's template query names the templates (`Run.templateCircuits`), and the
+templates they record as table reads, each with its table's rows (`Run.templateReads`); refused where the Python
+raises. -/
 def templateCircuits (j : Json) : V Json := do
   let named ← Run.templateCircuits (getD j "proofs") (getD j "query")
-  return Json.mkObj [("circuits", Json.arr (named.map fun (t, c, h, r) => Json.arr #[Json.str t, Json.str c, h, r]))]
+  let reads := Run.templateReads (getD j "proofs")
+  return Json.mkObj [("circuits", Json.arr (named.map fun (t, c, h, r) => Json.arr #[Json.str t, Json.str c, h, r])),
+    ("reads", Json.arr (reads.map fun (t, v) => Json.arr #[Json.str t, Lean.toJson v]))]
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),
@@ -963,6 +996,7 @@ def table : List (String × (Json → V Json)) :=
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("ran_out", ranOut),
    ("select", select), ("design", design), ("slots", slots),
    ("file_population", FilePart.piece), ("tables_held", OneStageZk.tablesPiece),
+   ("own_tables", OneStageZk.ownTablesPiece),
    ("check_proved", checkProved),
    ("select_second", selectSecond), ("second_statements", secondStatements),
    ("second_interior_reads", secondInteriorReads), ("replay_links", replayLinks),
@@ -989,7 +1023,9 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_seed_salt", Challenger.seedSaltPiece),
    ("challenger_coin_trees", Challenger.coinTreesPiece), ("challenger_session_trees", Challenger.sessionTreesPiece),
    ("challenger_sample_link_first", Challenger.sampleLinkFirstPiece),
-   ("challenger_inner_trees", Challenger.innerTreesPiece),
+   ("challenger_inner_trees", Challenger.innerTreesPiece), ("period_windows", MonitoringPeriod.windowsPiece),
+   ("period_asked", MonitoringPeriod.askedPiece), ("period_check", MonitoringPeriod.checkPiece),
+   ("period_check_stub", MonitoringPeriod.checkStubPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
    ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef),
    ("public_units", PublicUnits.piece),

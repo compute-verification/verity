@@ -65,7 +65,7 @@ def served_header(ref: Mapping[str, Any], rec: Mapping[str, Any], k: int, lo: in
 
 
 def checked(statement: Mapping[str, Any], tables: int | None = 1) -> dict[str, Any]:
-    """What `flock-verify verify`'s verdict names of the session of second-stage statement `statement` it checked, which
+    """What `verity-verify-proof verify`'s verdict names of the session of second-stage statement `statement` it checked, which
     round 2 holds the statement to (`second_stage.verified_of`): the SHA-512 of its header's canonical JSON, of its
     registered reads' when it reads any, its sample, and the `tables` it set the session up as (one, as the
     verifier runs it; None: a verdict naming no count)."""
@@ -77,17 +77,21 @@ def checked(statement: Mapping[str, Any], tables: int | None = 1) -> dict[str, A
 
 
 class Challenger(T.ChallengerCoins):
-    """The challenger's `LABEL` coins (`coins` of them a session) on entropy seeded from `seed`, one session for each
-    commitment, its files in a directory of its own, opened for `window` as it is at the commitment (`WINDOW` unless
-    a test sets another)."""
+    """The challenger's coins of one family (`label`, `LABEL` unless given; `coins` of them a session) on entropy seeded
+    from `seed`, one session for each commitment, its files in a directory of its own, opened for `window` as it is at
+    the commitment (`WINDOW` unless a test sets another)."""
 
-    def __init__(self, seed: str = "fake", coins: int = 64) -> None:
-        self.seed, self.coins, self.window = seed, coins, WINDOW
+    def __init__(self, seed: str = "fake", coins: int = 64, label: str = LABEL) -> None:
+        self.seed, self.coins, self.window, self.family = seed, coins, WINDOW, label
         self.directory = Path(tempfile.mkdtemp(prefix="fake-challenger-"))
         weakref.finalize(self, shutil.rmtree, self.directory, True)
         self.sessions: dict[bytes, tuple[R.Session, Ledger, C.LiveRecord]] = {}
         self._evidence: dict[bytes, dict[str, Any]] = {}
         super().__init__(None)
+
+    @property
+    def label(self) -> str:
+        return self.family
 
     def _session(self, after: bytes) -> C.LiveRecord:
         sid = f"s-{len(self.sessions) + 1}"
@@ -95,10 +99,10 @@ class Challenger(T.ChallengerCoins):
         d.mkdir()
         ledger = Ledger(d / "windows.jsonl", at(0, 3))
         ledger.open(sid, self.window, withheld=True)
-        challenger = C.LiveChallenger(SCHEME, 0, [(LABEL, self.coins)], entropy(f"{self.seed}/{sid}"))
+        challenger = C.LiveChallenger(SCHEME, 0, [(self.family, self.coins)], entropy(f"{self.seed}/{sid}"))
         session = R.open_session(challenger, pinned_key(), f"{HOST}.{sid}", at(1, 2), d, sid, withhold=True)
         (d / R.HELLOS).write_text("")
-        record = C.LiveRecord(challenger, LABEL, itertools.count().__next__)
+        record = C.LiveRecord(challenger, self.family, itertools.count().__next__)
         self.sessions[after] = (session, ledger, record)
         return record
 

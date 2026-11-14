@@ -25,16 +25,20 @@ auditor's device reads, apart from the host it runs in). Each number is an entry
 
 Every card of a kind has the same sections and entries, a host card's `disk.read` apart. A GPU card's are `sm` (`count`, the SMs, and
 `warps`, the most warps resident on one at once), `clock` (`tensor` the tensor's, `sm` every other resource's, `memory`
-device memory's),
+device memory's, and `default`, the name of the reading of `readings(card)`, `sm` or `tensor`, that every figure
+is stated at unless it names the other: the higher tensor ceiling, `sm` on every card (CMP-438)),
 `store` (each store's size; `smem` is the pool of L1 and shared memory, and `smem_carveout` the most of that pool a
 kernel can make shared memory, a part of `smem` that no store's size adds; `dram` is the device memory a program gets
 and `dram_installed` the memory on the board, a second reading at or above it; and, only where a run found them, the
 caches an SM serves code and constants from, `l15`, `l1i`, `l0i` and `const_l0`, which the RTX PRO 6000's card has),
 `rate` (each resource's units a SM-clock), `memory` (device memory's bus, transfers and bandwidth, and `read`, the
 fastest read of it measured, which stands at the bandwidth as a placeholder where none is), `weight` (the tensor
-units a MAC of each format uses), `price` (what an operation costs in tensor units in a timed loop: `fp32_loop`, an FP32
-add in a loop of 64 adds and 3 loop instructions, at or above the add's price at the card's ceilings, `rate.tensor` over
-32 lanes of `rate.issue`) and `model` (`Accel.Card`'s `exact` and code space). A host card's are `cpu` (the
+units a MAC of each format uses), `price` (what an operation costs in tensor units, each operation charged in seconds at
+its own pipe's data-sheet ceiling (CMP-438): `fp32`, an FP32 add under each reading, keyed by its name: `fp32.sm`,
+both pipes at `clock.sm`, `rate.tensor` over 32 lanes of `rate.issue`, the default reading; `fp32.tensor`, the same
+with the tensor at `clock.tensor`, which differs only on the H200, 29.58 there and holding only if its tensor pipe
+never exceeds 1830 MHz; and `fp32_loop`, an FP32 add in a loop of 64 adds and 3 loop instructions, at or above
+`fp32.sm`) and `model` (`Accel.Card`'s `exact` and code space). A host card's are `cpu` (the
 server's sockets and cores, and `vm_cores`, the cores a GPU that a node's VM gives: a measurement of our nodes, not a
 number of the server), `clock`, `rate` (AMX MACs and SHA-512 compressions a cycle a core, and the host's op peak),
 `memory` (DRAM's channels, speed, bandwidth, measured read and write ceiling, and `speed_max`, `bandwidth_max` and
@@ -50,8 +54,8 @@ node's host card has it and the H200 nodes' has no entry rather than an invented
 allowances, and `chip`, the host's on-chip bytes in S_chip). A server card's is `link`: the line rates of the
 server's network ports by its guide's classes (`cluster`, `storage`, `management`), each port in one class, and `rate`,
 all of them together, which a boundary link of a host of that model carries at most each way. The DGX H200 is the
-machine the inference-only policy's `h200-hgx` location is, and `tests/test_policy.py` holds the policy's `links` to
-the card's `link.cluster` and `link.storage`, the twelve ConnectX-7 ports it counts. A time base's card's is `drift`:
+machine the inference-only policy's `h200-hgx` location is, whose `links` `benchmarks/rho` reads from the card: its
+`link.rate`, and its `link.cluster` as the low. A time base's card's is `drift`:
 `max`, the most the clock's rate may differ from the SI second's (`s/s`), and `read`, the largest reading of it on
 record, a `measurement`, which `max` is never below.
 
@@ -84,9 +88,8 @@ else: the functions `load_card`, `skus`, `rate`, `number` (an entry's value as a
 `CARD_KINDS` (a card's kinds), `MARKS` (an entry's marks), `ENTRY` (an entry's keys), `WORD` (the bytes in a 32-bit
 word) and `CARDS` (the directory the card files are in, found from the `verity` package's directory). The module
 imports the standard library, the wire and `verity.errors` only. The package file, `verity/hardware/__init__.py`,
-holds a docstring and nothing else: no import and no re-export. The registration log (`verity.hardware.registration`)
-shares the package, and importing it or the Site, in a verifier too, reads no card file and no node file: the readers
-run only when called. `tests/test_package.py` holds both.
+holds a docstring and nothing else: no import and no re-export. Importing the Site or the wire, in a verifier too,
+reads no card file and no node file: the readers run only when called. `tests/test_package.py` holds both.
 
 `load_card(sku) -> dict` returns the parsed file and refuses a number without its unit, mark and source, and a card without
 its kind. `skus(kind=None)` lists the cards, or those of one kind.
@@ -95,7 +98,10 @@ its kind. `skus(kind=None)` lists the cards, or those of one kind.
 Lean's `card.ρ`, the SMs times the resource's rate times its clock (for the tensor `clock.tensor` where the card has one
 and `clock.sm` where it doesn't, for the rest `clock.sm`, or the clock `mhz` names), in MACs of operand format `fmt` when
 given, and device memory's `memory.bandwidth` in words. A benchmark that quotes a peak calls it rather than multiplying
-the card's numbers itself, and `tests/test_lean.py` holds it to each Lean table.
+the card's numbers itself, and `tests/test_lean.py` holds it to each Lean table. `readings(card, *, fmt=None) -> dict`
+is the tensor peak under each reading of its clock the card states (`READINGS`: `clock.tensor`, the card's own, then
+`clock.sm`), so a figure quoted under every reading names no clock itself, and the card's default is
+`readings(card)[card["clock"]["default"]]`.
 
 **The Lean tables are generated** (`verity/hardware/lean.py`). A GPU card file that names a Lean table (`lean`) gives
 that module: `render(card)` is its text, the card file's numbers (`table(card)`) under the namespace, `clock`,

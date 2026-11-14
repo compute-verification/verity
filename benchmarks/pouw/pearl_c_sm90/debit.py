@@ -1,5 +1,6 @@
-"""The words' debit counts of a Pearl-C call on the H100 or H200: `fast_tile.word_debits` on every word of A′'s rows by B̃'s,
-from debit_sm90.cubin (debit_sm90.cu; build.sh builds it into its tree's debit/) through the driver API (run.py's `Dev`).
+"""The words' inert-work counts of a Pearl-C call on the H100 or H200: `fast_tile.word_debits` on every word of A′'s
+rows by B̃'s, from debit_sm90.cubin (debit_sm90.cu; build.sh builds it into its tree's debit/) through the driver API
+(run.py's `Dev`).
 
   Debit(cubin_bytes).words(a, b) -> (atoms, zeros, bad)
   Debit(cubin_bytes).resident(a, b) -> body, words()'s launches alone on operands put once (for `run.Dev.timed`)
@@ -22,15 +23,24 @@ import sys
 
 import numpy as np
 
-_RUN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "verity", "protocols", "accounting",
-                    "pouw", "prover", "kernels", "pearl_c_sm90", "run.py")
-if "pearl_c_sm90_kernel_run" not in sys.modules:
-    _spec = importlib.util.spec_from_file_location("pearl_c_sm90_kernel_run", _RUN)
-    sys.modules[_spec.name] = importlib.util.module_from_spec(_spec)
-    _spec.loader.exec_module(sys.modules[_spec.name])
-run = sys.modules["pearl_c_sm90_kernel_run"]
-
+HERE = os.path.dirname(os.path.abspath(__file__))
+KERNEL = os.path.join(HERE, "..", "..", "..", "verity", "protocols", "accounting", "pouw", "prover", "kernels",
+                      "pearl_c_sm90")
 WINDOW, BLOCK_ROWS, BLOCK_COLS = 128, 64, 32
+
+
+def _driver():
+    """The kernel's run.py, loaded from its file as `pearl_c_sm90_run` once a process: other directories hold a run.py
+    too, so its name alone does not say which."""
+    name = "pearl_c_sm90_run"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, os.path.join(KERNEL, "run.py"))
+        module = sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    return sys.modules[name]
+
+
+run = _driver()
 
 
 class Debit:
@@ -146,7 +156,7 @@ def check(cubin: bytes, shapes: list[tuple[int, int, int]], timed: list[tuple[in
     `reps` bodies of `Debit.resident` between events (the launches alone)."""
     import time
 
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "pearl_c_vllm"))
+    sys.path.insert(0, os.path.join(HERE, "..", "pearl_c_vllm"))
     import fast_tile as FT
     from verity.protocols.accounting.pouw.prover.schemes import pearl_c_debit as D
 

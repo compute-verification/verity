@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # two_stage.py's two commands end to end on a CPU node, on a token select class at small statics (two_stage_small.py: no
-# engine): flock-circuit, flock-verify and SPOT's Lean verifier built from this tree as the toy's audit.sh builds them,
+# engine): flock-circuit, verity-verify-proof and SPOT's Lean verifier built from this tree as the toy's audit.sh builds them,
 # then `first` (the boundary registration and the first stage on a local challenger session) and `second` (the interior,
 # the second stage on a session of its own, a --zk session per member, Lean's verdicts, round 2 and the stream's outcome).
-# Exit 0 when the second stage held (two_stage_small.py expect): round 1 commits the ids the block returns as a port, the
-# return's sessions read it at round 1's rows, round 2 accepts the statements, and the stream's outcome is accepted or
-# refused by the two-stage form alone. Records under $OUT (never a circuit, a prover file, a
+# Exit 0 when the second stage is what the class's record gives (two_stage_small.py expect). Round 1 commits the ids the
+# block returns as a port and the return's sessions read it at round 1's rows. The select's logits are a value the
+# prover registers after the first stage's sample, so everything holds but round 2's second-inputs, by which it refuses
+# the statements. Records under $OUT (never a circuit, a prover file, a
 # private body or salts, or a challenger's key or secret); a record over 63 MiB (a served vocabulary's public bodies and
 # written window, a challenger host's ledger) is not kept, and large.txt lists its SHA-512, size and path.
 #   research run --on auto --cwd clone --cpus 16 --mem-gb 64 --max-min 120 -- bash benchmarks/one_stage/two_stage_small.sh
@@ -26,7 +27,7 @@ command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/de
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 
-{ (cd verity/protocols/proofs/flock/verifier && lake build flock-verify flock-firewall) \
+{ (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-firewall) \
     && (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier); } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
@@ -35,7 +36,7 @@ RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protoco
   || { tail -40 "$O/m0-build/build.log"; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
-LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify
+LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof
 sha256sum "$BIN" "$LEAN" | tee "$O/binaries.sha256"
 
 M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
@@ -49,6 +50,8 @@ UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW
 
 PY=(uv run --no-sync python)
 INLINE=(); UNLINKED=(); [ -n "${SMALL_INLINE:-}" ] && { INLINE=(--inline); UNLINKED=(--unlinked); }
+# a linked run's record of round 1 doesn't commit the select's logits, so round 2 refuses it by second-inputs
+INPUTS=(); [ -n "${SMALL_INLINE:-}" ] || INPUTS=(--inputs)
 # shellcheck disable=SC2086
 "${PY[@]}" benchmarks/one_stage/two_stage_small.py serve --out "$W/serve" "${INLINE[@]}" ${SMALL_ARGS:-} | tee "$O/serve.json"
 CHECK=$("${PY[@]}" -c 'import json,sys; print(json.load(open(sys.argv[1]))["check"])' "$O/serve.json")
@@ -74,4 +77,4 @@ for d in first second; do
      | xargs -0 -r -I{} sh -c 'printf "%s  %s  %s\n" "$(sha512sum < "$1" | cut -d" " -f1)" "$(stat -c %s "$1")" "$1"' _ {}) > "$O/$d/large.txt"
 done
 [ -f "$W/second/summary.json" ] || exit 2
-"${PY[@]}" benchmarks/one_stage/two_stage_small.py expect "$W/second/summary.json" "${UNLINKED[@]}" | tee "$O/expect.txt"
+"${PY[@]}" benchmarks/one_stage/two_stage_small.py expect "$W/second/summary.json" "${UNLINKED[@]}" "${INPUTS[@]}" | tee "$O/expect.txt"

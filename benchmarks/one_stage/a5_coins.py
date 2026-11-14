@@ -2,7 +2,7 @@
 of record, from whose coins each rank's registration samples once (`spot.coins.ChallengerCoins` over a
 `remote.RemoteChallenger`), and the evidence its verifier checks every sample's coins against once the session has ended.
 
-* **The session.** ``local``: a development session on this machine, run by the auditor host's own service
+* **The session.** ``local``: a development session on this machine, run by the auditor device's own service
   (`verity/protocols/compose/device/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an
   LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what the challenger host
   writes, and its key is this run's alone (or, where its caller keeps the host's root, `start`'s ``host``, that of every
@@ -67,7 +67,7 @@ import tempfile
 import threading
 import time
 from collections.abc import Callable, Mapping
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from multiprocessing import get_context
 from multiprocessing.managers import BaseManager
 from pathlib import Path
@@ -85,6 +85,8 @@ FAMILY = "draw"
 #: the family of the one coin after the window's root, which no sample reads
 WINDOW_FAMILY = "window"
 COINS_PER_RANK = 16
+#: the stage tag of a two-stage audit's second stage's families (`family`), apart from its first stage's
+SECOND = "second"
 LOCAL_PARAMS = (4, 5)
 LOCAL_HOST, LOCAL_PEER = "local-challenger", "local"
 MINUTES = 240
@@ -125,22 +127,23 @@ def need(rule: str, program: Program, query: Mapping[str, Any], population: int,
     return -(-(sum(reads) + max(reads, default=0)) // Ch.COIN_BYTES)
 
 
-def family(rank: int) -> str:
+def family(rank: int, stage: str = "") -> str:
     """Rank `rank`'s family of the session: its registration's alone, since a family's coins follow one registration
-    (`coins.FAMILY_ROOT`), and the one its verifier holds its sample's evidence to."""
-    return f"{FAMILY}/{rank}"
+    (`coins.FAMILY_ROOT`), and the one its verifier holds its sample's evidence to. A `stage` tag (`SECOND`) names a
+    stage's families apart from another stage's."""
+    return f"{FAMILY}/{stage}/{rank}" if stage else f"{FAMILY}/{rank}"
 
 
-def families(needs: Mapping[int, int]) -> list[list[Any]]:
+def families(needs: Mapping[int, int], stage: str = "") -> list[list[Any]]:
     """The session's layout for the samples `needs` (rank -> `need`): `WINDOW_FAMILY` with the coin after the window's
     root (`Draws.pre`), then each rank's family (`family`) with its need, at least `COINS_PER_RANK` coins."""
-    return [[WINDOW_FAMILY, 1], *([family(r), max(COINS_PER_RANK, n)] for r, n in sorted(needs.items()))]
+    return [[WINDOW_FAMILY, 1], *([family(r, stage), max(COINS_PER_RANK, n)] for r, n in sorted(needs.items()))]
 
 
-def reserve_reason(layout: list, needs: Mapping[int, int]) -> str | None:
+def reserve_reason(layout: list, needs: Mapping[int, int], stage: str = "") -> str | None:
     """Why the challenger's reserve `layout` can't cover the coin after the window's root and every rank's sample (`needs`,
     rank -> `need`), naming the need and the reserve; None when it can."""
-    want = {WINDOW_FAMILY: 1, **{family(r): n for r, n in sorted(needs.items())}}
+    want = {WINDOW_FAMILY: 1, **{family(r, stage): n for r, n in sorted(needs.items())}}
     why = Ch.layout_problem(SCHEME, 0, tuple(tuple(f) for f in layout))
     if why is not None:
         return f"the draws need {want} coins, and the challenger can't reserve {layout}: {why}"
@@ -182,8 +185,9 @@ class Draws:
     (`hold`, before its sample ends) until its sessions have closed (`release`): `tree` and `tree_open` are the client's
     (`remote.RemoteChallenger`'s), one request and its answer at a time among the ranks' reads."""
 
-    def __init__(self, window_root: str, ranks: list[int], key: dict | None = None, main: list[str] | None = None) -> None:
-        self._root, self._ranks = window_root, sorted(ranks)
+    def __init__(self, window_root: str, ranks: list[int], key: dict | None = None, main: list[str] | None = None,
+                 stage: str = "") -> None:
+        self._root, self._ranks, self._stage = window_root, sorted(ranks), stage
         self._key, self._main = key, list(main or ())
         self._lock, self._left, self._closed, self._ready = threading.Lock(), set(ranks), threading.Event(), threading.Event()
         self._io, self._held = threading.Lock(), set()
@@ -271,7 +275,7 @@ class Draws:
                 if rank not in self._left:
                     raise Ch.CoinError(f"rank {rank} has drawn, or won't: a rank's registration draws once")
                 self._left.discard(rank)
-            self._coins[rank] = CC.ChallengerCoins(Ch.LiveRecord(self._client, family(rank)))
+            self._coins[rank] = CC.ChallengerCoins(Ch.LiveRecord(self._client, family(rank, self._stage)))
             self._segment = self._coins[rank].commit(bytes.fromhex(after))
         except BaseException:
             self.drawn(rank)
@@ -310,6 +314,10 @@ class Draws:
     def ranks(self) -> list[int]:
         """The step's ranks, whose samples this session's coins are."""
         return list(self._ranks)
+
+    def stage(self) -> str:
+        """The stage tag of the session's families (`family`)."""
+        return self._stage
 
     def hold(self, rank: int) -> None:
         """Rank `rank`'s sessions take their coin trees from this session (`tree`, `tree_open`), so it stays open past
@@ -454,10 +462,11 @@ class RankCoins(CC.ChallengerCoins):
 
     def __init__(self, draws: Any, rank: int) -> None:
         self._draws, self._rank, self.read, self.need = draws, rank, bytearray(), None
+        self._label = family(rank, draws.stage())
 
     @property
     def label(self) -> str:
-        return family(self._rank)
+        return self._label
 
     def plan(self, coins: int) -> None:
         """The sample reads at most `coins` coins (`need`): once every rank has planned, the session opens (`Draws.plan`)."""
@@ -612,7 +621,7 @@ def opened_reason(got: dict, withhold: bool) -> str | None:
 
 
 class Local:
-    """A development session on this machine (module docstring), its auditor host's root in scratch `root`, pinned on the
+    """A development session on this machine (module docstring), its auditor device's root in scratch `root`, pinned on the
     verifier's copy of main's first-parent line `main`, its key at `params` (W, H), made in `workers` processes. A
     `root` that holds a host already is reopened: its key, with the leaves it has signed at, its ledger and its pins
     log are kept, so a session opened on it is the same challenger's as the ones before it, under the same key (`key`)."""
@@ -629,7 +638,7 @@ class Local:
         pins = lines(self.host.pins) if self.host.pins.exists() else []
         if not pins or json.loads(pins[-1]).get("commit") != self.pin:  # the pins log only grows, as the host's does
             with open(self.host.pins, "a", encoding="utf-8") as log:
-                log.write(A.pin_line(self.pin, main[0] if main else self.pin, A.utc(datetime.now(timezone.utc))) + "\n")
+                log.write(A.pin_line(self.pin, main[0] if main else self.pin, A.utc(datetime.now(UTC))) + "\n")
         self.params = lms.Params(64, *params)
         self.signer = A.key_signer(self.host, self.params, workers=workers)
         self.key = Ch.ChallengerKey(self.params.W, self.params.H, (self.host.key / "public").read_bytes())
@@ -642,14 +651,14 @@ class Local:
         argv = A.serve_argv(host, session, body)
         argv[argv.index("--port") + 1] = "0"
         argv += ["--params", f"{self.params.W},{self.params.H}", "--keygen-workers", "1"]
-        A.run(host, session, signer=self.signer, pinned=self.pin, now=lambda: datetime.now(timezone.utc), argv=argv)
+        A.run(host, session, signer=self.signer, pinned=self.pin, now=lambda: datetime.now(UTC), argv=argv)
 
     def open(self, root: str, layout: list, minutes: int = MINUTES, scheme: str = SCHEME,
              withhold: bool = False) -> tuple[str, str, str | None]:
         """Reserve and open the session on `root` with the coins `layout` of `scheme`, as the gate does, a withheld one
         when `withhold`: (address, secret, commitment), the commitment None on a withheld session (the gate holds its
         root until the session's end)."""
-        A, host, now = self.A, self.host, datetime.now(timezone.utc)
+        A, host, now = self.A, self.host, datetime.now(UTC)
         hooks = dict(by=self.by, now=now, own=lambda p: None, token=secrets.token_hex(2),
                      reserve=lambda s: A.reserve(host, s, signer=self.signer, pinned=self.pin, now=now))
         rc, out = A.gate(["reserve", "--peer", LOCAL_PEER, "--scheme", scheme, "--families", json.dumps(layout),
@@ -805,7 +814,8 @@ def opened_pin(ledger: list[str], session: str) -> str | None:
 
 def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | Path, *, ssh_key: str | None = None,
           peer: str | None = None, key_record: str | None = None,
-          reserve: Callable[[Mapping[int, int]], list] = families, deployed: bool = False, host: Path | None = None):
+          reserve: Callable[[Mapping[int, int]], list] | None = None, deployed: bool = False, host: Path | None = None,
+          stage: str = ""):
     """The step's session on `root` (``local`` or ``gate:USER@HOST``, module docstring) and its samples' manager: (the manager, a
     `Draws` proxy, and the thread that opens the session and publishes its evidence). The thread waits until every rank of
     `ranks` has planned its sample (`Draws.plan`), then opens the session with the layout `reserve` gives their needs
@@ -815,7 +825,7 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
     verifier's own copy of main's first-parent history (`remote.main_lines`'s file: ``git rev-list --first-parent
     origin/main``). With `deployed`, a ``local`` session's key is made at `lms.DEPLOYED` (module docstring). A ``local``
     session's host is made under `host` when given, or reopened there when it holds one (`Local`), and else in a
-    scratch directory of this run's alone. The challenger's key is known here, before the session opens (the local
+    scratch directory of this run's alone. `stage` tags every family of the session (`family`). The challenger's key is known here, before the session opens (the local
     host's, the loopback party's, or the gate's key record), and the manager holds it with `main`'s lines (`held`)."""
     first_parent = R.main_lines(main)
     if challenger == "local":
@@ -830,7 +840,8 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
                          f"not {challenger!r}")
     manager = _Manager(ctx=get_context("spawn"))
     manager.start()
-    draws = manager.Draws(root, ranks, session.key.to_json(), first_parent)
+    draws = manager.Draws(root, ranks, session.key.to_json(), first_parent, stage)
+    reserve = reserve or (lambda needs: families(needs, stage))
 
     def finish() -> None:
         needs = draws.wait_planned()
@@ -840,7 +851,7 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
             if missing:
                 raise Ch.CoinError(f"rank(s) {missing} ended before planning their draw (refused before it, or failed)")
             layout = plan["families"] = reserve(needs)
-            why = reserve_reason(layout, needs)
+            why = reserve_reason(layout, needs, stage)
             if why is not None:
                 raise Ch.CoinError(why)
         except Exception as e:  # every waiting rank's plan must end, whatever refused

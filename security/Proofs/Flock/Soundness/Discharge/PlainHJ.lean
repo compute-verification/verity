@@ -6,7 +6,7 @@ public import Proofs.Flock.Soundness.Discharge.PlainHJ.Bind
 public import Proofs.Flock.Soundness.Discharge.PlainHJ.Sound
 
 /-!
-# One plain sampled session of `J` hidden-output tables (`flock-verify verify --plain-tables`, hidden outputs)
+# One plain sampled session of `J` hidden-output tables (`verity-verify-proof verify --plain-tables`, hidden outputs)
 
 * `Defs.lean`: the hidden-output plan at the plain inputs, the challenger's live-coin part's samples and table `j`'s openings.
 * `Decode.lean`: `setupOf_tablePHJ`, `accepts_reps_atH`, `decodesOnPHJ_exec` (the decoder premise at every number of tables).

@@ -20,7 +20,8 @@ compiled):
   For H1 + fx1 on DS-120, ♭ binds DS_issue alone: an IMMA.16832, 0.025641 LDSM_X4 and fx1's 8 ALU and 8 IMAD warp
   instructions, 17.025641, and 0.4207% skippable, so B_♭ = 17.097571.
 - 4 · SMs · f_max: the credit is T_cred = B_♭/f_max a unit on one SMSP (`Accounting.TS.Model.credit`), and a GPU's
-  4 · SMs SMSPs share the window's units. SMs is data/table.toml's (188 on sm_120), f_max the sheet's (`FMAX_MHZ`).
+  4 · SMs SMSPs share the window's units. SMs is data/table.toml's (188 on sm_120), f_max the family's
+  card's `clock.sm` (`FMAX_MHZ`; the card its model.toml names).
 - ε, PoUW's headline at the sheet: outside δ = 2^-40, an accepted window takes at least (1 − ε) · T_cred a unit over
   every route. ε (Corollary D3's) is what any other route, skipped work and luck can save against ♭, so the figure
   is (1 − ε) of ♭'s block-ticks, not ♭'s. `SHEET_EPS` is 5.860%, `Sm120SheetHeadline`'s (with A5b: receipt
@@ -59,13 +60,12 @@ import sys
 from collections import Counter
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
-from pathlib import Path
 
-sys.path.append(str(Path(__file__).parent))     # appended: the tests import this module by path
 import eps_budget as EB
+from verity.device import number
 from verity_machine_model import headline
 from verity_machine_model.eps import PRODUCTS, design, honest, table
-from verity_machine_model.model import device
+from verity_machine_model.model import card, device
 
 #: what the tests read
 __all__ = [
@@ -74,9 +74,9 @@ __all__ = [
 ]
 
 SMSPS = 4                          # SMSPs an SM
-#: each family's f_max, the sheet's highest SM clock (A1): SPEC's P1, the hardware's 2,430 MHz on sm_120 (Lean's
+#: each family's f_max, the sheet's highest SM clock (A1): SPEC's P1, the family's card's `clock.sm` (Lean's
 #: `Accounting.TS.Headline.Sm120.ds120.fmax`)
-FMAX_MHZ = {"sm_120": 2430}
+FMAX_MHZ = {"sm_120": int(number(card(device("sm_120"))["clock"]["sm"]))}
 #: PoUW's headline ε at the data sheet, H1 + fx1 on DS-120: `Accounting.SecurityProofs.TS.Sm120SheetHeadline`
 SHEET_EPS = 5860 / 100000
 KINDS = tuple(f"mac:{p}" for p in PRODUCTS)
@@ -152,8 +152,8 @@ class Tile:
 def tiles(program, calls: Collection[int] | None = None) -> Counter:
     """The H1 tile units a Program `SCHEME` or `SCHEME_V3` compiled runs in its root Calls `calls` (all of them by default), by shape,
     each once per activation (a batch or scan multiplies its callee's, as `logical.work` counts)."""
-    from verity.protocols.accounting.pouw.prover.circuit import h1tile
     from verity.circuits.program import is_input
+    from verity.protocols.accounting.pouw.prover.circuit import h1tile
     versions = {id(h1tile.PouwH1Tile): 1, id(h1tile.PouwH1Tile3): 3}
     memo: dict[int, Counter] = {}
 

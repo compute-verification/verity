@@ -368,7 +368,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         self._step_off = runner_step.add(self.runner, _StepPart(self))
         runner = self.runner
         me = self
-        if hasattr(runner, "gather_batch_req_state"):                          # new `vllm.v1.worker.gpu` runner: capture the step's sorted batch rows
+        if runner is not None and hasattr(runner, "gather_batch_req_state"):   # new `vllm.v1.worker.gpu` runner: capture the step's sorted batch rows
             orig_gather = self._orig["gather_batch_req_state"] = runner.gather_batch_req_state
 
             def gather_batch_req_state(*a, **kw):
@@ -619,17 +619,25 @@ class NativeCollectCommitter(NativeHostCommitter):
             if per_row is not None and not isinstance(per_row, dict):
                 try:
                     per_row = per_row.tolist() if hasattr(per_row, "tolist") else list(per_row)
-                except TypeError:
+                except TypeError as e:
                     per_row = None
+                    self._rows_by_request(int(job.step), e)
             job.rows_snapshot = (req_ids, n, per_row, nst)
             return
         self._expand_step_rows(int(job.step), req_ids, n, per_row, nst)
 
+    def _rows_by_request(self, step: int, e: TypeError) -> None:
+        """The batch's per-row token counts of ``step`` are no list of numbers (``e``), so its rows are counted by the scheduler's
+        `num_scheduled_tokens`, by request: `step_rows_why`, which the binding's population records, says so."""
+        self.step_rows_why = (f"step {step}: its rows are counted by the scheduler's num_scheduled_tokens, by request: the batch's "
+                              f"is no list of numbers ({type(e).__name__}: {e})")[:300]
+
     def _expand_step_rows(self, step: int, req_ids: list, n: int, per_row: Any, nst: dict) -> None:
         try:
             per_row = [int(x) for x in per_row] if per_row is not None and not isinstance(per_row, dict) else None
-        except TypeError:
+        except TypeError as e:
             per_row = None
+            self._rows_by_request(step, e)
         rows, lo = [], 0
         for i, rid in enumerate(req_ids[:n]):
             if rid is None:
@@ -739,14 +747,15 @@ class NativeCollectCommitter(NativeHostCommitter):
             # at every step end -- a component that accumulates the whole prefill shows up here as a pool that never stops growing
             _pool = getattr(self, "pool", None)
             _rss = None
+            _rss_why: dict[str, str] = {}
             try:
                 with open("/proc/self/statm") as _f:
                     _rss = int(_f.read().split()[1]) * 4096
-            except OSError:
-                pass
+            except OSError as e:
+                _rss_why = {"rss_unreadable": f"{type(e).__name__}: {e}"}     # the event says why it has no resident set
             self.footprint.event("end_step", step=job.step, used=int(job.cursor), staged_bytes=job.acq_bytes, backlog=job.backlog, tensors=int(n),
                                  pinned_pool_bytes=(int(_pool.bytes_total) if _pool is not None else None),
-                                 pinned_pool_in_use=(int(_pool.bytes_in_use) if _pool is not None else None), rss_bytes=_rss)
+                                 pinned_pool_in_use=(int(_pool.bytes_in_use) if _pool is not None else None), rss_bytes=_rss, **_rss_why)
         job.done_evt.set()                                                      # (queued at step begin)
 
     # ------------------------------------------------------------------ worker side: metas from the plan (cached per plan version)
@@ -918,6 +927,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             tops = torch.cat(state["tops"]) if len(state["tops"]) > 1 else state["tops"][0]
         keep_lv = state["views"] is not None
         upper_dst = self.pool.take((2 * n_tops - 1) * 64) if keep_lv and self.retain_pinned else torch.empty(0, dtype=torch.uint8)
+        assert H is not None, "a windowed collector has the native worker's StepHasher"
         upper, mr, tree_ms = H.rows_tree(state["rs"], tops, state["n_levels"] - 1, side.cuda_stream, keep_lv, upper_dst)
         levels = list(state["views"][:state["n_levels"] - 1]) + list(upper) if keep_lv else []
         del tops
@@ -954,6 +964,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             dsts: list[Any] = [views[L][first >> L:(first >> L) + (n >> L)] for L in range(n_levels)] if copy is not None else []
             # copy_stream_ptr goes only with a copy stream: 0 is the binding's default, and a hasher may take the six arguments alone
             on_copy = (copy.cuda_stream,) if copy is not None and copy.cuda_stream else ()
+            assert self._hasher is not None, "a windowed collector has the native worker's StepHasher"
             state["tops"].append(self._hasher.rows_tree_window(state["rs"], lv, n_levels, first, side.cuda_stream, dsts, *on_copy))
         if copy is not None:
             state["copied"] = torch.cuda.Event()
@@ -1007,6 +1018,7 @@ class NativeCollectCommitter(NativeHostCommitter):
 
         side = self._side_stream()
         nc, H, W, C = self._nc, self._hasher, self.win_bytes, self.chunk
+        assert H is not None, "a windowed collector has the native worker's StepHasher"
         if getattr(nc, "win_dead", False):
             # the serving thread's slot wait timed out earlier in this run: every stage() since was refused by name, so this step
             # has nothing staged -- fail it by the SAME name instead of tripping over an empty tree ("cudaMemcpyAsync(root): invalid argument").
@@ -1143,6 +1155,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                     hfirst = False                                              # past rows_hold_bytes of h: this window on takes the host path
                 if hfirst:
                     if padded_k:
+                        assert rs_h is not None, "a step whose windows are hashed to h in place made its row step"
                         rs_h.max_blocks = self.rows_cap_blocks if self.rows_cap_blocks and nc.free_slots() >= self.rows_cap_free else 0
                         hwins.append((k, H.rows_h(rs_h, st, padded_k, k << j, tn, side.cuda_stream)[0]))
                 elif bounded and not fault_lifetime:
@@ -1303,6 +1316,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                 for kk, hv, n in host_wins:
                     if not n:
                         continue
+                    assert self.win_scratch is not None, "no scratch window: `enable_windows` allocates it before the run"
                     self.win_scratch[:n].copy_(hv[:n], non_blocking=True)     # H2D pinned; same stream as the leaf kernel -> ordered
                     lv_k = row_leaves(self.win_scratch, n, kk)
                     absorb(kk, lv_k)

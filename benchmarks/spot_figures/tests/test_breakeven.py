@@ -51,8 +51,8 @@ def test_the_proof_servers_line_prices_on_figure_1s_path():
 def test_a_case_s_partition_cuts_its_line_beside_the_line_s_own_cut():
     """A case's `partition` cuts its line's circuit by that card too, priced as Figure 1 prices a configuration: the
     tokens line cut by `head-scores-values` is that configuration's own strata, and the per-expert line cut by it keeps
-    its per-expert blocks and holds the scores and values units in place of the whole head blocks, with its served
-    MACs. A card replacing a kind the line's own cut replaces, and a card the model hasn't, are refused. Slow as the
+    its per-expert blocks and holds the scores and values units and their key rows' writers in place of the whole head
+    blocks, with its served MACs. A card replacing a kind the line's own cut replaces, and a card the model hasn't, are refused. Slow as the
     tests above."""
     from dataclasses import replace
 
@@ -63,9 +63,9 @@ def test_a_case_s_partition_cuts_its_line_beside_the_line_s_own_cut():
     case = replace(sweep.cases()["P5+poolwin600"], partition=cut)
     line, base = sweep.build(case), sweep.build(replace(case, partition=""))
     fams = [{x["block"].split("{")[0] for x in L[1]["partition"].value["strata"]} for L in (line, base)]
-    assert {"SparseMlaHeadScores_v1", "SparseMlaHeadValues_v1"} <= fams[0] and "SparseMlaHeadBlock_v1" not in fams[0]
-    assert "SparseMlaHeadBlock_v1" in fams[1] and fams[0] - fams[1] == {"SparseMlaHeadScores_v1", "SparseMlaHeadValues_v1",
-                                                                         "SparseMlaSplitEnd_v1"}
+    units = {"SparseMlaHeadScoresCols_v1", "SparseMlaHeadValues_v1", "SparseMlaHeadKeysWire_v1"}
+    assert units <= fams[0] and "SparseMlaHeadBlock_v1" not in fams[0]
+    assert "SparseMlaHeadBlock_v1" in fams[1] and fams[0] - fams[1] == units | {"SparseMlaSplitEnd_v1"}
     assert {f for f in fams[1] if f.startswith(("Fused[", "MoeRouter"))} <= fams[0]
     assert line[1]["partition"].value["served_macs_per_token"] == base[1]["partition"].value["served_macs_per_token"]
     with pytest.raises(ValueError, match="`per-expert` and `per-expert-fused` both replace"):

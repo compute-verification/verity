@@ -302,7 +302,7 @@ AUTO_PLAN = "check-shard-plan.json"
 #: are when set, `check.py --shard-plan` there with the rest of its arguments into `AUTO_PLAN` in the plan's directory ($1),
 #: the worktree removed after; its venv kept between plans.  The job exits as check.py did: on an NFS TMPDIR (the control
 #: pod's) `git worktree remove` can stop at a directory a silly-renamed file keeps from emptying and exit 255, so `rm -rf`
-#: takes what it left, as train.sh does, and a worktree that won't go fails no plan
+#: takes what it left, and a worktree that won't go fails no plan
 PLAN_JOB = ('set -e; d=$1 r=$PWD; t="${TRAIN_TREES:-${1%/*}}/plan-${1##*/}"; mkdir -p "${t%/*}"; '
             'export UV_PROJECT_ENVIRONMENT="${t%/*}/plan-venv"; git worktree add -q --detach "$t" "$2"; '
             'trap \'s=$?; set +e; cd "$r"; git worktree remove --force "$t" 2>/dev/null || rm -rf "$t" 2>/dev/null || '
@@ -897,7 +897,7 @@ def not_run(st: dict) -> bool:
 
 class Landing:
     """The queue's side of a landing on ``q`` (the module's docstring).  ``on`` is drive.toml's machines at `main`, which its
-    checks run on ("" for one that launches nothing); ``launch`` launches a check (`train_launch`), which `launch_postland`
+    checks run on ("" for one that launches nothing); ``launch`` launches a check (`train_launch`), which `launch_after_landing`
     and `launch_locks` wrap; ``states``, ``evidence`` and ``cancel`` read and stop runs (`run_states`, `evidence`,
     `cancel_runs`); ``post`` posts to the merge thread (`merge_thread_post`); ``now`` is the clock; ``warn_steps`` is
     drive.toml's `warn_steps`, the steps whose failure doesn't hold `main`; ``reviews`` and ``ready_by`` read a PR head's
@@ -928,7 +928,7 @@ class Landing:
         self.planned: Callable[[dict], tuple[dict | None, str | None]] = planned
         #: a candidate's check, or the run beside it (`vqueue_slim.start`): `train.sh COMMIT MACHINE --deferred STEPS`, detached
         #: (`_started`), its check at `POSTLAND_SLOT_RANK`; an injected `launch` launches it too
-        self.launch_postland: Callable[..., tuple[list[str], str] | dict] = (
+        self.launch_after_landing: Callable[..., tuple[list[str], str] | dict] = (
             (lambda repo, commit, machine, steps, agreement=False, no_cache=False, circuit_cache=False, no_regenerate=False,
                     shard=None, base=None, cc_records=False, cc_records_from=None, shard_plan=None, ratchet_base=None,
                     train_from=None, deselect=None:
@@ -966,7 +966,7 @@ class Landing:
 
     @staticmethod
     def _started(got: tuple[list[str], str] | dict) -> tuple[dict | None, str]:
-        """A launch record's fields from what `launch_locks` or `launch_postland` returned: {"ids"} of a launch that printed
+        """A launch record's fields from what `launch_locks` or `launch_after_landing` returned: {"ids"} of a launch that printed
         them, {"ids": [], "launch"} of one still running detached (`detach`), which `_resolve` reads on later ticks and which
         counts as running until then; None, with train.sh's output's tail, of one that registered no run."""
         if isinstance(got, dict):
@@ -1299,7 +1299,7 @@ class Landing:
                       self._handle(n))
 
     def beside_args(self, tip: str, base: str) -> tuple[dict, list[str], str]:
-        """A check of candidate ``tip`` above ``base``, the commit of `main` below it (`vqueue_slim.start`): (`launch_postland`'s
+        """A check of candidate ``tip`` above ``base``, the commit of `main` below it (`vqueue_slim.start`): (`launch_after_landing`'s
         keywords, the steps it skips by name, its flags as a message gives them).  It sends the upstream build (`--agreement`)
         when the merges above ``base`` change what lean-agreement checks (as check.py finds against that base), and skips
         lean-agreement else; lean-audit fails on a record difference (`--no-regenerate`), since the records it checks are the

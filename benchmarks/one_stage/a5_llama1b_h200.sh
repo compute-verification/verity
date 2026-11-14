@@ -37,12 +37,12 @@ CLEAN_PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:/usr/local/sbin:/us
 for f in "$FA3" "$FA3G" "$NT" "$VENV/bin/python" "$PART"; do [ -e "$f" ] || { echo "a5_llama1b_h200.sh: missing $f" >&2; exit 2; }; done
 mkdir -p "$D" "$ROOT/cache" "$BASE/sealed" "$FW" "$KEPT"
 
-# the CPU side's builds, in the background: the tree's venv, Lean's flock-verify, flock-firewall and sampled-proofs-verifier, M0
+# the CPU side's builds, in the background: the tree's venv, Lean's verity-verify-proof, flock-firewall and sampled-proofs-verifier, M0
 ( export PATH=$CLEAN_PATH; unset PYTHONPATH PY PY312 VIRTUAL_ENV; cd "$TREE" || exit 1
   command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   uv sync --all-packages --extra torch-cpu || exit 5
-  (cd verity/protocols/proofs/flock/verifier && lake build flock-verify flock-firewall) || exit 7
+  (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-firewall) || exit 7
   (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) || exit 7
   RESEARCH_RUN_DIR=$OUT/prebuild FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh || exit 6
 ) > "$OUT/prebuild.log" 2>&1 &

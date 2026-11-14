@@ -40,7 +40,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 # The compiled part's setup is the model's recursive setup
 
 Each part `j` of the compiled recursive component (`VStar.Recursive.partVerdict`) sets its session up as
-`flock-verify verify --zk` does with that part's recursive flags: Flock's session (`OneStageZk.buildSessionOf`) and the
+`verity-verify-proof verify --zk` does with that part's recursive flags: Flock's session (`OneStageZk.buildSessionOf`) and the
 verifier's own checks on it (`BaseSetup`), then V\*'s checks block (after `RecSetup.checkInner` and
 `RecLinkPart.checkShape` at no link table), `RecSetup.checks`, `RecSetup.oneFull`, `Zk.shapeOk`, `RecCoins.check`,
 `RecVStar.checkPubRows`, `RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink`, `RecLinkPart.check`

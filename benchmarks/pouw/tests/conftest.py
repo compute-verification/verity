@@ -26,6 +26,8 @@ import pytest
 from verity.protocols.accounting.certifier.verifier import active
 
 POUW = Path(__file__).resolve().parents[1]
+#: PoUW's prover's kernel directories, which `load` reads a file from that ``benchmarks/pouw/`` does not hold
+KERNELS = POUW.parents[1] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels"
 #: what under ``benchmarks/pouw/`` this suite takes no script from: the tests, the package the environment installs,
 #: and ``edited_gemm``, a suite of its own whose files this suite's inputs do not hold
 NOT_SCRIPTS = frozenset({"tests", "exact_kit", "edited_gemm"})
@@ -73,12 +75,13 @@ def load_name(file: str | Path) -> str:
 
 
 def load(file: str) -> ModuleType:
-    """``benchmarks/pouw/FILE`` as a module named `load_name` of it, run once however many tests ask. For a module whose
-    name another directory holds and `AHEAD` gives to that one, and for one its own directory's scripts load from its
-    file under this name."""
+    """``benchmarks/pouw/FILE``, else `KERNELS`' ``FILE``, as a module named `load_name` of it, run once however many
+    tests ask. For a module whose name another directory holds and `AHEAD` gives to that one, and for one its own
+    directory's scripts load from its file under this name."""
     name = load_name(file)
     if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, POUW / file)
+        path = POUW / file if (POUW / file).exists() else KERNELS / file
+        spec = importlib.util.spec_from_file_location(name, path)
         sys.modules[name] = module = importlib.util.module_from_spec(spec)
         try:
             spec.loader.exec_module(module)

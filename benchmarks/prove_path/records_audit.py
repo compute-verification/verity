@@ -10,7 +10,8 @@ The records, every one in the window's directory but the advice's opening:
 * **the values**, committed before any coin: the registration (``registration.json``) and the files `rows.write` writes;
 * **on a sample, the sampled proof blocks' openings** (``m<k>-private.bin``), which reach only the prover behind the ZK server.
 
-The verifier's window is `interface.of_records`'s, each template resolved in Verity's catalog (`catalog_resolve`), or, for a
+The verifier's window is `interface.of_records`'s, each template resolved among the Definitions a catalog registers
+(`catalog_resolve`), or, for a
 template the verifier lowers from its own input set (``--template-sets``), that set's Definition; a window with row tables
 is refused until its records carry their segment roots. Before the sample the audit holds the registration to that circuit,
 to the run root the run published (``--run``) and, for a compiled circuit, to the compiler and advice it was compiled from
@@ -76,12 +77,13 @@ the prover's development verifier (`PEARL_CREDIT`). Once the records are read an
 audit stopped before its proofs end still says what it was tied to.
 
 ``--day N --day-log LOG``: the window is day N's, and the deployment's registration log declares the day's one circuit
-(`verity.hardware.registration.Declaration`). R2 holds the registration's program to it (`declared_day`, one-stage's
-Declared day), a negative moves the declaration to another program, and the summary's ``day`` names the day's declared
-program and where the day came from (`DAY_SOURCES`). ``--day`` and the prover's log are the development fallback: they
-bind the day to no time the auditor's device signed. ``--day-ledger LEDGER`` reads the day from the challenger's signed
-ledger instead (`device_day`, the challenger's ``declared_day``): the UTC day of the window's signed open and the
-declarations its lane signed before it, so a window that opens before UTC midnight and closes after is its open's day's.
+(`verity.protocols.accounting.registration.verifier.registration.Declaration`). R2 holds the registration's program to
+it (`declared_day`, one-stage's Declared day), a negative moves the declaration to another program, and the summary's
+``day`` names the day's declared program and where the day came from (`DAY_SOURCES`). ``--day`` and the prover's log
+are the development fallback: they bind the day to no time the auditor's device signed. ``--day-ledger LEDGER`` reads
+the day from the challenger's signed ledger instead (`device_day`, the challenger's ``declared_day``): the UTC day of
+the window's signed open and the declarations its lane signed before it, so a window that opens before UTC midnight
+and closes after is its open's day's.
 It reads the device's own ledger whole: a copy PoUS cut to a window's sessions
 (`pous.period.cite`) drops the declarations and the chain, and is refused. A window opened before its day's declaration,
 or of a lane that never declares, has no declaration of its day, so R2 refuses it (``R2-undeclared``).
@@ -95,8 +97,8 @@ the cache's key covers both; the audit with ``--compose-cache`` then composes no
 quotes the warm's beside it.
 
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
-        [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
-        --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
+        [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --firewall flock-firewall \\
+        --out DIR [--delta D] [--port P] [--ports N] [--forged | --forged-read] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W [--tie-prefix P]] [--skip-negatives] \\
         [--compose-cache DIR] [--day N --day-log LOG [--day-params FILE] | --day-ledger LEDGER]
     records_audit.py warm --window DIR --law L [--template-sets DIR] --compose-cache DIR [--jobs N]
@@ -144,13 +146,20 @@ auditing tree. The compile command is ``argv --advice FILE --out FILE``:
 ``--challenger``: the sample on the auditor's challenger's coins (`a5_coins`), the only coins a sample is on, as `prove_path.py audit`
 takes them: ``local``, a development session on this machine (with ``--deployed-key``, under a key made at the deployed
 LMS parameters, the only ones SPOT's v2 reads a challenger's signatures under), ``loopback:HOST:PORT``, that session on the challenger
-party's host (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, the auditor host through its SSH gate with
+party's host (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, the auditor device through its SSH gate with
 the lane's gate key ``--gate-key``, its challenger on ``--peer``'s 127.0.0.1 (so the audit runs on that peer), under the
 deployment's key record ``--challenger-key``. The gate opens a root once, ever.
 
-``--forged``: the window holds a forged unit, and the
-audit passes when every check before the sample passed and Lean refused the outcome (the prover runs with its self-check
-skipped, ``FC_ZK_SELF_CHECK=skip``, so it sends proofs of the false witness).
+``--forged``: the window holds a forged unit, and the audit passes when every check before the sample passed, the audit
+record rejects and the ZK server released no proof of the false member (`forged_outcome`). The prover runs with its
+self-check skipped, ``FC_ZK_SELF_CHECK=skip``, so it proves the false witness, and the ZK server holds the proof back.
+
+``--forged-read``: the window holds no false unit and a registered read that opens no pinned root (values served as the
+registered ones that are not), and the audit passes when every check before the sample passed, the audit record rejects
+and the Lean verifier refused a session while setting its statement up, on a row of that read not opening the root the
+verifier holds (`forged_outcome`'s ``read_refused``, `READ_OPENS_NO_ROOT`). The window's units are their Definitions',
+so its prover runs as an honest window's does and its proofs may leave: the audit passes on that refusal alone, never
+on a proof held back or refused, and under ``--forged`` never on that refusal.
 """
 from __future__ import annotations
 
@@ -179,7 +188,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from verity import device as ST  # noqa: E402
-from verity.hardware import registration as G  # noqa: E402
+from verity.protocols.accounting.registration.verifier import registration as G  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE  # noqa: E402
 from verity.protocols.accounting.pouw.verifier import credit as CR  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
@@ -196,7 +205,7 @@ REFUSED = 2
 
 
 def catalog_resolve(tid: str) -> Any:
-    """`interface.resolve` over the whole of Verity's catalog, the registry's Definitions loaded too (a window's io shell and
+    """`interface.resolve` over every catalog's Definitions, the registry's loaded too (a window's io shell and
     its blocks, which `interface`'s own walk can't import); a refusal names the registry modules that failed to import."""
     from verity.definitions.registry.catalog import load
 
@@ -806,7 +815,7 @@ def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]
 def verifier_window(window_dir: Path, law: Mapping[str, Any] | str, template_sets: Path | None) -> tuple[Any, dict, dict]:
     """The verifier's window and circuit record from the records (`interface.of_records`), and a5's template sets: each
     statement's template composed from its Definition (`composer`), every other template lowered from the verifier's own
-    input set, whose Definition it resolves to; any other template from Verity's catalog (`catalog_resolve`). ``law`` is
+    input set, whose Definition it resolves to; any other template from a catalog (`catalog_resolve`). ``law`` is
     the window's sampling design, or as text the rate a stream states as its rule (`service.Law`, which refuses a fixed
     count by name): the window's sampling design and work table are then the ones that rate names over the window's own proof
     blocks (`a5.rated`), as the stream derives them. A window with row tables is refused: a5 checks their segment roots
@@ -898,6 +907,104 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
                        "expected": f"the public file's byte {off} of {len(pub)}, bit 0 flipped, under the honest proof"}
     return {"member": k, "session": honest.name, "edits": len(cases), "refused": sum(v["refused"] for v in cases.values()),
             "cases": cases}
+
+
+def zk_server_refused() -> str:
+    """How the ZK server's reason for a message it holds back opens (its Lean's own text, under the prover's name for
+    it, `rec_live.refused`), which the prover's record of its session gives as why it stopped (``prover_stopped``; live
+    PROTOCOL.md, the ZK server's send check)."""
+    from verity_flock import rec_live
+
+    return rec_live.refused("")
+
+
+#: how a Lean verdict's reason opens where a file of the session's (its record, a rep's proof) was not there to read
+#: (`FlockVerify`'s ``verify``): like a refusal at setup, which `a0.lean_refused` leaves out, the verifier read no proof
+NO_SESSION_FILES = "session files:"
+#: what a Lean verdict's reason names where a table row of a statement's registered read does not open the root the
+#: verifier holds for the value read (`Registered.checkPort` in Flock's verifier: ``registered reads: port P: table row R
+#: does not open V's registered root at position N``), a check `verify` makes while it sets the statement up (the
+#: reason opens ``setup:``) and before it reads a proof. The registered reads' other refusals there do not name it: a
+#: verifier that holds no root for a read, or a statement that names none, is no row seen not to open one
+READ_OPENS_NO_ROOT = "'s registered root at position "
+
+
+def session_proofs(sdir: Path) -> dict[str, Any]:
+    """What member session ``sdir`` (a5's ``session-m<k>``) records of its proofs leaving the prover: ``proofs``, how many
+    proof streams the verifier's record of the session lists (``session.json``'s ``proof_sha512``; None where the session
+    has no record, or its record no such list), and ``prover_stopped``, why the prover's record says it stopped short (its
+    ``LIVE`` line; None where it didn't, or printed no such line). A session that was a process pair of its own has the
+    line in its ``prove.log`` (`a0.session`). One the audit's proof server proved (`a5.proof_server`) has none: its line
+    is in that server's prover's log, ``proof-server/prover-*.log`` beside the sessions, among every session's of that
+    prover, and is the one whose ``label`` is the session's directory, as a5 submits it. A ``LIVE`` line is one that
+    opens ``LIVE`` and a tab and holds a JSON object from there to its end. A line not opened so, or holding JSON that
+    is no object, is none and gives no stop; one opened so that holds no JSON raises, as the proof server's own read of
+    it does."""
+    recs = sorted((sdir / "sessions").glob("*/session.json"))
+    listed = json.loads(recs[-1].read_text()).get("proof_sha512") if recs else None
+
+    def lines(log: Path) -> list[dict]:
+        found = [json.loads(x[5:]) for x in (log.read_text(errors="replace").splitlines() if log.is_file() else ())
+                 if x.startswith("LIVE\t")]
+        return [v for v in found if isinstance(v, dict)]
+    own = lines(sdir / "prove.log")
+    served = [v for log in sorted((sdir.parent / "proof-server").glob("prover-*.log")) for v in lines(log)
+              if v.get("label") == str(sdir.resolve())]
+    live = next(iter(own or served), {})
+    return {"proofs": None if listed is None else len(listed), "prover_stopped": live.get("prover_stopped")}
+
+
+def forged_outcome(s: dict, wdir: Path, member: int | None = None, more: Mapping[str, bool] | None = None,
+                   read: bool = False) -> dict[str, Any]:
+    """A forged window's verdict, from a5's summary ``s`` and its audit directory ``wdir`` (``audit.json``, each sampled
+    member's ``session-m<k>``). Every check before the sample passed, ``more`` (the caller's own checks) holds, the audit
+    record rejects, and the window was stopped where what it forges is. The caller says what that is, a false unit or
+    (``read``) a registered read, and the window passes on the one check that calls for, never on another's:
+
+    * a false unit behind the ZK server (the summary's ``arm`` is ``fw``, which a5 writes where the sessions ran behind
+      its binary and nowhere else), no proof of which may leave the prover:
+      ``no_proof_released``, the session of the member holding the forged unit (``member``; any sampled member's where
+      None) has no proof in the verifier's record of it, and the prover's record gives the ZK server's refusal as why it
+      stopped (`session_proofs`, `zk_server_refused`). The Lean verifier refuses that session too, for want of its files:
+      a verdict on no proof.
+    * a false unit behind none (a plain audit), whose proof leaves, and Lean's own verdict must refuse it:
+      ``lean_refused``, the Lean verifier refused a proof it read (`a0.lean_refused`, and not for want of the session's
+      files, `NO_SESSION_FILES`).
+    * ``read``, a registered read that opens no pinned root, in a window of no false unit: ``read_refused``, some
+      session's Lean verdict is a refusal naming a row of a registered read that does not open the verifier's root,
+      which Lean checks at setup (`a0.lean_refused` naming `READ_OPENS_NO_ROOT`). The units are their Definitions', so
+      the sessions' proofs may leave, and none is refused: neither is asked of the window, or held against it.
+
+    ``checks`` holds the three, and the window passes on the one named (``passes_on``); the other two are shown and not
+    counted. A check with nothing to read has no value, and ``no_value`` says why: ``no_proof_released`` behind no ZK
+    server, and ``lean_refused`` where Lean refused only sessions it read no proof of (False where it refused none).
+    ``sessions`` is what each session read records (`session_proofs`), and ``why`` the audit's reasons."""
+    import a0
+
+    audit, behind, no_value = s.get("audit") or {}, s.get("arm") == "fw", {}
+    record = json.loads((wdir / "audit.json").read_text()) if (wdir / "audit.json").is_file() else {}
+    lean = {k: v for k, v in (record.get("verdicts") or {}).items() if k.startswith("lean-verify/") and v.get("accepted") is not True}
+    on_proof = [k for k, v in lean.items() if a0.lean_refused(v) and not v["why"].startswith(NO_SESSION_FILES)]
+    refused: bool | None = bool(on_proof)
+    if lean and not on_proof:
+        refused = None
+        no_value["lean_refused"] = "the Lean verifier read no proof: " + "; ".join(
+            f"{k}: {(v.get('why') or 'no reason given').split(chr(10), 1)[0]}" for k, v in sorted(lean.items()))
+    dirs = sorted(wdir.glob("session-m*")) if member is None else [wdir / f"session-m{member}"]
+    sessions = {d.name.removeprefix("session-"): session_proofs(d) for d in dirs}
+    no_proof_released: bool | None = None
+    if behind:
+        no_proof_released = any(x["proofs"] == 0 and str(x["prover_stopped"] or "").startswith(zk_server_refused())
+                                for x in sessions.values())
+    else:
+        no_value["no_proof_released"] = "the sessions ran behind no ZK server"
+    stopped = {"no_proof_released": no_proof_released, "lean_refused": refused,
+               "read_refused": any(a0.lean_refused(v, READ_OPENS_NO_ROOT) for v in lean.values())}
+    on = "read_refused" if read else "no_proof_released" if behind else "lean_refused"
+    checks = {"checks_before_draw": bool(s.get("checks_before_draw")) and all(s["checks_before_draw"].values()), **(more or {}),
+              "rejected": audit.get("accepted") is False, **stopped}
+    return {"ok": all(v is True for c, v in checks.items() if c == on or c not in stopped), "checks": checks, "passes_on": on,
+            "no_value": no_value, "sessions": sessions, "why": audit.get("why")}
 
 
 def audit(a: argparse.Namespace) -> int:
@@ -1017,12 +1124,8 @@ def audit(a: argparse.Namespace) -> int:
             ordered = ordered and row["after_draw"]["refused"]
     else:
         ordered = False
-    if a.forged:
-        verdicts = (s.get("audit") or {}).get("verdicts") or {}
-        checks = {"checks_before_draw": bool(s.get("checks_before_draw")) and all(s["checks_before_draw"].values()),
-                  "rejected": (s.get("audit") or {}).get("accepted") is False,
-                  "lean_refused": any(v is False for k, v in verdicts.items() if k.startswith("lean-verify/"))}
-        row["forged"] = {"ok": all(checks.values()), "checks": checks, "why": (s.get("audit") or {}).get("why")}
+    if a.forged or a.forged_read:
+        row["forged"] = forged_outcome(s, out / "window", read=a.forged_read)
         row["ok"] = row["forged"]["ok"] and ordered
     else:
         row["ok"] = ok and ordered and (compiled is None or compiled["ok"])
@@ -1042,7 +1145,7 @@ def audit(a: argparse.Namespace) -> int:
                                      "leak": {k: row["leak"][k] for k in ("other_inputs", "free", "registered", "advice_bits",
                                                                           "bound", "unpinned", "untied", "window")
                                               if k in row["leak"]},
-                                     **({"forged": row["forged"]} if a.forged else {})}, sort_keys=True, default=str))
+                                     **({"forged": row["forged"]} if "forged" in row else {})}, sort_keys=True, default=str))
     return 0 if row["ok"] else 1
 
 
@@ -1095,12 +1198,15 @@ def main(argv: list[str] | None = None) -> int:
                    "every member with a proved unit, a sample needing more refused before any listens (default one a member)")
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--session-jobs", type=A5.one_session, default=1, help="1 only: a5 runs the sessions one at a time (a5.ONE_AT_A_TIME)")
-    p.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")
+    forges = p.add_mutually_exclusive_group()
+    forges.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")
+    forges.add_argument("--forged-read", action="store_true", help="the window holds a registered read that opens no pinned "
+                        "root, and no forged unit: the Lean verifier must refuse it at setup on that read")
     p.add_argument("--flip-proofs", type=int, default=0, metavar="N",
                    help="after an accepted audit, at most N one-bit edits of its first drawn session's proof, each of which "
                    "Lean verify must refuse (`proof_edits`)")
     p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins): local, loopback:HOST:PORT or "
-                   "gate:USER@HOST (the auditor host through its SSH gate, with --peer and --challenger-key)")
+                   "gate:USER@HOST (the auditor device through its SSH gate, with --peer and --challenger-key)")
     p.add_argument("--deployed-key", action="store_true",
                    help="with --challenger local: the session's key at the deployed LMS parameters (a5_coins.start's deployed), "
                    "its whole tree made over this machine's cores")

@@ -2653,7 +2653,7 @@ def test_the_after_lean_suites_test_files_reading_lean_build_s_outputs_stand_for
     runs after lean-build stand for lean-suites (`_job`): the graph lacks no job `main` waits for, and the lean-suites tasks
     its base lists may go.  A candidate whose base's check isn't listed waits for it."""
     env.gates = ["pytest", "lean-build", "lean-suites"]
-    lean, exe = "verity/protocols/proofs/flock/verifier", {"name": "flock-verify", "path": "verity/protocols/proofs/flock/verifier/.lake/build/bin/v"}
+    lean, exe = "verity/protocols/proofs/flock/verifier", {"name": "verity-verify-proof", "path": "verity/protocols/proofs/flock/verifier/.lake/build/bin/v"}
     build, outs = f"lean-build:{lean}", [exe, {"name": "build", "path": f"{lean}/.lake/build.tar.gz"}]
     env.put(1, {"a.txt": "1\n"})
     loop = env.loop(policy)
@@ -2663,14 +2663,14 @@ def test_the_after_lean_suites_test_files_reading_lean_build_s_outputs_stand_for
     env.graph2.list_graph(f"ready:{main}", _graph(main, [
         a, {"id": build, "kind": "lean-build", "inputs": [f"{lean}/Main.lean"], "key": "sha512:b0", "outputs": [exe]},
         {"id": "lean-suites:verity-flock", "kind": "lean-suites", "inputs": ["f/test_f.py"],
-         "reads": [{"task": build, "output": "flock-verify"}]}]))
+         "reads": [{"task": build, "output": "verity-verify-proof"}]}]))
     env.graph2.list_graph(f"ready:{sha}", _graph(sha, [
         a, {"id": build, "kind": "lean-build", "inputs": [f"{lean}/Main.lean"], "key": "sha512:b1", "outputs": outs},
         {"id": "test-file:f/test_f.py", "kind": "test-file", "inputs": ["f/test_f.py"],
          "reads": [{"task": build, "output": o["name"]} for o in outs]}]))
     env.result("sha512:a", "pytest:a", PASS)
     env.graph2.finish_result({"key": "sha512:b1", "task": build, "status": PASS,
-                              "outputs": {"flock-verify": "sha512:v", "build": "sha512:t"}})
+                              "outputs": {"verity-verify-proof": "sha512:v", "build": "sha512:t"}})
     _, made, _ = w._settled(w.tasks.graph_v2(f"ready:{sha}")[1])
     env.result(made["test-file:f/test_f.py"], "test-file:f/test_f.py", PASS)
     j = w.verdict(sha, main)
@@ -4206,7 +4206,7 @@ class Runs:
         self.tmp, self.launches, self.state, self.dirs, self.cancelled = env.tmp / "runs", [], {}, [], []
         loop.world.on = on
         d = loop.world.slim_driver()
-        d.launch_postland, d.states = self.launch, lambda repo, ids: {i: self.state[i] for i in ids}
+        d.launch_after_landing, d.states = self.launch, lambda repo, ids: {i: self.state[i] for i in ids}
         d.evidence = lambda repo, ids: [x for x in self.dirs if x.name in ids]
         d.cancel = lambda repo, ids, reason: self.cancelled.extend(ids)
 
@@ -4593,6 +4593,87 @@ def test_under_gate_check_a_candidate_changing_no_lean_input_takes_lean_audit_fr
     started = {r["sha"]: r for r in env.lines() if r["action"] == "slim" and r["why"] == "started"}
     assert [started[c]["record"].get("lean_audit_from") for c in (one, two, three)] == [None, None, two]
     assert loop.world._changed(main, common) == {"tools/verity/check/common.py"}
+
+
+@pytest.mark.parametrize("main_says", ["passed", "nothing yet", "failed pytest"])
+def test_under_gate_check_a_candidate_on_one_in_flight_leaves_suites_to_its_base_s_check_once_main_s_passed_them(
+        env, monkeypatch, main_says):
+    """Three candidates stacked, one PR each.  The lowest is on `main`, whose check answers for nothing in flight: it names
+    no lender.  Each above it names its base (``suites_from``) once the check of `main` passed both suite steps, and none
+    while that check runs or failed one: a candidate lands on `main`'s failure as inherited, and a check that left the
+    failing suite out would record its step passed.  A check that left suites to its base's stands on it as every stacked
+    candidate does: passed, it advances nothing while its base's runs, and its base failed drops it."""
+    main = env.main()
+    env.put(1, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"})
+    env.put(2, {"b.txt": "1\n"})
+    env.put(3, {"c.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=3)
+    loop.tick()
+    if main_says == "passed":
+        runs.end(main)
+    elif main_says == "failed pytest":
+        runs.end(main, shard=2, step="pytest", rows=(_row(OLD),))
+    loop.tick()
+    loop.tick()
+    started = [r for r in env.lines() if r["action"] == "slim" and r["why"] == "started" and r["sha"] != main]
+    one, two, three = (r["sha"] for r in started)
+    assert [r["base"] for r in started] == [main, one, two]
+    assert [r["record"].get("suites_from") for r in started] == ([None, one, two] if main_says == "passed" else [None] * 3)
+    if main_says != "passed":
+        return
+    runs.end(two)
+    runs.end(three)
+    assert not {"advance", "drop"} & {*_acts(loop.tick())} and env.main() == main
+    runs.end(one, shard=2, step="pytest", rows=(_row(NEW),))
+    dropped = {r["sha"]: r["why"] for r in loop.tick() if r["action"] == "drop"}
+    assert (dropped[two], dropped[three]) == ("its base failed",) * 2 and one in dropped and env.main() == main
+
+
+@pytest.mark.parametrize("case", ["its base's check passed them", "it still runs", "it passed"])
+def test_under_gate_check_a_candidate_that_left_suites_to_its_base_s_check_lands_only_on_that_check_s_pass_of_them(
+        env, monkeypatch, case):
+    """A candidate whose check left suites to its base's passes only once that check passed both suite steps.  Where it
+    did, the two land in one tick.  Where it never will, the candidate runs them itself: here its base's
+    check ended in infra and was started again under a deselect list, so it passed without some tests of the suites left to
+    it.  The candidate above, though its own check passed, doesn't land with its base; once that is `main` its check is
+    started again with no lender, its runs still running cancelled, and it lands on that check."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"tools/verity/check/common.py": "# the auditor imports this\n"})     # so it audits itself: no other wait
+    loop, runs = _check(env, monkeypatch, batch=1, depth=2)
+    loop.tick()
+    runs.end(main)
+    loop.tick()
+    started = {r["sha"]: r for r in env.lines() if r["action"] == "slim" and r["why"] == "started" and r["sha"] != main}
+    (one, _), (top, lent) = started.items()
+    assert (lent["record"]["suites_from"], lent["base"], lent["record"].get("lean_audit_from")) == (one, one, None)
+    if case == "its base's check passed them":
+        runs.end(one)
+        runs.end(top)
+        assert _acts(loop.tick()).count("advance") == 2 and env.main() == top
+        assert not [r for r in env.lines() if r["action"] == "slim" and r["why"].startswith("started again")]
+        return
+    runs.end(one, 2, "pytest", "error: no\n")
+    runs.state["c-5"] = ("done", 137, None)
+    (env.tmp / "deselect").write_text("pkg/tests/test_x.py::test_slow\n")
+    loop.world.deselect_file = env.tmp / "deselect"
+    logged = loop.tick()
+    assert [r["why"] for r in logged if r["action"] == "slim" and r["sha"] == one] == ["judged infra", "started again"]
+    assert logged[-1]["record"]["deselect"] is True
+    runs.end(one)
+    if case == "it passed":
+        runs.end(top)
+    loop.tick()
+    assert env.main() == one, "only its base lands"
+    logged = loop.tick()
+    assert env.main() == one and "advance" not in _acts(logged)
+    (again,) = [r for r in logged if r["action"] == "slim" and r["sha"] == top and r["why"].startswith("started again")]
+    assert again["why"] == (f"started again: {one[:12]}'s check, which it left suites to, landed without passing them: it runs "
+                            "them itself")
+    assert "suites_from" not in again["record"]
+    assert again.get("beside_cancelled") == (None if case == "it passed" else ["c-7", "c-8", "c-9"])
+    runs.end(top)
+    assert "advance" in _acts(loop.tick()) and env.main() == top
 
 
 def test_under_gate_check_a_candidate_changing_only_the_task_graph_s_contract_audits_itself(env, monkeypatch):

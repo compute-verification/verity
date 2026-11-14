@@ -30,8 +30,6 @@ public import Definitions.Pouw.Assumptions.Fp8Atom.H1TGap
 public import Definitions.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions
 public import Definitions.Pouw.Assumptions.Game
 public import Definitions.Pouw.Assumptions.GameStatements
-public import Definitions.Pouw.Assumptions.Lead
-public import Definitions.Pouw.Assumptions.LeadCommit
 public import Definitions.Pouw.Assumptions.NCP.Assumptions
 public import Definitions.Pouw.Assumptions.NCP.Chain
 public import Definitions.Pouw.Assumptions.NCP.GamePinned
@@ -52,6 +50,7 @@ public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeedK
+public import Definitions.Pouw.Assumptions.PearlC.TTOutS8
 public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 public import Definitions.Pouw.Assumptions.RelativeSecurity

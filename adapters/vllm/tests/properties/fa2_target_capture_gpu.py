@@ -358,6 +358,7 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
                 spec = TG.attention_spec(tp, T, H, Hk, D, sq_max, row=r, own_rows=sq)
                 rec["binding_mismatch"] += spec.id != bind(F2.AttentionV5, T=T, NH=H, KVH=Hk, D=D, BN=BN, DOT=hopper.HopperBF16WgmmaDot16,
                                                              INV=P.Fa2InvSum, MASKED_FROM=gfrom).id
+            h: int | np.integer[Any]
             for h in np.flatnonzero(nonfinite):
                 qh, kf, vf = q[tok + r, h].tolist(), kk[h].reshape(-1).tolist(), vv[h].reshape(-1).tolist()
                 want["v2_hopper"][h] = evaluate(bind(b1.AttentionHeadV2, T=T, D=D, BN=BN, DOT=hopper.HopperBF16WgmmaDot16, INV=P.Fa2InvSum),

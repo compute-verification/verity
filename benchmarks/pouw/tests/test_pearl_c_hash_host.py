@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
-import importlib.util
 import re
 import shutil
 import subprocess
@@ -18,18 +17,17 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from conftest import load
+
+from verity.commitments.merkle import tree_levels
+from verity.protocols.accounting.pouw.verifier import audit
+from verity.protocols.accounting.pouw.verifier.audit import ROW_SCHEMA, activation_binding, rows_domain
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 
 HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c"
 FAST = HERE.parent / "pearl_c_sm120" / "hash_fast.cuh"
 WIDE = HERE / "hash_wide.cuh"
-_spec = importlib.util.spec_from_file_location("pearl_c_sm120_run", HERE.parent / "pearl_c_sm120" / "run.py")
-R = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(R)
-
-from verity.commitments.merkle import tree_levels  # noqa: E402
-from verity.protocols.accounting.pouw.verifier import audit  # noqa: E402
-from verity.protocols.accounting.pouw.verifier.audit import ROW_SCHEMA, activation_binding, rows_domain  # noqa: E402
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C  # noqa: E402
+R = load("pearl_c_sm120/run.py")
 
 
 class Host:

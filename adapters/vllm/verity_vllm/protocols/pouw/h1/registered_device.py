@@ -33,6 +33,7 @@ from typing import Any
 
 import numpy as np
 from verity.commitments import hm96
+from verity.commitments.cuda import ROW_COMMIT, SHA512
 from verity.commitments.rowleaf import (
     ROW_SEG_BYTES,
     sha512_row_seg_prefix,
@@ -40,7 +41,6 @@ from verity.commitments.rowleaf import (
     sha512_row_seg_segments,
     sha512_row_v2_prefix,
 )
-from verity.commitments.cuda import ROW_COMMIT, SHA512
 
 from verity_vllm.commit import row_tables_device as RTD
 from verity_vllm.protocols.pouw.h1.nodes import Nodes
@@ -231,7 +231,7 @@ def _root(words: np.ndarray) -> bytes:
 
 
 def host_zy(words: np.ndarray, key: bytes, nonce: int, domain_id: bytes, also: tuple[bytes, int]
-            ) -> tuple[bytes, tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
+            ) -> tuple[bytes, Nodes, tuple[Nodes, ...]]:
     """`device_hash`'s ``also`` on the CPU, the device path's twin: the call table ``also`` ``(domain id, nonce)``'s root,
     then the value's ``b || c`` strings and tree levels, of ``words`` ``(n, W)`` u16."""
     rows = _rows(words)
@@ -362,7 +362,7 @@ class Hashing:
     def ready(self) -> bool:
         return bool(self.done.query())
 
-    def result(self) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
+    def result(self) -> tuple[Nodes, tuple[Nodes, ...]]:
         self.done.synchronize()
         self.held = ()
         return _out(self.bcs.numpy().view(np.uint64), self.levels.numpy().view(np.uint64), self.W)
@@ -376,7 +376,7 @@ class Hashing:
 
 
 def device_commit(words: Any, key: bytes, nonce: int, row_salts: bytes | None,
-                  domain_id: bytes) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
+                  domain_id: bytes) -> tuple[Nodes, tuple[Nodes, ...]]:
     """`device_hash`'s strings and levels, waited for."""
     return device_hash(words, key, nonce, row_salts, domain_id).result()
 

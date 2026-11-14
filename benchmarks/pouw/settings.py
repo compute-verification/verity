@@ -1,6 +1,6 @@
 """Every environment variable PoUW's benchmarks read, declared once (`verity_config.settings`): the Pearl-C kernels'
-(``pearl_c_sm120``, ``pearl_c_sm90``, ``pearl_c4``), their vLLM arm (``pearl_c_vllm``), the GPU harness (``harness``) and
-served H1 (``served_h1``).  Code reads them through ``of(__file__)``::
+(``pearl_c_sm120``, ``pearl_c_sm90``, ``pearl_c4``), their vLLM arm (``pearl_c_vllm``), the GPU harness (``harness``),
+served H1 (``served_h1``) and the served path's opt-in tests.  Code reads them through ``of(__file__)``::
 
     from verity_config.settings import of
     S = of(__file__)
@@ -79,7 +79,7 @@ REGISTRY = Registry(
     S("PEARLC4_CUBIN", str, None, VALUE, "the cubin the Pearl-C4 arm loads; unset, pearl_c4.cubin beside it"),
     S("PEARLC4_VERIFY_WORKERS", int, 16, WHERE, "the verifier's worker processes: how fast it runs, not what it checks"),
     S("PEARLC4_GATE_TILES", int, 2, VALUE, "the tiles the arm's gate checks a call"),
-    S("PEARL_C4_F1", str, None, VALUE, "real.py's F1 check: fast checks a drawn tile through the fast path, else exact "
+    S("PEARL_C4_F1", str, None, VALUE, "real.py's F1 check: fast checks a seeded tile through the fast path, else exact "
                                        "(real.py --f1 sets it for the processes it starts)"),
     S("VERITY_COMMIT", str, None, WHERE, "the commit a Pearl-C4 replay names for its provenance; unset, unknown"),
     # ---------------------------------------------------------------- the vLLM arm (pearl_c_vllm)
@@ -89,7 +89,7 @@ REGISTRY = Registry(
     S("PEARLC_SCHEDULE", str, "deferred", VALUE, "when the arm's hashes run: deferred (the served schedule) or serial"),
     S("PEARLC_BENCH_EPOCH", int, 20261014, VALUE, "the arm's PoUW epoch"),
     S("PEARLC_CHALLENGER_GATE", str, None, WHERE, "infra's gate as an ssh command: with PEARLC_CHALLENGER_PEER, the salt coin "
-                                                  "is a live session's on the auditor host"),
+                                                  "is a live session's on the auditor device"),
     S("PEARLC_CHALLENGER_PEER", str, None, WHERE, "this node's name in the challenger host's peers"),
     S("PEARLC_CHALLENGER_LANE", str, "vllm", WHERE, "the lane the gate key is registered for"),
     S("PEARLC_GPU_UTIL", float, 0.55, VALUE, "vLLM's gpu_memory_utilization under the arm"),
@@ -118,8 +118,11 @@ REGISTRY = Registry(
     S("SERVED_TREE", str, None, WHERE, "the source tree served_profile.py profiles; unset, the working directory"),
     # ---------------------------------------------------------------- the harness
     S("POUW_CUDA_BIN", str, None, WHERE, "the CUDA toolkit's bin directory the SASS gate takes cuobjdump and nvdisasm from"),
+    S("VERITY_POUW_NVCC", str, None, WHERE, "a CUDA >= 12.8 toolkit's root (its bin/ holds nvcc and cuobjdump), with which "
+                                            "test_pearl_c_sm120.py's and test_pearl_c_sm90.py's build tests compile the "
+                                            "kernels and hold them to the SASS gate"),
     S("POUW_SASS_GATE_CACHE", str, None, WHERE, "the SASS gate's cache; unset, ~/.cache/pouw-harness/sass-gate"),
-    S("POUW_HARNESS_LIB", str, None, WHERE, "the harness's native library; unset, native/build/libpouw_harness.so"),
+    S("POUW_HARNESS_LIB", str, None, WHERE, "the harness's native library; unset, verity/protocols/accounting/pouw/prover/kernels/harness/native/build/libpouw_harness.so"),
     S("POUW_HARNESS_LT2", str, None, VALUE, "the second cuBLASLt's library; unset, libpouw_lt2.so beside the harness's if "
                                             "built; none leaves it out"),
     S("POUW_LIBNVML", str, "libnvidia-ml.so.1", WHERE, f"NVML, for the harness's clocks and power: {LIB}"),
@@ -136,5 +139,15 @@ REGISTRY = Registry(
     S("POUW_CHALLENGER_GATE", str, None, WHERE, "infra's gate, USER@HOST"),
     S("POUW_CHALLENGER_PEER", str, None, WHERE, "the node the window's client runs on, as the gate names it (its draw session)"),
     S("POUW_CHALLENGER_SSH_KEY", str, None, WHERE, "the lane's own gate key, for the window's draw session"),
+    # ---------------------------------------------------------------- which of the served path's tests run (tests/)
+    S("VERITY_POUW_H1_PIN", present, False, WHERE, "set, test_h1_pin.py builds the H1 unit's circuit at K = 64 and holds it "
+                                                   "to its pin (about 3.5 minutes, 9.5 GB): which tests run"),
+    S("PARTIALS_LIB", str, None, WHERE, "an h1u.cu build with kh_lanes, which the partials' GPU tests load (test_partials.py, "
+                                        "test_lane_refs.py); unset, they skip"),
+    S("VERITY_POUW_H1U_SO", str, None, WHERE, "an h1u.cu -hbc build (benchmarks/hash/dither/sbench.sh's h1u_kc.so), which "
+                                              "test_served_h1_producer.py's GPU tests load; unset, they skip"),
+    S("VERITY_POUW_NOISE_CUBIN", str, None, WHERE, "noise.cu built for the device (`receipts.Cubin`), for "
+                                                   "test_served_h1_producer.py's GPU tests of its J10-R streams; unset, they "
+                                                   "skip or take hashlib's"),
     standalone=STANDALONE,
 )

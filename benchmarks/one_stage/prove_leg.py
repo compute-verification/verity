@@ -1,13 +1,13 @@
 """The proof leg: units through Flock `prove --zk` behind the Lean ZK server and the Lean verifier, one call
 (`prove_units`) that stages each member's units, registers them, takes the verifier's sample, proves each sampled member's
-units in one `--zk` session, verifies it with Lean `flock-verify verify --zk` (with `--registered` when the units read
+units in one `--zk` session, verifies it with Lean `verity-verify-proof verify --zk` (with `--registered` when the units read
 registered values), opens the rows the verifier holds its own copy of, and records every verdict in the one-stage audit
 record. The compiled per-step units of an arbitrary vLLM model, its head-check units and the I/O tie's units all ride
 it.
 
-    python benchmarks/one_stage/prove_leg.py standin --bin flock-circuit --lean flock-verify [--firewall flock-firewall] \\
+    python benchmarks/one_stage/prove_leg.py standin --bin flock-circuit --lean verity-verify-proof [--firewall flock-firewall] \\
       --out DIR [--n 4] [--negatives] [--registered] [--gpus 0,1] [--structural iv/hybrid/4 --tmpl-unit-bin flock-tmpl-unit]
-    python benchmarks/one_stage/prove_leg.py defs --bin flock-circuit --lean flock-verify [--firewall flock-firewall] \\
+    python benchmarks/one_stage/prove_leg.py defs --bin flock-circuit --lean verity-verify-proof [--firewall flock-firewall] \\
       --out DIR --shape gemm:1b:2048 [--shape attention-v20:1b:384:block ...] [--negatives] [--census] [--reads slots] [--gpus 0,1] \\
       [--structural iv/hybrid/4 --tmpl-unit-bin flock-tmpl-unit]
 
@@ -22,7 +22,7 @@ it.
   members' templates (`partition.mixed_population_program`, `Q_template_instances`), one stratum a member.
 * **The registration** (`registration.record`): each statement's frame-v3 ports, the sampling design, the scheme and the
   leaf layer, checked by the verifier (R1-R7) and against each statement's header before the sample.
-* **The sample** (``coins``): ``"lean"``, the verifier's Lean (`flock-verify draw --stratified K`) on a development
+* **The sample** (``coins``): ``"lean"``, the verifier's Lean (`verity-verify-proof draw --stratified K`) on a development
   challenger's coins opened after the registration (`a0.challenger_draw`);
   a mapping ``{member: [unit, ...]}`` of each member's sampled proof blocks, a sample the proof system made on live coins; or a
   callable that takes the registration record and returns that mapping (a `service.Stream`'s register and select).
@@ -129,7 +129,7 @@ class Member:
 
 @dataclass(frozen=True)
 class Tools:
-    """The binaries: M0's ``flock-circuit`` (the proving build), the Lean ``flock-verify``, the Lean ZK server's frame
+    """The binaries: M0's ``flock-circuit`` (the proving build), the Lean ``verity-verify-proof``, the Lean ZK server's frame
     ``flock-firewall`` (None: proved without the ZK server), and with ``structural`` (a layout mode, ``iv/hybrid/4``)
     ``tmpl_unit``, `flock-tmpl-unit`, which places a templated statement's unit rows for its prover: each member is then
     staged as `struct_lower`'s template (`UnitStager`'s ``structural``) where it lowers, and flat where it doesn't, its
@@ -299,7 +299,7 @@ def _draw(coins, rec: dict, program_file: Path, partition_file: Path, k: int, le
                                out / "draw.log")
         line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
         if line is None:
-            raise RuntimeError(f"flock-verify draw gave no draw (rc {p.returncode}): {p.stderr[-400:]}")
+            raise RuntimeError(f"verity-verify-proof draw gave no draw (rc {p.returncode}): {p.stderr[-400:]}")
         return json.loads(line.split(" ", 1)[1])
     drawn = coins(rec) if callable(coins) else coins
     units = sorted(bases[name][0] + int(u) for name, us in drawn.items() for u in us)
@@ -509,7 +509,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
                   "why": ((record or {}).get("verdict") or {}).get("why") or (live or {}).get("why"), "draw_check": v.to_json()}
             op = opened(s, local, m)
             verdicts[f"m0-verifier/{m.name}"] = m0
-            verdicts[f"lean-verify/{m.name}"] = {**lv, "tool": "flock-verify verify --zk --archive --partition --program"
+            verdicts[f"lean-verify/{m.name}"] = {**lv, "tool": "verity-verify-proof verify --zk --archive --partition --program"
                                                  + (" --registered" if registered else "")}
             verdicts[f"openings/{m.name}"] = {"accepted": not any(op.values()), "detail": {i: b for i, b in op.items() if b}}
             statement[m.name] = {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest",

@@ -22,7 +22,10 @@ verified by Lean (`verify --zk --registered`), and the stop stream's outcome wit
   rule and sampling design, and the session's public files; it opens no file of the class's directory.
   The boundary record is the one the class's boundary stream registers again (`two_stage.resume`), never one rebuilt
   from ``commit.json``. The stop stream is built again on it, registers the stop record (R1 to R7) and samples it
-  again on the bytes its sample read; each is held to the hand-off. The ``--registered`` file is the verifier's
+  again on the bytes its sample read; each is held to the hand-off. Which family of which session those bytes are
+  challenges of is not the hand-off's to say: the family is the stop blocks' place's (`two_stage.family_of`, from the
+  class's layout), the session's root is the run its records' window names (`two_stage.first_root`), and a hand-off
+  that names another of either is refused. The ``--registered`` file is the verifier's
   own: the two parameters' ports as `boundary_stop.stop_registration` gives them, and ``o0`` at the stop record's
   root. The hand-off's coin evidence names no key: both streams read it under the challenger's key this command
   holds (``--challenger-key``, the deployment's key record, or ``--challenger-host``, the development challenger the
@@ -61,6 +64,10 @@ verified by Lean (`verify --zk --registered`), and the stop stream's outcome wit
   ``cross-stream-order`` (its ``case``), name that as their premise.
   ``summary.json`` copies the record's ``accepted`` and ``complete`` and lists every entry's ``premise``. It says the
   response's length is held (``length_held``) only when the record accepted and is complete.
+* **The answer** (`answer_of`, ``answer.json`` beside ``audit.json``, one canonical line) is the stop stream's, in
+  one-stage's form (`audit.answer`): an accept of a record that accepted, whose public ``complete`` is that record's
+  own, so it is false while any entry above is null; else a reject of the stop registration. A reader that wants a
+  complete audit of the stop population reads `audit.answer_complete` of it, never the verdict alone.
 * **The proof deadline** counts on the stream built again here, from its sample read again, not from the first
   stage's: nothing here holds the time between the two commands.
 
@@ -75,6 +82,7 @@ import sys
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -93,12 +101,14 @@ from verity.commitments.merkle import tree_levels  # noqa: E402
 from verity.commitments.rowleaf import row_leaf  # noqa: E402
 from verity.commitments.windows import rows as CS, tables as TB  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as REG, registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import audit as A, partition as P, registered as REG, registration as R  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
 from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS  # noqa: E402
 
 FORMAT = "verity/one-stage/stop-audit/v0"
 TOOL = "benchmarks/one_stage/stop_audit.py"
+#: the stop stream's answer, written beside ``audit.json`` (`answer_of`)
+ANSWER = "answer.json"
 #: the statement's one member, and its output row's circuit port
 MEMBER, OUT = "stop", "o0"
 
@@ -231,7 +241,7 @@ def session(st: Mapping[str, Any], units: Sequence[int], out: Path, *, bin_: str
     return {"sessions": [a0.sha512_file(f) for f in sorted((out / "sessions").glob("*/session.json"))],
             "served": [int(u) for u in sampled.get("units", [])], "proved_units": a0.proved_units(st["header"], live or {}),
             "instances": (live or {}).get("instances", 0),
-            "verdicts": {LEAN: {**lv, "tool": "flock-verify verify --zk --archive --partition --program --registered"},
+            "verdicts": {LEAN: {**lv, "tool": "verity-verify-proof verify --zk --archive --partition --program --registered"},
                          M0: m0},
             "statement": {MEMBER: {"session_s": seconds, "lean_verify_s": lv.get("verify_s"),
                                    **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
@@ -269,17 +279,20 @@ def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
     """The class's stop stream again from its hand-off, under the verifier's own check template, stop rule and
     sampling design: the boundary stream's record registered again (`two_stage.resume`), the stop stream built on the
     record of that stream's log (`Stream.log`) whose digest is the stop record's ``previous``, the stop record
-    registered (R1 to R7) and sampled again on the bytes its sample read, as coins of the challenger's family the
-    first stage read them from (the hand-off's, as `two_stage.resume` takes a class's own). Both streams are made with
-    the verifier's challenger key ``key`` and its copy of main's history ``main``, which every coin evidence of the
-    hand-off is read under (none: every evidence is refused). `Unlogged` when that
+    registered (R1 to R7) and sampled again on the bytes its sample read, as challenges of the family of the stop
+    blocks' place in the window's session (`two_stage.family_of`, from the class's layout, as `two_stage.resume`
+    names a class's own), on the session whose root is the boundary record's run, which the stop record's window
+    repeats. Both streams are made with the verifier's challenger key ``key`` and its copy of main's history
+    ``main``, which every coin evidence of the hand-off is read under (none: every evidence is refused). `Unlogged`
+    when that
     log holds no such record; ValueError when the first stage sampled no stop block, or
-    the Spec, the record, its registration or the sample isn't the hand-off's; `service.Refused` as the streams
-    refuse."""
+    the Spec, the record, its registration or the sample isn't the hand-off's, or the hand-off names another family
+    for the stop sample than its place's, or another session root than its record's (`two_stage.first_root`);
+    `service.Refused` as the streams refuse."""
     s = handoff.get("stop")
     if not isinstance(s, Mapping) or "units" not in s:
         raise ValueError(f"the class's first stage registered or sampled no stop block: {(s or {}).get('error') or handoff.get('error')}")
-    root = handoff.get("window_root")
+    root = TS.first_root(handoff)
     first = TS.resume(handoff, check, delta=delta, window_root=root, stop=stop, key=key, main=main)
     layout, logged = first.layout, {R.digest(rec): (i, rec) for i, rec in enumerate(first.stream.log)}
     if s["record"].get("previous") not in logged:
@@ -287,7 +300,9 @@ def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
                        f"boundary stream's log, which holds {', '.join(d[:16] for d in logged)}", first)
     received, boundary = logged[s["record"]["previous"]]
     coins = TS.Staged(bytes.fromhex(s["read"]))
-    coins.family = s.get("family")
+    coins.family = TS.family_of(layout, blocks=True)
+    if s.get("family") not in (None, coins.family):
+        raise ValueError(TS.another_family(s["family"], coins.family))
     stream = S.Stream(TS.stop_spec(layout, design, proof_deadline), layout.stop.template, budget=1, delta=delta,
                       challenger=TS.CHALLENGER, coins=coins, log=[boundary], key=key, main=main)
     if stream.spec.digest() != s["spec"]:
@@ -297,7 +312,7 @@ def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
     if R.digest(want) != R.digest(s["record"]):
         raise ValueError("the stop record isn't the one the class's commitment and its boundary record give")
     reg = stream.register(s["record"], layout.stop_ports(), registered=held.values, outputs=held.outputs,
-                          schemas=held.schemas, **({} if root is None else {"window_root": root}))
+                          schemas=held.schemas, window_root=root)
     if reg.digest != s["registration"]:
         raise ValueError("the stop record registers to another digest than its first stage's")
     sample = stream.select(reg)
@@ -323,14 +338,16 @@ def reads(r: Resumed) -> dict[str, Any]:
 
 def link(handoff: Mapping[str, Any], first: TS.First, outcome: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The stop record's read across the class's two streams, as the Lean verifier's piece ``across`` takes it: the
-    window's root, the boundary stream's own log (``first``'s `Stream.log`), the boundary stream's audit record
-    (``outcome``'s, none when no outcome is handed), the stop record, and the stop sample's coin evidence, the
-    challenger's family it read those coins from and the bytes it read (``handoff``'s ``stop``), with the challenger's
-    key and the copy of main's history ``first``'s stream was made with, which Lean reads that evidence under."""
+    window's root, which is the run the class was laid out under (`resume` holds the hand-off's and its records' to
+    it); the boundary stream's own log (``first``'s `Stream.log`); the boundary stream's audit record (``outcome``'s,
+    none when no outcome is handed); the stop record; the stop sample's coin evidence and the bytes it read
+    (``handoff``'s ``stop``); the family those are held to, the stop blocks' place's (`two_stage.family_of`), never
+    the one the hand-off names; and the challenger's key and the copy of main's history ``first``'s stream was made
+    with, which Lean reads that evidence under."""
     s, held = handoff["stop"], first.stream
-    return {"window": handoff.get("window_root") or first.layout.run, "log": [dict(x) for x in first.stream.log],
-            "audit": outcome.get("audit") if isinstance(outcome, Mapping) else None,
-            "later": dict(s["record"]), "coins": s.get("evidence"), "family": s.get("family"), "read": s["read"],
+    return {"window": first.layout.run, "log": [dict(x) for x in first.stream.log],
+            "audit": outcome.get("audit") if isinstance(outcome, Mapping) else None, "later": dict(s["record"]),
+            "coins": s.get("evidence"), "family": TS.family_of(first.layout, blocks=True), "read": s["read"],
             "key": None if held.key is None else held.key.to_json(), "main": list(held.main)}
 
 
@@ -483,6 +500,22 @@ def summary_of(r: Resumed, stop: BS.Stop, design: str, got: Mapping[str, Any]) -
             "premises": sorted({v["premise"] for v in verdicts.values() if "premise" in v})}
 
 
+def answer_of(r: Resumed, got: Mapping[str, Any]) -> dict[str, Any]:
+    """The stop stream's answer of an outcome (`decide`'s), in one-stage's form. Of an audit record that accepted it is
+    `audit.answer` at the stream's δ: its public ``complete`` is the record's own, true only when every entry has a
+    verdict, so an accept whose record left an entry null says so and `audit.answer_complete` refuses it. Else a
+    reject of the stop registration, naming the record's checks that failed and its verdicts that did not accept, or
+    that the stream refused the outcome and wrote no record."""
+    audit = got.get("audit") or {}
+    if got.get("accepted") is True and audit.get("accepted") is True:
+        return A.answer(audit, Fraction(r.stream.delta).limit_denominator(10**12))
+    failed = sorted(k for k, c in (audit.get("checks") or {}).items() if not c.get("ok"))
+    refused = sorted(k for k, v in (audit.get("verdicts") or {}).items() if v.get("accepted") is False)
+    named = "; ".join(f"{what}: {', '.join(names)}" for what, names in (("checks", failed), ("verdicts", refused)) if names)
+    return {"commitment": r.registration.digest, "profile": None, "protocol": R.PROTOCOL, "public": None,
+            "reason": named or "the stop stream refused the outcome", "verdict": "reject"}
+
+
 # --- the command ------------------------------------------------------------------------------------------------------
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -559,6 +592,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "error": f"{type(e).__name__}: {e}"})
     if got.get("audit") is not None:
         (out / "audit.json").write_text(json.dumps(got["audit"], indent=1, sort_keys=True, default=str) + "\n")
+    (out / ANSWER).write_bytes(canonical_json(answer_of(r, got)) + b"\n")
     summary = summary_of(r, stop, a.design, got)
     summary["statement"] = {"pin": st["pin"], "ands": st["ands"], "k_log": st["meta"].get("k_log"), **proved["statement"][MEMBER]}
     return done(0 if summary["accepted"] else 1, summary)
