@@ -3,10 +3,10 @@ integration's query path rebuilds and returns the `verity-sweep/manifest-verify/
 (`verity_vllm.pipeline.manifest_verify`) rebuilds it and writes the record beside the Commit (`commit/manifest_verify.json`).
 
 `ok` iff the used manifest's `manifest_digest` == the digest of its own rows == the rebuilt digest, the program digests agree and
-the rebuilt manifest is complete.  The manifest of record is a FUNCTION of the Program x declared workload: a weakened
+the rebuilt manifest is complete.  The manifest of record is a FUNCTION of the Program x the workload: a weakened
 manifest in the evidence dir has the wrong digest here even when its own `manifest_digest` is honest.  A verify FAIL is a Commit FAIL
 (`required_value_coverage/manifest_of_record_verified` in verdict.json), never a footnote.  Replaces `required_manifest verify`
-(the v1 builders' rebuild) on the row path since the v2 flip; the record's fields are unchanged so the regression harness lifts
+(the v1 rebuild) on the row path since the v2 flip; the record's fields are unchanged so the regression harness lifts
 `used_digest` / `used_program_digest` / `used_identities` as before.
 """
 from __future__ import annotations
