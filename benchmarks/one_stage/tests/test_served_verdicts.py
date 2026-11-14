@@ -31,9 +31,10 @@ step 6 defers the audit and the composite, leaving the follow-on's settings and 
 nothing in $OUT but a line; the follow-on holds the copy to those sums, refuses another setting, a node short of the
 memory or another tree, under DAY holds the day's log as the deferral copied it to the serve's declaration, and audits,
 records about the served node and composes, each saying it composed elsewhere, as the record says where it was composed
-and what was deferred. What it publishes holds a load's tokens and span by path, leaving the inference-only policy, its
-digest and its verdict line as written. Its load, `serve_load.py
---varied`, writes each request's send, first-token and done times beside its record, on an injected clock and a stand-in
+and what was deferred. The compose follow-on reads its hand-off's settings as data, refusing any line but one of the
+hand-off's names at a value of the characters its writer writes, and runs none of it. What it publishes holds a load's
+tokens and span by path, leaving the inference-only policy, its digest and its verdict line as written. Its load,
+`serve_load.py --varied`, writes each request's send, first-token and done times beside its record, on an injected clock and a stand-in
 endpoint."""
 from __future__ import annotations
 
@@ -4430,17 +4431,22 @@ printf "%s\\n" "$SERVED_NODE" "$COMPOSE_HANDOFF" "$@" > "$ORDER.composite"
 echo "COMPOSITE: composed on $(hostname -s)" >> "$2/verdicts.txt"'''
 
 
-def _compose(tmp_path: Path, keep: tuple[str, ...] = (), **extra: str | None) -> tuple[int, list[str], list[str]]:
+def _compose(tmp_path: Path, keep: tuple[str, ...] = (), link: tuple[str, Path] | None = None,
+             **extra: str | None) -> tuple[int, list[str], list[str]]:
     """The compose follow-on of the hand-off in `tmp_path`'s serve dir: the files its inputs.txt lists (and ``keep``)
-    copied to the same path on vy-auditor-2, the rest of the serve dir moved away, then `served_verdicts.sh compose` with
-    D alone in a toy tree whose record and composite note their arguments (``extra`` adds to the environment, None
-    unsetting): the exit status, the verdict lines and the steps in order."""
+    copied to the same path on vy-auditor-2 (``link``'s path, a link to its target in place of the file), the rest of the
+    serve dir moved away, then `served_verdicts.sh compose` with D alone in a toy tree whose record and composite note
+    their arguments (``extra`` adds to the environment, None unsetting): the exit status, the verdict lines and the steps
+    in order."""
     d, held = tmp_path / "serve", tmp_path / "served-node"
     listed = (d / "private" / "compose" / "inputs.txt").read_text().splitlines()
     d.rename(held)
     for f in (*listed, *keep):
         (d / f).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(held / f, d / f)
+    if link:
+        (d / link[0]).unlink()
+        (d / link[0]).symlink_to(link[1])
     tree, bin_, venv = tmp_path / "compose-tree", tmp_path / "compose-bin", tmp_path / "compose-venv" / "bin"
     py = f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\n[ "$1 $2" = "-m research" ] && exit 0\nexec {sys.executable} "$@"'
     for path, body in ((venv / "python", py), (tree / ".venv" / "bin" / "python", py), (bin_ / "uv", "exit 0"),
@@ -4528,6 +4534,135 @@ def test_a_compose_follow_on_refuses_the_served_node_a_witness_a_changed_copy_an
         (d / change).write_text("changed")
     rc, lines, order = _compose(tmp_path, keep, **extra)
     assert (rc, lines, order) == (3, [line.replace("{d}", str(d))], []), lines
+
+
+#: `served_verdicts.sh`'s COMPOSES, every setting a hand-off may carry
+HAND_OFF_NAMES = ("K PRODUCT PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE "
+                  "AUDITED_ON SAMPLED_AUDIT STEPS")
+SETTINGS_REFUSED = ("PREFLIGHT: the compose follow-on reads the hand-off's settings (the serve dir's "
+                    "private/compose/compose.env) as data, and refuses them, none set: its line {n} ")
+OTHER_CHARACTERS = "sets K to a value of other characters than A-Za-z0-9._/:+@=,-"
+
+
+def _read_env(f: Path, names: str) -> dict[str, str]:
+    """`f`'s settings by `names`, as `served_verdicts.sh compose` reads them (the script's own `read_env`)."""
+    fns = re.search(r"^ENV_VALUE=.*?^}\n", (HERE.parent / "served_verdicts.sh").read_text(), re.S | re.M)
+    assert fns, "served_verdicts.sh defines no ENV_VALUE and read_env"
+    script = (f'{fns.group(0)}read_env "$1" "{names}" || {{ echo "$ENV_REFUSED" >&2; exit 1; }}\n'
+              f'for v in {names}; do printf "%s=%s\\n" "$v" "${{!v}}"; done')
+    said = subprocess.run(["bash", "-c", script, "_", str(f)], check=True, capture_output=True, text=True).stdout
+    return dict(x.split("=", 1) for x in said.splitlines())
+
+
+@pytest.mark.parametrize("bad, why", [
+    ("K=$(touch {ran})", OTHER_CHARACTERS),
+    ("K=`touch {ran}`", OTHER_CHARACTERS),
+    ("K=7; touch {ran}", OTHER_CHARACTERS),
+    ("ONSITE_PIECES={evil}", "sets ONSITE_PIECES, which is no setting of a hand-off"),
+    ("touch {ran}", "is not NAME=VALUE"),
+])
+def test_a_compose_follow_on_reads_the_hand_offs_settings_as_data_and_runs_no_line_of_them(tmp_path, bad, why):
+    """compose.env is the prover's bytes on an auditor host, so the compose follow-on reads it as data and never runs it:
+    a value a shell would expand (`$(...)`, a backtick, a `;` and a command), a name outside the hand-off's settings
+    (ONSITE_PIECES, a file the script would source in turn) and a line that isn't NAME=VALUE (a bare command) each refuse
+    the hand-off before anything is composed, naming the line, and none of it runs: the marker it would make is absent."""
+    assert _handed(tmp_path).returncode == 0
+    ran, evil = tmp_path / "ran", tmp_path / "evil.sh"
+    evil.write_text(f"touch {ran}\n")
+    env = tmp_path / "serve" / "private" / "compose" / "compose.env"
+    honest = env.read_text().splitlines()
+    assert honest[0] == "K=7"
+    bad = bad.format(ran=ran, evil=evil)
+    lines = [bad, *honest[1:]] if bad.startswith("K=") else [*honest, bad]
+    env.write_text("".join(f"{x}\n" for x in lines))
+    rc, said, order = _compose(tmp_path)
+    assert (rc, said, order) == (3, [SETTINGS_REFUSED.format(n=lines.index(bad) + 1) + why], []), said
+    assert not ran.exists()
+
+
+@pytest.mark.parametrize("extra", [{}, {"ALPHA": "0.25", "GAMMA": "1e-3"}])
+def test_the_served_nodes_hand_off_reads_as_data_to_the_settings_sourcing_it_gives(tmp_path, extra):
+    """The served node's own compose.env, as `printf %q` writes it (a comma as \\, and an empty value as ''), reads as data
+    to exactly the settings a shell sourcing it sets, so the honest compose follow-on runs at the settings it did."""
+    assert _handed(tmp_path, **extra).returncode == 0
+    env = tmp_path / "serve" / "private" / "compose" / "compose.env"
+    assert "STEPS=0\\,3" in env.read_text().splitlines() and "AUDITED_ON=''" in env.read_text().splitlines()
+    got = _read_env(env, HAND_OFF_NAMES)
+    assert got == _env_of(env, HAND_OFF_NAMES)
+    assert (got["STEPS"], got["AUDITED_ON"], got["ALPHA"], got["GAMMA"]) == ("0,3", "", *(
+        (extra["ALPHA"], extra["GAMMA"]) if extra else ("", "")))
+
+
+def test_a_hand_off_whose_setting_the_compose_node_would_refuse_is_refused_on_the_served_node(tmp_path):
+    """The served node holds its compose.env to what COMPOSE_NODE reads: a setting of another character (here a space
+    in COMPOSE_NODE) refuses the hand-off there, which writes no sums for a copy to be held to."""
+    run = _handed(tmp_path, COMPOSE_NODE="vy-auditor-2 x")
+    assert run.returncode == 1
+    assert (tmp_path / "served-out" / "verdicts.txt").read_text().splitlines() == [
+        "HANDOFF refused: COMPOSE_NODE reads its settings (private/compose/compose.env) as data, and its line 9 sets "
+        "COMPOSE_NODE to a value of other characters than A-Za-z0-9._/:+@=,-"]
+    assert not (tmp_path / "serve" / "private" / "compose" / "inputs.sha256").exists()
+
+
+def _forged(tmp_path: Path, f: str, body: str) -> None:
+    """The served node's hand-off file `f` rewritten to `body`, its sum with it, as the prover who writes both can."""
+    d = tmp_path / "serve"
+    (d / f).write_text(body)
+    sums = d / "private" / "compose" / "inputs.sha256"
+    rows = [ln.split("  ", 1) for ln in sums.read_text().splitlines()]
+    sums.write_text("".join(f"{hashlib.sha256((d / x).read_bytes()).hexdigest() if x == f else h}  {x}\n" for h, x in rows))
+
+
+@pytest.mark.parametrize("setting, value, line", [
+    ("K", "7/../..", "PREFLIGHT: the compose follow-on reads the window's files in the copy, and the hand-off's K, "
+     "7/../.., is not a window's number"),
+    *(("SAMPLED_AUDIT", a, "PREFLIGHT: the compose follow-on reads the record's audit in the copy, and the hand-off's "
+       f"SAMPLED_AUDIT, {a}, is no path inside it (a relative path, no part of it starting with a dot)")
+      for a in ("../elsewhere", "v3c-x/../../elsewhere", "/elsewhere")),
+    ("SERVED_DIR", "''", "PREFLIGHT: the compose follow-on rebases the cases' blobs from the served node's serve dir, "
+     "which the hand-off doesn't name (SERVED_DIR)"),
+])
+def test_a_compose_follow_on_refuses_a_setting_that_would_point_its_reads_outside_the_copy(tmp_path, setting, value,
+                                                                                         line):
+    """Every path the compose follow-on reads is a file of the copy it received: a window K that isn't a number, a
+    record's audit that is no path inside the serve dir, and no served serve dir to rebase the cases' blobs from
+    (where they would be read as the prover wrote them) each refuse the hand-off before anything is composed."""
+    assert _handed(tmp_path).returncode == 0
+    env = "private/compose/compose.env"
+    lines = (tmp_path / "serve" / env).read_text().splitlines()
+    _forged(tmp_path, env, "".join(f"{setting}={value}\n" if x.startswith(f"{setting}=") else f"{x}\n" for x in lines))
+    assert _compose(tmp_path) == (3, [line], [])
+
+
+@pytest.mark.parametrize("blob, why", [
+    ("{d}/../outside/pub-0.bin", "names a blob that isn't a file of the hand-off: ../outside/pub-0.bin"),
+    ("{d}/requests.jsonl", "names a blob that isn't a file of the hand-off: requests.jsonl"),
+    ("/elsewhere/pub-0.bin", "names a blob outside the served node's serve dir {d}: /elsewhere/pub-0.bin"),
+])
+def test_a_compose_follow_on_refuses_a_case_blob_that_isnt_a_file_of_the_copy(tmp_path, blob, why):
+    """A case's blobs are read only as files of the copy, the ones its sums list: a blob past the serve dir, one in it
+    that the hand-off doesn't carry, or one outside it (with the copy at the served path, which needs no rebase) refuses
+    the compose once the copy is held to its sums, before the record or the composite reads anything."""
+    assert _handed(tmp_path).returncode == 0
+    d = tmp_path / "serve"
+    case = f"{STEP3}/window/case-v2.json"
+    _forged(tmp_path, case, json.dumps({"blobs": [str(d / BLOBS[0]), blob.format(d=d)]}) + "\n")
+    rc, lines, order = _compose(tmp_path)
+    assert (rc, lines[1:], order) == (3, [
+        "COMPOSE refused: the cases' blobs don't rebase from the served node's serve dir to this copy (REBASE refused: "
+        f"ValueError: {case} {why.format(d=d)})"], []), lines
+    assert lines[0] == COMPOSED.format(audit="no V3c audit", sampled=STEP3, verdict="PASS")
+
+
+def test_a_compose_follow_on_refuses_a_copy_holding_a_link(tmp_path):
+    """The copy holds the hand-off's files and no link, which would have the follow-on read past it: a listed file
+    linked to one outside the copy, its bytes the sum's, refuses the hand-off before anything is composed."""
+    assert _handed(tmp_path).returncode == 0
+    outside = tmp_path / "outside.json"
+    shutil.copy2(tmp_path / "serve" / "h1" / "w7" / "record.json", outside)
+    assert _compose(tmp_path, link=("h1/w7/record.json", outside)) == (3, [
+        "PREFLIGHT: the compose follow-on reads the copy's own files, and its serve dir holds a link (h1/wK/record.json): "
+        "copy the hand-off's files, never a link"], [])
 
 
 def test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_nothing(tmp_path):

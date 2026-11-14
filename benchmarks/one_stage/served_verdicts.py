@@ -1979,11 +1979,13 @@ def witness(paths: Sequence[str]) -> list[tuple[str, str]]:
     return out
 
 
-def rebase(serve_dir: Path, served_dir: str, paths: Sequence[str]) -> list[str]:
+def rebase(serve_dir: Path, served_dir: str, paths: Sequence[str], *, held: bool = False) -> list[str]:
     """Each case among ``paths`` (relative to ``serve_dir``, a hand-off's copy of the served node's serve dir
     ``served_dir``) that names ``blobs``, its blobs rewritten to the same paths under ``serve_dir``; the cases rewritten.
-    ValueError on a blob outside ``served_dir``, which no hand-off carries, or on such a file that isn't JSON."""
+    ValueError on a blob outside ``served_dir``, which no hand-off carries, or on such a file that isn't JSON; with
+    ``held``, on a blob that isn't one of ``paths``, the files the copy was held to, so nothing outside them is read."""
     base, done = served_dir.rstrip("/") + "/", []
+    listed = {os.path.normpath(p) for p in paths}
     for rel in paths:
         f = serve_dir / rel
         if f.suffix != ".json" or not f.is_file() or b'"blobs"' not in f.read_bytes():
@@ -1994,7 +1996,10 @@ def rebase(serve_dir: Path, served_dir: str, paths: Sequence[str]) -> list[str]:
         outside = [b for b in case["blobs"] if not (isinstance(b, str) and b.startswith(base))]
         if outside:
             raise ValueError(f"{rel} names a blob outside the served node's serve dir {served_dir}: {str(outside[0])[:200]}")
-        case["blobs"] = [str(serve_dir / b[len(base):]) for b in case["blobs"]]
+        rels = [os.path.normpath(b[len(base):]) for b in case["blobs"]]
+        if held and (unheld := [r for r in rels if r not in listed]):
+            raise ValueError(f"{rel} names a blob that isn't a file of the hand-off: {unheld[0][:200]}")
+        case["blobs"] = [str(serve_dir / r) for r in rels]
         f.write_text(json.dumps(case))
         done.append(rel)
     return done
@@ -2242,6 +2247,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     rb = sub.add_parser("rebase")
     rb.add_argument("serve_dir", type=Path)
     rb.add_argument("served_dir")
+    rb.add_argument("--held", action="store_true", help="refuse a blob that isn't one of the files on stdin")
     cd = sub.add_parser("composed")
     cd.add_argument("answer", type=Path)
     cd.add_argument("out", type=Path)
@@ -2263,7 +2269,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1 if found else 0
     if a.cmd == "rebase":
         try:
-            done = rebase(a.serve_dir, a.served_dir, [x for x in sys.stdin.read().splitlines() if x.strip()])
+            done = rebase(a.serve_dir, a.served_dir, [x for x in sys.stdin.read().splitlines() if x.strip()], held=a.held)
         except (OSError, ValueError) as e:
             print(f"REBASE refused: {type(e).__name__}: {e}", flush=True)
             return 1

@@ -158,7 +158,9 @@
 # the advice, a key, a row dir, the requests) or a blob outside the serve dir is refused, and the run fails. Those files alone
 # are copied to the same path on COMPOSE_NODE, an auditor host the prover doesn't control and where no witness goes
 # (default vy-auditor-2; never a prover node such as a deferral's follow-on), outside any run dir (`served_verdicts.sh
-# copy compose`), and there `served_verdicts.sh compose` with D alone holds the copy to its sums, rebases the cases'
+# copy compose`), and there `served_verdicts.sh compose` with D alone reads compose.env as data (`read_env`, which refuses
+# a line of any other name or character and runs nothing of it; `handoff` holds what it writes to the same), holds the
+# copy to its sums, rebases the cases'
 # blobs onto a copy at another path (`served_verdicts.py rebase`), runs at the served node's tree (another only with FOLLOW_ANY_TREE=1), refuses the served node itself and a serve dir
 # holding any witness, needs no row dir, vLLM venv, card or gpu-lease, and composes the final record (`record --off-node
 # --steps --sampled-lean`: composed_on the host it ran on, served_node false, from the hand-off, sampled proofs' row this
@@ -393,14 +395,42 @@ FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW V3C_CHALLENGER DEVELOPMENT H1_TIE PEARLPLUS
 # the compose hand-off (`handoff`): the settings its follow-on composes at, its inputs' list and sums, and the pieces
 COMPOSE_DIR=$D/private/compose
 COMPOSES="K PRODUCT PEARLPLUS_TIE COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE AUDITED_ON SAMPLED_AUDIT STEPS"
-FOLLOW= COMPOSE= CLASH=
-follow_env() {  # $1's settings, those named in $2, read over the environment's, CLASH naming each the environment set otherwise
+FOLLOW= COMPOSE= CLASH= ENV_REFUSED=
+# A compose hand-off's settings are the prover's bytes on an auditor host, so they are read as data and never run: each
+# line NAME=VALUE, NAME one of the hand-off's and set once, VALUE as handoff's printf %q writes these characters (each as
+# itself but a comma, which it writes \, and an empty value, which it writes '').
+ENV_VALUE='^([A-Za-z0-9._/:+@=,-]|\\,)*$'
+read_env() {  # $1's settings, those named in $2, set and exported; else none is, and ENV_REFUSED names the line and why
+  local _l _n _v _i=0
+  local -A _got=()
+  ENV_REFUSED=
+  while IFS= read -r _l || [ -n "$_l" ]; do
+    _i=$((_i + 1)) _n=${_l%%=*} _v=${_l#*=}
+    if [[ $_l != *=* ]]; then ENV_REFUSED="its line $_i is not NAME=VALUE"
+    elif [[ ! $_n =~ ^[A-Z][A-Z0-9_]*$ ]]; then ENV_REFUSED="its line $_i names no setting"
+    elif [[ " $2 " != *" $_n "* ]]; then ENV_REFUSED="its line $_i sets $_n, which is no setting of a hand-off"
+    elif [ -n "${_got[$_n]+x}" ]; then ENV_REFUSED="its line $_i sets $_n a second time"
+    elif [ "$_v" != "''" ] && [[ ! $_v =~ $ENV_VALUE ]]; then
+      ENV_REFUSED="its line $_i sets $_n to a value of other characters than A-Za-z0-9._/:+@=,-"
+    fi
+    [ -z "$ENV_REFUSED" ] || return 1
+    [ "$_v" != "''" ] || _v=
+    _got[$_n]=${_v//\\,/,}
+  done < "$1"
+  for _n in "${!_got[@]}"; do printf -v "$_n" %s "${_got[$_n]}" && export "${_n?}"; done
+}
+follow_env() {  # $1's settings, those named in $2, read over the environment's (with $3 `data`, by read_env, else sourced),
+  # CLASH naming each the environment set otherwise
   declare -A given=()
   for v in $2; do [ -z "${!v+x}" ] || given[$v]=${!v}; done
-  set -a
-  # shellcheck source=/dev/null
-  . "$1"
-  set +a
+  if [ "${3:-}" = data ]; then
+    read_env "$1" "$2"
+  else
+    set -a
+    # shellcheck source=/dev/null
+    . "$1"
+    set +a
+  fi
   for v in $2; do [ -z "${given[$v]+x}" ] || [ "${given[$v]}" = "${!v-}" ] || CLASH+=" $v"; done
   VENV=${VENV:-$TREE/.venv}
 }
@@ -415,7 +445,7 @@ if [[ ${1:-} =~ ^(v3c|handoff|gate-compose)$ ]] && [ -f "$DEFER_DIR/deferred.env
   fi
 elif [ "${1:-}" = compose ]; then  # the compose follow-on of a hand-off, at the settings it recorded
   COMPOSE=1
-  [ ! -f "$COMPOSE_DIR/compose.env" ] || follow_env "$COMPOSE_DIR/compose.env" "$COMPOSES"
+  [ ! -f "$COMPOSE_DIR/compose.env" ] || follow_env "$COMPOSE_DIR/compose.env" "$COMPOSES" data
 fi
 PEARLPLUS_TIE=${PEARLPLUS_TIE:-}
 if [ -n "$PEARLPLUS_TIE" ]; then  # the window served under Pearl+: Llama 3.2 1B's BF16 checkpoint, whose linears Pearl-C reads
@@ -1416,6 +1446,8 @@ handoff() {  # the compose hand-off in private/compose, from the pieces in $1 an
   printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" PEARLPLUS_TIE "$PEARLPLUS_TIE" COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" \
     SERVED_NODE "${SERVED_NODE:-$(hostname)}" SERVED_DIR "$D" COMPOSE_NODE "$COMPOSE_NODE" COMPOSE_TREE "$(tree_sha)" \
     AUDITED_ON "${V3C_AUDITED:-}" SAMPLED_AUDIT "$sampled" STEPS "$steps" > "$COMPOSE_DIR/compose.env" || return 1
+  why=$(read_env "$COMPOSE_DIR/compose.env" "$COMPOSES" || echo "$ENV_REFUSED")
+  [ -z "$why" ] || { say "HANDOFF refused: COMPOSE_NODE reads its settings (private/compose/compose.env) as data, and $why"; return 1; }
   handoff_inputs "$sampled" > "$COMPOSE_DIR/inputs.txt" 2> "$COMPOSE_DIR/inputs.err"
   rc=$?
   [ "$rc" = 0 ] || { say "HANDOFF refused: $(tail -1 "$COMPOSE_DIR/inputs.err" | cut -c1-600)"; return 1; }
@@ -1438,10 +1470,9 @@ compose() {  # `served_verdicts.sh compose` on a copy of a compose hand-off: the
       "hashed it (the serve dir's private/compose/inputs.sha256):" \
       "$([ "$rc" = 0 ] && echo PASS || echo "FAIL (the serve dir's private/compose/check.log)")"
   [ "$rc" = 0 ] || return 3
-  if [ -n "${SERVED_DIR:-}" ] && [ "$SERVED_DIR" != "$D" ]; then  # a copy at another path: its cases' blobs, here
-    "$SAY_PY" "$SV" rebase "$D" "$SERVED_DIR" < <(cut -d' ' -f3- "$COMPOSE_DIR/inputs.sha256") > "$COMPOSE_DIR/rebase.log" 2>&1 \
-      || { say "COMPOSE refused: the cases' blobs don't rebase from the served node's serve dir to this copy ($(tail -1 "$COMPOSE_DIR/rebase.log" | cut -c1-400))"; return 3; }
-  fi
+  # the cases' blobs, each a file the copy was held to, at its path here (the same where the copy is at the served path)
+  "$SAY_PY" "$SV" rebase --held "$D" "$SERVED_DIR" < <(cut -d' ' -f3- "$COMPOSE_DIR/inputs.sha256") > "$COMPOSE_DIR/rebase.log" 2>&1 \
+    || { say "COMPOSE refused: the cases' blobs don't rebase from the served node's serve dir to this copy ($(tail -1 "$COMPOSE_DIR/rebase.log" | cut -c1-400))"; return 3; }
   wait "$BUILD"; rc=$?
   [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; stop build "$rc"; }
   if [ -f "$COMPOSE_DIR/inference-only.json" ]; then
@@ -1586,6 +1617,18 @@ if [ -n "$FOLLOW" ]; then  # a deferral's follow-on: no serve, its venv the tree
 elif [ -n "$COMPOSE" ]; then  # a compose follow-on: no serve, row dir, card or gpu-lease, and never the served node
   [ -f "$COMPOSE_DIR/compose.env" ] \
     || { say "PREFLIGHT: the compose follow-on composes from the served node's hand-off, and the serve dir $D holds none (private/compose/compose.env): copy each file its private/compose/inputs.txt lists to the same path here first"; exit 3; }
+  [ -z "$ENV_REFUSED" ] || { say "PREFLIGHT: the compose follow-on reads the hand-off's settings (the serve dir's private/compose/compose.env) as data, and refuses them, none set: $ENV_REFUSED"; exit 3; }
+  # every path the follow-on reads is a file of the copy: the window and the record's audit name one inside it, the
+  # served node's serve dir is what the cases' blobs are rebased from, and the copy holds files, no link out of it
+  [[ ${K:-} =~ ^[0-9]+$ ]] \
+    || { say "PREFLIGHT: the compose follow-on reads the window's files in the copy, and the hand-off's K, ${K:-(none)}, is not a window's number"; exit 3; }
+  [[ -z ${SAMPLED_AUDIT:-} || $SAMPLED_AUDIT =~ ^[A-Za-z0-9_-][A-Za-z0-9._-]*(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$ ]] \
+    || { say "PREFLIGHT: the compose follow-on reads the record's audit in the copy, and the hand-off's SAMPLED_AUDIT, $SAMPLED_AUDIT, is no path inside it (a relative path, no part of it starting with a dot)"; exit 3; }
+  [ -n "${SERVED_DIR:-}" ] \
+    || { say "PREFLIGHT: the compose follow-on rebases the cases' blobs from the served node's serve dir, which the hand-off doesn't name (SERVED_DIR)"; exit 3; }
+  link=$(find "$D" -type l -printf '%P\n' -quit)
+  [ -z "$link" ] \
+    || { say "PREFLIGHT: the compose follow-on reads the copy's own files, and its serve dir holds a link ($(printf %q "$link" | cut -c1-200)): copy the hand-off's files, never a link"; exit 3; }
   [ -z "$CLASH" ] || { say "PREFLIGHT: the compose follow-on runs at the hand-off's settings (the serve dir's private/compose/compose.env), and the environment sets another$CLASH: unset it"; exit 3; }
   { [ "$(hostname)" != "$SERVED_NODE" ] && [ "$(hostname -s)" != "${SERVED_NODE%%.*}" ]; } \
     || { say "PREFLIGHT: this is the served node $SERVED_NODE, which the prover controls, so nothing composed here claims a record: compose on COMPOSE_NODE ($COMPOSE_NODE)"; exit 3; }
