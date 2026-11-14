@@ -164,11 +164,11 @@ def held_layers(k: float, layer_bits: float, products: float, entry: float, step
 @dataclass(frozen=True)
 class Point:
     """A measured execution's block: `bits` fresh input bits and `flops` FLOPs (`None`: any compute), which did the
-    reference work of `flops / rho` FLOPs (`rho` of the block's own compute when `flops` is `None`)."""
+    reference work of `flops / slowdown` FLOPs (`slowdown` of the block's own compute when `flops` is `None`)."""
 
     bits: float
     flops: float | None
-    rho: float
+    slowdown: float
 
 
 @dataclass(frozen=True)
@@ -190,9 +190,9 @@ class Measured:
             best = 0.0
             for pt in self.points:
                 if pt.flops is None:
-                    work = budget.compute / pt.rho if budget.inputs >= pt.bits else 0.0
+                    work = budget.compute / pt.slowdown if budget.inputs >= pt.bits else 0.0
                 else:
-                    work = min(budget.inputs // pt.bits, budget.compute // pt.flops) * pt.flops / pt.rho
+                    work = min(budget.inputs // pt.bits, budget.compute // pt.flops) * pt.flops / pt.slowdown
                 best = max(best, p.kappa * work / 2)
             return best
         return a

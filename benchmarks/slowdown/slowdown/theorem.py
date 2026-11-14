@@ -176,8 +176,8 @@ def aggregate(partition: Partition, cap: Cap, w: float, u: float | None = None) 
 
 
 @dataclass(frozen=True)
-class Overhead:
-    """The overhead for one algorithm under one cap, `rho` (the hardware multiple at `mfu`), from the padded size ratio
+class Slowdown:
+    """The overhead for one algorithm under one cap, `value` (the hardware multiple at `mfu`), from the padded size ratio
     `padded = efficiency / (unregistered + (1 − ε_unreg) g)`, with each server block's share and `g`'s terms summed over server
     blocks (each a share of the reference's weight in the monitored fleet at capacity). `unregistered` is the unregistered leaves'
     weight over the reference's in the whole inventory: `(u/w) ε_unreg` under a bound (`q_U(unregistered)`), and `ε_unreg` times
@@ -197,7 +197,7 @@ class Overhead:
     reference_efficiency: bool = True
 
     @property
-    def rho(self) -> float:
+    def value(self) -> float:
         """The overhead: the hardware multiple over the reference at `mfu` (`multiple`)."""
         return self.multiple(self.mfu)
 
@@ -220,7 +220,7 @@ class Overhead:
                               self.reference_efficiency)
 
     def rates(self) -> dict[str, float]:
-        """The slowdown's rate, `1 / rho` before its floor at 1, by part: the unregistered leaves (`unregistered`) and `g`'s terms.
+        """The slowdown's rate, `1 / slowdown` before its floor at 1, by part: the unregistered leaves (`unregistered`) and `g`'s terms.
         Under a bound the unregistered leaves count at 1 and the rest at `a` (`multiple_bound`'s `s + a x`); under an attack
         every part counts at `1 / mfu`."""
         attack = self.side == "attack"
@@ -229,9 +229,9 @@ class Overhead:
         return {"unregistered": unregistered} | {t: (1 - self.eps_unreg) * v * scale for t, v in self.terms.items()}
 
 
-def overhead(partition: Partition, cap: Cap, w: float, efficiency: float = 1.0, side: Side = "bound",
+def slowdown(partition: Partition, cap: Cap, w: float, efficiency: float = 1.0, side: Side = "bound",
              aggregate_only: bool = False, u: float | None = None, mfu: float = 1.0,
-             reference_efficiency: bool = True) -> Overhead:
+             reference_efficiency: bool = True) -> Slowdown:
     """The overhead from the server-block bound: each server block's local minimum (or, with `aggregate_only`, the
     minimum of the global sums), and the unregistered leaves. `w` is the reference's weight per gate, `u` the most a gate holds
     under a bound (`q_U`'s, default `w`), `mfu` the reference training algorithm's MFU, and `reference_efficiency`
@@ -249,7 +249,7 @@ def overhead(partition: Partition, cap: Cap, w: float, efficiency: float = 1.0, 
             out[term] = out.get(term, 0.0) + weights[name] * v / total
     g = math.fsum(weights[n] * s.value for n, s in shares.items()) / total if total else 0.0
     unregistered = partition.eps_unreg * (u / w if side == "bound" else partition.unreg_mfu)
-    return Overhead(padded(unregistered, g, efficiency, partition.eps_unreg), g, partition.eps_unreg, unregistered, efficiency, shares,
+    return Slowdown(padded(unregistered, g, efficiency, partition.eps_unreg), g, partition.eps_unreg, unregistered, efficiency, shares,
                     out, side, mfu, reference_efficiency)
 
 

@@ -104,7 +104,7 @@ def test_the_measured_s_times_moves_the_bound_by_u_over_w_on_the_share_counted_a
     at_u = sum(t.share for t in analysis.attribution(base) if t.name == "unregistered" or t.name.split(".")[0] in ROUTES)
     assert 0 < at_u <= 1
     def rate(r):
-        return math.fsum(r.families[0].combined.overhead.rates().values())
+        return math.fsum(r.families[0].combined.parts.rates().values())
 
     assert rate(one) / rate(base) == pytest.approx(at_u * uw + 1 - at_u, rel=1e-9)
     assert one.lo == pytest.approx(max(1.0, 1 / rate(one)), rel=1e-12)
