@@ -23,10 +23,10 @@ from verity.circuits import Program, bind
 from verity.circuits.codec import decode_program, encode_program, program_digest
 from verity.circuits.defs import REGISTRY, composite
 from verity.circuits.types import Array
-from verity.definitions.registry import b1
-from verity.definitions.registry import lifted as L
-from verity.definitions.registry import moe_pad as MP
-from verity.definitions.registry.prims import BF16
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import lifted as L
+from verity_vllm.definitions.registry import moe_pad as MP
+from verity_vllm.definitions.registry.prims import BF16
 
 from tests.program.test_moe_pad_stage2 import (
     BOT16,

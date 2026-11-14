@@ -10,7 +10,7 @@ a registered Definition. The package's docstring and each module's say what it h
   (`quarantine`).
 - **Loaded by:** the integration's `pipeline`, `observe`, `check`, `engine`, `acquire`, `query`, `properties` and
   `protocols` packages and its tools, `circuit-check`, and the benchmarks that build or read a Program.
-- **Loads:** `verity.circuits` and `verity.definitions`; torch, and vLLM inside functions; the integration's
+- **Loads:** `verity.circuits` and `verity_vllm.definitions`; torch, and vLLM inside functions; the integration's
   `engine`, `config` and `correspondence`; and, inside functions, its `check`, `observe` and `settings` and
   `verity.protocols.accounting.pouw.prover`.
 - **Names other packages read:** a top-level module that states `__all__` lists there every name another package or

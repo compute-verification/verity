@@ -126,7 +126,7 @@ def masked(fn: SpecializedDefinition) -> SpecializedDefinition:
     there too.
 
     NOT decided: whether each family's masked Definition is that family's next version in the catalog
-    (`verity/definitions/registry`, with its circuit-check sidecar), or one combinator registered once over any
+    (`adapters/vllm/verity_vllm/definitions/registry`, with its circuit-check sidecar), or one combinator registered once over any
     Definition, whose property check covers every family; whether a unit whose Definition maps rows of zeros to rows
     of zeros, word for word, and that reads nothing from outside its step but weights keeps its unmasked version
     (CIR-290's plan counts both); and how a template whose rows are near `interface.MAX_ROWS` takes the bit's row."""

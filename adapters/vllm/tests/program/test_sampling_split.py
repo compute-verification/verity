@@ -23,13 +23,13 @@ import pytest
 
 VLLM = Path(__file__).resolve().parents[2]
 REPO = VLLM.parents[1]
-_SPEC = importlib.util.find_spec("verity.definitions.registry")
+_SPEC = importlib.util.find_spec("verity_vllm.definitions.registry")
 assert _SPEC is not None and _SPEC.origin is not None
 REG = Path(_SPEC.origin).parent
 FIXTURE = Path(__file__).resolve().parent / "data" / "sampling_split_digests.json"
 REWRITE = ("a change meant to move the family's Definitions rewrites the pins with "
            "`uv run python tools/verity/check/pins.py --write adapters/vllm/tests/program/data/sampling_split_digests.json`")
-PKG = "verity.definitions.registry"
+PKG = "verity_vllm.definitions.registry"
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.circuits"
 
@@ -79,7 +79,7 @@ def family_definitions() -> dict[str, object]:
     import importlib
 
     from verity.circuits.defs import FunctionDefinition
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
 
     load()
     mods = {f"{PKG}.{m}" for m in FAMILY_MODULES}

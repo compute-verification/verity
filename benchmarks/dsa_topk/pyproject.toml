@@ -6,9 +6,9 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test_dsa_topk holds the canonical row to the registered relation's top-k set (verity.definitions.registry.dsa_topk)
+# test_dsa_topk holds the canonical row to the registered relation's top-k set (verity_vllm.definitions.registry.dsa_topk)
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits", "verity/circuits/kernels/__init__.py",
-          "verity/circuits/kernels/tc.py", "verity/definitions/__init__.py", "verity/definitions/evidence.py",
-          "verity/definitions/evidence.json", "verity/definitions/registry/__init__.py",
-          "verity/definitions/registry/dsa_topk.py", "verity/definitions/registry/prims.py",
+          "verity/circuits/kernels/tc.py", "adapters/vllm/verity_vllm/definitions/__init__.py", "adapters/vllm/verity_vllm/definitions/evidence.py",
+          "adapters/vllm/verity_vllm/definitions/evidence.json", "adapters/vllm/verity_vllm/definitions/registry/__init__.py",
+          "adapters/vllm/verity_vllm/definitions/registry/dsa_topk.py", "adapters/vllm/verity_vllm/definitions/registry/prims.py",
           "verity/circuits/ops", "verity/circuits/silicon"]
