@@ -99,6 +99,9 @@ card_free() {   # card COLD_CARD holds no other run's lease and no compute proce
 
 if [ "$STAGE" = probe ]; then
   log "probe: archive $(ls -l "${COLD_ARCHIVE:?}" | awk '{print $5}') B, sha256 $(sha256sum "$COLD_ARCHIVE" | cut -c1-16)"
+  PYTHONPATH=$REPO/tools/research/src python3 -m research keep "${COLD_ARCHIVE%/*}" --owner @proofs --expires 3d --priority low \
+    --why "cold_sessions.sh's copy of a kept audit window, read by its run stage" > "$O/keep.json" 2>&1 \
+    || log "no retention record on ${COLD_ARCHIVE%/*}: $(tail -1 "$O/keep.json")"
   unpack 1; rc=$?
   for f in verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh benchmarks/proof_throughput/verify.sh benchmarks/one_stage/member_seconds.py; do
     [ -f "$f" ] || { log "missing $f"; rc=1; }
