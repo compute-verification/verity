@@ -32,6 +32,9 @@ UNIT = ("the least slowdown of training run inside one inference block of the po
         "work and limit the most training work one block finishes (the bound's macs_a_block), in the policy's own MACs")
 #: the metric's id (benchmarks/inference_only/metrics.toml), the name the served policy's value is written under in the run's result
 METRIC = "training/inference-only-slowdown"
+#: the metric's target, its goal's (the `goal` metrics.toml names): a slowdown of at least 1,000. The console's Metrics
+#: tab shows the verdict a measurement carries beside its target, and compares nothing itself
+TARGET = 1000
 #: rho's command for a deployment's slowdown per monitoring period
 CALCULATOR = "uv run python benchmarks/rho/periods.py"
 #: the tied policy's label: what its figures are and what they rest on
@@ -381,6 +384,7 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
         args.out.mkdir(parents=True, exist_ok=True)
         (args.out / "inference_only.json").write_text(text + "\n")
         if stated.label == "served":
-            kit.writer(args.out).measurement(METRIC, doc["value"], UNIT, mark="modeled")
+            kit.writer(args.out).measurement(METRIC, doc["value"], UNIT, target=TARGET, mark="modeled",
+                                             verdict="within target" if doc["value"] >= TARGET else "misses")
     print("\n" + text)
     return doc

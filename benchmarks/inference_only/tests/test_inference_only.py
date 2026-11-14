@@ -149,6 +149,8 @@ def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(cap
     result = json.loads((tmp_path / "result.json").read_text())
     assert [(m["name"], m["value"], m["unit"], m["mark"]) for m in result["measurements"]] == [
         (report.METRIC, doc["value"], doc["unit"], "modeled")]
+    # the goal's target, which a value of 1 misses
+    assert [(m["target"], m["verdict"]) for m in result["measurements"]] == [(1000, "misses")] and report.TARGET == 1000
     assert lines[2] == "AS SERVED: 1" and "outside the circuit" in lines[4] and "Not checked here" in lines[6]
     assert out.index("AS SERVED: 1") < out.index("The class this tree builds: NOT SERVED")
     assert B.EXECUTABLE[1:] == ("--count", "--detail") and B.RULE.endswith(".Count: CompliesAtMost c k n")
