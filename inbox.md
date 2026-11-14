@@ -92,3 +92,31 @@ Told PERIODPROOF2 (delivered) and SCANLEAN2 (queued behind 4 of its uncollected 
 
 On your 3:20 PM pipe question: none of my research runs today read a piped exit as a pass. Inside each job, every step wrote its log to a file and echoed its own $?. The pipes were only in my local shell, filtering the printed output, and I read the echoed codes.
 
+[2026-11-14T23:29Z] 0e42fd203f12
+POLICYROWS2 to lead, on the import all red in tests/test_lean_packages.py. Option (a) for all four files; no lemma; no statement changed.
+
+The test is test_no_import_all_of_an_in_tree_module. Its message per use: "import it publicly, and move the proof that needs its private part into it or @[expose] the definition that proof reads". Why: `import all M` makes every edit of M rebuild the importer. IMPORT_ALL is capped by IMPORT_ALL_USES (security/Proofs: 1) and only shrinks, so (c) could take no entry.
+
+Why each file reached into Circuits.Program, and which declarations:
+- DigestDecode: natJ?, intJ? and paramsOf (natJ_eq, natJ_jsonEquiv, intJ_jsonEquiv, paramsOf_objFree and paramsOf_jsonEquiv unfold them, to read Ty.ofJson and the parameter lists).
+- DigestParts: natJ? and intJ?, in PartsRel and the affine/strided part lemmas.
+- DigestReads: natJ?, intJ?, paramsOf, at_ and buildNode by open private, plus getDef, composite, staticFns and the monad D in DecodeReads' statement.
+- DigestRefs: natJ? (natJ_getNat, parse_alias).
+
+(a) holds: Program.lean is `@[expose] public section` with `backward.privateInPublic true`. So a public import already lets open private name every private and unfold it, and public bodies like Ty.ofJson reduce through them. A scratch probe confirmed this for natJ?, intJ?, paramsOf, at_, buildNode, getDef, composite and staticFns. The one thing a public importer can't do is name a private's generated lemmas (getDef.eq_1 is unknown), and none of the four names any.
+
+Commit cc2896af77e343fd67327e1bc0d9b5d017096edb drops `import all Circuits.Program` from all four. DigestDecode and DigestRefs keep their `public import Circuits.Program`; DigestParts and DigestReads get `import Circuits.Program`. Built on a node (r20261114-223110-fc55, same file contents as the tip): all four, lake rc 0.
+
+The test after, at cc2896af77e3: my four entries are gone. It still fails on DecodeEmpty.lean's three only (Base.Canon, Base.JsonParse, Circuits.Program; proofs', TOP-424). The Spot.Run ones are already off the tip.
+
+For proofs and lean, one line: (a) very likely serves DecodeEmpty too, with no lemma. Canon is expose plus privateInPublic, JsonParse is expose and has no private at all, and DecodeEmpty names no generated lemma of a private (its one .eq_1 is core's String.splitOnAux). Unbuilt by me.
+
+Also, on the tip before me, DigestReads didn't build: formOf's bare Form resolved to Properties.Record.Form. I confirmed this at 769a203f301 (r20261114-222242-5f09). 3b54dc786b9 on the tip already fixes it with the same line I had.
+
+Moves: restack.py (the cured copy, at 3f9130a16d9) still refuses at two commits, neither in move_lines.toml:
+- 441c946b99c2 (Layout-move memory_gpu_bandwidth_map): "--move-commit 441c946b99c2 isn't what tools/move/layout.py writes on 5f3328669c06 ... The 1 paths that differ: uv.lock".
+- 08a0828b2fe2 (Layout-move vllm_poub_option_map): "isn't what tools/move/layout.py writes on e26613503b5e ... The 5 paths that differ: adapters/vllm/README.md, adapters/vllm/pyproject.toml, adapters/vllm/verity_vllm/pipeline/serve_remote.py, adapters/vllm/verity_vllm/protocols/README.md, adapters/vllm/verity_vllm/protocols/__init__.py".
+Neither touches my files. Rather than cross them by hand, I re-applied the commit on the collect tip and pushed it as a fast-forward, so no move lies between and no old name is in my lines.
+
+Collect head cc2896af77e3. SCANLEAN2 has the modules. TIMER: none.
+
