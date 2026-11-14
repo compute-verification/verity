@@ -572,8 +572,8 @@ what they are without this section.
 ~~~text
 "ports": {"params": [[i, lo, hi, <in>], ...], "ret": [[lo, hi, <out>], ...], "inputs": [[k, lo, hi, <in>], ...],
           "transfer": true}
-<in>  = {"bound": [a, b], "kind": "coin" | "static" | "position", "receipt": true, "word": <name>}
-<out> = {"interval": [a, b], "sink": true, "word": <name>}
+<in>  = {"bound": [a, b], "kind": "coin" | "static" | "position", "receipt": true, "word": <name>, "certified": <label>}
+<out> = {"interval": [a, b], "sink": true, "word": <name>, "certified": <label>}
 ~~~
 
 A row types leaves `[lo, hi)` of parameter `i`, of the return, or of root node `k`, which is an input node (§5.2). The program
@@ -582,6 +582,18 @@ root, which has no `params`. A port names only what differs from the default (at
 The rows of each array are sorted (by `i` then `lo`, by `lo`, by `k` then `lo`), disjoint and maximal: two adjacent rows with
 equal ports are one. An empty array is omitted, and so is `ports` when nothing is declared. A word type is a name matching
 `[a-z][a-z0-9_]*`.
+
+`"certified": <label>` (`In(certified=...)`, `Out(certified=...)`), a label matching `[a-z][a-z0-9_]*`, says the row's
+leaves are one row of the certified table so labelled: on a `params` row, a row the proof block reads; on a `ret` row, one
+it writes. The label is the Program's; the certified values it stands for, and their names, are the verifier's, so a
+Program's digest names no value. It is declared only on a composite the root calls or batches, a template of the proof
+blocks: a primitive's ports, a program function's and so the root's `inputs` and `ret` never carry it (`E_PORT_DECL`). It
+types no leaf (no rule below reads it), and a harness (`ports.harness`) leaves it out. Which row of the table a proof
+block's port is follows from the Program's description alone: the SPOT verifier numbers a label's rows from 0
+over the root's nodes in order, each call or batch of a template marking it taking one row per member, and refuses a mark
+that is not one whole parameter or one whole field of the return (the output port `o<j>` of field `j`, or `o0` of a
+return that is no tuple or record), a label on two ports of one template, and a mark on a Definition any node but a root
+call or batch calls (`Spot.CertifiedRows`, `one_stage/certified_rows.py`).
 
 An interval `[a, b]` has integers `a ≤ b`. It types leaves of one width `w`, and reads them as signed when `a < 0` and as
 unsigned otherwise, so it lies within `[-2^(w-1), 2^(w-1) - 1]` or within `[0, 2^w - 1]`. A *full* interval is one of those
@@ -676,15 +688,18 @@ as declared, so a composite over exact steps declares the intervals its operands
   a receipt fold too; or an input leaf of origin `position` is read by more than one seed. Any number of seeds may read one
   coin, each at positions of its own, so each (coin, position) seeds one proof block; that distinct position leaves hold distinct
   values is the verifier's, which binds them.
-- **`E_PORT_DECL`**: the `ports` are malformed or not canonical, or a transfer gives no interval of its return's width.
+- **`E_PORT_DECL`**: the `ports` are malformed or not canonical, a transfer gives no interval of its return's width, or a
+  primitive, a program function or the root declares `certified`.
 
 `ports.facts(root)` gives every leaf's fact to the census and the stacking property. A Program in which no Definition declares
-ports is refused by none of the rules, and nothing is computed for it (`ports.check` returns None).
+ports, or none but certified marks, is refused by none of the rules, and nothing is computed for it (`ports.check` returns
+None).
 
 Vectors: `verity/circuits/tests/test_ports.py`: each rule's acceptance and refusals, built and decoded; an input's bound
 narrower than its type refused, and narrowed by a range check instead; a chain of exact steps declaring its words' intervals
 and a limb split's bound on them; an explicit limb split with its carries; a word read at
 another width (`E_REINTERPRET`), built and in a tampered descriptor; the coin rules through calls,
 batches and scans; seeds batched over positions, and a proof block's z read from its noise;
-tampered descriptors; the canonical form; and a pinned
+tampered descriptors; the canonical form; a certified mark on a template, built and decoded, and refused on a primitive,
+a program function and the root; and a pinned
 digest of one typed descriptor.
