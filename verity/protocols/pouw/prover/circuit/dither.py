@@ -74,7 +74,7 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, ONE, ZERO, add, and_reduce, compress_columns
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import CompositeDefinition, bind, primitive
-from verity.definitions.silicon.integer import (
+from verity.circuits.silicon.integer import (
     BLACKWELL_SM120_S8_M16N8K32_WRAP,
     HOPPER_SM90_S8_K32,
     IntegerMma,

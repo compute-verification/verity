@@ -22,7 +22,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # above them; what `lake` reads through the path requires: the core protocol interface, the window's Lean and what it
 # requires (PoUW's commitments, the proof system's Lean with the LMS verifier, core's identity and randomness, Flock's
 # verifier with its configuration). The leaf statements' files `pouw-leaf-own-window` checks are `leaf_lanes.py`'s, with
-# what it imports (PoUW's `circuit/` seeds, one-stage's `produced.py`, and the `verity.definitions.kernels` `tc.py` they reach).
+# what it imports (PoUW's `circuit/` seeds, one-stage's `produced.py`, and the `verity.circuits.kernels` `tc.py` they reach).
 inputs = ["verity/protocols/spot/verifier/one_stage/link_points.py", "verity/protocols/spot/device/remote.py",
           "tools/difftest", "verity/__init__.py",
           "verity/hardware/record.py",
@@ -52,7 +52,7 @@ inputs = ["verity/protocols/spot/verifier/one_stage/link_points.py", "verity/pro
           # pouw/grind.py: credit reads it through circuit/h1zy.py.
           "verity/protocols/pouw/verifier/grind.py",
           "verity/protocols/spot/verifier/one_stage/produced.py",
-          "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py",
+          "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py",
           "verity/protocols/spot/verifier/lean/lakefile.toml", "verity/protocols/spot/verifier/lean/lake-manifest.json",
           "verity/protocols/spot/verifier/lean/lean-toolchain", "verity/protocols/spot/verifier/lean/Spot.lean",
           "verity/protocols/spot/verifier/lean/Spot",
