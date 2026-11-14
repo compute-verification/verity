@@ -31,7 +31,7 @@ import subprocess
 import tempfile
 import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 RECORD_VERDICT = "lean"
 #: the refusal code of an answer of record the Lean and its Python twin disagree on, or the Lean can't give
@@ -187,6 +187,16 @@ def serve_of_record(exe: str, case: Any, python: dict) -> dict:
     return got
 
 
+#: the goal under which a check `not_written` stands for gets its Lean interface
+GOAL = "compute-accounting/pouw-verdict-from-main"
+
+
+def not_written(fn: str, lean: str) -> NoReturn:
+    """The verdict of record of `fn`, the Lean `lean`'s, which no interface here reaches yet: raises
+    `NotImplementedError` naming `GOAL`. The Python twin beside `fn` answers the difftest only, never in its place."""
+    raise NotImplementedError(GOAL)
+
+
 def coins(n: int) -> bytes:
     """`n` bytes of the operating system's randomness, read by the Lean verifier (`IO.getRandomBytes`, A3's
     `uniform/io-getrandombytes`): a served challenger's entropy. Raises `LeanError` where the Lean can't run, refuses or
@@ -206,5 +216,5 @@ CLAIM = "uniform/io-getrandombytes"
 coins.claim = CLAIM  # type: ignore[attr-defined]
 
 
-__all__ = ["CLAIM", "COINS_MAX", "DISAGREE", "RECORD_VERDICT", "SERVE_EXES", "LeanError", "coins", "executable", "lean",
-           "of_record", "serve_of_record"]
+__all__ = ["CLAIM", "COINS_MAX", "DISAGREE", "GOAL", "RECORD_VERDICT", "SERVE_EXES", "LeanError", "coins", "executable",
+           "lean", "not_written", "of_record", "serve_of_record"]
