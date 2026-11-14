@@ -10,7 +10,7 @@ adopt it, how fast can a determined actor still advance frontier capability? Fou
 - the board: one training method in one configuration per row, with a slowdown bracket (`rows.json`, `bracket.py`).
 
 Nothing in `verity` reads this directory. The theorem it cites is in `security/`: `InferenceOnly.SecurityProofs.ThreadedTraining`
-(`security/Definitions/InferenceOnly/Guarantees/Threads.lean`).
+(`security/Definitions/Slowdown/Guarantees/Threads.lean`).
 
 The slowdown lower bound's numbers come from [`benchmarks/slowdown`](../slowdown/README.md), the one slowdown calculator.
 `tiers.py` gives the remote composition's terms per tier (`remote_terms`), and the slowdown on them is the slowdown calculator's
@@ -24,8 +24,7 @@ hosts assumption 2.19 and 2.80, and without both 1 and 1.12. For the slowdown's 
 these stems: `rho` for the slowdown (`bracket.py`'s stored key `"rho"`); `efficiency` or `eta` for the older efficiency
 term, written η in older text and replaced by the slowdown (`tiers.py`'s `efficiency`, `exposure.py`'s `eta`; today's η is
 the success threshold, and `exposure.py`'s docstring says 1/eta is not the slowdown D); `residual` for free compute
-(`residual_share`, `memory_caps_residual`); and `unmonitored` for unregistered hardware's share, ε_unreg (`tiers.py`'s
-key `unmonitored`). These are not older names: `tiers.py`'s `rho_T`,
+(`residual_share`, `memory_caps_residual`). These are not older names: `tiers.py`'s `rho_T`,
 `rho_PoS` and `rho_NCI`, which are rates; `exposure.py`'s `wipe_residual`, the memory the fill misses; `kappa.py`'s
 `RESIDUAL`, the model's residual stream; `fit.py`'s `D_max` and its loop variable `D` over `DATA_LIMITS`, token counts in
 the loss law; `kappa.py`'s `c.D` and the `D` of its softmax comment; `reference_efficiency`, the reference-efficiency

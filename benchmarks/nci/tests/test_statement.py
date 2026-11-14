@@ -36,15 +36,15 @@ def slowdown(over: dict, tier: str) -> float:
 
 
 def test_the_dampener_is_a_hardware_multiple_against_the_unconstrained_run():
-    """Unmonitored compute trains like the unconstrained developer, and so do dark fragments of monitored capacity
+    """Unregistered compute trains like the unconstrained developer, and so do dark fragments of registered capacity
     (reference efficiency: ``evaluate`` at ``residual_mfu`` = MFU_0); the rest are counted multiplications, so
     D = 1 / (s + rest / mfu): the slowdown calculator's ``multiple_bound`` in Lean's form, ``remoteSlowdown``, at tiers'
     terms."""
-    p = P | {"unmonitored": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
+    p = P | {"unregistered": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
     r = T.evaluate(p, T.TIERS["T4"], p["mfu"])
     rest = r["residual"] + r["declared"] + r["cheat"]
-    assert T.remote_terms(p, r) == (r["unmonitored"], rest)
-    assert S.slowdown(p, "T4") == pytest.approx(1 / (r["unmonitored"] + rest / p["mfu"]), rel=1e-9)
+    assert T.remote_terms(p, r) == (r["unregistered"], rest)
+    assert S.slowdown(p, "T4") == pytest.approx(1 / (r["unregistered"] + rest / p["mfu"]), rel=1e-9)
     assert r["residual"] == pytest.approx(p["mfu"] * T.evaluate(p, T.TIERS["T4"])["residual"], rel=1e-9)
     assert all(S.slowdown(P | {"residual": 1.0}, t) == 1.0 for t in ("T1", "T2", "T3", "T4"))
 
@@ -128,13 +128,13 @@ def test_the_regimes_add_unmonitored_compute_at_full_efficiency():
     """With today's wipes the fit bound caps nothing; at 6 GB it caps the best design's residual, which trains at
     MFU_0 (reference efficiency) where the cap and nu are counted multiplications."""
     q = P | S.BEST
-    monitored = T.residual_share(q) + LAG + X.nu(q) / P["mfu"]
+    registered = T.residual_share(q) + LAG + X.nu(q) / P["mfu"]
     mu = S.fit_mu(6.0) / P["mfu"]
-    assert mu < monitored
+    assert mu < registered
     for row in S.regimes()["rows"]:
         s, today, six = row["s"], row["slowdown"]["today's wipes"], row["slowdown"]["6 GB streamed-label wipes"]
-        assert 1 / today["T3"] == pytest.approx(s + (1 - s) * monitored, rel=1e-4), row
-        assert today["T5"] == pytest.approx(max(1.0, 1 / (s + (1 - s) * (monitored + S.cheat(q) / P["mfu"]))), rel=1e-4), row
+        assert 1 / today["T3"] == pytest.approx(s + (1 - s) * registered, rel=1e-4), row
+        assert today["T5"] == pytest.approx(max(1.0, 1 / (s + (1 - s) * (registered + S.cheat(q) / P["mfu"]))), rel=1e-4), row
         assert 1 / six["T3"] == pytest.approx(s + (1 - s) * mu, rel=1e-4), row
         assert six["T5"] == pytest.approx(max(1.0, 1 / (s + (1 - s) * (mu + S.cheat(q) / P["mfu"]))), rel=1e-4), row
 
@@ -167,7 +167,7 @@ def test_the_fit_edges_are_where_the_fit_bound_crosses_each_level():
 
 
 def test_the_recipe_multiplier_scales_the_fit_bounds_cap():
-    """As in ``tiers.evaluate``, where monitored efficiency is capped at m times the memory cap: at 6 GB the cap binds
+    """As in ``tiers.evaluate``, where registered efficiency is capped at m times the memory cap: at 6 GB the cap binds
     on the best design, so D is MFU_0 / (m mu) by both ``statement.capped`` and ``fit.slowdown``."""
     mu = S.fit_mu(6.0)
     for m in (1.0, 3.0):
@@ -255,7 +255,7 @@ def test_it_renders_every_section_as_markdown_and_json(capsys, monkeypatch):
     md = capsys.readouterr().out
     assert md.startswith("# ") and "at commit `" in md
     for heading in ("## Slide forms", "## 0. Symbols", "## 4. The terms", "## The ladder", "## The fit bound",
-                    "## Years of growth", "## The unmonitored share by regime", "## 6. Thresholds on D",
+                    "## Years of growth", "## The unregistered share by regime", "## 6. Thresholds on D",
                     "## Known holes"):
         assert heading in md
     assert S.main(["--json"]) == 0

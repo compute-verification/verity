@@ -14,7 +14,7 @@ import Proofs.Core.Game.Basic
 `SampleAfterRecorded`. The verifier's coin `i` is the challenger's flip `i` (`coin_of_log`), and the set of blocks fixed
 before it reads only the flips before `i` (`FlipsAfterRecorded`), so resampling flip `i` leaves the set where it is
 while the average over the challenger's flips stays the same (`Game.avg_update`). For each fixed set of at least `K`
-blocks, a uniform coin's sample misses it with probability the sampling design's `escape`, at most `miss K`.
+blocks, a uniform coin's sample misses it with probability the sampling design's `missProb`, at most `miss K`.
 
 Its witnesses: `SampleAfterRecorded_honest`, a log that releases coins around a recorded commitment and meets every
 premise, where the bound holds; and `SampleAfterRecorded_nontrivial`, at a log that flips before it records and meets the
@@ -123,7 +123,7 @@ theorem SampleAfterRecorded : Guarantees.SampleAfterRecorded := by
         refine avg_mono fun ω => ?_
         by_cases hK : K ≤ (B ω).card
         · exact le_trans (prCoin_mono fun c h => h.2)
-            (le_iSup₂ (f := fun (B : Finset U) (_ : K ≤ B.card) => L.escape B) (B ω) hK)
+            (le_iSup₂ (f := fun (B : Finset U) (_ : K ≤ B.card) => L.missProb B) (B ω) hK)
         · refine le_trans (prCoin_mono (q := fun _ => False) fun c h => hK h.1) ?_
           rw [prCoin_false]
           exact bot_le

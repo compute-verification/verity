@@ -44,8 +44,8 @@ whose extraction is one wait, at twice their probability:
 namespace Claims.SamplingGeneric
 
 open Claims Finset
-open Claims.Sampling (AuditStatement Opening Partition InScopeTwo cell replayOf forkOn wrongInAt assemble
-  gateBlock gateBlock_of_mem correct_refIn_congr val_assemble ιOf ιOf_eq wrongAllAt wrongAllAt_subset)
+open Claims.Sampling (AuditStatement Opening Partition InScopeTwo cell replayOf forkOn incorrectInAt assemble
+  gateBlock gateBlock_of_mem correct_refIn_congr val_assemble ιOf ιOf_eq incorrectAllAt incorrectAllAt_subset)
 
 namespace Compiled
 
@@ -170,20 +170,20 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 
 set_option synthInstance.maxSize 1024 in
 /-- **The deterministic half at the session's own witness**: at an accepted run whose sample holds, at slot `i`, a
-proof block `u` incorrect at the boundary trace `tr` and the interiors `itr` (`wrongAllAt`), the session of `i` is not
+proof block `u` incorrect at the boundary trace `tr` and the interiors `itr` (`incorrectAllAt`), the session of `i` is not
 found at its first slot `i₀`'s coins, or is found there with a witness that is off `tr` and `itr` (`Compiled.OffAt`).
 Otherwise the boundary values that are `tr` on the program's gates and what the witness keeps elsewhere, and the
 interior values that are `u`'s replay block's `itr` on its gates and what the witness keeps elsewhere, agree with
 every opening the witness reveals at `u` that passes, so they make `u` correct (`Sessions.opens`); and `tr` and `itr`
 agree with them where `u`'s correctness reads (`correct_refIn_congr`), so `u` is correct at them, which
-`u ∈ wrongAllAt` denies. It is `regTwo_split` with the values read off the session's one witness in place of the
+`u ∈ incorrectAllAt` denies. It is `regTwo_split` with the values read off the session's one witness in place of the
 run's extractions, so the interiors are the reader's too. -/
 theorem regTwo_found_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions H) {x : Msg}
     {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} (P : Prover Ω)
     (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) (hacc : (run H P L.V x ω r).out = .acc)
     (i u : Fin (L.nPU x)) (hiu : (L.checked x r)[i.val]? = some u.val) (tr : ℕ → Option Bool)
-    (itr : ℕ → ℕ → Bool) (hF : u.val ∈ wrongAllAt s Pt d.part tr itr) (i₀ u₀ : Fin (L.nPU x))
+    (itr : ℕ → ℕ → Bool) (hF : u.val ∈ incorrectAllAt s Pt d.part tr itr) (i₀ u₀ : Fin (L.nPU x))
     (hlead : L.leadOf x (L.checked x r) i = some i₀) (hu₀ : (L.checked x r)[i₀.val]? = some u₀.val) :
     ¬ L.Found H x (run H P L.V x ω) u₀ r (c i₀ u₀) ∨
       L.FoundWith H x (run H P L.V x ω) u₀ r (c i₀ u₀) fun _ w =>
@@ -217,9 +217,9 @@ theorem regTwo_found_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Se
     rw [Compiled.sessBlocks, hc]
     exact List.mem_filterMap.2 ⟨i.val, Compiled.self_mem_sessSlots hiu u.isLt, hiu⟩
   obtain ⟨b, ρ, rb, hb, hρ, hrb, hcor⟩ := hS.opens x s Pt d Ω P ω r u xS vS w hs hPt hd hin hacc hu hsu hR
-  simp only [wrongAllAt, mem_biUnion, mem_product, mem_range] at hF
+  simp only [incorrectAllAt, mem_biUnion, mem_product, mem_range] at hF
   obtain ⟨⟨ρ', t⟩, -, hwr⟩ := hF
-  simp only [wrongInAt, mem_filter] at hwr
+  simp only [incorrectInAt, mem_filter] at hwr
   obtain ⟨hcell, hnot⟩ := hwr
   have hρ' : ρ' = ρ := by
     simp only [cell, mem_filter] at hcell
@@ -301,24 +301,24 @@ theorem eventTwo_found_split {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} (P : Prover Ω)
     (ω : Ω) (tr : ℕ → Option Bool) (itr : (Fin (L.V.k x) → Coin) → ℕ → ℕ → Bool) :
     Pr (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
-      ∃ u ∈ L.checked x r, u ∈ wrongAllAt s Pt d.part tr (itr r)) ≤
+      ∃ u ∈ L.checked x r, u ∈ incorrectAllAt s Pt d.part tr (itr r)) ≤
       Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => (run H P L.V x ω rc.1).out = .acc ∧
-        ∃ i, L.leadSel x (L.selOf x (wrongAllAt s Pt d.part tr (itr rc.1))) (L.checked x rc.1) = some i ∧
+        ∃ i, L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part tr (itr rc.1))) (L.checked x rc.1) = some i ∧
           ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
             ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) +
       Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => (run H P L.V x ω rc.1).out = .acc ∧
-        ∃ i, L.leadSel x (L.selOf x (wrongAllAt s Pt d.part tr (itr rc.1))) (L.checked x rc.1) = some i ∧
+        ∃ i, L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part tr (itr rc.1))) (L.checked x rc.1) = some i ∧
           ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
             L.FoundWith H x (run H P L.V x ω) u rc.1 (rc.2 i u) fun _ w =>
               L.OffAt H x s d.part tr (itr rc.1) (L.checked x rc.1) i.val (run H P L.V x ω rc.1).seen w) := by
   refine (Pr_fst (β := L.SlotEC x) (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
-    ∃ u ∈ L.checked x r, u ∈ wrongAllAt s Pt d.part tr (itr r))).symm.trans_le
+    ∃ u ∈ L.checked x r, u ∈ incorrectAllAt s Pt d.part tr (itr r))).symm.trans_le
       (Sampling.Pr_or_le (fun rc hrc => ?_) le_rfl le_rfl)
   obtain ⟨hacc, v, hvl, hvF⟩ := hrc
   obtain ⟨i, hi, u, hiu, huF⟩ := L.selOf_some x (hS.slots x rc.1)
-    (fun w hw => by rw [Compiled.nPU_eq hs hPt]; exact mem_range.1 (wrongAllAt_subset s Pt d.part _ _ hw)) hvl hvF
+    (fun w hw => by rw [Compiled.nPU_eq hs hPt]; exact mem_range.1 (incorrectAllAt_subset s Pt d.part _ _ hw)) hvl hvF
   obtain ⟨i₀, u₀, hlead, hu₀⟩ := Compiled.leadOf_some hiu u.isLt
-  have hsel : L.leadSel x (L.selOf x (wrongAllAt s Pt d.part tr (itr rc.1))) (L.checked x rc.1) = some i₀ := by
+  have hsel : L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part tr (itr rc.1))) (L.checked x rc.1) = some i₀ := by
     rw [Compiled.leadSel, hi, Option.bind_some, hlead]
   rcases regTwo_found_split hS hs hPt hd hin P ω rc.1 rc.2 hacc i u hiu tr (itr rc.1) huF i₀ u₀ hlead hu₀
     with h | h
@@ -353,29 +353,29 @@ theorem eventTwo_oneWait_le_of_off {H : Msg → Msg} {L : CompiledTwo Coin A} (h
     (hN : Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.oneWait.SlotEC x) =>
       (run H P L.V x q.1 q.2.1).out = .acc ∧ L.oneWait.OffIreg H P x q.1 d.part q.2.1 q.2.2) ≤ bN) :
     Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
-        ∃ u ∈ L.checked x p.2, u ∈ wrongAllAt s Pt d.part (tr p.1) (L.oneWait.iregVal H P x p.1 p.2)) ≤
+        ∃ u ∈ L.checked x p.2, u ∈ incorrectAllAt s Pt d.part (tr p.1) (L.oneWait.iregVal H P x p.1 p.2)) ≤
       3 * L.κs x + 2 * Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + 2 * (bI + bB + bN) := by
   obtain ⟨β, hβ0, hβ, hκ⟩ := Compiled.sessionKS_of hA (L := L.toCompiled) ⟨hS.fixed, hS.runs⟩ x Ω P
   obtain ⟨β', hβ0', hβ', hκ'⟩ := Compiled.sessionFinds_of hF (L := L.toCompiled) ⟨hS.fixed, hS.runs⟩ x Ω P
   have hsel : ∀ (ω : Ω) (r e : Fin (L.V.k x) → Coin),
-      L.leadSel x (L.selOf x (wrongAllAt s Pt d.part (tr ω)
+      L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (tr ω)
           (L.oneWait.iregVal H P x ω (forkOn (L.stage2 x) r e)))) =
-        L.leadSel x (L.selOf x (wrongAllAt s Pt d.part (tr ω) (L.oneWait.iregVal H P x ω r))) :=
-    fun ω r e => congrArg (fun I => L.leadSel x (L.selOf x (wrongAllAt s Pt d.part (tr ω) I)))
+        L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (tr ω) (L.oneWait.iregVal H P x ω r))) :=
+    fun ω r e => congrArg (fun I => L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (tr ω) I)))
       (iregVal_forkOn H L.oneWait P x ω r e)
   have hT : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
       (run H P L.V x ω rc.1).out = .acc ∧
-        ∃ i, L.leadSel x (L.selOf x (wrongAllAt s Pt d.part (tr ω) (L.oneWait.iregVal H P x ω rc.1)))
+        ∃ i, L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (tr ω) (L.oneWait.iregVal H P x ω rc.1)))
             (L.checked x rc.1) = some i ∧
           ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
             ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) ≤
       L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) :=
     Compiled.pr_unfound_le_at H L.toCompiled P β hβ0 hβ
-      (fun ω r => L.leadSel x (L.selOf x (wrongAllAt s Pt d.part (tr ω) (L.oneWait.iregVal H P x ω r))))
+      (fun ω r => L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (tr ω) (L.oneWait.iregVal H P x ω r))))
       hsel fun ω r sl => hκ ω r sl
   have hG : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
       (run H P L.V x ω rc.1).out = .acc ∧
-        ∃ i, L.leadSel x (L.selOf x (wrongAllAt s Pt d.part (tr ω) (L.oneWait.iregVal H P x ω rc.1)))
+        ∃ i, L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (tr ω) (L.oneWait.iregVal H P x ω rc.1)))
             (L.checked x rc.1) = some i ∧
           ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
             L.FoundWith H x (run H P L.V x ω) u rc.1 (rc.2 i u) fun _ w =>
@@ -383,7 +383,7 @@ theorem eventTwo_oneWait_le_of_off {H : Msg → Msg} {L : CompiledTwo Coin A} (h
                 (run H P L.V x ω rc.1).seen w) ≤
       2 * Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.oneWait.SlotEC x =>
         (run H P L.V x ω rc.1).out = .acc ∧
-          ∃ i, L.leadSel x (L.selOf x (wrongAllAt s Pt d.part (tr ω) (L.oneWait.iregVal H P x ω rc.1)))
+          ∃ i, L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (tr ω) (L.oneWait.iregVal H P x ω rc.1)))
               (L.checked x rc.1) = some i ∧
             ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
               L.oneWait.FoundWith H x (run H P L.V x ω) u rc.1 (rc.2 i u) fun _ w =>
@@ -391,7 +391,7 @@ theorem eventTwo_oneWait_le_of_off {H : Msg → Msg} {L : CompiledTwo Coin A} (h
                   (run H P L.V x ω rc.1).seen w) +
         (2 * L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x)) :=
     Compiled.pr_found_le_at H L.toCompiled P β' hβ0' hβ'
-      (fun ω r => L.leadSel x (L.selOf x (wrongAllAt s Pt d.part (tr ω) (L.oneWait.iregVal H P x ω r))))
+      (fun ω r => L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (tr ω) (L.oneWait.iregVal H P x ω r))))
       hsel
       (fun ω r i _ w => L.OffAt H x s d.part (tr ω) (L.oneWait.iregVal H P x ω r) (L.checked x r) i.val
         (run H P L.V x ω r).seen w)
@@ -400,7 +400,7 @@ theorem eventTwo_oneWait_le_of_off {H : Msg → Msg} {L : CompiledTwo Coin A} (h
           (run H P L.V x ω r').seen w
   have hC : ∀ ω : Ω, Pr (fun rc : (Fin (L.V.k x) → Coin) × L.oneWait.SlotEC x =>
         (run H P L.V x ω rc.1).out = .acc ∧
-          ∃ i, L.leadSel x (L.selOf x (wrongAllAt s Pt d.part (tr ω) (L.oneWait.iregVal H P x ω rc.1)))
+          ∃ i, L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (tr ω) (L.oneWait.iregVal H P x ω rc.1)))
               (L.checked x rc.1) = some i ∧
             ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
               L.oneWait.FoundWith H x (run H P L.V x ω) u rc.1 (rc.2 i u) fun _ w =>
@@ -444,7 +444,7 @@ theorem eventTwo_oneWait_le_of_off {H : Msg → Msg} {L : CompiledTwo Coin A} (h
   have hC' := Ex_mono hC
   rw [Ex_add, Ex_add] at hC'
   have hE := (Sampling.Pr_prod_eq_Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
-      ∃ u ∈ L.checked x p.2, u ∈ wrongAllAt s Pt d.part (tr p.1) (L.oneWait.iregVal H P x p.1 p.2))).trans_le
+      ∃ u ∈ L.checked x p.2, u ∈ incorrectAllAt s Pt d.part (tr p.1) (L.oneWait.iregVal H P x p.1 p.2))).trans_le
     (Ex_mono fun ω => eventTwo_found_split hS hs hPt hd hin P ω (tr ω) fun r => L.oneWait.iregVal H P x ω r)
   rw [Ex_add] at hE
   linarith

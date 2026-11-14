@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Core.Formalism
-public import Definitions.InferenceOnly.Covering
+public import Definitions.Slowdown.Covering
 
 /-!
 # Appendix A.1: from a `(c, k)`-partition to a covering

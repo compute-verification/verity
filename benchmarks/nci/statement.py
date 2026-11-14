@@ -67,7 +67,7 @@ FIT_TARGET = ("besiroglu", "405b")
 FIT_TIERS = ("T3", "T5")
 #: frontier training compute grows 4-5x a year (Epoch AI)
 GROWTH = 4.5
-#: the s dossier's unmonitored shares, central and adversarial
+#: the s dossier's unregistered shares, central and adversarial
 REGIMES = {
     "Domestic oversight of 3-5 labs": (0.005, 0.05),
     "International compute registry": (0.02, 0.1),
@@ -80,7 +80,7 @@ LEVELS = (1000.0, 100.0, 10.0, 2.0)
 THRESHOLD_TIERS = ("T1", "T3", "T4", "T5")
 #: parameters the page's "no other parameter" sets aside: the parts of r̂ (the GPUs, the clock, host CPUs and the verdict
 #: lag J Delta / H), s and g
-TORNADO_SKIP = ("residual", "host_share", "clock_share", "lag_s", "identities", "unmonitored", "g")
+TORNADO_SKIP = ("residual", "host_share", "clock_share", "lag_s", "identities", "unregistered", "g")
 COSTS = {"today's sparse draws": T.DEFAULTS["overhead"], "512 draws per statement": 1.7e10}
 
 
@@ -105,7 +105,7 @@ THRESHOLD_ROWS: list[tuple[str, dict, list[tuple[str, Callable[[dict, float], fl
     ("K", {}, [("K, bits", same), ("α = K/Γ", alpha)]),
     ("b_a", {}, [("b_a, bits", same)]),
     ("d", {}, [("d", same)]),
-    ("unmonitored", {}, [("unmonitored share s", same)]),
+    ("unregistered", {}, [("unregistered share s", same)]),
     ("unfilled_gb", STREAMED, [("R_wipe, GB (streamed-label wipes, unfilled_gb varied)", r_wipe_gb)]),
 ]
 
@@ -136,7 +136,7 @@ def capacity(p: dict) -> float:
 
 
 def fit_mu(gb: float) -> float:
-    """The fit bound's cap on monitored efficiency at a wipe residual of ``gb`` GB, for a ``FIT_TARGET``-class target at
+    """The fit bound's cap on registered efficiency at a wipe residual of ``gb`` GB, for a ``FIT_TARGET``-class target at
     central w_e; ``inf`` where it doesn't hold."""
     law, target = FIT_TARGET
     L = F.target_loss(law, target)
@@ -145,10 +145,10 @@ def fit_mu(gb: float) -> float:
 
 def capped(p: dict, tier: str, mu: float) -> float:
     """D at ``tier`` with ``mu`` as the memory cap in place of the closed form: ``tiers.evaluate`` without wipes or
-    exhaustion, its monitored terms capped at ``m mu`` of C (the recipe multiplier scales the cap, as there)."""
+    exhaustion, its registered terms capped at ``m mu`` of C (the recipe multiplier scales the cap, as there)."""
     r = T.evaluate(p, T.TIERS[tier] | {"wipes": False, "exhaust": False}, p["mfu"])
-    monitored = min(r["residual"] + r["declared"], p["g"] * (1 - min(p["unmonitored"], 0.999)) * p["m"] * mu)
-    return multiple_bound(p["mfu"], *T.remote_terms(p, r | {"residual": monitored, "declared": 0.0}),
+    registered = min(r["residual"] + r["declared"], p["g"] * (1 - min(p["unregistered"], 0.999)) * p["m"] * mu)
+    return multiple_bound(p["mfu"], *T.remote_terms(p, r | {"residual": registered, "declared": 0.0}),
                           reference_efficiency=False)
 
 
@@ -201,10 +201,10 @@ def symbols() -> list[dict]:
     chi = sampled["cheat"]
     R = X.wipe_residual(p)
     out = [
-        ("N", "monitored servers", p["nodes"]),
+        ("N", "registered servers", p["nodes"]),
         ("F", "a server's peak, FLOP/s", p["node_flops"]),
         ("H", "the horizon, years", p["years"]),
-        ("C = NFH", "monitored capacity, FLOP", C),
+        ("C = NFH", "registered capacity, FLOP", C),
         ("κ", "Kimi K2's pretraining schedule (kappa.py)", K.schedule(K.MODELS["kimi-k2"])[0]),
         ("κ", "the model's value", p["kappa"]),
         ("κ", "adversarial", X.RANGES["kappa"][0]),
@@ -350,7 +350,7 @@ def regimes() -> dict:
     caps nothing) and with 6 GB streamed-label wipes; and the s above which s sets D, 1/D at s = 0."""
     wipes = {"today's wipes": BEST, "6 GB streamed-label wipes": streamed(6.0, BEST)}
     out = [{"regime": name, "case": case, "s": s,
-            "slowdown": {w: {t: fit_slowdown(T.DEFAULTS | over | {"unmonitored": s}, t) for t in REGIME_TIERS}
+            "slowdown": {w: {t: fit_slowdown(T.DEFAULTS | over | {"unregistered": s}, t) for t in REGIME_TIERS}
                   for w, over in wipes.items()}}
            for name, shares in REGIMES.items() for case, s in zip(("central", "adversarial"), shares)]
     return {"rows": out, "s_sets_slowdown": {w: {t: 1 / fit_slowdown(T.DEFAULTS | over, t) for t in REGIME_TIERS}
@@ -520,7 +520,7 @@ def render(s: dict) -> str:
     reg = s["regimes"]
     wipes = list(reg["s_sets_slowdown"])
     cols = [(w, t) for w in wipes for t in REGIME_TIERS]
-    out += ["## The unmonitored share by regime: best plausible PoUW design, by the fit bound", ""]
+    out += ["## The unregistered share by regime: best plausible PoUW design, by the fit bound", ""]
     out += table(["Regime", "Case", "s", *(f"D at {t}, {w}" for w, t in cols),
                   *(f"1/D at T5, {w}" for w in wipes)],
                  [[r["regime"], r["case"], num(r["s"]), *(num(r["slowdown"][w][t]) for w, t in cols),

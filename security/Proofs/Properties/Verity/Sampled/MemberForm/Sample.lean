@@ -19,7 +19,7 @@ many proof blocks as the member has units. This module reads, off one session's 
   registration's units and the members' counts to its population (`laidHeld`, which the form's structure check
   runs), and at a member of the one range `[lo, hi)` its first unit is `lo`, its count `hi - lo`, its unit at slot
   `u` is `lo + u`, and the sample holds one of its units exactly where it holds a unit from `lo` up to `hi`.
-* **The window's population** (`WindowOn.total`, `WindowOn.population`): at the window the parameters' members are
+* **The window's population** (`ExecutionPhaseOn.total`, `ExecutionPhaseOn.population`): at the window the parameters' members are
   on, where every member's files pass, the members' counts sum to the window's population (the committed files'
   units are the population and the members' reads' units summed, `Verity.FileRead.unitsWith_eq_sum`, and a member
   whose files pass has as many units in its read as proof blocks, `Flock.Guarantees.MemberV5.fileRead_units`), which
@@ -139,8 +139,8 @@ theorem membersStructure_laid {p : _root_.Spot.OneStageZk.Params} {ms : Array _r
 /-- **The members' counts sum to the window's population**, where every member's files pass: the committed files'
 units are the population and the members' reads' units summed, and a member whose files pass has as many units in
 its read as proof blocks. -/
-theorem WindowOn.total {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
-    {θ : ByteArray} {F : Array ByteArray} {W : Window} (h : WindowOn V θ F W)
+theorem ExecutionPhaseOn.total {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
+    {θ : ByteArray} {F : Array ByteArray} {W : Window} (h : ExecutionPhaseOn V θ F W)
     (hp : ∀ m ∈ W.ms, FilesPass m) : (W.ms.map fun m => m.n).sum = W.nJ := by
   obtain ⟨m₀, rest, hW, hread⟩ := h.read
   have hu : V.units θ F = ((W.ms.map fileRead).map Verity.FileRead.units).sum := by
@@ -156,8 +156,8 @@ theorem WindowOn.total {ι : Type} {d : Accounting.Device ι} {α : Type} [Finty
 /-- **The window's population is the registration's**: at the window the parameters' members are on, whose members'
 files pass, where the form's structure holds the members to the registration `rec` (`Spot.OneStageZk.laidHeld`),
 the window's population is the population `rec` names. -/
-theorem WindowOn.population {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
-    {θ : ByteArray} {F : Array ByteArray} {W : Window} (h : WindowOn V θ F W)
+theorem ExecutionPhaseOn.population {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
+    {θ : ByteArray} {F : Array ByteArray} {W : Window} (h : ExecutionPhaseOn V θ F W)
     (hp : ∀ m ∈ W.ms, FilesPass m) {p : _root_.Spot.OneStageZk.Params}
     {ms : Array _root_.Spot.OneStageZk.Member} (hpa : ParamsAt θ p) (hms : p.members = some ms) {rec : Json}
     (hl : _root_.Spot.OneStageZk.laidHeld ms rec = .ok ()) {n : ℕ}
