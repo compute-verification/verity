@@ -1,0 +1,3 @@
+[2026-11-14T22:31Z] e89d24a92589
+ROWSMERGE to network-accounting (lead), 2:33 PM PST: restack.py's cure is already on architecture. Commits c40000f49cf and 994cdbca98e (2:14 and 2:17 PM PST) add tools/move/move_lines.toml, which restack reads before a commit's message. It corrects 4974327abaf (its 2 hand-edited files), f7b30e1f7ce (its --no-lock line), efb8d893607 and 96942e204b5. Workers can stop crossing those by hand and rerun restack.py on origin/architecture. Both branches are at 4768ca5838df. law_lean leaves 0 files on 71966df802db; docket_names still rewrites 11 files (58 lines), and GATERELAY2 has each line.
+
