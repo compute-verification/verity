@@ -1,14 +1,15 @@
-"""scan-zk: the network certifier's step-indexed scan composed in zero knowledge, in the generator form. Ingress bucket t
-(`ingress_scan.IngressScanBucket`; bucket 0's `IngressScanFirst`, from the empty state) reads the warden's ingress row
-t, the scan's state S_{t−1} and its boundary's slot entries, and computes S_t and its egress view; egress bucket t
-(`egress.EgressBucket`) reads that view and computes the warden's egress row t. A group of link-windows is one
-registration, every row of every unit, input or output, a registered read, proved by Flock `prove --zk` behind the
-Lean ZK server and held by Lean `verify --zk --registered`. Standalone: in no Spec, except the honest round on the
-challenger's coins (``--challenger``), a `service.Stream`'s.
+"""scan-zk: the network certifier's step-indexed scan composed in zero knowledge, in the generator form, one
+link-window a registration. A link-window's start unit (`ingress_scan.IngressScanStart`) copies the state its scan
+starts from, the one the record before it committed (the run's first: the empty state); ingress bucket t
+(`ingress_scan.IngressScanBucket`) reads the warden's ingress row t, the scan's state S_{t−1} and its boundary's slot
+entries, and computes S_t and its egress view; egress bucket t (`egress.EgressBucket`) reads that view and computes
+the warden's egress row t. Every row of every unit, input or output, is a registered read, proved by Flock
+`prove --zk` behind the Lean ZK server and held by Lean `verify --zk --registered`. Standalone: in no Spec, except
+the honest round on the challenger's coins (``--challenger``), a `service.Stream`'s.
 
     python benchmarks/network_traces/scan_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
         [--class w63|w63k4|test|test2] [--group G] [--warden-run RUN] [--v3c WINDOW] [--draw K [--challenger
-        local|gate:USER@HOST --main FILE [--peer NAME --challenger-key RECORD] [--gate-key KEY]]] [--carried]
+        local|gate:USER@HOST --main FILE [--peer NAME --challenger-key RECORD] [--gate-key KEY]]]
     python benchmarks/network_traces/scan_zk.py schedule [--class w63|w63k4|test|test2]    # as warden_serve.py's flags
 
 * **The setups** (`SETUPS`, ``--class``): ``w63`` (`W63`, whose `CLASS`, `SHAPE` and `PARAMS` these are), w63's class
@@ -34,31 +35,35 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   registration of each execution phase of the group in ``cells.jsonl``, its head's signature verified under that key;
   the prover's rows are the records under ``cells.salts``, held to that head. Each is refused by name where it doesn't
   hold, as is a schedule the class doesn't serve and a response that isn't id-form.
-* **The group** (``--group G``, default 1; `link`'s ``start``, its first execution phase, 0): G execution phases of each
-  link, one registration, the scan's buckets 0 … G·T − 1 from the empty state, T an execution phase's.
-* **The scan's rows**, committed by the prover before the sample as hiding rows (`verity.commitments.advice`, each
-  tree's root in the registration): ``state``, G·T leaves, leaf t S_{t−1} and leaf 0 the empty state, the rows a
-  window circuit of the group reads as its `SCAN_STATE` (`ingress_scan.window_state` from bucket 0), so S_{G·T−1},
-  which no bucket of the group reads, has no leaf; ``prog<j>`` for each lane j < NR, lane j's slot entries
-  (`slot_entries`), nb leaves for the group's nb = G·T / EVERY boundaries, leaf b slot j's entry at boundary b (the
-  outputs of the Program anchored there, read and its response ids, as `SlotEntry_v1` writes them), the o0 rows of the
-  block round's lane-j member; and ``view``, G·T leaves, leaf t S_t's egress view.
+* **The group** (``--group G``, default 1; `link`'s ``start``, its first link-window, 0): G link-windows of each
+  link, each a registration of its own (`window_of`) and proved in rounds of its own, ``<kind>-<its number>``
+  (`round_name`), in link-window order on one verifier's log (`prove`). The scan's chain runs over the group's
+  buckets from the empty state, T a link-window, and link-window w's rounds read its buckets w·T … (w + 1)·T − 1 as
+  their buckets 0 … T − 1.
+* **A link-window's rows**, committed by the prover before the sample as hiding rows (`verity.commitments.advice`,
+  each tree's root in the registration, bound to the session and the link-window's ingress head): ``state``, T
+  leaves, leaf t the state bucket t reads, S_{t−1}, and leaf 0 the state the link-window starts from, the rows a
+  window circuit of the link-window reads as its `SCAN_STATE` (`ingress_scan.window_state`), so the state bucket
+  T − 1 computes, which no bucket of the link-window reads, has no leaf; ``prog<j>`` for each lane j < NR, lane j's
+  slot entries (`slot_entries`), nb leaves for the link-window's nb = T / EVERY boundaries, leaf b slot j's entry at
+  boundary b (the outputs of the Program anchored there, read and its response ids, as `SlotEntry_v1` writes them),
+  the o0 rows of the block round's lane-j member; and ``view``, T leaves, leaf t S_t's egress view.
 * **The block round** (`BLOCK`): the slot entries' stand-in (`SlotEntry{KO, IDB}`, whose Definition id,
   ``SlotEntry_v1``, is the one `NetworkCheck.Period`'s `wired` reads: o0 its `entry_bits` input ``x`` through two
   NOTs, a committed row the verifier never opens; ``x`` a row-seg/v1 row, `ROW_SCHEMAS`), one unit a slot entry of the
-  group, cut as one-stage cuts a template into NR members of nb units, a lane each (``block-c<j>``, `members_of`):
-  unit j·nb + b's ``x`` slot entry b of lane j, its free input (the member's own rows, `Frame`), and its o0 a
-  registered read of ``prog<j>`` leaf b, standing in for the anchored Programs' `SlotEntry_v1` units, whose outputs
-  the slot entries are. Its entries, read bit included, are the prover's: the stand-in copies its input. Lane j's
-  ``prog<j>`` tree is committed under the binding of its block member's o0 frame domain (`block_binding`, over that
-  member's statement's input set `block_set`, bound to the lane's value, the session and the group's ingress heads),
-  so its root is the o0 frame root Flock commits under the same salts, and `stage` refuses a block member whose o0
-  frame root and domain aren't its lane's tree's: the registration's ``SlotEntry_v1{…}/c<j>/o0`` (its ports named as
-  one-stage names a template's chunk j's, `entries_port`) and the honest round's ``scan/prog<j>`` are one root and
-  domain, the tie `NetworkCheck.Period`'s rows form checks for each lane (`progTied`, `wired`). Its registration also
-  names the scan's ``state`` tree as ``scan/state``, as an anchored Program's names the `SCAN_STATE` it reads, the tie
-  the rows form checks next (`stateTied`); the stand-in reads no state, so here that tie is its registration's alone.
-  Proved first; accepted, with no output opened.
+  link-window, cut as one-stage cuts a template into NR members of nb units, a lane each (``block-c<j>``,
+  `members_of`): unit j·nb + b's ``x`` slot entry b of lane j, its free input (the member's own rows, `Frame`), and
+  its o0 a registered read of ``prog<j>`` leaf b, standing in for the anchored Programs' `SlotEntry_v1` units, whose
+  outputs the slot entries are. Its entries, read bit included, are the prover's: the stand-in copies its input.
+  Lane j's ``prog<j>`` tree is committed under the binding of its block member's o0 frame domain (`block_binding`,
+  over that member's statement's input set `block_set`, bound to the lane's value, the session and the link-window's
+  ingress head), so its root is the o0 frame root Flock commits under the same salts, and `stage` refuses a block
+  member whose o0 frame root and domain aren't its lane's tree's: the registration's ``SlotEntry_v1{…}/c<j>/o0`` (its
+  ports named as one-stage names a template's chunk j's, `entries_port`) and the honest round's ``scan/prog<j>`` are
+  one root and domain, the tie `NetworkCheck.Period`'s rows form checks for each lane (`progTied`, `wired`). Its
+  registration also names the scan's ``state`` tree as ``scan/state``, as an anchored Program's names the
+  `SCAN_STATE` it reads, the tie the rows form checks next (`stateTied`); the stand-in reads no state, so here that
+  tie is its registration's alone. A link-window's first round; accepted, with no output opened.
 * **V3c's trees** (``--v3c WINDOW``, `v3c_trees`; a group of 1): in place of the scan's own, the trees V3c's window
   (`prove_path.py window-commit`'s directory, at w63k4's class) committed before its coins: ``state`` its
   `SCAN_STATE` (its registration's window activations entry, the rows and salts its prover's `SCAN_STATE_FILE`) and lane
@@ -70,35 +75,51 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   ``answers.json`` carries no ``audits`` (the period reads V3c's ``period.json``, `scan_period.rows_case`). `stateTied`
   reads an audit's state entry among its ``roots`` and its ``registered`` alone, so the check refuses V3c's audit,
   whose `SCAN_STATE` is in its window's activations alone, at the state tie.
-* **The honest round, one registration**: one Program of three templates (`TEMPLATES`) in the generator form
-  (`scan_root`, the form `NetworkCheck.Period`'s `scanOf` reads): the first unit (`IngressScanFirst`, bucket 0), G·T − 1
-  ingress units (buckets 1 … G·T − 1) and G·T egress units, each template one batch with its row, state and egress
-  parameters inputs of its own and every ingress unit's ``prog<j>`` a row of lane j's input of its slot entries, its members
-  split a link-window (`members_of`: ``first``, ``ingress-w`` and ``egress-w``, and ``last``, the group's last ingress
-  unit, whose o1 has no leaf to open), every unit sampled by the verifier's Lean. `program` refuses a Program whose
-  one-stage partition or reads (`registered.reads`) aren't the members'. Ingress unit t reads ``row`` (the warden's
-  ingress row t), ``sin`` (state leaf t, S_{t−1}; the first unit none) and each slot j's ``prog<j>`` (``prog<j>``
-  leaf ⌊t / EVERY⌋, its boundary's entry of the slot, one table row a boundary, `NetworkCheck.Period`'s
-  `readsEntries`), and outputs ``o0``, its ok bit, ``o1``, S_t, committed as state leaf t + 1, and ``o2``, its view,
-  committed as view leaf t. Egress unit t reads ``state`` (view leaf t) and outputs ``o0``, its render bit, and
-  ``o1``, the row it computes, committed as the warden's egress row t. Each output row but o0 is a registered read of
-  the row it is committed as (`Registered.checkPort` holds a hidden-output statement's output rows, the verifier's
-  PROTOCOL.md §16.13), so S_t is the one leaf unit t computes and unit t + 1 reads, the view the one leaf ingress t
-  computes and egress t reads, and the egress row the one the warden signed: the chains are wires through the
-  registered roots, not the prover's word. `Registered.checkPort` holds every instance of a registered port, so the
-  last unit's o1, S_{G·T−1}, which no state leaf holds, is a member's own rows (`Frame`), committed and never opened.
-  Leaf 0 is opened by
-  no unit, and the entries boundary 0's Programs write on it are read by none: bucket 0 reads the empty state, in
-  which no slot is live, so none is due. The registration's window states those reads, one run a port (``reads``,
-  `state_reads`: ``sin`` units 1 … G·T − 1 and ``o1`` units 0 … G·T − 2, each from leaf 1, as `NetworkCheck.Period`'s
-  `stateRead` holds them), and opens leaf 0 to the empty state, zero words under its salt (``empty``, `state_empty`,
-  its `stateEmpty`), public as that state is. Accepted: every o0 opens to 1. Its registration names each lane's
-  ``prog<j>`` tied, which R8 lets through though `EVERY` units read each slot entry, and both verifiers' verdict
-  publishes them (``rests_on_period_check``, the lanes' ``prog<j>``): the acceptance rests on a period check,
+* **The honest round**: one Program of three templates (`TEMPLATES`) in the generator form (`scan_root`, the form
+  `NetworkCheck.Period`'s `scanOf` reads), 2T + 1 units: the start unit (`IngressScanStart`), T ingress units
+  (`IngressScanBucket`, buckets 0 … T − 1) and T egress units, each template one batch with its row, state and egress
+  parameters inputs of its own and every ingress unit's ``prog<j>`` a row of lane j's input of its slot entries, its
+  members ``start``, ``ingress-0``, ``last`` (the link-window's last ingress unit, whose o1 has no leaf to open) and
+  ``egress-0`` (`members_of`), every unit sampled by the verifier's Lean. `program` refuses a Program whose one-stage
+  partition or reads (`registered.reads`) aren't the members'. The start unit reads ``sin``, the state the
+  link-window starts from (the start, below), and outputs ``o0``, that row through two NOTs, committed as state leaf
+  0, a committed row the verifier never opens: the row bucket 0's ``sin`` and the first boundary's Programs read is
+  the start by gates. Ingress unit t reads ``row`` (the warden's ingress row t), ``sin`` (state leaf t, S_{t−1}) and
+  each slot j's ``prog<j>`` (``prog<j>`` leaf ⌊t / EVERY⌋, its boundary's entry of the slot, one table row a boundary,
+  `NetworkCheck.Period`'s `readsEntries`), and outputs ``o0``, its ok bit, ``o1``, S_t, committed as state leaf t + 1,
+  and ``o2``, its view, committed as view leaf t. Egress unit t reads ``state`` (view leaf t) and outputs ``o0``, its
+  render bit, and ``o1``, the row it computes, committed as the warden's egress row t. Each output row but a public
+  o0 is a registered read of the row it is committed as (`Registered.checkPort` holds a hidden-output statement's
+  output rows, the verifier's PROTOCOL.md §16.13), so S_t is the one leaf unit t computes and unit t + 1 reads, the
+  view the one leaf ingress t computes and egress t reads, and the egress row the one the warden signed: the chains
+  are wires through the registered roots, not the prover's word. `Registered.checkPort` holds every instance of a
+  registered port, so the last unit's o1, the state the link-window ends in, which no state leaf holds, is a
+  member's own rows (`Frame`), committed and never opened: the port the next link-window's start reads
+  (`CARRY_PORT`). The registration's window states the state's reads, one run a port (``reads``, `state_reads`: the
+  start unit's ``o0`` at leaf 0, the ingress units' ``sin`` from leaf 0 and their ``o1``, but the last's, from leaf
+  1, as `NetworkCheck.Period`'s `stateRead` holds them). Accepted: every public o0 opens to 1. Its registration names
+  each lane's ``prog<j>`` tied, which R8 lets through though `EVERY` units read each slot entry, and both verifiers'
+  verdict publishes them (``rests_on_period_check``, the lanes' ``prog<j>``): the acceptance rests on a period check,
   `NetworkCheck.Period`'s `wired`, which ties each ``prog<j>``'s rows to the audit that registered them and refuses
   this run's stand-in block, no pinned `SlotEntry_v1` (`period_case.UNWIRED`). The registration's roots also name, as
   ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden port
   reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
+* **The start**: the start unit's ``sin`` is one-stage's registered value `CARRY` (the Program's parameter ``0.sin``,
+  one row/v2 row), which the link-window's record, a v2 record, names with its root and domain. The run's first
+  record holds `CARRY` at the root the verifier computes and pins, the empty state's row under one-stage's registered
+  domain and the public salt of a value the verifier fills (`empty_start`), and its `window` opens it (``empty``,
+  `NetworkCheck.Period`'s `startEmpty`: the state's zero words under that salt), public as that state is. Each later
+  record's ``previous`` is the record before it and its `CARRY` entry is that record's ``last/o1`` (`CARRY_PORT`: its
+  last ingress unit's o1), root and domain, which the verifier holds in the window-history form ``{"port": P}``, the
+  port of its log's last record (`carry_of`); the start member's statement opens its ``sin`` row there, under the
+  salt and at the frame domain the earlier statement committed it with, and the verifier's ``--registered`` port of
+  it is one-stage's (`registered.reads_file`, its ``domains``). The verifier's log takes a link-window's record once
+  its honest round's audit accepted it with every opened output 1 (`prove`), so no start is read from a link-window
+  the verifier refused. A record's changed forms are refused by the registration check (another root, `R7-held`; no
+  earlier record in the verifier's log, `R7-output`), and the start's leaf as a registered read frames it is the
+  earlier statement's frame leaf byte for byte (`frame_leaf`). One-stage accepts a record that names an older
+  record's port in the explicit form ``{"record": D, "port": P}`` (``explicit-older``, recorded, not refused): which
+  record a start may name is for the check that reads the records after it.
 * **Every port registered**: the verifier's registered reads name every port of every member's circuit, inputs and
   output rows (`Flock.Registered.checkComplete`, which `flock-verify` runs whenever ``--registered`` is given), so no
   output reads a row the statement commits afresh. A port no scan tree or network certifier row registration holds
@@ -106,84 +127,69 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   it (`Frame`, value ``frame``), committed under its statement's frame binding (`frame_binding`, over the member's
   input set), so its root is the member's frame root of the port, which the round's registration names before any
   coin; `stage` refuses a member whose frame root isn't the tree's. A scan member's input set is its template's
-  (`set_of`), naming no round and no execution phase, so the frame domain of such a port is its template's and its unit
+  (`set_of`), naming no round and no link-window, so the frame domain of such a port is its template's and its unit
   count's in every round. A public o0's rows are committed under the verifier's public salts (`ok_salts`,
   `scan_ok.salt`), so the o0 frame root of a member whose every proof block is ok is a constant of its template and
   count, which a period check computes from the schedule's T and holds the registration's ``<member>/o0`` to
   (`scan_ok.constants`, the period check's `okChecks`); it is opened as before, under that salt, which the
   prover sends.
-* **The answers** (``answers.json``, `answers`): the honest round's registration and, for each link-window W of the
-  group, the network certifier's two row registrations of W and the scan's one-stage answer (`window_answer`), the same
-  for every W, which `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records'
-  certificates: accepted, one-stage's profile and bound at ``--delta`` (every unit sampled, the bound 0); refused, a
-  reject naming the members Lean refused. Beside them, ``audits``: the block round's, the compute audit whose lanes'
-  o0 are the scan's ``prog<j>`` (its registration and answer, its Program's descriptor, its free inputs NR·nb·NE, every bit of every
-  slot entry, which the rows form's K charges to each link-window tied to it, and no steps).
+* **The answers** (``answers.json``, `answers`): for each link-window W of the group, the scan's registration of W,
+  the network certifier's two row registrations of W and the scan's one-stage answer for W (`window_answer`), which
+  `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records' certificates:
+  accepted, one-stage's profile and bound at ``--delta`` (every unit sampled, the bound 0); refused, a reject naming
+  the members Lean refused. Beside them, ``audits``: each link-window's block round's, the compute audit whose lanes'
+  o0 are that link-window's scan's ``prog<j>`` (its registration and answer, its Program's descriptor, its free
+  inputs NR·nb·NE, every bit of every slot entry, which the rows form's K charges to the link-window tied to it, and
+  no steps).
 * **A void run** (a warden run whose warden failed a connection closed, its `FAIL` in the egress row it signed, its
   reason in the ``fails`` record): the scan renders the connection's end where the warden wrote `FAIL`, and that bucket
-  alone differs from the warden's row. Its block round and its honest round are proved, the honest one expected
-  refused by Lean's registered reads ("does not open") at the egress members of its FAIL buckets (`rounds_of`,
-  `targets`), every other member held, and its answer is that refusal, so the period check rejects the link-windows by
-  name.
-* **Negatives**, chain's and tampered's refused by Lean's registered reads ("does not open"), unread's by its unit's ok
-  bit. ``chain``: the same Program on a state tree with S_A and S_{A+1} swapped (leaves A + 1 and A + 2): ingress unit
-  A's o1, the S_A it computes, doesn't open leaf A + 1, nor units A + 1's and A + 2's theirs. ``tampered``: an
-  egress-only Program of G·T units, one egress row's `DATA` id changed and its link-window re-signed (a warden that
-  saw a byte the scan doesn't render; a warden run's
-  re-signed by the driver's own key, under which the verifier reads it): egress unit t's o1, the row its view renders,
-  doesn't open the signed row t. ``unread`` (`_unread`): a Program of one ingress unit, at the first bucket U ≥ 1 where
-  a request's Program starts (its slot's `occ` 1), its slot j's ``prog<j>`` tree the honest one but for its entry at U's
-  boundary, its read bit cleared (no Program reads the request): every registered read holds, since the read bit
-  enters the unit's ok bit alone and its S_U and view are the honest ones, and Lean holds its proof, but its o0 opens
-  to 0, so the link-window is refused. Every unit (the one) is sampled. A prover that sets the bit with n 0 and no
-  outputs passes here, since the stand-in's entries are the prover's; an anchored Program's entry is its outputs on the
-  `SCAN_STATE` it reads, which the period check holds to the scan's state tree (`stateTied`).
-* **The carried shape** (``--carried``, off by default; `prove_carried`): each link-window of the group a
-  registration of its own, its scan started from the state the record before it committed. **No period check reads
-  this shape yet** (`NetworkCheck.Period`'s `scanOf` reads the three templates above, a group one registration), so
-  a scan proved in it has no period: it writes no ``answers.json`` and proves no block round, and nothing but its
-  own test and run sets the flag. One Program for every link-window (`CARRIED`, `scan_program`), 2T + 1 units: the
-  start unit (`IngressScanStart`), T ingress units (`IngressScanBucket`, bucket 0's too) and T egress units. The
-  start unit's ``sin`` is one-stage's registered value `CARRY` (the Program's parameter ``0.sin``, one row/v2 row),
-  which the link-window's record, a v2 record, names with its root and domain, and its o0, ``sin`` through two NOTs,
-  is a registered read of state leaf 0, a committed row never opened, so the row bucket 0's ``sin`` and the first
-  boundary's Programs read is the carried state by gates. The run's first record holds `CARRY` at the root the
-  verifier computes and pins, the empty state's row under one-stage's registered domain and the public salt of a
-  value the verifier fills (`empty_start`). Each later record's ``previous`` is the record before it and its `CARRY`
-  entry is that record's ``last/o1`` (`CARRY_PORT`: its last ingress unit's o1, a member's own rows, `Frame`), root
-  and domain, which the verifier holds in the window-history form ``{"port": P}``, the port of its log's last record
-  (`carry_of`); the start member's statement opens its ``sin`` row there, under the salt and at the frame domain
-  the earlier statement committed it with, and the verifier's ``--registered`` port of it is one-stage's
-  (`registered.reads_file`, its ``domains``). A ``carried-<w>`` round is accepted, every unit sampled; its record's
-  changed forms are refused by the registration check (another root, `R7-held`; no earlier record in the verifier's
-  log, `R7-output`); and the start's leaf as a registered read frames it is the earlier statement's frame leaf byte
-  for byte (`frame_leaf`). The stale round, a start unit alone registered after the group's last record, is given
-  the state the last link-window started from: Lean's registered reads refuse it ("does not open"). One-stage
-  accepts a record that names an older record's port in the explicit form ``{"record": D, "port": P}``
-  (``explicit-older``, recorded, not refused): which record a carried start may name is for the check that reads the
-  records after it.
+  alone differs from the warden's row. Its FAILs are in the group's last link-window (`link` refuses a group with
+  one earlier: the link-window after a refused one has no start the verifier holds). That link-window's block round
+  and its honest round are proved, the honest one expected refused by Lean's registered reads ("does not open") at
+  its egress member (`rounds_of`, `targets`), every other member held, and its answer is that refusal, so the period
+  check rejects the link-window by name. No negative is placed in a void run.
+* **Negatives**, each a registration of one link-window of the group in its honest round's place (`link` places
+  them), chain's, tampered's and stale's refused by Lean's registered reads ("does not open"), unread's by one unit's
+  ok bit. ``chain``, in bucket ``A``'s link-window: the same Program on a state tree with S_a and S_{a+1} swapped
+  (leaves a + 1 and a + 2, a that bucket in its link-window): ingress unit a's o1, the S_a it computes, doesn't open
+  leaf a + 1, nor units a + 1's and a + 2's theirs. ``tampered``, in the first link-window with a `DATA` cell: an
+  egress-only Program of T units, one egress row's `DATA` id changed and the link-window re-signed (a warden that
+  saw a byte the scan doesn't render; a warden run's re-signed by the driver's own key, under which the verifier
+  reads it): egress unit t's o1, the row its view renders, doesn't open the signed row t. ``unread`` (`_unread`), in
+  the link-window of the group's first bucket U ≥ 1 where a request's Program starts (its slot's `occ` 1): a Program
+  of the T ingress units alone, its slot j's ``prog<j>`` tree the honest one but for its entry at U's boundary, its
+  read bit cleared (no Program reads the request): every registered read holds, since the read bit enters the unit's
+  ok bit alone and its S_U and view are the honest ones, and Lean holds its proofs, but bucket U's o0 opens to 0, so
+  the link-window is refused. Its units are every bucket's, not U's alone, so that unit m of the ingress template
+  is bucket m, which reads the warden's row m, as in every Program that batches the template; every one is sampled,
+  whatever ``--draw``. A prover that sets the bit with n 0 and no outputs passes here, since the stand-in's entries
+  are the prover's; an anchored Program's entry is its outputs on the `SCAN_STATE` it reads, which the period check
+  holds to the scan's state tree (`stateTied`). ``stale`` (`STALE`, ``stale-<the last link-window's number + 1>``):
+  a start unit alone, registered after the group's last record as the link-window after it would be, given the
+  state the last link-window started from in place of the one it ended in, which opens no leaf of the last record's
+  ``last/o1``.
 * **A sampled sample** (``--draw K``): Lean ``draw --stratified K`` on a development challenger's coins opened after
   the round's registration (`a0.challenger_draw`: the verifier has none of its own), each template's stratum its share
   and at least one unit; only the sampled proof blocks are proved and opened, and an accepted audit carries ε at δ
   (``wrong_units``: at most ``bound`` of ``of`` units wrong, except with probability δ), its charge terms
   (`charge_terms`) and each member's cost per sampled proof block (`per_unit`). The chain and tampered rounds sample
   too and are refused all the same: Lean holds every table row of a registered port, sampled or not, an output port's
-  table its instances' rows. A member none of whose units is sampled (G > 1) runs no session.
+  table its instances' rows.
 * **The challenger's coins** (``--challenger local|gate:USER@HOST --main FILE``, with ``--draw K``): the honest round
-  sampled at the stratified rate of K in its N (`rule_of`: a stream's rule is a rate) as prove_path's records audit samples
-  (`a5_coins`): one session of the auditor's challenger on the group's root
-  (`window_root`: the warden's session and the group's signed registrations), and the round's `service.Stream`
+  sampled at the stratified rate of K in its N (`rule_of`: a stream's rule is a rate) as prove_path's records audit
+  samples (`a5_coins`): for each link-window, one session of the auditor's challenger on the link-window's root
+  (`window_root`: the warden's session and the link-window's signed registrations), and the round's `service.Stream`
   (`spec_of`, `stream_of`: its own copy of the round's Program the generator form the round registers) on its coins
-  (`a5_coins.RankCoins`): the stream registers the round, the coins commit to the
-  registration's digest, and its select samples once (Lean's `Select.select` on the bytes read). Once the session has
-  ended, the outcome of record is the stream's with the coins' evidence, the Lean's whole run (`Run.run`, coin source
-  the challenger) held to the Python's, and each altered evidence (`a5_coins.negatives`, the evidence for another
-  window) refused by `coins.coins_reason` and the Lean's run (`coins_outcome`). ``local`` is a development session on
-  this machine (its own key; it shows the path, not an auditor's coins); ``gate:USER@HOST`` is the auditor's
-  challenger's through its gate, its challenger on ``--peer``'s 127.0.0.1, under the deployment's key record
-  ``--challenger-key``. The gate opens a root once, ever: a run's group is sampled once (the synthetic run's registrations
-  carry fresh salts, so each synthetic run has a root of its own). The other rounds keep a development challenger's
-  coins: one session serves one sample, and their refusal is Lean's registered reads, whatever the coins.
+  (`a5_coins.RankCoins`): the stream registers the round, the coins commit to the registration's digest, and its
+  select samples once (Lean's `Select.select` on the bytes read). Once the session has ended, the outcome of record is
+  the stream's with the coins' evidence, the Lean's whole run (`Run.run`, coin source the challenger) held to the
+  Python's, and each altered evidence (`a5_coins.negatives`, the evidence for another window) refused by
+  `coins.coins_reason` and the Lean's run (`coins_outcome`). ``local`` is a development session on this machine (its
+  own key; it shows the path, not an auditor's coins); ``gate:USER@HOST`` is the auditor's challenger's through its
+  gate, its challenger on ``--peer``'s 127.0.0.1, under the deployment's key record ``--challenger-key``. The gate
+  opens a root once, ever: a run's link-window is sampled once (the synthetic run's registrations carry fresh salts,
+  so each synthetic run has a root of its own). The other rounds keep a development challenger's coins: one session
+  serves one sample, and their refusal is Lean's registered reads, whatever the coins.
 * **What the verifier receives** is scanned for every piece of every unit's rows, inputs and outputs, and every salt
   but a public ``o0``'s, which the prover sends so the verifier opens each unit's output (`a8.received`; the slot
   entries' o0 is a committed row, `ROWS_O0`, whose salts it never sends), less the pieces public
