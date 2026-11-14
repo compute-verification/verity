@@ -41,7 +41,7 @@ METRIC = "training/inference-only-slowdown"
 #: the metric's target, its goal's (the `goal` metrics.toml names): a slowdown of at least 1,000. The console's Metrics
 #: tab shows the verdict a measurement carries beside its target, and compares nothing itself
 TARGET = 1000
-#: rho's command for a deployment's slowdown per monitoring period
+#: the slowdown calculator's command for a deployment's slowdown per monitoring period
 CALCULATOR = "uv run python benchmarks/slowdown/periods.py"
 #: the tied policy's label: what its figures are and what they rest on
 TIED_LABEL = "The served class under the value tie: NOT SERVED, and every figure of it RESTS ON NO PoUW VERDICT"

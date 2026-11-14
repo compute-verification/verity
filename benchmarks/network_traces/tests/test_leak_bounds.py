@@ -6,7 +6,7 @@ K's terms are `NetworkCheck.Period`'s rows form's, transcribed here from the Lea
 - the registered free inputs are the tied audit's slot entries, NR·T / EVERY entries of `ingress_scan.entry_bits`;
 - a request's caps are charged twice, as schedules and as fail cells, each ⌈log2(cap + 1)⌉;
 - a sampling block's jitter term is ⌈log2 D_j^T⌉ over its scan's T steps (`Scan.terms`), at D_j = 2;
-- the datacenter's links are the census's reference datacenter's machines, and the world's are the machines of rho's
+- the datacenter's links are the census's reference datacenter's machines, and the world's are the machines of the slowdown calculator's
   world fleet, the census's inference at the fleet's serving MFU;
 - a share is of one copy of the served model's weights, the workload card's parameters in FP4, labelled with what it
   is;
