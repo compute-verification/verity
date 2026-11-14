@@ -148,7 +148,7 @@ theorem anyErr_le_dataE (vs : (CoinLayer.session loopNr Masked.dataE).SwVals)
       ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
     (real : Msg → Flock.Wit →
       (CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand →
-      ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)) (t : ℕ) {x : Msg} {w : Flock.Wit}
+      ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)) (t : ℕ) {x : Msg} {w : Flock.Wit}
     {Θ : Type} {Vs : VStar Θ} {θ : Θ} {q : ℕ} {δ₁ : ℝ} (hδ : hidingGap ZkView.My ZkView.saltHash ≤ δ₁)
     (hB : Budget Masked.dataE vs L₀ real x w Vs θ q) (o : Bool) :
     anyErr Masked.dataE vs L₀ real t x w Θ Vs θ o ≤

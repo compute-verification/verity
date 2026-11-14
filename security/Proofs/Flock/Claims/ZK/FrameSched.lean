@@ -37,7 +37,7 @@ namespace Claims.ZKServer
 
 open _root_.Flock (V F128 F256 Transcript TMW liftTM)
 open _root_.Flock.Transcript (header framed label absorbF absorbSlice absorbBytes absorbK pow)
-open _root_.Flock.Firewall.Finish (Asks squeezeP sampleP sampleVecP sampleKP zerocheckFw lincheckFw repPiop ringSwitchP)
+open _root_.Flock.ZkServer.Finish (Asks squeezeP sampleP sampleVecP sampleKP zerocheckFw lincheckFw repPiop ringSwitchP)
 open FlockSoundness.Refine (Frame encs)
 
 namespace Sched
@@ -371,7 +371,7 @@ theorem ringSwitchP_sim (sv sv' : ℕ → Array F128) (claims : Array _root_.Flo
 
 /-! ## The Ligerito prover's state -/
 
-open _root_.Flock.Firewall.Finish (LigState LP liftT sendMsg powP challengeP oodIntroP queryP foldK splitK embedF
+open _root_.Flock.ZkServer.Finish (LigState LP liftT sendMsg powP challengeP oodIntroP queryP foldK splitK embedF
   roundPoly liftU addScaled maskMsg dotK ligeritoPZk repOpening Commit flat)
 
 /-- **Two Ligerito states of one shape**: tables of one size, and the same weight (the basis and the coins'). -/
@@ -536,7 +536,7 @@ theorem log2_succ_lt (q : ℕ) (hq : q < 2 ^ 64) : Nat.log2 (q - 1) + 1 < 2 ^ 64
     exact lt_of_le_of_lt this (by decide)
 
 theorem queryP_sim (nonce nonce' : ℕ → ℕ → UInt64) (ms : _root_.Flock.MerkleScheme) (lv : _root_.Flock.Level)
-    (cm cm' : _root_.Flock.Firewall.Finish.Commit) (hq : lv.q < 2 ^ 64) :
+    (cm cm' : _root_.Flock.ZkServer.Finish.Commit) (hq : lv.q < 2 ^ 64) :
     SimL L (fun r r' => r.2 = r'.2) (queryP io nonce ms lv cm : LP M _) (queryP io nonce' ms lv cm') := by
   unfold queryP
   refine simL_bind (powP_sim _ _ 0) fun _ _ _ => ?_
@@ -707,8 +707,8 @@ theorem repOpening_sim (commit : _root_.Flock.Level → Array F128 → (ℕ → 
     Sim L (fun _ _ => True) (repOpening io commit st sch lay tPad rep g cm0 claims h extra lanePad salt)
       (repOpening io commit st sch lay tPad rep g' cm0' claims h extra' lanePad' salt') := by
   unfold repOpening
-  refine sim_bind (ringSwitchP_sim _ _ claims (fun _ => by simp [_root_.Flock.Firewall.Finish.switchVec])
-    (fun _ => by simp [_root_.Flock.Firewall.Finish.switchVec]) hc) fun r r' hr => ?_
+  refine sim_bind (ringSwitchP_sim _ _ claims (fun _ => by simp [_root_.Flock.ZkServer.Finish.switchVec])
+    (fun _ => by simp [_root_.Flock.ZkServer.Finish.switchVec]) hc) fun r r' hr => ?_
   obtain ⟨ss, T, sws⟩ := r
   obtain ⟨ss', T', sws'⟩ := r'
   obtain rfl : sws = sws' := hr
@@ -736,35 +736,35 @@ theorem flat_size (A : Array ByteArray) (h : ∀ b ∈ A, b.size = 64) : (flat A
   rw [key _ _ fun b hb => h b (by simpa using hb)]
   simp
 
-theorem layer_size (d : ℕ) (lf : ℕ → ByteArray) : ∀ h, (_root_.Flock.Firewall.Link.layer d lf h).size = 2 ^ d / 2 ^ h
-  | 0 => by simp [_root_.Flock.Firewall.Link.layer]
+theorem layer_size (d : ℕ) (lf : ℕ → ByteArray) : ∀ h, (_root_.Flock.ZkServer.Link.layer d lf h).size = 2 ^ d / 2 ^ h
+  | 0 => by simp [_root_.Flock.ZkServer.Link.layer]
   | h + 1 => by
-    simp only [_root_.Flock.Firewall.Link.layer, Array.size_map, Array.size_range, layer_size d lf h]
+    simp only [_root_.Flock.ZkServer.Link.layer, Array.size_map, Array.size_range, layer_size d lf h]
     rw [Nat.div_div_eq_div_mul, pow_succ]
 
 theorem layer_mem (d : ℕ) (lf : ℕ → ByteArray) (hl : ∀ q, (lf q).size = 64) :
-    ∀ h, ∀ b ∈ _root_.Flock.Firewall.Link.layer d lf h, b.size = 64
+    ∀ h, ∀ b ∈ _root_.Flock.ZkServer.Link.layer d lf h, b.size = 64
   | 0 => by
     intro b hb
-    simp only [_root_.Flock.Firewall.Link.layer, Array.mem_map] at hb
+    simp only [_root_.Flock.ZkServer.Link.layer, Array.mem_map] at hb
     obtain ⟨q, -, rfl⟩ := hb
     exact hl q
   | h + 1 => by
     intro b hb
-    simp only [_root_.Flock.Firewall.Link.layer, Array.mem_map] at hb
+    simp only [_root_.Flock.ZkServer.Link.layer, Array.mem_map] at hb
     obtain ⟨q, -, rfl⟩ := hb
     exact _root_.Flock.Sha512.hash_size _
 
 /-- **A level's commitment has a cap of one shape** whatever its table and salts: `2^cap` digests. -/
 theorem commitRows_capAlike (lv : _root_.Flock.Level) (rows rows' : Array (Array F128)) (s s' : ℕ → ByteArray)
     (hd : 64 * 2 ^ lv.d < 2 ^ 64) :
-    CapAlike (_root_.Flock.Firewall.Finish.commitRows lv rows s) (_root_.Flock.Firewall.Finish.commitRows lv rows' s') := by
+    CapAlike (_root_.Flock.ZkServer.Finish.commitRows lv rows s) (_root_.Flock.ZkServer.Finish.commitRows lv rows' s') := by
   have key : ∀ (rows : Array (Array F128)) (s : ℕ → ByteArray),
-      (flat (_root_.Flock.Firewall.Finish.commitRows lv rows s).cap).size = 64 * (2 ^ lv.d / 2 ^ (lv.d - lv.cap)) := by
+      (flat (_root_.Flock.ZkServer.Finish.commitRows lv rows s).cap).size = 64 * (2 ^ lv.d / 2 ^ (lv.d - lv.cap)) := by
     intro rows s
-    rw [(_root_.Flock.Firewall.Finish.commitRows_tree lv _ s).2,
+    rw [(_root_.Flock.ZkServer.Finish.commitRows_tree lv _ s).2,
       flat_size _ (layer_mem _ (fun q => _root_.Flock.MerkleScheme.hm96Sha512.leaf
-        rows[q]! (_root_.Flock.Firewall.Finish.fitBytes 192 (s q)))
+        rows[q]! (_root_.Flock.ZkServer.Finish.fitBytes 192 (s q)))
         (fun _ => _root_.Flock.Hm96.Default512.leaf_size _ _) _), layer_size]
   refine ⟨by rw [key, key], ?_⟩
   rw [key]
@@ -772,7 +772,7 @@ theorem commitRows_capAlike (lv : _root_.Flock.Level) (rows rows' : Array (Array
 
 theorem commitFw_capAlike (lv : _root_.Flock.Level) (g g' : Array F128) (s s' : ℕ → ByteArray)
     (hd : 64 * 2 ^ lv.d < 2 ^ 64) :
-    CapAlike (_root_.Flock.Firewall.Finish.commitFw lv g s) (_root_.Flock.Firewall.Finish.commitFw lv g' s') :=
+    CapAlike (_root_.Flock.ZkServer.Finish.commitFw lv g s) (_root_.Flock.ZkServer.Finish.commitFw lv g' s') :=
   commitRows_capAlike lv _ _ s s' hd
 
 /-! ## Rounds of one shape, with their coin counts -/
@@ -821,7 +821,7 @@ theorem roundAt_of_alike {c c' : ByteArray} (h : RoundAlike c c') :
 
 /-! ## The opening's resumptions -/
 
-open _root_.Flock.Firewall.Drive (Step OpenM stepAsks openStep)
+open _root_.Flock.ZkServer.Drive (Step OpenM stepAsks openStep)
 
 /-- **Two resumptions of one shape**: both end at related results, both stop, or both ask for rounds of one shape at
 one count and go on alike from the same coins. -/
@@ -950,7 +950,7 @@ theorem stepRel_run {coins : Array (Array F128)} {live : Bool} {α β : Type} {S
 
 /-- **A rep's opening at two tables of one shape**, the same statement, schedule and `t_pad`, packed tables of one
 size and level-0 commitments of one shape, on the same coins: alike resumptions, whatever the salts for levels ≥ 1. -/
-theorem openStep_alike (t t' : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128)) (hi hi' : Array ByteArray)
+theorem openStep_alike (t t' : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128)) (hi hi' : Array ByteArray)
     (coins : Array (Array F128)) (hst : t.st = t'.st) (hsch : t.sch = t'.sch) (htp : t.tPad = t'.tPad)
     (hg : t.g.size = t'.g.size) (hcm : CapAlike t.cm0 t'.cm0) (hdom : dom.size < 2 ^ 64)
     (hdg : t.st.digest.size < 2 ^ 64) (hm : t.st.m < 2 ^ 64) (hx : xs.size + 2 < 2 ^ 64)
@@ -966,12 +966,12 @@ theorem openStep_alike (t t' : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (do
   dsimp only
   refine stepRel_run (coins := coins) (live := true) (S := fun _ _ => True) ?_ (trAlike_init dom hdom) _
   have h1 := repPiop_sim (L := openLift coins false) st (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0)
-    (flat cm0.cap) (flat cm0'.cap) ByteArray.empty (_root_.Flock.Firewall.Finish.claimsOf xs) (fun _ => 0) hcm.1 hdg
+    (flat cm0.cap) (flat cm0'.cap) ByteArray.empty (_root_.Flock.ZkServer.Finish.claimsOf xs) (fun _ => 0) hcm.1 hdg
     hcm.2 (by decide) hm
   refine sim_bind (sim_relift coins false true h1) fun r r' h => ?_
   obtain ⟨rfl, hcs⟩ := h
   have hc : r.2.2.size < 2 ^ 64 := by
-    simp only [_root_.Flock.Firewall.Finish.claimsOf, Array.size_map] at hcs
+    simp only [_root_.Flock.ZkServer.Finish.claimsOf, Array.size_map] at hcs
     omega
   refine sim_bind (sim_getThe coins true) fun k k' h => ?_
   subst h
@@ -980,7 +980,7 @@ theorem openStep_alike (t t' : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (do
     | exact sim_throw _ _
     | exact sim_bind (S := fun _ _ => False) (sim_throw _ _) fun _ _ h => h.elim
   exact sim_bind (S := fun _ _ => True) (repOpening_sim (L := openLift coins true)
-    (fun lv g salt => pure (_root_.Flock.Firewall.Finish.commitFw lv g salt)) st sch
+    (fun lv g salt => pure (_root_.Flock.ZkServer.Finish.commitFw lv g salt)) st sch
     (fun i g g' s s' _ => orel_pure (commitFw_capAlike _ g g' s s' (hd i))) _ tPad rep g g' cm0 cm0' r.2.2 _ extra
     extra' lanePad lanePad' _ _ hcm hg hc hn hq hp) fun _ _ _ => sim_pure trivial
 
@@ -1022,7 +1022,7 @@ theorem tmw_run'_run {σ α : Type} (x : TMW (StateT σ V) α) (t : Flock.Transc
 
 section Skel
 
-open _root_.Flock.Firewall.Skeleton (RecM recAsks padsFrames)
+open _root_.Flock.ZkServer.Skeleton (RecM recAsks padsFrames)
 
 variable {wideLeaf : Bool}
 
@@ -1078,7 +1078,7 @@ def zcPend (digest cap root dom : ByteArray) : ByteArray :=
 /-- The transcript after the masked zerocheck's first round `c`, the recording's coins. -/
 def skelT8 (c : ByteArray) : Flock.Transcript :=
   { rounds := (#[] : Array _root_.Flock.Round).push
-      ⟨6, ByteArray.empty, (Array.range 6).map fun i => _root_.Flock.Firewall.Skeleton.coin (0 + i + 1), some c⟩,
+      ⟨6, ByteArray.empty, (Array.range 6).map fun i => _root_.Flock.ZkServer.Skeleton.coin (0 + i + 1), some c⟩,
     k := 0 + 1, pending := ByteArray.empty }
 
 /-- The recording after the masked zerocheck's first round `c`. -/
@@ -1120,13 +1120,13 @@ theorem zcPend_alike (digest cap cap' root dom : ByteArray) (hc : cap.size = cap
   pendAlike_bytes (pendAlike_label (zcPre_alike digest cap cap' dom hc hd hcn hdom) _ (by decide) (by decide)) rfl hr
 
 theorem head_eq (st : _root_.Flock.Setup) (cap dom : ByteArray) :
-    _root_.Flock.Firewall.Skeleton.head st cap dom = zcPre st.digest cap dom := by
-  simp only [_root_.Flock.Firewall.Skeleton.head, zcPre, _root_.Flock.Firewall.Frame.labelFrame,
-    _root_.Flock.Firewall.Frame.bytesFrame, _root_.Flock.Firewall.Frame.LABEL_ZC, ByteArray.append_assoc]
+    _root_.Flock.ZkServer.Skeleton.head st cap dom = zcPre st.digest cap dom := by
+  simp only [_root_.Flock.ZkServer.Skeleton.head, zcPre, _root_.Flock.ZkServer.Frame.labelFrame,
+    _root_.Flock.ZkServer.Frame.bytesFrame, _root_.Flock.ZkServer.Frame.LABEL_ZC, ByteArray.append_assoc]
 
 theorem zcPend_eq (digest cap root dom : ByteArray) :
     zcPend digest cap root dom = zcPre digest cap dom ++ padsFrames root := by
-  simp only [zcPend, padsFrames, _root_.Flock.Firewall.Frame.labelFrame, _root_.Flock.Firewall.Frame.bytesFrame,
+  simp only [zcPend, padsFrames, _root_.Flock.ZkServer.Frame.labelFrame, _root_.Flock.ZkServer.Frame.bytesFrame,
     ByteArray.append_assoc]
 
 theorem forall₂_set0 {α β : Type} {R : α → β → Prop} {l : List α} {l' : List β} {a : α} {b : β}
@@ -1183,9 +1183,9 @@ theorem skel_run (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) (ca
 refused. -/
 theorem rounds_alike (st : _root_.Flock.Setup) (k0 : ℕ) (cap cap' dom : ByteArray) (hc : cap.size = cap'.size)
     (hd : st.digest.size < 2 ^ 64) (hcn : cap.size < 2 ^ 64) (hdom : dom.size < 2 ^ 64) (hm : st.m < 2 ^ 64) :
-    RelV RoundsAt (_root_.Flock.Firewall.Skeleton.rounds st k0 cap dom)
-      (_root_.Flock.Firewall.Skeleton.rounds st k0 cap' dom) := by
-  unfold _root_.Flock.Firewall.Skeleton.rounds
+    RelV RoundsAt (_root_.Flock.ZkServer.Skeleton.rounds st k0 cap dom)
+      (_root_.Flock.ZkServer.Skeleton.rounds st k0 cap' dom) := by
+  unfold _root_.Flock.ZkServer.Skeleton.rounds
   dsimp only
   refine relV_bind (skel_run st _ cap cap' _ dom hc hd hcn
     (show (Array.replicate 64 (0 : UInt8)).size < 2 ^ 64 by simp) hdom hm) fun a b hab => ?_
@@ -1197,33 +1197,33 @@ theorem rounds_alike (st : _root_.Flock.Setup) (k0 : ℕ) (cap cap' dom : ByteAr
   rw [h0, h0']
   dsimp only
   have key : ∀ c, zcPend st.digest c (ByteArray.mk (Array.replicate 64 0)) dom ++ header 4 2 6 =
-      _root_.Flock.Firewall.Skeleton.head st c dom ++ (padsFrames (ByteArray.mk (Array.replicate 64 0)) ++
+      _root_.Flock.ZkServer.Skeleton.head st c dom ++ (padsFrames (ByteArray.mk (Array.replicate 64 0)) ++
         header 4 2 6) := fun c => by
     rw [zcPend_eq, head_eq, ByteArray.append_assoc]
   have e1 : ∀ c, (zcPend st.digest c (ByteArray.mk (Array.replicate 64 0)) dom ++ header 4 2 6).extract 0
-      (_root_.Flock.Firewall.Skeleton.head st c dom).size = _root_.Flock.Firewall.Skeleton.head st c dom := fun c => by
+      (_root_.Flock.ZkServer.Skeleton.head st c dom).size = _root_.Flock.ZkServer.Skeleton.head st c dom := fun c => by
     rw [key]
     exact ByteArray.extract_append_eq_left rfl
   have e2 : ∀ c, (zcPend st.digest c (ByteArray.mk (Array.replicate 64 0)) dom ++ header 4 2 6).extract
-      (_root_.Flock.Firewall.Skeleton.head st c dom).size ((_root_.Flock.Firewall.Skeleton.head st c dom).size +
+      (_root_.Flock.ZkServer.Skeleton.head st c dom).size ((_root_.Flock.ZkServer.Skeleton.head st c dom).size +
         (padsFrames (ByteArray.mk (Array.replicate 64 0))).size) =
       padsFrames (ByteArray.mk (Array.replicate 64 0)) := fun c => by
-    have := @ByteArray.extract_append_size_add (_root_.Flock.Firewall.Skeleton.head st c dom)
+    have := @ByteArray.extract_append_size_add (_root_.Flock.ZkServer.Skeleton.head st c dom)
       (padsFrames (ByteArray.mk (Array.replicate 64 0)) ++ header 4 2 6) 0
       (padsFrames (ByteArray.mk (Array.replicate 64 0))).size
     simp only [Nat.add_zero] at this
     rw [key, this]
     exact ByteArray.extract_append_eq_left rfl
   have e3 : ∀ c, (zcPend st.digest c (ByteArray.mk (Array.replicate 64 0)) dom ++ header 4 2 6).extract
-      ((_root_.Flock.Firewall.Skeleton.head st c dom).size +
+      ((_root_.Flock.ZkServer.Skeleton.head st c dom).size +
         (padsFrames (ByteArray.mk (Array.replicate 64 0))).size)
       (zcPend st.digest c (ByteArray.mk (Array.replicate 64 0)) dom ++ header 4 2 6).size = header 4 2 6 :=
     fun c => by
       rw [key, ← ByteArray.append_assoc]
       exact ByteArray.extract_append_eq_right ByteArray.size_append.symm ByteArray.size_append
   simp only [e1, e2, e3, bne_self_eq_false, Bool.false_eq_true, or_self, ↓reduceIte]
-  have hpre : PendAlike (_root_.Flock.Firewall.Skeleton.head st cap dom)
-      (_root_.Flock.Firewall.Skeleton.head st cap' dom) := by
+  have hpre : PendAlike (_root_.Flock.ZkServer.Skeleton.head st cap dom)
+      (_root_.Flock.ZkServer.Skeleton.head st cap' dom) := by
     rw [head_eq, head_eq]
     exact zcPre_alike st.digest cap cap' dom hc hd hcn hdom
   show RoundsAt _ _
@@ -1247,28 +1247,28 @@ theorem relV_refl {α : Type} (x : V α) : RelV (· = ·) x x := by
 
 /-- **Two tables of one shape**: the same statement, schedule and `t_pad`, packed tables of one size and level-0
 commitments of one shape. -/
-def TabAlike (t t' : _root_.Flock.Firewall.Finish.Tab) : Prop :=
+def TabAlike (t t' : _root_.Flock.ZkServer.Finish.Tab) : Prop :=
   t.st = t'.st ∧ t.sch = t'.sch ∧ t.tPad = t'.tPad ∧ t.g.size = t'.g.size ∧ CapAlike t.cm0 t'.cm0
 
 /-- **Two level 0s the loop samples at one `m`**, of packed tables of one size, give tables of one shape, or are both
 refused. -/
 theorem tabOfLevel0_alike (st : _root_.Flock.Setup) {wideLeaf : Bool} {m : ℕ} {g g' : Array F128} {d d' : ByteArray}
-    {l l' : _root_.Flock.Firewall.Level0.Level0} (h : _root_.Flock.Firewall.Level0.ofDraws wideLeaf m g d = .ok l)
-    (h' : _root_.Flock.Firewall.Level0.ofDraws wideLeaf m g' d' = .ok l') (hg : g.size = g'.size)
+    {l l' : _root_.Flock.ZkServer.Level0.Level0} (h : _root_.Flock.ZkServer.Level0.ofDraws wideLeaf m g d = .ok l)
+    (h' : _root_.Flock.ZkServer.Level0.ofDraws wideLeaf m g' d' = .ok l') (hg : g.size = g'.size)
     (hd : 64 * 2 ^ l.lv.d < 2 ^ 64) :
-    RelV TabAlike (_root_.Flock.Firewall.Finish.tabOfLevel0 st l) (_root_.Flock.Firewall.Finish.tabOfLevel0 st l') := by
-  obtain ⟨hm, hgl, ⟨s, hs, hlv⟩, -, -, -⟩ := _root_.Flock.Firewall.Level0.ofDraws_ok h
-  obtain ⟨hm', hgl', ⟨s', hs', hlv'⟩, -, -, -⟩ := _root_.Flock.Firewall.Level0.ofDraws_ok h'
+    RelV TabAlike (_root_.Flock.ZkServer.Finish.tabOfLevel0 st l) (_root_.Flock.ZkServer.Finish.tabOfLevel0 st l') := by
+  obtain ⟨hm, hgl, ⟨s, hs, hlv⟩, -, -, -⟩ := _root_.Flock.ZkServer.Level0.ofDraws_ok h
+  obtain ⟨hm', hgl', ⟨s', hs', hlv'⟩, -, -, -⟩ := _root_.Flock.ZkServer.Level0.ofDraws_ok h'
   rw [hs] at hs'
   obtain ⟨rfl, htp⟩ := Prod.mk.inj (Except.ok.inj hs')
   have hll : l'.lv = l.lv := by rw [hlv, hlv']
-  have hcap : CapAlike (_root_.Flock.Firewall.Finish.commitOf l) (_root_.Flock.Firewall.Finish.commitOf l') := by
-    rw [_root_.Flock.Firewall.Finish.commitOf_eq h, _root_.Flock.Firewall.Finish.commitOf_eq h']
-    unfold _root_.Flock.Firewall.Finish.commit0
+  have hcap : CapAlike (_root_.Flock.ZkServer.Finish.commitOf l) (_root_.Flock.ZkServer.Finish.commitOf l') := by
+    rw [_root_.Flock.ZkServer.Finish.commitOf_eq h, _root_.Flock.ZkServer.Finish.commitOf_eq h']
+    unfold _root_.Flock.ZkServer.Finish.commit0
     rw [hll]
     exact commitRows_capAlike _ _ _ _ _ hd
-  unfold _root_.Flock.Firewall.Finish.tabOfLevel0
-  rw [hm, hm', _root_.Flock.Firewall.Level0.ofDraws_wideLeaf h, _root_.Flock.Firewall.Level0.ofDraws_wideLeaf h',
+  unfold _root_.Flock.ZkServer.Finish.tabOfLevel0
+  rw [hm, hm', _root_.Flock.ZkServer.Level0.ofDraws_wideLeaf h, _root_.Flock.ZkServer.Level0.ofDraws_wideLeaf h',
     ← htp]
   dsimp only
   refine relV_ite _ (fun _ => True.intro) fun _ => ?_
@@ -1294,7 +1294,7 @@ theorem roundsAt_append {rs rs' qs qs' : Array (ByteArray × ℕ)} (h : RoundsAt
 
 /-- **A rep's scheduled rounds so far at two tables of one shape**, on the same coins: rounds of one shape, or both
 refused, whatever the salts for levels ≥ 1. -/
-theorem schedSoFar_alike (t t' : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray)
+theorem schedSoFar_alike (t t' : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray)
     (xs : Array (Array F128)) (hi hi' : Array ByteArray) (cr : Array (Array F128)) (hst : t.st = t'.st)
     (hsch : t.sch = t'.sch) (htp : t.tPad = t'.tPad) (hg : t.g.size = t'.g.size) (hcm : CapAlike t.cm0 t'.cm0)
     (hdom : dom.size < 2 ^ 64) (hdg : t.st.digest.size < 2 ^ 64) (hm : t.st.m < 2 ^ 64) (hx : xs.size + 2 < 2 ^ 64)
@@ -1317,9 +1317,9 @@ theorem schedSoFar_alike (t t' : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (
       (openStep_alike t t' rep dom xs hi hi' (cr.extract 0 alg.size) hst hsch htp hg hcm hdom hdg hm hx hn hq hp hd)
       List.Forall₂.nil
     revert hs hrs
-    generalize (_root_.Flock.Firewall.Drive.openStep t rep dom xs hi (cr.extract 0 alg.size)).feed
+    generalize (_root_.Flock.ZkServer.Drive.openStep t rep dom xs hi (cr.extract 0 alg.size)).feed
       (cr.extract alg.size cr.size).toList #[] = A
-    generalize (_root_.Flock.Firewall.Drive.openStep t' rep dom xs hi' (cr.extract 0 alg.size)).feed
+    generalize (_root_.Flock.ZkServer.Drive.openStep t' rep dom xs hi' (cr.extract 0 alg.size)).feed
       (cr.extract alg.size cr.size).toList #[] = B
     obtain ⟨sA, rsA⟩ := A
     obtain ⟨sB, rsB⟩ := B
@@ -1390,46 +1390,46 @@ theorem flatMap_range_congr {α : Type} {f g : ℕ → List α} {i : ℕ} (h : �
 their coins, then round `i` without its coins. -/
 theorem reqs_take (prior : Array F128) (sched own : Array (ByteArray × ℕ)) (dev : ℕ → ByteArray)
     (coins : Array (Array F128)) {i : ℕ} (hi : i < sched.size) :
-    (_root_.Flock.Firewall.Drive.reqs prior sched own dev coins).take ((if prior.isEmpty then 0 else 1) + 2 * i + 1) =
-      (if prior.isEmpty then [] else [.prior prior.size (_root_.Flock.Firewall.Frame.wordBytes prior)]) ++
+    (_root_.Flock.ZkServer.Drive.reqs prior sched own dev coins).take ((if prior.isEmpty then 0 else 1) + 2 * i + 1) =
+      (if prior.isEmpty then [] else [.prior prior.size (_root_.Flock.ZkServer.Frame.wordBytes prior)]) ++
       (List.range i).flatMap (fun k =>
         [.round (sched.getD k (.empty, 0)).2 (dev k) (.sched (sched.getD k (.empty, 0)).1),
           .coins (.ok (coins.getD k #[]))]) ++
       [.round (sched.getD i (.empty, 0)).2 (dev i) (.sched (sched.getD i (.empty, 0)).1)] := by
-  unfold _root_.Flock.Firewall.Drive.reqs
+  unfold _root_.Flock.ZkServer.Drive.reqs
   have hl : ∀ k, ([.round (sched.getD k (.empty, 0)).2 (dev k) (.sched (sched.getD k (.empty, 0)).1),
-      .coins (.ok (coins.getD k #[]))] : List _root_.Flock.Firewall.Frame.Req).length = 2 := fun _ => rfl
+      .coins (.ok (coins.getD k #[]))] : List _root_.Flock.ZkServer.Frame.Req).length = 2 := fun _ => rfl
   have hr := flatMap_range_take _ hl hi
   have hlen := flatMap_range_length _ hl sched.size
   rw [List.append_assoc, List.append_assoc]
   cases hp : prior.isEmpty
   · simp only [Bool.false_eq_true, ↓reduceIte]
-    rw [show 1 + 2 * i + 1 = [_root_.Flock.Firewall.Frame.Req.prior prior.size
-        (_root_.Flock.Firewall.Frame.wordBytes prior)].length + (2 * i + 1) by simp; omega,
+    rw [show 1 + 2 * i + 1 = [_root_.Flock.ZkServer.Frame.Req.prior prior.size
+        (_root_.Flock.ZkServer.Frame.wordBytes prior)].length + (2 * i + 1) by simp; omega,
       List.take_length_add_append, List.take_append_of_le_length (by omega), hr]
     rfl
   · simp only [↓reduceIte, List.nil_append, Nat.zero_add]
     rw [List.take_append_of_le_length (by omega), hr]
     rfl
 
-theorem feed_append {α : Type} : ∀ (s : _root_.Flock.Firewall.Drive.Step α) (l₁ l₂ : List (Array F128))
+theorem feed_append {α : Type} : ∀ (s : _root_.Flock.ZkServer.Drive.Step α) (l₁ l₂ : List (Array F128))
     (rs : Array (ByteArray × ℕ)), s.feed (l₁ ++ l₂) rs = (s.feed l₁ rs).1.feed l₂ (s.feed l₁ rs).2
   | s, [], l₂, rs => by cases s <;> rfl
   | .ask c n k, a :: l₁, l₂, rs => feed_append (k a) l₁ l₂ (rs.push (c, n))
   | .done _, _ :: _, l₂, _ => by cases l₂ <;> rfl
   | .fail _, _ :: _, l₂, _ => by cases l₂ <;> rfl
 
-theorem feed_nil {α : Type} (s : _root_.Flock.Firewall.Drive.Step α) (rs : Array (ByteArray × ℕ)) :
+theorem feed_nil {α : Type} (s : _root_.Flock.ZkServer.Drive.Step α) (rs : Array (ByteArray × ℕ)) :
     s.feed [] rs = (s, rs) := by
   cases s <;> rfl
 
 /-- **The schedule so far only grows**: one more round's coins keep every round scheduled so far. -/
-theorem schedSoFar_snoc (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray)
+theorem schedSoFar_snoc (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray)
     (xs : Array (Array F128)) (hi : Array ByteArray) (cr : Array (Array F128)) (a : Array F128)
     {s s' : Array (ByteArray × ℕ)} (h : schedSoFar t rep dom xs hi cr = .ok s)
     (h' : schedSoFar t rep dom xs hi (cr.push a) = .ok s') : ∃ u, s' = s ++ u := by
   unfold schedSoFar at h h'
-  cases hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom with
+  cases hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom with
   | error e => rw [hal] at h; cases h
   | ok alg =>
     rw [hal] at h h'
@@ -1445,7 +1445,7 @@ theorem schedSoFar_snoc (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom 
           rw [Array.extract_empty_of_size_le_start (by rw [Array.size_push] at hlt' ⊢; omega)]
         rw [e, feed_nil] at h'
         revert h'
-        generalize _root_.Flock.Firewall.Drive.openStep t rep dom xs hi ((cr.push a).extract 0 alg.size) = S
+        generalize _root_.Flock.ZkServer.Drive.openStep t rep dom xs hi ((cr.push a).extract 0 alg.size) = S
         intro h'
         cases S with
         | ask c n k =>
@@ -1465,7 +1465,7 @@ theorem schedSoFar_snoc (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom 
         rw [Array.size_push, Array.extract_push, if_neg (by omega), if_pos (by omega), Array.toList_push]
       rw [e1, e2, feed_append] at h'
       revert h h'
-      generalize (_root_.Flock.Firewall.Drive.openStep t rep dom xs hi (cr.extract 0 alg.size)).feed
+      generalize (_root_.Flock.ZkServer.Drive.openStep t rep dom xs hi (cr.extract 0 alg.size)).feed
         (cr.extract alg.size cr.size).toList #[] = P
       obtain ⟨S, rs⟩ := P
       intro h h'
@@ -1474,7 +1474,7 @@ theorem schedSoFar_snoc (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom 
         simp only [pure, Except.pure, Except.ok.injEq] at h
         subst h
         dsimp only at h'
-        rw [show (_root_.Flock.Firewall.Drive.Step.ask c n k).feed [a] rs = (k a).feed [] (rs.push (c, n)) from rfl,
+        rw [show (_root_.Flock.ZkServer.Drive.Step.ask c n k).feed [a] rs = (k a).feed [] (rs.push (c, n)) from rfl,
           feed_nil] at h'
         cases hk : k a with
         | ask c' n' _ =>
@@ -1490,14 +1490,14 @@ theorem schedSoFar_snoc (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom 
         simp only [pure, Except.pure, Except.ok.injEq] at h
         subst h
         dsimp only at h'
-        rw [show ∀ x, (_root_.Flock.Firewall.Drive.Step.done x : _root_.Flock.Firewall.Drive.Step Unit).feed [a] rs =
+        rw [show ∀ x, (_root_.Flock.ZkServer.Drive.Step.done x : _root_.Flock.ZkServer.Drive.Step Unit).feed [a] rs =
           (.done x, rs) from fun _ => rfl] at h'
         simp only [pure, Except.pure, Except.ok.injEq] at h'
         exact ⟨#[], by rw [← h', Array.append_empty]⟩
       | fail _ => cases h
 
 /-- A step still asking after the coins `l` sent a round for each. -/
-theorem feed_ask_size {α : Type} : ∀ (s : _root_.Flock.Firewall.Drive.Step α) (l : List (Array F128))
+theorem feed_ask_size {α : Type} : ∀ (s : _root_.Flock.ZkServer.Drive.Step α) (l : List (Array F128))
     (rs : Array (ByteArray × ℕ)) {c n k rs'}, s.feed l rs = (.ask c n k, rs') → rs'.size = rs.size + l.length
   | s, [], rs, _, _, _, _, h => by rw [feed_nil] at h; cases h; rfl
   | .ask c' n' k', a :: l, rs, _, _, _, _, h => by
@@ -1509,12 +1509,12 @@ theorem feed_ask_size {α : Type} : ∀ (s : _root_.Flock.Firewall.Drive.Step α
 
 /-- **A schedule that has stopped growing**: where the schedule so far holds no round past its coins, the opening has
 ended, and one more round's coins schedule nothing more. -/
-theorem schedSoFar_snoc_done (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray)
+theorem schedSoFar_snoc_done (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray)
     (xs : Array (Array F128)) (hi : Array ByteArray) (cr : Array (Array F128)) (a : Array F128)
     {s s' : Array (ByteArray × ℕ)} (h : schedSoFar t rep dom xs hi cr = .ok s) (hle : s.size ≤ cr.size)
     (h' : schedSoFar t rep dom xs hi (cr.push a) = .ok s') : s' = s := by
   unfold schedSoFar at h h'
-  cases hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom with
+  cases hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom with
   | error e => rw [hal] at h; cases h
   | ok alg =>
     rw [hal] at h h'
@@ -1536,7 +1536,7 @@ theorem schedSoFar_snoc_done (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) 
         rw [Array.length_toList, Array.size_extract]
         omega
       revert h h'
-      generalize hP : (_root_.Flock.Firewall.Drive.openStep t rep dom xs hi (cr.extract 0 alg.size)).feed
+      generalize hP : (_root_.Flock.ZkServer.Drive.openStep t rep dom xs hi (cr.extract 0 alg.size)).feed
         (cr.extract alg.size cr.size).toList #[] = P
       obtain ⟨S, rs⟩ := P
       intro h h'
@@ -1551,7 +1551,7 @@ theorem schedSoFar_snoc_done (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) 
         simp only [pure, Except.pure, Except.ok.injEq] at h
         subst h
         dsimp only at h'
-        rw [show ∀ x, (_root_.Flock.Firewall.Drive.Step.done x : _root_.Flock.Firewall.Drive.Step Unit).feed [a] rs =
+        rw [show ∀ x, (_root_.Flock.ZkServer.Drive.Step.done x : _root_.Flock.ZkServer.Drive.Step Unit).feed [a] rs =
           (.done x, rs) from fun _ => rfl] at h'
         simp only [pure, Except.pure, Except.ok.injEq] at h'
         exact h'.symm
@@ -1559,7 +1559,7 @@ theorem schedSoFar_snoc_done (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) 
 
 /-- **The schedule on one more round's coins reaches one round further**: where the schedule on the coins `cr` has
 round `j + 1` and the coins before the last (`cr.pop`, `j` of them) schedule `sched`, `sched` has round `j`. -/
-theorem schedSoFar_pop_lt (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray)
+theorem schedSoFar_pop_lt (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray)
     (xs : Array (Array F128)) (hi : Array ByteArray) {cr : Array (Array F128)} {j : ℕ}
     {sched sched' : Array (ByteArray × ℕ)} (hs : schedSoFar t rep dom xs hi cr.pop = .ok sched)
     (hs' : schedSoFar t rep dom xs hi cr = .ok sched') (hcr : cr.size = j + 1) (hj : j + 1 < sched'.size) :
@@ -1570,24 +1570,24 @@ theorem schedSoFar_pop_lt (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (do
   subst e
   omega
 
-theorem schedSoFar_ok_rounds {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray}
+theorem schedSoFar_ok_rounds {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray} {cr : Array (Array F128)} {s : Array (ByteArray × ℕ)}
     (h : schedSoFar t rep dom xs hi cr = .ok s) :
-    ∃ alg, _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+    ∃ alg, _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
       .ok alg := by
   unfold schedSoFar at h
-  cases hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom with
+  cases hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom with
   | error e => rw [hal] at h; cases h
   | ok alg => exact ⟨alg, rfl⟩
 
 /-- **The schedule on fewer coins is not refused** where the schedule on one more round's is not: a refused opening
 stays refused. -/
-theorem schedSoFar_push_ok (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray)
+theorem schedSoFar_push_ok (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray)
     (xs : Array (Array F128)) (hi : Array ByteArray) (cr : Array (Array F128)) (a : Array F128)
     {s : Array (ByteArray × ℕ)} (h : schedSoFar t rep dom xs hi (cr.push a) = .ok s) :
     ∃ s0, schedSoFar t rep dom xs hi cr = .ok s0 := by
   unfold schedSoFar at h ⊢
-  cases hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom with
+  cases hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom with
   | error e => rw [hal] at h; cases h
   | ok alg =>
     rw [hal] at h
@@ -1605,7 +1605,7 @@ theorem schedSoFar_push_ok (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (d
         rw [Array.size_push, Array.extract_push, if_neg (by omega), if_pos (by omega), Array.toList_push]
       rw [e1, e2, feed_append] at h
       revert h
-      generalize (_root_.Flock.Firewall.Drive.openStep t rep dom xs hi (cr.extract 0 alg.size)).feed
+      generalize (_root_.Flock.ZkServer.Drive.openStep t rep dom xs hi (cr.extract 0 alg.size)).feed
         (cr.extract alg.size cr.size).toList #[] = P
       obtain ⟨S, rs⟩ := P
       intro h
@@ -1614,7 +1614,7 @@ theorem schedSoFar_push_ok (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (d
       | done _ => exact ⟨_, rfl⟩
       | fail e => cases h
 
-theorem schedSoFar_pop_ok {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray}
+theorem schedSoFar_pop_ok {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray} {cr : Array (Array F128)} {s : Array (ByteArray × ℕ)}
     (h : schedSoFar t rep dom xs hi cr = .ok s) : ∃ s0, schedSoFar t rep dom xs hi cr.pop = .ok s0 := by
   by_cases h0 : cr.size = 0

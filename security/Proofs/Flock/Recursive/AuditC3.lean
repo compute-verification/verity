@@ -25,7 +25,7 @@ registered opening (`Model.holoTableCL`, `Recursion.holoInnerAt`). It is a conju
   (`HoloSatSome`: the slots' types are the partition's, private, so the statement binds them existentially — for some
   hidden types — below `2^tLog`, the range the zero outputs pin), with
   probability at most `RecursiveSound`'s bound with candidate 3's error (`holoError`) as its inner term;
-* (ii) zero knowledge: `RecursiveFirewallPrivate`, as in `PublicAudit`.
+* (ii) zero knowledge: `RecursiveZkServerPrivate`, as in `PublicAudit`.
 
 What it takes, against `PublicAudit`:
 
@@ -758,7 +758,7 @@ def RecursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
 coins of their coin kinds in the run's order (`holoCTs`: the link points, then the coins of the stages' shapes,
 `holoKinds`) and the verifier's map of its records (`holoMap`: the session's schedule at the verifier's inner shape,
 each stream round's coins read off the history's prefix at the last round it takes), and (ii) zero knowledge,
-`RecursiveFirewallPrivate`, as in `PublicAudit`. (i) states no bits. The recursion's knowledge form,
+`RecursiveZkServerPrivate`, as in `PublicAudit`. (i) states no bits. The recursion's knowledge form,
 `Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`, which no theorem evaluates at the deployment. Route 2C's
 bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`),
 and `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved
@@ -767,10 +767,10 @@ statements follows from it (`bitsLin2On_of_ksLin2On`). The dense form, which `ve
 accepts, is `RecursiveAuditC3`, at `λ₂ = 135.7` and, at the deployment's tables, at `κ + t'·ε`.
 -/
 def RecursiveAuditHolo : Prop :=
-  RecursiveAuditC3At holoCTs holoMap ∧ RecursiveFirewallPrivate
+  RecursiveAuditC3At holoCTs holoMap ∧ RecursiveZkServerPrivate
 
 /-- **`RecursiveAuditHolo` with no A3**: `RecursiveAuditHolo` with its first part with no A3. -/
 def RecursiveAuditHoloNoA3 : Prop :=
-  RecursiveAuditC3AtNoA3 holoCTs holoMap ∧ RecursiveFirewallPrivate
+  RecursiveAuditC3AtNoA3 holoCTs holoMap ∧ RecursiveZkServerPrivate
 
 end Flock.Guarantees

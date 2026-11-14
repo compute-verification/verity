@@ -937,7 +937,7 @@ the branch that reads it, which here is the last. -/
 
 /-- `parse` with the file's lines split in tasks (`SplitNL.splitTasks`), each net's rows read in the same tasks
 (`Net.parseWith`) and the file hashed in a task beside them,
-`parse_eq_fast`: the ZK server's setup runs it (`HmOut.parseFast`, `Firewall.Hello.Setup.setup`). Not a `@[csimp]`:
+`parse_eq_fast`: the ZK server's setup runs it (`HmOut.parseFast`, `ZkServer.Hello.Setup.setup`). Not a `@[csimp]`:
 `verity-verify-proof` compiles `parse` too, and runs no task. -/
 def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
     (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) : V Circuit :=
@@ -1740,7 +1740,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   checkRows c
   return c
 
-/-- `parse` through `HmRow.parseFast` (`parse_eq_fast`): the ZK server's setup (`Firewall.Hello.Setup.setup`). -/
+/-- `parse` through `HmRow.parseFast` (`parse_eq_fast`): the ZK server's setup (`ZkServer.Hello.Setup.setup`). -/
 def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit :=
   if tags.isTmpl then throw s!"{tags.name}: a templated statement's circuit is read from its template" else do
   let c ← if !tags.typed then HmRow.parseFast tags bytes tables else do

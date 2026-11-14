@@ -71,8 +71,8 @@ namespace Claims.ZKServer
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
 open _root_.Flock.Transcript (header)
-open _root_.Flock.Firewall.Frame (Cfg Masker INNER_ROUNDS check labelFrame wordBytes words)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Frame (Cfg Masker INNER_ROUNDS check labelFrame wordBytes words)
+open _root_.Flock.ZkServer.Finish (Tab)
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
@@ -88,7 +88,7 @@ theorem check_inner0_inner {c : Cfg} {m s' : Masker} {w' : ByteArray} (hw : w'.s
       (labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++ w' ++ header 4 1 1).data.toList)
     (h : check c m v r n = .ok (out, s', why)) : s'.inner = some 0 := by
   have ht : (ByteArray.mk (Array.replicate 64 0)).size = 64 := by simp [ByteArray.size]
-  have e : _root_.Flock.Firewall.Frame.ownRound c {} w' (ByteArray.mk (Array.replicate 64 0)) n 0 =
+  have e : _root_.Flock.ZkServer.Frame.ownRound c {} w' (ByteArray.mk (Array.replicate 64 0)) n 0 =
       labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++ w' ++ header 4 1 1 := rfl
   have hR : r = labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++ w' ++ header 4 1 1 := by
     have e2 : r = ByteArray.mk r.data.toList.toArray := by rw [Array.toArray_toList]
@@ -122,7 +122,7 @@ theorem unrefused_rep (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (wk : (ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit) (hx : Masked.Live x) (hSv : Serves x)
     (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (κ : (ofLoop T L₀ real).toSrv.Chk) (m₀ ρ₀ : Msg) (ops : List (Msg × Msg)) (hl : ops.length ≤ refK x)

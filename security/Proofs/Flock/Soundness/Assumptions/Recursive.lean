@@ -22,7 +22,7 @@ Obligation: `VBridge` is a fact about our own code (V*'s circuits and the verifi
 obligation, not a premise. VBridge G (`Proofs.Flock.VBridge`) discharges it, and it stays a hypothesis of
 `RecursiveRanRegistered`, and so in this module, only until that lands.
 
-In the recursive audit (`Proofs.Flock.Recursive.Defs`: `recGame`), the developer's firewall sends the auditor a salted
+In the recursive audit (`Proofs.Flock.Recursive.Defs`: `recGame`), the developer's ZK server sends the auditor a salted
 SHA-512 commitment to each inner round message, relays the auditor's live coin for the round, and afterwards proves, in
 Flock `--zk --registered` sessions of the public verifier circuits V* (`Vs j`, one session each, in a row), that
 openings of those commitments exist on which the inner verifier accepts. `VBridge` is what V*'s circuits must compute
