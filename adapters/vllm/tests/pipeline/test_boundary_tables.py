@@ -32,7 +32,7 @@ from verity_vllm.records.boundary_tables import ROOTS, TableRoots
 
 RUN = "a" * 128
 PROGRAM = "cd" * 64
-CAP = 16
+LEAVES = 16
 BLOCK = 4
 #: an fp8_ds_mla cache row's bytes: 512 e4m3 NoPE bytes, four f32 scales, 64 bf16 RoPE dims
 FP8_ROW = 656
@@ -182,15 +182,15 @@ def built(make_tables: list | None = None):
 def test_the_builder_builds_each_spans_tables_under_the_classs_names_in_slot_order():
     _runner, hook, _hooks = serve()
     make, tables = built()
-    doc = BT.assignment(3, RUN, PROGRAM, 8, 4, [0, 3], CAP, [("b", 3, 3, "length"), ("a", 5, 4, "stop")])
+    doc = BT.assignment(3, RUN, PROGRAM, 8, 4, [0, 3], LEAVES, [("b", 3, 3, "length"), ("a", 5, 4, "stop")])
     out = BT.Builder(hook.latents, make).build(doc)
     assert "error" not in out and (out["window"], out["prompt"], out["outputs"]) == (3, 8, 4)
     names = [BT.name(RUN, 8, 4, r, x) for r in (0, 1) for x in (0, 3)]
     assert [e["value"] for e in out["tables"]] == [t.value for t in tables] == names
     for e, t in zip(out["tables"], tables, strict=True):
-        assert e == t.entry() and e["leaves"] == CAP and e["words"] == H.WORDS
-        assert e["domain"] == HT.domain(PROGRAM, e["value"], H.WORDS, CAP).domain_id.hex()
-    assert [len(t.rows) for t in tables] == [BT.class_rows(8, 4, CAP)] * 4 == [12] * 4
+        assert e == t.entry() and e["leaves"] == LEAVES and e["words"] == H.WORDS
+        assert e["domain"] == HT.domain(PROGRAM, e["value"], H.WORDS, LEAVES).domain_id.hex()
+    assert [len(t.rows) for t in tables] == [BT.class_rows(8, 4, LEAVES)] * 4 == [12] * 4
     assert np.array_equal(np.stack(tables[3].rows[:8]), np.stack([row("a", p, 3) for p in range(8)]))
     assert hook.latents.requests() == []
 
@@ -201,7 +201,7 @@ def test_two_spans_of_a_class_with_other_lengths_publish_as_many_strings_and_a_r
     The root covers the fill: it is not the root over L rows with placeholders past them."""
     _runner, hook, _hooks = serve()
     make, tables = built()
-    out = BT.Builder(hook.latents, make).build(BT.assignment(3, RUN, PROGRAM, 8, 4, [0, 3], CAP,
+    out = BT.Builder(hook.latents, make).build(BT.assignment(3, RUN, PROGRAM, 8, 4, [0, 3], LEAVES,
                                                             [("b", 3, 3, "length"), ("a", 5, 4, "stop")]))
     assert "error" not in out
     b3, a3 = tables[1], tables[3]
@@ -209,10 +209,10 @@ def test_two_spans_of_a_class_with_other_lengths_publish_as_many_strings_and_a_r
     for t, n in ((b3, 5), (a3, 8)):
         assert len(t.bcs) == 12 and placeholder not in t.bcs and len(set(t.salts)) == 12
         assert not np.stack(t.rows[n:]).any() and np.stack(t.rows[:n]).any()
-        bare = HT.HistoryTable(PROGRAM, t.value, H.WORDS, CAP)
+        bare = HT.HistoryTable(PROGRAM, t.value, H.WORDS, LEAVES)
         bare.append(np.stack(t.rows[:n]), t.salts[:n])
         assert bare.root != t.root
-        HT.check(PROGRAM, t.value, H.WORDS, t.bcs, t.root, CAP)
+        HT.check(PROGRAM, t.value, H.WORDS, t.bcs, t.root, LEAVES)
     drop = ("value", "root", "domain")
     assert {k: v for k, v in b3.entry().items() if k not in drop} == {k: v for k, v in a3.entry().items() if k not in drop}
     assert BT.class_rows(256, 256) == 512 and BT.class_rows(1 << 17, 16) == BT.CAPACITY == 1 << 17
@@ -229,7 +229,7 @@ def test_two_spans_of_a_class_with_other_lengths_publish_as_many_strings_and_a_r
 def test_the_builder_refuses_a_span_whose_rows_dont_match_its_lengths(b, why):
     """b holds five positions (a three-id prompt and three ids served, the last never computed)."""
     _runner, hook, _hooks = serve()
-    out = BT.Builder(hook.latents, built()[0]).build(BT.assignment(0, RUN, PROGRAM, 8, 4, [0, 3], CAP, [b, ("a", 5, 4, "stop")]))
+    out = BT.Builder(hook.latents, built()[0]).build(BT.assignment(0, RUN, PROGRAM, 8, 4, [0, 3], LEAVES, [b, ("a", 5, 4, "stop")]))
     assert f"slot 0: rank 0 holds 5 positions of it, {why}" in out["error"] and "tables" not in out
     assert hook.latents.requests() == []
 
@@ -244,13 +244,13 @@ def test_a_step_with_draft_tokens_fails_the_rows_and_every_later_build_says_why(
     hook = BT.StepHook(model).install(runner, hooks)
     runner.execute_model(step(a=(0, 2)))
     runner.execute_model(NS(**{**vars(step(a=(2, 2))), "scheduled_spec_decode_tokens": {"a": [7]}}))
-    out = BT.Builder(hook.latents, built()[0]).build(BT.assignment(0, RUN, PROGRAM, 2, 2, [0, 3], CAP, [("a", 2, 2, "stop")]))
+    out = BT.Builder(hook.latents, built()[0]).build(BT.assignment(0, RUN, PROGRAM, 2, 2, [0, 3], LEAVES, [("a", 2, 2, "stop")]))
     assert "step 1: ValueError: a step with draft tokens" in out["error"]
 
 
 def test_the_builder_refuses_a_class_at_other_layers_than_rank_0_holds():
     _runner, hook, _hooks = serve()
-    out = BT.Builder(hook.latents, built()[0]).build(BT.assignment(0, RUN, PROGRAM, 8, 4, [0], CAP, [("a", 5, 4, "stop")]))
+    out = BT.Builder(hook.latents, built()[0]).build(BT.assignment(0, RUN, PROGRAM, 8, 4, [0], LEAVES, [("a", 5, 4, "stop")]))
     assert "the class's tables are at layers [0], rank 0 holds [0, 3]" in out["error"]
 
 
@@ -280,12 +280,12 @@ def test_over_fp8_ds_mla_caches_the_hook_reads_each_row_as_its_328_words_and_the
     words = H.LAYOUT_WORDS["fp8_ds_mla"]
     assert words == FP8_ROW // 2 == 328 and BT.layout(runner.model) == "fp8_ds_mla" and hook.latents.words == words
     make, tables = built()
-    out = BT.Builder(hook.latents, make).build(BT.assignment(3, RUN, PROGRAM, 8, 4, [0, 3], CAP,
+    out = BT.Builder(hook.latents, make).build(BT.assignment(3, RUN, PROGRAM, 8, 4, [0, 3], LEAVES,
                                                             [("b", 3, 3, "length"), ("a", 5, 4, "stop")]))
     assert "error" not in out
     for e, t in zip(out["tables"], tables, strict=True):
-        assert e["words"] == words and e["domain"] == HT.domain(PROGRAM, e["value"], words, CAP).domain_id.hex()
-        assert e["domain"] != HT.domain(PROGRAM, e["value"], H.WORDS, CAP).domain_id.hex()
+        assert e["words"] == words and e["domain"] == HT.domain(PROGRAM, e["value"], words, LEAVES).domain_id.hex()
+        assert e["domain"] != HT.domain(PROGRAM, e["value"], H.WORDS, LEAVES).domain_id.hex()
     assert np.array_equal(np.stack(tables[3].rows[:8]), np.stack([row("a", p, 3, 0, words) for p in range(8)]))
     assert np.array_equal(np.stack(tables[1].rows[:5]), np.stack([row("b", p, 3, 1, words) for p in range(5)]))
     with pytest.raises(ValueError, match="the tables' rows are 576 words, the caches' 328"):
@@ -298,11 +298,11 @@ def test_a_bf16_launchs_hook_tables_domains_and_program_are_unchanged():
     and program are the ones they were before the layout was read (`BF16_LAYOUT`), and its record names no words."""
     _runner, hook, _hooks = serve()
     assert hook.latents.words == H.WORDS == H.LAYOUT_WORDS["bf16"] == 576 and BT.layout(Model()) == "bf16"
-    L = BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=CAP)
+    L = BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=LEAVES)
     doc = {"program": L.partition["program"], "ports": L.ports(), "provenance": L.provenance(),
            "words": [L.words(t) for t in L.tables]}
     assert hashlib.sha256(json.dumps(doc, sort_keys=True).encode()).hexdigest() == BF16_LAYOUT
-    assert "words" not in L.provenance()["tables"] and L == BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=CAP,
+    assert "words" not in L.provenance()["tables"] and L == BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=LEAVES,
                                                                       row_words=H.WORDS)
 
 
@@ -310,20 +310,20 @@ def test_a_layout_of_fp8_ds_mla_rows_binds_its_words_in_its_tables_domains_and_i
     """A class whose tables hold fp8_ds_mla rows: each table at 328 words, under the domain that binds them, its record's
     tables naming the words, the challenger's own layout from it the same; rank 0's answer at 576 words refused."""
     words = H.LAYOUT_WORDS["fp8_ds_mla"]
-    L = BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=CAP, row_words=words)
-    bf = BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=CAP)
-    assert L.provenance()["tables"] == {"layers": [0, 3], "capacity": CAP, "words": words}
+    L = BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=LEAVES, row_words=words)
+    bf = BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=LEAVES)
+    assert L.provenance()["tables"] == {"layers": [0, 3], "capacity": LEAVES, "words": words}
     for t in L.tables:
-        assert L.words(t) == words and L.domain(t) == HT.domain(L.partition["program"], t, words, CAP)
+        assert L.words(t) == words and L.domain(t) == HT.domain(L.partition["program"], t, words, LEAVES)
         assert L.ports()[t]["domain"] != bf.ports()[t]["domain"]
     assert [L.words(v) for v in L.values] == [bf.words(v) for v in bf.values] and L.partition["program"] == bf.partition["program"]
-    entries = [HT.HistoryTable(L.partition["program"], n, words, CAP).entry() for n in L.tables]
+    entries = [HT.HistoryTable(L.partition["program"], n, words, LEAVES).entry() for n in L.tables]
     assert BR.table_roots(TableRoots(0, RUN, 4, 4, tuple(entries), None).dump(), L).keys() == set(L.tables)
-    wide = [HT.HistoryTable(L.partition["program"], n, H.WORDS, CAP).entry() for n in L.tables]
+    wide = [HT.HistoryTable(L.partition["program"], n, H.WORDS, LEAVES).entry() for n in L.tables]
     with pytest.raises(ValueError, match="isn't at the class's leaves, words and domain"):
         BR.table_roots(TableRoots(0, RUN, 4, 4, tuple(wide), None).dump(), L)
     with pytest.raises(ValueError, match=r"a table's words are a layout's, \(576, 328\), not 300"):
-        BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=CAP, row_words=300)
+        BR.Layout(PAIR, 0, 1, 4, 4, 2, RUN, layers=(0, 3), capacity=LEAVES, row_words=300)
 
 
 def test_the_step_hook_reads_only_the_layers_it_is_given_and_refuses_one_the_model_hasnt():
@@ -348,7 +348,7 @@ def test_latents_replace_a_recomputed_requests_rows_and_refuse_a_gap():
 def test_the_channel_carries_an_assignment_to_rank_0_and_its_answer_back(tmp_path):
     _runner, hook, _hooks = serve()
     ch = BT.Channel(tmp_path / "private", sleep=lambda s: pytest.fail("the answer was there"))
-    doc = BT.assignment(1, RUN, PROGRAM, 8, 4, [0, 3], CAP, [("a", 5, 4, "stop")])
+    doc = BT.assignment(1, RUN, PROGRAM, 8, 4, [0, 3], LEAVES, [("a", 5, 4, "stop")])
     ch.assign(doc)
     assert ch.serve(BT.Builder(hook.latents, built()[0])) == 1 and ch.serve(BT.Builder(hook.latents)) == 0
     out = ch.roots(1, RUN, 8, 4)
@@ -369,7 +369,7 @@ def test_the_channel_gives_up_on_an_answer_after_its_timeout():
 def test_the_local_channel_builds_at_once():
     _runner, hook, _hooks = serve()
     ch = BT.LocalChannel(BT.Builder(hook.latents, built()[0]))
-    ch.assign(BT.assignment(1, RUN, PROGRAM, 8, 4, [0, 3], CAP, [("a", 5, 4, "stop")]))
+    ch.assign(BT.assignment(1, RUN, PROGRAM, 8, 4, [0, 3], LEAVES, [("a", 5, 4, "stop")]))
     assert len(ch.roots(1, RUN, 8, 4)["tables"]) == 2
 
 
@@ -410,7 +410,7 @@ class Scheduler:
 def windows(out, latents: BT.Latents, make, lines: list, keep: BT.Kept | None = None, check=PAIR, verdicts: bool = False):
     sched, hooks = Scheduler(), Hooks(tag="test-boundary-tables")
     bw = BW.BoundaryWindows(out, check, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s",
-                            tables=BT.LocalChannel(BT.Builder(latents, make, keep=keep)), layers=(0, 3), capacity=CAP,
+                            tables=BT.LocalChannel(BT.Builder(latents, make, keep=keep)), layers=(0, 3), capacity=LEAVES,
                             words=latents.words, verdicts=verdicts)
     return bw.install(sched, hooks), sched, hooks
 
@@ -451,7 +451,7 @@ def test_each_classs_commitment_waits_for_its_tables_and_lists_them_beside_its_v
         assert pub["values"] == line["values"]
         names = [BT.name(run, p, o, 0, x) for x in (0, 3)]
         named = {"words": words} if cache else {}
-        assert list(pub["values"]) == [*BR.PORTS, *names] and pub["tables"] == {"layers": [0, 3], "capacity": CAP, **named}
+        assert list(pub["values"]) == [*BR.PORTS, *names] and pub["tables"] == {"layers": [0, 3], "capacity": LEAVES, **named}
         assert [pub["values"][n]["root"] for n in names] == [made[n].root.hex() for n in names]
         mine = BR.layout_of(pub, PAIR)
         assert mine.tables == tuple(names) and mine.ports()[names[1]] == {k: made[names[1]].entry()[k] for k in
@@ -462,7 +462,7 @@ def test_each_classs_commitment_waits_for_its_tables_and_lists_them_beside_its_v
         assert V.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
         bare = BR.Layout(PAIR, 0, 1, p, o, 1, run)
         assert R.check(rec, bare.program, bare.grain, DESIGN, CS.SCHEME, bare.ports()).codes != ()
-        assert mine.row_words == words and (mine.ports() == BR.Layout(PAIR, 0, 1, p, o, 1, run, layers=(0, 3), capacity=CAP).ports()) != cache
+        assert mine.row_words == words and (mine.ports() == BR.Layout(PAIR, 0, 1, p, o, 1, run, layers=(0, 3), capacity=LEAVES).ports()) != cache
         assert BR.reopen(tmp_path / "w0" / f"p{p}-o{o}", PAIR).roots == {k: bytes.fromhex(v["root"])
                                                                           for k, v in pub["values"].items()}
     assert [len(made[BT.name(BR.run_root("s", 0), *k, 0, 3)].rows) for k in ((8, 4), (4, 4))] == [12, 8]
@@ -508,15 +508,15 @@ def test_a_class_registers_nothing_when_rank_0_built_no_tables_or_answered_other
     assert [x["error"] for x in lines] == ["ValueError: rank 0 built no history tables: ValueError: rank 0's latent rows "
                                            "are incomplete: step 9: ValueError: no slot"] * 2
     assert not list(tmp_path.rglob(BR.COMMIT))
-    L = BR.Layout(PAIR, 0, 1, 8, 4, 1, RUN, layers=(0, 3), capacity=CAP)
-    entries = [HT.HistoryTable(L.partition["program"], n, H.WORDS, CAP).entry() for n in L.tables]
+    L = BR.Layout(PAIR, 0, 1, 8, 4, 1, RUN, layers=(0, 3), capacity=LEAVES)
+    entries = [HT.HistoryTable(L.partition["program"], n, H.WORDS, LEAVES).entry() for n in L.tables]
 
     def answer(tables):
         return {"format": ROOTS, "window": 0, "run": RUN, "prompt": 8, "outputs": 4, "tables": tables}
     assert BR.table_roots(answer(entries), L) == {e["value"]: bytes.fromhex(e["root"]) for e in entries}
     with pytest.raises(ValueError, match="not the class's"):
         BR.table_roots(answer(entries[::-1]), L)
-    for other in ({"leaves": 8}, {"domain": HT.domain(PROGRAM, L.tables[0], H.WORDS, CAP).domain_id.hex()}, {"root": "00"}):
+    for other in ({"leaves": 8}, {"domain": HT.domain(PROGRAM, L.tables[0], H.WORDS, LEAVES).domain_id.hex()}, {"root": "00"}):
         with pytest.raises(ValueError, match="isn't at the class's leaves, words and domain"):
             BR.table_roots(answer([entries[0] | other, entries[1]]), L)
     with pytest.raises(ValueError, match="'format' is None"):
@@ -545,10 +545,10 @@ def test_history_tables_refuse_a_scheduler_that_caches_prefixes(tmp_path):
 
 
 def test_the_tables_private_directory_is_never_under_what_leaves_the_node(tmp_path):
-    cfg = {"check": "c", "tables": {"private": str(tmp_path / "node"), "layers": 2, "capacity": CAP, "timeout_s": 5}}
+    cfg = {"check": "c", "tables": {"private": str(tmp_path / "node"), "layers": 2, "capacity": LEAVES, "timeout_s": 5}}
     bw = BW.BoundaryWindows.of(cfg, tmp_path / "out", public=[tmp_path / "run"])
     bw.stop()
-    assert (bw.layers, bw.capacity, bw.tables.timeout_s, bw.tables.dir) == ((0, 1), CAP, 5.0, tmp_path / "node" / "channel")
+    assert (bw.layers, bw.capacity, bw.tables.timeout_s, bw.tables.dir) == ((0, 1), LEAVES, 5.0, tmp_path / "node" / "channel")
     for under in (tmp_path / "out" / "node", tmp_path / "run" / "x"):
         with pytest.raises(ValueError, match="which leaves the node"):
             BW.BoundaryWindows.of({**cfg, "tables": {**cfg["tables"], "private": str(under)}}, tmp_path / "out",
@@ -621,7 +621,7 @@ def test_the_interior_loads_a_served_table_by_its_name_and_commits_it_again_to_r
             made = next(t for t in tables if t.value == n)
             assert got.entry() == made.entry() and got.root == pub["values"][n]["root"]
             assert got.program == BR.layout_of(pub, PAIR).partition["program"]
-            assert got.rows.shape == (BT.class_rows(p, o, CAP), H.WORDS) and not got.rows[slot_rows:].any()
+            assert got.rows.shape == (BT.class_rows(p, o, LEAVES), H.WORDS) and not got.rows[slot_rows:].any()
             assert got.salts == b"".join(made.salts) and got.strings() == made.bcs
             again = HT.HistoryTable(got.program, got.value, got.words, got.leaves)
             again.append(got.rows, [got.salts[i * 192:(i + 1) * 192] for i in range(len(got.rows))])
@@ -638,7 +638,7 @@ def test_a_class_that_registers_nothing_keeps_nothing(tmp_path):
     """A class whose second span's rows don't match its lengths: the first span's files were written, and are dropped."""
     _runner, hook, _hooks = serve()
     kept = BT.Kept(tmp_path / "tables")
-    doc = BT.assignment(1, RUN, PROGRAM, 8, 4, [0, 3], CAP, [("a", 5, 4, "stop"), ("b", 3, 1, "stop")])
+    doc = BT.assignment(1, RUN, PROGRAM, 8, 4, [0, 3], LEAVES, [("a", 5, 4, "stop"), ("b", 3, 1, "stop")])
     out = BT.Builder(hook.latents, built()[0], keep=kept).build(doc)
     assert "slot 1: rank 0 holds 5 positions" in out["error"] and not list((tmp_path / "tables").rglob("*.json"))
     with pytest.raises(FileNotFoundError):
