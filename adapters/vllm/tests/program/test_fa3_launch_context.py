@@ -157,3 +157,12 @@ def test_unreadable_manifest_is_an_error_not_no_context():
         LC.shape_contexts({"sweep": {"input_lengths": [8, 1024]}})
     # a shape the workload does not have is genuinely "no context" (the row's default build_request of the longest prompt / largest cap)
     assert LC.spec_for({"sweep": {"input_lengths": [8, 1024], "output_caps": [15, 69]}}, 1024, 127) == ""
+
+
+@pytest.mark.parametrize("requests", [None, [], [{"foo": 1}]])
+def test_a_workload_of_no_declared_request_and_no_sweep_is_refused_by_name(requests):
+    # the workload `common.launch_batch` reads off a φ that declares no request (a class's Program, off batch invariance)
+    w = {"requests": requests, "engine": {"target": {"batch_invariant": False}}}
+    for read in (LC.batch_dispatch, LC.shape_contexts):
+        with pytest.raises(ValueError, match=r"declares no requests with their prompt_len and no sweep .* The fix: .* its launch"):
+            read(w)
