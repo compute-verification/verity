@@ -83,7 +83,7 @@ kind under `schema` (the protocol's entry schema and version), `session` its ses
 SHA-512 of the protocol's role, the signer's LMS identifier and `d`, the schema's tagged SHA-512 of the entry without its
 sig (`Record.unsigned`). `Record.ofJson` reads the form; what a protocol accepts beyond it (its schemas, kinds, bodies,
 signer and sessions) is its own check. The auditor's ledger (`Spot.Challenger.ledgerEntry?`, schemas
-`verity/challenger-auditor/v1|v2`) reads its entries through it. `verity/hardware/record.py` is its Python.
+`verity/challenger-auditor/v1|v2`) reads its entries through it. `verity/channel.py`'s `Record` is its Python.
 
 ## The profile (`CoreProtocol/Profile.lean`)
 
