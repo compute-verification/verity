@@ -42,7 +42,7 @@ def shown (r : Files) : String :=
   match r with
   | .error e => s!"refused: {e}"
   | .ok as => "\n".intercalate (as.map fun x =>
-      s!"{x.1}|{why x.2.scope}|{why x.2.ksFiles}|{why x.2.ksForm}|{why x.2.population}|{x.2.g.getD 0}|" ++
+      s!"{x.1}|{why x.2.scope}|{why x.2.ksFiles}|{why x.2.ksForm}|{why x.2.header}|{why x.2.population}|{x.2.g.getD 0}|" ++
         s!"{x.2.programSha.getD "none"}|{x.2.want.compress}")
 
 /-- `f`'s result and its microseconds; `f` reads the clock's reading so the compiler can't hoist it out of the

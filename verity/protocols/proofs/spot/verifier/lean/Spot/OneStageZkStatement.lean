@@ -1021,8 +1021,9 @@ def scopeAt (parsed : V Flock.Circuit) (I : Flock.Witness.Inputs) (rd : Reads) :
 
 /-- **What `step` reads of one statement**: its inputs, the verifier's registered reads, the scope, files and
 population checks its sessions' verdicts run, and its program's digest against the partition object's program; and,
-of its circuit file alone, the form the sampled audit's knowledge soundness covers without a session's sample
-(`ksForm`) and the units a proof block it parses with (`g`). Nothing of it reads a session's record, coins or sample,
+of its files alone, the form the sampled audit's knowledge soundness covers without a session's sample
+(`ksForm`), the public file's header and rows as a session's setup takes them (`header`) and the units a proof block
+the circuit parses with (`g`). Nothing of it reads a session's record, coins or sample,
 and it holds each check's result, never the parsed circuit. -/
 structure StepAt where
   I : Flock.Witness.Inputs
@@ -1030,6 +1031,7 @@ structure StepAt where
   scope : V Unit
   ksFiles : V Unit
   ksForm : V Unit
+  header : V Unit
   g : Option Nat
   population : V Unit
   programSha : Option String
@@ -1049,6 +1051,7 @@ def StepAt.ofOwn (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (bs 
   { I, rd, scope := scopeAt parsed I rd
     ksFiles := Flock.PortRoots.checkOf parsed (Flock.Witness.zkTags I) pubB
     ksForm := Flock.KsScope.filesOf parsed (Flock.Witness.zkTags I) I.publicFile I.count
+    header := Flock.PortRoots.headerOf parsed (Flock.Witness.zkTags I) I.publicFile
     g := parsed.toOption.map (·.g)
     population
     programSha := programDigest p.program
@@ -1088,9 +1091,11 @@ def Member.statement (m : Member) (slice : Json) (bs : Core.Blobs) : V StepAt :=
 /-- **A statement's files held to what its sessions' verdicts check of the files alone**, with no session: the scope
 (`scope`), the files' ports and roots (`ksFiles`), the form the sampled audit's knowledge soundness covers, without a
 session's sample (`ksForm`, `Flock.KsScope.filesOf`), and the population check (`population`), in `verdictOf`'s
-order. It reads the statement's results and parses nothing. -/
+order; and, before the population check, the public file's header and rows as a session's setup takes them (`header`,
+`Flock.PortRoots.headerOf`), which a session's verdict holds at its sample and this at none. It reads the statement's
+results and parses nothing. -/
 def StepAt.filesHeld (a : StepAt) : V Unit :=
-  a.scope >>= fun _ => a.ksFiles >>= fun _ => a.ksForm >>= fun _ => a.population
+  a.scope >>= fun _ => a.ksFiles >>= fun _ => a.ksForm >>= fun _ => a.header >>= fun _ => a.population
 
 /-- **A member's statement with its files held** (`Member.statement`, then `StepAt.filesHeld`), a refusal naming the
 member. It reads the member's own files and no session, so it is the same for a member the sample holds and one it
@@ -1307,7 +1312,7 @@ theorem Member.population_on (m : Member) (slice : Json) :
 
 /-- `StepAt.ofOwn` on what is kept of the circuit file and the program: the blobs' lookup tables `tables`, the tags
 its sessions run under `tags`, what its checks read of the parse `k`, and the program's digest `sha`. Every check that
-read the parse reads `k`, and the three that load the public file read one load of it
+read the parse reads `k`, and the four that load the public file read one load of it
 (`Spot.CircuitKept.loadOf`). -/
 def StepAt.ofKept (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (tables : List (String × ByteArray))
     (rd : Reads) (population : V Unit) (tags : Flock.Tags) (k : V CircuitKept.Kept) (sha : Option String) : StepAt :=
@@ -1316,6 +1321,7 @@ def StepAt.ofKept (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (ta
     scope := CircuitKept.checkOf k pub tags true pubB 1 false rd.registered.isSome >>= fun _ => k >>= fun k => k.own
     ksFiles := CircuitKept.portsOf k pub
     ksForm := CircuitKept.filesOf k pub tags pubB
+    header := CircuitKept.headerOf k pub
     g := k.toOption.map (·.c.g)
     population
     programSha := sha
@@ -1342,11 +1348,12 @@ theorem StepAt.ofOwn_kept (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteAr
       StepAt.ofKept p tags0 circuitB pubB (tablesOf bs) rd population (tagsAt tags0 circuitB)
         ((Flock.ProvedScope.circuitOf (tagsAt tags0 circuitB) circuitB (tablesOf bs)).map
           (CircuitKept.keptOf (tagsAt tags0 circuitB) true 1 templateOk)) (programDigest p.program) := by
-  show StepAt.mk _ _ _ _ _ _ _ _ _ = StepAt.mk _ _ _ _ _ _ _ _ _
+  show StepAt.mk _ _ _ _ _ _ _ _ _ _ = StepAt.mk _ _ _ _ _ _ _ _ _ _
   congr 1
   · exact scopeAt_kept _ _ _
   · exact CircuitKept.portsOf_kept _ _ _ true 1 templateOk
   · exact CircuitKept.filesOf_kept _ _ _ true 1 templateOk
+  · exact CircuitKept.headerOf_kept _ _ _ true 1 templateOk
   · exact CircuitKept.keptOf_g _ _ true 1 templateOk
 
 /-- `statementOf` on what the files' pass keeps of its circuit file (`fk`) and its program's digest (`sha`), at the

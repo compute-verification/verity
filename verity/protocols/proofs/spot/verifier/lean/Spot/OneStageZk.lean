@@ -88,12 +88,13 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   member's files are read, sampled or not (`membersFiles`): its statement must read as a sampled member's does
   (`Member.statement`), and its files pass what a session's verdict checks of the files alone (`StepAt.filesHeld`: the
   scope, the files' ports and roots, the form the sampled audit's knowledge soundness covers without a session's
-  sample, `Flock.KsScope.filesOf`, and the population check), so a member the sample missed is refused where its
+  sample, `Flock.KsScope.filesOf`, the public file's header and rows as a session's setup takes them,
+  `Flock.PortRoots.headerOf`, and the population check), so a member the sample missed is refused where its
   session's verdict would have refused its files (`membersRun_files`). A member's circuit file is parsed once for
   them (`StepAt.ofOwn`), and the statement keeps each check's result, never the parse. The compiled pass
   (`membersFilesKept`, equal to it) reads the blobs' lookup tables once and a circuit file once for the members that
   name it, and keeps of the file the circuit's own verdicts and the circuit without its rows (`Spot.CircuitKept`),
-  so its work on the rows is by the file and not by the member; a member's public file it loads once for the three
+  so its work on the rows is by the file and not by the member; a member's public file it loads once for the four
   checks that read it, and a program it parses and hashes once for the members in a row that read it. Then each
   statement's session is verified as the one statement's is, on its member's own files as that pass read them
   (`runMembers`), after the statements before it, so no coin tree serves two statements: its circuit's units a proof
@@ -270,8 +271,33 @@ theorem Member.files_ok {m : Member} {slice : Json} {bs : Core.Blobs} {a : StepA
   unfold StepAt.filesHeld at hf
   obtain ⟨⟨⟩, hsc, hf⟩ := Flock.HmNets.bind_ok hf
   obtain ⟨⟨⟩, hk, hf⟩ := Flock.HmNets.bind_ok hf
-  obtain ⟨⟨⟩, hks, hp⟩ := Flock.HmNets.bind_ok hf
+  obtain ⟨⟨⟩, hks, hf⟩ := Flock.HmNets.bind_ok hf
+  obtain ⟨⟨⟩, -, hp⟩ := Flock.HmNets.bind_ok hf
   exact ⟨a', hs, hsc, hk, (Member.statement_parse hs).1.symm.trans hks, hp⟩
+
+/-- **A member whose statement `Member.files` returns has its public file's header and rows as a session's setup
+takes them**: `Flock.PortRoots.headerOf` passes on the circuit its own inputs' files parse to, at no session. -/
+theorem Member.files_header {m : Member} {slice : Json} {bs : Core.Blobs} {a : StepAt}
+    (h : m.files slice bs = .ok a) :
+    Flock.PortRoots.headerOf (Flock.ProvedScope.circuitOf (Flock.Witness.zkTags a.I) a.I.circuitFile a.I.tables)
+      (Flock.Witness.zkTags a.I) a.I.publicFile = .ok () := by
+  unfold Member.files at h
+  obtain ⟨a', hs, h⟩ := Flock.HmNets.bind_ok (mapError_ok h)
+  obtain ⟨⟨⟩, hf, h⟩ := Flock.HmNets.bind_ok h
+  have ha : a' = a := Except.ok.inj h
+  subst ha
+  unfold StepAt.filesHeld at hf
+  obtain ⟨⟨⟩, -, hf⟩ := Flock.HmNets.bind_ok hf
+  obtain ⟨⟨⟩, -, hf⟩ := Flock.HmNets.bind_ok hf
+  obtain ⟨⟨⟩, -, hf⟩ := Flock.HmNets.bind_ok hf
+  obtain ⟨⟨⟩, hh, -⟩ := Flock.HmNets.bind_ok hf
+  unfold Member.statement at hs
+  obtain ⟨a'', hs, hb⟩ := Flock.HmNets.bind_ok hs
+  obtain ⟨⟨⟩, -, hb⟩ := Flock.HmNets.bind_ok hb
+  have ha : a'' = a' := Except.ok.inj hb
+  subst ha
+  obtain ⟨tags0, circuitB, pubB, rd, rfl⟩ := statementOf_ofOwn hs
+  exact hh
 
 /-- Where `membersFiles` reads the members `ms`, each of them has its files held. -/
 theorem membersFiles_ok {slice : Member → Json} {bs : Core.Blobs} {ms : List Member}
@@ -1028,21 +1054,23 @@ private def unitsJ (us : Array Nat) : Json := Json.mkObj [("units", Json.mkObj [
 #guard ((membersFiles (fun _ => Json.null) ⟨#[]⟩ []).toOption.map (·.length)) == some 0
 #guard whyT (statementAt [] (memberT "m2" #[(2, 3)])) == "the parameters name no such member"
 
-/-- A statement of no file whose scope, ports, form and population checks are the ones given. -/
-private def stepT (scope ksFiles ksForm population : V Unit) : Option StepAt :=
+/-- A statement of no file whose scope, ports, form, header and population checks are the ones given. -/
+private def stepT (scope ksFiles ksForm header population : V Unit) : Option StepAt :=
   (Flock.Tags.find? STATEMENT).map fun tags =>
     { I := inputsOf tags sharedT .empty .empty ⟨#[]⟩, rd := { registered := none, known := #[], params := #[] }, scope,
-      ksFiles, ksForm, g := none, population, programSha := none, want := Json.null }
+      ksFiles, ksForm, header, g := none, population, programSha := none, want := Json.null }
 
-#guard ((stepT (.error "scope") (.error "ports") (.error "form") (.error "population")).map fun a =>
+#guard ((stepT (.error "scope") (.error "ports") (.error "form") (.error "header") (.error "population")).map fun a =>
   refusal a.filesHeld) == some "scope"
-#guard ((stepT (.ok ()) (.error "ports") (.error "form") (.error "population")).map fun a => refusal a.filesHeld) ==
-  some "ports"
-#guard ((stepT (.ok ()) (.ok ()) (.error "form") (.error "population")).map fun a => refusal a.filesHeld) ==
-  some "form"
-#guard ((stepT (.ok ()) (.ok ()) (.ok ()) (.error "population")).map fun a => refusal a.filesHeld) ==
+#guard ((stepT (.ok ()) (.error "ports") (.error "form") (.error "header") (.error "population")).map fun a =>
+  refusal a.filesHeld) == some "ports"
+#guard ((stepT (.ok ()) (.ok ()) (.error "form") (.error "header") (.error "population")).map fun a =>
+  refusal a.filesHeld) == some "form"
+#guard ((stepT (.ok ()) (.ok ()) (.ok ()) (.error "header") (.error "population")).map fun a =>
+  refusal a.filesHeld) == some "header"
+#guard ((stepT (.ok ()) (.ok ()) (.ok ()) (.ok ()) (.error "population")).map fun a => refusal a.filesHeld) ==
   some "population"
-#guard ((stepT (.ok ()) (.ok ()) (.ok ()) (.ok ())).map fun a => a.filesHeld.toOption.isSome) == some true
+#guard ((stepT (.ok ()) (.ok ()) (.ok ()) (.ok ()) (.ok ())).map fun a => a.filesHeld.toOption.isSome) == some true
 
 /-- The statement `StepAt.ofOwn` builds of no file: its form check is `Flock.KsScope.filesOf`'s refusal of a circuit
 that does not parse, and it names no units a proof block. -/
@@ -1051,6 +1079,7 @@ private def ownT : Option StepAt :=
     StepAt.ofOwn sharedT tags .empty .empty ⟨#[]⟩ { registered := none, known := #[], params := #[] } (.ok ())
 
 #guard (ownT.map fun a => (refusal a.ksForm).startsWith "refused: ") == some true
+#guard (ownT.map fun a => (refusal a.header).startsWith "refused: a circuit that does not parse (") == some true
 #guard (ownT.map fun a => a.g) == some none
 #guard whyT ((memberT "m0" #[(0, 1)]).blockHeld (some 2)) ==
   "vus_per_block: the member's circuit has 2 units a proof block, not the 1 the parameters name"
