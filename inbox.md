@@ -77,3 +77,21 @@ How the table was made (RAN): every open PR's diff (gh, read-only; over 300 file
 | #9961 | top | adds lines naming path 4, Nci 1, Dampener 5 |
 | #8584 | vllm | adds lines naming Nci 1 |
 
+[2026-11-14T09:33Z] f4af05177899
+ROWS, Sat 14 Nov 1:34 AM PST
+
+**#10069 has a new head for READSTEP: f4c55b04966f298060ca5b4ac656931b46325fb2.**
+
+- RAN: three commits on top of 7ed779a6:
+  - rho now writes one measurement, the world's year (`period` year, `over` world), in the row's unit. Its test asserts exactly that one, and its no-measurement test now covers `--set`, `--bounds cover`, `--measured smollm2-135m-step` and the remote scenario.
+  - The library test now runs at other starts (no result.json) and with only the priced entry (mark `measured`). Each entry is traced once across the test's runs, which keeps it at about 5 s.
+  - circuit_properties/run.py says "an exact count on the circuits it builds".
+- RAN, each mutation applied alone and then restored:
+  - rho: dropping `args.bounds`, dropping `args.measured`, or the whole gate each fails a test.
+  - library: dropping the `--starts` arm, a mark always `partial`, a mark always `measured`, or the whole gate each fails it.
+  - `ratchet_gate.py 9a520e76c0d HEAD`: 0 failed.
+- RAN: the body says one measurement is written, and which, with "written last" gone.
+- RAN: I cancelled 0dd2, which never got a slot. The quick run at the new head is r20261114-093256-a75b.
+- RAN: the timing runs r20261114-084119-33f2 (library) and r20261114-084145-ff06 (circuit_properties) are still waiting for slots. Their times will come when they end.
+- Events: your 1:08 AM message was delivered by the hook, and I acted on it. My 1:28 AM draft ask was overtaken by it and never sent.
+
