@@ -38,7 +38,7 @@ import numpy as np
 
 from verity_vllm.commit import challenge as CH
 from verity_vllm.config import option
-from verity_vllm.records.property_record import seal
+from verity_vllm.records.property_record import REGISTRY, seal
 
 REQUIRED_EDGE_KINDS = ("zeros", "max", "subnormal", "alternating")
 DTYPE_BITS = {"bfloat16": 16, "float16": 16, "float32": 32, "int32": 32, "int64": 64, "uint8": 8, "int8": 8, "bool": 8}
@@ -157,7 +157,7 @@ def evaluate_spec(spec, operand_words: list[np.ndarray]) -> list[int]:
 def check(adapter: str, d: Path) -> dict[str, Any]:
     mod = importlib.import_module(adapter)
     man = json.loads((d / "manifest.json").read_text())
-    rep: dict[str, Any] = {"schema": "verity-gen/difftest/v1", "adapter": adapter, "semantic_id": getattr(mod, "SEMANTIC_ID", None),
+    rep: dict[str, Any] = {"schema": REGISTRY["difftest"].schema, "adapter": adapter, "semantic_id": getattr(mod, "SEMANTIC_ID", None),
                            "produce": {k: man.get(k) for k in ("seed", "n", "torch", "device")}, "cases": [], "status": "fail"}
     kinds_seen: set[str] = set()
     passed = 0
