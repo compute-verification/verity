@@ -130,7 +130,7 @@ def undersizing(fit: str, N: float, L: float) -> float:
 
 def params(wipe_gb: float, **over: float) -> dict:
     """``tiers``' defaults with a wipe residual of ``wipe_gb`` (memory the fill doesn't reach, no proof-of-space slack):
-    the monitored residual is the ladder's, PoUW's floor credit at the locked clock."""
+    the registered residual is the ladder's, PoUW's floor credit at the locked clock."""
     return T.DEFAULTS | {"unfilled_gb": wipe_gb, "pous_rounds": 1e9, "pous_floor": 0.0} | over
 
 
@@ -184,7 +184,7 @@ def left_out(p: dict, periods: int) -> float:
 
 
 def fit_mu(p: dict, wipe_bits: float, N: float, w_e: float, b: float | None = None) -> float:
-    """The fit bound's cap on monitored efficiency: ``fit_rate``'s share plus ``left_out``; ``inf`` where it's void."""
+    """The fit bound's cap on registered efficiency: ``fit_rate``'s share plus ``left_out``; ``inf`` where it's void."""
     rate, periods = fit_rate(p, wipe_bits, N, w_e, b)
     return share(p, rate) + left_out(p, periods)
 
@@ -198,7 +198,7 @@ def residual_with_lag(p: dict) -> float:
 
 
 def slowdown(p: dict, mu: float, declared: float, cheat: float = 0.0) -> float:
-    """D under a memory cap ``mu``, with nothing unmonitored: ``multiple_bound`` in Lean's form at
+    """D under a memory cap ``mu``, with nothing unregistered: ``multiple_bound`` in Lean's form at
     x = min(MFU_0 r + declared, m mu) + cheat, the residual training at MFU_0 (reference efficiency) and the rest counted
     multiplications."""
     x = min(p["mfu"] * residual_with_lag(p) + declared, p["m"] * mu) + cheat

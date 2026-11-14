@@ -28,7 +28,7 @@ import tiers as T  # noqa: E402
 #: a plausible (low, high) for every parameter and where it comes from; the central value is the default. "guess" marks
 #: a bound no parameter file, calibration or measurement gives
 RANGES = {
-    "unmonitored": (0.0, 0.1, "guess: none, to a tenth of the fleet's compute hidden"),
+    "unregistered": (0.0, 0.1, "guess: none, to a tenth of the fleet's compute hidden"),
     "residual": (0.01, 1.0, "best plausible design 0.01 (eight conditions); floor credit 0.323 at the locked clock, 0.213 attested (C7 dossier, its eps left to eps_w); nothing credited today 1"),
     "eps_w": (6e-4, 0.00917, "best plausible design 0.06% (C7 dossier); CircuitCredit's closed 0.744%, 0.681-0.917% over r = 1-4"),
     "host_share": (0.0, 0.14, "without the hosts assumption (hosts carry no compute sets it to 0), against the card table's FP8 peak: two EPYC 9015s without matrix units 0.22%; Xeon 6776P INT8 AMX 12.6%, 14.0% at fused maximum clocks"),
@@ -67,7 +67,7 @@ RANGES = {
     "K": (2.2e6, 9.1e7, "calibrations kimi-k2-1m-coded, kimi-k2-1m-raw, kimi-k2-11mb-raw"),
     "Gamma": (6.4e15, 2.9e17, "low a guess (100k-token sessions); kimi-k2-1m-raw; kimi-k2-11mb-raw"),
     "d": (1.0, 17.0, "a run that trains its embedding; ReferenceThreaded gives 10 for Kimi K2 at S = 2e7 under the "
-                     "open conjecture ReferenceLayered; a Dot16 step's 17 legs, no lookup read"),
+                     "open conjecture ReferenceLayered; a Dot16 step's 17 terms, no lookup read"),
     "e": (12288.0, 1.65e5, "low a guess; Kimi K2 4e4; dense-405b"),
     "kappa": (0.5, 0.667, "kappa.py: adversarial 0.5 (DeepSeek-V3's or Qwen3's shape with a fifth of its tokens at "
                           "32k, 0.49); Kimi K2's schedule 0.60; 4 of 6, the ceiling with no attention"),
@@ -108,7 +108,7 @@ KEYED = {"d": T.REFERENCE_THREADED[0]}
 #: samples it is worth more, and ``evaluate`` stops the cheating share at 1, which the closed form chi does not
 BATCHED = {"overhead": 1.6e8}
 #: points where a closed form is checked against evaluate(): the probe, its overrides, the tier, the term (eta against
-#: the bound, mu against the monitored part when memory caps it, nu against the declared part, chi against the cheating
+#: the bound, mu against the registered part when memory caps it, nu against the declared part, chi against the cheating
 #: share) and the regime; a regime that starts with "breaks" is one the closed form doesn't cover
 CHECKS = [
     ("defaults", {}, "T1", "eta", "the residual plus the thread bound"),
@@ -116,7 +116,7 @@ CHECKS = [
      "the floor credit's residual is above the cap"),
     ("design", DESIGN, "T4", "eta", "memory caps nothing: mu > r"),
     ("host CPUs bounded, batched", DESIGN | BATCHED | {"host_share": 0.0}, "T5", "eta", "r = 1%, chi on top"),
-    ("unmonitored 0.1", DESIGN | {"unmonitored": 0.1}, "T4", "eta", "s of spent FLOP, the rest scaled by 1 - s"),
+    ("unregistered 0.1", DESIGN | {"unregistered": 0.1}, "T4", "eta", "s of spent FLOP, the rest scaled by 1 - s"),
     ("intake at line rate", {"residual": 0.9, "intake_x": 1.3e6}, "T4", "eta", "no count check: mu >> 1 caps nothing"),
     ("served, R_wipe 4 GB", SERVED_4GB | KEYED, "T3", "mu", "memory caps the residual"),
     ("served, R_wipe 4 GB", SERVED_4GB | KEYED, "T4", "mu", "hourly wipes inside a 3.6 h window"),
@@ -195,14 +195,14 @@ def bound(p: dict, tier: str) -> float:
     """s + (1 - s)(min(r + nu, mu) + chi), mu from T3 and chi at T5. The memory cap holds the declared computation too,
     so s + min(r, mu) + nu + chi exceeds it by at most nu."""
     mech = T.TIERS[tier]
-    s = p["unmonitored"]
+    s = p["unregistered"]
     cap = mu(p, mech["exhaust"]) if mech["wipes"] else math.inf
     return s + (1 - s) * (min(T.residual_share(p) + nu(p), cap) + (chi(p) if mech["sampled"] else 0.0))
 
 
 def terms(p: dict) -> dict:
     lam_in = intake(p)
-    return {"s": p["unmonitored"], "r": T.residual_share(p), "mu": mu(p), "mu_T4": mu(p, True), "nu": nu(p),
+    return {"s": p["unregistered"], "r": T.residual_share(p), "mu": mu(p), "mu_T4": mu(p, True), "nu": nu(p),
             "chi": chi(p), "R_wipe_gb": wipe_residual(p) / T.GB, "envelope_gb": envelope(p) / T.GB,
             "window_s": wipe_residual(p) / lam_in, "lambda_in": lam_in,
             "lambda_knee_bits": 2 * p["d"] * p["b_w"] * p["e"],

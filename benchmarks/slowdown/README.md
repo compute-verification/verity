@@ -83,7 +83,7 @@ uv run python benchmarks/slowdown/periods.py --bounds min-cut --scenario referen
   citation's status.
 - `benchmarks/census` (devices, the reference datacenter and the world) and `benchmarks/nci` (the remote regime's
   terms in `tiers.py`, its algorithms and their traits), which the tests hold the data to;
-  `security/Definitions/InferenceOnly/Remote.lean`, whose
+  `security/Definitions/Slowdown/Remote.lean`, whose
   `remoteSlowdown` `tests/test_envelopes.py` holds `theorem.multiple_bound` to; and the Lean files that define the
   min-cut bound's `alphaHE`, `shareF` and `workHEOn` and state its `HE`, `HEShared` and `HECharged`, found through
   the lock, which `tests/test_min_cut.py` holds `min_cut.py` to.
