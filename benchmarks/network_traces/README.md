@@ -344,17 +344,18 @@ The run of record takes the network chain end to end on the gate's machines:
    reads.
 5. The verdict is the per-execution-phase acceptance that the certification period's leak bound reads.
 
-**How it runs.** The gate runs on the auditor's machine: `sudo vy-challenger-gate certifier-rehearse --peer HOST --port
-PORT --minutes 30 --traffic varied --requests 100 --tokens 64 --seed 1 --eos-ids 128001 --height 20` (or
-`warden-rehearse --scan`, the network certifier as a relay), then `status` and `fetch`. A prompt range shorter than the
-chat turn's tail (`CHAT_TAIL`, as the toy's 8-byte prompts are) makes every chat turn one prompt, so such an endpoint
-takes its prompts on stdin and a wider margin: `demo_stub.py prompts --count 100 | sudo vy-challenger-gate
-certifier-rehearse … --traffic varied --requests 100 --rate 0.2 --tokens 24 --eos-ids 0 --prompts --margin 4`
-(`--prompts`: request j sends the (j mod n)-th; `--margin`: the plan's over the probes, 1 to 8, 2 otherwise). The
-fetched tarballs go to one job, `chain_record.sh`, with the endpoint's records (`benchmarks/network_e2e/chain.py`'s
-`ENDPOINT`: `advice_trace.jsonl`, `requests.jsonl`, `windows.jsonl` and `serve.json` from the endpoint's serve
-directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's binding and the two provers, and writes
-`out/report/report.json` and `report.md`:
+**How it runs.** The gate runs on the auditor's machine: `sudo vy-challenger-gate warden-rehearse --scan --peer HOST
+--port PORT --minutes 30` (the network certifier as a relay), then `status` and `fetch`. The proxy's rehearsal is no
+verb of the gate's: `certifier_serve.py rehearse --upstream URL --traffic varied --requests 100 --tokens 64 --seed 1
+--eos-ids 128001 --height 20` runs it off the gate's machine, and `demo_chain.sh` keeps its run as the gate keeps one. A
+prompt range shorter than the chat turn's tail (`CHAT_TAIL`, as the toy's 8-byte prompts are) makes every chat turn one
+prompt, so such an endpoint takes its prompts from a file and a wider margin: `demo_stub.py prompts --count 100 >
+PROMPTS`, then `certifier_serve.py rehearse … --traffic varied --requests 100 --rate 0.2 --tokens 24 --eos-ids 0
+--prompts-file PROMPTS --margin 4` (`--prompts-file`: request j sends the (j mod n)-th; `--margin`: the plan's over the
+probes, 1 to 8, 2 otherwise). The fetched tarballs go to one job, `chain_record.sh`, with the endpoint's records
+(`benchmarks/network_e2e/chain.py`'s `ENDPOINT`: `advice_trace.jsonl`, `requests.jsonl`, `windows.jsonl` and
+`serve.json` from the endpoint's serve directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's
+binding and the two provers, and writes `out/report/report.json` and `report.md`:
 
 | step | what it checks | its ε at δ | computed in the clear |
 |---|---|---|---|
@@ -460,11 +461,27 @@ passes the scan), so `NetworkCheck.Period` refuses the execution phase by name (
 whole body by its closure digest (`entryPins`, `io_shell.SlotEntry_v1` at its circuit-check rows, and
 `SelectEntry_v1`'s), so the block round's `prog<j>`, the o0 of scan_zk's `SlotEntry_v1` stand-in's lane-j member,
 whose entries, read bit included, are the prover's, is refused there (scan_period.py). A slot's Program reads the
-requests from its own registered `SCAN_STATE`, and the check refuses, last, by name, an execution phase whose scan's
-state isn't a wired audit's `SCAN_STATE` by root and domain (`stateTied`). scan_zk's state tree is the window state
-(`ingress_scan.window_state`: leaf 0 the empty state, leaf t S_{t−1}), each leaf but the first the o1 of the proof block
-that computes it and the sin of the next, both registered reads, so a state tree that skips or alters a transition is
-refused at that proof block's o1; the block round's registration names it as `scan/state`.
+requests from its own registered `SCAN_STATE`, and the check refuses, next, by name, an execution phase whose scan's
+state isn't a wired audit's `SCAN_STATE` by root and domain (`stateTied`). `EVERY` units read each slot entry, which
+one-stage's registration check lets through only with each lane's `prog<j>` named tied (`lane_kinds`), and its answer
+then names them (`rests_on_period_check`); the check refuses, after that, by name, an execution phase whose scan's
+answer names under that key anything that is no lane's `prog<j>` (`tiedInputWired`), since `wired` ties no other
+Input. scan_zk's state tree is the window state (`ingress_scan.window_state`: leaf 0 the empty state, leaf t S_{t−1}),
+each leaf but the first the o1 of the proof block that computes it and the sin of the next, both registered reads, so
+a state tree that skips or alters a transition is refused at that proof block's o1; the block round's registration
+names it as `scan/state`.
+A scan proof block's public word, o0, is its ok bit. scan_zk commits a member's o0 rows under the verifier's public
+salts (`ok_salts`, `scan_ok.salt`: row i's from its index alone), so the o0 root of a member whose every proof block is
+ok is a constant of its template and count, and one execution phase's members are a function of the schedule's T
+(`scan_ok.members`: `first`, `ingress-0`, `last` and `egress-0`). The check computes those constants once a period
+(`scan_ok.constants`, Lean `ScanOk.consts`) and refuses, last, by name, an execution phase whose scan's registration
+names a member's `<member>/o0` at another root, leaf count or domain, names none for it, or names another port ending
+`/o0` (`held`): comparisons alone, no hash an execution phase. An ok bit is then the verifier's own computation from
+public parameters, never a row the prover's registered file states. Two members of one template and one count (at
+T = 3, `ingress-0` and `last`) are at one domain and root, and each is held to it. The table is one execution phase a
+registration's (`--group 1`, the only group the rows form reads). A schedule of fewer than two ticks has no constants
+(its one bucket would be the scan's first and its last, a member no scan is staged with), and the check refuses
+every execution phase under one.
 Tied (`NetworkCheck.Period`'s `progTied`, scan_zk's block round), the entries are a compute audit's outputs
 and the scan's own free term is 0: the bits are that audit's free inputs (the stand-in's `x`), which the rows form's
 K charges to the execution phase's term (`tiedAudits`). The egress tie moves the free term from the scan's `prog` to the

@@ -80,8 +80,8 @@ theorem scanFits : ScanFits := by
 /-- **An accepted scan's statements are in the sampled audit's scope.** -/
 theorem scanScopeAcc : ScanScopeAcc := scanScopeAcc_of_scanFits scanFits
 
-/-- One slot of one lane and a window of one step: the schedule of the nontrivial instances. -/
-def oneSlot : NetworkCheck.Period.Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, none⟩
+/-- One slot of one lane and two ticks (T = 2): the schedule of the nontrivial instances. -/
+def oneSlot : NetworkCheck.Period.Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 2, none⟩
 
 /-- A circuit that returns nothing fits no layout over a horizon of at least one step: step 0's egress presence gate
 isn't returned. -/
@@ -156,11 +156,11 @@ theorem scanScopeAcc_nontrivial_of {Coin : Type} [Fintype Coin] [Nonempty Coin] 
     {A : Claims.SamplingGeneric.Arg Coin} {D : Claims.SamplingGeneric.Compiled Coin A} {x : Claims.Msg}
     {st : Claims.Sampling.AuditStatement} (hx : D.parse x = some st)
     (hP : Flock.Program.decode ⟨st.desc.toArray⟩ = .ok default) (hC : st.prog = ⟨[], []⟩) :
-    ¬ NetTiming.ScopeAcc D (layOf oneSlot) (fun _ => 1) x := by
+    ¬ NetTiming.ScopeAcc D (layOf oneSlot) (fun _ => oneSlot.window) x := by
   rintro ⟨-, st', hx', hF⟩
   obtain rfl := Option.some.inj (hx.symm.trans hx')
   unfold layOf at hF
   rw [hP, hC] at hF
-  exact not_fits_of_no_outs _ [] Nat.zero_lt_one 0 ⟨0, by decide⟩ hF
+  exact not_fits_of_no_outs _ [] (show 0 < oneSlot.window by decide) 0 ⟨0, by decide⟩ hF
 
 end Properties.NetworkScan

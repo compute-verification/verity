@@ -1,7 +1,7 @@
 """The compact finish on the end-to-end report: on a compact run the I/O tie holds each response's records to
 its sampled ids (`negatives.tie_run`'s ``finish``, `active.compact_finish_violations`), and the report requires it of
-the honest run (`chain.TIE_REQUIRED`). The runs are the gate's own compact rehearsal (network_traces' `gate_compact`:
-`certifier-rehearse --traffic varied --compact 8`, honest and token, against one endpoint), tied to the endpoint's
+the honest run (`chain.TIE_REQUIRED`). The runs are a compact rehearsal's (network_traces' `gate_compact`:
+`rehearse --traffic varied --compact 8`, honest and token, against one endpoint), tied to the endpoint's
 `requests.jsonl` with `io_tie`'s parts all holding (`HOLDS`, a stand-in), so the finish alone decides.
 """
 from __future__ import annotations
