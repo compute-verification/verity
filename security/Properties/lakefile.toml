@@ -83,6 +83,10 @@ name = "core_onsite"
 path = "../../verity/protocols/compose/verifier/onsite"
 
 [[require]]
+name = "core_registration"
+path = "../../verity/protocols/accounting/registration/verifier/lean"
+
+[[require]]
 name = "flock_verifier"
 path = "../../verity/protocols/proofs/flock/verifier"
 

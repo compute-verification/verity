@@ -40,7 +40,8 @@ the prover (`verity/protocols/accounting/poub/prover/p2_party_prover.py`'s `Prov
 whole as its body (`Lines`), so the Lean reads every line the prover sent as it sent it, and the verifier takes the line
 it waits for whatever its key, one it can't name as `Malformed`. `session` and the prover's `prove` step each side over
 the channel with PoUS's loop (`drive`, `challenger_session.run`), the verifier's side handed a failed write as its
-channel failing (`broken`).
+channel failing (`broken`). The runtime starts the verifier from a configuration and its deploy bindings (`start`,
+`STARTS`): its closer's key is refused unless the configuration pins it (`pinned_signer`).
 
 The verifier is the Lean, since the trusted base is the compiled Lean verifier, which parses bytes of
 untrusted provenance, and Python is never trusted: the process `remote-audit-verifier` (`p2_lean.py`,
@@ -68,6 +69,7 @@ digest too, the chain its signed close signs, a line of `private/case-digests.tx
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -80,9 +82,9 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from verity.channel import Body, Message, Schema
+from verity.channel import Body, Message, Refused, Schema
 from verity.party import Finish, Identity, Received, Send, Timer
-from verity.protocol import Channel, Manifest, ProtocolDef, Role
+from verity.protocol import Channel, Manifest, ProtocolDef, Role, Start
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
@@ -710,7 +712,8 @@ def drive(party: Any, params: Mapping[str, Any], identity: Identity, f_in: Binar
 class Verifier:
     """The verifier and its challenger: one session, decided by the Lean beside the books (`Twin`), on its clock and
     coins. Its capabilities are `lean` (holding `registration` and `plan`: `hold`), the auditor's session parameters
-    `auditor`, its `host`'s name, the memory challenger signing the close (`closer`, or None) and a progress `log`.
+    `auditor`, its `host`'s name, the memory challenger signing the close (`closer`, or None), where its case is kept
+    (`keep`, or None) and a progress `log`.
     It claims the closer's session id, draws the session's coins, and reads the prover's request; then each pass is
     asked for in order under the plan, each window's openings sampled once its roots are final and verified, and the
     session ends with its coins disclosed, its case and the answer sent, finishing with `{"answer", "case"}`. Every
@@ -722,6 +725,7 @@ class Verifier:
         self.lean, self.registration, self.closer = c["lean"], c["registration"], c.get("closer")
         self.plan = Plan.whole(self.registration.blocks) if c.get("plan") is None else c["plan"]
         self.auditor, self.host = c.get("auditor", SESSION), c["host"]
+        self.keep: Callable[[dict[str, Any]], None] | None = c.get("keep")
         self.log: Callable[[str], None] = c.get("log") or (lambda _m: None)
         self.twin: Twin | None = None
         self.coins = b""
@@ -887,6 +891,8 @@ class Verifier:
             close = p2_case.close_of(self.closer.signer, self.closer.session, head, twin.log)
             case = p2_case.case_of(held, twin.request, twin.not_before_ns, twin.log, session=self.closer.session,
                                    trusted=[self.closer.signer.public_key], close=close)
+            if self.keep is not None:
+                self.keep(case)
         end = {"commitment": commitment.to_json(), "openings": [o.to_json() for o in openings]}
         sent = [Send(PROVER, Message("End", body=line_of("end", end)))]
         if case is not None:
@@ -907,11 +913,9 @@ def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, c
     `closer`'s session id is claimed before the request is read, and the session refused when the claim is. A line out
     of form or a closed channel rejects the session (its answer says why)."""
     capabilities = {"lean": lean, "registration": registration, "plan": plan, "auditor": auditor, "closer": closer,
-                    "log": log, "host": host or socket.gethostname()}
+                    "keep": keep, "log": log, "host": host or socket.gethostname()}
     done = drive(Verifier(), {}, Identity(VERIFIER, capabilities=capabilities), f_in, f_out, peer=PROVER, clock=clock,
                  coins=lambda _n: coins, wait=sleep_until)
-    if done.outcome["case"] is not None and keep is not None:
-        keep(done.outcome["case"])
     return done.outcome["answer"]
 
 
@@ -1029,14 +1033,53 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-PROTOCOLS = {ID: ProtocolDef(MANIFEST, {VERIFIER: Verifier})}
+GOAL = "memory-accounting/onsite-memory-verdicts"
+CLOSER_PIN = ("memory-challenger", "pous")
+"""The configuration's `[[pin]]` (party, protocol) of the key that signs a session's close: the memory challenger's,
+the key it signs PoUS's sessions with."""
 
 
-__all__ = ["Books", "CASE_DIGESTS", "COIN_BYTES", "Closer", "DELTA", "EPS_TERMS", "GAMMA_TERMS", "ID", "LINES",
-           "Lines", "MANIFEST", "PROTOCOL", "PROTOCOLS", "PROVER", "SESSION", "Twin", "VERIFIER", "VERSION", "Verifier",
-           "answer", "broken", "case_digest", "core_answer", "drive", "held_json", "hold", "line_of", "main",
-           "message", "opening_json", "opening_of", "params_of", "plan_of", "pous_record", "recv", "registration_json",
-           "registration_of", "registration_of_setup", "request_of", "send", "session", "verdict_json"]
+def pinned_signer(configuration: Mapping[str, Any], directory: Path) -> mc.LmsSigner:
+    """The memory challenger's key in its device's `directory` (`pous.verifier.period.challenger`), refused unless the
+    SHA-512 of its public key is the configuration's pin `CLOSER_PIN`. A directory holding no key is refused, never
+    given a new one, which no pin could name."""
+    pin = next((p["key-sha512"] for p in configuration.get("pin", ()) if (p["party"], p["protocol"]) == CLOSER_PIN),
+               None)
+    if pin is None:
+        raise Refused("unpinned-key", f"the configuration pins no key for {CLOSER_PIN}, which signs each close")
+    if not (directory / "seed").is_file():
+        raise Refused("no-key", f"{directory} holds no memory challenger's key; its setup makes one")
+    from verity.protocols.accounting.pous.verifier import period
+
+    signer = period.challenger(directory)
+    if hashlib.sha512(signer.public_key).hexdigest() != pin:
+        raise Refused("unpinned-key", f"the key in {directory} is not the one the configuration pins for {CLOSER_PIN}")
+    return signer
+
+
+def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None) -> Start:
+    """The verifier's start on the auditor's host, from the configuration, its deploy bindings (`bound`, its
+    `[bandwidth-verifier.bandwidth]`: `address`, and `challenger`, the memory challenger's device directory on this
+    host) and its own `state` directory: the closer's key, pinned (`pinned_signer`); its case digests under `state`'s
+    `private/` (`CASE_DIGESTS`, `_keep`, the `keep` capability); the session parameters `SESSION`; and the runtime's
+    own clock (`Start.clock` None), `CLOCK_MONOTONIC` in ns, which `Twin`'s windows are timed on. It raises `NotImplementedError(GOAL)`
+    past the key: the registration (PoUS setup's record on that device, `pous_record`, for the setup's session id), the
+    session id the auditor gives the memory challenger, and the Lean process holding the registration (`hold`) have no
+    source the runtime gives a party."""
+    pinned_signer(configuration, Path(bound["challenger"]))
+    raise NotImplementedError(GOAL)
+
+
+STARTS = {VERIFIER: start}
+PROTOCOLS = {ID: ProtocolDef(MANIFEST, {VERIFIER: Verifier}, STARTS)}
+
+
+__all__ = ["Books", "CASE_DIGESTS", "CLOSER_PIN", "COIN_BYTES", "Closer", "DELTA", "EPS_TERMS", "GAMMA_TERMS", "GOAL",
+           "ID", "LINES", "Lines", "MANIFEST", "PROTOCOL", "PROTOCOLS", "PROVER", "SESSION", "STARTS", "Twin",
+           "VERIFIER", "VERSION", "Verifier", "answer", "broken", "case_digest", "core_answer", "drive", "held_json",
+           "hold", "line_of", "main", "message", "opening_json", "opening_of", "params_of", "pinned_signer", "plan_of",
+           "pous_record", "recv", "registration_json", "registration_of", "registration_of_setup", "request_of", "send",
+           "session", "start", "verdict_json"]
 
 if __name__ == "__main__":
     sys.exit(main())
