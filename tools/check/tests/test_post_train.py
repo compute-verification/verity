@@ -298,8 +298,8 @@ def test_the_neutrality_tier_names_each_fast_row_that_moved_after_the_rebuilds_r
 
 
 def test_a_moved_fast_row_fails_its_landing_and_rings_vllm_at_once_and_a_neutral_tier_passes(tmp_path, monkeypatch):
-    """A landing that moves a fast row of record's Program without re-pinning it is labelled with the row, and the owner of
-    the rows of record is rung in the merge thread as ci with the run, not left to the daily sweep; a tier whose every row
+    """A landing that moves a fast workload of record's Program without re-pinning it is labelled with the row, and the owner of
+    the workloads of record is rung in the merge thread as ci with the run, not left to the daily sweep; a tier whose every row
     reproduced its pins passes and rings no one."""
     calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806", r39="pass", rows={LLAMA: False, QWEN: True})
     assert PT.main([]) == 1

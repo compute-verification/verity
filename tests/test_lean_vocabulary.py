@@ -751,7 +751,7 @@ KNOWN: dict[str, str] = {
     "adapters/vllm/verity_vllm/commit/memory_map.py::Layout": "homonym, the engine's KV pool map: rename (circuits)",
     "adapters/vllm/verity_vllm/pipeline/advice_code/codec.py::Record":
         "duplicate of `NetworkCheck.Check.Certificate`: becomes its certified record (vllm)",
-    "adapters/vllm/verity_vllm/program/frontend/registration.py::Registration":
+    "adapters/torch/verity_torch/frontend/registration.py::Registration":
         "homonym, the builder's allocation of registered inputs: rename (circuits)",
     "verity/protocols/accounting/pouw/prover/serving/credit_gate.py::Trace":
         "homonym, one linear call's recorded ops and their writers: rename (vllm)",
@@ -957,10 +957,10 @@ KNOWN: dict[str, str] = {
         "homonym, one inner proof through the ZK server: rename (proofs)",
     "verity/protocols/proofs/flock/prover/python/verity_flock/rec_links.py::Link":
         "homonym, a recursion link from a reader to a port, `Flock.RecLinks.Link`'s pair: rename (proofs)",
-    "verity/commitments/windows/interface.py::Circuit":
+    "verity/commitments/periods/interface.py::Circuit":
         "duplicate of `Flock.Circuit`: becomes a reading of it in proof blocks (proofs)",
-    "verity/commitments/windows/interface.py::Opening": "homonym, a template's open read of a table row: rename (proofs)",
-    "verity/commitments/windows/interface.py::Window":
+    "verity/commitments/periods/interface.py::Opening": "homonym, a template's open read of a table row: rename (proofs)",
+    "verity/commitments/periods/interface.py::Window":
         "duplicate of the execution block (no canonical yet): becomes the builder's output for it (proofs)",
     # verity/
     "tools/config/verity_config/verity_settings.py::Registry": "homonym, one distribution's settings from the environment: rename (proofs)",

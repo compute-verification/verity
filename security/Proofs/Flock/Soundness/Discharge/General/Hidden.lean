@@ -5,7 +5,7 @@ public import Proofs.Flock.Soundness.Discharge.Composed.Defs
 public import Proofs.Flock.Soundness.Discharge.HiddenDec.Assemble
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.BindInst
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundSampleOk
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -74,7 +74,7 @@ open scoped ENNReal
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Flock.Circuit}
   (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (hgen : Layout.scopeGenH c = true)
-  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
   {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub) (hU : Built c.unit) {Reg : Type}
 
 /-- **`rs` at the hidden tables, at the general form**: `rsAtHI` with its circuit conditions from `scopeGenH`. -/
@@ -100,7 +100,7 @@ theorem flock_headline_exec_hidden_gen (hT : TagsOkHL I)
     (hr : ∀ S R j, rateB (planAtH (Reg := Reg) dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (K : ℕ) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (dg : ByteArray → ByteArray) (N : ℕ)
     (hwr : RecordsLive I dj wr)
-    (hdraw : ∀ ω, DrawOkH I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
+    (hdraw : ∀ ω, SampleOkH I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     {qF qS : ℝ} :
     let σ := simAuditOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH dj x₀) I wr (opnAtH (tablesAtH dj x₀) I dj) dg
@@ -148,14 +148,14 @@ variable {mPts n : ℕ} {Reg : Type}
 /-- **`rs` at the hidden-output `--zk` tables, at the general form**: `rsZHI` with its circuit conditions from
 `scopeGenH`. -/
 noncomputable abbrev rsZG {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (y₀ : SampleSetupZKH I mPts S₀ (dj S₀)) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hgen : Layout.scopeGenH c = true) {pub : Public}
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hU : Built c.unit) :=
   rsZHI dj y₀ ht hc (rowsFit_of_scopeGenH ((zkTags_typed I).trans ht) hc hgen) hpub hU
     (Layout.scopeGenH_spec hU hgen).1 (Layout.scopeGenH_spec hU hgen).2 (Reg := Reg)
 
 theorem rsZG_computes {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (y₀ : SampleSetupZKH I mPts S₀ (dj S₀)) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hgen : Layout.scopeGenH c = true) {pub : Public}
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hU : Built c.unit) :
     (rsZG (Reg := Reg) dj y₀ ht hc hgen hpub hU).Computes :=
@@ -168,7 +168,7 @@ template instance's program `instProg c n`: for any live prover `τ`,
 `scopeGenH`; `RunsZC` at the sampling design's samples is `runsZC_liveHI`'s. -/
 theorem zk_session_soundH_gen
     (I : Inputs) (ht : I.tags.typed = false)
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the session's circuit and public file
@@ -181,7 +181,7 @@ theorem zk_session_soundH_gen
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the challenger's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, DrawOkZKH I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
+    (hDraw : ∀ ω, SampleOkZKH I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
     -- the verify command's tags and the challenger's record of the live session
     (hTags : TagsOkH I) (hRec : RecordsLiveZK I dj wr)
     -- the count curve's parameters
@@ -237,7 +237,7 @@ theorem zk_session_soundH_custody_gen
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the record, at the link points of the sampling design's samples
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZKH I (mPtsOf c.g (∑ s, ks s)) S₀ (dj S₀))
+    (y₀ : SampleSetupZKH I (mPtsOf c.g (∑ s, ks s)) S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut (mPtsOf c.g (∑ s, ks s)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the verify command's tags, and live-verifier: the record and its sample file are the live session's
@@ -251,7 +251,7 @@ theorem zk_session_soundH_custody_gen
     {qF qS : ℝ} :
     let σ := simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
       (runsZC_liveHI I ht hc dj y₀ wr _ tablesAtZKH_liveI hTags hCust.1
-        (fun ω => drawOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ
+        (fun ω => sampleOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ
     -- cr/sha-512 for the knowledge finders of its simulation
     (∀ ω j, TableCRZ execArith hs512 (planAtZKH dj y₀
         ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
@@ -270,13 +270,13 @@ theorem zk_session_soundH_custody_gen
           ((rsZG dj y₀ ht hc hgen hpub hU).bindingZ (rsZG_computes dj y₀ ht hc hgen hpub hU))
           k Rw M ρ t' (reg σ) (cont σ) :=
   zk_session_soundH_gen I ht dj y₀ wr dg N hc hU hpub hgen σs ks hks St hS Kd pop Lb src hA3
-    (fun ω => drawOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω) hTags hCust.1 hk hRw hM hρ hr ht' K₀ τ
+    (fun ω => sampleOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω) hTags hCust.1 hk hRw hM hρ hr ht' K₀ τ
 
 /-! At `J` tables, `ZkHidden.zk_session_soundHJI` and `ZkReg.checked_of_acceptsHJI` take the conditions `scopeGenH`
 gives; these are their rows with those conditions read off it. -/
 
 variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-  (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
+  (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
   (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hgen : Layout.scopeGenH c = true) {pub : Public}
   (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hU : Built c.unit)
 

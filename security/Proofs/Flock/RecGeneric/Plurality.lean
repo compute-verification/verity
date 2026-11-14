@@ -239,7 +239,7 @@ noncomputable def innerFO (decC : Msg → Coin) (ω : Ω) (d : (Fin (K.V.k x) �
 extend to. -/
 noncomputable def keepAO (ω : Ω) (ρ : Fin (I.V.k (K.xI x)) → Coin) (a : (Fin (K.V.k x) → Coin) × K.EO.C x) :
     Bool :=
-  K.keepDO I S H P x ω (extendDraw (ρ, a))
+  K.keepDO I S H P x ω (extendSample (ρ, a))
 
 open Classical in
 /-- The served run at a sample, aborted where `E_O` gives witnesses outside `R_O`. -/
@@ -556,12 +556,12 @@ omit [Nonempty Coin] in
 theorem abortRun_eqO (decC : Msg → Coin) (hn : I.V.k (K.xI x) ≤ K.V.k x) (ω : Ω)
     (t : (Fin (I.V.k (K.xI x)) → Coin) × (Fin (K.V.k x) → Coin) × K.EO.C x) :
     abortRun H (K.innerPO I S H P x decC) I.V (K.xI x) (K.keepAO I S H P x) ω t =
-      K.innerFO I S H P x decC ω (extendDraw t) := by
-  have hc : firstCoins (I.V.k (K.xI x)) (extendDraw t).1 = t.1 := firstCoins_extend hn t.1 t.2.1
+      K.innerFO I S H P x decC ω (extendSample t) := by
+  have hc : firstCoins (I.V.k (K.xI x)) (extendSample t).1 = t.1 := firstCoins_extend hn t.1 t.2.1
   unfold abortRun Comp.keepAO
-  show (if K.keepDO I S H P x ω (extendDraw t) = true then
+  show (if K.keepDO I S H P x ω (extendSample t) = true then
       run H (K.innerPO I S H P x decC) I.V (K.xI x) ω t.1 else abortTranscript) =
-    K.innerFO I S H P x decC ω (extendDraw t)
+    K.innerFO I S H P x decC ω (extendSample t)
   unfold Comp.innerFO
   rw [hc]
 
@@ -571,8 +571,8 @@ where the judged sample's inner view rejects**: where every outer extraction suc
 openings what `E^rep` there sees of them opened (`erep_rel₂`), which off the bad samples accept as `P_O`'s aborting runs
 and open alike (`servedO_rel`, through the mixed run `mixO`); the judged sample is `P_O`'s accepted run where its inner
 view accepts, and its statement parses (`Refuses`). A bad rerun costs `N_I` times one sample's
-(`Pr_exists_rerun_draws`), and `E^rep` at `P_O`'s aborting runs over their own coins is `Inner.PrBadAbort` at the inner
-protocol (`unifMap_extendDraw`, `InnerRounds`). -/
+(`Pr_exists_rerun_samples`), and `E^rep` at `P_O`'s aborting runs over their own coins is `Inner.PrBadAbort` at the inner
+protocol (`unifMap_extendSample`, `InnerRounds`). -/
 theorem PrBadGood_le (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c)
     (hRp : K.Replays H x) (hRef : K.Refuses H x) (hR : K.InnerRounds I.V x) [Fintype Ω] :
     PrBadGood H K.V (K.R I) K.RO K.EO (K.dec (S.IVStar I.V I.ans) H) (fun x => I.waits (K.xI x))
@@ -681,7 +681,7 @@ theorem PrBadGood_le (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ 
     have hΦ : UnifMap (fun s : Ω × ((Fin (I.V.k (K.xI x)) → Coin) × (Fin (K.V.k x) → Coin) × K.EO.C x) ×
         (Fin (I.waits (K.xI x)) → Fin (I.cap (K.xI x)) →
           (Fin (I.V.k (K.xI x)) → Coin) × (Fin (K.V.k x) → Coin) × K.EO.C x) =>
-        (s.1, (extendDraw s.2.1).1, (extendDraw s.2.1).2, fun i j => extendDraw (s.2.2 i j))) := by
+        (s.1, (extendSample s.2.1).1, (extendSample s.2.1).2, fun i j => extendSample (s.2.2 i j))) := by
       let e : Ω × ((Fin (K.V.k x) → Coin) × K.EO.C x) ×
           (Fin (I.waits (K.xI x)) → Fin (I.cap (K.xI x)) → (Fin (K.V.k x) → Coin) × K.EO.C x) ≃
           Ω × (Fin (K.V.k x) → Coin) × K.EO.C x ×
@@ -690,18 +690,18 @@ theorem PrBadGood_le (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ 
           invFun := fun s => (s.1, (s.2.1, s.2.2.1), s.2.2.2)
           left_inv := fun _ => rfl
           right_inv := fun _ => rfl }
-      exact (UnifMap.self.prod ((unifMap_extendDraw hn).prod
-        (UnifMap.pi (UnifMap.pi (unifMap_extendDraw hn) _) _))).comp (UnifMap.equiv e)
+      exact (UnifMap.self.prod ((unifMap_extendSample hn).prod
+        (UnifMap.pi (UnifMap.pi (unifMap_extendSample hn) _) _))).comp (UnifMap.equiv e)
     rw [← hΦ.Pr Yb]
     refine Pr_congr fun s => ?_
-    show (K.innerFO I S H P x decC s.1 (extendDraw s.2.1)).out = .acc ∧
+    show (K.innerFO I S H P x decC s.1 (extendSample s.2.1)).out = .acc ∧
       ¬ I.R.ext (K.xI x) ((erepProg (I.waits (K.xI x)) (I.k (K.xI x)) (I.cap (K.xI x)) I.opens
-        (I.assemble (K.xI x)) (I.check (K.xI x)) (extendDraw s.2.1) (fun i j => extendDraw (s.2.2 i j))).eval H
+        (I.assemble (K.xI x)) (I.check (K.xI x)) (extendSample s.2.1) (fun i j => extendSample (s.2.2 i j))).eval H
           (K.innerFO I S H P x decC s.1)).1 ↔ _
-    have hf : (fun d => K.innerFO I S H P x decC s.1 (extendDraw d)) =
+    have hf : (fun d => K.innerFO I S H P x decC s.1 (extendSample d)) =
         abortRun H (K.innerPO I S H P x decC) I.V (K.xI x) (K.keepAO I S H P x) s.1 :=
       funext fun d => (abortRun_eqO decC hn s.1 d).symm
-    rw [erepProg_eval_comp H (K.innerFO I S H P x decC s.1) extendDraw, hf, ← abortRun_eqO decC hn]
+    rw [erepProg_eval_comp H (K.innerFO I S H P x decC s.1) extendSample, hf, ← abortRun_eqO decC hn]
     rfl
   have hZ : Pr Zb ≤ K.NI I x *
       Pr (fun t : Ω × (Fin (K.V.k x) → Coin) × K.EO.C x => K.BadO I S H P x t.1 t.2) := by
@@ -716,7 +716,7 @@ theorem PrBadGood_le (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ 
         invFun := fun t => (t.1, t.2.1.1, t.2.1.2, t.2.2)
         left_inv := fun _ => rfl
         right_inv := fun _ => rfl }
-    have hpe := Pr_exists_rerun_draws H (K.servedO I S H P x) (I.waits (K.xI x)) (I.k (K.xI x))
+    have hpe := Pr_exists_rerun_samples H (K.servedO I S H P x) (I.waits (K.xI x)) (I.k (K.xI x))
       (I.cap (K.xI x)) I.opens (I.assemble (K.xI x)) (I.check (K.xI x)) (K.BadO I S H P x)
     rw [← Pr_equiv e] at hpe
     exact hpe

@@ -18,14 +18,14 @@ tables, each the one-table piece's counterpart:
 
 * `nTab`, `inputsJ`, `drawJ`, `partOf`, `partS`: the number of tables, table `j`'s inputs and sample, the table unit `u`
   is sampled into (its position among the sample's units over the parts' size), and the sampled proof blocks of table `j`.
-* `DrawSetupZJ`, `tableZJ`, `planZJ`, `tabZJ`: `DrawSetupZK`, `tableAtZK`, `planZAt` and `tabZAt` at table `j`'s inputs
-  and sample (where `verify --zk` sets none up, the refused table of `y₀`, a `DrawSetupZJ` at table 0's inputs).
+* `SampleSetupZJ`, `tableZJ`, `planZJ`, `tabZJ`: `SampleSetupZK`, `tableAtZK`, `planZAt` and `tabZAt` at table `j`'s inputs
+  and sample (where `verify --zk` sets none up, the refused table of `y₀`, a `SampleSetupZJ` at table 0's inputs).
 * `tableShJ`, `planShJ`, `sitesShJ`, `sitesZJ`, `layZJ`, `rsZJ`, `rsZJ_computes`: `ZkBind`'s public shadow, sites,
   layout and rows (`At.lean`) at `J` tables.
 * `liveOfZJ`, `DecodesOnZKJ`, `simZJ`, `zk_headline_exec_tables`: `Tables.liveOfJ`, `DecodesOnJ`, `simAuditJ` and
   `execRefines_tables` at the compiled `--zk` tables.
 * `RunsOnZCJ`, `decodesOnZKJ_of_runsOnZCJ`: `RunsOnZC` and `decodesOnZK_of_runsOnZC` table by table.
-* `TagsOkZJ`, `RecordsLiveZKJ`, `DrawOkZKJ`: `TagsOk` without `count ≤ 1`, and `RecordsLiveZK`, `DrawOkZK` at `J` tables.
+* `TagsOkZJ`, `RecordsLiveZKJ`, `SampleOkZKJ`: `TagsOk` without `count ≤ 1`, and `RecordsLiveZK`, `SampleOkZK` at `J` tables.
 * `runsZCJ_live`: `runsZC_live` at `J` tables.
 -/
 
@@ -61,9 +61,9 @@ def inputsJ (I : Inputs) (j : ℕ) : Inputs := { zkInputs I with tags := tagsAt 
 def drawJ (I : Inputs) (d : Lean.Json) (j : ℕ) : Lean.Json := if I.count ≤ 1 then d else partJson d I.count j
 
 /-- **The table unit `u` is sampled into** at the session's sample `d`: its position among `d`'s units over the parts' size
-(`partDraw`'s equal consecutive parts), within the tables; table 0 at one table. -/
+(`partSample`'s equal consecutive parts), within the tables; table 0 at one table. -/
 def partOf (I : Inputs) (d : Lean.Json) (u : ℕ) : Fin (nTab I) :=
-  ⟨min (match Draw.UnitDraw.ofJson d with
+  ⟨min (match Draw.UnitSample.ofJson d with
       | .ok D => D.units.toList.idxOf u / (D.units.size / I.count)
       | .error _ => 0) (nTab I - 1), by have := nTab_pos I; omega⟩
 
@@ -75,10 +75,10 @@ theorem mem_partS {I : Inputs} {d : Lean.Json} {S : Finset (Fin n)} {u : Fin n} 
     u ∈ partS I d S (partOf I d u.val) :=
   Finset.mem_filter.2 ⟨h, rfl⟩
 
-/-- **A table `verify --zk` sets up**, on table `j`'s inputs `I'` (`inputsJ I j`): `DrawSetupZK`'s fields at a
-`DrawSetup` of `I'`. -/
-structure DrawSetupZJ (I' : Inputs) (mPts : ℕ) (S : Finset (Fin n)) (d : Lean.Json) where
-  x : DrawSetup I' mPts S d
+/-- **A table `verify --zk` sets up**, on table `j`'s inputs `I'` (`inputsJ I j`): `SampleSetupZK`'s fields at a
+`SampleSetup` of `I'`. -/
+structure SampleSetupZJ (I' : Inputs) (mPts : ℕ) (S : Finset (Fin n)) (d : Lean.Json) where
+  x : SampleSetup I' mPts S d
   sch : Flock.Schedule
   tPad : ℕ
   hz : Zk.schedule x.st.wideLeaf x.st.m = .ok (sch, tPad)
@@ -93,9 +93,9 @@ structure DrawSetupZJ (I' : Inputs) (mPts : ℕ) (S : Finset (Fin n)) (d : Lean.
     prCoin (fun w => innerPos _ (lt_of_lt_of_le (by simp [Zk.K_PAD]) hL) w ∈ D) ≤
       (D.card : ℝ≥0∞) / innerN (layOf x.st sch)
 
-namespace DrawSetupZJ
+namespace SampleSetupZJ
 
-variable {I' : Inputs} {S : Finset (Fin n)} {d : Lean.Json} (y : DrawSetupZJ I' mPts S d)
+variable {I' : Inputs} {S : Finset (Fin n)} {d : Lean.Json} (y : SampleSetupZJ I' mPts S d)
 
 theorem innerN_pos : 0 < innerN (layOf y.x.st y.sch) := lt_of_lt_of_le (by simp [Zk.K_PAD]) y.hL
 
@@ -111,7 +111,7 @@ def innerDom : Fin (innerN (layOf y.x.st y.sch)) ↪ 𝔽 :=
     simp only [Nat.toUInt64_eq, UInt64.toNat_ofNat', Nat.mod_eq_of_lt (hlt a), Nat.mod_eq_of_lt (hlt b)] at this
     exact Fin.ext (by omega)⟩
 
-/-- **The `--zk` table of a table `verify --zk` sets up**, at statement regions `regs` (`DrawSetupZK.tabAt`). -/
+/-- **The `--zk` table of a table `verify --zk` sets up**, at statement regions `regs` (`SampleSetupZK.tabAt`). -/
 noncomputable def tabAt (regs : List (Model.Region y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)))
     (hregs : ∀ R ∈ regs, R.free.Nodup ∧ R.free.length ≤ PT_LOCAL) : TabZK 𝔽 mPts where
   S := stmtOf y.x.st y.x.wf.1 regs
@@ -149,21 +149,21 @@ noncomputable def table : TabZK 𝔽 mPts := y.tabAt (regionsOf y.x.st) (stmtOf_
 
 /-- A refused table's `--zk` table: the statement with `contra`'s regions, which no witness satisfies. -/
 noncomputable def refused : TabZK 𝔽 mPts :=
-  y.tabAt (regionsOf y.x.st ++ DrawSetup.contra y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)) y.x.refused_wf
+  y.tabAt (regionsOf y.x.st ++ SampleSetup.contra y.x.st.c.kLog (y.x.st.m - y.x.st.c.kLog)) y.x.refused_wf
 
-end DrawSetupZJ
+end SampleSetupZJ
 
 section Shadow
 
 variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-  (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
+  (y₀ : SampleSetupZJ (inputsJ I 0) mPts S₀ d₀)
 
 open Classical in
 /-- **Table `j` at sample `S`** (`tableAtZK` at table `j`): the table `verify --zk` sets up at table `j`'s inputs and sample
 when it sets one up, and otherwise the reference setup `y₀`'s refused table (a setup at table 0's inputs, which every
-session `verify --zk` accepts at a sample `DrawOkZKJ` admits has: `setupZJ_of_acceptsZK`). -/
+session `verify --zk` accepts at a sample `SampleOkZKJ` admits has: `setupZJ_of_acceptsZK`). -/
 noncomputable def tableZJ (S : Finset (Fin n)) (j : Fin (nTab I)) : TabZK 𝔽 mPts :=
-  if h : Nonempty (DrawSetupZJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
+  if h : Nonempty (SampleSetupZJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
     (Classical.choice h).table
   else y₀.refused
 
@@ -191,9 +191,9 @@ theorem typedJ (j : ℕ) : (inputsJ I j).tags.typed = false := (Exec.tagsAt_type
 
 include ht in
 open Classical in
-/-- **The public table at table `j`'s sample** (`tableSh`): its `DrawSetupZJ`'s table, or `y₀`'s refused one. -/
+/-- **The public table at table `j`'s sample** (`tableSh`): its `SampleSetupZJ`'s table, or `y₀`'s refused one. -/
 noncomputable def tableShJ (S : Finset (Fin n)) (j : Fin (nTab I)) : Integrate.Table mPts (partS I (dj S) S j) :=
-  if h : Nonempty (DrawSetupZJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
+  if h : Nonempty (SampleSetupZJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
     (Classical.choice h).x.table (typedJ ht j)
   else y₀.x.refused (typedJ ht 0) _
 
@@ -252,7 +252,7 @@ theorem sitesShJ_parse : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
   show HmRow.parse (tableShJ dj y₀ ht S (partOf I (dj S) u.val)).acc.tags
     (tableShJ dj y₀ ht S (partOf I (dj S) u.val)).acc.cf (tableShJ dj y₀ ht S (partOf I (dj S) u.val)).acc.tables = .ok c
   unfold tableShJ
-  by_cases hS : Nonempty (DrawSetupZJ (inputsJ I (partOf I (dj S) u.val)) mPts (partS I (dj S) S (partOf I (dj S) u.val))
+  by_cases hS : Nonempty (SampleSetupZJ (inputsJ I (partOf I (dj S) u.val)) mPts (partS I (dj S) S (partOf I (dj S) u.val))
     (drawJ I (dj S) (partOf I (dj S) u.val)))
   · rw [dite_eq_left_of_eq_true (eq_true hS)]; exact (parse_tagsAt _ _ _ _ _).trans hc
   · rw [dite_eq_right_of_eq_false (eq_false hS)]; exact (parse_tagsAt _ _ _ _ _).trans hc
@@ -314,7 +314,7 @@ theorem sitesShJ_bcSite :
   show Layout.BcSite (tableShJ dj y₀ ht S (partOf I (dj S) u.val)).acc pub
     ((tableShJ dj y₀ ht S (partOf I (dj S) u.val)).o u (mem_partS h))
     ((tableShJ dj y₀ ht S (partOf I (dj S) u.val)).vu u (mem_partS h)) u.val
-  by_cases hS : Nonempty (DrawSetupZJ (inputsJ I (partOf I (dj S) u.val)) mPts (partS I (dj S) S (partOf I (dj S) u.val))
+  by_cases hS : Nonempty (SampleSetupZJ (inputsJ I (partOf I (dj S) u.val)) mPts (partS I (dj S) S (partOf I (dj S) u.val))
     (drawJ I (dj S) (partOf I (dj S) u.val)))
   · have e : tableShJ dj y₀ ht S (partOf I (dj S) u.val) = (Classical.choice hS).x.table (typedJ ht _) := by
       unfold tableShJ; rw [dite_eq_left_of_eq_true (eq_true hS)]
@@ -549,12 +549,12 @@ def RecordsLiveZKJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (Jf : Finset
         sess.streams.find? (fun x => x.name == toString spec.tables[j.val]! ++ toString "/rep" ++ toString r.val) =
           some s ∧ s.rounds.toList = o.reps j r
 
-/-- **The challenger's live-coin part's sample at `S`, at `J` tables** (`DrawOkZK` at table `j`'s inputs and sample): each table's sample
+/-- **The challenger's live-coin part's sample at `S`, at `J` tables** (`SampleOkZK` at table `j`'s inputs and sample): each table's sample
 proves the sampled proof blocks it is given (`partS`), and setupH sets each table up at it with `mPts` link points. At one table
-it is `DrawOkZK`. -/
-def DrawOkZKJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
+it is `SampleOkZK`. -/
+def SampleOkZKJ (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
   ∀ j : Fin (nTab I),
-    (∀ D, Draw.UnitDraw.ofJson (drawJ I (dj S) j) = .ok D → ∀ u ∈ partS I (dj S) S j, u.val ∈ D.proved) ∧
+    (∀ D, Draw.UnitSample.ofJson (drawJ I (dj S) j) = .ok D → ∀ u ∈ partS I (dj S) S j, u.val ∈ D.proved) ∧
     ∀ st, Stmt.setupH (tagsAt (zkTags I) I.count j) I.circuitFile I.publicFile (zkCoins I) I.tables
       (some (drawJ I (dj S) j)) I.partition I.program = .ok st → st.mPts = mPts
 
@@ -588,10 +588,10 @@ section Live
 
 variable {I' : Inputs} {S : Finset (Fin n)} {d : Lean.Json}
 
-/-- A `DrawSetup` with `Zk.schedule`'s schedule at its `m` is a `DrawSetupZJ` (`drawSetupZK_of`). -/
-theorem drawSetupZJ_of (ht' : I'.tags.typed = false) (x : DrawSetup I' mPts S d) {sch : Flock.Schedule} {tPad : ℕ}
+/-- A `SampleSetup` with `Zk.schedule`'s schedule at its `m` is a `SampleSetupZJ` (`sampleSetupZK_of`). -/
+theorem sampleSetupZJ_of (ht' : I'.tags.typed = false) (x : SampleSetup I' mPts S d) {sch : Flock.Schedule} {tPad : ℕ}
     (hz : Zk.schedule x.st.wideLeaf x.st.m = .ok (sch, tPad)) :
-    ∃ y : DrawSetupZJ I' mPts S d, y.x = x ∧ y.sch = sch ∧ y.tPad = tPad := by
+    ∃ y : SampleSetupZJ I' mPts S d, y.x = x ∧ y.sch = sch ∧ y.tPad = tPad := by
   obtain ⟨hshape, hmsch, hpad⟩ := schedule_zk hz
   obtain ⟨-, hm35, -⟩ := schedule_spec hz
   have hk := (setupH_spec ht' x.h).2.2.2.2.2.1
@@ -610,19 +610,19 @@ theorem drawSetupZJ_of (ht' : I'.tags.typed = false) (x : DrawSetup I' mPts S d)
   exact ⟨⟨x, sch, tPad, hz, hshape, hmsch, hpad, hN, innerN_ge _,
     fun D => prCoin_innerPos_le _ _ hd D⟩, rfl, rfl, rfl⟩
 
-/-- A table's `--zk` table is the same at every `DrawSetupZJ` of it (`tableZK_eq`). -/
-theorem DrawSetupZJ.table_eq (y₁ y₂ : DrawSetupZJ I' mPts S d) : y₁.table = y₂.table := by
+/-- A table's `--zk` table is the same at every `SampleSetupZJ` of it (`tableZK_eq`). -/
+theorem SampleSetupZJ.table_eq (y₁ y₂ : SampleSetupZJ I' mPts S d) : y₁.table = y₂.table := by
   obtain ⟨⟨st₁, h₁, D₁, hD₁, hS₁, hg₁, hb₁, m₁, k₁, a₁, b₁, r₁, e₁, hs₁, hm₁, hp₁⟩, sch₁, t₁, hz₁, _, _, _, _, _, _⟩ := y₁
   obtain ⟨⟨st₂, h₂, D₂, hD₂, hS₂, hg₂, hb₂, m₂, k₂, a₂, b₂, r₂, e₂, hs₂, hm₂, hp₂⟩, sch₂, t₂, hz₂, _, _, _, _, _, _⟩ := y₂
   obtain rfl : st₁ = st₂ := Except.ok.inj (h₁.symm.trans h₂)
   obtain ⟨rfl, rfl⟩ := Prod.ext_iff.1 (Except.ok.inj (hz₁.symm.trans hz₂))
   rfl
 
-theorem DrawSetupZJ.table_seam (y : DrawSetupZJ I' mPts S d) :
+theorem SampleSetupZJ.table_seam (y : SampleSetupZJ I' mPts S d) :
     ZkTabSeam y.table (Setup.ofCircuit y.x.st) y.sch y.tPad :=
   ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
-theorem DrawSetupZJ.table_lay (y : DrawSetupZJ I' mPts S d) : ZkTabLay y.table (Setup.ofCircuit y.x.st) y.sch := by
+theorem SampleSetupZJ.table_lay (y : SampleSetupZJ I' mPts S d) : ZkTabLay y.table (Setup.ofCircuit y.x.st) y.sch := by
   constructor <;> intros <;> rfl
 
 end Live
@@ -651,7 +651,7 @@ theorem setupOf_tableJ {I : Inputs} {record : String} {d : Lean.Json} {spec : Se
     obtain ⟨-, -, population, units, hD1, -, -, -, hsz, hall⟩ := Tables.setupTables_parts hh' hc1 hs
     obtain ⟨u, hu, -, hpop, hun⟩ := hD1 _ hd
     refine ⟨by simp only [nTab, hc, ite_false]; exact hsz, fun j hj => ?_⟩
-    have hpart : drawJ I d j = Tables.partDraw population units I.count j := by
+    have hpart : drawJ I d j = Tables.partSample population units I.count j := by
       simp only [drawJ, hc, ite_false]
       unfold partJson
       rw [hu]
@@ -675,10 +675,10 @@ tables): on untyped inputs under the tags `TagsOkZJ` fixes, with `wr` the challe
 each of the sampling design's samples setting each table up at `mPts` link points, `RunsOnZCJ` holds at the tables `planZJ` under
 `hm96-sha512/v1`, with the decoder `decAtZJ`, the openings `opnAtZJ`, no tail and table `j`'s cap from `root_B[j]`. -/
 theorem runsZCJ_live (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
-    {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
+    {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : SampleSetupZJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (L : Law n) (hT : TagsOkZJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZJ (Reg := Reg) dj y₀ S R).length) wr)
-    (hDraw : ∀ ω, DrawOkZKJ I dj mPts (L.draw ω)) :
+    (hDraw : ∀ ω, SampleOkZKJ I dj mPts (L.draw ω)) :
     RunsOnZCJ (K := 𝕂) execArith hs512 (planZJ dj y₀) I wr (opnAtZJ (planZJ dj y₀) I dj) (decAtZJ (planZJ dj y₀))
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L := by
   intro ω R o hacc j
@@ -698,12 +698,12 @@ theorem runsZCJ_live (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin
   have hz' : Zk.schedule sts[j.val].wideLeaf sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
   obtain ⟨-, -, sch₀, hf⟩ := schedule_spec hz'
   have ht' : (inputsJ I j.val).tags.typed = false := typedJ _ht j.val
-  obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn hst
-  obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdr
-  obtain ⟨x, hx⟩ := drawSetup_of_setupH_g (I := inputsJ I j.val)
+  obtain ⟨pop, -, hdr⟩ := Layout.setupH_sampled hst
+  obtain ⟨D, hD, -⟩ := Layout.sampled_spec hdr
+  obtain ⟨x, hx⟩ := sampleSetup_of_setupH_g (I := inputsJ I j.val)
     (S := partS I (dj (L.draw ω)) (L.draw ω) ⟨j.val, hjn⟩) (mPts := mPts) ht' hst hf hD
     ((hDraw ω ⟨j.val, hjn⟩).1 D hD) ((hDraw ω ⟨j.val, hjn⟩).2 _ hst)
-  obtain ⟨y, hyx, hysch, hytp⟩ := drawSetupZJ_of ht' x (sch := schs[j.val].1) (tPad := schs[j.val].2)
+  obtain ⟨y, hyx, hysch, hytp⟩ := sampleSetupZJ_of ht' x (sch := schs[j.val].1) (tPad := schs[j.val].2)
     (by rw [hx]; exact hz')
   have hyst : y.x.st = sts[j.val] := by rw [hyx]; exact hx
   have hTy : (planZJ (Reg := Reg) dj y₀ (L.draw ω) R).get j = y.table := by
@@ -712,7 +712,7 @@ theorem runsZCJ_live (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin
     rw [hget]
     unfold tableZJ
     rw [dite_eq_left_of_eq_true (eq_true ⟨y⟩)]
-    exact DrawSetupZJ.table_eq _ _
+    exact SampleSetupZJ.table_eq _ _
   rw [← hysch, ← hytp, ← hyst] at hv0 hv1
   rw [← hyst] at hst
   obtain ⟨hpts, hrj⟩ := hrec spec sts sess hs hdecS

@@ -1,5 +1,5 @@
 """`tools/check/lean_slot.py`: a Lean audit takes one of the node's N slots, waits for one naming their holders, and frees it on
-exit; with no cap set it runs at once, and where its pool is at 0 as it arrives it is refused. And check's lean-audit step takes
+exit; with no limit set it runs at once, and where its pool is at 0 as it arrives it is refused. And check's lean-audit step takes
 one only when it audits a package."""
 from __future__ import annotations
 
@@ -240,7 +240,7 @@ def test_a_waiter_goes_behind_the_live_waiters_that_came_first(slots):
     os.close(got[2])
 
 
-def test_without_the_steward_s_file_there_is_no_cap(tmp_path, monkeypatch):
+def test_without_the_steward_s_file_there_is_no_limit(tmp_path, monkeypatch):
     """A laptop, or a node whose steward set no N: the audit runs at once, and nothing is written."""
     monkeypatch.setattr(LS, "SLOTS", tmp_path / "absent")
     monkeypatch.delenv(LS.HELD, raising=False)
@@ -371,7 +371,7 @@ def test_status_says_a_pool_at_0_is_closed_quoting_its_line_and_json_adds_each_p
 
 
 def test_status_json_is_each_pool_s_slots_holders_and_waiters(slots, monkeypatch, capsys):
-    """`--status --json`, which `check.py --slots` reads from each machine; null pools where no cap is set (node 2)."""
+    """`--status --json`, which `check.py --slots` reads from each machine; null pools where no limit is set (node 2)."""
     held = _hold(slots / "lean-check-1.lock", {"pid": os.getpid(), "run": "r-train", "by": "lander", "took": "2026-10-03T16:40Z"})
     line = slots / "lean-line-audit"
     line.mkdir()
@@ -460,7 +460,7 @@ def _audit_py():
 
 
 def test_the_lean_audit_run_by_hand_with_build_takes_a_slot_of_pool_audit(slots, monkeypatch):
-    """`tools/verity/lean/check.py --build` outside check and lean_changed: a full audit that took no slot overran the cap."""
+    """`tools/verity/lean/check.py --build` outside check and lean_changed: a full audit that took no slot overran the limit."""
     audit = _audit_py()
     monkeypatch.setenv("LEAN_SLOTS", str(slots / "lean-slots"))
     held = [_hold(slots / "lean-audit-0.lock")]

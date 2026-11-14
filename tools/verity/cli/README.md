@@ -10,8 +10,7 @@ tools beside it and holds no check of its own. `uv run verity --help` prints the
 | `verity check --record [ARGS]` | the check of a clean commit, recorded as an Attempt |
 | `verity check move BASE HEAD` | the certificate that BASE..HEAD is a pure move (`check/move_check.py`) |
 | `verity bench NAME [ARGS]` | `benchmarks/<NAME>/`'s runner, its `run.py` or `run.sh` |
-| `verity demo NAME [ARGS]` | `demos/<NAME>/`'s command: `verity run` on its `config.toml`, else its runner |
-| `verity demo --status` | every demo's place on its two axes, how far it runs and how far its guarantee is proved, and what each next step needs |
+| `verity demo [NAME] [ARGS]` | `verity run demos/NAME.toml ARGS`, the demo's one file (`demos/README.md`); NAME defaults to `onsite_compute` |
 | `verity run CONFIG` | the parties a deployment configuration places on this machine, and its verdict |
 | `verity config new\|check\|hash` | write, check or hash a deployment configuration |
 | `verity verify proof [ARGS]` | Flock's Lean verifier, the executable `lake build` writes in `verity/protocols/proofs/flock/verifier`, with ARGS as its own, in the directory you are in |
@@ -27,7 +26,6 @@ In a NAME, a `-` stands for a `_`.
 | `verity_cli/__init__.py` | the dispatch, `verity check`, `verity verify proof` and `verity lean try` |
 | `verity_cli/deployed.py` | `verity lean deployed`, over `tools/verity/lean/check.py`'s `trust_gaps` |
 | `verity_cli/run.py` | `verity run` and `verity config`, over `verity.config` |
-| `verity_cli/examples.py` | the examples' ladder, read from each `demos/<name>/example.toml` |
 | `verity_cli/settings.py` | the environment variables `verity run` reads, declared once |
 
 `verity run` and `verity config` refuse a configuration (`no-table`) until a workload's protocols bring a table of parties;

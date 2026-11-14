@@ -8,7 +8,7 @@ identity row (`op_path`, `output_member`, ...), a Program instance row (`name`, 
 WHERE the owning module comes from -- `source`:
 
   correspondence   the `runtime-correspondence/v1` record the frontend emitted into `annotations["correspondence"]` of the Build's request
-                   Program descriptors (`verity_vllm.correspondence.runtime.load_correspondence`; one table per component Program).  A
+                   Program descriptors (`verity_torch.correspondence.runtime.load_correspondence`; one table per component Program).  A
                    Value's module path is the record's owning module (`occurrences[occ].module`, the source module's own vocabulary)
                    mapped to the implementation's `named_modules()` name by the manifest's `wrapper_prefix` (`collector_path`) and
                    `op_path_aliases` -- the SAME mapping the manifest applied to the naming hints.
@@ -28,7 +28,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.correspondence.runtime import (
+from verity_torch.correspondence.runtime import (
     NAMESPACE,
     SCHEMA,
     RuntimeCorrespondence,

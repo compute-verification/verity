@@ -7,6 +7,7 @@ dependencies = [
     "verity",
     "verity-config",
     "numpy>=1.26",
+    "verity-torch",
 ]
 
 [project.scripts]
@@ -179,7 +180,7 @@ tests = [
     "tests/acquire/test_dsv4_route_source.py",
     "tests/acquire/test_route_source.py",
 ]
-paths = ["adapters/vllm/verity_vllm/check", "adapters/vllm/verity_vllm/properties"]
+paths = ["adapters/vllm/verity_vllm/check"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/acquire/test_norm_tap_src.py"]

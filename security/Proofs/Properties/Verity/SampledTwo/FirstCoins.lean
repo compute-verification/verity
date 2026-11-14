@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.SampledTwo.Steps
 public import Proofs.Properties.Verity.SampledDraw
 public import Proofs.Properties.Challenger.CanonRead
 public import Proofs.Flock.SpotFlock.Jeq
-public import Spot.Run
+public import all Spot.Run
 import all Lean.Data.Json.Basic
 
 /-!

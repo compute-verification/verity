@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import IO, Any
 
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
-from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
+from verity.protocols.accounting.pouw.prover.serving import CommitRecord, commit_registration
 
 #: the deployment's registration log under the serve dir's ``h1/``: one line a record, W at its writing and R once bound
 LOG = "log.jsonl"
@@ -107,7 +107,7 @@ class WindowTie:
             raise ValueError(f"window {window}'s seal failed, so window-commit has no row dir: {line['error']}"[:500])
         return line
 
-    def hook(self, window: int, prover: Path | None, kept: Callable[[], Any] | None) -> CT.CommitRecord:
+    def hook(self, window: int, prover: Path | None, kept: Callable[[], Any] | None) -> CommitRecord:
         """Window ``window``'s pouw setting ``commit_record`` (`pouw_h1_commit.CommitRecord`): its prover directory
         ``prover`` and ``kept``, which waits until its prover state is written."""
         return lambda run: self.record(window, run, prover, kept)
@@ -123,7 +123,7 @@ class WindowTie:
             kept()
         d = self.out / "h1" / f"w{window}"
         d.mkdir(parents=True, exist_ok=True)
-        w, wf, rf = CT.registration(run, self.last, self.day and self.day.naming()), d / W_FILE, d / R_FILE
+        w, wf, rf = commit_registration(run, self.last, self.day and self.day.naming()), d / W_FILE, d / R_FILE
         wf.write_text(json.dumps(w, indent=1) + "\n")
         self.last = self._logged(window, "registration", wf, REG.digest(w))
         rf.unlink(missing_ok=True)

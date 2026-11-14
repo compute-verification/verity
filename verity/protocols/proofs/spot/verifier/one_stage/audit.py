@@ -9,11 +9,11 @@ t: exact for `subset` and `stratified`, the linear relaxation for `bernoulli`. A
 
 The record states the profile three ways, in the forms its recorded runs hold: `profile`, the profile's JSON (a stratified
 sampling design's in its v0 form: the sampling design's JSON with delta and the count sampled per template); `wrong_units`, its bounds; and
-`integrity_profile`, `verity/integrity-profile/v1` (README "The audit record and the profile"): the partition, the registration it
+`integrity_profile`, `verity/integrity-profile/v1` (README "The audit record and the profile"): the partition, the docket it
 counts against, the sampling design and which proof blocks were sampled and proved, and the evidence by digest. The v1 form's non-sampling
 terms (ε) come from the soundness analysis, not from the run, so the run leaves them null.
 
-The audit record carries the registration and its receipt, the sample, the proved proof blocks, the statement's digests and each
+The audit record carries the docket and its receipt, the sample, the proved proof blocks, the statement's digests and each
 verifier's verdict. A verdict is `{"accepted": true | false | null, ...}`; null means that verifier did not run, which leaves
 the record incomplete. The record is accepted, and the profiles are present, only when there is a verdict of
 record (`of_record`) and every one of them ran and accepted, every other verdict that ran accepted, and the sample, the proved
@@ -141,7 +141,7 @@ def _jeq(a: Any, b: Any) -> bool:
 
 
 def less_own_reads(opened: Mapping[str, Any] | None, registration: Mapping[str, Any]) -> dict[str, Any] | None:
-    """`Record.lessOwnReads`: ``opened`` less the reads of the registration's own ports at their own roots (each port's
+    """`Record.lessOwnReads`: ``opened`` less the reads of the docket's own ports at their own roots (each port's
     last root). A read named by one of its ports at another root stays, to be held to the registered values."""
     if opened is None:
         return None
@@ -155,7 +155,7 @@ COMPLETE = "complete"
 
 def answer(record: Mapping[str, Any], delta: Fraction) -> dict[str, Any]:
     """One-stage's answer of the accepted audit record `record`, as Lean's `OneStage.check` gives it on that record's
-    evidence (`Core.Answer.toJson`): the commitment is the registration's digest; the profile is `profile` with `delta`
+    evidence (`Core.Answer.toJson`): the commitment is the docket's digest; the profile is `profile` with `delta`
     an exact ratio; and the public outputs are the sampled proof blocks and the proved ones, the bound on incorrect
     proof blocks at `delta` with each template's own under a stratified or work sampling design, and `COMPLETE`, the
     record's own ``complete``: whether every verdict ran, those that are not of record too. A record without one says
@@ -189,7 +189,7 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     """`draw` is the verifier's own sample. `served`: the proof blocks the sessions were served, when the sample was handed to them
     (each must serve exactly the sample). `session_roots`: `{registered port: root}` from the sessions' statements (each
     must be the registered root). `session_registered`: `{value: root}`, the registered roots the verdicts of
-    record opened the sessions' reads against (`session_registered(verdicts)`, never the registration's own), less the
+    record opened the sessions' reads against (`session_registered(verdicts)`, never the docket's own), less the
     reads of its own ports at their own roots (`less_own_reads`); each read it reports must be of a registered value, at
     that value's registered root, and a registered value needs no reported read. `certified`: the names of the values
     the verifier holds certified entries for; each of them does need a reported read (the check `certified` names the

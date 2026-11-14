@@ -21,7 +21,7 @@ a run.  The build's part is in exactly one shard, so a combine takes each part o
 Units are packed longest first (own cost and builds) onto the shard where they end soonest, the builds a shard lacks counted
 (LPT); a shard's predicted time is the sum of its parts' and builds' costs (a shard runs its groups at once, so this is an upper
 bound).  The floor is the longest unit with its builds: no N beats it.  N is the smallest N up to ``max_shards`` whose packed
-makespan is within `SLACK` of max(floor, total / max_shards), the best bound the cap allows (else the N with the least
+makespan is within `SLACK` of max(floor, total / max_shards), the best bound the limit allows (else the N with the least
 makespan).  Stdlib only, no I/O: check.py gathers the costs and the tree's parts.
 """
 from __future__ import annotations

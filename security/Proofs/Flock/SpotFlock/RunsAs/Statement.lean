@@ -5,6 +5,8 @@ public import Proofs.Flock.SpotFlock.Honest
 public import Proofs.Flock.Claims.Sampling.Select.Code
 public import Properties.Challenger
 public import Proofs.Flock.SpotFlock.RunsAs.Statements
+public import Spot.Run
+public import Spot.Record
 
 /-!
 # A two-stage run the running verifier accepts is a play SPOT[Flock]'s two-stage verifier accepts
@@ -46,13 +48,39 @@ open Round2 (core OwnAgrees NamesDistinct StmtsAre TwoHolds RecordsHeld Register
 
 /-! ## The run -/
 
+/-- **What the verifier holds of the run as `Run.run` builds it** for round 2's check (`interiorAudit`), over the replay
+sample `sample`, the interior's strata and the second stage's sample. -/
+def runOwn (i : Spot.Run.Input) (it : Spot.Run.Interior) (sample : Array ℕ)
+    (strata : Array (String × Array (ℕ × ℕ))) (draw : Json) : Spot.SecondStage.Own :=
+  { sample, parts := Spot.SecondStage.parts sample.size strata, interior := it.record, boundary := i.record,
+    drawn := (Spot.Draw.proved draw).map Int.toNat,
+    links := Spot.SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record,
+    reported := Spot.Record.sessionRegistered i.verdicts, verified := Spot.SecondStage.verifiedOf i.verdicts,
+    refs := it.circuits.map fun (t, _, h, _) => (t, h), refReads := it.circuits.map fun (t, _, _, r) => (t, r),
+    wires := Spot.SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn,
+    rows := Spot.SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn,
+    returns := Spot.SecondStage.replayReturns i.params.verifier.program.prog it.replay.prog.programFn i.record,
+    supplied := it.params.verifier.supplied,
+    fixed := it.params.verifier.pinned.map (·.1) ++ it.params.verifier.outputs.map (·.1), reads := it.reads,
+    tables := it.tables }
+
+/-- **No statement of the run is of only its part's sampled proof blocks** (`SecondStage.anySampled`), at every replay
+sample, strata and second-stage sample: where it holds, round 2's check (`SecondStage.checkAny`) is `SecondStage.check`
+(`SecondStage.checkAny_eq_check`), the check the two-stage guarantees read. -/
+def NoSampledOnly (i : Spot.Run.Input) (it : Spot.Run.Interior) : Prop :=
+  ∀ (sample : Array ℕ) (strata : Array (String × Array (ℕ × ℕ))) (draw : Json),
+    ∀ ps ss, (runOwn i it sample strata draw).parts = some ps → it.statements = some ss →
+      Spot.SecondStage.anySampled (runOwn i it sample strata draw) ps ss.toList = false
+
 /-- **A two-stage run `Run.run` accepted**: with the two-stage form allowed (`form := true`), it decided `j` with the
-symbol `accept`, under a two-stage rule, with the interior registration `it`. -/
+symbol `accept`, under a two-stage rule, with the interior registration `it`, none of whose statements is of only its
+part's sampled proof blocks (`NoSampledOnly`). -/
 structure AcceptedTwo (i : Spot.Run.Input) (it : Spot.Run.Interior) (j : Json) : Prop where
   run : Spot.Run.run i true = .ok j
   accept : Spot.getD j "symbol" = .str "accept"
   two : ∃ grain replay k, i.rule = .twoStage grain replay k
   interior : i.interior = some it
+  sampledNone : NoSampledOnly i it
 
 /-! ## The held copies the run reads -/
 

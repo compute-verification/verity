@@ -1,5 +1,5 @@
 """The shard planner (`shards.py`) and `check.py --shard auto`: tasks packed longest first, N the smallest that reaches the
-floor (or the cap's bound), a build kept with what reads it, an auto plan's shards read from the one plan and combined by the
+floor (or the limit's bound), a build kept with what reads it, an auto plan's shards read from the one plan and combined by the
 gate's own reading (`research.merge.shard_set`).  Synthetic costs."""
 from __future__ import annotations
 
@@ -45,15 +45,15 @@ def test_lpt_packs_the_longest_first_onto_the_shard_where_it_ends_soonest():
     assert S.lpt(ts, {}, 1)[0]["seconds"] == 18.0
 
 
-def test_the_plans_n_stops_at_the_floor_and_the_cap_bounds_it():
+def test_the_plans_n_stops_at_the_floor_and_the_limit_bounds_it():
     ts = _ts({"long": 100, **{f"t{i}": 10 for i in range(10)}})
     doc = S.plan(ts, {}, max_shards=8)
     assert (doc["n"], doc["floor_s"], doc["predicted_s"], doc["floor"]) == (2, 100.0, 100.0, ["long"]), \
         "a third shard can't beat the longest task"
     assert S.plan(ts, {}, max_shards=1)["n"] == 1
     even = _ts({f"t{i}": 10 for i in range(40)})
-    capped = S.plan(even, {}, max_shards=4)
-    assert (capped["n"], capped["predicted_s"], capped["floor_s"]) == (4, 100.0, 10.0), "total / max binds: N is the cap"
+    limited = S.plan(even, {}, max_shards=4)
+    assert (limited["n"], limited["predicted_s"], limited["floor_s"]) == (4, 100.0, 10.0), "total / max binds: N is the limit"
     assert S.plan(even, {}, max_shards=4, n=2)["n"] == 2
 
 

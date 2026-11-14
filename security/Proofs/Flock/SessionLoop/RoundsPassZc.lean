@@ -176,7 +176,7 @@ theorem schedTaken_zcBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hc : ∀ p, p < ((ofLoop Masked.dataE L₁ (Loop.realOf src)).cfg x (ν, t) ((m₀, ρ₀) :: ops)).order.size →
       ((ofLoop Masked.dataE L₁ (Loop.realOf src)).cfg x (ν, t) ((m₀, ρ₀) :: ops)).order[p]! <
         ((ofLoop Masked.dataE L₁ (Loop.realOf src)).cfg x (ν, t) ((m₀, ρ₀) :: ops)).h.size :=
-    Claims.ZKServer.ofDraws_order _ _ _
+    Claims.ZKServer.ofSamples_order _ _ _
   obtain ⟨o, tq, hro, -⟩ := roundFree_zcHead_out
     ((ofLoop Masked.dataE L₁ (Loop.realOf src)).cfg x (ν, t) ((m₀, ρ₀) :: ops))
     { m with stopped := false } tr.st.digest (_root_.Flock.ZkServer.Finish.flat tr.cm0.cap) _ hc hm0.1 hm0.2.1

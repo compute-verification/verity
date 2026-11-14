@@ -148,7 +148,8 @@ def PortsDistinctAt (C : CaseOf) : Prop :=
 /-- **An accepted play's records name their registrations' names**: its run's registration checks have no code
 (`checks_of_accepted`), and each names its registration's names (`RecordNames.recordOk_of_check`), which
 are the held copies' (`HeldOf.namesHeld_of`). -/
-theorem recordsHeldAt_of {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) (hports : PortsDistinctAt C) :
+theorem recordsHeldAt_of {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (hof : HeldOfAt A C)
+    (hports : PortsDistinctAt C) :
     RecordsHeldAt A C := by
   intro o i it x m₁ hA hi hit hx hm₁
   obtain ⟨u, hu⟩ := hof o i it hA hi hit
@@ -523,7 +524,7 @@ theorem names_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o 
 /-- **`PartsSizedAt` is a lemma of the accept**: an accepted play's interior passed `interior-parts` (`interiorSteps_parts`), whose parts are the held copies' (`partsAt_heldOf`,
 `names_of_formAccepts`), at its replay sample, which has `K` blocks where the held first stage samples a `K`-subset
 (`SpotFlock.select_subset_size`). -/
-theorem partsSizedAt_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) :
+theorem partsSizedAt_of_formAccepts {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (hof : HeldOfAt A C) :
     ∀ K, SpotFlock.firstK A.h.reg.first = some K → PartsSizedAt A C K := by
   intro K hK o i it strata hA hi hit hst
   obtain ⟨u, hu⟩ := hof o i it hA hi hit
@@ -571,7 +572,8 @@ theorem heldAt_of_parts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) (hparts 
 /-- **The design evaluates at the held copies** (`TwoHolds`), wherever a play is accepted: the play's run is an accepted
 two-stage run (`acceptedTwo_of_formAccepts`), which passed its population check (`RunsAs.population_of_accepted`), and
 the held copies are the ones `heldOf` builds from it (`HeldOf.twoHolds_of`). -/
-theorem twoHolds_at {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o : Verity.Exchange} {i : Spot.Run.Input}
+theorem twoHolds_at {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (hof : HeldOfAt A C) {o : Verity.Exchange}
+    {i : Spot.Run.Input}
     {it : Spot.Run.Interior} (hA : FormAccepts C o) (hi : inputOn C o = some i) (hit : i.interior = some it) :
     TwoHolds A.h := by
   obtain ⟨u, hu⟩ := hof o i it hA hi hit
@@ -593,7 +595,7 @@ the rule two-stage by the form's parser (`ruleIsTwo`), the second stage's hand-o
 design evaluating at them at the accepted play (`twoHolds_at`), so the names distinct and the interior record
 registering no value (`Round2.namesDistinct_of_two`, `recordsAt_of_held`), and the records naming their registrations'
 names (`recordsHeldAt_of`). -/
-theorem playAccepts_form (A : Live₂) (C : CaseOf) (S : SessionReading)
+theorem playAccepts_form (A : Live₂) (C : CaseOf) [Fact (SampledNoneAt C)] (S : SessionReading)
     (P' : Verity.Exchange → ℕ → Claims.Prover Unit) (hparts : PartsHeldAt A C)
     (hof : HeldOfAt A C) (hports : PortsDistinctAt C) (hst : StmtsRead A C S)
     (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S)
@@ -607,7 +609,7 @@ theorem playAccepts_form (A : Live₂) (C : CaseOf) (S : SessionReading)
 
 /-- **The form's accept is the run's accept** (`AcceptsRun` at the form): where the form's check accepts a play, every
 run of `SpotFlock.V` on coins agreeing with what the check read, whose messages are what the check read, accepts. -/
-theorem acceptsRun_form (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
+theorem acceptsRun_form (A : Live₂) (x : Msg) (C : CaseOf) [Fact (SampledNoneAt C)] (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
     (hsm : SessionMsgs A C S P') (hparts : PartsHeldAt A C) (hof : HeldOfAt A C)
     (hports : PortsDistinctAt C) (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S)
@@ -619,7 +621,7 @@ theorem acceptsRun_form (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading
 /-- **The form's accept is the run's accept, with every message reached** (`ReachedAccepts` at the form): where the
 form's check accepts a play, every run of `SpotFlock.V` on coins agreeing with what the check read, whose messages
 are what the check read wherever the run has one, accepts and has all the verifier's `k` messages. -/
-theorem reachedAccepts_form (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
+theorem reachedAccepts_form (A : Live₂) (x : Msg) (C : CaseOf) [Fact (SampledNoneAt C)] (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
     (hsm : SessionMsgs A C S P') (hparts : PartsHeldAt A C) (hof : HeldOfAt A C)
     (hports : PortsDistinctAt C) (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S)
@@ -647,7 +649,8 @@ theorem reachedAccepts_at {A : Live₂} {x : Msg} {C : CaseOf} {S : SessionReadi
 /-- **The form's accept is the run's accept, its premises asked at the plays at `x`**: `acceptsRun_form` at the cases
 at `x` (`atStmt C x`), whose accepted plays are `C`'s at the statement `x`, the only ones `AcceptsRun` at `x` looks at
 (`acceptsRun_at`). -/
-theorem acceptsRun_form_at (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
+theorem acceptsRun_form_at (A : Live₂) (x : Msg) (C : CaseOf) [Fact (SampledNoneAt (atStmt C x))]
+    (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
     (hsm : SessionMsgs A (atStmt C x) S P') (hparts : PartsHeldAt A (atStmt C x))
     (hof : HeldOfAt A (atStmt C x)) (hports : PortsDistinctAt (atStmt C x))
@@ -660,7 +663,8 @@ theorem acceptsRun_form_at (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionRead
 
 /-- **The form's accept is the run's accept, with every message reached, its premises asked at the plays at `x`**:
 `reachedAccepts_form` at the cases at `x` (`reachedAccepts_at`). -/
-theorem reachedAccepts_form_at (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
+theorem reachedAccepts_form_at (A : Live₂) (x : Msg) (C : CaseOf) [Fact (SampledNoneAt (atStmt C x))]
+    (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
     (hsm : SessionMsgs A (atStmt C x) S P') (hparts : PartsHeldAt A (atStmt C x))
     (hof : HeldOfAt A (atStmt C x)) (hports : PortsDistinctAt (atStmt C x))

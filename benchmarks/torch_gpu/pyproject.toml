@@ -1,0 +1,12 @@
+# The torch_gpu benchmarks' distribution root, which `verity_config.settings.of` finds their registry (settings.py) beside.
+# Not a suite: the benchmarks' CPU checks are the suites of what they measure (verity/commitments/cuda/sha512_rows and
+# commit_slots), and p2_stage is a suite of its own.
+[project]
+name = "verity-torch-gpu-benchmarks"
+version = "0.0.0"
+description = "What measures the SHA-512 rows engine and the serve-time commit call on a GPU, and the store's load."
+requires-python = ">=3.12"
+dependencies = ["verity", "numpy"]
+
+[tool.uv]
+package = false

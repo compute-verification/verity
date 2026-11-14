@@ -56,9 +56,9 @@ written as, every SHA-512 call an oracle query (`Hashes.oc`, `DeployOC`):
 The setup's SHA-512 (`setupOf`'s statement digest and Σ) is not an oracle query. It reads `I x` and the sample of the
 record `wr x o`, and a sampled statement's digest covers its sample (`HmRow.drawn`'s public statement), so it is a function
 of `x` only where that sample is. `Deploy.V`'s checks pin the record's sample to the statement's whatever its key order
-(`Custody.checks_draw`), and where the two are equal as values the setup of a record it accepts is the one it made of
+(`Custody.checks_sample`), and where the two are equal as values the setup of a record it accepts is the one it made of
 `x` before the first message (`Custody.setupOf_record`). At an equivalent sample with its keys in another order the setup
-is another value (its `unitDraw` is the record's sample), and its digests agree only through `canon`.
+is another value (its `unitSample` is the record's sample), and its digests agree only through `canon`.
 -/
 
 @[expose] public section

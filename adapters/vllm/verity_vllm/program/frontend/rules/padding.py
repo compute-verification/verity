@@ -1,4 +1,4 @@
-"""Padded-serving rules (profile mode; PAD-INT phase-1 requirements, PAD-SPEC v1 §4–§7).
+"""Padded-serving rules (profile mode; PAD-INT's first-stage requirements, PAD-SPEC v1 §4–§7).
 
 A padded serving module represents the realized generation length as *values*: a per-event live bit derived from
 EOS detection, token slots muxed against the pad token, and every decode step's appended K/V row muxed against one
@@ -25,12 +25,12 @@ import torch
 from verity.circuits.refs import Coll, array_of, concat
 from verity.circuits.types import Array, Value
 
-from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
-from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import shape
+from verity_torch.frontend.derive import Alloc, StaticIndex, refuse
+from verity_torch.frontend.rules.base import OpRule, RuleInfo, StateRule
+from verity_torch.frontend.rules.common import shape
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
-from verity_vllm.program.frontend.strided_views import _tensor_type
-from verity_vllm.program.frontend.value_types import shape_of
+from verity_torch.frontend.strided_views import _tensor_type
+from verity_torch.frontend.value_types import shape_of
 
 aten = torch.ops.aten
 

@@ -47,7 +47,7 @@ LANE, OTHER = "dev", "other-lane"
 LABEL = "draw"
 SAMPLE = [[LABEL, 17]]
 SALT = [["pouw/salt", 1]]
-#: the circuit a period of a `Book` commits unless told another, and another registration's
+#: the circuit a period of a `Book` commits unless told another, and another docket's
 CIRCUIT, ELSEWHERE = "ab" * 64, "cd" * 64
 BASE = datetime(2026, 3, 2, tzinfo=UTC)
 DAY = 86400

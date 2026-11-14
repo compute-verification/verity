@@ -76,9 +76,24 @@ from verity_vllm.records.schema_ids import REPLAY_SLIM_SCHEMA
 # partition, the admission's calibration and the timeline are imported inside the functions that read them: the route pin's and the
 # driver's imports put the catalog's Definitions into the Definition table, which this module's import is to leave as it found it.
 
-__all__ = ["OnRead", "Options", "Refused", "WORDS", "main", "manifest_of", "of_record", "open_weights", "opener",
-           "provider", "registered_roles", "replay_args", "tensor_root_of", "tree_refusal", "weights_attest",
-           "worker_peak"]
+__all__ = [
+    "WORDS",
+    "OnRead",
+    "Options",
+    "Refused",
+    "main",
+    "manifest_of",
+    "of_record",
+    "open_weights",
+    "opener",
+    "provider",
+    "registered_roles",
+    "replay_args",
+    "tensor_root_of",
+    "tree_refusal",
+    "weights_attest",
+    "worker_peak",
+]
 
 logger = init_logger(__name__)
 
@@ -367,7 +382,7 @@ class OnRead(Mapping):
     holds it, and one that does not open is refused by name on its read (``LookupError``, which ``.get`` does not swallow)."""
 
     def __init__(self, bundle: Path, tree: dict[str, Any], root_of_record: str | None, ck: Any, *, tp: dict[str, int] | None = None,
-                 roles: dict[str, dict[str, Any]] | None = None):
+                 roles: dict[str, dict[str, Any]] | None = None) -> None:
         names = tree["names"]
         _folded, refused = tree_refusal(tree, root_of_record)
         if refused:

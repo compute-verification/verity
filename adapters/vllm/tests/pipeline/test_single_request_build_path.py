@@ -24,9 +24,9 @@ from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.definitions.registry import b1
 
 from verity_vllm.program.frontend import derive_examples as ex
-from verity_vllm.program.frontend.derive import derive_report
+from verity_torch.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import DEFAULT_RULES
-from verity_vllm.program.frontend.rules.base import RuleSet
+from verity_torch.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
 from verity_vllm.records import workload as WL
 

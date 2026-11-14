@@ -21,11 +21,11 @@ namespace FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil
 open Finset
 open scoped ENNReal
 
-theorem cost_const {n : ℕ} (L : Law n) (a : ℝ) : cost L (fun _ => a) = meanDraws L * a := by
-  unfold cost meanDraws
+theorem cost_const {n : ℕ} (L : Law n) (a : ℝ) : cost L (fun _ => a) = meanSamples L * a := by
+  unfold cost meanSamples
   rw [Finset.sum_mul]
 
-theorem meanDraws_nonneg {n : ℕ} (L : Law n) : 0 ≤ meanDraws L :=
+theorem meanSamples_nonneg {n : ℕ} (L : Law n) : 0 ≤ meanSamples L :=
   Finset.sum_nonneg fun _ _ => ENNReal.toReal_nonneg
 
 theorem bern_escape_toReal {n num N : ℕ} [NeZero N] (h : num ≤ N) (B : Finset (Fin n)) :
@@ -44,9 +44,9 @@ theorem bern_incl_toReal {n num N : ℕ} [NeZero N] (h : num ≤ N) (u : Fin n) 
     ENNReal.toReal_sub_of_le (incl_le_one _ u) ENNReal.one_ne_top, ENNReal.toReal_one] at e
   linarith
 
-theorem bern_meanDraws {n num N : ℕ} [NeZero N] (h : num ≤ N) :
-    meanDraws (Law.bernoulli n num N) = n * ((num : ℝ) / N) := by
-  unfold meanDraws
+theorem bern_meanSamples {n num N : ℕ} [NeZero N] (h : num ≤ N) :
+    meanSamples (Law.bernoulli n num N) = n * ((num : ℝ) / N) := by
+  unfold meanSamples
   simp only [bern_incl_toReal h, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
 /-- **Independent samples certify `b·K + locBits n K`** once a set of `K + 1` escapes with less than `δ`. -/
@@ -85,7 +85,7 @@ theorem bern_certifies {n num N b K : ℕ} [NeZero N] (h : num ≤ N) {δ ℓ : 
 /-- **A sampling design certifying `ℓ` that samples at most `n·Λ/(K+1) + ε` units.** -/
 theorem exists_certifying_law (n b K : ℕ) {δ ℓ ε : ℝ} (hδ0 : 0 < δ) (hδ1 : δ ≤ 1)
     (hℓ : (b : ℝ) * K + locBits n K ≤ ℓ) (hε : 0 < ε) :
-    ∃ L : Law n, CertifiesLeak L (fun _ => b) δ ℓ ∧ meanDraws L ≤ n * Real.log δ⁻¹ / (K + 1) + ε := by
+    ∃ L : Law n, CertifiesLeak L (fun _ => b) δ ℓ ∧ meanSamples L ≤ n * Real.log δ⁻¹ / (K + 1) + ε := by
   have hΛ : 0 ≤ Real.log δ⁻¹ := Real.log_nonneg ((one_le_inv₀ hδ0).2 hδ1)
   have hK : (0 : ℝ) < K + 1 := by positivity
   obtain ⟨x, hx⟩ : ∃ x, x = Real.log δ⁻¹ / (K + 1) := ⟨_, rfl⟩
@@ -118,7 +118,7 @@ theorem exists_certifying_law (n b K : ℕ) {δ ℓ ε : ℝ} (hδ0 : 0 < δ) (h
     rw [← hδeq]
     exact pow_lt_pow_left₀ hfac ht0 (Nat.succ_ne_zero K)
   refine ⟨Law.bernoulli n num N, bern_certifies hnum hesc hℓ, ?_⟩
-  rw [bern_meanDraws hnum]
+  rw [bern_meanSamples hnum]
   -- `num ≤ x·N + 1`, and `n/N ≤ ε`
   have hnum' : (num : ℝ) ≤ x * N + 1 := by
     have : (num : ℝ) ≤ (⌊x * N⌋₊ : ℝ) + 1 := by exact_mod_cast min_le_right N (⌊x * N⌋₊ + 1)
