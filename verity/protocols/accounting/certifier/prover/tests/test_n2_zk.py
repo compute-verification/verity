@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 import pytest
 
-HERE = Path(__file__).resolve().parents[1]
+HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
 
 
 def _load():
@@ -26,7 +26,7 @@ def _load():
 
 
 n2 = _load()
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces" / "tests")))
 from test_warden_chain import gate_run  # noqa: E402
 
 
