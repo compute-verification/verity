@@ -333,7 +333,8 @@ theorem firstDrawn_of (C : CaseOf) (hC : CaseIsSent C) : FirstDrawn C := by
   cases he
   obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, rfl, -, -, hdig⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
   obtain ⟨hik, him, hic, hif, hir, hip, his⟩ :=
-    inputOf_coinsRead p { c with record := j₁ } e.source ξ₂ { e with record := j₂ } received₂ vs
+    inputOf_coinsRead p { c with record := j₁ } e.source ξ₂
+      { e with record := j₂, stmts := VStar.Recursive.SampledTwo.stmtsOwn p e k.blobs } received₂ vs
   obtain ⟨_, _, _, _, -, -, -, hcc⟩ := hread
   have hcc' : Spot.Run.coinsCode (p.audit.base.challenger.map (·.1)) (Spot.getD e.coins "main") e.coins j₁
       p.boundary.verifier.windowRoot (p.boundary.challenger.map (·.2)) (e.source.extract 0 read) = none := by
