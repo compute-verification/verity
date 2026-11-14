@@ -48,10 +48,11 @@ theorem paramsParsed_deployed {j : Json} {p : OneStageZk.Params} (h : OneStageZk
   exact ⟨_, _, hch, deployedKey_params (by simpa using hk)⟩
 
 /-- **Every challenger key v2's parameters name is at `Lms.deployed`**, in either form: the v1 part of parameters
-either form's parse returns is that of parameters `paramsParsed` returned (`paramsEitherOfJson_base`). -/
+either form's parse returns is that of parameters `paramsParsed` returned but for its registration check's members
+(`paramsEitherOfJson_base`). -/
 theorem paramsOfJson_deployed {j : Json} {p : OneStageZk.Params} (h : OneStageZk.paramsEitherOfJson j = .ok p) :
     ∃ key label, p.base.challenger = some (key, label) ∧ key.params = Lms.deployed := by
-  obtain ⟨j', p', hp', hb⟩ := OneStageZk.paramsEitherOfJson_base h
+  obtain ⟨j', p', ms, hp', hb⟩ := OneStageZk.paramsEitherOfJson_base h
   rw [hb]
   exact paramsParsed_deployed hp'
 

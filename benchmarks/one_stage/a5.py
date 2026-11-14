@@ -848,7 +848,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     leaf_layer = CS.leaf_layer(publics)
     hist = history(publics) if history is not None else None
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
-                                     history=hist, **tie(a), **declared(a)).to_json()
+                                     history=hist, members=link_members(members) if per_member(members, not plain(a)) else (),
+                                     **tie(a), **declared(a)).to_json()
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
@@ -1427,15 +1428,30 @@ def draw_ran_out(law: dict, population: int, read: bytes) -> bool | str:
         return str(e)
 
 
+def link_members(members: Sequence[dict]) -> list[tuple[list[list[int]], int]]:
+    """The window's staged members as the registration's `link-points` reads them (`link_points.Member`): each its
+    units ``[base, base + n)`` and its circuit's units a proof block."""
+    return [([[mm["m"].base, mm["m"].base + mm["m"].n]], int(mm["st"]["meta"]["vus_per_block"])) for mm in members]
+
+
+def per_member(members: Sequence[dict], zk: bool) -> bool:
+    """Whether the audit's case is of the per-member form (`members_proof`): a window of several members, its sessions
+    `--zk`. Its registration's check reads the members (`link_members`), as v2's check of that case does
+    (`OneStageZk.membersParamsOfJson`); the one statement's form names none."""
+    return len(members) >= 2 and zk
+
+
 def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
     """The registration's `link-points` (`link_points.refused`) over the window's staged members, each its units
     ``[base, base + n)`` at its circuit's units a proof block: the members it would refuse, each with its fewest and most
     sampled proof blocks under the sampled law over the samples that end (one that runs out of coins fails the window:
-    `draw_ran_out`), or why it refuses them all, a sampling design no sample of which ends among them (`link_points.NEVER_ENDS`).
-    Recorded here; a registration whose verifier names its members refuses (`Registration.check`)."""
+    `draw_ran_out`): one a sample misses, its fewest none, and one whose fewest and most open different link points. Or
+    why it refuses them all, a sampling design no sample of which ends among them (`link_points.NEVER_ENDS`).
+    Recorded here for every window; the registration's check refuses them where the audit's case is of the per-member
+    form (`per_member`)."""
     from verity.protocols.proofs.spot.verifier.one_stage import link_points as LP
 
-    ms = [([[mm["m"].base, mm["m"].base + mm["m"].n]], int(mm["st"]["meta"]["vus_per_block"])) for mm in members]
+    ms = link_members(members)
     try:
         if why := CC.law_problem(law, population):
             raise ValueError(why)
@@ -1493,7 +1509,7 @@ def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool) -> di
 
     if len(members) < 2:
         return None
-    if not zk:
+    if not per_member(members, zk):
         return "v2 verifies --zk sessions; this audit's are plain"
     sdirs = {got["mm"]["m"].key: got["sdir"] for got in done}
     out, tables = [], {}
