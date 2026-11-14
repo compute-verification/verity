@@ -246,9 +246,11 @@ def shard_machines(on: str, n: int) -> list[str]:
     """Each of ``n`` shards' machines (train.sh's MACHINES) from ``on``'s: first its own, every Nth from the Kth for shard K, so
     no machine is the own of two shards (with fewer machines than shards, the ((K-1) mod M)th of the M, shared); then every
     other machine of ``on`` in its order from the Kth on, so each shard falls back on the next one's machines first.  check.py
-    places a check on the first machine of its list with a slot free for it, and twins it on every machine of the list only
-    when none has one: with slots free the shards keep to their own machines (and their warm caches), and a shard whose own
-    are busy takes a free slot anywhere rather than waiting in one machine's line."""
+    places a check on the first machine of its list with a slot free for it and twins it on the two others with the most
+    slots free, which join their lines only after a delay, and only if it hasn't started there by then (with no slot free
+    anywhere, on every machine of the list at once): with slots
+    free the shards keep to their own machines (and their warm caches), and a shard whose own are busy, or whose slot was taken
+    after its launch, takes a free slot anywhere rather than waiting in one machine's line."""
     ms = on.split(",")
     out = []
     for k in range(n):

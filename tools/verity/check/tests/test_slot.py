@@ -1449,6 +1449,86 @@ def test_a_twin_that_holds_a_slot_after_its_pair_was_claimed_or_can_t_claim_it_l
     os.close(fd)
 
 
+def _two_nodes(tmp_path: Path, monkeypatch, run: str) -> tuple[Path, Path]:
+    """Node 1 (vy-nebius-1, HOME) and node 2, each with one free slot `a`; this process is node 2's twin in run ``run``, whose
+    run dir is ``tmp_path/run``, reaching node 1 over ssh (`_twin_ssh`)."""
+    n1, n2 = tmp_path / "n1", tmp_path / "n2"
+    for d in (n1, n2, tmp_path / "run"):
+        d.mkdir()
+    for d in (n1, n2):
+        (d / "slots").write_text("a 0\n")
+    peers = tmp_path / "peers"
+    peers.write_text("vy-nebius-1 research@10.0.0.1\n")
+    monkeypatch.setattr(SLOT, "PEERS", peers)
+    _twin_ssh(monkeypatch, n2, n1, [])
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setenv("RESEARCH_RUN_ID", run)
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "run"))
+    monkeypatch.setattr(SLOT, "SLOTS", n2 / "slots")
+    return n1, n2
+
+
+def test_a_delayed_twin_joins_its_line_after_its_delay_and_takes_a_free_slot_when_no_twin_has_started(tmp_path, monkeypatch):
+    """A check placed beside its home's free slot waited out home's line alone once a check or memory took that slot after
+    the launch, while another machine's slot stood free. Its twin there (`--twin-after`) stays out of that line for the delay,
+    then joins it, takes the free slot, claims the pair on HOME and runs."""
+    n1, n2 = _two_nodes(tmp_path, monkeypatch, "r-n2")
+    held = _hold(n1 / "check-a.lock")                                              # home's slot was taken after the launch
+    ran = []
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda f, argv, env: ran.append(env["CHECK_SLOT"]) or (_ for _ in ()).throw(Exec()))
+    t, waits = [NOW], []
+
+    def sleep(s):
+        assert not (n2 / SLOT.LINE).exists() and not ran                          # out of node 2's line through the delay
+        assert json.loads((tmp_path / "run" / SLOT.RUN_SLOT).read_text())["state"] == "waiting"
+        waits.append(s)
+        t[0] += timedelta(seconds=s)
+
+    with pytest.raises(Exec):
+        SLOT.main(["--twin", "p4@vy-nebius-1", "--twin-after", "600", "--", "check"], now=lambda: t[0], sleep=sleep)
+    assert waits == [SLOT.TWIN_PEEK_S] * 5 and ran == ["a"]
+    claim = json.loads((n1 / "twins" / "p4" / "who").read_text())
+    assert (claim["run"], claim["took"]) == ("r-n2", "2026-10-01T09:10Z")
+    os.close(held)
+
+
+def test_a_delayed_twin_never_joins_its_line_once_a_twin_has_started_and_leaves_not_started(tmp_path, monkeypatch, capsys):
+    """A check that took its home's free slot must cost no other machine's line a waiter: its delayed twin, though its own
+    machine's slot is free, stays out of the line, finds the claim at its next look and leaves with NOT_STARTED (75), which the
+    queue reads as a twin that never ran. One launched after the claim leaves at once."""
+    n1, n2 = _two_nodes(tmp_path, monkeypatch, "r-n2")
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran"))
+    t, waits = [NOW], []
+
+    def sleep(s):
+        assert not (n2 / SLOT.LINE).exists()
+        if not waits:                                                              # home's twin takes its slot meanwhile
+            assert SLOT.twin_here("claim", n1, "p5", {"run": "r-n1"})[0] == "claimed"
+        waits.append(s)
+        t[0] += timedelta(seconds=s)
+
+    assert SLOT.main(["--twin", "p5@vy-nebius-1", "--twin-after", "600", "--", "check"], now=lambda: t[0],
+                     sleep=sleep) == SLOT.NOT_STARTED
+    assert waits == [SLOT.TWIN_PEEK_S] and not (n2 / SLOT.LINE).exists()
+    err = capsys.readouterr().err
+    assert "slot: twin p5@vy-nebius-1: joins this machine's line after 600 s, and only if no twin of its pair has taken" in err
+    assert "slot: not started: its twin took a slot first (run r-n1); exit 75" in err
+    left = json.loads((tmp_path / "run" / SLOT.RUN_SLOT).read_text())
+    assert (left["state"], left["twin"], left["left"]) == ("left", "p5@vy-nebius-1", "2026-10-01T09:02:00Z")
+    os.close(SLOT.take(SLOT.parse("a 0"), n2, NOW)[1])                             # node 2's slot stayed free
+    assert SLOT.main(["--twin", "p5@vy-nebius-1", "--twin-after", "600", "--", "check"], now=lambda: t[0],
+                     sleep=lambda s: pytest.fail("waited")) == SLOT.NOT_STARTED
+
+
+def test_twin_after_is_parsed_and_needs_a_twin_off_its_home():
+    assert SLOT.options(["--twin", "p1@vy-nebius-1", "--twin-after", "600"])[7] == 600 and SLOT.options([])[7] is None
+    for bad in (["--twin-after", "600"], ["--twin", "p1", "--twin-after", "600"]):
+        with pytest.raises(SystemExit, match="--twin-after needs --twin PAIR@HOME"):
+            SLOT.options(bad)
+    with pytest.raises(SystemExit, match="--twin-after must be more than 0 seconds"):
+        SLOT.options(["--twin", "p1@vy-nebius-1", "--twin-after", "0"])
+
+
 def test_twin_is_parsed_and_shown_and_a_bad_pair_is_refused(tmp_path, capsys):
     assert SLOT.options(["--by", "x", "--twin", "20261009T0440Z-ab12@vy-nebius-2"])[4] == "20261009T0440Z-ab12@vy-nebius-2"
     with pytest.raises(SystemExit, match="is not PAIR or PAIR@HOME"):

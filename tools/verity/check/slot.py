@@ -87,9 +87,12 @@ audit (its `train_gb`), so a train never runs in a lane slot: in one, every para
 one-process suites one process between them and circuit-check one target at a time, two to four times a train slot's wall
 time, and a build or audit can run out of memory. It is the environment, not an option, so the run's command stays the one `research merge` reads; CMD doesn't inherit it.
 
-`--twin PAIR` / `--twin PAIR@HOME`: one of a check's twins, the same check launched on each machine it may run on when none had a
-free slot (`check.py --record --on auto`), so it takes the first slot that frees on any of them, and never waits in one
-machine's line while another's slot is free. Each waits in its own machine's line. The one holding a slot runs only if it
+`--twin PAIR` / `--twin PAIR@HOME`: one of a check's twins, the same check launched on each machine it may run on (`check.py
+--record --on auto`), so it takes the first slot that frees on any of them, and never waits in one machine's line while
+another's slot is free. Each waits in its own machine's line. `--twin-after SECONDS` (with `--twin PAIR@HOME`, given when HOME
+had a slot free at the launch): the twin joins its line only after SECONDS, looking for its pair's claim on HOME at the start
+and every TWIN_PEEK_S until then, and leaves (NOT_STARTED) without joining once it finds one, so a check that found its place
+costs no other machine's line a waiter, and one that lost it there takes a slot elsewhere after the delay. The one holding a slot runs only if it
 claims PAIR first: `mkdir TWINS/PAIR` beside SLOTS on this machine (`--twin PAIR`) or on HOME, over the ssh PEERS names for it.
 Its twins, finding the claim (each poll here, every TWIN_PEEK_S from another machine, and whenever one holds a slot), leave
 their line and exit NOT_STARTED. A claim that can't be made (HOME unreachable or not in PEERS) also exits NOT_STARTED, so a
@@ -175,8 +178,8 @@ RUN_MEM_ENV = "CHECK_RUN_MEM_GB"
 #: status.json). The share and a machine's N hold for that day when, at each of its minutes, what they count for the lane runs
 #: then holding slots there is at least what those runs' summed memory then rose by
 PEAK_SHARE = 0.25
-USAGE = ("usage: slot.py [--priority [--rank N]] [--by NAME] [--twin PAIR[@HOME]] [--wait-max SECONDS] [--run-max SECONDS] "
-         "[--budget-gb GB] -- CMD...")
+USAGE = ("usage: slot.py [--priority [--rank N]] [--by NAME] [--twin PAIR[@HOME] [--twin-after SECONDS]] [--wait-max SECONDS] "
+         "[--run-max SECONDS] [--budget-gb GB] -- CMD...")
 #: the claims of twins (`--twin`), one directory per pair, beside SLOTS on the machine that holds them; a week old, removed
 TWINS = "twins"
 #: machine name, then the ssh destination and options with which this machine's research user reaches it (`--twin PAIR@HOME`)
@@ -694,20 +697,21 @@ def _read(p: Path) -> dict:
         return {}
 
 
-def options(opts: list[str]) -> tuple[bool, str | None, float | None, float | None, str | None, int | None, int | None]:
+def options(opts: list[str]) -> tuple[bool, str | None, float | None, float | None, str | None, int | None, int | None,
+                                      float | None]:
     """--priority, --by NAME, --wait-max SECONDS and --run-max SECONDS (each > 0), --twin PAIR[@HOME], --rank N (with
-    --priority) and --budget-gb GB (> 0; in GiB, as a slot's mem= is) from the arguments before `--`; SystemExit with the usage
-    on anything else."""
+    --priority), --budget-gb GB (> 0; in GiB, as a slot's mem= is) and --twin-after SECONDS (> 0, with --twin PAIR@HOME) from
+    the arguments before `--`; SystemExit with the usage on anything else."""
     priority, vals, i = False, {}, 0
     while i < len(opts):
         if opts[i] == "--priority":
             priority, i = True, i + 1
-        elif opts[i] in ("--by", "--wait-max", "--run-max", "--twin", "--rank", "--budget-gb") and i + 1 < len(opts):
+        elif opts[i] in ("--by", "--wait-max", "--run-max", "--twin", "--twin-after", "--rank", "--budget-gb") and i + 1 < len(opts):
             vals[opts[i]], i = opts[i + 1], i + 2
         else:
             sys.exit(USAGE)
     secs = {}
-    for k in ("--wait-max", "--run-max"):
+    for k in ("--wait-max", "--run-max", "--twin-after"):
         try:
             secs[k] = float(vals[k]) if k in vals else None
         except ValueError:
@@ -717,6 +721,8 @@ def options(opts: list[str]) -> tuple[bool, str | None, float | None, float | No
     twin = vals.get("--twin")
     if twin is not None and not re.fullmatch(r"[A-Za-z0-9._-]+(@[A-Za-z0-9._-]+)?", twin):
         sys.exit(f"slot: --twin {twin!r} is not PAIR or PAIR@HOME (letters, digits, '.', '_', '-'); {USAGE}")
+    if secs["--twin-after"] is not None and "@" not in (twin or ""):
+        sys.exit(f"slot: --twin-after needs --twin PAIR@HOME: only a twin off its pair's HOME waits before joining; {USAGE}")
     rank = vals.get("--rank")
     if rank is not None and not (priority and re.fullmatch(r"\d{1,6}", rank)):
         sys.exit(f"slot: --rank {rank!r} needs --priority and a whole number below 1,000,000; {USAGE}")
@@ -730,7 +736,7 @@ def options(opts: list[str]) -> tuple[bool, str | None, float | None, float | No
         if not 0 < budget < float("inf"):
             sys.exit(bad)
     return (priority, vals.get("--by"), secs["--wait-max"], secs["--run-max"], twin, None if rank is None else int(rank),
-            None if budget is None else gib(budget))
+            None if budget is None else gib(budget), secs["--twin-after"])
 
 
 def run_id() -> str | None:
@@ -1171,6 +1177,26 @@ def twin(op: str, spec: str, who: dict) -> tuple[str, dict]:
     return twin_there(op, home, SLOTS.parent, pair, who) if home else twin_here(op, SLOTS.parent, pair, who)
 
 
+def hold_off(pair: str, after: float, me: dict, run_dir: str | None, now, sleep) -> int | None:
+    """`--twin-after SECONDS`: wait SECONDS before joining this machine's line, peeking at ``pair``'s claim at the start and
+    every TWIN_PEEK_S until then; NOT_STARTED, never having joined, once a twin of the pair has taken a slot, else None."""
+    begun = now()
+    since = {"since": f"{begun:%Y-%m-%dT%H:%M:%SZ}", "twin": pair}
+    why = f"twin {pair}: joins this machine's line after {after:g} s, and only if no twin of its pair has taken a slot by then"
+    print(f"slot: {why}", file=sys.stderr, flush=True)
+    record_slot(run_dir, {"state": "waiting", **since, "why": why})
+    while True:
+        state, info = twin("peek", pair, me)
+        if state == "taken":
+            why = f"its twin took a slot first ({describe(info) or 'claimed'})"
+            record_slot(run_dir, {"state": "left", **since, "left": f"{now():%Y-%m-%dT%H:%M:%SZ}", "why": why})
+            print(f"slot: not started: {why}; exit {NOT_STARTED}", file=sys.stderr, flush=True)
+            return NOT_STARTED
+        if (rest := after - (now() - begun).total_seconds()) <= 0:
+            return None
+        sleep(min(rest, TWIN_PEEK_S))
+
+
 def leave(ticket: Path, tfd: int, why: str) -> int:
     """Leave the line without running CMD: NOT_STARTED."""
     ticket.unlink(missing_ok=True)
@@ -1191,7 +1217,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             print("\n".join(status(parse(SLOTS.read_text()), SLOTS.parent, now())))
         return 0
     opts, cmd = (argv[:argv.index("--")], argv[argv.index("--") + 1:]) if "--" in argv else ([], argv)
-    priority, by, wait_max, run_max, pair, rank, budget = options(opts)
+    priority, by, wait_max, run_max, pair, rank, budget, after = options(opts)
     min_mem = min_mem_gb()
     if not cmd:
         sys.exit(USAGE)
@@ -1238,6 +1264,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
               f"with a train slot (only=trains, mem={min_mem} or more: `check.py --slots` lists them); exit {NOT_STARTED}",
               file=sys.stderr, flush=True)
         return NOT_STARTED
+    if after and (rc := hold_off(pair, after, asker(by, pair), research_run_dir(), now, sleep)) is not None:
+        return rc
     me = asker(by, pair)
     ran = copy(me.get("commit"))
     if ran.get("of") == "tree" and named and not NODE_COPY.exists():

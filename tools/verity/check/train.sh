@@ -11,9 +11,10 @@
 # (but sigma/, a README.md or PROTOCOL.md) against origin/main, which the run fetches. --agreement sends them whatever the train
 # changes: the lander's rule for a train that adds or changes a guarantee (`lean-audit.json`) anywhere.
 # It prints the run ids (`RUN ID...`); `research merge COMMIT` lands it on a pass. `research merge --train --prepare` builds
-# COMMIT's branch. With MACHINE `auto` and no free slot, check.py launches twins, one run per machine that can take it (`slot.py
-# --twin`): the first to take a slot runs the check and the others exit 75, not started, so RUN names one id per twin. When every
-# twin exits 75 (check.py's own exit 75), none of them ran: rerun the train.
+# COMMIT's branch. With MACHINE `auto` or a list, check.py launches twins, one run per machine that can take it (`slot.py
+# --twin`; when its pick had a slot free, on two others at most, which join their lines only after a delay, `--twin-after`): the first to
+# take a slot runs the check and the others exit 75, not started, so RUN names one id per twin. When every twin exits 75
+# (check.py's own exit 75), none of them ran: rerun the train.
 #
 # `--deferred STEP,...`: drive's after-landing run and its lock run in place of the check: only those ci.toml jobs and what
 # they need (`check.py --record --deferred`), in a priority slot as a check runs, recorded without `--tool check`, so no gate
