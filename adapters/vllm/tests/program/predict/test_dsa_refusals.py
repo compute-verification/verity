@@ -1,7 +1,8 @@
 """verity_vllm.program.predict.dsa: three things the sparse-attention decoder refuses, each by name.  A target whose device has
 no tuned fused-MoE tile (`engine.profiles.devices.FUSED_MOE_CONFIGS`) is `Unexpressible` where the MoE block is written, and
-nowhere before it.  A history opens once, before a layer's first call, and an edge is every layer's rows at one length: a
-caller that breaks either gets the decoder's own `AssertionError`, which `build_program`'s order of calls never does.
+nowhere before it; a node of such ranks (`node.build_node_program`) is refused in the same words.  A history opens once,
+before a layer's first call, and an edge is every layer's rows at one length: a caller that breaks either gets the decoder's
+own `AssertionError`, which `build_program`'s order of calls never does.
 
 GLM-5.3's checkpoint is cut to its first 4 layers: three dense MLPs and then one MoE block, three full indexers and then one
 that shares the third's top-k."""
@@ -20,10 +21,13 @@ from tests.program.predict.test_node import _first_layers
 from tests.program.predict.test_predict import GLM53, _row_phi
 from verity_vllm.program.predict.build import build_program, decoder
 from verity_vllm.program.predict.common import Unexpressible, _Peers
+from verity_vllm.program.predict.node import build_node_program
 from verity_vllm.program.predict.phi import Phi
 
 LAYERS, H200, H100 = 4, "NVIDIA H200", "NVIDIA H100 80GB HBM3"
 GROUPS = ("prefix", "prefix_ik", "prefix_iks")
+NO_TILE = (f"vocabulary cannot express: no tuned fused-MoE config for E=256, N=256 on {H100!r} "
+           f"(engine.profiles.devices.FUSED_MOE_CONFIGS)")
 
 
 @pytest.fixture
@@ -63,12 +67,21 @@ def test_a_device_without_a_tuned_fused_moe_tile_is_refused_where_the_moe_block_
     another device the fourth layer, the MoE block, is refused by name.  The first three layers read no tile: cut to them,
     the other device's Program is the H200's."""
     assert _families(build_program(cut(), "step", M=1, pos0=0, with_desc=False))["MoeExpertFp8Gemm_v1"] == 8
-    with pytest.raises(Unexpressible, match=re.escape(
-            f"vocabulary cannot express: no tuned fused-MoE config for E=256, N=256 on {H100!r} "
-            f"(engine.profiles.devices.FUSED_MOE_CONFIGS)")):
+    with pytest.raises(Unexpressible, match=re.escape(NO_TILE)):
         build_program(cut(device=H100), "step", M=1, pos0=0, with_desc=False)
     dense, same = (build_program(cut(3, device), "step", M=1, pos0=0) for device in (H100, H200))
     assert not any(f.startswith("Moe") for f in _families(dense)) and dense.digest == same.digest
+
+
+def test_a_node_of_refused_ranks_is_refused_in_the_ranks_words(cut):
+    """A node's ranks are written in lockstep, each on a thread of its own, a collective at a time.  The first rank to reach
+    the MoE block is refused there; every other rank stops where it waits, and the caller gets that rank's refusal, whichever
+    rank φ names.  On the H200 the eight ranks join."""
+    assert build_node_program(cut(), "step", M=1, pos0=0, with_desc=False).world == 8
+    for rank in (0, 5):
+        phi = cut(device=H100)
+        with pytest.raises(Unexpressible, match=re.escape(NO_TILE)):
+            build_node_program(Phi.from_json({**phi.to_json(), "tp": {**phi.tp, "rank": rank}}), "step", M=1, pos0=0, with_desc=False)
 
 
 def test_a_history_opens_once_and_before_a_layers_first_call(cut):

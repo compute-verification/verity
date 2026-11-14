@@ -130,6 +130,12 @@ def test_the_gate_refuses_a_field_reads_doesnt_declare_by_name():
         R.gate(A_WHOLE.i1())
 
 
+def test_the_gate_prints_as_the_record_it_gates():
+    """A gated record, and a record read through it, print as `gate(...)` of the record: a message that prints one says so."""
+    g = R.gate(A_WHOLE)
+    assert (repr(g), repr(g.requests[0])) == (f"gate({A_WHOLE!r})", f"gate({A_WHOLE.requests[0]!r})")
+
+
 def test_the_table_is_the_compilers_read_path(monkeypatch):
     """Without its declaration a field the planner reads fails it by name, and the planner's body roles are the table's."""
     from verity_vllm.program.predict import ingress_policy as IP
