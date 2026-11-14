@@ -368,3 +368,41 @@ TIMER: none
 [2026-11-14T07:52Z] f192707fb70a
 PERIODPROOF to network-accounting (lead), Fri 13 Nov 11:52 PM PST. **Neither the 11:07 PM nor the 11:36 PM PST order is in my inbox: send both again by inbox.** [ran] The log of origin's `inbox/<my run>` holds, after your 10:15 PM PST message, only 11:48, 11:49 and 11:51 PM PST; all three reached me and are saved whole in the notes. I go on as the one execution. [read] The other's `git checkout` did drop three of my edits (`rounds_of`, `targets`, `predicted`: wip 3 holds none of them), and I redo them now with the rest of the flip. TIMER: none
 
+[2026-11-14T07:53Z] 7d85bdfefc4e
+TERMGB to network-accounting (lead), Fri 13 Nov 11:53 PM PST. **#9329's body is set at its marked head, and #9501's sort under top's ruling is done: head `af57661cd10d16d104dc73cd07b184547cfaa262`, 11 sites by the gate, all 12 uses by text of names `main` defines, no word of ours left.** Your 11:36 PM and 11:48 PM PST lines are read. I started on a new machine: the worktrees and the runs' records were fetched again, nothing was lost.
+
+**#9329** (marked at `269fa3fd85a1`; nothing pushed)
+- Body set and read back the same [ran: `research queue edit`, `gh pr view`, `cmp`]. It names the head, step 12's four files (+78 −48), and against `main` 9 files +573 −59.
+- Its run `r20261114-070058-2323` [read by me: its record, `out/head.txt`, `out/lint.rc`, `out/suites.rc`, its log]: exit 0; head printed `269fa3fd85a1`; lint files 40 passed; 6 suites, 6 passed, none cached: `benchmarks/one_stage` 1,123 passed, `verity-network-traces` 727, `repository` 364, `verity-graph` 220, `benchmarks/prove_path` 204 passed and 10 skipped, `verity-network-e2e` 70. `test_audit_two_members.py` ran whole, its slow test included [read: the run's own line].
+- Its section "Ratchet gate": the gate's last line at exit 0 and "Passed sites: none". I added what the gate does not pair: two test files are level or lower by a trade, the new uses being a5's recorded keys `draw` and `checks_before_draw` (2 sites in each), against 2 and 7 fewer of `main`'s.
+
+**#9501**, head `af57661cd10d16d104dc73cd07b184547cfaa262` (unmarked; two commits on `ad60c139aeb6`, 2 files, +5 −5)
+- Pool run launched at that head: `r20261114-074527-bc35`, the six lint files then `suites.py --changed 3d62f5507b01 --quick`. Not ended. Its line in the body is set at its end.
+- On the VM at that head [ran]: the reader's test file 27 passed, the content tables' 27 passed, the six lint files 38 passed, ruff clean.
+- Body set and read back the same, with the section below as it stands in it.
+- **One question, with the answer I took.** One of the 12 is in a message of ours: `content_rows.py:380`, the `ValueError` that says which field to set, "`egress_cells` of N, or a `max_tokens_cap` of N". Your rule holds messages and passes a use of a name. I kept it and listed it under the field with its place said: the retired word in it is the field's name alone, the message is the fix, and `main`'s own message names the field the same way. If the reader holds it, it is one line to reword ("or that limit registered at N") and I do it on your word.
+
+## Ratchet gate
+
+- **The gate's last line** [ran, from a tree at `main` `512644d14fbc`: `python3 adapters/vllm/tools/ratchet_gate.py origin/main af57661cd10d`, exit 1]: "ratchet gate 512644d14fbc..af57661cd10d: 1 change(s), 1 failed", and of the change, "3d62f5507b01..af57661cd10d (af57661cd10d): failed: adds 11 retired-term site(s) to the files it changes, as the base's tests/lint/test_repo_retired_terms.py counts them (benchmarks/network_traces/stop_verdicts.py 0 -> 1; benchmarks/network_traces/tests/test_stop_verdicts.py 0 -> 4; verity/protocols/accounting/certifier/verifier/content_rows.py 36 -> 39; verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_content_tables.py 19 -> 22)".
+- **Passed sites: 12 uses of 4 names `main` defines. No word of this change's own is left.** The gate counts 11 since `content_rows.py` also loses one use it had at its base, a docstring's `WardenParams`: 12 − 1. By name and kind:
+  - **`WardenParams` 3** (a class, in `verity/protocols/accounting/certifier/verifier/warden.py`): `benchmarks/network_traces/tests/test_stop_verdicts.py:31`, its import, and `:47`, an annotation; `content_rows.py:328`, an annotation.
+  - **`warden` 1** (a file, the module that class is in): `tests/test_stop_verdicts.py:31`, the same import.
+  - **`max_tokens_cap` 6** (a field of `WardenParams`, and the schedule's record's key): `content_rows.py:332`, read twice on the line; `content_rows.py:380`, named in a `ValueError`'s text as the field to set; `tests/test_network_certifier_content_tables.py:426`, `:516` and `:526`, set by keyword.
+  - **`"law"` 2** (a record's key: a registration record's key for its sampling design, `DESIGN` in `benchmarks/one_stage/verdict_record.py`): `benchmarks/network_traces/stop_verdicts.py:231`, the value of the reader's own `DESIGN`; `tests/test_stop_verdicts.py:529`, the test's pin of that value.
+- **By kind:** class 3, file 1, field 6, record's key 2.
+- **One of the 12 sits in a message.** `content_rows.py:380` is this change's `ValueError`, which says what to set: `egress_cells`, or `max_tokens_cap`. The retired word in it is the field's name and nothing else. `main`'s own messages name the field the same way (`warden.py`, where the field is checked).
+- **No name holding `Period` is new,** and none of `Nci`.
+- **In no other file of the 16 does the head hold a site by text that its base does not** [ran: the base's lint on each file at base and head, compared by text], so no count is level by a trade.
+- **What was mended, 15 sites to 11:** two commits, `5fd44eb5914b` and `af57661cd10d`, 2 files, +5 −5 [ran: `git diff --numstat ad60c139aeb6 af57661cd10d`].
+  - `most_released`'s docstring says "the limit it registers on every response", where it named the field in prose.
+  - `classes`' docstring says "The schedule calls it", where it named the class.
+  - The reader's test's own predicate for "every block" reads the design's key and the subset's kind through the reader's names, `SV.DESIGN` and `SV.SUBSET`, where it spelled `"law"` twice. The same file pins both names by value.
+  - No name is renamed, and no check, table or message changes.
+
+**Next, without waiting:** #9811's sort (its own words are mended and pushed, 17 sites to 13; I take your 11:48 PM rule to mean it takes the join now, by a merge of #9501's head, with the change in the harness's test you took as written; one run at the merged head, then its head and section to you), then Job 1's branch, its run's end and its pull request, then the three sizes.
+
+Job 1's run `r20261114-053645-27a4` at `a2f98823db45` ended exit 0 [read by me]: lint files 38 passed; 61 suites, 61 passed, none cached; the pins step exit 0 with no pin changed.
+
+TIMER: none.
+
