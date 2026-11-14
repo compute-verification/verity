@@ -938,7 +938,7 @@ def test_onsite_counted_agrees(onsite_counted_server, recorded):
     """`onsite-counted serve` (`Core.Onsite.counted`) against `ONSITE_COUNTED` on 50 cases. What only whole cases through
     it hold, which `test_wipe_count_ties.py` can't: its eight subprotocols, with the count over the wipe's span on its
     host's one link and the counted wipe, decode a case and reject it as the reference does. No case here reaches its
-    wipe's ties: sampled proofs' cases all reject, and a rejection stands before any tie is read."""
+    wipe's ties: SPOT's cases all reject, and a rejection stands before any tie is read."""
     _agree(ONSITE_COUNTED, onsite_counted_server, SEEN["onsite-counted"], 50,
            (R.REJECT, "reject, a component undecided", "one record"))
 

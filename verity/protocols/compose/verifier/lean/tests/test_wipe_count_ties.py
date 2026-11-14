@@ -1,7 +1,7 @@
 """The reference's ties of the counted composite (`reference.WIPE_NODE`, `reference.WIPE_COUNT`, Lean's
 `Core.Onsite.wipeNode` and `wipeCount`) and its count's parameters (`reference.wipe_link`, `host_span_params`) on made
 pairs: a wipe run between the two marks of a count over a span on its host's one link. Python alone: no case of the
-composite reaches a tie at acceptance through `onsite-counted serve`, since sampled proofs' cases all reject there, so
+composite reaches a tie at acceptance through `onsite-counted serve`, since SPOT's cases all reject there, so
 the Lean ties are checked by `CoreOnsite`'s `#guard`s on the same kinds of pair and the Python ties here."""
 
 from __future__ import annotations
