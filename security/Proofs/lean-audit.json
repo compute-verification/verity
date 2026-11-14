@@ -125,6 +125,7 @@
   "Proofs.Properties.Challenger.Lines",
   "Proofs.Properties.Spot.MonitoringPeriod",
   "Proofs.Properties.Spot.MonitoringPeriodLedger",
+  "Proofs.Properties.Spot.MonitoringPeriodSigned",
   "Proofs.Properties.Challenger.CanonLine",
   "Proofs.Properties.Challenger.Drawn",
   "Proofs.Properties.Verity.Sampled.Messages",
