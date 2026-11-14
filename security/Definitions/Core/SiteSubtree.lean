@@ -22,6 +22,10 @@ bound of the model at these is a bound read off the registration.
 * `Site.Place`, `Site.place`, `Site.placesIn`: the places as a type, the place an id names, and the places whose id
   is in a set.
 * `Site.placeEnds`, `Site.linkβ`: the registered links as the model's.
+* `Site.proverUnder`, `Site.certifiersOf`, `Site.challengersOf`, `Site.auditorsOf`: a subtree's prover places, and the
+  auditor's devices at it, read off the links' far ends (`Site.far`).
+* `Site.Within`, `Site.sharedOf`: a place linked only into a subtree, and the memory challengers of a subtree that are
+  not.
 -/
 
 @[expose] public section
@@ -62,5 +66,38 @@ def placeEnds (e : Fin S.links.length) : S.Place × S.Place :=
 
 /-- The registered links as the model's: link `e`'s capacity each way, in bits a tick. -/
 def linkβ (e : Fin S.links.length) : ℕ := (S.links.get e).β
+
+open Classical in
+/-- **The prover's places of the subtree at `i`**: the subtree less the auditor's devices (`Kind.auditor`). -/
+noncomputable def proverUnder (i : String) : Finset String :=
+  (S.under i).filter fun j => ∀ k ∈ S.kind? j, k.auditor = false
+
+open Classical in
+/-- **The certifiers of the subtree at `i`**: the registered certifiers at the far end (`far`) of a link of one of the
+subtree's prover places. -/
+noncomputable def certifiersOf (i : String) : Finset String :=
+  S.places.filter fun y => S.kind? y = some .certifier ∧ ∃ x ∈ S.proverUnder i, y ∈ S.far x
+
+open Classical in
+/-- **The memory challengers of the subtree at `i`**, under the pins `pinned`: the registered memory challengers among
+`pinned` at the far end (`far`) of a link of one of the subtree's prover places. `pinned` holds the ids of the
+challengers whose key and session the auditor's pins hold, a parameter. A challenger that is not pinned, and a device
+at a link's end that is not registered as a challenger, is not among them. -/
+noncomputable def challengersOf (pinned : Finset String) (i : String) : Finset String :=
+  S.places.filter fun y => S.kind? y = some .challenger ∧ y ∈ pinned ∧ ∃ x ∈ S.proverUnder i, y ∈ S.far x
+
+/-- **The auditor's devices at the subtree at `i`**: its certifiers and its memory challengers. -/
+noncomputable def auditorsOf (pinned : Finset String) (i : String) : Finset String :=
+  S.certifiersOf i ∪ S.challengersOf pinned i
+
+/-- **`y` is linked only into the subtree at `i`**: the far end (`far`) of each of `y`'s links is in the subtree. -/
+def Within (i y : String) : Prop := ∀ z ∈ S.far y, z ∈ S.under i
+
+open Classical in
+/-- **The shared memory challengers of the subtree at `i`**: its memory challengers with a link whose far end is
+outside the subtree. On the Site's link kinds (`Kind.links`) that is a challenger linked to a host of the subtree and to
+a host outside it. -/
+noncomputable def sharedOf (pinned : Finset String) (i : String) : Finset String :=
+  (S.challengersOf pinned i).filter fun y => ¬ S.Within i y
 
 end Verity.Site
