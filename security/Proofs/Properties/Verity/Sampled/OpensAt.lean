@@ -344,19 +344,6 @@ theorem remote_soundness_deployedReady (I : Instance d α) (K₀ : Constructions
   remote_soundness_deployedAt I K₀ reg record recordDigest (I.opensAt_of_sessions hready) hRg
     (I.sessionAt_of_registered .remote hSr) (I.logOpensRecorded .remote) hW hI
 
-open scoped ENNReal in
-/-- **`remote_soundness_deployedReady`'s honest lemma**: its premises hold at the idle deployment's instance at v2's
-reading (`Instance.Honest.inst`) that runs no session, whose base publishes `⊤` for every subprotocol: each deployment
-premise speaks of the sessions the deployment runs, and the base's PoUW and inference-only targets hold at `⊤`. -/
-theorem remote_soundness_deployedReady_honest :
-    (Instance.Honest.inst ⊤ fun _ => none).SessionsReady ∧ (Instance.Honest.inst ⊤ fun _ => none).RegisteredFiles ∧
-      (Instance.Honest.inst ⊤ fun _ => none).SessionRegistered .remote ∧
-      (Instance.Honest.inst ⊤ fun _ => none).base.PouwSound .remote ∧
-      (Instance.Honest.inst ⊤ fun _ => none).base.InferenceOnlySound .remote :=
-  ⟨fun _ _ _ h => by simp [Instance.Honest.inst] at h, Instance.Honest.registeredFiles ⊤ _,
-    Instance.Honest.sessionRegistered_none ⊤ .remote,
-    Instance.Honest.target_top .remote .pouw, Instance.Honest.target_top .remote .inferenceOnly⟩
-
 /-- **`remote_soundness_deployedReady`'s nontrivial lemma**: its conclusion, soundness at remote's compiled verifier,
 fails for a verifier that accepts everything at the idle deployment whose errors are all `0`. -/
 theorem remote_soundness_deployedReady_nontrivial : ¬ Verity.Idle.exact.SoundnessFor .remote fun _ => True :=

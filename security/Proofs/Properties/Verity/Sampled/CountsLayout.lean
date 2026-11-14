@@ -404,8 +404,8 @@ the log's first opening (`RoundsReach.stop_frame`, `firstOpened_noPick`), of the
 which asks for `A.mP + A.mP` coins (`link_frameCount`, at the record's sample, `recordDraw_firstStop`); each answered
 stop's frame is round `k` of the first table's rep stream at its fixed round's slot (`stop_slot`), which asks for its
 message's count (`stop_count`). So no stop off the first events is in the second (`RoundsReach.weaken`). -/
-theorem ReachesOff.counts {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
-    {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
+theorem ReachesOff.counts {V : Vocab d α} {T : Pinned} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (reg : Option Claims.Msg → A.Reg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
     (hrd : rd = readingAt A.tables A.layout record recordDigest) {σ : Strategy (V.game θ F c)}
@@ -419,7 +419,7 @@ theorem ReachesOff.counts {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
       (roundEmptyAt fieldEnc (finish (V.signer θ) θ F c σ.1)) o)
     (hv : V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ o.2)) (hn : NoMiss V θ F c rd σ o.2)
     (hl : Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ o.2))
-    (ht : TablesSent (CoinTape.run (V.game θ F c) σ o.2).sent)
+    (ht : TablesSent T (CoinTape.run (V.game θ F c) σ o.2).sent)
     (hN : SampleNamed k (CoinTape.run (V.game θ F c) σ o.2).sent label after)
     (hO : ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ o.2).sent = some text →
       Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ o.2).log) :
@@ -500,8 +500,8 @@ theorem ReachesOff.counts {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
 the device's log and each pinned table at its registered file (`TablesSent`) and that v2 samples at `after`
 (`SampledDigest`), with what it takes of each accepted play the cut holds
 of stated for every tape, as `movesReach_layout` takes it. -/
-theorem countsReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
-    {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
+theorem countsReach_layout {V : Vocab d α} {T : Pinned} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (reg : Option Claims.Msg → A.Reg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
     (hrd : rd = readingAt A.tables A.layout record recordDigest) {σ : Strategy (V.game θ F c)}
@@ -519,15 +519,16 @@ theorem countsReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
       ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ x).sent = some text →
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log) :
     CountsReach fieldEnc V θ F c k
-      (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent) ∧ SampledDigest k o.sent after) A rd σ D M :=
+      (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent T o.sent) ∧ SampledDigest k o.sent after) A rd σ D M :=
   fun _ h ⟨hv, hn, ⟨hl, ht⟩, hd⟩ => h.counts hA hDg reg record recordDigest hrd hD hm hsrc hM hv hn hl ht
     (hN _ hv hl hd) (hO _ hv hl)
 
 /-- **`CountsReach` at the deployment**: `countsReach_layout` at `movesReachAt`'s readings, decoders, family, digest
 and coins, its premises on the sample closed as `movesReachAt` closes them. -/
-theorem countsReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray} {F : Array ByteArray}
-    {A : Live} (reg : Option Claims.Msg → A.Reg) (record : ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : ByteArray → Claims.Msg) (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
+theorem countsReachAt {V : Vocab d α} {T : Pinned} {k : Verity.Registration.Composite} {θ : ByteArray}
+    {F : Array ByteArray} {A : Live} (reg : Option Claims.Msg → A.Reg)
+    (record : ByteArray → Exchange → Option Claims.Msg)
+    (recordDigest : ByteArray → Claims.Msg) (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (hL : A.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64)
     (hO : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
@@ -536,7 +537,8 @@ theorem countsReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ :
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log)
     (c : ByteArray) (σ : Strategy (V.game θ F c)) :
     CountsReach fieldEnc V θ F c k
-      (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent) ∧ SampledDigest k o.sent (afterAt V k θ F c σ)) A
+      (fun o =>
+        (Binding.Logged Binding.readsV2 o ∧ TablesSent T o.sent) ∧ SampledDigest k o.sent (afterAt V k θ F c σ)) A
       (readingAt A.tables A.layout (record c) (recordDigest c)) σ (decodersAt reg A.layout)
       (sampleMap fieldEnc V θ F c A (readingAt A.tables A.layout (record c) (recordDigest c)) σ (labelAt θ)
         (afterAt V k θ F c σ) (srcCoinsAt _root_.Spot.Challenger.MAX_COINS A)) :=
@@ -549,22 +551,22 @@ deployed device's history and `movesReachAt`'s readings, decoders, family, diges
 `movesReachAt` and the count match (`countsReachAt`, `movesReach_at`). It holds wherever the vocabulary's signer at
 `θ` is the deployment's (`hD`) and `movesReachAt`'s premises hold, with no bound on the stops' term. -/
 theorem couplingTargetAt_counts {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V)
-    (P : Device.Deployment) {θ : ByteArray} {F : Array ByteArray} {A : Live}
+    (T : Pinned) (P : Device.Deployment) {θ : ByteArray} {F : Array ByteArray} {A : Live}
     (reg : (A : Live) → Option Claims.Msg → A.Reg)
     (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hD : V.signer θ = P.signer V.families θ)
-    (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hL : A.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64)
+    (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ) (hL : A.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64)
     (hO : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
       ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ x).sent = some text →
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log) :
-    CouplingTarget V k (K.assembled fieldEnc (Device.dev (P.setupOf V.families)) k
+    CouplingTarget V k (K.assembled fieldEnc T (Device.dev (P.setupOf V.families)) k
       (fun A θ F c => readingAt A.tables A.layout (record A θ F c) (recordDigest A θ F c))
       (fun A _ _ _ _ => decodersAt (reg A) A.layout) (fun θ _ _ _ => labelAt θ) (afterAt V k)
       (srcCoinsAt _root_.Spot.Challenger.MAX_COINS)) A θ F :=
-  couplingTarget_assembled_at fieldEnc V k K (Device.dev (P.setupOf V.families))
+  couplingTarget_assembled_at fieldEnc V k K T (Device.dev (P.setupOf V.families))
     (fun A θ F c => readingAt A.tables A.layout (record A θ F c) (recordDigest A θ F c))
     (fun A _ _ _ _ => decodersAt (reg A) A.layout) (fun θ _ _ _ => labelAt θ)
     (srcCoinsAt _root_.Spot.Challenger.MAX_COINS) A θ F (fun o _ => Device.printsLog_dev _ o)
