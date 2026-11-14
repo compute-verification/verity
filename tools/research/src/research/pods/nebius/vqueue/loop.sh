@@ -90,9 +90,13 @@ lists() {
   [ -z "$missing" ] || say "no$missing in $H/live: the loop reads each as empty; copy ci's from the host the loop ran on"
 }
 
-# Exports what VQ_CRED/*.env set, one KEY=VALUE a line (blank and `#` lines, `export ` before a key and one pair of quotes
-# round a value allowed), as data: no line runs, and none can set what this script decides, since a key not in KEYS refuses
-# the tick, naming the file, the line and the key, never a value.
+# A value sh reads as its own text: in single quotes, in double quotes with nothing sh expands, or bare with no character
+# sh treats apart. Any other is refused rather than read one way here and another by a shell sourcing the same file.
+SQ="^'([^']*)'\$" DQ='^"([^"$`\\]*)"$' PLAIN='^([A-Za-z0-9_./:@%+=,-]*)$'
+
+# Exports what VQ_CRED/*.env set, one KEY=VALUE a line (blank and `#` lines and `export ` before a key allowed), as data: no
+# line runs, and none can set what this script decides, since a key not in KEYS refuses the tick, naming the file, the line
+# and the key, never a value.
 creds() {
   local f n line k v
   for f in "$CRED"/*.env; do
@@ -112,8 +116,12 @@ creds() {
         *" $k "*) ;;
         *) say "$f line $n sets $k, which the loop doesn't read: remove it (the keys it reads: $KEYS)"; return $CONFIG ;;
       esac
-      case $v in \"*\"|\'*\') v=${v:1:${#v}-2} ;; esac
-      export "$k=$v"
+      if [[ $v =~ $SQ ]] || [[ $v =~ $DQ ]] || [[ $v =~ $PLAIN ]]; then
+        export "$k=${BASH_REMATCH[1]}"
+      else
+        say "$f line $n: sh would read $k's value as other than its text: put the value in single quotes"
+        return $CONFIG
+      fi
     done < "$f"
   done
 }

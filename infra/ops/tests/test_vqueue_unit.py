@@ -201,6 +201,11 @@ def test_a_credential_file_is_data_naming_only_the_keys_the_loop_reads(node):
     [t] = node.ticks()
     assert "--shadow" in t["argv"] and t["env"]["SLACK_BOT_TOKEN"] == "a=b"
     assert (t["env"]["R2_BUCKET"], t["env"]["R2_ENDPOINT"]) == ("dummy-bucket", f"dummy $(touch {ran})")
+    # a value sh would read as other than its text is refused, never taken one way where the pod's sh took it another
+    for value in ("a b", "x # note", "a&b", "~/k", '"a$b"', '"a\\b"', "'a'b", '"a"b', "a\\b", "`id`", "$HOME"):
+        zz.write_text(f"R2_BUCKET={value}\n")
+        r = node.loop("once")
+        assert r.returncode == CONFIG and "R2_BUCKET" in r.stderr and len(node.ticks()) == 1, value
 
 
 def test_a_tick_runs_research_from_ci_s_pinned_checkout_not_from_its_origin_main(node, tmp_path, monkeypatch):
