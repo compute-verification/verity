@@ -30,7 +30,7 @@ from verity.commitments import history as HT
 from verity.commitments.windows import rows as CS
 from verity.definitions.registry import stop_check, stop_rule
 from verity_vllm.engine.hooks import Hooks
-from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS, boundary_windows as BW
+from verity_vllm.pipeline import boundary_class as BC, boundary_rows as BR, boundary_stop as BS, boundary_windows as BW
 
 XOR8 = PrimitiveDefinition("BoundaryRowsTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
@@ -646,7 +646,7 @@ WRITES_EGRESS = CompositeDefinition(
     _egress, register=False)
 #: a class's Definition whose body calls each template once: its parameters read whole, its return one's output whole
 CLASS = CompositeDefinition(
-    "BoundaryRowsTestClass", 0, ("P", "O"), lambda S: BR.class_signature(S.P, S.O),
+    "BoundaryRowsTestClass", 0, ("P", "O"), lambda S: BC.class_signature(S.P, S.O),
     lambda B, S, request, prompt: B.call(bind(WRITES_EGRESS, O=S.O), B.call(READS_REQUEST, request),
                                          B.call(bind(READS_PROMPT, P=S.P), prompt)), register=False)
 
@@ -660,7 +660,7 @@ def test_a_class_definitions_ends_are_its_boundary_values_and_round_two_links_ea
     block. A size that is no class's, and a row of no value a Definition reads or returns, are refused."""
     D = bind(CLASS, P=4, O=2)
     key, (params, ret) = descriptor_id(D), D.signature()
-    assert (params, ret) == BR.class_signature(4, 2)
+    assert (params, ret) == BC.class_signature(4, 2)
     assert [n for n, _t in params] == list(BR.PARAMS) == [BR.REQUEST, BR.PROMPT]
     assert [2 * BR.row_type(v, 4).leaves for v in BR.PARTS] == [_stop_layout(prompt=4).words(v) for v in BR.PARTS]
     assert dict(RULE.template.signature()[0]) == {p: BR.row_type(v, RULE.outputs) for p, v in BS.STOP_READS.items()}
@@ -671,23 +671,23 @@ def test_a_class_definitions_ends_are_its_boundary_values_and_round_two_links_ea
     templates = {BR.REQUEST: (descriptor_id(READS_REQUEST), "request"),
                  BR.PROMPT: (descriptor_id(bind(READS_PROMPT, P=4)), "prompt"),
                  BR.EGRESS: (descriptor_id(bind(WRITES_EGRESS, O=2)), "o0")}
-    assert BR.ends(key) == {BR.REQUEST: BR.REQUEST, BR.PROMPT: BR.PROMPT, BR.EGRESS: BR.RETURN}
+    assert BC.ends(key) == {BR.REQUEST: BR.REQUEST, BR.PROMPT: BR.PROMPT, BR.EGRESS: BR.RETURN}
     for others in ((), ("table/x",)):
-        ends = BR.ends(key, others)
+        ends = BC.ends(key, others)
         links = SS.replay_links(program, key, {"roots": [{"port": p} for p in (*ends.values(), *others)]})
         want = sorted((*templates[v], ends[v]) for v in BR.PARTS)
         assert sorted((x.template, x.port, x.value) for x in links) == want
-    assert BR.ends(key, ("table/x",)) == {v: f"{key}/{n}" for v, n in BR.ends(key).items()}
+    assert BC.ends(key, ("table/x",)) == {v: f"{key}/{n}" for v, n in BC.ends(key).items()}
     per = {x.value: n for x, n, _rs in SS.link_runs(definitions(program), key)}
-    assert per == dict.fromkeys(BR.ends(key).values(), 1)
+    assert per == dict.fromkeys(BC.ends(key).values(), 1)
     with pytest.raises(ValueError, match="at a class's"):
-        BR.class_signature(3, 2)
+        BC.class_signature(3, 2)
     with pytest.raises(ValueError, match="reads or returns a row of"):
         BR.row_type(BR.INGRESS)
 
 
 #: a class's Definition at P = O that reads its prompt an id at a time and returns each id's successor
-BY_ID = CompositeDefinition("BoundaryRowsTestById", 0, ("P",), lambda S: BR.class_signature(S.P, S.P),
+BY_ID = CompositeDefinition("BoundaryRowsTestById", 0, ("P",), lambda S: BC.class_signature(S.P, S.P),
                             lambda B, S, request, prompt: B.batch(PICK, prompt, axes=(0,)), register=False)
 
 
@@ -719,7 +719,7 @@ def test_a_class_laid_out_under_its_own_definition_commits_its_ends_as_round_two
     key = descriptor_id(D)
     reads, prompts, writes = (descriptor_id(t) for t in (READS_REQUEST, bind(READS_PROMPT, P=4), bind(WRITES_EGRESS, O=2)))
     assert L.replay is D and [P.template_id(t) for t in L.templates] == [reads, prompts, writes] and L.n_rho == 3
-    assert L.values == L.committed == (BR.REQUEST, BR.PROMPT, BR.RETURN) == tuple(BR.ends(key).values())
+    assert L.values == L.committed == (BR.REQUEST, BR.PROMPT, BR.RETURN) == tuple(BC.ends(key).values())
     assert L.cuts == dict.fromkeys(L.values, 1) and L.return_rows == (1, 64)
     assert [(L.leaves(p), L.words(p)) for p in L.values] == [(3, 2 * BR.HEAD_U32), (3, 8), (3, 4)]
     rows, span = BR.port_rows(c.spans, L), c.spans[1]

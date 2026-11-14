@@ -65,14 +65,8 @@ per_output * O` instances of one check template (`population`), so a window comm
 template; or, ``inline``, those instances with each one's body in place (`inlined`), audited with the templates that body
 calls, for a check template too large for one proof block whose pieces are. The boundary's values, layout and serving
 path stay as they are when the replay block becomes the class's own; its program, and so its domains, name whichever
-replay block it is configured with. The class's own Definition has its boundary values as its ends (`class_signature`):
-its parameters are a span's `b.request` and `b.prompt` rows and it returns the span's `b.egress` row, so round 2's own
-derivation links a template's port that reads a parameter to the value of its name, and the template output it returns
-to the name round 2 gives a return (`ends`). A class laid out under one (`Layout.own`) has it, whole, as its replay
-block and commits those three values and no other: `b.request`, `b.prompt` and, under the return's name, `b.egress`'s
-ids, each in the rows round 2's link reads of it (`Layout.cuts`: a prompt read an id at a time is P rows a span),
-audited with the templates its body calls. A parameter of any other name is the interior's, as a stand-in's all are.
-It takes no stop rule, whose check is the Definition's own to make, and no history tables.
+replay block it is configured with. A class laid out under its own Definition (`Layout.own`) has it as its replay block
+and commits its ends (`boundary_class`).
 
 **Files** (`write`), under ``w<window>/p<P>-o<O>[-nostop]/``: ``commit.json`` (public: the layout, each value's root,
 domain and leaves, the index's hiding leaf), and prover-only ``index.json`` (each span's engine id, prompt, sampling
@@ -119,7 +113,7 @@ REQUEST, PROMPT, STOP = "b.request", "b.prompt", "b.stop"
 #: a class's values under a stop rule, one row a span each: `b.ingress`'s row in two and `b.egress`'s ids
 PARTS = (REQUEST, PROMPT, EGRESS)
 #: a class's Definition's parameters, each a span's row of the value of its name; it returns `b.egress`'s
-#: (`class_signature`)
+#: (`boundary_class.class_signature`)
 PARAMS = (REQUEST, PROMPT)
 #: a row's u32, a 32-bit leaf: two of its u16 words, the low one first
 U32 = Value(32)
@@ -135,7 +129,8 @@ TABLES_UNDER_A_RULE = ("a serve under a stop rule commits no history tables: a t
 ONE_RETURN = "a class commits its replay block's return as verdicts or as ids, not as both"
 #: what `Layout.own` says ``check`` is
 OWN = ("a class's own Definition has a body of calls of templates, each a proof block, reads a span's `b.request` and "
-       "`b.prompt` rows at its parameters of those names and returns its `b.egress` row (`class_signature`)")
+       "`b.prompt` rows at its parameters of those names and returns its `b.egress` row "
+       "(`boundary_class.class_signature`)")
 MIN_CAP = 2
 #: `b.ingress`'s fields before its ids, each a u32 (``u64``: two, low first) of the request's own sampling inputs
 FIELDS = (("lp", "u32"), ("max_tokens", "u32"), ("min_tokens", "u32"), ("ignore_eos", "u32"), ("temperature", "f32"),
@@ -282,25 +277,6 @@ def row_type(value: str, ids: int = 0) -> Array:
     return Array(HEAD_U32 if value == REQUEST else ids, U32)
 
 
-def class_signature(prompt: int, outputs: int) -> tuple[tuple[tuple[str, Array], ...], Array]:
-    """The signature of a class's Definition at (P, O) = (``prompt``, ``outputs``): its parameters `PARAMS`, a span's
-    `b.request` and `b.prompt` rows, and its return, the span's `b.egress` row (`row_type`). Round 2 then links a
-    template's port that reads one of them to the class's value of that name, and the template output it returns to
-    the name `ends` gives `b.egress`."""
-    if not (class_size(prompt) and class_size(outputs)):
-        raise ValueError(f"a class's Definition is at a class's (P, O), each a class's size (`class_size`), not "
-                         f"({prompt!r}, {outputs!r})")
-    return tuple((v, row_type(v, prompt)) for v in PARAMS), row_type(EGRESS, outputs)
-
-
-def ends(block: str, ports: Iterable[str] = ()) -> dict[str, str]:
-    """Each boundary value a class's Definition ``block`` (`class_signature`) reads or returns, and the name round 2
-    gives the value its link reads in a record whose other ports are ``ports`` (`linked`): `b.request` and `b.prompt`
-    their own, and `b.egress` the return's (`return_port`)."""
-    ports = tuple(ports)
-    return {**{v: linked(block, v, ports) for v in PARAMS}, EGRESS: return_port(block, ports)}
-
-
 def _parts(r: Any) -> list[Any]:
     """A body reference's parts, its concatenations spliced in."""
     return [x for q in r.parts for x in _parts(q)] if isinstance(r, Concat) else [r]
@@ -344,8 +320,8 @@ class Layout:
     verdicts, every bit a one where it passes, or the ids the span was served, one check instance an output, and the
     class commits that return as one more value of its boundary record (`return_rows`).
     ``own``: ``check`` is the class's own Definition and the replay block is it, whole (`OWN`): its proof blocks are the
-    templates its body calls, and the class's values are its ends (`ends`), `b.request`, `b.prompt` and its return, which
-    holds `b.egress`'s ids, each cut into the rows round 2's links read of it (`cuts`).
+    templates its body calls, and the class's values are its ends (`boundary_class.ends`), `b.request`, `b.prompt` and
+    its return, which holds `b.egress`'s ids, each cut into the rows round 2's links read of it (`cuts`).
     What the prover commits under and the challenger's own copies (`ports`, `stop_ports`)."""
 
     check: SpecializedDefinition
@@ -403,7 +379,7 @@ class Layout:
         if not isinstance(getattr(self.check, "defn", None), CompositeDefinition):
             return "which has no body"
         params, ret = self.check.signature()
-        want = dict(class_signature(self.prompt, self.outputs)[0])
+        want = {v: row_type(v, self.prompt) for v in PARAMS}
         if any(t != want[v] for v, t in params if v in want) or ret != row_type(EGRESS, self.outputs):
             return f"of parameters {[(v, t) for v, t in params if v in want]} and return {ret!r}"
         forms = {n.form for n in self.check.body.nodes}
@@ -818,6 +794,6 @@ def reopen(directory: Path, check: SpecializedDefinition, kept: BT.Kept | None =
 
 __all__ = ["COMMIT", "EGRESS", "FIELD_AT", "FIELDS", "FINISH", "FORMAT", "INDEX", "INGRESS", "MIN_CAP", "PARAMS",
            "PARTS", "PORTS", "PROMPT", "REQUEST", "RETURN", "SALTS", "SCHEMA", "STOP", "U32", "Committed", "Layout",
-           "Span", "cap", "check_template", "class_signature", "class_size", "commit", "egress_row", "ends", "id_rows",
-           "ingress_row", "inlined", "layout_of", "linked", "port_rows", "record", "reopen", "return_port", "row_type",
-           "run_root", "sampling_of", "write"]
+           "Span", "cap", "check_template", "class_size", "commit", "egress_row", "id_rows", "ingress_row", "inlined",
+           "layout_of", "linked", "port_rows", "record", "reopen", "return_port", "row_type", "run_root", "sampling_of",
+           "write"]
