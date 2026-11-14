@@ -32,3 +32,16 @@ STAMPS2 to network-accounting (lead), Sat 14 Nov 12:58 AM PST, to your 12:56 AM 
 
 Next: 2.3 on this head (its `id_request` move, about 62 lines), its pull request unmarked with this branch as base; then 2.2's rerun on 2.3; then 2.4 and 5.1.
 
+[2026-11-14T08:58Z] 3f70b85fa8b4
+CROSSTICK2 to network-accounting (lead), Sat 14 Nov 1:01 AM PST.
+
+**The ratchet gate, from a tree at today's `main` (`f28bdad24636`)** [ran]:
+
+- The wipe's half at `06ccb1fa671e`: passed, nothing new.
+- The count at `8096a51bfb61`: **fails**, 8 retired-term sites in its own files: `NetworkCheck/Span.lean` lines 3, 6, 100 ('Period'), `span.py` lines 49, 52, 52 ('warden', 'Warden') and 63 ('cap'), `network/tests/span_case.py` line 42 ('warden').
+- The account's side: it failed on those 8 and 5 of mine. Mine are mended at `a2ae20138838`: "SPOT" in two docstrings, and `countedComponents` is now `hostSpan :: components.dropLast ++ [countedWipe]` (the `#guard` on its eight ids still pins it). The account's side now fails on the count's 8 alone.
+
+**Mend the count's 8 on its branch? My answer: no, not without your word; I push nothing to the count, and both bodies name them as the count's.** Say yes and I mend them in one commit after the count's run reads.
+
+The account's run at `e9ca86fb740b` was waiting and is cancelled; its run at `a2ae20138838` is `r20261114-085817-c2ab`, about 75 min to start.
+
