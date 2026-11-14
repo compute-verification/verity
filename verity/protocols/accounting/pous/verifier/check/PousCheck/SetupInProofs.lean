@@ -9,7 +9,7 @@ public import PousCheck.SetupProtocol
 `verity/pous/p2/v4/setup-in-proofs` is the setup check that reads no block of `C*`. The store's blocks are committed and
 their root registered; the auditor's challenger then samples `SAMPLE` of them on its live coins (`law`); each sampled
 block is proved to decode to the registered rows of `W` at its place, one instance of the setup unit
-`PousP2SetupCheck_v1` a block (`verity/protocols/accounting/pous/prover/setup_proof.py`). The check takes the parameters
+`PousP2SetupCheck_v1` a block (`verity/protocols/accounting/pous/prover/window.py`). The check takes the parameters
 and the commitment as `SetupProtocol` does, and in place of `C*` the claim (`Claim`, the Python `setup_proof.Claim`'s
 last four fields):
 

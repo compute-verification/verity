@@ -3,7 +3,7 @@
 Today's setup check (`setup.verifier_key_from_encoding`, `PousCheck.SetupProtocol`) reads all of C* and decodes it.  In
 proofs it reads none of it: the store's blocks are committed and their root registered, the challenger samples
 `SAMPLE` blocks on its live coins after that (`law`), each sampled block is proved to decode to the registered rows of W
-at its place (`verity/protocols/accounting/pous/prover/setup_proof.py`, one instance of `PousP2SetupCheck_v1` a block),
+at its place (`verity/protocols/accounting/pous/prover/window.py`, one instance of `PousP2SetupCheck_v1` a block),
 and the check takes the `Claim`: the parameters and commitment as today, the store's root, the unit's Program digest
 and SPOT's outcome.  The Lean check `PousCheck.SetupInProofs.check` decides; Python only carries the claim.
 """
