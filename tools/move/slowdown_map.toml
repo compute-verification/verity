@@ -38,7 +38,7 @@ files = ["*"]
 # stay as they are ([keep]).
 exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md",
            "tests/test_retired_terms.py", "tests/lint/test_repo_retired_terms.py", "fixtures/**", "*.patch",
-           "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "tools/verity/check/tests/test_move_check.py",
+           "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "tools/check/tests/test_move_check.py",
            "tools/verity/lean/tests/fixtures/**"]
 
 [keep]
