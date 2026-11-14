@@ -20,6 +20,7 @@ from typing import Any
 
 from verity_vllm.config import option, workload_arg
 from verity_vllm.log import init_logger
+from verity_vllm.pipeline.cli import write
 from verity_vllm.query.manifest.verify import verify
 
 __all__ = ["Options", "main"]
@@ -84,6 +85,6 @@ def main(a: Options) -> int:
         os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
         with open(a.out, "w") as f:
             json.dump(rec, f, indent=1)
-    print(json.dumps(rec, indent=1))
-    print(f"[manifest] VERIFY {'OK: the manifest of record' if rec['ok'] else 'FAIL: ' + rec['why']}")
+    write(json.dumps(rec, indent=1))
+    write(f"[manifest] VERIFY {'OK: the manifest of record' if rec['ok'] else 'FAIL: ' + rec['why']}")
     return 0 if rec["ok"] else 1
