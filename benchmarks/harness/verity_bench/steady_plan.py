@@ -314,8 +314,11 @@ class SteadyCompletion:
         store, whys = self.store, []
         for run in self._own(identity):
             files = run_files(store, run)
-            row = f"{steady.CANNOT_TELL}: the run kept no files" if files is None else steady_spec.own_row(files, item)
-            why = row if isinstance(row, str) else steady_spec.point_why(row, files, spec, item, own=True)
+            if files is None:
+                why: str | None = f"{steady.CANNOT_TELL}: the run kept no files"
+            else:
+                row = steady_spec.own_row(files, item)
+                why = row if isinstance(row, str) else steady_spec.point_why(row, files, spec, item, own=True)
             if why is None:
                 return run, None
             whys.append(f"{run}: {why}")
@@ -323,7 +326,7 @@ class SteadyCompletion:
         if record not in self._labelled:
             self._labelled[record] = labelled_rows(store, record)
         for found in sorted(self._labelled[record], key=lambda found: found.run, reverse=True):
-            if found.row is None:
+            if found.row is None or found.files is None:
                 whys.append(f"{found.run} (labelled `{record}`): {steady.CANNOT_TELL}: {found.held}")
                 continue
             blocks = steady_spec.row_blocks(found.row)
@@ -376,10 +379,12 @@ def direct_command(plan: jobs.Plan, source: str | Path, item: jobs.PlannedPoint,
     files before the run's verdict is computed. A point whose row names its statement in the store runs with a
     read-only key to it."""
 
-    spec = plan.spec
+    spec, point = plan.spec, item.point
+    if not isinstance(point, SteadyPoint):
+        raise TypeError(f"{point.id} is a vLLM point: jobs runs it")
     return jobs.slot_run(
         spec, root, node, campaign="steady-point", tool="verity_bench.tool:STEADY_POINT",
-        store_read=item.point.row.stored is not None,
+        store_read=point.row.stored is not None,
         env=[flag for name, setting in jobs.point_environment(spec).items() for flag in ("--env", f"{name}={setting}")],
         job=["bash", "benchmarks/harness/steady_point.sh", "--spec", jobs._relative_spec(source, root),
              "--point", item.point.id, "--identity", item.identity])

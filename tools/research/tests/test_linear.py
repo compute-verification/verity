@@ -27,17 +27,17 @@ PROJECTS = [{"id": "PJ1", "name": "E2E toy deployment on one H200", "projectMile
 class FakeLinear:
     """Linear's token endpoint and GraphQL API: one team per name in `teams`, labels made on first use; the parent (id `P1`) on
     PJ1's M3, the active `projects`, the open issues the audit pages through (`open`), the team keys the credentials see
-    (`visible`, default the teams'), the team of the issue a comment reads (`team_key`), the issues' `relations` (an
-    issue's id is `I-` and its identifier), the workspace's `users`, the asked team's active projects (`team_projects`,
-    with the team ids they were read for in `boards`), the comments an issue's comment pages read (`thread`), and each
-    relation, project or milestone mutation as it was sent (`wrote`)."""
+    (`visible`, default the teams'), the team and label names of the issue a comment reads (`team_key`, `issue_labels`),
+    the issues' `relations` (an issue's id is `I-` and its identifier), the workspace's `users`, the asked team's active
+    projects (`team_projects`, with the team ids they were read for in `boards`), the comments an issue's comment pages
+    read (`thread`), and each relation, project or milestone mutation as it was sent (`wrote`)."""
 
     def __init__(self, teams=("infra", "comms")):
         self.teams, self.labels, self.calls, self.grants, self.refuse = list(teams), {}, [], 0, set()
         self.subscribers, self.authors, self.comments, self.moved = {}, {}, [], []
         self.state_type = "backlog"
         self.projects, self.open, self.updated, self.refuse_project = PROJECTS, [], [], False
-        self.visible, self.team_key = None, "INF"
+        self.visible, self.team_key, self.issue_labels = None, "INF", []
         self.project_teams = {"PJ3": [{"id": "T-infra", "key": "INF"}]}
         self.project_state = {"PJ3": {"targetDate": "2026-10-28", "status": {"name": "In Progress"}}}
         self.parent = {"id": "P1", "project": {"id": "PJ1"}, "projectMilestone": {"id": "MS3"}}
@@ -185,7 +185,7 @@ class FakeLinear:
                 {"identifier": "INF-1", "title": "first", "createdAt": "2026-10-14T01:00Z", "state": {"name": "Backlog"}}]}}}
         if "team { key }" in q:
             return {"data": {"issue": {"id": "I1", "identifier": "INF-1", "url": "https://linear.app/x/issue/INF-1",
-                                       "team": {"key": self.team_key}}}}
+                                       "team": {"key": self.team_key}, "labels": {"nodes": [{"name": n} for n in self.issue_labels]}}}}
         if "issue(id: $id) { id }" in q:
             return {"data": {"issue": {"id": "P1" if v["id"] == "CMP-92" else "I1"}}}
         if "issueUpdate" in q:
@@ -429,6 +429,53 @@ def test_comments_reads_an_issues_comments_whole_across_pages_oldest_first(fake,
     assert rc == 2 and "--since 'this morning'" in err
     lin.thread = []
     assert run(capsys, "linear", "comments", "INF-9")[1].strip() == "INF-9: no comments"
+
+
+@pytest.fixture
+def cmp_inboxes(fake, routes_dirs, lin):
+    """An issue in CMP, compute-accounting's team, where compute-research (no team of its own) files with its `lane:` label."""
+    lin.subscribers["I1"], lin.team_key = [], "CMP"
+    return {n: inbox(fake, routes_dirs, n) for n in ("compute-research", "compute-accounting", "circuits")}
+
+
+def rung(fake, boxes) -> dict[str, int]:
+    return {n: len(bells(fake, ts)) for n, ts in boxes.items()}
+
+
+def test_a_lane_commenting_on_its_own_labelled_issue_in_its_parents_team_rings_only_its_leading_names(
+        fake, registry, capsys, lin, cmp_inboxes):
+    """The ring took the lane from the team alone, so each comment compute-research wrote on its own CMP issues rang
+    compute-accounting, whose turn a false ring costs."""
+    lin.issue_labels = ["lane:compute-research"]
+    rc, _, err = run(capsys, "linear", "comment", "CMP-409", "picked up", "--as", "compute-research")
+    assert rc == 0 and "route" not in err
+    assert rung(fake, cmp_inboxes) == {"compute-research": 0, "compute-accounting": 0, "circuits": 0}
+    rc, _, err = run(capsys, "linear", "comment", "CMP-409", "@circuits the trace is up", "--as", "compute-research")
+    assert rc == 0 and err.count("route ") == 1 and "route @circuits: rang" in err
+    assert rung(fake, cmp_inboxes) == {"compute-research": 0, "compute-accounting": 0, "circuits": 1}
+
+
+def test_another_lane_commenting_on_a_labelled_issue_rings_the_labels_lane_not_the_teams(fake, registry, capsys, lin, cmp_inboxes):
+    lin.issue_labels = ["from:proofs", "lane:compute-research"]
+    rc, _, err = run(capsys, "linear", "comment", "CMP-409", "picked up", "--as", "proofs")
+    assert rc == 0 and "route @compute-research: rang" in err and "@compute-accounting" not in err
+    assert rung(fake, cmp_inboxes) == {"compute-research": 1, "compute-accounting": 0, "circuits": 0}
+    rc, _, err = run(capsys, "linear", "comment", "CMP-409", "@circuits the trace is up", "--as", "proofs")
+    assert rc == 0 and "route @compute-research: rang" in err and "route @circuits: rang" in err
+    assert rung(fake, cmp_inboxes) == {"compute-research": 2, "compute-accounting": 0, "circuits": 1}
+
+
+def test_an_issue_with_no_lane_label_or_one_naming_no_handle_rings_its_teams_handle(fake, registry, capsys, lin, cmp_inboxes):
+    rc, _, err = run(capsys, "linear", "comment", "CMP-410", "picked up", "--as", "compute-research")
+    assert rc == 0 and "route @compute-accounting: rang" in err
+    assert rung(fake, cmp_inboxes) == {"compute-research": 0, "compute-accounting": 1, "circuits": 0}
+    rc, _, err = run(capsys, "linear", "comment", "CMP-410", "@circuits the trace is up", "--as", "compute-research")
+    assert rc == 0 and "route @compute-accounting: rang" in err and "route @circuits: rang" in err
+    assert rung(fake, cmp_inboxes) == {"compute-research": 0, "compute-accounting": 2, "circuits": 1}
+    lin.issue_labels = ["lane:nobody"]
+    rc, _, err = run(capsys, "linear", "comment", "CMP-410", "picked up", "--as", "compute-research")
+    assert rc == 0 and "route @compute-accounting: rang" in err and "@nobody" not in err
+    assert rung(fake, cmp_inboxes) == {"compute-research": 0, "compute-accounting": 3, "circuits": 1}
 
 
 def test_traffic_counts_an_ask_taken_up_on_linear_as_answered(fake, registry, routes_dirs, capsys, lin):
