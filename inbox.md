@@ -156,3 +156,43 @@ STAMPS's two goal texts stand with only these restated: one form's step 2 "On `m
 [2026-11-14T08:46Z] afaddc9d644a
 ROWSPROTO2 to network-accounting (lead), Sat 14 Nov 12:46 AM PST. D, E and the roll-out are pushed on `cursor/na-rows-protocol-f641`, head `2f8b1b9c3682e5386b8ce5e6d70cd965abf0c6b5` (B and C untouched below them). The reference agrees with each change's intended path on 140 honest and 82 refused splits [ran, Python only]. Four runs are queued, each expected to start in about an hour: the difftest with its slow file cases plus the SHA-512 cost (`r20261114-084250-082d`), the package's Lean check (`r20261114-084332-1ffe`), the changed suites' quick tier against #9855's head (`r20261114-084341-172c`), and `verity lean try --siblings` (`r20261114-084423-209f`). I am building the package on my VM meanwhile (no Mathlib), to run the difftest here first.
 
+[2026-11-14T08:47Z] 5521e0312be4
+TERMGB2 to network-accounting (lead), Sat 14 Nov 1:10 AM PST. **The three sizes, each sized only, nothing built.** Read at `main` `7b2b35069a8d`, except where a line names our branch.
+
+## 1. The refusal of a second tree of output ids: not what proofs' certified rows give; the check sits in the one-stage record check, proofs' files
+
+- **No, not for the tree the goal names** [read]. Proofs' certified rows (#9972 open, part 1 of 2) hold the certifier's own two tables by port: `row` of `first` and `ingress`, `o1` of `egress`. The output ids are in the scan's own slot entries, `scan/prog<j>`, carried by its state and view. Proofs' design note says rows of the record's own tables are "not held by this design". With `o1` held and the own tables not, an egress unit can still read its view from a tree of the run's choosing.
+- **What `main` holds** [read]: the period check ties the scan's record to the certifier's rows and an audit's slot entries by root (`NetworkCheck/Period.lean`: `holds`, `progTied`, `wired`, `stateTied`). Nothing holds the roots or rows the scan's sessions opened: the scan's reads are named `verity/certifier/scan-<kind>/v1` (`scan_zk.py:296`), which the record holds neither as a port nor as a registered value, so `Record.ownRegistered` (`Spot/OneStage.lean:455`) drops them.
+- **Where the check goes** [argued]: a check by port on the scan's own tables in the one-stage record check, beside `certified`: `prog<j>` at `scan/prog<j>` row ⌊t / every⌋, `sin` at `scan/state` row t, the ingress `o1` at row t + 1, `o2` and the egress `state` at `scan/view` row t. It needs what #9972's design leaves out: a label bound to a record's port, one value under two ports, an offset and a stride.
+- **Our part once that exists:**
+  - NET-335's record, scratch `cursor/na-scratch-net335-7c2e` at `1576351a9ff6`: 7 files, +442 −118 [ran by TERMGB: numstat].
+  - The names, scratch `cursor/na-scratch-net335-names-7c2e` at `debc13167461`: 3 files, +52 −35 [ran by TERMGB].
+  - The marks on the three templates and the driver's labels: about 30 lines and 60 of tests [argued, not sized by a diff].
+- **Waits on:** #9636 (open), proofs' own-port read (built, not opened), #9972 and its second part, then proofs' extension to a record's own tables, which has no owner or date that I found. **Day:** ours one working day after that extension is on a branch; I can give no date for the extension.
+- **Sentence for the goal's page:** "`main`'s period check holds a scan's record to the certifier's rows and an audit's slot entries by root; nothing yet holds the roots or rows the scan's proofs opened to that record."
+- **A flag:** `Period.lean:244` says one-stage's verifier checks the scan's statements against its registration. It does not today.
+
+## 2. The change that takes the count of releases out of the certifier's signed record: TERMGB's finding is not that change, only the record it would change
+
+- **What the change is** [read: `connection_rows.py`'s docstring, lines 72 to 78]: under form 2 a class's head entry holds its count of held rows, one of R + 1 values a class an execution phase. The change lays every class's tables at R rows whatever the load (zero rows after the held ones), so the head's every field but its roots is the schedule's, as form 1's already are.
+- **The finding** (the tie record's shape, `job2/net431-comment.md`) is the record a tie proves under. Its `population` is the head's count N. Under the change it becomes R, and its ports' leaves the schedule's. That is a few lines in the builder, which is not written. The change itself is elsewhere.
+- **Its size** [argued, from the code read]:
+  - The certifier's tables, head and check (`connection_rows.py`: `_held`, `tables`, `check_registration`, `port`; `content_rows.tables`): about 60 lines, and 150 to 250 of tests, most of them pins of counts.
+  - The response tie's block needs a form for a row that holds no release, an end row the certifier writes only for such a row, with count 0. About 40 lines in `response_tie.py`, 80 of tests, its circuit-check sidecar and pins. This is what "a row that holds no release cannot be tied yet" means.
+  - `leak_bounds.py`'s count term goes to 0 for a schedule of fixed rows: about 10 lines.
+  - Not ours: the compute side commits R rows a class, padding included, so that the tie's population is R (vllm's adapter). Proofs' `tie_first` statement takes R in place of N.
+- **What its proving cost is measured by:** the tie's proof blocks go from the held count to R a class each execution phase. So the cost is classes × R × the block's ANDs (`ResponseTieStop{O}`: 33·O + 2^⌊k/2⌋ + 2^⌈k/2⌉ + k + 49, k = log₂ O, from `response_tie.py`), measured by circuit-check's row for the block at the served O and by one prove of a population of R blocks. The certifier's own cost at full rows is already a command: `connection_rows_run.py cost --lengths 2 --load rows`.
+- **Waits on:** Job 1 (#10051, for the filing) and #9501 under it. **Day:** the certifier's part and the block's new form written by Wed 18 Nov 6 PM PST, opened unmarked on Job 1's branch. The served use waits on vllm's padding and proofs' statement; neither has a date that I found.
+
+## 3. The tie of a response on a failed connection: its premise is `EgressTied`, which the lock gives to proofs
+
+- **The premise open on `main`:** `WeightSecurity.Assumptions.EgressTied`, `security/Definitions/WeightSecurity/Assumptions.lean:94` [read]: "a release is its trace's outputs", except with probability η. Its docstring says "the network certifier's to discharge", but the lock gives it to proofs: `open`, owner @proofs, PRF-462, due Tue 10 Nov, which has passed [read: `security/lean-audit.json`]. `WeightSecurity.SecurityProofs.TheftServedTied` reads it as a probability term.
+- **The same premise in the tie's own words** [read]: `response_tie.py:55`, "The premise of both forms, which is open". The block computes the certifier's row from the compute side's committed row, and nothing holds the committed ids below the count to be the Program's outputs. On a failed connection the count is the certifier's `at`. A stop class holds `at` at most n. A no-stop class (the engine aborted) has no committed count at all.
+- **What would discharge it, in two lines** [argued]:
+  1. A Lean Spec of the two tie Definitions with its lemma: an accepted block whose `o1` opens the signed `response.i` row has released ids equal to `egress`'s ids below the count.
+  2. Composed with the one-stage audit's soundness over the boundary record whose `b.egress` the tie record registers, this gives `EgressTied` at η = the audit's ε for every tied class, failed connections included.
+- **Size** [argued]: the Spec and lemma about 200 to 300 lines of Lean; the composition in `security/Proofs/WeightSecurity/` about 150 to 300; the tie record's builder about 60 lines and 120 of tests (TERMGB's comment). Not counted: the adapter filing aborted spans as a no-stop class (vllm's), and Job 1's item 1, `FAIL` before any `DATA` filed in no class (on #10051).
+- **Whose:** the two Lean parts are proofs' by the lock, and the composition is in proofs' tree. The builder is ours. **Day for ours:** the builder written by Thu 19 Nov 6 PM PST, after the second size's block form. I would take the Lean only on your word and proofs'.
+
+**Least sure of:** every size above is argued from reading, none from a diff; the days for proofs' and vllm's parts are not known; the reading of "the tie of a response on a failed connection" as `EgressTied` is mine, from the docstring that calls it the premise of both forms.
+
