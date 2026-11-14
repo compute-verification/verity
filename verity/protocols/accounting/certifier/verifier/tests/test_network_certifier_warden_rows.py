@@ -46,7 +46,7 @@ def _attest(tmp_path, record, direction=Direction.EGRESS, session=signers.SESSIO
     return issuer, cells_, cert
 
 
-def test_a_link_window_is_a_row_a_bucket_whatever_the_load(traffic):
+def test_a_phase_is_a_row_a_bucket_whatever_the_load(traffic):
     """T rows in every window, loaded or idle; row b is bucket b's S slots in slot order, an empty slot B zero bytes."""
     warden, _ = traffic
     idle, _, _ = run([], {}, windows=1)

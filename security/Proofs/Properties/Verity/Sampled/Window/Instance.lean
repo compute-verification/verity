@@ -8,7 +8,7 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.SetsUp
 /-!
 # SPOT's vocabulary as deployed over windows of several members
 
-The vocabulary the window's leg reads (`ExecutionPhaseDeployed`, `ExecutionPhaseCovers`) built from the other subprotocols' names over
+The vocabulary the window's subprotocol reads (`ExecutionPhaseDeployed`, `ExecutionPhaseCovers`) built from the other subprotocols' names over
 the deployed device (`ExecutionPhaseInstance.base`), as `Sampled/Instance.lean` builds the one statement's, so
 `executionPhaseSpotSound_sessions` applies to it with every field of `ExecutionPhaseDeployed` and `ExecutionPhaseCovers` either proved or one
 of the named `Prop`s below.
@@ -48,7 +48,7 @@ of the named `Prop`s below.
 * **The verifier's window at an accepted play** (`executionPhaseAt_members`): `ExecutionPhaseAt` from the deployment's window on the
   registered files (`ExecutionPhaseRegistered`), which the vocabulary reads on every committed files alike (`read`,
   `MemberForm.ExecutionPhaseOn.of_read`), laid out with its members' files passing at an accepted play (`ExecutionPhasePasses`).
-* **The leg and remote's soundness** (`spotSound`, `remote_soundness_executionPhase`): `executionPhaseSpotSound_sessions` at the
+* **The subprotocol and remote's soundness** (`spotSound`, `remote_soundness_executionPhase`): `executionPhaseSpotSound_sessions` at the
   constructions `constructionsAt` assembles at the deployed device's history, the sessions' readings and decoders at
   the window's table, the family the parameters name (`labelAt`) and the window's bytes as `MAX_COINS` frames' coins.
 * **What stays open**: what the claim reads of the window (`ClaimReads`), the verifier's window at an accepted play
@@ -513,7 +513,7 @@ theorem claimTransfers (h : I.ClaimReads K) : I.ClaimTransfers K := by
 
 /-- **`ExecutionPhaseDeployed` at the deployed vocabulary**, from what the claim reads of the window (`ClaimReads`,
 `claimTransfers`), at constructions whose read finder is the window's and whose forger is the binding's
-(`ExecutionPhaseConstructions.withBinding`): the leg's per-finder premises are `error`'s condition at this strategy
+(`ExecutionPhaseConstructions.withBinding`): the subprotocol's per-finder premises are `error`'s condition at this strategy
 (`strictSpecs`, `rootsSpecs`, `premisesOf`), and the published δ is the window's, which doesn't read the widening
 (`ExecutionPhase.delta_extend`). -/
 theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = executionPhaseReadFinder I.base I.dev θ F c σ)
@@ -616,7 +616,7 @@ theorem executionPhaseAt_members (k : Verity.Registration.Composite) (hW : I.Exe
   obtain ⟨hlaid, hpassed⟩ := hpass θ F W hw hon hplay
   exact (⟨hon, hlaid, hpassed⟩ : MemberForm.MembersSetUp I.base θ F W)
 
-/-! ## The leg at the deployment -/
+/-! ## The subprotocol at the deployment -/
 
 /-- **The constructions at the deployment**: `K₀`'s with the binding's finders at the deployed device's history
 (`dev`) and composite `k`, the window's projection at the sessions' readings and decoders at the window's table
@@ -650,7 +650,7 @@ def ExecutionPhaseReads (k : Verity.Registration.Composite) (ev : ℕ → Exchan
     ExecutionPhaseRead W W.table ev filesDec (labelAt θ) (afterAt I.base k θ F c σ) _root_.Spot.Challenger.MAX_COINS
       (CoinTape.run (I.base.game θ F c) σ z)
 
-/-- **SPOT's leg at the deployment's windows** (`executionPhaseSpotSound_sessions`, at the deployed vocabulary and the
+/-- **SPOT's subprotocol at the deployment's windows** (`executionPhaseSpotSound_sessions`, at the deployed vocabulary and the
 constructions `constructionsAt` assembles): `ExecutionPhaseDeployed` and `ExecutionPhaseCovers` are `deployed`'s and `covers`'s, the
 deployed device printed each play's log and signed what its signatures are on (`Device.printsLog_dev`,
 `Device.signsPlay_dev`, at the base's signer, `ExecutionPhaseInstance.signer`), and each window the verifier sets up reads
@@ -686,7 +686,7 @@ most their errors summed, at the vocabulary `ExecutionPhaseInstance.vocab` build
 `ExecutionPhaseInstance.constructionsAt` assembles, wherever what the claim reads of the window (`ClaimReads`), the
 verifier's window at an accepted play (`ExecutionPhaseAt`), what the verifier's acceptance gives of each play
 (`ExecutionPhaseReads`), and the base's PoUW and inference-only targets hold.
-The sampled leg's error at a window is `ExecutionPhase.delta`: the sample's own miss and the members' knowledge and binding
+The sampled subprotocol's error at a window is `ExecutionPhase.delta`: the sample's own miss and the members' knowledge and binding
 terms summed (`JointShareV5`), each member's registration's roots term (`ExecutionPhase.rootsErr`), a two-continuation term
 per round opened after a digest in every member's session, its closing round among them, one for the record and one
 for the bound digests, the coin trees' hiding term, and the read finder's bound. The premises at the finders the

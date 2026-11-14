@@ -48,7 +48,7 @@ is each request's max_tokens, at most KO. ``--scan-class`` asks the gate for ano
   The lane's own fetch, with ``witness/``, goes to KEEP/RUN/fetch.tar.gz (KEEP and KEEP/RUN 0700, refused inside the
   run dir: custody publishes all of ``--out``). ``--out`` gets ``bundle.tgz``, what ``fetch`` gives any other key (the
   bundle less ``witness/``), and ``session.json``, the public outcome: the gate run, its rc, the check's verdict and
-  counts, the link-windows, the origin and the session's span. Every file is first written to a fresh hold under
+  counts, the execution phases, the origin and the session's span. Every file is first written to a fresh hold under
   KEEP/held (0700), and reaches ``--out`` only through the record's leak guard (``leak_guard.py``), whatever the exit:
   each file of the hold and member of ``bundle.tgz`` that holds a prompt's ids is removed, then the guard reads
   ``--out`` and the hold against the kept fetch, moves what holds a piece of the witness to KEEP/quarantine and releases
@@ -73,7 +73,7 @@ is each request's max_tokens, at most KO. ``--scan-class`` asks the gate for ano
   CR_GATES=KEEP/RUN/fetch.tar.gz), with
   the endpoint's report (``--endpoint``, ``endpoint``'s art), or a dry rehearsal's endpoint records (KEEP/RUN/endpoint
   by default) and the model's EOS ids (``--eos-ids``, the stand-in's ``--vocab``), N2's period sampled
-  on the verifier's coins (CR_N2_DRAW 8) and the tie on 8 link-windows (CR_TIE_WINDOWS)
+  on the verifier's coins (CR_N2_DRAW 8) and the tie on 8 execution phases (CR_TIE_WINDOWS)
   at CR_MEM_GB 96, unless a CR_K=V says otherwise. The scan proves every proof block, or ``--draw K`` of them, on the
   verifier's own coins (``--coins verifier``, the default and the fallback) or on the gate's (``--coins gate``). It is
   refused unless the tree has the record's leak guard (``leak_guard.py``), which chain_record.sh runs on its
