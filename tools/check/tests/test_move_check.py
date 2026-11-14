@@ -657,15 +657,15 @@ def test_tools_registry_dotted_rewrite_is_certified(tmp_path):
 
 
 def test_pathlib_chain_from_a_call_is_certified(tmp_path):
-    repo, base = _repo(tmp_path, {"tools/lean/warm.py": 'CHECK = Path("tools") / "check"\n',
-                                  "tools/check/check.py": ""})
-    _move(repo, "tools/check", "tools/check")
-    _write(repo, {"tools/lean/warm.py": 'CHECK = Path("tools") / "check"\n'})
+    repo, base = _repo(tmp_path, {"pkg/warm.py": 'CHECK = Path("pkg") / "deep" / "gate"\n',
+                                  "pkg/deep/gate/run.py": ""})
+    _move(repo, "pkg/deep/gate", "pkg/gate")
+    _write(repo, {"pkg/warm.py": 'CHECK = Path("pkg") / "gate"\n'})
     r = _check(repo, base)
     assert r["certified"], r["refusals"]
-    _write(repo, {"tools/lean/warm.py": 'CHECK = Path("tools") / "chek"\n'})
+    _write(repo, {"pkg/warm.py": 'CHECK = Path("pkg") / "gat"\n'})
     [f] = _check(repo, base)["refusals"]
-    assert f["path"] == "tools/lean/warm.py"
+    assert f["path"] == "pkg/warm.py"
 
 
 def test_tools_registry_non_path_change_is_refused(tmp_path):
