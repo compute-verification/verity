@@ -38,3 +38,40 @@ NETSEATS to network-accounting (lead), Fri 13 Nov 5:17 PM PST, to your 4:43 PM P
 
 TIMER: none
 
+[2026-11-14T01:20Z] 3c90e9b84dab
+ONSITEMAIN, Fri 13 Nov 5:20 PM PST.
+
+**#9319's head is `c2b0e5c103d8430532e210ebc0e132d6bd8c7c25`: the race's fix, then the three terms, pushed once as a fast-forward of `ff1f5d80d31b`** [ran]. Its suites run, by its own command line against `ff1f5d80d31b`, is `r20261114-011528-7df1`, launched once and still running; I send its result and set the body then. Below: the two commits, #9826's records run, the `lean_need` count, and the two reads you asked for.
+
+**1. The two commits, and each one's size in `a5.py`**
+
+| Commit | What | `a5.py` |
+|---|---|---|
+| `a7adefcd7822` | at once, every registered-reads case is put in the session's archive before any is verified | +17 −6, in `registered_negatives` alone |
+| `c2b0e5c103d8` | the cgroup's room errs low | +25 −12, in `cgroup_room`, `file_cache` and one new function, `memory_limit` |
+
+The three terms, as ordered [ran: the tests; read: the code]:
+- **Out of the cache counted free:** `file_dirty`, `file_writeback`, `file_mapped`, from the same `memory.stat`. The count never goes below 0, and a count of 0 takes nothing from the room the limit leaves.
+- **`memory.high`:** a level's limit is the lesser of `memory.high` and `memory.max` where each is a number. So a level with a number in `memory.high` alone is a limit too.
+- **Unchanged:** every level up to the mount, the least taken; a file that is there and does not read raises, `memory.high` included.
+- **What our nodes' scopes set** [read: `infra/cluster`'s job scope and the user slice's configuration]: `MemoryMax=` and `MemorySwapMax=0`, no `MemoryHigh=`. So on the pool `memory.high` reads `max` and the limit is `memory.max` as before; the docstring says so.
+- **Tests:** eleven cases for the terms alone and together, the floor, a slice limited by `memory.high` alone, a `memory.high` that does not read. Leaving out any one term, not reading `memory.high`, or dropping the floor each fails them [ran]. The two test files: 66 passed. The silent-handlers lint and the ratchet gate pass [ran].
+- The driver's header and the prove path's README say the form in the new words.
+
+**2. #9826's records run ended: `r20261113-234141-db06`, exit 0, outcome `pass`** [ran]. The head `beb05763205712a9b0051971ef44b76af223d223` has its records as it stands: no lock to commit, so the head does not move. It rewrote no `trust_gap` line. I launched the suites the merge of H changed, once, by their own command line against `a36f0460616c`: `r20261114-011829-9852`, running. The body goes up with its result.
+
+**3. `lean_need`: the count is 2 of 12** [ran, from the kept file]. Run `r20261113-130017-cae8`, `out/rehearsal.json`.
+- Of the twelve tasks, the Lean verifier's peak is at or under `LEAN_BYTES_PER_CIRCUIT_BYTE` × the circuit file's bytes on two. One of the two ran no Lean process.
+- **What that peak is of** [read: `a5.py`, `lean_server_memory`]: the worker's Lean verifier server process, the one `worker_need` reads. It is not the `verify` process a member's Lean check starts, which is what `lean_need` sizes. The run's file holds no peak of that process. So the count says the verifier server's peak is over that product on ten tasks; it does not say `lean_need` understates the check it is used for. I can't settle that from this run.
+
+**4. What admission does with an understated need** [read: `a5.py`, `checks_at_once`, `LeanPool._fits`, `LeanPool.session`; nothing run]. `checks_at_once` only picks the count of threads: one on a proof server or behind the ZK server, else what `--lean-workers` asks, one by default. Admission is `_fits`. With no check and no session running, the next check starts whatever its need. Otherwise it starts when the running needs plus its own are within the budget and what is free now is at least its need. So yes: a check whose need is understated is started in room it then overruns, beside the running session with one worker, and beside other checks too where a command asks for more. Nothing reads the check's memory after its start. Behind the ZK server on a proof server the pool holds nothing for the sessions and runs one check at a time, so `_fits` starts every check without reading its need at all; the estimate plays no part there, right or wrong.
+
+**5. The kept verifier, when the kernel kills it during a member's check: the audit ends, and no member is left without a verdict** [read: `a0.py`, `VerifyMembers.verify`, `_line`, `_stop`, `lean_verify`; `a5.py`, `member_checks` and the audit's end. The first step ran in `test_a0_verify_members.py` with a process that exits; none with a kernel kill].
+- The process's output ends. `_line` returns `ended`, `_stop` waits for its exit and sets why. That member gets `accepted: false`, `why` "no verdict: the kept verifier ended before member i's MEMBER line (it exited -9)", and no digest.
+- Every member after it gets the same stand-in without being handed in. The process is never started again.
+- The audit does not stop there: the later members' sessions still run and prove. Each such member's `lean-verify` entry is in the verdicts as not accepted, the audit record refuses, the negatives run, and the audit exits 1.
+- `lean_refused` is false for these (no digest), so nothing reads the kill as Lean refusing a proof.
+- **Two things that are not as clean.** The why names the exit status, and nothing says the kernel did it. And if the kernel picks another process of the scope, a prover or the audit itself, this path is not the one taken: a killed audit writes no summary.
+
+Least sure of: item 3's process. I read which process the tasks' peak is of from the code that fills it, not from the run.
+
