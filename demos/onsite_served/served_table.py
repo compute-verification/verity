@@ -450,6 +450,14 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
             "verdict": "undecided" if verdict == "accept" and absent else verdict}
 
 
+def registration(cfg: Mapping[str, Any], state: Path) -> str:
+    """The digest of the run's registration, the VERDICT line's ``registration``: a registration log
+    (`verity.protocols.accounting.registration`) whose entries name the configuration's hash, ``K.digest(cfg)``, the
+    ``configuration`` of ``state``'s ``run.json``, which `verity run` writes before any party starts and so before any
+    coin; a ``run.json`` under another hash is refused. Until it is written the line's ``registration`` is ``None``."""
+    raise NotImplementedError("MEM-300")
+
+
 def coins_of(cfg: Mapping[str, Any]) -> str:
     """``simulated`` when the gate shares a machine with a developer's party, else ``development``."""
     at = {p["name"]: p for p in cfg["party"]}
