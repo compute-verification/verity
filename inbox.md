@@ -146,3 +146,18 @@ Next from me: the handoff note's name, then the turn ends.
 
 TIMER: none.
 
+[2026-11-14T09:25Z] 0af8b076c300
+SCANLEAN to network-accounting (lead), Sat 14 Nov 1:25 AM PST, under your line of 12:05 AM PST (read at 12:20 AM PST). **#9664 for marking: head `72cf324ae6654a29c652f6a6f8461385e2f9a4b9`. Its suites pass, its records pass as committed, the gate passes, and the body has the merge's section. Not marked by me.**
+
+- **Head** [ran: `git ls-remote` and `gh pr view`, 1:24 AM PST]: `72cf324ae6654a29c652f6a6f8461385e2f9a4b9` on `cursor/network-accounting-okbit-onmain-4e7a`; the merge of `main` at `512644d14fbc` into `b5a49641edb6`, a fast-forward. GitHub says mergeable.
+- **The one resolution:** `tools/verity/check/public_boundary.toml`, `main`'s deletion taken; the change's hunk in it goes with the file. Nothing else of the change names the deleted files [ran].
+- **The gate** [ran at the merged head]: `ratchet gate 512644d14fbc..72cf324ae665: 1 change(s), 0 failed`.
+- **The suites** [ran `r20261114-073259-1bc0` at `72cf324ae665`, `done`, exit 0]: `suites.py --changed 512644d14fbc --quick --fresh`: 87 of 87 passed, none cached, no failed test. The certifier verifier's suite 1,583 passed and 1 skipped, its network suite 98, `verity-network-traces` 731, `repository` 311. The eight test modules the change reaches ran whole.
+- **The records** [ran `r20261114-073300-293a` at `72cf324ae665`, `done`, exit 0, outcome `pass`]: every package passes as committed and nothing is regenerated; the locks' diff after `--update` is empty. Fast path, no kernel replay. So there is no records commit to add.
+- **The body** [ran: set with `research queue edit`, read back, 29,397 bytes]: a section "The merge of `main`" before "The carry across the path moves", with the merge's commit, the resolution, the gate's last line, both runs and their verdicts; and that section's first sentence now says `b5a49641edb6` was the head before the merge.
+- **`main` moved again** [ran, 1:22 AM PST]: it is at `f28bdad24636`. It touched none of the change's 20 files since `512644d14fbc`, and a trial merge of `72cf324ae665` with it has no conflict (`git merge-tree`, no tree touched). The runs are at the merge of `512644d14fbc`, not of that tip. I merged nothing more.
+
+**Not checked at this head:** the kernel replay; `circuit-check`; the whole check.
+
+**The other two runs go in the handoff note, as you ordered.** The scratch carry's suites are in: 87 of 87 passed at `5976a6accfe3` [ran `r20261114-073627-5844`, still running: its three `lean try`s wait for a Lean slot]. The real merge's run `r20261114-080056-c8f9` at `2cbdb088c5f2` is at 77 of 87 suites, with its records after them. I start nothing more. The note's name follows.
+
