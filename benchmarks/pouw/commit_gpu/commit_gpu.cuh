@@ -5,7 +5,7 @@
 // A GPU committer for hm96-sha512/row/v2 and hm96-sha512/row-seg/v1 rows in frame-v3-sha512 trees, bit for bit the
 // reference's (verity.commitments: hm96.SHA512, rowleaf, merkle.CommitmentDomain and tree_levels; reference.py here).
 // The frame's leaf, pad and node, the hm96 leaf's mask, salt digest and value, and the constants' builders are the GPU's one
-// row commitment (`rc`, verity/circuits/kernels/row_commit.cuh); this file keeps the committer's schedule: its rows' digests, its
+// row commitment (`rc`, verity/commitments/cuda/row_commit.cuh); this file keeps the committer's schedule: its rows' digests, its
 // salts, its kernels and streams, and its constants in __constant__ memory.
 //
 // Per position of a domain of n leaves (rank = position, the tree padded to width = 2^depth):
@@ -44,7 +44,7 @@
 #include <string>
 #include <vector>
 
-#include "../../../verity/circuits/kernels/row_commit.cuh"
+#include "../../../verity/commitments/cuda/row_commit.cuh"
 
 using u64 = uint64_t;
 using u32 = uint32_t;

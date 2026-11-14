@@ -2,7 +2,7 @@
 // hm96-sha512 row leaves of a frame-v3-sha512 tree (verity.commitments: rowleaf's sha512/row-seg/v1 and
 // sha512/row/v2, hm96's SHA512 instance, merkle's frame-v3 leaf and node), the hashing being Flock's (verity/protocols/proofs/flock/prover/cuda/
 // sha512.cuh: s512_compress) and the frame messages, the mask, the salt digest and the hm96 leaf's value
-// verity/circuits/kernels/row_commit.cuh's over it.  Every launch takes rows_bench.py's Args (16 pointers, 16 ints).
+// verity/commitments/cuda/row_commit.cuh's over it.  Every launch takes rows_bench.py's Args (16 pointers, 16 ints).
 //   sz_mid       the SHA-512 state after each of `count` 128-byte first blocks (the segment prefixes S(j, s, m_j), Q, P,
 //                hm96's salt and leaf prefixes): constants of a shape and a key, computed once
 //   sz_segments  d_j = SHA-512(S(j, s, m_j) || segment j) for every segment of every row, a lane a segment, a warp's 32 segments'
@@ -15,7 +15,7 @@
 //                grid-stride loop over the rows
 //   sz_level     one level of the tree (a thread a node), for trees wider than one CTA
 #include "../../../verity/protocols/proofs/flock/prover/cuda/sha512.cuh"
-#include "../../../verity/circuits/kernels/row_commit.cuh"
+#include "../../../verity/commitments/cuda/row_commit.cuh"
 
 struct Args { unsigned long long p[16]; int i[16]; };
 
