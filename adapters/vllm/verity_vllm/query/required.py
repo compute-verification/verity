@@ -317,10 +317,8 @@ class Population:
         returned = replace(P, outputs=tuple(v for v in P.outputs if v not in frozenset(P.checks))) if P.checks else P
         B_module = boundary_without_literals(returned, module_body_partition(P, corr), literals)
         if query == Q_WORD_ID:
-            self.Q = partition_by(lambda c: c.id)
-            self.B = B = boundary_without_literals(returned, self.Q, literals)
+            self.B = B = boundary_without_literals(returned, partition_by(lambda c: c.id), literals)
         else:
-            self.Q = module_body_partition(P, corr)
             self.B = B = B_module
         step_of = self.step_of
         #: UNRETURNED: Calls whose Values no Call reads, the Program does not return and no policy below requires: nothing depends on
@@ -391,8 +389,9 @@ class Population:
                 continue
             self.operand[c.id] = own[0]
             if inside == {True}:
-                if any(op in self.partial_of for op in own):
-                    self.tp_faults.append(f"{P.call(own[0].call).family} under {where}: one Value is the rank-local partial of two collectives")
+                shared = next((op for op in own if op in self.partial_of), None)
+                if shared is not None:
+                    self.tp_faults.append(f"{P.call(shared.call).family} under {where}: one Value is the rank-local partial of two collectives")
                     continue
                 self.partial_of.update(dict.fromkeys(own, c.id))
             elif (len({p.elems for p in c.port_table}) != 1 if k == "all_reduce" else
