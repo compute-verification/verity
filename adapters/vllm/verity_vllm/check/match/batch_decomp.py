@@ -51,7 +51,7 @@ import json
 import os
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from verity_vllm import settings
 from verity_vllm.check.match import compiler_form as CF
@@ -175,7 +175,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
         run_prof["fold_compact"] = bool(getattr(B, "compact", False))
     fold = _Fold(B, header, steps, reqs, param_of, parent_of)
     with _Phase(run_prof, "attribution") if profiling else _NoPhase():
-        own = _instance_owners(fold, oracle_dir)
+        own = _instance_owners(fold)
     n_in, seed_node_of, weights_nodes = own.n_in, own.seed_node_of, own.weights_nodes
     per_req, shared_idx, unattributed, how, disagree = own.per_req, own.shared_idx, own.unattributed, own.how, own.disagree
 
@@ -239,7 +239,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     return res
 
 
-def _instance_owners(fold: _Fold, oracle_dir: str) -> _Owners:
+def _instance_owners(fold: _Fold) -> _Owners:
     """Attribute every instance of the fold to its request, to no request (weight-only) or to nothing, by name."""
     B, steps, reqs, param_of = fold.view, fold.steps, fold.reqs, fold.param_of
     n_in = B.n_input_nodes
@@ -248,9 +248,7 @@ def _instance_owners(fold: _Fold, oracle_dir: str) -> _Owners:
     # parameters; the shared weights are the Input nodes no request owns -- ONE node for a homogeneous bf16 Record, one per leaf field
     # for a mixed-width one (FP8: 435) -- never `n_input_nodes - 1`; refused by name when the layout does not hold
     seed_node_of, peer_node_of, witness_owners, weights_nodes = request_inputs(B, reqs)
-    if B.oracle_rows is None:
-        raise ValueError(f"{oracle_dir}: the view passed as the fold has no instances.jsonl rows")
-    meta_of = {o["node"] + n_in: o for o in B.oracle_rows}
+    meta_of = {o["node"] + n_in: o for o in cast("list[dict]", B.oracle_rows)}   # a fold's loader sets its rows
 
     # attribution of every instance, in node order (producers precede consumers). Channels, in order:
     #   meta     -- the fold recorded `request` on the instance (fold._compute_emit, X-09+);
@@ -434,7 +432,9 @@ def _compare_request(reads: _RequestReads, item) -> tuple:
             ma, mb = collections.Counter(ha.values()), collections.Counter(hb.values())
             only_a, only_b = ma - mb, mb - ma
             diff = only_a + only_b
-            spec = lambda Q, i: Q.inst[i]["spec"].split("{")[0]  # noqa: E731
+
+            def spec(Q: Any, i: int) -> str:
+                return Q.inst[i]["spec"].split("{")[0]
             ent["dag_multiset_equal"] = not diff
             ent["dag_multiset"] = {
                 "a_live": len(la), "a_dead": len(A.inst) - len(la), "b_live": len(lb), "b_dead": len(P.inst) - len(lb),
@@ -523,6 +523,7 @@ class Options:
     oracle: str = option("--oracle", help="match dir: program.json + instances.jsonl (+ capture/log.jsonl.gz)")
     derived: list[str] = option("--derived", action="append", default=[],
                                 help="derived request-wrapper dir (repeatable; shape read from artifact.json)")
+    log: str | None = option("--log", default=None, help="capture log (default <oracle>/capture/log.jsonl.gz)")
     out: str = option("--out")
     within_step: str = option("--within-step", choices=WITHIN_STEP_CRITERIA, default=DEFAULT_WITHIN_STEP,
                               help="within-step criterion of record: dag (live-cone DAG multiset accepted for every request) | sequence (r14-v1)")
@@ -530,9 +531,9 @@ class Options:
 
 def main(a: Options) -> int:
     # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
+    from verity_vllm.gc_tuning import tune as _gc_tune
     _gc_tune()
-    res = decompose(a.oracle, a.derived, within_step=a.within_step)
+    res = decompose(a.oracle, a.derived, a.log, within_step=a.within_step)
     with open(a.out, "w") as f:
         json.dump(res, f, indent=1, default=str)
     brief = {"verdict": res["verdict"], "within_step": res["within_step_criterion"], "reasons": res["reasons"],

@@ -1,6 +1,7 @@
 """The gate's load (`weights-write` and `load-relay`, `auditor.py`), with its unit, the tunnels and the rehearsal
 injected: `weights-write` needs the store disk and a lane's own key, and its run writes interface 1's stream there once
-(`load_relay.py write`, here at the tiny shape) and carries the store's record in its end; `load-relay` is refused
+(`load_relay.py write`, here at the tiny shape) and carries the store's record in its end, and a stop of its unit,
+which the unit sends to `certifier-run` alone, still ends it with its end; `load-relay` is refused
 unless the store holds the shape as `weights-write` wrote it, its program, sink port, streams and shape check, and its
 minutes cover the load and then the rehearsal; its run opens a tunnel to the sink a stream beside the endpoint's, gives
 the rehearsal their local ends and the store, and publishes the load's signed registrations and the relay's counts,
@@ -10,8 +11,10 @@ never a salt. `test_warden_serve` holds `warden_command`'s load flags to `warden
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
+import signal
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -102,6 +105,21 @@ def test_the_store_write_runs_load_relay_write_over_every_core_into_the_store():
     assert A.Host().store == store
 
 
+def test_a_store_write_whose_unit_is_stopped_stops_its_writer_and_writes_its_end(host, stop_held):
+    """The unit's stop reaches the writer, which here ends only on a signal, and the end says the unit stopped it."""
+    host.store.mkdir()
+    rc, out = gate(host, ["weights-write", "--shape", "tiny"])
+
+    def wait(proc, seconds):
+        os.kill(os.getpid(), signal.SIGTERM)
+        return proc.wait()
+
+    end = A.certifier_run(host, json.loads(out)["run"], pinned=PIN, now=lambda: T1, wait=wait,
+                          command=lambda req, out, store: [sys.executable, "-c", "import signal; signal.pause()"])
+    assert end["device"] == "weights" and end["rc"] == -signal.SIGTERM and end["ended"] == A.STOPPED
+    assert end["store"] is None and set(end["files"]) == {"rehearse.log"}
+
+
 @pytest.mark.parametrize("bad, why", [
     (["--program", "9E" * 64], "the reading program's digest, 128 lowercase hex digits"),
     (["--program", "9e" * 63], "the reading program's digest, 128 lowercase hex digits"),
@@ -184,6 +202,14 @@ def test_the_longest_minutes_fit_in_the_rehearsal_units_runtime_and_leave_an_h20
     limit = re.search(r"^RuntimeMaxSec=(\d+)h$", UNIT.read_text(), re.M)
     assert limit and A.CERTIFIER_MINUTES[1] + 10 <= int(limit[1]) * 60
     assert A.CERTIFIER_MINUTES[1] - A.load_minutes("h200") >= 100
+
+
+def test_the_rehearsal_units_stop_signals_certifier_run_alone_and_gives_it_time_to_write_the_end():
+    """`KillMode=mixed`: a stop's SIGTERM goes to `certifier-run` alone, which passes it to the runner, closes the
+    tunnels and writes the end (`auditor._Stop`); only what is left at `TimeoutStopSec` is killed."""
+    unit = UNIT.read_text()
+    assert re.search(r"^KillMode=mixed$", unit, re.M)
+    assert re.search(r"^TimeoutStopSec=\d+(s|min)$", unit, re.M)
 
 
 SALT = "5a" * 64
