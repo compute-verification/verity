@@ -112,3 +112,27 @@ CROSSTICK2 to network-accounting (lead), Sat 14 Nov 10:50 AM PST. **Commit 3 of 
 - [ran] `test_a_mark_that_is_not_bytes_is_signed_nowhere` now holds 0 coins taken (was 2) and 1 after the certified mark (was 4). The certificate tests: 29 passed. The span protocol's tests without Lean: 6 passed, 5 skipped. Ruff clean.
 - Memory's item 2: [ran] not on `architecture` at `b7ecffd08204`, which holds no `mkCounted` or `outcome_counted` at all; the counted code is only on our collect branch. I hold no timer, so I can't watch for Sunday 6 AM PST. Its state stands as of 10:50 AM PST Saturday. TIMER: none.
 
+[2026-11-14T18:50Z] acae1f134488
+LAYOUTREAD2 to network-accounting (lead), Sat 14 Nov 10:51 AM PST. **The rehearsal on the collect branch at `2f9a0fa9bc3539725bcd1603c8611405c7a2d88e`: the current maps miss no site of the older name in code. Two sites are left, both lock records in lean's files (`security/lean-audit.json`'s module `Definitions.NetworkCertifier.Warden` and `security/Properties/lean-audit.json`'s `NetworkCheck.TransferBlocks.Kind.warden`), and the rename's records commit takes both and picks clean. No map row is added, so no map is pushed.** [ran]
+
+- **Rehearsal:**
+  - `stage.py` certifies both moves on the branch (72 edits; 1 rename, 179 path-only edits, against 171 on `main`).
+  - The third map runs, and the four hand renames apply clean: the fixture, the uplink, the stall label and summaries' key and programs' directory, and the scratch directory.
+  - 202 files, local head `5d9821264f0eb3ec238d96f7a262f16122078e8e`, not pushed. The 151 changed `.py` files compile.
+  - The counting test's scan finds the six kinds exactly at their caps (610 sites), so the branch's new merges added no kept site either.
+- **The real build** is the same commands on the branch as it stands then, with the records commit picked. If a lock has moved by then, it gets regenerated at the end like the other shared lists. The Lean cap drop from 10 to 0 (`tests/test_lean_packages.py`) goes in with it.
+
+LAYOUTREAD2 to network-accounting (lead), Sat 14 Nov 10:51 AM PST. **Merge into the collect branch: my head `ac96893e0a7e67d6b54e94d7ae30c60d4f6cb1e7` (two commits, `131db838faf…` and `e8f87adb7c5…`, then merges of the branch), pushed on the third try. The collect branch is at `2f9a0fa9bc3539725bcd1603c8611405c7a2d88e`. No file was resolved by hand, and everything I changed compiles.** [ran]
+
+- **`131db838faf` "The kept flags name their attribute":**
+  - `--warden-run` (8 declarations) and `--warden` gain `dest="network_certifier_run"` and `dest="network_certifier"`.
+  - Their reads in `chain_record.py`, `n2_tie_zk.py`, `n2_zk.py`, `scan_zk.py` and `tick_load.py` follow, and so do the parsed-argument stand-ins in `test_chain_record.py` and `test_warden_chain.py`.
+  - The declarations can't go in alone, since they would break the reads. Those two test files pass (28), with the worktree on the path.
+- **`e8f87adb7c5` "A test holds the network certifier's older name to what the Glossary keeps":**
+  - The counting test (`tests/test_retired_terms.py`) and its two names in the root suite's bookkeeping list (`tests/conftest.py`). Until the rename they only warn, listing the sites left.
+  - **A statement changes:** the Glossary's row for the older name now says what keeps it.
+- **Not in now, with the build:** the Lean cap and the lock records. The tokens map's header was already on the branch with #10013's maps.
+- **How my commits got onto the tip:** the branch gained `Layout-move: tools/move/memory_provers_map.toml` while I worked. My two unpushed commits touch none of its paths, so I picked them onto the tip instead of merging across the move. The two later merges of the branch held no move commit.
+
+LAYOUTREAD2 to network-accounting (lead), Sat 14 Nov 10:51 AM PST. **Cancelled: `r20261114-165746-86e1`**, the rename's suites at `40d936872d54`. It had waited 72 minutes and checked 31 in its slot. I launched nothing else.
+
