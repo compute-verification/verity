@@ -151,7 +151,7 @@ gpu-lease 1 --wait --max-min 40 -- bash -c '
       echo "lin $m $n $k rc $?" >> "$O/rc.txt"
     done
   done
-  $TPY $D/flash_ref.py "$REPS" $FLASH_SHAPES >> "$O/flash.jsonl" 2>> "$O/flash.err"; echo "flash rc $?" >> "$O/rc.txt"
+  $TPY benchmarks/pouw/edited_gemm_profile/flash_ref.py "$REPS" $FLASH_SHAPES >> "$O/flash.jsonl" 2>> "$O/flash.err"; echo "flash rc $?" >> "$O/rc.txt"
   kill $smi
   mkdir -p "$O/ncu"
   S=(--section SpeedOfLight --section ComputeWorkloadAnalysis --section InstructionStats --section WarpStateStats
@@ -186,7 +186,7 @@ names = {"l8": (2048, 32), "l8x8k": (8192, 32), "l8x32k": (32768, 8)}
 for name, (s, h) in names.items():
     (o / f"gate_{name}_meta.json").write_text(json.dumps({"m": h * s, "n": s, "k": 128}))
 EOF
-$PY $D/eps_profile.py "$O" --mm benchmarks/machine_model --json "$O/profile.json" --toml "$O/profile.toml" \
+$PY benchmarks/pouw/edited_gemm_profile/eps_profile.py "$O" --mm benchmarks/machine_model --json "$O/profile.json" --toml "$O/profile.toml" \
   --toml-arms "hm,hsm,fu" > "$O/profile.md" 2> "$O/profile.err"
 echo "profile rc $?" >> "$O/rc.txt"
 wait $apv_ref $cg_ref

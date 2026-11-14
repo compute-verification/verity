@@ -58,7 +58,8 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
 - `adapters/`: one directory per serving system, holding only what attaches Verity to it: an adapter, which the Design
   rules below still call an integration. `adapters/vllm/` (`verity_vllm`) builds each served workload's circuit and
   commits its values while serving. Target, not yet: a torch adapter beside it, which the vLLM adapter sits on.
-- `demos/`: one directory per demo: its workload, placement, commands and doneness (`demos/README.md`).
+- `demos/`: one file per demo, the configuration `verity run` reads (`demos/README.md`, one table of them); a demo holds no
+  code.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).

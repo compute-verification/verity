@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The wipe's piece of a served window (served_verdicts.sh): one streamed wipe (`demo.sh`) of the card the
 # window is served on, before its engine loads, the fill taking the whole HBM. A piece as served_verdicts.py runs one, from
-# the tree's root, writing its core answer (verity/wipe/v0's, `wipe_period.leg`'s) to DIR/answer.json:
+# the tree's root, writing its core answer (verity/wipe/v0's, `wipe_run.leg`'s) to DIR/answer.json:
 #
 #   WIPE_CMD='bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'   # bash -c "$WIPE_CMD" _ SERVE_DIR WINDOW DIR
 #

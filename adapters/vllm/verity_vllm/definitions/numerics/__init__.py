@@ -1,4 +1,4 @@
-"""CPU models of the kernels production vLLM runs, which tests and the sampled replay hold Definitions and committed words to.
+"""CPU models of the kernels vLLM runs when serving, which tests and the sampled replay hold Definitions and committed words to.
 
 * :mod:`.mma` -- one ``mma.sync.m16n8k16`` on Ampere (BF16 = ``verity.circuits.silicon.models.AMPERE_BF16_M16N8K16``,
   FP16 added);

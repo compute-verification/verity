@@ -23,6 +23,7 @@ from verity.protocols.accounting.pous.device import challenger_party as CP
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.prover import challenger_prover as CR
+from verity.protocols.accounting.pous.prover import period_prover
 from verity.protocols.accounting.pous.prover import weight_store as ws
 from verity.protocols.accounting.pous.verifier import period, setup
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
@@ -180,7 +181,7 @@ def test_a_tiny_int8_model_is_held_as_p2_and_served_bit_exact(toy):
         held = s.held()                                                                     # the verifier's setup check of C*
         period.tie(held.point, held.published, period.setup_inputs(held.setup_case))
         assert held.published.root.hex() == c["storage_root"]
-        assert [b for seg in period.encode(q, s.salt, w) for b in seg] == [held.blocks[i] for i in range(q.blocks)]
+        assert [b for seg in period_prover.encode(q, s.salt, w) for b in seg] == [held.blocks[i] for i in range(q.blocks)]
 
         plain = opt.weights()                                                               # tied weights: encoded once, one tensor
         assert {n: t.numpy().tobytes() for n, t in plain.items()} == {
@@ -265,13 +266,13 @@ JUDGES = {"pous-run-protocol": "RUN", "pous-setup": "SETUP"}
 def _judges(monkeypatch) -> list:
     """`period.serve` answering for `JUDGES` as the Lean does of an honest period: the run tool with the Python's
     answer, the setup tool with an accept. Returns the Python's runs, in order."""
-    audit, runs = period.audit, []
+    audit, runs = period_prover.audit, []
 
     def audited(*args, **kw):
         runs.append(audit(*args, **kw))
         return runs[-1]
 
-    monkeypatch.setattr(period, "audit", audited)
+    monkeypatch.setattr(period_prover, "audit", audited)
     monkeypatch.setattr(period, "serve", lambda exe, cases: [runs[-1].answer if exe == "RUN" else {"verdict": "accept"}])
     return runs
 
@@ -347,7 +348,7 @@ def test_a_dropped_block_rejects(toy, tmp_path):
         short = [list(seg) for seg in period.setup_inputs(held.setup_case)[2]]
         del short[1][3]
         bad = dataclasses.replace(held, setup_case=period.setup_case(q, held.published.commitment, held.published.salt, short))
-        got = period.audit(NODE, bad, COINS, log=ts.session_log(tmp_path), prover=opt.prover, **run)
+        got = period_prover.audit(NODE, bad, COINS, log=ts.session_log(tmp_path), prover=opt.prover, **run)
         assert got.verdict == "reject" and got.answer["reason"] == f"setup: segment 1 of C* is not 8 blocks of {q.block_bytes} bytes"
 
 
