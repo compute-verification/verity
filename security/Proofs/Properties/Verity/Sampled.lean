@@ -1,6 +1,7 @@
 module
 
 public import Properties.Verity.Game
+public import Proofs.Properties.Verity.Soundness.Composite
 public import Properties.Spot.Draw
 public import Proofs.Flock.Bridge.V5.Statement
 public import Proofs.Flock.Bridge.CircuitOf
@@ -50,9 +51,9 @@ files and at the strategy a strategy of the period's game projects to. This modu
   game as flock-verify `--zk`'s acceptance in the live audit at the projected strategy, plus the two-continuation
   finders' terms, the coin trees' hiding term at every leaf, the read finder's collision and the forger's forgery.
 * **The component** (`ReadsV2`): the composite's `.sampled` component is `VStar.Recursive.Sampled.protocol`, whose
-  one-stage form is v2 and which refuses v1 (whose verdicts are the prover's). Both composites name it
-  (`composite_readsV2`). The parameters fix the form before any coin; this leg covers the one-stage form, and the
-  recursive form (`VStar.Recursive`) is not this leg's (`Covers`).
+  one-stage form is v2 and which refuses v1 (whose verdicts are the prover's). Every composite that lists SPOT
+  names it (`readsV2_of_component`). The parameters fix the form before any coin; this leg covers the one-stage
+  form, and the recursive form (`VStar.Recursive`) is not this leg's (`Covers`).
 * **The session v2 sets up on the parameters and the committed files** (`SetsUp`): v2's parameters in the composite's,
   the first under the sampled component's id, as v2's case finds them (`ParamsAt`, at most one), the session's inputs
   as v2 hands them to flock-verify (the statement, one table, the verifier's partition object and program, no
@@ -633,9 +634,11 @@ verdict from the session's files; one-stage v1, whose verdicts are the prover's,
 def ReadsV2 (k : Verity.Registration.Composite) : Prop :=
   Verity.component k .sampled = some VStar.Recursive.Sampled.protocol
 
-/-- Both composites read sampled proofs at v2. -/
-theorem composite_readsV2 (k : Verity.Registration.Composite) : ReadsV2 k := by
-  cases k <;> rfl
+/-- **Every composite with a sampled component reads SPOT at v2**: the component is SPOT's own
+compiled check, the same in every composite that lists it. -/
+theorem readsV2_of_component {k : Verity.Registration.Composite} {P : _root_.Core.BlobProtocol}
+    (h : Verity.component k .sampled = some P) : ReadsV2 k :=
+  h.trans (congrArg some (Verity.component_eq_some.1 h).2)
 
 /-- **v2's parameters in the composite's parameters `θ`**: the first component parameters the composition's format
 decodes under the sampled component's id, as `caseOf` finds them, read by its decoder in its one-stage form. The
