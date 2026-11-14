@@ -142,20 +142,20 @@ theorem readUnitSampled_partsOf {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Ha
     {ι : Type} (R : ReadUnit.Reads (Flock.Bridge.circuitOf D hU n) n ι)
     (hR : ∀ i ∈ R.reads, ∃ j, ∃ hj : j < D.unroll.upv,
       R.port i = readPorts (Flock.Bridge.copyGate D hU n (R.unit i) hj) hr V H)
-    (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (tr : Ω → (Flock.Bridge.circuitOf D hU n).Trace)
+    (acc : Ω → Prop) (sampled : Ω → Finset (Fin n)) (tr : Ω → (Flock.Bridge.circuitOf D hU n).Trace)
     (cost : Ω → ℕ) (ε : ℝ) (hcommitted : R.Committed Verity.sha512 Verity.sha512 key)
-    (below : Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+    (below : Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
       ¬ ((Flock.Bridge.partsOf D hU n).Correct (tr ω) (R.unit i) ∧
         ReadUnit.RegisteredRows consts (Flock.Bridge.partsOf D hU n) (R.unit i) (R.port i) (R.root i) (R.domain i)
           (tr ω))) ≤ ε)
     (hcr : Claims.ExpectedCR (fun m => (Verity.sha512 m).bytes)
-      (R.finder (Flock.Bridge.partsOf D hU n) Verity.sha512 key drawn tr cost)) :
-    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+      (R.finder (Flock.Bridge.partsOf D hU n) Verity.sha512 key sampled tr cost)) :
+    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
       R.index i ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)) < (R.port i).count ∧
       (R.port i).hOf ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)) ≠
         (R.table i (R.index i ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)))).row) ≤
       ε + Claims.Ex (fun ω => (cost ω : ℝ)) / 2 ^ (256 : ℝ) := by
-  refine Accounting.SecurityProofs.readUnitSampledCR Verity.sha512 key consts (Flock.Bridge.partsOf D hU n) R acc drawn
+  refine Accounting.SecurityProofs.readUnitSampledCR Verity.sha512 key consts (Flock.Bridge.partsOf D hU n) R acc sampled
     tr cost ε (fun i hi => ?_) hcommitted below hcr
   obtain ⟨j, hj, hp⟩ := hR i hi
   rw [hp]
@@ -186,15 +186,15 @@ theorem readUnitSampled_layout {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Has
     {ι : Type} (R : ReadUnit.Reads (Flock.Bridge.circuitOf D hU n) n ι)
     (hR : ∀ i ∈ R.reads, ∃ j, ∃ hj : j < D.unroll.upv,
       R.port i = readPorts (Flock.Bridge.copyGate D hU n (R.unit i) hj) hr V H)
-    (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (tr : Ω → (Flock.Bridge.circuitOf D hU n).Trace)
+    (acc : Ω → Prop) (sampled : Ω → Finset (Fin n)) (tr : Ω → (Flock.Bridge.circuitOf D hU n).Trace)
     (cost : Ω → ℕ) (ε : ℝ) (hcommitted : R.Committed Verity.sha512 Verity.sha512 key)
-    (below : Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+    (below : Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
       ¬ ((Flock.Bridge.partsOf D hU n).Correct (tr ω) (R.unit i) ∧
         ReadUnit.RegisteredRows consts (Flock.Bridge.partsOf D hU n) (R.unit i) (R.port i) (R.root i) (R.domain i)
           (tr ω))) ≤ ε)
     (hcr : Claims.ExpectedCR (fun m => (Verity.sha512 m).bytes)
-      (R.finder (Flock.Bridge.partsOf D hU n) Verity.sha512 key drawn tr cost)) :
-    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+      (R.finder (Flock.Bridge.partsOf D hU n) Verity.sha512 key sampled tr cost)) :
+    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
       R.index i ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)) < (R.port i).count ∧
       (R.port i).hOf ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)) ≠
         (R.table i (R.index i ((Flock.Bridge.partsOf D hU n).localEval (tr ω) (R.unit i)))).row) ≤
@@ -208,7 +208,7 @@ theorem readUnitSampled_layout {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Has
     (fun u => Flock.Bridge.constGate_mem_io D hU n u hupv)
     (fun u j hj => Flock.Bridge.copyGate_mem_committed D hU n u hj (hr.out (16 * H)) (hleaves j hj) (by omega) hout
       (by omega) (by omega))
-    R hR acc drawn tr cost ε hcommitted below hcr
+    R hR acc sampled tr cost ε hcommitted below hcr
 
 /-- **A sampled read unit of a parsed circuit file returns its table's row, at a template the read's check accepts.**
 Let the circuit file parse into `ct` (`hparse`, `Flock.HmOut.parseTmpl`), with its unit template passing the read's
@@ -234,16 +234,16 @@ theorem readUnitSampled_check {Ω : Type} [Fintype Ω] [Nonempty Ω] {V H : ℕ}
         ∀ {ι : Type} (R : ReadUnit.Reads (Flock.Bridge.circuitOf (.tmpl ct) hB n) n ι),
         (∀ i ∈ R.reads, ∃ j, ∃ hj : j < (Flock.HmOut.unrolled ct).upv,
           R.port i = readPorts (Flock.Bridge.copyGate (.tmpl ct) hB n (R.unit i) hj) hr V H) →
-        ∀ (acc : Ω → Prop) (drawn : Ω → Finset (Fin n))
+        ∀ (acc : Ω → Prop) (sampled : Ω → Finset (Fin n))
           (tr : Ω → (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) (cost : Ω → ℕ) (ε : ℝ),
         R.Committed Verity.sha512 Verity.sha512 pinnedKey →
-        Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+        Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
           ¬ ((Flock.Bridge.partsOf (.tmpl ct) hB n).Correct (tr ω) (R.unit i) ∧
             ReadUnit.RegisteredRows consts (Flock.Bridge.partsOf (.tmpl ct) hB n) (R.unit i) (R.port i) (R.root i)
               (R.domain i) (tr ω))) ≤ ε →
         Claims.ExpectedCR (fun m => (Verity.sha512 m).bytes)
-          (R.finder (Flock.Bridge.partsOf (.tmpl ct) hB n) Verity.sha512 pinnedKey drawn tr cost) →
-        Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+          (R.finder (Flock.Bridge.partsOf (.tmpl ct) hB n) Verity.sha512 pinnedKey sampled tr cost) →
+        Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ sampled ω ∧
           R.index i ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval (tr ω) (R.unit i)) < (R.port i).count ∧
           (R.port i).hOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval (tr ω) (R.unit i)) ≠
             (R.table i (R.index i ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval (tr ω) (R.unit i)))).row) ≤
@@ -263,8 +263,8 @@ theorem readUnitSampled_check {Ω : Type} [Fintype Ω] [Nonempty Ω] {V H : ℕ}
   have hv : (hr.out (16 * H)).val = FlockSoundness.Discharge.Layout.outCol (Flock.HmOut.unrolled ct) H 0 := by
     have h := hout (16 * H) (by omega)
     rwa [Nat.mul_div_cancel_left H (by norm_num : 0 < 16), Nat.mul_mod_right] at h
-  exact ⟨run, hr, hφ, hout, fun consts hone {ι} R hR acc drawn tr cost ε hcommitted below hcr =>
-    readUnitSampled_layout pinnedKey (.tmpl ct) hB n hr hsound hupv hlen hv hH consts hone R hR acc drawn tr cost
+  exact ⟨run, hr, hφ, hout, fun consts hone {ι} R hR acc sampled tr cost ε hcommitted below hcr =>
+    readUnitSampled_layout pinnedKey (.tmpl ct) hB n hr hsound hupv hlen hv hH consts hone R hR acc sampled tr cost
       ε hcommitted below hcr⟩
 
 end Accounting.ReadUnit.Gates

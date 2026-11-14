@@ -29,7 +29,7 @@ TP stand-in (adapters/vllm's `tests.pipeline.served_tp`, deferred), without prov
 * A served window's circuit record states its window ingress at each step, so the leak count prints a window figure, the
   advice's charge under its named premise, beside the run figure, which stays vacuous (`records_audit.declared_count`).
 * The per-expert fused cut over a block-FP8 MoE layer's committed step (adapters/vllm's `tests.pipeline.served_experts`, no
-  engine): the step sealed as serve-openai seals a closed window, then committed by `commit1` with the tables' docket
+  engine): the step sealed as serve-openai seals a closed window, then committed by `commit1` with the tables' registration
   and the checkpoint, is the window the row driver's in-Commit hook commits over the same step (`_same_commitment`), a
   stand-in `source1` accepts; it is refused without the tables or the checkpoint, and a TP rank's window is handed both."""
 from __future__ import annotations
@@ -1508,7 +1508,7 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
 
 
 def test_the_weights_registration_is_also_the_first_record_of_the_serves_registration_log(tmp_path, capsys, monkeypatch):
-    """``weights-registration --deployment-record FILE`` writes the committer's docket also as the first record of the
+    """``weights-registration --deployment-record FILE`` writes the committer's registration also as the first record of the
     serve's registration log (`window_weights.deployment_record`): a `verity/registration/v2` record chained after nothing
     that registers each rooted weight parameter's entry as the docket states it, by name, and names the unrooted
     ones in its header, with nothing of the key; the command says its digest (`registration.digest`), which Pearl+'s W
@@ -2057,7 +2057,7 @@ def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows
 
 @pytest.fixture(scope="module")
 def fused(tmp_path_factory) -> dict:
-    """A block-FP8 MoE layer's committed step with the per-expert tables' docket, the checkpoint and the fused cut's
+    """A block-FP8 MoE layer's committed step with the per-expert tables' registration, the checkpoint and the fused cut's
     partition; over that one step, the row driver's window (``hook``: the in-Commit hook's, ``served``) and a serve-openai
     window's sealed row dir (``served``), which names no Programs."""
     pytest.importorskip("torch")

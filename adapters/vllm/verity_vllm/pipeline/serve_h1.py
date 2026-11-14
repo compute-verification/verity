@@ -363,8 +363,7 @@ class H1Windows:
         ``readied``, with where each part's time went (``seconds``)."""
         from verity.protocols.accounting.pouw.prover.serving import ready_verifier
         from verity_vllm.protocols.pouw import h1_hooks as PHK
-        from verity.protocols.accounting.pouw.prover.serving import Receipts
-        from verity.protocols.accounting.pouw.prover.serving import h1_tables_available
+        from verity_torch.pouw import Receipts, h1_tables_available
 
         t0 = self.clock()
         PHK.weight_roots(self.layers)
@@ -415,7 +414,8 @@ class H1Windows:
         from verity_vllm import protocols as PO
         from verity_vllm.acquire import h1_commit as HC
         from verity_vllm.protocols import pouw
-        from verity.protocols.accounting.pouw.prover.serving import Receipts, Served
+        from verity.protocols.accounting.pouw.prover.serving import Served
+        from verity_torch.pouw import Receipts
 
         if self.comp is not None:
             raise RuntimeError(f"{ENTRY}: window {window} opens while window {self.window}'s H1 is open")
