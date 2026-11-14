@@ -7,11 +7,11 @@ import Mathlib.Algebra.Order.Chebyshev
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
-# The majority: the transcript a sampled leg extracts, and the binding term
+# The majority: the transcript a sampled subprotocol extracts, and the binding term
 
-Both sampled legs that read a transcript off many plays (the recursive leg, `Verity.Recursive.spotRecursive`, and the
-two-stage leg, `Verity.SampledTwo`) extract it the same way and bound the same event. This module holds that argument
-once, over a structure of only what it reads (`Plays`), and each leg instantiates it.
+Both sampled subprotocols that read a transcript off many plays (the recursive subprotocol, `Verity.Recursive.spotRecursive`, and the
+two-stage subprotocol, `Verity.SampledTwo`) extract it the same way and bound the same event. This module holds that argument
+once, over a structure of only what it reads (`Plays`), and each subprotocol instantiates it.
 
 * **The plays** (`Plays C n P`): over a circuit `C` partitioned into `n` units by `P`, the outer samples `Ξ` (averaged),
   each with a finite space of plays `Smp ξ`; at each play, whether it accepts (`acc`), the units it binds

@@ -232,7 +232,7 @@ def hashedAt (H : Hash.Msg → Verity.Digest) (key : Hash.Msg) (i : ι) (X : C.T
 open Classical in
 /-- **What the sampled reads hashed** at the outcome `ω`: `hashedAt` for each read whose unit is sampled, in its unit's
 local evaluation of the transcript `X ω` under the partition `P`. -/
-noncomputable def drawnHashed {Ω : Type} (P : Verity.Partition C n) (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
+noncomputable def sampledHashed {Ω : Type} (P : Verity.Partition C n) (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
     (drawn : Ω → Finset (Fin n)) (X : Ω → C.Trace) (ω : Ω) : List Hash.Msg :=
   (R.reads.filter (R.unit · ∈ drawn ω)).toList.flatMap fun i => R.hashedAt H key i (P.localEval (X ω) (R.unit i))
 
@@ -245,7 +245,7 @@ noncomputable def finder {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Verity.Part
     (cost : Ω → ℕ) : Claims.Finder where
   S := Ω
   out ω :=
-    if h : ∃ x ∈ R.drawnHashed P H key drawn X ω, ∃ y ∈ R.drawnHashed P H key drawn X ω,
+    if h : ∃ x ∈ R.sampledHashed P H key drawn X ω, ∃ y ∈ R.sampledHashed P H key drawn X ω,
         Hash.Collision (fun m => (H m).bytes) x y then
       some (h.choose, h.choose_spec.2.choose)
     else none

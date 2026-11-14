@@ -25,7 +25,7 @@ from verity_vllm.pipeline import replay_bundle as RB
 
 D = 64
 ROPE = f"RoPEHead_v1{{D={D}}}"
-LAW = "subset:1"
+DESIGN = "subset:1"
 HEADS = 2 * 4 * (3 + 1)       # 2 requests x 4 tokens (2 prefill + 2 decode) x (3 query + 1 key heads)
 
 
@@ -90,7 +90,7 @@ def commit(root: Path, *, seed: int = 17, silu: str | None = None, inter: int | 
     (out / "runs.jsonl").write_text(json.dumps(row) + "\n")
     (out / "verdict.json").write_text(json.dumps({"replay_deferred": {"bundles": [{"pair": 1, "manifest_sha256": m["sha256"]}]}}))
     pf = root / "partition.json"
-    pf.write_text(json.dumps({"templates": [ROPE], "law": LAW}))
+    pf.write_text(json.dumps({"templates": [ROPE], "law": DESIGN}))
     return {"out": out, "row_dir": row_dir, "partition": pf, "world": world, "run_root": rc.run_root.hex(), "inst": inst}
 
 

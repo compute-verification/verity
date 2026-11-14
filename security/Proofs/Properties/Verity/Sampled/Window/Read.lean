@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.Sampled.Window.Assembled
 public import Proofs.Properties.Verity.Sampled.RecordDraw
 
 /-!
-# SPOT's leg over a window: the sessions of the window's one sample
+# SPOT's subprotocol over a window: the sessions of the window's one sample
 
 `ExecutionPhase/Steps.lean` takes the window's sessions at the sample the coin map's coins give (`ExecutionPhaseSessions`, of every
 play on a tape through the coin map's first stop). Here that is what the verifier's acceptance gives of a play, read
@@ -18,7 +18,7 @@ at the play alone, at the sample-coupled coin map.
   stop on the widened coins `ω` that `ExecutionPhaseRead` holds of has the sessions of the sample at `ω`. The walk from the
   sample's fill stops at a log of the fill's releases, then nothing or an opening (`walkFill_req`); the order leaves
   the play's coins of the family those releases' (`freshCoins_of_stopTail`), which agree with the sample's coins.
-* **The members' steps at the sample-coupled coin map** (`memberSteps_sampleMap`) and **the leg**
+* **The members' steps at the sample-coupled coin map** (`memberSteps_sampleMap`) and **the subprotocol**
   (`executionPhaseSpotSound_sessions`): `executionPhaseSpotSound_assembled` at the sessions' readings and decoders, with the members'
   steps from `ExecutionPhaseRead` at each accepted play.
 -/
@@ -164,7 +164,7 @@ abbrev sessionReadings (tb : ExecutionPhase → String) (ev : ℕ → Exchange �
   fun W θ F c => sessionReading W.rounds (tb W) ev (record₀ W θ F c) (recordDigest W θ F c)
 
 omit θ F c in
-/-- **SPOT's leg over a window of several members, from what the verifier's acceptance gives of a play**:
+/-- **SPOT's subprotocol over a window of several members, from what the verifier's acceptance gives of a play**:
 `executionPhaseSpotSound_assembled` at the sessions' readings (`sessionReadings`) and decoders (`sessionDecoders`), under
 `fieldEnc`. Soundness's vocabulary at `.sampled` reading, at the deployment's windows `S` and the constructions with
 the binding's finders at the device's history `dev`, the window's projection at those readings and decoders and the

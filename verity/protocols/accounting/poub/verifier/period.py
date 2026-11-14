@@ -72,7 +72,7 @@ def eps(windows: int, groups_per_coin: int, samples: int) -> Fraction:
 def certified(record: audit.Record) -> tuple[dict[str, Any], dict[str, Any]]:
     """`Poub.Protocol.certify`: an accepted session's public outputs `{"eps", "q_bytes"}` and its profile."""
     if record.samples is None:
-        raise ValueError("the record states no samples, at which eps charges each draw's rejection: certify a "
+        raise ValueError("the record states no samples, at which eps charges each sample's rejection: certify a "
                          "session's record (`Session.record`)")
     windows, _ = audit.pooled_windows(record)
     us = sum(u for u, _ in windows)

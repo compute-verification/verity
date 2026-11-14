@@ -87,7 +87,7 @@ def egress(run: Path, t0: int, t1: int, pad: int = E.PAD_NS) -> dict:
     return E.record(E.read_run(run), t0, t1, pad)
 
 
-def test_a_link_window_carries_the_scan_schedules_cells() -> None:
+def test_a_phase_carries_the_scan_schedules_cells() -> None:
     assert E.capacity_bits(SCAN) == (SCAN.lanes * SCAN.slots + SCAN.lanes) * SCAN.window * SCAN.cell_bytes * 8 \
         == 2_621_440
     assert E.window_ns(SCAN) == 3_200_000_000
@@ -121,9 +121,9 @@ def test_a_window_past_the_sessions_end_or_before_its_origin_isnt_covered(tmp_pa
     late = egress(run, at(10_000), at(18_500))
     assert (late["windows"], late["covered"], late["egress_bits"], late["egress_mib"], late["K"]) == \
         ([2, 7], False, None, None, None)
-    assert late["why"] == [f"the window ends at link-window 7, past the session's {WINDOWS}"]
+    assert late["why"] == [f"the window ends at execution phase 7, past the session's {WINDOWS}"]
     early = egress(run, at(500), at(4_000))
-    assert not early["covered"] and early["why"] == ["the window starts at link-window -1, before the session's origin"]
+    assert not early["covered"] and early["why"] == ["the window starts at execution phase -1, before the session's origin"]
 
 
 def test_a_certificate_that_fails_to_verify_or_is_missing_uncovers_its_window(tmp_path: Path) -> None:

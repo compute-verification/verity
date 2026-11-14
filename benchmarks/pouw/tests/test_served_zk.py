@@ -388,7 +388,7 @@ def test_select_draws_once_over_the_draw_coin_opened_after_the_registration(serv
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
-    k = SC.law_of(params, public["level"])["k"]
+    k = SC.sampling_design_of(params, public["level"])["k"]
     ch = _challenger(params)
     reg = _held(ch, "honest", rec)
     assert ch.passes == {"honest": "coin"} and "draw" not in ch.openings
@@ -734,7 +734,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_sampled_unde
     assert Ch.live_reason(ch.trusted, o, Wd.DRAW, 0, o.after) is None and ch.trusted == ch.coins.commitment
     assert ch.trusted == Ch.trusted_commitment(tmp_path / "honest.json", Ch.ChallengerKey.from_json(ch.signed["key"]),
                                                CC.lms_verify)
-    k = SC.law_of(params, SC.level_of(rec))["k"]
+    k = SC.sampling_design_of(params, SC.level_of(rec))["k"]
     assert d.units == CC.stream_subset(k, 26, SC.draw_bytes(SC.draw_key(o.coin, st, reg), d.law, 26))
     assert ch.coins_of("honest") == {"commitment": ch.trusted.to_json(), "pass": "certifier", "draw": o.to_json()}
 
@@ -886,7 +886,7 @@ def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_re
         assert why in e.value.verdict.detail[code]
     ch = _challenger(bparams, coins=_coins())
     ch.register("honest", brec, manifest=braw, recorded=True)
-    assert ch.passes == {"honest": "recorded beacon"} and len(ch.select("honest").units) == SC.law_of(bparams, bpublic["level"])["k"]
+    assert ch.passes == {"honest": "recorded beacon"} and len(ch.select("honest").units) == SC.sampling_design_of(bparams, bpublic["level"])["k"]
 
 
 def test_stream_subset_is_the_exact_partial_fisher_yates_on_one_stream():
@@ -1039,7 +1039,7 @@ def test_r1_r6_of_a_window_are_leans(served):
     rec = _register(params, public)
     ell, n = SC.level_of(rec), rec["population"]
     prog, q = SC.PT.population_program(SC.template(K), n), SC.PT.template_instance_query(SC.template(K))
-    law, ports = SC.law_of(params, ell), SC.ports(params, ell)
+    law, ports = SC.sampling_design_of(params, ell), SC.ports(params, ell)
     p = OR.registration_params(prog, q, law, S.SCHEME, ports, [], params["delta"])
     record = ORL.Record()
 

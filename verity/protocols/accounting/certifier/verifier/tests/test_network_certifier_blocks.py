@@ -150,7 +150,7 @@ def test_refuses_a_pin_without_a_certificate(tiny, tmp_path):
 
 
 @pytest.mark.parametrize("other,to", [("link", "s1/uplink"), ("window", 3), ("direction", Direction.EGRESS)])
-def test_refuses_a_certificate_for_another_link_window_or_direction(tiny, tmp_path, other, to):
+def test_refuses_a_certificate_for_another_phase_or_direction(tiny, tmp_path, other, to):
     _c, doc, lays = tiny
     cert = Certifier(tmp_path)
     regs = cert.register(doc, at={"w": {other: to}})

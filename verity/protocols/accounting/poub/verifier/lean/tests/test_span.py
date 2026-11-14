@@ -218,8 +218,8 @@ def test_a_missing_unit_or_statement_is_malformed_at_no_sample(server) -> None:
 
 
 def test_a_pass_whose_plan_is_not_the_identity_is_malformed(server) -> None:
-    """v2's unit has no plan row: a sample of a pass that reads the store in another order is no unit's, whatever its rows
-    (here zeros of their widths)."""
+    """v2's unit has no plan row: a sample of a pass that reads the store in another order is no unit's, whatever its
+    rows (here zeros of their widths)."""
     s = Span(drawn(WORLD, plans=(None, Plan(((1, 3), (0, 1)), 6))))
     k = next(k for k, d in enumerate(s.ds) if d.index == 1)
     assert held(server, s.case(s.held())) == rejected(tuple(s.r.draws[0][k]))

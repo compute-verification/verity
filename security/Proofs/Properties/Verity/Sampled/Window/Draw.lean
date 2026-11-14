@@ -9,7 +9,7 @@ public import Proofs.Properties.Verity.Sampled.Members.Widen
 
 The period's one sample covers a window's population of all its members' proof blocks; each member's session proves
 the member's part of it (`Member.part`), and the window's projection hands each member's session that part
-(`seqP`). What the leg reads of the one sample and of the coin map over the members' sessions:
+(`seqP`). What the subprotocol reads of the one sample and of the coin map over the members' sessions:
 
 * **The members' parts** (`Member.mem_part`, `ExecutionPhase.Partitions`, `ExecutionPhase.sum_part_card`): a member's part of a
   sample is its proof blocks the sample holds, and where the members' places partition the population the parts'
