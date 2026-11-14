@@ -4,11 +4,11 @@ public import Difftest
 public import Spot.Pieces
 
 /-!
-# `sampled-proofs-wired-key-dev`: round 2 with the wired key's switch on, for development plays only
+# `spot-wired-key-dev`: round 2 with the wired key's switch on, for development plays only
 
 Round 2's statement check (`second_statements`, `Pieces.secondOwn`) with `Own.wiredKey` on: a read whose key one wire
 fills whole is taken (`SecondStage.keyFailure`, `openedRow`). The build of record holds the switch off
-(`SecondStage.WIRED_KEY`): `sampled-proofs-verifier` and every other executable read the field from no input. What this
+(`SecondStage.WIRED_KEY`): `spot-verifier` and every other executable read the field from no input. What this
 one accepts is a development play, never an accept of record, and nothing that records an audit runs it.
 -/
 

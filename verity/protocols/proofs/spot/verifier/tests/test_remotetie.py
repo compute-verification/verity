@@ -32,7 +32,7 @@ only the reader's proof refuses it.
 **Lean** (opt-in as the records, on a machine with Lean's toolchain): `served_cases.py --serve-dir` on a serve dir under H1's tie (V3c's
 audit's v1 case of R, H1's log of W then R, and PoUW's period case of one window naming R) writes three cases: one-stage
 v1's, and those of two of remote's three subprotocols, the inference-only policy's and the period's.
-`sampled-proofs-one-stage check` (whose log record reader takes W and whose R1-R7 accept R) and `inference-only check`
+`spot-one-stage check` (whose log record reader takes W and whose R1-R7 accept R) and `inference-only check`
 accept theirs, each naming R's digest, and the period's window names R (`served_cases.period_case`, the record tie remote
 checks). The v1 case's verdict of record is an accepting stand-in reporting R's tables' roots as their readers opened them:
 the proof blocks' proofs aren't run here, so the audit holds no case of one-stage v2, the audit on the proofs themselves.

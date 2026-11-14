@@ -24,7 +24,7 @@ Without registered reads (``registered`` None), `verify` refuses a program with 
 doesn't apply to it.
 
 `printed` prints Lean's own `printT` vectors as Lean does, and `fits_why` and `draw_fits_why` refuse a length at their
-limit and not below it (fast tests; the sampled-proofs service's difftest holds them to Lean's `fits` piece)."""
+limit and not below it (fast tests; the SPOT service's difftest holds them to Lean's `fits` piece)."""
 from __future__ import annotations
 
 import hashlib

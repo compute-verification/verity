@@ -2,7 +2,7 @@ module
 
 public import Proofs.Poub.RemoteHeld.Sample
 public import Proofs.Poub.RemoteHeld.Subprotocol
-public import Proofs.Poub.RemoteHeld.Draw
+public import Proofs.Poub.RemoteHeld.Sample
 public import Proofs.Pouw.Prob
 import Proofs.Pous.Prob
 import all Init.Data.Array.DecidableEq

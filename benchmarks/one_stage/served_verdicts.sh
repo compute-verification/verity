@@ -205,7 +205,7 @@
 # pinned tree (COMPOSE_BUILT: built at its pin; SAMPLED_EXE its prebuilt SPOT Lean; COMPOSE_TREE_ON the branch
 # infra pinned it on, which the record's composed_on names beside the commit) and answers its $OUT, written to
 # $OUT/compose with the gate's pin in gate.json, one GATE-COMPOSE line saying what it composed.
-# Coins: V3c's audit, the sampled-proofs audit of record, samples on V3C_CHALLENGER's coins, by default PP_CHALLENGER's: the
+# Coins: V3c's audit, the SPOT audit of record, samples on V3C_CHALLENGER's coins, by default PP_CHALLENGER's: the
 # live challenger with PP_CHALLENGER=gate:USER@HOST (records_audit's, with its peer V3C_PEER, default PP_PEER, the node
 # it runs on, PP_CHALLENGER_KEY and PP_GATE_KEY), where it runs, on the served node or a deferral's follow-on. There
 # `served_verdicts.py gate --root` first finds no session on the window's run root (the gate opens a root once, ever) and
@@ -368,7 +368,7 @@
 # (PROGRAM_DIGEST:MANIFEST_DIGEST); CUT, W registers exactly that circuit's Pearl+ values. Its last line, SERVED-COMPARE:
 # EQUAL or NOT EQUAL, is the one the record names (`record --served-compare`, its served-compare/served_compare.json
 # carried to a follow-on and the compose hand-off), and NOT EQUAL fails the run.
-# A step that can't run says why, and the chain stops there. Flock, Lean's verity-verify-proof and sampled-proofs-verifier and the
+# A step that can't run says why, and the chain stops there. Flock, Lean's verity-verify-proof and spot-verifier and the
 # tree's venv are built while the endpoint serves, Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).
 #   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --timeout 6h -- \
 #     bash benchmarks/one_stage/served_verdicts.sh
@@ -616,7 +616,7 @@ kept_windows() {  # the tied windows the serve root's other serve dirs keep, the
 V3C_CHALLENGER=${V3C_CHALLENGER:-${PP_CHALLENGER:-local}} V3C_PEER=${V3C_PEER:-${PP_PEER:-}} DEVELOPMENT=${DEVELOPMENT:-}
 v3c_live() { [[ $V3C_CHALLENGER == gate:* ]]; }
 # Step 3's: PP_CHALLENGER's, but local while V3c's audit is live, since both open on the window's run root, which the
-# gate opens once, ever, and V3c's is the sampled-proofs audit of record
+# gate opens once, ever, and V3c's is the SPOT audit of record
 SP_CHALLENGER=${PP_CHALLENGER:-local}
 [ -n "$V3C" ] && v3c_live && SP_CHALLENGER=local
 v3c_coins() {  # where V3c's audit's coins come from, as its COINS line says
@@ -1370,14 +1370,14 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
   echo "---- verdicts"; cat "$OUT/verdicts.txt"
   [ "$vrc" = 0 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ]
 }
-# The record's sampled-proofs audit, relative to the serve dir: V3c's of window K where it wrote its summary, the
-# sampled-proofs audit of record, on V3C_CHALLENGER's coins (step 3's are local while those are live) and, under a tie,
+# The record's SPOT audit, relative to the serve dir: V3c's of window K where it wrote its summary, the
+# SPOT audit of record, on V3C_CHALLENGER's coins (step 3's are local while those are live) and, under a tie,
 # tied to H1's or Pearl+'s W; else step 3's records audit
 sampled_of_record() {
   if [ -f "$D/v3c-w$K-$vtag/audit/summary.json" ]; then echo "v3c-w$K-$vtag/audit"; else echo sampled-proofs-served; fi
 }
 # The compose hand-off (COMPOSE_OFF_NODE=1, the default): what the final record and the composite read, relative to the
-# serve dir, and nothing else. The record's: its sampled-proofs audit's (`sampled_of_record`) summary, audit record,
+# serve dir, and nothing else. The record's: its SPOT audit's (`sampled_of_record`) summary, audit record,
 # registration and runs, and of each piece the files `piece_row` and `piece_server` read (copied to
 # private/compose/pieces), Pearl+'s verdict of record's among them (`pearlplus_of_record`'s: the auditor's ledger, the
 # coin record, Pearl+'s answer, the Lean verdict and each challenger session's public key, out/key.json at its path, and
@@ -1804,7 +1804,7 @@ build() {  # what prove_path.sh builds, here while the endpoint serves; prove_pa
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
   uv sync --all-packages --extra torch-cpu || return 5
   (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-firewall) || return 7
-  (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) || return 7
+  (cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) || return 7
   mkdir -p "$OUT/m0-build"
   # FW is the node's, every run's: two builds in it at once break each other's crates
   RESEARCH_RUN_DIR=$OUT/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh || return 6
@@ -2005,7 +2005,7 @@ else
     || { say "OVERHEAD: no aggregate: $(cut -c1-300 "$D/overhead.err")"; rm -f "$OUT/serve/overhead.json"; }
 fi
 
-# 3. sampled proofs: the window, its advice and Programs, V3b's window circuit, then C-Flock --zk and the Lean verifier
+# 3. SPOT: the window, its advice and Programs, V3b's window circuit, then C-Flock --zk and the Lean verifier
 # the pick (its number, steps, requests and users, and each window refused and why) stays in the serve dir's private/
 PICK=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS" ${WINDOW:+--window "$WINDOW"} 2> "$D/private/window.err")
 [ -n "$PICK" ] || { say "WINDOW refused: no sealed window qualifies (why, by window, in the serve dir's private/window.err)"; stop window 12; }
@@ -2048,7 +2048,7 @@ wc_ok=0
 circuits && wc_ok=1
 block_counts
 wait "$BUILD"; rc=$?
-inference_only &  # beside sampled proofs, which it doesn't read; the record waits for it
+inference_only &  # beside SPOT, which it doesn't read; the record waits for it
 IOV=$!
 [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; wait "$IOV"; stop build "$rc"; }
 export PP_PARTITION PP_SETS=${PP_SETS:-}

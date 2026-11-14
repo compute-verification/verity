@@ -10,7 +10,7 @@ untraced = ["tests/test_remote_coins.py"]
 # profile; its coins on the one challenger, local and as a service.
 inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proofs/spot/verifier/one_stage/link_points.py",
           # `coins.trusted`'s Lean verifier (`coins.lean_answer`): one_stage's `lean`, and what `lake build
-          # sampled-proofs-verifier` reads, its package and its path requires
+          # spot-verifier` reads, its package and its path requires
           "verity/protocols/proofs/spot/verifier/one_stage", "verity/protocols/proofs/spot/verifier/lean",
           "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "verity/protocols/interface",
           "verity/protocols/proofs/flock/verifier/Flock", "verity/protocols/proofs/flock/verifier/lakefile.toml",

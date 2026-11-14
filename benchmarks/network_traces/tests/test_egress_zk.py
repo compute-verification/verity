@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from test_warden_zk import needs_lean, reads_of, statement
+from benchmarks.network_traces.tests.test_warden_zk import needs_lean, reads_of, statement
 
 
 from verity.protocols.accounting.certifier.prover import egress_zk as ez

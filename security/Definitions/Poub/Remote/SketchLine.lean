@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Poub.Remote.Sample
-public import Definitions.Poub.Remote.Draw
+public import Definitions.Poub.Remote.Sample
 public import Definitions.Poub.Remote.Outside
 public import Definitions.Poub.Remote.Sketch
 import Mathlib.Algebra.Order.Floor.Extended
@@ -44,7 +44,7 @@ The memory line (`Properties.Poub.Line.LineHeld`) is a statement over a session'
 window's openings coin, all uniform. The receipts' sketch bound (`Accounting.Guarantees.Remote.SketchBoundDeployed`) is
 a statement over a session's outcomes `Accounting.Remote.Sketch.Outcome β Hs N m`: the prover's own coins, the
 registered store and SHA-512's outputs, all uniform. One space carries both: the line's coins whose other coins are a
-sketch outcome, `Draw.SampleCoins n κ (Outcome β Hs N m)`. Read the other way round it is a sketch outcome whose
+sketch outcome, `Sample.SampleCoins n κ (Outcome β Hs N m)`. Read the other way round it is a sketch outcome whose
 prover's coins are `β` and the windows' openings coins, `Outcome (β × (Fin n → Bits κ)) Hs N m` (`lineCoins`, a
 bijection). The prover is sent every openings coin once it is released, and the sketch model's devices may read its
 prover's coins in any way, so a device that reads an openings coin early is one of the model's.
