@@ -13,6 +13,7 @@ from it.
 research pods registry [--json]             every machine `research run --on` accepts, and where its entry comes from
 research pods register NAME --host ADDR --project P    bind a name to an ssh machine; refused unless it answers over ssh
 research pods unregister NAME               drop the name
+research pods env NAME [NAME ...]           `export <NAME>_HOST=<host>` for each, for `eval` only: it prints addresses
 research pods ssh TARGET [-- CMD ...]       reach a machine by its name
 research pods sync TARGET [SRC]             put a worktree's files on it (what git would show, nothing ignored)
 research pods lease TARGET                  its lease line
