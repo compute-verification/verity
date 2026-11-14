@@ -409,7 +409,7 @@ def SharedNoiseLucks {ι K C Ω : Type} [Fintype C] (Sc : Scheme K) (Cd : Declar
 `w_max = 1`, `p = 7/8`, `p0 = ½`, the first, `8(1 + Kρ)/(ρK)`. -/
 noncomputable def j10rRate (K : ℕ) (ρ : ℝ) : ℝ := 8 * (1 + K * ρ) / (ρ * K)
 
-/-- **(L)'s credit over the windows served H1's verdict credits, at J10-R's tile unit.** For every declared circuit
+/-- **(L)'s credit over the windows served H1's verdict credits, at J10-R's tile unit.** For every registered circuit
 `Cd` and scheme `Sc` run as a period of at most `n ≥ 1` windows, each window's `Credit.window` inputs any function of
 the period's coins (`CreditWindows`), over the sampling block's tile stratum `s_T` of `σ` (`N_p = |stratum σ s_T|`,
 `K_d = k s_T ≥ 1`): `CircuitCreditMonitoringPeriod`'s premises at the period's proofs with `Credit.window`'s verdict (`tileRun`,

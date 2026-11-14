@@ -36,7 +36,7 @@ reads the level's tops `rec-top-L<l>` at row `i` in instance `i`, every node of 
 -/
 module
 
-public import Flock.Firewall
+public import Flock.ZkServer
 public import Flock.RecVStar
 public import Flock.Zk
 
@@ -95,7 +95,7 @@ def dirsRow (pos H : Nat) : Array Nat :=
 /-- A registered row's `b ‖ c` under `salt` (`registered.Registered.commit`, registered.py:139: `sha512/row/v1` of its
 u16 words, zero-padded to whole blocks, under hm96-sha512's default key). -/
 def commitRow (row : Array Nat) (salt : ByteArray) : ByteArray :=
-  Hm96.Default512.commitString (Firewall.rowDigest (padTo row (Registered.rowWords row.size 16))) salt
+  Hm96.Default512.commitString (ZkServer.rowDigest (padTo row (Registered.rowWords row.size 16))) salt
 
 /-- How Flock's plain verifier is told to set the inner statement up, as the verifier holds it
 (`--rec-inner-statement`, `--rec-inner-tables`, `--rec-inner-draw`): the statement id, its lookup tables, and its sample's
@@ -188,7 +188,7 @@ def Inner.load (unit : String) (f : Files) : V Inner := do
   let (spec, st) ← f.stmt unit
   if let some i := f.inner then
     if let .error e := RecVStar.checkInnerStmt i st then throw s!"rec-coins: {unit}: {e}"
-  if let .error e := Zk.schedule st.m then throw s!"rec-coins: {unit}: the inner statement's schedule: {e}"
+  if let .error e := Zk.schedule st.wideLeaf st.m then throw s!"rec-coins: {unit}: the inner statement's schedule: {e}"
   let spec ← match f.drawnSpec spec st with
     | .ok s => pure s
     | .error e => throw s!"rec-coins: {unit}: the inner session's draw: {e}"

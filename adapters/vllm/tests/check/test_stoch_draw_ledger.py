@@ -61,6 +61,7 @@ def test_eos_before_the_cap_with_exactly_one_lag_draw_at_prompt_len_plus_k_is_r5
     assert a["expected_executed_slots"] == {"n": 4, "first": 1, "last": 4} and a["rule"]["t_eos"] == 3
     assert a["lag_slot"]["measured"] is True and a["lag_slot"]["lag_slots_expected"] == 1 and a["lag_slot"]["bounded_by_cap"] is False
     assert a["lag_slot"]["draws"] == [{"slot": 4, "pos_expected": 12, "pos": 12, "step": 3, "pos_ok": True}]
+    assert a["lag_slot"]["profile_A"] == 1
     assert out["measured"].startswith("R5 MEASURED")
 
 
@@ -68,7 +69,9 @@ def test_a_draw_past_the_lag_slot_a_missing_lag_draw_and_a_lag_pos_off_by_one_ea
     wl = _wl(tmp_path, [("a", 10, 8)])
     b = _build(tmp_path, [99])
     two_after = draw_accounting(_draws("a", 10, 5, 0, served=[7, 7, 99, 5, 5]), wl, b, lag_attested=(1, "t"))
-    assert len(two_after["problems"]) == 1 and "RNG advanced without r_t" in two_after["problems"][0] and "past the EOS's lag slot" in two_after["problems"][0]
+    (past,) = two_after["problems"]
+    assert "[13] outside the executed set (slots 1..4 of " in past and " 8, EOS at slot 3, 1 lag slot(s)): " in past
+    assert past.endswith(" past the EOS's lag slot -- the RNG advanced without r_t")
     assert two_after["requests"]["a"]["drawn_not_expected"] == [13]
     none_after = draw_accounting(_draws("a", 10, 3, 0, served=[7, 7, 99]), wl, b, lag_attested=(1, "t"))
     assert len(none_after["problems"]) == 1 and "the lag slot did not draw" in none_after["problems"][0] and none_after["requests"]["a"]["expected_not_drawn"] == [12]
@@ -96,6 +99,9 @@ def test_f_r17b_35_over_cap_without_eos_fails_and_the_lag_slot_is_bounded_by_the
     # (a') EOS at the cap sample (slot 8) plus one more sample: the cap has no slot after it
     over_eos = draw_accounting(_draws("a", 10, 9, 0, served=[7] * 7 + [99, 5]), wl, b, lag_attested=(1, "t"))
     assert len(over_eos["problems"]) == 1 and over_eos["requests"]["a"]["finish"] == "eos-at-cap" and over_eos["requests"]["a"]["drawn_not_expected"] == [17]
+    (past,) = over_eos["problems"]                                                # an EOS at the last slot has no lag slot to name
+    assert "[17] outside the executed set (slots 1..8 of " in past and " 8): " in past and "EOS at slot" not in past
+    assert past.endswith(" past the EOS's lag slot -- the RNG advanced without r_t")
     # (b) EOS at slot 7 of cap 8 under A = 1: one lag sample (slot 8) and the record is MEASURED, clean
     near = draw_accounting(_draws("a", 10, 8, 0, served=[7] * 6 + [99, 5]), wl, b, lag_attested=(1, "t"))
     assert near["problems"] == [] and near["lag_slot_exercised"] is True and near["requests"]["a"]["lag_slot"]["lag_slots_expected"] == 1
@@ -161,17 +167,17 @@ def test_expected_executed_slots_is_the_spec_s7_rule_and_names_what_it_cannot_ju
 
 def test_the_rule_is_pads_recurrence_and_the_slot_to_position_map_is_the_records_first_draw_at_prompt_len_minus_1():
     """The executed set comes from `verity_vllm.program.lifting.continuation.recurrence` (ONE mechanism, no twin here), the
-    comparison from `compare_draw_positions`.  The slot -> position map is the RECORD's: slot 1 samples at pos prompt_len - 1 (the query
+    comparison from `compare_sample_positions`.  The slot -> position map is the RECORD's: slot 1 samples at pos prompt_len - 1 (the query
     position whose logits are sampled; qwen B8 L=1024 -> first_pos 1023, device_facts_match on every row), slot t at prompt_len - 2 + t.
-    An earlier `expected_draw_positions` mapped slot t to prompt_len + t - 1, one more than the record; the two maps now agree and
-    the ledger's positions ARE `expected_draw_positions(...)["positions"]` (one mechanism, no map of its own)."""
+    An earlier `expected_sample_positions` mapped slot t to prompt_len + t - 1, one more than the record; the two maps now agree and
+    the ledger's positions ARE `expected_sample_positions(...)["positions"]` (one mechanism, no map of its own)."""
     exp, info = E([7, 7, 99], 8, 1, {99})
     assert exp == [1, 2, 3, 4] and info["t_eos"] == 3 and info["rule"].startswith("verity_vllm.program.lifting.continuation.recurrence")
     ours = [10 - 1 + (t - 1) for t in exp]                       # L = 10: 9, 10, 11, 12 (the lag slot 4 at pos 12)
-    pad = CT.expected_draw_positions([7, 7, 99], cap=8, A=1, eos={99}, prompt_len=10)
+    pad = CT.expected_sample_positions([7, 7, 99], cap=8, A=1, eos={99}, prompt_len=10)
     assert pad["slots"] == exp and pad["n"] == 4 and pad["lag_positions"] == [pad["positions"][-1]]
     assert pad["positions"] == ours, (pad["positions"], ours)      # the two maps AGREE (slot 1 at L - 1); the ledger takes the padding's field
-    cmp = CT.compare_draw_positions(ours, ours + [13])
+    cmp = CT.compare_sample_positions(ours, ours + [13])
     assert cmp["ok"] is False and cmp["extra"] == [13] and "RNG advanced without r_t" in cmp["problems"][0]
 
 

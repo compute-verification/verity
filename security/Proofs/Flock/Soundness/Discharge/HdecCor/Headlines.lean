@@ -29,12 +29,12 @@ openings, single coins, no final messages and `capOfRoot` at the values the deco
 * `flock_headline_exec_hidden_dec`: `flock_headline_exec_hidden` with `decodesOn_execH`: `hdec` becomes
   `c.outNet = c.unitNet`, `TagsOkHL`, `RecordsLive` and `DrawOkH` at the sampling design's samples, and the session's leaf is the
   model's leaf of the tags' leaf scheme (`leafOfId`: `hm96-sha512/v1` or plain SHA-512 leaves);
-* `headline_tables_subset_dec`: `headline_tables_subset` at the tables flock-verify sets up (`planJ`) with
+* `headline_tables_subset_dec`: `headline_tables_subset` at the tables verity-verify-proof sets up (`planJ`) with
   `decodesOnJ_exec`: `hdec` becomes `TagsOkJ`, `RecordsLiveJ` and `DrawOkJ` at the sampling design's samples. The decoder at `J`
   tables reads no circuit, so there is no `c.outNet = c.unitNet` here.
 
 `FailClosed.flock_headline_exec_dec` and `_hidden_dec` take none of the hypotheses on the statement's form
-(`c.outNet = c.unitNet`, `scopeOk`, the parse and load, retained rounds and leaves), which flock-verify refuses a statement
+(`c.outNet = c.unitNet`, `scopeOk`, the parse and load, retained rounds and leaves), which verity-verify-proof refuses a statement
 failing (`Flock.ProvedScope`).
 -/
 
@@ -190,7 +190,7 @@ section Tables
 
 open FlockSoundness.Discharge.Tables FlockSoundness.Discharge.DecodeZLJ FlockSoundness.Discharge.DecodeZL
 
-/-- **`headline_tables_subset` with `hdec` discharged**, at the tables flock-verify sets up (`planJ ht T₀ dj`, any
+/-- **`headline_tables_subset` with `hdec` discharged**, at the tables verity-verify-proof sets up (`planJ ht T₀ dj`, any
 fallback `T₀`), by `decodesOnJ_exec`. -/
 theorem headline_tables_subset_dec
     {N' n : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N')) {Reg : Type} {mPts : ℕ}

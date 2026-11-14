@@ -88,7 +88,7 @@ def test_ledger_replay_writes_a_ledger_the_challenger_accepts(tmp_path):
 
 
 def test_replays_writes_a_period_its_check_accepts(tmp_path):
-    """replays.py at one window: PoUW's period reference (`period_check.case`) accepts the period it wrote, and replays
+    """replays.py at one window: PoUW's period reference (`period_check.case_twin`) accepts the period it wrote, and replays
     the ledger on the way."""
     got = subprocess.run([sys.executable, str(HERE / "ledger_replay/replays.py"), str(tmp_path), "1"], cwd=ROOT,
                          capture_output=True, text=True)

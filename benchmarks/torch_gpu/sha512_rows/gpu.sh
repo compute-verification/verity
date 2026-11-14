@@ -10,11 +10,11 @@
 # SHA512_ROWS_V (the default variant), LEASE_MIN (default 25), PY (default benchmarks/harness/env.sh's).
 set -uo pipefail
 O=${OUT:?}
-ROOT=$PWD D=benchmarks/torch_gpu/sha512_rows
+ROOT=$PWD D=benchmarks/torch_gpu/sha512_rows V=verity/commitments/cuda/sha512_rows
 PY=${PY:-$(. benchmarks/harness/env.sh && echo "$VENV/bin/python3")} || exit 2
 TV=$($PY -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)
 for c in "/usr/local/cuda-$TV" /usr/local/cuda /usr/local/cuda-13.0; do [ -x "$c/bin/nvcc" ] && { CUDA=$c; break; }; done
-export PATH=${CUDA:-/usr/local/cuda}/bin:$PATH PYTHONPATH=$ROOT:$ROOT/$D:$ROOT/tools/config PYTHONDONTWRITEBYTECODE=1
+export PATH=${CUDA:-/usr/local/cuda}/bin:$PATH PYTHONPATH=$ROOT:$ROOT/$V:$ROOT/$D:$ROOT/tools/config PYTHONDONTWRITEBYTECODE=1
 export SHA512_ROWS_BUILD=${SHA512_ROWS_BUILD:-$HOME/.cache/verity/sha512_rows}
 git rev-parse HEAD > "$O/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}" > "$O/commit.txt"
 { echo "python $PY"; $PY -c 'import sys, torch, numpy; print(sys.version.split()[0], torch.__version__, torch.version.cuda, numpy.__version__)'
@@ -27,15 +27,15 @@ echo "build rc $?" > "$O/rc.txt"
 LIB=$(head -1 "$O/build.txt")
 cp "${LIB%.so}.log" "$O/ptxas.txt" 2>/dev/null
 $PY "$D/sass.py" "$LIB" > "$O/sass.json" 2> "$O/sass.err"
-export O PY D ROOT STEPS=${STEPS:-tests check bench} BENCH_ARGS=${BENCH_ARGS:-}
+export O PY D V ROOT STEPS=${STEPS:-tests check bench} BENCH_ARGS=${BENCH_ARGS:-}
 # shellcheck disable=SC2016
 gpu-lease 1 --wait --max-min "${LEASE_MIN:-25}" -- bash -c '
   nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem,power.limit --format=csv \
     -i "$GPU_LEASE_UUID" > "$O/gpu.txt" 2>&1
   for s in $STEPS; do
     case $s in
-      tests) (cd "$D" && $PY -m pytest -q -p no:cacheprovider tests) > "$O/tests.txt" 2>&1 ;;
-      check) $PY "$D/check.py" --out "$O" > "$O/check.out" 2> "$O/check.err" ;;
+      tests) (cd "$V" && $PY -m pytest -q -p no:cacheprovider tests) > "$O/tests.txt" 2>&1 ;;
+      check) $PY "$V/check.py" --out "$O" > "$O/check.out" 2> "$O/check.err" ;;
       bench) $PY "$D/bench.py" --out "$O" --check "$O/check.json" ${BENCH_ARGS:-} > "$O/bench.jsonl" 2> "$O/bench.err" ;;
     esac
     echo "$s rc $?" >> "$O/rc.txt"

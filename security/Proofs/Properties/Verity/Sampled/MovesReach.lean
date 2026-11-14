@@ -8,7 +8,7 @@ public import Proofs.Properties.Verity.Sampled.SpecTie
 /-!
 # `MovesReach`, clause by clause
 
-On the joint law's support off the held-off events (`ReachesOff`), each outcome is the writer's at the widened sample's
+On the joint distribution's support off the held-off events (`ReachesOff`), each outcome is the writer's at the widened sample's
 sample, the decoded registration and a live session's outcome (`reachesOff_out`). What v2's files decode to in the play on
 the tape beside it, clause by clause of `MovesOf`:
 
@@ -64,7 +64,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-/-- **An outcome on the joint law's support off `BL` and `B` is the writer's, beside a play the first stop reaches**
+/-- **An outcome on the joint distribution's support off `BL` and `B` is the writer's, beside a play the first stop reaches**
 (`reachesOff_out`, `firstStop_playReaches`). -/
 theorem ReachesOff.out_reaches {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {A : Live}
     {rd : Reading A.rounds} {σ : Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg}
@@ -82,8 +82,8 @@ theorem ReachesOff.out_reaches {V : Vocab d α} {θ : ByteArray} {F : Array Byte
   obtain ⟨_, h1, -⟩ := hr.out
   exact ⟨ω, pts, _, hL, h1, firstStop_playReaches V θ F c A rd σ M ω hr⟩
 
-/-- **The record's sample on the joint law's support** (`MovesOf`'s clause (i)): at the sample-coupled coin map, an
-outcome on the joint law's support off `BL` and `B` is the writer's at the widened sample `ω`, and where the play beside
+/-- **The record's sample on the joint distribution's support** (`MovesOf`'s clause (i)): at the sample-coupled coin map, an
+outcome on the joint distribution's support off `BL` and `B` is the writer's at the widened sample `ω`, and where the play beside
 it ends where the sampled verdict accepts, the log v2 read is the device's, v2 reads the sample's coins of the family
 `label` answering `after`, and every release of that family precedes every opening, its record decodes to the session's
 sample file at `ω`'s sample (`ReachesOff.out_reaches`, `recordDraw_firstStop`). -/
@@ -437,7 +437,7 @@ theorem rep_rounds {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : 
     rw [hfil, hR, hnil]
     all_goals rfl
 
-/-- **The rep rounds at a sample the joint law's support is reached at** (`MovesOf`'s clause (iv) at a `ReachesOff`
+/-- **The rep rounds at a sample the joint distribution's support is reached at** (`MovesOf`'s clause (iv) at a `ReachesOff`
 witness): at the readings and the decoders at a layout `L`, injective, of distinct tables, whose rep slots are of a
 plan's one table and which has a link slot, and at the sample-coupled coin map under `fieldEnc`, an outcome with a
 widened sample `ω` and link points `pts` off the link's empty class, with a trace off the rounds' empty class from the
@@ -680,15 +680,16 @@ theorem verdict_read {V : Vocab d α} {k : Verity.Registration.Composite} {θ : 
   subst hθ
   obtain ⟨p', hp', -⟩ := hA.params
   obtain ⟨a, b, e, p, c, ev, ξ, dr, hcase, hacc⟩ := case_drew hv.2.1 hp' (verdict_case hv)
-  obtain ⟨lr, hlr⟩ := Option.isSome_iff_exists.1 (logRead_isSome hv.2.1 hcase hacc)
-  obtain ⟨record', _, _, _, _, hcs, hrec', -, hver⟩ := sent_verified hv.2.1 hcase hacc
+  have hm : p.members = none := single_of_case hv.2.1 hcase hacc hA.single
+  obtain ⟨lr, hlr⟩ := Option.isSome_iff_exists.1 (logRead_isSome hv.2.1 hcase hacc hm)
+  obtain ⟨record', _, _, _, _, hcs, hrec', -, hver⟩ := sent_verified hv.2.1 hcase hacc hm
   have hrr : record' = text := Option.some.inj (hrec'.symm.trans hrec)
   rw [hrr] at hver
   obtain ⟨J, hJ, hrs⟩ := sent_records hver
   obtain ⟨rs, _, _, _, _, he, -, -, -, -, hsr, -⟩ := hver
   obtain ⟨-, -, -, hξ, hdr, _, _, hck⟩ := hacc
   obtain ⟨key, hch, -⟩ := source_of hdr
-  obtain ⟨ts, htr, hth⟩ := trees_of_checkBlobsAt hck
+  obtain ⟨ts, htr, hth⟩ := trees_of_checkBlobsAt hm hck
   obtain ⟨_, _, htt⟩ := treesOf_ok htr
   obtain ⟨ls, lines, hls0, hls, hct⟩ := trustedTreesOf_ok htt
   have hread : readLog dr.label c.digest [J] ξ lines = some lr := by
@@ -759,8 +760,8 @@ statement `rep_rounds`'s premise `hans` is an instance of (`verdict_read`, `Sets
 (`verdict_opens`, `verdict_nodup`), its premises `hsome` and `hkey` from the record `sessionTreeReason` accepts
 (`recordRound_isSome`, `keyAt_of_record`), and the layout's slot for each round the log opens of a stream of the
 record's tree from the session's coin tree, which `Record.decode` holds the record's to (`SetsUp.covers_logged`). -/
-theorem firstStop_reps_verdict {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
-    {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
+theorem firstStop_reps_verdict {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (reg : Option Claims.Msg → A.Reg) (record : Exchange → Option Claims.Msg)
     (recordDigest : Claims.Msg) {rd : Reading A.rounds} (hrd : rd = readingAt A.tables A.layout record recordDigest)
     {σ : Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg} (hD : D = decodersAt reg A.layout) {label : String}
@@ -776,7 +777,7 @@ theorem firstStop_reps_verdict {V : Vocab d α} {θ : ByteArray} {F : Array Byte
       ((firstStop V θ F c A rd σ M ω).rewrite (M.link (firstStop V θ F c A rd σ M ω) pts)).consume o)
     (hv : V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ o.2)) (hn : NoMiss V θ F c rd σ o.2)
     (hl : Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ o.2))
-    (ht : TablesSent (CoinTape.run (V.game θ F c) σ o.2).sent)
+    (ht : TablesSent T (CoinTape.run (V.game θ F c) σ o.2).sent)
     (hfirst : ∀ pre r post, (CoinTape.run (V.game θ F c) σ o.2).log = pre ++ r :: post → ∀ i s n,
       r.frame = .opening i s n → (∀ q ∈ pre, ∀ i' s' n', q.frame ≠ .opening i' s' n') →
         ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some _root_.Spot.Challenger.TREE_SESSION)

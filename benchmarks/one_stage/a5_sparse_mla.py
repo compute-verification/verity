@@ -26,7 +26,7 @@ rows' writers on 64 columns, and per head, five scores units, forty values units
 eight combines.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
-      python benchmarks/one_stage/a5_sparse_mla.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
+      python benchmarks/one_stage/a5_sparse_mla.py --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
         [--firewall flock-firewall] [--units] --main FILE --out DIR
 """
 from __future__ import annotations
@@ -43,10 +43,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "adapters" / "vllm"))
 
-import a5  # noqa: E402
-import a5_coins as AC  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import window_audit as a5  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
 from tests.pipeline import test_serving_rows_splits as TS  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity.commitments.windows import rows as CS  # noqa: E402
 

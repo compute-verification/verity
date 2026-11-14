@@ -28,7 +28,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 /-!
 # `RunsZC` at the live `--zk` tables, from `TablesAtZKLive`
 
-`runsZC_live`: at each of the sampling design's samples, on an outcome flock-verify `--zk` accepts, `TablesAtZKLive` puts the sample's
+`runsZC_live`: at each of the sampling design's samples, on an outcome verity-verify-proof `--zk` accepts, `TablesAtZKLive` puts the sample's
 table at `tablesAtZK` (`DrawSetupZK.table`, at the executable's dimensions, pads and inner code: `table_seam`,
 `table_lay`), the acceptance peels to the one table's two `verifyRep` successes (`setupTables_ok`, `zk_verify_ok`) and
 each rep's run (`zk_verifyRep_ok`), `zk_rep_run_plays` makes each run a `RepRun` for `decAtZ` at the result it plays on
@@ -64,7 +64,7 @@ compiled rep on `repMsgsZ` that the `RepRun` is at. -/
 theorem zk_rep_run_plays {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : TabZK 𝔽 mPts)
     (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
     (extras : Array Flock.Claim) (bytes : ByteArray) (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray)
-    (tr : Flock.Transcript) (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hdl : st.merkle.digestLen = 64)
+    (tr : Flock.Transcript) (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hdl : st.merkle.digestLen = 64)
     (hseam : ZkTabSeam T st sch tPad) (hlen : extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length)
     (hext : ∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
       ClaimRel T.S.m extras[j]! (Model.extraClaims T.S T.ptLocal mPts pts)[j])
@@ -121,7 +121,7 @@ theorem runsZC_live : RunsZCLive := by
   obtain ⟨-, sess, schs, hdecS, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs0, c, hz0, hv0, hv1⟩ := hall 0 (by simp)
   simp only [Array.getElem_map] at hz0 hv0 hv1
-  change Zk.schedule (Setup.ofCircuit y.x.st).m = .ok schs[0] at hz0
+  change Zk.schedule (Setup.ofCircuit y.x.st).wideLeaf (Setup.ofCircuit y.x.st).m = .ok schs[0] at hz0
   change Zk.verifyRep y.x.st.spec (Setup.ofCircuit y.x.st) schs[0].1 schs[0].2 sess 0 0 _ = .ok c at hv0
   change Zk.verifyRep y.x.st.spec (Setup.ofCircuit y.x.st) schs[0].1 schs[0].2 sess 0 1 _ = .ok c at hv1
   have hsc : schs[0] = (y.sch, y.tPad) := Except.ok.inj (hz0.symm.trans hz)

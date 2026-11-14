@@ -43,8 +43,7 @@ from typing import Any
 import numpy as np
 from verity_config.settings import SHARED
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "commitments" / "cuda" / "commit_slots"))
 
 import slots as S  # noqa: E402
 from verity.commitments.identity import identity_digest_sha512  # noqa: E402
@@ -199,7 +198,7 @@ def result(a: argparse.Namespace, docs: dict[str, dict[str, Any]], ok: bool, lin
     run_dir = Path(SHARED.need("RESEARCH_RUN_DIR"))
     ms = []
     for k, d in docs.items():
-        ms.append({"name": f"{k}.step_gpu_s", "value": best_s(d), "unit": "s"})
+        ms.append({"name": f"kernels/commit-slots.{k}.step-gpu-s", "value": best_s(d), "unit": "s"})
         for g in sorted({st["graphs"] for st in d["steps"]}):
             ms.append({"name": f"{k}.{'graphs' if g else 'eager'}.enqueue_s", "value": best_enqueue_s(d, g), "unit": "s"})
         ms.append({"name": f"{k}.rows_a_slot", "value": d["layout"]["rows"], "unit": "rows"})

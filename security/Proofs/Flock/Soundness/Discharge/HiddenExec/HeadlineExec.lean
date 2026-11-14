@@ -24,7 +24,7 @@ the one-table plan of the session's inputs (`planAtH`), with:
 * `hHm := keyRowsH_computes` (`rsAtH_computes`).
 
 So the hypotheses left are those of the plain headline: `hscope`, `hdec`, A3, `cr/sha-512`, `ecr/sha-512` and the
-numeric conditions. flock-verify refuses a statement failing `hscope` or the statement's other form hypotheses
+numeric conditions. verity-verify-proof refuses a statement failing `hscope` or the statement's other form hypotheses
 (`Flock.ProvedScope`), and `FailClosed.flock_headline_exec_hidden` takes none of them.
 -/
 
@@ -49,7 +49,7 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Fl
   {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none) {Reg : Type}
 
 include hU hpub in
-/-- **The site fact at a sampled table under hidden outputs**: at a sample flock-verify sets up with `Stmt.setupHidden`,
+/-- **The site fact at a sampled table under hidden outputs**: at a sample verity-verify-proof sets up with `Stmt.setupHidden`,
 each sampled proof block's site is `BcSiteH`: the acceptance's sample is `dj S`, which decodes to `D`, its regions are the
 executable's, its public file loads (`HmOut.loadPublic`) to `pub`, with or without shared rows, and the unit's block
 and template instance index its rank in `D.proved`, the template instance below `2^⌊log₂ c.g⌋` (`Layout.vu_lt_pow2`). -/
@@ -75,7 +75,7 @@ theorem tableH_bcSite {S : Finset (Fin n)} (x : DrawSetupH I mPts S (dj S)) {u :
   tableH_bcSiteS ht hc hscope dj hU hpub x h
 
 include hU hpub hpt in
-/-- **`BcSiteH` at every satisfiable site** of the one-table hidden plan: at a sample flock-verify sets up by
+/-- **`BcSiteH` at every satisfiable site** of the one-table hidden plan: at a sample verity-verify-proof sets up by
 `tableH_bcSite`; at a refused sample no message satisfies the table (`tableAtH_unsat`). -/
 theorem sitesAtH_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
@@ -131,14 +131,14 @@ checks each output row holds its port's words, `ht`) and whose public file loads
 the JSON `dj S` (`x₀` one sample it sets up with `Stmt.setupHidden`). Let the units be sampled with
 `Flock.Draw.drawWith`'s stratified sampling design on the challenger's coins, a byte source A3 makes uniform, and let each sample's
 session be the live-coin part's one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`,
-flock-verify accepts with at least `K` incorrect proof blocks of the production program `Placed.keyProg c hU n`, at the simulated
+verity-verify-proof accepts with at least `K` incorrect proof blocks of the production program `Placed.keyProg c hU n`, at the simulated
 prover's committed values (1 on the constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with
 probability at most `miss(K) + ε_ks + δ_link`.
 
 Its hypotheses, past the session's inputs, are `flock_headline_exec`'s at the hidden tables:
 * the circuit is in `rs`'s scope, `hscope : Layout.scopeOkH c = true`: the plain headline's, or its rows each a
   `sha512/row/v2` row that fits or a `sha512/row-seg/v1` row, of any mix, the output rows fit;
-* `hdec` (`DecodesOn`, at the sampling design's samples only), open, at the hidden tables `tablesAtH`: at a sample flock-verify
+* `hdec` (`DecodesOn`, at the sampling design's samples only), open, at the hidden tables `tablesAtH`: at a sample verity-verify-proof
   accepts under hidden outputs whose record carries the challenger's sample `dj S`, proving `S`, with link points
   `mPts`, the table is `stmtOf` of the `Stmt.setupHidden` statement it accepted (`tableAtH_of_accepts`);
 * the assumptions of record: A3 (`hA3`, `uniform/io-getrandombytes`), `cr/sha-512` for the knowledge finders (`hKS`),

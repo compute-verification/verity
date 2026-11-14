@@ -1,5 +1,5 @@
 """Regression guards on GP-01's compose (`verity_vllm.program.workload`) around the request root's exemption (the request
-Program's ROOT is exempt from the shared-definition canon because two derives of one model at the same prompt length and different caps
+Program's ROOT is exempt from the shared-definition canon because two derives of one model at the same prompt length and different max_tokens
 carry ONE root id `Root[Derived[..]{SRC=..}]` over two bodies -- SRC names the input shapes, not T).
 
 Pinned so the exemption cannot widen: (1) the FIXED POPULATION counts DECLARED requests, not distinct shapes --
@@ -67,7 +67,7 @@ def _component_or_skip(desc, LP, canon):
 
 def test_two_identical_requests_are_two_members_of_the_fixed_population_not_one():
     """One digest, ONE component object (the compose cache) -- and TWO members: two component calls, two disjoint address intervals
-    partitioning the non-input gates, two chronology rows, Σ cap = 2·cap events; the workload digest differs from the one-request
+    partitioning the non-input gates, two chronology rows, Σ max_tokens = 2·max_tokens events; the workload digest differs from the one-request
     workload's.  The population is the manifest's declared requests, never the set of distinct shapes."""
     wl1, wl2 = _wl([(3, 2)]), _wl([(3, 2), (3, 2)])
     am = wl2.address_map()

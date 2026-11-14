@@ -54,8 +54,6 @@ NOT_PATHS = {
     ("benchmarks/numerical/README.md", "utils.cpp::bfloat16_to_gfloat_tensor"): "the GPU simulator's source",
     ("benchmarks/pous/README.md", "gmp.h"): "the system's GMP header",
     ("benchmarks/ppl/README.md", "linears_layerwise.py"): "a harness the bench replaced",
-    ("fixtures/proof-format-v3/README.md", "test_format3_equivalence.py::test_write_vectors"): "veritor's test",
-    ("fixtures/proof-format-v3/README.md", "format3_equivalence.rs"): "D-SP1's guest, deleted with the archive",
     ("tools/verity/lean/README.md", "lakefile.lean"): "the file the package deliberately lacks",
     ("verity/protocols/accounting/pous/verifier/DISCREPANCIES.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
     ("verity/protocols/accounting/pous/verifier/PROTOCOL.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
@@ -82,7 +80,7 @@ NOT_PATHS = {
 #: file a demo branch edits isn't rewritten until it lands. Unlike `NOT_PATHS` it has no currency check, so the demo
 #: branch's landing, which drops the mention, needs no edit here; the entry leaves after it.
 WAITING = {
-    ("security/Definitions/NetworkCertifier/Schedule.lean", "verity/protocols/accounting/communication/certifier/schedule.py"):
+    ("security/Definitions/Certifier/Schedule.lean", "verity/protocols/accounting/communication/certifier/schedule.py"):
         "the `remote` demo branch rewrites this docstring",
     ("security/Definitions/Accounting/Guarantees/Headline.lean", "fixtures/fold_bulk_loops.json"): "both demo branches edit the file",
     ("security/Definitions/Accounting/Guarantees/Headline.lean", "fold_bulk.cu"): "both demo branches edit the file",

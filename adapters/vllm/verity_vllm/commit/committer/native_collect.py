@@ -368,7 +368,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         self._step_off = runner_step.add(self.runner, _StepPart(self))
         runner = self.runner
         me = self
-        if hasattr(runner, "gather_batch_req_state"):                          # new `vllm.v1.worker.gpu` runner: capture the step's sorted batch rows
+        if runner is not None and hasattr(runner, "gather_batch_req_state"):   # new `vllm.v1.worker.gpu` runner: capture the step's sorted batch rows
             orig_gather = self._orig["gather_batch_req_state"] = runner.gather_batch_req_state
 
             def gather_batch_req_state(*a, **kw):
@@ -619,17 +619,25 @@ class NativeCollectCommitter(NativeHostCommitter):
             if per_row is not None and not isinstance(per_row, dict):
                 try:
                     per_row = per_row.tolist() if hasattr(per_row, "tolist") else list(per_row)
-                except TypeError:
+                except TypeError as e:
                     per_row = None
+                    self._rows_by_request(int(job.step), e)
             job.rows_snapshot = (req_ids, n, per_row, nst)
             return
         self._expand_step_rows(int(job.step), req_ids, n, per_row, nst)
 
+    def _rows_by_request(self, step: int, e: TypeError) -> None:
+        """The batch's per-row token counts of ``step`` are no list of numbers (``e``), so its rows are counted by the scheduler's
+        `num_scheduled_tokens`, by request: `step_rows_why`, which the binding's population records, says so."""
+        self.step_rows_why = (f"step {step}: its rows are counted by the scheduler's num_scheduled_tokens, by request: the batch's "
+                              f"is no list of numbers ({type(e).__name__}: {e})")[:300]
+
     def _expand_step_rows(self, step: int, req_ids: list, n: int, per_row: Any, nst: dict) -> None:
         try:
             per_row = [int(x) for x in per_row] if per_row is not None and not isinstance(per_row, dict) else None
-        except TypeError:
+        except TypeError as e:
             per_row = None
+            self._rows_by_request(step, e)
         rows, lo = [], 0
         for i, rid in enumerate(req_ids[:n]):
             if rid is None:
@@ -678,7 +686,9 @@ class NativeCollectCommitter(NativeHostCommitter):
             _shape = getattr(self, "_plan_shape", (0, 0))
             self.footprint.event("begin_step", step=job.step, ntok=_shape[0], nreq=_shape[1], plan_key=int(self._plan_key), plan_key_mode=getattr(self, "_plan_key_mode", "counts"),
                                  step_min_bytes=int(getattr(self, "_step_min_bytes", 0) or 0),
-                                 arena_block_bytes=int(job.arena.numel()) if job.arena is not None else 0, arena_total_bytes=self.arena.bytes_total, arena_free_blocks=[int(b.numel()) for b in self.arena.free],
+                                 arena_block_bytes=int(job.arena.numel()) if job.arena is not None else 0,
+                                 arena_total_bytes=self.arena.bytes_total if self.arena is not None else 0,
+                                 arena_free_blocks=[int(b.numel()) for b in self.arena.free] if self.arena is not None else [],
                                  retained_device_total=self._retained_device_bytes())
 
     def _end_step(self) -> None:
@@ -739,14 +749,15 @@ class NativeCollectCommitter(NativeHostCommitter):
             # at every step end -- a component that accumulates the whole prefill shows up here as a pool that never stops growing
             _pool = getattr(self, "pool", None)
             _rss = None
+            _rss_why: dict[str, str] = {}
             try:
                 with open("/proc/self/statm") as _f:
                     _rss = int(_f.read().split()[1]) * 4096
-            except OSError:
-                pass
+            except OSError as e:
+                _rss_why = {"rss_unreadable": f"{type(e).__name__}: {e}"}     # the event says why it has no resident set
             self.footprint.event("end_step", step=job.step, used=int(job.cursor), staged_bytes=job.acq_bytes, backlog=job.backlog, tensors=int(n),
                                  pinned_pool_bytes=(int(_pool.bytes_total) if _pool is not None else None),
-                                 pinned_pool_in_use=(int(_pool.bytes_in_use) if _pool is not None else None), rss_bytes=_rss)
+                                 pinned_pool_in_use=(int(_pool.bytes_in_use) if _pool is not None else None), rss_bytes=_rss, **_rss_why)
         job.done_evt.set()                                                      # (queued at step begin)
 
     # ------------------------------------------------------------------ worker side: metas from the plan (cached per plan version)
@@ -903,14 +914,14 @@ class NativeCollectCommitter(NativeHostCommitter):
     def _window_root(self, step: int, state: dict[str, Any], padded: int, side: Any) -> tuple[list[Any], bytes, float]:
         """The step's tree levels, Merkle root and tree ms from its absorbed windows (`state`, cleared): the upper tree over the per-window
         top nodes (level n_levels-1 of the step), its levels to pinned host too when the step keeps levels."""
-        H, rows = self._hasher, self.rows
+        H = self._hasher
         if not padded:
             return [], self._row_domain(step, 0).empty_root(), 0.0
         top_span = 1 << (state["n_levels"] - 1)
         n_tops = state["width"] // top_span
-        if rows and state.get("leaves"):
+        if state.get("leaves"):
             self._fold_leaves(state, side)
-        if rows and self._copy is not None:
+        if self._copy is not None:
             side.wait_stream(self._copy)                                        # rows_tree's sync covers the window levels' copies
         if sum(int(t.shape[0]) for t in state["tops"]) != n_tops:
             raise RuntimeError(f"windowed absorb: {len(state['tops'])} window subtrees for {state['n_total']} leaves (expected {n_tops})")
@@ -918,6 +929,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             tops = torch.cat(state["tops"]) if len(state["tops"]) > 1 else state["tops"][0]
         keep_lv = state["views"] is not None
         upper_dst = self.pool.take((2 * n_tops - 1) * 64) if keep_lv and self.retain_pinned else torch.empty(0, dtype=torch.uint8)
+        assert H is not None, "a windowed collector has the native worker's StepHasher"
         upper, mr, tree_ms = H.rows_tree(state["rs"], tops, state["n_levels"] - 1, side.cuda_stream, keep_lv, upper_dst)
         levels = list(state["views"][:state["n_levels"] - 1]) + list(upper) if keep_lv else []
         del tops
@@ -954,6 +966,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             dsts: list[Any] = [views[L][first >> L:(first >> L) + (n >> L)] for L in range(n_levels)] if copy is not None else []
             # copy_stream_ptr goes only with a copy stream: 0 is the binding's default, and a hasher may take the six arguments alone
             on_copy = (copy.cuda_stream,) if copy is not None and copy.cuda_stream else ()
+            assert self._hasher is not None, "a windowed collector has the native worker's StepHasher"
             state["tops"].append(self._hasher.rows_tree_window(state["rs"], lv, n_levels, first, side.cuda_stream, dsts, *on_copy))
         if copy is not None:
             state["copied"] = torch.cuda.Event()
@@ -1007,6 +1020,7 @@ class NativeCollectCommitter(NativeHostCommitter):
 
         side = self._side_stream()
         nc, H, W, C = self._nc, self._hasher, self.win_bytes, self.chunk
+        assert H is not None, "a windowed collector has the native worker's StepHasher"
         if getattr(nc, "win_dead", False):
             # the serving thread's slot wait timed out earlier in this run: every stage() since was refused by name, so this step
             # has nothing staged -- fail it by the SAME name instead of tripping over an empty tree ("cudaMemcpyAsync(root): invalid argument").
@@ -1014,12 +1028,10 @@ class NativeCollectCommitter(NativeHostCommitter):
         t0 = time.perf_counter()
         plan_used = int(getattr(job, "plan_used", -1))
         inplace = plan_used >= 0
-        m_words = (-(-plan_used // C) * C) // 4
         host_wins: list[tuple[int, Any, int]] = []                              # (k, pinned host view, bytes)
         transient: list[int] = []                                               # windows on host only for the re-hash (retain none|sample)
         j = self.win_log2_chunks                                                # W = C * 2^j: window k holds leaves [k 2^j, (k+1) 2^j)
         state: dict[str, Any] = {}                                              # per-step subtree state (reset when the plan length was wrong)
-        rows = self.rows
         ks = self._row_key(job.step)
         tn = self._row_table()
 
@@ -1050,24 +1062,10 @@ class NativeCollectCommitter(NativeHostCommitter):
             return H.rows_leaves(rs, src, nbytes, first, min(1 << j, state["width"] - first), state["n_total"], tn, side.cuda_stream)[0]
 
         def absorb(k: int, lv_k: Any) -> None:
-            """Subtree of window k (lv_k = its leaves, device) -> host level slices + top node kept on device; under rows-sha512 the
-            leaves are held and fold with later windows'."""
-            n_k = int(lv_k.shape[0])
-            views, n_levels = state["views"], state["n_levels"]
-            if rows:
-                # the window's leaves (64 B a row) wait on the device and fold with the next windows' (_hold_leaves): a window's own
-                # subtree is two launches of a few blocks each, bound by latency and by waiting for SMs
-                state["absorbed"].append(k)
-                self._hold_leaves(state, lv_k, side)
-                return
-            if views is None:
-                state["tops"].append(H.tree_window_top(lv_k, n_levels, side.cuda_stream))
-                return
-            dsts = []
-            for L in range(n_levels):
-                s0 = k << (j - L)
-                dsts.append(views[L][s0:s0 + -(-n_k // (1 << L))])
-            state["tops"].append(H.tree_window(lv_k, n_levels, side.cuda_stream, dsts))
+            """Window k's leaves (`lv_k`, on the device, 64 B a row) wait there and fold with the next windows' (`_hold_leaves`): a
+            window's own subtree is two launches of a few blocks each, bound by latency and by waiting for SMs."""
+            state["absorbed"].append(k)
+            self._hold_leaves(state, lv_k, side)
 
         # host copy of the raw window: retention (retain=host) and/or the re-upload source for learning steps
         keep_set = self.retain_windows if self.retain == "sample" else None     # retain=sample: only these (step, k) windows are kept
@@ -1143,6 +1141,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                     hfirst = False                                              # past rows_hold_bytes of h: this window on takes the host path
                 if hfirst:
                     if padded_k:
+                        assert rs_h is not None, "a step whose windows are hashed to h in place made its row step"
                         rs_h.max_blocks = self.rows_cap_blocks if self.rows_cap_blocks and nc.free_slots() >= self.rows_cap_free else 0
                         hwins.append((k, H.rows_h(rs_h, st, padded_k, k << j, tn, side.cuda_stream)[0]))
                 elif bounded and not fault_lifetime:
@@ -1195,10 +1194,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                 # in-place hashing only while the step stays inside the plan's length: a window running past it means the plan changed
                 # mid-step (learning) -> the frame domain (the step's row count) is wrong -> the step is re-hashed from the host windows below
                 if inplace and padded_k and state and (k << j) + padded_k // C <= state["n_total"]:
-                    if rows:
-                        lv_k = row_leaves(st, padded_k, k)
-                    else:
-                        lv_k = H.leaves_window(st, padded_k, (k * W) // C, job.step, self.GPU_TREE_SRC, C, m_words, side.cuda_stream)
+                    lv_k = row_leaves(st, padded_k, k)
                     absorb(k, lv_k)                                             # the slot's release below is ordered after its reads (side stream)
                     del lv_k
             if fault_lifetime:
@@ -1303,6 +1299,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                 for kk, hv, n in host_wins:
                     if not n:
                         continue
+                    assert self.win_scratch is not None, "no scratch window: `enable_windows` allocates it before the run"
                     self.win_scratch[:n].copy_(hv[:n], non_blocking=True)     # H2D pinned; same stream as the leaf kernel -> ordered
                     lv_k = row_leaves(self.win_scratch, n, kk)
                     absorb(kk, lv_k)

@@ -268,6 +268,13 @@ ROWS = {"inline": True, "per_prompt": 0, "per_output": 1, "drained": True}
 #: one attention layer's latent history tables in the boundary commitment (its ``tables``): the first layer's, their
 #: rows and salts kept on the node
 TABLES = {"layers": 1, "private": PRIVATE}
+#: the logits each served id was selected from in the boundary commitment (its ``logits``): their rows and salts kept on
+#: the node
+LOGITS = {"private": PRIVATE}
+#: the two-stage serve's boundary object: `ROWS`, the ids served committed as what its replay block returns
+#: (`boundary_rows.Layout.ids`), which round 2 holds the check's output to, the logits they were selected from
+#: (`boundary_rows.Layout.logits`), the select's inputs, and `TABLES`
+TWO_STAGE_ROWS = {**ROWS, "ids": True, "logits": LOGITS, "tables": TABLES}
 ARMS = {
     "compiled": Arm(None, "stock vLLM, its defaults (CUDA graphs, and torch.compile where vLLM compiles the model)"),
     "compiled-again": Arm("compiled", "stock vLLM in a second server lifetime: what two starts of one engine differ by"),
@@ -308,7 +315,7 @@ ARMS = {
     "two-stage": Arm("boundary-rows", "the two-stage serve's launch line: + the canonical DSA top-k and one attention "
                      "layer's history tables in the boundary commitment, prefix caching off",
                      ("--no-enable-prefix-caching",),
-                     plugin=("record", "boundary_rows"), env=TOPK_ENV, general=TOPK, rows={**ROWS, "tables": TABLES}),
+                     plugin=("record", "boundary_rows"), env=TOPK_ENV, general=TOPK, rows=TWO_STAGE_ROWS),
     "prod": Arm("published", "that server, as the stock arm the arms made from it are costed over", published=True),
     "prod-again": Arm("prod", "that server in a second lifetime: what two starts of its engine differ by",
                       published=True),
@@ -471,7 +478,7 @@ MODELS = {
                             "lengthened every step"),
                        Part("the history tables", 0.004, ("the history tables",),
                             "one attention layer's table rows a computed token, hashed at the commitment card's rate")),
-                   metric="vllm/serving-cost-glm53", check="TokenSelect_v4{V=154880}",
+                   metric="vllm/serving-cost-glm53", check="GreedySelect_v1{V=154880,N=7744}",
                    # recipes/models/zai-org/GLM-5.3.yaml in vllm-project/vllm, its command "FP8 on 8xH200 (standard)":
                    # the FP8 checkpoint, tensor parallel, an FP8 KV cache, five draft tokens a step from the model's
                    # own draft layer. The command's tokenizer mode is its Rust front end's, and the recipe names the
@@ -597,8 +604,8 @@ def published_context(arm: str, model_id: str | None, given: int | str | None) -
 
 def published_args(text: str | None) -> tuple[str, ...]:
     """``--published-args``: the flags of vLLM's own a job adds to the line of an arm that starts the server as the
-    recipe does (the values a recipe leaves to the operator: the requests at once, the cards' share of memory), each one
-    ``--FLAG=VALUE``, comma-separated."""
+    recipe does (the values a recipe leaves to the operator: the requests at once, the cards' share of memory, and the
+    server's seed in place of `BASE_ARGS`'s), each one ``--FLAG=VALUE``, comma-separated."""
     args = tuple(x for x in (text or "").split(",") if x)
     bad = [x for x in args if not x.startswith("--") or len(x.split("=")) != 2 or not all(x.split("=")) or " " in x]
     if bad:
@@ -617,7 +624,8 @@ def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blo
     """The server's command: vLLM's Python server, or behind `RUST` ``vllm serve``, the command that starts the Rust
     front end (under `RUST_ENV`, `server_env`). ``added`` (`published_args`) goes on the line of an arm that starts the
     server as the recipe does, after the recipe's flags and the runner's, and is refused where it names a flag the line
-    already sets; no other arm's line takes it."""
+    already sets, but for ``--seed=N``, which takes the place of the line's ``--seed 0``; no other arm's line takes
+    it."""
     base = base_args(max_model_len, UNPUBLISHED if arm.published else ())
     serve = (["vllm.entrypoints.cli.main", "serve", str(checkpoint)] if front == RUST
              else ["vllm.entrypoints.openai.api_server", "--model", str(checkpoint)])
@@ -629,11 +637,14 @@ def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blo
             *(["--middleware", TICK_MIDDLEWARE] if arm.tick else [])]
     added = tuple(added) if arm.published else ()
     flags = [x.split("=")[0] for x in added]
-    twice = sorted({f for f in flags if f in line or flags.count(f) > 1})
+    twice = sorted({f for f in flags if f in line and f != "--seed" or flags.count(f) > 1})
     if twice:
         raise SystemExit(f"--published-args: {', '.join(twice)}: the arm's line sets it already; name each flag once, "
                          "and the context limit with --max-model-len")
-    return [*line, *added]
+    seed = [x for x in added if x.split("=")[0] == "--seed"]
+    if seed:
+        line[line.index("--seed") + 1] = seed[0].split("=")[1]
+    return [*line, *(x for x in added if x not in seed)]
 
 
 def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float, kv_window_s: float,

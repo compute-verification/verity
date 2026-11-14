@@ -11,7 +11,7 @@ after the process has closed the lease's descriptors, stays inside its lease.
 
 A leased Commit's weights registration hashes on its leased GPU (``VERITY_WEIGHTS_HASH=device`` unless the item sets it: the same
 leaves, tree and root as the host path, ``commit.committer.weights_rows``), where the host path holds the GPU idle while it copies and
-hashes every tensor (79 to 91 s for a 7B or 8B model in cov-gm186, gm177 and gm178, against 0.1 s on the device).
+hashes every tensor.
 
 After its last run the Commit gives the GPU back (``release``): the engine shut down, the device's CUDA context destroyed with every
 allocation in it (as at the process's exit), nvidia-smi showing nothing left on the leased GPU (the node's stray probe reads the
@@ -56,7 +56,7 @@ from verity_vllm.records.schema_ids import GPU_LEASE_SCHEMA
 
 SCHEMA = GPU_LEASE_SCHEMA
 RECORD = "gpu_lease.json"
-MATCH_LEG_KEPT = "a Match stage holds its GPUs to its exit: its engine is its last work"
+MATCH_STAGE_KEPT = "a Match stage holds its GPUs to its exit: its engine is its last work"
 HEARTBEAT_S = 60
 WATCH_S = 0.2                      # after the release, how often the Commit checks that no CUDA context reappeared
 STARTED = "VERITY_LEASE_STARTED"   # set by the row for its Commit: the marker the holder writes; the Commit takes its own lease
@@ -243,7 +243,7 @@ def kept_reason(args: Any, coms: list[Any], eng: Any, environ: MutableMapping[st
     return ("the C2 replay runs in this process, on the engine's weights (no --replay-deferred)" if not getattr(args, "replay_deferred", False) else
             "the replay bundle reads the model's buffers at the C2 site (--replay-bundle-overlap 0)" if not getattr(args, "replay_bundle_overlap", 1) else
             "the replay bundle is written at the C2 site or the C2 replay runs in this process (replay_bundle.start began no write: a slim "
-            "bundle, a live-only replay, a retention other than host, or a store over the cap)" if not bundle else
+            "bundle, a live-only replay, a retention other than host, or a store over its bound)" if not bundle else
             "--serving-rows commits its window at the C2 site, from the engine's weights (c2_replay.serving_rows)"
             if getattr(args, "serving_rows", None) else
             "--tensor-digests reads the retained bytes after the run" if getattr(args, "tensor_digests", False) else

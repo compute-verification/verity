@@ -23,20 +23,20 @@ public import Proofs.Flock.ZkAny.RelayLoopOwn
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Session (State Placed byte?)
+open _root_.Flock.ZkServer.Session (State Placed byte?)
 open _root_.Flock (V F128 SessionSpec Stmt)
-open _root_.Flock.Firewall.Frames (Sessions Rep Release)
-open _root_.Flock.Firewall.Frame (Cfg Masker Place Req)
+open _root_.Flock.ZkServer.Frames (Sessions Rep Release)
+open _root_.Flock.ZkServer.Frame (Cfg Masker Place Req)
 
 /-- **A round `roundPlace` places has its table's level 0**: the session's entry is there, with the table's name, and
 a level 0 bound for the session under it. -/
-theorem roundPlace_l0 {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
+theorem roundPlace_l0 {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q : Rep} {pl : Place} {f : Bool} {nd : Option String}
-    (h : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd)) :
-    ∃ (s : Release) (name : String) (l0 : _root_.Flock.Firewall.Level0.Level0),
+    (h : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd)) :
+    ∃ (s : Release) (name : String) (l0 : _root_.Flock.ZkServer.Level0.Level0),
       R.sessions.find? (·.sid == sid) = some s ∧ s.spec.tables[i]? = some name ∧
-        _root_.Flock.Firewall.Level0.ofSession L0 sid name = some l0 := by
-  unfold _root_.Flock.Firewall.Frames.roundPlace at h
+        _root_.Flock.ZkServer.Level0.ofSession L0 sid name = some l0 := by
+  unfold _root_.Flock.ZkServer.Frames.roundPlace at h
   rcases hf : R.find sid i r with _ | ⟨j, p⟩
   · simp only [hf] at h <;> cases h
   simp only [hf, bind, Except.bind, pure, Except.pure] at h
@@ -49,7 +49,7 @@ theorem roundPlace_l0 {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {
   rcases hn : s.spec.tables[i]? with _ | name
   · simp only [hn] at h <;> cases h
   simp only [hn] at h
-  rcases hl : _root_.Flock.Firewall.Level0.ofSession L0 sid name with _ | l0
+  rcases hl : _root_.Flock.ZkServer.Level0.ofSession L0 sid name with _ | l0
   · simp only [hl] at h <;> cases h
   refine ⟨s, name, l0, ?_, ?_, ?_⟩ <;> first | rfl | assumption
 
@@ -71,17 +71,17 @@ theorem repJ_round (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)}
     {real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} {sid : Nat} {stream : String} {n : Nat}
     (hD : LoopModel.Deployed M L₀ real s0 spec sts) (hR : Count.RealTabs sts (real M.x M.w M.ρ))
     (hreal : ∀ σ : LoopAt, SessOn spec sts σ.R sid → BuiltAt M spec sts σ.L0 sid →
-      ∀ (i r : Nat) (rel : Release) (name : String) (l0 : _root_.Flock.Firewall.Level0.Level0) (stm : Stmt)
-        (t : _root_.Flock.Firewall.Finish.Tab), r < 2 → sessAt σ.R sid = some rel →
-        rel.spec.tables[i]? = some name → _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 →
+      ∀ (i r : Nat) (rel : Release) (name : String) (l0 : _root_.Flock.ZkServer.Level0.Level0) (stm : Stmt)
+        (t : _root_.Flock.ZkServer.Finish.Tab), r < 2 → sessAt σ.R sid = some rel →
+        rel.spec.tables[i]? = some name → _root_.Flock.ZkServer.Level0.ofSession σ.L0 sid name = some l0 →
         rel.sts[i]? = some stm →
-        _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t →
+        _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t →
         ∃ hi, real M.x M.w M.ρ (2 * i + r) = .ok (t, hi)) :
     ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt) (i r : Nat)
       (dom : ByteArray) (v : Claims.Msg), slot st pl = some (.round stream n) → e.setup = .ok (spec, sts) →
@@ -128,15 +128,15 @@ theorem repJ_round (T : ZKMal.CoinLayer.TableData)
     obtain ⟨hsp, hsts⟩ := (hJ.sess hsent).eq hrs
     obtain ⟨-, name, l0, -, -, hl0⟩ := roundPlace_l0 hrp
     exact ⟨hsp, hsts, hJ.link hc2 name l0 hl0 rel hrs⟩
-  have hK3 : ∀ (rel : Release) (name : String) (l0 : _root_.Flock.Firewall.Level0.Level0) (stm : Stmt)
-      (t : _root_.Flock.Firewall.Finish.Tab), sessAt σ.R sid = some rel → rel.spec.tables[i]? = some name →
-      _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 → rel.sts[i]? = some stm →
-      _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t →
+  have hK3 : ∀ (rel : Release) (name : String) (l0 : _root_.Flock.ZkServer.Level0.Level0) (stm : Stmt)
+      (t : _root_.Flock.ZkServer.Finish.Tab), sessAt σ.R sid = some rel → rel.spec.tables[i]? = some name →
+      _root_.Flock.ZkServer.Level0.ofSession σ.L0 sid name = some l0 → rel.sts[i]? = some stm →
+      _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t →
       ∃ hr, real M.x M.w M.ρ (2 * i + r) = .ok (t, hr) :=
     fun rel name l0 stm t => hreal σ (hJ.sess hsent) hB i r rel name l0 stm t (rep_lt_two hmem)
-  have hS : ∀ (k : Nat) (link : Array F128) (c' : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (dom : ByteArray)
+  have hS : ∀ (k : Nat) (link : Array F128) (c' : Cfg) (t : _root_.Flock.ZkServer.Finish.Tab) (dom : ByteArray)
       (xs : Array (Array F128)) (hi : Array ByteArray), k < spec.repStreams.size →
-      link.size ≤ _root_.Flock.Firewall.Frames.COIN_MAX → placeholder spec sts k link = .ok (c', t, dom, xs, hi) →
+      link.size ≤ _root_.Flock.ZkServer.Frames.COIN_MAX → placeholder spec sts k link = .ok (c', t, dom, xs, hi) →
       dom.size < 2 ^ 64 ∧ xs.size + 2 < 2 ^ 64 := by
     intro k link c' t dom xs hi hk hlk hph
     obtain ⟨-, hd, hx2, -⟩ := Loop.sizesOk_at hSz hk
@@ -147,9 +147,9 @@ theorem repJ_round (T : ZKMal.CoinLayer.TableData)
     have := Nat.mul_le_mul_left sts[k / 2]!.regions.size ((Loop.linkPoints_size_le sts[k / 2]! link).trans hlk)
     omega
   have hP : ∀ k, k < spec.repStreams.size → sts[k / 2]!.mPts = spec.mPts ∧ 0 < spec.mPts ∧
-      spec.points * spec.mPts ≤ _root_.Flock.Firewall.Frames.COIN_MAX :=
+      spec.points * spec.mPts ≤ _root_.Flock.ZkServer.Frames.COIN_MAX :=
     fun k hk => (Loop.sizesOk_at hSz hk).1
-  have hRow : ∀ (k : Nat) (link : Array F128) (c' : Cfg) (t : _root_.Flock.Firewall.Finish.Tab) (dom : ByteArray)
+  have hRow : ∀ (k : Nat) (link : Array F128) (c' : Cfg) (t : _root_.Flock.ZkServer.Finish.Tab) (dom : ByteArray)
       (xs : Array (Array F128)) (hi : Array ByteArray), k < spec.repStreams.size →
       placeholder spec sts k link = .ok (c', t, dom, xs, hi) → c'.rowH.size < 2 ^ 64 := by
     intro k link c' t dom xs hi hk hph

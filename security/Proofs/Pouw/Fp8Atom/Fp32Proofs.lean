@@ -304,6 +304,6 @@ theorem wordQ_representable {w : Nat} {x : ℚ} (h : wordQ w = some x) : Represe
   · exact Nat.or_lt_two_pow (by decide) (lt_trans (Nat.mod_lt _ (by norm_num)) (by norm_num))
 
 
-/-! ## The pinned statements -/
+/-! ## The guarantees -/
 
 end Pouw.Fp8Atom.Proofs

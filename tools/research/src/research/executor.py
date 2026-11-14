@@ -8,7 +8,7 @@
     Executor(transport).graph_v2(check)                -> (its art: id, the graph/v2 document) once labelled, else None
     Executor(transport).settle(graph)                  -> {task id: (pass | fail | pending | blocked, its result or None)}
 
-Two graph schemas.  `tasks/v1` (`verity tasks list --json`, `tools/verity/check/tasks.py`), which `executor = "shadow"`
+Two graph schemas.  `tasks/v1` (`verity tasks list --json`, `tools/check/tasks.py`), which `executor = "shadow"`
 compares with the after-landing run, and graph/v2 (`verity graph`, `tools/verity/graph`), which `executor = "on"` verifies a tip
 by, beside a train.sh run of the steps drive still takes from one (`drive.SLIM_STEPS`).
 

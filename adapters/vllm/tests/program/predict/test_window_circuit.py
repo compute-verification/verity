@@ -4,7 +4,7 @@ of the weights or the network certifier's scan state rows, and nothing free; a s
 Programs' row. Pinned on a TINY class of 2 slots, 4 prompt ids and 2 outputs (5 positions a Program), at a grain small
 enough to slice TINY's GEMMs and cut its ports; the class's circuit, its blocks included, is the same for windows that differ
 in everything, their request count included. At the class of record's slots (8, 4 at each of buckets 0 and 16) with TINY's
-caps, a 3-request and an 8-request window are one circuit. Every reader reads its writers' rows as they are, a port cut
+bounds, a 3-request and an 8-request window are one circuit. Every reader reads its writers' rows as they are, a port cut
 once a writer row. A head is `AttentionHead_v19`'s Calls, a unit each: a key block reads a key's row and a value's a key,
 so past 126 keys it holds more than a unit's 256 rows, and TINY at 129 positions is refused by name.
 """
@@ -50,7 +50,7 @@ from verity_vllm.records import weights_registration as WRG
 
 GRAIN = Grain(gemm_words=1024, rows=256, select=64)
 CLASS = WindowClass(2, 4, 2)
-#: the class of record's slots (8, 4 a boundary at buckets 0 and 16) at TINY's caps
+#: the class of record's slots (8, 4 a boundary at buckets 0 and 16) at TINY's bounds
 SLOTS = WindowClass(8, 4, 2, lanes=4, every=16)
 G2 = {**S.GREEDY, "max_tokens": 2}
 #: q0's prompt of 4 at step 0, q1's prompt of 3 chunked 2 then 1 across steps 0 and 1; each keeps two outputs
@@ -129,7 +129,7 @@ def test_windows_of_a_class_are_one_circuit_whatever_their_request_count(window)
 
 
 def test_a_3_request_and_an_8_request_window_at_the_class_of_records_slots_are_one_circuit():
-    """At the class of record's slots, 4 a boundary at buckets 0 and 16 (at TINY's caps of 4 prompt ids and 2 outputs), a
+    """At the class of record's slots, 4 a boundary at buckets 0 and 16 (at TINY's bounds of 4 prompt ids and 2 outputs), a
     window of three requests (two anchored at bucket 0, one at 16) and one of eight (four at each) emit the
     same circuit, the same descriptor digest (SHA-512 of its description's bytes) and the same blocks: eight class Programs,
     each slot's `ScanSlots_v2` unit reading its lane of the scan's state row before its anchor (rows 0 and 16 of the 4-lane
@@ -149,7 +149,7 @@ def test_a_3_request_and_an_8_request_window_at_the_class_of_records_slots_are_o
 
 def test_the_slots_entries_are_one_member_a_lane_in_boundary_order():
     """At the class of record's slots, the wires into the slots' entries begin and end at every lane's nb = 2 slots and
-    nowhere else, so `interface.members` (which cuts a template's batch only there and at the cap) makes the entry
+    nowhere else, so `interface.members` (which cuts a template's batch only there and at a statement's unit bound) makes the entry
     template one member a lane, ``<descriptor id>/c<j>``: its ``o0`` rows lane j's
     entries, slot nb·j + b at leaf b, each lane's a hiding row with its own root in the window's registration, which the
     network certifier's scan reads as lane j's Programs."""
@@ -266,7 +266,7 @@ def test_the_circuit_is_a_class_program_a_slot_in_units_by_template_and_wire_pat
     assert circuit.external == (f"{ids[SCAN]}/state", f"{ids[ENTRY]}/o0")
 
 
-def test_a_positions_token_is_its_feed_below_the_prompt_cap_and_the_previous_select_past_it(window):
+def test_a_positions_token_is_its_feed_below_the_prompt_bound_and_the_previous_select_past_it(window):
     """Each slot's request is its lane's of the scan state row before its anchor (both slots at bucket 0, lanes 0 and 1, row 0
     of the registered scan state), read by its `ScanSlots_v2` unit, whose lane k is its outputs ``o4k`` to ``o4k+3``: the
     first position's token and slot (its `TokenFeed_v1`'s), the occupancy word and the head. Position 0's embedding reads
@@ -824,7 +824,7 @@ def test_the_verifier_holds_the_committers_registration_to_its_weights_records_s
 
 
 def test_what_the_class_doesnt_take_is_refused_by_name():
-    """A window past its class (three requests in two slots, a prompt past the cap, more outputs than the cap), a stochastic
+    """A window past its class (three requests in two slots, a prompt past the bound, more outputs than the bound), a stochastic
     request (its Program would read a seed) and a unit past the grain's rows (at 12, position 4's key block's 14) are
     refused, and so is a Program count the class has no slots for."""
     reg = S._registered()
@@ -882,7 +882,7 @@ def _unit_rows(circuit) -> dict[str, int]:
 
 
 def test_no_unit_holds_more_rows_in_and_out_than_the_grain(window):
-    """C-Flock's composer gives each row a unit reads or writes an hm96 slot, so at Llama-3.2-1B's grain a unit fits its
+    """Flock's composer gives each row a unit reads or writes an hm96 slot, so at Llama-3.2-1B's grain a unit fits its
     2^27-bit block with at most 256 rows in and out. A port is cut once a writer row, so a unit's rows are its writers' rows,
     its registered reads and its outputs: at the test grain the largest are SiluMul's (its 16 gate/up slices and its output,
     17), position 4's key block's (5 key rows, 5 value rows, its query and three outputs, 14), the fused norm's (8 down or
@@ -910,7 +910,7 @@ def _widest_row(circuit) -> dict[str, int]:
 
 
 def test_a_class_too_small_to_prove_is_refused_naming_each_template_c_flock_wouldnt_compose(window):
-    """C-Flock's composer refuses a proof block none of whose rows is over 111 bytes (no row then has a compression before its
+    """Flock's composer refuses a proof block none of whose rows is over 111 bytes (no row then has a compression before its
     last SHA-512 block, so the block's SHA range holds no slot), one of more than 256 rows, or one past 2^27 bits
     (`interface.check_proof_block`), and the class builder refuses such a unit at lowering, naming each. TINY's class is too
     small to prove: 12 templates have no wider row, its heads' of 16 values (RoPE, the key blocks, the head end), the token

@@ -1,4 +1,11 @@
-/-
+module
+
+public import Flock.With.Hashes
+public import Flock.HmRow
+public import Flock.ByteLines
+public import Flock.TmplLines
+
+/-!
 `Flock.HmRow`, `HmOut`'s setup over the hash oracle (`Flock.With.Hashes`): `Stmt.setupTablesWith` is `Stmt.setupTables` with every
 digest of what the session brings taken from the oracle, in a verdict monad `M`. Run in `V` with `Hashes.ofSha512 Sha512.hash`
 it is `Stmt.setupTables` (`Flock.With.SetupEq`). The copies keep the originals' text; what hashes nothing is the compiled
@@ -19,12 +26,6 @@ table pins (`Pinned.tableSha`), `row_key_sha512` (`Pinned.rowKey`), the zero row
 a registered scheme through the oracle, `MerkleScheme.opsWith`). No digest of these depends on the session: the flock lock's
 `verifier.stop` names each.
 -/
-module
-
-public import Flock.With.Hashes
-public import Flock.HmRow
-public import Flock.ByteLines
-public import Flock.TmplLines
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -1156,7 +1157,7 @@ def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
   if count > Tags.MAX_TABLES then throw s!"tables: at most {Tags.MAX_TABLES} per session, not {count}"
   let splits := fun (n : Nat) => if n == 0 || n % count != 0 then throw s!"tables: {n} units do not split into {count} equal tables"
     else (pure () : V Unit)
-  -- the sample's law and count are refused before the circuit is read
+  -- the sample's sampling design and count are refused before the circuit is read
   let u? ← (draw.mapM Draw.UnitDraw.ofJson : V _)
   if let some u := u? then
     match u.law with

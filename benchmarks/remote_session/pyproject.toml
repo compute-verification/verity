@@ -2,7 +2,7 @@
 # `verity/protocols/accounting/poub/verifier/session/verifier.py`, their wire `wire.py` beside it) and the prover's
 # (`prover.py`, its GPU backend `device.py` and `session.cu`). Not a package: `run.sh` runs both on a GPU node, and the suite
 # runs both over a loopback socket with the driver's reference as the prover's backend
-# (`uv run tools/verity/check/suites.py benchmarks/remote_session`). `serve.py` is vLLM serving as the prover, which
+# (`uv run tools/check/suites.py benchmarks/remote_session`). `serve.py` is vLLM serving as the prover, which
 # `tests/test_vllm_serve.py` runs where vLLM, a GPU and the vLLM integration's `StoreBackend` are. `sampling_inputs.py`
 # reads a run's `verifier.json` for the audit's side of a sampling plan: ε, the line and the serving cost. `auditor_line.py`
 # reads a gate run's memory line on the auditor's clock, computed by the Lean verifier (its `line` request) and held
@@ -59,7 +59,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/proofs/spot",
           # auditor_line.py --boundary: the network certifiers' records of the gate node's boundary and their audit
           "verity/protocols/accounting/certifier", "verity/protocols/accounting/certifier/prover",
-          # test_challengers.py: challengers.Gate against the auditor host's gate, its sessions served by serve.py
+          # test_challengers.py: challengers.Gate against the auditor device's gate, its sessions served by serve.py
           "verity/protocols/compose/device/live_challenger/auditor.py", "verity/protocols/compose/device/live_challenger/host.json", "verity/protocols/compose/device/live_challenger/serve.py",
           "verity/protocols/compose/device/live_challenger/tests/stub_serve.py",
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",

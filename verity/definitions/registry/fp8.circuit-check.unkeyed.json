@@ -1,0 +1,11 @@
+{
+ "held": {
+  "neither a Call of a served Program (targets.call_families), a serving cut (serving_templates) nor PoUW's: a subcircuit proved inside its callers' units, or a whole step's composition, which no window stages whole": [
+   "LayerPostFp8_v1{C={bbdad8e23e0c}}",
+   "LayerPreFp8_v1{C={bbdad8e23e0c},L0=True}",
+   "ScaledMmFp8_v1{K=256,N=512,BIAS=False}",
+   "ScaledMmFp8_v1{K=256,N=512,BIAS=True}",
+   "ServeFp8_v1{C={bbdad8e23e0c},LP=2,STEPS=1}"
+  ]
+ }
+}

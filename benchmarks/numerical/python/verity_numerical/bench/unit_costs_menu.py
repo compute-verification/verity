@@ -6,7 +6,7 @@ per model.
     python -m verity_numerical.bench.unit_costs_menu --inventory unit-costs.json --out DIR --rows VSTAR_DIR
 
 **Buckets** (:func:`buckets`): :mod:`unit_costs_prover`'s dp4t at its CPU limit (``find_limit``: the largest power of two
-whose 16-slot session at the workload's least ρ is in range and fits one node; ``menu.json``'s ``cap``): the body's buckets
+whose 16-slot session at the workload's least ρ is in range and fits one node; ``menu.json``'s ``limit``): the body's buckets
 by (template class, Z), each rare type its own bucket, the body's units over the limit one bucket of their pieces at the
 limit, the tail's samplers each their own bucket and its other large units one bucket at their largest Z, their units over
 the limit one bucket of pieces.
@@ -37,7 +37,7 @@ is padded up), its claims 2 + 2 regions, both in ``menu.json``. With ``--outer``
 check of the inner session's two reps' algebra at those claims (:func:`inner_algebra`), which the input's rows leave out,
 and carries V*'s refusal where ``rec_residuals.parts`` refuses the shape.
 
-**Positions per shape** (``FlockSampled.Shape``): an entry's unit positions per slot are its bucket's
+**Positions per shape** (``VStar.Menu.Entry.positions``): an entry's unit positions per slot are its bucket's
 ``instances_max`` in the ``--rows`` output (``--positions``), and a shape's are the largest among its entries, as its
 claims are.
 """
@@ -96,7 +96,7 @@ def buckets(N: int, K: int, units: Sequence[P.Unit], nets: Mapping[str, Mapping[
     out = [{"part": "body", "class": f"{c[0]} 2^{c[1]}", "Z": Z, "units": us, "pieces": False} for c, Z, us in groups]
     out += [{"part": "rare", "class": "rare", "Z": u.z, "units": [u], "pieces": False} for u in rares]
     if len(small) < len(body):
-        out.append({"part": "body", "class": "cap pieces", "Z": limit, "units": [u for u in body if u not in small],
+        out.append({"part": "body", "class": "limit pieces", "Z": limit, "units": [u for u in body if u not in small],
                     "pieces": True})
     samplers = [u for u in tail if u.template in P.SAMPLERS]
     big = [u for u in tail if u.template not in P.SAMPLERS]
@@ -107,7 +107,7 @@ def buckets(N: int, K: int, units: Sequence[P.Unit], nets: Mapping[str, Mapping[
                 out.append({"part": "tail", "class": "tail", "Z": max(u.z for u in keep) if len(keep) < len(us) else Z,
                             "units": keep, "pieces": False})
             if len(keep) < len(us):
-                out.append({"part": "tail", "class": "cap pieces", "Z": limit, "units": [u for u in us if u not in keep],
+                out.append({"part": "tail", "class": "limit pieces", "Z": limit, "units": [u for u in us if u not in keep],
                             "pieces": True})
     return out
 
@@ -155,7 +155,7 @@ def regions(row: Mapping[str, Any]) -> int:
 
 def plan(inv: Mapping[str, Any], slot: Mapping[str, Any] | None = U.SLOT_SUMCHECK,
          b_menu: Sequence[int] = B_MENU) -> list[dict[str, Any]]:
-    """Every workload's limit (``cap``), buckets (each with its :func:`regions`, the largest of its types') and each bucket's
+    """Every workload's limit (``limit``), buckets (each with its :func:`regions`, the largest of its types') and each bucket's
     :func:`inner` at every B, with ``at_rho(B, r)``: its :func:`inner`
     at B with every unit at ρ = r (:func:`one_session_per_shape` sizes a smaller entry's session to its shape's)."""
     coef = U.fit()["coef"]
@@ -173,7 +173,7 @@ def plan(inv: Mapping[str, Any], slot: Mapping[str, Any] | None = U.SLOT_SUMCHEC
             b["by_B"] = {B: inner(N, K, b, B, rho, coef, nets=nets, slot=slot) for B in b_menu}
             b["at_rho"] = lambda B, r, N=N, b=b, nets=nets: inner(N, K, b, B, {u.label: r for u in b["units"]}, coef,
                                                                  nets=nets, slot=slot)
-        out.append({"workload": w, "N": N, "cap": limit, "buckets": bs})
+        out.append({"workload": w, "N": N, "limit": limit, "buckets": bs})
     return out
 
 
@@ -198,7 +198,7 @@ def proofs_rows(inv: Mapping[str, Any], pl: Sequence[Mapping[str, Any]], vstar: 
         for i, b in enumerate(W["buckets"]):
             tm: dict[str, tuple[int, int, float]] = {}
             for u in b["units"]:
-                key, nu, ell, inst, _src = BK.template(by[(w, u.label)], W["cap"])
+                key, nu, ell, inst, _src = BK.template(by[(w, u.label)], W["limit"])
                 o = tm.get(key, (0, 0, 0))
                 tm[key] = (max(nu, o[0]), max(ell, o[1]), max(inst, o[2]))
             nu, ell = max(v[0] for v in tm.values()), max(v[1] for v in tm.values())
@@ -358,7 +358,7 @@ def menu(pl: Sequence[Mapping[str, Any]], K: int, outer: Mapping[str, Any] | Non
         if outer is None:
             tot["outer_h_mean"] = tot["outer_h_public"] = None
         tot["refused_entries"] = sum(bool(e["outer_refused"]) and e["sessions_public"] > 0 for e in entries)
-        models.append({"workload": W["workload"], "N": W["N"], "cap": W["cap"], "entries": entries, "totals": tot})
+        models.append({"workload": W["workload"], "N": W["N"], "limit": W["limit"], "entries": entries, "totals": tot})
     return {"format": "verity/f6-menu/v1", "K": K, "b_menu": list(B_MENU), "node_gib": U.NODE_GIB,
             "k_log_max": K_MAX, "d_fit_log": D_FIT_LOG,
             "chosen_on": ("public inner + outer hours (outer per (bucket, B) from the input)" if outer is not None else
@@ -384,7 +384,7 @@ def render(mn: Mapping[str, Any]) -> str:
          "|---|---|---|---|---|---|---|"]
     for M in mn["models"]:
         t, parts = M["totals"], [e["part"] for e in M["entries"]]
-        L.append(f"| {P._short(M['workload'])} | {U._p2(M['cap'])} | "
+        L.append(f"| {P._short(M['workload'])} | {U._p2(M['limit'])} | "
                  f"{parts.count('body')} / {parts.count('rare')} / {parts.count('tail')} | "
                  f"{_h(t['inner_h_mean'])} / {_h(t['inner_h_public'])} | {_h(t['outer_h_mean'])} / {_h(t['outer_h_public'])} | "
                  f"{_h(t['total_h_mean'])} / {_h(t['total_h_public'])} | {t['refused_entries']} |")

@@ -6,7 +6,7 @@
     {"law": "work", "population": N, "k": K, "strata": [<work stratum>, ...], "units": [...], ["closure": [...]]}
 
 This is the Lean verifier's `Flock.Draw` object and `flock-circuit`'s `unit_draw`. A stream samples it from the
-auditor's challenger's coins (`service.Stream.select`, Lean `Select.select`); `flock-verify draw` reads them too
+auditor's challenger's coins (`service.Stream.select`, Lean `Select.select`); `verity-verify-proof draw` reads them too
 (`--stream`, `--stream-file`), and without them refuses any sample that reads coins: the verifier has no randomness of
 its own. Nothing here samples, and no sample is derived from a commitment. `check_draw` holds a sample to the
 registration and to the verifier's own sampling design, and `check_proved` holds the proved statement's proof blocks to
@@ -56,7 +56,6 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any, Mapping, Sequence
 
-from verity.protocols.proofs.spot.verifier.profile import work_k
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
@@ -216,6 +215,12 @@ def total_work(strata: Sequence[Mapping[str, Any]]) -> int:
     return sum(s["work"] * _size(s["units"]) for s in strata)
 
 
+def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
+    """A stratum's sample size under the work rule (Lean `Flock.Draw.workK`): ceil(k * work * size / total), at least
+    `floor` and at most `size`."""
+    return min(size, max(floor, (k * work * size + total - 1) // total))
+
+
 def derive(program: Program, query: Mapping[str, Any], law: Mapping[str, Any],
            table: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The verifier's sampling design for its program and query: `stratified` (the rule, or an expanded sampling design, whose strata are ignored)
@@ -338,7 +343,7 @@ TABLES_LAW = ("tables: several tables need a subset or stratified draw, whose un
 def tables_problem(law: Mapping[str, Any], tables: int) -> str | None:
     """Why one sample under `law` can't be split into `tables` equal tables, as the Lean verifier's `Stmt.setupTables`
     splits a session's sample, or None: one table takes any sampling design; several take a sampling design of fixed count (`fixed_count`) that is
-    positive and a multiple of `tables`. Lean `Draw.tablesWhy`, which `flock-verify draw --tables J` refuses by before
+    positive and a multiple of `tables`. Lean `Draw.tablesWhy`, which `verity-verify-proof draw --tables J` refuses by before
     any coin."""
     if tables <= 1:
         return None

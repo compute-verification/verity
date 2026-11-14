@@ -1,5 +1,5 @@
 # PoUS's benchmarks and their tests. Not a package: the drivers run on a GPU pod (torch/Triton), their CPU reference
-# invariants run here as a suite (`uv run tools/verity/check/suites.py benchmarks/pous`), so `check` keeps them pinned.
+# invariants run here as a suite (`uv run tools/check/suites.py benchmarks/pous`), so `check` keeps them pinned.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
@@ -50,7 +50,8 @@ inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proo
           "benchmarks/census/deployments.json",
           "verity/protocols/accounting/pouw/verifier/__init__.py", "verity/protocols/accounting/pouw/verifier/audit.py",
           "verity/protocols/accounting/pouw/verifier/coins.py", "verity/protocols/accounting/pouw/verifier/core_check.py",
-          "verity/protocols/proofs/spot/verifier/one_stage/registration.py",
+          "verity/protocols/accounting/pouw/verifier/verifier.py",
+          "verity/protocols/proofs/spot/verifier/one_stage/docket.py",
           "verity/protocols/proofs/spot/verifier/one_stage/draw.py",
           "verity/protocols/proofs/spot/verifier/one_stage/verdict.py",
           "verity/protocols/accounting/pouw/verifier/protocol.py", "verity/protocols/accounting/pouw/verifier/salt.py",

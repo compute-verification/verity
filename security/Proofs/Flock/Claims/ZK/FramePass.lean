@@ -25,7 +25,7 @@ import VCVio.Prelude.Core
 # A device round that passes the frame's check
 
 The frame passes a device round `v` in a scheduled round `r`'s place when `v` is `r` byte for byte outside the words
-`roundFree` frees, the values `r` absorbs in the algebraic phase (`Flock.Firewall.Frame.passes`). With `r` the bytes of
+`roundFree` frees, the values `r` absorbs in the algebraic phase (`Flock.ZkServer.Frame.passes`). With `r` the bytes of
 frames `fs` and its squeeze, this file shows `v` is the bytes of frames alike to `fs` (`Alike`) and the same squeeze
 (`passes_frames`), so that the frame's round at `v` is its round at `r` but for the values (`roundFree_alike`):
 
@@ -40,7 +40,7 @@ namespace Claims.ZKServer
 
 open _root_.Flock (V F128 u64OfLE)
 open _root_.Flock.Transcript (header)
-open _root_.Flock.Firewall.Frame (Cfg Masker INNER_ROUNDS roundFree inFree firstDiff passes)
+open _root_.Flock.ZkServer.Frame (Cfg Masker INNER_ROUNDS roundFree inFree firstDiff passes)
 open FlockSoundness.Refine (Frame encs colBytes toBytes_length)
 open FlockSoundness.Discharge.ZkView (get!_eq u64OfLE_eq)
 

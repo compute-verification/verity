@@ -27,8 +27,8 @@ from tests.pipeline import test_serve_openai as TSO
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline.serve_admit import Admission
-from verity_vllm.protocols.pouw.h1 import hooks as H1H
-from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw import h1_hooks as H1H
+from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
 
 
 class Engine:

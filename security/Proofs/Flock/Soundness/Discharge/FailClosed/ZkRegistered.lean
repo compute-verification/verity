@@ -23,9 +23,9 @@ import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJSt
 
 /-!
-# The registered `--zk` headline, over what flock-verify accepts
+# The registered `--zk` headline, over what verity-verify-proof accepts
 
-`flock-verify verify --zk --registered F` accepts `VerifiesZKR` (`LiveVerifiesZKR`): the setup, registered check and
+`verity-verify-proof verify --zk --registered F` accepts `VerifiesZKR` (`LiveVerifiesZKR`): the setup, registered check and
 verdict `ZkReg.AcceptsZKR` models (every table's statement passes `checkRegistered` at F's ports `own`), and the
 statement check with the verifier's own registered reads (`ScopeZR`), which also passes a shared-row public file of a
 statement with hidden outputs (`ProvedScope.sharedRowsOk`). `zk_session_soundHJR` is `ZkReg.zk_session_soundHJR` over
@@ -51,7 +51,7 @@ open FlockSoundness.Discharge.ZkReg (AcceptsZKR LiveAcceptsZKR OwnReadsHJ regPat
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
-/-- **What `flock-verify verify --zk --registered F` accepts** (`own` F's ports): the setup, registered check and verdict
+/-- **What `verity-verify-proof verify --zk --registered F` accepts** (`own` F's ports): the setup, registered check and verdict
 `AcceptsZKR` models, and the statement check with the verifier's own registered reads. -/
 def VerifiesZKR (I : Inputs) (own : Array Flock.Registered.Port) (t : Exec.Transcript) : Prop :=
   AcceptsZKR I own t ∧ ScopeZR I
@@ -91,7 +91,7 @@ theorem ScopeZR.parseHG {I : Inputs} (h : ScopeZR I) (hh : I.tags.hiddenOutputs 
     rw [hw] at hf
     cases hf
 
-/-- **One hidden-output `--zk --registered` sampled session of `J` tables that flock-verify accepts is sound, and its
+/-- **One hidden-output `--zk --registered` sampled session of `J` tables that verity-verify-proof accepts is sound, and its
 registered reads are checked.** `ZkReg.zk_session_soundHJRSt` over `VerifiesZKR`, at a public file with or without shared
 rows: the first conjunct is its bound, the second the registered check's consequence at every accepted outcome. -/
 theorem zk_session_soundHJR

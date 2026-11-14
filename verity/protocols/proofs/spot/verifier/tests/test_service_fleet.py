@@ -8,7 +8,7 @@ from __future__ import annotations
 import pytest
 
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R, verifier as V
 
 import test_service_sessions as T
 from test_service import SESSION, Clock, _lean, _ports, _record, _refused, _round, _stream

@@ -279,7 +279,7 @@ public import Proofs.Flock.Claims.ZK.RepCons
   committed schedule's places, the opening read from `Resp::Coins`'s words, the coin handed on its words), and
   **`Flock.zk_deployZk_ref`** at it, at every rep rounds' coin counts; `Claims.Witness.Flock.ZK_meets` states its coin
   layer and `ZK_coins_fails` that the degenerate one (every opening passes, the coin is the opening) is not it.
-* `CoinOpen`: the Lean coin check (`flock-firewall coins`, `Flock.Firewall.Coins`), whose verdict `coin_tree::Checked`
+* `CoinOpen`: the Lean coin check (`flock-zk-server coins`, `Flock.ZkServer.Coins`), whose verdict `coin_tree::Checked`
   takes, is that coin layer's at SHA-512: one opening (`CoinOpen.treeChk_sha`, `CoinOpen.check_isOk`), and a session's
   openings when its requests follow the committed schedule (`CoinOpen.coinLayer_verdict`), so it refuses the openings
   `LeanRelease.OpeningsRefused` (`Claims/ZK/Refine.lean`) names (`CoinOpen.coinLayer_refuses`). The release
@@ -501,12 +501,12 @@ public import Proofs.Flock.Claims.ZK.RepCons
   statement of a class `A` with `TapeOK` on `A` only (`Flock.zk_server_blind_on`), at the deployed coin layer with the
   tables' tape read with fibers of one size on `A` (`Flock.zk_server_blind_deployed`).
 * `Release`: the deployed release (`LeanRelease`), the ZK server whose frame is the compiled Lean frame
-  (`Masker.answer`, then `Flock.Firewall.Frame.round`: `LeanRelease.release`, `refMsg_toSrv` by definition) at the
+  (`Masker.answer`, then `Flock.ZkServer.Frame.round`: `LeanRelease.release`, `refMsg_toSrv` by definition) at the
   frame's own configuration from its samples on the server's tape (`LeanRelease.cfg`, `Cfg.ofDraws`: `cfg_pads`,
   `cfg_root`). Its coin stops are the frame's, all four of them (a zerocheck outer coin `1`, a mask slot short of full
   rank, level 0's `ρ` dependent, the inner proof's `β = 0`: `answer_rho_dependent`, `answer_beta_zero`), and where the
   frame refuses the coins the release is the stop (`LeanRelease.release_of_refusesCoins`). Its pass decision is the
-  frame's too (`Flock.Firewall.Frame.check`: `LeanRelease.pass`, `check_release`), the device round against the
+  frame's too (`Flock.ZkServer.Frame.check`: `LeanRelease.pass`, `check_release`), the device round against the
   scheduled round in its place; Rust's own checks only fail a round more (`LeanRelease.cross`). Any other stop comes at its
   `Finish`, with its scheduled rounds in a failed device's place
   (`LeanRelease.fillOf`), and every way a worker fails is a failed round (`LeanRelease.pass_of_none`, `nextD_of_fail`);
@@ -544,13 +544,13 @@ public import Proofs.Flock.Claims.ZK.RepCons
   history only through the decoded coins on the histories its check passes (`LeanRelease.ReadsCoins`) gives the rule
   and `StopsAt` (`LeanRelease.rfOf`, `stopsAt_of_readsCoins`). `Flock.zk_server_lean_coinLayer` is it at the deployed
   coin layer (`CoinLayer.session`) at SHA-512 from the transport's trusts alone, each named for its reason:
-  `FinalRoundEq` is a fact about the proof files the session's Lean finish computes (`Flock.Firewall.Finish`), which
+  `FinalRoundEq` is a fact about the proof files the session's Lean finish computes (`Flock.ZkServer.Finish`), which
   `flock-circuit` sends, `ProgReads` one about the state the session loop's requests leave each rep's frame in
-  (`Flock.Firewall.Frames`; a theorem at `LeanRelease.ofLoop`, `ofLoop_progReads`), `LinkRoundEq` one
-  about what the transport hands `Flock.Firewall.Link` (`LinkRecheck`), and `LeanRelease.HelloIs` (`HelloLean`;
+  (`Flock.ZkServer.Frames`; a theorem at `LeanRelease.ofLoop`, `ofLoop_progReads`), `LinkRoundEq` one
+  about what the transport hands `Flock.ZkServer.Link` (`LinkRecheck`), and `LeanRelease.HelloIs` (`HelloLean`;
   `HelloEq` follows, `helloEq_of_helloIs`), `HelloParses`, `ReqsFollow`, `CoinsRead` (`ReadsCoins` is `ProgReads` and
   `CoinsRead`) and the `Finish`'s round facts about the session loop
-  (`flock-firewall session`), where they are theorems (`SessionLean`); `CheckIs` is proved from them
+  (`flock-zk-server session`), where they are theorems (`SessionLean`); `CheckIs` is proved from them
   (`LeanRelease.checkIs_coinLayer`). The released bytes are read only through `LiveRoundEq`, `FillRoundEq`,
   `FinalRoundEq` (from `FrameAdmits` and `FinishIs`), `LinkRoundEq` (from `LinkIs`) and `ProgReads`, none of them yet
   proved about the live path, so the deployed ZK server is not yet proved zero-knowledge.
@@ -559,16 +559,16 @@ public import Proofs.Flock.Claims.ZK.RepCons
   (`LeanRelease.ownHist_msg_live`, `ownHist_msg_fill`): what the proofs of `LeanRelease.LiveRoundEqOwn` (`Refine`,
   `LiveRoundEq` at the own histories only) share.
 * `SessionLean`: the release at the session loop (`LeanRelease.loop`): its `Hello`, its coin check's reading of it and its
-  requests are the loop's pure functions at the statement's setup (`Flock.Firewall.Session.helloOf`, `planOf`, `reqAt`),
+  requests are the loop's pure functions at the statement's setup (`Flock.ZkServer.Session.helloOf`, `planOf`, `reqAt`),
   so `HelloIs`, `HelloParses` and `ReqsFollow` hold at every statement and `Finish` is one past the last coin
   (`LeanRelease.loop_helloIs`, `loop_helloParses`, `loop_reqsFollow`, `loop_last`), and
   **`Flock.zk_server_lean_loop`** is `Flock.zk_server_lean_coinLayer` there.
-* `HelloLean`: the server's `Hello` at Lean's `flock-firewall hello`. Its `Hello` is the coin layer's
-  (`Flock.Firewall.Hello.json_eq`, `CoinLayer.helloD_eq`, by `rfl`), so `HelloEq` follows from the server's `Hello`
+* `HelloLean`: the server's `Hello` at Lean's `flock-zk-server hello`. Its `Hello` is the coin layer's
+  (`Flock.ZkServer.Hello.json_eq`, `CoinLayer.helloD_eq`, by `rfl`), so `HelloEq` follows from the server's `Hello`
   being that command's message (`LeanRelease.HelloIs`, **`LeanRelease.helloEq_of_helloIs`**).
-* `LinkRecheck`: the ZK server's link at the Lean recheck. `Flock.Firewall.Link`'s root (`Flock.Firewall.Link.root`, its
+* `LinkRecheck`: the ZK server's link at the Lean recheck. `Flock.ZkServer.Link`'s root (`Flock.ZkServer.Link.root`, its
   tree built in tasks) is `layerOf`'s cap over `hm96-sha512/v1`'s leaves of `encodeRowsZk`'s rows
-  (`Flock.Firewall.Link.root_eq`, `cap_eq`), the switched prover's level-0 leaves are the honest prover's
+  (`Flock.ZkServer.Link.root_eq`, `cap_eq`), the switched prover's level-0 leaves are the honest prover's
   (`swExeOf_inl`, `Masked.leafAt_swCutAt`), so the recheck's link message at the tape (`Masked.linkMsg`) is round `0`'s
   encoding of the switched cut (`Masked.enc0_swCutAt`), and at the deployed session `LinkRoundEq` follows from the
   ZK server's link being that message (`LeanRelease.LinkIs`, **`LeanRelease.linkRoundEq_of_linkIs`**). Where the
@@ -577,7 +577,7 @@ public import Proofs.Flock.Claims.ZK.RepCons
   **`LeanRelease.linkRoundEq_ofLoop`**, `Proofs.Flock.SessionLoop.Link`).
 * `FinishRound`: `FinalRoundEq` split at its branch. On a live history whose last coins the frame takes, every table
   admits the opened coins (`LeanRelease.FrameAdmits`, one of the transport's trusts: the frame refuses each coin fault
-  `Admits` excludes, and the state the transport hands it is its own run, the session loop's, `Flock.Firewall.Frames`),
+  `Admits` excludes, and the state the transport hands it is its own run, the session loop's, `Flock.ZkServer.Frames`),
   and where the ZK server's own
   `Finish` does not stop either its files encode `fin` of the switched views (`LeanRelease.FinishIs`), so
   `FinalRoundEq` follows (**`LeanRelease.finalRoundEq_of_finishIs`**, a live run's `Finish` not stopping by
@@ -588,63 +588,63 @@ public import Proofs.Flock.Claims.ZK.RepCons
   (**`LeanRelease.coins_taken_of_live`**, from `refusesCoins_of_live` at the prefixes, `live_take`). `Hello`'s and the
   `Commit`'s coins go to the session (`takeAt`), so it says nothing of them.
 * `FrameRank`: the frame's rank check is the prover's. Where the frame's reduction over the mask slot's words fills all
-  `128 k` columns (`Flock.Firewall.Frame.maskRank`), the weight rows' GF(2)-span is all of `GF(2^128)^k`
+  `128 k` columns (`Flock.ZkServer.Frame.maskRank`), the weight rows' GF(2)-span is all of `GF(2^128)^k`
   (**`Rank.maskRankOk_of_maskRank`**: `MaskRank.maskRankOk`, by an invariant of both loops and a downward induction over
   the pivots, `lowBit_spec`, `span_of_pivots`), and the statement's slot (`Drive.maskSlot`) enumerates its mask words
   (`Rank.words_maskSlot`, `Composed.maskWordsOf`).
 * `FramePoints`: the frame's claim points are the session's. On the algebraic phase's coins as the frame keeps them,
   one flat array holding round `1`'s outer coins from `K_SKIP`, `ρ`'s from `m − 6` and the lincheck's from `2 m − 10`,
-  `Flock.Firewall.Frame.claimPoints` is `MaskRank.claimPoints` at the rounds (**`Rank.claimPoints_frame`**), so a rep
+  `Flock.ZkServer.Frame.claimPoints` is `MaskRank.claimPoints` at the rounds (**`Rank.claimPoints_frame`**), so a rep
   whose frame takes the opening's label has full rank at its rounds and the earlier reps' points
   (**`Rank.rank_of_label`**, with `maskRankOk_of_maskRank`).
-* `LinkFft`: the recheck's rows by the additive FFT in the novel basis (`Flock.Firewall.Link.rowsFft`) are
-  `encodeRowsZk`'s where the padding fits below `2^cols` and `cols < d ≤ 64` (`Flock.Firewall.Link.rowsFft_eq`), so
+* `LinkFft`: the recheck's rows by the additive FFT in the novel basis (`Flock.ZkServer.Link.rowsFft`) are
+  `encodeRowsZk`'s where the padding fits below `2^cols` and `cols < d ≤ 64` (`Flock.ZkServer.Link.rowsFft_eq`), so
   `rows` is `encodeRowsZk` on both of its paths (`rows_eq`).
-* `FinishCommit`: the ZK server's own `Finish` (`Flock.Firewall.Finish`) commits as the masked prover does. Its codeword
-  by the FFT is `encodeRows`'s (`Flock.Firewall.Finish.rowsFft_eq`, `rowsOf_eq`), so at SHA-512 and `hm96-sha512/v1`, in
+* `FinishCommit`: the ZK server's own `Finish` (`Flock.ZkServer.Finish`) commits as the masked prover does. Its codeword
+  by the FFT is `encodeRows`'s (`Flock.ZkServer.Finish.rowsFft_eq`, `rowsOf_eq`), so at SHA-512 and `hm96-sha512/v1`, in
   any lawful monad, `FlockComplete.commitP` returns `commitFw`'s commitment and `FlockComplete.commitPZk` of the table
-  `Flock.Firewall.Link` reads returns `commit0`'s (**`commitP_eq`**, **`commitPZk_eq`**, through `Commit.toC`), and
+  `Flock.ZkServer.Link` reads returns `commit0`'s (**`commitP_eq`**, **`commitPZk_eq`**, through `Commit.toC`), and
   their openings agree (`openP_eq`).
-* `FinishLevel0`: the commitment the session loop's finish reads off its `Level0` (`Flock.Firewall.Finish.commitOf`)
+* `FinishLevel0`: the commitment the session loop's finish reads off its `Level0` (`Flock.ZkServer.Finish.commitOf`)
   is `commit0`'s at the `Level0`'s own level, `t_pad` and table, wherever `Level0.ofDraws` returned it
   (**`commitOf_eq`**), so the loop's finish proves at the commitment the `table` path commits.
 * `FinishPiop`: the ZK server's transcript, zerocheck, lincheck and ring switch are the masked session's from its source,
-  by unfolding through `Asks.toC`: **`Flock.Firewall.Finish.zerocheckFw_eq`**, **`lincheckFw_eq`** (`zerocheckCut`,
+  by unfolding through `Asks.toC`: **`Flock.ZkServer.Finish.zerocheckFw_eq`**, **`lincheckFw_eq`** (`zerocheckCut`,
   `lincheckCut` at the masked values) and **`ringSwitchP_eq`** (`ringSwitchCut` at the switched vectors).
-* `FinishInner`: the ZK server's pads commitment is the masked prover's (`Flock.Firewall.Finish.innerCommitP_eq`, through
+* `FinishInner`: the ZK server's pads commitment is the masked prover's (`Flock.ZkServer.Finish.innerCommitP_eq`, through
   `InnerCommit.toC`), and its inner proof, which never checks the batched constraint, is `FlockComplete.innerP`'s
   wherever that constraint holds at every coin (**`innerP_eq`**), which it does at pads with `h_ab = h_a·h_b` and
   `w = x·y` where `repFw`'s stop does not fire (**`batched_of_failingOn`**: no constraint `failingOn` the pads).
 * `FinishLig`: the ZK server's Ligerito prover is the masked prover's (`FlockComplete.ligeritoPZk`), its level loop
   carried through `LigState.toC` (`ligConj`), wherever its commitment is `FlockComplete.commitP`'s
-  (**`Flock.Firewall.Finish.ligeritoPZk_eq`**), so at SHA-512 and `hm96-sha512/v1` with `commitFw`
+  (**`Flock.ZkServer.Finish.ligeritoPZk_eq`**), so at SHA-512 and `hm96-sha512/v1` with `commitFw`
   (**`ligeritoPZk_fw`**).
-* `FinishRep`: the copies put together. The ZK server's rep is `Flock.Firewall.Finish.repFwC`, `piopCut`'s PIOP at the
+* `FinishRep`: the copies put together. The ZK server's rep is `Flock.ZkServer.Finish.repFwC`, `piopCut`'s PIOP at the
   masked values with no rank check (the frame's), `FlockComplete.ligeritoPZk` at SHA-512 and `hm96-sha512/v1`, the
   session's replay and constraints, the stop where one fails on the pads, then `FlockComplete.innerP`
-  (**`Flock.Firewall.Finish.repFw_eq`**, at pads with `h_ab = h_a·h_b` and `w = x·y`, in a monad where a throw ends the
-  run, as `flock-firewall finish`'s does, `throw_bind_sv`). Where no constraint fails on the pads the batched
+  (**`Flock.ZkServer.Finish.repFw_eq`**, at pads with `h_ab = h_a·h_b` and `w = x·y`, in a monad where a throw ends the
+  run, as `flock-zk-server finish`'s does, `throw_bind_sv`). Where no constraint fails on the pads the batched
   constraint holds whatever the constraints' lengths (`batched_of_noFail`, by `evalL_combo_linAt`).
 * `FinishBridge`: the ZK server's rounds as the session's. Its rep counts rounds from zero in `StateT Nat V`; the session
-  logs every send in `FlockComplete.PS`. The state map `Flock.Firewall.Finish.bridge base` relates a rep at round `k` to
+  logs every send in `FlockComplete.PS`. The state map `Flock.ZkServer.Finish.bridge base` relates a rep at round `k` to
   a log of `base + k` sends, and every prover the rep calls is walked once, generic in its `Sim`, so a `repFw` run that
   returns at round `k'` is `repFwC` answered by `asksCut` at its coins from round `base` (`coinsFrom`), returning the
-  same with a log of `base + k'` (**`Flock.Firewall.Finish.repFw_cut`**).
+  same with a log of `base + k'` (**`Flock.ZkServer.Finish.repFw_cut`**).
 * `FinishTrunc`: the same at coins that agree with the rep's only below each round's count, as the session's opened
   coins do. A squeeze below `2^64` coins reads only those (`squeezeP_br`), and Ligerito's recursive levels keep their
   sizes through its loop (`loopG_bridge`), so `repFwC` at the rep's coins and at such coins is related, given `m − 13`,
-  the claims, `n + 1` and every level's `q + 1` bounded (**`Flock.Firewall.Finish.repFwC_br`**).
+  the claims, `n + 1` and every level's `q + 1` bounded (**`Flock.ZkServer.Finish.repFwC_br`**).
 * `FinishLive`: the served rep's live rounds as `repFw`'s. Answered by `liveAsks` at recorded coins `C`, a rep's
   rounds within `C` do no channel IO and are the rounds under `asksOf C` (`liveSim`, `liveAsks_rel`), so `repCons`
   run live is `repFw`'s `repCons` with the same result, transcript and coins (`repCons_live`); where `repFw` returns,
   its `repCons` used exactly the recorded coins and no constraint failed on the pads (`repFw_parts`), and `innerLive`
-  continues from that state into `innerP` at `repFw`'s own inputs (**`Flock.Firewall.Finish.innerProg_run`**).
+  continues from that state into `innerP` at `repFw`'s own inputs (**`Flock.ZkServer.Finish.innerProg_run`**).
 * `FinishSrc`: the ZK server's rep against the rep from a source. Answered by `asksCut`, where the source's masked values
   below `zp 64` (the PIOP's) are `vals + h`, its switched vectors the ZK server's at the claims, the rank check passes, and the
   session's Ligerito and inner hybrids hold (`LigHyp`, `InnerSrc`, the latter given the batched constraint, which held
-  wherever the ZK server's own inner proof returned: `Flock.Firewall.Finish.innerP_batched`), `FlockComplete.repCut` at
+  wherever the ZK server's own inner proof returned: `Flock.ZkServer.Finish.innerP_batched`), `FlockComplete.repCut` at
   level 0's commitment erased returns the ZK server's transcript and log, and its proof up to `eraseZ`
-  (**`Flock.Firewall.Finish.repCut_fw`**).
+  (**`Flock.ZkServer.Finish.repCut_fw`**).
 * `FinishRank`: the rank check of `FinishSrc`'s rep from a source. Answered by `asksCut`, a rep's zerocheck and lincheck
   leave rounds carrying the coins of their sends whatever the masked values (`FlockComplete.RankAt.growS`), so the check
   reads the claim points at the coins from the rep's first send (`FlockComplete.RankAt.roundPoints_cut`); where every
@@ -843,7 +843,7 @@ public import Proofs.Flock.Claims.ZK.RepCons
   PIOP returns, level 0's from `zp 64` to `h_ab` are `l0Clear` plus the pads (`hl0`). So the views' source at the
   workers' values takes the ZK server's rep's place.
 * `FinishClaimsX`: the ZK server's rep reads the extra claims' coordinates alone, through the ring switch
-  (**`Flock.Firewall.Finish.repFwC_claims_x`**), so it is one run at `claimsOf xs` and at any extra claims at `xs`.
+  (**`Flock.ZkServer.Finish.repFwC_claims_x`**), so it is one run at `claimsOf xs` and at any extra claims at `xs`.
 * `FinishRows`: the replay's rows on a view's masked values, constants included. Where the proof's masked messages are
   the view's, the coins `c`'s and the switched vectors `ŝ`'s, `Zk.replay`'s three constraints and the two ring-switch
   rows are `rowsOf`'s first five as whole forms (**`Composed.replay_rows`**), as the ZK server's stop reads them.

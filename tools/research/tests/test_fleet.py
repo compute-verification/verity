@@ -151,7 +151,7 @@ def test_the_card_alerts_at_80_percent_of_its_daily_limit_only_when_one_is_set(m
     monkeypatch.delenv("FLEET_CARD_DAILY_USD", raising=False)
     assert F.card_finding(rows) is None
     monkeypatch.setenv("FLEET_CARD_DAILY_USD", "1200")
-    assert F.card_finding(rows) == {"spent": 1000.0, "cap": 1200.0}
+    assert F.card_finding(rows) == {"spent": 1000.0, "limit": 1200.0}
     monkeypatch.setenv("FLEET_CARD_DAILY_USD", "2000")
     assert F.card_finding(rows) is None
 

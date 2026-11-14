@@ -1,13 +1,14 @@
-/-
-The refinement seam with the soundness package's `Arith F K` (`verity/ml/flock/verifier/README.md`): the embedding `F ⊂ K` and `u` on the
-executable's representation. An executable `F256` value `⟨c0, c1⟩` is `embed c0 + embed c1 · u` (`Arith.ofLimbs`), and `u`
-is a root of `Y^2 + Y + x⁻¹`.
--/
 module
 
 public import Proofs.Flock.Level3.GF256
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Data.Nat.Totient
+
+/-!
+The refinement seam with the soundness package's `Arith F K` (`verity/ml/flock/verifier/README.md`): the embedding `F ⊂ K` and `u` on the
+executable's representation. An executable `F256` value `⟨c0, c1⟩` is `embed c0 + embed c1 · u` (`Arith.ofLimbs`), and `u`
+is a root of `Y^2 + Y + x⁻¹`.
+-/
 
 @[expose] public section
 

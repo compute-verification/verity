@@ -1,4 +1,9 @@
-/-
+module
+
+public import CoreProtocol.Cli
+public import Base.Hash
+
+/-!
 Blobs: content-addressed bytes a check reads beside its three byte strings (a statement's circuit file, its public file,
 each session's record and proofs), which are too large for canonical JSON.
 
@@ -13,10 +18,6 @@ each session's record and proofs), which are too large for canonical JSON.
 
 A protocol without blobs needs none of this: `Protocol` and `Protocol.answer` are unchanged.
 -/
-module
-
-public import CoreProtocol.Cli
-public import Base.Hash
 
 @[expose] public section
 set_option backward.privateInPublic true

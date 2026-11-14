@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Claims.DeployTables
 public import Proofs.Flock.Claims.ZK.MaskFamily
 public import Proofs.Flock.Claims.ZK.MaskTape
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -115,6 +117,8 @@ theorem fibersEq_comp_emb {A B Cod : Type} (ι : A ↪ B) : FibersEq fun f : B �
     fun _ => rfl
 
 namespace Masked
+
+variable {wideLeaf : Bool}
 
 /-- `Fin n` in `Fin N`, `n ≤ N`, at the same index. -/
 def castEmb {n N : ℕ} (h : n ≤ N) : Fin n ↪ Fin N :=
@@ -332,22 +336,49 @@ def bnd (p : _root_.Flock.Schedule × ℕ) : ℕ :=
     2 ^ (FlockSoundness.Refine.schedOf p.1).level₀.logLen +
     2 * ((FlockSoundness.Refine.schedOf p.1).levels.tail.map fun l => 2 ^ l.logLen).sum
 
-/-- `bnd` at `Zk.schedule m`, `0` where it refuses. -/
-def schB (m : ℕ) : ℕ :=
-  match _root_.Flock.Zk.schedule m with
+/-- `bnd` at `Zk.schedule wideLeaf m`, `0` where it refuses. -/
+def schB (wideLeaf : Bool) (m : ℕ) : ℕ :=
+  match _root_.Flock.Zk.schedule wideLeaf m with
   | .ok p => bnd p
   | .error _ => 0
 
-/-- **The largest schedule sizes**: `bnd` at its largest over the `m` the `--zk` schedule accepts (`[25, 35]`). -/
-def schMax : ℕ := (Finset.Icc 25 35).sup schB
+/-- **The largest schedule sizes**: `bnd` at its largest over the `m` the `--zk` schedule accepts (`[25, 35]`), at
+either statement version, so the layout's sizes are one for both. -/
+def schMax : ℕ := (Finset.Icc 25 35).sup fun m => max (schB false m) (schB true m)
 
 theorem bnd_le {st : _root_.Flock.Stmt} (y : ZkHidden.ZkTab st) : bnd (y.sch, y.tPad) ≤ schMax := by
-  have h := Finset.le_sup (f := schB) (Finset.mem_Icc.2 (ZkHidden.schedule_range y.hz))
-  have e : schB st.m = bnd (y.sch, y.tPad) := by
+  have h := Finset.le_sup (f := fun m => max (schB false m) (schB true m))
+    (Finset.mem_Icc.2 (ZkHidden.schedule_range y.hz))
+  have e : schB st.wideLeaf st.m = bnd (y.sch, y.tPad) := by
     unfold schB
     rw [y.hz]
+  have hw : schB st.wideLeaf st.m ≤ max (schB false st.m) (schB true st.m) := by
+    cases st.wideLeaf
+    · exact le_max_left _ _
+    · exact le_max_right _ _
   rw [← e]
-  exact h
+  exact hw.trans h
+
+/-- The largest schedule sizes at today's statement version alone: `bnd` at its largest over today's `--zk`
+schedules. -/
+def schMaxToday : ℕ := (Finset.Icc 25 35).sup (schB false)
+
+/-- **The largest schedule sizes are today's**: no wide-leaf schedule's sizes pass today's at `m = 35` (one kernel
+check per `m`), so the largest over both statement versions is the largest over today's, and the layout's sizes are
+the numbers they were. -/
+theorem schMax_eq_today : schMax = schMaxToday := by
+  have key : ∀ k : Fin 11, schB true (k.val + 25) ≤ schB false 35 := by decide +kernel
+  have h35 : schB false 35 ≤ schMaxToday :=
+    Finset.le_sup (f := schB false) (Finset.mem_Icc.2 ⟨by norm_num, le_rfl⟩)
+  apply le_antisymm
+  · refine Finset.sup_le fun m hm => ?_
+    obtain ⟨h1, h2⟩ := Finset.mem_Icc.1 hm
+    have hk := key ⟨m - 25, by omega⟩
+    simp only [show m - 25 + 25 = m by omega] at hk
+    exact max_le (Finset.le_sup (f := schB false) hm) (hk.trans h35)
+  · refine Finset.sup_le fun m hm => ?_
+    exact (le_max_left (schB false m) (schB true m)).trans
+      (Finset.le_sup (f := fun m => max (schB false m) (schB true m)) hm)
 
 /-- **The live tables' largest sizes**: the mask slot within `2^35` words, the schedule's sizes at `schMax`, the pads
 and their code below `2^64`. -/
