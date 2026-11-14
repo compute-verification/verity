@@ -10,6 +10,12 @@ On the loaded public file: three ports at distinct 64-byte published domains pas
 distinct and not their registered ones; a short domain, a missing one, one that is not hex and a header without
 `frame_v3` are refused (`IDS_WHY`), and so are two ports of one domain (`DUP_IDS_WHY`) and a row of `2^64` bits
 (`WORDS_WHY`). At shared rows each port's published tree is over its table's rows.
+
+On the header (`headerWhy`): a header whose `frame_v3` names the frame, the row key, each port's schema and each port's
+published root over the file's rows passes at a circuit whose pinned dummy rows are the padding instance's. A header
+naming `public_inputs` is refused where the circuit's META names none (`INPUTS_WHY`) and passed where it names them;
+another row, another frame, row key or schema, and a pinned dummy row that is not the padding instance's are refused
+(`HEADER_WHY`).
 -/
 module
 
@@ -115,5 +121,42 @@ def tabled : Public :=
 #guard digOf (circ #[v2 "x", v2 "y"]) tabled 1 0 == ByteArray.mk #[13]
 #guard digOf (circ #[v2 "x", v2 "y"]) (pub 2) 1 1 == ByteArray.mk #[3]
 #guard loadedWhy Sha512.hash (circ #[v2 "x", v2 "y"]) tabled == none
+
+/-- `three` with each port's pinned dummy `b ‖ c` its padding row's under a zero salt, as a circuit file's are. -/
+def pinned : Circuit :=
+  { three with dummyDigests := (Array.range 3).map fun p =>
+      HmOut.rowBcZeroSalt (three.ports.getD p default) (HmOut.dummyRow three p) }
+
+/-- A staged header's `frame_v3` for `three` over `pub 3`'s rows: the frame, the row key, the published domains, and
+each port's schema and published root. A later entry of one key replaces it. -/
+def fv3 : List (String × Json) :=
+  let byPort := fun (f : Nat → String) =>
+    Json.mkObj ((List.range 3).map fun q => ((three.ports.getD q default).name, Json.str (f q)))
+  [("frame", Json.str "frame-v3-sha512"), ("row_key_sha512", Json.str (hexOf (Sha512.hash Hm96.Default512.key))),
+   ("domain_ids", Json.mkObj (ids3.map fun (k, d) => (k, Json.str (hexOf d)))),
+   ("schemas", byPort (schemaOf three)), ("roots", byPort fun q => hexOf (pubRoot three (pubIds 3 ids3) q))]
+
+/-- `pub 3` at a header of the `frame_v3` entries `fv` and the further keys `more`. -/
+def headed (fv : List (String × Json)) (more : List (String × Json) := []) : Public :=
+  { pub 3 with header := Json.mkObj (("frame_v3", Json.mkObj fv) :: more) }
+
+/-- `headerWhy` refuses the public file for `HmOut.checkPublic`'s reason. -/
+def rowsWhy (c : Circuit) (p : Public) : Bool := (headerWhy c p).any (·.startsWith HEADER_WHY)
+
+-- a staged header over its own rows passes
+#guard headerWhy pinned (headed fv3) == none
+-- a header naming `public_inputs`: refused where META names none, the setup's to hold where META names them
+#guard headerWhy pinned (headed fv3 [("public_inputs", Json.arr #[])]) == some INPUTS_WHY
+#guard headerWhy { pinned with metaJ := Json.mkObj [("public_inputs", Json.arr #[])] }
+  (headed fv3 [("public_inputs", Json.arr #[])]) == none
+-- another row than the header's root is over
+#guard rowsWhy pinned { headed fv3 with digests := (pub 3).digests.setIfInBounds 0 (ByteArray.mk #[9]) }
+-- another frame, another row key, another schema
+#guard rowsWhy pinned (headed (fv3 ++ [("frame", Json.str "frame-v3")]))
+#guard rowsWhy pinned (headed (fv3 ++ [("row_key_sha512", Json.str (hexOf (id64 0)))]))
+#guard rowsWhy pinned (headed (fv3 ++ [("schemas", Json.mkObj [("x", Json.str HmRow.ROW_SCHEMA_V2),
+  ("y", Json.str HmRow.ROW_SCHEMA), ("z", Json.str HmRow.ROW_SCHEMA_SEG)])]))
+-- a pinned dummy row that is not the padding instance's
+#guard rowsWhy three (headed fv3)
 
 end Flock.Test.PortRoots

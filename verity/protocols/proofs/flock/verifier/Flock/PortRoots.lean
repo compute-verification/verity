@@ -21,6 +21,11 @@ one root under different domains (`collidesPub`).
   outputs `verify --zk` hands it the circuit `ProvedScope.circuitOf` reads (`HmOut.parseCommit`), which for a templated
   statement is the template's parse (`HmOut.parseTmpl`) and for a flat one the circuit `HmOut.parse` reads, as `check`
   does. It refuses every session whose files fail it, after every other check (`Main.verifyCmd`).
+* `headerOf parsed tags publicFile`: on the public file as `HmOut.loadPublic` reads it over the circuit `parsed`, the
+  refusals of `headerWhy`, which a session's setup makes of the public file and `checkOf` does not: a header naming
+  `public_inputs` where the circuit's META names none (`strayInputs`), and `HmOut.checkPublic`'s (`frame_v3`'s
+  `frame` and `row_key_sha512`, each port's `schemas` entry, each port's rows against its `roots` entry, each port's
+  pinned dummy row). It reads no session, so files with none are held to it.
 -/
 module
 
@@ -135,6 +140,12 @@ def DUP_IDS_WHY : String :=
 def PUB_ROOTS_WHY : String :=
   "two ports whose published frame-v3 roots are one root under different domains (a SHA-512 collision)"
 
+def INPUTS_WHY : String :=
+  "a public file whose header names public_inputs at a circuit whose META names none"
+
+def HEADER_WHY : String :=
+  "a public file whose rows are not its header's"
+
 /-- `checkWith`'s refusals on the loaded public file, at the roots `H` makes: `collidesWith` at its population,
 `wordsOk`, `idsSized`, `dupId` and `collidesPubWith`, in that order. -/
 def loadedWhy (H : ByteArray → ByteArray) (c : Circuit) (pub : Public) : Option String :=
@@ -144,6 +155,23 @@ def loadedWhy (H : ByteArray → ByteArray) (c : Circuit) (pub : Public) : Optio
   else if dupId c pub then some DUP_IDS_WHY
   else if collidesPubWith H c pub then some PUB_ROOTS_WHY
   else none
+
+/-- **A header naming `public_inputs` where the circuit's META names none.** A circuit whose META names none has no
+public input port (`HmIn.parse`), and at none `HmIn.loadPublic` refuses a header that names the key. The form check
+reads the key at a shared-row file alone (`KsScope.sharedWhy`). Where META names `public_inputs`, the key is the
+setup's to hold to them. -/
+def strayInputs (c : Circuit) (pub : Public) : Bool :=
+  !J.has c.metaJ "public_inputs" && J.has pub.header "public_inputs"
+
+/-- **What a session's setup refuses of the loaded public file and `loadedWhy` does not**: a header naming
+`public_inputs` at a circuit that names none (`strayInputs`), then `HmOut.checkPublic`'s refusals: `frame_v3`'s
+`frame` and `row_key_sha512`, each port's `schemas` entry, each port's root over the population's rows against its
+`roots` entry, and each port's pinned dummy row. -/
+def headerWhy (c : Circuit) (pub : Public) : Option String :=
+  if strayInputs c pub then some INPUTS_WHY
+  else match HmOut.checkPublic c pub with
+    | .error e => some s!"{HEADER_WHY} ({e})"
+    | .ok () => none
 
 /-- `checkOf` at the roots `H` makes. -/
 def checkWith (H : ByteArray → ByteArray) (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) :
@@ -172,6 +200,46 @@ def checkOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) : Except
 def check (tags : Tags) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray)) :
     Except String Unit :=
   checkOf (HmOut.parse tags circuitFile tables) tags publicFile
+
+/-- **The public file's header and rows are what a session's setup takes of them**: the circuit `parsed` parses, the
+public file loads (`HmOut.loadPublic`), and `headerWhy` refuses nothing. It reads the files alone. -/
+def headerOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) : Except String Unit :=
+  match parsed with
+  | .error e => .error (ProvedScope.refusal s!"a circuit that does not parse ({e})")
+  | .ok c => match HmOut.loadPublic tags c publicFile with
+    | .error e => .error (ProvedScope.refusal s!"a public file that does not load ({e})")
+    | .ok pub => match headerWhy c pub with
+      | some why => .error (ProvedScope.refusal why)
+      | none => .ok ()
+
+/-- **What `headerWhy` refusing nothing says of the loaded public file**: its header names no `public_inputs` where
+the circuit's META names none (`strayInputs`), and `HmOut.checkPublic` passes. -/
+theorem headerWhy_none {c : Circuit} {pub : Public} (h : headerWhy c pub = none) :
+    strayInputs c pub = false ∧ HmOut.checkPublic c pub = .ok () := by
+  unfold headerWhy at h
+  cases hs : strayInputs c pub with
+  | true => simp [hs] at h
+  | false =>
+    cases hc : HmOut.checkPublic c pub with
+    | ok _ => exact ⟨rfl, rfl⟩
+    | error _ => simp [hs, hc] at h
+
+/-- **At a circuit whose META names no `public_inputs`, a header `strayInputs` passes names none.** -/
+theorem strayInputs_none {c : Circuit} {pub : Public} (hm : J.has c.metaJ "public_inputs" = false)
+    (h : strayInputs c pub = false) : (pub.header.getObjVal? "public_inputs").toOption = none := by
+  unfold strayInputs at h
+  rw [hm] at h
+  cases hg : pub.header.getObjVal? "public_inputs" with
+  | error _ => rfl
+  | ok _ => simp [J.has, hg] at h
+
+/-- **`headerOf` passing at a circuit, at the public file it loaded**: `headerWhy` refuses nothing. -/
+theorem headerOf_loaded {tags : Tags} {c : Circuit} {pf : ByteArray} {pub : Public}
+    (h : headerOf (.ok c) tags pf = .ok ()) (hpub : HmOut.loadPublic tags c pf = .ok pub) : headerWhy c pub = none := by
+  unfold headerOf at h
+  cases hw : headerWhy c pub with
+  | none => rfl
+  | some _ => simp [hpub, hw] at h
 
 theorem loadedWhy_none {H : ByteArray → ByteArray} {c : Circuit} {pub : Public} (h : loadedWhy H c pub = none) :
     collidesWith H c pub pub.n = false ∧ wordsOk c = true ∧ idsSized c pub = true ∧ dupId c pub = false ∧
