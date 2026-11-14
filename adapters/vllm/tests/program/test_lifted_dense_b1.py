@@ -154,7 +154,7 @@ def _lserve_names(d_max: int, n_eos: int) -> list[str]:
 def test_address_stability_modulo_guard_nodes_vs_serve_v2(programs):
     p_u, p_l = programs
     assert p_u.gates > 10**9  # a real shape, not a toy
-    # the activity guard (2 per step + |E| + bot) + the Continuation_v1 controller (is_eos, out per slot; emit per slot) over cap = D_MAX + 1 slots
+    # the activity guard (2 per step + |E| + bot) + the Continuation_v1 controller (is_eos, out per slot; emit per slot) across cap = D_MAX + 1 slots
     assert p_l.gates == p_u.gates + 2 * D_MAX + len(EOS) + 2 + 3 * (D_MAX + 1) == p_u.gates + L.continuation_gate_count(D_MAX + 1, len(EOS), 0)
     assert p_l.input_gates == p_u.input_gates  # the same prescribed leaves (lifted widths, same count)
     names = [n for n, _ in _root_named(p_l)]

@@ -1,7 +1,7 @@
 """`registry.mla`: Triton's one-split MLA decode, the absorb bmm and the shared-expert combine on bits are Boolean; agree with
 `mla_check`'s numpy models of the kernels (equal to the sm_120 captures of `mla_capture` word for word, 12,420 decode rows, 3,028
 bmm rows and 84 combine rows of one run) on random words and on words that reach every branch: the exp's
-small-argument path, masked columns, signed zeros, subnormals, infinities and NaNs; reduce stage 2's one-split merge to the
+small-argument path, masked columns, signed zeros, subnormals, infinities and NaNs; reduce the merge kernel's one-split merge to the
 gate and `TritonMlaOut` exactly; reproduce captured hardware outputs at GLM-4.7-Flash's statics (by digest); and are pinned by
 gate count and program digest."""
 from __future__ import annotations
@@ -116,7 +116,7 @@ def _merge_one_split(e_max, e_sum, tv):
 
 
 def test_one_split_merge_is_the_gate_and_out() -> None:
-    """Stage 2's merge of one split equals ``TritonMlaGate ? F2fp(tv + 0) : 0x7FFF`` with ``tv = div.full(acc, e_sum)``
+    """The merge kernel's result for one split equals ``TritonMlaGate ? F2fp(tv + 0) : 0x7FFF`` with ``tv = div.full(acc, e_sum)``
     (`TritonMlaOut_v1`) on every (e_max, e_sum) pair of specials and on random words, with e_sum around 1..T as the kernel
     makes it; MUFU.RCP(1) is 1, so ``div.full(x, 1) = x``."""
     assert int(MU.mufu_rcp_words(np.array([MK.ONE], U32), MU.table("rcp"))[0]) == int(MK.ONE)
