@@ -17,8 +17,9 @@ a process of the server's side, on its host, between the network certifier and t
   trailer and none of the server's text, so the network certifier fails the connection. Once the network certifier's
   side of the connection has ended (closed, or broken), the front closes its connection to the server, whatever the
   server has sent, so the server sees the close as it would on a connection of its own: vLLM's server aborts a request
-  on its connection's close, and one the tick gate dropped (`serve_admit`: a lost release's) gets no chunk and ends no
-  other way. What the network certifier sends after its request is read and dropped.
+  on its connection's close. One the tick gate dropped (`serve_admit`: a lost release's) gets no chunk: the tick's
+  middleware ends it when its watermark line comes (`tick_plugin.TickFeed`), and this close ends it where that line
+  never does. What the network certifier sends after its request is read and dropped.
 * **Every other connection** (``GET /v1/models``, the watermark's ``POST /verity/watermark``, a probe's HTTP) is relayed
   byte for byte, both ways, until both sides have closed.
 

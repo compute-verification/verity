@@ -62,9 +62,10 @@ scheduler policy other than FCFS (the waiting queue must be the admission order)
 Two frontends feed the gate: serve-openai's (`TickAdmit`, its watermark route in the server), and vLLM's own OpenAI server
 through `verity_vllm.pipeline.tick_plugin` (its ``--middleware``, which writes the releases and the watermark to a feed
 file, and a vLLM general plugin whose gate in the engine core process reads it). A request the gate drops is its
-frontend's to end: serve-openai's answers it with an error and aborts it, and refuses one that comes after its line
-(`TickAdmit`); under vLLM's own server nothing here does, and the request ends when vLLM aborts it on its connection's
-close, a lost release's connection being one that is closing, failed or ended.
+frontend's to end, and each refuses one that comes after its line with one sentence (`LOST`). serve-openai's answers the
+one in the engine with that error and aborts it (`TickAdmit`). vLLM's own server's is given the request's disconnect, on
+which vLLM aborts it as it does on its connection's close, and is then answered by the middleware: 400 where the server
+had begun no response, the response ended with nothing more of it where it had (`tick_plugin.TickFeed`).
 """
 from __future__ import annotations
 
@@ -83,6 +84,8 @@ from verity_vllm.engine.hooks import Hooks
 ADMIT = ("arrival", "release-order", "tick")
 RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER = "x-verity-release", "x-verity-release-run", "x-verity-release-bucket"
 WATERMARK_PATH = "/verity/watermark"
+#: what either frontend answers a request whose release a watermark line named lost
+LOST = RELEASE_HEADER + ": {n} of run {run!r} was lost on the way to the server, as the watermark says"
 #: seconds between the gate's looks at its feed while the engine waits on it
 POLL_S = 0.002
 _ENGINE_ID = re.compile(r"^(?:cmpl|chatcmpl)-(.+)-\d+-[0-9a-f]{8}$")
@@ -717,8 +720,6 @@ class TickAdmit:
     names lost, which the open gate adds at once like any other: no admission order rests on which, since an open gate
     orders nothing. All of it runs on the HTTP server's event loop."""
 
-    LOST = RELEASE_HEADER + ": {n} of run {run!r} was lost on the way to the server, as the watermark says"
-
     def __init__(self, forward: Callable[[Any], None], abort: Callable[[str], None],
                  take: Callable[[dict[str, Any]], None]) -> None:
         self.forward, self.abort, self.take = forward, abort, take
@@ -735,7 +736,7 @@ class TickAdmit:
             return None
         run, n, bucket = rel
         if n in self.lost.get(run, ()):
-            raise ValueError(self.LOST.format(n=n, run=run))
+            raise ValueError(LOST.format(n=n, run=run))
         seen = self.seen.setdefault(run, set())
         if n in seen:
             raise ValueError(f"{RELEASE_HEADER}: {n} came twice in run {run!r}")
@@ -786,7 +787,7 @@ class TickAdmit:
         for n in lost:
             adm = self.submitted.get((run, n))
             if adm is not None:
-                adm.deliver(Delta([], "", error=self.LOST.format(n=n, run=run)))
+                adm.deliver(Delta([], "", error=LOST.format(n=n, run=run)))
                 self.abort(adm.engine_id)
 
     def summary(self) -> dict[str, Any]:
