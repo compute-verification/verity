@@ -9,7 +9,7 @@ import random
 
 import pytest
 
-import verity.circuits.ops.prims  # noqa: F401  (the one-stage tests' primitives)
+import verity.circuits.ops.prims  # the one-stage tests' primitives
 import verity.circuits.ops.scalar  # noqa: F401
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program

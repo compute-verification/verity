@@ -1,7 +1,8 @@
 """A served window's boundary commitment (`pipeline.boundary_rows`): each span's `b.ingress` and `b.egress` rows word for
 word, the size classes, one class's commitment under core's window domains registering by both verifiers, its files
 recommitting to its roots, the replay block's return as one more value of a class that says it is verdicts or ids, named
-and laid out as round 2 links it, the serving path's hook on a stand-in for vLLM's V1 scheduler committing each window's
+and laid out as round 2 links it, a class's Definition whose parameters and return are its boundary values, each of which
+round 2 links, the serving path's hook on a stand-in for vLLM's V1 scheduler committing each window's
 finished requests by class as it closes, and a serve's stop rule: a stop class's rows, its stop word the stop block's
 output over the committed rows, the stop blocks' own registration over the class's boundary record, a response one id
 shorter or longer than the rule's refused, a class that holds the rule and verdicts together, and the long row's check
@@ -621,6 +622,72 @@ def test_the_stop_block_at_the_registered_class_is_the_rules_reference():
     assert glm.word(_ended("s", (*[9] * 500, 154827), "stop", 1024)) == _word(501, 1)
     assert glm.word(_ended("l", (9,) * 72, "length", 1024, tuple(range(131000)))) == _word(72, 3)
     assert glm.word(_ended("p", (9,) * 1024, "length", 2000)) is None
+
+
+TAKE32 = PrimitiveDefinition("BoundaryRowsTestTake32", 1, (("a", Bits(32)),), Bits(32), lambda a: a, register=False)
+ADD32 = PrimitiveDefinition("BoundaryRowsTestAdd32", 1, (("a", Bits(32)), ("b", Bits(32))), Bits(32),
+                            lambda a, b: (a + b) & 0xFFFFFFFF, register=False)
+#: a template that reads a span's `b.request` row whole and gives its ``max_tokens``
+READS_REQUEST = bind(CompositeDefinition(
+    "BoundaryRowsTestRequest", 0, (), lambda S_: ((("request", BR.row_type(BR.REQUEST)),), BR.U32),
+    lambda B, S_, r: B.call(TAKE32, r[BR.FIELD_AT["max_tokens"]]), register=False))
+#: a template that reads a span's `b.prompt` row whole and adds its first and last ids
+READS_PROMPT = CompositeDefinition(
+    "BoundaryRowsTestPrompt", 0, ("P",), lambda S: ((("prompt", BR.row_type(BR.PROMPT, S.P)),), BR.U32),
+    lambda B, S, p: B.call(ADD32, p[0], p[S.P - 1]), register=False)
+
+
+def _egress(B, S, first, step):
+    ids = [B.call(TAKE32, first)]
+    for _ in range(1, S.O):
+        ids.append(B.call(ADD32, ids[-1], step))
+    return coll_concat(BR.row_type(BR.EGRESS, S.O), ids)
+
+
+#: a template that writes O ids, the first ``first`` and each next ``step`` more: a whole `b.egress` row
+WRITES_EGRESS = CompositeDefinition(
+    "BoundaryRowsTestEgress", 0, ("O",), lambda S: ((("first", BR.U32), ("step", BR.U32)), BR.row_type(BR.EGRESS, S.O)),
+    _egress, register=False)
+#: a class's Definition whose body calls each template once: its parameters read whole, its return one's output whole
+CLASS = CompositeDefinition(
+    "BoundaryRowsTestClass", 0, ("P", "O"), lambda S: BR.class_signature(S.P, S.O),
+    lambda B, S, request, prompt: B.call(bind(WRITES_EGRESS, O=S.O), B.call(READS_REQUEST, request),
+                                         B.call(bind(READS_PROMPT, P=S.P), prompt)), register=False)
+
+
+def test_a_class_definitions_ends_are_its_boundary_values_and_round_two_links_each():
+    """A class's Definition (`class_signature`) reads a span's `b.request` and `b.prompt` rows and returns its
+    `b.egress` row, each u32 one 32-bit leaf, two of the u16 words the class commits under a stop rule, which the stop
+    block reads too. On a small one whose body reads each parameter whole by a template and returns one template's
+    output whole, round 2's own derivation (`second_stage.replay_links`) makes one link for each value, to the name the
+    class's record gives it (`ends`), bare or under the replay block's id beside a port with a ``/``, one row a replay
+    block. A size that is no class's, and a row of no value a Definition reads or returns, are refused."""
+    D = bind(CLASS, P=4, O=2)
+    key, (params, ret) = descriptor_id(D), D.signature()
+    assert (params, ret) == BR.class_signature(4, 2)
+    assert [n for n, _t in params] == list(BR.PARAMS) == [BR.REQUEST, BR.PROMPT]
+    assert [2 * BR.row_type(v, 4).leaves for v in BR.PARTS] == [_stop_layout(prompt=4).words(v) for v in BR.PARTS]
+    assert dict(RULE.template.signature()[0]) == {p: BR.row_type(v, RULE.outputs) for p, v in BS.STOP_READS.items()}
+    row = _u32s(BR.ingress_row(_ended("x", (), None, 7, (1, 2, 3, 4)), 4))
+    assert evaluate(D, row[:BR.HEAD_U32], row[BR.HEAD_U32:]) == (7, 12)
+
+    program = P.population_program(D, 3)
+    templates = {BR.REQUEST: (descriptor_id(READS_REQUEST), "request"),
+                 BR.PROMPT: (descriptor_id(bind(READS_PROMPT, P=4)), "prompt"),
+                 BR.EGRESS: (descriptor_id(bind(WRITES_EGRESS, O=2)), "o0")}
+    assert BR.ends(key) == {BR.REQUEST: BR.REQUEST, BR.PROMPT: BR.PROMPT, BR.EGRESS: BR.RETURN}
+    for others in ((), ("table/x",)):
+        ends = BR.ends(key, others)
+        links = SS.replay_links(program, key, {"roots": [{"port": p} for p in (*ends.values(), *others)]})
+        want = sorted((*templates[v], ends[v]) for v in BR.PARTS)
+        assert sorted((x.template, x.port, x.value) for x in links) == want
+    assert BR.ends(key, ("table/x",)) == {v: f"{key}/{n}" for v, n in BR.ends(key).items()}
+    per = {x.value: n for x, n, _rs in SS.link_runs(definitions(program), key)}
+    assert per == dict.fromkeys(BR.ends(key).values(), 1)
+    with pytest.raises(ValueError, match="at a class's"):
+        BR.class_signature(3, 2)
+    with pytest.raises(ValueError, match="reads or returns a row of"):
+        BR.row_type(BR.INGRESS)
 
 
 def test_a_stop_class_takes_a_span_only_as_the_rule_ends_it():
