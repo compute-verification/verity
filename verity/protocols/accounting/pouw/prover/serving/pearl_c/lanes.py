@@ -139,11 +139,13 @@ def schedule_of(name: str | Schedule, scheme: Any, kernel: Any = None) -> Schedu
 
 def admitted(scheme: Any, kernel: Any) -> frozenset[str]:
     """The schedules' names `schedule_of` admits for `scheme` on `kernel`."""
-    ok = set()
-    for name in SCHEDULES:
-        try:
-            schedule_of(name, scheme, kernel)
-        except ValueError:
-            continue
-        ok.add(name)
-    return frozenset(ok)
+    return frozenset(name for name in SCHEDULES if _admits(name, scheme, kernel))
+
+
+def _admits(name: str, scheme: Any, kernel: Any) -> bool:
+    """Whether `schedule_of` admits schedule `name` (it raises ValueError for one it refuses)."""
+    try:
+        schedule_of(name, scheme, kernel)
+    except ValueError:
+        return False
+    return True

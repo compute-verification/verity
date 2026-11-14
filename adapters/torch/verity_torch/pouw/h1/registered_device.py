@@ -18,7 +18,7 @@ hashes from, and rows written there (under `hashing`) it reads with no wait. `ho
 the same functions on the CPU (`registered_rows_host.cpp`, built with the system C++ compiler): the twin the CPU tests
 hold to `pouw_h1_registered.commit`'s NumPy path on machines without a GPU. Builds share the Commit's row-table builder
 (`row_table_kernels._build`, keyed by sources, the shared headers, flags and compiler) and its per-device state
-(`row_table_kernels.DeviceLibrary`); nvcc is `pouw_device`'s (its `TOOLCHAIN`'s, or the one on the path).
+(`verity_torch.pouw.row_table_device.DeviceLibrary`); nvcc is `pouw_device`'s (its `TOOLCHAIN`'s, or the one on the path).
 """
 from __future__ import annotations
 
@@ -43,6 +43,7 @@ from verity.commitments.rowleaf import (
 )
 
 from verity.protocols.accounting.pouw.prover.serving import row_table_kernels as RTD
+from verity_torch.pouw import row_table_device as RTL
 from verity.protocols.accounting.pouw.prover.serving.h1.nodes import Nodes
 
 __all__ = ["CHUNK_BYTES", "Hashing", "Pub", "Table", "ZyArgs", "available", "device_commit", "device_hash", "device_lib",
@@ -294,8 +295,8 @@ def host_public_salts(head: bytes, first: int, n: int, ok: bool = False) -> byte
     return out.tobytes()
 
 
-def _device(torch: Any) -> RTD.DeviceLibrary:
-    return RTD.DeviceLibrary.of(torch, torch.cuda.current_device(), device_lib, "rr_midstates")
+def _device(torch: Any) -> RTL.DeviceLibrary:
+    return RTL.DeviceLibrary.of(torch, torch.cuda.current_device(), device_lib, "rr_midstates")
 
 
 @cache

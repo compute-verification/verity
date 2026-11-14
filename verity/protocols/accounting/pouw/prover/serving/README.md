@@ -8,8 +8,8 @@ device libraries (`device`, `native`, `row_table_kernels`), a call's circuit rec
 The package's docstring states the two calls, and each module's docstring says what it holds.
 
 The workload's device code is not here: Pearl-C's run on the device, H1's receipts and the device halves of H1's rows,
-tables, records and trace, and the lead's words on the device are the PyTorch adapter's (`verity_torch.pouw`), which
-hands its implementations in when it is imported.
+tables, records and trace, and the lead's words on the device are the device adapter's, which hands its
+implementations in when it is imported.
 
 ## Interface
 
@@ -17,7 +17,7 @@ hands its implementations in when it is imported.
   module. There are two calls per matrix multiply:
   - `run_matmul(run, site, x, weight, bias=None)` runs one under PoUW, served and committed by ``run``, a `MatmulRun`:
     `NcpRun`, `NcpCircuitRun` or `LeadRun` (whose ``x`` is a `QuantizedRows`), or a workload's own (Pearl-C's,
-    `verity_torch.pouw.PearlCDeviceRun`).
+    the device adapter's `PearlCDeviceRun`).
   - `observe_matmul(run, site, x, weight, y, *, x_scale=None, weight_scale=None, z=None)` records one the workload
     served itself, by ``run``, a `MatmulObserver` (`H1Run`), after the workload has handed H1 its int8 arm
     (`use_int8_arm`).
@@ -25,13 +25,13 @@ hands its implementations in when it is imported.
   ``site`` is the linear's ordinal in the forward pass. Beside the calls are the names a serve loop needs to manage a
   window (its coins, salt session, gate, draw and outcome), the schemes' names, settings and refusals, the hand-ins
   (`use_int8_arm`, `use_tensors`, `use_h1_device`), and the row-table kernels' build and table helpers the adapter's
-  step-root and history tables run (`RowTableLibrary`, `row_table_nvcc`, `row_table_host_lib`, `hm_tables`,
+  step-root and history tables run (`row_table_nvcc`, `row_table_host_lib`, `hm_tables`,
   `leaf_prefixes`, `table_width`, `u64_words`, …). The package defines the calls, their types and four wrappers that
   look up their targets at each call (`in_process_coins`, `verifier_coins`, `lead_in_process_certifier`,
   `ready_verifier`). Every other exported name is read from its module at each lookup, never cached, and a function
   that imports a name sees its module's current attribute.
 - **Loaded by:** the vLLM adapter (`verity_vllm.protocols.pouw` and its `pipeline`, `acquire`, `program` and `commit`
-  packages) and the PyTorch adapter's `verity_torch.pouw`; PoUW's prover tests
+  packages) and the device adapter; PoUW's prover tests
   (`verity/protocols/accounting/pouw/prover/tests/`), SPOT's prove path, and PoUW's `kernels/served_zk/`; and the
   benchmarks under `benchmarks/pouw/`, `benchmarks/one_stage/`, `benchmarks/harness/`, `benchmarks/hash/`,
   `benchmarks/commitments/` and `benchmarks/serve_tax/`, which import its modules directly.
@@ -40,5 +40,5 @@ hands its implementations in when it is imported.
   tensor library, nothing under `adapters/` and no vLLM. Where it needs the workload, it asks: `int8_arm.arm()` raises
   `NotImplementedError("compute-accounting/pouw-serving-out-of-adapter")` until the workload hands in its arm, and
   `tensors.tensors()` and `tensors.h1_device()` raise `NotImplementedError("compute-accounting/architecture-on-branch")`
-  until it hands in its tensors and H1's device (`verity_torch.pouw` does, at import). Without them the host paths run:
+  until it hands in its tensors and H1's device (the device adapter does, at import). Without them the host paths run:
   numpy buffers, H1's Python reference tables, and no credit-gate trace (`credit_gate.outside` is a no-op).

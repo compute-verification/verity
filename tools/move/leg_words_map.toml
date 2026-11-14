@@ -26,12 +26,13 @@
 "Leg" = "Subprotocol"
 "leg" = "subprotocol"
 
-# bytes a stored record or a caller holds: the block record's key `legs` (``legs.certifier``, `rec["legs"]`) and its
+# bytes a stored record or a caller holds: the block record's key `legs` (``legs.certifier``, `rec["legs"]`, the check's
+# `composed:legs`) and its
 # schema's `$defs/leg` and `"leg": {`; a quoted "leg" elsewhere names a function the map renames (`__all__`); the proof subprotocol's format id `verity/prove-leg/v0`, its receipt's text, its configuration
 # name for hidden_zk and its run directory's names (`leg.json`, `leg.log`, `$OUT/leg`, `leg/wipe.json`); a claim id; the
 # all-protocols runner's paths as they were; and the report's refusal of the retired word itself, with its test
 [keep]
-patterns = ["(?<=[\"'`])legs(?=[\"'`])", "(?<=/ \")leg(?=\" /)", "(?<=\")leg(?=\": \\{)", "(?<![\\w-])legs\\.(?:integrity|pouw|pous|bandwidth|certifier|wipe)\\b",
+patterns = ["(?<=[\"'`])legs(?=[\"'`])", "(?<=composed:)legs\\b", "(?<=/ \")leg(?=\" /)", "(?<=\")leg(?=\": \\{)", "(?<![\\w-])legs\\.(?:integrity|pouw|pous|bandwidth|certifier|wipe)\\b",
             "\\$defs/legs?\\b", "prove-leg\\b", "(?<![\\w-])legs?\\.(?:json|log)\\b", "\\$(?:W|OUT)/leg\\b",
             "(?<![\\w/.-])leg/wipe\\.json", "all_protocols/legs/"]
 strings = ["prove-leg verifier (prove_leg.py)", "leg_s=round", "ProveLegRegisteredDot",

@@ -156,7 +156,7 @@ def L₀ (n oc : ℕ) : Compiled Unit A₀ where
   scopeCheck _ := true
   partition _ := some P₀
   commit := Cm₀
-  stage2 _ := Finset.univ
+  secondStage _ := Finset.univ
   checked _ _ := List.replicate n 0
   sh _ _ := ()
   rounds _ _ := Finset.univ
@@ -220,7 +220,7 @@ theorem draws₀ {n : ℕ} (hn : 0 < n) (oc : ℕ) : ∀ x s P, (L₀ n oc).pars
     (L₀ n oc).partition s = some P → InScope P s → ∀ B ⊆ Finset.range P.blocks.length,
       ∃ esc : (Fin ((L₀ n oc).V.k x) → Unit) → ℝ, (∀ r, 0 ≤ esc r) ∧
         (∀ r, Pr (fun d : Fin ((L₀ n oc).V.k x) → Unit =>
-          ∀ u ∈ (L₀ n oc).checked x (forkOn ((L₀ n oc).stage2 x) r d), u ∉ B) ≤ esc r) ∧
+          ∀ u ∈ (L₀ n oc).checked x (forkOn ((L₀ n oc).secondStage x) r d), u ∉ B) ≤ esc r) ∧
         Ex esc ≤ s.design.Pa P B := by
   intro x s P hs hP _ B hB
   obtain rfl : s₀ = s := Option.some.inj hs
