@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.ZK.Refine
-public import Flock.Firewall.Frames
+public import Flock.ZkServer.Frames
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 import Mathlib.Algebra.Order.Floor.Extended
@@ -39,10 +39,10 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# The release at the session loop (`flock-firewall session`)
+# The release at the session loop (`flock-zk-server session`)
 
-The session loop (`Flock.Firewall.Session`, live PROTOCOL.md §10.4) decides what crosses to the auditor from pure functions
-of the statement's setup (`Flock.Firewall.SessionPlan`): the `Hello` (`Hello.msg`), what its coin check reads of it
+The session loop (`Flock.ZkServer.Session`, live PROTOCOL.md §10.4) decides what crosses to the auditor from pure functions
+of the statement's setup (`Flock.ZkServer.SessionPlan`): the `Hello` (`Hello.msg`), what its coin check reads of it
 (`helloOf`: the tree, the link points and the nonce), each opening's stream and count (`planOf`, `reqAt`), and when
 `Finish` leaves (`State.finish`: once the schedule's last opening has). `LeanRelease.loop` is a release with those, at the
 masked session the statement `x` sets up (`sessOf`: Flock's setup, else the recursive statement's), and here the
@@ -71,9 +71,9 @@ runs at `x`'s setup: the loop sets up from the auditor's sample (`Hello.Setup.se
 namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
-open _root_.Flock.Firewall.Session (INNER_CONS replayCoins ligeritoCoins repCoins repPlan repName planOf reqAt streamsOk
+open _root_.Flock.ZkServer.Session (INNER_CONS replayCoins ligeritoCoins repCoins repPlan repName planOf reqAt streamsOk
   helloOf)
-open _root_.Flock.Firewall.Frame (Cfg Masker Draws MaskSlot)
+open _root_.Flock.ZkServer.Frame (Cfg Masker Draws MaskSlot)
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
@@ -322,7 +322,7 @@ theorem rounds_eq {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.St
 
 theorem streamsOk_eq {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     {ct : _root_.Flock.CoinTree.Spec} (h : streamsOk spec sts ct = true) :
-    ct.streams.toList = _root_.Flock.Firewall.Coins.SESSION :: spec.repStreams.toList.map (·.2.2) ∧
+    ct.streams.toList = _root_.Flock.ZkServer.Coins.SESSION :: spec.repStreams.toList.map (·.2.2) ∧
       ct.streams.toList.Nodup ∧ spec.repStreams.size = 2 * sts.size := by
   simp only [streamsOk, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
   exact ⟨h.1.1, h.1.2, h.2⟩
@@ -337,7 +337,7 @@ theorem repName_eq {spec : _root_.Flock.SessionSpec} {k : ℕ} (hk : k < spec.re
   simp [repName, hk]
 
 theorem idx_repName {spec : _root_.Flock.SessionSpec} {ct : _root_.Flock.CoinTree.Spec} {k : ℕ}
-    (hs : ct.streams.toList = _root_.Flock.Firewall.Coins.SESSION :: spec.repStreams.toList.map (·.2.2))
+    (hs : ct.streams.toList = _root_.Flock.ZkServer.Coins.SESSION :: spec.repStreams.toList.map (·.2.2))
     (hnd : ct.streams.toList.Nodup) (hk : k < spec.repStreams.size) :
     ct.streams.toList.idxOf (repName spec k) = k + 1 := by
   have hl : k + 1 < ct.streams.toList.length := by rw [hs]; simp [hk]
@@ -347,15 +347,15 @@ theorem idx_repName {spec : _root_.Flock.SessionSpec} {ct : _root_.Flock.CoinTre
   rw [e, List.Nodup.idxOf_getElem hnd _ hl]
 
 theorem idx_session {spec : _root_.Flock.SessionSpec} {ct : _root_.Flock.CoinTree.Spec}
-    (hs : ct.streams.toList = _root_.Flock.Firewall.Coins.SESSION :: spec.repStreams.toList.map (·.2.2)) :
-    ct.streams.toList.idxOf _root_.Flock.Firewall.Coins.SESSION = 0 := by
+    (hs : ct.streams.toList = _root_.Flock.ZkServer.Coins.SESSION :: spec.repStreams.toList.map (·.2.2)) :
+    ct.streams.toList.idxOf _root_.Flock.ZkServer.Coins.SESSION = 0 := by
   rw [hs]
   exact List.idxOf_cons_self
 
 theorem ne_session {spec : _root_.Flock.SessionSpec} {ct : _root_.Flock.CoinTree.Spec} {k : ℕ}
-    (hs : ct.streams.toList = _root_.Flock.Firewall.Coins.SESSION :: spec.repStreams.toList.map (·.2.2))
+    (hs : ct.streams.toList = _root_.Flock.ZkServer.Coins.SESSION :: spec.repStreams.toList.map (·.2.2))
     (hnd : ct.streams.toList.Nodup) (hk : k < spec.repStreams.size) :
-    (repName spec k == _root_.Flock.Firewall.Coins.SESSION) = false := by
+    (repName spec k == _root_.Flock.ZkServer.Coins.SESSION) = false := by
   rw [beq_eq_false_iff_ne]
   intro e
   have h1 := idx_repName hs hnd hk
@@ -437,7 +437,7 @@ theorem count_opened {x : Msg} {spec : _root_.Flock.SessionSpec} {sts : Array _r
       0 :: ((List.range i).map fun i' => (CoinLayer.locate (roundsOf spec sts) 0 i').1).map (· + 1) := by
     unfold openedAt
     rw [List.range_succ_eq_map, List.map_cons, List.map_map, List.map_map]
-    have h0 : (reqOf x 0).1 = _root_.Flock.Firewall.Coins.SESSION := by rw [reqOf_sess hs]; rfl
+    have h0 : (reqOf x 0).1 = _root_.Flock.ZkServer.Coins.SESSION := by rw [reqOf_sess hs]; rfl
     rw [h0, idx_session hst]
     congr 1
     apply List.map_congr_left
@@ -460,12 +460,12 @@ theorem follows_head {x : Msg} {spec : _root_.Flock.SessionSpec} {sts : Array _r
     (hj : j < (planOf spec sts).size + 1) :
     CoinLayer.place loopNr x j = CoinOpen.placeOf ct (ct.streams.toList.idxOf (reqOf x j).1)
       ((openedAt ct (reqOf x) j).count (ct.streams.toList.idxOf (reqOf x j).1))
-      (if (reqOf x j).1 == _root_.Flock.Firewall.Coins.SESSION then spec.points * spec.mPts else (reqOf x j).2) := by
+      (if (reqOf x j).1 == _root_.Flock.ZkServer.Coins.SESSION then spec.points * spec.mPts else (reqOf x j).2) := by
   obtain ⟨hst, hnd, hN⟩ := streamsOk_eq hok
   cases j with
   | zero =>
     rw [CoinOpen.place_eq (slot_zero hs hc hok)]
-    have h0 : (reqOf x 0).1 = _root_.Flock.Firewall.Coins.SESSION := by rw [reqOf_sess hs]; rfl
+    have h0 : (reqOf x 0).1 = _root_.Flock.ZkServer.Coins.SESSION := by rw [reqOf_sess hs]; rfl
     rw [h0, idx_session hst]
     simp [openedAt]
   | succ i =>
@@ -500,7 +500,7 @@ theorem follows_gen {x : Msg} {spec : _root_.Flock.SessionSpec} {sts : Array _ro
 
 /-- **What the loop's coin check reads of the session's `Hello`** at `x` and the nonce `ν`: `helloOf` at the masked
 session `x` sets up (`sessOf`) and the nonce's bytes. -/
-def helloChkAt (x : Msg) (ν : CoinLayer.Nonce) : Except String _root_.Flock.Firewall.Coins.Hello :=
+def helloChkAt (x : Msg) (ν : CoinLayer.Nonce) : Except String _root_.Flock.ZkServer.Coins.Hello :=
   match sessOf x with
   | some (spec, sts) =>
     match helloOf spec sts ⟨(CoinLayer.nb ν).toArray⟩ with
@@ -508,7 +508,7 @@ def helloChkAt (x : Msg) (ν : CoinLayer.Nonce) : Except String _root_.Flock.Fir
     | none => .error "the session has no coin tree of its own streams"
   | none => .error "the statement sets up no session"
 
-theorem helloChkAt_ok {x : Msg} {ν : CoinLayer.Nonce} {hl : _root_.Flock.Firewall.Coins.Hello}
+theorem helloChkAt_ok {x : Msg} {ν : CoinLayer.Nonce} {hl : _root_.Flock.ZkServer.Coins.Hello}
     (h : helloChkAt x ν = .ok hl) :
     ∃ spec sts ct, sessOf x = some (spec, sts) ∧ spec.coinTree = some ct ∧
       streamsOk spec sts ct = true ∧
@@ -560,24 +560,24 @@ def lastOf (x : Msg) : ℕ :=
 /-- **The coins the loop feeds the frame** after `h`: `Frames.feedOf` of the last opening at its request's count. -/
 def coinsAt (x : Msg) (h : List (Msg × Msg)) : Array _root_.Flock.F128 :=
   match h.tail.getLast? with
-  | some (_, a) => _root_.Flock.Firewall.Frames.feedOf (loopNr x (h.tail.length - 1)) a
+  | some (_, a) => _root_.Flock.ZkServer.Frames.feedOf (loopNr x (h.tail.length - 1)) a
   | none => #[]
 
 /-- The coins `coinsAt` reads, from the decoded coins: the last one's words, as many as its request's count. -/
 def readCoins (x : Msg) (cs : List FlockDeploy.Coin) : Array _root_.Flock.F128 :=
   match cs.getLast? with
-  | some c => c.vals (min (loopNr x (cs.length - 1)) _root_.Flock.Firewall.Frames.COIN_MAX)
+  | some c => c.vals (min (loopNr x (cs.length - 1)) _root_.Flock.ZkServer.Frames.COIN_MAX)
   | none => #[]
 
 /-- `feedOf` of an opening is its decoded coin's words. -/
 theorem feedOf_rd (n : ℕ) (m : Msg) :
-    _root_.Flock.Firewall.Frames.feedOf n m = (CoinLayer.rd m).vals (min n _root_.Flock.Firewall.Frames.COIN_MAX) := by
-  unfold _root_.Flock.Firewall.Frames.feedOf _root_.Flock.Firewall.Frame.words FlockDeploy.Coin.vals
+    _root_.Flock.ZkServer.Frames.feedOf n m = (CoinLayer.rd m).vals (min n _root_.Flock.ZkServer.Frames.COIN_MAX) := by
+  unfold _root_.Flock.ZkServer.Frames.feedOf _root_.Flock.ZkServer.Frame.words FlockDeploy.Coin.vals
   apply Array.ext (by simp)
   intro i h1 _
   simp only [Array.size_map, Array.size_range] at h1
   have hi : i < 65536 := by
-    have : min n _root_.Flock.Firewall.Frames.COIN_MAX ≤ 65536 := Nat.min_le_right _ _
+    have : min n _root_.Flock.ZkServer.Frames.COIN_MAX ≤ 65536 := Nat.min_le_right _ _
     omega
   simp [FlockDeploy.Coin.at, hi, CoinLayer.rd, CoinLayer.coinOfD, FlockComplete.coinOf, Claims.ofMsg]
 
@@ -624,7 +624,7 @@ theorem loop_coinsRead (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
   · rfl
   · exact Loop.feedOf_rd _ b
 
-/-- **The loop's `Hello` is `flock-firewall hello`'s.** -/
+/-- **The loop's `Hello` is `flock-zk-server hello`'s.** -/
 theorem loop_helloIs (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand))
     (x : Msg) :

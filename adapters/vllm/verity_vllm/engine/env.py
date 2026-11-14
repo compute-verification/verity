@@ -18,7 +18,7 @@ __all__ = ["ENGINE", "EXPORT", "INDUCTOR_DIR_MARK", "apply_compile_fresh", "appl
            "hide_devices", "own_compile_dirs", "own_inductor_dir", "pin", "require_inductor", "served_defaults", "snapshot",
            "step_timeout"]
 
-#: The engine's execution profile, shared by production and replay: vLLM's defaults but for these, each
+#: The engine's execution profile, shared by serving and replay: vLLM's defaults but for these, each
 #: with its reason in `REASONS`.  Batch invariance is the workload's execution label's (`engine.served.EXECUTIONS`), not the profile's.
 ENGINE = {
     "VLLM_USE_V2_MODEL_RUNNER": "1",

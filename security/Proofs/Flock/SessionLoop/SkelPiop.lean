@@ -60,8 +60,8 @@ namespace Claims.ZKServer.Sched
 
 open _root_.Flock (V F128 Transcript TMW)
 open _root_.Flock.Transcript (header)
-open _root_.Flock.Firewall.Skeleton (RecM recAsks)
-open _root_.Flock.Firewall.Finish (Asks AsksRel repPiop)
+open _root_.Flock.ZkServer.Skeleton (RecM recAsks)
+open _root_.Flock.ZkServer.Finish (Asks AsksRel repPiop)
 open FlockSoundness.Refine (Frame encs)
 open FlockComplete (PS asksCut)
 
@@ -79,7 +79,7 @@ def recLog (rs : Array (ByteArray × ℕ)) : List Claims.Msg := rs.toList.map fu
 
 /-- The session's coins at the final recording `fin`: round `j`'s are those `recAsks` answered `fin`'s round `j`. -/
 def skelCoin (fin : Array (ByteArray × ℕ)) (j i : ℕ) : F128 :=
-  _root_.Flock.Firewall.Skeleton.coin (cntSum (fin.toList.take j) + i + 1)
+  _root_.Flock.ZkServer.Skeleton.coin (cntSum (fin.toList.take j) + i + 1)
 
 /-- **The recording's rounds as the session's**: a recording run from `s` that returns `a` at `s'` only adds rounds, and
 where `s'`'s rounds are a prefix of `fin`, the session's run from a log of `s`'s rounds returns `a` with a log of
@@ -117,7 +117,7 @@ def skelSim (fin : Array (ByteArray × ℕ)) : _root_.Flock.With.Sim RecM PS whe
 
 theorem recAsks_round_run (c : ByteArray) (rs : Array (ByteArray × ℕ)) (k : ℕ) :
     (recAsks.round c).run (rs, k) =
-      .ok (fun i => _root_.Flock.Firewall.Skeleton.coin (k + i + 1), rs.push (c, cntOf c), k + cntOf c) :=
+      .ok (fun i => _root_.Flock.ZkServer.Skeleton.coin (k + i + 1), rs.push (c, cntOf c), k + cntOf c) :=
   rfl
 
 /-- **The recording's sends are the session's** at the coins `recAsks` answered the final recording `fin`, wherever the
@@ -148,9 +148,9 @@ theorem asksRel_skel (fin : Array (ByteArray × ℕ)) (n : ℕ) (hn : fin.size �
         have e := hf.length_le
         simp only [Array.toList_push, List.length_append, Array.length_toList, List.length_singleton] at e
         omega
-      rw [_root_.Flock.Firewall.Finish.asksCut_round_fw, if_neg (show ¬ n ≤ l.size by omega)]
+      rw [_root_.Flock.ZkServer.Finish.asksCut_round_fw, if_neg (show ¬ n ≤ l.size by omega)]
       refine ⟨?_, ?_⟩
-      · show Except.ok (skelCoin fin l.size) = Except.ok fun i => _root_.Flock.Firewall.Skeleton.coin (k + i + 1)
+      · show Except.ok (skelCoin fin l.size) = Except.ok fun i => _root_.Flock.ZkServer.Skeleton.coin (k + i + 1)
         congr 1
         funext i
         have ht : fin.toList.take rs.size = rs.toList := by
@@ -183,10 +183,10 @@ def skelProg (st : _root_.Flock.Setup) (k0 : ℕ) (cap : ByteArray) : TMW RecM U
 
 /-- **A schedule that returns is its recording's rounds**, round `0` replaced, from a rep's start. -/
 theorem rounds_run {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {alg : Array (ByteArray × ℕ)}
-    (h : _root_.Flock.Firewall.Skeleton.rounds st k0 cap dom = .ok alg) :
+    (h : _root_.Flock.ZkServer.Skeleton.rounds st k0 cap dom = .ok alg) :
     ∃ t' rs k, (skelProg st k0 cap).run (Flock.Transcript.init #[] dom) (#[], 0) = .ok (((), t'), rs, k) ∧
       alg.size = rs.size ∧ ∀ jj, jj ≠ 0 → alg[jj]? = rs[jj]? := by
-  unfold _root_.Flock.Firewall.Skeleton.rounds at h
+  unfold _root_.Flock.ZkServer.Skeleton.rounds at h
   dsimp only at h
   obtain ⟨⟨u, rs, k⟩, hr, h⟩ := except_bind_ok h
   rw [tmw_run'_run] at hr
@@ -208,14 +208,14 @@ theorem rounds_run {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {a
 and the zero root, which only round `0` reads) closed by its squeeze, with its coin count `piopN`. -/
 theorem rounds_piop {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {alg : Array (ByteArray × ℕ)}
     (hm : 14 ≤ st.m) (hm' : st.m < 2 ^ 64)
-    (h : _root_.Flock.Firewall.Skeleton.rounds st k0 cap dom = .ok alg) :
+    (h : _root_.Flock.ZkServer.Skeleton.rounds st k0 cap dom = .ok alg) :
     alg.size = piopNR st.m st.fold.kLog ∧ ∀ jj, jj ≠ 0 → jj < piopNR st.m st.fold.kLog →
       alg[jj]? = some (ByteArray.mk (encs (piopFr st.m st.fold.kLog st.digest cap root0
           (_root_.Flock.Zk.PadLayout.new st.m st.kLog k0) (fun _ => 0) jj) ++
         (Frame.sq (piopK jj) (piopN st.m jj)).enc).toArray, piopN st.m jj) := by
   obtain ⟨t', rs, k, hr, hsz, hset⟩ := rounds_run h
   obtain ⟨n, hn⟩ : ∃ n, n = rs.size + piopNR st.m st.fold.kLog := ⟨_, rfl⟩
-  have hS := _root_.Flock.Firewall.Finish.repPiop_rel (skelSim rs) (io := recAsks) (io' := skelIO rs n)
+  have hS := _root_.Flock.ZkServer.Finish.repPiop_rel (skelSim rs) (io := recAsks) (io' := skelIO rs n)
     (asksRel_skel rs n (by omega)) st (_root_.Flock.Zk.PadLayout.new st.m st.kLog k0) cap root0 #[] (fun _ => 0)
   have hS' := ((skelSim rs).st Flock.Transcript).bind hS fun _ => ((skelSim rs).st Flock.Transcript).pure ()
   obtain ⟨-, hwf, hy⟩ := hS' (Flock.Transcript.init #[] dom) (#[], 0) #[] ⟨rfl, by simp⟩ rfl _ _ hr
@@ -224,10 +224,10 @@ theorem rounds_piop {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {
       fun _ => 0) >>= fun _ => pure ()) : TMW PS Unit).run (Flock.Transcript.init #[] dom)).go #[] =
       (.ok ((), t'), ⟨recLog rs⟩) :=
     Prod.ext hy1 (Array.ext' hyl)
-  obtain ⟨res, t₂, L₂, hrep, hpure⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hY
+  obtain ⟨res, t₂, L₂, hrep, hpure⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok hY
   have hL₂ : L₂ = ⟨recLog rs⟩ := congrArg Prod.snd hpure
   unfold repPiop at hrep
-  obtain ⟨⟨zp, zc⟩, t₁, L₁, hz, hrest⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hrep
+  obtain ⟨⟨zp, zc⟩, t₁, L₁, hz, hrest⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok hrep
   obtain ⟨res₁, t₁', L₁', e₁, hL₁, hP₁⟩ :=
     zerocheckCut_bodies (skelCoin rs) n hm st.digest cap root0 (_root_.Flock.Zk.PadLayout.new st.m st.kLog k0)
       (fun _ => 0) (Flock.Transcript.init #[] dom) #[] (by unfold piopNR at hn; simp only [Array.size_empty]; omega)
@@ -237,7 +237,7 @@ theorem rounds_piop {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {
   simp only [Prod.mk.injEq, Except.ok.injEq] at e₁
   obtain ⟨⟨-, rfl⟩, rfl⟩ := e₁
   dsimp only at hrest
-  obtain ⟨⟨lp, lc⟩, t₂', L₂', hl, hrest₂⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hrest
+  obtain ⟨⟨lp, lc⟩, t₂', L₂', hl, hrest₂⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok hrest
   change ((FlockComplete.lincheckCut (asksCut (skelCoin rs) n) st.fold st.m
     (_root_.Flock.Zk.PadLayout.new st.m st.kLog k0) (fun _ => 0) zc).run t₁).go L₁ = _ at hl
   have hs₁ : L₁.size = 3 + (st.m - 6) := by

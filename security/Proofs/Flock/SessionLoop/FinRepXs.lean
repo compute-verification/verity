@@ -65,7 +65,7 @@ namespace Loop
 /-- **`extraClaims`' claims are at `Drive.extras`' coordinates**: where `extraClaims` returns at the link points `pts`,
 its claims' coordinates are `Drive.extras st pts`. -/
 theorem extraClaims_xs {st : Stmt} {pts : Array (Array F128)} {extras : Array _root_.Flock.Claim}
-    (h : st.extraClaims pts = .ok extras) : extras.map (·.x) = _root_.Flock.Firewall.Drive.extras st pts := by
+    (h : st.extraClaims pts = .ok extras) : extras.map (·.x) = _root_.Flock.ZkServer.Drive.extras st pts := by
   obtain ⟨ess, hess, heq⟩ := FlockSoundness.Refine.extraClaims_ok st pts extras h
   have inner : ∀ (reg : _root_.Flock.Region) (rs : List (Array F128)) (es : List _root_.Flock.Claim),
       List.Forall₂ (fun r e => ∃ v, st.regionValue reg r = .ok v ∧
@@ -90,7 +90,7 @@ theorem extraClaims_xs {st : Stmt} {pts : Array (Array F128)} {extras : Array _r
       rw [List.flatten_cons, List.map_append, ih, inner _ _ _ hre, List.flatMap_cons, Array.toList_map]
   apply Array.toList_inj.mp
   rw [Array.toList_map, heq, outer _ _ hess]
-  unfold _root_.Flock.Firewall.Drive.extras
+  unfold _root_.Flock.ZkServer.Drive.extras
   rw [Array.toList_flatMap]
 
 /-- **The request's link points are the session's**: at a statement in the masked scope with a witness, where the
@@ -102,7 +102,7 @@ theorem linkPoints_wordsAt (x : Msg) (w : Flock.Wit)
     {ops : List (Msg × Msg)} (hl : ops.length = refK x) {s0 : FlockDeploy.Ins} {spec : SessionSpec}
     (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) {k : ℕ} (hk : k < 2 * spec.tables.size)
     (m₀ ρ₀ : Msg) :
-    _root_.Flock.Firewall.Drive.linkPoints (Masked.stsOf x)[k / 2]!
+    _root_.Flock.ZkServer.Drive.linkPoints (Masked.stsOf x)[k / 2]!
         (wordsAt x (ops.map fun e => CoinLayer.rd e.2) 0) = viewPoints x ops spec := by
   have hx : Masked.Live x := Masked.live_of hsc hR
   have hK := Masked.refK_eq hsx
@@ -120,7 +120,7 @@ theorem linkPoints_wordsAt (x : Msg) (w : Flock.Wit)
     rw [List.take_length] at e
     rw [e, hl0, Nat.min_eq_left hpc]
   rw [viewPoints_eq x w hsc hR hl hsx m₀ ρ₀]
-  unfold _root_.Flock.Firewall.Drive.linkPoints pointsOf
+  unfold _root_.Flock.ZkServer.Drive.linkPoints pointsOf
   show _ = (Array.range spec.points).map fun p => (Array.range spec.mPts).map fun j =>
     (wordsAt x (ops.map fun e => CoinLayer.rd e.2) 0).getD (p * spec.mPts + j) 0
   rw [hsz, hmp, Nat.mul_div_cancel _ hmp0]
@@ -142,7 +142,7 @@ theorem linkPoints_wordsAt (x : Msg) (w : Flock.Wit)
 
 variable (L₀ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
-  (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+  (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
 /-- **`FinRepXs` in the masked scope with a witness**: rep stream `k`'s request's coordinates are `Drive.extras` at its
@@ -160,8 +160,8 @@ theorem finRepXs (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Re
   obtain ⟨-, hq, -⟩ := hRep
   unfold repInOf at hq
   obtain ⟨⟨lay, ms⟩, -, hq⟩ := bok hq
-  have hqx : q.xs = _root_.Flock.Firewall.Drive.extras (Masked.stsOf x)[k / 2]!
-      (_root_.Flock.Firewall.Drive.linkPoints (Masked.stsOf x)[k / 2]!
+  have hqx : q.xs = _root_.Flock.ZkServer.Drive.extras (Masked.stsOf x)[k / 2]!
+      (_root_.Flock.ZkServer.Drive.linkPoints (Masked.stsOf x)[k / 2]!
         (wordsAt x (ops.map fun p => CoinLayer.rd p.2) 0)) := by
     cases hq
     rfl

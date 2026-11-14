@@ -122,7 +122,7 @@ theorem topsAt_two {src : VStar.In.Src} {l : ℕ} {a b : Array (ByteArray × Byt
     (h0 : (src.tops[0]!)[l]? = some a) (h1 : (src.tops[1]!)[l]? = some b) (ha : a.all (·.1.size == 64) = true)
     (hb : b.all (·.1.size == 64) = true) (hd : VStar.In.sameTop b a = false) :
     VStar.In.topsAt src l = .ok
-      { rows := #[a, b].flatMap (fun t => t.flatMap fun (n, _) => (Firewall.topRows n).toArray),
+      { rows := #[a, b].flatMap (fun t => t.flatMap fun (n, _) => (ZkServer.topRows n).toArray),
         salts := #[a, b].flatMap (fun t => t.map (·.2)), first := #[0, a.size] } := by
   have hr : List.range' 0 2 1 = [0, 1] := rfl
   have h0' : (src.tops[0]'(by omega))[l]? = some a := by

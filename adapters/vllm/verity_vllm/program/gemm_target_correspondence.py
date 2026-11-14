@@ -77,13 +77,13 @@ def linear_shapes(config: dict, tp: int = 1) -> dict[str, tuple[int, int]]:
     return shapes
 
 
-def sample_indices(n: int, cap: int, edge: int) -> np.ndarray:
-    """Sorted distinct indices into ``range(n)``: all of them when ``n <= cap``, else the first and the last ``edge`` (where the
-    tile tails fall) and evenly spaced ones between, ``cap`` at most."""
-    if n <= cap:
+def sample_indices(n: int, most: int, edge: int) -> np.ndarray:
+    """Sorted distinct indices into ``range(n)``: all of them when ``n <= most``, else the first and the last ``edge`` (where the
+    tile tails fall) and evenly spaced ones between, ``most`` in all at most."""
+    if n <= most:
         return np.arange(n)
-    edge = min(edge, cap // 4)
-    mid = np.linspace(edge, n - edge - 1, cap - 2 * edge).round().astype(np.int64)
+    edge = min(edge, most // 4)
+    mid = np.linspace(edge, n - edge - 1, most - 2 * edge).round().astype(np.int64)
     return np.unique(np.concatenate([np.arange(edge), mid, np.arange(n - edge, n)]))
 
 

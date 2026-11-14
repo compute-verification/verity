@@ -33,7 +33,7 @@ pub mod ir_sampling;
 pub mod ir_tail;
 pub mod lookup;
 pub mod circuit;
-pub mod firewall;
+pub mod zk_server;
 pub mod glue;
 pub mod huge_pages;
 pub mod proved_scope;

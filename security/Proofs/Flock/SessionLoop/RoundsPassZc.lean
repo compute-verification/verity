@@ -25,14 +25,14 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 SessionSpec)
-open _root_.Flock.Firewall.Frame (Cfg Masker roundFree)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Frame (Cfg Masker roundFree)
+open _root_.Flock.ZkServer.Finish (Tab)
 open FlockSoundness.Refine (Frame encs)
 
 theorem midAll_zcHead {dom digest cap : ByteArray} (hdom : dom.size < 2 ^ 64) (hdg : digest.size < 2 ^ 64)
     (hcap : cap.size < 2 ^ 64) :
     Sched.MidAll [.dom dom, .label "flock-r1cs-v0".toUTF8, .bytes digest, .bytes cap,
-      .label _root_.Flock.Firewall.Frame.LABEL_ZC.toUTF8] := by
+      .label _root_.Flock.ZkServer.Frame.LABEL_ZC.toUTF8] := by
   intro f hf
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hf
   rcases hf with rfl | rfl | rfl | rfl | rfl
@@ -40,7 +40,7 @@ theorem midAll_zcHead {dom digest cap : ByteArray} (hdom : dom.size < 2 ^ 64) (h
   · exact ⟨by show "flock-r1cs-v0".toUTF8.size < 2 ^ 64; decide, ne_inner_of_isLabel (by decide)⟩
   · exact ⟨hdg, nofun⟩
   · exact ⟨hcap, nofun⟩
-  · exact ⟨by show _root_.Flock.Firewall.Frame.LABEL_ZC.toUTF8.size < 2 ^ 64; decide,
+  · exact ⟨by show _root_.Flock.ZkServer.Frame.LABEL_ZC.toUTF8.size < 2 ^ 64; decide,
       ne_inner_of_isLabel (by decide)⟩
 
 namespace LeanRelease
@@ -145,8 +145,8 @@ theorem schedTaken_zcBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
       (.empty, 0)).1.data.toList =
       encs [.dom (spec.domain (spec.tables[(ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 q).1 / 2]!)
           ((ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 q).1 % 2)).toUTF8,
-        .label "flock-r1cs-v0".toUTF8, .bytes tr.st.digest, .bytes (_root_.Flock.Firewall.Finish.flat tr.cm0.cap),
-        .label _root_.Flock.Firewall.Frame.LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc := by
+        .label "flock-r1cs-v0".toUTF8, .bytes tr.st.digest, .bytes (_root_.Flock.ZkServer.Finish.flat tr.cm0.cap),
+        .label _root_.Flock.ZkServer.Frame.LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc := by
     rw [hj0, hrest, Array.getD_eq_getD_getElem?, Array.getElem?_append_left hsz0, h0'.1, head_encs]
     simp only [Option.getD_some, List.toList_toArray]
   have hdom := (sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx)
@@ -179,7 +179,7 @@ theorem schedTaken_zcBind (L₁ : LeanRelease Flock.Wit Loop.Tp)
     Claims.ZKServer.ofDraws_order _ _ _
   obtain ⟨o, tq, hro, -⟩ := roundFree_zcHead_out
     ((ofLoop Masked.dataE L₁ (Loop.realOf src)).cfg x (ν, t) ((m₀, ρ₀) :: ops))
-    { m with stopped := false } tr.st.digest (_root_.Flock.Firewall.Finish.flat tr.cm0.cap) _ hc hm0.1 hm0.2.1
+    { m with stopped := false } tr.st.digest (_root_.Flock.ZkServer.Finish.flat tr.cm0.cap) _ hc hm0.1 hm0.2.1
     hm0.2.2.1 hdg hTcap hdom (by show m.pos ≤ _; rw [hm0.2.2.2]; exact Nat.zero_le _)
   have hK : ((2 : UInt8) = 2 ∨ ((2 : UInt8) = 1 ∧ (6 : ℕ) = 1)) ∧ ¬ ((6 : ℕ) = 0 ∧ (2 : UInt8) = 2) ∧
       (6 : ℕ) < 2 ^ 64 :=

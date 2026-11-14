@@ -464,6 +464,17 @@ def readsOf : Option Json → V Reads
     Flock.Registered.checkKnownAll own known
     pure ⟨some own, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j), ← Flock.Registered.paramsOf j⟩
 
+/-- The refusal of registered reads at the sample's units alone: not written. -/
+def SAMPLED_READS : String :=
+  "registered reads: reads at the sample's units alone, with no walk over every instance, are not written " ++
+    "(proofs/zero-knowledge)"
+
+/-- **The verifier's registered reads at the sample's units alone**: `readsOf`, its ports' positions and the reads it
+knows given only for the proof blocks `units` the sample proves, each a position the verifier derives from the unit's
+index rather than a row of a table over every instance. Refused (`SAMPLED_READS`) until written. -/
+def sampledReadsOf (_j : Option Json) (_units : Array Nat) : V Reads :=
+  throw SAMPLED_READS
+
 /-- The checks `verifyCmd` makes on a session's tables once they are set up, before `Zk.shapeOk`. -/
 def setupChecks (I : Flock.Witness.Inputs) (rd : Reads) (sts : Array Flock.Stmt) : V Unit := do
   if let some own := rd.registered then sts.forM fun (st : Flock.Stmt) => Flock.Registered.checkComplete st.c own
@@ -666,6 +677,28 @@ def treesOf (p : OneStage.Params) (e : OneStage.Evidence) : V (Array Challenger.
 /-- The tables of the session `run` sets up: the statement's tags' at `inputsOf`'s count, one table. None when the
 statement is unknown, which `run` refuses. -/
 def sessionTables : Array String := ((Flock.Tags.find? STATEMENT).map (·.tableNames 1)).getD #[]
+
+/-- The parameter naming how many tables one session sets up: the audit at `J` tables in one session, as
+`verity-verify-proof --session-tables J` and `SampledKSLiveV5` take them. Read nowhere yet: `inputsOf` and `inputsAt`
+set up one table (`count := 1`) and `sessionTables` names it. -/
+def TABLES_KEY : String := "session_tables"
+
+/-- The refusal of parameters naming `TABLES_KEY`: a session of more than one table is not written. -/
+def TABLES_REFUSED : String :=
+  "session_tables: one-stage v2 sets up one table a session; J tables in one session are not written (proofs/zero-knowledge)"
+
+/-- The tables one session sets up, from the parameters `j`: one where they name no `TABLES_KEY`, and `TABLES_REFUSED`
+where they name it, at any `J`. Where it would be read: `inputsOf`'s and `inputsAt`'s `count`, `sessionTablesAt` in
+place of `sessionTables`, and so `rootBTablesAt`'s link lengths; a sample split over `J` tables is held to
+`Draw.tablesWhy`. -/
+def tablesOfJson (j : Json) : V Nat :=
+  match field? j TABLES_KEY with
+  | none => pure 1
+  | some _ => throw TABLES_REFUSED
+
+/-- The tables a session of `J` tables sets up: the statement's tags' at `J` (`Flock.Tags.tableNames`), the names its
+link's `root_b` would hold. At `J = 1` it is `sessionTables`. -/
+def sessionTablesAt (J : Nat) : Array String := ((Flock.Tags.find? STATEMENT).map (·.tableNames J)).getD #[]
 
 /-- The byte length of table `st`'s `root_B`: the level-0 cap a `--zk` proof's reader reads (`Flock.ZkProof.reader`),
 `2^cap₀` digests of the table's Merkle scheme, `cap₀` the first stratum of `Flock.Zk.schedule` at the table's `m`.

@@ -167,17 +167,17 @@ def test_expected_executed_slots_is_the_spec_s7_rule_and_names_what_it_cannot_ju
 
 def test_the_rule_is_pads_recurrence_and_the_slot_to_position_map_is_the_records_first_draw_at_prompt_len_minus_1():
     """The executed set comes from `verity_vllm.program.lifting.continuation.recurrence` (ONE mechanism, no twin here), the
-    comparison from `compare_draw_positions`.  The slot -> position map is the RECORD's: slot 1 samples at pos prompt_len - 1 (the query
+    comparison from `compare_sample_positions`.  The slot -> position map is the RECORD's: slot 1 samples at pos prompt_len - 1 (the query
     position whose logits are sampled; qwen B8 L=1024 -> first_pos 1023, device_facts_match on every row), slot t at prompt_len - 2 + t.
-    An earlier `expected_draw_positions` mapped slot t to prompt_len + t - 1, one more than the record; the two maps now agree and
-    the ledger's positions ARE `expected_draw_positions(...)["positions"]` (one mechanism, no map of its own)."""
+    An earlier `expected_sample_positions` mapped slot t to prompt_len + t - 1, one more than the record; the two maps now agree and
+    the ledger's positions ARE `expected_sample_positions(...)["positions"]` (one mechanism, no map of its own)."""
     exp, info = E([7, 7, 99], 8, 1, {99})
     assert exp == [1, 2, 3, 4] and info["t_eos"] == 3 and info["rule"].startswith("verity_vllm.program.lifting.continuation.recurrence")
     ours = [10 - 1 + (t - 1) for t in exp]                       # L = 10: 9, 10, 11, 12 (the lag slot 4 at pos 12)
-    pad = CT.expected_draw_positions([7, 7, 99], cap=8, A=1, eos={99}, prompt_len=10)
+    pad = CT.expected_sample_positions([7, 7, 99], cap=8, A=1, eos={99}, prompt_len=10)
     assert pad["slots"] == exp and pad["n"] == 4 and pad["lag_positions"] == [pad["positions"][-1]]
     assert pad["positions"] == ours, (pad["positions"], ours)      # the two maps AGREE (slot 1 at L - 1); the ledger takes the padding's field
-    cmp = CT.compare_draw_positions(ours, ours + [13])
+    cmp = CT.compare_sample_positions(ours, ours + [13])
     assert cmp["ok"] is False and cmp["extra"] == [13] and "RNG advanced without r_t" in cmp["problems"][0]
 
 

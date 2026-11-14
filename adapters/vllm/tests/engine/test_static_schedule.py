@@ -27,7 +27,7 @@ def test_declared_static_reads_ignore_eos_only():
     assert not ss.declared_static(None)
 
 
-def test_a_run_of_every_cap_passes():
+def test_a_run_of_every_request_to_its_max_tokens_passes():
     rec = ss.check(REQS, _timing(), cached_tokens={"a": 0, "b": 0}, preempted={})
     assert rec["ok"] and rec["problems"] == [] and rec["schema"] == ss.SCHEMA
     assert [r["n_generated"] for r in rec["schedule"]["requests"]] == [3, 2]

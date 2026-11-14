@@ -318,7 +318,7 @@ pub struct Masking<C: Challenger> {
     pub at_open: Option<Box<dyn FnMut(&[F128]) -> Result<(), String> + Send>>,
     /// the zerocheck's outer coins: `coins[K_SKIP..K_SKIP + n_outer]` ([`points_from_coins`]' `r_outer`)
     n_outer: usize,
-    /// Under the outer ZK server the Lean frame decides the refusals (`Flock.Firewall.Frame`): this challenger's are kept in
+    /// Under the outer ZK server the Lean frame decides the refusals (`Flock.ZkServer.Frame`): this challenger's are kept in
     /// `stopped` instead of stopping the proof, the ZK server's cross-check of the frame's.
     pub defer: bool,
     pub stopped: Option<String>,
@@ -1244,7 +1244,7 @@ mod tests {
         assert!(verify_inner(&pr2, &lay, F128::ZERO, vec![("t", l)], &mut Tape::new(&coins)).is_err());
     }
 
-    /// `coin_stop_vectors.json`, which `test_firewall_frame.py` holds the Lean frame's `ρ` and `β` stops to: Rust's
+    /// `coin_stop_vectors.json`, which `test_zk_server_frame.py` holds the Lean frame's `ρ` and `β` stops to: Rust's
     /// cross-checks of the same coins (`rho_independent`, `prove_inner`'s `β = 0`) agree case by case.
     #[test]
     fn rust_coin_stops_agree_with_the_lean_frames_vectors() {

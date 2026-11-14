@@ -1,11 +1,11 @@
-"""The ZK server's value service (`Flock/Firewall/Values.lean`, `flock-firewall values`), live PROTOCOL.md §10.2: every
+"""The ZK server's value service (`Flock/ZkServer/Values.lean`, `flock-zk-server values`), live PROTOCOL.md §10.2: every
 value commitment's salt is the server's, derived from its own key, and no request takes one from the serving stack. Held
 here to the Python reference: each leaf's salt `SHA-512(k ‖ L ‖ s ‖ be32 j ‖ be64 i ‖ ctr)` for `ctr` 0, 1 and 2, its
 `b ‖ c` (`hm96.SHA512.commit_string`), its frame-v3-sha512 leaf and the table's root (`merkle.frame_hash`,
 `merkle.root_from_subtrees`) and the table's tag; a commit body carrying a salt, a refs file of another length, a row past
 its table and a forged tag, each refused; and the key file its owner's alone and kept. A registration is numbered on the
-ZK server's record and admitted there (`core-firewall values` and `core-firewall session --salt-key`,
-`verity/protocols/proofs/recursion/verifier/firewall/tests/test_firewall_registrations.py`), so this service, which has no record, registers
+ZK server's record and admitted there (`core-zk-server values` and `core-zk-server session --salt-key`,
+`verity/protocols/proofs/recursion/verifier/zk_server/tests/test_zk_server_registrations.py`), so this service, which has no record, registers
 nothing and this loop admits no registration."""
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ def refs(tables: list[bytes], rows: list[tuple[int, int]]) -> bytes:
 
 
 class Values:
-    """A running `flock-firewall values` on the key file `key`."""
+    """A running `flock-zk-server values` on the key file `key`."""
 
     def __init__(self, key: Path):
         self.p = subprocess.Popen([str(BIN), "values", "--salt-key", str(key)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -229,7 +229,7 @@ def test_an_interior_commit_holds_its_own_salts(tmp_path):
     """An interior commit's leaves take salts the service drew from the operating system, not ones derived from its key:
     the salts `salts` answers for its rows make each leaf's `b ‖ c` and the table's root, and its tags are not under `k`
     (they are under a key the service drew for the session, which the ZK server's record holds:
-    `test_firewall_registrations.py`). The same digests committed again take other salts, a refs file may name tables of
+    `test_zk_server_registrations.py`). The same digests committed again take other salts, a refs file may name tables of
     both kinds, and a tag forged in any byte is refused. A service started again on the key holds no earlier interior
     session's key or salts, so it refuses that session's tables, and still answers a commit's."""
     key = tmp_path / "salt.key"
@@ -274,16 +274,16 @@ def test_a_malformed_registration_is_refused(values, line, body, why):
     s, _ = v.commit(_tables())
     out = v.request(line.format(s=s.hex()), body).decode(errors="replace")
     assert out.startswith(why) and out.count("\n") == 1, out
-    assert v.register(s) == "a registration is numbered on the ZK server's record: `core-firewall values --state DIR`"
+    assert v.register(s) == "a registration is numbered on the ZK server's record: `core-zk-server values --state DIR`"
 
 
 def test_the_loop_without_a_record_admits_no_registration(tmp_path):
-    """`flock-firewall session` keeps no record of the ZK server's, so it refuses `--salt-key` before it listens (`refused
+    """`flock-zk-server session` keeps no record of the ZK server's, so it refuses `--salt-key` before it listens (`refused
     WHY`, exit 2)."""
     for f in ("circuit", "pub"):
         (tmp_path / f).write_bytes(b"x")
     p = subprocess.run([str(BIN), "session", "--verifier", "127.0.0.1:9", "--circuit", str(tmp_path / "circuit"), "--public",
                         str(tmp_path / "pub"), "--salt-key", str(tmp_path / "salt.key")], input=b"", capture_output=True)
     assert p.returncode == 2 and p.stdout.decode() == (
-        "refused --salt-key: a statement's value commitments are admitted on the ZK server's record (core-firewall session "
+        "refused --salt-key: a statement's value commitments are admitted on the ZK server's record (core-zk-server session "
         "--state DIR --salt-key FILE)\n"), (p.stdout, p.stderr[-400:])

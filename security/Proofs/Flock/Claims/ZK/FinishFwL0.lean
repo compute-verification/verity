@@ -108,7 +108,7 @@ theorem laneW0_coins (n L : ℕ) (b : Array F128) : laneW0 resp n L b = LigLock.
 
 end FlockComplete.ZkTables.Level0
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 open Flock Transcript
 open FlockComplete.LigLock (l0Clear l0Clear_ood l0Clear_msg l0Clear_e tabS wS)
@@ -237,4 +237,4 @@ theorem repFwC_l0 (coin : ℕ → ℕ → F128) (n : ℕ) (resp : ℕ → Claims
       rw [hLF.e1, hfT, hfW]
       rfl
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish

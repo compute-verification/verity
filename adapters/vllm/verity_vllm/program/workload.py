@@ -505,7 +505,7 @@ class WorkloadProgram:
     def __init__(self, requests: list[WorkloadRequest], shared: str = "weights", manifest_digest: str | None = None,
                  ordering: str = "manifest", *, lag: int, theta_registered: bool = False, edge: Edge | None = None) -> None:
         """`theta_registered`: bind the model's weights (`theta`) at registration, as `RegisteredInput<w>_v1`, whatever the
-        components bind them as. The inference-only check reads only registered inputs as θ (nci-check's `theta-not-registered`). Off, the
+        components bind them as. The inference-only check reads only registered inputs as θ (its `theta-not-registered` finding). Off, the
         weights are bound as the components bind them, so every workload digest built before it stands. `edge`: a Commit window's
         (`Edge`), the Program then `WORKLOAD_EDGE`'s; None, `WORKLOAD`'s."""
         if not requests:
@@ -663,7 +663,7 @@ class WorkloadProgram:
                                                             "prefix cache, never recomputed); the prefill computes rows..prompt_len-1"}}
                             if r.prefix else {})})
         last = max(r.arrive_step + r.cap - 1 for r in self.requests)
-        # the programmed instance set of every engine step: the union over the requests programmed for it of their step-s
+        # the programmed segments of every engine step: the union over the requests programmed for it of their step-s
         # segment (component node range + global gate range) — well-defined from the declaration alone, no observation read
         body = self.program.root.body
         engine_steps = []

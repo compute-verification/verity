@@ -47,7 +47,7 @@ pin_dir="$HF_HOME/hub/models--${REPO/\//--}"
 mkdir -p "$pin_dir"
 research keep "$pin_dir" --owner "$OWNER" --expires "$PIN_EXPIRES" --priority normal \
   --regenerate "verity-vllm int8-checkpoint make --role $ROLE --hf-home $HF_HOME --jobs $JOBS" \
-  --why "GLM-5.3 int8 ($RECIPE) for the Dither leg's serve" || echo "warning: research keep failed: the path stays unrecorded (never deleted by gc)"
+  --why "GLM-5.3 int8 ($RECIPE) for Dither's served runs" || echo "warning: research keep failed: the path stays unrecorded (never deleted by gc)"
 
 if [ "$MODE" = make ]; then
   stamp "make $ROLE"

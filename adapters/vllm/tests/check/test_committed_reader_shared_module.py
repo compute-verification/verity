@@ -25,7 +25,7 @@ W = 16                                                                         #
 def _record(n_layers: int = 4, requests: int = 2, *, block: bool = False):
     """Step 0 (decode-shaped: one row per request): per layer L one meta `ROT/0` with rows [r0, r1] filled with 1000*L + 10*r + i; a per-layer
     q_norm meta `model.layers.L.self_attn.q_norm/out` (one invocation), committed in acquisition order (per-tensor host path, or the GPU-tree
-    step block with `block`) and read through the production OpenedReader.  The binding map as build_binding_map writes it: per (meta, request)
+    step block with `block`) and read through the library's OpenedReader.  The binding map as build_binding_map writes it: per (meta, request)
     one entry, name = the meta's name, invocation k = the k-th same-name meta of the step, tensor_ordinal = the meta's ordinal."""
     tensors: list[tuple] = []
     entries: list[dict] = []

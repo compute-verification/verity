@@ -154,12 +154,17 @@ noncomputable def Design.Two.Pa (d : Design.Two) (Pt : Partition) (fp : ℕ → 
 def Design.Two.M (d : Design.Two) (Pt : Partition) (δ : ℝ) : Set (ℕ → ℕ → ℕ) := {fp | δ < d.Pa Pt fp}
 
 /-- **The first stage catches each replay block at rate `r`**: it misses every set `T` of replay blocks with
-probability at most `(1 − r)^{|T|}`, as independent catches at rate `r` would. -/
+probability at most `(1 − r)^{|T|}`, as independent catches at rate `r` would. `r` is a hypothesis: a first stage that
+samples a uniform `Q`-subset of the population's `N` replay blocks and every input replay block has it at `r = Q/N`
+(`Design.Two.firstRate_subsetInputs`), and a two-stage rule's replay design is a `rate:NUM/DEN` design, whose count is
+at least `NUM/DEN` of whatever replay blocks it is taken over. -/
 def Design.Two.FirstRate (d : Design.Two) (r : ℝ) : Prop :=
   ∀ T ⊆ Finset.range d.part.blocks.length, d.replay.Pa d.part T ≤ (1 - r) ^ T.card
 
 /-- **The second stage samples each cell at rate `r`**: in every nonempty cell `(ρ, t)` it samples
-`min(k_t, n_{ρ,t}) ≥ r·n_{ρ,t}` proof blocks. -/
+`min(k_t, n_{ρ,t}) ≥ r·n_{ρ,t}` proof blocks. `r` is a hypothesis that reads no rule's rate: a two-stage rule names
+the counts `k_t`, each fixed, so the largest `r` that holds is the least `min(k_t, n_{ρ,t}) / n_{ρ,t}` over the cells,
+which the cells' sizes set. -/
 def Design.Two.SecondRate (d : Design.Two) (Pt : Partition) (r : ℝ) : Prop :=
   ∀ ρ < d.part.blocks.length, ∀ t < Pt.strata.length, 0 < (cell Pt d.part ρ t).card →
     r * (cell Pt d.part ρ t).card ≤ ((min (d.k.getD t 0) (cell Pt d.part ρ t).card : ℕ) : ℝ)

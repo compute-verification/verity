@@ -37,7 +37,7 @@ Check = Callable[[Mapping[str, Any], Path, int], tuple[dict[str, Any], dict[str,
 #: a party of the live run, not an entry of its own
 LIVE = "live"
 ROLES = tuple(SP.PROTOCOL.parties)
-SPOKES = (SP.CHALLENGER, SP.FIREWALL, SP.WORKERS)
+SPOKES = (SP.CHALLENGER, SP.ZK_SERVER, SP.WORKERS)
 PROVER = ("prover", "developer")
 KEY = lms.Params(64, 1, 3)
 
@@ -206,7 +206,7 @@ class Machine:
     def capabilities(self, party: str) -> dict[str, Any]:
         if party == SP.CHALLENGER:
             return {"host": self.host()}
-        return {SP.FIREWALL: {"pin": self.pin}, SP.WORKERS: {"serve": self.serve},
+        return {SP.ZK_SERVER: {"pin": self.pin}, SP.WORKERS: {"serve": self.serve},
                 SP.VERIFIER: {"audit": self.audit, "component": self.component, "product": self.product}}[party]
 
 
@@ -231,7 +231,7 @@ def coins_of(config: Mapping[str, Any], local: bool) -> str:
     ``development``."""
     at = {p["name"]: p for p in config["party"]}
     shared = any(at[p]["machine"] == at[SP.CHALLENGER]["machine"] and at[p].get("principal") in PROVER
-                 for p in (SP.FIREWALL, SP.WORKERS))
+                 for p in (SP.ZK_SERVER, SP.WORKERS))
     return "simulated" if local or shared else "development"
 
 

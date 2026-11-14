@@ -2,7 +2,7 @@
 # what the node's registration states that no card does (verity/hardware/README.md): the cards it names, how many GPUs
 # it carries, the host's own memory, one table a leaf, and the node's ways out: the interfaces that carry traffic off
 # it, one table each, and the storage path. Each number is { value, unit, mark, source }, as in a card. A GPU's
-# memory is its card's store.dram, whole, and every clock and peak of a card is its card's: none is here.
+# memory is its card's store.dram_installed, whole, and every clock and peak of a card is its card's: none is here.
 
 node = "rtx-pro-6000-server-x8"
 name = "An RTX PRO 6000 node: eight cards in the VM of a two-socket Xeon 6776P server"

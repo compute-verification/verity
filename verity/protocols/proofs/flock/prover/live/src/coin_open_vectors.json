@@ -589,5 +589,5 @@
       ]
     }
   ],
-  "comment": "The coin tree's opening checks (`coin-tree/hm96-sha512/v2`) on docs/coin-tree-v2.md §9's tree, which coin_tree.rs's test holds Rust's `Checked` to and test_lean_coin_open.py holds the Lean check (`Flock.Firewall.Coins`, `flock-firewall coins`) to, word for word. Each case is the steps the Lean check takes: the prover's `hello`, `Hello`'s `answer` (`Resp::Coins`' frame, hex), then each `open` of `n` coins of a stream's next round (its frame); an open's `coins` are the ones handed on (hex), and a step's `stop` is the refusal, which ends the case."
+  "comment": "The coin tree's opening checks (`coin-tree/hm96-sha512/v2`) on docs/coin-tree-v2.md §9's tree, which coin_tree.rs's test holds Rust's `Checked` to and test_lean_coin_open.py holds the Lean check (`Flock.ZkServer.Coins`, `flock-zk-server coins`) to, word for word. Each case is the steps the Lean check takes: the prover's `hello`, `Hello`'s `answer` (`Resp::Coins`' frame, hex), then each `open` of `n` coins of a stream's next round (its frame); an open's `coins` are the ones handed on (hex), and a step's `stop` is the refusal, which ends the case."
 }

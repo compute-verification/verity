@@ -92,7 +92,7 @@ def test_an_eos_stopped_request_s_facts_of_record_bound_the_replay_s_population(
     assert (r0["a_r"], r0["n_exec"], r0["cap"], r0["faults"]) == (4, 4, 4, [])
     assert (r1["a_r"], r1["n_exec"], r1["cap"], r1["arrive"], r1["faults"]) == (2, 2, 4, 1, [])
     assert facts["r1"]["served"] == [5, 2] and facts["r1"]["eos_ids"] == [2] and facts["r1"]["linked"] is True
-    assert said() == ["INFO [delta] not-executed class -> sampled_replay(executed_prefix=): r0 a_r 4 n_exec 4 cap 4, r1 a_r 2 n_exec 2 cap 4; no faults"]
+    assert said() == ["INFO [delta] not-executed class -> sampled_replay(executed_prefix=): r0 a_r 4 n_exec 4 max_tokens 4, r1 a_r 2 n_exec 2 max_tokens 4; no faults"]
 
 
 def test_a_prefix_no_account_links_is_passed_on_with_its_faults_named(tmp_path: Path, said: Lines) -> None:
@@ -101,7 +101,7 @@ def test_a_prefix_no_account_links_is_passed_on_with_its_faults_named(tmp_path: 
     faults = {k: v["faults"] for k, v in kw["executed_prefix"].items()}
     assert all(len(f) == 3 and "a_r is not linked" in f[1] for f in faults.values())
     line, = said()
-    assert line == ("WARNING [delta] not-executed class -> sampled_replay(executed_prefix=): r0 a_r 4 n_exec 4 cap 4, r1 a_r 2 n_exec 2 cap 4; "
+    assert line == ("WARNING [delta] not-executed class -> sampled_replay(executed_prefix=): r0 a_r 4 n_exec 4 max_tokens 4, r1 a_r 2 n_exec 2 max_tokens 4; "
                     f"FAULTS {faults}")
 
 
@@ -309,7 +309,7 @@ def test_the_replay_and_the_linkage_are_given_the_run_s_facts_of_record_and_the_
     assert told[7:] == (steps.loaded, {"r0": "d" * 8, "r1": "e" * 8})
     assert said() == [
         "INFO [delta] replay/linkage horizons = the executed prefix of record: {'r0': 4, 'r1': 2} (LAG 0; ok)",
-        "INFO [delta] not-executed class -> sampled_replay(executed_prefix=): r0 a_r 4 n_exec 4 cap 4, r1 a_r 2 n_exec 2 cap 4; no faults",
+        "INFO [delta] not-executed class -> sampled_replay(executed_prefix=): r0 a_r 4 n_exec 4 max_tokens 4, r1 a_r 2 n_exec 2 max_tokens 4; no faults",
         "INFO [delta] not-executed reconciliation (pair 0): AGREE n_exec r0 4/4, r1 2/2; row families [('instance_outputs', 2, 2)]",
         ("INFO [delta] C2 SAMPLED REPLAY + LINKAGE opened values (pair 0): 6 reads, 12 leaves, 96 B verified against the run root in 0.5 s (5 "
          "steps bound); not retained 0, failed 0; forked evaluators 3")]
