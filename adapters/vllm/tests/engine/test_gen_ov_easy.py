@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 from verity.definitions.registry import b1
 
+from verity_vllm.config import workload_file
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.patterns import GemmLaunch
 from verity_vllm.observe.fold.profiles import gen_llama_patterns as GP
@@ -185,7 +186,7 @@ def test_every_b7_gemm_k_is_a_multiple_of_the_pinned_block_k():
 # --- workload: one 32-token greedy request, 16 tokens, no accepted tokens ----------------------------------------------------
 
 def test_workload_file():
-    path = REPO / WORKLOAD
+    path = workload_file(REPO / WORKLOAD)
     doc = json.loads(path.read_text())
     assert doc["schema"] == "verity-vllm/workload/v2" and doc["case"] == "B7"
     assert doc["model"] == B7.REPO_ID and doc["engine"]["revision"] == B7.REVISION
@@ -196,7 +197,7 @@ def test_workload_file():
     assert len(ids) == r["prompt_len"] == 32 and r["max_tokens"] == 16 and r["index"] == 0
     assert all(isinstance(t, int) and 0 <= t < B7.C["V"] for t in ids) and len(set(ids)) > 16
     # the same 32 ids as the QWEN05 workload: the two snapshots ship a byte-identical tokenizer.json (sha in tokenizer_note)
-    q = json.loads((REPO / "workloads" / "workload_qwen05_32x16_1req.json").read_text())
+    q = json.loads(workload_file(REPO / "workloads" / "workload_qwen05_32x16_1req.json").read_text())
     assert ids == q["requests"][0]["prompt_token_ids"] and r["prompt_text"] == q["requests"][0]["prompt_text"]
     assert r["request_id"] != q["requests"][0]["request_id"] and "c0382117ea329cdf" in doc["tokenizer_note"]
     assert "accepted_token_ids" not in r and "accepted_from" not in r and "accepted" not in doc    # the control run is the reference

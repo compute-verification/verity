@@ -42,6 +42,7 @@ untraced = [
     "tests/test_preflight.py",
     "tests/test_record_clone.py",
     "tests/test_record_pool.py",
+    "tests/test_records.py",
     "tests/test_settings.py",
     "tests/test_shard_plan.py",
     "tests/test_shards.py",

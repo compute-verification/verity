@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.protocols.proofs.spot.verifier import profile
-from verity.protocols import reporting
+from verity.protocol import DELTAS, MONITORING_PERIODS
 from verity.circuits import partition_v2
 
 DATA = Path(__file__).resolve().parent.parent / "data"
@@ -45,8 +45,8 @@ CALIBRATIONS = Path(__file__).resolve().parents[2] / "nci" / "calibrations.json"
 
 STATUSES = frozenset({"datasheet", "measured", "declared", "assumed", "ruled", "conjecture", "derived"})
 
-#: core's monitoring periods (`reporting`), seconds by name
-PERIODS = dict(reporting.PERIODS)
+#: core's monitoring periods (`verity.protocol`), seconds by name
+PERIODS = dict(MONITORING_PERIODS)
 #: the keys that hold the output bits an accepted incorrect proof block injects: a block's outputs fit its Definition's
 #: public size class, so the widest class (`partition_v2.UNIT_CLASS_MAX`), over the classes down to the smallest
 BLOCK_OUTPUT_BITS = ("regime.remote-sampled.step_bits", "incorrect.step_bits")
@@ -180,7 +180,7 @@ def entry(path: Path, name: str) -> dict:
 def sourced() -> list[Param]:
     """The parameters another file states, read from it: no file under `data/` restates one (`Registry.load` refuses a
     key set twice). The census's numbers are not among them (module docstring)."""
-    periods = [Param(f"horizon.{name}.seconds", s, "s", source="verity.protocols.reporting PERIODS",
+    periods = [Param(f"horizon.{name}.seconds", s, "s", source="verity.protocol MONITORING_PERIODS",
                      status="declared") for name, s in PERIODS.items()]
     widest, smallest = partition_v2.UNIT_CLASS_MAX, partition_v2.UNIT_CLASSES[0]
     bits = [Param(key, widest, "bit", low=smallest, high=widest,
@@ -191,7 +191,7 @@ def sourced() -> list[Param]:
 
 
 def _deltas() -> list[Param]:
-    window, report = float(profile.WINDOW_DELTA), [float(d) for d in reporting.DELTAS]
+    window, report = float(profile.WINDOW_DELTA), [float(d) for d in DELTAS]
     core = "verity.protocols.proofs.spot.verifier.profile WINDOW_DELTA, the per-window delta"
     credit = "CircuitCredit's per-window failure p = delta_s + delta_bind + delta_ks (eps_agg's source)"
     return [
@@ -204,7 +204,7 @@ def _deltas() -> list[Param]:
         Param("regime.remote-sampled.p_evade", window, low=1e-15, high=2.0 ** -20, status="declared",
               source=f"{core}, the planner's (benchmarks/nci/tiers.py DEFAULTS p_evade); high: 2^-20"),
         Param("incorrect.delta", min(report), low=min(report), high=max(report), status="ruled",
-              source="verity.protocols.reporting DELTAS, the deltas a period's bounds are stated at: the smaller; "
+              source="verity.protocol DELTAS, the deltas a period's bounds are stated at: the smaller; "
                      "high: the larger (ruled: the reference datacenter, wherever a probabilistic term enters)"),
     ]
 

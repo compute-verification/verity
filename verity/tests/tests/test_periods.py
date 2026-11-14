@@ -1,12 +1,13 @@
-"""`verity.periods`: spans, cuts and the monitoring period, their JSON, and the blocks a monitoring period of the
-reporting grid holds."""
+"""`verity.protocol`'s monitoring periods: spans, cuts and the monitoring period, their JSON, and the monitoring
+periods results are presented for at the δs their bounds are stated at."""
 
 from __future__ import annotations
 
+from fractions import Fraction
+
 import pytest
 
-from verity.periods import Cut, MonitoringPeriod, PeriodError, TickSpan, block_count
-from verity.protocols import reporting
+from verity.protocol import DELTAS, MONITORING_PERIODS, Cut, MonitoringPeriod, PeriodError, TickSpan, block_count
 
 
 def test_a_span_stops_after_its_last_tick():
@@ -76,7 +77,11 @@ def test_the_json_round_trips_and_accepts_only_what_it_writes():
 
 
 def test_the_monitoring_periods_are_a_week_a_month_and_a_year():
-    assert reporting.PERIODS == (("week", 604800), ("month", 2592000), ("year", 31536000))
+    assert MONITORING_PERIODS == (("week", 604800), ("month", 2592000), ("year", 31536000))
+
+
+def test_the_bounds_are_stated_at_a_hundredth_and_a_millionth():
+    assert DELTAS == (Fraction(1, 100), Fraction(1, 10 ** 6))
 
 
 @pytest.mark.parametrize("seconds, block_s", [(10, 3), (9, 3), (2, 3), (0, 1), (7, 7)])
@@ -89,7 +94,7 @@ def test_the_block_count_is_a_machines_monitoring_periods_execution_blocks(secon
 
 
 def test_the_block_count_of_the_reference_deployment():
-    assert {name: block_count(s, 600, 12500) for name, s in reporting.PERIODS} == {
+    assert {name: block_count(s, 600, 12500) for name, s in MONITORING_PERIODS} == {
         "week": 12_600_000, "month": 54_000_000, "year": 657_000_000}
 
 

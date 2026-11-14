@@ -93,13 +93,20 @@ def install(model: Any) -> dict | None:
     from vllm import envs
     from vllm.model_executor.layers.activation import SiluAndMul
     from vllm.model_executor.layers.layernorm import RMSNorm
-    from vllm.model_executor.models.llama import LlamaAttention, LlamaDecoderLayer, LlamaMLP
+    from vllm.model_executor.models.llama import (
+        LlamaAttention,
+        LlamaDecoderLayer,
+        LlamaMLP,
+    )
 
     from verity_vllm.engine.int8_experts import PlainGemm
     if not envs.VLLM_BATCH_INVARIANT:
         return None
     h = hooks.Hooks(TAG)
     sites: list[tuple[Any, type, Any]] = []
+    attn: Any
+    mlp: Any
+    producer: Any
     for _, layer in model.named_modules():
         attn, mlp = getattr(layer, "self_attn", None), getattr(layer, "mlp", None)
         if (type(layer).forward is not LlamaDecoderLayer.forward or type(attn).forward is not LlamaAttention.forward
