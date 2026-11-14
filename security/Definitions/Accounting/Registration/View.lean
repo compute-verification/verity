@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Core.Site
-public import Definitions.Accounting.Joint
+public import Definitions.Compose.Joint
 
 /-!
 # What registration establishes, and what the protocols account for

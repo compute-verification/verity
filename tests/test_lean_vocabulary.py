@@ -494,7 +494,7 @@ KNOWN: dict[str, str] = {
         "homonym, a tile shape: rename (compute-accounting)",
     "security/Definitions/Pouw/TS/Machine.lean::Accounting.TS.Machine":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes a reading of it (compute-accounting)",
-    "security/Definitions/Accounting/TS/Sheet.lean::Accounting.TS.Sheet":
+    "security/Definitions/Pouw/TS/Sheet.lean::Accounting.TS.Sheet":
         "duplicate of the data sheet (`Verity.Site.Sheet`; `Verity.Accel.Card`): becomes a reading of the one data-sheet type in Core (compute-accounting)",
     "security/Definitions/Pous/Accounting/Wipe.lean::Accounting.Wipe.Strategy":
         "homonym, a device's play in the wipe (its fill, egress and spot-read answers): rename (lean)",

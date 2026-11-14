@@ -115,7 +115,7 @@ def RemoteSoundness : Prop :=
     V.SpotSound .remote → V.PouwSound .remote → V.WiresSound .remote → GateARow → V.SoundnessAt .remote
 
 /-- **Soundness at remote's plain sibling: `SoundnessOf` at its list** (`Verity.Registration.Composite.plain`), whose
-guarantee is soundness alone. If sampled proofs, PoUW (Pearl+'s run verdict, its claim in MACs as at remote) and the
+guarantee is soundness alone. If SPOT, PoUW (Pearl+'s run verdict, its claim in MACs as at remote) and the
 inference-only policy, decided by the rows check (`rowsCheck`, `verity/inference-only/rows/v1`), each meet their target
 at the plain sibling, then the probability that its compiled verifier accepts files that passed the commit phase's check
 while one of their claims fails is at most their three errors at that strategy summed. The rows check's target

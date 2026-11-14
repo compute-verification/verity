@@ -151,7 +151,7 @@ A few older names stay here until a change of their own renames each (`GLOSSARY.
 a verdict's failure rule `"nci"`, its key `ius` for its inference blocks with the names that compute it, and the
 refusal codes `input-in-iu`, `gate-in-no-iu` and `empty-iu`; the toy Definitions the vector generators build
 (`NciHandBlk`, `NciDecl…`); `baseline_difftest/`, the θ difftest's directory, whose bytes the lock pins; "baseline"
-for the registered information, also the θ difftest's name in its printed messages; "IU" and "isolation unit" for
-an inference block, in the lock's reasons; "novel reads" for fresh input
+for the registered information, also the θ difftest's name in its printed messages; "IU" and "inference block" for
+an inference block, in the lock's reasons; "fresh input bits" for fresh input
 bits, in the lock's reasons and the liveness difftest's message; and `novel` for fresh input: the variable of the
 check's rate rule and of its Python reference, and a mode of the liveness difftest.

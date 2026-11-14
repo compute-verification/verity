@@ -408,7 +408,7 @@ theorem families_params {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} {ke
   rw [families_holds hp hc]
   exact List.mem_singleton_self _
 
-/-- The first component of sampled proofs' id names the parameters' challenger key (`Binding.keyOf`). -/
+/-- The first component of SPOT's id names the parameters' challenger key (`Binding.keyOf`). -/
 theorem findSome_keyAt : ∀ {ps : List _root_.Core.Composition.Named} {x : _root_.Core.Composition.Named}
     {k : ChallengerKey}, ps.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) = some x → Binding.keyAt x = some k →
     ps.findSome? Binding.keyAt = some k

@@ -120,7 +120,7 @@ its root, its rows' shape and the domain its leaves are hashed under) is the ent
 value's name (`NamesRegistered`, `f` the identity). A tie on the root alone could not say that the leaves, words and
 domain an answer reads are the registered ones.
 
-No theorem reads it. It becomes a lemma when the check that reads the answer's θ entry (sampled proofs' registered
+No theorem reads it. It becomes a lemma when the check that reads the answer's θ entry (SPOT's registered
 values, a protocol's parameters) reads it from θ in the view of an accepted log rather than from its own parameters. -/
 def RootIn (t : Theta) (v : View) : Prop :=
   NamesRegistered {x | x ∈ v.theta ∧ x.value = t.value} id t
