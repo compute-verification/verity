@@ -10,7 +10,7 @@ must be `inference-only-check --policy`'s.
       per Call (`run.instance`)
   glm --out DIR --phases EXE --scratch DIR --workload PATH [--word-only]
       GLM-5.3's rank 0 workload Program of the B1 Build (root: its inputs and one Call, the request) word-level as built,
-      then on bits: `verity_vllm.definitions.boolean.dry_run`'s gaps, and where there are none the request lifted
+      then on bits: `verity.circuits.ops.boolean.versions.dry_run`'s gaps, and where there are none the request lifted
       (`lift.on_bits`) and called once by a root of its inputs. θ empty (its weights are bound per run), one inference block, the
       request, at `inference_only_glm.GAMMA`, `inference_only_glm.ALPHA`
 
@@ -177,7 +177,7 @@ def peak_gb() -> float:
 def glm(args) -> int:
     from verity.circuits import codec
     from verity.circuits.program import Program
-    from verity_vllm.definitions import boolean as BB
+    from verity.circuits.ops.boolean import versions as BB
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     import lift

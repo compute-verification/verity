@@ -143,4 +143,4 @@ messages = ["out-opening", "records", "cells-salts"]
 [[channel]]
 from = "network-certifier"
 to = "verifier"
-messages = ["out-record", "certificate", "registration", "load", "deployment", "groups"]
+messages = ["out-record", "certificate", "registration", "deployment", "groups"]

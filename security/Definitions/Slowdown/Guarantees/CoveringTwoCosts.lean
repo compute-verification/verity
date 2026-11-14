@@ -12,9 +12,9 @@ statement beside `CoveringBound`, which is it at `c_w = c_a = r · b`.
 
 @[expose] public section
 
-namespace InferenceOnly.Guarantees
+namespace Slowdown.Guarantees
 
-open Verity InferenceOnly.Covering
+open Verity Slowdown.Covering
 
 /-- **The covering bound at two costs**: if `C` is `(s, c_w)`-parameter-hard (`Assumptions.ParameterHardAt`),
 `c_w D > k` and `c_a > 0`, every `(s, k)`-covering `𝓘` of `C` by `n` blocks has `|𝓜*| ≤ n · ((k / c_w)(k / c_a) + k)`,
@@ -36,4 +36,4 @@ def CoveringBoundTwoCosts : Prop :=
       ((Assumptions.chainedBlocksAt d B D ca).card : ℝ) ≤ n * (k / cw * (k / ca) + k) ∧
       ((Assumptions.chainedBlocksAt d B D ca).card : ℝ) / d.D.N * s / (k / cw * (k / ca) + k) ≤ s * n / d.D.N
 
-end InferenceOnly.Guarantees
+end Slowdown.Guarantees

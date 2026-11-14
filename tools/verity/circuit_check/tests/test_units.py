@@ -923,7 +923,7 @@ def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_
 ON_DEMAND = """
 from circuit_check import targets as TG
 from verity.circuits.defs import REGISTRY
-import verity_vllm.definitions.boolean
+import verity.circuits.ops.boolean.versions
 import verity_vllm.definitions
 
 before = set(dict.keys(REGISTRY.defs))

@@ -18,7 +18,7 @@ from verity.circuits.evaluation import evaluate
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32 as BW
 from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32 as MV
-from verity_vllm.definitions import boolean as SW
+from verity.circuits.ops.boolean import versions as SW
 from verity_vllm.definitions.registry import boolean_fp8_moe as BM
 from verity_vllm.definitions.registry import fp8_moe_experts as X
 

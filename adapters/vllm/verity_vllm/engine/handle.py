@@ -26,8 +26,35 @@ if TYPE_CHECKING:
 
     type Engine = Wrapper | vllm.LLM | LLMEngine
 
-__all__ = ["core_in_process", "core_or_none", "engine_of", "executor", "executor_or_none", "model_runner", "scheduler",
-           "scheduler_or_none", "structural_output_lag"]
+__all__ = ["Lease", "Steps", "core_in_process", "core_or_none", "engine_of", "executor", "executor_or_none",
+           "model_runner", "scheduler", "scheduler_or_none", "structural_output_lag"]
+
+
+class Lease(Protocol):
+    """The engine core as the ``LLMEngine`` holds it, which a GPU lease ends: the core itself where it runs in this process
+    (its ``engine_core`` set), else its client; ``shutdown`` ends it, freeing what it holds on the device."""
+
+    @property
+    def engine_core(self) -> Any: ...
+
+    def shutdown(self) -> None: ...
+
+
+class Steps(Protocol):
+    """What serving needs of the ``LLMEngine``: a request taken, whether any request is still in flight, one step's outputs, the
+    settings it resolved (``vllm_config``, which decide its schedules) and its core (`Lease`)."""
+
+    @property
+    def vllm_config(self) -> Any: ...
+
+    @property
+    def engine_core(self) -> Lease: ...
+
+    def add_request(self, request_id: str, prompt: Any, params: Any) -> Any: ...
+
+    def has_unfinished_requests(self) -> bool: ...
+
+    def step(self) -> list[Any]: ...
 
 
 def engine_of(llm: Engine) -> LLMEngine:

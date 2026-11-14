@@ -59,7 +59,7 @@ import chain_record as CR  # noqa: E402
 from verity.protocols.accounting.certifier.prover import scan_period as SP  # noqa: E402
 import served_verdicts as S  # noqa: E402
 from verity.protocols.accounting.certifier.device import warden_serve as WS  # noqa: E402
-from test_scan_zk import published, sz  # noqa: E402
+from verity.protocols.accounting.certifier.prover.tests.test_scan_zk import published, sz  # noqa: E402
 from test_served_session import CHALLENGER_HOST, LIVE_GATE, RUN, STUB  # noqa: E402
 from test_warden_chain import WC, gate_run  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
@@ -1464,7 +1464,8 @@ def test_close_waits_for_the_sessions_end_keeps_its_fetch_and_publishes_what_a_r
         RUN, 0, "ended", True, 20, f"research@{GATE_HOST}")
     assert doc["request"] == _asked(tmp_path)[0] and doc["keep"] == str(kept)
     assert (kept.parent / CP.SESSION).read_text() == (out / "session.json").read_text()
-    assert CP.placement(serve, RUN)["parties"] == {"network_certifier": GATE_HOST, "prover": PEER, "verifier": PEER}
+    assert CP.placement(serve, RUN)["parties"] == {"network_certifier": GATE_HOST, "prover": PEER,
+                                                   "verifier": CP.ran_on()["period"]}
     assert CP.open_sessions(serve / CP.PRIVATE) == []
     # with the session closed there is none to close, and the gate isn't asked
     asked = len(_asked(tmp_path))
@@ -1618,7 +1619,7 @@ def test_the_served_tables_scan_class_is_v3cs_setup_in_scan_zk():
     """`served_table.SCAN_CLASS` is `V3C_SCAN_CLASS`'s setup (`scan_zk.W63K4`) as served_verdicts.sh's
     SLOTS,PROMPT,OUTPUTS,LANES,EVERY: a slot stride's Program slots over an execution phase's strides, KI, KO, the
     lanes and EVERY."""
-    import scan_zk as SZ
+    from verity.protocols.accounting.certifier.prover import scan_zk as SZ
 
     spec = importlib.util.spec_from_file_location("served_table", ROOT / "tools/verity/cli/verity_cli/served_table.py")
     table = importlib.util.module_from_spec(spec)

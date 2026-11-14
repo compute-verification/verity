@@ -241,7 +241,7 @@ The guarantees rest on named assumptions, each a hypothesis of the statement: th
 proved (`Pouw.NCP.Assumptions.TTNCP_U`, and Pearl-C's TT_OUT forms such as
 `Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1` and, at the H100, `Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8`
 beside the device model `Pouw.PearlC.Assumptions.W1CompleteH100`), the receipt clock (`Pouw.Assumptions.HonestClock`), and the claims
-`trusted-device`, `live-verifier`, `cr/sha-512` and `prf/sha-512` (`verity.claims`). The lemmas at device records
+`trusted-device`, `live-verifier`, `cr/sha-512` and `prf/sha-512` (`verity.commitments.claim_ids`). The lemmas at device records
 (`security/Proofs/Pouw/Lemmas/PearlCRecords.lean`) rest on further forms that no listed statement takes: Pearl-C4's
 TT_OUT at its sm_120 record (`TTOutFp4Sm120W1`), the seeded noise's forms (`RowSeedNoise`, `CodeSeedNoise`) and the
 sampled tile's proof (`TileProofSoundAll`).

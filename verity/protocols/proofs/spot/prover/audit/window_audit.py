@@ -2312,7 +2312,7 @@ def devices_refusal(a: argparse.Namespace) -> str | None:
     server take a card. A plain session is a process pair of its own on the CPU, and behind the ZK server
     (``--zk-server``) the sessions are on the proof server's one kept prover, or each a process pair of its own, on the
     CPU too (`proof_server`)."""
-    if devices(a) is None or not (plain(a) or getattr(a, "firewall", None)):
+    if devices(a) is None or not (plain(a) or getattr(a, "zk_server", None)):
         return None
     return ("--devices names the proof server's cards, and a plain session or one behind the ZK server (--zk-server) "
             "proves on the CPU: drop --devices, or run the sessions on the proof server with no ZK server")

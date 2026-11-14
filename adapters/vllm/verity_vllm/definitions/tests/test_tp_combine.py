@@ -20,7 +20,7 @@ import pytest
 
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate_batch, evaluate_words
-from verity_vllm.definitions import boolean as BB
+from verity.circuits.ops.boolean import versions as BB
 from verity_vllm.definitions.registry import b1, b1_tp2, dead_free
 from verity_vllm.definitions.registry import boolean_tp_combine as BC
 from verity_vllm.definitions.registry import tp_allreduce as TA

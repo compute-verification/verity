@@ -8,7 +8,7 @@ import json
 import os
 import sys
 
-from test_out_request_values import block, run
+from benchmarks.network_traces.tests.test_out_request_values import block, run
 
 BLOCK = ('if [ -n "${SC_LEAN_ONE:-}" ]; then', "fi")
 VERIFIER = '#!/usr/bin/env bash\ngrep Cpus_allowed_list /proc/self/status | tr -dc "0-9,\\n-" >> "$SEEN"\n[ "$1" = verify ]\n'
