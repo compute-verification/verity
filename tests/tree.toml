@@ -332,7 +332,7 @@ day = "2026-11-18"
 
 [[not_yet]]
 path = "verity/protocols/accounting/pouw/clear/"
-to = "verity/protocols/accounting/pouw/verifier/"
+to = "verity/protocols/accounting/pouw/prover/"
 owner = "compute-accounting"
 day = "2026-11-19"
 
