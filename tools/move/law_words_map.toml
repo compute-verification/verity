@@ -248,7 +248,7 @@ exclude = ["tools/move/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
            "verity/commitments/lean/Commitments/Draw.lean"]
 
 [keep]
-patterns = ['"[A-Za-z0-9_.-]*laws?[A-Za-z0-9_.-]*"', "'[A-Za-z0-9_.-]*laws?[A-Za-z0-9_.-]*'", '--laws?\b', 'note:[\w./-]+', 'art:[0-9a-f]+',
+patterns = ['(?<!"self", )"[A-Za-z0-9_.-]*laws?[A-Za-z0-9_.-]*"', "'[A-Za-z0-9_.-]*laws?[A-Za-z0-9_.-]*'", '--laws?\b', 'note:[\w./-]+', 'art:[0-9a-f]+',
             'cursor/[\w./-]+', '(?<=\.)(?<![^\w.]c\.)(?<![^\w.]CR\.)(?<![^\w.]Cr\.)laws?\b',
             '(?<=\n    )law(?=: (?:Mapping|dict)\[str, Any\]\n)']
 strings = ["the registration's law {", "the registration's law is not subset:K′",
