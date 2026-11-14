@@ -1,8 +1,8 @@
 """The memory challenger's record formats and crypto in Lean (`memory-challenger-difftest`) against `memory_challenger.py`,
 `streamed_wipe.py` and `verity.commitments.crypto.lms`: the coins and their tree, the round records' root, the header and the
-signed message, the label digest, LMS signing at a leaf and verification, and the streamed wipe's signed message, start
-and end messages and an egress count's unit, each on sampled inputs that include what both sides must refuse (`test_verdict.py` and
-`test_wipe_verdict.py` hold the verdicts)."""
+signed message, the label digest, LMS signing at a leaf and verification, the setup record's bytes, message and check,
+and the streamed wipe's signed message, start and end messages and an egress count's unit, each on sampled inputs that
+include what both sides must refuse (`test_verdict.py` and `test_wipe_verdict.py` hold the verdicts)."""
 
 from __future__ import annotations
 
@@ -247,6 +247,102 @@ def lms_verify_inputs(sample) -> dict:
 def test_lms_verify(server):
     stats = D.run(port("lms_verify", lms_verify, with_malformed(lms_verify_inputs())), examples=200, server=server)
     assert stats.outputs > 80, stats
+
+
+#: A setup record's fields, its blocks now and then past a u64, which no encoder takes.
+SETUP_RECORD = st.fixed_dictionaries({
+    "blocks": WIDE(64), "commitment": hexed(st.binary(max_size=70)), "salt": hexed(st.binary(max_size=30)),
+    "root": hexed(st.binary(max_size=70))})
+#: A setup record's fields, well formed: the message's inputs, whose record's malformed fields `SETUP_RECORD` samples.
+WELL_FORMED_SETUP_RECORD = st.fixed_dictionaries({
+    "blocks": st.integers(0, 2 ** 64 - 1), "commitment": hexed(st.binary(max_size=70)),
+    "salt": hexed(st.binary(max_size=30)), "root": hexed(st.binary(max_size=70))})
+
+
+def setup_record_of(v) -> mc.SetupRecord:
+    return mc.SetupRecord(M.nat(v, "blocks"), M.hex_(v, "commitment"), M.hex_(v, "salt"), M.hex_(v, "root"))
+
+
+def setup_record(v) -> str:
+    return setup_record_of(v).value().hex()
+
+
+def test_setup_record(server):
+    stats = D.run(port("setup_record", setup_record, with_malformed(SETUP_RECORD)), examples=300, server=server)
+    assert stats.outputs > 100, stats
+    honest = {"blocks": 983_040, "commitment": "ab" * 64, "salt": "cd" * 24, "root": "ef" * 64}
+    value = bytes.fromhex(D.replay(port("setup_record", setup_record, st.none()), honest, server)[1].strip('"'))
+    assert value.startswith(mc.SETUP_RECORD_TAG + (983_040).to_bytes(8, "big")) and len(value) == 230
+
+
+def setup_record_message(v) -> str:
+    return mc.setup_record_message(M.hex_(v, "I"), M.hex_(v, "session"), setup_record_of(M._get(v, "record"))).hex()
+
+
+def test_setup_record_message(server):
+    I = mostly(st.binary(min_size=16, max_size=16), st.binary(max_size=20))
+    inputs = with_malformed(st.fixed_dictionaries({"I": hexed(I), "session": hexed(st.binary(max_size=40)),
+                                                   "record": WELL_FORMED_SETUP_RECORD}))
+    stats = D.run(port("setup_record_message", setup_record_message, inputs), examples=300, server=server)
+    assert stats.outputs > 100, stats
+
+
+def setup_record_ok(v) -> bool:
+    signed = M._exactly(mc.SignedSetupRecord.from_json, M._get(v, "setup"))
+    return mc.setup_record_ok(signed, scheme=M._str(v, "scheme"), public_key=M.hex_(v, "public_key"),
+                              session=M.hex_(v, "session"), schemes=M.SCHEMES_ALL)
+
+
+def _record(s: mc.SignedSetupRecord, **edits) -> mc.SignedSetupRecord:
+    return dataclasses.replace(s, record=dataclasses.replace(s.record, **edits))
+
+
+@st.composite
+def setup_record_ok_inputs(draw) -> dict:
+    """A setup record a test signer or a deployed-parameter key signed, then now and then its signature, a field, its
+    scheme or key changed, its JSON not a record's (a key extra or missing, hex in capitals), or checked against another
+    scheme, key or session."""
+    signer = draw(st.one_of(st.builds(M.test_signer, st.sampled_from(M.SECRETS), st.just(2), st.integers(0, 3)),
+                            st.builds(M.deployed_signer)))
+    session = draw(st.binary(min_size=32, max_size=32))
+    signed = mc.sign_setup_record(signer, session, blocks=draw(WIDE(20)), commitment=draw(st.binary(min_size=64, max_size=64)),
+                                  salt=draw(st.binary(min_size=24, max_size=24)), root=draw(st.sampled_from(M.SETUP_ROOTS)))
+    x, r = draw(st.integers(0, 2 ** 16)), signed.record
+    signed = draw(mostly(st.just(signed), st.sampled_from([
+        dataclasses.replace(signed, signature=M._flip(signed.signature, x)),
+        _record(signed, blocks=r.blocks + 1), _record(signed, blocks=2 ** 64 + r.blocks),
+        _record(signed, commitment=M._flip(r.commitment, x)), _record(signed, salt=M._flip(r.salt, x)),
+        _record(signed, root=M.SETUP_ROOTS[0] if r.root != M.SETUP_ROOTS[0] else M.SETUP_ROOTS[1]),
+        dataclasses.replace(signed, scheme="none"),
+        dataclasses.replace(signed, public_key=M.test_signer(M.STRANGER, 2, 0).public_key)]), 2))
+    j = signed.to_json()
+    j = draw(mostly(st.just(j), st.sampled_from([
+        j | {"passed": 1}, j | {"extra": 1}, {k: v for k, v in j.items() if k != "salt"},
+        j | {"root": j["root"].upper()}]), 4))
+    scheme = draw(mostly(st.just(signer.scheme), st.sampled_from([mc.LMS, M.ts.scheme(1), M.ts.scheme(2), "none"]), 4))
+    public_key = draw(mostly(st.just(signer.public_key), st.just(M.test_signer(M.STRANGER, 2, 0).public_key), 4))
+    session = draw(mostly(st.just(session), st.just(session[:-1] + bytes([session[-1] ^ 1])), 4))
+    return {"public_key": public_key.hex(), "scheme": scheme, "session": session.hex(), "setup": j}
+
+
+def test_setup_record_ok(server):
+    stats = D.run(port("setup_record_ok", setup_record_ok, with_malformed(setup_record_ok_inputs())), examples=200,
+                  server=server)
+    assert stats.outputs > 80, stats
+
+
+def test_a_setup_record_says_no_outcome(server):
+    """The record holds what the device was given and nothing about setup's check: a signed record verifies, and its
+    JSON with a `passed` key beside its fields is no record, refused by both decoders."""
+    signer, session = M.test_signer(M.SECRETS[0], 2, 1), bytes(range(32))
+    ok = port("setup_record_ok", setup_record_ok, st.none())
+    signed = mc.sign_setup_record(signer, session, blocks=983_040, commitment=bytes(64), salt=bytes(24),
+                                  root=M.SETUP_ROOTS[0])
+    case = {"public_key": signer.public_key.hex(), "scheme": signer.scheme, "session": session.hex(),
+            "setup": signed.to_json()}
+    assert D.replay(ok, case, server) == ("output", "true")
+    for passed in (0, 1):
+        assert D.replay(ok, case | {"setup": signed.to_json() | {"passed": passed}}, server)[0] == "reject"
 
 
 WIPE_PARAMS = st.builds(
