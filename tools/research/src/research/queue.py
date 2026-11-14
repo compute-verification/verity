@@ -768,8 +768,8 @@ GATE_PATH_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.py")
 CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "flock-circuit-build", "lean-build",
                "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests",
                "ratchet-gate")
-#: an entry of `DriveFlags.lowrisk_excludes` or `DriveFlags.verdict_excludes`: a directory from the repository's root ending
-#: in `/`, one file's path from the root (a `/` before its end, no glob), or a file name glob (no `/`)
+#: an entry of `DriveFlags.lowrisk_excludes`, `DriveFlags.verdict_plain` or `DriveFlags.verdict_excludes`: a directory from the
+#: repository's root ending in `/`, one file's path from the root (a `/` before its end, no glob), or a file name glob (no `/`)
 LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+(?:[\w.-]+)?|[\w.*?\[\]-]+")
 #: an entry of `DriveFlags.bottom_ring`: a handle as a post that starts with it rings it (`slack.NAME_TOKEN_RE`)
 HANDLE_RE = re.compile(r"@[a-z0-9][a-z0-9._-]*")
@@ -853,6 +853,9 @@ class DriveFlags:
     #: what the land verdicts gate (`research queue vqueue --gate verdict`, `vqueue_loop.Loop._plain`) keeps on the whole
     #: check beyond `lowrisk_excludes`, written as it is: the gate reads both (`plain_excludes`); none, no candidate is plain
     verdict_excludes: tuple[str, ...] = ()
+    #: the entries of `lowrisk_excludes` the land verdicts gate doesn't read, each written as it is there: what keeps a change
+    #: off the low-risk lane only so that a reader sees it, which a land verdict already is (`plain_excludes`)
+    verdict_plain: tuple[str, ...] = ()
     #: the task executor after landing (`research.executor`, `drive.Driver`): "off"; "shadow", each tip's task graph enqueued beside
     #: the after-landing run and their verdicts compared (`research queue shadow-report`); "on", its verdicts decide, with a run
     #: of `drive.SLIM_STEPS` alone beside it
@@ -880,12 +883,13 @@ class DriveFlags:
 
     @property
     def plain_excludes(self) -> tuple[str, ...]:
-        """What keeps a candidate on the whole check where the land verdicts gate: `lowrisk_excludes`, then `verdict_excludes`,
-        each entry once, so a change the low-risk lane keeps off is never plain.  With either list empty, none: as `lowrisk`
+        """What keeps a candidate on the whole check where the land verdicts gate: `lowrisk_excludes` without the entries of
+        `verdict_plain`, then `verdict_excludes`, each entry once, so a change the low-risk lane keeps off is plain only when
+        entries of `verdict_plain` alone keep it off.  With `lowrisk_excludes` or `verdict_excludes` empty, none: as `lowrisk`
         reads no excludes, nothing is plain."""
         if not (self.lowrisk_excludes and self.verdict_excludes):
             return ()
-        return tuple(dict.fromkeys(self.lowrisk_excludes + self.verdict_excludes))
+        return tuple(dict.fromkeys([x for x in self.lowrisk_excludes if x not in self.verdict_plain] + list(self.verdict_excludes)))
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml", strict: bool = False) -> "DriveFlags":
@@ -949,7 +953,7 @@ class DriveFlags:
             if type(doc["restack_jobs"]) is not int or doc["restack_jobs"] < 1:
                 raise bad("restack_jobs", "a whole number, 1 or more")
             got["restack_jobs"] = doc["restack_jobs"]
-        for k in ("lowrisk_excludes", "verdict_excludes"):
+        for k in ("lowrisk_excludes", "verdict_excludes", "verdict_plain"):
             if k in doc:
                 v = doc[k]
                 if not (isinstance(v, list) and v and all(isinstance(x, str) and LOWRISK_EXCLUDE_RE.fullmatch(x)
@@ -957,6 +961,16 @@ class DriveFlags:
                     raise bad(k, "a non-empty list of directories from the repository's root, each ending in `/`, files' paths "
                                  "from it and file name globs, as [\"*.lean\", \"verity/core/\", \"verity/__init__.py\"]")
                 got[k] = tuple(v)
+        if plain := got.get("verdict_plain"):
+            if dup := sorted({x for x in plain if plain.count(x) > 1}):
+                raise bad("verdict_plain", f"{', '.join(dup)} written more than once: keep each entry once")
+            if stray := [x for x in plain if x not in got.get("lowrisk_excludes", ())]:
+                raise bad("verdict_plain", f"{', '.join(stray)} is no entry of lowrisk_excludes: each entry is one of "
+                                           "lowrisk_excludes, written character for character as it is there; copy it from "
+                                           "there, or remove it")
+            if both := [x for x in plain if x in got.get("verdict_excludes", ())]:
+                raise bad("verdict_plain", f"{', '.join(both)} is also an entry of verdict_excludes, which keeps it on the "
+                                           "whole check: remove it from one of the two")
         if "bottom_ring" in doc:
             v = doc["bottom_ring"]
             if not (isinstance(v, list) and v and all(isinstance(x, str) and HANDLE_RE.fullmatch(x) for x in v)):
