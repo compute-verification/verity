@@ -53,6 +53,9 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
            "adapters/vllm/manifests/definitions.json"]
 
 [split]
+# A reference to `benchmarks/torch_gpu/sha512_rows/`, which the map splits, follows its larger part, the engine:
+# "old file: old directory" = why.
+"benchmarks/torch_gpu/commit_slots/tests/test_host_twin.py: benchmarks/torch_gpu/sha512_rows" = "the engine's host twin, which moves"
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`); the files load each other from their own directories by
