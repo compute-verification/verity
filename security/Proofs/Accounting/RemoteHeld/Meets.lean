@@ -15,9 +15,10 @@ so the guarantees cover nodes that rebuild, read their disks and take blocks ove
 
 The session (`burst`, in `Definitions/Accounting/Remote/DrawInstances.lean` with `pulse`, `burstMem` and `burstPace`)
 is two passes of `D` ticks, every receipt correct. Its node has its first `Br + Bd + Bl` registered blocks absent until
-tick `t₁` and brings them all back at `t₁`: `Br` rebuilt, `Bd` read from its disks, `Bl` over its links (`burst_back`). It meets every premise at any rates (`burst_meets`, and `burst_meets_held` for `Held`'s
-Identity), while no rate below the burst meets the same ceiling with burst 0 (`not_bucket_pulse`): that was the
-bare-rate form, which over one-tick intervals allowed no rebuild, disk read or link block at all.
+tick `t₁` and brings them all back at `t₁`: `Br` rebuilt, `Bd` read from its disks, `Bl` over its links (`burst_back`).
+It meets every premise at any rates (`burst_meets`, and `burst_meets_held` for `Held`'s Identity), while no rate below
+the burst meets the same ceiling with burst 0 (`not_bucket_pulse`): that was the bare-rate form, which over one-tick
+intervals allowed no rebuild, disk read or link block at all.
 
 `w2_meets` and `w2_meets_held` are W2's instance: 8 × Qwen2.5-32B on one node, at the ledger's nanosecond tick.
 -/

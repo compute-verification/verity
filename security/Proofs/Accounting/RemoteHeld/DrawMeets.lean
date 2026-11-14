@@ -55,8 +55,8 @@ that accepts everything (`*_nontrivial`).
 * **Met.** The honest session (`honest`): window `t` registers `U t` receipts, every one correct, whatever the coins,
   its draw's fallbacks `0`. It is `Live`, `Refused` at any receipts (every opening is one of the window's receipts,
   `openings_zero_subset`), `Counted` on any trace that finds nothing wrong, and its distinguishers gain nothing
-  (`Draw.prfAdvantage_honest`). Over `Meets.burst` on its coins (a node bringing absent blocks back by every route) it
-  meets every premise of the memory-line forms too, at any rates, W2's measured ones among them (`Meets.w2_meets`).
+  (`Draw.prfAdvantage_honest`). Over `Instances.burst` on its coins (a node bringing absent blocks back by every route)
+  it meets every premise of the memory-line forms too, at any rates, W2's measured ones among them (`Meets.w2_meets`).
 * **Bites.** The toy (`toy`): one window of one receipt, none correct, sampled once, on an audit that accepts every
   outcome with that receipt wrong (`acceptAll`), its node holding nothing and bringing nothing in, inside the device
   model at no rates, bursts or chip blocks (`acceptAll_inside`). It is `Live` and `Counted`; no opening of its
@@ -113,7 +113,7 @@ theorem honest_meets [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Po
     fun ω ha => (hT ω ha).trans_le (Nat.zero_le _),
     fun δ t => Draw.prfAdvantage_honest (honest k κ X U) (fun _ _ => subset_rfl) prf δ t⟩
 
-/-- `Meets.burst` on a session's coins. -/
+/-- `Instances.burst` on a session's coins. -/
 abbrev burstOn (n κ : ℕ) (X : Type) (N D t₁ Br Bd Bl : ℕ) : Trace (DrawCoins n κ X) := burst N D t₁ Br Bd Bl
 
 theorem burst_incorrect {Ω : Type} {N D t₁ Br Bd Bl : ℕ} (ω : Ω) : (burst (Ω := Ω) N D t₁ Br Bd Bl).incorrect ω = 0 := by
@@ -137,7 +137,7 @@ theorem liveCoinsSampled_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : F
   let ⟨hL, hR, hC, _⟩ := honest_meets (k := k) U prf T R hT
   ⟨hL, hR, hC, fun _ _ => le_rfl⟩
 
-/-- **`HeldSampled`'s premises meet** at the honest session over `Meets.burst` on its coins, with no link block. -/
+/-- **`HeldSampled`'s premises meet** at the honest session over `Instances.burst` on its coins, with no link block. -/
 theorem heldSampled_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Pous.Bits κ → Blocks m)
     (R : Receipts n κ X) {N D t₁ Br Bd S : ℕ} {s E β : ℝ} (hs : 0 ≤ s) (hE : 0 < E) (hβ : 0 ≤ β)
     (ht : t₁ + 1 < D) :
@@ -153,8 +153,8 @@ theorem heldSampled_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n 
     honest_meets (k := k) U prf (burstOn n κ X N D t₁ Br Bd 0) R fun ω _ => burst_incorrect ω
   exact ⟨hI, hsq, hd, hS, hr, hc, hk, hL, hR, hC⟩
 
-/-- **`HeldOverTimeSampled`'s premises meet** at the honest session over `Meets.burst` on its coins, with no link
-block, paced by `Meets.burstPace`. -/
+/-- **`HeldOverTimeSampled`'s premises meet** at the honest session over `Instances.burst` on its coins, with no link
+block, paced by `Instances.burstPace`. -/
 theorem heldOverTimeSampled_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Pous.Bits κ → Blocks m)
     (R : Receipts n κ X) {N D t₁ Br Bd S : ℕ} {s E β : ℝ} (hs : 0 ≤ s) (hE : 0 < E) (hβ : 0 ≤ β)
     (ht : t₁ + 1 < D) :
@@ -171,8 +171,8 @@ theorem heldOverTimeSampled_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf 
     honest_meets (k := k) U prf (burstOn n κ X N D t₁ Br Bd 0) R fun ω _ => burst_incorrect ω
   exact ⟨burst_identity, hsq, hd, hS, hr, hp, hcov, hk, hL, hR, hC⟩
 
-/-- **`HeldOverTimeLinksSampled`'s premises meet** at the honest session over `Meets.burst` on its coins, its node
-bringing blocks back by rebuilds, disk reads and links at once, paced by `Meets.burstPace`. -/
+/-- **`HeldOverTimeLinksSampled`'s premises meet** at the honest session over `Instances.burst` on its coins, its node
+bringing blocks back by rebuilds, disk reads and links at once, paced by `Instances.burstPace`. -/
 theorem heldOverTimeLinksSampled_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Pous.Bits κ → Blocks m)
     (R : Receipts n κ X) {N D t₁ Br Bd Bl S : ℕ} {s E β βl : ℝ} (hs : 0 ≤ s) (hE : 0 < E) (hβ : 0 ≤ β)
     (hβl : 0 ≤ βl) (ht : t₁ + 1 < D) :
@@ -491,7 +491,7 @@ theorem HeldSampled_nontrivial :
     heldSampled_nontrivial toyStream (fun _ _ _ => 0) (δs := 0) (δc := 1 / 1099511627776) (by norm_num)
   exact h
 
-/-- **`HeldOverTimeSampled`'s hypotheses hold** at W2's session with no link block, paced by `Meets.burstPace`, at
+/-- **`HeldOverTimeSampled`'s hypotheses hold** at W2's session with no link block, paced by `Instances.burstPace`, at
 W2's rates, `δs = 0` and `δc = 2^-40`. -/
 theorem HeldOverTimeSampled_honest :
     (0 : ℝ) < 98016 ∧ (0 : ℝ) ≤ 191.5 ∧ (0 : ℝ) ≤ 4.32e9 / 4096 / 1e9 ∧ (0 : ℝ) ≤ 1 / 1099511627776 ∧
@@ -524,7 +524,7 @@ theorem HeldOverTimeSampled_nontrivial :
   exact h
 
 /-- **`HeldOverTimeLinksSampled`'s hypotheses hold** at W2's session, its node bringing blocks back by rebuilds, disk
-reads and links at once, paced by `Meets.burstPace`, at W2's rates, `δs = 0` and `δc = 2^-40`. -/
+reads and links at once, paced by `Instances.burstPace`, at W2's rates, `δs = 0` and `δc = 2^-40`. -/
 theorem HeldOverTimeLinksSampled_honest :
     (0 : ℝ) < 98016 ∧ (0 : ℝ) ≤ 191.5 ∧ (0 : ℝ) ≤ 4.32e9 / 4096 / 1e9 ∧ (0 : ℝ) ≤ 50e9 / 4096 / 1e9 ∧
       (0 : ℝ) ≤ 1 / 1099511627776 ∧ 18446744073709551615 < 18446744073709551616 ∧
