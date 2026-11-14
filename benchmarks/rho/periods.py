@@ -20,7 +20,8 @@ world-inference-2027) and each monitoring period (`PERIODS`, core's, through `rh
 * **what is scaled**: a server block's local minimum is a per-server-window bound (one server between two wipes,
   onsite; one server over the period, remote), its cuts' statements are per server block, and the bound sums them over
   every server and window; the unregistered leaves are one pool, `ε_unreg` of the fleet, and the uncertified routes are shares of
-  each server's capacity, neither a per-window bound;
+  each server's capacity, neither a per-window bound; on a remote row both are `DampenerRemotePeriod`'s terms over the
+  period, which a row cites with the premises it takes and each one's section of the lock (`PERIOD_PREMISES`);
 * **what sets it** (`analysis.attribution`);
 * **the premises ranked** by how far each alone moves the lower bound: each ranged parameter over its range, each
   assumption of `data/premises.toml` refuted, and `draft:no-straddle` dropped (`s_×` = 1, the elementary cap). A proof
@@ -50,7 +51,7 @@ from pathlib import Path
 import run
 from rho import analysis, circuits, lean, operating, params
 from rho.classes import CLASSES, premise_status, premises
-from rho.envelopes import ROUTES
+from rho.envelopes import ROUTES, Onsite, Remote
 from rho.params import Param, Registry
 from rho.scenario import Result, _binding_k, draft
 
@@ -67,6 +68,13 @@ FIXED = ("datasheet", "measured", "declared", "ruled")
 #: the parameters whose range is a limit `verity` sets, not a premise, by the kind their row shows: a proof block's
 #: output bits, the widest public size class (the limit, provisional) down to the smallest, the 16-bit limit
 LIMITS = dict.fromkeys(params.BLOCK_OUTPUT_BITS, "the size class's limit (provisional)")
+#: the period statement whose terms a remote row's unregistered pool and uncertified routes are, each a share of the
+#: fleet's capacity over the period, and the premises it takes in place of `DampenerRemote`'s per-window ones; no
+#: statement sums a server block's bound over servers, so the scaled part cites none
+PERIOD_BOUND = "Nci.Guarantees.DampenerRemotePeriod"
+PERIOD_PREMISES = ("Nci.Assumptions.PouwPerWindow", "Nci.Assumptions.SampledPerWindow",
+                   "Nci.Assumptions.IdentitySchedule", "Nci.Assumptions.UnmonitoredAtMost",
+                   "Nci.Assumptions.CheatingAtMost")
 
 
 def choices(name: str, fleet: str, period: str) -> dict[str, str]:
@@ -136,7 +144,10 @@ def scaled(r: Result) -> dict:
     blocks = [{"name": b.name, "count": b.count, "seconds": b.gates / phi,
                "cuts": {c.name: list(c.cites) for c in b.cuts}} for b in part.serving]
     terms = analysis.attribution(r)
-    return {"blocks": blocks,
+    inner = operating._inner(s.regime)
+    period = ({"bound": PERIOD_BOUND, "premises": {p: lean.premise_kind(p) for p in PERIOD_PREMISES}}
+              if isinstance(inner, Remote) and not isinstance(inner, Onsite) else None)
+    return {"blocks": blocks, "period": period,
             "per_window_share": math.fsum(t.share for t in terms if t.name.split(".")[0] in ("serving", "inference")),
             "unreg_share": math.fsum(t.share for t in terms if t.name == "unregistered"),
             "routes_share": math.fsum(t.share for t in terms if t.name.split(".")[0] in ROUTES)}
@@ -304,7 +315,10 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
         out += [(f"| scaled | {sc['per_window_share']:.1%} of the slowdown's rate: each server block's local minimum is a "
                 f"per-server-window bound ({blocks}), summed over the blocks ({counts}) |"),
                 (f"| not scaled | the unregistered pool {sc['unreg_share']:.1%} (`ε_unreg` of the fleet, one pool), the "
-                f"uncertified routes {sc['routes_share']:.1%} (shares of each server's capacity at `q_U`) |"),
+                f"uncertified routes {sc['routes_share']:.1%} (shares of each server's capacity at `q_U`)"
+                + (f"; both are `{sc['period']['bound']}`'s terms over the period, pooled over the fleet's capacity, "
+                   "under " + ", ".join(f"`{p}` ({k})" for p, k in sc["period"]["premises"].items())
+                   if sc["period"] else "") + " |"),
                 "| what sets it | " + ", ".join(f"{t['name']} {t['share']:.1%}" for t in x["attribution"]) + " |", ""]
     out += ["## The premises, ranked", "",
             ("How far each alone moves the lower bound, the rest at reference, in decades: each ranged parameter "

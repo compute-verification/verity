@@ -52,6 +52,18 @@ def status(name: str) -> str:
     return "absent"
 
 
+@cache
+def premise_kind(name: str, locks: tuple[Path, ...] = LOCKS) -> str:
+    """The lock section a premise is listed in: `assumptions` (a named assumption), `open` or `domain`; `absent` where
+    no lock lists it."""
+    for path in locks:
+        lock = json.loads(path.read_text())
+        for section in ("assumptions", "open", "domain"):
+            if name in (lock.get(section) or {}):
+                return section
+    return "absent"
+
+
 def weakest(names: Iterable[str]) -> str:
     """`proved`, `conditional` (proved under named assumptions), `draft` or `absent`: the weakest of `names`."""
     s = max((s for s in map(status, names) if s != "evidence"), key=ORDER.index, default="proved")

@@ -553,6 +553,11 @@ def test_periods_bounds_gives_the_rows_of_one_class_alone_and_says_what_they_cov
         assert x["parts"]["setter"] == y["parts"]["setter"] == "min-cut"
         assert x["slowdown"] == pytest.approx(y["slowdown"], rel=1e-12) and 2.9 < x["slowdown"] < 3.1
         assert x["scaled"]["per_window_share"] < 1e-5 < 0.99 < x["scaled"]["routes_share"]
+        assert x["scaled"]["period"] is None
+        assert y["scaled"]["period"] == {"bound": periods.PERIOD_BOUND,
+                                         "premises": {p: "open" for p in periods.PERIOD_PREMISES}}
+    assert f"both are `{periods.PERIOD_BOUND}`'s terms over the period" in text
+    assert "`Nci.Assumptions.PouwPerWindow` (open)" in text
     monkeypatch.setattr(sys, "argv", ["periods.py", "--scenario", names[1]])
     periods.main()
     assert "--bounds" not in capsys.readouterr().out
