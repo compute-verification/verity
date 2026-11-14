@@ -66,15 +66,15 @@ noncomputable def opnAtZ (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) (I : I
 /-- **`RunsZC` at the live `--zk` tables, at the sampling design's samples** (the decoder premise's message half at `--zk`). Given that wherever
 verity-verify-proof accepts the `--zk` table is the executable's (`TablesAtZKLive`), on untyped one-table inputs under the tags
 `TagsOk` fixes, with `wr` the challenger's record of the live `--zk` session and each of the sampling design's samples proving its
-units at `mPts` link points (`DrawOkZK` at `L.draw ω`: the link points depend on `|S|`, so no `mPts` holds at every
+units at `mPts` link points (`SampleOkZK` at `L.draw ω`: the link points depend on `|S|`, so no `mPts` holds at every
 sample), `RunsZC` holds at the sampling design's samples (`RunsOnZC`) at the tables `tablesAtZK` under `hm96-sha512/v1` (`hs512`), with
 the decoder `decAtZ`, the openings `opnAtZ`, no tail and `capOfRoot`. The reference setup `y₀` is data. -/
 def RunsZCLive : Prop :=
   ∀ {n mPts : ℕ} {Reg : Type} (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
-    {S₀ : Finset (Fin n)} (y₀ : ZkLink.DrawSetupZK I mPts S₀ (dj S₀))
+    {S₀ : Finset (Fin n)} (y₀ : ZkLink.SampleSetupZK I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : Audit.Law n),
     ZkLink.TablesAtZKLive (n := n) (mPts := mPts) (Reg := Reg) → TagsOk I → ZkLink.RecordsLiveZK I dj wr →
-    (∀ ω, ZkLink.DrawOkZK I dj mPts (L.draw ω)) →
+    (∀ ω, ZkLink.SampleOkZK I dj mPts (L.draw ω)) →
     RunsOnZC (K := 𝕂) execArith hs512 (ZkLink.tablesAtZK (Reg := Reg) dj y₀) I wr
       (opnAtZ (ZkLink.tablesAtZK dj y₀) I dj) (decAtZ (ZkLink.tablesAtZK dj y₀)) (fun _ _ _ _ => [])
       (fun _ _ b _ => capOfRoot b) L

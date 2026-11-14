@@ -31,11 +31,11 @@ collision, or the forger outputs a forgery of the device's LMS signature.
   parameters' challenger key (`keyOf`) is that of their first component of sampled proofs' id that names one.
 * **An accepted v2 case is one of them** (`accepted_case`): a composite names each component's id once (`Verity.ids_nodup`), so
   on parameters naming the one-stage form, the case the sampled component accepts is v2's (`caseOf`), its record is one
-  of `records` under `keyOf`'s key, `drawCoins` reads from it the coins v2's check read, and v2's check accepts at
+  of `records` under `keyOf`'s key, `sampleCoins` reads from it the coins v2's check read, and v2's check accepts at
   them.
 * **An accepted read is a run's log** (`accepted_run`): where v2's check reads a log, it is what `readLog` reads
   from the lines of a run of the device that the device's ledger opens withheld on the sample's window, whose release
-  log reads as its coin commitment's, with the run's released coins as the sample's (`Challenger.Drawn.drawn_log`), or
+  log reads as its coin commitment's, with the run's released coins as the sample's (`Challenger.Drawn.sampled_log`), or
   one of the records under `keyOf`'s key carries a break. The records the evidence names give each round that
   run's log opens the coins its line shows (`Lines.TreeLines`), in either form of v2's check: the one statement's
   records each pass the coin trees `coinTreesOf` reads from the log (`trees_of`, `records_of`), and a member's
@@ -259,14 +259,14 @@ theorem key_of_source {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment
 proofs at v2 (`ReadsV2`), on parameters that name its one-stage form (`ParamsAt`), a run accepted as a `same`
 composition whose sampled component accepts its own case has that case as v2's (`caseOf`), read under a challenger
 and a window its parameters name (`oneStageZkSource`); its record is one of the run's v2 records (`records`) under
-the parameters' challenger key (`keyOf`), v2's coins are what `drawCoins` reads from it, its evidence is one either
+the parameters' challenger key (`keyOf`), v2's coins are what `sampleCoins` reads from it, its evidence is one either
 form's parse returns, and v2's check accepts at those coins. -/
 theorem accepted_case {k : Verity.Registration.Composite} (hk : ReadsV2 k) {s : Sent}
     {p : Spot.OneStageZk.Params} (hp : ParamsAt s.params p) (hs : SameAccepts k s)
     (ha : ComponentAccepts k .sampled s) :
     ∃ c e d ξ, caseOf s = .ok (p, c, e) ∧ oneStageZkSource p c = some d ∧ (d, e.base.coins) ∈ records s ∧
       keyOf s.params = some d.key ∧ Spot.OneStageZk.coinsOf p c e = .ok ξ ∧
-      drawCoins d.key d.window d.label d.after e.base.coins = .ok ξ ∧
+      sampleCoins d.key d.window d.label d.after e.base.coins = .ok ξ ∧
       (∃ b, Spot.OneStageZk.evidenceEitherOf b = .ok e) ∧
       ∃ pub prof, Spot.OneStageZk.checkBlobsAt p c ξ e (_root_.Core.Blobs.ofArray s.blobs) = .accept pub prof := by
   obtain ⟨P, hP, ps, b, ev, ⟨hps, -, hev⟩, x, hx, hx1, hacc⟩ := ha
@@ -301,7 +301,9 @@ theorem accepted_case {k : Verity.Registration.Composite} (hk : ReadsV2 k) {s : 
   · cases hch
   have hc' : Spot.OneStage.commitmentOf x.2.2.commitment = .ok c := hc
   have he' : VStar.Recursive.Sampled.evidenceOf x.2.2.evidence = .ok (Sum.inl e) := he
-  have hch' : Spot.OneStageZk.checkBlobs p c e (_root_.Core.Blobs.ofArray s.blobs) = .accept pub prof := hch
+  have hch' : Spot.OneStageZk.checkBlobs p c e (_root_.Core.Blobs.ofArray s.blobs) = .accept pub prof :=
+    (VStar.Recursive.Caller.gate_accept (show VStar.Recursive.Caller.gate c.record p.base.verifier
+      (Spot.OneStageZk.checkBlobs p c e (_root_.Core.Blobs.ofArray s.blobs)) = .accept pub prof from hch)).2
   cases hξ : Spot.OneStageZk.coinsOf p c e with
   | error r =>
     unfold Spot.OneStageZk.checkBlobs at hch'
@@ -554,7 +556,7 @@ theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev :
               cases hw : p.base.verifier.windowRoot with
               | none => rw [hw] at hd; cases hd
               | some w => rw [hw] at hd; cases hd; exact ⟨rfl, rfl⟩
-            rcases Drawn.drawn_log (dev := dev) hdraw with ⟨r, hr, ho, hξr, hcr, ls, hlog, hls⟩ | b
+            rcases Drawn.sampled_log (dev := dev) hdraw with ⟨r, hr, ho, hξr, hcr, ls, hlog, hls⟩ | b
             · have hlr : lines = r.log := Except.ok.inj (hlines.symm.trans (linesOf_eq hlog hls))
               refine .inr ⟨d, e, recs, r, hr, ho, hcr, hrecs, ?_, ts, trees_of hts hlog hls,
                 hlines' _ (trees_of hts hlog hls)⟩

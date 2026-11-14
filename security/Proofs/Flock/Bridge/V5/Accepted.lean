@@ -33,10 +33,10 @@ its template, and V5 the statement circuit it unrolls to, which has its ports, p
   domain 64 bytes; `v5Files_of_checksStmt`, `idsSized_of_checksStmt`: at the statement circuit of a descriptor
   `Flock.Desc.parseStmt` reads, flat or templated.
 * `SampledKSLiveV5Accepted`: `SampledKSLiveV5R` with its event `LiveAcceptsKSP ∧ RunPopOk` in place of `LiveAcceptsZKP`
-  and without the four hypotheses, under the sampling design the verifier samples under from the registration (`Bridge.DrawsUnder`),
-  no Bernoulli law, and at `δ` the sampling design's own miss of `B`, as V5 has them; `sampledKSLiveV5Accepted_of` derives it from
+  and without the four hypotheses, under the sampling design the verifier samples under from the registration (`Bridge.SamplesUnder`),
+  no Bernoulli sampling design, and at `δ` the sampling design's own miss of `B`, as V5 has them; `sampledKSLiveV5Accepted_of` derives it from
   `SampledKSLiveV5R` as `sampledKSLiveV3_of` derives V3 from V2, and `sampledKSLiveV5Accepted` proves it. The session's
-  simulator is V5's: its sample files decode to `kd` units whatever the population (`Bridge.lawSized_drawsUnder`,
+  simulator is V5's: its sample files decode to `kd` units whatever the population (`Bridge.lawSized_samplesUnder`,
   `Bridge.lawSized_size`), so it reads no population check.
 -/
 
@@ -289,7 +289,7 @@ open Classical in
 rows of distinct published domains, no two registered roots one root under different domains, and the form, shared rows
 included, `KsScope` admits), the sampled-proofs run passes the registration's population (`RunPopOk`: the descriptor `desc` and
 the query `qr` give the game's `n` units in order), and the claims relation fails, under the sampling design the verifier samples
-under from the registration (`Bridge.DrawsUnder`), no Bernoulli law (`Bridge.NotBernoulli`), at `δ` that sampling design's own miss
+under from the registration (`Bridge.SamplesUnder`), no Bernoulli sampling design (`Bridge.NotBernoulli`), at `δ` that sampling design's own miss
 of `B`, as in `SampledKSLiveV5`. It has none of `SampledKSLiveV5R`'s hypotheses `RowsOk`, `dupId = false`, `RootFixesDomainL` and
 `PopMatches`; the game's `n` is the public file's population (`pub.n = n`). It reads the circuit file as
 `SampledKSLiveV5R` does, flat or templated (`Flock.Desc.parseStmt`), and `verify --zk`'s checks at the circuit they read
@@ -307,12 +307,12 @@ def SampledKSLiveV5Accepted : Prop :=
     (_hn : pub.n = n)
     -- the statement's descriptor, and the registration's query
     (desc : Claims.Msg) (qr : Lean.Json)
-    -- the registration's law object and work table, the sampling design the verifier samples under from them, sampling kd proof
-    -- blocks, and that it is no Bernoulli law
+    -- the registration's sampling design object and work table, the sampling design the verifier samples under from them, sampling kd proof
+    -- blocks, and that it is no Bernoulli sampling design
     (lj : Lean.Json) (tb : Option Lean.Json) (law : Flock.Draw.Law) (kd : ℕ)
-    (hlaw : Bridge.DrawsUnder desc qr lj tb n law kd) (hb : Bridge.NotBernoulli law) (hdiv : kd % nTab I = 0)
+    (hlaw : Bridge.SamplesUnder desc qr lj tb n law kd) (hb : Bridge.NotBernoulli law) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-    (y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
+    (y₀ : SampleSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJP (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -338,7 +338,7 @@ def SampledKSLiveV5Accepted : Prop :=
     let σ := simZJA execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr (opnAtZHJP (planZHJP dj y₀) I own dj) dg
       (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesZCJH_custodyP I own ht (Flock.Desc.parseStmt_stmt hD) law kd hdiv dj y₀ wr
-        _ hTags hCust (Bridge.lawSized_size (Bridge.lawSized_drawsUnder hlaw hb) hCust.2)) τ
+        _ hTags hCust (Bridge.lawSized_size (Bridge.lawSized_samplesUnder hlaw hb) hCust.2)) τ
     let Xr := XplurZC execArith hs512 P (planZHJP dj y₀) (tabZHJP dj y₀) vb (reg σ) (cont σ) k Rw
     -- the deployed commitment's layout: the game's rows, read off the circuit file, at the public file's leaf map
     let Cc := (keyProgP D.unroll pi hU n).circuit (Discharge.Layout.outsOfP D.unroll hU n pi)

@@ -74,9 +74,9 @@ theorem flock_e2e_count
   P.flock_e2e_count H E plan tab hExec dp ones hConst zeros hZero vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le K σ
     (linkCR_of_strict P H E plan tab vb (reg σ) (cont σ) ht hq hCRs)
 
-/-- **The end-to-end drawn-unit bound (skeleton) under `cr/sha-512`**: `Partition.flock_e2e_drawn` with `LinkCRStrict`
+/-- **The end-to-end drawn-unit bound (skeleton) under `cr/sha-512`**: `Partition.flock_e2e_sampled` with `LinkCRStrict`
 for `LinkCR`, as in `flock_e2e_count`. -/
-theorem flock_e2e_drawn
+theorem flock_e2e_sampled
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
     (ones : Finset (Fin C.N)) (hConst : P.ConstCols plan tab dp.place ones)
@@ -90,7 +90,7 @@ theorem flock_e2e_drawn
         ¬ Disjoint (P.wrong (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ (strictRunCost t' q) :=
-  P.flock_e2e_drawn H E plan tab hExec dp ones hConst zeros hZero vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le σ
+  P.flock_e2e_sampled H E plan tab hExec dp ones hConst zeros hZero vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le σ
     (linkCR_of_strict P H E plan tab vb (reg σ) (cont σ) ht hq hCRs)
 
 /-- **The end-to-end count curve with the rows' value binding, under `cr/sha-512` alone**:
@@ -122,8 +122,8 @@ theorem flock_e2e_count_hm96
     hKS tr hT
 
 /-- **The end-to-end drawn-unit bound with the rows' value binding, under `cr/sha-512` alone**:
-`Binding.flock_e2e_drawn_hm96` with `LinkCRStrict` for `LinkCR`, as in `flock_e2e_count_hm96`. -/
-theorem flock_e2e_drawn_hm96
+`Binding.flock_e2e_sampled_hm96` with `LinkCRStrict` for `LinkCR`, as in `flock_e2e_count_hm96`. -/
+theorem flock_e2e_sampled_hm96
     {execAccept : Bool × Finset (Fin n) → Prop}
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
     (ones : Finset (Fin C.N)) (hConst : P.ConstCols plan tab dp.place ones)
@@ -144,15 +144,15 @@ theorem flock_e2e_drawn_hm96
       StrictCR.ksAvgStrict plan L k qF qS (reg σ) +
         P.linkBoundE (L := L) plan tab (rs.binding hHm) k Rw M ρ (strictRunCost t' q) +
         ENNReal.ofReal (tr.bound qT) :=
-  Binding.flock_e2e_drawn_hm96 P H E plan tab dp ones hConst zeros hZero lay rs hHm hk hRw hM hρ hr
+  Binding.flock_e2e_sampled_hm96 P H E plan tab dp ones hConst zeros hZero lay rs hHm hk hRw hM hρ hr
     (strictRunCost_pos ht hq).le σ (linkCR_of_strict P H E plan tab (rs.binding hHm) (reg σ) (cont σ) ht hq hCRs)
     hKS tr hT
 
 variable {m : ℕ} (St : Fin m → Flock.Draw.Stratum) (Ls : Fin m → ℕ)
 
-/-- **The e2e drawn-unit bound at the executable's law, with the rows' value binding, under `cr/sha-512` alone**:
-`Binding.flock_e2e_drawn_exec_hm96` with `LinkCRStrict` for `LinkCR`. -/
-theorem flock_e2e_drawn_exec_hm96
+/-- **The e2e drawn-unit bound at the executable's sampling design, with the rows' value binding, under `cr/sha-512` alone**:
+`Binding.flock_e2e_sampled_exec_hm96` with `LinkCRStrict` for `LinkCR`. -/
+theorem flock_e2e_sampled_exec_hm96
     {execAccept : Bool × Finset (Fin n) → Prop}
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
     (ones : Finset (Fin C.N)) (hConst : P.ConstCols plan tab dp.place ones)
@@ -174,11 +174,11 @@ theorem flock_e2e_drawn_exec_hm96
       StrictCR.ksAvgStrict plan (Law.execStratified St Ls) k qF qS (reg σ) +
         P.linkBoundE (L := Law.execStratified St Ls) plan tab (rs.binding hHm) k Rw M ρ (strictRunCost t' q) +
         ENNReal.ofReal (tr.bound qT) :=
-  Binding.flock_e2e_drawn_exec_hm96 P H E plan tab St Ls dp ones hConst zeros hZero lay rs hHm hk hRw hM hρ hr
+  Binding.flock_e2e_sampled_exec_hm96 P H E plan tab St Ls dp ones hConst zeros hZero lay rs hHm hk hRw hM hρ hr
     (strictRunCost_pos ht hq).le σ (linkCR_of_strict P H E plan tab (rs.binding hHm) (reg σ) (cont σ) ht hq hCRs)
     hKS tr hT
 
-/-- **The e2e count curve at the executable's law, with the rows' value binding, under `cr/sha-512` alone**:
+/-- **The e2e count curve at the executable's sampling design, with the rows' value binding, under `cr/sha-512` alone**:
 `Binding.flock_e2e_count_exec_hm96` with `LinkCRStrict` for `LinkCR`. -/
 theorem flock_e2e_count_exec_hm96 (σs : Fin n → Fin m) (ks : Fin m → ℕ)
     (hks : ∀ s, ks s ≤ (Law.stratum σs s).card) (hS : Law.ExecStrata σs ks St)
@@ -242,8 +242,8 @@ theorem prog_e2e_count
     K σ (linkCR_of_strict (p.partition outs) H E plan tab vb (reg σ) (cont σ) ht hq hCRs)
 
 /-- **The end-to-end drawn-unit bound on the circuit of the statement's rows, under `cr/sha-512` for the link
-finders**: `Prog.flock_e2e_drawn` with `LinkCRStrict` for `LinkCR`. -/
-theorem prog_e2e_drawn
+finders**: `Prog.flock_e2e_sampled` with `LinkCRStrict` for `LinkCR`. -/
+theorem prog_e2e_sampled
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (pp : ProgPlaces p outs plan tab)
     (ones : Finset (Fin N)) (hConst : (p.partition outs).ConstCols plan tab pp.derived.place ones)
@@ -260,7 +260,7 @@ theorem prog_e2e_drawn
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) +
         (p.partition outs).linkBoundE (L := L) plan tab vb k Rw M ρ (strictRunCost t' q) :=
-  p.flock_e2e_drawn outs plan tab H E hExec pp ones hConst zeros hZero vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le
+  p.flock_e2e_sampled outs plan tab H E hExec pp ones hConst zeros hZero vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le
     σ (linkCR_of_strict (p.partition outs) H E plan tab vb (reg σ) (cont σ) ht hq hCRs)
 
 end Session

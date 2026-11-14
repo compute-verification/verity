@@ -22,7 +22,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   `verity-verify-proof --archive` finds one) are other than those refuse (`tablesHeld`, `NO_TABLES`) before the session is set
   up: the tables the session `run` sets up reads are the registered circuit's. The per-member form holds each member
   to its own circuit's tables instead (below, **per member**);
-* **coins** (`coinsOf`): v1's (`OneStage.coinsOf`), what `Challenger.drawCoins` reads from the evidence's `coins` under
+* **coins** (`coinsOf`): v1's (`OneStage.coinsOf`), what `Challenger.sampleCoins` reads from the evidence's `coins` under
   the challenger's key, on the verifier's window; none read refuses. The check below runs at them (`checkBlobsAt`): v1's
   `checkAt` refuses a sample other than the one they give before v1's `check`;
 * **trees** (`treesOf`, `orderHeld`, `treesHeld`): the coin trees that same session's signed release log shows the
@@ -57,7 +57,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   file no blob holds is that session's reject, as a file `verity-verify-proof` can't read is. So does a length a session's
   statement can't hold, since it writes each in an 8-byte word: the circuit or public file, the lookup tables, the
   program, the partition object, the registered reads or a session's sample at `2^64` bytes or more (`fitsWhy`,
-  `drawFitsWhy`, the JSON ones as `Flock.RecordText.printT` prints them);
+  `sampleFitsWhy`, the JSON ones as `Flock.RecordText.printT` prints them);
 * **per member** (`checkMembersAt`): the form for a population of several members, a statement a sampled member. It
   accepts where every statement's session accepted and v1's check at the coins accepts on their verdicts, as the one
   statement's check does (`checkMembersAt_accept`). v1's check reads the members there
@@ -94,13 +94,14 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   a member's inputs hold no table its circuit does not look up (`Properties.Spot.TablesRegistered`). Its files pass
   what a session's verdict checks of the files alone (`StepAt.filesHeld`: the
   scope, the files' ports and roots, the form the sampled audit's knowledge soundness covers without a session's
-  sample, `Flock.KsScope.filesOf`, and the population check), so a member the sample missed is refused where its
+  sample, `Flock.KsScope.filesOf`, the public file's header and rows as a session's setup takes them,
+  `Flock.PortRoots.headerOf`, and the population check), so a member the sample missed is refused where its
   session's verdict would have refused its files (`membersRun_files`). A member's circuit file is parsed once for
   them (`StepAt.ofOwn`), and the statement keeps each check's result, never the parse. The compiled pass
   (`membersFilesKept`, equal to it) reads the blobs' lookup tables once and a circuit file once for the members that
   name it, at the tables of them it looks up, and keeps of the file the circuit's own verdicts and the circuit without
   its rows (`Spot.CircuitKept`),
-  so its work on the rows is by the file and not by the member; a member's public file it loads once for the three
+  so its work on the rows is by the file and not by the member; a member's public file it loads once for the four
   checks that read it, and a program it parses and hashes once for the members in a row that read it. Then each
   statement's session is verified as the one statement's is, on its member's own files as that pass read them
   (`runMembers`), after the statements before it, so no coin tree serves two statements: its circuit's units a proof
@@ -130,7 +131,7 @@ public import Spot.OneStage
 public import Spot.ChallengerTrees
 public import Spot.Slots
 public import Spot.FilePart
-public import Spot.WiresDrawn
+public import Spot.WiresSampled
 public import Spot.CircuitKept
 public import Spot.OneStageZkStatement
 public import Flock
@@ -141,7 +142,7 @@ meta import Spot.OneStage
 meta import Spot.ChallengerTrees
 meta import Spot.Slots
 meta import Spot.FilePart
-meta import Spot.WiresDrawn
+meta import Spot.WiresSampled
 meta import Spot.OneStageZkStatement
 meta import Flock
 meta import Flock.JsonParse
@@ -284,8 +285,33 @@ theorem Member.files_ok {m : Member} {slice : Json} {bs : Core.Blobs} {a : StepA
   unfold StepAt.filesHeld at hf
   obtain ⟨⟨⟩, hsc, hf⟩ := Flock.HmNets.bind_ok hf
   obtain ⟨⟨⟩, hk, hf⟩ := Flock.HmNets.bind_ok hf
-  obtain ⟨⟨⟩, hks, hp⟩ := Flock.HmNets.bind_ok hf
+  obtain ⟨⟨⟩, hks, hf⟩ := Flock.HmNets.bind_ok hf
+  obtain ⟨⟨⟩, -, hp⟩ := Flock.HmNets.bind_ok hf
   exact ⟨a', hs, hsc, hk, (Member.statement_parse hs).1.symm.trans hks, hp⟩
+
+/-- **A member whose statement `Member.files` returns has its public file's header and rows as a session's setup
+takes them**: `Flock.PortRoots.headerOf` passes on the circuit its own inputs' files parse to, at no session. -/
+theorem Member.files_header {m : Member} {slice : Json} {bs : Core.Blobs} {a : StepAt}
+    (h : m.files slice bs = .ok a) :
+    Flock.PortRoots.headerOf (Flock.ProvedScope.circuitOf (Flock.Witness.zkTags a.I) a.I.circuitFile a.I.tables)
+      (Flock.Witness.zkTags a.I) a.I.publicFile = .ok () := by
+  unfold Member.files at h
+  obtain ⟨a', hs, h⟩ := Flock.HmNets.bind_ok (mapError_ok h)
+  obtain ⟨⟨⟩, hf, h⟩ := Flock.HmNets.bind_ok h
+  have ha : a' = a := Except.ok.inj h
+  subst ha
+  unfold StepAt.filesHeld at hf
+  obtain ⟨⟨⟩, -, hf⟩ := Flock.HmNets.bind_ok hf
+  obtain ⟨⟨⟩, -, hf⟩ := Flock.HmNets.bind_ok hf
+  obtain ⟨⟨⟩, -, hf⟩ := Flock.HmNets.bind_ok hf
+  obtain ⟨⟨⟩, hh, -⟩ := Flock.HmNets.bind_ok hf
+  unfold Member.statement at hs
+  obtain ⟨a'', hst, hb⟩ := Flock.HmNets.bind_ok hs
+  obtain ⟨⟨⟩, -, hb⟩ := Flock.HmNets.bind_ok hb
+  have ha : a'' = a' := Except.ok.inj hb
+  subst ha
+  obtain ⟨tags0, circuitB, pubB, rd, rfl⟩ := statementOf_ofOwn hst
+  exact hh
 
 /-- Where `membersFiles` reads the members `ms`, each of them has its files held. -/
 theorem membersFiles_ok {slice : Member → Json} {bs : Core.Blobs} {ms : List Member}
@@ -516,7 +542,7 @@ partition's ranges `rs` (each its template, first unit and count), the members `
 count), the units of the sample `sample` and each member's rows (`load`, by name): each template of the wiring is one
 range of `rs` of exactly its units, so its unit `u` is the population's unit `first + u` (else `WIRES_TEMPLATE`); and
 every wired row of every unit of the sample is its writer's output row (`Spot.Wires.Summary.drawnOk`, the reference's
-check on the sample's units by `Spot.Wires.drawnOk_iff`): the row's `b ‖ c` in its member's public file, at the unit's
+check on the sample's units by `Spot.Wires.sampledOk_iff`): the row's `b ‖ c` in its member's public file, at the unit's
 slot and the port the row names (`rowName`), is the writer's output row's in the writer's member's, neither empty
 (else `WIRES_SAMPLED`). It loads the members a unit of the sample with a wired row, or one of its writers, is in. -/
 def wiresOn (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (rs : Array (String × Nat × Nat))
@@ -1268,21 +1294,23 @@ private def statedT (c : ByteArray) (bs : Core.Blobs) : String :=
 #guard (whyT (statementOf (ownOf (lookingUp ["rcp"])) (fun _ => pure ()) [("rcp", .empty)] (twoT []))).startsWith
   "public file: "
 
-/-- A statement of no file whose scope, ports, form and population checks are the ones given. -/
-private def stepT (scope ksFiles ksForm population : V Unit) : Option StepAt :=
+/-- A statement of no file whose scope, ports, form, header and population checks are the ones given. -/
+private def stepT (scope ksFiles ksForm header population : V Unit) : Option StepAt :=
   (Flock.Tags.find? STATEMENT).map fun tags =>
     { I := inputsOf tags sharedT .empty .empty ⟨#[]⟩, rd := { registered := none, known := #[], params := #[] }, scope,
-      ksFiles, ksForm, g := none, population, programSha := none, want := Json.null }
+      ksFiles, ksForm, header, g := none, population, programSha := none, want := Json.null }
 
-#guard ((stepT (.error "scope") (.error "ports") (.error "form") (.error "population")).map fun a =>
+#guard ((stepT (.error "scope") (.error "ports") (.error "form") (.error "header") (.error "population")).map fun a =>
   refusal a.filesHeld) == some "scope"
-#guard ((stepT (.ok ()) (.error "ports") (.error "form") (.error "population")).map fun a => refusal a.filesHeld) ==
-  some "ports"
-#guard ((stepT (.ok ()) (.ok ()) (.error "form") (.error "population")).map fun a => refusal a.filesHeld) ==
-  some "form"
-#guard ((stepT (.ok ()) (.ok ()) (.ok ()) (.error "population")).map fun a => refusal a.filesHeld) ==
+#guard ((stepT (.ok ()) (.error "ports") (.error "form") (.error "header") (.error "population")).map fun a =>
+  refusal a.filesHeld) == some "ports"
+#guard ((stepT (.ok ()) (.ok ()) (.error "form") (.error "header") (.error "population")).map fun a =>
+  refusal a.filesHeld) == some "form"
+#guard ((stepT (.ok ()) (.ok ()) (.ok ()) (.error "header") (.error "population")).map fun a =>
+  refusal a.filesHeld) == some "header"
+#guard ((stepT (.ok ()) (.ok ()) (.ok ()) (.ok ()) (.error "population")).map fun a => refusal a.filesHeld) ==
   some "population"
-#guard ((stepT (.ok ()) (.ok ()) (.ok ()) (.ok ())).map fun a => a.filesHeld.toOption.isSome) == some true
+#guard ((stepT (.ok ()) (.ok ()) (.ok ()) (.ok ()) (.ok ())).map fun a => a.filesHeld.toOption.isSome) == some true
 
 /-- The statement `StepAt.ofOwn` builds of no file: its form check is `Flock.KsScope.filesOf`'s refusal of a circuit
 that does not parse, and it names no units a proof block. -/
@@ -1291,6 +1319,7 @@ private def ownT : Option StepAt :=
     StepAt.ofOwn sharedT tags .empty .empty [] { registered := none, known := #[], params := #[] } (.ok ())
 
 #guard (ownT.map fun a => (refusal a.ksForm).startsWith "refused: ") == some true
+#guard (ownT.map fun a => (refusal a.header).startsWith "refused: a circuit that does not parse (") == some true
 #guard (ownT.map fun a => a.g) == some none
 #guard whyT ((memberT "m0" #[(0, 1)]).blockHeld (some 2)) ==
   "vus_per_block: the member's circuit has 2 units a proof block, not the 1 the parameters name"

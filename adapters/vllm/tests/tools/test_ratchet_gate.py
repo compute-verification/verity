@@ -62,7 +62,7 @@ MOVE_CHECK = """\
 import importlib.util, subprocess, sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
-for path in ("tools/move/rename.py", "tools/verity/check/pins.py"):
+for path in ("tools/move/rename.py", "tools/check/pins.py"):
     spec = importlib.util.spec_from_file_location(Path(path).stem, ROOT / path)
     spec.loader.exec_module(importlib.util.module_from_spec(spec))
 out = subprocess.run(["git", "diff", "--name-status", "-M100%", sys.argv[1], sys.argv[2]], capture_output=True, text=True).stdout
@@ -79,7 +79,7 @@ layout = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(layout)
 """,
     "tools/move/layout.py": "ROWS = ()\n",
-    "tools/verity/check/pins.py": "PINS = ()\n",
+    "tools/check/pins.py": "PINS = ()\n",
 }
 #: a toy lint in the real ones' shape: a library file matching WORD is a violation, keyed by its file
 TOY_LINT = '''\
@@ -168,7 +168,7 @@ def repo(tmp_path, monkeypatch) -> Repo:
     r = Repo(tmp_path / "repo")
     r.commit("base", {"adapters/vllm/verity_vllm/a.py": "A = 1\n", "adapters/vllm/verity_vllm/b.py": "B = 1\n",
                       P01: _allowlist(_entry("verity_vllm/a.py", "A"), _entry("verity_vllm/b.py", "B")),
-                      "tools/verity/check/move_check.py": MOVE_CHECK, **MOVE_SCRIPTS})
+                      "tools/check/move_check.py": MOVE_CHECK, **MOVE_SCRIPTS})
     monkeypatch.chdir(r.root)
     return r
 
@@ -1497,7 +1497,7 @@ def callers_linted(repo) -> Repo:
 
 
 def test_a_public_command_a_change_adds_passes_when_its_caller_runs_it_and_fails_when_it_does_not(callers_linted):
-    """A command run only from benchmarks/, as weights-tie is from benchmarks/prove_path/run.sh: the base's P16 lint, run on
+    """A command run only from benchmarks/, as weights-tie is from verity/protocols/proofs/spot/prover/audit/prove_path.sh: the base's P16 lint, run on
     the change's tree, reads the change's public table, and the gate checks each caller the table gains (a new command's, or
     one moved to another file) as that lint finds a call."""
     callers_linted.commit("adds tie, run from benchmarks", {

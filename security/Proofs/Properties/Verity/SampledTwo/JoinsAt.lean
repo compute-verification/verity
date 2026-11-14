@@ -18,7 +18,7 @@ public import Proofs.Properties.Verity.SampledTwo.GoodCaseHeld
 public import Proofs.Properties.Verity.SampledTwo.BlobFinder
 
 /-!
-# The two-stage leg's projection at the form's accept, from the coin map's law
+# The two-stage leg's projection at the form's accept, from the coin map's distribution
 
 `joined` (`Joined.lean`) is the projection's bound over any acceptance. This module is the one place the two-stage
 form's check comes in: the acceptance is the form's (`FormAccepts C`), the check read a log of both sessions, the log
@@ -26,7 +26,7 @@ it read is the device's and every fresh coin carries its 512 bits (`JoinGood`), 
 (`joinLocate`: the stages' families' fresh coins on rounds `0` to `stage`, the sessions' openings on theirs).
 
 **One premise at the form's accept.** `joinedOfLaw` takes `JoinsAt`, a structure whose fields are the pieces'
-remaining premises, each in its owner's words, and the coin map's law (`CoinMap.CoinMapHolds`), which speaks of the
+remaining premises, each in its owner's words, and the coin map's distribution (`CoinMap.CoinMapHolds`), which speaks of the
 period's game and the coin map alone and reads no accept. `joinedForm` (`JoinedForm.lean`) is `joinedOfLaw` at
 COINMAP's proof of the sampling design (`CoinMap.coinMapHolds`), so it takes `JoinsAt` and nothing else, and a witness of it at an
 accepted play is one term of that structure. The sampling design is a hypothesis here only so that this module does not import
@@ -51,15 +51,15 @@ its proof (`CoinMapAgree.lean`).
 STAGECOINS's `CutReads`, `DevFirst` and `DevSecond` speak of every play the form accepts, and none of them is known
 there: the cut reads no log where a session's record carries a break, and a family's coins follow one root only on a
 log the check read. At the kept case they speak of the accepted plays `JoinGood` holds of. There `CutReads` is
-`JoinGood`'s first part, the fresh coins' width `DevSecond` needs is its last, and `StageDraws` is asked only of those
-plays. There each stage's one root is CUT's (`oneRoot_draws`, `oneRoot_second`, at `otherRoots`), so `StageDraws`
-  takes the families alone (`stageDraws_first`, `stageDraws_second`, `DrawRoots.lean`). What the pieces conclude comes
+`JoinGood`'s first part, the fresh coins' width `DevSecond` needs is its last, and `StageSamples` is asked only of those
+plays. There each stage's one root is CUT's (`oneRoot_samples`, `oneRoot_second`, at `otherRoots`), so `StageSamples`
+  takes the families alone (`stageSamples_first`, `stageSamples_second`, `DrawRoots.lean`). What the pieces conclude comes
 back to `C` by `coinsAgree_goodCase`, `firstFits_goodCase` and `secondFits_goodCase`. So `joinedOfLaw` takes no
 `CutReads` and no coins' premise for either stage.
 
 **What the stages read is the form's accept's**, with `caseIsSent`, and no field. The check's first session is the
 cut's (STAGECOINS's `sessionMatches_of`, from the form's refusal of an interior record whose read-back digest is not
-the interior commitment's, `INTERIOR_DIGEST`), and the first stage read the cut's sample (`firstDrawn_of`, from its
+the interior commitment's, `INTERIOR_DIGEST`), and the first stage read the cut's sample (`firstSampled_of`, from its
 refusal of a first-stage record whose read-back digest is not the commitment's), both taken at the kept case
 (`sessionMatches_goodCase`, `caseIsSent_goodCase`). The first stage's coins are read under the parameters' key and an
 accepted play on two windows shows its sessions' order (`firstReads`, `orderShown`, CUT's `CutAccept.lean`).
@@ -147,11 +147,11 @@ theorem sessionMatches_goodCase {C : CaseOf} {G : Verity.Exchange → Prop} (h :
     SessionMatches (goodCase C G) :=
   fun o ha => h o (formAccepts_goodCase.1 ha).1
 
-/-- **A stage's sample at the kept case**: `StageDraws` asked of the accepted plays `G` holds of is `StageDraws` at the
+/-- **A stage's sample at the kept case**: `StageSamples` asked of the accepted plays `G` holds of is `StageSamples` at the
 kept case's acceptance and sample. -/
-theorem stageDraws_goodCase {C : CaseOf} {G : Verity.Exchange → Prop} {f : Case → Option (String × ByteArray)}
-    {ℓ : String} (h : CoinMap.StageDraws (fun o => FormAccepts C o ∧ G o) (fun o => (C o).bind f) ℓ) :
-    CoinMap.StageDraws (FormAccepts (goodCase C G)) (fun o => (goodCase C G o).bind f) ℓ := by
+theorem stageSamples_goodCase {C : CaseOf} {G : Verity.Exchange → Prop} {f : Case → Option (String × ByteArray)}
+    {ℓ : String} (h : CoinMap.StageSamples (fun o => FormAccepts C o ∧ G o) (fun o => (C o).bind f) ℓ) :
+    CoinMap.StageSamples (FormAccepts (goodCase C G)) (fun o => (goodCase C G o).bind f) ℓ := by
   intro o ha label after hd
   obtain ⟨ha', hg⟩ := formAccepts_goodCase.1 ha
   exact h o ⟨ha', hg⟩ label after
@@ -172,7 +172,7 @@ theorem input_interior_of {C : CaseOf} {o : Verity.Exchange} (hA : FormAccepts C
 /-- **The first stage's bytes fit in round 0's releases at the stages' locator.** -/
 theorem firstFits_stage (A : Live₂) (C : CaseOf) (ℓ₁ ℓ₂ : String) (G Good : Verity.Exchange → Prop)
     (hG : ∀ o, Good o → G o ∧ CoinMap.FreshWide o.log) (hShow : FirstShown C G)
-    (hDraw : CoinMap.StageDraws (FormAccepts C) (fun o => (C o).bind firstDraw) ℓ₁) :
+    (hDraw : CoinMap.StageSamples (FormAccepts C) (fun o => (C o).bind firstDraw) ℓ₁) :
     FirstFits C (CoinMap.stageLocate ℓ₁ ℓ₂) (FormAccepts C) Good := by
   intro o hA hGo
   obtain ⟨hg, hw⟩ := hG o hGo
@@ -193,7 +193,7 @@ theorem firstFits_stage (A : Live₂) (C : CaseOf) (ℓ₁ ℓ₂ : String) (G G
 /-- **The second stage's bytes fit in rounds `1` to `stage`'s releases at the stages' locator.** -/
 theorem secondFits_stage (A : Live₂) (C : CaseOf) (ℓ₁ ℓ₂ : String) (hne : ℓ₁ ≠ ℓ₂) (G Good : Verity.Exchange → Prop)
     (hG : ∀ o, Good o → G o ∧ CoinMap.FreshWide o.log) (hShow : SecondShown C G)
-    (hDraw : CoinMap.StageDraws (FormAccepts C) (fun o => (C o).bind secondDraw) ℓ₂) :
+    (hDraw : CoinMap.StageSamples (FormAccepts C) (fun o => (C o).bind secondDraw) ℓ₂) :
     SecondFits A C (CoinMap.stageLocate ℓ₁ ℓ₂) (FormAccepts C) Good := by
   intro o hA hGo
   obtain ⟨hg, hw⟩ := hG o hGo
@@ -294,10 +294,10 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   /-- The vocabulary's signer is the deployment's. -/
   signer : V.signer θ = P.signer fs₁ fs₂ cut θ
 
-/-- **The projection's bound at the form's accept, from the coin map's law**: `joined` at the form's acceptance,
+/-- **The projection's bound at the form's accept, from the coin map's distribution**: `joined` at the form's acceptance,
 `JoinGood` with no collision of the play's blobs with the registered files, and the run's locator, at the cut's terms
 at the deployed two-session history plus the blob finder's collision probability (`cutBound_avoid`), from the coin
-map's law (`hHolds`) and the join's one premise (`JoinsAt`). The stages' pieces are taken at the case kept on the
+map's distribution (`hHolds`) and the join's one premise (`JoinsAt`). The stages' pieces are taken at the case kept on the
 plays `JoinGood` holds of, and the run of record's accept at the case kept on the plays with no such collision. -/
 theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf)
@@ -321,18 +321,18 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
   -- The stages' pieces, at the case kept on the plays `JoinGood` holds of.
   have hC' : CaseIsSent (goodCase C JoinGood) := caseIsSent_goodCase h.caseIsSent
   have hR' : CutReads (goodCase C JoinGood) := cutReads_goodCase fun o (hg : JoinGood o) => hg.1.1
-  have hD' : FirstDrawn (goodCase C JoinGood) := firstDrawn_of _ hC'
+  have hD' : FirstSampled (goodCase C JoinGood) := firstSampled_of _ hC'
   have hM' : SessionMatches (goodCase C JoinGood) := sessionMatches_goodCase (sessionMatches_of C h.caseIsSent)
   have hcase : ∀ o k p c e, C o = some k → Decoded k p c e → caseOf o.sent = .ok (p, c, e) :=
     fun o k p c e hk hd => (h.caseIsSent o k p c e hk hd).1
   have hA : ∀ o, FormAccepts C o ∧ JoinGood o → FormAccepts C o ∧ ReadIsDevice o ∧ OtherRoots o.sent :=
     fun o ho => ⟨ho.1, ho.2.1, h.otherRoots o ho⟩
-  have hDraw₁ : CoinMap.StageDraws (FormAccepts (goodCase C JoinGood))
+  have hDraw₁ : CoinMap.StageSamples (FormAccepts (goodCase C JoinGood))
       (fun o => (goodCase C JoinGood o).bind firstDraw) ℓ₁ :=
-    stageDraws_goodCase (stageDraws_first hcase hA h.family₁)
-  have hDraw₂ : CoinMap.StageDraws (FormAccepts (goodCase C JoinGood))
+    stageSamples_goodCase (stageSamples_first hcase hA h.family₁)
+  have hDraw₂ : CoinMap.StageSamples (FormAccepts (goodCase C JoinGood))
       (fun o => (goodCase C JoinGood o).bind secondDraw) ℓ₂ :=
-    stageDraws_goodCase (stageDraws_second hcase hA h.family₂)
+    stageSamples_goodCase (stageSamples_second hcase hA h.family₂)
   have hShow₁ : FirstShown (goodCase C JoinGood) LogIsDevice := firstShown_of _ hC' hR' hD'
   have hShow₂ : SecondShown (goodCase C JoinGood) LogIsDevice :=
     secondShown_of _ hC' hR' (secondAlone_of_matches _ hC' hM')

@@ -28,15 +28,15 @@ import numpy as np
 import pytest
 
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as RG, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as RG, docket as R
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array
 from verity.commitments import history as HT
 from verity.commitments.gates import embedding as E
-from verity.commitments.windows import rows as CS
-from verity.commitments.windows.interface import digest_words
+from verity.commitments.periods import rows as CS
+from verity.commitments.periods.interface import digest_words
 from verity_vllm.pipeline import (boundary_rows as BR, boundary_tables as BT, chunk_rows as CR, interior_rows as IR,
                                   serving_rows as SRW)
 

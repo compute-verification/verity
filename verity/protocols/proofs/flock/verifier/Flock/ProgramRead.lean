@@ -343,7 +343,7 @@ def Stmt.setupHiddenBy (readDesc : ByteArray → V TemplateQuery.Desc) (readProg
     | none => pure pop
   if let some d := draw then
     if let (Except.ok (Draw.Law.stratified k strata), some obj, some prog) :=
-        ((Draw.UnitDraw.ofJson d).map (·.law), partition, program) then
+        ((Draw.UnitSample.ofJson d).map (·.law), partition, program) then
       let (law, _) ← HmRow.stratifiedDesignBy readDesc obj prog k
       if law != Draw.Law.stratified k strata then throw "U2: the draw's strata are not the verifier's own (its program and query)"
   HmOut.checkPublic c pub
@@ -401,7 +401,7 @@ def Stmt.setupTablesBy (readDesc : ByteArray → V TemplateQuery.Desc) (readProg
     (publicInputs : Option ByteArray := none) : V (SessionSpec × Array Stmt) := do
   -- a closure sample proves more units than it samples, so what it adds must be the verifier's own closure of the sample
   if let some d := draw then
-    if let .ok u := Draw.UnitDraw.ofJson d then
+    if let .ok u := Draw.UnitSample.ofJson d then
       if let .work .. := u.law then
         match closure with
         | some cm =>
@@ -411,7 +411,7 @@ def Stmt.setupTablesBy (readDesc : ByteArray → V TemplateQuery.Desc) (readProg
           if !u.closure.isEmpty then throw "U3: a closure draw needs the verifier's own closure map (--closure)"
   -- a stratified sample's K and strata set every k_s, so its sampling design must be the verifier's own derivation, never taken as stated
   if let some d := draw then
-    if let .ok (Draw.Law.stratified k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+    if let .ok (Draw.Law.stratified k strata) := (Draw.UnitSample.ofJson d).map (·.law) then
       let (some obj, some prog, some K) := (partition, program, stratified)
         | throw "U2: a stratified draw needs the verifier's own K, program and partition (--stratified, --program, --partition)"
       if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
@@ -420,7 +420,7 @@ def Stmt.setupTablesBy (readDesc : ByteArray → V TemplateQuery.Desc) (readProg
         throw "U2: the draw's strata are not the verifier's own (its K, program and query)"
   -- a work sample's K and stated work set every k_s, so its sampling design must be the verifier's own derivation, never taken as stated
   if let some d := draw then
-    if let .ok (Draw.Law.work k strata) := (Draw.UnitDraw.ofJson d).map (·.law) then
+    if let .ok (Draw.Law.work k strata) := (Draw.UnitSample.ofJson d).map (·.law) then
       let (some obj, some prog, some (K, table)) := (partition, program, work)
         | throw "U2: a work draw needs the verifier's own K, work table, program and partition (--work, --work-table, --program, --partition)"
       if k != K then throw s!"U2: the draw's K is {k}, not the verifier's {K}"
@@ -456,8 +456,8 @@ def Stmt.setupTablesBy (readDesc : ByteArray → V TemplateQuery.Desc) (readProg
   if count > Tags.MAX_TABLES then throw s!"tables: at most {Tags.MAX_TABLES} per session, not {count}"
   let splits := fun (n : Nat) => if n == 0 || n % count != 0 then throw s!"tables: {n} units do not split into {count} equal tables"
     else (pure () : V Unit)
-  -- the sample's law and count are refused before the circuit is read
-  let u? ← draw.mapM Draw.UnitDraw.ofJson
+  -- the sample's sampling design and count are refused before the circuit is read
+  let u? ← draw.mapM Draw.UnitSample.ofJson
   if let some u := u? then
     match u.law with
     | .subset _ | .stratified .. => splits u.units.size
@@ -483,7 +483,7 @@ def Stmt.setupTablesBy (readDesc : ByteArray → V TemplateQuery.Desc) (readProg
   let names := tags.tableNames count
   let hello ← helloOf tags sigma mPts coins names
   return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
-            unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := coins.tree? }, sts)
+            unitSample := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := coins.tree? }, sts)
 
 set_option maxRecDepth 20000 in
 theorem Stmt.setupHiddenOf_eq_by (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (coins : Coins)

@@ -3,7 +3,7 @@ module
 public import Proofs.Properties.Verity.SampledTwo.Steps
 
 /-!
-# The last step's law is over the run of record's own second stage's cells and counts
+# The last step's sampling design is over the run of record's own second stage's cells and counts
 
 The two-stage form's last step holds the interior audit's sample to a sampling design it computes from its parameters
 (`secondDesignOf`): the replay block's cells under the interior's query, at the rule's counts. The run of record's second
@@ -91,7 +91,7 @@ theorem secondLawOf_ok {p : Params} {run law : Json} (h : secondDesignOf p run =
     exact ⟨_, _, _, ns, ids, ks, by assumption, hns, hids, hks, h.symm⟩
   · cases h
 
-/-- **The last step's law, at the run of record's own second stage**: where the two-stage check accepts, the run of
+/-- **The last step's sampling design, at the run of record's own second stage**: where the two-stage check accepts, the run of
 record `run` of the input `i` names `accept`; `i` holds an interior `it` on the second stage's bytes `ξ₂` under a
 two-stage rule; and the sampling design the last step holds the interior audit's sample to is `Select.secondLaw` of the proved
 units of `run`'s `draw`, over the cells of `it`'s replay block under `it`'s query, at the rule's counts over them:
@@ -113,8 +113,10 @@ theorem accepted_law_run {form : Bool} {p : Params} {c : OneStage.Commitment} {�
   obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, hio, -, -⟩ := inputAt_ok hi
   obtain ⟨grain, replay, k, ns, ids, ks, hk, hns, hids, hks, hlaw⟩ := secondLawOf_ok hl
   obtain ⟨it, hit, hp, hrep, hsrc⟩ :=
-    inputOf_interior p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs
-  obtain ⟨h1, -, -, h4, h5⟩ := inputOf_first p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs
+    inputOf_interior p { c with record := j₁ } ξ ξ₂
+      { e with record := j₂, stmts := VStar.Recursive.SampledTwo.stmtsOwn p e bs } received₂ vs
+  obtain ⟨h1, -, -, h4, h5⟩ := inputOf_first p { c with record := j₁ } ξ ξ₂
+    { e with record := j₂, stmts := VStar.Recursive.SampledTwo.stmtsOwn p e bs } received₂ vs
   refine ⟨c₂, ξ₂, r, i, run, law, it, grain, replay, k, ns, ids, ks, hi, hr, hj, htwo, ?_, hsrc, ?_, ?_, ?_, ?_, ?_,
     hks, hlaw⟩
   · rw [hio]

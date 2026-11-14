@@ -47,7 +47,7 @@ import VCVio.Prelude.Core
 * `misses_layout`: a sample that checks no proof block at a slot of `B` leaves `B` no input slot, and proves no unit at a
   population slot of `B`.
 * `pa_slots`: the design's `P_a` on `Slots.layout`'s partition, the population's first stage times the input class's.
-* `drawMisses`: the sample is accepted and misses `B` with probability at most `missBound`.
+* `sampleMisses`: the sample is accepted and misses `B` with probability at most `missBound`.
 -/
 
 @[expose] public section
@@ -150,7 +150,7 @@ theorem pa_slots (first : OneStage) (pop ic : Array (Array Slots.ProofBlock)) (B
   congr 2
   simp [Function.comp_def]
 
-/-- `slotDesign`'s steps: the population, the rule's law and its expansion, and the design they give. -/
+/-- `slotDesign`'s steps: the population, the rule's sampling design and its expansion, and the design they give. -/
 theorem slotDesign_ok (rule : Select.Rule) (d : Program) (query : Lean.Json) (table : Option Lean.Json)
     (D : Design) (h : slotDesign rule d query table = .ok D) :
     ∃ n named derived, Partition.units d query = .ok n ∧ rule.lawOver n = .ok named ∧
@@ -215,7 +215,7 @@ theorem totalWork_eq (ws : Array Flock.Draw.WorkStratum) :
   | cons s l ih => intro a; simp only [List.foldl_cons, ih, List.map_cons, List.sum_cons, Nat.mul_comm s.work]; omega
 
 /-- **The population's first stage misses `W`** with probability at most the claims' `P_a(W)` of the sampling design it samples, on
-the population's strata: the units `drawUnits` samples hold none at a slot of `W`. -/
+the population's strata: the units `sampleUnits` samples hold none at a slot of `W`. -/
 theorem law_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQuery.TRange)
     (he : Partition.evaluate d query = .ok rs) (pop : Array (Array Slots.ProofBlock))
     (hlays : List.Forall₂ LaysOut (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count))).toList
@@ -227,7 +227,7 @@ theorem law_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQu
     (W : Finset ℕ) (hW : W ⊆ range (popUnits (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)))).length)
     (L : ℕ) :
     Claims.Pr (fun src : Fin L → Fin 256 => ∃ units read,
-      Draw.drawUnits (derived.getD parsed)
+      Draw.sampleUnits (derived.getD parsed)
         (popUnits (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)))).length (bytesOf src) =
           .ok (units, read) ∧
         ∀ v ∈ W, (popUnits (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)))).getD v 0 ∉ units) ≤
@@ -283,7 +283,7 @@ theorem law_bound (d : Program) (query : Lean.Json) (rs : Array Flock.TemplateQu
         simpa [popUnits, List.flatMap_map, Function.comp_def, h1] using hm v hv
 
 /-- **`Slots.select` misses `B` no more often than the claims' `P_a(B)`** (`Properties.Spot.DrawMisses`). -/
-theorem drawMisses : DrawMisses := by
+theorem sampleMisses : DrawMisses := by
   intro rule d query table cm L B
   set E := fun src : Fin L → Fin 256 => (Slots.select rule d query table cm (bytesOf src)).isOk = true ∧
     Misses B (checkedOf (Slots.select rule d query table cm (bytesOf src))) with hE
@@ -334,7 +334,7 @@ theorem drawMisses : DrawMisses := by
       ∃ units : Array ℕ, (∀ v ∈ window 0 (popUnits S).length B, (popUnits S).getD v 0 ∉ units) ∧
         ((rule = .all ∧ units = Array.range (popUnits S).length) ∨
           (rule ≠ .all ∧ ∃ parsed read', Draw.flockLaw (lawObj named derived) (popUnits S).length = .ok parsed ∧
-            Draw.drawUnits (derived.getD parsed) (popUnits S).length (bytesOf src) = .ok (units, read'))) := by
+            Draw.sampleUnits (derived.getD parsed) (popUnits S).length (bytesOf src) = .ok (units, read'))) := by
     intro src hs
     obtain ⟨l', c, hs, hm⟩ := hev src hs
     obtain ⟨hl', draw, proved, read, hsel, rfl⟩ := slots_select_ok _ _ _ _ _ _ _ _ hs

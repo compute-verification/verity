@@ -29,17 +29,17 @@ binding's openings at each history are `obK` by definition (`ZkOuter.openingsOf_
 only the registered digests (`ValueBindingZ.cs`, from the public file). V*'s sessions together open `obS`: session
 `j`'s `obK`, tagged by `j` (`Openings.sigma`).
 
-* `candWeightK`: `candWeightZC` read off a session's law alone (`ZkOuter.candWeight_vb`);
+* `candWeightK`: `candWeightZC` read off a session's sampling design alone (`ZkOuter.candWeight_vb`);
 * `ZkOuter.candTransfer`: `zk_session_candValsR` with `candTermZC_le` at one session, the trial for each commit string a
   finder of `obK`'s openings (`ZkOuter.trial`), and the slack `ZkOuter.stageSlack` (`slackIf` where the session's
   knowledge finders satisfy `cr/sha-512`, else `1`);
-* `vCovers_full`: V*'s live law, the full sample, samples every unit (`execOS_subset_full_mem`), so every unit's wires are
+* `vCovers_full`: V*'s live sampling design, the full sample, samples every unit (`execOS_subset_full_mem`), so every unit's wires are
   covered;
 * `sessions_stage_le`: at V*'s sessions in a row, a layer that disagrees on a wire of a session's commit strings with
   the values `wv` is at most the sessions' expected slack plus each commit string's weight times its trial's chance of
   opening the session's registered digest there off `wv`; `outerV_stage_le` is the same at the registration `R₂` the
   prover sends (`outerV`), and `trialV` the trial there;
-* `VCommits`, `VDecodes`, `VFull`: what V*'s inputs, circuits and laws must do at each stage: session `j`'s public file
+* `VCommits`, `VDecodes`, `VFull`: what V*'s inputs, circuits and sampling designs must do at each stage: session `j`'s public file
   at history `t` registers `t`'s stage-`i` commitment at the stage's commit strings `Sk i j`, at every registration
   `R₂`, the layers' round-`i` message is read from the wires of those commit strings, and every such wire is a wire of
   some unit;
@@ -114,7 +114,7 @@ noncomputable def bitK (v : ValK c) (g : Fin ((keyProg c hU n).circuit (Layout.o
   v.2 (idxK c hU n g)
 
 /-- A sample of `Lv` reads commit string `pos`: a sampled proof block reads a wire it holds. -/
-def ReadsDrawK (Lv : Law n) (pos : PosK c hU n) (ω : Lv.Ω) : Prop :=
+def ReadsSampleK (Lv : Law n) (pos : PosK c hU n) (ω : Lv.Ω) : Prop :=
   ∃ u ∈ Lv.draw ω, ∃ g ∈ ((keyProg c hU n).partition (Layout.outsOf c hU n)).io u, posK c hU n g = pos
 
 /-- **Every sample of `Lv` reads every wire of the commit strings `Sk`**: each is a wire of a sampled proof block. -/
@@ -126,7 +126,7 @@ open Classical in
 it over `1 − ρ`. -/
 noncomputable def candWeightK (Lv : Law n) (Sk : Finset (PosK c hU n)) (ρ : ℝ) (pos : PosK c hU n) : ℝ≥0∞ :=
   if pos ∈ Sk then
-    ENNReal.ofReal ((Fintype.card {ω // ReadsDrawK c hU n Lv pos ω} : ℝ) / Fintype.card Lv.Ω / (1 - ρ))
+    ENNReal.ofReal ((Fintype.card {ω // ReadsSampleK c hU n Lv pos ω} : ℝ) / Fintype.card Lv.Ω / (1 - ρ))
   else 0
 
 end Fixed
@@ -223,7 +223,7 @@ theorem vb_bit (v : ValK c) (g : Fin ((keyProg c hU nv).circuit (Layout.outsOf c
   rcases HiddenExec.rowOfH c hU nv (Layout.outsOf c hU nv) g with _ | ⟨u, q, k⟩ <;> rfl
 
 open Classical in
-/-- **`candWeightZC` of V*'s session reads only V*'s law**: it is `candWeightK`. -/
+/-- **`candWeightZC` of V*'s session reads only V*'s sampling design**: it is `candWeightK`. -/
 theorem candWeight_vb (Sk : Finset (PosK c hU nv)) (ρ : ℝ) (pos : PosK c hU nv) :
     candWeightZC (L := Lv) execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀)
       (tabZHJ zo.dj zo.y₀) zo.vb Sk ρ pos = candWeightK c hU nv Lv Sk ρ pos := by
@@ -231,7 +231,7 @@ theorem candWeight_vb (Sk : Finset (PosK c hU nv)) (ρ : ℝ) (pos : PosK c hU n
   split_ifs with h1 h2 h2
   · exact congrArg (fun x : ℕ => ENNReal.ofReal ((x : ℝ) / Fintype.card Lv.Ω / (1 - ρ)))
       (Fintype.card_congr (Equiv.subtypeEquivRight fun ω => by
-        unfold ReadsDrawZ ReadsZ ReadsDrawK
+        unfold ReadsSampleZ ReadsZ ReadsSampleK
         simp only [vb_pos]
         exact Iff.rfl))
   · exact absurd h1 h2
@@ -525,7 +525,7 @@ def VDecodes (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg) (same : ℕ �
     Option.Rel (same i ρs) (wmsg Xt)[i]? (some (msg i v))
 
 /-- **The stages are read from units' wires**: each wire of `Sk i j` (`i < r`) is a wire of some unit, so session `j`'s
-law, the full sample, samples it. -/
+sampling design, the full sample, samples it. -/
 def VFull (r : ℕ) (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)) : Prop :=
   ∀ i < r, ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk i j →
     ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u

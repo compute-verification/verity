@@ -12,7 +12,7 @@ public import Proofs.Flock.Bridge.Draw
 accepted has at most `cap h` proof blocks (`Code.ReplayCap`):
 
 * an accepted fork passed round `stage + 1` (`stmtOk`), whose reads check at template `0` reads the second stage's sample
-  (`stmtOk_draw`), so its second stage accepted the replay sample, which is then not empty: the first stage accepted,
+  (`stmtOk_sample`), so its second stage accepted the replay sample, which is then not empty: the first stage accepted,
   and the sample of record is the slots `Slots.checked` keeps of the units it proved. With no template there is no
   proof block;
 * each population slot `ρ` it keeps is unit `ρ`, whose cell of each template `t` is `blockOf ρ t` on `[0, n_t)`, and
@@ -32,7 +32,7 @@ open Lean (Json)
 
 /-! ## The first stage's count -/
 
-/-- The `K` of the first stage's law over the population, where Flock reads it as a uniform `K`-subset. -/
+/-- The `K` of the first stage's sampling design over the population, where Flock reads it as a uniform `K`-subset. -/
 def firstKOf (g : Reg) : Option ℕ :=
   match Spot.Partition.units g.program g.query with
   | .ok n =>
@@ -83,7 +83,7 @@ theorem select_proved (rule : Spot.Select.Rule) (d : Spot.Program) (query : Json
       Spot.Draw.deriveLaw d query named table = .ok derived ∧
         ∃ units : Array ℕ, (cm = none → proved = units) ∧ ((rule = .all ∧ units = Array.range n) ∨
           (rule ≠ .all ∧ ∃ parsed read', Spot.Draw.flockLaw (lawObj named derived) n = .ok parsed ∧
-            Spot.Draw.drawUnits (derived.getD parsed) n src = .ok (units, read'))) := by
+            Spot.Draw.sampleUnits (derived.getD parsed) n src = .ok (units, read'))) := by
   unfold Spot.Select.select at h
   obtain ⟨n, hn, h⟩ := bind_eq_ok.1 h
   obtain ⟨named, hnamed, h⟩ := bind_eq_ok.1 h
@@ -136,8 +136,8 @@ theorem select_subset_size {g : Reg} {K : ℕ} (hK : firstK g = some K) {src : B
   · have hp' : Spot.Draw.flockLaw named n = .ok parsed := hp
     rw [hf] at hp'
     obtain rfl : parsed = .subset K := (Except.ok.inj hp').symm
-    have hu' : Spot.Draw.drawUnits (.subset K) n src = .ok (units, read') := hu
-    exact _root_.Flock.Bridge.drawUnits_size (law := .subset K) (ns := [K]) (kd := K) ⟨rfl, by simp⟩ hu'
+    have hu' : Spot.Draw.sampleUnits (.subset K) n src = .ok (units, read') := hu
+    exact _root_.Flock.Bridge.sampleUnits_size (law := .subset K) (ns := [K]) (kd := K) ⟨rfl, by simp⟩ hu'
 
 /-! ## The cap -/
 
@@ -171,7 +171,7 @@ def cap (_ : Msg) : ℕ :=
 
 /-- **Round `stage + 1` passes only at coins whose second stage samples**, where there is a template: template `0`'s
 statement check reads the second stage's sample (`readsOk`). -/
-theorem stmtOk_draw {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
+theorem stmtOk_sample {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
     (hm : 0 < h.ms.length) : ∃ draw, secondDraw h c₀ c₁ = some draw := by
   obtain ⟨s, hp⟩ : ∃ s, parse h x = some s := by
     cases hp : parse h x with
@@ -248,7 +248,7 @@ theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (
         lt_irrefl _ (mem_filter.1 hm').2
       rw [e0, hr']
       exact ite_eq_right hnot
-    obtain ⟨draw₂, hd₂⟩ := stmtOk_draw h hok hm
+    obtain ⟨draw₂, hd₂⟩ := stmtOk_sample h hok hm
     obtain ⟨q, hq⟩ : ∃ q, Spot.Select.selectSecond (h.reg.sample (src (coinSeq r' 0))) h.reg.ns h.reg.ks
         (stageSrc c₁) = .ok q := by
       unfold secondDraw at hd₂
@@ -266,10 +266,10 @@ theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (
     have hrs : rs h x r = (Spot.Slots.checked l proved).toList := by
       show ((reg h x).map fun g => g.first.checked (bytesOf (coinByte (r (order h x).first)))).getD [] = _
       rw [hreg]
-      show (drawChecked h.reg.first.rule h.reg.first.program h.reg.first.query h.reg.first.table h.reg.first.closure
+      show (sampleChecked h.reg.first.rule h.reg.first.program h.reg.first.query h.reg.first.table h.reg.first.closure
         h.reg.first.layout (src (r (order h x).first))).toList = _
       rw [← hc0]
-      unfold drawChecked
+      unfold sampleChecked
       simp only [slots_select_of _ _ _ _ _ _ hl hS]
     have hsize : proved.size = K := select_subset_size hK hS
     have hsub : sampleBlocks Pt d.part (rs h x r) ⊆

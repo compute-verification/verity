@@ -15,7 +15,7 @@ which the verifier's work table sets per stratum beside `w_s` (one when it names
 
 The work sampling design is `Law.stratified` at those sizes (`Law.work`), so every theorem of the stratified sampling design and of the one-stage
 audit holds of it as stated: `stratified_escape`, `stratified_escape_floor`, `audit_whole_stratum`,
-`extraction_audit_whole_stratum`, `audit_profile`, `audit_count`, `audit_drawn` and the Flock instantiations. What is new,
+`extraction_audit_whole_stratum`, `audit_profile`, `audit_count`, `audit_sampled` and the Flock instantiations. What is new,
 for every floor `f ≥ 1`:
 
 * `floor_le_workK`: **the floor**. A stratum samples at least `min(n_s, f_s)` units, so every non-empty stratum samples at least
@@ -36,11 +36,11 @@ for every floor `f ≥ 1`:
 For the strata that do no work:
 
 * `workK_rest`: such a stratum samples exactly `min(n_s, f_s)`.
-* `work_escape_le_count`: **floors at the count law's sizes keep its guarantee**. When every stratum that does no work has
+* `work_escape_le_count`: **floors at the count sampling design's sizes keep its guarantee**. When every stratum that does no work has
   `f_s` at least `countK σ C s` (`main`'s stratified sampling design's `stratumK C n_s N` for a non-empty stratum and `C ≤ N`,
   `countK_eq`), a set escapes the work sampling design at most as often as its units in those strata escape the stratified sampling design at `C`;
   `audit_work_rest` and `extraction_audit_work_rest` carry any such integrity profile to the audit.
-* `countRule_self`, `countK_self`, `countK_self_miss`: at `C = N` the count law samples every unit of every stratum
+* `countRule_self`, `countK_self`, `countK_self_miss`: at `C = N` the count sampling design samples every unit of every stratum
   (`stratumK N n_s N = n_s`), so its sampling term is zero: a recursive inner session's full sample.
 
 Closure samples (a sampled proof block proved with the units it reads) are not part of this sampling design. `Law.widen` proves more units than a
@@ -343,10 +343,10 @@ theorem workK_rest {σ : Fin n → Fin m} {w : Fin m → ℕ} {f : Fin m → ℕ
   unfold workK workRule
   rw [h0, max_eq_left (Nat.zero_le _)]
 
-/-- The count law's rule, the executable's `Flock.Draw.stratumK`: `C · size / population` rounded half up, at least one. -/
+/-- The count sampling design's rule, the executable's `Flock.Draw.stratumK`: `C · size / population` rounded half up, at least one. -/
 def countRule (C size population : ℕ) : ℕ := max 1 ((2 * C * size + population) / (2 * population))
 
-/-- The count law's sizes over `σ`'s strata at count budget `C`: `main`'s stratified sampling design, `stratumK C n_s N`. -/
+/-- The count sampling design's sizes over `σ`'s strata at count budget `C`: `main`'s stratified sampling design, `stratumK C n_s N`. -/
 def countK (σ : Fin n → Fin m) (C : ℕ) (s : Fin m) : ℕ := min (stratum σ s).card (countRule C (stratum σ s).card n)
 
 theorem countK_le (σ : Fin n → Fin m) (C : ℕ) (s : Fin m) : countK σ C s ≤ (stratum σ s).card :=
@@ -366,7 +366,7 @@ theorem countRule_self {size N : ℕ} (h1 : 1 ≤ size) (hN : 0 < N) : countRule
   rw [Nat.mul_add_div (by omega : 0 < 2 * N), Nat.div_eq_of_lt (by omega : N < 2 * N), Nat.add_zero,
     max_eq_right h1]
 
-/-- **The count law at `C = N` samples every unit of every stratum**: `countK σ N s` is stratum `s`'s size. -/
+/-- **The count sampling design at `C = N` samples every unit of every stratum**: `countK σ N s` is stratum `s`'s size. -/
 theorem countK_self (σ : Fin n → Fin m) (s : Fin m) : countK σ n s = (stratum σ s).card := by
   unfold countK
   rcases Nat.eq_zero_or_pos (stratum σ s).card with h0 | hpos
@@ -374,8 +374,8 @@ theorem countK_self (σ : Fin n → Fin m) (s : Fin m) : countK σ n s = (stratu
   · have hn : 0 < n := hpos.trans_le (by simpa using Finset.card_le_univ (stratum σ s))
     rw [countRule_self hpos hn, min_self]
 
-/-- **The count law at `C = N` has no sampling term** (a recursive inner session's full sample, `rec_live.full_draw`): its
-sample is every unit (`stratified_draw_full`), so `miss K = 0` for `K ≥ 1`. -/
+/-- **The count sampling design at `C = N` has no sampling term** (a recursive inner session's full sample, `rec_live.full_draw`): its
+sample is every unit (`stratified_sample_full`), so `miss K = 0` for `K ≥ 1`. -/
 theorem countK_self_miss (σ : Fin n → Fin m) {K : ℕ} (hK : 1 ≤ K) :
     (stratified σ (countK σ n) (countK_le σ n)).miss K = 0 :=
   stratified_full_miss σ _ _ (countK_self σ) hK
@@ -421,8 +421,8 @@ theorem choose_div_anti {a n k k' : ℕ} (ha : a ≤ n) (hkk : k ≤ k') (hk' : 
     ENNReal.le_div_iff_mul_le (Or.inl hk0) (Or.inl (ENNReal.natCast_ne_top _))]
   exact_mod_cast choose_mul_le_of_le ha hkk hk'
 
-/-- **Floors at the count law's sizes keep its guarantee.** When every stratum that does no work has a floor of at least
-the count law's size at `C`, a set escapes the work sampling design at most as often as its units in those strata escape the
+/-- **Floors at the count sampling design's sizes keep its guarantee.** When every stratum that does no work has a floor of at least
+the count sampling design's size at `C`, a set escapes the work sampling design at most as often as its units in those strata escape the
 stratified sampling design at `C`. -/
 theorem work_escape_le_count (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : Fin m → ℕ) (K C : ℕ)
     (hf : ∀ s, w s = 0 → countK σ C s ≤ f s) (B : Finset (Fin n)) :
@@ -460,7 +460,7 @@ def widen (L : Law n) (f : Finset (Fin n) → Finset (Fin n)) : Law n where
   Ω := L.Ω
   draw ω := f (L.draw ω)
 
-/-- **Widening only helps**: when `f` keeps every sampled proof block, the widened law escapes at most as often, so every escape
+/-- **Widening only helps**: when `f` keeps every sampled proof block, the widened sampling design escapes at most as often, so every escape
 bound of `L` (the work bound, the floor) holds of it. -/
 theorem escape_widen_le (L : Law n) {f : Finset (Fin n) → Finset (Fin n)} (hf : ∀ S, S ⊆ f S) (B : Finset (Fin n)) :
     (L.widen f).escape B ≤ L.escape B :=
@@ -586,8 +586,8 @@ theorem extraction_audit_work_floor (A : ExtractionAnalysis (Law.work σ w f K) 
   · exact (prCoin_mono fun ω h => h.2).trans (Law.work_escape_floor_le_of_le σ w f K s hs hB)
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)
 
-/-- **Floors at the count law's sizes keep its profile, audited** (oracle layer): when every stratum that does no work has
-a floor of at least the count law's size at `C`, for any family `𝓑`, the audit accepts while the incorrect proof blocks in those
+/-- **Floors at the count sampling design's sizes keep its profile, audited** (oracle layer): when every stratum that does no work has
+a floor of at least the count sampling design's size at `C`, for any family `𝓑`, the audit accepts while the incorrect proof blocks in those
 strata form a set in `𝓑` with probability at most the stratified sampling design's `sup_{B ∈ 𝓑} escape B` at `C`, plus
 `ε_ks + δ_link`. -/
 theorem audit_work_rest {C : ℕ} (hf : ∀ s, w s = 0 → Law.countK σ C s ≤ f s)
@@ -603,7 +603,7 @@ theorem audit_work_rest {C : ℕ} (hf : ∀ s, w s = 0 → Law.countK σ C s ≤
     (le_iSup₂_of_le (f := fun (B : Finset (Fin n)) (_ : 𝓑 B) =>
       (Law.stratified σ (Law.countK σ C) (Law.countK_le σ C)).escape B) _ hB le_rfl)
 
-/-- **Floors at the count law's sizes keep its profile, audited** (compiled layer, randomized extractor): the same with
+/-- **Floors at the count sampling design's sizes keep its profile, audited** (compiled layer, randomized extractor): the same with
 `ε_ks(σ) + δ_link(σ)`. -/
 theorem extraction_audit_work_rest {C : ℕ} (hf : ∀ s, w s = 0 → Law.countK σ C s ≤ f s)
     (A : ExtractionAnalysis (Law.work σ w f K) Reg session)

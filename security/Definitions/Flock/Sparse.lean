@@ -64,11 +64,11 @@ def holoLincheck (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) :
 /-! ## Rounds in coefficient form -/
 
 /-- `n` coins, one sample each. -/
-def drawFin : (n : ℕ) → Game (Fin n → F)
+def sampleFin : (n : ℕ) → Game (Fin n → F)
   | 0 => pure Fin.elim0
   | n + 1 => do
       let c ← draw F
-      let cs ← drawFin n
+      let cs ← sampleFin n
       pure (Fin.cons c cs)
 
 /-- A round's claim after its coin `r` (C1): `g(r)` for `g = c₀ + c₁X + Σ_i c_{i+2}X^{i+2}`, with
@@ -149,15 +149,15 @@ def sparseVerdict (A : Arith F K) (sh : SparseShape) (pub : SparsePub F sh) (τ 
 /-- **The sparse phase** (H1–H4) of one rep, on the slots' hidden types `τ` and L4′'s `h`. -/
 def sparsePhase (A : Arith F K) (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ)
     (h : Fin 64 → F) : Game (Option (RegClaim F sh)) := do
-  let ζc ← drawFin (F := F) 6                                                  -- H1
+  let ζc ← sampleFin (F := F) 6                                                  -- H1
   let (ζr, c₂) ← degRounds 1 6 (∑ s : Fin 64, eqAt ζc s.val * h s)             -- H2
   let v₂ ← recv F
   let (rk, c₃) ← degRounds (2 * sh.ell) sh.nu v₂                                -- H3: the entries
   let (rs, c₄) ← degRounds (2 * sh.ell + 1) sh.sLog c₃                          -- H3: the slots
   let u ← recv (Fin (2 ^ sh.pLog) → F)
-  let ζp ← drawFin (F := F) sh.pLog                                             -- H4
+  let ζp ← sampleFin (F := F) sh.pLog                                             -- H4
   let vt : Fin (2 ^ sh.tLog) → F ← if sh.tLog = 0 then pure fun _ => 0 else recv (Fin (2 ^ sh.tLog) → F)
-  let ρ ← drawFin (F := F) sh.tLog
+  let ρ ← sampleFin (F := F) sh.tLog
   pure (sparseVerdict A sh pub τ ζc ζr c₂ v₂ rk rs c₄ u ζp vt ρ)
 
 end FlockSoundness.Model

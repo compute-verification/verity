@@ -109,7 +109,7 @@ from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL  # noqa: 
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
 
 if TYPE_CHECKING:
     from verity.circuits.defs import SpecializedDefinition

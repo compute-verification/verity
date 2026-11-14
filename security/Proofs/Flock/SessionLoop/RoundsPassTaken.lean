@@ -29,7 +29,7 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 SessionSpec)
-open _root_.Flock.Firewall.Frame (Cfg Masker roundFree isLabel)
+open _root_.Flock.ZkServer.Frame (Cfg Masker roundFree isLabel)
 open FlockSoundness.Refine (Frame encs)
 
 theorem ne_inner_of_isLabel {b : ByteArray} (h : isLabel b _root_.Flock.Zk.LABEL_INNER = false) :

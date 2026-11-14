@@ -17,8 +17,8 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.gates import embedding as EMB
-from verity.commitments.windows import rows as CS
-from verity.commitments.windows import wiring as WI
+from verity.commitments.periods import rows as CS
+from verity.commitments.periods import wiring as WI
 from verity.definitions.numerics import fp8_moe_rows as FR
 from verity.definitions.numerics.derived_rows import f2fp_bf16
 from verity.circuits.ops.boolean import gemm as BG

@@ -25,12 +25,12 @@ Each headline takes `hdec` (`DecodesOn`, or `DecodesOnJ` at `J` tables). These c
 openings, single coins, no final messages and `capOfRoot` at the values the decoding theorems are about, and replace
 `hdec` by those theorems' hypotheses:
 * `flock_headline_exec_dec`: `flock_headline_exec` with `decodesOn_exec` at `wOP`, `wLIG`: `hdec` becomes
-  `c.outNet = c.unitNet`, `TagsOk`, `RecordsLive` and `DrawOk` at the sampling design's samples;
+  `c.outNet = c.unitNet`, `TagsOk`, `RecordsLive` and `SampleOk` at the sampling design's samples;
 * `flock_headline_exec_hidden_dec`: `flock_headline_exec_hidden` with `decodesOn_execH`: `hdec` becomes
-  `c.outNet = c.unitNet`, `TagsOkHL`, `RecordsLive` and `DrawOkH` at the sampling design's samples, and the session's leaf is the
+  `c.outNet = c.unitNet`, `TagsOkHL`, `RecordsLive` and `SampleOkH` at the sampling design's samples, and the session's leaf is the
   model's leaf of the tags' leaf scheme (`leafOfId`: `hm96-sha512/v1` or plain SHA-512 leaves);
 * `headline_tables_subset_dec`: `headline_tables_subset` at the tables verity-verify-proof sets up (`planJ`) with
-  `decodesOnJ_exec`: `hdec` becomes `TagsOkJ`, `RecordsLiveJ` and `DrawOkJ` at the sampling design's samples. The decoder at `J`
+  `decodesOnJ_exec`: `hdec` becomes `TagsOkJ`, `RecordsLiveJ` and `SampleOkJ` at the sampling design's samples. The decoder at `J`
   tables reads no circuit, so there is no `c.outNet = c.unitNet` here.
 
 `FailClosed.flock_headline_exec_dec` and `_hidden_dec` take none of the hypotheses on the statement's form
@@ -54,7 +54,7 @@ open FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.DecodeZL
 
 variable {c : Flock.Circuit} (hU : Built c.unit) {n : ℕ} {I : Inputs} (ht : I.tags.typed = false)
   (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
-  {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀)) {pub : Public}
+  {S₀ : Finset (Fin n)} (x₀ : SampleSetup I mPts S₀ (dj S₀)) {pub : Public}
   (hpub : HmRow.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none)
   (hscope : Layout.scopeOk c = true) {Reg : Type}
 
@@ -68,7 +68,7 @@ theorem flock_headline_exec_dec (ho : c.outNet = c.unitNet) (hT : TagsOk I)
     (hr : ∀ S R j, rateB (Integrate.planAt (Reg := Reg) ht dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (K : ℕ) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (dg : ByteArray → ByteArray) (N : ℕ)
     (hwr : RecordsLive I dj wr)
-    (hdraw : ∀ ω, DrawOk I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
+    (hdraw : ∀ ω, SampleOk I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     (hCR : LinkCRL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 leaf512
       (Integrate.planAt ht dj x₀) (Integrate.tabAt ht dj x₀) ((rsAt hU ht hc dj x₀ hpub hpt hscope (Reg := Reg)).binding
@@ -124,7 +124,7 @@ open FlockSoundness.Discharge.HiddenExec FlockSoundness.Discharge.HiddenDec Floc
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Flock.Circuit}
   (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (hscope : Layout.scopeOkH c = true)
-  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) (hU : Built c.unit)
+  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) (hU : Built c.unit)
   {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none) {Reg : Type}
 
 /-- **`flock_headline_exec_hidden` with `hdec` discharged** by `decodesOn_execH`, at the model's leaf of the tags'
@@ -138,7 +138,7 @@ theorem flock_headline_exec_hidden_dec (ho : c.outNet = c.unitNet) (hT : TagsOkH
     (hr : ∀ S R j, rateB (planAtH (Reg := Reg) dj x₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
     (K : ℕ) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (dg : ByteArray → ByteArray) (N : ℕ)
     (hwr : RecordsLive I dj wr)
-    (hdraw : ∀ ω, DrawOkH I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
+    (hdraw : ∀ ω, SampleOkH I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     (hCR : LinkCRL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 (leafOfId I.tags.merkleLeaf)
       (planAtH dj x₀) (tabAtH dj x₀) ((rsAtH ht hc hscope dj x₀ hU hpub hpt (Reg := Reg)).binding
@@ -211,7 +211,7 @@ theorem headline_tables_subset_dec
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planJ ht T₀ dj S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     (hwr : RecordsLiveJ I dj (fun S R => (planJ ht T₀ dj S R).length) wr)
-    (hdraw : ∀ ω, DrawOkJ I mPts dj ((Law.execOS (n := n) src (.subset kd) n).draw ω))
+    (hdraw : ∀ ω, SampleOkJ I mPts dj ((Law.execOS (n := n) src (.subset kd) n).draw ω))
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfJ dg (planJ ht T₀ dj) N wr))) :
     let σ := simAuditJ H512 enc512 leaf512 (planJ ht T₀ dj) I wr (opnJ I (planJ ht T₀ dj) dj) dg
       (decJ (planJ ht T₀ dj)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N

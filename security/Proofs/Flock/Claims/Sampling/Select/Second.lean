@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Sampling.Select.Design
 public import Proofs.Flock.Claims.Sampling.Count
-public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.ExecSample
 public import Properties.Spot.Second
 import all Spot.Draw
 import all Lean.Data.Json.Basic
@@ -15,7 +15,7 @@ import Proofs.Flock.Claims.Sampling.Select.Take
 /-!
 # The second stage misses proof blocks no more often than the cells' escapes (`SecondMisses`)
 
-* `flockLaw_second`: `secondLaw`'s Flock law is the work sampling design at `k = 1`, its strata the cells in order, template by
+* `flockLaw_second`: `secondLaw`'s Flock sampling design is the work sampling design at `k = 1`, its strata the cells in order, template by
   template and in each by sampled replay block (`cellPairs`), cell `(t, i)` exactly
   `[off_t + i·n_t, off_t + (i+1)·n_t)` sampling `k_t` (`cellOf`).
 * `selectSecond_ok`: an accepted second stage passed `secondProblem`, drew its units from the coins under that sampling
@@ -137,7 +137,7 @@ theorem strata_second (sample ns ks : Array ℕ) :
         Select.cellObj (cellOff sample.size ns z.1) (ns.getD z.1 0) (ks.getD z.1 0) z.2 (sample.getD z.2 0) z.1 := by
   simp only [cellPairs, List.map_flatMap, List.map_map, Function.comp_def]
 
-/-- **`secondLaw`'s Flock law**: the work sampling design at `k = 1`, its strata the cells in order (`cellOf` over `cellPairs`). -/
+/-- **`secondLaw`'s Flock sampling design**: the work sampling design at `k = 1`, its strata the cells in order (`cellOf` over `cellPairs`). -/
 theorem flockLaw_second (sample ns ks : Array ℕ) (m : ℕ) (parsed : Flock.Draw.Law)
     (h : Draw.flockLaw (Select.secondLaw sample ns ks) m = .ok parsed) :
     ∃ ws : Array Flock.Draw.WorkStratum, parsed = .work 1 ws ∧
@@ -164,7 +164,7 @@ theorem flockLaw_second (sample ns ks : Array ℕ) (m : ℕ) (parsed : Flock.Dra
       exact forall₂_map_eq (fun _ _ hb => stratum_cell hb) hF
     · exact absurd h (throw_ne _ _)
 
-theorem getD_draw_units (sample ns ks : Array ℕ) (m : ℕ) (units : Array ℕ) :
+theorem getD_sample_units (sample ns ks : Array ℕ) (m : ℕ) (units : Array ℕ) :
     getD (Json.mkObj ((entries (Select.secondLaw sample ns ks)).toList ++
       [("population", Lean.toJson m), ("units", natsJson units)])) "units" = natsJson units := (rfl)
 
@@ -172,7 +172,7 @@ theorem getD_draw_units (sample ns ks : Array ℕ) (m : ℕ) (units : Array ℕ)
 theorem proved_units (draw : Json) (units : Array ℕ) (hd : getD draw "units" = natsJson units)
     (u : ℕ) (hu : u ∈ units) : (u : Int) ∈ Draw.proved draw := by
   unfold Draw.proved
-  rw [FlockSoundness.Audit.DrawExec.mem_qsort]
+  rw [FlockSoundness.Audit.SampleExec.mem_qsort]
   refine Array.mem_append_left _ ?_
   dsimp only
   rw [hd]
@@ -180,12 +180,12 @@ theorem proved_units (draw : Json) (units : Array ℕ) (hd : getD draw "units" =
   exact ⟨_, ⟨u, hu, rfl⟩, int_toJson u⟩
 
 /-- **`Select.selectSecond`'s steps**: an accepted second stage passed `secondProblem`, drew its units from the coins
-under `secondLaw`'s Flock law over the `|sample|·Σ n_t` proof blocks, and proves each of them. -/
+under `secondLaw`'s Flock sampling design over the `|sample|·Σ n_t` proof blocks, and proves each of them. -/
 theorem selectSecond_ok {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
     (h : Select.selectSecond sample ns ks src = .ok (draw, read)) :
     Select.secondProblem sample ns ks = none ∧
       ∃ parsed units, Draw.flockLaw (Select.secondLaw sample ns ks) (sample.size * ns.toList.sum) = .ok parsed ∧
-        Draw.drawUnits parsed (sample.size * ns.toList.sum) src = .ok (units, read) ∧
+        Draw.sampleUnits parsed (sample.size * ns.toList.sum) src = .ok (units, read) ∧
           ∀ u ∈ units, (u : Int) ∈ Draw.proved draw := by
   unfold Select.selectSecond at h
   cases hq : Select.secondProblem sample ns ks with
@@ -199,12 +199,12 @@ theorem selectSecond_ok {sample ns ks : Array ℕ} {src : ByteArray} {draw : Jso
     · exact absurd h (throw_bind_ne _ _ _)
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
-    unfold Draw.drawFirstRead at hd
+    unfold Draw.sampleFirstRead at hd
     obtain ⟨parsed, hp, hd⟩ := bind_eq_ok.1 hd
     obtain ⟨⟨units, read''⟩, hu, hd⟩ := bind_eq_ok.1 hd
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hd
     obtain ⟨rfl, rfl⟩ := hd
-    exact ⟨parsed, units, hp, hu, proved_units _ _ (getD_draw_units _ _ _ _ _)⟩
+    exact ⟨parsed, units, hp, hu, proved_units _ _ (getD_sample_units _ _ _ _ _)⟩
 
 /-- A second stage `secondProblem` passes has a nonempty, ascending replay sample. -/
 theorem secondProblem_sample {sample ns ks : Array ℕ} (h : Select.secondProblem sample ns ks = none) :
@@ -371,7 +371,7 @@ theorem secondMisses : SecondMisses := by
   · rw [Claims.Pr_congr fun src => iff_false_intro fun hs => hex ⟨src, hs⟩, Claims.Pr_false]
     exact hR0
   obtain ⟨src0, hs0⟩ := hex
-  obtain ⟨draw0, read0, h0, -⟩ := hev src0 hs0
+  obtain ⟨sample0, read0, h0, -⟩ := hev src0 hs0
   obtain ⟨-, parsed, -, hp, -, -⟩ := selectSecond_ok h0
   obtain ⟨ws, rfl, hmap⟩ := flockLaw_second _ _ _ _ _ hp
   refine le_trans (Claims.Pr_mono fun src hs => ?_)

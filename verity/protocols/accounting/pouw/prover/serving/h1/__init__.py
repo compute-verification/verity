@@ -38,7 +38,7 @@ served int8 linear call as its own Program on bits, which `verity.protocols.acco
   and held to them by core's credit (`credit._arow`); a window that fails it credits nothing (`pouw_h1_commit.UNTIED`).
 * **z** is the call's z/y records (`pouw_h1_records`): the int8 arm serves ``verity_int8::scaled_mm_zy`` over T slots (its
   ``zy_rows``), writing the served y and one record a proof block, its exact z (`Call.z`'s cells) then y = dq(z). With none,
-  none is committed (with ``retain``, `engine.int8_exact.int_mm` beside, to check). The last ``retain`` calls' Y are kept.
+  none is committed (with ``retain``, the arm's `int_mm` beside, `int8_arm.Int8Arm`, to check). The last ``retain`` calls' Y are kept.
 * **The credit gate** (`credit_gate`, compute accounting's credit rule): each served call's ``apply`` runs under a trace
   (`traced`); the call gate-passes only if the y it hands back to vLLM was written by the GEMM invocation that wrote its
   z, the only GEMM of the call, and z is its records, which hold together with its scales and served y
@@ -70,6 +70,7 @@ import json
 import os
 from collections import Counter, deque
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import nullcontext
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
@@ -91,6 +92,7 @@ from verity.protocols.accounting.pouw.verifier.credit import CREDIT
 from verity.protocols.proofs.spot.device.challenger import CoinError
 
 from verity.protocols.accounting.pouw.prover.serving import credit_gate as CG
+from verity.protocols.accounting.pouw.prover.serving import int8_arm as ARM
 from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
 from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
@@ -107,13 +109,13 @@ from verity.protocols.accounting.pouw.prover.serving.h1.static import (
     graph_pad,
     utilization,
 )
-from verity_vllm.records.schema_ids import POUW_H1_CALLS_SCHEMA
 
 SCHEME = H.SCHEME
 TILE = (32, 32)
 #: the bits of one s8 entry and of one bf16 output
 I8_BITS, BF16_BITS = 8, 16
-RECORD = POUW_H1_CALLS_SCHEMA
+#: a served window's calls record's schema, `CALLS_FILE`, which `H1Run.finish` writes
+RECORD = "verity-vllm/pouw-h1-calls/v2"
 CALLS_FILE = "pouw-h1-calls.json"
 #: the declared window Program a server writes under its ``h1/`` (`served.write_program`): its descriptor, gzipped, and
 #: what a period-open of it reads, so ``pouw_h1_circuits --program OUT/h1`` builds its circuit files
@@ -590,6 +592,16 @@ class H1Run:
         return [f"step {u['round']}: {u['rows']} row{'' if u['rows'] == 1 else 's'} of a request with no entry"
                 for u in self.unadmitted] + self.unbound
 
+    def observe(self, site: int, x: Any, weight: Any, y: Any, /, *, x_scale: Any = None, weight_scale: Any = None,
+                z: Any = None) -> None:
+        """`serving.observe_matmul`: linear ``site``'s call as its arm served it, recorded (`record`) unless the run commits
+        nothing. ``y`` is the arm's, which `judge` holds against the call's trace. A record given z writes neither y nor z
+        and runs no GEMM, so it runs `credit_gate.outside` the trace; one without z stays in it, where the GEMM a retaining
+        record runs is seen."""
+        if self.commit:
+            with CG.outside() if z is not None else nullcontext():
+                self.record(site, x, x_scale, weight, weight_scale, z)
+
     def record(self, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, z: Any = None) -> Call | None:
         """Linear `w`'s served call: its s8 rows a [m, k], their f32 scales s_a [m], its int8 weight [n, k] and scales, and
         the z its arm handed over: its records (`pouw_h1_records.of`), committed as its z table; without them nothing is
@@ -610,8 +622,7 @@ class H1Run:
         records = ZR.of(z, units(k, n, self.rows)) if n % TILE[1] == 0 else None
         zy = z if records is not None else None
         if z is None and self.retain:
-            from verity_vllm.engine.int8_exact import int_mm
-            z = int_mm(a, weight)
+            z = ARM.arm().int_mm(a, weight)
         call = self._call(self.step, w, a, s_a, weight, weight_scale, records, zy)
         if self.retain:
             y = ZR.split(ZR.host(records), call.rows, call.n)[0][:m] if records is not None else numpy_of(z)

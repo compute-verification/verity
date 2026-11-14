@@ -16,7 +16,7 @@ from pathlib import Path
 from .. import ROOT, contract
 from . import call
 
-#: `tools/verity/check/suites.py`'s ELAN and LAKE_BUILD, word for word (`tests/test_build.py`): lake through elan, installed
+#: `tools/check/suites.py`'s ELAN and LAKE_BUILD, word for word (`tests/test_build.py`): lake through elan, installed
 #: when missing, and one build of a tree's package at a time
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '

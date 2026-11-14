@@ -4,7 +4,9 @@ session opens one after another, each closed after its session's evidence.
 
 The files are stand-ins, so no member's files are held: an audit with nothing else wrong ends at its first member's
 circuit, which does not parse, on both sides and before any session, and each other row changes one thing and reads
-Lean's reason off the twin. A case every session accepts, which Lean accepts, is a whole audit's, which
+Lean's reason off the twin. An audit's sample holds a unit of each member (`Audit`'s `sampled`), so no statement is of
+a member it missed; where it misses a member that has a statement, both refuse that statement before any member's file
+is read (`OneStageZk.sampledHeld`). A case every session accepts, which Lean accepts, is a whole audit's, which
 `benchmarks/one_stage` runs with the twin beside it.
 
 The twin decides the sessions' trees by `challenger.members_tree_reason` (with `member_tree_reason`, `closes` and
@@ -21,6 +23,12 @@ needs a statement Lean sets up, on real files, under a release log this file's c
 `test_challenger_difftest.py` holds the two sides of the trees' check with and without the length. A member whose
 circuit parses and is outside the scope's rules, or whose ports' roots are, which Lean refuses with its files and the
 twin leaves to the member's session, needs real files too.
+
+One row puts real files at the first member, which has no session there: a circuit a prover staged
+(`tests/fixtures/form-refusals`'s honest case, a fetched fixture) and its public file, as staged and with its header
+or a row changed. Lean holds the public file's header and rows with the member's files
+(`Flock.PortRoots.headerOf`, `StepAt.header`) and the twin through the verifier's form check (`members.flock_form`),
+and each changed file is refused by both with one reason, the staged one passing both to the population check.
 """
 from __future__ import annotations
 
@@ -35,12 +43,18 @@ import pytest
 import verity_difftest as D
 from verity.commitments import coin_tree as CT
 from verity.protocols.proofs.spot.device import challenger as Ch
-from verity.protocols.proofs.spot.verifier.one_stage import (closing as CL, draw as DR, members as M, partition as P,
-                                                      proofs as PF, registration as R)
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    closing as CL,
+    draw as DR,
+    members as M,
+    partition as P,
+    proofs as PF,
+    docket as R,
+)
 
 from test_challenger_difftest import Ledger, TreeSession, _pinned, lms_verify
 from test_difftest import (LEAF, PAIR, RECEIVED, SCHEME, STAND_IN_CIRCUIT, TRIPLE, V2_TABLES, WINDOW, Setup,
-                           _challenger_draw, _json)
+                           _challenger_sample, _json)
 
 #: slow: the first of them builds the executable, and each row runs it
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")]
@@ -48,6 +62,14 @@ pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None,
 A, B = f"{PAIR.id}/c0", f"{TRIPLE.id}/c0"
 UNITS = {A: [[0, 2]], B: [[2, 5]]}
 DESIGN = {"k": 2, "law": "subset"}
+#: the honest case of the form refusals' fetched fixture: a circuit a prover staged and its public file
+STAGED = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "form-refusals" / "honest"
+#: `Flock.ProvedScope.refusal`'s tail, and `Flock.PortRoots.INPUTS_WHY` and `HEADER_WHY`
+FORM = ": a statement form the soundness proof does not cover"
+INPUTS_WHY = "a public file whose header names public_inputs at a circuit whose META names none"
+HEADER_WHY = "a public file whose rows are not its header's"
+#: `Flock.HmOut.checkPublic`'s refusal of another frame or row key
+NOT_FRAMED = "the instance file's rows are not frame-v3-sha512 hm96 leaves under the default key"
 
 
 def _sha(b: bytes) -> str:
@@ -59,7 +81,7 @@ def _never(_):
 
 
 class Audit:
-    """A window of the members `A` and `B` (two instances of `PAIR`, three of `TRIPLE`), its registration's two roots
+    """A window of the members `A` and `B` (two instances of `PAIR`, three of `TRIPLE`), its docket's two roots
     named `ports`, audited on a challenger session that releases the sample and then opens one coin tree a member of
     `opened`, in that order (a member it leaves out has no session and no statement), each tree's link, its rounds and
     its closing round after its session's evidence (its record and one proof file) before the next tree's first round:
@@ -77,7 +99,7 @@ class Audit:
         self.rec = R.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF)
         held = None
         while held != set(sampled):
-            ch, sample, _ = _challenger_draw(rng, s, DESIGN, self.rec, trees=0)
+            ch, sample, _ = _challenger_sample(rng, s, DESIGN, self.rec, trees=0)
             held = {n for n in (A, B) if any(lo <= u < hi for u in DR.proved(sample) for lo, hi in UNITS[n])}
         self.files: dict[str, bytes] = {}
         sessions = {}
@@ -243,6 +265,50 @@ def test_a_member_with_no_statement_has_its_files_held_by_both_before_any_sessio
     assert why.startswith(f"proofs: member {A}: {M.UNREAD[0]}"), why
 
 
+def test_a_member_with_no_session_has_its_public_files_header_and_rows_held_by_both(tmp_path):
+    """A window audited with a statement of its second member alone, its first member's files a circuit a prover
+    staged and that circuit's public file: Lean holds the public file's header and rows as a session's setup takes
+    them, with no session (`StepAt.header`, `Flock.PortRoots.headerOf`), and the twin answers the Flock verifier's
+    own check (`members.flock_form`). The file as staged passes both, which then refuse the member at its population
+    check, its units not the file's. A header naming ``public_inputs`` (the circuit's META names none), a changed row,
+    and another ``frame``, ``row_key_sha512`` or ``schemas`` entry are each refused by both with one reason, before
+    any session.
+
+    Each row parses the staged circuit, the smallest the fixture holds, in Lean's check and in the twin's form check,
+    so the test takes minutes. What it catches that the form check's own tests
+    (``tests/test_form_refusals.py``) can't: that Lean's files pass makes the check for a member no session samples,
+    and that the twin's reason is Lean's there."""
+    assert (STAGED / "pub-4.bin").is_file(), (
+        f"{STAGED.parent} is not fetched: `uv run research data fetch-fixtures "
+        f"{STAGED.parent.relative_to(Path(__file__).resolve().parents[7])}`")
+    a = Audit("members-twin-header", opened=(B,))
+    circuit = a.put((STAGED / "stage" / "circuit.txt").read_bytes())
+    line, body = (STAGED / "pub-4.bin").read_bytes().split(b"\n", 1)
+
+    def held(header=None, rows=None) -> str:
+        h = json.loads(line)
+        if header is not None:
+            header(h)
+        public = a.put(json.dumps(h, separators=(",", ":"), sort_keys=True).encode() + b"\n"
+                       + (body if rows is None else rows(body)))
+        why, (run, refused) = a.ask(tmp_path / "held", params=a.members(A, circuit=circuit, public=public,
+                                                                         vus_per_block=2))
+        assert run is None and why == M.run_reason(run, refused), (why, refused)
+        assert why.startswith(f"proofs: member {A}: "), why
+        return why.removeprefix(f"proofs: member {A}: ")
+
+    assert held() == M.MEMBER_UNITS
+    assert held(header=lambda h: h.update(public_inputs=[])) == f"refused: {INPUTS_WHY}{FORM}"
+    row = held(rows=lambda b: bytes([b[0] ^ 1]) + b[1:])
+    assert row.startswith(f"refused: {HEADER_WHY} (row ") and row.endswith(
+        f": the rows' b || c do not hash to the header's frame-v3-sha512 root){FORM}"), row
+    assert held(header=lambda h: h["frame_v3"].update(frame="frame-v3")) == f"refused: {HEADER_WHY} ({NOT_FRAMED}){FORM}"
+    assert held(header=lambda h: h["frame_v3"].update(row_key_sha512="00" * 64)) == (
+        f"refused: {HEADER_WHY} ({NOT_FRAMED}){FORM}")
+    assert held(header=lambda h: h["frame_v3"]["schemas"].update(r0="hm96-sha512/row/v1")) == (
+        f"refused: {HEADER_WHY} (row r0: schema is not hm96-sha512/row/v2){FORM}")
+
+
 def test_a_member_no_statement_names_is_held_to_its_own_circuits_lookup_tables(tmp_path):
     """A window audited with a statement of its second member alone: the first member, which no statement names, is
     held to its own circuit's lookup tables among the blobs as a sampled one is (`OneStageZk.ownTables`, the first read
@@ -269,7 +335,7 @@ def test_a_member_no_statement_names_is_held_to_its_own_circuits_lookup_tables(t
 
 def test_the_twin_answers_leans_reason_on_the_logs_order_and_the_registrations_roots(tmp_path):
     """A release log that opens the second statement's tree first is refused by both as `MEMBERS_ORDER`, the statements
-    being in the members' order; and a registration with a root that is no member's is refused by both, the trees'
+    being in the members' order; and a docket with a root that is no member's is refused by both, the trees'
     check passed."""
     late = Audit("members-twin-order", opened=(B, A))
     why, (run, refused) = late.ask(tmp_path / "order")
@@ -304,6 +370,19 @@ def test_the_twin_answers_leans_reason_on_each_refusal_of_the_sessions_trees(tmp
          evidence=a.proofs([first, {**last, "sessions": [{**s1, "record": elsewhere}]}]))
     same(a, "shared", f"two sessions' coins are one tree's: {Ch.SHARED_TREE}",
          evidence=a.proofs([first, {**last, "sessions": [{**s1, "record": s0["record"], "reps": s0["reps"]}]}]))
+
+
+def test_a_statement_of_a_member_the_sample_missed_is_refused_by_both_before_any_session(tmp_path):
+    """A window whose sample holds units of one member alone, audited with a statement of each member, each statement's
+    tree logged and closed: Lean refuses the other member's statement by its member's name (`OneStageZk.sampledHeld`),
+    after the trees, the members laid and the roots and before any member's file, and the twin answers the same,
+    whichever member the sample missed."""
+    for k, held, missed in (("second", (A,), B), ("first", (B,), A)):
+        a = Audit(f"members-twin-missed-{k}", sampled=held)
+        why, (run, refused) = a.ask(tmp_path / k)
+        assert run is None and why == M.run_reason(run, refused), (k, why, refused)
+        assert why == (f"proofs: member {missed}: the sample holds none of its units, and a member the sample missed "
+                       "has no statement")
 
 
 def test_the_one_row_run_here_where_the_twin_is_not_leans(tmp_path):

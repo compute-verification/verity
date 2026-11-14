@@ -2,26 +2,26 @@ module
 
 public import Proofs.Flock.Claims.Sampling.Select.Steps
 public import Proofs.Flock.Claims.Sampling.Select.Take
-public import Proofs.Flock.Soundness.ExecDrawOS
+public import Proofs.Flock.Soundness.ExecSampleOS
 
 /-!
 # `Select.select`'s subset sample is the live sample's (`Law.runOS`) on the same bytes
 
-`Select.select` samples a sampling design's units with `Draw.drawUnits`, which is `Flock.Draw.drawWith` reading the coins in order
+`Select.select` samples a sampling design's units with `Draw.sampleUnits`, which is `Flock.Draw.drawWith` reading the coins in order
 through `Draw.take`, one position for every stream, in `StateT ℕ (Except String)`. `Law.runOS` is the same `drawWith`
 reading through `Law.tapeGet`, one position per stream, in `StateT (ℕ → ℕ) Option`. A subset sample reads stream `0` only,
 so on stream `0`'s bytes the two runs agree step for step (`TapeSim`), the code erring where the model reads past the
 tape.
 
-* `drawUnits_subset_runOS`: the code's subset sample on the bytes `f 0` is `runOS`'s on `f`, and fails exactly where it is
+* `sampleUnits_subset_runOS`: the code's subset sample on the bytes `f 0` is `runOS`'s on `f`, and fails exactly where it is
   `none`.
 * `select_subset_runOS`: an accepted `Select.select` at a rule whose sampling design over the population Flock reads as
   `.subset k` proves every unit `runOS` samples.
 * `select_subset_escape_le`: so on bytes uniform by A3 (`Assumptions.UniformRandomBytes`) it misses `B` no more often
-  than the uniform `k`-subset does (`Law.drawOS_subset_escape_le`).
+  than the uniform `k`-subset does (`Law.sampleOS_subset_escape_le`).
 
 A stratified or work sample reads one stream per stratum, which the code serves from the one sequence of coins and `runOS`
-from a tape each, so the agreement here is the subset sampling design's, which a rate law resolves to (`Select.Rule.over`).
+from a tape each, so the agreement here is the subset sampling design's, which a rate sampling design resolves to (`Select.Rule.over`).
 -/
 
 @[expose] public section
@@ -141,25 +141,25 @@ theorem tapeSim_onWith (T : ℕ → ByteArray) (N : ℕ) (hN : 0 < N) (run : Byt
     cases r <;> exact tapeSim_pure _
 
 /-- **The subset sample on the code's reader is the one on stream `0` of the tapes.** -/
-theorem tapeSim_drawWith (T : ℕ → ByteArray) (k n : ℕ) :
+theorem tapeSim_sampleWith (T : ℕ → ByteArray) (k n : ℕ) :
     TapeSim (Flock.Draw.drawWith (fun _ need => Draw.take (T 0) need) (.subset k) n)
       (Flock.Draw.drawWith (Law.tapeGet T) (.subset k) n) := by
   unfold Flock.Draw.drawWith
   exact tapeSim_bind (tapeSim_onWith T _ (by omega) _) fun u => tapeSim_pure _
 
 /-- **The code's subset sample is the live sample's** (`Law.runOS`, `Flock.Draw.drawWith`): on the bytes `f 0`,
-`Draw.drawUnits` samples the units `runOS` samples on `f`, and fails exactly where `runOS` is `none`. -/
-theorem drawUnits_subset_runOS (k n : ℕ) {L : Fin 1 → ℕ} (f : (i : Fin 1) → Fin (L i) → Fin 256) :
-    (Draw.drawUnits (.subset k) n (Law.streamOf (f 0))).toOption.map Prod.fst =
+`Draw.sampleUnits` samples the units `runOS` samples on `f`, and fails exactly where `runOS` is `none`. -/
+theorem sampleUnits_subset_runOS (k n : ℕ) {L : Fin 1 → ℕ} (f : (i : Fin 1) → Fin (L i) → Fin 256) :
+    (Draw.sampleUnits (.subset k) n (Law.streamOf (f 0))).toOption.map Prod.fst =
       (Law.runOS f (.subset k) n).map (·.units) := by
   have hT : Law.tapesOf f 0 = Law.streamOf (f 0) := by simp [Law.tapesOf, Array.getD_eq_getD_getElem?]
   have hsim : (Flock.Draw.drawWith (Law.tapeGet (Law.tapesOf f)) (.subset k) n).run (fun _ => 0) =
       onTape (fun _ => 0)
         ((Flock.Draw.drawWith (fun _ need => Draw.take (Law.streamOf (f 0)) need) (.subset k) n).run 0) := by
-    have h := tapeSim_drawWith (Law.tapesOf f) k n (fun _ => 0)
+    have h := tapeSim_sampleWith (Law.tapesOf f) k n (fun _ => 0)
     rw [hT] at h
     exact h
-  unfold Law.runOS Draw.drawUnits
+  unfold Law.runOS Draw.sampleUnits
   rw [hsim]
   cases (Flock.Draw.drawWith (fun _ need => Draw.take (Law.streamOf (f 0)) need) (.subset k) n).run 0 with
   | error e => rfl
@@ -238,8 +238,8 @@ theorem select_subset_runOS (rule : Select.Rule) (hne : rule ≠ .all) (d : Prog
     rw [hk] at hp'
     have e3 : parsed = .subset k := (Except.ok.inj hp').symm
     subst e3
-    have hu' : Draw.drawUnits (.subset k) n (Law.streamOf (f 0)) = .ok (units, read') := hu
-    have heq := drawUnits_subset_runOS k n f
+    have hu' : Draw.sampleUnits (.subset k) n (Law.streamOf (f 0)) = .ok (units, read') := hu
+    have heq := sampleUnits_subset_runOS k n f
     rw [hu'] at heq
     cases hr : Law.runOS f (.subset k) n with
     | none =>
@@ -251,7 +251,7 @@ theorem select_subset_runOS (rule : Select.Rule) (hne : rule ≠ .all) (d : Prog
       exact ⟨dr, rfl, fun x hx => hsub x (by rw [hud]; exact hx)⟩
 
 /-- **`Select.select`'s subset sample misses `B` no more often than the uniform `k`-subset**, on coins uniform by A3
-(`Assumptions.UniformRandomBytes`), through the live sample's bound (`Law.drawOS_subset_escape_le`). -/
+(`Assumptions.UniformRandomBytes`), through the live sample's bound (`Law.sampleOS_subset_escape_le`). -/
 theorem select_subset_escape_le (rule : Select.Rule) (hne : rule ≠ .all) (d : Program) (query : Json)
     (table : Option Json) (n : ℕ) (named : Json) (k : ℕ) (hn : Partition.units d query = .ok n)
     (hnamed : rule.lawOver n = .ok named) (hk : Draw.flockLaw named n = .ok (.subset k)) (hkn : k ≤ n)
@@ -260,7 +260,7 @@ theorem select_subset_escape_le (rule : Select.Rule) (hne : rule ≠ .all) (d : 
     prCoin (fun ω => ∃ draw proved read,
       Select.select rule d query table none (Law.streamOf (t ω 0)) = .ok (draw, proved, read) ∧
         ∀ u ∈ B, u.val ∉ proved) ≤ (Law.subset n k hkn).escape B := by
-  refine le_trans (prCoin_mono fun ω hω => ?_) (Law.drawOS_subset_escape_le n k hkn L t ht B)
+  refine le_trans (prCoin_mono fun ω hω => ?_) (Law.sampleOS_subset_escape_le n k hkn L t ht B)
   obtain ⟨draw, proved, read, hs, hm⟩ := hω
   obtain ⟨dr, hdr, hsub⟩ := select_subset_runOS rule hne d query table n named k hn hnamed hk (t ω) draw proved read hs
   exact ⟨dr, hdr, fun u hu hud => hm u hu (hsub _ hud)⟩

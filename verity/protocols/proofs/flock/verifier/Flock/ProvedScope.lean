@@ -548,14 +548,14 @@ theorem programP_ok {parsed : V Circuit} {program : Option ByteArray} (h : progr
     | none => rfl
     | some w => simp [hw] at h
 
-/-- What a sample's law is, when no soundness claim samples by it at the session's form: the one rule
-for which law each form samples by. Without `--plain-tables`: the stratified sampling design at every form `check` passes, each claim at
+/-- What a sample's sampling design is, when no soundness claim samples by it at the session's form: the one rule
+for which sampling design each form samples by. Without `--plain-tables`: the stratified sampling design at every form `check` passes, each claim at
 one table (`SoundExec`, `SoundExecH`, `SoundZ`, `SoundZH`); the subset sampling design under `--zk` (`SoundZJ`, `SoundZHJ`, `SoundZHJR`)
 and, without it, exactly where a plain claim samples by it: at hidden outputs, at the one table `check` admits there
 (`SoundExecH` at its subset sample design). Under `--plain-tables` (`plainTables`, `SoundExecJ`), the subset sampling design alone. So a
 bernoulli sample, a work sample (with or without a closure), a subset sample without `--zk` or `--plain-tables` at public outputs,
 and a stratified sample under `--plain-tables` are outside them. -/
-def lawWhy (zk : Bool) (tags : Tags) (plainTables : Bool) (d : Draw.UnitDraw) : Option String :=
+def lawWhy (zk : Bool) (tags : Tags) (plainTables : Bool) (d : Draw.UnitSample) : Option String :=
   match d.law with
   | .stratified .. => if plainTables then some "a stratified draw under --plain-tables" else none
   | .subset _ => if zk || tags.hiddenOutputs || plainTables then none else some "a subset draw without --zk"
@@ -565,9 +565,9 @@ def lawWhy (zk : Bool) (tags : Tags) (plainTables : Bool) (d : Draw.UnitDraw) : 
 /-- **The session's sample is by a sampling design a soundness claim samples by at its form** (`lawWhy`): `draw` is
 the record's (`recordDraw`), none for a session without one. Every claim is about a sampled session, so a session without
 a sample is refused (D12); so is a sample that does not parse. -/
-def drawLaw (zk : Bool) (tags : Tags) (plainTables : Bool) : Option Lean.Json → Except String Unit
+def sampleLaw (zk : Bool) (tags : Tags) (plainTables : Bool) : Option Lean.Json → Except String Unit
   | none => .error "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
-  | some j => match Draw.UnitDraw.ofJson j with
+  | some j => match Draw.UnitSample.ofJson j with
     | .error e => .error s!"refused: a draw that does not parse ({e})"
     | .ok d => match lawWhy zk tags plainTables d with
       | some why => .error s!"refused: {why}: no soundness claim draws by this law"

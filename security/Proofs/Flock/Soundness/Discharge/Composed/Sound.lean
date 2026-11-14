@@ -21,17 +21,17 @@ import Proofs.Flock.Soundness.Discharge.Exec.Headline
 /-!
 # The soundness half of one `--zk` sampled session
 
-`zk_session_sound`: `zk_session_composed`'s soundness conjunct, at the same law and parameters, with the same proof.
+`zk_session_sound`: `zk_session_composed`'s soundness conjunct, at the same sampling design and parameters, with the same proof.
 For any live prover `τ` of a public-output one-table `--zk` session,
 `Pr[verity-verify-proof --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key
 program's partition (`keyProg c hU n`), each read at its `--zk` site and bound to the rows it commits (lp-zkbind's
 `sitesZAt`, `rsZAt`): `ZkBind.zk_flock_countC_execOS_at` at the simulated prover `simZ … τ`, with `δ_tree = 0`
 (`execAccept` is acceptance, so the tree's event is empty: `TreeRewind.ofNever`), carried to verity-verify-proof's acceptance
 by `zk_headline_exec_on`. `RunsZC` at the sampling design's samples is `ZkExec.runsZC_live`, from the tags (`TagsOk`), the challenger's
-live-coin part's record of the live session (`RecordsLiveZK`) and its sample at each of the sampling design's samples (`DrawOkZK`).
+live-coin part's record of the live session (`RecordsLiveZK`) and its sample at each of the sampling design's samples (`SampleOkZK`).
 
 What it rests on: `cr/sha-512` (`hCR`), `ecr/sha-512` (A2, inside `δ_link`: `⊤` at a prover whose link finders break
-it), A3 (`hA3`), A6 and the challenger (`RecordsLiveZK`, and `DrawOkZK` at each of the sampling design's samples). It reads neither
+it), A3 (`hA3`), A6 and the challenger (`RecordsLiveZK`, and `SampleOkZK` at each of the sampling design's samples). It reads neither
 `hash-derived-key` nor `PadNonvanishing`, nor the session's `Coined` tables: those are the zero-knowledge half's.
 
 `tagsOk_circuit967b8d06`: the citation of its tag hypotheses. Under `--statement verity/flock-circuit@967b8d06` with
@@ -64,7 +64,7 @@ variable {mPts n : ℕ} {Reg : Type}
 /-- **One `--zk` sampled session is sound.** -/
 theorem zk_session_sound
     (I : Inputs) (ht : I.tags.typed = false)
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZK I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the session's circuit and public file
@@ -77,7 +77,7 @@ theorem zk_session_sound
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the challenger's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, DrawOkZK I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
+    (hDraw : ∀ ω, SampleOkZK I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
     -- the verify command's tags and the challenger's record of the live session
     (hTags : TagsOk I) (hRec : RecordsLiveZK I dj wr)
     -- the count curve's parameters

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # two_stage.py's two commands end to end on a CPU node, on a token select class at small statics (two_stage_small.py: no
 # engine): flock-circuit, verity-verify-proof and SPOT's Lean verifier built from this tree as the toy's audit.sh builds them,
-# then `first` (the boundary registration and the first stage on a local challenger session) and `second` (the interior,
+# then `first` (the boundary docket and the first stage on a local challenger session) and `second` (the interior,
 # the second stage on a session of its own, a --zk session per member, Lean's verdicts, round 2 and the stream's outcome).
 # Exit 0 when the second stage is what the play expects (two_stage_small.py expect). With no arguments the play is the
 # honest one round 2 accepts: the class inlined as the greedy select in one unit, round 1 committing the ids the block
@@ -106,12 +106,12 @@ KEPT=(); [ -z "$LOGITS" ] || KEPT=(--kept "$LOGITS")
 [ -n "$LOGITS${SMALL_INLINE:-}${SMALL_NEGATIVE:-}" ] || { echo "the serve's record commits no logits, a play round 2 refuses (second-inputs):" \
   "give SMALL_ARGS --inline --units K --logits, or name the negative case, SMALL_NEGATIVE=second-inputs" >&2; exit 9; }
 # shellcheck disable=SC2086
-"${PY[@]}" benchmarks/one_stage/two_stage.py first --boundary "$CLASS" --check "$CHECK" --replay rate:2/6 --k 1 \
+"${PY[@]}" verity/protocols/proofs/spot/device/two_stage.py first --boundary "$CLASS" --check "$CHECK" --replay rate:2/6 --k 1 \
   --challenger local --main "$O/main.txt" --out "$W/first" "${STOP[@]}" ${SMALL_FIRST:-} > "$O/first.log" 2>&1 || { tail -20 "$O/first.log"; exit 3; }
 tail -3 "$O/first.log"
 rc=0
 # shellcheck disable=SC2086
-"${ON_CARDS[@]}" "${PY[@]}" benchmarks/one_stage/two_stage.py second --stage1 "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
+"${ON_CARDS[@]}" "${PY[@]}" verity/protocols/proofs/spot/device/two_stage.py second --stage1 "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
   --capture "$W/serve/capture" --challenger local --challenger-host "$W/first/challenger-host" --main "$O/main.txt" --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
   --out "$W/second" "${UNLINKED[@]}" "${STOP[@]}" "${KEPT[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
 grep '^TWO ' "$O/second.log" || tail -30 "$O/second.log"
