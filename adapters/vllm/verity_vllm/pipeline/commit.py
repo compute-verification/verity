@@ -1230,315 +1230,8 @@ def main(args: Options) -> None:
                                 required_classes_cli=required_classes_cli, hidden_family=hidden_family if not required_classes_cli else None,
                                 fa_version=fa_version, cb_plan=cb_plan, served=served)
         required_classes, moe_attached, _hidden_required = _att.required_classes, _att.moe_attached or moe_attached, _att.hidden_required
-        if hasattr(com, "size_arena") and getattr(com, "arena", None) is not None and not (args.arena_unchecked and args.arena_mb):
-            # X-02: size the device staging block from the workload envelope (refuses here, with needed vs available bytes, if it cannot fit)
-            envelope = {"batch": args.max_num_seqs, "max_prompt": max(len(r["prompt_token_ids"]) for r in reqs),
-                        "max_new": max(int(r.get("max_tokens") or sampling.get("max_tokens") or 1) for r in reqs),
-                        "max_num_batched_tokens": eng.kwargs.get("max_num_batched_tokens"), "max_model_len": eng.kwargs.get("max_model_len")}
-            asz = com.size_arena(envelope, hidden_m1=bool(args.hidden_so) and _hidden_required is not False)
-            print(f"[delta] arena sizing (X-02, {kind}): decode block {asz['decode_block_bytes'] >> 20} MiB x{asz['blocks_preallocated']} + prefill block "
-                  f"{asz['prefill_block_bytes'] >> 20} MiB "
-                  f"(step bound {asz['step_bound_bytes'] >> 20} MiB: prefill {asz['prefill_tokens']} tok -> {asz['prefill_step_bytes'] >> 20} MiB "
-                  f"[hidden {asz['prefill_hidden_bytes'] >> 20} MiB], decode -> {asz['decode_step_bytes'] >> 20} MiB; per-token {asz['per_token_bytes']} B), "
-                  f"retained bound {asz['retained_bytes_bound'] >> 20} MiB; device free {asz['device_free_bytes'] >> 20} MiB; "
-                  f"gpu_memory_utilization <= {asz['gpu_memory_utilization_max']}", flush=True)
-            (out / f"arena_sizing_{kind}.json").write_text(json.dumps(asz, indent=1, default=str) + "\n")
-            # `--retain host` pins the whole run's raw bytes (+ ~1/4 for levels) in HOST memory; inside a container the
-            # bound is the cgroup limit, not `free`. Over it the kernel OOM-killer SIGKILLs the process mid-warm-up with no Python error
-            # (B=32 Llama 1024/128 on a 125 GB cp-dA container). Say so up front; the sound alternative is `--retain none` + replay openings.
-            host_limit = None
-            host_limit_src = None
-            for cg in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
-                try:
-                    v = Path(cg).read_text().strip()
-                    if v.isdigit() and int(v) < (1 << 60):
-                        host_limit = int(v)
-                        host_limit_src = cg
-                        asz["host_memory_cap_source"] = cg
-                        break
-                except OSError:
-                    pass
-            if host_limit is None:
-                # no cgroup limit visible (bare host / 'max'): the machine's MemTotal keeps the admission a bound instead of
-                # admitting unconditionally; the source is named on the record either way
-                try:
-                    for line in Path("/proc/meminfo").read_text().splitlines():
-                        if line.startswith("MemTotal:"):
-                            host_limit = int(line.split()[1]) * 1024
-                            host_limit_src = "/proc/meminfo MemTotal (no cgroup limit visible)"
-                            break
-                except OSError:
-                    pass
-            asz["host_memory_cap_bytes"] = host_limit
-            asz["host_memory_cap_source"] = host_limit_src
-            # the record NAMES the admission that governs this run (a field, not an
-            # inference from which file is present): a run must satisfy the admission whose domain is its retention mode -- the bounded
-            # HOST BOUND (below) for --bounded-staging, the host-retention envelope for the unbounded --retain host path; the other
-            # stays on the record beside it and does not refuse alone.  Rides on arena_sizing_<kind>.json and host_admission_<kind>.json.
-            asz["admission_of_record"] = {
-                "governing": ("bounded_host_admission" if getattr(com, "bounded", False)
-                              else ("f_da_15_host_retention_envelope" if getattr(com, "retain", None) == "host" else None)),
-                "retain": getattr(com, "retain", None), "bounded_staging": bool(getattr(com, "bounded", False)),
-                "rule": "the admission whose domain is the run's retention mode governs; the other-mode admission is on the record and does not refuse alone"}
-            if host_limit is not None and getattr(com, "retain", None) == "host" and not getattr(com, "bounded", False):
-                need = int(asz["retained_bytes_bound"] * 1.25)
-                if need > host_limit:
-                    print(f"[delta] WARNING host retention bound {need >> 20} MiB (raw x1.25 for levels) exceeds the container memory limit "
-                          f"{host_limit >> 20} MiB: expect a silent OOM-kill (rc 137) during the instrumented run; use --retain none (openings by "
-                          f"replay) or a larger container", flush=True)
-            if getattr(com, "bounded", False):
-                # the HOST peak bound of a bounded run, every term named (bytes):
-                #   engine       the process RSS now (weights are on device; this is vLLM + torch + the tokenizer + the pinned pool so far)
-                #   levels       the run's tree levels on pinned host: 32 B per 256 B chunk per level -> <= raw / 4 (kept for openings)
-                #   raw          retain=host: the raw bytes kept on host = the bound minus the excluded families' prefill hidden bytes
-                #                (decode-step hidden rows are counted as retained: conservative); retain=none|sample: 0
-                #   learn        the learning-step transient budget (given back after each re-hash; at most one step at a time)
-                #   replay       openings-after-release: a second run's levels (raw / 4) + the challenged windows on host (<= picks x W)
-                #   ring         the windowed device ring is DEVICE memory (not counted); the pinned pool rounds slices up to 64 MiB blocks
-                # The bound is compared with the cgroup limit; `--host-admit <margin>` REFUSES the run (rc 3, named) when it does not fit.
-                _rss_now = int((rss_kb()[0] or 0) * 1024)
-                # TERM BY TERM against the B1 1024/128 measurements on an H100 (runs.jsonl of the record and
-                # bounded-x arms): the stream has two components the sizing models with very different accuracy --
-                #   hidden (fa3_hidden_m1, the FA3 slab padded to the step's longest query): sized 19,636,365,312 B, measured (excluded_bytes)
-                #            19,635,194,880 B -> exact to 1.2 MB; factor 1.05
-                #   other  (every other family, per-token widths): sized ~3.43 GB, measured (host kept under exclude) 5,440,526,844 B -> x1.59;
-                #            factor 2.0 (the per-token widths of the declaration under-size these planes; bounded, not explained)
-                # A blanket x1.15 on the total held on B1 only because hidden is 78 % of the stream; on B8 (hidden 92 %) it under-sizes the
-                # kept raw by ~7 GiB while over-sizing the levels. Env overrides for a re-derivation, never for a launch.
-                _f_hidden = settings.VERITY_ADMIT_HIDDEN_FACTOR
-                _f_other = settings.VERITY_ADMIT_OTHER_FACTOR
-                # the run's stream under the workload's DECLARED schedule (per step; the hidden family's share), not the envelope's
-                # any-packing worst case (`retained_bytes_bound` = ceil(B x max_prompt / T_prefill) prefills of the worst step: 3x for the
-                # B8 1024/128 row whose 8 prompts prefill in ONE step) -- both are on the record
-                from verity_vllm.commit.committer.native_host import (
-                    schedule_stream_bound,
-                )
-                _ssb = schedule_stream_bound(asz, reqs, sampling)
-                asz["schedule_stream_bound"] = _ssb
-                _excl = set(getattr(com, "retain_exclude", ()) or ())
-                from verity_vllm.commit.committer.native_host import bounded_host_bound
-                # the C2 sampled replay's Programs of record become Python objects in THIS process (B8: 70,300 MiB,
-                # the peak of attempt 1); forecast them BEFORE the run from the instance files the replay will load (streamed count, ~17 s
-                # for the B8 row's 4.9 GB of json; nothing is built), so the bound printed here names them as a term of their own
-                _c2f: dict[str, Any] = c2_programs_forecast(getattr(args, "programs_root", None), getattr(args, "program_dir", None)) if args.replay_per_stratum else \
-                    {"bytes": 0, "rows": 0, "json_bytes": 0, "files": [], "why": "no sampled replay (--replay-per-stratum 0)"}
-                asz["c2_programs_forecast"] = _c2f
-                print(f"[delta] C2 PROGRAMS FORECAST: {_c2f['rows']:,} instance rows in {len(_c2f['files'])} files, json {_c2f['json_bytes'] >> 20} MiB -> "
-                      f"{_c2f['bytes'] >> 20} MiB of Python objects (x{_c2f.get('factor')}, {_c2f.get('calibration')})"
-                      f"{(' -- ' + str(_c2f.get('why'))) if _c2f.get('why') else ''}", flush=True)
-                _admit = bounded_host_bound(_ssb, engine_rss_bytes=_rss_now, retain=com.retain, retain_exclude=_excl,
-                                            c2_programs_bytes=int(_c2f["bytes"]), c2_freed_before_replay=True,       # freed after the replay + linkage records (this file)
-                                            fork_children_bytes=(FORK_CHILDREN_BYTES if args.replay_per_stratum else 0),
-                                            c2_residual_bytes=(int(_c2f["bytes"] * C2_RESIDUAL_FRACTION) if args.replay_per_stratum else 0),
-                                            pool_carry_bytes=(POOL_CARRY_BYTES if int(getattr(args, "pairs", 1) or 1) >= 2 else 0),
-                                            pool_exact=(getattr(getattr(com, "pool", None), "exact", False) is True), replay_cache=bool(getattr(args, "replay_cache", False)),
-                                            learn_budget_bytes=int(getattr(com, "learn_budget_bytes", 0) or 0), openings=int(args.openings),
-                                            chunk_bytes=int(com.chunk), window_bytes=int(getattr(com, "win_bytes", 0) or 0),
-                                            bounded=bool(getattr(com, "bounded", False)), open_after_release=bool(args.open_after_release),
-                                            host_cap_bytes=host_limit, hidden_factor=_f_hidden, other_factor=_f_other,
-                                            # engine growth after admission (torch host allocator, vLLM bookkeeping, CUDA context, the warm-ups'
-                                            # buffers) + pool rounding: B1 timelines RSS 2,218 -> 5,757 MiB before the first pool block (+3,539
-                                            # MiB), rounding <= 190 MiB -> 6 GiB (the earlier 4 GiB left 516 MiB on bounded-none try 3)
-                                            slack_bytes=int(settings.VERITY_ADMIT_SLACK_GIB * (1 << 30)),
-                                            # a 2nd+ pair's frozen pool beside the pinned cache of the first (B1 PAIRS=3 curve, FP8-STAGING §3.4)
-                                            pairs=int(getattr(args, "pairs", 1) or 1))
-                _admit.update({"envelope_retained_bytes_bound": int(asz["retained_bytes_bound"]), "schedule_run_bytes": int(_ssb["run_bytes"]),
-                               "schedule_hidden_bytes": int(_ssb["hidden_bytes"]), "schedule_largest_step": _ssb.get("largest_step"),
-                               "prefill_tokens": asz.get("prefill_tokens"), "per_token_bytes": asz.get("per_token_bytes"),
-                               # the DECLARED schedule the bound came from: a hit-plan deviation from it fails by name on the run
-                               "declared_schedule": {k: _ssb.get(k) for k in ("model", "requests", "steps", "horizon", "prefill_steps",
-                                                                               "hidden_prefill_bytes", "decode_step_bytes_max")},
-                               "cgroup_path": asz.get("host_memory_cap_source"),
-                               # this admission GOVERNS the run it is printed before (the bound printed
-                               # BEFORE the run is the bound; commit_delta compares its own VmHWM with it at the end -> verdict.host_peak)
-                               "governs_this_run": bool(getattr(com, "bounded", False)), "admission_of_record": asz.get("admission_of_record"),
-                               # not a literal: the admission's own print time; verdict.host_peak compares it with the first
-                               # pair's start (first_run_started_utc) and records printed_before_run from the two timestamps
-                               "admission_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "admission_monotonic_s": round(time.monotonic(), 3)})
-                _bound, _raw_bound, _levels, _raw_kept, _hidden_prefill, _learn, _replay, _slack, _pairs_x = (
-                    _admit["host_peak_bound_bytes"], _admit["raw_bound_bytes"], _admit["levels_bytes"], _admit["raw_kept_bytes"],
-                    _admit["excluded_prefill_hidden_bytes"], _admit["learn_budget_bytes"], _admit["replay_bytes"], _admit["slack_bytes"],
-                    _admit["pairs_extra_bytes"])
-                _hidden_sized, _other_sized = _admit["hidden_sized_bytes"], _admit["other_sized_bytes"]
-                asz["bounded_host_admission"] = _admit
-                com.host_admission = _admit          # rides on the record: extra.bounded_staging.host_admission
-                print(f"[delta] stream of record (declared schedule, {_ssb['steps']} steps, {_ssb['requests']} requests): run {int(_ssb['run_bytes']) >> 20} MiB "
-                      f"(hidden {int(_ssb['hidden_bytes']) >> 20} MiB), largest step {(_ssb.get('largest_step') or {}).get('bytes', 0) >> 20} MiB "
-                      f"({(_ssb.get('largest_step') or {}).get('tokens')} tok); envelope any-packing bound {int(asz['retained_bytes_bound']) >> 20} MiB; "
-                      f"raw bound {_raw_bound >> 20} MiB = hidden {_hidden_sized >> 20} x {_f_hidden} + other {_other_sized >> 20} x {_f_other} "
-                      f"(factors measured on B1)", flush=True)
-                _ph = _admit.get("phases_bytes") or {}
-                print(f"[delta] bounded staging HOST BOUND ({kind}): {_bound >> 20} MiB = max(phases) + pairs {_pairs_x >> 20} ({_admit['pairs']} pairs) + slack {_slack >> 20}; "
-                      f"phases: run {_ph.get('run', 0) >> 20} = engine {_rss_now >> 20} + levels {_levels >> 20} + raw kept {_raw_kept >> 20} (bound {_raw_bound >> 20}, "
-                      f"excluded hidden {_hidden_prefill >> 20}) + learn {_learn >> 20} + pool_rounding {_admit.get('pool_rounding_bytes', 0) >> 20} "
-                      f"(pool {'exact' if _admit.get('pool_exact') else 'torch-pow2'}) | c2 {_ph.get('c2_sampled_replay', 0) >> 20} = run + c2_programs "
-                      f"{_admit.get('c2_programs_bytes', 0) >> 20} + fork_children {_admit.get('fork_children_bytes', 0) >> 20} (cgroup scope) | "
-                      f"replay {_ph.get('openings_after_release', 0) >> 20} = run + replay {_replay >> 20}"
-                      f"{' + c2_residual ' + str(_admit.get('c2_residual_bytes', 0) >> 20) if _admit.get('c2_freed_before_replay', True) else ' + c2_programs'}"
-                      f"{(' | later_pair_replay ' + str(_ph.get('later_pair_replay', 0) >> 20) + ' = replay + pool_carry ' + str(_admit.get('pool_carry_bytes', 0) >> 20)) if 'later_pair_replay' in _ph else ''}"
-                      f" -> peak phase {_admit.get('peak_phase')} MiB; "
-                      f"cgroup {((host_limit or 0) >> 20) or None} MiB; margin "
-                      f"{(_admit['margin_bytes'] or 0) >> 20 if host_limit else None} MiB ({round(100 * (_admit['margin_frac'] or 0), 1) if host_limit else None} %)", flush=True)
-                # the dominant contributor by name, on the print and on any refusal -- never merely "predicted OOM"
-                print(f"[delta] bounded staging DOMINANT CONTRIBUTOR ({kind}): {(_admit.get('dominant_contributor') or {}).get('text')}", flush=True)
-                (out / f"host_admission_{kind}.json").write_text(json.dumps(_admit, indent=1, default=str) + "\n")
-                (out / f"arena_sizing_{kind}.json").write_text(json.dumps(asz, indent=1, default=str) + "\n")   # + cap, admission_of_record, bound
-                if getattr(args, "host_admit", None) is not None:
-                    if host_limit is None:
-                        print("[delta] REFUSE (--host-admit): no cgroup memory limit readable to admit against", flush=True)
-                        sys.exit(3)
-                    if _bound > host_limit * (1.0 - float(args.host_admit)):
-                        print(f"[delta] REFUSE (--host-admit {args.host_admit}): host peak bound {_bound >> 20} MiB > {(1.0 - float(args.host_admit)):.2f} x cgroup "
-                              f"{host_limit >> 20} MiB -- predicted OOM, not launched; dominant contributor: "
-                              f"{(_admit.get('dominant_contributor') or {}).get('text')}", flush=True)
-                        sys.exit(3)
-            # step: arriving prompts, live decode rows, the M1 stream geometry the record shows; + the Program's LAG rows), x1.25 for levels,
-            # against the cgroup.  A Commit predicted to exceed it is NOT launched: refused here by name before the engine runs a step
-            # (rc 3 = COMMIT FAIL in row_pod; the record carries the numbers).  VERITY_ADMIT_OVER_BOUND=1 overrides -- named on the record.
-            try:
-                from verity_vllm.pipeline import admission_bound as ADM
-                adm = ADM.admission(asz, reqs, host_limit, retain=str(getattr(com, "retain", "host")),
-                                    max_num_batched_tokens=eng.kwargs.get("max_num_batched_tokens"), lag=admission_lag(wl),
-                                    envelope_bound_bytes=int(asz["retained_bytes_bound"]), resident=ADM.committer_resident(wl, host_limit, pairs=args.pairs, replay_workers=args.replay_workers))
-                adm["override"] = settings.VERITY_ADMIT_OVER_BOUND
-                adm["host_cap_source"] = host_limit_src
-                adm["domain"] = "--retain host (the whole run's raw bytes pinned on host); a non-host retention is recorded, never refused"
-                # a --bounded-staging run pins the NON-excluded families sparsely and opens the excluded
-                # one by replay: its governing admission is the bounded HOST BOUND printed above (asz["admission_of_record"]); this envelope
-                # admission counts the whole run's raw bytes (the excluded family too) and is RECORDED beside it, never refuses alone
-                adm["governs_this_run"] = not bool(getattr(com, "bounded", False))
-                asz["admission"] = adm
-                (out / f"admission_{kind}.json").write_text(json.dumps(adm, indent=1, default=str) + "\n")
-                _s = adm["scheduled"]
-                print(f"[delta] HOST ADMISSION ({kind}): scheduled raw {adm['scheduled_raw_bytes'] >> 20} MiB over {_s['steps']} steps "
-                      f"({_s['prompt_tokens']} prompt tokens + {_s['decode_rows']} decode rows, lag {_s['lag']}; peak step {_s['peak_step']} = "
-                      f"{_s['peak_step_bytes'] >> 20} MiB) -> predicted host {adm['predicted_host_bytes'] >> 20} MiB vs limit "
-                      f"{(host_limit or 0) >> 20 if host_limit else 'none'} MiB: {'ADMITTED' if adm['admitted'] else 'REFUSED'} -- {adm['why']}", flush=True)
-                if not adm["admitted"] and not adm["override"] and adm["governs_this_run"]:
-                    print(f"[delta] REFUSE: host admission -- {adm['why']} (VERITY_ADMIT_OVER_BOUND=1 launches anyway, named on the record)", flush=True)
-                    sys.exit(3)
-                if not adm["admitted"] and not adm["governs_this_run"]:
-                    print(f"[delta] NOTE host-retention envelope admission not met ({adm['why'][:160]}) -- recorded, not governing: this is a --bounded-staging run "
-                          f"(the bounded HOST BOUND above governs)", flush=True)
-                elif not adm["admitted"]:
-                    print("[delta] WARNING host admission OVERRIDDEN by VERITY_ADMIT_OVER_BOUND=1 (named on the record): the run may be OOM-killed", flush=True)
-            except SystemExit:
-                raise
-            except Exception as _ae:  # noqa: BLE001  -- an unreadable schedule is named, never a silent skip of the admission
-                # an uncomputed admission is not an admission: a --retain host run is REFUSED by name (rc 3) unless
-                # VERITY_ADMIT_OVER_BOUND=1; a non-host retention (nothing pinned for the run) records the error and proceeds
-                _host = str(getattr(com, "retain", "host")) == "host" and not bool(getattr(com, "bounded", False))   # a bounded run: the HOST BOUND above governs
-                _ovr = settings.VERITY_ADMIT_OVER_BOUND
-                asz["admission"] = {"admitted": (None if not _host else False), "override": _ovr, "host_cap_source": host_limit_src,
-                                    "why": f"admission not computed: {_ae!r}"[:300] + (" -- refused: an uncomputed admission is not an admission (--retain host)" if _host and not _ovr else "")}
-                (out / f"admission_{kind}.json").write_text(json.dumps(asz["admission"], indent=1, default=str) + "\n")
-                if _host and not _ovr:
-                    print(f"[delta] REFUSE: host admission not computed on a --retain host run: {_ae!r} (VERITY_ADMIT_OVER_BOUND=1 launches anyway, named on the record)", flush=True)
-                    sys.exit(3)
-                print(f"[delta] WARNING host admission not computed: {_ae!r}" + (" (OVERRIDDEN by VERITY_ADMIT_OVER_BOUND=1, named on the record)" if _host else " (retain != host: nothing pinned for the run)"), flush=True)
-            if getattr(com, "windowed", False):
-                # windowed staging ring instead of per-step blocks; device staging = slots x window regardless of the step size
-                wi = com.enable_windows(asz)
-                print(f"[delta] windowed staging (P0): {wi['slots']} x {wi['window_bytes'] >> 20} MiB ring + scratch (largest tensor bound "
-                      f"{wi['largest_tensor_bound'] >> 20} MiB); in-place hashing: {wi['in_place_hashing']}", flush=True)
-                (out / f"window_ring_{kind}.json").write_text(json.dumps(wi, indent=1, default=str) + "\n")
-        if args.flip_weight:
-            # NEGATIVE TEST ONLY: one element of one served parameter, changed before registration -- the pin (below, per pair) must name it
-            _fw = str(args.flip_weight).split(":")
-            if len(_fw) < 2:
-                raise SystemExit("--flip-weight <served param name>:<flat index>[:<value>]")
-            import torch as _torch
-            _pmap = dict(eng.model.named_parameters())
-            if _fw[0] not in _pmap:
-                raise SystemExit(f"--flip-weight names no served parameter {_fw[0]!r} (first served names: {sorted(_pmap)[:5]})")
-            with _torch.no_grad():
-                _flat = _pmap[_fw[0]].data.view(-1)
-                _idx = int(_fw[1]) % _flat.numel()
-                _before = float(_flat[_idx].item())
-                _flat[_idx] = float(_fw[2]) if len(_fw) > 2 else (1.0 if _before != 1.0 else -1.0)
-            flip_weight_rec = {"param": _fw[0], "index": _idx, "before": _before, "after": float(_flat[_idx].item()), "numel": int(_flat.numel()),
-                               "expect": "weights pin FAIL naming the field; Commit FAIL rc 3"}
-            if flip_weight_rec["after"] == _before:
-                raise SystemExit(f"--flip-weight did not change the element ({_before} -> {flip_weight_rec['after']}): pick another value")
-            print(f"[delta] FLIP-WEIGHT NEGATIVE TEST ({kind}): {flip_weight_rec} -- checkpoint_binding (the weights pin) MUST FAIL naming {_fw[0]}", flush=True)
-        with TL.span("prep.register_weights", kind=kind):
-            w = com.register_weights()
-        TL.end("prep.committer_setup", kind=kind)
-        print(f"[delta] weight registration ({kind}): {w}", flush=True)
-        # the weights of record are the CHECKPOINT's, not the committer's: sha256 every live parameter
-        # the registration just hashed (same tensors, same moment) for the field-by-field comparison with the checkpoint-composed digests of
-        # record (per pair, below).  Once per process, excluded from steady state like the registration itself.
-        _live_wd: dict[str, Any] | None = None
-        _wor_rec: dict[str, Any] | None = None
-        if getattr(args, "weights_of_record", None) or getattr(args, "checkpoint_dir", None):
-            from verity_vllm.check import weights_of_record as WR
-            TL.start("validate.weights_of_record_digests", kind=kind)
-            try:
-                if getattr(args, "weights_of_record", None):
-                    _wor_rec = json.loads(Path(args.weights_of_record).read_text())
-                    _wor_rec["source"] = str(args.weights_of_record)
-                elif served is not None:
-                    _wor_rec = WR.served_record(required_manifest, args.checkpoint_dir, checkpoints_manifest=args.checkpoints,
-                                                kv_cache_dtype=str(engine_args.get("kv_cache_dtype") or "auto"))
-                    _wor_rec["source"] = f"derived in-process from the served Build's weight reads x {args.checkpoint_dir}"
-                    (Path(args.out) / "weights_of_record.json").write_text(json.dumps(_wor_rec, indent=1) + "\n")
-                else:
-                    _pd = args.program_dir
-                    if not _pd and getattr(args, "programs_root", None):
-                        # prefer a COMPONENT Program (build_request_LP*_T*) over the default wrapper shape build_request: at
-                        # B>=2 only the components are of record (the record binds to the manifest's component digests)
-                        _cands = sorted(p for p in Path(args.programs_root).glob("build_request_LP*_T*") if (p / "instances.json.gz").exists()) or \
-                                 sorted(p for p in Path(args.programs_root).glob("build_request*") if (p / "instances.json.gz").exists())
-                        _pd = str(_cands[0]) if _cands else None
-                    if not _pd:
-                        raise RuntimeError("--checkpoint-dir needs the Program of record (--program-dir / --programs-root)")
-                    _wor_rec = WR.build_record(_pd, args.checkpoint_dir, checkpoints_manifest=args.checkpoints,   # the engine's own checkpoints.json (shard pins)
-                                               kv_cache_dtype=str(engine_args.get("kv_cache_dtype") or "auto"))   # the kv scales' engine assumption
-                    _wor_rec["source"] = f"derived in-process from {_pd} x {args.checkpoint_dir}"
-                    if getattr(args, "programs_root", None):
-                        # stamp the WHOLE of-record set (every component's digest, struct-checked, + the workload digest +
-                        # the row manifest's): check() then requires the run's set to EQUAL it -- no dependence on which component was picked
-                        _man = args.required_manifest if getattr(args, "required_manifest", None) and Path(str(args.required_manifest)).exists() else None
-                        WR.stamp_of_record_set(_wor_rec, args.programs_root, manifest=_man)
-                    if hasattr(WR, "derivation_provenance"):      # the in-process derivation is a logged derivation too
-                        _wor_rec["derived"] = WR.derivation_provenance(_pd, args.checkpoint_dir, args.checkpoints, None)
-                        _wor_rec["derived"]["tool"] = "verity_vllm.pipeline.commit (in-process --checkpoint-dir fallback)"
-                    (Path(args.out) / "weights_of_record.json").write_text(json.dumps(_wor_rec, indent=1) + "\n")
-                _live_wd = WR.live_param_digests(eng.model)
-                print(f"[delta] weights of record ({kind}): root {str(_wor_rec.get('root_of_record'))[:16]} fields {_wor_rec.get('n_pinned')}/{_wor_rec.get('n_fields')} pinned, "
-                      f"unpinned {len(_wor_rec.get('unpinned') or [])}, unresolved {len(_wor_rec.get('unresolved') or [])}, shards pinned {(_wor_rec.get('checkpoint') or {}).get('all_shards_pinned')}; "
-                      f"live digests {_live_wd.get('n')} tensors in {_live_wd.get('wall_s')} s", flush=True)
-            except Exception as _we:  # noqa: BLE001  -- fail closed: recorded as not evaluated, the verdict refuses it by name
-                _wor_rec = {"error": repr(_we)[:300], "complete": False, "why": f"weights of record not derived: {_we!r}"[:300], "fields": []}
-                print(f"[delta] WARNING weights of record not derived: {_we!r}", flush=True)
-            TL.end("validate.weights_of_record_digests", kind=kind, ok=not (_wor_rec or {}).get("error"))
-        # warm-up (instrumented): sizes the pinned pool, JITs nothing else
-        # bounded staging: the warm-up is also the LEARN-ONLY pass -- every shape class of the workload (same lengths, same schedule
-        # as the record runs: throwaway_requests) gets its plan here; a learning step over the transient budget records its plan and
-        # discards its windows (placeholder root: this run is never a record).  The record runs then hit every plan and stage bounded.
-        # Its call boundaries are placeholder words of their shapes (TAPS.warmup): the record pass evaluates its own.
-        TL.start("prep.warmup_instrumented", kind=kind)
-        TAPS.warmup(com, True)
-        com.install()
-        r = run_workload(eng, va.throwaway_requests(eng, reqs, seed=200), sampling)
-        rc = com.finalize()
-        com.uninstall()
-        TAPS.warmup(com, False)
-        if getattr(com, "bounded", False):
-            _bs = rc.extra.get("bounded_staging") or {}
-            print(f"[delta] bounded staging warm-up ({kind}): learned-only steps {_bs.get('learned_only_steps')} ({(_bs.get('learned_only_bytes') or 0) >> 20} MiB "
-                  f"discarded), transient peak {(_bs.get('transient_peak_bytes') or 0) >> 20} MiB (budget {(_bs.get('learn_budget_bytes') or 0) >> 20} MiB), "
-                  f"plan mismatches {_bs.get('plan_mismatches')}, plans cached {(rc.extra.get('native_collect') or {}).get('plans_cached')}, "
-                  f"pinned pool {(rc.extra.get('pinned_pool_bytes') or 0) >> 20} MiB", flush=True)
-            (out / f"bounded_warmup_{kind}.json").write_text(json.dumps({**_bs, "pinned_pool_bytes": rc.extra.get("pinned_pool_bytes"),
-                                                                          "plans_cached": (rc.extra.get("native_collect") or {}).get("plans_cached"),
-                                                                          "host_mem_kb": dict(zip(("rss", "hwm"), rss_kb())), "cgroup_memory_current": cgroup_mem_current(),
-                                                                          "errors": rc.extra.get("errors")}, indent=1, default=str) + "\n")
-        com.reset()
-        assert_pristine(eng, base)
-        TL.end("prep.warmup_instrumented", kind=kind, wall_s=round(r["wall_s"], 3))
-        print(f"[delta] warm-up instrumented ({kind}): {r['wall_s']:.3f}s root-ready {rc.root_ready_delay_s * 1e3:.1f} ms spans {rc.spans['total_s']} "
-              f"errors {rc.extra.get('errors')}", flush=True)
+        flip_weight_rec, _live_wd, _wor_rec = committer_setup(cfg, eng, com, kind=kind, reqs=reqs, sampling=sampling, base=base,
+                                                              flip_weight_rec=flip_weight_rec, _hidden_required=_hidden_required)
         coms[kind] = com
     com = coms[kinds[0]] if kinds else None
     if served is not None:
@@ -2027,6 +1720,381 @@ def main(args: Options) -> None:
     write_verdict(cfg, versions=versions, rows=rows, step_rows=step_rows, decl=decl, decls=decls, required_classes=required_classes,
                   fa_version=fa_version, moe_attached=moe_attached, flip_weight_rec=flip_weight_rec, replay_cache=replay_cache,
                   first_run=_RUN0, protocols=protocols, engine_kw=_ekw, deferred=deferred)
+
+
+def staging_host_limit(asz: dict[str, Any]) -> tuple[int | None, str | None]:
+    """The host memory limit a committer's staging is admitted against and where it was read: the cgroup's limit, else the
+    machine's ``MemTotal``, else None.  It records both in `asz`, the staging's sizing."""
+    # `--retain host` pins the whole run's raw bytes (+ ~1/4 for levels) in HOST memory; inside a container the
+    # bound is the cgroup limit, not `free`. Over it the kernel OOM-killer SIGKILLs the process mid-warm-up with no Python error
+    # (B=32 Llama 1024/128 on a 125 GB cp-dA container). Say so up front; the sound alternative is `--retain none` + replay openings.
+    host_limit = None
+    host_limit_src = None
+    for cg in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
+        try:
+            v = Path(cg).read_text().strip()
+            if v.isdigit() and int(v) < (1 << 60):
+                host_limit = int(v)
+                host_limit_src = cg
+                asz["host_memory_cap_source"] = cg
+                break
+        except OSError:
+            pass
+    if host_limit is None:
+        # no cgroup limit visible (bare host / 'max'): the machine's MemTotal keeps the admission a bound instead of
+        # admitting unconditionally; the source is named on the record either way
+        try:
+            for line in Path("/proc/meminfo").read_text().splitlines():
+                if line.startswith("MemTotal:"):
+                    host_limit = int(line.split()[1]) * 1024
+                    host_limit_src = "/proc/meminfo MemTotal (no cgroup limit visible)"
+                    break
+        except OSError:
+            pass
+    asz["host_memory_cap_bytes"] = host_limit
+    asz["host_memory_cap_source"] = host_limit_src
+    return host_limit, host_limit_src
+
+
+def bounded_admission(com: Any, asz: dict[str, Any], *, args: Options, reqs: list[dict], sampling: dict, host_limit: int | None,
+                      kind: str, out: Path) -> None:
+    """A bounded-staging committer's admission: the peak its process reaches in host memory, term by term, from the workload's
+    declared schedule.  It is printed, recorded in `asz` and on the committer, and written as ``host_admission_<kind>.json``.
+    Under ``--host-admit`` it ends the process with exit 3 where no limit is readable or the bound does not fit under it."""
+    # the HOST peak bound of a bounded run, every term named (bytes):
+    #   engine       the process RSS now (weights are on device; this is vLLM + torch + the tokenizer + the pinned pool so far)
+    #   levels       the run's tree levels on pinned host: 32 B per 256 B chunk per level -> <= raw / 4 (kept for openings)
+    #   raw          retain=host: the raw bytes kept on host = the bound minus the excluded families' prefill hidden bytes
+    #                (decode-step hidden rows are counted as retained: conservative); retain=none|sample: 0
+    #   learn        the learning-step transient budget (given back after each re-hash; at most one step at a time)
+    #   replay       openings-after-release: a second run's levels (raw / 4) + the challenged windows on host (<= picks x W)
+    #   ring         the windowed device ring is DEVICE memory (not counted); the pinned pool rounds slices up to 64 MiB blocks
+    # The bound is compared with the cgroup limit; `--host-admit <margin>` REFUSES the run (rc 3, named) when it does not fit.
+    _rss_now = int((rss_kb()[0] or 0) * 1024)
+    # TERM BY TERM against the B1 1024/128 measurements on an H100 (runs.jsonl of the record and
+    # bounded-x arms): the stream has two components the sizing models with very different accuracy --
+    #   hidden (fa3_hidden_m1, the FA3 slab padded to the step's longest query): sized 19,636,365,312 B, measured (excluded_bytes)
+    #            19,635,194,880 B -> exact to 1.2 MB; factor 1.05
+    #   other  (every other family, per-token widths): sized ~3.43 GB, measured (host kept under exclude) 5,440,526,844 B -> x1.59;
+    #            factor 2.0 (the per-token widths of the declaration under-size these planes; bounded, not explained)
+    # A blanket x1.15 on the total held on B1 only because hidden is 78 % of the stream; on B8 (hidden 92 %) it under-sizes the
+    # kept raw by ~7 GiB while over-sizing the levels. Env overrides for a re-derivation, never for a launch.
+    _f_hidden = settings.VERITY_ADMIT_HIDDEN_FACTOR
+    _f_other = settings.VERITY_ADMIT_OTHER_FACTOR
+    # the run's stream under the workload's DECLARED schedule (per step; the hidden family's share), not the envelope's
+    # any-packing worst case (`retained_bytes_bound` = ceil(B x max_prompt / T_prefill) prefills of the worst step: 3x for the
+    # B8 1024/128 row whose 8 prompts prefill in ONE step) -- both are on the record
+    from verity_vllm.commit.committer.native_host import (
+        schedule_stream_bound,
+    )
+    _ssb = schedule_stream_bound(asz, reqs, sampling)
+    asz["schedule_stream_bound"] = _ssb
+    _excl = set(getattr(com, "retain_exclude", ()) or ())
+    from verity_vllm.commit.committer.native_host import bounded_host_bound
+    # the C2 sampled replay's Programs of record become Python objects in THIS process (B8: 70,300 MiB,
+    # the peak of attempt 1); forecast them BEFORE the run from the instance files the replay will load (streamed count, ~17 s
+    # for the B8 row's 4.9 GB of json; nothing is built), so the bound printed here names them as a term of their own
+    _c2f: dict[str, Any] = c2_programs_forecast(getattr(args, "programs_root", None), getattr(args, "program_dir", None)) if args.replay_per_stratum else \
+        {"bytes": 0, "rows": 0, "json_bytes": 0, "files": [], "why": "no sampled replay (--replay-per-stratum 0)"}
+    asz["c2_programs_forecast"] = _c2f
+    print(f"[delta] C2 PROGRAMS FORECAST: {_c2f['rows']:,} instance rows in {len(_c2f['files'])} files, json {_c2f['json_bytes'] >> 20} MiB -> "
+          f"{_c2f['bytes'] >> 20} MiB of Python objects (x{_c2f.get('factor')}, {_c2f.get('calibration')})"
+          f"{(' -- ' + str(_c2f.get('why'))) if _c2f.get('why') else ''}", flush=True)
+    _admit = bounded_host_bound(_ssb, engine_rss_bytes=_rss_now, retain=com.retain, retain_exclude=_excl,
+                                c2_programs_bytes=int(_c2f["bytes"]), c2_freed_before_replay=True,       # freed after the replay + linkage records (this file)
+                                fork_children_bytes=(FORK_CHILDREN_BYTES if args.replay_per_stratum else 0),
+                                c2_residual_bytes=(int(_c2f["bytes"] * C2_RESIDUAL_FRACTION) if args.replay_per_stratum else 0),
+                                pool_carry_bytes=(POOL_CARRY_BYTES if int(getattr(args, "pairs", 1) or 1) >= 2 else 0),
+                                pool_exact=(getattr(getattr(com, "pool", None), "exact", False) is True), replay_cache=bool(getattr(args, "replay_cache", False)),
+                                learn_budget_bytes=int(getattr(com, "learn_budget_bytes", 0) or 0), openings=int(args.openings),
+                                chunk_bytes=int(com.chunk), window_bytes=int(getattr(com, "win_bytes", 0) or 0),
+                                bounded=bool(getattr(com, "bounded", False)), open_after_release=bool(args.open_after_release),
+                                host_cap_bytes=host_limit, hidden_factor=_f_hidden, other_factor=_f_other,
+                                # engine growth after admission (torch host allocator, vLLM bookkeeping, CUDA context, the warm-ups'
+                                # buffers) + pool rounding: B1 timelines RSS 2,218 -> 5,757 MiB before the first pool block (+3,539
+                                # MiB), rounding <= 190 MiB -> 6 GiB (the earlier 4 GiB left 516 MiB on bounded-none try 3)
+                                slack_bytes=int(settings.VERITY_ADMIT_SLACK_GIB * (1 << 30)),
+                                # a 2nd+ pair's frozen pool beside the pinned cache of the first (B1 PAIRS=3 curve, FP8-STAGING §3.4)
+                                pairs=int(getattr(args, "pairs", 1) or 1))
+    _admit.update({"envelope_retained_bytes_bound": int(asz["retained_bytes_bound"]), "schedule_run_bytes": int(_ssb["run_bytes"]),
+                   "schedule_hidden_bytes": int(_ssb["hidden_bytes"]), "schedule_largest_step": _ssb.get("largest_step"),
+                   "prefill_tokens": asz.get("prefill_tokens"), "per_token_bytes": asz.get("per_token_bytes"),
+                   # the DECLARED schedule the bound came from: a hit-plan deviation from it fails by name on the run
+                   "declared_schedule": {k: _ssb.get(k) for k in ("model", "requests", "steps", "horizon", "prefill_steps",
+                                                                   "hidden_prefill_bytes", "decode_step_bytes_max")},
+                   "cgroup_path": asz.get("host_memory_cap_source"),
+                   # this admission GOVERNS the run it is printed before (the bound printed
+                   # BEFORE the run is the bound; commit_delta compares its own VmHWM with it at the end -> verdict.host_peak)
+                   "governs_this_run": bool(getattr(com, "bounded", False)), "admission_of_record": asz.get("admission_of_record"),
+                   # not a literal: the admission's own print time; verdict.host_peak compares it with the first
+                   # pair's start (first_run_started_utc) and records printed_before_run from the two timestamps
+                   "admission_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "admission_monotonic_s": round(time.monotonic(), 3)})
+    _bound, _raw_bound, _levels, _raw_kept, _hidden_prefill, _learn, _replay, _slack, _pairs_x = (
+        _admit["host_peak_bound_bytes"], _admit["raw_bound_bytes"], _admit["levels_bytes"], _admit["raw_kept_bytes"],
+        _admit["excluded_prefill_hidden_bytes"], _admit["learn_budget_bytes"], _admit["replay_bytes"], _admit["slack_bytes"],
+        _admit["pairs_extra_bytes"])
+    _hidden_sized, _other_sized = _admit["hidden_sized_bytes"], _admit["other_sized_bytes"]
+    asz["bounded_host_admission"] = _admit
+    com.host_admission = _admit          # rides on the record: extra.bounded_staging.host_admission
+    print(f"[delta] stream of record (declared schedule, {_ssb['steps']} steps, {_ssb['requests']} requests): run {int(_ssb['run_bytes']) >> 20} MiB "
+          f"(hidden {int(_ssb['hidden_bytes']) >> 20} MiB), largest step {(_ssb.get('largest_step') or {}).get('bytes', 0) >> 20} MiB "
+          f"({(_ssb.get('largest_step') or {}).get('tokens')} tok); envelope any-packing bound {int(asz['retained_bytes_bound']) >> 20} MiB; "
+          f"raw bound {_raw_bound >> 20} MiB = hidden {_hidden_sized >> 20} x {_f_hidden} + other {_other_sized >> 20} x {_f_other} "
+          f"(factors measured on B1)", flush=True)
+    _ph = _admit.get("phases_bytes") or {}
+    print(f"[delta] bounded staging HOST BOUND ({kind}): {_bound >> 20} MiB = max(phases) + pairs {_pairs_x >> 20} ({_admit['pairs']} pairs) + slack {_slack >> 20}; "
+          f"phases: run {_ph.get('run', 0) >> 20} = engine {_rss_now >> 20} + levels {_levels >> 20} + raw kept {_raw_kept >> 20} (bound {_raw_bound >> 20}, "
+          f"excluded hidden {_hidden_prefill >> 20}) + learn {_learn >> 20} + pool_rounding {_admit.get('pool_rounding_bytes', 0) >> 20} "
+          f"(pool {'exact' if _admit.get('pool_exact') else 'torch-pow2'}) | c2 {_ph.get('c2_sampled_replay', 0) >> 20} = run + c2_programs "
+          f"{_admit.get('c2_programs_bytes', 0) >> 20} + fork_children {_admit.get('fork_children_bytes', 0) >> 20} (cgroup scope) | "
+          f"replay {_ph.get('openings_after_release', 0) >> 20} = run + replay {_replay >> 20}"
+          f"{' + c2_residual ' + str(_admit.get('c2_residual_bytes', 0) >> 20) if _admit.get('c2_freed_before_replay', True) else ' + c2_programs'}"
+          f"{(' | later_pair_replay ' + str(_ph.get('later_pair_replay', 0) >> 20) + ' = replay + pool_carry ' + str(_admit.get('pool_carry_bytes', 0) >> 20)) if 'later_pair_replay' in _ph else ''}"
+          f" -> peak phase {_admit.get('peak_phase')} MiB; "
+          f"cgroup {((host_limit or 0) >> 20) or None} MiB; margin "
+          f"{(_admit['margin_bytes'] or 0) >> 20 if host_limit else None} MiB ({round(100 * (_admit['margin_frac'] or 0), 1) if host_limit else None} %)", flush=True)
+    # the dominant contributor by name, on the print and on any refusal -- never merely "predicted OOM"
+    print(f"[delta] bounded staging DOMINANT CONTRIBUTOR ({kind}): {(_admit.get('dominant_contributor') or {}).get('text')}", flush=True)
+    (out / f"host_admission_{kind}.json").write_text(json.dumps(_admit, indent=1, default=str) + "\n")
+    (out / f"arena_sizing_{kind}.json").write_text(json.dumps(asz, indent=1, default=str) + "\n")   # + cap, admission_of_record, bound
+    if getattr(args, "host_admit", None) is not None:
+        if host_limit is None:
+            print("[delta] REFUSE (--host-admit): no cgroup memory limit readable to admit against", flush=True)
+            sys.exit(3)
+        if _bound > host_limit * (1.0 - float(args.host_admit)):
+            print(f"[delta] REFUSE (--host-admit {args.host_admit}): host peak bound {_bound >> 20} MiB > {(1.0 - float(args.host_admit)):.2f} x cgroup "
+                  f"{host_limit >> 20} MiB -- predicted OOM, not launched; dominant contributor: "
+                  f"{(_admit.get('dominant_contributor') or {}).get('text')}", flush=True)
+            sys.exit(3)
+
+
+def envelope_admission(com: Any, asz: dict[str, Any], *, args: Options, eng: va.Engine, wl: dict, reqs: list[dict],
+                       host_limit: int | None, host_limit_src: str | None, kind: str, out: Path) -> None:
+    """The host-retention envelope's admission (`admission_bound.admission`), written as ``admission_<kind>.json``.  It ends the
+    process with exit 3 where it governs the run and is not met, or was not computed on a run that retains on the host,
+    unless ``VERITY_ADMIT_OVER_BOUND`` is set.  Under bounded staging it is recorded and does not govern."""
+    # step: arriving prompts, live decode rows, the M1 stream geometry the record shows; + the Program's LAG rows), x1.25 for levels,
+    # against the cgroup.  A Commit predicted to exceed it is NOT launched: refused here by name before the engine runs a step
+    # (rc 3 = COMMIT FAIL in row_pod; the record carries the numbers).  VERITY_ADMIT_OVER_BOUND=1 overrides -- named on the record.
+    try:
+        from verity_vllm.pipeline import admission_bound as ADM
+        adm = ADM.admission(asz, reqs, host_limit, retain=str(getattr(com, "retain", "host")),
+                            max_num_batched_tokens=eng.kwargs.get("max_num_batched_tokens"), lag=admission_lag(wl),
+                            envelope_bound_bytes=int(asz["retained_bytes_bound"]), resident=ADM.committer_resident(wl, host_limit, pairs=args.pairs, replay_workers=args.replay_workers))
+        adm["override"] = settings.VERITY_ADMIT_OVER_BOUND
+        adm["host_cap_source"] = host_limit_src
+        adm["domain"] = "--retain host (the whole run's raw bytes pinned on host); a non-host retention is recorded, never refused"
+        # a --bounded-staging run pins the NON-excluded families sparsely and opens the excluded
+        # one by replay: its governing admission is the bounded HOST BOUND printed above (asz["admission_of_record"]); this envelope
+        # admission counts the whole run's raw bytes (the excluded family too) and is RECORDED beside it, never refuses alone
+        adm["governs_this_run"] = not bool(getattr(com, "bounded", False))
+        asz["admission"] = adm
+        (out / f"admission_{kind}.json").write_text(json.dumps(adm, indent=1, default=str) + "\n")
+        _s = adm["scheduled"]
+        print(f"[delta] HOST ADMISSION ({kind}): scheduled raw {adm['scheduled_raw_bytes'] >> 20} MiB over {_s['steps']} steps "
+              f"({_s['prompt_tokens']} prompt tokens + {_s['decode_rows']} decode rows, lag {_s['lag']}; peak step {_s['peak_step']} = "
+              f"{_s['peak_step_bytes'] >> 20} MiB) -> predicted host {adm['predicted_host_bytes'] >> 20} MiB vs limit "
+              f"{(host_limit or 0) >> 20 if host_limit else 'none'} MiB: {'ADMITTED' if adm['admitted'] else 'REFUSED'} -- {adm['why']}", flush=True)
+        if not adm["admitted"] and not adm["override"] and adm["governs_this_run"]:
+            print(f"[delta] REFUSE: host admission -- {adm['why']} (VERITY_ADMIT_OVER_BOUND=1 launches anyway, named on the record)", flush=True)
+            sys.exit(3)
+        if not adm["admitted"] and not adm["governs_this_run"]:
+            print(f"[delta] NOTE host-retention envelope admission not met ({adm['why'][:160]}) -- recorded, not governing: this is a --bounded-staging run "
+                  f"(the bounded HOST BOUND above governs)", flush=True)
+        elif not adm["admitted"]:
+            print("[delta] WARNING host admission OVERRIDDEN by VERITY_ADMIT_OVER_BOUND=1 (named on the record): the run may be OOM-killed", flush=True)
+    except SystemExit:
+        raise
+    except Exception as _ae:  # noqa: BLE001  -- an unreadable schedule is named, never a silent skip of the admission
+        # an uncomputed admission is not an admission: a --retain host run is REFUSED by name (rc 3) unless
+        # VERITY_ADMIT_OVER_BOUND=1; a non-host retention (nothing pinned for the run) records the error and proceeds
+        _host = str(getattr(com, "retain", "host")) == "host" and not bool(getattr(com, "bounded", False))   # a bounded run: the HOST BOUND above governs
+        _ovr = settings.VERITY_ADMIT_OVER_BOUND
+        asz["admission"] = {"admitted": (None if not _host else False), "override": _ovr, "host_cap_source": host_limit_src,
+                            "why": f"admission not computed: {_ae!r}"[:300] + (" -- refused: an uncomputed admission is not an admission (--retain host)" if _host and not _ovr else "")}
+        (out / f"admission_{kind}.json").write_text(json.dumps(asz["admission"], indent=1, default=str) + "\n")
+        if _host and not _ovr:
+            print(f"[delta] REFUSE: host admission not computed on a --retain host run: {_ae!r} (VERITY_ADMIT_OVER_BOUND=1 launches anyway, named on the record)", flush=True)
+            sys.exit(3)
+        print(f"[delta] WARNING host admission not computed: {_ae!r}" + (" (OVERRIDDEN by VERITY_ADMIT_OVER_BOUND=1, named on the record)" if _host else " (retain != host: nothing pinned for the run)"), flush=True)
+
+
+def size_staging(com: Any, *, args: Options, eng: va.Engine, wl: dict, reqs: list[dict], sampling: dict, kind: str, out: Path,
+                 _hidden_required: bool | None) -> None:
+    """Sizes a committer's device staging from the workload's envelope (``arena_sizing_<kind>.json``), names the admission that
+    governs the run and holds the run to it (`bounded_admission`, `envelope_admission`), then sets up a windowed committer's
+    ring."""
+    # X-02: size the device staging block from the workload envelope (refuses here, with needed vs available bytes, if it cannot fit)
+    envelope = {"batch": args.max_num_seqs, "max_prompt": max(len(r["prompt_token_ids"]) for r in reqs),
+                "max_new": max(int(r.get("max_tokens") or sampling.get("max_tokens") or 1) for r in reqs),
+                "max_num_batched_tokens": eng.kwargs.get("max_num_batched_tokens"), "max_model_len": eng.kwargs.get("max_model_len")}
+    asz = com.size_arena(envelope, hidden_m1=bool(args.hidden_so) and _hidden_required is not False)
+    print(f"[delta] arena sizing (X-02, {kind}): decode block {asz['decode_block_bytes'] >> 20} MiB x{asz['blocks_preallocated']} + prefill block "
+          f"{asz['prefill_block_bytes'] >> 20} MiB "
+          f"(step bound {asz['step_bound_bytes'] >> 20} MiB: prefill {asz['prefill_tokens']} tok -> {asz['prefill_step_bytes'] >> 20} MiB "
+          f"[hidden {asz['prefill_hidden_bytes'] >> 20} MiB], decode -> {asz['decode_step_bytes'] >> 20} MiB; per-token {asz['per_token_bytes']} B), "
+          f"retained bound {asz['retained_bytes_bound'] >> 20} MiB; device free {asz['device_free_bytes'] >> 20} MiB; "
+          f"gpu_memory_utilization <= {asz['gpu_memory_utilization_max']}", flush=True)
+    (out / f"arena_sizing_{kind}.json").write_text(json.dumps(asz, indent=1, default=str) + "\n")
+    host_limit, host_limit_src = staging_host_limit(asz)
+    # the record NAMES the admission that governs this run (a field, not an
+    # inference from which file is present): a run must satisfy the admission whose domain is its retention mode -- the bounded
+    # HOST BOUND (below) for --bounded-staging, the host-retention envelope for the unbounded --retain host path; the other
+    # stays on the record beside it and does not refuse alone.  Rides on arena_sizing_<kind>.json and host_admission_<kind>.json.
+    asz["admission_of_record"] = {
+        "governing": ("bounded_host_admission" if getattr(com, "bounded", False)
+                      else ("f_da_15_host_retention_envelope" if getattr(com, "retain", None) == "host" else None)),
+        "retain": getattr(com, "retain", None), "bounded_staging": bool(getattr(com, "bounded", False)),
+        "rule": "the admission whose domain is the run's retention mode governs; the other-mode admission is on the record and does not refuse alone"}
+    if host_limit is not None and getattr(com, "retain", None) == "host" and not getattr(com, "bounded", False):
+        need = int(asz["retained_bytes_bound"] * 1.25)
+        if need > host_limit:
+            print(f"[delta] WARNING host retention bound {need >> 20} MiB (raw x1.25 for levels) exceeds the container memory limit "
+                  f"{host_limit >> 20} MiB: expect a silent OOM-kill (rc 137) during the instrumented run; use --retain none (openings by "
+                  f"replay) or a larger container", flush=True)
+    if getattr(com, "bounded", False):
+        bounded_admission(com, asz, args=args, reqs=reqs, sampling=sampling, host_limit=host_limit, kind=kind, out=out)
+    envelope_admission(com, asz, args=args, eng=eng, wl=wl, reqs=reqs, host_limit=host_limit, host_limit_src=host_limit_src, kind=kind, out=out)
+    if getattr(com, "windowed", False):
+        # windowed staging ring instead of per-step blocks; device staging = slots x window regardless of the step size
+        wi = com.enable_windows(asz)
+        print(f"[delta] windowed staging (P0): {wi['slots']} x {wi['window_bytes'] >> 20} MiB ring + scratch (largest tensor bound "
+              f"{wi['largest_tensor_bound'] >> 20} MiB); in-place hashing: {wi['in_place_hashing']}", flush=True)
+        (out / f"window_ring_{kind}.json").write_text(json.dumps(wi, indent=1, default=str) + "\n")
+
+
+def flip_weight(args: Options, eng: va.Engine, kind: str) -> dict[str, Any]:
+    """``--flip-weight``, a negative test: changes one element of one served parameter before the weights are registered and
+    returns the record of the change.  The weights pin must then fail and name the parameter."""
+    # NEGATIVE TEST ONLY: one element of one served parameter, changed before registration -- the pin (below, per pair) must name it
+    _fw = str(args.flip_weight).split(":")
+    if len(_fw) < 2:
+        raise SystemExit("--flip-weight <served param name>:<flat index>[:<value>]")
+    import torch as _torch
+    _pmap = dict(eng.model.named_parameters())
+    if _fw[0] not in _pmap:
+        raise SystemExit(f"--flip-weight names no served parameter {_fw[0]!r} (first served names: {sorted(_pmap)[:5]})")
+    with _torch.no_grad():
+        _flat = _pmap[_fw[0]].data.view(-1)
+        _idx = int(_fw[1]) % _flat.numel()
+        _before = float(_flat[_idx].item())
+        _flat[_idx] = float(_fw[2]) if len(_fw) > 2 else (1.0 if _before != 1.0 else -1.0)
+    flip_weight_rec = {"param": _fw[0], "index": _idx, "before": _before, "after": float(_flat[_idx].item()), "numel": int(_flat.numel()),
+                       "expect": "weights pin FAIL naming the field; Commit FAIL rc 3"}
+    if flip_weight_rec["after"] == _before:
+        raise SystemExit(f"--flip-weight did not change the element ({_before} -> {flip_weight_rec['after']}): pick another value")
+    print(f"[delta] FLIP-WEIGHT NEGATIVE TEST ({kind}): {flip_weight_rec} -- checkpoint_binding (the weights pin) MUST FAIL naming {_fw[0]}", flush=True)
+    return flip_weight_rec
+
+
+def weights_of_record_digests(args: Options, eng: va.Engine, *, engine_args: dict, required_manifest: dict[str, Any] | None,
+                              served: ServedCommit | None, kind: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """The digests of the live parameters and the weights record each pair's weights pin holds them to: the record
+    ``--weights-of-record`` names, else one derived from ``--checkpoint-dir`` and the Program of record (a served row's from
+    its Build's weight reads) and written as ``weights_of_record.json``.  With neither option both are None.  A record that
+    cannot be read or derived comes back as an error record, which the pin reports as not evaluated."""
+    # the weights of record are the CHECKPOINT's, not the committer's: sha256 every live parameter
+    # the registration just hashed (same tensors, same moment) for the field-by-field comparison with the checkpoint-composed digests of
+    # record (per pair, below).  Once per process, excluded from steady state like the registration itself.
+    _live_wd: dict[str, Any] | None = None
+    _wor_rec: dict[str, Any] | None = None
+    if getattr(args, "weights_of_record", None) or getattr(args, "checkpoint_dir", None):
+        from verity_vllm.check import weights_of_record as WR
+        TL.start("validate.weights_of_record_digests", kind=kind)
+        try:
+            if getattr(args, "weights_of_record", None):
+                _wor_rec = json.loads(Path(args.weights_of_record).read_text())
+                _wor_rec["source"] = str(args.weights_of_record)
+            elif served is not None:
+                _wor_rec = WR.served_record(required_manifest, args.checkpoint_dir, checkpoints_manifest=args.checkpoints,
+                                            kv_cache_dtype=str(engine_args.get("kv_cache_dtype") or "auto"))
+                _wor_rec["source"] = f"derived in-process from the served Build's weight reads x {args.checkpoint_dir}"
+                (Path(args.out) / "weights_of_record.json").write_text(json.dumps(_wor_rec, indent=1) + "\n")
+            else:
+                _pd = args.program_dir
+                if not _pd and getattr(args, "programs_root", None):
+                    # prefer a COMPONENT Program (build_request_LP*_T*) over the default wrapper shape build_request: at
+                    # B>=2 only the components are of record (the record binds to the manifest's component digests)
+                    _cands = sorted(p for p in Path(args.programs_root).glob("build_request_LP*_T*") if (p / "instances.json.gz").exists()) or \
+                             sorted(p for p in Path(args.programs_root).glob("build_request*") if (p / "instances.json.gz").exists())
+                    _pd = str(_cands[0]) if _cands else None
+                if not _pd:
+                    raise RuntimeError("--checkpoint-dir needs the Program of record (--program-dir / --programs-root)")
+                _wor_rec = WR.build_record(_pd, args.checkpoint_dir, checkpoints_manifest=args.checkpoints,   # the engine's own checkpoints.json (shard pins)
+                                           kv_cache_dtype=str(engine_args.get("kv_cache_dtype") or "auto"))   # the kv scales' engine assumption
+                _wor_rec["source"] = f"derived in-process from {_pd} x {args.checkpoint_dir}"
+                if getattr(args, "programs_root", None):
+                    # stamp the WHOLE of-record set (every component's digest, struct-checked, + the workload digest +
+                    # the row manifest's): check() then requires the run's set to EQUAL it -- no dependence on which component was picked
+                    _man = args.required_manifest if getattr(args, "required_manifest", None) and Path(str(args.required_manifest)).exists() else None
+                    WR.stamp_of_record_set(_wor_rec, args.programs_root, manifest=_man)
+                if hasattr(WR, "derivation_provenance"):      # the in-process derivation is a logged derivation too
+                    _wor_rec["derived"] = WR.derivation_provenance(_pd, args.checkpoint_dir, args.checkpoints, None)
+                    _wor_rec["derived"]["tool"] = "verity_vllm.pipeline.commit (in-process --checkpoint-dir fallback)"
+                (Path(args.out) / "weights_of_record.json").write_text(json.dumps(_wor_rec, indent=1) + "\n")
+            _live_wd = WR.live_param_digests(eng.model)
+            print(f"[delta] weights of record ({kind}): root {str(_wor_rec.get('root_of_record'))[:16]} fields {_wor_rec.get('n_pinned')}/{_wor_rec.get('n_fields')} pinned, "
+                  f"unpinned {len(_wor_rec.get('unpinned') or [])}, unresolved {len(_wor_rec.get('unresolved') or [])}, shards pinned {(_wor_rec.get('checkpoint') or {}).get('all_shards_pinned')}; "
+                  f"live digests {_live_wd.get('n')} tensors in {_live_wd.get('wall_s')} s", flush=True)
+        except Exception as _we:  # noqa: BLE001  -- fail closed: recorded as not evaluated, the verdict refuses it by name
+            _wor_rec = {"error": repr(_we)[:300], "complete": False, "why": f"weights of record not derived: {_we!r}"[:300], "fields": []}
+            print(f"[delta] WARNING weights of record not derived: {_we!r}", flush=True)
+        TL.end("validate.weights_of_record_digests", kind=kind, ok=not (_wor_rec or {}).get("error"))
+    return _live_wd, _wor_rec
+
+
+def warmup_instrumented(com: Any, eng: va.Engine, *, reqs: list[dict], sampling: dict, base: dict, kind: str, out: Path) -> None:
+    """One instrumented run of throwaway requests of the workload's shapes, never a record: it sizes the pinned pool and, under
+    bounded staging, learns every step's plan (``bounded_warmup_<kind>.json``).  The committer is reset after it and the engine
+    held to its baseline."""
+    # warm-up (instrumented): sizes the pinned pool, JITs nothing else
+    # bounded staging: the warm-up is also the LEARN-ONLY pass -- every shape class of the workload (same lengths, same schedule
+    # as the record runs: throwaway_requests) gets its plan here; a learning step over the transient budget records its plan and
+    # discards its windows (placeholder root: this run is never a record).  The record runs then hit every plan and stage bounded.
+    # Its call boundaries are placeholder words of their shapes (TAPS.warmup): the record pass evaluates its own.
+    TL.start("prep.warmup_instrumented", kind=kind)
+    TAPS.warmup(com, True)
+    com.install()
+    r = run_workload(eng, va.throwaway_requests(eng, reqs, seed=200), sampling)
+    rc = com.finalize()
+    com.uninstall()
+    TAPS.warmup(com, False)
+    if getattr(com, "bounded", False):
+        _bs = rc.extra.get("bounded_staging") or {}
+        print(f"[delta] bounded staging warm-up ({kind}): learned-only steps {_bs.get('learned_only_steps')} ({(_bs.get('learned_only_bytes') or 0) >> 20} MiB "
+              f"discarded), transient peak {(_bs.get('transient_peak_bytes') or 0) >> 20} MiB (budget {(_bs.get('learn_budget_bytes') or 0) >> 20} MiB), "
+              f"plan mismatches {_bs.get('plan_mismatches')}, plans cached {(rc.extra.get('native_collect') or {}).get('plans_cached')}, "
+              f"pinned pool {(rc.extra.get('pinned_pool_bytes') or 0) >> 20} MiB", flush=True)
+        (out / f"bounded_warmup_{kind}.json").write_text(json.dumps({**_bs, "pinned_pool_bytes": rc.extra.get("pinned_pool_bytes"),
+                                                                      "plans_cached": (rc.extra.get("native_collect") or {}).get("plans_cached"),
+                                                                      "host_mem_kb": dict(zip(("rss", "hwm"), rss_kb())), "cgroup_memory_current": cgroup_mem_current(),
+                                                                      "errors": rc.extra.get("errors")}, indent=1, default=str) + "\n")
+    com.reset()
+    assert_pristine(eng, base)
+    TL.end("prep.warmup_instrumented", kind=kind, wall_s=round(r["wall_s"], 3))
+    print(f"[delta] warm-up instrumented ({kind}): {r['wall_s']:.3f}s root-ready {rc.root_ready_delay_s * 1e3:.1f} ms spans {rc.spans['total_s']} "
+          f"errors {rc.extra.get('errors')}", flush=True)
+
+
+def committer_setup(cfg: CommitConfig, eng: va.Engine, com: Any, *, kind: str, reqs: list[dict], sampling: dict, base: dict,
+                    flip_weight_rec: dict | None,
+                    _hidden_required: bool | None) -> tuple[dict | None, dict[str, Any] | None, dict[str, Any] | None]:
+    """What a Commit does with a committer once its sources are attached and before its first run: sizes its staging and holds
+    the run to its host admission (`size_staging`), registers the weights, takes the weights of record
+    (`weights_of_record_digests`) and runs the instrumented warm-up.  It returns ``--flip-weight``'s record (`flip_weight_rec`
+    as given, without the option), the live parameters' digests and the weights record."""
+    args, out, wl, engine_args, required_manifest, served = cfg.args, cfg.out, cfg.wl, cfg.engine_args, cfg.required_manifest, cfg.served
+    if hasattr(com, "size_arena") and getattr(com, "arena", None) is not None and not (args.arena_unchecked and args.arena_mb):
+        size_staging(com, args=args, eng=eng, wl=wl, reqs=reqs, sampling=sampling, kind=kind, out=out, _hidden_required=_hidden_required)
+    if args.flip_weight:
+        flip_weight_rec = flip_weight(args, eng, kind)
+    with TL.span("prep.register_weights", kind=kind):
+        w = com.register_weights()
+    TL.end("prep.committer_setup", kind=kind)
+    print(f"[delta] weight registration ({kind}): {w}", flush=True)
+    _live_wd, _wor_rec = weights_of_record_digests(args, eng, engine_args=engine_args, required_manifest=required_manifest, served=served, kind=kind)
+    warmup_instrumented(com, eng, reqs=reqs, sampling=sampling, base=base, kind=kind, out=out)
+    return flip_weight_rec, _live_wd, _wor_rec
 
 
 def write_verdict(cfg: CommitConfig, *, versions: dict, rows: list[dict], step_rows: list[dict], decl: Any | None,
