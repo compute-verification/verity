@@ -71,6 +71,9 @@ PUBLIC = {
     "verity_vllm.engine.int8_ranks": "I1: the exact-int8 parts a process's engines build with, its tensor-parallel ranks "
                                      "included (register, EXTENSION), which the harness's engine and benchmarks/network_e2e's "
                                      "trace plugin register",
+    "verity_vllm.engine.int8_k_scales": "I1: the int8 attention's K scales, a calibrated parameter of the served "
+                                        "checkpoint: its manifest (MANIFEST), a revision's table (table) and a calibration's "
+                                        "entry (entry, with_entry), which benchmarks/ppl's calibration job writes",
     "verity_vllm.engine.pool_row": "I1: the carried pool's row, a prefix cache's block pool at a window's edge (snapshot, row, "
                                    "export), its genesis reset and its BlockKey_v1 keys (install_keys), which "
                                    "benchmarks/network_e2e/encodings drives over recorded traces",
@@ -273,7 +276,6 @@ KNOWN = frozenset({
     "verity_vllm.commit.opened",
     # the served circuits (`verity_vllm.definitions`), which outside code imported from `verity` before the served circuits'
     # move into the adapter; vllm takes these down under its goal vllm/benchmarks-import-public-only (due Wed 25 Nov)
-    "verity.circuits.ops.boolean.versions",
     "verity_vllm.definitions.encoding",
     "verity_vllm.definitions.numerics._jit",
     "verity_vllm.definitions.numerics.cublas_gemm_rows",
@@ -326,7 +328,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.registry.lifted",
     "verity_vllm.definitions.registry.marlin_moe",
     "verity_vllm.definitions.registry.moe",
-    "verity.protocols.accounting.pouw.prover.circuit.pearl_c_tile",
     "verity_vllm.definitions.registry.pouw_rows",
     "verity_vllm.definitions.registry.prims",
     "verity_vllm.definitions.registry.ref_prims",
@@ -388,18 +389,6 @@ KNOWN = frozenset({
     "verity_vllm.program.predict.batch",
     "verity_vllm.program.predict.build",
     "verity_vllm.program.predict.score",
-    "verity.protocols.accounting.pouw.prover.serving.h1",
-    "verity.protocols.accounting.pouw.prover.serving.h1.challenger",
-    "verity.protocols.accounting.pouw.prover.serving.h1.window",
-    "verity.protocols.accounting.pouw.prover.serving.pearl_c",
-    "verity.protocols.accounting.pouw.prover.serving.pearl_c.graphs",
-    "verity.protocols.accounting.pouw.prover.serving.pearl_c.host",
-    "verity.protocols.accounting.pouw.prover.serving.pearl_c.lanes",
-    "verity.protocols.accounting.pouw.prover.serving.pearl_c.screen",
-    "verity.protocols.accounting.poub.prover.node_store.interface",
-    "verity.protocols.accounting.poub.prover.node_store.memory_map",
-    "verity.protocols.accounting.poub.prover.node_store.registry",
-    "verity_vllm.protocols.remote_bandwidth.registry",
     "verity_vllm.protocols.remote_bandwidth.remote",
     "verity_vllm.query.program_view",
 })
@@ -410,7 +399,6 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.check.fold_compare', '_component_ranges'),
     ('verity_vllm.check.fold_compare', '_in_place'),
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
-    ('verity.protocols.accounting.poub.prover.node_store.registry', '_page_blocks'),
 })
 
 

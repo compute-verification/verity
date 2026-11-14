@@ -319,7 +319,8 @@ def Shows {m : ℕ} {s : Fin n → ℕ} (D : Run n m s κ X) (prf : Fin n → Po
 `t`'s continuations of `ω`, a row that the most of them show (`Accounting.TS.plural` at `cont t`, ties broken by
 `Classical.epsilon`). -/
 noncomputable def held [Fintype X] {m : ℕ} {s : Fin n → ℕ} (D : Run n m s κ X)
-    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : SampleCoins n κ X)
+    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n)
+    (ω : SampleCoins n κ X)
     (p : ℕ) : Hash.Row :=
   Accounting.TS.plural (cont t) (R.Shows D prf rest t p) ω
 

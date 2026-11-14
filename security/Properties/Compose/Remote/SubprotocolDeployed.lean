@@ -123,7 +123,8 @@ the node are `LineHeldAtSubprotocol`'s, under `Paced`, `Covers`, `SketchBoundAt`
 def QBytesAtSubprotocol : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
     (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → SampleCoins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ) (com : SampleCoins node.samples κ X → Cm)
+    (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
+    (com : SampleCoins node.samples κ X → Cm)
     (T : Trace (SampleCoins node.samples κ X)) (R : Receipts node.samples κ X)
     (a b e : SampleCoins node.samples κ X → ByteArray),
     let r := played recs com
@@ -146,7 +147,8 @@ passes read is at most `δs + δnet + (δ + Σ_c s / 2^256 + Σ_c adv_c + Σ_c h
 def LineHeldAtSubprotocol : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
     (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → SampleCoins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ) (com : SampleCoins node.samples κ X → Cm)
+    (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
+    (com : SampleCoins node.samples κ X → Cm)
     (T : Trace (SampleCoins node.samples κ X)) (R : Receipts node.samples κ X) (δs δnet : ℝ)
     (a b e : SampleCoins node.samples κ X → ByteArray),
     let r := played recs com
