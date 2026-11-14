@@ -374,9 +374,9 @@ end NciCheck.Record.SecurityProofs.Json
 namespace NciCheck.Record.SecurityProofs
 
 open Lean (Json toJson)
-open Flock.Program (Prog)
+open Flock.Program (Prog fieldsOf)
 open Flock.Sigma (bits)
-open NciCheck.RecordText (Tmpl tmplOf wiresOf fieldsOf outerOf)
+open NciCheck.RecordText (Tmpl tmplOf wiresOf outerOf)
 
 /-- `eraseDups` keeps a list's length only where the list has no duplicates. -/
 theorem nodup_of_eraseDups : ∀ (n : Nat) (l : List String), l.length ≤ n →

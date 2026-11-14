@@ -3,7 +3,7 @@ verifier itself (`one_stage.proofs.verify`) on the circuit file the period's ope
 with the partition object and the ``--registered`` file it builds from the committed descriptor and the window's entries,
 and credits nothing from a verdict the evidence carries.
 
-The verifier here is a stand-in `flock-verify` (`FAKE`), so the test runs without a Flock proof of an H1 window: it
+The verifier here is a stand-in `verity-verify-proof` (`FAKE`), so the test runs without a Flock proof of an H1 window: it
 answers as the Lean verifier does, one ``VERDICT`` line a session, and accepts a session only when its proof is the
 SHA-512 of every file it was handed (the circuit file, the public file, the program, the partition object and the
 ``--registered`` file, those two as the JSON they hold, whose key order the verifier doesn't read) and the units its
@@ -67,7 +67,7 @@ for s in sessions:
 
 @pytest.fixture
 def verifier(tmp_path, monkeypatch) -> Path:
-    exe = tmp_path / "flock-verify"
+    exe = tmp_path / "verity-verify-proof"
     exe.write_text(FAKE)
     exe.chmod(0o755)
     monkeypatch.setattr(PF, "executable", lambda: exe)
@@ -529,7 +529,7 @@ def test_a_verifier_that_cannot_run_leaves_the_window_refused(tmp_path, monkeypa
     d, statements = window(0, tmp_path)
 
     def broken():
-        raise PF.LeanError("lake build flock-verify failed")
+        raise PF.LeanError("lake build verity-verify-proof failed")
 
     monkeypatch.setattr(PF, "executable", broken)
     got, refused = credit(d, statements)

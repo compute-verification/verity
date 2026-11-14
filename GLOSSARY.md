@@ -100,9 +100,8 @@ Credit and all reporting are in circuit size (tentative).
 - **Credit** is of two kinds (ASK-166 A). Sampled proofs' is declared size, values certified: an accepted run credits
   S, and Pr[accept ∧ the AND gates whose values in the committed trace are right number fewer than (1 − ε_skip)·S] ≤
   δ_coin + δ_crypto, with no algorithmic premise. Dither's compute credit also needs values that read live noise and SAK
-  (`SAKResidual`), over noised operands only; an un-noised call earns none. PoUW's bar is T1–T3
-  (`verity/protocols/accounting/pouw/verifier/README.md`). PoUB (`Accounting.Remote`) bounds no hidden work itself, so PoUW's
-  guarantee beside it is its compute credit alone.
+  (`SAKResidual`), over noised operands only; an un-noised call earns none. PoUB (`Accounting.Remote`) bounds no hidden
+  work itself, so PoUW's guarantee beside it is its compute credit alone.
 - **The slowdown lower bound** bounds the hidden training beside verified compute. Its N counted objects can come from
   verified compute (products the registered circuit computes anyway, through inference-block yields) and free compute: a
   server block on registered hardware yields at most min(q_S, its inference-block yields plus what its free compute can
@@ -165,7 +164,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "M1", "M2" (elsewhere in the code also unrelated things) | Flock ZK: M1 is its masking, M2 its coin tree |
 | `hm96-sha256/v1`, until it is deleted | the hiding leaf `hm96-sha512/v1` |
 | "coin server"; the `round_digest` strings of statement identities in `Flock/Tags.lean`, until a format version | the challenger's live-coin part |
-| "network transparency"; the `network-transparency/` paths the `NetworkCertifier` Lean cites | network accounting |
+| "network transparency"; the `network-transparency/` paths the `Certifier` Lean cites | network accounting |
 | "warden", "network warden", "tap", "the auditor's tap", "uplink tap", "warden/certifier"; the domain tags `verity-network-warden/row/v1` and `verity-network-warden/record/v1`, the store label value `replay_set=warden/re-verify` | the network certifier; "the warden's records" are network certificates |
 | "remote bandwidth audit", "remote bandwidth", "remote audit", "proof of useful bandwidth" | PoUB |
 | "timed verifier"; the recorded config key `verifier_cpu` (`--verifier-cpu`), until a format version | the memory challenger |

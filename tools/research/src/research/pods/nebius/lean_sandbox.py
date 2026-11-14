@@ -164,9 +164,9 @@ def probe(spec: dict, environ=None, connect=_connect, resolve=_resolve, sudo=_su
 
     def privileges():
         st = dict(ln.split(":", 1) for ln in status().splitlines() if ":" in ln)
-        caps = {k: int(st.get(k, "1").strip(), 16) for k in ("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb")}
+        capabilities = {k: int(st.get(k, "1").strip(), 16) for k in ("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb")}
         nnp = st.get("NoNewPrivs", "").strip() == "1"
-        return nnp and not any(caps.values()), f"NoNewPrivs {int(nnp)}, " + ", ".join(f"{k} {v:x}" for k, v in caps.items() if v)
+        return nnp and not any(capabilities.values()), f"NoNewPrivs {int(nnp)}, " + ", ".join(f"{k} {v:x}" for k, v in capabilities.items() if v)
 
     def sudo_():
         path = which("sudo", path="/usr/bin:/bin:/usr/sbin:/sbin")

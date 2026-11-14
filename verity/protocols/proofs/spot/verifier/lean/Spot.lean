@@ -18,9 +18,10 @@ public import Spot.RecordAcross
 public import Spot.Schedule
 public import Spot.OneStage
 public import Spot.PublicUnits
+public import Spot.CircuitKept
+public import Spot.OneStageZkStatement
 public import Spot.OneStageZk
 public import Spot.MembersParse
-public import Spot.MembersRefusal
 public import Spot.Rate
 public import Spot.HiddenDraw
 public import Spot.Select
@@ -32,6 +33,7 @@ public import Spot.SecondStage
 public import Spot.Returned
 public import Spot.SecondStageExamples
 public import Spot.SecondWires
+public import Spot.BoundaryWritten
 public import Spot.Run
 public import Spot.Stream
 public import Spot.Fleet
@@ -44,6 +46,8 @@ public import Spot.ChallengerCoins
 public import Spot.ChallengerDraw
 public import Spot.ChallengerTrees
 public import Spot.ChallengerInnerTrees
+public import Spot.MonitoringPeriod
+public import Spot.MonitoringPeriodAudit
 public import Spot.Wires
 public import Spot.HistoryTable
 public import Spot.WiresSpan
@@ -55,5 +59,7 @@ public import Spot.SiteDifftest
 public import Spot.Interval
 public import Spot.FactorUpper
 public import Spot.TwoStageCheck
+public import Spot.Ranks
+public import Spot.SecondWindow
 
 @[expose] public section

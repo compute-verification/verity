@@ -16,10 +16,10 @@ from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz
 from verity.definitions.registry import attention_vocab
 
+from tests.commit.hidden_stream import SRC_BITS, StreamLayout
 from tests.properties import fa_tap_exactness as X
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.acquire.sources.hidden_source import fa3_tile
-from verity_vllm.commit.hidden_stream import SRC_BITS, StreamLayout
 from verity_vllm.records.property_record import digest_of
 
 ADAPTER = Path(__file__).parents[2]

@@ -45,7 +45,6 @@ verity_vllm.program.predict.window_rows      # a window's rows: a library entry 
 verity_vllm.program.predict.window_weights      # the window circuit's weights: a library entry point (the committer's `weights_registration`, the verifier's `weights_record` and `registration_pins`), called from outside the package
 verity_vllm.program.predict.inference_blocks      # B's partition of a window circuit into inference blocks: a library entry point (`commit`, with `records.inference_blocks` its public statement), for the window commit and the network certifier's audit
 verity_vllm.program.predict.step_needs      # one served engine step's needs: a library entry point (`StepNeeds`, `workload_phi`), for benchmarks/route_capture's gap
-verity_vllm.commit.hidden_stream      # the FA2 hidden stream's layout and commitment: only tests read it (tests/commit, tests/acquire and tests/properties' tap exactness)
 verity_vllm/properties/difftests/      # the difftest adapters, imported by name (properties-admission --adapter)
 verity_vllm.program.moe_difftest      # properties-admission --adapter: imported by name
 verity_vllm.program.layer_norm_difftest      # properties-admission --adapter: imported by name
@@ -67,44 +66,44 @@ verity_vllm.engine.stock      # a stock engine at the pin with no protocol on, w
 # the protocol options, each module a root: the adapters are imported by name when a run enables their protocol
 # (protocol_options.adapter)
 verity_vllm.protocols
-verity_vllm.protocols.pouw.credit_gate
+verity.protocols.accounting.pouw.prover.serving.credit_gate
 verity_vllm.protocols.interface
 verity_vllm.protocols.pous
 verity_vllm.protocols.pouw
-verity_vllm.protocols.pouw.circuit
-verity_vllm.protocols.pouw.device
-verity_vllm.protocols.pouw.h1
-verity_vllm.protocols.pouw.h1.answers    # benchmarks/pouw/h1_prove/drawn.py hands its Answers to credit, outside this tree
-verity_vllm.protocols.pouw.h1.challenger
-verity_vllm.protocols.pouw.h1.commit
-verity_vllm.protocols.pouw.h1.drawn      # benchmarks/pouw/h1_prove/drawn.py runs it, outside this tree
-verity_vllm.protocols.pouw.h1.handoff
-verity_vllm.protocols.pouw.h1.hooks
-verity_vllm.protocols.pouw.h1.kept
-verity_vllm.protocols.pouw.h1.live
-verity_vllm.protocols.pouw.h1.prover
-verity_vllm.protocols.pouw.h1.ranks
-verity_vllm.protocols.pouw.h1.records
-verity_vllm.protocols.pouw.h1.registered
-verity_vllm.protocols.pouw.h1.registered_device
-verity_vllm.protocols.pouw.h1.requests
-verity_vllm.protocols.pouw.h1.served
-verity_vllm.protocols.pouw.h1.served_files
-verity_vllm.protocols.pouw.h1.settings
-verity_vllm.protocols.pouw.h1.static
-verity_vllm.protocols.pouw.h1.window
-verity_vllm.protocols.pouw.native
-verity_vllm.protocols.pouw.pearl_c.passes
-verity_vllm.protocols.pouw.pearl_c
-verity_vllm.protocols.pouw.pearl_c.graphs
-verity_vllm.protocols.pouw.pearl_c.grouped
-verity_vllm.protocols.pouw.pearl_c.host
-verity_vllm.protocols.pouw.pearl_c.kernel
-verity_vllm.protocols.pouw.pearl_c.lanes
-verity_vllm.protocols.pouw.pearl_c.manifest
-verity_vllm.protocols.pouw.pearl_c.screen
-verity_vllm.protocols.pouw.pearl_c.screen_kernels
-verity_vllm.protocols.pouw.pearl_c.whole
+verity.protocols.accounting.pouw.prover.serving.circuit
+verity.protocols.accounting.pouw.prover.serving.device
+verity.protocols.accounting.pouw.prover.serving.h1
+verity.protocols.accounting.pouw.prover.serving.h1.answers    # benchmarks/pouw/h1_prove/drawn.py hands its Answers to credit, outside this tree
+verity.protocols.accounting.pouw.prover.serving.h1.challenger
+verity.protocols.accounting.pouw.prover.serving.h1.commit
+verity.protocols.accounting.pouw.prover.serving.h1.drawn      # benchmarks/pouw/h1_prove/drawn.py runs it, outside this tree
+verity.protocols.accounting.pouw.prover.serving.h1.handoff
+verity_vllm.protocols.pouw.h1_hooks
+verity.protocols.accounting.pouw.prover.serving.h1.kept
+verity.protocols.accounting.pouw.prover.serving.h1.live
+verity.protocols.accounting.pouw.prover.serving.h1.prover
+verity_vllm.protocols.pouw.h1_ranks
+verity.protocols.accounting.pouw.prover.serving.h1.records
+verity.protocols.accounting.pouw.prover.serving.h1.registered
+verity.protocols.accounting.pouw.prover.serving.h1.registered_device
+verity.protocols.accounting.pouw.prover.serving.h1.requests
+verity.protocols.accounting.pouw.prover.serving.h1.served
+verity.protocols.accounting.pouw.prover.serving.h1.served_files
+verity_vllm.protocols.pouw.h1_settings
+verity.protocols.accounting.pouw.prover.serving.h1.static
+verity.protocols.accounting.pouw.prover.serving.h1.window
+verity.protocols.accounting.pouw.prover.serving.native
+verity.protocols.accounting.pouw.prover.serving.pearl_c.passes
+verity.protocols.accounting.pouw.prover.serving.pearl_c
+verity.protocols.accounting.pouw.prover.serving.pearl_c.graphs
+verity.protocols.accounting.pouw.prover.serving.pearl_c.grouped
+verity.protocols.accounting.pouw.prover.serving.pearl_c.host
+verity.protocols.accounting.pouw.prover.serving.pearl_c.kernel
+verity.protocols.accounting.pouw.prover.serving.pearl_c.lanes
+verity.protocols.accounting.pouw.prover.serving.pearl_c.manifest
+verity.protocols.accounting.pouw.prover.serving.pearl_c.screen
+verity.protocols.accounting.pouw.prover.serving.pearl_c.screen_kernels
+verity.protocols.accounting.pouw.prover.serving.pearl_c.whole
 verity_vllm.protocols.spot
 tests/regression/
 verity_vllm/protocols/remote_bandwidth/      # the node's store, imported by the protocol driver and the benchmarks (benchmarks/vllm_hooks)

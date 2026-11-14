@@ -252,6 +252,32 @@ def test_registration_refusals():
     assert len(codes) == 1 and set(next(iter(codes))) == {"R3-domain", "R3-leaves"}
 
 
+def test_a_wired_port_has_the_root_of_the_port_that_holds_it():
+    """A port the layout wires to another's tree (`"wired"`) is registered at that port's root: R3 refuses a record
+    whose roots under the two names differ, whichever was changed, one with no root under either name, and a root that
+    is not a string (`R3-wired`), reads the last root of a name as it does elsewhere, and reads none of it where the
+    roots are not well formed."""
+    prog, q, rec = _registration(6)
+    ports = _ports(prog, q, P.units(prog, q))
+    ports = {**ports, "in": {**ports["x"], "wired": "x"}}
+    x = next(r for r in rec["roots"] if r["port"] == "x")
+    named = {**x, "port": "in"}
+
+    def codes(roots, **wired):
+        return _check({**rec, "roots": roots}, prog, q, ports={**ports, "in": {**ports["in"], **wired}}).codes
+
+    honest = [*rec["roots"], named]
+    assert codes(honest) == () and codes(honest, wired="in") == ()
+    assert codes([*rec["roots"], {**named, "root": "ef" * 64}]) == ("R3-wired",)
+    assert codes([{**r, "root": "ef" * 64} if r is x else r for r in rec["roots"]] + [named]) == ("R3-wired",)
+    assert codes(honest, wired="nowhere") == ("R3-wired",)
+    assert codes(rec["roots"]) == ("R3-ports", "R3-wired")
+    assert codes([*rec["roots"], {**named, "root": 5}]) == ("R3-root", "R3-wired")
+    assert codes([{**named, "root": "ef" * 64}, *honest]) == ("R3-ports",)
+    assert codes([{k: v for k, v in honest[0].items() if k != "domain"}, *honest[1:]]) == ("R3-roots",)
+    assert _check(rec, prog, q).ok
+
+
 def test_the_window_runs_its_days_declared_circuit():
     """R2 holds the record's program to the one circuit the registration log declares for the window's day, read off the
     accepted log's view: another day's program is `R2-declared`, a day the log declares nothing for `R2-undeclared`, and
@@ -983,7 +1009,7 @@ def test_audit_record_under_the_work_law():
 
 def test_work_sizes_are_the_lean_verifiers():
     """The sizes `verity/protocols/proofs/flock/prover/tests/test_lean_verifier.py::test_work_draw_from_the_verifiers_own_program` pins for
-    `flock-verify draw --work K`: strata of 3, 3 and 4 proof blocks doing 3, 1 and 0 (W = 12), and its floor cases."""
+    `verity-verify-proof draw --work K`: strata of 3, 3 and 4 proof blocks doing 3, 1 and 0 (W = 12), and its floor cases."""
     sizes, works = (3, 3, 4), (3, 1, 0)
     total = sum(w * n for w, n in zip(works, sizes))
     for k, want in {1: [1, 1, 1], 2: [2, 1, 1], 4: [3, 1, 1], 10: [3, 3, 1]}.items():

@@ -50,6 +50,8 @@ pub mod zk_hooks;
 pub mod zk_veil;
 #[cfg(feature = "sha512")]
 pub mod sha512_native;
+#[cfg(feature = "sha512")]
+pub mod wide_leaf;
 // needs flock-vtime-b684b12.patch, which the pods apply with the SHA-512 patches
 #[cfg(feature = "sha512")]
 pub mod session_verify;

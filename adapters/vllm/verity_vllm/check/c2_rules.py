@@ -21,9 +21,9 @@ from verity_vllm.check.commit_rules import (
     _oracle_of,
     _replay_of,
 )
-from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.result import FAIL, INSUFFICIENT, NOT_RUN, PASS, CheckResult
 from verity_vllm.query.manifest.format import is_token_select
+from verity_vllm.records import replay_codes as RC
 from verity_vllm.records.fields import RecordError
 from verity_vllm.records.query_checks import QueryChecks
 

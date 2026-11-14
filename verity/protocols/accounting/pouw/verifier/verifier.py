@@ -10,7 +10,10 @@ on the circuit files its credit period's open committed, `lean("credit-committed
 with `credit.committed_files` the reference. The verdicts acted on are the Lean's too (`of_record`): `credit.window`'s
 and `credit.period_credit`'s, `lean("window", …)` and `lean("period", …)` (`PouwCheck.Credit.window`,
 `Credit.periodCredit`) on those outcomes, and the challenger's salt check's, `lean("salt", …)` (`PouwCheck.saltCheck`,
-`core_check.salt_of_record`), each with its Python twin beside it, and a disagreement between them is a refusal.
+`core_check.salt_of_record`), each with its Python twin beside it, and a disagreement between them is a refusal. An
+execution phase's and a credit period's verdicts are `pouw-check serve`'s and `pouw-period serve`'s (`serve_of_record`,
+`core_check.case`, `period_check.case`), and a verdict whose Lean no interface here reaches yet raises
+(`not_written`) rather than fall back on its twin; the README's "Verdicts of record" lists each.
 
 `RECORD_VERDICT` is the switch, and setting it to ``"python"`` is the one line that undoes it.
 

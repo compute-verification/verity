@@ -36,6 +36,8 @@ set -uo pipefail
 # RELEASE=1: one inner session opens the one recursive session, and every step inside its first window runs once
 [ "${RELEASE:-0}" = 1 ] && export WARM=${WARM:-0} RUNS=${RUNS:-1} REPEAT=${REPEAT:-1}
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/rec-bench-$$}/out}; mkdir -p "$O"
+# the pod's python3 runs settings.py, run.py and forge_after.py from the tree: verity_config and verity after the run's roots
+export PYTHONPATH=${PYTHONPATH:+$PYTHONPATH:}$REPO/tools/config:$REPO
 # settings.py: an unknown REPEAT_* or OPROVE_*, or a value that doesn't parse, is refused; the value settings given are recorded
 SETTINGS=$(python3 benchmarks/recursion_e2e/settings.py record "$O/settings.json") || exit 2
 # 85's leases are preemptible unless GPU_PREEMPTIBLE is empty: on node 1 a waiter stops one after about 2 min, a lost
@@ -127,7 +129,7 @@ for s in ${STEPS//,/ }; do
     # the forgeries the ZK server stops before release, made on the honest releases after proving and put to Lean with the
     # lean step's own flags (forge_after.py; out/forge-after.json)
     forge-after)
-      lo=$O/steps/lean/r1/out; fv=$L/lean-$LSHA/flock-verify
+      lo=$O/steps/lean/r1/out; fv=$L/lean-$LSHA/verity-verify-proof
       timed forge-after 1 env OUT=$O/steps/forge-after/r1/out python3 benchmarks/recursion_e2e/forge_after.py \
         --work "$FLOCK_WORK" --tag "$TAG" --run-out "$lo" --kinds "${FORGE_AFTER:-coef,dirs,message}" --jobs "${LEAN_JOBS:-4}" \
         --bin "$([ -f $lo/lean/own-L0.txt ] || [ -f $lo/lean/own-alg-p0.txt ] && echo run || echo lean)=$fv" || rc=1 ;;

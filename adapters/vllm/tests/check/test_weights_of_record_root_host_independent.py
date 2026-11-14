@@ -9,7 +9,7 @@ bounded check against the analytic function), but a root that names the weights 
 v2 keys the analytic entry by the sha256 of its EXACT inputs (table name, declared shape, the config.json values the function reads);
 the host's inv_freq bytes stay on the record as information.  Tests (CPU, no torch): perturbing what the host computes leaves the root
 unchanged; changing an input the function reads changes it; the checkpoint bytes still change it; a v1 record's root is not re-rooted
-by the reader (records are never hand-edited: the row_pod reuse rule re-derives them, test_row_pod_weights_of_record_reuse).
+by the reader (records are never hand-edited: the row driver's reuse rule, `row_records.wor_stale`, moves a stale one aside and re-derives it).
 """
 from __future__ import annotations
 
@@ -92,7 +92,7 @@ def test_the_root_moves_with_the_analytic_inputs_and_with_the_checkpoint_bytes(c
 
 
 def test_a_v1_record_is_read_as_it_is_and_the_checker_still_pins_by_field(checkpoint):
-    """The reader never re-roots an older record (repairs are logged derivations, done by row_pod's reuse rule)."""
+    """The reader never re-roots an older record (repairs are logged derivations, done by the row driver's reuse rule)."""
     rec = _record(checkpoint)
     v1 = json.loads(json.dumps(rec))
     v1["schema"] = WR.SCHEMA_V1

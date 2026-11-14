@@ -99,7 +99,7 @@ def test_span_accounting_nested_repeated_overlapping_and_open():
         _span("span_start", "load2", "match.load", 3.0, parent="row"),          # repeated stage name, distinct invocation
         _span("span_end", "load2", "match.load", 4.0, parent="row", outcome="ok"),
         _span("span_start", "fold", "match.fold", 4.0, parent="row"),
-        _span("span_start", "x09", "match.x09", 5.0, parent="row"),             # overlaps fold (parallel legs)
+        _span("span_start", "x09", "match.x09", 5.0, parent="row"),             # overlaps fold (parallel parts)
         _span("span_end", "fold", "match.fold", 8.0, parent="row", outcome="ok"),
         _span("span_end", "x09", "match.x09", 9.0, parent="row", outcome="ok"),
         _span("span_start", "gm", "match.gm", 9.0, parent="row"),               # dies open
@@ -518,7 +518,7 @@ def test_d6_deferred_hash_records_identity_at_launch_and_completes_at_preserve(t
     assert job.hash_inputs(tmp_path)[0]["stat_changed_since_launch"] is True
 
 
-# ---- tele run: the event CLI, the sampler's import root, timeouts, leftovers and memory caps ---------------------------------------------------
+# ---- tele run: the event CLI, the sampler's import root, timeouts, leftovers and memory limits ---------------------------------------------------
 
 def test_event_accepts_kv_positionals_after_options_on_every_python(tmp_path):
     """run_row.sh writes `tele event ... submitted --stage S row=.. role=..`; 3.11 parse_args rejects the k=v tail ('unrecognized
@@ -665,20 +665,20 @@ def test_tele_run_kills_what_is_left_of_the_workloads_group_once_its_leader_exit
     assert json.loads((d / "status.json").read_text())["state"] == "failed"
 
 
-def test_a_run_on_a_machine_that_caps_sessions_needs_a_cap_of_its_own(tmp_path):
+def test_a_run_on_a_machine_that_limits_sessions_needs_a_limit_of_its_own(tmp_path):
     """When user-1001.slice sits at its MemoryMax, logind fails to create login session scopes, and those logins' runs go on in
-    ssh.service, which has no per-run cap. The machine's session-.scope.d MemoryMax is the
-    cap a run expects; a run with no finite memory.max, or in a service's cgroup, has none of its own. A machine without the drop-in
+    ssh.service, which has no per-run limit. The machine's session-.scope.d MemoryMax is the
+    limit a run expects; a run with no finite memory.max, or in a service's cgroup, has none of its own. A machine without the drop-in
     asks nothing."""
-    from research.telemetry.cgroup import session_cap, uncapped
+    from research.telemetry.cgroup import session_limit, uncapped
 
     drop = tmp_path / "session-.scope.d"
-    assert session_cap(drop) is None
+    assert session_limit(drop) is None
     drop.mkdir()
     (drop / "50-vy-job-memory.conf").write_text("# a comment\n[Scope]\nMemoryMax=900G\nMemorySwapMax=0\n")
-    assert session_cap(drop) == "900G"
+    assert session_limit(drop) == "900G"
     (drop / "60-off.conf").write_text("[Scope]\nMemoryMax=infinity\n")
-    assert session_cap(drop) is None, "the last one systemd reads wins"
+    assert session_limit(drop) is None, "the last one systemd reads wins"
     (drop / "60-off.conf").unlink()
 
     session = {"path": "/user.slice/user-1001.slice/session-9.scope", "memory_max_kind": "finite", "memory_max_bytes": 900 << 30}
@@ -691,21 +691,21 @@ def test_a_run_on_a_machine_that_caps_sessions_needs_a_cap_of_its_own(tmp_path):
     assert uncapped(leaked, None) is None and uncapped(bare, None) is None
 
 
-def test_tele_run_never_starts_a_workload_without_its_memory_cap(tmp_path, monkeypatch):
-    """The guard runs before the spawn: status failed with the reason, a no_memory_cap mark, exit 75, and the workload never ran."""
+def test_tele_run_never_starts_a_workload_without_its_memory_limit(tmp_path, monkeypatch):
+    """The guard runs before the spawn: status failed with the reason, a no_memory_limit mark, exit 75, and the workload never ran."""
     from research.telemetry import run as trun
 
-    monkeypatch.setattr(trun, "session_cap", lambda: "900G")
+    monkeypatch.setattr(trun, "session_limit", lambda: "900G")
     monkeypatch.setattr(trun.Cgroup, "limits", lambda self: {"path": "/system.slice/ssh.service", "memory_max_kind": "finite"})
     ran = tmp_path / "ran"
     d = tmp_path / "a"
     rc = trun.main(["--attempt-dir", str(d), "--stage", "t", "--no-sampler", "--no-classify", "--", sys.executable, "-c",
                     f"open({str(ran)!r}, 'w')"])
-    assert rc == trun.EX_NO_MEMORY_CAP == 75 and not ran.exists()
+    assert rc == trun.EX_NO_MEMORY_LIMIT == 75 and not ran.exists()
     st = json.loads((d / "status.json").read_text())
     assert st["state"] == "failed" and st["rc"] == 75 and "ssh.service" in st["error"]
     recs = [json.loads(l) for l in (d / "events.jsonl").read_text().splitlines() if l.strip()]
-    assert [x["name"] for x in recs if x.get("kind") == "mark"] == ["no_memory_cap"]
+    assert [x["name"] for x in recs if x.get("kind") == "mark"] == ["no_memory_limit"]
 
 
 def test_the_timeout_control_file_accepts_a_bare_number_and_ignores_what_it_cannot_parse(tmp_path, capsys):
@@ -847,7 +847,7 @@ def _queue_attempt(tmp_path, run_id, *, sig, oom, unit=None):
     return d
 
 
-def test_a_queue_scope_systemd_stopped_after_an_oom_kill_is_an_oom_that_names_the_cap(tmp_path):
+def test_a_queue_scope_systemd_stopped_after_an_oom_kill_is_an_oom_that_names_the_limit(tmp_path):
     doc = classify(_queue_attempt(tmp_path, "r20261005-064854-bd63", sig=15, oom=1))
     assert doc["class"] == "CGROUP_OOM_ATTRIBUTED" and doc["certainty"] == "established", doc["why"]
     assert "MemoryMax=8G" in doc["why"] and "--mem-gb" in doc["why"] and "systemd" in doc["why"]

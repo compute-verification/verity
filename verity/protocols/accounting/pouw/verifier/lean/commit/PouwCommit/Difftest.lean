@@ -23,7 +23,7 @@ is not it, naming the Lean's. The kinds:
 * `epoch_salt`, `draw_coin`: `Epoch.start`'s salt and `draw_coin`'s coin, or their refusals in their words (`{"reason"}`);
 * `key`: the audit, sample and replay keys and `draw_after`;
 * `sampled`, `pearl_draw`: the clear audit's work-weighted samples over given tickets, `Sampled.select`'s and
-  `clear_work.draw`'s (`benchmarks/pouw/clear`).
+  `clear_work.draw`'s (`verity/protocols/accounting/pouw/prover/clear`).
 -/
 
 @[expose] public section

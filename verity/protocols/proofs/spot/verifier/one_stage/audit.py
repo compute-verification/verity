@@ -132,6 +132,23 @@ def session_registered(verdicts: Mapping[str, Mapping[str, Any]],
     return {k: r for k, r in out.items() if k in named}
 
 
+def _jeq(a: Any, b: Any) -> bool:
+    """`jeq`: the same canonical JSON, so `true` is not `1`."""
+    try:
+        return canonical_json(a) == canonical_json(b)
+    except (TypeError, ValueError):
+        return False
+
+
+def less_own_reads(opened: Mapping[str, Any] | None, registration: Mapping[str, Any]) -> dict[str, Any] | None:
+    """`Record.lessOwnReads`: ``opened`` less the reads of the registration's own ports at their own roots (each port's
+    last root). A read named by one of its ports at another root stays, to be held to the registered values."""
+    if opened is None:
+        return None
+    roots = {r["port"]: r["root"] for r in registration["roots"]}
+    return {v: r for v, r in opened.items() if not (v in roots and _jeq(roots[v], r))}
+
+
 #: the public output of an accept that says whether every verdict ran (`answer`), read by `answer_complete`
 COMPLETE = "complete"
 
@@ -168,12 +185,15 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
                  law: Mapping[str, Any], proved_units: list[int], instances: int, statement: Mapping[str, Any],
                  verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
                  served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None,
-                 session_registered: Mapping[str, str] | None = None) -> dict[str, Any]:
+                 session_registered: Mapping[str, str] | None = None, certified: Sequence[str] = ()) -> dict[str, Any]:
     """`draw` is the verifier's own sample. `served`: the proof blocks the sessions were served, when the sample was handed to them
     (each must serve exactly the sample). `session_roots`: `{registered port: root}` from the sessions' statements (each
     must be the registered root). `session_registered`: `{value: root}`, the registered roots the verdicts of
-    record opened the sessions' reads against (`session_registered(verdicts)`, never the registration's own); a registration with
-    registered values needs it, each the registered root."""
+    record opened the sessions' reads against (`session_registered(verdicts)`, never the registration's own), less the
+    reads of its own ports at their own roots (`less_own_reads`); each read it reports must be of a registered value, at
+    that value's registered root, and a registered value needs no reported read. `certified`: the names of the values
+    the verifier holds certified entries for; each of them does need a reported read (the check `certified` names the
+    ones that have none), so a read reported under another value's name does not stand in for it."""
     checks = {"draw": check_draw(draw, registration, law).to_json(),
               "proved": check_proved(draw, proved_units, instances).to_json()}
     if receipt.get("registration") != registration_digest(registration):
@@ -185,13 +205,16 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
         wrong = sorted(p for p, r in session_roots.items() if p not in registered or registered[p] != r)
         if not session_roots or wrong:
             checks["roots"] = {"ok": False, "codes": ["roots"], "detail": {"ports": wrong}}
-    if "registered" in registration or session_registered is not None:
-        want = {e["value"]: e["root"] for e in registration.get("registered", [])}
-        opened = dict(session_registered or {})
-        if opened != want:
-            checks["registered"] = {"ok": False, "codes": ["registered"],
-                                    "detail": {"registered": sorted(want), "opened": sorted(opened),
-                                               "wrong": sorted(v for v in want if v not in opened or opened[v] != want[v])}}
+    want = {e["value"]: e["root"] for e in registration.get("registered", [])}
+    opened = dict(session_registered or {})
+    wrong = sorted(v for v in opened if v not in want or opened[v] != want[v])
+    if wrong:
+        checks["registered"] = {"ok": False, "codes": ["registered"],
+                                "detail": {"registered": sorted(want), "opened": sorted(opened), "wrong": wrong}}
+    unread = sorted(v for v in certified if v not in opened)
+    if unread:
+        checks["certified"] = {"ok": False, "codes": ["certified"],
+                               "detail": {"certified": sorted(certified), "unread": unread}}
     ran = {k: v for k, v in verdicts.items() if v.get("accepted") is not None}
     of_record = [v for v in verdicts.values() if v.get("of_record")]
     accepted = (bool(of_record) and all(v.get("accepted") is True for v in of_record)

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.Recursive.BaseSetup
+public import Proofs.Properties.Verity.Sampled.Record.PartSame
 public import Proofs.Flock.Claims.Deploy
 
 /-!
@@ -8,13 +9,14 @@ public import Proofs.Flock.Claims.Deploy
 
 One-stage v2 (`Spot.OneStageZk`) decides its one session with `verdictOf`: the session set up at its record's
 sample (`setupAt`: `sessionAt`'s `buildSessionOf` and `verifyCmd`'s checks, then the sample's law), the rep files its
-`reps` name (`filesOf`), `Zk.verify`, the scope check and the refusals after it. The record's session is flock-verify
+`reps` name (`filesOf`), `Zk.verify`, the scope check and the refusals after it. The record's session is verity-verify-proof
 `--zk` in public-coin form (`FlockDeploy.V true`), which at SHA-512 accepts exactly when `Zk.verify` at its statement's
 setup accepts the last message's record and proof files and `FlockDeploy.checks` pass (`next_decide_sha512`).
 
 * `SessionMatch si I rd`: the model's reading `si` of the session's statement holds v2's inputs `I` and registered reads
-  `rd` field by field, under `--zk`. Then the two readings set the session up on the same `Stmt.setupTables` call
-  (`SessionMatch.read_setup`).
+  `rd` field by field, under `--zk`, the partition as one partition or two alike objects (`PartSame`: a statement's
+  text read back is alike the object it states, not equal to it). Then the two readings set the session up alike: the
+  model's is v2's `Stmt.setupTables` call (`SessionMatch.read_setup`).
 * `setup_of_setupAt`: where v2's `setupAt` is `.ok`, so is the model's setup (`FlockDeploy.Ins.setup`), with the same
   session. v2 makes every call `Ins.setup` makes and more (`checkProgram`, `checkComplete`, `checkCover`,
   `KnownRead.check`, `RecSetup.oneFull`, `checkTopRows`, `checkLink`), so this direction is the one that holds.
@@ -30,6 +32,7 @@ namespace Verity.Sampled.Record
 
 open Lean (Json)
 open Flock (V SessionSpec Stmt Setup)
+open Flock.PartCong (PartSame)
 open FlockDeploy (Coin Final Ins)
 open Verity.Recursive.BaseSetup (bind_ok forIn_mem body_ok body_yield noIdentifier_of_check)
 
@@ -58,7 +61,8 @@ private theorem forIn_ok_of_all {α : Type} {xs : Array α} {b : α → PUnit �
 /-- **The model's reading of the session's statement holds v2's inputs**: what `FlockDeploy.Raw.ins` reads of the
 session's statement (`si`) holds, field by field, what v2's `sessionAt` and `verdictOf` read under `--zk`: the inputs
 `I` (`Spot.OneStageZk.inputsOf`'s), none of `--work`, `--stratified`, `--closure` or `--public-inputs`, and the
-verifier's registered reads `rd`. -/
+verifier's registered reads `rd`. The two partitions are one, or two objects that are alike (`PartSame`), which the
+setup reads alike (`Flock.PartCong.setupTables_same`, `checks_none`). -/
 structure SessionMatch (si : Ins) (I : Flock.Witness.Inputs) (rd : Spot.OneStageZk.Reads) : Prop where
   zk : si.read.zk = true
   stmtTags : si.stmtTags = I.tags
@@ -67,7 +71,7 @@ structure SessionMatch (si : Ins) (I : Flock.Witness.Inputs) (rd : Spot.OneStage
   publicFile : si.read.I.publicFile = I.publicFile
   count : si.read.I.count = I.count
   tables : si.read.I.tables = I.tables
-  partition : si.read.I.partition = I.partition
+  partition : PartSame si.read.I.partition I.partition
   program : si.read.I.program = I.program
   work : si.read.I.work = none
   stratified : si.read.I.stratified = none
@@ -92,14 +96,15 @@ theorem SessionMatch.read_coins (hm : SessionMatch si I rd) : si.read.coins = Fl
   unfold FlockSoundness.Discharge.ZkExec.zkCoins Flock.Witness.zkCoins
   rw [hm.tags, hm.count]
 
-/-- **Both readings set the session up on one call**: the model's `Read.setup` is v2's `Stmt.setupTables` at `I`'s
+/-- **Both readings set the session up alike**: the model's `Read.setup` is v2's `Stmt.setupTables` at `I`'s
 `--zk` tags and coins and the model's sample. -/
 theorem SessionMatch.read_setup (hm : SessionMatch si I rd) {draw : Option Json} (hdraw : si.read.draw = draw) :
     si.read.setup = Flock.Stmt.setupTables (Flock.Witness.zkTags I) I.circuitFile I.publicFile
       (Flock.Witness.zkCoins I) I.count I.tables draw I.partition I.program := by
   unfold Flock.Readable.Read.setup
-  rw [hm.read_tags, hm.read_coins, hm.circuitFile, hm.publicFile, hm.count, hm.tables, hdraw, hm.partition,
-    hm.program, hm.work, hm.stratified, hm.closure, hm.publicInputs]
+  rw [hm.read_tags, hm.read_coins, hm.circuitFile, hm.publicFile, hm.count, hm.tables, hdraw, hm.program, hm.work,
+    hm.stratified, hm.closure, hm.publicInputs]
+  exact Flock.PartCong.setupTables_same _ _ _ _ _ _ _ hm.partition _ _ _ _ _
 
 /-- **The model's scope check is v2's**: `Read.check` at `si` is the scope check v2's `run` builds at `I` and `rd`. -/
 theorem SessionMatch.read_check (hm : SessionMatch si I rd) :
@@ -241,9 +246,11 @@ theorem setup_of_setupAt {si : Ins} {I : Flock.Witness.Inputs} {rd : Spot.OneSta
   obtain ⟨⟨⟩, hpub, -⟩ := bind_ok hrc
   refine ⟨sts, ?_, rfl⟩
   have hci' : Flock.RecSetup.checkInner none none (Except.ok (none, none)) = .ok () := hci
+  have hpart := fun tags tables sts circuitB program registered =>
+    Flock.PartCong.checks_none tags tables sts circuitB si.read.I.partition I.partition program registered
   unfold FlockDeploy.Ins.setup
   simp only [hm.read_tags, hm.read_setup hdraw, hdraw, hm.zk, hm.registered, hm.stmtTags, hm.tables,
-    hm.circuitFile, hm.partition, hm.program]
+    hm.circuitFile, hpart, hm.program]
   simp only [hh, Bool.not_true, Bool.false_eq_true, ↓reduceIte, hci', hs0, bind, Except.bind, pure, Except.pure]
   rw [forIn_ok_of_all fun a ha u => by simp only [(hregs a ha).1, (hregs a ha).2]]
   rcases draw with _ | d
@@ -256,7 +263,7 @@ theorem setup_of_setupAt {si : Ins} {I : Flock.Witness.Inputs} {rd : Spot.OneSta
 
 /-- **v2's verdict on its one session is the record's decision there.** Where v2's `verdictOf` on the session is
 `.ok ()` (its record `record`, set up at the record's sample, its rep files `q`'s on the blobs `bs`) and the model decides
-on the last message `f` with its reading `si` of the statement `x` and session `(spec, sts)`, flock-verify `--zk` in
+on the last message `f` with its reading `si` of the statement `x` and session `(spec, sts)`, verity-verify-proof `--zk` in
 public-coin form accepts at SHA-512, given:
 * the inputs: `si` holds v2's inputs and registered reads (`SessionMatch`), and its sample is the record's (`hdraw`);
 * `Shows`: `f`'s statement is `x` (`hstmt`), its record the session's record (`hrec`) and its proof files the session's

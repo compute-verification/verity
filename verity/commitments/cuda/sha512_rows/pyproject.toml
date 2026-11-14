@@ -1,0 +1,23 @@
+[project]
+name = "verity-sha512-rows"
+version = "0.0.0"
+description = "The serve-time commit's SHA-512 engine on sm_90a: hm96-sha512 rows under hiding leaves and frame-v3-sha512 levels."
+requires-python = ">=3.12"
+dependencies = ["verity", "numpy"]
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+verity = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["tests/test_engine.py"]
+# engine.py reads its variables through settings.py, on verity_config.settings; the tests read the H200 layer's rows from
+# the benchmark's bench.py (h200_rows).
+inputs = ["tools/config/verity_config", "benchmarks/torch_gpu/sha512_rows/bench.py"]

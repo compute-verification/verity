@@ -282,7 +282,7 @@ def test_a_second_session_under_the_windows_binding_is_refused(served, tmp_path,
     replay, calls = _run(served, tmp_path, monkeypatch, auditor)
     assert replay["verdict"] == "undecided" and len(calls) == 1
     assert replay["reason"].startswith(f"the memory challenger's session on {AUDITOR} did not complete: RuntimeError: "
-                                       f"the side on {AUDITOR} refused: a session has run for audit")
+                                       f"the side on {AUDITOR} refused: a session has run for the request's `audit`")
     assert len(auditor.log.path.read_text().splitlines()) == 2
 
 
@@ -295,8 +295,8 @@ def test_a_session_whose_setup_salt_is_not_the_challengers_is_refused(served, tm
                                                                            b"the prover's own" * 4)[1])
     answer, calls = _run(served, tmp_path, monkeypatch, auditor)
     assert answer["verdict"] == "undecided" and calls == []
-    assert answer["reason"].endswith(f"refused: setup's published outputs do not carry the commitment and salt the memory "
-                                     f"challenger logged for audit {SP.binding(REPO, REV, 3, None).hex()}")
+    assert answer["reason"].endswith("refused: setup's published outputs (`published`) do not carry the commitment and "
+                                     "salt the memory challenger logged for the request's `audit`")
     assert auditor.log.path.read_text() == f"{mc.SESSION_LOG}\n"
 
 

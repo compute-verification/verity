@@ -77,7 +77,7 @@ window holds at any value `ξ` of the other windows' coins, over its own (`ξ[t 
   at most `p ≥ 0`: `CircuitCredit`'s conclusion at window `t`'s play.
 * Sampled proofs: the developer's incorrect proof blocks `bad ξ` (block `b` in window `win b`, skipping `0 ≤ w_b ≤ B` of
   declared work) are fixed before their window's coins; the units the window samples (`drawn`) and the faulty blocks it
-  detects (`detected`, those of a window flock-verify rejects) read only its coins and the earlier windows'. The sample
+  detects (`detected`, those of a window verity-verify-proof rejects) read only its coins and the earlier windows'. The sample
   misses the window's `m` faulty blocks with probability at most `(1 − q)^m`, `0 ≤ q ≤ 1` (A3, `q ≤ kd/n`), and the
   window detects none of them while it samples one with probability at most `ks t` (`EndToEndHiddenDrawn`,
   `ks t = ε_ks + δ_link`).

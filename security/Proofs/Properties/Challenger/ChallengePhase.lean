@@ -4,6 +4,7 @@ public import Proofs.Properties.Challenger.Break
 public import Proofs.Properties.Challenger.Commitment
 public import Proofs.Properties.Pouw.LiveSalt.Ledger
 public import Proofs.Properties.Pouw.LiveSalt.Coin
+public import Proofs.Flock.Be64
 import all Init.Data.String.Defs
 
 /-!
@@ -37,7 +38,7 @@ namespace Properties.Challenger.ChallengePhase
 open Lean (Json)
 open Std.Do
 open Spot Spot.Challenger
-open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj split_bytes hash_size be64_size be64_size_inj)
+open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj split_bytes hash_size be64_size be64_size_inj)
 open Properties.Pouw.LiveSalt.Coin (enc enc_length enc_split enc_inj taggedBytes tagged_ok taggedBytes_inj)
 open Properties.Pouw.LiveSalt.Ledger (of_triple of_triple_opt throw_spec ok_spec bind_ok except_spec none_spec
   failure_spec toOption_spec ledgerTag_spec nat_spec some_pure_spec recordOfJson_spec mapM_spec)

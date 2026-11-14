@@ -73,8 +73,8 @@ def module(name: str, path: Path) -> ModuleType:
     return m
 
 
-#: Sampled proofs' one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, `decode_params_v2`
-#: and `_challenger_draw` v2's parameters and its challenger's coins, and its strategies sample audits.
+#: SPOT's one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, `parsed_params_v2`,
+#: `subset_design` and `_challenger_draw` v2's parameters and its challenger's coins, and its strategies sample audits.
 ONE_STAGE = module("one_stage_difftest", ROOT / "verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py")
 #: PoUW's period difftest's cases: periods of the auditor's ledger and their windows, honest and with one mutation each.
 POUW_PERIOD_CASES = module("pouw_period_cases", ROOT / "verity/protocols/accounting/pouw/verifier/lean/check/tests/pouw_period_cases.py")
@@ -181,30 +181,38 @@ def _keys(j: Any, keys: list[str], what: str) -> None:
 
 
 def _one_stage_params(rest: dict) -> dict:
-    """`OneStageZk.paramsOfJson` behind `VStar.Recursive.Sampled`'s refusal of v1: ``proofs``, exactly the circuit and
-    public files' SHA-512s and the verifier's registered file or null, then v1's params (`decode_params_v2`, which
-    refuses them naming no challenger) with a partition object."""
+    """`OneStageZk.paramsEitherOfJson` behind `VStar.Recursive.Sampled`'s refusal of v1, in the one statement's form
+    (`paramsOfJson`): ``proofs``, exactly the circuit and public files' SHA-512s and the verifier's registered file or
+    null, then v1's params (`parsed_params_v2`, which refuses them naming no challenger) with a partition object, under
+    a subset sampling design (`subset_design`), its last refusal. The per-member form (``proofs`` exactly ``members``)
+    is outside the mirror."""
     if "proofs" not in rest:
         raise Reject(f"the parameters name no proofs: {V1_REFUSED}")
     pr = rest["proofs"]
+    if isinstance(pr, dict) and sorted(pr) == ["members"]:
+        raise ValueError("outside the mirror: the per-member form of the parameters' proofs")
     _keys(pr, ["circuit", "public", "registered"], "proofs")
     for k in ("circuit", "public"):
         if not (isinstance(pr[k], str) and len(pr[k]) == 128 and all(c in "0123456789abcdef" for c in pr[k])):
             raise Reject(f"proofs: {k} is not a SHA-512 digest (128 lowercase hex)")
     if pr["registered"] is not None and not isinstance(pr["registered"], dict):
         raise Reject("proofs: registered is not the verifier's registered file (an object) or null")
-    p = ONE_STAGE.decode_params_v2(rest)
+    p = ONE_STAGE.parsed_params_v2(rest)
     if p["partition"] is None:
         raise Reject("partition is null: the sessions are verified against the verifier's own partition object")
-    return {**p, "proofs": pr}
+    return {**ONE_STAGE.subset_design(p), "proofs": pr}
 
 
 def _one_stage_evidence(rest: dict) -> dict:
-    """`OneStageZk.evidenceOf` behind `VStar.Recursive.Sampled`'s refusal of v1: no ``verdicts``, v1's evidence with
-    none (`covered_evidence`, `OneStage.evidenceOf`), and ``proofs``, exactly the sessions: for each of v1's sessions in
-    order, its name, its record's digest and its rep files' digests. The public file is the parameters'."""
+    """`OneStageZk.evidenceEitherOf` behind `VStar.Recursive.Sampled`'s refusal of v1, in the one statement's form
+    (`evidenceOf`): no ``verdicts``, v1's evidence with none (`covered_evidence`, `OneStage.evidenceOf`), and
+    ``proofs``, exactly the sessions: for each of v1's sessions in order, its name, its record's digest and its rep
+    files' digests. The public file is the parameters'. The per-member form (``proofs`` exactly ``statements``) is
+    outside the mirror."""
     if "proofs" not in rest:
         raise Reject(f"the evidence names no proofs: {V1_REFUSED}")
+    if isinstance(rest["proofs"], dict) and sorted(rest["proofs"]) == ["statements"]:
+        raise ValueError("outside the mirror: the per-member form of the evidence's proofs")
     if "verdicts" in rest:
         raise Reject("the evidence names verdicts: this audit's verdicts are its own run of the verifier on the proofs")
     base = ONE_STAGE.covered_evidence(canonical({**{k: v for k, v in rest.items() if k != "proofs"},
@@ -228,7 +236,7 @@ def _one_stage_check(p: dict, c: tuple[dict, bytes], e: dict, blobs: list[bytes]
     release (`_coins_of`), the evidence's one session (`oneSession`: the sampled proof blocks are proved in one session), its
     record on the blobs and held to the coin trees that release log shows (`challenger.sessions_tree_reason`). So every
     case the mirror decides is refused: a session on a tree the challenger logged goes on to the population, the public
-    file and `flock-verify`, outside the mirror."""
+    file and `verity-verify-proof`, outside the mirror."""
     try:
         if ONE_STAGE._coins_of(p, c, e) is None:
             return REJECT, "coins: no challenger"

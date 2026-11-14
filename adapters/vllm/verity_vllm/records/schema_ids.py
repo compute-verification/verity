@@ -179,9 +179,6 @@ DIFFTEST_PRODUCE_SCHEMA = "verity-gen/difftest-produce/v1"
 #: the quarantine admission, `quarantine.json`: the difftest report of each definition checked, which
 #: `properties.admission`'s `main` writes
 QUARANTINE_ADMISSION_SCHEMA = "verity-gen/quarantine/v1"
-#: the golden corpus (`properties/golden/corpus.json`), which `properties.golden.record` writes; `load_corpus` gives an
-#: empty one with it where there is no file
-GOLDEN_CORPUS_SCHEMA = "verity-gen/golden/v1"
 
 # --- the TP row (`verity_vllm.pipeline.tp`)
 #: the TP Commit's record of the replays it left for `tp-commit-replay` (`pipeline.tp.c2.SCHEMA`), which `seal` writes
@@ -268,7 +265,7 @@ COMPILED_STEPS_SCHEMA = "verity-vllm/compiled-steps/v2"
 #: `pipeline.global_program.build` writes as `workload_program.json`
 WORKLOAD_PROGRAM_SCHEMA = "verity/workload-program/v1"
 
-# --- PoUW's H1 (`verity_vllm.protocols.pouw.h1`)
+# --- PoUW's H1 (`verity.protocols.accounting.pouw.prover.serving.h1`)
 #: a served window's calls record, `pouw-h1-calls.json` (`protocols.pouw.h1.RECORD`), which `H1Run.finish` writes
 POUW_H1_CALLS_SCHEMA = "verity-vllm/pouw-h1-calls/v2"
 #: a suspended window's hand-off state (`protocols.pouw.h1.handoff.SCHEMA`), which `suspend` writes and `resume` refuses
@@ -279,3 +276,6 @@ POUW_H1_HANDOFF_SCHEMA = "verity-vllm/pouw-h1-handoff/v1"
 #: the record of the options one stage installed (`protocols.RECORD_SCHEMA`), which `Composition.record` builds and
 #: `into_verdict` writes as a Commit's `protocols.json`
 PROTOCOL_COMPOSITION_SCHEMA = "verity-vllm/protocol-composition/v0"
+#: the record of one PoUB session (`remote_session.json`), which the PoUB option's `CommitSession._session` writes, and
+#: `.end` for a session whose thread raised
+REMOTE_SESSION_SCHEMA = "verity-vllm/remote-session/v0"

@@ -20,7 +20,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
 
 * **The verdicts are credit's own** (`_verified`). A window's evidence carries its statements' proof files, one
   statement a call with a sampled proof block (`STATEMENT_KEYS`: its circuit file, its public file and its sessions), never a
-  verdict. Credit runs the verifier (`proofs.verify`, `flock-verify verify --zk`) on each: on the circuit file
+  verdict. Credit runs the verifier (`proofs.verify`, `verity-verify-proof verify --zk`) on each: on the circuit file
   whose SHA-512 its period's open committed for the call's K (`CIRCUIT_FILES`, ``{k<K>: SHA-512}``, refused before the
   verifier runs when it differs), against the committed descriptor, its partition object (`partition_of`) and the
   call's ``--registered`` file credit builds from the descriptor and the window's entries (`registered_file`,
@@ -162,7 +162,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   the public schedule's.
 * **The proofs are the window's registration's** (`_registration`): each sampled proof block's proof outcome is the
   verifier's verdict for its session (`PROOF_KEYS`): the SHA-512 of the descriptor it verified the session against
-  (``program``) and the session's own registered finding (``registered``, flock-verify's: each registered port's value
+  (``program``) and the session's own registered finding (``registered``, verity-verify-proof's: each registered port's value
   and the root its reads were opened against). The entries are the registration's: each A value's domain, and each
   other value's a proof opened, is `domain_of` the committed descriptor's SHA-512 and, for every value but the weights'
   ``…/b/<K>`` (held across windows, `is_held`) and round 0's input-ids and request tables, the window's open root
@@ -1341,7 +1341,7 @@ def _window_drawn(window: dict, draw: dict, ss: list[dict], k: Any
 
 
 def _finding(x: Any) -> list[tuple[str, str, str]] | None:
-    """A session's registered finding (flock-verify's ``registered``, ``{port: {value, root}}``: each registered port's
+    """A session's registered finding (verity-verify-proof's ``registered``, ``{port: {value, root}}``: each registered port's
     value and the root its reads were opened against) as ``(port, value, root)`` in port order, or None."""
     if not isinstance(x, dict):
         return None
@@ -3165,10 +3165,12 @@ def period(key: Any, ledger: Any, name: Any, roots: Any, verify: Ch.Verify) -> t
 
 
 def passes_distinct(passes: Any) -> tuple[str, str] | None:
-    """The verdict of record on passes credited together: the Lean `PouwPearlPlus.passesDistinct`'s (Pearl+'s run
-    verdict reads it), which no interface here reaches yet, so this raises (`verifier.not_written`);
-    `passes_distinct_twin` is its Python twin."""
-    return V.not_written("passes_distinct", "PouwPearlPlus.passesDistinct")
+    """The verdict of record on passes credited together, (code, why) or None: Pearl+'s Lean
+    `PouwCheck.PearlPlus.passesDistinct`'s, the one its run verdict reads (`verifier.of_record` on ``passes-distinct``),
+    with `passes_distinct_twin` its Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
+    why = passes_distinct_twin(passes)
+    said = V.of_record("passes-distinct", {"passes": passes}, None if why is None else {"refused": list(why)})
+    return None if said is None else tuple(said["refused"])
 
 
 def pearl_c_period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, passes: Any, earlier: Any,
@@ -3224,11 +3226,27 @@ def _period_outcomes(key: Any, ledger: Any, pins: Any, main: Any, name: Any, win
     return _period_of(key, ledger, pins, main, name, windows, verify, None)
 
 
+def _once(verify: Ch.Verify) -> Ch.Verify:
+    """`verify`, each answer held by its key, message and signature: a period's check reads its ledger 5W + 1 times
+    (`period`, then each window's two `credited_session`s, `_credited`, the rounds and `_period_weights`), all at the
+    verifier's one key, so each entry's signature is verified once. Lean's `PouwCheck.Credit.Once.periodCreditOnce`
+    replays the ledger once."""
+    held: dict[tuple[Ch.ChallengerKey, bytes, bytes], bool] = {}
+
+    def once(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
+        at = (key, message, signature)
+        if at not in held:
+            held[at] = verify(key, message, signature)
+        return held[at]
+    return once
+
+
 def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify,
                run: Run | None, kept: list[_Outcomes] | None = None, files_of: Any = None
                ) -> tuple[dict | None, tuple[str, str] | None]:
     """`_period_outcomes`, or with `run` `period_credit`'s Python twin, each window's statement runs appended to `kept`
     and the committed circuit files' refusal set on `files_of` (``.refused``)."""
+    verify = _once(verify)
     keys, form = (PROVED_KEYS, WINDOWS_FORM) if run is None else (PERIOD_KEYS, PERIOD_FORM)
     if not _formed(windows, keys):
         return None, ("period", form)

@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Assembled
 public import Proofs.Flock.Claims.JsonNorm
-public import Proofs.Properties.Challenger.CanonRead
+public import Proofs.Flock.Claims.CanonWf
 public import Proofs.Properties.Challenger.Coins
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
@@ -710,13 +710,14 @@ def recordDrawn (L : Flock.Draw.Law) (n : ℕ) (units : Array ℕ) (record : Str
     Flock.Witness.recordDraw record = some (Flock.Draw.UnitDraw.toJson ⟨L, n, units, #[]⟩)
 
 /-- **v2 holds the record's sample to its own** in what composite `k` accepts: wherever `k` accepted what the prover sent
-as a `same` composition and v2 drew `units` over `n` units there (`Drew`, under the verifier's law), the record v2
-reads there is the `.subset` print of those units (`recordDrawn` at `.subset units.size`), the member's share of the
-window's sample; the bound is the verifier's law's, from v1's window check. Without the acceptance, the record
+as a `same` composition on parameters that name no members (`OneStatement`) and v2 drew `units` over `n` units there
+(`Drew`, under the verifier's sampling design), the record v2 reads there is the `.subset` print of those units
+(`recordDrawn` at `.subset units.size`), the member's share of the window's sample; the bound is the verifier's
+sampling design's, from v1's window check. Without the acceptance, the record
 `sentRecord` finds by id can be another entry's than the case `Drew` reads in order. -/
 def DrawHeld (k : Verity.Registration.Composite) : Prop :=
-  ∀ s dr L n ξ units record, Verity.SameAccepts k s → Drew k s dr L n ξ units → sentRecord s = some record →
-    recordDrawn (.subset units.size) n units record
+  ∀ s dr L n ξ units record, Verity.SameAccepts k s → Drew k s dr L n ξ units → OneStatement s.params →
+    sentRecord s = some record → recordDrawn (.subset units.size) n units record
 
 theorem exec_recordDraw (record : String) :
     FlockSoundness.Discharge.Exec.recordDraw record = Flock.Witness.recordDraw record :=
@@ -764,28 +765,6 @@ theorem drawOf_filter {n : ℕ} {units : Array ℕ} (h : unitsAscending n units 
     (List.toFinset_sort (· ≤ ·) (hs.imp ne_of_lt)).2 (hs.imp le_of_lt)
   simp only [FlockSoundness.Discharge.ZkLink.drawOf, himg, hsort, Array.toArray_toList]
 
-open Properties.Challenger.CanonRead (sortedKeys_arr sortedKeys_obj increasing_iff) in
-/-- **A well-formed value's objects hold their keys in order.** -/
-theorem sortedKeys_of_wf : ∀ j : Json, Claims.Json.Wf j → _root_.Spot.sortedKeys j = true := by
-  refine FlockDeploy.json_ind (fun _ => by simp [_root_.Spot.sortedKeys])
-    (fun _ _ => by simp [_root_.Spot.sortedKeys]) (fun _ _ => by simp [_root_.Spot.sortedKeys])
-    (fun _ _ => by simp [_root_.Spot.sortedKeys]) ?_ ?_
-  · intro a ih hw
-    cases hw with
-    | arr h => exact sortedKeys_arr.2 fun x hx => ih x hx (h x hx)
-  · intro m ih hw
-    cases hw with
-    | obj hm h =>
-      refine sortedKeys_obj.2 ⟨?_, fun p hp => ?_⟩
-      · rw [Std.TreeMap.Raw.toList_toArray, increasing_iff, List.pairwise_map]
-        exact (Std.TreeMap.Raw.ordered_keys_toList hm).imp fun hlt => compareOfLessAndEq_eq_lt.1 hlt
-      · have hp' : p ∈ m.toList := by
-          rw [← Std.TreeMap.Raw.toList_toArray]
-          exact Array.mem_toList_iff.2 hp
-        refine ih p hp' (h p.1 p.2 ?_)
-        rw [Std.TreeMap.Raw.get?_eq_getElem?]
-        exact (Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm).1 hp'
-
 /-! ## `norm` fixes a subset sample's file -/
 
 theorem norm_arr_of {a : Array Json} (h : ∀ x ∈ a, Flock.norm x = x) : Flock.norm (.arr a) = .arr a := by
@@ -818,12 +797,12 @@ blocks `units` names. v2 drew the session's `kd` units (`Flock.Bridge.drawUnits_
 is the session's. -/
 theorem recordDraw_of_drew {k : Verity.Registration.Composite} (hH : DrawHeld k) {s : Verity.Sent} {dr : Draws}
     {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (hS : Verity.SameAccepts k s)
-    (hd : Drew k s dr L n ξ units) (A : Live)
+    (hd : Drew k s dr L n ξ units) (hone : OneStatement s.params) (A : Live)
     (hL : A.design = L) (hn : A.n = n) {record : String}
     (hr : sentRecord s = some record) :
     FlockSoundness.Discharge.Exec.recordDraw record =
       some (A.dj (Finset.univ.filter fun u : Fin A.n => u.val ∈ units)) := by
-  obtain ⟨hu, h⟩ := hH s dr L n ξ units record hS hd hr
+  obtain ⟨hu, h⟩ := hH s dr L n ξ units record hS hd hone hr
   obtain ⟨_, _, _, _, _, _, -, -, -, -, _, hdu⟩ := hd
   subst hL hn
   have hk : units.size = A.kd := Flock.Bridge.drawUnits_size A.hlaw hdu
@@ -840,7 +819,7 @@ theorem coins_size_le {bs : Core.Blobs} {a b e : ByteArray} {p : _root_.Spot.One
     {dr : Draws} (h : V2Accepts bs a b e p c ev ξ dr) :
     ξ.size ≤ _root_.Spot.Challenger.COIN_BYTES * _root_.Spot.Challenger.MAX_COINS := by
   obtain ⟨-, -, hev, hξ, hdr, -⟩ := h
-  obtain ⟨b', hb'⟩ := Binding.dispatch_evidence hev
+  obtain ⟨b', hb'⟩ := dispatch_evidence hev
   obtain ⟨-, -, -, -, hops, -⟩ :=
     Properties.Challenger.Limits.withinAt_spec (Properties.Challenger.Limits.evidenceOf_within hb')
   obtain ⟨raw, hraw, rfl⟩ := Properties.Challenger.oneStageZk_reads p c dr hdr ev ξ hξ
@@ -894,7 +873,8 @@ theorem recordDraw_of_coins {V : Vocab d α} {k : Verity.Registration.Composite}
     (hr : sentRecord o.sent = some record) :
     FlockSoundness.Discharge.Exec.recordDraw record = some (A.dj (A.L.draw ω)) := by
   obtain ⟨p₀, hp₀, -⟩ := hA.params
-  obtain ⟨dr, L, n, ξ, units, hd, hs⟩ := logged_draw_v2 hR (by rw [hθ]; exact hp₀) hv hl
+  have hone : OneStatement o.params := by rw [hθ]; exact hA.single
+  obtain ⟨dr, L, n, ξ, units, hd, hs⟩ := logged_draw_v2 hR (by rw [hθ]; exact hp₀) hone hv hl
   have hn := n_of_popTied ht hv.2.1 hθ hd
   have hL := law_of_setsUp hA hv.2.1 hθ hd hn
   obtain ⟨a, b, e, p, c, ev, hcase, hacc, -⟩ := id hd
@@ -914,7 +894,7 @@ theorem recordDraw_of_coins {V : Vocab d α} {k : Verity.Registration.Composite}
       rw [length_bitsOf, length_fillCoins]
       omega
   rw [draw_of_drew hd A ω hL hn hpre]
-  exact recordDraw_of_drew hH hv.2.1 hd A hL hn hr
+  exact recordDraw_of_drew hH hv.2.1 hd hone A hL hn hr
 
 /-! ## The record's sample from the sample-coupled first stop -/
 

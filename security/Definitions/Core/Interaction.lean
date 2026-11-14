@@ -550,7 +550,7 @@ structure Recorded {Coin : Type} (V : Verifier Coin) where
 /-- **Nontriviality**: there are recorded runs, and the verifier accepts each when it is replayed. It is for a test
 against recorded sessions to establish, not a Lean proof, and none is expected: `check`'s `lean-agreement` job
 (`tools/verity/check/ci.toml`) replays recorded honest sessions through the compiled Lean verifier's checks
-(`flock-verify agree`, `verity/ml/flock/verifier/agree.py`) and fails unless each passes them. Its sessions are of
+(`verity-verify-proof agree`, `verity/ml/flock/verifier/agree.py`) and fails unless each passes them. Its sessions are of
 forms the verifier then refuses, so it reaches this acceptance only up to those refusals. -/
 def Nontrivial {Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (recs : List (Recorded V)) : Prop :=
   recs ≠ [] ∧ ∀ e ∈ recs, (run H (replay e.as) V e.x () e.r).out = .acc

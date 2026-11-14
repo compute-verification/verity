@@ -32,7 +32,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 /-!
-# flock-verify's acceptance under hidden outputs, and the headline over hidden-output sessions
+# verity-verify-proof's acceptance under hidden outputs, and the headline over hidden-output sessions
 
 Main's prover writes the hidden-output statement (`verity/flock-circuit`, `Tags.hiddenOutputs = true`), which
 `Stmt.setupTables` sets up with `Stmt.setupHidden`. `Discharge/Exec`'s acceptance lemmas and the plain

@@ -34,10 +34,11 @@ from typing import Any, Literal
 from verity_vllm.config import option
 from verity_vllm.engine import env as engine_env
 from verity_vllm.engine import hooks
+from verity_vllm.records.schema_ids import META_INVENTORY_SCHEMA
 
 __all__ = ["Options", "main", "write_live"]
 
-SCHEMA = "verity-vllm/meta-inventory/v1"
+SCHEMA = META_INVENTORY_SCHEMA
 
 #: attributes whose value says which kernel a module runs; recorded by type name (objects) or value (scalars)
 KERNEL_ATTRS = ("quant_method", "attn_backend", "impl", "router", "runner", "quant_config", "kernel", "linear_method",

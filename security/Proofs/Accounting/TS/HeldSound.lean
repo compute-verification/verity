@@ -39,7 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # A checked unit's proof layer with its served checks is sound through its Flock sessions (the proof)
 
-`Accounting.SecurityProofs.TS.HeldSessionSound`. The held layer accepts where the checked layer does and flock-verify's
+`Accounting.SecurityProofs.TS.HeldSessionSound`. The held layer accepts where the checked layer does and verity-verify-proof's
 known-content check passes, and opens the same rows, so `AcceptedLive` is its acceptance's first half. Its unsound event
 is inside the checked layer's (`Pouw.RelativeSecurity.prob_mono`), because on every path an accepted proof whose rows
 meet `CheckedRel` meets `HeldRel` (`held_of_checked`):
@@ -76,7 +76,7 @@ theorem find_name_eq {l : List Flock.Registered.Port} {n : String} {pt : Flock.R
     have := List.find?_some h
     simpa using this
 
-/-- **The `ok` tie**: where flock-verify's known-content check accepted `own` at `known`, which names the port `ok` with
+/-- **The `ok` tie**: where verity-verify-proof's known-content check accepted `own` at `known`, which names the port `ok` with
 rows each the word `1`, every `ok` wire of unit `u` is at a registrant's row that is the `ok` row, unless the `ok` tie
 collides. -/
 theorem tie_ok (s : RowsSession) (ok : String) {known : Array (String × Array (Array ℕ × ByteArray))}

@@ -9,13 +9,14 @@ The one-stage audit record (`audit.audit_record`), whole, and what the drivers c
   two roots mapped to null; none when no such verdict reports any; `ownRegistered` keeps a registration's own values (its
   roots' ports and registered values);
 * `checks`: `audit_record`'s checks, each with Python's detail: the sample's and the proved units' always, and the receipt's,
-  the served sample's, the sessions' roots' and the registered roots' when they fail;
+  the served sample's, the sessions' roots' and the registered roots' when they fail; `certifiedCheck`: its check that
+  each value the verifier holds a certified entry for has a reported read, when it fails;
 * `record`: the record, every field as `audit_record` writes it, the registered roots its checks read derived here from
-  the verdicts (`sessionRegistered`, `ownRegistered`), never taken as input; with `own_reads` (a two-stage run's, whose
-  round 2 holds those reads' rows), less the reads of the registration's own ports at their own roots
-  (`lessOwnReads`). `checks` and `ownRegistered` run linear in the
+  the verdicts (`sessionRegistered`, `ownRegistered`), never taken as input, and the certified values' names an input
+  (`certified`), less the reads of the registration's own ports at their own roots (`lessOwnReads`). `checks`,
+  `ownRegistered` and `lessOwnReads` run linear in the
   registration's roots: each is compiled as its form on `lastRoots`, a hash map of `byPort` (`checks_eq_checksFast`,
-  `ownRegistered_eq_ownRegisteredFast`), while every theorem reads the definitions above. Python writes `delta` as a float: here it is the double nearest
+  `ownRegistered_eq_ownRegisteredFast`, `lessOwnReads_eq_lessOwnReadsFast`), while every theorem reads the definitions above. Python writes `delta` as a float: here it is the double nearest
   the exact δ given, which `PyJson` writes as Python's `repr` does. `wrong_units.bound` is exact under every sampling design
   (`Bound.boundOf`).
 -/
@@ -54,6 +55,11 @@ private def obj (kvs : List (String × Json)) : Json := Json.mkObj kvs
 /-- Python's `==` on two dicts of JSON values with distinct keys. -/
 def sameDict (a b : Array (String × Json)) : Bool :=
   a.size == b.size && a.all fun (k, v) => b.any fun (k', v') => k == k' && jeq v v'
+
+/-- Each entry of the dict `a` is one of `b`'s: `b` has its key, with an equal value. An entry of `b` whose key `a` lacks
+is not looked at. -/
+def subDict (a b : Array (String × Json)) : Bool :=
+  a.all fun (k, v) => b.any fun (k', v') => k == k' && jeq v v'
 
 /-- `{r["port"]: r for r in rec["roots"]}`: the last root of each port. -/
 def byPort (rec : Json) : Array (String × Json) :=
@@ -126,18 +132,25 @@ def checks (reg receipt draw law : Json) (units : Array Int) (provedUnits : Arra
       | none => some p)
     if roots.isEmpty || !wrong.isEmpty then
       out := out.push ("roots", failed "roots" (obj [("ports", Json.arr (wrong.map Json.str))]))
-  if (field? reg "registered").isSome || sessionRegistered.isSome then
-    let want := registeredRoots reg
-    let opened := sessionRegistered.getD #[]
-    if !sameDict opened want then
-      let wrong := want.filterMap fun (v, r) => match opened.find? (·.1 == v) with
-        | some (_, o) => if jeq o r then none else some v
-        | none => some v
-      out := out.push ("registered", failed "registered" (obj [
-        ("registered", Json.arr ((sortStrings (want.map (·.1))).map Json.str)),
-        ("opened", Json.arr ((sortStrings (opened.map (·.1))).map Json.str)),
-        ("wrong", Json.arr ((sortStrings wrong).map Json.str))]))
+  let want := registeredRoots reg
+  let opened := sessionRegistered.getD #[]
+  if !subDict opened want then
+    let wrong := opened.filterMap fun (v, o) => match want.find? (·.1 == v) with
+      | some (_, r) => if jeq o r then none else some v
+      | none => some v
+    out := out.push ("registered", failed "registered" (obj [
+      ("registered", Json.arr ((sortStrings (want.map (·.1))).map Json.str)),
+      ("opened", Json.arr ((sortStrings (opened.map (·.1))).map Json.str)),
+      ("wrong", Json.arr ((sortStrings wrong).map Json.str))]))
   return out
+
+/-- `audit_record`'s check `certified`, present only when it fails: each value the verifier holds a certified entry
+for (`certified`, their names) has a read among `opened`, the `{value: root}` the accepting verdicts of record report;
+the check names each one that has none (`unread`). A read reported under another value's name is no read of it. -/
+def certifiedCheck (certified : Array String) (opened : Option (Array (String × Json))) : Array (String × Check) :=
+  if (certified.all fun v => (opened.getD #[]).any (·.1 == v)) then #[] else #[("certified", failed "certified" (obj [
+    ("certified", Json.arr ((sortStrings certified).map Json.str)),
+    ("unread", Json.arr ((sortStrings (certified.filter fun v => !(opened.getD #[]).any (·.1 == v))).map Json.str))]))]
 
 /-- `byPort` as a hash map, port to its last root. -/
 def lastRoots (rec : Json) : Std.HashMap String Json :=
@@ -216,17 +229,16 @@ def checksFast (reg receipt draw law : Json) (units : Array Int) (provedUnits : 
       | none => some p)
     if roots.isEmpty || !wrong.isEmpty then
       out := out.push ("roots", failed "roots" (obj [("ports", Json.arr (wrong.map Json.str))]))
-  if (field? reg "registered").isSome || sessionRegistered.isSome then
-    let want := registeredRoots reg
-    let opened := sessionRegistered.getD #[]
-    if !sameDict opened want then
-      let wrong := want.filterMap fun (v, r) => match opened.find? (·.1 == v) with
-        | some (_, o) => if jeq o r then none else some v
-        | none => some v
-      out := out.push ("registered", failed "registered" (obj [
-        ("registered", Json.arr ((sortStrings (want.map (·.1))).map Json.str)),
-        ("opened", Json.arr ((sortStrings (opened.map (·.1))).map Json.str)),
-        ("wrong", Json.arr ((sortStrings wrong).map Json.str))]))
+  let want := registeredRoots reg
+  let opened := sessionRegistered.getD #[]
+  if !subDict opened want then
+    let wrong := opened.filterMap fun (v, o) => match want.find? (·.1 == v) with
+      | some (_, r) => if jeq o r then none else some v
+      | none => some v
+    out := out.push ("registered", failed "registered" (obj [
+      ("registered", Json.arr ((sortStrings (want.map (·.1))).map Json.str)),
+      ("opened", Json.arr ((sortStrings (opened.map (·.1))).map Json.str)),
+      ("wrong", Json.arr ((sortStrings wrong).map Json.str))]))
   return out
 
 @[csimp] theorem checks_eq_checksFast : @checks = @checksFast := by
@@ -280,7 +292,8 @@ structure Input where
   sessions : Array Json
   served : Option (Array Int)
   sessionRoots : Option (Array (String × Json))
-  ownReads : Bool := false
+  /-- the values the verifier holds certified entries for, by name -/
+  certified : Array String := #[]
 
 private def need (ok : Bool) (what : String) : V Unit := if ok then pure () else throw what
 
@@ -291,19 +304,27 @@ private def ints? (j : Json) : Option (Array Int) := match j with
 private def INPUT_KEYS : Array String := sortStrings #["registration", "receipt", "draw", "law", "proved_units", "instances",
   "statement", "verdicts", "delta", "sessions", "served", "session_roots"]
 
+private def OPTIONAL_KEYS : Array String := #["certified"]
+
+private def strings (j : Json) (what : String) : V (Array String) := do
+  let .arr xs := j | throw s!"{what} is not a list of strings"
+  xs.mapM fun
+    | .str s => pure s
+    | _ => throw s!"{what} is not a list of strings"
+
 /-- `audit_record`'s arguments, on the inputs it reads without raising and the drivers give it: a registration whose
 canonical JSON is Python's (`pyCanonical`, so its digest is `registration.digest`'s) and that has every field the record reads (its roots and registered entries objects with a string port or value), a sample object whose
 units (and closure) are integers, its population an integer and a subset's `k` present, integer proved units and
 instances, verdicts objects (the verifier that accepted reporting its registered reads as objects with a string
 `value` and a `root`), session digests as strings, served units integers, and δ an exact ratio in (0, 1); and
-optionally `own_reads`, a boolean (`record`). -/
+optionally `certified`, a list of strings: the names of the values the verifier holds certified entries for
+(`record`). -/
 def inputOf (j : Json) : V Input := do
-  need (keys? j == some INPUT_KEYS || keys? j == some (sortStrings (INPUT_KEYS.push "own_reads")))
-    s!"the record's input is exactly {", ".intercalate INPUT_KEYS.toList}, and optionally own_reads"
-  let ownReads ← match field? j "own_reads" with
-    | none => pure false
-    | some (.bool b) => pure b
-    | some _ => throw "own_reads is not a boolean"
+  need ((keys? j).map (fun ks => ks.filter fun k => !OPTIONAL_KEYS.contains k) == some INPUT_KEYS)
+    s!"the record's input is exactly {", ".intercalate INPUT_KEYS.toList}, and optionally certified"
+  let certified ← match field? j "certified" with
+    | none => pure (#[] : Array String)
+    | some c => strings c "certified"
   let reg := getD j "registration"
   need (reg matches .obj _) "the registration is not an object"
   need (pyCanonical reg) "the registration holds a number that is not an integer"
@@ -354,7 +375,7 @@ def inputOf (j : Json) : V Input := do
   let delta ← Core.Ratio.ofString d "delta"
   need (delta.num != 0 && delta.num < delta.den) "delta is not in (0, 1)"
   return { registration := reg, receipt, draw, units, law, provedUnits, instances := getD j "instances",
-           statement := getD j "statement", verdicts, delta, sessions, served, sessionRoots, ownReads }
+           statement := getD j "statement", verdicts, delta, sessions, served, sessionRoots, certified }
 
 private def strataDrawn (draw : Json) (units : Array Int) : Json :=
   obj ((match getD draw "strata" with | .arr ss => ss | _ => #[]).toList.filterMap fun s =>
@@ -364,10 +385,19 @@ private def strataDrawn (draw : Json) (units : Array Int) : Json :=
       some (t, Lean.toJson (units.filter fun u => rs.any fun (lo, hi) => lo ≤ u && u < hi).size)
     | _ => none)
 
-/-- `opened` less the reads of `reg`'s own ports at their own roots. -/
+/-- `opened` less the reads of `reg`'s own ports at their own roots: a read named by one of its ports is taken where
+its root is that port's last root (`byPort`), and stays, to be held to the registered values, at any other. -/
 def lessOwnReads (reg : Json) (opened : Option (Array (String × Json))) : Option (Array (String × Json)) :=
-  let ports := byPort reg
-  opened.map (·.filter fun (v, r) => !ports.any fun (p, x) => p == v && jeq (getD x "root") r)
+  opened.map (·.filter fun (v, r) => !((byPort reg).find? (·.1 == v)).any fun (_, x) => jeq (getD x "root") r)
+
+/-- `lessOwnReads`, each port's root a hash lookup. -/
+def lessOwnReadsFast (reg : Json) (opened : Option (Array (String × Json))) : Option (Array (String × Json)) :=
+  let ports := lastRoots reg
+  opened.map (·.filter fun (v, r) => !(ports[v]?.any fun x => jeq (getD x "root") r))
+
+@[csimp] theorem lessOwnReads_eq_lessOwnReadsFast : @lessOwnReads = @lessOwnReadsFast := by
+  funext reg opened
+  simp only [lessOwnReads, lessOwnReadsFast, find?_byPort, Option.any_map]
 
 /-- Whether every verdict ran (`accepted` not null): the audit record's `complete` (`record`), and what one-stage's
 accept publishes under the same name (`OneStage.Public`). -/
@@ -378,9 +408,9 @@ def record (i : Input) : V Json := do
   let reg := i.registration
   let get := getD reg
   let digest ← Flock.WindowRecord.digestHex reg
-  let opened := ownRegistered reg (sessionRegistered i.verdicts)
-  let cs := checks reg i.receipt i.draw i.law i.units i.provedUnits i.instances digest i.served i.sessionRoots
-    (if i.ownReads then lessOwnReads reg opened else opened)
+  let opened := lessOwnReads reg (ownRegistered reg (sessionRegistered i.verdicts))
+  let cs := checks reg i.receipt i.draw i.law i.units i.provedUnits i.instances digest i.served i.sessionRoots opened
+    ++ certifiedCheck i.certified opened
   let accepted' := fun (v : Json) => jeq (getD v "accepted") (.bool true)
   let ran := i.verdicts.filter fun (_, v) => !(getD v "accepted" matches .null)
   let ofRecord := i.verdicts.filter fun (_, v) => truthy (getD v "of_record")

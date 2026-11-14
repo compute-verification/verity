@@ -89,8 +89,10 @@ def test_the_challengers_stream_has_the_toys_cells_and_its_interior_program():
 def test_the_interior_is_template_major_and_wired_as_the_replay_blocks_edges(run):
     """Each instance's input reads its writer's (`toy.WRITERS`) one output in its span, one wire a port and one writer a
     wire, FLIP_B's two instances a span the same row, and a wired port commits no tree: its rows are its writer's tree's
-    leaves, one tree a value, its table the writer's output rows (their ``b || c``) and each unit's ref its writer's row."""
+    leaves, one tree a value, its table the writer's output rows (their ``b || c``) and each unit's ref its writer's row.
+    The layout names it under its reader too, at its writer's port's leaves and domain: one tree at two ports."""
     win, c = run["it"].window, run["it"].committed
+    lay = T.CS.expected_ports(win)
     assert [m.base for m in win.members] == T.offsets(Q) == [0, Q, 2 * Q, 3 * Q, 5 * Q]
     assert [m.n for m in win.members] == [Q * n for n in T.N_T] and win.population == Q * T.N_RHO
     assert P.in_order(win.program, win.query, Q * T.N_RHO)
@@ -100,11 +102,11 @@ def test_the_interior_is_template_major_and_wired_as_the_replay_blocks_edges(run
         (p, o, writers), = m.wired
         assert (p, o, writers) == (T.LAYOUT[t][0][0][0], "o0", tuple(T.offsets(Q)[w] + i for i in spans))
         assert win.held(m, p) == win.members[w].port("o0") and win.held_leaves(m, p) == spans
-        assert m.port(p) not in c.roots and m.port(p) not in T.CS.expected_ports(win)
+        assert m.port(p) not in c.roots and lay[m.port(p)] == {**lay[win.held(m, p)], "wired": win.held(m, p)}
         assert dict(m.tables)[p] == win.members[w].n == Q and tuple(c.refs[t][:, 0].tolist()) == spans
         assert c.bc[m.port(p)] == c.bc[win.members[w].port("o0")]
-    assert set(c.roots) == set(T.CS.expected_ports(win)) == {
-        m.port(p) for m in win.members for p, _ in m.all_rows if win.held(m, p) == m.port(p)}
+    assert set(c.roots) == {m.port(p) for m in win.members for p, _ in m.all_rows if win.held(m, p) == m.port(p)}
+    assert set(lay) == {m.port(p) for m in win.members for p, _ in m.all_rows} == set(c.roots) | set(T.CS.wired_ports(win))
     WI.validate(win.members)
     assert WI.check(win.members, publics(run["it"].committed)) == {}
 
@@ -152,6 +154,7 @@ def test_every_other_port_reads_the_interior_record_at_its_own_leaves_or_its_wri
             n = roots[value]["leaves"]
             assert (e["value"], e["root"], e["leaves"], e["domain"]) == (value, roots[value]["root"], n,
                                                                          roots[value]["domain"])
+            assert roots[m.port(p)] == {**roots[value], "port": m.port(p)}
             assert e["reads"] == leaves and (e[REG.READS_FROM], e["words"]) == (m.base, words)
             assert header["positions"] == list(range(n)) == list(range(dict(m.tables).get(p, m.n)))
             held = rows_bc(c, value, n)
@@ -243,7 +246,7 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
     def sha512(j) -> str:
         return hashlib.sha512(canonical_json(j)).hexdigest()
 
-    # what `flock-verify verify`'s verdict of record names of each session it checked
+    # what `verity-verify-proof verify`'s verdict of record names of each session it checked
     verified = SS.verified_of({f"lean-verify/m{k}": {
         "of_record": True, "accepted": True, "public_header_sha512": sha512(s["header"]), "unit_draw": s["draw"],
         "session_tables": 1, **({} if s["registered"] is None else {"registered_sha512": sha512(s["registered"])})}

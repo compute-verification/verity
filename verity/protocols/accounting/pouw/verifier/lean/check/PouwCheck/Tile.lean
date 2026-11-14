@@ -5,7 +5,7 @@ module
 
 `tiles`: each tile template an execution phase's check item may name, with its work per tile, its check query's SHA-512 (one-stage's
 `query_digest` of the template's instance query), and the one circuit, by SHA-512, a unit's tile proof of it is over: the
-`circuit_sha512` of the proof's public file, which `flock-verify verify --zk` binds to the circuit it verifies against.
+`circuit_sha512` of the proof's public file, which `verity-verify-proof verify --zk` binds to the circuit it verifies against.
 `paramsOf` refuses a check item or query that isn't one of these, and `opening` a proof over any other circuit, so this
 table fixes the circuit an execution phase's units are proved over, not the code that builds it (`verity.ml.circuits`, lowered by
 Flock). A change to a template's Definition or to Flock's lowering changes its circuit's digest, which then has to

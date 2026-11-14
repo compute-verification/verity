@@ -1,7 +1,7 @@
 module
 
 public import NetworkCheck.Period
-public import Definitions.NetworkCertifier.SampledAudit
+public import Definitions.Certifier.SampledAudit
 
 /-!
 # A sampling statement's gates are its descriptor's Program flattened

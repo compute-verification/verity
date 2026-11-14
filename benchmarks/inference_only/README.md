@@ -7,6 +7,7 @@ training run inside the policy's inference blocks, under the min-cut bound
 ~~~sh
 uv run verity bench inference_only --stated-only     # the served policy and its number, from its stated numbers alone
 uv run verity bench inference_only --stated-only --uncredited-share 0.1%   # and the served class under the value tie
+uv run verity bench inference_only --stated-only --served RUN/out --program P --circuit C --log L0 L1 L2  # a served record
 research run --on auto --mem-gb 16 --cwd clone -- bash -lc \
   'uv sync -q --all-packages --extra torch-cpu && uv run verity bench inference_only --out "$OUT"'
 ~~~
@@ -38,7 +39,8 @@ through `research run` in the run's own clone.
    where PoUW's checks credit all but that share of every block's work.
 5. **One JSON object**, the last line, also written to `--out DIR` (default `$OUT`) as `inference_only.json`: `value`,
    `unit`, `check`, `rests_on`, `work_is`, `policies` (each with its `c`, `k`, `n` and their `units`), `divisions`,
-   `periods`, `tied` (the tied section's figures, `null` without a share), `commit`, and `run` where the environment
+   `periods`, `tied` (the tied section's figures, `null` without a share), `record` (a served record's, below, `null`
+   without `--served`), `commit`, and `run` where the environment
    names one. `check` is the Lean count's verdict on the policy the value is
    of, `refused` or `accepted` by its executable. For a stated policy it is `not run`, which is no verdict: this tree
    has no instance of the stated class to give the count. The count's instance names no θ and carries no wire, so it
@@ -50,7 +52,8 @@ through `research run` in the run's own clone.
    is priced from the policy's stated numbers, and no check runs on the served class. Its target is 1,000, its goal's
    (the `goal` `metrics.toml` names: a slowdown of at least 1,000), and its verdict says
    where the value stands against it, `misses` below it and `within target` at or above it: the console's Metrics tab
-   shows that verdict beside the target. A `--policy FILE` writes none. The
+   shows that verdict beside the target. A `--policy FILE` writes none, and neither does `--served`: the metric reads
+   the stated policy until a data file the command reads names a served run of record. The
    metric's command is the second form above with `uv run python benchmarks/inference_only/run.py`, the script
    `verity bench inference_only` runs, in place of `uv run verity bench inference_only`.
 
@@ -106,6 +109,40 @@ statement with the standing the locks give it, `rho.lean.status`; a `β_x` a blo
 proved, being arithmetic on the typed share), what is a premise (the share, the tie, the bound on the untied words, (H)
 and (E)), and what is scaled (every row). `--policy tied.toml` is refused: it would print the number alone.
 
+## A served run's record
+
+`--served OUT` reads a served run's record (`record.py`): its `out/` (the compose's `record/verdicts.json`, its
+`inference-only-policy.json`, `inference-only-limits.json` and one `block-counts-*.json`), and the Program, circuit
+record and registration log it registered (`--program`, `--circuit`, `--log`, its own registration last). None has a
+default: a file that isn't there is named as one the run did not write. It prints, under the run's name:
+
+- **The check's verdicts, public form only.** The policy's record check runs on the run's files: its script writes the
+  case (`served_record_case.py --case-only`) and its compiled command (`inference-only-record-check`) judges it. The
+  command prints each rule's whole detail, the private record's; the benchmark keeps of it only what the public form
+  gives, `NciCheck.Record.check` for the rate rule and `NciCheck.RecordCount.check` for the count: `complies`, or the
+  refusal's `error` and `message`. Which of `c`, `k` and `n` failed, any count and any block stay in the detail, which
+  is written to a scratch directory outside the run's and deleted.
+- **What the check costs in the clear** at the record's size: its wall and CPU seconds and peak memory, and the case's
+  bytes, with the command's own seconds at each verdict; and the same for writing the case.
+- **The share** `s` of the blocks' work that no PoUW check credits, PoUW's alone: `1 - C / W`, `C` the MACs PoUW's
+  verdict of record credits (`protocols.work.quantity.work.credited`, read only where `protocols.work.verdict` is
+  `accept`) and `W` the blocks' work in the policy's unit (`class.slots × n_inputs.work.theta_macs`). A development
+  accept is no accept, and with none `s = 1`. A verdict counting other MACs than `class.slots × linears`, or crediting
+  below 0 or above `W`, is refused.
+- **The tie** between PoUW's verdict and the record the check read: the window record the verdict holds its passes to
+  (`quantity.tie.record`) must be the `previous` of the run's registration, the log's last record, whose chain the
+  check holds. Both are printed; a difference is refused; a verdict with no window record prints that nothing ties
+  them.
+- **The value**, with its reading and mark. The check refusing (either rule; the reading names the rate rule, the count
+  or both), or no PoUW accept of record, gives 1, `measured`.
+  Otherwise one block's value is the smaller of its two limits at `s` under the tie (`tied.priced` on the record's
+  class: its `c`, `n` and work, and `k` its policy's own `k_by_kind` but the linears' outputs, with `tied.toml`'s
+  `[fresh]`), `partial`, its inputs saying which are the record's and which are premises; and each fleet and period's
+  is the least of its four readings, `modeled`. `k_by_kind` is keyed as its writer (`benchmarks/one_stage/inference_only.py`)
+  keys it: `linears`, the linears' outputs, and `scan_state`, the scan state row. A policy with no `k_by_kind` (one
+  written before its writer stated it), or with kinds other than the linears' outputs and those `tied.toml`'s source
+  names, gives no figure and says why.
+
 ## What it does not mean
 
 The number is a block's ratio under two assumptions, on a check that Lean does not yet accept for any class.
@@ -138,4 +175,4 @@ computes for its class; its `c` is held to nothing here, and the number does not
 `words`, a node's bound on the untied words of its accepted execution phases for a phase of `blocks` blocks;
 `phase_seconds`; `macs_a_word`, the MACs that feed one untied word at most; and `word_bits`, its fresh bits in the block
 that reads it. The tests hold its `c`, `n` and work to the served policy's and its `k` to the scan state row and the
-salt. The uncredited share is never in a file: it is the command line's.
+salt. The uncredited share is never in a file here: it is the command line's, or a served record's PoUW verdict's.

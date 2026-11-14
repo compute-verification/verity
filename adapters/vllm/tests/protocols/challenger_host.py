@@ -33,7 +33,7 @@ from verity.protocols.accounting.pouw.verifier import window as Wd
 from verity.protocols.proofs.spot.device import challenger as LC
 from verity.protocols.proofs.spot.device import remote as R
 
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
 
 HOST = "vy-challenger-1"
 #: the commit every open here was run from (``pinned``), the host's pins log recording it as main's, and the
@@ -440,7 +440,7 @@ class Host:
         ours, theirs = socket.socketpair()
         self.reason: str | None = None
         self._ended = False
-        self._thread = threading.Thread(target=self._serve, args=(ours, session_))
+        self._thread = threading.Thread(target=self._serve, args=(ours, session_), daemon=True)
         self._thread.start()
         self.client = R.RemoteChallenger(theirs)
 

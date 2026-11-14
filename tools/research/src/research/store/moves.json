@@ -2251,6 +2251,7 @@
         "security/Proofs/NetworkCertifier/PeriodSum.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodSum.lean",
         "security/Proofs/NetworkCertifier/PeriodWitnesses.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodWitnesses.lean",
         "security/Proofs/Properties/NetworkCertifier/Check/LinkWindow.lean": "security/Proofs/Properties/NetworkCertifier/Check/TransferBlocks.lean",
+        "security/Proofs/Properties/Verity/SampledTwo/SessionFits.lean": "security/Proofs/Properties/Verity/SampledTwo/AttachmentFits.lean",
         "security/Properties/NetworkCertifier/Check/LinkWindow.lean": "security/Properties/NetworkCertifier/Check/TransferBlocks.lean",
         "verity/protocols/certifier/verifier/lean/NetworkCheck/LinkWindow.lean": "verity/protocols/certifier/verifier/lean/NetworkCheck/TransferBlocks.lean"
       }
@@ -2451,6 +2452,143 @@
     {
       "paths": {
         "verity/protocols/proofs/flock/sigma/": "verity/protocols/proofs/flock/verifier/sigma/"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/edited_gemm/": "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/",
+        "benchmarks/pouw/masked_gemm/": "verity/protocols/accounting/pouw/prover/kernels/masked_gemm/",
+        "benchmarks/pouw/floored_gemm/": "verity/protocols/accounting/pouw/prover/kernels/floored_gemm/",
+        "benchmarks/pouw/gpu_kit/": "verity/protocols/accounting/pouw/prover/kernels/gpu_kit/"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/torch_gpu/sha512_rows/engine.py": "verity/commitments/cuda/sha512_rows/engine.py",
+        "benchmarks/torch_gpu/sha512_rows/rows.cu": "verity/commitments/cuda/sha512_rows/rows.cu",
+        "benchmarks/torch_gpu/sha512_rows/rows.cuh": "verity/commitments/cuda/sha512_rows/rows.cuh",
+        "benchmarks/torch_gpu/sha512_rows/rows_host.cpp": "verity/commitments/cuda/sha512_rows/rows_host.cpp",
+        "benchmarks/torch_gpu/sha512_rows/settings.py": "verity/commitments/cuda/sha512_rows/settings.py",
+        "benchmarks/torch_gpu/sha512_rows/check.py": "verity/commitments/cuda/sha512_rows/check.py",
+        "benchmarks/torch_gpu/sha512_rows/README.md": "verity/commitments/cuda/sha512_rows/README.md",
+        "benchmarks/torch_gpu/sha512_rows/pyproject.toml": "verity/commitments/cuda/sha512_rows/pyproject.toml",
+        "benchmarks/torch_gpu/sha512_rows/tests/": "verity/commitments/cuda/sha512_rows/tests/",
+        "benchmarks/torch_gpu/commit_slots/slots.py": "verity/commitments/cuda/commit_slots/slots.py",
+        "benchmarks/torch_gpu/commit_slots/slots_gpu.py": "verity/commitments/cuda/commit_slots/slots_gpu.py",
+        "benchmarks/torch_gpu/commit_slots/README.md": "verity/commitments/cuda/commit_slots/README.md",
+        "benchmarks/torch_gpu/commit_slots/pyproject.toml": "verity/commitments/cuda/commit_slots/pyproject.toml",
+        "benchmarks/torch_gpu/commit_slots/tests/": "verity/commitments/cuda/commit_slots/tests/"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/protocols/pouw/circuit.py": "verity/protocols/accounting/pouw/prover/serving/circuit.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/credit_gate.py": "verity/protocols/accounting/pouw/prover/serving/credit_gate.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/device.py": "verity/protocols/accounting/pouw/prover/serving/device.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/native.py": "verity/protocols/accounting/pouw/prover/serving/native.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/operands.py": "verity/protocols/accounting/pouw/prover/serving/operands.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/lead/": "verity/protocols/accounting/pouw/prover/serving/lead/",
+        "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/": "verity/protocols/accounting/pouw/prover/serving/pearl_c/",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/README.md": "verity/protocols/accounting/pouw/prover/serving/h1/README.md",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py": "verity/protocols/accounting/pouw/prover/serving/h1/__init__.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/answers.py": "verity/protocols/accounting/pouw/prover/serving/h1/answers.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/challenger.py": "verity/protocols/accounting/pouw/prover/serving/h1/challenger.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/commit.py": "verity/protocols/accounting/pouw/prover/serving/h1/commit.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/draw.py": "verity/protocols/accounting/pouw/prover/serving/h1/draw.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/drawn.py": "verity/protocols/accounting/pouw/prover/serving/h1/drawn.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/drawn_rows.py": "verity/protocols/accounting/pouw/prover/serving/h1/drawn_rows.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/handoff.py": "verity/protocols/accounting/pouw/prover/serving/h1/handoff.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/hooks.py": "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/kept.py": "verity/protocols/accounting/pouw/prover/serving/h1/kept.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/live.py": "verity/protocols/accounting/pouw/prover/serving/h1/live.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/model_key.py": "verity/protocols/accounting/pouw/prover/serving/h1/model_key.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/names.py": "verity/protocols/accounting/pouw/prover/serving/h1/names.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/nodes.py": "verity/protocols/accounting/pouw/prover/serving/h1/nodes.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/prover.py": "verity/protocols/accounting/pouw/prover/serving/h1/prover.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/public_rows.py": "verity/protocols/accounting/pouw/prover/serving/h1/public_rows.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/ranks.py": "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/receipts.py": "verity/protocols/accounting/pouw/prover/serving/h1/receipts.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/records.py": "verity/protocols/accounting/pouw/prover/serving/h1/records.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/registered.py": "verity/protocols/accounting/pouw/prover/serving/h1/registered.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/registered_device.py": "verity/protocols/accounting/pouw/prover/serving/h1/registered_device.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/requests.py": "verity/protocols/accounting/pouw/prover/serving/h1/requests.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/served.py": "verity/protocols/accounting/pouw/prover/serving/h1/served.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/served_files.py": "verity/protocols/accounting/pouw/prover/serving/h1/served_files.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/served_program.py": "verity/protocols/accounting/pouw/prover/serving/h1/served_program.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/settings.py": "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/static.py": "verity/protocols/accounting/pouw/prover/serving/h1/static.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/tables_device.py": "verity/protocols/accounting/pouw/prover/serving/h1/tables_device.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/window.py": "verity/protocols/accounting/pouw/prover/serving/h1/window.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/h1/words.py": "verity/protocols/accounting/pouw/prover/serving/h1/words.py",
+        "adapters/vllm/verity_vllm/commit/lead_rows.py": "verity/protocols/accounting/pouw/prover/serving/lead/rows.py",
+        "adapters/vllm/verity_vllm/records/pearl_served.py": "verity/protocols/accounting/pouw/prover/serving/pearl_c/served_record.py",
+        "adapters/vllm/verity_vllm/pipeline/serve_h1_draw.py": "verity/protocols/accounting/pouw/prover/serving/h1/serve_draw.py",
+        "adapters/vllm/verity_vllm/pipeline/serve_h1_gate.py": "verity/protocols/accounting/pouw/prover/serving/h1/serve_gate.py",
+        "adapters/vllm/tests/protocols/test_credit_gate_outside.py": "verity/protocols/accounting/pouw/prover/tests/test_credit_gate_outside.py",
+        "adapters/vllm/tests/protocols/test_credit_gate_writes.py": "verity/protocols/accounting/pouw/prover/tests/test_credit_gate_writes.py",
+        "adapters/vllm/tests/protocols/test_pouw_device.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_device.py",
+        "adapters/vllm/tests/protocols/test_pouw_h1_answers.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_answers.py",
+        "adapters/vllm/tests/protocols/test_pouw_h1_import_loads.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_import_loads.py",
+        "adapters/vllm/tests/protocols/test_pouw_pearl_c_host.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_pearl_c_host.py",
+        "adapters/vllm/tests/protocols/test_pouw_h1_device_lib.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_device_lib.py",
+        "adapters/vllm/tests/protocols/test_pouw_h1_nodes.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_nodes.py",
+        "adapters/vllm/tests/protocols/test_pouw_h1_prover.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_prover.py",
+        "adapters/vllm/tests/protocols/test_pouw_h1_receipts.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_receipts.py",
+        "adapters/vllm/tests/protocols/test_pouw_h1_records.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_records.py",
+        "adapters/vllm/tests/protocols/test_pouw_h1_records_device.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_records_device.py",
+        "adapters/vllm/tests/protocols/test_pouw_h1_weight_roots.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_weight_roots.py",
+        "adapters/vllm/tests/protocols/test_pouw_lead_feed.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_lead_feed.py",
+        "adapters/vllm/tests/protocols/test_pouw_lead_record.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_lead_record.py",
+        "adapters/vllm/tests/protocols/test_pouw_native.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_native.py",
+        "adapters/vllm/tests/commit/test_lead_rows.py": "verity/protocols/accounting/pouw/prover/tests/test_lead_rows.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/circuits/kernels/sha512.cuh": "verity/commitments/cuda/sha512.cuh",
+        "verity/circuits/kernels/row_commit.cuh": "verity/commitments/cuda/row_commit.cuh",
+        "verity/circuits/kernels/tests/": "verity/commitments/cuda/tests/",
+        "verity/circuits/kernels/pyproject.toml": "verity/commitments/cuda/pyproject.toml"
+      }
+    },
+    {
+      "paths": {
+        "security/Definitions/NetworkCertifier.lean": "security/Definitions/Certifier.lean",
+        "security/Definitions/NetworkCertifier/": "security/Definitions/Certifier/",
+        "security/Proofs/NetworkCertifier.lean": "security/Proofs/Certifier.lean",
+        "security/Proofs/NetworkCertifier/": "security/Proofs/Certifier/",
+        "security/Proofs/Properties/NetworkCertifier/": "security/Proofs/Properties/Certifier/",
+        "security/Properties/NetworkCertifier/": "security/Properties/Certifier/"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/pearl_c/": "verity/protocols/accounting/pouw/prover/kernels/pearl_c/",
+        "benchmarks/pouw/pearl_c_sm120/": "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/",
+        "benchmarks/pouw/pearl_c_sm120/fixture.py": "benchmarks/pouw/pearl_c_sm120/fixture.py",
+        "benchmarks/pouw/pearl_c_sm120/ship.sh": "benchmarks/pouw/pearl_c_sm120/ship.sh",
+        "benchmarks/pouw/pearl_c_sm120/card.sh": "benchmarks/pouw/pearl_c_sm120/card.sh",
+        "benchmarks/pouw/pearl_c_sm90/": "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/",
+        "benchmarks/pouw/pearl_c_sm90/fixture.py": "benchmarks/pouw/pearl_c_sm90/fixture.py",
+        "benchmarks/pouw/pearl_c_sm90/ship.sh": "benchmarks/pouw/pearl_c_sm90/ship.sh",
+        "benchmarks/pouw/pearl_c_sm90/debit.py": "benchmarks/pouw/pearl_c_sm90/debit.py",
+        "benchmarks/pouw/pearl_c_sm90/glm53.py": "benchmarks/pouw/pearl_c_sm90/glm53.py",
+        "benchmarks/pouw/pearl_c_sm90/glm53_passes.py": "benchmarks/pouw/pearl_c_sm90/glm53_passes.py",
+        "benchmarks/pouw/pearl_c_sm90/glm53_profile.py": "benchmarks/pouw/pearl_c_sm90/glm53_profile.py",
+        "benchmarks/pouw/pearl_c_sm90/glm53_slices.py": "benchmarks/pouw/pearl_c_sm90/glm53_slices.py",
+        "benchmarks/pouw/pearl_c_sm90/glm53_timing.py": "benchmarks/pouw/pearl_c_sm90/glm53_timing.py",
+        "benchmarks/pouw/pearl_c_sm90/grouped_check.py": "benchmarks/pouw/pearl_c_sm90/grouped_check.py",
+        "benchmarks/pouw/pearl_c_sm90/llama32_1b.py": "benchmarks/pouw/pearl_c_sm90/llama32_1b.py",
+        "benchmarks/pouw/pearl_c_sm90/overhead_arm.py": "benchmarks/pouw/pearl_c_sm90/overhead_arm.py",
+        "benchmarks/pouw/pearl_c_sm90/overhead_arm.json": "benchmarks/pouw/pearl_c_sm90/overhead_arm.json",
+        "benchmarks/pouw/pearl_c_sm90/h200.sh": "benchmarks/pouw/pearl_c_sm90/h200.sh",
+        "benchmarks/pouw/harness/ieee_pin.cu": "verity/protocols/accounting/pouw/prover/ieee_pin.cu"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/interface/CoreProtocol/Registration.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog.lean",
+        "verity/protocols/interface/CoreProtocol/RegistrationMain.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog/Main.lean"
       }
     }
   ]

@@ -14,7 +14,8 @@ every product, is a reference, not an answer.
 
 - **The verifier** is Lean (What runs, below): `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), the subprotocol
   the onsite and the remote protocol compose. It decides each execution phase by `PouwCheck.check` and credits a closed
-  credit period by `PouwCheck.Credit`; its executable is `pouw-check`, and the Python modules of the same names mirror it.
+  credit period by `PouwCheck.Credit`; its executable is `pouw-check`, and the Python modules of the same names are
+  its twins, never a verdict of their own (Verdicts of record, below).
 - **The top-level guarantees**, stated under `security/Definitions/` and proved as `SecurityProofs.G` under
   `security/Proofs/`. W is the credited reference work, t the work-weighted samples and ε_s the share of W a sample may
   miss. Items 1 and 2 hold for every in-domain workload (`Pouw.Workload.InDomain`: at most 2^64 units, a layout in the
@@ -101,6 +102,34 @@ references, held to them by the difftests (`lean/check/tests`, `lean/window/test
 `verifier.py` is the entry the Python side calls: `verifier.lean(fn, value)` runs the Lean, and `verifier.coins(n)` is
 the challenger's entropy, which the Lean reads from the operating system. `RECORD_VERDICT` (`"lean"`) is the switch, and
 setting it to `"python"` is the one line that undoes it.
+
+### Verdicts of record
+
+No function here returns a verdict of its own. Each verdict PoUW acts on comes from one of two places. Some come from
+its Lean check: `verifier.of_record` for a `pouw-check-difftest` function, or `verifier.serve_of_record` for a core
+protocol's `serve`. The Python computes its answer beside the Lean as the twin (`*_twin`), and a disagreement, or no
+answer from the Lean, is a refusal. The rest refuse until their Lean is reached: the public entry raises
+`NotImplementedError("compute-accounting/pouw-verdict-from-main")` (`verifier.not_written`), and its twin answers the
+difftest only.
+
+| Verdict | Entry | Lean of record | Twin |
+| --- | --- | --- | --- |
+| An execution phase | `core_check.case`, `answer` | `pouw-check serve` | `case_twin`, `answer_twin`, `check_twin` |
+| A credit period | `period_check.case`, `answer` | `pouw-period serve` | `case_twin`, `answer_twin`, `check_twin` |
+| A served execution phase's credit | `credit.window` | `Credit.window` (`window`) | `credit._window` |
+| A credit period's credit | `credit.period_credit` | `Credit.periodCredit` (`period`) | `credit._period_of` |
+| The salt | `core_check.salt_of_record` | `saltCheck` (`salt`) | `salt_twin` |
+| A live pass's salt | `core_check.live_salt` | `liveSaltCheck` (`live-salt`) | `live_salt_twin` |
+| The round coins | `core_check.rounds` | `roundsCheck` (`rounds`) | `rounds_twin` |
+| The sample | `credit.drawn` | `Credit.drawn` (`drawn`) | `drawn_twin` |
+| A period's presented roots | `credit.period` | `Credit.periodRoots`, a stub that refuses everything | `period_twin` |
+| A Pearl-C period's credit | `credit.pearl_c_period_credit` | `Credit.pearlCPeriodCredit`, a stub that refuses everything | `pearl_c_period_credit_twin` |
+| Passes credited together | `credit.passes_distinct` | Pearl+'s `PearlPlus.passesDistinct` (`passes-distinct`) | `passes_distinct_twin` |
+
+Several functions are twins only, because the Lean decides their verdict inside a whole case's (`registered_twin`,
+`opening_twin`, `pass_epoch_twin`, `draw_twin`). Others are guards a device runs before a coin opens: `window`'s
+`*_epoch_reason` and `rounds_reason`, `coins.coin_reason`, `salt.unit_reason` and `core_check.recorded_reason`. They
+only refuse to go on, never credit, and the verdict of record checks the same rules again in Lean.
 
 An **execution phase** is the served steps one commitment covers (PoUW's older name, "commit period"). The code and the
 Lean call it an execution phase (`window.py`, `PouwWindow`, `credit.window`), and keep the name until a format version. In one
@@ -223,7 +252,7 @@ from verity.protocols.accounting.pouw.prover import schemes
 
 scheme = schemes.get("pearl-c-sm120-v1-h3")                 # a configured PoUWScheme
 root = audit.weights_root(weight_roots)                    # the weights' root a credit period's open signs
-verdict = core_check.check(params, commitment, evidence)   # one execution phase, as `pouw-check` answers
+verdict = core_check.case(case)                            # one execution phase, `pouw-check serve`'s answer of record
 outcome = credit.window(key, ledger, pins, main, ...)      # a served execution phase's credited set and its sampled proof blocks' outcome
 period = credit.period_credit(key, ledger, pins, main, name, windows, verify, ...)   # a credit period, closed and complete
 work = window.bucket(n_real)                               # the grid level: credited tiles and padded N

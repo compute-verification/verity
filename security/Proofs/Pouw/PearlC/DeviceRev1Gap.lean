@@ -55,9 +55,8 @@ theorem unitDebitRev1_ge (sem : PearlCSem Q R S) (d : PearlCDevice) (hadd : 0 �
     (U : Workload) (u : ℕ) (act : Codes) :
     debitDev d (sem.unitDebitDev d H s U u act) ≤ sem.unitDebitRev1 d H s U u act := by
   unfold PearlCSem.unitDebitRev1
-  have : (0 : ℚ) ≤ d.prices.add * ∑ i, ∑ j, (laterZeroPromos d (sem.unitChain H s U u act).1
-      (sem.unitChain H s U u act).2 i j : ℚ) := by positivity
-  linarith
+  dsimp only
+  exact le_add_of_le_of_nonneg (le_add_of_nonneg_right (by positivity)) (by positivity)
 
 theorem unitDebitRev1_nonneg (sem : PearlCSem Q R S) (d : PearlCDevice) (hadd : 0 ≤ d.prices.add) (H : Q → R) (s : S)
     (U : Workload) (u : ℕ) (act : Codes) : 0 ≤ sem.unitDebitRev1 d H s U u act := by
@@ -71,11 +70,8 @@ theorem tileDebitRev1_ge (sem : PearlCSem Q R S) (d : PearlCDevice) (hadd : 0 �
     sem.tileDebitDev d H s U u rows cols act ≤ sem.tileDebitRev1 d H s U u rows cols act := by
   classical
   unfold PearlCSem.tileDebitRev1
-  simp only
-  have : (0 : ℚ) ≤ d.prices.add * ∑ e ∈ (univ : Finset (Fin (U.layout.shape u).m × Fin (U.layout.shape u).n)).filter
-      (fun e => (e.1 : ℕ) ∈ rows ∧ (e.2 : ℕ) ∈ cols),
-      (laterZeroPromos d (sem.unitChain H s U u act).1 (sem.unitChain H s U u act).2 e.1 e.2 : ℚ) := by positivity
-  linarith
+  dsimp only
+  exact le_add_of_le_of_nonneg (le_add_of_nonneg_right (by positivity)) (by positivity)
 
 end
 

@@ -18,9 +18,9 @@ stops included (`_kept_prover`).
 * **The sessions' coin trees.** Under FLOCK_CHALLENGER=1 the two sessions run on that same challenger session
   (`a5.window_trees`): each of the kept prover's verifiers takes its tree through the audit's relay, and each
   session's tree is closed there after its evidence before the next session starts. The audit then writes its case in
-  v2's per-member form with the challenger's key, the window's root and the coins, and v2 refuses it for its form
-  alone (`members.ALL_PASSED`). v2 reads a key at the deployed parameters only, so that audit's local key is made at
-  them (``--deployed-key``), over the machine's cores.
+  v2's per-member form with the challenger's key, the window's root and the coins, and v2's check accepts it
+  (`members.case_check`). v2 reads a key at the deployed parameters only, so that audit's local key is made at them
+  (``--deployed-key``), over the machine's cores.
 * **The binaries.** The Lean verifier and the ZK server's Lean are what check's lean-build step builds before this
   suite (`AFTER_LEAN`, the suite's ``artifacts``), and the tests skip without them. `flock-circuit` is built by
   `check_build.sh bin` on the Flock checkout check's flock-circuit-build step leaves on a machine. That build fetches
@@ -116,7 +116,7 @@ def _window(d: Path, flipped: bool = False) -> Path:
 @pytest.fixture(scope="module")
 def binaries(tmp_path_factory) -> dict[str, Path]:
     """The prover, the Lean verifier and the ZK server's Lean (module docstring)."""
-    lean = {"lean": LEAN / "flock-verify", "firewall": LEAN / "flock-firewall"}
+    lean = {"lean": LEAN / "verity-verify-proof", "firewall": LEAN / "flock-firewall"}
     if not all(p.is_file() for p in lean.values()):
         pytest.skip(f"no {' or '.join(p.name for p in lean.values())} under {LEAN}: check's lean-build step builds them")
     prover = tmp_path_factory.mktemp("flock-circuit") / "flock-circuit"
@@ -223,17 +223,16 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     assert "this audit drew 2 members" in (out / "window" / "case-v2-error.txt").read_text()
 
 
-def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_refuses_the_form_alone(tmp_path, binaries):
+def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_accepts_the_case(tmp_path, binaries):
     """Under FLOCK_CHALLENGER=1 the audit's two sessions take their coin trees from the session the sample's coins came
     from, and each is closed there after its evidence: the audit accepts with each member's ``challenger`` verdict, the
     release log holds the sample, then each session's tree, its rounds and its closing round, in the sessions' order,
     and the per-member case names the challenger and carries its coins; the audit's summary says the trees were the
-    window's session's. On that case Lean's check passes everything before the per-member form's refusal and answers
-    `MULTI_REFUSED`, with exit 1; with one proof file of the first session changed after its closing round, it refuses
-    the session's coins as the driver's check of the log does; and with the second session left out, the log shows a
-    tree no session records, which both refuse (`challenger.UNUSED_TREE`). The Python run of the form
-    (`members.members_run`) answers the same on all three: every session accepted with the units it proved, which
-    maps to the refusal, the changed file's reason, and the unused tree's."""
+    window's session's. On that case Lean's check accepts, with exit 0; with one proof file of the first session
+    changed after its closing round, it rejects for the session's coins as the driver's check of the log does; and with
+    the second session left out, the log shows a tree no session records, which both refuse
+    (`challenger.UNUSED_TREE`). The Python run of the form (`members.members_run`) answers the same on all three:
+    every session accepted with the units it proved, the changed file's reason, and the unused tree's."""
     window = _window(tmp_path / "window")
     rc, row, out, said = _audit(tmp_path, window, binaries, "--deployed-key", more={"FLOCK_CHALLENGER": "1"})
     assert rc == 0 and row.get("ok") is True, said
@@ -270,13 +269,13 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_ref
     run, refused = twin(case, evidence)
     assert refused is None and run.all and sorted(run.proved) == evidence["proved_units"], (run, refused)
     assert [f.session for f in run.findings] == evidence["sessions"] and all(f.units for f in run.findings)
-    assert M.case_refusal(case) == (M.run_reason(run, refused), True) == (M.ALL_PASSED, True)
+    assert M.case_check(case) == ("accept", M.run_reason(run, refused)) == ("accept", None)
     # the second member's statement and its session taken out of the evidence, everything else as the audit wrote it
     first = {**evidence, "sessions": evidence["sessions"][:1],
              "proofs": {"statements": evidence["proofs"]["statements"][:1]}}
     assert twin(case, first) == (None, left_out)
-    assert M.case_refusal({**case, "evidence": _evidence_hex(first)}) == (M.run_reason(None, left_out), True) \
-        == (f"proofs: {left_out}", True)
+    assert M.case_check({**case, "evidence": _evidence_hex(first)}) == ("reject", M.run_reason(None, left_out)) \
+        == ("reject", f"proofs: {left_out}")
 
     rep = sorted(dirs[0].glob("*.bin"))[0]
     changed = tmp_path / "changed" / rep.name
@@ -288,7 +287,7 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_ref
     assert str(rep) in case["blobs"] and other["blobs"] != case["blobs"]
     why = f"session {evidence['sessions'][0]}'s coins are not the challenger's: {C.NO_CLOSING}"
     assert twin(other, evidence) == (None, why)
-    assert M.case_refusal(other) == (M.run_reason(None, why), True) == (f"proofs: {why}", True)
+    assert M.case_check(other) == ("reject", M.run_reason(None, why)) == ("reject", f"proofs: {why}")
 
 
 def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):

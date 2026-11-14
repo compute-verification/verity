@@ -18,7 +18,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
-# The statements: flock-verify `--zk`'s acceptance and its tables under hidden outputs
+# The statements: verity-verify-proof `--zk`'s acceptance and its tables under hidden outputs
 
 ZkExec's acceptance statements and ZkLink's `TablesAtZKLive` take `hh : I.tags.hiddenOutputs = false`: they are about
 `Stmt.setupH`'s statements, and under hidden outputs (the default `--statement`, `HmOut`) `Stmt.setupTables`
@@ -97,7 +97,7 @@ message's, and uniform query positions. It reads `st` only through `m`, `kLog` a
 `setupH`'s and `setupHidden`'s statements. -/
 def ZkSchedOK : Prop :=
   ∀ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st → RegionsWF st → 13 ≤ st.m →
-    Zk.shapeOk st = .ok () → Zk.schedule st.m = .ok (sch, tPad) →
+    Zk.shapeOk st = .ok () → Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) →
     (2 ≤ (schedOf sch).levels.length ∧ ((schedOf sch).levels.headD default).lanes = (schedOf sch).k0 ∧
       (schedOf sch).m - 7 = (schedOf sch).k0 + ((schedOf sch).levels.headD default).logCols ∧
       levelsChained (schedOf sch).levels (schedOf sch).ext = true) ∧
@@ -110,7 +110,7 @@ def ZkSchedOK : Prop :=
 
 variable {n : ℕ} {mPts : ℕ} {Reg : Type}
 
-/-- **Wherever flock-verify accepts a hidden-output session, the `--zk` table is the executable's**
+/-- **Wherever verity-verify-proof accepts a hidden-output session, the `--zk` table is the executable's**
 (`TablesAtZKLive` under `hh = true`). On hidden-output one-table inputs whose `--statement` tags are untyped and whose
 circuit file `HmOut.parse` accepts (at the `--zk` tags) as a circuit whose unit returns the outputs, with `wr` the challenger's
 live-coin part's record (`RecordsLiveZK`): whenever the sample `S` is `DrawOkZKH` and `verify --zk` accepts what `wr` writes for
@@ -126,7 +126,7 @@ def TablesAtZKHLive : Prop :=
     ∀ S R o, DrawOkZKH I dj mPts S → AcceptsZK I (wr S R o) →
       ∃ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st ∧ RegionsWF st ∧
         Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition
-          I.program = .ok st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+          I.program = .ok st ∧ Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) ∧
         ∃ y : DrawSetupZKH I mPts S (dj S), y.x.st = st ∧ y.sch = sch ∧ y.tPad = tPad ∧
           tablesAtZKH (Reg := Reg) dj y₀ S R = y.table ∧
           ∀ points : Array (Array F128), points.size = 2 → (∀ p ∈ points.toList, p.size = mPts) →
@@ -143,7 +143,7 @@ def TablesAtZKHLiveI : Prop :=
     ∀ S R o, DrawOkZKH I dj mPts S → AcceptsZK I (wr S R o) →
       ∃ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st ∧ RegionsWF st ∧
         Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition
-          I.program = .ok st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+          I.program = .ok st ∧ Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) ∧
         ∃ y : DrawSetupZKH I mPts S (dj S), y.x.st = st ∧ y.sch = sch ∧ y.tPad = tPad ∧
           tablesAtZKH (Reg := Reg) dj y₀ S R = y.table ∧
           ∀ points : Array (Array F128), points.size = 2 → (∀ p ∈ points.toList, p.size = mPts) →
@@ -161,7 +161,7 @@ def TablesAtZKHLiveSt : Prop :=
     ∀ S R o, DrawOkZKH I dj mPts S → AcceptsZK I (wr S R o) →
       ∃ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st ∧ RegionsWF st ∧
         Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition
-          I.program = .ok st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+          I.program = .ok st ∧ Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) ∧
         ∃ y : DrawSetupZKH I mPts S (dj S), y.x.st = st ∧ y.sch = sch ∧ y.tPad = tPad ∧
           tablesAtZKH (Reg := Reg) dj y₀ S R = y.table ∧
           ∀ points : Array (Array F128), points.size = 2 → (∀ p ∈ points.toList, p.size = mPts) →
@@ -178,7 +178,7 @@ def TablesAtZKHLiveISt : Prop :=
     ∀ S R o, DrawOkZKH I dj mPts S → AcceptsZK I (wr S R o) →
       ∃ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st ∧ RegionsWF st ∧
         Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition
-          I.program = .ok st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+          I.program = .ok st ∧ Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) ∧
         ∃ y : DrawSetupZKH I mPts S (dj S), y.x.st = st ∧ y.sch = sch ∧ y.tPad = tPad ∧
           tablesAtZKH (Reg := Reg) dj y₀ S R = y.table ∧
           ∀ points : Array (Array F128), points.size = 2 → (∀ p ∈ points.toList, p.size = mPts) →
@@ -195,7 +195,7 @@ def TablesAtZKHLiveU : Prop :=
     ∀ S R o, DrawOkZKH I dj mPts S → AcceptsZK I (wr S R o) →
       ∃ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st ∧ RegionsWF st ∧
         Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition
-          I.program = .ok st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+          I.program = .ok st ∧ Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) ∧
         ∃ y : DrawSetupZKH I mPts S (dj S), y.x.st = st ∧ y.sch = sch ∧ y.tPad = tPad ∧
           tablesAtZKH (Reg := Reg) dj y₀ S R = y.table ∧
           ∀ points : Array (Array F128), points.size = 2 → (∀ p ∈ points.toList, p.size = mPts) →

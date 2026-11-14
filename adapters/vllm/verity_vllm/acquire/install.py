@@ -64,6 +64,7 @@ class Installation:
     handles: list = field(default_factory=list)
     _runner: Any = None
     _sample_patch: Any = None
+    _attrs: list[tuple[tuple[str, str, str], str]] = field(default_factory=list)  # each runner_return site's key and its attribute of what `sample()` returns
 
     def keys(self) -> list[tuple[str, str, str]]:
         return sorted(s.key() for s in self.installed)
@@ -148,9 +149,8 @@ def install_from_plan(plan: AcquisitionPlan, model: Any, runner: Any = None, *, 
                 continue
             if inst._runner is None:
                 inst._runner = runner
-                attrs: list[tuple[tuple[str, str, str], str]] = []
 
-                def sample(*a, _orig=runner.sample, _attrs=attrs, **kw):
+                def sample(*a, _orig=runner.sample, _attrs=inst._attrs, **kw):
                     res = _orig(*a, **kw)
                     so = res[0] if isinstance(res, tuple) else res
                     for k, attr in _attrs:
@@ -160,8 +160,7 @@ def install_from_plan(plan: AcquisitionPlan, model: Any, runner: Any = None, *, 
                     return res
 
                 inst._sample_patch = engine_hooks.patch(runner, "sample", sample)
-                inst._attrs = attrs  # type: ignore[attr-defined]
-            inst._attrs.append((key, s.slot.lstrip(".")))  # type: ignore[attr-defined]
+            inst._attrs.append((key, s.slot.lstrip(".")))
             inst.installed.append(s)
     if inst.missing:
         inst.remove()
