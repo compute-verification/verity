@@ -74,6 +74,7 @@ files = ["verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py"]
 files = ["verity/protocols/proofs/spot/prover/audit/template_audit.py"]
 [words_in.words]
 "registration=" = "docket="
+"base[\"registration\"]" = "base[\"docket\"]"
 
 [keep]
 patterns = []
