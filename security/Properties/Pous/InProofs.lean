@@ -4,6 +4,7 @@ public import Properties.Pous.MemoryChallenger
 public import Definitions.Core.InProofs
 public import Properties.Verity.Sha512
 public import Mathlib.Probability.ProbabilityMassFunction.Monad
+public import Lms.Sign
 
 /-!
 # PoUS's session inside proofs: an accepted run gives a session `verdict` accepts
@@ -105,6 +106,21 @@ def SessionGives : Prop :=
 /-- The run that always accepts, holds `v u` at proof block `u` and hashes nothing. -/
 def constRun {n : ℕ} (v : Fin n → Vals) : Verity.InProofs.Run Unit n fun _ => Vals :=
   ⟨fun _ => True, fun u _ => v u, fun _ => []⟩
+
+/-- **`SessionGives`' hypotheses hold, with `verdict`'s acceptance, at an honest session**: a key `Lms.keygen` derives at
+S1's deployed parameters, trusted alone, signs a session of one round that ended complete on time, its coin opened from a
+coin tree of one leaf. The run that always accepts holds that session's values at each of its three proof blocks and hashes
+nothing: no proof block fails `PieceOk` (`Gives` at `K₀ = 1`, `ε = 0`), `Carried` holds, the clear checks pass, and
+`verdict` accepts the session the run opens. -/
+def SessionGivesHonest : Prop :=
+  ∃ (seed : ByteArray) (k : Lms.PrivateKey) (expected : Nat → Option ByteArray) (c : SessionCommitment)
+    (openings : Array CoinOpening) (idx : Nat → Nat) (v : Fin (c.k + 2) → Vals),
+    Lms.keygen Lms.deployed seed = .ok k ∧ c.k = 1 ∧
+      Gives (PMF.pure ()) (constRun v) (PieceOk SCHEMES LMS k.publicKey c expected idx) 1 0 ∧
+      Carried c (constRun v) ∧ ClearOk SCHEMES [k.publicKey] LMS k.publicKey c openings idx ∧
+      (verdict SCHEMES [k.publicKey] expected
+        (sessionOf c LMS k.publicKey ((constRun v).ports ⟨1, by omega⟩ ()) ((constRun v).ports ⟨0, by omega⟩ ())) c
+        openings).accepted = true
 
 /-- **`SessionGives`' conclusion fails without its hypotheses**: under S1's scheme (`SCHEMES`, `LMS`) and a trusted key,
 a session of no rounds that did not end complete passes the clear checks and `verdict` rejects it, so a run that always

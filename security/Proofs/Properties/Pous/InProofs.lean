@@ -3,6 +3,8 @@ module
 public import Properties.Pous.InProofs
 public import Proofs.Properties.Accounting.InProofs
 public import Proofs.Properties.Pous.MemoryChallenger
+import Proofs.Properties.Pous.WipeSigned
+import Proofs.Properties.NetworkCertifier.Device.Lms
 
 /-!
 # Proof of PoUS's session inside proofs (`Properties.Pous.InProofs`)
@@ -58,6 +60,98 @@ theorem sessionGives : SessionGives := by
     have ht := htime j hj
     simp only [hround j hj] at ht
     exact ⟨⟨o, ho, hrj, by rw [hoi, hri], hvc⟩, hb, hd, ht⟩
+
+/-- The honest session's coin: round 0 at block 0, its tree's one leaf. -/
+def honestSession : ByteArray := ⟨Array.replicate 32 0⟩
+def honestCoinKey : ByteArray := ⟨Array.replicate 256 0⟩
+def honestSalt : ByteArray := ⟨Array.replicate 192 0⟩
+def honestRound : Round := ⟨0, 0, 0, 0, .empty⟩
+def honestOpening : CoinOpening := ⟨0, 0, honestSalt, #[]⟩
+
+theorem honest_leaf : ∃ leaf, coinLeaf honestCoinKey honestSession 0 0 honestSalt = .ok leaf := by
+  have hk : honestCoinKey.size = HM96.keyBytes ∧ honestCoinKey.get! (HM96.keyBytes - 1) &&& 128 = 0 := by
+    refine ⟨by simp [honestCoinKey, ByteArray.size, HM96, Flock.Hm96.sha512, Flock.Hm96.keyBytes, Flock.Hm96.keyBits], ?_⟩
+    have h255 : HM96.keyBytes - 1 = 255 := by simp [HM96, Flock.Hm96.sha512, Flock.Hm96.keyBytes, Flock.Hm96.keyBits]
+    rw [h255]
+    set_option maxRecDepth 100000 in decide
+  have hs : honestSalt.size = HM96.saltBytes := by simp [honestSalt, ByteArray.size, HM96, Flock.Hm96.sha512]
+  simp [coinLeaf, coinDigest, beN, checkKey, checkSalt, Bind.bind, Except.bind, Pure.pure, Except.pure, hk, hs]
+
+/-- The commitment of a session of one round over one block, its coin root the one leaf `leaf`. -/
+def honestCommitment (leaf : ByteArray) : SessionCommitment :=
+  { session := honestSession, coinRoot := (domain COIN_BINDING honestSession 1).leaf 0 0 COIN_SCHEMA leaf,
+    coinKey := honestCoinKey, blocks := 1, k := 1, limitNs := 20000000, blockBytes := 4096, binding := .empty }
+
+theorem honest_coin {leaf : ByteArray} (h : coinLeaf honestCoinKey honestSession 0 0 honestSalt = .ok leaf) :
+    verifyCoin (honestCommitment leaf) honestOpening = true := by
+  simp [verifyCoin, honestCommitment, honestOpening, h]
+  simp [Flock.FV3.Domain.verifyOpening, Flock.FV3.Domain.climb, Flock.FV3.Scheme.climbL, domain,
+    Flock.FV3.Sha512.Domain.make, Flock.FV3.Domain.make, Flock.FV3.Domain.leaf, Flock.FV3.Scheme.hash, Flock.FV3.hash,
+    Flock.FV3.Sha512.scheme, Properties.NetworkCertifier.Bytes.hash_size]
+  exact ⟨by decide, Properties.CertifierDevice.Proofs.Lms.beq_self _⟩
+
+theorem honest_message (leaf : ByteArray) : ∃ m, message (honestCommitment leaf) COMPLETE #[honestRound] = .ok m := by
+  simp [message, recordsRoot, Round.value, honestRound, beN, Bind.bind, Except.bind, Pure.pure, Except.pure]
+
+theorem sessionGives_honest : SessionGivesHonest := by
+  obtain ⟨k, hkg, I, hk⟩ := Wipe.honest_keygen
+  obtain ⟨-, hIk, -, hIs, -, -, -⟩ := Properties.CertifierDevice.Proofs.Lms.key_spec hk
+  subst hIk
+  have hroot : (k.tree[1]!).size = Lms.deployed.N :=
+    Properties.CertifierDevice.Proofs.Lms.node_size hk (by decide) 1 le_rfl (by decide)
+  have hpub : k.publicKey.size = 16 + Lms.deployed.N := by
+    simp only [Lms.PrivateKey.publicKey, ByteArray.size_append, hIs, hroot]
+  have hI : k.publicKey.extract 0 16 = k.I := ByteArray.extract_append_eq_left hIs.symm
+  obtain ⟨leaf, hleaf⟩ := honest_leaf
+  obtain ⟨m, hm⟩ := honest_message leaf
+  obtain ⟨M, hM⟩ : ∃ M, memoryChallengerMessage k.I honestSession m = .ok M := by
+    unfold memoryChallengerMessage
+    simp [hIs]
+    exact ⟨_, rfl⟩
+  obtain ⟨sig, hsig⟩ :=
+    Properties.CertifierDevice.Proofs.Lms.lmsSigns 64 1 20 false Lms.deployed k.I _ k 0 M rfl hk (by decide)
+  obtain ⟨hver, hdec⟩ :=
+    Properties.CertifierDevice.Proofs.Lms.lmsCorrect 64 1 20 false Lms.deployed k.I _ k 0 M sig rfl hk hsig
+  have hlms : lmsVerify Lms.deployed k.publicKey honestSession m sig.encode = .ok true := by
+    unfold lmsVerify
+    simp only [hpub, ne_eq, not_true_eq_false, ↓reduceIte, hdec, hI, hM, hver, Bind.bind, Except.bind]
+  have hcoin := honest_coin hleaf
+  let V : Vals := ⟨m, sig.encode, COMPLETE, #[honestRound], honestRound⟩
+  have hlook : SCHEMES.lookup LMS = some Lms.deployed := rfl
+  have hpiece : ∀ u, PieceOk SCHEMES LMS k.publicKey (honestCommitment leaf) (fun _ => some .empty) (fun _ => 0) u V := by
+    rintro ⟨u, hu⟩
+    have hu' : u < 3 := hu
+    rcases u with _ | _ | _ | u
+    · simp only [PieceOk, ↓reduceIte]
+      intro p hp
+      rw [hlook] at hp
+      cases hp
+      exact hlms
+    · simp only [PieceOk, show (0 + 1 : ℕ) ≠ 0 from by omega, ↓reduceIte]
+      refine ⟨hm, rfl, rfl, fun j hj => ?_⟩
+      obtain rfl : j = 0 := by simp [V] at hj; omega
+      simp [V, honestRound, Round.elapsedNs, honestCommitment]
+    · simp only [PieceOk, show (0 + 1 + 1 : ℕ) ≠ 0 from by omega, show (0 + 1 + 1 : ℕ) ≠ 1 from by omega, ↓reduceIte]
+      exact ⟨rfl, rfl, by simp [V, honestRound, honestCommitment], rfl⟩
+    · omega
+  have hclear : ClearOk SCHEMES [k.publicKey] LMS k.publicKey (honestCommitment leaf) #[honestOpening] (fun _ => 0) := by
+    refine ⟨⟨_, hlook⟩, List.mem_singleton.2 rfl, fun j hj => ?_⟩
+    obtain rfl : j = 0 := by simp [honestCommitment] at hj; omega
+    exact ⟨honestOpening, by simp [honestOpening], rfl, hcoin⟩
+  refine ⟨_, k, fun _ => some .empty, honestCommitment leaf, #[honestOpening], fun _ => 0, fun _ => V, hkg, rfl,
+    ?_, ?_, hclear, ?_⟩
+  · simp [Gives, prPMF, Run.failing, constRun, hpiece]
+  · intro _ _
+    left
+    refine ⟨rfl, fun j hj => ?_⟩
+    obtain rfl : j = 0 := by simp [honestCommitment] at hj; omega
+    rfl
+  · refine verdict_accepted_of _ _ _ _ _ _ Lms.deployed hlook (List.mem_singleton.2 rfl) m hm hlms rfl rfl rfl ?_
+    intro j hj
+    obtain rfl : j = 0 := by simp [sessionOf, constRun, V] at hj; omega
+    exact ⟨⟨honestOpening, by simp [honestOpening], rfl, rfl, hcoin⟩, by simp [sessionOf, constRun, V, honestRound, honestCommitment], rfl,
+      by simp [sessionOf, constRun, V, honestRound, Round.elapsedNs],
+      by simp [sessionOf, constRun, V, honestRound, Round.elapsedNs, honestCommitment]⟩
 
 /-- The values of a session that ended nowhere: no digest, no signature, no rounds. -/
 def noSession : Vals := ⟨.empty, .empty, "", #[], default⟩
