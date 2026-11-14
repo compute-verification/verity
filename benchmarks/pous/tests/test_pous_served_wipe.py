@@ -240,8 +240,8 @@ def test_a_node_with_no_gpu_lease_gets_the_trees_own(node, tmp_path) -> None:
     demo = _exe(tmp_path / "demo-card.sh", '#!/usr/bin/env bash\necho "$GPU_LEASE_UUID" > "$OUT/card.txt"\n')
     path = ":".join(p for p in node["PATH"].split(":") if not (Path(p) / "gpu-lease").exists())
     assert shutil.which("gpu-lease", path=f"{bin_}:{path}") is None
-    env = node | {"PATH": path, "FAKE_BIN": str(bin_), "WIPE_DEMO": str(demo)}
-    r = subprocess.run(["bash", "-c", LAUNCH, "_", str(wrapper), str(tmp_path / "serve-run"), "3", str(d), "--no-lean"],
+    env = node | {"PATH": path, "FAKE_BIN": str(bin_), "WIPE_DEMO": str(demo), "WIPE_PROTOCOL_EXE": _judge(tmp_path)}
+    r = subprocess.run(["bash", "-c", LAUNCH, "_", str(wrapper), str(tmp_path / "serve-run"), "3", str(d)],
                        env=env, capture_output=True, text=True, cwd=tmp_path)
     assert r.returncode == 0, r.stdout + r.stderr
     lease = (tmp_path / "lease.log").read_text().splitlines()
