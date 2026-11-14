@@ -273,7 +273,10 @@ block type measured and what its accept holds) come first among its inputs, then
 proving totals' words also give the plan's own prices where its record states them. The prover GPUs a serving GPU are
 the proving total over the stated serving rate, so their mark is the weaker of the two's (measured, then partial, then
 modeled), first among their inputs, then proving's words and the serving rate's. A total the table gives as not
-measured has no value, says why and is marked `modeled`. The validation is
+measured has no value, says why and is marked `modeled`. Both prover GPUs a serving GPU, at the plan of record and
+at the exfiltration run of record's design, carry the goal's target, at most 0.0545 (`prove_records.GPUS_PER_SERVING_GPU_TARGET`:
+proving's share of the 10% compute budget, until the proof system's own number is set), and, with a value, the verdict `meets` at or under it or `misses`
+over it; no other measurement carries a target. The validation is
 the six checks a steady-state row is held to: passed when some block type is priced from rows that passed them all
 and no block type is left out of the totals. The run keeps the table as `out/prove.json`, and its fingerprint names
 the sampling plan.

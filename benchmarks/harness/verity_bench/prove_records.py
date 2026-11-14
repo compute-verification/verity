@@ -133,6 +133,12 @@ FIGURES = {"gpus_per_serving_gpu": "prover GPUs a serving GPU",
            "lean_verifier_seconds_per_token": "Lean verifier seconds a served token",
            "proof_bytes_per_token": "proof bytes a served token",
            AT_RECORD: "prover GPUs a serving GPU"}
+#: the target the goal benchmarks/proof-system-performance holds the prover GPUs a serving GPU to, at most this many:
+#: proving's share of the 10% compute budget, in prover GPUs a serving GPU; replaced when the proof system's own
+#: number is set
+GPUS_PER_SERVING_GPU_TARGET = 0.0545
+#: the figures whose measurements carry that target, lower being better; no other figure carries one
+TARGETED = ("gpus_per_serving_gpu", AT_RECORD)
 #: the scope of the exfiltration run of record's rows that `AT_RECORD` is read over, at `exfiltration.SHARE`: the
 #: planner's world year, `verity bench exfiltration`'s figure
 DESIGN_SCOPE = "world year"
@@ -705,7 +711,9 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
     the records the table read; a total with none has those words as its `why`. The prover GPUs a serving GPU are the
     proving total over the stated serving rate, so their mark is the weaker of the two's (`STRENGTH`), first among
     their inputs, then proving's words and the serving rate's. The figure at the exfiltration run of record's design
-    (`AT_RECORD`) is read from that run alone, which its inputs name in place of the table's records."""
+    (`AT_RECORD`) is read from that run alone, which its inputs name in place of the table's records. The figures of
+    `TARGETED` carry `GPUS_PER_SERVING_GPU_TARGET` as their `target`, and, where they have a value, its check against
+    it as their `verdict`: `meets` at or under it, `misses` over it."""
 
     if bad := sorted(set(metrics.values()) - FIGURES.keys()):
         raise ValueError(f"no total of the table is named {', '.join(bad)}: a metric records one of {', '.join(FIGURES)}")
@@ -729,6 +737,11 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
             mark = max(mark, s["status"], key=STRENGTH.index)
             inputs = [mark, f"proving: {said}", f"serving rate ({s['status']}, a stated input): {s['basis']}"]
         out.append({"name": name, "value": value, "unit": FIGURES[figure], "inputs": [*inputs, *targets], "mark": mark})
+    for m, figure in zip(out, metrics.values(), strict=True):
+        if figure in TARGETED:
+            m["target"] = GPUS_PER_SERVING_GPU_TARGET
+            if m["value"] is not None:
+                m["verdict"] = "meets" if m["value"] <= GPUS_PER_SERVING_GPU_TARGET else "misses"
     return out
 
 
