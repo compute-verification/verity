@@ -2,10 +2,10 @@
 challenger's path runs its Lean and its Python reference on one input:
 
 * ``registered``: PoUW's rule over the registration (`pouw-check-difftest registered`, `core_check.registered_twin`);
-* ``registration``: one-stage's R1-R8 against the challenger's own copies (`sampled-proofs-difftest registration`,
+* ``registration``: one-stage's R1-R8 against the challenger's own copies (`spot-difftest registration`,
   `registration.check`), with the fan-out and tied values its verdict publishes (`registration_answer`); a PoUW window
   registers no values;
-* ``public``: the service's public-items rule over the Stream's Spec (`sampled-proofs-difftest check_public`,
+* ``public``: the service's public-items rule over the Stream's Spec (`spot-difftest check_public`,
   `service.check_public`);
 * ``pass``: the pass's epoch under the challenger's coins (`pouw-check-difftest pass`, `core_check.pass_epoch_twin`);
 * ``draw``: the sampled proof blocks are the sampling coin's, under the challenger key the window's parameters pin when it is
@@ -79,7 +79,7 @@ def core_params(params: Mapping[str, Any], check: Mapping[str, Any], query: str)
 
 def registration_params(program: Any, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
                         ports: Mapping[str, Any], log: list[dict], delta: str) -> dict:
-    """`sampled-proofs-difftest registration`'s parameters for `Stream.register`'s `registration.check`: no leaf layer,
+    """`spot-difftest registration`'s parameters for `Stream.register`'s `registration.check`: no leaf layer,
     anchors, partition, work table or registered values, which a PoUW window registers none of."""
     return {"anchors": [], "delta": delta, "law": dict(law), "leaf_layer": None, "log": [dict(r) for r in log],
             "partition": None, "ports": {p: dict(v) for p, v in ports.items()},
@@ -96,7 +96,7 @@ def registration_answer(v: Any) -> dict:
 
 
 def public_params(spec: Any, record: Mapping[str, Any], scheme: str) -> dict:
-    """`sampled-proofs-difftest check_public`'s input for `service.check_public(spec, record)`: the record, the service's
+    """`spot-difftest check_public`'s input for `service.check_public(spec, record)`: the record, the service's
     scheme, the check's query, the Spec's values (each its name and whether it is registered) and its declared items."""
     return {"record": dict(record), "scheme": scheme, "query": dict(spec.check.query),
             "values": [{"name": v.name, "registered": v.registered} for v in spec.values],
@@ -149,7 +149,7 @@ def py_draw(x: dict) -> dict | None:
 class Record:
     """Both verdicts of each check, Lean's of record. `lean` False runs the references alone; by default it is whether
     `verifier.RECORD_VERDICT` is ``"lean"``. The servers start at their first check and build their executables (`lake
-    build`) then, unless `exes` names them (``pouw-check``, ``pouw-check-difftest``, ``sampled-proofs-difftest``,
+    build`) then, unless `exes` names them (``pouw-check``, ``pouw-check-difftest``, ``spot-difftest``,
     ``spot-flock-caller``)."""
 
     def __init__(self, lean: bool | None = None, exes: Mapping[str, str | Path] | None = None) -> None:
@@ -211,7 +211,7 @@ class Record:
     def registration(self, params: dict, record: Any, python: Callable[[], Any]) -> list[str]:
         """R1-R8's codes for `record` against `params` (`registration_params`); `python` is the reference's call, its
         `Verdict`, whose fan-out and tied values are held to Lean's with its codes (`registration_answer`)."""
-        out = self._piece("registration", "sampled-proofs-difftest", PIECES, "registration",
+        out = self._piece("registration", "spot-difftest", PIECES, "registration",
                           {"params": params, "record": record}, lambda _: registration_answer(python()))
         return out.get("codes", ["registration"])
 
@@ -225,7 +225,7 @@ class Record:
     def public(self, x: dict, python: Callable[[], dict]) -> dict:
         """The service's public-items rule's ``{"ok", "codes", "detail"}`` on `x` (`public_params`), or ``{"refused"}``
         for an input it can't read; `python` is the reference's call (`service.check_public(...).to_json()`)."""
-        return self._piece("public", "sampled-proofs-difftest", PIECES, "check_public", x, lambda _: python())
+        return self._piece("public", "spot-difftest", PIECES, "check_public", x, lambda _: python())
 
     def prelude(self, python: str | None, lean: str | None) -> str | None:
         """`served_commit.check`'s own reading of the registration before a unit's opening (`python`: its level in the

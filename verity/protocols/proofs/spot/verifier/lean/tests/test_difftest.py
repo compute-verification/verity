@@ -1,5 +1,5 @@
-"""`one_stage`'s Python held to SPOT's one-stage audit in Lean (`core_spot`), its definition and verifier (`one_stage.verifier.RECORD_VERDICT`): the whole protocol through its own `serve` (`sampled-proofs-one-stage`, a
-`ProtocolPort`), and its pieces through `sampled-proofs-difftest` (`Port`s), on sampled programs, sampling designs, records, samples and
+"""`one_stage`'s Python held to SPOT's one-stage audit in Lean (`core_spot`), its definition and verifier (`one_stage.verifier.RECORD_VERDICT`): the whole protocol through its own `serve` (`spot-one-stage`, a
+`ProtocolPort`), and its pieces through `spot-difftest` (`Port`s), on sampled programs, sampling designs, records, samples and
 verdicts, valid ones and one or two changes to each. A disagreement is the Python's to fix, unless it finds the Lean wrong.
 
 The Python held to it is `one_stage` itself (`registration.check`, `draw.derive`, `check_draw`, `audit.audit_record`, `profile`,
@@ -2579,7 +2579,7 @@ CASES = st.one_of(
               st.integers(0, 63)),
     JSON)
 
-ONE_STAGE = D.ProtocolPort("sampled-proofs-one-stage", answer, CASES, package=PACKAGE)
+ONE_STAGE = D.ProtocolPort("spot-one-stage", answer, CASES, package=PACKAGE)
 server = D.server_fixture(ONE_STAGE)
 
 
@@ -2639,7 +2639,7 @@ def test_an_accept_says_whether_every_verdict_ran(server):
         assert got["public"]["complete"] is complete and audit.answer_complete(got) is complete, (other, line)
 
 
-ONE_STAGE_V2 = D.ProtocolPort("sampled-proofs-one-stage-zk", answer, CASES, package=PACKAGE)
+ONE_STAGE_V2 = D.ProtocolPort("spot-one-stage-zk", answer, CASES, package=PACKAGE)
 server_v2 = D.server_fixture(ONE_STAGE_V2)
 
 
@@ -3318,7 +3318,7 @@ def fanout_cases(draw) -> dict:
     return case
 
 
-PIECES = "sampled-proofs-difftest"
+PIECES = "spot-difftest"
 
 
 def _audit_inputs(f, groups, most=1):

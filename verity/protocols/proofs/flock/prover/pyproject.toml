@@ -137,7 +137,7 @@ paths = ["benchmarks/numerical/python/verity_numerical/bench", "verity/protocols
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_challenger_audit.py"]
-# `lake build sampled-proofs-difftest`: its package and those it requires by path
+# `lake build spot-difftest`: its package and those it requires by path
 paths = [
     "verity/circuits/base",
     "verity/circuits/lean",

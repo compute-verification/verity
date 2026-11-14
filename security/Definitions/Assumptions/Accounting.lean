@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Registration.Carrier
-public import Definitions.Compose.Remote.Sketch
+public import Definitions.Poub.Carrier
+public import Definitions.Poub.Remote.Sketch
 public import Definitions.Pouw.Game.Defs
 public import Definitions.Pouw.PearlC.Game
 import Mathlib.Basic.ENNReal.Real

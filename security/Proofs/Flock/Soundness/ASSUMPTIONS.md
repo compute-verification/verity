@@ -146,7 +146,7 @@ coins.
     its answer to the prover's round-`r` message. That ordering takes the place of "sampled after the prover's message"
     in the statement above. As with A6 itself, the record can't establish it: it keeps no opening, so the Lean verifier
     checks none, and the prover checks each against the root (`Flock.ZkServer.Coins.check`, under the ZK server's session
-    loop), not when it was sampled or opened. On `sampled-proofs-one-stage-zk` the auditor's challenger samples each
+    loop), not when it was sampled or opened. On `spot-one-stage-zk` the auditor's challenger samples each
     session's tree and opens each round after its message digest, logging both under its signed
     close, and the audit holds each session's record to those lines, one tree per session
     (`verity/protocols/proofs/spot/verifier/lean/Spot/ChallengerTrees.lean`). There the ordering rests on `trusted-device`.

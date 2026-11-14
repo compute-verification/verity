@@ -1,4 +1,4 @@
-# Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), the
+# Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (SPOT), the
 # inference-only policy (`verity/inference-only/v0`), work (PoUW's period credit, `verity/pouw/period/v1`), space (PoUS's
 # run check), bandwidth (the PoUB session), communication (the network certifier over the period,
 # `verity/certifier/v0`) and the wipe (`verity/wipe/v0`). Its executable is the core CLI (`onsite id | check | serve`),
@@ -24,7 +24,7 @@ path = "../../../interface"
 name = "core_composition"
 path = "../lean"
 
-# The ported subprotocols: sampled proofs' one-stage audit (integrity) and PoUW's period credit (work,
+# The ported subprotocols: SPOT's one-stage audit (integrity) and PoUW's period credit (work,
 # `PouwCheck.Period`).
 [[require]]
 name = "core_spot"
@@ -55,7 +55,7 @@ path = "../../../accounting/pous/verifier/check"
 name = "poub"
 path = "../../../accounting/poub/verifier/lean"
 
-# Integrity: sampled proofs in the form its params name, one-stage v2's audit or the recursive audit, V*'s compiled
+# Integrity: SPOT in the form its params name, one-stage v2's audit or the recursive audit, V*'s compiled
 # check (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`).
 [[require]]
 name = "core_vstar_recursive"

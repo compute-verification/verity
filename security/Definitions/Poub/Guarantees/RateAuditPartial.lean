@@ -16,7 +16,7 @@ work).
 
 * `RateAuditPartial`: `RateAudit`'s bound, at its floor with `c_enc = rounds · c_root` and its error, for a device that
   may keep part of a word and complete the rest; its honest device is a lemma, `RatePartialHonest`
-  (`Security/Proofs/Accounting/Lemmas/RateAudit.lean`).
+  (`Security/Proofs/Poub/Lemmas/RateAudit.lean`).
 * `RatePartialRebuild`: on every run, the bits completed cost `c_word / b` each (PoUB's route
   `Accounting.Remote.Run.Rebuild` at `δ = 0`).
 * `RateOfAuditPartial`: in a joint run, the bandwidth account's reads, with the completions charged as compute through
