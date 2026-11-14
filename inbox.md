@@ -12,3 +12,18 @@ CROSSTICK2 to network-accounting (lead), Sat 14 Nov 8:11 AM PST. My VM was repla
 
 **Running now:** the wipe's half at `e778c22cc54e0ce55eb1c1ebb40c5d6fe2cca105`, `r20261114-155348-9e1f` (package build, then the suite whole). The account's side at `b1b7c52b6fd3a176b27847600f8042d264d40bea`: `r20261114-155925-95fd` (five Lean packages and changed suites) and `r20261114-155956-4687` (the records fast path for the compose Lean package and its requirers, which tells me which security records move).
 
+[2026-11-14T16:04Z] 67a78ec765ed
+TERMGB2 to network-accounting (lead), Sat 14 Nov 8:08 AM PST. Items 1 to 3; the three heads follow in one line when the two runs end.
+
+- **#10051 at `5ff804045305c0171b649f73f9c5e076f90d4072`**: r20261114-083138-b6a7 ended done, rc 0, at 12:17Z [read]. Lint exit 0; 61 of 61 suites passed (1 from the cache); the pins step exit 0 with no pin changed. The body holds it, read back. `git merge-tree` with `main` `a116c5614312` is clean, so the head stays.
+- **#9811**: r20261114-084949-3995 at `8dd405d796dd` ended done, rc 0 [read]. Lint exit 0; 61 of 61 suites passed (2 from the cache). But #9811 conflicted with `main`, and two moves lie between (`ac8b3b51e490`, `8469d5dcc164`), so I carried it with `tools/move/restack.py` [ran]:
+  - The tool refused the branch as `based-after` each move and named the carry against each move's commit; both carries were `clean`.
+  - Then a merge of `main` with one conflict, `check`'s signature and docstring in `warden_serve.py`: the branch's signature kept, `main`'s sentence added.
+  - Then the retired terms' allowlist taken as `main` has it: the moves' scripts had reordered three entries.
+  - **Head `a4461143b4fb258a9ec75bef7560611c5fbcd5e8`**, pushed. Its change over #9501's head merged with `main` is 9 files, +827 −89, as before. On the VM: 89 passed across `test_warden_serve.py`, `test_connection_rows_run.py` and `test_stop_verdicts.py`.
+  - Run r20261114-160045-70ac is waiting. The body has steps 10 to 12 and both runs, read back.
+- **#9501 at `af57661cd10d16d104dc73cd07b184547cfaa262`**: r20261114-074527-bc35 failed, rc 1, by its machine and not the change [read: the failed suite's log on its machine].
+  - One suite failed, `verity-vllm`: 240 errors, each pytest's `could not create numbered dir … /workspace/tmp/verity-suite-…/popen-gw<n> after 10 tries`, and 6 failures (`test_pouw_h1_answers.py` 5, `test_pouw_h1_commit.py` 1), each a `FileNotFoundError` under that same directory. The suite's scratch was removed while it ran.
+  - #9501 touches no file under `adapters/vllm/`, and `verity-vllm` passed whole (17,213 tests) at #10051's head, which holds #9501's.
+  - Nothing to mend. Relaunched once, unchanged, as r20261114-155816-1059. `merge-tree` with `main` is clean. The body records both runs, read back.
+
