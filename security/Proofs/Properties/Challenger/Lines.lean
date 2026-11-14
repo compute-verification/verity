@@ -156,8 +156,8 @@ theorem seq_of_text {line line' : Json} {e e' : LedgerEntry} (he : ledgerEntry? 
     entry_fields_equiv sO sE objO objE hs hs' (by decide)
   obtain ⟨r, hr, hrs⟩ := ledgerEntry_seq he
   obtain ⟨r', hr', hrs'⟩ := ledgerEntry_seq he'
-  obtain ⟨n, hn, hrn⟩ := recordOfJson_seq (Properties.Challenger.Session.toOption_some hr)
-  obtain ⟨n', hn', hrn'⟩ := recordOfJson_seq (Properties.Challenger.Session.toOption_some hr')
+  obtain ⟨n, hn, hrn⟩ := recordOfJson_seq (Properties.Challenger.ChallengePhase.toOption_some hr)
+  obtain ⟨n', hn', hrn'⟩ := recordOfJson_seq (Properties.Challenger.ChallengePhase.toOption_some hr')
   rw [hn, hn'] at hq
   have hnn : n = n' := Json.num.inj (equiv_num hq)
   rw [← hrs, ← hrs', hrn, hrn', hnn]

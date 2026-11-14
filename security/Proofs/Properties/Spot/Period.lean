@@ -1,7 +1,7 @@
 module
 
 public import Properties.Spot.Period
-public import Proofs.Properties.Challenger.Session
+public import Proofs.Properties.Challenger.ChallengePhase
 import Proofs.Flock.Soundness.Discharge.Exec.Setup
 import all Init.Data.Array.Basic
 
@@ -33,7 +33,7 @@ are then facts about arrays.
   (`othersOf_nodup`).
 * **The decoder** (`decodedMeans`): `AuditParams.of` reads the ledger's key from the key's JSON it keeps
   (`paramsOf_key`) and refuses an `audit` that names a key a window sets or leaves unset (`none_of_keys`).
-* **The session audited** (`auditedSession`): `auditedIn` reads the first of the ledger's windows on the window's
+* **The session audited** (`auditedChallengePhase`): `auditedIn` reads the first of the ledger's windows on the window's
   root (`auditedIn_root`), and the ledger's windows share no root (`wins_inj`), so it is the window's own session.
 -/
 
@@ -51,7 +51,7 @@ open Lean (Json)
 open Std.Do
 open _root_.Spot _root_.Spot.Challenger _root_.Spot.Period
 open Properties.Pouw.LiveSalt.Ledger (bind_ok of_triple throw_spec ok_spec checked_ok verifyLedger_inv getD_root)
-open Properties.Challenger.Session (none_of_forall)
+open Properties.Challenger.ChallengePhase (none_of_forall)
 open FlockSoundness.Discharge.Exec (array_mapM_ok_getElem)
 
 /-! ## Lists, arrays and options -/
@@ -1012,7 +1012,7 @@ theorem auditedIn_root {wins : Array Win} {periods : Array MonitoringPeriod} {ro
   exact ⟨win, Array.mem_of_find?_eq_some hfind, beq_iff_eq.1 hbeq, hses⟩
 
 /-- **The session audited at a window is the window's** (`Properties.Spot.Period.AuditedSession`). -/
-theorem auditedSession : AuditedSession := by
+theorem auditedChallengePhase : AuditedSession := by
   intro p ledger r ws w au opened hr hw hmem ha
   have hwo : windowsOf p ledger = .ok ws := by
     unfold windowsOf
