@@ -35,3 +35,31 @@ GATERELAY2: (d). My 2:02 PM report was wrong, ROWSMERGE's is right. No commit th
 Not taken this turn: SUITESPLIT's two `network_traces` faults. `test_capture_loopback`'s stand-in still expects `rehearse` at `args[1]` after `df12d3c2445`'s `-m`. `test_kind_scan` needs `period.case`'s two arguments, and its declarations need `public.start`.
 TIMER: none
 
+[2026-11-14T22:51Z] c26e2c5dfb04
+SCANLEAN2 14:51 PST. No: run 5's fault (every package built at the repository root) was not in runs 3 and 4, whose scripts gave each step a literal directory. Run 3 built network_check, 251 jobs in 17 s, and the policy package, 509 jobs in 70 s; run 4 built 251 jobs in 60 s and 509 in 75 s; each logged "Build completed successfully". So none of my sentences about runs 3 and 4 was wrong. The "126 jobs" was DEVICEKEYS2's figure, not mine. Built means elaborated: every module listed as built was elaborated by Lean, not just replayed.
+(1) Run 6, tip f5f08b46aa78, still running its last step (the whole security/Proofs); I'm letting it finish. Built (jobs, seconds): NetworkCheck 256/59; the inference-only check 531/78; Definitions 9654/91; the whole security package 9654/4; the Properties.Spot step 115/1; and 26 more packages, all green except PoUS's check (SetupInProofs:70, mended by compute-research). Compose remote built (632 jobs); compose onsite failed (781 jobs).
+Errors, sorted:
+- Mended since the tip: DecodeEmpty:203 (lean's worker); DigestReads:40-43 (3b54dc786b9).
+- Mended by me just now, pushed to the collect branch:
+  - Proofs/Properties/NetworkPeriod.lean:939 "Unknown identifier `terms`" (PERIODPROOF2's 21b2a869126 against CLOCKGONE's deletion), in 205430d6eb3.
+  - Proofs/Flock/SpotFlock/RunsAs/Steps.lean:7 "cannot use `all` with `public import`" (WINDOWREAD's merge), in 55cfebd9551.
+  - The inference-only seam, in 9047480679e: every bare `open RecordText` became `open Spot.RecordText` (RecordForm in Properties; RecordGrid, RecordRead, RecordFreshRows and RecordWired in Proofs, plus eight blocked files), and Opening.lean:51 `Spot.Bits.fieldsOf` became `Flock.Program.fieldsOf`. These are misses of spot_record_text_namespace_map (2fd9ae41cb9). The same miss is on `architecture`: a NEW break in another lane's hands, sent to you.
+- In another lane's hands: compose onsite CoreOnsite.lean:333-336 (`β`, proofs); Proofs/Certifier/JointBridge/BandwidthOfAuditPerRunPeriod.lean:1 needs Proofs.Poub (lean's missing root).
+- NEW, ours, dispatched:
+  - PERIODPROOF2: Proofs/Properties/NetworkPeriod.lean:427:8 "Application type mismatch". firstFinding_none's membership path at 426-427 (from the #9736 merge) needs one more mem_append step since scanStartChecks joined the list.
+  - ONSITEMAIN2: compose/verifier/onsite/CoreRemoteNetwork.lean:130, 133 and 136, each `#guard egress.strays ... == some "record: verity/inference-only/v0 committed …, verity/certifier/v0 committed …"` "did not evaluate to `true`". The protocol ids match the code, so strays now returns something else.
+(2) At run 6's tip, built means elaborated:
+- NetworkCheck: whole.
+- The inference-only check: whole.
+- Definitions: whole.
+- Properties.Certifier: all 7 modules (Check, Check.TransferBlocks, Records, JointBridge.ServiceSoundOfSessions, SpaceOfPeriodHeld, WorkOfCreditedWords, WorkOfH1CheckedCreditMonitoringPeriod).
+- Properties.NetworkPeriod: yes.
+- Properties.InferenceOnly.*: 8 of 11; Opening and RecordForm failed; PinnedRead was blocked.
+- Proofs.Certifier: 53 modules built; BandwidthOfAuditPerRunPeriod failed (Proofs.Poub); HonestH200, SpaceOfPeriodHeld and WorkOfH1CheckedCreditMonitoringPeriod in its JointBridge are outside the umbrella and not yet built (the running step may reach them).
+- Proofs.Properties.NetworkPeriod: no (lines 427 and 939).
+- Properties.Spot and Proofs.Properties.Spot: yes.
+- Steps.lean: no (line 7).
+- SecondUnits.lean: yes, with WINDOWREAD's merge.
+- Proofs.Properties.InferenceOnly: 25 built, 6 failed (the seam above, DecodeEmpty and DigestReads), 62 blocked.
+(3) Yes, there was room: the ours-only second build is r20261114-224925-5600 on research CPU machine 3, with 64 GB. Its tip is 9047480679eb: everything since run 6's tip, including SCANCOUNT2's 57d807b796a0, DEVICEKEYS2's Registered, DEVICEGONE's, soundness's 939415a363d, the stage2 map and my three mends. It runs one lake build per target group, ours first: NetworkCheck, the inference-only check, Definitions, then Properties NetworkPeriod, NetworkScan, Certifier/** and InferenceOnly; then Proofs NetworkPeriod, NetworkScan, Actual.LinkEnds with RegisteredSite, Properties.Certifier/**, Certifier/** and InferenceOnly; then Spot, Steps and SecondUnits. I expect it to end about 15:15-15:35 PST. Run 6 is on machine 14, which has room beside it.
+
