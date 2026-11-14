@@ -2369,37 +2369,99 @@ def test_a_worker_whose_branches_nothing_names_takes_its_lanes_runs_as_its_activ
         "its silence counts from its lane's run"
 
 
-def test_github_prs_reads_every_page_of_open_prs_with_the_token_from_its_file(tmp_path, monkeypatch):
-    env = tmp_path / "relay.env"
-    env.write_text("SLACK_BOT_TOKEN=x\nGH_TOKEN=ghs_dummy_for_tests\n")
-    seen = []
+class GitHub:
+    """api.github.com's open PRs for `github_prs`: 103 over two pages, each request's URL and Authorization header recorded,
+    or the HTTP status it is told to answer with."""
 
-    class Resp:
-        def __init__(self, data):
-            self.data = data
+    def __init__(self, monkeypatch):
+        self.seen, self.status = [], None
+        monkeypatch.setattr(W.urllib.request, "urlopen", self.open)
 
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def read(self):
-            return json.dumps(self.data).encode()
-
-    def urlopen(req, timeout):
-        seen.append((req.full_url, req.get_header("Authorization")))
+    def open(self, req, timeout):
+        self.seen.append((req.full_url, req.get_header("Authorization")))
+        if self.status:
+            raise W.urllib.error.HTTPError(req.full_url, self.status, "refused", None, None)
         page = int(req.full_url.rsplit("page=", 1)[1])
-        return Resp([{"head": {"ref": f"b{page}-{i}"}, "body": "x"} for i in range(100 if page == 1 else 3)])
+        return io.BytesIO(json.dumps([{"head": {"ref": f"b{page}-{i}"}, "body": "x"} for i in range(100 if page == 1 else 3)]).encode())
 
-    monkeypatch.setattr(W.urllib.request, "urlopen", urlopen)
-    got = W.github_prs(REMOTE, env)()
+
+def test_github_prs_reads_every_page_of_open_prs_with_the_token_its_source_gives_at_that_read(monkeypatch):
+    """The watch runs for weeks and a token lives an hour: each read asks the source again and reads every page with that
+    token, so a later read never goes out with the first one's."""
+    github, tokens = GitHub(monkeypatch), iter(["dummy-one", "dummy-two"])
+    read = W.github_prs(REMOTE, lambda: next(tokens))
+    got = read()
     assert len(got) == 103 and got[0] == {"branch": "b1-0", "body": "x"}
-    assert [u for u, _ in seen] == [
+    assert [u for u, _ in github.seen] == [
         f"https://api.github.com/repos/compute-verification/verity/pulls?state=open&per_page=100&page={p}" for p in (1, 2)]
-    assert {a for _, a in seen} == {"Bearer ghs_dummy_for_tests"}
+    assert len(read()) == 103
+    assert [a for _, a in github.seen] == ["Bearer dummy-one"] * 2 + ["Bearer dummy-two"] * 2
     with pytest.raises(ValueError):
-        W.github_prs("/srv/git/verity.git", env)
+        W.github_prs("/srv/git/verity.git", lambda: "dummy")
+
+
+def test_the_token_command_is_run_at_each_read_and_one_that_gives_no_token_is_a_refusal_that_quotes_only_its_stderr():
+    calls = []
+    out = iter([(0, "dummy-one\n", ""), (0, "dummy-two\n", ""), (1, "", "gh_read_token: GitHub refused: Bad credentials\n"),
+                (0, "\n", ""), (255, "", "FileNotFoundError: no such file")])
+
+    def sh(argv, stdin, timeout):
+        calls.append(argv)
+        return next(out)
+
+    token = W.token_command("/data/infra/gh_read_token.sh --cached", sh)
+    assert [token(), token()] == ["dummy-one", "dummy-two"]
+    for why in ("exit 1: gh_read_token: GitHub refused: Bad credentials", "exit 0: nothing on stderr",
+                "exit 255: FileNotFoundError: no such file"):
+        with pytest.raises(W.GitHubRefused, match=re.escape(f"`/data/infra/gh_read_token.sh --cached` gave no token ({why})")):
+            token()
+    assert calls == [["/data/infra/gh_read_token.sh", "--cached"]] * 5
+
+
+def test_a_refused_read_of_the_open_prs_is_recorded_once_for_infra_and_again_only_after_a_read_that_worked(tmp_path, monkeypatch):
+    """While GitHub refuses the read, no new PR's branch counts for the agents it names, so a refusal is more than a log
+    line: a 401 or 403, or a token source that gives none, is one `github_refused` record per spell, across restarts; a
+    server error is none."""
+    github = GitHub(monkeypatch)
+    source = {"token": "dummy"}
+
+    def token():
+        if not source["token"]:
+            raise W.GitHubRefused("`gh_read_token.sh --cached` gave no token (exit 1: GitHub refused: Bad credentials)")
+        return source["token"]
+
+    def refused():
+        return [(r["kind"], r["what"], r["why"]) for r in records(tmp_path) if r["kind"] == "github_refused"]
+
+    api, clock, w = coordinators(tmp_path, [], {}, git_remote=REMOTE, sh=FakeSh(), open_prs=W.github_prs(REMOTE, token))
+    sweeps(w, clock, 10)
+    assert refused() == [] and len(github.seen) == 4
+    github.status = 401
+    sweeps(w, clock, 60)
+    w = W.Watch(api, tmp_path / "events.jsonl", clock, git_remote=REMOTE, sh=FakeSh(), open_prs=W.github_prs(REMOTE, token))
+    sweeps(w, clock, 60)
+    assert refused() == [("github_refused", "the open PRs",
+                          "GitHub answered HTTP 401 to the read of compute-verification/verity's open PRs")]
+    rec = next(r for r in records(tmp_path) if r["kind"] == "github_refused")
+    assert (rec["owner"], rec["agent"], rec["every_min"]) == ("infra", "", 5) and "dummy" not in json.dumps(rec)
+    github.status = 502
+    sweeps(w, clock, 10)
+    assert len(refused()) == 1, "a server error is no refusal, and ends no spell of one"
+    github.status = None
+    sweeps(w, clock, 5)
+    assert W.GH_REFUSED_KEY not in w.done
+    github.status = 403
+    sweeps(w, clock, 10)
+    github.status, source["token"] = None, ""
+    sweeps(w, clock, 10)
+    assert [why for _, _, why in refused()][1:] == [
+        "GitHub answered HTTP 403 to the read of compute-verification/verity's open PRs"]
+    source["token"] = "dummy"
+    sweeps(w, clock, 5)
+    source["token"] = ""
+    sweeps(w, clock, 10)
+    assert [why for _, _, why in refused()][2:] == [
+        "`gh_read_token.sh --cached` gave no token (exit 1: GitHub refused: Bad credentials)"]
 
 
 def test_a_silent_worker_still_showing_nothing_six_hours_on_is_one_no_step_for_top(tmp_path):
@@ -4990,7 +5052,7 @@ def test_with_no_linear_credential_no_hand_in_is_recorded_and_the_log_says_so_on
     """Without the Linear app's two names in the file the watch is handed, or with no file, there is no hand-in ring:
     nothing is read or recorded, and the log says so once, however many sweeps and issues."""
     env = tmp_path / "relay.env"
-    env.write_text("GH_TOKEN=dummy-not-a-secret\nLINEAR_CLIENT_ID=\n")
+    env.write_text("SLACK_BOT_TOKEN=dummy\nLINEAR_CLIENT_ID=\n")
     asked = []
     lin = W.Linear(env, tmp_path / "linear-token.json", http=lambda *a: asked.append(a))
     api, clock, w, _ = swarm(tmp_path, linear=lin)
@@ -5285,9 +5347,12 @@ def test_a_name_one_lane_already_places_costs_no_linear_read(tmp_path):
     assert lin.calls == [] and sorted(d["placed_by"] for d in placed_files(tmp_path).values()) == ["handle", "name", "name"]
 
 
-def test_the_pods_wrapper_hands_the_watch_the_file_its_github_and_linear_credentials_are_in():
-    """Without `--gh-env` the watch reads no open pull request and no Linear issue, and says only that it has no
-    credential. The wrapper passes the pod's relay.env as a path: its values never enter the watch's environment."""
+def test_the_pods_wrapper_hands_the_watch_the_read_token_s_command_and_the_file_its_linear_credentials_are_in():
+    """Without `--gh-token-cmd` the watch reads no open pull request, and without `--gh-env` no Linear issue, saying only
+    that it has no credential. The wrapper names the pod's read-only token helper, run at each read, and passes relay.env
+    as a path for the Linear app's lines: neither a token nor the file's values enter the watch's environment."""
     sh = (W.Path(__file__).resolve().parents[3] / "infra/control/agent_watch.sh").read_text()
+    assert ' --gh-token-cmd "/data/infra/gh_read_token.sh --cached" ' in sh
     assert " --gh-env /root/.config/verity/relay.env " in sh
     assert not re.search(r"(^|[\s;(])(\.|source)\s+\S*relay\.env", sh), "never sourced"
+    assert "GH_TOKEN" not in sh and "GH_TOKEN" not in open(W.__file__).read()

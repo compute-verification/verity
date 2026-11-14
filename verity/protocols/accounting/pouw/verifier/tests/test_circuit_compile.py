@@ -27,7 +27,7 @@ from verity.circuits.ops import s8 as S8
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.boolean import s8 as BS8
 from verity.circuits.program import Program
-from verity.circuits.refs import Coll, array_of, concat
+from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, RecordType, Tuple, Value
 from verity.protocols.accounting.pouw.verifier import grind as GR
 from verity.protocols.accounting.pouw.prover.circuit import compile as C
@@ -79,7 +79,6 @@ XOR1 = _prim("CompileTestXor1", (("x", V1), ("e", V1)), V1, lambda x, e: x ^ e)
 #: a noise word's w-bit pieces, least significant first
 PIECES = {w: tuple(_prim(f"CompileTestPiece{w}x{s}", (("x", V32),), Value(w), lambda x, s=s, w=w: (x >> w * s) % (1 << w))
                    for s in range(32 // w)) for w in (8, 16)}
-ADD8 = ADD[8]
 #: a noise primitive (the coin rules' coin flow): it adds its coin to its operand
 NOISED8 = _prim("CompileTestNoised8", (("x", V8), ("e", V8)), V8, lambda x, e: (x + e) & 0xFF, ports=COIN)
 FOLD32 = _prim("CompileTestFold32", (("r", V32), ("t", V32)), V32, lambda r, t: (r * 0x9E3779B1 + t) & M32, ports=FOLD)
