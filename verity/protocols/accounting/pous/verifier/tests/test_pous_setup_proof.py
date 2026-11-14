@@ -77,7 +77,7 @@ class Given:
         self.recorded.append((template, inputs, outputs))
 
 
-def test_setup_window_reads_every_input_of_each_sampled_unit():
+def test_setup_window_reads_every_input_of_each_sampled_proof_block():
     """Each unit reads its block of ``store`` and its row of ``weights`` at their leaves, and its own row of the supplied
     base (72 leaves) and slot (one leaf), and every unit's ok output the supplied ok's one row; the circuit names the
     three as supplied, which proofs' `Registered` refuses until the window gives them (`proofs/zero-knowledge`); a

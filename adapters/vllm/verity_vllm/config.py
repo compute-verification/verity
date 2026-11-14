@@ -713,7 +713,7 @@ class CommitConfig:
     commit_timeout: int | None = option("--commit-timeout", env="COMMIT_TIMEOUT", type=int, default=None,
                                         help="seconds (default scales with B and the envelope; TP: 7200)")
     vu_export: str = option("--vu-export", env="VU_EXPORT", default="1",
-                            help="0 opts out: the Commit exports a sample of the row's VUs as instance sets (verity_vllm.pipeline.vu_export)")
+                            help="0 opts out: the Commit exports a sample of the row's VUs as input sets (verity_vllm.pipeline.vu_export)")
     serving_rows: str | None = option("--serving-rows", env="SERVING_ROWS", default=None, metavar="PARTITION_JSON",
                                       help="opt in, never the record: the Commit also commits every unit of this partition file's templates "
                                            "in M0's serving row format (verity_vllm.pipeline.serving_rows), fixed before serving; a "
