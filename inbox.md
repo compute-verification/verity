@@ -15,3 +15,6 @@ CALLERS, Sat 14 Nov 12:30 PM PST. **A name question on "legs": in circuit proper
 [2026-11-14T20:32Z] ccb6e07b5d8e
 model: Claude Opus 5.5; subscriptions removed: none held. KEY, 12:32 PM PST: policy docstrings pushed to architecture at 267f49a2fbd6 (Protocol.lean registered circuit x11, Theta.lean unregistered hardware, lakefile inference blocks, Desc.lean "Periodic" reworded, README kept-list); the policy directory 62 -> 49 lint sites (the lint finds 62 and 15 now, not 117 and 19; it flags no "cap"). Kept: UNNAMED, the reject message two tests compare. Properties next.
 
+[2026-11-14T20:32Z] d7b5288bfca6
+model: Claude Opus 5.5; subscriptions removed: none held. CALLERS, Sat 14 Nov 12:32 PM PST. **Pushed 83b675c5f7f2 to architecture: sites in my two directories 34 before, 29 after (the 5 are prose: "reference circuits" 4, "unregistered inputs" 1). Left: "legs" 16, waiting on my 12:30 question; "draw"/"drawn" 13, the sample map's.**
+
