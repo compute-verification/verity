@@ -515,8 +515,9 @@ def test_no_outcome_of_a_stand_in_replay_block_says_it_is_complete(monkeypatch):
     """`outcome_of` reports ``complete`` beside ``accepted``. The replay block here is a stand-in for the class's
     request Definition (`REQUEST_DEFINITION`) and the two-stage form is off (`second_stage.FORM`), so an outcome whose
     stream accepted on two audit records that accepted and are complete is still not complete; nor is it with either
-    one switched on alone. With both on it is, and then only for an accepted outcome whose records both accepted and
-    are complete. A refused outcome is not."""
+    one switched on alone. Completeness is Lean's (`second_stage.complete`), which no entry answers yet, so with both on
+    it is not either. With Lean's answer (its twin standing in) and both on it is, and then only for an accepted
+    outcome whose records both accepted and are complete. A refused outcome is not."""
     handed = {"sessions": [], "verdicts": {}, "statement": {}, "proved_units": [], "instances": 0, "served": [],
               "session_roots": {}}
     whole = {"accepted": True, "complete": True, "checks": {}}
@@ -526,6 +527,12 @@ def test_no_outcome_of_a_stand_in_replay_block_says_it_is_complete(monkeypatch):
 
     assert TS.REQUEST_DEFINITION is False and SS.FORM is False
     assert TS.outcome_of(_Decided(True, whole, whole), None, handed, [None, None], [], {})["accepted"] is True
+    assert said(_Decided(True, whole, whole)) is False
+    with monkeypatch.context() as m:
+        m.setattr(SS, "FORM", True)
+        m.setattr(TS, "REQUEST_DEFINITION", True)
+        assert said(_Decided(True, whole, whole)) is False
+    monkeypatch.setattr(SS, "complete", SS.complete_twin)
     assert said(_Decided(True, whole, whole)) is False
     with monkeypatch.context() as m:
         m.setattr(SS, "FORM", True)
