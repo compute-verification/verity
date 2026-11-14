@@ -1,7 +1,7 @@
 """The gate's warden rehearsal (`warden-rehearse`, `auditor.py`), with its unit, the tunnel and the rehearsal injected:
 the gate refuses a request it can't check, one whose minutes the traffic doesn't fit in, a read-only key, and a second
 rehearsal (a certifier's or a warden's) while one runs; a lane's own key starts one, whose run (as `auditor`) runs the
-warden through the tunnel into `witness/`, publishes to `out/` only the warden's deployment, its certificates, a
+network certifier through the tunnel into `witness/`, publishes to `out/` only its deployment, its certificates, a
 row registration's among them, and each cells' registration as the witness writes it less its wiring and its cost
 (a line the gate's one list of published keys doesn't rule fails the end and publishes no registration), and writes
 its end; `fetch` gives `witness/` to the run's own lane and
@@ -276,7 +276,7 @@ def tar_names(blob: bytes) -> set[str]:
         return set(tar.getnames())
 
 
-def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_and_certificates(host):
+def test_a_rehearsal_writes_witness_apart_and_publishes_its_deployment_and_certificates(host):
     seen = []
     run, end = run_warden(host, WARDEN_FILES, seen)
     d = host.certifier / run
