@@ -61,10 +61,9 @@ piece at that table, where the three are theorems, and with them the statements'
 The reading's statements and messages are taken to be the case's (`hS`, `hM`), which holds by definition at
 `SessionMsgs.sessionReading`.
 
-**Not established here**: `StmtsRead`, `PartsHeldAt`, `PinHeldAt` and `SessionCoins.StmtsBytesFit`, each a
-hypothesis, and `agreed_form`'s `hR`. `SessionCoins.StmtsFit` is `SessionCoins.stmtsFit_of_bytes`
-(`FormSetup.lean`) of the last: the form refuses evidence of `2^64` statements or more, and nothing it checks
-bounds a statement's bytes, a sum of fields it bounds one by one.
+**Not established here**: `StmtsRead`, `PartsHeldAt` and `PinHeldAt`, each a hypothesis, and `agreed_form`'s `hR`.
+`SessionCoins.StmtsFit` is `SessionCoins.stmtsFit_of` (`FormSetup.lean`): the form refuses evidence of `2^64`
+statements or more, and a play one of whose sessions' statements is `2^64` bytes or more.
 -/
 
 @[expose] public section
@@ -103,7 +102,7 @@ theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
     (hM : ∀ o t j, S.msg o t j = (C o).bind fun k => SessionMsgs.msgAtCase k t j)
     (hplay : PlayAccepts A C S P') (hsess : SessionMsgs A C S P') (hof : HeldOfAt A C) (hst : StmtsRead A C S)
     (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S) (hparts : PartsHeldAt A C)
-    (hbytes : SessionCoins.StmtsBytesFit C Good) (hsent : CaseIsSent C) (hC : CaseCommits C) (hx : stmtOf c = some x)
+    (hsent : CaseIsSent C) (hC : CaseCommits C) (hx : stmtOf c = some x)
     (hR : ∀ (ω : TapeOf V θ F c σ) (r : Coins A x),
       FormAccepts C ((formFrame V A x θ F c σ C S dev Good L).out ω r) →
       Good ((formFrame V A x θ F c σ C S dev Good L).out ω r) →
@@ -116,7 +115,7 @@ theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
     MessagesFixedAgreed V A x θ F c σ (formFrame V A x θ F c σ C S dev Good L) (formReading A C S dev)
       (FormAccepts C) Good (formMiss V A x θ F c σ C S dev Good L q) := by
   have hcount : StmtsCount A C Good := stmtsCount_of Good hof hparts
-  have hfit : SessionCoins.StmtsFit C Good := SessionCoins.stmtsFit_of_bytes hbytes
+  have hfit : SessionCoins.StmtsFit C Good := SessionCoins.stmtsFit_of C Good
   have hsz : SessionCoins.HeldSize := fun _ _ _ hh => held_size hh
   have hprint : SessionCoins.StmtsPrint C Good := stmtsPrint_of C Good
   have hcoins : PlayCoinsOne A C Good L := by
