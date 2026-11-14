@@ -3,10 +3,10 @@ module
 public import Randomness
 
 /-!
-# `tagged`: PoUW's domain-separated hash (`verity.core.protocols.pouw.protocol.tagged`)
+# `tagged`: PoUW's domain-separated hash (`verity.protocols.accounting.pouw.verifier.protocol.tagged`)
 
 `tagged tag parts = SHA-512(tag ‖ 0x00 ‖ frame(part)…)`, all 64 bytes. A part is framed as core's randomness frames it
-(`verity.ml.randomness.frame`, here `FlockSoundness.Randomness.frame`): a tag byte (`b` bytes, `s` a UTF-8 string, `i` a
+(`verity.commitments.randomness.frame`, here `FlockSoundness.Randomness.frame`): a tag byte (`b` bytes, `s` a UTF-8 string, `i` a
 natural as minimal big-endian bytes, one zero byte for 0), the body's length as 8 bytes big-endian, then the body.
 -/
 

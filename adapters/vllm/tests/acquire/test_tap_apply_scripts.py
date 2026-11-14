@@ -1,4 +1,4 @@
-"""The two modules that patch a FlashAttention tree for the tap, `verity_vllm.acquire.fa2_tap_src.apply_v8` and
+"""The two modules that patch a FlashAttention tree for the tap, `verity_vllm.acquire.fa2_tap_src.apply_fa2_tap` and
 `verity_vllm.acquire.fa3_tap_src.apply_fa3_tap`: an import of one does nothing, and its `main` does the work.
 
 Torch-free, and with no FlashAttention tree: a `main` is stopped at its first step that needs one.
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-FA2 = "verity_vllm.acquire.fa2_tap_src.apply_v8"
+FA2 = "verity_vllm.acquire.fa2_tap_src.apply_fa2_tap"
 FA3 = "verity_vllm.acquire.fa3_tap_src.apply_fa3_tap"
 
 
@@ -54,11 +54,11 @@ def test_an_import_does_nothing(name, arguments, tmp_path, monkeypatch, capsys, 
 
 
 def test_fa2_applies_its_patch_first_and_takes_this_directory_by_default(tmp_path, ran):
-    apply_v8 = importlib.import_module(FA2)
+    apply_fa2_tap = importlib.import_module(FA2)
     src = tmp_path / "csrc" / "flash_attn" / "src"
     src.mkdir(parents=True)
     with pytest.raises(_Ran):
-        apply_v8.main(apply_v8.Options(src=str(src)))
+        apply_fa2_tap.main(apply_fa2_tap.Options(src=str(src)))
     assert ran == [((["git", "apply", str(_dir(FA2) / "verity_tap_v7.patch")],), {"cwd": str(tmp_path), "check": True})]
 
 

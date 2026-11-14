@@ -470,7 +470,7 @@ theorem poolChained_iff (rec : Json) (v : Spot.Docket.Verifier) :
   · simp
   · rcases he : Spot.Docket.entryOf rec p.pin with _ | e <;>
       rcases ho : Spot.Docket.poolOpen rec v p with _ | ⟨d, r⟩ <;> simp [he, ho]
-    exact ⟨fun h => ⟨d, r, ⟨rfl, rfl⟩, h⟩, fun ⟨_, _, ⟨h1, h2⟩, h⟩ => by subst h1 h2; exact h⟩
+    all_goals exact ⟨fun h => ⟨d, r, ⟨rfl, rfl⟩, h⟩, fun ⟨_, _, ⟨h1, h2⟩, h⟩ => by subst h1 h2; exact h⟩
 
 /-- The pool's codes (`VStar.Recursive.Caller.poolMarks`) add none exactly when the window names the pool's reset, week
 and spent mark and no reset falls where the week's is spent before it. -/

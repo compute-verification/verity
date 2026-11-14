@@ -280,7 +280,7 @@ def indicesHeld (rec h : Json) : Bool :=
   | some n, .arr is => is.size == n && (List.range n).all fun i => (is[i]? >>= nat?) == some i
   | _, _ => false
 
-/-- The port a registration names a window's row tables' root at (`verity.commitments.windows.rows.TABLE_PORT`). -/
+/-- The port a registration names a window's row tables' root at (`verity.commitments.periods.rows.TABLE_PORT`). -/
 def TABLE_PORT : String := "row-table"
 
 /-- The refusal of a registration that names a row tables' root (`rootsOf`, `publicPorts`). -/
