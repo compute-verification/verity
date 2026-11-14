@@ -52,7 +52,9 @@ when:
   below's wherever in its file it stands: it is compared by its file and what it is, with a count, never by its line, so
   an edit above a site moves it and adds none, a second site of the same kind in its file is the change's, and a file's
   count that a mended site lowers is no new violation, whether its entry falls with it or stays (`beyond`); a list
-  lowered under a tree that its base's list covered is one.  In a temporary worktree of the change's top, each
+  lowered under a tree that its base's list covered is one.  A file the change renames (``git diff -M``) is its old
+  path's file, so a move adds none of the sites its base holds there past its list, which are named at the old path
+  (`at_paths`).  In a temporary worktree of the change's top, each
   lint directory to run and both ``ruff.toml`` files are replaced by the base's, each allowlist there holding the top's
   entries for its slug (none for a deleted one), P16's the top's public commands too, and the ``test_no_new*`` tests
   of each lint whose code or allowlist changed (every lint's in a directory whose shared code did) run without pytest, the ruff
@@ -1289,6 +1291,28 @@ def beyond(found: list[str], had: list[str]) -> tuple[list[str], list[str]]:
     return [old[i] for i in sorted(old)], [v for i, v in enumerate(found) if i not in old]
 
 
+def renamed(c: Change) -> dict[str, str]:
+    """{old path: new path} of each file the change renames (``git diff -M``)."""
+    fields = git("diff", "--name-status", "-z", "-M", "--diff-filter=R", c.lo, c.hi).split("\0")
+    return {fields[i + 1]: fields[i + 2] for i in range(0, len(fields) - 2, 3)}
+
+
+def at_paths(items: list[str], to: dict[str, str], repo_lints: frozenset[str]) -> list[str]:
+    """``items``, each violation that names a file ``to`` maps named at that file's path there.  A repository lint (one of
+    ``repo_lints``, the names of ``tests/lint``'s modules) names a file from the root, the integration's lints from
+    ``INTEGRATION``."""
+    out = []
+    for v in items:
+        s, m = v.partition(": ")[0], SITE.match(v) or RUFF_PAIR.match(v)
+        new = None
+        if m and s in repo_lints:
+            new = to.get(m[1])
+        elif m and (n := to.get(f"{INTEGRATION}/{m[1]}", "")).startswith(f"{INTEGRATION}/"):
+            new = n.removeprefix(f"{INTEGRATION}/")
+        out.append(v[:m.start(1)] + new + v[m.end(1):] if new is not None else v)
+    return out
+
+
 def added_by(rev: str, items: list[str]) -> str:
     """Each violation in ``items`` with the change on ``rev``'s first-parent chain that added the line it names
     (``lint: file:line ...``), by `git blame --first-parent`: ``#N`` for a queue merge, else the commit.  One that names only
@@ -1343,8 +1367,12 @@ def judge(c: Change, base: str) -> None:
             c.lints, failures = base_lints(c, selection, after)
             found = violations(failures)
             if found:
-                at_base = violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1])
+                to = renamed(c)
+                repo = frozenset(PurePosixPath(p).stem.removeprefix("test_")
+                                 for p in git("ls-tree", "--name-only", c.lo, f"{REPO_LINT}/").splitlines())
+                at_base = at_paths(violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1]), to, repo)
                 inherited, new = beyond(found, at_base)
+                inherited = at_paths(inherited, {n: o for o, n in to.items()}, repo)
                 had, found = set(at_base) | (set(found) - set(new)), new
                 like, rekeyed, rekey = base_form(before, after, {**was_at, **now_at})
                 if found and rekeyed:
