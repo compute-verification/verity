@@ -612,7 +612,7 @@ reaches = [
 
 [[place]]
 paths = [
-    "verity/protocols/proofs/flock/sigma",
+    "verity/protocols/proofs/flock/verifier/sigma",
 ]
 trusted = true
 

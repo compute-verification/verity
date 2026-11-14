@@ -10,11 +10,11 @@ backward.proofsInPublic = true
 
 [[require]]
 name = "flock_verifier"
-path = "../verifier"
+path = ".."
 
 [[require]]
 name = "verity_difftest"
-path = "../../../../circuits/difftest"
+path = "../../../../../circuits/difftest"
 
 [[lean_exe]]
 name = "sigma-difftest"
