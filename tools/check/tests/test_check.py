@@ -2262,7 +2262,7 @@ def test_train_sh_hands_the_lock_runs_bookkeeping_flag_to_a_check_that_takes_it(
     check.py takes it, and on a commit whose check.py predates it the run launches without it, saying so; with --no-regenerate,
     --shard or without --deferred it is refused before anything launches."""
     git, train, argv = _train_repo(tmp_path)
-    check = tmp_path / "repo" / "tools" / "verity" / "check" / "check.py"
+    check = tmp_path / "repo" / "tools" / "check" / "check.py"
     check.parent.mkdir(parents=True)
     check.write_text('BOOKKEEPING = "--bookkeeping-warn"\n')
     git("add", "tools")
@@ -2290,7 +2290,7 @@ def test_train_sh_hands_the_loops_deselect_list_to_a_check_that_takes_it(tmp_pat
     it, and on a commit whose check.py predates it the run launches without it, saying so; without --deferred, by a relative
     path or with --cc-records it is refused before anything launches."""
     git, train, argv = _train_repo(tmp_path)
-    check = tmp_path / "repo" / "tools" / "verity" / "check" / "check.py"
+    check = tmp_path / "repo" / "tools" / "check" / "check.py"
     check.parent.mkdir(parents=True)
     check.write_text('DESELECT_FILE = "check-deselect.txt"\n')
     git("add", "tools")
