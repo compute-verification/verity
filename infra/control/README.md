@@ -236,9 +236,12 @@ it is free for: a row naming none is free for none, and said. Never `auto`, neve
 launches at most `--max`; never a number whose last launch of the loop's is in flight (a run whose state can't be read
 stays so) or ran and ended less than its `every` ago, whatever the door says; never a command that takes a run id only its
 owner picks (FIRE_RUN); never a loop's own number (a row whose command's script is under `infra/`); never a command that
-failed twice running under its rows as they are, until a change to them. A launch that never ran (it named no run, or its
-run ended without taking its slot, as a pool that refuses it at once does) is a fault of the launch, not of the command:
-after two in a row the number waits its `every` from the last, and is then tried once more. Each pass holds
+failed twice running under its rows as they are, until a change to them. The loop names each run (`--id`) and records it
+before launching, so a launch that prints no run line, or that its timeout kills, is judged by that run's own record: a
+run that registered and reached its machine is in flight and never launched again while it is. A launch that never ran
+(its run never registered or never reached its machine, or ended without taking its slot, as when a pool refuses it at
+once) is a fault of the launch, not of the command: after two in a row the number waits its `every` from the last, and is
+then tried once more. Each pass holds
 `metrics-rerun.json.lock`, so a dry run and the live loop never share the clone; one that finds it held does nothing and
 says so. A record that isn't JSON is moved aside and said, and every number then waits its `every`, so nothing in flight is
 launched twice; a record that is lost may launch a run still in flight once more. A launch runs `main`'s `research` from

@@ -53,12 +53,13 @@ def free(machine, metrics=None, start="2026-11-14T00:00:00Z", until="2026-11-15T
 
 
 class Pod:
-    """The pass's world: the door's ages (None: listed without a reading), each run's state, rc and whether it started, and
-    each launch's output; it records what it was asked."""
+    """The pass's world: the door's ages (None: listed without a reading), each run's state, rc and whether it started (a run
+    is registered once its launch printed its run line, or when `states` holds it), and each launch's output; it records what
+    it was asked."""
 
     def __init__(self, ages=None, states=None, out=None, listed=None, on_refresh=None):
         self.ages, self.states, self.lines, self.launched = ages or {}, states or {}, [], []
-        self.listed, self.on_refresh = listed, on_refresh
+        self.listed, self.on_refresh, self.named, self.registered = listed, on_refresh, 0, set()
         self.out = out or (lambda n: f"research: run {run_id(n)} launched\n")
 
     def log(self, msg):
@@ -73,15 +74,25 @@ class Pod:
         ids = self.listed if self.listed is not None else self.ids
         return {"metrics": [{"id": i, "ageMs": self.ages.get(i)} for i in ids]}
 
+    def new_id(self, now):
+        self.named += 1
+        return run_id(self.named)
+
     def status(self, run):
+        if run not in self.states and run not in self.registered:
+            return None
         s = self.states.get(run, RUNNING)
         if isinstance(s, Exception):
             raise s
         return {"state": s[0], "rc": s[1], "started": s[2]}
 
     def launch(self, argv):
-        self.launched.append(argv)
-        return 0, self.out(len(self.launched))
+        i = argv.index("--id")
+        self.launched.append(argv[:i] + argv[i + 2:])
+        said = self.out(len(self.launched))
+        if f"run {argv[i + 1]} launched" in said:
+            self.registered.add(argv[i + 1])
+        return 0, said
 
 
 def setup(tmp_path, files, **kw):
@@ -314,6 +325,39 @@ def test_a_launch_that_names_no_run_is_a_fault_of_the_launch_and_never_holds_the
     assert len(pod.launched) == 2 and "never ran" in pod.lines[-1] and "failed twice" not in pod.lines[-1]
     run(cfg, pod, state, now=NOW + 900 + 3601)
     assert len(pod.launched) == 3 and state["launches"][-1]["state"] == "submitted"
+
+
+def test_a_launch_its_timeout_killed_after_its_run_registered_is_never_launched_again(tmp_path):
+    cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/share", CPU, every="1h")]})
+    pod = Pod(out=lambda n: "research: shipping the tree\n", states={run_id(1): ("waiting", None, False)})
+    state, _ = run(cfg, pod)
+    (e,) = state["launches"]
+    assert (e["run"], e["state"]) == (run_id(1), "waiting")
+    assert pod.lines[-1].startswith("launch of compute-accounting/share named no run (exit 0: research: shipping the tree), "
+                                    f"but run {run_id(1)} is registered (waiting): it is in flight")
+    for n in range(1, 20):                                    # past the launch's timeout and its every, a pass each 15 min
+        run(cfg, pod, state, now=NOW + n * 900)
+    assert len(pod.launched) == 1
+    pod.states[run_id(1)] = ("done", 0, True)
+    run(cfg, pod, state, now=NOW + 20 * 900)
+    assert len(pod.launched) == 1 and state["launches"][0]["state"] == "passed"
+
+
+def test_a_launch_that_stopped_before_its_run_reached_its_machine_never_ran(tmp_path):
+    cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/share", CPU, every="1h")]})
+    pod = Pod(out=lambda n: "", states={run_id(1): (R.UNSENT, None, False)})
+    state, _ = run(cfg, pod)
+    assert state["launches"][0]["state"] == "unlaunched"
+    assert pod.lines[-1] == (f"launch of compute-accounting/share named no run (exit 0) and run {run_id(1)} never reached its "
+                             "machine: it printed nothing, a fault of the launch and not of the command")
+
+
+def test_the_loop_names_each_run_and_records_its_id_before_launching(tmp_path):
+    cfg = setup(tmp_path, {"benchmarks/compute": [row("compute-accounting/share", CPU)]})
+    pod = Pod()
+    state, saved = run(cfg, pod)
+    assert saved[0]["launches"][0]["run"] == run_id(1) and saved[0]["launches"][0]["state"] == "launching"
+    assert state["launches"][0]["argv"][:4] == ["research", "run", "--id", run_id(1)]
 
 
 def test_a_row_that_does_not_split_is_refused_and_the_pass_goes_on(tmp_path):

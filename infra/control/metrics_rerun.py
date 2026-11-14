@@ -21,9 +21,9 @@ that finds it held does nothing and says so. Then:
               - it names no placeholder but its machine's (a run id such as FIRE_RUN, which only its owner picks);
               - none of its numbers has a launch of this loop's still in flight, or one that ran and ended less than that
                 number's `every` ago, whatever the door says (the record);
-              - none of its numbers has had NEVER_MAX launches in a row that never ran (a launch that named no run, or a run
-                that ended without taking its slot) unless that number's `every` has passed since the last; then it is
-                tried once more;
+              - none of its numbers has had NEVER_MAX launches in a row that never ran (a run that never registered or never
+                reached its machine, or one that ended without taking its slot) unless that number's `every` has passed
+                since the last; then it is tried once more;
               - it has not failed twice running under the declaration it has now (two runs that started and failed): a
                 change to its rows launches it again;
               - the record was not reset (a corrupt one moved aside) less than that number's `every` ago;
@@ -34,11 +34,13 @@ that finds it held does nothing and says so. Then:
               - this pass has launched fewer than `--max`;
               - the stop file (`--stop`) is absent, read again just before each launch: it stops every launch (a dry run
                 judges all the same).
-    launch    in the tree, `research run --on MACHINE [--pool POOL] --project verity --source .`, then the row's allowed
-              options but its `--on`, then its workload, with the pod's site key left out of its environment. The record
-              holds the launch before it starts (its numbers, command, declaration, machine and time) and its run id once
-              the launch names one. Each pass reads how the record's launches in flight stand (`research.runs`) before it
-              judges; one whose run can't be read stays in flight.
+    launch    in the tree, `research run --id RUN --on MACHINE [--pool POOL] --project verity --source .`, then the row's
+              allowed options but its `--on`, then its workload, with the pod's site key left out of its environment. The
+              loop names the run: the record holds the launch and its run id before it starts (its numbers, command,
+              declaration, machine and time). A launch that prints no run line (it failed, or its timeout killed it) is
+              judged by that run's own record: a run that registered and reached its machine is in flight, and never
+              launched again while it is; one that didn't never ran. Each pass reads how the record's launches in flight
+              stand (`research.runs`) before it judges; one whose run can't be read stays in flight.
 
 The record keeps the newest KEEP launches, every launch in flight, and each declared number's newest NEVER_MAX + 1. A record
 that isn't JSON is moved aside (`--state`.corrupt) and said once, and every number is then held for its `every`, so nothing
@@ -110,7 +112,8 @@ ALLOWED: dict[str, re.Pattern | frozenset | None] = {
 }
 OWNERS = "NODE"                                         # `--on NODE`: a machine its owner picks
 PLACEHOLDER = re.compile(r"^\[?([A-Z][A-Z0-9_]+)\]?$")  # FIRE_RUN, [RUN: what the command's owner fills in
-NEVER_RAN = ("unlaunched", "unrun")                     # the launcher named no run; the run ended without taking its slot
+NEVER_RAN = ("unlaunched", "unrun")                     # the run never registered or reached its machine; it never took its slot
+UNSENT = "unsent"                                       # a registered run whose launch stopped before it reached its machine
 OVER = ("passed", "failed", *NEVER_RAN)
 NEVER_MAX = 2                                           # launches in a row that never ran, before the number waits its every
 LAUNCH_S = dispatch.LAUNCH_TIMEOUT_S                    # a launch that names no run by then never ran
@@ -283,27 +286,34 @@ def of(record: list[dict], metric: str) -> list[dict]:
     return [e for e in record if metric in e.get("metrics", [])]
 
 
-def refresh(record: list[dict], status: Callable[[str], dict], now: float, say: Callable[[str], None]) -> None:
-    """How each launch the record holds as in flight stands now: passed, failed (it ran), unrun (it never took its slot), or
-    still in flight. A launch that named no run is never in flight; one whose run can't be read stays in flight."""
+def settle(e: dict, status: Callable[[str], dict | None], now: float, over: bool, say: Callable[[str], None]) -> None:
+    """How launch `e` stands, read from its run's own record: passed, failed (it ran), unrun (it never took its slot), unlaunched
+    (no record of the run, or one that never reached its machine, once its launch is `over`), or in flight. A run whose record
+    can't be read stays in flight."""
+    try:
+        s = status(e["run"]) if e.get("run") else None
+    except Exception as x:  # noqa: BLE001  (a run whose machine can't be read stays in flight; read again next pass)
+        say(f"run {e['run']} ({', '.join(e['metrics'])}): not read ({type(x).__name__}: {x}); it stays in flight")
+        return
+    if s is None or s["state"] == UNSENT:
+        if over:
+            why = f"run {e.get('run')} never reached its machine" if s else f"no record of run {e.get('run')}"
+            e.update(state="unlaunched", ended=iso(now), why=why)
+        return
+    if s["state"] in ENDED:
+        ok = "passed" if s["state"] == "done" and s["rc"] == 0 else "failed" if s["started"] else "unrun"
+        e.update(state=ok, ended=iso(now), rc=s["rc"], how=s["state"])
+        say(f"run {e['run']} ({', '.join(e['metrics'])}): {ok} ({s['state']}, rc {s['rc']})")
+    else:
+        e["state"] = s["state"]
+
+
+def refresh(record: list[dict], status: Callable[[str], dict | None], now: float, say: Callable[[str], None]) -> None:
+    """How each launch the record holds as in flight stands now (`settle`). A launch is over once LAUNCH_S has passed since it
+    began: until then a pass that died during it may have left its `research run` still registering the run."""
     for e in record:
-        if e.get("state") in OVER:
-            continue
-        if not e.get("run"):
-            if now - at(e["at"]) >= LAUNCH_S:
-                e.update(state="unlaunched", ended=iso(now), why="the launch named no run")
-            continue
-        try:
-            s = status(e["run"])
-        except Exception as x:  # noqa: BLE001  (a run whose machine can't be read stays in flight; read again next pass)
-            say(f"run {e['run']} ({', '.join(e['metrics'])}): not read ({type(x).__name__}: {x}); it stays in flight")
-            continue
-        if s["state"] in ENDED:
-            ok = "passed" if s["state"] == "done" and s["rc"] == 0 else "failed" if s["started"] else "unrun"
-            e.update(state=ok, ended=iso(now), rc=s["rc"], how=s["state"])
-            say(f"run {e['run']} ({', '.join(e['metrics'])}): {ok} ({s['state']}, rc {s['rc']})")
-        else:
-            e["state"] = s["state"]
+        if e.get("state") not in OVER:
+            settle(e, status, now, now - at(e["at"]) >= LAUNCH_S, say)
 
 
 def trim(record: list[dict], declared: set[str]) -> None:
@@ -510,22 +520,28 @@ def _pass(state: dict, cfg: Settings, fx, now: float, save: Callable[[dict], Non
         say(f"{'would launch' if dry_run else 'launch'} {nums} on {d.machine}: {d.why}: {shlex.join(d.argv)}")
         if dry_run:
             continue
+        rid = fx.new_id(now)
+        argv = [*d.argv[:2], "--id", rid, *d.argv[2:]]
         e = {"metrics": d.job.ids, "command": d.job.command, "declared": d.job.declared, "machine": d.machine,
-             "argv": list(d.argv), "commit": commit, "at": iso(now), "run": None, "state": "launching"}
+             "argv": argv, "commit": commit, "at": iso(now), "run": rid, "state": "launching"}
         record.append(e)
         save(state)                                      # before the launch: a restart during it must not launch it again
         try:
-            rc, said = fx.launch(list(d.argv))
+            rc, said = fx.launch(argv)
         except (OSError, subprocess.SubprocessError) as x:
             rc, said = None, f"{type(x).__name__}: {x}"
-        if m := dispatch.LAUNCHED.search(said):
-            e.update(run=m.group(1), state="submitted")
-            say(f"launched {nums}: run {m.group(1)}")
+        if dispatch.LAUNCHED.search(said):
+            e["state"] = "submitted"
+            say(f"launched {nums}: run {rid}")
         else:
-            tail = " | ".join(ln.strip() for ln in said.splitlines()[-3:] if ln.strip())[-400:]
-            e.update(state="unlaunched", ended=iso(now), rc=rc, why=f"the launch named no run: {tail or 'it printed nothing'}")
-            say(f"launch of {nums} named no run (exit {rc}), a fault of the launch and not of the command: "
-                f"{tail or 'it printed nothing'}")
+            tail = " | ".join(ln.strip() for ln in said.splitlines()[-3:] if ln.strip())[-400:] or "it printed nothing"
+            settle(e, fx.status, now, True, say)
+            if e["state"] == "unlaunched":
+                e.update(rc=rc, why=f"{e['why']}: {tail}")
+                say(f"launch of {nums} named no run (exit {rc}) and {e['why']}, a fault of the launch and not of the command")
+            elif e["state"] not in OVER:
+                say(f"launch of {nums} named no run (exit {rc}: {tail}), but run {rid} is registered ({e['state']}): it is "
+                    "in flight, and no later pass launches it again while it is")
         save(state)
     trim(record, {i for j in jobs for i in j.ids})
     if not dry_run:
@@ -568,12 +584,23 @@ class Pod:
 
         return metrics.Route(metrics.METRICS, metrics._key()).call()
 
-    def status(self, run: str) -> dict:
+    def new_id(self, now: float) -> str:
+        from research import runs
+
+        return runs.new_run_id(now)
+
+    def status(self, run: str) -> dict | None:
         """The run's state and exit code, and whether it started: took its slot, or, outside a pool, ran and didn't exit as
-        slot.py does when it never ran its command."""
+        slot.py does when it never ran its command. None when no run of that id is registered here; UNSENT when its launch
+        stopped before it named the run's directory on its machine (remote.json's `remote_run_dir`), so it never got there."""
         from research import asker, monitors, remote, runs
 
-        d = runs.resolve(runs.runs_root(), run)
+        d = runs.runs_root() / run
+        if not d.is_dir():
+            return None
+        p = d / "remote.json"
+        if not (json.loads(p.read_text()) if p.exists() else {}).get("remote_run_dir"):
+            return {"state": UNSENT, "rc": None, "started": False}
         rec = remote.fetch(d)
         if rec.get("last_fetch_error"):
             raise ConnectionError(f"its machine is unreachable (rc {rec['last_fetch_error'].get('rc')})")
