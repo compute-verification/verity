@@ -3,6 +3,7 @@ module
 public import Flock.Zk
 public import Proofs.Flock.Claims.JsonNorm
 public import Proofs.Flock.Soundness.Discharge.Hidden.CanonOk
+public import Proofs.Flock.Soundness.Discharge.Hidden.EmptyDraw
 public import Proofs.Flock.Soundness.Discharge.Hidden.OkWith
 public import Proofs.Flock.Soundness.Discharge.Hidden.Public
 public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
@@ -153,7 +154,6 @@ theorem drawn_okWith {c : Circuit} {pop : Public} {d : Json} {D : Draw.UnitDraw}
     | exact ⟨rfl, rfl, rfl, rfl⟩
     | exact okWith_forIn_array _ _ _
     | exact publicDigest_okWith hcan
-    | skip
 
 /-! ## What a sample's header holds -/
 
@@ -410,5 +410,18 @@ theorem setupHidden_sibling {tags : Tags} {cf pf₁ pf₂ : ByteArray} {coins : 
       Stmt.Sibling st₁ st₂ ∧ Zk.shapeOk st₂ = Zk.shapeOk st₁ := by
   obtain ⟨st₂, h₂, hs⟩ := sibling_core (setupHidden_spec' h).parse h hn₁ hpop hkey hpub hd₂ hcan
   exact ⟨st₂, h₂, hs, shapeOk_sibling hs⟩
+
+/-- **A setup at the sample of no unit, carried to another public file's sample of no unit** (`emptyDraw`):
+`setupHidden_sibling` at the sample `flock-verify draw` prints for no unit of `pf₂`'s population. -/
+theorem setupHidden_noUnit {tags : Tags} {cf pf₁ pf₂ : ByteArray} {coins : Coins}
+    {tables : List (String × ByteArray)} {d₁ : Json} {partition : Option Json} {program : Option ByteArray}
+    {st₁ : Stmt} {pop : Public}
+    (h : Stmt.setupHidden tags cf pf₁ coins tables (some d₁) partition program none = .ok st₁) (hn₁ : st₁.n = 0)
+    (hpop : HmOut.loadPublic tags st₁.c pf₂ = .ok pop)
+    (hkey : (pop.header.getObjVal? "public_inputs").toOption = none)
+    (hpub : HmOut.checkPublic st₁.c pop = .ok ()) :
+    ∃ st₂, Stmt.setupHidden tags cf pf₂ coins tables (some (emptyDraw pop.n)) partition program none = .ok st₂ ∧
+      Stmt.Sibling st₁ st₂ ∧ Zk.shapeOk st₂ = Zk.shapeOk st₁ :=
+  setupHidden_sibling h hn₁ hpop hkey hpub (ofJson_emptyDraw pop.n) (canonUtf8_emptyDraw pop.n)
 
 end FlockSoundness.Discharge.Hidden
