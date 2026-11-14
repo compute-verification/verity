@@ -97,8 +97,8 @@ gives its outcome (`prove`, `outcome_of`).
   shows there); ``audit.staging``, the audit's staging before and after the sample; ``interior_commit``, this
   command's clock over the capture's read, the interior's commitment and its files (`replayed`), not its docket
   or its sample; and ``replay``, copied from the replay's own record (``--replay-record``, `replay_cost`), since this
-  command runs no replay. ``--devices`` gives the audit's proof server its cards by nvidia-smi's indices
-  (`a5.proof_server`), and is the only place the command takes cards from: it reads no lease and asks for none.
+  command runs no replay. ``--gpus`` gives the audit's proof server its cards by nvidia-smi's indices
+  (`a5.proof_server`, behind the ZK server or not), and is the only place the command takes cards from: it reads no lease and asks for none.
   Without it the sessions are proved on the CPU.
 
 Until the class's request Definition lands, the replay block is `boundary_rows`' stand-in (one check template's
@@ -115,7 +115,7 @@ Usage::
         [--proof-deadline S] [--stop RULE [--stop-design rate:NUM/DEN]] [--challenger-host HOST]
     two_stage.py second --stage1 OUT/<class>/stage1.json --boundary DIR --capture CAPTURE --challenger local --main FILE \\
         --challenger-host HOST --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --out OUT2 [--proofs PARAMS.json] \\
-        [--rids IDS.json] [--zk-server F] [--unlinked] [--stop RULE] [--kept PRIVATE] [--devices 0,1] [--replay-record REPLAY.json]
+        [--rids IDS.json] [--zk-server F] [--unlinked] [--stop RULE] [--kept PRIVATE] [--gpus 0,1] [--replay-record REPLAY.json]
 
 Each DIR a class's (``w<window>/p<P>-o<O>/``), every one of one window (``second``: one class's, with its private
 files); COUNTS.json each check template's own count in place of one for all, ``{descriptor id: k_t}`` (`counts`);
@@ -1544,9 +1544,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     g.add_argument("--zk-server", help="Lean's flock-zk-server: every session behind the ZK server; without it each runs "
                                       "prove --zk itself, as SPOT[Flock]'s proof server does")
     g.add_argument("--stop", help=STOP_HELP)
-    g.add_argument("--devices", help="the audit's proof server's cards, their indices comma-separated (0,1): a prover a "
-                                     "card (`flock-circuit prove --zk --gpu`, a device build); without it one CPU prover. "
-                                     "Never with --zk-server, whose sessions prove on the CPU")
+    g.add_argument("--gpus", help="the audit's proof server's cards, their indices comma-separated (0,1), as nvidia-smi "
+                                  "numbers them: a prover a card (`flock-circuit prove --zk --gpu`, a device build), "
+                                  "behind the ZK server or not; without it one CPU prover. CUDA_DEVICE_ORDER is set to "
+                                  "PCI_BUS_ID for the provers, so CUDA numbers the cards as nvidia-smi does")
     g.add_argument("--replay-record", help="the record the replay wrote beside --capture (replay.json): its seconds and "
                                            "cards go in the summary's `replay`, which this command has no clock over")
     g.add_argument("--delta", type=float, default=0.5)
@@ -1572,12 +1573,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     g.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     if a.cmd == "second":
-        if a.devices is not None:
+        if a.gpus is not None:
             a5 = _a5()
             try:
-                a.devices = a5.cards(a.devices)
+                a.gpus = a5.cards(a.gpus)
             except argparse.ArgumentTypeError as e:
-                ap.error(f"--devices: {e}")
+                ap.error(f"--gpus: {e}")
             if why := a5.devices_refusal(a):
                 ap.error(why)
         return _second(a)

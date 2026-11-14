@@ -1684,15 +1684,15 @@ def window_trees_held(published: dict, done: Sequence[dict], relayed: Sequence[s
     return {"ok": why is None, "sessions": len(named), "why": why, "relay": list(relayed)}
 
 
-#: a prover given a card numbers the cards as nvidia-smi does (by PCI bus), so ``--devices`` names nvidia-smi's indices
+#: a prover given a card numbers the cards as nvidia-smi does (by PCI bus), so ``--gpus`` names nvidia-smi's indices
 NVIDIA_SMI_ORDER = {"CUDA_DEVICE_ORDER": "PCI_BUS_ID"}
 
 
 def devices(a: argparse.Namespace) -> list[int] | None:
-    """The cards the audit's proof server proves on (``a.devices``, `cards`'s), by nvidia-smi's indices
+    """The cards the audit's proof server proves on (``a.gpus``, `cards`'s), by nvidia-smi's indices
     (`NVIDIA_SMI_ORDER`); None: on the CPU. The command line is the only place an audit takes cards from: it reads no
     lease and asks for none."""
-    return list(getattr(a, "devices", None) or ()) or None
+    return list(getattr(a, "gpus", None) or ()) or None
 
 
 def card_clocks(cards: Sequence[int] | None, run: Callable[[list[str]], str] | None = None) -> dict[str, Any] | None:
@@ -1716,7 +1716,7 @@ CLOCK_COUNTERS, CLOCK_COUNTER = "Clocks Event Reasons Counters", re.compile(r"^\
 
 
 def cards(text: str) -> list[int]:
-    """``--devices``: the proof server's cards, their indices comma-separated (``0,1``), each once."""
+    """``--gpus``: the proof server's cards, their indices comma-separated (``0,1``), each once."""
     got = [x.strip() for x in text.split(",")]
     if not all(x.isdigit() for x in got) or len(set(got)) != len(got):
         raise argparse.ArgumentTypeError(f"the proof server's cards are their indices, each once (0,1), not {text!r}")
@@ -1724,29 +1724,29 @@ def cards(text: str) -> list[int]:
 
 
 def devices_refusal(a: argparse.Namespace) -> str | None:
-    """Why an audit given cards (`devices`) can't prove on them, or None: only the proof server's provers with no ZK
-    server take a card. A plain session is a process pair of its own on the CPU, and behind the ZK server
-    (``--zk-server``) the sessions are on the proof server's one kept prover, or each a process pair of its own, on the
-    CPU too (`proof_server`)."""
-    if devices(a) is None or not (plain(a) or getattr(a, "firewall", None)):
+    """Why an audit given cards (`devices`) can't prove on them, or None: a plain session is a process pair of its own
+    on the CPU, never on the proof server (`proof_server`), so a plain audit given cards is refused by name rather than
+    proved on the CPU in silence. Behind the ZK server and without it the proof server's provers take the cards."""
+    if devices(a) is None or not plain(a):
         return None
-    return ("--devices names the proof server's cards, and a plain session or one behind the ZK server (--zk-server) "
-            "proves on the CPU: drop --devices, or run the sessions on the proof server with no ZK server")
+    return ("--gpus names the proof server's cards, and a plain session is a process pair on the CPU: drop --gpus, or "
+            "drop --plain")
 
 
 def proof_server(a: argparse.Namespace, out: Path, sts: Sequence[dict] = (), relay: MT.Relay | None = None
                  ) -> ProofServer | None:
     """SPOT's proof server for an audit's sessions (`verity_flock.proof_server`, its processes' logs under
-    ``out/proof-server``): one prover a card of `devices` (`prove --zk --gpu`), else one CPU prover, and one verifier a
+    ``out/proof-server``): one prover a card of `devices` (`prove --zk --gpu`, the cards numbered by PCI bus,
+    `NVIDIA_SMI_ORDER`), else one CPU prover, and one verifier a
     template, each verifier on a challenger of its own under
     FLOCK_CHALLENGER=1, a templated statement's unit (`--tmpl-unit`) handed to both; with ``relay`` (`window_trees`),
     every verifier on the window's challenger session through it, one session at a time. Where the audit's sessions are
-    behind the ZK server so is its prover: one `prove --zk --stream` process on the CPU that starts a Lean session loop
-    for each session at the session's turn, one session at a time (``verify_ahead=0``), each loop's `Hello` set up as
+    behind the ZK server so is its prover: one `prove --zk --stream` process a card of `devices` (else one on the CPU)
+    that starts a Lean session loop for each session at the session's turn, one session at a time (``verify_ahead=0``), each loop's `Hello` set up as
     the process's environment says (`a0.prover_env`), so only where the sampled members' statements ``sts`` agree on
     it. None where a session is one it doesn't prove (plain, or members that don't agree): each session is then a
-    process pair of its own (`a0.session`), which takes its tree through ``relay`` too. Neither a session behind the ZK
-    server nor a process pair takes a card (`devices_refusal`)."""
+    process pair of its own (`a0.session`), which takes its tree through ``relay`` too, and takes no card
+    (`devices_refusal`)."""
     if why := devices_refusal(a):
         raise ValueError(why)
     if plain(a):
@@ -1754,13 +1754,14 @@ def proof_server(a: argparse.Namespace, out: Path, sts: Sequence[dict] = (), rel
     zk_server = a.zk_server
     trees = ({"challenger": a0.own_challenger(zk=True)} if relay is None else
              {"verify_ahead": 0, "tree_from": relay.flags})
+    order = {} if devices(a) is None else NVIDIA_SMI_ORDER
     if not zk_server:
-        env = {**a0.DIRECT, **({} if devices(a) is None else NVIDIA_SMI_ORDER)}
-        return ProofServer(a.bin, out / "proof-server", devices=devices(a), env=env, **trees)
+        return ProofServer(a.bin, out / "proof-server", devices=devices(a), env={**a0.DIRECT, **order}, **trees)
     envs = [a0.prover_env(zk_server, st) for st in sts]
     if not envs or any(e != envs[0] for e in envs):
         return None
-    return ProofServer(a.bin, out / "proof-server", env=envs[0], **{**trees, "verify_ahead": 0})
+    return ProofServer(a.bin, out / "proof-server", devices=devices(a), env={**envs[0], **order},
+                       **{**trees, "verify_ahead": 0})
 
 
 def proving_of(handle: Session | None) -> dict[str, Any]:
@@ -1988,9 +1989,11 @@ def main() -> int:
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
     ap.add_argument("--zk-server", help=ZK_SERVER_HELP)
-    ap.add_argument("--devices", type=cards,
-                    help="the proof server's cards, their indices comma-separated (0,1): a prover a card; default the CPU. "
-                         "A plain session or one behind the ZK server (--zk-server) proves on the CPU (`devices_refusal`)")
+    ap.add_argument("--gpus", type=cards,
+                    help="the proof server's cards, their indices comma-separated (0,1), as nvidia-smi numbers them: "
+                         "a prover a card, behind the ZK server (--zk-server) or not; default the CPU. CUDA_DEVICE_ORDER "
+                         "is set to PCI_BUS_ID for the provers, so CUDA numbers the cards as nvidia-smi does. A plain "
+                         "session proves on the CPU and refuses --gpus (`devices_refusal`)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=7551)
