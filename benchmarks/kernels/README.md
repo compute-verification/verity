@@ -1,12 +1,13 @@
 # benchmarks/kernels
 
-Exact linear kernels and what a kernel build ships with. Each kernel is held bit for bit to its CPU reference or
+The served path's exact kernels and what a kernel build ships with. Each kernel is held bit for bit to its CPU reference or
 Definition before anything is timed; nothing here changes a committed format, and nothing a verifier runs reads this code.
 
 | Directory or file | What it holds |
 |---|---|
 | `s8_linear/` | the exact W8A8 linear that `ScaledMmS8Coordinate_v1` defines, three backends under one gate; `run.sh "run.py"` holds every cell to the twin, on an H200 |
 | `exactlin/` | the int8-exact linear as two Triton kernels, the vLLM integration's (`verity_vllm.engine.int8_fused`: the exact quantizer, and the GEMM with the exact epilogue and per-card configs; no copy of a kernel or a table here, only the three Triton helpers `dither/dither_a.py` inlines, in `exactlin.py`), gated bit-exact against `int8_exact` (`kgate.py`) and the int8 Definitions' replay evaluators (`replay.py`), timed against stock vLLM int8 at kernel level (`kbench.py`, `ksweep.py`) and served (`served.sh`, through `dither/sbench.py`'s exact and exact-fused arms, one engine, after the kernel gate), with the served y checked bit for bit by the vLLM integration's `int8_exact_gpu` (`values.py`), the per-step kernel table (`steps.py`) and the share of a served step PoUW doesn't credit (`share.py`) |
+| `moe_align/` | the Marlin MoE path's `moe_align_block_size` at the integration's vLLM pin, made a function of its inputs by `verity_vllm.engine.moe_align`: outputs run to run, each expert's pairs against the pin's op, and its cost against it |
 | `ship.sh`, `ship_clock.c`, `ship_nvcc.sh`, `ship_probe.sh` | the ship frame, below |
 | `job_nvcc.sh` | the nvcc a job's own library compiles with off the card, outside a ship |
 
