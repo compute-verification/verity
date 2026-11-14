@@ -25,7 +25,7 @@ padding past the last tensor, which is PoUS's and which the decode never reads; 
   [opening_json, ...]}`, and verifies them while the prover serves on.
 - Once the session has its outcome, `{"end": {"commitment", "openings"}}`: the session's coin commitment and every
   released coin's opening (`audit.AuditRun.disclose`), against which the prover checks each challenge it was sent
-  (`audit.Prover.end`). The commitment is a function of every coin, so the prover gets it only after its last root.
+  (`audit_prover.Prover.end`). The commitment is a function of every coin, so the prover gets it only after its last root.
 - `{"case": {...}}`: the session's core case (`p2_case`), the log of every request the Lean answered with the
   registration, the request, the verifier's clock floor, the session id and the memory challenger's close of the case
   (its registration's digest, its clock floor and its log), signed with its key (`Closer`), which
