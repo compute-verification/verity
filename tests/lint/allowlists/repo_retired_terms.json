@@ -9,7 +9,7 @@
     {"file": ".agents/skills/testing/SKILL.md", "count": 1},
     {"file": ".agents/skills/writing-goals/SKILL.md", "count": 3},
     {"file": ".agents/skills/writing-runs/SKILL.md", "count": 1},
-    {"file": "AGENTS.md", "count": 16},
+    {"file": "AGENTS.md", "count": 14},
     {"file": "ARCHITECTURE.md", "count": 31},
     {"file": "security/Definitions.lean", "count": 39},
     {"file": "security/Definitions/Accounting.lean", "count": 7},
