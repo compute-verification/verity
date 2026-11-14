@@ -866,7 +866,7 @@ theorem portsAccepted_iff (v : Registration.Verifier) :
     · exact ⟨fun _ _ _ hm => Bool.false_ne_true (hr.2 hm), fun _ => rfl⟩
     · exact ⟨fun hf => by simp at hf, fun hp => absurd (hr.1 rfl) (hp e rfl)⟩
   · show true = true ↔ ∀ p, Registration.Earlier.value e = .port p → (d, false) ∉ v.verdicts
-    exact ⟨fun _ _ hp => nomatch hp, fun _ => rfl⟩
+    exact ⟨fun _ _ hp => (nomatch hp), fun _ => rfl⟩
 
 theorem linkRefused_false_iff (v : Registration.Verifier) : Registration.linkRefused v = false ↔ RL v := by
   unfold Registration.linkRefused RL
