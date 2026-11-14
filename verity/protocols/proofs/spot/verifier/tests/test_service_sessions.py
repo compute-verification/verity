@@ -17,7 +17,7 @@ N = 6
 def _units(*draws):
     """A sampler that samples `draws[i]` at its i-th call: each round its own proof blocks."""
     it = iter(draws)
-    return lambda law, n: next(it)
+    return lambda sampling_design, n: next(it)
 
 
 def _stream(rounds=2, budget=4, clock=None, sampler=None, spec=None) -> S.Stream:

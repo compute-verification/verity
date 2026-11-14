@@ -12,7 +12,7 @@ public import Proofs.Flock.Soundness.Audit.Periods
 is a bound on the period's coins (`prob_le_of_update`: the run's average is, by `avg_update`, the average over the other
 windows of window `t`'s own). Three events carry the failure:
 
-* PoUW's wrong windows hold more than `ε' C`: `CertificateSlack` at the period's law, each window's marginal from its
+* PoUW's incorrect windows hold more than `ε' C`: `CertificateSlack` at the period's law, each window's marginal from its
   per-window bound, at most `p/ε'`;
 * some window samples a faulty block and detects none: the union over the windows (`prob_exists_le`), at most `∑_t ks t`;
 * no window does, and some identity has more than `K` escaped blocks: `escape_tail`, over the identities, at most
@@ -336,16 +336,16 @@ theorem escape_tail {β : Type} (bad drawn detected : ((t : Fin T) → Ω t) →
 end Coords
 
 /-- **The remote overhead bound over a monitoring period.** Three events of the period's coins carry the failure:
-PoUW's wrong windows hold more than `ε' C` (`CertificateSlack` on the run's law, each window's marginal from its
+PoUW's incorrect windows hold more than `ε' C` (`CertificateSlack` on the run's law, each window's marginal from its
 per-window bound, `prob_le_of_update`: at most `p/ε'`); some window samples a faulty block and detects none (the union
 over windows: at most `∑_t ks t`); or no window does and some identity has more than `K` escaped blocks
-(`escape_tail`, over the identities: at most `J (1 − q)^(K+1)`). Outside them the wrong windows hold at most `ε' C`,
+(`escape_tail`, over the identities: at most `J (1 − q)^(K+1)`). Outside them the incorrect windows hold at most `ε' C`,
 each identity's escaped blocks skip at most `K B`, so `VerdictLag` puts the faulty blocks' skipped work at most
 `(JΔ/H) C + J K B`, and the residual's hypothesis is `SlowdownThreaded`'s at
 `(1 − ε_W) W_cert − ε' C − (JΔ/H) C − J K B`; each day's verdict bounds its MACs by `CountHE`, summed over the days into
 `X`; `remote_core` gives both forms, at `ρ = C/X` (`declaredShare_div`). -/
 theorem SlowdownRemoteMonitoringPeriod : Guarantees.SlowdownRemoteMonitoringPeriod := by
-  intro T Ω _ _ cap wrong p ε β ι _ bad drawn detected win I idW τw w ks K Φ Δ H q B εW κ C U χ mfu W M Mu Mr Mx R _
+  intro T Ω _ _ cap incorrect p ε β ι _ bad drawn detected win I idW τw w ks K Φ Δ H q B εW κ C U χ mfu W M Mu Mr Mx R _
     d n c k γ V _ _ _ Wk val βw βx b hp hε hc hcC hpouw hS hq0 hq1 hId hH hΔ hTD hw hB0 hκ hC hU hmfu hmfu1 hβw hβx hb
     hcomp hval hshare hHard hExp hM0 hM hu hres hx
   classical
@@ -365,9 +365,9 @@ theorem SlowdownRemoteMonitoringPeriod : Guarantees.SlowdownRemoteMonitoringPeri
   let Esc : ι → ((t : Fin T) → Ω t) → Prop := fun j ξ => (∀ t, ¬ Bad t ξ) ∧
     K + 1 ≤ ((escaped (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b))).filter
       fun b => idW (win b) = j).card
-  have h1 : prob μ (fun ξ => ε * C < wrongCapacity cap (fun t => wrong t ξ)) ≤ p / ε :=
-    CertificateSlack _ μ T cap (fun ξ t => wrong t ξ) p ε C hp hε hC hc hcC fun t =>
-      prob_le_of_update t (fun ξ => wrong t ξ) (hpouw t)
+  have h1 : prob μ (fun ξ => ε * C < incorrectCapacity cap (fun t => incorrect t ξ)) ≤ p / ε :=
+    CertificateSlack _ μ T cap (fun ξ t => incorrect t ξ) p ε C hp hε hC hc hcC fun t =>
+      prob_le_of_update t (fun ξ => incorrect t ξ) (hpouw t)
   have h2 : prob μ (fun ξ => ∃ t ∈ Finset.univ, Bad t ξ) ≤ ∑ t, ks t := by
     refine (prob_exists_le μ Finset.univ Bad).trans (Finset.sum_le_sum fun t _ => prob_le_of_update t _ fun ξ => ?_)
     refine (prob_mono _ fun a ha => ?_).trans (hks t ξ)
@@ -379,11 +379,11 @@ theorem SlowdownRemoteMonitoringPeriod : Guarantees.SlowdownRemoteMonitoringPeri
     calc ∑ j ∈ I, prob μ (Esc j) ≤ ∑ _j ∈ I, (1 - q) ^ (K + 1) := Finset.sum_le_sum fun j _ =>
           escape_tail bad drawn detected win idW τw q K j hbadP hdrawnA hq0 hq1 hmiss hord
       _ = I.card * (1 - q) ^ (K + 1) := by rw [Finset.sum_const, nsmul_eq_mul]
-  refine prob_ge_of_not μ (F := fun ξ => (ε * C < wrongCapacity cap (fun t => wrong t ξ) ∨
+  refine prob_ge_of_not μ (F := fun ξ => (ε * C < incorrectCapacity cap (fun t => incorrect t ξ) ∨
     ∃ t ∈ Finset.univ, Bad t ξ) ∨ ∃ j ∈ I, Esc j ξ) (fun ξ hbad => ?_) ?_
   · by_contra hgood
     apply hbad
-    have hwrong : wrongCapacity cap (fun t => wrong t ξ) ≤ ε * C := not_lt.1 fun h => hgood (Or.inl (Or.inl h))
+    have hwrong : incorrectCapacity cap (fun t => incorrect t ξ) ≤ ε * C := not_lt.1 fun h => hgood (Or.inl (Or.inl h))
     have hG : ∀ t, ¬ Bad t ξ := fun t h => hgood (Or.inl (Or.inr ⟨t, Finset.mem_univ _, h⟩))
     have hesc : ∑ b ∈ escaped (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b)), w b ≤
         I.card * K * B := by
@@ -407,9 +407,9 @@ theorem SlowdownRemoteMonitoringPeriod : Guarantees.SlowdownRemoteMonitoringPeri
     have hθ : (I.card * K * B / C : ℝ) * C = I.card * K * B := div_mul_cancel₀ _ hC.ne'
     have hr : (Mr ξ : ℝ) ≤ κ * (C - ((1 - εW) * W ξ - ε * C - lagShare I.card Δ H * C -
         (I.card * K * B / C) * C)) / 2 := by
-      have h1 : (Mr ξ : ℝ) ≤ κ * (C - (1 - εW) * W ξ + wrongCapacity cap (fun t => wrong t ξ) + ∑ b ∈ bad ξ, w b) / 2 :=
+      have h1 : (Mr ξ : ℝ) ≤ κ * (C - (1 - εW) * W ξ + incorrectCapacity cap (fun t => incorrect t ξ) + ∑ b ∈ bad ξ, w b) / 2 :=
         hres ξ
-      have h2 : κ * (C - (1 - εW) * W ξ + wrongCapacity cap (fun t => wrong t ξ) + ∑ b ∈ bad ξ, w b) ≤
+      have h2 : κ * (C - (1 - εW) * W ξ + incorrectCapacity cap (fun t => incorrect t ξ) + ∑ b ∈ bad ξ, w b) ≤
           κ * (C - ((1 - εW) * W ξ - ε * C - lagShare I.card Δ H * C - (I.card * K * B / C) * C)) :=
         mul_le_mul_of_nonneg_left (by linarith) hκ.le
       linarith
@@ -418,11 +418,11 @@ theorem SlowdownRemoteMonitoringPeriod : Guarantees.SlowdownRemoteMonitoringPeri
     obtain ⟨h1, h2⟩ := remote_core hκ hC hU hmfu hmfu1 (Nat.cast_pos.2 (hM0 ξ)) hMc (hu ξ) hr hdecl (hx ξ)
     rw [residualShare_sub hC, declaredShare_div hC hU] at h1 h2
     exact ⟨h1, h2⟩
-  · calc prob μ (fun ξ => (ε * C < wrongCapacity cap (fun t => wrong t ξ) ∨ ∃ t ∈ Finset.univ, Bad t ξ) ∨
+  · calc prob μ (fun ξ => (ε * C < incorrectCapacity cap (fun t => incorrect t ξ) ∨ ∃ t ∈ Finset.univ, Bad t ξ) ∨
           ∃ j ∈ I, Esc j ξ)
-        ≤ prob μ (fun ξ => ε * C < wrongCapacity cap (fun t => wrong t ξ) ∨ ∃ t ∈ Finset.univ, Bad t ξ) +
+        ≤ prob μ (fun ξ => ε * C < incorrectCapacity cap (fun t => incorrect t ξ) ∨ ∃ t ∈ Finset.univ, Bad t ξ) +
             prob μ (fun ξ => ∃ j ∈ I, Esc j ξ) := prob_or_le _ _ _
-      _ ≤ prob μ (fun ξ => ε * C < wrongCapacity cap (fun t => wrong t ξ)) +
+      _ ≤ prob μ (fun ξ => ε * C < incorrectCapacity cap (fun t => incorrect t ξ)) +
             prob μ (fun ξ => ∃ t ∈ Finset.univ, Bad t ξ) + prob μ (fun ξ => ∃ j ∈ I, Esc j ξ) :=
           add_le_add_left (prob_or_le _ _ _) _
       _ ≤ p / ε + I.card * (1 - q) ^ (K + 1) + ∑ t, ks t := by linarith
@@ -440,7 +440,7 @@ theorem prob_uniform_le_one {α : Type} [Fintype α] [Nonempty α] (E : α → P
   exact ENNReal.toReal_le_of_le_ofReal zero_le_one (by simpa using prCoin_le_one E)
 
 /-- **`SlowdownRemoteMonitoringPeriod`'s premises hold where its conclusion says something** (`SlowdownRemoteMonitoringPeriod_honest`): one
-window run by one identity, its certificate right (`wrong` empty) at capacity `C = 100`, all of the monitored compute
+window run by one identity, its certificate right (`incorrect` empty) at capacity `C = 100`, all of the monitored compute
 certified (`W_cert = 100`), no incorrect proof block, unmonitored compute `U = 100` at `MFU₀ = 1/2`, `κ = 2`, and one
 declared day, the toy `InferenceOnly.Cut.Toy` at `CompliesAtMost 1 2 2`, (H) at unit costs and (E) at `b = 2`, so `α = 1` and the
 day's bound is `X = 2 (2 + 1) + √4 = 8`, its two MACs the run's counted multiplications; at `p = 3 · 2⁻⁴⁰`,
@@ -460,12 +460,12 @@ theorem SlowdownRemoteMonitoringPeriod_honest : Guarantees.SlowdownRemoteMonitor
     fun _ => Cut.SecurityProofs.toy_noSharedPair, fun _ => Cut.SecurityProofs.toy_hardness 2,
     fun _ => Cut.SecurityProofs.toy_exports 2,
     fun _ => two_pos, fun _ => by simp [Assumptions.SourcesCover, Cut.SecurityProofs.toy_N],
-    fun _ => by norm_num [Assumptions.UnmonitoredAtMost], fun _ => by simp [Assumptions.ResidualAtMost, wrongCapacity],
+    fun _ => by norm_num [Assumptions.UnmonitoredAtMost], fun _ => by simp [Assumptions.ResidualAtMost, incorrectCapacity],
     fun _ => by norm_num [Assumptions.CheatingAtMost], by norm_num [Finset.card_univ], fun ξ => ?_⟩
   · intro t ξ
     rw [prob_of_forall_not _ fun _ h => h]
     positivity
-  · unfold Assumptions.SampledPerWindow
+  · unfold Assumptions.SampledPerExecutionPhase
     exact ⟨fun _ _ _ _ b => b.elim, fun _ _ _ _ b => b.elim, fun t ξ => by simpa using prob_uniform_le_one _,
       fun t ξ => by rw [prob_of_forall_not _ fun _ h => by simp at h]⟩
   · unfold Assumptions.IdentitySchedule
@@ -476,8 +476,8 @@ theorem SlowdownRemoteMonitoringPeriod_honest : Guarantees.SlowdownRemoteMonitor
     norm_num
 
 /-- **`SlowdownRemoteMonitoringPeriod` is false without PoUW's per-window bound** (`SlowdownRemoteMonitoringPeriod_nontrivial`), at
-`AcceptAll`: the window's certificate is wrong on every run, so PoUW's per-window probability is 1, above `p = 0`. The
-residual counts the wrong capacity, so the run's one counted multiplication (`M_r = 1`, `κ = 2`, `MFU₀ = 1`) has compute
+`AcceptAll`: the window's certificate is incorrect on every run, so PoUW's per-window probability is 1, above `p = 0`. The
+residual counts the incorrect capacity, so the run's one counted multiplication (`M_r = 1`, `κ = 2`, `MFU₀ = 1`) has compute
 efficiency 1, above the bound `1/2`, and hardware multiple 1, below the overhead bound `2`, on every run, while
 `δ = 0`. -/
 theorem SlowdownRemoteMonitoringPeriod_nontrivial : Guarantees.SlowdownRemoteMonitoringPeriod_nontrivial := by
@@ -487,9 +487,9 @@ theorem SlowdownRemoteMonitoringPeriod_nontrivial : Guarantees.SlowdownRemoteMon
     two_pos, one_pos, le_rfl, one_pos, le_rfl, one_pos, one_pos, one_pos,
     fun i => i.elim, fun i => i.elim, fun i => i.elim, fun i => i.elim, fun i => i.elim, fun _ => Nat.one_pos,
     fun _ => by simp [Assumptions.SourcesCover], fun _ => by norm_num [Assumptions.UnmonitoredAtMost],
-    fun _ => by simp [Assumptions.ResidualAtMost, wrongCapacity], fun _ => by norm_num [Assumptions.CheatingAtMost],
+    fun _ => by simp [Assumptions.ResidualAtMost, incorrectCapacity], fun _ => by norm_num [Assumptions.CheatingAtMost],
     fun h => ?_, ?_⟩
-  · unfold Assumptions.SampledPerWindow
+  · unfold Assumptions.SampledPerExecutionPhase
     exact ⟨fun _ _ _ _ b => b.elim, fun _ _ _ _ b => b.elim, fun t ξ => by simpa using prob_uniform_le_one _,
       fun t ξ => by rw [prob_of_forall_not _ fun _ h => by simp at h]⟩
   · unfold Assumptions.IdentitySchedule
@@ -497,9 +497,9 @@ theorem SlowdownRemoteMonitoringPeriod_nontrivial : Guarantees.SlowdownRemoteMon
       by simp⟩
   · have h1 := h 0 fun _ => true
     have h2 := prob_add_not (PMF.uniformOfFintype Bool)
-      fun a => Guarantees.AcceptAll.wrong 0 (Function.update (fun _ => true) 0 a)
+      fun a => Guarantees.AcceptAll.incorrect 0 (Function.update (fun _ => true) 0 a)
     have h3 : prob (PMF.uniformOfFintype Bool)
-        (fun a => ¬ Guarantees.AcceptAll.wrong 0 (Function.update (fun _ => true) 0 a)) = 0 :=
+        (fun a => ¬ Guarantees.AcceptAll.incorrect 0 (Function.update (fun _ => true) 0 a)) = 0 :=
       prob_of_forall_not _ fun _ h => h trivial
     linarith
   · rw [prob_of_forall_not _ fun ξ hG => by
@@ -514,10 +514,10 @@ theorem SlowdownRemoteMonitoringPeriod_nontrivial : Guarantees.SlowdownRemoteMon
 
 open Guarantees.AcceptAll in
 example (h5 : ∀ (t : Fin 1) (ξ : Fin 1 → Bool),
-    prob (PMF.uniformOfFintype Bool) (fun a => wrong t (Function.update ξ t a)) ≤ 0) : False := by
+    prob (PMF.uniformOfFintype Bool) (fun a => incorrect t (Function.update ξ t a)) ≤ 0) : False := by
   obtain ⟨-, h1, h2, h3, h4, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15, h16, h17, h18, h19, h20, h21, h22, h23,
     h24, h25, h26, h27, h28, h29, h30, h31, h32, -, hnot⟩ := SlowdownRemoteMonitoringPeriod_nontrivial
-  exact hnot (SlowdownRemoteMonitoringPeriod 1 (fun _ => Bool) cap wrong 0 (1 / 2) Empty Unit bad drawn detected win ∅ idW τw w
+  exact hnot (SlowdownRemoteMonitoringPeriod 1 (fun _ => Bool) cap incorrect 0 (1 / 2) Empty Unit bad drawn detected win ∅ idW τw w
     ks 0 0 0 1 1 0 0 2 1 0 0 1 W M Mu Mr Mx Empty d n 1 1 Unit Unit Wk val 1 1 1 h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 h11 h12
     h13 h14 h15 h16 h17 h18 h19 h20 h21 h22 h23 h24 h25 h26 h27 h28 h29 h30 h31 h32)
 

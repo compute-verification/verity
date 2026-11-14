@@ -18,7 +18,7 @@ window (`Flock.Guarantees.MemberV5`), with no hypothesis on its session, its sam
   files, which parse to its descriptor, unit rows and population and name no public input ports
   (`MemberV5.Checked`), so its circuit, partition and constants are the parsed circuit file's (`MemberV5.Cc_eq`,
   `P_heq`, `consts_eq`).
-* **A member's incorrect proof blocks are incorrect proof blocks** (`MemberV5.faultyWrong`): a unit right at a registration with
+* **A member's incorrect proof blocks are incorrect proof blocks** (`MemberV5.faultyIncorrect`): a unit right at a registration with
   canonical openings is not faulty (`Flock.Bridge.faultyRightTargetC`), since each canonical registered opening
   opens the deployed commitment at the public file's leaf map (`Flock.Bridge.transports_shapedP`), whose roots are
   distinct where the ports' published domains are and the roots fix their domains. The transport reads the
@@ -97,12 +97,12 @@ theorem unboundFaulty : m.UnboundFaulty := by
   exact Flock.Bridge.unbound_subset_faulty_partOf m.P m.κ (show [m.n].sum = m.n by simp) Claims.Sampling.sha512Msg
     m.Cd m.stmt rfl (m.wit Xv) opens m.κ_isInput hK hO
 
-/-- **A member's incorrect proof blocks are incorrect proof blocks** (`MemberV5.FaultyWrong`). -/
-theorem faultyWrong : m.FaultyWrong := by
+/-- **A member's incorrect proof blocks are incorrect proof blocks** (`MemberV5.FaultyIncorrect`). -/
+theorem faultyIncorrect : m.FaultyIncorrect := by
   intro hc R Xv u hu
   by_contra hu'
   obtain ⟨-, op, hop⟩ := not_not.1
-    (mt (mem_wrongRegZc execArith m.P (planZHJP m.dj m.y₀) (tabZHJP m.dj m.y₀) m.vb m.canon).2 hu')
+    (mt (mem_incorrectRegZc execArith m.P (planZHJP m.dj m.y₀) (tabZHJP m.dj m.y₀) m.vb m.canon).2 hu')
   refine Flock.Bridge.faultyRightTargetC m.P m.vb.pos (fun o g => m.vb.bit (m.vb.val o) g) id m.vb.com (m.vb.cs R)
     m.canon Claims.Sampling.sha512Msg m.Cd m.roots Xv m.κ u m.κ_isInput ⟨op, hop⟩ ?_ ?_ [m.n] .all []
     ⟨"", 0, []⟩ (by simp) hu

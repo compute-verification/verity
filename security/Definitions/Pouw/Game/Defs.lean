@@ -30,7 +30,7 @@ the model, and the model, not the adversary, says what it costs. M_4090 is one i
 every cost model.
 
 Simplifications:
-* ideal commitments: the online phase outputs the committed values themselves (`Transcript`);
+* ideal commitments: the online phase outputs the committed values themselves (`Trace`);
 * a finite oracle `Q → R` and a uniform salt type `S` (the chain's instance is `Fin (2^128)`);
 * deterministic adversaries (`Definitions/Pouw/Basic/Prob.lean`).
 
@@ -109,8 +109,8 @@ structure Commit where
   checked : Checked
   out : Mat
 
-/-- A committed transcript: unit `u`'s commitment, or `none` (a blank, which is never correct). -/
-abbrev Transcript : Type := ℕ → Option Commit
+/-- A committed trace: unit `u`'s commitment, or `none` (a blank, which is never correct). -/
+abbrev Trace : Type := ℕ → Option Commit
 
 /-- An abstract cost model for the online phase: its programs, what a program outputs, what it costs and how many
 oracle calls it makes, on oracle `H`, workload `U`, activation input `act` (unit `u`'s own operand is `act u`),
@@ -119,7 +119,7 @@ The model fixes `cost`, `calls` and `hashed`; an adversary only chooses a progra
 nothing. -/
 structure CostModel (Q R S : Type) where
   Prog : Type
-  run : Prog → (Q → R) → Workload → (ℕ → Mat) → State → S → Transcript
+  run : Prog → (Q → R) → Workload → (ℕ → Mat) → State → S → Trace
   cost : Prog → (Q → R) → Workload → (ℕ → Mat) → State → S → ℝ
   calls : Prog → (Q → R) → Workload → (ℕ → Mat) → State → S → ℕ
   sha : Hash.Msg → Hash.Digest := fun _ => default
@@ -128,7 +128,7 @@ structure CostModel (Q R S : Type) where
 /-- The model's programs reach `H` only through counted queries: on fixed inputs, a run is the result
 of an adaptive oracle program, and `calls` counts that program's queries. -/
 def CostModel.Queries {Q R S : Type} (CM : CostModel Q R S) : Prop :=
-  ∀ (prog : CM.Prog) (U : Workload) (act : ℕ → Mat) (σ : State) (s : S), ∃ t : QTree Q R Transcript,
+  ∀ (prog : CM.Prog) (U : Workload) (act : ℕ → Mat) (σ : State) (s : S), ∃ t : QTree Q R Trace,
     ∀ H : Q → R, CM.run prog H U act σ s = t.eval H ∧ CM.calls prog H U act σ s = t.calls H
 
 /-! ## Protocols -/
@@ -164,14 +164,14 @@ def Correct (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (u : ℕ) 
   CheckedOK P U H s u c ∧ OutOK U u c
 
 open Classical in
-/-- `K`: the units that are correct in the transcript `τ`. -/
-noncomputable def correctSet (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) :
+/-- `K`: the units that are correct in the trace `τ`. -/
+noncomputable def correctSet (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Trace) :
     Finset ℕ :=
   (range U.layout.N).filter fun u => ∃ c, τ u = some c ∧ Correct P U H s u c
 
 open Classical in
 /-- `K'` (§4.4): the units whose checked values are correct; the useful output is not required. -/
-noncomputable def checkedSet (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) :
+noncomputable def checkedSet (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Trace) :
     Finset ℕ :=
   (range U.layout.N).filter fun u => ∃ c, τ u = some c ∧ CheckedOK P U H s u c
 
@@ -184,19 +184,19 @@ def Protocol.Complete (P : Protocol Q R S) (D : Layout → Prop) : Prop :=
     (∀ i < (U.layout.shape u).m, ∀ j < (U.layout.shape u).n,
         P.refOut H s U u A i j = mm (U.layout.shape u).k A (U.fixed (U.layout.fixedId u)) i j)
 
-/-- The honest transcript on activations `act`: `H_ref`'s output for every unit. -/
-def honestTranscript (P : Protocol Q R S) (H : Q → R) (s : S) (U : Workload) (act : ℕ → Mat) : Transcript :=
+/-- The honest trace on activations `act`: `H_ref`'s output for every unit. -/
+def honestTrace (P : Protocol Q R S) (H : Q → R) (s : S) (U : Workload) (act : ℕ → Mat) : Trace :=
   fun u => if u < U.layout.N then
     some ⟨act u, P.refChecked H s U u (act u), P.refOut H s U u (act u)⟩ else none
 
 /-- The cost model runs `H_ref` at its claimed cost: one program, fixed before the workload and the activations
-(a real kernel reads its operands; it does not embed them), outputs the honest transcript on every in-domain
+(a real kernel reads its operands; it does not embed them), outputs the honest trace on every in-domain
 workload and int7 activation input, with no preprocessing, at cost at most `∑_u W_ref(u)` and at most `qref U`
 oracle calls. -/
 def AdmitsRef (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (qref : Workload → ℕ) : Prop :=
   ∃ prog : CM.Prog, ∀ U : Workload, U.InDomain D → ∀ act : ℕ → Mat,
     (∀ u < U.layout.N, ActOK (U.layout.shape u) (act u)) → ∀ (H : Q → R) (s : S),
-      CM.run prog H U act [] s = honestTranscript P H s U act ∧
+      CM.run prog H U act [] s = honestTrace P H s U act ∧
       CM.cost prog H U act [] s ≤ ∑ u ∈ range U.layout.N, (P.Wref U.layout u : ℝ) ∧
       CM.calls prog H U act [] s ≤ qref U
 
@@ -210,9 +210,9 @@ structure Adversary (CM : CostModel Q R S) where
   online : CM.Prog
   act : ℕ → Mat
 
-/-- The transcript the adversary commits on oracle `H` and salt `s`. -/
-def Adversary.transcript {CM : CostModel Q R S} (A : Adversary CM) (U : Workload) (H : Q → R) (s : S) :
-    Transcript :=
+/-- The trace the adversary commits on oracle `H` and salt `s`. -/
+def Adversary.trace {CM : CostModel Q R S} (A : Adversary CM) (U : Workload) (H : Q → R) (s : S) :
+    Trace :=
   CM.run A.online H U A.act (A.pre.eval H) s
 
 /-- The inputs the adversary's online run hashes with SHA-512 on oracle `H` and salt `s`. -/
@@ -234,7 +234,7 @@ def Adversary.Bounded {CM : CostModel Q R S} (A : Adversary CM) (U : Workload) (
 def totalWref (P : Protocol Q R S) (L : Layout) : ℝ := ∑ u ∈ range L.N, (P.Wref L u : ℝ)
 
 /-- The adversary wins: the honest work of its correct units exceeds `T / (1 − g)`. -/
-def Wins (P : Protocol Q R S) (U : Workload) (g T : ℝ) (τ : Transcript) (H : Q → R) (s : S) : Prop :=
+def Wins (P : Protocol Q R S) (U : Workload) (g T : ℝ) (τ : Trace) (H : Q → R) (s : S) : Prop :=
   T / (1 - g) < ∑ u ∈ correctSet P U H s τ, (P.Wref U.layout u : ℝ)
 
 /-- **The gap property** `G_g` at the gap `g` (an adversary's advantage `ε = g/(1 − g)`) with failure probability
@@ -243,7 +243,7 @@ def Wins (P : Protocol Q R S) (U : Workload) (g T : ℝ) (τ : Transcript) (H : 
 def GGap [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
     (D : Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
-    pr (fun x : (Q → R) × S => Wins P U g T (A.transcript U x.1 x.2) x.1 x.2 ∧ ¬ A.Breaks U x.1 x.2)
+    pr (fun x : (Q → R) × S => Wins P U g T (A.trace U x.1 x.2) x.1 x.2 ∧ ¬ A.Breaks U x.1 x.2)
       ≤ δ q U.layout.N
 
 /-- **§3.3's requirement** at `(g, δ)`: `∃ Π` whose honest reference is complete and runs in the cost model at

@@ -123,7 +123,7 @@ theorem closeRecord_size (lines : Nat) (chain : ByteArray) :
     length_toList, length_toList, length_toList, be64_size]
 
 /-- PoUS's session record is a digest. -/
-theorem pous_record_size {c : MemoryChallenger.SessionCommitment} {ended : String}
+theorem pous_record_size {c : MemoryChallenger.ChallengePhaseCommitment} {ended : String}
     {rounds : Array MemoryChallenger.Round} {r : ByteArray} (h : MemoryChallenger.message c ended rounds = .ok r) :
     r.size = 64 := by
   unfold MemoryChallenger.message at h
@@ -152,7 +152,7 @@ theorem closeRecord_ne_digest {lines : Nat} {entries : Array ByteArray} {d : Byt
   rw [closeRecord_size, chainOf_size, hd] at this
   omega
 
-theorem closeRecord_ne_pous {lines : Nat} {entries : Array ByteArray} {c : MemoryChallenger.SessionCommitment}
+theorem closeRecord_ne_pous {lines : Nat} {entries : Array ByteArray} {c : MemoryChallenger.ChallengePhaseCommitment}
     {ended : String} {rounds : Array MemoryChallenger.Round} {r : ByteArray}
     (h : MemoryChallenger.message c ended rounds = .ok r) : closeRecord lines (chainOf entries) ≠ r :=
   closeRecord_ne_digest (pous_record_size h)
@@ -194,7 +194,7 @@ theorem closePreimage_ne_digest {I I' s s' d : ByteArray} {lines : Nat} {entries
   fun h => closeRecord_ne_digest hd (rolePreimage_inj hI hI' hs hs' h).2.2
 
 theorem closePreimage_ne_pous {I I' s s' r : ByteArray} {lines : Nat} {entries : Array ByteArray}
-    {c : MemoryChallenger.SessionCommitment} {ended : String} {rounds : Array MemoryChallenger.Round}
+    {c : MemoryChallenger.ChallengePhaseCommitment} {ended : String} {rounds : Array MemoryChallenger.Round}
     (hI : I.size = 16) (hI' : I'.size = 16) (hs : s.size < 2 ^ 64) (hs' : s'.size < 2 ^ 64)
     (h : MemoryChallenger.message c ended rounds = .ok r) :
     rolePreimage I s (closeRecord lines (chainOf entries)) ≠ rolePreimage I' s' r :=

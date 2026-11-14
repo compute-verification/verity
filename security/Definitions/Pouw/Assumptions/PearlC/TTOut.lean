@@ -26,8 +26,8 @@ def TTOut [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q 
   CM.Queries ∧
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
-      T / (1 - g₀) < ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2),
-        P.credit x.1 x.2 U u (actOf (A.transcript U x.1 x.2) u))
+      T / (1 - g₀) < ∑ u ∈ correctSet P U x.1 x.2 (A.trace U x.1 x.2),
+        P.credit x.1 x.2 U u (actOf (A.trace U x.1 x.2) u))
       ≤ δ q U.layout.N
 
 /-- **The named assumption TT_OUT(1/400) for Pearl-C**: `TTOut` at `pearlCProtocol sem c ρ`, `pearlCDomain Params.pi`,
@@ -96,8 +96,8 @@ def TTOutTile [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMode
   CM.Queries ∧
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
-      T / (1 - g₀) < ∑ g ∈ goodTiles P TR U x.1 x.2 (A.transcript U x.1 x.2),
-        TR.credit x.1 x.2 U g (actOf (A.transcript U x.1 x.2) ((TR.tiling U.layout).unit g)))
+      T / (1 - g₀) < ∑ g ∈ goodTiles P TR U x.1 x.2 (A.trace U x.1 x.2),
+        TR.credit x.1 x.2 U g (actOf (A.trace U x.1 x.2) ((TR.tiling U.layout).unit g)))
       ≤ δ q U.layout.N
 
 /-- **The named assumption TT_OUT(1/400) for Pearl-C, per audit tile**: `TTOutTile` at `pearlCProtocol sem c ρ`, its

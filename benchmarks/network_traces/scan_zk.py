@@ -1304,7 +1304,7 @@ def challenger(a, at: SimpleNamespace, out: Path):
 
 
 def rule_of(k: int, n: int) -> str:
-    """The round's stream rule over its ``n`` proof blocks: the stratified rate of ``k`` in ``n`` (`service.Law`), at least
+    """The round's stream rule over its ``n`` proof blocks: the stratified rate of ``k`` in ``n`` (`service.SamplingDesign`), at least
     ceil(k n_s / n) of each template's n_s, so each proof block is sampled with probability at least k/n however many the prover
     registers."""
     return f"stratified-rate:{min(k, n)}/{n}"
@@ -1320,8 +1320,8 @@ def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[
     blocks, over its members)."""
     units = [pg.stagers[tp].defn for tp in pg.templates]
     n = sum(m["n"] for m in members)
-    law = S.Law(rule_of(k, n))
-    named = S.selection_law(law, n, S.selection_sizes(law, pg.program, pg.query))
+    law = S.SamplingDesign(rule_of(k, n))
+    named = S.selection_sampling_design(law, n, S.selection_sizes(law, pg.program, pg.query))
     strata = [s["template"] for s in DR.derive(pg.program, pg.query, named,
                                                S.selection_table(law, pg.program, pg.query, None)).get("strata") or ()]
     public = [("population", "N, the round's proof units"), *((f"population:{t}", "a template's stratum") for t in strata),
@@ -1473,7 +1473,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     n = sum(m["n"] for m in members)
     k = n if k is None else k
     rule = f"stratified:{k}" if coins is None else rule_of(k, n)
-    law, table = (M.D.parse_design(rule), None) if coins is None else S.params_law(rule, pg.program, pg.query, None)
+    law, table = (M.D.parse_design(rule), None) if coins is None else S.params_sampling_design(rule, pg.program, pg.query, None)
     win = {"kind": "stand-in", "of": f"round {name}: link-windows {at.windows} of {at.source}, their ingress and egress "
                                      f"at {at.setup.name}'s class (scan_zk.py)",
            "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]}

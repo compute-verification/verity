@@ -274,7 +274,7 @@ def spec_of(params: dict, ell: int, predates_deadline: bool = False) -> S.Spec:
         raise ValueError(NO_DEADLINE)
     d = template(params["k"])
     return S.Spec(values=(S.Value(PORT, ENTRY_SCHEMA, "serve"), S.Value("W", W_SCHEMA, "epoch")),
-                  selection=S.Law(f"rate:{law_of(params, ell)['k']}/{work_at(params, ell).n}"),
+                  selection=S.SamplingDesign(f"rate:{law_of(params, ell)['k']}/{work_at(params, ell).n}"),
                   check=S.Check(PT.program_sha512(Program(d)), PT.template_instance_query(d),
                                 proof_deadline=params.get("proof_deadline", PROOF_DEADLINE),
                                 registration_deadline=params.get("registration_deadline")),
@@ -318,25 +318,17 @@ NEEDS_BENCHMARK = ("{} is benchmark-side code, which verity does not import (com
                    "{} passes it")
 
 
-def fetch_pin(art: str) -> Path:
-    """The file the evidence store holds under `art` (`research.store.local.LocalStore().fetch`), which a caller that reads
-    the store passes as `fetch`."""
-    raise NotImplementedError(NEEDS_BENCHMARK.format("the evidence store's fetch", "the caller that reads the store"))
-
-
 def install_tiles(scheme: Any) -> Callable[[], None]:
     """The batch forms of `scheme`'s tile checks installed for one commit, and what undoes them
     (`benchmarks/pouw/pearl_c_vllm/fast_tile.py`'s `install`), which `main` takes as `tiles`."""
     raise NotImplementedError(NEEDS_BENCHMARK.format("fast_tile.install", "benchmarks/pouw/served_zk/served_commit_run.py"))
 
 
-def pinned_challenger_key(record: Path | None = None, fetch: Callable[[str], Path] = fetch_pin) -> Ch.ChallengerKey:
-    """The verifier's challenger key, read from infra's published pin (`CHALLENGER_KEY_PIN`, fetched from the store by
-    `fetch` unless `record` is its file): refused (ValueError) unless the record is a challenger-key/v1 record whose public
-    key's SHA-512 is `CHALLENGER_KEY_SHA512`, both the one the record names and the one the public key hashes to."""
-    if record is None:
-        # only the verifier's own reading fetches
-        record = fetch(CHALLENGER_KEY_PIN)
+def pinned_challenger_key(record: Path) -> Ch.ChallengerKey:
+    """The verifier's challenger key, read from `record`, the file of infra's published pin (`CHALLENGER_KEY_PIN`), which
+    the caller fetches from the evidence store and hands in: verity reads no store. Refused (ValueError) unless the record
+    is a challenger-key/v1 record whose public key's SHA-512 is `CHALLENGER_KEY_SHA512`, both the one the record names and
+    the one the public key hashes to."""
     try:
         doc = json.loads(Path(record).read_bytes())
     except (OSError, ValueError) as e:
@@ -375,11 +367,10 @@ class Deployment:
             raise ValueError(DEPLOYMENT_FORM)
 
     @classmethod
-    def pinned(cls, certifier_key: Any, run_id: bytes, record: Path | None = None,
-               fetch: Callable[[str], Path] = fetch_pin) -> Deployment:
-        """The deployment whose challenger key is the pinned one (`pinned_challenger_key`, from `record` or the store by
-        `fetch`)."""
-        return cls(certifier_key, run_id, pinned_challenger_key(record, fetch))
+    def pinned(cls, certifier_key: Any, run_id: bytes, record: Path) -> Deployment:
+        """The deployment whose challenger key is the pinned one (`pinned_challenger_key`, from `record`, the pin's file
+        the caller fetched from the evidence store)."""
+        return cls(certifier_key, run_id, pinned_challenger_key(record))
 
 
 def stream_id(params: dict, stream: str, certifier: Mapping[str, str]) -> bytes:
@@ -1030,7 +1021,7 @@ class Challenger:
         (`caller.check`, `Caller.gate`), and the service's public-items rule over the Stream's Spec, as `Stream.register`
         runs them, each of record.  Raises `Refused`."""
         n = rec["population"]
-        law = S.selection_law(st.spec.selection, n)
+        law = S.selection_sampling_design(st.spec.selection, n)
         prog = PT.population_program(st.unit, n)
         q = st.spec.check.query
         params = OR.registration_params(prog, q, law, S.SCHEME, ports_, list(st.log), self.params["delta"])

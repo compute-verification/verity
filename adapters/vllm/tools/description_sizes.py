@@ -111,6 +111,7 @@ def measure(t: str) -> dict:
     process has already loaded (the registry, the long row's cut), and this process's peak GB."""
     from verity.circuits.codec import descriptor_id
     from verity_vllm.definitions import boolean as BB
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     BB.load()
     long_row_units()

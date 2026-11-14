@@ -82,7 +82,7 @@ def _ports_refused(c: _Collect, outs: Mapping[str, tuple[str, str, str]], verdic
                                      "why": PORTS_REFUSED_WHY})
 
 
-def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
+def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any], scheme: str,
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,
           work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None,
