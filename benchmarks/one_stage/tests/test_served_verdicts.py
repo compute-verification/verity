@@ -2598,8 +2598,9 @@ def test_the_policys_limits_are_fixed_with_it_before_the_serve_from_its_own_c_an
     line says which, and that the developer wrote them. What the run's own two numbers prove is in the file and the
     line where LIMITS_PROVE says it, and nowhere for the policy's own. Where the run sets both HELD_ALPHA and
     HELD_GAMMA, the file's ``held`` and one clause of the line state the record form's pair beside them, in lowest
-    terms, with its unit and whose weights θ is, and v0's pair is as it was; half a pair states none, and a pair that
-    is no limits writes no file. A policy that names no c writes none and says so, and the policy step still passes."""
+    terms, with its unit and whose weights θ is, and v0's pair is as it was; half a pair states none, and so does a
+    pair that is no limits (a gamma of 0, or text that is no number), whose clause names both values, the file still
+    v0's whole. A policy that names no c writes none and says so, and the policy step still passes."""
     policy = json.dumps({"c": 14, "k": 6, "n": 16})
     rc, lines, _ = _inference_only(tmp_path / "own", "inference-policy", IO_WRITE=policy)
     assert rc == 0 and lines[1:] == [
@@ -2644,11 +2645,13 @@ def test_the_policys_limits_are_fixed_with_it_before_the_serve_from_its_own_c_an
     assert rc == 0 and lines[1:] == [
         f"INFERENCE-ONLY LIMITS alpha = 1/2 and gamma = 100, the run's ALPHA and GAMMA ({none})" + LIMITS_SAID]
     assert "held" not in json.loads((tmp_path / "half-held" / "out" / "inference-only-limits.json").read_text())
-    rc, lines, _ = _inference_only(tmp_path / "no-held", "inference-policy", IO_WRITE=policy, HELD_ALPHA="6/8",
-                                   HELD_GAMMA="0", **run)
-    assert rc == 0 and lines[1].startswith("INFERENCE-ONLY LIMITS: none written, ")
-    assert lines[1].endswith(": the held alpha 3/4 and gamma 0 are no limits")
-    assert not (tmp_path / "no-held" / "out" / "inference-only-limits.json").exists()
+    for name, ha, hg in (("zero-held", "6/8", "0"), ("text-held", "abc", "xyz")):
+        rc, lines, _ = _inference_only(tmp_path / name, "inference-policy", IO_WRITE=policy, HELD_ALPHA=ha,
+                                       HELD_GAMMA=hg, **run)
+        assert rc == 0 and lines[1:] == [
+            f"INFERENCE-ONLY LIMITS alpha = 1/2 and gamma = 100, the run's ALPHA and GAMMA ({none}); the held alpha "
+            f"{ha} and gamma {hg} are no limits, so the file states no held pair" + LIMITS_SAID]
+        assert json.loads((tmp_path / name / "out" / "inference-only-limits.json").read_text()) == held
     rc, lines, _ = _inference_only(tmp_path / "none", "inference-policy", IO_WRITE=json.dumps({"k": 6}))
     assert rc == 0 and lines[1].startswith("INFERENCE-ONLY LIMITS: none written, so the composite's inference-only case "
                                            "is at the run's ALPHA and GAMMA, or at what it reads off the served "

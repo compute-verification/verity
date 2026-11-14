@@ -1090,7 +1090,9 @@ inference_policy() {  # in TREE, before the lease: the policy's (c, k, n) at the
 # Beside them, where the run sets both HELD_ALPHA and HELD_GAMMA, the file's `held` and one clause of the line state a
 # second pair, the record form's: a block a slot, θ the weights the serve's first registration record registers, so a
 # registered weight's bit is not fresh (the class's numbers alone: slots × k over Γ, and Γ a slot; `rehearsal.sh check`
-# holds the two settings to them). No verdict of the run reads that pair, and `fixed_limits` hands on v0's alone.
+# holds the two settings to them). No verdict of the run reads that pair, and `fixed_limits` hands on v0's alone. A held
+# pair that is no limits (gamma under 1, alpha under 0, or text that is no number) is stated nowhere in the file, and the
+# line says so with both values; v0's file is written all the same.
 IO_LIMITS=${IO_LIMITS:-$OUT/inference-only-limits.json}
 limits() {
   local out
@@ -1115,15 +1117,21 @@ if given and proves:
     doc["proves"] = proves
 held = ""
 if held_alpha and held_gamma:
-    ha, hg = Fraction(held_alpha), int(held_gamma)
-    if ha < 0 or hg < 1:
-        sys.exit(f"the held alpha {ha} and gamma {hg} are no limits")
-    doc["held"] = {"alpha": [ha.numerator, ha.denominator], "gamma": hg,
-                   "unit": "the record form's, a block a slot: alpha in fresh input bits a gate of a block, gamma in a "
-                           "block's gates",
-                   "theta": "the weights the serve's first registration record registers (deployment-registration.json)"}
-    held = (f"; held for the record form, a block a slot and theta the serve's first registration record's weights, "
-            f"alpha = {ha.numerator}/{ha.denominator} and gamma = {hg}, which no verdict of the run reads")
+    try:
+        ha, hg = Fraction(held_alpha), int(held_gamma)
+    except (ValueError, ZeroDivisionError):
+        ha = hg = None
+    if ha is None or ha < 0 or hg < 1:
+        held = (f"; the held alpha {held_alpha} and gamma {held_gamma} are no limits, so the file states no held "
+                "pair")
+    else:
+        doc["held"] = {"alpha": [ha.numerator, ha.denominator], "gamma": hg,
+                       "unit": "the record form's, a block a slot: alpha in fresh input bits a gate of a block, gamma "
+                               "in a block's gates",
+                       "theta": "the weights the serve's first registration record registers "
+                                "(deployment-registration.json)"}
+        held = (f"; held for the record form, a block a slot and theta the serve's first registration record's "
+                f"weights, alpha = {ha.numerator}/{ha.denominator} and gamma = {hg}, which no verdict of the run reads")
 with open(out, "w") as f:
     f.write(json.dumps(doc, indent=1, sort_keys=True) + "\n")
 print(f"alpha = {a.numerator}/{a.denominator} and gamma = {g}, {doc['from']}" + (f" ({proves})" if "proves" in doc else "")
