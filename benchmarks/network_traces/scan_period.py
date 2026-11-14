@@ -15,7 +15,9 @@ and its Lean.
   scan that Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms; the
   commitment the audits' registrations and the scan's; the evidence the audits' answers, then the scan's answer, the
   certificates of W's three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations
-  (``cells.jsonl``, as ``answers.json`` carries them). The rows form reads a registration of one link-window's 2T
+  (``cells.jsonl``, as ``answers.json`` carries them), and the listed entry's session's signed start
+  (``deployment.json``'s ``start``, which the period check reads for each listed entry: a run whose deployment holds
+  none is refused). The rows form reads a registration of one link-window's 2T
   units, so a group of more is refused, and the scan's `prog` must be an audit's `SlotEntry_v1` template's entries
   and its ``scan/state`` that audit's.
 * **tampered** and **chain**: the same rows and certificates with that round's registration
@@ -85,6 +87,9 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     dep = json.loads(SZ._found(run, "deployment.json").read_text())
     if dep["params"].get("egress", "id") != "id":
         raise SystemExit(f"{run}: the period check's schedule is the id egress form's, not {dep['params']['egress']!r}'s")
+    if "start" not in dep:
+        raise SystemExit(f"{run}: deployment.json holds no signed start, and the period check reads each listed entry's "
+                         "session's: take a run whose network certifier certified its session's start")
     doc = json.loads((scan / "answers.json").read_text())
     if v3c is not None:
         doc["audits"] = [json.loads(v3c.read_text())]
@@ -113,7 +118,7 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
               "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": schedule,
               "windows": 1}
     commitment = canonical_json({"audits": [a["registration"] for a in audits], "windows": [reg]})
-    evidence = canonical_json({"audits": [a["answer"] for a in audits], "windows": [
+    evidence = canonical_json({"audits": [a["answer"] for a in audits], "starts": [dep["start"]], "windows": [
         {"answer": answer, "certificates": certs, "registrations": x["registrations"]}]})
     return {"commitment": commitment.hex(), "evidence": evidence.hex(), "params": params}
 

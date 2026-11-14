@@ -365,31 +365,128 @@ def test_a_signer_that_is_not_listed_is_refused_by_name(server, monkeypatch):
         refused_by_lean_alone(build(m, 0, small=True), server, PC.UNLISTED)
 
 
-#: The entries the parameters must not list (`PC.bad_entries`), each with what Lean's reason and the mirror's say.
+#: The entries the parameters must not list (`PC.bad_entries`), each with what Lean's reason and the mirror's say, in
+#: the clock form and in the rows form: the rows form reads a key listed in another session, and names another key
+#: under a listed identifier as two keys.
 ENTRIES_REFUSALS = {
     "empty": PC.NO_KEY, "out-of-order": PC.OUT_OF_ORDER, "overlap": PC.OVERLAP, "twice": PC.TWICE,
     "other-session": PC.ONE_ID, "one-id": PC.ONE_ID, "before": PC.BEFORE, "no-entry": PC.NO_ENTRY,
     "key": PC.KEY_NOT_KEYS, "key-too": PC.KEY_NOT_KEYS, "session": PC.SESSION_IN_ENTRY,
     "sessions": PC.SESSIONS_IN_ENTRY}
+ROWS_ENTRIES_REFUSALS = {k: v for k, v in ENTRIES_REFUSALS.items() if k != "other-session"} | {"one-id": PC.TWO_KEYS}
 
 
 def test_entries_the_parameters_must_not_list_are_refused_by_name(server):
     """Parameters that list no entry; entries out of order, one starting before the one listed before it; two entries
     with one start, whose stretches would overlap; one key identifier and one session twice, whose execution phase n
-    would be two of the period's; two entries with one key identifier, a key in two sessions or another key under its
-    identifier; a period that starts before the first entry's stretch; an entry that is the key alone; or that still
-    name `"key"`, `"session"` or `"sessions"`: each is refused at the parameters by Lean and by the mirror and by name.
-    So is a list or an entry that doesn't read."""
-    for m in ("honest", "rows-honest", "second-key"):
+    would be two of the period's; another key under a listed key's identifier; in the clock form, which reads no
+    session's signed start, a key in two sessions; a period that starts before the first entry's stretch; an entry that
+    is the key alone; or that still name `"key"`, `"session"` or `"sessions"`: each is refused at the parameters by Lean
+    and by the mirror and by name. So is a list or an entry that doesn't read."""
+    for m in ("honest", "rows-honest", "second-key", "rows-second-key"):
         case = build(m, 0, small=True)
         bad = PC.bad_entries(case["params"])
-        assert set(ENTRIES_REFUSALS) < set(bad)
+        refusals = ROWS_ENTRIES_REFUSALS if PC.form_of(m) == "rows" else ENTRIES_REFUSALS
+        assert set(refusals) < set(bad) and ("other-session" in bad) == (PC.form_of(m) == "clock"), (m, sorted(bad))
         for name, params in bad.items():
-            why = ENTRIES_REFUSALS.get(name, "")
+            why = refusals.get(name, "")
             out = reference(case | {"params": params})
             assert out["verdict"] == REJECT and why in out["reason"], (m, name, out)
             verdict, got = D.replay(PORT, case | {"params": params}, server)
             assert verdict == REJECT and why in json.loads(got)["reason"], (m, name, got)
+
+
+def shown_starts(case: dict) -> list[PC.CertifiedStart]:
+    """The signed starts a case's evidence shows, in its order."""
+    return [PC._start(x, "a start") for x in json.loads(bytes.fromhex(case["evidence"])).get("starts", [])]
+
+
+def with_starts(case: dict, starts: list | None) -> dict:
+    """`case` with its evidence's `"starts"` replaced, or left out (`None`)."""
+    e = {k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "starts"}
+    return case | {"evidence": D.canonical(e if starts is None else e | {"starts": starts}).encode().hex()}
+
+
+def test_a_key_listed_in_two_sessions_is_held_to_its_signed_starts(server, monkeypatch):
+    """The rows form reads each listed entry's session's signed start, so a key may be listed in two sessions. A
+    period that two stretches of one key hold between them, each signature in its own stretch's session at that
+    session's number, the second entry starting as many execution phases after the first as its session's signed
+    base is after the first's on the key's life (`restart`), is accepted by Lean with the mirror's public. The same
+    list with the second session's signed base another, every signature still verifying, is refused by Lean and by the
+    mirror and by name (`PC.NOT_SIGNED`); and a mirror that reads the starts' certificates and not their bases accepts
+    what Lean refuses by that name. A key's first listed entry is held to no start: moving every base of a key by one
+    amount changes no verdict."""
+    for n in range(6):
+        for m, want in (("rows-restart", ACCEPT), ("rows-start-not-signed", REJECT)):
+            case = build(m, n, small=n % 2 == 0)
+            p = PC.params(case["params"])
+            first, second = p.entries
+            starts = shown_starts(case)
+            assert first.key == second.key and first.session != second.session, (m, n)
+            assert {PC._entry_at(p, w) for w, _ in by_window(case)} == {first, second}, (m, n)
+            for w, certs in by_window(case):
+                e = PC._entry_at(p, w)
+                assert all(c.window == w - e.start and c.verify(e.key, e.session) for c in certs), (m, n, w)
+            assert [x.refusal(e.key, e.session, p.link, p.schedule.digest) for e, x in zip(p.entries, starts)] == \
+                [None, None], (m, n)
+            L = p.schedule.window * p.schedule.bucket_ms
+            held = (second.start - first.start) * L == starts[1].base_ms - starts[0].base_ms
+            assert held == (want == ACCEPT), (m, n)
+            out = reference(case)
+            verdict, got = D.replay(PORT, case, server)
+            assert out["verdict"] == verdict == want, (m, n, out, got)
+            if want == ACCEPT:
+                assert json.loads(got)["public"] == out["public"], (m, n, got)
+            else:
+                assert PC.NOT_SIGNED in out["reason"] and PC.NOT_SIGNED in json.loads(got)["reason"], (m, n, out, got)
+    monkeypatch.setattr(PC, "_held_to", lambda L, a, xa, e, x: True)
+    for n in range(3):
+        refused_by_lean_alone(build("rows-start-not-signed", n, small=True), server, PC.NOT_SIGNED)
+
+
+def test_a_start_its_session_did_not_certify_is_refused_by_name(server, monkeypatch):
+    """A rows-form period shows one signed start for each listed entry, each its session's certified start as the
+    network certifier's own verifier reads it. A shown start that is no egress certificate of window 0 under the
+    link's start name, that names a key other than its entry's, that names another schedule's digest than the
+    period's, whose base and schedule do not open the digest it signs, or whose signature does not verify under its
+    entry's key in its entry's session is refused by Lean and by the mirror, by name (`PC.UNCERTIFIED`) and by the
+    same code. So is evidence that shows a start too few or too many, or none (`PC.STARTS_COUNT`): parameters that
+    list a key again in a session whose start the evidence does not show read, and the period is refused there. So is
+    a clock-form period whose evidence shows a start (`PC.STARTS_CLOCK`): its certifier signs none. A mirror that
+    reads no start accepts what Lean refuses by `PC.UNCERTIFIED`."""
+    codes = Counter()
+    for n in range(48):
+        case = build("rows-start-uncertified", n, small=n % 2 == 0)
+        p = PC.params(case["params"])
+        whys = [x.refusal(e.key, e.session, p.link, p.schedule.digest) for e, x in zip(p.entries, shown_starts(case))]
+        (why,) = [w for w in whys if w is not None]
+        codes[why] += 1
+        out = reference(case)
+        verdict, got = D.replay(PORT, case, server)
+        named_by = f"{PC.UNCERTIFIED} ({why})"
+        assert out["verdict"] == verdict == REJECT, (n, out, got)
+        assert named_by in out["reason"] and named_by in json.loads(got)["reason"], (n, why, out, got)
+    assert set(codes) == set(PC.UNCERTIFIED_BY), codes
+    for m, why in (("rows-start-count", PC.STARTS_COUNT), ("start-shown", PC.STARTS_CLOCK)):
+        for n in range(6):
+            case = build(m, n, small=n % 2 == 0)
+            out = reference(case)
+            verdict, got = D.replay(PORT, case, server)
+            assert out["verdict"] == verdict == REJECT, (m, n, out, got)
+            assert why in out["reason"] and why in json.loads(got)["reason"], (m, n, out, got)
+    case = build("rows-honest", 0, small=True)
+    e = case["params"]["keys"][-1]
+    again = e | {"session": e["session"][:-1] + ("1" if e["session"][-1] == "0" else "0"), "start": e["start"] + 1}
+    restarted = case | {"params": case["params"] | {"keys": [*case["params"]["keys"], again]}}
+    assert len(PC.params(restarted["params"]).entries) == len(shown_starts(restarted)) + 1
+    for bad in (restarted, with_starts(case, None)):
+        out = reference(bad)
+        verdict, got = D.replay(PORT, bad, server)
+        assert out["verdict"] == verdict == REJECT, (out, got)
+        assert PC.STARTS_COUNT in out["reason"] and PC.STARTS_COUNT in json.loads(got)["reason"], (out, got)
+    monkeypatch.setattr(PC, "_start_check", lambda p, starts, i, e, x: None)
+    for n in range(3):
+        refused_by_lean_alone(build("rows-start-uncertified", n, small=True), server, PC.UNCERTIFIED)
 
 
 def test_the_rows_form_accepts_a_wired_state_tied_period(server):
