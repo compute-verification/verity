@@ -1,34 +1,67 @@
 """A PoUW period as a core protocol, ``verity/pouw/period/v1``: the Python the Lean `PouwCheck.Period` (``pouw-period``,
 PoUW's verifier for a period and onsite's work component) is held to by ``lean/check/tests/test_period_difftest.py``.
 
-Its parameters are the verifier's own, ``{key, main, name}``: the challenger key it pins, its copy of main's
-first-parent history and the period it credits. Its commitment is the auditor's ledger (the lines the challenger signed),
-its digest SHA-512(`COMMITMENT_TAG` ‖ 0 ‖ its bytes). Its evidence is ``{pins, windows}``: the challenger host's pins log
-and each window's evidence in the close's order (`credit.PROVED_KEYS`). The check first refuses, by name (``form``),
-every window in a form the period's proved guarantee (`GUARANTEE`) doesn't cover: a Pearl-C pass, a circuit that is not
-an H1 window, a template over per-unit noise (``PouwH1Tile`` v1, v3 or v4), a J10-R unit over a tile other than
-``PouwH1Tile_v5`` (v6), or units at more than one K. Then it is `credit._period_outcomes`, all or nothing: it accepts with the period's credit (``{windows, work, k, delta, eps}``) and the profile ``{period, windows}``,
-or rejects with the first refusal, ``code: why``. Each sampled proof block's and each round's proof outcome is the
-verifier's verdict, which the evidence carries."""
+Its parameters are the verifier's own, ``{head, key, main, name, place, sessions}``: the head of the registration log
+the period is accounted against (a SHA-512 digest), the challenger key it pins, its copy of main's first-parent history,
+the period it credits, the id the registration log registered its device under, and the ordered ids of the sessions
+the challenger's ledger opened for the period's windows (each window's and its sample's). The registration's three
+(head, place, sessions) come all or none: with none, ``{key, main, name}`` (`ALONE_KEYS`), the period runs alone, its
+sessions aren't checked against a list and its answer names no head, place or part. Its commitment is the
+auditor's ledger (the lines the challenger signed), its digest SHA-512(`COMMITMENT_TAG` ‖ 0 ‖ its bytes). Its evidence
+is ``{pins, windows}``: the challenger host's pins log and each window's evidence in the close's order
+(`credit.PROVED_KEYS`). The check first refuses, by name (``form``), every window in a form the period's proved
+guarantee (`GUARANTEE`) doesn't cover: a Pearl-C pass, a circuit that is not an H1 window, a template over per-unit
+noise (``PouwH1Tile`` v1, v3 or v4), a J10-R unit over a tile other than ``PouwH1Tile_v5`` (v6), or units at more than
+one K. Then it is `credit._period_outcomes`, all or nothing, and last a session of the period's close the parameters
+don't list or that repeats one before it is refused (``sessions``). It accepts publishing the period's credit
+(``{windows, work, k, delta, eps}``) with the parameters' challenger ``key`` and, where they name the registration,
+its ``registration_head`` and ``place`` with the ``part`` of the device it accounts for (`PART`), the close's open
+``roots`` and the period's span in ledger entries
+(``start``, ``length``), with the profile ``{period, windows}``, or rejects with the first refusal, ``code: why``. Each
+sampled proof block's and each round's proof outcome is the verifier's verdict, which the evidence carries."""
 from __future__ import annotations
 
 import hashlib
+import json
 from typing import Any
 
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import credit as Cr
+from verity.protocols.accounting.pouw.verifier import salt as PS
 
 ID = "verity/pouw/period/v1"
 COMMITMENT_TAG = "verity/pouw/period/ledger/v1"
-PARAMS_KEYS = ("key", "main", "name")
+PARAMS_KEYS = ("head", "key", "main", "name", "place", "sessions")
+#: the keys of a period's parameters run alone, against no registration log
+ALONE_KEYS = ("key", "main", "name")
 EVIDENCE_KEYS = ("pins", "windows")
+KEYS_FORM = (f"keys are not {', '.join(PARAMS_KEYS)}, or {', '.join(ALONE_KEYS)} alone: head, place and sessions "
+             "come all or none")
+HEAD_FORM = "head is not the registration log's head (a SHA-512 digest, 128 lowercase hex)"
+PLACE_FORM = ("place is not the id the registration log registered the period's device under "
+              "(a nonempty string)")
+#: `PouwCheck.Period.PART`: the name of the part of the device at ``place`` a period accounts for, its compute
+PART = "compute"
+CHALLENGE_PHASES_FORM = ("sessions is not a list of the ids of the sessions the challenger's ledger opened for the "
+                         "period (1 to 64 of [A-Za-z0-9._:-] each, the first alphanumeric)")
 
 
 def params(j: Any) -> dict:
-    if not isinstance(j, dict) or sorted(j) != list(PARAMS_KEYS):
-        raise CC.Refused(f"keys are not {', '.join(PARAMS_KEYS)}")
+    """`PouwCheck.Period.paramsOf`: the registration's fields (head, place, sessions) all or none; with none the period
+    runs alone, against no registration log."""
+    if not isinstance(j, dict) or sorted(j) not in (list(PARAMS_KEYS), list(ALONE_KEYS)):
+        raise CC.Refused(KEYS_FORM)
     if not isinstance(j["name"], str):
         raise CC.Refused("name is not a string")
+    if sorted(j) == list(ALONE_KEYS):
+        return j
+    if Cr._digest(j["head"]) is None:
+        raise CC.Refused(HEAD_FORM)
+    if not (isinstance(j["place"], str) and j["place"]):
+        raise CC.Refused(PLACE_FORM)
+    ss = j["sessions"]
+    if not (type(ss) is list and all(type(s) is str and PS.SESSION.fullmatch(s) for s in ss)):
+        raise CC.Refused(CHALLENGE_PHASES_FORM)
     return j
 
 
@@ -122,16 +155,57 @@ def form(nm: str, windows: Any) -> str | None:
     return None
 
 
+def _period_entry(ledger: list, kind: str, name: str) -> dict | None:
+    return next((e for e in map(json.loads, ledger) if e["kind"] == kind and e["body"].get("period") == name), None)
+
+
+def ledger_challenge_phases(ledger: list, name: str) -> list[str]:
+    """`PouwCheck.Period.ledgerChallengePhases` on a ledger the challenger's checks have trusted: the sessions period
+    `name`'s close lists, in its order (each window's session, then its sample's), the empty list when it closes no
+    period `name`."""
+    close = _period_entry(ledger, "period-close", name)
+    return [] if close is None else [w["session"] for w in close["body"]["windows"]]
+
+
+def challenge_phases_refusal(name: str, listed: list[str], got: list[str]) -> str | None:
+    """`PouwCheck.Period.challengePhasesRefusal`: the first session of `got` the parameters don't list (`listed`) or
+    that repeats one before it, else None."""
+    seen: set[str] = set()
+    for i, s in enumerate(got):
+        if s not in listed:
+            return (f"session {i} of period {name}'s close ({s}) is not one the verifier's parameters list for the "
+                    "period: only a session the challenger's ledger opened for one of its windows counts")
+        if s in seen:
+            return f"session {i} of period {name}'s close ({s}) repeats a session before it: each session counts once"
+        seen.add(s)
+    return None
+
+
+def published(credit: dict, p: dict, ledger: list) -> dict:
+    """`PouwCheck.Period.Published.toJson`: the period's credit, its parameters' challenger key, from the trusted ledger
+    its close's open roots and its span (the period-open's seq and the entries from it to its close, inclusive), and,
+    where its parameters name the registration, their registration head and place with the part it accounts for
+    (`PART`)."""
+    o, c = (_period_entry(ledger, k, p["name"]) for k in ("period-open", "period-close"))
+    own = {**credit, "key": p["key"], "roots": [w["root"] for w in c["body"]["windows"]], "start": o["seq"],
+           "length": c["seq"] + 1 - o["seq"]}
+    return own if "head" not in p else {**own, "registration_head": p["head"], "place": p["place"], "part": PART}
+
+
 def check(p: dict, c: dict, e: dict) -> tuple[str, str | None, tuple[Any, Any] | None]:
     """`PouwCheck.Period.check`: the first window in a form the period's guarantee doesn't cover (``form``), else the
-    period's credit and profile, or the first refusal."""
+    period's credit or the first refusal, then a session of its close the parameters don't list or that repeats; on
+    acceptance what it publishes (`published`) and its profile."""
     if (why := form(p["name"], e["windows"])) is not None:
         return "reject", f"form: {why}", None
     got, refused = Cr._period_outcomes(p["key"], c["ledger"], e["pins"], p["main"], p["name"], e["windows"],
                                        CC.lms_verify)
     if refused is not None:
         return "reject", f"{refused[0]}: {refused[1]}", None
-    return "accept", None, (got, {"period": p["name"], "windows": len(got["windows"])})
+    if "sessions" in p and (why := challenge_phases_refusal(p["name"], p["sessions"],
+                                                     ledger_challenge_phases(c["ledger"], p["name"]))) is not None:
+        return "reject", f"sessions: {why}", None
+    return "accept", None, (published(got, p, c["ledger"]), {"period": p["name"], "windows": len(got["windows"])})
 
 
 def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
@@ -170,5 +244,7 @@ def case(j: Any) -> dict:
     return answer(params_b, bytes.fromhex(c), bytes.fromhex(e))
 
 
-__all__ = ["COMMITMENT_TAG", "COVERED_TILE", "EVIDENCE_KEYS", "GUARANTEE", "ID", "PARAMS_KEYS", "answer", "case", "check",
-           "commitment", "digest", "evidence", "form", "params"]
+__all__ = ["ALONE_KEYS", "CHALLENGE_PHASES_FORM", "COMMITMENT_TAG", "COVERED_TILE", "EVIDENCE_KEYS", "GUARANTEE",
+           "HEAD_FORM", "ID", "KEYS_FORM", "PARAMS_KEYS", "PART", "PLACE_FORM", "answer", "case",
+           "challenge_phases_refusal", "check", "commitment", "digest", "evidence", "form", "ledger_challenge_phases",
+           "params", "published"]
