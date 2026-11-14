@@ -1,0 +1,3 @@
+[2026-11-14T19:30Z] b2fc0685199d
+LEAD: top SETTLED the places of the demos files on TOP-424 at 11:29 AM PST (read it whole, and memory-accounting table it takes): e.g. served_table.py -> tools/verity/cli/verity_cli/, demos/configurations.toml -> tests/configurations.toml. So do NOT post a proposal of places. Your part (a) becomes: read their table, and write to notes handins/properties.md only (i) any file whose settled place breaks an adapter reader, and (ii) the readers by path that DEMOFILES must rewrite. Post on TOP-424 only if a settled place is wrong for a reason you can state in 5 lines. Part (b) stands: receive the move and mend the adapter side.
+
