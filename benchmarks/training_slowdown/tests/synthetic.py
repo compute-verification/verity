@@ -186,13 +186,10 @@ JOBS = {"whole": {"dials": {"trainable": "*", "lr": 1e-2}},
 #: Muon on the matrices as the library's configs run it: decayed, beside AdamW in torch's fused kernel, in two
 #: micro-batches
 FULLMUON = {"opt": "muon", "lr": 1e-2, "weight_decay": 0.05, "fused": True, "micro_batches": 2}
-#: QAT of the one block's matrices
-QAT = {"targets": "blocks.0.w*.weight", "keep": 0.35, "lr": 1e-2}
-#: each kind of step a config of the library (`attacks/`) takes that none of the jobs above takes, with the settings
-#: its configs give what the step computes (the optimizer, a decay, the fused kernel, micro-batches, what trains, a
-#: code or a state's width), on the tiny start, deeper (`blocks`) where blocks are frozen below or between trained
-#: ones. A QAT config's 8-bit gradient codes count as its 4-bit ones: the two differ only in shifts and ors, which no
-#: count holds
+#: QAT of the top block's matrices, the block below it frozen, as the library's QAT configs train their top blocks
+QAT = {"targets": "blocks.1.w*.weight", "keep": 0.35, "lr": 1e-2}
+#: each kind of step (`kind_of`) a config of the library (`attacks/`) takes that none of the jobs above takes, on the
+#: tiny start, deeper (`blocks`) where blocks are frozen below or between trained ones
 KINDS = {"adamw-decay": {"dials": {"trainable": "*", "lr": 1e-2, "weight_decay": 0.1}},
          "accumulate": {"dials": {"trainable": "*", "lr": 1e-2, "weight_decay": 0.1, "micro_batches": 2}},
          "adafactor": {"dials": {"trainable": "*", "opt": "adafactor", "lr": 1e-2}},
@@ -215,10 +212,50 @@ KINDS = {"adamw-decay": {"dials": {"trainable": "*", "lr": 1e-2, "weight_decay":
          "ema-whole": {"route": "ema", "dials": {"trainable": "*", "lr": 1e-2, "weight_decay": 0.1, "ema_decay": 0.99}},
          "ema-fullmuon": {"route": "ema", "dials": {"trainable": "*"} | FULLMUON | {"ema_horizon": 0.1}},
          "ema-fullmuon-fe": {"route": "ema", "dials": {"trainable": "blocks.0.*,norm"} | FULLMUON | {"ema_horizon": 0.1}},
-         "qat": {"route": "qat", "dials": QAT},
-         "qat-grad4": {"route": "qat", "dials": QAT | {"grad_code": "rtn4"}},
-         "qat-grad4-lowstate": {"route": "qat", "dials": QAT | {"grad_code": "rtn4", "low_state": True}}}
+         "qat": {"route": "qat", "blocks": 2, "dials": QAT},
+         "qat-grad4": {"route": "qat", "blocks": 2, "dials": QAT | {"grad_code": "rtn4"}},
+         "qat-grad4-lowstate": {"route": "qat", "blocks": 2, "dials": QAT | {"grad_code": "rtn4", "low_state": True}}}
 JOBS |= KINDS
+
+
+def _part(name: str, p: torch.Tensor) -> str:
+    """What a tensor of a route's model is, by its name: the embedding, the final gain, an adapter (LoRA's), a latent
+    (QAT's), a block's gain or a block's matrix."""
+    if name in ("embed", "norm"):
+        return {"embed": "embedding", "norm": "final gain"}[name]
+    if name.endswith((".a", ".b", ".v")):
+        return "latent" if name.endswith(".v") else "adapter"
+    return "gain" if p.ndim == 1 else "matrix"
+
+
+def kind_of(route: str, given: dict, blocks: int) -> tuple:
+    """The kind of step a config of the route `route` and the dials `given` takes on a start of `blocks` blocks, read
+    from what the route builds (at the tiny start's widths): each optimizer's class, whether it decays, steps in
+    torch's fused kernel, keeps its state at low width or normalizes a matrix as a stack, its groups and what it
+    trains; whether the step runs micro-batches and clips; which blocks are frozen below, between or above trained
+    ones; whether QAT codes its gradients; and whether a grown model's repeated copies start zeroed. Two configs of
+    one kind run the same code, the same branches taken, on tensors of other shapes and at other rates: what a rate,
+    a schedule, `keep`, a rank, a depth, the matrices a pattern names or `store` (E, encoded outside the count) sets
+    is no part of it. A QAT config's 8-bit gradient codes are its 4-bit ones: the two differ only in shifts and ors,
+    which no count holds."""
+    mod = config.route(route)
+    dials = config.dials(mod, given, route) | getattr(mod, "FIXED", {})
+    torch.manual_seed(0)
+    model, optimizers = mod.build(shape_of(blocks), dials)
+    names = {id(p): n for n, p in model.named_parameters()}
+    trained = sorted({int(n.split(".")[1]) for n, p in model.named_parameters()
+                      if p.requires_grad and n.startswith("blocks.")})
+    frozen = tuple(where for where, holds in (
+        ("below", trained and trained[0] > 0), ("between", trained and len(trained) < trained[-1] - trained[0] + 1),
+        ("above", trained and trained[-1] < len(model.blocks) - 1), ("every", not trained)) if holds)
+    steps = tuple((type(o).__name__, bool(o.defaults.get("fused")), any(g.get("weight_decay") for g in o.param_groups),
+                   bool(o.defaults.get("low_state")), bool(o.defaults.get("stack")), len(o.param_groups),
+                   tuple(sorted({_part(names[id(p)], p) for g in o.param_groups for p in g["params"]})))
+                  for o in optimizers)
+    return (("route", route), ("optimizers (class, fused, decayed, low state, stack, groups, trains)", steps),
+            ("micro-batches", dials["micro_batches"] > 1), ("clipped", dials["clip"] > 0),
+            ("frozen blocks", frozen), ("coded gradients", dials.get("grad_code", "fp32") != "fp32"),
+            ("zeroed copies", bool(dials.get("zero"))))
 
 
 def job_counted(root: Path, steps: int, math: bool = False, blocks: int = 1, **over):
