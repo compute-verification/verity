@@ -491,9 +491,6 @@
       "usergroup": "S0CAAA80KGT",
       "retired_usergroups": [
         "S0C5LSDENA1"
-      ],
-      "owns": [
-        "benchmarks/metrics.toml"
       ]
     },
     {
