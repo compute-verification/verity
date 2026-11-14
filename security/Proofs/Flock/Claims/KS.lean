@@ -190,7 +190,7 @@ with `k ≥ 8` wherever the verifier accepts at SHA-512 (`Range`, `FlockDeploy.K
 `FlockDeploy.KS.zk_of_oneWait_sha512`).
 
 One wait's bound from a fixed table's bound (`Joint`): the old theorems' `joint_acc_le` on the deployed verifier's own
-run law (`Flock.runGame`, `Flock.oneWait_lhs_eq`), with three obligations: a fixed table's bound over tables of
+run sampling design (`Flock.runGame`, `Flock.oneWait_lhs_eq`), with three obligations: a fixed table's bound over tables of
 well-formed or unopened (`0`) columns, accepted runs opening only well-formed columns, and conflicts tied to collisions
 (`Flock.TableBoundθ`, `Flock.orZero`, `Flock.ColsOk`, `Flock.ConflictTied`, `Flock.oneWait_of_tableBound`,
 `FlockDeploy.KS.plain_KS_of_tableBound`, `FlockDeploy.KS.zk_KS_of_tableBound`). At the records the claims read, whose
@@ -325,7 +325,7 @@ of each deployed coin on its tape bounds an event of the deployed coins by a mix
 coins being uniform, and the mixture by an event of the deployed coins the live event implies (`LiveMix`:
 `Claims.Bridge.Live.Pr_mergeC`, `Claims.Bridge.Live.Pr_mergeAt`, `Claims.Bridge.Live.liveMix_eq`,
 `Claims.Bridge.Live.Pr_le_liveMix`, `Claims.Bridge.Live.liveMix_le_Pr`). A live prover simulates the deployed prover on
-coins of uniform law where its live outcome is the run's wherever the run accepts, and at the coins that merge each live
+coins of uniform distribution where its live outcome is the run's wherever the run accepts, and at the coins that merge each live
 coin with the rest of a deployed coin the sampling design holds, so the simulation of the runs alone suffices (`PlainFirst`:
 `FlockDeploy.KS.PlainSim`, `FlockDeploy.KS.PlainSimRun`, `FlockDeploy.KS.plainCoins`,
 `FlockDeploy.KS.plainSim_of_run`); the checks compare samples only up to `JsonEquiv`, which holds between different
@@ -510,7 +510,7 @@ the deployed decoders are right at that verdict on those outcomes, at a masked s
 `FlockDeploy.KS.decodesTableHW_zkTabs`, `FlockDeploy.KS.decodesTableW_deploy`). On an accepting deployed masked run, the
 event of no column of table `j` off `C` gives that verdict at the run's live outcome (`ZkEvent`:
 `FlockDeploy.KS.cols_zk`, `FlockDeploy.KS.accTxJ_of_run`), with no premise on the record's sample, so a simulation of
-the deployed masked prover by a live prover on coins of uniform law gives the masked mixture's first bound at that
+the deployed masked prover by a live prover on coins of uniform distribution gives the masked mixture's first bound at that
 verdict, and at the coins that merge each live coin with the rest of a deployed coin, a deployed event a live event
 implies bounds the mixture (`ZkFirst`: `FlockDeploy.KS.ZkSimRun`, `FlockDeploy.KS.ZkSim`, `FlockDeploy.KS.zkCoins`,
 `FlockDeploy.KS.zk_first_of_sim`, `FlockDeploy.KS.zk_first_of_run`, `FlockDeploy.KS.zkMix_le_of_run`).
@@ -579,7 +579,7 @@ column at a position of its word (`FlockDeploy.KS.okThroughJ_nil`), so with no `
 counted per round at full-width columns (`FlockDeploy.KS.zk_KS_trim_of_tableBoundJR`), so from `ZkLiveAccWJ` or
 `ZkXferWJ` where some run accepts alone (`FlockDeploy.KS.zk_KS_trim_of_liveAccWJ`,
 `FlockDeploy.KS.zk_KS_trim_of_xferWJ`). With an accepting run or fork with its collision as the events, `ZkXferWJ`
-holds from a live prover for each prover, with a finite tape and coins of uniform law, that sends its roots, simulates
+holds from a live prover for each prover, with a finite tape and coins of uniform distribution, that sends its roots, simulates
 its accepting runs, whose self-clashes give its accepting runs with a collision and whose fork bounds hold (`ZkSimW`:
 `FlockDeploy.KS.zkRoot`, `FlockDeploy.KS.zkRoot_of_first`, `FlockDeploy.KS.ZkClashRun`, `FlockDeploy.KS.ZkSimWJ`,
 `FlockDeploy.KS.zkXferWJ_of_simWJ`), with no premise on the record's sample, so `Flock.KS` at the trimmed masked record

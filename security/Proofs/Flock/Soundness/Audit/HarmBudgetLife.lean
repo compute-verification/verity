@@ -8,7 +8,7 @@ import Proofs.Flock.Soundness.Game
 /-!
 # The cumulative harm budget over a lifetime of one-stage audits
 
-`life L Reg session N` is a lifetime of at most `N` one-stage audits (`audit`), round `m` by law
+`life L Reg session N` is a lifetime of at most `N` one-stage audits (`audit`), round `m` by sampling design
 `L m`: before each, the prover chooses to stop (accepting) or to run it, and a rejected audit ends
 the session. The prover's choices are adaptive, so the number of rounds is a stopping time.
 
@@ -39,7 +39,7 @@ def stage (L : Law n) (Reg : Type) (session : Finset (Fin n) → Reg → Game Bo
     Game Bool :=
   .send Bool fun go => cond go ((audit L Reg session).bind (afterAudit next)) (.ret true)
 
-/-- **A lifetime of at most `N` one-stage audits**, round `m` by law `L m`. -/
+/-- **A lifetime of at most `N` one-stage audits**, round `m` by sampling design `L m`. -/
 def life (L : ℕ → Law n) (Reg : ℕ → Type) (session : (m : ℕ) → Finset (Fin n) → Reg m → Game Bool) :
     ℕ → Game Bool
   | 0 => .ret true
@@ -313,7 +313,7 @@ theorem life_accept (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) (h : 
   | 0, _, _ => rfl
   | N + 1, s, x => accept_stagePlay (A N) h (life_accept A h N) s x
 
-/-- **The cumulative harm budget over a lifetime of one-stage audits.** For laws meeting the design
+/-- **The cumulative harm budget over a lifetime of one-stage audits.** For sampling designs meeting the design
 condition with weights `π`, harms `h` with `λ h ≤ π` and `λ ≥ 0`, and every prover strategy, the
 lifetime accepts with total harm `Σ_t h(wrong(X_t))` at least `H` with probability at most
 `e^{−λH} + Σ_{m<N} (ε_ks,m + δ_link,m)`. -/

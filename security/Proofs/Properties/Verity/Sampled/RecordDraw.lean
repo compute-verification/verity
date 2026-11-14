@@ -17,10 +17,10 @@ Clause (i) of `MovesOf`: the record v2 reads in an accepted play decodes (`Exec.
   (`Verity.SameAccepts`) and v2 drew `units` over `n` units there (`Drew`), the units are ascending below `n`
   (`unitsAscending`) and the record's `unit_draw` is the subset sample of those units,
   `UnitDraw.toJson ⟨.subset units.size, n, units, #[]⟩` (`recordDrawn`): v2 accepts only a subset record sample
-  (`recordDraw_subset`), whatever law it drew by. `Sampled/Held.lean` proves it for every composite (`drawHeld`), from
+  (`recordDraw_subset`), whatever sampling design it drew by. `Sampled/Held.lean` proves it for every composite (`drawHeld`), from
   the record sample's population and units (`drawHeld_of`).
 * **The record half** (`recordDraw_of_drew`): where `DrawHeld` holds, `k` accepted, v2 drew `units`, and the session's
-  law and population are v2's, the record decodes to the session's sample file, the subset print of `kd` units
+  sampling design and population are v2's, the record decodes to the session's sample file, the subset print of `kd` units
   (`Live.dj`), at the proof blocks `units` names: v2 drew `kd` units (`Flock.Bridge.drawUnits_size`), and the sample file
   at the units' proof blocks is `UnitDraw.toJson ⟨.subset kd, n, units, #[]⟩` (`drawOf_filter`).
 * **`norm` fixes a subset sample's file** (`norm_toJson_subset`), as `DrawHeld`'s proof reads it.
@@ -792,7 +792,7 @@ theorem norm_toJson_subset (k pop : ℕ) (units cl : Array ℕ) :
 
 /-- **The record's sample is the session's sample file at v2's units**: where v2 holds the record's sample to its own
 (`DrawHeld`), composite `k` accepted what the prover sent, v2 drew `units` under the sampling design `L` over `n` units there, and
-the session's law and population are `L` and `n`, the record v2 reads decodes to the session's sample file at the proof
+the session's sampling design and population are `L` and `n`, the record v2 reads decodes to the session's sample file at the proof
 blocks `units` names. v2 drew the session's `kd` units (`Flock.Bridge.drawUnits_size`), so the record's subset sample
 is the session's. -/
 theorem recordDraw_of_drew {k : Verity.Registration.Composite} (hH : DrawHeld k) {s : Verity.Sent} {dr : Draws}

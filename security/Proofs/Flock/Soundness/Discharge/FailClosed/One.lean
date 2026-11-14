@@ -94,7 +94,7 @@ covers `--registered F` at public outputs: there it accepts no more than the ver
 distinct claims: the six soundness bounds (each its own game: the sampling design,
 stratified or the live subset sample, and the outputs, public or hidden) and the two zero-knowledge views. The registered
 headlines make two more: `SoundZHJR` (`FailClosed.ZkRegistered`) and `SoundExecHR` (`FailClosed.PlainRegistered`), and
-`ViewZHJR` is `ViewZHJ`'s view at the statements only its check passes. `SoundExecH` and `SoundExecHR` take their law as
+`ViewZHJR` is `ViewZHJ`'s view at the statements only its check passes. `SoundExecH` and `SoundExecHR` take their sampling design as
 a parameter (`DrawDesign`), the one the inputs make live (`LiveDesign`), so each is one claim at the stratified sampling design
 and the live subset sample. The other eight
 are corollaries of these: `flock_headline_exec` and `flock_headline_exec_hidden` state the `_dec` bounds at any decoder
@@ -183,10 +183,10 @@ theorem exists_k_rateZ {F : Type} [Field F] [Fintype F] [DecidableEq F] {n mPts 
 /-! ## The stratified sampling design
 
 The claims at the stratified sampling design (`SoundExec`, `SoundZ`, `SoundZH`, and their `205` and per-test forms, and
-`SoundExecH`, `SoundExecHR` at a stratified `DrawDesign` through `LiveDesign`) take the live law from the inputs, as the
+`SoundExecH`, `SoundExecHR` at a stratified `DrawDesign` through `LiveDesign`) take the live sampling design from the inputs, as the
 verifier does: `liveLaw I`, `HmRow.stratifiedLaw` at the verifier's own `--partition`, `--program` and `--stratified K`,
-to which `setupTables` holds a stratified sample file's law (U2). Their miss term is the stratified sampling design's at every assignment `σs` of the population's units to the strata that the strata
-describe (`ExecStrata`), the bound the infimum over them. At an accepted sample file's law that infimum ranges over a
+to which `setupTables` holds a stratified sample file's sampling design (U2). Their miss term is the stratified sampling design's at every assignment `σs` of the population's units to the strata that the strata
+describe (`ExecStrata`), the bound the infimum over them. At an accepted sample file's sampling design that infimum ranges over a
 non-empty set (`liveStrata_of_ofJson`, from `Law.execStrata_of_ofJson`). -/
 
 section
@@ -226,7 +226,7 @@ theorem liveStrata_of_ofJson {j : Lean.Json} {D : Flock.Draw.UnitDraw} {Kd m : �
     exact h1
 
 /-- **A sample design is the live sample's** at the inputs: at the stratified sample, its strata, `Kd` and population are the
-stratified sampling design the verifier derives (`liveLaw`), as at `SoundExec`; the subset sample's law is the sample file's, which
+stratified sampling design the verifier derives (`liveLaw`), as at `SoundExec`; the subset sample's sampling design is the sample file's, which
 `ProvedScope.lawWhy` admits at hidden outputs. -/
 def LiveDesign (I : Inputs) {n : ℕ} : DrawDesign n → Prop
   | .stratified St Kd pop => liveLaw I = some (.stratified Kd (Array.ofFn St), pop)

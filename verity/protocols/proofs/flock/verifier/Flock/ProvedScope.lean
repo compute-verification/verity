@@ -548,8 +548,8 @@ theorem programP_ok {parsed : V Circuit} {program : Option ByteArray} (h : progr
     | none => rfl
     | some w => simp [hw] at h
 
-/-- What a sample's law is, when no soundness claim samples by it at the session's form: the one rule
-for which law each form samples by. Without `--plain-tables`: the stratified sampling design at every form `check` passes, each claim at
+/-- What a sample's sampling design is, when no soundness claim samples by it at the session's form: the one rule
+for which sampling design each form samples by. Without `--plain-tables`: the stratified sampling design at every form `check` passes, each claim at
 one table (`SoundExec`, `SoundExecH`, `SoundZ`, `SoundZH`); the subset sampling design under `--zk` (`SoundZJ`, `SoundZHJ`, `SoundZHJR`)
 and, without it, exactly where a plain claim samples by it: at hidden outputs, at the one table `check` admits there
 (`SoundExecH` at its subset sample design). Under `--plain-tables` (`plainTables`, `SoundExecJ`), the subset sampling design alone. So a

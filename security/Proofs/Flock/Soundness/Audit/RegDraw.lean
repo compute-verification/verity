@@ -33,7 +33,7 @@ def atReg {Reg : Type} {L : Reg → Law n} {session : Finset (Fin n) → Reg →
     (σ : Strategy (auditReg L session)) : Strategy (audit (L σ.1) Reg session) :=
   ⟨σ.1, σ.2⟩
 
-/-- **A strategy of the registration-dependent audit is a strategy of the fixed-law audit at its registration's law**,
+/-- **A strategy of the registration-dependent audit is a strategy of the fixed-law audit at its registration's sampling design**,
 with the same outcome probabilities. -/
 theorem prob_auditReg {Reg : Type} (L : Reg → Law n) (session : Finset (Fin n) → Reg → Game Bool)
     (p : Bool × Finset (Fin n) → Prop) (σ : Strategy (auditReg L session)) :
