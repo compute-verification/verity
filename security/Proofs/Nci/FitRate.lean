@@ -9,7 +9,7 @@ public import Proofs.Nci.Fit
 
 `ServerBlocksAt` at the run's cuts divides the developer's declaration into the windows `A[X i, [τ j, τ (j + 1))]`, each
 reading in `G` at most the part in `G` of its server's state at `τ j` plus `β_{X i} (τ (j + 1) − τ j)`. At `G` the image
-of `c`'s novel gates, the windows pulled into `c` (`pull`) read at most that (`novelReads_pull_le_readsIn_compl`), so at
+of `c`'s novel gates, the windows pulled into `c` (`pull`) read at most that (`freshInput_pull_le_readsIn_compl`), so at
 most `R + r ω`, and `FitBound` gives the count over the `n J` windows. Its compute-rate hypothesis holds at `Φ = A.N`
 (`computeRate_N`), and the count does not read `Φ`. Windows of at least `ω₀` ticks number at most `t / ω₀`
 (`cuts_mul_le`), which gives the rate.
@@ -23,9 +23,9 @@ open Verity Accounting Finset
 
 /-- Through a containment `M : c ≼ d`, the piece of `c` that a unit of `d` induces reads at most what the unit reads in
 the image of `c`'s novel gates. -/
-theorem novelReads_pull_le_readsIn_compl {c d : RegisteredCircuit} (M : Containment c.D d.D) {n : ℕ} (P : Partition d.D n)
-    (u : Fin n) : novelReads c ((pull M P).gates u) ≤ readsIn d (P.gates u) ((c.θᶜ).map ⟨M.emb, M.emb_inj⟩) := by
-  unfold novelReads readsIn
+theorem freshInput_pull_le_readsIn_compl {c d : RegisteredCircuit} (M : Containment c.D d.D) {n : ℕ} (P : Partition d.D n)
+    (u : Fin n) : freshInput c ((pull M P).gates u) ≤ readsIn d (P.gates u) ((c.θᶜ).map ⟨M.emb, M.emb_inj⟩) := by
+  unfold freshInput readsIn
   rw [width_map (M := M)]
   refine sum_le_sum_of_subset fun b hb => ?_
   obtain ⟨a, ha, rfl⟩ := mem_map.1 hb
@@ -75,16 +75,16 @@ theorem FitRate : Guarantees.FitRate := by
   have hQ : ∀ (i : Fin n) (j : Fin κ.J) (g : Fin c.D.N), g ∈ (pull M P).gates (finProdFinEquiv (i, j)) ↔
       M.emb g ∈ A.region (X i) (Set.Ico (κ.τ j.castSucc) (κ.τ j.succ)) := fun i j g =>
     mem_pull_gates.trans (Iff.of_eq (congrArg (fun s => M.emb g ∈ s) (hP i j).1))
-  have hread : ∀ u, (novelReads c ((pull M P).gates u) : ℝ) ≤ R + r * ω := by
+  have hread : ∀ u, (freshInput c ((pull M P).gates u) : ℝ) ≤ R + r * ω := by
     intro u
     obtain ⟨⟨i, j⟩, rfl⟩ := finProdFinEquiv.surjective u
-    have h1 : novelReads c ((pull M P).gates (finProdFinEquiv (i, j))) ≤
+    have h1 : freshInput c ((pull M P).gates (finProdFinEquiv (i, j))) ≤
         A.stateIn (X i) (κ.τ j.castSucc) ((c.θᶜ).map ⟨M.emb, M.emb_inj⟩) +
           linkCapacity ends β (X i) * (κ.τ j.succ - κ.τ j.castSucc) :=
-      (novelReads_pull_le_readsIn_compl M P _).trans (hP i j).2.2
+      (freshInput_pull_le_readsIn_compl M P _).trans (hP i j).2.2
     have h2 : ((linkCapacity ends β (X i) : ℕ) : ℝ) * ((κ.τ j.succ - κ.τ j.castSucc : ℕ) : ℝ) ≤ r * ω :=
       mul_le_mul (hr i) (Nat.cast_le.2 (hω j)) (Nat.cast_nonneg _) ((Nat.cast_nonneg _).trans (hr i))
-    have h3 : (novelReads c ((pull M P).gates (finProdFinEquiv (i, j))) : ℝ) ≤
+    have h3 : (freshInput c ((pull M P).gates (finProdFinEquiv (i, j))) : ℝ) ≤
         (A.stateIn (X i) (κ.τ j.castSucc) ((c.θᶜ).map ⟨M.emb, M.emb_inj⟩) : ℝ) +
           ((linkCapacity ends β (X i) : ℕ) : ℝ) * ((κ.τ j.succ - κ.τ j.castSucc : ℕ) : ℝ) := by
       exact_mod_cast h1

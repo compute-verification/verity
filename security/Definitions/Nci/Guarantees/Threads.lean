@@ -39,7 +39,7 @@ division. -/
 def ThreadedReads : Prop :=
   ∀ (r : RegisteredCircuit) (T : Threading r) (c : ℕ) (k b_w b_a : ℝ) (d e : ℕ),
     0 < b_w → 0 < b_a → 0 < d → T.Threaded c k d e → Assumptions.WeightsIncompressible r T c k b_w b_a →
-    ∀ R, Small r c k R → b_a * (T.mults R).card ≤ novelReads r R * T.bound k b_w d e
+    ∀ R, Small r c k R → b_a * (T.mults R).card ≤ freshInput r R * T.bound k b_w d e
 
 /-- **Theorem 2 (a high fresh-input rate means padding)** (the thread draft, Appendix B), for the reference circuits of
 Theorem 1: a declaration `d` that contains `r` (`M`) and complies at `(Γ, α)`, with no fresh input of `r` in its
@@ -102,7 +102,7 @@ since a thread's counted multiplications on the versions of one slot number at m
 def ThreadedReadsSlots : Prop :=
   ∀ (r : RegisteredCircuit) (T : Threading r) (σ : T.Slots) (c : ℕ) (k b_w b_a : ℝ) (d e : ℕ),
     0 < b_w → 0 < b_a → 0 < d → T.Threaded c k d e → Assumptions.WeightsIncompressibleSlots r T σ c k b_w b_a →
-    ∀ R, Small r c k R → b_a * (T.mults R).card ≤ novelReads r R * T.bound k b_w d e
+    ∀ R, Small r c k R → b_a * (T.mults R).card ≤ freshInput r R * T.bound k b_w d e
 
 /-- **Theorem 2 per parameter slot**: `ThreadedThrottled` under `WeightsIncompressibleSlots`. -/
 def ThreadedThrottledSlots : Prop :=
