@@ -81,10 +81,7 @@ def _parents(tree: ast.AST, target: ast.AST) -> list[ast.AST]:
         if node is target:
             out.extend(chain)
             return True
-        for ch in ast.iter_child_nodes(node):
-            if walk(ch, chain + [node]):
-                return True
-        return False
+        return any(walk(ch, chain + [node]) for ch in ast.iter_child_nodes(node))
 
     walk(tree, [])
     return out
