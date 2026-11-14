@@ -162,7 +162,7 @@ class ProgramIndex:
     counts), read with the correspondence of its Build dir (`program_dir`; without one, the rows' recorded names)."""
 
     def __init__(self, inst: dict[str, Any], *, prefix: str | None = None, attention_paths: list[str] | None = None, tp: dict[str, Any] | None = None,
-                 program_dir: str | None = None, query: str | None = None, norm_scales: bool = False):
+                 program_dir: str | None = None, query: str | None = None, norm_scales: bool = False) -> None:
         self.inst = inst
         self.key = index_key(prefix=prefix, attention_paths=attention_paths, tp=tp, program_dir=program_dir, query=query, norm_scales=norm_scales)
         self.rows: list[dict] = list(inst["rows"])

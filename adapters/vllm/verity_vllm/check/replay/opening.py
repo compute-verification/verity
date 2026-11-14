@@ -79,7 +79,7 @@ class CommittedStore:
     missing invocation read fails closed, it never reads a neighbour's words)."""
 
     def __init__(self, bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None],
-                 aliases: dict[str, Any] | None = None):
+                 aliases: dict[str, Any] | None = None) -> None:
         self.committed = committed
         # accepts the manifest's raw form (alias -> [canonical, invocation]) or the parsed table (alias -> (canonical, invocation))
         self.aliases: dict[str, tuple[str, int]] = {str(k): (str(v[0]), int(v[1])) for k, v in (aliases or {}).items()}
