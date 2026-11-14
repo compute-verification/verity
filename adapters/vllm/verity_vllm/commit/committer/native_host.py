@@ -40,11 +40,6 @@ import threading
 import time
 from typing import Any
 
-try:
-    import torch
-except ImportError:                      # the offline core (tests, CPU cross-checks) needs no torch
-    torch = None  # type: ignore[assignment]
-
 from verity_vllm import settings
 from verity_vllm.acquire.committer_api import (
     Opening,
@@ -71,6 +66,7 @@ from verity_vllm.commit.committer.identity_check import (
     is_hidden_value_row,
 )
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
+from verity_vllm.commit.committer.optional_torch import torch
 from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
 from verity_vllm.commit.committer.staging_bounds import _ARENA_MIN, step_bound_bytes
 from verity_vllm.commit.committer.staging_bounds import _ARENA_ROUND as _ARENA_ROUND

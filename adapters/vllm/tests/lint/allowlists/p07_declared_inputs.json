@@ -4,7 +4,7 @@
     {"file": "verity_vllm/acquire/fa2_tap_src/build_ext.py", "kind": "machine-path", "symbol": "main", "detail": "/usr/local"},
     {"file": "verity_vllm/acquire/fa3_tap_src/build_fa3_ext.py", "kind": "machine-path", "symbol": "main", "detail": "/usr/local"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "broad-except", "symbol": "NativeHostCommitter._load_cudart", "detail": "except Exception", "count": 2},
-    {"file": "verity_vllm/commit/committer/native_host.py", "kind": "optional-import", "symbol": "<module>", "detail": "except ImportError"},
+    {"file": "verity_vllm/commit/committer/optional_torch.py", "kind": "optional-import", "symbol": "<module>", "detail": "except ImportError"},
     {"file": "verity_vllm/properties/noninterference.py", "kind": "broad-except", "symbol": "case_of_args", "detail": "except Exception"},
     {"file": "verity_vllm/properties/noninterference.py", "kind": "broad-except", "symbol": "compare", "detail": "except Exception"},
     {"file": "verity_vllm/properties/noninterference.py", "kind": "broad-except", "symbol": "expected_layers_for", "detail": "except Exception"},
