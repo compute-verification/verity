@@ -54,7 +54,7 @@ import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "s8_linear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "kernels" / "s8_linear"))
 import gemm as G  # noqa: E402
 import layout as L  # noqa: E402
 import stage as S  # noqa: E402

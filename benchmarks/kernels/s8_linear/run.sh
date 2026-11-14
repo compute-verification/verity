@@ -2,7 +2,7 @@
 # This directory's scripts on one leased GPU of an H200 (or another sm_90 GPU), each STEP under its own lease of at most
 # S8_MAX_MIN (30) minutes, from build.sh's ship (nothing is compiled here; cwd = the source tree's root):
 #   tar -C SHIP -cf /tmp/s8-ship.tar .
-#   OUT=DIR S8_SHIP=/tmp/s8-ship.tar bash benchmarks/torch_gpu/s8_linear/run.sh STEP...
+#   OUT=DIR S8_SHIP=/tmp/s8-ship.tar bash benchmarks/kernels/s8_linear/run.sh STEP...
 # Needs CUDA torch with vLLM and `gpu-lease` on PATH; OUT and S8_SHIP default to a run directory's out/ and
 # inputs/s8-ship.tar (RESEARCH_RUN_DIR).
 # A STEP is a script and its arguments in one word, e.g. "run.py --ms 1,7,257 --no-swap" (the canary) then "run.py" (the
@@ -37,7 +37,7 @@ for step in "$@"; do
   i=$((i + 1)); read -r -a argv <<< "$s"; script=${argv[0]}; dir=$OUT/$i-${script%.py}; mkdir -p "$dir"
   if [ "$lease" = 0 ]; then
     echo "s8_linear: step $i ($step) with no GPU at $(date -u +%H:%M:%SZ)"
-    "$PY" "$ROOT/benchmarks/torch_gpu/s8_linear/$script" --out "$dir" "${argv[@]:1}" 2>&1 | tee "$dir/log.txt"
+    "$PY" "$ROOT/benchmarks/kernels/s8_linear/$script" --out "$dir" "${argv[@]:1}" 2>&1 | tee "$dir/log.txt"
     rc=${PIPESTATUS[0]}
     echo "s8_linear: step $i ($step) exited $rc at $(date -u +%H:%M:%SZ)" | tee -a "$OUT/rc.txt"
     [ "$rc" = 0 ] || { rc_all=$rc; [ "${S8_KEEP_GOING:-0}" = 1 ] || break; }
@@ -54,7 +54,7 @@ for step in "$@"; do
     [ -n "${GPU_LEASE_UUID:-}" ] && nvidia-smi -i "$GPU_LEASE_UUID" -q -d CLOCK,PERFORMANCE,POWER > "$0/clocks.txt" 2>&1
     timeout $((60 * $1 - 30)) "$2" "$3" --out "$0" "${@:4}"; rc=$?
     [ -n "$lock" ] && sudo -n nvidia-smi -i "$GPU_LEASE_UUID" -rgc >> "$0/lock.txt" 2>&1
-    exit $rc' "$dir" "$MAX_MIN" "$PY" "$ROOT/benchmarks/torch_gpu/s8_linear/$script" \
+    exit $rc' "$dir" "$MAX_MIN" "$PY" "$ROOT/benchmarks/kernels/s8_linear/$script" \
     "${argv[@]:1}" 2>&1 | tee "$dir/log.txt"
   rc=${PIPESTATUS[0]}
   kill "$smi" 2>/dev/null
