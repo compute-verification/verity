@@ -291,6 +291,9 @@ from verity.protocols.proofs.spot.prover.costfit import fit
   `SPOT_TWO_PROTOCOL`), the core deployment's `Firewall`, `Workers` and `Verifier` (`MANIFEST`, `PROTOCOL`, `params_of`),
   the `Challenger` both run, `PROTOCOLS` by id, and `IDS`, the configuration's subprotocol names and their protocol ids.
 - `consumers`: `infiltration_bound`, `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
+- `window_place`: `of`, `family` and `run`, the place a registration record's window names in its window's session, the
+  family of challenges of that place and the root the session opens on; a stream holds a sample's challenger source
+  to that family.
 - `coins`: `OwnRandomness`, exact samplers over a byte source (a challenger's coins); `draw_first`, a one-stage sampling design's sample from it,
   with `closure_of` for a work design's closure; `ChallengerCoins`, a sample's coins from one family of the auditor's
   challenger, and `challenger_stream`, `read_reason` and `coins_reason`, the verifier's replay of them from the record.
@@ -524,7 +527,7 @@ sampled once. The record is each `Segment` (family, first index, `after` and the
 `read_reason` against the roots the challenger's signed release log shows (`remote.trusted_session`): the sample's coins
 are exactly those released after the commitment, every one read; the stream's digest says `"coins": "challenger"`.
 `Stream.outcome(coins=...)` hands the evidence (`coins_reason`'s `{ledger, main, pins, segment, session}`, which is
-`draw_coins`'s: one object for the stream's check and a component's), and the run takes the commitment and the roots
+`draw_coins`'s: one object for the stream's check and a subprotocol's), and the run takes the commitment and the roots
 from the session the auditor's ledger opens for the registration's run (`register`'s `window_root`, never one the
 evidence names) under the challenger key the stream is made with (`Stream(key=)`, never one the evidence names: evidence
 that carries a key is refused), run from a commit the host's pins log records on the verifier's copy of main's
