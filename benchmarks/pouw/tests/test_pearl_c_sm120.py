@@ -1,4 +1,4 @@
-"""Pearl-C's sm_120 tree off the card (benchmarks/pouw/pearl_c_sm120): the shared-memory swizzles conflict-free for
+"""Pearl-C's sm_120 tree off the card (verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120): the shared-memory swizzles conflict-free for
 every ldmatrix phase and the GEMMs within sm_120's 99 KB, the kernel's constants the scheme's, the SASS gate refusing a
 lowered or spilling build, the check fixture against the scheme on both device records, and run.py's identity refusal
 and dry run on a CPU stand-in for libcuda (pearl_c/fake_cuda.c, with fake_tma.c's tensor maps; an RTX PRO 6000's name,
@@ -24,7 +24,7 @@ from conftest import load
 from verity.protocols.accounting.pouw.verifier.audit import weights_root
 from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
 
-HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
+HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 
 
 #: by `load`: other directories have a fixture.py, a sass_gate.py and a run.py too

@@ -1,7 +1,7 @@
 """Pearl-C on the RTX PRO 6000 (sm_120) at the linears' ``quant_method.apply``: every call computed and committed on the device
 by GPU 1's kernel pipeline, one epoch per install over every linear weight, one transcript per pass over every call.
 
-The kernel is a directory (setting ``kernel``): the run tree's ``benchmarks/pouw/pearl_c_sm120``, or ``pearl_c_sm90`` for the
+The kernel is a directory (setting ``kernel``): the run tree's ``verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120``, or ``pearl_c_sm90`` for the
 ``h100`` record (an H100 or H200, sm_90a), whose ``run.py`` has the `Pipeline` (its kernels in order, each a named step of a
 phase, over buffers the caller may own); a unit's keys are the scheme's (`pearl_c.keys_of`, `pearl_c.unit_block`).  The cubin is
 build.sh's (setting ``cubin``, default the directory's cubin).  This module owns the buffers and runs the pipeline's steps on

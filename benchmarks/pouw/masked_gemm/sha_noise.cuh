@@ -11,7 +11,7 @@
 // tag = 2 (NS - 1) + side (0 for A, 1 for B). The generator hands its patch's noise to apply(c, n) a 16-byte chunk at a
 // time, c = 0..31 (row c / 8 of the patch, column chunk c % 8), n its 16 noise values as 4 words of int8 bytes.
 #pragma once
-#include "../pearl_c/sha512.cuh"
+#include "../../../verity/protocols/accounting/pouw/prover/kernels/pearl_c/sha512.cuh"
 
 DEV void sha_block(const uint64_t* sg, uint64_t ctr, uint64_t* st) {
   uint64_t w[16];
