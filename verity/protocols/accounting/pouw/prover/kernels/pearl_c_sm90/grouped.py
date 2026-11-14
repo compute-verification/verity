@@ -153,12 +153,17 @@ def has(dev, name: str) -> bool:
     if got is None:
         got = dev.grouped_has = {}
     if name not in got:
-        try:
-            dev.fn(name)
-            got[name] = True
-        except RuntimeError:
-            got[name] = False
+        got[name] = _loads(dev, name)
     return got[name]
+
+
+def _loads(dev, name: str) -> bool:
+    """Whether the cubin loads kernel `name` (`dev.fn` raises RuntimeError for one it lacks)."""
+    try:
+        dev.fn(name)
+    except RuntimeError:
+        return False
+    return True
 
 
 def has_tree(dev) -> bool:
