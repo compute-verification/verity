@@ -309,4 +309,42 @@ def IntegrityHorizonCarried : Prop :=
     value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map WindowRec.wrong).sum : ℝ)) (S.run s) ≤
       ENNReal.ofReal δ + ∑ b ∈ Finset.range S.B, S.err b + ∑ x, (S.leaf x).carry
 
+/-- **Sessions that prove every unit and share registered values, with no proof block wrong.** In a monitoring period
+with carried leaves (`CarriedBlocks`), on a set `I` of its sessions each of which proves every one of its units
+(`kd = n`), the probability that every session of `I` is accepted and at least one proof block of `I` is incorrect,
+each carried leaf read at its one value in every session that shares it, is at most
+$$\sum_{t \in I} (\varepsilon_{ks,t} + \delta_{link,t}) + \sum_\ell \delta_{carry,\ell,I},$$
+with no sampling term. Two sessions that share one registered value are the case where `I` is those two and the value
+is one carried leaf whose `sessions` are both. Its premises are `IntegrityHorizonCarried`'s.
+
+What it does not say: anything of a session that samples (`kd < n`: that is `IntegrityHorizonCarried`'s pooled bound);
+which value the shared leaf holds, only that both sessions are held to one value, the plurality of its finder over them
+(`CarriedBlocks.Xm`); anything of zero knowledge; or anything of sessions outside the monitoring-period game, where
+each session's statement is fixed before any session's coins.
+
+How it composes with `Verity.InProofs.Gives μ r ok K₀ ε` (`prPMF μ (accepts ∧ K₀ ≤ |failing ok|) ≤ ε`): its conclusion
+is `Gives` at `K₀ = 1` for the run whose `accepts` is every session of `I` accepted, whose proof blocks are the units of
+`I`'s sessions (`failing.card` the sum of their `wrong`), and whose `ok` is each unit's circuit at its values, each
+carried leaf at its one value, at `ε` the bound above. A row's lemma takes that `Gives` and concludes its own check.
+
+Not proved: it is `Flock.SecurityProofs.integrity_on` at `q = 1` and `M = 1`, whose sampling term `(1 - q)^M` is then
+`0`, once `IntegrityHorizonCarried`'s premises give that lemma's. -/
+def IntegrityAllProvedCarried : Prop :=
+  ∀ (S : CarriedBlocks) (I : Finset ℕ),
+    (∀ t ∈ I, (S.W t).kd = (S.W t).n) →
+    (∀ t ∈ I, Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src) →
+    ∀ s : Strategy S.game,
+    (∀ t (τ : Strategy (S.W t).game), Period.Plays S.W S.T s t τ → ∀ ω j,
+      TableCRZ execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀ ((S.W t).L.draw ω) (reg ((S.W t).sim τ))) j
+        (zcStrat execArith hs512 (planZHJ (S.W t).dj (S.W t).y₀) (cont ((S.W t).sim τ) ω)) (S.W t).qF (S.W t).qS) →
+    (∀ t (τ : Strategy (S.W t).game), Period.Plays S.W S.T s t τ →
+      LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
+        (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') →
+    (∀ x, Assumptions.SHA512CRExpected H512 (finderG (S.mix s x) (S.leaf x).M)
+      (finderStrat (S.mix s x) (S.mixS s x) (S.leaf x).M) (outOf (rdSig fun _ => (S.leaf x).rd) (S.leaf x).op (S.leaf x).col)
+      (finderCost (rdSig fun _ => (S.leaf x).rd) (S.leaf x).costMix)) →
+    value (fun l => (∀ r ∈ l, r.idx ∈ I → r.accepted) ∧
+        1 ≤ ((l.filter fun r => r.idx ∈ I).map WindowRec.wrong).sum) (S.run s) ≤
+      ∑ t ∈ I, ((S.W t).ks + (S.W t).link) + ∑ x, (S.leaf x).carryOn I
+
 end Flock.Guarantees

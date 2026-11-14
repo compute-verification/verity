@@ -2682,6 +2682,11 @@
     },
     {
       "paths": {
+        "benchmarks/one_stage/tests/test_two_stage_verdicts.py": "verity/protocols/proofs/spot/device/tests/test_two_stage_verdicts.py"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/pouw/served_zk/": "verity/protocols/accounting/pouw/prover/kernels/served_zk/"
       }
     },
@@ -2705,6 +2710,12 @@
     {
       "paths": {
         "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordText.lean": "verity/protocols/proofs/spot/verifier/lean/Spot/RecordText.lean"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/hash/dither/h1r.py": "verity/protocols/experimental/dither/prover/h1r.py",
+        "benchmarks/hash/dither/j10r_ws.py": "verity/protocols/experimental/dither/prover/j10r_ws.py"
       }
     },
     {

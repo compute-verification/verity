@@ -44,7 +44,7 @@ from verity_vllm.pipeline.serving_templates import shard_block
 from verity_vllm.records import expert_tables as XT
 from verity_vllm.records.expert_tables import SCHEMA, ExpertTables
 
-__all__ = ["NONCES", "SCHEMA", "TABLES_NONCE", "ExpertTables", "bnk_param", "bnk_words", "committer", "entries", "key_of", "mint_key",
+__all__ = ["NONCES", "SCHEMA", "TABLES_NONCE", "ExpertTables", "bnk_fields", "bnk_param", "bnk_words", "committer", "entries", "key_of", "mint_key",
            "nonces", "of_request", "program", "register", "served_fields", "shard_param", "shard_words", "table_param", "table_words",
            "tables_of"]
 
@@ -284,6 +284,11 @@ def register(program_dir: str | None, checkpoint_dir: str, key: bytes, blocks: M
                          f"{len(why)} fields unresolved: {why[:2]}")
     return XT.ExpertTables(program=digest, repo=repo, revision=rev, world=world, rank=rank, prefix=prefix, blocks=blocks, values=values,
                            nonces=nonce).dump()
+
+
+def bnk_fields(program_dir: Path, rank: int) -> tuple[str, ...]:
+    """The rank's ``W_UK_T`` and ``W_UV`` fields, as ``weights/<label>@<K>``, for ``tp-register-tables --bnk``."""
+    raise NotImplementedError("vllm/compiler-wires-period-pieces: no /bnk value is registered on the served path yet")
 
 
 @dataclass(frozen=True, kw_only=True)
