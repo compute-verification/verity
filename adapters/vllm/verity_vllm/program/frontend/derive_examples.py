@@ -41,6 +41,9 @@ from verity_vllm.program.frontend.rules.vllm_iface import (
     iface,  # registers the stand-in ops
 )
 
+#: a padded engine's attention operand (`Attention.forward`): (live, the zero row, the cache slot), or None unpadded.
+_Pad = tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None
+
 # ---------------------------------------------------------------------------------------------------------
 # vLLM-style building blocks (the classes vllm/model_executor/layers/* expose, at the kernel interface)
 # ---------------------------------------------------------------------------------------------------------
@@ -49,12 +52,12 @@ from verity_vllm.program.frontend.rules.vllm_iface import (
 class RMSNorm(nn.Module):
     """vllm.model_executor.layers.layernorm.RMSNorm (forward_cuda): fused add+norm when a residual is given."""
 
-    def __init__(self, hidden_size: int, eps: float, dtype=torch.bfloat16) -> None:
+    def __init__(self, hidden_size: int, eps: float, dtype: torch.dtype = torch.bfloat16) -> None:
         super().__init__()
         self.weight = nn.Parameter(torch.ones(hidden_size, dtype=dtype))
         self.variance_epsilon = eps
 
-    def forward(self, x, residual=None):
+    def forward(self, x: torch.Tensor, residual: torch.Tensor | None = None) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         if residual is not None:
             torch.ops.vllm_iface.fused_add_rms_norm(x, residual, self.weight, self.variance_epsilon)
             return x, residual
@@ -66,12 +69,12 @@ class RMSNorm(nn.Module):
 class LinearNoTP(nn.Module):
     """A (Q)KV/MergedColumn/RowParallelLinear at TP=1: `F.linear(x, weight, bias)`; returns (out, None) like vLLM."""
 
-    def __init__(self, in_f: int, out_f: int, bias: bool, dtype=torch.bfloat16) -> None:
+    def __init__(self, in_f: int, out_f: int, bias: bool, dtype: torch.dtype = torch.bfloat16) -> None:
         super().__init__()
         self.weight = nn.Parameter(torch.empty(out_f, in_f, dtype=dtype))
         self.bias = nn.Parameter(torch.empty(out_f, dtype=dtype)) if bias else None
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, None]:
         return F.linear(x, self.weight, self.bias), None
 
 
@@ -79,7 +82,7 @@ class RotaryEmbedding(nn.Module):
     """vllm.model_executor.layers.rotary_embedding.RotaryEmbedding (NeoX): bf16 cos/sin cache buffer computed at init
     (`_compute_cos_sin_cache`), applied in place by `_C.rotary_embedding`."""
 
-    def __init__(self, head_size: int, max_position: int, base: float, dtype=torch.bfloat16) -> None:
+    def __init__(self, head_size: int, max_position: int, base: float, dtype: torch.dtype = torch.bfloat16) -> None:
         super().__init__()
         self.head_size = head_size
         inv_freq = 1.0 / (base ** (torch.arange(0, head_size, 2, dtype=torch.float32) / head_size))
@@ -88,7 +91,7 @@ class RotaryEmbedding(nn.Module):
         cache = torch.cat((freqs.cos(), freqs.sin()), dim=-1).to(dtype)
         self.register_buffer("cos_sin_cache", cache, persistent=False)
 
-    def forward(self, positions, query, key):
+    def forward(self, positions: torch.Tensor, query: torch.Tensor, key: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         torch.ops.vllm_iface.rotary_embedding(positions, query, key, self.head_size, self.cos_sin_cache, True)
         return query, key
 
@@ -108,7 +111,7 @@ def get_rope(head_size: int, max_position: int, base: float, dtype=torch.bfloat1
 
 
 class SiluAndMul(nn.Module):
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         d = x.shape[-1] // 2
         out = torch.empty(x.shape[:-1] + (d,), dtype=x.dtype, device=x.device)
         torch.ops.vllm_iface.silu_and_mul(out, x)
@@ -122,7 +125,7 @@ class Attention(nn.Module):
         super().__init__()
         self.layer_name = layer_name
 
-    def forward(self, q, k, v, pad=None):
+    def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, pad: _Pad = None) -> torch.Tensor:
         out = torch.ops.vllm_iface.unified_attention(q, k, v, self.layer_name)
         if pad is not None:
             # padded engine (serve3-spec §6): after the step's attention (which read the raw row), the appended cache
@@ -135,7 +138,7 @@ class Attention(nn.Module):
 class DecoderLayer(nn.Module):
     """vLLM LlamaDecoderLayer / Qwen2DecoderLayer shape: merged qkv_proj, o_proj, merged gate_up_proj, down_proj."""
 
-    def __init__(self, C: dict, layer_idx: int, dtype=torch.bfloat16) -> None:
+    def __init__(self, C: dict, layer_idx: int, dtype: torch.dtype = torch.bfloat16) -> None:
         super().__init__()
         H, NH, KVH, D, INTER = C["H"], C["NH"], C["KVH"], C["D"], C["I"]
         self.NH, self.KVH, self.D = NH, KVH, D
@@ -149,7 +152,7 @@ class DecoderLayer(nn.Module):
         self.input_layernorm = RMSNorm(H, C["EPS"], dtype=dtype)
         self.post_attention_layernorm = RMSNorm(H, C["EPS"], dtype=dtype)
 
-    def forward(self, positions, hidden_states, residual, pad=None):
+    def forward(self, positions: torch.Tensor, hidden_states: torch.Tensor, residual: torch.Tensor | None, pad: _Pad = None) -> tuple[torch.Tensor, torch.Tensor]:
         if residual is None:
             residual = hidden_states
             hidden_states = self.input_layernorm(hidden_states)
@@ -176,19 +179,19 @@ class SingleLayer(nn.Module):
         self.pos0 = pos0
         self.first = first
 
-    def forward(self, hidden_states, residual=None):
+    def forward(self, hidden_states: torch.Tensor, residual: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
         positions = torch.arange(self.pos0, self.pos0 + hidden_states.shape[0])
         return self.layer(positions, hidden_states, None if self.first else residual)
 
 
 class Model(nn.Module):
-    def __init__(self, C: dict, dtype=torch.bfloat16) -> None:
+    def __init__(self, C: dict, dtype: torch.dtype = torch.bfloat16) -> None:
         super().__init__()
         self.embed_tokens = nn.Embedding(C["V"], C["H"], dtype=dtype)
         self.layers = nn.ModuleList([DecoderLayer(C, i, dtype) for i in range(C["NL"])])
         self.norm = RMSNorm(C["H"], C["EPS"], dtype=dtype)
 
-    def forward(self, input_ids, positions, last_only: bool = True, pad=None):
+    def forward(self, input_ids: torch.Tensor, positions: torch.Tensor, last_only: bool = True, pad: _Pad = None) -> torch.Tensor:
         hidden_states = self.embed_tokens(input_ids)
         residual = None
         for layer in self.layers:
@@ -201,14 +204,14 @@ class Model(nn.Module):
 
 
 class CausalLM(nn.Module):
-    def __init__(self, C: dict, dtype=torch.bfloat16) -> None:
+    def __init__(self, C: dict, dtype: torch.dtype = torch.bfloat16) -> None:
         super().__init__()
         self.model = Model(C, dtype)
         self.lm_head = nn.Linear(C["H"], C["V"], bias=False, dtype=dtype)
         if C.get("tie_word_embeddings", True):
             self.lm_head.weight = self.model.embed_tokens.weight
 
-    def forward(self, input_ids, positions, last_only: bool = True, sampled_rows_only: bool = False, pad=None):
+    def forward(self, input_ids: torch.Tensor, positions: torch.Tensor, last_only: bool = True, sampled_rows_only: bool = False, pad: _Pad = None) -> torch.Tensor:
         h = self.model(input_ids, positions, last_only, pad)
         if sampled_rows_only and not last_only:
             h = h[-1:]  # vLLM's LogitsProcessor: logits for the sampled (last) row only
@@ -231,7 +234,7 @@ class GreedyServe(nn.Module):
         self.last_only = not (final_norm_all_rows or vllm_rows)
         self.sampled_rows_only = vllm_rows
 
-    def forward(self, prompt):
+    def forward(self, prompt: torch.Tensor) -> torch.Tensor:
         LP = prompt.shape[0]
         positions = torch.arange(0, LP)
         logits = self.lm(prompt, positions, self.last_only, self.sampled_rows_only)
@@ -333,7 +336,7 @@ class NegDataDependent(nn.Module):
         super().__init__()
         self.fc = LinearNoTP(H, V, bias=False)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         logits, _ = self.fc(x)
         tok = torch.argmax(logits[-1], dim=-1).view(1)
         return logits[tok]
@@ -347,7 +350,7 @@ class NegMutatesWeight(nn.Module):
         self.weight = nn.Parameter(torch.ones(H, dtype=torch.bfloat16))
         self.register_buffer("scratch", torch.zeros(T, H, dtype=torch.bfloat16))
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         torch.ops.vllm_iface.rms_norm(self.scratch, x, self.weight, 1e-5)
         return self.scratch
 
@@ -362,7 +365,7 @@ class NegStaleAlias(nn.Module):
         self.qkv_proj = LinearNoTP(H, (NH + 2 * KVH) * D, bias=False)
         self.rotary_emb = RotaryEmbedding(D, C["MAX_POS"], C["ROPE_THETA"])
 
-    def forward(self, hidden_states):
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = qkv.split([self.NH * self.D, self.KVH * self.D, self.KVH * self.D], dim=-1)
         positions = torch.arange(0, hidden_states.shape[0])
