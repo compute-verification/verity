@@ -8,7 +8,7 @@ row (no `commit_summary.json`) is summarised from its own evidence.  A row's `ma
 Programs view outlives the trees it was assembled from, and a row's tree evicted under the suite is fetched again.  Each process
 rebuilds in a scratch of its own.  A row's pins are files.toml's, and without it nothing resolves unpinned.  A check module loads
 neither numpy, torch nor the core `verity` as it is imported.  A row's batch is its workload's, whether or not the workload was
-fetched before.
+fetched before.  The listing of decisions and retirements wraps a reason and a need to a line of 132.
 """
 from __future__ import annotations
 
@@ -110,6 +110,21 @@ def test_a_malformed_retirement_is_named(monkeypatch):
     monkeypatch.setattr(resolver, "load_fixtures", lambda: fx)
     problems = {r["check"]: r["problem"] for r in D.retirements()}
     assert problems["step_segmentation"].startswith("missing") and "no check named" in problems["no_such_check"]
+
+
+def test_the_listing_wraps_a_reason_and_a_need_to_a_line_of_132():
+    """Each render wraps a reason, and the retirements' a need too, to `D.WRAP` columns after the 13 of its label.  A word of 300
+    letters is cut at that column, so it shows the width to the column: two lines of 132 and one of the 62 letters left."""
+    word = "x" * 300
+    decision = {"row": 9, "row_id": "k", "check": "c", "finding": "f", "status": "accepted", "since": "s", "since_commit": "", "reason": word,
+                "expected": {}, "pins": {}, "problem": ""}
+    retired = {"row": 9, "check": "c", "since": "s", "reason": word, "needs": word, "problem": ""}
+
+    def widths(text: str) -> list[int]:
+        return [len(line) for line in text.splitlines() if line.startswith(("    reason   ", "    needs    ", " " * 13))]
+
+    assert widths(D.render([decision])) == [132, 132, 75]
+    assert widths(D.render_retired([retired])) == [132, 132, 75] * 2
 
 
 def test_a_registered_fixture_is_found_by_its_path():

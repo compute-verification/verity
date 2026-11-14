@@ -739,7 +739,8 @@ class FusedTap:
         from vllm.models.common.ops import fused_allreduce_rms_norm as FAR
 
         self.calls: list[dict[str, Any]] = []
-        self.saved = [(FAR, "_can_use_flashinfer"), (FAR, "tensor_model_parallel_all_reduce"), (FA, "trtllm_mnnvl_fused_allreduce_add_rmsnorm")]
+        self.saved: list[tuple[Any, ...]] = [(FAR, "_can_use_flashinfer"), (FAR, "tensor_model_parallel_all_reduce"),
+                                             (FA, "trtllm_mnnvl_fused_allreduce_add_rmsnorm")]
         self.saved = [(m, n, getattr(m, n)) for m, n in self.saved]
         can_use, reduce, mnnvl = (f for _, _, f in self.saved)
 

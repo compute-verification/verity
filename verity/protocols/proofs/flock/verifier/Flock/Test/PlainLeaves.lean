@@ -1,12 +1,13 @@
-/-
-`ProvedScope.statementRules` on plain SHA-512 leaves (`Tags.withPlainLeaves`): a recursive session's inner statement
-(`Tags.circuitPlainLeaves`, hidden outputs) passes them without `--zk` and is refused under it; a statement with public
-outputs and plain leaves is refused either way.
--/
 module
 
 public import Flock.ProvedScope
 meta import Flock.ProvedScope
+
+/-!
+`ProvedScope.statementRules` on plain SHA-512 leaves (`Tags.withPlainLeaves`): a recursive session's inner statement
+(`Tags.circuitPlainLeaves`, hidden outputs) passes them without `--zk` and is refused under it; a statement with public
+outputs and plain leaves is refused either way.
+-/
 
 @[expose] public section
 

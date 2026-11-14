@@ -272,6 +272,16 @@ def test_direct_dispatch_runs_each_missing_point_on_the_nodes_gpu_slots_as_the_q
                          execute=lambda command, cwd: commands.append((list(command), cwd)) or 0) == 0
     [(command, cwd)] = commands
     item = plan.points[1]
+    assert command == [
+        "research", "run", "--on", "vy-nebius-3", "--project", "verity", "--campaign", "vllm-bench", "--source", str(root),
+        "--cwd", "source", "--timeout", "120m", "--require-result", "--tool", "verity_bench.tool:VLLM_BENCH_POINT",
+        "--env", "VERITY_BENCH_VENV=/workspace/jobs/venv312", "--",
+        "env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/verity/check/slot.py", "--by", "benchmarks",
+        "--run-max", "7200", "--",
+        "gpu-lease", "1", "--wait", "--max-min", "120", "--preemptible", "--",
+        "bash", "benchmarks/harness/run_point.sh", "--spec", "benchmarks/harness/specs/llama31-8b-fp8-1gpu.toml",
+        "--point", "b32-p512-mixed", "--identity", item.identity,
+    ], "the whole launch: a changed token anywhere in it is a changed launch"
     queued = jobs.research_command(plan, "llama31-8b-fp8-1gpu", item, root)
     flags, workload = command[:command.index("--")], command[command.index("--") + 1:]
     assert cwd == root and flags[:4] == ["research", "run", "--on", "vy-nebius-3"]

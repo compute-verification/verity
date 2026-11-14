@@ -1,0 +1,40 @@
+# The auditor's devices, in prose: what `tools/move/rename.py --map tools/move/device_term_map.toml` renames. Daniel's term
+# (12 Nov) for the auditor's hardware at the site is "the auditor's devices", and "host" is not used for it. So "auditor
+# host" and "auditor's host" become "auditor device" and "auditor's device", in every case and plural, and the named
+# assumption that the devices run their stated code, `trusted-host`, becomes `trusted-device`. The assumption's Lean name
+# (`Verity.Assumptions.TrustedHost`) is `device_map.toml`'s, whose move runs after this one, and the ids this map can't
+# reach (in code, string literals, backticks and data files) are `device_tokens_map.toml`'s, whose move runs last.
+#
+# This move renames prose only (`scope = "prose"`): a word in a comment, a docstring or Markdown's text, never in code, a
+# string, backticks or a data file, so it moves no path, renames no declaration, leaves every lock and pin as it is, and
+# `move_check.py` certifies it without a build. Phrases come before the words they hold.
+#
+# What stays, in all three maps: the machine class and test machine name `auditor-host` (a placement's id, `--on
+# auditor-host`, `ssh:auditor-hosts`) and the names `auditor_host`/`AUDITOR_HOST` that hold one, which are ids and not
+# the term; "host" where it is a real host (the machine a GPU sits in, a device's host provider, a network host), so
+# "challenger host" and "the verifier's host" too; and "trusted host" in the rate device model
+# (`security/Definitions/Accounting/RateAudit.lean`, the claim `rate-device-model`), where the host is the machine that
+# streams bits to the GPU over PCIe.
+scope = "prose"
+
+[words]
+"auditor's hosts" = "auditor's devices"
+"auditor's host" = "auditor's device"
+"auditor hosts" = "auditor devices"
+"auditor host" = "auditor device"
+"Auditor host" = "Auditor device"
+"auditor-trusted host" = "auditor-trusted device"
+"trusted-host" = "trusted-device"
+
+# "trusted host" where it names the auditor's device, the role `trusted-host` states (each file by a glob that still
+# matches it after a directory move)
+[[words_in]]
+files = ["**/test_provider_names.py", "**/certifier/verifier/protocol/coin-link.md", "**/pouw/verifier/README.md"]
+[words_in.words]
+"trusted host" = "trusted device"
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the archive), files whose bytes a
+# digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+           "**/*.lock"]
