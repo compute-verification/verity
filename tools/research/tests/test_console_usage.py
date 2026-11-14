@@ -8,7 +8,7 @@ import os
 import re
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -18,8 +18,8 @@ vc = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vc)
 usage = vc.usage_module()
 
-H0 = datetime(2026, 10, 3, 8, tzinfo=timezone.utc).timestamp()
-NOW = datetime(2026, 10, 3, 9, 10, tzinfo=timezone.utc)
+H0 = datetime(2026, 10, 3, 8, tzinfo=UTC).timestamp()
+NOW = datetime(2026, 10, 3, 9, 10, tzinfo=UTC)
 
 
 def test_the_console_and_the_module_share_their_labels_and_the_record():
@@ -204,6 +204,14 @@ def test_a_live_lease_a_record_already_has_counts_once(tmp_path):
     log.write_text(usage_record(0, "keeper:circuits", "08:00:00", "08:10:00"))
     assert vc.n1_leases(H0 + 3600, {str(pool): "proofs"}, log) == [(0, H0, H0 + 600, "keeper:circuits")]
     assert vc.n1_leases(H0 + 3600, {str(pool): "proofs"}, tmp_path / "none") == [(0, H0, H0 + 3600, "keeper:circuits")]
+
+
+def test_lease_lines_that_do_not_parse_are_skipped_and_counted_on_stderr(tmp_path, capsys):
+    log = tmp_path / "lease-usage.jsonl"
+    log.write_text(usage_record(0, "keeper:circuits", "08:00:00", "08:10:00") + "{\n" + json.dumps({"schema": "gpu-lease/usage/v1",
+                                                                                                 "who": "x"}) + "\n")
+    assert vc.n1_leases(H0 + 3600, {}, log) == [(0, H0, H0 + 600, "keeper:circuits")]
+    assert f"verity_console: 2 line(s) of {log} unread, so their leases are not counted" in capsys.readouterr().err
 
 
 def fake_proc(tmp_path, procs: dict) -> Path:

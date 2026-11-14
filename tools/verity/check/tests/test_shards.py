@@ -815,8 +815,8 @@ def test_record_of_the_records_step_launches_it_alone_with_circuit_checks_memory
 def test_a_train_shards_launch_asks_its_slot_for_what_its_steps_take(monkeypatch):
     """Each train shard asks for its kind's memory (`check.SHARD_ASKS_GIB`) as the run's ask beside the train slot's minimum,
     so slot.py books it over a lowered book= (`slot.booked`): the 5-shard plan's pytest shard, whose parts are by suite, asks
-    too, each group of lean-suites asks what its workers need whether its audit runs or is reused, lean-agreement raises an
-    ask only where it runs, and a lane's check and a whole train check, which no shard row measures, ask nothing."""
+    too, a reused audit lowers its shard's ask, lean-agreement raises one only where it runs, and a lane's check and a whole
+    train check, which no shard row measures, ask nothing."""
     real, launched = subprocess.run, []
 
     def run(cmd, *a, **k):
@@ -839,17 +839,17 @@ def test_a_train_shards_launch_asks_its_slot_for_what_its_steps_take(monkeypatch
 
     steps = "flock-circuit-build,lean-build,lean-audit,lean-suites,pytest,circuit-check,flock-rust-tests"
     reused = steps.replace("lean-audit,", "")
-    for args, gib in ((["--deferred", steps, "--shard", "1/3"], 520), (["--deferred", reused, "--shard", "1/3"], 520),
-                      (["--deferred", steps, "--shard", "1/5"], 520), (["--deferred", reused, "--shard", "1/5"], 520),
-                      (["--deferred", steps, "--shard", "2/5"], 350), (["--deferred", reused, "--shard", "2/5"], 350),
-                      (["--deferred", steps, "--shard", "4/5"], 110),
-                      (["--deferred", steps, "--shard", "3/5"], 480), (["--deferred", steps, "--shard", "2/3"], 480),
-                      (["--deferred", steps, "--shard", "3/3"], 470), (["--deferred", "lean-audit"], 330)):
+    for args, gib in ((["--deferred", steps, "--shard", "1/3"], 330), (["--deferred", reused, "--shard", "1/3"], 280),
+                      (["--deferred", steps, "--shard", "1/5"], 330), (["--deferred", reused, "--shard", "1/5"], 280),
+                      (["--deferred", steps, "--shard", "2/5"], 260), (["--deferred", reused, "--shard", "2/5"], 260),
+                      (["--deferred", steps, "--shard", "4/5"], 160),
+                      (["--deferred", steps, "--shard", "3/5"], 190), (["--deferred", steps, "--shard", "2/3"], 190),
+                      (["--deferred", steps, "--shard", "3/3"], 340), (["--deferred", "lean-audit"], 330)):
         sent = env("--priority", *args)
         assert sent[CHECK.SLOT.MIN_MEM_ENV] == str(CHECK.TRAIN_GB), args
         assert sent[CHECK.SLOT.RUN_MEM_ENV] == CHECK.ask_gb(gib) and CHECK.SLOT.gib(float(CHECK.ask_gb(gib))) == gib, args
     assert CHECK.SLOT.RUN_MEM_ENV not in env("--deferred", steps, "--shard", "1/3"), "a lane's check books its slot line alone"
     assert CHECK.SLOT.RUN_MEM_ENV not in (whole := env("--priority")) and CHECK.SLOT.MIN_MEM_ENV in whole
     build = ["lean-build", "lean-audit:security/Properties", "lean-agreement"]
-    assert CHECK.shard_ask_gib(build, ["lean-agreement"]) == 390 and CHECK.shard_ask_gib(build, []) == 130
+    assert CHECK.shard_ask_gib(build, ["lean-agreement"]) == 460 and CHECK.shard_ask_gib(build, []) == 130
     assert all(CHECK.SLOT.gib(float(CHECK.ask_gb(g))) == g for _, g in CHECK.SHARD_ASKS_GIB)
