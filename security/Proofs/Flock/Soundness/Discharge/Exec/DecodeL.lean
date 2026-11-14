@@ -19,8 +19,10 @@ novel-basis polynomials (`xP`), the inverse of their coefficient map (`Claims.GS
 `ofRows` (`Claims.Flock.levelZero`).
 
 The decoder is imported privately, and `decodeL`'s value is not exposed: a module that imports this one reads the list
-as a constant with `mem_decodeL_of_close`, and gains none of the decoder's own imports. A lemma that reads the
-decoder's definition goes in this module.
+as a constant with `mem_decodeL_of_close`, and gains none of the decoder's own imports. Those reach all of Mathlib,
+which many modules that import `Exec.FlockLinkL` are not compiled against: under a public import instance search in
+them finds other instances (Batteries' `DecidableEq ByteArray` for core's), and definitions this file does not touch
+elaborate to other terms. A lemma that reads the decoder's definition goes in this module.
 -/
 
 @[expose] public section
