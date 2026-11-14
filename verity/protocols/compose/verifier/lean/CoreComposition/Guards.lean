@@ -138,8 +138,7 @@ private def answerT (xs : List Stubbed) (c : ByteArray := commitmentOf tiedToy x
 #guard (answerT [accepts "a", accepts "b", accepts "c"]).verdict == .accept
 #guard (answerT [accepts "a", undecided "b", accepts "c"]).verdict == .undecided
 -- `a` and `b` on two stores: refused once the cases fit, unless `same` rejects already, and nothing is published
-#guard (answerT [accepts "a", stray (accepts "b"), accepts "c"]).reason ==
-  some s!"store: a committed {hex 7}, b committed {hex 9}"
+#guard (answerT [accepts "a", stray (accepts "b"), accepts "c"]).reason == some "store: a and b named different values"
 #guard (answerT [undecided "a", stray (undecided "b"), accepts "c"]).verdict == .reject
 #guard (answerT [accepts "a", stray (accepts "b"), accepts "c"]).published.isNone
 #guard (answerT [accepts "a", stray (accepts "b"), rejects "c"]).reason == some "c reject: 1 of 2 drawn units failed"

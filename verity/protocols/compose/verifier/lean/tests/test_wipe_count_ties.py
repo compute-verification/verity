@@ -82,13 +82,18 @@ def test_each_tie_finds_its_stray():
     count, wipe = pair(0)
     e = C.decode_evidence(bytes.fromhex(wipe["evidence"]))
     other_server = C.wipe_case(e.signed.commitment, e.signed, (), server=b"node1", egress_mib=e.egress_mib)
-    assert stray(count, other_server).startswith(f"node: {WP.COUNTED} committed ")
+    assert stray(count, other_server) == named_apart("node")
     assert stray(count, with_evidence(wipe, signed=dataclasses.replace(e.signed, start_mark=bytes([9]) * 64))) \
-        .startswith("start mark: ")
-    assert stray(*pair(0, start=bytes([3]) * 64)).startswith("start message: ")
-    assert stray(*pair(0, end=bytes([6]) * 64)).startswith("end message: ")
+        == named_apart("start mark")
+    assert stray(*pair(0, start=bytes([3]) * 64)) == named_apart("start message")
+    assert stray(*pair(0, end=bytes([6]) * 64)) == named_apart("end message")
     for n in (e.egress_mib - 1, e.egress_mib + 1):
-        assert stray(count, with_evidence(wipe, egress_mib=n)).startswith("egress: ")
+        assert stray(count, with_evidence(wipe, egress_mib=n)) == named_apart("egress")
+
+
+def named_apart(what: str) -> str:
+    """`CoreOnsite`'s `wipeStray`: a stray of the wipe's tie `what`, naming the two subprotocols and neither value."""
+    return f"{what}: {WP.COUNTED} and {span.ID} named different values"
 
 
 def test_a_wipe_that_names_nothing_ties_nothing():

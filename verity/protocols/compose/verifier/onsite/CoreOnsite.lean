@@ -191,10 +191,8 @@ private def answered : List (Outcome Keyed Keyed) := [.accept [] [], .undecided 
 
 #guard answered.all fun o => stray (registration 0) [registration 0, registration 0] o == none
 -- a window on another record
-#guard answered.all fun o => (stray (registration 0) [registration 0, registration 1] o).map
-  (·.startsWith "record: verity/inference-only/v0 committed ") == some true
-#guard answered.all fun o => (stray (registration 0) [registration 0, registration 1] o).map
-  (contains · ", verity/pouw/period/v1 committed ") == some true
+#guard answered.all fun o => stray (registration 0) [registration 0, registration 1] o ==
+  some "record: verity/inference-only/v0 and verity/pouw/period/v1 named different values"
 -- every window on a record that isn't the policy's
 #guard answered.all fun o => (stray (registration 1) [registration 0] o).isSome
 -- a window naming no Commit record leaves the period to refuse it
@@ -402,25 +400,28 @@ private def countStray (cases : List Case) : Option String :=
   | .reject r => some r
   | _ => none
 
+/-- A stray of the wipe's tie `what`: its name and the two subprotocols, and neither value. -/
+private def wipeStray (what : String) : Option String :=
+  some s!"{what}: {countedWipe.id} and {hostSpan.id} named different values"
+
 #guard endMsg.size == 64 && (spanNamed (spanCase startMsg endMsg)).isSome
 #guard (wipeNamed (wipeCase "node0" (some wipeSigned) 1)).isSome
 -- the wipe and the count over its span on one node, one span and one count
 #guard countStray [spanCase startMsg endMsg, wipeCase "node0" (some wipeSigned) 1] == none
 -- a wipe of another server than the count's host
-#guard (countStray [spanCase startMsg endMsg, wipeCase "node1" (some wipeSigned) 1]).map
-  (·.startsWith "node: verity/wipe/counted/v0 committed ") == some true
+#guard countStray [spanCase startMsg endMsg, wipeCase "node1" (some wipeSigned) 1] == wipeStray "node"
+#guard wipeStray "node" == some "node: verity/wipe/counted/v0 and verity/certifier/span/v0 named different values"
 -- a session that names another start certificate
-#guard (countStray [spanCase startMsg endMsg,
-    wipeCase "node0" (some { wipeSigned with startMark := ⟨Array.replicate 64 9⟩ }) 1]).map
-  (·.startsWith "start mark: ") == some true
+#guard countStray [spanCase startMsg endMsg,
+    wipeCase "node0" (some { wipeSigned with startMark := ⟨Array.replicate 64 9⟩ }) 1] == wipeStray "start mark"
 -- marks that open to another wipe's start message, or to another end message than the signed session's
-#guard (countStray [spanCase ⟨Array.replicate 64 3⟩ endMsg, wipeCase "node0" (some wipeSigned) 1]).map
-  (·.startsWith "start message: ") == some true
-#guard (countStray [spanCase startMsg ⟨Array.replicate 64 6⟩, wipeCase "node0" (some wipeSigned) 1]).map
-  (·.startsWith "end message: ") == some true
+#guard countStray [spanCase ⟨Array.replicate 64 3⟩ endMsg, wipeCase "node0" (some wipeSigned) 1] ==
+  wipeStray "start message"
+#guard countStray [spanCase startMsg ⟨Array.replicate 64 6⟩, wipeCase "node0" (some wipeSigned) 1] ==
+  wipeStray "end message"
 -- a count that is not the count's: one MiB less, one more
-#guard [0, 2].all fun n => (countStray [spanCase startMsg endMsg, wipeCase "node0" (some wipeSigned) n]).map
-  (·.startsWith "egress: ") == some true
+#guard [0, 2].all fun n => countStray [spanCase startMsg endMsg, wipeCase "node0" (some wipeSigned) n] ==
+  wipeStray "egress"
 -- an unsigned wipe names nothing, and the outcome stands: undecided there, as the wipe is
 #guard countStray [spanCase startMsg endMsg, wipeCase "node0" none 1] == none
 -- a subprotocol's rejection stands

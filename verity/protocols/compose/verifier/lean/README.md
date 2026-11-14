@@ -126,7 +126,8 @@ when each window's record names the registration log's head (`Core.Registration`
 every subprotocol names.
 
 A tie (`Tie`, `Tie.lean`) is the values each named subprotocol reads off its own case (its commitment's bytes, or its
-evidence's) with its own decoder, which must all be one value (`Tie.strays`: `what: s committed D, t committed D'`). `tiedSame id ss ties components`
+evidence's) with its own decoder, which must all be one value (`Tie.strays`: `what: s and t named different values`,
+neither value, which can be witness). `tiedSame id ss ties components`
 (`tiedSameB` over blobs) is `same` with its ties held (`holdTies`): a verdict of `same` that isn't a reject becomes a
 reject when a tie strays, and a reject stays itself. Onsite's ties are remote's `Core.Remote.windows` (below), read
 from `core_remote` rather than restated, then `Core.Onsite.store`, which puts PoUS and PoUB-P2 on one store: the root

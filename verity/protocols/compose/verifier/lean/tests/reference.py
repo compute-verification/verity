@@ -587,13 +587,14 @@ class Tie:
         return out
 
     def strays(self, ev: list) -> str | None:
-        """`Core.Composition.Tie.strays`: the first value that isn't the first one, with both; none when they all named
-        it, or when a subprotocol names none."""
+        """`Core.Composition.Tie.strays`: the tie's name, the subprotocol that named the first value and the one that
+        named the first value that isn't it, and nothing of either value; none when they all named it, or when a
+        subprotocol names none."""
         got = self.values(ev)
         if not got:
             return None
         (s, d), *rest = got
-        return next((f"{self.what}: {s} committed {d.hex()}, {t} committed {e.hex()}" for t, e in rest if e != d), None)
+        return next((f"{self.what}: {s} and {t} named different values" for t, e in rest if e != d), None)
 
 
 def _commitment_hex(key: str) -> Callable[[bytes, bytes], list[bytes]]:
