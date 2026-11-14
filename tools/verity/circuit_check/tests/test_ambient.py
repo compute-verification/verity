@@ -38,7 +38,7 @@ def test_the_h1_units_larger_definitions_lower_to_one_text_in_any_interpreter():
     assert _verdicts(big) == dict.fromkeys(big, "same")
 
 
-BAD = {"Counted": "differs", "SetOrder": "differs", "Environ": "reads", "Clocked": "reads", "Drawn": "reads"}
+BAD = {"Counted": "differs", "SetOrder": "differs", "Environ": "reads", "Clocked": "reads", "Sampled": "reads"}
 
 
 def test_a_builder_that_reads_state_besides_its_operands_is_refused_by_name():
@@ -52,7 +52,7 @@ def test_a_builder_that_reads_state_besides_its_operands_is_refused_by_name():
     reads = {s.split(":")[1]: r["failures"][0]["reads"] for s, r in rs.items() if r["ambient"]["verdict"] == "reads"}
     assert [x.split(" at ")[0] for x in reads["Environ"]] == ["os.environ['VERITY_AMBIENT_TEST']"]
     assert [x.split(" at ")[0] for x in reads["Clocked"]] == ["time.perf_counter"]
-    assert [x.split(" at ")[0] for x in reads["Drawn"]] == ["random.random"]
+    assert [x.split(" at ")[0] for x in reads["Sampled"]] == ["random.random"]
     assert all(x.split(" at ")[1].startswith("tools/verity/circuit_check/tests/fixtures/ambient_builders.py:")
                for xs in reads.values() for x in xs)
 

@@ -213,7 +213,7 @@ def test_compiled_profile_declares_the_execution_and_keeps_eager_digests():
     c = TargetProfile.from_json({**e.to_json(), "compilation": "piecewise"})
     assert c.execution_label == "bi-compiled" and TargetProfile(batch_invariant=False, compilation="piecewise").execution_label == "compiled"
     assert c.with_overrides(compute_capability=(9, 0), flash_attn_version=2).execution_label == "bi-compiled-fa2"
-    # `piecewise` = vLLM's production DEFAULT compiled configuration (no precision-cast emulation): its Program is P_compiled;
+    # `piecewise` = vLLM's DEFAULT compiled configuration for serving (no precision-cast emulation): its Program is P_compiled;
     # `piecewise-emu` = the separate declared specialization with Inductor emulate_precision_casts (a different numerical computation)
     assert c.engine_args() == {"enforce_eager": False, "compilation_config": {"cudagraph_mode": "PIECEWISE",
                                                                               "inductor_compile_config": {"emulate_precision_casts": False}}}

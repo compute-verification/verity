@@ -86,7 +86,7 @@ def test_fp8_tile_generation_is_byte_identical_for_a_fixed_seed(P, key):
     assert list(got)[: len(FP8_BASELINE[key])] == list(FP8_BASELINE[key])                    # in the same order
 
 
-def test_bf16_families_keep_the_old_draws_and_add_the_canonical_set(P):
+def test_bf16_families_keep_the_old_samples_and_add_the_canonical_set(P):
     got = _digests(P, P.BF16, 16, 16)
     assert {n: v[0] for n, v in got.items() if n in BF16_BASELINE} == BF16_BASELINE
     assert list(got)[len(BF16_BASELINE):] == list(CANONICAL)
