@@ -166,7 +166,7 @@ def format_report(rep: dict[str, Any]) -> list[str]:
     if rep.get("check") and rep["check"].get("reason"):
         lines.append(f"  remote: {rep['check']['reason']}")
     for aid in rep["unpreserved"]:
-        if aid not in rep["attempts"]:                 # the --custody-r2 leg (pod_custody)
+        if aid not in rep["attempts"]:                 # the --custody-r2 part (pod_custody)
             lines.append(f"  NOT preserved  {aid}")
             continue
         a = rep["attempts"][aid]

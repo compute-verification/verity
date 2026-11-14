@@ -34,7 +34,7 @@
 # Test seams: LEASE_NOW (epoch), LEASE_ONCE=1 (one tick, exit 0 terminated / 1 not due / 2 failed), LEASE_TERMINATE_CMD (run with the
 # pod id as $1 instead of the API), LEASE_API_GQL / LEASE_API_REST, LEASE_ENVIRON (default /proc/1/environ).
 # A machine that is not a RunPod pod (an ssh machine: pods/nebius/) names itself with LEASE_MACHINE_ID and ends itself through
-# LEASE_TERMINATE_CMD, which is then the production path, not a seam.
+# LEASE_TERMINATE_CMD, which is then the path in use, not a seam.
 #
 # Hard deadline: when $LEASE_DEADLINE_FILE exists (root's, `EPOCH ISO BY`: the end of the spend authorization), nothing carries the
 # machine past it.  `extend` clamps the expiry to EPOCH - LEASE_DEADLINE_MARGIN_S, and the loop ends the machine from that moment
@@ -73,7 +73,7 @@ lease_read() {
   echo "$e"
 }
 
-lease_cap() {
+lease_limit() {
   # the latest moment the lease may reach (deadline - margin).  Exit 1: no deadline file; exit 2: a read error (lease_first's)
   d=$(lease_first "$LEASE_DEADLINE_FILE") || { st=$?; printf '%s\n' "$d"; return "$st"; }
   case $d in ''|*[!0-9]*) d=0;; esac
@@ -142,7 +142,7 @@ lease_extend() {
   if [ "$st" = 2 ]; then echo "lease: cannot read $LEASE_FILE ($cur): taken as missing" >&2; fi
   [ "$st" = 0 ] || cur=${RESEARCH_LEASE_EXPIRES:-0}
   case $cur in ''|*[!0-9]*) cur=0;; esac
-  latest=$(lease_cap); st=$?
+  latest=$(lease_limit); st=$?
   if [ "$st" = 2 ]; then
     echo "lease: cannot read $LEASE_DEADLINE_FILE ($latest): taken as a deadline of 0, so nothing is extended" >&2
     latest=$(( 0 - LEASE_DEADLINE_MARGIN_S ))
@@ -218,7 +218,7 @@ lease_loop() {
     if [ "$st" = 0 ]; then exp=$e
     elif [ "$st" = 2 ]; then bad="$LEASE_FILE ($e)"; [ -n "$exp" ] || blind=1
     fi
-    c=$(lease_cap); st=$?
+    c=$(lease_limit); st=$?
     if [ "$st" = 0 ]; then latest=$c
     elif [ "$st" = 1 ]; then latest=""
     else bad="${bad:+$bad and }$LEASE_DEADLINE_FILE ($c)"; [ -n "$latest" ] || blind=1
