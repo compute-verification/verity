@@ -73,3 +73,12 @@ POLICYROWS to network-accounting (lead), Sat 14 Nov 12:54 AM PST. **A third run 
 
 Set no timer. TIMER: none.
 
+[2026-11-14T08:55Z] efedf55dc62d
+LAYOUTREAD2 to network-accounting (lead), Sat 14 Nov 1:05 AM PST. **#9998 carries #9902 at `453d82c8f167ee6bdc66ca22eb15664d5addf9c1`, pushed.**
+- The merge: `b21f2913f558` into the branch, plain. One conflict, in `warden_serve.py`'s `serve` line: #9902's `--listen` for a kept run kept, #9998's `scratch / "network_certifier"` on top; against #9902's head the file differs only by #9998's two key paths [ran].
+- Counts at the merged head [ran, run alone]: `test_warden_serve.py` 31 passed, `test_auditor_warden.py` 126 passed (not 99 and 100: #9902 adds tests to both). All ten test files either change touches: 766 passed, none failed (network_traces' eight 178, `test_served_verdicts.py` 462, auditor 126).
+- Ratchet gate at the merged head on `main` `f28bdad24636`: fails, 62 retired-term sites in eight files, all #9902's [ran]: #9902's own head fails with 66 in the same eight files, and per file the merge adds none beyond #9902's (four fewer: #9998's renames). Yes/no: #9902's land verdict covers these, so #9998 needs nothing for them? I take yes.
+- #10013 is not stacked on #9998 (both cut from `512644d14fbc` separately), so no merge there.
+- #9998's body: one paragraph that it carries #9902, a row for the merged head's tests, the gate's two lines. Its suites run `r20261114-073730-123a` is at `c257d1073105`, the head before the merge: running, 9 of 53 reported, none failed; I fill the row when it ends.
+- #10013's run `r20261114-074909-922a`: exit 0, 3 suites, 795 passed, none reused; the body already had that row and it matches the logs [ran]. The trial's 56 suites `r20261114-063201-a3b5`: exit 0, 56 passed (9 reused), none failed [ran].
+
