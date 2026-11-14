@@ -1,6 +1,7 @@
 module
 
 public import PouwCheck.Credit
+public import PouwCheck.CreditOnce
 public import PouwCheck.Difftest
 
 /-!

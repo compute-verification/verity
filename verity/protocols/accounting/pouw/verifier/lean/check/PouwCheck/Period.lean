@@ -3,6 +3,7 @@ module
 public import CoreProtocol.Account
 public import CoreProtocol.Cli
 public import PouwCheck.Credit
+public import PouwCheck.CreditOnce
 meta import CoreProtocol.Account
 meta import CoreProtocol.Cli
 meta import PouwCheck.Credit
