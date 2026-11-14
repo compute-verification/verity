@@ -25,6 +25,7 @@ import shutil
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 from tests.pipeline import served_rope
 
@@ -33,22 +34,22 @@ ROWS = "rows-sha512"
 MAX_TOKENS = 3
 
 
-def commit(root: Path, *, world: int = 2, I: int = 256, law: str = "subset:2", deferred: bool = False,
+def commit(root: Path, *, world: int = 2, inter: int = 256, law: str = "subset:2", deferred: bool = False,
            templates: tuple[str, ...] = ()) -> dict:
     """The TP Commit's files under ``root`` (module docstring), and its TP run root, record and windows (deferred: none)."""
     from verity_vllm.check.replay import driver as SR
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline import deferred_rows as DRW
     from verity_vllm.pipeline import replay_bundle as RB
-    from verity_vllm.pipeline.tp import serving_rows as SRT
     from verity_vllm.pipeline.tp import run_root as RT
+    from verity_vllm.pipeline.tp import serving_rows as SRT
 
     root.mkdir(parents=True, exist_ok=True)
     pf = root / "partition.json"
-    pf.write_text(json.dumps({"templates": [*templates, f"SiluMul_v2{{I={int(I)}}}"], "law": law}))
+    pf.write_text(json.dumps({"templates": [*templates, f"SiluMul_v2{{I={int(inter)}}}"], "law": law}))
     ranks = []
     for r in range(world):
-        c = served_rope.commit(root / "ranks" / f"rank{r}", seed=17 + r, silu="SiluMul_v2", I=I)
+        c = served_rope.commit(root / "ranks" / f"rank{r}", seed=17 + r, silu="SiluMul_v2", I=inter)
         b = root / "build" / f"rank{r}"
         b.mkdir(parents=True)
         shutil.copyfile(c["row_dir"] / "build_request" / "instances.json.gz", b / "instances.json.gz")
@@ -65,11 +66,12 @@ def commit(root: Path, *, world: int = 2, I: int = 256, law: str = "subset:2", d
     tp_root = RT.combine(tag, world, roots)
     of_record = {str(r): [c["inst"]["digest"]] for r, (c, _o) in enumerate(ranks)}
     tp = {"world": world, "tp_run_root": tp_root.hex(), "roots": {str(r): x.hex() for r, x in roots.items()}, "root_tag": tag}
-    replay = {"programs": {str(r): str(root / "build" / f"rank{r}") for r in range(world)}, "of_record": of_record, "requests": reqs}
+    replay: dict[str, Any] = {"programs": {str(r): str(root / "build" / f"rank{r}") for r in range(world)}, "of_record": of_record, "requests": reqs}
     out = root / "commit"
     out.mkdir()
     per_rank = {str(r): {"run_root": x.hex()} for r, x in roots.items()}
-    req, windows = {"dir": str(root / "serving-rows"), "partition": str(pf), "run": LABEL, "committer": {"source": __name__}, "row": LABEL}, None
+    req: dict[str, Any] = {"dir": str(root / "serving-rows"), "partition": str(pf), "run": LABEL, "committer": {"source": __name__}, "row": LABEL}
+    windows = None
     if deferred:
         seal(out, tp, ranks, replay, per_rank)
     else:
@@ -133,7 +135,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--template", action="append", default=[], help="a template the partition holds before SiluMul_v2{I} (repeatable)")
     ap.add_argument("--deferred", action="store_true", help="no window: every rank's replay deferred to its sealed bundle")
     a = ap.parse_args(argv)
-    c = commit(Path(a.out), world=a.world, I=a.I, law=a.law, deferred=a.deferred, templates=tuple(a.template))
+    c = commit(Path(a.out), world=a.world, inter=a.I, law=a.law, deferred=a.deferred, templates=tuple(a.template))
     print(json.dumps({k: str(c[k]) for k in ("commit", "build", "workload", "partition", "windows", "tp_run_root", "world")}))
     return 0
 

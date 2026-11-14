@@ -25,14 +25,16 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.pipeline import serving_templates as ST
-
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
+from verity.commitments.windows import interface as I
 from verity.definitions.registry import b1_tp2 as B1T
 from verity.definitions.registry import tp_allreduce as TA
 from verity.definitions.registry import tp_combine as TC
-from verity.commitments.windows import interface as I
+
+from verity_vllm.pipeline import serving_templates as ST
+
+__all__ = ["GROUP"]
 
 COORD, ROW = "coordinate", "row"
 #: the all-reduces whose every element is the same sum of the ranks' words there, by the static holding the element count
@@ -179,7 +181,7 @@ def lower(combine: Any, own: Sequence[Sequence[tuple[Any, int, int]]], reads: Se
         p, fn, lo, hi = bad
         raise ValueError(f"{where}: rank {p}'s partial reads leaves [{lo}, {hi}) of a {fn.id} node, neither its output words' "
                          "units nor one whole output of it")
-    kinds = {g[0] for rs in grains for g, *_ in rs}
+    kinds = {g[0] for rs in grains for g, *_ in rs if g is not None}
     if len(kinds) != 1:
         raise ValueError(f"{where}: its producers are of grains {sorted(kinds)}: a combine's grain is its producers' one grain")
     grain = kinds.pop()
@@ -187,7 +189,7 @@ def lower(combine: Any, own: Sequence[Sequence[tuple[Any, int, int]]], reads: Se
     if len(widths) != 1:
         raise ValueError(f"{where}: its producers' rows are {sorted(widths)} words: a row-grain combine reads rows of one width")
     width = widths.pop()
-    producers = tuple(tuple((g[1], g[2], g[3]) for g, *_ in rs) for rs in grains)
+    producers = tuple(tuple((g[1], g[2], g[3]) for g, *_ in rs if g is not None) for rs in grains)
     positions = {sum(n for *_, n in rs) for rs in producers}
     if len(positions) != 1:
         raise ValueError(f"{where}: its ranks' partials are {sorted(positions)} units")
