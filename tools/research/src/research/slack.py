@@ -1166,7 +1166,7 @@ def unrouted_names(body: str, reg: dict, author: str, rung: tuple[str, ...] = ()
 def warn_unrouted(body: str, reg: dict, author: str, rung: tuple[str, ...] = ()) -> None:
     """Say which names a post mentions past its start, where nothing rings.  It posts anyway: refusing costs re-sends, and the
     sender learns here that those names weren't woken.  A Linear comment that starts with no name at all is refused instead
-    (`cmd_linear`): it would ring its issue's team alone."""
+    (`cmd_linear`): it would ring no one but its issue's lane (`linear.lane`)."""
     if names := unrouted_names(body, reg, author, rung):
         print(f"note: it names {' '.join('@' + n for n in names)} past its start, so they aren't rung: only the names a post "
               "starts with wake anyone. To ring them, move them to the start (--to, or the leading @names)", file=sys.stderr)
@@ -2224,7 +2224,7 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             author = acting_as(ns, reg, need(ns.handle, "--as HANDLE, the comment's sender (a lane's worker: --worker NAME)"))["handle"]
             if not lead_names(text, reg) and (names := unrouted_names(text, reg, author)):
                 at = " ".join("@" + n for n in names)
-                raise SlackError(f"the comment names {at} but starts with no name, so only its issue's team is rung: start it "
+                raise SlackError(f"the comment names {at} but starts with no name, so it rings no one but its issue's lane: start it "
                                  f"with the names to ring ({at} ...), or put them in code (`@{names[0]}`) to name them without ringing")
             warn_unrouted(text, reg, author)
         info = lin.gql("query($id: String!) { issue(id: $id) { id identifier url team { key } labels { nodes { name } } } }",
