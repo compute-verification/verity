@@ -11,7 +11,8 @@
 # - `Certifier`: `JointBridge`, `Bridge`, `NetWitness`, `Assumptions/RemoteOutside`;
 # - `Pous`: `Responder`, `Memory`, `Wipe`, `Tag`;
 # - `Registration`: `Sheets`, `Assumptions/Sheet`, `Capacity`, `Carrier`, `Device`, `Physical`;
-# - `InferenceOnly`: `Slowdown`, `Coverage*`, `ServingBlocks`, `Guarantees/Actual`.
+# - `InferenceOnly`: `Slowdown`, `Coverage*`, `ServingBlocks`, `Guarantees/Actual`. `Definitions/Accounting/Slowdown.lean`
+#   becomes `Definitions/InferenceOnly/Tasks.lean`, after its heading, since `InferenceOnly/Slowdown.lean` is taken.
 # What stays in `Accounting` is the shared accounting vocabulary: `Actual`, `Gates`, `RegisteredCircuit`, `Requirement`,
 # `Served`, `Window`, `Schedule`, `Lemmas`, `Prob`, `Defs`, `Sanity`, the `Guarantees` and `Assumptions` not named above,
 # and each tree's `Accounting.lean`, whose imports follow the modules. A file goes where its family goes, also where its
@@ -41,8 +42,8 @@
 "Definitions/Accounting/ServingBlocks" = "Definitions/InferenceOnly/ServingBlocks"
 "Definitions.Accounting.CoverageToy" = "Definitions.InferenceOnly.CoverageToy"
 "Definitions/Accounting/CoverageToy" = "Definitions/InferenceOnly/CoverageToy"
-"Definitions.Accounting.Slowdown" = "Definitions.InferenceOnly.Slowdown"
-"Definitions/Accounting/Slowdown" = "Definitions/InferenceOnly/Slowdown"
+"Definitions.Accounting.Slowdown" = "Definitions.InferenceOnly.Tasks"
+"Definitions/Accounting/Slowdown" = "Definitions/InferenceOnly/Tasks"
 "Proofs.Accounting.ServingBlocks" = "Proofs.InferenceOnly.ServingBlocks"
 "Proofs/Accounting/ServingBlocks" = "Proofs/InferenceOnly/ServingBlocks"
 "Proofs.Accounting.Coverage" = "Proofs.InferenceOnly.Coverage"
