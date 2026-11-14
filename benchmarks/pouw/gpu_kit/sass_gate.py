@@ -1,6 +1,6 @@
 """The timing gate: what a timed loop executes, checked on the kernel's SASS before it is timed.
 
-`benchmarks/pouw/harness/sass_gate.py` is the numeric gate (no .FTZ, no bare FP32 MUFU). This gate checks what a timing
+`verity/protocols/pouw/prover/sass_gate.py` is the numeric gate (no .FTZ, no bare FP32 MUFU). This gate checks what a timing
 measures, and it reuses that gate's cubin reader, disassembly and instruction model rather than a copy of them. For each
 kernel `--kernels` names (fnmatch on the mangled name, or on the name the mangling holds), it checks the following.
 
@@ -47,7 +47,7 @@ __all__ = [
 ]
 
 HERE = Path(__file__).resolve().parent
-HARNESS_GATE = HERE.parents[2] / "benchmarks/pouw/harness/sass_gate.py"
+HARNESS_GATE = HERE.parents[2] / "verity/protocols/pouw/prover/sass_gate.py"
 
 
 def _load(name: str, path: Path):
