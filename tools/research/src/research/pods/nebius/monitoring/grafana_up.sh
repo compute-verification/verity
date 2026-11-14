@@ -35,4 +35,4 @@ $K -n monitoring exec -i deploy/grafana -- grafana cli --homepath /usr/share/gra
   < "$pw" > /dev/null
 for _ in $(seq 30); do curl -sf http://127.0.0.1:3000/api/health > /dev/null && break; sleep 2; done
 curl -sf http://127.0.0.1:3000/api/health
-echo "grafana_up: http://127.0.0.1:3000 on this host; from a laptop: ssh -N -L 3000:127.0.0.1:3000 research@81.85.2.165"
+echo "grafana_up: http://127.0.0.1:3000 on this host; from a laptop: ssh -N -L 3000:127.0.0.1:3000 research@\$VY_NEBIUS_1_HOST (this host's address)"

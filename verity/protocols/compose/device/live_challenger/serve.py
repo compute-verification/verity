@@ -1,4 +1,4 @@
-"""The proof system's challenger on its auditor host (`verity.protocols.proofs.spot.device.remote`): one epoch's coins for
+"""The proof system's challenger on its auditor device (`verity.protocols.proofs.spot.device.remote`): one epoch's coins for
 one client session, its record signed with the host's LMS key and written before the first coin opens, and its release
 log signed when the session ends.
 
@@ -30,16 +30,16 @@ log signed when the session ends.
   `challenger.MAX_HELLOS` refused hellos, the most a session's evidence holds: the next refused past them ends the
   session (`remote`, "The device's caps"). Once a hello is accepted it stops listening, so every later connection is
   refused.  However the session ends, a tunnel that ends first included, it
-  signs its release log and how it ended and writes `challenger.json` (`remote.close_session`).  On the auditor host
+  signs its release log and how it ended and writes `challenger.json` (`remote.close_session`).  On the auditor device
   (`auditor.py`) the session has a secret, `--secret-file` (64 hex digits, given to the window's opener by the gate),
   which the client's hello must carry, and `--root`, the window's Commit root: a salt family's coin (label `salt` or
   `.../salt`) opens only after that root, and any other is refused, which ends the session.
-- **A withheld session** (`--withhold`, which the auditor host passes when the window's open entry says `withheld: true`)
+- **A withheld session** (`--withhold`, which the auditor device passes when the window's open entry says `withheld: true`)
   keeps its commitment on this host until the client closes it (`remote.open_session(..., withhold=True)`): the hello is
   answered with the layout alone and each open with the coin's raw bytes, and once the signed close is written the
   commitment and every opened coin's salt and path are released (`remote`, "A withheld session").
 - **Signing.**  The key's leaf state is opened only for each signature (the session id's start with the record's, then
-  the close's), under `--sign-lock` when given (the auditor host's `sign.lock`, which every signer of the key takes), so
+  the close's), under `--sign-lock` when given (the auditor device's `sign.lock`, which every signer of the key takes), so
   the host's other sessions and the ledger sign between them.
 
 Exit 0 when the client closed the session, 1 when it ended otherwise (a refusal, a broken stream, a tunnel that ended
@@ -64,11 +64,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[5]))
 
-from verity.protocols.proofs.spot.device import remote  # noqa: E402
-from verity.protocols.proofs.spot.device.challenger import (ChallengerKey, CoinError, LiveChallenger,  # noqa: E402
+from verity.protocols.proofs.spot.device import remote
+from verity.protocols.proofs.spot.device.challenger import (ChallengerKey, CoinError, LiveChallenger,
                                                              served_claim)
-from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
-from verity.commitments.crypto import lms  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
+from verity.commitments.crypto import lms
 
 KEY = Path.home() / ".local" / "state" / "live-challenger" / "key"
 HELLO_SECONDS = 10.0

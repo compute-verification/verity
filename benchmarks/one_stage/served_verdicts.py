@@ -90,7 +90,7 @@ them (the Program is a function of the linears, T and S, and of the pouw setting
 serve-openai run and refuses unless the digest is that run's.
 
 ``pouw``: PoUW's development piece (``POUW_CMD``): window K's H1 outcome (``windows.jsonl``'s ``pouw_h1``) and record
-(``h1/w<K>/pouw-h1-calls.json``); with the auditor host's challenger's coins, the window's session and its sample's
+(``h1/w<K>/pouw-h1-calls.json``); with the auditor device's challenger's coins, the window's session and its sample's
 session (the record's ``draw_session``, ``--draw-dir``) as the gate's ``fetch`` gives them, the auditor's ledger and pins
 log as the gate answers now and main's first-parent history (``--main``),
 checked by `pouw_h1_gpu.check_challenger` under the key the deployment pins (``--key-sha512``). Its verdict is accept when
@@ -336,10 +336,10 @@ LEAN_HERE = ("recomputed on this host by the Lean verifier (vstar-recursive samp
              "files of the window's sampled proofs case, not the served node's answer")
 #: ... PoUW's where Pearl+'s piece is its verdict of record (`pearlplus_of_record`)
 PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdict of record (PouwCheck.PearlPlus), "
-                  "the prover side's, run on the served node over the retained passes; no auditor host re-checks it, since "
+                  "the prover side's, run on the served node over the retained passes; no auditor device re-checks it, since "
                   "its case (the passes' manifests with their salt key, and the opened tiles' rows) is witness")
 #: what the composed verdict's reason (`said`) says of that row's accept
-PEARLPLUS_SAID = "Pearl+'s Lean verdict of record, the prover side's, which no auditor host re-checks"
+PEARLPLUS_SAID = "Pearl+'s Lean verdict of record, the prover side's, which no auditor device re-checks"
 #: ... the files the served node wrote that a row's answer is otherwise read from, by runner name (a piece's: its dir)
 WRITTEN = {"integrity": "the records audit's summary.json and window/audit.json"}
 #: A served run's witness, by a path's part (`witness`): what a compose hand-off never carries, each with why
@@ -1155,7 +1155,7 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
     elif h1.get("tied") is not True:
         reasons.append(f"ROOTS1: H1's tables are not tied to the window's Commit ({(h1.get('roots1') or {}).get('reason')})")
     if h1 and "error" not in h1 and h1.get("coin_source") != "challenger":
-        reasons.append(f"coins: {h1.get('coin_source')}, not the auditor host's challenger's, so nothing checks them")
+        reasons.append(f"coins: {h1.get('coin_source')}, not the auditor device's challenger's, so nothing checks them")
     elif h1.get("coin_source") == "challenger":
         try:
             if not (gate and key):
@@ -1628,7 +1628,7 @@ def _ledger_period(lines: Sequence[str], session: str) -> tuple[dict[str, Any] |
 def pearlplus_live_draw(record: Mapping[str, Any], piece_dir: Path, key: str, lane: str, check: Mapping[str, Any],
                         lines: Sequence[str], period: str) -> str | None:
     """Why the verifier's sample source in its coin record `record` (the piece's `COIN_RECORD`, `verify_run`'s "The coin
-    record") is not a coin the auditor host's challenger under `key` opened on the run commitment C, or None. It must be
+    record") is not a coin the auditor device's challenger under `key` opened on the run commitment C, or None. It must be
     a challenger sample (`PEARLPLUS_NODE_DRAW`) whose session the piece's check held to the signed ledger and session
     (`check`, `pearlplus_draw`'s), under `key` (that session's tree in the piece); in the piece's ledger `lines`, the
     first reserve of lane `lane` after its Pearl-C period `period` closed, withheld with a sample session's layout alone,
@@ -1690,7 +1690,7 @@ def _rational(x: Any) -> Fraction | None:
     return Fraction(s) if not isinstance(x, bool) and _RATIONAL.fullmatch(s) else None
 
 
-def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, sampled_proofs: Path | None, key: str | None,
+def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | None, key: str | None,
                         lane: str | None) -> tuple[dict[str, Any] | None, str | None]:
     """Whether Pearl+'s accepted development piece `doc` (`pearlplus`'s, in `piece_dir`) is PoUW's verdict of record: its
     answer and None when it is, else None and the first condition it fails, in order:
@@ -1706,7 +1706,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, sampled_proofs:
        session the lane's first reserve after the period closed (`pearlplus_live_draw` over `pearlplus_draw`'s check),
        and the verdict is over the coin published at its sample (`pearlplus_coin`).
        Pearl+'s verdict (`PEARLPLUS_ANSWER`) held its passes to a window record W (``verify --tie W``), the
-       window's registration R under `sampled_proofs` is chained right after W, and its records audit is tied to W
+       window's registration R under `spot` is chained right after W, and its records audit is tied to W
        (``records_audit --tie W``), so the window sampled proofs audited reads the roots Pearl+ credits. The period's
        open (in the signed ledger) committed the SHA-512 of the window-circuit record V3c held R's circuit to
        (`CIRCUIT_RECORD` beside R), so the period holds the salt session to the circuit of the window served.
@@ -1720,7 +1720,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, sampled_proofs:
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
     if doc.get("coin_source") != LIVE_SOURCE:
-        return None, f"its epoch's coins come from {doc.get('coin_source')!r}, not a live session on the auditor host's challenger"
+        return None, f"its epoch's coins come from {doc.get('coin_source')!r}, not a live session on the auditor device's challenger"
     check = (doc.get("coins") or {}).get("check") or {}
     if check.get("reason") is not None or not check.get("passes"):
         return None, f"the live session's check refused its passes: {check.get('reason') or 'it checked none'}"
@@ -1770,11 +1770,11 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, sampled_proofs:
     if not isinstance(w, str):
         return None, ("Pearl+'s verdict holds its passes to no window record W (served_passes.py verify --tie W), so "
                       "nothing ties them to the window")
-    if sampled_proofs is None:
+    if spot is None:
         return None, "the compose names no window registration to tie W to (--window-tie, else --sampled-proofs)"
     try:
-        reg = json.loads((sampled_proofs / WINDOW_REGISTRATION).read_text())
-        summary = json.loads((sampled_proofs / AUDIT_SUMMARY).read_text())
+        reg = json.loads((spot / WINDOW_REGISTRATION).read_text())
+        summary = json.loads((spot / AUDIT_SUMMARY).read_text())
     except (OSError, ValueError) as e:
         return None, f"the window's registration or its audit's summary can't be read ({type(e).__name__}: {e})"
     if reg.get("previous") != w:
@@ -1783,7 +1783,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, sampled_proofs:
     if ((summary.get("tie") or {}).get("record")) != w:
         return None, f"the window's records audit is not tied to Pearl+'s window record W {w[:16]}... (records_audit --tie W)"
     try:
-        held = hashlib.sha512((sampled_proofs / CIRCUIT_RECORD).read_bytes()).hexdigest()
+        held = hashlib.sha512((spot / CIRCUIT_RECORD).read_bytes()).hexdigest()
     except OSError as e:
         return None, (f"no window-circuit record V3c held R's circuit to ({CIRCUIT_RECORD} beside R: {type(e).__name__}), "
                       f"so nothing holds period {name}'s circuit to the window served")
@@ -1821,7 +1821,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, sampled_proofs:
 
 def piece(key: str, pieces_dir: Path, run: str | None = None, **of_record: Any
           ) -> tuple[dict[str, Any], tuple[str | None, str]]:
-    """A subprotocol's `piece_row` (`of_record`: its ``sampled_proofs``, ``key_sha512`` and ``lane``) and `piece_server`;
+    """A subprotocol's `piece_row` (`of_record`: its ``spot``, ``key_sha512`` and ``lane``) and `piece_server`;
     a piece that left a file that isn't JSON is its ``error``, about no server."""
     try:
         return piece_row(key, pieces_dir, run, **of_record), piece_server(key, pieces_dir)
@@ -1830,10 +1830,10 @@ def piece(key: str, pieces_dir: Path, run: str | None = None, **of_record: Any
                  "reason": f"its piece left a file that isn't JSON: {type(e).__name__}: {e}"[:2000]}, (None, "real"))
 
 
-def piece_row(key: str, pieces_dir: Path, run: str | None = None, *, sampled_proofs: Path | None = None,
+def piece_row(key: str, pieces_dir: Path, run: str | None = None, *, spot: Path | None = None,
               key_sha512: str | None = None, lane: str | None = None) -> dict[str, Any]:
     """A subprotocol's runner row from its piece's answer; Pearl+'s accepted development piece is PoUW's verdict of record
-    where `pearlplus_of_record` says so (`sampled_proofs`, `key_sha512` and `lane` what it reads), its row that answer's
+    where `pearlplus_of_record` says so (`spot`, `key_sha512` and `lane` what it reads), its row that answer's
     with its document as ``piece``, else ``missing`` with its document, its ``why`` `DEV_VERDICT` and the first condition
     of record it fails; any other development piece's is ``missing`` with its document when it accepts or claims no
     verdict (`UNCLAIMED`; it credits nothing, for the document's ``why``, else `DEV_WHY`), else ``reject``; a piece that
@@ -1847,7 +1847,7 @@ def piece_row(key: str, pieces_dir: Path, run: str | None = None, *, sampled_pro
         if not isinstance(doc, dict):
             return {"verdict": "error", "owner": owner, "reason": f"its piece's {DEVELOPMENT} is not a JSON object"}
         if key == "work" and doc.get("piece") == "pearlplus" and doc.get("verdict") == "accept":
-            answer, failed = pearlplus_of_record(doc, d, sampled_proofs, key_sha512, lane)
+            answer, failed = pearlplus_of_record(doc, d, spot, key_sha512, lane)
             if answer is not None:
                 return {**row_of(owner, answer, d, run), "piece": doc, "answer_from": PEARLPLUS_FROM}
             return {"verdict": "missing", "owner": owner, "why": f"{DEV_VERDICT}: {failed}"[:2000], "development": doc}
@@ -1900,8 +1900,9 @@ def _ratio(e: Fraction, deltas: Sequence[Fraction]) -> str:
 def terms(r: Mapping[str, Any], leg: Mapping[str, Any] | None) -> list[str]:
     """What an accepted answer holds beyond its verdict: where its profile says when its weights were held and what share
     of the checkpoint they are, those; where it says which host ran each party (the network certifier's ``placement``),
-    the link K counts, named, with every other link of the node uncounted and uncertified, and what its `trusted-host`
-    premise rests on; and each δ of the block record's at which its leg's quantity is not established. A placement
+    the link K counts, named, with every other link of the node uncounted and uncertified, and what its `trusted-device`
+    premise rests on (the wipe's holds only under the key its challenger's host is pinned to, and reads a rehearsal's
+    otherwise); and each δ of the block record's at which its leg's quantity is not established. A placement
     with no links (the front's ``--gate local``) states no link."""
     profile = (r.get("answer") or {}).get("profile")
     w = profile.get("weights") if isinstance(profile, Mapping) else None
@@ -1911,7 +1912,7 @@ def terms(r: Mapping[str, Any], leg: Mapping[str, Any] | None) -> list[str]:
     others = place.get("uncounted") or "every other link of the node"
     out = ([f"K counts the relayed link alone, {'; '.join(counted)}; {others} is uncounted and uncertified"]
            if counted else [])
-    out += [f"trusted-host {place['trusted-host']}"] if place.get("trusted-host") else []
+    out += [f"trusted-device {place['trusted-device']}"] if place.get("trusted-device") else []
     if isinstance(w, Mapping) and w.get("held"):
         out.append(f"its weights {w['held']}, not concurrently with the block")
     if isinstance(w, Mapping) and w.get("share"):
@@ -2423,7 +2424,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         steps = pick(a.serve_run, 1 << 30, a.window)["steps"]
     run = os.environ.get("RESEARCH_RUN_ID")
     keys = [*PIECES, "wipe"]
-    got = {k: piece(k, a.pieces, run, sampled_proofs=a.window_tie or a.sampled_proofs, key_sha512=a.key_sha512, lane=a.lane)
+    got = {k: piece(k, a.pieces, run, spot=a.window_tie or a.sampled_proofs, key_sha512=a.key_sha512, lane=a.lane)
            for k in keys}
     if a.sampled_exe is not None and not a.sampled_lean:
         ap.error("--sampled-exe is sampled proofs' Lean, which only --sampled-lean runs")

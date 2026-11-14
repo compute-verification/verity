@@ -9,9 +9,9 @@ docstring), the record's wires as SPOT's `wires` piece reads them (`spot_of`, ea
 Python's own layout of it; `null` where the reference refuses the case before its wires, or that layout has no row
 for a port: leaves of two widths, or an output past a word that is not whole words), some input rows of its units (`[template, port, unit, row]` each), the count's limits
 (`{"table", "c", "k", "n"}`) and the rows rule's (`{"table", "gamma", "alpha"}`, `rows_limits`); and `python.jsonl`,
-`{"detail", "public", "kinds", "exported", "count", "closed", "block_rows"}`:
+`{"detail", "public", "kinds", "exported", "count", "closed", "block_rows", "chosen"}`:
 `nci_record_reference`'s `check_detail`, `check`, `kinds` and `exported` of those rows, `count`, each
-template's closed rows (`closed`), and `block_rows`. The Lean audit runs `NciCheck/RecordDifftestMain.lean` on the two (`runs` in
+template's closed rows (`closed`), `block_rows` and `chosen`. The Lean audit runs `NciCheck/RecordDifftestMain.lean` on the two (`runs` in
 `lean-audit.json`).
 
 Case `seed`, for the first `COUNT`, is a random circuit (`random_circuit`): one to four templates of a few gates, each
@@ -848,6 +848,50 @@ KEYED: dict[str, str] = {
     "a template keyed as an input bound at registration": "RegisteredInput7",
 }
 
+#: the history table the cases of `HISTORIES` declare
+HISTORY = "history/hidden"
+
+
+def _history(d: dict, **fields) -> None:
+    """The record `d` with one history table more: `Norm`'s output rows, a position a unit, as
+    `verity.commitments.windows.interface` records one (`History.doc`). `fields` replace its own, and one that is
+    None is left out."""
+    n = dict(d["templates"])[NORM]
+    h = {"name": HISTORY, "program": d["program"], "writer": NORM, "out": "o0", "words": 2,
+         "runs": [{"start": 0, "count": n, "writer": NORM, "out": "o0", "radix": [n], "base": 0, "step": [1]}],
+         "capacity": IF.HT.CAPACITY, **fields}
+    d["registered"].setdefault("histories", []).append({k: v for k, v in h.items() if v is not None})
+
+
+def _opened_from_history(d: dict) -> None:
+    """The record `d` with the history table, its table reads and its opening naming it in place of the weights'
+    table."""
+    _history(d)
+    for x in (*d["registered"]["roots"], *d["registered"]["openings"]):
+        x["table"] = HISTORY
+
+
+#: `lowered(2, 3)`'s record with `registered.histories`, a case each: the stage that refuses the record, None where
+#: the form takes it, and the edit that makes it. `LOOSE` names the one the form takes that
+#: `verity.commitments.windows.interface` refuses: the form reads a history's keys and its name, and nothing of its
+#: writer, rows and runs.
+HISTORIES: dict[str, tuple] = {
+    "histories, none of them": (None, lambda d: d["registered"].update(histories=[])),
+    "a history no row reads": (None, _history),
+    "a history that states no capacity": (None, lambda d: _history(d, capacity=None)),
+    "the opening against a history": (None, _opened_from_history),
+    "a history of no template's rows": (None, lambda d: _history(d, writer="Nope_v1")),
+    "a history under a table's name": ("inputs", lambda d: _history(d, name=TABLE)),
+    "a history under a registered parameter's name": ("inputs", lambda d: _history(d, name="weights/norm")),
+    "two histories of one name": ("inputs", lambda d: (_history(d), _history(d))),
+    "a history with a key more": ("inputs", lambda d: _history(d, rows=6)),
+    "a history that states no runs": ("inputs", lambda d: _history(d, runs=None)),
+    "a history named by no string": ("inputs", lambda d: _history(d, name=3)),
+    "histories that are no list": ("inputs", lambda d: d["registered"].update(histories=3)),
+}
+LOOSE = "a history of no template's rows"
+
+
 SEG32 = {"row_schema": "hm96-sha512/row-seg/v1", "word_bits": 32}
 #: a row format (`registered.formats`) and the registration beside it: the stage that refuses the case (None where it
 #: is not refused), the circuit (`lowered(2, 3)` where None, else `passed_on` of that way with its one weight held
@@ -940,6 +984,13 @@ def shaped() -> list[dict]:
     Program and record those of that one template, a unit a slot (`_alone`), and the accepted case with a unit of
     it more at its Program's root, which its record does not list (`_unlisted`). Each is refused with its templates
     (`templates`): a root node of a composite is no input, whatever its key reads as.
+
+    Then the accepted case with `registered.histories` (`HISTORIES`). With none of them, with a history table of
+    `Norm`'s output rows that no row reads, stating its capacity or not, and with one of a writer the circuit has no
+    template of, the record counts as the accepted case does. With its table reads and its opening naming the history
+    in place of the weights' table, they are fresh and the rate refuses: a history is over no registered parameter.
+    A history under a table's name, a registered parameter's or another history's, one with a key more or a key
+    less, one named by no string, and histories that are no list are refused with the declarations (`inputs`).
 
     Then a row format (`FORMATS`), each at two slots and three positions under the same policy and pin but the last,
     a `passed_on` weight under the policy of exactly what its blocks hold. A format the registration log holds is
@@ -1091,6 +1142,9 @@ def shaped() -> list[dict]:
         seed = 47 + len(TWICE) + len(BITLESS) + 2 * k
         first(f"2x3 {what}, alone", lowered(2, 3), seed, broken="templates", alone=keyed)
         first(f"2x3 {what}, unlisted", lowered(2, 3), seed + 1, broken="templates", unlisted=keyed)
+    for k, (what, (stage, declare)) in enumerate(HISTORIES.items()):
+        first(f"2x3 {what}", lowered(2, 3), 47 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + k, edit=declare,
+              broken=stage)
     for k, (what, (stage, shape, more)) in enumerate(FORMATS.items()):
         c = lowered(2, 3) if shape is None else passed_on(how=shape)
         place = {} if shape is None else {"held": ("weights/wide",), "committed": ("weights/wide",), "pins": [],
@@ -1106,7 +1160,8 @@ def shaped() -> list[dict]:
             more.update(edit=put, broken=stage)
         else:
             more = {**more, "refused": stage}
-        first(f"2x3 {what}" if shape is None else what, c, 47 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + k,
+        seed = 47 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + k
+        first(f"2x3 {what}" if shape is None else what, c, seed,
               **place, **more)
     return out
 
@@ -1849,17 +1904,18 @@ NAMES = ("cases", "python")
 
 def total() -> int:
     """How many cases the audit's data has: the random ones and `shaped()`'s."""
-    return COUNT + 50 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(FORMATS)
+    return COUNT + 50 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(FORMATS)
 
 
 def results(case: dict) -> dict:
     """The reference's results on a case: the whole verdict, what is published, its rows' classes, what the form
-    exports of them (each row's slot and why it is held), the count, each template's closed rows, and the rows rule's
-    verdict."""
+    exports of them (each row's slot and why it is held), the count, each template's closed rows, the rows rule's
+    verdict, and what the prover chose of the phase's input bits."""
     inst, tr = case["instance"], case["trusted"]
     return {"detail": ref.check_detail(inst, tr), "public": ref.check(inst, tr), "kinds": ref.kinds(inst, tr, case["rows"]),
             "exported": ref.exported(inst, tr, case["rows"]), "count": ref.count(inst, tr, case["count"]),
-            "closed": ref.closed(inst, tr), "block_rows": ref.block_rows(inst, tr, case["block_rows"])}
+            "closed": ref.closed(inst, tr), "block_rows": ref.block_rows(inst, tr, case["block_rows"]),
+            "chosen": ref.chosen(inst, tr)}
 
 
 def write(out: Path, count: int | None = None) -> dict[str, Path]:

@@ -17,7 +17,8 @@ no forward) the source does not attach, and the Commit's coverage names the narr
 from __future__ import annotations
 
 import time
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from verity_vllm.acquire.sources.allreduce_norm import _flush
 from verity_vllm.acquire.sources.vocab_range_source import module_of
@@ -27,12 +28,19 @@ SHORT_NAME = "narrowed_rows"
 _BYTES = {"bf16": 2, "f16": 2, "u8": 1, "i8": 1}
 
 
+def _fields(row: Mapping[str, Any]) -> dict[str, Any]:
+    """A manifest row's fields, those under its `identity` over its own."""
+    own = {**row}
+    inner = row.get("identity")
+    return {**own, **inner} if inner else own
+
+
 def manifest_sites(manifest: Mapping[str, Any] | None) -> dict[str, dict[str, dict[str, Any]]]:
     """{op path: {member: {"columns": (c0, c1), "bytes": element bytes}}} of the manifest's narrowed rows.  ValueError, naming the row,
     for one whose `columns` are missing or not its width, or two rows of one member at different columns."""
     out: dict[str, dict[str, dict[str, Any]]] = {}
     for row in (manifest or {}).get("identities") or ():
-        r = {**row, **(row.get("identity") or {})}
+        r = _fields(row)
         if not r.get("narrowed_of"):
             continue
         op, member, cols, w = str(r["op_path"]), str(r["output_member"]), r.get("columns"), int(r.get("width") or 0)
@@ -139,7 +147,7 @@ class NarrowedRowsSource:
 
 def applies(manifest: Mapping[str, Any] | None) -> bool:
     """Whether the manifest names a narrowed row (`narrowed_of`)."""
-    return any({**r, **(r.get("identity") or {})}.get("narrowed_of") for r in (manifest or {}).get("identities") or ())
+    return any(_fields(r).get("narrowed_of") for r in (manifest or {}).get("identities") or ())
 
 
 def attach(com: Any, manifest: Mapping[str, Any] | None, *, model: Any = None) -> NarrowedRowsSource | None:

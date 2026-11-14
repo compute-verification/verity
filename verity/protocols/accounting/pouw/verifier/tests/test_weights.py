@@ -15,7 +15,7 @@ from verity.commitments.crypto import chacha20
 from verity.commitments.hm96 import batch as hm96_batch
 from verity.commitments.merkle import tree_levels
 from verity.commitments.rowleaf import sha512_row_v2_digest
-from verity.hardware import registration as Reg
+from verity.protocols.accounting.registration.verifier import registration as Reg
 from verity.protocols.accounting.pouw.verifier import audit, core_check
 from verity.protocols.accounting.pouw.verifier import weights as Wt
 from verity.protocols.accounting.pouw.verifier.audit import chacha20_block, hm96_salt
@@ -170,7 +170,8 @@ def test_bytes_like_rows_and_slots_released(workers, monkeypatch):
     shapes, rows = random_model(7)
     want = Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w], KEY, workers=1)
     for kind in (bytearray, memoryview):
-        assert Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: map(kind, rows[w]), KEY, workers=workers) == want
+        assert Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w, kind=kind: map(kind, rows[w]), KEY,
+                                workers=workers) == want
     assert Wt._SLOTS == {}
     with pytest.raises(ValueError, match="gave"):
         Wt.weights_roots(CIRCUIT, PREFIX, shapes, lambda w: rows[w][:-1], KEY, workers=workers)
