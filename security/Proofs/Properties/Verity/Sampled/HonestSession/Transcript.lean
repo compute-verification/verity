@@ -4201,25 +4201,53 @@ def transcript : Exec.Transcript where
 
 /-- The subset draw carried by the concrete record. -/
 def draw : Lean.Json :=
-  (Flock.JsonParse.parse drawText).toOption.getD .null
-
-/-- The subset draw's decoded value. -/
-def unitDraw : Flock.Draw.UnitDraw where
-  law := .subset 16
-  population := 32
-  units := #[ 1, 4, 6, 7, 9, 14, 16, 18, 19, 20, 21, 22, 23, 24, 27, 29]
+  (Exec.recordDraw transcript.record).getD .null
 
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 1000000 in
+theorem record_draw_some : (Exec.recordDraw transcript.record).isSome = true := by
+  decide +kernel
+
+/-- The subset draw's decoded value. -/
+def unitDraw : Flock.Draw.UnitDraw :=
+  (Flock.Draw.UnitDraw.ofJson draw).toOption.get
+    (by
+      set_option maxHeartbeats 0 in
+      set_option maxRecDepth 1000000 in
+      decide +kernel)
+
+/-- The concrete draw's units. -/
+def units : Array ℕ := unitDraw.units
+
 /-- **The concrete record carries its non-null subset draw**, checked by kernel reduction. -/
 theorem record_draw : Exec.recordDraw transcript.record = some draw := by
-  rfl
+  generalize h : Exec.recordDraw transcript.record = o at record_draw_some ⊢
+  cases o with
+  | none => simp at record_draw_some
+  | some d => rfl
 
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 1000000 in
 /-- **The concrete record's draw decodes to its subset of its population**, checked by kernel reduction. -/
 theorem draw_decodes : Flock.Draw.UnitDraw.ofJson draw = .ok unitDraw := by
-  rfl
+  have h : (Flock.Draw.UnitDraw.ofJson draw).toOption.isSome = true := by
+    decide +kernel
+  generalize he : Flock.Draw.UnitDraw.ofJson draw = e at h ⊢
+  cases e with
+  | error msg => simp at h
+  | ok d => rfl
+
+set_option maxHeartbeats 0 in
+theorem unit_law : unitDraw.law = .subset 16 := by
+  have h : (match unitDraw.law with | .subset k => k == 16 | _ => false) = true := by
+    decide +kernel
+  cases hl : unitDraw.law <;> simp_all
+
+set_option maxHeartbeats 0 in
+theorem unit_population : unitDraw.population = 32 := by decide +kernel
+
+set_option maxHeartbeats 0 in
+theorem unit_count : units.size = 16 := by decide +kernel
 
 /-- The concrete ZK transcript has the verifier's two repetition streams. -/
 theorem proof_count : transcript.proofs.size = 2 := by

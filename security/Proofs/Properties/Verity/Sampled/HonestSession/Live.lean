@@ -64,12 +64,15 @@ theorem subset_design :
       .subset (Flock.Bridge.lawK (Flock.Bridge.designAt desc query law none 32)) := by
   decide +kernel
 
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 1000000 in
 /-- The transcript records the concrete ascending subset draw. -/
 theorem record_drawn :
     recordDrawn (.subset units.size) 32 units transcript.record := by
-  decide +kernel
+  have h := ofJson_subset_eq (Claims.Bridge.Custody.recordDraw_norm record_draw) draw_decodes unit_law
+  constructor
+  · simpa [units, unit_population] using h.1
+  · rw [← exec_recordDraw, record_draw]
+    apply congrArg some
+    simpa [units, unit_population] using h.2
 
 /-- The accepted setup consists of one table, as the one-stage statement requires. -/
 theorem setup_size : setup.2.size = 1 :=
