@@ -67,3 +67,23 @@ def test_run_lines_bytes_unchanged(tmp_path, name):
     assert (tmp_path / "after" / name).read_bytes() == (tmp_path / "before" / name).read_bytes()
     old = [json.loads(line) for line in (tmp_path / "before" / name).read_text().splitlines() if line.strip()]
     assert [json.loads(line) for line in M.lines(tmp_path / "after" / name, "Run")] == old == recs
+
+
+def test_request_lines_bytes_unchanged(tmp_path):
+    recs = [{"http_id": "h0", "engine_id": "e0", "user": "user-0", "prompt_ids": [1, 2], "streamed_ids": [3],
+             "finish": {"reason": "length"}, "check": {"passed": True}},
+            {"http_id": "h1", "engine_id": "e1", "user": "é", "prompt_ids": [4], "streamed_ids": []}]
+    before, after = tmp_path / "before", tmp_path / "after"
+    before.mkdir()
+    after.mkdir()
+    with open(before / "requests.jsonl", "a") as fh, open(before / "request_users.jsonl", "a") as fu:
+        for rec in recs:
+            fh.write(json.dumps(rec) + "\n")
+            fu.write(json.dumps({"engine_id": rec["engine_id"], "user": rec["user"]}) + "\n")
+    with open(after / "requests.jsonl", "ab") as fh, open(after / "request_users.jsonl", "ab") as fu:
+        for rec in recs:
+            fh.write(M.line("Request", json.dumps(rec).encode()))
+            fu.write(M.line("Request", json.dumps({"engine_id": rec["engine_id"], "user": rec["user"]}).encode()))
+    for name in ("requests.jsonl", "request_users.jsonl"):
+        assert (after / name).read_bytes() == (before / name).read_bytes()
+    assert A.io_record(after / "requests.jsonl") == A.io_record(before / "requests.jsonl")

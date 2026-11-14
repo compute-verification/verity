@@ -753,7 +753,7 @@ class CommitWindows:
     def _check_finished(self, finished: Sequence[LiveRequest]) -> None:
         """Each of ``finished`` checked against the record its window's readback completed, a line of requests.jsonl, and its
         engine id and ``user`` a line of `REQUEST_USERS`."""
-        with open(self.out / "requests.jsonl", "a") as fh, open(self.out / REQUEST_USERS, "a") as fu:
+        with open(self.out / "requests.jsonl", "ab") as fh, open(self.out / REQUEST_USERS, "ab") as fu:
             for led in finished:
                 eid = led.engine_id
                 rr = self.record.requests.get(eid)
@@ -765,8 +765,8 @@ class CommitWindows:
                 with self._lock:
                     self.checked.append({"http_id": led.http_id, "engine_id": led.engine_id, "passed": rec["check"]["passed"],
                                          "cache_hit": int(rec["check"].get("cache_hit") or 0)})
-                fh.write(json.dumps(rec) + "\n")
-                fu.write(json.dumps({"engine_id": rec["engine_id"], "user": rec["user"]}) + "\n")
+                fh.write(M.line("Request", json.dumps(rec).encode()))
+                fu.write(M.line("Request", json.dumps({"engine_id": rec["engine_id"], "user": rec["user"]}).encode()))
 
     def summary(self) -> dict[str, Any]:
         """The windows closed so far; ``closing`` those whose finalize, off the loop, has yet to run (their requests unchecked)."""

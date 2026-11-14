@@ -13,13 +13,14 @@ from verity.protocols.accounting.pous.prover import workload as pous
 from verity.protocols.accounting.pouw.prover import workload as pouw
 from verity.protocols.proofs.spot.prover import workload as spot
 
-__all__ = ["TYPES", "append", "body", "lines", "read", "write"]
+__all__ = ["TYPES", "append", "body", "line", "lines", "read", "write"]
 
 TYPES = MessageTypes((*spot.MESSAGES, *pouw.MESSAGES, *pous.MESSAGES, *certifier.MESSAGES))
 
 
 def body(type_: str, data: bytes) -> bytes:
-    """``data`` as the body of a ``type_`` message, unchanged: `verity.channel.Refused` when its declaration refuses it."""
+    """``data`` as the body of a ``type_`` message, unchanged; `verity.channel.Refused` when its declaration refuses
+    it."""
     TYPES.encode(Message(type_, body=data))
     return data
 
@@ -34,10 +35,15 @@ def read(path: Path, type_: str) -> bytes:
     return body(type_, path.read_bytes())
 
 
+def line(type_: str, data: bytes) -> bytes:
+    """``data`` as one line of a JSON-lines file, a ``type_`` message's body."""
+    return body(type_, data) + b"\n"
+
+
 def append(path: Path, type_: str, data: bytes) -> None:
     """Append ``data`` to ``path`` as one line, a ``type_`` message's body."""
     with open(path, "ab") as fh:
-        fh.write(body(type_, data) + b"\n")
+        fh.write(line(type_, data))
 
 
 def lines(path: Path, type_: str) -> list[bytes]:
