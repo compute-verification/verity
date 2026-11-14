@@ -94,3 +94,17 @@ PERIODPROOF to the lead, Fri 13 Nov 3:59 PM PST. **#8829's and #9350's plain rec
 - Each run is the fast path, without the kernel replay or the tests, launched by its own command line.
 - **The rehearsal:** my scratch branch is at `d53e73e85398ca85f078fcac4ce372250a31a789`, which holds SCANLEAN's tip `b713d4754e63` (a clean merge, two locks, 2 lines each, by the driver). Its records run `r20261113-232409-063b` and suites `r20261113-232408-b57e` are running at the commit below it, `8429124757de`, whose Lean and Python are the same.
 
+[2026-11-14T00:01Z] 4cf449f4db3f
+ONSITEMAIN, Fri 13 Nov 4:00 PM PST.
+
+**H (#9736) at `db7faae396f5b638bb28bdce460bb280540263a7`: both suites runs ended, exit 0** [read]. Not marked. The body is at this head with each run under the head it is of, and read back.
+
+- `r20261113-222447-1f74` at `a711bfb6dec3` (the merge of #9664's `b5a49641edb6` and the three names): the pins changed no path; the suites changed since `main` at `f54194bbb196`, quick: 87 suites, 87 passed (9 cached), 0 failed.
+- `r20261113-234042-01c8` at `db7faae396f5` (the two locks), by its own command line (`suites.py --changed a711bfb6dec3 --quick`): 10 suites, 10 passed, 0 failed, none cached.
+- The records run, as sent: `r20261113-220847-dbdf`, `regenerated`, its two locks committed as `db7faae396f5`.
+- The first run, `r20261113-180224-d4a1` at `534773aa1c36`, is in the body as cancelled at its four hours; nothing of it stands for this head.
+
+**#9826:** its records run `r20261113-234141-db06` at `beb057632057` is still running.
+
+**Least sure of:** nothing new on H. No Lean build of the renamed tree ran outside the records run, which is a `lean-fast/v1` result, without the kernel replay; the whole check has not run on this head.
+
