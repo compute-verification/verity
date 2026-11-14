@@ -1,0 +1,4 @@
+t001	census:MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v1"}}	1	session
+t002	census:BatchedGemm_v1{B=1,K=192,N=1,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}	1	session
+t010	census:SparseMlaHeadEnd_v1{DV=64,INV={"fn":"Fa3InvSum_v1"}}	1	session
+t017	census:ResidualAdd_v1{N=384}	1	session

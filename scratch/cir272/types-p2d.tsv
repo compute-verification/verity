@@ -1,0 +1,14 @@
+t105	census:SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=13,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	3058
+t106	census:SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=14,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	3242
+t107	census:SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=15,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	3440
+t108	census:SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=16,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	3654
+t109	census:SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=17,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	3858
+t111	census:SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=19,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	4324
+t110	census:SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=18,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	4378
+t112	census:SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=20,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	4556
+t114	census:SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=22,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	5242
+t116	census:SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=24,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	5638
+t118	census:SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=26,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	6000
+t099	census:FlashInferFp8Quant1x128_v1{K=2048}	1	session	6000
+t120	census:SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=28,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	6000
+t032	census:Fp8GroupQuantUe8m0_v1{K=6144,G=128}	1	session	6000

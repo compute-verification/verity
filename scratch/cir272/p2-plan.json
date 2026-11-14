@@ -1,0 +1,3929 @@
+{
+ "t019": {
+  "tag": "t019",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 1916928,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "refused",
+   null
+  ],
+  "estimate": {
+   "basis": "its word form's own staging (r20261112-215857-32d2: 5177372164 bytes, 33.04 GB, 1050.0 s) scaled by SparseMlaHeadBlock_v2 over _v1 at NVIS=64 (r20261112-201828-47ac: 12191652715 bytes, 202.63 GB, 5610.1 s at 16 CPUs; r20261112-143157-9dd0: 12788381484 bytes, 65.85 GB, 2545.8 s); by its share of the head block's circuit instead, 82 GB",
+   "kind": "inferred",
+   "stage_gb_range": [
+    82.0,
+    101.7
+   ],
+   "staged": "SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=64,FIRST=False,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}",
+   "stage_s": 2314,
+   "stage_gb": 101.7,
+   "circuit_gib": 4.6,
+   "lean_gb": 20.3,
+   "total_s": 5923
+  },
+  "run": false
+ },
+ "t031": {
+  "tag": "t031",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=64,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 638976,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "refused",
+   null
+  ],
+  "estimate": {
+   "basis": "its word form's own staging (r20261112-215857-32d2: 5168979359 bytes, 33.0 GB, 1039.1 s) scaled by SparseMlaHeadBlock_v2 over _v1 at NVIS=64 (r20261112-201828-47ac: 12191652715 bytes, 202.63 GB, 5610.1 s at 16 CPUs; r20261112-143157-9dd0: 12788381484 bytes, 65.85 GB, 2545.8 s); by its share of the head block's circuit instead, 82 GB",
+   "kind": "inferred",
+   "stage_gb_range": [
+    81.9,
+    101.5
+   ],
+   "staged": "SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=64,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}",
+   "stage_s": 2290,
+   "stage_gb": 101.5,
+   "circuit_gib": 4.59,
+   "lean_gb": 20.3,
+   "total_s": 5862
+  },
+  "run": false
+ },
+ "t032": {
+  "tag": "t032",
+  "block": "Fp8GroupQuantUe8m0_v1{K=6144,G=128}",
+  "blocks": 491688,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "stage-past-62GB"
+  ],
+  "estimate": {
+   "basis": "its own run r20261112-215921-f101: the stager passed 62 GB at 613.0 s",
+   "kind": "measured",
+   "stage_gb": 62.1
+  },
+  "run": true,
+  "estimate_160": {
+   "basis": "3 x Fp8GroupQuantUe8m0_v1{K=2048,G=128} (t033, accepted: 8724721893 bytes, 21.38 GB, 550 s staging, 1,391 s in all), linear in K; its own run r20261112-215921-f101 stopped its stager past 62 GB at 613 s",
+   "kind": "inferred",
+   "stage_s": 1650,
+   "stage_gb": 64.1,
+   "circuit_gib": 24.38,
+   "lean_gb": 107.7,
+   "total_s": 4063
+  },
+  "list": "d",
+  "order": 14,
+  "limit_s": 6000,
+  "mem_gb": 160
+ },
+ "t099": {
+  "tag": "t099",
+  "block": "FlashInferFp8Quant1x128_v1{K=2048}",
+  "blocks": 43896,
+  "k_log": 24,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "lean-past-64GB"
+  ],
+  "estimate": {
+   "basis": "its own run r20261112-215857-32d2: staged in 926.0 s at 15.25 GB to 23925068134 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 926,
+   "stage_gb": 15.2,
+   "circuit_gib": 22.28,
+   "lean_gb": 98.5,
+   "total_s": 2877
+  },
+  "run": true,
+  "estimate_160": {
+   "basis": "its own run r20261112-215857-32d2: staged in 926.0 s at 15.25 GB to 23925068134 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 926,
+   "stage_gb": 15.2,
+   "circuit_gib": 22.28,
+   "lean_gb": 98.5,
+   "total_s": 3132
+  },
+  "list": "d",
+  "order": 12,
+  "limit_s": 6000,
+  "mem_gb": 160
+ },
+ "t100": {
+  "tag": "t100",
+  "block": "FlashInferFp8Quant1x128_v1{K=6144}",
+  "blocks": 38688,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "past-2700s"
+  ],
+  "estimate": {
+   "basis": "its own run r20261112-215921-f101: not staged at 2,725 s [measured]; its circuit taken as 3 x K=2048's (t099, 23925068134 bytes) [inferred]",
+   "kind": "measured stage, inferred circuit",
+   "stage_s": 2725,
+   "circuit_gib": 66.85,
+   "lean_gb": 295.5,
+   "total_s": 6976
+  },
+  "run": false
+ },
+ "t105": {
+  "tag": "t105",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=13,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 24960,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "lean-past-64GB"
+  ],
+  "estimate": {
+   "basis": "its own run r20261112-215857-32d2: staged in 522.4 s at 9.2 GB to 10922772583 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 522,
+   "stage_gb": 9.2,
+   "circuit_gib": 10.17,
+   "lean_gb": 45.0,
+   "total_s": 1623
+  },
+  "run": true,
+  "limit_s": 3058,
+  "order": 1,
+  "list": "d",
+  "estimate_160": {
+   "basis": "its own run r20261112-215857-32d2: staged in 522.4 s at 9.2 GB to 10922772583 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 522,
+   "stage_gb": 9.2,
+   "circuit_gib": 10.17,
+   "lean_gb": 45.0,
+   "total_s": 1529
+  },
+  "mem_gb": 160
+ },
+ "t106": {
+  "tag": "t106",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=14,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 24960,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "lean-past-64GB"
+  ],
+  "estimate": {
+   "basis": "its own run r20261112-215921-f101: staged in 536.0 s at 9.9 GB to 11765231749 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 536,
+   "stage_gb": 9.9,
+   "circuit_gib": 10.96,
+   "lean_gb": 48.4,
+   "total_s": 1665
+  },
+  "run": true,
+  "limit_s": 3242,
+  "order": 2,
+  "list": "d",
+  "estimate_160": {
+   "basis": "its own run r20261112-215921-f101: staged in 536.0 s at 9.9 GB to 11765231749 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 536,
+   "stage_gb": 9.9,
+   "circuit_gib": 10.96,
+   "lean_gb": 48.4,
+   "total_s": 1621
+  },
+  "mem_gb": 160
+ },
+ "t107": {
+  "tag": "t107",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=15,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 24960,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "lean-past-64GB"
+  ],
+  "estimate": {
+   "basis": "its own run r20261112-215857-32d2: staged in 558.3 s at 10.57 GB to 12603324174 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 558,
+   "stage_gb": 10.6,
+   "circuit_gib": 11.74,
+   "lean_gb": 51.9,
+   "total_s": 1734
+  },
+  "run": true,
+  "limit_s": 3440,
+  "order": 3,
+  "list": "d",
+  "estimate_160": {
+   "basis": "its own run r20261112-215857-32d2: staged in 558.3 s at 10.57 GB to 12603324174 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 558,
+   "stage_gb": 10.6,
+   "circuit_gib": 11.74,
+   "lean_gb": 51.9,
+   "total_s": 1720
+  },
+  "mem_gb": 160
+ },
+ "t108": {
+  "tag": "t108",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=16,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 24960,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "lean-past-64GB"
+  ],
+  "estimate": {
+   "basis": "its own run r20261112-215921-f101: staged in 588.2 s at 11.25 GB to 13441414551 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 588,
+   "stage_gb": 11.2,
+   "circuit_gib": 12.52,
+   "lean_gb": 55.3,
+   "total_s": 1827
+  },
+  "run": true,
+  "limit_s": 3654,
+  "order": 4,
+  "list": "d",
+  "estimate_160": {
+   "basis": "its own run r20261112-215921-f101: staged in 588.2 s at 11.25 GB to 13441414551 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 588,
+   "stage_gb": 11.2,
+   "circuit_gib": 12.52,
+   "lean_gb": 55.3,
+   "total_s": 1827
+  },
+  "mem_gb": 160
+ },
+ "t109": {
+  "tag": "t109",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=17,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 24960,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "lean-past-64GB"
+  ],
+  "estimate": {
+   "basis": "its own run r20261112-215857-32d2: staged in 612.5 s at 12.06 GB to 14279505297 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 612,
+   "stage_gb": 12.1,
+   "circuit_gib": 13.3,
+   "lean_gb": 58.8,
+   "total_s": 1903
+  },
+  "run": true,
+  "limit_s": 3858,
+  "order": 5,
+  "list": "d",
+  "estimate_160": {
+   "basis": "its own run r20261112-215857-32d2: staged in 612.5 s at 12.06 GB to 14279505297 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 612,
+   "stage_gb": 12.1,
+   "circuit_gib": 13.3,
+   "lean_gb": 58.8,
+   "total_s": 1929
+  },
+  "mem_gb": 160
+ },
+ "t110": {
+  "tag": "t110",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=18,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 24960,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "lean-past-64GB"
+  ],
+  "estimate": {
+   "basis": "its own run r20261112-215921-f101: staged in 794.9 s at 12.89 GB to 15117596251 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 795,
+   "stage_gb": 12.9,
+   "circuit_gib": 14.08,
+   "lean_gb": 62.2,
+   "total_s": 2470
+  },
+  "run": true,
+  "estimate_160": {
+   "basis": "its own run r20261112-215921-f101: staged in 794.9 s at 12.89 GB to 15117596251 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 795,
+   "stage_gb": 12.9,
+   "circuit_gib": 14.08,
+   "lean_gb": 62.2,
+   "total_s": 2189
+  },
+  "list": "d",
+  "order": 7,
+  "limit_s": 4378,
+  "mem_gb": 160
+ },
+ "t111": {
+  "tag": "t111",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=19,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 24960,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "lean-past-64GB"
+  ],
+  "estimate": {
+   "basis": "its own run r20261112-215857-32d2: staged in 691.2 s at 13.57 GB to 15955687204 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 691,
+   "stage_gb": 13.6,
+   "circuit_gib": 14.86,
+   "lean_gb": 65.7,
+   "total_s": 2147
+  },
+  "run": true,
+  "estimate_160": {
+   "basis": "its own run r20261112-215857-32d2: staged in 691.2 s at 13.57 GB to 15955687204 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 691,
+   "stage_gb": 13.6,
+   "circuit_gib": 14.86,
+   "lean_gb": 65.7,
+   "total_s": 2162
+  },
+  "list": "d",
+  "order": 6,
+  "limit_s": 4324,
+  "mem_gb": 160
+ },
+ "t112": {
+  "tag": "t112",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=20,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 24960,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "lean-past-64GB"
+  ],
+  "estimate": {
+   "basis": "its own run r20261112-215921-f101: staged in 729.9 s at 14.25 GB to 16793780205 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 730,
+   "stage_gb": 14.2,
+   "circuit_gib": 15.64,
+   "lean_gb": 69.1,
+   "total_s": 2268
+  },
+  "run": true,
+  "estimate_160": {
+   "basis": "its own run r20261112-215921-f101: staged in 729.9 s at 14.25 GB to 16793780205 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 730,
+   "stage_gb": 14.2,
+   "circuit_gib": 15.64,
+   "lean_gb": 69.1,
+   "total_s": 2278
+  },
+  "list": "d",
+  "order": 8,
+  "limit_s": 4556,
+  "mem_gb": 160
+ },
+ "t113": {
+  "tag": "t113",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=21,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 24960,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 814,
+   "stage_gb": 14.9,
+   "circuit_gib": 16.42,
+   "lean_gb": 72.6,
+   "total_s": 2529
+  },
+  "run": false
+ },
+ "t114": {
+  "tag": "t114",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=22,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 24960,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "lean-past-64GB"
+  ],
+  "estimate": {
+   "basis": "its own run r20261112-215921-f101: staged in 918.2 s at 15.6 GB to 18469962111 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 918,
+   "stage_gb": 15.6,
+   "circuit_gib": 17.2,
+   "lean_gb": 76.0,
+   "total_s": 2853
+  },
+  "run": true,
+  "estimate_160": {
+   "basis": "its own run r20261112-215921-f101: staged in 918.2 s at 15.6 GB to 18469962111 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 918,
+   "stage_gb": 15.6,
+   "circuit_gib": 17.2,
+   "lean_gb": 76.0,
+   "total_s": 2621
+  },
+  "list": "d",
+  "order": 9,
+  "limit_s": 5242,
+  "mem_gb": 160
+ },
+ "t115": {
+  "tag": "t115",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=23,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 24960,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 894,
+   "stage_gb": 16.3,
+   "circuit_gib": 17.98,
+   "lean_gb": 79.5,
+   "total_s": 2777
+  },
+  "run": false
+ },
+ "t116": {
+  "tag": "t116",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=24,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 24960,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "lean-past-64GB"
+  ],
+  "estimate": {
+   "basis": "its own run r20261112-215921-f101: staged in 962.2 s at 16.95 GB to 20146146065 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 962,
+   "stage_gb": 16.9,
+   "circuit_gib": 18.76,
+   "lean_gb": 82.9,
+   "total_s": 2989
+  },
+  "run": true,
+  "estimate_160": {
+   "basis": "its own run r20261112-215921-f101: staged in 962.2 s at 16.95 GB to 20146146065 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 962,
+   "stage_gb": 16.9,
+   "circuit_gib": 18.76,
+   "lean_gb": 82.9,
+   "total_s": 2819
+  },
+  "list": "d",
+  "order": 10,
+  "limit_s": 5638,
+  "mem_gb": 160
+ },
+ "t117": {
+  "tag": "t117",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=25,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 24960,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 975,
+   "stage_gb": 17.7,
+   "circuit_gib": 19.55,
+   "lean_gb": 86.4,
+   "total_s": 3029
+  },
+  "run": false
+ },
+ "t118": {
+  "tag": "t118",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=26,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 24960,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "lean-past-64GB"
+  ],
+  "estimate": {
+   "basis": "its own run r20261112-215921-f101: staged in 1008.1 s at 18.31 GB to 21822332068 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 1008,
+   "stage_gb": 18.3,
+   "circuit_gib": 20.32,
+   "lean_gb": 89.8,
+   "total_s": 3132
+  },
+  "run": true,
+  "estimate_160": {
+   "basis": "its own run r20261112-215921-f101: staged in 1008.1 s at 18.31 GB to 21822332068 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 1008,
+   "stage_gb": 18.3,
+   "circuit_gib": 20.32,
+   "lean_gb": 89.8,
+   "total_s": 3020
+  },
+  "list": "d",
+  "order": 11,
+  "limit_s": 6000,
+  "mem_gb": 160
+ },
+ "t119": {
+  "tag": "t119",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=27,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 24960,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1055,
+   "stage_gb": 19.1,
+   "circuit_gib": 21.11,
+   "lean_gb": 93.3,
+   "total_s": 3278
+  },
+  "run": false
+ },
+ "t120": {
+  "tag": "t120",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=28,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 24960,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "lean-past-64GB"
+  ],
+  "estimate": {
+   "basis": "its own run r20261112-215921-f101: staged in 1062.5 s at 19.7 GB to 23507238390 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 1062,
+   "stage_gb": 19.7,
+   "circuit_gib": 21.89,
+   "lean_gb": 96.8,
+   "total_s": 3301
+  },
+  "run": true,
+  "estimate_160": {
+   "basis": "its own run r20261112-215921-f101: staged in 1062.5 s at 19.7 GB to 23507238390 bytes [measured]; Lean peak 4.42 x its GiB, time 3.1 x its staging as t104's (1,371 s over 441 s) [inferred]; at 160 GB: time = its staging + 99 s per circuit GiB, t104's Lean and session (930 s on 9.39 GiB)",
+   "kind": "measured circuit, inferred Lean peak",
+   "stage_s": 1062,
+   "stage_gb": 19.7,
+   "circuit_gib": 21.89,
+   "lean_gb": 96.8,
+   "total_s": 3229
+  },
+  "list": "d",
+  "order": 13,
+  "limit_s": 6000,
+  "mem_gb": 160
+ },
+ "t121": {
+  "tag": "t121",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=29,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 24960,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1136,
+   "stage_gb": 20.5,
+   "circuit_gib": 22.67,
+   "lean_gb": 100.2,
+   "total_s": 3529
+  },
+  "run": false
+ },
+ "t122": {
+  "tag": "t122",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=30,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 24960,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1176,
+   "stage_gb": 21.2,
+   "circuit_gib": 23.45,
+   "lean_gb": 103.6,
+   "total_s": 3654
+  },
+  "run": false
+ },
+ "t123": {
+  "tag": "t123",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=31,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 24960,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1216,
+   "stage_gb": 21.9,
+   "circuit_gib": 24.23,
+   "lean_gb": 107.1,
+   "total_s": 3778
+  },
+  "run": false
+ },
+ "t124": {
+  "tag": "t124",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=1,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 23,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 9,
+   "stage_gb": 0.8,
+   "circuit_gib": 0.8,
+   "lean_gb": 3.5,
+   "total_s": 28
+  },
+  "run": true,
+  "limit_s": 900,
+  "order": 1,
+  "list": "a"
+ },
+ "t125": {
+  "tag": "t125",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=2,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 23,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 49,
+   "stage_gb": 1.5,
+   "circuit_gib": 1.58,
+   "lean_gb": 7.0,
+   "total_s": 152
+  },
+  "run": true,
+  "limit_s": 900,
+  "order": 5,
+  "list": "a"
+ },
+ "t126": {
+  "tag": "t126",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=3,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 23,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 89,
+   "stage_gb": 2.2,
+   "circuit_gib": 2.36,
+   "lean_gb": 10.4,
+   "total_s": 276
+  },
+  "run": true,
+  "limit_s": 900,
+  "order": 10,
+  "list": "b"
+ },
+ "t127": {
+  "tag": "t127",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=32,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1257,
+   "stage_gb": 22.6,
+   "circuit_gib": 25.01,
+   "lean_gb": 110.5,
+   "total_s": 3905
+  },
+  "run": false
+ },
+ "t128": {
+  "tag": "t128",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=33,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1297,
+   "stage_gb": 23.3,
+   "circuit_gib": 25.79,
+   "lean_gb": 114.0,
+   "total_s": 4029
+  },
+  "run": false
+ },
+ "t129": {
+  "tag": "t129",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=34,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1337,
+   "stage_gb": 24.0,
+   "circuit_gib": 26.57,
+   "lean_gb": 117.4,
+   "total_s": 4154
+  },
+  "run": false
+ },
+ "t130": {
+  "tag": "t130",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=35,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1377,
+   "stage_gb": 24.7,
+   "circuit_gib": 27.36,
+   "lean_gb": 120.9,
+   "total_s": 4278
+  },
+  "run": false
+ },
+ "t131": {
+  "tag": "t131",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=36,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1418,
+   "stage_gb": 25.4,
+   "circuit_gib": 28.14,
+   "lean_gb": 124.4,
+   "total_s": 4405
+  },
+  "run": false
+ },
+ "t132": {
+  "tag": "t132",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=37,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1458,
+   "stage_gb": 26.1,
+   "circuit_gib": 28.92,
+   "lean_gb": 127.8,
+   "total_s": 4530
+  },
+  "run": false
+ },
+ "t133": {
+  "tag": "t133",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=38,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1498,
+   "stage_gb": 26.8,
+   "circuit_gib": 29.7,
+   "lean_gb": 131.3,
+   "total_s": 4654
+  },
+  "run": false
+ },
+ "t134": {
+  "tag": "t134",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=39,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1538,
+   "stage_gb": 27.5,
+   "circuit_gib": 30.48,
+   "lean_gb": 134.7,
+   "total_s": 4778
+  },
+  "run": false
+ },
+ "t135": {
+  "tag": "t135",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=4,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 23,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 130,
+   "stage_gb": 2.9,
+   "circuit_gib": 3.15,
+   "lean_gb": 13.9,
+   "total_s": 404
+  },
+  "run": true,
+  "limit_s": 900,
+  "order": 14,
+  "list": "b"
+ },
+ "t136": {
+  "tag": "t136",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=40,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1579,
+   "stage_gb": 28.2,
+   "circuit_gib": 31.26,
+   "lean_gb": 138.2,
+   "total_s": 4906
+  },
+  "run": false
+ },
+ "t137": {
+  "tag": "t137",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=41,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1619,
+   "stage_gb": 28.9,
+   "circuit_gib": 32.04,
+   "lean_gb": 141.6,
+   "total_s": 5030
+  },
+  "run": false
+ },
+ "t138": {
+  "tag": "t138",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=42,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1659,
+   "stage_gb": 29.6,
+   "circuit_gib": 32.82,
+   "lean_gb": 145.1,
+   "total_s": 5154
+  },
+  "run": false
+ },
+ "t139": {
+  "tag": "t139",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=43,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1699,
+   "stage_gb": 30.3,
+   "circuit_gib": 33.6,
+   "lean_gb": 148.5,
+   "total_s": 5278
+  },
+  "run": false
+ },
+ "t140": {
+  "tag": "t140",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=44,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1740,
+   "stage_gb": 31.0,
+   "circuit_gib": 34.38,
+   "lean_gb": 152.0,
+   "total_s": 5406
+  },
+  "run": false
+ },
+ "t141": {
+  "tag": "t141",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=45,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1780,
+   "stage_gb": 31.7,
+   "circuit_gib": 35.17,
+   "lean_gb": 155.5,
+   "total_s": 5530
+  },
+  "run": false
+ },
+ "t142": {
+  "tag": "t142",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=46,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1820,
+   "stage_gb": 32.4,
+   "circuit_gib": 35.95,
+   "lean_gb": 158.9,
+   "total_s": 5654
+  },
+  "run": false
+ },
+ "t143": {
+  "tag": "t143",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=47,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1860,
+   "stage_gb": 33.1,
+   "circuit_gib": 36.73,
+   "lean_gb": 162.3,
+   "total_s": 5779
+  },
+  "run": false
+ },
+ "t144": {
+  "tag": "t144",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=48,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1901,
+   "stage_gb": 33.8,
+   "circuit_gib": 37.51,
+   "lean_gb": 165.8,
+   "total_s": 5906
+  },
+  "run": false
+ },
+ "t145": {
+  "tag": "t145",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=49,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1941,
+   "stage_gb": 34.5,
+   "circuit_gib": 38.29,
+   "lean_gb": 169.2,
+   "total_s": 6030
+  },
+  "run": false
+ },
+ "t146": {
+  "tag": "t146",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=5,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 24,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 170,
+   "stage_gb": 3.6,
+   "circuit_gib": 3.93,
+   "lean_gb": 17.4,
+   "total_s": 528
+  },
+  "run": true,
+  "limit_s": 1056,
+  "order": 17,
+  "list": "a"
+ },
+ "t147": {
+  "tag": "t147",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=50,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 1981,
+   "stage_gb": 35.2,
+   "circuit_gib": 39.07,
+   "lean_gb": 172.7,
+   "total_s": 6154
+  },
+  "run": false
+ },
+ "t148": {
+  "tag": "t148",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=51,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 2021,
+   "stage_gb": 35.9,
+   "circuit_gib": 39.85,
+   "lean_gb": 176.1,
+   "total_s": 6279
+  },
+  "run": false
+ },
+ "t149": {
+  "tag": "t149",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=52,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 2062,
+   "stage_gb": 36.6,
+   "circuit_gib": 40.63,
+   "lean_gb": 179.6,
+   "total_s": 6406
+  },
+  "run": false
+ },
+ "t150": {
+  "tag": "t150",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=53,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 2102,
+   "stage_gb": 37.3,
+   "circuit_gib": 41.41,
+   "lean_gb": 183.0,
+   "total_s": 6530
+  },
+  "run": false
+ },
+ "t151": {
+  "tag": "t151",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=54,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 2142,
+   "stage_gb": 38.0,
+   "circuit_gib": 42.19,
+   "lean_gb": 186.5,
+   "total_s": 6655
+  },
+  "run": false
+ },
+ "t152": {
+  "tag": "t152",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=55,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 2182,
+   "stage_gb": 38.7,
+   "circuit_gib": 42.97,
+   "lean_gb": 189.9,
+   "total_s": 6779
+  },
+  "run": false
+ },
+ "t153": {
+  "tag": "t153",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=56,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 2223,
+   "stage_gb": 39.4,
+   "circuit_gib": 43.76,
+   "lean_gb": 193.4,
+   "total_s": 6906
+  },
+  "run": false
+ },
+ "t154": {
+  "tag": "t154",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=57,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 2263,
+   "stage_gb": 40.1,
+   "circuit_gib": 44.54,
+   "lean_gb": 196.9,
+   "total_s": 7031
+  },
+  "run": false
+ },
+ "t155": {
+  "tag": "t155",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=58,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 2303,
+   "stage_gb": 40.8,
+   "circuit_gib": 45.32,
+   "lean_gb": 200.3,
+   "total_s": 7155
+  },
+  "run": false
+ },
+ "t156": {
+  "tag": "t156",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=59,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 2343,
+   "stage_gb": 41.5,
+   "circuit_gib": 46.1,
+   "lean_gb": 203.8,
+   "total_s": 7279
+  },
+  "run": false
+ },
+ "t157": {
+  "tag": "t157",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=6,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 24,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 210,
+   "stage_gb": 4.3,
+   "circuit_gib": 4.71,
+   "lean_gb": 20.8,
+   "total_s": 652
+  },
+  "run": true,
+  "limit_s": 1304,
+  "order": 20,
+  "list": "b"
+ },
+ "t158": {
+  "tag": "t158",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=60,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 2384,
+   "stage_gb": 42.2,
+   "circuit_gib": 46.88,
+   "lean_gb": 207.2,
+   "total_s": 7406
+  },
+  "run": false
+ },
+ "t159": {
+  "tag": "t159",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=61,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 2424,
+   "stage_gb": 42.9,
+   "circuit_gib": 47.66,
+   "lean_gb": 210.7,
+   "total_s": 7531
+  },
+  "run": false
+ },
+ "t160": {
+  "tag": "t160",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=62,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 2464,
+   "stage_gb": 43.6,
+   "circuit_gib": 48.44,
+   "lean_gb": 214.1,
+   "total_s": 7655
+  },
+  "run": false
+ },
+ "t161": {
+  "tag": "t161",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 2504,
+   "stage_gb": 44.3,
+   "circuit_gib": 49.22,
+   "lean_gb": 217.6,
+   "total_s": 7779
+  },
+  "run": false
+ },
+ "t162": {
+  "tag": "t162",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=7,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 24,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 250,
+   "stage_gb": 5.0,
+   "circuit_gib": 5.49,
+   "lean_gb": 24.3,
+   "total_s": 777
+  },
+  "run": true,
+  "limit_s": 1554,
+  "order": 24,
+  "list": "b"
+ },
+ "t163": {
+  "tag": "t163",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=8,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 24,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 291,
+   "stage_gb": 5.7,
+   "circuit_gib": 6.27,
+   "lean_gb": 27.7,
+   "total_s": 904
+  },
+  "run": true,
+  "limit_s": 1808,
+  "order": 27,
+  "list": "a"
+ },
+ "t164": {
+  "tag": "t164",
+  "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=9,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 19968,
+  "k_log": 24,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "linear fit of SparseMlaHeadScores_v1 FIRST=true over NVIS 10-28, CIR-272's runs; time 3.1 x staging as t104's",
+   "kind": "inferred",
+   "stage_s": 331,
+   "stage_gb": 6.4,
+   "circuit_gib": 7.05,
+   "lean_gb": 31.2,
+   "total_s": 1028
+  },
+  "run": true,
+  "limit_s": 2056,
+  "order": 30,
+  "list": "b"
+ },
+ "t165": {
+  "tag": "t165",
+  "block": "FlashInferFp8Quant1x128_v1{K=256}",
+  "blocks": 18600,
+  "k_log": 22,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "FlashInferFp8Quant1x128_v1{K=2048} (t099: 23925068134 bytes, 15.25 GB, 940 s) taken linear in K",
+   "kind": "inferred",
+   "stage_s": 46,
+   "stage_gb": 1.9,
+   "circuit_gib": 2.79,
+   "lean_gb": 12.3,
+   "total_s": 118
+  },
+  "run": true,
+  "limit_s": 900,
+  "order": 3,
+  "list": "a"
+ },
+ "t166": {
+  "tag": "t166",
+  "block": "AllReduceMnnvl_v1{WORLD=8,N=96,SHOT=1}",
+  "blocks": 15872,
+  "k_log": 22,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family; the longest of CIR-272's 24 accepted types of card k_log 22 (190 s)",
+   "kind": "inferred",
+   "total_s": 190
+  },
+  "run": true,
+  "limit_s": 900,
+  "order": 7,
+  "list": "a"
+ },
+ "t167": {
+  "tag": "t167",
+  "block": "SiluMul_v2{I=1536}",
+  "blocks": 6888,
+  "k_log": 24,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "SiluMul_v2{I=256} at 2 instances (r20261112-125341-11a8) taken linear in I x instances",
+   "kind": "inferred",
+   "stage_s": 109,
+   "stage_gb": 3.6,
+   "circuit_gib": 0.36,
+   "lean_gb": 1.6,
+   "total_s": 280
+  },
+  "run": true,
+  "limit_s": 900,
+  "order": 11,
+  "list": "a"
+ },
+ "t168": {
+  "tag": "t168",
+  "block": "Fp8GroupQuantUe8m0_v1{K=1536,G=128}",
+  "blocks": 6144,
+  "k_log": 24,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "Fp8GroupQuantUe8m0_v1{K=2048,G=128} (t033: 8724721893 bytes, 21.38 GB, 1391 s) taken linear in K",
+   "kind": "inferred",
+   "stage_s": 408,
+   "stage_gb": 16.0,
+   "circuit_gib": 6.09,
+   "lean_gb": 26.9,
+   "total_s": 1043
+  },
+  "run": true,
+  "limit_s": 2086,
+  "order": 32,
+  "list": "b"
+ },
+ "t169": {
+  "tag": "t169",
+  "block": "RMSNormCudaVector8_v1{N=6144,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},BLOCK=256}",
+  "blocks": 2048,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "RmsNormMnnvlSumSq_v1{N=6144} (t101, accepted: 3.87e9 bytes, 11.6 GB, 270.5 s) taken as half of it; no measurement of this family",
+   "kind": "inferred",
+   "stage_s": 541,
+   "stage_gb": 23.2,
+   "circuit_gib": 7.21,
+   "lean_gb": 31.9,
+   "total_s": 1385
+  },
+  "run": true,
+  "limit_s": 2770,
+  "order": 39,
+  "list": "a"
+ },
+ "t170": {
+  "tag": "t170",
+  "block": "FlashInferFp8Quant1x128_v1{K=1536}",
+  "blocks": 744,
+  "k_log": 24,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "FlashInferFp8Quant1x128_v1{K=2048} (t099: 23925068134 bytes, 15.25 GB, 940 s) taken linear in K",
+   "kind": "inferred",
+   "stage_s": 275,
+   "stage_gb": 11.4,
+   "circuit_gib": 16.71,
+   "lean_gb": 73.9,
+   "total_s": 705
+  },
+  "run": false
+ },
+ "t171": {
+  "tag": "t171",
+  "block": "SparseMlaSplit_v1{T=1,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 624,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family; t019's whole time (1,580 s), the one type of card k_log 27 CIR-272 staged",
+   "kind": "inferred",
+   "total_s": 1580
+  },
+  "run": true,
+  "limit_s": 3160,
+  "order": 44,
+  "list": "b"
+ },
+ "t172": {
+  "tag": "t172",
+  "block": "SparseMlaSplit_v1{T=2,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 624,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family; t019's whole time (1,580 s), the one type of card k_log 27 CIR-272 staged",
+   "kind": "inferred",
+   "total_s": 1580
+  },
+  "run": true,
+  "limit_s": 3160,
+  "order": 45,
+  "list": "a"
+ },
+ "t173": {
+  "tag": "t173",
+  "block": "SparseMlaSplit_v1{T=3,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 624,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family; t019's whole time (1,580 s), the one type of card k_log 27 CIR-272 staged",
+   "kind": "inferred",
+   "total_s": 1580
+  },
+  "run": true,
+  "limit_s": 3160,
+  "order": 46,
+  "list": "b"
+ },
+ "t174": {
+  "tag": "t174",
+  "block": "SparseMlaSplit_v1{T=4,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 624,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family; t019's whole time (1,580 s), the one type of card k_log 27 CIR-272 staged",
+   "kind": "inferred",
+   "total_s": 1580
+  },
+  "run": true,
+  "limit_s": 3160,
+  "order": 47,
+  "list": "a"
+ },
+ "t175": {
+  "tag": "t175",
+  "block": "SparseMlaSplit_v1{T=5,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 624,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family; t019's whole time (1,580 s), the one type of card k_log 27 CIR-272 staged",
+   "kind": "inferred",
+   "total_s": 1580
+  },
+  "run": true,
+  "limit_s": 3160,
+  "order": 48,
+  "list": "b"
+ },
+ "t176": {
+  "tag": "t176",
+  "block": "SparseMlaSplit_v1{T=6,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 624,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family; t019's whole time (1,580 s), the one type of card k_log 27 CIR-272 staged",
+   "kind": "inferred",
+   "total_s": 1580
+  },
+  "run": true,
+  "limit_s": 3160,
+  "order": 49,
+  "list": "a"
+ },
+ "t177": {
+  "tag": "t177",
+  "block": "SparseMlaSplit_v1{T=7,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 624,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family; t019's whole time (1,580 s), the one type of card k_log 27 CIR-272 staged",
+   "kind": "inferred",
+   "total_s": 1580
+  },
+  "run": true,
+  "limit_s": 3160,
+  "order": 50,
+  "list": "b"
+ },
+ "t178": {
+  "tag": "t178",
+  "block": "SparseMlaSplit_v1{T=8,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 624,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family; t019's whole time (1,580 s), the one type of card k_log 27 CIR-272 staged",
+   "kind": "inferred",
+   "total_s": 1580
+  },
+  "run": true,
+  "limit_s": 3160,
+  "order": 51,
+  "list": "a"
+ },
+ "t179": {
+  "tag": "t179",
+  "block": "SparseMlaSplit_v1{T=9,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},INV={\"fn\":\"Fa3InvSum_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "blocks": 624,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family; t019's whole time (1,580 s), the one type of card k_log 27 CIR-272 staged",
+   "kind": "inferred",
+   "total_s": 1580
+  },
+  "run": true,
+  "limit_s": 3160,
+  "order": 52,
+  "list": "b"
+ },
+ "t180": {
+  "tag": "t180",
+  "block": "GreedyChunk_v1{N=16384,FIRST=true}",
+  "blocks": 256,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "GreedyChunk_v1{N=16384,FIRST=false} (r20261112-140245-1147, accepted), taken equal",
+   "kind": "inferred",
+   "stage_s": 55,
+   "stage_gb": 2.3,
+   "circuit_gib": 0.2,
+   "lean_gb": 0.9,
+   "total_s": 141
+  },
+  "run": true,
+  "limit_s": 900,
+  "order": 4,
+  "list": "b"
+ },
+ "t181": {
+  "tag": "t181",
+  "block": "RMSNormCudaVector8_v1{N=6144,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},BLOCK=768}",
+  "blocks": 248,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "RmsNormMnnvlSumSq_v1{N=6144} (t101, accepted: 3.87e9 bytes, 11.6 GB, 270.5 s) taken as half of it; no measurement of this family",
+   "kind": "inferred",
+   "stage_s": 541,
+   "stage_gb": 23.2,
+   "circuit_gib": 7.21,
+   "lean_gb": 31.9,
+   "total_s": 1385
+  },
+  "run": true,
+  "limit_s": 2770,
+  "order": 40,
+  "list": "b"
+ },
+ "t182": {
+  "tag": "t182",
+  "block": "DsaMqaLogits_v3{N=10,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 665,
+   "stage_gb": 12.8,
+   "circuit_gib": 2.91,
+   "lean_gb": 12.9
+  },
+  "run": true,
+  "limit_s": 1098,
+  "order": 18,
+  "list": "b"
+ },
+ "t183": {
+  "tag": "t183",
+  "block": "DsaMqaLogits_v3{N=11,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 726,
+   "stage_gb": 14.0,
+   "circuit_gib": 3.21,
+   "lean_gb": 14.2
+  },
+  "run": true,
+  "limit_s": 1208,
+  "order": 19,
+  "list": "a"
+ },
+ "t184": {
+  "tag": "t184",
+  "block": "DsaMqaLogits_v3{N=12,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 786,
+   "stage_gb": 15.3,
+   "circuit_gib": 3.51,
+   "lean_gb": 15.5
+  },
+  "run": true,
+  "limit_s": 1318,
+  "order": 21,
+  "list": "a"
+ },
+ "t185": {
+  "tag": "t185",
+  "block": "DsaMqaLogits_v3{N=13,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 846,
+   "stage_gb": 16.5,
+   "circuit_gib": 3.81,
+   "lean_gb": 16.8
+  },
+  "run": true,
+  "limit_s": 1428,
+  "order": 22,
+  "list": "b"
+ },
+ "t186": {
+  "tag": "t186",
+  "block": "DsaMqaLogits_v3{N=14,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 907,
+   "stage_gb": 17.8,
+   "circuit_gib": 4.11,
+   "lean_gb": 18.2
+  },
+  "run": true,
+  "limit_s": 1538,
+  "order": 23,
+  "list": "a"
+ },
+ "t187": {
+  "tag": "t187",
+  "block": "DsaMqaLogits_v3{N=15,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 967,
+   "stage_gb": 19.0,
+   "circuit_gib": 4.41,
+   "lean_gb": 19.5
+  },
+  "run": true,
+  "limit_s": 1648,
+  "order": 25,
+  "list": "a"
+ },
+ "t188": {
+  "tag": "t188",
+  "block": "DsaMqaLogits_v3{N=16,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 1028,
+   "stage_gb": 20.3,
+   "circuit_gib": 4.71,
+   "lean_gb": 20.8
+  },
+  "run": true,
+  "limit_s": 1758,
+  "order": 26,
+  "list": "b"
+ },
+ "t189": {
+  "tag": "t189",
+  "block": "DsaMqaLogits_v3{N=17,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 1088,
+   "stage_gb": 21.5,
+   "circuit_gib": 5.01,
+   "lean_gb": 22.1
+  },
+  "run": true,
+  "limit_s": 1868,
+  "order": 28,
+  "list": "b"
+ },
+ "t190": {
+  "tag": "t190",
+  "block": "DsaMqaLogits_v3{N=18,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 1149,
+   "stage_gb": 22.8,
+   "circuit_gib": 5.31,
+   "lean_gb": 23.5
+  },
+  "run": true,
+  "limit_s": 1976,
+  "order": 29,
+  "list": "a"
+ },
+ "t191": {
+  "tag": "t191",
+  "block": "DsaMqaLogits_v3{N=19,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 1209,
+   "stage_gb": 24.1,
+   "circuit_gib": 5.61,
+   "lean_gb": 24.8
+  },
+  "run": true,
+  "limit_s": 2086,
+  "order": 31,
+  "list": "a"
+ },
+ "t192": {
+  "tag": "t192",
+  "block": "DsaMqaLogits_v3{N=2,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 24,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 182,
+   "stage_gb": 2.7,
+   "circuit_gib": 0.52,
+   "lean_gb": 2.3
+  },
+  "run": true,
+  "limit_s": 900,
+  "order": 2,
+  "list": "b"
+ },
+ "t193": {
+  "tag": "t193",
+  "block": "DsaMqaLogits_v3{N=20,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 1270,
+   "stage_gb": 25.3,
+   "circuit_gib": 5.91,
+   "lean_gb": 26.1
+  },
+  "run": true,
+  "limit_s": 2196,
+  "order": 33,
+  "list": "a"
+ },
+ "t194": {
+  "tag": "t194",
+  "block": "DsaMqaLogits_v3{N=21,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 1330,
+   "stage_gb": 26.6,
+   "circuit_gib": 6.21,
+   "lean_gb": 27.4
+  },
+  "run": true,
+  "limit_s": 2306,
+  "order": 34,
+  "list": "b"
+ },
+ "t195": {
+  "tag": "t195",
+  "block": "DsaMqaLogits_v3{N=22,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 1390,
+   "stage_gb": 27.8,
+   "circuit_gib": 6.51,
+   "lean_gb": 28.8
+  },
+  "run": true,
+  "limit_s": 2416,
+  "order": 35,
+  "list": "a"
+ },
+ "t196": {
+  "tag": "t196",
+  "block": "DsaMqaLogits_v3{N=23,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 1451,
+   "stage_gb": 29.1,
+   "circuit_gib": 6.81,
+   "lean_gb": 30.1
+  },
+  "run": true,
+  "limit_s": 2526,
+  "order": 36,
+  "list": "b"
+ },
+ "t197": {
+  "tag": "t197",
+  "block": "DsaMqaLogits_v3{N=24,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 1511,
+   "stage_gb": 30.3,
+   "circuit_gib": 7.11,
+   "lean_gb": 31.4
+  },
+  "run": true,
+  "limit_s": 2636,
+  "order": 37,
+  "list": "a"
+ },
+ "t198": {
+  "tag": "t198",
+  "block": "DsaMqaLogits_v3{N=25,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 1572,
+   "stage_gb": 31.6,
+   "circuit_gib": 7.4,
+   "lean_gb": 32.7
+  },
+  "run": true,
+  "limit_s": 2746,
+  "order": 38,
+  "list": "b"
+ },
+ "t199": {
+  "tag": "t199",
+  "block": "DsaMqaLogits_v3{N=26,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 1632,
+   "stage_gb": 32.9,
+   "circuit_gib": 7.7,
+   "lean_gb": 34.1
+  },
+  "run": true,
+  "limit_s": 2856,
+  "order": 41,
+  "list": "a"
+ },
+ "t200": {
+  "tag": "t200",
+  "block": "DsaMqaLogits_v3{N=27,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 1693,
+   "stage_gb": 34.1,
+   "circuit_gib": 8.0,
+   "lean_gb": 35.4
+  },
+  "run": true,
+  "limit_s": 2966,
+  "order": 42,
+  "list": "b"
+ },
+ "t201": {
+  "tag": "t201",
+  "block": "DsaMqaLogits_v3{N=28,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 1753,
+   "stage_gb": 35.4,
+   "circuit_gib": 8.3,
+   "lean_gb": 36.7
+  },
+  "run": true,
+  "limit_s": 3076,
+  "order": 43,
+  "list": "a"
+ },
+ "t202": {
+  "tag": "t202",
+  "block": "DsaMqaLogits_v3{N=29,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 1814,
+   "stage_gb": 36.6,
+   "circuit_gib": 8.6,
+   "lean_gb": 38.0
+  },
+  "run": true,
+  "limit_s": 3184,
+  "order": 53,
+  "list": "a"
+ },
+ "t203": {
+  "tag": "t203",
+  "block": "DsaMqaLogits_v3{N=3,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 24,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 242,
+   "stage_gb": 4.0,
+   "circuit_gib": 0.82,
+   "lean_gb": 3.6
+  },
+  "run": true,
+  "limit_s": 900,
+  "order": 6,
+  "list": "b"
+ },
+ "t204": {
+  "tag": "t204",
+  "block": "DsaMqaLogits_v3{N=30,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 26,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 1874,
+   "stage_gb": 37.9,
+   "circuit_gib": 8.9,
+   "lean_gb": 39.3
+  },
+  "run": true,
+  "limit_s": 3600,
+  "order": 1,
+  "list": "c"
+ },
+ "t205": {
+  "tag": "t205",
+  "block": "DsaMqaLogits_v3{N=31,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 1934,
+   "stage_gb": 39.1,
+   "circuit_gib": 9.2,
+   "lean_gb": 40.7
+  },
+  "run": true,
+  "limit_s": 3600,
+  "order": 2,
+  "list": "c"
+ },
+ "t206": {
+  "tag": "t206",
+  "block": "DsaMqaLogits_v3{N=32,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 1995,
+   "stage_gb": 40.4,
+   "circuit_gib": 9.5,
+   "lean_gb": 42.0
+  },
+  "run": true,
+  "limit_s": 3600,
+  "order": 3,
+  "list": "c"
+ },
+ "t207": {
+  "tag": "t207",
+  "block": "DsaMqaLogits_v3{N=33,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 2055,
+   "stage_gb": 41.7,
+   "circuit_gib": 9.8,
+   "lean_gb": 43.3
+  },
+  "run": true,
+  "limit_s": 3600,
+  "order": 4,
+  "list": "c"
+ },
+ "t208": {
+  "tag": "t208",
+  "block": "DsaMqaLogits_v3{N=34,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 2116,
+   "stage_gb": 42.9,
+   "circuit_gib": 10.1,
+   "lean_gb": 44.6
+  },
+  "run": true,
+  "limit_s": 3600,
+  "order": 5,
+  "list": "c"
+ },
+ "t209": {
+  "tag": "t209",
+  "block": "DsaMqaLogits_v3{N=35,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 2176,
+   "stage_gb": 44.2,
+   "circuit_gib": 10.4,
+   "lean_gb": 46.0
+  },
+  "run": true,
+  "limit_s": 3600,
+  "order": 6,
+  "list": "c"
+ },
+ "t210": {
+  "tag": "t210",
+  "block": "DsaMqaLogits_v3{N=36,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 2237,
+   "stage_gb": 45.4,
+   "circuit_gib": 10.7,
+   "lean_gb": 47.3
+  },
+  "run": true,
+  "limit_s": 3600,
+  "order": 7,
+  "list": "c"
+ },
+ "t211": {
+  "tag": "t211",
+  "block": "DsaMqaLogits_v3{N=37,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 2297,
+   "stage_gb": 46.7,
+   "circuit_gib": 11.0,
+   "lean_gb": 48.6
+  },
+  "run": true,
+  "limit_s": 3600,
+  "order": 8,
+  "list": "c"
+ },
+ "t212": {
+  "tag": "t212",
+  "block": "DsaMqaLogits_v3{N=38,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 2357,
+   "stage_gb": 47.9,
+   "circuit_gib": 11.3,
+   "lean_gb": 49.9
+  },
+  "run": true,
+  "limit_s": 3600,
+  "order": 9,
+  "list": "c"
+ },
+ "t213": {
+  "tag": "t213",
+  "block": "DsaMqaLogits_v3{N=39,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 2418,
+   "stage_gb": 49.2,
+   "circuit_gib": 11.6,
+   "lean_gb": 51.3
+  },
+  "run": true,
+  "limit_s": 3600,
+  "order": 10,
+  "list": "c"
+ },
+ "t214": {
+  "tag": "t214",
+  "block": "DsaMqaLogits_v3{N=4,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 24,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 302,
+   "stage_gb": 5.2,
+   "circuit_gib": 1.12,
+   "lean_gb": 4.9
+  },
+  "run": true,
+  "limit_s": 900,
+  "order": 8,
+  "list": "b"
+ },
+ "t215": {
+  "tag": "t215",
+  "block": "DsaMqaLogits_v3{N=40,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 2478,
+   "stage_gb": 50.5,
+   "circuit_gib": 11.9,
+   "lean_gb": 52.6
+  },
+  "run": true,
+  "limit_s": 3600,
+  "order": 11,
+  "list": "c"
+ },
+ "t216": {
+  "tag": "t216",
+  "block": "DsaMqaLogits_v3{N=41,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 2539,
+   "stage_gb": 51.7,
+   "circuit_gib": 12.19,
+   "lean_gb": 53.9
+  },
+  "run": true,
+  "limit_s": 3600,
+  "order": 12,
+  "list": "c"
+ },
+ "t217": {
+  "tag": "t217",
+  "block": "DsaMqaLogits_v3{N=42,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 2599,
+   "stage_gb": 53.0,
+   "circuit_gib": 12.49,
+   "lean_gb": 55.2
+  },
+  "run": true,
+  "limit_s": 3600,
+  "order": 13,
+  "list": "c"
+ },
+ "t218": {
+  "tag": "t218",
+  "block": "DsaMqaLogits_v3{N=43,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 2660,
+   "stage_gb": 54.2,
+   "circuit_gib": 12.79,
+   "lean_gb": 56.5
+  },
+  "run": true,
+  "limit_s": 3600,
+  "order": 14,
+  "list": "c"
+ },
+ "t219": {
+  "tag": "t219",
+  "block": "DsaMqaLogits_v3{N=44,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 2720,
+   "stage_gb": 55.5,
+   "circuit_gib": 13.09,
+   "lean_gb": 57.9
+  },
+  "run": true,
+  "limit_s": 3600,
+  "order": 15,
+  "list": "c"
+ },
+ "t220": {
+  "tag": "t220",
+  "block": "DsaMqaLogits_v3{N=45,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 2781,
+   "stage_gb": 56.7,
+   "circuit_gib": 13.39,
+   "lean_gb": 59.2
+  },
+  "run": true,
+  "limit_s": 3600,
+  "order": 16,
+  "list": "c"
+ },
+ "t221": {
+  "tag": "t221",
+  "block": "DsaMqaLogits_v3{N=46,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 2841,
+   "stage_gb": 58.0,
+   "circuit_gib": 13.69,
+   "lean_gb": 60.5
+  },
+  "run": false,
+  "limit_s": 3600,
+  "order": 75,
+  "list": "a"
+ },
+ "t222": {
+  "tag": "t222",
+  "block": "DsaMqaLogits_v3{N=47,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 2901,
+   "stage_gb": 59.3,
+   "circuit_gib": 13.99,
+   "lean_gb": 61.8
+  },
+  "run": false,
+  "limit_s": 3600,
+  "order": 76,
+  "list": "b"
+ },
+ "t223": {
+  "tag": "t223",
+  "block": "DsaMqaLogits_v3{N=48,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 2962,
+   "stage_gb": 60.5,
+   "circuit_gib": 14.29,
+   "lean_gb": 63.2
+  },
+  "run": false,
+  "limit_s": 3600,
+  "order": 77,
+  "list": "a"
+ },
+ "t224": {
+  "tag": "t224",
+  "block": "DsaMqaLogits_v3{N=49,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 3022,
+   "stage_gb": 61.8,
+   "circuit_gib": 14.59,
+   "lean_gb": 64.5
+  },
+  "run": false,
+  "limit_s": 3600,
+  "order": 78,
+  "list": "b"
+ },
+ "t225": {
+  "tag": "t225",
+  "block": "DsaMqaLogits_v3{N=5,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 24,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 363,
+   "stage_gb": 6.5,
+   "circuit_gib": 1.42,
+   "lean_gb": 6.3
+  },
+  "run": true,
+  "limit_s": 900,
+  "order": 9,
+  "list": "a"
+ },
+ "t226": {
+  "tag": "t226",
+  "block": "DsaMqaLogits_v3{N=50,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 3083,
+   "stage_gb": 63.0,
+   "circuit_gib": 14.89,
+   "lean_gb": 65.8
+  },
+  "run": false,
+  "limit_s": 3600,
+  "order": 79,
+  "list": "a"
+ },
+ "t227": {
+  "tag": "t227",
+  "block": "DsaMqaLogits_v3{N=51,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 3143,
+   "stage_gb": 64.3,
+   "circuit_gib": 15.19,
+   "lean_gb": 67.1
+  },
+  "run": false,
+  "limit_s": 3600,
+  "order": 80,
+  "list": "b"
+ },
+ "t228": {
+  "tag": "t228",
+  "block": "DsaMqaLogits_v3{N=52,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 3204,
+   "stage_gb": 65.5,
+   "circuit_gib": 15.49,
+   "lean_gb": 68.5
+  },
+  "run": false,
+  "limit_s": 3600,
+  "order": 81,
+  "list": "a"
+ },
+ "t229": {
+  "tag": "t229",
+  "block": "DsaMqaLogits_v3{N=53,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 3264,
+   "stage_gb": 66.8,
+   "circuit_gib": 15.79,
+   "lean_gb": 69.8
+  },
+  "run": false,
+  "limit_s": 3600,
+  "order": 82,
+  "list": "b"
+ },
+ "t230": {
+  "tag": "t230",
+  "block": "DsaMqaLogits_v3{N=54,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 3325,
+   "stage_gb": 68.1,
+   "circuit_gib": 16.09,
+   "lean_gb": 71.1
+  },
+  "run": false,
+  "limit_s": 3600,
+  "order": 83,
+  "list": "a"
+ },
+ "t231": {
+  "tag": "t231",
+  "block": "DsaMqaLogits_v3{N=55,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 3385,
+   "stage_gb": 69.3,
+   "circuit_gib": 16.39,
+   "lean_gb": 72.4
+  },
+  "run": false,
+  "limit_s": 3600,
+  "order": 84,
+  "list": "b"
+ },
+ "t232": {
+  "tag": "t232",
+  "block": "DsaMqaLogits_v3{N=56,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 3445,
+   "stage_gb": 70.6,
+   "circuit_gib": 16.69,
+   "lean_gb": 73.7
+  },
+  "run": false,
+  "limit_s": 3600,
+  "order": 85,
+  "list": "a"
+ },
+ "t233": {
+  "tag": "t233",
+  "block": "DsaMqaLogits_v3{N=57,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 3506,
+   "stage_gb": 71.8,
+   "circuit_gib": 16.98,
+   "lean_gb": 75.1
+  },
+  "run": false,
+  "limit_s": 3600,
+  "order": 86,
+  "list": "b"
+ },
+ "t234": {
+  "tag": "t234",
+  "block": "DsaMqaLogits_v3{N=58,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 3566,
+   "stage_gb": 73.1,
+   "circuit_gib": 17.28,
+   "lean_gb": 76.4
+  },
+  "run": false,
+  "limit_s": 3600,
+  "order": 87,
+  "list": "a"
+ },
+ "t235": {
+  "tag": "t235",
+  "block": "DsaMqaLogits_v3{N=59,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 3627,
+   "stage_gb": 74.3,
+   "circuit_gib": 17.58,
+   "lean_gb": 77.7
+  },
+  "run": false,
+  "limit_s": 3600,
+  "order": 88,
+  "list": "b"
+ },
+ "t236": {
+  "tag": "t236",
+  "block": "DsaMqaLogits_v3{N=6,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 24,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 423,
+   "stage_gb": 7.7,
+   "circuit_gib": 1.72,
+   "lean_gb": 7.6
+  },
+  "run": true,
+  "limit_s": 900,
+  "order": 12,
+  "list": "b"
+ },
+ "t237": {
+  "tag": "t237",
+  "block": "DsaMqaLogits_v3{N=60,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 27,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 3687,
+   "stage_gb": 75.6,
+   "circuit_gib": 17.88,
+   "lean_gb": 79.0
+  },
+  "run": false,
+  "limit_s": 3600,
+  "order": 89,
+  "list": "a"
+ },
+ "t238": {
+  "tag": "t238",
+  "block": "DsaMqaLogits_v3{N=7,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 24,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 484,
+   "stage_gb": 9.0,
+   "circuit_gib": 2.02,
+   "lean_gb": 8.9
+  },
+  "run": true,
+  "limit_s": 900,
+  "order": 13,
+  "list": "a"
+ },
+ "t239": {
+  "tag": "t239",
+  "block": "DsaMqaLogits_v3{N=8,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 544,
+   "stage_gb": 10.2,
+   "circuit_gib": 2.32,
+   "lean_gb": 10.2
+  },
+  "run": true,
+  "limit_s": 900,
+  "order": 15,
+  "list": "a"
+ },
+ "t240": {
+  "tag": "t240",
+  "block": "DsaMqaLogits_v3{N=9,H=32,D=128}",
+  "blocks": 168,
+  "k_log": 25,
+  "extra": false,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "DsaMqaLogits_v3 at N=2..18, measured in r20261113-051534-0fa1 and r20261113-051633-810f (17 types), each linear in N",
+   "kind": "inferred",
+   "total_s": 605,
+   "stage_gb": 11.5,
+   "circuit_gib": 2.61,
+   "lean_gb": 11.6
+  },
+  "run": true,
+  "limit_s": 988,
+  "order": 16,
+  "list": "b"
+ },
+ "x01": {
+  "tag": "x01",
+  "block": "RMSNormFusedCudaVector8_v3{N=6144,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},BLOCK=256}",
+  "blocks": null,
+  "k_log": null,
+  "extra": true,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family",
+   "kind": "none"
+  },
+  "run": true,
+  "limit_s": 1800,
+  "order": 17,
+  "list": "e"
+ },
+ "x02": {
+  "tag": "x02",
+  "block": "RMSNormFusedSumSqCudaVector8_v1{N=6144,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},BLOCK=256}",
+  "blocks": null,
+  "k_log": null,
+  "extra": true,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family",
+   "kind": "none"
+  },
+  "run": true,
+  "limit_s": 1800,
+  "order": 16,
+  "list": "e"
+ },
+ "x03": {
+  "tag": "x03",
+  "block": "RMSNormFusedApplyCudaVector8_v1{G=3072}",
+  "blocks": null,
+  "k_log": null,
+  "extra": true,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family",
+   "kind": "none"
+  },
+  "run": true,
+  "limit_s": 1800,
+  "order": 12,
+  "list": "e"
+ },
+ "x04": {
+  "tag": "x04",
+  "block": "RMSNormFusedApplyCudaVector8_v1{G=1536}",
+  "blocks": null,
+  "k_log": null,
+  "extra": true,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family",
+   "kind": "none"
+  },
+  "run": true,
+  "limit_s": 1800,
+  "order": 11,
+  "list": "e"
+ },
+ "x05": {
+  "tag": "x05",
+  "block": "RMSNormFusedApplyCudaVector8_v1{G=768}",
+  "blocks": null,
+  "k_log": null,
+  "extra": true,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family",
+   "kind": "none"
+  },
+  "run": true,
+  "limit_s": 1800,
+  "order": 10,
+  "list": "e"
+ },
+ "x06": {
+  "tag": "x06",
+  "block": "RMSNormFusedApplyCudaVector8_v1{G=384}",
+  "blocks": null,
+  "k_log": null,
+  "extra": true,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family",
+   "kind": "none"
+  },
+  "run": true,
+  "limit_s": 1800,
+  "order": 9,
+  "list": "e"
+ },
+ "x07": {
+  "tag": "x07",
+  "block": "RMSNormFusedApplyCudaVector8_v1{G=192}",
+  "blocks": null,
+  "k_log": null,
+  "extra": true,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family",
+   "kind": "none"
+  },
+  "run": true,
+  "limit_s": 1800,
+  "order": 8,
+  "list": "e"
+ },
+ "x08": {
+  "tag": "x08",
+  "block": "RMSNormFusedApplyCudaVector8_v1{G=96}",
+  "blocks": null,
+  "k_log": null,
+  "extra": true,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family",
+   "kind": "none"
+  },
+  "run": true,
+  "limit_s": 1800,
+  "order": 7,
+  "list": "e"
+ },
+ "x09": {
+  "tag": "x09",
+  "block": "RMSNormFusedApplyCudaVector8_v1{G=48}",
+  "blocks": null,
+  "k_log": null,
+  "extra": true,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family",
+   "kind": "none"
+  },
+  "run": true,
+  "limit_s": 1800,
+  "order": 6,
+  "list": "e"
+ },
+ "x10": {
+  "tag": "x10",
+  "block": "RMSNormFusedApplyCudaVector8_v1{G=24}",
+  "blocks": null,
+  "k_log": null,
+  "extra": true,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family",
+   "kind": "none"
+  },
+  "run": true,
+  "limit_s": 1800,
+  "order": 5,
+  "list": "e"
+ },
+ "x11": {
+  "tag": "x11",
+  "block": "RMSNormFusedApplyCudaVector8_v1{G=12}",
+  "blocks": null,
+  "k_log": null,
+  "extra": true,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family",
+   "kind": "none"
+  },
+  "run": true,
+  "limit_s": 1800,
+  "order": 4,
+  "list": "e"
+ },
+ "x12": {
+  "tag": "x12",
+  "block": "RMSNormFusedApplyCudaVector8_v1{G=6}",
+  "blocks": null,
+  "k_log": null,
+  "extra": true,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family",
+   "kind": "none"
+  },
+  "run": true,
+  "limit_s": 1800,
+  "order": 3,
+  "list": "e"
+ },
+ "x13": {
+  "tag": "x13",
+  "block": "RMSNormFusedApplyCudaVector8_v1{G=3}",
+  "blocks": null,
+  "k_log": null,
+  "extra": true,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family",
+   "kind": "none"
+  },
+  "run": true,
+  "limit_s": 1800,
+  "order": 2,
+  "list": "e"
+ },
+ "x14": {
+  "tag": "x14",
+  "block": "DsaLatentRow_v1{KVL=512,R=64,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}",
+  "blocks": null,
+  "k_log": null,
+  "extra": true,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family",
+   "kind": "none"
+  },
+  "run": true,
+  "limit_s": 1800,
+  "order": 15,
+  "list": "e"
+ },
+ "x15": {
+  "tag": "x15",
+  "block": "AllGather_v1{WORLD=8,N=19360}",
+  "blocks": null,
+  "k_log": null,
+  "extra": true,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family",
+   "kind": "none"
+  },
+  "run": true,
+  "limit_s": 1800,
+  "order": 14,
+  "list": "e"
+ },
+ "x16": {
+  "tag": "x16",
+  "block": "AllGather_v1{WORLD=1,N=19360}",
+  "blocks": null,
+  "k_log": null,
+  "extra": true,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family",
+   "kind": "none"
+  },
+  "run": true,
+  "limit_s": 1800,
+  "order": 13,
+  "list": "e"
+ },
+ "x17": {
+  "tag": "x17",
+  "block": "TokenSelect_v4{V=154880}",
+  "blocks": null,
+  "k_log": null,
+  "extra": true,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family",
+   "kind": "none"
+  },
+  "run": true,
+  "limit_s": 1800,
+  "order": 18,
+  "list": "e"
+ },
+ "x18": {
+  "tag": "x18",
+  "block": "StopCheck_v1{T=32,STOP=[],MAX_TOKENS=32,PROMPT_LEN=256,MAX_MODEL_LEN=4096,FINISH=2}",
+  "blocks": null,
+  "k_log": null,
+  "extra": true,
+  "v3": [
+   "not-run",
+   "not-reached"
+  ],
+  "estimate": {
+   "basis": "no measurement of this family",
+   "kind": "none"
+  },
+  "run": true,
+  "limit_s": 1800,
+  "order": 1,
+  "list": "e"
+ },
+ "_split": {
+  "at_s": 9300,
+  "runs": {
+   "a": "r20261113-051534-0fa1",
+   "b": "r20261113-051633-810f"
+  },
+  "reach": {
+   "a": {
+    "ended": [
+     "t124",
+     "t125",
+     "t146",
+     "t163",
+     "t165",
+     "t166",
+     "t167",
+     "t183",
+     "t184",
+     "t186",
+     "t187",
+     "t190",
+     "t225",
+     "t238",
+     "t239"
+    ],
+    "may_reach": [
+     "t191",
+     "t193",
+     "t195",
+     "t197",
+     "t169",
+     "t199",
+     "t201",
+     "t172",
+     "t174",
+     "t176"
+    ],
+    "beyond": [
+     "t178",
+     "t202",
+     "t204",
+     "t205",
+     "t206",
+     "t108",
+     "t109",
+     "t210",
+     "t212",
+     "t215",
+     "t217",
+     "t219",
+     "t221",
+     "t223",
+     "t226",
+     "t228",
+     "t230",
+     "t232",
+     "t234",
+     "t237",
+     "x13",
+     "x11",
+     "x09",
+     "x07",
+     "x05",
+     "x03",
+     "x15",
+     "x02",
+     "x17"
+    ]
+   },
+   "b": {
+    "ended": [
+     "t126",
+     "t135",
+     "t157",
+     "t162",
+     "t180",
+     "t182",
+     "t185",
+     "t188",
+     "t189",
+     "t192",
+     "t203",
+     "t214",
+     "t236",
+     "t240"
+    ],
+    "may_reach": [
+     "t164",
+     "t168",
+     "t194",
+     "t196",
+     "t198",
+     "t181",
+     "t200",
+     "t171",
+     "t173",
+     "t175",
+     "t177"
+    ],
+    "beyond": [
+     "t179",
+     "t105",
+     "t106",
+     "t107",
+     "t207",
+     "t208",
+     "t209",
+     "t211",
+     "t213",
+     "t216",
+     "t218",
+     "t220",
+     "t222",
+     "t224",
+     "t227",
+     "t229",
+     "t231",
+     "t233",
+     "t235",
+     "x18",
+     "x12",
+     "x10",
+     "x08",
+     "x06",
+     "x04",
+     "x16",
+     "x14",
+     "x01"
+    ]
+   }
+  },
+  "dsa_fit": {
+   "points": [
+    [
+     14,
+     901,
+     17.852153778076172,
+     4.111281701363623,
+     "r20261113-051534-0fa1",
+     "t186"
+    ],
+    [
+     11,
+     721,
+     14.293529510498047,
+     3.1724733896553516,
+     "r20261113-051534-0fa1",
+     "t183"
+    ],
+    [
+     15,
+     960,
+     19.03753662109375,
+     4.424217169173062,
+     "r20261113-051534-0fa1",
+     "t187"
+    ],
+    [
+     7,
+     460,
+     8.97589111328125,
+     1.9873849721625447,
+     "r20261113-051534-0fa1",
+     "t238"
+    ],
+    [
+     5,
+     330,
+     6.447235107421875,
+     1.4268163042142987,
+     "r20261113-051534-0fa1",
+     "t225"
+    ],
+    [
+     18,
+     1190,
+     22.60921859741211,
+     5.363027390092611,
+     "r20261113-051534-0fa1",
+     "t190"
+    ],
+    [
+     8,
+     530,
+     10.15621566772461,
+     2.267668830230832,
+     "r20261113-051534-0fa1",
+     "t239"
+    ],
+    [
+     12,
+     781,
+     15.481575012207031,
+     3.485408858396113,
+     "r20261113-051534-0fa1",
+     "t184"
+    ],
+    [
+     3,
+     290,
+     3.9437255859375,
+     0.8662471575662494,
+     "r20261113-051633-810f",
+     "t203"
+    ],
+    [
+     4,
+     311,
+     5.127021789550781,
+     1.1465314915403724,
+     "r20261113-051633-810f",
+     "t214"
+    ],
+    [
+     2,
+     200,
+     2.614299774169922,
+     0.5859633022919297,
+     "r20261113-051633-810f",
+     "t192"
+    ],
+    [
+     6,
+     421,
+     7.790138244628906,
+     1.7071001613512635,
+     "r20261113-051633-810f",
+     "t236"
+    ],
+    [
+     13,
+     801,
+     16.66991424560547,
+     3.7983462335541844,
+     "r20261113-051633-810f",
+     "t185"
+    ],
+    [
+     9,
+     610,
+     11.35042953491211,
+     2.5479545947164297,
+     "r20261113-051633-810f",
+     "t240"
+    ],
+    [
+     16,
+     1050,
+     20.228527069091797,
+     4.737152639776468,
+     "r20261113-051633-810f",
+     "t188"
+    ],
+    [
+     10,
+     661,
+     12.785507202148438,
+     2.859537921845913,
+     "r20261113-051633-810f",
+     "t182"
+    ],
+    [
+     17,
+     1090,
+     21.419578552246094,
+     5.05009001493454,
+     "r20261113-051633-810f",
+     "t189"
+    ]
+   ],
+   "total_s": [
+    60.70588235294122,
+    60.44117647058823
+   ],
+   "stage_gb": [
+    0.1839015437107463,
+    1.2568010068407245
+   ],
+   "circuit_gib": [
+    -0.07976636261788794,
+    0.2993719429257052
+   ]
+  }
+ }
+}

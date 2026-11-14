@@ -1,0 +1,2 @@
+t019	census:SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	9000
+t032	census:Fp8GroupQuantUe8m0_v1{K=6144,G=128}	1	session	6000

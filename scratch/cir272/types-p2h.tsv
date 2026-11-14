@@ -1,0 +1,5 @@
+t116	census:SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=24,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	4500
+t118	census:SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=26,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	4500
+t099	census:FlashInferFp8Quant1x128_v1{K=2048}	1	session	4500
+t120	census:SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=28,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	4500
+t032	census:Fp8GroupQuantUe8m0_v1{K=6144,G=128}	1	session	6000
