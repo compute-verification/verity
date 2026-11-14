@@ -37,6 +37,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from verity.commitments.crypto import lms
 from verity.protocols.accounting.certifier.verifier import active
 from verity.protocols.accounting.certifier.verifier.certificate import Issuer
 from verity.protocols.accounting.certifier.verifier.release import release_of
@@ -308,9 +309,9 @@ def test_the_gates_keys_height_reaches_rehearse_and_a_key_above_this_files_is_ma
     plain = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": None}, tmp_path, "u")[2:])
     given = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": None, "height": 10}, tmp_path,
                                                        "u")[2:])
-    assert (plain.height, given.height) == (cs.lms.DEPLOYED.H, 10) and cs.KEYGEN_WORKERS == 8
-    keygen, workers = cs.lms.keygen, []
-    monkeypatch.setattr(cs.lms, "keygen", lambda params, seed, workers=1, seen=workers: (
+    assert (plain.height, given.height) == (lms.DEPLOYED.H, 10) and cs.KEYGEN_WORKERS == 8
+    keygen, workers = lms.keygen, []
+    monkeypatch.setattr(lms, "keygen", lambda params, seed, workers=1, seen=workers: (
         seen.append((params.H, workers)), keygen(params, seed, workers))[1])
     for h in (cs.HEIGHT, cs.HEIGHT + 1):
         made = cs.load_key(tmp_path / f"h{h}", h)

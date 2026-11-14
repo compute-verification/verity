@@ -8,6 +8,7 @@ certifier's process, moves no tick in `serve`'s publisher process."""
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import dataclasses
 import importlib.util
@@ -55,6 +56,70 @@ ws = _load()
 
 async def _no_sleep(_: float) -> None:
     pass
+
+
+#: what the relay's runner still imports from the older form's files, by the file: the certificate's JSON and the
+#: endpoint's model from the older runner, a record's bytes on disk and its process's runtime and usage from its replay,
+#: and the id request's writer from the older form's protocol file. Each leaves its file in a change of its own, so this
+#: only shrinks.
+OLDER_FORM_READS = {"certifier_serve": {"certified_from_json", "certified_json", "served_model"},
+                    "active_replay": {"_quiet_runtime", "_usage", "pack_record", "unpack_record"},
+                    "active": {"id_request"}}
+#: what a file beside the runner still imports from them, by the file and the older file: the rows' run the id
+#: request's writer, as the runner does. It only shrinks.
+BESIDE_READS = {("connection_rows_run.py", "active"): {"id_request"}}
+
+
+def _imports(path: Path) -> dict[Path, set[str]]:
+    """{a file of the tree: the names `path` imports from it, "*" for the module itself}, the module named bare beside
+    `path` or dotted from the root, the imports inside `path`'s functions included."""
+    def file(module: str) -> Path | None:
+        beside, rooted = path.with_name(f"{module}.py"), ROOT.joinpath(*module.split(".")).with_suffix(".py")
+        return beside if beside.is_file() else rooted if rooted.is_file() else None
+
+    out: dict[Path, set[str]] = {}
+    for node in ast.walk(ast.parse(path.read_text())):
+        if isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            if f := file(node.module):
+                out.setdefault(f, set()).update(a.name for a in node.names)
+            for a in node.names:
+                if f := file(f"{node.module}.{a.name}"):
+                    out.setdefault(f, set()).add("*")
+        elif isinstance(node, ast.Import):
+            for a in node.names:
+                if f := file(a.name):
+                    out.setdefault(f, set()).add("*")
+    return out
+
+
+def test_the_relays_runner_imports_from_the_older_forms_files_only_what_is_listed():
+    """A file of the relay's runner is the runner's own or a file beside it that it reaches by its imports, the two
+    older runners left out. Of the older runners and the older form's protocol file, the runner imports
+    `OLDER_FORM_READS`, a file beside it `BESIDE_READS`, and no more, so once both are empty the older form can go
+    without the relay; and neither list names what its file no longer imports."""
+    runner = Path(ws.__file__)
+    older = {runner.with_name("certifier_serve.py"), runner.with_name("active_replay.py"),
+             ROOT.joinpath(*WR.__package__.split("."), "active.py")}
+    assert all(f.is_file() for f in older) and {f.stem for f in older} == set(OLDER_FORM_READS), older
+    files: dict[Path, dict[Path, set[str]]] = {}
+    todo = [runner]
+    while todo:
+        if (path := todo.pop()) not in files:
+            files[path] = _imports(path)
+            todo += [f for f in files[path] if f.parent == runner.parent and f not in older]
+    assert len(files) > 4, sorted(p.name for p in files)
+    found = {(p.name, f.stem): names for p, imports in files.items() for f, names in imports.items() if f in older}
+    more = {k: sorted(names - (OLDER_FORM_READS[k[1]] if k[0] == runner.name else BESIDE_READS.get(k, set())))
+            for k, names in found.items()}
+    assert not any(more.values()), (
+        "\n".join(f"{f} imports {', '.join(names)} from {m}.py" for (f, m), names in sorted(more.items()) if names)
+        + f"\nA file of the relay reads nothing of the older form's files. Move the definition to a module of the relay's "
+          f"own, or to one named for what it holds, beside {runner.name} (a definition of the protocol's: beside the "
+          f"relay's protocol file), and have the older form's file import it from there, so that it keeps one definition.")
+    stale = {m: sorted(gone) for m, names in OLDER_FORM_READS.items() if (gone := names - found.get((runner.name, m), set()))}
+    stale |= {k: sorted(gone) for k, names in BESIDE_READS.items() if (gone := names - found.get(k, set()))}
+    assert not stale, (f"OLDER_FORM_READS or BESIDE_READS lists what its file no longer imports from the older form's "
+                       f"files: {stale}. Delete it from the list, which only shrinks.")
 
 
 def test_varied_traffic_is_fixed_by_its_seed_and_varies():
@@ -496,7 +561,7 @@ def test_the_fake_endpoint_answers_a_request_as_vllm_streams_it():
         server = await asyncio.start_server(lambda r, w: ws.fake_endpoint(r, w, sleep=_no_sleep), "127.0.0.1", 0)
         port = server.sockets[0].getsockname()[1]
         try:
-            return await asyncio.to_thread(ws.cs.served_model, f"http://127.0.0.1:{port}")
+            return await asyncio.to_thread(ws.served_model, f"http://127.0.0.1:{port}")
         finally:
             server.close()
 
@@ -662,13 +727,13 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
     if process:
         import warden_serve  # by name, so that the spawned process finds its functions
 
-        ws.cs.load_key(key, height)
+        ws.ck.load_key(key, height)
         publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads)
         hooks = {"publish": publisher, "withhold": publisher.withhold, "release": publisher.release,
                  "lengths": publisher.lengths}
         public = publisher.key
     else:
-        signer = ws.cs.signer(key, height)
+        signer = ws.ck.signer(key, height)
         issuer = ws.Issuer(signer, SESSION)
         publisher = ws.Publisher(out, issuer, params, commit or WR.Cells.of)
         hooks, public = {"publish": publisher, "withhold": publisher.withhold,
@@ -785,19 +850,19 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
         frames[k] = frames[k][:-1] + bytes([frames[k][-1] ^ 1])
         grid = record.grid[:row] + (tuple(frames),) + record.grid[row + 1:]
         (out / "responses.records").unlink()
-        ws.ar.write_blobs(out / "responses.records", ws.ar.pack_record(ws.replace(record, grid=grid)))
+        ws.bf.write_blobs(out / "responses.records", ws.pack_record(ws.replace(record, grid=grid)))
 
     problems = refused(flip_record)
     assert "responses window 0 isn't certified" in problems and "responses window 0's cells aren't registered" in problems
 
     def edit_cells(change) -> None:
         lines = [json.loads(x) for x in (out / "cells.jsonl").read_text().splitlines()]
-        salts = ws.ar.read_blobs(out / "cells.salts")
+        salts = ws.bf.read_blobs(out / "cells.salts")
         change(lines, salts)
         (out / "cells.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines))
         (out / "cells.salts").unlink()
         for blob in salts:
-            ws.ar.write_blobs(out / "cells.salts", blob)
+            ws.bf.write_blobs(out / "cells.salts", blob)
 
     def other_root(lines, salts) -> None:
         lines[1]["registration"]["root"] = "00" * 64
@@ -815,7 +880,7 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
         (record,) = ws.read_records(out, PARAMS)["fails"]
         grid = ((reason_frame(0, "late", PARAMS.cell_bytes),) + record.grid[0][1:],) + record.grid[1:]
         (out / "fails.records").unlink()
-        ws.ar.write_blobs(out / "fails.records", ws.ar.pack_record(ws.replace(record, grid=grid)))
+        ws.bf.write_blobs(out / "fails.records", ws.pack_record(ws.replace(record, grid=grid)))
 
     assert "fails window 0 isn't certified" in refused(forge_reason)
 
@@ -849,7 +914,7 @@ def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, proce
     certified = [json.loads(x) for x in (out / "certified.jsonl").read_text().splitlines()]
     cells_ = [json.loads(x) for x in (out / "cells.jsonl").read_text().splitlines()]
     assert [(x["refused"][2], x["withheld"]) for x in certified if "refused" in x] == [(0, True)] * 3
-    assert [ws.cs.certified_from_json(x).window for x in certified if "refused" not in x] == [1] * 3
+    assert [ws.certified_from_json(x).window for x in certified if "refused" not in x] == [1] * 3
     assert [("refused" in x, x.get("withheld")) for x in cells_] == [(True, True)] * 2 + [(False, None)] * 2
     result = ws.check(out)
     s = result["summary"]
@@ -1028,7 +1093,7 @@ def test_serve_through_its_command_line_serves_on_the_socket_its_descriptor_name
     serve, kw = started.value.args
     assert kw["pass_fds"] == (args.listen_fd,)
 
-    public, got = ws.cs.signer(tmp_path / "key", 4).public_key(), []
+    public, got = ws.ck.signer(tmp_path / "key", 4).public_key(), []
 
     class Publisher:
         """`PublisherProcess` with no process: the key's public half, and nothing published."""
@@ -1069,7 +1134,7 @@ def test_serve_through_its_command_line_serves_on_the_socket_its_descriptor_name
     monkeypatch.setattr(ws, "Warden", Relay)
     monkeypatch.setattr(ws, "prepare_process", lambda params: {})
     monkeypatch.setattr(ws, "stall_probe", types.SimpleNamespace(start=lambda *a: None, stop=lambda *a: None))
-    monkeypatch.setattr(ws.ar, "_quiet_runtime", lambda: None)
+    monkeypatch.setattr(ws, "_quiet_runtime", lambda: None)
     for name in ("PYTHONMALLOC", ws.C_ALLOCATOR):
         monkeypatch.delenv(name, raising=False)
     early = socket.create_connection(held.getsockname())

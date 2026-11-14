@@ -77,14 +77,15 @@ from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 
-import active_replay as ar
-import certifier_serve as cs
+import blob_files as bf
+import certifier_key as ck
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import VirtualClock, id_request
+from verity.protocols.accounting.certifier.verifier.active import id_request
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer
 from verity.protocols.accounting.certifier.verifier.grid import BlockGrid
+from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.certifier.verifier.warden import LENGTHS_FORMS, Released, Warden, WardenParams, _Connection
 
 #: the publisher queue's name for a hand's items, where a record's rows have their link's
@@ -178,7 +179,7 @@ class Keeper:
             cert = CR.attest_no_head(self.issuer, self.link, window, self.params)
             line = ({"refused": [self.link, Direction.EGRESS.value, window]} if cert is None
                     else {NO_HEAD: CR.no_head(cert, self.params)})
-            ar.write_blobs(self.out / SALTS, b"")
+            bf.write_blobs(self.out / SALTS, b"")
             with open(self.out / ROWS, "a") as fh:
                 fh.write(json.dumps(line | {"cost": {"sign_ms": round((time.perf_counter() - t0) * 1000, 3)}}) + "\n")
             return
@@ -196,7 +197,7 @@ class Keeper:
                 "sign_ms": round((t3 - t2) * 1000, 3)}
         line = ({"refused": [self.link, Direction.EGRESS.value, window]} if cert is None
                 else {"registration": CR.registration(head, cert, self.params)})
-        ar.write_blobs(self.out / SALTS, rows.witness)
+        bf.write_blobs(self.out / SALTS, rows.witness)
         with open(self.out / ROWS, "a") as fh:
             fh.write(json.dumps(line | {"cost": cost}) + "\n")
 
@@ -210,7 +211,7 @@ def read(run: Path, params: WardenParams) -> list[tuple[dict, dict[str, list[byt
     line's registration gives the table, and there a line without a registration has no salts read."""
     path = run / ROWS
     lines = [json.loads(x) for x in path.read_text().splitlines()] if path.exists() else []
-    blobs = ar.read_blobs(run / SALTS)
+    blobs = bf.read_blobs(run / SALTS)
     listed = [(name, rows) for name, rows, _ in CR.tables_of(params)]
     size = WR.SALT_BYTES * sum(rows for _, rows in listed)
     counted = CT.counted(params) and params.content is not None
@@ -267,7 +268,7 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
     schedule without lengths rows."""
     if params.lengths is None:
         return None, []
-    key, session, windows = cs.read_public(dep["key"]), bytes.fromhex(dep["session"]), dep["windows"]
+    key, session, windows = ck.read_public(dep["key"]), bytes.fromhex(dep["session"]), dep["windows"]
     kept_records = run / "certified.jsonl"
     withheld = {doc["refused"][2] for doc in map(json.loads, kept_records.read_text().splitlines())
                 if doc.get("withheld")} if kept_records.exists() else set()
@@ -422,7 +423,7 @@ def cost(params: WardenParams, load: str, phases: int, height: int) -> dict:
     with tempfile.TemporaryDirectory(prefix="connection-rows-cost-") as scratch:
         out, key = Path(scratch) / "run", Path(scratch) / "key"
         out.mkdir()
-        cs.load_key(key, height)
+        ck.load_key(key, height)
         publish = ws.PublisherProcess(out, key, bytes(32), params)
         try:
             for phase in range(phases):
@@ -469,7 +470,7 @@ def parser() -> argparse.ArgumentParser:
                         "(egress_cells − 1), and each release's request is a canonical id request")
     c.add_argument("--load", choices=("grid", "rows"), default="grid")
     c.add_argument("--phases", type=int, default=5)
-    c.add_argument("--height", type=int, default=cs.HEIGHT, help="the LMS key's tree height")
+    c.add_argument("--height", type=int, default=ck.HEIGHT, help="the LMS key's tree height")
     for name, default in (("cell_bytes", 512), ("slots", 8), ("lanes", 16), ("window", 600), ("every", 1),
                           ("delay", 30), ("ingress_cells", 96), ("egress_cells", 4097)):
         c.add_argument(f"--{name.replace('_', '-')}", type=int, default=default)

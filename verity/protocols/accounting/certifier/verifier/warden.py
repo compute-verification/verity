@@ -10,7 +10,7 @@ the server's copy, and, with `watermark`, a stream that tells the server each bu
 decides is the framing and the timing, both public functions of the schedule (`WardenParams`), and it certifies every
 cell it sends with the certifier's grid (`grid.Certifier`) and certificates (`certificate.Issuer`, in the runner).
 
-**Cells.** Every cell is B = `cell_bytes` bytes, `active.encode_frame(kind, ordinal, payload)`: the header (kind u8,
+**Cells.** Every cell is B = `cell_bytes` bytes, `link_frame.encode_frame(kind, ordinal, payload)`: the header (kind u8,
 the connection's ordinal u32, the payload's length u32), at most P = B − 9 payload bytes, zero fill. `DATA` carries
 exactly P bytes, `END` the last 0 … P of a direction, `PAD` none (marked padding), `FAIL` none (the connection failed
 closed, for whatever reason), and `REFUSED` none (a connection the network certifier doesn't take). Both directions are
@@ -61,7 +61,7 @@ parameters' digest is no id form's, and the period check reads only the id form'
 **The response cap** (`WardenParams.max_tokens_cap`, none by default): a schedule may register a cap on every response,
 in the id egress form, where a response's tokens are its `DATA` cells, one id event each. The network certifier then
 reads each request's `max_tokens` from its first request cell, where `active.id_request` puts it
-(`active.id_request_max_tokens`), before cutting that cell. A request whose field isn't there as a u32 or exceeds the cap
+(`id_form.id_request_max_tokens`), before cutting that cell. A request whose field isn't there as a u32 or exceeds the cap
 is refused (cap), never clamped: none of its bytes is cut into a cell or reaches the server, its ingress is padding, and
 it fails at once, as the client's other problems do. Every other request's response is held to its `max_tokens`: an
 egress slot past that many `DATA` cells, with a whole cell waiting, fails (limit), so each response the client receives
@@ -216,12 +216,13 @@ from functools import cached_property
 from typing import Any, NamedTuple
 
 from verity.commitments.identity import canonical_json_bytes, tagged_sha512
-from verity.protocols.accounting.certifier.verifier.active import (DATA, HEADER, ID_DIGITS, MAX_TOKENS_AT, PAD, RUN_ID_BYTES,
-                                                   decode_frame, encode_frame, id_request_max_tokens, precise_sleep)
+from verity.protocols.accounting.certifier.verifier.active import precise_sleep
 from verity.protocols.accounting.certifier.verifier.grid import Certifier, GridParams, Reason, BlockGrid, Row, Status, row_count
+from verity.protocols.accounting.certifier.verifier.id_form import ID_DIGITS, MAX_TOKENS_AT, id_request_max_tokens
 from verity.protocols.accounting.certifier.verifier.io_tie import parse_cell
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD, decode_frame, encode_frame
 from verity.protocols.accounting.certifier.verifier.pacer import Pacer, Report
-from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
+from verity.protocols.accounting.certifier.verifier.release import RUN_ID_BYTES, WATERMARK_END, watermark_chunk, watermark_head, with_release
 from verity.protocols.accounting.certifier.verifier.release import one_request, to_watermark
 
 PARAMETERS_TAG = "verity-network-warden/parameters/v3"

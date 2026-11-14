@@ -448,7 +448,7 @@ def record_counts(run: Path) -> dict:
     params = WardenParams(**dep["params"])
     run_id = bytes.fromhex(dep["run_id"]) if dep.get("run_id") else None
     records = ws.read_records(run, params)
-    key, session = ws.cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    key, session = ws.ck.read_public(dep["key"]), bytes.fromhex(dep["session"])
     certified, _ = ws.read_certified(run / "certified.jsonl")
     windows = 0
     for name, (link, direction) in ws.CERTIFIED.items():

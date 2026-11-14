@@ -115,7 +115,7 @@ def links(run: Path, n: int) -> dict[str, SimpleNamespace]:
     unit's cell at, and how many of those cells hold the server's bytes (`data_units`, reported, never read to choose)."""
     dep = json.loads((run / "deployment.json").read_text())
     params = WardenParams(**dep["params"])
-    key, session = ws.cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    key, session = ws.ck.read_public(dep["key"]), bytes.fromhex(dep["session"])
     records = ws.read_records(run, params)
     cells = {(d["registration"]["direction"], d["registration"]["window"]): (d["registration"], salts, wiring_salt)
              for d, salts, wiring_salt in ws.read_cells(run) if "registration" in d}

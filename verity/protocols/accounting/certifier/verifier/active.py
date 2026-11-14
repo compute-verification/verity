@@ -177,8 +177,6 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
-import heapq
-import itertools
 import json
 import math
 import multiprocessing
@@ -208,23 +206,34 @@ from verity.protocols.accounting.certifier.verifier.grid import (
     Status,
     row_count,
 )
+from verity.protocols.accounting.certifier.verifier.id_form import (  # noqa: F401 - re-exported
+    EVENT_END,
+    EVENT_HEAD,
+    ID_BODY_AT,
+    ID_DIGITS,
+    ID_FIELD_BYTES,
+    ID_NAME_BYTES,
+    ID_REQUEST_HEAD,
+    MAX_TOKENS_AT,
+    MAX_TOKENS_KEY,
+    id_request_max_tokens,
+    u32_field,
+)
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD, SALT, decode_frame, encode_frame  # noqa: F401 - re-exported
 from verity.protocols.accounting.certifier.verifier.online import Prover, Refused
 from verity.protocols.accounting.certifier.verifier.pacer import Pacer, Report
+from verity.protocols.accounting.certifier.verifier.release import RUN_ID_BYTES
+from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock  # noqa: F401 - re-exported
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, LogicalFrame, SyncSet, eligible
 from verity.protocols.accounting.certifier.verifier.served import Admission, ServedProfile, admits
 from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 from verity.protocols.proofs.spot.verifier.service import WindowCommitmentRecord
 
-HEADER = struct.Struct(">BII")
-PAD, DATA, SALT = 0, 1, 3
 #: the kind of the header that opens a stream's server connection under `Proxy(ordinals=True)`; never on a link
 ORDINAL = 4
-EVENT_END = b"\n\n"
 CANONICAL_STREAM = 0
 TOKEN_BYTES = 64
 EVENT_TEXT = 4 * -(-TOKEN_BYTES // 3)
-EVENT_HEAD = (b'data: {"object":"chat.completion.chunk","created":0,"model":"verity","choices":[{"index":0,'
-              b'"delta":{"base64":"')
 EVENT_TAIL = b'"},"finish_reason":null}]}' + EVENT_END
 EVENT_BYTES = len(EVENT_HEAD) + EVENT_TEXT + len(EVENT_TAIL)
 LENGTH = struct.Struct(">I")
@@ -249,8 +258,6 @@ def weights_message(link: str, window: int, root: bytes, context: bytes = b"") -
 REVEAL_REQUEST_TAG = "verity-network-certifier/reveal-request/v1"
 REVEAL_RESPONSE_TAG = "verity-network-certifier/reveal-response/v1"
 SALT_KIND, WEIGHTS_KIND = b"salt", b"weights"
-#: a proxy's run id, sampled at its construction (`Proxy.run_id`)
-RUN_ID_BYTES = 32
 #: the longest request or answer line `serve_reveals` and `CertifierClient` read: a deployed LMS signature is 34,756
 #: bytes, twice that in hex, beside a registration
 REVEAL_LINE_BYTES = 1 << 20
@@ -326,19 +333,6 @@ class Revealed:
         return isinstance(self.signature, bytes) and key.verify(message, self.signature)
 
 
-def encode_frame(kind: int, stream: int, payload: bytes, frame_bytes: int) -> bytes:
-    """One B-byte link frame: the header, the payload, then zero fill."""
-    if HEADER.size + len(payload) > frame_bytes:
-        raise ValueError(f"a {len(payload)}-byte payload doesn't fit a {frame_bytes}-byte frame")
-    return HEADER.pack(kind, stream, len(payload)) + payload + bytes(frame_bytes - HEADER.size - len(payload))
-
-
-def decode_frame(frame: bytes) -> tuple[int, int, bytes]:
-    """(kind, stream, payload) of a link frame; padding is (`PAD`, 0, b"")."""
-    kind, stream, n = HEADER.unpack_from(frame)
-    return kind, stream, bytes(frame[HEADER.size : HEADER.size + n])
-
-
 def event(data: bytes) -> bytes:
     """The canonical event of at most `TOKEN_BYTES` bytes: `EVENT_HEAD`, their base64 padded with NUL to `EVENT_TEXT`
     characters, `EVENT_TAIL`; `EVENT_BYTES` long whatever the data."""
@@ -364,7 +358,6 @@ def event_data(body: bytes) -> bytes | None:
     return data if len(data) <= TOKEN_BYTES and event(data) == body else None
 
 
-ID_DIGITS = 10
 ID_EVENT_HEAD = EVENT_HEAD[: EVENT_HEAD.index(b'"delta"')] + b'"request":'
 ID_EVENT_MID = b',"token_id":'
 ID_EVENT_TAIL = b',"finish_reason":null}]}' + EVENT_END
@@ -515,40 +508,6 @@ def compact_placement(frame_bytes: int) -> tuple[int, int, bytes, bytes]:
     if frame_bytes < COMPACT_RECORD.size:
         raise ValueError(f"a {frame_bytes}-byte frame has no room for a compact record")
     return 0, COMPACT_RECORD.size, b"", b""
-
-
-#: an id request's HTTP head, up to its length (`id_request`)
-ID_REQUEST_HEAD = (b"POST /v1/completions HTTP/1.1\r\nhost: server\r\ncontent-type: application/json\r\n"
-                   b"content-length:")
-#: the room of an id request's `model` and `user`, each its JSON string padded with spaces
-ID_NAME_BYTES = 64
-#: a prompt id's place in an id request: `[` or `,`, then the id in `ID_DIGITS` characters
-ID_FIELD_BYTES = 1 + ID_DIGITS
-#: the body's offset in an id request at offset 0: `ID_REQUEST_HEAD`, the content-length in `ID_DIGITS`, CRLF CRLF
-ID_BODY_AT = len(ID_REQUEST_HEAD) + ID_DIGITS + 4
-#: the body's first field, `max_tokens`, its value in `ID_DIGITS` characters at `MAX_TOKENS_AT`
-MAX_TOKENS_KEY = b'{"max_tokens":'
-MAX_TOKENS_AT = ID_BODY_AT + len(MAX_TOKENS_KEY)
-
-
-def u32_field(field: bytes) -> int | None:
-    """The u32 an id request's `ID_DIGITS` characters hold as `_u32_field` writes one (spaces, then decimal digits
-    without a leading zero, below 2^32), or None for any other bytes."""
-    s = field.lstrip(b" ")
-    if len(field) == ID_DIGITS and s.isdigit() and (s == b"0" or s[:1] != b"0") and int(s) < 1 << 32:
-        return int(s)
-    return None
-
-
-def id_request_max_tokens(head: bytes) -> int | None:
-    """The `max_tokens` of an id request at offset 0 (the network certifier's cells), read from its first bytes at the
-    place `id_request` fixes for it: `ID_REQUEST_HEAD`, a u32 content-length, CRLF CRLF and `MAX_TOKENS_KEY`, then the
-    u32; None where any of them isn't there."""
-    if head[:len(ID_REQUEST_HEAD)] != ID_REQUEST_HEAD or \
-            u32_field(head[len(ID_REQUEST_HEAD):len(ID_REQUEST_HEAD) + ID_DIGITS]) is None or \
-            head[ID_BODY_AT - 4:MAX_TOKENS_AT] != b"\r\n\r\n" + MAX_TOKENS_KEY:
-        return None
-    return u32_field(head[MAX_TOKENS_AT:MAX_TOKENS_AT + ID_DIGITS])
 
 
 def _ratio_field(x: float, what: str) -> bytes:
@@ -1080,34 +1039,6 @@ async def precise_sleep(delay: float) -> None:
     caller injects one. An injected sleep (a `VirtualClock`, the device difftest's harness) gets one wait a tick."""
     loop = asyncio.get_running_loop()
     await wait_until(loop.time() + delay, loop.time)
-
-
-class VirtualClock:
-    """A clock its caller moves, for runs driven event by event (tests, and replays without the host's timer):
-    `clock()` reads it, `sleep` waits until `advance` passes the deadline."""
-
-    def __init__(self, now: float = 0.0) -> None:
-        self.now = now
-        self._waiters: list[tuple[float, int, asyncio.Future]] = []
-        self._seq = itertools.count()
-
-    def __call__(self) -> float:
-        return self.now
-
-    async def sleep(self, delay: float) -> None:
-        if delay <= 0:
-            await asyncio.sleep(0)
-            return
-        future = asyncio.get_running_loop().create_future()
-        heapq.heappush(self._waiters, (self.now + delay, next(self._seq), future))
-        await future
-
-    def advance(self, to: float) -> None:
-        self.now = max(self.now, to)
-        while self._waiters and self._waiters[0][0] <= self.now:
-            future = heapq.heappop(self._waiters)[2]
-            if not future.done():
-                future.set_result(None)
 
 
 @dataclass

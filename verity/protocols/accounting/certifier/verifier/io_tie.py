@@ -79,7 +79,8 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import _PAD, CommitmentDomain, frame_hash, _uint
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.protocols.accounting.certifier.verifier import head_check as HC
-from verity.protocols.accounting.certifier.verifier.active import DATA, EVENT_END, EVENT_HEAD, HEADER, PAD
+from verity.protocols.accounting.certifier.verifier.id_form import EVENT_END, EVENT_HEAD
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD
 from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 

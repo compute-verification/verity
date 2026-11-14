@@ -108,7 +108,7 @@ def _relay_run(out: Path, key: Path, params: WardenParams, requests: Sequence[by
     once it has taken `cut` writes. Returns the relay's log, an entry a connection."""
     out.mkdir(parents=True, exist_ok=True)
     tau, B = params.bucket_ms / 1000, params.cell_bytes
-    signer = ws.cs.signer(key, 4)
+    signer = ws.ck.signer(key, 4)
     public = signer.public_key()
     publisher = ws.Publisher(out, Issuer(signer, SESSION), params, WR.Cells.of)
     servers: list[_Side] = []

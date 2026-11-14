@@ -407,7 +407,7 @@ def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the
     run = published(tmp_path / "run", sz.TEST, windows=G)
     h = sz.host(tmp_path / "host", run, setup=sz.TEST, group=G)
     dep = json.loads((run / "deployment.json").read_text())
-    key, session, params = WS.cs.read_public(dep["key"]), bytes.fromhex(dep["session"]), sz.W.WardenParams(**dep["params"])
+    key, session, params = WS.ck.read_public(dep["key"]), bytes.fromhex(dep["session"]), sz.W.WardenParams(**dep["params"])
     signed = {}
     for (d, w), doc in _cells(run).items():
         head, dom = sz.WR.check_registration(doc, key, session, params, WS.LINK, sz.Direction(d), w)
@@ -819,20 +819,20 @@ def test_w63k4s_rounds_read_as_w63s(tmp_path):
 def _rewrite(path: Path, blobs: list[bytes]) -> None:
     path.unlink()
     for b in blobs:
-        WS.ar.write_blobs(path, b)
+        WS.bf.write_blobs(path, b)
 
 
 def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tmp_path):
     run = published(tmp_path / "run")
     B = sz.PARAMS.cell_bytes
-    blobs = WS.ar.read_blobs(run / "responses.records")
-    rec = WS.ar.unpack_record(blobs[0], B)
+    blobs = WS.bf.read_blobs(run / "responses.records")
+    rec = WS.unpack_record(blobs[0], B)
     t, j = next((t, j) for t, row in enumerate(rec.grid) for j, f in enumerate(row) if f is not None and f[0] == sz.DATA)
     frame = bytearray(rec.grid[t][j])
     frame[sz.IT.ID_AT + sz.IT.ID_DIGITS - 1] ^= 1
     grid = [list(row) for row in rec.grid]
     grid[t][j] = bytes(frame)
-    _rewrite(run / "responses.records", [WS.ar.pack_record(replace(rec, grid=tuple(tuple(r) for r in grid))),
+    _rewrite(run / "responses.records", [WS.pack_record(replace(rec, grid=tuple(tuple(r) for r in grid))),
                                          *blobs[1:]])
     with pytest.raises(SystemExit, match="egress link-window 0's record under cells.salts isn't the rows whose root "
                                          "the warden signed"):
@@ -861,18 +861,18 @@ def test_a_fails_reason_outside_its_fails_bucket_is_refused_by_name_and_one_outs
     is refused, naming the run's ``check.json`` problems that say a connection failed closed; one in an execution phase
     past the group is another group's, and the group is read as if it weren't there."""
     run = published(tmp_path / "run")
-    rec = WS.ar.unpack_record(WS.ar.read_blobs(run / "responses.records")[0], sz.PARAMS.cell_bytes)
+    rec = WS.unpack_record(WS.bf.read_blobs(run / "responses.records")[0], sz.PARAMS.cell_bytes)
     t, j = next((t, j) for t, row in enumerate(rec.grid) for j, f in enumerate(row) if f is not None)
     grid = tuple(tuple(f if (u, k) == (t, j) else None for k, f in enumerate(row)) for u, row in enumerate(rec.grid))
     (run / "check.json").write_text(json.dumps({"problems": ["audit: connection 7 failed closed (late) at egress cell 2",
                                                              "connection 7: fail, HTTP None, complete False"]}))
-    _rewrite(run / "fails.records", [WS.ar.pack_record(replace(rec, grid=grid, window=0))])
+    _rewrite(run / "fails.records", [WS.pack_record(replace(rec, grid=grid, window=0))])
     with pytest.raises(SystemExit, match=re.escape(f"egress buckets [] hold a FAIL and the warden's fails record has a "
                                                    f"reason in buckets [{t}], not the same: a failed connection's "
                                                    "reason is in its FAIL's bucket (connection 7 failed closed (late) "
                                                    "at egress cell 2)")):
         sz.host(tmp_path / "h", run)
-    _rewrite(run / "fails.records", [WS.ar.pack_record(replace(rec, grid=grid, window=3))])
+    _rewrite(run / "fails.records", [WS.pack_record(replace(rec, grid=grid, window=3))])
     at = sz.host(tmp_path / "h2", run).at
     assert (at.void, at.failed, at.failed_why) == ([], 0, [])
 

@@ -37,6 +37,8 @@ inputs = ["verity", "adapters/vllm", "benchmarks/one_stage", "benchmarks/network
           "benchmarks/network_traces/warden_chain.py", "benchmarks/network_traces/certifier_serve.py",
           "benchmarks/network_traces/warden_serve.py", "benchmarks/network_traces/active_replay.py",
           "benchmarks/network_traces/connection_rows_run.py",
+          "benchmarks/network_traces/blob_files.py", "benchmarks/network_traces/certifier_key.py",
+          "benchmarks/network_traces/runner_cli.py",
           "benchmarks/network_traces/covert.py", "benchmarks/network_traces/replay.py",
           "benchmarks/network_traces/load_relay.py", "benchmarks/network_traces/stall_probe.py",
           "benchmarks/network_traces/site.json", "verity/protocols/compose/device/live_challenger/auditor.py",

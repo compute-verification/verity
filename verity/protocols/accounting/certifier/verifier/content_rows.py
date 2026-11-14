@@ -120,7 +120,8 @@ from functools import lru_cache
 
 from verity.circuits.partition_v2 import UNIT_CLASS_MAX
 from verity.protocols.accounting.certifier.verifier import io_request
-from verity.protocols.accounting.certifier.verifier.active import id_request, id_request_max_tokens
+from verity.protocols.accounting.certifier.verifier.active import id_request
+from verity.protocols.accounting.certifier.verifier.id_form import id_request_max_tokens
 from verity.protocols.accounting.certifier.verifier.warden import Released, WardenParams, cells
 from verity.protocols.accounting.certifier.verifier.warden_rows import WORD_BITS
 
