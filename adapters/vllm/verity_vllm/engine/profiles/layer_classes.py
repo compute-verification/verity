@@ -6,6 +6,10 @@ own class name.  ``REEXEC`` are the groups whose forward is a pure function of t
 """
 from __future__ import annotations
 
+__all__ = ["ATTENTION", "COLUMN_LINEAR", "EMBEDDING", "GATED_ACTS", "GELU_AND_MUL", "GEMMA_RMS_NORM", "LINEAR", "LINEAR_BASE",
+           "LINEAR_GROUP", "LM_HEAD", "LOGITS", "NORMS", "REEXEC", "RMS_NORM", "ROTARY", "ROW_LINEAR", "SAMPLER",
+           "SHARDED_ENDINGS", "SILU_AND_MUL", "TAPPED"]
+
 TAPPED = ("RMSNorm", "GemmaRMSNorm", "SiluAndMul", "GeluAndMul", "RotaryEmbedding", "Attention", "VocabParallelEmbedding",
           "LogitsProcessor")
 LINEAR = frozenset({"LinearBase", "ColumnParallelLinear", "RowParallelLinear", "ReplicatedLinear", "QKVParallelLinear",
