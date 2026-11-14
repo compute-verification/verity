@@ -507,7 +507,9 @@ A symlink or other entry that isn't a regular file holds no bytes, so the artifa
 A preserved run whose run record lacks files custody did not store (it trimmed them past its limit: `uncovered`) holds their only
 copy, as a never-stored run does: gc deletes it, under `--unpreserved-runs`, 7 days after custody verified the run (the marker's
 `verified_utc`; never the last write, which the store eviction moves), once the remote holds the rest, and lists it with that date
-until then. To keep one longer: `research keep RUNDIR ...`.
+until then, with how to keep it: `research keep RUNDIR --owner @LANE --expires DATE --priority P`, or a custody that declares the
+files (`--declared-output`); a run with a keep record never goes this way. Each deleted run's line says how much of it was
+stored nowhere else, and the pass's summary counts these runs apart from the never-stored and the covered ones.
 
 `rm` is the one way to delete data you don't own on a node, for a cleanup the policy doesn't reach. It deletes a path only when a
 record covers it (its own or an ancestor's), and that record and every record beneath it (sidecars and implicit ones) name the
