@@ -66,7 +66,9 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   its rows aren't the scan's own. The honest round's ``scan/state`` and ``scan/prog<j>`` are then V3c's roots and
   domains, which the consistency check (`NetworkCheck.Period`'s rows form: `stateTied`, `wired`) holds to V3c's
   audit at any sample of it, and there is no block round: V3c's audit proves the anchored Programs' slot entries, and
-  ``answers.json`` carries no ``audits`` (the period reads V3c's ``period.json``, `scan_period.rows_case`).
+  ``answers.json`` carries no ``audits`` (the period reads V3c's ``period.json``, `scan_period.rows_case`). `stateTied`
+  reads an audit's state entry among its ``roots`` and its ``registered`` alone, so the check refuses V3c's audit,
+  whose `SCAN_STATE` is in its window's activations alone, at the state tie.
 * **The honest round, one registration**: one Program of three templates (`TEMPLATES`) in the generator form
   (`scan_root`, the form `NetworkCheck.Period`'s `scanOf` reads): the first unit (`IngressScanFirst`, bucket 0), G·T − 1
   ingress units (buckets 1 … G·T − 1) and G·T egress units, each template one batch with its row, state and egress
@@ -86,7 +88,10 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   last unit's o1, S_{G·T−1}, which no state leaf holds, is a member's own rows (`Frame`), committed and never opened.
   Leaf 0 is opened by
   no unit, and the entries boundary 0's Programs write on it are read by none: bucket 0 reads the empty state, in
-  which no slot is live, so none is due. Accepted: every o0 opens to 1. Its registration names each lane's
+  which no slot is live, so none is due. The registration's window states those reads, one run a port (``reads``,
+  `state_reads`: ``sin`` units 1 … G·T − 1 and ``o1`` units 0 … G·T − 2, each from leaf 1, as `NetworkCheck.Period`'s
+  `stateRead` holds them), and opens leaf 0 to the empty state, zero words under its salt (``empty``, `state_empty`,
+  its `stateEmpty`), public as that state is. Accepted: every o0 opens to 1. Its registration names each lane's
   ``prog<j>`` tied, which R8 lets through though `EVERY` units read each slot entry, and both verifiers' verdict
   publishes them (``rests_on_period_check``, the lanes' ``prog<j>``): the acceptance rests on a period check,
   `NetworkCheck.Period`'s `wired`, which ties each ``prog<j>``'s rows to the audit that registered them and refuses
@@ -179,7 +184,7 @@ from dataclasses import asdict, replace
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
-from typing import NamedTuple, Sequence
+from typing import Mapping, NamedTuple, Sequence
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -548,6 +553,34 @@ def tree_port(kind: str, reg: ADV.Committed, reads: list[int], reads_from: int) 
 def tree_entry(kind: str, reg: ADV.Committed, positions) -> dict:
     return {"value": value(kind), "positions": [int(p) for p in positions],
             "paths": [b"".join(reg.open(p).path).hex() for p in positions]}
+
+
+def state_reads(ports: Sequence[Mapping[str, dict]]) -> dict:
+    """The scan's state reads as its registration's `window` states them (``reads``, `NetworkCheck.Period`'s
+    `stateRead`), from each member's ``--registered`` ports (`tree_port`: unit ``reads_from + i`` at leaf ``reads[i]``):
+    its ``sin`` and ``o1`` of the state's value, each one run ``{"leaf": l, "units": [lo, hi]}``, unit lo + i at leaf
+    l + i. SystemExit when a port's reads are no one run."""
+    at: dict[str, dict[int, int]] = {}
+    for ps in ports:
+        for p in ("sin", "o1"):
+            if p in ps and ps[p]["value"] == value("state"):
+                at.setdefault(p, {}).update({ps[p].get(REG.READS_FROM, 0) + i: r for i, r in enumerate(ps[p]["reads"])})
+    runs = {}
+    for p, got in sorted(at.items()):
+        lo, hi = min(got), max(got) + 1
+        if got != {u: got[lo] + u - lo for u in range(lo, hi)}:
+            raise SystemExit(f"the scan's {p} reads {got} are no one run, unit lo + i at leaf l + i, as its "
+                             "registration states them")
+        runs[p] = {"leaf": got[lo], "units": [lo, hi]}
+    return runs
+
+
+def state_empty(reg: ADV.Committed | Held) -> dict:
+    """Row 0's opening as the scan's registration's `window` gives it (``empty``, `NetworkCheck.Period`'s
+    `stateEmpty`): the empty state, its ``words`` zero u16 words, under leaf 0's salt through its path. The row is
+    public, and no unit reads leaf 0, so its salt opens no row a proof hides."""
+    o = reg.open(0)
+    return {"words": reg.n_bits // 16, "salt": o.salt.hex(), "path": b"".join(o.path).hex()}
 
 
 def tree_refusal(port: dict, reg: ADV.Committed, entry: dict, bcs: list[bytes | None],
@@ -1509,6 +1542,9 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
            "link": "registered: each warden row port, input or output, at the warden's signed root of its "
                    "link-window, unit base + k row k of the member's rows; the scan's state, each lane's prog<j> and "
                    "view, inputs and outputs, at the prover's registered roots (scan/*)"}
+    reads = state_reads([json.loads(Path(m["registered_file"]).read_text())["ports"] for m in members])
+    win |= ({"reads": {"scan/state": reads}} if reads else {}) | (
+        {"empty": {"scan/state": state_empty(trees["state"])}} if "state" in trees else {})
     rec = R.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer, work_table=table)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, pg.program, pg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer,
@@ -1835,7 +1871,7 @@ def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     setup = SETUPS[a.setup]
-    h = host(out / "warden", a.warden_run, a.draw, setup, a.group, v3c=a.v3c)
+    h = host(out / "warden", a.network_certifier_run, a.draw, setup, a.group, v3c=a.v3c)
     at, T, G = h.at, h.at.T, h.at.G
     ch, cls, N = at.chain, setup.cls, 2 * G * T
     if a.draw is not None and not 3 <= a.draw <= N:
@@ -1959,7 +1995,7 @@ def main(argv=None) -> int:
                    help="the class and the network certifier's schedule (default w63's, PARAMS; w63k4: w63's at KO 4 "
                         "and KI 32, its certifier's at egress cells 5; test: the certifier tests', a CPU window)")
     p.add_argument("--group", type=int, default=1, help="G: link-windows 0 .. G - 1 in one registration (default 1)")
-    p.add_argument("--warden-run", type=Path,
+    p.add_argument("--warden-run", dest="network_certifier_run", type=Path,
                    help="a warden_serve run's directory (rehearse --ids at the class's schedule): its group's "
                         "execution phases, verified under its deployment's key, in place of the synthetic run")
     p.add_argument("--draw", type=int,
