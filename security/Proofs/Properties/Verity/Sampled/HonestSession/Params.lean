@@ -82,11 +82,13 @@ local macro "plstr" : tactic =>
       label₀, templateId, Flock.HmRow.PARTITION_V1, VStar.Recursive.Sampled.PROTOCOL])
 
 /-- An object's members have distinct keys: their keys ascend (`compare … = .lt`, which the kernel reduces), so no two
-are equal (`Asc.ne`). Stated over the unfolded `Pairwise` so its `Decidable` instance is found without unfolding `Asc`. -/
+are equal (`Asc.ne`). The decidable `Pairwise` is ascribed to `of_decide_eq_true` so Lean uses its `List.Pairwise`
+instance rather than looking for one on `Asc` (there is none); the result coerces to `Asc Prod.fst L` by defeq. -/
 private theorem keys_ne {L : List (String × Json)}
     (h : decide (L.Pairwise fun a b => compare a.1 b.1 = .lt) = true) :
     L.Pairwise fun a b => a.1 ≠ b.1 :=
-  FlockSoundness.Discharge.Recursion.FirewallObj.Asc.ne (key := Prod.fst) (of_decide_eq_true h)
+  FlockSoundness.Discharge.Recursion.FirewallObj.Asc.ne (key := Prod.fst)
+    (of_decide_eq_true h : L.Pairwise fun a b => compare a.1 b.1 = .lt)
 
 /-! ## Plain values and their ASCII texts -/
 
@@ -104,25 +106,30 @@ private theorem plainStr_hexOf (b : ByteArray) : Firewall.plainStr (hexOf b) = t
   · exact key _ (by omega)
   · exact key _ (Nat.mod_lt _ (by decide))
 
+/-- An ASCII character's low byte stays below `0x7f`. -/
+private theorem byte_lt (c : Char) (h : c.toNat < 127) : c.val.toUInt8 < 127 := by
+  rw [UInt8.lt_iff_toNat_lt, UInt32.toNat_toUInt8]
+  have h127 : (127 : UInt8).toNat = 127 := by decide
+  have hv : c.val.toNat < 127 := h
+  have h8 : c.val.toNat < 2 ^ 8 := Nat.lt_trans hv (by decide)
+  rw [Nat.mod_eq_of_lt h8, h127]
+  exact hv
+
 /-- An ASCII text's UTF-8 bytes are each below `0x7f`. -/
 private theorem ascii_bytes {s : String} (h : Claims.Json.Ascii s) : s.toUTF8.data.all (· < 0x7f) = true := by
   have hu : ∀ c ∈ s.toList, c.utf8Size = 1 := by
     intro c hc
     rw [Char.utf8Size_eq_one_iff, UInt32.le_iff_toNat_le]
-    have hv : c.toNat < 0x7f := h c hc
-    simpa [Char.toNat] using Nat.le_of_lt hv
+    have hv : c.val.toNat < 127 := h c hc
+    have h127 : (127 : UInt32).toNat = 127 := by decide
+    omega
   have hb : s.toUTF8.data = (s.toList.map (·.val.toUInt8)).toArray := by
     rw [String.toUTF8_eq_toByteArray, ← String.utf8Encode_toList, List.utf8Encode,
       Flock.Scan.flatMap_ascii _ hu, List.data_toByteArray]
-  rw [hb, ← Array.all_toList, Array.toList_toArray, List.all_eq_true]
+  rw [hb, List.all_toArray, List.all_eq_true]
   intro x hx
   obtain ⟨c, hc, rfl⟩ := List.mem_map.1 hx
-  have hv : c.toNat < 0x7f := h c hc
-  have hlt8 : c.val.toNat < 2 ^ 8 := Nat.lt_trans (by simpa [Char.toNat] using hv) (by decide)
-  have hsize : (c.val.toUInt8).toNat = c.val.toNat := by rw [UInt32.toNat_toUInt8]; exact Nat.mod_eq_of_lt hlt8
-  refine decide_eq_true ?_
-  rw [UInt8.lt_iff_toNat_lt, hsize]
-  simpa [Char.toNat] using hv
+  exact decide_eq_true (byte_lt c (h c hc))
 
 /-- `Flock.canon` of a plain value is ASCII at its UTF-8 bytes, so `canonicalJson` admits its text. -/
 private theorem canon_ascii_bytes {j : Json} {s : String} (hc : Flock.canon j = .ok s) :
@@ -132,12 +139,6 @@ private theorem canon_ascii_bytes {j : Json} {s : String} (hc : Flock.canon j = 
 /-- The program descriptor is plain (no hash is spliced into it): a concrete-JSON fact of this instance, taken as a
 hypothesis `hpp : ProgramPlain` by every lemma below that reads `programJ`. -/
 def ProgramPlain : Prop := Firewall.plain programJ = true
-
-/-- `partitionObj`, as `Spot.Partition.build` writes it, with `query` (whose keys are not empty) at `query`. -/
-private theorem partitionObj_eq :
-    partitionObj = Json.mkObj [("format", Json.str Flock.HmRow.PARTITION_V1),
-      ("program", Json.str (hexOf programSha)), ("query", query)] := by
-  kernel_rfl'
 
 /-- The session's query is plain. -/
 private theorem plain_query : Firewall.plain query = true := by
@@ -165,16 +166,42 @@ private theorem plain_law : Firewall.plain law = true := by
   · exact ⟨by plstr, by decide⟩                                    -- k
   · exact ⟨by plstr, by plstr⟩                                     -- law
 
-/-- The partition object is plain. -/
-private theorem plain_partition : Firewall.plain partitionObj = true := by
-  rw [partitionObj_eq]
+/-- The query `build` falls back to for an empty one is plain. -/
+private theorem plain_defaultQuery : Firewall.plain Spot.Partition.defaultQuery = true := by
+  unfold Spot.Partition.defaultQuery
   refine plain_mkObj (keys_ne (by kernel_rfl')) ?_
   intro e he
   simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he
   rcases he with rfl | rfl | rfl
-  · exact ⟨by plstr, by plstr⟩                                     -- format
-  · exact ⟨by plstr, plainStr_hexOf _⟩                             -- program
-  · exact ⟨by plstr, plain_query⟩                                  -- query
+  · refine ⟨by plstr, ?_⟩                                          -- name
+    show Firewall.plain (Json.str "Q_word") = true
+    plstr
+  · exact ⟨by plstr, by decide⟩                                    -- version
+  · refine ⟨by plstr, ?_⟩                                          -- params
+    refine plain_mkObj (keys_ne (by kernel_rfl')) ?_
+    intro e2 he2
+    simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he2
+    rcases he2 with rfl | rfl
+    · exact ⟨by plstr, by decide⟩                                  -- X
+    · exact ⟨by plstr, by decide⟩                                  -- W
+
+/-- The partition object is plain. The query member is `build`'s `if`, so split on it: either branch (`defaultQuery` or
+`query`) is plain, and nothing decides the stuck `keys? query`. -/
+private theorem plain_partition : Firewall.plain partitionObj = true := by
+  unfold partitionObj Spot.Partition.build
+  refine plain_mkObj (keys_ne (by kernel_rfl')) ?_
+  intro e he
+  simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at he
+  rcases he with rfl | rfl | rfl
+  · refine ⟨by plstr, ?_⟩                                          -- format
+    show Firewall.plain (Json.str Flock.HmRow.PARTITION_V1) = true
+    plstr
+  · refine ⟨by plstr, ?_⟩                                          -- program
+    show Firewall.plain (Json.str (hexOf programSha)) = true
+    exact plainStr_hexOf _
+  · refine ⟨by plstr, ?_⟩                                          -- query (build's if)
+    dsimp only
+    split <;> first | exact plain_defaultQuery | exact plain_query
 
 /-- The composite's component parameters are plain. -/
 private theorem plain_paramsJ (hpp : ProgramPlain) : Firewall.plain paramsJ = true := by
@@ -303,11 +330,14 @@ private theorem params_full (hJ : JsonCanon.JsonFacts) (hpp : ProgramPlain) : �
   have hE := parse_program hJ hpp
   have hU := Flock.Hex.unhex_hexOf keyPub
   have hpf := programFile_eq hJ hpp
-  refine ⟨?p, ⟨_, ?decode, _, ?find, ?pchain⟩, ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9⟩
+  refine ⟨?p, ⟨[{ id := VStar.Recursive.Sampled.PROTOCOL, params := Firewall.printJson paramsJ }], ?decode,
+      { id := VStar.Recursive.Sampled.PROTOCOL, params := Firewall.printJson paramsJ }, ?find, ?pchain⟩,
+      ?f1, ?f2, ?f3, ?f4, ?f5, ?f6, ?f7, ?f8, ?f9⟩
   case decode =>
     fwd_walk [hA, hB] block [Core.canonicalJson, Flock.canon] shallow []
   case find => kernel_rfl'
   case pchain =>
+    dsimp only
     fwd_walk [hC, hD, hE, hU] block [Core.canonicalJson, Flock.canon, Spot.Program.parse, Flock.unhex] shallow []
   case f1 => kernel_rfl'            -- own.partition = partitionObj
   case f2 => rw [hpf]               -- own.program = programFile
