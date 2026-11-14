@@ -27,15 +27,15 @@ meta import NetworkCheck.Period.Start
 # The network certifier over a period, a core protocol: `verity/certifier/v0`
 
 The network certifier, one of onsite's subprotocols (`Core.Onsite.components`). A period is one node's link over `m`
-link-windows beside the period's compute audits (SPOT's one-stage, one answer per registered window of the
-workload). Its link-windows are the rows form's: the network certifier's own run, where it functions as an active warden
+execution phases beside the period's compute audits (SPOT's one-stage, one answer per registered window of the
+workload). Its execution phases are the rows form's: the network certifier's own run, where it functions as an active warden
 (`warden_serve`): each execution phase's cells committed as rows (`warden_rows`), one registration a direction under one
 fixed schedule, its three records certified, and the scan's one-stage answer for the window (`scan_zk --warden-run`).
 Parameters that name a sync set, the clock form's, are refused: the clock form is not one this check reads.
 
 It accepts when every execution phase passes the check and every compute audit accepted; it then publishes `K`, the
 bits a covert sender in the server can move through the network certifier in the period, as
-`NetTiming.Guarantees.MonitoringPeriodLeakAccepted` counts them. Each link-window's scan's Programs' row must be a
+`NetTiming.Guarantees.MonitoringPeriodLeakAccepted` counts them. Each execution phase's scan's Programs' row must be a
 compute audit's slot entries (`wired`, below), and the state that audit's Programs read (its `SCAN_STATE`) the scan's
 state, by root and domain, which the scan's units read and register as its transitions chain it from the state its
 start unit copies, the empty state (`stateTied`, `scanStartCheck`), so a slot's entry is the one its Program computed
@@ -68,7 +68,7 @@ out of order; two entries with one start, whose stretches would overlap; two ent
 key's first 16 bytes, and one session, whose execution phase `n` would be two of the period's; two keys with one key
 identifier, where one key may be listed in several sessions; a `w₀` before the first entry's start; and parameters
 that still name `"key"`, `"session"` or `"sessions"`, naming the entry to write), their LMS parameters, the link (at
-most 65,535 UTF-8 bytes), the period's `m ≥ 1` link-windows, the class circuit, the SHA-512 of the Program of the one
+most 65,535 UTF-8 bytes), the period's `m ≥ 1` execution phases, the class circuit, the SHA-512 of the Program of the one
 window circuit the workload's class registers, which every tied compute audit runs (`held`); the scan's Program, its
 descriptor (`verity-ir/descriptor/v1`, `scan_zk`'s `program.json`), and the network
 certifier's one fixed schedule (`warden.WardenParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte
@@ -108,7 +108,7 @@ egress gate is an input (`NetTiming.BoundaryGates.Fits`), so `K` counts only wha
 leaves free. The rest of what `NetTiming.BoundaryGates.Fits` asks is read off the description (`scanOf`): the Program laid out
 as the decoder lays one out and within its resolution's walk (`InferenceOnlyCheck.Desc`), every egress leaf returned by the root
 and computed by the egress template, and every template's argument one input node's leaves, no egress template's an
-ingress row's. A compute audit's free inputs are in the term of each link-window whose scan's `prog` is its output
+ingress row's. A compute audit's free inputs are in the term of each execution phase whose scan's `prog` is its output
 (`tiedAudits`), and its other layout terms and its units' bits are in no term.
 
 **Commitment**, canonical JSON `{"audits": [registration, …], "windows": [registration, …]}`: one-stage's registration
@@ -127,7 +127,7 @@ one-stage's, SHA-512(format ‖ 0 ‖ canonical record) (`registration.digest`).
             "layout": {"buckets", "connection_slots", "first_bucket", "slots"}, "link", "parameters", "root",
             "row_schema", "rows", "value", "window", "wiring", "word_bits", "words"}
 
-each audit's and each link-window's one-stage answer (`Core.Answer.ofJson`), per link-window the requests',
+each audit's and each execution phase's one-stage answer (`Core.Answer.ofJson`), per execution phase the requests',
 responses' and fails' records' certificates (`certified.jsonl`'s) and the ingress and the egress rows' registrations
 (`warden_rows.registration`, `cells.jsonl`'s), and the listed entries' sessions' signed starts, one an entry, in the
 entries' order:
@@ -140,7 +140,7 @@ schedule it runs under, and the certificate the key signed for both once, before
 
 **The check**, in order; any rejection rejects, then any undecided answer leaves the period undecided:
 
-* the commitment registers the parameters' audits and `m` link-windows, and the evidence answers each;
+* the commitment registers the parameters' audits and `m` execution phases, and the evidence answers each;
 * the listed entries (`startChecks`): their starts strictly increase (`entriesOrderRefusal`), and no two of them have
   one key identifier and different keys (`entriesKeyRefusal`), which the decoder refuses too and the check refuses of
   any parameters;
@@ -160,7 +160,7 @@ schedule it runs under, and the certificate the key signed for both once, before
   key's device state gives each session it starts the next ordinal and moves the key's life on by the session's whole
   span, so an entry whose ordinal is not the next, which a session of the key that no entry lists would leave, is
   refused by name, and the stretches of a key's entries are each its session's whole span;
-* link-window `w` (the `i`-th, `w = w₀ + i`): its registration (the scan's, per window) names the scan's Program; its three
+* execution phase `w` (the `i`-th, `w = w₀ + i`): its registration (the scan's, per window) names the scan's Program; its three
   certificates are the requests' record's (the link's ingress), the responses' (its egress) and the fails'
   (`<link>-fails`, egress) at `w − a`, each the key's of the entry `w` picks and verifying in its session, so an
   execution phase missing any record's certificate is refused, and the network certifier certifies no record of an
@@ -183,14 +183,14 @@ schedule it runs under, and the certificate the key signed for both once, before
   for that registration's digest, accepted with one level of the scan's 2T + 1 units sampled `subset:k` or stratified,
   sampling no more than the level holds and no more of a stratum than the stratum holds, its strata's sizes summing
   to the level's (`factsOf` refuses a profile that fails any of the three), and its `bound`;
-* every accepted link-window's scan is at one δ, `MonitoringPeriodLeakAccepted`'s;
+* every accepted execution phase's scan is at one δ, `MonitoringPeriodLeakAccepted`'s;
 * audit `i`: its registration names its Program (the descriptor's SHA-512), and the answer is one-stage's for its
   registration's digest, accepted with one level of its Program's units sampled `subset:k` or stratified (a work sampling design's
   sample is stratified), held to the same three (`factsOf`), and its `bound`, at any sample: this is the consistency
   check (each audit's answer is its registration's, and its outputs are the scan's `prog` and its `SCAN_STATE` the
   scan's state, below), and what a sample in part leaves unproved is in `K` (a tied audit's `faulty_entries` and δ,
   below);
-* link-window `w`'s scan's Programs' rows are a compute audit's slot entries, a lane a chunk
+* execution phase `w`'s scan's Programs' rows are a compute audit's slot entries, a lane a chunk
   (`wired`): for each lane `j`, its `scan/prog<j>` entry names the root and domain of the entries port
   `<descriptor id>/c<j>/o0`, of T / `every` leaves, in the `roots` of one audit's registration, where the descriptor id
   is a template node's of that audit's own Program calling `SlotEntry_v1`, or `SelectEntry_v1` (the slot's last
@@ -202,7 +202,7 @@ schedule it runs under, and the certificate the key signed for both once, before
   `j · T / every + b`'s entry, the row the scan's lane `j` reads at boundary `b` (`scanOf`), and each due, occupied
   slot's entry, read bit included, is the one its Program computed, not the prover's word, which with read 1 and no
   outputs would pass for a request no Program reads (`Properties.NetworkPeriod.RowsProgWired`);
-* link-window `w`'s scan's state is the `SCAN_STATE` of an audit its `prog` is wired to
+* execution phase `w`'s scan's state is the `SCAN_STATE` of an audit its `prog` is wired to
   (`stateTied`): the scan's registration has an entry of its `roots` whose port is `scan/state` or of its `registered`
   whose value is `verity/certifier/scan-state/v1`, every such entry at one root and domain, and so has a `wired`
   audit's registration, every such entry at that root and domain; and the scan's registration states its units' reads
@@ -257,7 +257,7 @@ schedule it runs under, and the certificate the key signed for both once, before
   execution phase under one is refused.
 
 **Public**, on acceptance: `K` and its terms, each a ceiling of `log2` of `MonitoringPeriodLeakAccepted`'s factor, over
-its windows, the link-windows' scans, whose statements read the network certifier's rows:
+its windows, the execution phases' scans, whose statements read the network certifier's rows:
 
     {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c, "eps": m · δ + Σ δ_i,
      ["max_tokens_cap": cap,] "scans": [terms, …], "schedules": c, "start": s, "windows": m}
@@ -272,16 +272,16 @@ knowledge error and collision errors add to it, and the check evaluates neither:
 (`Core.Ratio.toString`), as PoUS's and PoUB's publics carry theirs.
 
 A compute audit reads none of the rows, so its own terms are in none (it is an acceptance condition), but the free
-inputs of each audit a scan's `prog` is an output of are in that scan's link-window's term: the egress
+inputs of each audit a scan's `prog` is an output of are in that scan's execution phase's term: the egress
 renders the audit's outputs, so the bits the prover chose of its inputs are the egress's to leak. An incorrect proof
 block of such an audit reaches the scan only as the slot entries the scan reads: the scan reads the audit only through
-its `prog`, one input node of `E_w` entry bits a link-window (`wired`, `scanOf`), and its state is the scan's own
+its `prog`, one input node of `E_w` entry bits an execution phase (`wired`, `scanOf`), and its state is the scan's own
 (`stateTied`). So an incorrect proof block of any template, a `SlotEntry_v1` or `SelectEntry_v1` one setting its
 slot's entry, a `ScanSlots_v2` one setting the `occ` and prompts its slots' Programs read, or any other its entries
 read, changes at most those `E_w` bits; the scan reads an entry only where its own state has the slot due and occupied,
 and refuses one there whose `read` is 0, so no `occ` the audit computes drops a request. The check accepts a tied audit
-at any sample; sampled in part, its at most `b` incorrect proof blocks can set any of its link-window's entries, so that
-link-window's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 1] · E_w`) when `b ≥ 1`, and its δ is in
+at any sample; sampled in part, its at most `b` incorrect proof blocks can set any of its execution phase's entries, so that
+execution phase's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 1] · E_w`) when `b ≥ 1`, and its δ is in
 `eps`:
 
 
@@ -491,7 +491,7 @@ structure Scan where
   entries : Nat
   start : Nat
 
-/-- Which run the link-windows are: the rows form's, under one schedule (and its digest), read by the scan whose terms
+/-- Which run the execution phases are: the rows form's, under one schedule (and its digest), read by the scan whose terms
 are the last. -/
 inductive Form where
   | rows (schedule : Schedule) (digest : ByteArray) (scan : Scan)
@@ -974,7 +974,7 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
       de.params.map (·.1) == egressParams)
     s!"scan: the templates' parameters are not {startParams}, {ingressParams s.lanes} and {egressParams}"
   need (xs.form == .batch && xs.n == 1 && xi.form == .batch && xi.n == T && xe.form == .batch && xe.n == T)
-    s!"scan: not the start unit, {T} ingress buckets and {T} egress buckets, the link-window's"
+    s!"scan: not the start unit, {T} ingress buckets and {T} egress buckets, the execution phase's"
   need (di.params[0]!.2 == row) "scan: the ingress template's row is not the schedule's"
   let ety := di.params[2]!.2
   need ((di.params.toList.drop 2).all (·.2 == ety)) "scan: the ingress template's entry ports' types differ"
@@ -1102,7 +1102,7 @@ def paramsOf (j : Json) : V Params := do
   if s.connectionRows then throw connectionRowsRefusal
   let form := Form.rows s (← s.digest) (← scanOf (← Flock.J.get j "scan" "the object") program s)
   let windows ← Flock.J.nat j "windows" "the object"
-  unless 1 ≤ windows do throw "windows: a period has at least one link-window"
+  unless 1 ≤ windows do throw "windows: a period has at least one execution phase"
   unless rowsWf s windows do throw (rowsWfRefusal s windows)
   unless cells == s.rowsCells windows do
     throw s!"cells: the rows form's cells are egress_cells = {s.egressCells} for each of the lanes · windows · \
@@ -1185,7 +1185,7 @@ def commitmentOf (b : ByteArray) : V Commitment := do
   let j ← Core.canonicalJson b
   exactly j ["audits", "windows"] "the object"
   let audits ← (← Flock.J.arr j "audits" "the object").mapM (registrationOf · "an audit's registration")
-  let windows ← (← Flock.J.arr j "windows" "the object").mapM (registrationOf · "a link-window's registration")
+  let windows ← (← Flock.J.arr j "windows" "the object").mapM (registrationOf · "an execution phase's registration")
   pure { audits, windows, bytes := b }
 
 def rowsOf (j : Json) (ctx : String) : V Rows := do
@@ -1228,7 +1228,7 @@ def evidenceOf (b : ByteArray) : V Evidence := do
   let shown := keysOf j == ["audits", "starts", "windows"]
   unless shown do exactly j ["audits", "windows"] "the object"
   let audits ← (← Flock.J.arr j "audits" "the object").mapM (Core.Answer.ofJson · "an audit's answer")
-  let windows ← (← Flock.J.arr j "windows" "the object").mapM (executionPhaseOf · "a link-window")
+  let windows ← (← Flock.J.arr j "windows" "the object").mapM (executionPhaseOf · "an execution phase")
   let starts ← if shown then (← Flock.J.arr j "starts" "the object").mapM (startOf · "a start") else pure #[]
   if shown && starts.isEmpty then throw "starts: none: evidence that shows no session's start has no \"starts\""
   pure { audits, windows, starts }
@@ -1353,7 +1353,7 @@ def rowsCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (d : Direct
       r.layout == ({ buckets := T, slots := S, connectionSlots := s.slots, firstBucket := n * T } : BucketSchedule) do
     refuse s!"{what}: not the schedule's rows"
   let .ok dom := rowsDomain s sd e.session p.link d n | refuse s!"{what}: no domain"
-  unless r.domain == Flock.hexOf dom do refuse s!"{what}: not the link-window's domain"
+  unless r.domain == Flock.hexOf dom do refuse s!"{what}: not the execution phase's domain"
   let .ok head := headDigest p.link d n sd s r.wiring dom r.root | refuse s!"{what}: the head doesn't encode"
   unless r.digest == head do refuse s!"{what}: the certificate doesn't sign the head"
   unless certifiesOn p p.link d w
@@ -1521,7 +1521,7 @@ def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : J
 def tiedIn (audits windows : Array Json) (i : Nat) : Bool :=
   windows.any fun reg => (tiedAudits audits reg).contains i
 
-/-- The audits the form ties to a link-window's scan: `tiedIn`. -/
+/-- The audits the form ties to an execution phase's scan: `tiedIn`. -/
 def tiedOf : Form → Commitment → Nat → Bool
   | .rows .., c => tiedIn c.audits c.windows
 
@@ -1605,7 +1605,7 @@ def wiredCheck (p : Params) (s : Schedule) (audits : Array Json) (w : Nat) (reg 
       occupied slot's read bit is the prover's word: reuse chunk j's port of the pinned template as the scan's \
       prog<j>")
 
-/-- The rows form's wiring findings, one a link-window, in order (`wiredCheck`). -/
+/-- The rows form's wiring findings, one an execution phase, in order (`wiredCheck`). -/
 def wiredChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × String)) := match p.form with
   | .rows s .. => c.windows.zipIdx.map fun (reg, i) => wiredCheck p s c.audits (p.first + i) reg
 
@@ -1934,8 +1934,8 @@ structure AuditTerms where
 
 def AuditTerms.bits (t : AuditTerms) : Nat := t.free + t.faultySets + t.faultyBits + t.jitter + t.faultyEntries
 
-/-- A link-window's scan's terms in the rows form, from the scan's terms, its facts, its tied audits' free inputs
-(`tied`: the egress renders their outputs, so the bits the prover chose of them are the link-window's free inputs), the
+/-- An execution phase's scan's terms in the rows form, from the scan's terms, its facts, its tied audits' free inputs
+(`tied`: the egress renders their outputs, so the bits the prover chose of them are the execution phase's free inputs), the
 slot entries' bits its tied audits' incorrect proof blocks can set (`faulty`, `faultyEntries`) and the jitter bound: each of its
 at most `b` incorrect proof blocks commits at most the wider instance's bits. -/
 def Scan.terms (s : Scan) (f : Facts) (tied faulty jitter : Nat) : AuditTerms :=
@@ -1971,10 +1971,10 @@ def Public.eps (x : Public) : Core.Ratio :=
 def capsTerm (cells : Array Nat) : Nat := (cells.map fun cap => clog2 (cap + 1)).foldl (· + ·) 0
 
 /-- The rows form's terms: the cells' (`capsTerm`), the schedules' the same count (each connection's lane
-length, one of `cap_c + 1`, fixes its admission and the lanes it frees), and each link-window's scan's from the scan's
-terms, its facts, its tied audits' free inputs and the entry bits their incorrect proof blocks can set (`scans`, a triple a
-link-window). The compute audits' own terms are in none: a tied audit's free inputs and incorrect proof blocks are in its
-link-window's, and the δ of one sampled in part (`charged`) in `eps`; and the period's first start, `start` bits where it is
+length, one of `cap_c + 1`, fixes its admission and the lanes it frees), and each execution phase's scan's from the scan's
+terms, its facts, its tied audits' free inputs and the entry bits their incorrect proof blocks can set (`scans`, a triple an
+execution phase). The compute audits' own terms are in none: a tied audit's free inputs and incorrect proof blocks are in its
+execution phase's, and the δ of one sampled in part (`charged`) in `eps`; and the period's first start, `start` bits where it is
 charged. -/
 def rowsTerms (facts : Array Facts) (scan : Scan) (scans : Array (Facts × Nat × Nat)) (cells : Array Nat)
     (jitter windows : Nat) (charged : Array Facts := #[]) (start : Nat := 0) : Public :=
@@ -2022,11 +2022,11 @@ structure Profile where
 
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Profile :=
   if c.windows.size ≠ p.windows then
-    .reject s!"the commitment registers {c.windows.size} link-windows, not the period's {p.windows}"
+    .reject s!"the commitment registers {c.windows.size} execution phases, not the period's {p.windows}"
   else if c.audits.size ≠ p.audits.size then
     .reject s!"the commitment registers {c.audits.size} audits, not the parameters' {p.audits.size}"
   else if e.windows.size ≠ c.windows.size then
-    .reject s!"evidence: {e.windows.size} link-windows for {c.windows.size} registered"
+    .reject s!"evidence: {e.windows.size} execution phases for {c.windows.size} registered"
   else if e.audits.size ≠ c.audits.size then
     .reject s!"evidence: {e.audits.size} audits' answers for {c.audits.size} registered"
   else
@@ -2089,7 +2089,7 @@ def protocol : Core.Protocol where
 #guard clog2 0 == 0 && clog2 1 == 0 && clog2 2 == 1 && clog2 3 == 2 && clog2 4 == 2 && clog2 5 == 3
 #guard atMost 10 0 == 1 && atMost 10 1 == 11 && atMost 10 2 == 56 && atMost 4 9 == 16 && atMost 0 3 == 1
 
--- the rows form over 1 link-window: 7 cells on one connection and 2 on another (3 + 2 bits, for the schedules and
+-- the rows form over 1 execution phase: 7 cells on one connection and 2 on another (3 + 2 bits, for the schedules and
 -- again for the fail cells), an audit whose own terms are in none, and one scan of 21 units (T = 10) sampled at
 -- δ = 1/15 with at most 3 wrong, 1,120 free inputs, ingress and egress instances committing 300 and 512 bits, and
 -- jitter below 2 over its 10 steps: 1562 sets of at most 3 of 21 units

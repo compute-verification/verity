@@ -185,7 +185,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   at that class's schedule instead (`SCAN_CLASSES`, `scan_schedule`: w63k4, the window circuit's 4,32,4, at 5 egress cells),
   with its prompts of at most its KI ids (32) and `--tokens` at most its egress cells less the trailer (4)
   (`scan_bounds`), the network certifier's run `scan_zk.py prove --class CLASS --warden-run` reads. `--window-per-group` (at most
-  the scan's 4 lanes of prompts) sends them a group at a time, group g's half a bucket into link-window g·G
+  the scan's 4 lanes of prompts) sends them a group at a time, group g's half a bucket into execution phase g·G
   (G = `scan_group_windows` of the tokens), so that group g's cells are exactly windows g·G … (g+1)·G − 1, which
   `out/groups.json` publishes, and `--minutes` must cover `warden_group_minutes` of its groups. The demo's stand-in (`benchmarks/network_traces/demo_stub.py`) serves the demo's class, prompts of exactly 8
   byte ids and exactly 24 out, id-form, and prints its prompts: `demo_stub.py prompts | … warden-rehearse --scan
@@ -440,17 +440,17 @@ REHEARSAL_HEIGHT = (10, lms.DEPLOYED.H)
 #: the one-time keys a second `certifier_key.load_key` makes in its eight processes (16384 in 4.1 s on four cores)
 KEYGEN_LEAVES_S = 4096
 #: a warden rehearsal's `--requests` (and a scan rehearsal's on its own `--prompts`, `WARDEN_PROMPT_REQUESTS`): 1700 at
-#: `WARDEN_RATE` is one session of about 57 minutes, about 1080 of the scan's 3.2 s link-windows, past the 745 that
+#: `WARDEN_RATE` is one session of about 57 minutes, about 1080 of the scan's 3.2 s execution phases, past the 745 that
 #: the whole-node wipe needs
 WARDEN_REQUESTS = (4, 1700)
-#: the one-time signatures a warden rehearsal's key gives a link-window: a certificate for each of its three links'
+#: the one-time signatures a warden rehearsal's key gives an execution phase: a certificate for each of its three links'
 #: records (ingress, egress and the fails link) and a signed head for the ingress and egress cells' rows
 #: (`warden_serve.Publisher.keep` and `attest`)
 WARDEN_WINDOW_LEAVES = 5
 #: the one-time signature that key gives its session's start, before its first execution phase's (`certify_start`
 #: there)
 START_LEAVES = 1
-#: a warden rehearsal's link-window without `--scan`: `warden_serve.py`'s default schedule's (`WardenParams`, 600
+#: a warden rehearsal's execution phase without `--scan`: `warden_serve.py`'s default schedule's (`WardenParams`, 600
 #: buckets of 100 ms)
 WARDEN_WINDOW_MS = 60_000
 WARDEN_TOKENS = (16, 256)
@@ -462,7 +462,7 @@ WARDEN_RATE, WARDEN_TAIL_S, WARDEN_SEED = 0.5, 60, 0
 SCAN_SCHEDULE = ("--cell-bytes", "512", "--slots", "4", "--bucket-ms", "100", "--delay", "27", "--lanes", "4",
                  "--queue", "4", "--window", "32", "--ingress-cells", "47", "--ingress-buckets", "12",
                  "--egress-cells", "65", "--every", "16")
-#: the scan's schedule by flag, which `--window-per-group` sizes a group's link-windows on (`scan_group_windows`)
+#: the scan's schedule by flag, which `--window-per-group` sizes a group's execution phases on (`scan_group_windows`)
 SCAN = {f: int(v) for f, v in zip(SCAN_SCHEDULE[::2], SCAN_SCHEDULE[1::2])}
 #: a scan rehearsal's classes, scan_zk's (`scan_zk.SETUPS`) by name, each its egress cells (KO + 1) and KI, the most ids
 #: a prompt has. `--scan-class` (with `--prompts`; `SCAN_CLASS`, the class of record, by default) picks one, whose
@@ -493,7 +493,7 @@ PROMPTS = "prompts.json"
 #: and the cells' registrations less their private keys (`ROW_REGISTRATIONS`);
 #: everything else `warden_serve.py rehearse` writes, what it prints (`rehearse.log`) and what the run's tunnels
 #: print (`tunnel.log`) are witness and stay in `witness/`, which `fetch` gives the run's own lane alone.
-#: `groups.json` (a `--window-per-group` run's) is each group's request indices and link-windows, the request's
+#: `groups.json` (a `--window-per-group` run's) is each group's request indices and execution phases, the request's
 #: public counts and the scan's schedule alone. Of a load, nothing: its registrations (`load.json`, each value's
 #: whole) stay in `witness/`, as the connection rows' registrations do, and so does its relay's `load-relay.json`
 WARDEN_PUBLIC = ("deployment.json", "groups.json")
@@ -621,7 +621,7 @@ OUT_FILES = ("record.json", "key.json", "releases.jsonl", "hellos.jsonl", "chall
              "coin-link.json", "coin-link.log")
 #: how long serve.py has, once started, to sign its record (`await_commitment`), and the coin link to listen
 START_SECONDS = 60.0
-#: how long the coin link has, once told to stop, to run to the end of its link-window (D7's T·τ, 60 s) and write its
+#: how long the coin link has, once told to stop, to run to the end of its execution phase (D7's T·τ, 60 s) and write its
 #: record, before it is killed
 LINK_STOP_SECONDS = 90.0
 
@@ -1571,8 +1571,8 @@ def warden_window_ms(req: dict) -> int:
 
 
 def warden_windows(requests: int, scan: bool = True, bucket_ms: int = SCAN["--bucket-ms"]) -> int:
-    """The most link-windows a warden rehearsal of `requests` requests runs (`warden_serve.rehearse` counts its
-    traffic's last arrival and tail): `warden_minutes`'s arrivals and three tails, in link-windows of the scan's
+    """The most execution phases a warden rehearsal of `requests` requests runs (`warden_serve.rehearse` counts its
+    traffic's last arrival and tail): `warden_minutes`'s arrivals and three tails, in execution phases of the scan's
     schedule at the tick `bucket_ms` with `scan` and of `WARDEN_WINDOW_MS` otherwise."""
     window_ms = warden_window_ms({"scan": True, "bucket_ms": bucket_ms} if scan else {})
     return -(-(round(requests / WARDEN_RATE) + 3 * WARDEN_TAIL_S) * 1000 // window_ms)
@@ -1597,18 +1597,18 @@ def load_heads(shape: str) -> int:
 
 
 def warden_key(windows: int, height: int, what: str, heads: int = 0) -> None:
-    """Refuses a warden rehearsal whose key at `height` can't sign its `windows` link-windows after a load's `heads`,
+    """Refuses a warden rehearsal whose key at `height` can't sign its `windows` execution phases after a load's `heads`,
     with the least height that can (`warden_height`)."""
     if height < (least := warden_height(windows, heads)):
         load = f" after the load's {heads} heads" if heads else ""
-        raise Refused(f"--height {height}: {what} take {windows} link-windows, "
+        raise Refused(f"--height {height}: {what} take {windows} execution phases, "
                       f"{key_signatures(windows, heads)} one-time signatures (the session's start and "
                       f"{WARDEN_WINDOW_LEAVES} a window{load}), past the key's {1 << height}: give --height {least} or "
                       f"more, or fewer --requests")
 
 
 def scan_group_windows(tokens: int) -> int:
-    """The link-windows a `--window-per-group` group takes at the scan's schedule, each request answered by at most
+    """The execution phases a `--window-per-group` group takes at the scan's schedule, each request answered by at most
     `tokens` id events (`warden_serve.group_windows`, which `test_warden_serve` holds this to)."""
     return -(-(SCAN["--delay"] + tokens // SCAN["--slots"] + 3) // SCAN["--window"])
 
@@ -1660,7 +1660,7 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False, session: bo
     given, its tick `--bucket-ms` (`SCAN_BUCKET_MS`, which the minutes and the key's sampling blocks are counted at),
     the sampling (`sampling`) and the key's height. `--prompts` (with `--scan`) marks the request's prompts as the gate's stdin,
     `--scan-class` (with `--prompts`, recorded only when given) the scan's class they are of (`SCAN_CLASSES`: its
-    schedule, prompt ids and tokens), and `--window-per-group` (with `--prompts`) sends them a group a link-window's
+    schedule, prompt ids and tokens), and `--window-per-group` (with `--prompts`) sends them a group an execution phase's
     span; `warden_prompts` reads them and checks what depends on them. `--watermark` (recorded only when given) sends
     the endpoint the watermark stream. With `load` (`load-relay`) it is the serving session with its load first
     (`parse_load`: the request's ``load``), whose minutes come out of `--minutes` before the rehearsal's. With
@@ -2370,7 +2370,7 @@ def coin_link_argv(host: Host, session: str, open_body: dict, tree: Path = TREE)
 
 
 def stop_link(proc: subprocess.Popen, seconds: float = LINK_STOP_SECONDS) -> int:
-    """Stop the coin link: SIGTERM, on which it runs to the end of its link-window, writes its record and closes its
+    """Stop the coin link: SIGTERM, on which it runs to the end of its execution phase, writes its record and closes its
     tunnel; past `seconds`, SIGKILL to its process group, tunnel included."""
     try:
         if proc.poll() is None:

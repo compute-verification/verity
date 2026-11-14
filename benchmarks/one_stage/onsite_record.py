@@ -113,7 +113,7 @@ more; the rest is ``unvalued`` (`COMPOSITE_UNVALUED`).
 
 **The bound** is the network certifier's accepted answer's public in its rows form: K and each of its terms in the
 notation table's symbols (`TERMS`, `PHASE_TERMS`), each naming the public fields it sums (``lean``): k_sched
-(``schedules``), k_fail (``cells``) and, for each execution phase j of the certification period (the code's link-window,
+(``schedules``), k_fail (``cells``) and, for each execution phase j of the certification period (the code's execution phase,
 the public's ``scans[j]``), ℓ_{a,j} (``free``), k_{skip,j} (``faulty_sets``, ``faulty_bits`` and ``faulty_entries``) and
 the jitter T_j·log2 d_jit, T_j the phase's buckets (``jitter``). They sum to K, by which `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` bounds what the serving node
 sends past its committed program except with δ_net over ``period_s`` seconds, the run's m execution phases of T buckets
@@ -424,7 +424,7 @@ MULTI = ("a window of more than one member, whatever its draw: its case of verit
 #: the network certifier's chain report as its piece publishes it (`certifier_piece.PUBLIC`), and its draws by step
 CHAIN_REPORT = CASE.parent / "chain" / "report" / "report.json"
 DRAWS = {"n2": "the period draw", "scan": "the scan's draw"}
-CHAIN_DRAWS = (f"the network certifier's chain draws on no live coins. Its period draw (N2's, `LinkWindows.period_draw`) "
+CHAIN_DRAWS = (f"the network certifier's chain draws on no live coins. Its period draw (N2's, `TransferBlocks.period_draw`) "
                "takes every window (sampling_design all: k None, no coins) or K of them on the verifier's own coins (n2_zk.py's); "
                "its scan's draw takes every proof block or K of them on the verifier's or the gate's coins, which the "
                "published report doesn't say. So each draw whose sampling_design isn't all is open under "

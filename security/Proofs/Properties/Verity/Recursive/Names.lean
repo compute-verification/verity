@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
 public import Proofs.Flock.Claims.Recursion.CapLowerPin
-public import VStarRecursive.Protocol
+public import VStarRecursion.Protocol
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

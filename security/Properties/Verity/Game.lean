@@ -4,7 +4,7 @@ public import CoreComposites
 public import Properties.Composition
 public import Properties.Pouw.PearlPlus
 public import Properties.Flock.Circuit.CircuitOf
-public import Definitions.Accounting.JointLive
+public import Definitions.Compose.JointLive
 public import Definitions.Core.Blocks
 public import Definitions.Core.Game
 public import Definitions.Core.Site
