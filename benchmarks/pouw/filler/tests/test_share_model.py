@@ -1,9 +1,13 @@
 """share.py's `Model` and its tables on the lines of a made-up dcap run: what the model fits (the read clock, the DRAM
 rate, lm_head's and the linears' curves, the attention's line, the step's δ, FA2's efficiency), what it reads back
 from the fit (a step's and a prompt's time, and a row of the tables' ratios), a filler beside a step, the τ table,
-the decode grid, the serving mixes and the headline's rows. Each number is chosen so the fit can be stated by hand."""
+the decode grid, the serving mixes and the headline's rows, and what `main` prints of them. Each number is chosen so
+the fit can be stated by hand."""
 
 from __future__ import annotations
+
+import json
+import sys
 
 import pytest
 import share as S
@@ -14,6 +18,11 @@ PEAK = 1024 * 188 * MHZ * 1e6  # the int8 peak at the read clock, MACs a second
 
 ALONE = {"qkv": 2.0, "o": 1.5, "gate_up": 5.5, "down": 3.0}  # one layer's four linears, each alone, ms
 QUARTER = S.Filler([(1, 0.25, 1.25)])  # a filler of a quarter of the peak that slows the step by a quarter
+SPLIT = S.Filler([(1, 0.25, 1.25)], dsms=47)  # the same on a split that leaves decode 47 SMs, a quarter of the GPU's
+# at 0.88 of those SMs' peak 256 rows' linears and lm_head take 22.68 ms, so a step whose own are 16 ms, slowed by a
+# quarter to 20 ms, waits 2.68 ms more
+WAIT = 256 * (S.LIN_TOK + S.LM_TOK) / (0.22 * PEAK) * 1e3 - 20.0
+TUNED = "dfree-split-w8-nc4-t8 92 SMs tuned"  # the one DRAM-free filler the headline prints
 
 
 def _lin(mhz, m, ms, lm=None):
@@ -51,12 +60,15 @@ def _att(p, eta):
     return S.causal(p) / (eta * PEAK) * 1e3  # a causal prompt's attention at a share eta of the peak, ms
 
 
-def _chat(m):
+def _chat(m, batch=32):
     """Chat (a prompt of 1,024 tokens, an answer of 256) at a batch of 32 with FA2: a request's MACs, its prefill and
     one of its steps, ms. The step is at the answer's mean context, 1,152, where the attention's line gives 5 ms;
-    from 16 rows to 256 the linears and lm_head both grow as the square root of the rows, from 3 ms and from 1 ms."""
+    from 16 rows to 256 the linears and lm_head both grow as the square root of the rows, from 3 ms and from 1 ms.
+    At a batch of 256, the pool's: the linears' measured 16 ms, eight times the attention's bytes (36.5 ms) and 256
+    tokens' non-GEMM time."""
     n = 1024 * S.LIN_TOK + S.LM_TOK + S.causal(1024) + 256 * S.decode_n(1, 1152)
-    return n, m.prefill_ms(1024, m.eta_fa2), 4 * 2 ** 0.5 + 5.0 + 0.4 + 1.09
+    step = {32: 4 * 2 ** 0.5 + 5.0 + 0.4 + 1.09, 256: 16.0 + 36.5 + 0.4 + 38.37 / 32}[batch]
+    return n, m.prefill_ms(1024, m.eta_fa2), step
 
 
 def test_the_fit_of_a_runs_lines(m):
@@ -158,7 +170,7 @@ def test_the_tau_table_is_each_kernels_share_of_the_peak_and_that_share_priced_a
 
 
 def test_the_grid_is_a_decode_step_at_each_batch_and_context_alone_and_beside_each_filler(m, monkeypatch):
-    monkeypatch.setattr(S, "FILLER", {"quarter": QUARTER})
+    monkeypatch.setattr(S, "FILLER", {"quarter": QUARTER, "split": SPLIT})
     grid = {(r["B"], r["L"]): r for r in S.grid(m)}
     # six batches at three contexts and the run's two measured points, in order
     assert list(grid) == sorted([(b, ctx) for b in (1, 8, 32, 64, 128, 256) for ctx in (2048, 8192, 32768)]
@@ -176,6 +188,12 @@ def test_the_grid_is_a_decode_step_at_each_batch_and_context_alone_and_beside_ea
         assert r["filler quarter"] == pytest.approx(beside)
         assert r["filler quarter"]["nominal/capacity"] == pytest.approx(r["nominal/capacity"] / 1.25 + 0.25)
     assert grid[(16, 2048)]["nominal/capacity"] == pytest.approx(16 * 8_041_529_344 / (PEAK * 0.01039))
+    # on the split, the floor is of the step's linears and lm_head, not of the step: 16 rows' 4 ms are over theirs
+    # (1.42 ms) and the step is the quarter longer; 256 rows' wait
+    assert pytest.approx(2.68, abs=5e-3) == WAIT
+    assert grid[(16, 2048)]["filler split"] == pytest.approx(grid[(16, 2048)]["filler quarter"])
+    n, t = S.decode_n(256, 2048), 1.25 * (16.0 + 64.5 + 0.4 + 38.37 / 32) + WAIT
+    assert grid[(256, 2048)]["filler split"] == pytest.approx({"ms": t, **m.row(n + 0.25 * PEAK * t * 1e-3, t, 0.25)})
 
 
 def test_each_mix_is_at_32_and_at_the_pools_batch_with_each_attention_kernel_and_each_schedule(m, monkeypatch):
@@ -195,8 +213,9 @@ def test_each_mix_is_at_32_and_at_the_pools_batch_with_each_attention_kernel_and
 
 
 def test_a_mix_is_a_requests_prefill_and_its_decode_steps_at_the_answers_mean_context(m, monkeypatch):
-    monkeypatch.setattr(S, "FILLER", {"quarter": QUARTER})
-    separate, chunked = (r for r in S.mixes(m) if (r["mix"], r["B"], r["attention"]) == ("chat", 32, "FA2"))
+    monkeypatch.setattr(S, "FILLER", {"quarter": QUARTER, "split": SPLIT})
+    rows = S.mixes(m)
+    separate, chunked = (r for r in rows if (r["mix"], r["B"], r["attention"]) == ("chat", 32, "FA2"))
     n, pre, step = _chat(m)
     # a request's 256 steps are each shared by the batch's 32: eight steps' time a request
     assert separate["schedule"] == "separate"
@@ -212,6 +231,18 @@ def test_a_mix_is_a_requests_prefill_and_its_decode_steps_at_the_answers_mean_co
     assert chunked["schedule"] == "chunked, M = 160" and chunked["prefill_time_share"] is None
     assert {k: chunked[k] for k in m.row(n, 1.0)} == pytest.approx(m.row(n, 8 * a_step))
     assert "filler quarter" not in chunked
+    # at the pool's batch, 256, a request's time is one step's. On the split the step waits for its linears' floor
+    separate, chunked = (r for r in rows if (r["mix"], r["B"], r["attention"]) == ("chat", 256, "FA2"))
+    n, pre, step = _chat(m, 256)
+    assert {k: separate[k] for k in m.row(n, 1.0)} == pytest.approx(m.row(n, pre + step))
+    slowed = pre + 1.25 * step + WAIT
+    beside = m.row(n + 0.25 * PEAK * (slowed - pre) * 1e-3, slowed, 0.25 * (slowed - pre) / slowed)
+    assert separate["filler split"] == pytest.approx({**beside, "time": slowed / (pre + step)})
+    # chunked, a step's 256 rows of decode carry 1,024 tokens of prompt: linears of 1,280 rows (60 ms), 256 of them
+    # with lm_head (4 ms), decode's attention and a whole prompt's, and 1,280 tokens' non-GEMM time
+    a_step = 60.0 + 4.0 + 36.5 + 0.4 + _att(1024, m.eta_fa2) + 38.37 * 1280 / 8192
+    assert chunked["schedule"] == "chunked, M = 1280"
+    assert {k: chunked[k] for k in m.row(n, 1.0)} == pytest.approx(m.row(n, a_step))
 
 
 def test_a_mixs_step_is_the_models_where_one_was_measured_and_no_step_is_chunked_past_8192_rows(m, monkeypatch):
@@ -252,4 +283,82 @@ def test_the_headline_is_four_decode_points_and_five_mixes_alone_and_beside_each
     assert (head[4]["N/C"], head[4]["cert/C"]) == pytest.approx((alone, 0.99 * alone))
     assert head[4]["quarter"] == pytest.approx({"N/C": beside, "cert/C": 0.99 * beside,
                                                 "time": slowed / (pre + 8 * step)})
+    # and the same mix at its other batch is its own row
+    n, pre, step = _chat(m, 256)
+    assert head[5]["N/C"] == pytest.approx(n / (PEAK * (pre + step) * 1e-3))
+    assert head[5]["quarter"]["time"] == pytest.approx((pre + 1.25 * step) / (pre + step))
+
+
+def test_a_cell_is_three_decimals_below_ten_one_decimal_from_ten_and_a_dash_for_nothing():
+    cells = [S.fmt(x) for x in (None, 0.25, 9.9994, 10, 10.96, 1042.1)]
+    assert cells == ["–", "0.250", "9.999", "10.0", "11.0", "1042.1"]
+    assert S.fmt_in(None, "tau") == "–" and S.fmt_in({"tau": 0.5, "eta": 12.0}, "tau") == "0.500"
+
+
+def test_main_prints_the_fit_and_each_table_and_writes_them_as_json(m, tmp_path, monkeypatch, capsys):
+    """A run's directory holds `dcap.jsonl`. With no run of a filler named, the fillers are the module's own, and of
+    the DRAM-free ones the headline prints the tuned 92-SM split alone. The numbers are the tables' (the tests above),
+    as `fmt` writes them."""
+    (tmp_path / "dcap.jsonl").write_text("".join(json.dumps(r) + "\n" for r in ROWS) + "\n")
+    monkeypatch.setattr(S, "FILLER", {**S.FILLER, "dfree-other": QUARTER, TUNED: QUARTER})
+    monkeypatch.setattr(sys, "argv", ["share.py", str(tmp_path), "--json", str(tmp_path / "share.json")])
+    S.main()
+    blocks = [b.splitlines() for b in capsys.readouterr().out.rstrip("\n").split("\n\n")]
+    fit, _, head, filler, tau, grid, mixes, _, ladder = blocks
+    # 1024 × 188 MACs a clock at 2,000 and at 2,430 MHz; 250 × 2³¹ B/s; the steps of 9.3 and 20.7 ms modelled as 8.9
+    # and 20.9
+    assert fit[0] == ("read clock 2000 MHz, C = 385.0 TMAC/s (C_2430 = 467.8); DRAM read 1000 GB/s; attention fit "
+                      "537 GB/s + 0.500 ms; step δ 0.400 ms; FA2 η 0.313; A(V99) 0.2068; pool 1220703 tokens")
+    assert fit[1:] == ["step model vs measured: worst 4.3%"]
+    assert [len(t) - 2 for t in (head, tau, grid, mixes, ladder)] == [9, 11, 20, 32, 10]
+    assert head[0] == ("| phase or mix | N/C | cert/C | 60 SMs: N/C, cert/C, time | 92 SMs: N/C, cert/C, time | "
+                       f"{TUNED}: N/C, cert/C, time |")
+    assert head[1] == "|---|---|---|" + "---|" * 3
+    # 0.065 alone; beside a filler of share f that slows it by s, 0.065 / s + f
+    assert head[5] == ("| decode B = 256, L = 2K | 0.065 | 0.064 | 0.284, 0.281, 1.047 | 0.399, 0.395, 1.106 | "
+                       "0.302, 0.299, 1.250 |")
+    assert head[7] == ("| chat, B = 256 | 0.223 | 0.221 | 0.331, 0.328, 1.024 | 0.390, 0.386, 1.053 | "
+                       "0.337, 0.334, 1.125 |")
+    assert filler == ["filler: W11 (assumed)"]
+    assert tau[:2] == ["| kernel | η (read clock) | τ (V99) |", "|---|---|---|"]
+    assert tau[6] == "| 32 layers of linears, m = 8192 (measured) | 0.387 | 0.066 |"
+    assert grid[0] == "| B | L | fits | step ms | N/C | τ | cert/C | forced | +60 SMs N/C | τ | +92 SMs N/C | τ |"
+    assert grid[8] == "| 16 | 2048 | yes | 10.4 | 0.032 | 0.005 | 0.032 | 0.005 | 0.253 | 0.043 | 0.369 | 0.063 |"
+    assert grid[20] == ("| 256 | 8192 | no (model) | 274.1 | 0.023 | 0.004 | 0.023 | 0.004 | 0.244 | 0.042 | 0.361 | "
+                        "0.061 |")
+    assert mixes[0] == ("| mix | P / D | B | attention | schedule | prefill time | N/C | τ | cert/C | forced | "
+                        "+60 SMs N/C | τ | +92 SMs N/C | τ |")
+    assert mixes[2] == ("| chat | 1024 / 256 | 32 | FA2 | separate | 0.357 | 0.159 | 0.027 | 0.158 | 0.027 | 0.300 | "
+                        "0.051 | 0.376 | 0.064 |")
+    assert mixes[3] == ("| chat | 1024 / 256 | 32 | FA2 | chunked, M = 160 | – | 0.172 | 0.029 | 0.170 | 0.029 | "
+                        "– | – | – | – |")
+    # the ladder: a row's τ under each vector, A / A(V99) times its own, and what that leaves hidden
+    assert ladder[0] == "| row | " + " | ".join(f"{what} (A = {a:.3f})" for what, a in S.A_LADDER) + " |"
+    assert [line.split(" | ")[0] for line in ladder[2:]] == [
+        "| linears m = 8192", "| prefill step 8192 (FA2)", "| decode 32 / 8192", "| decode 32 / 8192 + 92-SM filler",
+        "| decode 256 / 2048", "| decode 256 / 2048 + 92-SM filler", "| chat B = 256", "| chat B = 256 + 92-SM filler",
+        "| reasoning B = 132", "| reasoning B = 132 + 92-SM filler"]
+    assert ladder[2] == ("| linears m = 8192 | 0.066 (1.000) | 0.111 (1.000) | 0.163 (1.000) | 0.180 (1.000) | "
+                         "0.272 (0.857) | 0.318 (0.685) |")
+    assert ladder[5] == ("| decode 32 / 8192 + 92-SM filler | 0.061 (1.000) | 0.103 (1.000) | 0.151 (1.000) | "
+                         "0.167 (1.000) | 0.252 (0.880) | 0.295 (0.708) |")
+    res = json.loads((tmp_path / "share.json").read_text())
+    assert (res["read_mhz"], res["dram_read_gb_s"], res["pool_tokens"], res["filler"]) == (
+        2000, 1000.0, 1220703, "W11 (assumed)")
+    assert res["att_fit"] == pytest.approx({"gb_s": 250 * 2 ** 31 / 1e9, "c0_ms": 0.5})
+    assert (res["step_delta_ms"], res["eta_fa2"], res["A_v99"]) == pytest.approx((0.4, m.eta_fa2, S.A_V99))
+    assert res["model_check"] == [{"B": 16, "L": 2048, "measured": 9.3, "model": pytest.approx(8.9)},
+                                  {"B": 16, "L": 8192, "measured": 20.7, "model": pytest.approx(20.9)}]
+    assert [(len(res[k]), res[k][0]) for k in ("tau", "grid", "mixes")] == [
+        (11, S.tau_table(m)[0]), (20, S.grid(m)[0]), (32, S.mixes(m)[0])]
+    assert res["a_ladder"] == [{"what": what, "A": a} for what, a in S.A_LADDER]
+    # every filler is in the JSON's headline, the unprinted one too
+    columns = ["row", "N/C", "cert/C", "60 SMs", "92 SMs", "dfree-other", TUNED]
+    assert [list(h) for h in res["headline"]] == [columns] * 9
+    assert res["fill"] == res["dfill"] == res["fstep"] == []
+    assert res["adaptive"] == {"as tuned for the whole GPU": {}, "tuned": {}}
+    assert res["fstep_pick"] == {"fused": {}, "fused + pump": {}}
+    assert [r["row"] for r in res["tau_ladder"]] == [line.split(" | ")[0][2:] for line in ladder[2:]]
+    assert res["tau_ladder"][0]["no CUDA-core product route"] == pytest.approx(
+        {"tau": 8192 * S.LIN_TOK / 0.384 / (1024 * 188 * 2430e6), "hidden": 0.685}, abs=5e-4)
 
