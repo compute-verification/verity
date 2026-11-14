@@ -34,7 +34,6 @@ IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
 #: ``verity`` (or drop the use) and delete its line; a new line needs a reason the dependency cannot go through ``verity``.
 KNOWN = {
     ("verity/circuits/evaluate/tests/test_difftest.py", "verity_vllm.definitions.registry"),
-    ("verity/protocols/proofs/flock/verifier/sigma/tests/test_sigma_difftest.py", "verity.circuits.ops.boolean.versions"),
     ("verity/protocols/proofs/flock/verifier/sigma/tests/test_sigma_difftest.py", "verity_vllm.definitions.registry"),
     ("verity/protocols/proofs/flock/verifier/sigma/tests/test_sigma_difftest.py", "verity_vllm.definitions.registry.catalog"),
     ("verity/protocols/proofs/flock/verifier/sigma/tests/test_sigma_difftest.py", "verity_vllm.definitions.replay"),
@@ -90,7 +89,6 @@ KNOWN = {
     ("verity/protocols/proofs/flock/prover/tests/test_rolled_lowering.py", "verity_vllm.definitions.registry"),
     ("verity/protocols/proofs/flock/prover/tests/test_tmpl_statement.py", "verity_vllm.definitions.registry"),
     ("verity/protocols/proofs/flock/prover/tests/test_unit_range.py", "verity_vllm.definitions.registry"),
-    ("verity/protocols/accounting/pouw/verifier/tests/test_pearl_c_tile.py", "verity_vllm.definitions.registry"),
     ("verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py", "verity_vllm.definitions.registry.catalog"),
     ("verity/protocols/proofs/spot/verifier/tests/test_proofs.py", "verity_vllm.definitions.registry.catalog"),
     ("verity/protocols/proofs/spot/verifier/tests/test_served_select.py", "verity_vllm.definitions.registry"),

@@ -274,6 +274,17 @@ KNOWN = frozenset({
     "verity_vllm.check.replay.opening",
     "verity_vllm.commit.committer.host_retention",
     "verity_vllm.commit.opened",
+    # the compile slice and its pieces (`verity_vllm.compiler`), which the network certifier's drivers under `benchmarks/`
+    # imported from `verity` before the compiler's move into the adapter
+    "verity_vllm.compiler.cache_step",
+    "verity_vllm.compiler.cache_step_v3",
+    "verity_vllm.compiler.compile_slice",
+    "verity_vllm.compiler.compile_slice_v4",
+    "verity_vllm.compiler.compile_slice_v6",
+    "verity_vllm.compiler.compile_slice_v7",
+    "verity_vllm.compiler.served_rows",
+    "verity_vllm.compiler.served_statics",
+    "verity_vllm.compiler.served_tie",
     # the served circuits (`verity_vllm.definitions`), which outside code imported from `verity` before the served circuits'
     # move into the adapter; vllm takes these down under its goal vllm/benchmarks-import-public-only (due Wed 25 Nov)
     "verity_vllm.definitions.encoding",

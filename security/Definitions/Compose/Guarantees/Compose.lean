@@ -113,7 +113,7 @@ the folded branch still binds. The seeded pair's folded branch reads a stronger 
 `κ = 4` (each word's row and column bits, `1 + κ = 5` per unit, plus the premium), but its whole skips pay a premium at
 a rate no granted premise sets (`Scheme.wholeRate`), so its line is a condition: 56.1% at Llama-3.1-8B decode, `r = 1`,
 at the decided `½` a query, 1.120% if `GuessLuckAt` holds at `2^-64`, and 0.101%, below this one, only if
-`WholeEntropyAt` holds at `K/8` nats a tile. `TemplateMoment` is a property of the template, not of the coin source, so
+`WholeEntropyAt` holds at `K/8` nats a tile. `TemplateMoment` is a property of the template, not of the coins, so
 it would hold here too; reading it needs a per-round moment premise and a rate lemma in place of `SplitRate`, a
 statement of its own, so this line leaves that margin unused.
 

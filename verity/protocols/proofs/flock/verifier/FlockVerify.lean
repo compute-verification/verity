@@ -792,7 +792,7 @@ def plainCoinsArg (arg : Option String) (tables : Array String) : Option Coins :
   | some "tree" => some (.tree (Zk.coinSpec tables))
   | some _ => none
 
-def COINS_USAGE : String := "--coins is tree, the challenger's keyed coin tree (the one coin source a session may have)"
+def COINS_USAGE : String := "--coins is tree, the challenger's keyed coin tree (the one origin of coins a session may have)"
 
 /-- `coin-tree-check FILE`: R7 and the record's `coin_tree` for the keyed coin tree (`Flock.CoinTree`), on `{"hello": the
 verifier's Hello object (its coins.nonce empty), "sessions": [{"hello": the prover's Hello, "coin_tree": ...}, ...]}`, in

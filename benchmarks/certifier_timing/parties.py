@@ -65,7 +65,7 @@ LOOPBACK = "127.0.0.1"
 OBSERVERS = ("plain", "spin")
 #: how long before a time the server stops sleeping and spins on the clock
 SPIN_S = 0.003
-#: a cell's header, `verity.protocols.accounting.certifier.verifier.active.HEADER`'s size: the certifier checks it at its start
+#: a cell's header, `verity.protocols.accounting.certifier.verifier.link_frame.HEADER`'s size: the certifier checks it at its start
 HEADER_BYTES = 9
 #: what the observer sends, a request of no meaning
 HELLO = b"go\n"

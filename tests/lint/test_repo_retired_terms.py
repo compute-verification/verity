@@ -139,15 +139,15 @@ REQUEST_CAPS = tuple(f"adapters/vllm/{p}" for p in (
     "tests/program/test_lifted_dense_b1_padrev.py", "tests/program/test_lifted_mixed.py",
     "tests/program/test_lifted_workload_padrev.py", "tests/program/test_lifted_tiny.py",
     "tests/program/test_lifted_tiny_padrev.py"))
-#: the vLLM adapter's files of a logit soft cap, which name no Pearl term: the softcapped attention chain's static ``CAP``
+#: the vLLM and torch adapters' files of a logit soft cap, which name no Pearl term: the softcapped attention chain's static ``CAP``
 #: (``AttentionSoftcap_v2{...,CAP}``) and the scalar ``cap`` its rules and tests pass
 SOFTCAP_CAPS = tuple(f"adapters/vllm/{p}" for p in (
     "verity_vllm/program/frontend/targets.py", "verity_vllm/program/frontend/rules/vocab.py",
-    "verity_vllm/program/frontend/rules/common.py", "verity_vllm/program/frontend/rules/vllm_bindings/attention.py",
+    "verity_vllm/program/frontend/rules/vllm_bindings/attention.py",
     "verity_vllm/program/frontend/rules/vllm_bindings/observations.py", "verity_vllm/program/predict/build.py",
     "tests/acquire/fa2_attn_oracle.py", "tests/program/test_fa2_softcap.py", "tests/program/test_boolean_softcap.py",
     "tests/program/test_registered_value_chains.py", "tests/program/test_registered_value_rules.py",
-    "tests/properties/fa2_softcap_capture_gpu.py"))
+    "tests/properties/fa2_softcap_capture_gpu.py")) + ("adapters/torch/verity_torch/frontend/rules/common.py",)
 #: the files whose ``CAP`` and ``CAPS`` in capitals are their own too
 CAPITALS = LIVE_CAPS + REQUEST_CAPS + SOFTCAP_CAPS
 #: the files whose "cap" is their own, by path prefix, with each reason; Pearl's spellings still count there, and
