@@ -156,8 +156,8 @@ def _relay_run(out: Path, key: Path, params: WardenParams, requests: Sequence[by
     finally:
         publisher.close()
         signer.close()
-    deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=1, listen=("127.0.0.1", 1),
-                                      upstream=("127.0.0.1", 2), slack=warden.slack, run_id=warden.run_id)
+    deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=1, slack=warden.slack,
+                                      run_id=warden.run_id)
     (out / "deployment.json").write_text(json.dumps(deployment))
     log = []
     for index, (request, client) in enumerate(zip(requests, clients)):

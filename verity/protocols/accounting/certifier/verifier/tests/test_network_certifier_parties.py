@@ -56,11 +56,12 @@ def test_the_certifier_sends_the_opening_to_the_workers_and_the_record_to_the_ve
     m = NC.MANIFEST
     assert [(c.sender, c.receiver, c.messages, c.after, c.carries_coins, c.latency_ms) for c in m.channels] == [
         ("network-certifier", "workers", ("out-opening", "records", "cells-salts"), (), False, None),
-        ("network-certifier", "verifier", ("out-record", "certificate", "registration", "load"), (), False, None)]
+        ("network-certifier", "verifier", ("out-record", "certificate", "registration", "load", "deployment"), (), False,
+         None)]
     assert m.peers(NC.NETWORK_CERTIFIER) == ("verifier", "workers")
     assert {t: m.registry.kind(t) for t in m.registry.types} == {
         "out-opening": "private", "records": "private", "cells-salts": "private", "out-record": "commitment",
-        "certificate": "commitment", "registration": "commitment", "load": "commitment"}
+        "certificate": "commitment", "registration": "commitment", "load": "commitment", "deployment": "structure"}
     assert not m.sends(NC.WORKERS, NC.VERIFIER).types and not m.sends(NC.VERIFIER, NC.NETWORK_CERTIFIER).types
 
 
@@ -105,13 +106,14 @@ def _sent(channel, message: Message) -> Message:
 RUN = {NC.WORKERS: [Message(NC.RECORDS, {**HEAD, "record": r}, bytes(range(256)) * 3) for r in NC.RECORD_NAMES]
        + [Message(NC.CELLS_SALTS, HEAD, bytes(3 * WR.SALT_BYTES + WR.WIRING_SALT_BYTES))],
        NC.VERIFIER: [Message(NC.CERTIFICATE, HEAD, b'{"refused": ["node0/uplink0", "egress", 3]}'),
-                     Message(NC.REGISTRATION, HEAD, b'{"cost": {"rows": 4}, "registration": {}}'),
-                     Message(NC.LOAD, {}, b'{"values": []}')]}
+                     Message(NC.REGISTRATION, HEAD, b'{"cost": {"row_bytes": 512, "rows": 4}, "registration": {}}'),
+                     Message(NC.LOAD, {}, b'{"values": []}'),
+                     Message(NC.DEPLOYMENT, {}, b'{"digest": "00", "params": {}, "windows": 2}')]}
 
 
 def test_the_runs_witness_goes_to_the_workers_and_its_certificates_and_registrations_to_the_verifier() -> None:
-    """The records and the rows' salts reach the workers alone, the certificates, the rows' registrations and the
-    load the verifier alone, each as it was sent; the salts read back as the rows' and the wiring's."""
+    """The records and the rows' salts reach the workers alone, the certificates, the rows' registrations, the
+    load and the deployment the verifier alone, each as it was sent; the salts read back as the rows' and the wiring's."""
     for receiver, other in ((NC.WORKERS, NC.VERIFIER), (NC.VERIFIER, NC.WORKERS)):
         to, wrong = (NC.MANIFEST.sends(NC.NETWORK_CERTIFIER, p) for p in (receiver, other))
         for message in RUN[receiver]:
@@ -137,7 +139,9 @@ def test_a_message_past_its_schema_is_refused_by_name(out) -> None:
                           (Message(NC.CELLS_SALTS, HEAD, bytes(WR.SALT_BYTES + 1)), "schema"),
                           (Message(NC.CERTIFICATE, {"link": LINK}, b"{}"), "schema"),
                           (Message(NC.REGISTRATION, HEAD, bytes(NC.MAX_RECORD + 1)), "oversized"),
-                          (Message(NC.LOAD, HEAD, b"{}"), "schema")):
+                          (Message(NC.LOAD, HEAD, b"{}"), "schema"),
+                          (Message(NC.DEPLOYMENT, HEAD, b"{}"), "schema"),
+                          (Message(NC.DEPLOYMENT, {}, bytes(NC.MAX_RECORD + 1)), "oversized")):
         with pytest.raises(Refused) as e:
             types.encode(message)
         assert e.value.name == name, message.type

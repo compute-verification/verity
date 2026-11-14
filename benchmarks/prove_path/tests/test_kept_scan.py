@@ -85,8 +85,8 @@ def _kept(d: Path, served: ST.Served, records: Callable[[str, Any], Any] = lambd
         for kind, rec, grid in (("ingress", served.ingress[w], params.grid), ("egress", served.egress[w], params.grid),
                                 ("failed", served.failed[w], params.fails_grid)):
             pub.keep(records(kind, rec), grid)
-    dep = WS.deployment_record(params, signer.public_key(), SESSION, origin_unix=0.0, windows=2,
-                               listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=0.025, run_id=bytes(32))
+    dep = WS.deployment_record(params, signer.public_key(), SESSION, origin_unix=0.0, windows=2, slack=0.025,
+                               run_id=bytes(32))
     (run / "deployment.json").write_text(json.dumps(deployment(dep)))
     serve = d / "serve"
     (serve / CP.PRIVATE / "RUN").mkdir(parents=True)

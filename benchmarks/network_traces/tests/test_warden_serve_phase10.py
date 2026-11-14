@@ -162,7 +162,7 @@ def _drive(out: Path, key: Path, *, process: bool, commit=fixed_commit, late: di
     except (RuntimeError, EOFError) as e:
         close_error = e
     deployment = ws.deployment_record(PARAMS, publisher.key, SESSION, origin_unix=0.0, windows=WINDOWS,
-                                      listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=warden.slack)
+                                      slack=warden.slack)
     (out / "deployment.json").write_text(json.dumps(deployment))
     log, B = [], PARAMS.cell_bytes
     for index, (request, client) in enumerate(zip(REQUESTS, clients)):
