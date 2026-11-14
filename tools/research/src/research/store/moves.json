@@ -2712,6 +2712,12 @@
     },
     {
       "paths": {
+        "benchmarks/hash/dither/numabind.py": "benchmarks/kernels/numabind/numabind.py",
+        "benchmarks/hash/dither/tests/test_numabind.py": "benchmarks/kernels/numabind/tests/test_numabind.py"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/one_stage/member_trees.py": "verity/protocols/proofs/spot/verifier/one_stage/member_trees.py",
         "benchmarks/one_stage/served_integrity.py": "verity/protocols/proofs/spot/verifier/one_stage/served_integrity.py",
         "benchmarks/one_stage/verdict_record.py": "verity/protocols/proofs/spot/verifier/one_stage/verdict_record.py",
