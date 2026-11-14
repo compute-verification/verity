@@ -16,6 +16,8 @@ import re
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
+from verity.protocols.proofs.spot.verifier import second_stage as SS
+
 #: how a rank's registered names are its own (`Spot.Ranks.PREFIX`)
 PREFIX = "r<rank>/"
 #: the detail of a check whose body is not built: it refuses (`Spot.Ranks.NOT_BUILT`)
@@ -24,7 +26,7 @@ NOT_BUILT = "not yet built: refused"
 RANK_CODES = ("ranks-shape", "ranks-window", "ranks-run", "ranks-members", "ranks-units", "ranks-wires", "ranks-reads")
 #: `Spot.SecondStage`'s per-session codes this reader reuses, read against a rank member (`Spot.SecondWindow.SESSION_CODES`)
 SESSION_CODES = ("second-header", "second-population", "second-roots", "second-sample", "second-read", "second-values",
-                 "second-refs", "second-tables", "second-verified")
+                 "second-refs", "second-tables", "second-verified", "second-table-rows")
 WINDOW_WHY = "a served rank record's digest is not its rank's window, or its registration binds another digest or other bytes"
 RUN_WHY = "the ranks' registrations are not one serve's, one a rank at <root>/rank<r>, each in the log before the challenge"
 MEMBERS_WHY = ("a rank's members of a template don't tile its units in key order, name no template of the rank's, or "
@@ -36,6 +38,8 @@ WIRES_WHY = ("the joined record's first wires are not each rank's own wires move
              "rank order, or a wire after them has its reader units in no one rank or all its writers in its reader's rank")
 READS_WHY = ("the joined record's registered declarations are not its ranks', each named r<r>/... and at its rank's units, "
              "in rank order, or a rank's record has values or histories")
+WIRE_TREE_WHY = "a sampled reader member reads through one wire writer rows that lie in more than one writer member, or in none"
+PARTS_WHY = "a sampled unit is in no rank member"
 NO_REGISTERED = {"openings": [], "params": {}, "reads": [], "roots": [], "tables": []}
 #: the `two-stage-form` refusal's detail (`Spot.SecondStage.FORM_WHY`)
 FORM_WHY = ("refused: a two-stage run, its second-stage sessions over an interior registration: a statement form the "
@@ -227,11 +231,146 @@ def rank_failures(record: Mapping[str, Any], records: Sequence[Mapping[str, Any]
     return out
 
 
+_WIRE_KEYS = {"reader", "port", "writer", "out", "at", "radix", "base", "step"}
+
+
+def _pattern(d: Any) -> dict[str, Any] | None:
+    """`Spot.Wires.Wire.ofJson`: a wire's record, or None."""
+    if not isinstance(d, Mapping) or not _WIRE_KEYS <= set(d) <= {*_WIRE_KEYS, "cut"}:
+        return None
+    radix, step, cut = d["radix"], d["step"], d.get("cut", [0, 1])
+    strs = all(isinstance(d[k], str) for k in ("reader", "port", "writer", "out"))
+    ints = (isinstance(radix, list) and isinstance(step, list) and isinstance(cut, list) and len(cut) == 2
+            and all(_nat(x) for x in (*radix, *cut, d["at"])) and all(isinstance(x, int) and not isinstance(x, bool)
+                                                                       for x in (*step, d["base"])))
+    if not (strs and ints and radix and len(radix) == len(step) and min(radix) >= 1 and cut[1] >= 1):
+        return None
+    return {**d, "cut": list(cut)}
+
+
+def _read(d: Any) -> dict[str, Any] | None:
+    """`Spot.SecondWindow.readOf?`: a read's record as a wire's, its ``param`` for the writer and no output port."""
+    if not isinstance(d, Mapping) or "writer" in d or "out" in d:
+        return None
+    return _pattern({**{k: v for k, v in d.items() if k != "param"}, "writer": d.get("param"), "out": ""})
+
+
+def _list(record: Mapping[str, Any], key: str) -> list | None:
+    x = record.get(key) if isinstance(record, Mapping) else None
+    return [] if x is None else x if isinstance(x, list) else None
+
+
+def _all(xs: list | None, f: Callable[[Any], Any]) -> list | None:
+    if xs is None:
+        return None
+    ys = [f(x) for x in xs]
+    return None if any(y is None for y in ys) else ys
+
+
+def _distinct(xs: Sequence[Any]) -> list[Any]:
+    return [x for i, x in enumerate(xs) if x not in xs[:i]]
+
+
+def links_of(record: Mapping[str, Any]) -> list[SS.Link] | None:
+    """`Spot.SecondWindow.linksOf?`."""
+    rs = _all(_list(record, "boundary_reads"), _read)
+    if rs is None:
+        return None
+    ls = _distinct([SS.Link(r["reader"], r["port"], r["writer"]) for r in rs])
+    return None if any(a.template == b.template and a.port == b.port and a.value != b.value for a in ls for b in ls) else ls
+
+
+def wires_of(record: Mapping[str, Any]) -> list[SS.Wire] | None:
+    """`Spot.SecondWindow.wiresOf?`."""
+    ws = _all(_list(record, "wires"), _pattern)
+    return None if ws is None else _distinct([SS.Wire(w["reader"], w["port"], w["writer"], w["out"]) for w in ws])
+
+
+def _writer_at(p: Mapping[str, Any], i: int) -> int:
+    out = p["base"]
+    for r, s in zip(reversed(p["radix"]), reversed(p["step"]), strict=True):
+        out, i = out + i % r * s, i // r
+    return out
+
+
+def _reader_units(p: Mapping[str, Any]) -> int:
+    return math.prod(p["radix"]) // p["cut"][1]
+
+
+def rows_of(record: Mapping[str, Any], sample: Sequence[tuple[str, int]]) -> list[tuple] | None:
+    """`Spot.SecondWindow.rowsOf?`: ``(template, port, unit, row, of, out, source)`` each."""
+    reads = _all(_list(record.get("registered") or {}, "reads"), _read)
+    ps = [_all(_list(record, "wires"), _pattern), _all(_list(record, "boundary_reads"), _read), reads]
+    if any(x is None for x in ps):
+        return None
+    return [(t, p["port"], u, p["cut"][0] + c, p["writer"], p["out"], _writer_at(p, (u - p["at"]) * p["cut"][1] + c))
+            for p in ps[0] + ps[1] + ps[2] for t, u in sample if t == p["reader"] and p["at"] <= u < p["at"] + _reader_units(p)
+            for c in range(p["cut"][1])]
+
+
+def parts_of(ranks: Sequence[tuple[str, Mapping[str, int], int]], registrations: Sequence[Mapping[str, Any]],
+             sample: Sequence[tuple[str, int]]) -> list[tuple[int, str, int, int, int]] | None:
+    """`Spot.SecondWindow.partsOf?`."""
+    ms = [member_of(ranks, registrations, t, u) for t, u in sample]
+    return None if any(m is None for m in ms) else _distinct(ms)
+
+
+def _box(p: Mapping[str, Any], lo: int, hi: int) -> tuple[int, int]:
+    """`Spot.Wires.Wire.box`."""
+    a = b = p["base"]
+    radix, step = p["radix"], p["step"]
+    for k in range(len(radix) - 1, -1, -1):
+        r, s = radix[k], step[k]
+        if lo // r == hi // r:
+            q, rest = lo // r, 0
+            for j in range(k - 1, -1, -1):
+                rest += q % radix[j] * step[j]
+                q //= radix[j]
+            return a + min(lo % r * s, hi % r * s) + rest, b + max(lo % r * s, hi % r * s) + rest
+        a, b, lo, hi = a + min(0, s * (r - 1)), b + max(0, s * (r - 1)), lo // r, hi // r
+    return a, b
+
+
+def _tree_ok(ranks: Sequence[tuple[str, Mapping[str, int], int]], registrations: Sequence[Mapping[str, Any]],
+             m: tuple[int, str, int, int, int], w: Mapping[str, Any]) -> bool:
+    r, t, _j, base, units = m
+    lo, c, ru = segment(ranks, t, r)[0] + base, w["cut"][1], _reader_units(w)
+    if t != w["reader"] or not max(lo, w["at"]) < min(lo + units, w["at"] + ru):
+        return True
+    a, b = (max(lo, w["at"]) - w["at"]) * c, (min(lo + units, w["at"] + ru) - w["at"]) * c - 1
+    x, y = _box(w, a, b)
+    p, q = (member_of(ranks, registrations, w["writer"], x), member_of(ranks, registrations, w["writer"], y)) \
+        if x >= 0 else (None, None)
+    return p is not None and q is not None and p[:3] == q[:3]
+
+
+def wire_tree_failures(ranks: Sequence[tuple[str, Mapping[str, int], int]], registrations: Sequence[Mapping[str, Any]],
+                       record: Mapping[str, Any], ms: Sequence[tuple[int, str, int, int, int]]) -> list[tuple[str, Any]]:
+    """`Spot.SecondWindow.wireTreeFailures`: ``ranks-wire-tree``."""
+    ws = _all(_list(record, "wires"), _pattern)
+    ok = ws is not None and all(_tree_ok(ranks, registrations, m, w) for m in ms for w in ws)
+    return [] if ok else [("ranks-wire-tree", WIRE_TREE_WHY)]
+
+
+def session_failures(record: Mapping[str, Any], statements: Sequence[Any]) -> list[tuple[str, Any]]:
+    """`Spot.SecondWindow.sessionFailures`: ``second-table-rows`` as `second_stage` reads it, over the joined record's
+    wires; the rest refused until built."""
+    ws = wires_of(record)
+    own = SS.Own(sample=(), parts=None, interior=None, boundary=None, drawn=(), wires=None if ws is None else tuple(ws))
+    return [(c, NOT_BUILT) for c in SESSION_CODES if c != "second-table-rows"] + SS.table_rows_failures(own, statements)
+
+
 def failures(allow: bool, record: Mapping[str, Any], records: Sequence[Mapping[str, Any]],
              served: Sequence[tuple[str, str]], registrations: Sequence[Mapping[str, Any]], root: str,
-             logged: Callable[[str], bool], sample: Sequence[int],
+             logged: Callable[[str], bool], sample: Sequence[tuple[str, int]],
              statements: Sequence[Mapping[str, Any]]) -> list[tuple[str, Any]]:
-    """`Spot.SecondWindow.failures`: the ranks' failures, then (with no reader of the sampled members built yet)
-    ``ranks-members``; ``two-stage-form`` last while nothing else fails and the form is off."""
-    found = rank_failures(record, records, served, registrations, root, logged) + [("ranks-members", NOT_BUILT)]
+    """`Spot.SecondWindow.failures`: the ranks' failures, then ``ranks-members`` where a sampled unit is in no rank
+    member, else ``ranks-wire-tree`` and the per-session failures; ``two-stage-form`` last while nothing else fails and
+    the form is off."""
+    found = rank_failures(record, records, served, registrations, root, logged)
+    ranks = ranks_of(record.get("ranks"))
+    if ranks is not None:
+        ms = parts_of(ranks, registrations, sample)
+        found += [("ranks-members", PARTS_WHY)] if ms is None else (
+            wire_tree_failures(ranks, registrations, record, ms) + session_failures(record, statements))
     return [("two-stage-form", FORM_WHY)] if not found and not allow else found
