@@ -17,7 +17,7 @@ from typing import Any
 
 from verity.circuits.defs import bind
 from verity.circuits.refs import runs
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity.definitions.registry import linear_cut as LC
 
 from .build import Unexpressible

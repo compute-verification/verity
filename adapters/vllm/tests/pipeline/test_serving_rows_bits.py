@@ -27,7 +27,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.commitments.gates.embedding import read
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity_flock import circuit as FC
 from verity_flock.class_statement import UnitStager
 from verity_vllm.pipeline import chunk_rows as CR
