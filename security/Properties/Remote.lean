@@ -115,12 +115,19 @@ def CaseHeld (k : Case) : Prop :=
 verifier, `VStar.Recursive.Caller.check` returns no code exactly when the record keeps `Properties.Spot.CallerHeld`
 against that verifier: its day's declared program, its window's stream, prover, seed salt, the pool's reset, week and
 spent mark with at most one reset a week, and the registration log's compiler and advice within its length, and, when
-the verifier expects values registered, the pool its window opens. SPOT's one-stage form and the recursive
-audit read SPOT's acceptance through that check (`VStar.Recursive.Caller.gate`), so `StageHeld` reads the caller's
-facts off it. -/
+the verifier expects values registered, the pool its window opens and no output value reading a port of a record its
+verdict log names refused. SPOT's one-stage form and the recursive audit read SPOT's acceptance through that
+check (`VStar.Recursive.Caller.gate`), so `StageHeld` reads the caller's facts off it (`CallerCheckSound`). -/
 def CallerCheckMeans : Prop :=
   ∀ (rec : Json) (v : Spot.Docket.Verifier),
     VStar.Recursive.Caller.check rec v = #[] ↔ Properties.Spot.CallerHeld rec v
+
+/-- **Where the caller's check finds nothing, the record keeps the caller's facts**: `CallerCheckMeans`' forward half,
+which is all `StageHeld` reads. On every record and every verifier, where `VStar.Recursive.Caller.check` returns no
+code, the record keeps `Properties.Spot.CallerHeld` against that verifier. -/
+def CallerCheckSound : Prop :=
+  ∀ (rec : Json) (v : Spot.Registration.Verifier),
+    VStar.Recursive.Caller.check rec v = #[] → Properties.Spot.CallerHeld rec v
 
 /-- SPOT's case `k` decodes under SPOT's own decoders (`VStar.Recursive.Sampled`, whose params name
 the form), and the record it decodes to names, by its SHA-512, the program the named form verifies the sessions against
@@ -129,8 +136,8 @@ params, `Spot.OneStageZk.Params.base`); in the recursive form, the program of th
 (`VStar.Recursive.Params.base`), the statement whose one verdict of record V*'s compiled check computes and whose
 soundness the recursive audit (`RecursiveAuditC3`) states. In either form the record keeps the caller's facts against
 that verifier (`Properties.Spot.CallerHeld`): it names its day's declared program, its window names the stream, the
-prover, the seed salt, the registered compiler and the pool's reset the verifier holds, and it opens the pool the previous window of record
-left. SPOT's own statement (`Properties.Spot.AcceptMeans`) holds none of them: they are what SPOT's caller hands the
+prover, the seed salt, the registered compiler and the pool's reset the verifier holds, it opens the pool the previous
+window of record left, and no output value reads a port of a record the verifier's verdict log names refused. SPOT's own statement (`Properties.Spot.AcceptMeans`) holds none of them: they are what SPOT's caller hands the
 verifier, so they are stated here, of the case the caller's check (`VStar.Recursive.Caller.check`) accepted. -/
 def StageHeld (k : Case) : Prop :=
   (∃ (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitment),
