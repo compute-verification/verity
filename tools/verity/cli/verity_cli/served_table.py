@@ -424,7 +424,7 @@ def _certifier_piece(cfg, params, bound):
 
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
               "requests, every closed window sealed and the audited window picked; then SPOT's records audit "
-              "(C-Flock --zk behind the Lean ZK server, the Lean verifier) and each listed component's piece",
+              "(Flock --zk behind the Lean ZK server, the Lean verifier) and each listed component's piece",
               scripts=(RUNNER, VERDICTS_SCRIPT), hooks=_serve)
 #: each listed component's party -> its piece
 PARTIES: dict[str, dict[str, Piece]] = {
@@ -434,7 +434,7 @@ PARTIES: dict[str, dict[str, Piece]] = {
         ZK_SERVER: Piece("sampled-proofs", ZK_SERVER, SERVED_WINDOW, "the Lean ZK server every outer proof goes through, "
                         "one at a time, in the records audit"),
         WORKERS: Piece("sampled-proofs", WORKERS, SERVED_WINDOW, "the window's values committed under hiding leaves "
-                       "and sealed, its registration before the draw, and the drawn proof blocks proved in C-Flock --zk; "
+                       "and sealed, its registration before the draw, and the drawn proof blocks proved in Flock --zk; "
                        "the draw on the live challenger when its gate is bound, else on a local development session's "
                        "coins in a development run", reaches=CHALLENGER, optional=tuple(_PP), hooks=_spot_challenger),
         VERIFIER: Piece("sampled-proofs", VERIFIER, CHECK, "the onsite check: served_verdicts.py record over the "
