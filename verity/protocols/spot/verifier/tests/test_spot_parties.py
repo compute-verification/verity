@@ -1,18 +1,18 @@
 """SPOT[Flock]'s own deployment on the deployment layer (`parties.SPOT_PROTOCOL`), every party on stand-in capabilities: an
-honest run draws each block's sample on the challenger's coins once its registration is in, the proof server proves it from
-the inference server's replay inputs and that draw, and the verifier audits each block in order on its proof and accepts,
+honest run samples each block's sample on the challenger's coins once its registration is in, the proof server proves it from
+the inference server's replay inputs and that sample, and the verifier audits each block in order on its proof and accepts,
 with no ZK server, no pin and no composite; the inference server only sends, and the proof server hears only the
 inference server and the verifier and answers only the verifier; an accepting audit of another registration rejects; an
-audit that is `Unavailable` is its block's error, a draw that is ends the verifier refused ``draw``, and a proof server or
+audit that is `Unavailable` is its block's error, a sample that is ends the verifier refused ``draw``, and a proof server or
 inference server that can't do its step leaves the verifier refused ``closed``; parameters out of range are refused by
 every party; the verifier replays from its own transcript; and the placement holds each party to its principal's machine
-and the draws to a link no developer's machine relays.
+and the samples to a link no developer's machine relays.
 
-In two stages (`parties.SPOT_TWO_PROTOCOL`) each block's interior is registered once its draw is in, its second stage
-drawn only once that interior is in, and the block proved on both draws and audited on both, its line naming the interior;
-an accepting audit of another interior rejects; a second-stage draw that is `Unavailable` ends the verifier refused
+In two stages (`parties.SPOT_TWO_PROTOCOL`) each block's interior is registered once its sample is in, its second stage
+sampled only once that interior is in, and the block proved on both samples and audited on both, its line naming the interior;
+an accepting audit of another interior rejects; a second-stage sample that is `Unavailable` ends the verifier refused
 ``second``, and an interior the proof server can't register leaves the verifier refused ``closed``; and a message out of
-its phase (an interior of a block not drawn or registered twice, a proof before its second-stage draw, a second-stage draw
+its phase (an interior of a block not sampled or registered twice, a proof before its second-stage sample, a second-stage sample
 before its interior) is refused ``out-of-phase``."""
 
 from __future__ import annotations
@@ -328,7 +328,7 @@ def _refused(out) -> str | None:
 
 
 def _drawn():
-    """A two-stage verifier that has drawn block 0's first stage."""
+    """A two-stage verifier that has sampled block 0's first stage."""
     v = _started(P.TwoStageVerifier())
     v.on(Received(P.CHALLENGER, Message("Challenger", {"address": ADDRESS, "pin": "f" * 40})))
     assert [s.message.type for s in _said(v, P.INFERENCE_SERVER, "Registration", 0, registration(0))] == ["Draw"]
