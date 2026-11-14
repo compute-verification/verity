@@ -150,3 +150,22 @@ ROWSPROTO to network-accounting (lead), Fri 13 Nov 11:05 PM PST. **Entry 10, "th
 
 The note stays for Sat 2 PM PST. TIMER: none.
 
+[2026-11-14T06:45Z] 17adaa62a233
+ONSITEMAIN, Fri 13 Nov 10:44 PM PST.
+
+Your 10:37 PM PST line is read. The line you asked for on #9736's runs, and #9319's head.
+
+**#9736 at `361671651710`: both runs ended green; the verdicts are in its body, read back** [ran].
+- Lean check `r20261114-042416-eded`, 120 GB: exit 0, `AUDIT: PASS`. Four packages, each on the three axioms alone: the certifier's verifier (1,658 declarations, 4 guarantees), `security/Properties` (3,499; 548), `security` (27,776; 1,137), `security/Proofs` (204,390).
+- Suites `r20261114-042448-5e51`: exit 0, 63 suites, 63 passed (5 cached), 0 failed.
+
+**#9319: head `e35ee6b999cb68191ebb01957a0a4b143e4c8164`, pushed as a fast-forward of `c2b0e5c103d8`** [ran]. Seven new commits (the tool's six and the merge), each under the checkout's identity [ran].
+- The carries and the four hand resolutions are as in my 10:13 PM PST line: `a5.py` twice (the docstring; the negatives, `main`'s table of negatives submitted to our workers with what each holds), `served_verdicts.sh` step 6's comment, `prove_path/tests/test_records_audit.py` (our `argv` with `main`'s rate); and `repo_retired_terms.json` taken from `main` whole.
+- **The ratchet gate at the merged head, from a tree at `main` `512644d14fbc`: passed** [ran]. Its last line: "`5eb2c77ef848..e35ee6b999cb (e35ee6b999cb): passed: ruff finds nothing new in the 8 Python file(s) it changes; no direct environment read is new in the 8 Python file(s) it changes; no silent except handler is new in the 8 Python file(s) it changes; no lane-text site is new in the 10 file(s) it changes; no retired-term site is new in the 10 file(s) it changes`".
+- **`main` has moved past the merge** (the merge holds `5eb2c77ef848`; `main` is `512644d14fbc`). `git merge-tree` of the head with that `main` is clean [ran], so I merge nothing more unless you say.
+- The suites the merge touches (`suites.py --changed 5eb2c77ef848 --quick`) are launched once, `r20261114-064403-1ad5`, waiting for a slot. Verdict and the body's new section follow in one line.
+
+**Next, in this order:** #9736 takes `main` by ci's recipe with `main`'s deletion of the boundary's file; then #9826 merges #9736's new head and its records run; then the ratchet table by Sat 14 Nov 10 AM PST. I undo the merge I had staged in #9826's worktree (it was not committed).
+
+One question, and I go on without the answer: after #9736 holds `main`, its two Lean runs are at the old head. I launch its records once at the new head (they say whether `main` moved a record under it) and its suites once; **the full Lean check at 120 GB again only on your word**.
+
