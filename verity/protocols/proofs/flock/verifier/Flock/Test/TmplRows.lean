@@ -1,4 +1,11 @@
-/-
+module
+
+public import Flock.Test.Tmpl
+public import Flock.TmplUnroll
+meta import Flock.Test.Tmpl
+meta import Flock.TmplUnroll
+
+/-!
 `Tmpl.inputsT` against `Tmpl.unroll`: `Flock.Test.Tmpl`'s unit, its input rows written by copies of a self-row Definition
 (`SELF`, directly or through a block of three) instead of the root's own rows, passes and unrolls to the same text, with
 input padding written by copies of an empty Definition. The forms it refuses, each one `Net.ofRows` refuses on the
@@ -9,12 +16,6 @@ copies meeting). And `Tmpl.groupsOk`, the port groups' and size's checks of `Tmp
 that passes all five description checks unrolls, and the groups `Net.ofRows` refuses fail it (an output group past the
 unit's slot, D11, or not aligned).
 -/
-module
-
-public import Flock.Test.Tmpl
-public import Flock.TmplUnroll
-meta import Flock.Test.Tmpl
-meta import Flock.TmplUnroll
 
 @[expose] public section
 

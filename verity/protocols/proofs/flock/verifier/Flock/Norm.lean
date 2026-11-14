@@ -1,10 +1,11 @@
-/-
-A parsed JSON value rebuilt: `JsonParse.parse` builds an object's tree in the order its keys arrived, so where the verifier
-keeps a parsed value (a sample) it keeps `norm` of it, whose trees depend only on each object's fields.
--/
 module
 
 public import Lean.Data.Json.Basic
+
+/-!
+A parsed JSON value rebuilt: `JsonParse.parse` builds an object's tree in the order its keys arrived, so where the verifier
+keeps a parsed value (a sample) it keeps `norm` of it, whose trees depend only on each object's fields.
+-/
 
 @[expose] public section
 

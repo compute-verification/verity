@@ -2,9 +2,10 @@
 
 Checked today, against ``allowlists/p04_one_result.json``:
 
-* ``verdict-import``: the rule's import contract, "``check.verdict`` imports only ``check.result`` and
-  ``properties.record``", the verdict codes ``check.codes`` they carry (core's until the layout move), and the typed stage
-  records the rules read (``records``, which imports nothing else in ``verity_vllm``) (``VERDICT_ALLOWED``).  Any other integration import made by the modules ``check/verdict.py``
+* ``verdict-import``: the rule's import contract, "``check.verdict`` imports only ``check.result`` and the property
+  record", the verdict codes ``check.codes`` they carry (core's until the layout move), and the typed stage records the
+  rules read (``records``, which holds the property record as ``records.property_record`` and imports nothing else in
+  ``verity_vllm``) (``VERDICT_ALLOWED``).  Any other integration import made by the modules ``check/verdict.py``
   absorbs (``_imports.VERDICT_MODULES``) is a violation.
   One entry per (importer, imported) module pair.
 * ``g-identifier``: a ``G1`` to ``G8`` token in an identifier (names, attributes, defs, classes, arguments, keywords).
@@ -24,8 +25,7 @@ from . import _ratchet as R
 
 NAME = "p04_one_result"
 RULE = "P4 (one result type, one verdict)"
-VERDICT_ALLOWED: tuple[str, ...] = ("verity_vllm.check.result", "verity_vllm.properties.record", "verity_vllm.check.codes",
-                                    "verity_vllm.records")
+VERDICT_ALLOWED: tuple[str, ...] = ("verity_vllm.check.result", "verity_vllm.check.codes", "verity_vllm.records")
 G_TOKEN = re.compile(r"(?<![A-Z0-9])G[1-8](?![0-9])")
 G_LEADING = re.compile(r"^\W*(G[1-8])(?![0-9])")
 REASONY = re.compile(r"(?i)(reason|\bwhy\b|detail|message|\bmsg\b|\bnote|explan|\bcause|diagnos)")

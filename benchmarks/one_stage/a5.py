@@ -917,6 +917,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     if drawn is not None:
         union_draw, drawn_law, receipt = (dict(x) for x in drawn)
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
+        trees = stage_trees(a, members)
+        if getattr(a, "stage", None) is not None and not trees:
+            a.stage["coins"].release(0)
     elif not streamed(a):
         p = a0.challenger_draw(a.lean, ["--population", str(n_all), "--k", str(law["k"])],
                                {"law": "subset", "k": law["k"]}, n_all, R.digest(rec), out / "draw.log")
@@ -936,7 +939,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             return summary, False
         union_draw, drawn_law, receipt = dict(draw.draw), dict(draw.law), dict(draw.registration.receipt)
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
-    (out / "draw.json").write_text(json.dumps(union_draw, sort_keys=True))
+    (out / SAMPLE_FILE).write_text(json.dumps(union_draw, sort_keys=True))
     after: dict[str, dict] = {}
     if any(m.wired for m in mine.members):
         bad = WI.check_drawn(mine.members, publics, union_draw["units"])
@@ -966,7 +969,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     for mm in members:
         mm["st"]["archived"] = archived
 
-    relay = MT.Relay(a.coins, MT.listener()) if trees else None
+    relay = MT.Relay(tree_coins(a), MT.listener()) if trees else None
     summary["coin_trees"] = "window" if trees else "own"
     server = proof_server(a, out, [mm["st"] for mm, _ in drawn], relay)
 
@@ -979,7 +982,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         # a plain session is served the stream's stratified sample itself, its one member the whole window (`plain_refusal`)
         session_draw, session_law = ((union_draw, drawn_law) if plain(a) else
                                      ({"law": "subset", "population": m.n, "k": len(local), "units": local}, {"law": "subset", "k": len(local)}))
-        (sdir / "draw.json").write_text(json.dumps(session_draw, sort_keys=True))
+        (sdir / SAMPLE_FILE).write_text(json.dumps(session_draw, sort_keys=True))
         t = time.time()
         stage(served, mm, files)
         return {"mm": mm, "local": local, "sdir": sdir, "staged_s": time.time() - t, "session_draw": session_draw,
@@ -1002,7 +1005,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             return {**s, "handle": h}
         t = time.time()
         env = {"FC_COINS": "tree"} if plain(a) else a0.prover_env(a.firewall, mm["st"])
-        record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / "draw.json",
+        record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / SAMPLE_FILE,
                                   zk=not plain(a), env=env, prove_timeout=a.session_timeout,
                                   tree_from=None if relay is None else relay.flags)
         session_s = round(time.time() - t, 1)
@@ -1026,7 +1029,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                 if len(dirs) != 1:
                     raise ValueError(f"the session left {len(dirs)} records, not one")
                 directory = dirs[0]
-            return {**s, "closing": {"ok": True, "after": MT.closing_round(a.coins, directory)}}
+            return {**s, "closing": {"ok": True, "after": MT.closing_round(tree_coins(a), directory)}}
         except (ProofServerError, TimeoutError, AC.Ch.CoinError, OSError, ValueError) as e:
             return {**s, "closing": {"ok": False, "why": str(e)[-600:]}}
 
@@ -1112,9 +1115,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                                                          indent=1, sort_keys=True))
         if relay is not None:
             relayed = relay.close()
-            a.coins.release(rank)
+            tree_coins(a).release(rank if streamed(a) else 0)
     if relay is not None:
-        held = window_trees_held(a.coins.evidence(), done, relayed)
+        held = window_trees_held(tree_coins(a).evidence(), done, relayed)
         for got in done:
             got["challenger"] = {**held, "closing": got["closing"]}
     for got in done:
@@ -1146,7 +1149,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                    {"draw": union_draw, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
                    served=sorted(served_units), v2=v2_proof(done, not plain(a)), partition=part,
-                   per_member=members_proof(members, done, not plain(a)))
+                   per_member=members_proof(members, done, not plain(a), one=drawn is not None and trees),
+                   **stage_case(a, relay is not None))
         if drawn is not None:
             summary["handed"] = {"verdicts": verdicts, "statement": statement, "sessions": sessions,
                                  "proved_units": sorted(proved), "instances": instances, "served": sorted(served_units),
@@ -1393,8 +1397,8 @@ def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> di
     evidence with its ``verdicts`` replaced by the statements, one for each member with a session, in the members' order
     (`proofs.members_v2`), each session under the name v1's ``sessions`` gives it, its ``session.json``'s SHA-512; and
     ``blobs``, the paths of the statements' files, of the circuit and public files of each member with no session, which
-    v2's check of the form reads too, and of the pinned lookup ``tables`` the statements' circuits look up. The
-    statements' sessions must be v1's ``sessions`` in order, as v2 reads them. v2 parses this form and refuses it
+    v2's check of the form reads too, and of the pinned lookup ``tables`` the members' circuits look up, any member's.
+    The statements' sessions must be v1's ``sessions`` in order, as v2 reads them. v2 parses this form and refuses it
     (`OneStageZk.MULTI_REFUSED`); `proofs.members_parsed` is what its parsers read of the case."""
     RP = own_replay()
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
@@ -1501,7 +1505,8 @@ def session_dirs(sdir: Path) -> tuple[Path, ...]:
 
 def looked_up_tables(st_dir: Path) -> list[Path]:
     """The pinned MUFU tables under a staged member's ``st_dir`` that its circuit looks up (`proofs.circuit_lookups`):
-    v2 holds the blobs' tables to exactly those."""
+    v2 holds the blobs' tables to exactly those, and in the per-member form a member's statement to those among the
+    blobs'."""
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
     tdir = st_dir / "tables"
@@ -1509,15 +1514,17 @@ def looked_up_tables(st_dir: Path) -> list[Path]:
     return sorted(f for f in tdir.glob("*.u32") if f.is_file() and f.stem in looked_up)
 
 
-def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool) -> dict | str | None:
+def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: bool = False) -> dict | str | None:
     """`case_members`'s members and tables from the window's staged ``members``, every one of them, and the sampled
     members' sessions (`member_checks`'s ``done``): each member's circuit and public files' digests as staged before
-    the sample, its registered file, its units and its circuit's ``vus_per_block``, and a sampled member's session and
-    the tables its circuit looks up, one path a table. None for a window of one member, whose form is the one
-    statement's (`v2_proof`); or why the audit has no per-member case."""
+    the sample, its registered file, its units and its circuit's ``vus_per_block``, a sampled member's session, and
+    the tables every member's circuit looks up, sampled or not, one path a table: v2 holds each member's statement to
+    its own circuit's tables among the blobs (`OneStageZk.ownTables`) and reads every member's files. None for a window
+    of one member, whose form is the one statement's (`v2_proof`), unless ``one`` (its sessions ran on a caller's
+    stage's challenger session, `stage_trees`); or why the audit has no per-member case."""
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
-    if len(members) < 2:
+    if len(members) < 2 and not one:
         return None
     if not zk:
         return "v2 verifies --zk sessions; this audit's are plain"
@@ -1532,8 +1539,7 @@ def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool) -> di
         reads = st.get("registered_file")
         out.append(PF.Member(m.key, PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{m.n}.bin", sessions), mm["pin"],
                              st["public"], json.loads(reads.read_text()) if reads else None, ((m.base, m.base + m.n),), g))
-        if sessions:
-            tables.update((f.name, f) for f in looked_up_tables(st["dir"]) if f.name not in tables)
+        tables.update((f.name, f) for f in looked_up_tables(st["dir"]) if f.name not in tables)
     return {"members": out, "tables": [tables[x] for x in sorted(tables)]}
 
 
@@ -1545,6 +1551,10 @@ def streamed(a: argparse.Namespace) -> bool:
 FIREWALL_HELP = ("the core protocols' path, Lean's flock-firewall: every session's prover runs behind the ZK server's send check "
                  "(FC_FIREWALL=1, live PROTOCOL.md §10.4); without it each runs prove --zk itself, as SPOT[Flock]'s proof server "
                  "does (a0.DIRECT, zk_cost's dev arm)")
+#: the ZK server's Lean session loop's executable, beside Lean's flock-verify in its package
+ZK_SERVER_LOOP = "flock-firewall"
+#: the file an audit keeps a sample in: the window's (``out``) and each session's (``session-m<k>/``)
+SAMPLE_FILE = "draw.json"
 #: AGENTS.md's live-coins rule, which keeps an audit's sampled members' sessions one after another
 ONE_AT_A_TIME = "outer proofs go through the ZK server one at a time (AGENTS.md, \"Live coins only\")"
 
@@ -1571,6 +1581,29 @@ def window_trees(a: argparse.Namespace, members: Sequence[dict]) -> bool:
             and len(a.coins.ranks()) == 1)
 
 
+def stage_trees(a: argparse.Namespace, members: Sequence[dict]) -> bool:
+    """`window_trees` for a caller's sample: the sessions take their coin trees from the caller's
+    stage's own challenger session (``a.stage``, `two_stage`'s ``--interior-trees``), held for them since before its
+    sample ended, a window of one member's too: that caller's case is the per-member form's at any number of members
+    (`members_proof`'s ``one``). Without ``a.stage`` the sessions keep a challenger of their own."""
+    return getattr(a, "stage", None) is not None and bool(members) and not plain(a) and a0.own_challenger(zk=True)
+
+
+def tree_coins(a: argparse.Namespace) -> Any:
+    """The challenger session the sessions' coin trees are on: the stream's (``a.coins``), else the caller's stage's."""
+    return a.coins if streamed(a) else a.stage["coins"]
+
+
+def stage_case(a: argparse.Namespace, member_trees: bool) -> dict:
+    """`write_case`'s coins for a caller's sampled sample on its stage's own challenger session (``a.stage``: its
+    session, the sample's segment, family and window root): {} without one."""
+    s = getattr(a, "stage", None)
+    if s is None:
+        return {}
+    return {"coins": AC.evidence(s["coins"].evidence(), s["segment"]), "window_root": s["window_root"],
+            "family": s["family"], "member_trees": member_trees, "challenger_key": s["coins"].held()["key"]}
+
+
 def window_trees_held(published: dict, done: Sequence[dict], relayed: Sequence[str]) -> dict:
     """The audit of the sessions that ran on the window's challenger session (`window_trees`), once it has ended
     (``published``, `a5_coins`' `evidence`): ``ok`` when the session's release log shows each session of ``done``
@@ -1594,18 +1627,20 @@ def proof_server(a: argparse.Namespace, out: Path, sts: Sequence[dict] = (), rel
     session at the session's turn, one session at a time (``verify_ahead=0``), each loop's `Hello` set up as the process's
     environment says (`a0.prover_env`), so only where the sampled members' statements ``sts`` agree on it. None where a
     session is one it doesn't prove (plain, or members that don't agree): each session is then a process pair of its own
-    (`a0.session`), which takes its tree through ``relay`` too."""
+    (`a0.session`), which takes its tree through ``relay`` too. ``a.gpus``: the devices its provers prove on
+    (`prove --gpu`), else the CPU; a process pair stays on the CPU."""
     if plain(a):
         return None
     zk_server = a.firewall
     trees = ({"challenger": a0.own_challenger(zk=True)} if relay is None else
              {"verify_ahead": 0, "tree_from": relay.flags})
+    devices = getattr(a, "gpus", None)
     if not zk_server:
-        return ProofServer(a.bin, out / "proof-server", env=a0.DIRECT, **trees)
+        return ProofServer(a.bin, out / "proof-server", devices=devices, env=a0.DIRECT, **trees)
     envs = [a0.prover_env(zk_server, st) for st in sts]
     if not envs or any(e != envs[0] for e in envs):
         return None
-    return ProofServer(a.bin, out / "proof-server", env=envs[0], **{**trees, "verify_ahead": 0})
+    return ProofServer(a.bin, out / "proof-server", devices=devices, env=envs[0], **{**trees, "verify_ahead": 0})
 
 
 def plain_refusal(a: argparse.Namespace, mine: CS.Binding, registered: dict | None) -> str | None:
@@ -1819,6 +1854,9 @@ def main() -> int:
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
     ap.add_argument("--firewall", help=FIREWALL_HELP)
+    ap.add_argument("--gpus", type=lambda s: [int(x) for x in s.split(",")],
+                    help="the proof server's devices, CUDA indices comma-separated: its provers prove on them (`prove --gpu`); "
+                         "default the CPU. A member proved as a process pair (a5.proof_server's None) stays on the CPU")
     ap.add_argument("--out", required=True)
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=7551)

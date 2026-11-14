@@ -190,7 +190,7 @@ def parseRow (row : ByteArray) (k : Nat) : Reject (Array Nat) := do
     finite (row[4 * i]!.toNat ||| (row[4 * i + 1]!.toNat <<< 8) ||| (row[4 * i + 2]!.toNat <<< 16) |||
       (row[4 * i + 3]!.toNat <<< 24))
 
-/-- What one fixed operand's noise reads, once per weight and epoch: seed_B, F_A and F_B as columns, and G. -/
+/-- What one fixed operand's noise reads, once per fixed operand and epoch: seed_B, F_A and F_B as columns, and G. -/
 structure FixedNoise where
   seedB : ByteArray
   fa : Array (Array Nat)

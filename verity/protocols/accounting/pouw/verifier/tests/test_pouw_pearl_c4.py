@@ -640,8 +640,8 @@ def test_f1_prime_puts_the_correction_inside_the_expectation():
 
 
 def test_f1_prime_reads_the_exact_noise_law():
-    """p_t under the exact law given E: the pmf of Σ (2E_r)(2F_r) has the
-    Gaussian's variance exactly, sums to 1, and is symmetric; a lone E code of 6 gives F's own 16-point law scaled
+    """p_t under the exact distribution given E: the pmf of Σ (2E_r)(2F_r) has the
+    Gaussian's variance exactly, sums to 1, and is symmetric; a lone E code of 6 gives F's own 16-point distribution scaled
     by 12."""
     e = tuple(F.line(b"\x05" * 32, F.ROLE_EA, 0))
     lo, pmf = F.noise_law(e)
