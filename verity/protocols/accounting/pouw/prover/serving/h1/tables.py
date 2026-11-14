@@ -12,7 +12,7 @@ from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
 from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
 from verity.protocols.accounting.pouw.prover.serving.h1.requests import TABLE_NONCES, TABLE_TAGS, table_leaves
-from verity.protocols.accounting.pouw.prover.serving.tensors import h1_device
+from verity.protocols.accounting.pouw.prover.serving.tensors import dtype_name, h1_device
 
 
 def _host(x: Any) -> bool:
@@ -61,16 +61,12 @@ def _table(run: Any, call: Any, name: str, leaves: list[bytes]) -> str:
     return RQ.hiding_rows(binding, call.index, leaves, run._key, nonce).commitment.root.hex()
 
 
-def _dtype(x: Any) -> str:
-    return str(x.dtype).removeprefix("torch.")
-
-
 def _keep(run: Any, call: Any, a: Any, s_a: Any, records: Any) -> None:
     """The served call's prover state (`pouw_h1_prover.keep_call`): by the `pouw_h1_prover.Writer` its directory is open
     on, off this thread, when its rows, scales and records are the int8, f32 and uint8 the file keeps; else here."""
     writer = PV.writer_of(run.prover)
-    if writer is not None and _dtype(a) == "int8" and _dtype(s_a) == "float32" and \
-            (records is None or _dtype(records) == "uint8"):
+    if writer is not None and dtype_name(a) == "int8" and dtype_name(s_a) == "float32" and \
+            (records is None or dtype_name(records) == "uint8"):
         writer.keep(run.prover, call.index, a.reshape(call.m, -1), s_a, records)
         return
     PV.keep_call(run.prover, call.index, row_words(a, call.m, "i1"), row_words(s_a, call.m, "<f4"), ZR.host(records))

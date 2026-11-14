@@ -23,9 +23,9 @@ forward's words at 2^63 + f, one a forward.  :class:`WindowKeying` keys them in 
 is fixed when it is made.  keyLeaf (ks_w's hm96 leaf) and the weights' root are recorded before salt_w arrives.  Each position
 then gets one d, and a forward's A_j come before its words.  It refuses everything else (:class:`verity.errors.Refused`).
 
-**On the device.**  A forward's words are hashed where they are served (`rows_device.DeviceWords`, the workload's): ``native_rows.cu``'s tile
+**On the device.**  A forward's words are hashed where they are served (the device adapter's `DeviceWords`): ``native_rows.cu``'s tile
 gather and inline leaves call by call, then its pads and levels up to the subtree's top, which :meth:`WindowKeying.words_top`
-keys as :meth:`WindowKeying.words_root` keys the CPU's.  A_j's are hashed from its bytes on the device (`rows_device.device_a_top`):
+keys as :meth:`WindowKeying.words_root` keys the CPU's.  A_j's are hashed from its bytes on the device (the device adapter's `device_a_top`):
 its segments' inline leaves, then the same pads and levels, up to the top :meth:`WindowKeying.a_top` keys as
 :meth:`WindowKeying.a_root` keys the CPU's.
 """
@@ -222,12 +222,12 @@ class WindowKeying:
 
     def a_domain(self, forward: int, call: int, count: int) -> CommitmentDomain:
         """The domain of A_j's instance of ``count`` segments, ``ceil(m K / A_SEGMENT)`` for m rows of K, for its leaves on the
-        device (`rows_device.device_a_top`).  It refuses what :meth:`a_root` refuses."""
+        device (the device adapter's `device_a_top`).  It refuses what :meth:`a_root` refuses."""
         position = self._a_unkeyed(forward, call)
         return instance_domain(self._salt(), position, _leaf_count("an A", count))
 
     def a_top(self, forward: int, call: int, count: int, top: bytes, *, check: bytes | None = None) -> bytes:
-        """root(A_j) from its subtree's top as the device hashed it (`rows_device.device_a_top`): the root's two children (128 bytes) for
+        """root(A_j) from its subtree's top as the device hashed it (the device adapter's `device_a_top`): the root's two children (128 bytes) for
         ``count`` >= 2 segments, or the one segment of 1 to ``A_SEGMENT`` bytes.  ``check``, A_j's bytes, recomputes the
         subtree on the CPU and refuses a top that differs.  d is :meth:`a_root`'s for the same A."""
         dom = self.a_domain(forward, call, count)
@@ -240,13 +240,13 @@ class WindowKeying:
         return self._keyed(words_position(forward), WORDS_LEAF_TAG, words_values(self._words_calls(calls)))
 
     def words_domain(self, forward: int, count: int) -> CommitmentDomain:
-        """The domain of the forward's words instance of ``count`` leaves, for its leaves on the device (`rows_device.DeviceWords`).  Its
+        """The domain of the forward's words instance of ``count`` leaves, for its leaves on the device (the device adapter's `DeviceWords`).  Its
         id binds ``count``, so a forward's chunks (`chunk_count` of each call) are fixed before its first leaf."""
         position = self._unkeyed(words_position(forward))
         return instance_domain(self._salt(), position, _leaf_count("a words", count))
 
     def words_top(self, forward: int, count: int, top: bytes, *, check: Sequence[bytes] | None = None) -> bytes:
-        """The forward's words root from its subtree's top as the device hashed it (`rows_device.DeviceWords.top`): the root's two
+        """The forward's words root from its subtree's top as the device hashed it (the device adapter's `DeviceWords.top`): the root's two
         children (128 bytes) for ``count`` >= 2 leaves, or the one chunk.  ``check``, the calls' committed streams, recomputes
         the subtree on the CPU and refuses a top that differs."""
         dom = self.words_domain(forward, count)

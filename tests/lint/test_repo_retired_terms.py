@@ -30,8 +30,10 @@ what the word maps of ``tools/move/`` keep: a domain tag or format id (``verity/
 key's value (``goal = "vllm/serving-cost-benchmark"``, ``GOAL``); the tree holds no list of goal ids, so the same id
 elsewhere still counts.  A word's other senses aren't counted: by the words about it (``OTHER_SENSES``: a power law,
 nvidia-smi's ``power.draw``, ``AUDIT_CAP``, ``cap_bits``, a memory cap, a compute capability), by the code around it
-(hypothesis's ``draw``) and by the file's place (``OWN_CAPS``: PoUS's and PoUB's own caps, a row table's size, the live
-proof block's caps, a PoUW session's cap, Flock's caps, a request's length cap, a logit soft cap).  Sites are counted per file: an entry ``{"file", "count"}`` allows ``count`` sites in its file, a file
+(hypothesis's ``draw``), by the file's place (``OWN_CAPS``: PoUS's and PoUB's own caps, a row table's size, the live
+proof block's caps, a PoUW session's cap, Flock's caps, a request's length cap, a logit soft cap) and by the name it
+stands in (``OWN_NAMES``: PoUS's ``Pous.Period`` and its guarantees' names).  Sites are counted per file: an entry
+``{"file", "count"}`` allows ``count`` sites in its file, a file
 with more fails, and ``--prune`` lowers what the tree no longer holds.  The ratchet gate (``adapters/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file
 it touches, grows this list, or leaves a renamed file's entry behind; it loads this module alone from the change's
 base, so the module imports only the standard library and reads ``GLOSSARY.md`` from the tree it runs in.
@@ -176,6 +178,19 @@ OWN_CAPS = {
 #: Pearl's `CAP`, which the table spells as a word, so no longer term holds it ("over-cap", "cap check", `capOK` and
 #: `Device.cap` are terms of their own)
 PEARL_CAP = re.compile(r"(?<!\w)CAPS?(?!\w)")
+#: names that keep a retired term's word in another sense, by the term: a whole identifier its pattern matches is never
+#: one of the term's sites, for the reason beside it
+OWN_NAMES = {
+    "*Period*": (
+        r"(?<=Pous[./])Period|Period(?:Held(?:Coins|Sha512)?(?:At)?|Held(?:Deployed|Demo|Honest|Nontrivial)|Deployed"
+        r"|Game|At|Capacity|Witnesses)",
+        "PoUS's `Pous.Period` and its guarantees' names (`PeriodHeld`, `PeriodHeldAt`, `PeriodGame`, ...) are one "
+        "stretch of a joint run: GLOSSARY.md's row of `*Period*` retires the word only as the stretch of time a bound "
+        "is about, and its row of \"window\" makes \"period\" the word for a span of time. Open, and lean's: whether "
+        "that stretch should read the one shared period type in `Core`; if it should, the names follow by a map with a "
+        "moves file"),
+}
+OWN_NAME = {term: re.compile(pattern) for term, (pattern, _) in OWN_NAMES.items()}
 #: hypothesis's own ``draw`` in a module importing it: a composite strategy's first parameter, through its body, and the
 #: data object's ``data.draw(``, as code where the file is Python; a comment or a string there, a ``"draw"`` key anywhere, a
 #: longer name, an attribute (``challenger.draw``) and the other forms (``draws``, ``drawn``) aren't
@@ -356,6 +371,8 @@ def sites_of(text: str, by: dict[str, list[Term]], path: str = "") -> list[tuple
     out, end, line, at = [], -1, 1, 0
     for s, e, t in hits:
         if s < end or text[s:e] == "draw" and s in draws or kept(text, s, e, caps, toml, path in CAPITALS, t.says):
+            continue
+        if t.old in OWN_NAME and OWN_NAME[t.old].fullmatch(text, s, e):
             continue
         end = e
         line, at = line + text.count("\n", at, s), s
@@ -952,6 +969,22 @@ def test_a_name_that_already_says_the_row_s_term_is_not_a_site_of_its_glob() -> 
     assert period_sites("DampenerMonitoringPeriod, MonitoringPeriodRemotePeriod") == [
         "DampenerMonitoringPeriod", "MonitoringPeriodRemotePeriod"]
     assert period_sites("ComposeEpoch, MonitoringEpoch") == ["ComposeEpoch", "MonitoringEpoch"]
+
+
+def test_pous_period_names_keep_the_word_and_the_names_beside_them_do_not() -> None:
+    """PoUS's ``Pous.Period``, as a namespace or a module path, and its guarantees' names (``OWN_NAMES``) aren't sites
+    of ``*Period*``; a bare ``Period``, another area's (``Core.Period``, Flock's ``Periods``, ``Attest.Period``), a longer
+    name holding one of PoUS's (``SpaceOfPeriodHeld``) and PoUS's other periods (``B2Period``, ``PeriodSigned``) still
+    count."""
+    assert Path(ROOT, "security/Properties/Pous/Period.lean").is_file(), \
+        "Pous.Period moved: move OWN_NAMES' pattern with it"
+    pous = ("Pous.Period.PeriodHeld, Properties/Pous/Period.lean, PeriodHeldAt, PeriodHeldCoinsAt, PeriodHeldSha512, "
+            "PeriodHeldDeployed, PeriodHeldDemo, PeriodHeldHonest, PeriodHeldNontrivial, PeriodDeployed, PeriodGame, "
+            "PeriodAt, PeriodCapacity, PeriodWitnesses")
+    assert period_sites(pous) == []
+    assert period_sites("Period, Core.Period, Audit.Periods, Attest.Period, SpaceOfPeriodHeld, B2Period, PeriodSigned, "
+                        "PeriodHeldX") == ["Period", "Period", "Periods", "Period", "SpaceOfPeriodHeld", "B2Period",
+                                           "PeriodSigned", "PeriodHeldX"]
 
 
 def test_it_reads_what_lane_text_reads_and_skips_what_it_says() -> None:

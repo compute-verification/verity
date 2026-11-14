@@ -118,8 +118,8 @@ theorem pr_missTwo_fork_le (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Se
     (hι : ∀ ρ < d.part.blocks.length, ∀ ι' : ℕ → ℕ → Bool,
       d.esc Pt (footprintAt s Pt d.part val ι') ρ ≤ d.esc Pt (footprintAt s Pt d.part val ι) ρ)
     (r : Fin (L.V.k x) → Coin) :
-    Pr (fun e : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.stage2 x) r e),
-        u ∉ incorrectAllAt s Pt d.part val (L.iregVal H P x ω (forkOn (L.stage2 x) r e))) ≤
+    Pr (fun e : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.secondStage x) r e),
+        u ∉ incorrectAllAt s Pt d.part val (L.iregVal H P x ω (forkOn (L.secondStage x) r e))) ≤
       ∏ ρ ∈ (range d.part.blocks.length).filter (· ∈ L.replaySample x r),
         d.esc Pt (footprintAt s Pt d.part val ι) ρ := by
   simp only [iregVal_forkOn]
@@ -144,7 +144,7 @@ theorem pr_missTwo_le_Pa (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Sess
     Pr (fun r : Fin (L.V.k x) → Coin =>
         ∀ u ∈ L.checked x r, u ∉ incorrectAllAt s Pt d.part val (L.iregVal H P x ω r)) ≤
       d.Pa Pt (footprintAt s Pt d.part val ι) := by
-  rw [Claims.SamplingGeneric.Pr_forkOn (L.stage2 x)]
+  rw [Claims.SamplingGeneric.Pr_forkOn (L.secondStage x)]
   exact (Ex_mono fun r => pr_missTwo_fork_le H L hS hs hPt hd hin P ω val ι hι r).trans
     (Claims.Sampling.Ex_esc_le d Pt _ (L.replaySample x) (hS.replaySamples x s Pt d hs hPt hd hin))
 

@@ -58,10 +58,10 @@ def run(served) -> dict:
     check, tmp = served["check"], served["tmp"]
     got = TS.first(served["pub"], check, TS.rule_of(_layout(), f"rate:{Q}/{N}", K, 60.0),
                    FC.Challenger("first", label=TS.family_of(served["class"].layout)))
-    stage1 = json.loads(json.dumps(got.stage1()))
-    again = TS.resume(stage1, check, FC.Challenger("second"))
+    first_stage = json.loads(json.dumps(got.first_stage()))
+    again = TS.resume(first_stage, check, FC.Challenger("second"))
     r = TS.replayed(again, served["class"], served["capture"], tmp / "interior", clock=iter((100.0, 102.5)).__next__)
-    return {**served, "stage1": stage1, "again": again, "r": r}
+    return {**served, "first_stage": first_stage, "again": again, "r": r}
 
 
 def _handed(interior: Path, served: Path, mine: CS.Binding, reads: dict, drawn: list[int]) -> tuple[list[dict], dict]:
@@ -323,7 +323,7 @@ def test_an_unlinked_class_is_committed_and_proved_blockwise_and_round_2_refuses
     c, pub = BR.reopen(got["class"], check), json.loads((got["class"] / BR.COMMIT).read_text())
     first = TS.first(pub, check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0),
                      FC.Challenger("first", label=TS.family_of(c.layout)))
-    again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"))
+    again = TS.resume(json.loads(json.dumps(first.first_stage())), check, FC.Challenger("second"))
     with pytest.raises(ValueError, match="makes no wires round 2 derives"):
         TS.replayed(again, c, got["capture"], tmp_path / "never")
     r = TS.replayed(again, c, got["capture"], tmp_path / "interior", unlinked=True)
@@ -369,8 +369,9 @@ def test_an_inlined_class_of_the_greedy_select_in_units_is_linked_and_round_2_ta
     assert c.layout.inline and len(c.layout.templates) == k and len(names) == (N if tables else 0) and pub["ids"]
     assert ret == f"{block}o0"
     assert list(pub["values"]) == [*BR.PORTS, ret, *names]
-    first = TS.first(pub, check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0), FC.Challenger("first"))
-    again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"))
+    first = TS.first(pub, check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0),
+                     FC.Challenger("first", label=TS.family_of(c.layout)))
+    again = TS.resume(json.loads(json.dumps(first.first_stage())), check, FC.Challenger("second"))
     r = TS.replayed(again, c, got["capture"], tmp_path / "interior")
     d, brec, sample, drawn = r.design, again.record, [int(u) for u in again.sample.units], list(r.draw.units)
     combine = f"GreedyCombine_v2{{V={v},N={v // k}}}"
@@ -440,12 +441,12 @@ def test_a_class_whose_record_commits_the_selects_inputs_registers_no_value_and_
     assert (pub["values"][name]["leaves"], pub["values"][name]["words"]) == (N * k * O, v // k)
     rule_of = TS.rule_of(L, f"rate:{Q}/{N}", K, 60.0)
     assert rule_of.span_values == ()
-    first = TS.first(pub, check, rule_of, FC.Challenger("first"), stop=rule)
+    first = TS.first(pub, check, rule_of, FC.Challenger("first", label=TS.family_of(L)), stop=rule)
     assert [x["port"] for x in first.record["roots"]][-2 - len(L.tables):] == [ret, name, *L.tables]
-    again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"), stop=rule)
+    again = TS.resume(json.loads(json.dumps(first.first_stage())), check, FC.Challenger("second"), stop=rule)
     with pytest.raises(ValueError, match="--kept"):
         TS.replayed(again, c, got["capture"], tmp_path / "never")
-    again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"), stop=rule)
+    again = TS.resume(json.loads(json.dumps(first.first_stage())), check, FC.Challenger("second"), stop=rule)
     r = TS.replayed(again, c, got["capture"], tmp_path / "interior", kept=got["logits"])
     d, brec, sample, drawn = r.design, again.record, [int(u) for u in again.sample.units], list(r.draw.units)
     assert d.links == () and r.tie == {} and not r.record.get("registered")
@@ -652,7 +653,7 @@ def test_under_a_stop_rule_the_serves_hook_gives_a_stop_class_of_the_greedy_sele
     rule_of = TS.rule_of(L, f"rate:{Q}/{spans}", K)
     assert rule_of.span_values == (("logits", outputs * k, (v // k, 16)),)
 
-    got = TS.first(pub, BR.check_template(check), rule_of, FC.Challenger("first"), stop=rule)
+    got = TS.first(pub, BR.check_template(check), rule_of, FC.Challenger("first", label=TS.family_of(L)), stop=rule)
     assert [r["port"] for r in got.registration.record["roots"]] == [*BR.PARTS, "o0"]
     s = TS.stop_first(pub, BR.check_template(check), rule, f"rate:{Q}/{spans}", FC.Challenger("stop"), got.record)
     assert s["record"]["previous"] == got.registration.digest and s["record"]["population"] == spans

@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Pouw.PearlC.TileDraw
+public import Definitions.Pouw.PearlC.TileSample
 public import Proofs.Flock.Claims.Prob
 public import Proofs.Pouw.PearlC.TileGapTol
 
