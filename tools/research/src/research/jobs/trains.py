@@ -1,4 +1,4 @@
-"""Stage 1.5 of the Job queue: trains that the service builds, checks and lands, as an in-memory model beside `model.py`.
+"""Step 1.5 of the Job queue: trains that the service builds, checks and lands, as an in-memory model beside `model.py`.
 
 The research coordinator names a train (`POST /api/trains`: PR numbers in order).  The service, with the `verity-merge-queue`
 App's token, merges each PR's head onto a new `train/{id}` branch through GitHub's Merges API and adds one `merge-check` job for
