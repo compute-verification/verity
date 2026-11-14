@@ -35,7 +35,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   SHA-512 TP run root (`tp.run_root`'s v2, over the ranks' rows-sha512 roots; an old record's SHA-256 v1 root is refused before
   the sample): GLM-5.3's TP8 Commit with
   `SERVING_ROWS=benchmarks/one_stage/glm53_silu_mul_v2_tp8.json` (its SiluMul_v2 partition: every unit of `SiluMul_v2{I=1536}`,
-  the dense layers' 861 per rank, by `subset:512`), or by default the CPU TP stand-in
+  the dense layers' 861 per rank, by `rate:512/861`), or by default the CPU TP stand-in
   (`adapters/vllm/tests/pipeline/served_tp.py`). A member's whole population is one `verity/flock-circuit` statement, whose shape takes at most
   `2^(35 - k_log)` instances: 2,048 at I=1536 (`k_log` 24) and 8,192 at I=256 (`k_log` 22), so a rank's `SiluMul_v2{I=256}`
   (172,200 routed-expert and 21,525 shared-expert units) is not a member. Each session's `circuit.txt` files and lookup tables
