@@ -195,7 +195,7 @@ theorem sessionGives : SessionGives := by
 def honestSession : ByteArray := ⟨Array.replicate 32 0⟩
 def honestCoinKey : ByteArray := ⟨Array.replicate 256 0⟩
 def honestSalt : ByteArray := ⟨Array.replicate 192 0⟩
-def honestRound : Round := ⟨0, 0, 0, 0, .empty⟩
+def honestRound : Round := ⟨0, 0, 0, 0, ⟨Array.replicate 64 0⟩⟩
 def honestOpening : CoinOpening := ⟨0, 0, honestSalt, #[]⟩
 
 theorem honest_leaf : ∃ leaf, coinLeaf honestCoinKey honestSession 0 0 honestSalt = .ok leaf := by
@@ -221,7 +221,8 @@ theorem honest_coin {leaf : ByteArray} (h : coinLeaf honestCoinKey honestSession
   exact ⟨by decide, Properties.CertifierDevice.Proofs.Lms.beq_self _⟩
 
 theorem honest_message (leaf : ByteArray) : ∃ m, message (honestCommitment leaf) COMPLETE #[honestRound] = .ok m := by
-  simp [message, recordsRoot, Round.value, honestRound, beN, Bind.bind, Except.bind, Pure.pure, Except.pure]
+  simp [message, recordsDigest, recordsStream, Round.value, honestRound, ByteArray.size, beN, Bind.bind, Except.bind,
+    Pure.pure, Except.pure]
 
 theorem sessionGives_honest : SessionGivesHonest := by
   obtain ⟨k, hkg, I, hk⟩ := Wipe.honest_keygen
