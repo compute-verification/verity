@@ -142,28 +142,33 @@ def test_a_class_the_builder_refuses_is_answered_with_the_reason_though_nothing_
     assert lat.requests() == [] and not (tmp_path / "tables").exists()
 
 
-def test_the_channel_serves_on_a_daemon_thread_until_its_event_is_set(tmp_path, monkeypatch):
-    """The thread is a stand-in that only keeps what it was made with, so its loop runs here: the one assignment's build
-    sets the event, and the loop ends after that pass."""
+def test_the_channel_serves_on_a_daemon_thread_every_poll_until_its_event_is_set(tmp_path, monkeypatch):
+    """The thread is a stand-in that only keeps what it was made with, and the event one that its first wait sets, so the
+    thread's loop runs here and ends after one pass."""
     made: list[dict[str, Any]] = []
-    stops: list[threading.Event] = []
+    waits: list[float | None] = []
+
+    class Once(threading.Event):
+        def wait(self, timeout: float | None = None) -> bool:
+            waits.append(timeout)
+            self.set()
+            return True
 
     def thread(**kw: Any) -> NS:
         made.append(kw)
         return NS(start=lambda: None)
 
-    def build(doc: dict[str, Any]) -> dict[str, Any]:
-        stops[0].set()
-        return {"answered": doc["window"]}
-
     def unanswered(_s: float) -> None:
         raise AssertionError("rank 0 answered nothing")
 
-    monkeypatch.setattr(BT, "threading", NS(Event=threading.Event, Thread=thread))
-    ch = BT.Channel(tmp_path, sleep=unanswered)
+    monkeypatch.setattr(BT, "threading", NS(Event=Once, Thread=thread))
+    ch, builder = BT.Channel(tmp_path, poll_s=0.25, sleep=unanswered), NS(build=lambda doc: {"answered": doc["window"]})
     ch.assign({"window": 0, "run": RUN, "prompt": 2, "outputs": 2})
-    stops.append(ch.start(NS(build=build)))
+    stop = ch.start(builder)
     (kw,) = made
-    assert kw["daemon"] is True and kw["name"] == "boundary-tables" and not stops[0].is_set()
+    assert kw["daemon"] is True and kw["name"] == "boundary-tables" and not stop.is_set()
     kw["target"]()
-    assert stops[0].is_set() and ch.roots(0, RUN, 2, 2) == {"answered": 0}
+    assert stop.is_set() and waits == [0.25] and ch.roots(0, RUN, 2, 2) == {"answered": 0}
+    ch.assign({"window": 1, "run": RUN, "prompt": 2, "outputs": 2})
+    kw["target"]()
+    assert waits == [0.25] and ch.serve(builder) == 1
