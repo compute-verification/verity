@@ -47,7 +47,7 @@ theorem ConstantRate_honest :
 
 /-- **From the first execution block's start, the reference schedule accepts the honest certifier's run**: at
 `e₀ = 0`, `m = 2`, `fxRate` accepts its two blocks under `fxAdv`, and the run continues the empty prefix. -/
-theorem ConstantRatePerWindow_honest :
+theorem ConstantRatePerExecutionPhase_honest :
     (honestI (K := 1) fxRate fxAdv).obsRun () ((0 + 2) * (1 * 2)) ∈
         AccSeqs fxRate (unitOp (K := 1)) ((0 + 2) * (1 * 2)) 1 ∧
       ((honestI (K := 1) fxRate fxAdv).obsRun () ((0 + 2) * (1 * 2))).take (0 * (1 * 2)) = [] :=
@@ -117,7 +117,7 @@ theorem DecodableConstantRate_honest :
 /-- **From the first execution block's start, the reference schedule accepts the honest certifier's run, which meets
 W2 and J**: at `e₀ = 0` the run's prefix is `[]`, `fxHonestI`'s `m = 2` blocks are accepted at `fxRate`, its wire is
 its record, and its jitter class is below `D = 1`. -/
-theorem DecodableConstantRatePerWindow_honest :
+theorem DecodableConstantRatePerExecutionPhase_honest :
     fxHonestI.obsRun () (0 * (1 * 2)) = [] ∧
       AcceptedUpTo fxRate fxHonestI.op ((0 + 2) * (1 * 2)) (fxHonestI.obsRun () ((0 + 2) * (1 * 2))) ∧
       Regenerates fxHonestI.certifier (fun _ o => o) ∧ JitterBounded fxHonestI.certifier 1 :=

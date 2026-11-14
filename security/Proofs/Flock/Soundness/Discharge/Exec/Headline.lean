@@ -43,7 +43,7 @@ variable {n : ℕ}
 
 open Classical in
 /-- **A bound on the audit as Lean defines it carries to the live audit.** If `σ` accepts `Gm` with the fact `Q`
-(fixed by the strategies, such as "at least `K` units of `σ`'s committed values are wrong") with probability at most
+(fixed by the strategies, such as "at least `K` units of `σ`'s committed values are incorrect") with probability at most
 `B`, and `τ`'s event `acc` refines `σ`'s acceptance up to `bad`, then `acc ∧ Q` has probability at most `B` plus
 `bad`'s. -/
 theorem exec_le_of_refines {β : Type} {G : Game β} {τ : Strategy G} {acc bad : β → Prop}
@@ -107,7 +107,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_exec
       (plan ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
       (batchStrat H512 enc512 plan (cont σ ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros ((p.partition outs).Xplur H512 enc512 plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg live) τ ≤
       (Law.stratified σs ks hks).miss K +

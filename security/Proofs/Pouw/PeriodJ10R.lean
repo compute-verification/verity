@@ -29,7 +29,7 @@ open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assum
 `k s_T > 0`. -/
 theorem credited_iff {C Ξ V : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ) (hKd : 0 < k sT)
-    (ws : CreditWindows (Coin C Ξ m σ sT) n) (opened : Paths (Coin C Ξ m σ sT) n → Fin n → ℕ → ℕ → V)
+    (ws : CreditExecutionPhases (Coin C Ξ m σ sT) n) (opened : Paths (Coin C Ξ m σ sT) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Coin C Ξ m σ sT) n → Fin n → Fin (tileCount σ sT) → (ℕ → V) → Prop)
     (x : Paths (Coin C Ξ m σ sT) n) (w : Fin n) :
     (tileRun σ k hk sT unitOf ws opened rel right).Credited x w ↔ ws.AcceptedUpTo x w :=
@@ -38,19 +38,19 @@ theorem credited_iff {C Ξ V : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) 
 /-- **The run's accepted prefix is `Credit.window`'s.** -/
 theorem prefixLen_eq {C Ξ V : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ) (hKd : 0 < k sT)
-    (ws : CreditWindows (Coin C Ξ m σ sT) n) (opened : Paths (Coin C Ξ m σ sT) n → Fin n → ℕ → ℕ → V)
+    (ws : CreditExecutionPhases (Coin C Ξ m σ sT) n) (opened : Paths (Coin C Ξ m σ sT) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Coin C Ξ m σ sT) n → Fin n → Fin (tileCount σ sT) → (ℕ → V) → Prop)
     (x : Paths (Coin C Ξ m σ sT) n) :
     (tileRun σ k hk sT unitOf ws opened rel right).prefixLen x = ws.prefixLen x := by
   classical
-  unfold Outcomes.prefixLen CreditWindows.prefixLen
+  unfold Outcomes.prefixLen CreditExecutionPhases.prefixLen
   congr 1
   exact Finset.filter_congr fun w _ => credited_iff σ k hk sT unitOf hKd ws opened rel right x w
 
 /-- **The run's credited live words are `Credit.window`'s accepted prefix's.** -/
 theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {nB mB n : ℕ} (σ : Fin nB → Fin mB)
     (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ) (hKd : 0 < k sT)
-    (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
+    (ws : CreditExecutionPhases (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → (ℕ → V) → Prop)
     (Wp : ExecutionPhasePlay C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
@@ -66,7 +66,7 @@ tile whose opening fails its relation is one `Credit.window` credits with that t
 sample demanded (`TileSampleIsCoin`), whose opening fails its relation, which `TileServiceSound` bounds at `δ_ks`. -/
 theorem jointSound_tile {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] (Cd : Declared ι) {nB mB n : ℕ}
     (hr : 0 < Cd.rounds) (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
-    (unitOf : Fin nB → ℕ) (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
+    (unitOf : Fin nB → ℕ) (ws : CreditExecutionPhases (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → (ℕ → V) → Prop) {δks : ℝ}
     (hD : TileSampleIsCoin σ k hk sT unitOf ws) (hS : TileServiceSound σ sT unitOf ws opened rel δks) :

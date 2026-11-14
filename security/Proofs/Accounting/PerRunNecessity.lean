@@ -65,7 +65,7 @@ theorem tt : Assumptions.TT CM P D 0 (fun _ _ => 0) := by
   replace hx := hx.1
   have hT : ∑ u ∈ range U'.layout.N, ((U'.layout.shape u).Wmm : ℝ) ≤ T := by
     simpa [CM] using (hA' x.1 false).1
-  have hK : ∑ u ∈ checkedSet P U' x.1 x.2 (A'.transcript U' x.1 x.2), ((U'.layout.shape u).Wmm : ℝ) ≤
+  have hK : ∑ u ∈ checkedSet P U' x.1 x.2 (A'.trace U' x.1 x.2), ((U'.layout.shape u).Wmm : ℝ) ≤
       ∑ u ∈ range U'.layout.N, ((U'.layout.shape u).Wmm : ℝ) :=
     sum_le_sum_of_subset_of_nonneg (filter_subset _ _) fun _ _ _ => Nat.cast_nonneg _
   simp only [sub_zero, div_one] at hx
@@ -82,7 +82,7 @@ theorem inDomain : U.InDomain D :=
 theorem callsWithin : CallsWithin A U 0 := fun _ _ => by simp [A, CM, QTree.calls]
 
 theorem accepts {t : ℕ} (H : Unit → Unit) (s : Bool) (c : Fin t → Ticket (P.Wref U.layout) U.layout.N) :
-    AuditAccepts (correctSet P U H s (A.transcript U H s)) c := by
+    AuditAccepts (correctSet P U H s (A.trace U H s)) c := by
   classical
   intro i
   have hi : ((c i).1 : ℕ) = 0 := Nat.lt_one_iff.1 (c i).1.2
@@ -114,21 +114,21 @@ theorem tt_not_perRun :
       U.InDomain D ∧ CallsWithin A U 0 ∧
       (1 - 1 / 2 : ℝ) ^ 2 + 0 <
         pr (fun x : (Unit → Unit) × Bool × (Fin 2 → Ticket (P.Wref U.layout) U.layout.N) =>
-          AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          AuditAccepts (correctSet P U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 ∧
           onlineCost A U x.1 x.2.1 < (1 - reductionGap 0 1) * (1 - 1 / 2) * totalWref P U.layout) := by
   refine ⟨tt, wref_le, inDomain, callsWithin, ?_⟩
   have hW : (1 - reductionGap 0 1) * (1 - 1 / 2) * totalWref P U.layout = 1 / 2 := by
     norm_num [reductionGap, totalWref, P, U, layout]
   have : Nonempty (Ticket (P.Wref U.layout) U.layout.N) := ⟨⟨⟨0, by simp [U, layout]⟩, ⟨0, by simp [P]⟩⟩⟩
   have hev : ∀ x : (Unit → Unit) × Bool × (Fin 2 → Ticket (P.Wref U.layout) U.layout.N),
-      (AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
+      (AuditAccepts (correctSet P U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 ∧
         onlineCost A U x.1 x.2.1 < (1 - reductionGap 0 1) * (1 - 1 / 2) * totalWref P U.layout) ↔
         x.2.1 = true := by
     rintro ⟨H, s, c⟩
     rw [hW, onlineCost_eq]
     cases s <;> norm_num [accepts]
   rw [show (fun x : (Unit → Unit) × Bool × (Fin 2 → Ticket (P.Wref U.layout) U.layout.N) =>
-      AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
+      AuditAccepts (correctSet P U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 ∧
         onlineCost A U x.1 x.2.1 < (1 - reductionGap 0 1) * (1 - 1 / 2) * totalWref P U.layout) =
       fun x => x.2.1 = true from funext fun x => propext (hev x), pr_mid_true]
   norm_num

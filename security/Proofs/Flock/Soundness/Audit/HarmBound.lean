@@ -51,7 +51,7 @@ variable {n m : ℕ}
 
 /-! ## The closed form -/
 
-/-- The hypergeometric escape of `c` of `N` units under a uniform `k`-subset is at most `exp(−k c / N)`: it is at most
+/-- The hypergeometric missProb of `c` of `N` units under a uniform `k`-subset is at most `exp(−k c / N)`: it is at most
 `(1 − c/N)^k` (`choose_div_le_pow`), and `1 − x ≤ exp(−x)`. -/
 theorem choose_div_le_exp {N c k : ℕ} (hk : k ≤ N) (hc : c ≤ N) :
     ((N - c).choose k : ℝ) / (N.choose k : ℝ) ≤ Real.exp (-((k : ℝ) * c / N)) := by
@@ -198,7 +198,7 @@ theorem card_filter_le_stratum (σ : Fin n → Fin m) (s : Fin m) (B : Finset (F
 units in stratum `s` escapes with probability at most `exp(−∑ s k_s c_s / n_s)`. -/
 theorem stratified_escape_le_exp (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (B : Finset (Fin n)) :
-    (stratified σ k hk).escape B ≤
+    (stratified σ k hk).missProb B ≤
       ENNReal.ofReal (Real.exp (-∑ s, (k s : ℝ) * (B.filter (σ · = s)).card / (stratum σ s).card)) := by
   rw [stratified_escape]
   exact prod_choose_div_le_exp (fun s => (stratum σ s).card) (fun s => (B.filter (σ · = s)).card) k hk
@@ -207,14 +207,14 @@ theorem stratified_escape_le_exp (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk 
 /-- **The work sampling design in closed form**: a set with `c_s` units in stratum `s` escapes with probability at most
 `exp(−∑ s k_s c_s / n_s)`, `k_s = workK σ w f K s`, at any floors. -/
 theorem work_escape_le_exp (σ : Fin n → Fin m) (w f : Fin m → ℕ) (K : ℕ) (B : Finset (Fin n)) :
-    (work σ w f K).escape B ≤
+    (work σ w f K).missProb B ≤
       ENNReal.ofReal (Real.exp (-∑ s, (workK σ w f K s : ℝ) * (B.filter (σ · = s)).card / (stratum σ s).card)) :=
   stratified_escape_le_exp σ (workK σ w f K) (workK_le σ w f K) B
 
 /-- A set escaping with probability at least `δ > 0` holds at most `n_s − k_s` units of stratum `s`, and its closed-form
 risk `∑ s k_s c_s / n_s` is at most `ln(1/δ)`. -/
 theorem stratified_risk_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) {δ : ℝ≥0∞}
-    (hδ : 0 < δ) {B : Finset (Fin n)} (hB : δ ≤ (stratified σ k hk).escape B) :
+    (hδ : 0 < δ) {B : Finset (Fin n)} (hB : δ ≤ (stratified σ k hk).missProb B) :
     (∀ s, (B.filter (σ · = s)).card + k s ≤ (stratum σ s).card) ∧
       ∑ s, (k s : ℝ) * (B.filter (σ · = s)).card / (stratum σ s).card ≤ Real.log δ.toReal⁻¹ := by
   rw [stratified_escape] at hB
@@ -278,7 +278,7 @@ theorem stratified_isHarmBound_bits (σ : Fin n → Fin m) (k : Fin m → ℕ) (
 
 /-! ## The exact risk -/
 
-/-- Stratum `s`'s exact risk with `c` of its units wrong, `ln(C(n_s, k_s)/C(n_s − c, k_s))`: minus the log of its escape. -/
+/-- Stratum `s`'s exact risk with `c` of its units wrong, `ln(C(n_s, k_s)/C(n_s − c, k_s))`: minus the log of its missProb. -/
 noncomputable def stratumRisk (σ : Fin n → Fin m) (k : Fin m → ℕ) (s : Fin m) (c : ℕ) : ℝ :=
   Real.log (((stratum σ s).card.choose (k s) : ℝ) / (((stratum σ s).card - c).choose (k s) : ℝ))
 

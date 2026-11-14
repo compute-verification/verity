@@ -105,10 +105,10 @@ What H1's instance takes that the deployed path doesn't give, each a named premi
   opening the service gives is bound to nothing fixed before the sample. Discharge path: the loop's anchors
   committed before the sampling coin with ALLP-H1LOOP's binding of the tiles' rows to them (above).
 * `SaltIsLiveCoin`: each window's salt is its round's live coin. The check reads it: a live window (`coins` live in its
-  check item) carries its salt in its service answer, and `PouwCheck.windowSaltReason`
+  check item) carries its salt in its service answer, and `PouwCheck.executionPhaseSaltReason`
   (`Properties.Pouw.Check.SaltKept`) accepts it only as the round-0 salt of a salt-only live session's coin, opened on
   the salt epoch's root `anchoredEpochRoot W X k` of the registration's weights' root `W` and the root `X` of the
-  activations its window committed before the salt (`windowAnchors`). That session counts as a live Pearl-C pass's
+  activations its window committed before the salt (`executionPhaseAnchors`). That session counts as a live Pearl-C pass's
   does (`PouwCheck.liveSaltCheck`, `Properties.Pouw.LiveSalt`). A window whose check item names no coin mode is seeded,
   its answer carries no salt, and `Scope`'s `Declared.Live` and `LayerCommitted` fail of the circuit it runs. No path
   that serves H1 windows takes its salt from such a session yet: `window_salt.issue` opens one, on the auditor's
@@ -143,13 +143,13 @@ open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assum
 
 /-- **The deployed check accepts the window**: `protocol.check` at the verifier's parameters `p`, on the window's
 registration `c` and the proof system's answer `e`, accepts with some public items and profile. -/
-def Accepts (p : Params) (c : WindowCommitmentRecord) (e : Evidence) : Prop :=
+def Accepts (p : Params) (c : ExecutionPhaseCommitmentRecord) (e : Evidence) : Prop :=
   ∃ (pub : Public) (prof : Core.Integrity), protocol.check p c e = .accept pub prof
 
 /-- **The executions of a period's windows as the check reads them**: on the period's coins `x`, window `w`'s
 registration and the proof system's answer to it, each any function of the coins. -/
 structure Executions (Ω : Type) (n : ℕ) where
-  reg : Paths Ω n → Fin n → WindowCommitmentRecord
+  reg : Paths Ω n → Fin n → ExecutionPhaseCommitmentRecord
   ev : Paths Ω n → Fin n → Evidence
 
 namespace Executions
@@ -317,7 +317,7 @@ def CheckedCreditPeriod : Prop :=
 /-- **Each window's salt is its live coin** (H1's instance). On every path, window `w`'s salt (`salt x w`: the 64-byte
 salt the verifier holds for the window, which every tile's noise reads through its public row, `PouwCheck.publicBc`, and
 every sampled proof block's proof is held to) is `enc` of the window's round-0 coin, the model's coin, released after the
-round's values are committed. The check holds a live window to it: `PouwCheck.windowSaltReason` accepts a live
+round's values are committed. The check holds a live window to it: `PouwCheck.executionPhaseSaltReason` accepts a live
 window's salt only as its salt session's live coin (`Properties.Pouw.Check.SaltKept`), opened after the window's
 committed activations (`anchoredEpochRoot W X k`). The served windows don't meet it yet: no path that serves H1 windows
 takes its salt from such a session, and the proved tiles' salt port is a value the prover records. A named assumption

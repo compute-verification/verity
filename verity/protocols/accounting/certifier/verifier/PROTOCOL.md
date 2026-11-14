@@ -987,7 +987,7 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 | At most M available | at most `binom(T + M, M)` grids | `SecurityProofs.EncardFifoGridsLeOfAvailable` |
 | Envelope, with no clock | `T·log2(r + 1)` bits per execution phase | Proposition 2 |
 | Accepted runs of the check, with clock-sync advice | `A_c + W·log2 #Σ_sync + W·T·log2 D` bits: 7 bits per window at 16 × 8 sync values under J | `Properties.NetworkCertifier.EncardAcceptedObservationsLe`, the reference's constant-rate Program as one execution block of the W windows |
-| Accepted runs of the check, over its first m windows | `A_c + m·log2 #Σ_sync + m·T·log2 D` bits for m ≤ W: 7 bits per window opened at 16 × 8 sync values under J, counted from the run's first window | `Properties.NetworkCertifier.EncardProgramRunsLeWindows`, at the Program an accepted run is a run of (`Properties.NetworkCertifier.AcceptedRunsAreProgramRuns`); for the check's accepted runs, `Proofs.NetworkCertifier.encard_acceptedObservations_take_le` |
+| Accepted runs of the check, over its first m windows | `A_c + m·log2 #Σ_sync + m·T·log2 D` bits for m ≤ W: 7 bits per window opened at 16 × 8 sync values under J, counted from the run's first window | `Properties.NetworkCertifier.EncardProgramRunsLeExecutionPhases`, at the Program an accepted run is a run of (`Properties.NetworkCertifier.AcceptedRunsAreProgramRuns`); for the check's accepted runs, `Proofs.NetworkCertifier.encard_acceptedObservations_take_le` |
 | The reference schedule, k advice bits per execution block | `E·k + n·log2 D` bits over E execution blocks of g·T buckets, for n ≤ E·g·T steps | `SecurityProofs.EncardAccSeqsLeConstantRate` |
 | The reference schedule, over the first m execution blocks | `min(E, m)·k + n·log2 D` bits, for n ≤ m·g·T steps | `SecurityProofs.EncardAccSeqsLeConstantRateExecutionPhases`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRate` |
 | The reference schedule, per execution block | `k + g·T·log2 D` bits per execution block over any m whole execution blocks from block e₀ ((e₀ + m)·g·T ≤ E·g·T), given everything the run showed before block e₀: k bits under J | `SecurityProofs.EncardAccSeqsLeConstantRatePerExecutionPhase`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRatePerExecutionPhase` |
@@ -1056,7 +1056,7 @@ monitoring period (the K charge, `k_charge.share_of_k_by_span` from each link's 
 `SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase`, whose interaction is any link's). Its egress per window
 (`clock_sync.bits_per_window`, `log2 #Σ_sync`, held by `test_network_certifier_calibration.py`) is the check's charge
 for each window opened, counted from the run's first window
-(`Properties.NetworkCertifier.EncardProgramRunsLeWindows`, a guarantee in `security/Properties/lean-audit.json` stated
+(`Properties.NetworkCertifier.EncardProgramRunsLeExecutionPhases`, a guarantee in `security/Properties/lean-audit.json` stated
 over the network check's code, as the table's two rows of the check's accepted runs are). The steps of their proofs are lemmas
 (`security/Proofs/NetworkCertifier/Lemmas.lean`): proved and audited, with no record.
 
@@ -1074,7 +1074,7 @@ window at 16 × 8 sync values. At one execution block the reference's forms over
 nothing finer, so the check's bound over its first m windows comes from the program instead: a window's sync moves no
 hand tick before the window's start (`Properties.NetworkCertifier.ExpectedGridCausal`), so the first m windows' rows
 read only the content advice and those windows' syncs, and the Program's sequences over them number at most
-`#Ac · #Σ_sync^min(W, m) · D^(m·T)` (`Properties.NetworkCertifier.EncardProgramRunsLeWindows`); the check's accepted
+`#Ac · #Σ_sync^min(W, m) · D^(m·T)` (`Properties.NetworkCertifier.EncardProgramRunsLeExecutionPhases`); the check's accepted
 runs' first m ≤ W windows are among them (`Proofs.NetworkCertifier.encard_acceptedObservations_take_le`). The per-block
 form, a window's bits given everything the run showed before it, has no Lean statement for the check and need not hold
 of it: the queue and the hand ticks carry from one window into the next, so the run shown before a window need not fix

@@ -188,7 +188,7 @@ theorem zk_flock_countC_execOS_keyProgX (hA : A.Correct) {c : Flock.Circuit} (hU
     (tr : StrictCR.TreeRewind Hs.H (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC A Hs planZ)) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR Hs.H qT) :
-    prob (fun o => execAccept o ∧ K ≤ (((keyProg c hU n).partition outs).wrong
+    prob (fun o => execAccept o ∧ K ≤ (((keyProg c hU n).partition outs).incorrect
         (XplurZC A Hs ((keyProg c hU n).partition outs) planZ tab (rs.bindingZ hHm) (reg σ) (cont σ) k Rw)).card)
         (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZC A Hs planZ)) σ ≤
       (Law.stratified σs ks hks).miss K +

@@ -9,8 +9,8 @@ public import MemoryChallenger.Protocol
 the whole `Verdict` back. This is what `benchmarks/pous/memory_challenger/live.py` judges each session with, and what a
 replay of its records reads (`verdict.py` beside this package is the Python call). The input is one object:
 
-* `signed`: `SignedSession.to_json()`;
-* `commitment`: `SessionCommitment.to_json()`, the commitment the device builds before the session and releases once
+* `signed`: `SignedChallengePhase.to_json()`;
+* `commitment`: `ChallengePhaseCommitment.to_json()`, the commitment the device builds before the session and releases once
   it is signed;
 * `openings`: `[CoinOpening.to_json(), …]`;
 * `expected`: `{"<i>": hex, …}`, `block_digest` of block `i` of `C` for the blocks the caller has it for (the blocks the
@@ -34,8 +34,8 @@ open Flock
 
 /-- `verdict`'s inputs, decoded. -/
 structure JudgeInputs where
-  signed : SignedSession
-  commitment : SessionCommitment
+  signed : SignedChallengePhase
+  commitment : ChallengePhaseCommitment
   openings : Array CoinOpening
   expected : Digests
   trusted : Array ByteArray
@@ -48,8 +48,8 @@ def JudgeInputs.toJson (r : JudgeInputs) : Json :=
 
 def JudgeInputs.ofJson (j : Json) : V JudgeInputs := do
   let ctx := "record"
-  pure { signed := ← SignedSession.ofJson (← J.get j "signed" ctx),
-         commitment := ← SessionCommitment.ofJson (← J.get j "commitment" ctx),
+  pure { signed := ← SignedChallengePhase.ofJson (← J.get j "signed" ctx),
+         commitment := ← ChallengePhaseCommitment.ofJson (← J.get j "commitment" ctx),
          openings := ← objs j "openings" ctx CoinOpening.ofJson,
          expected := ← Digests.ofJson j "expected" ctx,
          trusted := ← hexArr j "trusted" ctx,

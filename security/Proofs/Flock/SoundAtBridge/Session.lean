@@ -39,7 +39,7 @@ The session's game, prover, value layer and events are those `EndToEndRegistered
 
 * `G`, `τ`: the live audit and its prover; `Out`: its outcome (the registration, the sample and the transcript);
 * `Xv`: the plurality value layer the rows extraction finds at the registration (`XplurZC`);
-* `WrongAt u`: sampled proof block `u` is wrong on the registration (`wrongRegZ`);
+* `IncorrectAt u`: sampled proof block `u` is wrong on the registration (`incorrectRegZ`);
 * `RowsAt o u`: unit `u`'s rows are right at `Xv` (`RowsRightZC`) at its own owned registered reads;
 * `BadU o`: flock-verify accepts and some sampled proof block is wrong or its rows are off;
 * `CR`: `EndToEndRegisteredRows`' named assumptions at every unit's opening; `bound`: its bound.
@@ -154,9 +154,9 @@ abbrev σ := simZJ execArith hs512 (planZHJ s.dj s.y₀) s.I s.wr (opnAtZHJ (pla
 abbrev Xv : Fin s.Circ.N → Bool :=
   XplurZC execArith hs512 s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb (reg s.σ) (cont s.σ) s.k s.Rw
 
-/-- Unit `u` is wrong on the registration, at the value layer (`wrongRegZ`). -/
-def WrongAt (u : Fin s.n) : Prop :=
-  u ∈ wrongRegZ execArith s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb (reg s.σ) s.Xv
+/-- Unit `u` is wrong on the registration, at the value layer (`incorrectRegZ`). -/
+def IncorrectAt (u : Fin s.n) : Prop :=
+  u ∈ incorrectRegZ execArith s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb (reg s.σ) s.Xv
 
 /-- Unit `u`'s rows are right at the value layer (`RowsRightZC`), at its own registered reads (`rdU u`) where the
 verifier owns them at the outcome `o`'s sample. -/
@@ -167,12 +167,12 @@ def RowsAt (o : s.Out) (u : Fin s.n) : Prop :=
 
 /-- **The per-unit event**: flock-verify accepts, and some sampled proof block is wrong, or its rows are off at its own
 registered reads. -/
-def BadU (o : s.Out) : Prop := LiveAcceptsZKR s.I s.own o ∧ ∃ u ∈ o.2.1, s.WrongAt u ∨ ¬ s.RowsAt o u
+def BadU (o : s.Out) : Prop := LiveAcceptsZKR s.I s.own o ∧ ∃ u ∈ o.2.1, s.IncorrectAt u ∨ ¬ s.RowsAt o u
 
 /-- `EndToEndRegisteredRows`' event at unit `u`'s opening `rdU u`. -/
 def EvAt (u : Fin s.n) (o : s.Out) : Prop :=
   LiveAcceptsZKR s.I s.own o ∧ ∃ u' ∈ o.2.1,
-    u' ∈ wrongRegZ execArith s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb (reg s.σ)
+    u' ∈ incorrectRegZ execArith s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb (reg s.σ)
       (XplurZC execArith hs512 s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb (reg s.σ) (cont s.σ) s.k s.Rw) ∨
     ¬ RowsRightZC execArith hs512 s.P (planZHJ s.dj s.y₀) (tabZHJ s.dj s.y₀) s.vb (reg s.σ) (cont s.σ)
       (fun p => OwnReadsHJ s.I s.own s.c s.pub o.2.2 (s.rdU u).isRead (s.rdU u).port (s.rdU u).readAt ∧

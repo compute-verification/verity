@@ -69,7 +69,7 @@ structure TileCheck (Q R S : Type) where
 
 /-- The registered values of unit `u` in `τ`: its commitment's, and zero for a blank unit, whose tiles are never
 checked. -/
-def TileCheck.valueAt (TC : TileCheck Q R S) (U : Workload) (τ : Transcript) (u : ℕ) :
+def TileCheck.valueAt (TC : TileCheck Q R S) (U : Workload) (τ : Trace) (u : ℕ) :
     (TC.C (U.layout.shape u)).Trace :=
   match τ u with
   | some c => TC.rowsOf U u c

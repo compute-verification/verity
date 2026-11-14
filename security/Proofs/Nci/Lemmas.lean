@@ -37,6 +37,6 @@ included, each reading from outside itself only registered information and its o
 bits, complies at `(c, k)`, and its slowdown factor is at most 1. -/
 def Inference : Prop :=
   ∀ (c k : ℕ) (d : RegisteredCircuit) (B : ℕ) (P : Partition d.D B) (prompt : Fin B → Finset (Fin d.D.N)),
-    d.D.Boolean → Assumptions.Sessions d P prompt c k → Complies c k d ∧ slowdown (Complies c k) d ≤ 1
+    d.D.Boolean → Assumptions.InferenceBlocks d P prompt c k → Complies c k d ∧ slowdown (Complies c k) d ≤ 1
 
 end Nci.Guarantees

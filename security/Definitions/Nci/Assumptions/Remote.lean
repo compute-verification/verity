@@ -71,7 +71,7 @@ def SampledDetection {Ω β ι : Type} [Fintype Ω] (μ : PMF Ω) (bad detected 
 /-- **PoUW's per-window bound** (in place of `PouwSound`): window `t`'s certificate is wrong (`wrong t`) with
 probability at most `p` over its own coins, `CircuitCredit`'s conclusion at window `t`'s play. That the deployment's
 window is such a play is not stated. -/
-def PouwPerWindow {T : ℕ} {Ω : Fin T → Type} [∀ t, Fintype (Ω t)] [∀ t, Nonempty (Ω t)]
+def PouwPerExecutionPhase {T : ℕ} {Ω : Fin T → Type} [∀ t, Fintype (Ω t)] [∀ t, Nonempty (Ω t)]
     (wrong : Fin T → ((t : Fin T) → Ω t) → Prop) (p : ℝ) : Prop :=
   ∀ t (ξ : (t : Fin T) → Ω t), prob (PMF.uniformOfFintype (Ω t)) (fun a => wrong t (Function.update ξ t a)) ≤ p
 
@@ -79,9 +79,9 @@ def PouwPerWindow {T : ℕ} {Ω : Fin T → Type} [∀ t, Fintype (Ω t)] [∀ t
 window `win b`) are fixed before its coins, and the units it samples (`drawn`) and the faulty blocks it detects
 (`detected`) read only its coins and the earlier windows'; its sample misses its `m` faulty blocks with probability at most
 `(1 − q)^m` (`Flock.Guarantees.HiddenWindow.drawMiss_le`, under A3), and it detects none of them while sampling one with
-probability at most `ks t` (`HiddenWindow.accepted_drawnWrong_le`). That the deployment's windows are such windows is not
+probability at most `ks t` (`HiddenWindow.accepted_drawnIncorrect_le`). That the deployment's windows are such windows is not
 stated. -/
-def SampledPerWindow {T : ℕ} {Ω : Fin T → Type} [∀ t, Fintype (Ω t)] [∀ t, Nonempty (Ω t)] {β : Type}
+def SampledPerExecutionPhase {T : ℕ} {Ω : Fin T → Type} [∀ t, Fintype (Ω t)] [∀ t, Nonempty (Ω t)] {β : Type}
     (bad drawn detected : ((t : Fin T) → Ω t) → Finset β) (win : β → Fin T) (q : ℝ) (ks : Fin T → ℝ) : Prop :=
   (∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s < t → ξ s = ξ' s) → ∀ b, win b = t → (b ∈ bad ξ ↔ b ∈ bad ξ')) ∧
     (∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s ≤ t → ξ s = ξ' s) → ∀ b, win b = t →

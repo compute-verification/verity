@@ -76,7 +76,7 @@ theorem flock_headline_exec_hiddenP {Lp : Merkle.Leaf (List FlockLevel3.GF128) (
         (cont (simAuditOnP H512 enc512 Lp (tablesAtHP dj x₀) I own wr opn dg dec one fin capOf N hdec τ) ω))
       qF qS) :
     prob (fun o => LiveAcceptsP I own o ∧
-        K ≤ (((Placed.keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi)).wrong
+        K ≤ (((Placed.keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi)).incorrect
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi)) H512 enc512 Lp
               (planAtHP dj x₀) (tabAtHP dj x₀) ((rsAtHP ht hcS hscope dj x₀ hU hpi hpub (Reg := Reg)).binding

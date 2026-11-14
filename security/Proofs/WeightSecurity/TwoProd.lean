@@ -25,8 +25,8 @@ committed interiors) as a hypothesis, and no knowledge soundness of the argument
 * `acceptedSampledAt`: the event's probability at a statement, a prover with no tape and boundary values.
 * `regCountAt`, `escAt`: what a verification phase's strategy fixes before its coins, the replay blocks wrong at `val`
   and `P̄_a` at `val`'s footprint at best interiors (`0` and `1` out of the two-stage scope).
-* `ServedEsc`, `twoAtRec`, `twoAtRun`: the record, a `Served` with that escape, and the period's run.
-* `ServedEsc.leadEscape`, `ServedEsc.UndetectedBelow`: the escapes of the verification phases before the first whose
+* `ServedEsc`, `twoAtRec`, `twoAtRun`: the record, a `Served` with that missProb, and the period's run.
+* `ServedEsc.leadMissProb`, `ServedEsc.UndetectedBelow`: the escapes of the verification phases before the first whose
   sample holds an incorrect proof block, multiplied, and the event that an accepted phase's sample holds one or that
   product is below `δ`.
 * `PeriodTwoProd`: every verification phase is accepted and the escapes multiply below `δ` with probability at most
@@ -61,7 +61,7 @@ end Claims.Sampling
 namespace Claims.SamplingGeneric.CompiledTwo
 
 open Claims
-open Claims.Sampling (wrongAllAt)
+open Claims.Sampling (incorrectAllAt)
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
@@ -75,7 +75,7 @@ noncomputable def FregTwoAt (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Typ
   | none => ∅
   | some s =>
     match L.partition s, L.two s with
-    | some Pt, some d => wrongAllAt s Pt d.part val (L.iregVal H P x ω r)
+    | some Pt, some d => incorrectAllAt s Pt d.part val (L.iregVal H P x ω r)
     | _, _ => ∅
 
 end Claims.SamplingGeneric.CompiledTwo
@@ -86,11 +86,11 @@ open Claims Claims.Sampling Claims.SamplingGeneric
 open FlockSoundness.Game hiding Msg
 open scoped ENNReal
 
-/-- **What a run records of a verification phase, with its escape**: a `Served`, and the probability `escape` that the
+/-- **What a run records of a verification phase, with its missProb**: a `Served`, and the probability `missProb` that the
 phase's sample misses, which the strategy that plays the phase fixes before the phase's coins. -/
 structure ServedEsc (O V Tick Adv : Type) extends Served O V Tick Adv where
   /-- The probability that the verification phase's sample misses, fixed before the phase's coins. -/
-  escape : ℝ≥0∞
+  missProb : ℝ≥0∞
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} {O V Tick Adv : Type}
 
@@ -100,16 +100,16 @@ open Classical in
 /-- **The escapes before the first sampled incorrect proof block, multiplied**: those of each verification phase, up to
 the first whose sample holds one of its incorrect proof blocks. It is `Served.lead` with the phases' escapes
 multiplied in place of their counts added. -/
-noncomputable def leadEscape : List (ServedEsc O V Tick Adv) → ℝ≥0∞
+noncomputable def leadMissProb : List (ServedEsc O V Tick Adv) → ℝ≥0∞
   | [] => 1
-  | w :: l => if w.sampledIncorrect then 1 else w.escape * leadEscape l
+  | w :: l => if w.sampledIncorrect then 1 else w.missProb * leadMissProb l
 
 /-- **The sampling leaves escapes that multiply below `δ` undetected**: an accepted verification phase's sample held
 one of its incorrect proof blocks, or the escapes of the verification phases before the first sampled one multiply
 below `δ`. Outside it, every verification phase accepted before the first rejection is one whose sample missed, and
 the escapes of the verification phases before the first sampled one multiply to at least `δ`. -/
 def UndetectedBelow (δ : ℝ) (l : List (ServedEsc O V Tick Adv)) : Prop :=
-  (∃ w ∈ l, w.accepted ∧ w.sampledIncorrect) ∨ leadEscape l < ENNReal.ofReal δ
+  (∃ w ∈ l, w.accepted ∧ w.sampledIncorrect) ∨ leadMissProb l < ENNReal.ofReal δ
 
 end ServedEsc
 
@@ -123,17 +123,17 @@ noncomputable def acceptedSampledAt (H : Msg → Msg) (L : CompiledTwo Coin A) (
 
 open Classical in
 /-- **The incorrect replay blocks at boundary values `val`**: at the statement `x`, the replay blocks wrong at `val`
-whatever their interior (`wrongAtBoundaryAt`); `0` on a statement out of the two-stage scope. -/
+whatever their interior (`incorrectAtBoundaryAt`); `0` on a statement out of the two-stage scope. -/
 noncomputable def regCountAt (L : CompiledTwo Coin A) (x : Msg) (val : ℕ → Option Bool) : ℕ :=
   match L.parse x with
   | none => 0
   | some s =>
     match L.partition s, L.two s with
-    | some Pt, some d => if InScopeTwo Pt d s then (wrongAtBoundaryAt s Pt d.part val).card else 0
+    | some Pt, some d => if InScopeTwo Pt d s then (incorrectAtBoundaryAt s Pt d.part val).card else 0
     | _, _ => 0
 
 open Classical in
-/-- **The escape at boundary values `val`**: at the statement `x`, the two-stage design's `P̄_a` at `val`'s footprint at
+/-- **The missProb at boundary values `val`**: at the statement `x`, the two-stage design's `P̄_a` at `val`'s footprint at
 best interiors (`Design.Two.PaBestAt`); `1` on a statement out of the two-stage scope, which no run accepts. It reads
 the statement and `val` only, and no coin of the run. -/
 noncomputable def escAt (L : CompiledTwo Coin A) (x : Msg) (val : ℕ → Option Bool) : ℝ≥0∞ :=
@@ -146,7 +146,7 @@ noncomputable def escAt (L : CompiledTwo Coin A) (x : Msg) (val : ℕ → Option
 
 /-- **A two-stage verification phase's record at boundary values `val`**: accepted when the run accepts; sampled
 incorrect when its sample holds a proof block incorrect at `val` and the committed interiors; incorrect, the count `n`,
-and escape, the probability `e`, both of which its strategy fixes; and the release. -/
+and missProb, the probability `e`, both of which its strategy fixes; and the release. -/
 noncomputable def twoAtRec (H : Msg → Msg) (L : CompiledTwo Coin A) (val : ℕ → Option Bool) (n : ℕ) (e : ℝ≥0∞)
     (b : ((O → V) × Tick × Adv) × TwoPlay L) : ServedEsc O V Tick Adv where
   accepted := b.2.accepted H
@@ -155,11 +155,11 @@ noncomputable def twoAtRec (H : Msg → Msg) (L : CompiledTwo Coin A) (val : ℕ
   egress := b.1.1
   tick := b.1.2.1
   adv := b.1.2.2
-  escape := e
+  missProb := e
 
 /-- **The run over `T` two-stage verification phases** at the datacenter's strategy `s` and the boundary traces
 `val`: verification phase `t` is recorded by `twoAtRec` at the boundary values `val t m x P` of the release `m`, the
-statement `x` and the prover `P` its strategy sends, with the count and the escape there (`regCountAt`, `escAt`). -/
+statement `x` and the prover `P` its strategy sends, with the count and the missProb there (`regCountAt`, `escAt`). -/
 noncomputable def twoAtRun (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
     (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) (T : ℕ)
     (s : Strategy (monitoringPeriodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)) :
@@ -183,7 +183,7 @@ def PeriodTwoProd (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
       acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.1 τ.2.1.1 τ.2.1.2) ≤ ε t) →
     ∀ δ : ℝ, Verity.Game.value
         (fun l : List (ServedEsc O V Tick Adv) =>
-          (∀ r ∈ l, r.accepted) ∧ (l.map ServedEsc.escape).prod < ENNReal.ofReal δ)
+          (∀ r ∈ l, r.accepted) ∧ (l.map ServedEsc.missProb).prod < ENNReal.ofReal δ)
         (twoAtRun H Lv val T s) ≤
       ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t)
 
@@ -195,7 +195,7 @@ the escapes of the verification phases before the first whose sample holds one m
 $$\delta + \sum_t \varepsilon_t.$$
 It is `PeriodTwoReg` with the phases' escapes multiplied in place of one rate to the count of incorrect replay blocks,
 and it gives `PeriodTwoProd`: a run whose verification phases are all accepted either has one whose sample holds an
-incorrect proof block or multiplies every phase's escape. -/
+incorrect proof block or multiplies every phase's missProb. -/
 def PeriodTwoLead (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
     (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) : Prop :=
   ∀ (T : ℕ) (ε : ℕ → ℝ) (s : Strategy (monitoringPeriodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)),

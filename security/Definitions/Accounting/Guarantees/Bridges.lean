@@ -33,13 +33,13 @@ namespace Accounting.Guarantees
 open Finset
 
 /-- **B1**: PoUW's assumption TT(γ₀) at `CM_A`, the cost model of `A`'s provers (`Actual.costModel`: the verifier at `V`
-releases the salt at `tₛ` and decodes the transcript with `read` from what it receives before `t_d`; a program is a
+releases the salt at `tₛ` and decodes the trace with `read` from what it receives before `t_d`; a program is a
 prover, a strategy with runs in `𝓕` causal from every tick whose oracle calls are the hash's gates `hash`; its cost is
 the prover's work at `π` in `[tₛ + ℓ, t_d − ℓ)`). With `HonestClock` at `CM_A`
 (`Accounting.SecurityProofs.Actual.honestClock`), `Pouw.SecurityProofs.WorkBetweenSaltAndDeadline` then bounds the work
 between the salt and the deadline. -/
 def B1 (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {L : Type} [LinearOrder L] [Fintype L]
-    (𝓕 : Set (Actual.Run L)) (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Transcript)
+    (𝓕 : Set (Actual.Run L)) (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Trace)
     (hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)) (π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ)
     (P : Pouw.Protocol Q R S) (D : Pouw.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
   Pouw.Assumptions.TT (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π) P D γ₀ ε
@@ -47,12 +47,12 @@ def B1 (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {L : T
 /-- **PoUW's row, from B1**: `Pouw.Guarantees.WorkBetweenSaltAndDeadline` at `CM_A`, its terms and names as
 there. Under B1 and the `Ω_max` bound, for every in-domain workload and adversary of `CM_A` whose prover's work at `π`
 in `[tₛ + ℓ, t_d − ℓ)` is at most `T` and whose oracle calls are at most `q` at every oracle and salt
-(`Adversary.Bounded` at `CM_A`), the audit with `t` work-weighted samples accepts the transcript the verifier receives
+(`Adversary.Bounded` at `CM_A`), the audit with `t` work-weighted samples accepts the trace the verifier receives
 before `t_d` while `T < (1 − g)(1 − ε_s)·W`, `g = 1 − (1 − g₀)/Ω_max`, with probability at most
 `(1 − ε_s)^t + δ(q, N)`. -/
 def pouwRow : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {L : Type} [LinearOrder L] [Fintype L]
-    (𝓕 : Set (Actual.Run L)) (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Transcript)
+    (𝓕 : Set (Actual.Run L)) (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Trace)
     (hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)) (π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ)
     (P : Pouw.Protocol Q R S) (D : Pouw.Layout → Prop) (g₀ Ωmax : ℝ) (δ : ℕ → ℕ → ℝ),
     g₀ < 1 → 0 < Ωmax →
@@ -62,7 +62,7 @@ def pouwRow : Prop :=
     ∀ U : Pouw.Workload, U.InDomain D → ∀ A : Pouw.Adversary (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π),
     ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → A.Bounded U T q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       Pouw.pr (fun x : (Q → R) × S × (Fin t → Pouw.Ticket (P.Wref U.layout) U.layout.N) =>
-          Pouw.AuditAccepts (Pouw.correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          Pouw.AuditAccepts (Pouw.correctSet P U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 ∧
           T < (1 - Pouw.reductionGap g₀ Ωmax) * (1 - εs) * Pouw.totalWref P U.layout)
         ≤ (1 - εs) ^ t + δ q U.layout.N
 

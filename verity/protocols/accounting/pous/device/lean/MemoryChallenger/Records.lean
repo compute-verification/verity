@@ -133,7 +133,7 @@ def CoinTree.opening (t : CoinTree) (j : Nat) : CoinOpening :=
 /-! ## The session -/
 
 /-- What the memory challenger publishes before the session. Every field is in the signed header. -/
-structure SessionCommitment where
+structure ChallengePhaseCommitment where
   session : ByteArray
   coinRoot : ByteArray
   coinKey : ByteArray
@@ -145,7 +145,7 @@ structure SessionCommitment where
   deriving BEq, Inhabited
 
 /-- `verify_coin`: the opening opens round `j`'s coin under the commitment's coin tree, to a block index. -/
-def verifyCoin (c : SessionCommitment) (o : CoinOpening) : Bool :=
+def verifyCoin (c : ChallengePhaseCommitment) (o : CoinOpening) : Bool :=
   o.j < c.k && o.index < c.blocks &&
     match coinLeaf c.coinKey c.session o.j o.index o.salt with
     | .error _ => false
@@ -195,8 +195,8 @@ def pyJsonStr (s : String) : String := Id.run do
              else let m := n - 0x10000; out ++ "\\u" ++ hex4 (0xd800 + (m >>> 10)) ++ "\\u" ++ hex4 (0xdc00 + (m &&& 0x3ff))
   return out ++ "\""
 
-/-- The header's fields, in key order, as `SessionCommitment.header()` and `message` write them. -/
-def SessionCommitment.headerFields (c : SessionCommitment) : List (String × String) :=
+/-- The header's fields, in key order, as `ChallengePhaseCommitment.header()` and `message` write them. -/
+def ChallengePhaseCommitment.headerFields (c : ChallengePhaseCommitment) : List (String × String) :=
   [("binding", pyJsonStr (hexOf c.binding)), ("block_bytes", toString c.blockBytes), ("blocks", toString c.blocks),
    ("clock", pyJsonStr CLOCK), ("coin_key_sha512", pyJsonStr (hexOf (Sha512.hash c.coinKey))),
    ("coin_root", pyJsonStr (hexOf c.coinRoot)), ("coin_tree", pyJsonStr COIN_TREE), ("k", toString c.k),
@@ -205,12 +205,12 @@ def SessionCommitment.headerFields (c : SessionCommitment) : List (String × Str
 
 /-- The signed header: the commitment's header with how the session ended and its number of rounds, as
 `json.dumps(sort_keys=True, separators=(",", ":"))`. -/
-def header (c : SessionCommitment) (ended : String) (rounds : Nat) : String :=
+def header (c : ChallengePhaseCommitment) (ended : String) (rounds : Nat) : String :=
   let fields := (c.headerFields ++ [("ended", pyJsonStr ended), ("rounds", toString rounds)]).toArray.qsort (·.1 < ·.1)
   "{" ++ ",".intercalate (fields.toList.map fun (k, v) => pyJsonStr k ++ ":" ++ v) ++ "}"
 
 /-- `message`: what the session's one signature signs, `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`. -/
-def message (c : SessionCommitment) (ended : String) (rounds : Array Round) : E ByteArray := do
+def message (c : ChallengePhaseCommitment) (ended : String) (rounds : Array Round) : E ByteArray := do
   let head := (header c ended rounds.size).toUTF8
   let root ← recordsRoot c.session rounds
   pure (Sha512.hash (SESSION_TAG ++ be64 head.size.toUInt64 ++ head ++ root))

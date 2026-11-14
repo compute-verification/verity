@@ -47,7 +47,7 @@ open Pous (Bits pr)
 open scoped ENNReal
 
 /-- **The remote bandwidth audit as deployed: an accepted session conserves its words, over the monitoring period and
-in every window.** For every deployed session of `n` windows on one store (`Rate.DeployedSession`: in each window `P`
+in every window.** For every deployed session of `n` windows on one store (`Rate.DeployedRun`: in each window `P`
 chained passes whose `G` candidate roots the prover grinds, pass devices with partial completion, interactive side
 sources that ignore the oracle, at most `S` bits on chip, `L` over the link and `q` oracle queries a pass, and one
 pooled sample of `d` of the window's `P·N` receipts), every split of device memory into `τ` tiers, and every `d̄` and
@@ -87,7 +87,7 @@ Frozen (no-function, hash): a bound in the random-oracle model over a session of
 function of the rate audit's code computes. -/
 def RemoteRunConservation : Prop :=
   ∀ (n P N b h ρ S L q r s d G lam τ rounds cRoot F : ℕ) (cost : ℕ → ℕ) (tier : ℕ → Fin τ)
-    (A : Rate.DeployedSession n P N b h ρ S L q r s d G) (dbar dw : ℝ),
+    (A : Rate.DeployedRun n P N b h ρ S L q r s d G) (dbar dw : ℝ),
     0 < n → 0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dw ≤ 1 →
     Assumptions.WorkHardness b rounds cRoot cost →
     (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
@@ -122,7 +122,7 @@ Proof: `Accounting.SecurityProofs.RemoteRunConservationDeployed`, from `RemoteRu
 Frozen (no-function, hash): as `RemoteRunConservation`. -/
 def RemoteRunConservationDeployed : Prop :=
   ∀ (n P N ρ S L q r s G lam τ cRoot F : ℕ) (cost : ℕ → ℕ) (tier : ℕ → Fin τ)
-    (A : Rate.DeployedSession n P N 32768 512 ρ S L q r s 2773 G),
+    (A : Rate.DeployedRun n P N 32768 512 ρ S L q r s 2773 G),
     7 ≤ n → 0 < P → 0 < N → 0 < cRoot → q ≤ 2 ^ 55 → G ≤ 2 ^ 55 →
     Assumptions.WorkHardness 32768 3 cRoot cost →
     (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
@@ -154,7 +154,7 @@ and the `n·P` passes' `S + (L − ρ) + b·F/(rounds·c_root)` bits.
 Frozen (no-function, hash): as `RemoteRunConservation`. -/
 def RemoteRunRoutes : Prop :=
   ∀ (n P N b h ρ S L q r s d G lam τ rounds cRoot F : ℕ) (cost : ℕ → ℕ) (tier : ℕ → Fin τ)
-    (A : Rate.DeployedSession n P N b h ρ S L q r s d G) (Nd : Remote.Node (Fin τ)) (a : Remote.Audit) (dbar : ℝ),
+    (A : Rate.DeployedRun n P N b h ρ S L q r s d G) (Nd : Remote.Node (Fin τ)) (a : Remote.Audit) (dbar : ℝ),
     0 < n → 0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dbar ≤ 1 →
     a.P = n * P → a.b = b → a.lam = lam → Nd.declared a.T = n * P * N * b →
     Assumptions.WorkHardness b rounds cRoot cost →
@@ -180,7 +180,7 @@ the window's term dropped.
 Frozen (no-function, hash): as `RemoteRunConservation`. -/
 def RemoteMonitoringPeriodConservation : Prop :=
   ∀ (n P N b h ρ S L q r s d G lam τ rounds cRoot F : ℕ) (cost : ℕ → ℕ) (tier : ℕ → Fin τ)
-    (A : Rate.DeployedSession n P N b h ρ S L q r s d G) (Nd : Remote.Node (Fin τ)) (a : Remote.Audit) (dbar : ℝ),
+    (A : Rate.DeployedRun n P N b h ρ S L q r s d G) (Nd : Remote.Node (Fin τ)) (a : Remote.Audit) (dbar : ℝ),
     0 < n → 0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dbar ≤ 1 →
     a.P = n * P → a.b = b → a.lam = lam → Nd.declared a.T = n * P * N * b →
     Assumptions.WorkHardness b rounds cRoot cost →
@@ -211,7 +211,7 @@ window `w`'s correct receipts cover less than `(1 − d_w)·C`, or its tier read
 Frozen (no-function, hash): as `RemoteRunConservation`. -/
 def RemoteWindowRunConservation : Prop :=
   ∀ (n P N b h ρ S L q r s d G lam τ rounds cRoot F : ℕ) (cost : ℕ → ℕ) (tier : ℕ → Fin τ)
-    (A : Rate.DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (Nd : Remote.Node (Fin τ)) (a : Remote.Audit)
+    (A : Rate.DeployedRun n P N b h ρ S L q r s d G) (w : Fin n) (Nd : Remote.Node (Fin τ)) (a : Remote.Audit)
     (dw : ℝ),
     0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dw ≤ 1 →
     a.P = P → a.b = b → a.lam = lam → Nd.declared a.T = P * N * b →
@@ -253,7 +253,7 @@ at each candidate root, and the session is as in `RemoteRunConservation`.
 Frozen (no-function, hash): as `RemoteRunConservation`. -/
 def RemoteRunConservationRelay : Prop :=
   ∀ (n P N b h ρ S L q r s d G lam m τ rounds cRoot F : ℕ) (cost : ℕ → ℕ) (tier : ℕ → Fin τ)
-    (A : Rate.DeployedSession n P N b h ρ S L q r s d G) (dbar dw : ℝ),
+    (A : Rate.DeployedRun n P N b h ρ S L q r s d G) (dbar dw : ℝ),
     0 < n → 0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dw ≤ 1 →
     Assumptions.WorkHardness b rounds cRoot cost →
     (∀ w η j ι c, Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c)) →
@@ -281,7 +281,7 @@ correct receipts cover less than `(1 − d̄)·C`, or its tier reads are less th
 Frozen (no-function, hash): as `RemoteRunConservation`. -/
 def RemoteMonitoringPeriodConservationRelay : Prop :=
   ∀ (n P N b h ρ S L q r s d G lam m τ rounds cRoot F : ℕ) (cost : ℕ → ℕ) (tier : ℕ → Fin τ)
-    (A : Rate.DeployedSession n P N b h ρ S L q r s d G) (Nd : Remote.Node (Fin τ)) (a : Remote.Audit) (dbar : ℝ),
+    (A : Rate.DeployedRun n P N b h ρ S L q r s d G) (Nd : Remote.Node (Fin τ)) (a : Remote.Audit) (dbar : ℝ),
     0 < n → 0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dbar ≤ 1 →
     a.P = n * P → a.b = b → a.lam = lam + m * b → Nd.declared a.T = n * P * N * b →
     Assumptions.WorkHardness b rounds cRoot cost →
@@ -306,7 +306,7 @@ receipts cover less than `(1 − d_w)·C`, or its tier reads are less than `(1 �
 Frozen (no-function, hash): as `RemoteRunConservation`. -/
 def RemoteWindowRunConservationRelay : Prop :=
   ∀ (n P N b h ρ S L q r s d G lam m τ rounds cRoot F : ℕ) (cost : ℕ → ℕ) (tier : ℕ → Fin τ)
-    (A : Rate.DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (Nd : Remote.Node (Fin τ)) (a : Remote.Audit)
+    (A : Rate.DeployedRun n P N b h ρ S L q r s d G) (w : Fin n) (Nd : Remote.Node (Fin τ)) (a : Remote.Audit)
     (dw : ℝ),
     0 < P → 0 < N → 0 < b → 0 < rounds * cRoot → dw ≤ 1 →
     a.P = P → a.b = b → a.lam = lam + m * b → Nd.declared a.T = P * N * b →

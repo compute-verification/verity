@@ -33,7 +33,7 @@ leakage lemma at an audited deployment, `WeightSecurity.Guarantees.TheftServed`,
 deployment, and per charge unit in bits (`TheftServedReq`, `TheftServedMinEntropy`). `Stop`: the incorrect proof
 blocks a period leaves undetected, over SPOT's period machinery. `Deployed`: `TheftServed` at the deployment audits
 (`TheftServedDeployed`). `Pressure`: a registered window's `pa B ≤ x^|B|`, the pressure `TheftServedDeployed` takes.
-`Two`: `TheftServed` at a two-stage audit (`TheftServedTwo`), its budget `T·(K − 1) + 1` from the cap `WindowCap`.
+`Two`: `TheftServed` at a two-stage audit (`TheftServedTwo`), its budget `T·(K − 1) + 1` from the cap `ExecutionPhaseCap`.
 `Tied`: `TheftServedReq` at a checked population whose run records each window's trace (`TheftServedTied`), its bound
 ending in the probabilities that a release isn't its trace's outputs or a trace doesn't hold its window's inputs.
 `TwoReg`: a period of two-stage windows at the committed traces, the

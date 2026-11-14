@@ -53,7 +53,7 @@ variable {N n : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg 
 /-- **The headline: the count curve on the statement's rows, under SHA-512, at the live sample.** Let the units be sampled
 with `Flock.Draw.drawWith`'s stratified sampling design (strata `St`, matching `Law.stratified σs ks` by `hS`) on a byte source
 `src` that A3 makes uniform (`hA3`), the challenger's coins, and run the batched session with SHA-512 leaves, nodes and
-rows. If `execAccept` holds, the probability that at least `K` units of the program's rows circuit are wrong at the
+rows. If `execAccept` holds, the probability that at least `K` units of the program's rows circuit are incorrect at the
 committed values (1 on `ones`, 0 on `zeros`, the plurality of the prover's openings elsewhere) is at most
 `miss(K) + ε_ks + δ_link + δ_tree`:
 * `miss(K)`, `Law.stratified`'s count curve, which `stratified_miss_eq_greedy` computes, under A3 (`hA3`);
@@ -86,7 +86,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline
       fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H512 qT) :
     prob (fun o => execAccept o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros ((p.partition outs).Xplur H512 enc512 plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
         (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSession H512 enc512 plan)) σ ≤
       (Law.stratified σs ks hks).miss K +

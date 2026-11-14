@@ -23,7 +23,7 @@ They take no premise. The schedule's bits (`scheduleBits`) are one-to-one on wel
 list comes after its length).
 
 The model's layout (`Accounting.ScheduleDeterministic`, `Accounting.Assumptions.SteeredLayout`) is the verifier's:
-`sessionLayout`, `codeLayout` of the session's appends and the runs the pass sent, tile `i` at `tileAt`, the
+`runLayout`, `codeLayout` of the session's appends and the runs the pass sent, tile `i` at `tileAt`, the
 `position` at which `checkOpening` checks the block at position `i` of the pass's plan (`runBlocks`). Three properties
 of the code tie it there: `PlanBlocks` (`Plan.block` is the runs' blocks in order), `CodeLayoutTiles` (a plan of `N`
 blocks with positions in range is laid out at them) and `OpensAtPosition` (an accepted opening is checked at its
@@ -71,7 +71,7 @@ def scheduleBits (sc : Schedule.Schedule) : List Bool :=
 
 /-- **The model's layout of a pass is a map of the session's appends and the pass's plan.** At each prefix `c` of the
 session's coins and each codec and append coins `y`, the model's layout of the pass is `pos c` of the session's appends
-`appended c y` and the runs `sent c y` the pass's plan sent. At the verifier's own layout (`sessionLayout`, `pos c`
+`appended c y` and the runs `sent c y` the pass's plan sent. At the verifier's own layout (`runLayout`, `pos c`
 its `codeLayout`) it holds of the code (`scheduleLayoutGap_code`). -/
 def ScheduleLayoutGap {Pfx Y : Type} {N T M : ℕ} (pos : Pfx → Array (ℕ × ℕ) → Array (ℕ × ℕ) → Fin N ↪ Fin T × Fin M)
     (appended sent : Pfx → Y → Array (ℕ × ℕ)) (layout : Pfx → Y → Fin N ↪ Fin T × Fin M) : Prop :=
@@ -108,7 +108,7 @@ noncomputable def codeLayout {N T M : ℕ} (blocks : ℕ) (dflt : Fin N ↪ Fin 
 
 /-- **The model's layout, the verifier's**: at prefix `c` and coins `y`, `codeLayout` of the session's appends
 `appended c y` and the runs `sent c y` the pass's plan sent, `dflt c` where they give no layout of `N` tiles. -/
-noncomputable def sessionLayout {Pfx Y : Type} {N T M : ℕ} (blocks : ℕ) (dflt : Pfx → Fin N ↪ Fin T × Fin M)
+noncomputable def runLayout {Pfx Y : Type} {N T M : ℕ} (blocks : ℕ) (dflt : Pfx → Fin N ↪ Fin T × Fin M)
     (appended sent : Pfx → Y → Array (ℕ × ℕ)) : Pfx → Y → Fin N ↪ Fin T × Fin M :=
   fun c y => codeLayout blocks (dflt c) (appended c y) (sent c y)
 

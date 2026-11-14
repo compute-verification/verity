@@ -30,7 +30,7 @@ import Proofs.Flock.Soundness.Game
 with the registered reads' term removed, at outcomes whose registration is on the registrant's leaves
 (`¬ rd.Off o.1`), and with only the input rows in the event. The rest is proved here:
 
-* **output rows**: a sampled proof block not wrong on the registration (`wrongRegZ`) is correct in the value layer, so on each of
+* **output rows**: a sampled proof block not wrong on the registration (`incorrectRegZ`) is correct in the value layer, so on each of
   its committed wires the value layer is the circuit's evaluation on its inputs (`Partition.correct_eval`, with
   `Layout.keyProg_readsOwn`);
 * **the registered reads' term**: at an accepted outcome whose reads the verifier owns, the registered check holds at
@@ -93,7 +93,7 @@ def RowsLinkLe : Prop :=
     LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
     RowsCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) rd.isRead wo k Rw t' →
     prob (fun o => LiveAcceptsZKR I own o ∧ ∃ u ∈ o.2.1,
-        u ∈ wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) Xv ∨
+        u ∈ incorrectRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) Xv ∨
         (¬ rd.Off o.1 ∧ OwnReadsHJ I own c pub o.2.2 rd.isRead rd.port rd.readAt ∧
           ∃ g ∈ P.io u, rd.isRead (vb.pos g) ∧ Xv g ≠ vb.bit (vb.val (wo (vb.pos g))) g))
         G τ ≤
@@ -109,7 +109,7 @@ def RowsLinkLe : Prop :=
 (`layShHJ`'s `regLeaf` reads only `pub`), so `rd.Off` is one proposition at every registration. Where it holds, the
 rows' disjunct is empty and the bound is `EndToEndRegisteredDrawnFlat`'s first conjunct. Where it fails, the registrant's
 openings `wo` open the registered commitments at every read, and the bound is `ZkLink.zk_flock_drawnC_rows` at "wrong"
-`wrongRegZ ∪ rowsWrongZ`, through `execRefinesZK_tables_drawn` and `ksAvgZC_le_strict`, as
+`incorrectRegZ ∪ rowsWrongZ`, through `execRefinesZK_tables_drawn` and `ksAvgZC_le_strict`, as
 `zk_session_soundHJR_custody_drawn_reg` is `zk_flock_drawnC_reg`'s. -/
 theorem rowsLinkLe : RowsLinkLe := by
   intro n Reg own I ht c hc hU pub hpub hscope kd hdiv dj S₀ d₀ y₀ rd wr dg N Ω _ _ Lb src hTags hCust k Rw M hk hRw
@@ -124,7 +124,7 @@ theorem rowsLinkLe : RowsLinkLe := by
   · have hD := (Flock.SecurityProofs.EndToEndRegisteredDrawnFlat n Reg I ht own c hc hU pub hpub hscope kd hdiv dj S₀
       d₀ y₀ wr dg N Ω Lb src hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' τ qF qS hCR hA2).1
     refine (prob_mono (q := fun o => LiveAcceptsZKR I own o ∧ ∃ u ∈ o.2.1,
-        u ∈ wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) Xv) ?_ G τ).trans
+        u ∈ incorrectRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) Xv) ?_ G τ).trans
       (hD.trans (le_add_right le_rfl))
     intro o h
     obtain ⟨hA, u, hu, hW | ⟨hno, -⟩⟩ := h
@@ -141,7 +141,7 @@ theorem rowsLinkLe : RowsLinkLe := by
     split_ifs with hrow
     · exact hl.symm
     · exact absurd (rd.read_row p hp) hrow
-  let W := wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) Xv ∪
+  let W := incorrectRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) Xv ∪
     rowsWrongZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb rd.isRead wo Xv
   refine le_trans (prob_mono (q := fun o => LiveAcceptsZK I o ∧ ∃ u ∈ o.2.1, u ∈ W) ?_ G τ) ?_
   · intro o h
@@ -183,21 +183,21 @@ theorem EndToEndRegisteredRows_of_rowsLink (hL : RowsLinkLe) : Flock.Guarantees.
     (fun o => regPathsHJ I D.unroll pub o.2.2 rd.port) (fun o ho => hD.2 o ho.1 rd ho.2) hReg
   have hsub : ∀ o : Reg × Finset (Fin n) × Discharge.Exec.Transcript,
       (LiveAcceptsZKR I own o ∧ ∃ u ∈ o.2.1,
-        u ∈ wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) Xv ∨
+        u ∈ incorrectRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) Xv ∨
         ¬ RowsRightZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ)
           (fun p => own' o ∧ rd.isRead p) wo k Rw u) →
       (LiveAcceptsZKR I own o ∧ ∃ u ∈ o.2.1,
-        u ∈ wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) Xv ∨
+        u ∈ incorrectRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) Xv ∨
         (¬ rd.Off o.1 ∧ own' o ∧
           ∃ g ∈ P.io u, rd.isRead (vb.pos g) ∧ Xv g ≠ vb.bit (vb.val (wo (vb.pos g))) g)) ∨
       ((LiveAcceptsZKR I own o ∧ own' o) ∧ rd.Off o.1) := by
     rintro o ⟨hA, u, hu, hW | hR⟩
     · exact Or.inl ⟨hA, u, hu, Or.inl hW⟩
-    by_cases hW : u ∈ wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) Xv
+    by_cases hW : u ∈ incorrectRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) Xv
     · exact Or.inl ⟨hA, u, hu, Or.inl hW⟩
     have hRR : RightRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) Xv u := by
       by_contra h
-      exact hW ((mem_wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb).2 h)
+      exact hW ((mem_incorrectRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb).2 h)
     have heval := P.correct_eval (Discharge.Layout.keyProg_readsOwn D.unroll hU n _ u) hRR.1
     obtain ⟨hOwn, g, hg, hrd, hne⟩ : own' o ∧
         ∃ g ∈ P.io u, rd.isRead (vb.pos g) ∧ Xv g ≠ vb.bit (vb.val (wo (vb.pos g))) g := by

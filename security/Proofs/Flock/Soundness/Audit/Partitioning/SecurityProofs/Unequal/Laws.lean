@@ -10,7 +10,7 @@ import Proofs.Flock.Soundness.Game
 * `Law.bernoulliOf num den` samples unit `u` independently with probability `num u / den`. A set escapes with
   `∏_{u ∈ B} (1 − num u / den)` (`bern_escape_toReal`), and unit `u` is sampled with `num u / den` (`bern_incl_toReal`).
   `Law.bernoulli` is its case of one `num` for every unit.
-* `restrict L S` is `L` seen on the units of `S` alone, numbered in increasing order. Its escape of `B` is `L`'s escape
+* `restrict L S` is `L` seen on the units of `S` alone, numbered in increasing order. Its missProb of `B` is `L`'s missProb
   of `B`'s image (`restrict_escape`), so its expected number of samples is `∑_{u ∈ S} incl(u)` (`meanDraws_restrict`).
 -/
 
@@ -54,13 +54,13 @@ theorem prCoin_fin_not_lt (den k : ℕ) [NeZero den] (hk : k ≤ den) :
       simp only [ite_true]
       exact avg_const 1
 
-/-- **The per-unit Bernoulli escape**: `∏_{u ∈ B} (1 − num u / den)`. -/
+/-- **The per-unit Bernoulli missProb**: `∏_{u ∈ B} (1 − num u / den)`. -/
 theorem bern_escape_toReal {num : Fin n → ℕ} {den : ℕ} [NeZero den] (hnum : ∀ u, num u ≤ den)
-    (B : Finset (Fin n)) : ((Law.bernoulliOf num den).escape B).toReal = ∏ u ∈ B, (1 - (num u : ℝ) / den) := by
+    (B : Finset (Fin n)) : ((Law.bernoulliOf num den).missProb B).toReal = ∏ u ∈ B, (1 - (num u : ℝ) / den) := by
   classical
-  have h : (Law.bernoulliOf num den).escape B = ∏ u ∈ B, prCoin (fun x : Fin den => ¬ x.val < num u) := by
+  have h : (Law.bernoulliOf num den).missProb B = ∏ u ∈ B, prCoin (fun x : Fin den => ¬ x.val < num u) := by
     rw [← prCoin_pi_forall (Ω := fun _ : Fin n => Fin den) B (fun u x => ¬ x.val < num u)]
-    unfold Verity.Law.escape
+    unfold Verity.Law.missProb
     refine congrArg prCoin (funext fun ω => propext ?_)
     simp only [Finset.disjoint_left, Finset.mem_filter, Finset.mem_univ, true_and]
     exact ⟨fun h u hu hlt => h hlt hu, fun h u hlt hu => h u hu hlt⟩
@@ -86,8 +86,8 @@ def restrict (L : Law n) (S : Finset (Fin n)) : Law S.card where
   draw ω := univ.filter fun i => S.orderEmbOfFin rfl i ∈ L.draw ω
 
 theorem restrict_escape (L : Law n) (S : Finset (Fin n)) (B : Finset (Fin S.card)) :
-    (restrict L S).escape B = L.escape (B.map (S.orderEmbOfFin rfl).toEmbedding) := by
-  unfold Verity.Law.escape
+    (restrict L S).missProb B = L.missProb (B.map (S.orderEmbOfFin rfl).toEmbedding) := by
+  unfold Verity.Law.missProb
   refine congrArg prCoin (funext fun ω => propext ?_)
   simp only [restrict, Finset.disjoint_left, Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_map,
     RelEmbedding.coe_toEmbedding, not_exists, not_and]

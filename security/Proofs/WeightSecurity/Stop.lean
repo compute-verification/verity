@@ -13,7 +13,7 @@ A deployment's monitoring period is a run of windows (`FlockSoundness.Game.monit
 * `period_lead`: if at every strategy satisfying `good` a window's records all carry one number `w` of incorrect proof
   blocks and its sample misses them all with probability at most `x ^ w`, then the windows before the first sampled
   incorrect proof block carry at least `M` (`Served.lead`) with probability at most `x ^ M`, for `x ≤ 1`. It is
-  `period_horizon` stopped at the first window whose sample holds one.
+  `period_pooled` stopped at the first window whose sample holds one.
 * `period_undetected`: if each such window is also accepted with a sampled incorrect proof block with probability at
   most `ε i`, the run leaves `M` incorrect proof blocks undetected (`Served.Undetected`) with probability at most
   `Σ_t ε (i + t) + x ^ M`.

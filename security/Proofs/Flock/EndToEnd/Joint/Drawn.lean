@@ -10,11 +10,11 @@ public import Proofs.Flock.Soundness.Audit.HarmBound
 * `Composed.execRefinesZK_on_drawn`: `execRefinesZK_on` with an event `E` of the sample on both sides, at one table, as
   `execRefinesZK_tables_drawn` is at `J` tables: both audits' outcomes carry the sample, and the refinement is one
   inequality at each of the sampling design's samples, where `E` is fixed.
-* `StratifiedBlock.accepted_drawnWrong_le`: flock-verify accepts the sampling block with a sampled proof block wrong with
+* `StratifiedBlock.accepted_drawnIncorrect_le`: flock-verify accepts the sampling block with a sampled proof block wrong with
   probability at most `ε_ks + ε_bind`: `zk_flock_drawnC_reg` at `planAtZKH`, carried to flock-verify's acceptance.
-* `StratifiedBlock.drawMiss_le`: the live sample misses a set `B` with probability at most `Law.stratified`'s escape of
+* `StratifiedBlock.drawMiss_le`: the live sample misses a set `B` with probability at most `Law.stratified`'s missProb of
   `B`, under A3 (`Law.execOS_escape_le`).
-* `StratifiedBlock.within_of_le`: a set in the confidence set, `δ ≤` its escape, is within the one budget:
+* `StratifiedBlock.within_of_le`: a set in the confidence set, `δ ≤` its missProb, is within the one budget:
   `Law.stratified_risk_le` for its spend, and `maxHarm`'s supremum for its ANDs and output bits.
 -/
 
@@ -89,20 +89,20 @@ variable (w : StratifiedBlock)
 open Classical in
 /-- **A sampling block accepted with a sampled proof block wrong**, at the strategy `τ` that plays it: at most
 `ε_ks + ε_bind`. -/
-theorem accepted_drawnWrong_le (τ : Strategy w.game)
+theorem accepted_drawnIncorrect_le (τ : Strategy w.game)
     (hCR : ∀ ω j, TableCRZ execArith hs512 (planAtZKH w.dj w.y₀ (w.L.draw ω) (reg (w.sim τ))) j
       (zcStrat execArith hs512 (planAtZKH w.dj w.y₀) (cont (w.sim τ) ω)) w.qF w.qS)
     (hA2 : LinkCRZC execArith hs512 w.P (planAtZKH w.dj w.y₀) (tabAtZKH w.dj w.y₀) w.vb (reg (w.sim τ))
       (cont (w.sim τ)) w.k w.Rw w.M w.t') :
-    prob (fun o => LiveAcceptsZK w.I o ∧ ∃ u ∈ o.2.1, u ∈ w.wrongSet τ) w.game τ ≤ w.epsKs + w.link := by
+    prob (fun o => LiveAcceptsZK w.I o ∧ ∃ u ∈ o.2.1, u ∈ w.incorrectSet τ) w.game τ ≤ w.epsKs + w.link := by
   refine (execRefinesZK_on_drawn execArith hs512 _ w.I w.wr _ w.dg _ _ _ _ w.N
     (decodesOnZK_of_runsOnZC execArith hs512 _ w.I w.wr _ _ _ _
       (runsZC_liveH w.I w.ht (Flock.Desc.parse_flat w.hD) (Discharge.Layout.scopeOkH_spec w.hU w.hscope).2.1 w.dj
         w.y₀ w.wr _ tablesAtZKH_live w.hTags w.hCust.1
         (fun ω => drawOkZKH_of_exec w.I (Flock.Desc.parse_flat w.hD) w.sub w.ks w.hks w.St w.hS w.Kd w.pop w.Lb
           w.src w.dj w.hCust.2 ω))) τ
-    (fun S => ∃ u ∈ S, u ∈ w.wrongSet τ)).trans ?_
-  refine (prob_mono (q := fun o : Bool × Finset (Fin w.n) => o.1 = true ∧ ¬ Disjoint (w.wrongSet τ) o.2)
+    (fun S => ∃ u ∈ S, u ∈ w.incorrectSet τ)).trans ?_
+  refine (prob_mono (q := fun o : Bool × Finset (Fin w.n) => o.1 = true ∧ ¬ Disjoint (w.incorrectSet τ) o.2)
     (fun o h => ⟨h.1, Finset.not_disjoint_iff.2 (let ⟨u, hu, hw⟩ := h.2; ⟨u, hw, hu⟩)⟩) _ _).trans ?_
   refine (zk_flock_drawnC_reg execArith hs512 w.P (planAtZKH w.dj w.y₀) (tabAtZKH w.dj w.y₀) w.vb
     (loweringSoundZK_of_place execArith _ (planAtZKH w.dj w.y₀) (tabAtZKH w.dj w.y₀)
@@ -125,7 +125,7 @@ private theorem prob_const {α : Type} (Q : Prop) [Decidable Q] (g : Game α) (s
 open Classical in
 /-- **A sampling block's sample misses a set `B`** with the acceptance probability of its live sample. -/
 theorem prob_drawMiss (B : Finset (Fin w.n)) (τ : Strategy w.game) :
-    prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ = w.L.escape B := by
+    prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ = w.L.missProb B := by
   show avg (fun ω => prob _ ((liveOf w.dg (mPtsOf w.D.unroll.g (∑ s, w.ks s)) w.N w.wr (w.L.draw ω) τ.1).map
     fun t => (τ.1, w.L.draw ω, t)) (τ.2 ω)) = prCoin fun ω => Disjoint (w.L.draw ω) B
   unfold prCoin
@@ -138,21 +138,21 @@ theorem prob_drawMiss (B : Finset (Fin w.n)) (τ : Strategy w.game) :
   · rw [if_neg (mt hiff.1 hd), if_neg hd]
 
 open Classical in
-/-- **A sampling block's sample misses a set `B`** with probability at most `Law.stratified`'s escape of `B`, under A3. -/
+/-- **A sampling block's sample misses a set `B`** with probability at most `Law.stratified`'s missProb of `B`, under A3. -/
 theorem drawMiss_le (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (B : Finset (Fin w.n)) (τ : Strategy w.game) :
-    prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ ≤ w.ideal.escape B := by
+    prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ ≤ w.ideal.missProb B := by
   rw [prob_drawMiss]
   exact Law.execOS_escape_le w.sub w.ks w.hks w.St w.hS w.Kd w.pop w.Lb w.src hA3 B
 
 /-- A set in the confidence set holds at most `maxHarm` of any weight. -/
 theorem harm_le_maxHarm (h : Fin w.n → ℕ) {δ : ℝ} {B : Finset (Fin w.n)}
-    (hB : ENNReal.ofReal δ ≤ w.ideal.escape B) : ((∑ u ∈ B, h u : ℕ) : ℝ) ≤ w.maxHarm h δ :=
-  le_ciSup (f := fun B : {B : Finset (Fin w.n) // ENNReal.ofReal δ ≤ w.ideal.escape B} =>
+    (hB : ENNReal.ofReal δ ≤ w.ideal.missProb B) : ((∑ u ∈ B, h u : ℕ) : ℝ) ≤ w.maxHarm h δ :=
+  le_ciSup (f := fun B : {B : Finset (Fin w.n) // ENNReal.ofReal δ ≤ w.ideal.missProb B} =>
     ((∑ u ∈ B.1, h u : ℕ) : ℝ)) (Set.finite_range _).bddAbove ⟨B, hB⟩
 
 /-- **A set in the confidence set is within the one budget.** -/
 theorem within_of_le {δ : ℝ} (hδ : 0 < δ) (ands bits : Fin w.n → ℕ) {B : Finset (Fin w.n)}
-    (hB : ENNReal.ofReal δ ≤ w.ideal.escape B) : w.Within δ ands bits B := by
+    (hB : ENNReal.ofReal δ ≤ w.ideal.missProb B) : w.Within δ ands bits B := by
   refine ⟨hB, ?_, w.harm_le_maxHarm ands hB, w.harm_le_maxHarm bits hB⟩
   have h := (Law.stratified_risk_le w.sub w.ks w.hks (ENNReal.ofReal_pos.2 hδ) hB).2
   rw [ENNReal.toReal_ofReal hδ.le, ← one_div] at h

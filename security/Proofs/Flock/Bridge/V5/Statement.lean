@@ -150,7 +150,7 @@ def _root_.Flock.Bridge.EndToEndHiddenV5 : Prop :=
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZHJP dj y₀) (tabZHJP dj y₀) vb (reg σ) (cont σ) k Rw M t' →
     prob (fun o => LiveAcceptsZKP I own o ∧
-        W ⊆ wrongRegZc execArith P (planZHJP dj y₀) (tabZHJP dj y₀) vb
+        W ⊆ incorrectRegZc execArith P (planZHJP dj y₀) (tabZHJP dj y₀) vb
           (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2) (reg σ)
           (XplurZC execArith hs512 P (planZHJP dj y₀) (tabZHJP dj y₀) vb (reg σ) (cont σ) k Rw))
         (auditLive L Reg (liveOfZJ dg (planZHJP dj y₀) N wr)) τ ≤

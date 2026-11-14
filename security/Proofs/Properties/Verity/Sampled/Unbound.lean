@@ -117,7 +117,7 @@ theorem unbound_subset_of_parsed {o : Option Flock.Bridge.Parsed} {r : Flock.Bri
           ∀ v : BitVec ((Flock.Bridge.Parsed.circuit o).w g), v.getLsbD 0 = b → op g v)
     (hconst : ∀ g b, Verity.parsedConsts o g = some b → ∀ v : BitVec ((Flock.Bridge.Parsed.circuit o).w g),
       (∀ i : Fin ((Flock.Bridge.Parsed.circuit o).w g), v.getLsbD i.val = b) → op g v)
-    (tr : (Flock.Bridge.Parsed.circuit o).Trace) (htr : HEq tr (Flock.Bridge.transcriptOf r.D r.hU r.n κ₀ val)) :
+    (tr : (Flock.Bridge.Parsed.circuit o).Trace) (htr : HEq tr (Flock.Bridge.traceOf r.D r.hU r.n κ₀ val)) :
     (Accounting.unbound (Flock.Bridge.Parsed.parts o) op tr).image Fin.val ⊆ F := by
   subst ho hC
   obtain rfl := eq_of_heq hP
@@ -185,7 +185,7 @@ theorem unbound_subset_faulty_part
     (w : Wit) :
     (Accounting.unbound A.fileRead.parts op
         (cast (congrArg Verity.Circuit.Trace A.circuit_eq.symm)
-          (Flock.Bridge.transcriptOf A.D A.hU A.n A.κ (w.val sha512Msg A.Cd
+          (Flock.Bridge.traceOf A.D A.hU A.n A.κ (w.val sha512Msg A.Cd
             (Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.design) A.desc ⟨"", 0, []⟩
               A.roots))))).image Fin.val ⊆
       faulty sha512Msg A.Cd

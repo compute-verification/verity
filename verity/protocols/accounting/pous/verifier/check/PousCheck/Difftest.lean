@@ -16,9 +16,9 @@ a test, not a proof.
 * `randomness`: `FlockSoundness.Randomness.derive` of a random source, domain and context, its streams and exact uniforms
   (`uniformExact`) over random indices, and P2's audit id, mode-0 key, indices and nonces and mode-1 round indices
   (`PousCheck.Challenge`).
-* `audit`: `Audit.check` on a session (frames, measured latencies, the verifier's secret, beacons, seen pairs, its own
+* `audit`: `Audit.check` on a challengePhase (frames, measured latencies, the verifier's secret, beacons, seen pairs, its own
   root of a private setup and its held `W`): its `FINAL` frame, the fault's code when there is none, or the refusal.
-  An accepted `FINAL` also gives the session's `Certificate.assess`: its verdict, coverage and StorageProfile.
+  An accepted `FINAL` also gives the challengePhase's `Certificate.assess`: its verdict, coverage and StorageProfile.
 * `storage`: the certificate gate and StorageProfile (`PousCheck.Certificate`) at a store, `k` and `Δ + RTT`.
 * `sha512`: the SHA-512 of labelled bytes, against the pins `reference.py` and `audit-vectors.json` hold for them.
 
@@ -144,9 +144,9 @@ def optional {α : Type} (j : Json) (k : String) (f : Json → V α) : V (Option
   | .null => pure none
   | v => some <$> f v
 
-/-- A session's record: its frames, measured latencies, and the verifier's secret, beacons, every pair it has used (a
+/-- A challengePhase's record: its frames, measured latencies, and the verifier's secret, beacons, every pair it has used (a
 list, required), and the root it built from `W` and the `W` it holds, when it has them. -/
-def session (inst : Json) : V (Array ByteArray × Array Nat × Wire.Verifier) := do
+def challengePhase (inst : Json) : V (Array ByteArray × Array Nat × Wire.Verifier) := do
   let frames ← bytesArr (← J.get inst "frames" "audit") "frames"
   let elapsed ← (← J.arr inst "elapsed_ns" "audit").mapM (J.asNat · "elapsed_ns")
   let source ← optional inst "verifier_source" (bytesOf · "verifier_source")
@@ -163,7 +163,7 @@ def session (inst : Json) : V (Array ByteArray × Array Nat × Wire.Verifier) :=
 /-- An `audit` instance's answer: `Audit.check`'s `FINAL` frame and assessment, the code of the fault that leaves no
 `FINAL`, or the verifier's refusal of its inputs. -/
 def audit (inst : Json) : V Json := do
-  let (frames, elapsed, v) ← session inst
+  let (frames, elapsed, v) ← challengePhase inst
   pure <| match Audit.check frames elapsed v with
     | .ok (final, storage) => Json.mkObj [("final", hex final), ("storage", storage)]
     | .error (.fault e) => Json.mkObj [("error", num e.code)]
@@ -180,7 +180,7 @@ def stop : Wire.Stop → Json
 code, and where the audit begins) and the audit's (`Audit.check`: the `FINAL` frame, its verdict, code, record count and
 transcript hash), or the fault or refusal each stops at. -/
 def transcript (inst : Json) : V Json := do
-  let (frames, elapsed, v) ← session inst
+  let (frames, elapsed, v) ← challengePhase inst
   let setup := match Wire.parseSetup frames with
     | .ok (s, cursor) => match Wire.judgeable s v with
       | .ok () => Json.mkObj [("blocks", num s.blocks.size), ("commitment", hex s.commitment), ("cursor", num cursor),

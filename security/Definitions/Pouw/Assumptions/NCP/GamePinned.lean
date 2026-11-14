@@ -81,7 +81,7 @@ def OneSegment : Prop :=
       ∀ g₀ : ℝ, g₀ < 1 → 0 < Lay.N → (∀ u < Lay.N, g₀ * (3 * (Lay.shape u).k) < P.d) →
         ∀ (H : Q → R) (s : S),
           (∑ u ∈ range Lay.N, (3 * ((Lay.shape u).Wmm : ℝ) - (Lay.shape u).m * P.d * (Lay.shape u).n)) / (1 - g₀)
-            < ∑ u ∈ checkedSet P.toProtocol ⟨Lay, fun _ => 0⟩ H s (A.transcript ⟨Lay, fun _ => 0⟩ H s),
+            < ∑ u ∈ checkedSet P.toProtocol ⟨Lay, fun _ => 0⟩ H s (A.trace ⟨Lay, fun _ => 0⟩ H s),
                 3 * ((Lay.shape u).Wmm : ℝ)
 
 /-- **`Barrier.Segment`'s hypotheses hold jointly with the lead's noise**: for all factor sources and

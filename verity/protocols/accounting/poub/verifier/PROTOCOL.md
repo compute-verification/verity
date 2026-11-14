@@ -1169,7 +1169,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   nothing after the seed without a `Scheduled` of the same session. So a credited plan is the verifier's own function
   of a schedule of at most \(a\) bits, and a plan that follows a coin at that schedule is refused: the `a` of the
   stacked guarantee's `SteeredLayout` premise is the cap plus one (`Properties.RemoteAudit.steered_of_checked`, at the
-  verifier's own layout, `Properties.RemoteAudit.sessionLayout`: the positions of the plan the pass sent, where it
+  verifier's own layout, `Properties.RemoteAudit.runLayout`: the positions of the plan the pass sent, where it
   checks each opened block, `CodeLayoutTiles` and `OpensAtPosition`), never the coins' bits for free. The cap, not
   the published schedule's own bits, is what is credited: `SteeredLayout` takes one \(a\) at every coin, and a
   schedule's length can follow

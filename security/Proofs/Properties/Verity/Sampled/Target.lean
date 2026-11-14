@@ -58,13 +58,13 @@ noncomputable abbrev stmt :=
 noncomputable abbrev part := Flock.Bridge.partOf A.P A.κ (Flock.Bridge.nsOf A.desc A.qr)
 
 /-- **The transcript a witness opens, on the committed files' circuit**: its first passing opening at each gate's claims
-position under the deployed commitment, read at the circuit's gates with its constants (`Flock.Bridge.transcriptOf`). -/
-noncomputable def transcriptAt (w : Claims.Sampling.Wit) : A.fileRead.circuit.Trace :=
+position under the deployed commitment, read at the circuit's gates with its constants (`Flock.Bridge.traceOf`). -/
+noncomputable def traceAt (w : Claims.Sampling.Wit) : A.fileRead.circuit.Trace :=
   cast (congrArg Verity.Circuit.Trace A.circuit_eq.symm)
-    (Flock.Bridge.transcriptOf A.D A.hU A.n A.κ (w.val Claims.Sampling.sha512Msg A.Cd A.stmt))
+    (Flock.Bridge.traceOf A.D A.hU A.n A.κ (w.val Claims.Sampling.sha512Msg A.Cd A.stmt))
 
 theorem extract_eq (τ : FlockSoundness.Game.Strategy A.game) :
-    A.extract τ = A.transcriptAt (Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)) :=
+    A.extract τ = A.traceAt (Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)) :=
   rfl
 
 end Live
@@ -146,11 +146,11 @@ theorem ks {r : Verity.FileRead} (hr : r = A.fileRead)
     have h := (Finset.mem_filter.1 hv).1
     rwa [Flock.Bridge.blocks_length_partOf A.P hns] at h
   have hcard : A.ε * A.n < (Fs.card : ℝ) := by
-    have h1 : (Accounting.unbound A.fileRead.parts op (A.transcriptAt w)).card ≤ Fs.card := by
+    have h1 : (Accounting.unbound A.fileRead.parts op (A.traceAt w)).card ≤ Fs.card := by
       rw [← Finset.card_image_of_injective _ Fin.val_injective]
       exact Finset.card_le_card (A.unbound_subset_faulty_part op hop hc w)
     have h2 : A.ε * (A.fileRead.units : ℝ) <
-        ((Accounting.unbound A.fileRead.parts op (A.transcriptAt w)).card : ℝ) := not_le.mp hI
+        ((Accounting.unbound A.fileRead.parts op (A.traceAt w)).card : ℝ) := not_le.mp hI
     calc A.ε * A.n = A.ε * (A.fileRead.units : ℝ) := by rw [A.units_eq]
       _ < _ := h2
       _ ≤ (Fs.card : ℝ) := by exact_mod_cast h1

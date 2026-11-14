@@ -196,9 +196,9 @@ theorem guess_act (a : Codes) (ha : ∀ i l, a i l < 2 ^ 32) (u i l : ℕ) :
   rw [guess_mem_of_ne dv sl t y U _ σ (act_ne_tk u i l) (act_ne_us u i l), init_act, W1.w32,
     Nat.mod_eq_of_lt (ha i l)]
 
-/-- The committed transcript of a declared unit. -/
-theorem guess_transcript (salt : S → List ℕ) (a : Codes) (H : Q → R) (s : S) {u : ℕ} (hu : u < U.layout.N) :
-    (guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s u =
+/-- The committed trace of a declared unit. -/
+theorem guess_trace (salt : S → List ℕ) (a : Codes) (H : Q → R) (s : S) {u : ℕ} (hu : u < U.layout.N) :
+    (guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s u =
       some ⟨fun i l => if i < (U.layout.shape u).m ∧ l < (U.layout.shape u).k then
           (W1.final dv (salt s) (guessProg t y) U (fun _ => a) []).mem (W1.actAt u i l) else a i l,
         fun i j => (W1.final dv (salt s) (guessProg t y) U (fun _ => a) []).mem (W1.ticketAt u i j),
@@ -230,8 +230,8 @@ def GuessEvent (P : Protocol Q R S) (k : ℕ) (w a : Codes) (θ : ℝ) (x : (Q �
 /-- **The win** of `guessAdv … t y` on `(H, s)`, as TT_OUT's game scores it at `θ = T/(1 − g₀)`. -/
 def GuessWins (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol Q R S) (k : ℕ) (w a : Codes) (θ : ℝ) (t y : ℕ)
     (x : (Q → R) × S) : Prop :=
-  θ < ∑ u ∈ correctSet P (oneUnit k w) x.1 x.2 ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) x.1 x.2),
-    P.credit x.1 x.2 (oneUnit k w) u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) x.1 x.2) u)
+  θ < ∑ u ∈ correctSet P (oneUnit k w) x.1 x.2 ((guessAdv (Q := Q) (R := R) dv salt a t y).trace (oneUnit k w) x.1 x.2),
+    P.credit x.1 x.2 (oneUnit k w) u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace (oneUnit k w) x.1 x.2) u)
 
 /-- On the event, the program whose constants are the two reference words wins. -/
 theorem wins_of_event {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q R S} {k : ℕ} {w a : Codes} {θ : ℝ}
@@ -239,10 +239,10 @@ theorem wins_of_event {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q
     (hcap : P.capOK H s (oneUnit k w) 0 a) (hwt : P.fixedOK ⟨1, 1, k⟩ w 0)
     (ht : wordQ t = P.ticket H s (oneUnit k w) 0 a 0 0) (hy : wordQ y = P.useful H s (oneUnit k w) 0 a 0 0)
     (hθ : θ < P.credit H s (oneUnit k w) 0 a) : GuessWins dv salt P k w a θ t y (H, s) := by
-  have hτ : (guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) H s 0 =
+  have hτ : (guessAdv (Q := Q) (R := R) dv salt a t y).trace (oneUnit k w) H s 0 =
       some ⟨a, fun i j => (W1.final dv (salt s) (guessProg t y) (oneUnit k w) (fun _ => a) []).mem (W1.ticketAt 0 i j),
         fun i j => (W1.final dv (salt s) (guessProg t y) (oneUnit k w) (fun _ => a) []).mem (W1.usefulAt 0 i j)⟩ := by
-    rw [guess_transcript dv t y (oneUnit k w) salt a H s Nat.one_pos]
+    rw [guess_trace dv t y (oneUnit k w) salt a H s Nat.one_pos]
     congr 2
     funext i l
     split_ifs <;> first | rfl | exact guess_act dv (salt s) t y (oneUnit k w) [] a ha 0 i l
@@ -257,7 +257,7 @@ theorem wins_of_event {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q
       exact ⟨(congrArg wordQ (guess_ticket dv (salt s) t y (oneUnit k w) (fun _ => a) [])).trans
           ((wordQ_w32 t).trans ht),
         (congrArg wordQ (guess_useful dv (salt s) t y (oneUnit k w) (fun _ => a) [])).trans ((wordQ_w32 y).trans hy)⟩
-  have hK : correctSet P (oneUnit k w) H s ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) H s) =
+  have hK : correctSet P (oneUnit k w) H s ((guessAdv (Q := Q) (R := R) dv salt a t y).trace (oneUnit k w) H s) =
       {0} := by
     ext u
     simp only [correctSet, Finset.mem_filter, Finset.mem_range, Finset.mem_singleton]
@@ -266,10 +266,10 @@ theorem wins_of_event {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q
       exact Nat.lt_one_iff.1 hu
     · rintro rfl
       exact ⟨Nat.one_pos, _, hτ, hC⟩
-  have hA : actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) H s) 0 = a := by
+  have hA : actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace (oneUnit k w) H s) 0 = a := by
     simp only [actOf, hτ]
-  show θ < ∑ u ∈ correctSet P (oneUnit k w) H s ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) H s),
-    P.credit H s (oneUnit k w) u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript (oneUnit k w) H s) u)
+  show θ < ∑ u ∈ correctSet P (oneUnit k w) H s ((guessAdv (Q := Q) (R := R) dv salt a t y).trace (oneUnit k w) H s),
+    P.credit H s (oneUnit k w) u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace (oneUnit k w) H s) u)
   rw [hK, Finset.sum_singleton, hA]
   exact hθ
 
@@ -577,19 +577,19 @@ theorem ttOutPearlCDevRev1W1_of_old [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
     TTOutPearlCDevRev1W1 dv salt d sem ρ :=
   ttOutW1_mono_domain (fun _ => pearlCDomainDevOld_of_new) h
 
-/-- A correct unit of the program's transcript has reference value `+0` at every word `(i, j)`, `j ≠ 0`, of its shape:
+/-- A correct unit of the program's trace has reference value `+0` at every word `(i, j)`, `j ≠ 0`, of its shape:
 the program never writes one. -/
 theorem guess_zero_words {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q R S} {U : Workload} {a : Codes}
     {t y : ℕ} {H : Q → R} {s : S} {u : ℕ}
-    (hu : u ∈ correctSet P U H s ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s)) {i j : ℕ}
+    (hu : u ∈ correctSet P U H s ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s)) {i j : ℕ}
     (hi : i < (U.layout.shape u).m) (hj : j < (U.layout.shape u).n) (hj0 : j ≠ 0) :
-    P.ticket H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u) i j = some 0 ∧
-      P.useful H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u) i j = some 0 := by
+    P.ticket H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u) i j = some 0 ∧
+      P.useful H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u) i j = some 0 := by
   simp only [correctSet, Finset.mem_filter, Finset.mem_range] at hu
   obtain ⟨huN, c, hc, hC⟩ := hu
   obtain ⟨-, -, -, hw⟩ := hC
-  have hc' := Option.some.inj (hc.symm.trans (guess_transcript dv t y U salt a H s huN))
-  have hA : actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u = c.act := by
+  have hc' := Option.some.inj (hc.symm.trans (guess_trace dv t y U salt a H s huN))
+  have hA : actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u = c.act := by
     simp only [actOf, hc]
   rw [hA]
   have ht0 : c.ticket i j = 0 := by
@@ -608,12 +608,12 @@ reference words `(0, j)`, `0 < j < 64`, ticket and useful, are all `+0`. -/
 theorem guess_win_zero {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q R S} {U : Workload} {a : Codes}
     {t y : ℕ} {H : Q → R} {s : S} {θ : ℝ}
     (hn : ∀ u < U.layout.N, 0 < (U.layout.shape u).m ∧ 64 ≤ (U.layout.shape u).n) (hθ : 0 ≤ θ)
-    (hwin : θ < ∑ u ∈ correctSet P U H s ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s),
-      P.credit H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u)) :
+    (hwin : θ < ∑ u ∈ correctSet P U H s ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s),
+      P.credit H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u)) :
     ∃ u < U.layout.N, ∀ j, 0 < j → j < 64 →
-      P.ticket H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u) 0 j = some 0 ∧
-        P.useful H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u) 0 j = some 0 := by
-  obtain ⟨u, hu⟩ : (correctSet P U H s ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s)).Nonempty := by
+      P.ticket H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u) 0 j = some 0 ∧
+        P.useful H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u) 0 j = some 0 := by
+  obtain ⟨u, hu⟩ : (correctSet P U H s ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s)).Nonempty := by
     by_contra h
     rw [Finset.not_nonempty_iff_eq_empty] at h
     rw [h, Finset.sum_empty] at hwin
@@ -631,13 +631,13 @@ theorem guess_win_zero_pearlCDev {dv : W1.W1Device} {salt : S → List ℕ} {d :
     {ρ : ℚ} {U : Workload} (hD : pearlCDomainDev d U.layout) {a : Codes} {t y : ℕ} {H : Q → R} {s : S} {T : ℝ}
     (hT : 0 ≤ T)
     (hwin : T / (1 - 1 / 400) < ∑ u ∈ correctSet (pearlCProtocolDev d sem ρ) U H s
-        ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s),
-      (pearlCProtocolDev d sem ρ).credit H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u)) :
+        ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s),
+      (pearlCProtocolDev d sem ρ).credit H s U u (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u)) :
     ∃ u < U.layout.N, ∀ j, 0 < j → j < 64 →
       (pearlCProtocolDev d sem ρ).ticket H s U u
-          (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u) 0 j = some 0 ∧
+          (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u) 0 j = some 0 ∧
         (pearlCProtocolDev d sem ρ).useful H s U u
-          (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u) 0 j = some 0 :=
+          (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u) 0 j = some 0 :=
   guess_win_zero (fun u hu => ⟨(hD u hu).1, (hD u hu).2.1.1⟩) (div_nonneg hT (by norm_num)) hwin
 
 /-- `guess_win_zero_pearlCDev` under rev1. -/
@@ -645,14 +645,14 @@ theorem guess_win_zero_pearlCDevRev1 {dv : W1.W1Device} {salt : S → List ℕ} 
     {sem : PearlCSem Q R S} {ρ : ℚ} {U : Workload} (hD : pearlCDomainDev d U.layout) {a : Codes} {t y : ℕ}
     {H : Q → R} {s : S} {T : ℝ} (hT : 0 ≤ T)
     (hwin : T / (1 - 1 / 400) < ∑ u ∈ correctSet (pearlCProtocolDevRev1 d sem ρ) U H s
-        ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s),
+        ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s),
       (pearlCProtocolDevRev1 d sem ρ).credit H s U u
-        (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u)) :
+        (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u)) :
     ∃ u < U.layout.N, ∀ j, 0 < j → j < 64 →
       (pearlCProtocolDevRev1 d sem ρ).ticket H s U u
-          (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u) 0 j = some 0 ∧
+          (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u) 0 j = some 0 ∧
         (pearlCProtocolDevRev1 d sem ρ).useful H s U u
-          (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).transcript U H s) u) 0 j = some 0 :=
+          (actOf ((guessAdv (Q := Q) (R := R) dv salt a t y).trace U H s) u) 0 j = some 0 :=
   guess_win_zero (fun u hu => ⟨(hD u hu).1, (hD u hu).2.1.1⟩) (div_nonneg hT (by norm_num)) hwin
 
 end Pouw.PearlC.TTOutW1Item1

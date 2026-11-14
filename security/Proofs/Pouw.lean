@@ -9,7 +9,7 @@ public import Proofs.Pouw.Copy
 public import Proofs.Pouw.Credit
 public import Proofs.Pouw.Deadline
 public import Proofs.Pouw.DeadlineWitness
-public import Proofs.Pouw.EndToEndWindow.Statement
+public import Proofs.Pouw.EndToEndExecutionPhase.Statement
 public import Proofs.Pouw.Eps1
 public import Proofs.Pouw.Dither
 public import Proofs.Pouw.DitherWitness

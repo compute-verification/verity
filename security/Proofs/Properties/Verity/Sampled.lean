@@ -537,11 +537,11 @@ noncomputable def κ : Fin A.Cc.N → Option Bool := fun g => Flock.Bridge.const
 
 /-- **The claim's transcript at a strategy of the live audit**: V5's trace fixed at registration (`Xr`) as the
 deployed commitment's sampling witness (`Flock.Bridge.witDep`), opened at each gate's claims position under the
-commitment's roots and read at the circuit's gates with its constants (`Flock.Bridge.transcriptOf`), on the committed
+commitment's roots and read at the circuit's gates with its constants (`Flock.Bridge.traceOf`), on the committed
 files' circuit (`circuit_eq`). -/
 noncomputable def extract (τ : FlockSoundness.Game.Strategy A.game) : A.fileRead.circuit.Trace :=
   cast (congrArg Verity.Circuit.Trace A.circuit_eq.symm)
-    (Flock.Bridge.transcriptOf A.D A.hU A.n A.κ
+    (Flock.Bridge.traceOf A.D A.hU A.n A.κ
       ((Flock.Bridge.witDep A.Cc A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)).val Claims.Sampling.sha512Msg A.Cd
         (Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.design) A.desc ⟨"", 0, []⟩
           A.roots)))

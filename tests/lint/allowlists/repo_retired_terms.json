@@ -2311,7 +2311,7 @@
     {"file": "security/Proofs/Pouw/Dither.lean", "count": 58},
     {"file": "security/Proofs/Pouw/DitherInstance.lean", "count": 5},
     {"file": "security/Proofs/Pouw/DitherWitness.lean", "count": 16},
-    {"file": "security/Proofs/Pouw/EndToEndWindow/Statement.lean", "count": 34},
+    {"file": "security/Proofs/Pouw/EndToEndExecutionPhase/Statement.lean", "count": 34},
     {"file": "security/Proofs/Pouw/Eps1.lean", "count": 1},
     {"file": "security/Proofs/Pouw/Eps1/ClassP.lean", "count": 1},
     {"file": "security/Proofs/Pouw/Eps1/WordLocal.lean", "count": 1},

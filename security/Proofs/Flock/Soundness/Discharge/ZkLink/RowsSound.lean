@@ -9,7 +9,7 @@ import Proofs.Flock.Soundness.Game
 /-!
 # The rows link at the compiled `--zk` audit
 
-`analysisZCReg` counts a sampled proof block wrong when it is wrong on the registration (`wrongRegZ`). This file adds the units
+`analysisZCReg` counts a sampled proof block incorrect when it is incorrect on the registration (`incorrectRegZ`). This file adds the units
 whose value layer differs, at a registered read, from the registrant's row (`rowsWrongZ`), and bounds the sampled proof blocks of
 both kinds by `ε_ks + δ_link + δ_rows`, at a registrant's openings `wo` of the registered reads `isRead` whose
 commitments are the registered ones:
@@ -297,7 +297,7 @@ noncomputable def analysisZCRows
     (hj : JointZC A Hs planZ k a) :
     ExtractionAnalysis L Reg (batchedSessionZC A Hs planZ) where
   Tr := Reg × (Fin C.N → Bool)
-  wrong Xt := wrongRegZ A P planZ tab vb Xt.1 Xt.2 ∪ rowsWrongZ A P planZ tab vb isRead wo Xt.2
+  incorrect Xt := incorrectRegZ A P planZ tab vb Xt.1 Xt.2 ∪ rowsWrongZ A P planZ tab vb isRead wo Xt.2
   committed R τ := (R, Xc R τ)
   ks S R τ u := ENNReal.ofReal (a S R (zcStrat A Hs planZ τ) (tab S R u) / (1 - rateZ (planZ S R) (tab S R u) k))
   link S R τ u Xt := if Xt.1 = R then
@@ -323,7 +323,7 @@ noncomputable def analysisZCRows
           by_contra h; exact hno (Or.inr ⟨g, hg, hrd, h⟩)
         have hcX : P.Correct Xt u := P.correct_congr (fun g hg => (hno1 g hg).symm) (hlow S R' u hS M hsat)
         rcases Finset.mem_union.1 hu with hw | hw
-        · refine (mem_wrongRegZ A P planZ tab vb).1 hw ⟨hcX, fun c => vb.opening S R' u M c, fun g hg => ?_⟩
+        · refine (mem_incorrectRegZ A P planZ tab vb).1 hw ⟨hcX, fun c => vb.opening S R' u M c, fun g hg => ?_⟩
           obtain ⟨h1, h2⟩ := vb.opening_spec S R' u hS M hsat g hg
           exact ⟨h1, h2.trans ((hno1 g hg).trans (P.correct_eval (hown u) hcX g hg))⟩
         · obtain ⟨g, hg, hrd, hne⟩ := (mem_rowsWrongZ A P planZ tab vb isRead wo).1 hw
@@ -489,14 +489,14 @@ theorem zk_rowsBindSoundC (hlow : LoweringSoundZK A P planZ tab decode) (hown : 
     _ = _ := by rw [← Finset.sum_mul]; ring
 
 /-- **The sampled proof blocks of the compiled `--zk` audit, against the registration and the registrant's rows**: it accepts
-with a sampled proof block in `wrongRegZ` or in `rowsWrongZ` with probability at most `ε_ks + δ_link + δ_rows`. -/
+with a sampled proof block in `incorrectRegZ` or in `rowsWrongZ` with probability at most `ε_ks + δ_link + δ_rows`. -/
 theorem zk_flock_drawnC_rows (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
     (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t')
     (σ : Strategy (audit L Reg (batchedSessionZC A Hs planZ))) :
     prob (fun o => o.1 = true ∧
-        ¬ Disjoint (wrongRegZ A P planZ tab vb (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw) ∪
+        ¬ Disjoint (incorrectRegZ A P planZ tab vb (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw) ∪
           rowsWrongZ A P planZ tab vb isRead wo (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)) o.2)
         (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
       ksAvgZC A Hs planZ k a (reg σ) (cont σ) +

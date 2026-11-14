@@ -203,7 +203,7 @@ def copyAct : CodeImage := ⟨fun _ => [], fun _ => .op (.mov (ticketAt 0 0 0) (
   fun _ => by norm_num [W1.Code.size]⟩
 
 /-- What `copyAct` commits, on every oracle. -/
-abbrev copyTranscript (dv : W1Device) (salt : List ℕ) (U : Workload) (act : ℕ → Codes) : Transcript :=
+abbrev copyTrace (dv : W1Device) (salt : List ℕ) (U : Workload) (act : ℕ → Codes) : Trace :=
   readout U act (final dv salt copyAct U act []).mem
 
 theorem copy_cost (dv : W1Device) (salt : List ℕ) (U : Workload) (act : ℕ → Codes) :
@@ -224,12 +224,12 @@ oracles under which `copyAct`'s unit 0 is correct and isn't, no program of W1 is
 theorem w1_not_budgetAbort (dv : W1Device) (hdv : Positive dv) (P : Protocol Q R S) (salt : S → List ℕ)
     (U : Workload) (act : ℕ → Codes) (s : S) (H₁ H₂ : Q → R) (hN : U.layout.N = 1) (hm : 0 < (U.layout.shape 0).m)
     (hk : 0 < (U.layout.shape 0).k) (hbig : 256 ≤ w32 (act 0 0 0))
-    (h₁ : 0 ∈ correctSet P U H₁ s (copyTranscript dv (salt s) U act))
-    (h₂ : 0 ∉ correctSet P U H₂ s (copyTranscript dv (salt s) U act)) :
+    (h₁ : 0 ∈ correctSet P U H₁ s (copyTrace dv (salt s) U act))
+    (h₂ : 0 ∉ correctSet P U H₂ s (copyTrace dv (salt s) U act)) :
     ¬ BudgetAbortPearlC (w1 dv P salt) := by
   rintro ⟨-, hab⟩
   obtain ⟨p', hp'⟩ := hab copyAct U act 0 le_rfl
-  have hfree : FreeFetch P U H₁ s (copyTranscript dv (salt s) U act) (actAt 0 0 0) := by
+  have hfree : FreeFetch P U H₁ s (copyTrace dv (salt s) U act) (actAt 0 0 0) := by
     refine Or.inl ⟨rfl, ?_, ?_, ?_⟩ <;> simp only [actAt, Nat.unpair_pair]
     · exact h₁
     · exact hm
@@ -306,7 +306,7 @@ def toyP : Protocol Unit Bool Unit where
   Wref := fun _ _ => 0
 
 theorem toy_correct (dv : W1Device) (H : Unit → Bool) :
-    0 ∈ correctSet toyP toyU H () (copyTranscript dv [] toyU toyAct) ↔ H () = true := by
+    0 ∈ correctSet toyP toyU H () (copyTrace dv [] toyU toyAct) ↔ H () = true := by
   simp [correctSet, Correct, readout, toyP, toyU, toyAct, final, copyAct, exec, Instr.exec, init, actAt, ticketAt,
     usefulAt, Function.update_apply, w32]
 

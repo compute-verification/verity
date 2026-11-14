@@ -10,8 +10,8 @@ The memory challenger's verdict behind the core protocol interface (`Core.Protoc
 * parameters `{"expected": {"<i>": hex, …}, "trusted": [hex, …]}`: `expected["<i>"]` is `block_digest` of block `i` of
   `C`, keyed by `i`'s decimal digits (a block with no entry has no answer, so the digests of the blocks the rounds
   name are enough, and C's whole table never has to be read), `trusted` the memory challengers' public keys;
-* the commitment: `SessionCommitment.to_json()` (its header and `coin_key`), its digest SHA-512 of those bytes;
-* the evidence: `{"openings": [CoinOpening.to_json(), …], "session": SignedSession.to_json()}`;
+* the commitment: `ChallengePhaseCommitment.to_json()` (its header and `coin_key`), its digest SHA-512 of those bytes;
+* the evidence: `{"openings": [CoinOpening.to_json(), …], "session": SignedChallengePhase.to_json()}`;
 * the check: `verdict`. On acceptance the public output is the verdict alone, `{"accepted": true}` (`Verdict.public`),
   and there is no profile (`null`); a rejection's reason is the verdict's reasons joined by `"; "`.
 
@@ -33,7 +33,7 @@ open Flock
 private def hexJ (b : ByteArray) : Json := .str (hexOf b)
 private def natJ (n : Nat) : Json := Lean.toJson n
 
-def SessionCommitment.toJson (c : SessionCommitment) : Json :=
+def ChallengePhaseCommitment.toJson (c : ChallengePhaseCommitment) : Json :=
   Json.mkObj [("protocol", .str PROTOCOL), ("coin_tree", .str COIN_TREE), ("records_tree", .str RECORDS_TREE),
     ("session", hexJ c.session), ("coin_root", hexJ c.coinRoot), ("coin_key_sha512", hexJ (Sha512.hash c.coinKey)),
     ("blocks", natJ c.blocks), ("k", natJ c.k), ("limit_ns", natJ c.limitNs), ("block_bytes", natJ c.blockBytes),
@@ -46,7 +46,7 @@ def Round.toJson (r : Round) : Json :=
 def CoinOpening.toJson (o : CoinOpening) : Json :=
   Json.mkObj [("j", natJ o.j), ("index", natJ o.index), ("salt", hexJ o.salt), ("path", .arr (o.path.map hexJ))]
 
-def SignedSession.toJson (s : SignedSession) : Json :=
+def SignedChallengePhase.toJson (s : SignedChallengePhase) : Json :=
   Json.mkObj [("commitment", s.commitment.toJson), ("ended", .str s.ended), ("rounds", .arr (s.rounds.map Round.toJson)),
     ("scheme", .str s.scheme), ("public_key", hexJ s.publicKey), ("signature", hexJ s.signature)]
 
@@ -65,7 +65,7 @@ def Params.toJson (p : Params) : Json :=
   Json.mkObj [("expected", p.expected.toJson), ("trusted", .arr (p.trusted.map hexJ))]
 
 structure Evidence where
-  session : SignedSession
+  session : SignedChallengePhase
   openings : Array CoinOpening
 
 def Evidence.toJson (e : Evidence) : Json :=
@@ -95,7 +95,7 @@ def Digests.ofJson (j : Json) (k ctx : String) : V Digests := do
     | .error e => throw s!"{ctx}.{k}: {e}"
   | _ => throw s!"{ctx}.{k}: not an object"
 
-def SessionCommitment.ofJson (j : Json) : V SessionCommitment := do
+def ChallengePhaseCommitment.ofJson (j : Json) : V ChallengePhaseCommitment := do
   let ctx := "commitment"
   pure { session := ← hexField j "session" ctx, coinRoot := ← hexField j "coin_root" ctx, coinKey := ← hexField j "coin_key" ctx,
          blocks := ← J.nat j "blocks" ctx, k := ← J.nat j "k" ctx, limitNs := ← J.nat j "limit_ns" ctx,
@@ -109,9 +109,9 @@ def CoinOpening.ofJson (j : Json) : V CoinOpening := do
   pure { j := ← J.nat j "j" "opening", index := ← J.nat j "index" "opening", salt := ← hexField j "salt" "opening",
          path := ← hexArr j "path" "opening" }
 
-def SignedSession.ofJson (j : Json) : V SignedSession := do
+def SignedChallengePhase.ofJson (j : Json) : V SignedChallengePhase := do
   let ctx := "session"
-  pure { commitment := ← SessionCommitment.ofJson (← J.get j "commitment" ctx), ended := ← J.str j "ended" ctx,
+  pure { commitment := ← ChallengePhaseCommitment.ofJson (← J.get j "commitment" ctx), ended := ← J.str j "ended" ctx,
          rounds := ← objs j "rounds" ctx Round.ofJson, scheme := ← J.str j "scheme" ctx,
          publicKey := ← hexField j "public_key" ctx, signature := ← hexField j "signature" ctx }
 
@@ -124,28 +124,28 @@ def exactly {α} (f : Json → V α) (enc : α → Json) (j : Json) : V α := do
 def decodeParams : Json → V Params :=
   exactly (fun j => do pure ⟨← Digests.ofJson j "expected" "params", ← hexArr j "trusted" "params"⟩) Params.toJson
 
-def decodeCommitment (b : ByteArray) : V SessionCommitment := do
-  exactly SessionCommitment.ofJson SessionCommitment.toJson (← Core.canonicalJson b)
+def decodeCommitment (b : ByteArray) : V ChallengePhaseCommitment := do
+  exactly ChallengePhaseCommitment.ofJson ChallengePhaseCommitment.toJson (← Core.canonicalJson b)
 
 def decodeEvidence (b : ByteArray) : V Evidence := do
-  exactly (fun j => do pure ⟨← SignedSession.ofJson (← J.get j "session" "evidence"),
+  exactly (fun j => do pure ⟨← SignedChallengePhase.ofJson (← J.get j "session" "evidence"),
                              ← objs j "openings" "evidence" CoinOpening.ofJson⟩) Evidence.toJson (← Core.canonicalJson b)
 
 /-- The commitment's digest: SHA-512 of its canonical JSON, the bytes it was decoded from. -/
-def commitmentDigest (c : SessionCommitment) : ByteArray :=
+def commitmentDigest (c : ChallengePhaseCommitment) : ByteArray :=
   match canon c.toJson with
   | .ok s => Sha512.hash s.toUTF8
   | .error _ => ByteArray.empty
 
 /-- The verdict as an outcome: accepted, with nothing but that public, or rejected with its reasons. -/
-def outcome (schemes : Schemes) (p : Params) (c : SessionCommitment) (e : Evidence) : Core.Outcome Unit Unit :=
+def outcome (schemes : Schemes) (p : Params) (c : ChallengePhaseCommitment) (e : Evidence) : Core.Outcome Unit Unit :=
   let v := verdict schemes p.trusted.toList p.expected.find e.session c e.openings
   if v.accepted then .accept () () else .reject ("; ".intercalate v.reasons.toList)
 
 def mkProtocol (id : String) (schemes : Schemes) : Core.Protocol where
   id := id
   Params := Params
-  Commitment := SessionCommitment
+  Commitment := ChallengePhaseCommitment
   Evidence := Evidence
   Public := Unit
   Profile := Unit

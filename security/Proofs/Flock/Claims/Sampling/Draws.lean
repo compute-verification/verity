@@ -77,13 +77,13 @@ theorem Pr_eq_toReal_prCoin {α : Type} [Fintype α] (p : α → Prop) : Claims.
   unfold Claims.Pr Claims.prUniform
   congr 2
 
-/-- A sampling design's miss probability, in the claims' terms, is its escape. -/
+/-- A sampling design's miss probability, in the claims' terms, is its missProb. -/
 theorem Pr_miss_eq {n : ℕ} (L : Law n) (B : Finset (Fin n)) :
-    Claims.Pr (fun ω : L.Ω => Disjoint (L.draw ω) B) = (L.escape B).toReal :=
+    Claims.Pr (fun ω : L.Ω => Disjoint (L.draw ω) B) = (L.missProb B).toReal :=
   Pr_eq_toReal_prCoin _
 
-/-- A miss probability below an escape bound `e` that is finite. -/
-theorem Pr_miss_le {n : ℕ} (L : Law n) (B : Finset (Fin n)) {e : ℝ≥0∞} (he : e ≠ ⊤) (h : L.escape B ≤ e) :
+/-- A miss probability below an missProb bound `e` that is finite. -/
+theorem Pr_miss_le {n : ℕ} (L : Law n) (B : Finset (Fin n)) {e : ℝ≥0∞} (he : e ≠ ⊤) (h : L.missProb B ≤ e) :
     Claims.Pr (fun ω : L.Ω => Disjoint (L.draw ω) B) ≤ e.toReal := by
   rw [Pr_miss_eq]
   exact ENNReal.toReal_mono he h
@@ -204,7 +204,7 @@ theorem work_miss_le {n m : ℕ} (σ : Fin n → Fin m) (w : Fin m → ℕ) (f :
 
 /-! ## Any law: its count curve -/
 
-/-- **Any law misses `t` wrong regions** with probability at most its count curve at `t`, the largest escape of a set
+/-- **Any law misses `t` wrong regions** with probability at most its count curve at `t`, the largest missProb of a set
 of at least `t` units. -/
 theorem miss_le_count {n t : ℕ} (L : Law n) {B : Finset (Fin n)} (ht : t ≤ B.card) :
     Claims.Pr (fun ω : L.Ω => Disjoint (L.draw ω) B) ≤ (L.miss t).toReal :=
