@@ -5,9 +5,9 @@ public import Definitions.Accounting.HeadlineDc.Sm100
 /-!
 # B200 (sm_100)'s measured headline instance: DC-100-ri and `dither-2s-licpw-redux-ldtm0-l32` (trusted; generated)
 
-Written by `machine-model lean-headline` from `machine_model`'s data, and checked against it by
-`benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never this file.
-`Accounting.Guarantees.TS.Sm100MeasuredHeadline` reads it.
+Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/pouw/machine_model/data`),
+and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
+this file. `Accounting.Guarantees.TS.Sm100MeasuredHeadline` reads it.
 
 * `rowNames`, `dc100ri`, `machine`: the measured vector DC-100-ri, 9 rows of SMSP-cycles a warp instruction at its
   epoch's census, each sparse over `Sm100.classes`; every facet SM-clocked, f_max 1965 MHz. `UNLISTED` is A2's catch-all
@@ -19,8 +19,8 @@ Written by `machine-model lean-headline` from `machine_model`'s data, and checke
   are off the writer menu, as they were when the catch-all counted them: `NoSum` carries their words.
 * `d2s`, `model`: `dither-2s-licpw-redux-ldtm0-l32` on that machine, its writer kinds every MMA class it times (ω its
   destination's words, A6); `Sm100.d2s`'s vector classes, fold routes, floors and `N_w`.
-* `flatFold`, `flatSkip`, `flat`: ♭ is `Sm100.flat`'s word writing and filler, its fold DC-100-ri's (the fold routes'
-  cheapest, cp-red2 on every word), with ε_skip's free compute at DC-100-ri's 0.814462% (`eps_budget.design_skip` on
+* `flatFold`, `flatSkip`, `flat`: ♭ is `Sm100.flat`'s word production and filler, its fold DC-100-ri's (the fold routes'
+  cheapest, cp-red2 on every word), with ε_skip's skippable work at DC-100-ri's 0.814462% (`eps_budget.design_skip` on
   DC-100-ri), at FFMA's price.
 * `lamStar`: π*, the certificate minimising the bound over this menu (issue 1.000000).
 -/
@@ -112,7 +112,7 @@ noncomputable def model : Model (Fin 52) (Fin 9) (Fin 13) Unit Empty (Fin 14) Un
 /-- ♭'s fold a unit on DC-100-ri: the lane fold for 32768 words, the fold routes' cheapest, cp-red2 on every word. -/
 def flatFold : Sparse := [(0, 536, 1), (8, 512, 1), (22, 16, 1)]
 
-/-- ♭'s free compute a unit on DC-100-ri, at its FFMA price. -/
+/-- ♭'s skippable work a unit on DC-100-ri, at its FFMA price. -/
 def flatSkip : Sparse := [(7, 1445669286395, 165309230717)]
 
 /-- The floor program ♭ on DC-100-ri, labelled. -/

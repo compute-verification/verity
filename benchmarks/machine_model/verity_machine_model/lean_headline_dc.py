@@ -119,9 +119,9 @@ public import {imports}
 /-!
 # {fam.gpu} ({fam.key})'s {what} (trusted; generated)
 
-Written by `machine-model lean-headline` from `machine_model`'s data, and checked against it by
-`benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never this file.
-`Accounting.Guarantees.TS.{reads}` reads it.
+Written by `benchmarks/pouw/lean_headline_dc.py` from the machine model's data (`benchmarks/pouw/machine_model/data`),
+and checked against it by `benchmarks/pouw/tests/test_lean_headline_dc.py`: edit the data and rerun the exporter, never
+this file. `Accounting.Guarantees.TS.{reads}` reads it.
 '''
 
 
@@ -170,8 +170,8 @@ def render_sheet(fam: Family, r: Reading) -> str:
         + f"the table level's bytes counted in {fam.bytes}, which `b_T = 0` prices at nothing (the census has no load "
         f"class); A6's floors `q = q_T = ½`, `b_T = 0`; {x.Nw} committed words a unit of honest work ({honest})"
         + ("; its filler menu the one route ffill runs on (sm_90's uniform datapath has no FFMA)." if filler else "."),
-        (f"`flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word writing), the fold "
-         f"({x.fold_mix}), {fill_doc}and ε_skip's free compute at {x.skip}'s price, {r.eps_skip:.6%} of ♭'s bound "
+        (f"`flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold "
+         f"({x.fold_mix}), {fill_doc}and ε_skip's skippable work at {x.skip}'s price, {r.eps_skip:.6%} of ♭'s bound "
          f"(`eps_budget.design_skip` on {fam.sheet})."),
         f"`lamStar`: π*, the certificate minimising the bound over this menu ({' + '.join(f'{k} {float(v):.6f}' for k, v in x.lam.items())}).",
         "`checks`: the checks a window, one a round (Theorem S's S).",
@@ -238,13 +238,13 @@ def d2s : DesignData where
 /-- `{fam.design}`'s TS model on the data sheet's machine. -/
 {_model_line(fam, x, "d2s", "sheet.machine", "flatFill", "(SheetRow Pipe)")}
 
-{LH._words(f"♭'s word writing a unit: {x.words_mix}. -/", "/-- ", "")}
+{LH._words(f"♭'s word production a unit: {x.words_mix}. -/", "/-- ", "")}
 {_sparse_def("flatWords", x, x.nw)}
 
 {LH._words(f"♭'s fold a unit: the lane fold for {x.Nw} words, {x.fold_mix}. -/", "/-- ", "")}
 {_sparse_def("flatFold", x, x.nf)}
 
-/-- ♭'s free compute a unit, at {x.skip}'s price. -/
+/-- ♭'s skippable work a unit, at {x.skip}'s price. -/
 {_sparse_def("flatSkip", x, x.ns)}
 
 /-- The floor program ♭, labelled. -/
@@ -269,12 +269,12 @@ def render_measured(fam: Family, r: Reading, s: Reading) -> str:
     own, own_w = x.nf != xs.nf, x.nw != xs.nw
     fold = "flatFold" if own else f"{fam.ns}.flatFold"
     words = "flatWords" if own_w else f"{fam.ns}.flatWords"
-    own_fold = ((LH._words(f"♭'s word writing a unit on {fam.measured}: {x.words_mix}. -/", "/-- ", "")
+    own_fold = ((LH._words(f"♭'s word production a unit on {fam.measured}: {x.words_mix}. -/", "/-- ", "")
                  + f"\n{_sparse_def('flatWords', x, x.nw)}\n\n") if own_w else "") + (
         (LH._words(f"♭'s fold a unit on {fam.measured}: the lane fold for {x.Nw} words, {x.fold_mix}. -/", "/-- ", "")
          + f"\n{_sparse_def('flatFold', x, x.nf)}\n\n") if own else "")
-    mine = [p for p, o in (("word writing", own_w), ("fold", own)) if o]
-    theirs = [p for p, o in (("word writing", own_w), ("fold", own)) if not o] + ["filler"]
+    mine = [p for p, o in (("word production", own_w), ("fold", own)) if o]
+    theirs = [p for p, o in (("word production", own_w), ("fold", own)) if not o] + ["filler"]
     ix = x.classes.index
     nk, m = len(x.classes), len(x.rows)
     sv = fam.measured.replace("-", "").lower()
@@ -303,9 +303,9 @@ def render_measured(fam: Family, r: Reading, s: Reading) -> str:
         f"fold routes, floors and `N_w`" + ("; ♭'s filler `" + fam.ns + ".flatFill` its filler route." if x.nx else "."),
         "".join(f"`{n}`, " for n, o in (("flatWords", own_w), ("flatFold", own)) if o)
         + f"`flatSkip`, `flat`: ♭ is `{fam.ns}.flat`'s {_and(theirs)}"
-        + "".join(f", its {p} {fam.measured}'s ({x.words_mix if p == 'word writing' else x.fold_mix})"
+        + "".join(f", its {p} {fam.measured}'s ({x.words_mix if p == 'word production' else x.fold_mix})"
                   for p in mine)
-        + f", with ε_skip's free compute at {fam.measured}'s {r.eps_skip:.6%} (`eps_budget.design_skip` on "
+        + f", with ε_skip's skippable work at {fam.measured}'s {r.eps_skip:.6%} (`eps_budget.design_skip` on "
         f"{fam.measured}), at {x.skip}'s price.",
         (f"`lamStar`: π*, the certificate minimising the bound over this menu "
          f"({' + '.join(f'{k} {float(v):.6f}' for k, v in x.lam.items())})."),
@@ -351,7 +351,7 @@ def d2s : DesignData where
 noncomputable def model : Model (Fin {nk}) (Fin {m}) (Fin {nt}) Unit Empty (Fin {nfo}) Unit :=
   {body}
 
-{own_fold}/-- ♭'s free compute a unit on {fam.measured}, at its {x.skip} price. -/
+{own_fold}/-- ♭'s skippable work a unit on {fam.measured}, at its {x.skip} price. -/
 {_sparse_def("flatSkip", x, x.ns)}
 
 /-- The floor program ♭ on {fam.measured}, labelled. -/
