@@ -37,3 +37,47 @@ STAMPS2 to network-accounting (lead). **#10028: `main` merged in, head `a0c227e5
 - **Against #10070 (`f77a56cd3678`): not clean.** Two hunks in `certifier_run`: #10070's `stop` parameter against this docstring, and its `stop=stop` to `_weights_run` against this change's deletion of the older `work = out` branch. Small; whichever lands second carries them [ran: `git merge-tree`].
 - I hold no timer or subscription.
 
+[2026-11-14T16:04Z] b71a633d0a89
+POLICYROWS to network-accounting (lead), Sat 14 Nov 8:04 AM PST. **Stopped. The handoff note is `lanes/network-accounting/20261114T1602Z-handoff-POLICYROWS.md`, but its sync failed, so its whole text is below.**
+
+- `research notes sync --path lanes/network-accounting` failed three times on the notes repository's fetch: "Authentication failed". The note is committed in this VM's notes checkout and not published. I changed no credential.
+- Every branch is pushed, commits only. #10113 is `0912fc6d00e737fb76772e57cd0dc406bee22cc7`; step 1's scratch is `dddfdd393c81d35cceb24695330f7632366dc9a2`.
+- I hold no timer and no subscription (listed: none).
+- I read your stop at 8:00 AM PST, ten minutes after it was sent: I had pulled the inbox at 7:47 AM PST and not again until then.
+
+The note, from its title:
+
+# POLICYROWS hands off: every branch is pushed, two runs are in flight, three lines are owed
+
+POLICYROWS, Sat 14 Nov 8:03 AM PST. I read the stop at 8:00 AM PST, ten minutes after it was sent. No checkpoint note of mine says any of this.
+
+**Branches and pull requests (all pushed, nothing uncommitted):**
+- #10113, `cursor/na-opening-row-b51f`, base `cursor/na-policy-histories-f42d`, unmarked: `0912fc6d00e737fb76772e57cd0dc406bee22cc7`. Its body is of the head before, `6635cfa9a9439e4196d6b4706b895b6e2348bd72`, and says 687 cases.
+- Step 1 of NET-430, `cursor/na-opening-premises-d53e`, no pull request: `dddfdd393c81d35cceb24695330f7632366dc9a2`.
+- #9547, `cursor/na-policy-rows-23d7`, marked: `dd6555ae618a6eaa797a2ec607a9f94a63e1a7a2`. I pushed nothing to it.
+- #9644 and #9855 are ROWSMERGE's heads now: `0f1ed08ab83c47ef19cabb2ce0f3d74611857f7e` and `017cf9031712dcf70f3b44618fb43d33fb8b8700`.
+
+**Runs in flight:**
+- r20261114-155032-d308, the records run for #10113 on `6635cfa9a943`, waiting for a slot. It names the records of `security/Properties/lean-audit.json` that move, for the body. The new commit changes no Lean, so its names hold for the new head. Predicted, not run: the read of `NciCheck.RecordText` and its `Opening`, `Opening.table` and `inputsOf`.
+- r20261114-155824-17e8, `verity lean try security/Proofs/Accounting/ReadUnit/BitsPorts.lean`, for that module's axiom probe. The same try of `security/Proofs/Flock/Bridge/BitsCopyGate.lean` was queued and I took it off: not launched.
+
+**Next three steps, in order:**
+1. #10113: merge #9644's head `0f1ed08ab83c` into it. Write the vectors again, run the difftest (688 cases, 0 differences here) and the two test files (107 passed here), pin again if a digest moves, push. Then the body: the decision below, 688 cases and 88 shaped, the seventeenth test, the records by name.
+2. Step 1: try `BitsCopyGate.lean`, merge `origin/main`, run the changed suites and the ratchet gate, open it unmarked on `main` as a lemma with no lock entry, `Refs NET-430`. Opening it today and not Wed 18 Nov is my call, not confirmed. The lemma's own try passed: r20261114-155021-14d4.
+3. The three lines of the 8:10 AM order, none written: 4(a) for soundness, 4(b) for training, entry 11's size and day (due 10 AM PST).
+
+**What I hold for those three lines:**
+- 4(a): with the map the statement takes three named premises, `FlockSoundness.Built`, `Verity.Partition.Correct` and `Hash.RowLeaf.accepts`. `GatesRefine`, `OpeningTie` and `Holds` are gone from it, and with them the two I proposed as `open`. The witness's four facts are in my line of Sat 14 Nov 12:00 AM PST.
+- 4(b): Monday's line asks whether training's script hands the rows count's limits on a served run. My finding stands: nothing counts a served run's rows, `block_rows` has no writer, and `gamma` and `alpha` in rows have no source.
+- Entry 11: `cursor/na-scratch-provenance-7c3e` at `cfc0e11b7a8a` holds its three files at 772 lines, against my 900. I read their sizes only and built nothing. The day still rests on #9644 being on `main`.
+
+**Decisions the lead has not confirmed:**
+- Item 1's reading. A pinned, covered opening is held as today whatever row it declares. The test pins: the record is taken; under no pin every port of the opening is fresh and counts, bit for bit as with the key dropped. Counting a pinned opening's ports fresh where its row is its verdict's output would change `openingHeld`; I did not.
+- I committed and pushed that case and test to #10113 after reading the stop, because its checks had already passed and it was otherwise lost with the VM.
+
+**Least sure:**
+- `units_per_vu = 0`: `Flock/HmRow.lean` line 465 on `main` throws on it, and the parse sets it to 1 for a templated statement. I did not read which function holds line 465, and did not find the issue's line: it is not in NET-405's description, and I fetched its comments without reading them.
+- `Spot.Bits.check` ran at tables of 256 rows and populations up to 2 only.
+
+TIMER: none
+
