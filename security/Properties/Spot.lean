@@ -421,7 +421,7 @@ def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.SamplingDesign) 
     bound := Bound.boundOf n d p.delta,
     perTemplate := if jeq (getD law "law") "stratified" || jeq (getD law "law") "work" then
       (Bound.strataOf n d).map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none,
-    restsOnPeriodCheck := Registration.tiedThrough p.verifier }
+    tiedThrough := Registration.tiedThrough p.verifier }
 
 /-- The integrity profile at δ: the record's program; one level `unit`, the record's partition, of `n` units, sampled by
 `d`; and the number of units sampled. -/

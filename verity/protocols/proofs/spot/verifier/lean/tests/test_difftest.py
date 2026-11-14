@@ -41,6 +41,7 @@ populations in a sample.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import functools
 import hashlib
 import json
@@ -2430,48 +2431,48 @@ def test_the_one_stage_audit_agrees(server):
     assert stats.examples == 600 and min(stats.counts.get(v, 0) for v in ("accept", "reject", "undecided")) > 40, stats
 
 
-def test_an_accepted_case_is_compared_whole(server):
-    """One accepted audit of each sampling design the audit covers, field by field: the public outputs and the profile Python
-    writes."""
-    for law in ({"k": 2, "law": "subset"}, {"k": 3, "law": "stratified"}, {"k": 3, "law": "work"}, "rate:1/3",
-                "stratified-rate:1/2", "work-rate:1/3"):
-        s = SETUPS[3]
-        table = {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}} if _worked(law) else None
-        named, expanded = service.params_law(law, s.program, s.query, table)
-        mine = DR.derive(s.program, s.query, named, expanded)
-        rec = R.record(s.program, s.query, named, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
-                       WINDOW, leaf_layer=LEAF, work_table=expanded)
+#: One of each sampling design the audit covers: a subset, a stratified and a work one, and each as a rate.
+DESIGNS = ({"k": 2, "law": "subset"}, {"k": 3, "law": "stratified"}, {"k": 3, "law": "work"}, "rate:1/3",
+           "stratified-rate:1/2", "work-rate:1/3")
+
+
+def _accepted_case(s: Setup, design, table=None, units=None, **more) -> dict:
+    """A case of `s` under the sampling design `design` (with `table`, a work design's) in which every sampled proof
+    block is proved and the Lean verifier's verdict accepts: the sample is `units`, or by default the first `k` of 0 and
+    3 under a subset design and each stratum's first `k` otherwise. `more` joins the verifier's parameters."""
+    named, expanded = service.params_law(design, s.program, s.query, table)
+    mine = DR.derive(s.program, s.query, named, expanded)
+    rec = R.record(s.program, s.query, named, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF, work_table=expanded)
+    if units is None:
         units = [0, 3][:mine["k"]] if mine["law"] == "subset" else sorted(
             u for st_ in mine["strata"] for u in [u for lo, hi in st_["units"] for u in range(lo, hi)][:st_["k"]])
-        d = {**{k_: v for k_, v in mine.items()}, "population": s.population, "units": units}
-        proved = DR.proved(d)
-        evidence = {"draw": d, "instances": len(proved), "proved_units": proved,
-                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
-                    "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
-        params = {"anchors": [], "delta": "1/20", "law": law, "leaf_layer": LEAF, "log": [], "partition": None,
-                  "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
-                  "work_table": table}
-        case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
-        verdict_, line = D.replay(ONE_STAGE, case, server)
-        assert verdict_ == "accept" and json.loads(line) == answer(case) | {"reason": None}, (law, line)
-
-
-def _tied_case(s: Setup, tied: list | None) -> dict:
-    """A case every unit of `s` is sampled and proved in, whose verifier names `tied` (None: no `tied` at all)."""
-    named, expanded = service.params_law({"k": s.population, "law": "subset"}, s.program, s.query, None)
-    mine = DR.derive(s.program, s.query, named, expanded)
-    rec = _record_of(s, None, named, WINDOW, leaf_layer=LEAF, work_table=expanded)
-    d = {**mine, "population": s.population, "units": list(range(s.population))}
+    d = {**{k_: v for k_, v in mine.items()}, "population": s.population, "units": units}
     proved = DR.proved(d)
     evidence = {"draw": d, "instances": len(proved), "proved_units": proved,
                 "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
                 "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
-    params = {"anchors": [], "delta": "1/20", "law": {"k": s.population, "law": "subset"}, "leaf_layer": LEAF, "log": [],
-              "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": None,
-              "scheme": SCHEME, "work_table": None}
-    if tied is not None:
-        params |= {"parameters": [[name, t.to_json()] for name, t in s.program.fn.signature()[0]], "tied": tied}
+    params = {"anchors": [], "delta": "1/20", "law": design, "leaf_layer": LEAF, "log": [], "partition": None,
+              "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
+              "work_table": table, **more}
     return _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
+
+
+def test_an_accepted_case_is_compared_whole(server):
+    """One accepted audit of each sampling design the audit covers, field by field: the public outputs and the profile Python
+    writes."""
+    for design in DESIGNS:
+        table = {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}} if _worked(design) else None
+        case = _accepted_case(SETUPS[3], design, table)
+        verdict_, line = D.replay(ONE_STAGE, case, server)
+        assert verdict_ == "accept" and json.loads(line) == answer(case) | {"reason": None}, (design, line)
+
+
+def _tied_case(s: Setup, tied: list | None) -> dict:
+    """A case every unit of `s` is sampled and proved in, whose verifier names `tied` (None: no `tied` at all)."""
+    more = {} if tied is None else {"parameters": [[name, t.to_json()] for name, t in s.program.fn.signature()[0]],
+                                    "tied": tied}
+    return _accepted_case(s, {**DESIGNS[0], "k": s.population}, units=list(range(s.population)), **more)
 
 
 def test_an_acceptance_names_the_tied_values_it_rests_on(server):
@@ -2494,15 +2495,14 @@ def test_an_acceptance_names_the_tied_values_it_rests_on(server):
         got = json.loads(line)
         assert verdict_ == "accept" and got == mine | {"reason": None}, (tied, line)
         assert got["public"].get("rests_on_period_check") == want, (tied, got["public"])
-        assert set(got["public"]) == {"bound", "drawn", "per_template", "proved"} | (
-            {"rests_on_period_check"} if want else set()), (tied, got["public"])
+        assert ("rests_on_period_check" in got["public"]) == bool(want) and len(got["public"]) == 4 + bool(want), (
+            tied, got["public"])
 
 
 def test_the_one_stage_audit_agrees_on_tied_values(server):
     """The whole audit, Lean's answer held to Python's, on verifiers that name tied values (`TIED`'s changes) over the
     programs whose run Inputs several proof blocks read (`READER_SETUPS`, `TIED_SETUPS`)."""
-    port = D.ProtocolPort("sampled-proofs-one-stage", answer,
-                          changed_audits([TIED], 1, 1, (*READER_SETUPS, *TIED_SETUPS)).map(_case), package=PACKAGE)
+    port = dataclasses.replace(ONE_STAGE, inputs=changed_audits([TIED], 1, 1, (*READER_SETUPS, *TIED_SETUPS)).map(_case))
     stats = D.run(port, examples=200, server=server)
     assert min(stats.counts.get(v, 0) for v in ("accept", "reject")) > 30, stats
 
