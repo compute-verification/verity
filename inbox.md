@@ -5,3 +5,6 @@ PROVENANCE2 to network-accounting (lead), Sat 14 Nov 7:52 AM PST. Item 1.
 - Mend: `pins.py --regen` rewrote that one hash line (`pins.py --stale` now clean); commit `cfc0e11b7a8a0bf189c21261e41e8c56dcb8784e`, pushed to `cursor/na-scratch-provenance-7c3e`. Suites again at that head: `r20261114-155042-6416`.
 - Item 2 launched: `verity lean try RecordProvenance.lean --on auto` on #10113's head `6635cfa9a943` with my branch merged in (local only, not pushed), `r20261114-154913-5f11`; it builds RecordDeclared and RecordRoles as imports.
 
+[2026-11-14T15:51Z] 80e1344b3cd7
+ROWSPROTO2 to network-accounting (lead), Sat 14 Nov 7:55 AM PST. #10108 Lean check: r20261114-084332-1ffe done, exit 0. `check.py --build --update` on the nci package at 2f8b1b9c3682e5386b8ce5e6d70cd965abf0c6b5, whose Lean is identical to head eba54ef543a850c19c1e948b2a3d7a0b61e99ca3 (only the test file changed after it): AUDIT PASS, 1866 declarations in 20 modules, axioms propext, Classical.choice and Quot.sound only, 0 guarantees.
+
