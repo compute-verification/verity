@@ -16,10 +16,9 @@ import numpy as np
 import pytest
 import torch
 
+from tests.engine.test_fp8_checkpoint import _bf16, _write_base_shard
 from verity_vllm.engine import fp8_checkpoint as F
 from verity_vllm.engine import int8_checkpoint as I
-
-from tests.engine.test_fp8_checkpoint import _bf16, _write_base_shard
 
 G = 128
 VOCAB, H = 16, 256
@@ -121,7 +120,7 @@ def _rn32(x: Fraction) -> float:
 
 
 def test_the_e4m3_table_is_the_format():
-    codes = np.arange(256, dtype=np.uint8)
+    codes: np.ndarray = np.arange(256, dtype=np.uint8)
     v = I.E4M3_VALUES
     assert np.isnan(v[[0x7F, 0xFF]]).all() and np.array_equal(v[np.isfinite(v)], F.e4m3fn_value(codes)[np.isfinite(v)])
 
@@ -156,7 +155,7 @@ def test_the_exact_rule_is_one_rounding_of_the_exact_values():
 def test_ties_round_to_even_on_the_exact_quotient():
     # block 0's scale is 127, so a = 127 and s = 1; block 1 (scale 1) holds the ties W / s = +-0.5, 1.5, 2.5, 3.5
     one, half, one5, two5, three5 = 0x38, 0x30, 0x3C, 0x42, 0x46                 # e4m3 codes of 1, 0.5, 1.5, 2.5, 3.5
-    codes = np.zeros((8, 256), dtype=np.uint8)
+    codes: np.ndarray = np.zeros((8, 256), dtype=np.uint8)
     codes[:, 0] = one
     codes[0, 128:134] = [half, one5, two5, three5, two5 | 0x80, half | 0x80]
     w = I.fp8_exact(codes, np.array([[127.0, 1.0]], dtype=np.float32), 0, G)
@@ -178,8 +177,8 @@ def test_the_bf16_linears_are_vllms_upcast():
 def test_nan_codes_and_non_finite_scales_are_refused(tmp_path, bad):
     base = _base(tmp_path / "base")
     t = _linear("model.layers.0.self_attn.q_a_proj", 256, H, 3)
-    codes = np.frombuffer(t["model.layers.0.self_attn.q_a_proj.weight"][2], dtype=np.uint8).copy()
-    scale = np.frombuffer(t["model.layers.0.self_attn.q_a_proj.weight_scale_inv"][2], dtype=np.float32).copy()
+    codes: np.ndarray = np.frombuffer(t["model.layers.0.self_attn.q_a_proj.weight"][2], dtype=np.uint8).copy()
+    scale: np.ndarray = np.frombuffer(t["model.layers.0.self_attn.q_a_proj.weight_scale_inv"][2], dtype=np.float32).copy()
     if bad == "code":
         codes[77] = 0x7F
     else:
@@ -317,7 +316,7 @@ def test_report_reads_the_pin_against_its_base(tmp_path):
     t, s = doc["tensors"], doc["summary"]
     assert s["mismatch"] == 0 and s["tensors"] == len(t) == 8 and s["int8"]["tensors"] == 6 and s["bf16"]["tensors"] == 2
     q = t["model.layers.0.self_attn.q_a_proj.weight"]
-    assert q["kind"] == "int8" and q["base_dtype"] == "F8_E4M3" and 0 < q["rel_fro"] and 0 < q["rel_max"] <= 0.5 / 127 + 1e-9
+    assert q["kind"] == "int8" and q["base_dtype"] == "F8_E4M3" and q["rel_fro"] > 0 and 0 < q["rel_max"] <= 0.5 / 127 + 1e-9
     assert q["inexact_f32"] > q["elements"] // 2 and t["lm_head.weight"]["inexact_f32"] == 0
     assert len(q["rows"]) == 3 and q["rows"][0]["rel_fro"] >= q["rows"][-1]["rel_fro"]
     assert 0 < t["model.layers.0.self_attn.kv_b_proj.weight"]["rel_max"] <= 2.0 ** -8 * 1.001   # half a bf16 ulp
@@ -335,3 +334,13 @@ def test_recipe_of_names_v3_and_report_refuses_other_recipes():
     assert I.recipe_of({"recipe": {"id": I.RECIPE_V3}}) is I.INT8_V3 and I.INT8_V3.lm_head
     with pytest.raises(F.UsageError, match="reads a v3 pin"):
         I.report({"role": "X", "recipe": {"id": I.RECIPE}}, [], None)
+
+
+@pytest.mark.parametrize("block", [{}, {"quantization_config": None}, {"quantization_config": {}}, {"quantization_config": 0},
+                                   {"quantization_config": ""}, {"quantization_config": False}, {"quantization_config": []}],
+                         ids=["absent", "null", "empty", "zero", "empty text", "false", "empty list"])
+def test_fp8_base_refuses_a_config_without_a_quantization_config_by_the_fields_it_lacks(block):
+    """An absent, a null and an empty block are refused alike: as a block that names none of the three fields."""
+    cfg = {"vocab_size": 8, "tie_word_embeddings": False, **block}
+    with pytest.raises(ValueError, match="reads a block-FP8 base .*; this one has quant_method None, fmt None, weight_block_size None$"):
+        I.fp8_base(cfg, I.INT8_V3)

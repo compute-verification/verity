@@ -8,9 +8,21 @@ from collections.abc import Iterator
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_int, is_row_major, sub_rows
-from verity_vllm.observe.fold.patterns.ops import base_op, bound_args, op_name, triton_name
+from verity_vllm.observe.fold.patterns.ops import (
+    base_op,
+    bound_args,
+    op_name,
+    triton_name,
+)
 from verity_vllm.observe.fold.patterns.resolutions import hint_of, unsupported
-from verity_vllm.observe.fold.resolver import PerRow, Resolution, Shared, StepContext, Transparent, Unsupported
+from verity_vllm.observe.fold.resolver import (
+    PerRow,
+    Resolution,
+    Shared,
+    StepContext,
+    Transparent,
+    Unsupported,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 ALIAS_OPS = frozenset({
@@ -107,8 +119,7 @@ def classify_transparent(node: TreeNode, ctx: StepContext) -> Transparent | Unsu
             return Transparent("noop", (node.id,), hint=f"{hint}: integer metadata allocation")
         if outs and all(o.numel == 0 for o in outs):
             return Transparent("noop", (node.id,), hint=f"{hint}: zero-element allocation")
-        dst = Shared(outs[0]) if outs else None
-        return Transparent("alloc", (node.id,), dst=dst, hint=hint, kernels=FILL_KERNELS if b in ("aten.zeros", "aten.zeros_like", "aten.ones", "aten.ones_like", "aten.full", "aten.full_like", "aten.new_zeros", "aten.new_ones", "aten.new_full", "aten.zero_", "aten.fill_", "aten.fill", "aten.scalar_tensor") else ())
+        return Transparent("alloc", (node.id,), dst=Shared(outs[0]) if outs else None, hint=hint, kernels=FILL_KERNELS if b in ("aten.zeros", "aten.zeros_like", "aten.ones", "aten.ones_like", "aten.full", "aten.full_like", "aten.new_zeros", "aten.new_ones", "aten.new_full", "aten.zero_", "aten.fill_", "aten.fill", "aten.scalar_tensor") else ())
     if b in MOVE_OPS:
         src, dst = _copy_endpoints(node)
         if src is None or dst is None:
