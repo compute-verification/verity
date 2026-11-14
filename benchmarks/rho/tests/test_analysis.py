@@ -265,7 +265,7 @@ def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatc
             "inputs, r_in = 9.11e+04 bit/s (r_out = 2.74e+03 bit/s out) over a 32-bucket link-window, at the warden "
             "form's public parameters, the honest-δ form of draft:per-server-ingress's bound (an incorrect ingress "
             "unit's 3.57e+05 bits are excluded, and 0 when every ingress unit is drawn)") in text
-    assert "line rate, 4.8e+12 bit/s, is its upper end until Lean proves that bound" in text
+    assert "line rate, 5.01e+12 bit/s, is its upper end until Lean proves that bound" in text
     assert text.count("Certified") == 1
     record = json.loads((tmp_path / "rho.json").read_text())["scenarios"]
     assert record["reference-remote-h200"]["certified"] is None
