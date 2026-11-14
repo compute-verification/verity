@@ -38,8 +38,8 @@ the check of record, `InferenceOnlyCheck.Theta.evaluate`: the policy check at th
   name verifies the sessions against (`StageHeld`): one-stage v2's verifier's, or in the recursive form the inner
   statement's, whose one verdict of record V*'s compiled check computes. With one digest for the two records, the
   registered circuit the policy checked and the program SPOT verifies have one SHA-512.
-* `AcceptComplies`: its corollary in the form `Nci.Guarantees.DampenerThreaded` reads, `Nci.CompliesRate Γ α d` from
-  acceptance, on a declaration acceptance exhibits and on every other. `Nci.Guarantees.DampenerRemote` reads the count
+* `AcceptComplies`: its corollary in the form `Nci.Guarantees.SlowdownThreaded` reads, `Nci.CompliesRate Γ α d` from
+  acceptance, on a declaration acceptance exhibits and on every other. `Nci.Guarantees.SlowdownRemote` reads the count
   verdict instead, `Nci.CompliesAtMost c k n d`, which a published `complies` of the count gives
   (`NciCheck.Properties.DescCountsCK`).
 

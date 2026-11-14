@@ -494,7 +494,7 @@ class Remote:
     pouw: Pouw
     detection: Detection
     #: a window, one round of the deployment's live coins, in seconds, and its SPOT's knowledge error
-    #: `ks_t = ε_ks + δ_link`: `DampenerRemotePeriod`'s `δ` sums it over the period's windows
+    #: `ks_t = ε_ks + δ_link`: `SlowdownRemoteMonitoringPeriod`'s `δ` sums it over the period's windows
     window_s: float = math.nan
     window_ks: float = 0.0
 
