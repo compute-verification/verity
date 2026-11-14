@@ -21,19 +21,20 @@ What code outside this directory may use. Everything else here is internal.
 | `python verity/protocols/accounting/pous/device/timed_audit.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [OPTIONS]` | The verifier process of the harness's timed audit: a client of a responder that runs `protocol.TimedAudit`'s audits against it (PoUS's `protocol.py`) and writes each audit's record and verdicts to `AUDIT.json`. With `--strict` it refuses a `k` or a limit the certificate doesn't cover. Every P2 v4 document is judged by the Lean, `pous-timed-audit` (at `--lean-exe PATH`, else `pous_check`'s), whose verdict is the record's: where it can't run, every audit is undecided and no profile is issued. A scheme no Lean judges (the band's) is measured, its verdict `unjudged`, with no profile. It exits 0 when the Lean accepted every audit and 1 otherwise. `--calibrate-only` measures the round trip and writes the limit instead. |
 | The Lean package `lean/` (`core_memory_challenger`) | The verdicts on what the device signed, as executables, Lean modules and two Python callers. `lean/README.md` states its interface. |
 
-From Python there are four modules, each imported by its path.
+From Python there are five modules, each imported by its path.
 `memory_challenger` is the timed rounds' device and its records: the device and its coin tree (`MemoryChallenger`,
 `CoinTree`, `CoinOpening`, `verify_coin`), what it publishes and signs (`SessionCommitment`, `SignedSession`, `Round`,
 `records_digest`, `message`), the check of a signed run (`verdict`, `Verdict`), its two logs (`SessionLog`, `SaltLog`), its
 signature schemes (`Signer`, `Verify`, `LmsSigner`, `SCHEMES`, `LMS`, `TEST_PREFIX`) and a block's digest
 (`block_digest`), with the formats' names and constants. `challenger_session` is a run of timed rounds between a node and
 the challenger's host: the two sides and their frames, the request and its ids (`request_of`, `session_id`, `placement`),
-the side it is handed (`Side`, `command`), the loop that steps its parties (`run`), the node's calls (`salt`,
-`session`, `answer`) and the setups the host keeps (`setup_of`, `SETUPS`).
+the side it is handed (`Side`, `command`), the loop that steps its parties (`run`), the node's salt request (`salt`)
+and the setups the host keeps (`setup_of`, `SETUPS`); the prover's side is `pous/prover/challenger_prover.py`.
 `challenger_party` is the challenger's side of that run: `serve`, `give_salt`, `designate`, `keep`, `report`, `Refusal`,
 `PROTOCOL` and `SOURCE_BYTES`, the byte length of a salt's source. `timed_audit` is the timed audit's client and its
 record's verdicts: the wire (`OP_CHALLENGE`, `OP_PING`, `OP_CLOSE`, `HEADER`), `audit`, `calibrate`, `judge`, `accepted`,
 `verdict`, `lean_verdict`, `run_lean` and `lean_judges`, and the clocks, counters and parameters a harness reads beside them.
+`continuous` is the continuous audit's memory challenger: `ContinuousMemoryChallenger`, `Reply` and `run_continuous`.
 
 What leaves the challenger's host goes into the node that started its party. `challenger_party` answers on two
 channels only: its stdout, which goes to the node that started it (the salt's source, `{"listening": PORT}`, the report
@@ -85,6 +86,7 @@ The proofs of the properties are in `security/Proofs/Properties/Pous/` (`MemoryC
 - `challenger_session.py` and `challenger_party.py`: a run of timed rounds, from the node's side and as the challenger's
   party on its own host.
 - `timed_audit.py`: the timed audit's client, its record and the two verdicts on it.
+- `continuous.py`: the continuous audit's memory challenger, which enforces the three rules above.
 - `wipe_challenger.py`: the streamed wipe's memory challenger as a party of the party runtime (`verity/runtime`), over
   `verity/protocols/accounting/pous/verifier/wipe_parties.py`'s messages; the prover's party is
   `verity/protocols/accounting/pous/prover/wipe_prover.py`.

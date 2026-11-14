@@ -1306,7 +1306,7 @@ LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "la
 
 #: the analysis tree: a Lean change only here that touches no lock and no spec (`LEAN_SPEC`) is proofs, checked by the
 #: after-landing run, a failure blaming it; Lean anywhere else runs as code (Flock's verifier and the ZK server, the PoUS
-#: grader, the certifier program, the inference-only check, the remote audit's verifier), and a lock run follows its landing
+#: grader, the certifier program, the inference-only check, PoUB's verifier), and a lock run follows its landing
 LEAN_PROOFS_TREE = "security/"
 #: the spec: the Lean the guarantees' statements read, `security/`'s Definitions library, and the Lake files of its package.
 #: A change to it, like a lock's, is a Lean change with or without a lock change

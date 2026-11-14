@@ -2,8 +2,9 @@
 proof-block Definition is a planner candidate whose outputs fit a size class, its units one request's count times the
 requests, its work its own ANDs and a statement at most `cap` of it; no served row is a gap; the totals per token and per
 request are the Definitions' sums; the planner certifies a sample over the card's candidates; `main` prints the totals and
-each gap's rows, ANDs and why; and `main --stop` refuses without the network certifier's response tie, which SPOT never
-imports. A stop class's populations, with the certifier's tie, are tested where both may be imported
+each gap's rows, ANDs and why; and `main --stop` refuses without the stop block and the network certifier's response tie,
+which SPOT never imports. A stop class's populations, with the adapter's stop rule and the certifier's tie, are tested
+where they may be imported
 (`benchmarks/sampling_plan/tests/test_glm53_stop_class.py`)."""
 
 from __future__ import annotations
@@ -73,4 +74,4 @@ def test_main_refuses_a_stop_class_without_the_certifiers_response_tie(capsys, m
     monkeypatch.setattr(sys, "argv", ["glm53.py", "--stop", "16"])
     with pytest.raises(SystemExit) as e:
         G.main()
-    assert e.value.code == 2 and "--stop needs the network certifier's response tie" in capsys.readouterr().err
+    assert e.value.code == 2 and "--stop needs the stop block and the network certifier's response tie" in capsys.readouterr().err

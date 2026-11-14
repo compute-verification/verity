@@ -240,7 +240,6 @@
     {"file": "verity/protocols/accounting/pouw/prover/schemes/pearl_kw.py", "count": 1},
     {"file": "verity/protocols/accounting/poub/verifier/lean/tests/ra_cases.py", "count": 1},
     {"file": "verity/protocols/accounting/poub/verifier/lean/tests/test_schedule.py", "count": 1},
-    {"file": "verity/protocols/accounting/poub/verifier/p2_party.py", "count": 2},
     {"file": "verity/protocols/accounting/poub/verifier/receipts.py", "count": 1},
     {"file": "verity/protocols/accounting/poub/verifier/wire.py", "count": 1},
     {"file": "verity/protocols/proofs/spot/device/challenger.py", "count": 7},
@@ -260,12 +259,7 @@
     {"file": "verity/circuits/tests/test_boolean.py", "count": 1},
     {"file": "verity/circuits/tests/test_lean_gates.py", "count": 1},
     {"file": "verity/circuits/tests/test_partition_v2.py", "count": 1},
-    {"file": "verity/definitions/boolean.py", "count": 1},
     {"file": "verity/circuits/call_scope.py", "count": 1},
-    {"file": "verity/definitions/numerics/_jit.py", "count": 3},
-    {"file": "verity/definitions/numerics/dense_rows.py", "count": 3},
-    {"file": "verity/definitions/numerics/kernel_registry.py", "count": 1},
-    {"file": "verity/definitions/numerics/marlin_moe_rows.py", "count": 1},
     {"file": "verity/circuits/word.py", "count": 3},
     {"file": "verity/protocols/proofs/flock/prover/pod/gemm_hill.py", "count": 5},
     {"file": "verity/protocols/proofs/flock/prover/pod/gemm_slowdown.py", "count": 1},
@@ -320,7 +314,13 @@
     {"file": "verity/protocols/proofs/spot/verifier/one_stage/docket.py", "count": 2},
     {"file": "verity/protocols/proofs/spot/device/challenger_session.py", "count": 1},
     {"file": "verity/protocols/proofs/spot/prover/audit/prove_path.py", "count": 2},
+    {"file": "verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py", "count": 4},
     {"file": "verity/protocols/proofs/spot/prover/audit/records_audit.py", "count": 2},
-    {"file": "verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py", "count": 4}
+    {"file": "verity/protocols/accounting/poub/verifier/p2_parties.py", "count": 2},
+    {"file": "adapters/vllm/verity_vllm/definitions/boolean.py", "count": 1},
+    {"file": "adapters/vllm/verity_vllm/definitions/numerics/_jit.py", "count": 3},
+    {"file": "adapters/vllm/verity_vllm/definitions/numerics/dense_rows.py", "count": 3},
+    {"file": "adapters/vllm/verity_vllm/definitions/numerics/kernel_registry.py", "count": 1},
+    {"file": "adapters/vllm/verity_vllm/definitions/numerics/marlin_moe_rows.py", "count": 1}
   ]
 }
