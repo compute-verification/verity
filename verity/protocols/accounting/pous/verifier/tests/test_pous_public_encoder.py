@@ -50,7 +50,7 @@ class World:
         self.prims = dense.reference(params)
         self.w = random.Random(21).randbytes(params.w_bytes)
         self.commitment = setup.commit(params, self.w)
-        self.salt = setup.draw_salt(b"verifier-secret", self.commitment)
+        self.salt = setup.sample_salt(b"verifier-secret", self.commitment)
         self.honest = self.server()
 
     def server(self, w=None, salt=None):
