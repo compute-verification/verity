@@ -26,6 +26,7 @@ order = [
     ["verity/protocols/proofs/spot"],
     ["verity/protocols/proofs/flock"],
     ["verity/protocols/proofs/recursion"],
+    ["verity/protocols/proofs/spot_flock"],
     ["verity/protocols/accounting/registration"],
     ["verity/protocols/accounting/pous"],
     ["verity/protocols/accounting/poub"],

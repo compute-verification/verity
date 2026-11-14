@@ -8381,7 +8381,8 @@
      "NciCheck.Properties.Expands",
      "NciCheck.Properties.LaysOut",
      "NciCheck.Properties.Names",
-     "NciCheck.Properties.Parses"
+     "NciCheck.Properties.Parses",
+     "Properties.Spot.ExpectsV2"
     ],
     "reads": []
    },
@@ -8402,7 +8403,8 @@
      "NciCheck.Properties.Expands",
      "NciCheck.Properties.LaysOut",
      "NciCheck.Properties.Names",
-     "NciCheck.Properties.Parses"
+     "NciCheck.Properties.Parses",
+     "Properties.Spot.ExpectsV2"
     ],
     "reads": []
    },
@@ -25667,7 +25669,7 @@
    }
   },
   "Properties.Remote": {
-   "digest": "a768b2c282528ec2f034ed46b41d9d0d070af1c0f396e0b97504402dd688b3ef",
+   "digest": "f68048aea4ec70ecfd8fd64e63bf18b031cb513d00cba6b1fcda85aab41d396d",
    "definitions": {
     "Properties.Remote.AcceptComplies": "8418fbde305dfd71e33cd3077d6b347d5d3ee11b551019de4780ce12b16d056e",
     "Properties.Remote.AcceptInferenceOnly": "fb2c35fa3ad927f7a1736524b0ff284924bfd554590feb57e3e1bf59a44f589c",
@@ -25676,16 +25678,17 @@
     "Properties.Remote.InferenceOnlyHeld": "fbb6b6c9c53b3374f8ca5c369c4957c19e5b36b5743ab32270dd59938befd948",
     "Properties.Remote.PolicyHeld": "6c6e9433cd79cf9727ae13a8e8aec08a1d82911fd7f799f560fa771e0fa376aa",
     "Properties.Remote.PolicyMet": "a2459a03f27bf629ab357360e5e2643f4f6948942f3ef08360c65b104b2bb8a1",
-    "Properties.Remote.StageHeld": "aad472c1c48359bb94842bbf0755b1eee0d37d777e4a16ec1e5ef86d56438fe3",
+    "Properties.Remote.StageHeld": "f56cf084d3e0be37faa36fffa7699c50078cd4b4624ca1d465df749c94b5f26c",
     "Properties.Remote.VerifierOwn": "b8047d52e6c51899acde32a61fd3db1ea1cc80fff100c26bf680a0a3afa34729"
    }
   },
   "Properties.Spot": {
-   "digest": "758bf8600377e21c605e11af8fc20fee3d5a9c948326d3adb9c27cbb65784257",
+   "digest": "e00e757ca95d4672904aeee537afa74cd9e96da2010af7a10de9770c9d842aa3",
    "definitions": {
     "Properties.Spot.AcceptMeans": "3ff7289fbaba16aa92009db0eed759161b4518b084e4883867e5f6164fa4d836",
     "Properties.Spot.Ascending": "17557ee116948293242d3e7d9a046a27b45ccee692aee0277b044c6c256cac37",
     "Properties.Spot.BernoulliBounds": "89d8853ad813e46855f441955951c2c6a900804b166dc182986263a6af838089",
+    "Properties.Spot.CallerHeld": "3aa3ec4b0f6ca7defff50503b497bdd1b3a5dfc2216b66998ee813c6c88451ee",
     "Properties.Spot.DeclaredDay": "cf01e95ed1bcc2fff08cab11264fba4583e59cb6e8853349dff564489b206ed4",
     "Properties.Spot.DigestIsRecord's": "53f1f3d667e96063c8718900569dd994568a7029f9e6c6d74f92ed3bfca40b2f",
     "Properties.Spot.Drawn": "c812203fae177ecf732837bdb0197800f5205536290f5debccf63b3c05c0f9b8",
@@ -25698,16 +25701,16 @@
     "Properties.Spot.PoolChained": "d5c9fddc044d13f69a61727f31985291f95250c52aae095edf19687cf5632cd5",
     "Properties.Spot.PoolResetOnce": "1738dd29a137b7c189a27184462d4708faa78e31e1b8ebf7fb3e5981f0b94569",
     "Properties.Spot.R1": "0764beacb9d1d9a8301f1b6438608bcca0332b24e66f35277f8d2e01d91dbf54",
-    "Properties.Spot.R2": "3dde0adab93f887c94919e961489b83e69096907c8bcd8e02ef593b4acfd4c14",
+    "Properties.Spot.R2": "94c781839371a1aed2b8c978c40d325507aa182eaff28a9be3a6fe14534427e8",
     "Properties.Spot.R3": "b4f069fb5ee3e1fad9023d7cf54501276846f964b7d9f8d93d519fc3f84e7b77",
     "Properties.Spot.R4": "ad01592460bc2a8a4fa4d72a066e12d19561607014f4622123140d536f0412ac",
     "Properties.Spot.R5": "735e5ccbb27e62eb30cf69fb59c8f8cc5cfac7f50139e3a46df05adcde086f04",
-    "Properties.Spot.R6": "cf7a38a8932158791f69ddea0d1e95bc3f99288165311dc8e2e3149911d42cf7",
+    "Properties.Spot.R6": "70e8ec4ebf692940bebf5ff60aed8e2891b191b42a9642d124020a7f3623f6c6",
     "Properties.Spot.R7": "31c7590047db03c2d9683d8d4a5f93a4ba735f6bca73afae3a5bf2d805598ac4",
     "Properties.Spot.R8": "ce6bb040f31018060fe03e96eeae42fc8475f31b16a41e3e2ed96236cd813954",
     "Properties.Spot.RL": "d29a1643eddc47b3ed9f1a64c652662651eb36e06449166272a98ea7da483964",
     "Properties.Spot.Receipt": "8aa1f184ada218c95592732c64cf8945ebe186fe284ce8b3f1918ff5071177da",
-    "Properties.Spot.Registered": "dd416cfa7a4b89810d9a88cd77fdf3347676cbd6c6bfe3fb44de884fa44ae6a7",
+    "Properties.Spot.Registered": "e5cd1330ab3815b799e1e01eaa98e67cd8a450ed13bcdf87218cb52a990b3ee7",
     "Properties.Spot.RootIs": "e7a1cc5645335f09b65b757d497101e00be83f6362a25beef16446f20eb548fe",
     "Properties.Spot.RunPoolReset": "14b775256c97270586572c916dd97cbdb7b84424fbc6d0125ad159f9cad5dc3e",
     "Properties.Spot.RunPoolSpent": "ac4b6d2f6f726beaa52fbd355de92ca693112ef53c87f8df7803b0cf57b25995",

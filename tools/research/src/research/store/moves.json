@@ -2437,6 +2437,11 @@
       "paths": {
         "benchmarks/dashboard/": "infra/dashboard/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/recursion/verifier/recursive/": "verity/protocols/proofs/spot_flock/verifier/lean/"
+      }
     }
   ]
 }
