@@ -42,15 +42,15 @@ This module shows the two sessions are one, and proves `VerdictsAt` from what is
   (`msgsOfRecords_form`).
 
 What `verdictsAt_of` takes beside the join's fields (`HeldOfAt`, `StmtsRead`, `RoundsHeldAt`, `ScopeHeldAt`) and
-`StmtsCount`, each a named hypothesis no check gives here:
+`StmtsCount`, each a named hypothesis here:
 
 * `StmtsPrint`: each member's partition object's objects are well-formed trees, and its registered reads are
-  printable. Nothing the setup checks holds a member's partition object to well-formed trees or its registered
-  reads to integers.
+  printable. Nothing the setup checks holds them to that; the parameters' reader does, and `stmtsPrint_of`
+  (`FormPrint.lean`) proves it of every case.
 * `StmtsFit`: the statements' message holds fewer than `2^64` statements of fewer than `2^64` bytes each. The form
-  refuses a field its statement can't hold, which bounds each field and no sum of them.
+  refuses a field its statement can't hold, which bounds each field and no sum of them. No check gives it here.
 * `SessionsLive`: a session the masked verdict accepts has messages (`SessionMsgs.sessionMsgs`): its record reads as a
-  live session and each recorded round kept its bytes.
+  live session and each recorded round kept its bytes. No check gives it here.
 -/
 
 @[expose] public section
