@@ -86,7 +86,7 @@ Open premises (`open`):
   as rows and their audit, the code form of `RecordRows` over the network certifier's lanes with `warden.py`'s `audit`
   its reference, which `network-rows` (`lean/`) runs on a run's certified records; no proof ties it to `RecordRows`.
   Against the reference it refuses three kinds of run the network certifier never writes and holds two things less:
-  no egress cell to the id egress form (the io tie's, `IoTieCell` on every cell) and no response to a response cap
+  no egress cell to the id egress form (the io tie's, `IoTieCell` on every cell) and no response to a `max_tokens_cap`
   (`network-rows` refuses such a schedule).
 - **Documents others read**: the answer of `network-period check`, `verity/certifier/v0`. `benchmarks/network_traces`
   runs the check and writes it as the certifier's piece, which `benchmarks/one_stage` reads.
