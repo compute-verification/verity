@@ -13,7 +13,12 @@
 # - the attributes the kept flags' declarations name (`dest=`: `a.network_certifier_run`, `a.network_certifier`), and a
 #   function and a parameter of that name;
 # - names that programs only write, which nothing reads back by name: a kept run's file names, a record's keys, a
-#   negative's name, a dictionary's keys and a test's own values, each with its row below.
+#   negative's name, a dictionary's keys and a test's own values, each with its row below;
+# - the word alone in quotes where programs only write it: the process label the serve program gives the stall
+#   probe, the key of two programs' summaries, and the directory `scan_zk.py` and `egress_zk.py` make under `--out`.
+#   No row can take these, since the same quoted word is a link window's kind, the gate's device value, a kept
+#   trace's key and a class, which [keep] holds: they are renamed by hand in the change that runs this map. A run
+#   kept from before it holds the older label, key or directory name.
 #
 # Kept bytes ([keep]), each a name that something a program must agree with holds: a file or a key a program in the
 # tree reads back from a kept run, a caller's launch line, a signed value, or bytes a digest takes in.
@@ -24,8 +29,8 @@
 # - the gate's verb `warden-rehearse`, which the deployed gate serves, and `warden-fails`, the link name of a window's
 #   fails certificate (`<link>-fails`), which signed certificates hold;
 # - the trace corpus's labels (`warden-heavy`, `warden-smallkv`);
-# - a message code makes from a kept value (`f"{label} thread"`, `f"device {device}"`), which a test spells whole: no
-#   phrase below rewords "warden thread", "warden ticker" or "device warden";
+# - a message code makes from a kept value (`f"device {device}"`, `f"on the {path} path"`): no phrase below rewords
+#   one, and a test builds its text from the value;
 # - the names a caller outside the tree sets, in a launch line or a settings file: the environment variables
 #   `A5_WARDEN_RUN`, `CR_WARDEN_RUN`, `N2_WARDEN_RUN`, `SC_WARDEN_RUN`, `A5_WARDEN_UNITS` and
 #   `WARDEN_SERVE_C_ALLOCATOR`, and the flags `--warden-run` and `--warden`. A map of their own renames them with
