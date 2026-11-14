@@ -23,12 +23,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from verity.circuits.census import census, step_ends
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.program import Program, is_input
 from verity.circuits.refs import Coll, runs
-from verity.circuits.types import Array
-from verity.circuits.census import census, step_ends
 from verity.circuits.requirement import from_census
+from verity.circuits.types import Array
 
 from verity_vllm.query.required import SAMPLING_EVENTS
 

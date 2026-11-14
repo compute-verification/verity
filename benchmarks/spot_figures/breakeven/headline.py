@@ -740,7 +740,7 @@ def plan(spec: dict, row: dict, reads: dict, known: dict, P: SimpleNamespace | N
     st = opt.two_stage_statements(split, drow["k"], drow["registration_sample"], drow["form"])
     total = sum(x["prove"] for x in st)
     s = sweep.SCOPES[spec["scope"]]
-    seconds = dict(f1.PERIODS)[s.period]
+    seconds = dict(f1.MONITORING_PERIODS)[s.period]
     out, left = [], []
     for x, c, t in zip(strata, split, st):
         if t["taken"] <= 0:

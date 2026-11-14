@@ -21,8 +21,8 @@ every member reads alike is shared (axis None); any other is mapped on axis 0, i
 they are consecutive runs of one node or Input, one `Strided` where they are evenly spaced, else their `concat`. A reference to a
 member's output becomes one to the batch's output at the member's leaves, in its form (a cut of a `PartLog` stays a cut; a plain
 `Concat` is put back in `concat`'s normal form). The form reads the body as written and nothing else, so equal bodies give equal
-forms. A collective stays a node of its own, for the root reader that takes only Calls: it reads peer Inputs in one operand of one
-Call (`tp_binding.rank_sites`). An attention's Calls batch like any other (`commit.memory_map` reads each member's KV).
+forms. A collective stays a node of its own, for the root reader that takes a collective only as a Call: it reads peer Inputs in
+one operand of one Call, whose output a Call or a batch may read (`tp_binding.rank_sites`). An attention's Calls batch like any other (`commit.memory_map` reads each member's KV).
 """
 from __future__ import annotations
 

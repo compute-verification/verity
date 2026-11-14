@@ -18,8 +18,6 @@ from tests.observe.test_fold_synthetic import (
     REQ,
     SAMPLED,
     C,
-    _real_memory_available,
-    install_stub_memory,
     toy_log,
     toy_profile,
 )
@@ -104,8 +102,6 @@ def _write_snapshots(result, t: dict[int, int], root: Path, corrupt_node: int | 
 
 @pytest.fixture(scope="module")
 def folded():
-    if not _real_memory_available():
-        install_stub_memory()   # module-wide; the fold tests re-patch per test anyway
     r = fold(toy_log(), toy_profile(), strict=True)
     weights = ToyWeights(r.params[-1][1].leaves)
     t = _evaluate_program(r, weights)
