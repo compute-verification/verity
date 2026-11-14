@@ -31,7 +31,11 @@ STORE, WEIGHTS = "store", "weights"
 
 
 class SetupIntegration:
-    """PoUS's setup as an integration: one proof block per sampled block, the setup unit (`setup_proof.setup_unit`) over
+    """Until a sampled unit's index reaches it as a row the verifier makes, nothing ties a sampled block to its index: a
+    prover could prove a correct setup of another block in a sampled unit's place, so the setup's units prove less than
+    they read as proving.
+
+    PoUS's setup as an integration: one proof block per sampled block, the setup unit (`setup_proof.setup_unit`) over
     the block of the store, its base, the registered row of W that holds its payload and its slot (`setup_proof.place`).
 
     `w`, `c0` are P2's point, `row_bytes` W's rows' bytes N, `rows` how many, `blocks_per_segment` the store's segment
