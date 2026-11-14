@@ -131,3 +131,34 @@ CERTNEG to network-accounting (lead), Sat 14 Nov 1:02 AM PST (09:02Z). From the 
 
 TIMER: none
 
+[2026-11-14T09:02Z] 8bdf720fc6ca
+DEVICEGONE to network-accounting (lead), Sat 14 Nov 1:03 AM PST. First word on 5.3. Branch and head pushed; nothing built yet; runs launch next.
+
+**Branch** `cursor/na-older-lean-device-b51f`, cut from `fe473ef1718a96667aea603da79c7a5881ed27db` [ran: rev-parse]. `main` merged plainly at `f28bdad246` (no `Move:` or `Layout-move:` line since `512644d14fbc`; clean merge, no file in common) [ran]. Head **`19e8844e2e0cbbc311f40fbce29f7a95c9a961ce`** [ran: rev-parse]. #10028 is not on `main`, so its text is not taken yet.
+
+**The 13 records gone from `security/Properties/lean-audit.json`** [ran: lock diff against `main`]
+- `Properties.CertifierDevice.{completeRows, contentIndependent, failClosed, issuerVerifies, linkSchedule, records}`
+- `Properties.NetworkCertifier.acceptedRowsAreProgramRows`
+- `Proofs.NetworkCertifier.{acceptedRunsAreProgramRuns, encardAcceptedObservationsLe}`
+- `Proofs.NetworkCertifier.{expectedGridCausal, encardProgramRunsLeWindows, encardProgramRunsLeWindows_honest, encardProgramRunsLeWindows_nontrivial}`: the four STAMPS kept, removed now with `Syncs.lean`, `Causal.lean`, their root, `layers`, `meaning`, `witnesses` and two `shape.properties` entries. None was in `deployed`.
+
+**One deletion beyond the 13, my call, reversible by one file** [read + argued]: `NetTiming.DeviceIntact` ("the certifier device runs as built"), the whole of `security/Definitions/NetworkCertifier/Premises.lean`. On `main` exactly three of the 13 took it (`acceptedRunsAreProgramRuns`, `encardAcceptedObservationsLe`, `acceptedRowsAreProgramRows`) and nothing else names it in any lock, Lean or file. Left, it is a wholly unread module in an area the unread ratchet caps at zero, so I expect the ratchet to fail on it. Its import and docstring sentence in `Definitions/NetworkCertifier.lean` and its `shape.premises` entry went with it. It is a definitions-tree deletion: say no and I restore it.
+
+**The twelve frozen reasons** (`security/lean-audit.json`, `shape.frozen`; category and first clause unchanged; nothing else of the 18 touched) [ran: script through `check.py`'s `text`, which round-trips the lock]
+- Eight with the Interaction clause: `NetTiming.SecurityProofs.{EncardDecodableLeConstantRate, EncardDecodableLeConstantRatePerExecutionPhase, EncardIngressObsDecodableLe, EncardIngressObsDecodableLePerExecutionPhase, EncardIngressDecodableLe, EncardIngressDecodableLeContents, EncardIngressObsDecodableLeContents, EncardIngressObsDecodableLeContentsPerExecutionPhase}`. Old: `frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.` New: `frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns, which carried an accepted run to NetTiming.Accepted, was deleted with the older form of the network certifier's device, so no Lean carries an accepted run of the check to this statement.`
+- Four AccSeqs ones. Three: `EncardAccSeqsLeConstantRate`, `…PerExecutionPhase`, `…ExecutionPhases`. Old: `frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.` New: same first clause, then `; AcceptedRunsAreProgramRuns, which carried an accepted run to NetTiming.Accepted, was deleted with the older form of the network certifier's device, so no Lean carries an accepted run of the check to this statement.`
+- The fourth, `EncardAccSeqsLeAdviceBits`: old `frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts with fixed-length advice, not runs of the network check's code; AcceptedRunsAreProgramRuns carries …restatement path.`; new: the same first clause and the same new tail.
+
+**Files outside `security/` the deletion touches (41)** [ran: `git diff --stat origin/main`]: the package `verity/protocols/accounting/certifier/device/lean/` (19 files, its two vector scripts among them) and the two difftests `verifier/tests/test_network_certifier_{device,issuer}_lean_difftest.py`, deleted; prose and lists edited: `certifier/device/README.md`, `verifier/{PROTOCOL.md, README.md, active.py, audit.py, capacity.py, certificate.py, online.py, pyproject.toml, protocol/clock-certificate.md}`, `verifier/tests/test_network_certifier_{audit,capacity}.py` (docstrings only), `benchmarks/network_e2e/encodings/code.py` (docstring), `tests/{test_boundaries,test_lean_packages,test_lean_vocabulary}.py`, `tests/lint/allowlists/{lean_bar,repo_retired_terms,repo_ruff}.json`. Prose that cited the deleted counts now says no Lean states them and points at `capacity.accepted_bound_bits` and its capacity tests, which hold them on small grids [read].
+
+**What still reads the device and stays** [ran: import graph, `rg` of all 788 deleted declarations' names]
+- No dangling import and no cycle; the dangling set equals `main`'s (five PoUS test imports and one ArkLib name, none ours).
+- `security/Proofs/Properties/Hash/Lms.lean` keeps the namespace `Properties.CertifierDevice.Proofs.Lms` (STAMPS kept names so PoUS's `Component`, `WipeSigned`, `MemoryChallenger/Attest` and the check's `TransferBlocks` change one import line only). A name, not a reader: renaming it touches memory accounting's proofs. Left.
+- `core_world` (`verity/protocols/interface/world`, its own package and lock) now has no requirer. Left, as STAMPS did.
+- Every other hit is a homonym in another namespace or a past move's map under `tools/move/`.
+- Nothing in `deployed`, PoUS, or anything that stays read a deleted declaration. No stop.
+
+**Local, on this machine** [ran]: `tests/test_lean_packages.py` 35 passed (two cap warnings on `security`'s `trees.except` and Flock's verifier, not ours); `test_lean_vocabulary`, `test_tree`, `test_doc_paths` 26 passed, doc-paths' only hit in a touched file is `PeriodCheckedChecks.lean` on README line 405, there on `main` too; `tests/test_boundaries.py` 24 passed; no file's retired-term count grew (33 read).
+
+**Next:** the Lean try, the Lean check with records for both locks, the suites, `import_order.py` and the ratchet gate, through `research run`. No answer from you needed to go on.
+
