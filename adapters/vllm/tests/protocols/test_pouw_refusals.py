@@ -5,8 +5,8 @@ layers that share a quant method; and H1's install's of a layout without its row
 `circuit`'s of a scheme without a circuit and of an input group of another length than its Definition's, the
 quantizer's of a value that is not finite, and the native prover's of a unit outside a call's population.  Pearl-C's of
 a kernel directory without one cubin, of a pass whose coins don't parse or are no object, of a live salt over other
-weights than its workload's and of B̃'s prefetch on a kernel without it, and the in-process certifier's of fewer coin
-bytes than it asks for."""
+weights than its workload's, of a group of experts that repeat, are another group's or differ in shape and of B̃'s
+prefetch on a kernel without it, and the in-process certifier's of fewer coin bytes than it asks for."""
 from __future__ import annotations
 
 import random
@@ -39,6 +39,7 @@ from verity_vllm.protocols.pouw import native as PN
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.lead import feed as PF
 from verity_vllm.protocols.pouw.operands import quantize
+from verity_vllm.protocols.pouw.pearl_c import grouped as PG
 from verity_vllm.protocols.pouw.pearl_c import kernel as PK
 from verity_vllm.protocols.pouw.pearl_c.lanes import schedule_of, whole_options
 
@@ -307,6 +308,29 @@ def test_a_live_salt_is_refused_unless_every_weight_of_the_workload_and_only_tho
             PPD.epoch_of(workload, other, live.commitment, opening, 3)
     assert PPD.epoch_of(workload, roots, live.commitment, opening, 3).salt == salt_of(live.commitment, opening.coin,
                                                                                      weights_root(roots))
+
+
+def test_a_group_of_experts_is_refused_unless_distinct_unheld_and_of_one_shape(monkeypatch):
+    """`group` refuses, before it stacks anything, experts that repeat or are none, weights another group holds, and
+    experts of more than one (n, k); a group it holds is given back."""
+    monkeypatch.setattr(PG, "module", lambda *_: pytest.fail("a group was stacked before the refusal"))
+    shapes = {0: (64, 32), 1: (64, 32), 2: (64, 48), 3: (64, 32), 4: (128, 32)}
+    run = SimpleNamespace(entry="e", weights={w: SimpleNamespace(n=n, k=k) for w, (n, k) in shapes.items()}, pipes={})
+    cases: tuple[tuple[tuple[int, ...], str], ...] = (((0, 0), "e: a group's experts are distinct weights, not (0, 0)"),
+                                                     ((), "e: a group's experts are distinct weights, not ()"),
+                                                     ((0, 2), "e: a group's experts are of one (n, k)"),
+                                                     ((0, 4), "e: a group's experts are of one (n, k)"))
+    for ws, said in cases:
+        with pytest.raises(ValueError, match=f"^{re.escape(said)}$"):
+            PG.group(run, ws)
+    held = object()
+    run._groups = {(0, 1): held}
+    assert PG.group(run, (0, 1)) is held
+    for ws, taken in (((1, 3), [1]), ((3, 0, 1), [0, 1])):
+        said = f"e: weights {taken} are already another group's"
+        with pytest.raises(ValueError, match=f"^{re.escape(said)}$"):
+            PG.group(run, ws)
+    assert run._groups == {(0, 1): held}
 
 
 def test_a_prefetch_of_b_is_refused_on_a_kernel_whose_pipeline_lacks_it():
