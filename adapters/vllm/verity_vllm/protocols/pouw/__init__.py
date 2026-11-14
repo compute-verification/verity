@@ -555,7 +555,7 @@ def ncp_linear_op() -> Any:
     return torch.ops.verity_pouw.ncp_linear
 
 
-def _executor(run: _Run | _CircuitRun | PPD.PearlCDeviceRun, w: int):
+def _executor(run: _Run | _CircuitRun | PPD.PearlCDeviceRun, w: int, _orig: Any):
     if isinstance(run, _CircuitRun):
         op = ncp_linear_op()
 
@@ -627,8 +627,8 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     if scheme in PPD.SCHEMES:
         settings = Settings.of(target.context.settings_of(NAME))
         key = _SALT_KEYS[entry] = PPD.new_salt_key(scheme)
-        device_roots = PPD.weight_roots(PPD.Kernel.load(settings.kernel, settings.cubin), {w: m.weight for w, m in enumerate(layers)},
-                                        scheme, salt_key=key)
+        device_roots = PPD.weight_roots(PPD.Kernel.load(cast(str, settings.kernel), settings.cubin),
+                                        {w: m.weight for w, m in enumerate(layers)}, scheme, salt_key=key)
         return {"weight_roots": {str(w): r.hex() for w, r in device_roots.items()}, "shapes": {str(w): list(v) for w, v in shapes.items()}}
     key, roots = _SALT_KEYS.setdefault(entry, os.urandom(32)), {}
     for w, layer in enumerate(layers):
@@ -687,7 +687,7 @@ def install(scheme: str, target: Target) -> Option:
         salt = Epoch.start(declared, roots, commitment, opening).salt
     with PHW.closed_on_error(session):
         if device:
-            run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(settings.kernel, settings.cubin),
+            run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(cast(str, settings.kernel), settings.cubin),
                                       {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
                                       schedule=settings.schedule, salt_key=_SALT_KEYS.get(entry), pass_index=k)
             run.commits["registration"], end_pass = weights_claim(s), run.end_pass
@@ -701,7 +701,7 @@ def install(scheme: str, target: Target) -> Option:
             _CIRCUIT_RUNS[entry] = (run, _sites(target.model, layers))
         h = target.hooks(entry)
         for w, layer in enumerate(layers):
-            h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
+            h.wrap(layer.quant_method, "apply", functools.partial(_executor, run, w))
         if device:
             PP.hook_steps(h, run, PPD.CALL_CAPACITY, settings.transcript_dir, settings.runner)
     return Option(name=entry, hooks=h, commits=run.commits, details=run.details, end_pass=end_pass,

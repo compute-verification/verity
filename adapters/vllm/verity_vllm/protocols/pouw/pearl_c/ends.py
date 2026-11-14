@@ -187,8 +187,9 @@ class PassEnds(_RunState):
             units = len(cur.matmuls)
             flags = self.flag_buf[:cur.flag_rows].to(torch.int64).sum(0) if cur.flag_rows else torch.zeros(2, dtype=torch.int64)
             aside = lag and self.aside_ends and cur.retain is None and self.device.type == "cuda"
-            leaves, side, got = self._end_aside(count, self.roots_buf[:nb * units], flags) if aside else \
+            where: tuple[int, Any, Any] = self._end_aside(count, self.roots_buf[:nb * units], flags) if aside else \
                 (self.leaves.data_ptr(), None, None)
+            leaves, side, got = where
             K.dev.stream = side.cuda_stream if aside else self.stream()
             try:
                 for _, f in R.Pipeline.tree_setup(ns, "t", count, "dom_t"):
@@ -212,10 +213,10 @@ class PassEnds(_RunState):
                 done.record()
                 self._lagged = (out, done, got, units, count)
             else:
-                roots_a, root = _bytes(self.roots_buf[:nb * units]), _bytes(tree[-nb:])
-                self._ended(out, roots_a, root, flags.tolist(), units, count)
+                roots_a, root_t = _bytes(self.roots_buf[:nb * units]), _bytes(tree[-nb:])
+                self._ended(out, roots_a, root_t, flags.tolist(), units, count)
                 if cur.retain is not None:
-                    complete = self._write_retained(cur, epoch, roots_a, root, tree, count, out)
+                    complete = self._write_retained(cur, epoch, roots_a, root_t, tree, count, out)
                     if behind and self.retain_behind:
                         self._behind = (*self._behind, host_behind(complete))
                         deferred = True
@@ -330,7 +331,7 @@ class PassEnds(_RunState):
         once every file is: its records, its weights' files and its manifest, ``out``'s ``excluded_rows`` and ``manifest``.
         A weight's files are written from the device by the first retained pass, on this thread, and hard-linked after."""
         import torch
-        d, nb = cur.retain, self.nb
+        d, nb = cast(Path, cur.retain), self.nb
         wd = d / "weights"
         wd.mkdir(mode=0o700, parents=True, exist_ok=True)
         last = write_behind(((d / "leaves", self.leaves[:nb * count], True), (d / "tree_t", tree, True)), cur.writes)
@@ -360,8 +361,8 @@ class PassEnds(_RunState):
                 **session_head(self.commits), "cubin_sha256": self.kernel.cubin_sha256,
                 "kernel_source_sha256": self.kernel.source_sha256, "kernel_files": dict(self.kernel.files),
                 "schedule": copy.deepcopy(self.details["schedule"]),
-                "records_root": None, "commitment": {"root": root.hex(), "count": count}, "hm96_salt_key": self.salt_key.hex(),
-                "leaves": last[0], "tree_t": last[1]}
+                "records_root": None, "commitment": {"root": root.hex(), "count": count},
+                "hm96_salt_key": cast(bytes, self.salt_key).hex(), "leaves": last[0], "tree_t": last[1]}
         splits = {w: PW.Split(self.weights[w].k) for w in epoch.workload.weights()}
 
         def complete() -> None:
