@@ -162,7 +162,7 @@ theorem laterCoins_holo {st : Flock.Stmt} {hp : HoloParams} {Cm : Type}
 
 section src
 
-variable {nT : ℕ} {T : Fin nT → Type} {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : Law n}
+variable {nT : ℕ} {T : Fin nT → Type} {st : Flock.Stmt} {hp : HoloParams} {n : ℕ} {L : SamplingDesign n}
   {Reg Cm Reg' Reg₂ : Type} {S : ℕ} {stmt : Fin S → VStar.Stmt} {Vs : Fin S → VStmt}
 
 local notation "ℐ" => holoInnerAt T (holoCTs st hp) st hp

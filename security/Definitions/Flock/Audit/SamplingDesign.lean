@@ -11,7 +11,7 @@ import Mathlib.Basic.ENNReal.Real
 /-!
 # Sampling designs
 
-A sampling design is the verifier's coin space `Ω`, uniform, and the set of units each coin samples, core's `Verity.Law`
+A sampling design is the verifier's coin space `Ω`, uniform, and the set of units each coin samples, core's `Verity.SamplingDesign`
 (`Definitions.Core.Draw`) over `Fin n`. What a sampling design gives a consumer is its escape function: the probability that a sample
 misses a set `B` of units.
 
@@ -26,7 +26,7 @@ misses a set `B` of units.
 `C(n - |B|, k) / C(n, k)` (`subset_escape`), so its count curve is `C(n - K, k) / C(n, k)`
 (`subset_miss`).
 
-The lemmas named here are `Proofs/Flock/Soundness/Audit/Law.lean`'s.
+The lemmas named here are `Proofs/Flock/Soundness/Audit/SamplingDesign.lean`'s.
 -/
 
 @[expose] public section
@@ -37,16 +37,16 @@ open Game
 open scoped ENNReal
 
 /-- A sampling design over `n` units: core's sampling design over `Fin n`. -/
-abbrev Law (n : ℕ) : Type 1 := Verity.Law (Fin n)
+abbrev SamplingDesign (n : ℕ) : Type 1 := Verity.SamplingDesign (Fin n)
 
-namespace Law
+namespace SamplingDesign
 
 variable {n : ℕ}
 
 /-! ## The uniform `k`-subset -/
 
 /-- The uniform `k`-subset of `n` units. -/
-def subset (n k : ℕ) (hk : k ≤ n) : Law n where
+def subset (n k : ℕ) (hk : k ≤ n) : SamplingDesign n where
   Ω := {S : Finset (Fin n) // S.card = k}
   nonempty := by
     obtain ⟨S, -, hS⟩ := Finset.exists_subset_card_eq (s := (Finset.univ : Finset (Fin n)))
@@ -57,12 +57,12 @@ def subset (n k : ℕ) (hk : k ≤ n) : Law n where
 /-! ## Bernoulli samples -/
 
 /-- Each unit sampled independently with probability `num / den`. -/
-abbrev bernoulli (n num den : ℕ) [NeZero den] : Law n where
+abbrev bernoulli (n num den : ℕ) [NeZero den] : SamplingDesign n where
   Ω := Fin n → Fin den
   draw ω := Finset.univ.filter fun u => (ω u).val < num
 
 /-- Each unit `u` sampled independently with probability `num u / den`. -/
-abbrev bernoulliOf (num : Fin n → ℕ) (den : ℕ) [NeZero den] : Law n where
+abbrev bernoulliOf (num : Fin n → ℕ) (den : ℕ) [NeZero den] : SamplingDesign n where
   Ω := Fin n → Fin den
   draw ω := Finset.univ.filter fun u => (ω u).val < num u
 
@@ -80,6 +80,6 @@ inequality at a mean of `k` gives `C(n - k, K)`, which is the uniform `k`-subset
 /-- The drop of `s ↦ C(n - s, K)` at `s`. -/
 def drop (n K s : ℕ) : ℕ := (n - s).choose K - (n - (s + 1)).choose K
 
-end Law
+end SamplingDesign
 
 end FlockSoundness.Audit

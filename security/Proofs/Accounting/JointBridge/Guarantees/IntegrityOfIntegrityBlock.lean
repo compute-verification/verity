@@ -53,7 +53,7 @@ open scoped ENNReal
 the server's monitoring period of sessions `S` with carried leaves (`Flock.Guarantees.CarriedBlocks`), each session a
 sampling block `S.W t`. Every field is a property of the deployed run:
 
-* `strat`, `record`, `law`: the node is one prover strategy of the monitoring period's game at each value of the other
+* `strat`, `record`, `samplingDesign`: the node is one prover strategy of the monitoring period's game at each value of the other
   coins
   (every other audit's, and every other server-time block's), and the period's sampled audit's own coins
   (`r.own .sampled`), sampled uniformly, drive that game as far as block `b`'s sampling blocks go: every event of their
@@ -82,7 +82,7 @@ structure RealizesIntegrityOfIntegrityBlock {ι : Type} {d : Device ι} {α : Ty
   record : ((i : I) → Ω i) → List Flock.Guarantees.WindowRec
   /-- the period's sampled audit's own coins drive the monitoring period's game at the strategy, on block `b`'s
   sampling blocks -/
-  law : ∀ (ξ : (i : I) → Ω i) (E : List Flock.Guarantees.WindowRec → Prop),
+  samplingDesign : ∀ (ξ : (i : I) → Ω i) (E : List Flock.Guarantees.WindowRec → Prop),
     ENNReal.ofReal (Pouw.pr fun x : Ω (r.own .sampled) => E (record (Function.update ξ (r.own .sampled) x))) =
       FlockSoundness.Game.value (fun l => E (l.filter fun w => w.idx ∈ S.sessions b)) (S.run (strat ξ))
   /-- the sampled audit accepts exactly when verity-verify-proof accepts every sampling block of the server-time block -/

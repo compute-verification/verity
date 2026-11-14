@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Sampling.Select.SecondCount
-public import Proofs.Flock.Soundness.Discharge.Exec.LawSample
+public import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignSample
 import Spot.Draw
 import Proofs.Core.QSort
 import Proofs.Flock.Claims.Sampling.Select.Take

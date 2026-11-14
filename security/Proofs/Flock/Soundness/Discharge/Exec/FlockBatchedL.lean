@@ -68,7 +68,7 @@ theorem prob_batchedSessionL (S : Finset (Fin n)) (R : Reg)
   funext outs
   exact propext decide_eq_true_iff
 
-variable {L : Law n}
+variable {L : SamplingDesign n}
 
 /-- **The batched audit's analysis.** `X` is the committed transcript (the link theorem defines it),
 `decode` reads each sampled proof block from its table's witness, `Kr` is the extractor's rerun count. -/

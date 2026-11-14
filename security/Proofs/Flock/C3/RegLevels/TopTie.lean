@@ -79,7 +79,7 @@ theorem capAt_size {sch : Flock.Schedule} {cap : Array ByteArray} {lig : Flock.L
 section Session
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+  {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **The registered `out` row's bits are `top`'s**: `hT_of_root`'s conclusion where `out`'s row bytes are `top`'s
 row's (`rowInV (capRow top)`). -/

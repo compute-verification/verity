@@ -121,7 +121,7 @@ open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink 
 open scoped ENNReal
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
-variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type}
 
 /-- **Two of V*'s sessions clash at a history**: at the history `(R, ω, t)` and registration `R₂`, the registrant
 records of some sessions `j`, `j'` clash (`ReadsX.Clash`). -/
@@ -237,7 +237,7 @@ theorem outerV_le_out
       Q R₂ o fun j => (zs R₂ j).layer dg N k Rw (τ j))
     (s : Strategy (outerV zs dg N)) :
     prob (fun o => AcceptsV zs o ∧ ¬ Q o.1 (fun j => (o.2 j).2) (layers (zs o.1) dg N k Rw o.2)) (outerV zs dg N) s ≤
-      sumV zs dg N (fun R₂ j τ => (zs R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s := by
+      sumV zs dg N (fun R₂ j τ => (zs R₂ j).boundIf dg N (Vs j).samplingDesign.model k Rw M ρ t' qF qS qW qR τ) s := by
   rw [prob_outerV]
   exact sessions_le_out (zs s.1) dg N hk hRw hM hρ (hr s.1) ht' qF qS qW qR (Q s.1) (hQ s.1) (sessOf zs dg N s)
 
@@ -254,7 +254,7 @@ theorem outerV_le_dep
       Q R₂ fun j => (zs R₂ j).layer dg N k Rw (τ j))
     (s : Strategy (outerV zs dg N)) :
     prob (fun o => AcceptsV zs o ∧ ¬ Q o.1 (layers (zs o.1) dg N k Rw o.2)) (outerV zs dg N) s ≤
-      sumV zs dg N (fun R₂ j τ => (zs R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s := by
+      sumV zs dg N (fun R₂ j τ => (zs R₂ j).boundIf dg N (Vs j).samplingDesign.model k Rw M ρ t' qF qS qW qR τ) s := by
   rw [prob_outerV]
   exact sessions_le (zs s.1) dg N hk hRw hM hρ (hr s.1) ht' qF qS qW qR (Q s.1) (hQ s.1) (sessOf zs dg N s)
 
@@ -299,14 +299,14 @@ theorem zk_sessions_recursive_upto_off
     prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
         (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
       expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) + εX +
+          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).samplingDesign.model k Rw M ρ t' qF qS qW qR τ) s) + εX +
         ∑ i ∈ Finset.range I.r,
           (expAt σ (εtr i σ.1) + (∑ pos, κ i pos) * ENNReal.ofReal (Real.sqrt (q i ^ 2 / 2 ^ (513 : ℝ)))) + εin := by
   have h := recursive_sound_upto ob σ (fun R ω t o => AcceptsV (zs R ω t) o) x
     (W := ((j : Fin S) → (Vs j).Bits) × I.Stmt) (fun R ω t _ o => (layers (zs R ω t o.1) dg N k Rw o.2, x R ω))
     Prod.snd (fun w => wmsg w.1) same hsame cmt msg T εtr κ q
     (εo := expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-      (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) + εX) (εP := 0)
+      (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).samplingDesign.model k Rw M ρ t' qF qS qW qR τ) s) + εX) (εP := 0)
     ?_ ?_ htr hCR hin
   · rwa [add_zero] at h
   · have hsplit : ∀ ω t (s : Strategy (outerV (zs σ.1 ω t) dg N)),
@@ -314,7 +314,7 @@ theorem zk_sessions_recursive_upto_off
             ¬ I.accepts (x σ.1 ω) ((wmsg (layers (zs σ.1 ω t b.1) dg N k Rw b.2)).zip (t.map Prod.snd)))
           (outerV (zs σ.1 ω t) dg N) s ≤
         sumV (zs σ.1 ω t) dg N
-            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s +
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).samplingDesign.model k Rw M ρ t' qF qS qW qR τ) s +
           prob (fun b => Bad σ.1 ω t b.1) (outerV (zs σ.1 ω t) dg N) s := by
       intro ω t s
       refine (prob_mono (q := fun b : Reg₂ × VRec Vs Reg' dg N => (AcceptsV (zs σ.1 ω t) b ∧
@@ -330,7 +330,7 @@ theorem zk_sessions_recursive_upto_off
           (fun R₂ τ o hout h =>
             (Classical.em (Bad σ.1 ω t R₂)).elim Or.inl fun hb => Or.inr (hbr σ.1 ω t R₂ hb τ o hout h)) s
     refine le_trans (b := expAt σ fun ω t s => sumV (zs σ.1 ω t) dg N
-        (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s +
+        (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).samplingDesign.model k Rw M ρ t' qF qS qW qR τ) s +
           prob (fun b => Bad σ.1 ω t b.1) (outerV (zs σ.1 ω t) dg N) s)
       (avg_mono fun ω => leafAvg_mono (fun t s => hsplit ω t _) _) ?_
     exact (expAt_add σ _ _).trans_le (add_le_add le_rfl ((prob_recGame _ σ).symm.le.trans hX))
@@ -365,7 +365,7 @@ theorem zk_sessions_recursive_read_off
     prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
         (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
       expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
+          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).samplingDesign.model k Rw M ρ t' qF qS qW qR τ) s) +
         ENNReal.ofReal (qX ^ 2 / 2 ^ (513 : ℝ)) +
         ∑ i ∈ Finset.range I.r,
           (expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
@@ -410,7 +410,7 @@ theorem zk_sessions_recursive_fork_read_off
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
           (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
         expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).samplingDesign.model k Rw M ρ τ) s) +
           (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin := by
   by_cases h0 : (regFinder zs dg N σ).Finds H512
@@ -422,9 +422,9 @@ theorem zk_sessions_recursive_fork_read_off
   refine Or.inr (Or.inr (Or.inr ?_))
   have hno := allAt_of_not_exAt h2
   have hB : expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-        (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ 0 0 0 0 0 τ) s) ≤
+        (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).samplingDesign.model k Rw M ρ 0 0 0 0 0 τ) s) ≤
       expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-        (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) := by
+        (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).samplingDesign.model k Rw M ρ τ) s) := by
     refine expAt_mono_all (hno.mono fun ω t s hs => ?_)
     unfold sumV sumS
     exact exG_mono_outcome _ _ fun rs hrs => Finset.sum_le_sum fun j _ =>
