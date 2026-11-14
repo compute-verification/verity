@@ -115,14 +115,20 @@ the form), and the record it decodes to names, by its SHA-512, the program the n
 (`Properties.Spot.R2`): in the one-stage form, the program of one-stage v2's own verifier (the v1 part of its
 params, `Spot.OneStageZk.Params.base`); in the recursive form, the program of the inner statement's verifier
 (`VStar.Recursive.Params.base`), the statement whose one verdict of record V*'s compiled check computes and whose
-soundness the recursive audit (`RecursiveAuditC3`) states. -/
+soundness the recursive audit (`RecursiveAuditC3`) states. In either form the record keeps the caller's facts against
+that verifier (`Properties.Spot.CallerHeld`): it names its day's declared program, its window names the stream, the
+prover, the seed salt and the pool's reset the verifier holds, and it opens the pool the previous window of record
+left. SPOT's own statement (`Properties.Spot.AcceptMeans`) holds none of them: they are what SPOT's caller hands the
+verifier, so they are stated here, of the case the caller's check accepted. -/
 def StageHeld (k : Case) : Prop :=
   (∃ (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitment),
     (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inl p) ∧
-    Spot.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.Spot.R2 c.record p.base.verifier) ∨
+    Spot.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.Spot.R2 c.record p.base.verifier ∧
+    Properties.Spot.CallerHeld c.record p.base.verifier) ∨
   (∃ (q : VStar.Recursive.Params) (c : Spot.OneStage.Commitment),
     (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inr q) ∧
-    Spot.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.Spot.R2 c.record q.base.verifier)
+    Spot.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.Spot.R2 c.record q.base.verifier ∧
+    Properties.Spot.CallerHeld c.record q.base.verifier)
 
 /-- What remote's acceptance establishes about its cases `ev`: they are the three subprotocols' cases in order, the
 policy's `kI`, PoUW's period's `kW` and sampled proofs' `kS`; the policy's and sampled proofs' commitments decode,
@@ -135,7 +141,7 @@ registered circuit by its SHA-512, θ holds what the log's first record register
 declaration the registered circuit lays out and a division, every parse carries the policy's `program`, `Γ` and `α`,
 and every declaration the registered circuit lays out, with the declared division, meets the policy; and sampled
 proofs' case is `StageHeld`: its record names, by its SHA-512, the program its named form verifies the sessions
-against. -/
+against, and keeps the caller's facts against that form's verifier. -/
 def InferenceOnlyHeld (ev : List Case) : Prop :=
   ∃ (kI kW kS : Case) (r : ByteArray), ev = [kI, kW, kS] ∧
     Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment = some r ∧

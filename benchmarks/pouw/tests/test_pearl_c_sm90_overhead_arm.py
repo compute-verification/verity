@@ -78,9 +78,83 @@ def test_the_build_record_lists_the_sent_cubin_and_declares_the_verifier(tmp_pat
     v = A.check_verifier(arm.name, rec)
     assert v["per"] == "shape" and v["transcript"] == "transcripts/{arm}/{shape}/manifest.json"
     assert v["control"] == "negative/{arm}/{shape}/manifest.json"
-    [cmd] = v["commands"]
-    assert cmd[:2] == ["{python}", "benchmarks/pouw/pearl_c_vllm/verify_run.py"] and (ROOT / cmd[1]).is_file()
-    assert cmd[2:] == ["{transcript}", "--coins", "{dir}/coins.json", "--commit", "{commit}"]
+    twin, lean = v["commands"]
+    assert twin[:3] == ["{python}", "benchmarks/pouw/pearl_c_vllm/served_passes.py", "verify"] and (ROOT / twin[1]).is_file()
+    assert twin[3:] == ["--passes", "{dir}", "--manifest", "{transcript}", "--coin-record", "{dir}/coin.json",
+                        "--out", "{dir}/pearlplus-verify.json", "--draws", "3", "--commit", "{commit}"]
+    assert lean == ["{python}", twin[1], "lean", "--passes", "{dir}", "--manifest", "{transcript}",
+                    "--verify", "{dir}/pearlplus-verify.json", "--exe", "build", "--out", "{dir}/pearlplus-lean.json"]
+
+
+@pytest.mark.slow
+def test_the_arms_declared_verdict_is_the_leans(tmp_path, monkeypatch, capsys):
+    """The declaration's commands on an honest retained pass and on a no-write control the twin rejects (each
+    `test_pearl_c_vllm.proved_pass`'s, a test instance's, so the twin is given ``--test-instance``), with a stand-in
+    ``pouw-pearlplus`` for ``--exe build``, read as the harness reads them (`verify.judge`, `verify.judge_control`): the
+    twin's own line is no verdict; the transcript is accepted on the Lean step's ACCEPT alone, and not where the Lean
+    disagrees with the twin or answers nothing; the control is rejected on the Lean's REJECT alone."""
+    import stat
+
+    from verity.protocols.accounting.pouw.verifier import verifier as PV
+
+    V = _load("pouw_harness_verify", POUW / "harness" / "verify.py")
+    T = sys.modules.get("test_pearl_c_vllm") or _load("test_pearl_c_vllm", POUW / "tests" / "test_pearl_c_vllm.py")
+    SP = T.load("pearl_c_vllm_served_passes", ROOT / OA.SERVED_PASSES)
+    monkeypatch.setattr(PV, "coins", lambda n: (b"verifier" * 8)[:n])
+    for k in ("PEARLC_CHALLENGER_GATE", "PEARLC_CHALLENGER_PEER"):
+        monkeypatch.delenv(k, raising=False)
+    honest = T.proved_pass(tmp_path / "transcripts", OA.SERVED)[0]
+    control = T.proved_pass(tmp_path / "negative", OA.SERVED)[0]
+    rows = control.parent / json.loads(control.read_text())["weights"]["0"]["rows"]["path"]
+    rows.write_bytes(bytes(b ^ 1 for b in rows.read_bytes()))
+
+    def run(cmd: list[str], *more: str) -> dict:
+        """One declared command, as served_passes.py's own main runs it: its exit and its lines."""
+        assert cmd[:2] == [sys.executable, OA.SERVED_PASSES]
+        capsys.readouterr()
+        rc = SP.main([*cmd[2:], *more])
+        return {"exit": rc, "lines": capsys.readouterr().out.splitlines()}
+
+    def lean(cmd: list[str], said: dict | str, rc: int) -> dict:
+        """The Lean step with a ``pouw-pearlplus`` that prints `said` and exits `rc` for ``--exe build``."""
+        (tmp_path / "said").write_text(said if isinstance(said, str) else json.dumps(said) + "\n")
+        exe = tmp_path / "pouw-pearlplus"
+        exe.write_text(f'#!/bin/sh\ncat "{tmp_path / "said"}"\nexit {rc}\n')
+        exe.chmod(exe.stat().st_mode | stat.S_IXUSR)
+        at = cmd.index("--exe") + 1
+        return run([*cmd[:at], str(exe), *cmd[at + 1:]])
+
+    def printout(doc: dict, **kw) -> dict:
+        return {**SP.python_answer(doc), "drawn": doc["draws"], **kw}
+
+    values = {"python": sys.executable, "commit": "0" * 7}
+    twin_cmd, lean_cmd = ([V.fill(x, values | {"transcript": str(honest), "dir": str(honest.parent)}) for x in c]
+                          for c in OA.verifier()["commands"])
+    twin = run(twin_cmd, "--test-instance")
+    doc = json.loads((honest.parent / "pearlplus-verify.json").read_text())
+    assert twin["exit"] == 0 and doc["answer"]["verdict"] == "accept", twin["lines"]
+    assert V.judge(honest, [twin], "shape")["why"] == f"no line starting ACCEPT names sha256:{V.sha256_file(honest)}"
+    agreed = lean(lean_cmd, printout(doc), 0)
+    got = V.judge(honest, [twin, agreed], "shape")
+    assert got["accepted"] and got["accept_line"] == agreed["lines"][-1] and got["accept_line"].startswith("ACCEPT ")
+    work = doc["answer"]["public"]["work"]
+    for said, rc in ((printout(doc, work={**work, "credited": work["credited"] + 1}), 0), ("", 0)):
+        refused = lean(lean_cmd, said, rc)
+        assert refused["exit"] == 2 and refused["lines"][-1].startswith("lean REFUSED: ")
+        assert V.judge(honest, [twin, refused], "shape") == {"sha256": V.sha256_file(honest), "exits": [0, 2],
+                                                             "accepted": False, "why": "a verifier command exited [0, 2]"}
+
+    twin_cmd, lean_cmd = ([V.fill(x, values | {"transcript": str(control), "dir": str(control.parent)}) for x in c]
+                          for c in OA.verifier()["commands"])
+    twin = run(twin_cmd, "--test-instance")
+    doc = json.loads((control.parent / "pearlplus-verify.json").read_text())
+    assert twin["exit"] == 1 and doc["answer"]["verdict"] == "reject", twin["lines"]
+    assert not V.judge_control(control, [twin])["rejected"]
+    agreed = lean(lean_cmd, printout(doc), 1)
+    assert V.judge_control(control, [twin, agreed])["reject_line"] == agreed["lines"][-1]
+    assert agreed["lines"][-1].startswith("REJECT ")
+    refused = lean(lean_cmd, "", 1)
+    assert not V.judge_control(control, [twin, refused])["rejected"]
 
 
 def test_the_cubin_of_record_is_one_art_by_its_bytes():

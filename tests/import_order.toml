@@ -26,6 +26,7 @@ order = [
     ["verity/protocols/proofs/spot"],
     ["verity/protocols/proofs/flock"],
     ["verity/protocols/proofs/recursion"],
+    ["verity/protocols/proofs/spot_flock"],
     ["verity/protocols/accounting/registration"],
     ["verity/protocols/accounting/pous"],
     ["verity/protocols/accounting/poub"],
@@ -325,7 +326,6 @@ loaded_by = [
     "verity/hardware/tests/test_cards.py",
     "verity/hardware/tests/test_lean.py",
     "verity/hardware/tests/test_nodes.py",
-    "verity/hardware/tests/test_policy.py",
 ]
 
 [[place]]
