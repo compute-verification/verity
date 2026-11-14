@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """The remote demo's minutes from its first command to its verdict, read off its finished runs' records: the metric
-``vllm/remote-demo-minutes`` (`demos/vllm/metrics.toml`). Standard library only; the onsite demo's reader
-(`demos/onsite_served/minutes.py`) is this one with its own verdict.
+``vllm/remote-demo-minutes`` (`benchmarks/demo_minutes/metrics.toml`). Standard library only; the onsite demo's reader
+(`benchmarks/demo_minutes/onsite_minutes.py`) is this one with its own verdict.
 
-    research run --cwd source -- python3 demos/vllm/minutes.py FIRST_RUN [RUN ...] VERDICT_RUN [--runs-dir DIR] [--main REF]
+    research run --cwd source -- python3 benchmarks/demo_minutes/minutes.py FIRST_RUN [RUN ...] VERDICT_RUN
+        [--runs-dir DIR] [--main REF]
 
-The arguments are the demo's research runs in the order it ran them: the first is `verity demo vllm`'s, the last the one
+The arguments are the demo's research runs in the order it ran them: the first is the vLLM served run's
+(`adapters/vllm/tools/served_run/run.sh`), the last the one
 that composed remote's verdict on the auditor's machine (``served_verdicts.sh compose``). Each is a run id under
 ``--runs-dir`` (default ``$RESEARCH_RUNS``, else ``~/.research/runs``), where ``research fetch RUN --all`` copies a run's
 records and its ``out/``, or a run directory. The minutes run from the first run's ``started_utc`` to the last's
@@ -132,7 +134,7 @@ def result(run_id: str, runs: list[str], m: dict | None, why: Refused | None, me
 
 
 def main(argv: list[str] | None = None, *, read: Callable[[Path], str] = verdict, metric: str = METRIC,
-         checker: str = "demos/vllm/minutes.py", nargs: str | int = "+", doc: str = __doc__) -> int:
+         checker: str = "benchmarks/demo_minutes/minutes.py", nargs: str | int = "+", doc: str = __doc__) -> int:
     ap = argparse.ArgumentParser(description=doc.split("\n\n")[0])
     ap.add_argument("runs", nargs=nargs, metavar="RUN", help="the demo's runs, first to last (module docstring)")
     ap.add_argument("--runs-dir", type=Path, default=settings.runs_root())

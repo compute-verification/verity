@@ -31,12 +31,18 @@ def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
         return False
 
 
+def lms_answer(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
+    """The Lean's LMS verify (`verity/commitments/lms`) of a served or gate session's signature at the key's (64, W, H),
+    held to `lms_verify`'s, which `main` is to hand `verifier.main` in its place."""
+    raise NotImplementedError("memory-accounting/lean-decides-memory-verdicts")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     return verifier.main(argv, figures=timing.RTX_PRO_6000_NODE, verify=lms_verify,
                          serve=(sys.executable, str(SERVE)))
 
 
-__all__ = ["lms_verify", "main"]
+__all__ = ["lms_answer", "lms_verify", "main"]
 
 if __name__ == "__main__":
     sys.exit(main())
