@@ -3206,6 +3206,12 @@
     },
     {
       "paths": {
+        "verity/protocols/accounting/pouw/prover/kernels/served_zk/replay_core.py": "benchmarks/pouw/served_zk/replay_core.py",
+        "verity/protocols/accounting/pouw/prover/kernels/served_zk/replay_window.py": "benchmarks/pouw/served_zk/replay_window.py"
+      }
+    },
+    {
+      "paths": {
         "verity/protocols/proofs/spot/prover/tests/test_kept_scan.py": "benchmarks/network_traces/tests/test_kept_scan.py"
       }
     }
