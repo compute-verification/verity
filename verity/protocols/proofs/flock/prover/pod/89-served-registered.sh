@@ -18,7 +18,8 @@
 # vectors.json's live set).
 # Pins its own slices where it can take slice locks (node 1); on a vy-cpu pod, run it in a check slot (--pool), which pins it.
 # env: CPUS=16  K=16 (the sample's units, of the stage's 32)  ZK=1  DRAW_COINS=FILE (ZK=0's)  SCHEMA=v1 (the tree's row
-#      format: v1, v2 or seg, served_registered.py's --schema)  FLOCK_WORK=/workspace, or where /workspace isn't writable
+#      format: v1, v2 or seg, served_registered.py's --schema)  SPARSE=1 (served_registered.py's --sparse: the `cs` table
+#      the whole tree, its header entry naming the rows the instances read)  FLOCK_WORK=/workspace, or where /workspace isn't writable
 #      /workspace/jobs/pc-read-gadget (node 1, shared as 76-read-gadget.sh's) else /workspace/cache/served-registered (the
 #      prover build and its venv)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -86,7 +87,7 @@ export PATH=$W/py/bin:$PATH PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$
 
 D=$S/stage; N=32; K=${K:-16}
 if [ "${ZK:-1}" = 0 ]; then ZF=(); else ZF=(--zk); fi
-python3 verity/protocols/proofs/flock/prover/tests/served_registered.py --out $D --schema ${SCHEMA:-v1} > $O/stage.json 2> $O/stage.err || { tail -20 $O/stage.err; exit 1; }
+python3 verity/protocols/proofs/flock/prover/tests/served_registered.py --out $D --schema ${SCHEMA:-v1} $([ "${SPARSE:-0}" = 1 ] && echo --sparse) > $O/stage.json 2> $O/stage.err || { tail -20 $O/stage.err; exit 1; }
 PIN=$(sha512sum $D/circuit.txt | cut -d' ' -f1)
 $B statement "${ZF[@]}" --circuit $D/circuit.txt --instances $D/pub-$N.bin --tables $D/tables > $O/statement.txt 2>&1
 if [ "${ZK:-1}" = 0 ]; then

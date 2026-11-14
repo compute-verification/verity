@@ -21,7 +21,11 @@ The program (`program`) is `N` RoPE d64 template instances, instance `i` reading
 input rows are bit rows of their words (`compose`'s `port_bits`), `cs` a `row/v2` or a segmented `row-seg/v1` row, and
 the tree is committed in that format.
 
-    python verity/protocols/proofs/flock/prover/tests/served_registered.py --out DIR [--seed S] [--schema v1|v2|seg]
+`--sparse`: the `cs` table is the whole tree (row `r` at position `r`, as a shared table is), of which the instances read
+`N` of its `ROWS` rows, and its header entry names those rows (`table_rows`, `verity_flock.circuit.TABLE_ROWS`), giving a
+position and a path for them alone.
+
+    python verity/protocols/proofs/flock/prover/tests/served_registered.py --out DIR [--seed S] [--schema v1|v2|seg] [--sparse]
 """
 from __future__ import annotations
 
@@ -71,7 +75,7 @@ def program() -> tuple[Program, dict]:
             P.template_instance_query(template))
 
 
-def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA) -> dict:
+def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA, sparse: bool = False) -> dict:
     from verity_flock import circuit as FC
     from verity_flock import subcircuit_templates as TM
     from synthetic_sets import synthetic_set
@@ -100,8 +104,12 @@ def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA) -> dict:
     for i, p in enumerate(POS):
         table[p] = cs[i]
     reg = G.Registered.commit(P.program_digest(prog), VALUE, table.tolist(), schema=schema)
-    positions, refs = G.table(POS)
+    positions, refs = (list(range(ROWS)), list(POS)) if sparse else G.table(POS)
     rows, salts, entry = reg.statement(positions)
+    if sparse:
+        read = sorted(set(refs))
+        entry = {"value": entry["value"], FC.TABLE_ROWS: read, "positions": [entry["positions"][r] for r in read],
+                 "paths": [entry["paths"][r] for r in read]}
     bit_rows = G.SCHEMA if schema == G.SCHEMA else G.SCHEMA_V2
     reg_x = G.Registered.commit(P.program_digest(prog), "x", x.tolist(), schema=bit_rows)
     x_rows, x_salts, x_entry = reg_x.statement(range(N))
@@ -147,8 +155,9 @@ def main(argv=None) -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--seed", type=int, default=SEED)
     ap.add_argument("--schema", choices=sorted(FORMATS), default="v1")
+    ap.add_argument("--sparse", action="store_true")
     a = ap.parse_args(argv)
-    print(json.dumps(stage(Path(a.out), a.seed, FORMATS[a.schema])))
+    print(json.dumps(stage(Path(a.out), a.seed, FORMATS[a.schema], a.sparse)))
     return 0
 
 
