@@ -6,8 +6,6 @@ from __future__ import annotations
 
 import re
 
-from verity.device import load_card, number
-
 #: what `bench.py`, `characterize.py`, `native.py` and the tests read
 __all__ = ["IdentityError", "check", "check_card", "expected_for", "parse_server_md", "resolve_gpu", "uuid_string"]
 
@@ -85,18 +83,21 @@ def check(env: dict[str, str], gpu: int, device_count: int, uuid: str, expected_
             "cuda_visible_devices": cvd, "cuda_device_order": env["CUDA_DEVICE_ORDER"]}
 
 
-#: what the card must be (the pods' bootstrap check), by its name within the device's: an RTX PRO 6000 Blackwell, sm_120 with
-#: `rtx-pro-6000-server`'s `sm.count` SMs, driver 575 or later; or an H200 (`verity bench overhead`'s card), sm_90 with
-#: `h200-sxm-141gb`'s `sm.count` SMs, driver 550 or later
-CARDS = {"RTX PRO 6000": ("12.0", int(number(load_card("rtx-pro-6000-server")["sm"]["count"])), 575, "sm_120a"),
-         "H200": ("9.0", int(number(load_card("h200-sxm-141gb")["sm"]["count"])), 550, "sm_90a")}
+#: what the card must be (the pods' bootstrap check), by its name within the device's: its compute capability, its card
+#: file (hardware/cards/), whose `sm.count` is the SMs it must have, its oldest driver and its build target. An RTX PRO
+#: 6000 Blackwell, sm_120, driver 575 or later; or an H200 (`verity bench overhead`'s card), sm_90, driver 550 or later
+CARDS = {"RTX PRO 6000": ("12.0", "rtx-pro-6000-server", 575, "sm_120a"),
+         "H200": ("9.0", "h200-sxm-141gb", 550, "sm_90a")}
 
 
 def check_card(name: str, capability: str, sms: int, driver: str) -> dict:
     known = next((c for c in CARDS if c in name), None)
     if known is None:
         raise IdentityError(f"not the card: name {name!r} is none of {', '.join(map(repr, CARDS))}")
-    want_capability, want_sms, min_driver, arch = CARDS[known]
+    from verity.device import load_card, number  # here: loading the harness needs the standard library alone
+
+    want_capability, sku, min_driver, arch = CARDS[known]
+    want_sms = int(number(load_card(sku)["sm"]["count"]))
     problems = []
     if capability != want_capability:
         problems.append(f"compute capability {capability}, not {want_capability}")
