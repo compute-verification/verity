@@ -388,10 +388,8 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
         declared = set(pats) | allow
         residue = []
         seen_declared: set[str] = set()
-        claims_by_kernel: dict[str, list[str]] = {}
         for name, d in cs["kernels"].items():
             cl = claims_for(name, declared)
-            claims_by_kernel[name] = cl
             seen_declared.update(cl)
             row = kernel_rows.setdefault(name, {"counts": {}, "us": {}, "claims": set(), "patterns": set(), "grid": d.get("grid"),
                                                 "block": d.get("block"), "cat": d.get("cat")})
@@ -478,9 +476,10 @@ def reconciliation_markdown(rep: dict) -> str:
     L: list[str] = []
     L.append(f"# Kernel census × resolution: `{Path(rep['log']).name}` × profile `{rep['profile']}`")
     L.append("")
+    gpu = rep["census"]["versions"].get("gpu")
     L.append(f"- reconciled {rep['utc']}; census taken {rep['census']['utc']} (torch {rep['census']['versions'].get('torch')}, "
              f"triton {rep['census']['versions'].get('triton')}, vLLM {rep['census']['versions'].get('vllm')}, GPU "
-             f"{(rep['census']['versions'].get('gpu') or {}).get('name') if isinstance(rep['census']['versions'].get('gpu'), dict) else rep['census']['versions'].get('gpu')})")
+             f"{gpu.get('name') if isinstance(gpu, dict) else gpu})")
     L.append(f"- method: {rep['census']['method']}")
     t = rep["totals"]
     L.append(f"- census: {rep['census_steps']} steps with device work ({rep['census']['engine_steps']} engine steps), "
@@ -548,8 +547,8 @@ def reconciliation_markdown(rep: dict) -> str:
                 c = s["counts"].get(k)
                 cells.append(f"{c['census_kernels']}/{c['declaring_events']}/{c['declaring_parts']}" if c else "-")
             rest = sorted({s["counts"][k]["census_kernels"] for s in steps[2:] if k in s["counts"]})
-            pats = sorted({p for s in steps for p in (s["counts"].get(k) or {}).get("patterns", [])})
-            L.append(f"| `{k}` | " + " | ".join(cells) + f" | {rest} | {', '.join(f'`{p}`' for p in pats)} |")
+            patterns = sorted({p for s in steps if k in s["counts"] for p in s["counts"][k]["patterns"]})
+            L.append(f"| `{k}` | " + " | ".join(cells) + f" | {rest} | {', '.join(f'`{p}`' for p in patterns)} |")
         L.append("")
     if rep["ambiguous"]:
         L.append("## Ambiguous compute claims")
