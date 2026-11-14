@@ -3,6 +3,7 @@ module
 public import Properties.Accounting.Registration.Code
 public import Proofs.Properties.Core.Site
 public import Proofs.Accounting.Registration.Sound
+public import Proofs.Flock.Bytes
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 import all Init.Data.Ord.String
@@ -385,10 +386,6 @@ theorem publishesHeads : PublishesHeads := fun _ _ => rfl
 
 /-! ## A head binds the prefix it heads -/
 
-/-- **A code log is chained**: each entry names the head of the log before it. -/
-def Chained (c : Core.Site.Registration.Composite) (l : Core.Registration.Log) : Prop :=
-  ∀ q e t, q ++ e :: t = l → e.previous = Core.Registration.head c q
-
 theorem head_nil_code (c : Core.Site.Registration.Composite) :
     Core.Registration.head c [] = Core.Registration.genesis c := rfl
 
@@ -511,7 +508,8 @@ theorem search_binds (c : Core.Site.Registration.Composite) :
       exact ⟨he, hh⟩
 
 theorem headBinds : HeadBinds := by
-  intro A A' c l l' s s' hl hl' n n' hh
+  intro A A' c l l' s s' hl hl'
+  refine ⟨check_chained hl, fun n n' hh => ?_⟩
   have h := search_binds c (l.take n).reverse (l'.take n').reverse
   rw [List.reverse_reverse, List.reverse_reverse] at h
   exact h (chained_take (check_chained hl) n) (chained_take (check_chained hl') n') hh
@@ -527,7 +525,7 @@ theorem view_binds {A A' : Core.Site.Registration.Auditor} {c : Core.Site.Regist
     Verity.Registration.view (digests (names B l)) (composite c) (log B (l.take n)) =
         Verity.Registration.view (digests (names B l')) (composite c) (log B (l'.take n')) ∨
       ∃ x, search c (l.take n).reverse (l'.take n').reverse = some x ∧ x.Holds := by
-  have h := headBinds A A' c l l' s s' hl hl' n n' hh
+  have h := (headBinds A A' c l l' s s' hl hl').2 n n' hh
   cases hs : search c (l.take n).reverse (l'.take n').reverse with
   | none =>
     rw [hs] at h
@@ -598,14 +596,24 @@ theorem caps_honestLog : Caps noGatesBuilder honestLog := by
   subst hb
   rfl
 
+open Core.Registration.Example in
+/-- The example site's uplink from its host to its certifier is a boundary link. -/
+theorem example_boundary :
+    (Properties.Site.site ⟨[sheet], locs, links⟩).Boundary
+      (Properties.Site.link { id := "up0", ends := ("node0", "cert0"), β := 100, latency := 1 }) :=
+  (Properties.Site.boundary_site _ _).mpr (by decide +kernel)
+
 theorem checks_honest :
     (Core.Registration.check Core.Registration.Example.auditor .onsite honestLog).toOption.isSome = true ∧
       Verity.Registration.Valid (digests (names noGatesBuilder honestLog))
         (auditor Core.Registration.Example.auditor) (composite .onsite) (log noGatesBuilder honestLog) ∧
-      Caps noGatesBuilder honestLog :=
+      Caps noGatesBuilder honestLog ∧
+      (Properties.Site.site
+          ⟨[Core.Registration.Example.sheet], Core.Registration.Example.locs, Core.Registration.Example.links⟩).Boundary
+        (Properties.Site.link { id := "up0", ends := ("node0", "cert0"), β := 100, latency := 1 }) :=
   ⟨check_honestLog,
     (checks noGatesBuilder Core.Registration.Example.auditor .onsite honestLog caps_honestLog).1.mp check_honestLog,
-    caps_honestLog⟩
+    caps_honestLog, example_boundary⟩
 
 theorem twiceLog_invalid (B : String → Verity.Compiler)
     (E : Verity.Registration.Entry → String) :
@@ -625,5 +633,40 @@ theorem checks_nontrivial :
           (composite .remote) (log noGatesBuilder twiceLog)) := by
   rintro ⟨h, -⟩
   exact twiceLog_invalid noGatesBuilder _ (h.mp rfl)
+
+/-- A SHA-512 digest in hex isn't empty: it has 128 characters. -/
+theorem hexOf_hash_ne (m : ByteArray) : Flock.hexOf (Flock.Sha512.hash m) ≠ "" := by
+  intro he
+  have e := congrArg String.toList he
+  rw [Properties.NetworkRecords.Bytes.hexOf_toList, String.toList_empty] at e
+  have hl : (Flock.Sha512.hash m).data.toList.length = 64 := by
+    rw [Array.length_toList]
+    exact Properties.NetworkCertifier.Bytes.hash_size m
+  obtain ⟨x, hx⟩ := List.exists_mem_of_ne_nil (Flock.Sha512.hash m).data.toList (by intro hn; rw [hn] at hl; cases hl)
+  have := Properties.NetworkRecords.Bytes.hexOf_length x
+  rw [List.flatMap_eq_nil_iff.1 e x hx] at this
+  cases this
+
+theorem genesis_ne_empty (c : Core.Site.Registration.Composite) : Core.Registration.genesis c ≠ "" :=
+  hexOf_hash_ne _
+
+/-- The check accepts the honest log, which is chained. -/
+theorem headBinds_honest :
+    (Core.Registration.check Core.Registration.Example.auditor .onsite honestLog).toOption.isSome = true ∧
+      Chained .onsite honestLog := by
+  refine ⟨check_honestLog, ?_⟩
+  have h := check_honestLog
+  cases hc : Core.Registration.check Core.Registration.Example.auditor .onsite honestLog with
+  | error _ => simp [hc, Except.toOption] at h
+  | ok s => exact check_chained hc
+
+/-- The check that accepts everything accepts a log that isn't chained: its one entry names the empty string, and the
+genesis is a digest. -/
+theorem headBinds_nontrivial :
+    ¬((acceptAllCheck .remote unchainedLog).toOption.isSome = true ∧ Chained .remote unchainedLog ∧
+      ∀ n n' : ℕ, Binds .remote (unchainedLog.take n) (unchainedLog.take n')) := by
+  rintro ⟨-, h, -⟩
+  have e : "" = Core.Registration.genesis .remote := h [] _ [] rfl
+  exact genesis_ne_empty .remote e.symm
 
 end Properties.Registration

@@ -142,12 +142,17 @@ from the heads back finds nothing and they are one, or it finds a pair that coll
 def Binds (c : Core.Site.Registration.Composite) (p p' : Core.Registration.Log) : Prop :=
   Core.Registration.head c p = Core.Registration.head c p' → Resolves (search c p.reverse p'.reverse) p p'
 
-/-- **A head binds the prefix it heads**: two prefixes of logs the check accepts, for the one composite, with one head
-are one prefix, or the search of their entries finds a pair that collides (`Binds`). -/
+/-- **A code log is chained**: each entry names the head of the log before it. -/
+def Chained (c : Core.Site.Registration.Composite) (l : Core.Registration.Log) : Prop :=
+  ∀ q e t, q ++ e :: t = l → e.previous = Core.Registration.head c q
+
+/-- **A head binds the prefix it heads**: a log the check accepts is chained, and two prefixes of logs the check
+accepts, for the one composite, with one head are one prefix, or the search of their entries finds a pair that collides
+(`Binds`). -/
 def HeadBinds : Prop :=
   ∀ (A A' : Core.Site.Registration.Auditor) (c : Core.Site.Registration.Composite) (l l' : Core.Registration.Log)
     (s s' : Core.Registration.State), Core.Registration.check A c l = .ok s → Core.Registration.check A' c l' = .ok s' →
-    ∀ n n' : ℕ, Binds c (l.take n) (l'.take n')
+    Chained c l ∧ ∀ n n' : ℕ, Binds c (l.take n) (l'.take n')
 
 /-! ## The witnesses' instances
 
@@ -196,6 +201,10 @@ def twiceLog : Core.Registration.Log :=
   [.information (Core.Registration.genesis .remote)
     [.theta { value := "weights", root := "root", leaves := 1, words := 1, domain := "domain" },
      .theta { value := "weights", root := "root", leaves := 1, words := 1, domain := "domain" }]]
+
+/-- A log that isn't chained: one information entry naming the empty string, which no genesis is, as its previous
+head. -/
+def unchainedLog : Core.Registration.Log := [.information "" []]
 
 /-- A check that accepts everything: every log, folded unchecked. -/
 def acceptAllCheck (c : Core.Site.Registration.Composite) (l : Core.Registration.Log) :
