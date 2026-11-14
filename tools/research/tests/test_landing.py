@@ -22,7 +22,7 @@ import pytest
 from research import landing, merge, remote
 from research.landing import AFTER_LANDING, AFTER_LANDING_OPTIONAL, SLIM_JUDGED, SLIM_STEPS, Landing, gating
 from research.policy import SCHEMA as POLICY_SCHEMA
-from research.queue import PR, Member
+from research.queue import PR, Member, merge_main
 from test_queue import World, _git
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "research"
@@ -1023,8 +1023,9 @@ def test_the_owner_of_each_unmarked_pr_stacked_on_a_landed_one_hears_once_to_mer
     tip = _main(world)
     state = {"told": []}
     h.d._stacked(state, [Member(1, h1, "lane-1", tip)], tip)
-    assert sorted(h.posts) == [f"@lane-2 queue: #2's base #1 landed in main at {tip[:12]}; merge main into #2",
-                               f"@lane-4 queue: #4's base #1 landed in main at {tip[:12]}; merge main into #4"]
+    assert sorted(h.posts) == [f"@lane-2 queue: #2's base #1 landed in main at {tip[:12]}: {merge_main('#2', gh.prs[2].branch)}",
+                               f"@lane-4 queue: #4's base #1 landed in main at {tip[:12]}: {merge_main('#4', 'cursor/w-4')}"]
+    assert "`python3 tools/move/restack.py cursor/w-4 --main MOVE`, then merge today's `main`" in h.posts[-1]
     assert set(state["told"]) == {"stacked:2<1", "stacked:4<1"}
     h.posts.clear()
     h.d._stacked(state, [Member(1, h1, "lane-1", tip)], tip)
@@ -1054,7 +1055,7 @@ def test_after_members_reach_main_they_are_caught_up_with_their_run_their_stacke
     assert h.after == [(since, {h1: "r1 r2", tip: "r1 r2"})]
     assert swept == [("main", "origin", {"cursor/w-9": 9})]
     assert state["told"] == ["stacked:2<1"]
-    assert h.posts == [f"@lane-2 queue: #2's base #1 landed in main at {tip[:12]}; merge main into #2"]
+    assert h.posts == [f"@lane-2 queue: #2's base #1 landed in main at {tip[:12]}: {merge_main('#2', gh.prs[2].branch)}"]
 
 
 # -- the verdict carry's judgement and a check's auto plan

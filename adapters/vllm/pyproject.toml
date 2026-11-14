@@ -45,7 +45,7 @@ addopts = "-q -p no:cacheprovider"
 # tests/regression (the reference regression; skipped unless VERITY_REGRESSION=1) is run explicitly: `pytest tests/regression -m regression`.
 markers = [
     "slow: takes over about 5 s; deselect with -m 'not slow'",
-    "boolean_sweep: a random Boolean-vs-word sweep; skipped unless VERITY_VLLM_BOOLEAN_SWEEPS=1 (circuit-check's word_view checks the equality on every merge)",
+    "boolean_sweep: a random Boolean-vs-word sweep; skipped unless VERITY_VLLM_BOOLEAN_SWEEPS=1 (circuit-check's word_view checks the equality, off the merge gate)",
     "regression: the v1 reference regression checks (tests/regression); opt in with VERITY_REGRESSION=1",
     "pod: reads > 100 MB or rebuilds for minutes/hours -- run on a pod, never on the laptop",
     "weak: PASS-side only or a rule no reference row exercises (see the check module's docstring)",
@@ -67,7 +67,6 @@ untraced = [
     "tests/lint/test_mypy.py",
     "tests/lint/test_ruff.py",
     "tests/lint/test_ruff_vllm.py",
-    "tests/migrate/test_superseded_quarantine.py",
     "tests/ops/test_epoch_row.py",
     "tests/ops/test_pod_bootstrap.py",
     "tests/ops/test_vllm_env.py",
@@ -160,6 +159,11 @@ worker_gb = 8
 # slot runs it on 2 or 3
 timeout_s = 14400
 timeout_workers = 5
+# check runs it as three parts by test id (`lean-suites:verity-vllm:K/3`, `suites.py`'s `id_part_of`), each collecting every
+# file and running the tests whose node id hashes to K, so that ci.toml's plans put one part beside the security analysis's
+# audit and two beside the Rust build: whole, on the workers a shard's memory gives it when the audit isn't deferred, it ran
+# longest of any gating step
+parts = 3
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

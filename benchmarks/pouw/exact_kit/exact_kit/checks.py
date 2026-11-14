@@ -23,6 +23,8 @@ import os
 import sys
 from pathlib import Path
 
+from exact_kit import settings
+
 #: what the scripts of `theory/` and `edited_gemm/` and the tests read
 __all__ = ["Checks", "SCHEMA", "dumps"]
 
@@ -116,9 +118,9 @@ class Checks:
         under `research run` the run's result.json. Returns the exit code."""
         self._print(f"\n{self.summary()}")
         doc = self.verdict()
-        path = self.verdict_path
-        if path is None and os.environ.get("OUT"):
-            path = os.path.join(os.environ["OUT"], f"{Path(self.script).stem}.verdict.json")
+        path, out = self.verdict_path, settings.out_dir()
+        if path is None and out:
+            path = os.path.join(out, f"{Path(self.script).stem}.verdict.json")
         if path:
             Path(path).parent.mkdir(parents=True, exist_ok=True)
             Path(path).write_text(dumps(doc), encoding="utf-8")
@@ -133,22 +135,23 @@ def dumps(doc: dict) -> str:
 
 def _result(doc: dict, verdict_path: str | None, detail: str) -> None:
     """The run's ``research/result/v0.1`` document (tools/research/src/research/result.py), written without importing
-    `research`, as benchmarks/pouw/run_result.py does."""
-    run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
-    if not run_dir or not run_id:
+    `research`, as benchmarks/pouw/run_result.py does.
+    It stands beside the harness kit's writer because a check runs where the harness is not installed."""
+    run = settings.run()
+    if run is None:
         return
     rel = None
     if verdict_path:
-        verdict, root = Path(verdict_path).resolve(), Path(run_dir).resolve()
+        verdict, root = Path(verdict_path).resolve(), Path(run.dir).resolve()
         rel = str(verdict.relative_to(root)) if verdict.is_relative_to(root) else None
-    out = {"schema": "research/result/v0.1", "run_id": run_id,
+    out = {"schema": "research/result/v0.1", "run_id": run.id,
            "workload_fingerprint": {"script": doc["script"], "args": doc["args"], "mutations_run": doc["mutations_run"],
-                                    "source_sha": os.environ.get("RESEARCH_SOURCE_SHA")},
+                                    "source_sha": run.source_sha},
            "validation": {"status": "passed" if doc["ok"] else "failed", "checker": "exact_kit.checks", "detail": detail,
                           "evidence": [rel] if rel else []},
            "measurements": [{"name": k, "value": float(v), "unit": "count"} for k, v in doc["counts"].items()],
            "measurement_files": [rel] if rel else [], "artifacts": []}
-    d = Path(run_dir)
+    d = Path(run.dir)
     tmp = d / f"result.json.tmp.{os.getpid()}"
     tmp.write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8")
     os.replace(tmp, d / "result.json")

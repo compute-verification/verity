@@ -42,6 +42,13 @@ apart by exactly those bits. The interface states no layout and no leaf's width:
 pinned reader's roles (`reader-layout`, `reader-roles`) or for a wire's leaves (`leaf-widths`) is one the interface
 takes. The form reads a history table's keys and its name and nothing of its writer, rows and runs: a record
 whose history the interface refuses for those (`LOOSE`) is one the form takes.
+
+The interface refuses a record with a `ValueError`, and the helper that asks it (`_interface`) takes nothing else for
+its refusal: an error of any other type, the helper's own or the interface's, fails the test as an error. A test of
+the helper holds it to that, on a helper that unpacks a pair from `Blocks.of`. It also states two records the form
+refuses and the interface does not: one that states no blocks (`blocks`), since the interface reads a stated record's
+blocks where it has them, and one with an opening of a reader that is no template of the circuit (`inputs`), which the
+interface refuses or fails on with a `KeyError` of the reader's name.
 """
 
 from __future__ import annotations
@@ -710,31 +717,89 @@ def test_a_root_node_of_a_composite_is_no_input(shaped):
 
 
 def _interface(made: dict):
-    """The stage at which `verity.commitments.windows.interface` refuses the case's record (`wires`, `inputs` or `blocks`), else
-    None with what it reads of it."""
+    """The stage at which `verity.commitments.windows.interface` refuses the case's record (`wires`, `inputs` or
+    `blocks`), else None with what it reads of it: the calls `window_of_record` makes on a stated record, which
+    refuses wires that are no list and reads the record's blocks where it has them. The interface refuses with a
+    `ValueError`, so that alone, from one of its own calls, is a refusal here. An error of any other type is this
+    helper's or the interface's, and is raised."""
     case = made["case"]
     doc = json.loads(case["instance"]["record"])
     lays = {codec.descriptor_id(fn): (IF.layout(fn), n) for fn, n in made["circuit"].templates}
     units = {t: n for t, (_, n) in lays.items()}
     spot = case["spot"]
-    malformed = (ValueError, KeyError, TypeError, AttributeError)
+    stated, cut = spot["wires"], spot["cuts"]
+    if not isinstance(stated, list):
+        return "wires", None
     try:
-        if not isinstance(spot["wires"], list):
-            raise ValueError("the wires are a list")
-        wires, cuts = tuple(IF.Wire.of(w) for w in spot["wires"]), IF._cuts(spot["cuts"])
+        wires, cuts = tuple(IF.Wire.of(w) for w in stated), IF._cuts(cut)
         IF.check_wires(lays, wires, cuts, IF.order_of(spot))
-    except malformed:
+    except ValueError:
         return "wires", None
     try:
         reg = IF.Registered.of(doc["registered"]) if "registered" in doc else None
         IF.check_inputs(lays, cuts, wires, reg, IF._ingress_of(doc, "ingress"))
-    except malformed:
+    except ValueError:
         return "inputs", None
     try:
-        blocks = IF.Blocks.of(doc["blocks"], units, "")
-    except malformed:
+        blocks = IF.Blocks.of(doc["blocks"], units, "") if "blocks" in doc else None
+    except ValueError:
         return "blocks", None
     return None, (lays, units, blocks, doc)
+
+
+def _strays(made: dict) -> set[str]:
+    """The readers the case's record names in its openings that are no template of its circuit."""
+    reg = json.loads(made["case"]["instance"]["record"]).get("registered")
+    openings = reg.get("openings") if isinstance(reg, dict) else None
+    readers = {o["reader"] for o in openings if isinstance(o, dict) and isinstance(o.get("reader"), str)} \
+        if isinstance(openings, list) else set()
+    return readers - {codec.descriptor_id(fn) for fn, _ in made["circuit"].templates}
+
+
+def test_a_fault_of_the_helper_is_an_error_and_no_refusal(shaped, monkeypatch):
+    """`_interface` takes a `ValueError` of one of the interface's calls for the interface's refusal, and nothing else.
+    A helper that unpacks a pair from `Blocks.of`, which returns the blocks alone, raises a `TypeError` at that call:
+    it is raised, where a refusal at `blocks` would say of every record that the interface refuses it. So is the
+    `KeyError` of the helper's own lookup on a case that states no cuts. The interface's `ValueError` at the same call
+    is the refusal. Two records the form refuses are none the interface refuses: one that states no blocks is
+    taken, and on an opening of a reader that is no template the interface refuses or fails with a `KeyError` of that
+    reader's name, which is raised."""
+    held = shaped["2x3 registered"]
+    assert _interface(held)[0] is None
+
+    def edited(edit) -> dict:
+        made = {**held, "case": copy.deepcopy(held["case"])}
+        vectors._rewrite(made, edit)
+        return made
+
+    blocks_of = IF.Blocks.of
+
+    def pair(d, units, partition):
+        blocks, _ = blocks_of(d, units, partition)
+        return blocks
+
+    with monkeypatch.context() as patch:
+        patch.setattr(IF.Blocks, "of", pair)
+        with pytest.raises(TypeError, match="unpack"):
+            _interface(held)
+    uncut = {**held, "case": {**held["case"], "spot": {k: v for k, v in held["case"]["spot"].items() if k != "cuts"}}}
+    with pytest.raises(KeyError, match="cuts"):
+        _interface(uncut)
+    refused = edited(lambda d: d["blocks"]["inference"].update(slots=0))
+    assert _interface(refused) == ("blocks", None)
+    assert ref.check_detail(refused["case"]["instance"], refused["case"]["trusted"]) == {"error": "blocks"}
+
+    bare = edited(lambda d: d.pop("blocks"))
+    stage, (*_, blocks, doc) = _interface(bare)
+    assert stage is None and blocks is None and "blocks" not in doc
+    assert ref.check_detail(bare["case"]["instance"], bare["case"]["trusted"]) == {"error": "blocks"}
+    stray = edited(lambda d: d["registered"]["openings"][0].update(reader="Nope_v1"))
+    assert _strays(held) == set() and _strays(stray) == {"Nope_v1"}
+    assert ref.check_detail(stray["case"]["instance"], stray["case"]["trusted"]) == {"error": "inputs"}
+    try:
+        assert _interface(stray) == ("inputs", None)
+    except KeyError as fault:
+        assert fault.args == ("Nope_v1",)
 
 
 def test_the_reference_reads_a_record_as_the_interface_does(random_cases, shaped):
@@ -744,11 +809,16 @@ def test_the_reference_reads_a_record_as_the_interface_does(random_cases, shaped
         case = m["case"]
         inst, tr = case["instance"], case["trusted"]
         refusal = ref.check_detail(inst, tr).get("error")
-        stage, read = _interface(m)
+        try:
+            stage, read = _interface(m)
+        except KeyError as fault:
+            assert refusal == "inputs" and fault.args[0] in _strays(m), (m["shape"], m.get("how"))
+            continue
         if m["shape"] == LOOSE:
             assert (stage, refusal) == ("inputs", None)
             continue
-        assert stage == (None if refusal in OWN else refusal), (m["shape"], m.get("how"))
+        bare = refusal == "blocks" and "blocks" not in json.loads(inst["record"])
+        assert stage == (None if refusal in OWN or bare else refusal), (m["shape"], m.get("how"))
         if read is None or refusal is not None:
             continue
         lays, units, blocks, doc = read
