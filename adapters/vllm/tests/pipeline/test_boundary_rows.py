@@ -11,7 +11,9 @@ from __future__ import annotations
 import hashlib
 import json
 import struct
+from collections.abc import Callable
 from types import SimpleNamespace as NS
+from typing import Any
 
 import numpy as np
 import pytest
@@ -383,14 +385,14 @@ def test_beside_a_history_table_the_return_is_named_under_its_replay_block():
 
 class Request:
     def __init__(self, rid: str, prompt: list[int], max_tokens: int = 4, **sampling):
-        self.request_id, self.prompt_token_ids = rid, prompt
+        self.request_id, self.prompt_token_ids, self.num_cached_tokens = rid, prompt, 0
         self.sampling_params = NS(**{**GREEDY, "max_tokens": max_tokens, **sampling})
 
 
 class Scheduler:
     """vLLM's V1 scheduler as the hook wraps it."""
 
-    def __init__(self, caching: bool = False, max_model_len: int = 64):
+    def __init__(self, caching: bool = False, max_model_len: int | None = 64):
         self.cache_config, self.max_model_len = NS(enable_prefix_caching=caching), max_model_len
         self.added: list[str] = []
         self.outputs: dict = {}
@@ -575,9 +577,9 @@ def test_the_stop_block_is_the_stop_rule_over_a_spans_request_row_and_served_ids
         BS.Stop((3,), 64, 5)
     with pytest.raises(ValueError, match="which the stop word's n holds"):
         BS.Stop((3,), 1 << 20, 1 << stop_rule.N_BITS)
-    for bad in ({"ids": [3]}, {**RULE.to_json(), "ignore_eos": True}):
+    for wrong in ({"ids": [3]}, {**RULE.to_json(), "ignore_eos": True}):
         with pytest.raises(ValueError, match="a stop rule is"):
-            BS.Stop.of(bad)
+            BS.Stop.of(wrong)
 
 
 def test_the_stop_block_reads_ignore_eos_off_the_request_row_and_takes_no_stop_id_for_that_request():
@@ -767,7 +769,7 @@ def test_a_class_is_laid_out_under_the_verifiers_own_stop_rule_and_never_the_one
     plain = json.loads(json.dumps(BR.commit(_spans(3), _layout(n=3), 0).public()))
     others = (BS.Stop((3,), 64, 4), BS.Stop((3, 7), 128, 4), BS.Stop((3, 7), 64, 8), NO_IDS, None)
     for doc, mine in [*((pub, o) for o in others), (plain, RULE)]:
-        calls = [lambda doc=doc, mine=mine: BR.layout_of(doc, PAIR, mine),
+        calls: list[Callable[..., Any]] = [lambda doc=doc, mine=mine: BR.layout_of(doc, PAIR, mine),
                  lambda doc=doc, mine=mine: BR.record(doc, PAIR, DESIGN, stop=mine)]
         if doc is pub:
             calls.append(lambda mine=mine: BR.reopen(d, PAIR, stop=mine))
