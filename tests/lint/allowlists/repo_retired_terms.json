@@ -4200,9 +4200,6 @@
     {"file": "verity/protocols/proofs/spot/verifier/lean/tests/test_harm_bound.py", "count": 8},
     {"file": "verity/protocols/proofs/spot/verifier/lean/tests/test_site_difftest.py", "count": 7},
     {"file": "verity/protocols/proofs/spot/verifier/lean/tests/test_wires_difftest.py", "count": 43},
-    {"file": "verity/protocols/proofs/flock/sigma/lakefile.toml", "count": 1},
-    {"file": "verity/protocols/proofs/flock/sigma/pyproject.toml", "count": 2},
-    {"file": "verity/protocols/proofs/flock/sigma/tests/test_sigma_difftest.py", "count": 2},
     {"file": "verity/protocols/proofs/recursion/verifier/vstar_cli/VStarDifftest.lean", "count": 14},
     {"file": "verity/protocols/proofs/recursion/verifier/vstar_cli/lakefile.toml", "count": 1},
     {"file": "verity/protocols/proofs/recursion/verifier/recursive/VStarRecursive/Protocol.lean", "count": 81},
@@ -4696,6 +4693,9 @@
     {"file": "security/Proofs/Pouw/Lemmas/Deadline.lean", "count": 16},
     {"file": "verity/protocols/proofs/spot_flock/verifier/lean/VStarRecursive/Protocol.lean", "count": 87},
     {"file": "verity/protocols/proofs/spot_flock/verifier/lean/VStarRecursive/Sampled.lean", "count": 6},
-    {"file": "verity/protocols/proofs/spot_flock/verifier/lean/lakefile.toml", "count": 6}
+    {"file": "verity/protocols/proofs/spot_flock/verifier/lean/lakefile.toml", "count": 6},
+    {"file": "verity/protocols/proofs/flock/verifier/sigma/lakefile.toml", "count": 1},
+    {"file": "verity/protocols/proofs/flock/verifier/sigma/pyproject.toml", "count": 2},
+    {"file": "verity/protocols/proofs/flock/verifier/sigma/tests/test_sigma_difftest.py", "count": 2}
   ]
 }
