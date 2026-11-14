@@ -13,6 +13,7 @@ rehearsal's records, and is refused without the leak guard; its sample on the ga
 the coin link's peer, and the served node is refused."""
 from __future__ import annotations
 
+import argparse
 import hashlib
 import io
 import json
@@ -57,13 +58,13 @@ elif cmd == "status RUN":
         signal.pause()
     print(json.dumps({"run": "RUN", "end": {"rc": 0}, "note": os.environ.get("STUB_NOTE")}))
 elif cmd == "fetch RUN":
-    files = {"end.json": json.dumps({"run": "RUN", "rc": 0, "verdict": {"accepted": True, "problems": 0}}).encode(),
+    files = {"end.json": json.dumps({"run": "RUN", "rc": 0, "verdict": {"accepted": True}}).encode(),
              "out/deployment.json": json.dumps({"windows": 4, "origin_unix": 1.5,
                                                 "params": {"window": 32, "bucket_ms": 100}}).encode(),
              "out/certificates.jsonl": b"", "witness/prompts.json": (d / "prompts.json").read_bytes(),
              "witness/certified.jsonl": b"PLANTED\n", "witness/stalls.json": STALLS}
     if (d / "leak").exists():
-        files["out/cells.jsonl"] = (d / "prompts.json").read_bytes()
+        files["out/cells-certificates.jsonl"] = (d / "prompts.json").read_bytes()
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         for name, data in files.items():
@@ -278,11 +279,11 @@ def test_at_waits_on_the_clock_and_a_late_launch_sends_nothing():
 def test_public_is_the_bundle_less_witness():
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        for name in ("r/end.json", "r/out/cells.jsonl", "r/witness/check.json", "r/witness/x/salts.bin"):
+        for name in ("r/end.json", "r/out/certificates.jsonl", "r/witness/cells.jsonl", "r/witness/x/salts.bin"):
             info = tarfile.TarInfo(name)
             info.size = 1
             tar.addfile(info, io.BytesIO(b"x"))
-    assert sorted(SS.members(SS.public(buf.getvalue()))) == ["r/end.json", "r/out/cells.jsonl"]
+    assert sorted(SS.members(SS.public(buf.getvalue()))) == ["r/end.json", "r/out/certificates.jsonl"]
 
 
 def _serve_dir(d: Path, ps: list[list[int]]) -> Path:
@@ -504,11 +505,13 @@ def _gate_chain(tmp_path, monkeypatch, peer):
     (tmp_path / "gate-key").write_text("")
     (tmp_path / "main.txt").write_text("abc\n")
     buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        data = json.dumps({"device": "warden", "peer": peer}).encode()
-        info = tarfile.TarInfo(f"{RUN}/request.json")
-        info.size = len(data)
-        tar.addfile(info, io.BytesIO(data))
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:  # as the gate's fetch gives the run's own lane its request
+        for name, doc in ((f"{RUN}/request.json", {"device": "warden"}),
+                          (f"{RUN}/witness/request.json", {"device": "warden", "peer": peer})):
+            data = json.dumps(doc).encode()
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
     (tmp_path / "keep" / RUN).mkdir(parents=True, exist_ok=True)
     (tmp_path / "keep" / RUN / "fetch.tar.gz").write_bytes(buf.getvalue())
     return ["chain", "--run", RUN, "--keep", str(tmp_path / "keep"), "--coins", "gate", "--draw", "8",
@@ -532,3 +535,28 @@ def test_a_gate_coin_draw_runs_on_the_auditors_side_and_never_on_the_served_node
     assert "no gate key" in capsys.readouterr().err
     assert SS.main([a for a in argv if a not in ("--draw", "8")]) == 2
     assert "give K" in capsys.readouterr().err
+
+
+def test_a_relay_sessions_request_is_the_gates_and_a_run_opened_earlier_is_ended_by_its_close(tmp_path, monkeypatch):
+    """A namespace naming a ``client_port`` asks for the gate's relay session, which this tree's gate takes; one with
+    a ``close`` starts nothing: the session's fetch is what ``close`` returns, kept and published as any session's."""
+    a = argparse.Namespace(peer=SOME_PEER, port=18782, client_port=8012, windows=20, minutes=8, height=10,
+                           bucket_ms=None, scan_class=None)
+    assert SS.words(a) == ["relay-session", "--peer", SOME_PEER, "--port", "18782", "--client-port", "8012",
+                           "--windows", "20", "--minutes", "8", "--height", "10"]
+    a.bucket_ms, a.scan_class = 200, "w63"
+    assert SS.words(a)[-4:] == ["--bucket-ms", "200", "--scan-class", "w63"]
+    req = SS.A.REHEARSALS["relay-session"](SS.words(a)[1:], SS.scratch_host(tmp_path / "host", SOME_PEER))
+    assert (req["client_port"], req["windows"], req["bucket_ms"], req["scan_class"]) == (8012, 20, 200, "w63")
+    assert _session(tmp_path, monkeypatch) == 0
+    full, asked = (tmp_path / "keep" / RUN / "fetch.tar.gz").read_bytes(), (tmp_path / "request").read_text()
+    (tmp_path / "request").unlink()
+    a.gate, a.at, a.keep, a.out = "research@some-gate", None, tmp_path / "keep-2", tmp_path / "out-2"
+    a.close = lambda hold: full
+    a.out.mkdir()
+    assert SS.session(a, b"", []) == 0
+    assert not (tmp_path / "request").exists() and asked.startswith("warden-rehearse ")
+    assert (tmp_path / "keep-2" / RUN / "fetch.tar.gz").read_bytes() == full
+    assert sorted(p.name for p in a.out.iterdir()) == ["bundle.tgz", "leak-guard.json", "session.json"]
+    doc = json.loads((a.out / "session.json").read_text())
+    assert doc["request"] == shlex.join(SS.words(a)) and doc["gate"] == "research@some-gate"

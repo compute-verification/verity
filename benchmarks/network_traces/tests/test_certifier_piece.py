@@ -2,16 +2,16 @@
 the gate's fetch, witness and all, 0700 under the serve dir's private/certifier, publishing only the bundle less witness/
 and its outcome. The piece, on a serve dir whose window was the network certifier's synthetic run's certified requests
 (the run `test_warden_chain.gate_run` publishes in the gate's layout), runs as `served_verdicts.py pieces` runs it and writes
-`network-period`'s answer only when the chain accepted and the window's requests are certified ones in the scan's
-link-window: the period mirror's certifier/v0 accept (`period_case`), its profile with the placement (the certifier on
+`network-period`'s answer only when the chain accepted and the window's requests are certified in the scan's execution
+phase: the period mirror's certifier/v0 accept (`period_case`), its profile with the placement (the certifier on
 the kept gate's host, the checks on the developer's node), then goes through `served_verdicts.py record` into the window
-report and the block record's certifier leg, which `block_record.check` holds and its schema admits. Its case.json is
+report and the block record's certifier entry, which `block_record.check` holds and its schema admits. Its case.json is
 the three files `network-period` read, as `composite.py` reads a piece's case: witness, kept 0600 in the serve dir's
 private/pieces/certifier with no answer beside it, and at no time under the pieces' directory, which gets
 certificates.json, the five certificates of the case's evidence, each with its own fields alone and each the network
 certifier's signature under the run's public key. The chain's endpoint report, with each Commit window's counts, and
-the scan's answers stay in the kept run. A window request the warden didn't certify is
-rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a period the check
+the scan's answers stay in the kept run. A window request the network certifier didn't certify is
+rejected before any chain runs; a chain that refused, requests outside the scan's execution phase and a period the check
 rejects are rejects; a rehearsal the gate's check failed (each request late) and a step that can't run (no kept run, no
 report, no build, the time limit) refuse, which leaves the certifier missing, and no process of a step's group outlives
 the piece, the time limit's SIGTERM included, whenever it comes. Of the chain, DIR gets only `PUBLIC`'s key paths,
@@ -62,9 +62,8 @@ SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v2.sch
 K = 3
 #: the gate's end of a rehearsal its check passed, and of one whose every request was late past the network certifier's
 #: D·τ
-PASSED = {"run": RUN, "rc": 0, "ended": "the rehearsal ended", "verdict": {"accepted": True, "problems": 0}}
-LATE = {"run": RUN, "rc": 1, "ended": "the rehearsal exited 1",
-        "verdict": {"accepted": False, "problems": 8, "requests": 4, "ended": 0, "failed": ["fail"]}}
+PASSED = {"run": RUN, "rc": 0, "ended": "ended", "verdict": {"accepted": True}}
+LATE = {"run": RUN, "rc": 1, "ended": "exited", "verdict": {"accepted": False, "failed": ["fail"]}}
 GATE_HOST = "gate-host"
 #: the window's private values, as numbers no other field of the chain's files takes: its request, step and output
 #: counts, its committed, v0 and derived advice bits, and the tie's prompt lengths
@@ -85,8 +84,8 @@ def period():
 @pytest.fixture(scope="module")
 def warden(tmp_path_factory):
     """The synthetic network certifier run, its fetch (``late``: the same run, its rehearsal failed late), the
-    execution phase holding the most whole certified requests, that link-window's two row registrations (ingress,
-    egress) and the run's deployment."""
+    execution phase holding the most whole certified requests, its two row registrations (ingress, egress) and the
+    run's deployment."""
     d = tmp_path_factory.mktemp("warden")
     run = gate_run(d)
     io, T = WC.io(run), WC.deployment(run)[1].window
@@ -102,7 +101,7 @@ def warden(tmp_path_factory):
         fetches[name] = d / f"{name}.tar.gz"
         with tarfile.open(fetches[name], "w:gz") as tar:
             tar.add(run, arcname=RUN)
-    cells = [json.loads(x)["registration"] for x in (run / "out" / "cells.jsonl").read_text().splitlines()]
+    cells = [json.loads(x)["registration"] for x in (run / "witness" / "cells.jsonl").read_text().splitlines()]
     registrations = [r for d_ in (Direction.INGRESS, Direction.EGRESS) for r in cells
                      if (r["link"], r["direction"], r["window"]) == (WC.WS.LINK, d_.value, w)]
     return {**fetches, "w": w, "records": by[w][:4], "others": [r for x, rs in by.items() if x != w for r in rs],
@@ -143,10 +142,12 @@ def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: b
     return d
 
 
-def _chain_out(d: Path, verdict: str, w: int, registrations: tuple | list = ()) -> Path:
-    """What the chain leaves in its run dir's out/: its report, the endpoint's and the scan's one link-window, with
-    the row registrations ``registrations``."""
-    out = d / "out"
+def _chain_out(d: Path, verdict: str, w: int, registrations: tuple | list = (), witness: Path | None = None) -> Path:
+    """What the chain leaves in its run dir's out/: its report and the endpoint's; and on its private side
+    (``witness``, D/witness by default, which `_copied` copies to the chain's quarantine), the scan's answers: its one
+    execution phase, with the row registrations ``registrations``."""
+    out, witness = d / "out", witness or d / "witness"
+    (witness / "scan").mkdir(parents=True)
     (out / "report").mkdir(parents=True)
     (out / "endpoint").mkdir(parents=True)
     (out / "endpoint" / "report.json").write_text(json.dumps({"chain": {"bits": {"commit_windows": [
@@ -154,10 +155,16 @@ def _chain_out(d: Path, verdict: str, w: int, registrations: tuple | list = ()) 
     (out / "scan" / "joint").mkdir(parents=True)
     (out / "report" / "report.json").write_text(json.dumps({"verdict": verdict, "why": None if verdict == "accepted"
                                                             else {"n2": "a window refused"}}))
-    (out / "scan" / "answers.json").write_text(json.dumps({"registration": {"program": "ab" * 64}, "windows": [
+    (witness / "scan" / "answers.json").write_text(json.dumps({"registration": {"program": "ab" * 64}, "windows": [
         {"window": w, "answer": {"verdict": "accept"}, "registrations": list(registrations)}]}))
     (out / "scan" / "joint" / "program.json").write_text("{}")
     return d
+
+
+def _copied(chain: Path) -> str:
+    """A stand-in chain's command: `_chain_out`'s out/ copied to the run dir, and its witness/ to the quarantine."""
+    return (f'mkdir -p "$RESEARCH_RUN_DIR" "$CR_QUARANTINE" && cp -r {shlex.quote(str(chain / "out"))} '
+            f'"$RESEARCH_RUN_DIR/" && cp -r {shlex.quote(str(chain / "witness"))} "$CR_QUARANTINE/"')
 
 
 def _stub_lean(tmp_path: Path, answer: dict) -> Path:
@@ -173,7 +180,7 @@ def _stub_lean(tmp_path: Path, answer: dict) -> Path:
 def _piece_cmd(tmp_path: Path, chain: Path, answer: dict, cmd: str | None = None, lean: Path | None = None) -> str:
     """The piece's command, its `network-period` `_stub_lean`'s answering ``answer``."""
     lean = lean or _stub_lean(tmp_path, answer)
-    cmd = cmd or f'mkdir -p "$RESEARCH_RUN_DIR" && cp -r {shlex.quote(str(chain / "out"))} "$RESEARCH_RUN_DIR/"'
+    cmd = cmd or _copied(chain)
     piece = ROOT / "benchmarks/network_traces/certifier_piece.py"
     return (f"{shlex.quote(sys.executable)} {shlex.quote(str(piece))} piece \"$@\" "
             f"--lean {shlex.quote(str(lean))} --chain-cmd {shlex.quote(cmd)}")
@@ -187,7 +194,7 @@ def _integrity() -> dict:
 
 
 def _record(monkeypatch, capsys, serve: Path, pieces: Path) -> tuple[dict | None, dict]:
-    """`served_verdicts.py record` over the pieces `pieces` ran, sampled proofs' row an accept: the block record (None
+    """`served_verdicts.py record` over the pieces `pieces` ran, SPOT's row an accept: the block record (None
     where none was written) and the ``RECORD`` line."""
     monkeypatch.setattr(S, "spot_row", lambda d, run=None: _integrity())
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
@@ -250,8 +257,10 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     assert (f"case: the serve dir's {CP.CASES / CP.CASE}, {len(raw)} bytes; {CP.CERTIFICATES}: 3 records' and 2 rows' "
             "certificates") in log
     keep = d / CP.PRIVATE / RUN
-    assert sorted(p.name for p in keep.iterdir()) == ["chain", "endpoint", "fetch.tar.gz", CP.SESSION]
+    assert sorted(p.name for p in keep.iterdir()) == ["chain", "endpoint", "fetch.tar.gz", "quarantine", CP.SESSION]
     assert (keep / "chain" / "out" / "endpoint" / "report.json").is_file()
+    assert (CP.chain_witness(keep.parent, RUN) / "scan" / "answers.json").is_file()
+    assert not _named(keep / "chain", "answers.json")
     assert [(keep / "endpoint" / f).stat().st_mode & 0o777 for f in CP.ENDPOINT] == [0o600] * 4
     row = S.piece_row("communication", tmp_path / "pieces")
     assert (row["verdict"], row["quantity"], row["owner"]) == ("accept", accept["public"], "network-accounting")
@@ -285,11 +294,12 @@ def _decide(tmp_path, warden, verdict="accepted", w=None, records=None, check=No
 
     def chain(keep, run, ep, windows):
         assert sorted(p.name for p in ep.iterdir()) == sorted(CP.ENDPOINT) and windows == warden["windows"]
-        _chain_out(keep / run / "chain", verdict, warden["w"] if w is None else w)
+        _chain_out(keep / run / "chain", verdict, warden["w"] if w is None else w,
+                   witness=CP.chain_witness(keep, run))
         return 0
     (tmp_path / "dir").mkdir()
     a, unpacked = CP.decide(d, K, tmp_path / "dir", chain=chain, check=check or (lambda c, p: pytest.fail("no check")),
-                            case=lambda run, scan: {"params": {}, "commitment": "", "evidence": ""})
+                            case=lambda run, scan, answers: {"params": {}, "commitment": "", "evidence": ""})
     assert unpacked is not None and unpacked.parent == d / CP.PRIVATE / RUN
     return a
 
@@ -393,9 +403,8 @@ def _piece(tmp_path: Path, warden: dict, chain: Path) -> tuple[int, Path, Path]:
     lean = tmp_path / "network-period"
     lean.write_text(f"#!/bin/sh\ncat <<'EOF'\n{json.dumps(CP.answer('reject', 'stub'))}\nEOF\n")
     lean.chmod(0o755)
-    cmd = f'mkdir -p "$RESEARCH_RUN_DIR" && cp -r {shlex.quote(str(chain / "out"))} "$RESEARCH_RUN_DIR/"'
     piece = tmp_path / "pieces" / "certifier"
-    rc = CP.main(["piece", str(d), str(K), str(piece), "--lean", str(lean), "--chain-cmd", cmd])
+    rc = CP.main(["piece", str(d), str(K), str(piece), "--lean", str(lean), "--chain-cmd", _copied(chain)])
     return rc, piece, d
 
 
@@ -436,7 +445,7 @@ def test_a_step_the_leak_guard_refuses_keeps_no_case_and_a_step_that_cant_start_
 
 
 def test_a_chain_file_holding_a_witness_value_is_moved_out_of_dir(tmp_path, warden):
-    """The chain's report carrying a piece of the warden run's witness (a salt of its cells.salts, as hex) in a key
+    """The chain's report carrying a piece of the run's witness (a salt of its cells.salts, as hex) in a key
     `PUBLIC` keeps: the guard moves DIR/chain/report/report.json to the quarantine and releases the rest, the answer
     with it. The chain's job.json carrying it is never published, so it reaches neither DIR nor the quarantine."""
     with tarfile.open(warden["fetch"]) as tar:
@@ -456,7 +465,7 @@ def test_a_chain_file_holding_a_witness_value_is_moved_out_of_dir(tmp_path, ward
 def test_a_rehearsal_the_gates_check_failed_late_leaves_the_certifier_missing_not_rejected(tmp_path, warden, capsys,
                                                                                           monkeypatch):
     """Each request late past the network certifier's D·τ: the gate's check fails the rehearsal, and the served answers, longer
-    than what the warden passed, don't bind to its certified ones. That is the endpoint's lateness, not the protocol
+    than what the certifier passed, don't bind to its certified ones. That is the endpoint's lateness, not the protocol
     rejecting a served answer, so the piece refuses before any chain and the certifier is missing, as for a busy gate;
     the same window on a rehearsal the check passed is a reject."""
     served = [dict(r, output=[*r["output"], 7]) for r in warden["records"]]
@@ -465,8 +474,8 @@ def test_a_rehearsal_the_gates_check_failed_late_leaves_the_certifier_missing_no
     S.pieces(d, K, tmp_path / "pieces", env=dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, chain, {})))
     piece = tmp_path / "pieces" / "certifier"
     why = (piece / CP.REFUSED).read_text()
-    assert why.startswith("the gate's rehearsal didn't pass, so it certified no served answer: exit 1, the rehearsal "
-                          "exited 1; its check accepted False with 8 problems"), why
+    assert why.startswith("the gate's rehearsal didn't pass, so it certified no served answer: exit 1, exited; "
+                          "its check accepted False, failed ['fail']"), why
     assert {p.name for p in piece.iterdir()} - {"piece.json"} == {CP.REFUSED, "piece.log"}
     assert not (d / CP.PRIVATE / RUN / "chain").exists() and not list((d / CP.PRIVATE / RUN).glob("unpacked-*"))
     assert S.piece_row("communication", tmp_path / "pieces")["verdict"] == "missing"
@@ -564,14 +573,14 @@ def _numbers(p: Path) -> set[int]:
 
 
 def _private_chain_out(out: Path) -> Path:
-    """What the chain's warden path leaves in out/ on a served window, the endpoint's report the served node's: each
+    """What the chain's relay path leaves in out/ on a served window, the endpoint's report the served node's: each
     step's file carrying the window's private values where the chain writes them, and the report and report.md that
     ``chain_record.py report`` makes of them."""
     docs = {
         "custody.json": {"verdict": "accepted", "gate_runs": [{"gate_run": RUN, "strategies": {}}]},
         "certs.json": {"warden_run": RUN, "verdict": "accepted", "windows": 1, "sync_bits": 0.0,
                        "rows": [{"window": 0, "certified": True}],
-                       "warden_check": {"accepted": True, "summary": {"requests": REQUESTS, "outputs": OUTPUTS}}},
+                       "warden_check": {"accepted": True, "problems": 0, "requests": REQUESTS}},
         "endpoint/report.json": {
             "warden_run": RUN, "at": CR.SERVED_NODE, "verdict": "accepted",
             "io": {"accepted": True, "requests": REQUESTS, "tokens": OUTPUTS, "violations": []},
@@ -604,7 +613,7 @@ def _private_chain_out(out: Path) -> Path:
 def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_moves_out_what_isnt_declared(tmp_path):
     """The chain's out/ holds the window's private values: the endpoint's report (its Commit window's request, step and
     output counts and its advice's bits), the report made of it (the certified I/O's counts, the advice's bits as K's
-    term) and report.md, the certificates step's view of the warden's check and the tie's prompt lengths. `publish`
+    term) and report.md, the certificates step's view of the certifier's check and the tie's prompt lengths. `publish`
     puts none of them in the hold, only `PUBLIC`'s key paths, the endpoint's step its verdict and where it ran, and
     nothing of the scan's answers, the period check's evidence less its certificates. A file put past `publish`, in the
     hold (the endpoint's report and the scan's answers copied whole, as the piece once published them) or in DIR (the
@@ -614,7 +623,7 @@ def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_
     held = {p.relative_to(out).as_posix(): _numbers(p) & PRIVATE for p in out.rglob("*") if p.is_file()}
     assert held["endpoint/report.json"] == PRIVATE - set(PROMPT_LENS) and held["tie/summary.json"] == set(PROMPT_LENS)
     assert held["report/report.json"] >= {REQUESTS, OUTPUTS, V0, DERIVED} and held["report/report.md"] >= {
-        REQUESTS, OUTPUTS, DERIVED} and held["certs.json"] == {REQUESTS, OUTPUTS}
+        REQUESTS, OUTPUTS, DERIVED} and held["certs.json"] == {REQUESTS}
     assert json.loads((out / "report" / "report.json").read_text())["verdict"] == "accepted"
     hold, d, q = tmp_path / "hold", tmp_path / "pieces" / "certifier", tmp_path / "quarantine"
     CP.publish(out, hold)
@@ -671,8 +680,7 @@ def _chained(tmp_path: Path, v3c: Path | None, verdict: str = "accepted", w: int
     out = _chain_out(tmp_path / "chain", verdict, w)
     (out / "out" / "scan" / "summary.json").write_text(json.dumps({"v3c": v3c and {"window": str(v3c / "window")}}))
     note = shlex.quote(str(tmp_path / "chain-args"))
-    return ["--chain-cmd", f'printf "%s\\n" "$@" > {note}; mkdir -p "$RESEARCH_RUN_DIR" && '
-                           f'cp -r {shlex.quote(str(out / "out"))} "$RESEARCH_RUN_DIR/"']
+    return ["--chain-cmd", f'printf "%s\\n" "$@" > {note}; {_copied(out)}']
 
 
 def _lean(tmp_path: Path, answer: dict) -> list[str]:
@@ -808,9 +816,10 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
 def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_scans_schedule_there(tmp_path,
                                                                                                    monkeypatch):
     """``--gate local``, this tree's gate in this process: the run's request records the tick and the minutes counted
-    at it, and the warden's command is the scan's schedule at it. The tunnel and the rehearsal are stand-ins, the
-    rehearsal's check accepting."""
-    real, ran, check = CP.SS.A.certifier_run, [], json.dumps({"accepted": True, "problems": []})
+    at it, and the certifier's command is the scan's schedule at it. The tunnel and the rehearsal are stand-ins, the
+    rehearsal's check accepting and counting the requests the front asks for."""
+    real, ran = CP.SS.A.certifier_run, []
+    check = json.dumps({"accepted": True, "problems": [], "summary": {"requests": 4}})
 
     def command(req, work, url):
         ran.append(CP.SS.A.warden_command(req, work, url))
@@ -966,3 +975,363 @@ class _Clock:
 
     def sleep(self, s: float) -> None:
         self.t += s
+
+
+# ------------------------------------------------------------------------------------------------------ a relay session
+# The front's relay session (`front --session`, `close`, and the piece's guard for a session nobody closed), through a
+# stub gate that answers a scripted run of statuses, with every nap an injected one: the front sends the gate one
+# `relay-session` request and no prompts, returns once the gate's status shows the relay listening and leaves nothing
+# in OUT; `close` waits for the session's end, keeps the lane's fetch where the piece reads it and publishes what a
+# rehearsal's front does; the piece's steps close a session nobody closed before they read the kept run; and a request
+# this tree's gate refuses is refused before the gate is asked.
+
+#: a made-up name of a served node, a session's peer
+PEER = "some-served-node"
+#: the relay's deployment, as the gate's status gives it once the relay listens and the run's bundle at its end
+#: a relay session's deployment as the gate gives it out, and as its relay wrote it in the witness: with where it
+#: listened, which the gate gives no one
+DEPLOYMENT = {"windows": 20, "origin_unix": 1.5, "params": {"window": 32, "bucket_ms": 100}}
+WRITTEN = DEPLOYMENT | {"listen": ["127.0.0.1", 40001], "upstream": ["127.0.0.1", 40002], "origin_raw": 7.5}
+#: the gate's status of a relay session before its relay listens, once it does, and at an end its check accepted
+WAITING = {"run": RUN, "request": {"device": "warden", "peer": PEER, "client_port": 8012, "windows": 20}, "end": None,
+           "active": True, "relay": None}
+LISTENING = WAITING | {"relay": {"client": "127.0.0.1:8012", "deployment": DEPLOYMENT}}
+ENDED = LISTENING | {"active": False, "end": PASSED}
+
+SESSION_GATE = r'''#!PYTHON
+import io, json, os, sys, tarfile
+from pathlib import Path
+d, cmd = Path(os.environ["STUB_DIR"]), sys.argv[-1]
+with open(d / "asked", "a") as f:
+    f.write(cmd + "\n")
+if cmd.startswith("relay-session "):
+    (d / "stdin").write_bytes(sys.stdin.buffer.read())
+    if (d / "busy").exists():
+        print(json.dumps({"refused": "a rehearsal is running"}))
+        sys.exit(3)
+    print(json.dumps({"device": "warden", "run": "RUN", "unit": "vy-certifier@RUN.service"}, sort_keys=True))
+elif cmd == "status RUN":
+    left = json.loads((d / "statuses.json").read_text())
+    (d / "statuses.json").write_text(json.dumps(left[1:] or left))
+    if left[0] is None:
+        sys.exit("stub gate: no answer")
+    print(json.dumps(left[0], sort_keys=True))
+elif cmd == "fetch RUN" and not (d / "no-fetch").exists():
+    status = json.loads((d / "statuses.json").read_text())[0]
+    files = {"request.json": json.dumps(status["request"]).encode(), "end.json": json.dumps(status["end"]).encode(),
+             "out/deployment.json": json.dumps(DEPLOYMENT).encode(),
+             "witness/certified.jsonl": b"a certified line, which only the run's own lane fetches\n"}
+    if ((status["end"] or {}).get("verdict") or {}).get("accepted"):   # the gate publishes only an accepted run's
+        files["out/certificates.jsonl"] = b""
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        for name, data in files.items():
+            info = tarfile.TarInfo("RUN/" + name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    sys.stdout.buffer.write(buf.getvalue())
+else:
+    sys.exit(f"stub gate: no verb {cmd!r}")
+'''.replace("PYTHON", sys.executable).replace("DEPLOYMENT", repr(DEPLOYMENT)).replace("RUN", RUN)
+
+
+def _statuses(tmp_path: Path, statuses: list[dict | None]) -> None:
+    """What the stub gate answers ``status`` from here on, one a call and the last ever after (None: no answer)."""
+    (tmp_path / "statuses.json").write_text(json.dumps(statuses))
+
+
+def _session_gate(tmp_path: Path, monkeypatch, statuses: list[dict | None]) -> None:
+    """`SESSION_GATE` as ssh: each request it gets is a line of tmp_path/asked."""
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / "ssh").write_text(SESSION_GATE)
+    (tmp_path / "bin" / "ssh").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}{os.pathsep}{os.defpath}")
+    monkeypatch.setenv("STUB_DIR", str(tmp_path))
+    _statuses(tmp_path, statuses)
+
+
+def _asked(tmp_path: Path) -> list[str]:
+    return (tmp_path / "asked").read_text().splitlines() if (tmp_path / "asked").is_file() else []
+
+
+def _front(tmp_path: Path, *flags: str, serve: str = "serve", gate: str = f"research@{GATE_HOST}") -> list[str]:
+    """``front --session``'s words: the endpoint at 18190, SERVE_DIR tmp_path/`serve` and OUT tmp_path/out."""
+    return ["front", "18190", str(tmp_path / serve), str(tmp_path / "out"), "--key", str(tmp_path / "key"),
+            "--gate", gate, "--peer", PEER, "--session", *flags]
+
+
+SESSION_FLAGS = ("--client-port", "8012", "--windows", "20")
+
+
+def test_the_front_opens_a_relay_session_sends_no_group_and_returns_once_its_relay_listens(tmp_path, monkeypatch,
+                                                                                           capsys):
+    _session_gate(tmp_path, monkeypatch, [LISTENING])
+    serve, out = tmp_path / "serve", tmp_path / "out"
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS)) == 0
+    minutes = CP.SS.A.session_minutes(20, CP.HEIGHT) + CP.SS.MARGIN
+    assert _asked(tmp_path) == [f"relay-session --peer {PEER} --port 18190 --client-port 8012 --windows 20 "
+                                f"--minutes {minutes} --height 10 --scan-class w63k4", f"status {RUN}"]
+    assert (tmp_path / "stdin").read_bytes() == b"" and list(out.iterdir()) == []
+    keep = serve / CP.PRIVATE
+    kept = keep / RUN / CP.RELAY
+    assert json.loads(capsys.readouterr().out.splitlines()[-1]) == {"run": RUN, "client": "127.0.0.1:8012",
+                                                                    "relay": str(kept)}
+    doc = json.loads(kept.read_text())
+    assert (doc["run"], doc["gate"], doc["client"], doc["deployment"]) == (RUN, f"research@{GATE_HOST}",
+                                                                           "127.0.0.1:8012", DEPLOYMENT)
+    assert doc["args"] == {"peer": PEER, "port": 18190, "client_port": 8012, "windows": 20, "minutes": minutes,
+                           "height": 10, "bucket_ms": None, "scan_class": "w63k4"}
+    assert sorted(p.name for p in (keep / RUN).iterdir()) == [CP.RELAY, "start.json"]
+    assert [p.stat().st_mode & 0o777 for p in (serve / "private", keep, keep / RUN, kept, keep / RUN / "start.json")] \
+        == [0o700, 0o700, 0o700, 0o600, 0o600]
+    assert [d["run"] for d in CP.open_sessions(keep)] == [RUN]
+    # a second session in the serve dir is refused while this one is open, before the gate is asked
+    assert CP.main(_front(tmp_path, "--client-port", "8013", "--windows", "20")) == 2
+    assert f"relay session {RUN} is open" in json.loads((out / "session.json").read_text())["refused"]
+    assert len(_asked(tmp_path)) == 2
+    # the scan's tick and class reach the gate, and the minutes are counted at the tick
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS, "--bucket-ms", "200", "--scan-class", "w63", serve="serve-200")) == 0
+    at_200 = CP.SS.A.session_minutes(20, CP.HEIGHT, 32 * 200) + CP.SS.MARGIN
+    assert at_200 > minutes and _asked(tmp_path)[2].endswith(
+        f"--windows 20 --minutes {at_200} --height 10 --bucket-ms 200 --scan-class w63")
+    # the longest session at the scan's tick: the least height that signs its execution phases, and its minutes at it
+    assert CP.main(_front(tmp_path, "--client-port", "8012", "--windows", "1119", serve="serve-long")) == 0
+    assert (CP.SS.A.warden_height(1119), CP.SS.A.session_minutes(1119, 13) + CP.SS.MARGIN) == (13, 66)
+    assert _asked(tmp_path)[4].endswith("--windows 1119 --minutes 66 --height 13 --scan-class w63k4")
+    assert CP.main(_front(tmp_path, "--client-port", "8012", "--windows", "1119", "--bucket-ms", "200",
+                          serve="serve-longest")) == 0
+    assert _asked(tmp_path)[6].endswith("--windows 1119 --minutes 126 --height 13 --bucket-ms 200 --scan-class w63k4")
+
+
+@pytest.mark.parametrize("statuses, rc, naps, why", [
+    ([WAITING, None, WAITING, LISTENING], 0, 3, None),
+    ([WAITING, WAITING | {"active": False, "end": {"run": RUN, "rc": 2, "ended": "tunnel"}}], 1, 1,
+     f"relay session {RUN} ended before its relay listened: exit 2, tunnel"),
+    ([WAITING | {"active": False}], 1, 1, f"relay session {RUN}: its unit ended and wrote no end.json"),
+    ([WAITING], 1, 5 * 60 + 1, f"relay session {RUN}: 5 minutes of asking"),
+])
+def test_a_sessions_front_waits_on_the_gates_status_and_says_why_one_never_listened(tmp_path, monkeypatch, statuses,
+                                                                                    rc, naps, why):
+    """The front asks the gate's status every `READY_POLL_S` seconds (a gate that doesn't answer is asked again) until
+    the relay listens. A session that ended first, a unit twice seen ended with no end, and a session's own minutes of
+    asking each end the front with exit 1 and the reason; the session stays open, so a close keeps its fetch."""
+    _session_gate(tmp_path, monkeypatch, statuses)
+    if naps > 3:  # a gate that never shows the relay: its answer without the stub's process each time
+        monkeypatch.setattr(CP, "gate_status", lambda a, keep, run: WAITING)
+    slept = []
+    a = CP.parser().parse_args(_front(tmp_path, *SESSION_FLAGS, "--minutes", "5"))
+    assert CP.front(a, sleep=slept.append) == rc
+    assert slept == [CP.READY_POLL_S] * naps
+    doc = json.loads((tmp_path / "serve" / CP.PRIVATE / RUN / CP.RELAY).read_text())
+    assert [d["run"] for d in CP.open_sessions(tmp_path / "serve" / CP.PRIVATE)] == [RUN]
+    if why is None:
+        assert doc["client"] == "127.0.0.1:8012" and not (tmp_path / "out" / "session.json").exists()
+    else:
+        assert "client" not in doc and "deployment" not in doc
+        assert json.loads((tmp_path / "out" / "session.json").read_text())["refused"].startswith(why)
+
+
+@pytest.mark.parametrize("flags, why", [
+    ((), "--session: with --client-port PORT"),
+    (("--client-port", "8012"), "--session: with --client-port PORT"),
+    ((*SESSION_FLAGS, "--warmup", "1"), "--session sends no request of its own"),
+    (("--client-port", "18190", "--windows", "20"), "the gate refuses it: --client-port 18190: a port of the peer's"),
+    (("--client-port", "7811", "--windows", "20"), "the gate refuses it: --client-port 7811: a port of the peer's"),
+    (("--client-port", "8012", "--windows", "1120"), "the gate refuses it: --windows '1120': 1 to 1119"),
+    (("--client-port", "8012", "--windows", "1100", "--height", "11"),
+     "the gate refuses it: --height 11: the key's 2048 one-time signatures don't sign 1100 execution phases"),
+    ((*SESSION_FLAGS, "--minutes", "4"),
+     "the gate refuses it: --minutes 4: 20 execution phases of 3200 ms take 5 minutes"),
+    ((*SESSION_FLAGS, "--bucket-ms", "50"), "the gate refuses it: --bucket-ms '50': 100 to 4000"),
+])
+def test_a_session_this_trees_gate_refuses_is_refused_before_the_gate_is_asked(tmp_path, monkeypatch, flags, why):
+    _session_gate(tmp_path, monkeypatch, [LISTENING])
+    assert CP.main(_front(tmp_path, *flags)) == 2
+    assert json.loads((tmp_path / "out" / "session.json").read_text())["refused"].startswith(why)
+    assert _asked(tmp_path) == [] and list((tmp_path / "serve" / CP.PRIVATE).iterdir()) == []
+
+
+def test_a_session_the_gate_doesnt_start_opens_none(tmp_path, monkeypatch):
+    _session_gate(tmp_path, monkeypatch, [LISTENING])
+    (tmp_path / "busy").touch()
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS)) == 2
+    refused = json.loads((tmp_path / "out" / "session.json").read_text())["refused"]
+    assert refused.startswith("the gate didn't start the session (exit 3)") and "a rehearsal is running" in refused
+    assert len(_asked(tmp_path)) == 1 and CP.open_sessions(tmp_path / "serve" / CP.PRIVATE) == []
+    assert CP.main(["close", str(tmp_path / "serve"), str(tmp_path / "out-close")]) == 2
+    assert json.loads((tmp_path / "out-close" / "session.json").read_text())["refused"].startswith(
+        "0 relay sessions open")
+    assert len(_asked(tmp_path)) == 1
+
+
+def test_close_waits_for_the_sessions_end_keeps_its_fetch_and_publishes_what_a_rehearsals_front_does(tmp_path,
+                                                                                                     monkeypatch):
+    _session_gate(tmp_path, monkeypatch, [LISTENING])
+    serve, out = tmp_path / "serve", tmp_path / "out-close"
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS)) == 0
+    _statuses(tmp_path, [LISTENING, None, LISTENING, ENDED])
+    slept = []
+    assert CP.close(argparse.Namespace(serve_dir=serve, out=out), sleep=slept.append) == 0
+    assert slept == [CP.SS.POLL_S] * 3
+    assert _asked(tmp_path)[2:] == [f"status {RUN}"] * 4 + [f"fetch {RUN}"]
+    kept = serve / CP.PRIVATE / RUN / "fetch.tar.gz"
+    assert kept.stat().st_mode & 0o777 == 0o600 and CP.kept_run(serve) == RUN
+    assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "leak-guard.json", "session.json", "status.json"]
+    assert json.loads((out / "status.json").read_text()) == {k: v for k, v in ENDED.items() if k != "relay"}
+    with tarfile.open(kept) as full, tarfile.open(out / "bundle.tgz") as shown:
+        assert f"{RUN}/witness/certified.jsonl" in full.getnames()
+        assert sorted(shown.getnames()) == [f"{RUN}/end.json", f"{RUN}/out/certificates.jsonl",
+                                            f"{RUN}/out/deployment.json", f"{RUN}/request.json"]
+    doc = json.loads((out / "session.json").read_text())
+    assert (doc["run"], doc["rc"], doc["ended"], doc["verdict"]["accepted"], doc["windows"], doc["gate"]) == (
+        RUN, 0, "ended", True, 20, f"research@{GATE_HOST}")
+    assert doc["request"] == _asked(tmp_path)[0] and doc["keep"] == str(kept)
+    assert (kept.parent / CP.SESSION).read_text() == (out / "session.json").read_text()
+    assert CP.placement(serve, RUN)["parties"] == {"network_certifier": GATE_HOST, "prover": PEER, "verifier": PEER}
+    assert CP.open_sessions(serve / CP.PRIVATE) == []
+    # with the session closed there is none to close, and the gate isn't asked
+    asked = len(_asked(tmp_path))
+    assert CP.main(["close", str(serve), str(tmp_path / "out-again")]) == 2
+    assert len(_asked(tmp_path)) == asked
+
+
+def test_a_session_the_gates_check_refused_is_closed_and_kept_and_the_piece_doesnt_answer_for_it(tmp_path, monkeypatch):
+    """The whole-run rule across a session: an end whose check didn't accept the run (here each connection late) is
+    `close`'s exit, its fetch is kept all the same, and the piece's steps refuse on it (`rehearsed`), which leaves the
+    certifier missing for every window of the served run."""
+    _session_gate(tmp_path, monkeypatch, [LISTENING])
+    serve = tmp_path / "serve"
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS)) == 0
+    _statuses(tmp_path, [LISTENING | {"active": False, "end": LATE}])
+    assert CP.main(["close", str(serve), str(tmp_path / "out-close")]) == 1
+    doc = json.loads((tmp_path / "out-close" / "session.json").read_text())
+    assert (doc["rc"], doc["verdict"]["accepted"]) == (1, False) and CP.kept_run(serve) == RUN
+    unpacked, run = CP.unpack(serve / CP.PRIVATE / RUN / "fetch.tar.gz")
+    try:
+        with pytest.raises(CP.NotRun):
+            CP.rehearsed(run)
+    finally:
+        CP.rm(unpacked)
+
+
+def test_the_pieces_steps_close_a_relay_session_nobody_closed_before_they_read_the_kept_run(tmp_path, monkeypatch,
+                                                                                            capsys):
+    _session_gate(tmp_path, monkeypatch, [LISTENING])
+    serve, keep = tmp_path / "serve", tmp_path / "serve" / CP.PRIVATE
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS)) == 0
+    _statuses(tmp_path, [LISTENING, ENDED])
+    slept = []
+    CP.close_open(serve, sleep=slept.append)
+    assert slept == [CP.SS.POLL_S] and CP.kept_run(serve) == RUN and CP.open_sessions(keep) == []
+    assert sorted(p.name for p in (keep / RUN).iterdir()) == ["fetch.tar.gz", CP.RELAY, CP.SESSION, "start.json"]
+    assert (keep / RUN / "fetch.tar.gz").stat().st_mode & 0o777 == 0o600
+    assert json.loads((keep / RUN / CP.SESSION).read_text())["gate"] == f"research@{GATE_HOST}"
+    # nothing is published and no hold is left: the guard keeps, and a close is what publishes
+    assert list((keep / "held").iterdir()) == [] and list((tmp_path / "out").iterdir()) == []
+    assert f"relay session {RUN} closed here: no close ran" in capsys.readouterr().out
+    asked = len(_asked(tmp_path))
+    CP.close_open(serve)
+    assert len(_asked(tmp_path)) == asked
+    # a step closes it first: by the time it reads the kept run, the session's fetch is the kept one
+    again, seen = tmp_path / "serve-step", []
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS, serve="serve-step")) == 0
+    _statuses(tmp_path, [ENDED])
+
+    def step(hold: Path):
+        seen.append((CP.kept_run(again), CP.open_sessions(again / CP.PRIVATE)))
+        raise CP.NotRun("the step's own")
+
+    with pytest.raises(CP.NotRun, match="the step's own"):
+        CP.settle(again, K, tmp_path / "dir", "CERTIFIER_TIMEOUT", step)
+    assert seen == [(RUN, [])]
+    # a session the gate's fetch fails for can't be closed: the step doesn't run, and the session stays open
+    third = tmp_path / "serve-no-fetch"
+    assert CP.main(_front(tmp_path, *SESSION_FLAGS, serve="serve-no-fetch")) == 0
+    (tmp_path / "no-fetch").touch()
+    with pytest.raises(CP.NotRun, match=f"relay session {RUN}, which no close ended, couldn't be closed here: .*fetch"):
+        CP.settle(third, K, tmp_path / "dir", "CERTIFIER_TIMEOUT", step)
+    assert len(seen) == 1 and [d["run"] for d in CP.open_sessions(third / CP.PRIVATE)] == [RUN]
+    assert list((third / CP.PRIVATE / "held").iterdir()) == []
+
+
+def test_a_local_gates_relay_session_is_this_trees_gate_its_unit_a_relay_each_way(tmp_path, monkeypatch):
+    """``--gate local``: this tree's gate takes the front's request on the scratch host under the serve dir's private,
+    answers its status and gives its fetch, and the unit the front starts runs `auditor.certifier_run` with a `relay`
+    each way in its ssh's place. The unit here is a stand-in that leaves the files a session's does."""
+    spent = subprocess.Popen([sys.executable, "-c", ""])
+    spent.wait()
+    serve, out, started = tmp_path / "serve", tmp_path / "out", []
+    keep = serve / CP.PRIVATE
+
+    def unit(pid: int, listens: bool):
+        class Unit:
+            def __init__(self, argv, **kw):
+                started.append(argv)
+                self.pid = pid
+                if listens:
+                    d = CP.SS.scratch_host(keep / "local-gate", PEER).certifier / argv[4] / CP.SS.A.WITNESS
+                    d.mkdir()
+                    (d / "deployment.json").write_text(json.dumps(WRITTEN))
+        return Unit
+
+    monkeypatch.setattr(CP.SS, "pinned", lambda: "unpinned")
+    with monkeypatch.context() as m:  # a unit that ended at once and wrote no end: the front says so
+        m.setattr(CP.subprocess, "Popen", unit(spent.pid, False))
+        slept = []
+        a = CP.parser().parse_args(_front(tmp_path, *SESSION_FLAGS, serve="serve-spent", gate="local"))
+        assert CP.front(a, sleep=slept.append) == 1 and slept == [CP.READY_POLL_S]
+    assert "its unit ended and wrote no end.json" in json.loads((out / "session.json").read_text())["refused"]
+    with monkeypatch.context() as m:
+        m.setattr(CP.subprocess, "Popen", unit(os.getpid(), True))
+        assert CP.main(_front(tmp_path, *SESSION_FLAGS, gate="local")) == 0
+    (doc,) = CP.open_sessions(keep)
+    run, host = doc["run"], CP.SS.scratch_host(keep / "local-gate", PEER)
+    assert started[-1] == [sys.executable, str(HERE / "certifier_piece.py"), "unit", str(keep), run, PEER, "18190"]
+    assert (doc["gate"], doc["unit"], doc["client"], doc["deployment"]) == ("local", os.getpid(), "127.0.0.1:8012",
+                                                                            DEPLOYMENT)
+    req = json.loads((host.certifier / run / "request.json").read_text())
+    minutes = CP.SS.A.session_minutes(20, CP.HEIGHT) + CP.SS.MARGIN
+    assert {k: req[k] for k in ("device", "peer", "port", "client_port", "windows", "minutes", "height")} == {
+        "device": "warden", "peer": PEER, "port": 18190, "client_port": 8012, "windows": 20, "minutes": minutes,
+        "height": 10}
+    # the unit: certifier_run on that host, its tunnel a relay to the endpoint and one from the clients' port
+    ran = []
+
+    def certifier_run(host_, run_, **kw):
+        ran.append((host_.root, run_, kw["pinned"], kw["tunnel_argv"]([], 1, (8012, 2))))
+        return {"rc": 0}
+
+    with monkeypatch.context() as m:
+        m.setattr(CP.SS.A, "certifier_run", certifier_run)
+        assert CP.main(["unit", str(keep), run, PEER, "18190"]) == 0
+    assert ran == [(host.root, run, "unpinned", [sys.executable, str(HERE / "certifier_piece.py"), "relay", "--listen",
+                                                 "1", "--to", "18190", "--listen", "8012", "--to", "2"])]
+    # the session's end as the unit leaves it, and the close through the same gate
+    d = host.certifier / run
+    (d / "out").mkdir()
+    (d / "out" / "deployment.json").write_text(json.dumps(DEPLOYMENT))
+    (d / "end.json").write_text(json.dumps(PASSED | {"run": run}))
+    assert CP.main(["close", str(serve), str(tmp_path / "out-close")]) == 0
+    assert CP.kept_run(serve) == run and CP.open_sessions(keep) == []
+    shown = json.loads((tmp_path / "out-close" / "session.json").read_text())
+    assert (shown["gate"], shown["rc"], shown["verdict"]["accepted"]) == ("local", 0, True)
+    assert set(json.loads((tmp_path / "out-close" / "status.json").read_text())) == {"run", "request", "end", "active"}
+    with tarfile.open(keep / run / "fetch.tar.gz") as full, tarfile.open(tmp_path / "out-close" / "bundle.tgz") as pub:
+        assert f"{run}/{CP.SS.A.WITNESS}/deployment.json" in full.getnames()
+        assert not any(CP.SS.A.WITNESS in n.split("/") for n in pub.getnames())
+
+
+def test_the_local_tunnel_relays_each_listen_port_to_its_own(monkeypatch):
+    """`relay --listen A --to B --listen C --to D`: one relay a pair, the last started once every other listens."""
+    order = []
+
+    def relay(listen: int, to: int, *, ready=lambda: None):
+        order.append((listen, to, threading.current_thread() is threading.main_thread()))
+        ready()
+
+    monkeypatch.setattr(CP, "relay", relay)
+    assert CP.main(["relay", "--listen", "1", "--to", "2"]) == 0
+    assert CP.main(["relay", "--listen", "3", "--to", "4", "--listen", "5", "--to", "6"]) == 0
+    assert order == [(1, 2, True), (3, 4, False), (5, 6, True)]
+    with pytest.raises(SystemExit, match="one --to for each --listen"):
+        CP.main(["relay", "--listen", "1", "--to", "2", "--listen", "3"])

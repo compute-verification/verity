@@ -122,11 +122,30 @@ def test_the_gate_refuses_a_rehearsal_it_cant_check(host, bad, why):
     assert not host.certifier.exists()
 
 
+def test_a_peer_the_device_doesnt_know_is_refused_in_words_that_name_none_it_does(host):
+    """The device's list of peers is its own file, the names of the machines it reaches. A request for a peer that
+    isn't on it gets its own word back and none of the list's."""
+    known = A.peers(host)
+    good = dict(zip(REQUEST[1::2], REQUEST[2::2])) | {"--peer": "elsewhere"}
+    argv = ["--ssh", shlex.join(["certifier-rehearse", *[w for kv in good.items() for w in kv]]), "--key",
+            "network-accounting"]
+    rc, out = gate(host, argv, started=[])
+    assert rc == 3 and json.loads(out)["refused"] == "--peer 'elsewhere': not one of this device's peers"
+    assert known and not any(name.encode() in out for name in known) and not host.certifier.exists()
+    assert A.registered_peer(host, known[0]) == known[0]
+
+
 def test_a_key_that_reads_only_starts_no_rehearsal(host):
     for argv in (["--ssh", shlex.join(REQUEST)], ["--ssh", shlex.join(REQUEST), "--key", "-"]):
         rc, out = gate(host, argv, started=[])
         assert rc == 3 and "this key reads only" in json.loads(out)["refused"]
     assert not host.certifier.exists()
+
+
+def ended_why(host, end: dict) -> str:
+    """The sentence a run's end's `ended` word stands for, which the gate writes to the run's `witness/` alone."""
+    assert end["ended"] in A.ENDED
+    return (host.certifier / end["run"] / A.WITNESS / A.ENDED_WHY).read_text().removesuffix("\n")
 
 
 def started_run(host, *extra, token="ab12") -> str:
@@ -159,17 +178,19 @@ def test_a_rehearsal_runs_through_the_tunnel_and_its_end_is_status_and_fetch(hos
         waited.append(seconds)
         return proc.wait()
 
-    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=tunnel_argv, up=lambda t, p: True,
+    end = A.certifier_run(host, run, pinned=PIN, tunnel_argv=tunnel_argv, up=lambda t, p: True,
                           command=rehearsal(SUMMARY), wait=wait)
     ssh, local = tunnels[0]
     assert ssh == ["-i", "/var/lib/vy-challenger/.ssh/vy-challenger-tunnel", "research@10.0.0.2"] and waited == [30 * 60]
-    assert end["rc"] == 0 and end["ended"] == "the rehearsal ended"
+    assert end["rc"] == 0 and end["ended"] == "ended" and ended_why(host, end) == "the rehearsal ended"
     assert end["runs"] == {"honest": {"verdict": "accepted", "network": True, "audit": True, "salt": True,
                                       "salt_again": "refused: already revealed"}}
-    assert end["pinned"] == PIN and end["ended_utc"] == "2026-10-23T11:30:00Z"
+    assert end["pinned"] == PIN and "ended_utc" not in end
     out = host.certifier / run / "out"
     assert json.loads((out / "summary.json").read_text())["upstream"] == f"http://127.0.0.1:{local}"
-    assert set(end["files"]) == {"summary.json", "honest/check.json", "tunnel.log", "rehearse.log"}
+    assert set(end["files"]) == {"summary.json", "honest/check.json"}
+    assert {p.name for p in (host.certifier / run / A.WITNESS).iterdir()} == {"tunnel.log", "rehearse.log", A.ENDED_WHY}
+    assert not any(log in json.dumps(end) for log in ("tunnel.log", "rehearse.log"))
 
     rc, st = A.gate(["--ssh", f"status {run}"], host, certifier_active=lambda r: True)
     doc = json.loads(st)
@@ -178,8 +199,9 @@ def test_a_rehearsal_runs_through_the_tunnel_and_its_end_is_status_and_fetch(hos
     with tarfile.open(fileobj=io.BytesIO(tgz)) as tar:
         assert {f"{run}/request.json", f"{run}/end.json", f"{run}/out/summary.json",
                 f"{run}/out/honest/check.json"} <= set(tar.getnames())
+        assert not [n for n in tar.getnames() if n.startswith(f"{run}/{A.WITNESS}") or n.endswith(".log")]
     with pytest.raises(A.Refused, match="has run already"):
-        A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
+        A.certifier_run(host, run, pinned=PIN, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
                         command=rehearsal(SUMMARY), wait=wait)
     for argv in (["status", "c20261023T110000Z-ffff"], ["fetch", "c20261023T110000Z-ffff"], ["status", "c../../etc"]):
         rc, out = A.gate(argv, host)
@@ -197,7 +219,7 @@ def test_each_tampering_shim_is_recorded_rehearsed_alone_and_its_verdict_ends_th
     assert A.certifier_command(request, tmp_path, "u")[-2:] == ["--strategies", tamper]
 
     summary = HONEST | {"verdict": verdict, "network_verdict": {"accepted": verdict == "accepted", "windows": 3}}
-    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
+    end = A.certifier_run(host, run, pinned=PIN, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
                           command=rehearsal(f'(out / "summary.json").write_text(json.dumps({{"upstream": url, '
                                             f'"runs": {{{tamper!r}: {summary!r}}}}}))'),
                           wait=lambda proc, seconds: proc.wait())
@@ -213,15 +235,17 @@ def test_a_rehearsal_past_its_minutes_is_stopped_and_a_tunnel_that_never_came_up
         proc.send_signal(signal.SIGTERM)
         return proc.wait()
 
-    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
+    end = A.certifier_run(host, run, pinned=PIN, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
                           command=rehearsal("import signal; signal.pause()"), wait=past_its_minutes)
-    assert end["rc"] == -signal.SIGTERM and end["ended"] == "stopped at --minutes 30" and end["runs"] == {}
+    assert end["rc"] == -signal.SIGTERM and end["ended"] == "stopped" and end["runs"] == {}
+    assert ended_why(host, end) == "stopped at --minutes 30"
 
     run = started_run(host, "--minutes", "5", token="cd34")
-    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: False,
+    end = A.certifier_run(host, run, pinned=PIN, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: False,
                           command=lambda *a: pytest.fail("ran without its tunnel"))
-    assert end["rc"] == 2 and "the tunnel to vy-nebius-1's 127.0.0.1:8011 didn't come up" in end["ended"]
-    assert set(end["files"]) == {"tunnel.log"}
+    assert end["rc"] == 2 and end["ended"] == "tunnel" and "vy-nebius-1" not in json.dumps(end)
+    assert "the tunnel to vy-nebius-1's 127.0.0.1:8011 didn't come up" in ended_why(host, end)
+    assert end["files"] == {} and (host.certifier / run / A.WITNESS / "tunnel.log").is_file()
 
 
 def test_the_rehearsal_runs_certifier_serve_on_the_requests_shim_and_profile_through_the_tunnels_local_end(tmp_path):
@@ -433,7 +457,7 @@ def test_a_varied_rehearsal_takes_its_prompts_off_stdin_into_its_witness_and_reh
     assert owned == [host.certifier, w / A.PROMPTS, w, d]
 
     seen = []
-    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
+    end = A.certifier_run(host, run, pinned=PIN, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
                           command=lambda req, out, url: seen.append((req, out, url)) or rehearsal(SUMMARY)(req, out,
                                                                                                          url),
                           wait=lambda proc, s: proc.wait())

@@ -57,22 +57,24 @@ def _certificate(link: str, w: int, q: int, session: bytes = SESSION) -> dict:
 def gate_run(root: Path, *, forged: frozenset = frozenset(), missing: frozenset = frozenset(),
              accepted: bool = True) -> Path:
     """A network certifier run's `end.json` and `out/` as the gate publishes them: each window's egress and fails
-    certificates (signed in another session when (link, w) is in `forged`, left out when in `missing`) and a signer's
-    refusal."""
+    certificates (signed in another session when (link, w) is in `forged`, left out when in `missing`), and of a run
+    its check didn't accept no certificate at all."""
     run = root / "c-test"
     (run / "out").mkdir(parents=True)
     key = LmsKey(_key().params, lms.public_key(_key()))
     dep = ws.deployment_record(SCAN, key, SESSION, origin_unix=ORIGIN, windows=WINDOWS, listen=("127.0.0.1", 1),
                                upstream=("127.0.0.1", 2), slack=0.025)
-    lines = [json.dumps({"refused": [LINK, "ingress", WINDOWS - 1]})]
+    lines = []
     for w in range(WINDOWS):
         for i, link in enumerate((LINK, FAILS)):
             if (link, w) not in missing:
                 session = bytes(32) if (link, w) in forged else SESSION
                 lines.append(json.dumps(_certificate(link, w, 2 * w + i, session), sort_keys=True))
     (run / E.DEPLOYMENT).write_text(json.dumps(dep, indent=1))
-    (run / E.CERTIFICATES).write_text("".join(x + "\n" for x in lines))
-    files = {Path(n).name: hashlib.sha512((run / n).read_bytes()).hexdigest() for n in (E.DEPLOYMENT, E.CERTIFICATES)}
+    if accepted:
+        (run / E.CERTIFICATES).write_text("".join(x + "\n" for x in lines))
+    files = {Path(n).name: hashlib.sha512((run / n).read_bytes()).hexdigest()
+             for n in (E.DEPLOYMENT, E.CERTIFICATES) if (run / n).is_file()}
     (run / E.END).write_text(json.dumps({"device": "warden", "rc": 0, "run": "c-test", "pinned": "0" * 40,
                                          "verdict": {"accepted": accepted}, "files": files}))
     return run
@@ -137,6 +139,11 @@ def test_a_certificate_that_fails_to_verify_or_is_missing_uncovers_its_window(tm
 def test_the_gates_verdict_and_its_hashes_of_out_bind_the_count(tmp_path: Path) -> None:
     refused = egress(gate_run(tmp_path / "refused", accepted=False), at(4_000), at(9_000))
     assert refused["why"] == ["the gate's check didn't accept the run (device warden, rc 0, accepted False)"]
+    assert (refused["covered"], refused["certificates"], refused["K"]) == (False, 0, None)
+    bare = gate_run(tmp_path / "bare")
+    (bare / E.CERTIFICATES).unlink()
+    with pytest.raises(ValueError, match="which the gate publishes of a run its check accepted"):
+        egress(bare, at(4_000), at(9_000))
     run = gate_run(tmp_path / "swapped")
     lines = (run / E.CERTIFICATES).read_text().splitlines()
     (run / E.CERTIFICATES).write_text("".join(x + "\n" for x in lines[:-1]))

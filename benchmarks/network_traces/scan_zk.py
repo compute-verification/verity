@@ -1221,7 +1221,7 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
     (out / "pub.bin").rename(out / f"pub-{n}.bin")
     (out / "tables").mkdir(exist_ok=True)
     os.link(sg.out / "circuit.txt", out / "circuit.txt")
-    (out / "registered.json").write_text(json.dumps(registered_file(mr), sort_keys=True))
+    (out / "registered.json").write_text(WR.reads_text(registered_file(mr)))
     m = {"tag": f"{mr.round}-{mr.name}", "name": mr.name, "at": port_prefix(sg.defn, mr), "template": mr.template,
          "window": mr.window, "buckets": mr.buckets, "dir": out, "meta": st.meta, "pin": st.pin,
          "class": st.class_sha512, "set": set_name, "tables": {r: len(x) for r, x in tables.items()},

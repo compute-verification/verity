@@ -1,0 +1,71 @@
+{
+ "schema": "network-traces/released-keys/v1",
+ "lists": [
+  {
+   "name": "a gate run's certificates",
+   "writer": "verity/protocols/compose/device/live_challenger/auditor.py (a run's public outcome, row_certificate)",
+   "files": [
+    "gates/*/*/out/certificates.jsonl",
+    "gates/*/*/out/cells-certificates.jsonl",
+    "gates/*/*/out/rows-certificates.jsonl"
+   ],
+   "form": "jsonl",
+   "keys": {
+    "certificate/key_id": "structure",
+    "certificate/link": "structure",
+    "certificate/direction": "structure",
+    "certificate/window": "structure",
+    "certificate/digest": "commitment",
+    "certificate/signature": "output"
+   }
+  },
+  {
+   "name": "a gate run's cells' registrations",
+   "writer": "verity/protocols/compose/device/live_challenger/auditor.py (row_registration, ROW_LINE)",
+   "files": [
+    "gates/*/*/out/cells-registrations.jsonl"
+   ],
+   "form": "jsonl",
+   "keys": {
+    "registration/format": "structure",
+    "registration/value": "structure",
+    "registration/link": "structure",
+    "registration/direction": "structure",
+    "registration/window": "structure",
+    "registration/parameters": "structure",
+    "registration/cell_bytes": "structure",
+    "registration/rows": "structure",
+    "registration/words": "structure",
+    "registration/word_bits": "structure",
+    "registration/row_schema": "structure",
+    "registration/domain": "structure",
+    "registration/root": "commitment",
+    "registration/layout/buckets": "structure",
+    "registration/layout/slots": "structure",
+    "registration/layout/connection_slots": "structure",
+    "registration/layout/first_bucket": "structure",
+    "registration/certificate/key": "structure",
+    "registration/certificate/digest": "commitment",
+    "registration/certificate/signature": "output"
+   }
+  }
+ ],
+ "not_yet": [
+  "session/session.json",
+  "session/leak-guard.json",
+  "endpoint/report.json",
+  "leak-guard.json",
+  "job.json",
+  "custody.json",
+  "certs.json",
+  "gates/*/*/request.json",
+  "gates/*/*/end.json",
+  "gates/*/*/out/deployment.json",
+  "gates/*/*/out/groups.json",
+  "gates/*/*/out/load-relay.json",
+  "n2/**",
+  "tie/**",
+  "scan/**",
+  "report/**"
+ ]
+}

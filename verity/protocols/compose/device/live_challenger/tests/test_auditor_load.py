@@ -56,6 +56,12 @@ def gate(host, argv, *, key=LANE, active=lambda r: False, token="ab12", stdin=No
                   read=lambda n: pytest.fail("read stdin") if stdin is None else stdin[:n])
 
 
+def ended_why(host, end: dict) -> str:
+    """The sentence a run's end's `ended` word stands for, which the gate writes to the run's `witness/` alone."""
+    assert end["ended"] in A.ENDED
+    return (host.certifier / end["run"] / A.WITNESS / A.ENDED_WHY).read_text().removesuffix("\n")
+
+
 def refused(rc: int, out: bytes) -> str:
     assert rc == 3, out
     return json.loads(out)["refused"]
@@ -63,9 +69,11 @@ def refused(rc: int, out: bytes) -> str:
 
 def test_weights_write_needs_the_store_disk_and_a_lane_key_and_its_run_writes_the_store_once(host):
     """The run is `load_relay.py write` itself, at the tiny shape: written the first time, present (read back to the
-    pin) the second, and its end carries the store's record less the digests."""
+    pin) the second, and its end carries the store's record less the digests. The record as the write left it
+    and what the write printed are the witness's, and no refusal says where the store is."""
     write = ["weights-write", "--shape", "tiny"]
-    assert f"no store disk at {host.store}: infra mounts it, auditor's" in refused(*gate(host, write))
+    no_disk = refused(*gate(host, write))
+    assert "the store: no-store (one of load_relay.REFUSALS' words)" in no_disk and str(host.store) not in no_disk
     host.store.mkdir()
     for key in (None, "-"):
         assert "this key reads only: the store's write is started with a lane's own gate key, or by vy-admin" in \
@@ -83,15 +91,56 @@ def test_weights_write_needs_the_store_disk_and_a_lane_key_and_its_run_writes_th
                                    "by": LANE, "requested_utc": "2026-10-26T04:00:00Z",
                                    "unit": f"vy-certifier@{run}.service"}
         assert "still runs: one at a time" in refused(*gate(host, write, active=lambda r: r == run, token="ef56"))
-        ends.append(A.certifier_run(host, run, pinned=PIN, now=lambda: T1, wait=lambda proc, s: proc.wait()))
+        ends.append(A.certifier_run(host, run, pinned=PIN, wait=lambda proc, s: proc.wait()))
     for end, status in zip(ends, ("written", "present")):
-        assert end["device"] == "weights" and end["rc"] == 0 and end["ended"] == "the rehearsal ended", end
+        assert end["device"] == "weights" and end["rc"] == 0 and end["ended"] == "ended", end
+        assert ended_why(host, end) == "the rehearsal ended"
         assert end["store"] == {"status": status, "format": LR.STORE_FORMAT, "shape": LR.TINY.name,
                                 "model": LR.model_id(LR.TINY), "stream_bytes": 34240,
                                 "fold": LR.STORE_DIGESTS[LR.TINY.name]}
-        assert set(end["files"]) == {"rehearse.log", "store.json"}
+        d = host.certifier / end["run"]
+        assert set(end["files"]) == {"store.json"} and json.loads((d / "out" / "store.json").read_text()) == end["store"]
+        assert {p.name for p in (d / A.WITNESS).iterdir()} == {"rehearse.log", "store.json", A.ENDED_WHY}
+        assert json.loads((d / A.WITNESS / "store.json").read_text()) == end["store"]
+    assert A.STORE_FORMAT == LR.STORE_FORMAT and set(A.LOAD_SHAPES) == set(LR.SHAPES)
     data, sha = LR.read_store(host.store, LR.TINY)
     assert data.stat().st_size == 34240 and len(sha) == len(LR.manifest(LR.TINY))
+
+
+def test_a_refused_store_write_ends_in_its_word_and_a_record_out_of_form_is_not_published(host):
+    """A write the runner refuses ends in the refusal's word alone: the sentence, which names the store's path on
+    the auditor's device, is in the witness's log and nowhere in the end or `out/`. A record `STORE_PUBLIC`
+    doesn't hold whole and in form is not published: the run ends nonzero as `unruled`."""
+    host.store.mkdir()
+    write = ["weights-write", "--shape", "tiny"]
+    run = json.loads(gate(host, write)[1])["run"]
+    host.store.rmdir()
+    end = A.certifier_run(host, run, pinned=PIN, wait=lambda proc, s: proc.wait())
+    d = host.certifier / run
+    assert end["rc"] == 1 and end["ended"] == "exited" and end["store"] == {"refused": "no-store"}
+    assert json.loads((d / "out" / "store.json").read_text()) == {"refused": "no-store"}
+    public = (d / "end.json").read_text() + (d / "out" / "store.json").read_text()
+    assert str(host.store) not in public and "no store directory" not in public
+    assert f"refused (no-store): no store directory {host.store}" in (d / A.WITNESS / "rehearse.log").read_text()
+
+    good = {"status": "written", "format": A.STORE_FORMAT, "shape": "tiny", "model": "m/tiny/0a",
+            "stream_bytes": 34240, "fold": "ab" * 64}
+    assert A.store_public(good) == good and A.store_public({"refused": "store-size"}) == {"refused": "store-size"}
+    assert A.store_public({"refused": f"no store directory {host.store}"}) == {"refused": "other"}
+    for bad in (good | {"sha256": []}, {k: v for k, v in good.items() if k != "fold"}, good | {"status": "kept"},
+                good | {"format": "another/v1"}, good | {"shape": "a shape"}, good | {"model": "a model"},
+                good | {"stream_bytes": True}, good | {"stream_bytes": 1 << 63}, good | {"fold": "AB" * 64}, [good]):
+        with pytest.raises(A.Unruled, match="STORE_PUBLIC"):
+            A.store_public(bad)
+    host.store.mkdir()
+    run = json.loads(gate(host, write, token="cd34")[1])["run"]
+    wrote = f'import json; (out / "store.json").write_text(json.dumps({good | {"path": str(host.store)}!r}))'
+    end = A.certifier_run(host, run, pinned=PIN, wait=lambda proc, s: proc.wait(),
+                          command=lambda req, out, store: [sys.executable, "-c",
+                                                           f"import pathlib; out = pathlib.Path({str(out)!r})\n{wrote}"])
+    assert (end["rc"], end["ended"], end["store"], end["files"]) == (2, "unruled", None, {})
+    assert "holds ['fold', 'format', 'model', 'path'" in ended_why(host, end)
+    assert str(host.store) not in (host.certifier / run / "end.json").read_text()
 
 
 def test_the_store_write_runs_load_relay_write_over_every_core_into_the_store():
@@ -110,7 +159,7 @@ def test_the_store_write_runs_load_relay_write_over_every_core_into_the_store():
     (["--streams", "0"], "--streams '0': 1 to 8"),
     (["--streams", "9"], "--streams '9': 1 to 8"),
     (["--shape", "small"], "--shape 'small': one of ['h200', 'tiny']"),
-    (["--shape", "h200"], "the store: no store record"),
+    (["--shape", "h200"], "the store: no-record (one of load_relay.REFUSALS' words): weights-write --shape h200"),
     (["--minutes", "16"], "--minutes 16: the tiny load takes 16 minutes"),
     (["--minutes", "26"], "--minutes 26: 100 requests take 11 minutes"),
     (["--minutes", "26"], "at height 20) after the load's 16: give --minutes 27 or more, or fewer --requests"),
@@ -126,19 +175,23 @@ def test_the_gate_refuses_a_load_it_cant_check(stored, bad, why):
 
 
 def test_a_load_is_refused_unless_the_store_holds_its_shape_as_weights_write_wrote_it(host):
-    assert "the store: no store record" in refused(*gate(host, LOAD))
+    def word() -> str:
+        why = refused(*gate(host, LOAD))
+        assert why.startswith("the store: ") and str(host.store) not in why and "weights-write --shape tiny" in why
+        return why.removeprefix("the store: ").split(" ")[0]
+
+    assert word() == "no-record"
     host.store.mkdir()
-    assert "write the store first (weights-write)" in refused(*gate(host, LOAD))
+    assert word() == "no-record"
     LR.write_store(host.store, LR.TINY)
     data, rec = LR.store_paths(host.store, LR.TINY)
     doc = json.loads(rec.read_text())
     rec.write_text(json.dumps(doc | {"sha256": doc["sha256"][::-1]}))
-    assert f"the store: the store record {rec} isn't interface 1's {LR.TINY.name} stream" in \
-        refused(*gate(host, LOAD))
+    assert word() == "not-interface-1"
     rec.write_text(json.dumps(doc))
     with open(data, "ab") as f:
         f.write(b"\0")
-    assert "isn't its 34,240 bytes: write the store again (weights-write)" in refused(*gate(host, LOAD))
+    assert word() == "store-size"
     assert "--program" in refused(*gate(host, [w for w in LOAD if w not in ("--program", PROGRAM)]))
     assert not host.certifier.exists()
 
@@ -187,21 +240,34 @@ def test_the_longest_minutes_fit_in_the_rehearsal_units_runtime_and_leave_an_h20
 
 
 SALT = "5a" * 64
+#: a load value's registration as the stand-in writes it: its root, and its certificate's digest and signature
+ROOT, DIGEST, SIGNATURE = "ab" * 64, "9f" * 64, "e7" * 40
+LOAD_DOC = {"format": "load/v1", "values": [
+    {"value": "w", "root": ROOT, "certificate": {"key": "0c" * 16, "digest": DIGEST, "signature": SIGNATURE}}]}
 LOAD_SUMMARY = {"values": 19, "registered": 19, "relayed": True}
-RELAY = {"shape": "tiny", "values": 19, "bytes": 34240, "streams": 4, "sinks": [{"accepted": True}] * 4}
-#: a stand-in for `warden_serve.py rehearse --load-store`'s files: public, then witness
+#: a relayed load's record with `load_relay.relay_load`'s keys (`test_load_relay` holds the relay to them): the
+#: shape's counts, the relay's own seconds, jobs and workers, and each stream's acknowledgement
+RELAY = {"shape": "tiny-h32-l1", "model": "verity/seeded-weights/v1/tiny-h32-l1/" + "5e" * 16, "values": 19,
+         "rows": 32, "link_bytes": 34240, "witness_bytes": 6144, "seconds": 0.375, "jobs": 3, "workers": 2,
+         "streams": [{"weights": 9000, "witness": 1536}, {"weights": 8000, "witness": 2048},
+                     {"weights": 9240, "witness": 512}, {"weights": 8000, "witness": 2048}]}
+#: what `out/` and the end hold of it (`auditor.load_relay_public`)
+RELAY_PUBLIC = {k: RELAY[k] for k in ("shape", "model", "values", "rows", "link_bytes", "witness_bytes")} | {
+    "streams": 4, "acknowledged": True}
+#: a stand-in for `warden_serve.py rehearse --load-store`'s files
 LOAD_FILES = (
     '(out / "deployment.json").write_text(json.dumps({"upstream": url, "session": "00" * 32}))\n'
     '(out / "cells.jsonl").write_text("")\n'
-    f'(out / "certified.jsonl").write_text(json.dumps({{"salt_c": {SALT!r}}}) + "\\n")\n'
-    '(out / "load.json").write_text(json.dumps({"format": "load/v1", "registrations": [{"root": "ab" * 64}]}))\n'
+    '(out / "certified.jsonl").write_text("")\n'
+    f'(out / "cells.salts").write_text({SALT!r})\n'
+    f'(out / "load.json").write_text(json.dumps({LOAD_DOC!r}))\n'
     f'(out / "load-relay.json").write_text(json.dumps({RELAY!r}))\n'
-    '(out / "load-heads.json").write_text(json.dumps({"heads": [{"root": "ab" * 64}]}))\n'
+    f'(out / "load-heads.json").write_text(json.dumps({{"heads": [{{"root": {ROOT!r}}}]}}))\n'
     f'(out / "check.json").write_text(json.dumps({{"accepted": True, "problems": [], '
-    f'"summary": {{"requests": 4, "load": {LOAD_SUMMARY!r}}}}}))\n')
+    f'"summary": {{"requests": 100, "load": {LOAD_SUMMARY!r}}}}}))\n')
 
 
-def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_registrations_and_relay_alone(stored):
+def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_relay_alone(stored):
     rc, out = gate(stored, LOAD)
     run = json.loads(out)["run"]
     tunnels, sinks, ups, seen = [], [], [], []
@@ -211,7 +277,7 @@ def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_reg
         return [sys.executable, "-c", f"import json, pathlib; out, url = pathlib.Path({str(work)!r}), {url!r}\n"
                                       f"{LOAD_FILES}"]
 
-    end = A.certifier_run(stored, run, pinned=PIN, now=lambda: T1,
+    end = A.certifier_run(stored, run, pinned=PIN,
                           tunnel_argv=lambda s, l: tunnels.append((s, l)) or TUNNEL,
                           sink_argv=lambda s, l, r: sinks.append((s, l, r)) or TUNNEL,
                           up=lambda t, p: ups.append(p) or True, command=command, wait=lambda proc, s: proc.wait())
@@ -223,27 +289,87 @@ def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_reg
     d = stored.certifier / run
     assert req["load"]["shape"] == "tiny" and work == d / A.WITNESS and url == f"http://127.0.0.1:{local}"
     assert kw == {"sinks": [("127.0.0.1", p) for p in locals_], "store": stored.store}
-    assert end["device"] == "warden" and end["rc"] == 0 and end["ended"] == "the rehearsal ended"
-    assert end["load"] == RELAY and end["verdict"] == {"accepted": True, "problems": 0, "requests": 4,
-                                                       "load": LOAD_SUMMARY}
-    assert set(end["files"]) == {"deployment.json", "cells.jsonl", "certificates.jsonl", "load.json",
-                                 "load-relay.json", "tunnel.log", "rehearse.log"}
-    assert json.loads((d / "out" / "load.json").read_text())["registrations"] == [{"root": "ab" * 64}]
-    assert "load-heads.json" in end["witness"]
+    assert end["device"] == "warden" and end["rc"] == 0 and end["ended"] == "ended"
+    assert ended_why(stored, end) == "the rehearsal ended"
+    assert end["load"] == RELAY_PUBLIC == json.loads((d / "out" / "load-relay.json").read_text())
+    assert json.loads((d / A.WITNESS / "load-relay.json").read_text()) == RELAY
+    assert end["verdict"] == {"accepted": True, "load": LOAD_SUMMARY}
+    assert set(end["files"]) == {"deployment.json", "cells-certificates.jsonl", "cells-registrations.jsonl",
+                                 "certificates.jsonl", "load-relay.json"}
+    assert (d / "out" / "cells-registrations.jsonl").read_text() == ""
+    assert (d / A.WITNESS / "cells.salts").read_text() == SALT
+    assert json.loads((d / A.WITNESS / "load.json").read_text()) == LOAD_DOC
+    assert {"load.json", "load-heads.json", "rehearse.log", "tunnel.log"} <= {
+        p.name for p in (d / A.WITNESS).iterdir()} and "witness" not in end
     public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
-    assert SALT.encode() not in public
+    assert not any(x.encode() in public for x in (SALT, ROOT, DIGEST, SIGNATURE))
 
 
 def test_a_load_whose_sink_tunnel_doesnt_come_up_runs_nothing_and_its_end_says_why(stored):
     rc, out = gate(stored, LOAD)
     run = json.loads(out)["run"]
     ups = []
-    end = A.certifier_run(stored, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL,
+    end = A.certifier_run(stored, run, pinned=PIN, tunnel_argv=lambda s, l: TUNNEL,
                           sink_argv=lambda s, l, r: TUNNEL, up=lambda t, p: not ups.append(p) and len(ups) < 3,
                           command=lambda *a, **k: pytest.fail("ran without its sink's tunnels"))
-    assert end["rc"] == 2 and end["ended"] == \
-        "a tunnel to vy-nebius-1's sink at 127.0.0.1:8021 didn't come up (tunnel.log)"
-    assert len(ups) == 3 and end["verdict"] is None and "load" not in end and set(end["files"]) == {"tunnel.log"}
+    assert end["rc"] == 2 and end["ended"] == "tunnel" and LOAD[2] not in json.dumps(end)
+    assert ended_why(stored, end) == "a tunnel to vy-nebius-1's sink at 127.0.0.1:8021 didn't come up (tunnel.log)"
+    assert len(ups) == 3 and end["verdict"] is None and "load" not in end
+    assert end["files"] == {} and "witness" not in end
+
+
+def test_a_refused_load_publishes_one_word_of_why_and_its_sentence_stays_in_the_witness(stored):
+    """Of a refused load, `out/load-relay.json` and the end hold one word, the gate's own list's (`LOAD_REFUSED`,
+    the relay's `REFUSALS` and `other`): the relay's sentence may name a value, a path of this host's store or what
+    the developer's sink said, and stays in the witness's `check.json`. Whatever the relay wrote in the word's place
+    is `other`."""
+    assert A.LOAD_REFUSED == (*LR.REFUSALS, "other"), (
+        "auditor.LOAD_REFUSED is the relay's words (load_relay.REFUSALS) and `other`: rule a word there first")
+    said = "the sink acknowledged 1,024 bytes of the weights and 0 of the witness, of 34,240 and 6,144 sent"
+    for token, wrote, word in (("ab12", "sink", "sink"), ("cd34", said, "other"), ("ef56", ["sink"], "other")):
+        rc, out = gate(stored, LOAD, token=token)
+        run = json.loads(out)["run"]
+        files = (f'(out / "load-relay.json").write_text(json.dumps({{"refused": {wrote!r}}}))\n'
+                 f'(out / "check.json").write_text(json.dumps({{"accepted": False, "problems": [{"load: " + said!r}], '
+                 '"summary": {}}))\nraise SystemExit(1)\n')
+        end = A.certifier_run(
+            stored, run, pinned=PIN, tunnel_argv=lambda s, l: TUNNEL, sink_argv=lambda s, l, r: TUNNEL,
+            up=lambda t, p: True, wait=lambda proc, s: proc.wait(),
+            command=lambda req, work, url, **kw: [
+                sys.executable, "-c", f"import json, pathlib; out = pathlib.Path({str(work)!r})\n{files}"])
+        d = stored.certifier / run
+        assert (end["rc"], end["ended"], end["load"]) == (1, "exited", {"refused": word})
+        assert json.loads((d / "out" / "load-relay.json").read_text()) == {"refused": word}
+        assert end["verdict"] == {"accepted": False}
+        public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
+        assert b"acknowledged" not in public and b"34,240" not in public
+        assert said in (d / A.WITNESS / "check.json").read_text()
+    assert A.load_relay_public({"refused": "digest"}) == {"refused": "digest"}
+    assert A.load_relay_public({"refused": None, "streams": [1]}) == {"refused": "other"}
+    assert A.load_relay_public(["refused"]) is None
+
+
+def test_of_a_relayed_load_the_gate_publishes_the_shapes_counts_and_no_streams_own():
+    """Of a relayed load's record `out/` and the end hold the shape and what it fixes (`LOAD_PUBLIC`), how many
+    streams carried it and whether their acknowledgements sum to the bytes sent. How the bytes fell across the
+    streams is the link's timing, which the developer's sink shares in, and the relay's seconds, jobs and workers
+    are the auditor's device's: none is published. A key out of its form is left out, and a record whose streams
+    don't sum to its bytes, which the relay would have refused, is not acknowledged."""
+    assert A.load_relay_public(RELAY) == RELAY_PUBLIC
+    assert set(RELAY) - set(RELAY_PUBLIC) == {"seconds", "jobs", "workers"} and A.LOAD_PUBLIC.keys() < RELAY.keys()
+    public = json.dumps(A.load_relay_public(RELAY))
+    assert not any(str(n) in public for a in RELAY["streams"] for n in a.values())
+    short = RELAY | {"streams": RELAY["streams"][:3]}
+    assert A.load_relay_public(short) == RELAY_PUBLIC | {"streams": 3, "acknowledged": False}
+    for key, value in (("shape", "tiny h32"), ("model", ["m"]), ("rows", 1.5), ("values", -1), ("link_bytes", True),
+                       ("witness_bytes", 1 << 63)):
+        got = A.load_relay_public(RELAY | {key: value})
+        assert key not in got and got.keys() == RELAY_PUBLIC.keys() - {key}
+        assert got["acknowledged"] is (key not in ("link_bytes", "witness_bytes"))
+    for streams in (None, "4", [], [1, 2], [{"weights": "9000", "witness": 0}]):
+        got = A.load_relay_public(RELAY | {"streams": streams})
+        assert got["acknowledged"] is False and got["streams"] == (1 if isinstance(streams, list) and streams
+                                                                    and isinstance(streams[0], dict) else 0)
 
 
 def test_a_loads_rehearsal_is_warden_serves_with_its_load_flags_after_the_rehearsals(tmp_path):

@@ -15,7 +15,11 @@ certifier path none of its records enters the chain.
 * `certificates`: the network certifier's own offline check (`warden_serve.check`: every execution phase of the three
   records certified under the network certifier's key and session with its head the record's, its rows' registration,
   the audit, and the client's view) rerun on the witness, and the public ``certificates.jsonl`` (the gate's,
-  `auditor.warden_outcome`) exactly the certified lines' certificates and refusals, in order.
+  `auditor.warden_outcome`, which writes it only of a run its check accepted) exactly the certified lines'
+  certificates, in order: a witness line that says the signer refused its execution phase has no public line, so a
+  public file beside one isn't the gate's. Of the check it writes what the gate's end publishes and no more
+  (`verdict`, `COUNTS`): whether it accepted, and the gate's own list of counts, less those only an accepted check's
+  end holds (`ACCEPTED_COUNTS`).
 * `io`: the certified I/O, read off the records' cells alone, in `certifier_serve.certified_io`'s keys: each
   connection's request (its ordinal's `DATA` and `END` payloads in bucket order), a network-certifier-form id request
   (`active.id_request`, offset 0), released in its `END`'s bucket, and its response's ids and buckets
@@ -52,6 +56,17 @@ FIELDS = ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed
 #: a network certifier link declares no sync, so its Σ_sync is never read (`service.LinkWindows`'s ``warden``); one
 #: value for the field
 UNREAD_SYNCS = SyncSet((0,), (Fraction(1),))
+#: the counts of `warden_serve.check`'s summary `certificates` writes: the gate's own list of what a network certifier
+#: run's end publishes (`auditor.WARDEN_COUNTS`), key for key, with `cell_rows` cut as the gate cuts it
+#: (`auditor.CELL_ROWS`). The summary's other keys count the traffic (the requests and how each ended, the cells, their
+#: bits and their lateness, the execution phases the signer refused) or are made from the witness (a connection's
+#: bytes before padding, the requests' tokens and finish reasons, the certifier's clocks and stalls) and stay there.
+#: A key is added here only after the gate's list has it
+COUNTS = ("failed", "windows", "certified_windows", "certificates", "cell_rows", "load")
+CELL_ROWS = ("registered", "of")
+#: of those, the counts that are one fewer for each execution phase the signer refused, which only an accepted
+#: check's verdict holds (`auditor.ACCEPTED_COUNTS`, `auditor.ACCEPTED_CELL_ROWS`)
+ACCEPTED_COUNTS, ACCEPTED_CELL_ROWS = ("certified_windows", "certificates"), ("registered",)
 
 
 def found(run: Path, name: str, required: bool = True) -> Path | None:
@@ -108,9 +123,28 @@ def pairs(run: Path, dep: dict) -> tuple[list[tuple], list]:
     return out, refused
 
 
+def verdict(check: dict) -> dict:
+    """What `certificates` writes of the network certifier's own check, the gate's end's verdict
+    (`auditor.warden_outcome`): whether it accepted, and `COUNTS` of its summary, its `failed` in the check's fixed
+    words (`warden_serve.FAILED`, the gate's `FAILED`). A check that didn't accept gives none of `ACCEPTED_COUNTS`:
+    how many execution phases the signer refused is the traffic's. The problems, their number and their words, are
+    made from the witness, as the summary's other keys are, so none is written."""
+    summary, accepted = check.get("summary") or {}, check["accepted"] is True
+    out = {"accepted": accepted,
+           **{k: summary[k] for k in COUNTS if k in summary and (accepted or k not in ACCEPTED_COUNTS)}}
+    if isinstance(out.get("cell_rows"), dict):
+        out["cell_rows"] = {k: out["cell_rows"][k] for k in CELL_ROWS
+                            if k in out["cell_rows"] and (accepted or k not in ACCEPTED_CELL_ROWS)}
+    if "failed" in out:
+        out["failed"] = WS.failed_words(out["failed"])
+    return out
+
+
 def certificates(run: Path, deployed: bool = False) -> dict:
     """The certificates' check on the run (the module docstring's `certificates`), one row an execution phase: certified
-    when each of its three records is, complete. ``deployed`` refuses a key that isn't LMS at `lms.DEPLOYED`."""
+    when each of its three records is, complete. ``deployed`` refuses a key that isn't LMS at `lms.DEPLOYED`. A run
+    the network certifier's own check refuses is refused with how many problems the check found:
+    ``warden_serve.py check`` on the witness says them."""
     dep, _ = deployment(run)
     wit = witness(run)
     check = WS.check(wit)
@@ -130,13 +164,13 @@ def certificates(run: Path, deployed: bool = False) -> dict:
                    "deployed": tuple(key["params"]) == (lms.DEPLOYED.N, lms.DEPLOYED.W, lms.DEPLOYED.H)},
            "parameters": dep["digest"], "records_file": "certified.jsonl",
            "public_file": None if public is None else public.name, "clock_certificates": 0, "sync_bits": 0.0,
-           "warden_check": {"accepted": check["accepted"], "problems": check["problems"][:20],
-                            "summary": check["summary"]},
+           "warden_check": verdict(check),
            "certified_windows": sum(r["certified"] for r in rows), "issuer_refused": refused,
            "public_is_the_records": None if public is None else theirs == mine, "rows": rows}
     why = ("the key isn't LMS at lms.DEPLOYED" if deployed and not out["key"]["deployed"]
            else "the public certificates.jsonl isn't the certified records' certificates" if public and theirs != mine
-           else f"the warden's own check refuses the run: {'; '.join(check['problems'][:3])}" if not check["accepted"]
+           else (f"the network certifier's own check refuses the run: {len(check['problems'])} problems, which "
+                 "warden_serve.py check says on the witness") if not check["accepted"]
            else None)
     return out | {"verdict": "refused" if why else "accepted", "why": why}
 

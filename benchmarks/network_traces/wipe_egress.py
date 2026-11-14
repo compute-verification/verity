@@ -21,10 +21,11 @@ audit over the wipe nothing in the cells is bound to a computation, so all of it
 
 **What it reads.** Only what the gate publishes: ``end.json``'s verdict and its SHA-512 of each ``out/`` file, the
 deployment (``out/deployment.json``: the network certifier's key, session, schedule and origin) and the certificates
-alone (``out/certificates.jsonl``, each signing a salted digest). The cells' counts are witness and never enter the
-record. It is ``covered`` when the gate's check accepted the run, ``out/``'s two files are the ones ``end.json`` hashed,
-the schedule is the one its digest names, the windows lie within the session, and each window has its egress and fails
-certificates verifying under the deployment's key in its session; ``why`` names each failure.
+alone (``out/certificates.jsonl``, each signing a salted digest). The gate publishes a run's certificates only when
+its check accepted it: of a run it didn't, none is read and the record isn't covered. The cells' counts are witness
+and never enter the record. It is ``covered`` when the gate's check accepted the run, ``out/``'s two files are the
+ones ``end.json`` hashed, the schedule is the one its digest names, the windows lie within the session, and each window
+has its egress and fails certificates verifying under the deployment's key in its session; ``why`` names each failure.
 """
 
 from __future__ import annotations
@@ -90,20 +91,25 @@ def record(files: dict[str, bytes], t0: int, t1: int, pad: int = PAD_NS) -> dict
         raise ValueError(f"the wipe's window [{t0}, {t1}) is empty: t0 must be before t1")
     if pad < 0:
         raise ValueError(f"the pad is {pad} ns: it is at least 0")
-    missing = [name for name in FILES if name not in files]
+    missing = [name for name in (END, DEPLOYMENT) if name not in files]
     if missing:
         raise ValueError(f"the gate run has no {', '.join(missing)}: give its `fetch` bundle or the directory it unpacks to")
     end, dep = json.loads(files[END]), json.loads(files[DEPLOYMENT])
+    accepted = (end.get("device") == "warden" and end.get("rc") == 0
+                and (end.get("verdict") or {}).get("accepted") is True)
+    if accepted and CERTIFICATES not in files:
+        raise ValueError(f"the gate run has no {CERTIFICATES}, which the gate publishes of a run its check accepted: "
+                         "give its `fetch` bundle or the directory it unpacks to")
     params = WardenParams(**dep["params"])
     key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
     origin, width, n = origin_ns(dep["origin_unix"]), window_ns(params), dep["windows"]
     windows = covering(origin, width, t0, t1, pad)
     why = []
-    if end.get("device") != "warden" or end.get("rc") != 0 or (end.get("verdict") or {}).get("accepted") is not True:
+    if not accepted:
         why.append(f"the gate's check didn't accept the run (device {end.get('device')}, rc {end.get('rc')}, "
                    f"accepted {(end.get('verdict') or {}).get('accepted')})")
     for name in (DEPLOYMENT, CERTIFICATES):
-        if hashlib.sha512(files[name]).hexdigest() != (end.get("files") or {}).get(Path(name).name):
+        if name in files and hashlib.sha512(files[name]).hexdigest() != (end.get("files") or {}).get(Path(name).name):
             why.append(f"{name} isn't the file the gate's end.json hashed")
     if params.digest.hex() != dep["digest"]:
         why.append("the deployment's schedule isn't the one its digest names")
@@ -112,13 +118,13 @@ def record(files: dict[str, bytes], t0: int, t1: int, pad: int = PAD_NS) -> dict
     if windows.stop > n:
         why.append(f"the window ends at link-window {windows.stop}, past the session's {n}")
     certificates = {}
-    for line in files[CERTIFICATES].decode().splitlines():
+    for line in files.get(CERTIFICATES, b"").decode().splitlines():
         doc = json.loads(line)
         if "certificate" in doc:
             c = cs.certificate_from_json(doc["certificate"])
             certificates[(c.link, c.direction, c.window)] = c
     links, verified = (dep["link"], f"{dep['link']}-fails"), 0
-    for w in range(max(windows.start, 0), min(windows.stop, n)):
+    for w in range(max(windows.start, 0), min(windows.stop, n)) if CERTIFICATES in files else ():
         for link in links:
             c = certificates.get((link, Direction.EGRESS, w))
             if c is None:

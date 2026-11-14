@@ -659,7 +659,7 @@ def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None
 
 #: The certifier front's session fields the CERTIFIER-FRONT line says. The rest (its prompts, request, kept fetch, gate
 #: and verdict's cells) count or name the group's requests, and stay in the serve dir.
-FRONT_PUBLIC = ("rc", "run", "ended", "ended_utc", "session_s", "pinned", "leaked_removed")
+FRONT_PUBLIC = ("rc", "run", "ended", "session_s", "pinned", "leaked_removed")
 
 
 def front_line(session: Mapping[str, Any]) -> str:

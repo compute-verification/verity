@@ -226,7 +226,14 @@ def prompts(n: int, ids: int, vocab: int, seed: bytes) -> list[list[int]]:
 
 
 def words(a: argparse.Namespace) -> list[str]:
+    """The request's words: the gate's scan rehearsal, or its relay session where ``a`` names a ``client_port``
+    (`certifier_piece.py front --session`: the relay kept up for the served run's own load, no traffic of ours)."""
     tick = getattr(a, "bucket_ms", None)
+    if getattr(a, "client_port", None) is not None:
+        return ["relay-session", "--peer", a.peer, "--port", str(a.port), "--client-port", str(a.client_port),
+                "--windows", str(a.windows), "--minutes", str(a.minutes), "--height", str(a.height),
+                *(["--bucket-ms", str(tick)] if tick is not None else []),
+                *(["--scan-class", a.scan_class] if getattr(a, "scan_class", None) else [])]
     return ["warden-rehearse", "--peer", a.peer, "--port", str(a.port), "--minutes", str(a.minutes),
             "--requests", str(a.requests), "--height", str(a.height), "--scan",
             *(["--bucket-ms", str(tick)] if tick is not None else []), "--prompts", "--tokens", str(a.tokens),
@@ -322,9 +329,8 @@ def outcome(bundle: bytes) -> dict:
     dep = json.loads(files["out/deployment.json"]) if "out/deployment.json" in files else {}
     n, params = dep.get("windows"), dep.get("params") or {}
     span = n * params["window"] * params["bucket_ms"] / 1000 if n is not None and params else None
-    return {"run": end.get("run"), "rc": end.get("rc"), "ended": end.get("ended"), "ended_utc": end.get("ended_utc"),
-            "pinned": end.get("pinned"), "verdict": end.get("verdict"), "origin_unix": dep.get("origin_unix"),
-            "windows": n, "session_s": span}
+    return {"run": end.get("run"), "rc": end.get("rc"), "ended": end.get("ended"), "pinned": end.get("pinned"),
+            "verdict": end.get("verdict"), "origin_unix": dep.get("origin_unix"), "windows": n, "session_s": span}
 
 
 def needles(ps: list[list[int]]) -> list[bytes]:
@@ -353,10 +359,13 @@ def wait_until(at: str, *, now=time.time, sleep=time.sleep) -> None:
         sleep(t - now())
 
 
-def remote(a: argparse.Namespace, data: bytes, out: Path, keep: Path, *, sleep=time.sleep) -> bytes:
-    """The session through the gate at `a.gate`: the lane's fetch of its run, its start reply in KEEP/RUN alone."""
-    ssh = [*SSH, "-i", str(a.key), a.gate]
-    got = subprocess.run([*ssh, shlex.join(words(a))], input=data, capture_output=True)
+def gate_ssh(a: argparse.Namespace) -> list[str]:
+    return [*SSH, "-i", str(a.key), a.gate]
+
+
+def start(a: argparse.Namespace, data: bytes, keep: Path) -> str:
+    """The request sent through the gate at `a.gate`: the run it started, its start reply in KEEP/RUN alone."""
+    got = subprocess.run([*gate_ssh(a), shlex.join(words(a))], input=data, capture_output=True)
     try:
         run = json.loads(got.stdout)["run"]
         if not A.CERTIFIER_RUN.fullmatch(run):
@@ -369,14 +378,34 @@ def remote(a: argparse.Namespace, data: bytes, out: Path, keep: Path, *, sleep=t
     with os.fdopen(fd, "wb") as f:
         f.write(got.stdout)
     print(f"gate run {run}", flush=True)
+    return run
+
+
+def status(a: argparse.Namespace, run: str) -> bytes | None:
+    """The gate's ``status RUN`` as it answered, None where it didn't."""
+    got = subprocess.run([*gate_ssh(a), f"status {run}"], capture_output=True)
+    return got.stdout if got.returncode == 0 else None
+
+
+def fetch(a: argparse.Namespace, run: str) -> bytes:
+    return subprocess.run([*gate_ssh(a), f"fetch {run}"], capture_output=True, check=True).stdout
+
+
+def await_end(a: argparse.Namespace, run: str, out: Path, *, sleep=time.sleep) -> bytes:
+    """``status`` every `POLL_S` seconds until the run ends (``status.json`` in `out`), then the lane's fetch."""
     while True:
-        got = subprocess.run([*ssh, f"status {run}"], capture_output=True)
-        if got.returncode == 0:
-            (out / "status.json").write_bytes(got.stdout)
-            if json.loads(got.stdout).get("end") is not None:
+        got = status(a, run)
+        if got is not None:
+            (out / "status.json").write_bytes(got)
+            if json.loads(got).get("end") is not None:
                 break
         sleep(POLL_S)
-    return subprocess.run([*ssh, f"fetch {run}"], capture_output=True, check=True).stdout
+    return fetch(a, run)
+
+
+def remote(a: argparse.Namespace, data: bytes, out: Path, keep: Path, *, sleep=time.sleep) -> bytes:
+    """The session through the gate at `a.gate`: the lane's fetch of its run, its start reply in KEEP/RUN alone."""
+    return await_end(a, start(a, data, keep), out, sleep=sleep)
 
 
 def pinned() -> str:
@@ -387,9 +416,9 @@ def pinned() -> str:
         return got.stdout.strip() or "unpinned"
 
 
-def local(a: argparse.Namespace, data: bytes, keep: Path) -> bytes:
-    """The dry rehearsal: this tree's gate on a scratch host under `keep`, the stand-in as its tunnel, or ``a.tunnel``
-    (``(ssh, port) -> argv``, a process listening on ``port``) when given."""
+def local_start(a: argparse.Namespace, data: bytes, keep: Path) -> tuple[A.Host, str]:
+    """The request taken by this tree's gate on a scratch host under `keep`: the host and the run, which no unit
+    runs."""
     host = scratch_host(keep / "local-gate", a.peer)
     rc, start = A.gate(["--ssh", shlex.join(words(a)), "--key", LANE], host, now=datetime.now(UTC),
                        token=secrets.token_hex(2), own=lambda p: None, certifier_active=lambda r: False,
@@ -398,11 +427,18 @@ def local(a: argparse.Namespace, data: bytes, keep: Path) -> bytes:
         raise Refused(f"the gate didn't start the session (exit {rc}): {start[:400]!r}")
     run = json.loads(start)["run"]
     print(f"gate run {run} (local)", flush=True)
+    return host, run
+
+
+def local(a: argparse.Namespace, data: bytes, keep: Path) -> bytes:
+    """The dry rehearsal: this tree's gate on a scratch host under `keep`, the stand-in as its tunnel, or ``a.tunnel``
+    (``(ssh, port) -> argv``, a process listening on ``port``) when given."""
+    host, run = local_start(a, data, keep)
     endpoint = keep / run / "endpoint"
     endpoint.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     stub = [sys.executable, str(HERE / "demo_stub.py"), "serve", "--prompt-ids", str(a.prompt_ids), "--tokens",
             str(a.tokens), "--vocab", str(a.vocab), "--out", str(endpoint)]
-    A.certifier_run(host, run, pinned=pinned(), now=lambda: datetime.now(UTC),
+    A.certifier_run(host, run, pinned=pinned(),
                     tunnel_argv=getattr(a, "tunnel", None) or (lambda ssh, port: [*stub, "--port", str(port)]))
     return A.certifier_fetch(run, host, witness=True)
 
@@ -416,10 +452,14 @@ def _ended(signum, _frame):
 
 
 def _session(a: argparse.Namespace, data: bytes, ps: list[list[int]], keep: Path, hold: Path) -> tuple[dict, Path]:
-    """The session, its files written to `hold`: its outcome and the kept fetch."""
+    """The session, its files written to `hold`: its outcome and the kept fetch. A run opened earlier is ended by
+    ``a.close`` (``hold -> the lane's fetch``: `certifier_piece.py close`, a relay session's), which starts none."""
     if a.at:
         wait_until(a.at)
-    full = local(a, data, keep) if a.gate == "local" else remote(a, data, hold, keep)
+    if getattr(a, "close", None) is not None:
+        full = a.close(hold)
+    else:
+        full = local(a, data, keep) if a.gate == "local" else remote(a, data, hold, keep)
     shown = public(full)
     doc = outcome(shown)
     run = doc["run"]
@@ -486,11 +526,14 @@ def session(a: argparse.Namespace, data: bytes, ps: list[list[int]]) -> int:
 
 
 def served_peer(fetch: Path) -> str | None:
-    """The node the kept gate run served on: its ``request.json``'s peer."""
+    """The node the kept gate run served on: its request's peer, which the gate's fetch holds in the witness's
+    ``request.json`` alone (`auditor.certifier_fetch`), so in a fetch with the run's own lane's key. A fetch kept
+    from a gate that still named the peer in the run's own ``request.json`` is read there."""
     with tarfile.open(fetch, "r:gz") as tar:
         for m in tar:
-            if m.isfile() and m.name.count("/") == 1 and m.name.endswith("/request.json"):
-                return json.loads(tar.extractfile(m).read()).get("peer")
+            if m.isfile() and m.name.split("/")[1:] in ([A.WITNESS, "request.json"], ["request.json"]):
+                if (peer := json.loads(tar.extractfile(m).read()).get("peer")) is not None:
+                    return peer
     return None
 
 
@@ -524,7 +567,8 @@ def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
         raise Refused("--coins gate draws --draw K of the scan's units: give K")
     served = served_peer(fetch)
     if served is None:
-        raise Refused(f"{fetch} holds no request.json naming the node it served on, so the coin peer can't be checked")
+        raise Refused(f"{fetch} holds no request naming the node it served on (the gate gives it in witness/request.json, "
+                      "to the run's own lane's key), so the coin peer can't be checked")
     if a.coin_peer in (served, PEER):
         raise Refused(f"--coin-peer {a.coin_peer} is the served node, the prover's: the gate key and the warden run's "
                       f"witness are the auditor's, so the draw runs where the chain does, {AUDITOR} by default")

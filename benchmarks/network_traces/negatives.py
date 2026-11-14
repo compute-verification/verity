@@ -221,8 +221,8 @@ def warden_frame(run: Path, at: int | None = None) -> dict:
         raise NotApplicable(f"no warden cells: {err.name} isn't in this tree") from None
     link, direction = WS.CERTIFIED[WS.EGRESS]
     if missing := [f for f in ("cells.salts", f"{WS.EGRESS}.records") if not (run / f).is_file()]:
-        raise NotApplicable(f"{run}: no {' or '.join(missing)}: the run kept its registrations only (public), so "
-                            "no unit can open its cells")
+        raise NotApplicable(f"{run}: no {' or '.join(missing)}: the run kept none of its witness, so no unit can "
+                            "open its cells")
     dep = json.loads((run / "deployment.json").read_text())
     params = WS.WardenParams(**dep["params"])
     key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])

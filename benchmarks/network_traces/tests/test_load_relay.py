@@ -24,6 +24,8 @@ import importlib.util
 import io
 import json
 import os
+import pickle
+import re
 import socket
 import stat
 import subprocess
@@ -353,6 +355,12 @@ def test_the_load_crosses_four_streams_to_a_loopback_sink(tmp_path):
     assert (rep["link_bytes"], rep["rows"], rep["values"], rep["model"]) == (len(data), rows, len(TINY),
                                                                              LR.model_id(LR.TINY))
     assert len(rep["streams"]) == 4 and all(s["weights"] and s["witness"] for s in rep["streams"])
+    assert set(rep) == {"shape", "model", "values", "rows", "link_bytes", "witness_bytes", "seconds", "jobs", "workers",
+                        "streams"} and [set(a) for a in rep["streams"]] == [{"weights", "witness"}] * 4, (
+        "the gate publishes of this record by key (auditor.LOAD_PUBLIC, load_relay_public): rule a new key there")
+    assert [sum(a[k] for a in rep["streams"]) for k in ("weights", "witness")] == [rep["link_bytes"],
+                                                                                    rep["witness_bytes"]]
+    assert rep == json.loads((out / "load-relay.json").read_text())
     assert sorted(p.name for p in out.iterdir()) == ["load-heads.json", "load-relay.json"]
     shape, heads = LR.heads_of(json.loads((out / "load-heads.json").read_text()))
     at = 0
@@ -375,18 +383,39 @@ def test_the_load_crosses_four_streams_to_a_loopback_sink(tmp_path):
     assert LR.check_load(dict(doc, format="x"), key, session)[1][0].startswith("load: not a load's registrations")
 
 
+def test_a_refused_write_records_its_word_and_says_the_sentence_to_stderr(tmp_path, capsys):
+    """`write`'s record of a refused write is the refusal's word alone (`REFUSALS`), on stdout and in `--out`,
+    which is what a run publishes of it: the sentence names the store's path and goes to stderr. A write that
+    isn't refused records the store less its tensors' digests."""
+    store, out = tmp_path / "store", tmp_path / "store.json"
+    assert LR.main(["write", "--store", str(store), "--shape", "tiny", "--out", str(out)]) == 1
+    said = capsys.readouterr()
+    assert json.loads(out.read_text()) == json.loads(said.out) == {"refused": "no-store"}
+    assert f"refused (no-store): no store directory {store}" in said.err and str(store) not in said.out
+    store.mkdir()
+    assert LR.main(["write", "--store", str(store), "--shape", "tiny", "--workers", "1", "--out", str(out)]) == 0
+    assert json.loads(out.read_text()) == json.loads(capsys.readouterr().out) == {
+        "status": "written", "format": LR.STORE_FORMAT, "shape": LR.TINY.name, "model": LR.model_id(LR.TINY),
+        "stream_bytes": len(demo_stream()), "fold": LR.STORE_DIGESTS[LR.TINY.name]}
+
+
 def test_a_load_that_isnt_the_stores_or_has_no_sink_is_refused(tmp_path):
+    """A refused load's ``load-relay.json`` holds the refusal's word alone (`REFUSALS`), which is what a run
+    publishes of it: the sentence, raised with it, names the store's path, the sink's address or a value and its
+    digests, and none of those is in the file. Every way the sink fails is the one word ``sink``."""
     store, out = tmp_path / "store", tmp_path / "out"
     store.mkdir()
-    with pytest.raises(LR.Refused, match="no store record"):
+    with pytest.raises(LR.Refused, match="no store record") as e:
         LR.relay_load(store, LR.TINY, [("127.0.0.1", 1)], PROGRAM, out)
-    assert "no store record" in json.loads((out / "load-relay.json").read_text())["refused"]
+    assert e.value.code == "no-record" and str(store) in str(e.value)
+    assert json.loads((out / "load-relay.json").read_text()) == {"refused": "no-record"}
     LR.write_store(store, LR.TINY)
     s = socket.create_server(("127.0.0.1", 0))
     port = s.getsockname()[1]
     s.close()
     with pytest.raises(LR.Refused, match=f"the sink at 127.0.0.1:{port} doesn't answer"):
         LR.relay_load(store, LR.TINY, [("127.0.0.1", port)] * 4, PROGRAM, out)
+    assert json.loads((out / "load-relay.json").read_text()) == {"refused": "sink"}
     data = LR.store_paths(store, LR.TINY)[0]
     raw, v = bytearray(data.read_bytes()), TINY[5]
     raw[v.offset + 3] ^= 1
@@ -395,8 +424,22 @@ def test_a_load_that_isnt_the_stores_or_has_no_sink_is_refused(tmp_path):
     with pytest.raises(LR.Refused, match=f"{v.name}: its bytes' SHA-256 .* the store isn't interface 1's weights"):
         LR.relay_load(store, LR.TINY, [("127.0.0.1", s.port)] * 4, PROGRAM, out, read_bytes=64)
     assert s.join()["accepted"] is False and s.res["errors"] and s.code == 1
-    assert json.loads((out / "load-relay.json").read_text())["refused"].startswith(f"{v.name}: ")
+    assert json.loads((out / "load-relay.json").read_text()) == {"refused": "digest"}
+    assert v.name not in (out / "load-relay.json").read_text()
     assert not (out / "load-heads.json").exists()
+
+
+def test_a_refusal_has_one_of_the_lists_words_and_keeps_it_across_processes():
+    """A refusal is made with its word, one of `REFUSALS`, and its sentence: ``str`` is the sentence, as every
+    reader of a refusal prints it, and `code` the word. Both survive pickling, which is how a refusal raised in a
+    worker process reaches the process that publishes it. A word the list doesn't hold is not a refusal."""
+    e = pickle.loads(pickle.dumps(LR.Refused("sink", "the sink closed stream 2 before acknowledging it")))
+    assert (type(e), e.code, str(e)) == (LR.Refused, "sink", "the sink closed stream 2 before acknowledging it")
+    with pytest.raises(ValueError, match="none of REFUSALS' words"):
+        LR.Refused("the sink closed stream 2", "the sink closed stream 2")
+    source = Path(LR.__file__).read_text()
+    raised = re.findall(r'raise Refused\(\s*"([^"]*)"', source)
+    assert len(raised) == source.count("raise Refused(") and set(raised) == set(LR.REFUSALS)
 
 
 def test_a_heads_document_is_the_loads_or_refused():

@@ -232,7 +232,7 @@ def _rehearsal(d: Path, strategies, verdicts: dict) -> Path:
 def test_a_gate_runs_directory_and_a_tarball_are_read_as_the_rehearsal(tmp_path):
     gate = tmp_path / "r1"
     _rehearsal(gate / "out", ["honest"], {"honest": "accepted"})
-    (gate / "end.json").write_text(json.dumps({"run": "r1", "rc": 0, "ended": "the rehearsal ended", "pinned": "abc",
+    (gate / "end.json").write_text(json.dumps({"run": "r1", "rc": 0, "ended": "ended", "pinned": "abc",
                                                "runs": {"honest": {"verdict": "accepted", "network": True}}}))
     (gate / "request.json").write_text(json.dumps({"run": "r1", "peer": "vy-nebius-1", "port": 18080}))
     local = _rehearsal(tmp_path / "local" / "planned-40", ["late", "extra"], {"late": "refused", "extra": "refused"})
@@ -253,6 +253,9 @@ def test_a_gate_runs_directory_and_a_tarball_are_read_as_the_rehearsal(tmp_path)
     assert at["upstream"] == "vy-nebius-1:18080"
     (gate / "out" / "honest" / "deployment.json").write_text(json.dumps({"upstream": "http://127.0.0.1:41000"}))
     assert e2e.where(got)["upstream"] == "vy-nebius-1:18080 (its 127.0.0.1, tunnelled to http://127.0.0.1:41000)"
+    (gate / "request.json").write_text(json.dumps({"run": "r1", "port": 18080}))  # as the gate's fetch gives it
+    assert e2e.where(got)["upstream"] == "the peer's port 18080 (its 127.0.0.1, tunnelled to http://127.0.0.1:41000)"
+    assert "tunnelled to the peer's port 18080; gate runs honest r1" in e2e.where(got)["where"]
     with pytest.raises(SystemExit, match="two honest runs"):
         e2e.collect([gate, gate], work)
     with pytest.raises(SystemExit, match="no honest run"):

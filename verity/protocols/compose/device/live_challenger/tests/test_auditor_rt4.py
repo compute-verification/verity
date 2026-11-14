@@ -232,7 +232,8 @@ def test_a_withheld_sessions_gate_gives_no_coin_commitment_root_and_fetches_no_r
 
 def test_rt4_int_30_a_trailing_newline_or_a_period_opens_nothing_and_an_uppercase_root_is_refused(host, signer, capsys):
     rest = f"--scheme verity/test/coins/v1 --families '{json.dumps(FAMILIES)}'"
-    for words, why in ((f"reserve --peer 'vy-nebius-1\n' {rest}", "--peer"),
+    for words, why in ((f"reserve --peer elsewhere {rest}", "--peer 'elsewhere': not one of this device's peers"),
+                       (f"reserve --peer 'vy-nebius-1\n' {rest}", "--peer"),
                        (f"reserve --period 'p0\n' --peer vy-nebius-1 {rest}", "no --commit, --period"),
                        (f"reserve --period p0 --peer vy-nebius-1 {rest}", "no --commit, --period"),
                        (f"reserve --commit {COMMIT} --peer vy-nebius-1 {rest}", "no --commit, --period")):

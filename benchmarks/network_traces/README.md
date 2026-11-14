@@ -42,7 +42,8 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   slice). `leak_scan.py` is the scan of what the verifier received that every one of them runs.
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with `window_chain.py` (a served
   endpoint's Commit periods as one I1 v0 advice), `negatives.py` (what network accounting must refuse, each by the
-  check and code that refuse it) and `leak_guard.py` (the record's leak guard, below). `block_certifier.py` decides a
+  check and code that refuse it), `leak_guard.py` (the record's leak guard, below) and `released_keys.py` (the keys a
+  record releases, each declared public by name, below). `block_certifier.py` decides a
   period by `network-period check` and writes its accepted answer as the block record's certifier entry.
   `demo_chain.sh` runs the one-H200 demo by the certifier-only path, and `served_session.py` is the served session's
   runbook (below).
@@ -68,8 +69,12 @@ two gate verbs on the auditor's machine:
   `warden-rehearse`'s flags) is `warden-rehearse` with the load first. The store goes over 4 TCP streams, an SSH
   tunnel each, to `load_relay.py sink` on the H200's loopback; each value is held to its digest and committed under the
   reading program's domain as it crosses. The certifier's one signer on that link then signs the load's heads before
-  its first execution phase, so one LMS key and one attachment carry the load and the execution phases. `load.json` (the
-  registrations the server block's record pins) and `load-relay.json` are public in the run's `out/`.
+  its first execution phase, so one LMS key and one attachment carry the load and the execution phases.
+  Of `load-relay.json` the run's `out/` holds what the gate's `load_relay_public` keeps: the shape and the counts it
+  fixes, how many streams carried the load and whether the sink acknowledged every byte. Each stream's own counts and
+  the relay's seconds are in the run's `witness/`. A refused load's says why in one word (`load_relay.REFUSALS`),
+  and the sentence is in the `witness/` too. `load.json` (the registrations the server block's record pins) is in
+  the run's `witness/`, which `fetch` gives the run's own lane key.
 - The witness, every row's salts, is the sink's `--witness` file (0600) on the developer's host. The certifier's host
   never writes a salt.
 
@@ -81,8 +86,9 @@ its period [t0, t1) comes after, from a relay run that spans it: `wipe_gate.sh` 
 when asked, and fetches the run's bundle: with `witness/` into a 0700 directory outside the run dir, and to the run's
 `$OUT` only the bundle less `witness/`. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the `wipe-egress/v1`
 record from what the gate published. Each execution phase that, with its verification phase, meets [t0 − 1 s, t1 + 1 s) counts at the
-schedule's capacity, 2,621,440 bits an execution phase, with K that count and δ 0. The record is covered only when every
-one of those execution phases is certified. The record is all the script writes: what the wipe's reader does with one is
+schedule's capacity, 2,621,440 bits an execution phase, with K that count and δ 0. The record is covered only when the
+gate's check accepted the run, of which alone the gate publishes certificates, and every one of those execution phases
+is certified. The record is all the script writes: what the wipe's reader does with one is
 its own function, `wipe_monitoring.counted` (`verity/protocols/accounting/pous/verifier/wipe_monitoring.py`), and is stated there.
 
 ## The served session
@@ -125,7 +131,7 @@ form of the scan's execution phase (`scan_period.rows_case`). The answer is acce
 request of the audited window is a certified one inside that execution phase, and the Lean check accepts. Its case,
 `case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a served window), is witness, as every
 case's evidence and params are: it is kept in the serve dir's `private/pieces/certifier` (0700, the file 0600) and is
-never in the piece's directory, which the run publishes. The certificates of its evidence, the link-window's three
+never in the piece's directory, which the run publishes. The certificates of its evidence, the execution phase's three
 records' and its two row registrations', which the network certifier signed where the check accepts them, are
 published beside the answer as `certificates.json`, each certificate with its own fields alone. Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
@@ -370,17 +376,40 @@ by its path alone. A file equal to one of the gate's public files (by sha256, so
 members aren't scanned) is no find, nor is a piece those files hold, as they are or with their JSON written again. The
 false positives are declared data, `leak_guard.json`'s `allow`, each entry written only after its find was read by
 counts and digests. Its entries excuse the stall probe's cgroup counters and cgroup path in the runner's own records,
-and, by key path in the witness file (`keys`), the certifier's own CPU list wherever an indented list of integers
-repeats it and its ticker's stalls in `out/certs.json`, which `warden_serve.check` publishes. The
+each by the record's file. An entry names its witness file and its records and nothing else: the guard refuses one
+that excuses a piece by a key path. A value of the witness that other
+files repeat by chance is written so that they don't: the certifier's usage record holds its CPUs as one string of
+ranges (`active_replay.cpu_ranges`), not as a list of integers, which an indented list of consecutive integers anywhere
+would repeat. The guard reads pieces of 32 bytes and sees no shorter value of the witness, so what a step may write of
+the witness is held by name where it is written: of the network certifier's own check the certificates step writes
+the gate's list of published counts and no other key (`warden_chain.COUNTS`). The
 guard's cost is linear in the bytes it reads, and past its budget (`--budget-s`) it stops. A signal (before or during
 the guard), a guard past its budget, or one that can't run releases nothing and withholds `out/`, `inputs/` and the logs
 whole; a SIGKILL leaves the hold where it is, out of the record.
+
+**The keys a record releases** (`released_keys.py`, `released_keys.json`). The guard's pieces find a private value
+copied into the record; they can't find a value the witness never held as bytes (a count, a length, a time). So the
+guard reads each JSON file bound for `out/` by key as well (`--keys`, which `chain_record.sh` passes): a file holds only
+keys its list in `released_keys.json` declares public by name, each with its kind, which is one of the four things
+that may be public: protocol structure, a protocol output, a challenge or sample of the verifier's, or a hiding
+commitment. A list is declared data beside the writers, one for each form of file, wherever a step copies it. A key
+is named by its path in the file; `*` stands for a list's index, or, where the list's `maps` says so, for a map's own
+keys, which are public ids of the form given there. No entry excuses a key: a key of none of the four kinds is not
+declared, and its writer stops writing it. A file with a key its list doesn't name goes to the quarantine with the
+guard's other finds and fails the record (exit 3). `out/leak-guard.json` names the file and how many keys; the key's
+path and the fix are in the quarantine's report (and in `released_keys.py OUT_DIR`'s output, on a record already
+made), since a writer may have made a key's name from a value. The report's `keys` counts the files checked by key,
+the JSON files whose lists aren't written yet (`not_yet` in the declared data) by step, and the files with no keys by
+extension. A JSON file under no list and no `not_yet` glob fails as an undeclared key does. A file with no keys (a
+binary, a log, free text) can't be read this way and is only counted. The check is linear in the bytes it reads.
 
 **The relay path** (`CR_PATH=warden`, `chain_record.WARDEN`). Every step reads the relay's own run (the gate's
 `warden-rehearse`, its witness under `witness/`; `warden_chain.py`), and a proxy rehearsal's run, whose records come
 through `active.Proxy` in front of the endpoint, is refused by name wherever it is given. The certificates step reruns
 the relay's own offline check on its witness (`warden_serve.check`) and holds the public `certificates.jsonl` to the
-certified lines. The relay signs no clock certificate, so none is read. The endpoint step binds the endpoint's own
+certified lines. That check requires the session's certified start, so a gate run made by a device that certifies no
+start is refused here: such a run is read by the chain of the tree its gate ran. The relay signs no clock certificate,
+so none is read. The endpoint step binds the endpoint's own
 advice to the certified I/O read off the relay's cells (`chain_record.py endpoint`, with `CR_EOS_IDS` the model's EOS
 ids). N2 is the plain proof block on the relay's link (`n2_zk.py prove --warden-run`: both heads at the relay's grid and
 parameters digest, no sync declared or charged). The I/O tie is proved on the relay's ingress (`n2_tie_zk.py prove
@@ -415,8 +444,11 @@ docstring says why pooling them by weight copy would be unsound).
 
 **K per monitoring period on a run**: `uv run benchmarks/network_traces/chain_record.py leak --warden-run RUN --scan
 SUMMARY --out FILE`, with RUN a fetched certifier run and SUMMARY its scan's `summary.json` (its sample). It reads
-`leak_bounds` on the run's parameters (`deployment.json`), its traffic (`end.json`'s requests and execution phases) and
-the scan's class (`scan_zk.CLASS`), and refuses a scan that left a proof block unsampled. FILE holds the widths, each
+`leak_bounds` on the run's parameters (`deployment.json`), its traffic (the requests `request.json` asked for and
+`end.json`'s execution phases) and the scan's class (`scan_zk.CLASS`), and refuses a scan that left a proof block
+unsampled. The end carries no count of the traffic: the gate takes an end as accepted only when its check counted the
+request's own number of requests, so `leak` refuses a run whose end isn't accepted, and a relay session, whose request
+asks for no number because its clients are the peer's. FILE holds the widths, each
 term, the links and a row for each monitoring period, scope and reading; `FILE.md`, which it prints, holds the tables.
 A run's figures are its published Attempt's. The report's `d1` lists, per execution phase, whether its certificates, N2
 and the scan accepted.

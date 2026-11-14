@@ -57,7 +57,7 @@ salt_k is fresh for each row of each table. The opening (`Rows`: each table's ro
 network certifier's to hand to the prover alone. A table of no row, which only a class's under form 2 can be, has no
 leaf: its domain is the one above at rows = 0 and its root is 64 zero bytes (`NO_ROWS_ROOT`), which no read opens.
 
-**The signed head** (`Head`) is public, as a hiding root is, one for each link's execution phase:
+**The signed head** (`Head`), one for each link's execution phase:
 
     H     = u16be len(link) ‖ link ‖ u64be window ‖ parameters (64 bytes) ‖ u16be tables ‖ entry of each table
     entry = u16be len(name) ‖ name ‖ u32be rows ‖ u32be row bytes ‖ domain (64 bytes) ‖ root (64 bytes)
@@ -101,7 +101,8 @@ the word makes nothing else public. That an execution phase gets one of the two 
 certifier's own code (`trusted-host`): its signer signs the digest it is asked to. Under form 1 an execution phase
 that isn't handed has no certificate of either kind.
 
-**The registration** (`registration`) is the head and its certificate as one public JSON object:
+**The registration** (`registration`) is the head and its certificate as one JSON object, kept on a run's private
+side (the auditor's gate publishes its certificate alone):
 
     {"format": REGISTRATION, "link", "window", "parameters", "word_bits", "row_schema",
      "tables": [{"name", "value", "rows", "words", "domain", "root", "layout"}, ...],
@@ -354,8 +355,8 @@ class Entry:
 
 @dataclass(frozen=True, slots=True)
 class Head:
-    """What the network certifier signs, once, for an execution phase's connection rows: its tables. Public, since each
-    root is hiding."""
+    """What the network certifier signs, once, for an execution phase's connection rows: its tables. A run keeps it
+    on its private side, in the registration."""
 
     link: str
     window: int
@@ -499,8 +500,8 @@ def _layout(params: WardenParams, window: int, table: str) -> dict[str, int]:
 
 
 def registration(head: Head, certificate: Certificate, params: WardenParams) -> dict[str, Any]:
-    """The public record of an execution phase's connection rows: the head, each table's format and order, and the one
-    certificate."""
+    """The record of an execution phase's connection rows: the head, each table's format and order, and the one
+    certificate. A run keeps it on its private side; the auditor's gate publishes the certificate alone."""
     return {"format": REGISTRATION, "link": head.link, "window": head.window, "parameters": head.parameters.hex(),
             "word_bits": WORD_BITS, "row_schema": SCHEMA,
             "tables": [{"name": e.name, "value": value_name(head.link, e.name, head.window), "rows": e.rows,
