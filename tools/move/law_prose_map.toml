@@ -5,7 +5,8 @@
 # `law_lean_map.toml` and `law_code_map.toml` rename the identifiers after it, so a name in backticks waits for them.
 #
 # Where a sentence says "law" for the distribution of a random variable (a joint law, the uniform law, equal in law), the
-# word is "distribution", as `terms_map.toml` gave the noise and coin laws; those phrases come first. A hyphenated name
+# word is "distribution", as `terms_map.toml` gave the noise and coin laws, and so is a game's, a run's, a tape's, a
+# transcript's or a coin's law; the monad laws become the monad identities. Those phrases come first. A hyphenated name
 # (`R1-law`, the recorded case names such as "registration-law-another-k") is a recorded token and keeps its spelling
 # ([keep]). The map renames prose only (`scope = "prose"`), so it moves no path and renames no declaration.
 scope = "prose"
@@ -121,4 +122,4 @@ files = [
   "verity/commitments/lean/Commitments/Draw.lean",
   "verity/protocols/proofs/*",
 ]
-words = { "joint laws" = "joint distributions", "Joint laws" = "Joint distributions", "joint law" = "joint distribution", "Joint law" = "Joint distribution", "uniform laws" = "uniform distributions", "uniform law" = "uniform distribution", "Uniform law" = "Uniform distribution", "one-coin law" = "one-coin distribution", "coin law" = "coin distribution", "equal in law" = "equal in distribution", "in law" = "in distribution", "draw laws" = "sampling designs", "Draw laws" = "Sampling designs", "draw law" = "sampling design", "Draw law" = "Sampling design", "sampling laws" = "sampling designs", "sampling law" = "sampling design", "laws" = "sampling designs", "Laws" = "Sampling designs", "law" = "sampling design", "Law" = "Sampling design" }
+words = { "monad laws" = "monad identities", "sample law" = "sampling design", "coin map's law" = "coin map's distribution", "game's law" = "game's distribution", "run's law" = "run's distribution", "runs' law" = "runs' distribution", "transcript's law" = "transcript's distribution", "tape's law" = "tape's distribution", "coin's law" = "coin's distribution", "coins' law" = "coins' distribution", "salts' law" = "salts' distribution", "salt's law" = "salt's distribution", "outcome's law" = "outcome's distribution", "play's law" = "play's distribution", "joint laws" = "joint distributions", "Joint laws" = "Joint distributions", "joint law" = "joint distribution", "Joint law" = "Joint distribution", "uniform laws" = "uniform distributions", "uniform law" = "uniform distribution", "Uniform law" = "Uniform distribution", "one-coin law" = "one-coin distribution", "coin law" = "coin distribution", "equal in law" = "equal in distribution", "in law" = "in distribution", "draw laws" = "sampling designs", "Draw laws" = "Sampling designs", "draw law" = "sampling design", "Draw law" = "Sampling design", "sampling laws" = "sampling designs", "sampling law" = "sampling design", "laws" = "sampling designs", "Laws" = "Sampling designs", "law" = "sampling design", "Law" = "Sampling design" }
