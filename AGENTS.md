@@ -25,7 +25,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     auditor's device (the network certifier, the memory challenger, the challenger).
     `flock/` is the proof system: its Lean verifier and the ZK server (`flock/verifier/`, `Flock.ZkServer`), its prover
     (`flock/prover/`: `verity_flock`, its own distribution) and the agreement with upstream's verifier
-    (`flock/agreement/`). `spot/verifier/` is sampled proofs, with the integrity profile (`profile`).
+    (`flock/agreement/`). `spot/verifier/` is SPOT, with the integrity profile (`profile`).
     `spot_flock/verifier/lean/` is SPOT[Flock], the argument SPOT builds over Flock: what stands on compose's two lists
     for the proofs, with the recursive audit. The inference-only policy's check (`inference_only/verifier/nci/`),
     `spot_flock/`, `remote/` and `onsite/` are Lean only; the policy's Python is its

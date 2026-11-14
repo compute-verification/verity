@@ -1,17 +1,13 @@
 """The engine's host twin, and on a CUDA device every variant, against the CPU reference (check.py's checks)."""
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "torch_gpu" / "sha512_rows"))
-
-import bench
-
+from verity.commitments.cuda.commit_slots import slots as S
 from verity.commitments.cuda.sha512_rows import check
 from verity.commitments.cuda.sha512_rows import engine as E
 
@@ -38,6 +34,9 @@ class TorchEngine(E.Engine):
 def _engine(device: str) -> E.Engine:
     return (E.Engine if device == "host" else TorchEngine)(device, build=BUILD)
 
+
+#: one layer of commit_slots' frozen H200 layout, the benchmarks' too (bench.h200_rows)
+H200_LAYER = check.layout_rows(S.h200_layout(layers=1).groups[0])
 
 ENGINES = ["host", pytest.param("cuda", marks=pytest.mark.skipif(not _cuda(), reason="no CUDA device"))]
 
@@ -70,12 +69,12 @@ def test_frame_leaves_levels_pads_and_roots_match_tree_levels(engine: E.Engine) 
 
 @pytest.mark.skipif(not _cuda(), reason="no CUDA device")
 def test_the_h200_layer_matches_on_sampled_slots() -> None:
-    r = check.check_layout(_engine("cuda"), 257, [0, 31, 32, 256])
+    r = check.check_layout(_engine("cuda"), *H200_LAYER, 257, [0, 31, 32, 256])
     assert r["mismatches"] == {"x": 0, "leaves": 0}, r
 
 
 def test_the_h200_layer_is_commit_slots_frozen_layout() -> None:
-    sources, rows = bench.h200_rows()
+    sources, rows = H200_LAYER
     sizes = [sum(n for _, _, n in r) for r in rows]
     assert len(rows) == 25 and sum(sizes) == 663_824 and max(sizes) == 32768
     assert sorted(set(sizes)) == [4, 256, 8192, 16384, 16388, 32768]

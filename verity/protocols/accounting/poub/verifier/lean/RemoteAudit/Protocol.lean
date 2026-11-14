@@ -1,8 +1,10 @@
 module
 
+public import CoreProtocol.Account
 public import CoreProtocol.Cli
 public import CoreProtocol.Ratio
 public import RemoteAudit.Difftest
+meta import CoreProtocol.Account
 meta import CoreProtocol.Cli
 meta import CoreProtocol.Ratio
 meta import RemoteAudit.Difftest
@@ -31,12 +33,12 @@ the difftest's `session` reads (`Difftest.sessionFn`):
   session's parameters and g.
 
 On acceptance it publishes the receipts not shown wrong and the error that holds at, `{"eps", "q_bytes"}` (`certify`):
-the session's receipts U less the wrong ones its openings leave, W rounded up (`Pooled.pooled` of each sample's
-receipts and openings at `DELTA`), one `BLOCK_BYTES` block each, at ε = δ + ⌈W/g⌉·s/2^64 (`eps`), the session's `⌈W/g⌉`
-openings coins at its `samples` s each (the per-sample term of `Accounting.Guarantees.Remote.PooledSample`; its PRF
-advantages and binding term are left out of ε, not numbers, and so are its hiding terms, each 0 where the records read
-no commitment): the sample term of the bound `Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol` proves at
-`Node.delta = DELTA` (`PublishedEps`). It is a constant of the parameters, not the openings a session made
+the session's receipts U less the wrong ones its openings leave, W rounded up (`Pooled.pooled` of each sample's receipts
+and openings at `DELTA`), one `BLOCK_BYTES` block each, at ε = δ + ⌈W/g⌉·s/2^64 (`eps`), the session's `⌈W/g⌉` openings
+coins at its `samples` s each (at least the per-sample term of `Accounting.Guarantees.Remote.PooledSample`, s/2^256; its
+PRF advantages and binding term are left out of ε, not numbers, and so are its hiding terms, each 0 where the records
+read no commitment): at least the sample term of the bound `Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol`
+proves at `Node.delta = DELTA` (`PublishedEps`). It is a constant of the parameters, not the openings a session made
 (`min(s, U_c)`, U_c the prover's), which can be fewer. The ledger's γ terms, which need the node's measured rates, are
 not taken off: `q_bytes` is the receipts the session's openings don't show wrong, in bytes, which
 `Properties.RemoteAudit.Subprotocol.QBytesAtSubprotocol` states is at most the right ones' except with its bound. When
@@ -127,8 +129,8 @@ a window at g ≤ 1, as `Properties.RemoteAudit.Line.Node.samples`. -/
 def openingsCoins (params : Session.Params) (g : Nat) : Nat :=
   if g ≤ 1 then params.windows else (params.windows + g - 1) / g
 
-/-- The error an accepted session's `q_bytes` holds at: `DELTA + ⌈W/g⌉·s/2^64`, the pooled bound's δ and the
-draw's rejection at the session's `samples` s a draw. -/
+/-- The error an accepted session's `q_bytes` holds at: `DELTA + ⌈W/g⌉·s/2^64`, the pooled bound's δ and at least the
+draws' rejection at the session's `samples` s a draw. -/
 def eps (params : Session.Params) (g : Nat) : Rat :=
   DELTA + ((openingsCoins params g * params.samples : Nat) : Rat) / (2 ^ 64 : Nat)
 
@@ -169,8 +171,24 @@ def protocol : Core.Protocol where
   publicJson := Public.toJson
   profileJson := id
 
+/-- **What a session accounts for** (`Core.Account`): the reads of the node's memory its openings certify
+(`q_bytes`), verified from below at `eps`, over the session. A session the pooled bound refuses publishes 0 reads at
+`eps` 0, a true lower bound, so nothing is flagged.
+
+It names no device and no registration's head, and states no span: the session publishes none. What it would say
+beyond what `Core.Account` holds: which tiers the registered blocks were read from, which the answer doesn't publish
+(the node's GPUs' memory and its host's DRAM, the session ledger's two tiers); and the bytes the node held through the
+session, which is the ledger's line on these reads and the node's rates, an amount of memory over a span, not an
+answer of this protocol. -/
+def account : Core.Account :=
+  { protocol := ID, head := none
+    amounts := [{ metric := "reads", part := .read [.hbm, .dram], key := .published "q_bytes",
+                  unit := Core.Account.bytes, side := .verified, time := .unstated, error := .published "eps",
+                  uncertified := .safe }] }
+
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason ==
   some "params: params: the keys must be [not_before_ns, params], not []"
+#guard account.Formed ∧ account.protocol = protocol.id
 #guard (ratio DELTA).toString == "1/1099511627776"
 private def three : Session.Params :=
   { deadlineNs := 0, windows := 3, samples := 5, minPasses := 1, windowNs := 0, lifetime := 1 }

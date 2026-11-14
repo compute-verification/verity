@@ -6,7 +6,7 @@ public import Proofs.Properties.Verity.Sampled.Window.FilesSent
 public import Proofs.Properties.Verity.Sampled.Digest
 
 /-!
-# Sampled proofs' leg over a window, assembled from its pieces
+# SPOT's leg over a window, assembled from its pieces
 
 `windowSpotSound_of_sample` at the cut the one-session leg uses (`couplingTarget_assembled`): the log v2's check read
 is the device's (`Binding.Logged Binding.readsV2`), v2 reads each pinned table at its registered file (`TablesSent`)
