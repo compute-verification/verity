@@ -38,8 +38,8 @@ from tests.program.predict.test_window_circuit_int8 import GRAIN as INT8_GRAIN
 from tests.program.predict.test_window_circuit_int8 import _registered as _int8
 from tests.program.predict.test_window_circuit_tables import FIXED
 from tests.program.predict.test_window_rows import (
+    DESIGN,
     KEY,
-    LAW,
     PROGRAM,
     RUN,
     _read,
@@ -239,7 +239,7 @@ def test_a_fixed_load_window_is_the_cut_class_circuit_and_any_other_window_is_re
                                                                 "slot at the window's one boundary")),
     (_registered, GRAIN, PearlTables(SCHEME, words=48), CLASS, (r"linears \(K, N\) \[\(64, 64\), \(64, 128\), \(64, 256\), "
                                                         r"\(128, 64\)\], whose y no rows of Pearl\+'s 48 words doubled hand "
-                                                        r"on in one unit within 256 rows that C-Flock proves"))])
+                                                        r"on in one unit within 256 rows that Flock proves"))])
 def test_a_circuit_pearls_tables_cant_cut_is_refused(registered, grain, tables, cls, why):
     """Refused by name: an int8 linear (TINY's exact-int8 checkpoint), a class of two boundaries (its slots aren't all
     admitted at round 0), and y rows of a width no doubling of which divides a linear's N."""
@@ -407,7 +407,7 @@ def test_a_windows_cut_units_are_their_definitions_on_the_inputs_it_commits(low,
         values = {**values, name: CR.Registered.commit(PROGRAM, name, v.view(f"<u{bits // 8}").tolist(),
                                                        [hm96_salt(KEY, (1 << 61) + i, j) for j in range(len(v))],
                                                        word_bits=bits, schema=schema)}
-    win = IF.Window(c, RUN, LAW, 64, registered=values, forms=WR.FORMS)
+    win = IF.Window(c, RUN, DESIGN, 64, registered=values, forms=WR.FORMS)
     win.supply(CR)
     rows.record(win)
     bad = {}

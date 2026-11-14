@@ -129,7 +129,7 @@ class CheckpointIndex:
     another process on the same files and manifest (`shard_pin`), adopted instead of hashing again."""
 
     def __init__(self, ckpt_dir: str, *, checkpoints_manifest: str | None = None, model: str | None = None, revision: str | None = None,
-                 verify_shards: bool = True, pin: dict[str, Any] | None = None, workers: int | None = None):
+                 verify_shards: bool = True, pin: dict[str, Any] | None = None, workers: int | None = None) -> None:
         self.dir = ckpt_dir
         self.tensors: dict[str, tuple[str, str, list[int], int, int]] = {}
         self.shards: list[str] = []

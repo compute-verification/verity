@@ -2806,7 +2806,7 @@
     },
     {
       "paths": {
-        "verity/commitments/windows/": "verity/commitments/periods/"
+        "demos/onsite_served/config.toml": "demos/onsite_full.toml"
       }
     }
   ]

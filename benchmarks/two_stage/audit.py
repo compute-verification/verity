@@ -36,7 +36,7 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
 
 Exit 0 when the run is as expected: every session's circuit file the one its template's params name, and every Lean
 verdict accepted with every negative refused, round 2 accepting the statements, a5's record accepted (it takes the
-sessions' reads of the interior's own ports as the stream's records do, `verifier.audit_record`'s ``own_reads``), and
+sessions' reads of the interior's own ports as the stream's records do, `audit.less_own_reads`), and
 the outcome accepted or refused by round 2's two-stage form alone (`second_stage.FORM`), its records taking
 those reads (the interior's at the interior record and the links' boundary ports at the boundary record); or
 (``--altered``) refused at both link members by Lean's registered reads and nowhere else, and the outcome refused.
