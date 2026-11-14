@@ -15,7 +15,7 @@ breaks the composition's own inputs (a subprotocol dropped, unknown, repeated or
 a wrong or short commitment, non-canonical or malformed evidence, blobs missing or malformed) or the case itself (a
 field missing or not hex, not an object), and every field of the outcome but its reason must agree exactly. Sampled
 proofs' cases all reject: v2 refuses evidence naming no session (`oneSession`), and a session on the challenger's coin
-trees is verified by `flock-verify`, which the mirror doesn't run. So every product rejects here, onsite often with a
+trees is verified by `verity-verify-proof`, which the mirror doesn't run. So every product rejects here, onsite often with a
 subprotocol undecided beside the rejection. Remote's `windows` tie decides only where no subprotocol rejects, so this
 difftest doesn't reach it; `CoreRemote`'s `#guard`s check which windows it finds stray. Remote's case on one record
 that reuses the window's registration of its tables (`reusing`) is one made case, which sampled proofs refuses at

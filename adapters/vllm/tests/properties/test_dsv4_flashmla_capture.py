@@ -19,7 +19,7 @@ from verity.definitions.registry import flashmla_prefill as P
 
 from tests import fake_vllm
 from tests.properties import dsv4_flashmla_capture_gpu as X
-from verity_vllm.properties.record import REGISTRY, digest_of, seal
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 FLIP = (6, 3, 100)
 PFLIP, WFLIP = (2, 5, 300), (1, 3, 77)

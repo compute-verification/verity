@@ -2,8 +2,9 @@ module
 
 public import Proofs.Pouw.PearlC.DeviceFp4Gap
 public import Definitions.Pouw.PearlC.DeviceFp4Issue
-public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.Lemmas.PearlCRecords
 public import Proofs.Pouw.Lemmas.PearlC
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # Pearl-C4 at the issue-bound FP32 price (staged)

@@ -11,7 +11,7 @@ after the process has closed the lease's descriptors, stays inside its lease.
 
 A leased Commit's weights registration hashes on its leased GPU (``VERITY_WEIGHTS_HASH=device`` unless the item sets it: the same
 leaves, tree and root as the host path, ``commit.committer.weights_rows``), where the host path holds the GPU idle while it copies and
-hashes every tensor (79 to 91 s for a 7B or 8B model in cov-gm186, gm177 and gm178, against 0.1 s on the device).
+hashes every tensor.
 
 After its last run the Commit gives the GPU back (``release``): the engine shut down, the device's CUDA context destroyed with every
 allocation in it (as at the process's exit), nvidia-smi showing nothing left on the leased GPU (the node's stray probe reads the
@@ -49,8 +49,12 @@ import sys
 import threading
 import time
 import traceback
-from typing import Any, Callable, MutableMapping
+from collections.abc import Callable, MutableMapping
+from typing import Any
 
+from verity_vllm.records.schema_ids import GPU_LEASE_SCHEMA
+
+SCHEMA = GPU_LEASE_SCHEMA
 RECORD = "gpu_lease.json"
 MATCH_LEG_KEPT = "a Match stage holds its GPUs to its exit: its engine is its last work"
 HEARTBEAT_S = 60
@@ -561,7 +565,7 @@ def run(row_dir: str, log: str, cmd: list[str], timeout_s: int, environ: dict[st
     t1 = clock()
     rel = _read(_released(started))
     t_rel = float(rel["t"]) if rel.get("released") else t1
-    rec: dict[str, Any] = {"schema": "verity-vllm/gpu-lease/v1", "tool": environ["GPU_LEASE"], "max_min": max_min(timeout_s),
+    rec: dict[str, Any] = {"schema": SCHEMA, "tool": environ["GPU_LEASE"], "max_min": max_min(timeout_s),
                            "process_started": _utc(t0), "requested": None, "released": _utc(t_rel),
                            "released_at": rel.get("released_at") or "process.end", "process_ended": _utc(t1),
                            "kept": rel.get("kept") or (None if rel.get("released") else kept or "the Commit ended before its release (its last "

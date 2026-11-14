@@ -8,7 +8,7 @@ public import Proofs.Flock.Claims.Deploy
 
 One-stage v2 (`Spot.OneStageZk`) decides its one session with `verdictOf`: the session set up at its record's
 sample (`setupAt`: `sessionAt`'s `buildSessionOf` and `verifyCmd`'s checks, then the sample's law), the rep files its
-`reps` name (`filesOf`), `Zk.verify`, the scope check and the refusals after it. The record's session is flock-verify
+`reps` name (`filesOf`), `Zk.verify`, the scope check and the refusals after it. The record's session is verity-verify-proof
 `--zk` in public-coin form (`FlockDeploy.V true`), which at SHA-512 accepts exactly when `Zk.verify` at its statement's
 setup accepts the last message's record and proof files and `FlockDeploy.checks` pass (`next_decide_sha512`).
 
@@ -256,7 +256,7 @@ theorem setup_of_setupAt {si : Ins} {I : Flock.Witness.Inputs} {rd : Spot.OneSta
 
 /-- **v2's verdict on its one session is the record's decision there.** Where v2's `verdictOf` on the session is
 `.ok ()` (its record `record`, set up at the record's sample, its rep files `q`'s on the blobs `bs`) and the model decides
-on the last message `f` with its reading `si` of the statement `x` and session `(spec, sts)`, flock-verify `--zk` in
+on the last message `f` with its reading `si` of the statement `x` and session `(spec, sts)`, verity-verify-proof `--zk` in
 public-coin form accepts at SHA-512, given:
 * the inputs: `si` holds v2's inputs and registered reads (`SessionMatch`), and its sample is the record's (`hdraw`);
 * `Shows`: `f`'s statement is `x` (`hstmt`), its record the session's record (`hrec`) and its proof files the session's

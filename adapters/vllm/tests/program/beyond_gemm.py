@@ -31,11 +31,11 @@ from __future__ import annotations
 import json
 import os
 import time
+from dataclasses import dataclass
 
 import numpy as np
 import torch
 import torch.nn.functional as F
-from dataclasses import dataclass
 
 from verity_vllm.config import option
 

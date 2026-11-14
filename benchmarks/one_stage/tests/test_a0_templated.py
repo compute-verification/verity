@@ -11,11 +11,11 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import a0  # noqa: E402
+import a0
 
 TMPL = "verity/flock-circuit/tmpl"
 
-#: a stand-in for flock-circuit and flock-verify: each call appends its argv to ``calls``; ``serve`` records an accepted
+#: a stand-in for flock-circuit and verity-verify-proof: each call appends its argv to ``calls``; ``serve`` records an accepted
 #: session, ``prove`` prints its LIVE line, ``archive-put`` keys each file by its name and ``verify`` accepts
 FAKE = '''#!{python}
 import json, pathlib, sys

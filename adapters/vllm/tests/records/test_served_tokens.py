@@ -60,7 +60,7 @@ def _tp(doc: dict, fields: tuple[str, ...]) -> dict:
 
 
 def test_the_real_record_loads():
-    t = ServedTokens.load(REAL)
+    t = ServedTokens.of(_real(), str(REAL))
     assert t.where == str(REAL) and t.lag == 1 and len(t.requests) == 1
     r = t.requests[0]
     assert r == ServedRequest(request_id="d73b90fd-3f5e-5f82-a4c7-16a7321ad556", generated_token_ids=_real()["requests"][0]["generated_token_ids"],

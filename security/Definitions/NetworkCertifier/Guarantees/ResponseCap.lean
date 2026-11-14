@@ -18,7 +18,7 @@ open NetTiming
 schedule `s` registered with the response cap `cap`, each connection `c`'s request read at ingress as `mt c` (`none`
 where its field isn't a u32), the network certifier's code under the cap (`cappedCode`) sends every connection at most
 `cap` data cells and at most its request's `max_tokens` (none for a request it couldn't read), whatever the server
-sends and whenever it arrives (`arr`). In the id egress form a data cell is one token. Under `trusted-host` the network
+sends and whenever it arrives (`arr`). In the id egress form a data cell is one token. Under `trusted-device` the network
 certifier's run is this code, so each response it certifies is so bounded. -/
 def ResponseCapped : Prop :=
   ∀ {κ Cell : Type} (s : CertifierSchedule κ) (cap : ℕ) (mt : κ → Option ℕ) (arr : κ → Arrivals Cell) (c : κ),

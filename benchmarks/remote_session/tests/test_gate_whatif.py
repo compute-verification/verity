@@ -133,7 +133,7 @@ def test_a_record_of_another_loop_is_refused_by_name(broken):
 
 def test_a_host_runs_replay_at_its_own_round_trip_is_its_line_of_record_and_its_peer_is_the_records(
         host, tmp_path, monkeypatch):
-    """A gate run of one honest paced session whose verifier ran on the auditor host, in the form gate run 7's record
+    """A gate run of one honest paced session whose verifier ran on the auditor device, in the form gate run 7's record
     has: its verifier.json names no challenger peer, the request.json beside out/ does (--challenger-peer
     auditor-host), its own `peer` being the audited node. The line of record `whatif` reads (`auditor_line`'s, as
     auditor_line.py writes it) takes the peer from that record, the session is of record and credited, and its replay

@@ -1,12 +1,13 @@
-/-
-`Flock.Statement`: sparse F2 matrices, and Flock's BLAKE3 compression circuit as a pinned file (`flock-r1cs-rows/v1`)
-whose statement digest `D_b3` the verifier recomputes and compares with the pinned value.
--/
 module
 
 public import Flock.Canon
 public import Flock.Hash
 public import Flock.JsonParse
+
+/-!
+`Flock.Statement`: sparse F2 matrices, and Flock's BLAKE3 compression circuit as a pinned file (`flock-r1cs-rows/v1`)
+whose statement digest `D_b3` the verifier recomputes and compares with the pinned value.
+-/
 
 @[expose] public section
 set_option backward.privateInPublic true

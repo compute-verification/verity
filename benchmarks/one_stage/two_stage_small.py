@@ -6,14 +6,16 @@ sampler inputs as a replay writes it (`engine.sampler_capture.write`): each toke
 the id `TokenSelect_v4{V}` selects from it, which is the id the class's egress row and its return's row commit.
 ``expect`` reads a ``two_stage.py second`` summary and says whether the run held, check by check: round 2 accepting
 the statements, the return's read at round 1's rows among them, and the stream's outcome accepted or refused by the
-two-stage form alone. ``--inline`` writes the class as a served vocabulary's is, its replay block the check's body
-inlined (chunks and a combine a token), which round 2 derives no wires from and whose record commits no return:
-``second --unlinked`` runs it, and ``expect --unlinked`` holds that run to round 2's refusal of the wires.
+two-stage form alone; ``expect --inputs`` holds a linked run whose interior registers the select's ``logits``, which
+the prover gives after the first stage's sample, to round 2's refusal by ``second-inputs`` alone. ``--inline`` writes
+the class as a served vocabulary's is, its replay block the check's body inlined (chunks and a combine a token), which
+round 2 derives no wires from and whose record commits no return: ``second --unlinked`` runs it, and ``expect
+--unlinked`` holds that run to round 2's refusal of the wires.
 The window's run is the serve nonce's (``--serve``, `SERVE` unless given): a challenger host opens a run's root once,
 ever, so a first stage on one takes a nonce no run has used.
 
     python two_stage_small.py serve --out DIR [--v 128] [--outputs 4] [--spans 6] [--inline] [--serve NONCE]
-    python two_stage_small.py expect SUMMARY.json [--unlinked]
+    python two_stage_small.py expect SUMMARY.json [--unlinked | --inputs]
 """
 from __future__ import annotations
 
@@ -36,6 +38,9 @@ GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "max_token
           "ignore_eos": True, "seed": None, "presence_penalty": 0.0, "frequency_penalty": 0.0, "repetition_penalty": 1.0}
 #: the stream's code for the two-stage form, which it refuses every run by, last, until the form's proof lands
 FORM = "two-stage-form"
+#: round 2's code for a value the interior registration registers that a replay block's input may not read: here the
+#: sampler's ``logits``, which the prover registers after the first stage's sample
+INPUTS = "second-inputs"
 #: round 2's code for a replay block it derives no wires from: an inlined class's
 UNWIRED = "second-wires"
 
@@ -69,10 +74,13 @@ def serve(out: Path, v: int = 128, outputs: int = 4, spans: int = 6, seed: int =
 def expect(summary: Mapping[str, Any], code: str | None = None) -> dict[str, bool]:
     """A ``two_stage.py second`` summary, check by check: every check before the sample passed, each session's circuit
     file is its template's params', every Lean verdict accepted, every negative refused, and round 2 and the stream's
-    outcome are the run's. For a record of round 1 that commits the block's return (``code`` None): round 2 accepts
-    the statements with no code, and the outcome is accepted, or refused by its interior record's statements check
-    with the two-stage form's code alone (`FORM`). For an unlinked run (``code`` `UNWIRED`): round 2 refuses the
-    statements by that code alone, and so does the outcome. Either way its replay sample's record fails nothing."""
+    outcome are the run's. For a record of round 1 that commits the block's return and its inputs (``code`` None): round
+    2 accepts the statements with no code, and the outcome is accepted, or refused by its interior record's statements
+    check with the two-stage form's code alone (`FORM`). For a linked run whose interior registers the block's inputs,
+    the ``logits`` the prover gives after the first stage's sample (``code`` `INPUTS`): round 2 refuses the statements
+    by that code alone, its return read at round 1's rows, and so does the outcome. For an unlinked run (``code``
+    `UNWIRED`): round 2 refuses the statements by that code alone, and so does the outcome. In every case its replay
+    sample's record fails nothing."""
     audit, o, r2 = summary.get("audit") or {}, summary.get("outcome") or {}, summary.get("round_two") or {}
     inner = audit.get("audit") or {}
     negatives = [v if isinstance(v, bool) else bool(v.get("refused")) for v in (audit.get("negatives") or {}).values()]
@@ -102,12 +110,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     e = sub.add_parser("expect")
     e.add_argument("summary", type=Path)
     e.add_argument("--unlinked", action="store_true")
+    e.add_argument("--inputs", action="store_true", help="a linked run whose interior registers the block's inputs: "
+                                                         "round 2 refuses it by second-inputs alone")
     a = ap.parse_args(argv)
     if a.cmd == "serve":
         got = serve(a.out, a.v, a.outputs, a.spans, inline=a.inline, nonce=a.serve)
         print(json.dumps({k: str(got[k]) for k in ("check", "class", "capture")}))
         return 0
-    checks = expect(json.loads(a.summary.read_text()), UNWIRED if a.unlinked else None)
+    checks = expect(json.loads(a.summary.read_text()), UNWIRED if a.unlinked else INPUTS if a.inputs else None)
     print("SMALL " + json.dumps(checks))
     return 0 if all(checks.values()) else 1
 

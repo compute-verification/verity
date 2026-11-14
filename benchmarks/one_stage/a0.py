@@ -2,14 +2,14 @@
 verifier, the Lean verifier's sample checks, and the audit record with its integrity profile; then the negatives.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
-      python benchmarks/one_stage/a0.py --set DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR \\
+      python benchmarks/one_stage/a0.py --set DIR --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --out DIR \\
       [--k 16] [--delta 0.01] [--port 7511]
 
 * **Stand-in commitment.** M0 commits the captured values afresh (`frame-v3-sha512`, `hm96-sha512/row/v1` leaves, fresh
   OS salts). The values were read under the served run's `vllm-v1` root and replayed bit-exact there by `vu_export`; that
   link is provenance, not proof, and the registration says so.
 * **Partition.** `Q_template_instance` v0 over the population program: one unit per instance, no width rule.
-* **Verifier of record.** Lean's `flock-verify verify` replays the session offline with the circuit and the public
+* **Verifier of record.** Lean's `verity-verify-proof verify` replays the session offline with the circuit and the public
   file held by content; Lean also checks U1-U3 on the sample, and M0's own verifier (`flock-circuit serve`) checks it live.
 """
 from __future__ import annotations
@@ -36,6 +36,7 @@ from verity_flock.input_sets import InputSet
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import verifier_env
+from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 
 import r2_population as R2
 
@@ -72,7 +73,7 @@ DEV_SCHEME, DEV_FAMILY = "verity/one-stage/dev-draw/v1", "draw"
 
 def challenger_draw(lean: str, args: list[str], law: dict, population: int, after: str | bytes,
                     log: Path) -> subprocess.CompletedProcess:
-    """Lean's sample, ``flock-verify draw ARGS --stream-file F``, on a development challenger's coins (the verifier has
+    """Lean's sample, ``verity-verify-proof draw ARGS --stream-file F``, on a development challenger's coins (the verifier has
     none of its own). The challenger is an in-process `LiveChallenger` on its own entropy (`secrets.token_bytes`),
     committed before any coin opens. Its one family holds the coins the sample reads, opened after `after` (the
     registration's digest) by `ChallengerCoins`. F holds the bytes `law` reads over `population`, each stream once, in
@@ -501,7 +502,7 @@ class VerifyMembers:
 
 def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify",
                 flags: Sequence[str] = (), members: VerifyMembers | None = None) -> dict:
-    """The verifier: Lean `flock-verify verify` on the session's record, with the circuit and the public file
+    """The verifier: Lean `verity-verify-proof verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
     `hold_registered`) when the statement reads registered values, with the window's registered circuit record
     (`st["interface_file"]`, `--interface`) whose declared registered ports the file never binds (`bound_files`); `zk`,
@@ -560,6 +561,34 @@ def lean_read_no_proof(v: dict) -> bool:
     return lean_refused(v, NO_SESSION_FILES) and v["why"].startswith(NO_SESSION_FILES)
 
 
+def lean_answered(verifiers: dict | None) -> bool:
+    """Whether a verdict's or an audit record's `verifiers` holds an answer of the Lean's. In its place the verifier
+    writes `{"refused": reason}` for a Lean that refused the input and for one that could not run (`verifier.lean`), and
+    fails its check either way."""
+    return "refused" not in ((verifiers or {}).get("lean") or {"refused": None})
+
+
+def negative(v: Verdict) -> dict:
+    """A negative's row from the verifier's verdict `v` on its altered input: refused only where the check failed and
+    the Lean answered (`lean_answered`). Under a Lean that could not run the verifier fails every check, the honest
+    input's too, so that failure refuses no negative: the row then carries what the verifier wrote in the Lean's place
+    (``lean``), and the audit fails."""
+    answered = lean_answered(v.verifiers)
+    return {"refused": not v.ok and answered, "codes": list(v.codes),
+            **({} if answered else {"lean": (v.verifiers or {}).get("lean")})}
+
+
+def history_negative(v: Verdict) -> dict:
+    """`negative` for a history table's registered root that is not the table's. The Python refuses it with a reason
+    and no code (`R.HistoryRefused`) and the Lean's own answer is a refusal too, so the verifier's verdict is `R.HISTORY`
+    alone for whatever stands in the Lean's place, a Lean that could not run included (`verifier.check`). Only the
+    Lean's own check of the root gives the Python's reason: refused only where the two reasons are one; else the row
+    carries both (``reasons``)."""
+    why = v.detail.get(R.HISTORY) or {}
+    refused = v.codes == (R.HISTORY,) and isinstance(why.get("lean"), str) and why["lean"] == why.get("python")
+    return {"refused": refused, "codes": list(v.codes), **({"reasons": dict(why)} if why and not refused else {})}
+
+
 def drawcheck_refused(cases: list[dict], i: int, code: str) -> bool:
     """Lean's sample check refused case `i` by `code` (U1, U3), not for a sample it could not read."""
     return len(cases) > i and not cases[i]["ok"] and cases[i]["why"].startswith(f"{code}:")
@@ -586,8 +615,8 @@ def audit_session(rec: dict, receipt: dict, st: dict, header: dict, law: dict, r
         "m0-verifier": {"accepted": verifier.get("accepted") is True, "why": verifier.get("why"),
                         "tool": "flock-circuit serve (M0)"},
         "lean-draw-u1-u3": {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u,
-                            "tool": "flock-verify draw-test (9d0d53df)"},
-        "lean-verify": {**lean_verify(lean118, st, header["instances"], out), "tool": "flock-verify verify --archive"},
+                            "tool": "verity-verify-proof draw-test (9d0d53df)"},
+        "lean-verify": {**lean_verify(lean118, st, header["instances"], out), "tool": "verity-verify-proof verify --archive"},
     }
     if draw is None:
         return {"accepted": False, "why": "no draw recorded", "verdicts": verdicts, "statement": statement}
@@ -600,16 +629,16 @@ def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict, 
     """The audit record's own refusals, each re-deciding the real record with one input altered: the verifier
     not run or absent, a session root that isn't the registered one, the verifier reporting a registered value's
     reads opened against another root than its registered one, and, when the sessions were handed the verifier's sample
-    (`served`), a served share that isn't it. Each is decided by the verifier (`verifier.audit_record`); `agree`
-    is whether the Lean and the Python decided it alike."""
+    (`served`), a served share that isn't it. Each is decided by the verifier (`verifier.audit_record`) and refused only
+    where the Lean answered (`lean_answered`); `agree` is whether the Lean and the Python decided it alike."""
     base = dict(registration=result["registration"], receipt=result["receipt"], draw=result["draw"], law=law,
                 proved_units=result["proved_units"], instances=len(result["proved_units"]), statement=result["statement"],
                 verdicts=result["verdicts"], delta=delta, served=served, session_roots=session_roots)
 
     def decide(**change) -> dict:
         r = V.audit_record(**{**base, **change})
-        return {"refused": not r["accepted"] and r["profile"] is None, "failed": [k for k, c in r["checks"].items() if not c["ok"]],
-                "agree": r["verifiers"]["agree"]}
+        return {"refused": not r["accepted"] and r["profile"] is None and lean_answered(r["verifiers"]),
+                "failed": [k for k, c in r["checks"].items() if not c["ok"]], "agree": r["verifiers"]["agree"]}
 
     vs = base["verdicts"]
     port = next(iter(session_roots), None)
@@ -658,8 +687,8 @@ def main() -> int:
     ap.add_argument("--set", required=True)
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
-    ap.add_argument("--lean", required=True, help="flock-verify for the draw checks")
-    ap.add_argument("--lean-verify", default=None, help="flock-verify for the full verify; default --lean")
+    ap.add_argument("--lean", required=True, help="verity-verify-proof for the draw checks")
+    ap.add_argument("--lean-verify", default=None, help="verity-verify-proof for the full verify; default --lean")
     ap.add_argument("--out", required=True)
     ap.add_argument("--k", type=int, default=16)
     ap.add_argument("--delta", type=float, default=0.01)

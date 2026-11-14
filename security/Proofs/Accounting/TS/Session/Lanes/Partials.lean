@@ -45,7 +45,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 Lane `l`'s statement reads its partials row at its port `partials`, and the combine reads it at `p<l>`: two ports of two
 circuits, of one registered value. Where each session's `--registered` file holds `PouwWindow.Lanes.ownOf` (one table
 per value at the unit's placement, `place v`, registered at `roots (place v).1`, each port read at its layout row from
-the table's base row) and flock-verify's known-read check holds each port the file
+the table's base row) and verity-verify-proof's known-read check holds each port the file
 marks `read_in_full` (`PouwWindow.Lanes.readFull`) to one row of its registered words whose every bit the unit reads
 (`Flock.KnownRead.fullRows`), the two statements decode one row:
 

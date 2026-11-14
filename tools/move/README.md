@@ -115,7 +115,10 @@ change did: a path no pass of the rewrite reads stays as written, and its commit
 checks it itself: `layout.py` stops (exit 1) a move after which a Lake package's path to another package (a requirement's
 `path` in a `lakefile.toml`, a path package's `dir` in a `lake-manifest.json`) names no package where it named one
 before, and names the file and the path. A path of any other kind that a move leaves behind is found by the check on
-its candidate.
+its candidate. Both movers give a pin of `tools/verity/check/pins.py` (a JSON pin or a `sha256sum` listing) the new
+digest of a Lake manifest the move rewrites, where it held the old one (`layout.repin_manifests`), and `move_check.py`
+certifies that edit; any other digest a pin holds of a file the move changes is left for the pin's command, and
+`layout.py` stops on a rewrite that would change a digest in a pin file the map rewrites.
 
 Once the moves have landed, each open branch crosses all of them with one command:
 
@@ -125,8 +128,13 @@ It finds each move `origin/main` (`--main`; fetch it first) has and the branch l
 script and map on the branch, its own additions included, and merges the moved `main` last. It changes no branch: the
 result is pushed to the new branch, never over one. It reports `clean`, or where it stopped: a conflict of the branch's
 own, files of the branch with no row (`no-row`, below), a script that failed (`script-failed`, with the last lines of its
-output: an `__init__.py` with content the move would delete names each file and the fix), or pins or Lean locks to
-regenerate. Its
+output: an `__init__.py` with content the move would delete names each file and the fix), pins to regenerate, or Lean
+locks that took the moved `main`'s side whole (`locks-stale`), into which the owner re-adds the branch's own entries by
+hand, leaving the records to the candidate's records run. A word a crossed map renames only in the files a block names
+(`[[words_in]]`, `[rewrite] words_in`) that the branch's own lines still spell in a file no such block names is left as
+written, since there it may mean something else, and the result may not build: the crossing is `stale-words`, never
+`clean`, names each file, line and word, pushes nothing and exits 1, and the owner renames each that means the renamed
+name. Its
 first step merges each move's base into the branch, so
 a branch behind `main` merges `main` up to the window's base before the window: otherwise `restack.py` stops at that
 merge's conflicts, which are the branch's own. Before a branch crosses a move, `restack.py` checks that the move's commit

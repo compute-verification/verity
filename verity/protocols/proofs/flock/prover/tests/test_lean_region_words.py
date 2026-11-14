@@ -18,7 +18,7 @@ import pytest
 from verity.circuits.codec import canonical_json
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 STATEMENT = "verity/flock-circuit@e51e2b86+seed-injection"
 GEMM = "art:3104c2f9/gemm-k1024/stage"
 #: the tail stage `stage1`'s range starts at slot 1057 of 2^9 columns; its output word is its word 1, the region its 16 bits
@@ -31,7 +31,7 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 def gemm(tmp_path_factory):
     """The GEMM coordinate statement's circuit and public file, from the evidence store as `ci.py` fetches them."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "agreement"))
-    import ci  # noqa: PLC0415
+    import ci
 
     store = tmp_path_factory.mktemp("store")
     try:

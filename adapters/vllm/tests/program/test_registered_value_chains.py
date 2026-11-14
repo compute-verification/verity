@@ -9,10 +9,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from verity.circuits.codec import encode_program, program_digest
+from verity.circuits.constants import program_data
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
-from verity.circuits.constants import program_data
 from verity.definitions.registry import b1, hopper
 from verity.definitions.registry import dense as DN
 from verity.definitions.registry import fa2_softcap as F2S

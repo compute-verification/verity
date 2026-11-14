@@ -5,7 +5,7 @@ served tree may be: `row/v1`, and `row/v2` and `row-seg/v1` bit rows (the circui
 v2 or a segmented row). Each unit's `x` row and output row are registered values too, so every port of the circuit is
 registered (`Flock.Registered.checkComplete`). The verifier writes its own `--registered` file from the trees as the
 service holds them (`served.json`, `served-x.json`), with `register_served` on its own program, and the output rows' port
-(`out-port.json`; `served_registered.registered_file`), and `flock-verify verify --zk --registered` passes every check of
+(`out-port.json`; `served_registered.registered_file`), and `verity-verify-proof verify --zk --registered` passes every check of
 the session on it, its verdict naming that program's digest (the partition's), and refuses it on the same file with the
 tree's root changed, or a bit row's port with its words or width changed.
 `--zk` holds the files to the form `SampledKSLiveV4` covers, or at a shared-row public file `SampledKSLiveV5`'s
@@ -35,7 +35,7 @@ from verity.protocols.proofs.spot.verifier.one_stage.served import register_serv
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
 VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 #: `pod/89-served-registered.sh`'s fixture for each row format (`SCHEMA=`): stage/ (circuit.txt, pub-32.bin, program.json,
 #: partition.json, served.json, registered.json, tables/), session/ (the sampled --zk session's record and proofs), live.json
 #: (the prover's LIVE record)
@@ -56,7 +56,7 @@ pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean t
 
 @pytest.fixture(scope="module")
 def built():
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
 
 
 @pytest.fixture(scope="module", params=list(FIXTURES), ids=["v1", "v2", "seg"])
@@ -152,7 +152,7 @@ def test_the_provers_record_carries_the_sha512_of_the_public_file_the_verifier_r
 
 def test_a_bit_row_port_whose_words_and_width_are_not_its_rows_is_refused(fx, tmp_path):
     """A bit row is exactly `words * word_bits` bits: `register_served` refuses a tree whose words or width are not the
-    parameter's rows, and `flock-verify` refuses the session on a file whose `cs` port names 63 or 65 16-bit words, or 64
+    parameter's rows, and `verity-verify-proof` refuses the session on a file whose `cs` port names 63 or 65 16-bit words, or 64
     32-bit ones, for its 1024-bit rows (`Port.fits`)."""
     import served_registered as SR
 

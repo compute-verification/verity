@@ -35,8 +35,6 @@ import time
 from pathlib import Path
 
 import numpy as np
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 import run_result
 
 # ---- E4M3 codec -------------------------------------------------------------------------------------------------------
@@ -770,7 +768,7 @@ def main() -> None:
     out.write_text(json.dumps(doc, indent=1) + "\n")
     ok = bad == 0 and worst <= 1 / 400
     run_result.write(out, ok, "pearlc-census", f"worst in-domain {key} {worst:.5f} (threshold 0.0025)",
-                     [("worst_in_domain_skippable_share", worst, "fraction"),
+                     [("compute-accounting/pearlc-census.worst-in-domain-skippable-share", worst, "fraction"),
                       ("max_double_rounding_differs", max(r["double_rounding_differs"] for r in rows_out), "fraction")])
     print(json.dumps({k: v for k, v in doc.items() if k != "cells"}))
 

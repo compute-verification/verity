@@ -36,7 +36,9 @@ theorem tabOfLevel0_fields {st : _root_.Flock.Setup} {l : _root_.Flock.Firewall.
   · cases h
   split at h
   · cases h
-  rcases hs : _root_.Flock.Zk.schedule st.m with e | ⟨sch, tPad⟩
+  split at h
+  · cases h
+  rcases hs : _root_.Flock.Zk.schedule st.wideLeaf st.m with e | ⟨sch, tPad⟩
   · rw [hs] at h; cases h
   · rw [hs] at h
     simp only at h

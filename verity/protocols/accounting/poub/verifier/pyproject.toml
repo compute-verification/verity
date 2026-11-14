@@ -8,8 +8,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # profile; its coins on the one challenger, local and as a service.
 inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proofs/spot/verifier/one_stage/link_points.py",
           "verity/__init__.py", "verity/errors.py",
-          "verity/hardware/record.py",
-          "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/reporting.py",
+          "verity/protocols/proofs/spot/verifier/profile.py",
           "verity/protocols/proofs/spot/verifier/__init__.py",
           "verity/claims/__init__.py",
           "verity/protocols/proofs/spot/device/challenger.py", "verity/protocols/proofs/spot/device/remote.py",
@@ -20,13 +19,11 @@ inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proo
           "verity/protocols/proofs/spot/verifier/one_stage/verdict.py",
           "verity/circuits", "verity/commitments",
           "verity/commitments/crypto", "verity/commitments/randomness",
-          # the core's `block_count`, the blocks a monitoring period holds, which `monitoring` reads through PoUS's
-          # `wipe_monitoring`
-          "verity/periods",
           # PoUS's setup, P2 and vk, which a P2 store is under (`p2.py`)
           "verity/protocols/accounting/pous",
           "verity/protocols/accounting/pous/prover",
-          # the deployment layer and its wire, which the session's parties run on (`session_parties.py`)
+          # the deployment layer and its wire, which the session's parties run on (`session_parties.py`), and the
+          # monitoring periods, which `monitoring` reads
           "verity/channel.py", "verity/runtime", "verity/tests/tests/test_channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py",
           # the circuit model's codec rows and the primitives' range rows, which test_encode_chain.py and
           # test_gate_ranges.py recompute from codec.encode_word, the f32 evaluators and property/v1's rules, and
@@ -42,6 +39,7 @@ inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proo
           # PoUW's core answer form and what it imports, which test_p2_party.py holds a session's answer to
           "verity/protocols/accounting/pouw/verifier/__init__.py", "verity/protocols/accounting/pouw/verifier/audit.py",
           "verity/protocols/accounting/pouw/verifier/coins.py", "verity/protocols/accounting/pouw/verifier/core_check.py",
+          "verity/protocols/accounting/pouw/verifier/verifier.py",
           "verity/protocols/accounting/pouw/verifier/protocol.py", "verity/protocols/accounting/pouw/verifier/salt.py",
           "verity/protocols/accounting/pouw/verifier/window.py", "verity/protocols/proofs/spot/verifier/one_stage/__init__.py",
           "verity/protocols/proofs/spot/verifier/one_stage/partition.py",

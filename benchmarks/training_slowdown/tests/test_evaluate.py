@@ -77,6 +77,36 @@ def test_the_final_split_scores_the_whole_set(setup):
     assert ev(theta, "w")["bpb"] == near(ev.start_bpb) and ev.start_bpb == sc["start_bpb"]
 
 
+def test_a_state_is_scored_at_the_depth_its_names_give_and_another_architecture_is_refused_by_name(setup):
+    """A state of more blocks than θ (a grown model) is scored in the start's architecture at its own depth, and the
+    score states it; θ's base stays θ. A state whose blocks don't run 0..N-1, or with a tensor of another shape, one
+    the architecture lacks or one missing, is refused by name."""
+    data, s, theta, _ = setup
+    n = s.shape["n_layer"]
+    ev = Evaluator(data, "final", theta, s.shape, "cpu")
+    torch.manual_seed(0)
+    deeper = LM.of(s.shape | {"n_layer": n + 2}).state_dict()
+    toks, man = held_out(data, "final")
+    full, tail = windows(len(toks))
+    sc = ev(deeper, "w")
+    assert sc["blocks"] == n + 2 and sc["bpb"] == near(
+        bpb_of(deeper, s.shape | {"n_layer": n + 2}, toks, full + tail, man["bytes"]))
+    again = ev(theta, "w")
+    assert again["blocks"] == n and again["bpb"] == near(ev.start_bpb) and sc["start_bpb"] == ev.start_bpb
+    wq = tuple(theta["blocks.0.wq.weight"].shape)
+    for state, why in (
+            ({k: v for k, v in deeper.items() if not k.startswith("blocks.1.")},
+             r"the state has no block 1, and a model's blocks run 0..N-1 \(it has blocks \[0, 2\]\)"),
+            (deeper | {"blocks.0.wq.weight": torch.zeros(2, 2)},
+             rf"the state's blocks.0.wq.weight is of shape \(2, 2\) where the start's architecture has \({wq[0]}, "
+             rf"{wq[1]}\): a state is the start's shape at {n + 2} blocks"),
+            (theta | {"blocks.0.extra": torch.zeros(1)},
+             "the state's blocks.0.extra is a tensor the start's architecture lacks"),
+            ({k: v for k, v in theta.items() if k != "norm"}, "the state's norm is missing")):
+        with pytest.raises(ValueError, match=why):
+            ev(state, "w")
+
+
 def test_a_search_pool_whose_tokens_arent_its_bytes_is_refused(setup):
     data, s, theta, _ = setup
     p = data.sets["search"] / "manifest.json"

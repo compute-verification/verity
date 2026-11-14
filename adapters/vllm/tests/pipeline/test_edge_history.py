@@ -5,13 +5,15 @@ windows and refuses tampered history by name."""
 from __future__ import annotations
 
 import pytest
-
-from tests.program.test_workload_program import _edge_wl, _groups
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as REG, registration as R
 from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.partition_object import calls
 from verity.circuits.types import Array, Value, field_starts, field_types
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+
+from tests.program.test_workload_program import _edge_wl, _groups
 from verity_vllm.pipeline import edge as E
 from verity_vllm.program import workload as W
 

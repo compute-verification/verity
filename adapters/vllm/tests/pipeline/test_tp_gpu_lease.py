@@ -439,7 +439,8 @@ def tp_commit(script: str) -> list[str]:
 
 def _run(tmp_path: Path, script: str) -> tuple[int, dict, str]:
     lease = fake_lease(tmp_path, ",".join(GPUS))
-    env = {"PATH": f"{tmp_path / 'bin'}:{os.environ['PATH']}", "GPU_LEASE": lease, "GPU_LEASE_N": str(len(GPUS))}   # nvidia-smi: `fake_smi`
+    env = {"PATH": f"{tmp_path / 'bin'}:{os.environ['PATH']}", "GPU_LEASE": lease, "GPU_LEASE_N": str(len(GPUS)),   # nvidia-smi: `fake_smi`
+           "PYTHONPATH": os.pathsep.join(p for p in sys.path if p)}      # the stand-in imports what this process imports
     GL.hide_devices(env)
     log = tmp_path / "commit.log"
 
@@ -479,7 +480,8 @@ def test_the_tp_commit_takes_every_gpu_at_once_and_gives_them_back_together_whil
 def test_a_tp_commit_that_fails_holding_its_lease_frees_every_gpu_at_its_exit(tmp_path, script, rc, kept):
     got, rec, log = _run(tmp_path, script)
     assert got == rc and rec["kept"].startswith(kept) and rec["released_at"] == "process.end", log
-    assert rc == 1 or "checks [([False, False], False), ([False, False], False)]" in log      # the checks ran holding both locks
+    # the stand-in's own end, not an import's: the engine's failure, or the checks run holding both locks
+    assert ("the engine did not start" if rc == 1 else "checks [([False, False], False), ([False, False], False)]") in log, log
     assert all(released(tmp_path / f"{g}.lock") for g in GPUS)
 
 

@@ -161,7 +161,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../verity/protocols/proofs/recursion/verifier/recursive",
+   "../../verity/protocols/proofs/spot_flock/verifier/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

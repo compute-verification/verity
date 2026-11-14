@@ -14,7 +14,7 @@ trap 'rm -rf $S' EXIT
 [ -x /usr/bin/time ] || { echo "no /usr/bin/time" >&2; exit 1; }
 
 LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier)
-LEAN_BIN=$L/lean-$LSHA/flock-verify
+LEAN_BIN=$L/lean-$LSHA/verity-verify-proof
 # the inner session's send check (rec_live --lean), built beside it
 FIREWALL_BIN=$L/lean-$LSHA/flock-firewall
 (
@@ -23,8 +23,8 @@ FIREWALL_BIN=$L/lean-$LSHA/flock-firewall
   exec 9>$L/lean.lock; flock 9
   if [ ! -x $LEAN_BIN ] || [ ! -x $FIREWALL_BIN ]; then
     rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $L/lean-src) \
-      && (cd $LEAN_SRC && lake build flock-verify flock-firewall) && mkdir -p $L/lean-$LSHA \
-      && cp $LEAN_SRC/.lake/build/bin/flock-verify $LEAN_SRC/.lake/build/bin/flock-firewall $L/lean-$LSHA/
+      && (cd $LEAN_SRC && lake build verity-verify-proof flock-firewall) && mkdir -p $L/lean-$LSHA \
+      && cp $LEAN_SRC/.lake/build/bin/verity-verify-proof $LEAN_SRC/.lake/build/bin/flock-firewall $L/lean-$LSHA/
   fi
 ) > $O/build-lean.log 2>&1 &
 LP=$!

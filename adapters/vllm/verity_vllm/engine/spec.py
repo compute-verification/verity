@@ -10,7 +10,7 @@
     enforce_eager = false
     compilation_config = { mode = 0, cudagraph_mode = "FULL_DECODE_ONLY", cudagraph_capture_sizes = [1, 8, 32, 128] }
 
-``[engine]`` takes exactly `LLM`'s supported options (`pipeline.llm.SUPPORTED`), each typed; an unknown or missing key,
+``[engine]`` takes exactly `LLM`'s supported options (`verity_vllm.llm.SUPPORTED`), each typed; an unknown or missing key,
 or a value of the wrong type, raises `verity_config.ConfigError` before any engine is built.  A key left out keeps
 `LLM`'s default, as when a caller doesn't pass it.  `EngineSpec.digest` is the spec's canonical SHA-256
 (`verity_config.sha256`, identity form), which `LLM.from_spec` records as ``engine_record["spec_digest"]``;

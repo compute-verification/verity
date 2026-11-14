@@ -68,8 +68,8 @@ sys.path.insert(0, str(HERE))
 
 import h1unit as U  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.protocols.accounting.pouw.verifier import core_check as CC  # noqa: E402
 from verity.protocols.accounting.pouw.prover.circuit import live as L  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import core_check as CC  # noqa: E402
 from verity.protocols.accounting.pouw.verifier import live_reads as LR  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402

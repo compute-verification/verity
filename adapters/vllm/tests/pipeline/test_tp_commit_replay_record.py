@@ -1,7 +1,7 @@
 """`verity_vllm.pipeline.tp.commit_replay` on a record that holds less than a sealed TP Commit's.  `_of_record`: a deferred record
 without its bundles, a run that never reached its commit, and a commit without its commitment vector, each refused before the
 bundle's store is opened; and a rank committed without a binding, on a stand-in store.  `replay_rank`: a rank committed without a
-weight registration.  `fold`: a pair with no cross-rank verdict, a rank whose finalize recorded nothing of its replay, and a run
+weight registration, and a replay whose pool does not fit, which `main` refuses.  `fold`: a pair with no cross-rank verdict, a rank whose finalize recorded nothing of its replay, and a run
 without a commit."""
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from verity_vllm.check.replay.driver import PoolDoesNotFit
 from verity_vllm.errors import Refused
 from verity_vllm.pipeline.tp import c2 as C2
 from verity_vllm.pipeline.tp import commit_replay as TPR
@@ -115,6 +116,29 @@ def test_a_ranks_shards_are_opened_against_the_root_its_commit_registered_and_ag
     assert doc["weights_check"] is None and json.loads(TPR.result_path(out, 0, 1).read_text())["sampled_replay"]["result"] is None
 
 
+def test_a_pool_that_does_not_fit_is_raised_by_name_and_the_command_refuses_with_no_record_of_the_rank(tmp_path, monkeypatch):
+    """Any other failure of a rank's replay is recorded as a replay that did not run.  This one says the host is too small, not
+    that the rank fails: the rank raises it, the command exits 2, and no record of the rank is written, so a larger host replays it."""
+    out, bundle, dd = _bundle_of_record(tmp_path, monkeypatch, {"binding": {"map_digest": MAP_DIGEST}})
+    bdir = Path(bundle["path"])
+    (bdir / "weights").mkdir()
+    (bdir / "weights" / "tree.json").write_text(json.dumps({"names": [], "root": "ab" * 32}))
+    bundle["context"]["replay"] = {}
+    (out / C2.DEFERRED).write_text(json.dumps(dd))
+
+    def load(cfg, rank, world):
+        raise PoolDoesNotFit("the largest pick does not fit")
+
+    monkeypatch.setattr(TPR.RB, "open_bundle", lambda path: bundle)
+    monkeypatch.setattr(TPR.RR, "load", load)
+    monkeypatch.setattr(TPR, "warm_vml", lambda: None)
+    o = TPR.Options(commit_out=str(out), checkpoint_dir="/ck")
+    with pytest.raises(PoolDoesNotFit):
+        TPR.replay_rank(o, out, dd, 0, 1, ck=lambda: None)
+    assert TPR.main(o) == 2
+    assert not TPR.result_path(out, 0, 1).exists() and "decided" not in json.loads((out / C2.DEFERRED).read_text())
+
+
 def test_the_fold_decides_a_record_with_no_cross_rank_verdict_no_finalize_block_and_a_run_without_a_commit(tmp_path):
     """Two ranks whose replay could not run, on a record whose pair has no cross-rank verdict: each rank fails by its replay's own
     reason and no collective family is waived; the rank's finalize gets the result alone; the run without a commit stays None."""
@@ -130,7 +154,7 @@ def test_the_fold_decides_a_record_with_no_cross_rank_verdict_no_finalize_block_
             {"pair": 0, "arm": "instrumented", "tokens_equal_ref": True, "commit": {"per_rank": {"0": dict(PENDING), "1": dict(PENDING)}, "commit_pass": None}},
             {"pair": 1, "arm": "instrumented", "tokens_equal_ref": True})
     (out / "finalize_pair0.json").write_text(json.dumps([{"rank": 0}, {"rank": 1, "sampled_replay": None}]))
-    (out / "summary.json").write_text("{}")
+    (out / "summary.json").write_text(json.dumps({"replay_deferred": {"record": C2.DEFERRED}}))
     assert TPR.fold(out) is False
     summ = json.loads((out / "summary.json").read_text())
     assert summ["commit_pass"] == [False, None] and summ["pass"] is False

@@ -5,8 +5,9 @@ import json
 
 import pytest
 
-from verity_vllm.properties import fa_tap_exactness, golden, holdout, quarantine_lint
-from verity_vllm.properties.record import (
+from tests.properties import fa_tap_exactness
+from verity_vllm.properties import golden, holdout, quarantine_lint
+from verity_vllm.records.property_record import (
     BY_SCHEMA,
     REGISTRY,
     PropertyRecord,
@@ -51,6 +52,10 @@ def test_the_registry_names_each_harness_schema_once():
         glm53_dsa_capture_gpu,
         glm53_fa3_prefill_capture_gpu,
         glm53_fused_rmsnorm_capture_gpu,
+        glm53_index_share_capture_gpu,
+        glm53_mtp_eh_norm_capture_gpu,
+        glm53_mtp_eh_proj_capture_gpu,
+        glm53_mtp_indexer_logits_capture_gpu,
         glm53_tp8_allreduce_capture_gpu,
         sigmoid_router_capture_gpu,
         tp4_nccl_tree_replay,
@@ -71,6 +76,7 @@ def test_the_registry_names_each_harness_schema_once():
     assert REGISTRY["tp4_nccl_tree_capture"].schema == tp4_nccl_tree_replay.SCHEMA
     assert REGISTRY["glm53_fa3_prefill_capture"].schema == glm53_fa3_prefill_capture_gpu.SCHEMA
     assert REGISTRY["glm53_fused_rmsnorm_capture"].schema == glm53_fused_rmsnorm_capture_gpu.SCHEMA
+    assert REGISTRY["glm53_index_share_capture"].schema == glm53_index_share_capture_gpu.SCHEMA
     assert REGISTRY["blackwell_fp8_capture"].schema == fp8_sm120_capture_gpu.SCHEMA
     assert REGISTRY["sigmoid_router_capture"].schema == sigmoid_router_capture_gpu.SCHEMA
     assert REGISTRY["dsv4_flashmla_capture"].schema == dsv4_flashmla_capture_gpu.SCHEMA
@@ -80,6 +86,9 @@ def test_the_registry_names_each_harness_schema_once():
     assert REGISTRY["dsv4_moe_capture"].schema == dsv4_moe_capture_gpu.SCHEMA
     assert REGISTRY["dsv4_decode_index_row_capture"].schema == dsv4_decode_index_row_capture_gpu.SCHEMA
     assert REGISTRY["dsv4_decode_metadata_capture"].schema == dsv4_decode_metadata_capture_gpu.SCHEMA
+    assert REGISTRY["glm53_mtp_eh_norm_capture"].schema == glm53_mtp_eh_norm_capture_gpu.SCHEMA
+    assert REGISTRY["glm53_mtp_eh_proj_capture"].schema == glm53_mtp_eh_proj_capture_gpu.SCHEMA
+    assert REGISTRY["glm53_mtp_indexer_logits_capture"].schema == glm53_mtp_indexer_logits_capture_gpu.SCHEMA
 
 
 def test_harnesses_return_sealed_records(tmp_path):

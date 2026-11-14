@@ -1,6 +1,6 @@
 """The Δ_commit committer (`native_host`) under the same validity conditions, through its offline core (no engine, no CUDA):
-the verifier holds the ORIGINAL `RunCommitment` (step roots, layouts, run root) and checks openings against it with the production
-core (core's `verify_opening`), then the context binding, then the run-root membership.  Each commit samples fresh step keys; a
+the verifier holds the ORIGINAL `RunCommitment` (step roots, layouts, run root) and checks openings against it with the serving
+path's core (core's `verify_opening`), then the context binding, then the run-root membership.  Each commit samples fresh step keys; a
 committer that must reproduce another's bare trees takes its keys (`replay_row_keys`).
 """
 
@@ -20,7 +20,7 @@ from verity_vllm.commit.challenge import challenge_positions
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
 CHUNK = step_rows.ROW_BYTES
-#: the run's positions coin, as the auditor host's challenger would open it after the run's root
+#: the run's positions coin, as the auditor device's challenger would open it after the run's root
 COIN = b"positions coin"
 
 

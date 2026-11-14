@@ -146,11 +146,11 @@ def test_the_lane_pool_is_the_pool_research_run_on_auto_spills_to():
 
 
 def test_the_commands_printed_for_a_lane_name_no_node():
-    """What the queue and the check tell an agent to run (a records run, a lane's own tests, a lane's recorded check) says
+    """What the queue and the check tell an agent to run (a lane's own tests, a lane's recorded check) says
     `--on auto`, so no refusal sends work to a node it names."""
     from research import queue
 
-    printed = [queue.RECORDS_COMMAND, queue.LANE_RUN, CHECK.LANE_RUN, CHECK.SLOT.LANE_RUN, CHECK.nested_record(["--record"]),
+    printed = [queue.LANE_RUN, CHECK.LANE_RUN, CHECK.SLOT.LANE_RUN, CHECK.nested_record(["--record"]),
                CHECK.nested_record(["--record", "--deferred", "lean-agreement"])]
     for cmd in printed:
         assert "--on auto" in cmd and "vy-" not in cmd, cmd

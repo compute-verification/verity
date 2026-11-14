@@ -5,7 +5,7 @@ public import Mathlib.Data.Fintype.Prod
 public import Mathlib.Data.Fintype.Sum
 
 /-!
-# H-1T's pinned statements (trusted)
+# H-1T's guarantees (trusted)
 
 The map `DistinctLiveH1T` is about (`Pouw.Fp8Atom.H1T`), the facts
 about it that do not need the Target A proof, and the FP32 lemmas that proof uses.

@@ -1,9 +1,9 @@
 """Class-fixed regions: two private circuits of one class, `UniversalUnit_v1{G, N_IN, N_OUT}`, staged as the bench stages the
 universal unit (`benchmarks/private_circuit/universal.py`: a one-Call Program partitioned by `Q_template_instance`,
 `class_statement.stage` packed, each description source one row every instance opens, x one row per instance) on the same x
-under one staging salt key, give one statement but for its regions' bytes. One description is the bench's (a random netlist
-padded to the class), the other a uniformly random bit string of the class (any index, reads past the wires included); each
-staging builds its own Program, units and partition.
+under one staging salt key, give one statement but for its regions' bytes. One description is the bench's (a random circuit
+description padded to the class), the other a uniformly random bit string of the class (any index, reads past the wires included);
+each staging builds its own Program, units and partition.
 
 * **The statement.** The circuit is the same byte for byte: its digest and class digest, and META's ports, ranges, leaf
   scheme, partition and program digest. So is every stage record, the partition object and the Program's descriptor. V*'s
@@ -13,7 +13,7 @@ staging builds its own Program, units and partition.
   port's rows are), and the same refs; the prover's files the same salts. A region is a row port's `b || c` of every instance (`HmRow.regions`, whose
   names, free bits and positions read the circuit alone): a table row's `b || c` is the same exactly where its rows are, so
   x's are and the description's differ, and the test cannot pass vacuously.
-* **Lean.** The Lean verifier (`flock-verify statement`, when a Lean toolchain is present) derives one statement digest (it
+* **Lean.** The Lean verifier (`verity-verify-proof statement`, when a Lean toolchain is present) derives one statement digest (it
   hashes n, the blocks, m, k_log, the pin, the region count and Δ), m, region count and Δ from both, and differs only in the
   public digest, Σ and the Hello that carries Σ: what `ExecClass.lean`'s `shapeOf` drops.
 
@@ -47,7 +47,7 @@ from verity_flock import rec_vstage as S
 SPEC = "q-template-instance"
 N = 4
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 BC = 128
 FULL = "VERITY_FLOCK_SAME_SHAPE_FULL"
 
@@ -193,7 +193,7 @@ def _lean(d: Path) -> dict:
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_lean_derives_one_statement_but_for_its_public_digest(staged):
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     a, b = (_lean(staged[k]["dir"]) for k in "ab")
     assert {k for k in a if a[k] != b[k]} == {"public_sha512", "sigma", "hello"}
     assert a["hello"].replace(a["sigma"], b["sigma"]) == b["hello"]

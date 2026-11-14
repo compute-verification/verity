@@ -27,17 +27,17 @@ PROJECTS = [{"id": "PJ1", "name": "E2E toy deployment on one H200", "projectMile
 class FakeLinear:
     """Linear's token endpoint and GraphQL API: one team per name in `teams`, labels made on first use; the parent (id `P1`) on
     PJ1's M3, the active `projects`, the open issues the audit pages through (`open`), the team keys the credentials see
-    (`visible`, default the teams'), the team of the issue a comment reads (`team_key`), the issues' `relations` (an
-    issue's id is `I-` and its identifier), the workspace's `users`, the asked team's active projects (`team_projects`,
-    with the team ids they were read for in `boards`), and each relation, project or milestone mutation as it was sent
-    (`wrote`)."""
+    (`visible`, default the teams'), the team and label names of the issue a comment reads (`team_key`, `issue_labels`),
+    the issues' `relations` (an issue's id is `I-` and its identifier), the workspace's `users`, the asked team's active
+    projects (`team_projects`, with the team ids they were read for in `boards`), and each relation, project or milestone
+    mutation as it was sent (`wrote`)."""
 
     def __init__(self, teams=("infra", "comms")):
         self.teams, self.labels, self.calls, self.grants, self.refuse = list(teams), {}, [], 0, set()
         self.subscribers, self.authors, self.comments, self.moved = {}, {}, [], []
         self.state_type = "backlog"
         self.projects, self.open, self.updated, self.refuse_project = PROJECTS, [], [], False
-        self.visible, self.team_key = None, "INF"
+        self.visible, self.team_key, self.issue_labels = None, "INF", []
         self.project_teams = {"PJ3": [{"id": "T-infra", "key": "INF"}]}
         self.project_state = {"PJ3": {"targetDate": "2026-10-28", "status": {"name": "In Progress"}}}
         self.parent = {"id": "P1", "project": {"id": "PJ1"}, "projectMilestone": {"id": "MS3"}}
@@ -179,7 +179,7 @@ class FakeLinear:
                 {"identifier": "INF-1", "title": "first", "createdAt": "2026-10-14T01:00Z", "state": {"name": "Backlog"}}]}}}
         if "team { key }" in q:
             return {"data": {"issue": {"id": "I1", "identifier": "INF-1", "url": "https://linear.app/x/issue/INF-1",
-                                       "team": {"key": self.team_key}}}}
+                                       "team": {"key": self.team_key}, "labels": {"nodes": [{"name": n} for n in self.issue_labels]}}}}
         if "issue(id: $id) { id }" in q:
             return {"data": {"issue": {"id": "P1" if v["id"] == "CMP-92" else "I1"}}}
         if "issueUpdate" in q:
@@ -387,6 +387,53 @@ def test_a_comment_rings_the_issues_team_and_the_names_it_starts_with_but_never_
     assert rc == 0 and "past its start" in err and len(bells(fake, circuits)) == 1                    # posted with a note; rings no one
 
 
+@pytest.fixture
+def cmp_inboxes(fake, routes_dirs, lin):
+    """An issue in CMP, compute-accounting's team, where compute-research (no team of its own) files with its `lane:` label."""
+    lin.subscribers["I1"], lin.team_key = [], "CMP"
+    return {n: inbox(fake, routes_dirs, n) for n in ("compute-research", "compute-accounting", "circuits")}
+
+
+def rung(fake, boxes) -> dict[str, int]:
+    return {n: len(bells(fake, ts)) for n, ts in boxes.items()}
+
+
+def test_a_lane_commenting_on_its_own_labelled_issue_in_its_parents_team_rings_only_its_leading_names(
+        fake, registry, capsys, lin, cmp_inboxes):
+    """The ring took the lane from the team alone, so each comment compute-research wrote on its own CMP issues rang
+    compute-accounting, whose turn a false ring costs."""
+    lin.issue_labels = ["lane:compute-research"]
+    rc, _, err = run(capsys, "linear", "comment", "CMP-409", "picked up", "--as", "compute-research")
+    assert rc == 0 and "route" not in err
+    assert rung(fake, cmp_inboxes) == {"compute-research": 0, "compute-accounting": 0, "circuits": 0}
+    rc, _, err = run(capsys, "linear", "comment", "CMP-409", "@circuits the trace is up", "--as", "compute-research")
+    assert rc == 0 and err.count("route ") == 1 and "route @circuits: rang" in err
+    assert rung(fake, cmp_inboxes) == {"compute-research": 0, "compute-accounting": 0, "circuits": 1}
+
+
+def test_another_lane_commenting_on_a_labelled_issue_rings_the_labels_lane_not_the_teams(fake, registry, capsys, lin, cmp_inboxes):
+    lin.issue_labels = ["from:proofs", "lane:compute-research"]
+    rc, _, err = run(capsys, "linear", "comment", "CMP-409", "picked up", "--as", "proofs")
+    assert rc == 0 and "route @compute-research: rang" in err and "@compute-accounting" not in err
+    assert rung(fake, cmp_inboxes) == {"compute-research": 1, "compute-accounting": 0, "circuits": 0}
+    rc, _, err = run(capsys, "linear", "comment", "CMP-409", "@circuits the trace is up", "--as", "proofs")
+    assert rc == 0 and "route @compute-research: rang" in err and "route @circuits: rang" in err
+    assert rung(fake, cmp_inboxes) == {"compute-research": 2, "compute-accounting": 0, "circuits": 1}
+
+
+def test_an_issue_with_no_lane_label_or_one_naming_no_handle_rings_its_teams_handle(fake, registry, capsys, lin, cmp_inboxes):
+    rc, _, err = run(capsys, "linear", "comment", "CMP-410", "picked up", "--as", "compute-research")
+    assert rc == 0 and "route @compute-accounting: rang" in err
+    assert rung(fake, cmp_inboxes) == {"compute-research": 0, "compute-accounting": 1, "circuits": 0}
+    rc, _, err = run(capsys, "linear", "comment", "CMP-410", "@circuits the trace is up", "--as", "compute-research")
+    assert rc == 0 and "route @compute-accounting: rang" in err and "route @circuits: rang" in err
+    assert rung(fake, cmp_inboxes) == {"compute-research": 0, "compute-accounting": 2, "circuits": 1}
+    lin.issue_labels = ["lane:nobody"]
+    rc, _, err = run(capsys, "linear", "comment", "CMP-410", "picked up", "--as", "compute-research")
+    assert rc == 0 and "route @compute-accounting: rang" in err and "@nobody" not in err
+    assert rung(fake, cmp_inboxes) == {"compute-research": 0, "compute-accounting": 3, "circuits": 1}
+
+
 def test_traffic_counts_an_ask_taken_up_on_linear_as_answered(fake, registry, routes_dirs, capsys, lin):
     """Asks are Linear-first: an owner who moved the issue out of Backlog answered it, whatever the Slack root shows."""
     ask = fake.add(COORD, text="@infra 4 GPUs" + LINKED, username="compute-accounting", bot_id=slack_bot(registry), ts="1600000000.000001")
@@ -446,10 +493,10 @@ def test_an_ask_under_a_parent_lands_on_its_project_and_milestone_and_under_the_
         "title": "One auditor-only host", "parentId": "P1", "projectId": "PJ1", "projectMilestoneId": "MS3"}
     assert capsys.readouterr().err == ""
     fake.refuse_project = True
-    lin.file("infra", "top", "the brief", parent="CMP-92", title=" The auditor's host ")
+    lin.file("infra", "top", "the brief", parent="CMP-92", title=" The auditor's device ")
     refused, filed = (c[1]["i"] for c in fake.sent("issueCreate")[1:])
     assert refused["projectId"] == "PJ1" and filed["parentId"] == "P1" and "projectId" not in filed and "projectMilestoneId" not in filed
-    assert filed["title"] == "The auditor's host"
+    assert filed["title"] == "The auditor's device"
     assert "Linear refused CMP-92's project for this issue (Linear: Argument Validation Error" in capsys.readouterr().err
     fake.parent = {"id": "P2", "project": None, "projectMilestone": None}                       # a parent on no board
     lin.file("infra", "top", "the brief", parent="CMP-93")
@@ -656,11 +703,11 @@ def test_an_issue_that_waits_only_on_landing_is_neither_overdue_nor_slipped_and_
     found = lin.audit({"INF": "infra"}, now=AUDIT_NOW, waiting=lambda nums: asks.append(nums) or set(nums) <= {20})
     assert [(f["issue"], f["kind"]) for f in found] == [
         ("INF-51", "overdue"), ("INF-51", "slipped"), ("INF-52", "overdue"), ("INF-53", "overdue"), ("INF-54", "overdue")]
-    assert lin.landing == [{"issue": "INF-50", "lane": "infra", "due": "2026-10-18", "late_h": 20.0}]
+    assert lin.landing == [{"issue": "INF-50", "lane": "infra", "due": "2026-10-18", "late_h": 13.0}]   # since the 18th ended, PDT
     assert asks == [[20], [21]]                                     # asked only of an In Review issue whose PRs are all open
     assert ("INF-50", "overdue") in [(f["issue"], f["kind"]) for f in lin.audit({"INF": "infra"}, now=AUDIT_NOW)]   # no `waiting`
     assert slack.render_landing(lin.audit({"INF": "infra"}, now=AUDIT_NOW, waiting=lambda n: True) and lin.landing) == (
-        "\nwaiting on landing: 2 issue(s), not findings; ci and top see the total (2 past their date, the oldest by 20 h)")
+        "\nwaiting on landing: 2 issue(s), not findings; ci and top see the total (2 past their date, the oldest by 13 h)")
     assert slack.render_landing([]) == ""
 
 
@@ -699,8 +746,27 @@ def test_a_persons_new_issue_with_no_answer_after_2_h_is_unheard_and_an_apps_nev
         issue("INF-103", "Backlog", createdAt=ago(3), **app),                                             # an agent's
         issue("INF-104", "Todo", createdAt=ago(3), **person),                                             # Todo, unanswered
         issue("INF-105", createdAt=ago(3), **person),                                                     # started
+        issue("INF-106", "Backlog", createdAt=ago(3), assignee={"name": "Daniel Reuter"}, **person),     # a note to himself
+        issue("INF-107", "Backlog", createdAt=ago(3), assignee={"name": "Someone Else"}, **person),      # filed for another
+        issue("INF-108", "Backlog", createdAt=ago(3), assignee=None, **person),                           # filed for nobody
     ])
-    assert [x for x in found if x[1] == "unheard"] == [("INF-100", "unheard"), ("INF-104", "unheard")]
+    assert [x for x in found if x[1] == "unheard"] == [("INF-100", "unheard"), ("INF-104", "unheard"), ("INF-107", "unheard"),
+                                                      ("INF-108", "unheard")]
+
+
+def test_due_and_target_dates_are_pacific_days_so_nothing_is_overdue_or_lapsed_before_its_day_ends_there(tmp_path):
+    """The team sets every date as a Pacific day: an issue due Fri 13 Nov is not overdue at 4:30 PM PST that day, when UTC
+    already reads the 14th, and is at 12:30 AM PST the next day."""
+    def found_at(stamp: str) -> list[tuple[str, str]]:
+        fake = FakeLinear()
+        fake.open = [issue("INF-110", dueDate="2026-11-13", startedAt=stamp, updatedAt=stamp,
+                           projectMilestone={"id": "MS3", "name": "M3 · composed", "targetDate": "2026-11-13"})]
+        now = datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp()
+        return [(f["issue"], f["kind"]) for f in linear.Linear(KEY, fake, cache=tmp_path / "t").audit({"INF": "infra"}, now=now)]
+    assert found_at("2026-11-14T00:30:00Z") == []                                                  # 4:30 PM PST on the 13th
+    assert found_at("2026-11-14T08:30:00Z") == [("INF-110", "lapsed"), ("INF-110", "overdue")]    # 12:30 AM PST on the 14th
+    assert linear.team_day(datetime(2026, 11, 14, 0, 30, tzinfo=UTC).timestamp()) == "2026-11-13"
+    assert linear.day_end("2026-11-13") == datetime(2026, 11, 14, 8, 0, tzinfo=UTC).timestamp()
 
 
 def test_an_open_issue_on_a_milestone_dated_before_today_is_lapsed_and_one_dated_today_is_not(tmp_path):
@@ -1008,8 +1074,8 @@ def test_create_files_an_issue_into_your_own_team_with_its_brief_title_and_due_d
 def test_edit_sets_the_title_due_date_description_and_parent_and_refuses_a_bad_date_or_nothing_to_set(tmp_path):
     fake = FakeLinear()
     lin = linear.Linear(KEY, fake, cache=tmp_path / "t")
-    sent = lin.edit("INF-1", " The auditor's host ", "2026-10-30", "## Done when\n- one host", "CMP-92")
-    assert sent == {"title": "The auditor's host", "dueDate": "2026-10-30", "description": "## Done when\n- one host", "parentId": "P1"}
+    sent = lin.edit("INF-1", " The auditor's device ", "2026-10-30", "## Done when\n- one host", "CMP-92")
+    assert sent == {"title": "The auditor's device", "dueDate": "2026-10-30", "description": "## Done when\n- one host", "parentId": "P1"}
     assert fake.updated == [("I1", sent)]
     assert lin.edit("INF-1", due="none") == {"dueDate": None} and fake.updated[-1] == ("I1", {"dueDate": None})
     assert lin.edit("INF-1", parent="CMP-92", send=False) == {"parentId": "CMP-92"}                 # built, not sent
@@ -1024,10 +1090,10 @@ def test_edit_sets_the_title_due_date_description_and_parent_and_refuses_a_bad_d
 def test_edit_from_the_cli_replaces_the_description_with_the_file_and_a_dry_run_sends_nothing(fake, registry, capsys, lin, tmp_path):
     brief = tmp_path / "BRIEF.md"
     brief.write_text("# The host\n\n- [ ] one auditor-only host\n")
-    rc, out, _ = run(capsys, "linear", "edit", "INF-1", "--title", "The auditor's host", "--file", str(brief), "--due", "2026-10-30",
+    rc, out, _ = run(capsys, "linear", "edit", "INF-1", "--title", "The auditor's device", "--file", str(brief), "--due", "2026-10-30",
                      "--parent", "CMP-92")
-    assert rc == 0 and out.strip() == "INF-1 set title The auditor's host, dueDate 2026-10-30, description 40 characters, parentId P1"
-    assert lin.updated == [("I1", {"title": "The auditor's host", "dueDate": "2026-10-30",
+    assert rc == 0 and out.strip() == "INF-1 set title The auditor's device, dueDate 2026-10-30, description 40 characters, parentId P1"
+    assert lin.updated == [("I1", {"title": "The auditor's device", "dueDate": "2026-10-30",
                                    "description": "# The host\n\n- [ ] one auditor-only host\n", "parentId": "P1"})]
     rc, out, _ = run(capsys, "linear", "edit", "INF-1", "--due", "none", "--dry-run")
     assert rc == 0 and out.strip() == "dry-run: would set dueDate None" and len(lin.updated) == 1

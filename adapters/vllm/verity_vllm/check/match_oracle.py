@@ -13,11 +13,14 @@ import hashlib
 import json
 import os
 from collections import defaultdict
-from pathlib import Path
+from collections.abc import Mapping
 from typing import Any
+
+from verity_vllm.records.fields import RecordError
 
 _ITEMSIZE = {"bfloat16": 2, "float16": 2, "float32": 4, "float64": 8, "int32": 4, "int64": 8, "int16": 2, "int8": 1, "uint8": 1, "bool": 1,
              "float8_e4m3fn": 1, "float8_e5m2": 1}
+VIEW = "a fold instance's view"
 _ROPE_MEMBER = {"query": "rope.q", "key": "rope.k"}                # RoPE's members (the Build's hints) -> the Match fold's hint suffixes
 
 
@@ -37,6 +40,63 @@ def _contiguous(shape, strides) -> bool:
     return True
 
 
+def _listed(holder: Mapping[Any, Any], key: Any) -> list[Any]:
+    """The list `holder` has under `key`, or an empty one where it leaves the key out or has null or nothing under it.  A holder is a
+    file of the Match record or a table of one, a workload, a manifest row's producer, or an index of the oracle's own, which a read
+    adds no key to."""
+    listed = holder.get(key)
+    return listed if listed else []
+
+
+def _sha256_at(name: str) -> str:
+    """sha256 of the bytes of the file `name`, opened by that name as it is given."""
+    with open(name, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+
+def _refused(view: Mapping[str, Any], key: str, kind: str) -> RecordError:
+    """The refusal, by name, of what a fold view states under `key` where it is not `kind`."""
+    return RecordError(VIEW, key, f"is {view.get(key)!r}, not {kind} (the view: {json.dumps(view, default=str)[:200]})")
+
+
+def _stated_number(view: Mapping[str, Any], key: str) -> int | None:
+    """The number a fold view states under `key`, or None where it leaves the key out or states null.  Anything else there is
+    refused by name."""
+    x = view.get(key)
+    if x is None:
+        return None
+    try:
+        return int(x)
+    except (TypeError, ValueError, OverflowError) as e:
+        raise _refused(view, key, "a number") from e
+
+
+def _number(view: Mapping[str, Any], key: str, left_out: int | None = None) -> int:
+    """The number a fold view states under `key`, as `int` reads it; `left_out`, where one is given, for a view that leaves the
+    key out.  Any other view that states no number there (null, anything that is none, or the key left out with no `left_out`)
+    is refused by name.  What is no view is refused by no name: a null, which the fold writes for an operand that has no device
+    view, raises the `TypeError` of indexing it (with `left_out`, the `AttributeError` of its `get`)."""
+    try:
+        x = view[key] if left_out is None else view.get(key, left_out)
+    except KeyError as e:
+        raise _refused(view, key, "a number") from e
+    try:
+        return int(x)
+    except (TypeError, ValueError, OverflowError) as e:
+        raise _refused(view, key, "a number") from e
+
+
+def _stated_numbers(view: Mapping[str, Any], key: str) -> list[int]:
+    """The numbers a fold view lists under `key`, none where it lists none.  Anything else there is refused by name."""
+    xs = _listed(view, key)
+    if not isinstance(xs, (list, tuple)):
+        raise _refused(view, key, "a list of numbers")
+    try:
+        return [int(x) for x in xs]
+    except (TypeError, ValueError, OverflowError) as e:
+        raise _refused(view, key, "a list of numbers") from e
+
+
 def oracle_tie_facts(match_dir: str) -> dict[str, Any]:
     """The facts that tie an oracle to a Match record: sha256 of match/fold_summary.json, of match/instances.jsonl, of the
     RunHeader line (line 1 of capture/log.jsonl.gz, the created_utc carrier); a missing file is named None (never a placeholder digest),
@@ -44,7 +104,7 @@ def oracle_tie_facts(match_dir: str) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for key, rel in (("fold_summary_sha256", "fold_summary.json"), ("instances_sha256", "instances.jsonl")):
         pth = os.path.join(match_dir, rel)
-        out[key] = hashlib.sha256(Path(pth).read_bytes()).hexdigest() if os.path.exists(pth) else None
+        out[key] = _sha256_at(pth) if os.path.exists(pth) else None
     lg = os.path.join(match_dir, "capture", "log.jsonl.gz")
     out["run_header_sha256"] = None
     if os.path.exists(lg):
@@ -68,11 +128,12 @@ class MatchOracle:
         for p in (self.snap_path, self.inst_path, self.log_path):
             if not os.path.exists(p):
                 raise FileNotFoundError(f"match oracle: {p} missing (Match stage of this attempt did not write it)")
-        snap = json.loads(Path(self.snap_path).read_text())
-        self.snapshot_steps: set[int] = {int(s) for s in snap.get("steps") or []}
+        with open(self.snap_path) as f:
+            snap = json.load(f)
+        self.snapshot_steps: set[int] = {int(s) for s in _listed(snap, "steps")}
         # (event, alloc) -> [entries]; an entry = spanned storage bytes [byte_offset, byte_offset+nbytes) of one alloc, copied right after the call
         self._snap: dict[tuple[int, int], list[dict]] = defaultdict(list)
-        for e in snap.get("entries") or []:
+        for e in _listed(snap, "entries"):
             if "sha256" not in e or "file" not in e:
                 continue
             v = e["view"]["$v"] if isinstance(e.get("view"), dict) and "$v" in e["view"] else e.get("view")
@@ -86,16 +147,17 @@ class MatchOracle:
         with open(self.inst_path) as f:
             hdr = json.loads(f.readline())
             self.fold_digest = hdr.get("digest")
-            for r in hdr.get("requests") or []:
+            for r in _listed(hdr, "requests"):
                 self.requests[str(r["request_id"])] = f"r{int(r['index'])}"
                 self.request_index[str(r["request_id"])] = int(r["index"])
             for line in f:
                 m = json.loads(line)
                 hint = m.get("hint") or ""
                 op = hint.split("/", 1)[0] if hint else (m.get("name") or "")
+                # an indexed instance has both lists of views, empty where its line states none: the readers below take them as they are
                 self._inst[(int(m["step"]), op)].append({"request": m.get("request"), "row": m.get("row"), "position": m.get("position"),
                                                           "hint": hint, "event": int(m["event"]) if m.get("event") is not None else None, "spec": m.get("spec"),
-                                                          "operand_views": m.get("operand_views") or [], "output_views": m.get("output_views") or []})
+                                                          "operand_views": _listed(m, "operand_views"), "output_views": _listed(m, "output_views")})
         # capture log: request row order + sampled ids per step (every step), header provenance
         self.step_requests: dict[int, list[str]] = {}
         self.step_rows: dict[int, list[tuple[str, int]]] = {}       # step -> [(request uuid, token position)] in the engine's row order
@@ -110,7 +172,7 @@ class MatchOracle:
                     e = r.get("$e")
                     if e == "StepStart":
                         order: list[str] = []
-                        rows = [(str(u), int(p)) for u, p in (r.get("rows") or [])]
+                        rows = [(str(u), int(p)) for u, p in _listed(r, "rows")]
                         for rid, _pos in rows:
                             if rid not in order:
                                 order.append(rid)
@@ -118,23 +180,26 @@ class MatchOracle:
                         self.step_rows[int(r["step"])] = rows
                         self.n_steps = max(self.n_steps, int(r["step"]) + 1)
                     elif e == "SampleEnd":
-                        self.sampled[int(r["step"])] = [int(x) for x in r.get("sampled_token_ids") or []]
+                        self.sampled[int(r["step"])] = [int(x) for x in _listed(r, "sampled_token_ids")]
                     elif e == "RunHeader":
+                        profile = r.get("profile")          # a header that states no profile, or one that is no table, names no vLLM version
                         self.header = {"created_utc": r.get("created_utc"), "profile_id": r.get("profile_id"), "schema": r.get("schema"),
-                                       "vllm": (r.get("profile") or {}).get("vllm", {}).get("version") if isinstance(r.get("profile"), dict) else None}
+                                       "vllm": profile.get("vllm", {}).get("version") if isinstance(profile, dict) else None}
         self._files: dict[str, bytes] = {}
         # per step, every instance's OUTPUT views by storage (alloc -> [(byte lo, byte hi, instance)]), built on
         # demand for the promoted members' dataflow resolution (`_promoted_instances`); a small cache, the compare walks the map by step
         self._outs_by_step: dict[int, dict[int, list[tuple[int, int, dict]]]] = {}
         self._families_at: dict[tuple[int, str], frozenset[str]] = {}
         tok = os.path.join(capture_dir, "tokens.json")
-        self.tokens_sha256 = hashlib.sha256(Path(tok).read_bytes()).hexdigest() if os.path.exists(tok) else None
+        self.tokens_sha256 = _sha256_at(tok) if os.path.exists(tok) else None
         # the ids of every row of every step: prompt ids + generated ids per request (tokens.json) at the StepStart rows' (request, position)
         # -- the runner's ids buffer is a Root of the capture (prompt_token roots), so it is never in a snapshot; this IS its value record
         self.tokens: dict[str, tuple[list[int], list[int]]] = {}
         if os.path.exists(tok):
-            for r in (json.loads(Path(tok).read_text()).get("requests") or []):
-                self.tokens[str(r.get("request_id"))] = ([int(x) for x in r.get("prompt_token_ids") or []], [int(x) for x in r.get("generated_token_ids") or []])
+            with open(tok) as f:
+                served = _listed(json.load(f), "requests")
+            for r in served:
+                self.tokens[str(r.get("request_id"))] = ([int(x) for x in _listed(r, "prompt_token_ids")], [int(x) for x in _listed(r, "generated_token_ids")])
 
     # ------------------------------------------------------------------ provenance
     def provenance(self) -> dict[str, Any]:
@@ -156,7 +221,7 @@ class MatchOracle:
             return {"ok": None, "problems": ["no workload given: oracle identity not checked"], "compared": 0}
         problems: list[str] = []
         declared = {}
-        for i, r in enumerate(workload.get("requests") or []):
+        for i, r in enumerate(_listed(workload, "requests")):
             rid = str(r.get("request_id"))
             declared[rid] = {"label": f"r{int(r.get('index', i))}", "prompt_len": r.get("prompt_len"), "max_tokens": r.get("max_tokens")}
         if not declared:
@@ -181,15 +246,18 @@ class MatchOracle:
     def _file(self, rel: str) -> bytes:
         b = self._files.get(rel)
         if b is None:
-            b = Path(os.path.join(self.dir, "capture", rel)).read_bytes()
+            with open(os.path.join(self.dir, "capture", rel), "rb") as f:
+                b = f.read()
             if len(self._files) > 64:
                 self._files.clear()
             self._files[rel] = b
         return b
 
     def _view_bytes(self, event: int, view: dict) -> tuple[bytes | None, str | None]:
-        """The logical (contiguous) bytes of one storage view at the snapshot of `event`, or (None, why)."""
-        alloc, off, shape, strides, dtype = int(view["alloc"]), int(view["offset"]), list(view["shape"]), list(view.get("strides") or []), str(view["dtype"])
+        """The logical (contiguous) bytes of one storage view at the snapshot of `event`, or (None, why).  A view that states no
+        allocation or no offset, or one that is no number, is refused by name."""
+        alloc, off = _number(view, "alloc"), _number(view, "offset")
+        shape, strides, dtype = list(view["shape"]), list(_listed(view, "strides")), str(view["dtype"])
         isz = _ITEMSIZE.get(dtype)
         if isz is None:
             return None, f"dtype {dtype} unknown itemsize"
@@ -199,7 +267,7 @@ class MatchOracle:
         else:
             span = 1 + sum((int(d) - 1) * int(s) for d, s in zip(shape, strides))
             lo, hi = off * isz, (off + span) * isz
-        cands = self._snap.get((event, alloc)) or []
+        cands = _listed(self._snap, (event, alloc))
         ent = next((e for e in sorted(cands, key=lambda e: (0 if str(e.get("path", "")).startswith("outs") else 1, e.get("path", "")))
                     if int(e["byte_offset"]) <= lo and hi <= int(e["byte_offset"]) + int(e["nbytes"])), None)
         if ent is None:
@@ -220,17 +288,17 @@ class MatchOracle:
     @staticmethod
     def _view_bytes_range(view: Any) -> tuple[int, int, int] | None:
         """(alloc, byte lo, byte hi) the storage range a fold view spans (contiguous: offset..offset+numel; strided: the span), or None
-        when there is no view, its allocation, offset, shape or strides cannot be read, or its dtype has no itemsize: such a view is skipped."""
-        try:
-            alloc, off = int(view["alloc"]), int(view["offset"])
-            shape, strides = list(view.get("shape") or []), list(view.get("strides") or [])
-            isz = _ITEMSIZE.get(str(view.get("dtype")))
-        except (KeyError, TypeError, ValueError):
+        when there is no view, it states no allocation or no offset, or its dtype has no itemsize: such a view is skipped.  One that
+        states an allocation or an offset that is no number, or a shape or strides that are no list of numbers, is refused by name."""
+        if not isinstance(view, Mapping):
             return None
-        if isz is None:
+        alloc, off = _stated_number(view, "alloc"), _stated_number(view, "offset")
+        isz = _ITEMSIZE.get(str(view.get("dtype")))
+        if alloc is None or off is None or isz is None:
             return None
+        shape, strides = _stated_numbers(view, "shape"), _stated_numbers(view, "strides")
         numel = _prod(shape) if shape else 1
-        span = numel if (not strides or _contiguous(shape, strides)) else 1 + sum((int(d) - 1) * int(s) for d, s in zip(shape, strides))
+        span = numel if (not strides or _contiguous(shape, strides)) else 1 + sum((d - 1) * s for d, s in zip(shape, strides))
         return alloc, off * isz, (off + span) * isz
 
     def _step_outputs(self, step: int) -> dict[int, list[tuple[int, int, dict]]]:
@@ -242,7 +310,7 @@ class MatchOracle:
                 if s != step:
                     continue
                 for m in insts:
-                    for ov in m.get("output_views") or []:
+                    for ov in m["output_views"]:
                         r = self._view_bytes_range(ov)
                         if r is not None:
                             idx[r[0]].append((r[1], r[2], m))
@@ -268,19 +336,19 @@ class MatchOracle:
         fold has NO instance of under the identity's path at this step while the Program names its consumers (`_names_producer`): a v2
         (`Q_module_body_v1`) manifest has no `promoted` flag, and #57's 432 `model/out` are that Value (fold hint `model.normalizer`)."""
         spec = str(producer.get("spec") or "").split("{", 1)[0].strip()
-        consumers = [str(c) for c in (producer.get("consumers") or [])]
+        consumers = [str(c) for c in _listed(producer, "consumers")]
         if not spec or not consumers:
             return None, "promoted member without producer spec / consumers in the manifest row: not resolvable"
         outs = self._step_outputs(step)
         n_consumer_insts = 0
         for cop in consumers:
-            cins = self._inst.get((step, cop)) or []
+            cins = _listed(self._inst, (step, cop))
             if request_uuid is not None:
                 cins = [c for c in cins if c.get("request") == request_uuid]
             n_consumer_insts += len(cins)
             found: dict[tuple, dict] = {}
             for c in cins:
-                for opv in c.get("operand_views") or []:
+                for opv in c["operand_views"]:
                     r = self._view_bytes_range(opv)
                     if r is None:
                         continue
@@ -288,7 +356,7 @@ class MatchOracle:
                     for plo, phi, p in outs.get(alloc, ()):
                         if plo <= blo and bhi <= phi and str(p.get("spec") or "").split("{", 1)[0] == spec:
                             ov0 = (p.get("output_views") or [{}])[0]
-                            found[(p.get("event"), p.get("request"), p.get("position"), p.get("row"), int(ov0.get("alloc", -1)), int(ov0.get("offset", -1)))] = p
+                            found[(p.get("event"), p.get("request"), p.get("position"), p.get("row"), _number(ov0, "alloc", -1), _number(ov0, "offset", -1))] = p
             if found:
                 return list(found.values()), None
         if n_consumer_insts == 0:
@@ -341,7 +409,7 @@ class MatchOracle:
                 return None, why, 0
             want_hint = None
         else:
-            insts = self._inst.get((step, op_path)) or []
+            insts = _listed(self._inst, (step, op_path))
             if not insts:
                 return None, "no fold instance of this op at this step", 0
             want_hint = _ROPE_MEMBER.get(member) if op_path.endswith("rotary_emb") else None
@@ -377,13 +445,13 @@ class MatchOracle:
                 if operand:
                     out_fam: dict[tuple[int, int], set[str]] = defaultdict(set)      # (alloc, offset) of an output view -> producing families
                     for m in insts:
-                        for ov in m.get("output_views") or []:
-                            out_fam[(int(ov["alloc"]), int(ov["offset"]))].add(str(m.get("spec") or "").split("{", 1)[0])
+                        for ov in m["output_views"]:
+                            out_fam[(_number(ov, "alloc"), _number(ov, "offset"))].add(str(m.get("spec") or "").split("{", 1)[0])
                     for v in per_pos.values():
                         fed = []
                         for m in v:
                             opv = (m.get("operand_views") or [None])[0]
-                            fams = out_fam.get((int(opv["alloc"]), int(opv["offset"]))) if opv else None
+                            fams = out_fam.get((_number(opv, "alloc"), _number(opv, "offset"))) if opv else None
                             if fams and operand in fams:
                                 fed.append(m)
                         if len(fed) != 1:
@@ -402,7 +470,7 @@ class MatchOracle:
                                   "instances in Program order)"), len(by_spec)
                 by_spec = picked
             insts = by_spec
-            producer_view0 = len(insts[0].get("output_views") or []) == 1       # the producer op's single output IS the member
+            producer_view0 = len(insts[0]["output_views"]) == 1       # the producer op's single output IS the member
         # ORDER = the request's rows in the packed member = token POSITION order (a request's tokens are contiguous and increasing in the
         # engine's row order), tie-broken by the view's storage offset.  NOT the fold's `row`: for attention instances `row` is the sequence's
         # index inside the varlen launch (and not even constant over a 256-token prefill: rows {0,1} for one request) -- sorting by it
@@ -410,7 +478,7 @@ class MatchOracle:
         def _order(m: dict) -> tuple[int, int]:
             pos = m.get("position")
             first = m["output_views"][0] if m.get("output_views") else (m["operand_views"][0] if m.get("operand_views") else {})
-            return (int(pos) if pos is not None else (int(m["row"]) if m.get("row") is not None else 0), int(first.get("offset") or 0))
+            return (int(pos) if pos is not None else (int(m["row"]) if m.get("row") is not None else 0), _number(first, "offset") if first.get("offset") else 0)
         insts = sorted(insts, key=_order)
         port = _port_view(member, producer)
         parts: list[bytes] = []
@@ -437,7 +505,7 @@ class MatchOracle:
         port = _port_view(member, producer)
         n = 0
         for m in insts:
-            ovs = m.get("output_views") or []
+            ovs = m["output_views"]
             j = port if port is not None and len(ovs) > 1 else 0
             r = self._view_bytes_range(ovs[j]) if j < len(ovs) else None
             if r is None:
@@ -486,7 +554,7 @@ class MatchOracle:
 
 def _port_view(member: str, producer: dict[str, Any] | None) -> int | None:
     """The output view of a several-output Call that `member` is: its manifest row's `port`, else the port `query.required.member_name`
-    spells into it (`<port>`, or `<hint>.<port>` when the Build recorded a hint), when that port is a digit; else None."""
+    spells into it (`<port>`, or `<hint>.<port>` when the Build recorded a hint), when that port is a decimal number; else None."""
     port = (producer or {}).get("port")
     port = str(port) if port is not None else member.rsplit(".", 1)[-1]
-    return int(port) if port.isdigit() else None
+    return int(port) if port.isdecimal() else None

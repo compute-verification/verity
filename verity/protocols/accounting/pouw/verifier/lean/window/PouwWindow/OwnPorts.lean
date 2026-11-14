@@ -18,7 +18,7 @@ count, row width, domain and schema), read at the layout's row from that base:
   statement's one unit). `selfPlace` (`(v, 0)`) reads each value as its own table;
 * `readFull T k`: the ports statement `k` marks `read_in_full` (`Flock.KnownRead.READ_KEY`), its reads of an A row, a B
   row or a partials row (`fullValue`: lane `l`'s `a<s>`, `b<t>` and `partials`, the combine's `p<x>`), each row read by
-  several statements, which flock-verify holds to one width read in every bit (`Flock.KnownRead.fullRows`);
+  several statements, which verity-verify-proof holds to one width read in every bit (`Flock.KnownRead.fullRows`);
 * `checkOwn want own`: the leaf verifier's check that a statement's parsed `--registered` file (`own`) holds the ports
   `want` (`ownOf` at the roots it takes from the accepted registration, round log and produced record and the
   placement it takes from the execution phase descriptor, `PouwWindow.Lanes.want?`),

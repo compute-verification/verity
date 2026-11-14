@@ -9,7 +9,7 @@ public import Proofs.Flock.Bridge.EndToEndHiddenC
 `EndToEndHiddenC.lean` at the verifier's public inputs:
 
 * `Layout.keyProgP_readsOwn`: `keyProgP`'s proof blocks read only their own gates and input gates (`keyProgP_reads`);
-* `zk_session_soundHJ_custody_escCP`: at flock-verify `--zk --public-inputs`'s acceptance (`zk_headline_exec_tablesA`
+* `zk_session_soundHJ_custody_escCP`: at verity-verify-proof `--zk --public-inputs`'s acceptance (`zk_headline_exec_tablesA`
   at `AcceptsZKP I own`, through `decodesZCJH_custodyP` under the registration's law), at `keyProgP` and the binding
   `rsZHJP`, a set `W` of proof blocks is wrong with probability at most the sample's escape of `W` and the extraction's
   terms (`zk_flock_escapeC_regC`), at any sample `L`;

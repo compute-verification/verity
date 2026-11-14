@@ -73,6 +73,10 @@ ALLOWLIST = {
     "tools/research/src/research/store/moves.json": 320 * 1024,  # the paths of every layout move: it only grows
     "adapters/vllm/tests/lint/allowlists/ruff_vllm.json": 512 * 1024,  # shrink-only: ruff's findings under vLLM's rules
     "verity/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
+    # GLM-5.3's block card and its sparse-attention partition card: each key block's values units and key rows' writers
+    # are a type a column block
+    "benchmarks/sampling_plan/glm53_blocks.json": 448 * 1024,
+    "benchmarks/spot_figures/cards/partition.glm-5.3.64864861b277.json": 320 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"
 #: A Lean package's audit record must stay in Git, since the audit compares the build against it and `--update`'s diff is

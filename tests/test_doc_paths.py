@@ -19,6 +19,9 @@ Prose names a file by its bare name wherever it lives (a README names its own di
 so the name exists when some tracked file has it; a script that was deleted, or never landed, has none. A name of
 three or more dotted segments, one before the last capitalized (`Loop.RepSrc.h`, or `coin_tree.Rules.h`: a namespace,
 a structure and its field), is a dotted Lean name, not a file.
+
+A document in `END_STATE_DOCS` may also name a path `tests/tree.toml` plans: one at or under a `[[tree]]` entry that
+carries a day, or under a path of two or more segments in a `[[not_yet]]` line's `to`.
 """
 from __future__ import annotations
 
@@ -26,6 +29,7 @@ import functools
 import json
 import posixpath
 import re
+import tomllib
 
 from lint.test_repo_lane_text import lean_prose
 from test_repository import REGISTRY, ROOT, _tracked
@@ -37,6 +41,8 @@ RETIRED = frozenset({"packages", "protocols", "pods", "census", "security_proofs
 #: The same one level down: directories `verity/` had before a move, so `verity/core/` reads as a path and not as an
 #: identifier.
 VERITY_RETIRED = frozenset({"core", "ml"})
+#: Documents that describe the end state, so they name paths the tree file plans and `main` doesn't hold yet.
+END_STATE_DOCS = ("ARCHITECTURE.md",)
 #: (document, token as written) that reads as a repository path but names something else, each with why.
 NOT_PATHS = {
     ("verity/circuits/ops/tests/fixtures/README.md", "tests/veritor/core/golden/"): "veritor's path, where the captures were copied from",
@@ -45,14 +51,9 @@ NOT_PATHS = {
     ("benchmarks/pouw/harness/README.md", "panel.py"): "the kernel panel, kept in an agent store",
     ("security/Proofs/Flock/Soundness/assumption-notes/a3-uniform-bytes.md", "io.cpp"): "the Lean runtime's source",
     ("security/Proofs/Flock/Soundness/assumption-notes/a3-uniform-bytes.md", "random.c"): "the Lean runtime's source",
-    ("benchmarks/numerical/README.md", "tc.rs"): "SP1's guest, deleted with the archive",
-    ("benchmarks/numerical/README.md", "TCB.lean"): "the archived tables' Lean, outside this tree",
-    ("benchmarks/numerical/README.md", "TCTotal.lean"): "the archived tables' Lean, outside this tree",
     ("benchmarks/numerical/README.md", "utils.cpp::bfloat16_to_gfloat_tensor"): "the GPU simulator's source",
     ("benchmarks/pous/README.md", "gmp.h"): "the system's GMP header",
     ("benchmarks/ppl/README.md", "linears_layerwise.py"): "a harness the bench replaced",
-    ("fixtures/proof-format-v3/README.md", "test_format3_equivalence.py::test_write_vectors"): "veritor's test",
-    ("fixtures/proof-format-v3/README.md", "format3_equivalence.rs"): "D-SP1's guest, deleted with the archive",
     ("tools/verity/lean/README.md", "lakefile.lean"): "the file the package deliberately lacks",
     ("verity/protocols/accounting/pous/verifier/DISCREPANCIES.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
     ("verity/protocols/accounting/pous/verifier/PROTOCOL.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
@@ -173,11 +174,32 @@ def dead(doc: str, path: str, link: bool, tree) -> bool:
     return not any(_exists(base + path, tree) for base in bases)
 
 
-def dead_paths(tree, read=lambda d: (ROOT / d).read_text(errors="replace")) -> list[tuple[str, int, str]]:
-    """(document, line, token as written) for each path a document of ``tree`` names that the tree lacks."""
+def planned(layout: dict) -> frozenset[str]:
+    """The paths ``layout`` (`tests/tree.toml`, parsed) plans: each `[[tree]]` entry with a day, and each path of two or
+    more segments in a `[[not_yet]]` line's `to` (a lone `verity/` there says what a thing leaves)."""
+    dated = {e["path"].rstrip("/") for e in layout.get("tree", ()) if "day" in e}
+    to = {w.strip(",;:()").rstrip("/") for e in layout.get("not_yet", ()) for w in e.get("to", "").split()}
+    return frozenset(dated | {p for p in to if "/" in p})
+
+
+@functools.cache
+def _plan() -> frozenset[str]:
+    return planned(tomllib.loads((ROOT / "tests/tree.toml").read_text(encoding="utf-8")))
+
+
+def dead_paths(tree, read=lambda d: (ROOT / d).read_text(errors="replace"), plan=None) -> list[tuple[str, int, str]]:
+    """(document, line, token as written) for each path a document of ``tree`` names that the tree lacks, but for a path
+    an end-state document names that ``plan`` (`planned`, by default of `tests/tree.toml`) holds or is under."""
+    plan = _plan() if plan is None else plan
+
+    def in_plan(doc: str, path: str) -> bool:
+        path = path.removeprefix("./").rstrip("/")
+        return doc in END_STATE_DOCS and any(path == p or path.startswith(p + "/") for p in plan)
+
     return [(doc, n, raw) for doc in documents(tree[0]) for n, line in lines(doc, read(doc))
             for raw, path, link in mentions(line)
-            if (doc, raw) not in NOT_PATHS and (doc, raw) not in WAITING and dead(doc, path, link, tree)]
+            if (doc, raw) not in NOT_PATHS and (doc, raw) not in WAITING and dead(doc, path, link, tree)
+            and not in_plan(doc, path)]
 
 
 def test_every_path_a_document_names_exists():
@@ -208,6 +230,23 @@ def test_a_directory_verity_had_before_a_move_reads_as_a_path():
     assert dead_paths(tree, read=docs.__getitem__) == [
         ("README.md", 1, "verity/core/"), ("README.md", 1, "verity/ml/circuits"),
         ("README.md", 1, "verity/core/protocols/a.py")]
+
+
+def test_an_end_state_document_may_name_what_the_tree_file_plans():
+    """An end-state document may name a path at or under a dated `[[tree]]` entry or under a path in a `[[not_yet]]`
+    line's `to`; another document may not, and an undated entry or a lone `verity/` in a `to` plans nothing."""
+    layout = {"tree": [{"path": "verity/protocols/"}, {"path": "verity/protocols/compose/", "day": "2026-11-15"}],
+              "not_yet": [{"path": "verity/definitions/", "to": "its protocol part to verity/circuits/, the rest out of verity/"}]}
+    plan = planned(layout)
+    assert plan == frozenset({"verity/protocols/compose", "verity/circuits"})
+    files = frozenset({"ARCHITECTURE.md", "README.md", "verity/protocols/a.py", "verity/circuits/b.py"})
+    tree = (files, frozenset({"verity", "verity/protocols", "verity/circuits"}), frozenset())
+    text = "`verity/protocols/compose/` `verity/protocols/compose/verifier/` `verity/circuits/ops/` `verity/protocols/c.py`"
+    docs = {"ARCHITECTURE.md": text, "README.md": text}
+    assert dead_paths(tree, read=docs.__getitem__, plan=plan) == [
+        ("ARCHITECTURE.md", 1, "verity/protocols/c.py"),
+        ("README.md", 1, "verity/protocols/compose/"), ("README.md", 1, "verity/protocols/compose/verifier/"),
+        ("README.md", 1, "verity/circuits/ops/"), ("README.md", 1, "verity/protocols/c.py")]
 
 
 def test_the_scan_reads_each_form_and_catches_a_dead_path():

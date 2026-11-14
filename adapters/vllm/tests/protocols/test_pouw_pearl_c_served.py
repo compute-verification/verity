@@ -14,7 +14,7 @@ coins and salt are read from the challenge phase, never from the pass.
 Served Pearl-C's passes end at each engine step under a committer that patched the model runner itself before the install
 (`pearl_c.passes.hook_steps`' ``runner``), once a step.
 
-CPU only: the auditor host is `challenger_host.Host` or `challenger_host.Gate` in this process, and the device run a
+CPU only: the auditor device is `challenger_host.Host` or `challenger_host.Gate` in this process, and the device run a
 stand-in that starts its epoch through `pouw_pearl_c_device.epoch_of` (no GPU here).
 """
 from __future__ import annotations
@@ -34,9 +34,17 @@ import pytest
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.pouw.verifier import salt as PS
 from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.accounting.pouw.verifier.audit import Workload, salt_of, weights_root
+from verity.protocols.accounting.pouw.verifier.audit import (
+    Workload,
+    salt_of,
+    weights_root,
+)
 from verity.protocols.accounting.pouw.verifier.coins import Challenger
-from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Matmul, Shape
+from verity.protocols.accounting.pouw.verifier.protocol import (
+    DomainError,
+    Matmul,
+    Shape,
+)
 from verity.protocols.proofs.spot.device import challenger as LC
 from verity.protocols.proofs.spot.device import remote as R
 
@@ -148,7 +156,8 @@ def test_a_step_ends_its_pass_once_under_a_committer_that_patched_the_runner_fir
     original = vars(Stepping)["execute_model"]
 
     def stepped(runner_setting):
-        runner, seen, ends = Stepping(), [], []
+        runner, ends = Stepping(), []
+        seen: list[int] = []
         run = SimpleNamespace(entry=ENTRY, details={}, cur=SimpleNamespace(matmuls=[]),
                               end_pass=lambda step=False: ends.append(step))
         first, h = _committed(runner, seen), hooks.Hooks(ENTRY)
@@ -162,7 +171,8 @@ def test_a_step_ends_its_pass_once_under_a_committer_that_patched_the_runner_fir
     ends, runner = stepped(True)
     assert ends == [True, True] and "execute_model" not in vars(runner) and vars(Stepping)["execute_model"] is original
 
-    runner, seen, ends = Stepping(), [], []
+    runner, ends = Stepping(), []
+    seen: list[int] = []
     run = SimpleNamespace(entry=ENTRY, details={}, cur=SimpleNamespace(matmuls=[]), end_pass=lambda step=False: ends.append(step))
     h = hooks.Hooks(ENTRY)
     PP.hook_steps(h, run, 1, None, runner)
@@ -175,7 +185,7 @@ def test_a_step_ends_its_pass_once_under_a_committer_that_patched_the_runner_fir
 
 
 def _host(tmp_path, monkeypatch, seed=1, challenger=None):
-    """The auditor host's challenger (by default Pearl-C's, its salt coin alone), its challenge phase `SID` reserved on its
+    """The auditor device's challenger (by default Pearl-C's, its salt coin alone), its challenge phase `SID` reserved on its
     ledger and reached at `AUDITOR`."""
     host = CH.Host(tmp_path / "auditor", challenger or salt_only(seed), seed, SID, gated=True)
     monkeypatch.setattr(R.RemoteChallenger, "connect",
@@ -251,8 +261,8 @@ def test_each_install_is_an_epoch_of_its_own_under_a_fresh_hm96_key_and_over_one
 
 def test_pearl_c_takes_its_coins_from_one_live_session_or_is_refused_before_any_patch():
     """No challenge phase, an open answer in place of the reserve (a challenge phase opened before the weights' root was committed), no
-    gate, an in-process challenger beside the auditor host's, or a capture: each refused before the model is touched. A
-    config naming the auditor host's challenger gets no in-process coins, and the epoch takes a live opening only of a
+    gate, an in-process challenger beside the auditor device's, or a capture: each refused before the model is touched. A
+    config naming the auditor device's challenger gets no in-process coins, and the epoch takes a live opening only of a
     live commitment, and an in-process opening only of an in-process one."""
     def refused(gate=lambda sid, r: pytest.fail("refused before the gate"), **kw):
         model = _model()

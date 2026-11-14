@@ -68,8 +68,8 @@ A number stands only where the scan did what it measures:
 - `scan_zk.sh` exits 0: every round came out as the scan expects, the honest round accepted and each round it
   expects refused refused at the members it names.
 - Each execution phase's answer in `answers.json` accepts, and its public part equals `public.json`'s for the class:
-  the bound 0 for each template, every block sampled and proved (over a group, G times the blocks), and the tied value
-  the acceptance rests on.
+  the bound 0 for each template, every block sampled and proved (over a group, G times the blocks), every verdict of
+  its audit run (`complete`), and the tied value the acceptance rests on.
 
 Where the guard does not hold, `result.py write` writes the document with the reasons and a failed validation, no
 measurement, and exits 1. `public.json` is a copy of what an accepted scan answers: a change to a class's
@@ -88,7 +88,7 @@ research run --on NODE --project verity --source . --cwd clone --pool network --
 It pins the job, clears every `SC_` setting but those below and `SC_MEM_GB`, `SC_CACHE` and `SC_PORT` (so none of
 the scan's settings that change what is proved reaches it), runs `scan_zk.sh`, then `result.py write`, which
 leaves `out/scan_cost.json` (the document: identity, group, guard, each session with its stages, the round's sums
-and the numbers) and the run's `result.json` (the two metrics of `benchmarks/metrics.toml` under their ids, and
+and the numbers) and the run's `result.json` (the two metrics of `benchmarks/scan_cost/metrics.toml` under their ids, and
 their inputs, through the harness kit's writer). The scan's own files stay under `out/` as it keeps them:
 `sczk/summary.json`, `sczk/answers.json`, each session's logs, `lean.jsonl`, `rss.jsonl`, `host.txt`. Two kinds do
 not: the verifier's copies of a round's circuits and of its program (`sczk/ROUND/verifier/NAME-circuit.txt` and

@@ -66,14 +66,14 @@ def edge_of(phi: Any, advice: WA.Advice, units: Sequence[Any], idle: Sequence[in
     def groups(i: int, E: int) -> tuple[tuple[str, int, int], ...]:
         q, carried = advice.requests[i], edge_groups(net, advice.requests[i])
         return (*((g, t.leaves, t.homogeneous_width()) for g, t in net.prefix_params(E) if g in carried),
-                *((("last_token", 1, 32),) if E >= q.prompt_len else ()))
+                *((("last_token", 1, 32),) if q.prompt_len <= E else ()))
 
     ins = {i: groups(i, c.computed) for i, c in enumerate(advice.carried) if c.kept < advice.requests[i].output_len and c.computed}
     outs = []
     for c in WA.close(advice):
         if not (c.must and c.state.computed) or (u := units[c.request]) is None and c.request not in idle:
             continue
-        if u is not None and u.LP + u.T != c.state.computed:
+        if u is not None and c.state.computed != u.LP + u.T:
             raise Unexpressible(f"request {c.request}: the window leaves it to continue at {c.state.computed}, and its Program here "
                                 f"reaches {u.LP + u.T}")
         outs.append((c.request, groups(c.request, c.state.computed)))

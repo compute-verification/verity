@@ -8,7 +8,7 @@ census and rho's reference.  The output carries them all beside every plotted se
 the console reads.
 
 **Workload.**  A scope's compute is its GPUs (the world: rho's `world-h200` fleet, the census's `world-inference-2027`;
-a datacenter: the census's `dc-12500-machines-600s`) over a monitoring period (`reporting.PERIODS`), serving at
+a datacenter: the census's `dc-12500-machines-600s`) over a monitoring period (`verity.protocol`'s `MONITORING_PERIODS`), serving at
 the fleet's MFU on the H200's dense FP8 peak.  It serves the model's requests of the census's tokens each, at the
 circuit's MACs a token (the `workload` card's `served_macs_per_token` where its proof blocks leave some out), cut into
 proof blocks as the card has them; the captions give the share of MACs in no proof block and in `modeled` strata.
@@ -85,7 +85,7 @@ from pathlib import Path
 from typing import Callable, Iterator, Sequence
 
 import cards as spot_cards
-from verity.protocols.reporting import PERIODS
+from verity.protocol import MONITORING_PERIODS
 from verity.protocols.proofs.spot.prover import plancheck
 from verity.protocols.proofs.spot.prover.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
                                                            two_stage_design, two_stage_strata)
@@ -392,7 +392,7 @@ def scopes(c: dict[str, InputCard], part: TokenBlocks) -> list[Scope]:
     rate = c.get("serving_rate")
     out = []
     for who in ("world", "datacenter"):
-        for period, seconds in PERIODS:
+        for period, seconds in MONITORING_PERIODS:
             gs = c[f"{who}_gpus"].value * seconds
             requests = (gs * rate.value / c["tokens_per_request"].value if rate is not None
                         else gs * c["mfu_serve"].value * c["peak_flops"].value / flop_request)

@@ -11,7 +11,7 @@ and never copies.
 **Run:**
 
 ~~~text
-verity bench memory PERIOD [--dry-run]        the node run: one session on the whole GPU node, through both auditor hosts
+verity bench memory PERIOD [--dry-run]        the node run: one session on the whole GPU node, through both auditor devices
 verity bench memory --from RUN [--session K]  the number of a recorded run
 verity bench memory --loopback                both processes on this machine, on the CPU: a test of the command
 ~~~
@@ -19,23 +19,32 @@ verity bench memory --loopback                both processes on this machine, on
 - **The node run** is `benchmarks/remote_session/gate_run.sh PERIOD` with one honest session (`PLAN=honest`, `PACED`
   one word, by default seven credited stretches of a second, each pass under a live coin of its own): the developer's
   node serves `ROLE` (default `LLAMA32_1B_BF16`, Llama 3.2 1B as upstream holds it, since the store's layout covers
-  BF16 weights) with each engine's weights arena the store, the verifier runs on the auditor's verifier host bound to
-  that role's pinned checkpoint, and the coins come from the challenger host under period `PERIOD`, a name its ledger
-  hasn't used. `UNPACED=WINDOWS:WINDOW_MS:SAMPLES` asks for a session of one coin a window in place of `PACED`'s
+  BF16 weights) with each engine's weights arena the store, the verifier runs on the auditor's verifier host, and the
+  coins come from the challenger host under period `PERIOD`, a name its ledger hasn't used. `BIND` (default `0`) is
+  whether the verifier binds the store to the role's pinned checkpoint, and whether the period signs the role
+  (`period-open --model`). With `0` the verifier holds no checkpoint, the period signs no model, and the store is the
+  developer's choice, which the text and the JSON's `bound` say; the auditor's line of record then credits the
+  session on its other checks, conditional on `DeveloperStore`, the developer's word that the store holds the
+  registered weights. No auditor's machine reads a checkpoint, so the default is 0. `BIND=1` binds it.
+  `UNPACED=WINDOWS:WINDOW_MS:SAMPLES` asks for a session of one coin a window in place of `PACED`'s
   (`7:60000:33273` is seven windows of a minute with 33,273 openings each); the verifier's ledger holds its γ as it
   does a paced session's, and the auditor's line of record has no time-held line for it, which only a paced session
   gets. `gate_run.sh`'s variables pass through: `COMMIT` (the commit the verifier host is pinned at, on `main`'s
   first-parent line, whose tree must pin `ROLE`), `ARENA_GIB` and `UTIL` (the arena on each card and vLLM's share of
-  it), `HOST_GIB` (whole GiB of the node's host memory the store holds beside the arenas, default none),
-  `PACE_PASS_MS` (the pass the verifier host counts a stretch's groups at), `LEASE_BY`, and `FETCH=1`, which stages
-  the role's checkpoint on the node before checking it. The session's form is `PACED` or `UNPACED` alone: the command
-  sets `gate_run.sh`'s `SESSIONS`, `WINDOWS`, `WINDOW_MS` and `SAMPLES` from `UNPACED`. The command waits for the fire
+  it), `HOST_GIB` (whole GiB of the node's host memory the store holds beside the arenas, default none), `LEAF_CTAS`
+  (the node's passes by the leaf pass on that many reading CTAs, default today's pass),
+  `PACE_PASS_MS` (the pass the verifier host counts a stretch's groups at), `LEASE_BY`, `FETCH=1`, which stages
+  the role's checkpoint on the node before checking it, and the three hosts' addresses, which it doesn't run
+  without (`VY_CHALLENGER_1_HOST`, `VY_AUDITOR_1_HOST`, `VY_NEBIUS_2_HOST`). The session's form is `PACED` or
+  `UNPACED` alone: the command sets `gate_run.sh`'s `SESSIONS`, `WINDOWS`, `WINDOW_MS` and `SAMPLES` from
+  `UNPACED`. The command waits for the fire
   run to reach the evidence store and prints from it; interrupted, `--from` the fire run prints the same. `--dry-run`
   sends nothing to either gate and prints no number.
 - **`--from RUN`** reads the verifier's record of a run in the store: a gate run's fire run, or a run of
   `remote_session/run.sh` that held the verifier. A run that holds several sessions needs `--session K`. A withdrawn
   run is refused before any of it is fetched. The text says what the number rests on: whether the verifier ran on the
-  auditor's verifier host, the store's size beside the node's GPU memory and the checkpoint it was bound to, that a
+  auditor's verifier host, the store's size beside the node's GPU memory and the checkpoint it was bound to (or that
+  the verifier held none, so the store is the developer's choice), that a
   share of 1 or more certifies nothing, and, of a run `--loopback` left, that it was a loopback.
 - **`--loopback`** runs `remote_session/run.sh` with `ROLE=both`, the prover the driver's CPU reference over a test
   store of 64 blocks. No node is audited, so it certifies nothing, and both its text and its JSON say so. It builds the
@@ -65,7 +74,15 @@ capacity but for the float's last place); and `error` (the probability the verif
 by window as the share is: the record's declared error, which adds the sketch's term and the sample's rejection and
 binding terms to the ledger's own and holds no PRF advantage; no rate is in it, so it is one number for both
 readings). A capacity's rate is the verifier's own figure for the node (`timing.py`), not the registered hardware's,
-and its unit says so. At a share of 1 or more, verified is 0 and free the whole capacity. An amount whose keys the
+and its unit says so. The printed number is written once more under
+`memory-accounting/node-read-rate-uncertified`, the id of its row on the console's Metrics tab (`benchmarks/memory/metrics.toml`).
+That entry also carries the goal's target, 0.14, and says whether the number is within it or past it. A session whose
+verifier held no checkpoint (`BIND=0`) still writes it, with `"bound": false` and its verdict naming that premise
+(`within target; the verifier held no checkpoint`); a bound session's entry holds neither. Where the number's error
+is above 2^-100, the goal's bound, the verdict names that as well (`within target; the verifier held no checkpoint;
+its error is above 2^-100`): the record's declared error where it holds one, else the ledger's own, and above it
+where the record holds neither. At a share of 1 or
+more, verified is 0 and free the whole capacity. An amount whose keys the
 record doesn't hold as numbers is left out of the result. The two references are other runs' numbers and are not in
 it; a loopback writes none, since it certifies nothing, and a session that wasn't accepted writes none, as it prints
 no number. A result holds one measurement a name, so a run that prints a second session keeps its first one's result

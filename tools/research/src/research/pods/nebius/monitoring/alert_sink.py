@@ -164,7 +164,7 @@ def notes(payload: dict[str, Any], now: float, ctx: Context | None = None) -> li
             text = ann.get("description") or ann.get("summary") or ""
             lines.append(f"- **{where or lab.get('alertname', rule)}**{f' ({owner})' if owner else ''}, since "
                          f"{a.get('startsAt', '?')[:19]}Z: {text}".rstrip(": "))
-        lines += ["", "Open http://127.0.0.1:3000 through `ssh -N -L 3000:127.0.0.1:3000 research@81.85.2.165` (Nebius folder)."]
+        lines += ["", "Open http://127.0.0.1:3000 through `ssh -N -L 3000:127.0.0.1:3000 research@$VY_NEBIUS_1_HOST` (vy-nebius-1's address; Nebius folder)."]
         out.append((name, "\n".join(lines) + "\n"))
     return out
 

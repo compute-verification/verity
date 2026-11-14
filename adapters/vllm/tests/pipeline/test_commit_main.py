@@ -10,15 +10,23 @@ Stood in, each because it needs a GPU, vLLM, the run store or a Program of recor
 build and its version facts, vLLM's sampling parameters, the two `torch.cuda` calls that raise with no device, the sources'
 attachment (`commit_attach.attach_of_record` refuses a Commit with no required-value manifest), the binding record and, where
 a test says so, a run's verdict.  This machine's memory and the command line are stood in too, and `commit`'s clock is one the
-stand-ins move (`Clock`), so every number in a row is one the test states.
+stand-ins move (`Clock`), so every number in a row is one the test states.  So is the full collection `main` asks the cyclic
+collector for before each run (`gc.collect`): it is counted and not made, since each would walk every object the test process
+holds.
 
 Held: the files `main` writes, `verdict.json`, `runs.jsonl`, `steps.jsonl` and `summary.json` whole (a run's root and its coins
 against what the committer and `commit_coins` gave), what each stand-in was handed, the last line printed, and how `main`
-ends: by returning, by exit 3, or by a refusal's sentence.  CPU only."""
+ends: by returning, by exit 3, or by a refusal's sentence.  What `main` does after its last run is held arm by arm: a
+compiling engine's loaded code objects, the challenge phase's close, the replay cache's record, the process's peak against
+the host admission's bound, and the remote session's answer.  The last tests stop `main` where it takes the GPU
+(`before_the_lease`) and hold what it does before that with a required-value manifest, with the served source, with a stack
+dump asked for and where the source identity precheck refuses: every line it prints and what the Programs' readers are handed.
+CPU only."""
 from __future__ import annotations
 
 import copy
 import dataclasses
+import gc
 import hashlib
 import json
 import os
@@ -39,6 +47,7 @@ from verity_vllm.engine import served as SV
 from verity_vllm.engine import vllm_adapter as va
 from verity_vllm.pipeline import cli, commit, source_identity
 from verity_vllm.pipeline import commit_coins as CC
+from verity_vllm.query.required import Q_WORD_ID
 
 Record = dict[str, Any]
 
@@ -164,6 +173,7 @@ class Core:
 
     def __init__(self, model: Model, clock: Clock) -> None:
         self.model, self.clock = model, clock
+        self.steps = 0
         self.live: dict[str, tuple[list[int], list[int], int]] = {}
         self.vllm_config = SimpleNamespace(
             scheduler_config=SimpleNamespace(async_scheduling=True), compilation_config=SimpleNamespace(mode="NONE", cudagraph_mode="NONE"),
@@ -179,6 +189,7 @@ class Core:
         ids = list(self.live)
         scores = self.model(torch.tensor([(self.live[i][1] or self.live[i][0])[-1] for i in ids]))
         self.clock.take(1.0)
+        self.steps += 1
         outs = []
         for i, token in zip(ids, scores.argmax(-1).tolist()):
             _, tokens, most = self.live[i]
@@ -299,7 +310,8 @@ def committer_2(eng: SimpleNamespace, run_id: str) -> Committer:
 def stand_ins(monkeypatch, tmp_path):
     """The stand-ins of the module docstring.  ``calls`` keeps what `main` handed each: the engine's build, each committer's
     attachment, each binding record, each run's verdict.  ``verdicts`` is what the runs' verdicts return in order, the last
-    one for every later run, or None for the real `commit_verdict`, whose answers ``answers`` keeps."""
+    one for every later run, or None for the real `commit_verdict`, whose answers ``answers`` keeps.  ``collected`` keeps the
+    engine steps taken when each full collection was asked for."""
     for name in ENVIRON:
         monkeypatch.setenv(name, "")
         monkeypatch.delenv(name)
@@ -307,7 +319,7 @@ def stand_ins(monkeypatch, tmp_path):
     MADE.clear()
     MAKE.clear()
     clock = Clock()
-    s = SimpleNamespace(calls=[], verdicts=None, answers=[], clock=clock, engine=engine(clock), environ=set(os.environ))
+    s = SimpleNamespace(calls=[], verdicts=None, answers=[], collected=[], clock=clock, engine=engine(clock), environ=set(os.environ))
     real_verdict = commit.commit_verdict
 
     def build_engine(checkpoints, **kw):
@@ -328,11 +340,17 @@ def stand_ins(monkeypatch, tmp_path):
         s.answers.append(real_verdict(record, tokens_equal, **kw) if s.verdicts is None else s.verdicts[min(len(s.answers), len(s.verdicts) - 1)])
         return s.answers[-1]
 
+    def collect(generation=2):
+        assert generation == 2, "main asks for a full collection"
+        s.collected.append(s.engine.llm.llm_engine.steps)
+        return 0
+
     for owner, name, value in [(source_identity, "precheck", lambda command, out=None: copy.deepcopy(SOURCE_IDENTITY)),
                                (va, "build_engine", build_engine), (va, "versions_doc", lambda eng: {"vllm": "stand-in"}),
                                (va, "sampling_params", lambda req, sampling: SimpleNamespace(max_tokens=int(req["max_tokens"]))),
                                (SV, "require", lambda llm, wl, target, out: dict(SERVED)),
                                (torch.cuda, "synchronize", lambda: None), (torch.cuda, "reset_peak_memory_stats", lambda: None),
+                               (gc, "collect", collect),
                                (commit, "git_head", lambda: None), (commit, "nvidia_smi_used_mib", lambda: None), (commit, "rss_kb", lambda: RSS),
                                (commit, "attach_of_record", attach_of_record), (commit, "binding_record", binding_record),
                                (commit, "commit_verdict", commit_verdict), (commit, "time", clock), (sys, "argv", list(ARGV))]:
@@ -490,6 +508,15 @@ def test_a_paired_commit_that_passes(tmp_path, stand_ins, capsys):
     assert extra == [], "main wrote a name the fixture does not take back"
 
 
+def test_a_full_collection_is_asked_for_once_before_each_run(tmp_path, stand_ins, capsys):
+    """`main` asks the cyclic collector for a full collection before each run of a pair and at no other time: the six engine
+    steps of the two warm-ups, the control's and the committer's, are taken when the first is asked for, and a run's three
+    more at each later one."""
+    stand_ins.verdicts = [(True, None)]
+    ended = run(tmp_path, capsys)
+    assert ended.exit is None and len(ended.rows()) == 4 and stand_ins.collected == [6, 9, 12, 15]
+
+
 def test_only_the_control_arm(tmp_path, stand_ins, capsys):
     ended = run(tmp_path, capsys, "--only-arm", "control")
     assert ended.exit is None and ended.printed[-1] == f"[delta] wrote {ended.out} (control arm only)"
@@ -616,14 +643,16 @@ def test_a_refusal_before_the_engine(tmp_path, stand_ins, capsys, argv, why):
 
 
 def test_a_flipped_weight_is_registered_and_named(tmp_path, stand_ins, capsys):
-    """``--flip-weight``: the element changes before the weights' registration, and the verdict names the negative."""
+    """``--flip-weight``: the element changes before the weights' registration, the change is printed under the committer's
+    kind, and the verdict names the negative."""
     stand_ins.verdicts = [(True, None)]
     ended = run(tmp_path, capsys, "--flip-weight", "head.weight:0")
     [com] = MADE
     flipped = weights_root(stand_ins.engine.model)
+    change = {"param": "head.weight", "index": 0, "before": 0.0, "after": 1.0, "numel": 256, "expect": "weights pin FAIL naming the field; Commit FAIL rc 3"}
     assert flipped != weights_root(Model()) and float(stand_ins.engine.model.head.weight[0, 0]) == 1.0
-    assert ended.exit is None and ended.doc("verdict.json") == verdict_doc(com.roots[1:], negatives={"flip_weight": {
-        "param": "head.weight", "index": 0, "before": 0.0, "after": 1.0, "numel": 256, "expect": "weights pin FAIL naming the field; Commit FAIL rc 3"}})
+    assert ended.exit is None and ended.doc("verdict.json") == verdict_doc(com.roots[1:], negatives={"flip_weight": change})
+    assert f"[delta] FLIP-WEIGHT NEGATIVE TEST ({PLUGIN}): {change} -- checkpoint_binding (the weights pin) MUST FAIL naming head.weight" in ended.printed
     assert less_coins(ended.rows())[1] == instrumented_row(tmp_path, 0, 1, com.roots[1], weights=flipped)
 
 
@@ -647,3 +676,524 @@ def test_a_root_other_than_the_expected_one(tmp_path, stand_ins, capsys):
     assert [row["root_equal_expected"] for row in rows] == [False, False]
     assert [row["commit"]["value_correspondence"]["result"] for row in rows] == [False, False]
     assert [f"[delta] ROOT MISMATCH: run root {root} != expected {'ab' * 64}" in ended.printed for root in MADE[0].roots[1:]] == [True, True]
+
+
+def test_classes_required_on_the_command_line_take_the_place_of_the_engines_default_set(tmp_path, stand_ins, capsys):
+    """``--required-classes``: the classes named are the ones the attachment of record, each run's verdict and the Commit's
+    verdict hold, the attachment is told they were given, and the verdict says where they came from."""
+    stand_ins.verdicts = [(True, None)]
+    given = ("input_token_ids", "weights")
+    ended = run(tmp_path, capsys, "--required-classes", ",".join(given))
+    attached = [kw for name, kw in stand_ins.calls if name == "attach_of_record"]
+    assert ended.exit is None and [(kw["required_classes"], kw["required_classes_cli"], kw["hidden_family"]) for kw in attached] == [(given, True, None)]
+    assert [kw["required_classes"] for name, kw in stand_ins.calls if name == "commit_verdict"] == [given, given]
+    assert "[delta] engine attention: vllm_flash_attn_version=None; required classes input_token_ids,weights" in ended.printed
+    assert ended.doc("verdict.json") == verdict_doc(MADE[0].roots[1:], required_classes=list(given), required_classes_source="cli")
+
+
+def test_the_options_handed_on_are_the_ones_whose_staging_is_resolved(tmp_path, stand_ins, capsys, monkeypatch):
+    """The staging is resolved once, before the engine (`resolve_staging`: here the window and whether the staging is bounded,
+    neither given), and the options the attachment of record and each run's binding record are handed are the resolved
+    ones, not the ones `main` was given."""
+    stand_ins.verdicts = [(True, None)]
+    resolved, handed = [], []
+    resolve, attach, binding = commit.resolve_staging, commit.attach_of_record, commit.binding_record
+
+    def resolve_staging(args):
+        resolved.append((args, resolve(args)))
+        return resolved[-1][1]
+
+    def attach_of_record(com, eng, args, manifest, out, **kw):
+        handed.append(args)
+        return attach(com, eng, args, manifest, out, **kw)
+
+    def binding_record(com, rc, reqs, sampling, args, pair, **kw):
+        handed.append(args)
+        return binding(com, rc, reqs, sampling, args, pair, **kw)
+
+    for name, value in [("resolve_staging", resolve_staging), ("attach_of_record", attach_of_record), ("binding_record", binding_record)]:
+        monkeypatch.setattr(commit, name, value)
+    ended = run(tmp_path, capsys)
+    [(given, settled)] = resolved
+    assert ended.exit is None and (given.window_mb, given.bounded_staging) == (None, None)
+    assert (settled.window_mb, settled.bounded_staging) == (0, False) and handed == [settled] * 3
+
+
+def test_every_request_of_every_run_is_served_under_the_workloads_sampling(tmp_path, stand_ins, capsys, monkeypatch):
+    """The two warm-ups' requests and the four measured runs' are each given their parameters from the workload's sampling
+    record, as the workload's reader hands it (`vllm_adapter.load_workload`)."""
+    stand_ins.verdicts = [(True, None)]
+    under = []
+    params = va.sampling_params
+
+    def sampling_params(req, sampling):
+        under.append(sampling)
+        return params(req, sampling)
+
+    monkeypatch.setattr(va, "sampling_params", sampling_params)
+    ended = run(tmp_path, capsys)
+    assert ended.exit is None and under == [va.load_workload(str(tmp_path / "workload.json"))["sampling"]] * (6 * len(WORKLOAD["requests"]))
+
+
+NOT_RUN = "oracle compare not run: "
+
+
+def oracle_compares(ended: Ended) -> list[Record]:
+    """Each instrumented row's oracle-compare record; a control row has no commit record, so none."""
+    assert [row.get("commit") for row in ended.rows() if row["arm"] == "control"] == [None, None]
+    return [row["commit"]["oracle_compare"] for row in ended.rows() if row["arm"] == "instrumented"]
+
+
+def test_an_oracle_that_cannot_be_read_is_recorded_as_not_checked(tmp_path, stand_ins, capsys):
+    """``--match-dir`` on a directory that holds no Match record: each instrumented row records an oracle compare that did not
+    run, under the comparison's own schema id and with no result, and its value correspondence says the compare is partial."""
+    stand_ins.verdicts = [(True, None)]
+    ended = run(tmp_path, capsys, "--match-dir", str(tmp_path / "no_match"))
+    missing = "FileNotFoundError(2, 'No such file or directory')"
+    assert oracle_compares(ended) == [{"schema": "verity-sweep/oracle-compare/v1", "method": "oracle-compare", "result": None,
+                                       "why": NOT_RUN + missing, "compared": 0, "mismatch_n": 0, "error": missing}] * 2
+    for row in ended.rows():
+        if row["arm"] == "instrumented":
+            correspondence = row["commit"]["value_correspondence"]
+            assert correspondence["method"].startswith("oracle-compare(partial) + ")
+            assert correspondence["oracle_provenance"] is None
+            assert correspondence["components"]["oracle_compare"] == {
+                **dict.fromkeys(("result", "grade", "equal", "steps_compared", "steps_not_snapshotted", "complete", "attribution",
+                                 "workload_check", "value_source", "provenance")),
+                "why": NOT_RUN + missing, "compared": 0, "mismatch_n": 0, "reference": "live Match oracle of this attempt (--match-dir)"}
+
+
+def test_an_oracle_compare_that_cannot_be_imported_is_recorded_under_the_same_schema(tmp_path, stand_ins, capsys, monkeypatch):
+    """The comparison's module is imported where it is first needed.  Where that import fails the record still carries the
+    comparison's schema id, which is the id the module itself writes."""
+    from verity_vllm import check
+    from verity_vllm.check import oracle_compare
+
+    assert oracle_compare.SCHEMA == "verity-sweep/oracle-compare/v1"
+    monkeypatch.delattr(check, "oracle_compare")
+    monkeypatch.setitem(sys.modules, "verity_vllm.check.oracle_compare", None)
+    stand_ins.verdicts = [(True, None)]
+    ended = run(tmp_path, capsys, "--match-dir", str(tmp_path / "no_match"))
+    records = oracle_compares(ended)
+    assert [(r["schema"], r["method"], r["result"], r["compared"], r["mismatch_n"]) for r in records] == [
+        ("verity-sweep/oracle-compare/v1", "oracle-compare", None, 0, 0)] * 2
+    assert all(r["why"] == NOT_RUN + r["error"] and r["error"].startswith(("ImportError(", "ModuleNotFoundError(")) for r in records)
+
+
+#: The host admission's record as far as the verdict reads it: the bound it printed, when, and the terms it adds up.
+ADMISSION: Record = {"host_peak_bound_bytes": 8 << 20, "admission_utc": "1969-12-31T23:59:59Z", "admission_monotonic_s": -1.0,
+                     "admission_of_record": {"governing": "the row's"}, "governs_this_run": True, "dominant_contributor": "engine_rss_bytes",
+                     "engine_rss_bytes": 3 << 20, "levels_bytes": 1 << 20, "slack_bytes": None}
+HOST_PEAK_LINE = ("[delta] host peak (process VmHWM) 4 MiB vs bounded HOST BOUND {bound} MiB: {side} by {by} MiB (measured/predicted {ratio}; "
+                  "admission 1969-12-31T23:59:59Z printed_before_run={before}, first run 1970-01-01T00:00:00Z; admission_of_record the row's)")
+
+
+@pytest.mark.parametrize(("more", "bound", "side", "by", "ratio", "before"), [
+    ({}, 8, "under", 4, 0.5, True),
+    ({"host_peak_bound_bytes": 4 << 20}, 4, "under", 0, 1.0, True),
+    ({"host_peak_bound_bytes": 2 << 20, "admission_monotonic_s": 1e9}, 2, "OVER", 2, 2.0, False),
+    ({"host_peak_bound_bytes": 0, "admission_monotonic_s": None}, 0, "OVER", 4, None, None),
+], ids=["under", "at-the-bound", "over-and-printed-late", "a-bound-of-zero-and-no-print-time"])
+def test_the_process_peak_is_held_against_the_newest_host_admissions_bound(tmp_path, stand_ins, capsys, more, bound, side, by, ratio, before):
+    """The verdict's `host_peak`: this process's high-water mark against the bound of the admission record the out directory
+    names last, with whether that record was printed before the first run began.  It is a record and a line, no verdict rule."""
+    stand_ins.verdicts = [(True, None)]
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "host_admission_0.json").write_text(json.dumps({"host_peak_bound_bytes": 1}))
+    (tmp_path / "out" / "host_admission_1.json").write_text(json.dumps({**ADMISSION, **more}))
+    ended = run(tmp_path, capsys)
+    peak = RSS[1] * 1024
+    assert ended.exit is None
+    assert ended.printed[-2:] == [HOST_PEAK_LINE.format(bound=bound, side=side, by=by, ratio=ratio, before=before), PASS_LINE.format(n=2)]
+    assert ended.doc("verdict.json") == verdict_doc(MADE[0].roots[1:], host_peak={
+        "process_vmhwm_bytes": peak, "host_peak_bound_bytes": bound << 20, "under_bound": side == "under", "margin_bytes": (bound << 20) - peak,
+        "admission": "host_admission_1.json", "admission_of_record": {"governing": "the row's"}, "governs_this_run": True,
+        "admission_utc": "1969-12-31T23:59:59Z", "first_run_started_utc": UTC, "printed_before_run": before,
+        "dominant_contributor": "engine_rss_bytes", "terms_predicted_bytes": {"engine_rss_bytes": 3 << 20, "levels_bytes": 1 << 20},
+        "terms_sum_bytes": 4 << 20, "measured_over_predicted": ratio})
+
+
+@pytest.mark.parametrize("text", [json.dumps({"admission_utc": "1969-12-31T23:59:59Z"}), "not JSON"], ids=["names-no-bound", "not-json"])
+def test_an_admission_record_that_cannot_be_read_leaves_no_host_peak(tmp_path, stand_ins, capsys, text):
+    stand_ins.verdicts = [(True, None)]
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "host_admission_0.json").write_text(text)
+    ended = run(tmp_path, capsys)
+    assert ended.exit is None and ended.printed[-2:] == [f"[delta] wrote {ended.out}", PASS_LINE.format(n=2)]
+    assert ended.doc("verdict.json") == verdict_doc(MADE[0].roots[1:])
+
+
+def test_a_commit_whose_remote_session_did_not_accept_exits_3_after_its_verdict(tmp_path, stand_ins, capsys, monkeypatch):
+    """The session's answer is the Commit's last word: asked once, after the verdict is written and the PASS line printed."""
+    from verity_vllm.pipeline import remote_session
+
+    asked = []
+
+    def accepted(rs):
+        asked.append((rs, (tmp_path / "out" / "verdict.json").exists()))
+        return False
+
+    monkeypatch.setattr(remote_session, "accepted", accepted)
+    stand_ins.verdicts = [(True, None)]
+    ended = run(tmp_path, capsys)
+    assert ended.exit == 3 and asked == [(None, True)] and ended.printed[-1] == PASS_LINE.format(n=2)
+    assert ended.doc("verdict.json") == verdict_doc(MADE[0].roots[1:])
+
+
+class Connection:
+    """The challenger's connection as a challenge phase holds it once it is open: an opening of each family's coin after a run's
+    root, then one close, which fails with ``why`` where the phase did not end cleanly."""
+
+    def __init__(self, why: str | None) -> None:
+        self.why = why
+        self.opened: list[tuple[str, int, str]] = []
+        self.closed = 0
+        self.commitment = SimpleNamespace(to_json=lambda: {"scheme": "the stand-in's"})
+
+    def open(self, family: str, index: int, root: bytes) -> SimpleNamespace:
+        self.opened.append((family, index, root.hex()))
+        return SimpleNamespace(coin=bytes([index + 1]) * 64, to_json=lambda: {"family": family, "index": index})
+
+    def close(self) -> None:
+        self.closed += 1
+        if self.why:
+            raise CC.CoinError(self.why)
+
+
+def gate_not_asked(argv: list[str]) -> tuple[int, str]:
+    raise AssertionError(f"a phase that is open asks the gate nothing: {argv}")
+
+
+@pytest.mark.parametrize("why", [None, "the ledger holds no end entry"], ids=["closed", "not-closed"])
+def test_a_challenge_phase_gives_each_run_its_coins_and_is_closed_once_after_the_last(tmp_path, stand_ins, capsys, monkeypatch, why):
+    """A challenge phase reserved for the Commit's instrumented runs: each run's coins are the phase's, a coin of each family
+    opened after that run's root, and its session is recorded without its secret.  A close that did not go cleanly is named in
+    one line and changes no verdict."""
+    connection = Connection(why)
+    phase = CC.ChallengePhase(CC.ChallengerGate("the-gate", gate_not_asked), {"session": "the session"}, 2)
+    phase.client, phase.given = connection, {"session": "the session", "secret": "never recorded"}
+    reserved = []
+
+    def of_options(args: commit.Options, runs: int) -> CC.ChallengePhase:
+        reserved.append(runs)
+        return phase
+
+    monkeypatch.setattr(CC, "of_options", of_options)
+    stand_ins.verdicts = [(True, None)]
+    ended = run(tmp_path, capsys)
+    roots = MADE[0].roots[1:]
+    assert ended.exit is None and reserved == [2] and connection.closed == 1 and phase.client is None
+    assert connection.opened == [(family, i, root) for i, root in enumerate(roots) for family in CC.FAMILIES]
+    assert [row["commit"]["extra"]["coins"] for row in ended.rows() if "commit" in row] == [
+        {"source": CC.CHALLENGER, "index": i, "root": root, "session": {"session": "the session"}, "commitment": {"scheme": "the stand-in's"},
+         "keys": {family: f"{i + 1:02x}" * 64 for family in CC.FAMILIES},
+         "openings": {family: {"family": family, "index": i} for family in CC.FAMILIES}}
+        for i, root in enumerate(roots)]
+    line = f"[delta] the challenger session did not close (no ledger end: its coins credit nothing): {why}"
+    assert [p for p in ended.printed if "challenger session" in p] == ([line] if why else [])
+    assert ended.doc("verdict.json") == verdict_doc(roots)
+
+
+#: A compiling engine's generated kernels as the adapter reads them at the build, and the code objects loaded after the last run.
+GENERATED: Record = {"per_process_cache_dir": "/cache", "wrappers": 2, "distinct_kernel_sources": 3, "kernel_set_sha256": "a" * 64,
+                     "call_set_sha256": "b" * 64, "loaded": {"modules": 2, "kernels": 3, "executed_set_sha256": "c" * 64}}
+LOADED_END: Record = {"modules": 2, "kernels": 3, "executed_set_sha256": "c" * 64, "per_kernel": {"k": 1}, "modules_list": ["m"]}
+GENERATED_LINE = ("[delta] generated kernels (Inductor output code, per-process dir /cache): pieces 2 distinct kernel sources 3 "
+                  "kernel_set aaaaaaaaaaaaaaaa call_set bbbbbbbbbbbbbbbb")
+LOADED_LINE = ("[delta] loaded code objects after the last run: modules 2 kernels 3 executed_set cccccccccccccccc vs build cccccccccccccccc "
+               "-> replay covered: {covered}")
+
+
+@pytest.fixture
+def compiling(stand_ins, monkeypatch):
+    """`stand_ins` with an engine that compiles: its compile settings say so, and the adapter's three readers of this process's
+    generated kernels and loaded code objects are stood in.  ``generated`` is what the build reads, ``end`` what is loaded
+    after the last run and ``delta`` the comparison's answer."""
+    from verity_vllm.acquire.sources import compiled_source
+
+    s = stand_ins
+    s.generated, s.end, s.delta = copy.deepcopy(GENERATED), copy.deepcopy(LOADED_END), {"ok": True}
+    settings_of = compiled_source.compile_settings
+
+    def loaded_code_objects_delta(start, end):
+        s.calls.append(("loaded_code_objects_delta", {"start": copy.deepcopy(start), "end": end}))
+        return s.delta
+
+    for owner, name, value in [(compiled_source, "compile_settings", lambda llm: {**settings_of(llm), "enforce_eager": False}),
+                               (va, "generated_kernels_of_this_process", lambda: s.generated), (va, "loaded_code_objects", lambda: s.end),
+                               (va, "loaded_code_objects_delta", loaded_code_objects_delta)]:
+        monkeypatch.setattr(owner, name, value)
+    return s
+
+
+@pytest.mark.parametrize(("delta", "covered"), [({"ok": True}, "True"), ({"ok": False, "why": "1 kernel is new"}, "False (1 kernel is new)")],
+                         ids=["covered", "a-new-kernel"])
+def test_a_compiling_engines_loaded_code_objects_are_read_again_after_the_last_run(tmp_path, compiling, capsys, delta, covered):
+    """The kernels generated at the build are recorded then; after the last run the loaded code objects are read again and held
+    against the build's, and the record, the versions and a file of its own say whether every run replayed what was built."""
+    s = compiling
+    s.delta, s.verdicts = delta, [(True, None)]
+    ended = run(tmp_path, capsys)
+    assert ended.exit is None and ended.printed[-1] == PASS_LINE.format(n=2)
+    assert [p for p in ended.printed if "generated kernels" in p or "loaded code objects" in p] == [GENERATED_LINE, LOADED_LINE.format(covered=covered)]
+    kernels = {**GENERATED, "loaded_end": {k: LOADED_END[k] for k in ("modules", "kernels", "executed_set_sha256")}, "replay_covered": delta}
+    assert ended.doc("inductor_kernels.json") == kernels and ended.doc("versions.json")["compilation"]["generated_kernels"] == kernels
+    assert ended.doc("inductor_kernels_end.json") == {"loaded": LOADED_END, "delta": delta, "runs": 4}
+    assert [kw for name, kw in s.calls if name == "loaded_code_objects_delta"] == [{"start": GENERATED["loaded"], "end": LOADED_END}]
+
+
+@pytest.mark.parametrize(("generated", "line", "written"), [
+    ({"error": "no cache dir of this process"}, "[delta] generated kernels: no cache dir of this process", False),
+    ({**GENERATED, "loaded": {"error": "no module table"}}, GENERATED_LINE, True),
+], ids=["kernels-not-read", "loaded-objects-not-read"])
+def test_generated_kernels_whose_loaded_objects_were_not_read_at_the_build_are_not_read_again(tmp_path, compiling, capsys, generated, line, written):
+    s = compiling
+    s.generated, s.verdicts = copy.deepcopy(generated), [(True, None)]
+    ended = run(tmp_path, capsys)
+    assert ended.exit is None and ended.printed[-1] == PASS_LINE.format(n=2)
+    assert [p for p in ended.printed if "generated kernels" in p or "loaded code objects" in p] == [line]
+    assert ("inductor_kernels.json" in ended.files()) == written and "inductor_kernels_end.json" not in ended.files()
+    assert ended.doc("versions.json")["compilation"]["generated_kernels"] == generated
+    assert not [name for name, _ in s.calls if name == "loaded_code_objects_delta"]
+
+
+REPLAY_CACHE_RULE = "C2 sampled replay once per distinct (run root, manifest digest, seed) per Commit stage; equal-root pairs reference that record"
+
+
+@pytest.mark.parametrize("kept", [True, False], ids=["artifact-kept", "artifact-gone"])
+def test_a_replay_that_a_later_pair_shares_is_counted_in_the_verdict_and_named_in_its_artifact(tmp_path, stand_ins, capsys, monkeypatch, kept):
+    """``--replay-cache``: the first pair's C2 replay is the one evaluated and the two after it, under the same key, share it.
+    The verdict counts the replays that ran and names who shares each; the evaluated pair's artifact, where it is still there,
+    is told who shares it."""
+    from verity_vllm.pipeline import c2_replay
+
+    artifact = tmp_path / "c2_pair0.json"
+    handed = []
+
+    def c2_run(sources, cache):
+        handed.append(sources.pair)
+        if not cache:
+            if kept:
+                artifact.write_text(json.dumps({"sampled_replay": {"result": True}}))
+            cache["the key"] = {"pair": sources.pair, "run_root": sources.rc.run_root.hex(), "artifact": str(artifact), "shared_by": []}
+        else:
+            cache["the key"]["shared_by"].append({"pair": sources.pair, "root_equal": sources.pair == 2})
+
+    monkeypatch.setattr(c2_replay, "run", c2_run)
+    stand_ins.verdicts = [(True, None)]
+    ended = run(tmp_path, capsys, "--replay-cache", "--program-dir", str(tmp_path / "program"), "--pairs", "3")
+    roots = MADE[0].roots[1:]
+    shared = [{"pair": 1, "root_equal": False}, {"pair": 2, "root_equal": True}]
+    assert ended.exit is None and handed == [0, 1, 2] and ended.printed[-1] == PASS_LINE.format(n=3)
+    assert ended.doc("verdict.json") == verdict_doc(roots, replay_cache={
+        "enabled": True, "distinct_replays": 1, "reused_pairs": 2, "rule": REPLAY_CACHE_RULE,
+        "records": [{"evaluated_pair": 0, "run_root": roots[0], "shared_by_pairs": [1, 2], "roots_equal": False}]})
+    assert artifact.exists() == kept
+    if kept:
+        assert json.loads(artifact.read_text()) == {"sampled_replay": {"result": True, "shared_by": shared}}
+
+
+def test_a_replay_cache_no_replay_filled_is_recorded_as_empty(tmp_path, stand_ins, capsys):
+    stand_ins.verdicts = [(True, None)]
+    ended = run(tmp_path, capsys, "--replay-cache")
+    assert ended.exit is None and ended.doc("verdict.json") == verdict_doc(MADE[0].roots[1:], replay_cache={
+        "enabled": True, "distinct_replays": 0, "reused_pairs": 0, "rule": REPLAY_CACHE_RULE, "records": []})
+
+
+class AtTheLease(Exception):
+    """Raised in place of `gpu_lease.acquire`: `main` has done all it does before it takes the GPU."""
+
+
+#: A required-value manifest as far as `main` reads one before the GPU: it names no query, so no partition is bound.
+MANIFEST: Record = {"program_digest": "d" * 128, "manifest_digest": "e" * 64, "populations": {"identities": 3, "by_family": {"instance_outputs": 3}}}
+SOURCE_OK = "[delta] source identity OK: verity_vllm=000000000 tree=/tree"
+MANIFEST_LINE = "[delta] required-value manifest {path}: 3 identities {{'instance_outputs': 3}} digest eeeeeeeeeeeeeeee (Program dddddddddddddddd)"
+FACTS_LINE = "[delta] form (B) producer facts from the Programs of record: {summary}"
+#: Each member is printed with the first two of the modules that read it.
+HANDED_DOWN_LINE = ("[delta] v2 manifest: {rows} row(s) of {members} member(s) handed down by their module's body (every reader inside its "
+                    "subtree) marked promoted -> observed at the first consumer's input: {first}")
+#: `load_workload`'s reading of `WORKLOAD`, which the producer facts are handed.
+REQUESTS = [{"request_id": "a", "prompt_token_ids": [5, 6, 7], "max_tokens": 3}, {"request_id": "b", "prompt_token_ids": [9, 2], "max_tokens": 2}]
+
+
+@pytest.fixture
+def before_the_lease(stand_ins, monkeypatch):
+    """`stand_ins`, with `main` stopped where it takes the GPU and the three readers of a manifest's Programs stood in: ``calls``
+    keeps what the call-boundary plan, the producer facts and the handed-down members' marking were handed.  ``facts`` is what
+    the producer facts answer and ``handed`` the marking; ``prechecks`` is what the source identity precheck was handed."""
+    from verity_vllm.check import oracle_compare
+    from verity_vllm.pipeline import boundary_plan, commit_plan, gpu_lease
+
+    s = stand_ins
+    s.facts, s.handed, s.prechecks = ((None, {"members": 0}), None), {"rows": 0, "members": {}}, []
+
+    def precheck(command, out=None):
+        s.prechecks.append((command, out))
+        return copy.deepcopy(SOURCE_IDENTITY)
+
+    def use(args, manifest, *, tl):
+        assert tl is commit.TL
+        s.calls.append(("boundary_plan.use", {"manifest": manifest}))
+        return None, None
+
+    def producer_facts(args, manifest, reqs, sampling, *, tl):
+        assert tl is commit.TL
+        s.calls.append(("producer_facts", {"manifest": manifest, "reqs": [{k: r[k] for k in ("request_id", "prompt_token_ids", "max_tokens")} for r in reqs],
+                                           "sampling": sampling["variant"]}))
+        return s.facts
+
+    def promote_handed_down(manifest, facts):
+        s.calls.append(("promote_handed_down", {"manifest": manifest, "facts": facts}))
+        return s.handed
+
+    def acquire(tl):
+        assert tl is commit.TL
+        raise AtTheLease
+
+    for owner, name, value in [(source_identity, "precheck", precheck), (boundary_plan, "use", use), (commit_plan, "producer_facts", producer_facts),
+                               (oracle_compare, "promote_handed_down", promote_handed_down), (gpu_lease, "acquire", acquire)]:
+        monkeypatch.setattr(owner, name, value)
+    return s
+
+
+def manifest_at(tmp_path: Path, doc: Record = MANIFEST) -> Path:
+    (tmp_path / "manifest.json").write_text(json.dumps(doc))
+    return tmp_path / "manifest.json"
+
+
+def to_the_lease(tmp_path: Path, capsys: Any, *argv: str) -> Ended:
+    """`run`, which `main` leaves at the lease: nothing is built and no committer is made."""
+    with pytest.raises(AtTheLease):
+        run(tmp_path, capsys, *argv)
+    assert MADE == []
+    return Ended(None, tmp_path / "out", capsys.readouterr().out.splitlines())
+
+
+def test_a_commit_with_no_manifest_asks_for_no_producer_facts(tmp_path, before_the_lease, capsys):
+    ended = to_the_lease(tmp_path, capsys)
+    assert ended.printed == [SOURCE_OK] and ended.files() == []
+    assert before_the_lease.calls == [("boundary_plan.use", {"manifest": None})]
+    assert before_the_lease.prechecks == [("commit", ended.out / "source_identity.json")]
+    assert os.environ["VERITY_WEIGHTS_HASH"] == "host" and os.environ["VERITY_COLLECT_WATCHDOG_MARKER"] == str(ended.out / "COLLECTOR_DEAD_HUNG.json")
+
+
+def test_a_manifests_producer_facts_are_derived_before_the_gpu_and_its_handed_down_members_marked(tmp_path, before_the_lease, capsys):
+    """The Programs are read on the CPU, before the lease: the producer facts, then the members a module's body hands down,
+    which the facts' summary then names."""
+    s = before_the_lease
+    facts = {("model.layers.0", "out"): {"consumers": ["model.layers.0.mlp"]}}
+    s.facts, s.handed = ((facts, {"members": 1}), {"used": True}), {"rows": 2, "members": {"model.layers.0/out": ["x", "y", "z"]}}
+    manifest = manifest_at(tmp_path)
+    ended = to_the_lease(tmp_path, capsys, "--required-manifest", str(manifest), "--program-digest", "d" * 128)
+    assert ended.printed == [
+        SOURCE_OK, MANIFEST_LINE.format(path=manifest), FACTS_LINE.format(summary={"members": 1}),
+        HANDED_DOWN_LINE.format(rows=2, members=1, first={"model.layers.0/out": ["x", "y"]})]
+    assert s.calls == [("boundary_plan.use", {"manifest": MANIFEST}),
+                       ("producer_facts", {"manifest": MANIFEST, "reqs": REQUESTS, "sampling": "greedy"}),
+                       ("promote_handed_down", {"manifest": MANIFEST, "facts": facts})]
+    assert s.facts[0][1] == {"members": 1, "handed_down": s.handed} and ended.files() == []
+
+
+@pytest.mark.parametrize(("facts", "marked"), [(None, False), ({("model", "out"): {"consumers": []}}, True)], ids=["no-facts", "none-handed-down"])
+def test_a_manifest_whose_programs_hand_nothing_down_says_so_in_no_line(tmp_path, before_the_lease, capsys, facts, marked):
+    """With no facts nothing is marked; with facts that hand no row down the marking runs and `main` prints no line for it."""
+    s = before_the_lease
+    s.facts = ((facts, {"members": 0}), None)
+    manifest = manifest_at(tmp_path)
+    ended = to_the_lease(tmp_path, capsys, "--required-manifest", str(manifest), "--program-digest", "d" * 128)
+    assert ended.printed == [SOURCE_OK, MANIFEST_LINE.format(path=manifest), FACTS_LINE.format(summary={"members": 0})]
+    assert [name for name, _ in s.calls] == ["boundary_plan.use", "producer_facts", *(["promote_handed_down"] if marked else [])]
+    assert s.facts[0][1] == ({"members": 0, "handed_down": s.handed} if marked else {"members": 0})
+
+
+def test_the_control_arm_alone_reads_no_program_of_its_manifest(tmp_path, before_the_lease, capsys):
+    """``--only-arm control`` makes no committer, so nothing derives a plan or a fact from the manifest it is given."""
+    manifest = manifest_at(tmp_path)
+    ended = to_the_lease(tmp_path, capsys, "--required-manifest", str(manifest), "--program-digest", "d" * 128, "--only-arm", "control")
+    assert ended.printed == [SOURCE_OK, MANIFEST_LINE.format(path=manifest)]
+    assert before_the_lease.calls == [("boundary_plan.use", {"manifest": None})]
+
+
+@pytest.mark.parametrize(("doc", "argv", "why"), [
+    (MANIFEST, (), "[delta] REFUSED: --required-manifest requires --program-digest <the Build's Program digest of record>"),
+    (MANIFEST, ("--program-digest", " "), "[delta] REFUSED: --required-manifest requires --program-digest <the Build's Program digest of record>"),
+    ({**MANIFEST, "query": {"query_id": Q_WORD_ID}}, ("--program-digest", "d" * 128),
+     f"[delta] REFUSED: the manifest is built under {Q_WORD_ID} but names no partition (query.partition)"),
+], ids=["no-digest", "a-blank-digest", "no-partition"])
+def test_a_manifest_refused_before_the_engine(tmp_path, before_the_lease, capsys, doc, argv, why):
+    """The Build's digest must come with the manifest, and a manifest under the query of record must name its partition."""
+    ended = run(tmp_path, capsys, "--required-manifest", str(manifest_at(tmp_path, doc)), *argv)
+    assert isinstance(ended.exit, str) and ended.exit.startswith(why)
+    assert before_the_lease.calls == [] and ended.printed == [SOURCE_OK] and not ended.out.exists()
+
+
+@pytest.mark.parametrize(("fault", "handed"), [("compiled_swap", "compiled_swap"), ("late_read", None), ("", None)])
+def test_the_served_source_is_made_from_the_build_of_record_before_the_engine(tmp_path, before_the_lease, capsys, monkeypatch, fault, handed):
+    """``--compiled-taps served``: the source is made of the manifest's document, before anything else reads the manifest, and is
+    handed ``VERITY_FAULT`` only where the fault is one of its own."""
+    from verity_vllm.pipeline import served_match
+
+    made = []
+
+    class Served:
+        def __init__(self, build, fault):
+            made.append(build)
+            self.src = SimpleNamespace(fault=fault)
+
+    monkeypatch.setattr(served_match, "ServedCommit", Served)
+    monkeypatch.setenv("VERITY_FAULT", fault)
+    manifest = manifest_at(tmp_path)
+    ended = to_the_lease(tmp_path, capsys, "--compiled-taps", "served", "--required-manifest", str(manifest), "--program-digest", "d" * 128)
+    assert made == [MANIFEST]
+    assert ended.printed == [SOURCE_OK, f"[delta] SERVED TAPS: every value of every engine step at vLLM's defaults; fault {handed!r}",
+                             MANIFEST_LINE.format(path=manifest), FACTS_LINE.format(summary={"members": 0})]
+    assert [name for name, _ in before_the_lease.calls] == ["boundary_plan.use", "producer_facts"]
+
+
+def test_a_stack_dump_is_asked_for_before_the_source_identity_is_checked(tmp_path, before_the_lease, capsys, monkeypatch):
+    """``VERITY_TRACEDUMP``: every thread's stack every so many seconds, from `main`'s first line on."""
+    import faulthandler
+
+    asked = []
+    monkeypatch.setattr(faulthandler, "dump_traceback_later", lambda seconds, **kw: asked.append((seconds, kw, list(before_the_lease.prechecks))))
+    monkeypatch.setenv("VERITY_TRACEDUMP", "30")
+    to_the_lease(tmp_path, capsys)
+    assert asked == [(30.0, {"repeat": True}, [])] and len(before_the_lease.prechecks) == 1
+
+
+def test_a_tree_other_than_the_one_asked_for_exits_3_with_the_prechecks_line(tmp_path, before_the_lease, capsys, monkeypatch):
+    """The source identity precheck's refusal is the Commit's: its sentence on stderr, exit 3, and nothing else done.  The
+    refusal's class is the run store's, stood in under the name `main` reads it by."""
+    class Refused(Exception):
+        pass
+
+    refusal = Refused("PRECHECK_FAIL_SOURCE_IDENTITY: 1 package(s) do not resolve from the requested tree /tree")
+
+    def precheck(command, out=None):
+        raise refusal
+
+    monkeypatch.setattr(source_identity, "SourceIdentityError", Refused, raising=False)
+    monkeypatch.setattr(source_identity, "precheck", precheck)
+    (tmp_path / "workload.json").write_text(json.dumps(WORKLOAD))
+    args = cli.parse("commit", ["--workload", str(tmp_path / "workload.json"), "--out", str(tmp_path / "out")], {})
+    with pytest.raises(SystemExit) as ended:
+        commit.main(args)
+    streams = capsys.readouterr()
+    assert ended.value.code == 3 and ended.value.__cause__ is None and ended.value.__suppress_context__
+    assert streams.out == "" and streams.err == str(refusal) + "\n"
+    assert before_the_lease.calls == [] and not (tmp_path / "out").exists() and "VERITY_WEIGHTS_HASH" not in os.environ
+
+
+def test_a_tree_without_the_run_store_is_refused_as_the_precheck_refuses_it(tmp_path, before_the_lease, capsys, monkeypatch):
+    """A `UsageError` of the precheck leaves `main` as it is, the command line's refusal (exit 2 at the CLI), not as exit 3."""
+    from verity_vllm.config import UsageError
+
+    refusal = UsageError("the source-identity precheck of stage 'commit' needs the run store")
+
+    def precheck(command, out=None):
+        raise refusal
+
+    monkeypatch.setattr(source_identity, "precheck", precheck)
+    with pytest.raises(UsageError) as ended:
+        run(tmp_path, capsys)
+    assert ended.value is refusal and capsys.readouterr().err == "" and before_the_lease.calls == []

@@ -1,0 +1,4 @@
+order = 163
+path = "`h1_lanes/`"
+runs_on = "CPU"
+what = "One H1 leaf proved as its 32 lanes and its combine, one Flock `--zk` statement each, and checked by the Lean verifier against the verifier's own files: a leaf at a small K made here, J10-R's leaf, or the unit a served window's own sample selected, beside negatives each refused (`run.sh JOB`; its README lists the jobs)"

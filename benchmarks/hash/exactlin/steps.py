@@ -70,10 +70,10 @@ def analyse(path: str) -> dict:
             arm, n = name.removeprefix(PROF_RANGE).rsplit("/n", 1)
             ranges.setdefault(arm, {})[int(n)] = (int(start), int(end), _pid(tid))
     kern = list(db.execute("SELECT demangledName, globalPid, start, end FROM CUPTI_ACTIVITY_KIND_KERNEL"))
-    try:
-        api = list(db.execute("SELECT nameId, globalTid, start, end FROM CUPTI_ACTIVITY_KIND_RUNTIME"))
-    except sqlite3.Error:
-        api = []
+    # nsys exports the runtime table only when the capture holds a runtime call
+    present = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    api = list(db.execute("SELECT nameId, globalTid, start, end FROM CUPTI_ACTIVITY_KIND_RUNTIME")
+               if "CUPTI_ACTIVITY_KIND_RUNTIME" in present else [])
     doc: dict = {"arms": {}}
     for arm, by_n in ranges.items():
         if len(by_n) != 2:

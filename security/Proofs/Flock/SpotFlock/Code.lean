@@ -10,6 +10,7 @@ public import Properties.Spot.Members
 public import Proofs.Flock.SpotFlock.Reveals
 public import Flock.Desc
 public import Flock.Comp
+public import Flock.PortRoots
 public import Spot.SecondStage
 
 /-!
@@ -30,8 +31,9 @@ partition query; the two-stage registration the samples read
 (`filesBlockOf`); the second
 stage's count per stratum; the templates' names and the design's links, as round 2's statement check reads them
 (`names`, `links`); template `t`'s reference session statement (`xS₀ t`), in Flock's masked scope, which template
-`t`'s session statement is but for what the run sets (`pinOk`); template `t`'s reference registered reads (`refReads`),
-which its statement's are but for the run's fields; and the commitment's layout and the reference prover's framing
+`t`'s session statement is but for what the run sets (`pinOk`); template `t`'s reference registered reads (`refReads`)
+and reference header (`refHeaders`), which its statement's are but for the run's fields; and the commitment's layout
+and the reference prover's framing
 (`frame`, a code whose verifier, samples and reveal count are unread).
 
 **The run's statement** (`Roots`): the boundary registration's record, as JSON (`decode`), whose ports' roots are the
@@ -55,9 +57,13 @@ roots the boundary values are committed under (`portRoots`).
   registration check holds them (`recordsOk`); and template `t`'s statement sets up as a masked Flock statement with
   `k₀ t` rounds, in Flock's masked scope, in the scope Flock's soundness proof covers and with hidden outputs, and
   with `xS₀ t`'s table shapes
-  (`sessionOk`); round 1's record lists the replay sample in its order (`SecondStage.interiorOrderOk`); round 2's
+  (`sessionOk`); round 1's record lists the replay sample in its order (`SecondStage.interiorOrderOk`), registers
+  no value of a name the statement's record has (`SecondStage.namesOk`) and none a replay block's input may not
+  read (`SecondStage.inputsFailure`); the design's links and wires are derived over the parts
+  (`SecondStage.designOk`); round 2's
   statement check passes the statement against template `t`'s part (`readsOk`, by `SecondStage.stmtCodes`: its public
-  file's header is `xS₀ t`'s placed in the run (`SecondStage.atRun`) but for the run's fields, names the part's slots
+  file's header is the template's reference header (`refHeaders`) placed in the run (`SecondStage.atRun`) but for the
+  run's fields, names the part's slots
   and the interior record's roots, its sample is the second stage's sample within the part, each registered read is one it
   may read, and its registered reads are its template's reference reads (`refReads`) but for the run's fields, the code
   itself the verifier of the session it checks (`codesOk`)); and it is `xS₀ t` but for its sample, its
@@ -74,8 +80,13 @@ proof-block partition a partition of it, each proof block in one replay block an
 replay layout fits the members' files (`filesOk`: the templates are the members, each population slot is its own unit,
 each member has room for its units, and the registration's blocks are theirs), and that each template's reference
 statement reads as a member's (`templateOk`: hidden outputs, untyped tags, a circuit file `Desc.parseStmt` reads, at
-most `2^32` rows a unit, one table, every port a `v2Row`); every check is a decision, so the verifier refuses every
-statement out of scope.
+most `2^32` rows a unit, one table, every port a `v2Row`), that each member's circuit is in the scope Flock's
+hidden-output proof covers (`membersScoped`), and that the registered wiring is one the connected program reads as
+the second stage's check does (`wiringOk`: the templates' names distinct, each wire's writer before its reader, every
+source bit at a port a link or a wire names and every wired one with a gate to go to, each wire's two ports alike,
+every written port no link names read by a wire and naming none, each reference read at a port neither names a port
+of the interior registration, and no value registered by the interior registration); every check is a decision, so
+the verifier refuses every statement out of scope.
 
 **What a session reveals** for a checked unit is the program's (`Reveal.reveal`): one opening for each value its proof
 block's correctness reads (`Prog.needsList`), at that gate, under the interior roots of its replay block where the
@@ -120,11 +131,14 @@ stage's count per stratum (`k`), the templates' names (`names`) and the design's
 the rows their units read (`rows`) round 2's statement check reads, the names the boundary and interior registrations'
 records must name (`boundaryNames`, `interiorNames`), template `t`'s reference session statement
 (`xS₀ t`) in Flock's masked scope (`xS₀_ok`), template `t`'s reference registered reads as round 2 reads a statement's,
-null for none (`refReads t`), the commitment's layout and the reference prover's framing
+null for none (`refReads t`), template `t`'s reference header as the auditor's params give it (`refHeaders t`), the
+commitment's layout and the reference prover's framing
 (`frame`), and the rounds after round 1 whose coins the second stage reads too (`more`). Template `t`'s circuit is
 its reference statement's (`Held.ms`). The reference reads are a copy of their own,
 not `xS₀ t`'s: Flock's setup reads a statement's registered reads as a registration's, roots included, which reference
-reads, staged before any run, can't name. -/
+reads, staged before any run, can't name. The reference headers are a copy of their own too, not the headers of
+`xS₀ t`'s public file: the second stage's check holds a statement's header to the JSON the params give, and no check
+holds that JSON to the file's first line as parsed. -/
 structure Held where
   desc : Msg
   vus : List (Array ℕ)
@@ -140,6 +154,7 @@ structure Held where
   xS₀ : ℕ → Msg
   xS₀_ok : ∀ t, zkOk (xS₀ t) = true
   refReads : ℕ → Json
+  refHeaders : ℕ → Json
   frame : Code
   more : ℕ
 
@@ -333,10 +348,11 @@ def filesOk (g : RegTwo) (ms : Spot.Bits.Members) (l : Spot.Slots.SlotOrder) (k 
         | none => true
       | none => true
 
-/-- The tables' sizes `m` a session's statement sets up under `--zk`, in order; none where it doesn't set up. -/
-def shapeOf (xS : Msg) : List ℕ :=
+/-- The tables a session's statement sets up under `--zk`, in order, each its statement version (wide leaf or not)
+and its size `m`; none where it doesn't set up. -/
+def shapeOf (xS : Msg) : List (Bool × ℕ) :=
   match FlockDeploy.setupOf true xS with
-  | some (_, _, sts) => sts.toList.map (·.m)
+  | some (_, _, sts) => sts.toList.map fun st => (st.wideLeaf, st.m)
   | none => []
 
 /-! ## What the verifier evaluates -/
@@ -360,7 +376,8 @@ def hiddenOf (xS : Msg) : Bool :=
   | none => false
 
 /-- **Template `t`'s session statement is in scope**: in Flock's masked scope, with template `t`'s reference statement's
-table shapes, in the scope Flock's soundness proof covers (`FlockDeploy.scopeCheck`, as `flock-verify` refuses any
+table shapes (each table's statement version and size, so a session at the other statement version is refused), in the
+scope Flock's soundness proof covers (`FlockDeploy.scopeCheck`, as `verity-verify-proof` refuses any
 other), and with hidden outputs (`hiddenOf`), as the deployed session circuit has. -/
 def sessionOk (t : ℕ) (xS : Msg) : Bool :=
   zkOk xS && shapeOf xS == shapeOf (h.xS₀ t) && FlockDeploy.scopeCheck true xS && hiddenOf xS
@@ -394,14 +411,358 @@ def parse (x : Msg) : Option AuditStatement :=
 def partition (_ : AuditStatement) : Option Partition :=
   some (membersPart h.ms)
 
+/-! ## The registered wiring
+
+The second stage's lookups at the auditor's copies, the gate each wired source bit goes to (`wireMap`) and the gates
+the boundary record holds (`returned`): the connected program is the members' programs read through them. The design
+evaluates (`two`) only where the conditions decided here hold (`wiringOk`). -/
+
+/-- **The link that names template `t`'s session port `port`**, as round 2 finds it (`SecondStage.linkOf`). -/
+def heldLink (t port : String) : Option Spot.SecondStage.Link :=
+  (h.links.getD #[]).find? fun l => l.template == t && l.port == port
+
+/-- **The wire that names template `t`'s session port `port`**, as round 2 finds it (`SecondStage.wireOf`). -/
+def heldWire (t port : String) : Option Spot.SecondStage.Wire :=
+  (h.wires.getD #[]).find? fun w => w.template == t && w.port == port
+
+/-- **The rows template `t`'s units read at port `port`**, as round 2 finds them (`SecondStage.rowsOf`). -/
+def heldRows (t port : String) : Option Spot.SecondStage.Rows :=
+  h.rows.find? fun r => r.template == t && r.port == port
+
+/-- **The template named `name`**: the first of that name, whose part round 2 takes for a wire's writer
+(`SecondStage.writerOf`). -/
+def heldWriter (name : String) : Option ℕ :=
+  (List.range h.ms.length).find? fun t => h.names.getD t "" == name
+
+/-- **A template name's place among round 2's parts**: the first template of the name (`heldWriter`), the members'
+count where none has it. -/
+def heldPos (name : String) : ℕ := (heldWriter h name).getD h.ms.length
+
+/-- **The row a cell position reads inside its replay block's rows**, at rows `r`: its unit's (`SecondStage.rowAt`),
+one of the `per` the replay block holds; none where the rows give it none. -/
+def cellRow (r : Spot.SecondStage.Rows) (c : ℕ) : Option ℕ :=
+  (Spot.SecondStage.rowAt r.runs c).bind fun x => if x < r.per then some x else none
+
+/-- **Where position `c` of template `t`'s cell reads at a port a wire names and no link does**: the writer's
+template, its output port, and the writer's position in its own cell of the same replay block. -/
+def wireCell (t : ℕ) (port : String) (c : ℕ) : Option (ℕ × String × ℕ) :=
+  match heldLink h (h.names.getD t "") port, heldWire h (h.names.getD t "") port,
+      heldRows h (h.names.getD t "") port with
+  | none, some w, some r => (heldWriter h w.writer).bind fun tw => (cellRow r c).map fun x => (tw, w.wport, x)
+  | _, _, _ => none
+
+/-- **Where unit `u` of member `t` reads at a wired port**: its writer's template, output port and unit. Unit `u` is
+position `u % n_t` of replay block `u / n_t`'s cell, and its writer's unit the writer's position in the same replay
+block's cell of the writer's template. -/
+def wireUnit (t : ℕ) (port : String) (u : ℕ) : Option (ℕ × String × ℕ) :=
+  (wireCell h t port (u % h.reg.ns.getD t 0)).map fun y =>
+    (y.1, y.2.1, u / h.reg.ns.getD t 0 * h.reg.ns.getD y.1 0 + y.2.2)
+
+/-- **Every source bit**: each source gate a unit reads that has a commitment position (`Bits.rowBit`), with its
+position in the members' programs, its member, and that commitment position at the member's own units. -/
+def sourceBits (ms : Spot.Bits.Members) : List (ℕ × ℕ × Spot.Bits.RowPos) :=
+  (List.range ms.length).flatMap fun m =>
+    let ci := ms.getD m default
+    (List.range (Spot.Bits.keyProg ci.1 ci.2.size).inputs).filterMap fun g =>
+      if (Spot.Bits.consts ci.1 ci.2.size g).isSome then none
+      else (Spot.Bits.rowBit ci.1 ci.2.size g).map fun r => (Spot.Bits.base ms m + g, m, r)
+
+/-- **Every written bit**: each returned output leaf bit's gate (`Bits.outGate`), with its position in the members'
+programs, its member, and its commitment position at the member's own units (`Bits.outRowBit`). -/
+def writtenBits (ms : Spot.Bits.Members) : List (ℕ × ℕ × Spot.Bits.RowPos) :=
+  (List.range ms.length).flatMap fun m =>
+    let ci := ms.getD m default
+    let kp := Spot.Bits.keyProg ci.1 ci.2.size
+    (List.range ci.2.size).flatMap fun u => (List.range ci.1.upv).flatMap fun k =>
+      (List.range (ci.1.leavesOut.getD k #[]).size).flatMap fun j => (List.range 16).filterMap fun b =>
+        match (Spot.Bits.outGate ci.1 ci.2.size u k j b).map (Spot.Bits.posOf kp), Spot.Bits.outRowBit ci.1 u k j b with
+        | some x, some r => some (Spot.Bits.base ms m + x, m, r)
+        | _, _ => none
+
+/-- **The rows one unit of circuit `c` reads its source bits at**: each input column's source's row, where the
+source is a message bit (`Bits.srcKey`, `Bits.srcPos`). A source gate's commitment position (`Bits.rowBit`) is its
+column's source at its unit, so its row is one of these whatever the unit: one unit's input columns, not the
+units'. -/
+def sourceRows (c : _root_.Flock.Circuit) : List String :=
+  let ix := Spot.Bits.Index.of c
+  (List.range ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nIn).filterMap fun b =>
+    (Spot.Bits.srcPos c 0 (Spot.Bits.srcKey c ix b)).map fun x => x.row
+
+/-- **The rows a unit of circuit `c` writes**: its output row ports' names, the rows a returned output's bit is
+given (`Bits.outPos`). -/
+def writtenRows (c : _root_.Flock.Circuit) : List String :=
+  (List.range c.outRowPorts.size).map fun o => (c.ports.getD (_root_.Flock.HmOut.nIn c + o) default).name
+
+/-- **Every returned output bit of circuit `c`'s unit sits on a computed row** of the unit net, decided
+(`Spot.Bits.check`'s clause): the column of each instance's output leaf `j`, bit `t` (`Bits.outCol`), is past the unit
+net's input columns and before its constant. A written bit's gate is then a row of its unit, never an input or the
+constant. Its cost is one reading of the unit net and sixteen comparisons an output leaf. -/
+def outsComputed (c : _root_.Flock.Circuit) : Bool :=
+  let R := Spot.Bits.Rows.ofNet c.unit
+  (List.range c.upv).all fun k => (List.range (c.leavesOut.getD k #[]).size).all fun j =>
+    (List.range 16).all fun t =>
+      decide (R.nIn ≤ Spot.Bits.outCol c j t) && decide (Spot.Bits.outCol c j t < R.nIn + R.nComp)
+
+/-- **A gate the boundary record holds**: a written bit at an output port a link names for its template, which its
+replay block returns. Every other written bit is one the interior record alone holds. -/
+def returned (x : ℕ) : Bool :=
+  (writtenBits h.ms).any fun y => y.1 == x && (heldLink h (h.names.getD y.2.1 "") y.2.2.row).isSome
+
+/-- **The gate a source bit is wired to**: a source bit at a port a wire names goes to the gate on the same bit of
+its writer unit's output row (`wireUnit`), where the writer's program has a gate there, no link names the writer's
+output port and the boundary record holds no written bit at that gate; none for every other position. At a gate the
+boundary record holds, the reader's source bit and the writer's gate stay two gates: round 2 holds them to two
+entries. -/
+def wireTarget (x : ℕ) : Option ℕ :=
+  ((sourceBits h.ms).find? (·.1 == x)).bind fun s =>
+    (wireUnit h s.2.1 s.2.2.row s.2.2.leaf).bind fun y =>
+      if (heldLink h (h.names.getD y.1 "") y.2.1).isSome then none
+      else (((writtenBits h.ms).find? fun z =>
+        z.2.1 == y.1 && z.2.2 == Spot.Bits.RowPos.mk y.2.1 y.2.2 s.2.2.bit).map (·.1)).filter fun g =>
+          !returned h g
+
+/-- **The wiring map**: a source bit goes to the gate it is wired to (`wireTarget`), every other position to
+itself. -/
+def wireMap (x : ℕ) : ℕ := (wireTarget h x).getD x
+
+/-- **Member `t`'s circuit**: its reference statement's statement circuit (`Held.ms`). -/
+def memberCircuit (t : ℕ) : _root_.Flock.Circuit := stmtOf (h.xS₀ t)
+
+/-- **The first port of member `t`'s circuit named `name`**; port `0` where none is. -/
+def portNamed (t : ℕ) (name : String) : ℕ :=
+  ((List.range (memberCircuit h t).ports.size).find? fun q => (memberCircuit h t).ports[q]!.name == name).getD 0
+
+/-! ## Decided on the registered wiring -/
+
+/-- **Each wire's writer's part is before its reader's**, decided: the first template of the writer's name comes
+before the first of the reader's. No unit is then wired to its own template or to a later one. -/
+def writersFirst : Bool :=
+  (h.wires.getD #[]).all fun w => decide (heldPos h w.writer < heldPos h w.template)
+
+/-- **Every source bit is at a port a link or a wire names**, on what the verifier holds: each source gate
+of a member that has a commitment position (`sourceBits`) is at a port the auditor's copies give a link or a wire
+(`heldLink`, `heldWire`). Round 2 reads any other port at its own port of the interior record
+(`SecondStage.readOk`), under the replay block's roots, while the wired program leaves its gates inputs, opened
+under the statement's roots (`CheckedRun.rootsWired`). `AddressesWired` asks the two to be one, so it is a premise
+only where this holds. Stated bit by bit; the design decides it once per template (`sourceRowsNamed`), which gives
+it (`sourcesNamed_of_rows`). -/
+def sourcesNamed : Bool :=
+  (sourceBits h.ms).all fun s =>
+    (heldLink h (h.names.getD s.2.1 "") s.2.2.row).isSome ||
+      (heldWire h (h.names.getD s.2.1 "") s.2.2.row).isSome
+
+/-- **Every wired source bit has a gate to go to**, decided: each source bit at a port a wire names and no link names
+has one (`wireTarget`). A wired source bit with none stays an input gate, which round 2 still reads off the interior
+record. Stated bit by bit; the design decides it once per template (`wiresMoveRows`), which gives it where the design
+evaluates (`wiresMove_of_rows`). -/
+def wiresMove : Bool :=
+  (sourceBits h.ms).all fun s =>
+    (heldLink h (h.names.getD s.2.1 "") s.2.2.row).isSome ||
+      (heldWire h (h.names.getD s.2.1 "") s.2.2.row).isNone || (wireTarget h s.1).isSome
+
+/-- **Wire `w`'s port at reader `t` is like its writer's output port**: as many words, and the same row schema
+(`PortRoots.schemaOf`); true where the wire's writer names no template. -/
+def wireAlike (w : Spot.SecondStage.Wire) (t : ℕ) : Bool :=
+  match heldWriter h w.writer with
+  | some tw =>
+    ((memberCircuit h t).ports[portNamed h t w.port]!).words ==
+        ((memberCircuit h tw).ports[portNamed h tw w.wport]!).words &&
+      _root_.Flock.PortRoots.schemaOf (memberCircuit h t) (portNamed h t w.port) ==
+        _root_.Flock.PortRoots.schemaOf (memberCircuit h tw) (portNamed h tw w.wport)
+  | none => true
+
+/-- **Each wire's reader port is like its writer's output port** (`wireAlike`), at every template of the wire's
+reader's name, decided. -/
+def wiresAlike : Bool :=
+  (h.wires.getD #[]).all fun w =>
+    (List.range h.ms.length).all fun t => !(w.template == h.names.getD t "") || wireAlike h w t
+
+/-- **No gate the boundary record holds is a written bit at a port no link names.** Stated bit by bit; the design
+does not decide it: it holds wherever a gate is at one written position at most (`returnedWhole_of_once`). -/
+def returnedWhole : Bool :=
+  (writtenBits h.ms).all fun y => (heldLink h (h.names.getD y.2.1 "") y.2.2.row).isSome || !returned h y.1
+
+/-- **No wire names a port a member writes that no link names.** Stated bit by bit; the design decides it once per
+template (`writtenRowsUnwired`), which gives it (`writtenUnwired_of_rows`). -/
+def writtenUnwired : Bool :=
+  (writtenBits h.ms).all fun y =>
+    (heldLink h (h.names.getD y.2.1 "") y.2.2.row).isSome || (heldWire h (h.names.getD y.2.1 "") y.2.2.row).isNone
+
+/-- **Each reference read at a port no link or wire names reads a port of the interior registration**, decided: for
+each template, each port of its reference registered reads (`Held.refReads`) that no link or wire names has a string
+value that is one of the interior registration's ports (`Held.interiorNames`). Round 2 holds a session's registered
+reads to its template's reference reads but for the run's fields (`SecondStage.valuesOk`), and a run's interior
+record to the registration's ports (`recordsOk`); so it is what `OwnReads` asks, on what the verifier holds. -/
+def refReadsOwn : Bool :=
+  (List.range h.ms.length).all fun t =>
+    (Spot.entries (Spot.getD (h.refReads t) "ports")).all fun pe =>
+      (heldLink h (h.names.getD t "") pe.1).isSome || (heldWire h (h.names.getD t "") pe.1).isSome ||
+        match Spot.getD pe.2 "value" with
+        | .str v => h.interiorNames.ports.contains v
+        | _ => false
+
+/-- **Each name is one template's**, decided: no two templates have one name. The second stage's check finds a
+statement's part and a wire's writer by the template's name (`SecondWires.namesOnce`, at the parts). -/
+def namesOnce : Bool := decide ((List.range h.ms.length).map fun t => h.names.getD t "").Nodup
+
+/-- **Every port a member writes that no link names is some wire's writer port.** A reader's check of that
+wire then holds the port's rows in the interior record to the writer's part (`SecondStage.readOk`, its wired
+arm). Stated bit by bit; the design decides it once per template (`writtenRowsRead`), which gives it
+(`writtenRead_of_rows`). -/
+def writtenRead : Bool :=
+  (writtenBits h.ms).all fun y =>
+    (heldLink h (h.names.getD y.2.1 "") y.2.2.row).isSome ||
+      (h.wires.getD #[]).any fun w => w.writer == h.names.getD y.2.1 "" && w.wport == y.2.2.row
+
+/-! ## Decided once per template
+
+The clauses above that range over every source bit or every written bit of the members' programs read only the bit's
+template and its row's name. The design decides each once per template, over the rows one unit of the template's
+circuit reads (`sourceRows`) or writes (`writtenRows`): its cost is the circuit files' and the registered wiring's,
+whatever the count of units. -/
+
+/-- **Every row a template's units read source bits at is a port a link or a wire names**, decided: `sourcesNamed`,
+once per template. -/
+def sourceRowsNamed : Bool :=
+  (List.range h.ms.length).all fun t =>
+    (sourceRows (memberCircuit h t)).all fun row =>
+      (heldLink h (h.names.getD t "") row).isSome || (heldWire h (h.names.getD t "") row).isSome
+
+/-- **No wire names a row a template's units write that no link names**, decided: `writtenUnwired`, once per
+template. -/
+def writtenRowsUnwired : Bool :=
+  (List.range h.ms.length).all fun t =>
+    (writtenRows (memberCircuit h t)).all fun row =>
+      (heldLink h (h.names.getD t "") row).isSome || (heldWire h (h.names.getD t "") row).isNone
+
+/-- **Every row a template's units write that no link names is some wire's writer port**, decided: `writtenRead`,
+once per template. -/
+def writtenRowsRead : Bool :=
+  (List.range h.ms.length).all fun t =>
+    (writtenRows (memberCircuit h t)).all fun row =>
+      (heldLink h (h.names.getD t "") row).isSome ||
+        (h.wires.getD #[]).any fun w => w.writer == h.names.getD t "" && w.wport == row
+
+/-- **Each member's circuit names its ports once**, decided: no two ports of one template's circuit have one name.
+The port found at a row's name (`portNamed`, the first of that name) is then the row's own. -/
+def portsOnce : Bool :=
+  (List.range h.ms.length).all fun t => decide ((memberCircuit h t).ports.toList.map (·.name)).Nodup
+
+/-- **Every returned output bit of each member's unit sits on a computed row** (`outsComputed`), decided once per
+template. -/
+def outsOk : Bool :=
+  (List.range h.ms.length).all fun t => outsComputed (memberCircuit h t)
+
+/-! ## Every wired source bit has a gate to go to, decided once per template
+
+What `wiresMove` asks of a source bit reads only the bit's template, its row, its bit of the row, and where the bit's
+unit sits in its replay block's cell. `wiresMoveRows` decides the same once per template:
+
+* for each row a unit of the template reads source bits at (`sourceRows`) that a wire names and no link names
+  (`rowGoes`): the row has rows, the wire's writer names a template, no link names the writer's port, the reader's
+  units are whole cells and the writer has as many cells of units, the rows' runs hold the reader's cell, and each
+  run's last row is one of the rows a replay block holds, which are no more than the writer's cell (`cellGoes`). So
+  every unit of the reader reads the row at a unit of the writer;
+* for each bit one unit of the template reads there (`sourceCells`), the writer's unit writes that bit of its
+  output row (`bitGoes`, `outBit`).
+
+`Proofs.Flock.SpotFlock.WiresMoveRows` proves that it gives `wiresMove` where the design evaluates. -/
+
+/-- **The row and the bit of it that each input column of one unit of circuit `c` reads**, where its source is a
+message bit (`Bits.srcKey`, `Bits.srcPos`): `sourceRows`, with each one's bit. A source gate's commitment position
+(`Bits.rowBit`) is its column's source at its unit, so its row and bit are one of these whatever the unit. -/
+def sourceCells (c : _root_.Flock.Circuit) : List (String × ℕ) :=
+  let ix := Spot.Bits.Index.of c
+  (List.range ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nIn).filterMap fun b =>
+    (Spot.Bits.srcPos c 0 (Spot.Bits.srcKey c ix b)).map fun x => (x.row, x.bit)
+
+/-- **Bit `bit` of the row named `wport` is one a unit of circuit `c` writes**, decided: `wport` names one of the
+circuit's output row ports and the bit is inside that output port's words, sixteen bits a word. An output row's port
+is padded to whole hash blocks, so the port's own `words` would say more than the unit writes. -/
+def outBit (c : _root_.Flock.Circuit) (wport : String) (bit : ℕ) : Bool :=
+  (List.range c.outPorts.size).any fun o =>
+    (c.ports.getD (_root_.Flock.HmOut.nIn c + o) default).name == wport &&
+      decide (bit < 16 * (c.outPorts.getD o default).2)
+
+/-- **Wire `w`'s writer writes bit `bit` of its output row**, decided: the wire's writer names a template
+(`heldWriter`) whose unit writes that bit of the wire's writer port (`outBit`). -/
+def wireBit (w : Spot.SecondStage.Wire) (bit : ℕ) : Bool :=
+  match heldWriter h w.writer with
+  | some tw => outBit (memberCircuit h tw) w.wport bit
+  | none => false
+
+/-- **Bit `bit` of template `t`'s row `row` has a writer's bit to go to**, decided: where a wire names the row and no
+link does, the wire's writer writes that bit (`wireBit`); true at every other row. -/
+def bitGoes (t : ℕ) (row : String) (bit : ℕ) : Bool :=
+  match heldLink h (h.names.getD t "") row, heldWire h (h.names.getD t "") row with
+  | none, some w => wireBit h w bit
+  | _, _ => true
+
+/-- **Every unit of template `t` has a unit of template `tw` to read wire `w` at**, at rows `r`, decided: no link
+names the writer's port; the reader's cell is not empty and its units are whole cells; the writer has as many cells
+of units; the rows a replay block holds are no more than the writer's cell; the rows' runs hold the reader's cell,
+each position once (`SecondStage.fits`); and each run's last row is one of the rows a replay block holds. -/
+def cellGoes (t tw : ℕ) (w : Spot.SecondStage.Wire) (r : Spot.SecondStage.Rows) : Bool :=
+  (heldLink h (h.names.getD tw "") w.wport).isNone && decide (0 < h.reg.ns.getD t 0) &&
+    decide ((h.vus.getD t #[]).size % h.reg.ns.getD t 0 = 0) &&
+    decide ((h.vus.getD t #[]).size / h.reg.ns.getD t 0 * h.reg.ns.getD tw 0 ≤ (h.vus.getD tw #[]).size) &&
+    decide (r.per ≤ h.reg.ns.getD tw 0) && Spot.SecondStage.fits r.runs (h.reg.ns.getD t 0) &&
+    r.runs.all fun x => decide (x.row + (x.count - 1) * x.step < r.per)
+
+/-- **Every unit of template `t` has a writer's unit to read wire `w` at**, at its row `row`, decided: the row has
+rows (`heldRows`), the wire's writer names a template (`heldWriter`), and each unit of `t` has a unit of it
+(`cellGoes`). -/
+def wireGoes (t : ℕ) (row : String) (w : Spot.SecondStage.Wire) : Bool :=
+  match heldRows h (h.names.getD t "") row, heldWriter h w.writer with
+  | some r, some tw => cellGoes h t tw w r
+  | _, _ => false
+
+/-- **Every unit of template `t` has a writer's unit to read its row `row` at**, decided: where a wire names the row
+and no link does, `wireGoes`; true at every other row. -/
+def rowGoes (t : ℕ) (row : String) : Bool :=
+  match heldLink h (h.names.getD t "") row, heldWire h (h.names.getD t "") row with
+  | none, some w => wireGoes h t row w
+  | _, _ => true
+
+/-- **Every wired source bit has a gate to go to, decided once per template** (`wiresMove`, which passes over every
+source bit of the members' programs): for each template, each row its units read source bits at has a writer's unit
+for each of its units (`rowGoes`), and each bit one unit reads there is one the writer's unit writes (`bitGoes`). It
+reads the circuit files and the registered wiring, whatever the count of units. -/
+def wiresMoveRows : Bool :=
+  (List.range h.ms.length).all fun t =>
+    ((sourceRows (memberCircuit h t)).all fun row => rowGoes h t row) &&
+      (sourceCells (memberCircuit h t)).all fun rb => bitGoes h t rb.1 rb.2
+
+/-- **Every member's circuit is in the scope Flock's hidden-output proof covers** (`ProvedScope.scopeOkH`), decided:
+its unit reads one input group, among the rest, so no wire inside a template instance fills an input of the unit. -/
+def membersScoped : Bool :=
+  (List.range h.ms.length).all fun t => _root_.Flock.ProvedScope.scopeOkH (stmtOf (h.xS₀ t))
+
+/-- **The registered wiring is one the connected program reads as the second stage's check does**, decided on the
+auditor's copies: each name is one template's (`namesOnce`); each wire's writer's part is before its reader's
+(`writersFirst`); every row a template's units read source bits at is a port a link or a wire names
+(`sourceRowsNamed`) and every wired source bit has a gate to go to (`wiresMoveRows`); each wire's reader port is like
+its writer's output port (`wiresAlike`); no wire names a row a template's units write that no link names
+(`writtenRowsUnwired`) and some wire reads it (`writtenRowsRead`); each reference read at a port no link or wire
+names reads a port of the interior registration (`refReadsOwn`); the interior registration registers no value, so a
+run's interior record registers none (`recordsOk`); each member's circuit names its ports once (`portsOnce`); and
+every returned output bit of its unit sits on a computed row (`outsOk`).
+Each clause reads the circuit files and the registered wiring once per template, whatever the count of units. -/
+def wiringOk : Bool :=
+  namesOnce h && writersFirst h && sourceRowsNamed h && wiresMoveRows h && wiresAlike h && writtenRowsUnwired h &&
+    writtenRowsRead h && refReadsOwn h && h.interiorNames.values.isEmpty && portsOnce h && outsOk h
+
 /-- **The two-stage design**: the members' replay partition over the boundary registration's layout (`filesReplay`),
 the first stage's design and the second stage's counts, where the two-stage scope holds (`scopeOk`), the layout
-fits the members' files (`filesOk`) and every template's reference statement reads as a member's (`templateOk`). -/
+fits the members' files (`filesOk`), every template's reference statement reads as a member's (`templateOk`), every
+member's circuit is in the scope Flock's hidden-output proof covers (`membersScoped`) and the registered wiring is
+one the connected program reads as the second stage's check does (`wiringOk`). -/
 def two (_ : AuditStatement) : Option Design.Two :=
   match (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption, replayDesign h with
   | some l, some d =>
     if scopeOk (bitsProgs h.ms) (membersPart h.ms) ⟨filesReplay h.ms h.reg.ns l, d, h.k⟩ &&
-        filesOk h.reg h.ms l h.k && (List.range h.ms.length).all (templateOk h) then
+        filesOk h.reg h.ms l h.k && (List.range h.ms.length).all (templateOk h) && membersScoped h &&
+        wiringOk h then
       some ⟨filesReplay h.ms h.reg.ns l, d, h.k⟩
     else none
   | _, _ => none
@@ -450,8 +811,8 @@ def headerOf (file : ByteArray) : Option Json := do
 
 /-- **Template `t`'s session statement is its reference one** but for what the run sets: decoded as `w`, it is
 `xS₀ t`'s in every field but its sample, its registered reads and its public file, its circuit, tables and program
-among them. Round 2's statement check holds its public file's header to `xS₀ t`'s but for the run's fields
-(`SecondStage.headerOk` at `refsOf`). -/
+among them. Round 2's statement check holds its public file's header to the template's reference header but for the
+run's fields (`SecondStage.headerOk` at `refsOf`). -/
 def pinOk (t : ℕ) (w : FlockDeploy.Raw) : Bool :=
   match FlockDeploy.decode (h.xS₀ t) with
   | some w₀ =>
@@ -477,10 +838,9 @@ def stmtJsonOf (t : ℕ) (w : FlockDeploy.Raw) : Option Spot.SecondStage.Stmt :=
     [("draw", draw), ("header", header), ("registered", registered), ("template", .str (h.names.getD t ""))])
 
 /-- **The reference headers** round 2's statement check holds each template's statement to (`SecondStage.Own.refs`):
-template `t`'s name with its reference statement's public file's header, for each template whose header reads. -/
+template `t`'s name with its reference header (`Held.refHeaders`), for each template. -/
 def refsOf : Array (String × Json) :=
-  ((List.range h.ms.length).filterMap fun t =>
-    ((FlockDeploy.decode (h.xS₀ t)).bind fun w₀ => headerOf w₀.publicFile).map fun r => (h.names.getD t "", r)).toArray
+  ((List.range h.ms.length).map fun t => (h.names.getD t "", h.refHeaders t)).toArray
 
 /-- **The reference reads** round 2's values check holds each template's statement to (`SecondStage.Own.refReads`):
 template `t`'s name with its reference reads (`Held.refReads`), for each template. -/
@@ -512,15 +872,23 @@ def codesOk (own : Spot.SecondStage.Own) (t : ℕ) (S : Spot.SecondStage.Stmt) :
 
 /-- **Template `t`'s session statement reads the run's**, at the run's statement `x`, the round-1 message `m₁`, round
 0's coin and the second stage's coins: round 1's record lists the replay sample in its order
-(`SecondStage.interiorOrderOk`, round 2's `second-interior-order`); round 2's statement check passes the statement
-against template `t`'s part (`codesOk`: its public file's header is `xS₀ t`'s placed in the run but for the run's
+(`SecondStage.interiorOrderOk`, round 2's `second-interior-order`) and registers no value of a name the statement's
+record has, a port or a registered value (`SecondStage.namesOk`, round 2's `second-interior-names`), so each name a
+session reads is one record's; it registers no value a replay block's input may not read
+(`SecondStage.inputsFailure`, round 2's `second-inputs`, at what this verifier holds: no value of its own and no
+read, so no value at all); the design's links and wires are derived over the parts (`SecondStage.designOk`, round
+2's `second-links` and `second-wires`); round 2's statement check passes the statement against template `t`'s part
+(`codesOk`: its public file's header is `xS₀ t`'s placed in the run but for the run's
 fields, names the part's slots and the interior record's roots, its sample is the second stage's sample within the part,
 and each registered read is one it may read); and it is otherwise template `t`'s reference statement (`pinOk`). -/
 def readsOk (t : ℕ) (x m₁ xS : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) : Bool :=
   match decode x, jsonMsg m₁, secondDraw h c₀ c₁, FlockDeploy.decode xS with
   | some st, some rec, some draw, some w =>
     let own := ownOf h st rec draw c₀
-    Spot.SecondStage.interiorOrderOk own && ((stmtJsonOf h t w).map (codesOk h own t)).getD false && pinOk h t w
+    Spot.SecondStage.interiorOrderOk own && Spot.SecondStage.namesOk own &&
+      (Spot.SecondStage.inputsFailure own).isNone &&
+      Spot.SecondStage.designOk (partsAt h own.sample.size) own &&
+      ((stmtJsonOf h t w).map (codesOk h own t)).getD false && pinOk h t w
   | _, _, _, _ => false
 
 /-- **The session statements a message states**, one per template in template order, each a byte string; kept only
@@ -735,7 +1103,8 @@ def session (u : ℕ) (v : Seen) : Option (Msg × Seen) :=
   else some (h.xS₀ (templateOf h.ms u), refusedSeen)
 
 /-- Template `t`'s reference statement's masked level-0 lengths, summed. -/
-noncomputable def n₀ (t : ℕ) : ℝ := ((shapeOf (h.xS₀ t)).map fun m => (2 : ℝ) ^ (Claims.Flock.zkLevel0 m).d).sum
+noncomputable def n₀ (t : ℕ) : ℝ :=
+  ((shapeOf (h.xS₀ t)).map fun p => (2 : ℝ) ^ (Claims.Flock.zkLevel0 p.1 p.2).d).sum
 
 /-- **The interior registration's roots** of replay block `ρ`, as the round-1 message states them (`irootsOf`); none
 before it. -/

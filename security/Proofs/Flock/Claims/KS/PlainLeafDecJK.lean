@@ -60,7 +60,7 @@ open Flock FlockLevel3 Refine Game Transcript Model Accounting
 open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.HiddenExec
 open Lean (Json)
 
-/-- **flock-verify's acceptance at `dr` through `keep` under hidden outputs and plain SHA-512 leaves makes each table's
+/-- **verity-verify-proof's acceptance at `dr` through `keep` under hidden outputs and plain SHA-512 leaves makes each table's
 verdict accept at the plain leaf** (`accepts_verdict_plainAnyD`). -/
 theorem accepts_verdict_plainAnyDJK (keep : Bool → Bool) {I : Exec.Inputs} {dr : Option Json} {t : TranscriptJ}
     (hh : I.tags.hiddenOutputs = true) (hl : I.tags.merkleLeaf = "flock-leaf/sha512-unsalted")
@@ -133,7 +133,7 @@ section Req0
 open Flock Refine Model Game FlockSoundness.Discharge.Exec
 open Lean (Json)
 
-/-- **At flock-verify's acceptance at `dr` through `keep`, each table's level-0 openings at the plain leaf are its
+/-- **At verity-verify-proof's acceptance at `dr` through `keep`, each table's level-0 openings at the plain leaf are its
 reps' deployed entries** (`accepts_opens₀LDU`): `accepts_opens₀LDLfJK` at `leafPlain`. -/
 theorem accepts_opens₀LDUJK (keep : Bool → Bool)
     {I : Exec.Inputs} {dr : Option Json} {t : TranscriptJ} (h : AcceptsAtDJK keep I dr t) :
@@ -186,7 +186,7 @@ open Flock Refine Exec Game Model Accounting Audit
 open FlockSoundness.Discharge.DecodeZL FlockSoundness.Discharge.HiddenExec
 open Lean (Json)
 
-/-- **flock-verify's acceptance at `dr` through `keep` of a one-table session under hidden outputs and plain SHA-512
+/-- **verity-verify-proof's acceptance at `dr` through `keep` of a one-table session under hidden outputs and plain SHA-512
 leaves, rep by rep** (`accepts_repsOneDU`): `accepts_repsOneDLfJK` at `leafPlain`. -/
 theorem accepts_repsOneDUJK (keep : Bool → Bool)
     {I : Inputs} {dr : Option Json} {t : TranscriptJ} (hrr : I.tags.retainRounds = true)

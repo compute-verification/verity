@@ -7,7 +7,7 @@ the cap the committed pass row and the public lifetime cap give), one instance o
 (`verity.circuits.requirement_units`), the layout row at two epochs a value.
 
     PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/tools/verity/circuit_check/src \\
-      python benchmarks/one_stage/a7.py --bin flock-circuit --lean flock-verify --out DIR [--k K] [--steps 32] [--delta 2^-20]
+      python benchmarks/one_stage/a7.py --bin flock-circuit --lean verity-verify-proof --out DIR [--k K] [--steps 32] [--delta 2^-20]
 
 * **Stand-in.** A decoder's requirement built directly (`requirement.Requirement`): 8 weight blocks, every step reading
   them but the last, an expert's, which only the first half of the steps reads, a
@@ -26,7 +26,7 @@ the cap the committed pass row and the public lifetime cap give), one instance o
   requirement names (`bindings`).
 * **Statements and sample.** One circuit per template, staged by Flock's `UnitStager` bound to the partition
   (`Q_template_instances` over `TemplatePopulations`, one unit per step each), sampled by the verifier's Lean
-  (`flock-verify draw --stratified K`, K every unit by default, so no unit is uncertified), each member's sample served
+  (`verity-verify-proof draw --stratified K`, K every unit by default, so no unit is uncertified), each member's sample served
   `--zk` and held by Lean `verify --zk --partition --program`. For every sampled proof block the prover opens its public row (the
   verifier's own copy of the step's public data) and its ok row (1): the units the proofs cover are the steps whose
   clauses hold.
@@ -748,7 +748,7 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
                                                     and (live or {}).get("roots") == m["header"]["frame_v3"]["roots"] and v.ok,
                                                     "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
             verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m, m["n"], sdir, zk=True),
-                                                    "tool": "flock-verify verify --zk --archive --partition --program"}
+                                                    "tool": "verity-verify-proof verify --zk --archive --partition --program"}
             statement[m["name"]] = {"session_s": round(time.time() - t, 1),
                                     **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
                                     "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
@@ -1017,7 +1017,7 @@ def main() -> int:
                                                 "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
         verdicts[f"lean-draw/{m['name']}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
         verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m, m["n"], sdir, zk=True),
-                                                "tool": "flock-verify verify --zk --archive --partition --program"}
+                                                "tool": "verity-verify-proof verify --zk --archive --partition --program"}
         opened[m["name"]] = openings(m, local, m["args"], m["rows"])
         verdicts[f"openings/{m['name']}"] = {"accepted": opened[m["name"]]["ok"], "detail": opened[m["name"]]["detail"]}
         statement[m["name"]] = {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},

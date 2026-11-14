@@ -44,6 +44,10 @@ threads, `norm_threads`) then `quant_rows`, each bit for bit (`tests/engine/test
 `producer_warps`' warps.  The silu's act is `_SILU_MUL2`, inline PTX on pairs of elements: written in Triton (libdevice's
 expf, tl.div_rn, a scalar bf16 rounding twice an element) it issued about 52 instructions an element, five of them on the
 quarter-rate unit, and ran short of HBM's rate; written out it issues about 43, three of them there.
+
+Three of the helpers these kernels inline are public, for a Triton kernel outside this module that must round, order its
+writes and dequantize as these do, so that it inlines this text and keeps no copy of it: `rni_s32` (cvt.rni.s32.f32),
+`membar_gl` (the split-K's membar.gl) and `epilogue` (the two scales, activation's first, and the bf16 store).
 """
 from __future__ import annotations
 
@@ -58,16 +62,19 @@ from verity_vllm.engine.int8_exact import UNIT, ZY_BYTES, zy_units
 from verity_vllm.engine.profiles.int8_gemm_configs import CONFIGS
 from verity_vllm.engine.profiles.int8_quant_plans import PRODUCER_WARPS, QUANT_PLANS
 
+__all__ = ["CONFIGS", "Cfg", "Workspace", "arch", "default_cfg", "pick", "product_zy", "ptx_check", "scaled_mm",
+           "scaled_mm_zy"]
+
 OPTS = {"enable_fp_fusion": False, "enable_reflect_ftz": False}
 
 
 @triton.jit
-def _rni_s32(v):
+def rni_s32(v):
     return tl.inline_asm_elementwise("cvt.rni.s32.f32 $0, $1;", "=r,r", [v], dtype=tl.int32, is_pure=True, pack=1)
 
 
 @triton.jit
-def _membar_gl(v):
+def membar_gl(v):
     return tl.inline_asm_elementwise("membar.gl;\n\tmov.b32 $0, $1;", "=r,r", [v], dtype=tl.int32, is_pure=False, pack=1)
 
 
@@ -91,7 +98,7 @@ def _quant_tile(x, BLOCK_M: tl.constexpr, BLOCK_K: tl.constexpr):
     q = xs * yb
     q = tl.fma(tl.fma(ns, q, xs), yb, q)
     q = tl.fma(tl.fma(ns, q, xs), yb, q)
-    return tl.minimum(tl.maximum(_rni_s32(q), -127), 127).to(tl.int8), s
+    return tl.minimum(tl.maximum(rni_s32(q), -127), 127).to(tl.int8), s
 
 
 @triton.jit
@@ -241,7 +248,7 @@ def exactlin_add_norm_quant(x_ptr, r_ptr, w_ptr, q_ptr, s_ptr, H, eps, stride_x,
 
 
 @triton.jit
-def _epilogue(acc, sa_ptr, sb_ptr, c_ptr, offs_m, offs_n, mask_m, mask_n, stride_cm):
+def epilogue(acc, sa_ptr, sb_ptr, c_ptr, offs_m, offs_n, mask_m, mask_n, stride_cm):
     sa = tl.load(sa_ptr + offs_m, mask=mask_m, other=0.0)
     sb = tl.load(sb_ptr + offs_n, mask=mask_n, other=0.0)
     y = acc.to(tl.float32) * sa[:, None]
@@ -277,7 +284,7 @@ def exactlin_scaled_mm(a_ptr, b_ptr, sa_ptr, sb_ptr, c_ptr, ws_ptr, cnt_ptr, M, 
         a_ptrs += BLOCK_K
         b_ptrs += BLOCK_K
     if SPLIT_K == 1:
-        _epilogue(acc, sa_ptr, sb_ptr, c_ptr, offs_m, offs_n, mask_m, mask_n, stride_cm)
+        epilogue(acc, sa_ptr, sb_ptr, c_ptr, offs_m, offs_n, mask_m, mask_n, stride_cm)
     else:
         # Integer partial sums add exactly in any order.  Each split adds its tile into the zeroed int32 workspace, and the
         # split that counts last reads the sum back while zeroing it, resets the tile's counter and applies the epilogue
@@ -285,14 +292,14 @@ def exactlin_scaled_mm(a_ptr, b_ptr, sa_ptr, sb_ptr, c_ptr, ws_ptr, cnt_ptr, M, 
         mask = mask_m[:, None] & mask_n[None, :]
         ws_ptrs = ws_ptr + offs_m[:, None] * N + offs_n[None, :]
         tl.atomic_add(ws_ptrs, acc, mask=mask, sem="relaxed")
-        _membar_gl(pid)
+        membar_gl(pid)
         tl.debug_barrier()
         done = tl.atomic_add(cnt_ptr + pid, 1, sem="acq_rel")
         if done == SPLIT_K - 1:
-            _membar_gl(pid)
+            membar_gl(pid)
             tot = tl.atomic_xchg(ws_ptrs, tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.int32), mask=mask, sem="relaxed")
             tl.atomic_xchg(cnt_ptr + pid, 0, sem="relaxed")
-            _epilogue(tot, sa_ptr, sb_ptr, c_ptr, offs_m, offs_n, mask_m, mask_n, stride_cm)
+            epilogue(tot, sa_ptr, sb_ptr, c_ptr, offs_m, offs_n, mask_m, mask_n, stride_cm)
 
 
 @triton.jit
@@ -310,7 +317,7 @@ def exactlin_scaled_mm_tma(a_desc, b_desc, sa_ptr, sb_ptr, c_ptr, M, N, K, strid
         acc = tl.dot(a, b.T, acc, out_dtype=tl.int32)
     offs_m = off_m + tl.arange(0, BLOCK_M).to(tl.int64)
     offs_n = off_n + tl.arange(0, BLOCK_N).to(tl.int64)
-    _epilogue(acc, sa_ptr, sb_ptr, c_ptr, offs_m, offs_n, offs_m < M, offs_n < N, stride_cm)
+    epilogue(acc, sa_ptr, sb_ptr, c_ptr, offs_m, offs_n, offs_m < M, offs_n < N, stride_cm)
 
 
 @triton.jit
@@ -369,11 +376,11 @@ def exactlin_scaled_mm_zy(a_ptr, b_ptr, sa_ptr, sb_ptr, c_ptr, z_ptr, yr_ptr, ws
             mask = mask_m[:, None] & mask_n[None, :]
             ws_ptrs = ws_ptr + offs_m[:, None] * N + offs_n[None, :]
             tl.atomic_add(ws_ptrs, acc, mask=mask, sem="relaxed")
-            _membar_gl(pid)
+            membar_gl(pid)
             tl.debug_barrier()
             done = tl.atomic_add(cnt_ptr + pid, 1, sem="acq_rel")
             if done == SPLIT_K - 1:
-                _membar_gl(pid)
+                membar_gl(pid)
                 tot = tl.atomic_xchg(ws_ptrs, tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.int32), mask=mask, sem="relaxed")
                 tl.atomic_xchg(cnt_ptr + pid, 0, sem="relaxed")
                 _zy_epilogue(tot, sa_ptr, sb_ptr, c_ptr, z_ptr, yr_ptr, offs_m, offs_n, M, N, T, stride_cm, UR, UC)

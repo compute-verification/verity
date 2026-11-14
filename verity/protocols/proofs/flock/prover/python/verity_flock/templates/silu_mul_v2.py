@@ -8,9 +8,9 @@ each one ``SiluMulBf16_v2`` over (gate[i], up[i]).
 That circuit is exact arithmetic on g's fields off a band of exponents and a constant table on it, so it is half
 ``silu-mul``'s 16-bit lookup in ANDs (1,380 against 2,606).
 
-The unit's rows do not depend on I; its ``flock-ir-unit/v2`` netlist, whose LEAVES line places the units on the row's words, is
-pinned per I by :data:`PINS` (GLM-5.3 at TP8: I = 1536 for the dense layers, 256 for the shared expert). ``verity/flock-circuit``
-holds a power-of-two number of units an instance, so there a unit is I's odd part of consecutive elements
+The unit's rows do not depend on I; its ``flock-ir-unit/v2`` circuit description, whose LEAVES line places the units on the row's
+words, is pinned per I by :data:`PINS` (GLM-5.3 at TP8: I = 1536 for the dense layers, 256 for the shared expert).
+``verity/flock-circuit`` holds a power-of-two number of units an instance, so there a unit is I's odd part of consecutive elements
 (:func:`circuit_lowering`, pinned by :data:`CIRCUIT_PINS` where that part is not 1)."""
 TEMPLATE = "silu-mul-v2"
 UNIT = "silu-mul-v2/bf16/element"

@@ -1,12 +1,13 @@
-/-
-`HmIn.derivedGroups` and `HmIn.checkDerived`: the verifier derives a public input itself only for a one-word port of seed
-`instance` and derivation `mod:G` (`G` as written by `toString`, `0 < G ≤ 2^16`), every port so; it then holds instance
-`i`'s word of port `k` to `i mod G_k`.
--/
 module
 
 public import Flock.HmRow
 meta import Flock.HmRow
+
+/-!
+`HmIn.derivedGroups` and `HmIn.checkDerived`: the verifier derives a public input itself only for a one-word port of seed
+`instance` and derivation `mod:G` (`G` as written by `toString`, `0 < G ≤ 2^16`), every port so; it then holds instance
+`i`'s word of port `k` to `i mod G_k`.
+-/
 
 @[expose] public section
 

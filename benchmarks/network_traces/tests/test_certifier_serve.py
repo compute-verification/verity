@@ -319,7 +319,7 @@ def test_the_gates_keys_height_reaches_rehearse_and_a_key_above_this_files_is_ma
 
 
 def test_the_gate_takes_every_tamper_the_rehearsal_has_and_each_is_a_serve_this_parser_takes(tmp_path):
-    """The gate's tampers are `serve`'s `--tamper` choices, so the auditor host runs every shim this file has, and
+    """The gate's tampers are `serve`'s `--tamper` choices, so the auditor device runs every shim this file has, and
     each reaches `serve` (which alone checks it, after the tunnel is up) as one strategy of `rehearse`."""
     sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
     import auditor as A

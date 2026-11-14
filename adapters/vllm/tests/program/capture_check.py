@@ -6,7 +6,6 @@ from __future__ import annotations
 import bisect
 
 import numpy as np
-
 from verity.circuits.evaluation import MissingValue, evaluate_region
 from verity.circuits.layout import Circuit, FunctionCall, resolve
 

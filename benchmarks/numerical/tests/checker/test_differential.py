@@ -7,9 +7,9 @@ import random
 import pytest
 from conftest import bf16, golden_records, k1536_vector, random_cases, structured_cases
 
-from verity.errors import InvalidArtifact
 from verity.circuits.silicon.cast import f32_to_bf16_word
 from verity.circuits.silicon.models import AMPERE_BF16_M16N8K16, tc_dot, tc_dot_chain
+from verity.errors import InvalidArtifact
 from verity_numerical.checker import REAL, Reject, check_step, check_vu, gen_step, gen_vu, step_output, vu_output
 from verity_numerical.checker import reference
 

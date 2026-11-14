@@ -8,20 +8,22 @@ class's events beside its bits, a class with no bits and no event reading "not e
 own; where the decoder refuses the string it gives the decoder's reason and the first step at which the replay
 differs from the engine's schedule; and a trace with an abort is its refusal, the aborts its directory records, by
 window, and that the run shows none of its windows. It prints ℓ beside each window's charge, the lengths' rule with
-the load's `max_tokens`, and the charge scaled to a week, a month and a year at the serve's own rate; it refuses a
-trace served with a draft; and set beside another serve's trace, read under that serve's own stop ids, it names what
-that serve exercised and this one did not, and where the two serves differ."""
+the load's `max_tokens`, and the charge scaled to a week, a month and a year at the serve's own rate; a trace served
+with a draft is read from the tokens its rows sampled and charged its kept drafts as one more class, and one the
+reader can't read is refused by name; and set beside another serve's trace, read under that serve's own stop ids, it
+names what that serve exercised and this one did not, and where the two serves differ."""
 
 from __future__ import annotations
 
 import dataclasses
 import importlib.util
 import json
+import random
 import sys
 from pathlib import Path
 
 import pytest
-from test_tick import EOS, N, R, buckets, engine, plan, serve, tick_case, write_corpus
+from test_tick import EOS, N, R, TICK, buckets, engine, plan, serve, tick_case, write_corpus
 
 from verity_vllm.pipeline.advice_code import by_class as BC
 from verity_vllm.pipeline.advice_code import pool as P
@@ -412,7 +414,7 @@ def test_a_serve_is_set_beside_the_serve_that_exercised_what_it_did_not(tmp_path
     here = write_corpus(tmp_path / "here", roomy, ios, times, serve(roomy, ios, times, seed=1), tick=True)
     there = write_corpus(tmp_path / "there", small, ios, times, serve(small, ios, times, seed=1), tick=True)
     gone = write_corpus(tmp_path / "gone", small, ios, times, serve(small, ios, times, seed=1), tick=True)
-    _name(here, "big", 8, "on the auditor's host")
+    _name(here, "big", 8, "on the auditor's device")
     _name(there, "little", 1, "beside the server")
     _name(gone, "little", 1, "beside the server", engine=False)
     reqs = [json.loads(line) for line in (gone / "requests.jsonl").read_text().splitlines()]
@@ -425,7 +427,7 @@ def test_a_serve_is_set_beside_the_serve_that_exercised_what_it_did_not(tmp_path
     row, (other, refused) = doc["rows"][0], doc["beside"]
     assert [r["trace"] for r in doc["rows"]] == ["here"] and "error" in refused and "error" not in other
     assert row["serve"] == {"model": "big", "cards": 8, "draft": False, "vllm": "0.9.1rc2.dev3+gabc123",
-                            "certifier": "on the auditor's host"}
+                            "certifier": "on the auditor's device"}
     ev, theirs = row["total"]["events"], other["total"]["events"]
     assert ev["preemptions"] == ev["evicted_blocks"] == ev["admissions_cut"] == 0 < theirs["preemptions"]
     a, b = row["beside"]
@@ -441,7 +443,7 @@ def test_a_serve_is_set_beside_the_serve_that_exercised_what_it_did_not(tmp_path
     assert refused["serve"]["vllm"] is None and other["serve"]["vllm"] == row["serve"]["vllm"]
     assert b["differs"]["vLLM"] == ["0.9.1rc2.dev3+gabc123", "not in the server's log"]
     assert a["differs"] == {"model": ["big", "little"], "cards": ["8", "1"],
-                            "where the network certifier ran": ["on the auditor's host", "beside the server"],
+                            "where the network certifier ran": ["on the auditor's device", "beside the server"],
                             "the pool": ["4,096 blocks of 16 tokens", "8 blocks of 16 tokens"]}
     assert set(a["same"]) == {"vLLM", "the draft", "requests a step", "tokens a step", "admission", "the prefix cache",
                               "the registered codebook", "ℓ", "T"}
@@ -456,7 +458,7 @@ def test_a_serve_is_set_beside_the_serve_that_exercised_what_it_did_not(tmp_path
     assert ("- the same in both serves: vLLM: 0.9.1rc2.dev3+gabc123; the draft: off; requests a step: at most 4; tokens a "
             "step: at most 64; admission: under the certified tick") in text
     assert ("- differing: model: big here, little in `there`; cards: 8 here, 1 in `there`; where the network certifier "
-            "ran: on the auditor's host here, beside the server in `there`; the pool: 4,096 blocks of 16 tokens here, 8 "
+            "ran: on the auditor's device here, beside the server in `there`; the pool: 4,096 blocks of 16 tokens here, 8 "
             "blocks of 16 tokens in `there`.\n") in text
     assert "Scaled, not measured: at this serve's own rate on its 8 cards, its " in text
     assert "request r5: finish 'abort'" in refused["error"]
@@ -501,23 +503,225 @@ def test_a_serve_of_another_model_is_set_beside_under_its_own_stop_ids(tmp_path,
     assert beside(same)[1] == b
 
 
-def test_a_trace_served_with_a_draft_is_refused(tmp_path, capsys):
-    """The reader takes no draft from the server's arguments, so its replay of a serve that had one would be of
-    another serve: such a trace is refused by name before it is read, and so a trace that has a table was served with
-    the draft off."""
-    e, (ios, times) = engine(False), plan()
-    d = write_corpus(tmp_path / "tick", e, ios, times, serve(e, ios, times, seed=1), tick=True)
+#: the drafts a row carries in the drafted serve
+K = 3
+MTP = ("--speculative-config.method", "mtp", "--speculative-config.num_speculative_tokens", str(K))
+
+
+def drafted(asy: bool, seed: int = 11):
+    """The plan under the certified tick on an engine that drafts `K` tokens a row: the engine, the plan's requests,
+    each with the drafts its emitting rows kept, their release times, and the tokens each executed step's rows
+    emitted. A row's kept count is random, seeded by `seed`, up to the drafts it carries and the outputs its request
+    still lacks, as an accept rule might give; each is chosen as the tick's replay asks for it."""
+    e = R.DraftEngine(**dataclasses.asdict(engine(asy)), num_speculative_tokens=K)
+    (ios, times), rng = plan(), random.Random(seed)
+    kept, emitted, now = [[] for _ in ios], [], {}
+    update0 = RP.Scheduler.update
+
+    def update(s, step, samples):
+        if not s.whatif:
+            now.update(s=s, step=step)
+            if step.rows:
+                emitted.append({})
+        return update0(s, step, samples)
+
+    def ask(i: int, _row: int) -> int:
+        k = rng.randint(0, min(now["step"].drafts.get(i, 0), ios[i].output_len - now["s"].reqs[i].n_out - 1))
+        kept[i].append(k)
+        emitted[-1][i] = 1 + k
+        return k
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(RP.Scheduler, "update", update)
+        rp = R.replay(e, ios, tick=R.Tick(*TICK), released=buckets(times), kept=ask)
+    assert len(emitted) == len(rp.steps)
+    return e, [dataclasses.replace(io, kept=tuple(k)) for io, k in zip(ios, kept)], times, emitted
+
+
+def with_draft(d: Path, ios, emitted, *argv: str) -> Path:
+    """A trace-corpus directory (`write_corpus`'s) as a serve with a draft leaves it: the server's draft arguments,
+    and for each step what the hook records of the model runner's output, the tokens it sampled for each row of its
+    batch. An emitting row's are the tokens it emitted (`emitted`) and, where they end its request, one more the
+    runner accepted past the stop; a row run after its request ended has one too, which the scheduler never took;
+    a prefill chunk's are none."""
     meta = json.loads((d / "meta.json").read_text())
-    meta["server_argv"] += ["--speculative-config", "{}"]
+    meta["server_argv"] += argv
     (d / "meta.json").write_text(json.dumps(meta))
+    steps = [json.loads(line) for line in (d / "steps.jsonl").read_text().splitlines()]
+    done = [0] * len(ios)
+    for s, out in zip(steps, emitted, strict=True):
+        s["sampled"] = []
+        for i in (int(rid[1:]) for rid in s["batch"]):
+            io, at = ios[i], ios[i].prompt_len + done[i]
+            done[i] += out.get(i, 0)
+            over = [9] if done[i] == io.output_len else []
+            s["sampled"].append([*io.tokens[at:at + out.get(i, 0)], *over])
+    (d / "steps.jsonl").write_text("".join(json.dumps(s) + "\n" for s in steps))
+    return d
+
+
+@pytest.mark.parametrize("asy", (False, True), ids=("sync", "async"))
+def test_a_serve_with_a_draft_is_read_and_charged_by_class(tmp_path, capsys, asy):
+    """The plan served under the certified tick with a draft, as a trace-corpus directory. The reader takes the draft
+    from the server's arguments, given as dotted settings (a setting turned off among them) or as JSON, and each
+    row's kept count from the tokens the model runner sampled for it, cut where the request ends. The report is of
+    the serve's schedule: the string decodes back to its steps and its rows' kept counts, the replay on those counts
+    is the engine's schedule, and the kept drafts are one more class, charged, beside the lengths: its bits and the
+    rows that sent a count are in each window's row and the table's last column, with its rule's line. Every other
+    class is as without a draft."""
+    e, ios, times, emitted = drafted(asy)
+    run = serve(e, ios, times, seed=1)
+    d = with_draft(write_corpus(tmp_path / "tick", e, ios, times, run, tick=True), ios, emitted, *MTP)
+    tr = R.read_corpus_trace(d)
+    assert tr.engine == e and tr.emitted == emitted and [q.kept for q in tr.requests] == [io.kept for io in ios]
+    assert [sorted(st.rows) for st in tr.steps] == [sorted(st.rows) for st in run.steps] and tr.emits == run.emits
+    counts = [k for io in ios for k in io.kept]
+    assert min(counts) == 0 < max(counts) <= K and any(st.preempted for st in run.steps)
+    sampled = [toks for line in (d / "steps.jsonl").read_text().splitlines() for toks in json.loads(line)["sampled"]]
+    assert any(len(toks) > 1 and toks[-1] == 9 for toks in sampled) and ([9] in sampled) == asy and [] in sampled
+    as_json = with_draft(write_corpus(tmp_path / "json", e, ios, times, run, tick=True), ios, emitted,
+                         "--speculative_config", json.dumps({"method": "mtp", "num_speculative_tokens": K}))
+    assert R.read_corpus_trace(as_json).requests == tr.requests and R.read_corpus_trace(as_json).engine == e
+    off = with_draft(write_corpus(tmp_path / "off", e, ios, times, run, tick=True), ios, emitted,
+                     *MTP, "--speculative-config.parallel_drafting=False")
+    assert R.read_corpus_trace(off).engine == e
     out = tmp_path / "report.json"
+    assert BYC.main([f"draft={d}", "--stops", str(EOS), "--T", "10", "--out", str(out)]) == 0
+    text, row = capsys.readouterr().out, json.loads(out.read_text())["rows"][0]
+    assert row["round_trip"] and row["refused"] is None and row["first_step_that_differs"] is None
+    assert row["serve"]["draft"] and row["steps"] == len(run.steps) and row["requests"] == N
+    kept, t = row["draft"], row["total"]
+    assert (kept["num_speculative_tokens"], kept["rows"], kept["rows_kept"], kept["drafts_kept"]) == (
+        K, len(counts), sum(k > 0 for k in counts), sum(counts))
+    lengths = sum(io.max_tokens.bit_length() + 1 for io in ios)
+    assert kept["bits"] == t["classes"]["kept drafts"] == t["fields"]["kept"] + t["fields"]["kept_end"] > 0
+    assert row["bits"] == lengths + kept["bits"] and t["classes"]["terminator"] == N
+    assert {c: v["standing"] for c, v in row["classes"].items()} == {
+        "hits": "0 by construction", "admission": "0 by construction", "terminator": "charged",
+        "output lengths": "charged", "resumes and lag": "0 by construction", "segment end": "0 by construction",
+        "kept drafts": "charged", "aborts": "no field", "release buckets": "no field"}
+    assert set(t["events"]) == {*BYC.EVENTS, *BYC.KEPT_EVENTS}
+    for w in row["by_window"]:
+        assert sum(w["classes"].values()) == w["charge"] == sum(w["fields"].values())
+        assert set(w["events"]) == set(t["events"]) and w["events"]["drafts_kept"] >= w["events"]["rows_kept"]
+        assert (w["classes"]["kept drafts"] > 0) <= (w["events"]["kept_rows"] > 0)
+    assert {e: sum(w["events"][e] for w in row["by_window"]) for e in BYC.KEPT_EVENTS} == {
+        "kept_rows": kept["rows"], "rows_kept": kept["rows_kept"], "drafts_kept": kept["drafts_kept"]}
+    quiet = {"classes": t["classes"] | {"kept drafts": 0}, "events": t["events"] | {"kept_rows": 0}}
+    assert BYC._cell("kept drafts", quiet) == "not exercised" and BYC._cell("kept drafts", t) == f"{kept['bits']:,}"
+    assert f", served with the draft on ({K} drafts a row), " in text and "decode(encode(a)) == a: yes." in text
+    assert "| segment end | kept drafts | rows that sent a count | of them kept a draft | drafts kept |" in text
+    assert len({line.count("|") for line in text.splitlines() if line.startswith("|")}) == 1
+    rule = kept["rule"]
+    assert rule["file"] == "advice_code/kept.py" and rule["why"] == BC.RULES["kept count"].why
+    assert 'e.bit("kept", c > j, context(self.before[i], j))' in (Path(BC.__file__).parent / "kept.py").read_text().splitlines()[
+        rule["line"] - 1]
+    assert (f"The kept drafts: {rule['why']} (`advice_code/kept.py:{rule['line']}`). {len(counts):,} rows sent a count, "
+            f"{kept['rows_kept']:,} of them kept a draft, {sum(counts):,} drafts in all; the counts are {kept['bits']:,} bits, "
+            f"{kept['bits'] / len(counts):.3f} a row.") in text
+    assert "- kept drafts: charged.\n" in text and BYC.render_all([row]) == text
+
+
+def test_a_serve_with_a_draft_and_no_tick_is_charged_its_admission_too(tmp_path):
+    """The drafted serve's same run read without the tick, and set beside the plan's serve without a draft: its
+    decisions are charged in its windows' first segments and its kept counts in their second, and it decodes back.
+    Beside the other serve it reads the draft on against off, and the other serve's own report has no kept class."""
+    e, ios, times, emitted = drafted(False)
+    run = serve(e, ios, times, seed=1)
+    d = with_draft(write_corpus(tmp_path / "plain", e, ios, times, run, tick=False), ios, emitted, *MTP)
+    small, (plain, _) = engine(False), plan()
+    there = write_corpus(tmp_path / "there", small, plain, times, serve(small, plain, times, seed=1), tick=False)
+    out = tmp_path / "report.json"
+    assert BYC.main([f"draft={d}", "--beside", f"there={there}", "--stops", str(EOS), "--T", "10", "--out", str(out)]) == 0
+    doc = json.loads(out.read_text())
+    row, other = doc["rows"][0], doc["beside"][0]
+    assert row["round_trip"] and row["tick"] is None and row["first_step_that_differs"] is None
+    t = row["total"]["classes"]
+    assert t["admission"] > 0 < t["kept drafts"] and sum(t.values()) == row["bits"]
+    assert all(w["fields"]["segment_end"] == 2 == w["fields"]["kept_end"] for w in row["by_window"])
+    assert "draft" not in other and "kept drafts" not in other["classes"] and set(other["total"]["events"]) == set(BYC.EVENTS)
+    b = row["beside"][0]
+    assert b["differs"]["the draft"] == ["on", "off"] and "drafts a row" not in {*b["same"], *b["differs"]}
+    assert BYC._facts(row)["drafts a row"] == f"at most {K}" and "kept drafts" not in b["not_exercised"]
+
+
+@pytest.mark.parametrize("asy", (False, True), ids=("sync", "async"))
+def test_the_corpus_table_refuses_a_serve_with_a_draft_by_name(tmp_path, capsys, asy):
+    """v1's own table (`v1.py`) is of I1 v0, whose rows emit one output each: for the drafted serve's directory it has
+    an error row that says so and names what reads the schedule, where the same serve without a draft has its row."""
+    e, ios, times, emitted = drafted(asy)
+    run = serve(e, ios, times, seed=1)
+    d = with_draft(write_corpus(tmp_path / "draft", e, ios, times, run, tick=True), ios, emitted, *MTP)
+    small, (plain, _) = engine(asy), plan()
+    there = write_corpus(tmp_path / "there", small, plain, times, serve(small, plain, times, seed=1), tick=True)
+    out = tmp_path / "table.json"
+    assert V.main([f"draft={d}", f"there={there}", "--stops", str(EOS), "--T", "10", "--jobs", "1", "--out", str(out)]) == 1
+    draft, other = json.loads(out.read_text())["rows"]
+    why = "the trace was served with a draft, and I1 v0's rows emit one output each: `schedule_of` gives its schedule"
+    assert draft == {"trace": "draft", "error": why} and "error" not in other and other["held_out"]["round_trip"]
+    assert f"| draft | error: {why} |" in capsys.readouterr().out
+    with pytest.raises(V.AdviceCodeError, match="^the trace was served with a draft"):
+        V.advice_of(R.read_corpus_trace(d), V.record_of(R.read_corpus_trace(d), (EOS,), bucket_s=TICK[0] / 1e6))
+
+
+def _refusal(d: Path, tmp_path: Path, capsys) -> str:
+    """The report's refusal of the trace-corpus directory `d`, a serve with a draft: one row, with the directory's own
+    facts and no table."""
+    out = tmp_path / "refused.json"
     assert BYC.main([f"draft={d}", "--stops", str(EOS), "--T", "10", "--out", str(out)]) == 1
     row = json.loads(out.read_text())["rows"][0]
-    assert row["serve"]["draft"] and row["error"].startswith("the server had a draft") and "bits" not in row
+    assert set(row) == {"trace", "error", "T", "serve", "aborts"} and row["serve"]["draft"]
     text = capsys.readouterr().out
-    assert text.startswith("**draft**: refused, so it has no table: the server had a draft") and "|" not in text
-    assert "Aborted requests: 0, by the window of T = 10 buckets their release falls in: none in any window. The record is " \
-           "refused whole: this run does not show the advice of any of its" in text
+    assert text.startswith(f"**draft**: refused, so it has no table: {row['error']}") and "|" not in text
+    assert "The record is refused whole: this run does not show the advice of any of its" in text
+    return row["error"]
+
+
+def test_a_draft_the_reader_cannot_read_is_refused_by_name(tmp_path, capsys):
+    """What the reader refuses of a serve with a draft, each by name and before any table: a draft the replay doesn't
+    model (another method than `mtp`, a setting it names, no method at all), an argument that begins ``--speculative``
+    and isn't the draft's settings, one with no value or with one that isn't settings; a row that kept more drafts
+    than the server's arguments say a row carries, which the replay refuses; and rows whose sampled tokens aren't
+    their requests' outputs: a token that isn't the request's next output, and steps with no record of what was
+    sampled, which leave a request short of its outputs."""
+    e, ios, times, emitted = drafted(False)
+    run = serve(e, ios, times, seed=1)
+
+    def corpus(name: str, *argv: str) -> Path:
+        return with_draft(write_corpus(tmp_path / name, e, ios, times, run, tick=True), ios, emitted, *argv)
+
+    for name, argv, why in (
+            ("ngram", ("--speculative-config", '{"method": "ngram", "num_speculative_tokens": 3}'),
+             "speculative method 'ngram': the replay models `mtp` only"),
+            ("parallel", (*MTP, "--speculative-config.parallel_drafting", "true"),
+             "speculative parallel_drafting=True: the replay does not model it"),
+            ("empty", ("--speculative-config", "{}"), "speculative method None: the replay models `mtp` only"),
+            ("count", ("--speculative-config.method=mtp",), "speculative num_speculative_tokens=None: a positive integer"),
+            ("other", (*MTP, "--speculative-model", "m"),
+             "the server's argument --speculative-model: the reader takes a draft from --speculative-config only"),
+            ("bare", ("--speculative-config",), "the server's argument --speculative-config has no value"),
+            ("list", ("--speculative-config=[1]",),
+             "the server's argument --speculative-config: its value isn't a JSON object of draft settings"),
+            ("word", ("--speculative-config", "mtp"),
+             "the server's argument --speculative-config: its value isn't a JSON object of draft settings")):
+        assert _refusal(corpus(name, *argv), tmp_path, capsys) == why, name
+    fewer = _refusal(corpus("fewer", *MTP[:3], "1"), tmp_path, capsys)
+    i = next(i for i, io in enumerate(ios) if max(io.kept) > 1)
+    assert fewer == (f"request {i}: the engine drafts 1 tokens a row, so the replay needs the drafts each of its rows kept "
+                     f"(each 0 to 1, and with one token a row its {ios[i].output_len} outputs)")
+    d = corpus("wrong", *MTP)
+    steps = [json.loads(line) for line in (d / "steps.jsonl").read_text().splitlines()]
+    s, j = next((s, j) for s, st in enumerate(steps) for j, toks in enumerate(st["sampled"]) if toks and toks != [9])
+    rid, was = steps[s]["batch"][j], list(steps[s]["sampled"][j])
+    steps[s]["sampled"][j][0] = 7
+    (d / "steps.jsonl").write_text("".join(json.dumps(x) + "\n" for x in steps))
+    assert _refusal(d, tmp_path, capsys) == (
+        f"request {rid}: step {s} sampled {[7, *was[1:]][:len(was) - (was[-1] == 9)]}, which aren't its outputs from 0 on")
+    for x in steps[s:]:
+        del x["sampled"]
+    (d / "steps.jsonl").write_text("".join(json.dumps(x) + "\n" for x in steps))
+    i = int(rid[1:])
+    assert _refusal(d, tmp_path, capsys) == f"request {rid}: its rows sampled 0 of its {ios[i].output_len} outputs"
 
 
 def test_the_report_names_the_first_step_that_differs(tmp_path, capsys):
@@ -542,3 +746,27 @@ def test_the_report_names_the_first_step_that_differs(tmp_path, capsys):
     text = capsys.readouterr().out
     assert f"decode(encode(a)) == a: NO. The decoder refuses the string: {row['refused']}." in text
     assert f"The replay's schedule differs from the engine's from step {first}, in window " in text
+
+
+@pytest.mark.parametrize("asy", (False, True), ids=("sync", "async"))
+def test_the_report_names_the_first_step_that_differs_under_a_draft(tmp_path, capsys, asy):
+    """The drafted serve read as served with the prefix cache off: a preempted request resumes from its own cached
+    prefix, which the replay's pool never gives. The schedule's string says only arrivals and kept counts, so it
+    decodes, to another schedule: the report has its table, says the round trip fails, exits 1 and names the first
+    step at which the replay differs from the engine's, the first that resumed a request from a hit."""
+    e, ios, times, emitted = drafted(asy)
+    run = serve(e, ios, times, seed=1)
+    d = with_draft(write_corpus(tmp_path / "tick", e, ios, times, run, tick=True), ios, emitted, *MTP)
+    meta = json.loads((d / "meta.json").read_text())
+    meta["server_argv"].remove("--enable-prefix-caching")
+    (d / "meta.json").write_text(json.dumps(meta))
+    out = tmp_path / "report.json"
+    assert BYC.main([f"draft={d}", "--stops", str(EOS), "--T", "10", "--out", str(out)]) == 1
+    row = json.loads(out.read_text())["rows"][0]
+    first = min(s for s, st in enumerate(run.steps) if any(start and i in st.resumed for i, start, _ in st.rows))
+    assert not row["round_trip"] and row["refused"] is None and not row["prefix_caching"]
+    assert row["first_step_that_differs"]["step"] == first < row["first_step_that_differs"]["matched"]
+    assert all(sum(w["fields"].values()) == w["charge"] for w in row["by_window"]) and row["draft"]["bits"] > 0
+    text = capsys.readouterr().out
+    assert (f"decode(encode(a)) == a: NO. The string decodes to another advice. The replay's schedule differs from the "
+            f"engine's from step {first}, in window ") in text

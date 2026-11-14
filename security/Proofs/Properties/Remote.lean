@@ -32,7 +32,8 @@ exhibits come from `DescAgrees` (the verdict is the gate-by-gate check's on an e
 verdicts are about a parse, a layout, a baseline and a division). Sampled proofs' acceptance is one-stage v1's check
 at the coins it read (`OneStage.checkAt`) at its params' form: in the one-stage form v2's, on the verdicts its own run of
 the verifier computed (`stage_zk_registered`), in the recursive form v1's live check on the inner statement's params
-after V*'s compiled check (`recursive_live`), so its record keeps R2 in either (`stage_registered_at`).
+after V*'s compiled check (`recursive_live`), so its record keeps R2 and the caller's facts
+(`Properties.Spot.CallerHeld`) in either (`stage_registered_at`).
 
 The policy's existence clause is neither empty nor trivial: `policyMet_honest` exhibits a declaration and a division into
 nonempty inference blocks that meet the policy, and `policyMet_nontrivial` one the policy refuses at every `α`. Both
@@ -272,23 +273,24 @@ theorem policyHeld {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Commitm
   exact ⟨P, hP, names_program hn hP, NciCheck.Properties.SecurityProofs.BaselineProvenance _ _ _ hb,
     ⟨j', i, d, hx, hpi, hL, hθ, hD, policy_met hd hc hP j' i d hx hpi hL hθ hD⟩, policy_met hd hc hP⟩
 
-/-- What one-stage v1's check at any coins gives on acceptance: its record keeps R2 against the audit's own
-verifier. -/
+/-- What one-stage v1's check at any coins gives on acceptance: its record keeps R2 and the caller's facts against the
+audit's own verifier. -/
 theorem stage_registered_at {p : Spot.OneStage.Params} {c : Spot.OneStage.Commitment}
     {ξ : Option ByteArray} {e : Spot.OneStage.Evidence} {pub : Spot.OneStage.Public}
     {prof : Integrity} (h : Spot.OneStage.checkAt p c ξ e = .accept pub prof) :
-    Properties.Spot.R2 c.record p.verifier := by
+    Properties.Spot.R2 c.record p.verifier ∧ Properties.Spot.CallerHeld c.record p.verifier := by
   unfold Spot.OneStage.checkAt at h
   split at h
   · cases h
   · obtain ⟨law, d, n, hreg, -⟩ := Properties.Spot.acceptMeans _ _ _ _ _ h
-    exact hreg.2.1
+    exact ⟨hreg.2.1, Properties.Spot.callerHeld_of_accept _ _ _ _ _ h⟩
 
-/-- What one-stage v1's live check gives on acceptance: its record keeps R2 against the audit's own verifier. -/
+/-- What one-stage v1's live check gives on acceptance: its record keeps R2 and the caller's facts against the audit's
+own verifier. -/
 theorem stage_registered {p : Spot.OneStage.Params} {c : Spot.OneStage.Commitment}
     {e : Spot.OneStage.Evidence} {pub : Spot.OneStage.Public} {prof : Integrity}
     (h : Spot.OneStage.checkLive p c e = .accept pub prof) :
-    Properties.Spot.R2 c.record p.verifier := by
+    Properties.Spot.R2 c.record p.verifier ∧ Properties.Spot.CallerHeld c.record p.verifier := by
   unfold Spot.OneStage.checkLive Core.atCoins at h
   split at h
   · exact stage_registered_at h
@@ -321,11 +323,11 @@ theorem stage_zk_at {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} 
     | undecided s => simp at h
 
 /-- One-stage v2 accepts only where v1's check accepts at the coins it read, on the verdicts its own run of the
-verifier computed, so its record keeps R2 against the v1 part of its params' verifier. -/
+verifier computed, so its record keeps R2 and the caller's facts against the v1 part of its params' verifier. -/
 theorem stage_zk_registered {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment}
     {e : Spot.OneStageZk.Evidence} {bs : Blobs} {pub : Spot.OneStage.Public} {prof : Integrity}
     (h : Spot.OneStageZk.checkBlobs p c e bs = .accept pub prof) :
-    Properties.Spot.R2 c.record p.base.verifier := by
+    Properties.Spot.R2 c.record p.base.verifier ∧ Properties.Spot.CallerHeld c.record p.base.verifier := by
   unfold Spot.OneStageZk.checkBlobs Core.atCoins at h
   split at h
   · obtain ⟨_, hr⟩ := stage_zk_at h

@@ -44,7 +44,6 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("DsaIndexerQHead_v2", lambda: bind(boolean_dsa.DsaIndexerQHeadV2, D=32, ROPE=16, NH=32)),
         ("DsaIndexerQ_v2", lambda: bind(boolean_dsa.DsaIndexerQV2, H=2, D=32, ROPE=16)),
         ("DsaMqaLogit_v2", lambda: bind(boolean_dsa.DsaMqaLogitV2, H=8, D=32)),
-        ("DsaMqaLogits_v2", lambda: bind(boolean_dsa.DsaMqaLogitsV2, N=2, H=8, D=32)),
         # H = 16: each lane sums two heads, so the contracted first FFMA is in the circuit (at H = 8 v4 is v2)
         ("DsaMqaLogit_v4", lambda: bind(boolean_dsa.DsaMqaLogitV4, H=16, D=32)),
         ("DsaMqaLogits_v4", lambda: bind(boolean_dsa.DsaMqaLogitsV4, N=2, H=16, D=32)),

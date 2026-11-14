@@ -1054,7 +1054,7 @@ def test_a_lean_report_naming_a_repaired_file_outside_repaired_is_unreadable():
         "tests/test_lean_packages.py": "lean-audit/repaired/t.py"}
 
 
-def test_a_lock_commit_carries_the_caps_its_lock_run_repaired_and_no_other_file(tmp_path):
+def test_a_lock_commit_carries_the_files_its_lock_run_repaired_and_no_other_file(tmp_path):
     """The lock run's `--bookkeeping warn` repairs files beside the locks (`REPAIRED`, its report's `repaired`): a lock commit
     holding the repaired copy byte for byte is vouched for; one whose copy differs, one that leaves it out, and one changing
     any other file is refused."""
@@ -1065,23 +1065,23 @@ def test_a_lock_commit_carries_the_caps_its_lock_run_repaired_and_no_other_file(
     from test_landing import _live_run
 
     main, feat, tip = _repos(tmp_path)
-    store, lock, caps, rid = LocalStore(), "pkg/lean-audit.json", "tests/test_lean_packages.py", "r20261020-000005-0005"
-    assert caps in REPAIRED
+    store, lock, packages, rid = LocalStore(), "pkg/lean-audit.json", "tests/test_lean_packages.py", "r20261020-000005-0005"
+    assert packages in REPAIRED
     d, fetch, _ = _live_run(tmp_path, rid, tip, {"pkg": '{"records": 2}\n'})
     (d / "lean-audit" / "repaired" / "tests").mkdir(parents=True)
-    (d / "lean-audit" / "repaired" / caps).write_text('UNWITNESSED = {"pkg": 3}\n')
+    (d / "lean-audit" / "repaired" / packages).write_text('UNWITNESSED = {"pkg": 3}\n')
     audit = json.loads((d / "lean-audit" / "audit.json").read_text())
-    audit["repaired"] = {caps: f"/workspace/research/runs/{rid}/lean-audit/repaired/{caps}"}
+    audit["repaired"] = {packages: f"/workspace/research/runs/{rid}/lean-audit/repaired/{packages}"}
     (d / "lean-audit" / "audit.json").write_text(json.dumps(audit))
 
     def vouched(files: dict[str, str]) -> str | None:
         return regenerated_parent(feat, _deferred_lock(feat, tip, files, rid), store, tool="check", kinds=frozenset({"check/v1"}),
                                   command=CHECKED, deferred=rid, fetch=fetch)
 
-    assert vouched({lock: '{"records": 2}\n', caps: 'UNWITNESSED = {"pkg": 3}\n'}) == rid
-    assert vouched({lock: '{"records": 2}\n', caps: 'UNWITNESSED = {"pkg": 9}\n'}) is None
+    assert vouched({lock: '{"records": 2}\n', packages: 'UNWITNESSED = {"pkg": 3}\n'}) == rid
+    assert vouched({lock: '{"records": 2}\n', packages: 'UNWITNESSED = {"pkg": 9}\n'}) is None
     assert vouched({lock: '{"records": 2}\n'}) is None
-    assert vouched({lock: '{"records": 2}\n', caps: 'UNWITNESSED = {"pkg": 3}\n', "a.txt": "x\n"}) is None
+    assert vouched({lock: '{"records": 2}\n', packages: 'UNWITNESSED = {"pkg": 3}\n', "a.txt": "x\n"}) is None
 
 
 def test_a_report_naming_a_regenerated_record_the_stores_files_lack_is_unreadable_not_none(tmp_path, monkeypatch):
@@ -1289,7 +1289,7 @@ def test_verdicts_cites_a_pass_in_a_checks_reused_pack_as_that_check(tmp_path, m
     assert "no verdicts.tar.gz or verdicts-reused.tar.xz of that sha256" in judge[1][1]
 
 
-def test_verdicts_cites_a_post_landing_runs_pack_though_no_tool_recorded_it_and_no_other_untooled_run(tmp_path, monkeypatch):
+def test_verdicts_cites_an_after_landing_runs_pack_though_no_tool_recorded_it_and_no_other_untooled_run(tmp_path, monkeypatch):
     """Drive cancels a train's check once every step it doesn't defer passed, and runs the deferred ones (pytest, circuit-check)
     on the `main` it landed: `check.py --record --deferred STEPS`, recorded without `--tool check` so no gate takes it as a
     check.  Its pack holds passes as a check's does, so `--verdicts` cites them part by part (`post_landing`); a run without the

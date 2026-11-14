@@ -31,7 +31,6 @@ import json
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity.definitions.numerics import fa3_model as FA3
 from verity.circuits.ops.prims import (
     BlackwellE4m3QmmaDot32,
     BlackwellNvf4OmmaDot64,
@@ -39,6 +38,7 @@ from verity.circuits.ops.prims import (
     HopperE4m3MmaV2Dot32,
     HopperE4m3QgmmaDot32,
 )
+from verity.definitions.numerics import fa3_model as FA3
 from verity.definitions.registry import (
     attention_vocab,
     b1,
@@ -351,7 +351,7 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
         s = spec.strip()
         if s.lower() == "conflict":
             return {"max_seqlen_q_by_step": {}, "conflict": True, "declared": True}
-        spec = int(s) if s.lstrip("-").isdigit() else json.loads(s)
+        spec = int(s) if s.lstrip("-").isdecimal() else json.loads(s)
     if isinstance(spec, bool):
         raise ValueError(f"launch context: {spec!r}")
     if isinstance(spec, int):
@@ -415,7 +415,9 @@ def launch_seqlen_q(own_rows: int, step: int, launch: dict[str, Any] | None) -> 
     if launch.get("conflict"):
         raise LaunchContextConflict("the launch context of this request shape is not one value ('conflict'): requests of the same (LP, T) are "
                                     "co-scheduled with different batches; build one Program per (shape, arrival) or declare the contexts")
-    by = launch.get("max_seqlen_q_by_step") or {}
+    by = launch.get("max_seqlen_q_by_step")
+    if not by:
+        by = {}
     v = by.get(int(step))
     if v is None:
         raise LaunchContextInvalid(f"the declared launch context names steps {sorted(by)} but the request runs step {int(step)}: declare every "

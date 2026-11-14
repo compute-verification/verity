@@ -1,5 +1,5 @@
 """PoUB's receipts beside the store's load: each pass's sketch of every unit of `C*` as the decode
-reads it, the units' receipts and the pass's root, bit for bit `remote_bandwidth.p2`'s (the interface is `PROTOCOL.md`
+reads it, the units' receipts and the pass's root, bit for bit PoUB's `p2`'s (the interface is `PROTOCOL.md`
 §11 of `verity/protocols/accounting/poub/verifier`; the fixture is `benchmarks/pous/p2_v1/serve.py fixture`). ::
 
     units = plan_units(layout.tensors)         # the units the store's tensors lie in: the pass's Plan.whole
@@ -51,7 +51,7 @@ from verity.protocols.accounting.poub.verifier import receipts as R
 
 settings = of(__file__)
 HERE = Path(__file__).resolve().parent
-ROWS_DIR = HERE.parent / "sha512_rows"
+ROWS_DIR = HERE.parents[2] / "verity" / "commitments" / "cuda" / "sha512_rows"
 sys.path.insert(0, str(ROWS_DIR))
 import engine as SE  # noqa: E402
 

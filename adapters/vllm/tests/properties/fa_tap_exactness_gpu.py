@@ -1,4 +1,4 @@
-"""GPU run of the FA-tap exactness property (`verity_vllm.properties.fa_tap_exactness`): check a tap build on this GPU and write the sealed
+"""GPU run of the FA-tap exactness property (`tests.properties.fa_tap_exactness`): check a tap build on this GPU and write the sealed
 record `<out>/fa_tap_exactness.json`.  Exit status 1 unless ok; `--verify RECORD` re-derives a record's digest and verdict without a GPU.
 
 The launch arguments are the ones `vllm.vllm_flash_attn.flash_attn_varlen_func` passes to the installed op (recorded at the op), so the
@@ -41,8 +41,7 @@ from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.registry import attention_vocab, hopper
 from verity.definitions.registry import fa3_check_inf as F3
 
-from verity_vllm.commit.hidden_stream import StreamLayout
-from verity_vllm.properties.fa_tap_exactness import (
+from tests.properties.fa_tap_exactness import (
     CONSTRUCTIONS,
     FILL,
     INSTALLED,
@@ -68,6 +67,7 @@ from verity_vllm.properties.fa_tap_exactness import (
     verify_record,
     visited_rows,
 )
+from verity_vllm.commit.hidden_stream import StreamLayout
 
 
 def _sha256(path: str) -> str:

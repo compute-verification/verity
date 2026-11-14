@@ -28,7 +28,8 @@ from typing import Any
 
 import numpy as np
 from verity.commitments.windows import interface as IF
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G, registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
 
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import CHECKPOINTS
@@ -61,7 +62,7 @@ def _param(param: str) -> tuple[str, int, bool]:
     body = param.removeprefix(f"{WEIGHTS}/")
     table = body.endswith("/table")
     label, _, w = body.removesuffix("/table").rpartition("@")
-    if not w.isdigit() or int(w) < 1 or (table_param if table else weight_param)(label, int(w)) != param:
+    if not w.isdecimal() or int(w) < 1 or (table_param if table else weight_param)(label, int(w)) != param:
         raise ValueError(f"{param!r} is no weight parameter, {WEIGHTS}/<label>@<words> or its /table")
     return label, int(w), table
 

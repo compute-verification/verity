@@ -15,7 +15,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["tests/test_composition_difftest.py", "tests/test_registration_difftest.py"]
+untraced = ["tests/test_composition_difftest.py", "tests/test_registration_difftest.py", "tests/test_sampled_two_difftest.py"]
 # its whole run, slow tests included, takes about two hours on a loaded node, past check's default bound per suite
 # (`suites.py`'s SUITE_TIMEOUT_S, one hour), which killed it mid-run
 timeout_s = 10800
@@ -40,15 +40,15 @@ parts = 3
 # them what they import of `verity.ml` and `verity.errors`. The configuration's composites (`verity.config`)
 # and sampled proofs' parties' subprotocol ids, which `product IDS id` is held to.
 inputs = ["verity/__init__.py", "verity/errors.py", "tools/config/verity_config/verity_settings.py", "verity/claims",
-          "verity/hardware/record.py",
           "tools/difftest", "verity/protocols/proofs/spot/verifier/profile.py",
-          "verity/hardware/registration.py", "verity/device.py", "verity/tests", "verity/channel.py", "verity/runtime",
+          "verity/protocols/accounting/registration/__init__.py", "verity/protocols/accounting/registration/verifier/__init__.py",
+          "verity/protocols/accounting/registration/verifier/registration.py", "verity/device.py", "verity/tests", "verity/channel.py", "verity/runtime",
           "verity/protocols/compose/verifier/onsite", "verity/protocols/compose/verifier/remote", "verity/protocols/interface",
           "verity/protocols/accounting/pouw/verifier", "verity/protocols/proofs/spot",
           "verity/protocols/policy/inference_only/verifier/nci", "verity/protocols/accounting/certifier",
           "verity/protocols/accounting/pous", "verity/protocols/accounting/poub/verifier",
           "verity/protocols/accounting/pous/device/lean", "verity/commitments/attest/lean",
-          "verity/protocols/proofs/spot/verifier/lean", "verity/protocols/proofs/recursion/verifier/recursive", "verity/protocols/proofs/flock/verifier",
+          "verity/protocols/proofs/spot/verifier/lean", "verity/protocols/proofs/spot_flock/verifier/lean", "verity/protocols/proofs/flock/verifier",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "verity/commitments/lms/lean",
           "verity/commitments/identity", "verity/commitments/randomness",

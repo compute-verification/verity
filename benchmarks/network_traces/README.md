@@ -10,7 +10,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 - `verity bench network_traces` runs `run.sh`: one chunk of per-token vLLM timing traces on a leased GPU
   (`record.py`), as a job whose resources are in the script's header.
 - Every other `.sh` here is a job on a node, its command and resources in its header (`capture_loopback.sh`, on a
-  machine where the job may capture). The proving jobs build Flock's `flock-circuit`, the Lean `flock-verify` and the
+  machine where the job may capture). The proving jobs build Flock's `flock-circuit`, the Lean `verity-verify-proof` and the
   Lean ZK server with `benchmarks/pouw/hidden_zk/job.sh`.
 - Every run is published, with its report and outputs, as an Attempt in the evidence store
   (`tools/research/src/research/store/README.md`). Results are read from there, never from this README.
@@ -36,7 +36,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   `warden_chain.py` is the chain's reads of a relay run, and `warden_zk.py` reads the relay's bucket rows in the proof
   system.
 - **Proofs in zero knowledge.** Each driver proves its proof blocks with Flock `prove --zk` behind the Lean ZK server
-  and holds them by the Lean `flock-verify verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of
+  and holds them by the Lean `verity-verify-proof verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of
   record), `n2_tie_zk.py` (the ingress tie), `egress_zk.py` (N2's egress bucket), `scan_zk.py` (the step-indexed
   scan), `scan_period.py` (the scan's answers held by `NetworkCheck.Period`) and `compile_slice_zk.py` (the compile
   slice). `leak_scan.py` is the scan of what the verifier received that every one of them runs.
@@ -75,7 +75,7 @@ two gate verbs on the auditor's machine:
 
 ## The wipe's egress
 
-Memory accounting's streamed wipe signs its egress `UNCOUNTED` when its challenger is on another host. The count over
+Memory accounting's streamed wipe signs no egress count; its check takes the count as evidence. The count over
 its period [t0, t1) comes after, from a relay run that spans it: `wipe_gate.sh` runs that relay through the gate
 (`warden-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the peer's loopback), at a given UTC time
 when asked, and fetches the run's bundle: with `witness/` into a 0700 directory outside the run dir, and to the run's
@@ -88,8 +88,11 @@ its own function, `wipe_monitoring.counted` (`verity/protocols/accounting/pous/v
 ## The served session
 
 `served_session.py` is the runbook of the served session of record, the network certifier in front of a served model.
-`plan` checks the request with this tree's gate and prints each run's command and the endpoint's flags. `session` runs
-the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
+`plan` checks the request with this tree's gate and prints each run's command and the endpoint's flags. The gate is
+`site.json`'s `gate`, whose host is the name of the environment variable that holds the challenger host's address
+(`VY_CHALLENGER_1_HOST`): the session, the front (`certifier_piece.py front`), a chain on the gate's coins and
+`wipe_gate.sh` read it there, and without it and with no gate given (`--gate`, `CHALLENGER`) each ends naming it.
+`session` runs the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
 the H200 peer's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
 of the class's 1,024 reach the relay late), each answered greedily with at most 64 ids, ending at the base model's EOS
 id 128001. It runs at a given UTC time when asked. The endpoint is started by hand (serve-openai directly with
@@ -119,7 +122,13 @@ network certifier at the schedule of that class's scan (`--scan-class w63k4`, 5 
 `scan_zk.py prove --class w63k4` takes), so the engine closes it into the run's earliest window, the one the run audits,
 and the gate's fetch is kept in the serve dir's `private/certifier`. A request's answer must be whole D·τ after its
 admission, 2.7 s at the scan's 100 ms tick; for a slower endpoint `--bucket-ms` runs the scan at a longer tick, up to
-4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`) runs the chain's certifier path on that fetch with the serve dir's
+4000 ms (108 s). Under that runner's `LOAD=session` the load is the caller's own, and neither the runner nor the gate
+sends a request: `front --session` opens the gate's relay session in the rehearsal's place and returns once its relay
+listens, the caller's command (`LOAD_CMD`, given the session's `relay.json` and the serve dir) sends the load to the
+client address that file names, and `close` (`CERTIFIER_CLOSE`) waits for the session's end and keeps its fetch where a
+rehearsal's is. The runner refuses a session without all three, and under any other `LOAD` each of them. A session's
+records cover the connections that crossed the relay; that no other route reaches the endpoint is the placement's.
+Its `piece` (`CERTIFIER_CMD`) runs the chain's certifier path on that fetch with the serve dir's
 endpoint records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows
 form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the chain accepted, every
 request of the audited window is a certified one inside that execution phase, and the Lean check accepts. Its case,
@@ -131,7 +140,7 @@ published beside the answer as `certificates.json`, each certificate with its ow
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
 late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's
 profile names its placement: the certifier on the gate's host, and the chain, the period check and their proofs' coins
-on the developer's node, so `trusted-host` is assumed with the auditor's devices not placed. The chain's endpoint report,
+on the developer's node, so `trusted-device` is assumed with the auditor's devices not placed. The chain's endpoint report,
 whose rows count each Commit period's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
 does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ): report.md, the report's
 other keys and the steps' summaries count the window's requests and outputs and the advice's bits, and the scan's
@@ -350,7 +359,7 @@ directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's
 | endpoint | the endpoint's own advice bound to the run (each Commit period opened to its registered root, rebuilt from the certified I/O) and the I/O tie on the honest run (`e2e.py --no-prove`); required on the advice profile | none: in the clear | all of it |
 | N2 | each execution phase's N2 proof block, proved `--zk` and decided by N2's verifier (`n2_zk.py`); not run on the advice profile, whose egress counts no N2 proof block holds | Selection All: no execution phase unsampled; a sample of k of n execution phases hides at most b incorrect ones except with probability δ (the report's `incorrect_at_delta`) | the registration, the sample, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
 | scan | the scan's ingress and egress proof blocks of an execution phase, one registration, `verify --zk --registered` | the audit's `wrong_units` at the sample's sampling design | each proof block's output bit; the I/O tie stays outside the proofs |
-| Lean | every proof of both steps is the verifier's own `flock-verify verify --zk` run | per proof, ε_ks + ε_bind | nothing |
+| Lean | every proof of both steps is the verifier's own `verity-verify-proof verify --zk` run | per proof, ε_ks + ε_bind | nothing |
 
 The job's environment picks what it runs: N2's sample on the relay path is `CR_N2_DRAW` (`n2_zk.py prove
 --warden-run --draw K`, on the verifier's coins) and any other N2 command is `CR_N2_CMD`, the scan of the gate's own

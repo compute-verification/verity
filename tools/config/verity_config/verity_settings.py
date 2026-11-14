@@ -418,13 +418,17 @@ REGISTRY = EnvSettings(
             "and every pair of bf16 words (2^32 instances each, minutes): which tests run, never what a circuit computes"),
     # ---- verity.definitions' suite
     Setting("VERITY_ML_DEFINITIONS_SLOW", flag, False, WHERE, "the definitions' tests at served statics run (the DSA mask's cut "
-            "at 43,008 and 131,072 keys, minutes): which tests run, never what a circuit computes"),
+            "at 43,008 and 131,072 keys, and the served positions merge against its one-port merge, minutes): which tests run, "
+            "never what a circuit computes"),
     # ---- verity_flock's suite
     Setting("VERITY_ML_FLOCK_CUDA_GHASH", stripped, "", WHERE, "a Flock b684b12 checkout's cuda-ghash directory, which "
             "test_zerocheck_fused and test_ring_switch build their kernels against where a GPU is present: which tests run"),
     # ---- verity.protocols.compose.verifier.lean's suite
     Setting("VERITY_COMPOSITION_SERVED", stripped, "", WHERE, "a directory holding a served Pearl+ run, which the composition "
             "suite's opt-in served test reads: which tests run, never what a verdict says"),
+    Setting("VERITY_SAMPLED_TWO_CASE", stripped, "", WHERE, "a directory holding one honest two-stage play's case "
+            "(sampled_two_small.sh's $OUT/form), which the composition suite's opt-in accept test reads: which tests run, "
+            "never what a verdict says"),
     schema=RECORD_SCHEMA)
 
 

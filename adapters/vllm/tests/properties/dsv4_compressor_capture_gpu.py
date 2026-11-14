@@ -5,7 +5,7 @@ DeepSeek-V4-Pro's statics on one TP8 rank: a ratio-4 layer (state width 1024, th
 a ratio-128 layer (state width 512, the 128-row window, the split compress and store), each into an `fp8_ds_mla` cache.  Line
 numbers under `vllm/models/deepseek_v4/` unless named ("cutedsl" is nvidia/ops/sparse_attn_compress_cutedsl.py).
 
-One GPU process writes `<out>/dsv4_compressor_capture.json`, the property record `dsv4_compressor_capture` (`properties.record`),
+One GPU process writes `<out>/dsv4_compressor_capture.json`, the property record `dsv4_compressor_capture` (`records.property_record`),
 and the three CuTe DSL kernels' PTX and cubin (and SASS where `cuobjdump` runs) under `<out>/ptx/`; it prints one line per launch
 and per case, then `DSV4-COMPRESSOR GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and nothing else
 runs when it fails (exit 3).  A layer that raises records its error and fails its cases without stopping the other.  The operands
@@ -79,7 +79,7 @@ from verity.definitions.registry import flashmla as F
 from tests.properties import dsv4_flashmla_capture_gpu as FX
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-compressor-capture/v1"
 RECORD = "dsv4_compressor_capture.json"

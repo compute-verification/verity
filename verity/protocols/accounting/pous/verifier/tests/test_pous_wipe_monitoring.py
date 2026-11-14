@@ -2,8 +2,9 @@
 with C(T, M)·p^M within δ, against hand counts at small T; an HBM-only wipe's table names its tier and device, every wipe
 meeting its bound except with T·eps; every number that is short by a wipe's PRF advantage says so beside it, in the
 same closing words, and no number moved for it; the cadence is a parameter; an uncounted wipe stays vacuous, since every
-egress record is refused, a covered one over the session's own real-time window too; a rejected wipe pools nothing; the
-periods are the reporting grid's `PERIODS`."""
+egress record is refused, a covered one over the session's own real-time window too; a run's own answer stays vacuous
+at the count its evidence gives, which no network certifier signs, so the pooled tables are of an answer certified by
+hand (`counted`); a rejected wipe pools nothing; the periods are the reporting grid's `MONITORING_PERIODS`."""
 
 from __future__ import annotations
 
@@ -14,12 +15,12 @@ from fractions import Fraction
 import pytest
 
 import pous_test_signer as ts
+from verity import protocol
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_monitoring as WM
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
 from verity.protocols.accounting.pous.verifier import wipe_period as W
-from verity.protocols import reporting
 
 HBM = sw.WipeParams(64, W.READS, 1, 1_000, ((WM.HBM, 64 * sw.LABEL_BYTES),))
 STORE = {"backend": "cuda", "device": "NVIDIA H200", "tier": WM.HBM, "uuid": "GPU-test", "nvml_total_bytes": 64 * 64,
@@ -27,24 +28,31 @@ STORE = {"backend": "cuda", "device": "NVIDIA H200", "tier": WM.HBM, "uuid": "GP
 LINK = WP.link("control", "n0", "outside", "eth0")
 
 
-def _answer(egress_bits: int) -> dict:
-    """An accepted HBM-only wipe of `HBM`, its egress signed as `egress_bits`, with the placement a GPU leg records."""
+def _answer(egress_mib: int | None) -> dict:
+    """An accepted HBM-only wipe of `HBM`, its evidence's egress `egress_mib`, with the placement a GPU leg records."""
     w = W.run("n0", HBM, signer=ts.TestSigner(b"wipe monitoring", 2), log=ts.session_log(), schemes=ts.SCHEMES,
               protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=iter(range(10 ** 9, 10 ** 10)).__next__,
-              coin_secret=b"coins", egress_bits=egress_bits)
+              coin_secret=b"coins", egress_mib=egress_mib)
     assert w.verdict == "accept"
-    where = WP.placement("n0", "auditor", store=STORE, links=[LINK])
+    where = WP.placement("n0", "auditor", w.report["key_sha512"], store=STORE, links=[LINK])
     return w.answer | {"profile": w.answer["profile"] | {"placement": where}}
 
 
 @pytest.fixture(scope="module")
-def counted():
-    return _answer(2 * sw.EGRESS_UNIT_BITS)
+def written():
+    return _answer(2)
+
+
+@pytest.fixture(scope="module")
+def counted(written):
+    """`written` as the check that composes the wipe with the network certifier is to publish it at a certifier's
+    count of 2 MiB: `certify` at that count, set by hand, since `verity/wipe/v0` certifies no wipe."""
+    return written | {"public": W.certify(HBM, 2), "profile": written["profile"] | {"gaps": []}}
 
 
 @pytest.fixture(scope="module")
 def uncounted():
-    return _answer(W.UNCOUNTED)
+    return _answer(None)
 
 
 @pytest.mark.parametrize("t,p,delta,m", [
@@ -77,7 +85,7 @@ def test_an_hbm_only_wipe_over_a_week_a_month_and_a_year(counted):
         row = r["periods"][name]
         t = 3 * days
         assert (row["wipes"], row["wipes_per_machine"]) == (t, days)
-        for d in reporting.DELTAS:
+        for d in protocol.DELTAS:
             assert row[str(d)]["failing_at_most"] == 0 and row[str(d)]["meeting_at_least"] == t
         assert row["per_wipe"]["except_with"] == f"T·eps = {float(t * W.EPS):.3g}, plus {SUM}"
     assert r["leaves_out"][0] == WM.EXCEPT and any(s.startswith("link control") for s in r["leaves_out"][1:])
@@ -91,7 +99,7 @@ def test_the_cadence_is_a_parameter(counted):
 
 
 def test_the_periods_are_the_reporting_grids():
-    assert WM.PERIODS is reporting.PERIODS
+    assert WM.MONITORING_PERIODS is protocol.MONITORING_PERIODS
 
 
 def test_the_table_pools_at_the_answers_eps(counted):
@@ -166,12 +174,20 @@ def test_an_uncounted_wipe_stays_vacuous_and_a_covered_egress_record_is_refused(
         WM.counted(uncounted, RECORD)
     said = str(refusal.value)
     assert said == WM.REFUSED and said.startswith(f"the {WM.EGRESS} record is refused")
-    assert "its monotonic clock (CLOCK_MONOTONIC ns" in said and "(t0_unix_ns, t1_unix_ns) is real time (Unix ns)" in said
+    assert "its raw monotonic clock (CLOCK_MONOTONIC_RAW ns" in said and "(t0_unix_ns, t1_unix_ns) is real time (Unix ns)" in said
     assert "until what the memory challenger signs ties its session to the span the record counts" in said
     assert "no --egress" in said
     for accepted in (uncounted, counted):
         with pytest.raises(ValueError, match="nothing signed says the record covers this wipe's session"):
             WM.table(accepted, 1, egress=RECORD)
+
+
+def test_the_evidence_writers_count_stays_vacuous(written):
+    """A run's own answer at the 2 MiB its evidence gives is `uncounted`: it pools nothing, and says why."""
+    assert written["public"] == W.uncounted(HBM)
+    r = WM.table(written, 1)
+    assert r["periods"] is None and "the egress count is 2 MiB, the evidence writer's" in r["why"]
+    assert r["each"]["eps"] == "0" and "eps_plus" not in r["each"]
 
 
 def test_a_record_over_the_sessions_own_real_time_window_is_refused_too(uncounted):

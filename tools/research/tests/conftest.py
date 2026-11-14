@@ -1,15 +1,29 @@
 """Every test gets its own evidence store: `research run` publishes an attempt at the end, and that must never land in the
 developer's ~/.research/store.  And every test starts without credentials or a recording run's variables: tests start runs of
-their own, which would inherit them."""
+their own, which would inherit them.  And they check this tree's `research`, whatever PYTHONPATH holds."""
 from __future__ import annotations
 
+import importlib.util
 import os
 import re
 import signal
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
+
+#: the tree these tests check. A `research` earlier on PYTHONPATH (a `research run` job puts its tool snapshot first) would be what
+#: they import and what the Pythons they start run, and a file a test takes from beside the code (store.pod.toml) would be sought
+#: beside that copy: the tree's goes first then, in this process and in the PYTHONPATH every test's children inherit
+SRC = Path(__file__).resolve().parents[1] / "src"
+_found = importlib.util.find_spec("research")
+SHADOWED = _found is None or not Path(_found.origin or "/").resolve().is_relative_to(SRC)
+if SHADOWED:
+    if "research" in sys.modules:
+        raise RuntimeError(f"research was imported from {_found.origin} before {__file__}, so these tests would check that copy and "
+                           f"not {SRC}: run them with no other `research` on PYTHONPATH (env -u PYTHONPATH)")
+    sys.path.insert(0, str(SRC))
 
 #: a cloud VM's Cursor secrets stand in for the laptop's config files (pods/runpod.py, store/remote.py), a recorded check's step
 #: holds its run's variables, and a pod's shell its own: no test may reach the real account or bucket, or act as a run, through them
@@ -23,6 +37,8 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     for k in list(os.environ):
         if k.startswith(CLEARED):
             monkeypatch.delenv(k)
+    if SHADOWED:
+        monkeypatch.setenv("PYTHONPATH", str(SRC), prepend=os.pathsep)
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path_factory.mktemp("store")))
     # ... and never the developer's ~/.research/store.toml remote (an S3 config without credentials in the test env would otherwise
     # be what every test sees).  Tests that want a remote point RESEARCH_STORE_CONFIG at their own file.
@@ -50,7 +66,7 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("NODE_SLOT_ONLY_FILE", str(tmp_path_factory.mktemp("slot-only") / "absent-slot_only.py"))
     # ... nor what a node requires of a shipped research package (/usr/local/lib/vy-monitoring/tool_rules.py)
     monkeypatch.setenv("NODE_TOOL_RULES_FILE", str(tmp_path_factory.mktemp("tool-rules") / "absent-tool_rules.py"))
-    # ... nor an auditor host's list of the only commands it runs (/etc/vy/auditor)
+    # ... nor an auditor device's list of the only commands it runs (/etc/vy/auditor)
     monkeypatch.setenv("AUDITOR_FILE", str(tmp_path_factory.mktemp("auditor") / "absent-auditor"))
     # ... nor its learned bundle sizes: on vy-nebius-1 the pacer mirrors them to /workspace/jobs/dispatch/bundle-sizes.json
     monkeypatch.setenv("VY_BUNDLE_SIZES", str(tmp_path_factory.mktemp("bundle-sizes") / "bundle-sizes.json"))

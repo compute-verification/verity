@@ -18,7 +18,7 @@ from common import c, f1, opt
 
 #: the period's audit windows: its seconds over the window's
 WINDOW_S = c["window"].value
-PERIOD_S = dict(f1.PERIODS)
+PERIOD_S = dict(f1.MONITORING_PERIODS)
 #: a served slot's bits, the token select's output word
 SLOT_BITS = 8 * c["token_bytes"].value
 #: the extractor's constant c in δ/(c² T)

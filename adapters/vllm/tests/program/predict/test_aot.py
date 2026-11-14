@@ -12,7 +12,13 @@ from pathlib import Path
 import pytest
 from verity.circuits.types import RecordType
 
-from tests.program.predict.test_predict import TINY, _phi
+from tests.program.predict.test_predict import (
+    GLM53,
+    HF_CONFIG_DIR,
+    TINY,
+    _phi,
+    _row_phi,
+)
 from verity_vllm.config import UsageError
 from verity_vllm.correspondence.runtime import SCHEMA as CORRESPONDENCE
 from verity_vllm.correspondence.runtime import correspondence_digest
@@ -144,6 +150,13 @@ def test_a_descriptor_without_node_hints_names_no_call(tmp_path):
     for desc in ({}, {"annotations": {"correspondence": {"schema": CORRESPONDENCE}}}):
         hints, params = A.traced_names(program, desc, str(trace))
         assert hints == {} and dict(params)[name] == str(RecordType(*((f"inner.{n}", t) for n, t in rec.fields)))
+
+
+def test_phi_at_is_the_rows_phi_at_the_rank_under_the_config_named(tmp_path):
+    """`phi_at`, which each command below reads its φ by: φ of the row's declared inputs (`score.phi_of`) at the rank asked for,
+    the checkpoint's `config.json` the file named.  For GLM-5.3's row it is the φ the pinned snapshot's copy of that file gives."""
+    phi = A.phi_at(GLM53, 5, str(HF_CONFIG_DIR / "GLM53.config.json"))
+    assert phi.tp == {"world": 8, "rank": 5} and phi.to_json() == _row_phi(GLM53, "GLM53", tmp_path, rank=5).to_json()
 
 
 def test_the_emit_command_prints_the_dir_its_digest_and_its_timings(tmp_path, monkeypatch, capsys):

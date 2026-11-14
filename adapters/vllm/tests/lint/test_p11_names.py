@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import ast
 import re
-from functools import lru_cache
+from functools import cache
 
 from . import _ratchet as R
 
@@ -100,7 +100,7 @@ def package_violations() -> list[R.Violation]:
     return [R.Violation(R.rel(d), "package-name", "<package>", d.name) for d in dirs if bad_name(d.name)]
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[R.Violation, ...]:
     out = package_violations()
     for p in R.library_files():

@@ -1,4 +1,10 @@
-/-
+module
+
+public import Flock.TemplateQuery
+public import Flock.Test.RegProgram
+meta import Flock.Test.RegProgram
+
+/-!
 `TemplateQuery.Desc.ofProg`, the template queries' reading of the program `Program.decode` decoded, reads what `Desc.parse`
 reads from the same bytes: the root, the program's SHA-512, and at every definition the decoder reached its nodes (form,
 member count, callee) and gates, which are the gates the decoder counted; and a template query's units with their gates, or
@@ -6,11 +12,6 @@ its refusal. Each program lists its callees in another order than the decoder nu
 `TQPair_v0` and three `TQTriple_v0` instances over `Input8_v1` gates (the codec's `mixed_population_program`), and
 `Flock.Test.RegProgram`'s `plain` and `reg`, whose roots a template query refuses.
 -/
-module
-
-public import Flock.TemplateQuery
-public import Flock.Test.RegProgram
-meta import Flock.Test.RegProgram
 
 @[expose] public section
 

@@ -12,7 +12,7 @@ with its self-check skipped (``FC_ZK_SELF_CHECK=skip``) and sends the proofs of 
 none, and Lean refuses the session for want of a proof (A8's negative).
 
     PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/tools/verity/circuit_check/src:\\
-      <tree>/benchmarks/numerical/python python benchmarks/one_stage/forged_proofs.py --bin flock-circuit --lean flock-verify \\
+      <tree>/benchmarks/numerical/python python benchmarks/one_stage/forged_proofs.py --bin flock-circuit --lean verity-verify-proof \\
       --work DIR --fixture DIR
 
 ``--fixture`` gets the tree: ``stage/`` (circuit.txt, partition.json, program.json), per case ``<case>/pub-N.bin`` and
@@ -87,7 +87,7 @@ def free_port() -> int:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", required=True, help="flock-circuit, the proving build (sha512, glue)")
-    ap.add_argument("--lean", required=True, help="flock-verify")
+    ap.add_argument("--lean", required=True, help="verity-verify-proof")
     ap.add_argument("--work", required=True)
     ap.add_argument("--fixture", required=True)
     a = ap.parse_args()

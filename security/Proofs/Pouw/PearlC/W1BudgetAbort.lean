@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pouw.PearlC.W1
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # W1 doesn't truncate

@@ -1,6 +1,6 @@
 """FA2 on a target: the stock vllm-flash-attn kernel vLLM launches there, against the attention Definitions a target can bind.
 
-One GPU process writes `<out>/fa2_target_capture.json`, the property record `fa2_target_capture` (`properties.record`).  `ok` = the
+One GPU process writes `<out>/fa2_target_capture.json`, the property record `fa2_target_capture` (`records.property_record`).  `ok` = the
 gate, MUFU, every launch's tile and determinism, the engine, every row equal to fa2_check_inf and v5 and, on its finite heads, to
 v2_hopper, and the target's own binding of every row the checked `Attention_v5` (where the target binds FA2's construction).
 The device gate runs first and nothing else runs when it fails (exit 3):
@@ -47,9 +47,9 @@ from typing import Any
 import numpy as np
 
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.properties.fa_tap_exactness import PAGE
-from verity_vllm.properties.fa_tap_exactness import cases as tap_cases
-from verity_vllm.properties.record import seal as seal_record
+from tests.properties.fa_tap_exactness import PAGE
+from tests.properties.fa_tap_exactness import cases as tap_cases
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/fa2-target-capture/v1"
 RECORD = "fa2_target_capture.json"
@@ -358,6 +358,7 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
                 spec = TG.attention_spec(tp, T, H, Hk, D, sq_max, row=r, own_rows=sq)
                 rec["binding_mismatch"] += spec.id != bind(F2.AttentionV5, T=T, NH=H, KVH=Hk, D=D, BN=BN, DOT=hopper.HopperBF16WgmmaDot16,
                                                              INV=P.Fa2InvSum, MASKED_FROM=gfrom).id
+            h: int | np.integer[Any]
             for h in np.flatnonzero(nonfinite):
                 qh, kf, vf = q[tok + r, h].tolist(), kk[h].reshape(-1).tolist(), vv[h].reshape(-1).tolist()
                 want["v2_hopper"][h] = evaluate(bind(b1.AttentionHeadV2, T=T, D=D, BN=BN, DOT=hopper.HopperBF16WgmmaDot16, INV=P.Fa2InvSum),

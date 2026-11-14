@@ -88,7 +88,7 @@
                     with custody, RESEARCH_PREFLIGHT_CUSTODY (the staged key's dir).  A declaration that cannot be read refuses the run.
                     `--preflight TOOL` runs TOOL's preflight before a run of anything else (a Lean record regeneration on a check
                     pod), and refuses when the tree declares none.  job.json run.remote.preflight and the launch's answer carry its report.
-    auditor         a machine with /etc/vy/auditor (deploy.toml installs it on an auditor host, vy-challenger-1) runs only the commands
+    auditor         a machine with /etc/vy/auditor (deploy.toml installs it on an auditor device, vy-challenger-1) runs only the commands
                     that file lists, one a line, exactly: launch-request refuses any other before anything starts, and the host's
                     vy-auditor-only.timer (slot_only.py --auditor) stops one launched from a tree that predates the refusal.
     tool rules      a shipped research package without a fix the machine requires (pods/nebius/tool_rules.py: one that predates #7656
@@ -106,7 +106,7 @@
                     member by member off the pipe (a big run is never in the launcher's memory); remote.json keeps observed_utc.
                     Unreachable means "last observed at T; current status unknown", never "failed".
     adopt           a run another VM launched has no local dir: `research inspect|fetch|status RUN` (a full run id) finds
-                    <root>/runs/<id> on `--on NAME`, else on each ssh machine but the auditor hosts (`restricted`; a pod belongs to
+                    <root>/runs/<id> on `--on NAME`, else on each ssh machine but the auditor devices (`restricted`; a pod belongs to
                     the VM that made it), writes the remote.json launch would have and fetches it as above (`adopt`).
     preservation    --all verifies every file's sha256 against the machine and writes preserved.json LAST.  Until then the only copy
                     is on the machine; this is stated, not hidden.  Then it writes <run>/.fetched ON THE MACHINE (research/fetched/v0.1:
@@ -159,7 +159,7 @@ REQUEST_SCHEMA = "research/request/v0.1"
 PRESERVED_SCHEMA = "research/preserved/v0.1"
 READY_SCHEMA = "research/source-ready/v0.1"
 READY_FILE = "READY.json"                     # the only marker that makes <root>/src/<identity>/ executable
-_DIRT_MARK = "RESEARCH-TRACKED-DIRT"              # _probe_source: what follows it is `git status` of a READY checkout
+_DIRT_MARK = "RESEARCH-TRACKED-DIRT"              # _probe_source: what follows it is the HEAD and `git status` of a READY checkout
 LEGACY_COMPLETE = ".complete"                 # the pre-verification marker: never sufficient on its own
 SHIP_SOURCE_TIMEOUT_S = 600                   # the floor; a big archive gets size / SHIP_MIN_BYTES_PER_S
 SHIP_MIN_BYTES_PER_S = 64 * 1024              # the slowest link a ship is allowed to be (a laptop -> pod link can run at 130-220 KB/s)
@@ -193,7 +193,7 @@ RUNS_VIA_SLOT_FILE = "/etc/vy/runs-via-slot"  # present: a run starts only throu
 NODE_SLOT_ONLY_FILE = "/usr/local/lib/vy-monitoring/slot_only.py"
 #: the machine's own tool_rules.py (deploy.toml): what a shipped research package must do before it runs here, judged as above
 NODE_TOOL_RULES_FILE = "/usr/local/lib/vy-monitoring/tool_rules.py"
-AUDITOR_FILE = "/etc/vy/auditor"              # present: an auditor host, which runs only the commands it lists (slot_only.auditor_allows)
+AUDITOR_FILE = "/etc/vy/auditor"              # present: an auditor device, which runs only the commands it lists (slot_only.auditor_allows)
 GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
 POD_TARGET_RETRY_S = 2.0
@@ -255,7 +255,7 @@ class CannotStart(Refused):
     """The machine could start no run, whatever the job: it could not start the runner's process (NOT_STARTED) or make the
     launch's log and FIFO, or it has no git (NO_GIT) for a run that needs a checkout.  Nothing started, so `research run --on
     auto` places the job again without the machine.  A refusal that reads the job (its command, its source, its flags, its
-    keys) or the machine's rules and admission (a slot-only or auditor host, memory, an exclusive run, a preflight) is never
+    keys) or the machine's rules and admission (a slot-only or auditor device, memory, an exclusive run, a preflight) is never
     this one: the same job is refused wherever it goes, or the machine does start runs."""
 
 
@@ -294,12 +294,12 @@ def load_machines(path: Path | None = None) -> dict[str, dict[str, Any]]:
 
 #: a machine's runs root when its entry names none (a pod `research pods register` wrote without --root)
 DEFAULT_ROOT = "/workspace/research"
-#: infra's manifest of the Nebius nodes, beside this package wherever it is installed: its `admin = true` nodes are the auditor hosts
+#: infra's manifest of the Nebius nodes, beside this package wherever it is installed: its `admin = true` nodes are the auditor devices
 DEPLOY_MANIFEST = Path(__file__).resolve().parent / "pods" / "nebius" / "deploy.toml"
 
 
 def restricted(machines: dict[str, dict[str, Any]]) -> set[str]:
-    """The auditor hosts among `machines`: an entry that names its gate (`auditor`), or a node DEPLOY_MANIFEST marks `admin = true`
+    """The auditor devices among `machines`: an entry that names its gate (`auditor`), or a node DEPLOY_MANIFEST marks `admin = true`
     (reached only by an admin login, which is why `research deploy drift` reads one only when --on names it). They refuse lanes'
     keys by design, so a search over every machine (`adopt`, `research doctor`) leaves them out before any ssh rather than leave a
     refused login in their auth logs; `--on NAME` still asks one, for whoever holds its key. Without the manifest the entries'
@@ -938,14 +938,14 @@ def archive_manifest(tar_bytes: bytes) -> dict[str, Any]:
     return _manifest_of(io.BytesIO(tar_bytes))
 
 
-# git's default delta-base cache (96 MiB) and unbounded pack windows put `git archive` itself at ~140 MiB on the laptop; these caps give
+# git's default delta-base cache (96 MiB) and unbounded pack windows put `git archive` itself at ~140 MiB on the laptop; these limits give
 # the same bytes at the same speed in ~70 MiB (what remains is about the largest blob, which git holds whole)
-GIT_ARCHIVE_CAPS = ("-c", "core.deltaBaseCacheLimit=8m", "-c", "core.packedGitWindowSize=4m", "-c", "core.packedGitLimit=16m")
+GIT_ARCHIVE_LIMITS = ("-c", "core.deltaBaseCacheLimit=8m", "-c", "core.packedGitWindowSize=4m", "-c", "core.packedGitLimit=16m")
 
 
 def _git_archive(git_dir: Path) -> subprocess.Popen:
     err = tempfile.TemporaryFile()
-    proc = subprocess.Popen(["git", *GIT_ARCHIVE_CAPS, "archive", "--format=tar", "HEAD"], cwd=git_dir, stdout=subprocess.PIPE, stderr=err)
+    proc = subprocess.Popen(["git", *GIT_ARCHIVE_LIMITS, "archive", "--format=tar", "HEAD"], cwd=git_dir, stdout=subprocess.PIPE, stderr=err)
     proc.archive_stderr = err          # Popen.stderr is None when stderr is a file, so the file is kept here
     return proc
 
@@ -1039,20 +1039,28 @@ def require_ready_source(path: Path | str, identity: str) -> dict[str, Any]:
     doc = read_ready(Path(path))
     if doc["identity"] != identity:
         raise SourceNotReady(f"{path}/{READY_FILE} names identity {doc['identity']}, the run asked for {identity}; refusing to execute")
-    if dirt := tracked_dirt(Path(path)):
+    if dirt := tracked_dirt(Path(path), identity):
         raise SourceNotReady(f"{path} is shared by every run of {identity}, and an earlier run edited its tracked files ({', '.join(dirt[:3])}); "
                              f"refusing to execute from it: relaunch (the launcher sets it aside and ships the commit afresh), or use --cwd clone")
     return doc
 
 
-def tracked_dirt(path: Path) -> list[str]:
-    """The tracked paths of a shipped checkout that differ from its commit (one run's edit to the shared per-commit tree would
-    otherwise reach every later run of that commit).  Untracked and ignored build output is not dirt; a tree shipped as an archive, with
-    no .git, has nothing to compare and gives none."""
+def _head_dirt(head: str, identity: str) -> list[str]:
+    """The dirt of a shipped checkout whose HEAD (`git rev-parse --verify -q HEAD`, empty when it names no commit) is not the commit
+    the tree is named for: `git status` compares the files with whatever HEAD names, so a run's `git checkout OTHER` there leaves it
+    silent over OTHER's files.  A detached HEAD or a branch at `identity` is the commit."""
+    return [] if head == identity else [f"HEAD is at {head or 'no commit'}, not at {identity}"]
+
+
+def tracked_dirt(path: Path, identity: str) -> list[str]:
+    """What makes a shipped checkout no longer `identity`'s (one run's change to the shared per-commit tree would otherwise reach
+    every later run of that commit): a HEAD that is not `identity` (`_head_dirt`), then the tracked paths that differ from HEAD.
+    Untracked and ignored build output is not dirt; a tree shipped as an archive, with no .git, has nothing to compare and gives none."""
     if not (Path(path) / ".git").exists():
         return []
+    head = subprocess.run(["git", "rev-parse", "--verify", "-q", "HEAD"], cwd=path, capture_output=True, text=True).stdout.strip()
     r = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=path, capture_output=True, text=True)
-    return [line[3:] for line in r.stdout.splitlines() if line.strip()] if r.returncode == 0 else []
+    return _head_dirt(head, identity) + ([line[3:] for line in r.stdout.splitlines() if line.strip()] if r.returncode == 0 else [])
 
 
 def _ready_doc(identity: str, tree: str | None, man: dict[str, Any], verified: str) -> dict[str, Any]:
@@ -1061,11 +1069,13 @@ def _ready_doc(identity: str, tree: str | None, man: dict[str, Any], verified: s
 
 
 def _probe_source(ssh: list[str], dest: str) -> tuple[str, dict[str, Any] | None]:
-    """(`ready` | `dirty` | `legacy` | `absent`, READY.json doc when ready or dirty).  `dirty`: READY, but a checkout whose tracked files
-    no longer match its commit; the doc then carries the first such paths under `dirt`."""
+    """(`ready` | `dirty` | `legacy` | `absent`, READY.json doc when ready or dirty).  `dirty`: READY, but a checkout that is no longer
+    its commit's: its HEAD is not the identity READY.json names, or its tracked files don't match HEAD; the doc then carries what
+    was found, as `tracked_dirt` lists it (HEAD, then the first such paths), under `dirt`."""
     q = shlex.quote(dest)
     r = ssh_run(ssh, ["sh", "-c", f"if [ -f {q}/{READY_FILE} ]; then cat {q}/{READY_FILE}; echo; echo {_DIRT_MARK}; "
-                                  f"if [ -e {q}/.git ]; then git -C {q} status --porcelain --untracked-files=no 2>/dev/null | head -5; fi; "
+                                  f"if [ -e {q}/.git ]; then echo \"HEAD $(git -C {q} rev-parse --verify -q HEAD 2>/dev/null)\"; "
+                                  f"git -C {q} status --porcelain --untracked-files=no 2>/dev/null | head -5; fi; "
                                   f"elif [ -e {q} ]; then echo LEGACY; else echo ABSENT; fi"])
     out, _, dirt = r.stdout.decode(errors="replace").partition(_DIRT_MARK)
     out = out.strip()
@@ -1079,8 +1089,9 @@ def _probe_source(ssh: list[str], dest: str) -> tuple[str, dict[str, Any] | None
         doc = json.loads(out)
     except ValueError:
         raise SourceNotReady(f"{dest}/{READY_FILE} is not JSON; inspect the machine") from None
-    if paths := [line[3:] for line in dirt.splitlines() if line.strip()]:
-        return "dirty", {**doc, "dirt": paths}
+    lines = [line for line in dirt.splitlines() if line.strip()]          # of a checkout: `HEAD <commit>`, then `git status`
+    if lines and (found := _head_dirt(lines[0][5:], doc.get("identity")) + [line[3:] for line in lines[1:]]):
+        return "dirty", {**doc, "dirt": found}
     return "ready", doc
 
 
@@ -1228,16 +1239,16 @@ def _ship_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | No
     return partial, None, True
 
 
-_RC_DIRT = 77                                  # _add_git: the tree's tracked files are not the commit's (its .git stays, so the probe sees dirt)
+_RC_DIRT = 77                                  # _add_git: the tree's HEAD or tracked files are not the commit's (its .git stays, so the probe sees dirt)
 
 
 def _add_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | None, dest: str, doc: dict[str, Any]) -> str | None:
     """Make the READY tree `dest`, shipped by the archive stream, a checkout of `sha` in place, so every later run of the commit finds
     one (a `--cwd clone` run clones it; `suites.py` keys from git's view of it): the commit is pushed as `_ship_git` pushes it, and a
     `--no-checkout` shared clone's .git, detached at `sha` with its index, is renamed into the tree whole, so runs of the commit
-    sharing it are never moved and no file of theirs is written.  Its tracked files must then be the commit's
-    (`git status`), and READY.json is replaced, renamed into place, with `checkout: true` and `transport: stream+git`.  A tree whose
-    files differ keeps the .git, so `_probe_source` reads it as dirty and `ship_source` ships the commit afresh.  None once done,
+    sharing it are never moved and no file of theirs is written.  Its HEAD and its tracked files must then be the commit's
+    (`git status`), and READY.json is replaced, renamed into place, with `checkout: true` and `transport: stream+git`.  A tree where
+    either differs keeps the .git, so `_probe_source` reads it as dirty and `ship_source` ships the commit afresh.  None once done,
     else why not."""
     repo = f"{root}/{POD_GIT_REPO}"
     if not tree:
@@ -1308,8 +1319,9 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
     """`git archive HEAD` of a clean checkout -> a VERIFIED <root>/src/<identity>/.  Returns (identity, remote dir, READY.json doc).
 
     Identity: the commit sha (a dirty tree is refused; there is no patch digest to name).  Protocol:
-      1. probe <root>/src/<identity>/: READY.json naming this identity -> done, unless it is a checkout whose tracked files an earlier
-         run edited, which is moved to <root>/src/.quarantine/ and shipped afresh; a foreign READY.json -> SourceNotReady (never touched);
+      1. probe <root>/src/<identity>/: READY.json naming this identity -> done, unless it is a checkout an earlier run left at another
+         commit (its HEAD is not the identity) or whose tracked files it edited, which is moved to <root>/src/.quarantine/ and shipped
+         afresh; a foreign READY.json -> SourceNotReady (never touched);
          a directory without READY.json (legacy `.complete`, or an interrupted ship) -> per-file sha256 against the archive: identical
          -> adopted (READY.json written, `verified: legacy-sha256-per-file`); otherwise moved to <root>/src/.quarantine/<identity>-<nonce>/
          (kept for inspection, never executable by name) and shipped afresh;
@@ -1803,7 +1815,7 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
     if mem_rec:
         remote["mem"] = mem_rec
         env["RESEARCH_MEM_RESERVATION"] = mem_rec["reservation"]      # the runner removes it at exit and does not pass it on
-        env["RESEARCH_RUN_MEM_GB"] = f"{float(req['mem_gb']):g}"       # the workload's: a reservation is no cgroup cap
+        env["RESEARCH_RUN_MEM_GB"] = f"{float(req['mem_gb']):g}"       # the workload's: a reservation is no cgroup limit
     cpus = direct_cpus()
     if cpus:
         remote["cpus"] = f"{format_cpus(cpus)}: {os.environ.get('DIRECT_CPUS_FILE') or DIRECT_CPUS_FILE} (a command may pin itself elsewhere)"
@@ -2183,7 +2195,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
     try:
         m = resolve_machine(machine_name, project)
         if m.get("auditor"):
-            raise Refused(f"machine {machine_name!r} is an auditor host: it takes no research run, from anyone. Its service is "
+            raise Refused(f"machine {machine_name!r} is an auditor device: it takes no research run, from anyone. Its service is "
                           f"reached only through its gate: {m['auditor']}")
         guard_min = guard_idle_min(m)
         custody_pub: dict[str, Any] | None = None
@@ -2386,7 +2398,7 @@ ADOPT_CONNECT_S, ADOPT_PROBE_S, ADOPT_JOBS = 5, 20, 16
 def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict[str, dict[str, Any]] | None = None,
           unique: bool = False) -> Path:
     """The local run dir of a run another VM launched: find <root>/runs/<run_id> on machine `on`, else on each ssh machine but the
-    auditor hosts (`restricted`: never asked unless `on` names one), write the remote.json `launch` would have (phase `adopted`), and
+    auditor devices (`restricted`: never asked unless `on` names one), write the remote.json `launch` would have (phase `adopted`), and
     fetch its records.  Refused when the id is not a full run id, when no machine holds it (each machine's answer in the reason), or
     when the local dir already exists; with `unique` (a cancel), every machine is asked and an id more than one holds is refused
     rather than taken from the first."""
@@ -2401,7 +2413,7 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
     ssh = {n: m for n, m in ms.items() if isinstance(m, dict) and m.get("provider") == "ssh"}
     skipped = [] if on else sorted(restricted(ssh))
     names = [on] if on else sorted(n for n in ssh if n not in skipped)
-    not_asked = (f"; not asked: the auditor hosts {', '.join(skipped)}, which refuse lanes' keys (--on NAME asks one)"
+    not_asked = (f"; not asked: the auditor devices {', '.join(skipped)}, which refuse lanes' keys (--on NAME asks one)"
                  if skipped else "")
     answers: dict[str, str] = {}
     targets = []
@@ -2500,7 +2512,7 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
     """Copy records (or everything) from the machine into the local run dir, with the run dir's files ``also`` names beside the
     records (paths under the run dir: the workload's own small progress files and logs).  Unreachable -> observed_utc
     unchanged, reason recorded.  ``timeout`` lowers each ssh call's own (900 s for the records, 120 s for a probe): a waiter's
-    time left under its cap (research.waitcap)."""
+    time left under its limit (research.waitcap)."""
 
     def within(s: float) -> float:
         return s if timeout is None else max(1.0, min(s, timeout))

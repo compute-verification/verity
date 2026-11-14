@@ -69,7 +69,7 @@ class Broken(Exception):
 def address(text: str) -> tuple[str, int]:
     """``HOST:PORT`` as (host, port)."""
     host, sep, port = text.rpartition(":")
-    if not (sep and host and port.isdigit()):
+    if not (sep and host and port.isdecimal()):
         raise UsageError(f"an address is HOST:PORT, not {text!r}")
     return host, int(port)
 
@@ -123,7 +123,7 @@ async def token_ids(reader: asyncio.StreamReader) -> AsyncIterator[list[int]]:
         status, *lines = (await reader.readuntil(BLANK))[:-len(BLANK)].decode("latin-1").split("\r\n")
         code = status.split(" ")[1:2]
         if code != ["200"]:
-            raise Broken(f"the server answered {code[0] if code and code[0].isdigit() else 'no status'}")
+            raise Broken(f"the server answered {code[0] if code and code[0].isdecimal() else 'no status'}")
         headers = {k.strip().lower(): v.strip() for k, _, v in (ln.partition(":") for ln in lines)}
         buf = b""
         async for data in _body(reader, "chunked" in headers.get("transfer-encoding", "").lower()):
@@ -150,7 +150,7 @@ async def _first(reader: asyncio.StreamReader) -> bytes:
         return await reader.read(READ_BYTES)
     line, *fields = head[:-len(BLANK)].split(b"\r\n")
     lengths = [f.partition(b":")[2].strip() for f in fields if f.partition(b":")[0].strip().lower() == b"content-length"]
-    if line != COMPLETIONS or len(lengths) != 1 or not lengths[0].isdigit() or int(lengths[0]) > BODY_BYTES:
+    if line != COMPLETIONS or len(lengths) != 1 or not lengths[0].decode("latin-1").isdecimal() or int(lengths[0]) > BODY_BYTES:
         return head
     try:
         return head + await reader.readexactly(int(lengths[0]))
@@ -185,7 +185,8 @@ async def _close(writer: asyncio.StreamWriter | None) -> None:
 
 class Front:
     """The relay (the module docstring's) before the server at ``upstream``, for id events of ``payload`` bytes: `handle`
-    serves one connection. ``log`` takes each id request's record, and ``clock`` reads the seconds its times are in."""
+    serves one connection, its task kept in ``handlers`` until it ends. ``log`` takes each id request's record, and
+    ``clock`` reads the seconds its times are in."""
 
     def __init__(self, upstream: tuple[str, int], payload: int = ID_PAYLOAD, *,
                  log: Callable[[dict[str, Any]], None] | None = None, clock: Callable[[], float] = time.monotonic) -> None:
@@ -193,8 +194,16 @@ class Front:
         self.upstream, self.payload, self.log, self.clock = upstream, payload, log, clock
         self.origin = clock()
         self.host = f"{upstream[0]}:{upstream[1]}".encode()
+        self.handlers: set[asyncio.Task[Any]] = set()
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        # asyncio holds a connection's handler only while it watches the client's side. Once that side has ended, a
+        # handler that still waits on the server (a relayed connection's, for the rest of the answer) is held by nothing
+        # but itself, and a collection would destroy it: the answer cut.
+        task = asyncio.current_task()
+        assert task is not None                          # asyncio starts each connection's handler as a task
+        self.handlers.add(task)
+        task.add_done_callback(self.handlers.discard)
         try:
             first = await _first(reader)
             arrived = self.clock()

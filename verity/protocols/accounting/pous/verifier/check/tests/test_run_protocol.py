@@ -26,14 +26,26 @@ import os
 import shutil
 
 import pytest
-from hypothesis import strategies as st
-
 import verity_difftest as D
-from test_run import INVALID, LEAN, WIDTHS, M, Run, _decode_session, _decode_setup, _point_of, _Port, documents, runs
+from hypothesis import strategies as st
+from test_run import (
+    INVALID,
+    LEAN,
+    WIDTHS,
+    M,
+    Run,
+    _decode_session,
+    _decode_setup,
+    _point_of,
+    _Port,
+    documents,
+    runs,
+)
 from test_setup_difftest import _commitment as _setup_commitment
 from test_setup_difftest import _evidence as _setup_evidence
 from test_setup_difftest import _evidence_bytes, honest, setup_port, setup_protocol
 from verity_difftest import protocol as P
+
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import period
 from verity.protocols.accounting.pous.verifier import setup as pous_setup
@@ -242,8 +254,8 @@ def test_a_small_periods_answers_agree(deployed_server, test_server) -> None:
         got[name] = json.loads(D.replay(DEPLOYED, p.case, deployed_server)[1])
     assert {n: a["verdict"] for n, a in got.items()} == {"honest": "accept", "zeros": "reject"}, got
     assert got["honest"]["public"] == {"certified": False, "eps": "0", "s_bits": 0}, got
-    assert got["honest"]["profile"]["gaps"] == [f"P2 has no certificate at (w, c0, blocks) = "
-                                                f"({period.W}, {period.C0}, {got['honest']['profile']['blocks']})"]
+    assert got["honest"]["profile"]["gaps"] == [("P2 has no certificate at (w, c0, blocks) = "
+                                                 f"({period.W}, {period.C0}, {got['honest']['profile']['blocks']})")]
     for name, p in test.items():
         assert _part(TEST.reference(p.case)) == _part(p.answer), name
         assert json.loads(D.replay(TEST, p.case, test_server)[1])["verdict"] == {"honest": "accept", "zeros": "reject"}[name]
@@ -317,7 +329,7 @@ def test_a_run_committed_to_another_setup_is_refused(deployed_server) -> None:
 
 
 @pytest.mark.slow
-def test_drawn_runs_agree(test_server) -> None:
+def test_sampled_runs_agree(test_server) -> None:
     """`test_run`'s sampled runs over honest setups (`SETUPS`) as cases under `--test`, and under one edit of the case's
     framing or of its setup's commitment and evidence."""
     rs = runs(stores=SETUPS)
@@ -360,7 +372,7 @@ def test_320_reads_certify_alike(certify_server) -> None:
         assert got["profile"]["certificate"]["delta"] == "1/100"
 
 
-def test_drawn_points_certify_alike(certify_server) -> None:
+def test_sampled_points_certify_alike(certify_server) -> None:
     """`CERTIFY_POINTS`, about every certificate's edges: the Lean's `certify` and profile are the Python's on each, and
     on a point `P2Params` refuses both refuse."""
     stats = D.run(CERTIFY, examples=300, server=certify_server)

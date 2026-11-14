@@ -1,13 +1,14 @@
-/-
+module
+
+public import Flock.RecOpen
+meta import Flock.RecOpen
+
+/-!
 `RecOpen.check` on one of R's levels, a unit named `rec-open-stacked/l<LANES>-h<H>`: refused as a `rec-open/` unit is,
 before any net is built, for its bits (this unit has none) at heights `RecOpen_v4` builds and for a `LANES` or `H` it does
 not; refused by name in any other form; a unit of another name passes. The honest unit and one a row off are read by the
 built verifier (`test_rec_outer.py`).
 -/
-module
-
-public import Flock.RecOpen
-meta import Flock.RecOpen
 
 @[expose] public section
 

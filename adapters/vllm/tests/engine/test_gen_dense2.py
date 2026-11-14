@@ -14,6 +14,7 @@ import pytest
 from verity.definitions.registry import b1
 
 from tests.observe.test_patterns_synthetic import by_spec, context, decode_step
+from verity_vllm.config import workload_file
 from verity_vllm.observe.events import DispatchEnter, RunHeader
 from verity_vllm.observe.fold.patterns import AttentionScope
 from verity_vllm.observe.fold.profiles import profile_module_for_case
@@ -256,8 +257,8 @@ def test_check_header_gemma2_checks_the_softcap_and_window_facts():
 @pytest.mark.parametrize("name, case, model, V", [("workload_phi3_mini_32x16_1req.json", "PHI3_MINI", phi3.MODEL, 32064),
                                                   ("workload_gemma2_2b_32x16_1req.json", "GEMMA2_2B", gemma.MODEL, 256000)])
 def test_workloads_mirror_the_b1_one_request_workload(name, case, model, V):
-    ref = json.loads((PROFILES / "workload_qwen15_32x16_1req.json").read_text())
-    doc = json.loads((PROFILES / name).read_text())
+    ref = json.loads(workload_file(PROFILES / "workload_qwen15_32x16_1req.json").read_text())
+    doc = json.loads(workload_file(PROFILES / name).read_text())
     assert doc["schema"] == ref["schema"] == "verity-vllm/workload/v2" and doc["case"] == case and doc["model"] == model
     assert doc["variants"] == ref["variants"] and doc["prompt_lengths"] == [32] and doc["max_tokens"] == [16]
     (r,) = doc["requests"]

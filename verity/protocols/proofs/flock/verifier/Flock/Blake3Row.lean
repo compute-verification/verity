@@ -1,14 +1,15 @@
-/-
+module
+
+public import Flock.RowLeaf
+public import Flock.FV3
+
+/-!
 The keyed-BLAKE3 row leaf (`blake3-keyed/row/v2`), the circuit statement's row leaf in the circuit prover up to `19c7269a`: each input
 port's row is hashed by BLAKE3 in keyed mode (key `verity/blake3-leaf/v1/x`) in compression slots of the pinned
 compression circuit, chunk runs then (for a port of several chunks) a keyed parent tree, and the root's output is the
 port's row digest. Regions: every compression's counter, block length and flags; every chain start's chaining value
 (the key); every digest (the public row digests; pinned padding values for padding instances).
 -/
-module
-
-public import Flock.RowLeaf
-public import Flock.FV3
 
 @[expose] public section
 

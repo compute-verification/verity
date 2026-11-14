@@ -3,7 +3,7 @@
 # FC_HOST_WITNESS=1, through the Lean session loop of this tree, whose finish reads each table's level 0 from the loop, samples
 # each rep's salts for levels ≥ 1 and holds the opening's and the inner proof's rounds itself) that dumps each table's roots
 # and requests and each rep's request and Lean proof file (FC_FINISH_DUMP), then `flock-firewall finish` on the requests;
-# the session's verifier must accept, every rep passing, and the Lean verifier (`flock-verify verify --zk`) pass every check
+# the session's verifier must accept, every rep passing, and the Lean verifier (`verity-verify-proof verify --zk`) pass every check
 # (refused only for the tile's want of a Program). Run from the source tree's root:
 #   bash verity/protocols/proofs/flock/prover/agreement/firewall_finish_agree.sh
 #   (a job run from the source tree, 16 CPUs, 48 GB, keeping out/*)
@@ -22,7 +22,7 @@ export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 # shellcheck source=../../../../../../benchmarks/pouw/hidden_zk/job.sh
 source "$SRC/benchmarks/pouw/hidden_zk/job.sh"
 setup
-FIREWALL=${LEAN%/flock-verify}/flock-firewall
+FIREWALL=${LEAN%/verity-verify-proof}/flock-firewall
 [ -x "$FIREWALL" ] || { log "missing: $FIREWALL"; exit 1; }
 role=${CFG%%:*} k=${CFG#*:} tag=${CFG%%:*}-k${CFG#*:}
 D=$W/$tag O=$OUT/$tag

@@ -19,7 +19,6 @@ from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 from verity_vllm.errors import Refused
 from verity_vllm.protocols.pouw.h1 import registered as NR
-from verity_vllm.protocols.pouw.h1 import served as SV
 
 __all__ = ["LEAF_NAMES", "LEAF_OUT_ROWS", "LEAF_PROGRAM", "held", "leaf_rows", "leaf_statement", "operands", "partials",
            "receipt_value", "receipt_words", "split_record", "split_row"]
@@ -152,6 +151,11 @@ def receipt_value(win: dict, key: bytes, call: int, trees: dict[str, G.Registere
     """Call `call`'s ``receipt@<c>`` as `Served.commit` registers it with receipts: one row a unit of the call, its
     receipt's u16 words (`receipt_words`), here the word reference's (`h1zy.reference` of the unit's rows, salt, position
     and roots), at ``RECEIPT_NONCE`` + c under the prover's key, bound to the window's root."""
+    # `served` loads the live circuit (`pouw.prover.circuit.live`), whose Definitions enter the Definition table as that module
+    # loads, and a reader of the table by id (`windows.interface.resolve`) answers for them from then on.  So it is imported
+    # here, where a value is rebuilt: importing this module alone leaves the table as it was.
+    from verity_vllm.protocols.pouw.h1 import served as SV
+
     sizes = [size for size, _w in CR.call_work(win["layout"])]
     rows = []
     for u in range(sum(sizes[:call]), sum(sizes[:call + 1])):

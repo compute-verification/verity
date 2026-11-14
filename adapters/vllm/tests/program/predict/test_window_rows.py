@@ -41,6 +41,7 @@ from tests.program.predict.test_window_circuit_fa3 import H200
 from verity_vllm.check.replay.checks import check_rows
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.pipeline.tp.grain import GROUP
 from verity_vllm.program.instances_file import read_instances
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_builder as WB
@@ -195,10 +196,10 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
             run, run_i = int(rows.outs[x0[0]][0][x0[1]][0]), 0
             for c, (ct, cu) in enumerate(units):
                 bests, idxs = rows.outs[ct][0][cu].tolist(), _i32(rows.outs[ct][1][cu])
-                assert len(bests) == len(idxs) == 64 // WC.GROUP
+                assert len(bests) == len(idxs) == 64 // GROUP
                 for g, (best, idx) in enumerate(zip(bests, idxs)):
                     if _gt(best, run):
-                        run, run_i = best, c * 64 + g * WC.GROUP + idx
+                        run, run_i = best, c * 64 + g * GROUP + idx
             assert run_i == token and (j in P.outs) == (j != max(P.selects))
             if j in P.outs:
                 (_, _, r), = P.outs[j]

@@ -68,7 +68,7 @@ At this code:
   `Framed`, `AcceptsFramed`, `SessionsScope`, `SessionWit` and `SessionsIn` are exactly their one-session forms
   (`FramedOne`, `AcceptsOne`, `SessScope`, `SessWit`, `SessIn`). Each reads `sess` once at a run that checks some unit,
   with no unit named.
-* `N₀_of_shapes`, `sessIn_of_shapes`: `N₀` reads only the session's table sizes, so `SessIn`'s `N₀` clause holds when
+* `N₀_of_shapes`, `sessIn_of_shapes`: `N₀` reads only the session's tables' statement versions and sizes, so `SessIn`'s `N₀` clause holds when
   every session at `x` has the tables `shape x` fixes (`ShapesFixed`). Nothing the Lean verifier runs establishes it at
   `sess`: its registration refusal (`Draw.bernoulli`) fixes the sampled count only, and its outcome step takes the
   session's statement as an opaque object.
@@ -267,36 +267,37 @@ theorem sessionsIn_code_iff : SessionsIn (code c reg L bytes sr sess) ↔ SessIn
 /-! ## The sessions' table shapes -/
 
 /-- **The session's table shapes are the statement's**: whatever a run shows, the session's statement sets up tables of
-sizes `shape x`, in order. The sampled verifier's registration refusal (`Draw.bernoulli`: `bernoulli`) fixes the sampled
+the statement versions and sizes `shape x`, in order. The sampled verifier's registration refusal (`Draw.bernoulli`: `bernoulli`) fixes the sampled
 count only, and its outcome step never reads the session's tables, so nothing in the Lean verifier establishes this at
 `sess`; at the session the shape check lets through it holds (`shapesFixed_checked`). -/
-def ShapesFixed (shape : Msg → List ℕ) : Prop :=
-  ∀ x v xS vS, sess x v = some (xS, vS) → (FlockDeploy.tables true xS).map (fun p => p.2.m) = shape x
+def ShapesFixed (shape : Msg → List (Bool × ℕ)) : Prop :=
+  ∀ x v xS vS, sess x v = some (xS, vS) → (FlockDeploy.tables true xS).map (fun p => (p.2.wideLeaf, p.2.m)) = shape x
 
 /-- A shape's `N₀`: its tables' masked level-0 codeword lengths, summed. -/
-noncomputable def shapeN₀ (ms : List ℕ) : ℝ := (ms.map fun m => (2 : ℝ) ^ (Claims.Flock.zkLevel0 m).d).sum
+noncomputable def shapeN₀ (ms : List (Bool × ℕ)) : ℝ :=
+  (ms.map fun p => (2 : ℝ) ^ (Claims.Flock.zkLevel0 p.1 p.2).d).sum
 
 /-- **`N₀` reads only the table shapes**: at fixed shapes, every session at `x` has `N₀` the shapes'. -/
-theorem N₀_of_shapes (shape : Msg → List ℕ) (h : ShapesFixed sess shape) (x : Msg) (v : Seen) (xS : Msg) (vS : Seen)
+theorem N₀_of_shapes (shape : Msg → List (Bool × ℕ)) (h : ShapesFixed sess shape) (x : Msg) (v : Seen) (xS : Msg) (vS : Seen)
     (hv : sess x v = some (xS, vS)) : FlockDeploy.N₀ true xS = shapeN₀ (shape x) := by
   rw [← h x v xS vS hv, shapeN₀, List.map_map]
   rfl
 
 /-- **`SessionsIn` from fixed shapes**: the sessions in Flock's masked scope with at most `tables` tables, their shapes
 the statement's, and the record's `N₀` the shapes'. -/
-theorem sessIn_of_shapes (shape : Msg → List ℕ)
+theorem sessIn_of_shapes (shape : Msg → List (Bool × ℕ))
     (hin : ∀ x v xS vS, sess x v = some (xS, vS) → ∃ s spec sts, FlockDeploy.ZkIn xS s spec sts ∧ sts.size ≤ c.tables x)
     (h : ShapesFixed sess shape) (hN : ∀ x, c.innerN₀ x = shapeN₀ (shape x)) : SessIn c sess :=
   fun x v xS vS hv => ⟨hin x v xS vS hv, (N₀_of_shapes sess shape h x v xS vS hv).trans (hN x).symm⟩
 
 /-- **The shape check**: `sess` with every session refused whose tables aren't `shape x`, what an outcome step that held
 the session's tables to the shapes its registration fixes would run. -/
-def shapeChecked (shape : Msg → List ℕ) (x : Msg) (v : Seen) : Option (Msg × Seen) :=
-  (sess x v).filter fun p => decide ((FlockDeploy.tables true p.1).map (fun q => q.2.m) = shape x)
+def shapeChecked (shape : Msg → List (Bool × ℕ)) (x : Msg) (v : Seen) : Option (Msg × Seen) :=
+  (sess x v).filter fun p => decide ((FlockDeploy.tables true p.1).map (fun q => (q.2.wideLeaf, q.2.m)) = shape x)
 
-theorem shapeChecked_some (shape : Msg → List ℕ) {x : Msg} {v : Seen} {p : Msg × Seen}
+theorem shapeChecked_some (shape : Msg → List (Bool × ℕ)) {x : Msg} {v : Seen} {p : Msg × Seen}
     (h : shapeChecked sess shape x v = some p) :
-    sess x v = some p ∧ (FlockDeploy.tables true p.1).map (fun q => q.2.m) = shape x := by
+    sess x v = some p ∧ (FlockDeploy.tables true p.1).map (fun q => (q.2.wideLeaf, q.2.m)) = shape x := by
   unfold shapeChecked at h
   cases hs : sess x v with
   | none => rw [hs] at h; cases h
@@ -309,12 +310,12 @@ theorem shapeChecked_some (shape : Msg → List ℕ) {x : Msg} {v : Seen} {p : M
     · cases h
 
 /-- **The shape check fixes the shapes**: every session it lets through sets up the tables `shape x`. -/
-theorem shapesFixed_checked (shape : Msg → List ℕ) : ShapesFixed (shapeChecked sess shape) shape :=
+theorem shapesFixed_checked (shape : Msg → List (Bool × ℕ)) : ShapesFixed (shapeChecked sess shape) shape :=
   fun _ _ _ _ hv => (shapeChecked_some sess shape hv).2
 
 /-- **Fixed shapes are a shape check that refuses nothing**: `sess`'s sessions have the tables `shape x` exactly when
 the shape check lets each of them through. -/
-theorem shapesFixed_iff_checked (shape : Msg → List ℕ) :
+theorem shapesFixed_iff_checked (shape : Msg → List (Bool × ℕ)) :
     ShapesFixed sess shape ↔ shapeChecked sess shape = sess := by
   constructor
   · intro h
@@ -331,7 +332,7 @@ theorem shapesFixed_iff_checked (shape : Msg → List ℕ) :
 
 /-- **`SessionsIn` at the shape check**: with `sess`'s sessions in Flock's masked scope and the record's `N₀` the
 shapes', the session the shape check lets through is in `SessIn`. -/
-theorem sessIn_checked (shape : Msg → List ℕ)
+theorem sessIn_checked (shape : Msg → List (Bool × ℕ))
     (hin : ∀ x v xS vS, sess x v = some (xS, vS) → ∃ s spec sts, FlockDeploy.ZkIn xS s spec sts ∧ sts.size ≤ c.tables x)
     (hN : ∀ x, c.innerN₀ x = shapeN₀ (shape x)) : SessIn c (shapeChecked sess shape) :=
   sessIn_of_shapes c (shapeChecked sess shape) shape

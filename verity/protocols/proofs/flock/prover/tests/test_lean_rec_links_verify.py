@@ -1,4 +1,4 @@
-"""`flock-verify verify --zk` and `statement` at a recursive statement carrying the inner population's link table
+"""`verity-verify-proof verify --zk` and `statement` at a recursive statement carrying the inner population's link table
 (`--rec-links ROOT:N`), on the fetched fixture `rec-links/k64-n4`: pod 85's run with REC_LINKS=1 at K = 64, N = 4 (its
 inner statement N instances of GemmCoordinate_v2{K} wired in a chain, each cut wire a link). It holds the inner statement's
 files and the inner session V* was staged over (``inner/``), V*'s inputs as oprove fixed them before any session
@@ -28,7 +28,7 @@ import pytest
 from verity_flock import rec_links as RL
 
 HERE = Path(__file__).resolve().parent
-BIN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify"
+BIN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof"
 SET = HERE / "fixtures" / "rec-links" / "k64-n4"
 #: the fixture's files stored gzipped (`SET / f"{rel}.gz"`), which `plain` gives decompressed
 GZ = ("link/circuit.txt", "link/program.json", "inner/circuit.txt")

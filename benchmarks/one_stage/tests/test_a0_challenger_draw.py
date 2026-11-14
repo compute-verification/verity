@@ -1,8 +1,8 @@
 """a0's Lean sample on a development challenger's coins (`a0.challenger_draw`): the verifier has no randomness of its
-own, so `flock-verify draw` of fewer than every unit reads `--stream-file F`, F holding a challenger's coins opened
+own, so `verity-verify-proof draw` of fewer than every unit reads `--stream-file F`, F holding a challenger's coins opened
 after the registration's digest. F holds exactly the bytes the sampling design reads in Lean's `Draw.drawOn` layout (no
 extension), and the record beside it replays them from the challenger's commitment, under no other registration digest
-or challenger. `flock-verify` is a stand-in that echoes its argv and F; the challenger's entropy is seeded."""
+or challenger. `verity-verify-proof` is a stand-in that echoes its argv and F; the challenger's entropy is seeded."""
 from __future__ import annotations
 
 import hashlib
@@ -19,7 +19,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import a0
 
-#: a stand-in for flock-verify: ``draw ... --stream-file F`` prints a DRAW line holding its argv and F's bytes
+#: a stand-in for verity-verify-proof: ``draw ... --stream-file F`` prints a DRAW line holding its argv and F's bytes
 FAKE = '''#!{python}
 import json, pathlib, sys
 args = sys.argv[1:]
@@ -42,7 +42,7 @@ LAWS = {"subset": ({"law": "subset", "k": 5}, 40), "bernoulli": ({"law": "bernou
 
 @pytest.fixture
 def lean(tmp_path, monkeypatch):
-    p = tmp_path / "flock-verify"
+    p = tmp_path / "verity-verify-proof"
     p.write_text(FAKE.format(python=sys.executable))
     p.chmod(0o755)
     monkeypatch.setattr(a0.secrets, "token_bytes", random.Random("a0-challenger-draw").randbytes)

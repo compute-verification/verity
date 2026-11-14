@@ -1,4 +1,5 @@
-"""Synthetic input sets from the IR: seeded samples of a subcircuit's inputs, each with the output the IR evaluator computes.
+"""Synthetic input sets from the circuits: seeded samples of a subcircuit's inputs, each with the output the circuits' reference
+evaluator computes.
 
 The key is ``verity.commitments.randomness.derive(SOURCE, DOMAIN, {"subcircuit": id, "seed": seed})``; sample ``j`` is
 ``Subcircuit.draw(key, j)`` (``templates``: every port's words from the counter stream at ``(port, j)``), evaluated by

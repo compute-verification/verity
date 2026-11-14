@@ -35,7 +35,7 @@ until the network certifier's coin link replaces them, and they credit nothing.
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from verity.protocols.accounting.pouw.verifier.serving import PassCommitment
 from verity.commitments.merkle import CommitmentDomain
@@ -157,7 +157,7 @@ class LeadRun:
         """Linear ``w``'s call on the s8 rows ``xq`` [m, K] and their scales ``s_a``: the served y. A call off linear
         ``w``'s n x k, or on other than the window's m, is refused, and its window is never published."""
         (m, k), n = tuple(xq.shape), int(layer.weight.shape[0])
-        record, window = (self.record, self.window) if self.window is not None else self._open(m)
+        record, window = (cast(R.PassRecord, self.record), self.window) if self.window is not None else self._open(m)
         call = self.unserved = F.Call(record.pass_index, len(record.calls), w, m, k, n)
         if m != self.m:
             raise Refused(f"pass {record.pass_index}: call {call.index} (linear {w}) has {m} rows, and the window's "

@@ -1,7 +1,8 @@
-/-
+module
+
+/-!
 The `fast100` Ligerito schedule, as data.
 -/
-module
 
 @[expose] public section
 

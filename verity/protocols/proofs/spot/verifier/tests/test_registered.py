@@ -720,6 +720,43 @@ def test_a_seed_salt_the_server_chose_is_refused_by_name():
         R.check(named(salt), prog, Q, **{**kw, "window_root": None, "held": None}, seed_salt=salt)
 
 
+def test_advice_no_registered_compiler_reads_is_refused_by_name():
+    """The registered compiler is the registration log's (its item, with the public length ℓ of the advice it reads),
+    never the record's: a verifier that read it accepts a window naming it by its digest with advice of at most ℓ bits,
+    and refuses by name a window naming another compiler or none (`R6-compiler`) and advice over ℓ, in another form or
+    none (`R6-advice-length`). One that read a log registering none refuses a window naming a compiler or advice
+    (`R6-compiler`); one that read no log's compiler holds the window to nothing. A compiler in another form refuses the
+    verifier's own inputs."""
+    prog = _program()
+    x = G.Registered.commit(P.program_digest(prog), "x", X_ROWS, window=WINDOWS[0])
+    (rec,), kw = _windows(prog, [x], _registered(prog))
+    kw = {**kw, "window_root": WINDOWS[0], "held": ["W"]}
+    digest, other = "c1" * 64, "c2" * 64
+    item = {"kind": "builder", "digest": digest, "advice": "verity/advice/v1", "cap": 32}
+    named = lambda d, bits: {**rec, "window": {**rec["window"], "compiler": {"name": "c", "digest": d},  # noqa: E731
+                                                 "advice": {"root": "ad" * 64, "bits": bits}}}
+    for bits in (0, 31, 32):
+        assert R.check(named(digest, bits), prog, Q, **kw, compiler=item).ok, bits
+        assert R.check(named(digest, bits), prog, Q, **kw).ok, bits
+    assert R.check(rec, prog, Q, **kw).ok and R.check(rec, prog, Q, **kw, compiler=None).ok
+    for bits in (33, -1, 1.0, True, "8", None):
+        assert R.check(named(digest, bits), prog, Q, **kw, compiler=item).codes == ("R6-advice-length",), bits
+    assert R.check(named(other, 8), prog, Q, **kw, compiler=item).codes == ("R6-compiler",)
+    assert R.check(rec, prog, Q, **kw, compiler=item).codes == ("R6-compiler", "R6-advice-length")
+    unregistered = R.check(named(digest, 8), prog, Q, **kw, compiler=None)
+    assert unregistered.codes == ("R6-compiler",)
+    assert unregistered.detail["R6-compiler"]["verifier"] is None
+    advice_only = {**rec, "window": {**rec["window"], "advice": {"root": "ad" * 64, "bits": 0}}}
+    assert R.check(advice_only, prog, Q, **kw, compiler=None).codes == ("R6-compiler",)
+    for bad in ({**item, "kind": "theta"}, {**item, "cap": -1}, {**item, "digest": 5},
+                {k: v for k, v in item.items() if k != "advice"}, {**item, "extra": 1}, "c"):
+        with pytest.raises(ValueError, match="registered compiler is the registration log's item"):
+            R.check(rec, prog, Q, **kw, compiler=bad)
+    for bad in (digest.upper(), digest[:-2]):
+        with pytest.raises(ValueError, match="lowercase hex of 64 bytes"):
+            R.check(rec, prog, Q, **kw, compiler={**item, "digest": bad})
+
+
 def test_a_record_without_registered_values_keeps_v1s_bytes():
     prog = _program()
     rec, _ = _record(prog, _registered(prog))
@@ -932,7 +969,8 @@ def test_a_history_source_is_the_root_the_verifier_computes():
     public bodies the leaf layer binds (`history.roots_of`, the Lean's `HistoryTable.rootsOf`): where the served port x's
     root is that root, it fills the rows `{"port": "x"}` fills, in both verifiers. A body the leaf layer doesn't bind, a
     registered root that is not the one computed, a table or field the verifier computed none of, or a `history`
-    without the verifier's leaf layer refuses the parameters in both, and the verifier's verdict is `R7-history`."""
+    without the verifier's leaf layer refuses the parameters in both, and the verifier's verdict is `R7-history`. For
+    an accepted registration `registration.resolved` gives the same bytes without a second pass over the table."""
     hist, leaf, root = _history()
     rec, check, _, _ = _seeded_case(x_root=root, leaf_layer=leaf)
     check = {**check, "leaf_layer": leaf}
@@ -945,6 +983,9 @@ def test_a_history_source_is_the_root_the_verifier_computes():
     assert got.ok and got.codes == ()
     domain = HT.domain("p", "k_hist", 64, 16).domain_id.hex()
     assert HT.resolve(HT.roots_of(leaf, hist), {"v": [[{"history": "k_hist/domain"}]]}) == {"v": [[{"bytes": domain}]]}
+    both = {**sup, "v": [[{"history": "k_hist/domain"}]]}
+    assert R.resolved(both, hist) == HT.resolve(HT.roots_of(leaf, hist), both)
+    assert R.resolved(both, None) == both and R.resolved(None, hist) is None
 
     def lean(**change) -> dict:
         args = {**check, "supplied": sup, "history": hist, **change}

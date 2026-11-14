@@ -1,0 +1,36 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "vllm/prod-replay-match-glm53"
+title = "Replay match rate"
+owner = "vllm"
+unit = "percent of tokens"
+axis = "Percent of the tokens GLM-5.3 serves at vLLM's published settings that a replay reproduces before a request's first difference."
+better = "higher"
+command = "research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model glm53 --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 8 --leave-out 1 --reps 2 --replay agentic@4 --sampled"
+every = "7d"
+goal = "vllm/production-vllm-reproducible"
+
+[[metric]]
+id = "vllm/prod-advice-bits-glm53"
+title = "Replay advice per request"
+owner = "vllm"
+unit = "bits a request"
+axis = "Bits a replay must be told, for each request GLM-5.3 serves at vLLM's published settings, to follow the original schedule."
+better = "lower"
+command = "research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model glm53 --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 8 --leave-out 1 --reps 2 --replay agentic@4 --sampled"
+every = "7d"
+goal = "vllm/production-vllm-reproducible"
+
+[[metric]]
+id = "vllm/prod-serving-cost-glm53"
+title = "Serving cost, published settings"
+owner = "vllm"
+unit = "percent"
+axis = "Extra time to serve GLM-5.3 at vLLM's published settings, as a percent of stock vLLM's."
+better = "lower"
+command = "research run --on NODE --source . --cwd source -- bash benchmarks/prod_repro/run.sh --client vllm-bench --model glm53 --again none --load agentic=4 --pass-prompts agentic=4 --lifetimes 8 --leave-out 1 --reps 2 --replay agentic@4 --sampled"
+every = "7d"
+floor = 1
+goal = "vllm/production-vllm-reproducible"

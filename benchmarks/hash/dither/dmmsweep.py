@@ -6,8 +6,8 @@ own y and records, so the weights stream from DRAM), timed kbench's way (a CUDA 
 
     coarse   `coarse_grid`: BLOCK_N x BLOCK_K x SPLIT_K at BLOCK_M 32, 4 warps, 3 stages, and the TMA kernel's
     refine   the best `top` across warps x stages
-    final    the best `top`, the served config (exactlin.pick, as dither_a's gemm takes it) and exactlin's scaled_mm at
-             the served config (the same product without the z/y epilogue), `reps` items each
+    final    the best `top`, the served config (`int8_fused.pick`, as dither_a's gemm takes it) and int8_fused's
+             scaled_mm at the served config (the same product without the z/y epilogue), `reps` items each
 
 A config's gate: y and the records (z and y halves) equal the served config's into 0xA5, twice (a split K's workspace
 and counters zero again), and the last copy's after the timing's replays; the served config's y is int8_exact's
@@ -32,10 +32,10 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 import triton
+from verity_vllm.engine import int8_fused as X
 
 HERE = Path(__file__).resolve().parent
-sys.path[:0] = [str(HERE), str(HERE.parent / "exactlin")]
-import exactlin as X  # noqa: E402
+sys.path[:0] = [str(HERE), str(Path(__file__).resolve().parents[1] / "exactlin")]
 import kbench  # noqa: E402
 import kgate  # noqa: E402
 
@@ -146,7 +146,7 @@ def prefill_grid() -> list[X.Cfg]:
 
 
 class GCfg(X.Cfg):
-    """An exactlin Cfg and its tile group g (dither_a's ":gG"); equal tuples of other groups are other configs, so
+    """An int8_fused Cfg and its tile group g (dither_a's ":gG"); equal tuples of other groups are other configs, so
     lists of them are deduplicated by text (`uniq`)."""
 
     def __new__(cls, *a, g: int = 1) -> GCfg:

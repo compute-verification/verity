@@ -8,8 +8,8 @@
 Adapters:
   (the Δ_commit committer `native_host` exposes `verify(RunCommitment, Opening)` — the verifier's held commitment — and is
    tested directly in `test_native_host_security.py` through its offline core `commit_offline`)
-  * `C0PrimitiveScheme`  — the bare production primitive both native_host and fa2_commit build on: `pos_leaf` + `scheme.fold_levels`
-                           + `path_in_levels` + `commit.fold_path`/`path_shape` (verity_vllm, the production opening verifier core)
+  * `C0PrimitiveScheme`  — the bare serving primitive both native_host and fa2_commit build on: `pos_leaf` + `scheme.fold_levels`
+                           + `path_in_levels` + `commit.fold_path`/`path_shape` (verity_vllm, the serving path's opening verifier core)
 """
 
 from __future__ import annotations

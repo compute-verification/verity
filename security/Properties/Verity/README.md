@@ -73,6 +73,13 @@ In this order:
 - **The five period subprotocols** (SPOT, PoUW, PoUS, PoUB-P2, the network certifier): a target is the
   per-period guarantee `Accounting.PeriodLive.Sound` at `Vocab.live` (`Vocab.target_audit`;
   `security/Definitions/Accounting/JointLive.lean`), so each discharges its target by proving that guarantee.
+- **SPOT** at the one-stage form: `Verity.Sampled.spotSound_of_targets`
+  (`security/Proofs/Properties/Verity/Sampled/Target.lean`) proves `SpotSound` at every composite, for a vocabulary whose
+  sampled fields are the deployment's sessions (`Sampled.Deployed`, `Sampled.Covers`), from the coupling at each session
+  (`Sampled.CouplingTarget`). It reads Flock's knowledge soundness through one listed theorem,
+  `Flock.SecurityProofs.SampledKSLiveV5`, at the session v2 sets up (`Sampled.Live.v5_at`); the rest it reads are
+  lemmas instantiating that theorem's binders and the coupling's pieces. `Verity.Sampled.remote_soundness_deployedReady`
+  (`security/Proofs/Properties/Verity/Sampled/OpensAt.lean`) states remote's soundness with it.
 - **SPOT** at the recursive configuration: `Verity.Recursive.spotRecursive`
   (`security/Proofs/Properties/Verity/Recursive/Target.lean`) proves the target's bound at the recursive configuration's
   verdict (`RecVerdict`) and its own error, under hypotheses that include `live-verifier`; `spotRecursive_of_ks`
@@ -103,6 +110,6 @@ The targets are the theorem's only hypotheses. Three kinds of assumption enter b
   the bytes they answer, is the challenger they describe. They are stated over the challenger's log
   (`security/Definitions/Core/Challenger.lean`), not over `Verity.Game`, and are not hypotheses of the theorem; what they
   give is `Verity.Guarantees.SampleAfterRecorded` (`security/Proofs/Core/Challenger.lean`). The challenger is an auditor
-  device (`trusted-host`, `Verity.Assumptions.TrustedHost`).
+  device (`trusted-device`, `Verity.Assumptions.TrustedDevice`).
 
 Each subprotocol's own proof of its target adds that subprotocol's named assumptions.

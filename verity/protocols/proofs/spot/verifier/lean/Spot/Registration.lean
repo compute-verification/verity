@@ -35,6 +35,12 @@ A verifier holds the record's window to name the window's seed salt it read from
 `Challenger.seedSaltOf`: the one coin of the seed-salt family released after the window's open root), and to name none
 when it read none (`R6-seed-salt`), so a seed salt the server chose is refused by name.
 
+A verifier that reads the registration log's registered compiler (`compiler`: its digest and the public length ℓ of
+the advice it reads, or none when the log registers none) holds the record's window to name that compiler by its digest
+(`window.compiler.digest`; `R6-compiler`) and advice of at most ℓ bits (`window.advice.bits`; `R6-advice-length`), and,
+where the log registers none, to name neither a compiler nor advice (`R6-compiler`), so advice no registered compiler
+reads is refused by name.
+
 A verifier that reads the registration log's declarations (`declared`: the window's day and the log's `(day, program)`
 declarations) holds R2's program to the day's one declared circuit (`declaredCode`): `R2-undeclared` when the day has no
 declaration, `R2-declared-twice` when it has more than one, and `R2-declared` when the record's program is not the
@@ -213,6 +219,25 @@ structure Verifier where
   `link-points` holds to a sampled proof block at every sample that ends and to one count of link points
   (`linkRefused`); none in the one-statement form -/
   members : Array (Array (Nat × Nat) × Nat) := #[]
+  /-- the registration log's registered compiler, its digest and the public length ℓ in bits of the advice it reads,
+  from the log it holds when it samples: `some none` when the log registers none; none when it reads no log's
+  compiler -/
+  compiler : Option (Option (String × Nat)) := none
+
+/-- R6's registered compiler (`registration._compiler`): the window names the log's compiler by its digest, and names
+neither a compiler nor advice where the log registers none; anything when the verifier reads no log's compiler. -/
+def compilerOk (w : Json) : Option (Option (String × Nat)) → Bool
+  | none => true
+  | some none => jeq (getD w "compiler") .null && jeq (getD w "advice") .null
+  | some (some (d, _)) => jeq (getD (getD w "compiler") "digest") (.str d)
+
+/-- R6's advice length (`registration._compiler`): the window's advice is a natural number of bits at most the log's
+compiler's public length ℓ; anything when the log registers no compiler or the verifier reads none. -/
+def adviceOk (w : Json) : Option (Option (String × Nat)) → Bool
+  | some (some (_, ℓ)) => match nat? (getD (getD w "advice") "bits") with
+    | some bits => decide (bits ≤ ℓ)
+    | none => false
+  | _ => true
 
 /-- The programs the declarations declare for `day`, in the log's order. -/
 def declaredOf (day : Nat) (ds : Array (Nat × String)) : List String :=
@@ -535,6 +560,11 @@ def poolMarks (w : Json) (pool : Option Pool) (log : Array Json) (c : Array Stri
         (kept (jeq (getD w "pool_reset") (optReset pool)) c "R6-pool-reset") "R6-pool-week") "R6-pool-spent")
     "R6-pool-reset-week"
 
+/-- R6's compiler codes added to `c` (`compilerOk`, `R6-compiler`; `adviceOk`, `R6-advice-length`). One term, as
+`poolMarks` is, for `check_eq_checkRef`'s `simp`. -/
+def compilerMarks (w : Json) (rc : Option (Option (String × Nat))) (c : Array String) : Array String :=
+  kept (adviceOk w rc) (kept (compilerOk w rc) c "R6-compiler") "R6-advice-length"
+
 /-- R8's codes added to `c`: a tied name it can't let through (`R8-tied`, `tiedBad`), then a run Input node the proof
 blocks don't each read alone outside the registered and tied parameters' gates (`R8-shared-input`,
 `Partition.readAlone`). One term, as `poolMarks` is, for `check_eq_checkRef`'s `simp`. -/
@@ -604,6 +634,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   -- `kept` terms, not statements: a statement's join point doubles what `check_eq_checkRef`'s `simp` unfolds
   c := kept (jeq (getD (get "window") "seed_salt") (optStr v.seedSalt)) c "R6-seed-salt"
   c := poolMarks (get "window") v.pool v.log c
+  c := compilerMarks (get "window") v.compiler c
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
@@ -678,6 +709,7 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
     if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
   c := kept (jeq (getD (get "window") "seed_salt") (optStr v.seedSalt)) c "R6-seed-salt"
   c := poolMarks (get "window") v.pool v.log c
+  c := compilerMarks (get "window") v.compiler c
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied

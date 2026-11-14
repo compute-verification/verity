@@ -1,10 +1,11 @@
-/-
-Level 3: the row encoding a Merkle leaf hashes is injective. `F128.toBytes` is `le64(lo) ‖ le64(hi)`, 16 bytes, and a row's
-bytes are its elements' encodings in order, so two different rows are two different byte strings.
--/
 module
 
 public import Flock.Merkle
+
+/-!
+Level 3: the row encoding a Merkle leaf hashes is injective. `F128.toBytes` is `le64(lo) ‖ le64(hi)`, 16 bytes, and a row's
+bytes are its elements' encodings in order, so two different rows are two different byte strings.
+-/
 
 @[expose] public section
 

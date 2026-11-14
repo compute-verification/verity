@@ -142,7 +142,7 @@ def MissBounded (eps δ : Rat) (credited n w : Int) (B k : Nat) : Prop :=
 def DrawMisses : Prop :=
   ∀ eps δ (credited n w : Int) (B k : Nat), kPrime eps δ credited n w = .ok k → MissBounded eps δ credited n w B k
 
-/-- K′ at level ℓ of the served grid, at ε = 1/2, for FP8 tiles of 4096 (`sampling`'s law; 0 if refused). -/
+/-- K′ at level ℓ of the served grid, at ε = 1/2, for FP8 tiles of 4096 (`sampling`'s sampling design; 0 if refused). -/
 def servedK (δ : Rat) (ℓ : Nat) : Nat :=
   let w := Work.at gridBits ℓ
   ((kPrime (1 / 2) δ (w.credited * 4096) w.n 4096).toOption).getD 0

@@ -1,10 +1,11 @@
-/-
-What the hm96 gadget's rows force (`Flock.HmNets.hm96Row`): its `b ‖ c` is the padding compression's digest XOR `M(key)·y`,
-then SHA-512's last two compressions of `salt_prefix ‖ y`, bit by bit in byte-string order.
--/
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hm.Compress
+
+/-!
+What the hm96 gadget's rows force (`Flock.HmNets.hm96Row`): its `b ‖ c` is the padding compression's digest XOR `M(key)·y`,
+then SHA-512's last two compressions of `salt_prefix ‖ y`, bit by bit in byte-string order.
+-/
 
 @[expose] public section
 

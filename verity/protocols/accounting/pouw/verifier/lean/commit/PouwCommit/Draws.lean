@@ -4,7 +4,10 @@ public import PouwCommit.Coins
 public import Identity.Domains.Pouw
 
 /-!
-# The salts and samples PoUW derives (`verity.core.protocols.pouw.audit`; the clear audit's samples, `benchmarks/pouw/clear`)
+# The salts and samples PoUW derives
+
+Python's are `verity.protocols.accounting.pouw.verifier.audit`'s, and the clear audit's samples are
+`verity.protocols.accounting.pouw.prover.clear`'s.
 
 Each is `verity.ml.randomness.derive` (`FlockSoundness.Randomness.derive`) under PoUW's domains:
 

@@ -37,18 +37,18 @@ else
 fi
 log "prove-bundle: source $(git rev-parse HEAD), bundle $BUNDLE, window $WINDOW, builds in $W"
 if [ -n "${PB_BINARIES:-}" ] && [ "$(cat "$PB_BINARIES/stamp" 2>/dev/null)" = "$STAMP" ]; then
-  BIN=$PB_BINARIES/flock-circuit LEAN=$PB_BINARIES/flock-verify FWL=$PB_BINARIES/flock-firewall
+  BIN=$PB_BINARIES/flock-circuit LEAN=$PB_BINARIES/verity-verify-proof FWL=$PB_BINARIES/flock-firewall
   log "binaries: prebuilt in $PB_BINARIES, stamp $STAMP"
 else
   [ -n "${PB_BINARIES:-}" ] && log "binaries: $PB_BINARIES's stamp is not this source's ($STAMP), so they're built here"
-  (cd verity/protocols/proofs/flock/verifier && lake build flock-verify flock-firewall) > "$O/build-lean.log" 2>&1 &
+  (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-firewall) > "$O/build-lean.log" 2>&1 &
   LP=$!
   mkdir -p "$O/m0-build"
   RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
     || { tail -40 "$O/m0-build/build.log"; exit 6; }
   BIN=$W/flock-gpu-link/flock/target/release/flock-circuit
   wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
-  LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify
+  LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof
   FWL=${LEAN%/*}/flock-firewall
 fi
 sha256sum "$BIN" "$LEAN" "$FWL" | tee "$O/binaries.sha256" | tee -a "$O/job.log"

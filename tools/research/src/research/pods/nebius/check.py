@@ -5,14 +5,16 @@
 
 Checks, each PASS or FAIL on one line (exit 1 on any FAIL; with RESEARCH_RUN_DIR, result.json carries every number):
     driver       NVIDIA driver >= 575 (the image's cuda13.0 preset ships 580.x)
-    gpus         8 GPUs, each compute capability 12.0 with 188 SMs (the CUDA driver API, through ctypes: no torch)
-    ram          MemTotal >= 97% of 1,744 GiB (the guest kernel keeps a little)
+    gpus         the node's device.count GPUs, each of its card's arch and sm.count SMs (the CUDA driver API, through ctypes: no torch)
+    ram          MemTotal >= 97% of the node's memory.dram (the guest kernel keeps a little)
     vcpu         192 online CPUs
     workspace    /workspace is the data disk (its own mount, >= 4.8 TiB)
     disk_read    sequential direct-I/O read of a file fio lays out on /workspace >= 1,500 MiB/s (the disk type's bound is 2 GiB/s)
     lease        vy-lease.service is active, so the VM stops itself when its lease runs out
     gpu_lease    gpu-lease answers `status`
-Stdlib only.  VY_CHECK_SKIP_FIO=1 skips the disk read (a quick re-check).
+The node's figures are its node file's (NODE) and its card's, read by path from the repository's hardware/ as the shipped
+tree lays it out, or the copy deploy.toml installs beside the research tool.  Stdlib only.  VY_CHECK_SKIP_FIO=1 skips the
+disk read (a quick re-check).
 """
 from __future__ import annotations
 
@@ -24,10 +26,29 @@ import shutil
 import socket
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
-WANT = {"driver_major": 575, "gpus": 8, "cc": (12, 0), "sms": 188, "ram_gib": 1744, "ram_fraction": 0.97, "vcpu": 192,
-        "workspace_tib": 4.8, "read_mib_s": 1500}
+NODE = "rtx-pro-6000-server-x8"
+_UP = Path(__file__).resolve().parents   # laid out as in the repository: its root is six directories above this one
+HARDWARE = _UP[min(6, len(_UP) - 1)] / "hardware"
+
+
+def figures(hardware: Path = HARDWARE) -> dict:
+    """The node file's GPUs and memory and its card's compute capability (`arch`, sm_XY as X.Y) and SMs."""
+    def read(path: Path) -> dict:
+        if not path.is_file():
+            raise SystemExit(f"check: no {path}: the check reads the node's figures from it; ship the tree (research run "
+                             f"--source .) or install hardware/ beside the research tool (deploy.toml)")
+        return tomllib.loads(path.read_text())
+    node = read(hardware / "nodes" / f"{NODE}.toml")
+    card = read(hardware / "cards" / f"{node['device']['sku']}.toml")
+    major, minor = re.fullmatch(r"sm_(\d+)(\d)a?", card["arch"]).groups()
+    return {"gpus": node["device"]["count"]["value"], "cc": (int(major), int(minor)), "sms": card["sm"]["count"]["value"],
+            "ram_gib": node["memory"]["dram"]["bytes"]["value"] // 2**30}
+
+
+WANT = {"driver_major": 575, **figures(), "ram_fraction": 0.97, "vcpu": 192, "workspace_tib": 4.8, "read_mib_s": 1500}
 CU_ATTR_SM_COUNT, CU_ATTR_CC_MAJOR, CU_ATTR_CC_MINOR = 16, 75, 76
 
 results: list[dict] = []
@@ -55,7 +76,7 @@ def gpus() -> None:
     try:
         cu = ctypes.CDLL("libcuda.so.1")
     except OSError as e:
-        return check("gpus", False, f"no libcuda ({e})", f"{WANT['gpus']} x cc 12.0, 188 SMs")
+        return check("gpus", False, f"no libcuda ({e})", f"{WANT['gpus']} x cc {'%d.%d' % WANT['cc']}, {WANT['sms']} SMs")
     n = ctypes.c_int()
     if cu.cuInit(0) != 0 or cu.cuDeviceGetCount(ctypes.byref(n)) != 0:
         return check("gpus", False, "cuInit failed", f"{WANT['gpus']} GPUs")
@@ -70,7 +91,7 @@ def gpus() -> None:
         seen.append({"index": i, "cc": f"{attrs[0]}.{attrs[1]}", "sms": attrs[2]})
     good = [g for g in seen if g["cc"] == "%d.%d" % WANT["cc"] and g["sms"] == WANT["sms"]]
     check("gpus", len(seen) == WANT["gpus"] and len(good) == len(seen),
-          f"{len(seen)} GPUs: " + ", ".join(sorted({f"cc {g['cc']} / {g['sms']} SMs" for g in seen})), f"{WANT['gpus']} x cc 12.0 / 188 SMs")
+          f"{len(seen)} GPUs: " + ", ".join(sorted({f"cc {g['cc']} / {g['sms']} SMs" for g in seen})), f"{WANT['gpus']} x cc {'%d.%d' % WANT['cc']} / {WANT['sms']} SMs")
 
 
 def ram() -> None:

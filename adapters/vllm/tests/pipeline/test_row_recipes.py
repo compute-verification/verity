@@ -13,16 +13,18 @@ and `${NAME:-WORD}` gives WORD; any other variable gives `STAND_IN`. Words the l
 """
 from __future__ import annotations
 
+import ast
 import re
 import shlex
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from verity_vllm.pipeline import cli
-from verity_vllm.pipeline.research_tools import STAGES
+from verity_vllm.pipeline import cli, research_tools
+from verity_vllm.pipeline.research_tools import STAGES, row_config
 from verity_vllm.pipeline.research_tools import parse as tool_parse
 
 TREE = Path(__file__).resolve().parents[2]
@@ -171,3 +173,45 @@ def test_the_run_stores_tools_read_a_row_recipe_as_the_parser_does(where: str, n
         for stage in STAGES:
             p = tool_parse([*launcher, "row", *argv], stage=stage)
             assert (p["row"], p["role"], p["model"], p["revision"], p["stage"]) == (o.row, o.role, o.repo, o.rev, named or stage)
+
+
+ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+NAMED = (ROW, "R", "org/repo", "rev1")
+
+
+@pytest.mark.parametrize("argv, stage, named", [
+    (["verity-vllm", "row", "stage", "match", *NAMED, "--lp", "8"], "match", NAMED),
+    (["/venv/bin/python", "-m", "verity_vllm.pipeline.cli", "row", "stage", "commit", *NAMED], "commit", NAMED),
+    (["bash", "/tree/run_row_v2.sh", "stage", "match", *NAMED], "match", NAMED),
+    (["bash", "/tree/row_pod.sh", *NAMED, "match,commit"], "match,commit", NAMED),
+    (["bash", "/tree/tp_stage.sh", *NAMED, "commit"], "commit", NAMED),
+    (["bash", "/tree/row_pod.sh", "stage", "match", ROW, "R"], "build", ("stage", "match", ROW, "R")),   # no stage line of its own
+    (["verity-vllm", "row", *NAMED, "--stages", "commit"], "commit", NAMED),
+    (["verity-vllm", "row", *NAMED], "build", NAMED),
+    (["verity-vllm", "row", "stage"], "build", ("stage", None, None, None)),                            # `stage` and no stage after it
+])
+def test_the_run_stores_tools_read_a_stage_line_and_an_earlier_runners_argv(argv: list[str], stage: str, named: tuple):
+    """`row stage STAGE ...` names its stage before the row, as the earlier `run_row_v2.sh stage` did; `row_pod.sh` and `tp_stage.sh`
+    named their stages after the revision; any other line's stage is its `--stages`, else the Tool's own (here `build`)."""
+    p = tool_parse(argv, stage="build")
+    assert (p["stage"], (p["row"], p["role"], p["model"], p["revision"])) == (stage, named)
+
+
+def test_a_row_id_is_read_into_its_ten_fields_and_any_other_id_keeps_its_first_token():
+    """The run store's key reads a row id's fields by position, a count as its number.  An id without the ten fields still gives a
+    derivation of its own: its first token as the model's tag and no other field."""
+    assert row_config(ROW) == {"model_tag": "llama32-1b", "dtype": "bf16", "hw": "l40s", "tp": 1, "batch": 1, "input": 256, "output": 32,
+                               "arrivals": "mixed", "sampling": "greedy", "exec": "bi-eager"}
+    assert row_config(ROW.replace("__tp1__", "__tpX__"))["tp"] == "tpX"                # a count that is no number stays as written
+    for other, tag in (("llama32-1b__bf16", "llama32-1b"), ("llama32-1b_bf16", "llama32-1b_bf16"), ("", "")):
+        fields = row_config(other)
+        assert fields.pop("model_tag") == tag and list(fields.values()) == [None] * 9
+
+
+def test_the_run_stores_tools_load_where_the_adapters_package_is_not_importable():
+    """research's own process loads this file by its path, with no `verity_vllm` to import (`research_tools._research`), so the
+    module's top imports the standard library alone; what it reads of the adapter, it imports where it reads it."""
+    top = ast.parse(Path(research_tools.__file__).read_text()).body
+    froms = {n.module or "" for n in top if isinstance(n, ast.ImportFrom)}
+    plain = {a.name for n in top if isinstance(n, ast.Import) for a in n.names}
+    assert {name.split(".")[0] for name in froms | plain} <= sys.stdlib_module_names

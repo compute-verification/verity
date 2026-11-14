@@ -75,7 +75,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pouw/clear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pouw/prover/clear"))
 import fast_tile as FT  # noqa: E402
 import run_result  # noqa: E402
 import verify_run as VR  # noqa: E402
@@ -156,7 +156,7 @@ class TileIndex:
 
 def load(path: Path, light: bool = False, coins: CoinCommitment | None = None) -> dict:
     """The pass as `verify_run.verify` reads it: the epoch from its salt coin under `coins` (the epoch's published coin
-    commitment), or a recorded pass's beacon (`pouw_pearl_c_device.manifest_epoch`), and the weights' roots, the records
+    commitment), or a recorded pass's beacon (`pouw_pearl_c_device.manifest_epoch`), and the fixed operands' roots, the records
     held to their published root, the transcript's roots and the verifier's tile enumeration.  `light`: the manifest alone (no verifier,
     no file of the pass is opened), for reading recorded lines back (``--resumed-only``)."""
     raw = path.read_bytes()
@@ -404,7 +404,7 @@ def resumed(paths: list[str], sha256: str) -> dict:
 def _run_tiles(label: str, job: dict, picks, jobs: int, path: Path, opts: dict) -> dict:
     """Every picked item's line (a tile id, or a fresh trial: `_measure`), by `line_key`: a resumed one as recorded (its
     geometry held to this pass's enumeration, a fresh trial's salt to its own), the others measured over `jobs` forked
-    workers, a matmul's tiles in runs of a few so that a worker's per-weight noise caches hit.  Every line is written to
+    workers, a matmul's tiles in runs of a few so that a worker's per-fixed-operand noise caches hit.  Every line is written to
     `path` as it is known.  Raises if a cross-checked tile's batch and scalar replays differ."""
     tile, records = job["tile"], job["records"]
     prior = resumed(opts.get("resume") or [], job["sha256"])
@@ -618,7 +618,7 @@ def write_inputs(rows: list[dict], seed: int, census_max: int, draws: int, out_d
                      f"{len(rows)} inputs, {sum(r['failures'] for r in rows)} rejected tiles; the worst input's 95% "
                      f"simultaneous upper limit {worst['upper']:.4g} ({worst['bound_method']})",
                      [("inputs", len(rows), "count"), ("failures", sum(r["failures"] for r in rows), "count"),
-                      ("cited_upper", worst["upper"], "share")])
+                      ("compute-accounting/served-inert-work.cited-upper", worst["upper"], "share")])
     return 0 if ok else 1
 
 

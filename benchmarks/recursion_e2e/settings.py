@@ -37,7 +37,7 @@ REGISTRY = Registry(__file__, ("REPEAT_", "OPROVE_"),
     S("MODES", csv, ("firewall",), VALUE, "oprove's prover sides; the last one's releases are the ones oreplay and lean read"),
     S("OPROVE_WARM", int, 0, VALUE, "warm releases per V* statement, untimed"),
     S("OPROVE_RUNS", int, 1, VALUE, "timed releases per V* statement"),
-    S("OPROVE_GPU", str, None, VALUE, "V*'s prover: 0 85's CPU prover, 1 the GPU one under a lease; unset, 0 under the firewall, "
+    S("OPROVE_GPU", str, None, VALUE, "V*'s prover: 0 85's CPU prover, 1 the GPU one under a lease; unset, 0 under the ZK server, "
       "else GPU"),
     S("NEG", str, "challenge,query", VALUE, "the inner coins of rep 0 the negative step flips (empty: none)"),
     S("FORGE", csv, (), VALUE, "85's forgeries, which vstage stages and oprove proves"),
@@ -58,7 +58,7 @@ REGISTRY = Registry(__file__, ("REPEAT_", "OPROVE_"),
     S("GPU_PREEMPTIBLE", str, "", WHERE, "85's leases are preemptible unless empty (the job's default): how a lease is held"),
     S("TREE_FROM", str, None, VALUE, "where the inner sessions' coin trees come from: the challenger's device, HOST:PORT (85's "
       "TREE_FROM); local, the challenger started beside the inner step, its release log audited against the session; unset, "
-      "this host's OS draws them (rec_live --tree-test-os), a test's coins"),
+      "this host's OS generates them (rec_live --tree-test-os), a test's coins"),
     S("RELEASE", int, 0, VALUE, "1: the recursive session through the ZK server's release side (85's RELEASE): the inner "
       "session opens it, oprove proves its parts in order through the Lean session loop, each held to its release window"),
     S("RELEASE_WINDOWS_S", str, None, VALUE, "each part's release window by class, seconds (85's RELEASE_WINDOWS_S); unset, 85's"),

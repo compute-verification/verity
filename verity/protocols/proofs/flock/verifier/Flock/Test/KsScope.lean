@@ -1,4 +1,13 @@
-/-
+module
+
+public import Flock.KsScope
+public import Flock.Test.TmplScope
+public import Flock.Test.Wires
+meta import Flock.KsScope
+meta import Flock.Test.TmplScope
+meta import Flock.Test.Wires
+
+/-!
 `KsScope`: the `--zk` statement passes `tagsWhy`, and a typed statement or one of public outputs is refused; every named
 statement that passes it reads its record's sample (`hm96Rows`), the sample `verify --zk` hands `checkOf`. A unit of
 one input group that returns the outputs passes `filesWhy`, and with a `sha512/row-seg/v1` output row too; with that row
@@ -12,14 +21,6 @@ that does not parse and no sample are refused. A templated statement's circuit, 
 `Flock.Test.TmplScope` builds it, is held to `scopeOkT` on its template: it passes at one table and is refused at two,
 with outputs a tail stage computes, and without a template.
 -/
-module
-
-public import Flock.KsScope
-public import Flock.Test.TmplScope
-public import Flock.Test.Wires
-meta import Flock.KsScope
-meta import Flock.Test.TmplScope
-meta import Flock.Test.Wires
 
 @[expose] public section
 

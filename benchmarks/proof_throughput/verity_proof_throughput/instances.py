@@ -87,7 +87,7 @@ def class_lanes(w: Workload, n: int | None = None) -> dict[str, Any]:
 
 def partition_object(w: Workload, circuit_meta: dict[str, Any]) -> dict[str, Any]:
     """The ``verity/partition/v1`` object the workload's statement binds, derived from its own program as the verifier must
-    (``flock-verify --partition``), refused unless it is the one the circuit's META names."""
+    (``verity-verify-proof --partition``), refused unless it is the one the circuit's META names."""
     from verity.circuits import partition_object as PO
 
     us = units(w)
@@ -100,7 +100,7 @@ def partition_object(w: Workload, circuit_meta: dict[str, Any]) -> dict[str, Any
 
 
 def program_file(w: Workload) -> bytes:
-    """The program as the verifier reads it (``flock-verify --program``): its canonical descriptor encoding."""
+    """The program as the verifier reads it (``verity-verify-proof --program``): its canonical descriptor encoding."""
     from verity.circuits.codec import canonical_json, encode_program
 
     return canonical_json(encode_program(w.population()))
@@ -147,7 +147,7 @@ def build(w: Workload, now: dt.datetime | None = None) -> dict[str, Any]:
                    "shape": got["shape"], "definition": got["definition"], "program_digest": got["program_digest"],
                    "domain": "total: uniform 16-bit words, non-finite encodings included"},
         "lane_digest": "sha256(b'proof-throughput/lane/v1\\0' || every input word then every output word, each u32 LE)",
-        "generated": {"utc": (now or dt.datetime.now(dt.timezone.utc)).strftime("%Y-%m-%dT%H:%M:%SZ"), "git_head": _git_head(),
+        "generated": {"utc": (now or dt.datetime.now(dt.UTC)).strftime("%Y-%m-%dT%H:%M:%SZ"), "git_head": _git_head(),
                       "research_run_id": os.environ.get("RESEARCH_RUN_ID"), "source_sha256": _source_sha256()},
         "output_words": {"distinct": len(set(outs)), "count": len(outs)},
         "population_digest": population_digest(lanes),

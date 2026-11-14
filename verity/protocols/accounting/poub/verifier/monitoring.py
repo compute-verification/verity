@@ -33,9 +33,9 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.protocol import DELTAS, MONITORING_PERIODS
 # The count bound is the wipe's too, held in pous: remote_bandwidth may import pous, and pous not it.
 from verity.protocols.accounting.pous.verifier.wipe_monitoring import block_count, short_sessions
-from verity.protocols.reporting import DELTAS, PERIODS
 
 from . import codec, pooled
 
@@ -92,7 +92,7 @@ def table(answer: Mapping[str, Any], machines: int, window_s: int, *, deployment
     eps = Fraction(o["eps"])
     draw_term = eps - Fraction(answer["profile"]["delta"])
     periods = {}
-    for name, seconds in PERIODS:
+    for name, seconds in MONITORING_PERIODS:
         per_machine, t = block_count(seconds, window_s), block_count(seconds, window_s, machines)
         row: dict[str, Any] = {"seconds": seconds, "sessions": t, "sessions_per_machine": per_machine,
                                "basis": f"one session scaled up to {t} sessions, not a measured {name}"}

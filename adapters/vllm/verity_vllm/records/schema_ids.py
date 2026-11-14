@@ -1,7 +1,8 @@
 """The schema ids of the records that have no type in this package yet: the string a record carries as ``schema``.
 
 Each id is written once, here; its writers and readers read the constant.  Beside each: the record, and what writes it.
-An id leaves this module when its record gets a dataclass in this package, whose ``SCHEMA`` then owns it.
+An id leaves this module when its record gets a dataclass in this package, whose ``SCHEMA`` then owns it.  One constant
+is no ``schema``: `SERVED_REQUIRED_MANIFEST_KIND`, the ``kind`` a served Build carries beside its ``schema``.
 """
 from __future__ import annotations
 
@@ -22,6 +23,12 @@ COVERAGE_DECLARATION_SCHEMA = "verity/commit-integ/coverage-declaration/v1"
 #: the record of `verity-vllm gate call-boundaries` (`acquire.gate.CALL_BOUNDARIES_SCHEMA`), which `call_boundaries_of`
 #: writes
 CALL_BOUNDARIES_GATE_SCHEMA = "verity-vllm/call-boundaries-gate/v1"
+#: what the acquisition plan's hooks saw in one run, occurrence counts and shapes only, which
+#: `acquire.install.OccurrenceSink.to_json` builds and the capture writes as `acquisition_observed.json`
+ACQUISITION_OBSERVED_SCHEMA = "verity-vllm/acquisition-observed/v1"
+#: the `kind` of a served Build (`acquire.served.KIND`), a manifest of `query.manifest.format.SCHEMA`, which
+#: `acquire.served.assemble` writes
+SERVED_REQUIRED_MANIFEST_KIND = "verity/served-required-manifest/v1"
 
 # --- the Commit (`verity_vllm.commit`)
 #: a dumped store's `store.json` (`commit.store_dump.SCHEMA`), which `dump_files` writes and `load` refuses any other
@@ -31,6 +38,9 @@ COMMITTED_STORE_SCHEMA = "verity-vllm/committed-store/v1"
 SERVING_ROWS_INDEX_SCHEMA = "verity-vllm/serving-rows/index/v0"
 #: the reconciliation of what a Commit did not execute, which `commit.executed_prefix.reconcile_not_executed` writes
 NOT_EXECUTED_RECONCILIATION_SCHEMA = "verity-sweep/not-executed-reconciliation/v3"
+#: a capture map (`commit.capture_map.SCHEMA`), a JSON under `manifests/capture-maps/`, which `load` refuses any other
+#: than
+CAPTURE_MAP_SCHEMA = "verity-vllm/capture-map/v0"
 
 # --- the Commit's driver (`verity_vllm.pipeline`)
 #: the Commit plan's document (`pipeline.commit_plan.SCHEMA`), which `derive` writes; `use` takes no plan of another
@@ -47,6 +57,13 @@ SPEC_TOKENS_SCHEMA = "verity-gen/spec-tokens/v1"
 #: a row's admission plan, the host memory reserved for each part of the row (`pipeline.telemetry.admission.SCHEMA`),
 #: which `predict` writes
 ADMISSION_PLAN_SCHEMA = "verity/admission-plan/v1"
+#: the Commit's admission bound (`pipeline.admission_bound.SCHEMA`): a launch's predicted host bytes against the
+#: container's limit, which the Commit's driver writes as `admission_<kind>.json`, and the record of the scheduled steps
+#: inside it
+ADMISSION_BOUND_SCHEMA = "verity-sweep/admission/f-da-15/v1"
+#: a leased Commit's lease record (`pipeline.gpu_lease.run`): when the GPU was requested, held and released, and why it
+#: was kept where it was; the row's driver writes it as `gpu_lease.json` beside the row
+GPU_LEASE_SCHEMA = "verity-vllm/gpu-lease/v1"
 
 # --- the Build (`verity_vllm.pipeline`)
 #: the Build's result, a derive dir's `result.json`, which `pipeline.build.run` makes
@@ -73,12 +90,12 @@ NEUTRALITY_REPORT_SCHEMA = "verity-vllm/neutrality/v1"
 MATCH_RUN_SCHEMA = "verity-gen/run/v1"
 #: a Match run's `stages.json`, which `pipeline.match.save_stages` writes
 MATCH_STAGES_SCHEMA = "verity-gen/stages/v1"
-#: the realized Program's `program.json` (`pipeline.match.PROGRAM_SCHEMA`), which `persist_program` writes
+#: the realized Program's `program.json` (`pipeline.match_fold.PROGRAM_SCHEMA`), which `persist_program` writes
 REALIZED_PROGRAM_SCHEMA = "verity-gen/program/v1"
-#: the head of the realized Program's `instances.jsonl` in its record form (`pipeline.match.INSTANCES_SCHEMA`), which
+#: the head of the realized Program's `instances.jsonl` in its record form (`pipeline.match_fold.INSTANCES_SCHEMA`), which
 #: `persist_program` writes
 REALIZED_INSTANCES_SCHEMA = "verity-gen/instances/v1"
-#: the same head in the compact form, operand references as progressions (`pipeline.match.INSTANCES_SCHEMA_V2`)
+#: the same head in the compact form, operand references as progressions (`pipeline.match_fold.INSTANCES_SCHEMA_V2`)
 REALIZED_INSTANCES_PROGRESSIONS_SCHEMA = "verity-gen/instances/v2"
 
 # --- the row driver (`verity_vllm.pipeline`)
@@ -99,6 +116,12 @@ CONFIGURATION_CARD_SCHEMA = "verity-gen/card/v1"
 TIMELINE_SCHEMA = "verity-sweep/timeline/v1"
 #: the `row.json` beside a row, its stages' Attempts, which `pipeline.research._row_json` writes
 ROW_ATTEMPTS_SCHEMA = "verity-sweep/row-v2/v1"
+#: the configuration a row command ran with, `<row dir>/effective_config.json` (`pipeline.row.EFFECTIVE_SCHEMA`), which
+#: `effective_config` writes
+EFFECTIVE_CONFIG_SCHEMA = "verity-vllm/effective-config/v1"
+#: a run's `tree.json`, the tree a row runs from with its export and its release line, which
+#: `pipeline.row_stages.SingleRow.prepare` writes
+EXECUTING_TREE_SCHEMA = "verity-sweep/executing-tree/v1"
 #: the document of `epoch digests`, which `pipeline.epoch`'s `main` writes
 REBASELINE_DIGESTS_SCHEMA = "verity-vllm/rebaseline-digests/v1"
 
@@ -150,6 +173,16 @@ WEIGHTS_OF_RECORD_SCHEMA = "verity/commit/weights-of-record/v2"
 #: writes it, and a row calls a record that carries it stale
 WEIGHTS_OF_RECORD_PRIOR_SCHEMA = "verity/commit/weights-of-record/v1"
 
+# --- the properties (`verity_vllm.properties`)
+#: the manifest of a difftest's cases, `manifest.json` in the directory `properties.admission.produce` writes them to
+DIFFTEST_PRODUCE_SCHEMA = "verity-gen/difftest-produce/v1"
+#: the quarantine admission, `quarantine.json`: the difftest report of each definition checked, which
+#: `properties.admission`'s `main` writes
+QUARANTINE_ADMISSION_SCHEMA = "verity-gen/quarantine/v1"
+#: the golden corpus (`properties/golden/corpus.json`), which `properties.golden.record` writes; `load_corpus` gives an
+#: empty one with it where there is no file
+GOLDEN_CORPUS_SCHEMA = "verity-gen/golden/v1"
+
 # --- the TP row (`verity_vllm.pipeline.tp`)
 #: the TP Commit's record of the replays it left for `tp-commit-replay` (`pipeline.tp.c2.SCHEMA`), which `seal` writes
 TP_REPLAY_DEFERRED_SCHEMA = "verity-vllm/tp-replay-deferred/v1"
@@ -160,6 +193,8 @@ TP_FOLD_MATCH_SCHEMA = "verity/tp2/fold-match/v1"
 #: the TP Commit's sampled replay (`pipeline.tp.rank_replay.SCHEMA`), which `in_process` and `defer` write, and
 #: `pipeline.tp.commit`'s `main`
 TP_SAMPLED_REPLAY_SCHEMA = "verity-sweep/tp-sampled-replay/v1"
+#: a TP Commit's serving rows, `tp.json` (`pipeline.tp.serving_rows.SCHEMA`), which `gather` writes
+TP_SERVING_ROWS_SCHEMA = "verity-vllm/tp-serving-rows/v1"
 #: the Build's relabel report (`pipeline.tp.emit_ranks.SCHEMA`), which `finish` and `read_report` write
 BUILD_RELABEL_SCHEMA = "verity-vllm/build-relabel/v1"
 #: the relabel's guard record (`pipeline.tp.relabel_build.SCHEMA`), which `derive` writes
@@ -177,6 +212,14 @@ CENSUS_RANK_SCHEMA = "verity-capture/census-rank/v0"
 #: the late-read check on a fused-MoE block's received output, which `acquire.sources.partial_source.late_read_check`
 #: writes for one rank, and `pipeline.tp.rank_worker` and `pipeline.tp.commit` for the ranks
 LATE_READ_CHECK_SCHEMA = "verity/commit-integ/t6_4-check/v1"
+#: the TP Commit's value check, `value_check.json`, which `pipeline.tp.commit`'s `main` writes
+TP_VALUE_CHECK_SCHEMA = "verity/commit-integ/value-check-tp/v1"
+#: one pair's cross-rank check of the ranks' collectives, `xrank_pair<N>.json`, which `pipeline.tp.commit`'s `main` writes
+XRANK_COLLECTIVES_SCHEMA = "verity/tp2/xrank-collectives/v1"
+#: the pairs' cross-rank checks folded, `xrank_collectives.json`, which `pipeline.tp.commit`'s `main` writes
+XRANK_COLLECTIVES_FOLD_SCHEMA = "verity/tp2/xrank-collectives-fold/v1"
+#: the ranks' weights pins folded, `weights_pin.json`, which `pipeline.tp.commit`'s `main` writes
+TP_WEIGHTS_PIN_SCHEMA = "verity-sweep/tp-weights-pin/v1"
 
 # --- the engine (`verity_vllm.engine`)
 #: the engine's profile manifest, which `engine.engine_profile.build_manifest` writes and `pipeline.tp.rank_worker` reads
@@ -215,6 +258,15 @@ AOT_COMPARISON_SCHEMA = "verity-vllm/aot-comparison/v1"
 PREDICT_NODE_SCHEMA = "verity-predict/node/v1"
 #: `registration.json`, which `program.predict.node_registration.register` writes
 NODE_REGISTRATION_SCHEMA = "verity-vllm/node-registration/v1"
+#: a compilation's summary (`program.predict.steps.SCHEMA`), which `Compiled.summary` returns and
+#: `tools/advice_compile.py` writes as `compiled.json`; the comparison with the Build traces, which `steps.compare`
+#: returns and the tool writes as `comparison.json`, carries it with `/comparison` after it
+COMPILED_STEPS_SCHEMA = "verity-vllm/compiled-steps/v2"
+
+# --- the workload Program (`verity_vllm.program`)
+#: the workload Program's document, which `program.workload.WorkloadProgram.artifact` returns and
+#: `pipeline.global_program.build` writes as `workload_program.json`
+WORKLOAD_PROGRAM_SCHEMA = "verity/workload-program/v1"
 
 # --- PoUW's H1 (`verity_vllm.protocols.pouw.h1`)
 #: a served window's calls record, `pouw-h1-calls.json` (`protocols.pouw.h1.RECORD`), which `H1Run.finish` writes
@@ -222,3 +274,8 @@ POUW_H1_CALLS_SCHEMA = "verity-vllm/pouw-h1-calls/v2"
 #: a suspended window's hand-off state (`protocols.pouw.h1.handoff.SCHEMA`), which `suspend` writes and `resume` refuses
 #: any other than
 POUW_H1_HANDOFF_SCHEMA = "verity-vllm/pouw-h1-handoff/v1"
+
+# --- the protocol options (`verity_vllm.protocols`)
+#: the record of the options one stage installed (`protocols.RECORD_SCHEMA`), which `Composition.record` builds and
+#: `into_verdict` writes as a Commit's `protocols.json`
+PROTOCOL_COMPOSITION_SCHEMA = "verity-vllm/protocol-composition/v0"

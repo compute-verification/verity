@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from verity_vllm.check.match import batch_decomp as bd
+from verity_vllm.check.match import dag_form, input_layout
 
 R0, R1 = "req-0", "req-1"
 
@@ -172,7 +173,7 @@ def test_multi_node_weights_are_shared_inputs_not_cross_request_reads(monkeypatc
     monkeypatch.setattr(bd, "read_steps", lambda p: (header, steps))
     monkeypatch.setattr(bd.C, "load_oracle", lambda d, label: B)
     res = bd.decompose(str(tmp_path), [], log_path="ignored")   # older code: ValueError '5 input nodes but the header has 2 requests (+1 weights expected)'
-    assert bd.weights_input_nodes(B, 2, 0) == {2, 3, 4}
+    assert input_layout.weights_input_nodes(B, 2, 0) == {2, 3, 4}
     assert res["attribution"]["how"] == {"dataflow": 8} and res["attribution"]["unattributed"] == 0
     assert res["oracle"]["weights_input_nodes"] == {"n": 3, "first": 2, "last": 4, "request_owned_inputs": 2}
     reqs = {e["request_id"]: e for e in res["requests"]}
@@ -196,12 +197,12 @@ def test_multi_node_weights_are_shared_inputs_not_cross_request_reads(monkeypatc
 def test_weights_input_nodes_refuses_a_layout_that_cannot_hold_the_header_by_name():
     B = _multi_weights_prog()
     with pytest.raises(ValueError, match="5 input nodes but the header has 5 requests"):
-        bd.weights_input_nodes(B, 5, 0)                   # more request params than Inputs: no room for any weights node
+        input_layout.weights_input_nodes(B, 5, 0)                   # more request params than Inputs: no room for any weights node
     with pytest.raises(ValueError, match="5 input nodes but the header has 3 requests \\+ 2 seeds"):
-        bd.weights_input_nodes(B, 3, 2)
+        input_layout.weights_input_nodes(B, 3, 2)
     B.inputs = {0: ("Input32_v1", 3), 2: ("Input8_v1", 4), 3: ("Input32_v1", 6)}   # node 1 is not an Input: request 1's prompt is missing
     with pytest.raises(ValueError, match="not the leading Input nodes 0..1"):
-        bd.weights_input_nodes(B, 2, 0)
+        input_layout.weights_input_nodes(B, 2, 0)
 
 
 def test_decompose_refuses_fewer_inputs_than_requests_by_name(monkeypatch, tmp_path):
@@ -250,7 +251,7 @@ def test_dag_multiset_is_order_insensitive_but_wiring_sensitive():
     op_major = _dag_prog([0, 1, 2, 3, 4])
     chunk_major = _dag_prog([0, 2, 1, 3, 4])
     rewired = _dag_prog([0, 1, 2, 3, 4], rewire=True)
-    ma, mb, mc = bd.dag_multiset(op_major), bd.dag_multiset(chunk_major), bd.dag_multiset(rewired)
+    ma, mb, mc = dag_form.dag_multiset(op_major), dag_form.dag_multiset(chunk_major), dag_form.dag_multiset(rewired)
     assert sum(ma.values()) == 5 and ma == mb
     assert ma != mc and collections.Counter(r["spec"] for r in op_major.inst) == collections.Counter(r["spec"] for r in rewired.inst)
 
@@ -279,5 +280,5 @@ def test_live_cone_drops_a_discarded_chunk_sample():
     Q.canon = canon
     live = bd.live_cone(Q)
     assert live == {0, 1, 2, 3, 6}
-    assert bd.dag_multiset(Q, live) == bd.dag_multiset(P, bd.live_cone(P))
-    assert bd.dag_multiset(Q) != bd.dag_multiset(P)
+    assert dag_form.dag_multiset(Q, live) == dag_form.dag_multiset(P, bd.live_cone(P))
+    assert dag_form.dag_multiset(Q) != dag_form.dag_multiset(P)

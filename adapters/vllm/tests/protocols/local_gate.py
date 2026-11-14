@@ -14,12 +14,12 @@ its own main, since nothing here fetches main) and its LMS key at ``--params``
 (default 4,5: 32 leaves), and builds the Lean verifier whose `one_stage.verifier.coins` serve.py flips its coins from
 (``--coins lean``; ``stub`` serves `stub_serve.py`'s seeded bytes instead, and ``init`` falls back to it, saying why, when
 the build fails). Every verb then runs infra's own code from that tree, which goes first on ``sys.path`` before any
-``verity`` import: `auditor.gate` with its hooks as root and `auditor` would run them on the auditor host (`reserve`,
+``verity`` import: `auditor.gate` with its hooks as root and `auditor` would run them on the auditor device (`reserve`,
 `admit`, `period`, `await_commitment`, `model_register`), each in this process, and a session's unit (`auditor.run`,
 serve.py with ``--root`` and the session's secret) a detached ``DIR run SESSION`` that holds ``DIR/units/SESSION.lock``
 while it runs, which is the gate's ``active``. The model registry is infra's (`models.py` of the tree): ``admin
 model-register`` reads the checkpoint role's manifest and core's pin from the tree, so the archive carries both
-checkpoint manifests (vLLM's and the torch loop's) beside ``verity``. What differs from the auditor host: one account
+checkpoint manifests (vLLM's and the torch loop's) beside ``verity``. What differs from the auditor device: one account
 runs everything (no ``auditor`` user, ``runuser``, sudoers or systemd unit, so ``own`` does nothing and the registry isn't
 made append-only); the key is a test key of ``--params``, not ``lms.DEPLOYED``; serve.py
 listens on the node itself (no ``--peer``, so no ``ssh -R`` tunnel), on ``--ports`` (default 27811-27899, off the live
@@ -34,7 +34,7 @@ import shlex
 import subprocess
 import sys
 import tarfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 CONFIG = "gate.json"
@@ -67,7 +67,7 @@ def _params(cfg: dict):
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _lock(d: Path, session: str) -> Path:
@@ -93,9 +93,10 @@ def _start(d: Path, A):
     """`auditor.start_unit`: returns once the unit holds its lock (systemd's Type=exec), so the gate sees it active."""
     def start(session: str) -> None:
         (d / "units").mkdir(exist_ok=True)
-        log = open(d / "units" / f"{session}.log", "ab")
-        p = subprocess.Popen([sys.executable, "-I", str(Path(__file__).resolve()), str(d), "run", session],
-                             stdout=subprocess.PIPE, stdin=subprocess.DEVNULL, stderr=log, start_new_session=True)
+        with open(d / "units" / f"{session}.log", "ab") as log:
+            p = subprocess.Popen([sys.executable, "-I", str(Path(__file__).resolve()), str(d), "run", session],
+                                 stdout=subprocess.PIPE, stdin=subprocess.DEVNULL, stderr=log, start_new_session=True)
+        assert p.stdout is not None, f"session {session}'s unit was started without the pipe its first line comes on"
         line = p.stdout.readline()
         p.stdout.close()
         if line != b"running\n":

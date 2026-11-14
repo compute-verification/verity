@@ -3,8 +3,8 @@
 machine, one a server.
 
 ~~~text
-challenger -> verifier    Commitment {phase} + the challenge commitment's root, for every phase before the first is
-                          begun; Coin {phase, opening}, a challenge opened once, after what the verifier recorded
+challenger -> verifier    Commitment {phase} + the challenge commitment's root, for every phase, sent before its phase
+                          is begun; Coin {phase, opening}, a challenge opened once, after what the verifier recorded
 verifier   -> challenger  Open {phase, label} + what the challenge follows (64 bytes); Done, once every phase is decided
 verifier   -> prover      Begin {phase} + the phase's challenge commitment root; Salt {phase, opening}, the salt
                           challenge; Sample {phase, opening} + the sample, its sampling challenge and the proof blocks
@@ -61,13 +61,13 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from verity.commitments.scheme import DIGEST_BYTES
-from verity.protocol import Channel, Manifest, Role
-from verity.runtime import sources
-from verity.party import Finish, Identity, LogEntry, Received, Send
-from verity.runtime.runner import ProtocolDef
 from verity.channel import Body, Int, Json, Message, Schema, Str
+from verity.commitments.scheme import DIGEST_BYTES
+from verity.party import Finish, Identity, LogEntry, Received, Send
+from verity.protocol import Channel, Manifest, Role
 from verity.protocols.proofs.spot.verifier.parties import MAX_PROOF, MAX_REGISTRATION, MAX_SAMPLE, Unavailable
+from verity.runtime import sources
+from verity.runtime.runner import ProtocolDef
 
 from . import coins as Co
 from .protocol import DomainError
@@ -141,7 +141,7 @@ class _Stream:
 
 
 class ChallengerParty:
-    """The challenger: every phase's challenges committed before the first is begun, each challenge opened once on the
+    """The challenger: every phase's challenges committed before its phase is begun, each challenge opened once on the
     verifier's `Open` (module docstring)."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:

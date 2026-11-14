@@ -28,10 +28,10 @@
 //!
 //! Beyond v2: the scalar operands are public ports, their frame-v3 row digests (keyed BLAKE3 of their 32-bit words) computed
 //! natively; a unit returns no output word (the token is a cut word, `out_cut`, committed as a `u64` word leaf); every cut word
-//! no unit computes is native (the netlist's CUT line names this statement): the verifier checks the row words natively here
-//! ([`check_sampling_words`]) and the lane words (top-p keep bits, Gumbel noise) with `verity_flock.ir_sampling.check_native`
-//! before any session (`serve --native-checked`); and the layout's meaning is derived, not read (IR6,
-//! [`check_sampling_blocks`]).
+//! no unit computes is native (the circuit description's CUT line names this statement): the verifier checks the row words
+//! natively here ([`check_sampling_words`]) and the lane words (top-p keep bits, Gumbel noise) with
+//! `verity_flock.ir_sampling.check_native` before any session (`serve --native-checked`); and the layout's meaning is derived,
+//! not read (IR6, [`check_sampling_blocks`]).
 
 use std::{
     array::from_fn,
@@ -493,8 +493,8 @@ pub fn check_sampling_blocks(inst: &FrameInstances) -> Result<(), String> {
     Ok(())
 }
 
-/// Per instance, the netlist's pinned tail evaluated on the cut words its units compute: every other cut word in the file must
-/// be what it gives (the units' cut ports are region claims on these words).
+/// Per instance, the circuit description's pinned tail evaluated on the cut words its units compute: every other cut word in the
+/// file must be what it gives (the units' cut ports are region claims on these words).
 pub fn check_cut_words(inst: &FrameInstances, cm: &CutMap, t: &Tables) -> Result<(), String> {
     if cm.words == 0 {
         return Ok(());
@@ -660,7 +660,7 @@ fn delta(net: &IrUnitNet, lay: &Layout) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
 pub struct FrameStmt {
     pub lay: Layout,
     pub net: IrUnitNet,
-    /// the netlist's pinned cut structure (no cut words for a template without a cut)
+    /// the circuit description's pinned cut structure (no cut words for a template without a cut)
     pub cm: CutMap,
     pub blocks_real: usize,
     pub nbl: usize,
@@ -1118,7 +1118,7 @@ pub struct CutMap {
     pub native: bool,
 }
 
-/// The statement whose verifier computes a netlist's unit-less cut words natively (a CUT line's `native`).
+/// The statement whose verifier computes a circuit description's unit-less cut words natively (a CUT line's `native`).
 pub const NATIVE_SAMPLING: &str = "verity/flock-ir-sampling/v1";
 
 fn pairs(v: &serde_json::Value) -> Result<Vec<Vec<(usize, usize)>>, String> {
@@ -1138,10 +1138,11 @@ fn pairs(v: &serde_json::Value) -> Result<Vec<Vec<(usize, usize)>>, String> {
         .collect()
 }
 
-/// The cut structure is the pinned netlist's (IR4), never the instance header's: a header carrying its own is refused, and
-/// its cut word and per-instance unit counts must be the netlist's. Checked: units = instances x units per instance; no cut
-/// word (and no second port group) without a tail that computes it; the cut ports exactly the netlist's cut groups (32-bit
-/// ports, in order); every cut word computed exactly once, by one unit of the instance or by the tail.
+/// The cut structure is the pinned circuit description's (IR4), never the instance header's: a header carrying its own is
+/// refused, and its cut word and per-instance unit counts must be the circuit description's. Checked: units = instances x units
+/// per instance; no cut word (and no second port group) without a tail that computes it; the cut ports exactly the circuit
+/// description's cut groups (32-bit ports, in order); every cut word computed exactly once, by one unit of the instance or by the
+/// tail.
 
 /// [`cut_map`] for any instance file: its header (`instances`, `units_per_instance`, `cut_words`, no `cut`) and unit count.
 pub fn cut_map_of(net: &IrUnitNet, h: &serde_json::Value, units: usize) -> Result<CutMap, String> {

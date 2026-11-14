@@ -1,0 +1,8 @@
+{
+ "held": {
+  "a training step's row, not a Call of a served Program nor PoUW's: no window stages it whole": [
+   "LogSoftmaxNllBackwardRow_v1{V=12288}",
+   "LogSoftmaxRow_v1{V=12288}"
+  ]
+ }
+}

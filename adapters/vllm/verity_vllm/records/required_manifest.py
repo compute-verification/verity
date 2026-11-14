@@ -19,6 +19,8 @@ from typing import Any
 
 from verity_vllm.records.fields import RecordError, optional, required
 
+__all__ = ["RequiredManifest", "SCHEMA"]
+
 #: the writers stamp `query.manifest.format.SCHEMA`, which tests/records holds equal to this
 SCHEMA = "verity-sweep/required-manifest/v1"
 

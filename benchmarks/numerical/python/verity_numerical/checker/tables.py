@@ -2,7 +2,7 @@
 as a lookup argument (the key's membership in the table's domain is part of what the lookup proves)."""
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 
 from .ctx import Table
 from .params import Params
@@ -10,7 +10,7 @@ from .params import Params
 __all__ = ["align_table", "lead_table", "norm_table", "pow_table"]
 
 
-@lru_cache(maxsize=None)
+@cache
 def pow_table(p: Params) -> Table:
     """POW: shift d -> (2^min(d, W), 2^(W - min(d, W))), W = acc_bits.  Row 0 is (1, 2^W): a zero shift leaves the
     remainder no room (r * 2^W < 2^W => r = 0).  Rows d >= W are (2^W, 1): the quotient has no room (q = 0)."""
@@ -23,7 +23,7 @@ def pow_table(p: Params) -> Table:
     return Table("POW", 0, p.shift_rows, ("pow", "ipow"), fn)
 
 
-@lru_cache(maxsize=None)
+@cache
 def align_table(p: Params) -> Table:
     """ALIGN: shift d -> (sl, sr, isr) for the product P = u * 2^prod_shift, u < 2^(2 sig):
 
@@ -44,7 +44,7 @@ def align_table(p: Params) -> Table:
     return Table("ALIGN", 0, p.shift_rows, ("sl", "sr", "isr"), fn)
 
 
-@lru_cache(maxsize=None)
+@cache
 def lead_table(p: Params) -> Table:
     """LEAD: leading-bit position l -> (lo, ispan) with lo = 2^(l-1) and the span 2^(l-1) of [2^(l-1), 2^l), so that
     (v - lo) * ispan in [0, 2^s_bits) <=> 2^(l-1) <= v < 2^l.  Row 0 is (0, 2^s_bits): v * 2^s_bits < 2^s_bits <=> v = 0."""
@@ -58,7 +58,7 @@ def lead_table(p: Params) -> Table:
     return Table("LEAD", 0, p.l_hi + 1, ("lo", "ispan"), fn)
 
 
-@lru_cache(maxsize=None)
+@cache
 def norm_table(p: Params) -> Table:
     """NORM: k -> (mul, div, idiv) realising M' = floor(v * 2^k) as div * M' + r = v * mul with r < div:
     mul = 2^max(k, 0), div = 2^max(-k, 0), idiv = 2^(norm_rem_bits - max(-k, 0)) (r * idiv < 2^norm_rem_bits <=> r < div)."""

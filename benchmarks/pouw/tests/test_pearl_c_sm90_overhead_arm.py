@@ -1,10 +1,13 @@
 """pearl_c_sm90's arm for `verity bench overhead` (`overhead_arm.py`) off the device: the harness's interface and its verifier
 declaration, the cubin it loads, its domain and work at the door's linears, its ε, and the door's names for it
-resolving here as the door resolves them."""
+resolving here as the door resolves them; and its y commitment (`_YTree`) on the host twin, where its tree is
+`audit.commit_rows`'s, and on a recording stand-in, where its launches are the served call's and it allocates nothing and
+calls no torch."""
 
 from __future__ import annotations
 
 import ast
+import ctypes
 import hashlib
 import importlib
 import importlib.util
@@ -13,7 +16,9 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 POUW = Path(__file__).resolve().parents[1]
@@ -22,10 +27,12 @@ sys.path.insert(0, str(POUW / "harness"))
 
 import arm as A  # noqa: E402
 import baselines as B  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import audit  # noqa: E402
 from verity.protocols.accounting.pouw.verifier import window as Wd  # noqa: E402
 from verity.protocols.accounting.pouw.verifier.protocol import Shape as Unit  # noqa: E402
 from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA  # noqa: E402
 from verity_vllm.protocols.pouw import pearl_c as PPD  # noqa: E402
+from verity_vllm.protocols.pouw.pearl_c import served_y as SY  # noqa: E402
 
 
 def _load(name: str, path: Path):
@@ -37,6 +44,9 @@ def _load(name: str, path: Path):
 
 OA = _load("pearl_c_sm90_overhead_arm", POUW / "pearl_c_sm90" / "overhead_arm.py")
 DOOR = _load("verity_bench_overhead_door", ROOT / "benchmarks" / "harness" / "verity_bench" / "overhead.py")
+#: the host twin's build of hash_host.cpp (`host`, a module fixture) and its `Dev`
+HH = _load("pearl_c_hash_host_test", POUW / "tests" / "test_pearl_c_hash_host.py")
+host = HH.host
 LINEARS = DOOR.MODELS[DOOR.KERNEL_MODEL]
 CTX = {"device": None, "arch": "sm_90a"}
 
@@ -68,9 +78,83 @@ def test_the_build_record_lists_the_sent_cubin_and_declares_the_verifier(tmp_pat
     v = A.check_verifier(arm.name, rec)
     assert v["per"] == "shape" and v["transcript"] == "transcripts/{arm}/{shape}/manifest.json"
     assert v["control"] == "negative/{arm}/{shape}/manifest.json"
-    [cmd] = v["commands"]
-    assert cmd[:2] == ["{python}", "benchmarks/pouw/pearl_c_vllm/verify_run.py"] and (ROOT / cmd[1]).is_file()
-    assert cmd[2:] == ["{transcript}", "--coins", "{dir}/coins.json", "--commit", "{commit}"]
+    twin, lean = v["commands"]
+    assert twin[:3] == ["{python}", "benchmarks/pouw/pearl_c_vllm/served_passes.py", "verify"] and (ROOT / twin[1]).is_file()
+    assert twin[3:] == ["--passes", "{dir}", "--manifest", "{transcript}", "--coin-record", "{dir}/coin.json",
+                        "--out", "{dir}/pearlplus-verify.json", "--draws", "3", "--commit", "{commit}"]
+    assert lean == ["{python}", twin[1], "lean", "--passes", "{dir}", "--manifest", "{transcript}",
+                    "--verify", "{dir}/pearlplus-verify.json", "--exe", "build", "--out", "{dir}/pearlplus-lean.json"]
+
+
+@pytest.mark.slow
+def test_the_arms_declared_verdict_is_the_leans(tmp_path, monkeypatch, capsys):
+    """The declaration's commands on an honest retained pass and on a no-write control the twin rejects (each
+    `test_pearl_c_vllm.proved_pass`'s, a test instance's, so the twin is given ``--test-instance``), with a stand-in
+    ``pouw-pearlplus`` for ``--exe build``, read as the harness reads them (`verify.judge`, `verify.judge_control`): the
+    twin's own line is no verdict; the transcript is accepted on the Lean step's ACCEPT alone, and not where the Lean
+    disagrees with the twin or answers nothing; the control is rejected on the Lean's REJECT alone."""
+    import stat
+
+    from verity.protocols.accounting.pouw.verifier import verifier as PV
+
+    V = _load("pouw_harness_verify", POUW / "harness" / "verify.py")
+    T = sys.modules.get("test_pearl_c_vllm") or _load("test_pearl_c_vllm", POUW / "tests" / "test_pearl_c_vllm.py")
+    SP = T.load("pearl_c_vllm_served_passes", ROOT / OA.SERVED_PASSES)
+    monkeypatch.setattr(PV, "coins", lambda n: (b"verifier" * 8)[:n])
+    for k in ("PEARLC_CHALLENGER_GATE", "PEARLC_CHALLENGER_PEER"):
+        monkeypatch.delenv(k, raising=False)
+    honest = T.proved_pass(tmp_path / "transcripts", OA.SERVED)[0]
+    control = T.proved_pass(tmp_path / "negative", OA.SERVED)[0]
+    rows = control.parent / json.loads(control.read_text())["weights"]["0"]["rows"]["path"]
+    rows.write_bytes(bytes(b ^ 1 for b in rows.read_bytes()))
+
+    def run(cmd: list[str], *more: str) -> dict:
+        """One declared command, as served_passes.py's own main runs it: its exit and its lines."""
+        assert cmd[:2] == [sys.executable, OA.SERVED_PASSES]
+        capsys.readouterr()
+        rc = SP.main([*cmd[2:], *more])
+        return {"exit": rc, "lines": capsys.readouterr().out.splitlines()}
+
+    def lean(cmd: list[str], said: dict | str, rc: int) -> dict:
+        """The Lean step with a ``pouw-pearlplus`` that prints `said` and exits `rc` for ``--exe build``."""
+        (tmp_path / "said").write_text(said if isinstance(said, str) else json.dumps(said) + "\n")
+        exe = tmp_path / "pouw-pearlplus"
+        exe.write_text(f'#!/bin/sh\ncat "{tmp_path / "said"}"\nexit {rc}\n')
+        exe.chmod(exe.stat().st_mode | stat.S_IXUSR)
+        at = cmd.index("--exe") + 1
+        return run([*cmd[:at], str(exe), *cmd[at + 1:]])
+
+    def printout(doc: dict, **kw) -> dict:
+        return {**SP.python_answer(doc), "drawn": doc["draws"], **kw}
+
+    values = {"python": sys.executable, "commit": "0" * 7}
+    twin_cmd, lean_cmd = ([V.fill(x, values | {"transcript": str(honest), "dir": str(honest.parent)}) for x in c]
+                          for c in OA.verifier()["commands"])
+    twin = run(twin_cmd, "--test-instance")
+    doc = json.loads((honest.parent / "pearlplus-verify.json").read_text())
+    assert twin["exit"] == 0 and doc["answer"]["verdict"] == "accept", twin["lines"]
+    assert V.judge(honest, [twin], "shape")["why"] == f"no line starting ACCEPT names sha256:{V.sha256_file(honest)}"
+    agreed = lean(lean_cmd, printout(doc), 0)
+    got = V.judge(honest, [twin, agreed], "shape")
+    assert got["accepted"] and got["accept_line"] == agreed["lines"][-1] and got["accept_line"].startswith("ACCEPT ")
+    work = doc["answer"]["public"]["work"]
+    for said, rc in ((printout(doc, work={**work, "credited": work["credited"] + 1}), 0), ("", 0)):
+        refused = lean(lean_cmd, said, rc)
+        assert refused["exit"] == 2 and refused["lines"][-1].startswith("lean REFUSED: ")
+        assert V.judge(honest, [twin, refused], "shape") == {"sha256": V.sha256_file(honest), "exits": [0, 2],
+                                                             "accepted": False, "why": "a verifier command exited [0, 2]"}
+
+    twin_cmd, lean_cmd = ([V.fill(x, values | {"transcript": str(control), "dir": str(control.parent)}) for x in c]
+                          for c in OA.verifier()["commands"])
+    twin = run(twin_cmd, "--test-instance")
+    doc = json.loads((control.parent / "pearlplus-verify.json").read_text())
+    assert twin["exit"] == 1 and doc["answer"]["verdict"] == "reject", twin["lines"]
+    assert not V.judge_control(control, [twin])["rejected"]
+    agreed = lean(lean_cmd, printout(doc), 1)
+    assert V.judge_control(control, [twin, agreed])["reject_line"] == agreed["lines"][-1]
+    assert agreed["lines"][-1].startswith("REJECT ")
+    refused = lean(lean_cmd, "", 1)
+    assert not V.judge_control(control, [twin, refused])["rejected"]
 
 
 def test_the_cubin_of_record_is_one_art_by_its_bytes():
@@ -115,17 +199,17 @@ def test_without_a_sent_cubin_the_arm_builds_one_for_development(tmp_path, monke
     assert OA.settings().VERITY_BENCH_CUBIN is None
 
 
-def test_the_development_build_is_build_sh_s_cubin_and_gates_alone(tmp_path, monkeypatch):
+def test_the_development_build_is_build_sh_s_cubin_and_gates(tmp_path, monkeypatch):
     runs = []
 
-    def run(argv, env, stdout, stderr):
-        runs.append((argv, env["CUBIN_ONLY"]))
+    def run(argv, stdout, stderr):
+        runs.append(argv)
         return subprocess.CompletedProcess(argv, len(runs) - 1)
 
     monkeypatch.setattr(OA.subprocess, "run", run)
     out = tmp_path / "pearl-plus-cubin"
     assert OA.build_dev(out) == out / "pearl_c_sm90.cubin"
-    assert runs == [(["bash", str(POUW / "pearl_c_sm90" / "build.sh"), str(out)], "1")]
+    assert runs == [["bash", str(POUW / "pearl_c_sm90" / "build.sh"), str(out)]]
     with pytest.raises(RuntimeError, match=r"build.sh exited 1 \(see .*pearl-plus-cubin.log\): send the cubin"):
         OA.build_dev(out)
 
@@ -147,6 +231,8 @@ def test_the_door_s_linears_are_in_the_domain(linear, m):
     (16, 8192 + 64, 8192, "the kernels take k a multiple of 256"),
     (16, 8192, 8192 + 32, "n of 64"),
     (16, 32768 + 256, 8192, "at most 128 1 KiB segments"),
+    (16, 8192, 8192 + 64, "y's row digests take rows of whole 1 KiB segments"),
+    (16, 8192, 1024 * 256 + 256, "at most 1024 (n a multiple of 256"),
     (PPD.FLAG_ROWS + 1, 8192, 8192, f"at most {PPD.FLAG_ROWS} rows"),
 ])
 def test_outside_the_domain_the_arm_says_why(m, k, n, why):
@@ -160,13 +246,13 @@ def test_work_is_the_served_scheme_s_at_the_padded_rows(m, m16):
     w, s, unit = OA.PearlPlus().work(A.Shape("o", m, k, n)), PPD.scheme_of(OA.SERVED), Unit(m16, k, n)
     assert w.tensor_macs == {"fp8-e4m3-rowwise": m16 * k * n} and w.unit == "fp8-mac"
     assert (w.w_ref, w.credited) == (str(s.wref(unit)), str(s.credit_of(unit)))
-    assert w.hashed_bytes == {"a_rows": 4 * m16 * k, "tile_leaves": 8 * m16 * n}
+    assert w.hashed_bytes == {"a_rows": 4 * m16 * k, "tile_leaves": 8 * m16 * n, "y_rows": 4 * m * n}
     assert w.weight_hashed_bytes == {"b_rows": 4 * n * k} and w.gamma is None
 
 
 def test_the_door_s_entry_says_the_call_commits_y_only_once_the_call_hashes_y_s_rows():
     """The door notes every figure of a scheme whose entry says its timed call commits no y (`Scheme.commits_y`). The
-    arm's call hashes A's rows and the tile leaves and no row of y, and the entry says so."""
+    arm's call hashes y's rows (`_YTree`), and the entry says so."""
     n, k = LINEARS["o"]
     hashed = OA.PearlPlus().work(A.Shape("o", 16, k, n)).hashed_bytes
     assert DOOR.SCHEMES[OA.SCHEME].commits_y is ("y_rows" in hashed), (
@@ -261,3 +347,198 @@ def test_the_door_s_node_side_imports_the_arm_without_the_harness_or_torch():
         elif isinstance(node, ast.ImportFrom):
             top.add(node.module.split(".")[0])
     assert top <= set(sys.stdlib_module_names), top
+
+
+SALT, SALT_KEY = bytes(range(32)), bytes(range(32, 64))
+#: y's shapes held to `audit.commit_rows`: the door's linears at 80 rows (not a power of two, so the pads are written, and
+#: one chunk) and at 384 (past s512_tree_small's widest level, so s512_nodes runs, and two chunks at gate_up's width), and
+#: the LM head's width at 16 rows (501 segments, the wide row digests)
+Y_SHAPES = [(m, n) for m in (80, 384) for n in sorted({n for n, _ in LINEARS.values()})] + [(16, 128256)]
+
+
+class Twin:
+    """The host twin as the arm's `Dev`: hash_host.cpp's kernels (`test_pearl_c_hash_host.Host`), with each row-digest
+    launch refused as the device refuses it (`rs_refusal`), and widen_a, which the host build doesn't hold, in numpy:
+    each BF16 word's bits shifted up 16, the rows from `rows` to `filled` - 1 zero, over the grid's words only.  Its
+    `pd_smem` stands set: a y tree launches nothing of hash_decode.cuh, whose tables pd_setup makes."""
+
+    pd_smem = {"no hash_decode.cuh launch": 0}
+
+    def __init__(self, host, widen: bool = True):
+        self.host, self.widen, self.stream, self.launched, self.allocs = host, widen, None, [], 0
+
+    def has(self, name: str) -> bool:
+        return True
+
+    def alloc(self, n: int) -> int:
+        self.allocs += 1
+        return self.host.alloc(n)
+
+    def free(self, p: int) -> None:
+        self.host.free(p)
+
+    def sync(self) -> None:
+        pass
+
+    def launch(self, name, grid, block, smem=0, p=(), i=(), stream=None, pdl=True) -> None:
+        R = OA.kernels()
+        self.launched.append(name)
+        if name in R.RS_KERNELS and (why := R.rs_refusal(name, i)):
+            raise ValueError(why)
+        if name != "widen_a":
+            return self.host.launch(name, grid, block, smem, p, i)
+        rows, k, filled = i[:3]
+        assert not pdl and grid * block * 8 >= filled * k
+        if self.widen:
+            src = np.ctypeslib.as_array((ctypes.c_uint16 * (rows * k)).from_address(p[0]))
+            out = np.ctypeslib.as_array((ctypes.c_uint32 * (filled * k)).from_address(p[2]))
+            out[:rows * k] = src.astype(np.uint32) << 16
+            out[rows * k:] = 0
+
+
+class Recording:
+    """A stand-in `Dev` that records each launch (name, pointers, ints) and runs nothing; its allocations are counted."""
+
+    pd_smem, rs_heads = {"no hash_decode.cuh launch": 0}, True
+
+    def __init__(self, wide: bool = True):
+        self.log, self.allocs, self.stream, self.wide = [], 0, None, wide
+
+    def has(self, name: str) -> bool:
+        return self.wide or not name.endswith("_w")
+
+    def alloc(self, n: int) -> int:
+        self.allocs += 1
+        return (self.allocs << 40) + 0x1000
+
+    def free(self, p: int) -> None:
+        pass
+
+    def sync(self) -> None:
+        pass
+
+    def launch(self, name, grid, block, smem=0, p=(), i=(), stream=None, pdl=True) -> None:
+        self.log.append((name, tuple(p), tuple(i)))
+
+
+def _trees(dev):
+    import torch
+    s, cpu = PPD.scheme_of(OA.SERVED), torch.device("cpu")
+    const = PPD._constants(s, cpu, SALT_KEY)
+    run = SimpleNamespace(kernel=SimpleNamespace(run=OA.kernels(), dev=dev), variant=s.device.name, const=const,
+                          const_keys=PPD._constant_keys(const), device=cpu, salt=SALT, salt_key=SALT_KEY, cur=None)
+    return SY.DeviceTrees(run)
+
+
+@pytest.fixture(scope="module")
+def twin_trees(host):
+    """One run's y trees on the host twin, each width's pipeline held to `commit_y` at its first use, as served."""
+    return _trees(Twin(host))
+
+
+def _y(m: int, n: int):
+    import torch
+    rng = np.random.default_rng(m * 1_000_003 + n)
+    return torch.from_numpy(rng.integers(0, 1 << 16, (m, n), dtype=np.uint16).view(np.int16)).view(torch.bfloat16)
+
+
+def _torch_calls(f) -> list[str]:
+    """What of torch `f` calls, Python or C: each function whose module is torch's, and each C method of a torch object."""
+    seen: list[str] = []
+
+    def prof(frame, event, arg):
+        if event == "call" and str(frame.f_globals.get("__name__", "")).split(".")[0] == "torch":
+            seen.append(frame.f_code.co_qualname)
+        elif event == "c_call":
+            owner = getattr(arg, "__self__", None)
+            mod = getattr(arg, "__module__", None) or type(owner).__module__
+            if str(mod).split(".")[0] == "torch":
+                seen.append(arg.__qualname__)
+    sys.setprofile(prof)
+    try:
+        f()
+    finally:
+        sys.setprofile(None)
+    return seen
+
+
+def test_the_torch_call_probe_sees_torch_s_python_and_c_calls():
+    import torch
+    t = torch.zeros(4)
+    assert _torch_calls(lambda: t.data_ptr()) and _torch_calls(lambda: torch.zeros(1)) and not _torch_calls(lambda: len([t]))
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("m, n", Y_SHAPES)
+def test_the_arm_s_y_tree_is_commit_rows_s_on_the_host_twin(twin_trees, m, n):
+    """The arm's y commitment, `_YTree`'s launches from its buffers made beforehand over y's BF16 rows, writes
+    `commit_y`'s whole tree, whose root is `audit.commit_rows`'s over y's FP32 rows under `y_binding` at nonce
+    `HM96_Y` + index, the root the verifier opens y's rows under; and its launch allocates nothing and calls no torch."""
+    import torch
+    yt, y, dev = OA._YTree(twin_trees, m, n, OA.INDEX), _y(m, n), twin_trees.run.kernel.dev
+    raw = y.contiguous().view(torch.uint8).numpy().tobytes()
+    allocs, at, ptr = dev.allocs, len(dev.launched), y.data_ptr()
+    assert _torch_calls(lambda: yt.launch(ptr)) == [] and dev.allocs == allocs
+    want = SY.commit_y(raw, n, SALT, OA.INDEX, SALT_KEY)
+    assert yt.tree.numpy().tobytes() == want[1]
+    rows = audit.commit_rows(SY.y_binding(SALT, OA.INDEX), OA.INDEX, SY.f32_rows(raw, n), audit.HM96, SALT_KEY,
+                             SY.HM96_Y + OA.INDEX)
+    assert yt.tree.numpy()[-64:].tobytes() == want[0] == rows.commitment.root
+    assert dev.launched[at:].count("widen_a") == -(-m // SY.chunk_rows(m, n))
+
+
+def test_a_y_tree_whose_rows_were_never_widened_is_not_commit_y_s(host):
+    """The control on the widening: the same launches with widen_a writing nothing leave the digests over the poison the
+    words buffer held, and the tree is not `commit_y`'s."""
+    import torch
+    trees = _trees(Twin(host))
+    m, n = 80, 8192
+    trees.pipe(n, OA.INDEX)
+    trees.run.kernel.dev.widen = False
+    yt, y = OA._YTree(trees, m, n, OA.INDEX), _y(m, n)
+    for t in yt.bufs:
+        t.fill_(0xA5)
+    yt.launch(y.data_ptr())
+    raw = y.contiguous().view(torch.uint8).numpy().tobytes()
+    assert yt.tree.numpy()[-64:].tobytes() != SY.commit_y(raw, n, SALT, OA.INDEX, SALT_KEY)[0]
+
+
+@pytest.mark.parametrize("m, n", [(80, 8192), (384, 57344), (16, 128256), (4100, 4096)])
+def test_the_arm_s_y_launches_are_the_served_call_s_from_its_own_buffers(m, n):
+    """On a recording stand-in, the arm's y launches are the served `DeviceTrees`'s for the same y, the same kernels with
+    the same ints, but for its widen_a launches: one a chunk, from y's rows into the words buffer its row digests read
+    next; every pointer is into a buffer made before the launch, and the launch allocates nothing and calls no torch."""
+    import torch
+    dev = Recording()
+    trees = _trees(dev)
+    trees.pipes[n] = trees._pipe(n)
+    yt = OA._YTree(trees, m, n, OA.INDEX)
+    y = torch.zeros((m, n), dtype=torch.bfloat16)
+    allocs, ptr, dev.log = dev.allocs, y.data_ptr(), []
+    assert _torch_calls(lambda: yt.launch(ptr)) == [] and dev.allocs == allocs
+    arm, dev.log = dev.log, []
+    trees._tree(trees.pipes[n], y, OA.INDEX)
+    served = dev.log
+    assert [(name, i) for name, _, i in arm if name != "widen_a"] == [(name, i) for name, _, i in served]
+    tree, dig, seg, words = yt.at
+    rows = SY.chunk_rows(m, n)
+    widens = [(j, p, i) for j, (name, p, i) in enumerate(arm) if name == "widen_a"]
+    assert [(p, i) for _, p, i in widens] == [((ptr + 2 * n * r, 0, words), (min(rows, m - r), n, min(rows, m - r)))
+                                              for r in range(0, m, rows)]
+    assert all(arm[j + 1][1][0] == words for j, _, _ in widens)
+    spans = [(ptr, 2 * m * n)] + [(t.data_ptr(), t.numel()) for t in [*yt.bufs, trees.dom, trees.run.const]]
+    held = set(trees.pipes[n].b.values())
+    for name, p, _ in arm:
+        for q in p:
+            assert q == 0 or q in held or any(a <= q < a + size for a, size in spans), (name, hex(q))
+
+
+def test_a_cubin_without_the_wide_row_digests_is_refused_where_y_s_rows_need_them():
+    """y's rows past 128 segments (gate_up's 57,344 words, the LM head's 128,256) take the wide row-digest kernels: on a
+    cubin that lacks them the call is refused at prepare, naming them, and narrower widths still commit y."""
+    trees = _trees(Recording(wide=False))
+    trees.pipes[8192] = trees._pipe(8192)
+    assert OA._YTree(trees, 16, 8192, OA.INDEX).tree.numel()
+    for n in (57344, 128256):
+        with pytest.raises(RuntimeError, match=f"{n // 256} 1 KiB segments, past 128: .* wide row-digest kernels"):
+            OA._YTree(trees, 16, n, OA.INDEX)

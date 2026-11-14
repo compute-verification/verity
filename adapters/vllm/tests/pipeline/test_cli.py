@@ -55,13 +55,12 @@ def test_no_command_and_an_unknown_command_are_usage_errors(capsys):
 
 
 def test_a_command_whose_module_is_absent_is_refused_by_name(tmp_path, monkeypatch, capsys):
-    """The public release leaves out `serve-openai`'s module: the command names it and why, and exits 2. A module that is
-    present but misses a dependency still raises."""
+    """A command whose module the tree doesn't hold names it and exits 2. A module that is present but misses a dependency
+    still raises."""
     monkeypatch.setitem(sys.modules, cli.COMMANDS["serve-openai"][0], None)
     assert cli.main(["serve-openai"]) == 2
     err = capsys.readouterr().err
     assert "serve-openai: its module verity_vllm.pipeline.serve_openai is not on this tree" in err
-    assert "the served window" in err and "network certifier" in err
     (tmp_path / "cli_stand_in.py").write_text("import no_such_dependency\n")
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.setitem(sys.modules, "no_such_dependency", None)

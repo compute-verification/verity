@@ -1,5 +1,5 @@
 """No hosting provider's name in a security assumption, claim, guarantee, property or protocol document:
-what the auditor trusts is a role, the trusted host (`trusted-host`), and which provider runs it is implementation,
+what the auditor trusts is a role, the trusted device (`trusted-device`), and which provider runs it is implementation,
 named only in infra and run tooling (machine names such as a node's host name included).
 
 Scanned: every tracked file under `security/` and `verity/claims/`, and every `PROTOCOL.md`. A name matches case-insensitively as a word or as one part of an identifier (`trusted-x-host`,
@@ -37,7 +37,7 @@ def test_no_provider_name_in_a_security_statement():
     bad = offenders(_tracked())
     assert not bad, (
         "a hosting provider is named where a security assumption, claim, guarantee, property or protocol is stated; say "
-        "the role instead (the trusted host, `trusted-host`), and keep provider and machine names in infra and run "
+        "the role instead (the trusted device, `trusted-device`), and keep provider and machine names in infra and run "
         "tooling:\n" + "\n".join(f"  {f}:{n}: {', '.join(names)}" for f, n, names in bad))
 
 
@@ -48,7 +48,7 @@ def test_the_scan_reads_each_form():
     docs = {
         "security/A.lean": "def TrustedNebiusHost := 1\n`trusted-runpod-host` on vy-nebius-2\nfun x => x -- lambda, laws, draws",
         "verity/claims/__init__.py": "f = lambda e: e.id\nhosted on Lambda Labs; an AWS_REGION, the gcp_zone, Azure's",
-        "verity/core/protocols/x/PROTOCOL.md": "the trusted host (`trusted-host`); a coreweave node",
+        "verity/core/protocols/x/PROTOCOL.md": "the trusted device (`trusted-device`); a coreweave node",
         "verity/core/protocols/x/README.md": "Nebius",
     }
     assert scanned(files) == ["security/A.lean", "verity/claims/__init__.py", "verity/core/protocols/x/PROTOCOL.md"]

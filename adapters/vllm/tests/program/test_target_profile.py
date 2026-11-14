@@ -12,6 +12,7 @@ from verity_vllm.program.frontend.target_profile import (
     ApplicabilityError,
     ArtifactIdentity,
     TargetProfile,
+    _json_default,
     canonical_bytes,
     check_reuse,
     load_artifact,
@@ -26,6 +27,8 @@ CV = {"schema": "cb-a/aot-artifact/v1", "rules": [{"id": "TritonGemm[vllm-bi]", 
 APPLIC = {"numerics_profile": "b1-eager-v3", "attention_impl": ["vllm.v1.attention.backends.flash_attn.FlashAttentionImpl"], "vllm_flash_attn_version": ["2"],
           "fused_add_rms_norm_dispatch": "batch_invariant", "vllm_version": "0.28.1rc1.dev472+gd9105ea80", "torch_version": "2.13.0+cu129",
           "triton_version": "3.7.1", "tuned_gemm_arch_family": "ada"}
+#: the keys of the engine block a compiled profile declares, sorted
+ENGINE_BLOCK_KEYS = ["claim", "compilation", "enforce_eager", "program_derivation"]
 
 
 def _applied(p: TargetProfile, **over) -> dict:
@@ -58,6 +61,30 @@ def test_canonical_bytes_are_compact_sorted_ascii_json_with_a_set_as_its_sorted_
     for bad in (object(), {"a": object()}, [{1, "a"}], {(1, 2): 3}):
         with pytest.raises(TypeError):
             canonical_bytes(bad)
+
+
+def test_canonical_bytes_take_and_refuse_what_json_does():
+    """json's encoder walks the value, with no Python frame a level and its own watch for a value that holds itself: a
+    value nested 2,000 deep, twice the frames an interpreter allows by default, has its bytes, one that holds itself is a
+    ValueError, and one JSON cannot hold is a TypeError that names its type."""
+    deep = 2000  # a number, not the interpreter's limit now: code this process ran earlier may have raised that
+    in_lists: object = 0
+    in_dicts: object = 0
+    for _ in range(deep):
+        in_lists, in_dicts = [in_lists], {"k": in_dicts}
+    assert canonical_bytes(in_lists) == b"[" * deep + b"0" + b"]" * deep
+    assert canonical_bytes(in_dicts) == b'{"k":' * deep + b"0" + b"}" * deep
+    ring: list = []
+    ring.append(ring)
+    knot: dict = {"k": []}
+    knot["k"].append(knot)
+    for held in (ring, knot, {"a": {"b"}, "z": ring}):
+        with pytest.raises(ValueError, match="Circular reference detected"):
+            canonical_bytes(held)
+    for bad, name in ((object(), "object"), ({"a": b"x"}, "bytes"), ([1, {2}, range(3)], "range")):
+        with pytest.raises(TypeError, match=f"not canonicalisable: {name}"):
+            canonical_bytes(bad)
+    assert _json_default((1, 2)) == [1, 2]  # json writes a tuple itself and never hands one over
 
 
 def test_profile_rejects_unknown_and_invalid_fields():
@@ -158,6 +185,27 @@ def test_parse_target_arg_overrides_the_default():
     assert TargetProfile.default().env() == {"VLLM_BATCH_INVARIANT": "1"} and TargetProfile(batch_invariant=False).env() == {"VLLM_BATCH_INVARIANT": "0"}
 
 
+L40S = {"multi_processor_count": 142, "compute_capability": "8.9"}
+NO_BACKENDS = object()
+
+
+@pytest.mark.parametrize("backends", [NO_BACKENDS, None, {}, [], 0, ""], ids=["left out", "null", "no backend", "an empty list", "zero", "an empty string"])
+def test_a_run_profile_whose_backends_are_left_out_or_empty_is_its_device_document(backends):
+    # a record that reports no attention backend forces no FA version: the target is the device's, with the selector's version
+    doc = {"gpu": L40S} if backends is NO_BACKENDS else {"gpu": L40S, "backends": backends}
+    assert TargetProfile.from_run_profile(doc) == TargetProfile.from_gpu_document(L40S)
+
+
+def test_a_run_profile_takes_a_reported_fa_version_only_where_it_is_not_the_selectors():
+    device = TargetProfile.from_gpu_document(L40S)
+    assert device.flash_attn_version is None and device.effective_flash_attn_version() == 2
+    assert TargetProfile.from_run_profile({"gpu": L40S, "backends": {"attention_backend": "FLASH_ATTN"}}) == device
+    assert TargetProfile.from_run_profile({"gpu": L40S, "backends": {"attention_flash_attn_version": 2}}) == device
+    for reported in (3, "3"):
+        forced = TargetProfile.from_run_profile({"gpu": L40S, "backends": {"attention_flash_attn_version": reported}})
+        assert forced == device.with_overrides(flash_attn_version=3)
+
+
 def test_compiled_profile_declares_the_execution_and_keeps_eager_digests():
     """`compilation="piecewise"` -> execution label `bi-compiled`, run-time engine args enforce_eager False + PIECEWISE CUDA
     graphs, derivation-side args unchanged (eager trace by construction), a declared engine block for GP-01/GM-01; eager profiles serialise
@@ -189,6 +237,37 @@ def test_compiled_profile_declares_the_execution_and_keeps_eager_digests():
     with pytest.raises(ValueError):
         TargetProfile(compilation="full")
     assert parse_target_arg('{"compilation": "piecewise"}').execution_label == "bi-compiled"
+
+
+def test_a_compiled_profile_declares_its_program_and_its_claim_in_these_words():
+    """The two texts of a compiled profile's engine block: the claim whole, and the derivation but for one word, a term the Glossary
+    retires, which named here would be one more site of it.  A Build that writes the block puts them in the artifact's identity, and
+    components compose only where their blocks are equal, so a word of them changes here too.  They name no module and cite nothing."""
+    me = TargetProfile(compilation="piecewise").modelled_engine()
+    assert sorted(me) == ENGINE_BLOCK_KEYS
+    head = "P_compiled: one registered relation per Inductor-generated kernel of the "
+    tail = (" artifact (GEMM/attention/lm_head existing Definitions; fused norm/act/RoPE regions new Definitions), applicability pinned by the "
+            "compilation facts + kernel_set digest")
+    derivation = me["program_derivation"]
+    assert derivation.startswith(head) and derivation.endswith(tail) and derivation[len(head):-len(tail)].isalpha()
+    assert me["claim"] == (
+        "P_compiled kernel-level conformance: every non-weight buffer of every kernel launch is committed under graph replay (wrapper-level "
+        "hooks, kernels untouched) and the kernel relations are replayed bit-for-bit from the committed bytes; the eager Program is NOT a "
+        "model of this execution (P_compiled != P_eager: roundings elided, residual recomputed unrounded, other reduction orders; tokens "
+        "diverge from eager). Attention = eager FA2 splitting op; lm_head eager")
+
+
+def test_the_other_compiled_profiles_declare_theirs_in_these_words():
+    """The same two texts of the other two compiled profiles, whole, and for the same reason: the profile that emulates the precision
+    casts declares a derivation of its own under the claim above, and the breakable profile declares both its own."""
+    emulating = TargetProfile(compilation="piecewise-emu").modelled_engine()
+    assert sorted(emulating) == ENGINE_BLOCK_KEYS
+    assert emulating["program_derivation"] == "eager module-forward trace (the emulation performs the eager roundings inside the fused kernels)"
+    assert emulating["claim"] == TargetProfile(compilation="piecewise").modelled_engine()["claim"]
+    breakable = TargetProfile(batch_invariant=False, compilation="breakable").modelled_engine()
+    assert sorted(breakable) == ENGINE_BLOCK_KEYS
+    assert breakable["program_derivation"] == "the eager Program's Definitions, each captured launch-dependent selection at the step's padded tokens"
+    assert breakable["claim"] == "the eager kernels replayed from breakable CUDA graphs (no torch.compile): eager's Definitions at the capture size"
 
 
 def test_breakable_profile_applies_vllms_breakable_graphs_at_its_capture_sizes():

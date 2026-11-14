@@ -1,11 +1,12 @@
-/-
-U4 (`Registered.checkFull`) on a five-unit population of two strata, `a = [0, 1)` and `b = [1, 5)`: `stratified:2` samples `a`
-in full (`k_a = 1 = n_a`) and two of `b`'s four units. A unit reading a round's commitment must be in `a`.
--/
 module
 
 public import Flock.Registered
 meta import Flock.Registered
+
+/-!
+U4 (`Registered.checkFull`) on a five-unit population of two strata, `a = [0, 1)` and `b = [1, 5)`: `stratified:2` samples `a`
+in full (`k_a = 1 = n_a`) and two of `b`'s four units. A unit reading a round's commitment must be in `a`.
+-/
 
 @[expose] public section
 

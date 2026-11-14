@@ -60,7 +60,7 @@ theorem repState_l0 {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! 
     (hm14 : 14 ≤ t.st.m) (hdg : t.st.digest.size < 2 ^ 64)
     (hcap : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
     (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (hx : xs.size + 2 < 2 ^ 64) {tp : ℕ}
-    (hz : _root_.Flock.Zk.schedule t.st.m = .ok (t.sch, tp)) {lay : _root_.Flock.Zk.PadLayout} {d : Draws}
+    (hz : _root_.Flock.Zk.schedule t.st.wideLeaf t.st.m = .ok (t.sch, tp)) {lay : _root_.Flock.Zk.PadLayout} {d : Draws}
     {mk : Option MaskSlot} (hlay : lay = _root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
     (hcd : c = Cfg.ofDraws lay d mk) (hord : c''.order.size = c.order.size) {i : ℕ} (hi1 : 1 ≤ i)
     (hik : i ≤ t.sch.k0 + 3) (hcr : cr.size = alg.size + (xs.size + 2) + 1 + i) {cs : Array F128} {m : Masker}

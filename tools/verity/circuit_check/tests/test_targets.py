@@ -3,7 +3,8 @@ directory and import name stays in `REGISTERED`, and one whose module can't be j
 every root function a binding file defines runs, the listed ones first.  `targets.definition`: a Definition-valued static in an
 id parses to the Definition it names, bound, recursively, a record static to the record a catalog root binds, and a composite's
 lift to the one a body calling it binds, without the catalog.  `targets.word_call_families`: a vocabulary kind that doesn't bind
-is refused by name."""
+is refused by name.  `targets.HOOKS`: what circuit-check reads of the catalog is handed by the one sidecar that defines each,
+read before any module with a sidecar is imported."""
 from __future__ import annotations
 
 import sys
@@ -271,3 +272,62 @@ def test_a_struct_slots_split_is_read_by_the_one_sidecar_that_defines_its_reader
     _binding_files(monkeypatch, a={TG.SPLIT_READER: reader}, b={TG.SPLIT_READER: reader})
     with pytest.raises(ValueError, match=r"2 that .* do: a.circuit-check#, b.circuit-check#"):
         TG.struct_slots_split("d")
+
+
+@pytest.mark.parametrize("name", sorted(TG.HOOKS))
+def test_each_hook_is_read_from_the_one_sidecar_that_defines_it(monkeypatch, name):
+    """circuit-check names no module of the catalog's: each of `HOOKS` is what the one sidecar defining it at its top level
+    hands (one on this tree), and a tree with two is refused by name; one with none is refused too, but an `OPTIONAL` table,
+    which is then empty."""
+    from circuit_check import sidecars as SC
+
+    assert len(SC.handing(name)) == 1, [mod for mod, _m in SC.handing(name)]
+    hand = object()
+    for found, want in (([("a", types.SimpleNamespace(**{name: hand}))], hand),
+                        ([], dict if name in TG.OPTIONAL else "0 that .* do: none"),
+                        ([("a", types.SimpleNamespace(**{name: hand})), ("b", types.SimpleNamespace(**{name: hand}))],
+                         r"2 that .* do: a.circuit-check#, b.circuit-check#")):
+        monkeypatch.setattr(TG, "_HANDS", {})
+        monkeypatch.setattr(SC, "handing", lambda n, found=found: found if n == name else [])
+        if not isinstance(want, str):
+            assert TG._handed(name) is want
+        else:
+            with pytest.raises(ValueError, match=f"handed by the one sidecar that defines `{name}`, and {want}"):
+                TG._handed(name)
+
+
+def test_the_catalog_is_read_before_any_module_with_a_sidecar_is_imported(monkeypatch):
+    """`load_registries` reads its two hooks before it imports anything, so the enumerators the tracer holds a listing by are
+    set before the first listing, and the catalog loads after every module with a sidecar, as before."""
+    from circuit_check import sidecars as SC
+
+    seen: list[str] = []
+    hooks = {"enumerators": lambda: seen.append("enumerators") or {("m", "f")},
+             "load_catalog": lambda: seen.append("load_catalog")}
+    monkeypatch.setattr(TG, "_LOADED", False)
+    monkeypatch.setattr(TG, "_HANDS", {})
+    monkeypatch.setattr(TG, "REGISTERED", [])
+    monkeypatch.setattr(TG, "declare_by_calls", lambda: None)
+    monkeypatch.setattr(TG.CC, "registries", lambda mods: None)
+    monkeypatch.setattr(TG.CC, "enumerators", lambda pairs: seen.append(f"held {sorted(pairs)}"))
+    monkeypatch.setattr(SC, "discover", lambda: {"m1": {}, "m2": {}})
+    monkeypatch.setattr(SC, "handing", lambda n: seen.append(f"read {n}") or [("cat", types.SimpleNamespace(**{n: hooks[n]}))])
+    monkeypatch.setattr(TG.importlib, "import_module", lambda m: seen.append(f"import {m}"))
+    TG.load_registries()
+    assert seen == ["read enumerators", "enumerators", "held [('m', 'f')]", "read load_catalog", "import m1", "import m2",
+                    "load_catalog"]
+
+
+def test_reading_every_hook_imports_no_module_of_the_catalog():
+    """Each hook is read (`sidecars.handing`) by loading the one binding file that defines it by its path, in a fresh process:
+    no module of the catalog's is imported until `load_catalog` runs."""
+    import subprocess
+
+    code = ("import sys\n"
+            "from circuit_check import sidecars as SC, targets as TG\n"
+            "for name in TG.HOOKS:\n"
+            "    TG._handed(name)\n"
+            "print(sorted(m for m in sys.modules if m.startswith(('verity.definitions.registry', 'verity.definitions.numerics',"
+            " 'verity.definitions.boolean')) and not m.endswith('.circuit-check')))\n")
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert r.stdout.strip() == "[]", r.stdout + r.stderr

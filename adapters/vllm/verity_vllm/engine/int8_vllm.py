@@ -59,6 +59,8 @@ from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_experts as X
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
+__all__ = ["Int8PlainLinearMethod", "register"]
+
 NAME = TargetProfile.INT8_EXACT_QUANTIZATION
 
 

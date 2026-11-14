@@ -32,7 +32,10 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   record's program to (`Registration.declaredCode`), refused in any other form; and it may add `seed_salt`: the window's
   seed salt it read from the challenger's log (`Challenger.seedSaltOf`), lowercase hex of 64 bytes, which needs
   `window_root` and which R6 holds the record's window to name (`R6-seed-salt`), refused in any other form; and it may
-  add `pool`, `{"genesis", "lag", "pin", "pout", "reset", "verdicts", "week"}`: the two registered values a window
+  add `compiler`: the registration log's registered compiler as its view publishes it (`CoreProtocol.Registration`'s
+  item), null when the log registers none, the digest lowercase hex of 64 bytes and the length ℓ a natural, whose digest
+  R6 holds the record's window's compiler to and ℓ its advice's bits (`Registration.compilerOk`,
+  `Registration.adviceOk`), refused in any other form; and it may add `pool`, `{"genesis", "lag", "pin", "pout", "reset", "verdicts", "week"}`: the two registered values a window
   opens its pool from and leaves it in, which it neither fills, pinned nor gives as outputs, the empty pool's root
   (lowercase hex of 64 bytes), the public lag at which serving learns a verdict (a positive integer), its verdict log
   (an object of record digests, lowercase hex of 64 bytes, to whether its run on that record accepted), whose verdict
@@ -65,12 +68,15 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   under the sampling design (`drawnFrom`), every coin opened read (`coinsWhy`); then (`check`) R1–R8 (`Registration.check`), then the
   record's checks (`Record.checks`: the sample, the proved units, the receipt, the served sample, the sessions' roots, and the
   roots the verifiers report opening the sessions' registered reads against, `Record.sessionRegistered`, each
-  the registered one). It rejects when one fails or
+  the registered one, and a read of the record's own port taken at that port's own root, `Record.lessOwnReads`). It rejects when one fails or
   a verdict that ran did not accept; it is undecided when they all hold but no verifier accepted because none
   is named or one has not run; and it accepts exactly when `audit_record` does;
 * on acceptance, **public** is the sampled and proved units with the exact bounds on incorrect proof blocks at δ (`Bound.boundOf`,
-  and each template's own under a stratified or work sampling design), and the **profile** is `audit.profile`'s `IntegrityProfile`:
-  one level `unit`, the partition's units, sampled by the verifier's law.
+  and each template's own under a stratified or work sampling design) and `complete`, whether every verdict ran
+  (`Record.allRan`, the audit record's own `complete`): an accept waits on the verdicts of record and on no other, so
+  one that is not of record may not have run, and a reader for which every one must have reads accept and `complete`,
+  an answer without the field as not complete; and the **profile** is `audit.profile`'s `IntegrityProfile`: one level
+  `unit`, the partition's units, sampled by the verifier's law.
 -/
 module
 
@@ -119,6 +125,8 @@ structure Public where
   proved : Array Nat
   bound : Nat
   perTemplate : Option (Array (String × Nat))
+  /-- every verdict ran (`Record.allRan`); false when one that is not of record has not -/
+  complete : Bool
 
 private def exactly (j : Json) (ks : Array String) (what : String) : V Unit :=
   if keys? j != some (sortStrings ks) then throw s!"the keys of {what} are not {", ".intercalate (sortStrings ks).toList}"
@@ -245,6 +253,7 @@ def paramsParsed (j : Json) : V Params := do
   let keys := if (field? j "seed_salt").isSome then keys.push "seed_salt" else keys
   let keys := if (field? j "pool").isSome then keys.push "pool" else keys
   let keys := if (field? j "history").isSome then keys.push "history" else keys
+  let keys := if (field? j "compiler").isSome then keys.push "compiler" else keys
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
@@ -381,12 +390,23 @@ def paramsParsed (j : Json) : V Params := do
       | some n, .str p => pure (n, p)
       | _, _ => throw "a declaration's day is not a natural number or its program not a string"
     pure (some (day, ds))
+  let compiler ← match field? j "compiler" with
+    | none => pure none
+    | some .null => pure (some none)
+    | some b => do
+      exactly b #["advice", "cap", "digest", "kind"] "the registered compiler"
+      match getD b "kind", getD b "digest", getD b "advice", nat? (getD b "cap") with
+      | .str "builder", .str d, .str _, some ℓ =>
+        if d.length == 128 && isHex d then pure (some (some (d, ℓ)))
+        else throw "the registered compiler's digest is not lowercase hex of 64 bytes"
+      | _, _, _, _ => throw ("the registered compiler is the registration log's item: its kind, a digest, an advice " ++
+        "format and a natural length")
   let .str d := getD j "delta" | throw "delta is not a ratio"
   let delta ← Core.Ratio.ofString d "delta"
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   let p : Params := { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition,
                                     registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
-                                    declared, seedSalt, pool, tied },
+                                    declared, seedSalt, pool, tied, compiler },
                       delta, challenger }
   let again := Registration.unwindowed p.verifier
   if !again.isEmpty then
@@ -446,13 +466,13 @@ def evidenceOf (b : ByteArray) : V Evidence := do
 
 /-- `audit_record`'s checks after the sample's (`Record.checks`): the names of those that fail. The registered roots the
 sessions' reads were opened against are the verdicts' own (`Record.sessionRegistered`), for the registration's own
-values (`Record.ownRegistered`). -/
+values (`Record.ownRegistered`), less the reads of its own ports at their own roots (`Record.lessOwnReads`). -/
 def recordChecks (rec : Json) (digest : String) (e : Evidence) : Array String :=
   let units := match getD e.draw "units" with | .arr us => us.filterMap int? | _ => #[]
   let roots := e.sessionRoots.map entries
   let cs := Record.checks rec e.receipt e.draw Json.null units (e.provedUnits.map Lean.toJson) (Lean.toJson e.instances)
     digest (e.served.map (·.map fun (n : Nat) => (n : Int))) roots
-    (Record.ownRegistered rec (Record.sessionRegistered e.verdicts))
+    (Record.lessOwnReads rec (Record.ownRegistered rec (Record.sessionRegistered e.verdicts)))
   (cs.filter fun (n, c) => n != "draw" && !c.codes.isEmpty).map (·.1)
 
 
@@ -533,7 +553,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
       strata.map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none
     .accept
       { drawn := units, proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
-        bound := Bound.boundOf population draw p.delta, perTemplate }
+        bound := Bound.boundOf population draw p.delta, perTemplate, complete := Record.allRan e.verdicts }
       { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
         levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := population, draw := some draw }],
         delta := p.delta, drawn := #[(Record.LEVEL, units.size)] }
@@ -571,7 +591,8 @@ def publicJson (x : Public) : Json :=
     ("bound", Lean.toJson x.bound),
     ("per_template", match x.perTemplate with
       | some ts => Json.mkObj (ts.toList.map fun (t, m) => (t, Lean.toJson m))
-      | none => Json.null)]
+      | none => Json.null),
+    ("complete", Json.bool x.complete)]
 
 def protocol : Core.Protocol where
   id := Registration.PROTOCOL

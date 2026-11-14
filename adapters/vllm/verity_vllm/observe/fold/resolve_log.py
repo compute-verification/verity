@@ -6,7 +6,7 @@
 Per step: `StepContext` (header, StepStart, SampleEnd, StepLinks, Roots by allocation — the weight/buffer Roots of the
 preamble plus the step's prompt-row Roots —, the profile's C, the profile), `resolve_step`, and the op histogram with
 the resolution of every event.  Prints the per-step summary, the op histogram, the `ResolutionReport` JSON (primary
-resolutions, the integrator's counter) and the expanded counts (grouped members: one `Attention_v3{T}` per T, the k
+resolutions) and the expanded counts (grouped members: one `Attention_v3{T}` per T, the k
 rotation of RoPE, the v move of the KV update), then writes `<out>.json` and `<out>.md`
 (default `out/capture/reports/resolution_<log stem>.{json,md}`).  `--dump-trees` prints `TreeNode.render` for one step
 (`--step`, default 0), collapsing roots whose subtree *shape* (ops only) was already printed.  Exit status 1 with
@@ -309,7 +309,8 @@ def _target_facts(header: RunHeader | None, results: list[StepResult]) -> dict:
     """[X-01] The target the resolver pinned the persistent GEMM against: the header's GPU document (the capture host's device query,
     `TargetProfile.from_gpu_document`) and the per-run total of GEMM launches checked against that target's `NUM_SMS` (0 launches /
     `target_profile` None when the header carried no device: the profile default was the pin)."""
-    gpu = ((header.profile if header else None) or {}).get("gpu") or {}
+    device = ((header.profile if header else None) or {}).get("gpu")
+    gpu = device if device else {}
     tp = TargetProfile.from_gpu_document(gpu) if gpu else None
     acc = [sr.target for sr in results if sr.target]
     out: dict = {"host_gpu": {"name": gpu.get("name"), "compute_capability": gpu.get("compute_capability", gpu.get("cc")),

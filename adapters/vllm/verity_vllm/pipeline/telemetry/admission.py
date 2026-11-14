@@ -32,9 +32,12 @@ from verity_vllm.engine.profiles.admission_calibration import (
     MODELS,
     uncalibrated_model_note,
 )
+from verity_vllm.records.schema_ids import ADMISSION_PLAN_SCHEMA
+
+__all__ = ["CALIBRATION", "predict", "request_prompt_len", "row_config_from_workload"]
 
 MiB = 1 << 20
-SCHEMA = "verity/admission-plan/v1"
+SCHEMA = ADMISSION_PLAN_SCHEMA
 
 
 #: the value families `--retain-exclude hidden_m1` names (native_collect.retain_exclude_families): the attention launch's
@@ -261,7 +264,7 @@ def _decision(reserved: int, limit: int | None, live: dict[str, int], margin_byt
     """The refusal names what does not fit: the live terms at the peak, largest first, and the shortfall in bytes.
 
     A stage whose reservation carries a lower-bound term never reads as a plain admit -- the model knows it
-    under-fits that object (rows #57 and #60 were killed at 1.4-1.6x the prediction); admit is None with verdict LOWER_BOUND naming the
+    under-fits that object; admit is None with verdict LOWER_BOUND naming the
     terms and the observation, so the runner decides by name.  Over the limit it is still REFUSE (a lower bound above the limit is a refusal).
     """
     if limit is None:

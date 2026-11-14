@@ -18,6 +18,7 @@ import torch
 import torch.fx.traceback as fxt
 from verity.definitions.registry import tp_allreduce as TA
 
+from verity_vllm.config import workload_file
 from verity_vllm.pipeline import launch_context as LC
 from verity_vllm.pipeline.build import applicability_conditions, run
 from verity_vllm.program.frontend import targets as TG
@@ -158,7 +159,7 @@ def test_the_batch_lists_a_step_in_admission_order():
 
 
 def test_glm53_b8_every_request_sits_in_its_declared_batch():
-    with open(GLM_B8) as f:
+    with open(workload_file(GLM_B8)) as f:
         w = json.load(f)
     assert LC.batch_dispatch(w)
     reqs = LC._requests(w)
@@ -173,7 +174,7 @@ def test_glm53_b8_every_request_sits_in_its_declared_batch():
 
 
 def test_dsv4_b8_every_request_sits_in_its_declared_batch():
-    with open(DSV4_B8) as f:
+    with open(workload_file(DSV4_B8)) as f:
         w = json.load(f)
     assert LC.batch_dispatch(w)
     reqs = LC._requests(w)

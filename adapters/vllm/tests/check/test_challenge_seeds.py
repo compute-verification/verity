@@ -40,8 +40,9 @@ def test_the_generators_are_the_stdlib_and_numpy_ones_over_the_seed_as_given():
 
 
 def test_sampled_replay_draws_its_challenge_seed_from_the_challenge_module():
-    from verity_vllm.check.replay import replay_codes as RC, sample as SM
+    from verity_vllm.check.replay import sample as SM
     from verity_vllm.commit import challenge as CH
+    from verity_vllm.records import replay_codes as RC
 
     root = bytes(range(32))
     assert SM.challenge_seed("verifier-challenge-1", root) == (CH.challenge_seed("verifier-challenge-1", root),

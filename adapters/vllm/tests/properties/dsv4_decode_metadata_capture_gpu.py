@@ -7,7 +7,7 @@ at block 64 over the SWA group's block-table row, and ratio 128 at block 2 over 
 1,048,576 and at 4096.  Line numbers under `vllm/` unless named.
 
 One GPU process writes `<out>/dsv4_decode_metadata_capture.json`, the property record `dsv4_decode_metadata_capture`
-(`properties.record`), and the kernels' PTX (and SASS where Triton's bundled `cuobjdump` runs) under `<out>/ptx/`; it prints one
+(`records.property_record`), and the kernels' PTX (and SASS where Triton's bundled `cuobjdump` runs) under `<out>/ptx/`; it prints one
 line per launch and per case, then `DSV4-DECODE-METADATA GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs
 first and nothing else runs when it fails (exit 3).  A case that raises records its error and fails its cases without stopping the
 others.  The operands are the integers a decode step holds (`requests`), so no model is loaded.
@@ -91,7 +91,7 @@ from tests.properties import dsv4_flashmla_capture_gpu as FX
 from tests.properties import dsv4_indices_capture_gpu as IX
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-decode-metadata-capture/v1"
 RECORD = "dsv4_decode_metadata_capture.json"
@@ -254,8 +254,8 @@ def c128_edge_positions(case: str, n: int, rng) -> np.ndarray:
     qs = [0, 1, BS - 1, BS, BS + 1, top - 1, top] + ([W + 1, 2 * W] if held else [])
     ends = [-1, -2, -R, -R - 1, I64_MIN, I64_MIN + 1, I64_MAX] + ([I64_MAX - 1, 1 << 40] if held else [])
     kinds = [q * R + off - 1 for q in qs for off in (0, R - 1)] + ends
-    draws = rng.integers(0, top + 1, n - len(kinds)) * R + rng.integers(0, R, n - len(kinds)) - 1
-    return rng.permutation(np.concatenate([np.asarray(kinds, dtype=np.int64), draws]))
+    sampled = rng.integers(0, top + 1, n - len(kinds)) * R + rng.integers(0, R, n - len(kinds)) - 1
+    return rng.permutation(np.concatenate([np.asarray(kinds, dtype=np.int64), sampled]))
 
 
 def c128_requests(case: str, kind: str, seed: int) -> dict[str, Any]:

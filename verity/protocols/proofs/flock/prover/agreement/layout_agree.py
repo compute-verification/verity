@@ -1,4 +1,4 @@
-"""Conformance of the Lean layout check (`flock-verify layout`, `Flock/Layout.lean`) with the reference,
+"""Conformance of the Lean layout check (`verity-verify-proof layout`, `Flock/Layout.lean`) with the reference,
 `verity_flock.layouts`: the same verdict, and on acceptance the same layout digests and own-region sizes.
 
     python layout_agree.py --lean BIN --out DIR [--seed S] [--n N]
@@ -21,11 +21,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from circuit_type_agree import flat, toy_table, tree, _width  # noqa: E402
+from circuit_type_agree import flat, toy_table, tree, _width
 
-from verity.circuits import library  # noqa: E402
-from verity_flock import circuit_types as CT  # noqa: E402
-from verity_flock import layouts as LY  # noqa: E402
+from verity.circuits import library
+from verity_flock import circuit_types as CT
+from verity_flock import layouts as LY
 
 
 def words_of(rng, ib, vb):

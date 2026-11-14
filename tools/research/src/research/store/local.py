@@ -43,9 +43,11 @@ from .remote_s3 import is_md5_etag
 
 DEFAULT_ROOT = Path.home() / ".research" / "store"
 REPLICA_MAP = Path("artifacts.json")
-#: each place a tree may hold the registry, the first it holds taken: a `research run` puts the launcher's research ahead of
-#: the tree's, so a tree read by an older or newer research may hold it at the place the other doesn't name
-REPLICA_MAPS = (REPLICA_MAP, Path("artifacts.json"))
+#: each place a tree or a commit may hold the registry, the first it holds taken: a `research run` puts the launcher's research
+#: ahead of the tree's, so a tree read by an older or newer research may hold it at the place the other doesn't name.
+#: The second stays because trees and commits from before the registry moved to the root live on nodes and branches; it is
+#: written as two parts, which a rerun of that move's rewrite of the registry's path leaves two places
+REPLICA_MAPS = (REPLICA_MAP, Path("fixtures", "artifacts.json"))
 SNAPSHOT_KIND = "dataset-snapshot/v1"
 VERIFY_HEAD, VERIFY_READBACK = "etag-md5", "sha256-readback"     # what a replica record's `verified` says was checked
 VERIFY_MULTIPART = "etag-multipart"                              # ... a > 5 GiB blob: the service's multipart ETag == the one the local parts yield
@@ -851,7 +853,7 @@ class LocalStore:
         local the file payloads (at most `payload_max_bytes` each) of every catalogued artifact of those kinds whose blob is not
         here yet -- what a reader of payloads (a render) needs; the count is `payloads`.  `attempts_only`: the attempts alone (what
         `research merge` reads), one listing instead of three.  `since` (a run id or its prefix, `rYYYYMMDD-HHMMSS`): only the
-        attempts whose ids sort after it, listed from there (`research queue ready`'s records gate)."""
+        attempts whose ids sort after it, listed from there (`research lean-times`)."""
         from . import labels_sync as LS  # noqa: PLC0415
 
         t0 = time.monotonic()

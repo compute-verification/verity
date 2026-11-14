@@ -110,8 +110,7 @@ def _w_edit(worker: Any, kind: str, tp: int) -> dict[str, Any] | None:
         edit = GPU.editor(GPU.EXPERT_NEGATIVE)
     else:
         codes = _edit_of(kind)
-        edit = lambda _layer, xq: codes(xq)  # noqa: E731
-        edit.at = None
+        edit = GPU.Edit(lambda _layer, xq: codes(xq))
     hooks = Hooks(tag=f"roots1-{kind}-tp{tp}")
     for m in layers:
         hooks.wrap(m.quant_method, "observe", lambda orig: GPU.edited(orig, edit))

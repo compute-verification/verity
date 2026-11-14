@@ -198,7 +198,8 @@ class Writer:
         self._cv = threading.Condition()
         #: the calls whose bytes are in the ring, in the order kept; the first ``_taken`` of them are being or were written
         self._jobs: deque[_Job] = deque()
-        self._taken, self._seq, self._written = 0, 0, set()
+        self._taken, self._seq = 0, 0
+        self._written: set[int] = set()
         self._head, self._closed = 0, False
         #: the first failure that stopped the writer's threads (None while it runs)
         self._stopped: str | None = None

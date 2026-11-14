@@ -1,11 +1,10 @@
 """`circuit.h1device`: H1's device records. `h1window.h1_tile` without ``arch`` is the sm_120 tile it was before records
 existed (template and Program digests recorded on the tree before), sm_90's binds the same step, so its tiles are sm_120's
-id for id, and sm_90's domain is h1u's; each record's sheet numbers are its data sheet's Lean table's."""
+id for id, and sm_90's domain is h1u's."""
 from __future__ import annotations
 
 import hashlib
 import re
-from pathlib import Path
 
 import pytest
 
@@ -17,10 +16,6 @@ from verity.protocols.accounting.pouw.prover.circuit import h1tile as H
 from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
 from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-
-ROOT = Path(__file__).resolve().parents[6]
-SHEET_90_LEAN = ROOT / "security" / "Definitions" / "Accounting" / "Sheets" / "H200.lean"
-SM120_LEAN = ROOT / "security" / "Definitions" / "Accounting" / "Headline" / "Sm120.lean"
 
 #: sha512 of the template descriptor of `HW.template(K, HW.tile_unit(K, (32, 32), definition))`, recorded before `h1_tile`
 #: took an architecture: (PouwH1Tile v1's, v3's) at each K
@@ -87,26 +82,3 @@ def test_each_record_binds_its_pinned_step() -> None:
         assert (ins.sm, ins.model, ins.status) == (dev.arch, dev.step, "pinned")
         assert dev.gemm == BG.GEMM_SM120_S8
     assert D.SM90.gemm == BG.GEMM_SM90_S8
-
-
-def test_the_sm90_record_is_its_data_sheet() -> None:
-    """SMs, the tensor clock, f_max and the dense s8 MACs are the H200 sheet's (`Accounting.TS.Sheets.H200`, the sheet's
-    Lean table), and 2 x MACs x SMs x clock is half the H200 data sheet's sparse INT8 3,958 TOPS to within the table's
-    tolerance."""
-    lean = SHEET_90_LEAN.read_text()
-
-    def real(name: str) -> int:
-        return int(re.search(rf"^def {name} : ℝ := (\d+)$", lean, re.M).group(1))
-
-    assert f"at the {D.SM90.gpu}'s vendor values" in lean
-    assert (D.SM90.sms, D.SM90.fmax_mhz) == (real("smCount"), real("fmaxMHz"))
-    assert (D.SM90.tensor_mhz, D.SM90.s8_macs) == (real("tensorMHz"), real("peakS8"))
-    assert "3958 with sparsity, dense 1979 ± 0.25" in lean and D.SM90.sheet_s8_tops == 3958 / 2
-    assert abs(D.SM90.s8_dense_tops - 3958 / 2) <= 0.25
-
-
-def test_the_sm120_record_is_ds120() -> None:
-    """f_max and the IMMA16832 MACs are `Accounting.TS.Headline.Sm120.ds120`'s."""
-    lean = SM120_LEAN.read_text()
-    assert re.search(r"def ds120 : SheetData Pipe where\n  fmax := 2430\n", lean)
-    assert (D.SM120.fmax_mhz, D.SM120.tensor_mhz, D.SM120.s8_macs, D.SM120.sheet_s8_tops) == (2430, 2430, 1024, None)

@@ -191,9 +191,9 @@ def test_the_cli_prints_the_placement_or_the_refusal(capsys):
     assert json.loads(capsys.readouterr().out)["max_s"] == 10800
     assert cli.main(["submit", NEBIUS, "--run-id", "r3", "--now", str(T), "--project", "verity", "--submitter", "w",
                      "--kind", "lean-audit", "--node", "vy-nebius-1", "--gpu-host"]) == 0   # the old spelling, a hidden alias
-    cap = capsys.readouterr()
-    out = json.loads(cap.out)
-    assert cap.err == "cluster: --node is now --on\n"
+    got = capsys.readouterr()
+    out = json.loads(got.out)
+    assert got.err == "cluster: --node is now --on\n"
     assert out["gpu_host"] is True and "CPUWeight=idle" not in out["wrap"]
 
 
@@ -249,7 +249,7 @@ def test_the_held_rules_warn_and_never_refuse(tmp_path):
     assert w == ["a GPU job over 60 min: split it into chunks", "a GPU kind that isn't preemptible", "declares no outputs"]
 
 
-def test_a_job_of_an_unregistered_kind_names_its_memory_cap():
+def test_a_job_of_an_unregistered_kind_names_its_memory_limit():
     c, reg = model.load(NEBIUS), kinds.load(KINDS)
     with pytest.raises(submit.Refused, match=r"--mem-gb G.*'adhoc' isn't registered.*MemoryMax"):
         submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w", max_s=600)

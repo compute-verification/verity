@@ -17,7 +17,7 @@ The step commitment is kernels' commit call (`verity/commit-slots/v1`): a step t
 unit trees over rows, only each unit's outputs committed. An output row opens in its unit's own commitment unit. An input
 row opens where its producer committed it, and names the producer's coordinates (the fixture's `x` and `sx` open at
 their layer's input quantizer). The bundle adds a block tree over each server block's step roots.
-The bundle builds its step commitments with kernels' CPU reference, `benchmarks/torch_gpu/commit_slots/slots.py`,
+The bundle builds its step commitments with kernels' CPU reference, `verity/commitments/cuda/commit_slots/slots.py`,
 imported from the tree. The suite pins the SHA-512 of their fixture, `commit-slots-v1.json`, which the reference must
 reproduce; its roots and digests are those of the commit `REFERENCE` pins.
 
@@ -27,7 +27,7 @@ resolves to the same s8 dot as `GEMM_SM120_S8`, so only the field tells the two 
 `draw.receipt`, the challenger's live-coin receipt; `check` and `build` refuse one without it. Against the window's
 registration, `check` refuses a sample whose sampling design isn't the registered one (fixed before any coin, so the
 prover can't pick it), a subset sample of other than its k units, and a `draw.record` that isn't a sample of the
-bundle's units under that sampling design over the registered population (Lean's `flock-verify draw --registration F`
+bundle's units under that sampling design over the registered population (Lean's `verity-verify-proof draw --registration F`
 refuses to sample one).
 
 ~~~sh

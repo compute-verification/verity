@@ -19,7 +19,7 @@ challenger and the verifier never hold a row, a salt or a served value):
    ``--partition``), holds the commitment's registration to them (`check_registration`), and the stager builds its
    statement bound to them;
 3. the verifier registers the execution phase's ok rows itself (`ok_registration`: value ``ok``, row u the one word 1 under unit
-   u's public salt), samples ``--draw`` units of the execution phase's tiles by Lean ``flock-verify draw`` on the coin's stream,
+   u's public salt), samples ``--draw`` units of the execution phase's tiles by Lean ``verity-verify-proof draw`` on the coin's stream,
    groups them by call (a registered port reads one value, and a call's units read its own tables, so a statement holds
    one call's units), and writes each call's ``--registered`` file (`registered_file`: `h1unit.registered_reads` from
    its own Program under the execution phase's roots and its own ``ok``, the ok port o1 beside the A, B and record ports,
@@ -138,12 +138,12 @@ sys.path.insert(0, str(HERE))
 import h1unit as U  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.randomness import derive  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
 from verity.protocols.accounting.pouw.verifier import core_check as CC  # noqa: E402
 from verity.protocols.accounting.pouw.verifier import credit as CR  # noqa: E402
 from verity.protocols.accounting.pouw.verifier import verifier  # noqa: E402
 from verity.protocols.accounting.pouw.verifier.coins import Challenger, coin_reason  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
 
 SAMPLE_DOMAIN = "verity/pouw/h1-prove-draw/v0"
 R, C = U.TILE
@@ -391,7 +391,7 @@ def credit_registration(descriptor: bytes, drawn: list[int], entries: list, find
     that refuses, or None: the layout of ``descriptor`` (`credit.layout_of`, `credit.strata`), each session's ok rows
     held to the verifier's own (`credit._ok_held`, step 5's rule: each sampled proof block's finding opened ``o1`` at ``ok``,
     the value and root of the verifier's ``ok``, `ok_registration`), one accepted outcome per sampled proof block
-    (`credit._proved`, ``drawn`` h1_prove's own sample, not credit's work-law sample), and the registration
+    (`credit._proved`, ``drawn`` h1_prove's own sample, not that of credit's work sampling design), and the registration
     (`credit._registration`): the execution phase's registered ``entries`` (the commitment's: no entry registers ``ok``), each
     proof's ``registered`` the finding of the session that proved the unit (``findings``, unit -> `findings_of`), under
     the open root ``window_root``, each call a step of its own (`h1unit.steps`). Each proof's ``program`` is the
@@ -494,13 +494,13 @@ def lean_sample(lean: str, n: int, k: int, src: bytes) -> list[int]:
     p = subprocess.run([lean, "draw", "--population", str(n), "--k", str(k), "--stream", src.hex()], capture_output=True, text=True)
     lines = [x[5:] for x in p.stdout.splitlines() if x.startswith("DRAW ")]
     if p.returncode != 0 or len(lines) != 1:
-        raise SystemExit(f"flock-verify draw: exit {p.returncode}: {(p.stderr or p.stdout)[-300:]}")
+        raise SystemExit(f"verity-verify-proof draw: exit {p.returncode}: {(p.stderr or p.stdout)[-300:]}")
     return [int(u) for u in json.loads(lines[0])["units"]]
 
 
 def sample_units(lean: str, coin: bytes, window: str, registration: str, population: int, k: int) -> list[int]:
     """The `k` units of `population` an execution phase's sampling coin selects, after its registration (hex) was recorded: Lean
-    ``flock-verify draw`` on the coin's stream under `SAMPLE_DOMAIN`, bound to the execution phase's name and its registration."""
+    ``verity-verify-proof draw`` on the coin's stream under `SAMPLE_DOMAIN`, bound to the execution phase's name and its registration."""
     key = derive(coin, SAMPLE_DOMAIN, {"window": window, "registration": registration})
     return sorted(lean_sample(lean, population, k, key.stream("draw", 2 * k * CC.width(population) + 64)))
 
@@ -551,7 +551,7 @@ def cmd_prepare(a: argparse.Namespace) -> int:
     # one statement a sampled call: "honest" the first sampled proof block's (the negatives'), "honest-c<c>" each other's
     honest = {c: "honest" if c == c0 else f"honest-c{c}" for c in by_call}
     record["windows"][w1].update(registration=reg.hex(), draw_opening=do.to_json())
-    record["draw"] = {"population": T, "k": a.draw, "units": units, "by": "flock-verify draw (Lean)",
+    record["draw"] = {"population": T, "k": a.draw, "units": units, "by": "verity-verify-proof draw (Lean)",
                       "calls": {honest[c]: {"call": c, "units": us} for c, us in by_call.items()},
                       "reads": {str(u): U.unit_reads(win.program, win.tp, u) for u in units}}
     log(f"drew {units} of {T}: {record['draw']['calls']}")

@@ -59,7 +59,7 @@ def test_show_filters_by_id_and_owner_and_prints_json(capsys):
 
 def test_an_undeclared_id_a_refusal_and_the_sites_note_are_one_line_each(capsys):
     assert metrics.main(["show", "vllm/nope"], Fake(REPORT)) == 1
-    assert "not declared in benchmarks/metrics.toml: vllm/nope" in capsys.readouterr().out
+    assert "not declared in any metrics.toml on main: vllm/nope" in capsys.readouterr().out
     assert metrics.main(["show"], Fake(refuse=RouteError(f"GET {metrics.METRICS}: 401 invalid_identity", 401))) == 1
     assert capsys.readouterr().out == f"research metrics: GET {metrics.METRICS}: 401 invalid_identity\n"
     assert metrics.main(["show"], Fake({"sha": None, "metrics": [], "refused": [], "why": "not on main yet"})) == 0

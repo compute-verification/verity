@@ -6,7 +6,7 @@
   (`verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py`'s is `verity/protocols/compose/device/live_challenger/serve.py`), started for the session
   on the verifier's machine with its LMS key (`--challenger-key`), reached over its 127.0.0.1 by
   `spot.remote`'s client. It flips its coins in the Lean (`one_stage.verifier.coins`), signs its record before
-  it listens and its release log when the client closes the session. Not the auditor host: the verifier's machine is
+  it listens and its release log when the client closes the session. Not the auditor device: the verifier's machine is
   the audit's (never the prover's), but no ledger opens the session for its window, so the read is
   `challenger.session_of`'s, under the key the run wrote.
 - `ChallengerGate`: the auditor's challenger host, through its gate (`verity/protocols/compose/device/live_challenger/auditor.py`)
@@ -154,7 +154,7 @@ def ssh_gate(ssh: Sequence[str]) -> Call:
 
 
 class ChallengerGate:
-    """Session coins from the auditor host's challenger, one gate session a session, its fetched directory, the ledger
+    """Session coins from the auditor device's challenger, one gate session a session, its fetched directory, the ledger
     and the host's pins log under `out`. `pin` is the SHA-512 of the challenger's public key, `period` the audit's
     period on the ledger (the lane opens it, `period-open`, before the first session), `main` the auditor's own
     first-parent list of main (`remote.main_lines`; None: every session is refused), `verify` what checks the ledger's

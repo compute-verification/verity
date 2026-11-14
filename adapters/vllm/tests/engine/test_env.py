@@ -91,7 +91,9 @@ def test_a_capture_at_served_defaults_never_pins_a_switch_back() -> None:
             elif isinstance(n, ast.ImportFrom) and n.module:
                 used |= {n.module, *(f"{n.module}.{a.name}" for a in n.names)}
             elif isinstance(n, ast.Call):
-                used.add(getattr(n.func, "attr", getattr(n.func, "id", None)))
+                called = getattr(n.func, "attr", getattr(n.func, "id", None))
+                if called is not None:
+                    used.add(called)
         assert not used & pinning, (p.name, sorted(used & pinning))
 
 
@@ -130,6 +132,83 @@ def test_a_checkpoint_not_on_this_host_is_refused_by_name(tmp_path) -> None:
     assert prof.checkpoint_for("ROLE_X", m) == entry
     m.write_text(json.dumps({"checkpoints": [made]}))
     assert prof.checkpoint_for("ROLE_X", m) == made
+
+
+def test_a_role_two_pins_carry_is_refused_with_both_revisions(tmp_path) -> None:
+    """A role names one checkpoint.  Two pins under one role are refused, each named by its revision's first twelve characters,
+    where the first pin's snapshot would have been served; under a role of its own each resolves to its own snapshot."""
+    import json
+
+    from verity_vllm.engine import engine_profile as prof
+
+    for name in ("first", "second"):
+        (tmp_path / name).mkdir()
+    first = {"repo": "org/model", "role": "ROLE_X", "revision": "9535bd9b1d1d" + "0" * 28, "downloaded": True,
+             "local_path": str(tmp_path / "first")}
+    second = dict(first, revision="4e20de362430" + "1" * 28, local_path=str(tmp_path / "second"))
+    (m := tmp_path / "checkpoints.json").write_text(json.dumps({"checkpoints": [first, second]}))
+    with pytest.raises(SystemExit) as refused:
+        prof.checkpoint_for("ROLE_X", m)
+    assert str(refused.value) == ("case 'ROLE_X': 2 pins carry role 'ROLE_X' (9535bd9b1d1d, 4e20de362430); a role names one "
+                                  "checkpoint, so another revision of a model is pinned under a role of its own")
+    m.write_text(json.dumps({"checkpoints": [first, dict(second, role="ROLE_Y")]}))
+    assert prof.checkpoint_for("ROLE_X", m) == first
+    assert prof.checkpoint_for("ROLE_Y", m) == dict(second, role="ROLE_Y")
+
+
+def test_a_fixed_case_whose_repo_is_pinned_at_two_revisions_is_refused_with_both(tmp_path) -> None:
+    """A fixed case reads its checkpoint by repo.  Pins of that repo whose revisions differ are refused, each named by its
+    revision's first twelve characters, where the later pin's snapshot would have been served.  The second pin's own role still
+    resolves, two pins at one revision resolve to the later as before, and another repo at two revisions refuses no fixed case."""
+    import json
+
+    from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.engine.profiles.cases import CASES
+
+    repo = CASES["B0"]["repo"]
+    for name in ("first", "second", "other"):
+        (tmp_path / name).mkdir()
+    first = {"repo": repo, "role": "B0", "revision": "9535bd9b1d1d" + "0" * 28, "downloaded": True,
+             "local_path": str(tmp_path / "first")}
+    second = dict(first, role="B0_NEXT", revision="4e20de362430" + "1" * 28, local_path=str(tmp_path / "second"))
+    (m := tmp_path / "checkpoints.json").write_text(json.dumps({"checkpoints": [first, second]}))
+    with pytest.raises(SystemExit) as refused:
+        prof.checkpoint_for("B0", m)
+    assert str(refused.value) == (f"case 'B0': 2 pins of {repo} differ in revision (9535bd9b1d1d, 4e20de362430); a fixed case "
+                                  "reads its checkpoint by repo, so the manifest pins one revision of that repo")
+    assert prof.checkpoint_for("B0_NEXT", m) == second
+    same = dict(second, revision=first["revision"])
+    m.write_text(json.dumps({"checkpoints": [first, same]}))
+    assert prof.checkpoint_for("B0", m) == same
+    other = {"repo": "org/other", "role": "OTHER", "revision": "a" * 40, "downloaded": True, "local_path": str(tmp_path / "other")}
+    m.write_text(json.dumps({"checkpoints": [first, other, dict(other, role="OTHER_NEXT", revision="b" * 40)]}))
+    assert prof.checkpoint_for("B0", m) == first
+
+
+def test_two_pins_are_refused_before_a_snapshot_is_looked_for(tmp_path) -> None:
+    """Each refusal of two pins stands before the checkpoint's snapshot is looked for.  Where the pin that would have been read (a
+    role's first, a fixed case's later) is not downloaded, or its snapshot is gone, the refusal is the two pins' and not that
+    pin's, which alone is refused for itself."""
+    import json
+
+    from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.engine.profiles.cases import CASES
+
+    (tmp_path / "there").mkdir()
+    there = {"repo": CASES["B0"]["repo"], "revision": "9535bd9b1d1d" + "0" * 28, "downloaded": True,
+             "local_path": str(tmp_path / "there")}
+    m = tmp_path / "checkpoints.json"
+    for unread in ({"downloaded": False}, {"local_path": str(tmp_path / "gone")}):
+        absent = dict(there, revision="4e20de362430" + "1" * 28, **unread)
+        m.write_text(json.dumps({"checkpoints": [dict(absent, role="ROLE_X")]}))
+        with pytest.raises(SystemExit, match="is not downloaded on this pod|local snapshot .* missing"):
+            prof.checkpoint_for("ROLE_X", m)
+        m.write_text(json.dumps({"checkpoints": [dict(absent, role="ROLE_X"), dict(there, role="ROLE_X")]}))
+        with pytest.raises(SystemExit, match="2 pins carry role 'ROLE_X'"):
+            prof.checkpoint_for("ROLE_X", m)
+        m.write_text(json.dumps({"checkpoints": [dict(there, role="B0"), dict(absent, role="B0_NEXT")]}))
+        with pytest.raises(SystemExit, match="2 pins of .* differ in revision"):
+            prof.checkpoint_for("B0", m)
 
 
 def test_serving_and_the_build_put_a_shared_expert_on_one_stream() -> None:
@@ -204,10 +283,11 @@ def test_the_suites_guard_fails_the_test_that_leaves_a_switch_changed_and_no_tes
     environ = {k: v for k, v in os.environ.items() if k not in runner}
     if plugin:
         loaded = sys.modules.get("verity_suite_guard")
-        if loaded is None:
+        if loaded is None or loaded.__file__ is None:
             pytest.skip("`suites.py` loads its plugin into the suites it runs, and it didn't start this run")
-        guard = Path(loaded.__file__).parent
-        environ["PYTHONPATH"] = os.pathsep.join([*filter(None, environ.get("PYTHONPATH", "").split(os.pathsep)), str(guard)])
+        else:
+            guard = Path(loaded.__file__).parent
+            environ["PYTHONPATH"] = os.pathsep.join([*filter(None, environ.get("PYTHONPATH", "").split(os.pathsep)), str(guard)])
     r = subprocess.run([sys.executable, "-m", "pytest", cases, "-rA", "-p", "no:cacheprovider", f"--basetemp={tmp_path / 'b'}",
                         *(["-p", "verity_suite_guard"] if plugin else [])], cwd=Path(__file__).resolve().parents[2], env=environ,
                        capture_output=True, text=True)

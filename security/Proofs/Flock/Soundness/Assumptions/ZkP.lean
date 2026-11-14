@@ -5,7 +5,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJP
 /-!
 # The `--zk` session's custody at the verifier's public inputs
 
-`RecordCustodyZKJP`: `RecordCustodyZKJ` at flock-verify `--zk --public-inputs`, whose acceptance is `AcceptsZKP I own`
+`RecordCustodyZKJP`: `RecordCustodyZKJ` at verity-verify-proof `--zk --public-inputs`, whose acceptance is `AcceptsZKP I own`
 and whose session sets up at `setupOfP (zkInputs I) own`. `RecordCustodyZKJ` is stated at `setupOf (zkInputs I)`, which
 refuses a circuit with public input ports (`HmIn.checkOwn` at `none`), so a session at public inputs needs this form.
 `RecordCustodyZKJPLaw` is the same custody with each sample's file under the sampling design the verifier samples it by,
@@ -24,7 +24,7 @@ open FlockSoundness
 /-- **The record is the live session's, at `J` tables, at the verifier's public inputs** (`live-verifier`, as
 `RecordCustodyZKJ`): the record `verify --zk --session-tables J --public-inputs` reads is the one the challenger wrote
 for the live session (`RecordsLiveZKJA` at that command's acceptance and setup: its sample, proofs and link points, and
-each table's root and rounds, are the live outcome's), and its sample file the one `flock-verify draw` printed for the
+each table's root and rounds, are the live outcome's), and its sample file the one `verity-verify-proof draw` printed for the
 verifier's own sample under the subset sampling design (`DrawFileZK` at `subset kd` over the `n` proof blocks).
 Provisional. -/
 def RecordCustodyZKJP {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (own : Option ByteArray)
@@ -38,7 +38,7 @@ def RecordCustodyZKJP {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (o
 /-- **The record is the live session's, at `J` tables, at the verifier's public inputs, under the sampling design of its sample**
 (`live-verifier`, as `RecordCustodyZKJP`): the record `verify --zk --session-tables J --public-inputs` reads is the one
 the challenger wrote for the live session (`RecordsLiveZKJA` at that command's acceptance and setup), and its sample file at
-each sample `S` the one `flock-verify draw` printed for the verifier's own sample of `S` under the sampling design `law S` it drew `S` by
+each sample `S` the one `verity-verify-proof draw` printed for the verifier's own sample of `S` under the sampling design `law S` it drew `S` by
 over the `n` proof blocks (`ZkLink.drawOf`): the registration's law at every sample (`recordCustodyZKJPLaw_const`), or
 `subset |S|` for a member's part `S` of a window's sample. Provisional. -/
 def RecordCustodyZKJPLaw {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (own : Option ByteArray)

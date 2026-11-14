@@ -17,7 +17,7 @@ from __future__ import annotations
 import ast
 import re
 from collections import defaultdict
-from functools import lru_cache
+from functools import cache
 
 from . import _ratchet as R
 
@@ -63,7 +63,7 @@ def module_violations(files: tuple[str, ...]) -> list[R.Violation]:
     return [R.Violation(p, "module-twin", "<module>", f"{n} ~ {b}") for n, b in twins(list(paths)) for p in paths[n]]
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[R.Violation, ...]:
     files = R.library_files()
     out = module_violations(tuple(R.rel(p) for p in files))

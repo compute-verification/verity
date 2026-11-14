@@ -633,7 +633,7 @@ pub fn lean_level0(addr: &str, session: &str, asks: &[Level0Ask]) -> Result<Vec<
 /// The ZK server's session loop of record: `flock-firewall session` (`Flock.Firewall.Session` in the Lean verifier) owns the
 /// auditor's connection. The prover connects to [`LeanSession::addr`] as it would to the auditor, and each connection is one
 /// session, which the Lean loop relays on its own connection to `verifier`: the `Hello` that leaves is its own (at the
-/// statement `args` name, `flock-verify verify --zk`'s flags, and the auditor's sample), `Hello`'s answer and every coin are
+/// statement `args` name, `verity-verify-proof verify --zk`'s flags, and the auditor's sample), `Hello`'s answer and every coin are
 /// checked there, and only the coins, without their openings, come back. Each rep's Lean frame is one of the loop's
 /// ([`LeanSession::frames`]), and a rep's round leaves only as its frame's release. It runs until this handle drops.
 #[cfg(feature = "sha512")]

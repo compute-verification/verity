@@ -68,18 +68,20 @@ dense form (no holo inner circuits, no RecSparse phase); it has at least one V\*
 setup of its inner statement (`xIOf x`) passes `PlainIn`'s checks.
 
 Assumption record. No claim: three evaluations of deterministic deployed code on public bytes, which say nothing about
-the prover or the world. It is witnessed outside Lean by a run that stages V\* over an honest inner statement with the
-deployed recursive driver, feeds the compiled statement's bytes to the compiled verifier's reader and Flock's setup, and
-records the three readings.
+the prover or the world. It is witnessed outside Lean on a session that stages V\* over an honest inner statement with
+the deployed recursive driver, by feeding the compiled statement's bytes to the compiled verifier's reader and Flock's
+setup and reading the three off.
 
-The run records its readings in its `summary.json`, over the bytes an honest deployed recursive run staged (the
-staging run). `flock-verify` built at 53a30ae7bc
-read: `rec-inner` wrote neither a `holo` nor a `sparse` key (dense); `rec-statements` listed 10 V\* statements; and the
-plain inner statement's setup gave 1 table, 2 points, `mPts = 27`, `(m, k_log, regions) = (25, 22, 3)`, inside
-`setupView`, and was accepted. The setup numbers come from a `dbgTrace` added to a scratch copy of `verifyCmd`'s setup
-(the art's `probe.diff`). The run is weaker than the Prop in two ways: no Lean term `x` is formed, so the readings are
-the compiled verifier's on the run's files rather than `parse`, `nS` and `xIOf` evaluated at an `x`; and the staging is
-the staging run's, at main 4331ec922a. -/
+How the witness is reproduced. The session is one `benchmarks/recursion_e2e` generates; the kept one is the toy
+deployment at K = 64 and N = 4 (`RecDeploy.HonestFixture`'s docstring has the generator's flags and the file that names
+the kept session). On its inner statement's files the compiled verifier's `rec-inner` writes the inner shape (`m`,
+`k_log`, regions) and neither a `holo` nor a `sparse` key (dense); its `rec-statements` at that shape lists V\*'s
+statements, at least one; and its `statement` on the same files derives the plain inner statement's setup. The
+whole-session tests of `verity/protocols/proofs/recursion/verifier/vstar_cli/tests/test_vstar_recursive.py` (opt-in,
+under `VERITY_VSTAR_RECURSIVE_DATA`) run the first two on the session they read and hold a proved session to each
+statement listed; no test compares the setup's readings with `setupView`'s ranges. It is weaker than the Prop in that
+no Lean term `x` is formed, so the readings are the compiled verifier's on the session's files rather than `parse`,
+`nS` and `xIOf` evaluated at an `x`. -/
 def DeployedParses (x : Msg) : Prop :=
   (parse x).map (fun s => (s.form.holo, s.form.sparse)) = some (false, none) ∧
   0 < nS x ∧
@@ -90,13 +92,16 @@ def DeployedParses (x : Msg) : Prop :=
 
 Assumption record. No claim: `RecDeploy.lamLin2_deployed_ge_dep`'s scope premises (`hO`, `hn`, `hS`), which every
 statement `λ₂`'s numbers are stated at takes; the parts are V\*'s at the deployed shape, fixed by the deployment, not by
-the fixture's inner statement. Witnessed outside Lean by the fixture's run, which records each part's setup.
+the fixture's inner statement. Witnessed outside Lean on the fixture's session, each of whose parts is set up.
 
-The run is `DeployedParses`'s, at the staging run's live-coin record (the inner session and its `public.json`
-transcript). Each of the 10 parts' `--zk` setup gave 1 table, 2 points, `mPts` from 27 to 33 and `(m, k_log, regions)`
-within `m` 26–32, `k_log` 22–26 and at most 48 regions, inside `PartIn`, and each was accepted. 10 ≤ `2^16`, and the
-whole tree is 1.8 GB, under `2^56` inputs. It is weaker than the Prop in that the parts are those the staging run's
-driver staged, not `pick`'s choice, which is `Classical.choose`. -/
+How the witness is reproduced. The session is `DeployedParses`'s, at its live-coin record (the inner session and its
+`public.json` transcript). The whole-session tests of
+`verity/protocols/proofs/recursion/verifier/vstar_cli/tests/test_vstar_recursive.py` hold that the compiled verifier
+accepts each part under `--zk` at that part's flags, so each part's setup passed; the parts are as many as
+`rec-statements` lists; and `vstar-recursive statement` holds the statement the session's inputs name under `2^56`
+bytes. No test compares a part's setup (`mPts`, `m`, `k_log`, regions) with `PartIn`'s ranges; the compiled
+verifier's `statement` at a part's flags derives that part's. It is weaker than the Prop in that the parts are those
+the generator's driver staged, not `pick`'s choice, which is `Classical.choose`. -/
 def PartsInScope (x : Msg) (tr : Msg → List (Msg × Out) → ByteArray) : Prop :=
   (∀ j < nS x, ∃ i spec' sts', PartIn (staged (Stage.ofMsg tr) x (pick (Stage.ofMsg tr) x j) j) i spec' sts') ∧
     nS x ≤ 2 ^ 16 ∧ (innerSetupIns (xIOf x)).length ≤ 2 ^ 56

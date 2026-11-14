@@ -71,7 +71,7 @@ theorem setupZJ_of_acceptsZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) (h
   obtain ⟨-, _, schs, -, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs0, _, hz0, -⟩ := hall j.val (by simpa using hj)
   simp only [Array.getElem_map] at hz0
-  have hz' : Zk.schedule sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
+  have hz' : Zk.schedule sts[j.val].wideLeaf sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
   obtain ⟨-, -, _, hf⟩ := schedule_spec hz'
   have ht' : (inputsJ I j.val).tags.typed = false := typedJ ht j.val
   obtain ⟨_, -, hdr⟩ := Layout.setupH_drawn hst
@@ -140,7 +140,7 @@ theorem zk_session_soundJ_custody_nonvacuous (I : Inputs) (ht : I.tags.typed = f
   exact ⟨⟨y₀⟩, hy, hok⟩
 
 /-- **`zk_session_soundJ_custody_json`'s `y₀` and `hdj` hold together.** As `zk_session_soundJ_custody_nonvacuous`, with
-each sample file the JSON value `flock-verify draw` printed for the verifier's `subset kd` sample (`hdj`). The proof applies
+each sample file the JSON value `verity-verify-proof draw` printed for the verifier's `subset kd` sample (`hdj`). The proof applies
 `zk_session_soundJ_custody_json` to the `y₀` it builds and to `hdj`. Not covered: the session's existence, `hRec`,
 `hU`, `hpub`, `hpt`, `hscope`, `hkd`, `hA3`, the count curve's parameters and `TableCRZ`. -/
 theorem zk_session_soundJ_custody_json_nonvacuous (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZJ I)

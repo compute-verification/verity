@@ -1,11 +1,11 @@
 """The inference-only policy's check of an execution phase's circuit record (`NciCheck.Record`) against the Python
 reference: the Python half.
 
-`verity/protocols/policy/inference_only/verifier/nci/lean/scripts/record_difftest_vectors.py` writes 670 cases (600 random circuits,
-two in five broken in one way, and 70 shaped ones, most in the shape of a served class) and, on each,
+`verity/protocols/policy/inference_only/verifier/nci/lean/scripts/record_difftest_vectors.py` writes 682 cases (600 random circuits,
+two in five broken in one way, and 82 shaped ones, most in the shape of a served class) and, on each,
 `scripts/nci_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/RecordDifftestMain.lean` fails unless
-`Record` and `RecordCount` give Python's results on every case, and unless SPOT's reader reads the
+`Record`, `RecordCount`, `RecordRows` and `RecordChosen` give Python's results on every case, and unless SPOT's reader reads the
 same wiring from the form's instance and from the one Python builds from its own layout of each template. The audit
 checks the data against the record's SHA-256 and caches its pass on the Lean package's files alone, so the first test
 is what says the data is still what the generator and the reference write. The second checks that the generator
@@ -26,14 +26,28 @@ declaration more into a row it already declares is refused, whatever the two dec
 is taken. The twelfth is that an output has a bit: a template that returns no field, or a field of no bit, is refused
 with its templates, and the interface lays out no unit of it. The thirteenth is that a root node of a composite is no
 input, whatever its key reads as: a template keyed as an input id is refused with its templates, its record alone and
-a unit of it at the root that the record does not list.
+a unit of it at the root that the record does not list. The fourteenth is a block's rows: on the served shape the
+rows the reference adds up unit by unit are what the record's listing gives, a template's units in a block times its
+rows of one unit, with the rate rule's two failures in rows and the refusal of a table that lacks a template. The
+fifteenth is a history table: a table over no registered parameter, so every row read of one is fresh, whatever
+pins and registers the rest. The sixteenth is what the prover chose of an execution phase's input bits: the rows no
+declaration fills, the reads of a parameter that is not θ and the ports of an opening that is not held, over every
+slot's units, with an opening's ports off the count only where the opening is held.
 
 The tenth holds to `input_count` only where every opening it counts registered is one the form holds (`held`: the
 reader's Definition pinned, with table reads of the table's root and domain id over the opening's units). Where one is
 not, `input_count` counts that opening's ports registered and the form counts them fresh, and the test holds the two
 apart by exactly those bits. The interface states no layout and no leaf's width: a record the form refuses for a
 pinned reader's roles (`reader-layout`, `reader-roles`) or for a wire's leaves (`leaf-widths`) is one the interface
-takes.
+takes. The form reads a history table's keys and its name and nothing of its writer, rows and runs: a record
+whose history the interface refuses for those (`LOOSE`) is one the form takes.
+
+The interface refuses a record with a `ValueError`, and the helper that asks it (`_interface`) takes nothing else for
+its refusal: an error of any other type, the helper's own or the interface's, fails the test as an error. A test of
+the helper holds it to that, on a helper that unpacks a pair from `Blocks.of`. It also states two records the form
+refuses and the interface does not: one that states no blocks (`blocks`), since the interface reads a stated record's
+blocks where it has them, and one with an opening of a reader that is no template of the circuit (`inputs`), which the
+interface refuses or fails on with a `KeyError` of the reader's name.
 """
 
 from __future__ import annotations
@@ -83,6 +97,10 @@ BITLESS = {f"2x3 {what}": "templates" for what in vectors.BITLESS}
 #: the cases on a template keyed as an input id, its record alone and a unit of it the record does not list, each
 #: with the stage that refuses it
 KEYED = {f"2x3 {what}, {how}": "templates" for what in vectors.KEYED for how in ("alone", "unlisted")}
+#: the cases on `registered.histories`, each with the stage that refuses it, None where the form takes it
+HISTORIES = {f"2x3 {what}": stage for what, (stage, _) in vectors.HISTORIES.items()}
+#: of those, the one the form takes that the interface refuses, and the one whose opening is against a history
+LOOSE, OPENED = f"2x3 {vectors.LOOSE}", "2x3 the opening against a history"
 
 
 @pytest.fixture(scope="module")
@@ -97,7 +115,7 @@ def shaped() -> dict[str, dict]:
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 670 cases and the reference's results, byte for byte as the record pins them."""
+    """All 682 cases and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", str(vectors.total())]
@@ -119,6 +137,12 @@ def test_the_generator_covers_what_it_says(random_cases, shaped):
     assert {r["detail"]["failure"] for r in good} == {None, "size", "nci"}
     assert {r["count"].get("failure") for r in good if "error" not in r["count"]} == {None, "gates", "fresh", "count"}
     assert {r["count"].get("error") for r in good} >= {None, "instance", "params", "gate-table"}
+    assert {r["block_rows"].get("failure") for r in good if "error" not in r["block_rows"]} == {None, "size", "nci"}
+    assert {r["block_rows"].get("error") for r in good} == {None, "instance", "params", "rows-table"}
+    assert all(r["block_rows"]["rows"] > 0 for r in good if "error" not in r["block_rows"])
+    zero = [r["block_rows"] for m, r in zip(made, results, strict=True) if "error" not in r["detail"]
+            and isinstance(m["case"]["block_rows"].get("table"), dict) and 0 in m["case"]["block_rows"]["table"].values()]
+    assert {z.get("error") for z in zero} == {"params"}
     assert {k for r in good for k in r["kinds"]} == set(ref.KINDS)
     for k in ("fresh", *ref.FRESH):
         assert any(r["detail"][k] > 0 for r in good), k
@@ -127,6 +151,7 @@ def test_the_generator_covers_what_it_says(random_cases, shaped):
     for what, stage in TEXT.items():
         r = vectors.results(shaped[what]["case"])
         assert r["detail"] == r["public"] == r["kinds"] == r["exported"] == r["count"] == {"error": stage}, what
+        assert r["block_rows"] == {"error": stage}, what
     # a record that lists its members, as the interface reads them back, states no wires: refused, not read as none
     listed = json.loads(shaped[LISTED]["case"]["instance"]["record"])
     assert "wires" not in listed and len(IF._listed_members(listed)) == len(listed["templates"])
@@ -140,7 +165,8 @@ def test_the_served_shape(shaped):
     block's fresh bits then its scan state's alone; refused by the rate rule, and by the count on its fresh bits,
     with none registered or committed, under another root, with an opening that reads no root, with an opening whose
     reader is another Definition under the pinned one's name, and with one wire from the next slot."""
-    got = {what: vectors.results(m["case"]) for what, m in shaped.items() if what not in LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED}
+    got = {what: vectors.results(m["case"]) for what, m in shaped.items()
+           if what not in LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES}
     verdicts = {what: (r["detail"]["failure"], r["count"]["failure"]) for what, r in got.items()}
     refused = ("nci", "fresh")
     assert verdicts == {
@@ -150,6 +176,12 @@ def test_the_served_shape(shaped):
         "2x3 another root": refused, "2x3 no root read": refused, "2x3 a constant verdict": refused,
         "2x3 one wire from the next slot": refused,
         "2x3 the order beside the record": (None, None), "2x3 the run's record first": (None, None)}
+    # in rows the rate rule decides each the same way: a size's cases list the same units, so a block's rows are
+    # those of the accepted case, which the policy's `Γ` and `α` in rows hold exactly
+    for what, r in got.items():
+        held = got[f"{what.split()[0]} registered"]["block_rows"]
+        assert r["block_rows"]["rows"] == held["rows"] > 0 and held["complies"], what
+        assert r["block_rows"]["failure"] == r["detail"]["failure"], what
     for size, blocks in (("2x3", 2), ("4x35", 4)):
         held = got[f"{size} registered"]["detail"]
         assert held["blocks"] == blocks
@@ -203,7 +235,7 @@ def test_a_pinned_readers_layout(shaped, monkeypatch):
     The layout's stage alone refuses them: without it the reference refuses none, and accepts the token among the
     ports with a block's fresh bits those of the case that wires it."""
     assert {what for what, m in shaped.items() if m["broken"]} == {
-        what for what, v in (LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED).items() if isinstance(v, str)}
+            what for what, v in (LAYOUT | ROWS | TEXT | TWICE | BITLESS | KEYED | HISTORIES).items() if isinstance(v, str)}
     got = {what: vectors.results(shaped[what]["case"]) for what in LAYOUT}
     for what, want in LAYOUT.items():
         detail, count, m = got[what]["detail"], got[what]["count"], shaped[what]
@@ -681,31 +713,89 @@ def test_a_root_node_of_a_composite_is_no_input(shaped):
 
 
 def _interface(made: dict):
-    """The stage at which `verity.commitments.windows.interface` refuses the case's record (`wires`, `inputs` or `blocks`), else
-    None with what it reads of it."""
+    """The stage at which `verity.commitments.windows.interface` refuses the case's record (`wires`, `inputs` or
+    `blocks`), else None with what it reads of it: the calls `window_of_record` makes on a stated record, which
+    refuses wires that are no list and reads the record's blocks where it has them. The interface refuses with a
+    `ValueError`, so that alone, from one of its own calls, is a refusal here. An error of any other type is this
+    helper's or the interface's, and is raised."""
     case = made["case"]
     doc = json.loads(case["instance"]["record"])
     lays = {codec.descriptor_id(fn): (IF.layout(fn), n) for fn, n in made["circuit"].templates}
     units = {t: n for t, (_, n) in lays.items()}
     spot = case["spot"]
-    malformed = (ValueError, KeyError, TypeError, AttributeError)
+    stated, cut = spot["wires"], spot["cuts"]
+    if not isinstance(stated, list):
+        return "wires", None
     try:
-        if not isinstance(spot["wires"], list):
-            raise ValueError("the wires are a list")
-        wires, cuts = tuple(IF.Wire.of(w) for w in spot["wires"]), IF._cuts(spot["cuts"])
+        wires, cuts = tuple(IF.Wire.of(w) for w in stated), IF._cuts(cut)
         IF.check_wires(lays, wires, cuts, IF.order_of(spot))
-    except malformed:
+    except ValueError:
         return "wires", None
     try:
         reg = IF.Registered.of(doc["registered"]) if "registered" in doc else None
         IF.check_inputs(lays, cuts, wires, reg, IF._ingress_of(doc, "ingress"))
-    except malformed:
+    except ValueError:
         return "inputs", None
     try:
-        blocks = IF.Blocks.of(doc["blocks"], units, "")
-    except malformed:
+        blocks = IF.Blocks.of(doc["blocks"], units, "") if "blocks" in doc else None
+    except ValueError:
         return "blocks", None
     return None, (lays, units, blocks, doc)
+
+
+def _strays(made: dict) -> set[str]:
+    """The readers the case's record names in its openings that are no template of its circuit."""
+    reg = json.loads(made["case"]["instance"]["record"]).get("registered")
+    openings = reg.get("openings") if isinstance(reg, dict) else None
+    readers = {o["reader"] for o in openings if isinstance(o, dict) and isinstance(o.get("reader"), str)} \
+        if isinstance(openings, list) else set()
+    return readers - {codec.descriptor_id(fn) for fn, _ in made["circuit"].templates}
+
+
+def test_a_fault_of_the_helper_is_an_error_and_no_refusal(shaped, monkeypatch):
+    """`_interface` takes a `ValueError` of one of the interface's calls for the interface's refusal, and nothing else.
+    A helper that unpacks a pair from `Blocks.of`, which returns the blocks alone, raises a `TypeError` at that call:
+    it is raised, where a refusal at `blocks` would say of every record that the interface refuses it. So is the
+    `KeyError` of the helper's own lookup on a case that states no cuts. The interface's `ValueError` at the same call
+    is the refusal. Two records the form refuses are none the interface refuses: one that states no blocks is
+    taken, and on an opening of a reader that is no template the interface refuses or fails with a `KeyError` of that
+    reader's name, which is raised."""
+    held = shaped["2x3 registered"]
+    assert _interface(held)[0] is None
+
+    def edited(edit) -> dict:
+        made = {**held, "case": copy.deepcopy(held["case"])}
+        vectors._rewrite(made, edit)
+        return made
+
+    blocks_of = IF.Blocks.of
+
+    def pair(d, units, partition):
+        blocks, _ = blocks_of(d, units, partition)
+        return blocks
+
+    with monkeypatch.context() as patch:
+        patch.setattr(IF.Blocks, "of", pair)
+        with pytest.raises(TypeError, match="unpack"):
+            _interface(held)
+    uncut = {**held, "case": {**held["case"], "spot": {k: v for k, v in held["case"]["spot"].items() if k != "cuts"}}}
+    with pytest.raises(KeyError, match="cuts"):
+        _interface(uncut)
+    refused = edited(lambda d: d["blocks"]["inference"].update(slots=0))
+    assert _interface(refused) == ("blocks", None)
+    assert ref.check_detail(refused["case"]["instance"], refused["case"]["trusted"]) == {"error": "blocks"}
+
+    bare = edited(lambda d: d.pop("blocks"))
+    stage, (*_, blocks, doc) = _interface(bare)
+    assert stage is None and blocks is None and "blocks" not in doc
+    assert ref.check_detail(bare["case"]["instance"], bare["case"]["trusted"]) == {"error": "blocks"}
+    stray = edited(lambda d: d["registered"]["openings"][0].update(reader="Nope_v1"))
+    assert _strays(held) == set() and _strays(stray) == {"Nope_v1"}
+    assert ref.check_detail(stray["case"]["instance"], stray["case"]["trusted"]) == {"error": "inputs"}
+    try:
+        assert _interface(stray) == ("inputs", None)
+    except KeyError as fault:
+        assert fault.args == ("Nope_v1",)
 
 
 def test_the_reference_reads_a_record_as_the_interface_does(random_cases, shaped):
@@ -715,8 +805,16 @@ def test_the_reference_reads_a_record_as_the_interface_does(random_cases, shaped
         case = m["case"]
         inst, tr = case["instance"], case["trusted"]
         refusal = ref.check_detail(inst, tr).get("error")
-        stage, read = _interface(m)
-        assert stage == (None if refusal in OWN else refusal), (m["shape"], m.get("how"))
+        try:
+            stage, read = _interface(m)
+        except KeyError as fault:
+            assert refusal == "inputs" and fault.args[0] in _strays(m), (m["shape"], m.get("how"))
+            continue
+        if m["shape"] == LOOSE:
+            assert (stage, refusal) == ("inputs", None)
+            continue
+        bare = refusal == "blocks" and "blocks" not in json.loads(inst["record"])
+        assert stage == (None if refusal in OWN or bare else refusal), (m["shape"], m.get("how"))
         if read is None or refusal is not None:
             continue
         lays, units, blocks, doc = read
@@ -756,3 +854,178 @@ def test_the_reference_reads_a_record_as_the_interface_does(random_cases, shaped
         apart += bool(loose)
         unpinned += any(not is_pinned(o["reader"]) for o in loose)
     assert exact >= 10 and apart >= 5 and unpinned >= 3, (exact, apart, unpinned)
+
+
+def test_a_blocks_rows(shaped):
+    """A block's rows are, over the record's templates, the template's units in a block times its rows of one unit.
+    The reference adds them up unit by unit into each unit's slot and takes the most a slot holds; on the served
+    shape, at both sizes, that is the sum the record's listing gives. `Γ` and `α` are the limits' own, in rows,
+    whatever the instance's are in the Program's gates: a row more than `Γ` is `size`, and a fresh bit more than `α`
+    times the rows is `nci`. An entry of the table for no template of the record is not counted, and a table that
+    lacks a template of the record is refused (`rows-table`), after the limits' own refusals and the record's. An
+    entry of 0 is one of the limits' own refusals (`params`), for a template of the record or for none, so no table
+    counts a template as holding no rows."""
+    for size, slots in (("2x3", 2), ("4x35", 4)):
+        case = shaped[f"{size} registered"]["case"]
+        inst, tr, limits = case["instance"], case["trusted"], case["block_rows"]
+        table, listed = limits["table"], json.loads(inst["record"])["templates"]
+        assert sorted(t for t, _ in listed) == sorted(table) and all(n % slots == 0 for _, n in listed)
+        rows = sum(n // slots * table[t] for t, n in listed)
+        fresh = ref.check_detail(inst, tr)["fresh"]
+        held = ref.block_rows(inst, tr, limits)
+        assert held == {"rows": rows, "fresh": fresh, "complies": True, "failure": None}
+        assert (limits["gamma"], limits["alpha"]) == (rows, [fresh, rows]) and 0 < fresh < rows
+        refused = {**inst, "gamma": 0, "alpha": [0, 1]}
+        assert ref.check_detail(refused, tr)["failure"] == "size" and ref.block_rows(refused, tr, limits) == held
+        assert ref.block_rows(inst, tr, {**limits, "gamma": rows - 1})["failure"] == "size"
+        assert ref.block_rows(inst, tr, {**limits, "alpha": [fresh - 1, rows]})["failure"] == "nci"
+        assert ref.block_rows(inst, tr, {**limits, "table": {**table, "Other_v1": 7}}) == held
+        for t, n in listed if slots == 2 else listed[:1]:
+            more = ref.block_rows(inst, tr, {**limits, "table": {**table, t: table[t] + 1}})
+            assert (more["rows"], more["failure"]) == (rows + n // slots, "size"), t
+            lacking = {k: v for k, v in table.items() if k != t}
+            assert ref.block_rows(inst, tr, {**limits, "table": lacking}) == {"error": "rows-table"}, t
+            assert ref.block_rows(inst, tr, {**limits, "table": {**table, t: 0}}) == {"error": "params"}, t
+            assert ref.block_rows(inst, tr, {**limits, "table": {**lacking, "Other_v1": 0}}) == {"error": "params"}, t
+    case = shaped[LISTED]["case"]
+    inst, tr, limits = case["instance"], case["trusted"], case["block_rows"]
+    assert ref.block_rows(inst, tr, {**limits, "table": {}}) == {"error": TEXT[LISTED]}
+    for bad in (-1, "3", 1.5, True, None):
+        assert ref.block_rows(inst, tr, {**limits, "gamma": bad}) == {"error": "params"}, bad
+        assert ref.block_rows(inst, tr, {**limits, "table": {"Other_v1": bad}}) == {"error": "params"}, bad
+    assert ref.block_rows(inst, tr, {**limits, "table": {"Other_v1": 0}}) == {"error": "params"}
+    for bad in ([1], [1, 0], [1, 2, 3], [1.5, 1], [-1, 1], [1, "2"], "1/2", None):
+        assert ref.block_rows(inst, tr, {**limits, "alpha": bad}) == {"error": "params"}, bad
+    for bad in ([], None, *({k: v for k, v in limits.items() if k != gone} for gone in ref.ROWS_LIMITS),
+                {**limits, "table": []}, {**limits, "table": [], "gamma": -1}):
+        assert ref.block_rows(inst, tr, bad) == {"error": "instance"}, bad
+
+
+def test_a_history_is_a_table_over_no_registered_parameter(shaped):
+    """A history table is a table of its own name over a parameter of that name, which is no registered parameter's:
+    the log's first record registers no such value, so no row read of it is θ. The served shape's record with one that
+    no row reads counts as the accepted case does. With its table reads and its opening naming the history in place of
+    the weights' table, under the same pin and the same registered weights, every row they fill is fresh (the table
+    reads' `unregistered`, the opening's ports `openings`) and the rate refuses, in gates, in rows and by the count.
+    The form reads a history's keys and its name and nothing else of it: one of a writer the circuit has no template of
+    is taken and counts the same, where the interface refuses it. A history under a name a table, a registered
+    parameter or another history has, one with a key more or a key less, one named by no string, and histories that
+    are no list are refused with the declarations, as the interface refuses each."""
+    accepted = shaped["2x3 registered"]
+    held = vectors.results(accepted["case"])
+    built = json.loads(accepted["case"]["instance"]["record"])
+    assert set(HISTORIES.values()) == {None, "inputs"} and {LOOSE, OPENED} <= set(HISTORIES)
+    for what, (stage, declare) in vectors.HISTORIES.items():
+        m = shaped[f"2x3 {what}"]
+        r = vectors.results(m["case"])
+        doc = copy.deepcopy(built)
+        declare(doc)
+        assert json.loads(m["case"]["instance"]["record"]) == doc != built, what
+        assert m["case"]["instance"]["pins"] == accepted["case"]["instance"]["pins"] != [], what
+        if stage is not None:
+            assert r["detail"] == r["public"] == r["kinds"] == r["exported"] == r["count"] == r["block_rows"] == {"error": stage}, what
+        elif m["shape"] != OPENED:
+            assert (r["detail"], r["count"], r["block_rows"]) == (held["detail"], held["count"], held["block_rows"]), what
+        assert (_interface(m)[0] is None) == (stage is None and m["shape"] != LOOSE), what
+    # the opening against a history: the record is the accepted one but for the table its reads and its opening name
+    m = shaped[OPENED]
+    inst, tr = m["case"]["instance"], m["case"]["trusted"]
+    doc = json.loads(inst["record"])
+    reg, was = doc["registered"], built["registered"]
+    assert [h["name"] for h in reg.pop("histories")] == [vectors.HISTORY]
+    assert vectors.HISTORY not in reg["params"] and vectors.HISTORY not in {t["name"] for t in reg["tables"]}
+    for key in ("roots", "openings"):
+        assert reg[key] == [{**x, "table": vectors.HISTORY} for x in was[key]] != was[key]
+    assert {k: v for k, v in reg.items() if k not in ("roots", "openings")} == {
+        k: v for k, v in was.items() if k not in ("roots", "openings")}
+    assert {k: v for k, v in doc.items() if k != "registered"} == {k: v for k, v in built.items() if k != "registered"}
+    x = ref.expand(inst, tr)["x"]
+    assert x.tables[vectors.HISTORY] == {"name": vectors.HISTORY, "param": vectors.HISTORY}
+    # each of the reader's rows they fill is θ in the accepted case and fresh here, with no reason it is held
+    embed = next(fn for fn, _ in m["circuit"].templates if codec.descriptor_id(fn) == vectors.EMBED)
+    bits = {p: 16 * words for p, words in IF.layout(embed).rows}
+    units = dict(built["templates"])[vectors.EMBED]
+    reads, ports = ("root", "domain"), ("row", "salt", "path")
+    rows = [[vectors.EMBED, p, u, 0] for p in (*reads, *ports) for u in range(units)]
+    before = accepted["case"]["instance"], accepted["case"]["trusted"]
+    assert ref.kinds(*before, rows) == ["theta"] * len(rows)
+    assert all(reason is not None for _, reason in ref.exported(*before, rows))
+    assert ref.kinds(inst, tr, rows) == ["unregistered"] * (2 * units) + ["openings"] * (3 * units)
+    assert all(reason is None for _, reason in ref.exported(inst, tr, rows))
+    r = vectors.results(m["case"])
+    d, d0 = r["detail"], held["detail"]
+    a_block = units // d["blocks"]
+    assert d["unregistered"] == d0["unregistered"] + a_block * sum(bits[p] for p in reads)
+    assert d["openings"] == a_block * sum(bits[p] for p in ports) > 0 == d0["openings"]
+    assert d["fresh"] == d0["fresh"] + a_block * sum(bits[p] for p in (*reads, *ports))
+    assert {k: d[k] for k in ("blocks", "gates", "inputs", "wired_rows", "wired_bits")} == {
+        k: d0[k] for k in ("blocks", "gates", "inputs", "wired_rows", "wired_bits")}
+    assert (d["failure"], r["count"]["failure"], r["block_rows"]["failure"]) == ("nci", "fresh", "nci")
+    assert r["block_rows"]["rows"] == held["block_rows"]["rows"] and r["block_rows"]["fresh"] == d["fresh"]
+
+
+def test_what_the_prover_chose_of_an_execution_phase(random_cases, shaped):
+    """The whole execution phase's input bits by kind, every slot's units, and of them the ones the prover chose: the
+    rows no declaration fills (`free`), the reads of a parameter that is not θ (`unregistered`) and the ports of an
+    opening that is not held (`openings`). Every row has one kind, so the kinds' bits are the phase's input bits, a
+    block's times the blocks. A fresh kind's bits are at least the most a block holds and at most that many in every
+    block, and fewer wherever the slots hold it unevenly, so the count is no multiple of the summary's. It is refused
+    exactly where the form is, with the form's code.
+
+    On the served shape, with the weights registered and the opening held, the prover chose the scan's state alone. An
+    opening takes its ports off the count only where it is held: under no pin, with another Definition under the
+    pinned one's name, or with no table read of the root, every row it opens is on the count at every unit it covers;
+    with no root read the root's rows, which nothing fills then, are on it too. Against a history its ports and its
+    table reads' rows are all on it. With nothing registered every row no wire fills is. A wire from the next slot is a
+    block's fresh input and none of the prover's choosing: the summary's fresh bits move and the count does not."""
+    uneven = none = 0
+    for m in (*random_cases, *shaped.values()):
+        inst, tr = m["case"]["instance"], m["case"]["trusted"]
+        detail, c = ref.check_detail(inst, tr), ref.chosen(inst, tr)
+        if "error" in detail:
+            assert c == {"error": detail["error"]}, m["shape"]
+            continue
+        blocks = detail["blocks"]
+        assert c["inputs"] == detail["inputs"] * blocks == sum(c[k] for k in ref.KINDS), m["shape"]
+        assert c["chosen"] == c["free"] + c["unregistered"] + c["openings"], m["shape"]
+        assert all(detail[k] <= c[k] <= detail[k] * blocks for k in ref.FRESH), m["shape"]
+        uneven += any(c[k] < detail[k] * blocks for k in ref.FRESH)
+        none += c["chosen"] == 0
+    assert uneven >= 50 and none >= 3, (uneven, none)
+
+    def chosen(what: str, **over) -> dict:
+        case = shaped[what]["case"]
+        return ref.chosen({**case["instance"], **over}, case["trusted"])
+
+    def moved(c: dict, held: dict, **by: int) -> bool:
+        """Whether `c` is `held` but for the kinds `by` names, each more by its bits, and θ, less by all of them."""
+        want = {**held, **{k: held[k] + n for k, n in by.items()}, "theta": held["theta"] - sum(by.values())}
+        return c == {**want, "chosen": want["free"] + want["unregistered"] + want["openings"]}
+
+    for size, blocks in (("2x3", 2), ("4x35", 4)):
+        case = shaped[f"{size} registered"]["case"]
+        held, detail = chosen(f"{size} registered"), ref.check_detail(case["instance"], case["trusted"])
+        assert vectors.results(case)["chosen"] == held
+        assert held["chosen"] == held["unregistered"] == blocks * detail["unregistered"] > 0
+        assert held["free"] == held["openings"] == held["cross_wires"] == held["ingress"] == 0
+        for what in ("none registered", "none committed"):
+            none = chosen(f"{size} {what}")
+            assert none["theta"] == 0 and none["chosen"] == none["inputs"] - none["inside"] > held["chosen"]
+    accepted = shaped["2x3 registered"]
+    held = chosen("2x3 registered")
+    embed = next(fn for fn, _ in accepted["circuit"].templates if codec.descriptor_id(fn) == vectors.EMBED)
+    bits = {p: 16 * words for p, words in IF.layout(embed).rows}
+    (opening,) = json.loads(accepted["case"]["instance"]["record"])["registered"]["openings"]
+    units, ports = opening["units"], sum(bits[p] for p in opening["ports"])
+    assert accepted["case"]["instance"]["pins"] != [] and units * ports > 0
+    assert moved(chosen("2x3 registered", pins=[]), held, openings=units * ports)
+    assert moved(chosen("2x3 a constant verdict"), held, openings=units * ports)
+    assert moved(chosen("2x3 no root read"), held, openings=units * ports, free=units * bits["root"])
+    assert moved(chosen(OPENED), held, openings=units * ports, unregistered=units * (bits["root"] + bits["domain"]))
+    # a wire from the next slot: computed in the phase, so not chosen, and fresh to the block that reads it
+    crossing, case = chosen("2x3 one wire from the next slot"), shaped["2x3 one wire from the next slot"]["case"]
+    assert crossing["cross_wires"] > 0 and crossing["chosen"] == held["chosen"]
+    wired = crossing["cross_wires"]
+    assert crossing == {**held, "cross_wires": wired, "inside": held["inside"] - wired}
+    assert (ref.check_detail(case["instance"], case["trusted"])["fresh"]
+            > ref.check_detail(accepted["case"]["instance"], accepted["case"]["trusted"])["fresh"])

@@ -51,14 +51,13 @@ def _recorded_coverage(runs: Path | None) -> dict | None:
     if runs is None:
         return None
     with open(runs) as f:
-        records = [json.loads(line) for line in f if line.strip()]
-    for r in records:
-        if r.get("arm") == "control" or r.get("committer") in (None, "control"):
-            continue
-        b = (r.get("commit") or {}).get("binding") if isinstance(r.get("commit"), dict) else None
-        cov = (b or {}).get("coverage") if isinstance(b, dict) else None
-        if isinstance(cov, dict):
-            return cov
+        for r in (json.loads(line) for line in f if line.strip()):
+            if r.get("arm") == "control" or r.get("committer") in (None, "control"):
+                continue
+            b = (r.get("commit") or {}).get("binding") if isinstance(r.get("commit"), dict) else None
+            cov = (b or {}).get("coverage") if isinstance(b, dict) else None
+            if isinstance(cov, dict):
+                return cov
     return None
 
 

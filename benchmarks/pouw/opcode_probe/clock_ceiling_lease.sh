@@ -7,7 +7,7 @@ UUID=${GPU_LEASE_UUID:?under gpu-lease}
 IDX=$(nvidia-smi --query-gpu=index,uuid --format=csv,noheader | awk -F', ' -v u="$UUID" '$2 == u {print $1}')
 SECS=${CLOCK_SECS:-20}
 LOCK=${CLOCK_RELOCK_MHZ:-2100}
-MEMLOCK=${CLOCK_RELOCK_MEM_MHZ:-12481}
+MEMLOCK=${CLOCK_RELOCK_MEM_MHZ:?set the memory clock to relock in MHz, clock.memory of the RTX PRO 6000 card}
 q() { nvidia-smi -i "$UUID" --query-gpu="$1" --format=csv,noheader,nounits | tr -d ' '; }
 MAXMHZ=$(q clocks.max.sm)
 MAXMEM=$(q clocks.max.mem)

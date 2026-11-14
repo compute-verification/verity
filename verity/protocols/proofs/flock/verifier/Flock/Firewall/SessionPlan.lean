@@ -1,4 +1,10 @@
-/-
+module
+
+public import Flock.Firewall.Coins
+public import Flock.Firewall.Hello
+public import Flock.Zk
+
+/-!
 # The schedule a ZK server session's coins follow (live PROTOCOL.md §10.4)
 
 The pure part of the session loop (`Session.lean`), at the statement its setup computed (`Hello.Setup.setup`): which
@@ -16,11 +22,6 @@ the setup's own Lean values, never a parse of the `Hello` text.
 
 The analysis holds them to the coin layer (`Claims/ZK/SessionLean.lean`).
 -/
-module
-
-public import Flock.Firewall.Coins
-public import Flock.Firewall.Hello
-public import Flock.Zk
 
 @[expose] public section
 
@@ -58,15 +59,15 @@ def ligeritoCoins (sch : Flock.Schedule) : Array Nat :=
 packed elements, `2^kLog` a block, with `claims` claims. The zerocheck's and the lincheck's (`replayCoins`), each claim's
 ring switch and their batching (`ringSwitch`), Ligerito (`ligeritoCoins`), and the inner proof's `ε`, `γ`, `β` and queries
 (`Zk.verifyInner`). A squeeze of no coins is no round. -/
-def repCoins (m kLog claims : Nat) : V (Array Nat) := do
-  let (sch, _) ← Zk.schedule m
+def repCoins (wide : Bool) (m kLog claims : Nat) : V (Array Nat) := do
+  let (sch, _) ← Zk.schedule wide m
   return (replayCoins m kLog ++ Array.replicate claims 7 ++ #[claims] ++ ligeritoCoins sch ++ #[1, INNER_CONS, 1, Zk.Q]).filter
     (· != 0)
 
 /-- A rep's rounds at its table's statement `st` (`repCoins`, with the statement's `2 + points · regions` claims); none for a
 table with no `--zk` schedule, as `FlockDeploy.repRounds` counts it, whose proof no verifier accepts. -/
 def repPlan (spec : SessionSpec) (st : Stmt) : Array Nat :=
-  (repCoins st.m st.c.kLog (2 + spec.points * st.regions.size)).toOption.getD #[]
+  (repCoins st.wideLeaf st.m st.c.kLog (2 + spec.points * st.regions.size)).toOption.getD #[]
 
 /-- Rep stream `k`'s name (`SessionSpec.repStreams`), `""` past them. -/
 def repName (spec : SessionSpec) (k : Nat) : String := (spec.repStreams[k]?.map (·.2.2)).getD ""

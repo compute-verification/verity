@@ -40,7 +40,7 @@ no soundness bound holds for it (`SHA512CRExpected`'s docstring).
 An empty class, or any `Bounded` that excludes the honest prover, makes `TileProofSoundAll` and `GGapHidden` vacuous:
 the first then holds at any `δzk ≥ 0` and says nothing about the proof system, so the second follows from `GGapSampled`
 alone. So a gap under the hidden audit is cited
-only beside its instance's pinned theorem that the honest prover, at its stated `q` (the batch's whole work), satisfies
+only beside its instance's guarantee that the honest prover, at its stated `q` (the batch's whole work), satisfies
 `ProverBounded`. That theorem is not enough on its own: `Bounded` must be the proof system's own class, stated without
 reading which of `τ`'s tiles are good, as Flock's per-finder class is. A class that reads goodness can hold the honest
 prover and still make `TileProofSoundAll` hold at `δzk = 0` with no proof system (`TileGame`'s docstring). -/

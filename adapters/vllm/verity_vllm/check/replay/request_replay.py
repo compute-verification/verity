@@ -22,7 +22,6 @@ from verity_vllm.check.replay.compare import _tp_member_alias
 from verity_vllm.check.replay.index import (
     IDS_MEMBER,
     ProgramIndex,
-    described,
     node_runs,
     plane_copies,
 )
@@ -112,15 +111,16 @@ class Replay:
 
     def _evaluate(self, i: int) -> None:
         r = self.pi.by_i[i]
-        d = described(self.pi, r)
+        d: Any = self.pi.describe(r)                                             # `_ensure` evaluates only a row its index describes
         fam = d["family"]
         t0 = time.perf_counter()
         self.busy.add(i)
+        got: Any                                                                 # outputs where `why` is None, whatever the evaluator gave
         try:
             got, why = EV.evaluated(self.pi, self, self.weights, r, self.rid, self.arrive, [])
         finally:
             self.busy.discard(i)
-        if got is None:
+        if why is not None:
             raise LookupError(f"row {i} ({fam}, {d['op_path']}, step {d['step']}) of request {self.rid}: {why}")
         if len(got) > 1:
             got = EV.by_member(got, self.pi.member_of_port(i) or EV.plane_ports(d))

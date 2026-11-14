@@ -45,7 +45,7 @@ def staged(tmp_path_factory):
     from synthetic_sets import synthetic_set
     from verity_flock.input_sets import InputSet
 
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     d = tmp_path_factory.mktemp("registered-bit-rows")
     program, query = _program()
     part = P.partition(program, query)
@@ -86,7 +86,7 @@ def one_value(tmp_path_factory):
     from synthetic_sets import synthetic_set
     from verity_flock.input_sets import InputSet
 
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     d = tmp_path_factory.mktemp("registered-rows-of-one-value")
     program, query = _program()
     part = P.partition(program, query)
@@ -335,7 +335,7 @@ def test_a_row_of_another_value_is_refused(one_value):
 
 def test_a_reads_file_naming_a_port_twice_is_refused(one_value):
     """A JSON parser keeps one of two equal keys: a file naming cs twice, the first under another root, would read as the
-    honest file. flock-verify refuses the text, naming the key, as it does a port's key named twice: exit 2, a verifier
+    honest file. verity-verify-proof refuses the text, naming the key, as it does a port's key named twice: exit 2, a verifier
     input it can't read, as any malformed `--registered` file."""
     good = {p: json.dumps(e) for p, e in one_value.own["ports"].items()}
     bad = json.dumps({**one_value.own["ports"]["cs"], "root": one_value.regs["again"].root.hex()})
@@ -354,7 +354,7 @@ def test_a_reads_file_naming_a_port_twice_is_refused(one_value):
 def test_a_circuit_naming_a_port_twice_is_refused(one_value, monkeypatch):
     """A registered read names its port by name, so under `--registered` a circuit naming a port twice is refused: x and cs
     are both 64-word `row/v2` rows, and the circuit with cs renamed x (its META alone; the gates as they are) is refused by
-    the statement writer and, staged with the honest port list, by flock-verify, whose hidden-output parse refuses a row
+    the statement writer and, staged with the honest port list, by verity-verify-proof, whose hidden-output parse refuses a row
     named twice (`HmOut.checkRows`) before the registered check's own refusal (`Registered.namesOnce`)."""
     head, line, rest = one_value.text.split("\n", 2)
     ports = json.loads(line[5:])["ports"]

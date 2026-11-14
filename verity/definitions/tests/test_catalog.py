@@ -35,6 +35,8 @@ print(json.dumps({
     "integration": sorted(m for m, mod in list(sys.modules.items())
                           if (f := Path(getattr(mod, "__file__", None) or "/").resolve()).is_relative_to(repo / "adapters")
                           and not f.is_relative_to(own) and f != own.parent / "__init__.py"),
+    "package": catalog.__name__.rsplit(".", 2)[0],
+    "catalog_packages": sorted(sys.modules["verity.circuits.defs"].CATALOG_PACKAGES),
 }))
 """
 
@@ -127,6 +129,14 @@ def test_the_catalog_reads_no_protocol():
 def test_the_catalog_loads_nothing_of_the_integration():
     """No module under `adapters/` but the catalog's own package and the `__init__.py` of the package that holds it."""
     assert not fresh()["integration"], f"loading the catalog imports the integration: {fresh()['integration']}"
+
+
+def test_the_package_names_itself_a_catalog_package():
+    """The package that holds the registry names itself a catalog package as it loads (`verity.circuits.defs.catalog_package`),
+    by its own name: a window takes its templates from a catalog package by that name, wherever the package is."""
+    got = fresh()
+    assert got["package"] in got["catalog_packages"], (
+        f"{got['package']} is no catalog package ({got['catalog_packages']}): its __init__.py calls catalog_package(__name__)")
 
 
 if __name__ == "__main__":

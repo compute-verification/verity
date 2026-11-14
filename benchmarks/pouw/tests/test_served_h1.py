@@ -9,7 +9,7 @@ junk row in a slot the queue leaves unassigned is refused and credits nothing, s
 the queue selects, and the tally's limbs are 16-bit.  A call's A table is AROW's row table, a tile's rows open against
 it and the step's A root, and A' = -b is refused.  A linear's B table is the same format over its weight rows, under the
 weights' root; the scheduler's record gives the request queue and its commitment.  A window's live coins
-(`served_h1/coins.py`) come from a challenger session off the node over its stream (a fake auditor host on loopback, its
+(`served_h1/coins.py`) come from a challenger session off the node over its stream (a fake auditor device on loopback, its
 ledger and the challenger's record and close signed with a test key), which refuses a session of another layout; the
 session is reserved at the gate for the window's layout and then opened on the root the caller gives (one quoted
 argument each), its secret kept from every output and carried in the hello, which the challenger refuses without it. The
@@ -400,13 +400,13 @@ MAIN = ["e1" * 20, PIN]
 
 @functools.cache
 def _host_key():
-    """The fake auditor host's LMS key: 16 leaves, a window's ledger entries, record and close at one each."""
+    """The fake auditor device's LMS key: 16 leaves, a window's ledger entries, record and close at one each."""
     from verity.commitments.crypto import lms
     return lms.keygen(lms.Params(64, 4, 4), bytes([7]) * 64)
 
 
 class _Host:
-    """The challenger on its auditor host over loopback, as the gate runs a window's session (`auditor.py`): the
+    """The challenger on its auditor device over loopback, as the gate runs a window's session (`auditor.py`): the
     lane's period opened and the session reserved and opened on `root` in the auditor's signed ledger (`ledger`, v2), a
     live window's coins (`coins.layout`, or `rounds` rounds at `epoch`) with its record signed and written to
     `directory` (`remote.open_session`) beside an empty hellos.jsonl, serving one session (`remote.serve`, its hello

@@ -29,18 +29,15 @@ fetch "${RUN_ART:?}" --to "$S/run" --path "${P}request.json" --path "${P}out/ver
 fetch "${AUDITOR_ART:?}" --to "$S/aud" --path out/ledger.jsonl --path out/pins.jsonl
 fetch "${PROVER_ART:?}" --to "$S/prover" --path out/prover.json
 MAIN=()
-# main's first-parent line, fetched as auditor.sh does, where this tree's auditor_line.py takes it (--main)
+# main's first-parent line as auditor.sh reads it (main_line.sh), where this tree's auditor_line.py takes it (--main)
 if uv run python "$HERE/auditor_line.py" --help | grep -q -- '--main FILE'; then
-  UNSHALLOW=()
-  [ "$(git -C "$HERE" rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
-  if { git -C "$HERE" fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main >> "$OUT/fetch.log" 2>&1 \
-        || git -C "$HERE" fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main \
-          >> "$OUT/fetch.log" 2>&1; } \
-      && git -C "$HERE" rev-list --first-parent refs/remotes/origin/main > "$OUT/main.txt"; then
-    MAIN=(--main "$OUT/main.txt")
-  else
-    echo "main: can't fetch origin/main's first-parent history, so no session is pinned" >> "$OUT/fetch.log"
-  fi
+  # shellcheck source=benchmarks/remote_session/main_line.sh
+  source "$HERE/main_line.sh" || exit 3
+  main_line "$OUT/fetch.log" "$OUT/main.txt" || {
+    main_refused fetch.log "no session's pin can be checked on it: no line was written" >> "$OUT/fetch.log"
+    cat "$OUT/fetch.log"
+    exit 3; }
+  MAIN=(--main "$OUT/main.txt")
 fi
 uv run python "$HERE/auditor_line.py" "$S/run/${P}out" --host-bytes "${HOST_BYTES:-1843153879040}" --pin "${PIN:?}" \
   --period "${PERIOD:?}" --commit "${COMMIT:?}" ${PEER:+--peer "$PEER"} --ledger "$S/aud/out/ledger.jsonl" \

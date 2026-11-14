@@ -217,6 +217,8 @@ namespace FlockComplete.CutFree
 
 open Flock Transcript Replay
 
+variable {wideLeaf : Bool}
+
 /-- Coins as the bytes a reply carries them in: each element's `le64(lo) ‖ le64(hi)`. -/
 def encC (cs : Array F128) : Claims.Msg := cs.toList.flatMap fun a => a.toBytes.data.toList
 
@@ -275,7 +277,7 @@ and salts, with a record of the layout's shape. `ligeritoPZk` returns at the rep
 coins, where the coupling (`ligeritoPZk_agree`) throws only at send `n + 1`, past its send count. -/
 theorem ligeritoPZk_cut_ret (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claims.Msg}
     (hr : ∀ k, coinOf (resp k) = coin k) {m : ℕ} (h25 : 25 ≤ m) (h35 : m ≤ 35) {sch : Schedule} {tp : ℕ}
-    (hz : Zk.schedule m = .ok (sch, tp)) (ms : MerkleScheme) (T : F128) (cm0 : Commit) (tb b : Array F128)
+    (hz : Zk.schedule wideLeaf m = .ok (sch, tp)) (ms : MerkleScheme) (T : F128) (cm0 : Commit) (tb b : Array F128)
     (lay : Zk.PadLayout) (hv : Array F128) (rep tPad : ℕ) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray)
     (t : Transcript) (l : Array Claims.Msg) (hN : l.size + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) ≤ n)
     (hρ : Zk.rhoIndependent ((⟨coin (l.size + 2 + sch.k0) 0, coin (l.size + 2 + sch.k0) 1⟩ : F256),
@@ -324,7 +326,7 @@ theorem repCons_cut (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Clai
       ts.size = st.fold.kLog - 6 → ∃ w, st.fold.folded a b lw ρ ts = .ok w ∧ w.size = 64)
     (hf : ∀ (a : F128) (lw ρ : Array F128), lw.size = 64 → ρ.size = st.fold.kLog - 6 →
       ∃ v, st.fold.fold a lw ρ = .ok v)
-    {sch : Schedule} {tp : ℕ} (hz : Zk.schedule st.m = .ok (sch, tp)) (tPad rep : ℕ) (dom : ByteArray)
+    {sch : Schedule} {tp : ℕ} (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tp)) (tPad rep : ℕ) (dom : ByteArray)
     (g : Array F128) (cm0 : _root_.Flock.Firewall.Finish.Commit) (extras : Array Claim)
     (pads : _root_.Flock.Firewall.Finish.PadsZk) (ic : _root_.Flock.Firewall.Finish.InnerCommit) (vals : Array F128)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (l : Array Claims.Msg)
@@ -679,7 +681,7 @@ theorem repCons_asksOf (C : Array (Array F128)) {st : Setup} (h25 : 25 ≤ st.m)
       ts.size = st.fold.kLog - 6 → ∃ w, st.fold.folded a b lw ρ ts = .ok w ∧ w.size = 64)
     (hf : ∀ (a : F128) (lw ρ : Array F128), lw.size = 64 → ρ.size = st.fold.kLog - 6 →
       ∃ v, st.fold.fold a lw ρ = .ok v)
-    {sch : Flock.Schedule} {tp : ℕ} (hz : Zk.schedule st.m = .ok (sch, tp)) (tPad rep : ℕ) (dom : ByteArray)
+    {sch : Flock.Schedule} {tp : ℕ} (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tp)) (tPad rep : ℕ) (dom : ByteArray)
     (g : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit) (vals : Array F128)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (hes : extras.size + 2 < 2 ^ 64)
     (hC : Claims.ZKServer.Count.consCounts st sch extras.size <+: C.toList.map Array.size)
@@ -740,7 +742,7 @@ theorem repCons_asksOf_size (C : Array (Array F128)) {st : Setup} (h25 : 25 ≤ 
       ts.size = st.fold.kLog - 6 → ∃ w, st.fold.folded a b lw ρ ts = .ok w ∧ w.size = 64)
     (hf : ∀ (a : F128) (lw ρ : Array F128), lw.size = 64 → ρ.size = st.fold.kLog - 6 →
       ∃ v, st.fold.fold a lw ρ = .ok v)
-    {sch : Flock.Schedule} {tp : ℕ} (hz : Zk.schedule st.m = .ok (sch, tp)) (tPad rep : ℕ) (dom : ByteArray)
+    {sch : Flock.Schedule} {tp : ℕ} (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tp)) (tPad rep : ℕ) (dom : ByteArray)
     (g : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit) (vals : Array F128)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (hes : extras.size + 2 < 2 ^ 64)
     (hC : C.toList.map Array.size = Claims.ZKServer.Count.consCounts st sch extras.size)

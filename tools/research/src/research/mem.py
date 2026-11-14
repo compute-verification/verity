@@ -5,7 +5,7 @@ of 946 GB under a cgroup memory.max of 256 GB, beside 300 GB of hand-written res
 
     limit      memory.max (cgroup v2) / memory.limit_in_bytes (v1) of the cgroup with the least left (available below): the
                process's own, or a v2 ancestor's (a Nebius node puts each run in its own session scope under the user slice's
-               cap, so the run's own empty scope says nothing about its neighbours); none finite -> MemTotal
+               limit, so the run's own empty scope says nothing about its neighbours); none finite -> MemTotal
     in_use     that cgroup's memory.current / memory.usage_in_bytes minus inactive_file (reclaimable page cache); meminfo: MemTotal
                - MemAvailable
     reserved   over the LIVE reservations in the ramlock dir (the fleet convention, /workspace/ramlock/<owner>-<job>.json with
@@ -28,7 +28,7 @@ stale only once its directory is gone, never while its run is starting.  One tha
 hand-written kind) counts whole until its owner removes it.  The runner removes its file at exit, any status
 ($RESEARCH_MEM_RESERVATION, research.cli);
 a runner that dies leaves a file whose pid is gone.  `research mem [--ramlock DIR] [--json]` prints the reading on the machine,
-and the waiters in line.  A reservation caps nothing; on the shared nodes pods/nebius/oom_order.py sets each live run's
+and the waiters in line.  A reservation limits nothing; on the shared nodes pods/nebius/oom_order.py sets each live run's
 oom_score_adj from its use against it, so the kernel's OOM killer takes a run over its reservation, or without one, first.
 
 Waiters form a line, first come first served: a run that waits writes a ticket, <ramlock>/.waiting/<ns>.<pid>.json ({"run_id",

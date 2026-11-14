@@ -44,7 +44,7 @@ import Proofs.Flock.Claims.Bridge.CustodyPlain
 /-!
 # The plain verdict at the statement's sample, at `VK keep`: the definitions
 
-`PlainDraw`'s predicates at every `keep`, with no facts about them: flock-verify's acceptance is `verifyWithMK keep` at
+`PlainDraw`'s predicates at every `keep`, with no facts about them: verity-verify-proof's acceptance is `verifyWithMK keep` at
 SHA-512 (`With.std`), the record decodes through `Record.decodeWithK keep`, and a recorded round is the live outcome's
 up to its digest (`Round.erase`), since at `keep := fun _ => true` the decoder drops S12's comparison of a retained
 round's bytes with its recorded digest. At `keep := id` each is `PlainDraw`'s.
@@ -64,7 +64,7 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **flock-verify accepts at the setup at the sample `dr`, its digest comparisons read through `keep`**: `AcceptsAtD`
+/-- **verity-verify-proof accepts at the setup at the sample `dr`, its digest comparisons read through `keep`**: `AcceptsAtD`
 with `verifyWithMK keep` at SHA-512 for `verify`. -/
 def AcceptsAtDK (keep : Bool → Bool) (I : Exec.Inputs) (dr : Option Json) (t : Exec.Transcript) : Prop :=
   ∃ spec sts, setupAtD I dr = .ok (spec, sts) ∧

@@ -11,12 +11,6 @@ parts, `PARTS`, the last of which is `MOVABLE`. Its side stream takes `DEFERRED`
 side lane (tile hashing), and the screen stays on the main lane. v0.4's phase names ``before``, ``gemm`` and ``after`` are
 still accepted, each as its part, and deprecated; their one ``after`` can't be split, so they get no side stream.
 
-An arm may have ``prefetch(dev, call, shape, flags)`` (optional, v0.6): before a flag set's first gate at a shape, the
-harness syncs the device and calls it on each call it is about to gate (`refs.prefetch`), so an arm whose gate recomputes
-outputs on the host can start those references, in `refs.pool()` (a process pool of the job's CPUs), while the first gate
-runs. It only starts work: the gate still takes what it compares against from the device as it is at the gate, and ignores
-a reference made from other inputs. An arm without it is gated as before.
-
 `build` returns the arm's build record (JSON), which names its ``binaries`` (v0.3): the path of every cubin, fatbin or
 library its kernels are loaded from, ``[]`` if they all come from libraries mapped into the process (those the SASS gate
 finds itself; a cubin loaded with ``cuModuleLoadData`` is never mapped, so it must be listed). `sass_gate.py` passes each
@@ -71,8 +65,9 @@ from __future__ import annotations
 import importlib
 import re
 import string
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 #: what the harness's modules, `pearl_c_sm90/overhead_arm.py` and the tests read
 __all__ = [
@@ -187,8 +182,8 @@ class Call(Protocol):
 
 @runtime_checkable
 class BenchArm(Protocol):
-    """A prover under test: its build, gates, timed call, work and verifier. Optional, and so not members here: ``dump``
-    (v0.5) and ``prefetch`` (v0.6), the module's docstring."""
+    """A prover under test: its build, gates, timed call, work and verifier. Optional, and so not a member here: ``dump``
+    (v0.5), the module's docstring."""
 
     name: str
     stream: str
@@ -246,8 +241,6 @@ def check_arm(arm: Any, precisions: set[str]) -> None:
                if not hasattr(arm, m)]
     if missing:
         raise ArmError(f"arm lacks {missing}")
-    if getattr(arm, "prefetch", None) is not None and not callable(arm.prefetch):
-        raise ArmError(f"arm {arm.name}: prefetch must be callable (dev, call, shape, flags), not {arm.prefetch!r}")
     if arm.stream not in STREAMS:
         raise ArmError(f"arm {arm.name}: stream {arm.stream!r} not in {STREAMS}")
     if arm.inputs not in INPUTS:

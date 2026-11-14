@@ -130,21 +130,23 @@ namespace FlockDeploy.KS
 
 open Flock FlockSoundness
 
+variable {wideLeaf : Bool}
+
 /-- **The numbers Flock ZK's schedules give the slack's fit**: at `m ∈ [25, 35]` at most `7` levels and at least
 one, level 1 a query, and level 0's weight `2^{d₀}·2Q₀` with `2` under `2^40`. -/
-theorem m1_slackNums : ∀ m : Fin 11, (Accounting.m1Schedule (m.val + 25)).levels.length ≤ 7 ∧
-    1 ≤ (Accounting.m1Schedule (m.val + 25)).levels.length ∧
-    1 ≤ 2 ^ (lvOf (Accounting.m1Schedule (m.val + 25)) 1).logLen *
-      (lvOf (Accounting.m1Schedule (m.val + 25)) 1).queries ∧
-    2 + 2 ^ (lvOf (Accounting.m1Schedule (m.val + 25)) 0).logLen *
-      (2 * (lvOf (Accounting.m1Schedule (m.val + 25)) 0).queries) ≤ 2 ^ 40 := by
-  decide +kernel
+theorem m1_slackNums : ∀ m : Fin 11, (Accounting.m1Schedule wideLeaf (m.val + 25)).levels.length ≤ 7 ∧
+    1 ≤ (Accounting.m1Schedule wideLeaf (m.val + 25)).levels.length ∧
+    1 ≤ 2 ^ (lvOf (Accounting.m1Schedule wideLeaf (m.val + 25)) 1).logLen *
+      (lvOf (Accounting.m1Schedule wideLeaf (m.val + 25)) 1).queries ∧
+    2 + 2 ^ (lvOf (Accounting.m1Schedule wideLeaf (m.val + 25)) 0).logLen *
+      (2 * (lvOf (Accounting.m1Schedule wideLeaf (m.val + 25)) 0).queries) ≤ 2 ^ 40 := by
+  cases wideLeaf <;> decide +kernel
 
 /-- **The slack fits the masked room at Flock ZK's schedules at chances at most `2^{-128}`**, every fork before the
 last round, whatever the rounds `K`: `|IZW| ≤ 19`, the joined weights at most `2^41` times the room, and
 `4·√(19·8·2^{-128})·2^41 + 2·19·8·2^{-128}·2^41 ≤ 1`. -/
 theorem zk_slackFitW {K n : ℕ} (st : ℕ → Stmt) (hm : ∀ j < n, 25 ≤ (st j).m ∧ (st j).m ≤ 35)
-    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < n, sch j = Accounting.m1Schedule (st j).m) (Np : ℕ → ℕ)
+    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < n, sch j = Accounting.m1Schedule (st j).wideLeaf (st j).m) (Np : ℕ → ℕ)
     (rd : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Fin K) (hj : ∀ j < n, ∀ i, (rd j i).val + 1 < K)
     {δ : ℕ → ℝ} (hδ0 : ∀ t, 0 ≤ δ t) (hδ : ∀ t, t + 1 < K → δ t ≤ ((2 : ℝ) ^ 128)⁻¹) (hδ1 : ∀ t, δ t ≤ 1) :
     Claims.Flock.SlackFitW n sch Np rd δ := by
@@ -152,7 +154,7 @@ theorem zk_slackFitW {K n : ℕ} (st : ℕ → Stmt) (hm : ∀ j < n, 25 ≤ (st
       1 ≤ 2 ^ (lvOf (sch j) 1).logLen * (lvOf (sch j) 1).queries ∧
       2 + 2 ^ (lvOf (sch j) 0).logLen * (2 * (lvOf (sch j) 0).queries) ≤ 2 ^ 40 := fun j hjn => by
     obtain ⟨h25, h35⟩ := hm j hjn
-    have he := m1_slackNums ⟨(st j).m - 25, by omega⟩
+    have he := m1_slackNums (wideLeaf := (st j).wideLeaf) ⟨(st j).m - 25, by omega⟩
     simp only [Nat.sub_add_cancel h25] at he
     rw [hsch j hjn]
     exact he
@@ -190,7 +192,7 @@ theorem δN_GF128_le {K : ℕ} {n : Fin K → ℕ} {t : ℕ} (hn : ∀ ht : t < 
 /-- **The slack fits the masked room at the coupling's chances** `FnFork.δN GF128 65536 n`, at Flock ZK's schedules,
 every fork before the last round, where every revealed length before the last round is positive. -/
 theorem zk_slackFitW_δN {K n : ℕ} (st : ℕ → Stmt) (hm : ∀ j < n, 25 ≤ (st j).m ∧ (st j).m ≤ 35)
-    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < n, sch j = Accounting.m1Schedule (st j).m) (Np : ℕ → ℕ)
+    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < n, sch j = Accounting.m1Schedule (st j).wideLeaf (st j).m) (Np : ℕ → ℕ)
     (rd : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Fin K) (hj : ∀ j < n, ∀ i, (rd j i).val + 1 < K)
     (c : Fin K → ℕ) (hc : ∀ t : Fin K, t.val + 1 < K → 1 ≤ c t) :
     Claims.Flock.SlackFitW n sch Np rd (Claims.Flock.FnFork.δN FlockLevel3.GF128 65536 c) :=

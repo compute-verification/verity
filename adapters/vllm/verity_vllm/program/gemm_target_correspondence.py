@@ -246,9 +246,9 @@ def capture(a: CaptureOptions) -> int:
 
 def step_model(dot: str):
     """``(the registered step primitive, a cpu_model TCModel with its parameters)`` for a ``GemmTarget.dot`` name."""
-    from verity.definitions.numerics.mma import TCModel
     from verity.circuits.silicon.models import AMPERE_BF16_M16N8K16
     from verity.circuits.silicon.total import HOPPER_BF16_WGMMA_K16
+    from verity.definitions.numerics.mma import TCModel
 
     from verity_vllm.program.frontend.targets import DOTS
 

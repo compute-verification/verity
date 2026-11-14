@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import gc
 import http.client
 import itertools
 import json
@@ -116,6 +117,32 @@ class Silent(threading.Thread):
                 with contextlib.suppress(ConnectionError):
                     while c.recv(65536):
                         pass
+
+
+class Paused(threading.Thread):
+    """A server that takes one connection's request, sends ``first``, reads until the other side has ended its sending
+    (``ended`` is set then), sends ``rest`` only once ``go`` is set, and closes."""
+
+    def __init__(self, first: bytes, rest: bytes) -> None:
+        super().__init__(daemon=True)
+        self.sock = socket.create_server(("127.0.0.1", 0))
+        self.address = self.sock.getsockname()[:2]
+        self.first, self.rest, self.ended, self.go = first, rest, threading.Event(), threading.Event()
+        self.start()
+
+    def run(self) -> None:
+        with self.sock:
+            c, _ = self.sock.accept()
+            with c, contextlib.suppress(OSError):        # a front that has closed its side takes no more
+                try:
+                    request_on(c)
+                    c.sendall(self.first)
+                    while c.recv(65536):
+                        pass
+                finally:
+                    self.ended.set()
+                self.go.wait()
+                c.sendall(self.rest)
 
 
 class Echo(threading.Thread):
@@ -343,6 +370,35 @@ def test_once_the_certifiers_side_has_ended_the_front_ends_the_servers(answer, s
                                                 b"%s:%d" % (server.address[0].encode(), server.address[1]))]
     assert f.log == [{"n": 4, "run": b"run".hex(), "bucket": 9, "prompt": 3, "ids": len(sent), "ended": False, "why": F.GONE,
                       "at": 1.0, "ms": [1000.0] * len(sent)}]
+
+
+def test_a_relayed_connection_whose_client_has_ended_its_sending_gets_the_servers_answer_whole():
+    """Once a client has ended its sending, asyncio no longer watches its connection, so the handler that waits on the
+    server for the rest of the answer is held by nothing but itself. A collection during that wait must not destroy
+    it: the answer still comes whole."""
+    first, rest = b"HTTP/1.1 200 OK\r\ncontent-length: 10\r\n\r\n12345", b"67890"
+    server = Paused(first, rest)
+
+    async def collect() -> None:
+        gc.collect()
+
+    try:
+        with Fronted(server.address) as f, socket.create_connection(f.address) as c:
+            c.sendall(b"GET /v1/models HTTP/1.1\r\n\r\n")
+            c.shutdown(socket.SHUT_WR)
+            got = b""
+            while len(got) < len(first):
+                got += c.recv(65536)
+            server.ended.wait()                          # the front has read the client's end and passed it on
+            asyncio.run_coroutine_threadsafe(collect(), f.loop).result()
+            server.go.set()
+            with contextlib.suppress(ConnectionError):
+                while chunk := c.recv(65536):
+                    got += chunk
+    finally:
+        server.go.set()
+    server.join()
+    assert got == first + rest
 
 
 def test_a_server_that_is_not_there_closes_the_connection():

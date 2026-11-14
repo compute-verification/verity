@@ -1,4 +1,4 @@
-# The adopted P.V a useful MMA as measured: apv_l7qs (benchmarks/pouw/edited_gemm/apv.cu), e_l7qs's mainloop over one
+# The adopted P.V a useful MMA as measured: apv_l7qs (verity/protocols/accounting/pouw/prover/kernels/edited_gemm/apv.cu), e_l7qs's mainloop over one
 # unit (a head's 128-query tile x 128 channels over keys 0 .. 128(qt + 1) - 1, warp row w the 32-query block j = 4qt + w)
 # with the tail stage P_A = [-U | -U | -U M_d | 64 M_d] against DG's [Y0 | Y1 | X_diag | 0] (O = T_last - U Y0 - W -
 # 256 U Y1, absorbed) and the served epilogue f = (float(O + 64 S) s_q + z_q X_0) s_ch, Llama-3.1-8B's attention at
@@ -10,7 +10,7 @@
 # 2,048 tokens (1.092x at 4,096, where both are DRAM-bound). The producers (U, P~, V, the X sums) are not in it.
 name = "apv-l7qs"
 status = "measured"
-source = "BC-KERNEL's apv_l7qs (benchmarks/pouw/edited_gemm/apv.cu) at s = 2048, H = 32, rep = 4, `eps_profile.py OUT --toml`, census VF3n-16's classes, scaled by 2,490,368 / 2,228,224 MMAs to a useful MMA (bit-exact against checked_strip's pv_words and pv_served, apv_ref.py)"
+source = "BC-KERNEL's apv_l7qs (verity/protocols/accounting/pouw/prover/kernels/edited_gemm/apv.cu) at s = 2048, H = 32, rep = 4, `eps_profile.py OUT --toml`, census VF3n-16's classes, scaled by 2,490,368 / 2,228,224 MMAs to a useful MMA (bit-exact against checked_strip's pv_words and pv_served, apv_ref.py)"
 L = 32
 
 [mma]

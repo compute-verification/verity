@@ -4,6 +4,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from verity_proof_throughput.cli import main  # noqa: E402
+from verity_proof_throughput.cli import main
 
 sys.exit(main())

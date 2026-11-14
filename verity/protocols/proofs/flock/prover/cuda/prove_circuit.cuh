@@ -10,8 +10,8 @@
 // plan m_plan) or given as host slots, the units by fc_unit_witness (32 units per CTA, bit-sliced: a row is one u32
 // over the 32 units; rows in level order, several warps per level; then a 32x32 bit transpose per 32 rows into each
 // unit's slot), the mask slot's free cells left zero (the no-op mask hook) or, under M1's masking, given as host slots. A
-// deep unit's slots come from the host too (u_host), and with host_z the whole witness does (a tampered
-// witness). Under M1 (zk_on) level 0's commitment is fc_commit_l0_zk's and the Ligerito lane phase carries level 0's hiding
+// deep unit's slots come from the host too (u_host), or from the level walk (u_walk, fc_unit_walk: a launch a level over
+// every unit at once), and with host_z the whole witness does (a tampered witness). Under M1 (zk_on) level 0's commitment is fc_commit_l0_zk's and the Ligerito lane phase carries level 0's hiding
 // (ligerito_zk.cuh).
 
 #include <cuda_pipeline.h>
@@ -98,6 +98,9 @@ typedef struct {
     // where it holds a copy, the row arrays (t_a_rows, t_b_rows; u_a_off, u_a_col, u_b_off, u_b_col) may be null. 0: keyed by
     // their host addresses (FcUploads)
     unsigned long long types_gen;
+    // the units by the level walk (fc_unit_walk) in place of fc_unit_witness, from the same input words: its rows are set 2
+    // of types_gen (flock_cuda_types_share), which must be on the device; not for a cut template (u_n_late)
+    int u_walk;
 } FlockCircuitParams;
 
 // hm96 leaves of the digests x[0..n) (64 bytes each) under the host's salts (192 bytes each), finished on the device as a tree's
@@ -209,6 +212,145 @@ __global__ void fc_unit_witness(const uint64_t* __restrict__ inputs, int in_word
         uint32_t zv = r < useful ? Z[r] : 0, av = r < useful ? A[r] : 0, bv = r < useful ? B[r] : 0;
         zv = fc_transpose32(zv, lane); av = fc_transpose32(av, lane); bv = fc_transpose32(bv, lane);
         if (ul < n_units + 32 * g_base) { z_out[base + rb] = zv; a_out[base + rb] = av; b_out[base + rb] = bv; }
+    }
+}
+
+// ---- the unit's level walk ----
+// Every unit of a statement at once, FC_WALK_UNITS of them a pass: a row is FC_WALK_G u64 words, bit l of word g unit
+// 64 g + l's. The rows are read in the level schedule's order (FcTypeUploads' set 2: `rid`, each scheduled row's index;
+// row k's A columns at cols[st[k]..mid[k]] and its B columns at cols[mid[k]..st[k + 1]]; `own`, per input row, bit 0 where
+// A's row is the row's own column and bit 1 where B's is). A level's rows read only earlier levels', the input rows, the
+// constant's and their own column, so a level is one launch: a thread a row, or a warp a row where the level is narrow
+// (the lanes share the row's columns and fold by shuffles). Then every 32 rows are transposed into the units' slots, as
+// fc_unit_witness leaves them. circuit.rs `unit_walk_words` is the same walk on the host.
+#define FC_WALK_G 4
+#define FC_WALK_UNITS (64 * FC_WALK_G)
+// a level of fewer rows than this goes a warp a row
+#define FC_WALK_WARP 65536
+
+struct FcWalk {
+    const uint32_t *rid, *st, *mid, *cols;
+    uint64_t *z, *a, *b;
+};
+
+__device__ __forceinline__ void fc_walk_fold(const uint64_t* z, uint32_t c, uint64_t& a0, uint64_t& a1, uint64_t& a2, uint64_t& a3) {
+    const ulonglong2* p = (const ulonglong2*)(z + (size_t)c * FC_WALK_G);
+    const ulonglong2 lo = p[0], hi = p[1];
+    a0 ^= lo.x; a1 ^= lo.y; a2 ^= hi.x; a3 ^= hi.y;
+}
+
+// scheduled row k by one thread: x and y the XOR of z over its A and B columns but its own, z = x & y, and a row that reads
+// its own column an odd number of times has z back in its a or b
+__device__ __forceinline__ void fc_walk_row(const FcWalk& d, uint32_t k) {
+    const uint32_t i = d.rid[k], s = d.st[k], m = d.mid[k], e = d.st[k + 1];
+    uint64_t x0 = 0, x1 = 0, x2 = 0, x3 = 0, y0 = 0, y1 = 0, y2 = 0, y3 = 0, oa = 0, ob = 0;
+    for (uint32_t j = s; j < m; j++) {
+        const uint32_t c = d.cols[j];
+        if (c == i) { oa = ~oa; continue; }
+        fc_walk_fold(d.z, c, x0, x1, x2, x3);
+    }
+    for (uint32_t j = m; j < e; j++) {
+        const uint32_t c = d.cols[j];
+        if (c == i) { ob = ~ob; continue; }
+        fc_walk_fold(d.z, c, y0, y1, y2, y3);
+    }
+    const uint64_t z0 = x0 & y0, z1 = x1 & y1, z2 = x2 & y2, z3 = x3 & y3;
+    uint64_t *pz = d.z + (size_t)i * FC_WALK_G, *pa = d.a + (size_t)i * FC_WALK_G, *pb = d.b + (size_t)i * FC_WALK_G;
+    pz[0] = z0; pz[1] = z1; pz[2] = z2; pz[3] = z3;
+    pa[0] = x0 ^ (z0 & oa); pa[1] = x1 ^ (z1 & oa); pa[2] = x2 ^ (z2 & oa); pa[3] = x3 ^ (z3 & oa);
+    pb[0] = y0 ^ (z0 & ob); pb[1] = y1 ^ (z1 & ob); pb[2] = y2 ^ (z2 & ob); pb[3] = y3 ^ (z3 & ob);
+}
+
+// scheduled row k by a whole warp, every lane of it called with the same k
+__device__ __forceinline__ void fc_walk_row_warp(const FcWalk& d, uint32_t k, uint32_t lane) {
+    const uint32_t i = d.rid[k], s = d.st[k], m = d.mid[k], e = d.st[k + 1];
+    uint64_t x0 = 0, x1 = 0, x2 = 0, x3 = 0, y0 = 0, y1 = 0, y2 = 0, y3 = 0;
+    uint32_t oa = 0, ob = 0;
+    for (uint32_t j = s + lane; j < m; j += 32) {
+        const uint32_t c = d.cols[j];
+        if (c == i) { oa = ~oa; continue; }
+        fc_walk_fold(d.z, c, x0, x1, x2, x3);
+    }
+    for (uint32_t j = m + lane; j < e; j += 32) {
+        const uint32_t c = d.cols[j];
+        if (c == i) { ob = ~ob; continue; }
+        fc_walk_fold(d.z, c, y0, y1, y2, y3);
+    }
+    for (int off = 16; off; off >>= 1) {
+        x0 ^= __shfl_xor_sync(0xffffffffu, x0, off); x1 ^= __shfl_xor_sync(0xffffffffu, x1, off);
+        x2 ^= __shfl_xor_sync(0xffffffffu, x2, off); x3 ^= __shfl_xor_sync(0xffffffffu, x3, off);
+        y0 ^= __shfl_xor_sync(0xffffffffu, y0, off); y1 ^= __shfl_xor_sync(0xffffffffu, y1, off);
+        y2 ^= __shfl_xor_sync(0xffffffffu, y2, off); y3 ^= __shfl_xor_sync(0xffffffffu, y3, off);
+        oa ^= __shfl_xor_sync(0xffffffffu, oa, off); ob ^= __shfl_xor_sync(0xffffffffu, ob, off);
+    }
+    if (lane == 0) {
+        const uint64_t ma = oa ? ~0ull : 0ull, mb = ob ? ~0ull : 0ull;
+        const uint64_t z0 = x0 & y0, z1 = x1 & y1, z2 = x2 & y2, z3 = x3 & y3;
+        uint64_t *pz = d.z + (size_t)i * FC_WALK_G, *pa = d.a + (size_t)i * FC_WALK_G, *pb = d.b + (size_t)i * FC_WALK_G;
+        pz[0] = z0; pz[1] = z1; pz[2] = z2; pz[3] = z3;
+        pa[0] = x0 ^ (z0 & ma); pa[1] = x1 ^ (z1 & ma); pa[2] = x2 ^ (z2 & ma); pa[3] = x3 ^ (z3 & ma);
+        pb[0] = y0 ^ (z0 & mb); pb[1] = y1 ^ (z1 & mb); pb[2] = y2 ^ (z2 & mb); pb[3] = y3 ^ (z3 & mb);
+    }
+}
+
+// a level's rows k0 .. k0 + n, a thread a row
+__global__ void fc_walk_level(FcWalk d, uint32_t k0, uint32_t n) {
+    const uint32_t t = blockIdx.x * blockDim.x + threadIdx.x;
+    if (t < n) fc_walk_row(d, k0 + t);
+}
+
+// a level's rows k0 .. k0 + n, a warp a row
+__global__ void fc_walk_level_warp(FcWalk d, uint32_t k0, uint32_t n) {
+    const uint32_t t = blockIdx.x * blockDim.x + threadIdx.x;
+    if ((t >> 5) < n) fc_walk_row_warp(d, k0 + (t >> 5), t & 31);
+}
+
+// The input rows of a pass's units (inputs: their words, [n_units][in_words] F128) and the constant's: one CTA of
+// FC_WALK_UNITS threads per u64 of a unit's input words, which holds 64 rows. Thread (g, t) forms row 64 w + t's word g
+// from that u64 of units 64 g .. 64 g + 63. An input row is its unit's input bit where A's row is its own column (else 0),
+// with a the same and b the same where B's is.
+__global__ void fc_walk_seed(const uint64_t* __restrict__ inputs, int in_words, int n_units, const uint32_t* __restrict__ own,
+                             FcWalk d, uint32_t cpos) {
+    __shared__ uint64_t sh[FC_WALK_UNITS];
+    const int tid = threadIdx.x;
+    const size_t w = blockIdx.x;
+    sh[tid] = tid < n_units ? inputs[(size_t)tid * 2 * in_words + w] : 0;
+    __syncthreads();
+    const int g = tid >> 6, t = tid & 63;
+    uint64_t word = 0;
+#pragma unroll 8
+    for (int l = 0; l < 64; l++) word |= ((sh[64 * g + l] >> t) & 1) << l;
+    const size_t i = 64 * w + t;
+    const uint32_t o = own[i];
+    const uint64_t zv = (o & 1) ? word : 0;
+    d.z[i * FC_WALK_G + g] = zv; d.a[i * FC_WALK_G + g] = zv; d.b[i * FC_WALK_G + g] = (o & 2) ? zv : 0;
+    if (w == 0 && tid < FC_WALK_G) {
+        const size_t c = (size_t)cpos * FC_WALK_G + tid;
+        d.z[c] = ~0ull; d.a[c] = ~0ull; d.b[c] = ~0ull;
+    }
+}
+
+// The walked rows into the slots of units u0 .. u0 + FC_WALK_UNITS (those under n_units): a warp takes 32 rows of 32 units
+// (a row's u32 number q, bit l unit u0 + 32 q + l's), transposes them, and each lane writes its unit's word of z, a and b,
+// the words fc_unit_witness writes. A warp's tasks are a run of row blocks of one q, so a unit's words are written in order.
+__global__ void fc_walk_slots(FcWalk d, uint32_t useful, long long u0, long long n_units, int per_block, int pos0, int unit_log,
+                              int k_log, uint32_t* __restrict__ z_out, uint32_t* __restrict__ a_out, uint32_t* __restrict__ b_out) {
+    const uint32_t nrb = (useful + 31) / 32;
+    const int lane = threadIdx.x & 31;
+    const unsigned long long nw = (unsigned long long)gridDim.x * (blockDim.x >> 5), tasks = (unsigned long long)nrb * (FC_WALK_UNITS / 32);
+    const uint32_t *Z = (const uint32_t*)d.z, *A = (const uint32_t*)d.a, *B = (const uint32_t*)d.b;
+    for (unsigned long long task = (unsigned long long)blockIdx.x * (blockDim.x >> 5) + (threadIdx.x >> 5); task < tasks; task += nw) {
+        const uint32_t q = (uint32_t)(task / nrb), rb = (uint32_t)(task % nrb);
+        const uint32_t r = 32 * rb + lane;
+        const size_t at = (size_t)r * (2 * FC_WALK_G) + q;
+        uint32_t zv = r < useful ? Z[at] : 0, av = r < useful ? A[at] : 0, bv = r < useful ? B[at] : 0;
+        zv = fc_transpose32(zv, lane); av = fc_transpose32(av, lane); bv = fc_transpose32(bv, lane);
+        const long long ul = u0 + 32LL * q + lane;
+        if (ul < n_units) {
+            const long long blk = ul / per_block, kk = ul % per_block;
+            const long long base = (blk << (k_log - 5)) + ((long long)(pos0 + kk) << (unit_log - 5));
+            z_out[base + rb] = zv; a_out[base + rb] = av; b_out[base + rb] = bv;
+        }
     }
 }
 
@@ -771,11 +913,13 @@ extern "C" int flock_cuda_dev_zero(void* p, size_t bytes) {
 
 // A circuit's arrays on the device for the process, keyed by the generation gpu_circuit.rs `types` drew for that circuit's build
 // (FlockCircuitParams.types_gen; no two builds share one) and a set: 0, every slot type's CSC (per type A's column pointers and
-// rows, then B's); 1, the unit's rows as CSR and its level schedule (fc_witness's six arrays). A set is copied from the host the
+// rows, then B's); 1, the unit's rows as CSR and its level schedule (fc_witness's six arrays); 2, the unit's rows in its level
+// schedule's order (fc_unit_walk's five arrays). A set is copied from the host the
 // first time its key is asked for, as flock_cuda_copy copies (beside a session proving meanwhile), and its host arrays are never
 // read again, so the host frees them once the set is here and passes null. A set not here whose host arrays are null is refused.
 // A set asked for with a key (a digest of its arrays) is one device copy shared by every process on this GPU that asks for that
-// key (fc_share_get, csc_share.cuh), and a copy of the process's own where it can't be. The arrays the asker marks in `host`
+// key (fc_share_get, csc_share.cuh), and a copy of the process's own where it can't be, or with `shared_only` refused there
+// (set 2: a copy a prover of rows as large as the CSC is what the device has no room for). The arrays the asker marks in `host`
 // (bit i, array i) stay where they are instead, page-locked and mapped, and the device reads them there for the process: the host
 // must keep them, unmoved, for as long. An array the runtime won't lock is copied.
 struct FcTypeUploads {
@@ -788,7 +932,7 @@ struct FcTypeUploads {
         return false;
     }
     cudaError_t get(unsigned long long gen, int set, const uint32_t* const* h, const size_t* len, size_t n, uint32_t** d,
-                    unsigned long long host = 0, const uint8_t* key = nullptr) {
+                    unsigned long long host = 0, const uint8_t* key = nullptr, bool shared_only = false) {
         std::lock_guard<std::mutex> lock(mu);
         for (const auto& e : held)
             if (e.first == std::make_pair(gen, set)) {
@@ -799,11 +943,15 @@ struct FcTypeUploads {
         for (size_t i = 0; i < n; i++)
             if (len[i] && !h[i]) return cudaErrorInvalidValue;
         std::vector<uint32_t*> got(n, nullptr);
-        if (key && !host && fc_share_get(key, h, len, n, got.data()) == 0) {
+        if (shared_only && (!key || host)) return cudaErrorInvalidValue;
+        if (key && !host &&
+            fc_share_get(key, h, len, n, got.data(), set == 2 ? "the unit's level walk's rows" : "the slot types' CSC",
+                         shared_only ? "not taken" : "a copy of its own") == 0) {
             held.emplace_back(std::make_pair(gen, set), got);
             std::copy(got.begin(), got.end(), d);
             return cudaSuccess;
         }
+        if (shared_only) return cudaErrorNotSupported;
         std::vector<char> locked(n, 0);
         auto undo = [&] {
             for (size_t i = 0; i < n; i++)
@@ -845,6 +993,15 @@ extern "C" int flock_cuda_types_upload(unsigned long long gen, int set, const ui
                                        unsigned long long host, const uint8_t* key) {
     std::vector<uint32_t*> d(n);
     if (fc_type_uploads.get(gen, set, h, len, n, d.data(), host, key) != cudaSuccess) { cudaGetLastError(); return 1; }
+    return 0;
+}
+
+// set `set` of generation `gen` onto the device now as one copy this GPU's provers share under `key` (64 bytes), or not at
+// all: 0 once this process holds it; nonzero where it can't be shared, and nothing is copied
+extern "C" int flock_cuda_types_share(unsigned long long gen, int set, const uint32_t* const* h, const size_t* len, size_t n,
+                                      const uint8_t* key) {
+    std::vector<uint32_t*> d(n);
+    if (fc_type_uploads.get(gen, set, h, len, n, d.data(), 0, key, true) != cudaSuccess) { cudaGetLastError(); return 1; }
     return 0;
 }
 
@@ -908,11 +1065,17 @@ static int fc_bad_shape(const FlockCudaProveParams* P, const FlockCircuitParams*
     return 0;
 }
 
+// each of the level walk's three working arrays, a row's FC_WALK_G words for every row of the unit: 0 where the units are not
+// walked
+static size_t fc_walk_bytes(const FlockCircuitParams* N) {
+    return N->u_walk && !N->u_host && !N->c.host_z ? (size_t)N->u_useful * FC_WALK_G * sizeof(uint64_t) : 0;
+}
+
 static size_t fc_arena_of(const FlockCudaProveParams* P, const FlockCircuitParams* N) {
     long long fold_words = 0;
     for (int t = 0; t < N->n_types; t++) fold_words += 1LL << N->type_log[t];
     const FcArenaShape s = {P->m, P->k_log, N->c.sub_log, P->initial_k, P->recursive_steps, P->log_inv_rates, P->recursive_ks,
-                            P->queries, FLOCK_HB, N->zk_on, N->zk_on ? N->zk_t_pad : 0, fold_words};
+                            P->queries, FLOCK_HB, N->zk_on, N->zk_on ? N->zk_t_pad : 0, fold_words, (long long)fc_walk_bytes(N)};
     return fc_arena_bytes(&s);
 }
 
@@ -942,6 +1105,98 @@ static void fc_zlin_transpose(const F128* df, int k_log, long long n_stripes, ui
     static const bool bytewise = [] { const char* e = std::getenv("FC_ZLIN_BYTEWISE"); return e && e[0] == '1'; }();
     if (bytewise) fc_zlin_transpose_bytewise<<<4096, 256>>>(df, k_log, n_stripes, d_zlin);
     else chunk_zlin_transpose<<<4096, 256>>>(df, k_log, n_stripes, d_zlin);
+}
+
+// n_units units' slots of z, a and b by the level walk (the kernels above), FC_WALK_UNITS units a pass: the input rows and
+// the constant's, a launch a level, the transposition into the slots (unit x's at block x / per_block, slot pos0 + x %
+// per_block). d holds set 2's first four arrays and the three working arrays; own is set 2's fifth; level_off is the host's.
+// `walked` false leaves the levels out (a test's control: the slots then hold whatever the working arrays held).
+static int fc_walk_units(FcWalk d, const uint32_t* own, const uint64_t* d_in, int in_words, long long n_units, uint32_t useful,
+                         uint32_t cpos, int levels, const uint32_t* level_off, int per_block, int pos0, int unit_log, int k_log,
+                         uint32_t* z_out, uint32_t* a_out, uint32_t* b_out, bool walked = true) {
+    const unsigned long long tasks = (unsigned long long)((useful + 31) / 32) * (FC_WALK_UNITS / 32);
+    for (long long u0 = 0; u0 < n_units; u0 += FC_WALK_UNITS) {
+        const int nu = (int)std::min<long long>(FC_WALK_UNITS, n_units - u0);
+        fc_walk_seed<<<(unsigned)(2 * in_words), FC_WALK_UNITS>>>(d_in + (size_t)u0 * 2 * in_words, in_words, nu, own, d, cpos);
+        for (int L = 0; walked && L < levels; L++) {
+            const uint32_t k0 = level_off[L], n = level_off[L + 1] - k0;
+            if (!n) continue;
+            if (n < FC_WALK_WARP) fc_walk_level_warp<<<(n + 7) / 8, 256>>>(d, k0, n);
+            else fc_walk_level<<<(n + 255) / 256, 256>>>(d, k0, n);
+        }
+        fc_walk_slots<<<(unsigned)((tasks + 7) / 8), 256>>>(d, useful, u0, n_units, per_block, pos0, unit_log, k_log, z_out, a_out, b_out);
+        CK(cudaGetLastError());
+    }
+    return 0;
+}
+
+// set 2 of `gen` (the level walk's rows), which flock_cuda_types_share put on the device; false where it isn't there
+static bool fc_walk_rows(unsigned long long gen, uint32_t** wd) {
+    if (!gen || !fc_type_uploads.has(gen, 2)) return false;
+    const uint32_t* h[5] = {};
+    const size_t len[5] = {};
+    if (fc_type_uploads.get(gen, 2, h, len, 5, wd) == cudaSuccess) return true;
+    cudaGetLastError();
+    return false;
+}
+
+// The session's units by the level walk, into the witness. Its working arrays come from the session's arena, which holds
+// only z, a and b (and a kept level 0) while the witness is built, and go back before the commitment (arena_bytes.h's
+// witness phase); they are the session's values, as z is.
+static int fc_unit_walk(const FlockCircuitParams* N, int m, int k_log, F128* df, F128* d_a, F128* d_b) {
+    if (N->u_n_late) { printf("FFI circuit: no level walk for a cut template's units\n"); return 213; }
+    uint32_t* wd[5];
+    if (!fc_walk_rows(N->types_gen, wd)) { printf("FFI circuit: the unit's level walk without its rows on the device\n"); return 213; }
+    const int ur = N->u_range;
+    const int per_block = N->r_count[ur];
+    const long long n_units = (1LL << (m - k_log)) * per_block;
+    const size_t in_bytes = (size_t)n_units * N->u_in_words * 16, row_bytes = fc_walk_bytes(N);
+    FcWalk d = {wd[0], wd[1], wd[2], wd[3], nullptr, nullptr, nullptr};
+    CK(ffi_malloc(&d.z, row_bytes)); CK(ffi_malloc(&d.a, row_bytes)); CK(ffi_malloc(&d.b, row_bytes));
+    uint64_t* d_in;
+    CK(cudaMalloc(&d_in, in_bytes));
+    CK(cudaMemcpy(d_in, N->u_inputs, in_bytes, cudaMemcpyHostToDevice));
+    if (const int e = fc_walk_units(d, wd[4], d_in, N->u_in_words, n_units, (uint32_t)N->u_useful, (uint32_t)N->u_const, N->u_levels,
+                                    N->u_level_off, per_block, N->r_pos0[ur], N->type_log[N->r_type[ur]], k_log, (uint32_t*)df,
+                                    (uint32_t*)d_a, (uint32_t*)d_b))
+        return e;
+    CK(cudaStreamSynchronize(0));
+    CK(ffi_free(d.b)); CK(ffi_free(d.a)); CK(ffi_free(d.z));
+    CK(fc_wipe_free(d_in, in_bytes));
+    return 0;
+}
+
+// The level walk alone (fc_walk_units, as fc_witness runs it) for n units of 2^unit_log rows from their input words (host
+// memory, [n][in_words] F128) into z, a and b (host memory, n << (unit_log - 7) F128 words each), with set 2 of `gen` on the
+// device: a test vector against the host's slots. The working arrays start as 0xA5 bytes, so a row read before it is written
+// shows; `walked` 0 is the control, the slots without the levels.
+extern "C" int flock_cuda_unit_walk(unsigned long long gen, const uint64_t* inputs, int in_words, long long n, int useful, int cpos,
+                                    int levels, const uint32_t* level_off, int unit_log, int walked, uint64_t* z, uint64_t* a, uint64_t* b) {
+    uint32_t* wd[5];
+    if (!fc_walk_rows(gen, wd)) return 213;
+    const size_t in_bytes = (size_t)n * in_words * 16, out_bytes = (size_t)n << (unit_log - 3), row_bytes = (size_t)useful * FC_WALK_G * 8;
+    uint64_t *d_in = nullptr, *d_rows = nullptr;
+    uint32_t* d_zab = nullptr;
+    int e = 0;
+    if (cudaMalloc(&d_in, in_bytes) != cudaSuccess || cudaMalloc(&d_rows, 3 * row_bytes) != cudaSuccess || cudaMalloc(&d_zab, 3 * out_bytes) != cudaSuccess ||
+        cudaMemcpy(d_in, inputs, in_bytes, cudaMemcpyHostToDevice) != cudaSuccess || cudaMemset(d_rows, 0xA5, 3 * row_bytes) != cudaSuccess ||
+        cudaMemset(d_zab, 0, 3 * out_bytes) != cudaSuccess)
+        e = 1;
+    if (!e) {
+        const FcWalk d = {wd[0], wd[1], wd[2], wd[3], d_rows, d_rows + row_bytes / 8, d_rows + 2 * (row_bytes / 8)};
+        e = fc_walk_units(d, wd[4], d_in, in_words, n, (uint32_t)useful, (uint32_t)cpos, levels, level_off, (int)n, 0, unit_log, unit_log,
+                          d_zab, d_zab + out_bytes / 4, d_zab + 2 * (out_bytes / 4), walked != 0);
+    }
+    uint64_t* out[3] = {z, a, b};
+    for (int k = 0; k < 3 && !e; k++)
+        if (cudaMemcpy(out[k], (const char*)d_zab + k * out_bytes, out_bytes, cudaMemcpyDeviceToHost) != cudaSuccess) e = 1;
+    if (e) cudaGetLastError();
+    // the units' values, as a session's scratch is wiped
+    if (d_rows) cudaMemset(d_rows, 0, 3 * row_bytes);
+    if (d_zab) cudaMemset(d_zab, 0, 3 * out_bytes);
+    if (d_in) cudaMemset(d_in, 0, in_bytes);
+    cudaFree(d_in); cudaFree(d_rows); cudaFree(d_zab);
+    return e;
 }
 
 static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N, int m, int k_log, long long len, F128* df, F128* d_a,
@@ -1172,7 +1427,9 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             CK(cudaStreamSynchronize(0));
         }
         auto t1 = std::chrono::steady_clock::now();
-        if (!N->u_host) {
+        if (!N->u_host && N->u_walk) {
+            if (const int e = fc_unit_walk(N, m, k_log, df, d_a, d_b)) return e;
+        } else if (!N->u_host) {
             static FcUploads net_up;
             uint32_t* ud[6];
             {

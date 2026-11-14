@@ -164,13 +164,13 @@ local notation "𝔽" => FlockLevel3.GF128
 and shape over a field of order `2^128`, is at most the table's deployed error (`bound_le_εtable_zk` at any table). -/
 theorem bound_le_tableErr_zk {F : Type} [Field F] [Fintype F] [DecidableEq F] (hF : Fintype.card F = 2 ^ 128)
     {spec : SessionSpec} {st : Stmt} {mPts : ℕ} (T : TabZK F mPts) (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35)
-    (hsch : T.sch = Accounting.m1Schedule st.m) (ht : T.t = Accounting.m1Pad st.m) (he : T.e = 2)
+    (hsch : T.sch = Accounting.m1Schedule st.wideLeaf st.m) (ht : T.t = Accounting.m1Pad st.wideLeaf st.m) (he : T.e = 2)
     (hS : T.S.shape mPts = acct spec st) (hN : T.N ≤ 2 ^ 13) (hq : T.q = 168) (hδ : 7 / 16 ≤ T.δ) :
     T.bound.toReal ≤ tableErr true spec st := by
-  have hl0 : 0 ≤ Accounting.padLinkError (Accounting.m1Schedule st.m) (acct spec st) (Accounting.m1Pad st.m) := by
+  have hl0 : 0 ≤ Accounting.padLinkError (Accounting.m1Schedule st.wideLeaf st.m) (acct spec st) (Accounting.m1Pad st.wideLeaf st.m) := by
     unfold Accounting.padLinkError
     positivity
-  have hr0 := Accounting.m1_rep_nonneg st.m h25 h35 (acct spec st)
+  have hr0 := Accounting.m1_rep_nonneg (wide := st.wideLeaf) st.m h25 h35 (acct spec st)
   have hi := Claims.Flock.Numbers.innerUp_nonneg
   have hb : εInner T.N F T.q T.δ ≤ ENNReal.ofReal (Claims.Flock.Numbers.innerUp : ℝ) := by
     rw [hq]
@@ -178,8 +178,8 @@ theorem bound_le_tableErr_zk {F : Type} [Field F] [Fintype F] [DecidableEq F] (h
   unfold tableErr TabZK.bound
   simp only [↓reduceIte]
   rw [hS, hsch, ht, he]
-  set l := Accounting.padLinkError (Accounting.m1Schedule st.m) (acct spec st) (Accounting.m1Pad st.m)
-  set r := Accounting.padRepError (Accounting.m1Schedule st.m) (acct spec st) (Accounting.m1Pad st.m) 2
+  set l := Accounting.padLinkError (Accounting.m1Schedule st.wideLeaf st.m) (acct spec st) (Accounting.m1Pad st.wideLeaf st.m)
+  set r := Accounting.padRepError (Accounting.m1Schedule st.wideLeaf st.m) (acct spec st) (Accounting.m1Pad st.wideLeaf st.m) 2
   refine ENNReal.toReal_le_of_le_ofReal (add_nonneg hl0 (sq_nonneg _)) ?_
   calc ENNReal.ofReal l + (ENNReal.ofReal r + εInner T.N F T.q T.δ) ^ 2
       ≤ ENNReal.ofReal l + (ENNReal.ofReal r + ENNReal.ofReal (Claims.Flock.Numbers.innerUp : ℝ)) ^ 2 := by
@@ -217,8 +217,8 @@ theorem mean_epsSZ_leJ {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field
     (cap₀ : Model.Cap D) {τ : Type} [Fintype τ] [Nonempty τ]
     (σ : τ → Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀)))
     {x : Claims.Msg} {j : ℕ} {spec : SessionSpec} {st : Stmt} (h : (tables true x)[j]? = some (spec, st))
-    (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hsch : T.sch = Accounting.m1Schedule st.m)
-    (ht : T.t = Accounting.m1Pad st.m) (he : T.e = 2) (hS : T.S.shape mPts = acct spec st)
+    (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35) (hsch : T.sch = Accounting.m1Schedule st.wideLeaf st.m)
+    (ht : T.t = Accounting.m1Pad st.wideLeaf st.m) (he : T.e = 2) (hS : T.S.shape mPts = acct spec st)
     (hN : T.N ≤ 2 ^ 13) (hq : T.q = 168) (hδ : 7 / 16 ≤ T.δ)
     {Ω Coin : Type} [Fintype Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) (V : Claims.Verifier Coin)
     (P : Claims.Prover Ω) (rd : Claims.Flock.IZ T.sch.levels.length → Fin (V.k x))
@@ -272,8 +272,8 @@ weights are `2·Σ_{ℓ ≥ 1} 2^{d_ℓ}·Q_ℓ + 2·N_p² + 2`, within the tabl
 when `N_p` is at most the deployed pads' domain; level 0's `2·2^{d₀}·Q₀ ≥ 2` is the `2`, and `4·2^{d₀}/e` the
 share of `k` (`kFits_all`). -/
 theorem cZ_sum_le_tableWeight {st : Stmt} (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35)
-    {sch : FlockSoundness.Accounting.Schedule} (hsch : sch = Accounting.m1Schedule st.m) (Np : ℕ)
-    (hNp : Np ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0)) :
+    {sch : FlockSoundness.Accounting.Schedule} (hsch : sch = Accounting.m1Schedule st.wideLeaf st.m) (Np : ℕ)
+    (hNp : Np ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.wideLeaf st.m).1.k0)) :
     4 * tableLen true st / Real.exp 1 + ∑ i : Claims.Flock.IZ sch.levels.length, Claims.Flock.cZ sch Np i + 2 ≤
       tableWeight true st := by
   set f : Accounting.Level → ℝ := fun l => 2 ^ l.logLen * l.queries with hf
@@ -288,7 +288,7 @@ theorem cZ_sum_le_tableWeight {st : Stmt} (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35
   have hd : (default : Accounting.Level).queries = 0 := rfl
   have hhead := Claims.Flock.head_add_sum_shift f (by simp [hf, hd]) sch.levels
   have hq0 : 1 ≤ (sch.levels.headD default).queries := by
-    have := m1_queries₀_pos ⟨st.m - 25, by omega⟩
+    have := m1_queries₀_pos (wideLeaf := st.wideLeaf) ⟨st.m - 25, by omega⟩
     simp only [Nat.sub_add_cancel h25] at this
     rw [hsch]
     exact this
@@ -297,19 +297,19 @@ theorem cZ_sum_le_tableWeight {st : Stmt} (h25 : 25 ≤ st.m) (h35 : st.m ≤ 35
     have h1 : (1 : ℝ) ≤ 2 ^ (sch.levels.headD default).logLen := one_le_pow₀ (by norm_num)
     have h2 : (1 : ℝ) ≤ (sch.levels.headD default).queries := by exact_mod_cast hq0
     nlinarith
-  set pd := Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0)
+  set pd := Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.wideLeaf st.m).1.k0)
   have htw : tableWeight true st = Claims.Flock.Numbers.weightOf sch pd := by
     simp only [tableWeight, ↓reduceIte, hsch, pd]
   have hNp2 : (Np : ℝ) * Np ≤ (pd : ℝ) ^ 2 := by
     have := Nat.mul_le_mul hNp hNp
     rw [sq]
     exact_mod_cast this
-  have hlen : tableLen true st = 2 ^ (Claims.Flock.zkLevel0 st.m).d := rfl
-  have hfits := kFits_all true st.m
+  have hlen : tableLen true st = 2 ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).d := rfl
+  have hfits := kFits_all (wideLeaf := st.wideLeaf) true st.m
   simp only [level0, wSched, ↓reduceIte, ← hsch] at hfits
-  have hpow : (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d ≤ 2 ^ (sch.levels.headD default).logLen :=
+  have hpow : (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).d ≤ 2 ^ (sch.levels.headD default).logLen :=
     pow_le_pow_right₀ (by norm_num) hfits
-  have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d / Real.exp 1 ≤
+  have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.wideLeaf st.m).d / Real.exp 1 ≤
       4 * 2 ^ (sch.levels.headD default).logLen / Real.exp 1 := by
     gcongr
   rw [hsum, hlen, htw, Claims.Flock.Numbers.weightOf, weightNat_cast, ← hhead]
@@ -323,10 +323,10 @@ theorem joinEscZ_fitsFork_zk (rel : Readable.Parsed → Readable.Relation) {Ω :
     (x : Claims.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
     (h25 : ∀ j < (tables true x).length, 25 ≤ (st j).m) (h35 : ∀ j < (tables true x).length, (st j).m ≤ 35)
-    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
+    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).wideLeaf (st j).m)
     (Np : ℕ → ℕ) (hNp : ∀ j < (tables true x).length,
       Np j ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new (st j).m (st j).c.kLog
-        (Claims.Flock.zkSched (st j).m).1.k0))
+        (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
     (rd : (j : ℕ) → Claims.Flock.IZ (sch j).levels.length → Fin ((deployZk rel).V.k x))
     (ev : (j : ℕ) → Claims.Flock.IZ (sch j).levels.length → Ω → (Fin ((deployZk rel).V.k x) → Coin) →
       (Fin ((deployZk rel).V.k x) → Coin) → Prop)
@@ -375,22 +375,22 @@ variable [S : ZkSetup]
 /-- **At table `j`'s index**, masked: table `j`'s word is `2^d` long and its columns have the `2^lanes` witness
 lanes. -/
 theorem zk_atJ {x : Claims.Msg} {j : ℕ} {spec : SessionSpec} {st : _root_.Flock.Stmt}
-    (h : (tables true x)[j]? = some (spec, st)) {i : ZkIdx} (hi : i.m = st.m) :
+    (h : (tables true x)[j]? = some (spec, st)) {i : ZkIdx} (hi : i.At st.wideLeaf st.m) :
     wordLenJ true x j = 2 ^ zkLen i ∧ ∀ u, wideJ true x j u ↔ u.length = 2 ^ zkLanes i := by
   refine ⟨?_, fun u => ?_⟩
   · unfold wordLenJ
     rw [h]
-    simp [zkLen, hi]
+    simp [zkLen, hi.level0]
   · unfold wideJ
     rw [h]
-    simp [zkLanes, hi]
+    simp [zkLanes, hi.level0]
 
 end Gen
 
 /-- **At table `j`'s index**, masked: table `j`'s word is `2^d` long and its columns have the `2^lanes` witness
 lanes. -/
 theorem zk_atJ {x : Claims.Msg} {j : ℕ} {spec : SessionSpec} {st : _root_.Flock.Stmt}
-    (h : (tables true x)[j]? = some (spec, st)) {i : ZkIdx} (hi : i.m = st.m) :
+    (h : (tables true x)[j]? = some (spec, st)) {i : ZkIdx} (hi : i.At st.wideLeaf st.m) :
     wordLenJ true x j = 2 ^ zkLen i ∧ ∀ u, wideJ true x j u ↔ u.length = 2 ^ zkLanes i :=
   Gen.zk_atJ (S := S₀) (x := x) (j := j) (spec := spec) (st := st) (h := h) (i := i) (hi := hi)
 
@@ -458,9 +458,9 @@ theorem good_of_committed_zkJ (rel : Readable.Parsed → Readable.Relation) (x :
     (hwit : ∀ P : Message 𝔽 (zkLanes i) (zkCols i),
       S.Satisfies (witnessOf execArith S.m (zkLanes i) (zkCols i) P) →
         Claims.Flock.RelS s (readTrace execArith i.m (zkLanes i) (zkCols i) P))
-    (hc : CommittedPad execArith S (schedOf (zkSched i.m).1) (zkPad i) padC (oracleOf C)) :
+    (hc : CommittedPad execArith S (schedOf (zkSched i.wideLeaf i.m).1) (zkPad i) padC (oracleOf C)) :
     GoodTableAt (deployZk rel) (wordLenJ true) x j C := by
-  have key : ∀ (k0 : ℕ) (l : FlockSoundness.Accounting.Level), k0 = zkLanes i → l = levelOf (zkLevel0 i.m) →
+  have key : ∀ (k0 : ℕ) (l : FlockSoundness.Accounting.Level), k0 = zkLanes i → l = levelOf (zkLevel0 i.wideLeaf i.m) →
       ∀ R ∈ padList execArith l (zkPad i) k0 0 0 (oracleOf C),
         S.Satisfies (witnessOf execArith S.m k0 l.logCols (padWit padC R)) →
       GoodTableAt (deployZk rel) (wordLenJ true) x j C := by
@@ -488,7 +488,7 @@ theorem good_of_committed_zkJ (rel : Readable.Parsed → Readable.Relation) (x :
     (hwit : ∀ P : Message 𝔽 (zkLanes i) (zkCols i),
       S.Satisfies (witnessOf execArith S.m (zkLanes i) (zkCols i) P) →
         Claims.Flock.RelS s (readTrace execArith i.m (zkLanes i) (zkCols i) P))
-    (hc : CommittedPad execArith S (schedOf (zkSched i.m).1) (zkPad i) padC (oracleOf C)) :
+    (hc : CommittedPad execArith S (schedOf (zkSched i.wideLeaf i.m).1) (zkPad i) padC (oracleOf C)) :
     GoodTableAt (deployZk rel) (wordLenJ true) x j C :=
   letI : ZkSetup := S₀
   Gen.good_of_committed_zkJ rel x j s hs i hN C hw S hwit hc
@@ -500,13 +500,13 @@ variable [S : ZkSetup]
 /-- **An uncommitted old table at table `j`** (`not_committed_zk` at table `j`). -/
 theorem not_committed_zkJ (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) (j : ℕ)
     (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x j = some s) {spec : SessionSpec} {st : _root_.Flock.Stmt}
-    (hst : (tables true x)[j]? = some (spec, st)) (i : ZkIdx) (hi : i.m = st.m)
+    (hst : (tables true x)[j]? = some (spec, st)) (i : ZkIdx) (hi : i.At st.wideLeaf st.m)
     (C : Fin (wordLenJ true x j) → List 𝔽) (hw : ∀ q, wideJ true x j (C q)) (S : Statement)
     (hwit : ∀ P : Message 𝔽 (zkLanes i) (zkCols i),
       S.Satisfies (witnessOf execArith S.m (zkLanes i) (zkCols i) P) →
         Claims.Flock.RelS s (readTrace execArith i.m (zkLanes i) (zkCols i) P))
     (hg : ¬ GoodTableAt (deployZk rel) (wordLenJ true) x j C) :
-    ¬ CommittedPad execArith S (schedOf (zkSched i.m).1) (zkPad i) padC (oracleOf C) := fun hc =>
+    ¬ CommittedPad execArith S (schedOf (zkSched i.wideLeaf i.m).1) (zkPad i) padC (oracleOf C) := fun hc =>
   hg (good_of_committed_zkJ rel x j s hs i (zk_atJ hst hi).1 C (fun q => ((zk_atJ hst hi).2 _).1 (hw q)) S hwit hc)
 
 end Gen
@@ -514,13 +514,13 @@ end Gen
 /-- **An uncommitted old table at table `j`** (`not_committed_zk` at table `j`). -/
 theorem not_committed_zkJ (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) (j : ℕ)
     (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x j = some s) {spec : SessionSpec} {st : _root_.Flock.Stmt}
-    (hst : (tables true x)[j]? = some (spec, st)) (i : ZkIdx) (hi : i.m = st.m)
+    (hst : (tables true x)[j]? = some (spec, st)) (i : ZkIdx) (hi : i.At st.wideLeaf st.m)
     (C : Fin (wordLenJ true x j) → List 𝔽) (hw : ∀ q, wideJ true x j (C q)) (S : Statement)
     (hwit : ∀ P : Message 𝔽 (zkLanes i) (zkCols i),
       S.Satisfies (witnessOf execArith S.m (zkLanes i) (zkCols i) P) →
         Claims.Flock.RelS s (readTrace execArith i.m (zkLanes i) (zkCols i) P))
     (hg : ¬ GoodTableAt (deployZk rel) (wordLenJ true) x j C) :
-    ¬ CommittedPad execArith S (schedOf (zkSched i.m).1) (zkPad i) padC (oracleOf C) :=
+    ¬ CommittedPad execArith S (schedOf (zkSched i.wideLeaf i.m).1) (zkPad i) padC (oracleOf C) :=
   Gen.not_committed_zkJ (S := S₀) (rel := rel) (x := x) (j := j) (s := s) (hs := hs) (spec := spec) (st := st)
     (hst := hst) (i := i) (hi := hi) (C := C) (hw := hw) S (hwit := hwit) (hg := hg)
 
@@ -649,20 +649,18 @@ theorem zk_not_committedJ {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hw : ∀ q, wideJ true x j (C q))
     (hg : ¬ Claims.Flock.GoodTableAt (deployZk Readable.relation) (wordLenJ true) x j C) :
     ¬ CommittedPad execArith (L.model (Refine.regionsOf sts[j]))
-      (Refine.schedOf (Claims.Flock.zkSched sts[j].m).1) (Claims.Flock.zkSched sts[j].m).2 padC
+      (Refine.schedOf (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m).1) (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m).2 padC
       (Claims.Flock.oracleOf C) := by
   obtain ⟨h25, h35, -, -⟩ := zk_scopeJ hs hin hset hj
-  have hi : Claims.Flock.ZkIdx.m ⟨sts[j].m - 25, by omega⟩ = sts[j].m := by
-    simp only [Claims.Flock.ZkIdx.m]
-    omega
+  have hi := Claims.Flock.ZkIdx.of_at sts[j].wideLeaf h25 h35
   obtain ⟨t, ht⟩ : ∃ t, table true Readable.relation x j = some t := by
     obtain ⟨p, -, -, -, -, htab⟩ := parsed_of_parse hs
     exact ⟨_, htab j⟩
   have := not_committed_zkJ Readable.relation x j t ht (tables_getElem? hset (Array.getElem?_eq_getElem hj))
-    ⟨sts[j].m - 25, by omega⟩ hi C hw (L.model (Refine.regionsOf sts[j]))
-    (fun P hsat => relS_tableJ hs hin hset hj ht L hi P hsat) hg
+    (Claims.Flock.ZkIdx.of sts[j].wideLeaf sts[j].m) hi C hw (L.model (Refine.regionsOf sts[j]))
+    (fun P hsat => relS_tableJ hs hin hset hj ht L hi.eq_m P hsat) hg
   unfold Claims.Flock.zkPad at this
-  rwa [hi] at this
+  rwa [hi.sched] at this
 
 end Gen
 
@@ -677,7 +675,7 @@ theorem zk_not_committedJ {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hw : ∀ q, wideJ true x j (C q))
     (hg : ¬ Claims.Flock.GoodTableAt (deployZk Readable.relation) (wordLenJ true) x j C) :
     ¬ CommittedPad execArith (L.model (Refine.regionsOf sts[j]))
-      (Refine.schedOf (Claims.Flock.zkSched sts[j].m).1) (Claims.Flock.zkSched sts[j].m).2 padC
+      (Refine.schedOf (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m).1) (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m).2 padC
       (Claims.Flock.oracleOf C) :=
   Gen.zk_not_committedJ (S := S₀) (x := x) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec) (sts := sts)
     (hset := hset) (j := j) (hj := hj) (L := L) (C := C) (hw := hw) (hg := hg)
@@ -794,10 +792,10 @@ theorem zk_le_sessionsJ {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [I
     (st : ℕ → Stmt) (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
     (T : ℕ → TabZK 𝔽 spec.mPts)
     (hT : ∀ j < (tables true x).length, 25 ≤ (st j).m ∧ (st j).m ≤ 35 ∧
-      (T j).sch = Accounting.m1Schedule (st j).m ∧ (T j).t = Accounting.m1Pad (st j).m ∧ (T j).e = 2 ∧
+      (T j).sch = Accounting.m1Schedule (st j).wideLeaf (st j).m ∧ (T j).t = Accounting.m1Pad (st j).wideLeaf (st j).m ∧ (T j).e = 2 ∧
       (T j).S.shape spec.mPts = acct spec (st j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
       (T j).N ≤ Claims.Flock.Numbers.padDomain
-        (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).m).1.k0))
+        (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω)
     (rd : (j : ℕ) → Claims.Flock.IZ (T j).sch.levels.length → Fin ((V true).k x))
     (hrd : ∀ j, Function.Injective (rd j))
@@ -914,10 +912,10 @@ theorem zk_tableBoundJAt_of_sessions {K D Sl : Type} [Field K] [Fintype K] [Deci
     (hn : Claims.Flock.nTab (deployZk rel) x = (tables true x).length) {spec : SessionSpec} (st : ℕ → Stmt)
     (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j)) (T : ℕ → TabZK 𝔽 spec.mPts)
     (hT : ∀ j < (tables true x).length, 25 ≤ (st j).m ∧ (st j).m ≤ 35 ∧
-      (T j).sch = Accounting.m1Schedule (st j).m ∧ (T j).t = Accounting.m1Pad (st j).m ∧ (T j).e = 2 ∧
+      (T j).sch = Accounting.m1Schedule (st j).wideLeaf (st j).m ∧ (T j).t = Accounting.m1Pad (st j).wideLeaf (st j).m ∧ (T j).e = 2 ∧
       (T j).S.shape spec.mPts = acct spec (st j) ∧ (T j).N ≤ 2 ^ 13 ∧ (T j).q = 168 ∧ 7 / 16 ≤ (T j).δ ∧
       (T j).N ≤ Claims.Flock.Numbers.padDomain
-        (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).m).1.k0))
+        (Zk.PadLayout.new (st j).m (st j).c.kLog (Claims.Flock.zkSched (st j).wideLeaf (st j).m).1.k0))
     (hnc : ∀ j < (tables true x).length, ∀ C : Fin (wordLenJ true x j) → List 𝔽, (∀ p, Ok x j (C p)) →
       ¬ Claims.Flock.GoodTableAt (deployZk rel) (wordLenJ true) x j C →
         ¬ (T j).Committed A (Claims.Flock.oracleOf C))

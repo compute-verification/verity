@@ -58,7 +58,7 @@ sessions read that the history does not fix, its running sums `rec-acc` and its 
   recursive guarantees answer with a registrant fork, `regFinder`), at all strategies of V*'s sessions there and at
   every record that is a genuine session-game outcome (each session's record is one its game reaches against its
   strategy, `Game.Outcome`; an accepted record is always such an outcome, since the audit only ever accepts what its
-  sessions play), when every session's outcome `flock-verify verify --zk --registered` accepts and every session's
+  sessions play), when every session's outcome `verity-verify-proof verify --zk --registered` accepts and every session's
   value layer is `Good` (no incorrect proof block, and at every unit each registered read carries the registrant's value: the
   hidden circuit's rows as registered, `R₂`'s values, and the values V* registers itself, the coins and the comb
   `coef`), the messages `wmsg` reads from the layers hold an inner transcript the inner verifier accepts on the hidden

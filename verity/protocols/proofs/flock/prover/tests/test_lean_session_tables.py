@@ -21,7 +21,7 @@ from verity_flock.record_text import session_text
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
 VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 #: RoPE d64 (8 instances) with loopback sessions of several tables: J = 2 without a sample, J = 2 with `--draw subset:4` (two), J = 4
 FIXTURE = "art:425f6860"
 STATEMENT = "verity/flock-circuit@967b8d06+seed-injection"
@@ -113,7 +113,7 @@ def verdicts(rope, tmp_path_factory):
 @pytest.mark.slow
 @pytest.mark.parametrize("name", ["honest", "a missing root", "a short y", "swapped files", "swapped files and digests"])
 def test_a_drawn_session_of_two_tables_is_refused(verdicts, name):
-    """Honest or tampered, the sampled session's statements set up and it meets the refusal of its sample's law; its
+    """Honest or tampered, the sampled session's statements set up and it meets the refusal of its sample's sampling design; its
     verdict names the two tables it set the session up as (``session_tables``)."""
     v = verdicts[name]
     assert not v["accepted"] and v["why"] == SUBSET, v["why"]
@@ -198,7 +198,8 @@ def plain(rope, program, tmp_path_factory):
 
 #: the fixture's statement, a selftest build's on seed coins: `verify` refuses it once every check has passed
 SELFTEST = (f"refused: {STATEMENT}, a selftest build's statement, whose coins the prover injected: verify takes only "
-            "verity/flock-circuit, verity/flock-circuit+plain-leaves and verity/flock-circuit/tmpl")
+            "verity/flock-circuit, verity/flock-circuit+plain-leaves, verity/flock-circuit+wide-leaf, "
+            "verity/flock-circuit/tmpl and verity/flock-circuit/tmpl+wide-leaf")
 
 
 @pytest.mark.slow

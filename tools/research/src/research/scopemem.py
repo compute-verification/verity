@@ -6,11 +6,11 @@
                queued GPU phase's runner in cluster-<run id>.scope and its workload in gpu-lease's gpu-lease-<pid>.scope.
                The namespace root `/` is left out: it is the whole visible machine, not the run's.
     current    memory.current; peak memory.peak (absent before Linux 5.19)
-    cap        the tightest finite memory.max on the cgroup and its ancestors (a scope inside a capped vy-lend.slice is bound
-               by the slice), with the cgroup that sets it; `max` everywhere is no cap
+    limit      the tightest finite memory.max on the cgroup and its ancestors (a scope inside a capped vy-lend.slice is bound
+               by the slice), with the cgroup that sets it; `max` everywhere is no limit
     growth     bytes/s of memory.current over the last GROWTH_WINDOW_S of the run's own sampler records (resources.jsonl
                `cgroup` records), only for the cgroup the sampler reads; none otherwise -- never two reads taken here
-    near_cap   current within NEAR_CAP of the cap
+    near_limit current within NEAR_LIMIT of the limit
     cpuset     each cgroup's own cpuset.cpus (a scope's AllowedCPUs; none when unset) and cpuset.cpus.effective, and the
                workload group's affinities (Cpus_allowed_list), which a `taskset` sets where no cgroup does
 
@@ -36,7 +36,7 @@ from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
-NEAR_CAP = 0.10
+NEAR_LIMIT = 0.10
 GROWTH_WINDOW_S = 60.0
 SAMPLES_TAIL = 1 << 20
 JOB_UNIT = "/system.slice/research-job-{run_id}.service"   # research.jobuser.unit_name, in the system slice systemd-run puts it
@@ -143,18 +143,18 @@ def growth(recs: list[dict[str, Any]], path: str) -> dict[str, Any] | None:
 def read(cg_root: Path, path: str) -> dict[str, Any]:
     d = cg_root / path.lstrip("/")
     own = _text(d / "memory.max")
-    cap = cap_at = None
+    limit = limit_at = None
     p = Path(path)
     while True:
         v = _bytes(_text(cg_root / str(p).lstrip("/") / "memory.max"))
-        if v is not None and (cap is None or v < cap):
-            cap, cap_at = v, str(p)
+        if v is not None and (limit is None or v < limit):
+            limit, limit_at = v, str(p)
         if p == p.parent:
             break
         p = p.parent
     cur = _bytes(_text(d / "memory.current"))
     return {"cgroup": path, "current_bytes": cur, "peak_bytes": _bytes(_text(d / "memory.peak")), "memory_max": own,
-            "cap_bytes": cap, "cap_at": cap_at, "near_cap": cur is not None and cap is not None and cur >= (1 - NEAR_CAP) * cap,
+            "limit_bytes": limit, "limit_at": limit_at, "near_limit": cur is not None and limit is not None and cur >= (1 - NEAR_LIMIT) * limit,
             "cpuset": _text(d / "cpuset.cpus") or None, "cpus_effective": _text(d / "cpuset.cpus.effective"),
             **({} if d.is_dir() else {"error": "gone"})}
 
@@ -385,18 +385,19 @@ def _gib(b: int | None) -> str:
 
 
 def render(r: dict[str, Any]) -> str:
-    """One line: `<cgroup>  current .. peak .. cap .. growth ..`, ending NEAR CAP when current is within NEAR_CAP of the cap."""
+    """One line: `<cgroup>  current .. peak .. limit .. growth ..`, ending NEAR LIMIT when current is within NEAR_LIMIT of the
+    limit."""
     if r.get("error") == "gone":
         return f"{r['cgroup']}  gone"
-    if r["cap_bytes"] is None:
-        cap = "none (memory.max is max)"
+    if r["limit_bytes"] is None:
+        limit = "none (memory.max is max)"
     else:
-        used = f", {100 * r['current_bytes'] / r['cap_bytes']:.0f}% used" if r["current_bytes"] is not None else ""
-        cap = _gib(r["cap_bytes"]) + (f" (at {r['cap_at']}{used})" if r["cap_at"] != r["cgroup"] else f" ({used[2:]})" if used else "")
+        used = f", {100 * r['current_bytes'] / r['limit_bytes']:.0f}% used" if r["current_bytes"] is not None else ""
+        limit = _gib(r["limit_bytes"]) + (f" (at {r['limit_at']}{used})" if r["limit_at"] != r["cgroup"] else f" ({used[2:]})" if used else "")
     g = r.get("growth")
     grow = "-" if g is None else f"{g['bytes_per_s'] * 60 / GIB:+.1f} GiB/min over {g['over_s']:g} s of samples"
-    return (f"{r['cgroup']}  current {_gib(r['current_bytes'])}  peak {_gib(r['peak_bytes'])}  cap {cap}  growth {grow}"
-            + ("  NEAR CAP" if r["near_cap"] else ""))
+    return (f"{r['cgroup']}  current {_gib(r['current_bytes'])}  peak {_gib(r['peak_bytes'])}  limit {limit}  growth {grow}"
+            + ("  NEAR LIMIT" if r["near_limit"] else ""))
 
 
 def main(argv: list[str]) -> int:

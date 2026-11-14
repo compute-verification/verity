@@ -56,6 +56,8 @@ two are one, wherever the loop drew that `Level0` (`Level0.ofDraws`):
 
 namespace Flock.Firewall.Finish
 
+variable {wideLeaf : Bool}
+
 
 /-- **A level's tree from its leaves**: through `Hashes` whose node is `nd` and whose leaf is `lf`, `commitRowsP`
 returns, its layers are layers `0, …, d − cap` of the tree over the rows' leaves under their fitted salts, and its cap
@@ -114,7 +116,7 @@ theorem commitRows_tree (lv : Level) (rows : Array (Array F128)) (salt : ℕ →
 /-- **The session loop's level 0 is `commit0`'s**: where `ofDraws` returns `l`, the commitment read off it
 (`commitOf`) is `commit0`'s at its level, `t_pad` and table, so the loop's finish proves at the commitment the `table`
 path commits. -/
-theorem commitOf_eq {m : ℕ} {g : Array F128} {d : ByteArray} {l : Level0.Level0} (h : Level0.ofDraws m g d = .ok l) :
+theorem commitOf_eq {m : ℕ} {g : Array F128} {d : ByteArray} {l : Level0.Level0} (h : Level0.ofDraws wideLeaf m g d = .ok l) :
     commitOf l = commit0 l.lv l.tPad l.toIn := by
   obtain ⟨-, -, -, hrows, hlayers, -⟩ := Level0.ofDraws_ok h
   obtain ⟨hly, hcp⟩ := commitRows_tree l.lv (Link.rows l.lv l.tPad l.toIn.g l.toIn.extra l.toIn.lanePad) l.toIn.salt

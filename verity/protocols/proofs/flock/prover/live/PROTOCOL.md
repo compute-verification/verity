@@ -846,7 +846,12 @@ session that doesn't stop sends the transcript at the commitment strings of the 
 
 `flock-circuit prove --zk` with `FC_FIREWALL=1` runs the ZK server (`firewall.rs`, and `Firewall` in `flock-circuit.rs`) on the GPU path and
 the CPU path alike, for a statement of one table on the device and of one or several (`--session-tables`) on the CPU; it
-refuses to start without `FC_HOST_WITNESS=1`. It is stricter than
+refuses to start without `FC_HOST_WITNESS=1`: a session asked for the device with no `FC_HOST_WITNESS` is refused by the
+recheck's name before anything of its table leaves, with the device's level walk asked for (`FC_UNIT_WALK=1`) as without
+it, and whether the device or the host would have built its witness (a typed template's statement is the host's
+either way). The refusal is decided from the session's witness mode before the session builds a witness; one the
+pipeline built ahead for it is waited for and dropped. It leaves after `Hello` (the selftest's `zk_server_refuses_device_witness`, in a device build and in a build without the device, on
+a session asked for the device, with `FC_UNIT_WALK=1` and without it). It is stricter than
 §10.1 in one place: the session loop recomputes the whole opening, level 0's lane rounds included, in lock step with the
 device (`Drive.openStep`, below). Each of the device's opening rounds must equal the loop's byte for byte, and the opening
 that leaves is the loop's. The lincheck's folded comb is the ZK server's (the Lean finish folds it), and `final_c'` is
@@ -868,7 +873,7 @@ anything. `flock-firewall hello` computes the same `Hello` on its own (`test_lea
 auditor's sample (or `null`) is answered `ok N` and the `Hello`, or `refused WHY`, and `draw LEN NONCE` fixes the nonce.
 `FC_FIREWALL_STATEMENT` names the Lean statement (by default the build's, `+seed-injection` under that feature), and `FC_FIREWALL_HELLO_ARGS` adds arguments:
 `--partition F --program F` for a statement whose setup reads them, and the verifier's own sampling-design inputs as
-`flock-verify verify` takes them, which a stratified, work or closure sample sets up only on (U2, U3): `--stratified K`,
+`verity-verify-proof verify` takes them, which a stratified, work or closure sample sets up only on (U2, U3): `--stratified K`,
 `--work K --work-table F`, `--closure F`.
 
 The session itself goes through Lean: one `flock-firewall session` process (`Flock.Firewall.Session`,

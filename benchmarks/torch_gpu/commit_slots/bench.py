@@ -22,8 +22,7 @@ from typing import Any
 
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "commitments" / "cuda" / "commit_slots"))
 
 import slots as S  # noqa: E402
 import slots_gpu as G  # noqa: E402

@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pouw.Guarantees.Deadline
+public import Proofs.Pouw.Lemmas.Deadline
 public import Proofs.Pouw.Game
 public import Proofs.Pouw.Break
 public import Proofs.Pouw.PearlC.DeviceCapRev1Gap
@@ -18,8 +19,8 @@ the same preprocessing, at a cost within the run's spending between the salt and
 the budget `EndToEnd` (or `GGapSampled`) reads, and its accepted transcripts include every one the verifier accepts by the
 deadline.
 
-The sm_120 instances are stated at W1: each is `PearlCSampledByDeadline` at `CM := W1.w1Priced dv salt`, with its
-sampled g from the old reduction at that cost model (`Proofs.Pouw.PearlC.TTOutW1`).
+The sm_120 instances (`Proofs.Pouw.Lemmas.Deadline`) are stated at W1: each is `PearlCSampledByDeadline` at
+`CM := W1.w1Priced dv salt`, with its sampled g from the old reduction at that cost model (`Proofs.Pouw.PearlC.TTOutW1`).
 
 The honest clock is stated once over `Adversaries`; at each game's `CostModel.adversaries` it unfolds to that game's own
 reading (`CostModel.honestClock_iff`, by `Iff.rfl`; `PearlC.CostModel.honestClock_iff`, whose adversaries hash nothing).

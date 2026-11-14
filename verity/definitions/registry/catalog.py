@@ -19,8 +19,8 @@ def load(scope: str | tuple[str, ...] = "registry", _package=None, _errors: list
 
     ``_package`` and ``_errors`` are its own descent into a subpackage, which imports that package's modules in name order, each
     subpackage's right after it, and returns nothing: the descent stays in `load`, so circuit-check's cache holds what it lists by
-    the modules' names (`cache._ENUMERATORS`), and each name a listing yields is only compared, imported or written into an
-    error."""
+    the modules' names (`enumerators` in this module's sidecar), and each name a listing yields is only compared, imported or
+    written into an error."""
     import importlib
     import pkgutil
 

@@ -20,7 +20,7 @@ namespace Flock.Witness
 
 open Lean (Json)
 
-/-- What `flock-verify verify --zk` reads besides the session directory, for one of V*'s sessions: `Exec.Inputs`'s
+/-- What `verity-verify-proof verify --zk` reads besides the session directory, for one of V*'s sessions: `Exec.Inputs`'s
 fields but the work, stratified and closure inputs, which V*'s full sample reads none of, and the coins, which `--zk` sets. -/
 structure Inputs where
   tags : Tags
@@ -109,7 +109,7 @@ def registeredOf (args : List String) : IO (Except String (Array Registered.Port
   let some f := argOf args "--registered" | return .ok #[]
   return (← readJson f) >>= Registered.ofJson
 
-/-- `--partition` and `--program`, each optional, as `flock-verify` reads them. -/
+/-- `--partition` and `--program`, each optional, as `verity-verify-proof` reads them. -/
 def bindingsOf (args : List String) : IO (Except String (Option Json × Option ByteArray)) := do
   let partition : Except String (Option Json) ← match argOf args "--partition" with
     | none => pure (.ok none)

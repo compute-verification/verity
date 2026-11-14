@@ -37,11 +37,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
-
-from verity.errors import ProtocolError
 from verity.commitments import hm96, keyed
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
+from verity.errors import ProtocolError
+
 from verity_vllm.errors import Refused
 
 __all__ = ["A_LEAF_TAG", "A_SEGMENT", "BINDING_TAG", "CHUNK_WORDS", "KEY_SALT_BYTES", "ROW_TILE", "TILE_COLS", "TILE_ROWS",
@@ -225,7 +225,8 @@ class WindowKeying:
     def a_domain(self, forward: int, call: int, count: int) -> CommitmentDomain:
         """The domain of A_j's instance of ``count`` segments, ``ceil(m K / A_SEGMENT)`` for m rows of K, for its leaves on the
         device (`device_a_top`).  It refuses what :meth:`a_root` refuses."""
-        return instance_domain(self._salt_w, self._a_unkeyed(forward, call), _leaf_count("an A", count))
+        position = self._a_unkeyed(forward, call)
+        return instance_domain(self._salt(), position, _leaf_count("an A", count))
 
     def a_top(self, forward: int, call: int, count: int, top: bytes, *, check: bytes | None = None) -> bytes:
         """root(A_j) from its subtree's top as the device hashed it (`device_a_top`): the root's two children (128 bytes) for
@@ -243,7 +244,8 @@ class WindowKeying:
     def words_domain(self, forward: int, count: int) -> CommitmentDomain:
         """The domain of the forward's words instance of ``count`` leaves, for its leaves on the device (`DeviceWords`).  Its
         id binds ``count``, so a forward's chunks (`chunk_count` of each call) are fixed before its first leaf."""
-        return instance_domain(self._salt_w, self._unkeyed(words_position(forward)), _leaf_count("a words", count))
+        position = self._unkeyed(words_position(forward))
+        return instance_domain(self._salt(), position, _leaf_count("a words", count))
 
     def words_top(self, forward: int, count: int, top: bytes, *, check: Sequence[bytes] | None = None) -> bytes:
         """The forward's words root from its subtree's top as the device hashed it (`DeviceWords.top`): the root's two
@@ -281,17 +283,22 @@ class WindowKeying:
                 raise Refused(f"{what}: the top from the device is not the CPU's")
         return self._store(position, keyed.digest(self._ks_w, self._salt_w, m_top))
 
-    def _unkeyed(self, position: int) -> int:
+    def _salt(self) -> bytes:
         if self._salt_w is None:
             raise Refused("a keyed digest before salt_w")
+        return self._salt_w
+
+    def _unkeyed(self, position: int) -> int:
+        self._salt()
         if position in self._digests:
             raise Refused(f"a second keyed digest at position {position} in the window")
         return position
 
     def _keyed(self, position: int, schema: str, values: list[bytes]) -> bytes:
         self._unkeyed(position)
-        sub = subtree(instance_domain(self._salt_w, position, len(values)), schema, values)
-        return self._store(position, keyed_root(self._ks_w, self._salt_w, sub))
+        salt_w = self._salt()
+        sub = subtree(instance_domain(salt_w, position, len(values)), schema, values)
+        return self._store(position, keyed_root(self._ks_w, salt_w, sub))
 
     def _store(self, position: int, d: bytes) -> bytes:
         self._digests[position] = d

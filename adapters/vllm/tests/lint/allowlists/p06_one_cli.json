@@ -16,8 +16,6 @@
     {"file": "verity_vllm/ops/pod_gate.sh", "kind": "heredoc", "symbol": "<script>", "detail": "$PY <<", "count": 2},
     {"file": "verity_vllm/ops/pod_gate.sh", "kind": "python-c", "symbol": "<script>", "detail": "python -c"},
     {"file": "verity_vllm/ops/stoch_negatives.sh", "kind": "heredoc", "symbol": "<script>", "detail": "$PY312 <<", "count": 2},
-    {"file": "verity_vllm/ops/stoch_negatives.sh", "kind": "python-c", "symbol": "<script>", "detail": "python -c", "count": 4},
-    {"file": "verity_vllm/commitments/vllm_v1/vectors.py", "kind": "main-block", "symbol": "<module>", "detail": "if __name__ == \"__main__\""},
-    {"file": "verity_vllm/commitments/vllm_v1/vectors_sha512.py", "kind": "main-block", "symbol": "<module>", "detail": "if __name__ == \"__main__\""}
+    {"file": "verity_vllm/ops/stoch_negatives.sh", "kind": "python-c", "symbol": "<script>", "detail": "python -c", "count": 4}
   ]
 }

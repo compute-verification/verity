@@ -4,7 +4,7 @@ process (a failed gate times nothing, exit 4):
     exact   the int8-exact profile's op bodies as served: `int8_exact.quantize_rows`, then `dequantize(int_mm(...))`
     stock   vLLM's W8A8 int8 on sm_120: `ops.scaled_int8_quant`, then `triton_scaled_mm` (not the exact statement; the
             speed reference)
-    fused   `exactlin.quant_rows`, then `exactlin.scaled_mm`, into caller-owned buffers
+    fused   `int8_fused.quant_rows`, then `int8_fused.scaled_mm` (the ops' CUDA kernels), into caller-owned buffers
 
 Each arm's linear is captured in a CUDA graph per shape, one call per weight copy (enough copies to pass 3x the L2, so the
 weights stream from DRAM as they do in a served step).  After a warm-up, each arm's replays per item are set so an item takes
@@ -29,9 +29,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import torch
+from verity_vllm.engine import int8_fused as X
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import exactlin as X
 import kgate
 
 if TYPE_CHECKING:
@@ -45,14 +45,15 @@ PARTS = ("stock_quant", "stock_mm", "stock_mm_notd", "stock_mm_td", "fused_quant
 WORK = X.Workspace("cuda") if torch.cuda.is_available() else None
 
 
-def nvml() -> Callable[[], int | None]:
+def nvml(device: int | None = None) -> Callable[[], int | None]:
+    """SM clock MHz of torch's CUDA device `device` (default the current one), by its UUID: NVML's indices ignore
+    CUDA_VISIBLE_DEVICES. A reader of None where NVML can't be read."""
     try:
         import pynvml
         pynvml.nvmlInit()
-        idx = torch.cuda.current_device()
-        import os
-        uuid = os.environ.get("GPU_LEASE_UUID")
-        h = pynvml.nvmlDeviceGetHandleByUUID(uuid) if uuid else pynvml.nvmlDeviceGetHandleByIndex(idx)
+        idx = torch.cuda.current_device() if device is None else device
+        uuid = str(torch.cuda.get_device_properties(idx).uuid)
+        h = pynvml.nvmlDeviceGetHandleByUUID(uuid if uuid.startswith("GPU-") else f"GPU-{uuid}")
         return lambda: pynvml.nvmlDeviceGetClockInfo(h, pynvml.NVML_CLOCK_SM)
     except Exception:  # noqa: BLE001
         return lambda: None

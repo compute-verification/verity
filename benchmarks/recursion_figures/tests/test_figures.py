@@ -38,7 +38,7 @@ def test_figures_scale_one_session_to_every_machine_window():
     kappa = F.log2_add(F.KAPPA_LOG2, F.KNOWLEDGE_LOG2)
     assert dc["window"]["ks"] == world["window"]["ks"]
     assert dc["window"]["ks"]["world"]["error_log2"] == round(F.log2_add(kappa, t + F.EPS_LOG2), 2)
-    year = dict(F.PERIODS)["year"]
+    year = dict(F.MONITORING_PERIODS)["year"]
     y = dc["periods"]["year"]
     R = year // w
     assert y["sessions"] == fl["datacenter"]["machines"] * R and y["covered_ands"] == y["sessions"] * 3000
@@ -110,3 +110,92 @@ def test_a_result_gives_its_figures_and_its_table(tmp_path, capsys):
 def test_a_result_without_session_times_is_refused():
     with pytest.raises(ValueError, match="session_times"):
         F.of_result(_doc())
+
+
+class _Store:
+    """The evidence store as `recorded` reads it: one run whose record is `art:rec`."""
+
+    def __init__(self, outputs: dict):
+        self.outputs = outputs
+        self.fetched: list[tuple[str, list[str]]] = []
+
+    def get_attempt(self, run):
+        return {"run_id": run, "outputs": self.outputs} if run == "r1" else None
+
+    def fetch(self, art, to, *, paths):
+        self.fetched.append((art, paths))
+        (to / "out").mkdir(parents=True)
+        return to
+
+
+def test_from_a_run_reads_its_record_with_this_trees_reader(tmp_path, monkeypatch):
+    """`--from RUN` fetches only the ``out/`` of the run's record and rereads it (`rec_profile.read`), so a run recorded
+    before ``session_times`` has them; a run the store doesn't hold, or one that kept no record, is refused."""
+    times = {s: {"wall_s": 10.0, "cpu_s": 60.0} for s in F.SESSION_STEPS}
+    read = []
+
+    def reread(root):
+        read.append(root)
+        return _doc() | {"session_times": times}
+
+    monkeypatch.setattr(F.RP, "read", reread)
+    store = _Store({"run_record": "art:rec"})
+    doc = F.recorded("r1", tmp_path, lambda: store)
+    assert store.fetched == [("art:rec", ["out"])] and read == [tmp_path / "out"]
+    assert doc["run"] == "r1" and F.of_result(doc) == F.figures(_doc(), times)
+    assert F.recorded("r1", tmp_path / "b", lambda: _Store({"run_files": "art:files"}))["run"] == "r1"
+    with pytest.raises(SystemExit, match="not in the evidence store"):
+        F.recorded("r2", tmp_path, lambda: store)
+    with pytest.raises(SystemExit, match="kept no record"):
+        F.recorded("r1", tmp_path, lambda: _Store({}))
+
+
+def test_under_a_research_run_the_figures_record_their_metrics(tmp_path, monkeypatch, capsys):
+    """Under a research run the command writes each of `METRICS` for each fleet's week, month and year, modeled, the
+    world's year last of its name, and passes the validation only for an accepted run with every figure there."""
+    from verity_bench import kit
+
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "none", "gpus": [], "driver": None, "cuda": None,
+                                                    "node": "cpu-node-0", "commit": "c" * 40, "why": "no nvidia-smi"})
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261114-000000-0000")
+    times = {s: {"wall_s": 10.0, "cpu_s": 60.0} for s in F.SESSION_STEPS}
+    r = tmp_path / "recursion_e2e.json"
+    r.write_text(json.dumps(_doc() | {"session_times": times, "run": "r1", "headline": {"ok": True}}))
+    assert F.main([str(r)]) == 0 and not list(tmp_path.glob("*/result.json"))
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    assert F.main([str(r)]) == 0
+    capsys.readouterr()
+    res = json.loads((run_dir / "result.json").read_text())
+    fig = json.loads((run_dir / F.KEPT).read_text())
+    assert fig == json.loads(json.dumps(F.figures(_doc(), times))) and res["measurement_files"] == [F.KEPT]
+    ms = res["measurements"]
+    assert len(ms) == len(F.METRICS) * 2 * len(F.MONITORING_PERIODS) and {m["mark"] for m in ms} == {"modeled"}
+    for metric in F.METRICS:
+        mine = [m for m in ms if m["name"] == metric]
+        assert (mine[-1]["over"], mine[-1]["period"]) == ("world", "year") and metric.endswith("-world-year")
+        assert mine[-1]["inputs"][-1] == "r1" and mine[-1]["inputs"][0].startswith("modeled: ")
+    year = fig["fleets"]["world"]["periods"]["year"]
+    last = {m["name"]: m for m in ms if (m["over"], m["period"]) == ("world", "year")}
+    assert last["benchmarks/recursion-core-years-world-year"]["value"] == year["cost"]["core_years"]
+    assert last["benchmarks/recursion-ks-error-log2-world-year"]["value"] == year["ks"]["world"]["error_log2"]
+    assert last["benchmarks/recursion-stop-leak-bits-world-year"]["value"] == year["leak"]["bits"]
+    assert last["benchmarks/recursion-stop-leak-bits-world-year"]["unit"] == "stop-leak bits a world year"
+    dc = next(m for m in ms if m["name"] == "benchmarks/recursion-ks-error-log2-world-year" and m["over"] == "datacenter")
+    assert dc["value"] == fig["fleets"]["datacenter"]["periods"]["week"]["ks"]["datacenter"]["error_log2"]
+    assert res["validation"]["status"] == "passed" and res["validation"]["detail"] == "figures of r1, an accepted recursive run"
+
+    # a session missing a step has no cost: its core-years carry why, and the run isn't passed
+    partial = tmp_path / "partial"
+    partial.mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(partial))
+    short = {s: times[s] for s in F.SESSION_STEPS[:-1]}
+    r.write_text(json.dumps(_doc() | {"session_times": short, "run": "r1", "headline": {"ok": False}}))
+    assert F.main([str(r)]) == 0
+    res = json.loads((partial / "result.json").read_text())
+    cost = [m for m in res["measurements"] if m["name"] == "benchmarks/recursion-core-years-world-year"]
+    assert all(m["value"] is None and "isn't whole" in m["why"] for m in cost)
+    v = res["validation"]
+    assert v["status"] == "failed" and "not an accepted recursive run" in v["detail"]
+    assert v["detail"].endswith("; none for benchmarks/recursion-core-years-world-year")

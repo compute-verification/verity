@@ -10,9 +10,9 @@ import pytest
 import torch
 import torch.nn as nn
 from verity.circuits.defs import bind
+from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity.definitions.numerics.fp8_moe_rows import moe_expert_fp8_block_row
 from verity.definitions.numerics.serve3_reference import materialize
-from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity.definitions.registry import moe
 
 from verity_vllm.program.frontend.derive import derive_report

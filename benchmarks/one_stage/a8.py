@@ -2,7 +2,7 @@
 openings proved in zero knowledge through the proof system in place of opened (PROTOCOL.md §6's checks 1-3 and 5, as §8
 deploys them), so that the verifier receives no chunk bytes; and the prover's cost per opening.
 
-    python benchmarks/one_stage/a8.py --bin flock-circuit --lean flock-verify --out DIR [--blocks 4096] [--plan 64]
+    python benchmarks/one_stage/a8.py --bin flock-circuit --lean verity-verify-proof --out DIR [--blocks 4096] [--plan 64]
       [--samples 16] [--points 1,4,16] [--arms nofw,fw] [--cold 1] [--gpu [--lease CMD]] [--no-audit]
 
 * **Store and window.** ``--blocks`` N seeded payloads (each 64-byte word's top byte zero, p512's words) registered under
@@ -280,7 +280,7 @@ def audit_round(a, sg, m: dict, rs, c3, draws, out: Path, port: int) -> dict:
                                         and (live or {}).get("roots") == fv["roots"] and v.ok,
                                         "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}}
     lv = a0.lean_verify(a.lean, m, n, sdir, zk=True)
-    verdicts[f"lean-verify/{name}"] = {**lv, "tool": "flock-verify verify --zk --archive --partition --program"}
+    verdicts[f"lean-verify/{name}"] = {**lv, "tool": "verity-verify-proof verify --zk --archive --partition --program"}
     proved = a0.proved_units(m["header"], live or {})
     statement = {name: {"session_s": proc["wall_s"], **{x: live.get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
                         "timing": {x: live.get(x) for x in TIMING}, "process": proc, "lean_verify_s": lv.get("verify_s")}}

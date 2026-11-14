@@ -14,7 +14,12 @@ import pytest
 from test_appends import N, Run, payload, salts, store, units_mapped
 
 from verity.protocols.accounting.poub.verifier import audit, codec
-from verity.protocols.accounting.poub.verifier.memory_map import Header, Replay, Step, Written
+from verity.protocols.accounting.poub.verifier.memory_map import (
+    Header,
+    Replay,
+    Step,
+    Written,
+)
 
 POOL = list(range(2, N)) + list(range(100, 106))
 """A KV pool's slots: registered blocks 2 … 7, filler, and memory outside the store."""

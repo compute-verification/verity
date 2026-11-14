@@ -16,7 +16,7 @@ stamp() { echo "served-zk: $* at $(date -u +%H:%M:%SZ)"; }
 df -h /workspace | tail -1
 
 stamp "ship build"
-CUDA=/usr/local/cuda-13.0 bash benchmarks/pouw/pearl_c_sm120/build.sh "$S/ship-${HEAD:0:8}" > "$OUT/build.log" 2>&1 \
+CUDA=/usr/local/cuda-13.0 bash benchmarks/pouw/pearl_c_sm120/ship.sh "$S/ship-${HEAD:0:8}" > "$OUT/build.log" 2>&1 \
   || { stamp "BUILD_FAIL rc=$?"; tail -20 "$OUT/build.log"; exit 11; }
 tar -cf "$S/ship.tar" -C "$S" "ship-${HEAD:0:8}"
 

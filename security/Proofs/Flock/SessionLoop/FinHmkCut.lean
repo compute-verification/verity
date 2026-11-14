@@ -679,7 +679,7 @@ theorem swSrcE_hmk_cut (vs : finS.SwVals)
   have hjj : (2 * j.val + r.val) / 2 = j.val := by omega
   have hmod : (2 * j.val + r.val) % 2 = r.val := by omega
   have hst : (Masked.stsOf x)[(2 * j.val + r.val) / 2]! = Masked.stAt x j := Masked.stsOf_half x j r
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [hst]
     exact (Masked.zkTab x j).hz

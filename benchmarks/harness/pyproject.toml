@@ -114,6 +114,8 @@ inputs = [
     "benchmarks/census/hardware.json",
     "benchmarks/rho/data/hardware.toml",
     "benchmarks/overhead/run.py",
+    # a card the door measures on reads its SMs and L2 from its card file through verity.device
+    "hardware/cards",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/engine/__init__.py", "tools/research/src/research/__init__.py", "tools/research/src/research/store/__init__.py",
     # the proof-system table prices serving at the reference fleet's assumed serving MFU, and `verity bench prove` is the
     # door's runner, which a test runs
@@ -129,6 +131,10 @@ inputs = [
     # a steady-state point's node side runs the stager and the timing script by their paths in the tree, which a test
     # checks are there and in the point's tool's closure, with the timing script's fewest timed sessions a prover
     "benchmarks/served_units/stage.py", "benchmarks/one_stage/server_rate.py",
+    # only verity_bench.adapter imports the vLLM adapter past its public interface, in the harness and the benchmarks whose
+    # doors it runs, which a test checks against the interface's list of public modules
+    "benchmarks/overhead", "benchmarks/prove", "benchmarks/exfiltration", "benchmarks/recursion_e2e",
+    "benchmarks/recursion_figures", "tests/test_vllm_public_api.py",
 ]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

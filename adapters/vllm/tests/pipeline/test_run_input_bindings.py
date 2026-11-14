@@ -1,4 +1,4 @@
-"""`pipeline.match.run_input_bindings`: each request's `run` Input batches of the workload root (one per field, `request[<id>].run[<k>]`,
+"""`pipeline.match_fold.run_input_bindings`: each request's `run` Input batches of the workload root (one per field, `request[<id>].run[<k>]`,
 at the gates `WorkloadProgram.address_map` gives) are bound, field by field, to the `run_values` identities the request's manifest
 requires, and a request whose rows and batches don't tile each other binds nothing and is refused by name."""
 
@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from verity.definitions.registry.dsa_topk import waksman_switches
 
-from verity_vllm.pipeline.match import run_input_bindings
+from verity_vllm.pipeline.match_fold import run_input_bindings
 from verity_vllm.program.predict import dsa as D
 from verity_vllm.query.manifest.format import RUN_FAMILY, canonical_identity
 
@@ -59,3 +59,24 @@ def test_rows_that_do_not_tile_the_batches_bind_nothing():
     out = run_input_bindings({"requests": [_request(0, "wl-a", [("prompt", 0, 4)])]}, [a])
     assert out["bindings"] == [] and out["refused"] == ["r0: 1 run values and no `run` Input in the address map"]
     assert run_input_bindings({"requests": [_request(0, "wl-a", [("prompt", 0, 4)])]}, []) == {"bindings": [], "refused": []}
+
+
+def test_an_input_is_a_run_batch_by_its_whole_name_and_a_row_that_states_no_rank_counts_at_rank_0():
+    a = _row("r0", 0, 5, 0)
+    n = a["leaves"][1]
+    others = [("prompt", 0, 4), ("run[x]", 4, 5), ("run[1", 5, 6), ("runx1]", 6, 7)]     # none is `run` or `run[<k>]`
+    amap = {"requests": [_request(0, "wl-a", [*others, ("run[0]", 10, 10 + n)])]}
+    out = run_input_bindings(amap, [a])
+    assert out["refused"] == [] and [(x["input"], x["gates"]) for x in out["bindings"]] == [("request[wl-a].run[0]", [10, 10 + n])]
+    assert run_input_bindings(amap, [a], rank=1) == {"bindings": [], "refused": [
+        f"r0: its run values' leaves [] don't tile its `run` Input batches [(0, {n})] (field k, one gate a leaf)"]}
+    unranked, no_run = {k: v for k, v in a.items() if k != "rank"}, {"requests": [_request(0, "wl-a", others)]}
+    assert run_input_bindings(no_run, [unranked]) == {"bindings": [], "refused": ["r0: 1 run values and no `run` Input in the address map"]}
+    assert run_input_bindings(no_run, [unranked], rank=1) == {"bindings": [], "refused": []}
+
+
+def test_a_request_s_rows_are_taken_by_their_first_leaf_and_a_refusal_states_them_in_that_order():
+    wide, inner = {**_row("r0", 0, 5, 0), "leaves": [0, 10]}, {**_row("r0", 1, 5, 0), "leaves": [2, 4]}
+    amap = {"requests": [_request(0, "wl-a", [("run[0]", 10, 20), ("run[1]", 20, 22)])]}
+    assert run_input_bindings(amap, [inner, wide]) == {"bindings": [], "refused": [
+        "r0: its run values' leaves [(0, 10), (2, 4)] don't tile its `run` Input batches [(0, 10), (1, 2)] (field k, one gate a leaf)"]}

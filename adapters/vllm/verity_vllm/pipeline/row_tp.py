@@ -56,7 +56,16 @@ from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline import store_data as SD
 from verity_vllm.pipeline.row_driver import Row, Stop, stage_on
 
+__all__ = ["TpRow"]
+
 TP_UTIL = "0.6"
+
+
+def _deferred(summary: Any, field: str) -> Any:
+    """`field` of what a Commit's summary says of the replay it deferred (``replay_deferred``); None when there is no summary,
+    it says nothing of a deferred replay, or what it says has no such field."""
+    deferred = (summary or {}).get("replay_deferred")
+    return deferred.get(field) if deferred else None
 
 
 def _tail_bytes(path: str, n: int = 200) -> str:
@@ -212,7 +221,7 @@ class TpRow(Row):
         """``--build-jobs`` N; unset or auto: as many of the `derives` derives as the memory holds at the largest of `shapes`
         (`row_records.build_jobs_auto`: the headroom, or ``--build-ram-budget-gb`` when smaller), marked ``build.jobs``."""
         j = self.cb.build_jobs or "auto"
-        n = int(j) if j.isdigit() and int(j) > 0 else R.build_jobs_auto(shapes, R.model_layers(self.ck), derives=derives,
+        n = int(j) if j.isdecimal() and int(j) > 0 else R.build_jobs_auto(shapes, R.model_layers(self.ck), derives=derives,
                                                                           budget_gb=self.cb.build_ram_budget_gb)
         self.tl("build.jobs", "mark", ("jobs", n), ("requested", j), ("derives", derives))
         return n
@@ -232,7 +241,8 @@ class TpRow(Row):
         else:
             cmd = self.cli("build", "--model", self.repo, "--revision", self.rev, "--max-model-len", str(self.MML), "--workload", self.wl,
                            "--tp", str(self.W), "--rank", str(r), "--out", out, *self.tgt_args, *args)
-        open(f"{out}.rc", "w").write(f"{self.run_to(self.to_b, f'{out}.log', cmd)}\n")
+        with open(f"{out}.rc", "w") as rc:
+            rc.write(f"{self.run_to(self.to_b, f'{out}.log', cmd)}\n")
 
     def construction(self) -> None:
         """The Build's construction (``--build-construction``): a switched row's AOT Build reads its ``aot.trace`` Build's derive dirs
@@ -272,11 +282,12 @@ class TpRow(Row):
         """The shape's `Row.launch_args`, read once for every rank; one that does not read fails the Build."""
         if (lp, t) not in self.lctx:
             self.lctx[(lp, t)] = self.launch_args(lp, t)
-        if self.lctx[(lp, t)] is None:
+        args = self.lctx[(lp, t)]
+        if args is None:
             self.verdict("build", "FAIL", f"rc=1 the launch context of shape LP{lp} T{t} did not read (row.log)")
             self.tl("row", "end", ("ok", "false"), ("stopped_at", "build"))
             raise Stop(10)
-        return self.lctx[(lp, t)]
+        return args
 
     def compose(self, r: int) -> None:
         """GP-01's workload Program of rank ``r`` over its request Programs."""
@@ -344,7 +355,7 @@ class TpRow(Row):
             self.derive_all(todo, jobs)
         for r in range(self.W):
             for f in sorted(glob.glob(f"{self.rank(r)}/*.rc")):
-                self.log(f"derive {os.path.basename(f[:-3])} rank{r} rc={open(f).read().strip()} {_tail_bytes(f[:-3] + '.log')}")
+                self.log(f"derive {os.path.basename(f[:-3])} rank{r} rc={Path(f).read_text().strip()} {_tail_bytes(f[:-3] + '.log')}")
         kept = [r for r in range(self.W) if R.composed_ok(self.rank(r))]
         if kept:
             self.log(f"compose: ranks {kept} keep their workload Programs on disk (composed after their request Programs)")
@@ -385,7 +396,7 @@ class TpRow(Row):
         one rank at a time and says so: the plan's ratios are fitted on GLM-5.3 B8 alone."""
         cm, layers = self.cm, R.model_layers(self.ck)
         if not layers or not self.shapes:
-            return cm.fold_rank_workers, cm.fold_workers, cm.fold_timeout or R.FOLD_LEG_MIN_S
+            return cm.fold_rank_workers, cm.fold_workers, cm.fold_timeout or R.FOLD_PART_MIN_S
         p = R.fold_plan(self.shapes, layers, self.W, int(cm.fold_mem_gb * 1e9) if cm.fold_mem_gb else None, folds=cm.fold_workers)
         gb = {k: round(p[f"{k}_bytes"] / 1e9) for k in ("gm", "fold", "mem")}
         rw, fw = (cm.fold_rank_workers, cm.fold_workers) if cm.fold_rank_workers else (p["rank_workers"], p["fold_workers"])
@@ -426,7 +437,7 @@ class TpRow(Row):
             shutil.rmtree(f"{M}/fold_match", ignore_errors=True)      # an earlier capture's folds and stages, which --match-reuse must never keep
             rc_cap = self.run_gpu("match.capture", to_m, f"{M}/capture.log", [*cap, "--record-collectives", "--out", f"{M}/capture"],
                                   lease_dir=f"{M}/lease/capture", kept=GL.MATCH_LEG_KEPT)
-            ranks = " ".join(_grep(f"{M}/capture.log", lambda s: s.startswith("[tp2] rank ") and s[11:].split(":", 1)[0].isdigit() and ":" in s[11:]))
+            ranks = " ".join(_grep(f"{M}/capture.log", lambda s: s.startswith("[tp2] rank ") and s[11:].split(":", 1)[0].isdecimal() and ":" in s[11:]))
             self.log(f"match capture rc={rc_cap} {(ranks + ' ' if ranks else '')[:300]}")
             rc_ctl = self.run_gpu("match.control", to_m, f"{M}/control.log", [*cap, "--no-observer", "--out", f"{M}/control"],
                                   lease_dir=f"{M}/lease/control", kept=GL.MATCH_LEG_KEPT)
@@ -447,7 +458,7 @@ class TpRow(Row):
             miss = "".join(" " + sh for sh in missing)
             self.verdict("eos-truncated", f"served=[{' '.join(need)}]", f"declared=[{declared}]: request(s) stopped before the cap; deriving the served-shape "
                          f"Program(s) [{miss}] per rank and recomposing GP-01 (MOE-05)", quiet=True)
-            served = R.longest_first({tuple(map(int, sh.split(","))) for sh in missing})
+            served = [(lp, t) for lp, t in R.longest_first({tuple(map(int, sh.split(","))) for sh in missing})]
             todo = [self.request(r, lp, t) for lp, t in served for r in range(self.W)
                     if not R.derived_ok(f"{self.rank(r)}/build_request_LP{lp}_T{t}")]
             self.derive_all(todo, self.derive_jobs(served, len(todo)))
@@ -483,9 +494,9 @@ class TpRow(Row):
             self.log(f"match fold ({fp}): {fold}")
         wall = int(time.time()) - t0
         ok = "FAIL"
-        if rc_cap == 0 and rc_ctl == 0 and rc_chk == 0 and R.tp_passed(f"{M}/tp2_match.json"):
-            if not fp or (rc_fold == 0 and R.tp_passed(f"{M}/fold_match/tp2_fold_match.json")):
-                ok = "PASS"
+        if (rc_cap == 0 and rc_ctl == 0 and rc_chk == 0 and R.tp_passed(f"{M}/tp2_match.json")
+                and (not fp or (rc_fold == 0 and R.tp_passed(f"{M}/fold_match/tp2_fold_match.json")))):
+            ok = "PASS"
         R.tp_match_summary(M, rc_cap, rc_ctl, rc_chk, rc_fold, ok, fp)
         self.verdict("match", ok, f"rc={rc_cap}/{rc_ctl}/{rc_chk}/{rc_fold} wall={wall}s tp2_match[{chk or 'none'}] {fold}")
         self.tl("stage.match", "end", ("ok", ok), ("wall_s", wall))
@@ -565,6 +576,7 @@ class TpRow(Row):
                        "--hidden-so", self.hidden_so, "--openings", "64", "--max-num-seqs", str(self.B),
                        "--engine-arg", f"gpu_memory_utilization={self.commit_util}", *self.engine, *self.build_ranks(),
                        "--required-manifest", f"{d}/manifest.json", *match, "--checkpoint-dir", self.ck, "--checkpoint-model", self.repo,
+                       "--checkpoints-manifest", self.path("manifests/checkpoints.json"),
                        *arms, "--replay-workers", str(ck.replay_workers), "--label", self.row, "--out", f"{d}/commit")
         if not self.config_run and self.fold_profile and os.path.isfile(f"{self.M}/fold_match/tp2_fold_match.json"):
             cmd.append("--require-fold-match")
@@ -580,7 +592,7 @@ class TpRow(Row):
         """True when the Commit ran every check but the ranks' C2 replay, which it deferred to their sealed bundles (`--replay-deferred`,
         `commit/replay_deferred.json`): the stage is PENDING until `replay` decides it."""
         sm = R.load_json(f"{self.d}/commit/summary.json") or {}
-        bundles = (sm.get("replay_deferred") or {}).get("bundles") or []
+        bundles = _deferred(sm, "bundles")
         if not (self.ck_.replay_deferred == "1" and rck == 0 and sm.get("pass") is None and bundles):
             return False
         self.verdict("commit", "PENDING", f"rc={rck} wall={wall}s {R.tp_commit_line(self.d)}; {len(bundles)} rank replay bundles sealed "
@@ -593,7 +605,7 @@ class TpRow(Row):
         """The deferred C2 of the Commit, on CPU (`tp-commit-replay`), from every rank's sealed bundle: each rank's shards composed from
         the checkpoint of record at (world, rank) and opened against its committed weights root.  Its exit decides the stage."""
         d = self.d
-        if skipped := ((R.load_json(f"{d}/commit/summary.json") or {}).get("replay_deferred") or {}).get("skipped"):
+        if skipped := _deferred(R.load_json(f"{d}/commit/summary.json"), "skipped"):
             self.log(f"replay: nothing deferred, the Commit replayed every rank in process ({skipped})")
             return
         self.tl("stage.replay", "start")

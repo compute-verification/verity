@@ -56,7 +56,7 @@ def test_width_refusals_agree_with_the_codec(tmp_path):
                 why = str(e)
             f.write(json.dumps({"program": inst["program"], "codec": why}) + "\n")
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(VERIFIER / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(VERIFIER / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/verity-verify-proof"),
                         "--out", str(tmp_path / "out"), "--widths", str(tmp_path / "widths.jsonl")],
                        capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr

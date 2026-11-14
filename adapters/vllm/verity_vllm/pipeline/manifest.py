@@ -43,7 +43,7 @@ from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query import vocab_range as VR
 from verity_vllm.query.compose import compose_global, merge_ranks
-from verity_vllm.query.program_view import from_instances, iter_instance_rows
+from verity_vllm.query.program_view import from_instances, iter_instance_rows, specialization
 from verity_vllm.query.required import (
     Q_WORD_ID,
     QUERIES,
@@ -98,8 +98,8 @@ def word_check(P: Any, corr: Correspondence, required: Any, word: str, *, strict
     The manifest is not touched."""
     from verity_vllm.query.module_body import literal_calls
     X, W, extras = word_query.parse(word)
-    r = word_query.check_query(P, _Committed(required, literal_calls(P) | unreturned, corr.module_of), X, W, extras, strict=strict,
-                                acquired=acquired, max_gates=max_gates)
+    r = word_query.check_calls(word_query.call_groups(P, _Committed(required, literal_calls(P) | unreturned, corr.module_of)), X, W,
+                               extras, strict=strict, specialize=specialization, acquired=acquired, max_gates=max_gates)
     if log:
         log(f"  {r['query']}: {r['calls']} calls -> {r['units']} units over {r['gates']} gates, {r['committed_interior_words']} committed interior words"
             + (f" ({r['acquired_interior_words']} acquired by a tap)" if acquired is not None else "")
@@ -137,7 +137,7 @@ def cross_call_check(program_dir: str, *, strict: bool = True, log=None) -> dict
     """Cross-Call recomputes (`cross_call.check_program`) over the Build's instance sequence; `strict` raises
     `cross_call.RecomputeViolation` naming every one.  The manifest is not touched."""
     path = os.path.join(program_dir, "instances.json.gz")
-    return cross_call.check_program(lambda: iter_instance_rows(path), strict=strict, log=log)
+    return cross_call.check_program(lambda: iter_instance_rows(path), strict=strict, specialize=specialization, log=log)
 
 
 def build(program_dir: str, *, workload: dict[str, Any] | None = None, request_id: str | None = None, rank: int = 0, ranks: int = 1,
@@ -194,7 +194,7 @@ def _headroom() -> int | None:
                 lim, cur = a.read().strip(), int(b.read().strip())
         except (OSError, ValueError):
             continue
-        if lim.isdigit() and int(lim) < (1 << 60):
+        if lim.isdecimal() and int(lim) < (1 << 60):
             return max(0, int(lim) - cur)
     try:
         with open("/proc/meminfo") as f:
@@ -232,7 +232,8 @@ def prefetch_word_rules(program_dirs: list[str], word: str | None, *, word_max_g
         return
     with _pool_headroom(budget_gb, "word check", log) as head:
         budget = None if head is None else int(head * HEADROOM_SHARE)
-        n = word_query.prefetch(specs, X, W, extras, max_gates=word_max_gates, jobs=jobs, budget=budget)
+        n = word_query.prefetch(specs, X, W, extras, max_gates=word_max_gates, jobs=jobs, budget=budget,
+                               specialize=specialization)
     if log:
         within = "with no memory budget" if budget is None else f"within {budget / 2**30:.1f} GiB"
         log(f"  word check: {n} unit rules of {len(set(specs))} Definitions cut by {jobs} processes {within} in {time.time() - t0:.1f}s")
@@ -304,7 +305,7 @@ def _own_budget(budget_gb: float | None = None) -> int | None:
             total = next(int(ln.split()[1]) * 1024 for ln in f if ln.split(":")[0] == "MemTotal")
     except (OSError, StopIteration, ValueError, IndexError):
         return None
-    return head if lim.isdigit() and int(lim) < total else None
+    return head if lim.isdecimal() and int(lim) < total else None
 
 
 def _build_in_turn(tasks: list[tuple[str, dict[str, Any]]], after: Callable[[int, dict[str, Any]], None], log=None) -> list[dict[str, Any]]:

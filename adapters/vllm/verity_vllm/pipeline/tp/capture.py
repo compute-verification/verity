@@ -132,7 +132,7 @@ def main(args: Options) -> None:
     if revision is None:
         try:
             revision = json.loads(Path("EXPORT.json").read_text()).get("commit", "unknown")
-        except (OSError, ValueError, AttributeError):
+        except (OSError, ValueError, AttributeError, RecursionError):
             revision = "unknown"
     env_flags = {**prof.apply_env(), **target_env}
     engine_env.step_timeout(args.rpc_timeout)

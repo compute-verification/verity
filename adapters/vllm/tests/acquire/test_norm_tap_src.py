@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.properties import norm_tap_exactness as X
 from verity_vllm.acquire.norm_tap_src import build_ext as BE
-from verity_vllm.properties import norm_tap_exactness as X
 
 SRC = Path(BE.__file__).resolve().parent
 

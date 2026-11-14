@@ -442,6 +442,69 @@ def test_removals_that_fail_are_one_line_on_stderr_and_the_command_runs_origin_m
     assert all((h / "tree/tools/f").is_file() for h in olds)
 
 
+def registrations(repo: Path) -> list[str]:
+    """What `repo` has registered as its worktrees, by name (git's `.git/worktrees`)."""
+    d = repo / ".git/worktrees"
+    return sorted(os.listdir(d)) if d.exists() else []
+
+
+def idle_and_past_the_newest(cache: Path, home: Path) -> list[Path]:
+    """The command that picked `home` has exited, long ago, and `KEEP` entries were picked since: those."""
+    exited()
+    os.utime(home / "lock", (NOW - 10 * IDLE, NOW - 10 * IDLE))
+    return [entry(cache, i, 1) for i in range(at_main.KEEP)]
+
+
+def test_an_entry_is_removed_together_with_what_its_repository_registered_for_its_tree(tmp_path, capsys):
+    """`rm -rf` of the tree alone left the repository listing a worktree that is gone, which git prunes months later: a
+    shipped source tree read as one with a worktree in use, and was kept on its node for good."""
+    repo, cache = checkout(tmp_path), tmp_path / "cache"
+    git(repo, "worktree", "add", "-q", "--detach", str(tmp_path / "another"), "main")
+    home = at_main.tree(repo, git(repo, "rev-parse", "origin/main"), cache).parent
+    assert registrations(repo) == ["another", "tree"]
+    newer = idle_and_past_the_newest(cache, home)
+    at_main.prune(cache, None, 1.0)
+    assert entries(cache) == newer and capsys.readouterr().err == ""
+    assert registrations(repo) == ["another"], "its own registration, and no other"
+    listed = git(repo, "worktree", "list", "--porcelain")
+    assert listed.count("worktree ") == 2 and "prunable" not in listed, "the repository and the other worktree, both there"
+    assert git(tmp_path / "another", "status", "--porcelain") == ""
+
+
+def test_a_tree_removed_to_be_made_again_leaves_no_registration_when_it_then_cant_be_made(tmp_path, monkeypatch, capsys):
+    """Made again, a tree takes the place of its old registration; when `git worktree add` fails or is cut short, nothing
+    does, and the old one would stay with no tree."""
+    repo, cache, wt = made(tmp_path)
+    (wt.parent / "at").unlink()                                         # as a tree a killed checkout left: not whole
+    monkeypatch.setattr(at_main, "run", at_worktree_add(still_running))
+    ran, err = run_shim(repo, cache, capsys)
+    assert ran == [own(repo)] and "(its 60 s ran out at `git worktree add`)" in err
+    assert not wt.exists() and registrations(repo) == []
+    monkeypatch.setattr(at_main, "run", to_its_end)
+    assert run_shim(repo, cache, capsys)[0] == [str(wt / "tools/research/src"), own(repo)] and registrations(repo) == ["tree"]
+
+
+def test_only_a_registration_that_names_the_tree_back_is_removed_with_it(tmp_path, capsys):
+    """A tree's `.git` says where its repository registered it; what is found there is removed only when it is a
+    registration (a directory of some `worktrees`) and that tree's (its `gitdir` names the tree's `.git`), so a `.git`
+    that names another worktree's registration, a directory elsewhere, or a repository costs that nothing."""
+    repo, cache = checkout(tmp_path), tmp_path / "cache"
+    git(repo, "worktree", "add", "-q", "--detach", str(tmp_path / "another"), "main")
+    newer = [entry(cache, i, 1) for i in range(at_main.KEEP)]
+    olds = [entry(cache, 100 + i, (10 + i) * IDLE) for i in range(3)]
+    elsewhere = tmp_path / "elsewhere/plain"
+    elsewhere.mkdir(parents=True)
+    (elsewhere / "gitdir").write_text(f"{olds[1] / 'tree/.git'}\n")
+    (olds[0] / "tree/.git").write_text(f"gitdir: {repo / '.git/worktrees/another'}\n")
+    (olds[1] / "tree/.git").write_text(f"gitdir: {elsewhere}\n")
+    (olds[2] / "tree/.git").write_text(f"gitdir: {repo / '.git'}\n")
+    for _ in olds:
+        at_main.prune(cache, None, 1.0)
+    assert entries(cache) == newer and capsys.readouterr().err == ""
+    assert registrations(repo) == ["another"] and git(tmp_path / "another", "status", "--porcelain") == ""
+    assert (elsewhere / "gitdir").exists() and git(repo, "status", "--porcelain") == ""
+
+
 def test_a_pick_renews_its_entry_so_a_pruner_that_listed_it_as_due_leaves_it(tmp_path, monkeypatch):
     """The race: one command picks an entry (the commit it was told to run from) while another has judged it old. The
     judgement that counts is the one made under the entry's lock, where the pick is dated and held."""

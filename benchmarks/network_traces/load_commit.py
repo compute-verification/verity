@@ -1,4 +1,4 @@
-"""load-commit: what the network certifier's commit of the weights' load costs on the auditor host, per core, for the demo's
+"""load-commit: what the network certifier's commit of the weights' load costs on the auditor device, per core, for the demo's
 frozen H200 shape (MQA, width 16,384, 52 layers, MLP 65,536, byte vocabulary, context 32; 130.10 GiB of INT8
 W8A8 weights, P2-encoded into about 0.93·U of HBM).
 

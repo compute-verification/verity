@@ -12,7 +12,7 @@ raised) and posts once in #agent-alerts naming infra's user group; it clears onc
 clear is a reply in the open post's thread. A post Slack refuses is tried again next pass. At `digest_hour_utc` each day the
 digest posts every check's lines: loop liveness, R2's size by top-level prefix, Neon, spend month to date and projected, the
 GitHub rate limit and the public endpoints. A check whose credential isn't in the environment is skipped, and the digest says
-once per check which key would close the gap (under *Unmonitored*: `needs KEY: what it would watch`). State: `state` in the config.
+once per check which key would close the gap (under *Unwatched*: `needs KEY: what it would watch`). State: `state` in the config.
 
 The checks (cloud_watch.toml holds every threshold, price and path):
 
@@ -28,7 +28,8 @@ The checks (cloud_watch.toml holds every threshold, price and path):
 - **spend**: the budgets guard's state (RunPod balance, rate and each line's spend) against budgets.toml's live lines, the
   RunPod balance under its auto top-up (a failed top-up), R2's month at Cloudflare's list price, and, when Nebius credentials and an
   instance list are available, each running VM's line: one on no line, on an expired line, or burning past its line is an anomaly.
-- **github**: the token's core rate limit; **jobs**: Control's Job queue, where a job queued past `stale_queued_h` (from its
+- **github**: the core rate limit of the read-only App token the pod's watchers read GitHub with (`token_command`, run each
+  pass; relay.env holds no GitHub token); **jobs**: Control's Job queue, where a job queued past `stale_queued_h` (from its
   `not_before`) means no worker claims its kind; **http**: the public endpoints (Vercel's site, the Slack broker) answer below 500.
 """
 from __future__ import annotations
@@ -421,9 +422,12 @@ ACCOUNT_RE = re.compile(r"ACCOUNT \$[\d,.]+ at \$([\d,.]+)/h")
 
 def account_rate(log: Path) -> float | None:
     """RunPod's own spend rate for the account (every pod and volume), from the steward's last `ACCOUNT` line."""
+    if not log.exists():
+        return None
     try:
         got = tail_match(log, ACCOUNT_RE, limit=1 << 20)
-    except OSError:
+    except OSError as e:
+        print(f"{log}: unreadable, so RunPod's account rate is unknown ({type(e).__name__}: {e})", file=sys.stderr)
         return None
     return None if got is None else float(got.replace(",", ""))
 
@@ -467,13 +471,13 @@ def spend_runpod(ctx: Ctx, rep: Report, lines: dict) -> None:
         line = lines.get(prefix)
         if not line or epoch(str(line.get("expires", "1970-01-01T00:00Z"))) < ctx.now:
             continue
-        cap, spent = line.get("cap_usd"), float(st.get("spent") or 0)
+        limit, spent = line.get("cap_usd"), float(st.get("spent") or 0)
         if line.get("cap_usd_per_day") is not None:
-            cap, spent = line["cap_usd_per_day"], float(st.get("window_usd") or 0)
-        if cap and spent >= cfg["line_alert_share"] * cap:
-            rep.findings.append(Finding(f"spend|runpod|{prefix}", f"*Budget line `{prefix}` at {usd(spent)} of {usd(cap)}*"
+            limit, spent = line["cap_usd_per_day"], float(st.get("window_usd") or 0)
+        if limit and spent >= cfg["line_alert_share"] * limit:
+            rep.findings.append(Finding(f"spend|runpod|{prefix}", f"*Budget line `{prefix}` at {usd(spent)} of {usd(limit)}*"
                                                                   + (" today" if line.get("cap_usd_per_day") is not None else "")
-                                                                  + " on RunPod (the guard terminates its pods at the cap)."))
+                                                                  + " on RunPod (the guard terminates its pods at the limit)."))
 
 
 def nebius_instances(ctx: Ctx, rep: Report) -> list[dict] | None:
@@ -497,7 +501,8 @@ def rates(ctx: Ctx) -> dict[str, float]:
             for f in p.glob("*.toml"):
                 try:
                     r = tomllib.loads(f.read_text()).get("rate_usd_per_hour")
-                except (OSError, tomllib.TOMLDecodeError):
+                except (OSError, tomllib.TOMLDecodeError) as e:
+                    print(f"{f}: skipped, so its machine has no rate ({type(e).__name__}: {e})", file=sys.stderr)
                     continue
                 if r is not None:
                     out[f.stem] = float(r)
@@ -538,13 +543,13 @@ def spend_nebius(ctx: Ctx, rep: Report, lines: dict) -> None:
         hours = max(epoch(str(line["expires"])) - ctx.now, 0) / 3600 if line.get("expires") else month_hours(ctx.now)[1]
         rep.lines.append(f"  `{prefix}`: {usd(rate)}/h, " + (f"{usd(rate * 24)}/day of {usd(line['cap_usd_per_day'])}/day"
                                                          if line.get("cap_usd_per_day") is not None else
-                                                         f"{usd(rate * hours)} more to its expiry, cap {usd(line.get('cap_usd') or 0)}"))
+                                                         f"{usd(rate * hours)} more to its expiry, limit {usd(line.get('cap_usd') or 0)}"))
         if line.get("cap_usd_per_day") is not None and rate * 24 > line["cap_usd_per_day"]:
             rep.findings.append(Finding(f"spend|nebius|{prefix}|day", f"*Budget line `{prefix}` burning {usd(rate * 24)}/day* on Nebius, "
                                                                       f"over its {usd(line['cap_usd_per_day'])}/day."))
         elif line.get("cap_usd") and rate * hours > line["cap_usd"]:
             rep.findings.append(Finding(f"spend|nebius|{prefix}|cap", f"*Budget line `{prefix}`'s running VMs alone reach "
-                                                                      f"{usd(rate * hours)} by its expiry*, over its {usd(line['cap_usd'])} cap "
+                                                                      f"{usd(rate * hours)} by its expiry*, over its {usd(line['cap_usd'])} limit "
                                                                       f"({usd(rate)}/h for {hours:.0f} h)."))
 
 
@@ -587,12 +592,17 @@ def check_spend(ctx: Ctx, rep: Report) -> None:
 # ---- GitHub and the public endpoints ---------------------------------------------------------------------------------------------
 
 def check_github(ctx: Ctx, rep: Report) -> None:
+    """The core rate limit of the token every watcher on the pod reads GitHub with: what `token_command` prints, run each
+    pass, so the watch holds none from its start. A command that gives no token, or a token GitHub refuses, is unreadable."""
     cfg = ctx.cfg["github"]
-    token = ctx.env.get(cfg["token_env"])
-    if not token:
-        rep.gaps.append(f"needs {cfg['token_env']}: the GitHub API rate limit")
+    cmd = cfg.get("token_command") or []
+    if not cmd or not shutil.which(cmd[0], path=ctx.env.get("PATH")):
+        rep.gaps.append(f"needs {cmd[0] if cmd else 'github.token_command'}: the GitHub API rate limit")
         return
-    status, body = ctx.http("GET", "https://api.github.com/rate_limit", {"Authorization": f"Bearer {token}",
+    rc, token, err = ctx.run(cmd, ctx.env)
+    if rc != 0 or not token.strip():
+        raise Unreadable(f"`{' '.join(cmd)}` gave no token (exit {rc}: {err.strip()[-200:] or 'nothing on stderr'})")
+    status, body = ctx.http("GET", "https://api.github.com/rate_limit", {"Authorization": f"Bearer {token.strip()}",
                                                                          "User-Agent": "verity-cloud-watch"})
     if status != 200:
         raise Unreadable(f"GitHub rate_limit answered HTTP {status}")
@@ -600,7 +610,7 @@ def check_github(ctx: Ctx, rep: Report) -> None:
     rep.lines.append(f"GitHub: {core['remaining']:,} of {core['limit']:,} core requests left, resets {iso(core['reset'])}")
     if core["remaining"] < cfg["remaining_share"] * core["limit"]:
         rep.findings.append(Finding("github|core", f"*GitHub API: {core['remaining']:,} of {core['limit']:,} core requests left* "
-                                                   f"for `{cfg['token_env']}` until {iso(core['reset'])}."))
+                                                   f"for the watchers' read token (`{cmd[0]}`) until {iso(core['reset'])}."))
 
 
 def check_jobs(ctx: Ctx, rep: Report) -> None:
@@ -701,7 +711,7 @@ def digest(ctx: Ctx, reports: dict[str, Report]) -> str:
     gaps = sorted({g for r in reports.values() for g in r.gaps})
     return "\n".join([head, *(f"• {ln}" for ln in body),
                       *([f"*Open* ({len(open_)}):"] + [f"• {t}" for t in open_] if open_ else ["Nothing open."]),
-                      *([f"*Unmonitored* ({len(gaps)}), each until its key is in the pod's environment:"] if gaps else []),
+                      *([f"*Unwatched* ({len(gaps)}), each until its key is in the pod's environment:"] if gaps else []),
                       *(f"• {g}" for g in gaps)])
 
 
@@ -752,9 +762,12 @@ def one_pass(ctx: Ctx, *, dry: bool = False, force_digest: bool = False, out=Non
 
 
 def load_state(path: Path) -> dict:
+    if not path.exists():
+        return {}
     try:
         return json.loads(path.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"{path}: unreadable, so the watch starts from no state ({type(e).__name__}: {e})", file=sys.stderr)
         return {}
 
 

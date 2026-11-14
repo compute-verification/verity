@@ -3,7 +3,7 @@ Each execution phase's cells are committed one `hm96-sha512/row/v2` row a bucket
 frame-v3-sha512 tree. The network certifier signs a head that names the root and a salted digest of the execution
 phase's wiring with the certifier's signer (`certificate.Issuer.sign`, LMS n = 64). A proof block opens a cell's row as
 its output port (the sender's) or its input port (the receiver's) by the Lean verifier's registered reads
-(`flock-verify --registered`, `Flock.Registered.checkPort`): the port's table row is the proof block's row committed
+(`verity-verify-proof --registered`, `Flock.Registered.checkPort`): the port's table row is the proof block's row committed
 under the row's salt, and it must climb its path to the signed root at the row the verifier reads for the proof block.
 The verifier derives that row from the proof block's (connection, cell) and the network certifier's wiring (`port`). No
 gate of the proof block hashes the row, and the verifier receives no row and no salt.

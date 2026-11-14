@@ -9,7 +9,7 @@ semantics (`verity.definitions.registry.b1` / `prims`) in the `rmsnorm_fused` pa
 
   * ``rmsnorm_triton_rows``   — the batch-invariant Triton `_rms_norm_kernel` reduction tree; emits the
     per-row scalars ``(sum, mean_eps, rms, inv)`` — `inv` is the gate
-    ``F32Mul(DivFullScaleA(1, rms), DivFullRcp(rms))`` of `RMSNormTriton_v1` (b1_authored.py line ~81).
+    ``F32Mul(DivFullScaleA(1, rms), DivFullRcp(rms))`` of `RMSNormTriton_v1` (`inv` in `b1.RMSNormTriton`).
   * ``rmsnorm_fused_v2_rows`` — the generic CUDA `fused_add_rms_norm_kernel` under batch-invariance
     (`RMSNormFusedCuda_v2`); emits ``(var, s)`` — `s` is the `RsqrtApprox` gate of the epilogue.
     (Thin wrapper over the committed twin in `rmsnorm_fused`.)

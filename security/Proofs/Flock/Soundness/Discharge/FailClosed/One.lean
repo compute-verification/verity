@@ -49,9 +49,9 @@ public import Proofs.Flock.Soundness.Discharge.PlainHJ
 public import Proofs.Flock.Soundness.Discharge.PlainJ
 
 /-!
-# Soundness: one theorem over everything flock-verify accepts
+# Soundness: one theorem over everything verity-verify-proof accepts
 
-`flock_verify_sound` is the soundness theorem over what `flock-verify verify` accepts (`FlockVerifyAccepts`, and with
+`flock_verify_sound` is the soundness theorem over what `verity-verify-proof verify` accepts (`FlockVerifyAccepts`, and with
 `--registered F` `FlockVerifyAcceptsR`), with or without `--zk`, public or hidden outputs, at any number of tables, with
 no hypothesis on the circuit file or the statement's form. It splits on the statement inside its conclusion (its
 hidden-output tag, `--zk`, and under `--zk` whether the session has one table) and states in each case the strongest
@@ -101,7 +101,7 @@ are corollaries of these: `flock_headline_exec` and `flock_headline_exec_hidden`
 given its `DecodesOn` (`hdec`), which the `_dec` forms prove for the verifier's decoder; the soundness halves of
 `zk_session_composed` and `zk_session_composedHJ` are `zk_session_sound` and `zk_session_soundHJ`; the four `_custody`
 forms take the record (`hRec`) and sample (`hDraw`) facts from one named assumption (`Assumptions.Zk.RecordCustodyZK`,
-`RecordCustodyZKJ`), and the two `_custody_json` forms the sample fact from the sample file being `flock-verify draw`'s
+`RecordCustodyZKJ`), and the two `_custody_json` forms the sample fact from the sample file being `verity-verify-proof draw`'s
 (`hdj`). The headlines remain, pinned, as lemmas. The claims take the headlines' record and sample facts as one named
 assumption too: without `--zk` `Assumptions.RecordCustodyExec` (`RecordCustodyExecH` at hidden outputs), under `--zk`
 `Assumptions.Zk.RecordCustodyZKLaw` (`RecordCustodyZKHLaw` at hidden outputs, `RecordCustodyZKJLaw` and
@@ -116,12 +116,12 @@ section Accepts
 
 open Flock Exec ZkExec
 
-/-- **`flock-verify verify` accepted**, with `--zk` (`zk = true`) or without: `Main.verifyCmd` prints `ACCEPT` exactly when
+/-- **`verity-verify-proof verify` accepted**, with `--zk` (`zk = true`) or without: `Main.verifyCmd` prints `ACCEPT` exactly when
 the setup and verdict `Accepts` (`AcceptsZK`) models hold and the statement check passes (`Verifies`, `VerifiesZK`). -/
 def FlockVerifyAccepts (zk : Bool) (I : Inputs) (t : Exec.Transcript) : Prop :=
   if zk then VerifiesZK I t else Verifies I t
 
-/-- **`flock-verify verify --registered F` accepted** (`own` F's ports): under `--zk`, `VerifiesZKR`, and without it
+/-- **`verity-verify-proof verify --registered F` accepted** (`own` F's ports): under `--zk`, `VerifiesZKR`, and without it
 `VerifiesR`: the registered check and the statement check with the verifier's registered reads. -/
 def FlockVerifyAcceptsR (zk : Bool) (I : Inputs) (own : Array Flock.Registered.Port) (t : Exec.Transcript) : Prop :=
   if zk then VerifiesZKR I own t else VerifiesR I own t
@@ -140,7 +140,7 @@ Every claim also takes a reference setup (`x₀`, `y₀`) at some sample: at one
 claims at every number of tables (`SoundZJ`, `SoundZHJ`, `ViewZHJ`) a setup of table 0 under its tags (`inputsJ I 0`,
 and under `--plain-tables` `inputsPJ I 0`, with the statement untyped: `SoundExecJ`'s `ht`; `SoundExecHJ` reads it off
 the check).
-Every session flock-verify accepts at a sample the challenger's live-coin part's file proves, with the session's link points, sets one up
+Every session verity-verify-proof accepts at a sample the challenger's live-coin part's file proves, with the session's link points, sets one up
 (`setup_of_verifies`, `setupH_of_verifies`, `setupZ_of_verifiesZK`, `setupZH_of_verifiesZK`, and at any number of
 tables `setupZJ_of_verifiesZK`, `setupZHJ_of_verifiesZK`, `setupPJ_of_verifiesP`, `setupPHJ_of_verifiesP`), so where there is none it accepts no such session. -/
 
@@ -373,7 +373,7 @@ theorem hr_exec (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) 
     exact ⟨k, hk, fun _ => h⟩
   · exact ⟨1, le_rfl, fun h => absurd h hs⟩
 
-/-- **`SoundExec`'s setup exists at every accepted sample.** Where flock-verify accepts a session whose record's sample is
+/-- **`SoundExec`'s setup exists at every accepted sample.** Where verity-verify-proof accepts a session whose record's sample is
 `d`, setupH set up at `d` (`st`), `d` decodes (`D`), and when `D` proves `S` and `st`'s link points are `mPts`, an
 `x₀ : DrawSetup I mPts S d` has statement `st`. -/
 theorem setup_of_verifies (I : Inputs) (hh : I.tags.hiddenOutputs = false) {n mPts : ℕ} {S : Finset (Fin n)}
@@ -540,7 +540,7 @@ theorem hr_execJ (I : Inputs) {n mPts : ℕ} (ht : I.tags.typed = false) (dj : F
     ∃ k : ℕ, 1 ≤ k ∧ ∀ S R j, rateB (planPJ (Reg := Reg) ht dj x₀ S R) j k ≤ ρ :=
   exists_k_rateB (planPJ ht dj x₀) (fun _ _ _ => rfl) hρ
 
-/-- **`SoundExecJ`'s reference setup exists at every accepted sample, at every number of tables**: where flock-verify
+/-- **`SoundExecJ`'s reference setup exists at every accepted sample, at every number of tables**: where verity-verify-proof
 `--plain-tables` accepts a session whose record's sample is `dj S`, at a sample whose parts the challenger's live-coin part's file proves
 with the session's link points (`DrawOkPJ`), the statement is untyped and table 0 sets up, so there are `ht` and
 `x₀ : DrawSetup (inputsPJ I 0) mPts _ _`. -/
@@ -898,7 +898,7 @@ theorem hr_execHJ (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json
   exists_k_rateB (planPHJ dj x₀) (fun _ _ _ => rfl) hρ
 
 /-- **`SoundExecHJ`'s reference setup exists at every accepted sample, at every number of tables**
-(`setupPJ_of_verifiesP` at hidden outputs): where flock-verify `--plain-tables` accepts a session of a hidden-output
+(`setupPJ_of_verifiesP` at hidden outputs): where verity-verify-proof `--plain-tables` accepts a session of a hidden-output
 statement whose record's sample is `dj S`, at a sample whose parts the challenger's live-coin part's file proves with the session's link
 points (`DrawOkPHJ`), table 0 sets up with setupHidden, so there is an `x₀ : DrawSetupH (inputsPJ I 0) mPts _ _`. -/
 theorem setupPHJ_of_verifiesP (I : Inputs) (hh : I.tags.hiddenOutputs = true) {n mPts : ℕ}
@@ -1729,7 +1729,7 @@ theorem hr_zj (I : Inputs) {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S
     ∃ k : ℕ, 1 ≤ k ∧ ∀ S R j, rateZ (planZJ (Reg := Reg) dj y₀ S R) j k ≤ ρ :=
   exists_k_rateZ (planZJ dj y₀) (fun _ _ _ => rfl) hρ
 
-/-- **`SoundZ`'s setup exists at every accepted sample**: where flock-verify `--zk` accepts a one-table session whose
+/-- **`SoundZ`'s setup exists at every accepted sample**: where verity-verify-proof `--zk` accepts a one-table session whose
 record's sample is `dj S`, at a sample the challenger's live-coin part's file proves with the session's link points (`DrawOkZK`), there is a
 `y₀ : DrawSetupZK I mPts S (dj S)`. -/
 theorem setupZ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) (hn : I.count ≤ 1) {n mPts : ℕ}
@@ -1740,7 +1740,7 @@ theorem setupZ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) (h
   rw [hd] at hst
   obtain ⟨-, sess, schs, -, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs, c, hz, -⟩ := hall 0 (by simp)
-  have hz' : Zk.schedule st.m = .ok (schs[0].1, schs[0].2) := hz
+  have hz' : Zk.schedule st.wideLeaf st.m = .ok (schs[0].1, schs[0].2) := hz
   generalize schs[0].1 = sch at hz'
   generalize schs[0].2 = tPad at hz'
   obtain ⟨-, -, sch₀, hf⟩ := schedule_spec hz'
@@ -1751,7 +1751,7 @@ theorem setupZ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) (h
   obtain ⟨y, -, -, -⟩ := drawSetupZK_of h.2.typed x hsh hz'
   exact ⟨y⟩
 
-/-- **`SoundZJ`'s setup exists at every accepted sample, at every number of tables**: where flock-verify `--zk` accepts a
+/-- **`SoundZJ`'s setup exists at every accepted sample, at every number of tables**: where verity-verify-proof `--zk` accepts a
 session whose record's sample is `dj S`, at a sample whose parts the challenger's live-coin part's file proves with the session's link
 points (`DrawOkZKJ`), table 0 sets up, so there is a `y₀ : DrawSetupZJ (inputsJ I 0) mPts _ _`. -/
 theorem setupZJ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) {n mPts : ℕ}
@@ -1765,7 +1765,7 @@ theorem setupZJ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) {
   obtain ⟨-, sess, schs, -, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs0, c0, hz0, -⟩ := hall 0 (by simpa using hj)
   simp only [Array.getElem_map] at hz0
-  have hz' : Zk.schedule sts[0].m = .ok (schs[0].1, schs[0].2) := hz0
+  have hz' : Zk.schedule sts[0].wideLeaf sts[0].m = .ok (schs[0].1, schs[0].2) := hz0
   obtain ⟨-, -, sch₀, hf⟩ := schedule_spec hz'
   have ht' : (inputsJ I 0).tags.typed = false := typedJ h.2.typed 0
   obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn hst
@@ -2292,7 +2292,7 @@ theorem setupZHJ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = true) {
   obtain ⟨-, sess, schs, -, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs0, c0, hz0, -⟩ := hall 0 (by simpa using hj)
   simp only [Array.getElem_map] at hz0
-  have hz' : Zk.schedule sts[0].m = .ok (schs[0].1, schs[0].2) := hz0
+  have hz' : Zk.schedule sts[0].wideLeaf sts[0].m = .ok (schs[0].1, schs[0].2) := hz0
   obtain ⟨sch₀, hf⟩ := fast100_of_schedule hz'
   have ht' : (inputsJ I 0).tags.typed = false := typedJ h.2.typed 0
   obtain ⟨pop, -, hdr⟩ := setupHidden_drawn hst
@@ -2628,8 +2628,8 @@ def FlockVerifySoundPerTest : Prop :=
     (if hh : I.tags.hiddenOutputs = true then SoundExecHJPerTest I hh
       else SoundExecJPerTest I (Bool.eq_false_of_ne_true hh))
 
-/-- **Soundness, over everything flock-verify accepts.** At every statement `I`, with or without `--zk` and with or
-without `--registered F`: the live session's probability that `flock-verify verify` accepts (`FlockVerifyAccepts zk I`,
+/-- **Soundness, over everything verity-verify-proof accepts.** At every statement `I`, with or without `--zk` and with or
+without `--registered F`: the live session's probability that `verity-verify-proof verify` accepts (`FlockVerifyAccepts zk I`,
 with `--registered F` `FlockVerifyAcceptsR zk I own`) while at least `K` of the statement's proof blocks are wrong is at
 most the case's bound. Without `--zk`, `SoundExec` (public outputs) or `SoundExecH` (hidden), and with `--registered F`
 at hidden outputs `SoundExecHR` (one table, the registered reads checked); under `--zk`, at one table `SoundZ` with zero

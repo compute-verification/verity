@@ -1,13 +1,14 @@
-/-
+module
+
+public import Flock.RecCoins
+meta import Flock.RecCoins
+
+/-!
 `RecCoins.checkTopReads`, R's level `l`'s `out` port: at level 1 with `H = 2`, openings at positions 5, 13 and 6 read R's
 tops `rec-top-stacked-L1` at nodes 1, 3 and 1, as `rec_outer.TopValue.position` reads them at R's one rep. A reads file
 without `out`, with `out` under another level's tops or the reps' `rec-top-L1`, reading another node, short of an opening,
 or past the last one is refused; only the first `out` port is read.
 -/
-module
-
-public import Flock.RecCoins
-meta import Flock.RecCoins
 
 @[expose] public section
 

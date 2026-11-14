@@ -1,7 +1,7 @@
 """Protocol 2's universal unit end to end: a random hidden netlist, padded to its size class, run by the public
 `UniversalUnit_v1{G, N_IN, N_OUT}` under Flock's circuit prover (M0) with `--zk`, and verified by the Lean verifier.
 
-    python benchmarks/private_circuit/universal.py --cls 16,16,8 --n 64 --bin flock-circuit --lean flock-verify --out DIR
+    python benchmarks/private_circuit/universal.py --cls 16,16,8 --n 64 --bin flock-circuit --lean verity-verify-proof --out DIR
 
 * **The program.** A netlist of 3/4 of the class's gates over 3/4 of its inputs, every index in range (`_netlist`), padded to
   the class with no-op gates and unread inputs (`universal.pad`). It is a value: the Call's `op`, `src` and `out` parameters.
@@ -13,7 +13,7 @@
   the hidden program as its own Boolean Definition (`direct`) and the unit, each under `verity.circuits.evaluation` (`evaluate` on the
   first instance, `evaluate_batch` on all), and the flat Definition's transcript that staging lays out (which `class_statement.stage`
   checks against the lowered circuit). The live `serve --zk` / `prove --zk` session must be accepted, then each recorded session
-  is replayed by Lean's `flock-verify verify --zk`, which must accept it, and must refuse it without `--zk` and with a proof byte
+  is replayed by Lean's `verity-verify-proof verify --zk`, which must accept it, and must refuse it without `--zk` and with a proof byte
   flipped.
 * **The row.** `rows.jsonl`: the class, the unit's ANDs (traced, closed form and Flock's lowering), ANDs per hidden gate,
   the direct netlist's ANDs, the statement's size (k_log, instances per block), prover time, proof bytes, the live and the Lean
@@ -115,7 +115,7 @@ def _sessions(d: Path) -> list[Path]:
 
 def lean_verify(lean: str, circuit: Path, pub: Path, partition: Path, sessions: list[Path], zk: bool = True,
                 program: Path | None = None) -> tuple[list[dict], float, str]:
-    """``flock-verify verify`` of the sessions; ``program``: the program's descriptor, so the verifier derives the units itself."""
+    """``verity-verify-proof verify`` of the sessions; ``program``: the program's descriptor, so the verifier derives the units itself."""
     cmd = [lean, "verify", "--circuit", str(circuit), "--public", str(pub), "--partition", str(partition),
            *(["--program", str(program)] if program else []), *(["--zk"] if zk else []), "--session", *map(str, sessions)]
     t0 = time.monotonic()
@@ -520,7 +520,7 @@ def write_result(rows: list[dict], a) -> None:
            "workload_fingerprint": {"kind": "private-circuit/universal-e2e/v0", "statement": FC.STATEMENT, "zk": True,
                                     "classes": a.cls, "n": a.n, "warm": a.warm, "runs": a.runs, "seed": a.seed, "wired": a.wired},
            "validation": {"status": "passed" if rows and all(r["pass"] for r in rows) else "failed",
-                          "checker": "flock-circuit serve --zk (live) and Lean flock-verify verify --zk, outputs against verity.circuits.evaluation",
+                          "checker": "flock-circuit serve --zk (live) and Lean verity-verify-proof verify --zk, outputs against verity.circuits.evaluation",
                           "detail": f"{sum(r['pass'] for r in rows)} of {len(rows)} rows passed" + "".join(
                               f"; wired {r['class']['G']},{r['class']['N_IN']},{r['class']['N_OUT']} made-up input: "
                               f"{(r.get('made_up_input') or {}).get('verdict')}, wrong salt: {(r.get('wrong_salt') or {}).get('verdict')}"
@@ -534,7 +534,7 @@ def main(argv=None) -> int:
     ap.add_argument("--cls", action="append", required=True, help="G,N_IN,N_OUT (repeatable)")
     ap.add_argument("--n", type=int, default=64, help="instances: runs of the one netlist on as many random x")
     ap.add_argument("--bin", default="flock-circuit")
-    ap.add_argument("--lean", default=None, help="flock-verify (Lean): replay every recorded session with --zk")
+    ap.add_argument("--lean", default=None, help="verity-verify-proof (Lean): replay every recorded session with --zk")
     ap.add_argument("--out", required=True)
     ap.add_argument("--warm", type=int, default=1)
     ap.add_argument("--runs", type=int, default=3)

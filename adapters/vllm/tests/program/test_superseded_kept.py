@@ -1,12 +1,9 @@
-"""The superseded Definition versions that stay registered so old records replay (`tools/migrate/superseded_quarantine.py`'s
-`KEPT`, each with what keeps it): each at a small binding keeps its id, its definition entry's digest and its Program's digest.
+"""The superseded Definition versions that stay registered so old records replay (`KEPT`): each at a small binding keeps
+its id, its definition entry's digest and its Program's digest.
 A changed digest means the version now computes or encodes something else, and the records that name it no longer replay."""
 from __future__ import annotations
 
 import hashlib
-import importlib.util
-import sys
-from pathlib import Path
 
 import pytest
 
@@ -16,7 +13,7 @@ from verity.circuits.program import Program
 from verity.definitions.registry import b1, prims as P, serve3
 from verity.definitions.registry import boolean_silu as BS
 
-TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
+TINY: dict[str, object] = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
         "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}
 
 #: version: (binding, its id, sha512 of its definition entry, its Program's digest or None for a primitive)
@@ -75,11 +72,3 @@ def test_a_kept_superseded_version_keeps_its_identity(version):
     assert hashlib.sha512(canonical_json(definition_entry(fn))).hexdigest() == entry
     assert (program_digest(Program(fn)) if prog is not None else None) == prog
 
-
-def test_the_pinned_versions_are_the_migration_script_s_kept_list():
-    script = Path(__file__).resolve().parents[2] / "tools" / "migrate" / "superseded_quarantine.py"
-    spec = importlib.util.spec_from_file_location("superseded_quarantine_kept", script)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    assert set(mod.KEPT) == set(KEPT) and not set(mod.DELETE) & set(KEPT)

@@ -19,6 +19,7 @@ import signal
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import tomllib
 import types
 from pathlib import Path
@@ -161,7 +162,7 @@ def gpu_env(tmp_path: Path, count: int = 3) -> dict[str, str]:
 
 @needs_flock
 def test_gpu_lease_reports_each_gpus_held_and_busy_time_from_the_sampler_log_and_keeps_cmds_status(tmp_path):
-    # started long ago, so the lease's held time is far past its 30 s of readings and the cap at held time doesn't bite
+    # started long ago, so the lease's held time is far past its 30 s of readings and the limit at held time doesn't bite
     env = {**gpu_env(tmp_path, count=2), "GPU_LEASE_UUID_TABLE": "GPU-a0,GPU-b1", "GPU_LEASE_WHO": "bc-test",
            "RESEARCH_RUN_DIR": str(tmp_path / "run"), "GPU_LEASE_STARTED": "2026-01-01T00:00:00Z"}
     (tmp_path / "run").mkdir()
@@ -185,7 +186,7 @@ def test_gpu_lease_reports_each_gpus_held_and_busy_time_from_the_sampler_log_and
 
 
 @needs_flock
-def test_gpu_lease_caps_busy_and_sampled_time_at_the_held_time(tmp_path):
+def test_gpu_lease_limits_busy_and_sampled_time_to_the_held_time(tmp_path):
     """Each reading counts a whole cadence, so readings near a lease's ends added up to more than it held (pous infra, 18:56Z).
     Two busy readings of a cadence longer than any held time must record busy_s == sampled_s == held_s."""
     env = {**gpu_env(tmp_path, count=1), "GPU_LEASE_UUID_TABLE": "GPU-a0", "GPU_LEASE_STARTED": "2026-01-01T00:00:00Z",
@@ -960,6 +961,53 @@ def test_n1s_replacement_plan_prints_each_create_for_a_deploy_node_and_calls_not
     assert not re.search(r"\bcat [^|'>]*(\.ssh/vy-cluster'|lean-cache\.env)", r.stdout)       # a key or env file is copied, never printed
     assert r.stdout.count("tar -C ~/.ssh -cf - vy-cluster vy-cluster.pub' | ") == nodes and "sudo tar -C /etc/verity -cf - lean-cache.env' | " in r.stdout
     assert subprocess.run(["bash", str(NEBIUS / "n1_replacement.sh"), "plan", "elsewhere"], capture_output=True).returncode == 2
+    # no file holds a project's id: each create reads it from the variable of its node's region
+    projects = re.findall(r"NEBIUS_REGION=(\S+) NEBIUS_PROJECT_ID=(\S+) ", r.stdout)
+    assert len(projects) == nodes and all(p == "$NEBIUS_PROJECT_ID_" + region.upper().replace("-", "_") for region, p in projects)
+
+
+@pytest.mark.parametrize("held, missing", [
+    ({}, "NEBIUS_PROJECT_ID_EU_WEST2 is unset: the id of the project"),
+    ({"NEBIUS_PROJECT_ID_EU_WEST2": "project-e00west", "NEBIUS_PROJECT_ID_UK_SOUTH1": "project-e00south"},
+     "NEBIUS_TENANT_ID is unset: the id of the tenant"),
+    ({"NEBIUS_PROJECT_ID_EU_WEST2": "project-e00west", "NEBIUS_PROJECT_ID_UK_SOUTH1": "project-e00south",
+      "N1R_TENANT": "tenant-e00example"}, "VY_NEBIUS_1_HOST is unset: vy-nebius-1's address"),
+])
+def test_n1s_replacement_preflight_ends_naming_the_first_id_or_address_the_environment_lacks(tmp_path, held, missing):
+    """The provider's ids and n1's address are the environment's: preflight ends naming the first one unset, before it
+    makes any Nebius call or opens any ssh."""
+    called = tmp_path / "called"
+    for name in ("nebius", "ssh"):
+        (tmp_path / name).write_text(f"#!/bin/bash\ntouch {called}\nexit 1\n")
+        (tmp_path / name).chmod(0o755)
+    base = {k: v for k, v in os.environ.items() if not k.startswith(("NEBIUS_", "N1R_", "VY_"))}
+    r = subprocess.run(["bash", str(NEBIUS / "n1_replacement.sh"), "preflight", "now"], capture_output=True, text=True,
+                       env={**base, "NEBIUS_BIN": str(tmp_path / "nebius"), "PATH": f"{tmp_path}:/usr/bin:/bin", **held})
+    assert r.returncode == 2 and r.stderr.startswith(f"n1_replacement: {missing}"), r.stderr
+    assert r.stdout == "" and not called.exists()
+
+
+def test_resolve_project_refuses_to_go_on_without_the_projects_id(tmp_path):
+    """No file holds a project's id: with NEBIUS_PROJECT_ID unset, launch.sh's and teardown.sh's resolve_project ends naming
+    it before any Nebius call; set, it is the project; set empty, the project is looked up by name, as before."""
+    script = (f". {NEBIUS / 'common.sh'}; nb() {{ echo \"$*\" >> \"$CALLS\"; echo '{{\"items\": []}}'; }}; "
+              "resolve_project && echo \"project $PROJECT_ID\"")
+    calls = tmp_path / "calls"
+    held = {k: v for k, v in os.environ.items() if not k.startswith("NEBIUS_")}
+
+    def resolve(**env: str) -> subprocess.CompletedProcess:
+        calls.unlink(missing_ok=True)
+        return subprocess.run(["bash", "-c", script], capture_output=True, text=True,
+                              env={**held, "CALLS": str(calls), "XDG_RUNTIME_DIR": str(tmp_path), **env})
+
+    r = resolve()
+    assert r.returncode == 1 and r.stderr.startswith("nebius: NEBIUS_PROJECT_ID is not set: the id of the project") and not calls.exists()
+    r = resolve(NEBIUS_PROJECT_ID="project-e00example")
+    assert (r.returncode, r.stdout) == (0, "project project-e00example\n"), r.stderr
+    assert calls.read_text() == "compute instance list --parent-id project-e00example\n"
+    r = resolve(NEBIUS_PROJECT_ID="", NEBIUS_TENANT_ID="tenant-e00example")
+    assert r.returncode == 1 and "no project named vy-nebius in tenant tenant-e00example" in r.stderr
+    assert calls.read_text() == "iam v2 project list --parent-id tenant-e00example --all\n"
 
 
 def test_launch_refuses_to_spend_without_yes_and_a_lease():
@@ -1031,8 +1079,8 @@ def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_refuses_the_multi
     assert r.returncode == 1 and "the Nebius key is not in this shell though this VM injects it" in r.stderr
 
 
-def test_nebius_auth_reads_a_der_key_whose_base64_fits_the_cursor_secret_cap(tmp_path):
-    """An RSA-4096 key's PEM is ~3272 bytes, whose base64 (~4364) exceeds Cursor's 4096-byte secret cap, so the secret may
+def test_nebius_auth_reads_a_der_key_whose_base64_fits_the_cursor_secret_limit(tmp_path):
+    """An RSA-4096 key's PEM is ~3272 bytes, whose base64 (~4364) exceeds Cursor's 4096-byte secret limit, so the secret may
     hold base64 of the DER (~3132 chars) instead; nebius_auth converts it back to PEM through openssl.  A throwaway
     RSA-2048 key generated here keeps the test fast; the size arithmetic scales, and the decode path is identical."""
     auth = _auth_harness(tmp_path)
@@ -1141,7 +1189,7 @@ def test_a_direct_run_starts_on_the_hosts_direct_cpus_and_may_pin_itself_elsewhe
     assert remote.direct_cpus() == set()
 
 
-def test_fill_runner_gives_a_tp2_commit_two_gpus_on_one_numa_node_and_commits_a_longer_cap(tmp_path, monkeypatch):
+def test_fill_runner_gives_a_tp2_commit_two_gpus_on_one_numa_node_and_commits_a_longer_limit(tmp_path, monkeypatch):
     """With node 2 first, a Commit guest may take 2 GPUs (a TP2 row), from one NUMA node when it
     can, through `gpu-lease 2 --on a,b`; it runs up to FILL_COMMIT_MAX_MIN (a Gemma-2 Commit's CPU phases outlast 30 min) while
     other GPU fill stays at 30 and gpus 1; and a TP2 Commit short of GPUs reclaims as many as it lacks."""
@@ -1220,7 +1268,7 @@ def test_fill_runner_lets_a_verity_cpu_job_run_a_whole_build_and_freezes_its_sco
 
 
 def test_the_verity_pool_lends_idle_slots_to_pous_cpu_jobs_and_takes_them_back(tmp_path, monkeypatch):
-    """With no Verity job waiting, queued pous CPU jobs start in the Verity pool's free slots (its CPUs, a scope, its memory caps);
+    """With no Verity job waiting, queued pous CPU jobs start in the Verity pool's free slots (its CPUs, a scope, its memory limits);
     a Verity job that finds no slot requeues the newest lent job, and nothing more is lent while it waits."""
     monkeypatch.setenv("FILL_DIR", str(tmp_path / "fill"))
     monkeypatch.setenv("FILL_VERITY_CPU_SLOTS", "2")
@@ -2001,27 +2049,62 @@ elif a[0] == "logs":
 N1_OLD, N1_FUTURE = 1_000_000_000, 4_102_444_800     # a run's records last changed in 2001 (settled, and stale for a pod), or in 2100
 N1_CUSTODY = pytest.mark.skipif(shutil.which("bash") is None or shutil.which("flock") is None or not Path("/proc/self/stat").exists(),
                                 reason="n1_custody.sh is bash, and takes a flock")
+#: where _n1_custody's tree goes when a directory above tmp_path fails n1_custody.sh's rule; each is removed as its test ends
+CUSTODY_TMP, _CUSTODY_BASES = Path("/tmp"), []
+
+
+def _owned_up(d: Path) -> bool:
+    """Whether d and every directory above it, as written and resolved, passes n1_custody.sh's rule for a directory above the tree
+    it runs: root's or this uid's, and writable by its owner alone unless sticky."""
+    for p in {d, d.resolve()}:
+        for a in (p, *p.parents):
+            st = a.stat()
+            if st.st_uid not in (0, os.geteuid()) or (st.st_mode & 0o022 and not st.st_mode & 0o1000):
+                return False
+    return True
+
+
+def _custody_base(tmp_path: Path) -> Path:
+    """Where _n1_custody puts the tree and the Python the round runs, which it refuses under a directory another uid could change:
+    tmp_path, whose own mode the helper sets, unless a directory above it fails that rule (a `research run` job's scratch, its
+    TMPDIR, is group-writable), then a new directory of mode 700 under CUSTODY_TMP."""
+    if _owned_up(next(a for a in tmp_path.parents if a.exists())):
+        return tmp_path
+    assert _owned_up(CUSTODY_TMP), (f"a directory above {tmp_path} and above {CUSTODY_TMP} could be changed by another uid, so no "
+                                    "round would run a tree under either: give the tests a TMPDIR whose every directory up from / is "
+                                    "root's or yours and writable by its owner alone, or sticky")
+    _CUSTODY_BASES.append(Path(tempfile.mkdtemp(prefix="n1-custody-", dir=CUSTODY_TMP)))
+    return _CUSTODY_BASES[-1]
+
+
+@pytest.fixture(autouse=True)
+def _no_custody_base_left():
+    yield
+    while _CUSTODY_BASES:
+        shutil.rmtree(_CUSTODY_BASES.pop(), ignore_errors=True)
 
 
 def _n1_custody(tmp_path: Path) -> types.SimpleNamespace:
     """Node 1 for n1_custody.sh: its runs roots `jobs` (store uid 1000) and `research` (1001), node 2's relay copies under jobs/runs-n2,
     and the Secret's R2 as the fs vault `vault`. `run` makes a run dir from the run_v0.2 fixture (a pod's, pod-RUN, unless `host`),
     `round_` runs one round through FAKE_KUBECTL and a sudo that logs its argv (at `clock`, when given, as _n2_custody's), `created`
-    lists the Jobs created so far, `job` reads one back with its outcome, `command` its container's command, `held` the holds."""
+    lists the Jobs created so far, `job` reads one back with its outcome, `command` its container's command, `held` the holds.
+    `src`, `pyhome` and `py` are the tree and the Python the round runs, under `_custody_base`."""
     src_root = Path(registry.__file__).resolve().parents[2]
     n = types.SimpleNamespace(jobs=tmp_path / "jobs", research=tmp_path / "research", state=tmp_path / "state", vault=tmp_path / "vault",
                               log=tmp_path / "calls.log", absent=tmp_path / "absent.toml", remote=tmp_path / "vault.toml")
     bin_, kjobs, home = tmp_path / "bin", tmp_path / "k8s", tmp_path / "home"
-    for d in (n.jobs / "runs", n.research / "runs", bin_, kjobs, n.vault, home, tmp_path / "py" / "bin"):
+    base = _custody_base(tmp_path)
+    for d in (n.jobs / "runs", n.research / "runs", bin_, kjobs, n.vault, home, base / "py" / "bin"):
         d.mkdir(parents=True)
     # the round runs only a tree and a Python that no other uid can change: copies, not links into the checkout
-    shutil.copytree(src_root, tmp_path / "src" / "tools" / "research" / "src", ignore=shutil.ignore_patterns("__pycache__"))
-    shutil.copy(src_root.parent / "store.pod.toml", tmp_path / "src" / "tools" / "research" / "store.pod.toml")
-    (tmp_path / "py" / "bin" / "python3").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
-    (tmp_path / "py" / "bin" / "python3").chmod(0o755)
-    for p in (tmp_path, tmp_path / "src", *(tmp_path / "src").rglob("*"), tmp_path / "py", *(tmp_path / "py").rglob("*")):
-        p.chmod(p.stat().st_mode & ~0o022)       # tmp_path too: a subdirectory a test makes takes the node's umask (002 on node 1)
-    n.src, n.py = tmp_path / "src", tmp_path / "py" / "bin" / "python3"
+    shutil.copytree(src_root, base / "src" / "tools" / "research" / "src", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copy(src_root.parent / "store.pod.toml", base / "src" / "tools" / "research" / "store.pod.toml")
+    (base / "py" / "bin" / "python3").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
+    (base / "py" / "bin" / "python3").chmod(0o755)
+    for p in (base, base / "src", *(base / "src").rglob("*"), base / "py", *(base / "py").rglob("*")):
+        p.chmod(p.stat().st_mode & ~0o022)       # base too: a subdirectory a test makes takes the node's umask (002 on node 1)
+    n.src, n.pyhome, n.py = base / "src", base / "py", base / "py" / "bin" / "python3"
     n.remote.write_text(f'[remote]\ntype = "fs"\npath = "{n.vault}"\n')
     (bin_ / "kubectl").write_text(f"#!{sys.executable}\n{FAKE_KUBECTL}")
     (bin_ / "sudo").write_text(f'#!/bin/sh\necho "sudo $*" >> {n.log}\n[ "$1 $2" = "-n -u" ] || exit 1\nshift 3\nexec "$@"\n')
@@ -2064,7 +2147,7 @@ def _n1_custody(tmp_path: Path) -> types.SimpleNamespace:
                               env={**os.environ, "PATH": f"{path}:{os.environ['PATH']}", "HOME": str(home), "KSTATE": str(kjobs),
                                    "KLOG": str(n.log), "KHOME": str(home), "KVAULT": str(n.remote), "RESEARCH_STORE_CONFIG": str(n.absent),
                                    "VY_CUSTODY_QUIET": "", "VY_CUSTODY_BOOT": "boot-n1", "VY_CUSTODY_PY": str(n.py),
-                                   "VY_CUSTODY_PYHOME": str(tmp_path / "py"), "VY_CUSTODY_STATE": str(n.state), "VY_CUSTODY_SRC": str(n.src),
+                                   "VY_CUSTODY_PYHOME": str(n.pyhome), "VY_CUSTODY_STATE": str(n.state), "VY_CUSTODY_SRC": str(n.src),
                                    "VY_CUSTODY_ROOTS": f"{n.jobs}/runs={n.jobs}/store=1000,{n.research}/runs={n.research}/store=1001",
                                    "VY_CUSTODY_RELAY": f"{n.jobs}/runs-n2={n.jobs}/store=1000", "VY_CUSTODY_MAX_FILES": "10", **env})
 
@@ -2388,8 +2471,8 @@ def test_n1_custody_runs_only_a_tree_and_a_python_no_other_uid_can_change(tmp_pa
     rid = "r20261003-200000-0f01"
     node.run(node.jobs, rid, "done")
     tree, custody_py = node.src / "tools" / "research", node.src / "tools" / "research" / "src" / "research" / "store" / "custody.py"
-    (tmp_path / "py" / ".lock").write_text("")
-    (tmp_path / "py" / ".lock").chmod(0o666)
+    (node.pyhome / ".lock").write_text("")
+    (node.pyhome / ".lock").chmod(0o666)
     said = []
     for p, mode in ((tree, 0o777), (custody_py, 0o664), (node.src, 0o775), (node.py, 0o757)):
         was = p.stat().st_mode
@@ -2401,10 +2484,29 @@ def test_n1_custody_runs_only_a_tree_and_a_python_no_other_uid_can_change(tmp_pa
         said.append(out.stdout)
     assert "on this host and in Jobs with the Secret research-r2" in said[0]
     elsewhere = node.round_(VY_CUSTODY_PY=sys.executable)
-    assert elsewhere.returncode == 3 and f"refused: {sys.executable} is no interpreter under {tmp_path / 'py'}" in elsewhere.stdout
+    assert elsewhere.returncode == 3 and f"refused: {sys.executable} is no interpreter under {node.pyhome}" in elsewhere.stdout
     assert node.created() == [] and "sudo" not in (node.log.read_text() if node.log.exists() else ""), "a refused round runs nothing"
     ok = node.round_()
     assert ok.returncode == 0 and node.created()[0] == f"n1-custody-{rid}", ok.stdout + ok.stderr
+
+
+@N1_CUSTODY
+def test_n1_custody_tests_hold_whatever_the_mode_of_the_directory_their_tmp_path_sits_under(tmp_path):
+    """A `research run` job's scratch, the TMPDIR its tests' tmp_path sits under, is group-writable (775), and a round rightly
+    refuses a tree under a directory another uid could change: the custody tests build the tree and the Python the round runs
+    where every directory up from / passes, and a round there runs, while a tree under the 775 directory is still refused by name."""
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    scratch.chmod(0o775)
+    node = _n1_custody(scratch / "test")
+    rid = "r20261003-200000-0f02"
+    node.run(node.jobs, rid, "done")
+    ok = node.round_()
+    assert ok.returncode == 0 and node.created()[0] == f"n1-custody-{rid}", ok.stdout + ok.stderr
+    under = scratch / "custody"
+    shutil.copytree(node.src, under, symlinks=True)
+    out = node.round_(VY_CUSTODY_SRC=str(under))
+    assert out.returncode == 3 and f"refused: {scratch} could be changed by a uid other than root and " in out.stdout, out.stdout
 
 
 @N1_CUSTODY
@@ -3564,9 +3666,9 @@ def test_fill_runner_pauses_cpu_sets_jobs_on_slot_d_while_a_train_check_holds_it
     assert mine() == [("ver-0.sh", False), ("ver-1.sh", False)] and signals[2:] == [signal.SIGCONT, signal.SIGCONT]
 
 
-def test_fill_runner_fence_command_caps_a_fence_keeps_one_per_owner_and_logs_it(tmp_path, monkeypatch, capsys):
+def test_fill_runner_fence_command_limits_a_fence_keeps_one_per_owner_and_logs_it(tmp_path, monkeypatch, capsys):
     """A fence on node 2 (an honest-latency measurement's) would otherwise take four steps by hand: keep-free, a respawned pane for
-    fill's CPUs, a max-min line and a revert timer. `fill_runner.py fence` writes one self-expiring line within the caps instead
+    fill's CPUs, a max-min line and a revert timer. `fill_runner.py fence` writes one self-expiring line within the limits instead
     (1 GPU, at most 8 cores on its NUMA node, at most 4 h, one per owner, none on another's GPU or cores) and logs each change."""
     fill, log = tmp_path / "fill", tmp_path / "quota-changes.log"
     fill.mkdir()

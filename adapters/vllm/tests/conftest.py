@@ -5,8 +5,9 @@ Each one failed on `main` with torch 2.14 and 2.4.1 on CPU, before this suite jo
 and a strict mark that passed there would fail `check`. Fix the test or the code, then delete its entry.
 
 Tests that take over about 5 s carry `@pytest.mark.slow` in their own module. The random Boolean-vs-word sweeps carry
-`boolean_sweep` and skip unless `VERITY_VLLM_BOOLEAN_SWEEPS=1`: circuit-check's `word_view` checks each Boolean Definition against
-its word Definition on every merge, and each file's special-word and edge cases stay in the default run.
+`boolean_sweep` and skip unless `VERITY_VLLM_BOOLEAN_SWEEPS=1`, which no job of `check` sets: each file's special-word and edge
+cases stay in the default run, and circuit-check's `word_view` checks each Boolean Definition against its word Definition off the
+merge gate (`off_gate` in `tools/verity/check/policy.toml`: a candidate's check runs it, and its red holds nothing).
 """
 from __future__ import annotations
 
@@ -77,14 +78,6 @@ def code_versions_stood_in(monkeypatch):
     monkeypatch.setattr(score, "code_version", lambda: "0" * 16)
     monkeypatch.setattr(experiment, "code_version", lambda repo: {"source": "git", "commit": "0" * 40, "dirty": False})
     monkeypatch.setattr(source_identity, "code_identity", lambda root: {"sha256": "0" * 64, "files": 1})
-
-
-@pytest.fixture
-def outside_a_checkout(monkeypatch):
-    """A tree a test builds under its tmp_path is no git checkout. With no git to find (`shutil.which`), the code identity's file
-    listing walks it as it walks any tree outside a checkout, and starts no git, which the suite's read guard can't trace."""
-    which = shutil.which
-    monkeypatch.setattr(shutil, "which", lambda cmd, *a, **k: None if cmd == "git" else which(cmd, *a, **k))
 
 
 @pytest.fixture

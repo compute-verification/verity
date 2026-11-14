@@ -22,7 +22,7 @@ trees and the admit tables on streams of their own beside the rest), then the ro
 salt is each step's instead: after step s's round is recorded, step s + 1's seeds read
 `h1tile.live_salt` of that round's opened coin and root, copied to the device between steps (in record_host_ms), so
 each step's noise comes from the round before it.  The rounds' coins are `dither_fused`'s switch (`coins.open_coins`):
-the challenger off the node with ``$POUW_CHALLENGER`` and ``$POUW_CHALLENGER_SESSION``, so the auditor host's round
+the challenger off the node with ``$POUW_CHALLENGER`` and ``$POUW_CHALLENGER_SESSION``, so the auditor device's round
 trip is in record_host_ms, else in
 this process, labelled ``in-process (not certified)`` in `stats`.
 
@@ -986,7 +986,7 @@ def check(win: DitherState, lib_h1o: str, which: str = "gate", n_cpu_units: int 
     if g["y"] is not None and which == "gate":
         eq, rel = 0, []
         for w in range(L):
-            # the op's own body, not the op: an -xl arm serves verity_int8::scaled_mm from exactlin
+            # the reference body, not the op: on CUDA the op serves verity_int8::scaled_mm from int8_fused's kernel
             yt = E.dequantize(E.int_mm(g["a"][w][:m], win.wt[w]), g["sa"][w][:m], REG[w][1].weight_scale).float()
             yk = g["y"][w].float()
             eq += int(torch.equal(yt, yk))

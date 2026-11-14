@@ -237,7 +237,7 @@ def dump(st: dict[str, Any], *, settings: dict[str, Any], out_dir: str, seed_hex
                     why = (why + "; " if why else "") + f"{key} {mn or '(no residual source)'} not committed"
             w_ = getattr(mods.get(pk["site"]), "weight", None)
             pk["w"] = w_.detach().to("cpu").clone() if w_ is not None else None
-        emb = embedding_leg(pk, metas, step, rows, part, mods, tensor_of, unverified) if pk["kind"] == "all_reduce" and XC.is_embedding_site(pk["site"]) else None
+        emb = embedding_check(pk, metas, step, rows, part, mods, tensor_of, unverified) if pk["kind"] == "all_reduce" and XC.is_embedding_site(pk["site"]) else None
         picks.append(dict(pk, part=part, recv=recv, recv_member=rname, why=why, emb=emb))
     rec = {"schema": XRANK_PICKS_SCHEMA, "rank": rank, "pair": int(pair), "seed": seed_hex, "strata": plan["strata"], "picks": picks,
            "per_stratum": int(per_stratum), "max_rows": int(max_rows), "steps_in_layout": len(layouts)}
@@ -252,8 +252,8 @@ def dump(st: dict[str, Any], *, settings: dict[str, Any], out_dir: str, seed_hex
             "wall_s": round(time.perf_counter() - t0, 3)}
 
 
-def embedding_leg(pk: dict[str, Any], metas: dict[str, Any], step: int, rows: Any, part: Any, mods: dict[str, Any], tensor_of: Any,
-                  unverified: dict[tuple[int, str], str]) -> dict[str, Any]:
+def embedding_check(pk: dict[str, Any], metas: dict[str, Any], step: int, rows: Any, part: Any, mods: dict[str, Any], tensor_of: Any,
+                    unverified: dict[tuple[int, str], str]) -> dict[str, Any]:
     """EmbeddingShard_v1 check: this rank's committed partial rows == masked gather of the committed ids from ITS vocab shard
     (the live parameter, which the per-rank weights pin ties to the checkpoint of record); rows outside the rank's range are zero."""
     import torch
@@ -280,4 +280,4 @@ def embedding_leg(pk: dict[str, Any], metas: dict[str, Any], step: int, rows: An
         return {"ok": None, "why": f"embedding-shard check error: {e!r}"[:200]}
 
 
-__all__ = ["dump", "route_of", "call_spans", "call_family", "residual_member", "path_disagrees", "program_specs", "embedding_leg", "ROUTED_WORLD"]
+__all__ = ["dump", "route_of", "call_spans", "call_family", "residual_member", "path_disagrees", "program_specs", "embedding_check", "ROUTED_WORLD"]
