@@ -75,10 +75,10 @@ scope = "prose"
 
 # The tap's Lean sets the relay beside the certifier's record of it, one device, so the word there is "relay". Each
 # phrase holds the word after the word, so it is none that `warden_tokens_map.toml` names "the network certifier".
-# `Security/Definitions/NetworkCertifier/Tap.lean`'s module docstring has the word once before a name in backticks,
+# `security/Definitions/NetworkCertifier/Tap.lean`'s module docstring has the word once before a name in backticks,
 # where no phrase is prose: it must read "The relay" when this move runs, or [words] makes it "The network certifier".
 [[words_in]]
-files = ["Security/Definitions/NetworkCertifier/Tap.lean", "Security/Proofs/NetworkCertifier/Tap.lean"]
+files = ["security/Definitions/NetworkCertifier/Tap.lean", "security/Proofs/NetworkCertifier/Tap.lean"]
 
 [words_in.words]
 "the warden and" = "the relay and"
