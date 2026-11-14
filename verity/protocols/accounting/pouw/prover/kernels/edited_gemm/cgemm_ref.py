@@ -1,5 +1,5 @@
 """cgemm.cu's gate judged on the CPU: each dumped tile recomputed from x (bf16), W and the per-call key alone, through
-checked_strip's own construction (`benchmarks/pouw/theory/checked_strip.py`'s `co32c_words` and `digits`).
+checked_strip's own construction (`co_words.py`'s `co32c_words` and `digits`, which checked_strip analyses).
 
 From the key (meta.json's four big-endian words): b (tag 7, egemm_ref.py's dither_rows), c (tag 8, the same patch
 layout over W), beta (tag 10: block j = rows 2j, 2j + 1, entry (row % 2) 32 + r digest byte v, beta_p = bit p of v, so
@@ -17,8 +17,7 @@ dropped at one (t, e), must both differ from the device's. A cohalf gate (QK^T a
 check_half's: X = clamp(floor(x inv_s), -64, 62)^T + b (meta's inv_s the 7-bit scale), Y = X's two 64-halves summed, U from tag 11 (row i's digest
 byte r), and (T, O) = honest_words(W, V, U, c, b, 64, 32) with O = T_last - U Y. One JSON line a gate directory; exit 1
 on any difference, on a device mismatch or on a control the device didn't reject.
-    uv run --no-project --with numpy --with python-sat --with-editable benchmarks/pouw/exact_kit \
-      python3 verity/protocols/accounting/pouw/prover/kernels/edited_gemm/cgemm_ref.py GATE_DIR...
+    uv run --no-project --with numpy python3 verity/protocols/accounting/pouw/prover/kernels/edited_gemm/cgemm_ref.py GATE_DIR...
 """
 from __future__ import annotations
 
@@ -47,7 +46,7 @@ def _load(name: str, path: Path):
 
 _derive = _load("floored_gemm_derive", HERE.parent / "floored_gemm" / "derive.py")
 NCT, key_mul, tile_receipts = _derive.NCT, _derive.key_mul, _derive.tile_receipts
-cs = _load("checked_strip", HERE.parents[6] / "benchmarks" / "pouw" / "theory" / "checked_strip.py")
+cs = _load("edited_gemm_co_words", HERE / "co_words.py")
 
 T = 128
 DITHER_TAG, C_TAG, Z_TAG, BETA_TAG, HBETA_TAG = 7, 8, 9, 10, 11
