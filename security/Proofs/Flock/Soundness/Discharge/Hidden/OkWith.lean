@@ -57,8 +57,6 @@ theorem okWith_of_isOk {γ : Type} {m : V γ} (h : m.isOk = true) : OkWith m fun
   | error e => cases h
   | ok a => exact ⟨a, rfl, trivial⟩
 
-theorem isOk_of_eq {γ : Type} {m : V γ} {a : γ} (h : m = .ok a) : m.isOk = true := by rw [h]; rfl
-
 /-- A loop whose body only updates its state returns. -/
 theorem okWith_forIn_array {α β : Type} (xs : Array α) (init : β) (f : α → β → β) :
     OkWith (forIn xs init fun a b => (pure (ForInStep.yield (f a b)) : V (ForInStep β))) fun _ => True :=

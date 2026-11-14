@@ -21,6 +21,8 @@ namespace FlockSoundness.Discharge.Hidden
 open Flock
 open Lean (Json)
 
+theorem isOk_of_eq {ε α : Type} {x : Except ε α} {a : α} (h : x = .ok a) : x.isOk = true := by rw [h]; rfl
+
 theorem isOk_bind_iff {ε α β : Type} {x : Except ε α} {f : α → Except ε β} :
     (x >>= f).isOk = true ↔ ∃ a, x = .ok a ∧ (f a).isOk = true := by
   cases x with
