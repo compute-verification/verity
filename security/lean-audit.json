@@ -37837,11 +37837,12 @@
    }
   },
   "Definitions.Pouw.PearlC.Device": {
-   "digest": "944c0f43b3c04bb5de0c9a060331ce9e345f7447239c55a703946c1b57d8ba94",
+   "digest": "e030406e9e802c7037a17597aa91bce32ab14d965b05501a17ea54887eee9bf5",
    "definitions": {
-    "Pouw.PearlC.PearlCDevice": "49b0746e634512b0ba15501dae4a8e1e7f5a92906eccf6db5291f7ed68f2dfd0",
+    "Pouw.PearlC.PearlCDevice": "cdd9d087a1bd8f21e3f5912660c9278a46ec90446799140c3214ddc0486d1bc8",
     "Pouw.PearlC.PearlCDevice.G": "dbfc86330607b7c4760f02bf16a71635ec8b1b7775a76ee3bb4ebfcdf645e58b",
     "Pouw.PearlC.PearlCDevice.flags": "ddb6dba3f011a3abb8d1d96ba80ba863ea59d0853acf18338f932c71365f43e2",
+    "Pouw.PearlC.PearlCDevice.pipe": "4973c7184bba24b2225f8854d5ccf33b63a0f0338e3421e628ea84b4962f5a96",
     "Pouw.PearlC.PearlCDevice.prices": "87437cbd368e3a008caece3fd2dc732323e3c01eb2429af655833443f2d1e179",
     "Pouw.PearlC.PearlCDevice.saltDead": "ed63ad2a67e0ae3974f3e23aff5a3c37c12f696253fa43bd2664cbf2a200f5c7",
     "Pouw.PearlC.PearlCDevice.ticket": "f5aedc2ce1ff89f774a37b21c5a392c2b753be366031bc3cb011042bbb45c7c4",
@@ -37856,7 +37857,8 @@
     "Pouw.PearlC.Prices.h100Tensor": "fc2627f60d7c35a1999aff37654c62a427e2ff615fb17a38208cb45bef0e2c75",
     "Pouw.PearlC.creditDev": "9afb51c265a332ac45a85411f9a4127dd9e9d9a99d85fee925a8562d2621addb",
     "Pouw.PearlC.debitDev": "5d35649e7854f34640190f26b02bf5e94e0be15469e978a3536b4ca2a1ad68b7",
-    "Pouw.PearlC.devAt": "94a05321199e2480ef9144b73ac8172e53414bb0afd06fb9647b9568ceea03e6",
+    "Pouw.PearlC.devAt": "583ca6ad2a77bd4679abdd2e1b4de6aa476313799d662b992f480a9725606507",
+    "Pouw.PearlC.devH100": "49583b7d15dc4838569355686fc363cd8d519f43887d8d8a488d62939baea601",
     "Pouw.PearlC.devH100Tensor": "7ff16414a22082392574a51c3b8819abb810358d0abc866c2374fded91c7be8f",
     "Pouw.PearlC.h100SmMHz": "0f51528688f38ae5a08967cd1984ee94d52aacd585f7770743cf22c4b0334799",
     "Pouw.PearlC.h100TensorMHz": "77b428dca9314f67b69b858e786bf9eba4b63a33a4627a10762d913c4c8c4cd6",
@@ -37970,16 +37972,17 @@
    }
   },
   "Definitions.Pouw.PearlC.DeviceRev1": {
-   "digest": "b6e5be6684fc3783d0126c0d17263756ccd193580463f6c2244d62d7402b0044",
+   "digest": "013c75e50d3d316827427f7a79a63f40b2e2264372ceda32e700711793cd597f",
    "definitions": {
-    "Pouw.PearlC.PearlCSem.tileDebitRev1": "354386da385cf396753c123767229172bb914fb2e8df1b11f9ac11de56901d38",
-    "Pouw.PearlC.PearlCSem.unitDebitRev1": "7fa751f08be283546cab44dded59f63909e4854f65f6f5a54df2a04e1fc55738",
+    "Pouw.PearlC.PearlCSem.tileDebitRev1": "2f7b4793f9a75ba3630e21681addbf6aa764395d37e5e03f1059d6c6765f5708",
+    "Pouw.PearlC.PearlCSem.unitDebitRev1": "cfde1751eed32204b566360aedda92ac7e123d6713973d080164881a7764c507",
     "Pouw.PearlC.creditDevRev1": "b18a0d566c841b648106a55a28b2ff1b42ea699a6faf64c29977034181b3e9cc",
     "Pouw.PearlC.firstAddDev": "363003ff8c2e23ceeb05a920b51197a3d9e6bdb95e997613d9e263bc91a49bba",
     "Pouw.PearlC.laterZeroPromos": "9529d485d30f928525a53965a95fdc8d5e2ef713139440b238ededa720d7aa77",
     "Pouw.PearlC.pearlCProtocolDevRev1": "3a380880a10a6b16ffece997a379c711b1fce4155a86118972c2957011b2e3d4",
     "Pouw.PearlC.pearlCTilesDevRev1": "e4cb0c810a1a6fed510a49e646b94247e317ea96e749c19c1334ea1d6a162ccb",
     "Pouw.PearlC.prefixCols": "3d2f6160477b8290eb7b68a17f646b7d44bf7a4e1c6054e25b4f1bebd5f96697",
+    "Pouw.PearlC.wordMend": "6bbfb8e2cfe1ccd404fbf794b3ece40cea0c332e8cca33917a892b2e2ef74c42",
     "Pouw.PearlC.wrefDevRev1": "82090ae714a525de44db217cfd62d293cf628d4e03e99c22b990179b706dd0ab"
    }
   },
@@ -38172,6 +38175,18 @@
     "Pouw.PearlC.codeBf16": "96682a0c5faec47aac555c7c01bb2cb5e2e778c5e9334a2dc6785a5021a2bfcd",
     "Pouw.PearlC.wordsVal": "c07093b8796e6dea8ecb3cc698b370726f6f6e31a450d1527e86540072036a46",
     "Pouw.PearlC.δPearlC": "d59867555ea584f9dc1ae4ba8f6247384c1b116b37fbe1808efba06bbef504a8"
+   }
+  },
+  "Definitions.Pouw.PearlC.Mend": {
+   "digest": "d2c7d8fc9fda00134e052d3c0827f192dd725f6a987330c6e162ce306866b914",
+   "definitions": {
+    "Pouw.PearlC.Mend.ForcedZero": "df4b23b3193fa229c6663076a19ab259a4b555404102dcfccb3d2ff4a4f29b3a",
+    "Pouw.PearlC.Mend.chainCuts": "6898d182a4d021f3689fc9d1798e4b97471c1cf026dd7b4af2d2ddbb41e81e7d",
+    "Pouw.PearlC.Mend.chainStep": "73d3b4dd694641e3b71ea8db6049259f58ba54ace3947796e29f65c4b244a430",
+    "Pouw.PearlC.Mend.cutAt": "2df674b8947d4ce5316c699308ef30b8c81e3edbd0be7ae7e007ce079f688f38",
+    "Pouw.PearlC.Mend.cutFold": "00df7cecf02aed153fc4862d8e82f647fa63291a16828682176996a3fac4d1e8",
+    "Pouw.PearlC.Mend.cuts": "4d92e9de8770171d365be8fc5d463ed2397d333b27a2ee2fbb14fadaf6f17a1d",
+    "Pouw.PearlC.Mend.endRow": "cc449ffd0fb61fc950f94a8aff398d526ae5a2b8489e1f93e3ed13fe818060ff"
    }
   },
   "Definitions.Pouw.PearlC.PeelExact": {
@@ -45526,7 +45541,7 @@
    }
   },
   "PouwPearlPlus.Rule": {
-   "digest": "5fec9ab146cfe31f44a973d330da1f04151f434e66fc4143e731b0629023b95d",
+   "digest": "713cab5c7295743d36183a080439741ac9e4adf907eeef5d3a2f6cca6590ce36",
    "definitions": {
     "PouwCheck.PearlPlus.Rule.CAP_DEN": "99dcb14c409cf24823be6faeb0ce2eb4a67dd8441c5a8815c2dcf0cabe8d06f9",
     "PouwCheck.PearlPlus.Rule.CAP_NUM": "471ae5289d0a8b40f7bccbe5a2dd8b12ad09bbeb273613eded437d14b08ee837",
@@ -45545,9 +45560,13 @@
     "PouwCheck.PearlPlus.Rule.Kind.voluntary": "241035dfce25634b649e42a5bd2c0d375deb4b832688351ed08a96e963bfdaef",
     "PouwCheck.PearlPlus.Rule.TOP": "a8ddb845c0dedda83c79eb3b44c3abed341e357cee3ef3b817f048258a231387",
     "PouwCheck.PearlPlus.Rule.UNSCALE_ONE": "a12ff12dd0435f908d1381bc34e27af649784aa13bfdf5c3a78742467ccd3265",
-    "PouwCheck.PearlPlus.Rule.capCheck": "d0ddcad427cb28aeee4bd152c0b5d9d289add663e2af26ee3882ed8bfdd71118",
+    "PouwCheck.PearlPlus.Rule.capCheck": "5a58953f7abb8ca60905c3844c54ebe4842259fc66ccbd420b49b656acebe1ce",
     "PouwCheck.PearlPlus.Rule.carried": "1e8a391f35ee433644906474fcf02ad3e7c5b27000a5f5b4b61828a500ddcc29",
+    "PouwCheck.PearlPlus.Rule.cutFold": "3acb11572d6a7ee5d95af00084969ef8923fdc7ffefd7b05fc03e66b861c9886",
+    "PouwCheck.PearlPlus.Rule.cutStep": "5eec0ea455251eb34366e342b74c26781f69d9fb115b58a85c04284957c7242f",
+    "PouwCheck.PearlPlus.Rule.cuts": "544be48c20cc4aaf1963a2bce6978b4de25d1d73c04677342897781d6d70494f",
     "PouwCheck.PearlPlus.Rule.debitUnits": "ce2d8164d25074b9ea610fd484c82ce3671fe6c1f17377e06296972b6e23e011",
+    "PouwCheck.PearlPlus.Rule.endCodes": "4b75042db22ef7201cafce101cb3a11b618ba448303d0d523abd97efe718a846",
     "PouwCheck.PearlPlus.Rule.endsAgree": "eb6ba1804dbc26790e9359f5111a7441fe180970a4f65fc3ed87c15ff3603622",
     "PouwCheck.PearlPlus.Rule.flatCode": "a5f7646aead2e0cc3d47b6970ca744809e9d1ab4fc7c560996838f08c5d9b9f7",
     "PouwCheck.PearlPlus.Rule.floorOK": "3a1f35c518cd0e1c999e6af4ba6e96e1c3cc7992db42219d8dab6c02c47d7d3c",
@@ -45563,13 +45582,16 @@
     "PouwCheck.PearlPlus.Rule.promote": "fd942dd4ff4960e76ef948aef73a2d738fa8f071a643493a26843102b270b78f",
     "PouwCheck.PearlPlus.Rule.roundHalfEven": "90b096e7181cc58f764381aef97a717fa8d515342af6f4c0fe6d4ba6f79f25da",
     "PouwCheck.PearlPlus.Rule.rowElements": "98e9416e20f7d81fffacb527f993a25ac79024318fcc4f338fc72972896c613c",
+    "PouwCheck.PearlPlus.Rule.rowEnds": "01b83bc22f16dabeadf9ffee4ee9bcda05458ad8f288629746c06c232923f8f0",
     "PouwCheck.PearlPlus.Rule.rowPasses": "a163e53269dc167c5b448be6ea9f3ae4523246f48fd5852a8306493434c5113c",
     "PouwCheck.PearlPlus.Rule.rowsFailure": "05f5dd2df46ff76271212c07a39fb4b219d2ff411bc4b8e78e17fbc66d23c52d",
-    "PouwCheck.PearlPlus.Rule.saltDead": "5f23aa2cb7190fd534b3dcc31616cfcfe8fc621a7529c38c4b457269c7443fc1",
+    "PouwCheck.PearlPlus.Rule.saltDead": "8725595d3ac199f07bc8ad6b6116a736f430844b24da603826370abaffe93bd9",
     "PouwCheck.PearlPlus.Rule.sq300": "9617fd5f76192f1b2a1c5ec2ebb6e83ad3b84dd1db5a5537f45e6c7fa97e60f8",
     "PouwCheck.PearlPlus.Rule.step": "884d41100e63b632f690293325dc825ae293b95121acd91b2b6a3ef5419cd804",
     "PouwCheck.PearlPlus.Rule.unscale": "77669f93f9f9d71f63cbcd9a2762e1ff99751c15c05abafd1fddda338af2a0c9",
+    "PouwCheck.PearlPlus.Rule.wordCuts": "9b7e975017caaaab1660889288b897162b13126759abce846678a0d49e00db04",
     "PouwCheck.PearlPlus.Rule.wordFlags": "6a3b9e1d4f134c1fdc245627f0825e007db0f90fa4ef721e1b5651adcd073270",
+    "PouwCheck.PearlPlus.Rule.wordMend": "ea4cf209bf442393a23a33a49adcf4a24ed7fb46d7a9f04e656c0deff2cbb03b",
     "PouwCheck.PearlPlus.Rule.wordOf": "59f22e81d7759763b8a444399cc4be5098945d4d66510ff3e383824b31a0ddfd",
     "PouwCheck.PearlPlus.Rule.yOf": "6c59b7797b83c9805b27efd1f6181366fecbb3c8404e716ded32b4c1b3ad20f6",
     "PouwCheck.PearlPlus.Rule.yReason": "7c76a9273dd746d0df2950c69117e311011942e6c4f11cbe13094c913fe71409"
