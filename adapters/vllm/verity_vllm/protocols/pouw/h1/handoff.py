@@ -50,6 +50,8 @@ SCHEMA = POUW_H1_HANDOFF_SCHEMA
 FILE = "h1-window.pkl"
 #: what the stream's descriptor travels with, and the holder's answer once it has it
 STREAM, TAKEN = b"verity/pouw/h1/stream/v1", b"taken"
+#: the bytes of path a Unix socket's address holds on Linux (``sun_path`` is 108 with its NUL)
+PATH_BYTES = 107
 #: an H1Run's attributes saved as they are; the rest are rebuilt by `resume`
 _REBUILT = ("listeners", "_opener", "_recorded", "_tables", "_slot_tables", "_weights", "rounds", "draw", "served")
 
@@ -189,10 +191,21 @@ def _declare(served: SV.Served, run: PH.H1Run) -> None:
             raise ValueError(f"{run.entry}: the window Program declared again is not the one its tables were registered under")
 
 
+def _address(path: str | Path) -> str:
+    """`path` as a Unix socket's address: OSError, as the socket's own refusal is, with the path's length when it is
+    longer than an address holds."""
+    n = len(os.fsencode(path))
+    if n > PATH_BYTES:
+        raise OSError(f"the hand-off's socket path is {n} bytes and a Unix socket's address holds {PATH_BYTES}: {path}")
+    return str(path)
+
+
 def send_stream(client: remote.RemoteChallenger, path: str | Path) -> None:
-    """Hand the session's stream to the `Holder` listening at `path`, and return once it has it."""
+    """Hand the session's stream to the `Holder` listening at `path`, and return once it has it. A path longer than a
+    Unix socket's address holds is refused before a socket is made (`_address`)."""
+    address = _address(path)
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as u:
-        u.connect(str(path))
+        u.connect(address)
         socket.send_fds(u, [STREAM], [client._wire.sock.fileno()])
         if u.recv(len(TAKEN)) != TAKEN:
             raise OSError(f"the holder at {path} didn't take the session's stream")
@@ -200,14 +213,16 @@ def send_stream(client: remote.RemoteChallenger, path: str | Path) -> None:
 
 class Holder:
     """Listens at `path` (a Unix socket) for the one stream `send_stream` hands over: ``fd`` is its descriptor once taken
-    (`take`), this process's to pass on and close."""
+    (`take`), this process's to pass on and close. A path longer than a Unix socket's address holds is refused before a
+    socket is made (`_address`)."""
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
         self.fd: int | None = None
         self.error: str | None = None
+        address = _address(self.path)
         self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self._sock.bind(str(self.path))
+        self._sock.bind(address)
         self._sock.listen(1)
         self._thread = threading.Thread(target=self._take, daemon=True)
         self._thread.start()

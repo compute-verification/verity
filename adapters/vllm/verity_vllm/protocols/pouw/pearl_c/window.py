@@ -38,6 +38,7 @@ from typing import Any
 import numpy as np
 from verity.commitments import CommitmentDomain
 from verity.commitments.merkle import tree_levels
+from verity.protocols.accounting.pouw.verifier import salt as PS
 from verity.protocols.accounting.pouw.verifier.audit import (
     HM96,
     activation_binding,
@@ -50,6 +51,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
 
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
+from verity_vllm.protocols.pouw.pearl_c.manifest import session_head
 from verity_vllm.records.pearl_served import SCHEMA as SERVED_SCHEMA
 
 #: the width of a word of A's and y's committed rows: each BF16 word widened to FP32
@@ -87,10 +89,6 @@ def coins_of(option: Any, reserved: Any = None) -> dict[str, Any]:
     weights' root, `salt.epoch_open_root`; the weights' root for a coin held in-process), its salt, how its session closed
     (``details.challenger``, once the engine has closed) and the session head a retained pass's manifest names
     (``manifest_head``, `pearl_c.manifest.session_head`); ``reserved`` the gate's reserve answer, when one was taken."""
-    from verity.protocols.accounting.pouw.verifier import salt as PS
-
-    from verity_vllm.protocols.pouw.pearl_c.manifest import session_head
-
     c = option.commitment()
     k, w = c.get("pass_index"), c.get("weights_root")
     after = w if k is None or w is None else PS.epoch_open_root(bytes.fromhex(w), k).hex()
