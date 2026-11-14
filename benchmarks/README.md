@@ -284,3 +284,9 @@ How long the team's own changes take to reach `main`: measured on the verified q
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `tree/` | the lines of `tests/tree.toml`'s not-yet list, each a path `main` holds outside the layout of record, and the unowned among them (`not_yet.py`) | maintained |
+
+### Security
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `security_findings/` | the security review's serious findings still open (`findings.toml`): each closed only by a check `open_findings.py` runs on the tree, or by a reading of the machine or account less than seven days old | maintained |

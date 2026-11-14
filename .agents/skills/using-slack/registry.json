@@ -83,7 +83,8 @@
         "tools/agent-guard/",
         "tools/research/",
         ".cursor/",
-        ".python-version"
+        ".python-version",
+        "benchmarks/security_findings/"
       ],
       "branch_suffixes": [
         "558b",
