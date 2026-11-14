@@ -60,11 +60,12 @@ else the path), to restart when it's safe, and `drift` says `restart` until then
 change nothing and say what they would. Exit 3 is a refusal, before anything changed.
 
 A file that lists machines by address is made from the register of machines, never copied: the tree holds no address. Its entry
-has `register = true`, and its `src` is a template that names machines: `{{NAME}}` is a machine's name and `{{NAME:FIELD}}` a
-field of its register file (`host`, its address), where NAME is one machine or a pattern (`vy-nebius-cpu-*`). A line that names
-a pattern is written once for each machine of the pattern, in the order of their names with numbers by value, so one register
-gives one text; a line names one machine or pattern, and a line that names none is copied. The register is the launcher's, the
-directory `research pods` finds a machine in ($RESEARCH_MACHINES_D, else the notes clone's `machines.d`; the launcher's own
+has `register = true`, and its `template`, with a `by` and no `src` (older deploy code copies a `src` as it is and writes nothing
+a `by` names; a held one keeps `src`, which no deploy code copies), names machines: `{{NAME}}` is a machine's name and
+`{{NAME:FIELD}}` a field of its register file (`host`, its address), where NAME is one machine or a pattern (`vy-nebius-cpu-*`).
+A line that names a pattern is written once for each machine of the pattern, in the order of their names with numbers by value,
+so one register gives one text; a line names one machine or pattern, and a line that names none is copied. The register is the
+launcher's, the directory `research pods` finds a machine in ($RESEARCH_MACHINES_D, else the notes clone's `machines.d`; the launcher's own
 clone is pulled first unless --no-fetch), and each machine in it is one of three: live, released (`released_host` and no
 `host`: a pattern passes it by, so its line goes at the next install, and a template that names it is refused), or broken (a
 file that doesn't parse or doesn't validate). A stopped machine (`unreachable_since`) is live: its address is still its own,
@@ -535,6 +536,12 @@ class Refused(RuntimeError):
     """Nothing changed: the request breaks a rule (an unpushed commit, a held entry, a path deploy.toml lacks)."""
 
 
+# Why a file made from the register names no `src` (deploy.toml is read at REF by whatever deploy code runs, older code included)
+BEFORE_TEMPLATES = ("deploy code from before templates, which a checkout behind main or the control pod's watchers can still run "
+                    "against main's deploy.toml, copies a `src` onto the node as it is, reads a `by` as a file made on the node "
+                    "and writes nothing to it, and loads a held entry only with a `src`, which it never copies")
+
+
 @dataclass
 class Entry:
     path: str
@@ -548,7 +555,7 @@ class Entry:
     required: bool = False             # (a tree) what runs from it can't run without any of its files
     no_restart: str | None = None      # why a process that started before an install is left to end: never `restart`
     whole: bool = False                # (a tree) installed as one new directory its link is renamed onto, never file by file
-    register: bool = False             # (a file) `src` is a template the register of machines fills at each install
+    register: bool = False             # (a file) `src` is a template the register of machines fills at each install (deploy.toml's `template`)
     accept: str | None = None          # (a register-made file) the public key, on the node, its machines are taken with
 
 
@@ -571,6 +578,14 @@ def load(manifest: Path = MANIFEST, text: str | None = None) -> dict[str, Node]:
         raise ValueError(f"deploy.toml: node {bad[0]!r}: `admin` is true or false")
     for kind in ("file", "tree"):
         for e in m.get(kind, []):
+            if "template" in e and (kind != "file" or e.get("register") is not True or "src" in e or "hold" in e
+                                    or not isinstance(e["template"], str) or not isinstance(e.get("by"), str)
+                                    or not e["by"].strip()):
+                raise ValueError(f"deploy.toml: {e.get('path')!r}: `template` is a file's made from the register "
+                                 f"(`register = true`), with `by` and no `src` or `hold`: {BEFORE_TEMPLATES}")
+            if kind == "file" and e.get("register") is True and "template" not in e and not e.get("hold"):
+                raise ValueError(f"deploy.toml: {e.get('path')!r} is made from the register: name its template `template`, with "
+                                 f"`by`, not `src` (a held one keeps `src` until its hold goes): {BEFORE_TEMPLATES}")
             if bool(e.get("src")) == bool(e.get("by")) or (kind == "tree" and not e.get("src")):
                 raise ValueError(f"deploy.toml: {e.get('path')!r} needs exactly one of src and by (a tree, src)")
             if e.get("hold") and not e.get("src"):
@@ -583,7 +598,7 @@ def load(manifest: Path = MANIFEST, text: str | None = None) -> dict[str, Node]:
                                       or not e["no_restart"].strip()):
                 raise ValueError(f"deploy.toml: {e['path']!r}: `no_restart` says why, for a file install copies (src) that names "
                                  "no service to restart (run)")
-            if "register" in e and (kind != "file" or not e.get("src") or not isinstance(e["register"], bool)):
+            if "register" in e and (kind != "file" or not (e.get("src") or e.get("template")) or not isinstance(e["register"], bool)):
                 raise ValueError(f"deploy.toml: {e['path']!r}: `register` is true or false, for a file whose `src` is the "
                                  "template the register of machines fills")
             if "accept" in e and (not e.get("register") or not isinstance(e["accept"], str) or not e["accept"].startswith("/")):
@@ -593,7 +608,9 @@ def load(manifest: Path = MANIFEST, text: str | None = None) -> dict[str, Node]:
                 if n not in nodes:
                     raise ValueError(f"deploy.toml: {e['path']!r} names node {n!r}, which has no [nodes.{n}]")
                 mode = int(e["mode"], 8) if e.get("mode") else None
-                nodes[n].entries.append(Entry(e["path"], e.get("src"), e.get("by"), list(e.get("run", [])), kind == "tree", mode,
+                made = "template" in e
+                nodes[n].entries.append(Entry(e["path"], e["template"] if made else e.get("src"), None if made else e.get("by"),
+                                              list(e.get("run", [])), kind == "tree", mode,
                                               e.get("owner"), e.get("hold"), e.get("required", False), e.get("no_restart"),
                                               e.get("whole", False), e.get("register", False), e.get("accept")))
     for node in nodes.values():

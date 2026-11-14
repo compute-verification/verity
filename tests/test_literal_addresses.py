@@ -219,7 +219,7 @@ def test_no_new_literal_addresses_or_service_ids():
 def test_a_file_made_from_the_register_holds_no_address():
     """Any IPv4 address, a private one included: the file asks the register for it (`{{NAME:host}}`), so a line that writes
     one would put a machine's address back in the tree and install it over the register's."""
-    made = {e["src"] for e in tomllib.loads(_read(MANIFEST))["file"] if e.get("register")}
+    made = {e.get("template") or e["src"] for e in tomllib.loads(_read(MANIFEST))["file"] if e.get("register")}
     assert made >= REGISTER_MADE, f"{MANIFEST} no longer marks {sorted(REGISTER_MADE - made)} `register = true`"
     written = [f"  {f}:{no}" for f in sorted(made) for no, line in enumerate(_read(f).splitlines(), 1) if _QUAD.search(line)]
     assert not written, ("a file made from the register of machines writes an address:\n" + "\n".join(written) + "\nName the "

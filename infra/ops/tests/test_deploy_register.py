@@ -5,6 +5,7 @@ one at a time. The register is a directory of this test's, and each node is a di
 `/NODE/` into the node's own directory, so one manifest path is a different file on each."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
@@ -80,15 +81,17 @@ managed = ["/NODE/etc/*"]
 
 [[file]]
 path = "/NODE/etc/peers"
-src = "src/peers"
+template = "src/peers"
 register = true
+by = "research deploy, from the template and the register of machines"
 accept = "/NODE/ssh/k.pub"
 nodes = ["a", "b", "c"]
 
 [[file]]
 path = "/NODE/etc/conf.json"
-src = "src/conf.json"
+template = "src/conf.json"
 register = true
+by = "research deploy, from the template and the register of machines"
 nodes = ["a"]
 """)
     calls: list[tuple[str, str]] = []
@@ -97,12 +100,12 @@ nodes = ["a"]
 
     def run(node: str, argv: list[str], stdin: bytes | None) -> subprocess.CompletedProcess:
         root = f"{tmp_path}/{node}/"
-        kind = next(SCRIPTS[a] for a in argv if a in SCRIPTS) + ("" if argv[0] == "sudo" or deploy.PROBE in argv else "?")
+        kind = next(SCRIPTS.get(a, "older") for a in argv if "\n" in a) + ("" if argv[0] == "sudo" or deploy.PROBE in argv else "?")
         calls.append((node, kind))
         if (node, kind) in faults:
             rc, err = faults[(node, kind)]
             return subprocess.CompletedProcess(argv, rc, b"", err.encode())
-        r = local(node, [a if a in SCRIPTS else a.replace("/NODE/", root) for a in argv],
+        r = local(node, [a if "\n" in a else a.replace("/NODE/", root) for a in argv],
                   stdin.replace(b"/NODE/", root.encode()) if stdin else stdin)
         then.get((node, kind), lambda: None)()
         return subprocess.CompletedProcess(argv, r.returncode, *(o.replace(root.encode(), b"/NODE/") for o in (r.stdout, r.stderr)))
@@ -627,15 +630,104 @@ def test_the_launchers_own_notes_clone_is_pulled_before_the_register_is_read_and
 
 def test_register_is_a_copied_files_and_accept_a_register_made_files(tmp_path):
     head = '[nodes.n]\nrecord = "/r"\n[[{kind}]]\npath = "/p"\nnodes = ["n"]\n'
-    for kind, rest, why in (("file", 'by = "setup.sh"\nregister = true\n', "`register` is true or false, for a file whose `src`"),
+    made = 'template = "f"\nregister = true\nby = "deploy"\n'
+    for kind, rest, why in (("file", 'by = "setup.sh"\nregister = true\n', "is made from the register: name its template `template`"),
+                            ("file", 'by = "setup.sh"\nregister = true\nhold = "a field"\n', "only an entry install copies"),
                             ("tree", 'src = "d"\nregister = true\n', "`register` is true or false"),
                             ("file", 'src = "f"\nregister = "yes"\n', "`register` is true or false"),
                             ("file", 'src = "f"\naccept = "/k.pub"\n', "`accept` is the path, on the node, of the public key"),
-                            ("file", 'src = "f"\nregister = true\naccept = "k.pub"\n', "`accept` is the path")):
+                            ("file", made + 'accept = "k.pub"\n', "`accept` is the path")):
         with pytest.raises(ValueError, match=why):
             deploy.load(text=head.format(kind=kind) + rest)
-    e = deploy.load(text=head.format(kind="file") + 'src = "f"\nregister = true\naccept = "/k.pub"\n')["n"].entries[0]
-    assert (e.register, e.accept) == (True, "/k.pub")
+    e = deploy.load(text=head.format(kind="file") + made + 'accept = "/k.pub"\n')["n"].entries[0]
+    assert (e.src, e.by, e.register, e.accept) == ("f", None, True, "/k.pub")
+
+
+@pytest.mark.parametrize("rest", ['src = "f"\nregister = true\n', 'template = "f"\nregister = true\n', 'template = "f"\nby = "deploy"\n',
+                                  'template = "f"\nregister = true\nby = "deploy"\nsrc = "f"\n',
+                                  'template = "f"\nregister = true\nby = "deploy"\nhold = "a field"\n'])
+def test_a_file_made_from_the_register_names_its_template_as_older_deploy_code_never_copies(rest):
+    """A `src` is what older deploy code copies onto a node as it is; its `by` it leaves alone; a held entry it loads only with
+    a `src`. So an entry made from the register has `template` and `by`, and keeps `src` only while it is held."""
+    with pytest.raises(ValueError, match="deploy code from before templates"):
+        deploy.load(text='[nodes.n]\nrecord = "/r"\n[[file]]\npath = "/p"\nnodes = ["n"]\n' + rest)
+    e = deploy.load(text='[nodes.n]\nrecord = "/r"\n[[file]]\npath = "/p"\nnodes = ["n"]\nsrc = "f"\nregister = true\nhold = "a field"\n')
+    assert [(x.src, x.register, x.hold) for x in e["n"].entries] == [("f", True, "a field")]
+
+
+#: `main` as this change found it: its deploy code knows no file made from the register, and a checkout behind main or the
+#: control pod's watchers tree can still run it against main's deploy.toml
+BEFORE = "245da271367f1fc0bea03b63b24408d18a4e8862"
+MADE_BY = "research deploy, from the template and the register of machines"
+BY = f'by = "{MADE_BY}"\n'
+
+
+@pytest.fixture
+def before(tmp_path, monkeypatch):
+    """`main`'s deploy module from before templates, loaded by path from `git show`."""
+    path = tmp_path / "deploy_before.py"
+    path.write_bytes(subprocess.run(["git", "-C", str(deploy.SRC), "show", f"{BEFORE}:infra/ops/verity_ops/deploy.py"],
+                                    capture_output=True, check=True).stdout)
+    spec = importlib.util.spec_from_file_location("deploy_before", path)
+    mod = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, "deploy_before", mod)
+    spec.loader.exec_module(mod)
+    assert not hasattr(mod, "fill"), "deploy code from before templates"
+    monkeypatch.setattr(mod, "CERTS", str(tmp_path / "certs"))
+    return mod
+
+
+def test_deploy_code_from_before_templates_copied_a_src_template_onto_the_node_and_read_it_clean(fleet, before, capsys):
+    """Why a template is never a `src`: in the shape this change first had (`src` the template, `register = true`), main's
+    install of a whole node writes the template's text over the node's list, and main's drift then reads the node clean."""
+    former = fleet["tmp"] / "former.toml"
+    former.write_text(fleet["manifest"].read_text().replace("template = ", "src = ").replace(BY, ""))
+    etc = fleet["tmp"] / "a" / "etc"
+    _install(fleet)                                         # the list the register gives, as this change's code installs it
+
+    def old(*argv: str) -> int:
+        return before.main([*argv, "--no-fetch"], run=fleet["run"], manifest=former, repo=fleet["repo"])
+
+    assert old("drift", "--on", "a") == 1
+    assert "stale    /NODE/etc/peers  (installed" in capsys.readouterr().out          # "install it"
+    assert old("install", "a", "--by", "lane-x", "--apply") == 0
+    assert "installed     /NODE/etc/peers  <- src/peers" in capsys.readouterr().out
+    assert (etc / "peers").read_text() == PEERS and (etc / "conf.json").read_text() == CONF
+    assert old("drift", "--on", "a") == 0 and "ok       2 of 2" in capsys.readouterr().out
+
+
+def test_deploy_code_from_before_templates_writes_nothing_a_template_makes_and_drift_reads_it_as_made_on_the_node(fleet, before, capsys):
+    """This change's shape (`template` and `by`, no `src`): main's install of a whole node, or of the path by name, leaves
+    the list as it is and never writes the template; its drift reads the list as a file made on the node."""
+    etc = fleet["tmp"] / "a" / "etc"
+    _install(fleet)
+    nodes = before.load(fleet["manifest"])
+    assert [(e.path, e.src, e.by) for e in nodes["a"].entries] == [
+        ("/NODE/etc/peers", None, MADE_BY), ("/NODE/etc/conf.json", None, MADE_BY)]
+
+    def old(*argv: str) -> int:
+        return before.main([*argv, "--no-fetch"], run=fleet["run"], manifest=fleet["manifest"], repo=fleet["repo"])
+
+    node = _entries(fleet["tmp"] / "a")
+    assert old("install", "a", "--by", "lane-x", "--apply") == 0 and "peers" not in capsys.readouterr().out
+    assert old("install", "a", "--by", "lane-x", "--apply", "/NODE/etc/peers") == 3
+    assert "not in deploy.toml for a: /NODE/etc/peers" in capsys.readouterr().err
+    assert _entries(fleet["tmp"] / "a") == node and (etc / "peers").read_text() == LIST
+    assert old("drift", "--on", "a") == 1
+    out = capsys.readouterr().out
+    assert "ok       1 of 2" in out and f"missing  /NODE/etc/conf.json  (by {MADE_BY}: re-run it)" in out
+
+
+def test_deploy_code_from_before_templates_copies_no_template_from_the_manifest(before):
+    """The tree's deploy.toml as main's deploy code reads it: each file made from the register is, on every node that lists
+    it, a file made on the node (`by`) or a held one, and no entry it would copy is a template."""
+    made = {(n, e.path): e for n, node in deploy.load().items() for e in node.entries if e.register}
+    old = {(n, e.path): e for n, node in before.load(deploy.MANIFEST).items() for e in node.entries}
+    assert made and set(made) <= set(old)
+    assert {k: "by" if old[k].by else "held" if old[k].hold else "copied" for k in made} == \
+        {k: "held" if e.hold else "by" for k, e in made.items()}
+    templates = {e.src for e in made.values()}
+    assert not [k for k, e in old.items() if e.src in templates and not e.hold]
 
 
 MADE = {"/etc/vy/peers": {"tools/research/src/research/pods/nebius/peers", "tools/research/src/research/pods/nebius/peers-challenger"},
