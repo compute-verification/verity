@@ -2,7 +2,7 @@ module
 
 public import Properties.Pouw.PeriodJ10R
 public import Proofs.Accounting.Served
-public import Proofs.Accounting.ComposeMonitoringPeriod.Honest
+public import Proofs.Compose.ComposeMonitoringPeriod.Honest
 public import Proofs.Flock.Soundness.Audit.StratifiedProj
 
 /-!

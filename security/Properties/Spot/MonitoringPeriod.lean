@@ -142,7 +142,7 @@ are one-stage v2's; that public file's header names no `shared_rows`; the case's
 ledger, pins log and session files for its coins (`evidenceAt`), is one-stage v2's; and the audit `inner` accepted
 them, publishing what `a` holds. -/
 def AuditedAt (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) (r : Read)
-    (w : Window) (we : RunEvidence) (before : Array Json) (record : Json) (a : Audit) : Prop :=
+    (w : _root_.Spot.MonitoringPeriod.Run) (we : RunEvidence) (before : Array Json) (record : Json) (a : Audit) : Prop :=
   ∃ (au : Audited) (opened : Json) (lc : LiveCommitment) (roots : Roots) (k : Case) (cm : OneStage.Commitment)
       (q : OneStageZk.Params) (ev : OneStageZk.Evidence),
     auditedIn r.wins r.periods (Json.mkObj [("root", Json.str w.root)]) = .ok (au, opened) ∧
@@ -243,7 +243,7 @@ it returns: the session `auditedIn` reads on the window's root, which is the ses
 of an audit to, is the session the window names. `checked` refuses a second open of a root, so the ledger opens the
 window's root on one session. -/
 def AuditedSession : Prop :=
-  ∀ (p : Params) (ledger : Json) (r : Read) (ws : Runs) (w : Window) (au : Audited) (opened : Json),
+  ∀ (p : Params) (ledger : Json) (r : Read) (ws : Runs) (w : _root_.Spot.MonitoringPeriod.Run) (au : Audited) (opened : Json),
     read p ledger = .ok r → runsIn p r = .ok ws → w ∈ ws.windows →
       auditedIn r.wins r.periods (Json.mkObj [("root", Json.str w.root)]) = .ok (au, opened) →
         au.session = w.session

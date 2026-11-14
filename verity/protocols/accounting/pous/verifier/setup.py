@@ -1,7 +1,7 @@
 """Setup with a server-side encoder:
 
 1. the server commits to `W` (`commit`) before any salt exists;
-2. the verifier samples the salt after the commitment (`draw_salt`, from its own secret or a later beacon round);
+2. the verifier samples the salt after the commitment (`sample_salt`, from its own secret or a later beacon round);
 3. the server encodes, `C* = Enc(W, salt)`, and sends it segment by segment.  The verifier builds `vk` one of two ways:
    - **public encoder** (the default, POUS `docs/public-encoder/protocol.md`, milestone 1): it decodes each segment of
      `C*`, streams `Dec(C*)` into `commit`'s framing, accepts iff the digest equals the commitment, and builds `vk`
@@ -50,7 +50,7 @@ def commit(params: Geometry, w: bytes | Iterable[bytes]) -> bytes:
     return h.digest()
 
 
-def draw_salt(source: bytes, commitment: bytes) -> bytes:
+def sample_salt(source: bytes, commitment: bytes) -> bytes:
     """The verifier's 24-byte salt from `source` (its secret, or a beacon round after the commitment), bound to it."""
     return derive(source, SALT_DOMAIN, {"w": commitment}).stream("salt", SALT_BITS // 8)
 

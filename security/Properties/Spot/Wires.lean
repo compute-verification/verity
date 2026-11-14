@@ -18,6 +18,12 @@ input rows are no unit's writes, so they add no dependency, and the population l
 itself through a chain of units each reading what the one before writes. Its witnesses' wirings are here (`Wires.honest`,
 a template whose second unit reads its first under a stated order; `Wires.selfRead`, a unit wired to read itself), so
 their statements read no proof.
+
+`miswired` and `WiredCorrect` are what a statement about committed rows reads of a wiring. A unit commits each of its
+rows apart from its writers', so a wire holds only where the reader's row is its writer's row, a comparison `same` of
+the two rows that the statement gives. `miswired` is the reader units with a covered row that `same` refuses, and
+`WiredCorrect` a unit that is correct on its own rows and has none. The sampled check
+(`Spot.Wires.Summary.drawnOk`) accepts exactly when no unit it drew is in `miswired` (`Spot.Wires.drawnOk_iff`).
 -/
 
 @[expose] public section
@@ -37,6 +43,21 @@ def wiresDataflow (c : Wiring) : Population.Dataflow (String × Int) (String × 
 /-- The dataflow of a wiring `check` accepts is acyclic. -/
 def WiresAcyclic : Prop :=
   ∀ (c : Wiring) (S : Summary), check c = .ok S → (wiresDataflow c).Acyclic
+
+/-- **The mis-wired units** of a wiring under a comparison of rows: the reader units `(template, unit)` with a row
+`(template, unit, port, row)` that a wire covers (`Wire.entries`) and that is not its writer's output row
+`(template, unit, output)`, as `same` compares the two. -/
+def miswired (c : Wiring) (same : String × Nat × String × Nat → String × Int × String → Prop) :
+    Set (String × Nat) :=
+  {y | ∃ e ∈ c.wires.flatMap Wire.entries, (e.1.1, e.1.2.1) = y ∧ ¬ same e.1 e.2}
+
+/-- **A unit is correct in the wired population**: it is correct on its own rows (`correct`: its output rows hold
+its function of its input rows), and each of its rows that a wire covers is its writer's row (it is not in
+`miswired`). Its output rows then hold its function of its writers' output rows, which is what
+`Population.Dataflow.Correct` asks of a unit of `wiresDataflow`. -/
+def WiredCorrect (c : Wiring) (same : String × Nat × String × Nat → String × Int × String → Prop)
+    (correct : String × Nat → Prop) (y : String × Nat) : Prop :=
+  correct y ∧ y ∉ miswired c same
 
 namespace Wires
 

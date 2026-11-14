@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Remote.Fork
+public import Definitions.Compose.Remote.Fork
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,7 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The receipts' binding bound in its fork form: a lemma
 
-`ReceiptsBindingOfFork`, the step of `Definitions.Accounting.Guarantees.RemoteBinding`'s `ReceiptsBindingOfCR` that
+`ReceiptsBindingOfFork`, the step of `Definitions.Compose.Guarantees.RemoteBinding`'s `ReceiptsBindingOfCR` that
 assumes no hash: the binding term is at most `Σ_t √(|L_t|·s_t·(fork_t + split_t))`. `ReceiptsBindingOfCR` is it with each
 window's fork finder meeting `Claims.StrictBirthday`, and is the guarantee `ledger.binding` charges. This is a
 `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem of the same name, and audited with

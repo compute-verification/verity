@@ -1,7 +1,7 @@
 module
 
 public import MemoryChallenger.WipeProtocol
-public import Definitions.Accounting.Wipe
+public import Definitions.Pous.Wipe
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 

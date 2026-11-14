@@ -9,7 +9,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Combinatorics.SimpleGraph.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Accounting.Capacity
+import Proofs.Registration.Capacity
 import Proofs.Accounting.Prob
 import Proofs.Pous.EndToEndAt
 import Proofs.Pous.Obligation

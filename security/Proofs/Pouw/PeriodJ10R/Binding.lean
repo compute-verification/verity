@@ -1,12 +1,12 @@
 module
 
 public import Properties.Pouw.PeriodJ10R
-public import Definitions.Accounting.TS.Hashed
-public import Proofs.Accounting.Compose.BindingOfECR
-public import Proofs.Accounting.RemoteHeld.Binding
+public import Definitions.Pouw.TS.Hashed
+public import Proofs.Compose.Compose.BindingOfECR
+public import Proofs.Compose.RemoteHeld.Binding
 public import Proofs.Hash.RowBinding
-public import Proofs.Accounting.TS.FixedMeets
-public import Definitions.Accounting.Guarantees.PeriodBinding
+public import Proofs.Pouw.TS.FixedMeets
+public import Definitions.Compose.Guarantees.PeriodBinding
 
 /-!
 # A sampled layer's binding from its hashed openings

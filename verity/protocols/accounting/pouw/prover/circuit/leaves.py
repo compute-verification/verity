@@ -104,7 +104,7 @@ blocks (a multiple of 64 words), the v2 rows Flock's widened scope takes; pc8-ca
 nvfp4-p's codes and scales are `rowleaf.nvfp4_row_bytes`' bytes, and every row's bytes are `rowleaf.bit_row`'s of its
 elements.
 
-Which unit ports make up each row is `pc4.PORTS`, `pc8.PORTS` and the inert-work bound's `cap.PORTS`, `rowk.PORTS4` and
+Which unit ports make up each row is `pc4.PORTS`, `pc8.PORTS` and the inert-work bound's `cap.PORTS`, `pc4_rowk.PORTS4` and
 `rowk.PORTS8` for the cut, and `pc8.SIDE_PORTS` for the audit execution phase's tile (`pc8.Pc8TileSide`), which reads
 fp8-pi rows: its execution phase's side rows, whose index field no unit writes.  `statement_rows` gives a unit's Flock
 rows from these: META ``row_schemas``, a [schema, bits] per row (the input rows, then the output rows), and
@@ -119,7 +119,7 @@ regions (`anchors.region_words`).
 
 An admission value has one ok leaf only while the word's bits 1-15 are zero, and no row check sees them: Flock's and the
 Lean verifier's hash a hidden row's bits as given.  So the row unit that writes the row returns the word (`OK`), not the bit,
-as a select between the constants 1 and 0, every bit fixed in gates (`pc4.ok_word`), and `ok_of` refuses any other word.
+as a select between the constants 1 and 0, every bit fixed in gates (`tile_units.ok_word`), and `ok_of` refuses any other word.
 """
 from __future__ import annotations
 

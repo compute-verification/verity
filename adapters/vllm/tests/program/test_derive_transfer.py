@@ -1,7 +1,7 @@
 """The transfer test's audit probe on the vLLM adapter's S3 claim: `GreedyServe(B0, steps=15)` derives, the family rule
 claims `Serve_v1`, the digest is the certificate of record's, and the KV-ownership oracle holds on the derived program.
 The transfer cases themselves, a second model family through the frozen importer, are the PyTorch adapter's
-`tests/frontend/test_derive_transfer.py`."""
+`tests/frontend/test_derive_transfer.py`, but for its two in the `b1-eager` profile, which are here."""
 
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ def test_audit_s3_derived_b0_serve_digest_and_kv_ownership():
         check_cache_ownership_by_kind,
     )
     from verity_vllm.program.frontend import derive_examples as dex
-    from verity_torch.frontend.derive import derive_report
+    from verity_vllm.program.frontend.vllm_derive import derive_report
     rep = derive_report(dex.GreedyServe(B0_CONFIG, 15), (torch.zeros(32, dtype=torch.int32),), mode="profile", profile="b1-eager",
                         config=B0_CONFIG)
     assert rep.ok, rep.unsupported
@@ -68,3 +68,22 @@ def test_audit_s3_derived_b0_serve_digest_and_kv_ownership():
     assert fam.get("matched"), fam
     assert rep.digest == CERTIFIED_B0_DIGEST, rec
     assert rec["ownership_by_name"] == [] and rec["ownership_by_kind"] == [], rec
+
+
+@pytest.mark.parametrize("ids, reason, at", [(torch.int64, "numerics_unregistered", "wte"), (torch.int32, "decomposition", "h.0.ln_1")],
+                         ids=["gpt2_lm_bf16_profile", "gpt2_lm_bf16_profile_i32"])
+def test_gpt2_bf16_in_the_b1_eager_profile_refuses_where_its_vocabulary_ends(ids, reason, at):
+    """The transfer cases in profile mode, which only the vLLM adapter's `b1-eager` vocabulary serves: GPT-2 in bf16
+    refuses at the int64 token gather (the profile's `Embedding_v1` takes I32), and with int32 ids at the first LayerNorm,
+    which the profile does not register. The model is `derive_examples.GPT2TinyLM`, whose embeddings and first LayerNorm
+    are the transfer family's, so both refusals fall where the transfer family's do; once the profile carries GPT-2
+    further, the case goes back to the PyTorch adapter's harness, which evaluates a derived Program against torch."""
+    from verity_torch.frontend import derive_examples as tex
+    from verity_vllm.program.frontend.vllm_derive import derive_report
+    torch.manual_seed(0)
+    m = tex.GPT2TinyLM().to(torch.bfloat16).eval()
+    rep = derive_report(m, (torch.zeros(4, dtype=ids, device="meta"),), mode="profile", profile="b1-eager", name="GPT2TinyLM")
+    _record({"case": f"gpt2_lm_bf16_profile{'_i32' if ids is torch.int32 else ''}", "importer": IMPORTER_NAME, "head": GIT_HEAD,
+             "outcome": "program" if rep.ok else "unsupported", "reason": None if rep.ok else rep.unsupported.reason})
+    assert not rep.ok, f"the b1-eager profile now carries GPT-2 past {at}: evaluate the Program in the transfer harness"
+    assert (rep.unsupported.reason, rep.unsupported.module_path.split(" ")[0]) == (reason, at), rep.unsupported

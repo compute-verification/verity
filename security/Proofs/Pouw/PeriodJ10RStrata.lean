@@ -32,7 +32,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.ComposeMonitoringPeriod
+import Proofs.Compose.ComposeMonitoringPeriod
 import Proofs.Pouw.PeriodJ10R
 
 /-!

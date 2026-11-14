@@ -1,11 +1,11 @@
 module
 
-public import Definitions.Accounting.Guarantees.Compose
+public import Definitions.Compose.Guarantees.Compose
 
 /-!
 # PoUW's credit on an arbitrary declared circuit: lemmas
 
-The statements of `Definitions.Accounting.Guarantees.Compose` that are steps of its guarantees' proofs rather than
+The statements of `Definitions.Compose.Guarantees.Compose` that are steps of its guarantees' proofs rather than
 guarantees. Each is a `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem of the same
 name, and audited with the proofs: no record pins it.
 

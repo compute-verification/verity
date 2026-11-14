@@ -20,10 +20,7 @@ and `fit.py` read. Hosts carry no compute and no run beats the reference's effic
 multiplications (the inference-only policy's term, χ, the memory cap) stay at peak: at `tiers.py`'s defaults the slowdown is 3.02
 where every unit is proved (T1 to T4), and the slowdown calculator's remote scenario at the H200 gives 3.04. PoUW's credit sets both: with nothing credited (`free` 1) both are 1.
 Without the reference-efficiency assumption they are 1.21 and 1.22, without the
-hosts assumption 2.19 and 2.80, and without both 1 and 1.12. For the slowdown's terms, the code and its outputs keep older names (`GLOSSARY.md`, Older names) in the names built on
-these stems: `rho` for the slowdown (`bracket.py`'s stored key `"rho"`); `efficiency` or `eta` for the older efficiency
-term, written η in older text and replaced by the slowdown (`tiers.py`'s `efficiency`, `exposure.py`'s `eta`; today's η is
-the success threshold, and `exposure.py`'s docstring says 1/eta is not the slowdown D). These are not older names: `tiers.py`'s `rho_T`,
+hosts assumption 2.19 and 2.80, and without both 1 and 1.12. These names look like older ones (`GLOSSARY.md`, Older names) and are not: `tiers.py`'s `rho_T`,
 `rho_PoS` and `rho_NCI`, which are rates; `exposure.py`'s `wipe_residual`, the memory the fill misses; `kappa.py`'s
 `RESIDUAL`, the model's residual stream; `fit.py`'s `D_max` and its loop variable `D` over `DATA_LIMITS`, token counts in
 the loss law; `kappa.py`'s `c.D` and the `D` of its softmax comment; `reference_efficiency`, the reference-efficiency
@@ -45,8 +42,8 @@ assumption; and `catalog.py`'s category id `efficiency-metrics`.
 | `library.py` | queries over the library: a bracket and the per-block read breakdown for any algorithm, model, policy and data mode |
 | `bracket.py` | the bracket per row; `python benchmarks/nci/bracket.py [--calibration ID] [--row ID]` |
 | `kappa.py` | kappa per token and over each frontier model's pretraining schedule, by part; `python benchmarks/nci/kappa.py [--model ID]` |
-| `tiers.py` | the remote composition's terms under the verification stack, per tier (its `efficiency`, and `remote_terms`, the `s` and `x` the slowdown calculator's `multiple_bound` takes); `python benchmarks/nci/tiers.py [--json]` |
-| `exposure.py` | what `tiers.py`'s `efficiency` is most exposed to: ranges, tornados, elasticities, thresholds on its inverse, and the closed forms of mu, nu and chi |
+| `tiers.py` | the remote composition's terms under the verification stack, per tier (its `counted_share`, and `remote_terms`, the `s` and `x` the slowdown calculator's `multiple_bound` takes); `python benchmarks/nci/tiers.py [--json]` |
+| `exposure.py` | what `tiers.py`'s `counted_share` is most exposed to: ranges, tornados, elasticities, thresholds on its inverse, and the closed forms of mu, nu and chi |
 | `fit.py` | the fit bound: the memory cap when no server window holds a model that reaches the target loss; `python benchmarks/nci/fit.py [--json]` |
 | `statement.py` | every number that the Notion page on `tiers.py`'s claims, model and tiers quotes, at the commit it runs on; `python benchmarks/nci/statement.py [--json]` |
 | `render.py` | the whole index as Markdown on stdout |
@@ -379,6 +376,6 @@ at most the bits of data the budgets allow.
 ## Rendering
 
 ~~~sh
-python benchmarks/nci/render.py > /tmp/nci-index.md     # never commit the output
+python benchmarks/nci/render.py > /tmp/literature-index.md     # never commit the output
 python benchmarks/nci/bracket.py --calibration kimi-k2-1m-raw
 ~~~

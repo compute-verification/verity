@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Accounting.ComposeMonitoringPeriod
-public import Definitions.Accounting.Assumptions.Compose
+public import Definitions.Compose.ComposeMonitoringPeriod
+public import Definitions.Compose.Assumptions.Compose
 public import PouwCheck
 
 /-!
