@@ -468,7 +468,7 @@ class WindowLocate:
     ``Registered(value, row, offset, nbytes)`` (bytes of a registered weight). A port of one Registered piece is a registered
     read: its position is the piece's byte offset in the value, ``row * stride(value) + offset``, over the registered row's
     bytes, which the piece must be exactly (``stride`` defaults to one registered row: ``row`` is the registered row, as
-    circuits' `Locator.locate` names the weights docket's rows). ``Run("token")`` is ingress, which no commitment holds: refused. Coordinates
+    circuits' `Locator.locate` names the weights registration's rows). ``Run("token")`` is ingress, which no commitment holds: refused. Coordinates
     are ``{step, slot, op: the family, unit: the block's index in it}``."""
 
     def __init__(self, window: Any, layout: S.CommitShape, weights: Mapping[str, Any] | None = None,
@@ -1109,7 +1109,7 @@ def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, 
 #: a step's commit-slots roots registered before a coin selects its proof blocks (M3): the sample's population is
 #: every (slot, layout unit) of the step, and each sampled proof block is proved from a one-member window of its own. ``steps``
 #: (optional, `STEPS_KEY`) names the root of every step of the block a sampled proof block can read (attention's K and V rows at
-#: steps 0 .. the sampled step), ``[{step, root}]``; a docket without it holds every read to the sampled step
+#: steps 0 .. the sampled step), ``[{step, root}]``; a registration without it holds every read to the sampled step
 STEP_FORMAT = "verity/commit-slots-step-registration/v1"
 STEP_KEYS = {"format", "run", "program", "block", "step", "step_root", "slot_roots", "slots", "layout_digest", "context",
              "units_per_slot", "population", "law", "weights"}
@@ -1117,13 +1117,13 @@ STEPS_KEY = "steps"
 
 
 def step_digest(reg: Mapping[str, Any]) -> str:
-    """The step docket's digest, which the challenger's receipt names and the gate binds before the coin."""
+    """The step registration's digest, which the challenger's receipt names and the gate binds before the coin."""
     return identity_digest_sha512(STEP_FORMAT, dict(reg)).hex()
 
 
-def step_docket(com: Commitment, weights: Mapping[str, REG.Registered], sampling_design: Mapping[str, Any], *, run: str,
+def step_registration(com: Commitment, weights: Mapping[str, REG.Registered], sampling_design: Mapping[str, Any], *, run: str,
                       program: str, block: int, step: int, read_steps: bool = False) -> dict[str, Any]:
-    """The docket of step ``(block, step)`` of ``com`` (the prover's records) under ``sampling_design``, naming the registered
+    """The registration of step ``(block, step)`` of ``com`` (the prover's records) under ``sampling_design``, naming the registered
     values ``weights`` its blocks read; ``read_steps``: and the root of every step of ``block`` up to ``step`` (`STEPS_KEY`),
     which ``com`` must hold."""
     steps = _Steps(com)
@@ -1144,7 +1144,7 @@ def position_of(reg: Mapping[str, Any], index: int) -> tuple[int, int]:
 
 def check_step(doc: Mapping[str, Any], payload: bytes, reg: Mapping[str, Any], index: int, *,
                registration: Mapping[str, Any] | None = None) -> dict[str, str]:
-    """`check` of a sampled proof block's bundle, then the bundle held to the step docket ``reg`` at sampled ``index``:
+    """`check` of a sampled proof block's bundle, then the bundle held to the step registration ``reg`` at sampled ``index``:
     ``{key: why}``, empty when it holds. Its commitment is the registered step (root, slot roots, layout, context), it is
     one proof block whose outputs open in the layout unit ``index`` names, every row opens against the registered step
     or a registered value whose root ``reg`` names, and each step row's slot root is the registered one. A row made of

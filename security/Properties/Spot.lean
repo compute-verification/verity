@@ -146,7 +146,7 @@ let through (`Docket.tiedThrough`, published as `rests_on_period_check`). The ne
 `Properties.NetworkPeriod.RowsProgWired` equates the scan's `scan/prog` entry's root and domain with an audit's entries
 port. It accepts that audit at any sample and charges one sampled in part: `Properties.NetworkPeriod.RowsTiedCharged`
 has its δ in the period's ε and, where its bound is at least one incorrect proof block, every slot entry bit of each
-link-window whose scan's `prog` is its output counted as faulty. `Properties.NetworkPeriod.RowsTiedInputWired` holds
+execution phase whose scan's `prog` is its output counted as faulty. `Properties.NetworkPeriod.RowsTiedInputWired` holds
 the names an answer carries to the ones the check ties: every name an accepted period's scan's answer carries under
 `rests_on_period_check` is one of that scan's lanes' `prog<j>`; that the answer carries every Input the registration
 piece let through, and that the name `prog<j>` is the Input the entry `scan/prog<j>` registers, are not said there.

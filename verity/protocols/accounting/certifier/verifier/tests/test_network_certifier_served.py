@@ -17,7 +17,7 @@ from verity.protocols.accounting.certifier.verifier.active import Bucketer
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer, parameters_digest
 from verity.protocols.accounting.certifier.verifier.grid import Certifier, GridParams, occupancy
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, run_shaper
-from verity.protocols.accounting.certifier.verifier.service import PUBLIC_SERVED, LinkWindows
+from verity.protocols.accounting.certifier.verifier.service import PUBLIC_SERVED, TransferBlocks
 from verity.protocols.proofs.spot.verifier import service as S
 
 import signers
@@ -71,7 +71,7 @@ class Run:
         self.tmp = tmp_path
         self.signer = signers.signer(tmp_path)
         self.issuer = Issuer(self.signer, signers.SESSION)
-        self.lw = LinkWindows(LINK, P, SYNC_SET, self.signer.public_key(), "r-served-test", signers.SESSION,
+        self.lw = TransferBlocks(LINK, P, SYNC_SET, self.signer.public_key(), "r-served-test", signers.SESSION,
                               proof_deadline=60.0, served=profile)
         self.stream = self.lw.stream(budget=8, delta=2.0 ** -40, challenger="challenger-test",
                                      coins=lambda n: b"\x07" * n, clock=lambda: 0.0)

@@ -20,7 +20,7 @@ def f():
 ADAPTER_OK = '''
 SEMANTIC_ID = "gen-x/Gelu@v1"
 def cases(rng, i): return {}
-def production(statics, inputs):
+def serving(statics, inputs):
     import torch
     return inputs
 def spec(statics): return None

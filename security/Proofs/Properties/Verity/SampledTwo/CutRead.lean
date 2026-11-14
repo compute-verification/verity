@@ -190,7 +190,7 @@ theorem second_reads {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursiv
 where the first stage's coins are read under the parameters' key (`FirstReads`) and the device's history at the
 play prints the play's log in its two sessions (`PrintsTwo`). -/
 theorem reads_or_break (dev : Exchange → History) (θ : ByteArray) (hF : FirstReads θ)
-    (hP : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → PrintsTwo (dev o) w₁ w₂ o.log)
+    (hP : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) → PrintsTwo (dev o) w₁ w₂ o.log)
     {o : Exchange} (hθ : o.params = θ) (ha : Accepts o.sent) :
     LogRead o ∨ ∃ x ∈ records o.sent, keyOf θ = some x.1.key ∧ Break (dev o) x.1.key x.1.label x.2 := by
   have ha' := ha
@@ -217,7 +217,7 @@ theorem reads_or_break (dev : Exchange → History) (θ : ByteArray) (hF : First
     exact h
   obtain ⟨-, -, -, hk₁⟩ := firstSamples_executionPhase h3
   have hm₁ : (d₁, firstCoins e) ∈ records o.sent := by rw [records_eq h1 h2, h3]; simp
-  have hw : windowsOf θ = some (d₁.window, d₂.window) := by rw [← hθ]; exact executionPhasesOf_eq h1 h3 h5 h6
+  have hw : executionPhasesOf θ = some (d₁.window, d₂.window) := by rw [← hθ]; exact executionPhasesOf_eq h1 h3 h5 h6
   have hPT := hP o hθ d₁.window d₂.window hw
   have hP₁ : ∃ log₁, PrintsOn (dev o) d₁.window log₁ := by
     unfold PrintsTwo at hPT
@@ -291,7 +291,7 @@ finder's collision plus the forger's forgery (`terms`), over both sessions. -/
 theorem cutBound_read (V : Vocab d α) (k : Verity.Registration.Composite) (dev : Exchange → History)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hw : Wired V k θ) (hF : FirstReads θ)
-    (hP : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → PrintsTwo (dev o) w₁ w₂ o.log)
+    (hP : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) → PrintsTwo (dev o) w₁ w₂ o.log)
     (hs : SignsPlay V dev θ F c) : CutBound V k θ F c σ ReadIsDevice (terms V dev θ F c σ) := by
   refine cutBound_of V k dev θ F c σ ReadIsDevice hw (fun o hθ ha hg => ?_) hs
   rcases reads_or_break dev θ hF hP hθ ha with hr | hb

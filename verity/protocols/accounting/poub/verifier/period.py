@@ -29,6 +29,7 @@ min(s, U) of a sample's U receipts, which can be fewer.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import os
@@ -38,7 +39,7 @@ from collections.abc import Callable, Sequence
 from fractions import Fraction
 from typing import Any, Protocol
 
-from verity.protocols.accounting.pous.verifier.period import Period, Run
+from verity.protocols.accounting.pous.verifier.period import Run
 from verity.commitments.identity import canonical_json_bytes
 
 from . import audit, codec, pooled
@@ -203,7 +204,7 @@ def case_of(s: audit.AuditRun, events: Sequence[dict[str, Any]]) -> dict[str, An
 def session(node: str, prover: Peer, coins: bytes, *, windows: int = 2, passes: int = 1, samples: int = audit.SAMPLES,
             window_ns: int = 100_000_000, deadline_ns: int = 500_000_000, codec_: codec.Codec = codec.DEFAULT,
             verify: int | None = None, clock: Callable[[], int] = time.monotonic_ns,
-            sleep_until: Callable[[Callable[[], int], int], None] = _sleep_until) -> Period:
+            sleep_until: Callable[[Callable[[], int], int], None] = _sleep_until) -> Run:
     """The verifier's side of the period's session on `node` against `prover` (`run`'s, wherever the prover is): the
     registration it samples from `coins`, its challenger's coins, its clock and its log, which are the case."""
     n, root = prover.register()
@@ -228,20 +229,22 @@ def session(node: str, prover: Peer, coins: bytes, *, windows: int = 2, passes: 
             root = prover.run(C.Released.of(challenge), t, i, previous)
             previous, step = root, step + 1
             call({"kind": "receive", "t": t, "i": i, "root": root.hex(), "runs": None, "change": None, "step": step},
-                 lambda: s.receive(t, i, root, None, change=None, step=step))
+                 functools.partial(s.receive, t, i, root, None, change=None, step=step))
         challenge = call({"kind": "boundary"}, s.boundary, s.next_boundary_ns())
     for t in range(windows if verify is None else verify):
         d = s.deadline(t)
-        draws = call({"kind": "close", "t": t}, lambda: s.close(t), None if s.windows[t].final else d + 1)
+        draws = call({"kind": "close", "t": t}, functools.partial(s.close, t),
+                     None if s.windows[t].final else d + 1)
         if isinstance(draws, audit.Verdict):
             break
         got = prover.open(t, s.windows[t].draws)
-        v = call({"kind": "verify", "t": t, "openings": [opening_json(o) for o in got]}, lambda: s.verify(t, got))
+        v = call({"kind": "verify", "t": t, "openings": [opening_json(o) for o in got]},
+                 functools.partial(s.verify, t, got))
         if not v.accepted:
             break
     if s.outcome is not None:
         prover.end(*s.disclose())
-    return Period(answer(s), case_of(s, events))
+    return Run(answer(s), case_of(s, events))
 
 
 def serve(exe: str | os.PathLike, cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -251,5 +254,5 @@ def serve(exe: str | os.PathLike, cases: list[dict[str, Any]]) -> list[dict[str,
     return [json.loads(x) for x in p.stdout.splitlines()]
 
 
-__all__ = ["DELTA", "PROTOCOL", "Peer", "Period", "Run", "answer", "case_of", "certified", "opened", "payloads",
+__all__ = ["DELTA", "PROTOCOL", "Peer", "Run", "answer", "case_of", "certified", "opened", "payloads",
            "registration_json", "registration_of", "serve", "session"]

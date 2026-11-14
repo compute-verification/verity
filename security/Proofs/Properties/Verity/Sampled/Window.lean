@@ -4,12 +4,12 @@ public import Proofs.Properties.Verity.Sampled.Target
 public import Proofs.Flock.EndToEnd.Joint.V5.Bound
 
 /-!
-# SPOT's leg over a window of several members, each its own session
+# SPOT's subprotocol over a window of several members, each its own session
 
 `Verity.Vocab.SpotSound` where a window's one sample covers several members and one-stage v2 verifies each member in
-its own `--zk` session, one after another: the leg `Proofs.Properties.Verity.Sampled.Target` proves at one session, at
+its own `--zk` session, one after another: the subprotocol `Proofs.Properties.Verity.Sampled.Target` proves at one session, at
 Flock's window of several members (`Flock.Guarantees.JointAuditV5`). The sessions are sequential, in the members'
-order (`JointAuditV5.sessions`, `seqG`); sessions run at once are not this leg's.
+order (`JointAuditV5.sessions`, `seqG`); sessions run at once are not this subprotocol's.
 
 * **A member** (`Member`): `MemberV5`'s binders, each the value v2's check derives on the member's own statement (its
   circuit file's parse, the public file over the circuit's empty public input ports, where its proof blocks sit in the
@@ -49,7 +49,7 @@ order (`JointAuditV5.sessions`, `seqG`); sessions run at once are not this leg's
 * **The vocabulary at the deployment's windows** (`ExecutionPhaseDeployed`, `ExecutionPhaseCovers`), and **the claim's transfer**
   (`ExecutionPhaseDeployed.claim`): where every member's roots fix their domains and the claim fails at a strategy, more than
   an `ε` share of the window's population is incorrect at the projected strategy (`JointAuditV5.incorrectSet`).
-* **`spotSound_of_executionPhase`**: the leg, from the coupling at each window.
+* **`spotSound_of_executionPhase`**: the subprotocol, from the coupling at each window.
 -/
 
 @[expose] public section
@@ -337,7 +337,7 @@ knowledge and binding terms summed, `Σ_m (ε_ks,m + ε_bind,m)` (`JointAuditV5.
 design and the finders' budgets at `t`, and each member's registration's roots term (`rootsErr`). -/
 noncomputable def sessionDelta (t : ℕ) : ℝ≥0∞ := W.sampleMiss + (W.joint t).eps + W.rootsErr
 
-/-- **The leg's δ at the window, `t` SHA-512 calls and the read finder's bound `cr`**: the window's error, each
+/-- **The subprotocol's δ at the window, `t` SHA-512 calls and the read finder's bound `cr`**: the window's error, each
 member's roots term in it, a two-continuation term per round opened after a digest in every member's session, its
 closing round among them, one for the record and one for the digests the composition's commitment binds, the coin
 trees' hiding term, and `cr`. -/
@@ -411,7 +411,7 @@ theorem ExecutionPhase.ks (W : ExecutionPhase) (t : ℕ) (τ : FlockSoundness.Ga
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The constructions the leg reads at a window, applied to a strategy of the period's game** (`Constructions`, at a
+/-- **The constructions the subprotocol reads at a window, applied to a strategy of the period's game** (`Constructions`, at a
 window): the projection, the device's other releases the strategy may ask for (`coins`) and the strategy of the
 window's audit it is read as, at the window widened by them and the strategy's SHA-512 calls (`project`); the read
 finder and the forger of the device's signature; and the two-continuation finders, one per round the device opens
@@ -446,7 +446,7 @@ noncomputable abbrev ExecutionPhaseConstructions.live {V : Vocab d α} (K : Exec
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) : ExecutionPhase :=
   W.extend (K.coins W θ F c σ)
 
-/-- **The leg's per-finder SHA-512 premises at a strategy and the window `W`**: `JointShareV5`'s at the projected
+/-- **The subprotocol's per-finder SHA-512 premises at a strategy and the window `W`**: `JointShareV5`'s at the projected
 strategy and the strategy's calls (`JointFinderCR`), `cr/sha-512` as the strict birthday bound at each
 two-continuation finder, and `ecr/sha-512` at each member's roots finder at its calls (`ExecutionPhase.RootsCR`). -/
 structure ExecutionPhaseFinderCR (V : Vocab d α) (K : ExecutionPhaseConstructions V) (W : ExecutionPhase) (θ : ByteArray)
@@ -488,7 +488,7 @@ def ExecutionPhaseCovers (V : Vocab d α) (k : Verity.Registration.Composite)
 
 /-- **Soundness's vocabulary at `.sampled` reads the constructions `K` at the deployment's windows `S`** (`Deployed`,
 at windows): the finder is `K`'s read finder and the forger `K`'s, with no loss term; `error`'s condition holds the
-leg's per-finder premises (`ExecutionPhaseFinderCR`); the published `δ` is at least the window's, at the window widened by the
+subprotocol's per-finder premises (`ExecutionPhaseFinderCR`); the published `δ` is at least the window's, at the window widened by the
 projection's coins; and **the claim's transfer** (`claim`): where every member's roots fix their domains
 (`ExecutionPhase.RootsFix`), at a strategy whose extracted transcript fails the claim at the published share, more than the
 window's `ε` share of its population's proof blocks is incorrect at the projected strategy
@@ -511,7 +511,7 @@ structure ExecutionPhaseDeployed (V : Vocab d α) (K : ExecutionPhaseConstructio
 
 variable (V : Vocab d α) (k : Verity.Registration.Composite)
 
-/-- **SPOT's leg over a window of several members**: soundness's vocabulary at `.sampled` reading the constructions
+/-- **SPOT's subprotocol over a window of several members**: soundness's vocabulary at `.sampled` reading the constructions
 `K` at the deployment's windows `S` (`ExecutionPhaseDeployed`), which cover the one-stage form (`ExecutionPhaseCovers`), meets SPOT's
 target at composite `k`, from the coupling at each window (`ExecutionPhaseCouplingTarget`). Where `error`'s premises hold and
 the claim fails, the coupling bounds the verdict by the window's audit's acceptance at the projected strategy and the

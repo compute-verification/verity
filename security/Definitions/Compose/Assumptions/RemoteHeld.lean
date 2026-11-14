@@ -59,7 +59,7 @@ links. -/
 def Identity (T : Trace Ω) : Prop := ∀ ω t, T.link ω t = 0
 
 /-- **The links' ceiling**: on every outcome, over every interval `[u, v)`, the node's boundary links bring in at most
-`β · (v − u) + B` blocks: `β` a tick and a burst of `B`, one link window. -/
+`β · (v − u) + B` blocks: `β` a tick and a burst of `B`. -/
 def Links (T : Trace Ω) (β B : ℝ) : Prop := ∀ ω u v, u ≤ v → (over T.link ω u v : ℝ) ≤ β * (v - u : ℕ) + B
 
 /-- **The squaring ceiling**: on every outcome, over every interval `[u, v)`, the node's compute re-encodes at most

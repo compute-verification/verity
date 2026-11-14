@@ -77,7 +77,7 @@ class Bounded(Committer):
             self.steps.append((self.run, step, outcome))
             return committed(sched)
 
-        vars(self.runner)["execute_model"] = execute_model
+        self.runner.__dict__["execute_model"] = execute_model
 
     def finalize(self) -> Any:
         rc = super().finalize()

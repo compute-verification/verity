@@ -18,7 +18,7 @@ phase (`scan_ok.constants` and `held`), and the scan's terms read off its Progra
 audit's units and their committed bits are read off its own (`_audit`). Its verdict,
 public, profile and digest are Lean's exactly; its reason is its own. The period is in the rows form, the one form the
 check reads: parameters naming a `sync_set` (the clock form's) are refused before anything else is read. Public is `K`
-and its terms over `MonitoringPeriodLeakAccepted`'s windows (the link-windows' scans, all at one δ), each with its
+and its terms over `MonitoringPeriodLeakAccepted`'s windows (the execution phases' scans, all at one δ), each with its
 `delta`, and `eps`, the union of those deltas as an exact ratio string, and the schedule's response cap
 (`max_tokens_cap`) when it has one.
 
@@ -41,8 +41,8 @@ first listed entry and the next for each later one. `restart` lists the signer's
 holding some of the period, and is accepted. Refused: that list with the second session's base another
 (`start-not-signed`), or its ordinal not the first's next (`start-skipped`); a shown start that is not its session's
 certified start, by each code of `CertifiedStart.refusal` (`start-uncertified`, `UNCERTIFIED_BY`); and evidence that
-shows a start too few or too many, or none (`start-count`). The link-windows of one link from the execution phase
-`first`, each link-window's ingress and egress rows committed and registered under a small sampled schedule
+shows a start too few or too many, or none (`start-count`). The execution phases of one link from the execution phase
+`first`, each execution phase's ingress and egress rows committed and registered under a small sampled schedule
 (`warden_rows.Cells.commit` and `registration`, signed by a small LMS key in a sampled network certifier session;
 `capped`: a schedule with a response cap, and
 `cap-schedule` the parameters or a registration under it with another cap or none), its three records certified
@@ -820,7 +820,7 @@ def params(j) -> Params:
     scan = _scan(j["scan"], program, schedule)
     windows = _nat(j["windows"], "windows")
     if windows < 1:
-        raise D.Reject("windows: a period has at least one link-window")
+        raise D.Reject("windows: a period has at least one execution phase")
     if not rows_wf(schedule, windows):
         raise D.Reject(rows_wf_refusal(schedule, windows))
     if list(cells) != schedule.rows_cells(windows):
@@ -846,7 +846,7 @@ def commitment(b: bytes) -> Commitment:
     j = P.canonical_json(b)
     _exactly(j, ["audits", "windows"], "the object")
     return Commitment([_registration(x, "an audit's registration") for x in _of(j["audits"], list, "audits")],
-                      [_registration(x, "a link-window's registration") for x in _of(j["windows"], list, "windows")], b)
+                      [_registration(x, "an execution phase's registration") for x in _of(j["windows"], list, "windows")], b)
 
 
 def _answer(j, ctx: str) -> dict:
@@ -906,7 +906,7 @@ def evidence(b: bytes) -> tuple[list[dict], list[Window], list[CertifiedStart]]:
     if not shown:
         _exactly(j, ["audits", "windows"], "the object")
     answers = [_answer(a, "an audit's answer") for a in _of(j["audits"], list, "audits")]
-    windows = [_window(x, "a link-window") for x in _of(j["windows"], list, "windows")]
+    windows = [_window(x, "an execution phase") for x in _of(j["windows"], list, "windows")]
     starts = [_start(x, "a start") for x in _of(j["starts"], list, "starts")] if shown else []
     if shown and not starts:
         raise D.Reject('starts: none: evidence that shows no session\'s start has no "starts"')
@@ -1439,9 +1439,9 @@ def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int, entries:
 
 def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]], charged: list[Facts] = (),
            start: int = 0) -> dict:
-    """K and its terms over `MonitoringPeriodLeakAccepted`'s windows: the link-windows' scans (`scans`, each its facts,
+    """K and its terms over `MonitoringPeriodLeakAccepted`'s windows: the execution phases' scans (`scans`, each its facts,
     its tied audits' free inputs and its `β_w`), where a compute audit's own terms are in none, a tied audit's free
-    inputs are in its link-window's `free` and its incorrect proof blocks in its `faulty_entries`, the δ of a tied audit
+    inputs are in its execution phase's `free` and its incorrect proof blocks in its `faulty_entries`, the δ of a tied audit
     sampled in part (`charged`) is in `eps`, and the period's first start, where it is not the run's first, is charged
     ``start``, the state's full width, once."""
     cells = sum(clog2(cap + 1) for cap in p.cells)
@@ -1460,11 +1460,11 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]], c
 def check(p: Params, c: Commitment, e) -> tuple:
     audits, windows, starts = e
     if len(c.windows) != p.windows:
-        return REJECT, "the commitment registers another number of link-windows"
+        return REJECT, "the commitment registers another number of execution phases"
     if len(c.audits) != len(p.audits):
         return REJECT, "the commitment registers another number of audits"
     if len(windows) != len(c.windows):
-        return REJECT, "evidence: another number of link-windows"
+        return REJECT, "evidence: another number of execution phases"
     if len(audits) != len(c.audits):
         return REJECT, "evidence: another number of audits' answers"
     findings, facts, scans = _start_checks(p, starts), [], []
@@ -2244,7 +2244,7 @@ def _strata_resize(r: random.Random, strata: list[dict], seed: int) -> int:
 
 
 def build(m: str, seed: int, small: bool = False) -> dict:
-    """A period's case with the change `m`, every choice sampled from `seed`; `small`: the toy key, as few link-windows
+    """A period's case with the change `m`, every choice sampled from `seed`; `small`: the toy key, as few execution phases
     and audits as `m` needs."""
     r = random.Random(f"network-period {m} {seed}")
     rp = random.Random(f"network-period prog {m} {seed}")
@@ -2268,7 +2268,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     # than the run's first only where the change asks, charged its start
     n_windows = r.randint(least_windows, least_windows if small or not carry else 3)
     n_audits = r.randint(least_audits, max(least_audits, 1) if small else 2)
-    # a link-window's own audit, and at times one no link-window ties, which may leave units unsampled
+    # an execution phase's own audit, and at times one no execution phase ties, which may leave units unsampled
     n_audits = max(n_audits, n_windows + (0 if small else rp.randint(0, 1)))
     first = r.choice([0, 0, r.randrange(1, 6)])
     if (m in SECOND or carry == "later" or m == "start-charged") and first == 0:
@@ -3163,7 +3163,7 @@ def verdict_of(kind: str) -> str:
 
 
 def case(kind: str, seed: int = 0) -> dict:
-    """A small period (`build(..., small=True)`: the toy key, as few link-windows and audits as its change needs) aimed
+    """A small period (`build(..., small=True)`: the toy key, as few execution phases and audits as its change needs) aimed
     at `kind`, its change and every choice sampled from `seed`."""
     ms = AIMS[kind]
     return build(ms[random.Random(f"network-period {kind} {seed}").randrange(len(ms))], seed, small=True)

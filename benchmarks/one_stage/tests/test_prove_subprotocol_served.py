@@ -1,4 +1,4 @@
-"""`prove_leg.py defs`' served shapes: each family binds the Definition the frontend serves on the RTX PRO 6000 at a Llama
+"""`prove_subprotocol.py defs`' served shapes: each family binds the Definition the frontend serves on the RTX PRO 6000 at a Llama
 model's statics, a template the serving rows commit, with stand-in values for every parameter's words; and `units_for` is the
 fewest units whose statement `stage` admits under --zk. Nothing is lowered or proved."""
 
@@ -13,7 +13,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-import prove_leg as L  # noqa: E402
+import prove_subprotocol as L  # noqa: E402
 
 DOT = 'DOT={"fn":"HopperBF16WgmmaDot16_v1"}'
 EPS = 'EPS={"f64":"0x1.4f8b588e368f1p-17"}'
@@ -51,7 +51,7 @@ SERVED = [
     ("attention-v20:8b:256:block", f"AttnBlock_v4{{D=128,NVIS=128,FIRST=false,BN=128,{DOT},CHECK=false}}"),
     ("attention-v20:1b:384:end", 'AttnHeadEnd_v1{D=64,INV={"fn":"Fa3InvSum_v1"}}'),
 ]
-#: SHA-512 of every served member's rows, output rows and recorded rows, as `prove_leg.py` on main built them itself
+#: SHA-512 of every served member's rows, output rows and recorded rows, as `prove_subprotocol.py` on main built them itself
 ROWS = ("4c4c22b639378c9002541c62fb178fa6e87380cc45f35ddb9041ace9b879b201"
         "85267aab6465305bb71a1c8ef69a0c75d0da74f1b2d0991f08a6f54de2117942")
 
@@ -70,7 +70,7 @@ def test_a_served_shape_binds_a_served_template_with_values_for_every_parameter(
     assert all(v.dtype == np.uint16 for v in values.values())
 
 
-def test_the_served_members_rows_are_the_bytes_prove_legs_own_rows_gave():
+def test_the_served_members_rows_are_the_bytes_prove_subprotocols_own_rows_gave():
     rows = []
     for shape in [s for s, _ in SERVED] + ["embedding-read:1b:300"]:
         m, info = L.served_member(shape, 0)
@@ -150,7 +150,7 @@ def test_a_served_members_reads_reach_its_stager(monkeypatch, tmp_path, reads):
     assert seen["reads"] == reads
 
 
-def test_a_structural_leg_stages_struct_lowers_template_else_flat_saying_why(monkeypatch, tmp_path):
+def test_a_structural_subprotocol_stages_struct_lowers_template_else_flat_saying_why(monkeypatch, tmp_path):
     """With a layout (``Tools.structural``), a member's stager is `struct_lower`'s template at it; where struct_lower
     refuses the Definition, or the member's reads are in lookup slots, it is the flat statement at the member's reads, and
     the reason is the member's. Without ``tmpl_unit``, which places a templated unit for its prover, no layout is taken."""

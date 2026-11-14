@@ -1,6 +1,6 @@
 """Differential-test adapter for the fused-MoE block's registered Definitions against vLLM d9105ea80's `fused_experts`
 (TritonExperts: `fused_moe_kernel` w13 -> `_C.silu_and_mul` -> `fused_moe_kernel` w2 with the routed weight ->
-`_moe_C.moe_sum`), bf16, unquantized, routing given: `cases` gives each case's statics and input words, `production` runs
+`_moe_C.moe_sum`), bf16, unquantized, routing given: `cases` gives each case's statics and input words, `serving` runs
 the kernels on them and `spec` is the Definition they are compared with.  The tree has no command that runs it.
 
 The served side runs vLLM's own entry and records what each `fused_moe_kernel` launch wrote, by wrapping the module's
@@ -55,7 +55,7 @@ def cases(rng, i: int) -> dict:
             "edge": kx != "random"}
 
 
-def production(statics: dict, inputs: list) -> list:
+def serving(statics: dict, inputs: list) -> list:
     import inspect
 
     import torch

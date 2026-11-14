@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.SampledTwo.JoinElems
 public import Proofs.Properties.Verity.SampledTwo.MessagesShown
 
 /-!
-# The two-stage leg's projection, joined over any acceptance
+# The two-stage subprotocol's projection, joined over any acceptance
 
 `projection_agreed` (`ProjectionOf.lean`) gives the projection's bound from its pieces at any frame, reading and
 agreement. This module fixes the three to the ones the pieces were proved at, and discharges the pieces that follow

@@ -60,15 +60,15 @@ structure RealizesIntegrityOfIntegrityMonitoringPeriod {ι : Type} {d : Device �
   strat : ((i : I) → Ω i) → FlockSoundness.Game.Strategy (Flock.Guarantees.Period.game W T)
   /-- the sampling blocks' records at the coins: verity-verify-proof's verdict and the incorrect proof blocks of each sampling
   block -/
-  record : ((i : I) → Ω i) → List Flock.Guarantees.WindowRec
+  record : ((i : I) → Ω i) → List Flock.Guarantees.SamplingBlockRec
   /-- the sampled audit's own coins drive the period's game at the strategy -/
-  samplingDesign : ∀ (ξ : (i : I) → Ω i) (E : List Flock.Guarantees.WindowRec → Prop),
+  samplingDesign : ∀ (ξ : (i : I) → Ω i) (E : List Flock.Guarantees.SamplingBlockRec → Prop),
     ENNReal.ofReal (Pouw.pr fun x : Ω (r.own .sampled) => E (record (Function.update ξ (r.own .sampled) x))) =
       FlockSoundness.Game.value E (Flock.Guarantees.Period.run W T (strat ξ))
   /-- the sampled audit accepts exactly when verity-verify-proof accepts every sampling block -/
   accepts_iff : ∀ ξ, r.accepts .sampled ξ ↔ ∀ w ∈ record ξ, w.accepted
   /-- the run's incorrect proof blocks are the sampling blocks' (M1, the program-from-circuit correspondence) -/
-  wrong_eq : ∀ ξ, (r.parts.incorrect (r.trace ξ)).card = ((record ξ).map Flock.Guarantees.WindowRec.incorrect).sum
+  wrong_eq : ∀ ξ, (r.parts.incorrect (r.trace ξ)).card = ((record ξ).map Flock.Guarantees.SamplingBlockRec.incorrect).sum
   /-- the partition's units are the sampling blocks' units -/
   units_eq : r.units = ∑ t ∈ Finset.range T, (W t).n
   /-- every unit of the partition has at least one gate -/

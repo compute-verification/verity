@@ -373,7 +373,7 @@ def eos_lag_rows(facts: dict) -> tuple[int | None, str]:
 
 def record_engine_facts(header: dict, oracle_dir: str | None = None) -> dict:
     """The execution conditions the record attests, gathered from EVERY location a recorder writes them:
-    the production recorder nests the effective LLM(**kw) under `RunHeader.profile.engine_kwargs` and the compilation facts under
+    the serving recorder nests the effective LLM(**kw) under `RunHeader.profile.engine_kwargs` and the compilation facts under
     `RunHeader.profile.compilation` (vllm_adapter build_manifest); older/foreign headers put them at the top level; the run's
     `capture/versions.json` repeats the effective engine kwargs.  Returns {engine: {k: v}, compilation: {fact: v}, values: {k: [distinct v]},
     sources: {k: [locations]}, disagreements: {k: (a, b, src_a, src_b)}, and unreadable: {location: error} only when a location is present

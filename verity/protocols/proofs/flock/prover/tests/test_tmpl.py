@@ -24,7 +24,7 @@ def _dot(n: int) -> list[str]:
         acc = C.commit(F.add(C, acc, F.multiply(C, a[8 * i:8 * i + 8], b[8 * i:8 * i + 8]), width=20))
     C.output("acc", acc)
     lay = IL.layout(C, ["a", "b"], ["acc"])
-    return IL.netlist(lay, "dot", leaves={"a": [1]}).splitlines()
+    return IL.circuit_description(lay, "dot", leaves={"a": [1]}).splitlines()
 
 
 def test_a_dot_products_template_unrolls_to_its_flat_unit_and_does_not_grow_with_it():

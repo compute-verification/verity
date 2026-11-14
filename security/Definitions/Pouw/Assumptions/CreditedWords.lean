@@ -87,8 +87,8 @@ so a word count `K / b` at a word's bits fails.
 
 Why it is a premise: the network certifier bounds the bits the node moved (`PeriodRun.commWithin`), not the units they
 carry, and nothing proved says a unit costs `b_unit` of them; a unit may go out in fewer bits than `b_unit` assumes. The
-joint period could discharge it from the network leg with a communication lower bound per unit; no such statement
-exists, and this one is unconditional, so it doesn't read the network leg's verdict. -/
+joint period could discharge it from the network subprotocol with a communication lower bound per unit; no such statement
+exists, and this one is unconditional, so it doesn't read the network subprotocol's verdict. -/
 def HelpWithinCertifier {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit} {I : Type}
     [DecidableEq I] {Ω : I → Type} (r : PeriodRun d α C Ω) (c : Certificates) (bUnit : ℕ) {X : Type}
     (coin : Ω (r.own .pouw) ≃ X) (acc : ((i : I) → Ω i) → X → Prop) (help : ((i : I) → Ω i) → X → ℝ) : Prop :=

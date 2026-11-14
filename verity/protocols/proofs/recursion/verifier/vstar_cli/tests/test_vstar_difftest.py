@@ -117,7 +117,7 @@ def _part(C: Circuit, ins: list[str], out: list) -> dict:
     """A part laid out as `VStar.DT.partNet` lays it out: its input ports as one group, its outputs as one port."""
     C.output("y", out)
     lay = IL.layout(C, ins, ["y"])
-    text = IL.netlist(lay, "part")
+    text = IL.circuit_description(lay, "part")
     return {"sha256": IL.digest(text), "bytes": len(text.encode()), "rows": lay.useful}
 
 

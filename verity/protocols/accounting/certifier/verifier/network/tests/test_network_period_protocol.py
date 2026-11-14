@@ -81,7 +81,7 @@ def test_the_period_check_agrees_with_its_mirror(server):
 
 
 def test_each_verdict_is_the_mirrors(server):
-    """A short run over an honest period, an undecided link-window and a forged certificate: all three verdicts."""
+    """A short run over an honest period, an undecided execution phase and a forged certificate: all three verdicts."""
     port = dataclasses.replace(PORT, inputs=cases(("rows-honest", "rows-answer-undecided", "rows-cert-forged")))
     stats = D.run(port, examples=40, server=server)
     assert all(stats.counts.get(v) for v in (ACCEPT, REJECT, UNDECIDED)), stats
@@ -820,7 +820,7 @@ def test_a_scan_whose_start_is_not_the_empty_state_is_refused(server, monkeypatc
         refused_by_lean_alone(build("rows-start-unpinned", n, small=True), server, PC.UNPINNED)
 
 
-def test_a_period_of_more_than_one_link_window_is_refused(server, monkeypatch):
+def test_a_period_of_more_than_one_phase_is_refused(server, monkeypatch):
     """An execution phase after its period's first starts from the state the one before it ended in, which the check
     neither holds nor charges, so the rows form refuses, in Lean and in the mirror and by name, a period of the run's
     first execution phase and the next and one of a later one and the next (`PC.CARRIES`), each stating a start opened
@@ -1008,7 +1008,7 @@ def test_a_template_named_slot_entry_with_another_body_is_refused(server, monkey
     assert selects == {False, True}, selects
 
 
-def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server):
+def test_a_tied_audits_free_inputs_are_in_its_phases_term(server):
     """The egress renders the outputs of the audit the scan's `prog` is tied to, so the bits the prover chose of that
     audit's inputs are the execution phase's: over honest rows periods, which Lean and the mirror accept with one
     public, each scan's `free` is the parameters' `free` of the audits whose registration holds its `prog`'s root (the
@@ -1063,7 +1063,7 @@ def test_an_untied_audit_sampled_in_part_is_charged_nothing(server):
 SAMPLED_IN_PART = ("rows-tied-partial", "rows-tied-entries-sampled", "rows-tied-slots-sampled", "rows-tied-sampled")
 
 
-def test_a_tied_audit_sampled_in_part_is_charged_its_link_windows_entries(server):
+def test_a_tied_audit_sampled_in_part_is_charged_its_phases_entries(server):
     """The scan reads a tied audit only through its `prog`, E_w entry bits an execution phase, and its state is the
     scan's own, so an incorrect proof block of any of the audit's templates, an unsampled `SelectEntry_v1` or
     `ScanSlots_v2` one among them, changes only those bits: the rows form accepts a tied audit at any sample, Lean with
@@ -1420,8 +1420,8 @@ def test_a_small_period_reaches_its_verdict(server):
 def test_each_kind_of_case_is_answered_as_lean_answers(server):
     """`case(kind, seed)` reaches its kind's verdict for each kind, the ones that fail to decode refused where they fail
     (a digest only once the commitment decodes); an accepted period's eps is its scans' deltas summed with its tied
-    audits' sampled in part, and its profile names no sync; its evidence holds each link-window's three records'
-    certificates and two row registrations, with one scan a link-window, all at one δ, and a schedules term equal to
+    audits' sampled in part, and its profile names no sync; its evidence holds each execution phase's three records'
+    certificates and two row registrations, with one scan an execution phase, all at one δ, and a schedules term equal to
     the cells'; `cases(seed)` is one of each with its answer; and Lean gives every one of them the mirror's answer."""
     drawn = {(k, s): PC.case(k, s) for k in KINDS for s in range(6)}
     answers = {ks: PC.answer(c) for ks, c in drawn.items()}
@@ -1460,7 +1460,7 @@ def test_the_clock_form_is_refused(server):
 
 def test_the_rows_forms_bound_counts_what_it_says():
     """The rows form's K worked by hand (Lean's `rowsTerms` `#guard`s): 7 cells on one connection and 2 on another, 5
-    bits for the schedules and 5 again for the fail cells, an audit whose own terms are in none, and over 1 link-window
+    bits for the schedules and 5 again for the fail cells, an audit whose own terms are in none, and over 1 execution phase
     one scan of 20 units (T = 10) sampled at δ = 1/15 with at most 3 incorrect (1351 sets), 1,120 free inputs, instances
     committing 300 and 512 bits, and jitter below 2 over its 10 steps; with every unit sampled, no term for incorrect
     proof blocks; at w63's class with the egress tie (T = 32, every unit sampled), K the tied slot entries' free inputs,

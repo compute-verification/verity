@@ -399,7 +399,7 @@ def test_a_deployment_record_of_another_session_than_the_one_handed_gets_no_file
     problem, the session and not the key, as its only one, and leaves no file, removing an earlier check's; handed
     another key's hash too, it names both. A deployment record changed to name another session than the one handed
     is the same problem by name, beside its certificates, which verify under no other session: the session's start's
-    first, as the period check reads the starts before the link-windows, then the windows'. What the check was held
+    first, as the period check reads the starts before the execution phases, then the windows'. What the check was held
     under comes first among its problems, the key and then the session, ahead of the certificates': so the fifty that
     `check.json` keeps hold it. The connection rows' check, called alone, names the two itself and
     writes no file, and does not name again one its caller already found."""
