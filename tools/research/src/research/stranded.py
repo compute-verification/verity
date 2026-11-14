@@ -23,8 +23,9 @@ A place (`analyse`) is a slot the launcher's own rule would start the job in now
     that reserves nothing would start beside a line stalled on memory), against the memory not reserved (`free_gb`), with
     each slot that shares a core with any held slot on the machine first marked blocked;
   - a check job that carries a twin (a queue shard) has no place off its own lines: it was launched as one run on each machine
-    of its launcher's list (the loop's `--on` line), all in one twin group, so a machine where the group has no line is one
-    that list leaves out by choice, which no window records;
+    of its launcher's list (the loop's `--on` line), or, when its first machine had a slot free, there and on the two others
+    with the most slots free, which join their lines only after a delay (check.py's `twins`), all in one twin group, so a
+    machine where the group has no line is one its launcher leaves out by choice, which no window records;
   - two idle slots that overlap are one place, and one place takes one job: places are dealt oldest first (priority first in
     the check pool), and a job left with none is in line but not stranded;
   - a twin still in line while its pair holds a slot (`runs_on`: its machine can't ask its home, so it can't see that) is a
