@@ -11,17 +11,19 @@ import pytest
 from test_verifier_party import STORE, Entropy, dropping
 
 from verity.runtime import sources as S
-from verity.runtime.runner import ProtocolDef, run
+from verity.protocol import ProtocolDef
+from verity.runtime.runner import run
 from verity.protocols.accounting.poub.verifier import audit
 from verity.protocols.accounting.poub.verifier import period as P
 from verity.protocols.accounting.poub.verifier import session_parties as SP
+from verity.protocols.accounting.poub.prover import session_prover as SPP
 
 SEED = b"remote bandwidth session parties"
 BOTH = [SP.VERIFIER, SP.PROVER]
 MS = 1_000_000
 
 
-def simulated(state, request=None, cheat=None, prover=SP.Prover, verifier=SP.Verifier, **kw):
+def simulated(state, request=None, cheat=None, prover=SPP.Prover, verifier=SP.Verifier, **kw):
     store = P.Local("n0", STORE, cheat=cheat, entropy=Entropy(b"salts"))
     proto = ProtocolDef(SP.MANIFEST, {SP.VERIFIER: verifier, SP.PROVER: prover})
     return run({"protocol": SP.ID, "params": request or SP.request_of("n0")}, BOTH, "simulated", state,
@@ -97,7 +99,7 @@ def test_the_verifier_replays_from_its_transcript(tmp_path) -> None:
     assert again.outcomes[SP.VERIFIER] == first.outcomes[SP.VERIFIER]
 
 
-class Twice(SP.Prover):
+class Twice(SPP.Prover):
     """Sends each root twice: the second is one the verifier didn't ask for."""
 
     def on(self, r):

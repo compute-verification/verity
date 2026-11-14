@@ -141,10 +141,10 @@ esac
 # --bw-passes (dbw.py): PoUB's prover libraries, as remote_session/run.sh builds them (BW_LIB, BW_KV)
 case " $* " in *" --bw-passes"*)
   nvcc -O3 -gencode "$GEN" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v \
-    -o "$S/session.so" benchmarks/remote_session/session.cu > "$OUT/build-session.log" 2>&1 \
+    -o "$S/session.so" verity/protocols/accounting/poub/prover/remote_session/session.cu > "$OUT/build-session.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL session"; grep -v "^ptxas info" "$OUT/build-session.log" | tail -30; exit 11; }
   nvcc -O3 -gencode "$GEN" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=1024 \
-    -DKV_MASK=1 -o "$S/kv.so" benchmarks/word_codec/kv.cu > "$OUT/build-kv.log" 2>&1 \
+    -DKV_MASK=1 -o "$S/kv.so" verity/protocols/accounting/poub/prover/word_codec/kv.cu > "$OUT/build-kv.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL kv"; grep -v "^ptxas info" "$OUT/build-kv.log" | tail -30; exit 11; }
   export BW_LIB=$S/session.so BW_KV=$S/kv.so ;;
 esac

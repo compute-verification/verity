@@ -14,9 +14,9 @@ makes in one process.
 
 `python -m verity.protocols.accounting.poub.verifier.verifier_party [--listen HOST:PORT]` is the verifier's side (`main`):
 it reads the request `{"deadline_ns", "node", "passes", "samples", "window_ns", "windows"}` as one JSON line on stdin,
-prints `{"listening": PORT}`, serves one prover and prints `{"answer", "case", "host"}`. `side_of(period, node)` is
-where `period.json` puts that side (`stream.Side`), and `period_with(side, request, store)` starts the side, connects
-to it and plays the prover (`prove`).
+prints `{"listening": PORT}`, serves one prover and prints `{"answer", "case", "host"}`. `command()` is the argv that
+starts that side on this machine, `Side` the side as what starts a run hands it over, wherever `period.json` puts it,
+and `period_with(side, request, store)` one session with it, playing the prover (`prove`).
 """
 
 from __future__ import annotations
@@ -29,9 +29,7 @@ import socket
 import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, BinaryIO
-
-from verity.runtime.stream import Side
+from typing import Any, BinaryIO, Protocol, TypeVar
 
 from . import audit, wire
 from . import coins as C
@@ -130,16 +128,22 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, coins: bytes, clock: Calla
     return out
 
 
+T = TypeVar("T")
+
+
+class Side(Protocol):
+    """The verifier's side as what starts a run hands it over (the runtime's `Side` is one): the machine it runs on,
+    and `talk(request, drive)`, one session with it: `request` sent, `drive` handed the connected socket, the side's
+    report back with what `drive` returned."""
+
+    host: str
+
+    def talk(self, request: Mapping[str, Any], drive: Callable[[socket.socket], T]) -> tuple[dict[str, Any], T]: ...
+
+
 def command() -> tuple[str, ...]:
     """The argv that starts the verifier's side as a process on this machine."""
     return (sys.executable, "-m", MODULE, "--listen", "127.0.0.1:0")
-
-
-def side_of(period: Mapping[str, Any], node: str) -> Side:
-    """`period.json`'s challenger host (`challenger_host`, by default `node`): this machine's process when it is the
-    node, else `challenger.bandwidth`'s `command` and `address`, which infra writes once the host serves the verifier's
-    side (`verity/protocols/accounting/poub/device/live_verifier`)."""
-    return Side.of(period, node, "bandwidth", command())
 
 
 def placement(node: str, host: str) -> dict[str, Any]:
@@ -186,8 +190,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["PREMISE", "Remote", "command", "main", "period_with", "placement", "prove", "request_of", "serve",
-           "side_of"]
+__all__ = ["PREMISE", "Remote", "command", "main", "period_with", "placement", "prove", "request_of", "serve"]
 
 if __name__ == "__main__":
     sys.exit(main())

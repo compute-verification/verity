@@ -3,7 +3,7 @@
 The model's layers are a stand-in linear type (`pous.linear_types`) holding an int8 weight [N, K] and its f32
 ``weight_scale`` [N, 1] as the ``int8_exact`` target's linears do, and P2 runs at the small point's 1,024-bit blocks, 8 a
 segment (`pous._base`), so encoding takes milliseconds.  The layout, the commitment, the salt, the codec, the root, the
-period's audit and the memory challenger are `verity.protocols.accounting.pous.verifier`'s and `benchmarks/pous/p2_v1/store.py`'s own; the
+period's audit and the memory challenger are `verity.protocols.accounting.pous.verifier`'s and `verity/protocols/accounting/pous/prover/p2/p2_store/store.py`'s own; the
 memory challenger's key is the PoUS tests' test signer, its clock a counter.
 """
 from __future__ import annotations
@@ -20,10 +20,12 @@ from concurrent import futures
 import pytest
 import torch
 
+from verity.runtime.stream import Side
 from verity.protocols.accounting.pous.device import challenger_party as CP
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import period, setup
+from verity.protocols.accounting.pous.prover import challenger_prover as CR
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
 from verity_vllm import config
 from verity_vllm import protocols as PO
@@ -139,7 +141,7 @@ def test_the_decode_at_use_on_a_gpu_is_the_stores_own_module():
     """What `pous._decoder` builds on a GPU comes from the store's package alone, as far as a CPU reaches: the layout of no
     tensors at the registered point, refused at any other, and rows of another shape refused before the library loads."""
     load = pous._p2("load")
-    assert load.__name__ == "p2_v1.load" and "p2_stage" not in sys.modules
+    assert load.__name__ == "p2_store.load" and "p2_stage" not in sys.modules
     layout = load.StoreLayout(pous._base(P2), (), bytes(128))
     with pytest.raises(ValueError, match="the point libp2v1.so is built for"):
         load.StoreLayout(SMALL, (), bytes(128))
@@ -221,9 +223,9 @@ def test_an_int8_linear_with_its_scales_is_served_not_refused(toy):
 
 
 def _in_process_party(signer, log):
-    """`challenger_session.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
+    """`challenger_prover.session` with the challenger's side in a thread of this process (`challenger_party.serve`, the
     test signer, a counter clock, its own coins each session) and the prover's over a socket pair
-    (`challenger_session.answer`)."""
+    (`challenger_prover.answer`)."""
     calls: list[tuple] = []
 
     def session(party, request, respond):
@@ -238,7 +240,7 @@ def _in_process_party(signer, log):
             served = pool.submit(challenger)
             try:
                 with a, a.makefile("rwb") as f:
-                    rounds = CS.answer(f, request["block_bytes"], respond)
+                    rounds = CR.answer(f, request["block_bytes"], respond)
             finally:
                 sid, served_session = served.result()
         calls.append((party, request))
@@ -259,12 +261,17 @@ def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_
     """`PousOption.leg`: the memory challenger at period.json's challenger host, the prover answering from C*, the verifier's tie of
     the setup case and its check; an accepted period says plainly that this point certifies 0 bits."""
     session, calls = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
-    monkeypatch.setattr(CS, "session", session)
+    monkeypatch.setattr(CR, "session", session)
+
+    def side_of(doc, node, key, local, what=None):
+        assert (key, what) == ("pous", None), "PoUS's side is period.json's challenger.pous"
+        return Side.of(doc, node, key, local, what)
+
     with PO.install(toy, _ctx(ENTRY)) as comp:
         opt = comp.get("pous")
         for n in (0, 1):
             out = tmp_path / f"out{n}"
-            got = opt.leg(_period_dir(tmp_path, n), NODE, out, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+            got = opt.leg(_period_dir(tmp_path, n), NODE, out, side_of=side_of, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
             assert got["verdict"] == "accept" and got["protocol"] == TEST_PROTOCOL, got["reason"]
             assert got["public"] == {"certified": False, "eps": "0", "s_bits": 0}
             assert got["profile"]["placement"]["trusted-device"].startswith(f"holds: the memory challenger ran on {AUDITOR}")

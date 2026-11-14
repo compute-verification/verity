@@ -40,7 +40,7 @@ every product, is a reference, not an answer.
 
 ## Parties
 
-PoUW, the compute accounting protocol, has three parties (`parties.PROTOCOL`, on the deployment layer
+PoUW, the compute accounting protocol, has three parties (`parties.protocol(ask)`, on the deployment layer
 `verity.runtime`). Each execution phase runs the same rounds between them:
 
 - **The prover** is the developer's: its GPU serving and the PoUW prover (`verity/protocols/accounting/pouw/prover/`,
@@ -262,8 +262,8 @@ k = window.k_prime(eps, delta, work.credited, work.n, tile_work)   # K′, the s
 ## Where things are
 
 - `protocol`: the `PoUWScheme` interface.
-- `parties`: PoUW's prover, challenger and verifier on the deployment layer (`MANIFEST`, `PROTOCOL`), each machine's work
-  a capability it is given.
+- `parties`: PoUW's prover, challenger and verifier on the deployment layer (`MANIFEST`, `protocol(ask)`), each
+  machine's work a capability it is given.
 - `audit`, `coins`, `salt`, `window`, `core_check`, `credit`, `identifier`, `registration`, `weights`, `operands`,
   `live_reads`: the Python references the Lean is held to, and the reference rules not yet ported.
 - `verity/protocols/accounting/pouw/prover/`, the prover's, which core doesn't import: the named schemes (`schemes/`) and `circuit/`,

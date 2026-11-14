@@ -242,7 +242,7 @@ if [ "$DEMO_STORE" = cuda ]; then
   case "$DEMO_GPU:$NAME" in any:*|*:*"$DEMO_GPU"*) ;; *) echo "REFUSED: the GPU is '$NAME', not an $DEMO_GPU"; exit 3 ;; esac
 fi
 rc=0
-uv run --no-sync python -m verity.protocols.accounting.pous.verifier.wipe_period --period "$DEMO_PERIOD" --out "$O" --node "$DEMO_NODE" \
+uv run --no-sync python benchmarks/pous/streamed_wipe/wipe_on_node.py --period "$DEMO_PERIOD" --out "$O" --node "$DEMO_NODE" \
   --expect "$DEMO_EXPECT" > "$O/summary.json" || rc=$?
 cat "$O/summary.json"
 exit $rc

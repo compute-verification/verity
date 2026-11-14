@@ -50,7 +50,7 @@ from verity.runtime.handshake import NONCE_BYTES, Handshake, Key, Verify
 
 from . import sources as S
 from .channels import Adversary, MemoryPipe, Pipe, Playback, TcpListen, dial
-from verity.protocol import SOURCES, Manifest, PlaceResult, place, site_of
+from verity.protocol import SOURCES, Manifest, PlaceResult, ProtocolDef, place, site_of
 from verity.party import Action, Finish, Identity, Party, Received, LogEntry, Send, Timer
 from .transcript import Entry, PartyLog, record
 
@@ -67,14 +67,6 @@ RUNS = "runs.jsonl"
 
 class Diverged(Exception):
     """The run stopped at its first divergence from a recorded transcript."""
-
-
-@dataclass(frozen=True)
-class ProtocolDef:
-    """A protocol as the runtime runs it: its manifest, and a factory for each of its parties."""
-
-    manifest: Manifest
-    parties: Mapping[str, Callable[[], Party]]
 
 
 @dataclass
@@ -695,5 +687,5 @@ def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state
     return result
 
 
-__all__ = ["ARRIVED", "FAILED", "MODES", "RUNTIME", "Diverged", "Endpoint", "Host", "ProtocolDef", "RunResult", "Runtime",
+__all__ = ["ARRIVED", "FAILED", "MODES", "RUNTIME", "Diverged", "Endpoint", "Host", "RunResult", "Runtime",
            "configuration_hash", "protocol_of", "replay", "run"]

@@ -22,9 +22,11 @@ inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proo
           # PoUS's setup, P2 and vk, which a P2 store is under (`p2.py`)
           "verity/protocols/accounting/pous",
           "verity/protocols/accounting/pous/prover",
-          # the deployment layer and its wire, which the session's parties run on (`session_parties.py`), and the
-          # monitoring periods, which `monitoring` reads
+          # the deployment layer and its wire, which the session's parties run on (`session_parties.py`), the prover's
+          # party (`session_prover.py`), which test_session_parties.py runs against the verifier's, and the monitoring
+          # periods, which `monitoring` reads
           "verity/channel.py", "verity/runtime", "verity/tests/tests/test_channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py",
+          "verity/protocols/accounting/poub/prover/__init__.py", "verity/protocols/accounting/poub/prover/session_prover.py",
           # the circuit model's codec rows and the primitives' range rows, which test_encode_chain.py and
           # test_gate_ranges.py recompute from codec.encode_word, the f32 evaluators and property/v1's rules, and
           # Exp2Lut127's table, which test_gate_ranges.py holds to vLLM's (fixtures/exp2_lut127.json)

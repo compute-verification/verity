@@ -3,7 +3,7 @@
 (`wipe_store.HostMemory`, period.json's `wipe.store` `host`) in place of the card, against `wipe_side.py`, the challenger's
 stand-in on a host of its own, in place of the side `--challenger-command` starts on `--challenger`, its key trusted
 only when it is the one `--trusted-sha512` pins (period.json's `wipe.trusted_sha512`), as demo.sh has it. The
-challenger period.json names is `wipe_party.side_of`'s, written to `$OUT/party.json` before the stand-in replaces it;
+challenger period.json names is `Side.of`'s, written to `$OUT/party.json` before the stand-in replaces it;
 the arguments and the lease it ran under go to `$OUT/demo-argv.json`. The Python judges alone: a `--wipe-protocol` is
 only recorded.
 `python served_wipe_demo.py OUT LEASE [DEMO_OPTIONS]`: the test's shim passes `$OUT` and `$GPU_LEASE_UUID`."""
@@ -19,7 +19,6 @@ import tempfile
 from pathlib import Path
 
 from verity.runtime.stream import Side
-from verity.protocols.accounting.pous.verifier import wipe_party as WP
 from verity.protocols.accounting.pous.verifier import wipe_period as W
 
 SIDE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "wipe_side.py"
@@ -38,15 +37,13 @@ def main(argv: list[str]) -> int:
     doc = {"tools": {}, "challenger_host": a.challenger,
            "challenger": {"wipe": {"command": shlex.split(a.challenger_command), "address": a.challenger_address}},
            "wipe": {"store": "host", "reads": int(a.reads), "trusted_sha512": a.trusted_sha512}}
-    of = WP.side_of
-
-    def stand_in(period, node, device, extra=()):
-        named = of(period, node, device, extra)
+    def stand_in(period, node, key, local, what=None):
+        assert (key, what) == ("wipe", "the wipe"), "the wipe's side is period.json's challenger.wipe"
+        named = Side.of(period, node, key, local, what)
         (out / "party.json").write_text(json.dumps({"host": named.host, "command": named.command,
                                                     "address": named.address}))
-        return Side(named.host, (sys.executable, str(SIDE), str(device)))
+        return Side(named.host, (sys.executable, str(SIDE), local[local.index("--device") + 1]))
 
-    WP.side_of = stand_in
     with tempfile.TemporaryDirectory() as t:
         period = Path(t) / "periods" / "p0"
         period.mkdir(parents=True)
@@ -54,7 +51,7 @@ def main(argv: list[str]) -> int:
         (out / "period.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
         (Path(t) / "periods" / "wipe-challenger").mkdir()
         with open(out / "summary.json", "w") as f, contextlib.redirect_stdout(f):
-            return W.main(["--period", str(period), "--out", str(out), "--node", a.node])
+            return W.main(["--period", str(period), "--out", str(out), "--node", a.node], side_of=stand_in)
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@
 #
 #   research run --on auto --cwd source -- bash benchmarks/torch_gpu/p2_stage/build.sh
 #
-# benchmarks/pous/p2_v1's libp2v1.so, unchanged, by its own Makefile (FAST's default: v4 keys by p2keys4.cuh, p2sq.cuh's
+# P2's prover's libp2v1.so (p2_store's), unchanged, by its own Makefile (FAST's default: v4 keys by p2keys4.cuh, p2sq.cuh's
 # Karatsuba squaring), at ARCH (default sm_90a) with CGBN at p2_gpu/CGBN.commit. Writes into OUT (default $OUT):
 #   lib/libp2v1.so, lib/libp2v1.so.ptxas   the library and ptxas's report (registers, spills)
 #   lib/libp2v1.so.cubins/                 the library's cubins (ship.sh's ship_cubins)
@@ -18,8 +18,9 @@ set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/../ship.sh"
 OUT=${1:-${OUT:?usage: build.sh OUT}}; ARCH=${ARCH:-sm_90a}
-ship_stage benchmarks/pous/p2_v1 benchmarks/pous/p2_gpu verity/commitments/cuda
-P2=$SRC/benchmarks/pous/p2_v1
+P2=$(dirname verity/protocols/accounting/pous/prover/p2/p2_store/Makefile)
+ship_stage "$P2" "$(dirname verity/protocols/accounting/pous/prover/p2/p2_gpu/p2dec.cu)" verity/commitments/cuda
+P2=$SRC/$P2
 S=$(mktemp -d "${TMPDIR:-/tmp}/p2-stage-build.XXXXXX"); trap 'rm -rf "$S"' EXIT
 mkdir -p "$OUT/lib"
 
@@ -32,7 +33,7 @@ if ! echo '#include <gmp.h>' | cpp >/dev/null 2>&1; then
   [ -n "$GMPINC" ] || { echo "gmpy2's wheel has no gmp.h" >&2; exit 2; }
 fi
 git clone -q https://github.com/NVlabs/CGBN "$S/CGBN"
-git -C "$S/CGBN" checkout -q "$(cat "$ROOT/benchmarks/pous/p2_gpu/CGBN.commit")"
+git -C "$S/CGBN" checkout -q "$(cat "$ROOT/verity/protocols/accounting/pous/prover/p2/p2_gpu/CGBN.commit")"
 
 mk=(make -C "$P2" NVCC="$SHIP_NVCC" CGBN="$S/CGBN" BIN="$OUT/lib" ARCH="$ARCH" ${GMPINC:+"INC=-I $GMPINC"})
 { "$CUDA/bin/nvcc" --version; echo "${mk[*]}"; } > "$OUT/toolchain.txt"
@@ -44,8 +45,9 @@ if grep -E "spill (stores|loads)" "$OUT/lib/libp2v1.so.ptxas" | grep -vq " 0 byt
   echo "ptxas reports spills (lib/libp2v1.so.ptxas)" >&2
 fi
 { git -C "$ROOT" rev-parse HEAD
-  (cd "$ROOT" && sha256sum benchmarks/pous/p2_v1/{p2v1.cu,p2sq.cuh,p2keys.cuh,p2keys4.cuh,Makefile} \
-    benchmarks/pous/p2_gpu/{p2dec.cu,CGBN.commit} verity/commitments/cuda/sha512.cuh); } > "$OUT/source.txt"
+  (cd "$ROOT" && sha256sum verity/protocols/accounting/pous/prover/p2/p2_store/p2v1.cu verity/protocols/accounting/pous/prover/p2/p2_store/p2sq.cuh verity/protocols/accounting/pous/prover/p2/p2_store/p2keys.cuh \
+    verity/protocols/accounting/pous/prover/p2/p2_store/p2keys4.cuh verity/protocols/accounting/pous/prover/p2/p2_store/Makefile \
+    verity/protocols/accounting/pous/prover/p2/p2_gpu/p2dec.cu verity/protocols/accounting/pous/prover/p2/p2_gpu/CGBN.commit verity/commitments/cuda/sha512.cuh); } > "$OUT/source.txt"
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
 cat "$OUT/elf.txt"
 grep -E "registers|spill" "$OUT/lib/libp2v1.so.ptxas" | sort | uniq -c | head -20

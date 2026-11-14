@@ -2196,6 +2196,47 @@
     },
     {
       "paths": {
+        "benchmarks/remote_session/prover.py": "verity/protocols/poub/prover/remote_session/prover.py",
+        "benchmarks/remote_session/device.py": "verity/protocols/poub/prover/remote_session/device.py",
+        "benchmarks/remote_session/session.cu": "verity/protocols/poub/prover/remote_session/session.cu",
+        "benchmarks/word_codec/cuda_lib.py": "verity/protocols/poub/prover/word_codec/cuda_lib.py",
+        "benchmarks/word_codec/kv.cu": "verity/protocols/poub/prover/word_codec/kv.cu",
+        "benchmarks/word_codec/kv.py": "verity/protocols/poub/prover/word_codec/kv.py",
+        "benchmarks/word_codec/kv_bench.py": "verity/protocols/poub/prover/word_codec/kv_bench.py",
+        "benchmarks/word_codec/tests/kv_vectors.json": "verity/protocols/poub/prover/word_codec/kv_vectors.json",
+        "benchmarks/vllm_encoded/paged.py": "verity/protocols/poub/prover/word_codec/paged.py",
+        "benchmarks/codec_tensor/reader.py": "verity/protocols/poub/prover/codec_tensor/reader.py",
+        "benchmarks/codec_tensor/sketch_receipt.py": "verity/protocols/poub/prover/codec_tensor/sketch_receipt.py",
+        "benchmarks/codec_tensor/sketching.py": "verity/protocols/poub/prover/codec_tensor/sketching.py",
+        "benchmarks/codec_tensor/reader.cu": "verity/protocols/poub/prover/codec_tensor/reader.cu",
+        "benchmarks/codec_tensor/sha512.cuh": "verity/protocols/poub/prover/codec_tensor/sha512.cuh",
+        "benchmarks/pous/p2_v1/store.py": "verity/protocols/pous/prover/p2/p2_store/store.py",
+        "benchmarks/pous/p2_v1/gpu.py": "verity/protocols/pous/prover/p2/p2_store/gpu.py",
+        "benchmarks/pous/p2_v1/p2v1.cu": "verity/protocols/pous/prover/p2/p2_store/p2v1.cu",
+        "benchmarks/pous/p2_v1/p2sq.cuh": "verity/protocols/pous/prover/p2/p2_store/p2sq.cuh",
+        "benchmarks/pous/p2_v1/p2keys.cuh": "verity/protocols/pous/prover/p2/p2_store/p2keys.cuh",
+        "benchmarks/pous/p2_v1/p2keys4.cuh": "verity/protocols/pous/prover/p2/p2_store/p2keys4.cuh",
+        "benchmarks/pous/p2_v1/Makefile": "verity/protocols/pous/prover/p2/p2_store/Makefile",
+        "benchmarks/pous/p2_v1/.gitignore": "verity/protocols/pous/prover/p2/p2_store/.gitignore",
+        "benchmarks/pous/p2_v1/store-toy/": "verity/protocols/pous/prover/p2/p2_store/store-toy/",
+        "benchmarks/pous/p2_gpu/p2dec.cu": "verity/protocols/pous/prover/p2/p2_gpu/p2dec.cu",
+        "benchmarks/pous/p2_gpu/CGBN.commit": "verity/protocols/pous/prover/p2/p2_gpu/CGBN.commit",
+        "benchmarks/pous/p2_v1/reference.py": "verity/protocols/pous/verifier/p2_v1/reference.py",
+        "benchmarks/pous/p2_v1/wire.py": "verity/protocols/pous/verifier/p2_v1/wire.py",
+        "benchmarks/pous/p2_v1/vectors.py": "verity/protocols/pous/verifier/p2_v1/vectors.py",
+        "benchmarks/pous/p2_v1/vectors.json": "verity/protocols/pous/verifier/p2_v1/vectors.json",
+        "benchmarks/pous/p2_v1/audit-vectors.json": "verity/protocols/pous/verifier/p2_v1/audit-vectors.json",
+        "benchmarks/pous/p2_v1/audit-negative-vectors.json": "verity/protocols/pous/verifier/p2_v1/audit-negative-vectors.json",
+        "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json": "verity/protocols/poub/verifier/bandwidth-mem69-v2.json"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pous/p2_v1/load.py": "verity/protocols/pous/prover/p2/p2_store/load.py"
+      }
+    },
+    {
+      "paths": {
         "verity/configuration/config/": "tools/config/"
       }
     },
