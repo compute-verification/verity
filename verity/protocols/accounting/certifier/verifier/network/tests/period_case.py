@@ -2404,10 +2404,10 @@ def _bad_params(p: dict, n: int) -> list:
 
 def bad_cells(p: dict) -> list[dict]:
     """Rows-form parameters whose `cells` aren't the schedule's (`Schedule.rowsCells`), each one change to `p`: none,
-    one connection short, one more, and one cap below `egress_cells`."""
-    caps = p["cells"]
-    return [p | {"cells": []}, p | {"cells": caps[1:]}, p | {"cells": [*caps, caps[0]]},
-            p | {"cells": [caps[0] - 1, *caps[1:]]}]
+    one connection short, one more, and one below `egress_cells`."""
+    cells = p["cells"]
+    return [p | {"cells": []}, p | {"cells": cells[1:]}, p | {"cells": [*cells, cells[0]]},
+            p | {"cells": [cells[0] - 1, *cells[1:]]}]
 
 
 def _bad_caps(s: dict, p: dict) -> list[dict]:

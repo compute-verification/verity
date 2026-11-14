@@ -1764,8 +1764,8 @@ def protocol : Core.Protocol where
 #guard
   let s : Schedule := ⟨100, 512, 27, 5, 16, 12, 47, 4, 4, 4, 32, none⟩
   s.rowsCells 1 == Array.replicate 128 5 && capsTerm (s.rowsCells 1) == 384 && (s.rowsCells 2).size == 256
--- its frames, B = 512 and 128 connections a link-window, read back over 2^25 − 1 link-windows and not over 2^25,
--- whose last connection's ordinal is 2^32; the check refuses that period
+-- its frames, B = 512 and 128 connections an execution phase, read back over 2^25 − 1 execution phases and not over
+-- 2^25, whose last connection's ordinal is 2^32; the check refuses that period
 #guard
   let s : Schedule := ⟨100, 512, 27, 65, 16, 12, 47, 4, 4, 4, 32, none⟩
   let p := fun (w : Nat) =>
