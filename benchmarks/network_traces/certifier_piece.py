@@ -95,9 +95,13 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   (``scan_zk.py --class CLASS --v3c V3C/window`` in CR_SCAN_ARGS: the window's committed scan state and slot entries):
   a reject is DIR/answer.json as the piece's, an accept DIR/`CHAINED`. **period** runs once V3c's audit wrote
   V3C/period.json: steps 1, 2 and 4 again on the chain's kept report (no chain runs), then step 5 on the rows case whose
-  one compute audit is V3C/period.json (`scan_period.rows_case`), whose answer is DIR/answer.json; it answers nothing
+  one compute audit is V3C/period.json (`scan_period.rows_case`), held to the class circuit of the verifier's own
+  window-circuit record beside V3C (`class_circuit`); its answer is DIR/answer.json. The check reads an audit's state
+  entry among its ``roots`` and its ``registered`` alone, and V3c's registration holds its `SCAN_STATE` in its window's
+  ``activations.values`` alone, so a served window's answer is a reject at the state tie. It answers nothing
   where the chain step refused (DIR/`REFUSED`) or rejected (its answer stands), and refuses where it left no
-  DIR/`CHAINED` or the chain's scan read no V3c window or another. Each releases through its own hold and refuses as
+  DIR/`CHAINED`, the chain's scan read no V3c window or another, or V3C has no window-circuit record beside it. Each
+  releases through its own hold and refuses as
   the piece does, keeping ``served_verdicts.sh``'s logs (`LOGS`).
 * **relay**: a TCP relay from 127.0.0.1:``--listen`` to 127.0.0.1:``--to``, the local gate's tunnel.
 * **front --session** and **close** put the gate's relay session (`auditor.py`'s "A relay session") around the served
@@ -720,17 +724,29 @@ def period_check(exe: str, case: dict, d: Path) -> dict:
         raise NotRun(f"network-period check: {type(e).__name__}: {e}") from None
 
 
-def case_of(warden: Path, scan: Path, v3c: Path | None = None) -> dict:
+def case_of(warden: Path, scan: Path, v3c: Path | None = None, circuit: str | None = None) -> dict:
     import scan_period as SP
     try:
-        return SP.rows_case(warden, scan, v3c=v3c)
+        return SP.rows_case(warden, scan, v3c=v3c, circuit=circuit)
     except (SystemExit, OSError, KeyError, ValueError) as e:
         raise NotRun(f"the period's rows case: {type(e).__name__}: {e}") from None
 
 
+def class_circuit(v3c: Path) -> str:
+    """The class circuit V3c's audit is held to: the Program of the verifier's own window-circuit record beside V3C
+    (`served_verdicts.sh`'s ``window-circuit-w<K>-<class>.json`` beside ``v3c-w<K>-<class>``,
+    `scan_period.circuit_of_record`); `NotRun` without one."""
+    import scan_period as SP
+    try:
+        return SP.circuit_of_record(v3c.parent / f"window-circuit-{v3c.name.removeprefix('v3c-')}.json")
+    except (SystemExit, OSError, ValueError) as e:
+        raise NotRun(f"the verifier's window-circuit record: {type(e).__name__}: {e}") from None
+
+
 def v3c_case(v3c: Path) -> Callable[[Path, Path], dict]:
-    """The period step's case: `case_of` with V3C/period.json as its one compute audit, once the chain's scan read
-    V3C/window's trees (its ``summary.json``'s ``v3c``); `NotRun` for a scan of no V3c window or another."""
+    """The period step's case: `case_of` with V3C/period.json as its one compute audit, held to the verifier's class
+    circuit (`class_circuit`), once the chain's scan read V3C/window's trees (its ``summary.json``'s ``v3c``); `NotRun`
+    for a scan of no V3c window or another, or no window-circuit record."""
     def case(warden: Path, scan: Path) -> dict:
         try:
             read = (json.loads((scan / "summary.json").read_text()).get("v3c") or {}).get("window")
@@ -739,7 +755,7 @@ def v3c_case(v3c: Path) -> Callable[[Path, Path], dict]:
         if read != str(v3c / "window"):
             raise NotRun(f"the chain's scan read {read or 'no'} V3c window, not {v3c / 'window'}: run the chain step "
                          "on this V3c")
-        return case_of(warden, scan, v3c / "period.json")
+        return case_of(warden, scan, v3c / "period.json", class_circuit(v3c))
     return case
 
 
