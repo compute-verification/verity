@@ -15,7 +15,7 @@ HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.paren
 sys.path.insert(0, str(HERE.parent))
 
 from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
-from test_a0_archive_once import window  # noqa: E402
+from test_template_audit_archive_once import window  # noqa: E402
 
 
 def kept_window(tmp_path: Path) -> tuple[str, list[tuple[dict, Path]], a0.VerifyMembers]:

@@ -127,9 +127,9 @@ record's (`RunsAs.accepted_registered`), each at a registration with the run's o
 table. -/
 theorem checks_of_accepted {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Lean.Json}
     (ha : SpotFlock.RunsAs.AcceptedTwo i it j) :
-    (∃ v, Spot.Registration.check i.record v = #[] ∧
+    (∃ v, Spot.Docket.check i.record v = #[] ∧
         SpotFlock.HeldOf.namesOf v = SpotFlock.HeldOf.namesOf i.params.verifier) ∧
-      ∃ v, Spot.Registration.check it.record v = #[] ∧
+      ∃ v, Spot.Docket.check it.record v = #[] ∧
         SpotFlock.HeldOf.namesOf v = SpotFlock.HeldOf.namesOf it.params.verifier := by
   obtain ⟨n, rule, samplingDesign, workTable, resolved, draw, rest, read, ns, -, -, -, -, h₁, -, -, -, -, h₂⟩ :=
     SpotFlock.RunsAs.accepted_registered ha

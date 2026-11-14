@@ -4,7 +4,7 @@ of the same case (`protocol`: the case decoded as the Lean decodes it, its event
 answer but its reason, the certified `q_bytes`, `eps` and the profile among them. Both refuse a session paced at one
 window in flight, which no property of the Lean covers.
 
-The cases are a small period on one node (`period.run` on a clock the test sets): honest, its prover reading a store
+The cases are a small period on one node (`period_prover.run` on a clock the test sets): honest, its prover reading a store
 that dropped every other chunk, and stopped before its last window is verified; every recorded scenario
 (`ra_cases.SCENARIOS`) as a case; sampled honest sessions of sampled shapes; and recorded ones with one or two edits
 (`test_drawn.edited`) or one edit of the case's framing."""
@@ -25,6 +25,7 @@ from test_drawn import BASES, edited, shaped
 from verity_difftest import canonical
 from verity_difftest import protocol as P
 
+from verity.protocols.accounting.poub.prover import period_prover
 from verity.protocols.accounting.poub.verifier import audit, period
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -120,7 +121,7 @@ def periods() -> dict[str, period.Run]:
     out = {}
     for name, kw in (("honest", {}), ("dropping", {"cheat": M.dropping(lambda j: j % 2 == 1)}), ("unverified", {"verify": 1})):
         c = M.Clock(10 ** 9, 1_000)
-        out[name] = period.run("n0", STORE, COINS, clock=c, sleep_until=c.sleep_until, entropy=M.Entropy(b"salts"), **kw)
+        out[name] = period_prover.run("n0", STORE, COINS, clock=c, sleep_until=c.sleep_until, entropy=M.Entropy(b"salts"), **kw)
     return out
 
 
