@@ -236,7 +236,7 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
 
    The challenger's party sends nothing but these rows. The indices and the end frame go on the prover's connection;
    the release goes in the report on the party's stdout, to the node that started it, as do the setup salt's source and
-   a refusal, which names the field and the rule the request breaks and quotes none of its bytes. The auditor host's
+   a refusal, which names the field and the rule the request breaks and quotes none of its bytes. The auditor device's
    gate starts a party only for a caller whose address is a registered node's, and keeps the party's log on the host
    for root alone (`verity/protocols/accounting/poub/device/live_verifier/README.md`), so nothing of a party leaves its
    host but into the node.
@@ -1095,8 +1095,8 @@ Two gaps stood between these statements and the deployed verifier:
   `trusted-device` (`verity.claims`): "the auditor's device runs its stated code, timing
   included, on a host the developer doesn't control, with its CPU isolated from other tenants and a monotonic clock; the
   host never restores its earlier state". This log is part of that state, as is the LMS leaf state. A run's record
-  says `trusted-host` holds only for a session signed under a key the tree pins for the challenger's host
-  (`memory_challenger.AUDITOR_KEYS`, read by `memory_challenger.trusted_host`), never from the host names, which are the
+  says `trusted-device` holds only for a session signed under a key the tree pins for the challenger's host
+  (`memory_challenger.AUDITOR_KEYS`, read by `memory_challenger.trusted_device`), never from the host names, which are the
   run's own: a session under any other key, a pin the run passes itself among them, is a rehearsal's, with no bound.
   Under one secret a reused id would also replay the coins, which `CoinTree.draw` derives from the secret and the id.
   The composed check accepts a session only under the id the auditor designated (`run.check`'s `session_id`), so an

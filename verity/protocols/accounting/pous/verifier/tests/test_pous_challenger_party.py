@@ -377,8 +377,8 @@ def test_a_rehearsals_challenger_under_a_key_that_is_not_the_pin_bounds_nothing(
 
 
 def test_the_auditors_host_under_its_pinned_key_holds() -> None:
-    """vy-auditor-2 under a key the tree pins for it: `trusted-host` holds, and setup is still the developer's to check,
-    the verifier on the auditor's host too. The pins are the role's module's alone."""
+    """vy-auditor-2 under a key the tree pins for it: `trusted-device` holds, and setup is still the developer's to check,
+    the verifier on the auditor's device too. The pins are the role's module's alone."""
     where = CS.placement("vy-dc-h200-3", "vy-auditor-2", PINNED, verifier="vy-auditor-2")
     assert where == {
         "parties": {"memory_challenger": "vy-auditor-2", "prover": "vy-dc-h200-3", "verifier": "vy-auditor-2"},
@@ -392,7 +392,7 @@ def test_the_auditors_host_under_its_pinned_key_holds() -> None:
         mc.AUDITOR_KEYS["on-node-rehearsal"] = frozenset({OTHER})
 
 
-def test_the_key_not_the_names_decides_trusted_host() -> None:
+def test_the_key_not_the_names_decides_trusted_device() -> None:
     """The name vy-auditor-2 is the run's to give: under any key but one pinned for it the record is a rehearsal's, and
     under a pinned key it holds whatever the names say, the prover's node named vy-auditor-2 too."""
     assert CS.placement("vy-dc-h200-3", "vy-auditor-2", OTHER)[CS.PREMISE] == (

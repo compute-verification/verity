@@ -55,7 +55,7 @@ same sessions, which no second session replaces. With neither, one process does 
    the run protocol's own answer on it (``case.json``, ``answer.json``: the composite's piece, `served_case.write`) go to
    ``--private`` (by default
    ``SERVE_DIR/private/pous/w<WINDOW>``, 0700), never to ``DIR``. The profile carries the point, the certificate, the
-   placement and the weights' public properties: their model, count and size. The placement's `trusted-host` holds
+   placement and the weights' public properties: their model, count and size. The placement's `trusted-device` holds
    only for a session signed under a key `memory_challenger.AUDITOR_KEYS` pins for the challenger's host: a run's
    own ``--trusted-sha512`` gets its session accepted, but its record is a rehearsal's, with no bound. Its ``setup``
    is `challenger_session.SETUP`: the tie ran on the developer's node, so every verdict rests on setup checked by the

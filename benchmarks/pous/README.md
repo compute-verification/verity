@@ -181,7 +181,7 @@ Before the card it also loads `libp2v1.so` once in the sessions' Python: a libra
 there, and so does a node that refuses `setarch -R`, where the library doesn't build and `P2_LIB` names one built
 elsewhere.
 PoUS's verdict trusts the one challenger key `--trusted-sha512` pins, by default one the tree pins for vy-auditor-2
-(`memory_challenger.AUDITOR_KEYS`). Its record says `trusted-host` holds only for a session signed under a key the
+(`memory_challenger.AUDITOR_KEYS`). Its record says `trusted-device` holds only for a session signed under a key the
 tree pins for the host it names, whatever the names say; a run that pins its own key has its session accepted, and its
 record says so (`pous.json`'s `key_pin`, `run`) and is a rehearsal's, with no bound.
 The bandwidth piece collects PoUB-P2's answer. A run that ended while answering, or whose Lean didn't answer, is

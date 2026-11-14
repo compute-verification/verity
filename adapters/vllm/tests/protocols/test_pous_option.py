@@ -268,7 +268,7 @@ def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_
             got = opt.leg(_period_dir(tmp_path, n), NODE, out, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
             assert got["verdict"] == "accept" and got["protocol"] == TEST_PROTOCOL, got["reason"]
             assert got["public"] == {"certified": False, "eps": "0", "s_bits": 0}
-            assert got["profile"]["placement"]["trusted-host"] == (   # the test signer's key is no auditor's pinned key
+            assert got["profile"]["placement"]["trusted-device"] == (   # the test signer's key is no auditor's pinned key
                 "rehearsal: key not the auditor's pinned key, no bound; "
                 f"the memory challenger ran on {AUDITOR}, not the prover's {NODE}")
             doc = json.loads((out / "pous.json").read_text())

@@ -309,8 +309,8 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
 @pytest.mark.parametrize("host", ["on-node-rehearsal", "vy-auditor-2"])
 def test_a_run_that_pins_its_own_key_is_accepted_and_its_record_is_a_rehearsals(served, tmp_path, monkeypatch, host):
     """A run that passes its own challenger key's SHA-512 as the pin has its session accepted under it (`key_pinned`),
-    and its record says the pin was the run's (`key_pin`) and that `trusted-host` is a rehearsal's, with no bound:
-    the tree pins another key for vy-auditor-2 and none for any other name, so naming the auditor's host changes
+    and its record says the pin was the run's (`key_pin`) and that `trusted-device` is a rehearsal's, with no bound:
+    the tree pins another key for vy-auditor-2 and none for any other name, so naming the auditor's device changes
     nothing."""
     answer, _ = _run(served, tmp_path, monkeypatch, host=host)
     assert answer["verdict"] == "accept", answer["reason"]

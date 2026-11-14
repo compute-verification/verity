@@ -27,8 +27,8 @@ its own host under `SETUPS`, from which PoUB's verifier on the same host builds 
 `side_of(period, node, device)` is where `period.json` puts the challenger's side (`stream.Side`, started by `command`),
 `salt(side, audit, commitment)` asks it for a salt, and `session(side, request, respond)` is PoUS's: it starts the
 side, connects to it and answers each index with `respond(index)` (`answer`). `placement` says which host ran each
-party and whether `trusted-host`'s premise holds, which it does only for a session signed under a key the memory
-challenger role pins for the host named (`memory_challenger.trusted_host`), and that setup was checked by the developer,
+party and whether `trusted-device`'s premise holds, which it does only for a session signed under a key the memory
+challenger role pins for the host named (`memory_challenger.trusted_device`), and that setup was checked by the developer,
 not the auditor (`SETUP`).
 """
 
@@ -210,14 +210,14 @@ def side_of(period: Mapping[str, Any], node: str, device: str | Path) -> Side:
 
 def placement(node: str, host: str, key_sha512: str | None, *, verifier: str | None = None) -> dict[str, Any]:
     """Which host ran each party, what those names say (`kind`: ``own-host``, a challenger host other than the node, or
-    ``prover-node``), `trusted-host`'s premise, `memory_challenger.trusted_host`'s for the session's key, and `SETUP`
+    ``prover-node``), `trusted-device`'s premise, `memory_challenger.trusted_device`'s for the session's key, and `SETUP`
     under ``setup``, wherever the verifier ran: the names are the run's own, so they bound nothing, and the premise
     holds only for `key_sha512`, the SHA-512 of the key the session was signed under, pinned for `host`."""
     kind = "own-host" if host != node else "prover-node"
     names = (f"the memory challenger ran on {host}, not the prover's {node}" if kind == "own-host" else
              f"the memory challenger ran on the prover's node {node}")
     return {"parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node}, "kind": kind,
-            PREMISE: mc.trusted_host(host, key_sha512, names), "setup": SETUP}
+            PREMISE: mc.trusted_device(host, key_sha512, names), "setup": SETUP}
 
 
 def session(side: Side, request: Mapping[str, Any], respond: Callable[[int], bytes]) -> dict[str, Any]:
