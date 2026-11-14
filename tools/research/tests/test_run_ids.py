@@ -4,6 +4,8 @@ as before. Each test fixes the id source (`runs.new_run_id`), so none depends on
 from __future__ import annotations
 
 import json
+import signal
+import subprocess
 import sys
 from pathlib import Path
 
@@ -105,3 +107,49 @@ def test_a_launch_gets_its_fresh_dir_made_and_empty_and_a_refused_one_leaves_non
     assert _run(runs, "--queue", "--project", "p", "--source", str(tmp_path), "--max-min", "1") == 3
     assert seen[1] == B and "placement refused" in capsys.readouterr().err
     assert [d.name for d in runs.iterdir()] == [A], "neither run wrote in its dir (the launch is a stand-in), so neither stays"
+
+
+#: a launcher held inside its run's window: its dir taken, nothing written in it yet (a stand-in `_prepare_store` says so on
+#: stdout, then waits on stdin)
+HELD = f"""
+import sys
+from research import cli
+from research import runs as R
+
+R.new_run_id = lambda now=None: {A!r}
+
+def held(*a, **kw):
+    print("held", flush=True)
+    sys.stdin.read()
+
+cli._prepare_store = held
+sys.exit(cli.main(["run", "--runs-dir", sys.argv[1], "--no-sampler", "--", sys.executable, "-c", "pass"]))
+"""
+
+
+def test_a_launcher_stopped_by_sigterm_inside_the_window_leaves_no_dir(tmp_path):
+    runs = tmp_path / "runs"
+    child = subprocess.Popen([sys.executable, "-c", HELD, str(runs)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, text=True)
+    assert child.stdout.readline() == "held\n", child.communicate()[1][-2000:]
+    assert [d.name for d in runs.iterdir()] == [A], "the dir is taken before the store is prepared"
+    child.send_signal(signal.SIGTERM)
+    _, err = child.communicate()
+    assert child.returncode == 128 + signal.SIGTERM, err[-2000:]
+    assert list(runs.iterdir()) == [], "the taken dir held nothing, so it is removed"
+
+
+def test_a_run_takes_sigterm_as_its_exit_while_it_runs_and_puts_the_handler_before_back(tmp_path, monkeypatch):
+    def mine(signum, frame):
+        raise AssertionError("not delivered here")
+
+    inside = []
+    prepare = cli._prepare_store
+    monkeypatch.setattr(cli, "_prepare_store", lambda *a, **kw: inside.append(signal.getsignal(signal.SIGTERM)) or prepare(*a, **kw))
+    before = signal.signal(signal.SIGTERM, mine)
+    try:
+        assert _run(tmp_path / "runs") == 0
+        assert signal.getsignal(signal.SIGTERM) is mine
+    finally:
+        signal.signal(signal.SIGTERM, before)
+    assert inside == [cli._exit_on_sigterm]

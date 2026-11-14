@@ -406,7 +406,13 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
 
 def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[str], clones: list[Path]) -> int:
     """`research run` once its place is settled: here, on --on's machine, on the queue's, or where `--on auto` sent it. A run dir
-    it took (`_take_run_dir`) that no run wrote in is removed as it returns."""
+    it took (`_take_run_dir`) that no run wrote in is removed as it returns. A run not claimed takes SIGTERM as SystemExit (exit
+    143) until then, so a launcher stopped that way removes it too; the handler it had before is put back. SIGKILL leaves it."""
+    import signal
+    import threading
+
+    own = not ns.claimed and threading.current_thread() is threading.main_thread()
+    before = signal.signal(signal.SIGTERM, _exit_on_sigterm) if own else None
     try:
         return _run_placed_in(ns, harness_opts, command, clones)
     except R.RunDirTaken as e:
@@ -415,6 +421,12 @@ def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     finally:
         if (taken := getattr(ns, "taken_dir", None)) is not None:
             R.drop_run_dir(taken)
+        if own:
+            signal.signal(signal.SIGTERM, signal.SIG_DFL if before is None else before)
+
+
+def _exit_on_sigterm(signum: int, _frame: object) -> None:
+    raise SystemExit(128 + signum)
 
 
 def _take_run_dir(ns: argparse.Namespace, root: Path) -> Path:
@@ -1091,7 +1103,7 @@ def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[
     if ns.campaign:
         env_out["RESEARCH_CAMPAIGN"] = ns.campaign
     conds = None
-    capture = Path(tempfile.mkdtemp(prefix=f"research-{run_id}-")) / E.DIRTY_CAPTURE   # the run dir is made after this returns
+    capture = Path(tempfile.mkdtemp(prefix=f"research-{run_id}-")) / E.DIRTY_CAPTURE   # the run dir holds nothing yet
     try:
         hint = json.loads(ns.source_identity) if ns.source_identity else None
         shipped = getattr(a, "tree_sha", None)
