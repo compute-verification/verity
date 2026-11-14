@@ -38,7 +38,7 @@ exactly when `f` sends it into `X'`, what leaves `X'` in the image of `A` under 
 theorem Placed.egress_onto (A : Placed L) (f : L → L') (X : Finset L) (X' : Finset L')
     (hX : ∀ p, p ∈ X ↔ f p ∈ X') (I : Set ℕ) : (A.onto f).egress X' I = A.egress X I := by
   unfold Placed.egress
-  refine congrArg A.width (Finset.filter_congr fun g _ => ?_)
+  refine congrArg A.width (@Finset.filter_congr _ _ _ (_) (_) _ fun g _ => ?_)
   exact and_congr (hX (A.x g)).symm (exists_congr fun h => and_congr (not_congr (hX (A.x h)).symm) Iff.rfl)
 
 end Onto
@@ -203,8 +203,10 @@ theorem egress_node0 : 0 < wire.egress (site.placesIn (site.under "node0")) (Set
   unfold Placed.egress Circuit.width
   refine lt_of_lt_of_le (by decide : 0 < wire.w (0 : Fin 2))
     (Finset.single_le_sum (f := wire.w) (fun _ _ => Nat.zero_le _) ?_)
-  simp only [mem_filter, mem_univ, true_and]
-  exact ⟨hin, (1 : Fin 2), hout, ⟨Nat.zero_le _, Nat.zero_lt_one⟩, by decide⟩
+  have hr : (0 : Fin 2) ∈ wire.reads (1 : Fin 2) := Finset.mem_singleton_self _
+  classical
+  rw [Finset.filter_congr_decidable]
+  exact mem_filter.2 ⟨mem_univ _, hin, (1 : Fin 2), hout, ⟨Nat.zero_le _, Nat.zero_lt_one⟩, hr⟩
 
 end RegisteredSite
 

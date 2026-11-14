@@ -29,6 +29,7 @@ theorem mem_placesIn {X : Finset String} {p : S.Place} : p ∈ S.placesIn X ↔ 
 /-- A place is in the subtree at `i` exactly when it is reached from `i` through the locations registered under
 one another. -/
 theorem mem_under {i j : String} : j ∈ S.under i ↔ j ∈ S.places ∧ Relation.ReflTransGen S.Child i j := by
+  classical
   unfold under
   exact mem_filter
 
