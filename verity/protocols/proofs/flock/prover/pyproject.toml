@@ -219,7 +219,7 @@ paths = [
 
 [[tool.verity.tests.reads]]
 tests = [
-    "tests/test_lean_draw_laws.py",
+    "tests/test_lean_sample_designs.py",
     "tests/test_lean_ks_form.py",
     "tests/test_lean_plain_hidden_tables.py",
     "tests/test_lean_record_checks.py",

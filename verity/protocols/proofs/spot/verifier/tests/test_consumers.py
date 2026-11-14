@@ -34,13 +34,13 @@ LEAN_VECTORS = Path(__file__).parent / "fixtures" / "exfiltration_lean.json"
 LEAN_TWO_VECTORS = Path(__file__).parent / "fixtures" / "exfiltration_two_lean.json"
 
 
-def a4_law(ks: dict) -> Stratified:
+def a4_sampling_design(ks: dict) -> Stratified:
     return Stratified(tuple(Stratum(name, size, ks[name]) for name, size in A4_SIZES.items()))
 
 
-def one_level(law) -> IntegrityProfile:
-    n = law.population if isinstance(law, Stratified) else sum(A4_SIZES.values())
-    return IntegrityProfile((Level("unit"),), (n,), {"unit": law}, DELTA)
+def one_level(sampling_design) -> IntegrityProfile:
+    n = sampling_design.population if isinstance(sampling_design, Stratified) else sum(A4_SIZES.values())
+    return IntegrityProfile((Level("unit"),), (n,), {"unit": sampling_design}, DELTA)
 
 
 def mib(bits: float) -> float:
@@ -59,9 +59,9 @@ def test_infiltration_is_the_output_bit_weighted_bound_and_exfiltration_adds_the
     out = exfiltration_bound(p, {"unit": segments})
     assert 9.39 < mib(got) < 9.41 and out == got + location_bits(p) and 9.48 < mib(out) < 9.49
     for ks, lo, hi, out_lo, out_hi in ((FLOOR, 8.80, 8.82, 8.88, 8.90), (BY_BITS, 1.49, 1.51, 1.90, 1.92)):
-        p = one_level(a4_law(ks))
+        p = one_level(a4_sampling_design(ks))
         got, out = infiltration_bound(p, A4_BITS), exfiltration_bound(p, A4_BITS)
-        assert got == a4_law(ks).harm_bound(A4_BITS, DELTA) and lo < mib(got) < hi
+        assert got == a4_sampling_design(ks).harm_bound(A4_BITS, DELTA) and lo < mib(got) < hi
         assert out == got + location_bits(p) and out_lo < mib(out) < out_hi
 
 
@@ -137,15 +137,15 @@ def test_stratified_miss_is_the_lean_certified_greedy_fill():
     data = json.loads(LEAN_VECTORS.read_text())
     assert len(data["stratified"]) == 16
     for v in data["stratified"]:
-        law = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k) in enumerate(v["strata"])))
-        names = [s.name for s in law.strata]
+        sampling_design = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k) in enumerate(v["strata"])))
+        names = [s.name for s in sampling_design.strata]
         K, H, b, admissible, delta = v["K"], v["H"], v["bits"], v["admissible"], 2.0 ** v["delta_log2"]
         after, at = dict(zip(names, v["fill_next"])), dict(zip(names, v["fill"]))
         assert sum(after.values()) == K + 1 and sum(at.values()) == K
-        assert law.miss(K + 1) == law.escape(after) < Fraction(delta) <= law.escape(at) == law.miss(K)
-        n = law.population
-        p = IntegrityProfile((Level("unit"),), (n,), {"unit": law}, delta)
-        assert law.count_bound(delta) == p.bound() == K and H == b * K
+        assert sampling_design.miss(K + 1) == sampling_design.escape(after) < Fraction(delta) <= sampling_design.escape(at) == sampling_design.miss(K)
+        n = sampling_design.population
+        p = IntegrityProfile((Level("unit"),), (n,), {"unit": sampling_design}, delta)
+        assert sampling_design.count_bound(delta) == p.bound() == K and H == b * K
         assert H <= p.harm_bound(b) < H + b
         loc = location_bits(p)
         if 2 * K >= n:
@@ -194,7 +194,7 @@ def test_compute_is_the_work_weighted_bound():
     two = IntegrityProfile(("group", "check"), (512, 4), {"group": Bernoulli(Fraction(1, 2)), "check": Subset(2)}, 0.01)
     assert compute_bound(two, 1) == two.worst_case(lambda m: m)
     work = {"gemm2048": 2048, "gemm8192": 8192, "rope": 128}
-    assert compute_bound(one_level(a4_law(FLOOR)), work) == a4_law(FLOOR).harm_bound(work, DELTA)
+    assert compute_bound(one_level(a4_sampling_design(FLOOR)), work) == a4_sampling_design(FLOOR).harm_bound(work, DELTA)
 
 
 def test_a_two_stage_profile_is_read_for_infiltration_and_exfiltration_and_refused_for_compute():
@@ -243,7 +243,7 @@ def test_the_two_stage_bound_is_at_least_the_footprint_count_evaluated_in_lean()
 def test_an_application_reads_nothing_the_profile_does_not_bound():
     """Weighting every proof block 1 reads the profile's own count (from above, within one proof block), for every sampling design;
     infiltration reads the same count, and exfiltration adds the location term to it."""
-    for p in (one_level(Subset(1024)), one_level(a4_law(FLOOR)), one_level(a4_law(BY_BITS))):
+    for p in (one_level(Subset(1024)), one_level(a4_sampling_design(FLOOR)), one_level(a4_sampling_design(BY_BITS))):
         assert p.bound() <= compute_bound(p, 1) < p.bound() + 1 + 1e-6 * p.bound()
         assert infiltration_bound(p, 1) == compute_bound(p, 1)
         assert exfiltration_bound(p, 1) == compute_bound(p, 1) + location_bits(p)

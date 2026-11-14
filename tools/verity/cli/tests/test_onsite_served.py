@@ -20,7 +20,7 @@ from verity.protocol import Channel
 from verity.channel import Refused
 from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.policy.inference_only.verifier import parties as IO
-from verity.protocols.proofs.spot.verifier.service import Law
+from verity.protocols.proofs.spot.verifier.service import SamplingDesign
 from verity_cli import run as R
 
 ROOT = Path(R.ROOT)
@@ -312,7 +312,7 @@ def test_a_served_windows_rule_that_is_no_rate_is_refused_by_name_with_the_rate_
     one, and a configuration whose rule is a fixed count, or a work rate, for which the window has no work table, is
     refused at its check, by name, with the rate to state in its place."""
     cfg = K.parse(CONFIG.read_text())
-    assert Law(cfg["service"]["law"]).text == cfg["service"]["law"]
+    assert SamplingDesign(cfg["service"]["law"]).text == cfg["service"]["law"]
     K.check(cfg, REG.components, REG.workloads)
     cfg["service"]["law"] = fixed
     with pytest.raises(Refused) as e:
@@ -345,7 +345,7 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
     assert hooks["SLOTS"] == "4" and not {"POUS_CMD", "POUS_ARGS", "WIPE_CMD"} & set(hooks)
     # the served window's rule is the configuration's, a rate: its audit states it to its stream, which takes no fixed count
-    assert Law(hooks["V3C_LAW"]).text == K.parse(CONFIG.read_text())["service"]["law"]
+    assert SamplingDesign(hooks["V3C_LAW"]).text == K.parse(CONFIG.read_text())["service"]["law"]
     kept = set(VARIABLES) - {"PRECISION", "WINDOW_STEPS", "DEVELOPMENT"}
     assert {k: hooks.get(k) for k in kept} == {k: VARIABLES[k] for k in kept}
     assert {"SERVE_ARGS", "H1_GATE", "CERTIFIER_FRONT", "CERTIFIER_CMD"} <= set(hooks)

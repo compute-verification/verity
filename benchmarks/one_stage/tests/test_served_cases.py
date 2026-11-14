@@ -89,11 +89,11 @@ def v1_case(program, query, previous: str | None = None, design: dict | None = N
     ``design`` (one unit of each stratum when None)."""
     part = P.partition(program, query)
     ports = {"x": {"leaves": 8, "domain": "02" * 64}}
-    law = design or {"law": "stratified", "k": 1}
-    rec = R.record(program, query, law, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
+    sampling_design = design or {"law": "stratified", "k": 1}
+    rec = R.record(program, query, sampling_design, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
                    {"kind": "served", "run": "r-served-cases", "row": 0}, previous=previous,
                    registered=[{"value": "weights/w", "root": "ab" * 64, "leaves": 8, "words": 4, "domain": "cd" * 64}])
-    params = RP.params(program, query, law, ports, None, "1/100", partition=part)
+    params = RP.params(program, query, sampling_design, ports, None, "1/100", partition=part)
     evidence = {"draw": {"units": [0]}, "sessions": ["5e" * 64], "verdicts": {"m0": {"accepted": True}}}
     return {"commitment": codec.canonical_json(rec).hex(), "evidence": codec.canonical_json(evidence).hex(),
             "params": params}
@@ -103,22 +103,22 @@ def audited_v1_case(program, query, accepted: bool = True) -> dict:
     """v1's case of a whole audit of ``program`` (SPOT difftest's accepted case): its record over the
     window's ports and their window domains, a stratified sample's first proof blocks of each stratum proved, the
     verifier's receipt, and the verdict of record ``accepted``."""
-    law, leaf = {"law": "stratified", "k": 2}, "ee" * 64
+    sampling_design, leaf = {"law": "stratified", "k": 2}, "ee" * 64
     part, population = P.partition(program, query), P.units(program, query)
     ports = {p: {"domain": R.window_domain(PO.program_sha512(program), P.digest(part), p, schema, leaves, "r-test"),
                  "leaves": leaves}
              for p, schema, leaves in (("out", "u16", 2 * population), ("x", "hm96-sha512/row/v1", population))}
     roots = {"out": "cd" * 64, "x": "ab" * 64}
-    rec = R.record(program, query, law, S.SCHEME, [{"port": p, "root": roots[p], **ports[p]} for p in ports],
+    rec = R.record(program, query, sampling_design, S.SCHEME, [{"port": p, "root": roots[p], **ports[p]} for p in ports],
                    {"kind": "served", "row": 101, "run": "r-test"}, leaf_layer=leaf)
-    drawn = DR.derive(program, query, law)
+    drawn = DR.derive(program, query, sampling_design)
     units = sorted(u for s in drawn["strata"] for u in [u for lo, hi in s["units"] for u in range(lo, hi)][:s["k"]])
     draw = {**drawn, "population": population, "units": units}
     proved = DR.proved(draw)
     evidence = {"draw": draw, "instances": len(proved), "proved_units": proved,
                 "receipt": R.receipt(rec, "v", received="2026-10-07T00:00:00Z"), "served": None, "session_roots": None,
                 "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": accepted, "of_record": True}}}
-    params = {"anchors": [], "delta": "1/20", "law": law, "leaf_layer": leaf, "log": [], "partition": None,
+    params = {"anchors": [], "delta": "1/20", "law": sampling_design, "leaf_layer": leaf, "log": [], "partition": None,
               "ports": ports, "program": json.loads(codec.canonical_json(codec.encode_program(program))),
               "query": query, "registered": None, "scheme": S.SCHEME, "work_table": None}
     return {"commitment": codec.canonical_json(rec).hex(), "evidence": codec.canonical_json(evidence).hex(),
@@ -241,12 +241,12 @@ def tied_v1_case(w: dict) -> dict:
     program = P.mixed_population_program([(t, SLOTS) for t in templates],
                                          values=[(name, leaves, 16) for name, _, leaves in TABLES])
     query = P.template_instances_query(templates)
-    law, ports = {"law": "stratified", "k": 1}, {"x": {"leaves": 8, "domain": "02" * 64}}
+    sampling_design, ports = {"law": "stratified", "k": 1}, {"x": {"leaves": 8, "domain": "02" * 64}}
     reused = {e["value"]: e for e in w["registered"]}
-    rec = R.record(program, query, law, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
+    rec = R.record(program, query, sampling_design, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
                    {"kind": "served", "run": "r-served-cases", "row": 0}, previous=R.digest(w),
                    registered=[{**reused[value], "value": name} for name, value, _ in TABLES])
-    params = RP.params(program, query, law, ports, None, "1/100", partition=P.partition(program, query), log=[w],
+    params = RP.params(program, query, sampling_design, ports, None, "1/100", partition=P.partition(program, query), log=[w],
                        registered={name: 1 for name, _, _ in TABLES},
                        outputs={name: {"record": R.digest(w), "value": value} for name, value, _ in TABLES},
                        schemas={name: G.SCHEMA_V2 for name, _, _ in TABLES})

@@ -85,8 +85,8 @@ def test_the_challengers_stream_has_the_toys_cells_and_its_interior_program():
     assert (stream.cells, stream.counts, stream.n_rho) == (T.N_T, (1,) * len(T.N_T), T.N_RHO)
     win = T.interior_window("00" * 64, SAMPLE)
     assert P.program_digest(stream.interior_program(Q)) == P.program_digest(win.program)
-    law = S.second_law(list(SAMPLE), stream.cells, stream.counts)
-    assert [tuple(u) for s in law["strata"] for u in s["units"]] == [
+    sampling_design = S.second_sampling_design(list(SAMPLE), stream.cells, stream.counts)
+    assert [tuple(u) for s in sampling_design["strata"] for u in s["units"]] == [
         (m.base + i * n, m.base + (i + 1) * n) for m, n in zip(win.members, T.N_T) for i in range(Q)]
 
 

@@ -29,7 +29,7 @@ RUN_SH = REPO / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" 
 #: where the partition files are kept: beside this benchmark's drivers and beside the one-stage audit's
 KEPT = (BENCH, REPO / "benchmarks" / "one_stage")
 #: the script's variable for the kind of its stand-in's rules, and a partition file's key for the rule it states
-VAR, KEY = "LAW", "law"
+VAR, KEY = "SAMPLING_DESIGN", "law"
 #: the stand-in's window a rank (`tests.pipeline.served_tp --world 2 --I 256`): its one template and its proof blocks
 STANDIN, UNITS = "SiluMul_v2{I=256}", 8
 RATE = "a rate (rate:NUM/DEN, stratified-rate:NUM/DEN or work-rate:NUM/DEN)"
@@ -53,7 +53,7 @@ def rule_of(text: object) -> tuple[S.Selection | None, str | None]:
     """``text`` as a stream's rule, as `a5.stream_of` makes it of what the audit states, or why a stream refuses it: a
     text that is no rate, or a Bernoulli design, which `Stream.register` refuses. -> (the rule, None) or (None, why)."""
     try:
-        rule = S.Law(text)
+        rule = S.SamplingDesign(text)
     except ValueError as e:
         return None, str(e)
     return (None, S.BERNOULLI) if rule.text.startswith("bernoulli") else (rule, None)
@@ -101,10 +101,10 @@ def test_each_rule_the_stand_in_states_is_a_rate_whose_design_its_window_registe
     program, query = population_program([(SRW.template(STANDIN).fn, UNITS)])
     for plain, forged, text in rules:
         rule, _why = rule_of(text)
-        names = S.selection_law(rule, UNITS, S.selection_sizes(rule, program, query))
-        read = SRW.law_of(text)
+        names = S.selection_sampling_design(rule, UNITS, S.selection_sizes(rule, program, query))
+        read = SRW.sampling_design_of(text)
         assert read == {KEY: names[KEY], "rate": text}, (text, read)
-        registers, table = S.params_law(read["rate"], program, query, SRW.work_table_of(read, {STANDIN: UNITS}))
+        registers, table = S.params_sampling_design(read["rate"], program, query, SRW.work_table_of(read, {STANDIN: UNITS}))
         assert registers == names and table is None, (text, registers, names, table)
         assert names["k"] == (UNITS if forged else UNITS // 2), (text, names)
         assert not plain or names[KEY] == "stratified", (text, names)
@@ -117,7 +117,7 @@ def test_the_weights_ties_arm_states_the_rate_of_every_unit_of_the_tie():
     whose sampling design over N proof blocks is work with K = N, every unit sampled, at any N. A rate of fewer would name
     another design than the tie's window registers, and leave units unproved."""
     arm = RUN_SH.read_text().split('elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then', 1)[1].split("\nelse\n", 1)[0]
-    rules = re.findall(r"records_audit\.py audit [^\n]*--law (\S+)", arm)
+    rules = re.findall(r"records_audit\.py audit [^\n]*--sampling-design (\S+)", arm)
     assert rules == ["work-rate:$units/$units"], (
         f"{RUN_SH.name}'s weights tie arm no longer states the rate of every unit of the tie to its records audit "
         f"(`--{KEY} work-rate:$units/$units`): found {rules}; a fixed count is refused by name, and a rate of fewer units "
@@ -128,7 +128,7 @@ def test_the_weights_ties_arm_states_the_rate_of_every_unit_of_the_tie():
         rule, why = rule_of(text)
         assert rule is not None, (text, why)
         program, query = population_program([(SRW.template(STANDIN).fn, units)])
-        names = S.selection_law(rule, units, S.selection_sizes(rule, program, query))
+        names = S.selection_sampling_design(rule, units, S.selection_sizes(rule, program, query))
         assert names == {KEY: "work", "k": units}, (text, names)
 
 

@@ -698,7 +698,7 @@ def build(window_dir: str | Path, drawn: Sequence[int], *, commitment: Commitmen
     (`BINDINGS`), which every template must bind. ``coords(label, offset)``: a unit's coordinates from its label and its
     offset in its labelled run. ``reads(coords, template, port)``: the ``(value, position)`` a unit's port reads of a
     registered value; ``weights``: those values, the prover's side (``program``, ``schema``, ``entry()``, ``path(position)``
-    and the row's string, ``string(position)`` or ``bcs[position]``: `registered.Registered`). ``draw``: the sample's ``law``,
+    and the row's string, ``string(position)`` or ``bcs[position]``: `registered.Registered`). ``draw``: the sample's ``sampling_design``,
     ``source`` and ``receipt`` (default ``{"source": "fixture"}``; a live sample without its receipt is refused). ``workers``:
     processes rebuilding the opened (step, slot) subtrees, one each.
 
@@ -1025,10 +1025,10 @@ def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, 
         if window_domain(win["program"], win["partition"], port, r["schema"], r["leaves"], win["run"]) != r["domain"]:
             bad[f"root:{port}"] = "its domain is not the window-domain rule's over the registration's fields"
     if registration is not None:
-        law = registration["law"]
-        if d.get("law") != law or (law.get("law") == "subset" and len(d["units"]) != law.get("k")):
-            bad["draw:law"] = f"the draw is not one under the registered law {law}"
-        if "record" in d and not (D.check_draw(d["record"], registration, law).ok
+        sampling_design = registration["law"]
+        if d.get("law") != sampling_design or (sampling_design.get("law") == "subset" and len(d["units"]) != sampling_design.get("k")):
+            bad["draw:law"] = f"the draw is not one under the registered law {sampling_design}"
+        if "record" in d and not (D.check_draw(d["record"], registration, sampling_design).ok
                                   and d["record"].get("units") == sorted(d["units"])):
             bad["draw:record"] = "the draw's record is not a draw of its units under the registered law and population"
         reg_roots = {r["port"]: r for r in registration["roots"]}
@@ -1121,16 +1121,16 @@ def step_digest(reg: Mapping[str, Any]) -> str:
     return identity_digest_sha512(STEP_FORMAT, dict(reg)).hex()
 
 
-def step_docket(com: Commitment, weights: Mapping[str, REG.Registered], law: Mapping[str, Any], *, run: str,
+def step_docket(com: Commitment, weights: Mapping[str, REG.Registered], sampling_design: Mapping[str, Any], *, run: str,
                       program: str, block: int, step: int, read_steps: bool = False) -> dict[str, Any]:
-    """The docket of step ``(block, step)`` of ``com`` (the prover's records) under ``law``, naming the registered
+    """The docket of step ``(block, step)`` of ``com`` (the prover's records) under ``sampling_design``, naming the registered
     values ``weights`` its blocks read; ``read_steps``: and the root of every step of ``block`` up to ``step`` (`STEPS_KEY`),
     which ``com`` must hold."""
     steps = _Steps(com)
     reg = {"format": STEP_FORMAT, "run": run, "program": program, "block": block, "step": step,
            "step_root": steps.step(block, step).root.hex(), "slot_roots": [r.hex() for r in steps.roots(block, step)],
            "slots": com.slots, "layout_digest": S.layout_digest(com.layout).hex(), "context": com.context.hex(),
-           "units_per_slot": com.layout.unit_count, "population": com.slots * com.layout.unit_count, "law": dict(law),
+           "units_per_slot": com.layout.unit_count, "population": com.slots * com.layout.unit_count, "law": dict(sampling_design),
            "weights": [{"value": v, "root": w.root.hex()} for v, w in sorted(weights.items())]}
     if read_steps:
         reg[STEPS_KEY] = [{"step": s, "root": steps.step(block, s).root.hex()} for s in range(step + 1)]
