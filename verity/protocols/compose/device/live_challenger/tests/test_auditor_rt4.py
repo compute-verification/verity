@@ -356,7 +356,7 @@ def test_publish_reads_the_hosts_address_from_the_environment_and_ends_at_once_w
     (bin_dir / "ssh").write_text(f'#!/bin/sh\necho "$*" >> {asked}\nexit 9\n')
     (bin_dir / "ssh").chmod(0o755)
     env = {k: v for k, v in os.environ.items() if k != "VY_CHALLENGER_1_HOST"}
-    env |= {"PATH": f"{bin_dir}:{os.environ['PATH']}", "VY_CHALLENGER_STATE": str(tmp_path / "state")}
+    env |= {"PATH": f"{bin_dir}:{env['PATH']}", "VY_CHALLENGER_STATE": str(tmp_path / "state")}
     for words in ([], ["--every", "300"]):
         r = subprocess.run(["bash", script, *words], env=env, capture_output=True, text=True)
         assert r.returncode != 0 and "VY_CHALLENGER_1_HOST: the auditor host's address, or DEST as an argument" in r.stderr

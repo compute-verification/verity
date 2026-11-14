@@ -992,11 +992,12 @@ def test_resolve_project_refuses_to_go_on_without_the_projects_id(tmp_path):
     script = (f". {NEBIUS / 'common.sh'}; nb() {{ echo \"$*\" >> \"$CALLS\"; echo '{{\"items\": []}}'; }}; "
               "resolve_project && echo \"project $PROJECT_ID\"")
     calls = tmp_path / "calls"
+    held = {k: v for k, v in os.environ.items() if not k.startswith("NEBIUS_")}
 
     def resolve(**env: str) -> subprocess.CompletedProcess:
         calls.unlink(missing_ok=True)
         return subprocess.run(["bash", "-c", script], capture_output=True, text=True,
-                              env={"PATH": os.environ["PATH"], "CALLS": str(calls), "XDG_RUNTIME_DIR": str(tmp_path), **env})
+                              env={**held, "CALLS": str(calls), "XDG_RUNTIME_DIR": str(tmp_path), **env})
 
     r = resolve()
     assert r.returncode == 1 and r.stderr.startswith("nebius: NEBIUS_PROJECT_ID is not set: the id of the project") and not calls.exists()

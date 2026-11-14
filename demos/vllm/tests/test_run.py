@@ -20,8 +20,8 @@ CHALLENGER_HOST = "192.0.2.21"
 
 
 def run(tmp_path: Path, *args: str, **env: str) -> subprocess.CompletedProcess:
-    """`run.sh ARGS` in a copy of the demo's tree whose workload is a stand-in (the real one is a fetched fixture), with
-    only ``env`` beside PATH and HOME: the completed run."""
+    """`run.sh ARGS` in a copy of the demo's tree whose workload is a stand-in (the real one is a fetched fixture), in
+    this environment less the address's variable, with ``env`` over it: the completed run."""
     tree = tmp_path / "tree"
     if not tree.exists():
         (tree / "demos" / "vllm").mkdir(parents=True)
@@ -33,8 +33,9 @@ def run(tmp_path: Path, *args: str, **env: str) -> subprocess.CompletedProcess:
         (tree / "adapters" / "vllm" / "workloads" / f"{row}.json").write_bytes(workload)
         (tree / "adapters" / "vllm" / "workloads" / "SHA256SUMS").write_text(
             f"{hashlib.sha256(workload).hexdigest()}  {row}.json\n")
+    held = {k: v for k, v in os.environ.items() if k != "VY_CHALLENGER_1_HOST"}
     return subprocess.run(["bash", str(tree / "demos" / "vllm" / "run.sh"), *args], capture_output=True, text=True,
-                          check=False, env={"PATH": os.environ["PATH"], "HOME": str(tmp_path), **env})
+                          check=False, env={**held, "HOME": str(tmp_path), **env})
 
 
 def envs(got: subprocess.CompletedProcess) -> list[str]:
