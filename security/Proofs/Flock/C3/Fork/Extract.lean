@@ -137,11 +137,8 @@ theorem outHL_of_plays (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (L
     (ho : PlaysT (holoTableCL A H E Lf (e.cls.pubStatement e.regs) e.sch e.cls.hm e.cls.ptLocal e.cls.mPts e.cls.shape
       e.cls.units (fun σ => (e.τ σ).val) e.rsch.sch x.cap) (schedSteps T CT 0 t) o) :
     outHL T CT A H E Lf e x t = some o := by
-  have hex : ∃ out, PlaysT (holoTableCL A H E Lf (e.cls.pubStatement e.regs) e.sch e.cls.hm e.cls.ptLocal
-      e.cls.mPts e.cls.shape e.cls.units (fun σ => (e.τ σ).val) e.rsch.sch x.cap) (schedSteps T CT 0 t) out :=
-    ⟨o, ho⟩
-  rw [outHL, dite_eq_left hex]
-  exact congrArg some (PlaysT.det hex.choose_spec ho)
+  unfold outHL
+  exact playT_of_playsT ho
 
 omit [Fintype K] in
 theorem outHL_lastCoin (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
@@ -250,7 +247,7 @@ theorem regClash_fork {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [
     rw [List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range lane.isLt, hc₂]
     exact regWord_of T CT hp zs dg N k Rw wmsg σ cap hex lane
   refine forkG_zero_of Refine.H512 _ r _ _ (σ.2 ω) hd (leafRun_of_rec zs dg N k Rw wmsg σ hO₂ hO₂ω)
-    (collOf_isColl Refine.H512 _ ⟨o, o₂, ho, Eq.trans (outHL_cap T CT _ _ _ _ _ _) ho₂, Or.inr ?_⟩)
+    (clashPickHL_isColl T CT ho (Eq.trans (outHL_cap T CT _ _ _ _ _ _) ho₂) (Or.inr ?_))
   refine clash₀_of_two Refine.H512 Refine.enc512 Refine.leafPlain _ cap o o₂ hy hy₂ hlt hp₂ hv hv₂ ?_
   rw [← hcol]
   exact fun h => hne (rowFin_inj hv.1 (by simp only [HoloReg.column, List.length_map, List.length_range]) h)
@@ -309,7 +306,7 @@ theorem innerAtLeavesL_reg {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Ty
     intro t t' o o' ht ht' hG hG' ho ho' hc
     obtain ⟨i, hi, hF⟩ := Inner.fork_of_outcomes Refine.H512 _ hr0 (pickOn G pk) s ht ht'
       ((congrArg (StrictCR.IsColl Refine.H512) (pickOn_of hG hG')).mpr
-        (collOf_isColl Refine.H512 _ ⟨o, o', ho, ho', hc⟩))
+        (clashPickHL_isColl T CT ho ho' hc))
     exact hno ⟨ω, i, hi, finds_forkG_refL Refine.H512 pk Q G i _ f (ref ω) id V Tr (σ.2 ω) hVT (fun _ hu => hu)
       (clashPickHL_lastFree T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAt st hp) x) hF⟩
   have hreg : ∀ t o, Game.Outcome (holoInnerAt T CT st hp).game s t → G t →
@@ -390,7 +387,7 @@ theorem regClash_forkτ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type)
     rw [List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range lane.isLt, hc₂]
     exact regWord_ofτ T CT hp τv zs dg N k Rw wmsg σ cap hex lane
   refine forkG_zero_of Refine.H512 _ r _ _ (σ.2 ω) hd (leafRun_of_rec zs dg N k Rw wmsg σ hO₂ hO₂ω)
-    (collOf_isColl Refine.H512 _ ⟨o, o₂, ho, Eq.trans (outHL_cap T CT _ _ _ _ _ _) ho₂, Or.inr ?_⟩)
+    (clashPickHL_isColl T CT ho (Eq.trans (outHL_cap T CT _ _ _ _ _ _) ho₂) (Or.inr ?_))
   refine clash₀_of_two Refine.H512 Refine.enc512 Refine.leafPlain _ cap o o₂ hy hy₂ hlt hp₂ hv hv₂ ?_
   rw [← hcol]
   exact fun h => hne (rowFin_inj hv.1 (by simp only [HoloReg.column, List.length_map, List.length_range]) h)
@@ -450,7 +447,7 @@ theorem innerAtLeavesL_regτ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → 
     intro t t' o o' ht ht' hG hG' ho ho' hc
     obtain ⟨i, hi, hF⟩ := Inner.fork_of_outcomes Refine.H512 _ hr0 (pickOn G pk) s ht ht'
       ((congrArg (StrictCR.IsColl Refine.H512) (pickOn_of hG hG')).mpr
-        (collOf_isColl Refine.H512 _ ⟨o, o', ho, ho', hc⟩))
+        (clashPickHL_isColl T CT ho ho' hc))
     exact hno ⟨ω, i, hi, finds_forkG_refL Refine.H512 pk Q G i _ f (ref ω) id V Tr (σ.2 ω) hVT (fun _ hu => hu)
       (clashPickHL_lastFree T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain (holoAtτ st hp τv) x) hF⟩
   have hreg : ∀ t o, Game.Outcome (holoInnerAtτ T CT st hp τv).game s t → G t →
