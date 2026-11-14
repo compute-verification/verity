@@ -1234,6 +1234,37 @@ def test_r7_holds_a_windows_history_to_the_previous_records_port():
         R.check(rec, prog, Q, **kw, outputs=hist, pinned={"W": "cd" * 64})
 
 
+def test_r7_carries_no_start_past_a_record_the_verdict_log_refused():
+    """With the verifier's verdict log (`verdicts`), an output value reading a port of an earlier record carries where
+    the log names that record accepted or doesn't name it, and is `R7-output-refused` where it names it refused, in the
+    history form and the explicit one alike, after the other R7 codes; a reused registered value is not held to it, and
+    a log in another form is refused before the record is read."""
+    prog = _program()
+    reg = _registered(prog)
+    first, ports = _record(prog, reg)
+    dom = "da" * 64
+    port = {"port": "W", "root": "cd" * 64, "leaves": len(TABLE), "domain": dom}
+    last = R.record(prog, Q, LAW, SCHEME, [*first["roots"], port], {**SERVED, "row": 6},
+                    registered=[{**reg.entry(), "value": "a/16@0", "root": "cd" * 64, "domain": dom}])
+    entry = {**reg.entry(), "root": "cd" * 64, "domain": dom}
+    rec = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=R.digest(last),
+                   registered=[entry])
+    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "log": [last]}
+    d = R.digest(last)
+    for out in ({"W": {"port": "W"}}, {"W": {"record": d, "port": "W"}}):
+        for verdicts in (None, {}, {d: True}, {"ee" * 64: False}):
+            assert R.check(rec, prog, Q, **kw, outputs=out, verdicts=verdicts).ok, (out, verdicts)
+        got = R.check(rec, prog, Q, **kw, outputs=out, verdicts={d: False})
+        assert got.codes == ("R7-output-refused",) and got.detail["R7-output-refused"]["records"] == [d], out
+        assert R.check({**rec, "registered": [{**entry, "root": "ce" * 64}]}, prog, Q, **kw, outputs=out,
+                       verdicts={d: False}).codes == ("R7-held", "R7-output-refused"), out
+    assert R.refused({d: False}, d) and not R.refused({d: True}, d) and not R.refused({}, d)
+    assert R.check(rec, prog, Q, **kw, outputs={"W": {"record": d, "value": "a/16@0"}}, verdicts={d: False}).ok
+    for bad in ([], {d: 0}, {d.upper(): False}, {d[:-2]: False}, {5: False}):
+        with pytest.raises(ValueError):
+            R.check(rec, prog, Q, **kw, outputs={"W": {"port": "W"}}, verdicts=bad)
+
+
 def test_r7_reuses_an_earlier_records_registered_value():
     """A value may reuse an earlier record's registered value (`outputs: {value: {"record", "value"}}`, H1's `a/<K>@<s>` as
     a Commit's AROW, say): its entry takes that entry's domain and root, with no tree of its own, under another name or the

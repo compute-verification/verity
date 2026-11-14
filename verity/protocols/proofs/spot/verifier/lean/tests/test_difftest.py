@@ -523,7 +523,7 @@ def decode_params(j) -> dict:
     keys = keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
-    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool")
+    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool", "verdicts")
                    if isinstance(j, dict) and k in j}
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
@@ -564,6 +564,11 @@ def decode_params(j) -> dict:
     if tied and not (j["tied"] is None or isinstance(j["tied"], list) and all(isinstance(t, str) for t in j["tied"])):
         raise D.Reject("tied values are a list of the program's parameters")
     raw = j
+    if "verdicts" in j:
+        try:
+            R._verdicts(j["verdicts"])
+        except ValueError as e:
+            raise D.Reject(str(e)) from None
     if "pool" in j:
         try:
             pool = R._pool(j["pool"], j["registered"] or {}, j.get("supplied"), j.get("pinned"), j.get("outputs"),
@@ -674,7 +679,8 @@ def _registration_verdict(p: dict, rec) -> Verdict:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
-                   p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"))
+                   p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"),
+                   verdicts=p.get("verdicts"))
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
@@ -6442,6 +6448,41 @@ def test_a_window_opens_the_pool_its_chain_left(pieces):
     for extra in ({"supplied": {"pin": [[{"bytes": GENESIS}]]}}, {"outputs": {"pout": {"port": "x"}}},
                   {"row_schemas": {"pin": G.SCHEMA_SEG}}):
         assert codes({**then, **extra}, record(WINDOW, pout1, carried, [first])) == "reject", extra
+
+
+def test_a_start_is_carried_only_past_a_record_the_verdict_log_accepted(pieces):
+    """Lean and Python agreeing on R7's verdicts: with the verifier's verdict log (`verdicts`, the pool's form), `W` read
+    from an earlier record's port carries where the log names that record accepted or doesn't name it, and is
+    `R7-output-refused` where it names it refused, in the history form and the explicit one alike, after the other R7
+    codes; `W` reusing that record's registered value is not held to it, and a log in another form refuses the
+    verifier's inputs."""
+    s, values, law = REGISTERED_SETUPS[0], {"D": 1, "W": 3}, {"k": 1, "law": "subset"}
+    output = {"root": "c1" * 64, "domain": EARLIER_OUT_DOMAIN}
+    w = s.committed["W", 3].entry()
+    roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
+    log = [R.record(s.program, s.query, law, SCHEME, [*roots, {"port": EARLIER_OUT, "leaves": w["leaves"], **output}],
+                    EARLIER, leaf_layer=LEAF, registered=[{**w, "value": EARLIER_VALUE, **output}])]
+    d = R.digest(log[0])
+    rec = _record_of(s, values, law, WINDOW, log, output=output, fixed=["W"], leaf_layer=LEAF, previous=d)
+    params = {"anchors": [], "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": log, "parameters": s.signature,
+              "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": values,
+              "scheme": SCHEME, "work_table": None}
+
+    def codes(outputs, verdicts=(), r=rec):
+        """The codes with `outputs` and the verdict log `verdicts`, or none where it is `()`."""
+        p = {**params, "outputs": outputs, **({} if verdicts == () else {"verdicts": verdicts})}
+        kind, out = D.replay(REGISTRATION, _json({"params": p, "record": r}), pieces)
+        return json.loads(out)["codes"] if kind == "output" else kind
+
+    moved = {**rec, "registered": [{**e, "root": "ef" * 64} if e["value"] == "W" else e for e in rec["registered"]]}
+    for out in ({"W": {"port": EARLIER_OUT}}, {"W": {"record": d, "port": EARLIER_OUT}}):
+        for verdicts in ((), {}, {d: True}, {"ee" * 64: False}):
+            assert codes(out, verdicts) == [], (out, verdicts)
+        assert codes(out, {d: False}) == ["R7-output-refused"], out
+        assert codes(out, {d: False}, moved) == ["R7-held", "R7-output-refused"], out
+    assert codes({"W": {"record": d, "value": EARLIER_VALUE}}, {d: False}) == []
+    for bad in ([], {d: 0}, {d.upper(): False}, {d[:-2]: False}, None, "x"):
+        assert codes({"W": {"port": EARLIER_OUT}}, bad) == "reject", bad
 
 
 def test_an_arrival_cut_at_a_windows_edge_continues_from_the_pool_it_left(pieces):

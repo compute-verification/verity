@@ -41,6 +41,8 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   (`R6-pool-reset`, `R6-pool-week`, `R6-pool-spent`, `R6-pool-reset-week`), refused in any other form; `pin` is then
   an output value reusing the previous record's `pout` when the window carries its pool (`Registration.Pool.chains`),
   and otherwise a supplied value of the one row `[{"bytes": genesis}]`, which R7 holds to the chain (`R7-pool-chain`);
+  and it may add `verdicts`, its verdict log in the pool's form, which R7 holds each output value's earlier port to
+  (`Registration.portsAccepted`, `R7-output-refused`), refused in any other form;
   and it may add `tied`, a list of the program's parameters, which needs `parameters` with or without `registered`:
   run Inputs whose rows a later check ties to the registrations that computed them, which R8 lets through
   (`Registration.tiedGate`, `R8-tied`), refused in any other form;
@@ -174,6 +176,16 @@ private def logRecord (j : Json) : V Json := do
     throw "a record of the log registers values that are not objects with a string value, root and domain"
   return j
 
+/-- A verdict log (`registration._verdicts`): an object of record digests (lowercase hex of 64 bytes) to whether the
+verifier's run on that record accepted, `what` naming it in the refusal. -/
+private def verdictsOf (j : Json) (what : String) : V (Array (String × Bool)) := do
+  let fail := s!"{what} are an object of record digests to bools"
+  let .obj vs := j | throw fail
+  vs.toArray.mapM fun (d, a) => do
+    let .bool a := a | throw fail
+    if !(d.length == 128 && isHex d) then throw fail
+    return (d, a)
+
 /-- The parameters' pool (`registration._pool`): exactly `{"genesis", "lag", "pin", "pout", "reset", "verdicts",
 "week"}`, `pin` and `pout` two registered values none of `given` (the supplied, pinned and output values) names, `pin`
 with no row format of its own in `schemas` (it takes `pout`'s, `poolValues`), `genesis` lowercase hex of 64 bytes,
@@ -194,11 +206,7 @@ private def poolOf (pj : Json) (registered : Array (String × Nat)) (given : Lis
   let some lag := nat? (getD pj "lag") | throw "the pool's lag is a positive integer"
   if lag == 0 then throw "the pool's lag is a positive integer"
   let some week := nat? (getD pj "week") | throw "the pool's week is a natural"
-  let .obj vs := getD pj "verdicts" | throw "the pool's verdicts are an object of record digests to bools"
-  let verdicts ← vs.toArray.mapM fun (d, a) => do
-    let .bool a := a | throw "the pool's verdicts are an object of record digests to bools"
-    if !(d.length == 128 && isHex d) then throw "the pool's verdicts are an object of record digests to bools"
-    return (d, a)
+  let verdicts ← verdictsOf (getD pj "verdicts") "the pool's verdicts"
   return { pin, pout, genesis, lag, verdicts, reset, week }
 
 /-- `o` with field `k` set to `x`: a new object where `o` is none, and `o` as it is where it is no object. -/
@@ -244,6 +252,7 @@ def paramsParsed (j : Json) : V Params := do
     else keys
   let keys := if (field? j "seed_salt").isSome then keys.push "seed_salt" else keys
   let keys := if (field? j "pool").isSome then keys.push "pool" else keys
+  let keys := if (field? j "verdicts").isSome then keys.push "verdicts" else keys
   let keys := if (field? j "history").isSome then keys.push "history" else keys
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
@@ -381,12 +390,15 @@ def paramsParsed (j : Json) : V Params := do
       | some n, .str p => pure (n, p)
       | _, _ => throw "a declaration's day is not a natural number or its program not a string"
     pure (some (day, ds))
+  let verdicts ← match field? j "verdicts" with
+    | none => pure #[]
+    | some vj => verdictsOf vj "the verdicts"
   let .str d := getD j "delta" | throw "delta is not a ratio"
   let delta ← Core.Ratio.ofString d "delta"
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   let p : Params := { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition,
                                     registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
-                                    declared, seedSalt, pool, tied },
+                                    declared, seedSalt, pool, verdicts, tied },
                       delta, challenger }
   let again := Registration.unwindowed p.verifier
   if !again.isEmpty then
