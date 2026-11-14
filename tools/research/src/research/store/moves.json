@@ -2612,6 +2612,28 @@
     },
     {
       "paths": {
+        "benchmarks/pouw/served_zk/": "verity/protocols/accounting/pouw/prover/kernels/served_zk/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/verifier/lean/Spot/SiteDifftest.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog/SiteDifftest.lean",
+        "verity/protocols/proofs/spot/verifier/lean/Spot/SiteDifftestMain.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog/SiteDifftestMain.lean",
+        "verity/protocols/proofs/spot/verifier/lean/tests/test_site_difftest.py": "verity/protocols/accounting/registration/verifier/lean/tests/test_site_difftest.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/tests/fixtures/sass_gate/": "verity/protocols/accounting/pouw/prover/tests/fixtures/sass_gate/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/verifier/one_stage/registration.py": "verity/protocols/proofs/spot/verifier/one_stage/docket.py"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/one_stage/member_trees.py": "verity/protocols/proofs/spot/verifier/one_stage/member_trees.py",
         "benchmarks/one_stage/served_integrity.py": "verity/protocols/proofs/spot/verifier/one_stage/served_integrity.py",
         "benchmarks/one_stage/verdict_record.py": "verity/protocols/proofs/spot/verifier/one_stage/verdict_record.py",
@@ -2662,6 +2684,9 @@
         "benchmarks/prove_path/tests/test_prove_path.py": "verity/protocols/proofs/spot/prover/tests/test_prove_path.py",
         "benchmarks/prove_path/tests/test_kept_scan.py": "verity/protocols/proofs/spot/prover/tests/test_kept_scan.py",
         "benchmarks/prove_path/tests/test_class_size.py": "verity/protocols/proofs/spot/prover/tests/test_class_size.py",
+        "benchmarks/prove_path/tests/test_run_keep.py": "verity/protocols/proofs/spot/prover/tests/test_prove_path_sh_keep.py",
+        "benchmarks/prove_path/tests/test_run_request_values.py": "verity/protocols/proofs/spot/prover/tests/test_prove_path_sh_request_values.py",
+        "benchmarks/prove_path/tests/test_run_rules.py": "verity/protocols/proofs/spot/prover/tests/test_prove_path_sh_rules.py",
         "benchmarks/sampling_plan/transformer.py": "verity/protocols/proofs/spot/prover/cost/transformer.py",
         "benchmarks/sampling_plan/int8_llama.py": "verity/protocols/proofs/spot/prover/cost/int8_llama.py",
         "benchmarks/sampling_plan/served_window.py": "verity/protocols/proofs/spot/prover/cost/served_window.py",
@@ -2678,28 +2703,6 @@
         "benchmarks/sampling_plan/tests/test_recursion.py": "verity/protocols/proofs/spot/prover/tests/test_cost_recursion.py",
         "benchmarks/prove_path/tests/test_window_cost.py": "verity/protocols/proofs/spot/prover/tests/test_window_cost.py",
         "benchmarks/prove_path/tests/test_class_rows.py": "verity/protocols/proofs/spot/prover/tests/test_class_rows.py"
-      }
-    },
-    {
-      "paths": {
-        "benchmarks/pouw/served_zk/": "verity/protocols/accounting/pouw/prover/kernels/served_zk/"
-      }
-    },
-    {
-      "paths": {
-        "verity/protocols/proofs/spot/verifier/lean/Spot/SiteDifftest.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog/SiteDifftest.lean",
-        "verity/protocols/proofs/spot/verifier/lean/Spot/SiteDifftestMain.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog/SiteDifftestMain.lean",
-        "verity/protocols/proofs/spot/verifier/lean/tests/test_site_difftest.py": "verity/protocols/accounting/registration/verifier/lean/tests/test_site_difftest.py"
-      }
-    },
-    {
-      "paths": {
-        "benchmarks/pouw/tests/fixtures/sass_gate/": "verity/protocols/accounting/pouw/prover/tests/fixtures/sass_gate/"
-      }
-    },
-    {
-      "paths": {
-        "verity/protocols/proofs/spot/verifier/one_stage/registration.py": "verity/protocols/proofs/spot/verifier/one_stage/docket.py"
       }
     }
   ]

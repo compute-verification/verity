@@ -23,7 +23,7 @@ from verity.commitments.windows.population import population_program
 from verity.protocols.proofs.spot.verifier import service as S
 from verity_vllm.pipeline import serving_rows as SRW
 
-BENCH = Path(__file__).resolve().parents[1]
+BENCH = (Path(__file__).resolve().parents[6] / "benchmarks" / "prove_path")
 REPO = BENCH.parents[1]
 RUN_SH = BENCH / "run.sh"
 #: where the partition files are kept: beside this benchmark's drivers and beside the one-stage audit's
