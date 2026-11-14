@@ -183,7 +183,7 @@ def test_the_network_certifier_path_requires_every_step_on_one_network_certifier
     assert got["steps"]["certificates"]["clock_certificates"] == 0 and got["d1"]["acc"] == [True] * sz.W63.windows
     assert got["steps"]["n2"]["clocks"]["source"] == "none"
     md = cr.markdown(got)
-    assert "on the warden path" in md and "| tie | accepted |" in md and "certified I/O" in md
+    assert f"on the {cr.NETWORK_CERTIFIER} path" in md and "| tie | accepted |" in md and "certified I/O" in md
     ep = json.loads(Path(steps.endpoint).read_text())
     Path(steps.endpoint).write_text(json.dumps(ep | {"at": cr.SERVED_NODE}))
     served = cr.report(steps)

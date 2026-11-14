@@ -455,7 +455,7 @@ def main(argv=None) -> int:
                                                    "network_certifier_serve.py's default if not given; 0: the proxy writes each "
                                                    "bucket on its loop, and the network certifier, which always paces, refuses "
                                                    "it)")
-    ap.add_argument("--warden", action="store_true",
+    ap.add_argument("--warden", dest="network_certifier", action="store_true",
                     help="rehearse the network certifier (network_certifier_serve.py rehearse) instead of the proxy: --requests at --rate a "
                          "second, each of at most --tokens, windows of --window buckets")
     ap.add_argument("--rate", type=float, default=1.0, help="with --warden: the requests' Poisson arrivals a second")

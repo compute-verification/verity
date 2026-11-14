@@ -124,7 +124,7 @@ def test_the_gate_refuses_a_network_certifier_rehearsal_it_cant_check(host, bad,
 def test_a_key_that_reads_only_starts_no_network_certifier_rehearsal(host):
     for key in (None, "-"):
         rc, out = gate(host, REQUEST, key=key, started=[])
-        assert rc == 3 and "this key reads only: a warden rehearsal" in json.loads(out)["refused"]
+        assert rc == 3 and f"this key reads only: a {REQUEST[0].removesuffix('-rehearse')} rehearsal" in json.loads(out)["refused"]
     assert not host.certifier.exists()
 
 
