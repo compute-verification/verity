@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Slowdown.Guarantees.RemotePeriod
+public import Definitions.Slowdown.Guarantees.RemoteMonitoringPeriod
 public import Proofs.Slowdown.Remote
 public import Proofs.Slowdown.CutWitness
 public import Proofs.Flock.Soundness.Audit.Periods

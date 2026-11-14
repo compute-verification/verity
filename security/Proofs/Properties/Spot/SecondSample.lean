@@ -5,7 +5,7 @@ public import Proofs.Flock.Claims.Sampling.Select.SecondUnits
 public import Proofs.Properties.Spot
 public import Proofs.Flock.Claims.Complete.Json.Canon
 public import Proofs.Flock.Claims.Complete.Json.Record
-public import Proofs.Pouw.Period.Sort
+public import Proofs.Pouw.MonitoringPeriod.Sort
 public import Proofs.Flock.Recursive.ZkServerObj
 import Spot.Draw
 import Spot.Json
@@ -68,7 +68,7 @@ theorem keys_mkObj_perm {L : List (String × Json)} {ks : List String} (hp : (L.
   have he := entries_mkObj_perm (hp.nodup_iff.2 hk)
   rw [FlockSoundness.Discharge.Recursion.ZkServerObj.mkObj_eq] at he ⊢
   show some (sortStrings ((⟨⟨Impl.Const.ofList L⟩⟩ : Std.TreeMap.Raw String Json compare).toArray.map (·.1))) = _
-  refine congrArg some (Array.toList_inj.1 (Properties.Pouw.Period.SecurityProofs.Sort.qsort_eq_of_perm ?_))
+  refine congrArg some (Array.toList_inj.1 (Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort.qsort_eq_of_perm ?_))
   rw [Array.toList_map]
   exact he.trans hp
 

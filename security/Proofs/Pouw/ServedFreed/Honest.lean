@@ -65,8 +65,8 @@ executionPhases' inputs (`hacc`, `hsalt`, `hdraw`).
 namespace Properties.Pouw.Served.SecurityProofs.Honest
 
 open Properties.Pouw.Served Properties.Pouw.Served.SecurityProofs
-open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs
-open Properties.Pouw.PeriodJ10R.SecurityProofs.HonestJ10R
+open Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs
+open Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.HonestJ10R
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 open Accounting.SecurityProofs.ComposeMonitoringPeriod
 
@@ -211,7 +211,7 @@ theorem servedFreed_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPha
     RegisteredBeforeDraw (executionPhases σ sT regOf evOf n) ∧ TileSampleIsCoin σ k hk sT unitOf (executionPhases σ sT regOf evOf n) ∧
     TileServiceSound σ sT unitOf (executionPhases σ sT regOf evOf n) opened
       (pinnedAt (saltOf (executionPhases σ sT regOf evOf n)) place tile) 0 ∧
-    Properties.Pouw.Period.SaltIsLiveCoin (hr1 _) (saltOf (executionPhases σ sT regOf evOf n)) enc ∧
+    Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin (hr1 _) (saltOf (executionPhases σ sT regOf evOf n)) enc ∧
     SharedNoiseLucks Honest.scheme (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n) ∧
     UnitFixed (play Unit (tileCount σ sT) (k sT) n)
       (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (executionPhases σ sT regOf evOf n) opened

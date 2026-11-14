@@ -119,10 +119,10 @@ least the honest work of its correct units, over `1 + ε`.
 
 ## Read first
 
-* `Properties.Pouw.Period.H1CheckedCreditPeriod` (`Properties.Pouw.Period`): the credit over the windows the deployed
+* `Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod` (`Properties.Pouw.MonitoringPeriod`): the credit over the windows the deployed
   check accepts, at H1's tile unit on the torch loop. It is PoUW's row in `security/README.md` and the lock's deployed
   PoUW guarantee.
-* `Properties.Pouw.Period.CheckedCreditPeriod` (the same module): the general form it instantiates, the credit in live
+* `Properties.Pouw.MonitoringPeriod.CheckedCreditMonitoringPeriod` (the same module): the general form it instantiates, the credit in live
   words over the windows the deployed check accepts.
 * Resource accounting reads PoUW through two guarantees. `Accounting.Guarantees.ComputeOfPouw`
   (`Definitions.Pouw.Guarantees.Pouw`) is PoUW's guarantee as the compute guarantee.

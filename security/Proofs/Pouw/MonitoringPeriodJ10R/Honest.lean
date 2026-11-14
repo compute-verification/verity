@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Compose.ComposeMonitoringPeriod.Honest
-public import Properties.Pouw.PeriodJ10R
+public import Properties.Pouw.MonitoringPeriodJ10R
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,14 +36,14 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.TS.Keyed
-import Proofs.Pouw.PeriodJ10R
+import Proofs.Pouw.MonitoringPeriodJ10R
 import Std.Tactic.BVDecide.Normalize.BitVec
 
 /-!
-# An honest J10-R period meets `H1J10RCheckedCreditPeriod`'s premises
+# An honest J10-R period meets `H1J10RCheckedCreditMonitoringPeriod`'s premises
 
-The positive twin of `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, as `Proofs.Pouw.Period.Honest` is of
-`H1CheckedCreditPeriod`, conditional on `Credit.window`'s verdict on the executionPhases' inputs. Over any sampling block's tile
+The positive twin of `Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod`, as `Proofs.Pouw.MonitoringPeriod.Honest` is of
+`H1CheckedCreditMonitoringPeriod`, conditional on `Credit.window`'s verdict on the executionPhases' inputs. Over any sampling block's tile
 stratum `s_T` of `σ` (`N_p = |stratum σ s_T|`, `1 ≤ k s_T`), take a period of `n ≥ 1` executionPhases whose registration is a
 function of the window's round coin (`regOf`) and the rest of whose inputs a function of its round and sampling coins
 (`evOf`). Given three facts of those inputs, the witness meets every premise of the statement (`j10r_meets`):
@@ -74,9 +74,9 @@ words are `N·n` (`creditLive_all`), so `j10r_credit` is the statement's bound a
 
 @[expose] public section
 
-namespace Properties.Pouw.PeriodJ10R.SecurityProofs.HonestJ10R
+namespace Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.HonestJ10R
 
-open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs
+open Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 open Accounting.SecurityProofs.ComposeMonitoringPeriod
 
@@ -322,7 +322,7 @@ theorem creditLive_all (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c
           exact sum_tileWords _
     _ = tileCount σ sT * n := by simp [mul_comm]
 
-/-- **An honest J10-R period meets every premise of `H1J10RCheckedCreditPeriod`**, in its order, at `N_p = |stratum σ
+/-- **An honest J10-R period meets every premise of `H1J10RCheckedCreditMonitoringPeriod`**, in its order, at `N_p = |stratum σ
 s_T|` one-word units, one round, `ρ = 1`, the twin's lucks, any `δ_s > 0`, `δ_bind = δ_ks = 0` and `N_p` fixed and
 folded words a window, given that `Credit.window` credits every window (`hacc`), that the registered salt is the
 round coin's bytes (`hsalt`) and that `Credit.descriptorDrawn`'s units are the tile coordinate's at the sampling coin
@@ -356,7 +356,7 @@ theorem j10r_meets (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (r
     RegisteredBeforeDraw (executionPhases σ sT regOf evOf n) ∧ TileSampleIsCoin σ k hk sT unitOf (executionPhases σ sT regOf evOf n) ∧
     TileServiceSound σ sT unitOf (executionPhases σ sT regOf evOf n) opened
       (pinnedAt (saltOf (executionPhases σ sT regOf evOf n)) place tile) 0 ∧
-    Properties.Pouw.Period.SaltIsLiveCoin (hr1 _) (saltOf (executionPhases σ sT regOf evOf n)) enc ∧
+    Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin (hr1 _) (saltOf (executionPhases σ sT regOf evOf n)) enc ∧
     SharedNoiseLucks Honest.scheme (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n) ∧
     UnitFixed (play Unit (tileCount σ sT) (k sT) n)
       (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (executionPhases σ sT regOf evOf n) opened
@@ -413,7 +413,7 @@ theorem j10r_meets (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (r
   · exact ite_words_le _ j
   · exact ite_zero_le _ j
 
-/-- **`H1J10RCheckedCreditPeriod`'s conclusion at the honest J10-R period**: `j10r_meets` gives the instance every
+/-- **`H1J10RCheckedCreditMonitoringPeriod`'s conclusion at the honest J10-R period**: `j10r_meets` gives the instance every
 premise, so except with probability `δ_s` its fixed words are at least `(1 − ε(n))₊` of its `N_p·n` live words. -/
 theorem j10r_credit (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
@@ -428,11 +428,11 @@ theorem j10r_credit (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (
             (executionPhases σ sT regOf evOf n) x) 1 1 (j10rRate (k sT) 1) δs) ≤ δs + n * (0 + 0) := by
   obtain ⟨hN, hM, hS, hρN, hwmax, hlk, hG, hDD, hPre, hMoved, hReg, hDraw, hServ, hSalt, hLucks, hUF, -, -, -⟩ :=
     j10r_meets σ k hk sT unitOf regOf evOf enc hKd hacc hsalt hdraw n hn hδs
-  exact h1J10RCheckedCreditPeriod σ k hk sT unitOf Honest.scheme (circuit (tileCount σ sT)) hn hN (hr1 _) hM hKd
+  exact h1J10RCheckedCreditMonitoringPeriod σ k hk sT unitOf Honest.scheme (circuit (tileCount σ sT)) hn hN (hr1 _) hM hKd
     (executionPhases σ sT regOf evOf n) opened enc place tile (period (Ω1 σ sT) (tileCount σ sT) n)
     (play Unit (tileCount σ sT) (k sT) n) (fun _ => (tileCount σ sT : ℝ)) 1 δs 0 0 hS one_pos le_rfl hρN
     hwmax hlk hG hDD hPre hMoved hReg hDraw hServ hSalt hLucks hUF
 
 end Meets
 
-end Properties.Pouw.PeriodJ10R.SecurityProofs.HonestJ10R
+end Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.HonestJ10R

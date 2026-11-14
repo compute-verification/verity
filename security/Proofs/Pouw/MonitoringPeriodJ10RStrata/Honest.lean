@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Pouw.PeriodJ10R.Honest
-public import Properties.Pouw.PeriodJ10RStrata
+public import Proofs.Pouw.MonitoringPeriodJ10R.Honest
+public import Properties.Pouw.MonitoringPeriodJ10RStrata
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,13 +34,13 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.TS.Keyed
-import Proofs.Pouw.PeriodJ10RStrata
+import Proofs.Pouw.MonitoringPeriodJ10RStrata
 
 /-!
-# An honest J10-R period over several tile strata meets `H1J10RCheckedCreditPeriodStrata`'s premises, and the
+# An honest J10-R period over several tile strata meets `H1J10RCheckedCreditMonitoringPeriodStrata`'s premises, and the
 conclusion fails at a verifier that accepts everything
 
-The twins of `Properties.Pouw.PeriodJ10RStrata.H1J10RCheckedCreditPeriodStrata`, as `HonestJ10R.j10r_meets` is of the
+The twins of `Properties.Pouw.MonitoringPeriodJ10RStrata.H1J10RCheckedCreditMonitoringPeriodStrata`, as `HonestJ10R.j10r_meets` is of the
 one-stratum statement.
 
 *Honest* (`strata_meets_period`, `strata_meets_stratum`, `strata_credit`). Over any sampling block `σ` with sample `k` and
@@ -68,10 +68,10 @@ probability is `1`, above any `∑_{s ∈ S} (δ_s(s) + n·(δ_bind(s) + δ_ks(s
 
 @[expose] public section
 
-namespace Properties.Pouw.PeriodJ10RStrata.SecurityProofs.HonestStrata
+namespace Properties.Pouw.MonitoringPeriodJ10RStrata.SecurityProofs.HonestStrata
 
-open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs Properties.Pouw.PeriodJ10RStrata
-  Properties.Pouw.PeriodJ10RStrata.SecurityProofs
+open Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs Properties.Pouw.MonitoringPeriodJ10RStrata
+  Properties.Pouw.MonitoringPeriodJ10RStrata.SecurityProofs
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 open Accounting.SecurityProofs.ComposeMonitoringPeriod
 
@@ -111,7 +111,7 @@ theorem strata_meets_period (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (e
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ s ∈ S, ∃ b ∈ tileDraw σ k hk s (β s), unitOf b = u) (n : ℕ) :
     RegisteredBeforeDraw (executionPhases σ regOf evOf n) ∧ StrataSampleIsCoin σ k hk S unitOf (executionPhases σ regOf evOf n) ∧
-    Properties.Pouw.Period.SaltIsLiveCoin Nat.one_pos (saltOf (executionPhases σ regOf evOf n)) enc ∧
+    Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin Nat.one_pos (saltOf (executionPhases σ regOf evOf n)) enc ∧
     ∀ x, (executionPhases σ regOf evOf n).prefixLen x = n := by
   classical
   refine ⟨fun x z w => ?_, fun _ _ _ => hdraw _ _, fun _ _ => hsalt _, fun x => ?_⟩
@@ -216,7 +216,7 @@ theorem strata_meets_stratum (s : Fin mB) (hKd : 1 ≤ k s) (n : ℕ) (hn : 0 < 
   · exact HonestJ10R.ite_words_le _ j
   · exact HonestJ10R.ite_zero_le _ j
 
-/-- **`H1J10RCheckedCreditPeriodStrata`'s conclusion at the honest J10-R period over `S`**: `strata_meets_period` and
+/-- **`H1J10RCheckedCreditMonitoringPeriodStrata`'s conclusion at the honest J10-R period over `S`**: `strata_meets_period` and
 `strata_meets_stratum` give the instance every premise, so except with probability `∑_{s ∈ S} δ_s(s)` its fixed words,
 summed over `S`, are at least the sum over `S` of `(1 − ε_s(n))₊` of stratum `s`'s `N_s·n` live words. -/
 theorem strata_credit (hKd : ∀ s ∈ S, 1 ≤ k s) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
@@ -235,7 +235,7 @@ theorem strata_credit (hKd : ∀ s ∈ S, 1 ≤ k s) (hacc : ∀ c β, Execution
       ∑ s ∈ S, (δs s + n * (0 + 0)) := by
   obtain ⟨hReg, hDraw, hSalt, -⟩ := strata_meets_period σ k hk S unitOf regOf evOf enc hacc hsalt hdraw n
   have hm := fun s (hs : s ∈ S) => strata_meets_stratum σ k hk unitOf regOf evOf enc s (hKd s hs) n hn (hδs s hs)
-  exact h1J10RCheckedCreditPeriodStrata σ k hk S unitOf Honest.scheme (fun s => HonestJ10R.circuit (tileCount σ s)) hn
+  exact h1J10RCheckedCreditMonitoringPeriodStrata σ k hk S unitOf Honest.scheme (fun s => HonestJ10R.circuit (tileCount σ s)) hn
     (fun _ _ => le_rfl) (fun _ => HonestJ10R.hr1 _) (fun s => rounds1 (tileCount σ s)) hKd (executionPhases σ regOf evOf n) HonestJ10R.opened enc
     (fun _ => HonestJ10R.place) (fun _ => HonestJ10R.tile) (fun s => HonestJ10R.period (View σ s) (tileCount σ s) n)
     (fun s => HonestJ10R.play (Rest σ s) (tileCount σ s) (k s) n) (fun s _ => (tileCount σ s : ℝ)) (fun _ => 1) δs
@@ -273,7 +273,7 @@ noncomputable def stratumLiveBy {ι K C : Type} (Sc : Scheme K) (Cd : Declared �
   ∑ w : Fin n, if UpToBy acc x w then
     ∑ t : Fin (tileCount σ s), (liveWords Sc Cd (tileCount σ s) (Wp.liveAt (pathsAt C hM σ s n x) w) t : ℝ) else 0
 
-/-- **`H1J10RCheckedCreditPeriodStrata`'s conclusion at verdict `acc`**: except with probability `δ`, an accepted
+/-- **`H1J10RCheckedCreditMonitoringPeriodStrata`'s conclusion at verdict `acc`**: except with probability `δ`, an accepted
 period's fixed words, summed over `S`, are at least the sum over `S` of each stratum's credit of `acc`'s accepted
 prefix. -/
 def StrataBoundBy {ι K T L U C : Type} [Fintype C] {nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
@@ -348,7 +348,7 @@ theorem prob_all {Ω : Type} [Fintype Ω] (a : Ω) : prob (fun _ : Ω => True) =
   rw [prob_eq_card, Finset.filter_true_of_mem fun _ _ => trivial, Finset.card_univ]
   exact div_self (Nat.cast_ne_zero.mpr Fintype.card_ne_zero)
 
-/-- **`H1J10RCheckedCreditPeriodStrata`'s conclusion fails at the verifier that accepts everything**: at the honest
+/-- **`H1J10RCheckedCreditMonitoringPeriodStrata`'s conclusion fails at the verifier that accepts everything**: at the honest
 instance's circuits, scheme, periods and rates over a non-empty `S` (`N_s = |stratum σ s|`, `1 ≤ k s`,
 `Λ_s = j10rRate (k s) 1`), with every window credited, the provers that fix no word (`idlePlay`) are accepted on every
 path with less than the summed credit, so the bound fails at every `∑_{s ∈ S} (δ_s(s) + n·(δ_bind(s) + δ_ks(s))) < 1`
@@ -379,4 +379,4 @@ theorem strata_nontrivial {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB →
   rw [prob_all (Paths.const (Paths.const true 1, fun s => Equiv.refl _) n)] at hall
   linarith
 
-end Properties.Pouw.PeriodJ10RStrata.SecurityProofs.HonestStrata
+end Properties.Pouw.MonitoringPeriodJ10RStrata.SecurityProofs.HonestStrata

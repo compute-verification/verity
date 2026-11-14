@@ -669,9 +669,9 @@ structure Audit where
   win : ℕ → ℕ
   reads : ℕ → ℕ
 
-/-- **The stacking property `P(c, R_in, L)`** of a registered circuit `W`, on its census and the audit's certified reads:
-every gate is in a window; in each window each budgeted class's units are within its cap per certified byte read, no
-unit is neutral (the registry classes every primitive), the run inputs are within that window's `R_in` bytes and the
+/-- **The stacking property `P(c, R_in, L)`** of a registered circuit `W`, on its census and the audit's certified
+reads: every gate is in a window; in each window each budgeted class's units are within its cap per certified byte read,
+no unit is neutral (the registry classes every primitive), the run inputs are within that window's `R_in` bytes and the
 data products (`productsAt`) within their cap per certified byte read; and no gate reads a value produced more than
 `L` engine steps before it. -/
 def Property (k : Caps) (A : Audit) (W : IntDag ι) : Prop :=

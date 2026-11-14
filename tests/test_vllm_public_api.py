@@ -117,6 +117,9 @@ PUBLIC = {
                                                     "(int8_exact_of), the FP8 linear kernel and the experts class, each one "
                                                     "value over the layers, which the harness's engine checks against its "
                                                     "declaration",
+    "verity_vllm.program.frontend.vllm_derive": "I7: a Program derived under the vLLM adapter's rules, its profiles' vocabulary "
+                                                "and its served seed and length rules (derive, derive_report), which "
+                                                "benchmarks/network_sim derives its served Program with",
     "verity_vllm.pipeline.workload_file": "I1: a workload file, fetched from the evidence store when absent and checked against "
                                           "its digest",
     "verity_vllm.pipeline.edge": "I7: the edge between two Commit windows on the advice's side: the requests it holds, each "

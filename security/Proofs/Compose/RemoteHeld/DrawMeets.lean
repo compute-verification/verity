@@ -60,8 +60,8 @@ that accepts everything (`*_nontrivial`).
 * **Bites.** The toy (`toy`): one window of one receipt, none correct, sampled once, on an audit that accepts every
   outcome with that receipt wrong (`acceptAll`), its node holding nothing and bringing nothing in, inside the device
   model at no rates, bursts or chip blocks (`acceptAll_inside`). It is `Live` and `Counted`; no opening of its
-  receipts verifies (`unsalted`: every salt empty), so the binding term is `0`; its sample always opens the wrong receipt,
-  so every advantage is `0`; and its pooled bound is `0`. Each conclusion then claims probability at most
+  receipts verifies (`unsalted`: every salt empty), so the binding term is `0`; its sample always opens the wrong
+  receipt, so every advantage is `0`; and its pooled bound is `0`. Each conclusion then claims probability at most
   `δ + 2^-256` (and `δs`) for an event of probability `1`.
 -/
 

@@ -402,5 +402,6 @@ __all__ = ["CLOCK", "COIN_DOMAIN", "COMPLETE", "DEPLOYED_FILL_BYTES", "DEPLOYED_
            "EGRESS_UNIT_BITS", "END_TAG", "KEY_DOMAIN", "LABEL_BITS", "LABEL_BYTES", "LABEL_TAG", "LATE", "MARK_BYTES",
            "PROTOCOL", "RECORDS_TREE", "RECORD_SCHEMA", "SESSION_TAG", "START_TAG", "WRONG", "BatchRecord",
            "SignedWipe", "Verdict", "WipeCommitment", "WipeParams", "batch_digest",
-           "challenges_for", "sample_indices", "egress_units", "end_message", "label", "labels", "log2_error", "mark_of",
+           "challenges_for", "sample_indices", "egress_units", "end_message", "label", "labels", "log2_error",
+           "mark_of",
            "message", "raw_clock_ns", "records_root", "retained_bits", "start_message", "verdict", "wipe_key"]

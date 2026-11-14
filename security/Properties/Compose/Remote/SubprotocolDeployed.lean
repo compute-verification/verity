@@ -58,8 +58,8 @@ and `e` decode to a session (`sessionOf`: its parameters, its windows a sample g
 events), and either the public outputs certify nothing (`eps` and `q_bytes` 0, the pooled bound refusing the windows),
 or at every node of those parameters and g whose δ is the component's `Poub.Protocol.DELTA` the published `eps`
 is `δ + Σ_c s/2^64` over the node's `⌈W/g⌉` samples (`Node.samples`) at its `samples` s, at least
-`LineHeldAtSubprotocol`'s sample term `δ + Σ_c s/2^256`. It is a constant of the session's parameters, not of the samples
-the session made. -/
+`LineHeldAtSubprotocol`'s sample term `δ + Σ_c s/2^256`. It is a constant of the session's parameters, not of the
+samples the session made. -/
 def PublishedEps : Prop :=
   ∀ (p : Poub.Protocol.Params) (reg : Poub.Registration) (e : Poub.Protocol.Evidence)
     (pub : Poub.Protocol.Public) (prof : Lean.Json),
