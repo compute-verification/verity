@@ -32,17 +32,18 @@ SECURITY = tuple(f"lean-audit:{p}" for p in ("security", "security/Proofs", "sec
 #: those the hand-written plans name: the spec goes with its provers (`declaration.resolve`), so no plan spells its path
 NAMED = SECURITY[1:]
 #: lean-suites' parts: its suites, the composition and PoUW benchmark suites and vLLM's each in the three parts by test id its
-#: pyproject declares
+#: pyproject declares, the one-stage benchmark's in seven
 SUITES = CHECK._parts_of()["lean-suites"]
 COMPOSITION = tuple(f"lean-suites:verity-core-composition:{k}/3" for k in (1, 2, 3))
 POUW = tuple(f"lean-suites:verity-pouw-benchmarks:{k}/3" for k in (1, 2, 3))
 VLLM = tuple(f"lean-suites:verity-vllm:{k}/3" for k in (1, 2, 3))
+ONE_STAGE = tuple(f"lean-suites:benchmarks/one_stage:{k}/7" for k in range(1, 8))
 #: the lean-suites every plan runs beside the security analysis's audit, and beside lean-build; the rest go with the Rust build
 BESIDE_AUDIT = (VLLM[0], *(f"lean-suites:{s}" for s in ("verity/protocols/proofs/recursion/verifier/vstar_cli",
                                                         "verity-core-evaluate", "pous-check",
                                                         "verity/protocols/accounting/certifier/verifier",
                                                         "verity-pouw-check-difftest")),
-                COMPOSITION[2], POUW[2])
+                COMPOSITION[2], POUW[2], ONE_STAGE[1])
 BESIDE_BUILD = ("lean-suites:verity-flock", COMPOSITION[0], POUW[1])
 WITH_RUST = (COMPOSITION[1], POUW[0], *VLLM[1:], "lean-suites:*")
 
@@ -117,7 +118,8 @@ def test_every_plan_runs_each_suite_in_parts_on_three_shards(n):
     its suites with each of those as its three, and every plan's shards, gated and after landing, hold each part once and no
     shard all three of a suite, so no shard runs one whole: the composition and PoUW suites one part on each of three shards,
     vLLM's one beside the security analysis's audit and two beside the Rust build."""
-    split = {"verity-core-composition": COMPOSITION, "verity-pouw-benchmarks": POUW, "verity-vllm": VLLM}
+    split = {"verity-core-composition": COMPOSITION, "verity-pouw-benchmarks": POUW, "verity-vllm": VLLM,
+             "benchmarks/one_stage": ONE_STAGE}
     assert CHECK.suite_parts() == {s: len(parts) for s, parts in split.items()}
     assert SUITES == [x for s in CHECK.AFTER_LEAN
                       for x in ([p.removeprefix("lean-suites:") for p in split[s]] if s in split else [s])]
@@ -126,10 +128,29 @@ def test_every_plan_runs_each_suite_in_parts_on_three_shards(n):
         for suite, parts in split.items():
             held = [[p for p in s if p in parts] for s in shards]
             assert sorted(p for h in held for p in h) == sorted(parts), (suite, held)
-            assert max(len(h) for h in held) <= (2 if suite == "verity-vllm" else 1), (suite, held)
+            assert max(len(h) for h in held) <= {"verity-vllm": 2, "benchmarks/one_stage": 6}.get(suite, 1), (suite, held)
         audit = next(s for s in shards if "lean-audit:security/Proofs" in s)
         rust = next(s for s in shards if "flock-circuit-build" in s)
         assert [p for p in audit if p in VLLM] == [VLLM[0]] and [p for p in rust if p in VLLM] == list(VLLM[1:])
+        assert [p for p in audit if p in ONE_STAGE] == [ONE_STAGE[1]]
+        assert [p for p in rust if p in ONE_STAGE] == [p for p in ONE_STAGE if p != ONE_STAGE[1]]
+
+
+def test_the_one_stage_benchmarks_two_longest_tests_run_on_two_shards():
+    """benchmarks/one_stage ran in one process for most of the Rust build's shard, its two longest tests most of that.  Of its
+    seven parts by test id they hash to parts 2 and 4, and every plan runs part 2 beside the security analysis's audit and the
+    rest with the Rust build, so neither shard runs both; a rename that moves either fails here, and the plans are placed
+    again."""
+    GUARD = _module("verity_suite_guard_for_shards", ROOT / "tools" / "verity" / "check" / "guard" / "verity_suite_guard.py")
+    longest = ("tests/test_served_cases.py::test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets",
+               "tests/test_two_stage_driver.py::test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_blocks_name")
+    for nodeid in longest:
+        path, _, name = nodeid.partition("::")
+        assert f"def {name}(" in (ROOT / "benchmarks" / "one_stage" / path).read_text(), nodeid
+    assert [GUARD.id_part(n, 7) for n in longest] == [2, 4]
+    for n in sorted(D.plans()):
+        shards = [CHECK.shard(f"{k}/{n}", False)["parts"] for k in range(1, n + 1)]
+        assert len({k for k, s in enumerate(shards) for p in (ONE_STAGE[1], ONE_STAGE[3]) if p in s}) == 2, n
 
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
