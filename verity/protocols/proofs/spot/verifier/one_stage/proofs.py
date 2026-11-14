@@ -38,8 +38,10 @@ as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts re
 `verify`'s. `order_why` mirrors its refusal of a challenger release log out of the order the sample, then the link,
 then the other rounds (`OneStageZk.orderHeld`). The registered circuit names the lookup tables its session reads (its
 META's ``lookups``, `lookups_of`), and v2 refuses blobs whose pinned MUFU tables are other than those (`tables_why`,
-`OneStageZk.tablesHeld`). `statements_v2` is the evidence's per-member form, one statement a sampled member, which v2
-refuses at parse: its evidence's ``proofs`` is exactly the sessions (`OneStageZk.proofsOf`).
+`OneStageZk.tablesHeld`); in the per-member form a member's statement holds the blobs' pinned tables its own circuit
+looks up and no other (`own_tables`, `tables_match_why`). `statements_v2` is the evidence's per-member form, one
+statement a sampled member, which v2 refuses at parse: its evidence's ``proofs`` is exactly the sessions
+(`OneStageZk.proofsOf`).
 
 A window of several members has v2's per-member form of ``proofs`` (`members_v2`: every `Member` in the parameters, one
 statement for each member with a session in the evidence), which the audit parses and refuses. `members_parsed` is what
@@ -367,16 +369,30 @@ def circuit_lookups(circuit: Path) -> list[str]:
     return lookups_of(json.loads(line[5:]))
 
 
+def tables_match_why(tables: Sequence[str], lookups: Sequence[str]) -> str | None:
+    """`OneStageZk.tablesMatch`: the refusal of the lookup tables a statement is handed, by name `tables`, when they are
+    not `lookups`, its circuit's (`lookups_of`), naming both; None when they are."""
+    if list(tables) == list(lookups):
+        return None
+    names = ", ".join
+    return (f"{NO_TABLES}: the circuit looks up {names(lookups) or 'none'}, the blobs hold {names(tables) or 'none'}")
+
+
 def tables_why(lookups: Sequence[str], digests: Iterable[str]) -> str | None:
     """`OneStageZk.tablesHeld`: the v2 audit's refusal of blobs whose SHA-512s (lowercase hex) are `digests` when the
     pinned MUFU tables among them (`MUFU_SHA512`, in its order) are not `lookups`, the registered circuit's
     (`lookups_of`), naming both; None when they are."""
     held = set(digests)
-    got = [n for n, d in MUFU_SHA512.items() if d in held]
-    if got == list(lookups):
-        return None
-    names = ", ".join
-    return (f"{NO_TABLES}: the circuit looks up {names(lookups) or 'none'}, the blobs hold {names(got) or 'none'}")
+    return tables_match_why([n for n, d in MUFU_SHA512.items() if d in held], lookups)
+
+
+def own_tables(lookups: Sequence[str], digests: Iterable[str]) -> list[str]:
+    """`OneStageZk.ownTables`, by name: a member's own lookup tables among blobs whose SHA-512s (lowercase hex) are
+    `digests`, the pinned MUFU tables among them (`MUFU_SHA512`, in its order) that `lookups` name, its circuit's
+    (`lookups_of`). A pinned table the blobs hold for another member's circuit is none of them; one of `lookups` the
+    blobs do not hold is missing from them, which `tables_match_why` refuses."""
+    held = set(digests)
+    return [n for n, d in MUFU_SHA512.items() if d in held and n in lookups]
 
 
 def proved_units(public: Path, session: Path) -> tuple[int, ...]:
@@ -570,8 +586,9 @@ def members_v2(members: Sequence[Member],
     (``{"statements": [{member, sessions}]}``: one statement for each member with a session, in the members' order by
     first unit, its session as `evidence_v2` names it, under `names`' for that member), and the blobs: the
     statements' files, then the circuit and public files of each member with no session, since the form's check reads
-    every member's files, sampled or not (`OneStageZk.membersFiles`). Two members of one name, a member of no unit or
-    one with several sessions raise: a statement is exactly one session on live coins. `Spot.OneStageZk` parses this
+    every member's files, sampled or not (`OneStageZk.membersFiles`). The case's blobs hold besides them each pinned
+    lookup table a member's circuit looks up, any member's (`own_tables`). Two members of one name, a member of no unit
+    or one with several sessions raise: a statement is exactly one session on live coins. `Spot.OneStageZk` parses this
     form and refuses it (`MULTI_REFUSED`); `members_parsed` holds these keys to its parsers."""
     if len({m.name for m in members}) != len(members):
         raise ValueError("two members have one name: a member's name is its own")
@@ -673,5 +690,6 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
 __all__ = ["EXE", "FITS", "MUFU_SHA512", "NO_ROW_WHY", "NO_TABLES", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY",
            "UNIT_CLASS_MAX", "V2", "V2_EXE", "WIDE_WHY", "WORD", "Finding", "LeanError", "Proof", "check_v2",
            "circuit_lookups", "draw_fits_why", "evidence_v2", "executable", "file_sha512", "fits_why", "ks_form_why",
-           "lookups_of", "order_why", "population_why", "printed", "printed_size", "proved_units", "reads_registered",
-           "statements_v2", "tables_why", "template_why", "units_exactly", "v2_executable", "verdicts_v2", "verify"]
+           "lookups_of", "order_why", "own_tables", "population_why", "printed", "printed_size", "proved_units",
+           "reads_registered", "statements_v2", "tables_match_why", "tables_why", "template_why", "units_exactly",
+           "v2_executable", "verdicts_v2", "verify"]
