@@ -412,8 +412,7 @@
         "security/Properties/Pouw.lean",
         "security/Properties/Pouw/",
         "security/Properties/Accounting/Compose.lean",
-        "security/Properties/Accounting/RegisteredCircuit.lean",
-        "security/Proofs/Nci.lean"
+        "security/Properties/Accounting/RegisteredCircuit.lean"
       ],
       "branch_suffixes": [
         "e3fa",
@@ -701,11 +700,7 @@
         "security/Properties/NetworkCertifier/",
         "security/Properties/NetworkPeriod.lean",
         "security/Properties/NetworkScan.lean",
-        "security/Properties/NetworkScan/",
-        "security/Properties/Nci.lean",
-        "security/Properties/Nci/",
-        "security/Proofs/Properties/Nci.lean",
-        "security/Proofs/Properties/Nci/"
+        "security/Properties/NetworkScan/"
       ],
       "branch_suffixes": [
         "728f",
@@ -731,7 +726,8 @@
       "usergroup": "S0CAAA80KGT",
       "retired_usergroups": [
         "S0C5LSDENA1"
-      ]
+      ],
+      "owns": []
     },
     {
       "handle": "dashboard-goals",
@@ -743,7 +739,8 @@
         "How do I put my goals on Daniel's Goals page?",
         "How do I publish a live plot of my runs to the console?"
       ],
-      "usergroup": "S0CEC206YBW"
+      "usergroup": "S0CEC206YBW",
+      "owns": []
     },
     {
       "handle": "dashboard-metrics",
@@ -755,7 +752,8 @@
         "How do I get my benchmark's number onto the Metrics dashboard?",
         "Why is a number on the Metrics dashboard stale?"
       ],
-      "usergroup": "S0CH8FZD0KH"
+      "usergroup": "S0CH8FZD0KH",
+      "owns": []
     },
     {
       "handle": "ci",
@@ -981,11 +979,7 @@
         "security/Definitions/Accounting/Guarantees/ServingBlocks/",
         "security/Proofs/Accounting/Coverage.lean",
         "security/Proofs/Accounting/ServingBlocks.lean",
-        "security/Proofs/Accounting/ServingBlocks/",
-        "security/Properties/Nci/Threads.lean",
-        "security/Properties/Nci/Desc/Cover.lean",
-        "security/Properties/Nci/Desc/Verdict.lean",
-        "security/Proofs/Properties/Nci/DescVerdict.lean"
+        "security/Proofs/Accounting/ServingBlocks/"
       ],
       "branch_suffixes": [
         "4207"
