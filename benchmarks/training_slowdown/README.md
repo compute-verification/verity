@@ -37,6 +37,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `data.py` | a start's data: the training stream (`Stream`, by the job's data seed; the fresh stream, without the windows of the parts a start read, `read_windows`) and the held-out sets (`held_out`: the search pool and the final set), checked against the registry; the search slice from a live coin (`sample_slice`) |
 | `evaluate.py` | the harness's evaluator: a checkpoint's bits per byte on the job's split, the search pool's paired with θ on the same slice |
 | `model.py` | the starts' architecture, the lf dense decoder |
+| `program_reading.py` | a training step's work read off its Program (`circuit_properties.work.read`, its point's test among it): the lf model's step under AdamW, looped (`loop`), with the reading's seconds, its pass's memory and claims, the refusal or N and \|C\|; `python -m training_slowdown.program_reading`, s-t20's shape by default |
 
 The reference shapes are the lf model's (`adapters/vllm/tests/program/train_step_lf.py`), which the suite checks.
 
@@ -115,7 +116,10 @@ n³ MACs a matrix and not as the gates of the algorithm that computes it, the ro
 that count is. Below the rows it prints each statement with what it rests on, each entry's planned run at its
 slowdown (the config's steps times the traced step's gates) as a share of one datacenter's and of the world's compute
 over a window, a week, a month and a year, and which parts are traced, approximated, proved, premises and scaled;
-`--out` writes all of it to `DIR/library.json`. A row has no slowdown, and says why, where the capture
+`--out` writes all of it to `DIR/library.json`, and on a run of every entry at the registered starts also the least
+slowdown of the entries that have one into the run's result, under the metric `metrics.toml` declares (`library.write_metric`:
+partial where an entry has none). Run by its path from the repository's root, as that metric's command does, it is the
+same command. A row has no slowdown, and says why, where the capture
 refuses the step, where the bound can't read it, and where the entry's E keeps less than the trained weights: a
 weight then costs at most E's bits a trained weight, which only a run's record has, so the grade reads that entry.
 
@@ -183,6 +187,8 @@ python -m training_slowdown.run --config CONFIG.toml --seed 0 --split search|fin
 python -m training_slowdown.run --retrace RUN_JSON --out OUT   # a record with its trace taken again
 python -m training_slowdown.capture.circuit STEP.npz    # a saved step circuit's quantities
 python -m training_slowdown.gates [--check]             # gates per multiply-add by op; --check compiles the Definitions
+python -m training_slowdown.program_reading [--size s] [--batch 2] [--ctx 1024] [--vocab 32000] [--iterations 2] \
+    [--k 65536] [--out OUT.json]                         # a step's work read off its Program, s-t20's by default
 ~~~
 
 An attack is a config of `attacks/` (`config.py`'s docstring has the schema): a start, a route and its dials, the
@@ -384,7 +390,7 @@ reads no file of a served run. It prints one block and writes `OUT/slowdown.json
   block's inputs cover), and the block says which of these figures are blank, why, and how the trace is taken again;
 - **S = p·ρ**, with what each factor rests on, and each seed beside it: whether it reaches the gain, and its |C|;
 - **the bound of record** at the same policy: the least slowdown of any partition of the attack's traced circuit, by
-  the theorem's count solved for the fewest blocks, times c/|C| (the calculator's `min_cut.bound`, the `bound` of
+  the theorem's count solved for the fewest blocks, times c/|C| (the calculator's `min_cut.slowdown_of`, the `bound` of
   `calculator.slowdown`'s result). ρ's products term is this bound, so where products bind ρ is it and S is p times
   it. It is "not available", with what is missing, where the search record
   gives the bound no traced step to read;
@@ -467,8 +473,9 @@ python grader.py HANDOVER --slowdown-code DIR --commit SHA [--trace STEP.product
 `HANDOVER` is the directory `grader.write_handover` writes: `handover.json` and the step's Program at two batch shapes.
 `--slowdown-code` is the directory this package sits in, which the grader loads where it sits and, in a git checkout,
 holds to the commit named. It writes `OUT.json`: the step's matrix products as rows, with their multiply-adds and output
-wires, the circuit's size |C| at the Boolean prices of the primitives it calls and, given `--trace`, the same rows of
-this package's capture beside them. It computes no ρ. Its tests are a suite of their own:
+wires (a flash attention the step keeps at a cc as the products its head Definitions compute, `grader.ATTENTION`), the
+circuit's size |C| at the Boolean prices of the primitives it calls and, given `--trace`, the same rows of this package's
+capture beside them. It computes no ρ. Its tests are a suite of their own:
 `uv run tools/verity/check/suites.py benchmarks/training_slowdown/grader`.
 
 ## What it reads, what it writes and what loads it

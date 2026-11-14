@@ -171,7 +171,7 @@ def test_v_stars_parts_are_as_many_as_the_verifiers_groups(tmp_path):
     assert rc == 1 and line["error"] == "V*'s parts: residual 26 alone reads more than 64 regions or 223 sha512x3 slots", line
 
 
-def test_a_v_star_statement_is_refused_without_the_verifiers_inner_shape_and_off_it(staged, tmp_path):  # noqa: F811
+def test_a_v_star_statement_is_refused_without_the_verifiers_inner_shape_and_off_it(staged, tmp_path):
     """`rec_outer`'s staged level (`rec-open/l8-h1`, four openings: no shape's V* has eight lanes) through the verifier's own
     files: `verify` refuses it at setup without `--rec-inner`, and `statement --rec-inner` refuses it as no statement of V*'s
     at the inner shape."""
@@ -193,7 +193,7 @@ def test_a_v_star_statement_is_refused_without_the_verifiers_inner_shape_and_off
         "setup: rec-open/l8-h1: not one of V*'s statements at the inner session's shape (m 25, k_log 22, claims 8)"), p.stdout
 
 
-def test_a_v_star_statements_bindings_are_the_verifiers_own_partition_and_program(staged, tmp_path):  # noqa: F811
+def test_a_v_star_statements_bindings_are_the_verifiers_own_partition_and_program(staged, tmp_path):
     """META's bindings are the verifier's own files' before the statement is matched to V*'s. Without the verifier's program
     the registered reads' check refuses first; a partition object naming another template, or another program, is refused
     by the partition checks that run before `RecVStar.checkBindings` (`HmRow.checkPartition`, `deriveTemplateUnits`); the
@@ -230,7 +230,7 @@ def test_a_v_star_statements_bindings_are_the_verifiers_own_partition_and_progra
         "setup: rec-open/l8-h1: not one of V*'s statements at the inner session's shape"), p.stdout
 
 
-def test_a_v_star_sessions_registration_past_the_call_bound_is_refused_by_both(staged, tmp_path):  # noqa: F811
+def test_a_v_star_sessions_registration_past_the_call_bound_is_refused_by_both(staged, tmp_path):
     """`rec_outer`'s staged level's registered reads, one port's tree made 65 levels deep and the file made to name 4097
     ports: `verify` under the verifier's inner shape refuses each at setup with `RecBudget.regs`'s message, which
     `rec_budget.regs` returns for the same file, and the honest file passes both."""
@@ -377,7 +377,7 @@ def test_a_v_star_circuit_file_is_the_one_v_star_writes_byte_for_byte(l16_h1, tm
         f"byte {at}, line 2"), line
 
 
-def test_the_verifiers_bindings_are_metas_of_v_stars_honest_statements(staged, l16_h1, tmp_path):  # noqa: F811
+def test_the_verifiers_bindings_are_metas_of_v_stars_honest_statements(staged, l16_h1, tmp_path):
     """`rec_bindings.bindings`, from the partition object and program alone, is exactly the three bindings of META that
     V*'s honest statements carry: `rec_outer`'s staged level, and `rec-open/l16-h1` under its population program."""
     d = staged[0]
@@ -466,7 +466,7 @@ def test_a_statement_relabelled_under_another_template_is_refused(l16_h1, tmp_pa
         f"rec-open/l16-h1: the verifier's bindings' program_digests names {other}, not V*'s template of the statement {tid}"), line
 
 
-def test_verify_refuses_a_v_star_statement_without_the_session_index_or_the_verifiers_bindings(staged, tmp_path):  # noqa: F811
+def test_verify_refuses_a_v_star_statement_without_the_session_index_or_the_verifiers_bindings(staged, tmp_path):
     """`rec_outer`'s staged level through `statement` and `verify` with the verifier's inner shape, partition object and
     program: without `--rec-part`, or without `--rec-bindings`, it is refused at setup naming the flag; with bindings whose
     `program_digests` value is not META's, by that value."""
@@ -501,7 +501,7 @@ def test_verify_refuses_a_v_star_statement_without_the_session_index_or_the_veri
         f'{{"{tid}":"{other}"}}'), p.stdout
 
 
-def test_the_verifiers_bindings_are_its_own_partition_objects(staged, tmp_path):  # noqa: F811
+def test_the_verifiers_bindings_are_its_own_partition_objects(staged, tmp_path):
     """`RecVStar.checkOwnBindings`: bindings whose partition digest is not the verifier's partition object's are refused by
     that digest, before META is compared with them (which would refuse the same file by META's digest instead)."""
     d = staged[0]
@@ -519,7 +519,7 @@ def test_the_verifiers_bindings_are_its_own_partition_objects(staged, tmp_path):
         f"{mine['partition']}"), p.stdout
 
 
-def test_the_verdict_says_whether_the_inner_sessions_circuit_is_private(staged, tmp_path):  # noqa: F811
+def test_the_verdict_says_whether_the_inner_sessions_circuit_is_private(staged, tmp_path):
     """`rec-inner`'s `holo` (the verifier's own `--hide`) is the verdict's `private_circuit`, on every VERDICT line verified
     with `--rec-inner` and on no other, and the private shape's list is V*'s holo statements, so `rec_outer`'s staged level
     is refused at either shape as none of them; a `holo` that is not a boolean is refused as the verifier's file reads."""

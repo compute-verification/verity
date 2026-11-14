@@ -936,7 +936,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             return summary, False
         union_draw, drawn_law, receipt = dict(draw.draw), dict(draw.law), dict(draw.registration.receipt)
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
-    (out / "draw.json").write_text(json.dumps(union_draw, sort_keys=True))
+    (out / SAMPLE_FILE).write_text(json.dumps(union_draw, sort_keys=True))
     after: dict[str, dict] = {}
     if any(m.wired for m in mine.members):
         bad = WI.check_drawn(mine.members, publics, union_draw["units"])
@@ -979,7 +979,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         # a plain session is served the stream's stratified sample itself, its one member the whole window (`plain_refusal`)
         session_draw, session_law = ((union_draw, drawn_law) if plain(a) else
                                      ({"law": "subset", "population": m.n, "k": len(local), "units": local}, {"law": "subset", "k": len(local)}))
-        (sdir / "draw.json").write_text(json.dumps(session_draw, sort_keys=True))
+        (sdir / SAMPLE_FILE).write_text(json.dumps(session_draw, sort_keys=True))
         t = time.time()
         stage(served, mm, files)
         return {"mm": mm, "local": local, "sdir": sdir, "staged_s": time.time() - t, "session_draw": session_draw,
@@ -1002,7 +1002,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             return {**s, "handle": h}
         t = time.time()
         env = {"FC_COINS": "tree"} if plain(a) else a0.prover_env(a.firewall, mm["st"])
-        record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / "draw.json",
+        record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / SAMPLE_FILE,
                                   zk=not plain(a), env=env, prove_timeout=a.session_timeout,
                                   tree_from=None if relay is None else relay.flags)
         session_s = round(time.time() - t, 1)
@@ -1545,6 +1545,10 @@ def streamed(a: argparse.Namespace) -> bool:
 FIREWALL_HELP = ("the core protocols' path, Lean's flock-firewall: every session's prover runs behind the ZK server's send check "
                  "(FC_FIREWALL=1, live PROTOCOL.md §10.4); without it each runs prove --zk itself, as SPOT[Flock]'s proof server "
                  "does (a0.DIRECT, zk_cost's dev arm)")
+#: the ZK server's Lean session loop's executable, beside Lean's flock-verify in its package
+ZK_SERVER_LOOP = "flock-firewall"
+#: the file an audit keeps a sample in: the window's (``out``) and each session's (``session-m<k>/``)
+SAMPLE_FILE = "draw.json"
 #: AGENTS.md's live-coins rule, which keeps an audit's sampled members' sessions one after another
 ONE_AT_A_TIME = "outer proofs go through the ZK server one at a time (AGENTS.md, \"Live coins only\")"
 
@@ -1594,18 +1598,20 @@ def proof_server(a: argparse.Namespace, out: Path, sts: Sequence[dict] = (), rel
     session at the session's turn, one session at a time (``verify_ahead=0``), each loop's `Hello` set up as the process's
     environment says (`a0.prover_env`), so only where the sampled members' statements ``sts`` agree on it. None where a
     session is one it doesn't prove (plain, or members that don't agree): each session is then a process pair of its own
-    (`a0.session`), which takes its tree through ``relay`` too."""
+    (`a0.session`), which takes its tree through ``relay`` too. ``a.gpus``: the devices its provers prove on
+    (`prove --gpu`), else the CPU; a process pair stays on the CPU."""
     if plain(a):
         return None
     zk_server = a.firewall
     trees = ({"challenger": a0.own_challenger(zk=True)} if relay is None else
              {"verify_ahead": 0, "tree_from": relay.flags})
+    devices = getattr(a, "gpus", None)
     if not zk_server:
-        return ProofServer(a.bin, out / "proof-server", env=a0.DIRECT, **trees)
+        return ProofServer(a.bin, out / "proof-server", devices=devices, env=a0.DIRECT, **trees)
     envs = [a0.prover_env(zk_server, st) for st in sts]
     if not envs or any(e != envs[0] for e in envs):
         return None
-    return ProofServer(a.bin, out / "proof-server", env=envs[0], **{**trees, "verify_ahead": 0})
+    return ProofServer(a.bin, out / "proof-server", devices=devices, env=envs[0], **{**trees, "verify_ahead": 0})
 
 
 def plain_refusal(a: argparse.Namespace, mine: CS.Binding, registered: dict | None) -> str | None:
@@ -1819,6 +1825,9 @@ def main() -> int:
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
     ap.add_argument("--firewall", help=FIREWALL_HELP)
+    ap.add_argument("--gpus", type=lambda s: [int(x) for x in s.split(",")],
+                    help="the proof server's devices, CUDA indices comma-separated: its provers prove on them (`prove --gpu`); "
+                         "default the CPU. A member proved as a process pair (a5.proof_server's None) stays on the CPU")
     ap.add_argument("--out", required=True)
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=7551)

@@ -1,4 +1,9 @@
-/-
+module
+
+public import CoreProtocol.Ratio
+public import Lean.Data.Json.Basic
+
+/-!
 JSON as Python's `canonical_json` writes it (`json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True)`),
 the form the audit record is compared and digested in: keys sorted, strings escaped to ASCII, integers as written, and a
 number with a fraction or a negative exponent (`Flock.JsonParse.parse` gives it a positive decimal exponent) as Python's
@@ -7,10 +12,6 @@ fixed notation unless the decimal point is more than 16 places right or 4 left o
 can't be read back as (`-0.0`, a float of 10¹⁶ or more, which `Flock.JsonParse.parse` reads as an integer) is written as
 the integer or `0.0`.
 -/
-module
-
-public import CoreProtocol.Ratio
-public import Lean.Data.Json.Basic
 
 @[expose] public section
 set_option backward.privateInPublic true

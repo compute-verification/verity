@@ -8,7 +8,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # (`benchmarks/rho`: `rho.min_cut`, `periods.py`, its registry and what that reads of the census,
 # the inference-only policy's calibrations and the reporting grid, `verity.protocol`), and each proved or
 # assumed name's standing from the locks (`rho.lean`). A block's work is priced as a served step is
-# (`benchmarks/one_stage`'s `served_shares` and `served_verdicts`, which imports `served_overhead`). The built class's
+# (`benchmarks/one_stage`'s `served_shares`, which reads θ from the H200's card in `hardware/cards`, and
+# `served_verdicts`, which imports `served_overhead`). The built class's
 # record, its counts and the model's shape are the integration's (`adapters/vllm`: `verity_vllm` and its manifests),
 # over `verity`. The run's variables are read through `verity_config.settings`, and the count's executable and module
 # are named by its Lake package's `lakefile.toml`. The served number is written into the run's result by the harness
@@ -19,7 +20,7 @@ inputs = ["benchmarks/rho",
           "benchmarks/one_stage/served_overhead.py",
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
           "benchmarks/harness/verity_bench/settings.py",
-          "adapters/vllm/verity_vllm", "adapters/vllm/manifests", "verity",
+          "adapters/vllm/verity_vllm", "adapters/vllm/manifests", "verity", "hardware/cards",
           "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/nci_reference.py",
           "verity/protocols/policy/inference_only/verifier/nci/lean/lakefile.toml",
           "security/lean-audit.json", "security/Properties/lean-audit.json",

@@ -1,5 +1,6 @@
-# Dither, an experimental PoUW variant: its circuit (prover/dither.py) and the circuit's test, which runs
-# here as a suite (`uv run tools/verity/check/suites.py verity/protocols/experimental/dither`).
+# Dither, an experimental PoUW variant: its circuit (prover/dither.py), its GPU kernels (prover/kernels/), and the
+# circuit's and h1u.cu's tests, which run here as a suite (`uv run tools/verity/check/suites.py
+# verity/protocols/experimental/dither`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

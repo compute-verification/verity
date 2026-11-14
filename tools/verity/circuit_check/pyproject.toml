@@ -56,7 +56,7 @@ parallel = true
 # binding reaches, building no body: about 2.6 GiB. Where a binding's record doesn't count, the
 # first worker has the bindings without one built and their records stored (`circuit-check --all --records-only`, a process
 # forked per binding) while the others wait: its processes take what the workers' shares
-# leave as they wait (conftest.py's `_budget`), each counted at what `heavy.json` says it grows.
+# leave as they wait (conftest.py's `_budget`), each counted at what its owner's unkeyed file says it grows (`cli.heavy`).
 # Built whole in each worker instead, the catalog takes a worker past 50 GB. A circuit-check a test starts
 # keeps to this share too (conftest.py's `worker_slot_gb`).
 worker_gb = 8
@@ -92,6 +92,8 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/accounting/pouw/verifier/protocol.py",
           # circuit/h1window.py imports both, so building the H1 units reads them.
           "verity/protocols/accounting/pouw/verifier/core_check.py", "verity/protocols/accounting/pouw/verifier/leaf_lanes.py",
+          # core_check.py imports it for the salt check's verdict of record
+          "verity/protocols/accounting/pouw/verifier/verifier.py",
           "verity/protocols/accounting/pouw/verifier/serving.py", "verity/protocols/accounting/pouw/verifier/registration.py", "verity/protocols/accounting/pouw/verifier/coins.py",
           "verity/protocols/proofs/spot/device/challenger.py", "verity/claims/__init__.py",
           "verity/protocols/accounting/pouw/verifier/grind.py", "verity/protocols/accounting/pouw/prover/circuit", "verity/protocols/accounting/pouw/prover/schemes",
@@ -128,9 +130,9 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/accounting/certifier/prover/io_ids.py", "verity/protocols/accounting/certifier/prover/io_ids.circuit-check.py",
           "verity/protocols/accounting/certifier/prover/io_ids.circuit-check.json",
           "verity/protocols/accounting/certifier/prover/ingress_scan.py", "verity/protocols/accounting/certifier/prover/ingress_scan.circuit-check.py",
-          "verity/protocols/accounting/certifier/prover/ingress_scan.circuit-check.json",
+          "verity/protocols/accounting/certifier/prover/ingress_scan.circuit-check.json", "verity/protocols/accounting/certifier/prover/ingress_scan.circuit-check.unkeyed.json",
           "verity/protocols/accounting/certifier/verifier/head_check.py", "verity/protocols/accounting/certifier/verifier/head_check.circuit-check.py",
-          "verity/protocols/accounting/certifier/verifier/head_check.circuit-check.json",
+          "verity/protocols/accounting/certifier/verifier/head_check.circuit-check.json", "verity/protocols/accounting/certifier/verifier/head_check.circuit-check.unkeyed.json",
           "verity/protocols/accounting/certifier/verifier/replay_step.py", "verity/protocols/accounting/certifier/verifier/replay_step.circuit-check.py",
           "verity/protocols/accounting/certifier/verifier/replay_step.circuit-check.json",
           "verity/protocols/accounting/certifier/verifier/served.py", "verity/protocols/accounting/certifier/verifier/served.circuit-check.py",
@@ -195,7 +197,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/accounting/certifier/prover/compile_slice_v5.circuit-check.json",
           "verity/protocols/accounting/certifier/prover/compile_slice_v6.py",
           "verity/protocols/accounting/certifier/prover/compile_slice_v6.circuit-check.py",
-          "verity/protocols/accounting/certifier/prover/compile_slice_v6.circuit-check.json",
+          "verity/protocols/accounting/certifier/prover/compile_slice_v6.circuit-check.json", "verity/protocols/accounting/certifier/prover/compile_slice_v6.circuit-check.unkeyed.json",
           "verity/protocols/accounting/certifier/prover/compile_slice_v7.py",
           "verity/protocols/accounting/certifier/prover/compile_slice_v7.circuit-check.py",
           "verity/protocols/accounting/certifier/prover/compile_slice_v7.circuit-check.json",

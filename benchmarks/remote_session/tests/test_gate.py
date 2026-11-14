@@ -1,4 +1,4 @@
-"""`gate.sh probe`: before a gate run writes anything to either auditor host, it reads the challenger host's key, pins
+"""`gate.sh probe`: before a gate run writes anything to either auditor device, it reads the challenger host's key, pins
 and ledger and the verifier host's status, and refuses (exit 3, the reason in probe.json) a key that isn't PIN, a used
 period, a period of the lane still open, a host pinned elsewhere or busy, and, before any request, a CIRCUIT that isn't COMMIT's
 and a COMMIT off origin/main's first-parent line (or no line to check it on). A host pinned elsewhere on that line is

@@ -10,14 +10,25 @@ from __future__ import annotations
 import dataclasses
 import functools
 import re
+from types import SimpleNamespace
 
 import pytest
 
 from tests.observe import test_fold_synthetic as T
 from verity_vllm.config import UsageError
-from verity_vllm.observe.events import DispatchEnter, DispatchExit
+from verity_vllm.observe.events import DispatchEnter, DispatchExit, ViewDesc
 from verity_vllm.observe.fold import resolve_log as RL
-from verity_vllm.observe.fold.resolver import Profile
+from verity_vllm.observe.fold.patterns.resolutions import ComputeGroup
+from verity_vllm.observe.fold.resolver import (
+    Collective,
+    Compute,
+    Const,
+    Group,
+    PerRow,
+    Profile,
+    Transparent,
+    Unsupported,
+)
 from verity_vllm.pipeline import cli
 from verity_vllm.properties import census as CEN
 from verity_vllm.properties import kernel_allowlist as KA
@@ -143,6 +154,32 @@ def test_a9_untraced_in_place_overwrite_is_refused(reconcile):
     assert (m["step"], m["device_count"], m["declaring_events"]) == (0, 2, 1)
     assert [(e["op"], e["module"]) for e in m["events"]] == [("_C.fused_add_rms_norm.default", "model.norm")]
     assert m["buffers"] == norm_writes("untraced", 0)["model.norm"]
+
+
+def test_a_steps_declarations_are_read_part_by_part():
+    """What the toy log has none of, on hand-made resolutions: a primary whose `also` member has no pattern name of its own and
+    declares under the primary's (RoPE's k rotation); a `Group`, which has no name, of a move and a Compute; a collective, whose
+    buffer is its own partial row; and an unsupported root, which declares nothing."""
+    def view(alloc):
+        return ViewDesc(alloc, 0, (4,), (1,), "int32", "cuda:0")
+
+    def root(i, op, module):
+        return SimpleNamespace(id=i, op=op, enter=SimpleNamespace(module=module))
+    rope = ComputeGroup(None, 1, (), (PerRow(view(10)),), (), kernels=("rot",), pattern="rope",
+                        also=(Compute(None, 1, (), (PerRow(view(11)),), (), kernels=("rot",)),))
+    group = Group((Transparent("move", (), dst=PerRow(view(20)), kernels=("Memcpy",), pattern="kv_move"),
+                   Compute(None, 1, (), (Collective(view(21), "all_reduce", "m.o_proj"), Const(8, 0)), (), kernels=("rot", "reduce"),
+                           pattern="collective")), ())
+    res = [rope, group, Unsupported(3, "aten.x", "no pattern")]
+    roots = [root(1, "_C.rotary_embedding", "m.rope"), root(2, "aten.cat", None), root(3, "aten.x", "m.x")]
+    assert CEN.declared_kernels_of_step(res, roots) == (
+        {"rot": {"rope", "collective"}, "Memcpy": {"kv_move"}, "reduce": {"collective"}},
+        {"rot": {1, 2}, "Memcpy": {2}, "reduce": {2}},
+        {"rot": 3, "Memcpy": 1, "reduce": 1})
+    assert CEN.declaring_events(res, roots, "rot") == [{"event": 1, "op": "_C.rotary_embedding", "module": "m.rope", "writes": [10, 11]},
+                                                       {"event": 2, "op": "aten.cat", "module": None, "writes": [21]}]
+    assert CEN.declaring_events(res, roots, "Memcpy") == [{"event": 2, "op": "aten.cat", "module": None, "writes": [20]}]
+    assert CEN.declaring_events(res, roots, "fill") == []
 
 
 def test_reconcile_names_no_profile_of_its_own(tmp_path):

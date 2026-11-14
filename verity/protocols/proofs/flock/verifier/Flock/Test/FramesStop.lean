@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.Firewall.Frames
+meta import Flock.Firewall.Frames
+
+/-!
 A session's stop in the loop's frames (`Frames.roundStep`, `Frames.coinsStep`, `Frames.finishOf`), on a table's two
 reps of one masked value each, in one scheduled one-value round: rep 0's device round fails (the place's squeeze alone,
 as a failed worker's), so the scheduled round leaves in its place, its value as rep 0's pad alone. Rep 1's next device
@@ -7,10 +12,6 @@ pad; after rep 0's failure it leaves as the scheduled round of a stopped rep, by
 model's release of every round after a session's first failure), its value as rep 1's pad alone. Both reps' frames
 then answer `finish` `stop`, so the session's `Finish` leaves without proofs.
 -/
-module
-
-public import Flock.Firewall.Frames
-meta import Flock.Firewall.Frames
 
 @[expose] public section
 

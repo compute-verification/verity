@@ -785,15 +785,15 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_sampled_unde
     assert d.units == CC.stream_subset(k, 26, SC.draw_bytes(SC.draw_key(o.coin, st, reg), d.law, 26))
     assert ch.coins_of("honest") == {"commitment": ch.trusted.to_json(), "pass": "certifier", "draw": o.to_json()}
 
-    held, opening = [], CC.opening
-    monkeypatch.setattr(CC, "opening", lambda *a: held.append(a[6]) or opening(*a))
+    held, opening = [], CC.opening_twin
+    monkeypatch.setattr(CC, "opening_twin", lambda *a: held.append(a[6]) or opening(*a))
     u = d.units[0]
     pub, op = _unit_pub(advice, priv, u), SC.opening(advice, priv, params, u)
     unread = "the window is certified, and its template's unit reads no salt"
     assert ch.check("honest", u, pub, op).startswith(unread)
     assert SC.check(params, rec, d.draw, u, pub, op, record=OR.Record(lean=False)).startswith(unread)
     assert held == [salt, None]
-    monkeypatch.setattr(CC, "opening", opening)
+    monkeypatch.setattr(CC, "opening_twin", opening)
     assert refused(challenger("again"), "certifier").startswith("the certifier doesn't reveal PoUW window 0's salt")
 
     late, late_salts = _certifier(sid, key, sign, record, keys, seed=b"late", clock=lambda: t[0])
@@ -1222,8 +1222,8 @@ def test_a_disagreement_rejects_the_session(served, monkeypatch):
     with pytest.raises(S.Refused) as e:
         ch.select("honest")
     assert _codes(e) == {"coin"} and "already open" in e.value.verdict.detail["coin"]
-    case = CC.case
-    ch = disagrees("answer", lambda m: m.setattr(OR.CC, "case", lambda j: {**case(j), "reason": "forced"}),
+    case = CC.case_twin
+    ch = disagrees("answer", lambda m: m.setattr(OR.CC, "case_twin", lambda j: {**case(j), "reason": "forced"}),
                    lambda ch: _through(ch, rec))
     with pytest.raises(S.Refused) as e:
         ch.outcome("honest", [_unit(t) for t in ch.draws["honest"].units])

@@ -1,4 +1,4 @@
-# The verifier's auditor host
+# The verifier's auditor device
 
 `host.py` is vy-auditor-1's verifier service: the verifier of PoUB
 (`verity/protocols/accounting/poub/verifier/session/verifier.py`) run only as `auditor`, from a tree infra pinned, one run at a time, behind the
@@ -54,7 +54,7 @@ session's end, beside the ledger, and it reads main's first-parent history from 
 
 ~~~sh
 git fetch origin main && git rev-list --first-parent origin/main > main-first-parent.txt
-install -m 0644 -o root -g root main-first-parent.txt /opt/vy-verifier/main-first-parent.txt   # on the auditor host
+install -m 0644 -o root -g root main-first-parent.txt /opt/vy-verifier/main-first-parent.txt   # on the auditor device
 ~~~
 
 The gate refuses a run before starting anything while the file is missing. A challenger pinned after the file was
@@ -87,7 +87,7 @@ pin, not because of where they came from. A run binds to a role once the pinned 
 The same `host.py`, pinned under `/opt/vy-compose/<commit>` (its `pins.jsonl`, `/var/lib/vy-compose`), is
 `vy-compose-gate`, which serves one verb: `compose`, a served run's final record and composite composed off the served
 node from its compose hand-off. The lane's own gate key is forced to `vy-compose-gate --ssh "$SSH_ORIGINAL_COMMAND"
---key LANE` for `research` on the auditor host's public address (`restrict`, and `from=` the hosts that send
+--key LANE` for `research` on the auditor device's public address (`restrict`, and `from=` the hosts that send
 hand-offs), and the compose itself runs as `auditor`, and the sender is
 `served_verdicts.sh gate-compose`, which runs:
 
@@ -98,7 +98,7 @@ tar --create --files-from=private/compose/inputs.txt --file=- | $COMPOSE_GATE co
 `COMPOSE_GATE` is the sender's setting: `ssh` with the lane's gate key, as `research` on that address.
 
 At pin time, as `auditor`, infra builds the tree's venv (`uv sync --all-packages --extra torch-cpu`) and the Lean
-packages the compose runs (`verity/protocols/proofs/recursion/verifier/recursive`, whose `vstar-recursive` the record runs, and the
+packages the compose runs (`verity/protocols/proofs/spot_flock/verifier/lean`, whose `vstar-recursive` the record runs, and the
 composite's), and records the pin with the branch it is on (`host.py pinned COMMIT BRANCH`). The compose runs as
 `auditor` with `HOME=/var/lib/vy-compose`, so `lake` and `elan` resolve from `/usr/local/bin` or that home's
 `.elan/bin`. The docstring says what the gate refuses and what it answers.

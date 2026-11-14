@@ -89,17 +89,17 @@ def test_a_step_counts_the_decoders_calls(M, S):
     from verity_vllm.program.predict import dsa
     from verity_vllm.program.predict.build import build_program
     seen: Counter[str] = Counter()
-    orig = dsa._Model.call
+    orig = dsa._Calls.call
 
     def call(self, fn, *refs):
         seen[fn.id] += 1
         return orig(self, fn, *refs)
 
-    dsa._Model.call = call
+    dsa._Calls.call = call
     try:
         build_program(S.phi, "step", M=M, pos0=8)
     finally:
-        dsa._Model.call = orig
+        dsa._Calls.call = orig
     need = S.step(M, M, [(M, 0)], [], 1, {"greedy": 1}, False)
     assert not _gaps(need)
     assert Counter({n.id: c for n, c in need.items()}) == Counter({k: v for k, v in seen.items() if not k.startswith("Const")})

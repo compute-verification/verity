@@ -129,7 +129,7 @@ ROOT = Path(__file__).resolve().parents[2]
 V1 = R.PROTOCOL
 V1_LEAN = (VF.PACKAGE, "sampled-proofs-one-stage")
 SAMPLED = "verity/sampled-proofs/v1"
-SAMPLED_LEAN = (ROOT / "verity/protocols/proofs/recursion/verifier/recursive", "vstar-recursive")
+SAMPLED_LEAN = (ROOT / "verity/protocols/proofs/spot_flock/verifier/lean", "vstar-recursive")
 #: `vstar-recursive`'s command for sampled proofs (`VStar.Recursive.Sampled.main`), ahead of ``check``
 SAMPLED_CMD = ("sampled",)
 #: The form remote's sampled proofs case names: one-stage v2's audit (`VStar.Recursive.Sampled.ONE_STAGE`)

@@ -1,14 +1,15 @@
-/-
+module
+
+public import Flock.Zk
+meta import Flock.Zk
+
+/-!
 A `--zk` statement's digest hashes its identity as upstream's `Stmt::new` does, `serde_json::to_vec(&sorted(identity))`
 (`Flock.identityBytes`): strings in UTF-8. The identity's `hooks` name `veil (ePrint 2026/683 §4.1, …)`, so `§` enters
 the digest as its bytes `c2 a7`. Canonical JSON's escape (`canon`) would give another digest and Σ, and the prover's
 `Hello` would fail R7. `HOOKS` is upstream's `zk_identity` at `mask_log` 14 (`flock-circuit.rs`), as `serde_json`
 writes it.
 -/
-module
-
-public import Flock.Zk
-meta import Flock.Zk
 
 @[expose] public section
 

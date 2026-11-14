@@ -495,15 +495,17 @@ def iso(t: float) -> str:
 def epoch(s: str | None) -> float | None:
     """The API's ISO time (2026-10-18T09:49:50.225Z) in epoch seconds; None when it doesn't parse."""
     try:
-        return calendar.timegm(time.strptime(str(s)[:19], "%Y-%m-%dT%H:%M:%S"))
-    except (ValueError, TypeError):
+        return calendar.timegm(time.strptime(str(s)[:19], "%Y-%m-%dT%H:%M:%S")) if s else None
+    except (ValueError, TypeError) as e:
+        print(f"{iso(time.time())} time {str(s)[:40]!r} does not parse; read as none ({e})", file=sys.stderr, flush=True)
         return None
 
 
 def read_json(p: Path | None) -> dict:
     try:
-        d = json.loads(p.read_text()) if p else {}
-    except (OSError, ValueError):
+        d = json.loads(p.read_text()) if p and p.exists() else {}
+    except (OSError, ValueError) as e:
+        print(f"{iso(time.time())} {p}: unreadable, read as empty ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
     return d if isinstance(d, dict) else {}
 
@@ -553,7 +555,9 @@ def front_matter(p: Path) -> dict[str, str]:
     try:
         with open(p, encoding="utf-8", errors="replace") as f:
             head = f.read(8192)
-    except OSError:
+    except OSError as e:
+        print(f"{iso(time.time())} {p}: unreadable, so its front-matter is read as none ({type(e).__name__}: {e})",
+              file=sys.stderr, flush=True)
         return {}
     if not head.startswith("---\n") or (end := head.find("\n---", 4)) < 0:
         return {}
@@ -572,7 +576,9 @@ def recent_notes(notes: Path | None, t: float) -> Iterator[tuple[Path, float, di
     for p in sorted((notes / "lanes").glob("*/**/*.md")) if notes else []:
         try:
             heard = p.stat().st_mtime
-        except OSError:
+        except OSError as e:
+            print(f"{iso(time.time())} {p}: skipped, gone while the notes were listed ({type(e).__name__}: {e})",
+                  file=sys.stderr, flush=True)
             continue
         if t - heard < WORKER_NOTES_S:
             yield p, heard, front_matter(p)
@@ -879,9 +885,13 @@ def branch_handle(branch: str, registry: Path | None, handles: set[str]) -> str 
 def machine(machines_d: Path, name: str) -> dict | None:
     """A node's `machines.d/<name>.toml` (`research pods register --host`): host, port, user, root and python, with research's
     defaults; None when it is missing or names no host."""
+    if not (machines_d / f"{name}.toml").exists():
+        return None
     try:
         m = tomllib.loads((machines_d / f"{name}.toml").read_text())
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        print(f"{iso(time.time())} {machines_d / f'{name}.toml'}: unreadable, so {name} has no host ({type(e).__name__})",
+              file=sys.stderr, flush=True)
         return None
     if not isinstance(m.get("host"), str) or not m["host"]:
         return None
@@ -901,7 +911,8 @@ def node_runs(cfg: dict, notes: Path | None, node: str, since: float,
     rc, out, err = sh(argv, RUNS_READER, 120)
     try:
         rows = json.loads(out) if rc == 0 else None
-    except ValueError:
+    except ValueError as e:
+        print(f"{iso(time.time())} {node}: its runs' listing is not JSON ({e})", file=sys.stderr, flush=True)
         rows = None
     if not isinstance(rows, list):
         return None, f"{node} unreadable (ssh exited {rc}: {err.strip()[-200:]})"
@@ -1074,8 +1085,9 @@ def doorbells(path: Path, t: float) -> tuple[dict[str, float], str]:
     for handle, i in (d.get("inboxes") or {}).items():
         try:
             out[str(handle)] = float(i["last"])
-        except (KeyError, TypeError, ValueError):
-            continue
+        except (KeyError, TypeError, ValueError) as e:
+            print(f"{iso(time.time())} {path}: @{handle}'s doorbell skipped, its `last` unread ({type(e).__name__}: {e})",
+                  file=sys.stderr, flush=True)
     return out, "fresh"
 
 
@@ -1211,8 +1223,9 @@ class Api:
                 if e.code in (400, 404, 410):
                     return
                 raise
-            except (TimeoutError, OSError):
-                continue
+            except (TimeoutError, OSError) as e:
+                print(f"{iso(time.time())} stream {run} of {agent}: {type(e).__name__}: {e}; reading it again",
+                      file=sys.stderr, flush=True)
 
 
 @dataclass
@@ -1294,8 +1307,10 @@ class Watch:
         self.kids_lock = threading.Lock()           # `children`, which streams add to and `save` reads, under `lock` or not
         self.state_path = log.with_name("state.json")
         try:
-            s = json.loads(self.state_path.read_text())
-        except (OSError, ValueError):
+            s = json.loads(self.state_path.read_text()) if self.state_path.exists() else {}
+        except (OSError, ValueError) as e:
+            print(f"{iso(time.time())} {self.state_path}: unreadable, so the watch starts from no state ({type(e).__name__}: "
+                  f"{e})", file=sys.stderr, flush=True)
             s = {}
         self.freed: dict[str, float] = s.get("freed", {})         # agent -> when the watch last cancelled or restarted it
         self.errors: dict[str, int] = s.get("errors", {})         # agent -> ERROR runs in a row the watch restarted
@@ -1358,9 +1373,13 @@ class Watch:
 
     def launch_key(self) -> str | None:
         """The key a relaunch creates agents with, from `launch.env` (one `CURSOR_API_KEY=` line); None while it is absent."""
+        if not self.launch_env.exists():
+            return None
         try:
             lines = self.launch_env.read_text().splitlines()
-        except OSError:
+        except OSError as e:
+            print(f"{iso(self.clock())} {self.launch_env}: unreadable, so no relaunch key ({type(e).__name__})", file=sys.stderr,
+                  flush=True)
             return None
         return next((v.strip().strip("\"'") for k, _, v in (ln.partition("=") for ln in lines)
                      if k.strip().removeprefix("export ").strip() == "CURSOR_API_KEY" and v.strip()), None)

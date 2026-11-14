@@ -7,7 +7,7 @@
   scheduled request's rows in the order its A tables hold them) to `pouw_h1.H1Run.admit` before the step's forward. Round s closes
   once step s's last linear is recorded: its root (`round_root`) is over the step's calls (`step_digest`, their manifest
   rows with what the listeners bound), its request table's root and its slot table's root, and only then does the round
-  coins' `LiveRecord` (the auditor host's session, the pouw setting ``challenger``; ``rounds`` in tests) open round s's coin.
+  coins' `LiveRecord` (the auditor device's session, the pouw setting ``challenger``; ``rounds`` in tests) open round s's coin.
   Round 0's request table comes before the salt: its root is in the window's open root (`salt.window_open_root`, over
   the weights' root, it and the session), which the gate opens the session on and the salt coin opens after
   (`pouw_h1.H1Run.open_window`), so its binding reads no salt (`requests_binding`) and every later round's does.

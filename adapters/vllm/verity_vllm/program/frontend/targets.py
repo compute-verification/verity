@@ -31,7 +31,6 @@ import json
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity.definitions.numerics import fa3_model as FA3
 from verity.circuits.ops.prims import (
     BlackwellE4m3QmmaDot32,
     BlackwellNvf4OmmaDot64,
@@ -39,6 +38,7 @@ from verity.circuits.ops.prims import (
     HopperE4m3MmaV2Dot32,
     HopperE4m3QgmmaDot32,
 )
+from verity.definitions.numerics import fa3_model as FA3
 from verity.definitions.registry import (
     attention_vocab,
     b1,
@@ -351,7 +351,7 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
         s = spec.strip()
         if s.lower() == "conflict":
             return {"max_seqlen_q_by_step": {}, "conflict": True, "declared": True}
-        spec = int(s) if s.lstrip("-").isdigit() else json.loads(s)
+        spec = int(s) if s.lstrip("-").isdecimal() else json.loads(s)
     if isinstance(spec, bool):
         raise ValueError(f"launch context: {spec!r}")
     if isinstance(spec, int):

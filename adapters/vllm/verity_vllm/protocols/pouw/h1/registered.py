@@ -316,7 +316,7 @@ def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_ro
     if rows is not None and len(rows) != n:
         raise ValueError(f"{len(rows)} rows held for a value of {n}")
 
-    def made(bcs: tuple[bytes, ...], levels: tuple[tuple[bytes, ...], ...]) -> G.Registered:
+    def made(bcs: Sequence[bytes], levels: Sequence[Sequence[bytes]]) -> G.Registered:
         held = rows if rows is not None else Rows(np.ascontiguousarray(_host(words)) if keep_rows else None, n)
         salts = public if public is not None else Salts(key, nonce, n) if fixed is None else fixed
         return G.Registered(program=program, value=value, words=int(w), word_bits=G.WORD_BITS, rows=held, salts=salts,

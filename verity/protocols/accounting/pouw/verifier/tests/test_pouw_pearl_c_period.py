@@ -227,7 +227,7 @@ def test_a_session_pinned_behind_its_periods_open_pin_refuses_the_period():
 
 
 def test_a_refused_pass_refuses_the_period():
-    """Clause 4: each pass passes `core_check.pass_epoch` under the live inputs: a context naming another manifest, or
+    """Clause 4: each pass passes `core_check.pass_epoch_twin` under the live inputs: a context naming another manifest, or
     a salt that isn't its live coin's, refuses the period."""
     lane, a, _, _ = _two_periods("pass")
     p0, p0b, p1 = a
@@ -279,7 +279,7 @@ def _retained(lane: Lane, sid: str, base: dict) -> bytes:
 
 
 def test_a_pass_retained_in_vllms_form_is_accepted_and_credited_in_a_one_epoch_period():
-    """A retained manifest exactly as the vLLM integration writes it passes `core_check.pass_epoch` under the live inputs (``live
+    """A retained manifest exactly as the vLLM integration writes it passes `core_check.pass_epoch_twin` under the live inputs (``live
     coin``), and its one-epoch period credits it."""
     lane = Lane("retained")
     base, w, _ = _base(lane.rng)
@@ -291,7 +291,7 @@ def test_a_pass_retained_in_vllms_form_is_accepted_and_credited_in_a_one_epoch_p
           "manifest": raw.hex(), "session": lane.sessions[sid][0].files()}
     key, ledger, pins, main = lane.args("p-a", [ev])[:4]
     live = {"key": key, "ledger": ledger, "main": main, "pins": pins, "session": ev["session"]}
-    assert pc.CC.pass_epoch(None, raw, ev["context"], live=live, verify=rc.lms_verify) == ("live coin", None)
+    assert pc.CC.pass_epoch_twin(None, raw, ev["context"], live=live, verify=rc.lms_verify) == ("live coin", None)
     got, why = Cr.pearl_c_period_credit(*lane.args("p-a", [ev]))
     assert why is None and got == {"epochs": [[w.hex(), 0]], "passes": [json.loads(raw)]}
 

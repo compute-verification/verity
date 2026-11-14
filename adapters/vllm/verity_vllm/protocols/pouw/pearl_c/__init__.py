@@ -74,7 +74,11 @@ from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import (
     SM120,
     SM120_UNPROMOTED,
 )
-from verity.protocols.accounting.pouw.verifier.audit import Workload, rows_domain, weight_binding
+from verity.protocols.accounting.pouw.verifier.audit import (
+    Workload,
+    rows_domain,
+    weight_binding,
+)
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.accounting.pouw.verifier.serving import (
     SERIAL,
@@ -316,7 +320,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
                  whole_fork_stats: bool = False, lag_ends: bool = False, whole_tree_sm: bool = False, aside_ends: bool = False,
                  pass_index: int | None = None, whole_prefetch_b: bool = False, whole_eager: str | Schedule | None = None,
                  whole_shape_joins: bool = False, whole_pd_shared: bool = False):
-        """`coins` is the epoch's coin commitment, held in this process or a live session's on the auditor host, and `opening`
+        """`coins` is the epoch's coin commitment, held in this process or a live session's on the auditor device, and `opening`
         its salt coin, opened after the weights' root, or a live session's after salt epoch `pass_index`'s root (`epoch_of`,
         which raises `DomainError` otherwise): the salt is the coin's.
         The whole capture's options: `whole_options`.  `lag_ends`: an engine step's pass end (`_ExecutorPass.end`, `end_pass`

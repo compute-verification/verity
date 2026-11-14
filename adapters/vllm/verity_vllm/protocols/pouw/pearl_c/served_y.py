@@ -2,7 +2,7 @@
 to FP32, followed by its hm96 salt under the prover's key), in a ``frame-v3-sha512`` tree bound to the epoch's salt and the
 call's index, and retained beside A's (``y/<index>.rows.bf16``, ``y/<index>.tree``).  `verify_run` opens a sampled tile's
 real rows of it and holds each word to the unscale of the tile's checked U (`pearl_c_u.y`); the root is what a consumer of
-y (the sampled proofs' blocks after the linear) is tied to.  A served call's tree is built on its device by the kernel's
+y (SPOT's proof blocks after the linear) is tied to.  A served call's tree is built on its device by the kernel's
 own tree launches (`DeviceTrees`), `commit_y`'s bytes."""
 from __future__ import annotations
 
@@ -11,12 +11,23 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.protocols.accounting.pouw.verifier.audit import HM96, ROW_SCHEMA, hm96_salt, rows_domain
-from verity.protocols.accounting.pouw.verifier.protocol import tagged
 from verity.commitments import CommitmentDomain
 from verity.commitments.merkle import tree_levels
+from verity.protocols.accounting.pouw.verifier.audit import (
+    HM96,
+    ROW_SCHEMA,
+    hm96_salt,
+    rows_domain,
+)
+from verity.protocols.accounting.pouw.verifier.protocol import tagged
 
-from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _put, _stream, _write, _zeros
+from verity_vllm.protocols.pouw.pearl_c.host import (
+    _bytes,
+    _put,
+    _stream,
+    _write,
+    _zeros,
+)
 
 __all__ = ["DeviceTrees", "HM96_Y", "Y_ROWS_TAG", "chunk_rows", "commit_y", "f32_rows", "retain_y", "tree_launches", "y_binding",
            "y_domain"]
@@ -101,6 +112,8 @@ class DeviceTrees:
     current stream, into a tree that starts as the pass's poison byte where the pass has one.  One pipeline a width n, y's
     rows its rows of k = n words, so n is a k the kernels take; its first tree is held to `commit_y` over a fixed
     `Y_CHECK_ROWS`-row y."""
+
+    pipes: dict[int, Any]
 
     def __init__(self, run: Any) -> None:
         self.run, self.pipes = run, {}

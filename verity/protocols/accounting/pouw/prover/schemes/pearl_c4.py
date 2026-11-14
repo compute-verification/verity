@@ -1335,8 +1335,8 @@ class PearlC4:
                  for j, w in enumerate(row)] for i, row in enumerate(checked.u)]
 
 
-#: the private names these four had, which readers outside the module still import
-_E2M1_MIDPOINTS, _F2, _pair_excess, _scale_value = E2M1_MIDPOINTS, E2M1_SIGNED_HALVES, pair_excess, scale_value
+#: the private names these two had, which a test and a Lean docstring outside the module still name
+_E2M1_MIDPOINTS, _scale_value = E2M1_MIDPOINTS, scale_value
 
 __all__ = ["ATOM", "B_OVF", "B_OVF_MIN_N", "DEAD_RHO_SQ", "DELTA", "DENSE_CORRECTION", "E2M1_MIDPOINTS",
            "E2M1_SIGNED_HALVES", "F1_B_OVERFIT", "F1_EPS", "FFMA_UNITS", "FLOOR", "FORMATS", "FORMING_CREDITED",

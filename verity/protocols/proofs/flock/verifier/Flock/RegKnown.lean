@@ -1,4 +1,8 @@
-/-
+module
+
+public import Flock.Registered
+
+/-!
 `Flock.HmRow` (registered reads): a value the verifier registers itself at public content. Its `--registered` port
 entry names the content under `known` (each row's u16 words and its salt), and the verifier computes the value's
 registered root from it and refuses a file whose stated root is another (`checkKnownAll`, which `flock-verify` runs on
@@ -6,9 +10,6 @@ registered root from it and refuses a file whose stated root is another (`checkK
 one of those rows, or SHA-512 collides. h1_prove's `ok` rows are such a value: row `u` the one word `1` under the public
 `ok_salt(window, u)` (`h1unit.register_ok`).
 -/
-module
-
-public import Flock.Registered
 
 @[expose] public section
 

@@ -135,11 +135,9 @@ def test_a_replay_bundle_goes_only_with_its_complete_slim_keep(tmp_path):
 
     text = (SKY / "jobs" / "config-run.yaml").read_text()
     run = textwrap.dedent(text.split("\n---\n")[3].split("\nrun: |\n", 1)[1].split("\n\nconfig:", 1)[0]) + "\n"
-    try:
+    if importlib.util.find_spec("yaml") is not None:
         import yaml
         assert [d for d in yaml.safe_load_all(text) if d and d.get("name") == "replay"][0]["run"] == run
-    except ImportError:
-        pass
     assert subprocess.run(["bash", "-n"], input=run, text=True).returncode == 0
     body = run.split("<< 'EOF'", 1)[1].split("\n", 1)[1].split("\nEOF\n", 1)[0]
     n2 = (SKY.parent / "n2_commit.sh").read_text()

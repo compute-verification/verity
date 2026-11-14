@@ -217,6 +217,36 @@ def test_padding_planes_are_counted_apart_and_a_padding_only_step_expects_nothin
     assert not check_step(decls, StepSequences(()), pad + whole(1, KVH, 2))["ok"]
 
 
+@pytest.mark.parametrize("rest", [f"g{KVH}xwide", "s0/gwide/S", f"s0/g{NH}x1x{NB}{TILE}/nope", "a/b"],
+                         ids=["whole-geometry", "sequence-geometry", "no-plane", "two-parts"])
+def test_a_plane_name_the_check_cannot_read_is_named_and_is_no_plane(rest: str):
+    decls = two_class(2)
+    good, bad = observed_pattern(decls, 3), f"fa2.m1/L1/{rest}"
+    v = check_step(decls, decode(3), good + [bad])
+    assert not v["ok"] and v["layers_bad"] == {1: [f"1 unparsable plane name(s), e.g. {bad!r}"]} and v["fa2_layers_bad"] == {1: 1}
+    # with no plane beside it, the layer has no class and no count either
+    alone = check_step(decls, decode(3), [n for n in good if "/L1/" not in n] + [bad])["layers_bad"][1]
+    assert alone[0] == f"1 unparsable plane name(s), e.g. {bad!r}" and alone[1].startswith("class none observed, whole declared (")
+    assert alone[2:] == ["count 0 observed, 1 expected"]
+
+
+def test_a_layer_with_planes_of_both_classes_is_mixed_and_a_sequence_planes_head_dim_is_checked():
+    decls = two_class(2)
+    good = observed_pattern(decls, 3)
+    mixed = check_step(decls, decode(3), good + per_seq(1, [0]))["layers_bad"][1]
+    assert mixed[0].startswith("class mixed observed, whole declared (") and mixed[1:] == ["count 7 observed, 1 expected"]
+    narrow = [f"fa2.m1/L0/s{i}/g{NH}x1x{NB}x64x128/{p}" for i in range(3) for p in FP.PLANES]
+    v = check_step(decls, decode(3), [n for n in good if "/L0/" not in n] + narrow)
+    assert v["layers_bad"] == {0: [f"s{i}: head_dim 128 in the name, 256 declared" for i in range(3)]}
+
+
+def test_a_window_that_is_no_number_is_no_window():
+    impl = {"num_heads": 8, "num_kv_heads": 4, "head_size": 256}
+    windows: list[object] = [[], "wide", [None, 0]]
+    ds = declarations_from_attention_impls({f"model.layers.{k}.self_attn.attn": {**impl, "sliding_window": w} for k, w in enumerate(windows)})
+    assert [(d.layer, d.window) for d in ds] == [(0, None), (1, None), (2, None)]
+
+
 def test_fa3_policy_stages_one_whole_launch_per_layer_whatever_the_window():
     decls = two_class(4)
     pol = LayoutPolicy(backend="fa3", compact=False)

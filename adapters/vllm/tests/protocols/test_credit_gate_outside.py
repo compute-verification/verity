@@ -6,12 +6,16 @@ import importlib
 import json
 from contextlib import nullcontext
 from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
-TorchDispatchMode = importlib.import_module("torch.utils._python_dispatch").TorchDispatchMode
+if TYPE_CHECKING:
+    from torch.utils._python_dispatch import TorchDispatchMode
+else:
+    TorchDispatchMode = importlib.import_module("torch.utils._python_dispatch").TorchDispatchMode
 OPS = importlib.import_module("verity_vllm.engine.int8_ops")
 CG = importlib.import_module("verity_vllm.protocols.pouw.credit_gate")
 PH = importlib.import_module("verity_vllm.protocols.pouw.h1")
@@ -44,9 +48,8 @@ class _Count(TorchDispatchMode):
 def test_outside_leaves_any_other_innermost_mode_and_no_mode_as_they_are():
     with CG.outside():
         assert torch.equal(torch.ones(2) + 1, torch.full((2,), 2.0))
-    with CG.Trace("q") as t, _Count() as count:
-        with CG.outside():
-            torch.ones(2) + 1
+    with CG.Trace("q") as t, _Count() as count, CG.outside():
+        torch.ones(2) + 1
     assert count.ops == 2 and [i.name for i in t.invocations] == ["aten::ones", "aten::add"]
 
 
@@ -70,7 +73,7 @@ def _window(no_z: int) -> str:
 
     applies = [arm(w) for w in range(len(T.SHAPES))]
     for _s in range(T.STEPS):
-        xs = {}
+        xs: dict[int, Any] = {}
         for b, (_n, k) in zip(T.BLOCKS, T.SHAPES):
             xs[b] = xs[b] if b in xs else T._codes(rng, T.SERVED, k)
         for w, b in enumerate(T.BLOCKS):

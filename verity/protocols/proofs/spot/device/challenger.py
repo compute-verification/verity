@@ -26,7 +26,7 @@ challenger refuses entropy no claim instance names (`served_claim`, `NO_CLAIM`),
 Timing is a trust assumption, not a check.  `after` binds an opening to the root the verifier recorded, but can't show
 the coin was released after it: that rests on the challenger releasing coin i only once it has received root i.  The
 challenger is auditor-trusted, the auditor's device on a machine the developer doesn't control, under the named assumption
-`trusted-host`.  The record keeps the release order with its own time (`LiveRecord.log`).
+`trusted-device`.  The record keeps the release order with its own time (`LiveRecord.log`).
 
 **A withheld session** (`remote.open_session(..., withhold=True)`, the auditor's choice, its ledger open's body
 `withheld: true`) keeps its commitment on the challenger's host until the prover's commitments are in: while it runs, the
@@ -87,7 +87,7 @@ when the run ends.  `rec-compose` refuses unless each part has exactly one sessi
 parts', so a retried part shows and is refused, never hidden.  The record holds no coin: each session's coins are its
 coin tree's, sampled at its `Hello` (fresh per round, never committed before the run, unlike an epoch's coins above).
 The verifier reads the record from the challenger's host, never from the prover's bundle; that it logs every `Hello`
-it answers is the auditor-trusted challenger's (`trusted-host`).  The live challenger keeps it one event a line: its
+it answers is the auditor-trusted challenger's (`trusted-device`).  The live challenger keeps it one event a line: its
 operator stages the record before any session and closes it after the last, and Flock's `flock-circuit serve --zk
 --rec-run FILE --rec-part J` appends each `open` in one write before the `Hello`'s answer leaves, refusing a `Hello` it
 can't log (`flock_live::run_record`); `RunRecord` is the same record in memory.
@@ -117,7 +117,7 @@ open's `for`, else its `by` (`lane_of`).  The verifier pins the challenger key f
 deployment; `key_of_record` reads the operator's published pin), and refuses any open or period-open naming another
 key's
 SHA-512 before it checks a signature, so a ledger signed under its own key can't pin itself.  Then the ledger is
-the operator's reference check, `verify_ledger` and `verify_periods` (one `_verify`, which the auditor's host runs
+the operator's reference check, `verify_ledger` and `verify_periods` (one `_verify`, which the auditor's device runs
 too): each
 entry chained and signed at strictly increasing leaves of the key (a ledger restored with its key's state forks at a
 reused leaf), a reserve first in its session and expiring its minutes after its start, one open a root and a session,
@@ -128,7 +128,7 @@ opened under v2, ended and closed, its end naming its record's leaf and commitme
 sealing the session's record, close, release log and refused hellos; then its record names the open's host and is
 signed at that leaf over that commitment, its signed close names the ledger's session id, and its release log and
 refused hellos are the ones the end sealed (`session_named`).  A ledger older than the window's end is refused, as is a
-window it opens no session for, so one session's coins pass for one window only.  The auditor host's operator publishes
+window it opens no session for, so one session's coins pass for one window only.  The auditor device's operator publishes
 the ledger's heads;
 `ledger_head` checks each, refuses any two that don't extend one another, and takes the longest.  Every entry is under
 the one pinned key, so a ledger whose key changes is refused: no entry, signed under the old key, hands the ledger to a
@@ -163,7 +163,7 @@ pins the open's commit (`pins_reason`), and that commit is on main's first-paren
 (`first_parent_reason`; the auditor's ``git rev-list --first-parent origin/main``, an argument, never the host's or the
 prover's word).  Ancestry is not enough: main lands each change as a merge, so a branch commit merged into main is in
 main's history, but main's check ran on the merge's tree, never on the branch commit's.  That the host ran the commit
-its open names is the auditor-trusted host's word (`trusted-host`).  Every path that credits a session reads it
+its open names is the auditor-trusted device's word (`trusted-device`).  Every path that credits a session reads it
 through `pinned_session`: `credited_session` (the pin first, then the circuit) and `trusted_session_of`.
 `audited_session` checks no pin and credits nothing.
 
@@ -212,7 +212,7 @@ import string
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -1250,7 +1250,7 @@ def later(t: Any, minutes: int) -> str | None:
     if m is None:
         return None
     try:
-        d = datetime(*map(int, m.groups()), tzinfo=timezone.utc) + timedelta(minutes=minutes)
+        d = datetime(*map(int, m.groups()), tzinfo=UTC) + timedelta(minutes=minutes)
     except (ValueError, OverflowError):
         return None
     return f"{d.year:04d}-{d.month:02d}-{d.day:02d}T{d.hour:02d}:{d.minute:02d}:{d.second:02d}Z"
@@ -1680,7 +1680,7 @@ def declared_day(ledger: Any, window: Any, key: ChallengerKey, verify: Verify) -
 
 
 def ledger_head(heads: Any, key: ChallengerKey, verify: Verify) -> list[str]:
-    """The auditor's ledger as the auditor host's operator published it: every head of `heads` (each its lines; None
+    """The auditor's ledger as the auditor device's operator published it: every head of `heads` (each its lines; None
     when the verifier has none)
     checked under the pinned key `key` (`audited_session`'s check of a ledger), any two extending one another, and of them
     the longest.  Raises `CoinError` naming why (and which head, when there are several), so a ledger forked, cut or
@@ -1837,7 +1837,7 @@ def pins_reason(session: str, opened: dict, pins: Any) -> str | None:
     n = seal["lines"]
     if len(pins) < n:
         return (f"the host's pins log has {len(pins)} lines, fewer than the {n} the open of session {session} sealed: "
-                "take the auditor host's operator's newest published pins log")
+                "take the auditor device's operator's newest published pins log")
     if log_digest(pins[:n]) != seal["sha512"]:
         return (f"the host's pins log is not the one the open of session {session} sealed: its first {n} lines were "
                 "edited or rewritten")
@@ -1868,7 +1868,7 @@ def first_parent_reason(session: str, pinned: Any, main: Any) -> str | None:
 
 def pinned_session(ledger: Any, window: Any, key: ChallengerKey, pins: Any, main: Any, verify: Verify) -> Audited:
     """`audited_session`, from main's code: the window's session as the auditor's ledger names it, when the host's pins
-    log `pins` (its lines; the auditor host's operator's published one) records the open's pin (`pins_reason`) and the
+    log `pins` (its lines; the auditor device's operator's published one) records the open's pin (`pins_reason`) and the
     verifier's own copy of
     main's first-parent history `main` holds it (`first_parent_reason`).  Raises `CoinError` naming why, so a session
     the host ran from any other tree fails closed.  For PoUW this is what makes a credited window's coins come from a
@@ -2027,7 +2027,7 @@ class LiveRecord:
     def log(self) -> tuple[dict[str, Any], ...]:
         """The release order with the record's time, two events a coin: root i's receipt, `{"event": "root", "label",
         "index", "root": <hex>, "received_at"}`, then coin i's release after it, `{"event": "release", "label", "index",
-        "after": <hex>, "released_at"}`.  It records the order; that the challenger kept it is `trusted-host`'s."""
+        "after": <hex>, "released_at"}`.  It records the order; that the challenger kept it is `trusted-device`'s."""
         return tuple(self._log)
 
     def record(self, root: bytes) -> LiveOpening:

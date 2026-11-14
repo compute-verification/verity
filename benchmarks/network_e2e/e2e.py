@@ -22,7 +22,7 @@ then runs this. The README says what the report establishes and what it doesn't.
   ``--upstream``, ``--vllm`` or ``--endpoint-peer`` the rehearsal is run first (`certifier_serve.py rehearse`, honest,
   late and extra, every option this file doesn't take passed on) into ``DIR/rehearsal``; ``--endpoint-peer NAME:PORT``
   reaches another node's endpoint on its loopback through an ssh forward (`forward`), so the certifier runs off the
-  developer's node, though not on the auditor host. The negatives' drop, when the rehearsal ran it, is a negative (refused
+  developer's node, though not on the auditor device. The negatives' drop, when the rehearsal ran it, is a negative (refused
   by N2's counts, and on the advice profile by the rehearsal's own check), and its token is refused only by the I/O tie
   (``PENDING``): on the advice profile, where the tie is required (`chain.tie`, `chain.tie_gate`), token is a negative
   it must refuse at the link-windows its changed ids fall in; on the others, where the tie doesn't run, a row pending
@@ -107,7 +107,7 @@ OWN_CODE = {"late": "audit.status:coverage-never-established", "extra": "io:long
 README = "verity/protocols/accounting/certifier/verifier/README.md"
 PEERS = Path("/etc/vy/peers")
 ADVICE = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]
-#: the auditor's host whose gate runs the certifier (``benchmarks/network_traces/site.json``'s ``challenger``)
+#: the auditor's device whose gate runs the certifier (``benchmarks/network_traces/site.json``'s ``challenger``)
 GATE_HOST = json.loads((ROOT / "benchmarks" / "network_traces" / "site.json").read_text())["challenger"]
 
 CLAIM = {
@@ -135,7 +135,7 @@ CLAIM = {
         "The rehearsal is a rehearsal: the client's link is loopback, its check plays the firewall and the challenger "
         "in one process, and it publishes the records, certificates and certifier's salts (witness) so that its check "
         "can be replayed (certifier_serve.py's docstring). Off the gate the certifier is a process on the host that "
-        "ran the rehearsal, which against an endpoint on its own loopback is the developer's node, not an auditor host "
+        "ran the rehearsal, which against an endpoint on its own loopback is the developer's node, not an auditor device "
         "(the report's 'where' says which). n2_zk runs the prover, the firewall and the verifier, whose live coins "
         "the proofs take, on one node. The model is the one the plan names: whether it was cut or full, and the "
         "response length, are the run's (the report's 'tokens').",
@@ -268,20 +268,20 @@ def where(runs: dict[str, dict], peer: str | None = None) -> dict:
         off = sorted(set(runs) - set(gates))
         at = f"{req['peer']}:{req['port']}" if req.get("peer") and req.get("port") else None
         return {"upstream": f"{at} (its 127.0.0.1, tunnelled to {upstream})" if at and upstream else at or upstream,
-                "where": f"gate: the certifier on {GATE_HOST}, the auditor's host, through its gate (vy-challenger-gate "
+                "where": f"gate: the certifier on {GATE_HOST}, the auditor's device, through its gate (vy-challenger-gate "
                          f"certifier-rehearse), tunnelled to {at or 'the endpoint'}; gate runs "
                          f"{', '.join(f'{s} {g.get('run')}' for s, g in gates.items())}; pinned to main "
                          f"{', '.join(sorted({str(g.get('pinned')) for g in gates.values()}))}"
                          + (f"; {', '.join(off)} off the gate" if off else "")}
     if peer is not None:
         return {"upstream": f"{peer} (its 127.0.0.1, forwarded to {upstream})",
-                "where": f"off the developer's node: better than the loopback, though not yet the auditor host (the "
+                "where": f"off the developer's node: better than the loopback, though not yet the auditor device (the "
                          f"certifier on {socket.gethostname()}, the endpoint on {peer.rsplit(':', 1)[0]} through an "
                          f"ssh forward)"}
     host = urllib.parse.urlsplit(upstream or "").hostname or ""
     local = host == "localhost" or host.startswith("127.") or host == "::1"
     return {"upstream": upstream, "where": "off the gate: the certifier on the host that ran the rehearsal" +
-            (", the endpoint's own (loopback), so the developer's node, not an auditor host" if local else "")}
+            (", the endpoint's own (loopback), so the developer's node, not an auditor device" if local else "")}
 
 
 def _ssh_to(peer: str, peers: Path) -> list[str]:

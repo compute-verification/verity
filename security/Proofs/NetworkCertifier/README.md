@@ -108,7 +108,7 @@ SampledCharge.lean  the leak bound under a sampled audit: by the layout's causal
 SampledLeak.lean  the leak bound under an accepted sampled audit: its relation (RAcc) gives the leak
     relation (rLeak_of_rAcc), composed with SampledAuditAccepted as a
     hypothesis (sampledLeak; sampledLeak_reg at the registered inputs pinned)
-Tap.lean        what the tap's certifier saw is what its warden sent: under trusted-host, on a schedule its
+Tap.lean        what the tap's certifier saw is what its warden sent: under trusted-device, on a schedule its
     record format holds, its cells read back from the record its same run writes
     (certifier_cells_read), and each data cell its lane sends before the fail cell is
     in it (certifier_data_read)
@@ -353,7 +353,7 @@ The other 25 are the rest of the Capacity table's bounds and the schedule's caus
   `CommitmentScheme.Binds`); filled in with the network certifier's values, it carries its records, and the incorrect proof blocks'
   gates are the advice the count already charges, so the count is unchanged. The network certifier is one device on
   the server's uplink, and it shapes what it forwards rather than only observing it (`Definitions/NetworkCertifier/Tap.lean`):
-  one run of its code (`recordingCode`, under one `trusted-host`) gives the cells the client receives and the observations
+  one run of its code (`recordingCode`, under one `trusted-device`) gives the cells the client receives and the observations
   the audits read, its record of those cells, so on every schedule its record format holds (`RecordFormat.fits`) the
   cells read back from the observations (`certifier_cells_read`, a lemma, not a premise). The format the Python network
   certifier writes, a row a bucket of frames naming their connections (`RowsFormat`,
@@ -361,7 +361,7 @@ The other 25 are the rest of the Capacity table's bounds and the schedule's caus
   in the monitoring period's buckets, at most `S` a bucket, and its `#guard`s hold it to the Python records. The record
   holds the fail cells and padding too, so the proof counts the cells through the
   observations and needs no fail-cell charge: `∏_c (cap_c + 1)` is room. Its premises are `Compiled.KS`,
-  `CommitmentScheme.Binds` and `trusted-host`. The union over the monitoring period's live coins and the registration's
+  `CommitmentScheme.Binds` and `trusted-device`. The union over the monitoring period's live coins and the registration's
   binding of the prover's values at `reg` are not yet stated. `Compiled.KS` stands in for proofs' live bound
   (`Flock.Guarantees.SampledKSLive`), which replaces it once locked, with live forms of `SampledAuditAccepted` and
   `SampledLeakAccepted`.
@@ -387,7 +387,7 @@ The other 25 are the rest of the Capacity table's bounds and the schedule's caus
   incorrect proof blocks cost `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits once over the monitoring period, `b = 16` by a
   proof block's output limit. The network certifier is one device, as in the period's bound: on every schedule its
   record format holds, the cells the client receives read back from its record (`certifier_cells_read`), so its one named
-  assumption is `trusted-host`. Over live audits the two inputs are `Flock.Guarantees.SampledKSLive` at each window's
+  assumption is `trusted-device`. Over live audits the two inputs are `Flock.Guarantees.SampledKSLive` at each window's
   history and the live `SampledLeakAccepted` (P2), neither discharged, so it is not the deployed system's bound over a
   monitoring period until they are.
 - **The leak bounds with checked inputs** (`Checked.lean`, `Carried.lean`): inputs a check pins cost no advice bits. A

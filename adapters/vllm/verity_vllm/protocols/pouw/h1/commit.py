@@ -53,15 +53,12 @@ from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
 
 from verity_vllm.commit import step_rows
-from verity_vllm.commit.served_record import PORT_NAMES
 from verity_vllm.protocols.pouw.h1 import names as NM
 from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1.words import ids_words
 
 #: the scheme H1's own Commit commits under, and its run root's bytes
 SCHEME, ROOT_BYTES = step_rows.NAME, 64
-#: the name the Commit's step-input port acquires the step's token ids under (`CommitTap.port`)
-IDS_PORT = PORT_NAMES[0]
 
 #: the credit refusal of every call of a window whose tables aren't the Commit's values (``details.roots1``)
 UNTIED = ("credit: a-not-the-commits: a call's A table or a round's input-ids table is not the Commit's value of its "
@@ -218,8 +215,8 @@ class CommitTap:
         self._at.setdefault(value, {})[call.index] = (call.index, j, s, len(codes))
         if len(rows) < len(cs):
             return
-        rows, got = self._rows.pop(value), self._at.pop(value)
-        held, at = [rows[c] for c in cs], [got[c] for c in cs]
+        rows, places = self._rows.pop(value), self._at.pop(value)
+        held, at = [rows[c] for c in cs], [places[c] for c in cs]
         same = words is not None and value in served.registered and _theirs(served, call, held, words)
         reg = served.registered[value] if same else served.a_tree(
             run, call, np.concatenate([served.a_words(call, cc, sc) for cc, sc in held]))
@@ -539,6 +536,6 @@ def calls_root(salt: bytes, manifest: Sequence[Mapping[str, Any]], served: bytes
     return CR.calls_root(salt, manifest, served, None if commit is None else digest(commit))
 
 
-__all__ = ["DAY_KEYS", "IDS_PORT", "ROOT_BYTES", "SCHEME", "CommitRecord", "CommitTap", "Reused", "Sites", "UNTIED", "bind",
-           "calls_root", "committed", "day_of", "digest", "ids_reason", "named", "record_of", "registration", "reuse", "reused",
-           "roots1", "shape", "site", "untied"]
+__all__ = ["DAY_KEYS", "ROOT_BYTES", "SCHEME", "CommitRecord", "CommitTap", "Reused", "Sites", "UNTIED", "bind",
+           "calls_root", "committed", "day_of", "digest", "ids_reason", "named", "record_of", "registration", "reuse",
+           "reused", "roots1", "shape", "site", "untied"]

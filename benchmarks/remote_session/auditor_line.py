@@ -1,6 +1,6 @@
 """The memory line on the auditor's clock, the analysis of record for a gate run: each accepted paced session's line
 (time-held and link-charged, each read held over time and at the passes, exact) with its groups' times read from what
-the auditor's host signed rather than from the verifier's stamps.
+the auditor's device signed rather than from the verifier's stamps.
 
 **Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`remote-audit-verifier`'s `line_record` request,
 `RemoteAudit.Line.lineOfRecordOn` at the record's `groups_per_coin` g, with its W from `RemoteAudit.Pooled` over the
@@ -31,7 +31,7 @@ Beside the times the line reads the Lean verifier's record of the session (`veri
 is its wrong receipts, and its registered blocks, the registration's; and the verifier's verdict, and each group's
 held bytes by kind (`ledger.memory`), which the record doesn't hold (they need each pass's plan and the store's
 regions). The verifier runs on the audit's machine, not
-the auditor's host, so these rest on its verdict, which the session's transcript (`verifier.py --transcript`) lets the
+the auditor's device, so these rest on its verdict, which the session's transcript (`verifier.py --transcript`) lets the
 auditor replay offline (PoUB's `lean/tests/replay.py transcript`). The verifier's stamps are read only to
 cross-check the challenger's: each coin interval on both clocks, their rates, and each group's L on both.
 
@@ -110,7 +110,7 @@ binding-split`, then `, DeveloperStore` when unbound), and the evidence store's 
 the gate node: the security group's allow list, each interval it was applied, with infra's records, and whether the
 node mounts a shared filesystem (null while infra's answer is pending). A gate session whose span as the challenger
 signed it on the ledger (its open's `started_utc` to its end's `ended_utc`) lies strictly inside one applied interval
-is grounded by it (`no_relay`): its `NoOutsideCompute` rests on `ProviderLockdown`, under `trusted-host`,
+is grounded by it (`no_relay`): its `NoOutsideCompute` rests on `ProviderLockdown`, under `trusted-device`,
 which names what the lockdown doesn't close. A line whose credited sessions are all grounded (every gate session's,
 with none credited) is conditional on `ProviderLockdown` in its place; any other is conditional on
 `NoOutsideCompute`, as without the file. It changes no credit.
@@ -202,7 +202,7 @@ prices and the line doesn't assume (the ledger's). Every error records it by nam
 CONDITIONAL_ON = {"NoOutsideCompute": (
     "statement C in full: no device outside the node computes for it during the session. LineHeld reads it from the "
     "network certifiers' record (no counted ingress over the credited passes, Accounting.Remote.Held.Assumptions."
-    "Covered under certifier-coverage and IngressCounted at δ_net under trusted-host), which this line didn't check; "
+    "Covered under certifier-coverage and IngressCounted at δ_net under trusted-device), which this line didn't check; "
     "assumed until certifiers cover the gate node's boundary and certify that nothing but the verifier's messages "
     "entered it over the credited span"),
     "binding-split": (
@@ -219,7 +219,7 @@ GAPS = ("binding-split",)
 """The gaps in the line's charge (`CONDITIONAL_ON`'s), which every line is conditional on, grounded or not."""
 LOCKDOWN = "ProviderLockdown"
 GROUNDED = {LOCKDOWN: (
-    "the provider's lockdown of the gate node, under trusted-host: while infra's records show it applied, no device "
+    "the provider's lockdown of the gate node, under trusted-device: while infra's records show it applied, no device "
     "outside the node computes for it, which gives statement C for a session whose signed span lies inside an applied "
     "interval; it assumes what the security group doesn't close: the provider's resolver, flows opened before it was "
     "applied, and the provider's own paths (metadata, management plane, a cluster's fabric, a shared filesystem). "
