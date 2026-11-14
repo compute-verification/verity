@@ -17,6 +17,7 @@ from verity_bench import (
     overhead,
     overhead_records,
     prove_records,
+    served_render,
     served_table,
     settings,
     spot_status,
@@ -152,7 +153,7 @@ def _served_table(args: Any) -> int:
     if args.json:
         print(json.dumps(table, indent=1, sort_keys=True))
     else:
-        print(served_table.render(table), end="")
+        print(served_render.render(table), end="")
     return 0
 
 

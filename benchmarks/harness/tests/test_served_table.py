@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_bench import served_table
+from verity_bench import served_render, served_table
 from verity_bench.cli import main
 from verity_bench.vllm.arms import Arm
 from verity_bench.vllm.presets import FORMER_SPECS, expand_sweep, load_spec, resolve_spec
@@ -199,7 +199,7 @@ def test_the_served_table_takes_each_points_newest_passing_unsuperseded_run_from
     assert others and all(row["run"] is None and row["over_served" if "protocol" in row else "factor"] is None
                           for row in others)
 
-    markdown = served_table.render(table)
+    markdown = served_render.render(table)
     [line] = [line for line in markdown.splitlines() if line.startswith("| Commit |") and "b8-p512-mixed" in line]
     assert line.startswith(f"| Commit | {RTX} | `{COMMIT_SPEC}` | b8-p512-mixed |")
     assert "| 1.500× ± 0.000 | 1.500× ± 0.000 | 1.500× ± 0.000 | 3 | r20261024-030000-0002 |" in line
@@ -320,7 +320,7 @@ def test_a_run_of_record_is_a_labelled_run_or_a_labelled_arts_runs_from_a_fresh_
     [factor] = table["factors"]
     assert factor["factor"]["time_per_output_token_s"]["mean"] == pytest.approx(0.5)
 
-    markdown = served_table.render(table)
+    markdown = served_render.render(table)
     assert f"| r20261024-020000-0001 | `{b32[:16]}` (record `{listed[:16]}`) | prices it, doesn't credit it |" in markdown
     assert f"| by id | {H200} | `{COMMIT_SPEC}` | b8-p512-mixed | 1.500× ± 0.000 |" in markdown
     assert "r20261024-040000-0004" in markdown.split("Passed over")[1]
@@ -374,7 +374,7 @@ def test_a_live_pouw_row_is_its_runs_median_decode_step_over_its_controls_and_st
     assert why["r20261024-210000-0003"] == "timed tokens differ from exact's"
     assert why["r20991231-000000-0000"] == "not in the store or on its remote"
 
-    markdown = served_table.render(table)
+    markdown = served_render.render(table)
     assert (f"| H200 | vy-dc-h200 | 32 | 64 | 16.480 | `{LIVE_CONTROL}` | 3.744 | 4.402× | 3 | off-node | "
             f"r20261024-210000-0001 | `{record[:16]}` | H200 gated live: gamma 4.40 |") in markdown
     assert "per step, not per token" in markdown
