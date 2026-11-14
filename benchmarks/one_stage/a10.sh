@@ -20,7 +20,7 @@ export HZ_CACHE=${A11_CACHE:-$HOME/.cache/verity-a11}
 mkdir -p "$HZ_CACHE"
 source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/config:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 C=${A10_CACHE:-$HOME/.cache/verity-a10}
 mkdir -p "$C"
 # the store CLI from the tree (a node's job has none on its PATH), with the run's custody key in its environment only

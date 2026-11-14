@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from verity import config as K
+from verity.commitments.domains import LMS_SHA512_N64_W1_H20
 from verity.config import Component, Workload
 from verity.protocol import Channel, Role
 from verity.protocols.accounting.certifier.verifier import parties as NC
@@ -151,19 +152,29 @@ PROVER_NODE, AUDITOR_HOST, GATE_HOST = "prover-node", "auditor-host", "gate-host
 PLACEMENT = {WORKERS: PROVER_NODE, FIREWALL: PROVER_NODE, PROVER: PROVER_NODE, CHALLENGER: GATE_HOST,
              NETWORK_CERTIFIER: GATE_HOST, MEMORY_CHALLENGER: AUDITOR_HOST, BANDWIDTH_VERIFIER: AUDITOR_HOST,
              VERIFIER: AUDITOR_HOST}
-HEADER = ("The onsite run of the served window: onsite's seven subprotocols, each party on its machine. Run it on each",
-          "machine with `verity run THIS --on MACHINE --bindings FILE` (demos/onsite_served/README.md); the deploy",
-          "bindings hold every host and address, this file none. `verity run THIS --dry-run` resolves it all.")
+#: the memory challenger's keys the auditor pinned, one for each subprotocol whose sessions it signs: the SHA-512 of
+#: each public key
+PINS = {"pous": "39cd635aea2e124a0fcae035e416b107de27955118914642bb8d9d06814a17a2"
+                "f73014a3b9229bf1293ce4703ccc52a5f3119d22789db6778f34e237dfa631bb",
+        "wipe": "c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb41"
+                "98fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252"}
+HEADER = ("The onsite run of the served window: onsite's seven subprotocols, each party on its machine, and the keys",
+          "the auditor pinned for its devices. Run it on each machine with `verity run THIS --on MACHINE --bindings",
+          "FILE` (demos/onsite_served/README.md); the deploy bindings hold every host and address, this file none.",
+          "`verity run THIS --dry-run` resolves it all.")
 
 
 def configuration(commit: str) -> dict[str, Any]:
     """The configuration `demos/onsite_served/config.toml` holds, at program ``commit``: `config new`'s over
-    `PROTOCOLS`, each party at its `PLACEMENT`, the workload's and PoUS's parameters stated."""
+    `PROTOCOLS`, each party at its `PLACEMENT`, the workload's and PoUS's parameters stated, and the memory challenger's
+    `PINS`."""
     cfg = K.new(SERVED_WINDOW, list(PROTOCOLS), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
     cfg["workload"]["params"] = dict(SERVED.default_params)
     cfg["params"] = {SP.IDS["pous"]: {"challenges": 320}}
     for p in cfg["party"]:
         p["machine"] = PLACEMENT[p["name"]]
+    cfg["pin"] = [{"party": MEMORY_CHALLENGER, "protocol": c, "scheme": LMS_SHA512_N64_W1_H20, "key-sha512": h}
+                  for c, h in sorted(PINS.items())]
     K.check(cfg, MANIFESTS, {SERVED_WINDOW: SERVED})
     return cfg
 
@@ -266,13 +277,19 @@ def _poub_session(cfg, params, bound):
 #: what the certifier's front asks of serve-openai: its id-form requests answered in the id form, an id event the
 #: 503-byte payload of the front's 512-byte cells; every other request is answered as before
 ID_FORM = "--protocol ids --id-payload 503"
+#: the certifier's scan class (`certifier_piece.V3C_SCAN_CLASS`, w63k4) as served_verdicts.sh's SLOTS,PROMPT,OUTPUTS,
+#: LANES,EVERY, V3c's class, so the period check's compute audit is V3c's of the served window; CLASSES holds it beside
+#: served_verdicts.sh's default class
+SCAN_CLASS = "8,32,4,4,16"
 
 
 def _certifier_piece(cfg, params, bound):
     py = ".venv/bin/python"
     return {"SERVE_ARGS": ID_FORM,
             "CERTIFIER_FRONT": f'{py} {CERTIFIER_PIECE} front "$1" "$2" "$3" --gate {shlex.quote(bound["gate"])}',
-            "CERTIFIER_CMD": f'{py} {CERTIFIER_PIECE} piece "$1" "$2" "$3"'}
+            "CERTIFIER_CHAIN_CMD": f'{py} {CERTIFIER_PIECE} chain "$@"',
+            "CERTIFIER_PERIOD_CMD": f'{py} {CERTIFIER_PIECE} period "$@"',
+            "V3C_CLASS": SCAN_CLASS, "CLASSES": f"4,32,4 {SCAN_CLASS}"}
 
 
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
@@ -325,8 +342,9 @@ PARTIES: dict[str, dict[str, Piece]] = {
     },
     "certifier": {
         WORKERS: Piece("certifier", WORKERS, SERVED_WINDOW, "the certifier's developer side: its front before the "
-                       "requests (CERTIFIER_FRONT, which the served window runs), and its piece, the chain and the "
-                       "period check on the kept warden run", scripts=(CERTIFIER_PIECE,), reaches=NETWORK_CERTIFIER,
+                       "requests (CERTIFIER_FRONT, which the served window runs), and its piece split around V3c: the "
+                       "chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period check on V3c's "
+                       "period.json (CERTIFIER_PERIOD_CMD)", scripts=(CERTIFIER_PIECE,), reaches=NETWORK_CERTIFIER,
                        binds=("gate",), hooks=_certifier_piece),
         NETWORK_CERTIFIER: Piece("certifier", NETWORK_CERTIFIER, GATE, "the network certifier behind the gate: its "
                                  "warden in front of serve-openai before the requests"),
