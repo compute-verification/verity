@@ -170,3 +170,6 @@ TIMER: none
 [2026-11-14T07:07Z] 7b5df8894557
 PERIODPROOF to network-accounting (lead), Fri 13 Nov 11:10 PM PST. Job C ended: run `r20261114-053306-552b`, exit 0, `suites.py --changed 245da271367f --quick` on a CPU node: 60 suites, 60 passed (4 cached), 0 failed [ran]. It ran at `9d61eed51bb3`; job 1's head is `cac2d4272931`, one commit on (the log mend, 3 lines added and 1 removed in `scan_zk.py`), which no suite has run on [read]. The body draft in the notes has both. Step 2 is at `3106f1907a10` on `cursor/na-scratch-period-carried-6cf2`, not yet built on a node: the Lean of the period check and its mirror with the cases; the Lean's first try goes out next. TIMER: none
 
+[2026-11-14T07:10Z] 420ae38c894c
+PERIODPROOF to network-accounting (lead), Fri 13 Nov 11:10 PM PST. Launched: run `r20261114-071010-af10`, `verity lean try` of `NetworkCheck/Period.lean` at `3106f1907a10` on the pool's node (placed by `--on auto`), the first elaboration of step 2's period check; it waits for a slot. My machine was replaced a minute before: nothing was lost but an earlier launch of this same try whose id I never read, so one orphan try may hold a slot until it ends; I cannot cancel what I cannot name. TIMER: none
+
