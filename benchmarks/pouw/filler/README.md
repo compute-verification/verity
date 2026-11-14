@@ -93,4 +93,5 @@ The tests are one suite, `uv run tools/verity/check/suites.py benchmarks/pouw/fi
 A test imports the directory's modules and the harness's `ledger` by name: the suite's `pyproject.toml` puts both
 directories on pytest's `pythonpath`. The harness has a `report.py` too, so `test_comm_report.py` takes
 `comm/report.py` from `load` in the suite's `tests/conftest.py`, as the module `comm_report`.
-`../tests/test_budget.py`, `test_eps_budget.py` and `test_lean_headline_dc.py` test `benchmarks/pouw`'s own modules.
+`../tests/test_budget.py` and `test_eps_budget.py` test `benchmarks/pouw`'s own modules, and
+`test_lean_headline_dc.py` tests `verity_machine_model.lean_headline_dc`.

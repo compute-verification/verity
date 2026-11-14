@@ -3,11 +3,11 @@
 threads' 8-column square chains, the xor-butterfly to lane 0 (the warp sum is a cut word) and the epilogue of its 256
 columns, which reads the row scalar ``inv`` (a cut word). The tail, the CTA combine ``(w0 + w2) + (w1 + w3)``, the chunks
 summed from +0, ``fma(rcp(N), sum, eps)``, ``MufuSqrtFtz`` and ``div.full``, reads no input word: the verifier evaluates it
-with the IR evaluator and supplies the cut words as public unit words.
+with the circuits' reference evaluator and supplies the cut words as public unit words.
 
 A warp's input leaves (:func:`width`): 32 threads x 8 columns of x, when every lane of every 1024-column chunk holds
 columns (N a multiple of 1024), or 32 threads x N/128 columns when N is a power of two under 1024 (one N-column block over
-the 128 threads); otherwise the warps differ. The unit netlist is pinned per (N, EPS) by :data:`PINS`, its leaf
+the 128 threads); otherwise the warps differ. The unit's circuit description is pinned per (N, EPS) by :data:`PINS`, its leaf
 maps and cut structure (the tail with N and eps, the cut ports) included."""
 TEMPLATE = "rmsnorm-triton"
 UNIT = "rmsnorm-triton/bf16/warp"
