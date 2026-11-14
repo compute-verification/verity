@@ -3,9 +3,10 @@
 
 [[metric]]
 id = "console/top-goals-running"
-title = "Top goals on the Metrics dashboard whose own number has a target, a fresh value and a mark"
+title = "Top goals with a running number"
 owner = "console"
 unit = "goals"
+axis = "Top goals on the Metrics dashboard whose first number has a target, a value newer than its schedule and a mark."
 better = "higher"
 # reading the dashboard takes a site key, which one machine holds (`~/.research/jobs/token`), so the row names it
 command = "research run --on vy-nebius-cpu-9 --project verity --source . --cwd source -- uv run python infra/dashboard/run.py"
