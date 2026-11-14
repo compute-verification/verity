@@ -37,6 +37,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `data.py` | a start's data: the training stream (`Stream`, by the job's data seed; the fresh stream, without the windows of the parts a start read, `read_windows`) and the held-out sets (`held_out`: the search pool and the final set), checked against the registry; the search slice from a live coin (`sample_slice`) |
 | `evaluate.py` | the harness's evaluator: a checkpoint's bits per byte on the job's split, the search pool's paired with θ on the same slice |
 | `model.py` | the starts' architecture, the lf dense decoder |
+| `program_reading.py` | a training step's work read off its Program (`circuit_properties.work.read`, its point's test among it): the lf model's step under AdamW, looped (`loop`), with the reading's seconds, its pass's memory and claims, the refusal or N and \|C\|; `python -m training_slowdown.program_reading`, s-t20's shape by default |
 
 The reference shapes are the lf model's (`adapters/vllm/tests/program/train_step_lf.py`), which the suite checks.
 
@@ -183,6 +184,8 @@ python -m training_slowdown.run --config CONFIG.toml --seed 0 --split search|fin
 python -m training_slowdown.run --retrace RUN_JSON --out OUT   # a record with its trace taken again
 python -m training_slowdown.capture.circuit STEP.npz    # a saved step circuit's quantities
 python -m training_slowdown.gates [--check]             # gates per multiply-add by op; --check compiles the Definitions
+python -m training_slowdown.program_reading [--size s] [--batch 2] [--ctx 1024] [--vocab 32000] [--iterations 2] \
+    [--k 65536] [--out OUT.json]                         # a step's work read off its Program, s-t20's by default
 ~~~
 
 An attack is a config of `attacks/` (`config.py`'s docstring has the schema): a start, a route and its dials, the

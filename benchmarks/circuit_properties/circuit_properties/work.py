@@ -51,7 +51,8 @@ For the inputs of `min_cut.slowdown_of` it reads:
 * `N` and `O`: the charged products' MACs and their returned leaves times their width. A token-indexed product keeps
   1 − `SHARED_PREFIX`/s of its MACs, s the least sequence a Program's products of two activations allow (the second
   smallest of each one's dims above 1, at least two of which a token indexes where it is attention's); a Program
-  with none keeps all of them.
+  with none keeps all of them. A charged product's MACs leave out the share that reads a row zero at its point
+  (`points.Tally.share`): a product by a zero row is zero.
 * `F`: `share(ω)`, ω the largest set of arrays the work multiplies pairwise (at least 2).
 
 Each status is per array, never per word: a node's output has one status unless it is a call's or a scan's, whose
@@ -60,8 +61,9 @@ where any may, and two arrays are one where any references overlap. A rule's bra
 the one with the smaller bound: a product with an activation is token-indexed by every dim its activations span, of
 the branches of `_gemm_rate` the least the Program doesn't exclude, from `HEAD_K` no bound, since a Program doesn't
 say which products are the head's. So, under the reading's two premises (`SHARED_PREFIX`'s and the updates', below),
-every error of the reading is less work or a smaller `β` than the trace's reading of the same
-step, and a bound true but weak: a product the tables don't name is not counted, a value with any
+every error of a reading the point passes (`points.check`, which tests each charged operand whose rows the rules show
+distinct or specific) is less work or a smaller `β` than the trace's reading of the same step, and a bound true but
+weak: a product the tables don't name is not counted, a value with any
 word θ′ doesn't reach is `θ`'s, and overlapping references are one array (F may be higher).
 
 A value is specific where, at an input whose rows hold one token at two positions, its words take different values at
@@ -90,19 +92,30 @@ gives a gathered value:
 The reading rests on two premises, each held as a fact by a test where a Program breaks it. The rule rests on the
 one `SHARED_PREFIX` takes (a longer shared prefix needs the batch's tokens), `training_slowdown.work.P_BATCH`, whose
 words its suite holds this text to: past each row's first position, no two positions of the batch hold equal words.
+The point's second draw, word by word (`points`), meets `P_BATCH` by the construction of its tokens wherever a batch
+holds no more positions than the least table has rows, so it shows a specific operand's rows are not equal by an
+identity of the circuit (the attention's output plus -1 times itself is 0
+for every input). That the served data meets `P_BATCH` stays the premise it is today, and with it that a specific
+operand's rows the second draw shows differing are not equal only at values a submitter found by trying circuits
+against its public seed.
 The three batches that break it, which `P_BATCH`'s comment states, make two positions' values equal at every layer,
 under this rule and the trace's reading alike. The updates': a weight is `θ`'s rows, which
 differ, for generic weights, at every width a product or a rounding (`ROUNDINGS`) reads them, and a word no input
 reaches is nonzero; a carried word an input reaches is θ′; and rows one node computes one to one from distinct rows
-are distinct, even where the update can't change a weight or cancels it for a reason the constant test doesn't see
-(W plus z plus -1 times z is θ′), and a weight combined with its own words still counts as a weight with distinct
-rows, though the combination may make its rows equal whatever the weight: cancelled against itself (M plus -1 times
-M; W times v plus -1 times v, v `θ`'s or carried, keeps W's rows), or times its own rows in another order (M times
-swap(M), whose two rows are equal for every M), so the looked-up rows plus such an array are charged as weights
-though they repeat with the tokens; where one word that every member
-of every enclosing batch reads multiplies it and is 0 (a learning rate, a decay, an input's or computed from inputs,
-taken as nonzero), and where two nodes compute rows one to one from one array's words into two arrays (b added to
-each of two rows, carried apart, whose products by W are charged).
+are distinct, wherever the point (`points.check`) doesn't make two of them equal: where the update can't change a
+weight or cancels it for a reason the constant test doesn't see (W plus z plus -1 times z is θ′), where one word that
+every member of every enclosing batch reads multiplies it and is 0 (a learning rate, a decay, an input's or computed
+from inputs, taken as nonzero), where the inputs are fitted to the weights, where the circuit tests its own weights
+against a stated constant, where the rows are equal only where an input's word is negative, where they are equal
+only at values a submitter found by trying circuits against the point's public seed, and where two nodes
+compute rows one to one from one array's words into two arrays (b added to each of two rows, carried apart, whose
+products by W are charged). The reading refuses a circuit
+(`RepeatedRows`) where a charged operand whose rows these rules show distinct holds two equal rows at the point that
+are not zero: a weight combined with its own words, cancelled against itself (M plus -1 times M; W times v plus -1
+times v) or times its own rows in another order (M times swap(M)), whose rows are equal whatever the weight, and a
+weight times a difference of an input's words; and where such an operand holds a NaN at the point, which leaves its
+rows uncompared. A row all zero at the point, -0 read as +0, is no work: it is left out of the comparison and none of
+the MACs that read it is charged (W plus -1 times W, times a stated ±1, is charged nothing).
 
 The rule doesn't reach a softmax's backward or a table the Program doesn't state, so the input gradients of the
 attention's queries and keys (dQ·Wq and dK·Wk, behind a rope table's product or the softmax's backward) stay gathered,
@@ -204,6 +217,42 @@ class Status(NamedTuple):
 
 THETA = Status(False, False, False, False, frozenset(), distinct=True)
 STATED = THETA._replace(stated=True, distinct=False)
+
+
+class RepeatedRows(ValueError):
+    """A charged operand whose rows the reading shows distinct, or specific alone (``by_words``: tested at the
+    word-by-word point), holds two equal rows, not zero, at the point (`points.check`), reads values a scan the point doesn't run
+    whole leaves unevaluated (``scan``), or holds a NaN in ``nan`` = (n, rows) of its rows there, which leaves them
+    uncompared. ``member`` is the activation that holds them, or the two whose rows are equal."""
+
+    def __init__(self, definition: str, node: int, operand: str, rows: tuple[int, int] | None,
+                 member: int | tuple[int, int] | None = None, scan=None, nan: tuple[int, int] | None = None,
+                 by_words: bool = False) -> None:
+        self.definition, self.node, self.operand, self.rows, self.member, self.scan, self.nan, self.by_words = \
+            definition, node, operand, rows, member, scan, nan, by_words
+        point = "the word-by-word point" if by_words else "the point"
+        at = ("" if member is None else f" in member {member}" if isinstance(member, int)
+              else f" of members {member[0]} and {member[1]}")
+        if scan is not None:
+            what = (f"reads the outputs of scan node {scan.node} of {scan.fn}, which {point} runs {scan.ran} of its "
+                    f"{scan.n} iterations; fix: carry the weight through the outer scan rather than out of a scan "
+                    "whose contexts repeat")
+        elif nan is not None:
+            what = (f"holds a NaN in {nan[0]} of its {nan[1]} rows at {point}{at}, which leaves them uncompared; fix: "
+                    "keep its values finite at the point, whose weights and registered values take every sign and "
+                    "whose inputs are positive: square a weight or a registered value before a square root or a "
+                    "logarithm reads it, or carry it in as an input")
+        elif by_words:
+            what = (f"holds rows {rows[0]} and {rows[1]} equal at {point}{at}, whose positions hold different "
+                    "tokens; fix: compute it so that its rows follow its positions' tokens (an identity such as O1 "
+                    "plus -1 times O1 is equal for every input), or let it read the inputs as gathered, which leaves "
+                    "its product out")
+        else:
+            what = (f"holds rows {rows[0]} and {rows[1]} equal at {point}{at}; fix: compute it from a weight one to "
+                    "one (a shift, a rounding, a multiply by a word no input reaches) or let it read the inputs, "
+                    "which leaves its product out as gathered")
+        shows = "specific" if by_words else "distinct"
+        super().__init__(f"{definition} node {node}: operand {operand!r}, whose rows the reading shows {shows}, {what}")
 
 
 def unknown(st: Status) -> bool:
@@ -1373,7 +1422,6 @@ def _read(program, k: float, products, lookups):
     groups: dict = {}
     reasons: dict = {}
     for s, i, site, x, w in ops:
-        n = count[s.sid] * site.n
         if not (site.x.aff and site.w.aff):
             reason = "theta"
         elif may_repeat(site.x) or may_repeat(site.w):
@@ -1385,13 +1433,17 @@ def _read(program, k: float, products, lookups):
         else:
             reason = ""
         reasons[s.sid, i] = reason
+    from .points import check
+    zero = check(program, R, root, reasons).share
+    for s, i, site, x, w in ops:
+        n, reason = count[s.sid] * site.n, reasons[s.sid, i]
         weight = (not site.x.data, not site.w.data)
         beta = tuple(round(operand_beta(r, p, not wt, r_step, k, most), 9)
                      for r, p, wt in zip(site.rates, site.passed(), weight))
         key = (site.product.op, site.widths, weight, site.out_width, site.k_dim, site.dims,
                tuple(round(r, 6) for r in site.rates), tuple(round(b, 6) for b in site.bits), beta, reason)
         g = groups.setdefault(key, [0, 0, set()])
-        g[0] += n * site.macs
+        g[0] += n * site.macs - math.ceil(n * site.macs * zero(s.sid, site.node))
         g[1] += n * site.outputs * site.out_width
         if x is not None and w is not None:
             g[2].add(frozenset((cls.find(x), cls.find(w))))
