@@ -1,7 +1,6 @@
 """Where this tree holds the inference-only policy's check (`verity/inference-only/v0`): its Lean package with the
 executable of the protocol's form, and the Python that check is held to. `served_cases.py` loads this module by name
-when the inference-only case is asked for (`served_cases.policy`), so it needs neither at import time. The public
-release leaves the policy out, and this file with it: there the case is refused by name."""
+when the inference-only case is asked for (`served_cases.policy`), so it needs neither at import time."""
 from __future__ import annotations
 
 import importlib.util

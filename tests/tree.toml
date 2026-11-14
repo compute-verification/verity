@@ -294,12 +294,6 @@ owner = "top"
 day = "2026-11-15"
 
 [[not_yet]]
-path = "verity/hardware/record.py"
-to = "into the hardware file"
-owner = "top"
-day = "2026-11-15"
-
-[[not_yet]]
 path = "verity/hardware/lean.py"
 to = "deleted, once the Lean takes a card as a parameter"
 owner = "compute-research"
@@ -323,12 +317,6 @@ path = "fixtures/"
 to = "beside its reader, each file"
 owner = "proofs"
 day = "2026-11-18"
-
-[[not_yet]]
-path = "verity/protocols/accounting/pouw/clear/"
-to = "verity/protocols/accounting/pouw/prover/"
-owner = "compute-accounting"
-day = "2026-11-19"
 
 [[not_yet]]
 path = "verity/protocols/proofs/flock/sigma/"

@@ -46,6 +46,14 @@ def test_a_missing_field_is_refused_by_name(field):
     assert (e.value.where, e.value.field) == ("commit.json", field)
 
 
+def test_a_missing_field_is_refused_before_a_wrong_kind_of_one_only_some_writers_write():
+    doc = _doc() | {"stop": [3, 7]}
+    del doc["seconds"]
+    with pytest.raises(MissingField) as e:
+        BoundaryCommit.of(doc, "commit.json")
+    assert e.value.field == "seconds"
+
+
 def test_another_format_an_unknown_field_and_a_wrong_kind_are_refused_by_name():
     with pytest.raises(RecordError, match="'format' is 'verity-vllm/two-stage/stage1/v0', not verity-vllm/boundary-rows/v1"):
         BoundaryCommit.of(_doc() | {"format": "verity-vllm/two-stage/stage1/v0"}, "w")

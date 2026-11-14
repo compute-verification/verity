@@ -1686,11 +1686,12 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
 
 def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_the_same(tmp_path, monkeypatch, capsys):
     """Under a research run, `verity bench exfiltration` writes run.py's metrics into the run's result through the kit:
-    the headline figure, the compute audit's part and the network certifier's, each over the world's year at the share
-    in GB, its mark heading its first input and its error over the world's year in the next, then the runs of record
-    it read; the document as its evidence and what ran in the fingerprint. What it prints is the same in a run as
-    outside one, where it writes nothing. Where the network certifier's ε is 1 or more its part has no value, and says
-    why."""
+    the headline figure, the compute audit's part and the network certifier's, each over every monitoring period of the
+    document it has a value over at the share in GB, with its `period` and `over`, the world's year last and as it was
+    (so a reader keyed by name alone reads it), its mark heading its first input and its error over its period in the
+    next, then the runs of record it read; the document as its evidence and what ran in the fingerprint. What it prints
+    is the same in a run as outside one, where it writes nothing. A period with no value is left out, but the world's
+    year, where the network certifier's part at an ε of 1 or more has no value and says why."""
 
     s = recorded(tmp_path)
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "reader"))
@@ -1728,12 +1729,26 @@ def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_th
         "variant": None, "share": E.SHARE, "network_check_share": E.NETWORK_CHECK_SHARE, "response_ids": E.RESPONSE_IDS,
         "scan_delta": doc["certifier"]["scan_delta"]["value"], "served_run": None, "runs": doc["runs"]}
     assert got["validation"]["status"] == "passed" and got["validation"]["evidence"] == [E.DOCUMENT]
+    # only what the document has a value over, the world's year last: the fixtures' rows of record hold the compute
+    # audit's part over the datacenter's year and the world's alone
+    headline, audit_gb, net_gb = metrics
+    assert [(m["name"], m["period"], m["over"]) for m in got["measurements"]] == [
+        (net_gb, "week", "datacenter"), (net_gb, "month", "datacenter"),
+        (headline, "year", "datacenter"), (audit_gb, "year", "datacenter"), (net_gb, "year", "datacenter"),
+        (net_gb, "week", "world"), (net_gb, "month", "world"),
+        (headline, "year", "world"), (audit_gb, "year", "world"), (net_gb, "year", "world")]
+    assert all(m["value"] is not None and "why" not in m for m in got["measurements"])
+    # a reader that keys them by name alone, the last of a name winning, reads the world's year
     by = {m["name"]: m for m in got["measurements"]}
-    assert list(by) == list(metrics) == ["benchmarks/exfiltration-gb-world-year", "benchmarks/exfiltration-compute-audit-gb",
-                                         "benchmarks/exfiltration-network-certifier-gb"]
-    head, audit, net = by.values()
+    assert list(metrics) == ["benchmarks/exfiltration-gb-world-year", "benchmarks/exfiltration-compute-audit-gb",
+                             "benchmarks/exfiltration-network-certifier-gb"]
+    assert [by[name] for name in metrics] == got["measurements"][-3:]
+    head, audit, net = (by[name] for name in metrics)
     year = doc["periods"][-1]
+    assert {(m["period"], m["over"]) for m in by.values()} == {("year", "world")}
     assert {m["unit"] for m in by.values()} == {"GB a world year at 10% of compute"}
+    assert [list(m)[:6] for m in by.values()] == [["name", "value", "unit", "mark", "period", "over"]] * 3
+    assert [m["mark"] for m in by.values()] == ["modeled"] * 3
     assert head["value"] == audit["value"] == doc["value"] == pytest.approx(YEAR_GB)
     assert net["value"] == year["together"]["scan"]["certifier_GB"] == pytest.approx(50_753_639, abs=0.5)
     assert head["inputs"][0].startswith("modeled: the headline figure, the planner's row `(ii) honest`, read where its "
@@ -1747,12 +1762,34 @@ def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_th
         f"its error: ε = {E._p(year['eps'])} over the world's year, at a scan's δ of "
         f"{E._p(doc['certifier']['scan_delta']['value'])} (assumed)"]
     assert all("why" not in m and m["ci95"] is None and m["host"]["node"] == "cpu-node-0" for m in by.values())
+    # every period of the document, each figure the document's own over it
+    at = {(m["name"], m["period"], m["over"]): m for m in got["measurements"]}
+    for p in doc["periods"]:
+        scope, span = f"{p['compute']} {p['period']}", f"{p['compute']}'s {p['period']}"
+        net = at[net_gb, p["period"], p["compute"]]
+        assert (net["unit"], net["mark"]) == (f"GB a {scope} at 10% of compute", "modeled")
+        assert net["value"] == p["together"]["scan"]["certifier_GB"]
+        assert net["inputs"][1] == (f"its error: ε = {E._p(p['eps'])} over the {span}, at a scan's δ of "
+                                    f"{E._p(doc['certifier']['scan_delta']['value'])} (assumed)")
+        if p["compute_audit"] is None:
+            assert (headline, p["period"], p["compute"]) not in at and (audit_gb, p["period"], p["compute"]) not in at
+            continue
+        head, audit = at[headline, p["period"], p["compute"]], at[audit_gb, p["period"], p["compute"]]
+        assert {(m["unit"], m["mark"]) for m in (head, audit)} == {(f"GB a {scope} at 10% of compute", "modeled")}
+        assert head["value"] == audit["value"] == p["compute_audit"]["GB"]
+        assert head["inputs"][1:] == audit["inputs"][1:] == [
+            f"its error: δ = {E._n(p['compute_audit']['delta'])} over the {span}, the compute audit's", *doc["runs"]]
 
+    # where every ε is 1 or more, the network certifier's part is written over the world's year alone, with no value
     second = tmp_path / "run-2"
     run("--scan-delta", "1/1048576", within=second)
-    net = {m["name"]: m for m in json.loads((second / "result.json").read_text())["measurements"]}[
-        "benchmarks/exfiltration-network-certifier-gb"]
-    assert net["value"] is None and net["why"] == f"{E.NO_BOUND}: ε = 11,012,646 over the world's year"
+    written = json.loads((second / "result.json").read_text())["measurements"]
+    nets = [m for m in written if m["name"] == net_gb]
+    assert [(m["period"], m["over"]) for m in nets] == [("year", "world")] and written[-1] == nets[0]
+    assert nets[0]["value"] is None and nets[0]["why"] == f"{E.NO_BOUND}: ε = 11,012,646 over the world's year"
+    assert [(m["name"], m["period"], m["over"]) for m in written if m["value"] is not None] == [
+        (headline, "year", "datacenter"), (audit_gb, "year", "datacenter"), (headline, "year", "world"),
+        (audit_gb, "year", "world")]
     with pytest.raises(ValueError, match="^no figure of the document is named total: a metric records one of headline, "):
         E.measurements(doc, {"benchmarks/x": "total"})
 
@@ -1779,7 +1816,7 @@ def test_the_legend_line_shows_a_rows_mark_as_its_calculator_gives_it(tmp_path, 
     scan = doc["certifier"]["legend"]["scan"]
     assert [line for line in E.render(doc).splitlines() if line not in base] == [
         f"- scan ({scan['standing']}; run, not proved): {scan['counts']}"]
-    net, = E.measurements(doc, {"benchmarks/x": "network_certifier"})
+    net = {(m["period"], m["over"]): m for m in E.measurements(doc, {"benchmarks/x": "network_certifier"})}["year", "world"]
     assert net["mark"] == "modeled" and net["inputs"][0].startswith("modeled (run, not proved): the network certifier's ")
     monkeypatch.setattr(lb, "document", marked("proved"))
     with pytest.raises(ValueError, match="^the network certifier's rows scan carry a mark this command doesn't print"):
