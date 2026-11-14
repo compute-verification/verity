@@ -13,9 +13,9 @@ No engine, no torch: the gates are pure functions of the record."""
 from __future__ import annotations
 
 from verity_vllm.check.c2_rules import _complete_replay_population_gap
-from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.pipeline.tp.c2 import TP_FORM_B_SCOPE, c2_and_pin_gates
 from verity_vllm.program.frontend.collective_kinds import cross_rank_families
+from verity_vllm.records import replay_codes as RC
 
 XF8 = cross_rank_families(8)
 #: a DeepSeek-V4-Pro TP8 Commit's rank-0 unreplayable families with no evaluator and no `evaluated_by` (rows over 8 ranks), a selection
