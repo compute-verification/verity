@@ -643,12 +643,6 @@ class Stratified:
         return {"law": "stratified", "strata": [{"name": s.name, "size": s.size, "k": s.k} for s in self.strata]}
 
 
-def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
-    """A stratum's sample size under the work rule (Lean `Flock.Draw.workK`): ceil(k * work * size / total), at least
-    `floor` and at most `size`."""
-    return min(size, max(floor, (k * work * size + total - 1) // total))
-
-
 @dataclass(frozen=True, slots=True)
 class WorkStratum:
     """A stratum of the work sampling design: `size` members, `k` of them sampled, each doing `work` (an integer in any
@@ -664,8 +658,9 @@ class WorkStratum:
 @dataclass(frozen=True, slots=True)
 class Work:
     """The work sampling design `work:k` (Lean `Core.SamplingDesign.work`): uniform samples inside disjoint strata of
-    the checked level, each stratum's k_s sized by its work above its floor (`work_k`).  Its sample is the stratified
-    one at those k_s, so its bounds are `stratified`'s."""
+    the checked level, each recorded with its k_s, its members' work and its floor.  Its sample is the stratified one
+    at those k_s, so its bounds are `stratified`'s.  A k_s is kept as recorded and held to no rule here: the draw's own
+    check holds it to the rule that sizes it by work, and a reader that relies on the rule checks it there."""
 
     k: int
     strata: tuple[WorkStratum, ...]
@@ -686,8 +681,6 @@ class Work:
             seen.add(s.name)
             if s.floor < 1:
                 raise ValueError(f"stratum {s.name!r}: a floor is at least one")
-            if s.k != work_k(self.k, s.work, s.size, total, s.floor):
-                raise ValueError(f"stratum {s.name!r}: k is not the work rule's")
 
     @property
     def population(self) -> int:

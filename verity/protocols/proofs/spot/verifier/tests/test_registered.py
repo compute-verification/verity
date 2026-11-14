@@ -927,6 +927,12 @@ def test_a_supplied_value_is_the_records_roots_as_its_leaves():
     for bad in ((b"\0" * 3, 32), (b"\0" * 4, 3), (b"\0" * 4, 64)):
         with pytest.raises(ValueError):
             G.bytes_leaves(*bad)
+    assert G.half_leaves(bytes.fromhex("0001"), 16) == [1] == G.leaves_of(bytes.fromhex("0001"), 16)
+    assert G.half_leaves(bytes.fromhex("1234"), 8) == [0x34, 0x12]
+    assert G.leaves_of(bytes.fromhex("00000001"), 16) == [1, 0]
+    for bad in ((b"\0" * 4, 16), (b"\0" * 2, 32), (b"\0" * 2, 3)):
+        with pytest.raises(ValueError):
+            G.half_leaves(*bad)
     salts = G.supplied_salts("ab" * 64, "pouw.roots", 2)
     assert salts[1][:32].hex() == SUPPLIED_SALT_1
     head = b"verity/one-stage/supplied-salt/v1\0" + b"ab" * 64 + b"\0pouw.roots\0" + (1).to_bytes(4, "little")
