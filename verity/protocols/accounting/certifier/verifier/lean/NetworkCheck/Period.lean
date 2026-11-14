@@ -1250,7 +1250,6 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
     | some (.reject, r) => .reject r
     | some (_, r) => .undecided r
     | none =>
-      let audits := as.filterMap (·.toOption)
       .accept { (match p.form with
           | .rows _ _ scan => rowsPublic p c as scan scans) with
           maxTokensCap := p.form.maxTokensCap }
