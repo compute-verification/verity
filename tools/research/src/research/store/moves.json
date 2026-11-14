@@ -2951,6 +2951,11 @@
       "paths": {
         "demos/configurations.toml": "tests/configurations.toml"
       }
+    },
+    {
+      "paths": {
+        "verity/commitments/cuda/sha512_rows/settings.py": "benchmarks/torch_gpu/settings.py"
+      }
     }
   ]
 }
