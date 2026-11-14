@@ -40,6 +40,8 @@ paths = []
 [split]
 # A reference to `benchmarks/pouw/pearl_c4/`, which the map splits, follows the kernels unless its row here names the
 # part that stays: "old file: old directory" = why, or { to, why }.
+"benchmarks/pouw/pearl_c4/build.sh: benchmarks/pouw/pearl_c4" = "the status of the sources it builds, the kernel directory"
+"verity/protocols/accounting/pouw/prover/kernels/pearl_c/README.md: benchmarks/pouw/pearl_c4" = "the kernel that includes sha512.cuh"
 
 [drop]
 paths = []
