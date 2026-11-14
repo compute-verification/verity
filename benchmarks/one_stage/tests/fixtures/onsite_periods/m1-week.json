@@ -15,7 +15,7 @@
  "bound": {
   "K": 10663,
   "notes": [
-   "a known overcount, proved and larger than necessary: k_sched and k_fail charge every connection the schedule can carry (`Schedule.caps`), whatever the traffic, and each connection's cell count twice, in k_sched (its lane's length, #S_s ≤ ∏_c (cap_c + 1)) and in k_fail (its fail cell's position), which in a run coincide; K is PeriodLeakAccepted's count as it states it"
+   "a known overcount, proved and larger than necessary: k_sched and k_fail charge every connection the schedule can carry (`Schedule.caps`), whatever the traffic, and each connection's cell count twice, in k_sched (its lane's length, #S_s ≤ ∏_c (cap_c + 1)) and in k_fail (its fail cell's position), which in a run coincide; K is MonitoringPeriodLeakAccepted's count as it states it"
   ],
   "of_record": {
    "K": 8399272,
@@ -52,7 +52,7 @@
   },
   "period_s": "630000",
   "phases": 1,
-  "statement": "NetTiming.Guarantees.PeriodLeakAccepted"
+  "statement": "NetTiming.Guarantees.MonitoringPeriodLeakAccepted"
  },
  "format": "verity/onsite-network-record/v1",
  "of_record": {
@@ -161,13 +161,13 @@
      "how": "proved",
      "share": 1.2141820062388753e-06,
      "share_served": 0.0004247842556293243,
-     "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
+     "statement": "NetTiming.Guarantees.MonitoringPeriodLeakAccepted",
      "vacuous": false
     },
     "rule": "run-to-period",
     "share": 6.0709100311943765e-06,
     "share_served": 0.002123921278146621,
-    "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
+    "statement": "NetTiming.Guarantees.MonitoringPeriodLeakAccepted",
     "vacuous": false
    },
    "phases": 5,
@@ -323,14 +323,14 @@
     "how": "proved",
     "share": 1.2141820062388753e-06,
     "share_served": 0.0004247842556293243,
-    "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
+    "statement": "NetTiming.Guarantees.MonitoringPeriodLeakAccepted",
     "vacuous": false
    },
    "phases": 1,
    "seconds": "630000",
    "share": 1.2141820062388753e-06,
    "share_served": 0.0004247842556293243,
-   "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
+   "statement": "NetTiming.Guarantees.MonitoringPeriodLeakAccepted",
    "vacuous": false
   },
   "week": {
@@ -432,12 +432,12 @@
      "how": "proved",
      "share": 1.2141820062388753e-06,
      "share_served": 0.0004247842556293243,
-     "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
+     "statement": "NetTiming.Guarantees.MonitoringPeriodLeakAccepted",
      "vacuous": false
     },
     "share": 1.2141820062388753e-06,
     "share_served": 0.0004247842556293243,
-    "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
+    "statement": "NetTiming.Guarantees.MonitoringPeriodLeakAccepted",
     "vacuous": false
    },
    "phases": 1,
@@ -596,13 +596,13 @@
      "how": "proved",
      "share": 1.2141820062388753e-06,
      "share_served": 0.0004247842556293243,
-     "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
+     "statement": "NetTiming.Guarantees.MonitoringPeriodLeakAccepted",
      "vacuous": false
     },
     "rule": "run-to-period",
     "share": 6.192328231818264e-05,
     "share_served": 0.02166399703709554,
-    "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
+    "statement": "NetTiming.Guarantees.MonitoringPeriodLeakAccepted",
     "vacuous": false
    },
    "phases": 51,
