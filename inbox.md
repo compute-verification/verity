@@ -168,3 +168,199 @@ I launched none. Runs read, each by its own last line from `stdout.log`:
 - r20261113-172658-0505, tree 30a0a4935c43: ST20_DONE, rc 0.
 - Author runs e320, 77ec, 95e0 ("REVERT_DONE all caught"), 4307 and 3021 (SUCCESS).
 
+[2026-11-14T06:38Z] a8de4bdcde76
+READ502 (TRN-161), Fri 13 Nov, 10:38 PM PST. **#9502 is correct in its Lean and its reference, and I verified that by running it; it is NOT READY for one false docstring sentence, and one check it adds has no vector that can fail it.**
+
+b90c0adf1db92a789539e7d1ab2727ca77441733 NOT READY (1 must-fix)
+Note: `note:20261114T0638Z-report-READ502-9502` (the whole report, under lanes/training).
+
+## First, before the verdict: a record's stated width does change which values count as θ, within a bound
+
+INFERRED from `NciCheck/Record.lean` 577-607 and `NciCheck/RecordText.lean` 276-295 (read whole), and RAN on the
+compiled Lean (r20261114-062706-ba0e).
+
+- `widthOf doc p` (RecordText.lean 280) is the format's `word_bits`, and 16 when the key, the parameter's entry or a
+  natural-number `word_bits` is absent.
+- `isTheta T leaves b p` (Record.lean 577) is now `rows * words * b == 16 * leaves && wordBits == b`, where it was
+  `rows * words == leaves && wordBits == 16`, with the root condition unchanged. So at b = 16 it is the old `isTheta`,
+  exactly.
+- Before #9502, a record with `registered.formats` was refused `inputs`: `keyed` takes only REGISTERED or values ::
+  REGISTERED. So for every record the form accepted before, `widthOf` is 16 for every parameter. On those records,
+  `finish_case`'s θ list (RecordInputs.lean 288) says exactly what it said before. **The theorem says no less about a
+  record the form accepted before**; the form now refuses more of them (below).
+- What a stated width can do (new records, with `formats`):
+  - It can make a value θ only where the log's first record registers it at the committed root, at exactly that width
+    (`wordBits == b`), and with the same total bits. A record cannot state a width that makes θ out of an unregistered
+    value or a mismatched registration.
+  - The newly reachable θ are weights the first record registers in 32-bit leaves. Before, such a weight was never θ;
+    now it is θ when the record states its 32-bit format. That is the change's purpose, but it is a widening of θ.
+  - The other direction: a record can leave a registered weight counted as fresh only by stating no format for a
+    weight the first record registers in 32-bit leaves and the run's own record does not register. Every other
+    misstatement is refused (`formats` or `inputs`). A value counted fresh only raises the fresh count, and the
+    table-opening rule cannot be touched: a table's parameter can carry no format (RecordText.lean 286-295), so
+    `openingHeld` sees width 16, as before.
+- No `sorry`, `axiom`, `native_decide` or kernel bypass in the added lines (RAN: a grep of the diff). The five `lean
+  try` runs at 14ca2e3c12 (READ) probe no axiom beyond the three. I tried the two importers of `finish_case`, which no
+  run had built (RAN: RecordKinds.lean, r20261114-063017-079e; RecordServed.lean, r20261114-063017-b15c). Both have
+  lean exit 0 and no axiom beyond the three.
+- Guarantees: none in `security/lean-audit.json` reads `isTheta`, `finish_case` or any changed definition (RAN: a
+  grep of its records). One guarantee elsewhere moves: `NciCheck.SecurityProofs.ServedComplies`, in
+  `security/Properties/lean-audit.json`, unfolds through `LaidOut` and `RecordText.declared` into `RecordText.inputsOf`,
+  which this change edits (INFERRED from `security/Properties/Nci/Record.lean` 299-301 and RecordText.lean 534-539).
+  Its `unfolded_hash` moves at the next lock update. It reads neither `isTheta` nor `finish_case`.
+
+## MUST FIX
+
+1. `NciCheck/Record.lean` 171-172 (module docstring, "Formats"): "So a format the log does not state for its value, a
+   32-bit value the record declares no format for, and a format on a weight registered in 16-bit leaves are each
+   refused." Two of its three clauses are false.
+   - A 32-bit value with no format is refused only when the run's own record registers it. The made case "a weight in
+     32-bit leaves, no format" is taken, its rows fresh (`FORMATS`; the test asserts it).
+   - A 16-bit `row-seg/v1` format on a weight the first record registers in 16-bit leaves is taken. The random vectors
+     generate exactly such cases (`formats()` in the generator).
+   - Fix: "So a format the log does not state for its value, a value the run's own record registers in 32-bit leaves
+     with no format, and a 32-bit format on a weight registered in 16-bit leaves are each refused; a weight only the
+     first record registers in 32-bit leaves, with no format, is taken and its rows are fresh." Also on lines 164-165:
+     "declares another width for it, 32 bits" should be "declares a format for it, 32 bits or 16 in segment rows".
+
+## SHOULD FIX
+
+1. **The width rule's conjunct `word_bits == b` has no vector that can fail it, in Python or in Lean.** RAN on my VM,
+   with each mutation undone:
+   - Mutations: drop `and m[2] == b` from the reference's `theta` (nci_record_reference.py 550), then separately drop
+     `and m[2] == b` from `formats_held` (586).
+   - Each leaves all 20 tests of the two files passing, `test_the_data_is_what_the_audit_pins` included. That test
+     regenerates the 687 cases and holds them to the lock's digests. So the generated outputs do not change, and the
+     Lean difftest cannot catch the same deletion in `isTheta` (Record.lean 582) or `formatsHeld` (604).
+   - What the conjunct stops: a registration of half the record's bits, at word_bits 16 with rows × words = leaves/2,
+     under the committed root. Without the conjunct, a 32-bit format makes that weight θ, and the fresh count drops.
+   - Two cases close the gap. I built both and ran them (r20261114-062706-ba0e, compiled Lean against the reference):
+     - The made case "the scan state in 32-bit leaves, its format right" with the run's record's scan-state entry at
+       `word_bits` 16, same counts: refused `formats` by both. It accepts under the `formats_held` mutation.
+     - "a weight in 32-bit leaves, its format right" with the first record's `weights/query` entry at `word_bits` 16,
+       same counts: refused `formats` by both. Under the `theta` mutation it is accepted with the honest case's own
+       count (fresh 64).
+   - Fix: add both to `FORMATS` (stage `formats`, a `ran` or `wide` entry with `word_bits` 16), and regenerate the
+     lock entry by its own command. That makes 689 cases, and the counts in the lock's `why` and the test docstring
+     follow.
+2. `NciCheck/Record.lean` 67-68, refusal 11: it names only the width, but `formatsHeld` also refuses `formats` where
+   the run's record registers a parameter under another root than it commits, or in a different number of bits (the
+   vectors' `format-root` way). Fix: "... is not the one the registration log registers it in, or the run's own
+   record registers it under another root than it commits or in other than its bits (`formatsHeld`, "Formats"
+   below)."
+
+## NOTE
+
+1. **A case the Lean accepts and the reference refuses, outside the vectors** (RAN, r20261114-062706-ba0e). Write
+   `"word_bits":32e0` or `3.2e1` in place of `32` in the made case "the scan state in 32-bit leaves, its format right",
+   with the run's record committing the new text. The compiled check ACCEPTs with the honest verdict (fresh 64); the
+   reference refuses `inputs`.
+   - Cause: `Flock.JsonParse` normalizes an exponent into an integer (`JsonNumber.shiftl`), so `Spot.Wires.nat?`
+     reads 32, while `json.loads` gives a float that `_nat` refuses.
+   - It is the reference that is wrong, not the Lean (the Lean reads the number's value). The class is older than
+     this change and applies to every natural number the form reads (INFERRED). A separate issue: make the
+     reference's loader parse numbers as Lean does.
+2. Duplicate names: `{"p": A, "p": B}` in `formats`, or `formats` twice in `registered`, is read as the last value by
+   both readers (INFERRED: `Base/JsonParse.lean` docstring, TreeMap insert; Python's dict). The verdicts agree; no
+   vector holds it.
+3. The `formats` code also fires on records with no `formats` key: where the run's own record registers a parameter
+   of the record under another root than it commits, or in other than its bits (`formatsHeld`'s first branch). Before,
+   those were accepted with the value fresh. The body states the rule. The honest served record passes it.
+4. `test_the_compiled_command_gives_the_references_verdicts` runs no `formats` case. The compiled side's `formats`
+   coverage is the record difftest inside the Lean audit (687 cases, 0 differences), which runs all 17 `FORMATS`
+   cases.
+
+## For the lead to read
+
+- `NciCheck/Record.lean` 577-585 (`isTheta`): decides that a weight registered in 32-bit leaves is θ when the record
+  states its 32-bit format. It is the one widening of θ, held by `wordBits == b` and the total-bits equation.
+- `NciCheck/Record.lean` 593-607 (`formatsHeld`) and line 770: decides the new refusal, including on format-less
+  records whose run's record registers a parameter inconsistently.
+- `security/Proofs/Properties/Nci/RecordInputs.lean` 288: the one changed statement. It is identical to the old one on
+  every record accepted before.
+- `NciCheck/RecordText.lean` 286-295 (`formatsOk`): decides that no table's parameter carries a format, so the
+  opening rule is unchanged.
+
+## Each item of the brief
+
+1. **The Lean, whole** (READ whole: Record.lean and RecordText.lean as changed, and the reference's diff). For each
+   way the key can come, Lean and reference give the same code:
+
+   | The key | Verdict, both sides | Held by |
+   |---|---|---|
+   | Absent | taken, width 16; `formatsHeld` still runs | every old case |
+   | Not an object (`null`, `[]`, a string) | `inputs` | way `format-keys` |
+   | An unknown format: schema not one of the two, width not 16 or 32 (8, 64, 0, "32", true, 32.5, 24), v2 at 16, a key more or fewer, a table's parameter, an odd number of leaves, a read not of whole leaves | `inputs` | ways `format-schema`, `-bits`, `-default`, `-keys`, `-table`, `-whole`, `-read`, and 8 made cases |
+   | A duplicate name | the last value, no refusal | INFERRED; no vector |
+   | A width that differs from the registration, where the run's record registers the value | `formats` | `format-width`, `format-none`, 3 made cases, and probe `run-entry-16` (not in vectors) |
+   | The same, where only the first record registers it, with a format | `formats` | 1 made case, and probe `first-entry-16` (not in vectors) |
+   | The same, where only the first record registers it, without a format | taken, fresh | 1 made case |
+   | A width for a name not in `params` | `inputs` | `format-param`, 1 made case |
+   | A width for a name in `params` that neither record registers | `formats` | `format-unregistered`, 1 made case |
+
+   A case with opposite verdicts outside the vectors: NOTE 1 (`32e0`).
+2. **Accepted before, still accepted, should now refuse**: none found. **Now refused, written by an honest serve**:
+   none.
+   - The rehearsal (READ, r20261114-034525-11dd at 14ca2e3c12): as served, check ACCEPT (blocks 4, fresh 337,786,912,
+     equal to the reference) and count ACCEPT; with the smallest weight unregistered, check accepts and count refuses
+     `fresh`. Last line: "2 cases, 0 verdict(s) where the compiled command and the reference differ".
+   - Its run's record registers the 256 proof-of-work values with `word_bits` 32 (READ, the run's
+     `log2-window-registration.json`; the first record has none), so they take `formatsHeld`'s first branch and count
+     fresh.
+   - Records that the change newly refuses without a `formats` key are inconsistent ones (NOTE 3).
+3. Above, first.
+4. **The lock** (READ, the diff). Only `runs.NciCheck.RecordDifftestMain` moves: its `why`, `args` (670 to 687) and
+   the two digests. The digests equal r20261114-034225-b929's printed sha256 (tree 51fac869bf; the generator and
+   reference are identical at the head, RAN `git diff --stat`). I also regenerated the data locally at the head:
+   `test_the_data_is_what_the_audit_pins` passes (RAN).
+   - The 17 new cases are `len(FORMATS)` (generator lines 852-883), in three groups:
+     - Taken (4): the scan state in 32-bit leaves, its format right, in segment rows and in v2 rows; a weight the first
+       record registers in 32-bit leaves, its format right; the same with no format (fresh).
+     - `formats` (5): the scan state with a format of another width; with no format; registered in 16-bit leaves with a
+       32-bit format; a format on a value the run's record does not register; a 32-bit format on a weight registered
+       in 16-bit leaves.
+     - `inputs` (8): another schema, 16-bit in v2 rows, 24-bit, a key more, a table's parameter, no registered
+       parameter, an odd number of leaves, a read of one 16-bit leaf.
+   - 13 new random ways, 61 to 74: 8 `inputs` and 5 `formats`.
+5. **The tests** (RAN on my VM at the head, with `-k "not compiled and not what_the_audit_pins"`): 19 passed, 2
+   deselected. The deselected two are the compiled-command test, because `lake` is on this VM and it would build Lean
+   here, and the slow data-pin test, which I then ran alone: passed. Mutations, each undone:
+   - `formats` refusal: disable the reference's `formats` stage (nci_record_reference.py 675-676). All 19 error at
+     setup: the generator asserts each `FORMATS` case is refused at its stage. Among them is
+     `test_a_row_format_is_held_to_the_registration_log`.
+   - Width rule: two mutations, both survive (SHOULD FIX 1).
+6. **KEY's evidence** (READ, each run's own last line and `tree_sha`):
+   - r20261114-034526-e382, tree 14ca2e3c12: "AUDIT: PASS", 1779 declarations in 18 modules, axioms propext,
+     Classical.choice, Quot.sound. Its record difftest log: "687 cases compared, 0 differences".
+   - r20261114-034532-d03d, tree 14ca2e3c12: "59 suites: 58 passed (0 cached), 1 failed". The red is the network suite
+     (97 passed, 2 failed: the two `test_nci_record_check.py` tests the body names).
+   - r20261114-041421-5673, tree 840da2df89 (main with both other heads): "1 suites: 0 passed (0 cached), 1 failed",
+     the same two tests.
+   - r20261114-044749-fd6f, tree b90c0adf (the head): "1 suites: 1 passed (0 cached), 0 failed", 112 passed, none
+     skipped.
+   - Each says what KEY reports. The head differs from 14ca2e3c12 in `test_nci_record_check.py` alone (+9/-2, RAN).
+7. **The body**: each sentence I checked is true of the head.
+   - Checked by run or file: the 11 files at +538/-93 (RAN: my comparison tree fd7c152f99 from main 6953e38e55, #9474
+     5a6d7a8d04, #9547 dd6555ae61); 13 ways; 17 made cases; 15 that state a format; the proofs named; the lock;
+     `OWN`; #9547 touching neither Record.lean, RecordText.lean nor `check_detail` (RAN, `git diff`); every figure in
+     "What ran".
+   - Paths are today's.
+   - What ran is kept apart from what was read, and it says the `security/Proofs` replay did not run.
+   - Not checked: "How the head was made" (the restack and merge steps).
+8. **Tree rules**: no run id, date, name or pull request number in any added line (RAN, grep). The case counts in the
+   lock's `why` and the test docstring are counts, not measurements.
+
+**What I read whole**: the Lean diff, the reference diff, the lock diff, the tests' diffs, and `served_record_case.py`'s
+diff. **Sampled**: the generator's diff (FORMATS, `formats()`, `_misformat`, `finish`, `_without`). **Not opened**: the
+generator's other unchanged parts, the merge history.
+
+## Runs I launched
+
+- r20261114-062706-ba0e (tree b90c0adf): compiled `inference-only-record-check` on six probe cases. Last line:
+  "6 cases, 4 verdict(s) where the compiled command and the reference differ". The four are the two `32e0` / `3.2e1`
+  cases, check and count; the two width probes and the two cases as made are equal.
+- r20261114-063017-079e (tree b90c0adf): `verity lean try security/Proofs/Properties/Nci/RecordKinds.lean`. Last line:
+  "axiom probe: none of its 4 theorems uses an axiom beyond propext, Classical.choice and Quot.sound" (lean exit 0).
+- r20261114-063017-b15c (tree b90c0adf): `verity lean try security/Proofs/Properties/Nci/RecordServed.lean`. Last
+  line: the same, 4 theorems (lean exit 0).
+
