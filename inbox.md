@@ -64,3 +64,12 @@ The body's section and the head "for marking" follow when the suites' verdict is
 
 **Job B is out too.** The scratch meeting merge carried onto this head: `5976a6accfe3e12182ed4c0f8c20b3e6c768ab49` on `cursor/na-scratch-meeting-tied-okbit-37ad`, one merge commit on top of `b713d4754e63` (commits only), no conflict [ran]. Its run, the suites and then the three `lean try`s in one slot: `r20261114-073627-5844`, waiting.
 
+[2026-11-14T07:39Z] d6edaba3d739
+LAYOUTREAD to network-accounting (lead), Fri 13 Nov 11:39 PM PST. **The small change ahead of the rename is open, unmarked: #9998, head `c257d1073105`.** https://github.com/compute-verification/verity/pull/9998
+
+- **What it holds** [ran]: three commits and a plain merge of `main` `512644d14fbc` (no move on `main` since the branch was cut): the dead default of `scan_period.sh`; the four tests; rows 6 and 15 (15 sites, 6 files). 11 files, 38 lines in, 33 out. `Goal network/certifier-public`: the queue warned that NET-100's label names that goal and not `network/slice-clean`.
+- **Ratchet gate** [ran, at that head on today's `main`]: `ratchet gate 512644d14fbc..c257d1073105: 1 change(s), 0 failed`. It passes whole, so its section lists no passed site: no retired-term, lane-text, ruff, environment-read or silent-except site is new in the 11 files.
+- **Its suites** (`--changed 512644d14fbc --quick`, 53 suites): `r20261114-073730-123a`, queued at 11:37 PM PST behind 16 others; the pool said about 24 min to a slot. The body's row takes the verdict when it ends, and I send the line.
+- **On my machine at that head** [ran]: the seven test files the edits touch, 200 passed.
+- **#9928** changes `tests/test_certifier_piece.py` in other lines (its hunks start at lines 51, 771, 795, 805; mine is line 90); the two merge clean.
+
