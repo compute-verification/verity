@@ -11,7 +11,7 @@ deploys them), so that the verifier receives no chunk bytes; and the prover's co
   which its openings coin draws ``--samples`` (`audit.AuditRun.close`). Every salt of the prover's (the payloads', the
   receipt leaves', every row's) comes from its own secret, sampled per run from the OS.
 * **Each opening a proof block.** Sample (pass i, position p, chunk j) is one `BlockOpeningCheck_v1` (`block_check`) at P,
-  DR (the pass's receipt tree), DP (the payload tree of N) and DV 1 (no appended chunk), its witness `opening.witness`:
+  DR (the pass's receipt tree), DP (the payload tree of N) and DV 1 (no appended chunk), its witness `opening_prover.witness`:
   the chunk, its payload, the receipt leaf, the pass's plan row, both salts and paths. The window's proof blocks are one
   statement of the one-stage audit (`one_stage.registration`, the template-instance partition, the stratified sampling
   design, every proof block sampled by the verifier's Lean), proved by `flock-circuit prove --zk` and held by Lean
@@ -64,6 +64,8 @@ sys.path.insert(0, str(HERE.parent / "network_traces"))
 import a0  # noqa: E402
 import a7  # noqa: E402
 import leak_scan as LS  # noqa: E402
+from verity.protocols.accounting.poub.prover import audit_prover  # noqa: E402
+from verity.protocols.accounting.poub.prover import opening_prover  # noqa: E402
 from verity.protocols.accounting.poub.verifier import audit, codec, coins, opening as C3, receipts  # noqa: E402
 from verity.protocols.accounting.poub.verifier.receipts import Plan  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
@@ -86,17 +88,17 @@ def log(msg: str) -> None:
 
 # --- the remote session -------------------------------------------------------------------------------------------------------
 
-def store_of(blocks: int, seed: int, secret: bytes) -> audit.Store:
+def store_of(blocks: int, seed: int, secret: bytes) -> audit_prover.Store:
     """The registered store: ``blocks`` seeded payloads, each 64-byte word's top byte zero, under salts from ``secret``."""
     rng = random.Random(seed)
     payloads = [b"".join(rng.randbytes(WORD - 1) + b"\0" for _ in range(codec.BLOCK_BYTES // WORD)) for _ in range(blocks)]
     salt = a7.Entropy(secret + b"payload salts")
     ys = [salt(receipts.SALT_BYTES) for _ in range(blocks)]
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
-    return audit.Store(audit.register(SOURCE, NODE, blocks, root, P512, nonce=bytes(32)), payloads, ys)
+    return audit_prover.Store(audit.register(SOURCE, NODE, blocks, root, P512, nonce=bytes(32)), payloads, ys)
 
 
-def window(store: audit.Store, L: int, samples: int, delta: float, secret: bytes, seed: int) -> SimpleNamespace:
+def window(store: audit_prover.Store, L: int, samples: int, delta: float, secret: bytes, seed: int) -> SimpleNamespace:
     """One window over ``store``: N / L passes, pass i the stripe of L chunks from L i, each received as the prover sends
     it (its root, its plan, its step i), then the window closed and sampled. Returns the session, the passes and v0's
     messages, as the verifier received them."""
@@ -105,7 +107,7 @@ def window(store: audit.Store, L: int, samples: int, delta: float, secret: bytes
     clock = a7.Clock()
     s = audit.AuditRun(p, reg, None, coins.local(reg.digest, 0, p.windows, a7.Entropy(b"a8 coins %d" % seed)),
                        not_before_ns=0, clock=clock)
-    prover = audit.Prover(store, None, entropy=a7.Entropy(secret + b"receipt salts"))
+    prover = audit_prover.Prover(store, None, entropy=a7.Entropy(secret + b"receipt salts"))
     challenge, previous, passes, msgs = s.start(), reg.digest, {}, []
     for i in range(N // L):
         runs = ((L * i, L),)
@@ -124,7 +126,7 @@ def window(store: audit.Store, L: int, samples: int, delta: float, secret: bytes
     return SimpleNamespace(session=s, store=store, passes=passes, messages=msgs, params=p)
 
 
-def tampered(store: audit.Store, j: int) -> audit.Store:
+def tampered(store: audit_prover.Store, j: int) -> audit_prover.Store:
     """``store`` with chunk j replaced by other bytes (every word still below p): a prover that lost it."""
     out = copy.copy(store)
     out.blocks = list(store.blocks)
@@ -469,7 +471,7 @@ def main() -> int:
     prepared = {}
     for name, (r, st_) in rounds.items():
         ds = r.session.drawn(0)
-        wits = [C3.witness(d, r.passes[d.window, d.index], st_, c3.plan_rows[d.step], S, c3.values) for d in ds]
+        wits = [opening_prover.witness(d, r.passes[d.window, d.index], st_, c3.plan_rows[d.step], S, c3.values) for d in ds]
         ref = [C3.check(d, w, st_.registration.codec_seed, S, c3.values, c3.plan_salts[d.step], c3.plan_bcs[d.step])
                for d, w in zip(ds, wits)]
         if ref != ([None] * len(ds) if name == "honest" else ["codec"] + [None] * (len(ds) - 1)):

@@ -35,10 +35,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity.protocols.accounting.pous.verifier.p2_v1 import reference as R
 from verity.protocols.accounting.pous.verifier.schemes import p2 as S
 
 from . import gpu
-from . import reference as R
 
 PARAMS = S.P2Params(*S.POINT)
 SPEC = R.DEPLOYMENT

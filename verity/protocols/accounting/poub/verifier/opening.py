@@ -18,9 +18,10 @@ receipt the leaf's entry p mod 16. Proved, the verifier opens only the unit's pu
 domain ids, ranks and depths), and its verdict row; it holds the one witness row it doesn't open, the plan row, to the
 canonical plan row of step s by ``b || c`` (`plan_link`). No block, payload, receipt leaf or plan is opened.
 
-A session takes check 3's outcome in place of `verify`'s openings by `audit.AuditRun.drawn` and `decide`, and the
-prover's witness is its `audit.Store`'s payloads (`audit.Store.payload`, `witness`). `check` decides one sample by the
-unit's reference on the prover's arguments and the plan link, and `reference` a session's windows by it."""
+A session takes check 3's outcome in place of `verify`'s openings by `audit.AuditRun.drawn` and `decide`. `check`
+decides one sample by the unit's reference on the prover's arguments and the plan link. The prover's witness is its
+store's payloads, and the honest prover's arguments and a session's windows decided on them are
+`verity/protocols/accounting/poub/prover/opening_prover.py`'s (`witness`, `reference`)."""
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -36,7 +37,6 @@ from verity.protocols.accounting.poub.verifier.commitments.gates import (
 )
 
 from . import audit, codec, receipts
-from .receipts import PER_LEAF
 
 ROWS = receipts.SKETCH_ROWS
 
@@ -85,19 +85,6 @@ def public(d: audit.PositionSample, codec_seed: bytes, S, values: Values) -> dic
                              (d.commitment.root, d.domain.domain_id, d.block - first, merkle_depth(d.domain.count)), vals)
 
 
-def witness(d: audit.PositionSample, ps: audit.Pass, store: audit.Store, plan_row: Sequence[int], S,
-            values: Values) -> dict[str, list[int]]:
-    """The honest prover's arguments for sample ``d`` of pass ``ps``: its block and payload from its store, the receipt leaf
-    under its salt and path in the pass's tree, the payload under its salt and path in its append's tree (or the
-    registration's), the step's certified plan row, and, appended, the payload's path in the canonical payload commitment."""
-    j, c = d.block, d.leaf
-    pay_salt, pay_path, _d = store.committed(j)
-    leaf = b"".join(ps.receipts[PER_LEAF * c:PER_LEAF * (c + 1)])
-    vpath = values.path(j - values.base) if d.coin is not None else ()
-    return BC.opening_args(S, public(d, store.registration.codec_seed, S, values), store.blocks[j], store.payload(j), leaf,
-                           list(plan_row), ps.salts[c], pay_salt, tuple(ps.tree.open(c).path), tuple(pay_path), vpath)
-
-
 def commit(bits: int, words: Sequence[int], salt: bytes) -> bytes:
     """A bit row's ``b || c`` under ``salt``: hm96-sha512 over its sha512/row/v2 digest, the row of ``bits`` bits held in
     ``words`` (u16, low bit first), as the proof system commits a unit's witness row."""
@@ -126,22 +113,4 @@ def check(d: audit.PositionSample, args: dict, codec_seed: bytes, S, values: Val
     return plan_link(commit(16 * S.P, args["plan"], plan_salt), certified_bc)
 
 
-def reference(session: audit.AuditRun, store: audit.Store, passes: dict, c3) -> list[audit.Verdict]:
-    """Every window of a session whose receipts are sampled, decided by `check` on the honest prover's witness: the stand-in
-    for the units' proofs. Stops at the first rejected window. ``c3`` holds the codec, the plan row's P and the depths DR,
-    DP and DV, each step's plan row (``plan_rows``), its salt (``plan_salts``) and certified ``b || c`` (``plan_bcs``), and
-    the value commitment (``values``)."""
-    out = []
-    for t in range(len(session.windows)):
-        fails = []
-        for d in session.drawn(t):
-            S = statics(c3.codec, d.leaf_size, c3.P, c3.DR, c3.DP, c3.DV)
-            a = witness(d, passes[d.window, d.index], store, c3.plan_rows[d.step], S, c3.values)
-            fails.append(check(d, a, store.registration.codec_seed, S, c3.values, c3.plan_salts[d.step], c3.plan_bcs[d.step]))
-        out.append(session.decide(t, fails))
-        if not out[-1].accepted:
-            break
-    return out
-
-
-__all__ = ["Values", "check", "commit", "depth", "plan_link", "public", "reference", "statics", "witness"]
+__all__ = ["Values", "check", "commit", "depth", "plan_link", "public", "statics"]

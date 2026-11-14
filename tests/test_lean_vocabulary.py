@@ -672,7 +672,7 @@ KNOWN: dict[str, str] = {
     "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py::Draw":
         "homonym, one synthetic benchmark draw: rename (compute-accounting)",
     "benchmarks/one_stage/a5_coins.py::Gate": "homonym, infra's challenger gate (an SSH host): rename (proofs)",
-    "benchmarks/pous/p2_v1/store.py::Store":
+    "verity/protocols/accounting/pous/prover/p2/p2_store/store.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a client of it (memory-accounting)",
     "verity/protocols/accounting/pouw/prover/clear/clear_audit.py::Transcript":
         "homonym, what a clear audit's prover publishes: rename (compute-accounting)",
@@ -892,9 +892,9 @@ KNOWN: dict[str, str] = {
     "verity/protocols/accounting/poub/verifier/opening.py::Draw":
         "homonym, a PoUB position draw: rename (memory-accounting)",
     "verity/protocols/accounting/poub/verifier/opening.py::Session":
-        "duplicate of `remote_bandwidth`'s own type: becomes `audit.Session`, `audit.Store` (folded) (memory-accounting)",
+        "duplicate of `remote_bandwidth`'s own type: becomes `audit.Session`, `audit_prover.Store` (folded) (memory-accounting)",
     "verity/protocols/accounting/poub/verifier/opening.py::Store":
-        "duplicate of `remote_bandwidth`'s own type: becomes `audit.Session`, `audit.Store` (folded) (memory-accounting)",
+        "duplicate of `remote_bandwidth`'s own type: becomes `audit.Session`, `audit_prover.Store` (folded) (memory-accounting)",
     "verity/protocols/accounting/poub/verifier/p2.py::Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes it (one opening type, parameterised by codec) (memory-accounting)",
     "verity/protocols/accounting/poub/verifier/p2.py::Registration":

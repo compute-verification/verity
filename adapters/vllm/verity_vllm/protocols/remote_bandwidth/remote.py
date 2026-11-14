@@ -1,12 +1,12 @@
 """The remote bandwidth session over the node's `NodeMemory`, inside the prover's process (the Commit's, or the serve
-driver's): `StoreBackend` is the backend `benchmarks/remote_session`'s `ProverSide` drives, the role
+driver's): `StoreBackend` is the backend PoUB's prover's `ProverSide` drives (`REMOTE_SESSION`), the role
 `device.GpuBackend` and `CpuBackend` play there, and `prove` connects it to a verifier at ``HOST:PORT`` (the row's ``REMOTE_VERIFIER``,
 `config.CommitConfig.remote_verifier`).
 
 ~~~text
 hello         the node, N = the store's blocks (`NodeMemory.layout`) and the payload root of every block's payload as the
               store holds it now (`NodeMemory.payload`: weights, the KV pool's pages as filler, host filler)
-registration  the verifier's; the backend encodes the payloads under its key (`audit.Store`, the driver's reference
+registration  the verifier's; the backend encodes the payloads under its key (`audit_prover.Store`, the driver's reference
               encoding, or kv.cu on the GPU into the same host mirror: `DeviceEncoded`); the hello's layout is each
               region's kind, tier and blocks (`StoreBackend.layout`)
 session       the store records its memory map against `Registration.digest` under the session's lifetime cap L
@@ -14,10 +14,10 @@ session       the store records its memory map against `Registration.digest` und
 pass          before each pass `Serving.advance` runs the engine's next step s against the store (its frees, allocs
               and `kv_append`, which closes the step before's memory-map line with its re-keys for the pass's window),
               then appends the blocks step s completed and still holds (`MemoryMap.complete`) as the audit's append
-              (committed by its digests alone, `audit.Store.append`), and applies each closed line's releases and
+              (committed by its digests alone, `audit_prover.Store.append`), and applies each closed line's releases and
               writes (`memory_map.Replay`, the map's).  `ProverSide` sends each append after the root before the
               pass, checks the reply's ``first`` against the append's j and hands its coin c_a to `encode_append`,
-              which encodes the blocks under b_j = codec.binding(d_j, j, key, c_a) (`audit.Store.encode`, the CPU
+              which encodes the blocks under b_j = codec.binding(d_j, j, key, c_a) (`audit_prover.Store.encode`, the CPU
               reference of kv.cu's and paged.cu's per-block offset, or `DeviceEncoded.encode`, which hands b_j to
               kv.cu) and tells the map the encode has landed: deferred residency (remote_bandwidth's ``PROTOCOL.md``
               §4) records the blocks' writes in the line open then, the step before the first whose pass reads them
@@ -37,7 +37,7 @@ Commit's session is `CommitSession`: the binder on its engine from the build, th
 Commit's instrumented run (`Lockstep`: each pass's engine step is the run's next step, so the memory map's steps are
 the steps the Commit commits), its store's encode on the GPU by kv.cu (`KvDevice`).
 
-`benchmarks/remote_session` is not a package: `session_module` loads its ``prover.py`` from the source tree
+PoUB's prover is not a package: `session_module` loads its ``prover.py`` from the source tree
 (`REMOTE_SESSION`, below), and `prove` takes the wire from it. The verifier's side, the wire among it, is
 `verity.protocols.accounting.poub.verifier.session`.
 """
@@ -60,15 +60,16 @@ from typing import Any
 
 import numpy as np
 
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import audit, codec as rcodec, receipts as rb
 from verity_vllm import config
 from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
 from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
 
 #: The PoUB session's processes (not a package), whose prover runs in the Commit's.
-REMOTE_SESSION = config.ROOT.parent.parent / "benchmarks" / "remote_session"
-#: kv.cu's launchers over torch (``paged.py``, with ``word_codec/kv_bench.py``), the remote session's device encode.
-VLLM_ENCODED = config.ROOT.parent.parent / "benchmarks" / "vllm_encoded"
+REMOTE_SESSION = (config.ROOT.parent.parent / "verity/protocols/accounting/poub/prover/remote_session/prover.py").parent
+#: kv.cu's launchers over torch (``paged.py``, with ``kv_bench.py`` beside it), the remote session's device encode.
+VLLM_ENCODED = (config.ROOT.parent.parent / "verity/protocols/accounting/poub/prover/word_codec/paged.py").parent
 
 
 def address(value: str) -> tuple[str, int]:
@@ -80,8 +81,8 @@ def address(value: str) -> tuple[str, int]:
 
 
 def session_module(name: str, directory: str | Path = REMOTE_SESSION) -> ModuleType:
-    """``benchmarks/remote_session``'s module ``name`` (``prover``, ``device``), loaded once from its file, as its own
-    scripts import it."""
+    """The module ``name`` of PoUB's prover in ``directory`` (``prover``, ``device``; ``paged``), loaded once from its
+    file, as its own scripts import it."""
     if name in sys.modules:
         return sys.modules[name]
     spec = importlib.util.spec_from_file_location(name, Path(directory) / f"{name}.py")
@@ -135,7 +136,7 @@ class Phases:
 
 class Serving:
     """The serving node's steps as a session sees them, `ProverSide`'s serving trace in its ``serve`` modes: the
-    memory map's appends as the audit's (`appends`, each an `audit.Append`, and `appended`, their indices), made as
+    memory map's appends as the audit's (`appends`, each an `audit_prover.Append`, and `appended`, their indices), made as
     each step's blocks complete, its closed lines' releases (`released`), and `plan`, every block the record holds
     live, registered and written: an appended block joins it once its write is recorded, after its encode has landed
     (deferred residency; `encoded`).  A step that runs past a boundary ``moves`` its pass into the next window
@@ -157,7 +158,7 @@ class Serving:
         self.step, self.steps, self.first = -1, 0, None
         self.live = np.ones(registration.blocks, bool)
         self._plan: rb.Plan | None = None
-        self.appends: list[audit.Append] = []
+        self.appends: list[audit_prover.Append] = []
         self.released: list[int] = []
         self.appended: list[int] = []
         self.digests: list[bytes] = []
@@ -261,7 +262,7 @@ class Serving:
 
 class StoreBackend:
     """`ProverSide`'s backend over ``store``, whose engine steps ``engine(s)`` runs (the module's docstring).  Its
-    passes are the driver's reference over its `audit.Store` (`receipts.receipter` over each plan's blocks, its tree
+    passes are the driver's reference over its `audit_prover.Store` (`receipts.receipter` over each plan's blocks, its tree
     `receipts.tree`), hiding salts from ``randbytes``; ``path`` is the memory map's file (None: kept in memory).  With
     ``device`` (`KvDevice`) the store's blocks are encoded on the GPU (`DeviceEncoded`).  An appended block is resident
     once its encode lands (`deferred`, which the hello says), so the verifier refuses it a lifetime of one window."""
@@ -294,7 +295,7 @@ class StoreBackend:
             raise RuntimeError("the store changed between its hello and its registration")
         self.registration = registration
         if self.device is None:
-            self.audit = audit.Store(registration, self.payloads, self.salts)
+            self.audit = audit_prover.Store(registration, self.payloads, self.salts)
         else:
             self.audit = DeviceEncoded(registration, self.payloads, self.salts, self.device)
             self.gates["device_encode"] = self.audit.gates
@@ -312,7 +313,7 @@ class StoreBackend:
         """The payload salts of an append's blocks ``first`` …, hiding each digest in its tree."""
         return [self.randbytes(rb.SALT_BYTES) for _ in range(count)]
 
-    def append(self, payloads, salts) -> audit.Append:
+    def append(self, payloads, salts) -> audit_prover.Append:
         return self.audit.append(payloads, salts)
 
     def encode_append(self, first: int, coin: bytes) -> None:
@@ -355,7 +356,7 @@ class StoreBackend:
     def launch(self, i: int, after: dict | None, plan: rb.Plan | None = None) -> dict:
         """Pass i of the window over ``plan`` (None: every registered block) at the step the trace last advanced to,
         chained from ``after``'s root (None: the window's previous root) and the head of every append so far
-        (`audit.Store.head`, all sent with this pass's root or before it), run when awaited."""
+        (`audit_prover.Store.head`, all sent with this pass's root or before it), run when awaited."""
         return {"challenge": self.challenge, "i": i, "after": after, "previous": self.previous, "root": None,
                 "plan": plan, "step": None if self.trace is None else self.trace.step, "head": self.audit.head}
 
@@ -395,7 +396,7 @@ class StoreBackend:
 
 
 class KvDevice:
-    """The store's encode on the GPU by kv.cu (``benchmarks/word_codec/kv.cu``, a build at the codec's field and mask
+    """The store's encode on the GPU by kv.cu (``verity/protocols/accounting/poub/prover/word_codec/kv.cu``, a build at the codec's field and mask
     loaded as `kv_bench.Lib`): blocks under the seed's key by ``kv_encode``; an append's under their bound keys and its
     coin by ``kv_encode_bound``, each block's offset b_j(c_a) = `codec.binding`(d_j, j, key, c_a) handed to the device
     by ``paged.offsets`` (`VLLM_ENCODED`), so the host computes only d_j and b_j."""
@@ -440,8 +441,8 @@ class KvDevice:
         return out
 
 
-class DeviceEncoded(audit.Store):
-    """`audit.Store` with its encodes on a `KvDevice`: the registered blocks at once, an append's once its coin
+class DeviceEncoded(audit_prover.Store):
+    """`audit_prover.Store` with its encodes on a `KvDevice`: the registered blocks at once, an append's once its coin
     arrives.  Before the store takes them, the device's blocks are checked against `codec.encode`: the registration's
     first and last, and each append's first (`gates`)."""
 
@@ -459,7 +460,7 @@ class DeviceEncoded(audit.Store):
         for j in sorted({0, len(encoded) - 1}):
             self._gate(encoded[j], self.payloads[j], j)
         self.blocks: list[bytes | None] = list(encoded)
-        self.appends: list[audit.Append] = []
+        self.appends: list[audit_prover.Append] = []
         self.pending: dict[int, tuple[bytes, ...]] = {}
         self.coin_of: dict[int, bytes] = {}
         self.gates = {"registered": len(encoded), "appends": 0, "blocks_checked": len({0, len(encoded) - 1})}

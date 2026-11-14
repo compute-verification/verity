@@ -46,8 +46,9 @@ import time
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/accounting/poub/prover/word_codec/cuda_lib.py").parent))
 
-from benchmarks.word_codec import cuda_lib
+import cuda_lib
 
 BLOCK = 4096
 GIB = 1 << 30
