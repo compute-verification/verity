@@ -129,8 +129,9 @@ the schedule are needed for that, whatever a run holds:
 - every class has one O, so a response row has one width, the one the compute side commits its ids at. The
   schedule doesn't know that width: that the O is it is held where a tie's statement is made, since a row of
   another width is another committed value;
-- it has a response cap, so a released request asks for at most the cap. The cap is then at most that O: a
-  schedule whose response releases more ids than a class of its largest P holds is refused ("The classes").
+- it has a response limit (`max_tokens_cap`), so a released request asks for at most the limit. The limit is then
+  at most that O: a schedule whose response releases more ids than a class of its largest P holds is refused
+  ("The classes").
 
 This is a word about a schedule and no refusal of one: a schedule that fails it is built and served as any other,
 none of its classes is tied, and each is charged its whole schedule. It is read where a tie's shape is taken from
@@ -411,7 +412,7 @@ def classes(params: WardenParams) -> tuple[tuple[int, ...], ...]:
 def untied(params: WardenParams) -> str | None:
     """What keeps the schedule's classes from being tied (the module docstring's "A schedule that can be tied"), or
     None where nothing does: it has no content rows, it lists a P in two classes, its classes have two O's, or it
-    has no response cap."""
+    has no response limit."""
     listed = sized(params)
     if not listed:
         return "it has no content rows, so no class to tie"
@@ -424,7 +425,7 @@ def untied(params: WardenParams) -> str | None:
         return (f"its classes hold O={', '.join(map(str, widths))} ids, and a tied schedule's response rows have "
                 f"one width, one O for every class")
     if params.max_tokens_cap is None:
-        return ("it has no response cap (max_tokens_cap), so a released request may ask for more ids than a "
+        return ("it has no response limit (max_tokens_cap), so a released request may ask for more ids than a "
                 "class holds")
     return None
 

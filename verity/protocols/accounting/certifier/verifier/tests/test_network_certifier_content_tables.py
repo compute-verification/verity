@@ -511,11 +511,11 @@ def test_an_execution_phase_a_longer_request_reached_releases_only_what_its_clas
     assert phases() == [(2, [0, 0, 1], 0)]
 
 
-def test_a_schedule_can_be_tied_with_each_p_once_one_o_and_a_response_cap_and_is_a_schedule_without_them():
+def test_a_schedule_can_be_tied_with_each_p_once_one_o_and_a_response_limit_and_is_a_schedule_without_them():
     """The word a tie and a charge read of a schedule (`content_rows.can_be_tied`): each P listed once, one O for
-    every class and a response cap, under either form of the lengths rows and in any order of the classes.
+    every class and a response limit, under either form of the lengths rows and in any order of the classes.
     `untied` says which of them a schedule lacks. The word refuses no schedule: one that can't be tied is built
-    and its hand laid as it was. A cap past the one O is no schedule's, by the schedule's own check of its
+    and its hand laid as it was. A limit past the one O is no schedule's, by the schedule's own check of its
     largest class, so the word has no such case."""
     assert CT.can_be_tied(TIED) and CT.untied(TIED) is None
     for other in (dataclasses.replace(TIED, max_tokens_cap=3), dataclasses.replace(TIED, content=ONCE[::-1]),
@@ -527,7 +527,7 @@ def test_a_schedule_can_be_tied_with_each_p_once_one_o_and_a_response_cap_and_is
                            "it lists P=16 prompt ids in classes 1, 3"),
                           (dataclasses.replace(TIED, content=((4, 4), (16, 8), (128, 8))),
                            "its classes hold O=4, 8 ids, and a tied schedule's response rows have one width"),
-                          (dataclasses.replace(TIED, max_tokens_cap=None), "it has no response cap (max_tokens_cap)"),
+                          (dataclasses.replace(TIED, max_tokens_cap=None), "it has no response limit (max_tokens_cap)"),
                           (HELD, twice), (CON, twice)):
         assert not CT.can_be_tied(schedule) and CT.untied(schedule).startswith(why), why
     with pytest.raises(ValueError, match="hold at most O=4 ids, and a response of the schedule releases up to 8"):
@@ -558,7 +558,7 @@ def test_a_class_of_a_schedule_that_cant_be_tied_is_charged_its_whole_schedule_w
     class is at its whole schedule on the same four, whichever its schedule is, and the line says the schedule was
     not handed. A schedule that is not the head's is refused, by the parameters' digest the head holds."""
     for schedule, why in ((TIED, ""), (HELD, CT.untied(HELD)), (dataclasses.replace(TIED, max_tokens_cap=None),
-                                                                "it has no response cap (max_tokens_cap), so a "
+                                                                "it has no response limit (max_tokens_cap), so a "
                                                                 "released request may ask for more ids than a class "
                                                                 "holds")):
         head = CR.Rows.commit(LINK, 0, CR.tables(schedule, loads["first"]), schedule, signers.SESSION).head

@@ -2187,12 +2187,12 @@ prompt ids and a size of ids released, each a power of two.
   (`content_rows.tables`): releases with one past R are no execution phase's of the schedule, so none of their
   tables is laid and no head is signed over them.
 - **A schedule that can be tied** (`content_rows.can_be_tied`) lists each P once, has one O for every class and
-  has a response cap, which is then at most that O. It is a word about a schedule and no refusal of one: a schedule
-  that fails it is built and served as any other, and none of its classes is tied. The response tie takes a shape
-  from a schedule only by it (`response_tie.tied`), and the rule that charges a class (`class_charge.charge`)
-  charges one below its schedule only where it is handed the head's schedule and that schedule can be tied: a
-  class of a schedule that can't be is at its whole schedule, and so is every class where no schedule is handed,
-  since the word was then not asked.
+  has a response limit (`max_tokens_cap`), which is then at most that O. It is a word about a schedule and no
+  refusal of one: a schedule that fails it is built and served as any other, and none of its classes is tied. The
+  response tie takes a shape from a schedule only by it (`response_tie.tied`), and the rule that charges a class
+  (`class_charge.charge`) charges one below its schedule only where it is handed the head's schedule and that
+  schedule can be tied: a class of a schedule that can't be is at its whole schedule, and so is every class where
+  no schedule is handed, since the word was then not asked.
 - **A row of zero bytes** is what every row past the held ones is under form 1 (`content_rows.empty_rows`). As a
   request row it reads as no request: a held row's byte count is at least 1, and `request_of` refuses it. As a
   response row it reads as no ids, and as an end row as an `END` after no `DATA` cell. So an unheld row and a held

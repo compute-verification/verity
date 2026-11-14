@@ -635,10 +635,10 @@ def test_a_request_past_the_cap_is_refused_at_ingress_with_its_own_reason_never_
     refused(id_req((1 << 32) - 1))
 
 
-def test_a_request_of_max_tokens_0_is_refused_at_ingress_under_a_cap_and_released_without_one():
-    """Under a cap a request that asks for no token is refused (cap), as one past the cap is: none of its bytes is
-    cut into a cell or reaches the server. The least a released request asks for is 1. A schedule without a cap
-    reads no request's `max_tokens`, and releases the same request."""
+def test_a_request_of_max_tokens_0_is_refused_at_ingress_under_a_response_limit_and_released_without_one():
+    """Under a response limit a request that asks for no token is refused as one past the limit is, by the same
+    reason: none of its bytes is cut into a cell or reaches the server. The least a released request asks for is
+    1. A schedule without one reads no request's `max_tokens`, and releases the same request."""
     assert active.id_request_max_tokens(id_req(0)[:GP]) == 0
     refused(id_req(0))
     _, _, server, e = capped(id_req(1), id_answer([7]))

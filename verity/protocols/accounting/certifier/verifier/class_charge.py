@@ -73,8 +73,8 @@ its whole schedule whatever its verdicts say, and the line says what keeps the s
 class has a statement, so a verdict that says one was accepted is of something else. A schedule that is not the
 head's, by the parameters' digest the head holds, is refused. With no schedule handed the word was not asked, so
 the class is at its whole schedule too, whatever its verdicts say, and the line says so (`NOT_HANDED`): the head
-holds the schedule's digest and none of its classes' sizes or its cap, so `charge` can't read the word from the
-head alone, and no caller is charged below a schedule by leaving the schedule out.
+holds the schedule's digest and none of its classes' sizes or its response limit, so `charge` can't read the word
+from the head alone, and no caller is charged below a schedule by leaving the schedule out.
 
 `head` is the verifier's read of the registration (`connection_rows.check_registration`), which holds it to the
 network certifier's certificate; `charge` checks no signature."""

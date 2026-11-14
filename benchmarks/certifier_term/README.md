@@ -157,8 +157,8 @@ from the signed head of an execution phase and the verdict records on a class of
 - so it is where the class's records on that head name two serves or two registrations: the head holds the network
   certifier's rows to a serve, and these two names hold the values the verdicts judge to it;
 - so it is where the rule is not handed the schedule the head names, or that schedule can't be tied (each P listed
-  once, one O for every class and a response cap): with no schedule handed that word was not asked, and the line
-  says the schedule was not handed;
+  once, one O for every class and a response limit): with no schedule handed that word was not asked, and the
+  line says the schedule was not handed;
 - a class with a count of 0 owes none.
 
 `benchmarks/network_traces/stop_verdicts.py` reads the records and hands the calculator the answer (`of_runs`, `stop`).

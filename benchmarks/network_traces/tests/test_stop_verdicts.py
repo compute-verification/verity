@@ -54,7 +54,7 @@ def schedule() -> WardenParams:
 
 def tied() -> WardenParams:
     """The cost runner's schedule made one that can be tied (`content_rows.can_be_tied`): its largest O for every
-    class, and that O its response cap."""
+    class, and that O its response limit."""
     own = schedule()
     width = max(O for _, O, _ in own.content)
     return dataclasses.replace(own, content=tuple((P, width, rows) for P, _, rows in own.content),

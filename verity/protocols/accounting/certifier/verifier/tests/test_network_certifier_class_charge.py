@@ -18,7 +18,7 @@ from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier
 LINK, WINDOW = "responses", 3
 ZEROS = bytes(64)
 #: a schedule that can be tied (`content_rows.can_be_tied`): the lengths tests' at the lengths rows' form 2, with
-#: each P listed once, one O for every class and a response cap
+#: each P listed once, one O for every class and a response limit
 ONCE = ((4, 8), (16, 8), (128, 8))
 TIED = dataclasses.replace(LEN, lengths=2, content=ONCE, max_tokens_cap=8)
 
