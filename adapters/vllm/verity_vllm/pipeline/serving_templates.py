@@ -527,6 +527,25 @@ def block_rows(N: int, G: int) -> list[int]:
     return [1 << j for j in range(G.bit_length()) if G % (1 << j) == 0 and N % (1 << j) == 0]
 
 
+#: the most u16 words of a row of an embedding shard's tables (`shard_block`).  A key's tables are at the widths this gives,
+#: so another value is another nonce scheme: `expert_tables.NONCES` changes with it, and a key minted for this one is refused
+SHARD_ROW = 256
+
+
+def shard_block(H: int) -> int:
+    """The one width, in u16 words, an ``EmbeddingShard_v1`` row of H columns is read at and its tables are registered at: the
+    widest H / 2^k of at most `SHARD_ROW` words, a column block of the row a ``READ`` keyed by the token over a table of the
+    whole vocabulary (`expert_rows.shard_param`).  It is a function of H alone, so a field has one width and nothing asks for a
+    second: a table's nonce is its field's place and its block (`expert_tables.nonces`), and a second width of the field would
+    sample the first's salts."""
+    w = int(H)
+    while w > SHARD_ROW and w % 2 == 0:
+        w //= 2
+    if not 1 <= w <= SHARD_ROW:
+        raise ValueError(f"an embedding shard of {H} columns: no H / 2^k of at most {SHARD_ROW} words")
+    return w
+
+
 def _bind(spec: str, family: str | None = None, **over: Any) -> Any:
     """The registry's Definition bound at ``spec``'s statics (``over`` replacing some), each ``{"fn": id}`` static (`spec_statics`
     reads it as the id) the primitive it names; with ``family``, that family's Definition at those of the statics it has.  None
