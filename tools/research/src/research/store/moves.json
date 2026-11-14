@@ -2203,6 +2203,11 @@
       "paths": {
         "verity/settings.py": "tools/config/verity_config/verity_settings.py"
       }
+    },
+    {
+      "paths": {
+        "fixtures/bench-instances/": "benchmarks/numerical/bench-instances/"
+      }
     }
   ]
 }
