@@ -39,13 +39,22 @@ def _spec_argument(parser: argparse.ArgumentParser) -> None:
                         help="find passing runs in this machine's catalog alone, not the store's remote")
 
 
+def _again_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--again", action="append", default=[], metavar="POINT",
+                        help="launch this point again though a passing run stands for it (repeatable; `jobs.again`): "
+                             "it labels and supersedes nothing")
+
+
 def _make_plan(args: Any) -> jobs.Plan:
-    """The spec's plan, by its schema: a steady-state spec's points (`steady_plan`), or a vLLM spec's."""
+    """The spec's plan, by its schema: a steady-state spec's points (`steady_plan`), or a vLLM spec's, with the points
+    `--again` names launched again."""
 
     root = jobs.repository_root()
     if steady_spec.is_steady(args.spec):
-        return steady_plan.make_plan(args.spec, root=root, local_only=args.local_only)
-    return jobs.make_plan(args.spec, root=root, lookup=jobs.StoreCompletion(root=root, local_only=args.local_only))
+        plan = steady_plan.make_plan(args.spec, root=root, local_only=args.local_only)
+    else:
+        plan = jobs.make_plan(args.spec, root=root, lookup=jobs.StoreCompletion(root=root, local_only=args.local_only))
+    return jobs.again(plan, args.again) if getattr(args, "again", None) else plan
 
 
 def _plan(args: Any) -> int:
@@ -65,7 +74,10 @@ def _check(args: Any) -> int:
 def _run(args: Any) -> int:
     plan = _make_plan(args)
     if isinstance(plan.spec, steady_spec.SteadySpec):
-        return steady_plan.dispatch(plan, args.spec, direct=args.direct)
+        return steady_plan.dispatch(plan, args.spec, direct=args.direct, card=args.card, cores=args.cores)
+    if args.card is not None or args.cores is not None:
+        raise ValueError(f"--card and --cores are a steady-state point's: spec {plan.spec.id!r}'s points lease their own "
+                         "GPUs")
     return jobs.dispatch(plan, args.spec, direct=args.direct)
 
 
@@ -304,12 +316,19 @@ def _parser() -> argparse.ArgumentParser:
 
     plan = commands.add_parser("plan", help="expand a spec and report passing points without running")
     _spec_argument(plan)
+    _again_argument(plan)
     plan.set_defaults(run=_plan, command_parser=plan)
 
     run = commands.add_parser("run", help="launch one recorded research run per incomplete point")
     _spec_argument(run)
+    _again_argument(run)
     run.add_argument("--direct", metavar="NODE", default=None,
                      help="launch each point with `research run --on NODE` through a GPU slot of that node, not the queue")
+    run.add_argument("--card", type=int, default=None, metavar="INDEX",
+                     help="a steady-state point's booked card, which its lease is asked of alone (needs --cores)")
+    run.add_argument("--cores", default=None, metavar="CPUS",
+                     help="a steady-state point's booked slot, by its cores (34-43): the slot taker runs under "
+                          "`taskset -c CPUS`")
     run.set_defaults(run=_run, command_parser=run)
 
     check = commands.add_parser("check", help="report whether every point has a passing result")

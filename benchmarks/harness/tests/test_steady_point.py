@@ -889,6 +889,48 @@ def test_run_launches_each_point_without_a_passing_run_through_a_gpu_slot_of_the
         assert STEADY_POINT.parse(command) == {"spec": path, "point": item.point.id, "identity": item.identity}
 
 
+def test_a_point_named_again_is_launched_though_a_passing_run_stands_for_it_and_plan_says_so(tmp_path):
+    """A labelled row stands for a point by its pin, provers and cores, so without `--again` a first run of the harness
+    at a point the record already has is never launched."""
+
+    root, path = tree(tmp_path)
+    plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: ("r-passed", None))
+    ran = []
+    assert P.dispatch(plan, root / path, root=root, direct="vy-dc-h200", execute=lambda c, cwd: ran.append(c) or 0) == 0
+    assert ran == [], "every point passed: nothing is launched"
+    again = jobs.again(plan, ["gemm64-k2"])
+    assert [item.again for item in again.points] == [False, True, False]
+    assert [point.get("again") for point in jobs.plan_json(again)["points"]] == [None, "passed by r-passed", None]
+    assert [point["passing_run"] for point in jobs.plan_json(again)["points"]] == ["r-passed"] * 3, "nothing superseded"
+    assert P.dispatch(again, root / path, root=root, direct="vy-dc-h200", execute=lambda c, cwd: ran.append(c) or 0) == 0
+    assert [STEADY_POINT.parse(command)["point"] for command in ran] == ["gemm64-k2"]
+    with pytest.raises(ValueError, match=r"--again gemm64-k3: not a point of spec 'steady', whose points are gemm64-k1, "):
+        jobs.again(plan, ["gemm64-k3"])
+    with pytest.raises(SystemExit):
+        main(["run", path, "--direct", "vy-dc-h200", "--again"])
+
+
+def test_a_point_on_a_booked_card_is_launched_through_the_booked_slot_and_names_the_card(tmp_path):
+    """The calendar books a card and its slot's cores; the first free slot, and either card of its NUMA node, may be
+    another lane's booking."""
+
+    root, path = tree(tmp_path)
+    plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, None))
+    ran = []
+    assert P.dispatch(plan, root / path, root=root, direct="vy-spot-glm53", card=3, cores="34-43",
+                      execute=lambda c, cwd: ran.append(c) or 0) == 0
+    for command, item in zip(ran, plan.points, strict=True):
+        workload = command[command.index("--") + 1:]
+        assert workload[:7] == ["taskset", "-c", "34-43", "env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3",
+                                "tools/verity/check/slot.py"]
+        assert workload[workload.index("--", 7) + 1:] == [
+            "bash", "benchmarks/harness/steady_point.sh", "--spec", path, "--point", item.point.id,
+            "--identity", item.identity, "--card", "3"]
+        assert STEADY_POINT.parse(command) == {"spec": path, "point": item.point.id, "identity": item.identity}
+    with pytest.raises(ValueError, match=r"--card 3 needs --cores, the booked slot's cores"):
+        P.dispatch(plan, root / path, root=root, direct="vy-spot-glm53", card=3, execute=lambda c, cwd: 0)
+
+
 def test_a_point_whose_statement_is_in_the_store_is_launched_with_a_read_only_key_to_it(tmp_path):
     """Only that point's run reads the store: a row staged in the run, or from a directory on the node, gets no key."""
 
@@ -997,7 +1039,8 @@ class Node:
         self.identity = SP.point_identity(spec, SP.point(spec, POINT), sha256_of(SP.closure(self.root, spec)))
 
     def args(self, **changes):
-        return N.parse(["--spec", self.spec, "--point", POINT, "--identity", changes.get("identity", self.identity)])
+        return N.parse(["--spec", self.spec, "--point", POINT, "--identity", changes.get("identity", self.identity),
+                        *(["--card", str(changes["card"])] if "card" in changes else [])])
 
     def ask(self, argv):
         if list(argv[1:5]) == list(N.FETCH):
@@ -1150,6 +1193,32 @@ def test_the_lease_is_asked_of_the_cards_on_the_numa_node_of_the_runs_cpus(tmp_p
     assert lease[:lease.index("--")] == ["gpu-lease", "1", "--wait", "--max-min", "90", "--on", "2,3", "--preemptible",
                                          "--mem-gb", "80"]
     assert node.read(N.POINT_FILE)["lease_on"] == {"numa_nodes": [1], "cards": [2, 3]}
+
+
+def test_a_booked_card_is_leased_alone_once_it_is_on_the_numa_node_of_the_runs_cpus(tmp_path, monkeypatch):
+    """Either card of the NUMA node may be another lane's booking in the same hours."""
+
+    node = Node(tmp_path, monkeypatch)
+    numa(node)
+    assert node.point(card=3) == 0
+    lease = node.ran[1]
+    assert lease[:lease.index("--")] == ["gpu-lease", "1", "--wait", "--max-min", "90", "--on", "3", "--preemptible",
+                                         "--mem-gb", "80"]
+    assert node.read(N.POINT_FILE)["lease_on"] == {"numa_nodes": [1], "cards": [3]}
+
+
+@pytest.mark.parametrize("cards, says", [
+    (CARDS, "the point was launched on card 0, which isn't on NUMA node 1 of the run's CPUs (its cards are 2, 3): "
+            "launch it with the cores of card 0's slot"),
+    (None, "the point was launched on card 0, and the node doesn't say which cards are on the NUMA node of the run's "
+           "CPUs"),
+])
+def test_a_booked_card_off_the_numa_node_of_the_runs_cpus_is_refused_before_the_statement(tmp_path, monkeypatch,
+                                                                                           cards, says):
+    node = Node(tmp_path, monkeypatch)
+    numa(node, cards=cards)
+    assert node.point(card=0) == N.REFUSED
+    assert node.ran == [] and says in node.read(N.POINT_FILE)["refused"]
 
 
 def test_a_node_that_cannot_run_gpu_lease_is_refused_before_a_statement_is_staged_with_the_script_to_install(

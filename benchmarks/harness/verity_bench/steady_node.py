@@ -2,7 +2,7 @@
 card of a GPU node. `steady_point.sh` runs it from the shipped source, in the environment the spec's setup leaves, under
 the `research run` that `steady_plan` launches through one of the node's GPU slots.
 
-    python -m verity_bench.steady_node --spec SPEC --point POINT --identity IDENTITY
+    python -m verity_bench.steady_node --spec SPEC --point POINT --identity IDENTITY [--card INDEX]
 
 1. **Before any card is asked for** it holds the run to its point: the identity it was launched with is the one this
    tree gives the point (`steady_spec.point_identity`: a changed file of the closure is another point); the run's
@@ -14,7 +14,9 @@ the `research run` that `steady_plan` launches through one of the node's GPU slo
    It refuses a statement whose circuit isn't the row's `pin` or whose units aren't its `n`.
 2. **One lease of one card** (the harness kit's, `kit.lease`: `gpu-lease 1 --wait --max-min M`), asked of the cards on
    the NUMA node of the run's CPUs where the node says which they are (`cards_near`: a slot gives a run its CPUs and
-   no card) and declaring no cores (`lease_argv`), and inside it the timed step (this module again, with `--inside`):
+   no card), or of the booked card alone where the run names one (`--card`, refused before the statement unless it is
+   one of those, `booked`), and declaring no cores (`lease_argv`), and inside it the timed step (this module again,
+   with `--inside`):
    it reads the card and the driver's version from the kit's host stamp (`kit.host_stamp`, the lease's card) and the
    toolkit's from the node's nvcc, and refuses a card or a version that isn't the spec's; records what else is on the
    node (`steady.card_file`) before and after;
@@ -262,6 +264,21 @@ def cards_near(cpus: Sequence[int], ask: Asker) -> dict[str, Any]:
     return {"numa_nodes": held, "cards": cards}
 
 
+def booked(card: int, near: Mapping[str, Any]) -> int:
+    """The card the point was launched on (`--card`, a booked card's index), which its lease is then asked of alone, once
+    it is one of the cards on the NUMA node of the run's CPUs (`cards_near`): refused, before any statement is staged or
+    fetched, where it isn't or the node doesn't say."""
+
+    if near["cards"] is None:
+        raise Refused(f"the point was launched on card {card}, and the node doesn't say which cards are on the NUMA node "
+                      f"of the run's CPUs ({near['why']}), so card {card} can't be held to them")
+    if card not in near["cards"]:
+        raise Refused(f"the point was launched on card {card}, which isn't on NUMA node {near['numa_nodes'][0]} of the "
+                      f"run's CPUs (its cards are {', '.join(map(str, near['cards']))}): launch it with the cores of "
+                      f"card {card}'s slot")
+    return card
+
+
 def lease_argv(spec: steady_spec.SteadySpec, inside: Sequence[str], on: Sequence[int] | None = None) -> list[str]:
     """The timed step under the kit's lease (`kit.lease`) of one card for the spec's bound, with what a point's lease
     says beside it, before the command: the cards it may be (`on`, gpu-lease's `--on`: `cards_near`), preemptible, as a
@@ -487,6 +504,8 @@ def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: 
         own = own_cores(spec, cpus())
         record["cores"] = {"count": spec.cores, "list": _spans(own)}
         record["lease_on"] = cards_near(own, ask)
+        if a.card is not None:
+            record["lease_on"]["cards"] = [booked(a.card, record["lease_on"])]
         scratch = Path(tempfile.mkdtemp(prefix="verity-bench-steady-", dir=settings.VERITY_BENCH_STEADY_SCRATCH))
         lease = lease_argv(spec, [sys.executable, "-m", "verity_bench.steady_node", "--spec", a.spec, "--point", a.point,
                                   "--identity", a.identity, "--inside", str(scratch)], record["lease_on"]["cards"])
@@ -528,6 +547,9 @@ def parse(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument("--spec", required=True)
     parser.add_argument("--point", required=True)
     parser.add_argument("--identity", required=True)
+    parser.add_argument("--card", type=int, default=None, metavar="INDEX",
+                        help="the booked card, which the lease is asked of alone (`booked`); default: one on the NUMA "
+                             "node of the run's CPUs")
     parser.add_argument("--inside", type=Path, default=None, metavar="SCRATCH",
                         help="the timed step, inside the lease the point took: the scratch directory its statement is in")
     return parser.parse_args(argv)

@@ -14,7 +14,8 @@ take), settings, the two tables `served-table` and `breakdown` render, and the k
 ~~~text
 verity-bench plan SPEC       # expand a spec; each point's identity and its passing run, if any
 verity-bench run SPEC        # one recorded run per point without a passing run, queued for any free GPU
-                             # (--direct NODE: on NODE itself, through its GPU slots, instead)
+                             # (--direct NODE: on NODE itself, through its GPU slots, instead; --again POINT: that
+                             # point too, though a passing run stands for it; plan takes --again to show it first)
 verity-bench check SPEC      # exit 0 only when every point has a passing run, here or on the store's remote
 verity-bench compare A B     # accept two results only when their identities agree (--allow PATH to permit one)
 verity-bench table R1 R2...  # one table from one spec's per-point results, only when their identities agree
@@ -268,7 +269,14 @@ says on stderr when it starts and what it pulled.
 
 **Run.** `verity-bench run SPEC --direct NODE` launches each point without a passing run as one recorded run on NODE
 through one of its GPU slots, which gives the run its cores, by the harness's one dispatch and its one slot run
-(`jobs.dispatch`, `jobs.slot_run`); a steady-state spec has no queued form. The job is
+(`jobs.dispatch`, `jobs.slot_run`); a steady-state spec has no queued form. `--again POINT` (repeatable, each point by
+its id, never all of them) launches that point too though a passing run stands for it, as a labelled row timed before
+the harness does whatever its closure: `plan SPEC --again POINT` shows it as `again: passed by RUN` before anything is
+launched, and the new run labels and supersedes nothing, so the passing run stays the record until a run is labelled
+on purpose. `--cores CPUS` (a booked slot's, `34-43`) runs the slot taker under `taskset -c CPUS`, so it takes that
+slot or waits for it, and `--card INDEX` (a booked card's, with `--cores`) asks the lease for that card alone, which
+the node side refuses before the statement unless it is on the NUMA node of the run's CPUs. On a node whose launcher
+takes a run only through `slot.py` (`/etc/vy/runs-via-slot`), the launcher refuses a `--cores` launch. The job is
 `benchmarks/harness/steady_point.sh`, which sources the spec's `setup` in the source tree and runs
 `python -m verity_bench.steady_node` under the Python the setup names. The setup builds the prover and exports
 `VERITY_BENCH_STEADY_BIN` (the prover) and `VERITY_BENCH_STEADY_PY` (a Python the stager, the timing script and the
@@ -280,14 +288,16 @@ the node's disk. A point whose row names its statement in the store is launched 
 
 1. before any card is asked for, refuses a tree that gives the point another identity than the one it was launched with,
    an environment that isn't the spec's, a node that can't run `gpu-lease` (the kit's lease calls it by its bare name:
-   the refusal names the tree's script to put on the node's path), a run whose CPUs aren't exactly the spec's `cores`,
+   the refusal names the tree's script to put on the node's path), a node whose nvcc's version isn't the spec's
+   `cuda_toolkit`, a run whose CPUs aren't exactly the spec's `cores`, a booked card (`--card`) not on their NUMA node,
    and a statement (staged there, copied from `staged` on the node, or fetched from `staged` in the store) whose
    circuit isn't the row's `pin` or whose units aren't its `n`. A statement from the store is fetched into the scratch, on the node's disk: a scratch
    in its memory (`/dev/shm`, the default of `VERITY_BENCH_STEADY_SCRATCH`, which the setup then exports) is refused,
    as is a disk with less free than the statement twice, and the node's own store keeps no copy;
 2. takes one lease of one card for the spec's `max_minutes`, the kit's (`kit.lease`), preemptible and with the spec's
    `mem_gb`. A slot gives a run its CPUs and no card, so the lease is asked of the cards on the NUMA node of the run's
-   CPUs (gpu-lease's `--on`) where the node says which those are, and of any card where it doesn't; `out/point.json`
+   CPUs (gpu-lease's `--on`) where the node says which those are, of the booked card alone where the run names one,
+   and of any card where it doesn't; `out/point.json`
    says which (`lease_on`). The lease declares no cores (gpu-lease's `--cores`): gpu-lease counts a lease that declares
    none by the CPUs its processes may run on, which are the slot's, and the check `no_throttling` says whether the
    machine throttled them while the row ran. Inside the lease it reads the kit's host stamp (`kit.host_stamp`, the leased card's) and

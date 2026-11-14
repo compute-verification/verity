@@ -20,8 +20,9 @@ A point with no passing run is launched again by `run`, and `plan` says why each
 (`PlannedPoint.why`): the check it failed, or the one its files can't show. A labelled run whose rows can't be read
 at all (it kept no files, or its rate file is no list of rows) could have been any point, and is named in each.
 
-**`run SPEC --direct NODE`** (`dispatch`) launches each point without a passing run as one recorded run on a GPU slot
-of the node (`direct_command`), in the spec's order.
+**`run SPEC --direct NODE`** (`dispatch`) launches each point without a passing run, and each `--again` names
+(`jobs.again`), as one recorded run on a GPU slot of the node (`direct_command`), in the spec's order: the booked slot
+and card where `--cores` and `--card` name them.
 """
 
 from __future__ import annotations
@@ -367,27 +368,37 @@ def make_plan(source: str | Path, *, root: Path | None = None, lookup: Lookup | 
     return jobs.Plan(spec, sha256(spec, identity=True), Sources(digest, len(files)), tuple(points))
 
 
-def direct_command(plan: jobs.Plan, source: str | Path, item: jobs.PlannedPoint, root: Path, node: str) -> list[str]:
-    """The point as a `research run --on NODE` through one of the node's GPU slots, which gives it its cores. The node
-    side takes the card itself, in one lease, so that the lease has ended and left its usage line among the run's
-    files before the run's verdict is computed. A point whose row names its statement in the store runs with a
-    read-only key to it."""
+def direct_command(plan: jobs.Plan, source: str | Path, item: jobs.PlannedPoint, root: Path, node: str, *,
+                   card: int | None = None, cores: str | None = None) -> list[str]:
+    """The point as a `research run --on NODE` through one of the node's GPU slots, which gives it its cores: the slot
+    of `cores` where given (a booked slot's, `jobs.slot_run`), else the first free one. The node side takes the card
+    itself, in one lease, so that the lease has ended and left its usage line among the run's files before the run's
+    verdict is computed: `card` where given (a booked card's, `steady_node --card`), else one on the NUMA node of the
+    run's cores. A point whose row names its statement in the store runs with a read-only key to it."""
 
     spec = plan.spec
     return jobs.slot_run(
         spec, root, node, campaign="steady-point", tool="verity_bench.tool:STEADY_POINT",
-        store_read=item.point.row.stored is not None,
+        store_read=item.point.row.stored is not None, cores=cores,
         env=[flag for name, setting in jobs.point_environment(spec).items() for flag in ("--env", f"{name}={setting}")],
         job=["bash", "benchmarks/harness/steady_point.sh", "--spec", jobs._relative_spec(source, root),
-             "--point", item.point.id, "--identity", item.identity])
+             "--point", item.point.id, "--identity", item.identity, *(["--card", str(card)] if card is not None else [])])
 
 
 def dispatch(plan: jobs.Plan, source: str | Path, *, root: Path | None = None, execute: jobs.Executor = jobs._execute,
-             direct: str | None = None) -> int:
+             direct: str | None = None, card: int | None = None, cores: str | None = None) -> int:
     """Launch one recorded run for each point without a passing run, on `direct`'s GPU slots: the harness's one
-    dispatch (`jobs.dispatch`), with a steady-state point's command. A steady-state spec has no queued form."""
+    dispatch (`jobs.dispatch`), with a steady-state point's command, on the booked `card` and `cores` where given. A
+    steady-state spec has no queued form."""
 
     if direct is None:
         raise ValueError(f"spec {plan.spec.id!r} is a steady-state spec: its points run on a node's own card, through a "
                          "GPU slot of it: `verity-bench run SPEC --direct NODE`")
-    return jobs.dispatch(plan, source, root=root, execute=execute, direct=direct, command=direct_command)
+    if card is not None and cores is None:
+        raise ValueError(f"--card {card} needs --cores, the booked slot's cores: the first free slot may be on another "
+                         "NUMA node than the card, which the node side refuses")
+
+    def command(plan: jobs.Plan, source: str | Path, item: jobs.PlannedPoint, root: Path, node: str) -> list[str]:
+        return direct_command(plan, source, item, root, node, card=card, cores=cores)
+
+    return jobs.dispatch(plan, source, root=root, execute=execute, direct=direct, command=command)
