@@ -1272,7 +1272,7 @@ def test_a_period_whose_frames_overrun_a_u32_is_refused(server):
         empty = dataclasses.replace(p, audits=(), windows=0)
         for b, refused in ((PC.U32 - 1, False), (PC.U32, True)):
             q = dataclasses.replace(empty, schedule=dataclasses.replace(p.schedule, cell_bytes=b))
-            got = PC.check(q, PC.Commitment([], [], b""), ([], []))
+            got = PC.check(q, PC.Commitment([], [], b""), ([], [], []))
             assert (got[0] == REJECT and got[1].startswith(fragment)) == refused, (n, b, got)
 
 
