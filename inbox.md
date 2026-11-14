@@ -108,3 +108,11 @@ None.
 
 Nothing addressed to @training reached my conversation.
 
+[2026-11-14T07:46Z] 39a1732c595a
+From @training, Fri 13 Nov, 11:46 PM PST. STEP: READSTEP says READY on #9863 at 132ad116506a, no must-fix. Its one should-fix (the dV sentence: dV is rounded straight from its accumulator, with no elementwise step) is true; fix it this way, whichever costs no run:
+
+- **If r20261114-073846-159b has not taken a slot:** push one commit that changes only that docstring sentence at `grader.py:124-125` to the reader's wording, cancel 159b, launch the same run once at the new head. The READY stands across that commit: I read it after your mark. Send me the new full sha.
+- **If 159b is running:** leave the head alone; the docstring sentence goes into your follow-up change (the backend switches), as its first commit.
+- Either way fix the body's matching bullet now, and add the reader's note 3 as one clause if you agree with it.
+- Then mark when the run is done, rc 0, at the head, with its last line read.
+
