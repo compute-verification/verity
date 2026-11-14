@@ -70,8 +70,8 @@ def test_wait_returns_the_runs_own_exit_once_it_ends(tmp_path, capsys, end, rc):
 
 
 @pytest.mark.parametrize("max_s, fetch_s", [(waitcap.WAIT_CAP_S, 0.0), (waitcap.WAIT_CAP_S, 45.0), (300.0, 0.0)],
-                         ids=["cap", "slow-fetches", "wait-max"])
-def test_wait_stops_at_its_cap_with_the_run_still_going_and_says_how_to_check_back(tmp_path, capsys, max_s, fetch_s):
+                         ids=["limit", "slow-fetches", "wait-max"])
+def test_wait_stops_at_its_limit_with_the_run_still_going_and_says_how_to_check_back(tmp_path, capsys, max_s, fetch_s):
     """Agents that blocked in one long `--wait` looked silent and missed their wake-ups. The wait ends within its
     bound however long each fetch takes, cancels nothing, and exits STILL_GOING, which no other outcome of the wait gives."""
     rd = tmp_path / "r1"
@@ -88,8 +88,8 @@ def test_wait_stops_at_its_cap_with_the_run_still_going_and_says_how_to_check_ba
     assert json.loads((rd / "status.json").read_text())["state"] == "running"
 
 
-def test_the_default_fetch_gets_the_time_left_under_the_cap(tmp_path, monkeypatch):
-    """`remote.fetch` may take its ssh's own 900 s; under `--wait` it gets what is left of the cap instead."""
+def test_the_default_fetch_gets_the_time_left_under_the_limit(tmp_path, monkeypatch):
+    """`remote.fetch` may take its ssh's own 900 s; under `--wait` it gets what is left of the limit instead."""
     rd = tmp_path / "r1"
     rd.mkdir()
     _status(rd, "running", None)
@@ -105,7 +105,7 @@ def test_the_default_fetch_gets_the_time_left_under_the_cap(tmp_path, monkeypatc
     (["--wait", "--wait-max", "0"], "--wait-max 0: a wait may last 0 to 1200 s"),
     (["--wait-max", "600"], "--wait-max is for --wait"),
 ])
-def test_wait_max_may_lower_the_cap_and_never_raise_it(capsys, flags, says):
+def test_wait_max_may_lower_the_limit_and_never_raise_it(capsys, flags, says):
     """Refused before anything launches."""
     assert cmd_run(["--on", "no-such-machine", "--project", "p", *flags, "--", "true"]) == 2
     assert says in capsys.readouterr().err
