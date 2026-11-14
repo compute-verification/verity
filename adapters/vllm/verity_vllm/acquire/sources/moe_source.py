@@ -99,6 +99,7 @@ from verity.definitions.registry.moe import router_kernel
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources.partial_source import _moe_reduces
 from verity_vllm.engine import hooks
+from verity_vllm.engine.moe_capture import ROUTER_SITE, TRITON_LAUNCH, TRITON_MOE_SITE, launch_arg
 from verity_vllm.log import init_logger
 from verity_vllm.query.manifest.bind import Port
 from verity_vllm.query.manifest.format import MOE_FP8_PLANES, MOE_PLANES
@@ -222,15 +223,14 @@ class MoeBlockSource:
         from vllm.model_executor.layers.fused_moe import fused_moe as fm
         # the ONE Triton launcher, at both names it is reached by: `fused_moe.invoke_fused_moe_triton_kernel` (the functional path's
         # `dispatch_fused_moe_kernel` looks it up in its module globals) and the engine's `experts.triton_moe` module, which imported the
-        # name (TritonExperts.apply).  One binding per launch either way.
-        sites: list[tuple[Any, str]] = [(ops, "topk_softmax"), (ops, "moe_sum"), (fm, "invoke_fused_moe_triton_kernel")]
+        # name (TritonExperts.apply).  One binding per launch either way.  `engine.moe_capture` names the launcher and the grouped
+        # router's site, which a replay's capture wraps too.
+        sites: list[tuple[Any, str]] = [(ops, "topk_softmax"), (ops, "moe_sum"), (fm, TRITON_LAUNCH)]
         if hasattr(ops, "silu_and_mul_per_block_quant"):
             sites.append((ops, "silu_and_mul_per_block_quant"))
         if hasattr(ops, "moe_wna16_marlin_gemm"):
             sites.append((ops, "moe_wna16_marlin_gemm"))
-        for modname, attr in (("vllm.model_executor.layers.fused_moe.experts.triton_moe", "invoke_fused_moe_triton_kernel"),
-                              ("vllm.model_executor.layers.fused_moe.router.grouped_topk_router", "grouped_topk"),
-                              (TOPK_BIAS_MODULE, "fused_topk_bias")):
+        for modname, attr in (TRITON_MOE_SITE, ROUTER_SITE, (TOPK_BIAS_MODULE, "fused_topk_bias")):
             try:
                 mod = importlib.import_module(modname)
             except Exception as e:  # noqa: BLE001
@@ -509,11 +509,7 @@ class MoeBlockSource:
         # the two Triton launchers share the positional prefix (A, B, C, A_scale, ..., mul_routed_weight, top_k, config)
         def launch(A, B, C, *a, **k):
             r = orig(A, B, C, *a, **k)
-            mrw = k.get("mul_routed_weight")
-            if mrw is None:
-                # invoke_fused_moe_triton_kernel(A, B, C, A_scale, B_scale, topk_weights, sorted, expert_ids, npp, mul_routed_weight, top_k, ...)
-                mrw = a[6] if len(a) > 6 else None
-            scale = k["A_scale"] if "A_scale" in k else (a[0] if a else None)
+            mrw, scale = launch_arg(a, k, "mul_routed_weight"), launch_arg(a, k, "A_scale")
             if mrw is True:
                 me._bind_w2(A, scale, C)
             elif mrw is False:
