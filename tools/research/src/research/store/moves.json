@@ -4364,6 +4364,63 @@
         "verity/protocols/accounting/certifier/prover/tests/test_scan_zk_lean_one.py": "benchmarks/network_traces/tests/test_scan_zk_lean_one.py",
         "verity/protocols/accounting/certifier/prover/tests/test_warden_zk.py": "benchmarks/network_traces/tests/test_warden_zk.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pous/streamed_wipe/wipe_on_node.py": "verity/protocols/accounting/pous/prover/wipe_on_node.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/certifier/verifier/compile_slice.py": "adapters/vllm/verity_vllm/compiler/compile_slice.py",
+        "verity/protocols/accounting/certifier/verifier/compile_slice.circuit-check.py": "adapters/vllm/verity_vllm/compiler/compile_slice.circuit-check.py",
+        "verity/protocols/accounting/certifier/verifier/compile_slice.circuit-check.json": "adapters/vllm/verity_vllm/compiler/compile_slice.circuit-check.json",
+        "verity/protocols/accounting/certifier/verifier/served_rows.py": "adapters/vllm/verity_vllm/compiler/served_rows.py",
+        "verity/protocols/accounting/certifier/verifier/cache_step.py": "adapters/vllm/verity_vllm/compiler/cache_step.py",
+        "verity/protocols/accounting/certifier/verifier/cache_step.circuit-check.py": "adapters/vllm/verity_vllm/compiler/cache_step.circuit-check.py",
+        "verity/protocols/accounting/certifier/verifier/cache_step.circuit-check.json": "adapters/vllm/verity_vllm/compiler/cache_step.circuit-check.json",
+        "verity/protocols/accounting/certifier/prover/advice_check.py": "adapters/vllm/verity_vllm/compiler/advice_check.py",
+        "verity/protocols/accounting/certifier/prover/advice_check.circuit-check.py": "adapters/vllm/verity_vllm/compiler/advice_check.circuit-check.py",
+        "verity/protocols/accounting/certifier/prover/advice_check.circuit-check.json": "adapters/vllm/verity_vllm/compiler/advice_check.circuit-check.json",
+        "verity/protocols/accounting/certifier/prover/compile_slice_v4.py": "adapters/vllm/verity_vllm/compiler/compile_slice_v4.py",
+        "verity/protocols/accounting/certifier/prover/compile_slice_v4.circuit-check.py": "adapters/vllm/verity_vllm/compiler/compile_slice_v4.circuit-check.py",
+        "verity/protocols/accounting/certifier/prover/compile_slice_v4.circuit-check.json": "adapters/vllm/verity_vllm/compiler/compile_slice_v4.circuit-check.json",
+        "verity/protocols/accounting/certifier/prover/compile_slice_v5.py": "adapters/vllm/verity_vllm/compiler/compile_slice_v5.py",
+        "verity/protocols/accounting/certifier/prover/compile_slice_v5.circuit-check.py": "adapters/vllm/verity_vllm/compiler/compile_slice_v5.circuit-check.py",
+        "verity/protocols/accounting/certifier/prover/compile_slice_v5.circuit-check.json": "adapters/vllm/verity_vllm/compiler/compile_slice_v5.circuit-check.json",
+        "verity/protocols/accounting/certifier/prover/compile_slice_v6.py": "adapters/vllm/verity_vllm/compiler/compile_slice_v6.py",
+        "verity/protocols/accounting/certifier/prover/compile_slice_v6.circuit-check.py": "adapters/vllm/verity_vllm/compiler/compile_slice_v6.circuit-check.py",
+        "verity/protocols/accounting/certifier/prover/compile_slice_v6.circuit-check.json": "adapters/vllm/verity_vllm/compiler/compile_slice_v6.circuit-check.json",
+        "verity/protocols/accounting/certifier/prover/compile_slice_v6.circuit-check.unkeyed.json": "adapters/vllm/verity_vllm/compiler/compile_slice_v6.circuit-check.unkeyed.json",
+        "verity/protocols/accounting/certifier/prover/compile_slice_v7.py": "adapters/vllm/verity_vllm/compiler/compile_slice_v7.py",
+        "verity/protocols/accounting/certifier/prover/compile_slice_v7.circuit-check.py": "adapters/vllm/verity_vllm/compiler/compile_slice_v7.circuit-check.py",
+        "verity/protocols/accounting/certifier/prover/compile_slice_v7.circuit-check.json": "adapters/vllm/verity_vllm/compiler/compile_slice_v7.circuit-check.json",
+        "verity/protocols/accounting/certifier/prover/cache_step_v3.py": "adapters/vllm/verity_vllm/compiler/cache_step_v3.py",
+        "verity/protocols/accounting/certifier/prover/cache_step_v3.circuit-check.py": "adapters/vllm/verity_vllm/compiler/cache_step_v3.circuit-check.py",
+        "verity/protocols/accounting/certifier/prover/cache_step_v3.circuit-check.json": "adapters/vllm/verity_vllm/compiler/cache_step_v3.circuit-check.json",
+        "verity/protocols/accounting/certifier/prover/served_tie.py": "adapters/vllm/verity_vllm/compiler/served_tie.py",
+        "verity/protocols/accounting/certifier/prover/served_tie.circuit-check.py": "adapters/vllm/verity_vllm/compiler/served_tie.circuit-check.py",
+        "verity/protocols/accounting/certifier/prover/served_tie.circuit-check.json": "adapters/vllm/verity_vllm/compiler/served_tie.circuit-check.json",
+        "verity/protocols/accounting/certifier/prover/served_statics.py": "adapters/vllm/verity_vllm/compiler/served_statics.py",
+        "verity/protocols/accounting/certifier/prover/served_statics.circuit-check.py": "adapters/vllm/verity_vllm/compiler/served_statics.circuit-check.py",
+        "verity/protocols/accounting/certifier/prover/served_statics.circuit-check.json": "adapters/vllm/verity_vllm/compiler/served_statics.circuit-check.json",
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_advice_check.py": "adapters/vllm/tests/compiler/test_network_certifier_advice_check.py",
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_cache_step.py": "adapters/vllm/tests/compiler/test_network_certifier_cache_step.py",
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_cache_step_free_hit.py": "adapters/vllm/tests/compiler/test_network_certifier_cache_step_free_hit.py",
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_cache_step_v3.py": "adapters/vllm/tests/compiler/test_network_certifier_cache_step_v3.py",
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_compile_slice.py": "adapters/vllm/tests/compiler/test_network_certifier_compile_slice.py",
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_compile_slice_phase14.py": "adapters/vllm/tests/compiler/test_network_certifier_compile_slice_phase14.py",
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_compile_slice_v4.py": "adapters/vllm/tests/compiler/test_network_certifier_compile_slice_v4.py",
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_compile_slice_v5.py": "adapters/vllm/tests/compiler/test_network_certifier_compile_slice_v5.py",
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_compile_slice_v6.py": "adapters/vllm/tests/compiler/test_network_certifier_compile_slice_v6.py",
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_compile_slice_v7.py": "adapters/vllm/tests/compiler/test_network_certifier_compile_slice_v7.py",
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_compile_slice_w1.py": "adapters/vllm/tests/compiler/test_network_certifier_compile_slice_w1.py",
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_compile_slice_w212.py": "adapters/vllm/tests/compiler/test_network_certifier_compile_slice_w212.py",
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_replay_step_engine.py": "adapters/vllm/tests/compiler/test_network_certifier_replay_step_engine.py",
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_served_rows.py": "adapters/vllm/tests/compiler/test_network_certifier_served_rows.py",
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_served_statics.py": "adapters/vllm/tests/compiler/test_network_certifier_served_statics.py",
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_served_tie.py": "adapters/vllm/tests/compiler/test_network_certifier_served_tie.py"
+      }
     }
   ]
 }

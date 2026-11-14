@@ -72,7 +72,7 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "verity/protocols/proofs/flock/prover/python/verity_flock",
           "benchmarks/network_e2e/encodings/replay.py", "benchmarks/network_e2e/encodings/replay_vectors.py",
           "benchmarks/network_e2e/encodings/cache_vectors.py", "benchmarks/network_e2e/encodings/derived.py",
-          "adapters/vllm/verity_vllm/pipeline/advice_code",
+          "adapters/vllm/verity_vllm/pipeline/advice_code", "adapters/vllm/verity_vllm/compiler",
           "benchmarks/network_e2e/encodings/tests/fixtures",
           "verity/protocols/accounting/certifier/verifier/network/tests/fixtures/slot_entry.json",
           "verity/protocols/accounting/certifier/verifier/network/tests/fixtures/select_entry.json",
