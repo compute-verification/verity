@@ -1574,18 +1574,20 @@ def proof_server(a: argparse.Namespace, out: Path, sts: Sequence[dict] = (), rel
     session at the session's turn, one session at a time (``verify_ahead=0``), each loop's `Hello` set up as the process's
     environment says (`a0.prover_env`), so only where the sampled members' statements ``sts`` agree on it. None where a
     session is one it doesn't prove (plain, or members that don't agree): each session is then a process pair of its own
-    (`a0.session`), which takes its tree through ``relay`` too."""
+    (`a0.session`), which takes its tree through ``relay`` too. ``a.gpus``: the devices its provers prove on
+    (`prove --gpu`), else the CPU; a process pair stays on the CPU."""
     if plain(a):
         return None
     zk_server = a.firewall
     trees = ({"challenger": a0.own_challenger(zk=True)} if relay is None else
              {"verify_ahead": 0, "tree_from": relay.flags})
+    devices = getattr(a, "gpus", None)
     if not zk_server:
-        return ProofServer(a.bin, out / "proof-server", env=a0.DIRECT, **trees)
+        return ProofServer(a.bin, out / "proof-server", devices=devices, env=a0.DIRECT, **trees)
     envs = [a0.prover_env(zk_server, st) for st in sts]
     if not envs or any(e != envs[0] for e in envs):
         return None
-    return ProofServer(a.bin, out / "proof-server", env=envs[0], **{**trees, "verify_ahead": 0})
+    return ProofServer(a.bin, out / "proof-server", devices=devices, env=envs[0], **{**trees, "verify_ahead": 0})
 
 
 def plain_refusal(a: argparse.Namespace, mine: CS.Binding, registered: dict | None) -> str | None:
@@ -1799,6 +1801,9 @@ def main() -> int:
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
     ap.add_argument("--firewall", help=FIREWALL_HELP)
+    ap.add_argument("--gpus", type=lambda s: [int(x) for x in s.split(",")],
+                    help="the proof server's devices, CUDA indices comma-separated: its provers prove on them (`prove --gpu`); "
+                         "default the CPU. A member proved as a process pair (a5.proof_server's None) stays on the CPU")
     ap.add_argument("--out", required=True)
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=7551)
