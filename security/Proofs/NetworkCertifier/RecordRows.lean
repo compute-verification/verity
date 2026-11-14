@@ -16,9 +16,9 @@ bucket's (`getElem?_filter_countP_take`); a row's frames are its connections' in
 (`filterMap_bucketFrames`), and the record's slots hold a row's frames in order when the row fits (`frames_record`).
 
 The `#guard`s hold the rows format to the Python network certifier's egress records (the test harness of
-`verity/core/protocols/certifier/tests/test_network_certifier_warden.py`, `params`: B = 64, r = 2, D = 3, two lanes,
+`verity/core/protocols/certifier/tests/test_network_certifier.py`, `params`: B = 64, r = 2, D = 3, two lanes,
 T = 24): three connections on two lanes, the third admitted when the second's END frees its lane (`fxQueue`, the
-traffic of `test_network_certifier_warden_rows.py`); a byte late at its cell (`fxLate`); and a server past
+traffic of `test_network_certifier_rows.py`); a byte late at its cell (`fxLate`); and a server past
 `egress_cells` (`fxLimit`). Each frame is its ordinal, kind and payload in hex; a lane's arrivals are its DATA cells'
 and its END's payloads (`true` for the END), every cell in time except a failed lane's next one.
 -/

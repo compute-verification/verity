@@ -69,7 +69,7 @@ def ExecutionPhaseCertified (c : Case) : Prop :=
 certifier link declares no sync, so nothing is asked of the syncs there. -/
 def ExecutionPhaseSynced (c : Case) : Prop :=
   match c.kind with
-  | .warden _ => True
+  | .networkCertifier _ => True
   | _ => ∃ s, c.syncs[c.window]? = some s ∧ s.delta ∈ c.deltas ∧ ∃ r ∈ c.rhos, s.num * r.2 = r.1 * s.den
 
 /-- An accepted link-window's public outputs: `verdict` 1 and `deadline` 1. -/

@@ -77,20 +77,20 @@ def _served(tmp):
     return Case(run.lw, opening, run.stream.select(reg), served.SYNCS, tmp)
 
 
-def _warden(tmp):
-    """The plain link as a network certifier's (`WardenProfile`): both records certified under the network certifier's
+def _network_certifier(tmp):
+    """The plain link as a network certifier's (`NetworkCertifierProfile`): both records certified under the network certifier's
     parameters digest, no occupancy profile."""
     run = plain.Run(tmp)
-    run.lw = lw = replace(run.lw, occupancy=(None, None), warden=SVC.WardenProfile(3, plain.WARDEN_DIGEST))
+    run.lw = lw = replace(run.lw, occupancy=(None, None), network_certifier=SVC.NetworkCertifierProfile(3, plain.WARDEN_DIGEST))
     run.stream = lw.stream(budget=8, delta=plain.DELTA, challenger="challenger-test", coins=lambda n: b"\x07" * n,
                            clock=run.clock)
-    warden = lambda d, r: run.issuer.certify(r, d, plain.PARAMS, plain.WARDEN_DIGEST)
-    opening = lw.commit(0, warden(plain.EGRESS, plain.egress_records()[0]),
-                        warden(plain.INGRESS, plain.ingress_records()[0]), plain.SALTS[0])
+    network_certifier = lambda d, r: run.issuer.certify(r, d, plain.PARAMS, plain.WARDEN_DIGEST)
+    opening = lw.commit(0, network_certifier(plain.EGRESS, plain.egress_records()[0]),
+                        network_certifier(plain.INGRESS, plain.ingress_records()[0]), plain.SALTS[0])
     return Case(lw, opening, run.stream.select(run.register(opening)), plain.SYNCS, tmp)
 
 
-KINDS = {"plain": _plain, "served": _served, "warden": _warden}
+KINDS = {"plain": _plain, "served": _served, "warden": _network_certifier}
 
 
 def _header(data):
@@ -193,19 +193,19 @@ def test_the_lean_verdict_is_the_pythons(tmp_path, kind):
     assert rejected >= len(cases) - 30
 
 
-def test_a_warden_link_window_reads_the_wardens_digest_and_no_sync(tmp_path):
+def test_a_network_certifier_link_window_reads_the_wardens_digest_and_no_sync(tmp_path):
     """On a network certifier link the Lean holds both ends' grids to the network certifier's parameters digest and
     reads no sync, as the Python does: syncs missing or off Σ_sync change neither verdict; the link under another
     network certifier's digest, or as the plain link whose grids carry the certifier's digests, is a reject by both; and
     a network certifier case the Python never makes (a digest of another length or none, an end with a profile, two
     grids) is refused, which `verify` rejects."""
-    c = _warden(tmp_path)
+    c = _network_certifier(tmp_path)
     honest = c.both()
     assert honest[0] == honest[1] and honest[1]["accepted"] and honest[1]["public"] == {"verdict": 1, "deadline": 1}
     for s in _syncs(c):
         assert c.both(syncs=s) == honest
     lw = c.lw
-    for other in (replace(lw, warden=SVC.WardenProfile(3, bytes(64))), replace(lw, warden=None)):
+    for other in (replace(lw, network_certifier=SVC.NetworkCertifierProfile(3, bytes(64))), replace(lw, network_certifier=None)):
         assert other.program == lw.program
         c.lw = other
         lean, python = c.both()

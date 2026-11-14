@@ -25,7 +25,7 @@ def test_fit_drops_a_negative_per_token_cost(mod):
     assert c[1] == 0.0 and c[2] > 0
 
 
-def test_a_warden_counting_egress_from_the_admission_is_refused(tmp_path, mod):
+def test_a_network_certifier_counting_egress_from_the_admission_is_refused(tmp_path, mod):
     ar = mod("admit_release")
     (tmp_path / "meta.json").write_text(json.dumps({"warden": {
         "params": {"bucket_ms": 100, "delay": 1200}, "origin_unix": 0.0,

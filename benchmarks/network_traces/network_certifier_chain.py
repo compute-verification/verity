@@ -1,4 +1,4 @@
-"""warden-chain: the network chain's reads of an active network certifier's run (`warden_serve.py`'s directory, or the
+"""warden-chain: the network chain's reads of an active network certifier's run (`network_certifier_serve.py`'s directory, or the
 gate's ``warden-rehearse``'s: its witness under ``witness/``, its public files under ``out/``), in place of a certifier
 rehearsal's. A certifier rehearsal's run (`certifier_serve.py`, whose records come through `active.Proxy` in front of
 the endpoint, under a certifier key with salted clock certificates) is refused by name (`PROXY`): on the network
@@ -7,15 +7,15 @@ certifier path none of its records enters the chain.
 * `deployment`: ``deployment.json``, a network certifier's (its link, its schedule and their digest, its key and
   session), never a certifier's (``certifier_key``, ``links``), in a run holding no certifier rehearsal's file
   (`CERTIFIER_FILES`).
-* `link`: N2's link on the run (`service.LinkWindows` with its `service.WardenProfile`): the network certifier's link
+* `link`: N2's link on the run (`service.LinkWindows` with its `service.NetworkCertifierProfile`): the network certifier's link
   name, its one grid both ends', its key and session, its windows and parameters digest, and no sync (the network
   certifier runs no shaper clock and signs none, so no clock certificate enters N2 here).
 * `pairs`: each execution phase's certified (egress, ingress) records, ``certified.jsonl``'s, from window 0 until the
   first window missing one.
-* `certificates`: the network certifier's own offline check (`warden_serve.check`: every execution phase of the three
+* `certificates`: the network certifier's own offline check (`network_certifier_serve.check`: every execution phase of the three
   records certified under the network certifier's key and session with its head the record's, its rows' registration,
   the audit, and the client's view) rerun on the witness, and the public ``certificates.jsonl`` (the gate's,
-  `auditor.warden_outcome`) exactly the certified lines' certificates and refusals, in order.
+  `auditor.network_certifier_outcome`) exactly the certified lines' certificates and refusals, in order.
 * `io`: the certified I/O, read off the records' cells alone, in `certifier_serve.certified_io`'s keys: each
   connection's request (its ordinal's `DATA` and `END` payloads in bucket order), a network-certifier-form id request
   (`active.id_request`, offset 0), released in its `END`'s bucket, and its response's ids and buckets
@@ -33,23 +33,23 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs
-import warden_serve as WS
+import network_certifier_serve as WS
 
 from verity.protocols.accounting.certifier.verifier import io_tie as IT
 from verity.protocols.accounting.certifier.verifier import service as SVC
-from verity.protocols.accounting.certifier.verifier import warden as W
+from verity.protocols.accounting.certifier.verifier import network_certifier as W
 from verity.protocols.accounting.certifier.verifier.active import DATA, id_request
 from verity.protocols.accounting.certifier.verifier.certificate import Direction
 from verity.protocols.accounting.certifier.verifier.schedule import SyncSet
 from verity.commitments.crypto import lms
 
 PROXY = ("a certifier rehearsal's run (certifier_serve.py, its records through active.Proxy in front of the endpoint): "
-         "the warden path reads an active warden's own run (warden_serve.py's, or the gate's warden-rehearse)")
+         "the warden path reads an active warden's own run (network_certifier_serve.py's, or the gate's warden-rehearse)")
 #: what only a certifier rehearsal's run holds (`certifier_serve.py rehearse`'s, per strategy under ``out/``)
 CERTIFIER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
 #: an id request's fields (`active.id_request`'s keywords but the frame's)
 FIELDS = ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")
-#: a network certifier link declares no sync, so its Σ_sync is never read (`service.LinkWindows`'s ``warden``); one
+#: a network certifier link declares no sync, so its Σ_sync is never read (`service.LinkWindows`'s ``network_certifier``); one
 #: value for the field
 UNREAD_SYNCS = SyncSet((0,), (Fraction(1),))
 
@@ -69,7 +69,7 @@ def witness(run: Path) -> Path:
     return found(run, "certified.jsonl").parent
 
 
-def deployment(run: Path) -> tuple[dict, W.WardenParams]:
+def deployment(run: Path) -> tuple[dict, W.NetworkCertifierParams]:
     """The run's ``deployment.json`` and the network certifier's schedule, refused by name where the run is a certifier
     rehearsal's (`PROXY`) or its digest isn't its parameters'."""
     for d in (run, run / "witness", run / "out", run / "out" / "honest", run / "honest"):
@@ -78,7 +78,7 @@ def deployment(run: Path) -> tuple[dict, W.WardenParams]:
     dep = json.loads(found(run, "deployment.json").read_text())
     if "certifier_key" in dep or "links" in dep or "params" not in dep or dep.get("link") != WS.LINK:
         raise SystemExit(f"{run}: {PROXY} (its deployment.json isn't a warden's)")
-    params = W.WardenParams(**dep["params"])
+    params = W.NetworkCertifierParams(**dep["params"])
     if params.digest.hex() != dep.get("digest"):
         raise SystemExit(f"{run}: deployment.json's digest isn't its parameters'")
     if not dep.get("run_id"):
@@ -86,12 +86,12 @@ def deployment(run: Path) -> tuple[dict, W.WardenParams]:
     return dep, params
 
 
-def link(run: Path) -> tuple[SVC.LinkWindows, dict, W.WardenParams]:
+def link(run: Path) -> tuple[SVC.LinkWindows, dict, W.NetworkCertifierParams]:
     """N2's link on the run (the module docstring's `link`), its deployment and the network certifier's schedule."""
     dep, params = deployment(run)
     lw = SVC.LinkWindows(dep["link"], params.grid, UNREAD_SYNCS, cs.read_public(dep["key"]), dep["run_id"],
                          bytes.fromhex(dep["session"]), ingress=params.grid, proof_deadline=cs.PROOF_DEADLINE_S,
-                         warden=SVC.WardenProfile(dep["windows"], params.digest))
+                         network_certifier=SVC.NetworkCertifierProfile(dep["windows"], params.digest))
     return lw, dep, params
 
 

@@ -14,9 +14,9 @@ import cell_shim as C
 import pytest
 from verity.protocols.accounting.certifier.verifier import io_tie as IT
 from verity.protocols.accounting.certifier.verifier.active import VirtualClock, id_request
-from verity.protocols.accounting.certifier.verifier.warden import Warden, WardenParams, audit
+from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifier, NetworkCertifierParams, audit
 
-PARAMS = WardenParams(cell_bytes=256, slots=1, bucket_ms=100, delay=4, lanes=2, queue=2, window=40, ingress_cells=8,
+PARAMS = NetworkCertifierParams(cell_bytes=256, slots=1, bucket_ms=100, delay=4, lanes=2, queue=2, window=40, ingress_cells=8,
                       ingress_buckets=6, egress_cells=12, egress="id", max_tokens_cap=8)
 TAU = PARAMS.bucket_ms / 1000
 #: a body as vLLM's client sends one (its `async_request_openai_completions`, greedy and to its length)
@@ -74,7 +74,7 @@ class Pipe:
 class Sink:
     """An HTTP client's end: every write of the shim's with the bucket it was made in."""
 
-    def __init__(self, certifier: Warden) -> None:
+    def __init__(self, certifier: NetworkCertifier) -> None:
         self.certifier, self.writes, self.closed = certifier, [], False
 
     def write(self, data: bytes) -> None:
@@ -160,7 +160,7 @@ def counting(body: dict) -> tuple[list[int], bool]:
     return [body["prompt"][0] + k for k in range(body["max_tokens"])], True
 
 
-def settled(certifier: Warden) -> bool:
+def settled(certifier: NetworkCertifier) -> bool:
     """Whether the certifier has read everything its clients and its server have written."""
     for c in certifier.active:
         if c.problem is None and not c.ingress_ended and c.reader._buffer:
@@ -172,12 +172,12 @@ def settled(certifier: Warden) -> bool:
     return True
 
 
-async def drive(arrivals: dict[int, list[bytes]], answer=counting, params: WardenParams = PARAMS):
+async def drive(arrivals: dict[int, list[bytes]], answer=counting, params: NetworkCertifierParams = PARAMS):
     """Send ``arrivals[t]`` (each an HTTP request's bytes) to the shim just before bucket t's tick, one after the
     other, for one window; returns the certifier, the server, each request's `Sink` and the shim's records."""
     clock = VirtualClock(-TAU / 2)
     server = IdServer(params.payload, answer)
-    certifier = Warden(params, server.connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
+    certifier = NetworkCertifier(params, server.connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
     log, pipes, sinks, tasks = [], [], [], []
 
     async def connect():
@@ -208,7 +208,7 @@ async def drive(arrivals: dict[int, list[bytes]], answer=counting, params: Warde
     return certifier, server, sinks, log
 
 
-def records(certifier: Warden):
+def records(certifier: NetworkCertifier):
     return tuple([r for r in certifier.records if r.link == link] for link in ("requests", "responses", "fails"))
 
 

@@ -1,20 +1,20 @@
 module
 
-public import Definitions.NetworkCertifier.Warden
+public import Definitions.NetworkCertifier.Cells
 
 /-!
 # The tap: one auditor device on each server's uplink, the relay and the certifier at once
 
-Definitions only. The relay (`Definitions.NetworkCertifier.Warden`) and the network certifier are one device, a tap
+Definitions only. The relay (`Definitions.NetworkCertifier.Cells`) and the network certifier are one device, a tap
 on each AI server's uplink. Its one code run on what reaches it from the server (the `Arrivals` of each
 connection) gives both what the client receives, the relay's cells (`certifierCode`), and the certifier's record of
 them, the observations the audits read (`recordingCode`). Its trust is one `trusted-host`
 (`Verity.Assumptions.TrustedHost`) over that code, with no second device and no second trust, so that what the
 certifier saw is what the relay sent is a fact of the code, not a premise.
 
-**The record is the wire.** The deployed tap (`benchmarks/network_traces/warden_serve.py`, one relay on the auditor's
+**The record is the wire.** The deployed tap (`benchmarks/network_traces/network_certifier_serve.py`, one relay on the auditor's
 machine) records every cell it sends, padding and fail cells included, a row a bucket, each cell a frame that names its
-connection (`verity/core/protocols/certifier/warden_rows.py`; `Definitions.NetworkCertifier.RecordRows` is that
+connection (`verity/core/protocols/certifier/network_certifier_rows.py`; `Definitions.NetworkCertifier.RecordRows` is that
 format). So on every schedule the format holds (`RecordFormat.fits`: a record of the monitoring period's buckets, each of
 `S` slots, holds a schedule whose cells fall in them, at most `S` a bucket), the cells read back from the record under
 the schedule (`RecordFormat.read_record`). What else the record holds, each step's jitter class and statuses, may depend on

@@ -1,5 +1,5 @@
-"""The network certifier's request words (`WardenParams.request_words`, `content_rows`' "The words row" and "A
-request's words", `connection_rows`), driven tick by tick on `test_network_certifier_warden`'s harness. A schedule
+"""The network certifier's request words (`NetworkCertifierParams.request_words`, `content_rows`' "The words row" and "A
+request's words", `connection_rows`), driven tick by tick on `test_network_certifier`'s harness. A schedule
 with them has a fourth table a class, `words.i`: row r is the `max_tokens` and the count of prompt ids of the r-th
 release filed in the class, as the network certifier reads them from the request's bytes, whatever its server
 answers, the count at most the class's P. A request without `max_tokens` at its place, or with an `ignore_eos` key,
@@ -25,8 +25,8 @@ from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier
     CON, GONE, HELD, LINK, _refusal, leaving, mixed, one_release, read, released, salt)
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_lengths import (B, LEN, answer, id_req,
                                                                                       no_id_requests)
-from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import reasons, records, run
-from verity.protocols.accounting.certifier.verifier.warden import Released, WardenParams, cells
+from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier import reasons, records, run
+from verity.protocols.accounting.certifier.verifier.network_certifier import Released, NetworkCertifierParams, cells
 
 #: the content tables tests' form-2 schedule with `max_tokens_cap` set, and the same with request words
 BOUNDED = dataclasses.replace(HELD, max_tokens_cap=8)
@@ -85,7 +85,7 @@ def signed(ran, tmp_path_factory):
     return issuer, {phase: read(issuer, phase, strides, WORDED) for phase, strides in handed.items()}
 
 
-def registrations(params: WardenParams, handed, directory) -> str:
+def registrations(params: NetworkCertifierParams, handed, directory) -> str:
     """A hash of every handed execution phase's registration under `params`, the public record the verifier reads,
     with the signer's key, its coins and every salt fixed."""
     counter = itertools.count()
@@ -110,16 +110,16 @@ def test_request_words_are_a_parameter_of_a_form_2_schedule_with_content_rows_an
     the schedule needs. They enter the digest of a schedule that has them, and read back from the parameters as a
     deployment writes them. Such a schedule lists a fourth table a class, `words.i`, after the class's other three:
     at most R rows of 8 bytes, with its class's layout."""
-    assert WardenParams().request_words is None and HELD.request_words is None and WORDED.request_words is True
+    assert NetworkCertifierParams().request_words is None and HELD.request_words is None and WORDED.request_words is True
     assert len({HELD.digest, BOUNDED.digest, WORDED.digest}) == 3
     assert dataclasses.replace(WORDED, request_words=None) == BOUNDED
-    assert WardenParams(**json.loads(json.dumps(dataclasses.asdict(WORDED)))) == WORDED
+    assert NetworkCertifierParams(**json.loads(json.dumps(dataclasses.asdict(WORDED)))) == WORDED
     for bad in (False, 1, 0, "true", (True,)):
         with pytest.raises(ValueError, match="request_words is true, for a schedule with request words, or unset"):
             dataclasses.replace(WORDED, request_words=bad)
     needs = "has content rows under the lengths rows' form 2 and a response cap"
     for other in (HELD, dataclasses.replace(CON, max_tokens_cap=8), dataclasses.replace(LEN, max_tokens_cap=8),
-                  dataclasses.replace(LEN, lengths=2, max_tokens_cap=8), WardenParams()):
+                  dataclasses.replace(LEN, lengths=2, max_tokens_cap=8), NetworkCertifierParams()):
         with pytest.raises(ValueError, match=needs):
             dataclasses.replace(other, request_words=True)
     assert [t for t in CR.tables_of(WORDED) if not t[0].startswith("words.")] == list(CR.tables_of(BOUNDED))

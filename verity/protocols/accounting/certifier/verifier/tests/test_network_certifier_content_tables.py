@@ -1,12 +1,12 @@
-"""The network certifier's content tables (`content_rows`' "The tables", `connection_rows`, `warden`'s "The content
-rows"), driven tick by tick on `test_network_certifier_warden`'s harness. A schedule without them has the digest,
+"""The network certifier's content tables (`content_rows`' "The tables", `connection_rows`, `network_certifier`'s "The content
+rows"), driven tick by tick on `test_network_certifier`'s harness. A schedule without them has the digest,
 records, heads and certificates it had. With them the device hands each release its request's bytes and its ids as
 its own records hold them, the tables are the schedule's size whatever the load, a release is filed in the first
 class that holds it, each row opens the one head's root at its place, the registration reads back, and the response
 tie run on a response row and an end row the network certifier wrote returns the signed response row: for a
 connection that ended, one that failed and one the client aborted. Under the lengths rows' form 2 a class is (P, O)
 and its tables hold its held rows and no other: the head counts them, a class's three alike and at most
-`WardenParams.phase_releases`, the verifier's read holds a registration to that, and a class's port is its held
+`NetworkCertifierParams.phase_releases`, the verifier's read holds a registration to that, and a class's port is its held
 rows."""
 
 from __future__ import annotations
@@ -24,13 +24,13 @@ from verity.protocols.accounting.certifier.prover import lengths_row as LR
 from verity.protocols.accounting.certifier.prover import response_tie as RT
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_lengths import (B, LEN, PLAIN, PLAIN_DIGEST, P,
                                                                                       T, answer, id_req, response,
                                                                                       traffic)
-from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import Client, reasons, records, run
-from verity.protocols.accounting.certifier.verifier.warden import KIND_NAMES, PARAMETERS_TAG, Released, WardenParams, cells
+from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier import Client, reasons, records, run
+from verity.protocols.accounting.certifier.verifier.network_certifier import KIND_NAMES, PARAMETERS_TAG, Released, NetworkCertifierParams, cells
 
 LINK = "responses"
 #: the lengths tests' schedule with four classes: one of short requests, one of short responses, and two of one size,
@@ -59,14 +59,14 @@ def salt(*name) -> bytes:
     return b"".join(hashlib.sha512(repr((*name, i)).encode()).digest() for i in range(WR.SALT_BYTES // 64))
 
 
-def fingerprint(params: WardenParams, directory) -> str:
+def fingerprint(params: NetworkCertifierParams, directory) -> str:
     """`leaves` of the lengths tests' traffic under `params`."""
     _, arrivals, answers = traffic()
     device, _, _ = run(answers, arrivals, params=params, windows=3)
     return leaves(device, params, directory)
 
 
-def leaves(device, params: WardenParams, directory) -> str:
+def leaves(device, params: NetworkCertifierParams, directory) -> str:
     """A hash of everything a run of `device` leaves under `params`, with the signer's key, its coins and every salt
     fixed: each wire record's certificate (or that it has none, not being complete), each cells' head and its
     signature, the `fails` records, and each handed execution phase's lengths slots, connection rows' head and
@@ -97,7 +97,7 @@ def leaves(device, params: WardenParams, directory) -> str:
     return h.hexdigest()
 
 
-def registered(device, params: WardenParams, directory) -> str:
+def registered(device, params: NetworkCertifierParams, directory) -> str:
     """A hash of every handed execution phase's registration, the public record the verifier reads, with the
     signer's key, its coins and every salt fixed as `leaves` fixes them."""
     counter = itertools.count()
@@ -115,7 +115,7 @@ def test_a_schedule_without_content_rows_has_the_digest_records_heads_and_certif
     """The classes are hashed only by a schedule that lists them, so a schedule without them, with lengths rows or
     without, has the parameters digest it had, and its run leaves the records, the heads and the certificates it left,
     byte for byte. Its device keeps and hands nothing more: a release has no request and no ids."""
-    assert PLAIN.content is None and LEN.content is None and WardenParams().content is None
+    assert PLAIN.content is None and LEN.content is None and NetworkCertifierParams().content is None
     assert PLAIN.digest.hex() == PLAIN_DIGEST and LEN.digest.hex() == LEN_DIGEST
     for name, params, was in (("plain", PLAIN, PLAIN_RUN), ("lengths", LEN, LEN_RUN)):
         (tmp_path / name).mkdir()
@@ -136,7 +136,7 @@ def test_the_classes_are_a_parameter_held_to_their_form():
     assert CON.content == CLASSES and CON.digest not in (LEN.digest, PLAIN.digest)
     assert dataclasses.replace(CON, content=None) == LEN
     assert dataclasses.replace(LEN, content=[list(c) for c in CLASSES]) == CON
-    assert WardenParams(**json.loads(json.dumps(dataclasses.asdict(CON)))) == CON
+    assert NetworkCertifierParams(**json.loads(json.dumps(dataclasses.asdict(CON)))) == CON
     others = [CLASSES[::-1], CLASSES[:-1], ((4, 4, 3), *CLASSES[1:]), ((8, 4, 2), *CLASSES[1:]),
               ((4, 8, 2), *CLASSES[1:])]
     assert len({CON.digest, *(dataclasses.replace(LEN, content=c).digest for c in others)}) == len(others) + 1
@@ -161,7 +161,7 @@ def test_under_form_2_a_class_is_its_two_sizes_and_each_form_refuses_the_others_
     pairs = tuple(c[:2] for c in CLASSES)
     assert HELD.content == pairs and CT.counted(HELD) and not CT.counted(CON)
     assert len({HELD.digest, CON.digest, LEN.digest, dataclasses.replace(LEN, lengths=2).digest}) == 4
-    assert WardenParams(**json.loads(json.dumps(dataclasses.asdict(HELD)))) == HELD
+    assert NetworkCertifierParams(**json.loads(json.dumps(dataclasses.asdict(HELD)))) == HELD
     R = HELD.phase_releases
     assert R == 6 and CT.sized(HELD) == tuple((p, o, R) for p, o in pairs) and CT.sized(CON) == CLASSES
     assert CT.sized(LEN) == CT.sized(dataclasses.replace(LEN, lengths=2)) == ()
@@ -224,7 +224,7 @@ def leaving(gone: dict[int, int]) -> type[Client]:
             super().__init__(device, data)
 
         def is_closing(self) -> bool:
-            return self.closed or (self.gone is not None and self.warden.ticks >= self.gone)
+            return self.closed or (self.gone is not None and self.network_certifier.ticks >= self.gone)
 
     return Leaving
 
@@ -250,7 +250,7 @@ def signed(ran, tmp_path_factory):
     return issuer, out
 
 
-def read(issuer: Issuer, phase: int, strides, params: WardenParams) -> tuple:
+def read(issuer: Issuer, phase: int, strides, params: NetworkCertifierParams) -> tuple:
     """An execution phase's tables committed and their head signed, and the registration read as the verifier reads
     it: the opening, the registration, and the head and domains the verifier derived."""
     opened, cert = CR.attest(issuer, LINK, phase, strides, params)
@@ -570,7 +570,7 @@ def test_under_form_2_a_classes_tables_are_its_held_rows_and_no_other(ran, loads
         {name: [row] * R for name, row in zip(CT.names(0), rows_of(CR.tables(HELD, loads["first"]), 0, 0))}
     assert sum(map(len, CR.releases(HELD, full["lengths"], full["fails"]))) == R
     assert [e.rows for e in CR.Rows.commit(LINK, 0, full, HELD, signers.SESSION).head.tables[2:5]] == [R] * 3
-    past = f"release {R} is filed in class 0 past the class's {R} rows: R = {R} \\(WardenParams.phase_releases\\)"
+    past = f"release {R} is filed in class 0 past the class's {R} rows: R = {R} \\(NetworkCertifierParams.phase_releases\\)"
     with pytest.raises(ValueError, match=past):
         CR.tables(HELD, by_stride(many))
     with pytest.raises(ValueError, match=past):
@@ -742,7 +742,7 @@ def one_release() -> tuple:
 
 def test_a_registration_of_a_form_2_schedule_whose_classes_have_rows_is_another_schedules(tmp_path):
     """A form-2 schedule whose classes are (P, O, rows), its tables of those rows whatever the load, is no schedule
-    now: `WardenParams` refuses it. Its digest hashed the classes with their rows and is not the digest of the
+    now: `NetworkCertifierParams` refuses it. Its digest hashed the classes with their rows and is not the digest of the
     schedule of the same sizes. A registration under it is rebuilt here, from form 1's tables of the same classes
     committed under that digest, and is that schedule's own: its head has the pinned digest. The verifier's read
     under the form-2 schedule refuses it as another schedule's, by its parameters, and with this schedule's digest
@@ -753,7 +753,7 @@ def test_a_registration_of_a_form_2_schedule_whose_classes_have_rows_is_another_
         | {"kinds": sorted(KIND_NAMES), "reasons": list(CON.reasons)}))
     assert earlier.hex() == EARLIER_DIGEST and earlier not in (HELD.digest, CON.digest)
     with pytest.raises(ValueError, match="drop its third number"):
-        WardenParams(**values)
+        NetworkCertifierParams(**values)
     stand_in = dataclasses.replace(CON)
     stand_in.__dict__["digest"] = earlier  # form 1's tables and layouts, under the other schedule's digest
     salts = {name: [salt(name, 0, k) for k in range(count)] for name, count, _ in CR.tables_of(CON)}
@@ -776,7 +776,7 @@ def test_a_registration_of_a_form_2_schedule_whose_classes_have_rows_is_another_
 
 def _refusal(opened, head, domains, table: str, rows) -> str | None:
     """The verifier's registered read of `rows` as every row of `table`, each under the network certifier's salt and
-    path for its position (`warden_rows.refusal` on `connection_rows.port`): None, or why not."""
+    path for its position (`network_certifier_rows.refusal` on `connection_rows.port`): None, or why not."""
     reads = [LR.reads(opened.table(table), p) for p in range(len(rows))]
     entry = {"value": reads[0].entry["value"], "positions": list(range(len(rows))),
              "paths": [r.entry["paths"][0] for r in reads]}
