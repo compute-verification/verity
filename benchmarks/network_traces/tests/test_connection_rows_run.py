@@ -364,9 +364,10 @@ def test_a_deployment_record_of_another_session_than_the_one_handed_gets_no_file
     """Handed the hash of the run's key and another session than its deployment record names, the check names the
     problem, the session and not the key, as its only one, and leaves no file, removing an earlier check's; handed
     another key's hash too, it names both. A deployment record changed to name another session than the one handed
-    is the same problem by name, beside its certificates, which verify under no other session. What the check was
-    held under comes first among its problems, the key and then the session, ahead of the certificates': so the
-    fifty that `check.json` keeps hold it. The connection rows' check, called alone, names the two itself and
+    is the same problem by name, beside its certificates, which verify under no other session: the session's start's
+    first, as the period check reads the starts before the link-windows, then the windows'. What the check was held
+    under comes first among its problems, the key and then the session, ahead of the certificates': so the fifty that
+    `check.json` keeps hold it. The connection rows' check, called alone, names the two itself and
     writes no file, and does not name again one its caller already found."""
     out, file = tmp_path / "run", tmp_path / "out" / "registrations.jsonl"
     served(out, tmp_path / "key")
@@ -394,10 +395,10 @@ def test_a_deployment_record_of_another_session_than_the_one_handed_gets_no_file
     assert "responses window 0 isn't certified" in problems[1:] and not any("key's SHA-512" in p for p in problems)
     # both first, the key and then the session, ahead of every other problem of the check
     both = refused(out, another_session, file, (wrong, session))
-    assert len(both) > 3 and [p.split(":")[0] for p in both[:3]] == [
+    assert len(both) > 4 and [p.split(":")[0] for p in both[:4]] == [
         "the deployment record's key's SHA-512 is not the one the check was handed",
         "the deployment record's session is not the one the check was handed",
-        "the session's start isn't certified (signature)"]
+        "the session's start isn't certified (signature)", "requests window 0 isn't certified"]
     assert sum("is not the one the check was handed" in p for p in both) == 2 and not file.exists()
 
     def another_digest() -> None:
