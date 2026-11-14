@@ -87,3 +87,39 @@ What can move the date:
 - Each day above assumes every change reaches `main` the working day after the one before it. The date leaves two working days beyond that.
 - Every open change that touches the certifier is carried across its rename, which is asked for Sun 15 Nov. That carry is not sized.
 
+[2026-11-14T08:25Z] 891194b716cd
+SCANCOUNT to network-accounting (lead), Sat 14 Nov 12:25 AM PST. **P1's second branch exists, on #9736's mended head `3b2f494fb203`: `cursor/network-accounting-p1-schedule-scratch-2-b51f` at `c57fdb5bcfb689d4b89321f2afc57dc902273099`. A new cut, not a merge into the first branch, which stays at `10b3822bd261` untouched for PERIODPROOF.**
+
+**How it was made** [ran]
+- Carried across the layout move with `tools/move/restack.py … --main ac8b3b51e490`: outcome `clean`, result `06e06ec7cd5e`.
+- The new branch starts at that result; #9736's `3b2f494fb203` is merged into it (`5136a06f4049`). Three conflicts, all in `NetworkCheck/Period.lean`, each by hand:
+  - the schedule's docstring keeps the lengths rows, the content rows and the request words and takes #9736's sentence on the cells;
+  - my new schedule functions stand before `Schedule.rowsCells`;
+  - the cells guard keeps its fifteen fields and reads `rowsCells`.
+- Nothing of mine read `caps` outside those lines, so the rename needed no other edit. The locks merged without a conflict: P1 holds no record of its own yet.
+- One commit over the merge mends my own words for the ratchet gate (`c57fdb5bcfb6`).
+
+**The ratchet gate, from a tree at `main` `9a520e76c0d0`, over `3b2f494fb203`** [ran]
+- Before the mend: "adds 40 retired-term site(s)". After: "adds 27 retired-term site(s)", in four files.
+- Every site on a line the branch adds or changes, 51 of them, by name:
+  - `WardenParams`, the class and its members: 20
+  - `max_tokens_cap`, the schedule's key: 15
+  - `maxTokensCap`, the field: 5
+  - `warden` and `warden_serve`, the modules: 4
+  - `NetworkCheck.Period`, the namespace: 3
+  - `_bad_caps`: 1
+  - **three that are not names:** `main`'s own words on two lines this branch continues. The digest's docstring keeps `main`'s sentence "before the cap was a parameter" and goes on after it (1). The digest's last line keeps `main`'s binder `fun cap => … toJson cap` and appends the three new keys (2). I left both rather than bend the code around the gate. If you want them gone: the docstring's new sentence becomes a comment above it, and the binder is renamed.
+- Mended: "response cap" in every line I wrote now says `max_tokens_cap`; the guard's local `cap` is `limit`; the guard's comment says "execution phase"; one refusal's text ends "form 2 and max_tokens_cap".
+- The list by line is in my store, and goes into P1's body on the day it opens.
+
+**Launched, not yet ended** (the pool's line is long: each says about 50 minutes to a slot)
+- Tries at `c57fdb5bcfb6`: `Period.lean` `r20261114-082321-4d70`, the period's proofs `r20261114-082320-ae8d`, the scan's proofs `r20261114-082320-b1d6`.
+- The changed suites over `3b2f494fb203`, `--quick` (so no slow test): `r20261114-082444-abdc`.
+- #9921's mend at `c5b9aa06690c`: the proofs file's try `r20261114-081123-d7b2` still waits for its slot. Since a try builds the file's imports first, I launched the two smaller files' tries beside it (`r20261114-081925-4222`, `r20261114-081925-7399`) to learn of a fault in them sooner. The records run follows the first green try, with `--mem-gb 120`.
+
+**A question, with the answer I take.** Does PERIODPROOF move to the second branch, or do I carry its work? I take: it stays on the first branch until you say otherwise, and I merge nothing of its into mine.
+
+Still owed by me: #9921's mend through its records, suites, gates, body and head; NET-440's sizing of the same mend, then way A's witness; P1's report by Mon 16 Nov noon PST.
+
+TIMER: none
+
