@@ -109,7 +109,7 @@ With `--at-step S --mirror-out DIR`, then `--from-mirror DIR`, it starts at an a
 instead, from per-step copies of the slots each step wrote (its docstring says how).
 
 The workload is the trace corpus's (`benchmarks/network_e2e/traces`: C4 prompts of 16 to 1,024 tokens, about 60% behind
-one of eight shared prefixes, caps of 64 or 256 tokens) under Poisson arrivals, every request decoding to its cap
+one of eight shared prefixes, max_tokens of 64 or 256) under Poisson arrivals, every request decoding to its max_tokens
 (`ignore_eos`) so that every arm serves the same tokens, sent by the corpus's streaming client. A job serves each arm in
 one server lifetime: a warm-up, then each load REPS times, rep by rep, each from an empty prefix cache.
 
@@ -418,7 +418,7 @@ snapshots under `HF_HOME` (`serve_tax.py checkpoint --model-id ID` prints the pa
 
 Under a deployment's traffic, the job serves the replay ladder's plan (`benchmarks/replay_ladder/prod_plan.py`: ShareGPT,
 multi-turn and 8k-32k-token prompts, half of them sampled at temperature 0.7 under the public seed rule, each stopping at
-its end of text or its cap), sent as `plan.jsonl` or named by `PLAN_FILE` (then no C4 shard is needed), with FlashInfer on:
+its end of text or its max_tokens), sent as `plan.jsonl` or named by `PLAN_FILE` (then no C4 shard is needed), with FlashInfer on:
 
 ~~~text
 research run --on NODE --source . --cwd source --send plan.jsonl [--send fi_smoke.py] \
@@ -449,7 +449,7 @@ compute per token over the reference's at the same load less one, against `compi
 by the arrivals, so the tax there reads the drain and the cost shows in the latencies; a tax beside unserved requests
 isn't over the same requests. `replay-{compiled,eager}/replay.json` has the replay's counts, its differing requests,
 its wall time beside the served window's and the same record of its engine's environment (`settings`), and
-`replay_tokens.jsonl.gz` its tokens. Each request decodes to its cap, so the
+`replay_tokens.jsonl.gz` its tokens. Each request decodes to its max_tokens, so the
 schedule doesn't depend on the tokens: a replay with no differing step can still sample other tokens. A mode listed twice
 in `REPLAY_MODES` replays again and compares its tokens with the first replay's too, which tells a replay that differs from
 serving from one that differs from itself; `REPLAY_FROM` with no `ARMS` replays an earlier job's window alone, reading

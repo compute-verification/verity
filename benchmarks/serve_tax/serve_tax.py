@@ -1,4 +1,4 @@
-"""The serve tax: what each change to the production server costs on every token, against stock compiled vLLM at the
+"""The serve tax: what each change to the served vLLM costs on every token, against stock compiled vLLM at the
 integration's pin, on the same node, workload and SLO.
 
     serve_tax.py plan --model-id ID --c4 C4.json.gz --rates NAME=R,... [--span-s 90] [--requests N] --out PLAN.jsonl
@@ -23,11 +23,11 @@ integration's pin, on the same node, workload and SLO.
 `run` serves one arm (`ARMS`) on one server lifetime of vLLM's own OpenAI server (`vllm.entrypoints.openai.api_server`):
 a warm-up load, then each named load REPS times, rep by rep (light, medium, saturated, light, ...), each from an empty prefix
 cache (the dev server's ``POST /reset_prefix_cache``). A load is the trace corpus's request plan (C4 prompts of 16 to 1,024
-tokens, about 60% behind one of eight shared prefixes, caps 64 or 256: `traffic.plan`) under Poisson arrivals at its rate for
-``--span-s`` seconds, sent by the corpus's streaming client (`corpus.drive`), every request decoding to its cap
+tokens, about 60% behind one of eight shared prefixes, max_tokens 64 or 256: `traffic.plan`) under Poisson arrivals at its rate for
+``--span-s`` seconds, sent by the corpus's streaming client (`corpus.drive`), every request decoding to its max_tokens
 (``ignore_eos``) so that every arm serves the same tokens. A plan whose requests carry their own sampling (the replay
-ladder's production plan: ShareGPT, multi-turn and 8k-32k-token prompts, each greedy or at temperature 0.7 with its seed
-by the public rule) is served with it, each request stopping at its end of text or its cap (`serve_body`). Each load's DIR/<load>/rep-<r>/client.jsonl holds the client's
+ladder's serving plan: ShareGPT, multi-turn and 8k-32k-token prompts, each greedy or at temperature 0.7 with its seed
+by the public rule) is served with it, each request stopping at its end of text or its max_tokens (`serve_body`). Each load's DIR/<load>/rep-<r>/client.jsonl holds the client's
 record of each request (send, each streamed chunk's time and tokens, done), and meta.json the load's rate, start and count,
 and its schedule: the engine's counters on ``/metrics`` before and after it (`SCHEDULE`).
 
@@ -369,7 +369,7 @@ class Part:
 
 #: what every request's body adds to the corpus's (`corpus`), set by `run` from its arm
 BODY_EXTRA: dict = {}
-#: the corpus's seeded sampling without the request's seed, as production clients send it: vLLM then samples each
+#: the corpus's seeded sampling without the request's seed, as deployed clients send it: vLLM then samples each
 #: request's seed from the engine's numpy generator when the request reaches the model runner
 UNSEEDED = "unseeded"
 
@@ -416,7 +416,7 @@ class Model:
 
 
 #: every arm's engine: vLLM's defaults but for the context (the plan's longest request is 1,024 + 256 tokens), the batch
-#: cap (pinned, so that a saturated load hits the same cap on every vLLM build) and the seed
+#: limit (pinned, so that a saturated load hits the same limit on every vLLM build) and the seed
 BASE_ARGS = ("--max-model-len", "4096", "--max-num-seqs", "256", "--seed", "0", "--disable-uvicorn-access-log")
 #: the flags of `BASE_ARGS` no recipe of vLLM's sets, which the ``published`` arm leaves to vLLM's own defaults: the
 #: batch limit, so that its server runs as many requests at once as vLLM itself allows on the hardware
@@ -467,7 +467,7 @@ MODELS = {
 
 
 def corpus():
-    """The trace corpus's client and plan (`benchmarks/network_e2e/traces`), with every request decoding to its cap."""
+    """The trace corpus's client and plan (`benchmarks/network_e2e/traces`), with every request decoding to its max_tokens."""
     if str(TRACES) not in sys.path:
         sys.path.insert(0, str(TRACES))
     import corpus as C
@@ -479,10 +479,10 @@ def corpus():
 
 
 def serve_body(body: Callable[..., dict], served: str, r: dict, rid: str, sampling: str) -> dict:
-    """The corpus's request body (``body``) as the serve tax sends it: decoding to its cap, with `BODY_EXTRA`, and under
+    """The corpus's request body (``body``) as the serve tax sends it: decoding to its max_tokens, with `BODY_EXTRA`, and under
     `UNSEEDED` the seeded sampling's parameters without the request's seed. A plan request that carries its own sampling
-    (the replay ladder's production plan, `prod_plan`) is sent with it instead, its seed by the public seed rule
-    (`corpus.request_seed`) when it is seeded, and stops at its end of text or its cap."""
+    (the replay ladder's serving plan, `prod_plan`) is sent with it instead, its seed by the public seed rule
+    (`corpus.request_seed`) when it is seeded, and stops at its end of text or its max_tokens."""
     if "sampling" in r:
         b = {"model": served, "prompt": r["prompt_ids"], "max_tokens": r["max_tokens"], **r["sampling"], "stream": True,
              "stream_options": {"include_usage": True}, "return_token_ids": True, "user": rid}
@@ -1871,9 +1871,9 @@ def certifier_cells(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict
 
 def certifier_schedule(cells: dict[str, int]):
     """The network certifier's own parameters for a schedule, in the id form; a ValueError where they are none."""
-    from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+    from verity.protocols.accounting.certifier.verifier.warden import WardenParams as CertifierParams
 
-    return WardenParams(**cells, egress="id")
+    return CertifierParams(**cells, egress="id")
 
 
 def cell_payload(cells: dict[str, int]) -> int:
@@ -3843,7 +3843,7 @@ def main(argv: list[str] | None = None) -> int:
                         "rows and salts, the top-k's counters), outside every run's directory (under vLLM's client "
                         "by default a fresh directory, removed when the arm stops; the corpus client needs it)")
     r.add_argument("--plan", help="the plan's file, shared by a job's arms (default: OUT/plan.jsonl)")
-    r.add_argument("--docs", type=int, default=20000, help="the shard's documents a plan draws from")
+    r.add_argument("--docs", type=int, default=20000, help="the shard's documents a plan samples from")
     r.add_argument("--seed", type=int, default=0)
     r.add_argument("--tick-from", metavar="STEP_TRACE|RECORD_DIR", help="τ for the tick arms (ignored by the others)")
     r.add_argument("--tick-ms", metavar="SAT,FREE")

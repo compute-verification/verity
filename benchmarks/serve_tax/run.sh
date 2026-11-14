@@ -13,7 +13,7 @@
 #     [RESTORE=1:2 [RESTORE_ARM="restore ..."] [RESTORE_WARM=N]] [NUM_GPU_BLOCKS=N] [KV_DIR=DIR]
 #     bash benchmarks/serve_tax/run.sh   # boundary states at the edges, one restored
 #   ARMS="compiled record tokens-only boundary" RATES=... EDGES_EVERY_S=30 [KV_COPY=all|first|none] [PLAN_FILE=PLAN.jsonl]
-#     [MAX_MODEL_LEN=N] [FLASHINFER=1] [LDCONFIG=1] [BUDGET_MIN=M] bash benchmarks/serve_tax/run.sh   # the production tax
+#     [MAX_MODEL_LEN=N] [FLASHINFER=1] [LDCONFIG=1] [BUDGET_MIN=M] bash benchmarks/serve_tax/run.sh   # the served configuration's tax
 #   ARMS=two-stage RATES=... [PLAN_FILE=PLAN.jsonl] PRIVATE=DIR [BOUNDARY_ROWS='{"check":T,...}']
 #     bash benchmarks/serve_tax/run.sh   # the two-stage serve: its launch line is the arm (serve_tax.ARMS), its boundary
 #                                        # committed under PRIVATE/two-stage/boundary
@@ -72,7 +72,7 @@
 # EDGES_EVERY_S puts the boundary arm's edge each that many seconds of a load (its replay blocks' length); at TP > 1 each
 # rank keeps its KV copy and rows in host memory, and KV_COPY=first copies rank 0's pool alone (for ranks that hold the
 # same KV bytes, as GLM-5.3's replicated MLA cache does). PLAN_FILE (else a sent inputs/plan.jsonl) is a ready plan, served
-# as it is (the replay ladder's production plan: each request's own sampling, stopping at its end of text), copied to
+# as it is (the replay ladder's serving plan: each request's own sampling, stopping at its end of text), copied to
 # OUT/plan.jsonl; MAX_MODEL_LEN the engines' context limit, a number of tokens or auto (vLLM's word for the longest the
 # cards' KV cache holds); PUBLISHED_FRONTEND=rust starts the published arm behind vLLM's Rust front end, on a build
 # that has it (python, the default, is the front end of every other arm), and PUBLISHED_ARGS=--FLAG=VALUE,... adds flags
