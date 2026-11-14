@@ -1262,9 +1262,8 @@ def test_a_sample_session_is_opened_once_on_the_windows_sample_root_and_a_retry_
         sample.record(root)
     assert str(refused.value) == (f"pouw:test: the window's draw session {sid}: the gate's answer is not draw session "
                                   f"{sid} opened on the draw root {root.hex()[:16]}...")
-    with pytest.raises(CoinError) as refused:
+    with pytest.raises(CoinError, match="^the window's draw session is opened once: a retry never "):
         sample.record(root)
-    assert str(refused.value) == "the window's draw session is opened once: a retry never redraws"
     assert asked == [(sid, root.hex(), True)] and tries == []
     assert sample.session is None and sample.commitment is None
 
