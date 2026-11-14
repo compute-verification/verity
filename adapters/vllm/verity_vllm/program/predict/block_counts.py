@@ -58,6 +58,7 @@ from verity.circuits.population import mixed_population_program
 from verity.circuits.program import is_input
 from verity.commitments.periods import interface as IF
 from verity_vllm.definitions.boolean import gate_table
+import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
 from verity_vllm.config import option
 from verity_vllm.records import block_counts as RBC

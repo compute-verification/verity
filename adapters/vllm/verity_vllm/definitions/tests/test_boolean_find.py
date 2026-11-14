@@ -12,6 +12,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.circuits.types import Value
 from verity_vllm.definitions import boolean as B
+import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
 WORD = PrimitiveDefinition("BooleanFindTestWord", 1, (("x", Value(4)),), Value(4), lambda x: x ^ 15, register=False)
 U4 = BL.bit_type(Value(4))
