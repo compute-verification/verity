@@ -59,8 +59,8 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.protocols.pouw.prover.schemes import pearl_c as C
-from verity.protocols.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 
 REPO = "unsloth/Llama-3.2-1B"
 REV = "9535bd9b1d1dea6acafbdc4813b728796aeb28da"
