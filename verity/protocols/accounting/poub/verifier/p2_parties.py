@@ -1062,10 +1062,10 @@ def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Pat
     `[bandwidth-verifier.bandwidth]`: `address`, and `challenger`, the memory challenger's device directory on this
     host) and its own `state` directory: the closer's key, pinned (`pinned_signer`); its case digests under `state`'s
     `private/` (`CASE_DIGESTS`, `_keep`, the `keep` capability); the session parameters `SESSION`; and the runtime's
-    own clock (`Start.clock` None), `CLOCK_MONOTONIC` in ns, which `Twin`'s windows are timed on. It raises `NotImplementedError(GOAL)`
-    past the key: the registration (PoUS setup's record on that device, `pous_record`, for the setup's session id), the
-    session id the auditor gives the memory challenger, and the Lean process holding the registration (`hold`) have no
-    source the runtime gives a party."""
+    own clock (`Start.clock` None), `CLOCK_MONOTONIC` in ns, which `Twin`'s windows are timed on. It raises
+    `NotImplementedError(GOAL)` past the key: the registration (PoUS setup's record on that device, `pous_record`, for
+    the setup's session id), the session id the auditor gives the memory challenger, and the Lean process holding the
+    registration (`hold`) have no source the runtime gives a party."""
     pinned_signer(configuration, Path(bound["challenger"]))
     raise NotImplementedError(GOAL)
 

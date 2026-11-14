@@ -224,3 +224,29 @@ def test_a_line_before_the_verifier_asked_for_one_ends_it_out_of_phase(store) ->
     assert v.on(Received(p2_parties.PROVER, Message("Request", body=line))) == [Send("clock", Message("ClockRead"))]
     *_, done = v.on(Received(p2_parties.PROVER, Message("Root", body=b'{"root": "ab"}\n')))
     assert isinstance(done, Finish) and done.outcome["answer"]["reason"] == "out-of-phase"
+
+
+def test_the_verifiers_start_refuses_a_closer_key_the_configuration_does_not_pin(tmp_path, monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from verity.channel import Refused
+    from verity.protocols.accounting.pous.verifier import period
+
+    def pinned(key: bytes) -> dict:
+        pin = {"party": "memory-challenger", "protocol": "pous", "key-sha512": hashlib.sha512(key).hexdigest()}
+        return {"pin": [pin]}
+
+    start = p2_parties.PROTOCOLS[p2_parties.ID].starts[p2_parties.VERIFIER]
+    bound = {"challenger": str(tmp_path)}
+    with pytest.raises(Refused, match="unpinned-key"):
+        start({}, bound, None)
+    with pytest.raises(Refused, match="no-key"):
+        start(pinned(b"key"), bound, None)
+    (tmp_path / "seed").write_bytes(b"seed")
+    monkeypatch.setattr(period, "challenger", lambda directory: SimpleNamespace(public_key=b"key"))
+    with pytest.raises(Refused, match="unpinned-key"):
+        start(pinned(b"another key"), bound, None)
+    with pytest.raises(NotImplementedError, match=p2_parties.GOAL):
+        start(pinned(b"key"), bound, None)
+    with pytest.raises(NotImplementedError, match=p2_parties.GOAL):
+        p2_party_prover.PROTOCOL.starts[p2_parties.PROVER](pinned(b"key"), {}, None)

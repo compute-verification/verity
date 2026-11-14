@@ -40,7 +40,6 @@ inputs = [
     "adapters/vllm/verity_vllm/definitions/__init__.py",
     "verity/circuits/census.py",
     "adapters/vllm/verity_vllm/definitions/registry/boolean_fp8_moe.circuit-check.json",
-    "verity/hardware/__init__.py",
     "verity/protocols/accounting/registration/__init__.py",
     "verity/protocols/accounting/registration/verifier/__init__.py",
     "verity/protocols/accounting/registration/verifier/registration.py",
