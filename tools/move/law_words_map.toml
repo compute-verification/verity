@@ -14,7 +14,8 @@
 # - the adapter's `law_of`, which proofs' files call as `serving_rows.law_of`: it renames with those callers;
 # - the bare `law` in code and every Lean name, which follow proofs' map and lean's names move;
 # - bytes a record, a wire format, a hash or a signature takes in: one-token strings (the key `law`), reason codes
-#   (`R1-law`, `record-law`, `answer-public-law`), the claim id `accounting-ts-window-law`;
+#   (`R1-law`, `record-law`, `answer-public-law`), the claim id `accounting-ts-window-law`, and the PoUW window's
+#   refusal message, which its Lean twin (`PouwWindow/Inputs.lean`) throws in the same words;
 # - another sense: a probability law (`noise_law`, `_below_law`), a scaling, power or size law, a law of the courts;
 # - network-accounting's files (the certifier, its benchmarks), which that lane runs this map's spellings over;
 # - records of what was: GLOSSARY.md's table, the retired-terms lint, its allowlists and tests, the move tool's tests.
@@ -68,7 +69,7 @@ files = ["benchmarks/pouw/**", "**/served_zk/served_commit.py"]
 [[words_in]]
 files = ["**/served_table.py"]
 [words_in.words]
-"_law" = "_sampling_design"
+"_law" = "_design"
 
 [[words_in]]
 files = ["verity/commitments/**/tests/test_blocks.py", "verity/commitments/**/tests/test_interface.py",
@@ -105,3 +106,4 @@ exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.p
 [keep]
 patterns = ['"[a-z0-9_-]*laws?[a-z0-9_-]*"', "'[a-z0-9_-]*laws?[a-z0-9_-]*'", 'note:[\w./-]+', 'art:[0-9a-f]+',
             'cursor/[\w./-]+']
+strings = ["the registration's law {law!r} is not subset:K′"]
