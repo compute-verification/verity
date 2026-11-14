@@ -2,6 +2,7 @@ module
 
 public import NetworkCheck.Check
 public import NetworkCheck.Clocks
+public import NetworkCheck.ScanOk
 public import CoreProtocol.Profile
 public import Flock.Program
 public import Flock.Public
@@ -10,6 +11,7 @@ public import NciCheck.Desc
 public import NciCheck.DefinitionDigest
 meta import NetworkCheck.Check
 meta import NetworkCheck.Clocks
+meta import NetworkCheck.ScanOk
 meta import CoreProtocol.Profile
 meta import Flock.Program
 meta import Flock.Public
@@ -34,8 +36,9 @@ It accepts when every execution phase passes its form's check and every compute 
 bits a covert sender in the server can move through the network certifier in the period, as
 `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` counts them. In the rows form each link-window's scan's Programs' row must be a
 compute audit's slot entries (`wired`, below), and the state that audit's Programs read (its `SCAN_STATE`) the scan's
-state, by root and domain (`stateTied`), so a slot's entry is the one its Program computed on the requests the scan
-read.
+state, by root and domain, which the scan's units read and register as its transitions chain it from the empty state
+(`stateTied`, `stateEmpty`), so a slot's entry is the one its Program computed on the requests the scan
+read; and each scan's ok bits must be at the roots the check computes from the schedule's T (`okChecks`).
 
 **Params**, JSON with exactly these keys (and each nested object exactly its own), in the clock form
 
@@ -56,18 +59,40 @@ the observations' jitter bound `Dj ≥ 1`, the network certifier's LMS public ke
 the link (the partition object's `program`, `LinkWindows.partition`), Σ_sync, and the period's `m ≥ 1` link-windows.
 The rows form has, in place of `sync_set`,
 
+    "circuit": hex,
     "scan": descriptor,
-    "schedule": {"bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells",
-                 "lanes", ["max_tokens_cap",] "queue", "slots", "window"}
+    "schedule": {"bucket_ms", "cell_bytes", ["content",] "delay", "egress_cells", "every", "ingress_buckets",
+                 "ingress_cells", "lanes", ["lengths",] ["max_tokens_cap",] "queue", ["request_words",] "slots",
+                 "window"}
 
+the class circuit, the SHA-512 of the Program of the one window circuit the workload's class registers, which every
+tied compute audit runs (`held`);
 the scan's Program, its descriptor (`verity-ir/descriptor/v1`, `scan_zk`'s `program.json`), and the network
 certifier's one fixed schedule (`warden.WardenParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte
 header, B, S = `lanes` · `slots` and T = `window` u32s, and `every`, a slot stride's buckets, dividing T, so each
 link-window is T / `every` timesteps of `lanes` Program slots, `Schedule.programSlots` and `Schedule.executionPhasePrograms`;
-and its response cap `max_tokens_cap` when it has one, a u32 below `egress_cells`, under which a cell's payload holds
-an id request's `max_tokens` field, `maxTokensEnd`),
-whose digest `WardenParams.digest` every registration binds; its `program` is the scan's registered Program, the
-descriptor's SHA-512 (`partition_object.program_sha512`), and its `link` the run's (`warden_serve.LINK`), whose fails record is certified under the link `<link>-fails`. The
+its response cap `max_tokens_cap` when it has one, a u32 below `egress_cells`, under which a cell's payload holds
+an id request's `max_tokens` field, `maxTokensEnd`; its lengths rows' form `lengths` when it has them, 1 or 2, under
+which ingress ends by the delay, a connection ends within a window of its admission (`Schedule.span`), its egress
+cells count in a u16, a cell's payload holds an id request's head and first prompt id (`firstPromptEnd`) and a slot
+stride's releases are at most a lengths row's slots (`Schedule.strideReleases`, `mostSlots`); and its content rows'
+classes `content` when it has them, which only a schedule with lengths rows has, each (P, O, rows) under form 1 and
+(P, O) under form 2, `classesRefusal`; and `request_words`, true, when it has request words, which only a schedule
+with content rows under form 2 and a response cap has, and which lists at most `mostClassesWords` classes),
+whose digest `WardenParams.digest` every registration binds. A schedule with lengths rows registers its connection
+rows, which this check does not read: it is parsed as the network certifier builds it, its digest is the network
+certifier's, and it is refused by name, in the parameters and in the check (`connectionRowsRefusal`,
+`connectionRowsCheck`), so no period is accepted under one. The rows form's `program` is the scan's registered
+Program, the descriptor's SHA-512 (`partition_object.program_sha512`), and its `link` the run's
+(`warden_serve.LINK`), whose fails record is certified under the link `<link>-fails`. Its
+`cells` must be the schedule's caps over the period (`Schedule.caps`): `egress_cells` for each of the
+`lanes · m · window` connections the network certifier can carry in `m` link-windows, since it admits a connection at a
+bucket's start only while fewer than `lanes` are live and serves it in that bucket. Any other list, an empty one
+included, is refused, so `K`'s schedules and cells terms are never read off caps that miss a connection. Before
+that, those `lanes · m · window` connections, the k-th at ordinal k + 1, must have distinct u32 ordinals, and a cell's
+`B` bytes must be under 2^32 (`rowsWf`): a frame names its connection and its payload's length by u32s, so past 2^32
+two frames would encode alike and the record would not read back (`NetTiming.RowsFormat.Wf`).
+The check refuses such a period too (`rowsWfCheck`), so whatever parameters it accepts, its frames read back. The
 descriptor must decode (`Flock.Program.decode`) and be the scan of the schedule's link-window in the generator form:
 its root batches one instance of a template whose parameters are `row` and a `prog<j>` a lane (`IngressScanFirst`,
 bucket 0), T − 1 of one whose are `row`, `sin` and the `prog<j>` (`IngressScanBucket`; none when T = 1), lane j's
@@ -167,12 +192,35 @@ against that salted digest is a later change to its circuit (the certifier PROTO
 * in the rows form, link-window `w`'s scan's state is the `SCAN_STATE` of an audit its `prog` is wired to
   (`stateTied`): the scan's registration has an entry of its `roots` whose port is `scan/state` or of its `registered`
   whose value is `verity/certifier/scan-state/v1`, every such entry at one root and domain, and so has a `wired`
-  audit's registration, every such entry at that root and domain. The scan's ingress unit t reads `sin` as that root's
-  row t and registers its `o1` as row t + 1, so each row past row 0 is the state the scan's transition computed from
-  the row before it, the prover's word for none; row 0 is the empty state, which no unit reads, and only the Programs
-  anchored at bucket 0 read it, whose entries the scan reads for no slot, since its state before bucket 0 has none
-  occupied. A slot's Program anchored at bucket a reads row a, the scan's state before a, so it computes its entry on
-  the requests the scan read, not on a state the prover chose (`Properties.NetworkPeriod.RowsStateTied`).
+  audit's registration, every such entry at that root and domain; and the scan's registration states its units' reads
+  of that state and opens its row 0, its `window`'s
+
+      "reads": {"scan/state": {"o1": {"leaf": 1, "units": [0, T − 1]}, "sin": {"leaf": 1, "units": [1, T]}}, …},
+      "empty": {"scan/state": {"words": W, "salt": hex, "path": hex}, …}
+
+  (`stateRead`, a run a port: unit `lo + i` at leaf `l + i`), so the scan's ingress unit t (bucket t) reads `sin` as
+  that root's row t and registers its `o1` as row t + 1, but for its last unit, whose `o1` no row holds, and each row
+  past row 0 is the state the scan's transition computed from the row before it, the prover's word for none; and row
+  0, which no unit computes and only the Programs anchored at bucket 0 read, is the empty state, `W` zero u16 words,
+  opened under its salt through its path to the state entry's root and domain (`stateEmpty`: the row and its salt are
+  public, the other leaves hidden). A slot's Program anchored at bucket a reads row a, the scan's state before a, so
+  it computes its entry on the requests the scan read, not on a state the prover chose
+  (`Properties.NetworkPeriod.RowsStateTied`, `Properties.NetworkPeriod.RowsStateEmpty`).
+* in the rows form, execution phase `w`'s tied compute audits run the class circuit (`held`): each audit its scan's
+  `prog` is an output of (`tiedAudits`) has a registration naming the parameters' `circuit` as its Program. A window
+  circuit's own digest binds its window's run, so it is another each window; its Program is the class's, one for the
+  period. So no execution phase's tied audit is registered under a Program the prover chose for that phase
+  (`Properties.NetworkPeriod.RowsCircuitHeld`), and, since the audit check holds the registered Program to the
+  descriptor its term is read off (`auditCheck`), that descriptor is the class circuit's.
+* in the rows form, each execution phase's scan's ok bits are the schedule's constants (`okChecks`,
+  `NetworkCheck.ScanOk`): a scan proof block's public word `o0` is its ok bit, and a member's `o0` rows are committed
+  under public salts, so the root of a member whose every proof block is ok is a function of the schedule's T alone.
+  The check computes those roots once a period (`ScanOk.consts`, `ScanOk.calls` SHA-512 calls whatever `m`) and holds
+  every registration to them by comparison (`ScanOk.held`, no hash an execution phase): its `roots` name each member's
+  `<member>/o0` at its constant's root, leaves and domain, and no other port ending `/o0`. A member's statement opens
+  its proof blocks' ok words at the root its registration names, so each is the row `[1]` the verifier computed, not a
+  row the prover's registered file states. A schedule of fewer than two ticks has no constants (`ScanOk.consts`
+  refuses it: its one bucket would be the scan's first and its last), so every execution phase under one is refused.
 
 **Public**, on acceptance: `K` and its terms, each a ceiling of `log2` of `MonitoringPeriodLeakAccepted`'s factor:
 
@@ -241,7 +289,8 @@ What it doesn't check: the proof's public row against the certificates' digests 
 verifier checks inside the answer (`LinkWindows.verify`, with Flock's Lean verifier on the `--zk` proof);
 the clock form's link-window registration's domain; in the rows form, the records' certificates' digests against the
 rows (each signs its salted record, witness) and the scan's statements against its registration (lane `j`'s slot
-entries' input node the value it registers as `scan/prog<j>`), which one-stage's verifier checks inside the
+entries' input node the value it registers as `scan/prog<j>`, and a member's public word its `<member>/o0` entry's
+root, which `okChecks` holds to the constant), which one-stage's verifier checks inside the
 answer, and each connection's cap against its lane (the parameters' `cells`; the network certifier holds a lane to
 `egress_cells`); that a tied audit's `SelectEntry_v1` units read their `occ` from its `ScanSlots_v2` units, which read
 its `SCAN_STATE` (the check reads no wires of an audit's Program, only its root templates' ids and closure digests);
@@ -290,6 +339,23 @@ def cellHeader : Nat := 9
 /-- The byte of an id request past its `max_tokens` field (`active.MAX_TOKENS_AT + ID_DIGITS`): under a response cap a
 cell's payload holds at least this much, so the network certifier reads the field off the request's first cell. -/
 def maxTokensEnd : Nat := 130
+/-- The byte of an id request past its first prompt id (`io_request.layout`'s `start` and `active.ID_FIELD_BYTES`):
+with lengths rows a cell's payload holds at least this much, so a request's head and first prompt id are in its first
+cell, each field at its place (`io_request.layout` raises for a smaller cell). -/
+def firstPromptEnd : Nat := 378
+/-- The most slots a lengths row has (`connection_rows.check_slots`): its proof block returns the whole row, 96 bits a
+slot, after its 2 words of 16 bits, in a public size class of at most 262,144 bits. -/
+def mostSlots : Nat := 2730
+/-- The most ids a response row has (`content_rows.most_ids`): its tie's proof block returns the whole row, 32 bits an
+id after its count, behind 16 bits of verdict in a public size class of at most 262,144 bits, and a class's size is a
+power of two. -/
+def mostIds : Nat := 4096
+/-- The most classes a schedule lists (`content_rows.MOST_CLASSES`): the connection rows' head counts its tables in a
+u16, three a class after the lengths and the fails tables. -/
+def mostClasses : Nat := 21844
+/-- The most classes a schedule with request words lists (`content_rows.most_classes`): a class has a fourth table
+there, its words table. -/
+def mostClassesWords : Nat := 16383
 
 /-- A compute audit's layout terms, its free inputs it doesn't register and its monitoring period, and what its Program
 gives: its SHA-512, its units (its root's template instances), the most bits one of them commits, and its slot entries'
@@ -318,6 +384,14 @@ structure Schedule where
   window : Nat
   /-- The response cap (`WardenParams.max_tokens_cap`), or none. -/
   maxTokensCap : Option Nat := none
+  /-- The lengths rows' form (`WardenParams.lengths`), 1 or 2, or none. -/
+  lengths : Option Nat := none
+  /-- The content rows' classes (`WardenParams.content`), each (P, O, rows) under the lengths rows' form 1 and (P, O)
+  under form 2, or none. -/
+  content : Option (Array (Array Nat)) := none
+  /-- Whether the schedule has request words (`WardenParams.request_words`, true or unset): a words row a release,
+  in its class. -/
+  requestWords : Bool := false
 
 /-- The `fails` record's reasons under the schedule: `failReasons`, and `capReason` after them under a response cap
 (`WardenParams.reasons`). -/
@@ -332,6 +406,63 @@ def Schedule.programSlots (s : Schedule) : Nat := s.lanes
 
 /-- A window's Program slots: T / `every` slot strides of `programSlots` (`WardenParams.window_programs`). -/
 def Schedule.executionPhasePrograms (s : Schedule) : Nat := s.window / s.every * s.programSlots
+
+/-- ⌈a / b⌉, and 0 at b = 0. -/
+def divCeil (a b : Nat) : Nat := (a + b - 1) / b
+
+/-- The most buckets from a connection's admission to its last egress cell's: D + ⌊(`egress_cells` − 1) / r⌋
+(`WardenParams.span`). With lengths rows a connection ends by then, and it is at most T. -/
+def Schedule.span (s : Schedule) : Nat := s.delay + (s.egressCells - 1) / s.slots
+
+/-- The most requests the network certifier releases in one slot stride with lengths rows, a lengths row's slots
+(`WardenParams.stride_releases`): a released connection holds its lane at least D + 2 − `ingress_buckets` buckets from
+its release, so that many buckets hold at most `lanes` releases, and it holds it D + 1 buckets around its release, so
+a stride's releases are live at one of 1 + ⌈(`every` − 1) / (D + 1)⌉ buckets. It is read where ingress ends by the
+delay (`ingress_buckets` ≤ D), as a schedule with lengths rows has it. -/
+def Schedule.strideReleases (s : Schedule) : Nat :=
+  s.lanes * min (divCeil s.every (s.delay + 2 - s.ingressBuckets)) (1 + divCeil (s.every - 1) (s.delay + 1))
+
+/-- A bound on the requests the network certifier releases in one execution phase with lengths rows
+(`WardenParams.phase_releases`): `lanes` · ⌈(T + `ingress_buckets` − 1) / (D + 1)⌉, as a release is at most
+`ingress_buckets` − 1 buckets after its connection's admission and the connections admitted in any D + 1 buckets in
+a row are live together, at most `lanes` of them. -/
+def Schedule.executionPhaseReleases (s : Schedule) : Nat :=
+  s.lanes * divCeil (s.window + s.ingressBuckets - 1) (s.delay + 1)
+
+/-- Whether the lengths rows end every execution phase of a run, its last included: their form 2
+(`WardenParams.closes`). -/
+def Schedule.closes (s : Schedule) : Bool := s.lengths == some 2
+
+/-- Whether the schedule registers connection rows (`connection_rows`): its lengths rows, which a schedule with
+content rows has too, as one with request words has content rows. Each is asked, since a `Schedule` the parse did not
+build may have one without the other. -/
+def Schedule.connectionRows (s : Schedule) : Bool := s.lengths.isSome || s.content.isSome || s.requestWords
+
+/-- The rows form's caps over `windows` link-windows (`WardenParams.caps`): `egressCells` for each of the
+`lanes · windows · window` connections the network certifier can carry, as at most `lanes` are live in a bucket and
+each is live in its admission bucket. -/
+def Schedule.caps (s : Schedule) (windows : Nat) : Array Nat :=
+  Array.replicate (s.lanes * (windows * s.window)) s.egressCells
+
+/-- **The rows form's frames read back** (`NetTiming.RowsFormat.Wf` at the network certifier's frames,
+`active.encode_frame`: kind u8, ordinal u32, payload length u32, payload, zero fill): a cell's `B` bytes are under
+2^32, so its payload's length is a u32, and the `lanes · windows · window` connections of a period of `windows`
+link-windows, the k-th at ordinal k + 1 (0 is a refusal's), have distinct u32 ordinals, so no two frames encode
+alike. -/
+def rowsWf (s : Schedule) (windows : Nat) : Bool :=
+  s.cellBytes < 2 ^ 32 && s.lanes * (windows * s.window) < 2 ^ 32
+
+def rowsWfRefusal (s : Schedule) (windows : Nat) : String :=
+  s!"rows format: a frame's ordinal and payload length are u32s, so the lanes · windows · window = \
+    {s.lanes * (windows * s.window)} connections and a cell's {s.cellBytes} bytes must each be under 2^32, or two \
+    frames could encode alike (rowsWf)"
+
+/-- What the check says of a schedule with connection rows (`Schedule.connectionRows`). It reads each execution
+phase's cells' rows and no connection rows' registration (`connection_rows.check_registration`), so it would hold
+nothing of such a schedule's lengths, fails and content tables to the schedule. -/
+def connectionRowsRefusal : String :=
+  "schedule: connection rows: the check reads no connection rows' registration, so it refuses a schedule with \
+    lengths rows, content rows or request words (connectionRowsCheck)"
 
 /-- The scan's terms, read off its Program: its monitoring period (`T`, the window's buckets), its own free inputs
 (none: it registers the rows, and its `prog` is a compute audit's output, `progTied`, whose free inputs a link-window's
@@ -368,6 +499,9 @@ structure Params where
   program : String
   form : Form
   windows : Nat
+  /-- The rows form's class circuit, its window circuit's Program's SHA-512, which every tied compute audit runs
+  (`held`); none in the clock form, which ties no audit. -/
+  circuit : Option String := none
 
 /-- The one-stage window records of the compute audits and of the link-windows, in order. -/
 structure Commitment where
@@ -446,30 +580,80 @@ def paramsKeys : List String :=
   ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
 
 def rowsParamsKeys : List String :=
-  ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule", "session", "windows"]
+  ["audits", "cells", "circuit", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule", "session",
+    "windows"]
 
-/-- A schedule's keys without a response cap. -/
+/-- The keys every schedule has (`warden.INTEGER_FIELDS`). -/
 def scheduleKeys : List String :=
   ["bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells", "lanes", "queue",
     "slots", "window"]
 
-/-- A schedule's keys with a response cap. -/
-def cappedScheduleKeys : List String :=
-  ["bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells", "lanes",
-    "max_tokens_cap", "queue", "slots", "window"]
+/-- The keys a schedule has only where it sets them (`warden.OPTIONAL_FIELDS`): its content rows' classes, its lengths
+rows' form, its response cap and that it has request words. -/
+def optionalScheduleKeys : List String := ["content", "lengths", "max_tokens_cap", "request_words"]
+
+/-- The keys of a schedule that sets the optional keys `set` holds, in the order an object lists its keys. -/
+def scheduleKeysWith (set : String → Bool) : List String :=
+  ["bucket_ms", "cell_bytes", "content", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells", "lanes",
+    "lengths", "max_tokens_cap", "queue", "request_words", "slots", "window"].filter fun k =>
+      !optionalScheduleKeys.contains k || set k
+
+/-- A class's size, of prompt ids or of ids released: a power of two of at least 2 (`content_rows.check_size`). -/
+def classSize (n : Nat) : Bool := 2 ≤ n && n &&& (n - 1) == 0
+
+/-- What `content_rows.classes` refuses of a schedule's content rows' classes, or none: a schedule with content rows
+has lengths rows; it lists 1 to `mostClasses` classes, or to `mostClassesWords` with request words, each (P, O, rows)
+under the lengths rows' form 1 and (P, O) under form 2; P and O are each a class's size, O at most `mostIds` and P
+at most the bytes of a request, a prompt id at least one (`ingress_cells` · a cell's payload); and under form 1 a
+class's tables have 1 to T / `every` · `strideReleases` rows, the lengths table's slots, since an execution phase
+releases no more. -/
+def classesRefusal (s : Schedule) (classes : Array (Array Nat)) : Option String :=
+  match s.lengths with
+  | none => some "content: the content rows' tables are listed in the connection rows' head, so a schedule with \
+      content has lengths rows (lengths is 1 or 2)"
+  | some form =>
+    let slots := s.window / s.every * s.strideReleases
+    let most := if s.requestWords then mostClassesWords else mostClasses
+    if classes.isEmpty || most < classes.size then
+      some s!"content: 1 to {most} classes, not {classes.size}"
+    else (classes.zipIdx.findSome? fun (c, i) =>
+      let p := c.getD 0 0
+      let o := c.getD 1 0
+      if c.size != (if form == 2 then 2 else 3) then
+        some s!"class {i} is (P, O) under the lengths rows' form 2 and (P, O, rows) under form 1, not {c.size} numbers"
+      else if !(classSize p && classSize o) then
+        some s!"class {i}: its sizes of prompt ids and of ids released are each a power of two of at least 2"
+      else if mostIds < o then some s!"class {i}: a response row is at most {mostIds} ids, not O = {o}"
+      else if s.ingressCells * (s.cellBytes - cellHeader) < p then
+        some s!"class {i} has P = {p} prompt ids, and a request of the schedule is at most \
+          {s.ingressCells * (s.cellBytes - cellHeader)} bytes (ingress_cells · a cell's payload), each id at least one"
+      else if form != 2 && !(1 ≤ c.getD 2 0 && c.getD 2 0 ≤ slots) then
+        some s!"class {i} has 1 to {slots} rows, the lengths table's slots, since an execution phase releases no more"
+      else none).map ("content " ++ ·)
 
 def scheduleOf (j : Json) : V Schedule := do
-  let capped := keysOf j == cappedScheduleKeys
-  unless capped do exactly j scheduleKeys "schedule"
+  exactly j (scheduleKeysWith (Flock.J.has j)) "schedule"
   let pos : String → V Nat := fun k => do
     let x ← Flock.J.nat j k "schedule"
     unless 1 ≤ x do throw s!"schedule: {k} is a positive integer"
     pure x
+  let opt : String → V (Option Nat) := fun k => if Flock.J.has j k then some <$> pos k else pure none
+  let content ← if Flock.J.has j "content" then do
+      let classes ← (← Flock.J.arr j "content" "schedule").mapM fun c => do
+        (← Flock.J.asArr c "schedule.content").mapM (Flock.J.asNat · "schedule.content")
+      pure (some classes)
+    else pure none
+  let requestWords ← if Flock.J.has j "request_words" then do
+      unless (← Flock.J.bool j "request_words" "schedule") do
+        throw "schedule: request_words is true, for a schedule with request words, or unset"
+      pure true
+    else pure false
   let s : Schedule :=
     { bucketMs := ← pos "bucket_ms", cellBytes := ← pos "cell_bytes", delay := ← pos "delay",
       egressCells := ← pos "egress_cells", every := ← pos "every", ingressBuckets := ← pos "ingress_buckets",
       ingressCells := ← pos "ingress_cells", lanes := ← pos "lanes", queue := ← pos "queue", slots := ← pos "slots",
-      window := ← pos "window", maxTokensCap := ← if capped then some <$> pos "max_tokens_cap" else pure none }
+      window := ← pos "window", maxTokensCap := ← opt "max_tokens_cap", lengths := ← opt "lengths", content,
+      requestWords }
   unless cellHeader + 1 < s.cellBytes do throw s!"schedule: a cell holds its {cellHeader}-byte header and a byte"
   unless s.cellBytes < 2 ^ 32 ∧ s.allocation < 2 ^ 32 ∧ s.window < 2 ^ 32 do
     throw "schedule: B, S = lanes · slots and T = window are u32s"
@@ -481,11 +665,34 @@ def scheduleOf (j : Json) : V Schedule := do
     unless maxTokensEnd + cellHeader ≤ s.cellBytes do
       throw s!"schedule: under a response cap a cell is at least {maxTokensEnd + cellHeader} bytes, so it holds an id \
         request's max_tokens"
+  if let some form := s.lengths then
+    unless form == 1 ∨ form == 2 do throw s!"schedule: lengths is 1 or 2, the lengths rows' forms, not {form}"
+    unless s.ingressBuckets ≤ s.delay do
+      throw s!"schedule: with lengths rows ingress_buckets ({s.ingressBuckets}) is at most the delay ({s.delay}): a \
+        released connection holds its lane from its release"
+    unless s.span ≤ s.window ∧ s.egressCells ≤ 2 ^ 16 do
+      throw s!"schedule: with lengths rows a connection ends within a window of its admission and its egress cells \
+        count in a u16: delay + (egress_cells − 1) / slots ({s.span}) is at most the window ({s.window}) and \
+        egress_cells at most {2 ^ 16}"
+    unless firstPromptEnd + cellHeader ≤ s.cellBytes do
+      throw s!"schedule: with lengths rows a cell is at least {firstPromptEnd + cellHeader} bytes, so its first holds \
+        an id request's head and first prompt id"
+    unless s.strideReleases ≤ mostSlots do
+      throw s!"schedule: a lengths row is at most {mostSlots} slots, and this schedule's slot stride releases up to \
+        {s.strideReleases} requests, a slot each"
+  if s.requestWords then
+    unless s.content.isSome ∧ s.closes ∧ s.maxTokensCap.isSome do
+      throw "schedule: a words row is a release's in its class, one for each the class holds, and its max_tokens the \
+        one its response is held to, so a schedule with request words has content rows under the lengths rows' form \
+        2 and a response cap"
+  if let some classes := s.content then
+    if let some why := classesRefusal s classes then throw s!"schedule: {why}"
   pure s
 
 /-- `WardenParams.digest`: the schedule's canonical JSON, with its egress form, the cell kinds and the fail reasons,
-tagged. A schedule without a response cap has neither the cap nor `capReason` in it, so its digest is the one it had
-before the cap was a parameter. -/
+tagged. A schedule without a response cap has neither the cap nor `capReason` in it, one without lengths rows not
+their form, one without content rows not their classes and one without request words not that it has none, so its
+digest is the one it had before any of them was a parameter. -/
 def Schedule.digest (s : Schedule) : V ByteArray :=
   Identity.identityDigestSha512 scheduleTag (Json.mkObj ([
     ("bucket_ms", toJson s.bucketMs), ("cell_bytes", toJson s.cellBytes), ("delay", toJson s.delay),
@@ -493,7 +700,10 @@ def Schedule.digest (s : Schedule) : V ByteArray :=
     ("ingress_buckets", toJson s.ingressBuckets),
     ("ingress_cells", toJson s.ingressCells), ("lanes", toJson s.lanes), ("queue", toJson s.queue),
     ("slots", toJson s.slots), ("window", toJson s.window), ("kinds", toJson cellKinds),
-    ("reasons", toJson s.reasons)] ++ (s.maxTokensCap.map fun cap => ("max_tokens_cap", toJson cap)).toList))
+    ("reasons", toJson s.reasons)] ++ (s.maxTokensCap.map fun cap => ("max_tokens_cap", toJson cap)).toList ++
+    (s.lengths.map fun form => ("lengths", toJson form)).toList ++
+    (s.content.map fun classes => ("content", toJson classes)).toList ++
+    (if s.requestWords then [("request_words", toJson true)] else [])))
 
 /-- The scan's templates' parameters in the generator form: bucket 0's (`ingress_scan.IngressScanFirst`, from the empty
 state), each later ingress bucket's (`ingress_scan.IngressScanBucket`) and the egress bucket's (`egress.EgressBucket`),
@@ -841,10 +1051,21 @@ def paramsOf (j : Json) : V Params := do
   let form ← if keysOf j == paramsKeys then do pure (Form.clock (← syncSetOf (← Flock.J.get j "sync_set" "the object")))
     else do
       let s ← scheduleOf (← Flock.J.get j "schedule" "the object")
+      if s.connectionRows then throw connectionRowsRefusal
       pure (Form.rows s (← s.digest) (← scanOf (← Flock.J.get j "scan" "the object") program s))
   let windows ← Flock.J.nat j "windows" "the object"
   unless 1 ≤ windows do throw "windows: a period has at least one link-window"
-  pure { audits, cells, first, jitter, link, lms, key, session, program, form, windows }
+  if let .rows s _ _ := form then
+    unless rowsWf s windows do throw (rowsWfRefusal s windows)
+    unless cells == s.caps windows do
+      throw s!"cells: the rows form's caps are egress_cells = {s.egressCells} for each of the lanes · windows · \
+        window = {s.lanes * (windows * s.window)} connections the schedule can carry (Schedule.caps), not these \
+        {cells.size}"
+  let circuit ← if keysOf j == paramsKeys then pure none else do
+    let d ← Flock.J.str j "circuit" "the object"
+    unless isDigest d do throw "circuit: not a SHA-512 digest (128 lowercase hex digits)"
+    pure (some d)
+  pure { audits, cells, first, jitter, link, lms, key, session, program, form, windows, circuit }
 
 /-- A window record of one of `Flock.WindowRecord.FORMATS`. -/
 def registrationOf (j : Json) (ctx : String) : V Json := do
@@ -978,6 +1199,117 @@ def defaultSchedule : Schedule :=
   "8832fdae0616446e90e1b4178ab99c0e3d67bf790d5bb81512f13c651767adc3\
     0a29f9401b9eb0a2cdf2a8d1c02c50304353250f06af526a970074a207bf3d12"
 
+/-- A schedule whose cells hold an id request's head and first prompt id, without lengths rows
+(`WardenParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
+ingress_buckets=3, egress_cells=9, every=2)`). -/
+def plainSchedule : Schedule :=
+  { bucketMs := 100, cellBytes := 512, delay := 5, egressCells := 9, every := 2, ingressBuckets := 3,
+    ingressCells := 4, lanes := 2, queue := 2, slots := 2, window := 16 }
+
+-- `WardenParams.digest` of `plainSchedule`, with lengths rows of form 1 and of form 2, with form 1's classes
+-- (2, 2, 1) and (4, 8, 16), with form 2's classes (2, 2) and (4, 8), with those under a response cap of 4, and with
+-- request words beside them: the lengths rows' form, the content rows' classes and the request words are in the
+-- digest only of a schedule that sets them
+#guard (plainSchedule.digest.map Flock.hexOf).toOption == some
+  "b064f2c3e90f5059b7393bcbca02b7b94d514041946423a253fa1cca6de11ee4\
+    1898e2e0368e1a03d9e5f8a910fc91ac2f8154924ccd7f669f8b0f4d99964808"
+#guard (({ plainSchedule with lengths := some 1 } : Schedule).digest.map Flock.hexOf).toOption == some
+  "98280d93904a794e8b443e0c2bb917e0ce0fbb20462a8e99f42fdbe06b0b8510\
+    bc65791cc41703428a43976695a2fb75330780df7434190990751efd1202bd13"
+#guard (({ plainSchedule with lengths := some 2 } : Schedule).digest.map Flock.hexOf).toOption == some
+  "804c6d03b6666a89155a1c4f41c31c7d02c90978cf6d5a28b6a41bbe54131d2c\
+    6ea7c345d593c1b204775de7b4bab8f1b264bfed3ec60bb9018d3bee4243335a"
+#guard (({ plainSchedule with lengths := some 1, content := some #[#[2, 2, 1], #[4, 8, 16]] } : Schedule).digest.map
+  Flock.hexOf).toOption == some
+  "f5a916f78cead6daa18dd2913f37aeb53acf2e2557bceb70a33326d786927891\
+    4bb9cc7e1c9737ba575ebb86bb5632d1d6d95cfabea982eda3af34081ac1384a"
+#guard (({ plainSchedule with lengths := some 2, content := some #[#[2, 2], #[4, 8]] } : Schedule).digest.map
+  Flock.hexOf).toOption == some
+  "d2217081ba58125d65abf5eef16979e867596c702dea76e3f3d55bb698cb490c\
+    dee255fe7b76238dc4b4147b60191d30179391ecca9e29aed228723e822f9811"
+#guard (({ plainSchedule with lengths := some 2, content := some #[#[2, 2], #[4, 8]], maxTokensCap := some 4 } :
+  Schedule).digest.map Flock.hexOf).toOption == some
+  "5c079664862cfe253a9794957b6af18c8d0cd41adf1e2608e624663cde1038f8\
+    3f792222b44885914fde2364290676e742cf28c1f93c55f093953fc7f1be6d3e"
+#guard (({ plainSchedule with
+    lengths := some 2, content := some #[#[2, 2], #[4, 8]], maxTokensCap := some 4, requestWords := true } :
+  Schedule).digest.map Flock.hexOf).toOption == some
+  "213b8b63d87459e4b76591beab56ea7b2ac6b9c888566ca4cd43b0d511584459\
+    b84624493f8e18377327c4402ab301982b8fda184864fb9f2879502707781b47"
+-- a slot stride's releases at `plainSchedule` and at its strides of 1, 4, 8 and 16 buckets, at a stride of 16 with
+-- one ingress bucket, and at 5 lanes, a stride of 8 and 5 ingress buckets; an execution phase's releases at
+-- `plainSchedule`, with one ingress bucket, at a delay of 12, and at 5 lanes and 5 ingress buckets; and a
+-- connection's span, at a delay of 5 and of 12 (`WardenParams.stride_releases`, `phase_releases` and `span`)
+#guard
+  let s := plainSchedule
+  s.strideReleases == 2 && ({ s with every := 1 } : Schedule).strideReleases == 2 &&
+    ({ s with every := 4 } : Schedule).strideReleases == 2 && ({ s with every := 8 } : Schedule).strideReleases == 4 &&
+    ({ s with every := 16 } : Schedule).strideReleases == 8 &&
+    ({ s with every := 16, ingressBuckets := 1 } : Schedule).strideReleases == 6 &&
+    ({ s with every := 8, lanes := 5, ingressBuckets := 5 } : Schedule).strideReleases == 15 &&
+    s.executionPhaseReleases == 6 && ({ s with ingressBuckets := 1 } : Schedule).executionPhaseReleases == 6 &&
+    ({ s with delay := 12 } : Schedule).executionPhaseReleases == 4 &&
+    ({ s with lanes := 5, ingressBuckets := 5 } : Schedule).executionPhaseReleases == 20 &&
+    s.span == 9 && ({ s with delay := 12 } : Schedule).span == 16
+-- a schedule's keys are in the order an object lists them, the optional ones only where it sets them
+#guard scheduleKeysWith (fun _ => false) == scheduleKeys && (scheduleKeysWith fun _ => true).length == 15 &&
+  keysOf (Json.mkObj ((scheduleKeysWith fun _ => true).map (·, Json.null))) == scheduleKeysWith fun _ => true
+-- an id request's body after `max_tokens`: `temperature` and `top_p` in 8 characters each, `seed` in 10, no stop
+-- strings, streamed, `model` and `user` in 64 each, then the prompt's key and its first id, `[` and 10 characters
+#guard maxTokensEnd + (",\"temperature\":".length + 8) + (",\"top_p\":".length + 8) + (",\"seed\":".length + 10) +
+  ",\"stop\":[],\"stream\":true".length + (",\"model\":".length + 64) + (",\"user\":".length + 64) +
+  ",\"prompt\":".length + (1 + 10) == firstPromptEnd
+-- a lengths row's slots, a response row's ids and a schedule's classes, each the most its bound gives
+#guard mostSlots == (262144 - 2 * 16) / 96 && mostClasses == (2 ^ 16 - 3) / 3 &&
+  mostClassesWords == (2 ^ 16 - 3) / 4 && classSize mostIds && mostIds ≤ (262144 - 16) / 32 - 1 &&
+  (262144 - 16) / 32 - 1 < 2 * mostIds
+-- the parse reads `plainSchedule` with lengths rows of either form and with content rows of the form's classes, and
+-- refuses a third form, lengths rows where ingress ends after the delay, a connection outlasts the window or a cell
+-- holds no first prompt id, content rows without lengths rows, no class, a class of the other form's numbers, a size
+-- that is no power of two, more ids than a response row has, more prompt ids than a request's bytes, and more rows
+-- than the lengths table's 16 slots
+#guard
+  let n := fun (x : Nat) => toJson x
+  let j := fun (delay cell : Nat) (more : List (String × Json)) => Json.mkObj ([("bucket_ms", n 100),
+    ("cell_bytes", n cell), ("delay", n delay), ("egress_cells", n 9), ("every", n 2), ("ingress_buckets", n 3),
+    ("ingress_cells", n 4), ("lanes", n 2), ("queue", n 2), ("slots", n 2), ("window", n 16)] ++ more)
+  let reads := fun (more : List (String × Json)) => (scheduleOf (j 5 512 more)).toOption.isSome
+  let classes := fun (cs : Array (Array Nat)) => ("content", toJson cs)
+  let form := fun (f : Nat) => ("lengths", n f)
+  reads [] && reads [form 1] && reads [form 2] && reads [form 1, classes #[#[2, 2, 1], #[4, 8, 16]]] &&
+    reads [form 2, classes #[#[2, 2], #[4, 4096]]] && reads [form 2, classes #[#[1024, 2]], ("max_tokens_cap", n 4)] &&
+    (scheduleOf (j 5 512 [form 2, classes #[#[2, 2]]])).toOption.map (·.content) == some (some #[#[2, 2]]) &&
+    !reads [form 3] && (scheduleOf (j 2 512 [form 1])).toOption.isNone &&
+    (scheduleOf (j 13 512 [form 1])).toOption.isNone && (scheduleOf (j 5 386 [form 1])).toOption.isNone &&
+    (scheduleOf (j 5 387 [form 1])).toOption.isSome && (scheduleOf (j 5 386 [])).toOption.isSome &&
+    !reads [classes #[#[2, 2]]] && !reads [form 2, classes #[]] && !reads [form 2, classes #[#[2, 2, 1]]] &&
+    !reads [form 1, classes #[#[2, 2]]] && !reads [form 2, classes #[#[3, 2]]] && !reads [form 2, classes #[#[2, 1]]] &&
+    !reads [form 2, classes #[#[2, 8192]]] && !reads [form 2, classes #[#[4096, 2]]] &&
+    !reads [form 1, classes #[#[2, 2, 0]]] && !reads [form 1, classes #[#[2, 2, 17]]]
+-- the parse reads `plainSchedule` with request words beside form 2's classes and a response cap, and refuses request
+-- words that are not true, under form 1, without content rows, without a response cap and without lengths rows; a
+-- schedule with request words lists at most `mostClassesWords` classes, and one without them more
+#guard
+  let n := fun (x : Nat) => toJson x
+  let reads := fun (more : List (String × Json)) => (scheduleOf (Json.mkObj ([("bucket_ms", n 100),
+    ("cell_bytes", n 512), ("delay", n 5), ("egress_cells", n 9), ("every", n 2), ("ingress_buckets", n 3),
+    ("ingress_cells", n 4), ("lanes", n 2), ("queue", n 2), ("slots", n 2), ("window", n 16)] ++ more)))
+  let classes := fun (cs : Array (Array Nat)) => ("content", toJson cs)
+  let form := fun (f : Nat) => ("lengths", n f)
+  let cap := ("max_tokens_cap", n 4)
+  let words := fun (b : Bool) => ("request_words", toJson b)
+  let many := fun (k : Nat) => classes (Array.replicate k #[2, 2])
+  (reads [form 2, classes #[#[2, 2]], cap, words true]).toOption.map (·.requestWords) == some true &&
+    (reads [form 2, classes #[#[2, 2]], cap]).toOption.map (·.requestWords) == some false &&
+    (reads [form 2, classes #[#[2, 2]], cap, words false]).toOption.isNone &&
+    (reads [form 2, classes #[#[2, 2]], cap, ("request_words", n 1)]).toOption.isNone &&
+    (reads [form 1, classes #[#[2, 2, 1]], cap, words true]).toOption.isNone &&
+    (reads [form 2, cap, words true]).toOption.isNone &&
+    (reads [form 2, classes #[#[2, 2]], words true]).toOption.isNone && (reads [cap, words true]).toOption.isNone &&
+    (reads [form 2, many mostClassesWords, cap, words true]).toOption.isSome &&
+    (reads [form 2, many (mostClassesWords + 1), cap, words true]).toOption.isNone &&
+    (reads [form 2, many (mostClassesWords + 1), cap]).toOption.isSome
+
 /-- `CellsHead.digest`: `tagged_sha512(CELLS_TAG, H)` of the head the network certifier signs for the rows. -/
 def headDigest (link : String) (d : Direction) (w : Nat) (sd : ByteArray) (s : Schedule) (wiring dom root : ByteArray) :
     V ByteArray := do
@@ -1107,13 +1439,46 @@ def stateEntries (reg : Json) : Array Json :=
   let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
   (entries "roots").filter (named "port" stateName) ++ (entries "registered").filter (named "value" stateValue)
 
-/-- The scan's state is the state its slots' Programs read: the scan's registration has a state entry (`stateEntries`),
-every one at one root and domain, and an audit `wired` to the scan's `prog` has one, every one at that root and domain.
-The scan's units read and register their states at that root (`sin` row t, `o1` row t + 1), so the `SCAN_STATE` that
-audit's Programs read is the chain of the scan's transitions. -/
+/-- Whether `j` is the run `{"leaf": l, "units": [lo, hi]}`: units `lo` to `hi − 1`, unit `lo + i` at leaf `l + i`. Read
+field by field, which the kernel evaluates (`Json`'s `==` it doesn't). -/
+def isRun (j : Json) (lo hi l : Nat) : Bool :=
+  let nat := fun (x : Json) (n : Nat) => match x.getNat? with
+    | .ok m => m == n
+    | .error _ => false
+  nat (j.getObjValD "leaf") l && match j.getObjValD "units" with
+    | .arr xs => match xs.toList with
+      | [a, b] => nat a lo && nat b hi
+      | _ => false
+    | _ => false
+
+/-- The scan's registration states its units' reads of its state as the scan's transitions chain them: its `window`'s
+`reads` of `stateName` has `sin` the run of units 1 to T − 1 from leaf 1 and `o1` the run of units 0 to T − 2 from leaf 1
+(`isRun`), so ingress unit `t` reads `sin` at leaf `t`, S_{t−1}, and registers its `o1`, S_t, at leaf `t + 1`. Unit `t` is
+bucket `t`: one-stage numbers the scan's units in its root's order, bucket 0's first and then the later ingress
+buckets' (`scanOf`). Leaf 0, the empty state, no unit reads, and the last ingress unit's `o1` no leaf holds. One run a
+port, so the check reads the description, never a unit. -/
+def stateRead (s : Schedule) (reg : Json) : Bool :=
+  let r := ((reg.getObjValD "window").getObjValD "reads").getObjValD stateName
+  isRun (r.getObjValD "sin") 1 s.window 1 && isRun (r.getObjValD "o1") 0 (s.window - 1) 1
+
+#guard stateRead ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 3, none, none, none, false⟩ (Json.mkObj [("window", Json.mkObj [
+  ("reads", Json.mkObj
+  [(stateName, Json.mkObj [("o1", Json.mkObj [("leaf", toJson 1), ("units", toJson [0, 2])]),
+                           ("sin", Json.mkObj [("leaf", toJson 1), ("units", toJson [1, 3])])])])])]) &&
+  !stateRead ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 3, none, none, none, false⟩ (Json.mkObj [("window", Json.mkObj [
+  ("reads", Json.mkObj
+  [(stateName, Json.mkObj [("o1", Json.mkObj [("leaf", toJson 0), ("units", toJson [0, 2])]),
+                           ("sin", Json.mkObj [("leaf", toJson 1), ("units", toJson [1, 3])])])])])])
+
+/-- The scan's state is the state its slots' Programs read, read where the scan's transitions chain it: the scan's
+registration states its state reads as the chain (`stateRead`: unit `t`'s `sin` at leaf `t`, its `o1` at leaf `t + 1`, but
+the last unit's `o1`, which no leaf holds), has a state entry (`stateEntries`), every one at one root and domain, and an
+audit `wired` to the scan's `prog` has one, every one at that root and domain. So the `SCAN_STATE`
+that audit's Programs read is the chain of the scan's transitions, each row past row 0 the one the unit before
+registered. -/
 def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : Json) : Bool :=
   let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
-  match (stateEntries reg)[0]? with
+  stateRead s reg && match (stateEntries reg)[0]? with
   | some e => match e.getObjValD "root", e.getObjValD "domain" with
     | .str root, .str dom =>
       let atRoot := fun (o : Json) => named "root" root o && named "domain" dom o
@@ -1121,6 +1486,28 @@ def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : J
         wired #[a] s #[r] reg && !(stateEntries r).isEmpty && (stateEntries r).all atRoot
     | _, _ => false
   | none => false
+
+/-- The scan's registration opens its state's row 0 to the empty state: its `window`'s
+`"empty": {"scan/state": {"words": W, "salt": hex, "path": hex}}` is leaf 0's opening, `W` zero u16 words (`W` at least
+1) under a salt of `HmRow.SALT_BYTES` bytes, whose hm96 leaf (`Registered.knownPayload`, as the verifier registers a
+value at known content), framed at 0 under the state entry's domain, climbs `path`, one sibling a level of the T
+leaves', to that entry's root. Row 0 is the state before bucket 0, which no unit computes and only the Programs
+anchored at bucket 0 read; a row's digest binds its length, so a reader of another width doesn't open it. The row is
+public, the empty state, and so is its salt; every other leaf stays hidden. -/
+def stateEmpty (s : Schedule) (reg : Json) : Bool :=
+  let o := ((reg.getObjValD "window").getObjValD "empty").getObjValD stateName
+  let hex := fun (k : String) (j : Json) => match j.getObjValD k with
+    | .str x => (Flock.unhex x).toOption
+    | _ => none
+  let depth := Flock.log2ceil s.window
+  match (stateEntries reg)[0]?, (o.getObjValD "words").getNat? with
+  | some e, .ok w => match hex "salt" o, hex "path" o, hex "root" e, hex "domain" e with
+    | some salt, some path, some root, some dom =>
+      decide (0 < w) && decide (salt.size = Flock.HmRow.SALT_BYTES) && decide (path.size = 64 * depth) &&
+        decide (Flock.FV3.Sha512.climb dom (Flock.FV3.Sha512.leafAs Flock.HmRow.ROW_SCHEMA_V2 dom 0
+          (Flock.Registered.knownPayload (Array.replicate w 0) salt)) 0 depth path = root)
+    | _, _, _, _ => false
+  | _, _ => false
 
 /-- Audit `i` is tied to a link-window's scan: some link-window's registration's `prog` is its output (`tiedAudits`). -/
 def tiedIn (audits windows : Array Json) (i : Nat) : Bool :=
@@ -1213,19 +1600,90 @@ def wiredChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × S
   | .clock _ => #[]
 
 /-- Link-window `w`'s state finding in the rows form: a refusal unless its scan's state is the `SCAN_STATE` of an audit
-its `prog` is wired to (`stateTied`). With the `prog` wired, each slot's entry is the one its Program computed, and a
-Program reads the requests from its own registered `SCAN_STATE`; unless that is the scan's state, it computes its entry
-on a state the prover chose. -/
+its `prog` is wired to, read where the scan's transitions chain it (`stateTied`), and its row 0 the empty state
+(`stateEmpty`). With the `prog` wired, each slot's entry is the one its Program computed, and a Program reads the
+requests from its own registered `SCAN_STATE`; unless that is the scan's state, each of its rows past row 0 the one the
+scan's unit before registered (`stateRead`) and row 0 the empty state, it computes its entry on a state the prover
+chose. -/
 def stateCheck (p : Params) (s : Schedule) (audits : Array Json) (w : Nat) (reg : Json) :
     Option (Core.Verdict × String) :=
-  if stateTied p.audits s audits reg then none else
-    some (.reject, s!"window {w}: the scan's state is no wired audit's SCAN_STATE: its {stateName} entries' root and \
-      domain are not every {stateValue} entry's of an audit whose slot entries are its prog, so a slot's Program can \
-      compute its entry on a state the prover chose: register the scan's state tree as that audit's SCAN_STATE")
+  if stateTied p.audits s audits reg then
+    if stateEmpty s reg then none else
+      some (.reject, s!"window {w}: the scan's state's row 0 is not the empty state: its registration's window.empty \
+        of {stateName} is no opening of leaf 0 to zero u16 words under its salt at its state entry's root and domain \
+        (stateEmpty), so the Programs anchored at bucket 0 can read a state the prover chose: open leaf 0, the empty \
+        state, with its salt and path")
+  else
+    some (.reject, if stateRead s reg then s!"window {w}: the scan's state is no wired audit's SCAN_STATE: its \
+      {stateName} entries' root and domain are not every {stateValue} entry's of an audit whose slot entries are its \
+      prog, so a slot's Program can compute its entry on a state the prover chose: register the scan's state tree as \
+      that audit's SCAN_STATE"
+    else s!"window {w}: the scan's state reads are not its transitions' chain: its registration's window.reads of \
+      {stateName} are not sin \{\"leaf\": 1, \"units\": [1, {s.window}]} and o1 \{\"leaf\": 1, \"units\": [0, \
+      {s.window - 1}]} (stateRead), so a unit could read a state no unit registered: register unit t's sin at leaf t \
+      and its o1 at leaf t + 1")
 
 /-- The rows form's state findings, one a link-window, in order (`stateCheck`); none in the clock form. -/
 def stateChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × String)) := match p.form with
   | .rows s .. => c.windows.zipIdx.map fun (reg, i) => stateCheck p s c.audits (p.first + i) reg
+  | .clock _ => #[]
+
+/-- `okCheck`'s refusal, after its execution phase's number. -/
+def okRefusal : String :=
+  "the scan's ok bits are not the schedule's constants: its registration's roots do not name each member's public \
+    word, <member>/o0, at the root, leaves and domain of that member's proof blocks' ok rows under the public salts \
+    (ScanOk.consts at the schedule's T: first, ingress-0, last and egress-0), or name another port ending /o0, so a \
+    proof block's ok bit is the prover's word: commit each member's o0 rows, one word 1 each, under the public salts \
+    (scan_ok.salt)"
+
+/-- Execution phase `w`'s ok finding in the rows form: a refusal unless its scan's registration names each member's ok
+rows at the schedule's constants `cs` (`ScanOk.held`), and where the constants do not compute (a schedule of fewer
+than two ticks, `ScanOk.consts`). It reads `cs`, which the period computes once, and hashes nothing. -/
+def okCheck (cs : V (Array ScanOk.Const)) (w : Nat) (reg : Json) : Option (Core.Verdict × String) :=
+  match cs with
+  | .ok ks => if ScanOk.held ks reg then none else some (.reject, s!"execution phase {w}: {okRefusal}")
+  | .error e => some (.reject, s!"execution phase {w}: the scan's ok bits' constants do not compute: {e}")
+
+/-- The ok findings of the registrations `regs` at the constants `cs`, one an execution phase from `first`, in
+order (`okCheck`): comparisons alone, no hash an execution phase. -/
+def okChecksAt (cs : V (Array ScanOk.Const)) (first : Nat) (regs : Array Json) :
+    Array (Option (Core.Verdict × String)) :=
+  regs.zipIdx.map fun (reg, i) => okCheck cs (first + i) reg
+
+/-- The rows form's ok findings, one an execution phase, in order: the schedule's constants (`ScanOk.consts` at its
+`T`, the one place the period hashes for them, once) and each registration held to them (`okChecksAt`); none in the
+clock form. -/
+def okChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × String)) := match p.form with
+  | .rows s .. => okChecksAt (ScanOk.consts s.window) p.first c.windows
+  | .clock _ => #[]
+
+/-- Whether a compute audit's registration names `circuit`, a class circuit's Program's SHA-512, as its Program: its
+window circuit is that class's. None with no class circuit. -/
+def runsCircuit (circuit : Option String) (reg : Json) : Bool := match circuit, reg.getObjValD "program" with
+  | some d, .str x => x == d
+  | _, _ => false
+
+/-- The class circuit is held at an execution phase: each audit its scan's `prog` is an output of (`tiedAudits`) runs
+it (`runsCircuit`), so the phase's tied audit runs the one window circuit the class registers. -/
+def held (circuit : Option String) (audits : Array Json) (reg : Json) : Bool :=
+  (tiedAudits audits reg).all fun i => (audits[i]?.map (runsCircuit circuit)).getD false
+
+/-- `heldCheck`'s refusal, after its execution phase's number. -/
+def heldRefusal : String :=
+  "the tied audit's window circuit is not the registered class circuit: an audit the scan's prog is an output of \
+    (tiedAudits) is registered under another Program than the parameters' circuit, so its execution phase's term \
+    would be read off a Program the prover chose for that phase: register every execution phase's audit under the \
+    class's window circuit"
+
+/-- Execution phase `w`'s class circuit finding in the rows form: a refusal unless the audits its scan's `prog` is an
+output of run the class circuit (`held`). A window circuit's own digest binds its window's run, so only its Program
+can be held; without the hold an execution phase's audit could run a Program the prover chose for that phase. -/
+def heldCheck (p : Params) (audits : Array Json) (w : Nat) (reg : Json) : Option (Core.Verdict × String) :=
+  if held p.circuit audits reg then none else some (.reject, s!"execution phase {w}: {heldRefusal}")
+
+/-- The rows form's class circuit findings, one an execution phase, in order (`heldCheck`); none in the clock form. -/
+def heldChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × String)) := match p.form with
+  | .rows .. => c.windows.zipIdx.map fun (reg, i) => heldCheck p c.audits (p.first + i) reg
   | .clock _ => #[]
 
 def findingOf {α : Type} : Found α → Option (Core.Verdict × String)
@@ -1338,6 +1796,19 @@ def faultyEntries (p : Params) (c : Commitment) (as : Array (Found Facts)) (scan
   if (tiedAudits c.audits reg).any fun i => (chargedOf p c as i).any (1 ≤ ·.wrong) then scan.entries
   else 0
 
+/-- The rows form's frames finding (`rowsWf`): `paramsOf` refuses such a period before its caps, and the check refuses
+it too, so whatever parameters it accepts, its rows form's frames read back. None in the clock form. -/
+def rowsWfCheck (p : Params) : Option (Core.Verdict × String) := match p.form with
+  | .rows s _ _ => if rowsWf s p.windows then none else some (.reject, rowsWfRefusal s p.windows)
+  | .clock _ => none
+
+/-- The rows form's connection rows finding (`Schedule.connectionRows`): `paramsOf` refuses a schedule with
+connection rows by name (`connectionRowsRefusal`), and the check refuses it too, so whatever parameters it accepts,
+its schedule has no lengths rows and no content rows. None in the clock form. -/
+def connectionRowsCheck (p : Params) : Option (Core.Verdict × String) := match p.form with
+  | .rows s _ _ => if s.connectionRows then some (.reject, connectionRowsRefusal) else none
+  | .clock _ => none
+
 /-- The rows form's public on acceptance: `rowsTerms` over the accepted audits' facts, each link-window's scan's facts,
 tied audits' free inputs and `β_w` (`faultyEntries`), and the charged audits (`chargedOf`). -/
 def rowsPublic (p : Params) (c : Commitment) (as : Array (Found Facts)) (scan : Scan) (scans : Array (Facts × Nat)) :
@@ -1372,8 +1843,9 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
       (scans.find? (·.1.delta != f0.delta)).map fun (f, _) =>
         (.reject, s!"a scan's δ {f.delta.toString} is not the period's, {f0.delta.toString}")
     let as := auditChecks p c e
-    match firstFinding (ws.toList.map findingOf ++ [oneDelta] ++ as.toList.map findingOf ++ (wiredChecks p c).toList ++
-        (stateChecks p c).toList) with
+    match firstFinding (ws.toList.map findingOf ++ [oneDelta, rowsWfCheck p, connectionRowsCheck p] ++
+        as.toList.map findingOf ++ (wiredChecks p c).toList ++ (stateChecks p c).toList ++ (okChecks p c).toList ++
+        (heldChecks p c).toList) with
     | some (.reject, r) => .reject r
     | some (_, r) => .undecided r
     | none =>
@@ -1469,7 +1941,7 @@ def protocol : Core.Protocol where
 #guard
   let scan : Scan := ⟨32, 0, 300, 512, 8 * 112⟩
   let p : Params := ⟨#[⟨0, 0, "", 16, 0, #[]⟩], #[], 0, 1, "", Lms.deployed, .empty, .empty, "",
-    .rows ⟨0, 0, 0, 0, 16, 0, 0, 4, 0, 0, 32, none⟩ .empty scan, 1⟩
+    .rows ⟨0, 0, 0, 0, 16, 0, 0, 4, 0, 0, 32, none, none, none, false⟩ .empty scan, 1, none⟩
   let at_ := fun (q : String) => Json.mkObj [("roots", Json.arr #[
     Json.mkObj [("port", .str q), ("root", .str "r"), ("domain", .str "d")]])]
   let c : Commitment := ⟨#[at_ (entriesPort "SelectEntry_v1{KO=4}" 0)], #[at_ (progName 0)], .empty⟩
@@ -1525,7 +1997,7 @@ def protocol : Core.Protocol where
 -- members; not with the lanes swapped, a chunk of other leaves, lane 1's tree missing, or another template's chunk 1;
 -- and the scan's lane-1 tree alone ties the audit
 #guard
-  let s : Schedule := ⟨0, 0, 0, 0, 2, 0, 0, 2, 0, 0, 4, none⟩
+  let s : Schedule := ⟨0, 0, 0, 0, 2, 0, 0, 2, 0, 0, 4, none, none, none, false⟩
   let a : Audit := ⟨0, 0, "", 4, 0, #[("SlotEntry_v1{KO=1}", 4, slotEntryPins[0]!)]⟩
   let port := fun (q root : String) (l : Nat) =>
     Json.mkObj [("port", .str q), ("leaves", toJson l), ("root", .str root), ("domain", .str "d")]
@@ -1543,5 +2015,57 @@ def protocol : Core.Protocol where
 #guard progPort (progName 0) && progPort "scan/prog3" && progPort "scan/prog12" && progName 3 == "scan/prog3"
 #guard !(progPort "scan/prog" || progPort "scan/prog01" || progPort "scan/prog/" || progPort "Scan/prog0" ||
   progPort "scan/prog0x" || progPort "prog0" || progPort "scan/state" || progPort "")
+-- the ok findings, one an execution phase, numbered from the period's first: none where its registration is at the
+-- schedule's constants, a refusal at another schedule's; every execution phase refused where the constants do not
+-- compute; and none of no execution phase
+#guard
+  let entry := fun (c : ScanOk.Const) => Json.mkObj [
+    ("port", .str c.port), ("leaves", toJson c.leaves), ("domain", .str c.domain), ("root", .str c.root)]
+  let regOf := fun (T : Nat) =>
+    (ScanOk.consts T).toOption.map fun cs => Json.mkObj [("roots", Json.arr (cs.map entry))]
+  match regOf 3, regOf 4 with
+  | some r3, some r4 =>
+    (okChecksAt (ScanOk.consts 3) 5 #[r3, r4, r3]).map (·.map (·.2.startsWith "execution phase 6: ")) ==
+        #[none, some true, none] &&
+      (okChecksAt (.error "x") 0 #[r3, r3]).all (·.isSome) && (okChecksAt (ScanOk.consts 3) 0 #[]).isEmpty
+  | _, _ => false
+-- a schedule of 4 lanes over a 32-bucket link-window carries at most 128 connections, each capped at its 5 egress
+-- cells, so the schedules and the cells each charge 128 · ⌈log2 6⌉ = 384 bits a link-window
+#guard
+  let s : Schedule := ⟨100, 512, 27, 5, 16, 12, 47, 4, 4, 4, 32, none, none, none, false⟩
+  s.caps 1 == Array.replicate 128 5 && capsTerm (s.caps 1) == 384 && (s.caps 2).size == 256
+-- its frames, B = 512 and 128 connections a link-window, read back over 2^25 − 1 link-windows and not over 2^25,
+-- whose last connection's ordinal is 2^32; the check refuses that period
+#guard
+  let s : Schedule := ⟨100, 512, 27, 65, 16, 12, 47, 4, 4, 4, 32, none, none, none, false⟩
+  let p := fun (w : Nat) =>
+    (⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows s .empty ⟨0, 0, 0, 0, 0⟩, w, none⟩ : Params)
+  rowsWf s (2 ^ 25 - 1) && !rowsWf s (2 ^ 25) && (rowsWfCheck (p (2 ^ 25 - 1))).isNone &&
+    (rowsWfCheck (p (2 ^ 25))).isSome
+-- the check refuses a schedule with connection rows, whatever parse it came from, and no other: the period of no
+-- link-window and no audit under `plainSchedule` at T = 2 is accepted, and with lengths rows it is refused by name
+#guard
+  let p := fun (s : Schedule) =>
+    (⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows s .empty ⟨0, 0, 0, 0, 0⟩, 0, none⟩ : Params)
+  let reason := fun (s : Schedule) => match check (p s) ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ with
+    | .accept .. => "accept"
+    | .reject r => r
+    | .undecided r => r
+  let s : Schedule := { plainSchedule with window := 2 }
+  (connectionRowsCheck (p s)).isNone && (connectionRowsCheck (p { s with lengths := some 1 })).isSome &&
+    (connectionRowsCheck (p { s with content := some #[] })).isSome &&
+    (connectionRowsCheck (p { s with requestWords := true })).isSome && reason s == "accept" &&
+    reason { s with lengths := some 2 } == connectionRowsRefusal
+
+-- the class circuit c is held when every tied audit is registered under it, an untied audit's Program unread; not when
+-- one tied audit's is another, or with no class circuit; with no tied audit it holds (`wired` refuses that)
+#guard
+  let o := fun (q root : String) => Json.mkObj [("port", .str q), ("root", .str root), ("domain", .str "d")]
+  let audit := fun (prog root : String) =>
+    Json.mkObj [("program", .str prog), ("roots", Json.arr #[o "SlotEntry_v1{KO=1}/c0/o0" root])]
+  let scan := Json.mkObj [("roots", Json.arr #[o "scan/prog0" "r0"])]
+  held (some "c") #[audit "c" "r0"] scan && held (some "c") #[audit "c" "r0", audit "x" "r1"] scan &&
+    !held (some "c") #[audit "d" "r0"] scan && !held none #[audit "c" "r0"] scan &&
+    !held (some "c") #[audit "c" "r0", audit "d" "r0"] scan && held (some "c") #[] scan
 
 end NetworkCheck.Period
