@@ -110,7 +110,7 @@ format:
 
 | format | what it registers |
 | --- | --- |
-| `verity/registration/site/v1` | the Site's own site entry (`Core.Site.Registration.Entry`, `CoreProtocol/Site.lean`): the sheets, locations and links it adds to the Site, with the Site's JSON, digest and check |
+| `verity/registration/site/v2` | the Site's own site entry (`Core.Site.Registration.Entry`, `CoreProtocol/Site.lean`): the sheets, locations and links it adds to the Site, with the Site's JSON, digest and check |
 | `verity/registration/information/v1` | θ, each registered value by its committed root (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`, a public checkpoint's pin), and the registered compiler `B` (digest, advice format, public advice cap `ℓ`); each once in the log |
 | `verity/registration/declaration/v1` | a day's circuit (`day`, the day's index among the monitoring period's days; `program`, its program's SHA-512; `blocks`, its block Definitions by descriptor key); one a day, before the day's first coin |
 
@@ -143,22 +143,29 @@ in: its key, in the public output or the profile (`Account.Key`), its unit, the 
 verified amount from below, the free amount from above), a moment or the keys of its span, the key of its error and of
 the share the error leaves out, how a period's error forms from its answers' (`Account.Pool`), the key of the capacity
 an answer carries, what an answer holds when nothing is certified, and the terms the error names and does not price.
-`Account.head` is the key under which an accepted answer names the registration's head; a protocol that names none is
-held to no registration. `Account.rests` names the answers a protocol's own rest on, those its check read as given and
-did not verify: such an answer lists each one's name (`Account.nameOf`) under a key, and counts only when each is an
-accepted answer `rows` is given.
+`Account.witness` is the key under which an accepted answer names the key its check ran under, a key of one of the
+auditor's devices on the site; a protocol that needs no such device names none, and its answers are of the whole site.
+An answer names no location and no registration's head: which hardware it is about is what the device holding its key
+(`Site.holder`) reaches, a network certifier's links to its host (`Site.hostLinks`) for egress and a memory challenger's
+hosts (`Site.hostsOf`) for compute, memory and reads, and an answer whose key no device or more than one holds counts
+for nothing. `Account.rests` names the answers a protocol's own rest on, those its check read as given and did not
+verify: such an answer lists each one's name (`Account.nameOf`) under a key, and counts only when each is an accepted
+answer `rows` is given.
 
-`Account.rows` reads a Site, the head of its registration, the answers and their accounts into the accounting rows
-(`Account.Row`, as JSON under `metric`, `capacity`, `verified`, `free` and `error`). A row's capacity is a function of
-the Site (`Account.Part.capacity`), at each reading the registration can be read at, and is never copied from an answer.
-A flow has one row for the period. Its answers' amounts add only over spans shown disjoint: an answer names the steps
-of its span (`Account.Steps`) and, where its steps are numbered within a session, the series they are numbered in; a
-verified amount is the largest total over answers of one series whose named spans share no step, or the largest amount
-of an answer that names none, and a tick's cover counts once. An amount at a moment has one row for each accepted
-answer and one for the period. The period's error, of a flow and of a moment alike, is its answers' errors summed, or
-the one answer's where the amount's error is stated once for the period, which two answers cannot both do. An error of
-1 or more prints "no bound at this period", and what no accepted answer covers is "not audited: charged at capacity",
-as is the memory of a device's sheet that none of its leaves holds.
+`Account.rows` reads a Site, the auditor, the period, the answers and their accounts into the accounting rows
+(`Account.Row`, as JSON under `metric`, `capacity`, `verified`, `free` and `error`). Which registration the Site is, and
+which answers are the period's, is the composite's: it reads the head once, from each window's record. Each amount gets
+its rows for each device its answers were witnessed by, or for the whole site, and rows at one place under different
+keys are separate audits of the same hardware and are never added. A row's capacity is a function of the Site
+(`Account.Part.capacity`), at each reading the registration can be read at, and is never copied from an answer. A flow
+has one row for the period. Its answers' amounts add only over spans shown disjoint: an answer names the steps of its
+span (`Account.Steps`) and, where its steps are numbered within a session, the series they are numbered in; a verified
+amount is the largest total over answers of one series whose named spans share no step, or the largest amount of an
+answer that names none, and a tick's cover counts once. An amount at a moment has one row for each accepted answer and
+one for the period. The period's error, of a flow and of a moment alike, is its answers' errors summed, or the one
+answer's where the amount's error is stated once for the period, which two answers cannot both do. An error of 1 or more
+prints "no bound at this period", and what no accepted answer covers is "not audited: charged at capacity", as is the
+memory of a device's sheet that none of its leaves holds.
 `Account.Example.account` is the example protocol's value; every other protocol's is written with that
 protocol. A caller that holds the Site as JSON, as the registration's view does under `site`, decodes it with
 `Core.Site.ofJson`, which reads exactly what `Site.toJson` writes.
