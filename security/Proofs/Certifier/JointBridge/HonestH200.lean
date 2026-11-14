@@ -59,16 +59,16 @@ import Proofs.Pouw.TS
 import Proofs.Pouw.TS.ReceiptDuoCP
 import Proofs.Pouw.TS.ReceiptLi
 import Proofs.Pouw.TS.Stages
-import Proofs.Pous.Tag.Basic
-import Proofs.Pous.Tag.LittlewoodOfford
-import Proofs.Pous.Tag.Signs
+import Proofs.Poub.Tag.Basic
+import Proofs.Poub.Tag.LittlewoodOfford
+import Proofs.Poub.Tag.Signs
 import Proofs.Pouw.Period
 import Proofs.Pouw.Period.Sort
 import Proofs.Pouw.Receipt
 import Proofs.Properties.Pouw.Check
 import Proofs.Properties.Pouw.Draw
 import Proofs.Properties.Pouw.Grid
-import Proofs.Properties.Compose.Remote.Sort
+import Proofs.Properties.Poub.Remote.Sort
 import Spot.Record
 
 /-!

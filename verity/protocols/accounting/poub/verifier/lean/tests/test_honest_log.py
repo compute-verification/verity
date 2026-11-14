@@ -1,4 +1,4 @@
-"""`HonestLogAccepted` (`security/Properties/Compose/Remote/HonestLog.lean`), the premise the honest witnesses of
+"""`HonestLogAccepted` (`security/Properties/Poub/Remote/HonestLog.lean`), the premise the honest witnesses of
 `LineHeld` and `LineHeldAtSubprotocol` take, held to what the compiled Lean and the Python verifier do: the module the
 premise reads is `honest_log.py`'s rendering of the honest one-window period's case; `poub-protocol`
 (`Poub.Protocol.check`) accepts that case with the live session's public outputs and profile, as the Python verifier
