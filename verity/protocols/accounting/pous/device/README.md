@@ -88,6 +88,8 @@ The proofs of the properties are in `security/Proofs/Properties/Pous/` (`MemoryC
 - `wipe_challenger.py`: the streamed wipe's memory challenger as a party of the party runtime (`verity/runtime`), over
   `verity/protocols/accounting/pous/verifier/wipe_parties.py`'s messages; the prover's party is
   `verity/protocols/accounting/pous/prover/wipe_prover.py`.
+- `onsite.py`: the memory challenger's key as a deployment starts it (`ProtocolDef.starts`, `challenger_party.start`,
+  `wipe_challenger.start`), refused unless the configuration pins it for the protocol it signs for.
 - `verity/protocols/accounting/pous/verifier/streamed_wipe.py`: the streamed-label wipe's device (`Challenger`) and `verdict`;
   `wipe_party.py` beside it, the wipe as a party of its own on the challenger's host.
 - `lean/tests/`: the difftests of both verdicts and of the record formats against the Python.

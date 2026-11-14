@@ -34,7 +34,7 @@ The two sides are parties of the deployment layer (`verity.runtime`), the challe
 key and each round's salt from its host's coins too. `serve` is its party, stepped over the session's stream by PoUS's
 loop (`challenger_session.run`) on the clock and coins it is given: it reads its clock once before each index it sends
 and once after each block it takes, those readings alone, so on the same coins and readings it signs the same bytes
-wherever it runs.
+wherever it runs. `start` is how a deployment starts it on the auditor's host (`challenger_session`'s docstring).
 
 `python -m verity.protocols.accounting.pous.device.challenger_party --device DIR [--listen HOST:PORT]` is the challenger's
 side (`main`): it reads one JSON line on stdin, a salt request or the session's `{"binding", "block_bytes", "blocks",
