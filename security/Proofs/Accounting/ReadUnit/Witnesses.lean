@@ -465,10 +465,10 @@ theorem returns₀ (i : Unit) :
 
 /-- What the sampled read hashed at the counterexample: `L₀`, its opening's and its table's checks. -/
 theorem sampledHashed₀ (ω : Unit) :
-    R₀.drawnHashed (Flock.Bridge.partsOf D₀ hU₀ 1) Verity.sha512 key₀ (fun _ : Unit => Finset.univ) (fun _ => tr₀) ω =
+    R₀.sampledHashed (Flock.Bridge.partsOf D₀ hU₀ 1) Verity.sha512 key₀ (fun _ : Unit => Finset.univ) (fun _ => tr₀) ω =
       L₀ := by
   have hr : R₀.reads = {()} := rfl
-  unfold Reads.drawnHashed
+  unfold Reads.sampledHashed
   simp only [hr, Finset.mem_univ, Finset.filter_true, Finset.toList_singleton, List.flatMap_cons, List.flatMap_nil,
     List.append_nil]
   unfold Reads.hashedAt Reads.index

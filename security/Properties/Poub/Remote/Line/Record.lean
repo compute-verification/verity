@@ -217,8 +217,8 @@ def receiptMax : ℕ := Poub.Session.RECEIPT_LIMIT - 1
 /-- **The record's opening sample**: the session's samples, sample `c` of outcome `ω` with the receipts its windows have
 in the state the record's session reaches at `ω` (at most `receiptMax`), sampling `min(s, U_c)` at the session's
 `samples`, with the correct receipts `correct`. -/
-def recordSample {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Draw.DrawCoins node.samples κ X → Record)
-    (correct : Fin node.samples → Accounting.Remote.Draw.DrawCoins node.samples κ X → Finset ℕ) :
+def recordSample {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Draw.SampleCoins node.samples κ X → Record)
+    (correct : Fin node.samples → Accounting.Remote.Draw.SampleCoins node.samples κ X → Finset ℕ) :
     Accounting.Remote.Draw.Run node.samples receiptMax (fun _ => node.params.samples) κ X where
   size c ω := ⟨min ((rec ω).sampleReceiptsAt node c) receiptMax, Nat.lt_succ_of_le (min_le_right _ _)⟩
   correct := correct
@@ -227,8 +227,8 @@ def recordSample {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Dr
 `ω` is `recs c ω`, and the session it plays is that record's opening sample (`recordSample`), with the correct receipts
 `correct c`. -/
 def recordCommitted {κ : ℕ} {X Cm : Type} (node : Node)
-    (recs : Cm → Accounting.Remote.Draw.DrawCoins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → Accounting.Remote.Draw.DrawCoins node.samples κ X → Finset ℕ) :
+    (recs : Cm → Accounting.Remote.Draw.SampleCoins node.samples κ X → Record)
+    (correct : Cm → Fin node.samples → Accounting.Remote.Draw.SampleCoins node.samples κ X → Finset ℕ) :
     Accounting.Remote.Draw.Committed node.samples receiptMax (fun _ => node.params.samples) κ X Cm where
   view c := recordSample node (recs c) (correct c)
 

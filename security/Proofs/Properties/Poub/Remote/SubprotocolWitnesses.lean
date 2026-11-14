@@ -117,7 +117,7 @@ theorem sketch_zero {Ω : Type} [Fintype Ω] (T : Trace Ω) (O : Outside T)
   exact ⟨t, h1, h2, mem_union_left _ (h3 ▸ mem_univ j)⟩
 
 theorem counted_of {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Accounting.Remote.Draw.Run n m s κ X)
-    (T : Trace (DrawCoins n κ X)) (h : ∀ ω p, T.plan ω p ⊆ T.correct ω p) : Counted D T := fun ω _ => by
+    (T : Trace (SampleCoins n κ X)) (h : ∀ ω p, T.plan ω p ⊆ T.correct ω p) : Counted D T := fun ω _ => by
   have hw : T.incorrect ω = 0 := by
     unfold Trace.incorrect
     exact Finset.sum_eq_zero fun p _ => by rw [Finset.sdiff_eq_empty_iff_subset.2 (h ω p), card_empty]
@@ -145,7 +145,7 @@ hold all of them nothing is refused. -/
 theorem refused_honest {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X]
     (D : Accounting.Remote.Draw.Run n m s κ X)
     (hc : ∀ t ω, range (D.size t ω : ℕ) ⊆ D.correct t ω) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X) : Refused D prf (fun _ _ _ => 0) T R := by
+    (T : Trace (SampleCoins n κ X)) (R : Receipts n κ X) : Refused D prf (fun _ _ _ => 0) T R := by
   intro ω _ t p hp
   left
   apply hc t ω
@@ -165,9 +165,9 @@ every receipt a sample can have and the sampler's fallbacks 0, every premise hol
 and `Counted`; and the bound's terms the prover could raise are 0: each sample's distinguisher has no advantage on its
 coin function and each hiding term is 0. -/
 theorem lineHeldAtSubprotocol_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X]
-    (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax) (recs : Cm → DrawCoins node.samples κ X → Record)
-    (com : DrawCoins node.samples κ X → Cm) (R : Receipts node.samples κ X) (passes : ℕ)
-    (tick : DrawCoins node.samples κ X → ℕ → ℕ) (hS : HonestSchedule node passes tick recs com) :
+    (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax) (recs : Cm → SampleCoins node.samples κ X → Record)
+    (com : SampleCoins node.samples κ X → Cm) (R : Receipts node.samples κ X) (passes : ℕ)
+    (tick : SampleCoins node.samples κ X → ℕ → ℕ) (hS : HonestSchedule node passes tick recs com) :
     Paced (ofRecord (honestTrace node passes tick) node (played recs com)) (recordPace node (played recs com)) ∧
     Covers (ofRecord (honestTrace node passes tick) node (played recs com)) ∧
     SketchBoundAt (ofRecord (honestTrace node passes tick) node (played recs com))
@@ -237,9 +237,9 @@ theorem lineHeldAtSubprotocol_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fin
 and at `Poub.Protocol.DELTA`, the δ the subprotocol's bound is at, each sample's distinguisher has no advantage
 on its coin function and each hiding term is 0. -/
 theorem qBytesAtSubprotocolBy_honest (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X]
-    (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax) (recs : Cm → DrawCoins node.samples κ X → Record)
-    (com : DrawCoins node.samples κ X → Cm) (R : Receipts node.samples κ X) (passes : ℕ)
-    (tick : DrawCoins node.samples κ X → ℕ → ℕ) (hS : HonestSchedule node passes tick recs com) :
+    (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax) (recs : Cm → SampleCoins node.samples κ X → Record)
+    (com : SampleCoins node.samples κ X → Cm) (R : Receipts node.samples κ X) (passes : ℕ)
+    (tick : SampleCoins node.samples κ X → ℕ → ℕ) (hS : HonestSchedule node passes tick recs com) :
     (∀ c, Live ((recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).view c)) ∧
     Refused ((recordCommitted node recs fun _ _ _ => Finset.range (receiptMax + 1)).play com) prf (fun _ _ _ => 0)
       (ofRecord (honestTrace node passes tick) node (played recs com)) R ∧
@@ -617,7 +617,7 @@ theorem toy_sketch {Ω : Type} [Fintype Ω] (ver : Node → Record → Prop)
 
 theorem binding_empty {n κ : ℕ} {X : Type} [Fintype X] [IsEmpty (Fin n)] {m : ℕ} {s : Fin n → ℕ}
     (D : Accounting.Remote.Draw.Run n m s κ X) (R : Receipts n κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) : R.binding D prf rest = 0 := by
+    (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) : R.binding D prf rest = 0 := by
   simp [Receipts.binding, Pous.pr_eq_card]
 
 theorem toy_delta : (Toy.node.delta : ℝ) = 1 / 2 := by

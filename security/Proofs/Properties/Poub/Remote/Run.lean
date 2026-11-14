@@ -76,7 +76,7 @@ structure InvOn (P : Params) (R : Registration) (AC : Array ByteArray) (ws : Arr
   receipts : ∀ t (ht : t < ws.size), ws[t].receipts < RECEIPT_LIMIT
 
 def Inv (s : State) : Prop :=
-  InvOn s.params s.reg s.appendCoins s.windows s.filling s.step s.extent s.appends s.appendDrawn s.head
+  InvOn s.params s.reg s.appendCoins s.windows s.filling s.step s.extent s.appends s.appendSampled s.head
 
 theorem inv_init (params : Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat) :
     Inv (State.init params reg coins appendCoins notBeforeNs) := by
