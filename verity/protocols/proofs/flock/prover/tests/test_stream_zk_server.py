@@ -10,14 +10,14 @@ behind the ZK server otherwise is, one `serve` and one `prove` process on a chal
   every key, every list's length and every value is the pair's, but a clock's reading (a float) and a field word or digest
   the session's coins decide (lowercase hex of 32 digits or more, compared by its length). Lean's verdict names the
   record it read, each side's own directory. A `LIVE` line's fields about its process and not its session are held on
-  their own (`OWN`, `TEXT`), and the digests its statement decides are equal (`DECIDED`). The Lean it ran is the pair's
-  as well: one tap for the process, then for each member one session loop, started with the pair's arguments, so on
-  that member's own circuit and tables.
+  their own (`OWN`, `TEXT`), and the digests its statement decides are equal (`DECIDED`). The Lean it ran is one tap
+  for the process, then one kept session loop on the window's partition and program, the pair's loop's, which each
+  member's session is a session of in turn (`session --kept`), so on that member's own circuit and tables.
 * **Member i + 1's first coin follows member i's closing round in the challenger's release log** (`order_reason`). A
   member's closing round is the last round the challenger opened of its coin tree. The verifier has that round's coins
   only from the challenger's answer, which the challenger writes the round's line before; the prover's proofs follow those
-  coins and the verdict follows the proofs, so a member's verdict follows its closing round's receipt. The stream starts
-  member i + 1's loop only once member i's verdict is emitted, so no line of member i + 1's tree, the one that samples
+  coins and the verdict follows the proofs, so a member's verdict follows its closing round's receipt. The stream makes
+  member i + 1 the loop's member only once member i's verdict is emitted, so no line of member i + 1's tree, the one that samples
   it at its `Hello` included, is before member i's closing round.
 * **It refuses to verify ahead**: with ``FC_VERIFY_AHEAD`` above 0 a session would start before the verdict of the one
   before it.
@@ -269,12 +269,14 @@ def window(tmp_path_factory):
 @real
 def test_a_member_through_the_stream_is_the_process_pairs_member_less_the_seconds(window):
     assert set(window["exits"].values()) == {0}, window["exits"]
-    # the Lean the stream started: its tap, then a session loop a member, each the one its process pair started
-    assert window["loops"] == [["tap"], *(pair["loops"][1] for pair in window["pairs"])], window["loops"]
+    # the Lean the stream started: its tap, then one kept session loop on the window's flags, which are each pair's loop's
+    tap, kept = window["loops"]
+    assert tap == ["tap"] and kept[:2] == ["session", "--kept"], window["loops"]
     for k, ((st, sample), got, pair) in enumerate(zip(window["members"], window["stream"], window["pairs"])):
         tap, loop = pair["loops"]
         assert tap == ["tap"] and loop[0] == "session", pair["loops"]
         assert (loop[loop.index("--circuit") + 1], loop[loop.index("--tables") + 1]) == (str(st.circuit), str(st.tables))
+        assert {f: kept[kept.index(f) + 1] for f in ("--partition", "--program")} == {f: loop[loop.index(f) + 1] for f in ("--partition", "--program")}
         for one in (got, pair):
             assert one["live"]["accepted"] is True and one["verdict"]["accepted"] is True and one["challenger"]["ok"] is True, (k, one["live"].get("why"), one["verdict"].get("why"), one["challenger"])
             assert one["record"]["unit_draw"] == sample, k

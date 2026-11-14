@@ -580,7 +580,7 @@ each request decided and its own frame sent at its place (`State.request`, the p
 answered by the loop), nothing after a stop, the session ended at its `Finish` whatever its outcome, and with a hold
 the loop's proofs and `Finish` held for `Hold.barrier`.
 `phase` is where a held session stands, and `ended` why it ended if the hold has no outcome of it. -/
-def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Sessions) (l0s : IO.Ref Level0.Slots) (sid : Nat)
+def relay (setupAt : Hello.SetupAt) (reg : IO.Ref Frames.Sessions) (l0s : IO.Ref Level0.Slots) (sid : Nat)
     (p : Socket.Client) (hold : Option Hold) (a : Socket.Client) (first : Option ByteArray) (phase : IO.Ref Phase)
     (ended : IO.Ref String) : IO Unit := do
   let mut st : State := {}
@@ -653,7 +653,7 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Sessions)
         continue
       let nonce ← IO.getRandomBytes Hello.NONCE_BYTES.toUSize
       let id ← IO.getRandomBytes Level0.ID_BYTES.toUSize
-      let set ← S.setupAt specs st.draw
+      let set ← setupAt st.draw
       match st.sendHello set nonce with
       | .error (st', out) =>
         st := st'
@@ -740,7 +740,7 @@ stop is answered with a verdict that does not accept and cuts the auditor's conn
 those proofs and `Finish` leave, and the auditor's verdict goes to the hold
 (`Hold.sent`) before the prover receives it. A session that ends before its `Finish` is decided, or a fault of the
 loop's, is the hold's to record (`Hold.cut`). -/
-def serve (S : Hello.Setup) (specs : Hello.Specs) (auditor : SocketAddress) (reg : IO.Ref Frames.Sessions)
+def serve (setupAt : Hello.SetupAt) (auditor : SocketAddress) (reg : IO.Ref Frames.Sessions)
     (l0s : IO.Ref Level0.Slots) (sid : Nat) (p : Socket.Client) (hold : Option Hold := none) : IO Unit := do
   let mut first : Option ByteArray := none
   if let some h := hold then
@@ -755,7 +755,7 @@ def serve (S : Hello.Setup) (specs : Hello.Specs) (auditor : SocketAddress) (reg
     let a ← Socket.Client.mk
     (a.connect auditor).block
     a.noDelay
-    relay S specs reg l0s sid p hold a first phase ended
+    relay setupAt reg l0s sid p hold a first phase ended
     if let some h := hold then
       if (← phase.get) == .relay then
         phase.set .done
@@ -872,15 +872,15 @@ def level0 (ch : Frame.Chan) (reg : IO.Ref Frames.Sessions) (l0s : IO.Ref Level0
 /-- **The loop's frames port**: each connection to `srv` is, by its first line, one rep's frame starting (`rep …`,
 `Frames.startRep`, the frame then the loop's own in `reg`); a rep's next place or the values its frame took (`place …`,
 `vals …`, `Frames.ask`, which only reads `reg`); a session's tables' level 0 (`level0 …`, `level0`); or a session's
-proof files on the tables' level 0 in `l0s` (`finish …`, `Finish.serveLoop`, at the statement `S`), each rep's salts for
+proof files on the tables' level 0 in `l0s` (`finish …`, `Finish.serveLoop`, set up by `setupAt`), each rep's salts for
 levels ≥ 1 kept in `reg` for its opening, once (another finish's sample of them is refused), its inner proof's rounds for
 the frame to release
 (`Frames.Sessions.innerRound`), its proof file for the session's `Proof` (`Frames.Sessions.file`), its proofs on its
 frame's samples, and its requests refused unless they carry the values its frame took, the session's extra claims and the
 coins the stream answered (`Frames.ownOf`).
-Anything else is answered `err WHY`. -/
-def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : IO.Ref Frames.Sessions)
-    (l0s : IO.Ref Level0.Slots) : IO Unit := do
+Anything else is answered `err WHY`. Each connection is served inside `around` (`listenAt`). -/
+def frames (setupAt : Hello.SetupAt) (srv : Socket.Server) (reg : IO.Ref Frames.Sessions)
+    (l0s : IO.Ref Level0.Slots) (around : IO Unit → IO Unit) : IO Unit := do
   let keep := fun (root : ByteArray) (r : Nat) (s : Array ByteArray) => reg.modifyGet fun R =>
     if R.salts.any fun (x, q, _) => x == root && q == r then
       (some s!"rep {r}'s salts for levels ≥ 1 were drawn already, on another finish", R)
@@ -896,13 +896,13 @@ def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : 
     | .error e => (some e, R)
   repeat
     let c ← srv.accept.block
-    let _ ← IO.asTask (prio := .dedicated) do
+    let _ ← IO.asTask (prio := .dedicated) <| around do
       let ch ← sockChan c
       let first ← ch.getLine
       if first.startsWith "level0 " then
         try level0 ch reg l0s first catch e => IO.eprintln s!"level 0: {e}"
       else if first.startsWith "finish " then
-        try Finish.serveLoop ch S specs l0s keep file own inner first catch e => IO.eprintln s!"finish: {e}"
+        try Finish.serveLoop ch setupAt l0s keep file own inner first catch e => IO.eprintln s!"finish: {e}"
       else if first.startsWith "rep " then
         try Frames.startRep ch reg l0s first catch e => IO.eprintln s!"rep: {e}"
       else if first.startsWith "place " || first.startsWith "vals " then
@@ -911,11 +911,45 @@ def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : 
         try ch.write s!"err a request `{first.trim}`\n".toUTF8 catch _ => pure ()
       try (c.shutdown).block catch _ => pure ()
 
+/-- **The loop's two ports**: sessions' on `127.0.0.1:listen` (`0`: a port the system picks) and the frames' on a port the
+system picks, printed as `LISTENING 127.0.0.1:PORT` and then `FRAMES 127.0.0.1:PORT` once it listens on both. Each
+connection is served on its own thread: the frames' by `frames` at `setupAt`, and each session's, numbered in arrival
+order, by `session`, after which its frames and every level 0 sampled for it are freed (`Frames.close`,
+`Level0.Slots.close`). Each connection, a session's with the freeing after it, is served inside `around` (the kept loop
+counts them, `kept`). -/
+def listenAt (listen : Nat) (setupAt : Hello.SetupAt) (reg : IO.Ref Frames.Sessions) (l0s : IO.Ref Level0.Slots)
+    (around : IO Unit → IO Unit) (session : Nat → Socket.Client → IO Unit) : IO Unit := do
+  let sids ← IO.mkRef 0
+  let srv ← Socket.Server.mk
+  srv.bind (.v4 { addr := IPv4Addr.ofParts 127 0 0 1, port := listen.toUInt16 })
+  srv.listen 128
+  let fsrv ← Socket.Server.mk
+  fsrv.bind (.v4 { addr := IPv4Addr.ofParts 127 0 0 1, port := 0 })
+  fsrv.listen 128
+  IO.println s!"LISTENING 127.0.0.1:{(← srv.getSockName).port}"
+  IO.println s!"FRAMES 127.0.0.1:{(← fsrv.getSockName).port}"
+  (← IO.getStdout).flush
+  let _ ← IO.asTask (prio := .dedicated) (frames setupAt fsrv reg l0s around)
+  let _ ← IO.asTask (prio := .dedicated) do
+    repeat
+      let p ← srv.accept.block
+      let sid ← sids.modifyGet fun n => (n, n + 1)
+      let _ ← IO.asTask (prio := .dedicated) <| around do
+        try session sid p catch e => IO.eprintln s!"session: {e}"
+        Frames.close reg sid (((← l0s.get).slots.filter (·.owner == sid)).map (·.l0.root))
+        let (k, n) ← l0s.modifyGet fun R =>
+          let R' := R.close sid
+          ((R.slots.size - R'.slots.size, R'.slots.size), R')
+        if k > 0 then
+          IO.eprintln s!"level 0: session {sid} ended; {k} drawn for it freed, {n} kept"
+          (← IO.getStderr).flush
+
 /-- `flock-firewall session --verifier HOST:PORT [--listen PORT] [--statement ID] --circuit F --public F …` (the
 statement flags `Hello.FLAGS`): the ZK server's session loop. It listens on `127.0.0.1:PORT` (by default a port the system picks)
 for sessions and on a port the system picks for the reps' frames, the tables' level 0 and the sessions' finish, prints `LISTENING 127.0.0.1:PORT` and then
-`FRAMES 127.0.0.1:PORT` once it does, and serves each connection as one session (`serve`) or one frame (`frames`), each
-on its own thread, every session's `Hello` at one statement set up once a sample (`Hello.Setup.specAt`). When a session
+`FRAMES 127.0.0.1:PORT` once it does (`listenAt`), and serves each connection as one session (`serve`) or one frame
+(`frames`), each on its own thread, every session's `Hello` at one statement set up once a sample (`Hello.Setup.specAt`);
+`kept` is the same loop for a window's statements, one after another. When a session
 ends, every level 0 sampled for it is freed (`Level0.Slots.close`), and where there were any, its standard error says
 `level 0: session SID ended; K drawn for it freed, N kept`. It runs until its standard
 input closes. `flock-firewall session --schedule …` instead reads a sample's JSON (`null` for none) on its standard input
@@ -927,6 +961,9 @@ refuses `--salt-key`: a statement's value commitments are admitted on the ZK ser
 --state DIR --salt-key FILE`). -/
 def run (usage : String) (args : List String) (mkHold : Option (Hello.Setup → IO (Except String (IO Hold)))) :
     IO UInt32 := do
+  if args.contains "--kept" then
+    IO.eprintln "--kept: a kept loop is `session --kept`'s alone, with no hold"
+    return 2
   let S ← match ← Hello.Setup.ofArgs usage args with
     | .ok S => pure S
     | .error e => IO.eprintln e; return 2
@@ -962,42 +999,177 @@ def run (usage : String) (args : List String) (mkHold : Option (Hello.Setup → 
   let specs : Hello.Specs ← IO.mkRef #[]
   let reg : IO.Ref Frames.Sessions ← IO.mkRef {}
   let l0s : IO.Ref Level0.Slots ← IO.mkRef {}
-  let sids ← IO.mkRef 0
-  let srv ← Socket.Server.mk
-  srv.bind (.v4 { addr := IPv4Addr.ofParts 127 0 0 1, port := listen.toUInt16 })
-  srv.listen 128
-  let fsrv ← Socket.Server.mk
-  fsrv.bind (.v4 { addr := IPv4Addr.ofParts 127 0 0 1, port := 0 })
-  fsrv.listen 128
-  IO.println s!"LISTENING 127.0.0.1:{(← srv.getSockName).port}"
-  IO.println s!"FRAMES 127.0.0.1:{(← fsrv.getSockName).port}"
-  (← IO.getStdout).flush
-  let _ ← IO.asTask (prio := .dedicated) (frames S specs fsrv reg l0s)
-  let _ ← IO.asTask (prio := .dedicated) do
-    repeat
-      let p ← srv.accept.block
-      let sid ← sids.modifyGet fun n => (n, n + 1)
-      let _ ← IO.asTask (prio := .dedicated) do
-        try
-          let hold ← match mkHold with
-            | some m => some <$> m
-            | none => pure none
-          serve S specs auditor reg l0s sid p hold
-        catch e => IO.eprintln s!"session: {e}"
-        Frames.close reg sid (((← l0s.get).slots.filter (·.owner == sid)).map (·.l0.root))
-        let (k, n) ← l0s.modifyGet fun R =>
-          let R' := R.close sid
-          ((R.slots.size - R'.slots.size, R'.slots.size), R')
-        if k > 0 then
-          IO.eprintln s!"level 0: session {sid} ended; {k} drawn for it freed, {n} kept"
-          (← IO.getStderr).flush
+  listenAt listen (S.setupAt specs) reg l0s id fun sid p => do
+    let hold ← match mkHold with
+      | some m => some <$> m
+      | none => pure none
+    serve (S.setupAt specs) auditor reg l0s sid p hold
   let stdin ← IO.getStdin
   repeat
     if (← stdin.getLine).isEmpty then break
   IO.Process.exit 0
 
-/-- `flock-firewall session`: `run`, with no hold. -/
+/-- A kept loop's member (`kept`): its flags, the statement its sessions are of, the setups of its samples so far, and the
+auditor its sessions are relayed to. -/
+structure Member where
+  args : List String
+  S : Hello.Setup
+  specs : Hello.Specs
+  auditor : SocketAddress
+
+/-- The flags no member names: the window's (`Hello.WINDOW_FLAGS`), and the loop's own. -/
+def NOT_MEMBER_FLAGS : List String := Hello.WINDOW_FLAGS ++ ["--kept", "--listen", "--schedule", "--salt-key"]
+
+/-- A member's flags, the `member` request's JSON array of strings `b`. -/
+def memberArgs (b : ByteArray) : Except String (List String) := do
+  let some text := String.fromUTF8? b | throw "a member's flags that are not UTF-8"
+  let some xs := ((JsonParse.parse text).toOption.bind (·.getArr?.toOption)) | throw "a member's flags that are not a JSON array"
+  xs.toList.mapM fun x => match x.getStr? with
+    | .ok s => pure s
+    | .error _ => throw "a member's flag that is not a string"
+
+/-- The member the statement flags `args` name in the window `w`, with `--verifier HOST:PORT`, or why they name none. -/
+def Member.ofArgs (usage : String) (w : Hello.Window) (args : List String) : IO (Except String Member) := do
+  if let some f := NOT_MEMBER_FLAGS.find? args.contains then
+    return .error s!"a member's flags name {f}, which is the kept loop's"
+  let some verifier := Witness.argOf args "--verifier" | return .error "a member's flags name no --verifier HOST:PORT"
+  let auditor : Except String SocketAddress ← try
+      let a ← resolve verifier
+      pure (.ok a)
+    catch e => pure (.error s!"--verifier {verifier}: {e}")
+  match auditor, ← Hello.Setup.ofWindow usage (pure (.ok w)) args with
+  | .error e, _ | _, .error e => return .error e
+  | .ok auditor, .ok S =>
+    let specs : Hello.Specs ← IO.mkRef #[]
+    return .ok { args, S, specs, auditor }
+
+/-- Whether `args` are `--kept` and the flags `valued`, each with its value, alone. -/
+def keptFlags (valued : List String) : List String → Bool
+  | [] => true
+  | "--kept" :: rest => keptFlags valued rest
+  | f :: _ :: rest => valued.contains f && keptFlags valued rest
+  | [_] => false
+
+/-- What a kept loop holds (`kept`'s `state` request), as JSON: its window (whether it names a partition, and its
+program's bytes), its member (its flags and how many samples' setups it holds), how many sessions and frames connections
+are open, the frames' sessions, reps, salts, proof files and inner proofs (`Frames.Sessions`), and the tables' level 0s
+with the sessions they are named for (`Level0.Slots`). -/
+def keptState (w : Hello.Window) (m : Option Member) (n : Nat) (R : Frames.Sessions) (L : Level0.Slots) : IO Json := do
+  let member : Json ← match m with
+    | none => pure Json.null
+    | some m => do
+      let setups := (← m.specs.get).size
+      pure <| Json.mkObj [("flags", Json.arr (m.args.toArray.map Json.str)), ("setups", Json.num setups)]
+  return Json.mkObj [
+    ("window", Json.mkObj [("partition", Json.bool w.partition.isSome), ("program", Json.num ((w.program.map (·.size)).getD 0))]),
+    ("member", member), ("open", Json.num n),
+    ("frames", Json.mkObj [("sessions", Json.num R.sessions.size), ("reps", Json.num R.reps.size),
+      ("salts", Json.num R.salts.size), ("files", Json.num R.files.size), ("inner", Json.num R.inner.size)]),
+    ("level0", Json.mkObj [("slots", Json.num L.slots.size), ("sessions", Json.num L.sessions.size),
+      ("tables", Json.num L.tables.size)])]
+
+/-- **The kept loop** (`session --kept [--listen PORT] [--partition F] [--program F]`): `run`'s loop for
+every statement of a window, one member after another. It reads the window (`Hello.Window`) once, and each member's
+statement and auditor on its standard input: `member LEN` followed by the `LEN` bytes of a JSON array of the member's
+flags, the statement flags (`Hello.FLAGS` without the window's) and `--verifier HOST:PORT`, is answered `ok` once it has
+read the member's files, or `refused WHY`. Every connection is counted open from before it reads the member to
+after its session's frames and level 0s are freed (`listenAt`'s `around`), and the member changes only while none is
+open, so a session is of the member it started at, from its first request to its end, and so is every frame and finish
+of it (`frames`); its sample's statement is set up once a member (`Hello.Setup.setupAt`), as `run` sets up each of its
+one statement's. Besides the window and its readings, the loop's frames and level-0 tables (`reg`, `l0s`) outlive a
+member, as they outlive a session in `run`'s loop; their entries are each one session's, freed at its end, and at the
+change, with the old member and its setups dropped, both are emptied of anything left, before the new member is set.
+Standard error says `kept: member K ok, its files read in R ms, then W ms until no session or frame was open, E entries
+left emptied: FLAGS`, `E` the entries it emptied, none unless a frames connection wrote one after its session ended.
+A session while the loop has no member is refused.
+`schedule LEN` followed by the `LEN` bytes of a sample's JSON is answered as `run --schedule` answers it at the member,
+and `state 0` with `state JSON`, what the loop holds (`keptState`). A request it cannot read is answered `err WHY` and
+ends the loop; so does the end of its standard input, which is how it is stopped. -/
+def kept (usage : String) (args : List String) : IO UInt32 := do
+  let some listen := ((Witness.argOf args "--listen").getD "0").toNat? | IO.eprintln usage; return 2
+  unless keptFlags ("--listen" :: Hello.WINDOW_FLAGS) args do
+    IO.eprintln s!"--kept: the window's flags alone; a member's come on its `member` request\n{usage}"
+    return 2
+  let w ← match ← Hello.Window.ofArgs args with
+    | .ok w => pure w
+    | .error e => IO.eprintln e; return 2
+  let member : IO.Ref (Option Member × Nat) ← IO.mkRef (none, 0)
+  let reg : IO.Ref Frames.Sessions ← IO.mkRef {}
+  let l0s : IO.Ref Level0.Slots ← IO.mkRef {}
+  let current : Hello.SetupAt := fun sample => do
+    match (← member.get).1 with
+    | some m => m.S.setupAt m.specs sample
+    | none => pure (.error "the kept loop has no member")
+  let counted : IO Unit → IO Unit := fun act => do
+    member.modify fun (m, n) => (m, n + 1)
+    try act finally member.modify fun (m, n) => (m, n - 1)
+  listenAt listen current reg l0s counted fun sid p => do
+    match (← member.get).1 with
+    | none =>
+      match ← recvFrame p with
+      | some f => refuseAll p f (stopOf "a session while the kept loop has no member")
+      | none => pure ()
+      close p
+    | some m => serve (m.S.setupAt m.specs) m.auditor reg l0s sid p
+  let stdin ← IO.getStdin
+  let stdout ← IO.getStdout
+  let say := fun (line : String) => do
+    stdout.putStrLn (line.replace "\n" " ")
+    stdout.flush
+  let mut members := 0
+  repeat
+    let line := (← stdin.getLine).replace "\n" ""
+    if line.isEmpty then break
+    let req : String × Option Nat := match line.splitOn " " with
+      | [v, len] => (v, len.toNat?)
+      | _ => ("", none)
+    let (verb, some len) := req | say s!"err a request `{line}`"; IO.Process.exit 1
+    let b ← Coins.readExact "kept" stdin len
+    match verb with
+    | "member" =>
+      match memberArgs b with
+      | .error e => say s!"refused {e}"
+      | .ok margs =>
+        let t0 ← IO.monoMsNow
+        match ← Member.ofArgs usage w margs with
+        | .error e => say s!"refused {e}"
+        | .ok m =>
+          let t1 ← IO.monoMsNow
+          repeat
+            if ← member.modifyGet fun (old, n) => if n == 0 then (true, (none, 0)) else (false, (old, n)) then break
+            IO.sleep 1
+          let R ← reg.modifyGet fun R => (R, {})
+          let L ← l0s.modifyGet fun L => (L, {})
+          member.modify fun (_, n) => (some m, n)
+          let left := R.sessions.size + R.reps.size + R.salts.size + R.files.size + R.inner.size + L.slots.size +
+            L.sessions.size + L.tables.size
+          IO.eprintln (s!"kept: member {members} ok, its files read in {t1 - t0} ms, then {(← IO.monoMsNow) - t1} ms " ++
+            s!"until no session or frame was open, {left} entries left emptied: " ++
+            (Json.arr (margs.toArray.map Json.str)).compress)
+          (← IO.getStderr).flush
+          members := members + 1
+          say "ok"
+    | "schedule" =>
+      let some m := (← member.get).1 | say "refused the kept loop has no member"
+      match Hello.drawOf ((String.fromUTF8? b).getD "?") with
+      | .error e => say s!"refused {e}"
+      | .ok sample =>
+        match ← m.S.setupAt m.specs sample with
+        | .error e => say s!"refused {e}"
+        | .ok (spec, sts) =>
+          let p := planOf spec sts
+          say s!"ok {p.size}"
+          for (stream, n) in p do say s!"{stream} {n}"
+    | "state" =>
+      let (m, n) ← member.get
+      say s!"state {(← keptState w m n (← reg.get) (← l0s.get)).compress}"
+    | _ => say s!"err a request `{line}`"; IO.Process.exit 1
+  IO.Process.exit 0
+
+/-- `flock-firewall session`: `run`, with no hold; with `--kept`, `kept`. -/
 def cmd (args : List String) : IO UInt32 :=
-  run s!"usage: flock-firewall session (--verifier HOST:PORT [--listen PORT] | --schedule) {Hello.FLAGS}" args none
+  let usage := s!"usage: flock-firewall session (--verifier HOST:PORT [--listen PORT] | --schedule) {Hello.FLAGS}" ++
+    " | --kept [--listen PORT] [--partition F] [--program F]"
+  if args.contains "--kept" then kept usage args else run usage args none
 
 end Flock.Firewall.Session

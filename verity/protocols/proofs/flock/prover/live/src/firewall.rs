@@ -635,11 +635,14 @@ pub fn lean_level0(addr: &str, session: &str, asks: &[Level0Ask]) -> Result<Vec<
 /// session, which the Lean loop relays on its own connection to `verifier`: the `Hello` that leaves is its own (at the
 /// statement `args` name, `flock-verify verify --zk`'s flags, and the auditor's sample), `Hello`'s answer and every coin are
 /// checked there, and only the coins, without their openings, come back. Each rep's Lean frame is one of the loop's
-/// ([`LeanSession::frames`]), and a rep's round leaves only as its frame's release. It runs until this handle drops.
+/// ([`LeanSession::frames`]), and a rep's round leaves only as its frame's release. A kept loop
+/// ([`LeanSession::start_kept`]) does so for each statement of a window in turn ([`LeanSession::member`]). It runs until
+/// this handle drops.
 #[cfg(feature = "sha512")]
 pub struct LeanSession {
     child: std::process::Child,
-    _stdin: std::process::ChildStdin,
+    stdin: std::process::ChildStdin,
+    stdout: std::io::BufReader<std::process::ChildStdout>,
     addr: String,
     frames: String,
 }
@@ -647,9 +650,23 @@ pub struct LeanSession {
 #[cfg(feature = "sha512")]
 impl LeanSession {
     pub fn start(exe: &std::path::Path, verifier: &str, args: &[String]) -> Result<Self, String> {
+        let mut all = vec!["--verifier".to_string(), verifier.to_string()];
+        all.extend_from_slice(args);
+        Self::spawn(exe, &all)
+    }
+
+    /// The kept loop (`session --kept`, the Lean verifier's `Session.kept`) on the window's flags `window` (`--partition F`, `--program F`),
+    /// which it reads once for every member's statement; it serves no session before its first [`LeanSession::member`].
+    pub fn start_kept(exe: &std::path::Path, window: &[String]) -> Result<Self, String> {
+        let mut all = vec!["--kept".to_string()];
+        all.extend_from_slice(window);
+        Self::spawn(exe, &all)
+    }
+
+    fn spawn(exe: &std::path::Path, args: &[String]) -> Result<Self, String> {
         use std::io::BufRead;
         use std::process::{Command, Stdio};
-        let mut child = Command::new(exe).arg("session").arg("--verifier").arg(verifier).args(args)
+        let mut child = Command::new(exe).arg("session").args(args)
             .stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
             .map_err(|e| refused(format!("the Lean session {} does not start ({e}): `lake build flock-firewall` in verity/protocols/proofs/flock/verifier, or FC_FIREWALL_LEAN; \
                                           with --firewall-state, `lake build core-firewall` in verity/protocols/proofs/recursion/verifier/firewall, or FC_CORE_FIREWALL", exe.display())))?;
@@ -665,7 +682,24 @@ impl LeanSession {
             let _ = child.wait();
             return Err(refused(format!("the Lean session did not start: {:?}", line.trim_end())));
         };
-        Ok(LeanSession { child, _stdin: stdin, addr, frames })
+        Ok(LeanSession { child, stdin, stdout, addr, frames })
+    }
+
+    /// A kept loop's next member: the statement flags `args` (the verifier's `verify --zk` flags, without the window's) with
+    /// `--verifier HOST:PORT`, which every session after it is of. The loop answers once it has read the member's files,
+    /// and only while no session is open does it change member.
+    pub fn member(&mut self, args: &[String]) -> Result<(), String> {
+        use std::io::{BufRead, Write};
+        let body = serde_json::to_vec(args).map_err(|e| e.to_string())?;
+        let sent = write!(self.stdin, "member {}\n", body.len()).and_then(|()| self.stdin.write_all(&body))
+            .and_then(|()| self.stdin.flush());
+        sent.map_err(|e| refused(format!("the kept Lean session's member: {e}")))?;
+        let mut line = String::new();
+        self.stdout.read_line(&mut line).map_err(|e| refused(format!("the kept Lean session's member: {e}")))?;
+        match line.trim_end() {
+            "ok" => Ok(()),
+            l => Err(refused(format!("the kept Lean session's member: {}", l.strip_prefix("refused ").unwrap_or(l)))),
+        }
     }
 
     /// Where the prover connects for a session.

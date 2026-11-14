@@ -16,6 +16,7 @@ module
 
 public import Flock.Firewall
 public import Flock.WitnessZk
+public import Flock.ProgramRead
 public import Flock.Firewall.Coins
 
 @[expose] public section
@@ -84,28 +85,53 @@ def lawOf (args : List String) :
     pure (work, ← nat "--stratified", ← closure)
 
 /-- A firewalled statement's `Hello` inputs, read once: `flock-verify verify --zk`'s statement of its files
-(`Witness.Inputs`) and the sampling design's inputs (`lawOf`). -/
+(`Witness.Inputs`), the sampling design's inputs (`lawOf`), and the readers its setups read the program through, which
+read it once for all of them and are the readers anew (`readers_eq`). -/
 structure Setup where
   I : Witness.Inputs
   work : Option (Nat × Array (String × Nat × Nat))
   stratified : Option Nat
   closure : Option (Std.HashMap Nat (Array Nat))
+  readers : ProgramRead.Readers
+  readers_eq : readers = ProgramRead.Readers.anew
 
 /-- The statement flags a `Setup` reads. -/
 def FLAGS : String :=
   "[--statement ID] --circuit F --public F [--tables DIR] [--session-tables J] [--partition F] [--program F] [--stratified K] [--work K --work-table F] [--closure F]"
 
-/-- The `Setup` the statement flags `args` name, or why they name none (`usage`, the usage line). `--statement` names its
-tags as `verify` reads them (`Tags.byName?`): a statement of `Tags.all`, else a templated one. -/
-def Setup.ofArgs (usage : String) (args : List String) : IO (Except String Setup) := do
+/-- The flags of what a window's statements share, which a `Window` reads; a member's statement flags are `FLAGS` without
+them. -/
+def WINDOW_FLAGS : List String := ["--partition", "--program"]
+
+/-- What every statement of a window shares, read once: the partition object, the program's bytes, and the readers each
+statement's setup reads the program through (`ProgramRead.kept`), which are the readers anew (`readers_eq`). -/
+structure Window where
+  partition : Option Json
+  program : Option ByteArray
+  readers : ProgramRead.Readers
+  readers_eq : readers = ProgramRead.Readers.anew
+
+/-- The `Window` that `--partition F` and `--program F` in `args` name. -/
+def Window.ofArgs (args : List String) : IO (Except String Window) := do
+  match ← Witness.bindingsOf args with
+  | .error e => return .error e
+  | .ok (partition, program) =>
+    let read := ProgramRead.kept (program.getD .empty)
+    return .ok { partition, program, readers := read.readers, readers_eq := ProgramRead.readers_kept _ }
+
+/-- The `Setup` the statement flags `args` name in the window `window` reads, or why they name none (`usage`, the usage
+line). `--statement` names its tags as `verify` reads them (`Tags.byName?`): a statement of `Tags.all`, else a templated
+one. -/
+def Setup.ofWindow (usage : String) (window : IO (Except String Window)) (args : List String) :
+    IO (Except String Setup) := do
   let (some cf, some pf) := (Witness.argOf args "--circuit", Witness.argOf args "--public") | return .error usage
   let some tags := Tags.byName? ((Witness.argOf args "--statement").getD Tags.circuit.name)
     | return .error s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"
   if tags.plainLeaves then
     return .error s!"hello: refused: {tags.name}, a statement with plain SHA-512 leaves, has no --zk session"
   let some count := ((Witness.argOf args "--session-tables").getD "1").toNat? | return .error usage
-  let (partition, program) ← match ← Witness.bindingsOf args with
-    | .ok b => pure b
+  let w ← match ← window with
+    | .ok w => pure w
     | .error e => return .error e
   let (work, stratified, closure) ← match ← lawOf args with
     | .ok l => pure l
@@ -113,18 +139,26 @@ def Setup.ofArgs (usage : String) (args : List String) : IO (Except String Setup
   let circuitFile ← IO.FS.readBinFile cf
   let publicFile ← IO.FS.readBinFile pf
   let tables ← Witness.readTables args
-  return .ok { I := { tags, circuitFile, publicFile, count, tables, partition, program }, work, stratified, closure }
+  return .ok { I := { tags, circuitFile, publicFile, count, tables, partition := w.partition, program := w.program },
+               work, stratified, closure, readers := w.readers, readers_eq := w.readers_eq }
+
+/-- The `Setup` the statement flags `args` name, its window theirs too (`Window.ofArgs`), or why they name none. -/
+def Setup.ofArgs (usage : String) (args : List String) : IO (Except String Setup) :=
+  Setup.ofWindow usage (Window.ofArgs args) args
 
 /-- The session's spec and its tables' statements at the verifier's sample `draw` (`Stmt.setupTables`, `setup_eq`; the public
-file the verifier's own, without rows), its circuit parsed with each net's rows in tasks (`HmOut.parseCommitFast`). -/
+file the verifier's own, without rows), its circuit parsed with each net's rows in tasks (`HmOut.parseCommitFast`) and its
+program read through `S`'s readers (`Stmt.setupTablesBy`). -/
 def Setup.setup (S : Setup) (draw : Option Json) : V (SessionSpec × Array Stmt) :=
-  Stmt.setupTablesOf (HmOut.parseCommitFast (Witness.zkTags S.I) S.I.circuitFile S.I.tables) (Witness.zkTags S.I) S.I.circuitFile
-    S.I.publicFile (Witness.zkCoins S.I) S.I.count S.I.tables draw S.I.partition S.I.program S.work S.stratified S.closure
+  Stmt.setupTablesBy S.readers.desc S.readers.prog (HmOut.parseCommitFast (Witness.zkTags S.I) S.I.circuitFile S.I.tables)
+    (Witness.zkTags S.I) S.I.circuitFile S.I.publicFile (Witness.zkCoins S.I) S.I.count S.I.tables draw S.I.partition
+    S.I.program S.work S.stratified S.closure
 
 theorem Setup.setup_eq (S : Setup) (draw : Option Json) :
     S.setup draw = Stmt.setupTables (Witness.zkTags S.I) S.I.circuitFile S.I.publicFile (Witness.zkCoins S.I) S.I.count
       S.I.tables draw S.I.partition S.I.program S.work S.stratified S.closure := by
-  rw [Setup.setup, Stmt.setupTables_eq, HmOut.parseCommit_eq_fast]
+  rw [Setup.setup, S.readers_eq, ProgramRead.Readers.anew, Stmt.setupTables_eq, HmOut.parseCommit_eq_fast,
+    Stmt.setupTablesOf_eq_by]
 
 /-- The session's spec at `draw`. -/
 def Setup.spec (S : Setup) (draw : Option Json) : V SessionSpec := (S.setup draw).map (·.1)
@@ -157,6 +191,9 @@ def Setup.setupAt (S : Setup) (specs : Specs) (draw : Option Json) : IO (V (Sess
 /-- The spec at `draw`, set up on first use. -/
 def Setup.specAt (S : Setup) (specs : Specs) (draw : Option Json) : IO (V SessionSpec) :=
   return (← S.setupAt specs draw).map (·.1)
+
+/-- How a session sets its statement up at its sample: `Setup.setupAt` of the statement it is a session of. -/
+abbrev SetupAt := Option Json → IO (V (SessionSpec × Array Stmt))
 
 /-- `flock-firewall hello [--statement ID] --circuit F --public F [--tables DIR] [--session-tables J] [--partition F]
 [--program F] [--stratified K] [--work K --work-table F] [--closure F]`: each session's `Hello`, served on stdin and stdout,
