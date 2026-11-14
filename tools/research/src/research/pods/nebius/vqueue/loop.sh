@@ -12,7 +12,8 @@
 #             ci's files: args (the loop's flags, one a line, `#` comments), priority, agent-url, frozen, stopped, and the lists
 #             every mode reads: deselect, keep-runs, wide, heavy and pins (LISTS)
 #   shadow/   a shadow's own log, with its own args and stopped
-#   verity/   the loop's clone;  src/  ci's pinned tree, whose research package and train.sh run;  tmp/, trains/  scratch
+#   verity/   the loop's clone;  src/  ci's pinned tree, whose research package and train.sh run, behind origin/main or
+#             not (RESEARCH_AT_CHECKOUT=1: research re-executes from origin/main's code otherwise);  tmp/, trains/  scratch
 # and what research keeps under a home: .research/ (the store's cache, the records of the runs it launched, the notes clone with
 # machines.d) and .runpod/ssh/ (its key to the machines its checks run on).
 #
@@ -61,7 +62,8 @@ if [ "${1:-}" = git ]; then
 fi
 
 export HOME=$H PATH="$LIB/bin:/usr/local/bin:/usr/bin:/bin" GIT_TERMINAL_PROMPT=0 LC_ALL=C.UTF-8 \
-  PYTHONUNBUFFERED=1 RESEARCH_LANE=ci TMPDIR=$H/tmp TRAIN_TREES=$H/trains RESEARCH_LEAN_PUBLISH=$LIB/lean_publish.sh
+  PYTHONUNBUFFERED=1 RESEARCH_LANE=ci TMPDIR=$H/tmp TRAIN_TREES=$H/trains RESEARCH_LEAN_PUBLISH=$LIB/lean_publish.sh \
+  RESEARCH_AT_CHECKOUT=1
 
 say() { echo "vy-vqueue: $*" >&2; }
 

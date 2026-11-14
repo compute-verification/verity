@@ -14,7 +14,7 @@ from fnmatch import fnmatch
 from pathlib import Path
 
 import pytest
-from research import merge
+from research import at_main, merge
 
 from verity_ops import deploy
 
@@ -24,7 +24,7 @@ HELPER = "infra/control/gh_app_token.sh"          # the control pod's own, which
 CONFIG, SKIP = 78, 75
 KEYS = ("HOME", "PATH", "PYTHONPATH", "TMPDIR", "TRAIN_TREES", "GH_TOKEN", "AWS_ACCESS_KEY_ID", "SLACK_BOT_TOKEN",
         "RESEARCH_AGENT_URL", "RESEARCH_LANE", "GIT_TERMINAL_PROMPT", merge.DRIVE_ENV, merge.LEAN_PUBLISH_ENV, "R2_BUCKET",
-        "R2_ENDPOINT")
+        "R2_ENDPOINT", at_main.OPT_OUT)
 #: each list's flag, which the loop otherwise reads at the control pod's path, and the node's file under live/
 LISTS = {"--deselect": "deselect", "--keep-runs": "keep-runs", "--wide-file": "wide", "--heavy-file": "heavy", "--pins-file": "pins"}
 # The stand-in tick: one JSON line a call. With VQ_TEST_TERM its first call tells the loop to stop and then goes on, as a tick
@@ -201,6 +201,32 @@ def test_a_credential_file_is_data_naming_only_the_keys_the_loop_reads(node):
     [t] = node.ticks()
     assert "--shadow" in t["argv"] and t["env"]["SLACK_BOT_TOKEN"] == "a=b"
     assert (t["env"]["R2_BUCKET"], t["env"]["R2_ENDPOINT"]) == ("dummy-bucket", f"dummy $(touch {ran})")
+
+
+def test_a_tick_runs_research_from_ci_s_pinned_checkout_not_from_its_origin_main(node, tmp_path, monkeypatch):
+    """`research` re-executes from origin/main's code when the checkout it runs from is only behind it (`at_main.reexec`),
+    and ci's pin is such a checkout whenever main has moved: the tick's environment keeps the pin's code, where the same
+    checkout without it runs origin/main's."""
+    assert node.loop("once").returncode == 0
+    [t] = node.ticks()
+    pin = tmp_path / "pin"
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-C", str(pin)]
+    (pin / "tools/research").mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(pin)], check=True)
+    for version in ("pin", "main"):
+        (pin / "tools/research/version").write_text(version)
+        subprocess.run([*git, "add", "-A"], check=True)
+        subprocess.run([*git, "commit", "-qm", version], check=True)
+    subprocess.run([*git, "update-ref", "refs/remotes/origin/main", "HEAD"], check=True)
+    subprocess.run([*git, "checkout", "-q", "--detach", "HEAD~"], check=True)
+    for value, runs_main in ((t["env"][at_main.OPT_OUT], False), (None, True)):
+        if value is None:
+            monkeypatch.delenv(at_main.OPT_OUT, raising=False)
+        else:
+            monkeypatch.setenv(at_main.OPT_OUT, value)
+        ran = []
+        at_main.reexec(["queue", "vqueue"], repo=pin, cache=tmp_path / "cache", execve=lambda *a: ran.append(a))
+        assert bool(ran) == runs_main, value
 
 
 def test_every_tick_reads_the_five_lists_at_the_node_s_paths_and_names_the_missing_in_one_line(node):
