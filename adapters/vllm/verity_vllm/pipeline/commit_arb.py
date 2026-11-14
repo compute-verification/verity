@@ -52,6 +52,7 @@ from typing import Any
 from verity_vllm.commit.challenge import stream
 from verity_vllm.commit.served_record import BlockValues, window_commit
 from verity_vllm.config import UsageError, option
+from verity_vllm.engine.handle import Steps
 from verity_vllm.pipeline import serve_release as SL
 from verity_vllm.pipeline import serve_row as RW
 from verity_vllm.pipeline import serve_seal as SS
@@ -342,7 +343,7 @@ def run(llm: Any, com: Any, requests: list[dict[str, Any]], out: Path, window_st
 
     from verity_vllm.engine import served_seed
 
-    engine = llm.vllm.llm_engine
+    engine: Steps = llm.vllm.llm_engine
     coins = served_seed.SeedCoins()
     by_id = {q["request_id"]: q for q in requests}
     record = BlockValues(known=by_id)
@@ -454,7 +455,7 @@ def summarize(checks: list[tuple[dict, dict | None, dict]], windows: list[dict],
             "passed": bool(checks) and not failed and not bad_windows and not prefix_problems}
 
 
-def scheduler_config(engine: Any) -> dict[str, Any]:
+def scheduler_config(engine: Steps) -> dict[str, Any]:
     """What the engine resolved of the settings that decide its schedules (async scheduling is vLLM's to resolve)."""
     vc = engine.vllm_config
     sc, cc = vc.scheduler_config, vc.cache_config
