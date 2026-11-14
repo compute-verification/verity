@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Pouw.PearlC.Cap.SaltDeadStep
+public import Proofs.Pouw.PearlC.InertBound.SaltDeadStep
 import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Tactic.Positivity.Finset
@@ -27,7 +27,7 @@ product `−|E′|·11/4`. So RowA decides `saltDeadP` per element from two eval
 
 @[expose] public section
 
-namespace Pouw.PearlC.Cap
+namespace Pouw.PearlC.InertBound
 
 open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.FormingP Pouw.PearlC.SaltDead
 
@@ -431,4 +431,4 @@ theorem saltDeadP_iff_ends_hopper (alpha beta : (k : ℕ) → (Fin k → ℚ) �
     saltDeadP hopperE4m3K32 alpha beta k x l ↔ EndsAgree hopperE4m3K32 (alpha k x) (x l) (beta k x) :=
   saltDeadP_iff_ends hopperE4m3K32 rfl (by decide) alpha beta k x l
 
-end Pouw.PearlC.Cap
+end Pouw.PearlC.InertBound
