@@ -403,7 +403,7 @@ first-parent line is refused.
 
 The verifier releases \(\text{chal}_0\) at the session's start (`AuditRun.start`). At window \(t\)'s end it sends the
 boundary message, which is \(\text{chal}_{t+1}\), or the close after the last window (`AuditRun.boundary`). Each is
-one-way: no round trip waits on it. The prover refuses an openings coin as a challenge (`Prover.run`). Pass \(i\) of
+one-way: no round trip waits on it. The prover refuses an openings coin as a challenge (`audit_prover.Prover.run`). Pass \(i\) of
 window \(t\) (`receipts.py`):
 
 ~~~text
@@ -510,7 +510,7 @@ sketches of other blocks (64 bytes a block at 16 rows, 64 blocks a page), and th
 page's bytes without reading them, a red-team finding whose
 test is `test_append_order.py`. A page that relayed any receipt of a pass whose seed binds it would be a fixed point
 of SHA-512. The prover therefore sends a pass's appends before its root and computes the seed after they're sent
-(`Store.head`, `Prover.run(..., head=...)`). A seed computed without an append the verifier received before the root
+(`Store.head`, `audit_prover.Prover.run(..., head=...)`). A seed computed without an append the verifier received before the root
 fails every receipt of the pass. While a session has no appends the seeds are unchanged, so the GPU passes, which
 append nothing, derive them as before.
 
@@ -857,7 +857,7 @@ It would also void the horizon reading (§10), whose proof takes each window's s
 prover did in that window, unless that is re-proved for a grinding prover. The coin costs one message a window, sent
 after the roots, which the verifier is waiting for anyway. So the protocol keeps it.
 
-The prover opens each sample (`Prover.open`, `Opening`): the block \(E_j\) at \(j = \text{plan}_{(t,i)}[p]\), its receipt
+The prover opens each sample (`audit_prover.Prover.open`, `Opening`): the block \(E_j\) at \(j = \text{plan}_{(t,i)}[p]\), its receipt
 leaf's receipts \(v_c\) with the leaf's salt and path to \(\text{root}_{(t,i)}\), the payload's salt and path to the
 payload root (to its append's root, for a block appended after the seed, which also carries its payload's digest
 \(d_j\)), and under a registration that binds \(z\), PoUW's evidence for \(z_{(i,j)}\). Openings aren't timed,
@@ -1629,7 +1629,7 @@ y_g        SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be g ‖ σ_
            one compression after the pass's 128-byte prefix, whose midstate every unit shares
 ~~~
 
-The host commits the \(y_g\) in plan order as §4's tree (`p2.Prover.commit`). The partial is a function of the bytes
+The host commits the \(y_g\) in plan order as §4's tree (`p2_prover.Prover.commit`). The partial is a function of the bytes
 the decode read, so the receipt binds the read the decode made; computing it from the decoded `W`, or from a second
 read, is another protocol. Per block it is \(16 \times 2056\) sign-and-add steps beside the decode's two 16,448-bit
 squarings. The fixture kernels build against comes from the serving loop over the toy `C*` (`serve.py fixture`,
@@ -1643,21 +1643,21 @@ path check, `PousCheck.Merkle`), and \(y_g\) recomputed from the four blocks (`p
 path is `C*`'s block, by SHA-512's collision resistance. A P2 store is fixed at setup, so a session over it appends
 nothing (`append`).
 
-**Of record** (`lean/RemoteAudit/P2Session.lean`). The Lean verifier's process decides a P2 session (`p2_party.py`):
+**Of record** (`lean/RemoteAudit/P2Session.lean`). The Lean verifier's process decides a P2 session (`p2_parties.py`):
 it holds the registration file's bytes (its digest recomputed from its fields, a stated `digest` refused unless it is
 theirs) and reads the prover's request and each root and openings line as sent, a line out of form rejecting the
 session `malformed` at the window filling. Its bookkeeping is §4–§6's over the U units, and its openings are checked
 as above, on the registered vk root. `audit.AuditRun` over the P2 codec runs beside it as a veto: where the two
 differ the session is rejected `disagreement`. The session's parameters (W, the passes a window, s, T and A) are the auditor's
-(`p2_party.SESSION`), never the prover's: the request restates them, and the veto refuses one that carries other
-values, by name, before the first coin, and so does the Lean, naming each in `p2_party.params_of`'s words
+(`p2_parties.SESSION`), never the prover's: the request restates them, and the veto refuses one that carries other
+values, by name, before the first coin, and so does the Lean, naming each in `p2_parties.params_of`'s words
 (`P2Session.heldTo`). The process holds its pinned `P2Session.SESSION` unless the auditor's party names a toy's
 (`p2_hold`'s `session`), and the session's core case (`p2_case.py`), whose request no digest binds, is replayed under
 `SESSION` alone (`P2Protocol.replay`), so a toy party's case is refused there. The case is signed: the memory
-challenger's key closes it (`p2_party.Closer`, its line count and its chain, `RemoteAudit.P2Close`) under the session id
+challenger's key closes it (`p2_parties.Closer`, its line count and its chain, `RemoteAudit.P2Close`) under the session id
 the auditor gave it, which its session log records before the first coin. The chain runs over the case's head (the
 commitment's digest and the clock floor, `P2Protocol.headOf`) and then every entry of its log, and it is the one
-SHA-512 the verifier's device keeps of the case (`p2_party.case_digest`). The check refuses a close that doesn't sign
+SHA-512 the verifier's device keeps of the case (`p2_parties.case_digest`). The check refuses a close that doesn't sign
 the case under a key and a session its params name before it replays any entry (`P2Protocol.closeRefusal`).
 
 **What it rests on, and what is open.**

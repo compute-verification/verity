@@ -12,6 +12,7 @@ import hashlib
 import pytest
 from remote_bandwidth_fakes import Clock, Entropy
 
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import (
     audit,
     codec,
@@ -82,7 +83,7 @@ class Run:
         else:
             self.s = registry.session(self.p, reg, None, not_before_ns=0, clock=self.clock, entropy=Entropy(b"coins"))
         self.store = store
-        self.prover = audit.Prover(prover_store or store, None, entropy=Entropy(b"receipt salts"))
+        self.prover = audit_prover.Prover(prover_store or store, None, entropy=Entropy(b"receipt salts"))
         self.challenges = [self.s.start()]
         self.t, self.i, self.previous, self.plan, self.step = 0, 0, reg.digest, Plan.whole(reg.blocks), -1
         self.head: bytes | None = None

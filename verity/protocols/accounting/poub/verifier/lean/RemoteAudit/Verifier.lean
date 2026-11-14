@@ -60,12 +60,12 @@ difftest's `session` reads one, `Difftest.eventOf`):
 * `{"op": "line", "groups", "per", "blocks", "block_bytes", "chip_bytes", "node_bytes", "windows", "delta", "rates"}`:
   the same line of groups and windows given (`Line.line`, `Difftest.lineFn`).
 
-A session over PoUS's P2 store is of record here too (`P2Session`), as `p2_party.py` runs it beside `p2.Session`, which
-can only veto: the process holds one P2 store and its sessions, each read from the bytes the verifier holds and the
-prover sends.
+A session over PoUS's P2 store is of record here too (`P2Session`), as `p2_parties.py` runs it beside `p2.Session`,
+which can only veto: the process holds one P2 store and its sessions, each read from the bytes the verifier holds and
+the prover sends.
 
 * `{"op": "p2_hold", "bytes": n, "chunk", "session"}` and then n bytes, the auditor's registration file
-  (`p2_party.registration_json`'s): the store held (`P2Session.heldOf`), the draws a thread checks, and the session
+  (`p2_parties.registration_json`'s): the store held (`P2Session.heldOf`), the draws a thread checks, and the session
   parameters every request must restate, `session` (`P2Session.Auditor.ofJson`, a toy party's) or, without one,
   `P2Session.SESSION`; `{"digest", "plan", "plan_units", "session", "units"}`;
 * `{"op": "p2_session", "bytes": n, "not_before_ns"}` and then the prover's request line: `{"session": k}`, its coins

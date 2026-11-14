@@ -8,7 +8,7 @@ refuses a registration that would bind (counted, for a node with one live). Past
 the Python's own code on the decoded objects. A session's events run through `audit.AuditRun` itself, on a clock each
 event sets, its coins those of a challenger that replays the case's (`Replay`).
 
-A recorded session is one `Run` drives through a real `AuditRun`, the prover's side computed by `audit.Prover` from a
+A recorded session is one `Run` drives through a real `AuditRun`, the prover's side computed by `audit_prover.Prover` from a
 `Store`, honest or with one deviation, every call kept as an event with the clock it read. `SCENARIOS` are the recorded
 ones; each names the outcome the definition gives it, which `test_session.py` holds the Lean's answer to, so a scenario
 that stops reaching its failure fails there, not silently in the difftest."""
@@ -27,6 +27,7 @@ from typing import Any
 import verity_difftest as D
 from verity_difftest import protocol as P
 
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import audit, codec, coins, receipts, wire
 from verity.protocols.accounting.poub.verifier.audit import AuditRun, Params, SessionError
 from verity.protocols.accounting.poub.verifier.receipts import Plan
@@ -217,7 +218,7 @@ def event_of(v: Any) -> tuple:
 
 class Clock:
     """The suite's one injected clock: nanoseconds from `now`, each reading `step` after the last (at `step = 0` time moves
-    only when a test sets `now`); waiting until `t` (`period.run`'s `sleep_until`) moves it there."""
+    only when a test sets `now`); waiting until `t` (`period_prover.run`'s `sleep_until`) moves it there."""
 
     def __init__(self, now: int = 0, step: int = 0) -> None:
         self.now, self.step = now, step
@@ -522,7 +523,7 @@ def _runs_json(runs) -> list | None:
 
 
 class Run:
-    """One session over a world's store, the verifier's side (a real `AuditRun`) and the prover's (`audit.Prover`, from
+    """One session over a world's store, the verifier's side (a real `AuditRun`) and the prover's (`audit_prover.Prover`, from
     `cheat` if given, else the store) in step, every call to the session kept as an event with the clock it read. The
     clock moves one tick an event unless a call needs more. Every receipt is sampled unless `samples` says fewer."""
 
@@ -540,7 +541,7 @@ class Run:
         self.not_before_ns = not_before_ns
         self.coins = coins.local(reg.digest, 0, windows, Entropy(b"coins"), per_coin=groups_per_coin)
         self.s = AuditRun(self.params, reg, None, self.coins, not_before_ns=not_before_ns, clock=self.clock)
-        self.prover = audit.Prover(cheat(self.store) if cheat else self.store, None, entropy=Entropy(b"receipt salts"))
+        self.prover = audit_prover.Prover(cheat(self.store) if cheat else self.store, None, entropy=Entropy(b"receipt salts"))
         self.events: list[dict] = []
         self.append_coins: list[bytes] = []
         self.challenges: dict[int, coins.LiveOpening] = {}

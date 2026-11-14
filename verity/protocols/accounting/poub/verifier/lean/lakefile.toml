@@ -4,7 +4,7 @@
 # verifier's process the driver runs (`remote-audit-verifier`, `RemoteAudit.Verifier`), the session as a core
 # protocol (`remote-audit-protocol`, `RemoteAudit.Protocol`, onsite's bandwidth component), and a P2 store's receipts
 # and openings (`RemoteAudit.P2`) and its sessions, of record in the verifier's process (`RemoteAudit.P2Session`),
-# which `p2.py` and `p2_party.py` are held to by the same difftest, and such a session as a core protocol
+# which `p2.py` and `p2_parties.py` are held to by the same difftest, and such a session as a core protocol
 # (`remote-audit-p2-protocol`, `RemoteAudit.P2Protocol`, which checks the memory challenger's close of its case,
 # `RemoteAudit.P2Close`, and replays the case, `p2_case.py`). Code: Lean core and the packages below, no Mathlib and
 # nothing of Security.

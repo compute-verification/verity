@@ -21,7 +21,7 @@ any other answer, 2 on none.
 
 The remote bandwidth session's record (`benchmarks/pous/p2_v1/bandwidth.py session`'s ``session.json``) as a core answer
 in ``DIR/answer.json`` (`answer`): the verifier's answer, held to the verifier's own record of it where the session has
-one, in the core interface's form (`p2_party.core_answer`), with γ against ``R``. The session runs on the card after
+one, in the core interface's form (`p2_parties.core_answer`), with γ against ``R``. The session runs on the card after
 window K was served, beside it: serving is not hooked, so its reads are the session's own, not the engine's reads of the
 window's steps (`SCOPE`); where window K isn't served the answer says that instead (`UNSERVED`). An accept has no reason
 in the core form, so its profile says so; any other answer says so in its reason. ``DIR/served.json`` names the window
@@ -40,7 +40,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
-from verity.protocols.accounting.poub.verifier import ledger, p2_party  # noqa: E402
+from verity.protocols.accounting.poub.verifier import ledger, p2_parties  # noqa: E402
 
 #: an H200's specified HBM read rate, bytes a second
 H200_BYTES_PER_S = 4_800_000_000_000
@@ -75,12 +75,12 @@ def answer(session: Mapping[str, Any], scope: str, r_bytes_per_s: int | None) ->
     """The core answer of the session's record `session`, saying `scope` (module docstring)."""
     a, record = dict(session.get("answer") or {}), session.get("verifier_record")
     if "protocol" not in a:
-        a = {"protocol": p2_party.PROTOCOL, "registration": (session.get("registration") or {}).get("digest"), **a}
+        a = {"protocol": p2_parties.PROTOCOL, "registration": (session.get("registration") or {}).get("digest"), **a}
     if record is not None and record != session.get("answer"):
-        a = {"protocol": p2_party.PROTOCOL, "registration": a.get("registration"), "verdict": "disagreement",
+        a = {"protocol": p2_parties.PROTOCOL, "registration": a.get("registration"), "verdict": "disagreement",
              "reason": f"the verifier's own record of its answer ({record.get('verdict')}) is not the session's "
                        f"({a.get('verdict')})"}
-    out = p2_party.core_answer(a, r_bytes_per_s)
+    out = p2_parties.core_answer(a, r_bytes_per_s)
     if out["verdict"] == "accept":
         out["profile"]["scope"] = scope
         out["profile"]["named_terms"] = ledger.NAMED_TERMS
@@ -99,10 +99,10 @@ def collect(out: Path, window: int) -> dict[str, Any] | None:
         return None
     a, summary = (json.loads(f.read_text()) for f in files)
     S.check_answer(a)
-    if a.get("protocol") != p2_party.PROTOCOL:
+    if a.get("protocol") != p2_parties.PROTOCOL:
         raise ValueError(f"the answer in {out} is {a.get('protocol')!r}'s, not the remote bandwidth audit's")
     if summary.get("window") != window:
-        a = {"commitment": None, "profile": None, "protocol": p2_party.PROTOCOL, "public": None,
+        a = {"commitment": None, "profile": None, "protocol": p2_parties.PROTOCOL, "public": None,
              "reason": f"the bandwidth answer in {out} is window {summary.get('window')}'s, not window {window}'s: the "
                        f"PoUS piece ran no bandwidth session for window {window}", "verdict": "undecided"}
         (out / "answer.json").write_text(json.dumps(a, indent=1, sort_keys=True) + "\n")

@@ -12,6 +12,7 @@ from remote_bandwidth_fakes import Clock, Entropy
 from test_ledger import DOWN_NS, PASS_NS, UP_NS, paced
 from test_remote_bandwidth import A, N, challenger, finish, params, store  # noqa: F401
 
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import audit, coins
 from verity.protocols.accounting.poub.verifier.audit import AuditRun, Pace, SessionError
 
@@ -63,7 +64,7 @@ def test_the_boundary_is_due_at_the_windows_kth_root_at_one_in_flight(store) -> 
     s = AuditRun(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
     coin = s.start()
     assert s.next_boundary_ns() == 2 * A, "not due before its k roots: at the latest k allowances after its coin"
-    prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
+    prover = audit_prover.Prover(store, None, entropy=Entropy(b"receipt salts"))
     clock.now = 100
     ps = prover.run(coin, 0, store.registration.digest, None)
     assert s.receive(0, 0, ps.root, step=0) is None
@@ -81,7 +82,7 @@ def two_roots_across_a_boundary(store, f: int, *, back: bool = False):
     p = params(windows=3, window_ns=5, pace=Pace(2, 1000, f))
     s = AuditRun(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
     coin = s.start()
-    prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
+    prover = audit_prover.Prover(store, None, entropy=Entropy(b"receipt salts"))
     clock.now = 100
     ps = prover.run(coin, 0, store.registration.digest, None)
     assert s.receive(0, 0, ps.root, step=0) is None
