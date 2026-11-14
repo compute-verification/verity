@@ -870,8 +870,9 @@ private def secondOwn (j : Json) : V (Bool × SecondStage.Own × Option (Array J
     | _ => throw "reads is null or an object of naturals"
   let tables ← match getD j "tables" with
     | .null => pure #[]
-    | ts@(.obj _) => if (entries ts).all (·.2 matches .obj _) then pure (entries ts)
-      else throw "tables is null or an object of entries, each an object"
+    | ts@(.obj _) => match (entries ts).mapM (fun (p, e) => match e with | .obj _ => some (p, e) | _ => none) with
+      | some ts => pure ts
+      | none => throw "tables is null or an object of entries, each an object"
     | _ => throw "tables is null or an object of entries, each an object"
   let own : SecondStage.Own :=
     { sample, parts := SecondStage.parts sample.size strata, interior := getD j "interior",
