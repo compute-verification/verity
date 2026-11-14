@@ -387,7 +387,7 @@ def test_registry_ahead_of_evidence_is_noted(store: LocalStore, repo: Path) -> N
 def test_registry_status_values_are_trust_ladder_members_and_never_above_pinned() -> None:
     """No store: the registry may assert at most PINNED (TRUSTED and above are computed), every status is a ladder level, and a
     dossier reference, when set, is a store artifact id."""
-    from verity.definitions.circuits.targets.target import TARGETS
+    from verity.circuits.targets.target import TARGETS
     from verity.circuits.silicon.instructions import INSTRUCTIONS
 
     for ins in INSTRUCTIONS.values():
