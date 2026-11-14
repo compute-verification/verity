@@ -63,6 +63,7 @@ follow_imports = "silent"
 # test files that start a program the read guard can't trace (git, lake, a shell): keyed on the suite's whole tree. A compiler
 # needs no entry: a file whose closure builds native code may start one (the test-file family's `compilers`)
 untraced = [
+    "tests/commit/test_census_and_memory_map.py",
     "tests/lint/test_merge_allowlist.py",
     "tests/lint/test_mypy.py",
     "tests/lint/test_ruff.py",
@@ -83,7 +84,6 @@ untraced = [
     "tests/pipeline/test_tp_gpu_lease.py",
     "tests/program/predict/test_predict.py",
     "tests/program/test_derive_transfer.py",
-    "tests/protocols/remote_bandwidth/test_census_and_memory_map.py",
     "tests/protocols/remote_bandwidth/test_remote_session.py",
     "tests/protocols/test_credit_gate.py",
     "tests/protocols/test_pouw_h1.py",
@@ -287,7 +287,7 @@ tests = [
 paths = ["adapters/vllm/verity_vllm", "verity"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/protocols/remote_bandwidth/test_census_and_memory_map.py"]
+tests = ["tests/commit/test_census_and_memory_map.py"]
 paths = ["verity/circuits/requirement", "verity/circuits/difftest", "verity/circuits/base", "verity/circuits/lean", "tools/difftest"]
 
 [[tool.verity.tests.reads]]

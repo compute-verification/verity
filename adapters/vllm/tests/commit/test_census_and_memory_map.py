@@ -60,7 +60,7 @@ from verity.circuits.census import census, step_ends, step_of
 from verity.protocols.accounting.poub.verifier import codec
 from verity.protocols.accounting.poub.verifier.memory_map import Header, Replay, Step
 
-PORT_TEST = Path(__file__).resolve().parents[5] / "verity/circuits/requirement/tests/test_requirement_difftest.py"
+PORT_TEST = Path(__file__).resolve().parents[4] / "verity/circuits/requirement/tests/test_requirement_difftest.py"
 _spec = importlib.util.spec_from_file_location("test_requirement_difftest", PORT_TEST)
 assert _spec is not None and _spec.loader is not None
 RD = importlib.util.module_from_spec(_spec)
