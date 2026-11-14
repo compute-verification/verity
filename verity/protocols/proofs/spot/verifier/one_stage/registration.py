@@ -673,14 +673,15 @@ def _registered_compiler(item: Any) -> Any:
     refuses too (`OneStage.paramsOfJson`)."""
     if item is UNREAD or item is None:
         return item
+    cap_bits = item.get("cap") if isinstance(item, Mapping) else None
     if not (isinstance(item, Mapping) and set(item) == {"advice", "cap", "digest", "kind"} and item["kind"] == "builder"
             and isinstance(item["digest"], str) and isinstance(item["advice"], str)
-            and type(item["cap"]) is int and item["cap"] >= 0):
+            and type(cap_bits) is int and cap_bits >= 0):
         raise ValueError("the registered compiler is the registration log's item: its kind, a digest, an advice format and "
                          f"a natural length, not {item!r}")
     if not (len(item["digest"]) == 128 and _HEX.fullmatch(item["digest"])):
         raise ValueError(f"the registered compiler's digest is not lowercase hex of 64 bytes: {item['digest']!r}")
-    return item["digest"], item["cap"]
+    return item["digest"], cap_bits
 
 
 def _compiler(c: _Collect, w: Mapping[str, Any], reads: tuple[str, int] | None) -> None:

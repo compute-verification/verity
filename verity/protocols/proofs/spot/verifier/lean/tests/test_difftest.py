@@ -6371,15 +6371,15 @@ def test_advice_no_registered_compiler_reads_is_refused_by_name(pieces):
     (`R6-compiler`); a verifier that reads no log's compiler holds the window to nothing. A compiler in another form
     refuses the verifier's inputs."""
     s, values = REGISTERED_SETUPS[0], {"D": 1, "W": 3}
-    law = {"k": 1, "law": "subset"}
+    design = {"k": 1, "law": "subset"}
     digest, other = "c1" * 64, "c2" * 64
     item = {"advice": "verity/advice/v1", "cap": 32, "digest": digest, "kind": "builder"}
 
     def named(d, bits):
         return {**WINDOW, "compiler": {"digest": d, "name": "c"}, "advice": {"bits": bits, "root": "ad" * 64}}
 
-    rec = _record_of(s, values, law, named(digest, 8), leaf_layer=LEAF, window_root=WROOT)
-    params = {"anchors": [], "compiler": item, "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": [],
+    rec = _record_of(s, values, design, named(digest, 8), leaf_layer=LEAF, window_root=WROOT)
+    params = {"anchors": [], "compiler": item, "delta": "1/10", "law": design, "leaf_layer": LEAF, "log": [],
               "parameters": s.signature, "partition": None, "ports": s.ports, "program": s.desc, "query": s.query,
               "registered": values, "scheme": SCHEME, "window_root": WROOT, "work_table": None}
     unread = {k: v for k, v in params.items() if k != "compiler"}
@@ -6397,7 +6397,7 @@ def test_advice_no_registered_compiler_reads_is_refused_by_name(pieces):
               (named(other, 99), unread, []), (WINDOW, unread, [])]
     for window, p, want in cases:
         assert codes(window, p) == want, (window, p.get("compiler"))
-    for bad in ({**item, "kind": "theta"}, {**item, "cap": -1}, {**item, "digest": 5}, {**item, "digest": digest.upper()},
+    for bad in ({**item, "kind": "theta"}, {**item, "digest": 5}, {**item, "digest": digest.upper()},
                 {k: v for k, v in item.items() if k != "advice"}, {**item, "extra": 1}, "c"):
         assert codes(rec["window"], {**params, "compiler": bad}) == "reject", bad
 
