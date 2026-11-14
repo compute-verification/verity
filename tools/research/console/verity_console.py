@@ -146,11 +146,14 @@ def fit(p: dict) -> dict:
 
 
 def publish(p: dict, url: str, key: str) -> str:
-    req = urllib.request.Request(f"{url}/api/panels/{p['id']}", data=json.dumps(p).encode(), method="PUT",
-                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+    if (scheme := urllib.parse.urlsplit(url).scheme) not in ("http", "https"):
+        return f"refused: --url is not an http or https URL (scheme {scheme!r}): nothing sent"
+    req = urllib.request.Request(  # noqa: S310 (http or https, checked above)
+        f"{url}/api/panels/{p['id']}", data=json.dumps(p).encode(), method="PUT",
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
     for attempt in range(3):
         try:
-            with urllib.request.urlopen(req, timeout=30) as r:
+            with urllib.request.urlopen(req, timeout=30) as r:  # noqa: S310 (http or https, checked above)
                 return str(r.status)
         except urllib.error.HTTPError as e:
             if e.code != 503 or attempt == 2:

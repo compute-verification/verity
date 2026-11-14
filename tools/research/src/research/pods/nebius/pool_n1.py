@@ -62,8 +62,10 @@ def iso(t: float) -> str:
 
 
 def prom(q: str) -> list[dict]:
+    if (scheme := urllib.parse.urlsplit(PROMETHEUS).scheme) not in ("http", "https"):
+        raise ValueError(f"VY_PROMETHEUS is not an http or https URL (scheme {scheme!r})")
     url = f"{PROMETHEUS}/api/v1/query?" + urllib.parse.urlencode({"query": q})
-    with urllib.request.urlopen(url, timeout=20) as r:
+    with urllib.request.urlopen(url, timeout=20) as r:  # noqa: S310 (http or https, checked above)
         return json.load(r)["data"]["result"]
 
 
