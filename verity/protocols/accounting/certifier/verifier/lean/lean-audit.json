@@ -5,7 +5,8 @@
   "NetworkCheck.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkCheck.Difftest.main, audited under NetworkCheck, a test and not a proof",
   "NetworkCheck.Main": "the network-check executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Check.protocol, audited under NetworkCheck",
   "NetworkCheck.PeriodMain": "the network-period executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Period.protocol, audited under NetworkCheck",
-  "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) of N2's link-window verdict of record (link-window, NetworkCheck.TransferBlocks.transferBlocksFn), of the client's check of a window's served certificates (certificates, NetworkCheck.TransferBlocks.certificatesFn) and of the syncs the certifier signed for a link, read through its clock certificates' openings (clocks, NetworkCheck.Period.clocksFn, in NetworkCheck.Clocks), audited under NetworkCheck"
+  "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) of N2's link-window verdict of record (link-window, NetworkCheck.TransferBlocks.transferBlocksFn), of the client's check of a window's served certificates (certificates, NetworkCheck.TransferBlocks.certificatesFn) and of the syncs the certifier signed for a link, read through its clock certificates' openings (clocks, NetworkCheck.Period.clocksFn, in NetworkCheck.Clocks), audited under NetworkCheck",
+  "NetworkCheck.SpanMain": "the network-span executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Span.protocol, audited under NetworkCheck"
  },
  "runs": {
   "NetworkCheck.DifftestMain": {
@@ -29,6 +30,11 @@
    "imports": ["NetworkCheck.Certificate", "NetworkCertifier.Schedule", "Lms.Verify", "CoreProtocol.Cli"],
    "except": [],
    "why": "the check is code: the record's encodings, the certifier program's Program grid and Σ_sync, the LMS verifier and the core protocol interface, no Mathlib and nothing of Security"
+  },
+  "NetworkCheck.Clocks": {
+   "imports": ["NetworkCheck.Check"],
+   "except": [],
+   "why": "the clock openings are code: v4's certificate and sync, its encodings and its one LMS check, no Mathlib, nothing of Security and nothing of the inference-only policy's check, so `network-records` builds without it"
   },
   "NetworkCheck.Period": {
    "imports": [
@@ -54,10 +60,10 @@
    "except": [],
    "why": "N2's link-window verdict of record is code: v4's certificate, its one LMS check and its encodings, the LMS verifier, C-Flock's hm96 row commitment, canonical JSON and frame-v3-sha512 domain, and core's identity hash, no Mathlib and nothing of Security"
   },
-  "NetworkCheck.Clocks": {
-   "imports": ["NetworkCheck.Check"],
+  "NetworkCheck.Span": {
+   "imports": ["NetworkCheck.Period", "NetworkCheck.Registered", "Identity.Domains"],
    "except": [],
-   "why": "the clock openings are code: v4's certificate and sync, its encodings and its one LMS check, no Mathlib, nothing of Security and nothing of the inference-only policy's check, so `network-records` builds without it"
+   "why": "the count over a span is code: the period's check with what it imports (its schedule, certificate and row registration decoders, v4's certificate and its one LMS check, the core interface), the read of the link and the key off the registered hardware (the core interface's Site) and the table of domain separators, no Mathlib and nothing of Security"
   }
  },
  "guarantees": {

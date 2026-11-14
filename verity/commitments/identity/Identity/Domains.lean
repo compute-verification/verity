@@ -22,6 +22,13 @@ public import Identity.Domains.Shared
 
 namespace Domains
 
+-- The network certifier's mark certificate (`verity.protocols.accounting.certifier.verifier.certificate`)
+abbrev CERTIFIER_MARK : String := "verity-network-certifier/mark/v1"
+
+-- The network certifier's count over a span between two marks (`verity.protocols.accounting.certifier.verifier.span`)
+abbrev CERTIFIER_SPAN : String := "verity-network-certifier/span/v0"
+abbrev CERTIFIER_SPAN_PROTOCOL : String := "verity/certifier/span/v0"
+
 -- Not yet read from here: the commitments' own (`verity.ml.commitments`)
 abbrev BLAKE3_KEYED_ROW_NVFP4 : String := "blake3-keyed/row-nvfp4/v1"
 abbrev BLAKE3_KEYED_ROW : String := "blake3-keyed/row/v2"
