@@ -87,7 +87,7 @@ def finder : Claims.Finder where
 def pin : AuditorPin := { role := .challenger, key := [], scheme := (0, 0, 0) }
 
 /-- **The deployment's pins**: the challenger's alone, with no designated session. -/
-def pins : AuditorPins := ⟨[pin], fun _ => []⟩
+def pins : AuditorPins := ⟨[pin], fun _ => [], []⟩
 
 /-- **The device's signer**: the pinned challenger, releasing from no family; it signs nothing and samples nothing
 at the close. -/

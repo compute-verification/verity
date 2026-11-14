@@ -47,11 +47,14 @@ structure AuditorPin where
   start : ℕ := 0
   servers : List Hash.Msg := []
 
-/-- **The deployment's pins for one monitoring period**: its devices' pins, SPOT's live challenger first, and the
-sessions the auditor designated for each role, all fixed before the prover's first move. -/
+/-- **The deployment's pins for one monitoring period**: its devices' pins, SPOT's live challenger first, the
+sessions the auditor designated for each role (for the challenger, sampled proofs' window roots), and apart from them
+the PoUW sessions it designated for the challenger, so that no protocol's session is taken for another's, all fixed
+before the prover's first move. -/
 structure AuditorPins where
   keys : List AuditorPin
   sessions : Role → List Hash.Msg
+  pouwSessions : List Hash.Msg
 
 namespace AuditorPins
 

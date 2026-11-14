@@ -29,7 +29,9 @@ TABLE = (Path(__file__).parent, "step0")
 REG = R.registry(TABLE)
 D = sys.modules[TABLE[1]]
 COMMIT = "a" * 40
-NO_PINS = {"certifiers": [], "challenger": None, "memory": [], "memory_sessions": [], "sessions": []}
+NO_PINS = {
+    "certifiers": [], "challenger": None, "memory": [], "memory_sessions": [], "pouw_sessions": [], "sessions": [],
+}
 ONSITE = ("sampled-proofs", "certifier", "pouw", "pous", "bandwidth", "inference-only", "wipe")
 REMOTE = ("sampled-proofs", "pearl-plus", "inference-only")
 REMOTE_V0 = ("sampled-proofs", "pouw", "inference-only")

@@ -70,12 +70,14 @@ structure MemoryPin where
   key : ByteArray
   servers : List ByteArray
 
-/-- **The auditor's pins**, as the composite reads them: its challenger's key (none: no challenger is pinned) and the
-sessions it designated for the challenger, sampled proofs' window roots and PoUW's session ids, each as the bytes of
-its text; its memory challengers and the sessions it designated for them; and its network certifiers' entries. -/
+/-- **The auditor's pins**, as the composite reads them: its challenger's key (none: no challenger is pinned), the
+window roots of the sampled proofs' sessions it designated for the challenger and, apart from them, the PoUW sessions it
+designated for the challenger, each as the bytes of its text, so one protocol's session is never taken for the other's;
+its memory challengers and the sessions it designated for them; and its network certifiers' entries. -/
 structure Pins where
   challenger : Option Spot.Challenger.ChallengerKey := none
   sessions : List ByteArray := []
+  pouwSessions : List ByteArray := []
   memory : List MemoryPin := []
   memorySessions : List ByteArray := []
   certifiers : List CertifierPin := []
@@ -105,18 +107,21 @@ def memoryOfJson (j : Json) : V MemoryPin := do
   pure ⟨← Flock.unhex (← Flock.J.str j "public" "a memory challenger's pin"),
     ← pinHexes j "servers" "a memory challenger's pin"⟩
 
+/-- The list of strings at `k` of `j`, each as the bytes of its text. -/
+def pinTexts (j : Json) (k ctx : String) : V (List ByteArray) := do
+  (← Flock.J.arr j k ctx).toList.mapM fun s => do pure (← Flock.J.asStr s s!"{ctx}.{k}").toUTF8
+
 /-- The pins file: `{"certifiers": [CERTIFIER, ...], "challenger": KEY | null, "memory": [MEMORY, ...],
-"memory_sessions": [hex, ...], "sessions": [SESSION, ...]}`, `KEY` as the sampled parameters carry a challenger's key
-(`ChallengerKey.ofJson`), `SESSION` a sampled window root or a PoUW session id, `CERTIFIER` as `certifierOfJson` and
-`MEMORY` as `memoryOfJson` read them. -/
+"memory_sessions": [hex, ...], "pouw_sessions": [SESSION_ID, ...], "sessions": [WINDOW_ROOT, ...]}`, `KEY` as the
+sampled parameters carry a challenger's key (`ChallengerKey.ofJson`), `CERTIFIER` as `certifierOfJson` and `MEMORY` as
+`memoryOfJson` read them. -/
 def Pins.ofJson (j : Json) : V Pins := do
-  pinKeys j #["certifiers", "challenger", "memory", "memory_sessions", "sessions"] "the pins"
+  pinKeys j #["certifiers", "challenger", "memory", "memory_sessions", "pouw_sessions", "sessions"] "the pins"
   let challenger ← match ← Flock.J.get j "challenger" "the pins" with
     | .null => pure none
     | k => some <$> Spot.Challenger.ChallengerKey.ofJson k
-  let sessions ← (← Flock.J.arr j "sessions" "the pins").toList.mapM fun s => do
-    pure (← Flock.J.asStr s "the pins' sessions").toUTF8
-  pure { challenger, sessions,
+  pure { challenger, sessions := ← pinTexts j "sessions" "the pins",
+         pouwSessions := ← pinTexts j "pouw_sessions" "the pins",
          memory := ← (← Flock.J.arr j "memory" "the pins").toList.mapM memoryOfJson,
          memorySessions := ← pinHexes j "memory_sessions" "the pins",
          certifiers := ← (← Flock.J.arr j "certifiers" "the pins").toList.mapM certifierOfJson }
@@ -165,13 +170,14 @@ def sameBytes (a b : ByteArray) : Bool := a.data.toList == b.data.toList
 def heldBytes (S : List ByteArray) (s : ByteArray) : Bool := S.any (·.data.toList == s.data.toList)
 
 /-- A PoUW period's challenger key, where it reads as one, is the pinned challenger's, and its parameters list the
-sessions its windows' checks are held to (`registered`), each one designated for the challenger. A period run alone
-lists none, so the sessions its challenger's ledger opens are held to nothing, and it is refused. -/
+sessions its windows' checks are held to (`challengePhases`, the key `sessions`), each one of the PoUW sessions
+designated for the challenger. A period run alone lists none, so the sessions its challenger's ledger opens are held to
+nothing, and it is refused. -/
 def pouwPinned (P : Pins) (p : PouwCheck.Period.Params) : Bool :=
   (match Spot.Challenger.ChallengerKey.ofJson p.key with
     | .ok k => P.challenger.any (sameKey k)
     | .error _ => true) &&
-  p.registered.any fun r => r.challengePhases.all fun s => heldBytes P.sessions s.toUTF8
+  p.challengePhases.any fun ss => ss.all fun s => heldBytes P.pouwSessions s.toUTF8
 
 /-- Every key a PoUS run trusts is a pinned memory challenger's, and its session is one designated for the memory
 challengers. A run's parameters name no server, so any pinned memory challenger's key passes. -/
@@ -300,18 +306,20 @@ private def remoteV1Ids : List String := Core.Remote.V1.components.map (·.id)
 private def pinsOf (s : String) : Except String Pins := Json.parse s >>= Pins.ofJson
 
 -- the pins file: no challenger and no sessions pins nothing; any other key, or a key that doesn't read, is refused
-private def noPins (rest : String) : String :=
-  "{\"certifiers\":[],\"challenger\":null,\"memory\":[],\"memory_sessions\":[],\"sessions\":[" ++ rest ++ "]}"
-#guard match pinsOf (noPins "\"ab\"") with
+private def noPins (rest : String) (pouw : String := "") : String :=
+  "{\"certifiers\":[],\"challenger\":null,\"memory\":[],\"memory_sessions\":[],\"pouw_sessions\":[" ++ pouw ++
+    "],\"sessions\":[" ++ rest ++ "]}"
+#guard match pinsOf (noPins "\"ab\"" "\"cd\"") with
   | .ok P => P.challenger.isNone && P.memory.isEmpty && P.certifiers.isEmpty && P.memorySessions.isEmpty &&
-      P.sessions.map (·.data.toList) == ["ab".toUTF8.data.toList]
+      P.sessions.map (·.data.toList) == ["ab".toUTF8.data.toList] &&
+      P.pouwSessions.map (·.data.toList) == ["cd".toUTF8.data.toList]
   | .error _ => false
 private def entryPin (link pub session : String) (start : Nat) : String :=
   s!"\{\"H\":3,\"N\":64,\"W\":1,\"link\":\"{link}\",\"public\":\"{pub}\",\"session\":\"{session}\",\"start\":{start}}"
 private def somePins : String :=
   "{\"certifiers\":[" ++ entryPin "eth0" "0a" "0c" 4 ++ "," ++ entryPin "eth1" "0f" "0c" 0 ++ "," ++
     entryPin "eth0" "1a" "1c" 9 ++ "],\"challenger\":null,\"memory\":[{\"public\":\"0b\"," ++
-    "\"servers\":[\"0d\"]}],\"memory_sessions\":[\"0e\"],\"sessions\":[]}"
+    "\"servers\":[\"0d\"]}],\"memory_sessions\":[\"0e\"],\"pouw_sessions\":[],\"sessions\":[]}"
 #guard match pinsOf somePins with
   | .ok P => P.memory.map (fun m => (m.key.data.toList, m.servers.map (·.data.toList))) == [([0x0b], [[0x0d]])] &&
       P.memorySessions.map (·.data.toList) == [[0x0e]] &&
@@ -341,18 +349,19 @@ private def somePins : String :=
 #guard (pinsOf ((noPins "").replace "\"challenger\":null" "\"challenger\":{\"H\":3}")).toOption.isNone
 #guard (pinsOf (noPins "1")).toOption.isNone
 #guard (pinsOf ((noPins "").replace "\"memory_sessions\":[]" "\"memory_sessions\":[1]")).toOption.isNone
+#guard (pinsOf (noPins "" "1")).toOption.isNone
+#guard (pinsOf ((noPins "").replace ",\"pouw_sessions\":[]" "")).toOption.isNone
 #guard (pinsOf (somePins.replace "\"start\":4" "\"start\":4,\"stop\":9")).toOption.isNone
 #guard (pinsOf (somePins.replace "\"start\":4" "\"start\":\"4\"")).toOption.isNone
 #guard (pinsOf (somePins.replace "\"session\":\"0c\"" "\"session\":\"0\"")).toOption.isNone
 #guard (pinsOf (somePins.replace "\"servers\":[\"0d\"]" "\"servers\":\"0d\"")).toOption.isNone
--- a PoUW period passes where its sessions are designated for the challenger; a period run alone lists none, and is
--- refused
-#guard match pinsOf (noPins "\"s1\",\"s2\"") with
+-- a PoUW period passes where its sessions are PoUW sessions designated for the challenger, not sampled proofs'
+-- window roots; a period run alone lists none, and is refused
+#guard match pinsOf (noPins "\"w1\"" "\"s1\",\"s2\"") with
   | .ok P =>
-    let p (r : Option PouwCheck.Period.Registered) : PouwCheck.Period.Params := ⟨.null, .null, "p", r⟩
-    let reg (ss : List String) : Option PouwCheck.Period.Registered := some ⟨"h", "d", ss⟩
-    pouwPinned P (p (reg ["s1"])) && pouwPinned P (p (reg ["s2", "s1"])) && pouwPinned P (p (reg [])) &&
-      !pouwPinned P (p (reg ["s1", "s3"])) && !pouwPinned P (p none)
+    let p (ss : Option (List String)) : PouwCheck.Period.Params := ⟨.null, .null, "p", ss⟩
+    pouwPinned P (p (some ["s1"])) && pouwPinned P (p (some ["s2", "s1"])) && pouwPinned P (p (some [])) &&
+      !pouwPinned P (p (some ["s1", "s3"])) && !pouwPinned P (p (some ["w1"])) && !pouwPinned P (p none)
   | .error _ => false
 -- parameters that aren't a composite's are the composite's to refuse
 #guard paramsPinned {} Json.null

@@ -171,21 +171,22 @@ theorem spotPinned_compiled {P : AuditorPins} {p : _root_.Spot.OneStageZk.Params
     · simp [AuditorPins.compiled, AuditorPins.Designated, List.any_map, toArray_eq_iff]
 
 /-- **One PoUW period's parameters pass the compiled pin check exactly where its challenger key is SPOT's pinned
-one and it lists its sessions, each designated for the challenger**, as `PouwPinned` states it of each. -/
+one and it lists its sessions, each a PoUW session designated for the challenger**, as `PouwPinned` states it of
+each. -/
 theorem pouwPinned_compiled {P : AuditorPins} {p : _root_.PouwCheck.Period.Params} :
     Composites.pouwPinned P.compiled p = true ↔
       (∀ k, _root_.Spot.Challenger.ChallengerKey.ofJson p.key = .ok k → P.HoldsChallenger k) ∧
-        ∃ r, p.registered = some r ∧ ∀ s ∈ r.challengePhases, P.Designated .challenger s := by
+        ∃ ss, p.challengePhases = some ss ∧ ∀ s ∈ ss, P.HoldsPouwSession s := by
   unfold Composites.pouwPinned
   rw [Bool.and_eq_true]
   refine and_congr ?_ ?_
   · cases _root_.Spot.Challenger.ChallengerKey.ofJson p.key with
     | error _ => simp
     | ok k => simp [challenger_compiled]
-  · cases p.registered with
+  · cases p.challengePhases with
     | none => simp
-    | some r =>
-      simp [AuditorPins.compiled, AuditorPins.Designated, Composites.heldBytes, List.any_map, toArray_eq_iff]
+    | some ss =>
+      simp [AuditorPins.compiled, AuditorPins.HoldsPouwSession, Composites.heldBytes, List.any_map, toArray_eq_iff]
 
 /-- **One PoUS run's parameters pass the compiled pin check exactly where every key it trusts is a pinned memory
 challenger's and its session is designated for the memory challengers.** -/
@@ -233,8 +234,8 @@ theorem paramsPinned_compiled {P : AuditorPins} {θ : ByteArray} :
 /-- **The agreement of the model's acceptance with the compiled check under the pins**: `Accepts pins k`, the
 acceptance of `product IDS --pins` (`pinnedVerifier`), is the compiled verifier's acceptance with every subprotocol's
 pin check passing: each sampled component's challenger key and window, each PoUW period's challenger key and its
-sessions, each designated for the challenger (a session not in the pins, or a period run alone, which lists none, is
-refused), every key PoUS and the wipe trust with their sessions, and each network period's entries, its link's pinned
+sessions, each a PoUW session designated for the challenger (a session not in the pins, a sampled proofs' window root,
+or a period run alone, which lists none, is refused), every key PoUS and the wipe trust with their sessions, and each network period's entries, its link's pinned
 entries one for one (key, session and start), as their own decoders read them. -/
 theorem accepts_iff {pins : AuditorPins} {k : Verity.Registration.Composite} {s : Sent} :
     Accepts pins k s ↔ ((verifier k).answer s.params s.commitment s.evidence s.blobs).verdict = .accept ∧

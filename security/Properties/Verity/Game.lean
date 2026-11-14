@@ -258,6 +258,9 @@ key under `q`'s LMS parameters, `q`'s session and `q`'s start. -/
 def EntryHeld (lms : Lms.Params) (q : AuditorPin) (e : _root_.NetworkCheck.Period.Entry) : Prop :=
   e.key.data.toList = q.key ∧ (lms.N, lms.W, lms.H) = q.scheme ∧ e.session.data.toList = q.session ∧ e.start = q.start
 
+/-- **The PoUW session `s` is one the auditor designated for the challenger.** -/
+def HoldsPouwSession (P : AuditorPins) (s : String) : Prop := s.toUTF8.data.toList ∈ P.pouwSessions
+
 /-- **The session `s` is one the auditor designated for role `r`.** -/
 def HoldsSession (P : AuditorPins) (r : Role) (s : ByteArray) : Prop := s.data.toList ∈ P.sessions r
 
@@ -278,13 +281,15 @@ def certifierPin (q : AuditorPin) : Core.Composites.CertifierPin :=
   ⟨q.link, ⟨⟨q.scheme.1, q.scheme.2.1, q.scheme.2.2⟩, ⟨q.key.toArray⟩⟩, ⟨q.session.toArray⟩, q.start⟩
 
 /-- **The pins as the compiled verifier reads them** (`Core.Composites.Pins`, `product IDS --pins`): the first
-pin's key and LMS parameters, when it is a challenger's, and the sessions designated for the challenger; every memory
+pin's key and LMS parameters, when it is a challenger's, the sampled proofs' and, apart, the PoUW sessions designated
+for the challenger; every memory
 challenger's key with its servers, and the sessions designated for the memory challengers; and every network certifier
 entry, its link, key, LMS parameters, session and start, in their order. -/
 def compiled (P : AuditorPins) : Core.Composites.Pins where
   challenger := (P.keys.head?.filter fun q => decide (q.role = .challenger)).map fun q =>
     ⟨⟨q.scheme.1, q.scheme.2.1, q.scheme.2.2⟩, ⟨q.key.toArray⟩⟩
   sessions := (P.sessions .challenger).map fun m => ⟨m.toArray⟩
+  pouwSessions := P.pouwSessions.map fun m => ⟨m.toArray⟩
   memory := (P.keys.filter fun q => decide (q.role = .memoryChallenger)).map fun q =>
     ⟨⟨q.key.toArray⟩, q.servers.map fun m => ⟨m.toArray⟩⟩
   memorySessions := (P.sessions .memoryChallenger).map fun m => ⟨m.toArray⟩
@@ -306,12 +311,13 @@ def SpotPinned (P : AuditorPins) (θ : ByteArray) : Prop :=
 
 /-- **PoUW's parameters name only the pinned challenger and designated sessions**: each PoUW period's challenger key,
 where it reads as one, is SPOT's pinned key, and its parameters list the sessions its windows are held to
-(`registered`), each one the auditor designated for the challenger. A session not in the pins is refused, and so is a
-period run alone, which lists none. -/
+(`challengePhases`, the key `sessions`), each one of the PoUW sessions the auditor designated for the challenger
+(`HoldsPouwSession`), never a sampled proofs' window root. A session not in the pins is refused, and so is a period run
+alone, which lists none. -/
 def PouwPinned (P : AuditorPins) (θ : ByteArray) : Prop :=
   ∀ p ∈ componentsAt Core.Composites.pouwAt θ,
     (∀ k, _root_.Spot.Challenger.ChallengerKey.ofJson p.key = .ok k → P.HoldsChallenger k) ∧
-      ∃ r, p.registered = some r ∧ ∀ s ∈ r.challengePhases, P.Designated .challenger s
+      ∃ ss, p.challengePhases = some ss ∧ ∀ s ∈ ss, P.HoldsPouwSession s
 
 /-- **PoUS's parameters name only pinned memory challengers and a designated session**: every key a PoUS run trusts
 is a pinned memory challenger's, and its session is one the auditor designated for the memory challengers. A run's
