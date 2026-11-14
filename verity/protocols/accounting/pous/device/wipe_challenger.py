@@ -9,12 +9,13 @@ ends. It is given no egress count and signs none. On the same coins, clock readi
 that one, `sources.RealClock(streamed_wipe.raw_clock_ns)`: the runtime's own real clock reads `time.monotonic_ns`,
 which time synchronisation slews. Its machine gives it `signing-key` (`capabilities["signer"]`, a
 `memory_challenger.Signer`, with `capabilities["log"]`, its session log) and the reads it times
-(`capabilities["reads"]`, `wipe_party.READS` when none, as `wipe_party`'s `--reads`). The run's parameters are `wipe_party.request_of`'s request, which names no reads: the challenger chooses them, never the
-prover. The challenger finishes with `wipe_party.report` (private: what it signs is witness), refused by name, and
-unsigned, when the prover leaves (`closed`), sends a frame the wire refuses, or answers a batch with another count of
-labels (`schema`); parameters that name the reads are refused `schema` before any fill. It streams the fill `WINDOW`
-frames at a time, letting the prover take each window before the next, so neither side holds more of it than that.
-`PROTOCOL` declares its one role.
+(`capabilities["reads"]`, `wipe_party.READS` when none, as `wipe_party`'s `--reads`). The run's parameters are
+`wipe_party.request_of`'s request, which names no reads: the challenger chooses them, never the prover. The challenger
+finishes with `wipe_party.report` (private: what it signs is witness), refused by name, and unsigned, when the prover
+leaves (`closed`), sends a frame the wire refuses, or answers a batch with another count of labels (`schema`);
+parameters that name the reads are refused `schema` before any fill. It streams the fill `WINDOW` frames at a time,
+letting the prover take each window before the next, so neither side holds more of it than that. `PROTOCOL` declares
+its one role.
 """
 
 from __future__ import annotations
@@ -22,8 +23,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from verity.protocol import ProtocolDef
 from verity.party import Finish, Identity, Received, LogEntry, Send, Timer
+from verity.protocol import ProtocolDef
 from verity.channel import Message, Phase, Refused
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
