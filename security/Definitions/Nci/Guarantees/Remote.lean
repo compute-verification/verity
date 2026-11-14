@@ -8,8 +8,8 @@ public import Definitions.Assumptions
 /-!
 # The compute dampener, remote protocol: the guarantees
 
-The remote dampener `1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` (`verity/protocols/inference_only/nci/tiers.py` at T1 and
-T2: `residual_share`, `fit.residual_with_lag` and `fit.dampener`, and `verity/protocols/inference_only/rho`'s
+The remote dampener `1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` (`benchmarks/nci/tiers.py` at T1 and
+T2: `residual_share`, `fit.residual_with_lag` and `fit.dampener`, and `benchmarks/rho`'s
 `theorem.multiple_bound`), with its two terms that `DampenerThreaded` takes inside its residual's hypothesis derived,
 and the two that sampled proofs and PoUW's deficit add:
 
