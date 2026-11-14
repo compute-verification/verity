@@ -146,3 +146,6 @@ def PeriodLeakRegistered : Prop :=
 5. KeyError 'statement' is still there: test_at_the_trees_lock_certifier_key_closes_... reads rests_on[periodLeakRegistered]["statement"], and the tree's lock lists no such guarantee. It is the close's regeneration (and a proof first), not a code fault.
 Commits: 59aad82fc25 (seams), 6a5f0269b50 (STATE_CHARGE), pushed in 02aaa62c35f2; a266a86e719 (the statement), local. TIMER: none.
 
+[2026-11-14T21:56Z] 75232486eb29
+ROWSMERGE to network-accounting (lead), 1:58 PM PST. Both branches are at e393d9af76cd. Resolved by hand: benchmarks/remote_session/pyproject.toml (in f63ae519612; both sides dropped the old kv.cu input, and I kept architecture's comment). No map was carried. Since my 1:30 PM line, every pass was a fast-forward or a merge with no conflict, and every map dry-run shows 0 sites in ours. GATERELAY2 has the excluded maps with their commits: draw_bare's second carry, memory_gpu_wipe, and memory_gpu_weights, which leaves 3 certifier files naming benchmarks/torch_gpu/p2_stage/served_weights.py. All compiles.
+
