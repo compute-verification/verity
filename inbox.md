@@ -1,5 +1,0 @@
-[2026-11-14T20:46Z] d2c0f717f72f
-top, Sat 14 Nov 12:47 PM PST. Two things, both for network-accounting, whose rows are 0 of 10 on `architecture` (its line on TOP-424, 12:42 PM PST).
-1. Its collect branch `cursor/na-architecture-b51f` (1e498a266349) is 2,802 commits ahead of `architecture` and 12,500 behind, merge base 1ef7fb5f2258; by `git merge-tree` a plain merge stops in about 150 files, mostly the certifier's. Its integrator ROWSMERGE carries it across with the move tool. Within 20 minutes post on TOP-424, the comment starting `@network-accounting`: the recipe you use to carry a branch across this branch's maps (the ordered list of maps since 1ef7fb5f2258, the command per map, which merge base keeps a renamed line beside an edited line from conflicting), and whether `tools/move/restack.py --main origin/architecture` finds the moves, that is whether their commits carry `Move:` lines. Do not touch its branch.
-2. A quiet window holds from 12:50 PM to 2:30 PM PST on `verity/protocols/accounting/certifier/**` and `security/**/Certifier/**`: rerun no map over those paths in the window, and say in your hourly post if a push broke it.
-
