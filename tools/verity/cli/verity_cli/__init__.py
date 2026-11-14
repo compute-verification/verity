@@ -49,6 +49,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parents[2]
@@ -58,9 +59,20 @@ USAGE = ("verity lean try FILE [--siblings] [--on auto | --on MACHINE [--pool P]
          "verity lean deployed [--rev REV] [--today YYYY-MM-DD]")
 #: `research run --on`'s line naming the run it started (or refused) and the machine it is on, which `--on auto` chose
 LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on (\S+)", re.M)
-#: Flock's Lean verifier, which `verity verify proof` runs: its Lake package and the executable `lake build` writes there
+#: Flock's Lean verifier, which `verity verify proof` runs: its Lake package and the root module of the executable `lake
+#: build` writes there, whose name the package's lakefile gives (`verify_proof_exe`)
 VERIFIER = "verity/protocols/proofs/flock/verifier"
-VERIFY_PROOF = "flock-verify"
+VERIFY_PROOF_ROOT = "FlockVerify"
+
+
+def verify_proof_exe(root: Path) -> str:
+    """The name of the `[[lean_exe]]` the verifier's lakefile below ``root`` builds from `VERIFY_PROOF_ROOT`."""
+    exes = tomllib.loads((root / VERIFIER / "lakefile.toml").read_text()).get("lean_exe", [])
+    names = [e["name"] for e in exes if e.get("root") == VERIFY_PROOF_ROOT]
+    if len(names) != 1:
+        raise SystemExit(f"verity verify proof: {VERIFIER}/lakefile.toml has {len(names)} [[lean_exe]] with root = "
+                         f"{VERIFY_PROOF_ROOT!r}, not one: name the verifier's root in verity_cli.VERIFY_PROOF_ROOT")
+    return names[0]
 
 
 def _run(argv: list[str]) -> int:
@@ -256,13 +268,14 @@ def _verify(args: list[str]) -> int:
     ARGS name are; its exit status."""
     if args[:1] != ["proof"]:
         raise SystemExit((f"verity verify: no command {args[0]!r}\n" if args else "") + "verity verify proof [ARGS]")
-    exe = ROOT / VERIFIER / ".lake" / "build" / "bin" / VERIFY_PROOF
+    name = verify_proof_exe(ROOT)
+    exe = ROOT / VERIFIER / ".lake" / "build" / "bin" / name
     try:
         return subprocess.run([str(exe), *args[1:]]).returncode
     except FileNotFoundError:
-        raise SystemExit(f"verity verify proof: {VERIFIER}/.lake/build/bin/{VERIFY_PROOF} is not built: `bash "
+        raise SystemExit(f"verity verify proof: {VERIFIER}/.lake/build/bin/{name} is not built: `bash "
                          f"tools/verity/lean/setup.sh {VERIFIER}` installs elan, the toolchain and the package's "
-                         f"dependencies, then `lake build {VERIFY_PROOF}` there builds it") from None
+                         f"dependencies, then `lake build {name}` there builds it") from None
 
 
 def main(argv: list[str] | None = None) -> int:
