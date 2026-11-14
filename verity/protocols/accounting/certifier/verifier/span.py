@@ -341,8 +341,8 @@ def _certified(p: Params, w: int, x: Phase) -> str | None:
 
 
 def check(p: Params, c: Commitment, e: list[Phase]) -> tuple:
-    """The count: ``("accept", public, profile)`` or ``("reject", reason)``. One pass over the two marks and the
-    evidence's entries, never over the span's length."""
+    """The count: ``("accept", public, profile)`` or ``("reject", reason)``. It reads the two marks, then makes one pass
+    over the evidence's entries, one an execution phase."""
     for name, m in zip(MARKS, c.marks):
         code = m.refusal(p.key, p.session, p.link)
         if code is not None:

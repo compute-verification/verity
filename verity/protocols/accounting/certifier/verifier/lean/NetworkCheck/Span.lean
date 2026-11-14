@@ -87,7 +87,7 @@ cell of both its egress records, the responses' and the fails', since both leave
 The two marks' execution phases are not public: they say when the span ran, which a mark's salt hides.
 **Profile**: `{"link", "phases"}`, the link and the count of execution phases.
 
-The check walks the two marks and the evidence's entries once, never the span's length.
+The check reads the two marks, then makes one pass over the evidence's entries, one an execution phase.
 -/
 
 @[expose] public section

@@ -521,6 +521,30 @@ def test_the_issuer_signs_no_second_mark_of_a_message(tmp_path):
     assert signers.used(signer) == [0, 1]
 
 
+def test_a_mark_that_is_not_bytes_is_signed_nowhere(tmp_path):
+    """A mark of 64 bytes that are not `bytes` (a `bytearray`, a `memoryview`) is no mark `marked` can hold, so it passes
+    by the once-only refusal; it takes a salt and is refused by `mark_digest` with `ValueError` before the signer is
+    asked anything, before and after the same bytes are certified: no leaf is used, nothing is listed in `refused`,
+    and neither the salt nor the mark is kept."""
+    signer = signers.signer(tmp_path)
+    taken = []
+
+    def coins(n):
+        taken.append(n)
+        return bytes([len(taken)]) * n
+
+    issuer = Issuer(signer, SESSION, coins=coins)
+    for mark in (bytearray(MARK), memoryview(MARK)):
+        with pytest.raises(ValueError, match="a mark is 64 bytes"):
+            issuer.mark("responses", 5, mark)
+    assert (len(taken), signers.used(signer), issuer.refused, issuer.marked, issuer.mark_salts) == (2, [], [], set(), set())
+    m = issuer.mark("responses", 5, MARK)
+    assert (m.salt, signers.used(signer), issuer.marked) == (b"\x03" * 64, [0], {MARK})
+    with pytest.raises(ValueError, match="a mark is 64 bytes"):
+        issuer.mark("responses", 9, bytearray(MARK))
+    assert (len(taken), signers.used(signer), issuer.refused, issuer.mark_salts) == (4, [0], [], {m.salt})
+
+
 def test_a_mark_certificate_is_refused_by_name(tmp_path):
     """A mark certificate's opening is refused with why: another mark, another salt or an altered digest (`opening`);
     read as another link's mark, or a certificate on the link's own name (`link`); an ingress certificate (`egress`);
