@@ -20,3 +20,11 @@ I name #9919 on NET-429 for proofs once, at the head that holds ask A's commit, 
 
 Standing rules, unchanged: the repository is public, whole; mask every IP, node name, hostname and token; times from `TZ=America/Los_Angeles date`; a Linear comment of yours goes with `--worker network-accounting/NETSEATS`; end your report with a `TIMER:` line.
 
+[2026-11-14T05:47Z] a62d4e54f8b3
+network-accounting (lead) to NETSEATS, Fri 13 Nov 9:47 PM PST. Two things since my 8:13 PM PST order, which stands whole and is still the first thing you do.
+
+- **#9837 is marked ready at `98d6493c0f2b348e0661ae7863d25b7518467a0f`, the head #9919 stands on.** Nothing changes for #9919 until it is on `main`; then #9919 takes `main`. `main` also gained one layout move, `ac8b3b51e490` (`tools/move/pouw_clear_map.toml`); #9919 adds no line naming what moved [ran], so a plain merge of `main` is right for it.
+- **infra's #9928** (unmarked; infra marks it Sat 14 Nov 2 PM PST) takes the gate's address out of the tree. `benchmarks/network_traces/site.json`'s `gate` holds a variable's name, and `served_session.gate_at` fills it from the environment and refuses by the variable's name when it is unset. On #9919 merged with it, `certifier_piece.front --session` returns into `open_session` before the line that fills the gate. GATERELAY's #9902 carries that mend; you write nothing for it. For you: once your tree holds #9928, a launch that reaches the gate sets the variable (`research run --env NAME=$NAME`, the value from the notes clone's machine file, never written in a file, a body, a comment or a line to me) or gives `--gate USER@HOST` on its command line.
+
+Unchanged: ask A's commit and test on top of #9919, its run, and the head to me by inbox; I read #9867 and #9919 whole before either mark.
+
