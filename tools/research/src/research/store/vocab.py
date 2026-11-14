@@ -400,17 +400,17 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "triage believes only while the run dir shows no sign of a start: no pid in status.json, no started, span_start or sampler_start "
        "event, no sampler reading, no output; needed: triage reads its records again, which withdraws an earlier waived or never-ran); "
        "the latest label wins", CUSTODY_VALUES),
-    _k(CHALLENGER_KEY, GROUP_VERIFICATION, ENUM, "on a challenger-key/v1 record, by infra: whether it names the auditor host's signing key "
+    _k(CHALLENGER_KEY, GROUP_VERIFICATION, ENUM, "on a challenger-key/v1 record, by infra: whether it names the auditor device's signing key "
        "that verifiers pin now (current) or one no longer signing (retired); the latest label wins", CHALLENGER_KEY_VALUES),
     _k(CHALLENGER_LEDGER, GROUP_VERIFICATION, ENUM, "on a challenger-ledger/v1|v2 artifact, by infra's publisher (publish.sh): a head of "
-       "the auditor host's ledger it published, each an extension of the one before; the label isn't authenticated, so a "
+       "the auditor device's ledger it published, each an extension of the one before; the label isn't authenticated, so a "
        "verifier checks every published head under the pinned key and refuses two that don't extend one another",
        CHALLENGER_LEDGER_VALUES),
     _k(CHALLENGER_PINS, GROUP_VERIFICATION, ENUM, "on a challenger-pins/v1 artifact, by infra's publisher (publish.sh): a head of "
-       "the auditor host's pins log it published, each an extension of the last; pinned_session reads the newest",
+       "the auditor device's pins log it published, each an extension of the last; pinned_session reads the newest",
        CHALLENGER_PINS_VALUES),
     _k(CHALLENGER_MODELS, GROUP_VERIFICATION, ENUM, "on a challenger-models/v1 artifact, by infra's publisher (publish.sh): a head "
-       "of the auditor host's model registry it published, each an extension of the last; a period-open's weights_root is "
+       "of the auditor device's model registry it published, each an extension of the last; a period-open's weights_root is "
        "one of its entries'", CHALLENGER_MODELS_VALUES),
     _k(SOURCE_LOST, GROUP_VERIFICATION, BOOL, "on a run id: the exact source it ran is gone (its tree held a dirty source that no record "
        "kept, and it was deleted), so the run cannot be re-run or audited from its source; the ref is the note that says how"),

@@ -172,7 +172,7 @@ write, before the answer carrying the session's fresh coin key leaves; a Hello i
 with two sessions or none, a session opened and not composed, a composed session the record didn't open, a staging after
 the first Hello, a second staging or one of other inputs, and a record that isn't closed (`RecCompose.checkRun`;
 `check_oneRun` proves acceptance gives `OneRun`, and `ComposeParts.composed_run` reads it at the compiled verifier's
-parts). The record is the auditor's: it is read from the challenger's host (`trusted-host`), never from the prover's
+parts). The record is the auditor's: it is read from the challenger's host (`trusted-device`), never from the prover's
 bundle. `verity_flock.rec_compose` is its Python mirror (`verity/protocols/proofs/flock/prover/tests/test_lean_rec_compose.py`). The pod's Lean step
 (`85-rec-reprice.sh`, `lean_verdicts.py --compose`) gives every part those files and composes V*'s parts over the run's
 record: on loopback the pod is the challenger's host, and under `MODES=firewall` (one session per staged statement) its

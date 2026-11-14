@@ -18,7 +18,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     challenge; its Lean is still in `interface/`); `policy/` holds `inference_only`, on accounting. Both layers use the
     proofs, and the proofs use neither. On top of the audits, `compose/` is a tenth protocol. Its `verifier/` holds its
     Lean (`lean/`) and the two lists of protocols it accepts: `remote/` is what an auditor with no devices at the
-    datacenter runs, and `onsite/` what an auditor with devices there runs. Its `device/` holds the auditor host's
+    datacenter runs, and `onsite/` what an auditor with devices there runs. Its `device/` holds the auditor device's
     challenger service. Target, not yet: `experimental/NAME/` for a whole directory
     no configuration lists. Inside a protocol, `verifier/` is trusted code (a Python verifier until its Lean verifier,
     its `lean/`, replaces it), `prover/` is what its prover builds and its verifier doesn't read, and `device/` is the
@@ -49,7 +49,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     directly under `verity/` (`party.py`, `channel.py` for the wire, `device.py`, `protocol.py` and `config.py`, which
     reads a configuration) and `verity/runtime/`, which runs parties over channels.
   - `verity/claims/`: the security claims' ids. `tools/difftest/`: the Python held to each Lean (target, not yet: under
-    `tools/`). `verity/protocols/compose/device/live_challenger/`: the auditor host's challenger service, from `benchmarks/` too.
+    `tools/`). `verity/protocols/compose/device/live_challenger/`: the auditor device's challenger service, from `benchmarks/` too.
 - `hardware/`: the data sheets, and data only: `cards/` (one TOML data sheet per GPU, host or server model, or time
   base) and `nodes/` (one per kind of node). The Site's readers (`verity.device`'s `load_card` and `load_node`) read them.
 - `security/`: the Lean every guarantee is stated and proved in (Lean, below).
@@ -178,7 +178,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   to the same floor.
 - **Auditor-trusted devices.** The network certifiers and memory challengers sign what they see; what they sign is
   witness and never reaches the auditor in the clear. Each is the auditor's hardware on a machine the developer doesn't
-  control, never a process on the developer's node, and trust in it and its host is the named assumption `trusted-host`.
+  control, never a process on the developer's node, and trust in it and its host is the named assumption `trusted-device`.
   Nothing the developer runs or hosts is trusted. "Network certifier" is its one name, never "warden" or "tap".
 - **The audited hardware is untrusted, and so is its vendor.** No guarantee rests on a GPU attesting its own
   SKU, firmware or clocks. Hardware constants (f_max, peak rates) come from the data sheet under two or three readings,

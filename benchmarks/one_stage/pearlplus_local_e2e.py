@@ -1,5 +1,5 @@
 """Pearl+'s live sample end to end on one CPU machine, against infra's own gate code (`verity/protocols/compose/device/live_challenger/auditor.py`)
-on a scratch auditor host: its LMS-signed ledger, and each session's challenger a real ``serve.py`` process whose coins
+on a scratch auditor device: its LMS-signed ledger, and each session's challenger a real ``serve.py`` process whose coins
 are the Lean verifier's (``sampled-proofs-verifier``, built first).
 
     python benchmarks/one_stage/pearlplus_local_e2e.py run --out OUT [--lean build|EXE]

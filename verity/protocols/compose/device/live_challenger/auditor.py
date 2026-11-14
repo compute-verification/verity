@@ -1,4 +1,4 @@
-"""The auditor host's challenger service: `serve.py` runs only as the `auditor` user, from a pinned
+"""The auditor device's challenger service: `serve.py` runs only as the `auditor` user, from a pinned
 tree, one session a window, each recorded in a signed append-only ledger before its first coin.
 
     vy-challenger-gate reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE] [--withhold]
@@ -87,7 +87,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   writes `coin-link.json`, which the `end` entry's `files` seals. The hop from the certifier to the server crosses the
   prover's NIC, so it is the certifier's counted ingress, not a path this side trusts. The challenger side rests on the
   premises `CoinsConfidential` (`Pouw.Assumptions.CoinsConfidential`; here the stream reaches the certifier only on
-  this auditor host) and `OneClock` (one clock for both, this host's), named in
+  this auditor device) and `OneClock` (one clock for both, this host's), named in
   `verity/protocols/proofs/spot/verifier/README.md`.
 
   `serve.py --peer`, its own `ssh -R` to the peer, which the prover's sshd decrypts, is the development path alone
@@ -542,7 +542,7 @@ class Refused(Exception):
     """A request the gate or the session refuses, with why."""
 
 
-#: the auditor host's name, which its records give it
+#: the auditor device's name, which its records give it
 HOST_NAME: str = json.loads((HERE / "host.json").read_text())["name"]
 
 

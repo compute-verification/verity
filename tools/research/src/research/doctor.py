@@ -18,7 +18,7 @@ Each check is `ok`, `skip` (it does not apply here) or a `finding`, which says w
   slack       `auth.test` is ok, with the bot token or through the broker (coordinator and infra: a lane asks its coordinator)
   ssh:NAME    `ssh -o BatchMode=yes ... true`, as `research run --on` reaches NAME, for each machine whose entry names an ssh host
               (machines.toml, and the registry where the notes clone already is: the doctor never clones it); a changed host
-              key reads as ok, since `research`'s ssh does not check host keys (runpod.ssh_command). The auditor hosts
+              key reads as ok, since `research`'s ssh does not check host keys (runpod.ssh_command). The auditor devices
               (`remote.restricted`) refuse lanes' keys by design: they are not probed, and `ssh:auditor-hosts` names them
   venv        `uv sync --locked --check --offline` of the checkout's lock against the venv this runs in (else the checkout's
               .venv), workspace members aside: a worktree's come from PYTHONPATH
@@ -317,12 +317,12 @@ def registry_unread() -> bool:
 
 def ssh_machines() -> dict[str, dict]:
     """The machines `research run --on` knows (machines.toml, and the registry unless `registry_unread`) whose entries name an
-    ssh host, the auditor hosts (`remote.restricted`) aside."""
+    ssh host, the auditor devices (`remote.restricted`) aside."""
     return _ssh_machines()[0]
 
 
 def _ssh_machines() -> tuple[dict[str, dict], list[str]]:
-    """(the machines to probe, the auditor hosts left out)."""
+    """(the machines to probe, the auditor devices left out)."""
     ms = remote.load_machines(remote.machines_path()) if registry_unread() else remote.load_machines()
     ssh = {n: m for n, m in sorted(ms.items()) if isinstance(m, dict) and m.get("provider") == "ssh"}
     skipped = remote.restricted(ssh)
