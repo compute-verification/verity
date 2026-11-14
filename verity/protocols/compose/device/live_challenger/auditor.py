@@ -407,7 +407,8 @@ WARDEN_REQUESTS = (4, 1700)
 #: records (ingress, egress and the fails link) and a signed head for the ingress and egress cells' rows
 #: (`warden_serve.Publisher.keep` and `attest`)
 WARDEN_WINDOW_LEAVES = 5
-#: the one-time signature that key gives its session's start, before its first link-window's (`certify_start` there)
+#: the one-time signature that key gives its session's start, before its first execution phase's (`certify_start`
+#: there)
 START_LEAVES = 1
 #: a warden rehearsal's link-window without `--scan`: `warden_serve.py`'s default schedule's (`WardenParams`, 600
 #: buckets of 100 ms)
@@ -1576,8 +1577,8 @@ def warden_height(windows: int, heads: int = 0) -> int:
 
 
 def key_signatures(windows: int, heads: int = 0) -> int:
-    """The one-time signatures a rehearsal of `windows` link-windows takes of its key: a load's `heads`, its session's
-    start and five a link-window."""
+    """The one-time signatures a rehearsal of `windows` execution phases takes of its key: a load's `heads`, its
+    session's start and five an execution phase."""
     return heads + START_LEAVES + WARDEN_WINDOW_LEAVES * windows
 
 
