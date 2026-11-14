@@ -54,7 +54,7 @@ from verity.commitments.periods import interface as IF, rows as CS
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path" / "tests")
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[1] / "one_stage"))
-from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import records_audit as RA  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI  # noqa: E402
 
 K = 64
@@ -153,7 +153,7 @@ def test_a_registry_template_resolves_in_a_fresh_audit_process():
     code = f"""
 import sys
 sys.path.insert(0, {str(HERE.parent)!r})
-from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA
+from verity.protocols.proofs.spot.prover.audit import records_audit as RA
 from verity.circuits.codec import descriptor_id
 assert descriptor_id(RA.catalog_resolve(sys.argv[1])) == sys.argv[1]
 """
@@ -1602,7 +1602,7 @@ def test_a_table_reads_composer_is_keyed_by_the_verifiers_executable_and_no_othe
     executable, and its inputs and its key are the statement's alone; the Definition decides, not the statement's form. The
     read here is the toy template under the read's name (`read_tmpl.READ`), which is all `is_read` asks of a Definition."""
     from verity.protocols.proofs.spot.prover.audit import window_audit as A5
-    from verity.protocols.proofs.spot.verifier.one_stage import compose_circuit as CM
+    from verity.protocols.proofs.spot.prover.audit import compose_circuit as CM
     from verity_flock import read_tmpl as RT
 
     st, flat = {"layout": "iv/hybrid/4", "structural": True}, {"reads": "inline"}
@@ -1639,7 +1639,7 @@ def test_the_audit_from_the_records_loads_of_verity_vllm_only_a_catalog_package(
 import json, sys
 from pathlib import Path
 sys.path.insert(0, {str(HERE.parent)!r})
-from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA
+from verity.protocols.proofs.spot.prover.audit import records_audit as RA
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, docket as R
 from verity.protocols.proofs.spot.prover.audit import window_audit as A5
 d, t = Path({str(written.dir)!r}), Path({str(tmp_path)!r})

@@ -14,6 +14,8 @@ untraced = [
     "tests/test_prove_path.py",
     "tests/test_prove_path_sh_keep.py",
     "tests/test_prove_path_sh_request_values.py",
+    "tests/test_check_memo.py",
+    "tests/test_records_audit.py",
 ]
 artifacts = [
     "verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof",
@@ -22,6 +24,7 @@ artifacts = [
 # The scripts under `benchmarks/` the moved audit commands still load off `sys.path`, and what their `benchmarks/` suites read
 inputs = [
     "verity",
+    "tools/difftest/python/verity_difftest",
     "benchmarks/one_stage",
     "benchmarks/prove_path",
     "benchmarks/sampling_plan",
@@ -48,7 +51,7 @@ inputs = [
     "tools/verity/circuit_check/src/circuit_check/entries.py",
     "tools/verity/circuit_check/src/circuit_check/targets.py",
     "benchmarks/one_stage/interfaces/verity_e2e_demo",
-    "verity/protocols/proofs/spot/verifier/one_stage/records_audit.py",
+    "verity/protocols/proofs/spot/prover/audit/records_audit.py",
     "verity/commitments/cuda/commit_slots/slots.py",
     "demos/vllm/serve_load.py",
     "demos/vllm/serve.sh",
@@ -137,7 +140,7 @@ inputs = [
 ]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_prove_bundle.py"]
+tests = ["tests/test_prove_bundle.py", "tests/test_records_audit.py"]
 paths = ["verity/circuits/ops"]
 
 [[tool.verity.tests.reads]]

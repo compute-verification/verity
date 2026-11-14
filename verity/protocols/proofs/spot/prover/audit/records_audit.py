@@ -184,8 +184,7 @@ from typing import Any
 
 import numpy as np
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path")
-sys.path.insert(0, str(HERE.parent / "one_stage"))
+HERE = Path(__file__).resolve().parent
 
 from verity import device as ST  # noqa: E402
 from verity.protocols.accounting.registration.verifier import registration as G  # noqa: E402
