@@ -290,7 +290,7 @@ def COUNTED_ID : String := "verity/onsite/counted/v0"
 /-- `counted`'s subprotocols, in the order of their ids: onsite's, with the count over the wipe's span and the wipe
 whose count the composition holds. -/
 def countedComponents : List BlobProtocol :=
-  hostSpan :: components.dropLast ++ [countedWipe]
+  (hostSpan : BlobProtocol) :: components.dropLast ++ [(countedWipe : BlobProtocol)]
 
 /-- `counted`'s ties: onsite's, the wipe on the count's host, and the wipe and the count on one span and one count. -/
 def countedTies : List Tie := ties ++ wipeNode :: wipeCount
