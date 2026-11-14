@@ -57,6 +57,7 @@ import verity_difftest as DT
 from verity_difftest import protocol as PR
 from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as DR, partition as P, registration as R, verifier as V
 from verity.circuits import codec, partition_object as PO
+from verity.commitments.domains import FLOCK_CIRCUIT_BINDING
 from verity.commitments.identity import identity_digest, identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
@@ -67,7 +68,7 @@ import r2_population as R2
 SCHEME = "frame-v3-sha512/hm96-sha512"
 ROW = "hm96-sha512/row/v1"
 #: M0's set-bound frame domains: each tag with its identity digest (`a0.STAND_IN_BINDINGS`)
-STAND_IN_BINDINGS = {"verity/flock-circuit/binding/v2": identity_digest_sha512,
+STAND_IN_BINDINGS = {FLOCK_CIRCUIT_BINDING: identity_digest_sha512,
                      "verity/flock-ir-frame/binding/v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
 SERVED_BINDINGS = {"sha512": identity_digest_sha512, "v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
 #: `registration.WINDOW_DOMAIN`, the current one and the one before it
@@ -739,7 +740,7 @@ def a0(run: Run) -> Iterator[Case]:
     ports, prov["ports"] = choose(((f"{tag} {layout}{' +content' if content else ''}",
                                     stand_in_ports(s.name, s.content_digest, n, layouts[layout], tag, content))
                                    for layout in ("words", "hidden") for tag in STAND_IN_BINDINGS for content in (True, False)),
-                                  rec, "verity/flock-circuit/binding/v2 hidden")
+                                  rec, f"{FLOCK_CIRCUIT_BINDING} hidden")
     leaf_layer, prov["leaf_layer"] = public_digest(run, f"{base}/stage/pub-{n}.bin", f"{base}/session/archive-put.log")
     live = live_line(run.path(f"{base}/session/prove.log")) or {}
     sessions = (a.get("integrity_profile") or {}).get("evidence", {}).get("sessions") or session_digests(run, f"{base}/session")
@@ -853,7 +854,7 @@ def a0_lean(run: Run) -> Iterator[Case]:
     ports, prov["ports"] = choose(((f"{tag} {layout}{' +content' if content else ''} ({gen['set']})",
                                     stand_in_ports(gen["set"], gen["content_digest"], n, layouts[layout], tag, content))
                                    for layout in ("words", "hidden") for tag in STAND_IN_BINDINGS for content in (True, False)),
-                                  rec, "verity/flock-circuit/binding/v2 hidden")
+                                  rec, f"{FLOCK_CIRCUIT_BINDING} hidden")
     prov["leaf_layer"] = "the record's: the run kept no copy of the public file (stage and archive were scratch)"
     law = DR.parse_design(state["law"])
     served = run.json(f"{base}/served-draw.json")["units"]
@@ -2027,7 +2028,7 @@ def a6(run: Run) -> Iterator[Case]:
     for m in summary["members"]:
         layout = {f"{m['name']}/{port}": (schema, m["n"]) for port, schema in (("x", SEG), ("w", V2), ("o0", V2))}
         set_name = m.get("set") or json.loads(pub_of(m).read_bytes().split(b"\n", 1)[0])["set"]
-        ports.update(stand_in_ports(set_name, "", m["n"], layout, "verity/flock-circuit/binding/v2", False,
+        ports.update(stand_in_ports(set_name, "", m["n"], layout, FLOCK_CIRCUIT_BINDING, False,
                                     prefix=f"{m['name']}/"))
     prov["ports"] = ("a6.frame_ports over each member's set (summary.json's, else its public file's; x row-seg, w and o0 "
                      "row-v2)" if matches(ports, rec) else "GAP: a6.frame_ports' domains are not the record's")
@@ -2129,7 +2130,7 @@ def a7(run: Run) -> Iterator[Case]:
     from verity.circuits import requirement_units as RU
     from verity.circuits.defs import bind
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-    base, tag = "out/a7", "verity/flock-circuit/binding/v2"
+    base, tag = "out/a7", FLOCK_CIRCUIT_BINDING
     a = run.json(f"{base}/audit.json")
     summary = run.json(f"{base}/summary.json")
     rec = a["registration"]
