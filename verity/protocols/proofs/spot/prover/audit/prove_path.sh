@@ -178,7 +178,7 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
   if [ -n "${PP_KEEP_WINDOWS:-}" ]; then   # the windows whole, the prover's files included, for a later job on this node
     mkdir -p "$PP_KEEP_WINDOWS" && rm -rf "$PP_KEEP_WINDOWS/$name-windows" && cp -a $W/$name-windows "$PP_KEEP_WINDOWS/" || return 1
     R keep "$PP_KEEP_WINDOWS" --owner @proofs --expires 7d --priority low \
-      --why "prove_path/run.sh PP_KEEP_WINDOWS: committed windows (rows and salts) a later job stages from" >> $O/keep.log 2>&1
+      --why "prove_path.sh PP_KEEP_WINDOWS: committed windows (rows and salts) a later job stages from" >> $O/keep.log 2>&1
   fi
   if [ -n "${PP_RECORDS:-}" ] && [ -n "${REC_RUN:-}" ]; then   # the window's audit from its records alone
     records $name $part $forged
