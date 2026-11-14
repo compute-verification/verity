@@ -1,4 +1,4 @@
-"""warden_zk's host side on a network certifier run driven tick by tick (`test_warden_serve._run`): the driver reads the
+"""warden_zk's host side on a network certifier run driven tick by tick (`relay_runs._run`): the driver reads the
 egress registration under the deployment's key and session and holds the network certifier's opening to its head; the
 Program's proof blocks read the egress cells of the connection admitted in the execution phase with the most cells, from
 cell D·r on, chosen from the wiring and the schedule alone, each at its bucket's row and the slot the network
@@ -16,7 +16,6 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -27,13 +26,10 @@ from verity.circuits.evaluation.bits import evaluate_bits
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD
 from verity.protocols.accounting.certifier.verifier.warden import END
+from verity.protocols.accounting.certifier.device.tests import relay_runs as tws
+from verity.protocols.accounting.certifier.prover import warden_zk as wz
 
 ROOT = Path(__file__).resolve().parents[6]
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "device" / "tests"))
-import test_warden_serve as tws  # noqa: E402
-
-
-from verity.protocols.accounting.certifier.prover import warden_zk as wz  # noqa: E402
 UNITS = 8
 LEAN = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier"
 #: the Lean verifier, which check builds before this suite (`AFTER_LEAN`)

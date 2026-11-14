@@ -8,17 +8,12 @@ witness pieces the public circuit holds. ``--jobs`` is 1 unless given and 2 is r
 from __future__ import annotations
 
 import json
-import sys
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-
-
 from verity.protocols.accounting.certifier.prover import n2_zk as n2
-sys.path.insert(0, str(Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces" / "tests"))
-from test_warden_chain import gate_run
+from benchmarks.network_traces.tests.test_warden_chain import gate_run
 
 
 @pytest.fixture(scope="module")
