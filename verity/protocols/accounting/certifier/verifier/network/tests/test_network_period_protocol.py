@@ -1269,7 +1269,7 @@ def test_a_period_whose_frames_overrun_a_u32_is_refused(server):
         assert reference(broken)["reason"].startswith(f"params: {fragment}"), (n, reference(broken))
         verdict, out = D.replay(PORT, broken, server)
         assert verdict == REJECT and json.loads(out)["reason"].startswith(f"params: {fragment}"), (n, out)
-        empty = dataclasses.replace(p, audits=(), windows=0)
+        empty = dataclasses.replace(p, audits=(), windows=0, entries=())
         for b, refused in ((PC.U32 - 1, False), (PC.U32, True)):
             q = dataclasses.replace(empty, schedule=dataclasses.replace(p.schedule, cell_bytes=b))
             got = PC.check(q, PC.Commitment([], [], b""), ([], [], []))
