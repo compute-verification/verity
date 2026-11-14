@@ -129,8 +129,8 @@ theorem h1CheckedCreditPeriod_honest :
     (period 64).EveryExecutionPhase (fun live _ => DeadConeDead Honest.scheme circuit 144 live) ∧
     PrefixOf (layer 64) (checkedPlay 64).game ∧
     (∀ w, prob (fun x => (layer 64).MovedIn x w) ≤ 0) ∧
-    RegisteredBeforeDraw (windows 64) ∧ SampleIsCoin hK24 prm (windows 64) ∧
-    ServiceSound prm (windows 64) opened (stagedAt salt staged) 0 ∧
+    RegisteredBeforeDraw (executionPhases 64) ∧ SampleIsCoin hK24 prm (executionPhases 64) ∧
+    ServiceSound prm (executionPhases 64) opened (stagedAt salt staged) 0 ∧
     SaltIsLiveCoin hr1 (salt (n := 64)) enc ∧ StagedPins staged flat ∧
     (period 64).EveryExecutionPhase
       (fun live W => PerLiveTile Honest.scheme circuit live W (fun k G _ => OperandHMu (Honest.scheme.mu k) G)) ∧
@@ -140,10 +140,10 @@ theorem h1CheckedCreditPeriod_honest :
       (fun live W => PerLiveTile Honest.scheme circuit live W (fun k _ G0 => GuessLuckAt (Honest.scheme.guess k) G0)) ∧
     UnitFixed (checkedPlay 64) (layer 64) (monitoringPeriodMode circuit (period 64) (run 64))
       (fun _ t => (tileWords Honest.scheme circuit 144 t : ℝ)) (fun _ => 128) ∧
-    (∀ x w, Accepts prm ((windows 64).reg x w) ((windows 64).ev x w)) ∧
+    (∀ x w, Accepts prm ((executionPhases 64).reg x w) ((executionPhases 64).ev x w)) ∧
     (∀ x, (checkedPlay 64).accepts x) ∧
-    (∀ x, (windows 64).prefixLen prm x = 64) ∧
-    ∀ x, checkedLive Honest.scheme circuit (period 64) prm (windows 64) x = 128 * 64 := by
+    (∀ x, (executionPhases 64).prefixLen prm x = 64) ∧
+    ∀ x, checkedLive Honest.scheme circuit (period 64) prm (executionPhases 64) x = 128 * 64 := by
   obtain ⟨hN, hM, hS, hρN, hwmax, hlk, hG, hDD, hPre, hMoved, hReg, hDraw, hServ, hSalt, hStaged, hMu, hRB, hGs,
     hUF, hAcc, hPrefix, hLive⟩ := h1_meets 64 (by norm_num) (δs := 1 / 100) (by norm_num)
   exact ⟨hN, hM, hS, hρN, hwmax, hlk, hG, hDD, hPre, hMoved, hReg, hDraw, hServ, hSalt, hStaged, hMu, hRB, hGs,
@@ -156,8 +156,8 @@ check accepts all `64` windows, their live words are `128·64` and `ε(64) < 1` 
 probability `1`, above `δ_s + n·(δ_bind + δ_ks) = 1/100`. -/
 theorem h1CheckedCreditPeriod_nontrivial :
     ¬ prob (fun x : Paths Ω1 64 => (acceptAll 64).accepts x ∧ 64 * ((acceptAll 64).run x).fixed <
-        creditPrefix Honest.scheme circuit 144 ((windows 64).prefixLen prm x)
-          (checkedLive Honest.scheme circuit (period 64) prm (windows 64) x) 1 1 (67 / 8) (1 / 100)) ≤
+        creditPrefix Honest.scheme circuit 144 ((executionPhases 64).prefixLen prm x)
+          (checkedLive Honest.scheme circuit (period 64) prm (executionPhases 64) x) 1 1 (67 / 8) (1 / 100)) ≤
       1 / 100 + 64 * (0 + 0) := by
   intro h
   have hall := (prob_mono (p := fun _ : Paths Ω1 64 => True) fun x _ => by

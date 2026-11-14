@@ -199,7 +199,7 @@ theorem executionPhasesOf_ne {θ : ByteArray} {w₁ w₂ : String} (h : windowsO
 /-- **A window `verifyLedger` returns is an open among the entries it read, named by its root**, and its end, where
 it has one, is an end among them of the open's session (`Ledger.verifyLedger_inv`). -/
 theorem win_lines {es : Array LedgerEntry} {key : ChallengerKey} {wins : Array Win}
-    {ms : Array Spot.Challenger.MonitoringPeriod} (h : verifyLedger es key = .ok (wins, ms)) {w : String} {W : Win}
+    {ms : Array Spot.Challenger.PeriodRecord} (h : verifyLedger es key = .ok (wins, ms)) {w : String} {W : Win}
     (hf : wins.find? (·.root == w) = some W) :
     W.opened ∈ es.toList ∧ W.opened.kind = "open" ∧ openedRoot W.opened = w ∧
       ∀ en, W.ended = some en → en ∈ es.toList ∧ en.kind = "end" ∧ en.session = W.opened.session := by

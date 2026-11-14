@@ -19,7 +19,7 @@ session, so they hold at a window as they do at one session:
   each play signed what the play's signatures are on (`Binding.SignsPlay`).
 * **(a'), the digest** (`prob_not_sampledDigest_le`): at the bound digests' two-continuation finder at the window's
   budget (`executionPhaseBindFinder`).
-* **The sample's coins** (`Window.srcCoinsAt`, `Window.avg_srcCoinsAt`): the window's bytes as `m` fresh frames' coins,
+* **The sample's coins** (`ExecutionPhase.srcCoinsAt`, `ExecutionPhase.avg_srcCoinsAt`): the window's bytes as `m` fresh frames' coins,
   uniform by A3 wherever the window's bytes are `m` frames.
 
 What is left is `executionPhaseSpotSound_assembled`'s hypotheses: the deployment's side (`ExecutionPhaseDeployed`, `ExecutionPhaseCovers`), the
@@ -41,14 +41,14 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The sample's coins at `m` frames, at a window**: the window's bytes as `m` fresh frames' coins (`byteCoins`)
 where the window reads `m` frames' bytes, else none. -/
-noncomputable def Window.srcCoinsAt (m : ℕ) (W : Window) : W.Ω → Fin m → Fin 512 → Bool :=
+noncomputable def ExecutionPhase.srcCoinsAt (m : ℕ) (W : ExecutionPhase) : W.Ω → Fin m → Fin 512 → Bool :=
   if h : W.Lb 0 = m * 64 then byteCoins W.src h else fun _ _ _ => false
 
-/-- **The window's sample's coins are uniform** where the window reads `m` frames' bytes (`Window.avg_byteCoins`). -/
-theorem Window.avg_srcCoinsAt {m : ℕ} {W : Window} (hL : W.Lb 0 = m * 64) (H : (Fin m → Fin 512 → Bool) → ℝ≥0∞) :
+/-- **The window's sample's coins are uniform** where the window reads `m` frames' bytes (`ExecutionPhase.avg_byteCoins`). -/
+theorem ExecutionPhase.avg_srcCoinsAt {m : ℕ} {W : ExecutionPhase} (hL : W.Lb 0 = m * 64) (H : (Fin m → Fin 512 → Bool) → ℝ≥0∞) :
     avg (fun ω => H (W.srcCoinsAt m ω)) = avg H := by
   have h : W.srcCoinsAt m = byteCoins W.src hL := by
-    unfold Window.srcCoinsAt
+    unfold ExecutionPhase.srcCoinsAt
     exact dif_pos hL
   rw [h]
   exact W.avg_byteCoins hL H
@@ -57,15 +57,15 @@ variable (V : Vocab d α) (k : Verity.Registration.Composite)
 
 /-- **The bound digests' two-continuation finder, at a window** (`bindFinder`): the commitment's cut's, `σ`'s play on
 two independent tapes from the start, at the window's budget, `2t + 2h` SHA-512 calls. -/
-noncomputable def executionPhaseBindFinder (W : Window) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+noncomputable def executionPhaseBindFinder (W : ExecutionPhase) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Strategy (V.game θ F c)) : Claims.Finder :=
   (bindCut V k θ F c).finder σ (2 * V.cost θ F c σ + 2 * W.h)
 
-theorem executionPhaseBindFinder_calls : ∀ (W : Window) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+theorem executionPhaseBindFinder_calls : ∀ (W : ExecutionPhase) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Strategy (V.game θ F c)) (x : (executionPhaseBindFinder V k W θ F c σ).S),
     ((executionPhaseBindFinder V k W θ F c σ).cost x : ℝ) ≤ W.qM (V.cost θ F c σ) := fun W θ F c σ _ => by
   show ((2 * V.cost θ F c σ + 2 * W.h : ℕ) : ℝ) ≤ W.qM (V.cost θ F c σ)
-  simp [Window.qM]
+  simp [ExecutionPhase.qM]
 
 /-- **The window's constructions with the binding's finders**: `K`'s with the window's read finder and the forger at
 the device's history `dev` (`executionPhaseReadFinder`, `Binding.forger`) and the bound digests' finder at composite `k`
@@ -90,14 +90,14 @@ picks only openings (`hR`); and the members' steps hold off the openings' empty 
 member's files at their registered files and whose sample answers the strategy's `afterAt`. -/
 theorem executionPhaseSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd : ExecutionPhaseReadings) (K : ExecutionPhaseConstructions V)
     (dev : Exchange → Properties.Challenger.History)
-    (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
+    (D : (W : ExecutionPhase) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       ExecutionPhaseDecoders V θ F c W σ)
     (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String) (nc : ℕ)
-    {S : ByteArray → Array ByteArray → Option Window}
+    {S : ByteArray → Array ByteArray → Option ExecutionPhase}
     (hD : ExecutionPhaseDeployed V ((K.withBinding dev k).withProject V rd D
       (executionPhaseSampleMaps e V rd label (afterAt V k) fun W => W.srcCoinsAt nc)) S)
     (hCov : ExecutionPhaseCovers V k S)
-    (I : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
+    (I : (W : ExecutionPhase) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       (W.extend (executionPhaseSampleMaps e V rd label (afterAt V k) (fun W => W.srcCoinsAt nc) W θ F c σ).widening).L.Ω →
         Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℕ → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → Prop)
     (hP : ∀ θ F W, S θ F = some W → ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
@@ -117,7 +117,7 @@ theorem executionPhaseSpotSound_assembled (e : 𝔽 ≃ (Fin 128 → Bool)) (rd 
   executionPhaseSpotSound_of_sample V k e rd (K.withBinding dev k) D label (afterAt V k) (fun W => W.srcCoinsAt nc) hD hCov
     (fun o => Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent ∧ FilesSent V o)
     (fun θ F c σ o => SampledDigest k o.sent (afterAt V k θ F c σ)) I
-    (fun θ F W hW H => Window.avg_srcCoinsAt (hL θ F W hW) H)
+    (fun θ F W hW H => ExecutionPhase.avg_srcCoinsAt (hL θ F W hW) H)
     (fun θ F W hW c σ => logged_files_le V k dev θ F c σ
       (Binding.binds_of_prints V k dev θ (hP θ F W hW)) (hS θ F W hW c))
     (fun θ F W _ c σ => prob_not_sampledDigest_le V k θ F c σ (2 * V.cost θ F c σ + 2 * W.h))

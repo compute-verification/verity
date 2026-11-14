@@ -21,7 +21,7 @@ namespace Slowdown.Guarantees
 
 open Verity
 
-/-- **Keyed circuits are threaded**: a keyed reference circuit whose roots have `d` legs, whose values each reach at
+/-- **Keyed circuits are threaded**: a keyed reference circuit whose roots have fan-in `d`, whose values each reach at
 most `e` counted multiplications and whose lookups each reach at most `eLk`, with lookup columns `b` bits wide, is
 `(d − E, e + E · eLk)`-threaded at every `c` and every `S < (E + 1) · b`: a small subcircuit reads too little to hold
 more than `E` of a thread's lookups, and one that reads fewer than `d − E` values of a thread holds none of its roots. -/

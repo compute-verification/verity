@@ -85,7 +85,7 @@ def test_toy_regenerates():
     assert straddles == ["model.layers.0.mlp.down_proj.weight"] and STORE.layer(1)[0].first_block % 11
     commitment = setup.commit(STORE.params, W)
     assert commitment.hex() == TOY["commitment"]
-    assert setup.draw_salt(bytes.fromhex(TOY["source"]), commitment) == SALT
+    assert setup.sample_salt(bytes.fromhex(TOY["source"]), commitment) == SALT
     assert expand_prefix(STORE.params, SALT).hex() == TOY["prefix"]
     for data, key in ((W, "w_sha512"), (C_STAR, "c_star_sha512"), (STAGING, "staging_sha512")):
         assert hashlib.sha512(data).hexdigest() == TOY[key]
@@ -296,7 +296,7 @@ def test_store_is_the_registered_encoding(gen: tuple[str, str], tmp_path: Path) 
     w = lay.layout.pack({t.name: b"".join(mod.tensor_bytes(g, b"seed", p) for p in S.generator_parts(t.name))
                          for t in lay.tensors})
     commitment = setup.commit(q, w)
-    salt = setup.draw_salt(bytes.fromhex(SOURCE), commitment)
+    salt = setup.sample_salt(bytes.fromhex(SOURCE), commitment)
     assert (doc["commitment"], doc["salt"]) == (commitment.hex(), salt.hex())
     vk = setup.verifier_key_from_encoding(q, None, commitment, salt, _store_segments(store, q))
     assert doc["root"] == vk.root.hex()

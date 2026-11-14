@@ -3942,6 +3942,11 @@
         "security/Proofs/Accounting/ServingBlocks.lean": "security/Proofs/Slowdown/ServingBlocks.lean",
         "security/Proofs/Accounting/ServingBlocks/Witnesses.lean": "security/Proofs/Slowdown/ServingBlocks/Witnesses.lean"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/verifier/lean/Spot/PeriodRecord.lean": "verity/protocols/proofs/spot/verifier/lean/Spot/MonitoringPeriod.lean"
+      }
     }
   ]
 }

@@ -6,7 +6,7 @@ subprotocols are that composite's three (`Core.Remote.components`: the inference
 SPOT) and the network certifier over the period (`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the
 period's execution phases certified and proved, and the bound `K` on what left the site).
 `Core.Composition.tiedSameB` composes them on the caller's blobs under remote's record subprotocols
-(`Core.Remote.tied`), remote's tie (`Core.Remote.windows`) and its own (`egress`), so its verdict is the AND of
+(`Core.Remote.tied`), remote's tie (`Core.Remote.executionPhases`) and its own (`egress`), so its verdict is the AND of
 remote's and the network certifier's over one registration: it accepts when both accept and the network certifier's
 period is on the policy's record, and either's rejection rejects it whatever the other answers.
 
@@ -59,7 +59,7 @@ def auditRecords (k : Case) : Option (List ByteArray) := do
 def egress : Tie :=
   ⟨"record", [(InferenceOnlyCheck.Protocol.protocolId, Core.Remote.policyRecord), (NetworkCheck.Period.protocolId, auditRecords)]⟩
 
-def ties : List Tie := [Core.Remote.windows, egress]
+def ties : List Tie := [Core.Remote.executionPhases, egress]
 
 def protocol : BlobProtocol := tiedSameB protocolId Core.Remote.tied ties components
 
@@ -151,7 +151,7 @@ private def composite : Protocol :=
   tiedSame protocolId Core.Remote.tied ties (standIns (components.map (·.id)))
 
 private def remote : Protocol :=
-  tiedSame "verity/remote/v0" Core.Remote.tied [Core.Remote.windows] (standIns (Core.Remote.components.map (·.id)))
+  tiedSame "verity/remote/v0" Core.Remote.tied [Core.Remote.executionPhases] (standIns (Core.Remote.components.map (·.id)))
 
 private def both : Verdict → Verdict → Verdict
   | .reject, _ | _, .reject => .reject
