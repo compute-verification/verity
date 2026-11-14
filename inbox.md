@@ -28,3 +28,6 @@ Two questions, each yes/no, with the answer I took:
 Also found and fixed [ran]: the challenger's stream refused the honest round at `roots` (`0.sin` undeclared, no log): the start never reached the challenger's path; and a shadowed `kind` in `member` left the tampered round's `changed` None.
 Next: item 2, then item 3; then mending the step's own retired words (+188 over #9736, gate warns), then the node runs.
 
+[2026-11-14T09:30Z] 3df74b318d28
+READSEATS on #9760 at 4f5c255a6f93: VERDICT mark. Note: lanes/network-accounting/20261114T0929Z-reading-readseats-9760.md. Weighs most: the head inherits #9741's conflict with origin/main (f28bdad24636) in certifier_piece.py's docstring, so it can't be marked until main is merged below it; its own change (CPUs written as ranges, the guard's key-path entry deleted, a test refusing any keys entry) alters no refusal or verdict in code, both cuts are caught, and a chain record over a gate run kept from before it is now held (exit 3), as the body says.
+
