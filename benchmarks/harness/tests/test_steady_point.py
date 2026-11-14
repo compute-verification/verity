@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import signal
 import sys
@@ -994,6 +995,48 @@ def test_run_launches_each_point_without_a_passing_run_through_a_gpu_slot_of_the
         assert STEADY_POINT.parse(command) == {"spec": path, "point": item.point.id, "identity": item.identity}
 
 
+def test_a_point_named_again_is_launched_though_a_passing_run_stands_for_it_and_plan_says_so(tmp_path):
+    """A labelled row stands for a point by its pin, provers and cores, so without `--again` a first run of the harness
+    at a point the record already has is never launched."""
+
+    root, path = tree(tmp_path)
+    plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: ("r-passed", None))
+    ran = []
+    assert P.dispatch(plan, root / path, root=root, direct="vy-dc-h200", execute=lambda c, cwd: ran.append(c) or 0) == 0
+    assert ran == [], "every point passed: nothing is launched"
+    again = jobs.again(plan, ["gemm64-k2"])
+    assert [item.again for item in again.points] == [False, True, False]
+    assert [point.get("again") for point in jobs.plan_json(again)["points"]] == [None, "passed by r-passed", None]
+    assert [point["passing_run"] for point in jobs.plan_json(again)["points"]] == ["r-passed"] * 3, "nothing superseded"
+    assert P.dispatch(again, root / path, root=root, direct="vy-dc-h200", execute=lambda c, cwd: ran.append(c) or 0) == 0
+    assert [STEADY_POINT.parse(command)["point"] for command in ran] == ["gemm64-k2"]
+    with pytest.raises(ValueError, match=r"--again gemm64-k3: not a point of spec 'steady', whose points are gemm64-k1, "):
+        jobs.again(plan, ["gemm64-k3"])
+    with pytest.raises(SystemExit):
+        main(["run", path, "--direct", "vy-dc-h200", "--again"])
+
+
+def test_a_point_on_a_booked_card_is_launched_through_the_booked_slot_and_names_the_card(tmp_path):
+    """The calendar books a card and its slot's cores; the first free slot, and either card of its NUMA node, may be
+    another lane's booking."""
+
+    root, path = tree(tmp_path)
+    plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, None))
+    ran = []
+    assert P.dispatch(plan, root / path, root=root, direct="vy-spot-glm53", card=3, cores="34-43",
+                      execute=lambda c, cwd: ran.append(c) or 0) == 0
+    for command, item in zip(ran, plan.points, strict=True):
+        workload = command[command.index("--") + 1:]
+        assert workload[:7] == ["taskset", "-c", "34-43", "env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3",
+                                "tools/verity/check/slot.py"]
+        assert workload[workload.index("--", 7) + 1:] == [
+            "bash", "benchmarks/harness/steady_point.sh", "--spec", path, "--point", item.point.id,
+            "--identity", item.identity, "--card", "3"]
+        assert STEADY_POINT.parse(command) == {"spec": path, "point": item.point.id, "identity": item.identity}
+    with pytest.raises(ValueError, match=r"--card 3 needs --cores, the booked slot's cores"):
+        P.dispatch(plan, root / path, root=root, direct="vy-spot-glm53", card=3, execute=lambda c, cwd: 0)
+
+
 def test_a_point_whose_statement_is_in_the_store_is_launched_with_a_read_only_key_to_it(tmp_path):
     """Only that point's run reads the store: a row staged in the run, or from a directory on the node, gets no key."""
 
@@ -1102,8 +1145,8 @@ class Node:
         self.identity = SP.point_identity(spec, SP.point(spec, point_id), sha256_of(SP.closure(self.root, spec)))
 
     def args(self, **changes):
-        return N.parse(["--spec", self.spec, "--point", self.point_id, "--identity",
-                        changes.get("identity", self.identity)])
+        return N.parse(["--spec", self.spec, "--point", self.point_id, "--identity", changes.get("identity", self.identity),
+                        *(["--card", str(changes["card"])] if "card" in changes else [])])
 
     def ask(self, argv):
         if list(argv[1:5]) == list(N.FETCH):
@@ -1209,7 +1252,8 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
     assert point["cores"] == {"count": 10, "list": "20-29"}
     assert point["statement"]["pin"] == PIN and point["statement"]["from"] == SP.STAGER
     assert point["timed"] == {"refused": None, "device": "3", "host": STAMP,
-                              SP.VERSIONS: {"driver": DRIVER, "cuda_toolkit": CUDA}, "exit": 0, "rows": 1}
+                              SP.VERSIONS: {"driver": DRIVER, "cuda_toolkit": CUDA}, "exit": 0, "rows": 1,
+                              "kept_session": {"session": None, "why": "the verifiers filed no session"}}
     assert STAMP["cuda"] != CUDA, "the stamp's `cuda` is the driver's newest, never the toolkit's version"
     verdict = node.read(N.VERDICT_FILE)
     assert (verdict["identity"], verdict["point"], verdict["passed"], verdict["why"]) == (node.identity, POINT, True, None)
@@ -1256,6 +1300,32 @@ def test_the_lease_is_asked_of_the_cards_on_the_numa_node_of_the_runs_cpus(tmp_p
     assert lease[:lease.index("--")] == ["gpu-lease", "1", "--wait", "--max-min", "90", "--on", "2,3", "--preemptible",
                                          "--mem-gb", "80"]
     assert node.read(N.POINT_FILE)["lease_on"] == {"numa_nodes": [1], "cards": [2, 3]}
+
+
+def test_a_booked_card_is_leased_alone_once_it_is_on_the_numa_node_of_the_runs_cpus(tmp_path, monkeypatch):
+    """Either card of the NUMA node may be another lane's booking in the same hours."""
+
+    node = Node(tmp_path, monkeypatch)
+    numa(node)
+    assert node.point(card=3) == 0
+    lease = node.ran[1]
+    assert lease[:lease.index("--")] == ["gpu-lease", "1", "--wait", "--max-min", "90", "--on", "3", "--preemptible",
+                                         "--mem-gb", "80"]
+    assert node.read(N.POINT_FILE)["lease_on"] == {"numa_nodes": [1], "cards": [3]}
+
+
+@pytest.mark.parametrize("cards, says", [
+    (CARDS, "the point was launched on card 0, which isn't on NUMA node 1 of the run's CPUs (its cards are 2, 3): "
+            "launch it with the cores of card 0's slot"),
+    (None, "the point was launched on card 0, and the node doesn't say which cards are on the NUMA node of the run's "
+           "CPUs"),
+])
+def test_a_booked_card_off_the_numa_node_of_the_runs_cpus_is_refused_before_the_statement(tmp_path, monkeypatch,
+                                                                                           cards, says):
+    node = Node(tmp_path, monkeypatch)
+    numa(node, cards=cards)
+    assert node.point(card=0) == N.REFUSED
+    assert node.ran == [] and says in node.read(N.POINT_FILE)["refused"]
 
 
 def test_a_node_that_cannot_run_gpu_lease_is_refused_before_a_statement_is_staged_with_the_script_to_install(
@@ -1316,6 +1386,65 @@ def test_a_node_that_lists_nothing_of_its_numa_nodes_leases_any_card(tmp_path, m
     node = Node(tmp_path, monkeypatch)
     assert node.point() == 0 and "--on" not in node.ran[1]
     assert node.read(N.POINT_FILE)["lease_on"]["cards"] is None
+
+
+def filed(step: Path, name: str, label: str, *, mtime: int, warm: bool = False, accepted: bool = True,
+          circuit: str = PIN, said: int = 1, proof: bytes = b"rep0") -> None:
+    """A session a verifier filed under `step` (its four files), its verifier's SESSION lines (`said` of them carry
+    its timings) and its row of sessions.jsonl."""
+
+    session = step / "verifier-0" / name
+    session.mkdir(parents=True)
+    (session / "circuit.rep0.bin").write_bytes(proof)
+    (session / "circuit.rep1.bin").write_bytes(b"rep1")
+    (session / "verifier.json").write_text("{}")
+    timings = {"handle_s": 1.5, "verify_s": float(mtime)}
+    (session / "session.json").write_text(json.dumps({
+        "verdict": {"accepted": accepted, **timings, "reps": [{"ok": accepted}, {"ok": True}]}, "aborted": False,
+        "proof_sha512": [{"stream": f"circuit/rep{i}", "bytes": 4, "sha512": hashlib.sha512(b"rep%d" % i).hexdigest()}
+                         for i in (0, 1)]}))
+    for path in session.iterdir():
+        os.utime(path, (mtime, mtime))
+    os.utime(session, (mtime, mtime))
+    with (step / "verifier-0.log").open("a") as log:
+        log.writelines(f"SESSION\t{json.dumps({'label': label, 'accepted': accepted, **timings})}\n" for _ in range(said))
+    with (step / "sessions.jsonl").open("a") as rows:
+        rows.write(json.dumps({"error": None, "live": {"label": label, "accepted": accepted, "warm": warm,
+                                                       "circuit_sha512": circuit}}) + "\n")
+
+
+def test_one_accepted_timed_session_is_kept_for_the_lean_verifier_with_its_label_and_proofs(tmp_path):
+    """The kept proof is what the Lean verifier is handed: a warm, refused or other-circuit session, or one whose
+    files aren't the proofs it recorded, would be a verdict on something the row didn't time."""
+
+    step, kept = tmp_path / "rate" / "gemm64-k2", tmp_path / "out" / "gemm64-k2"
+    step.mkdir(parents=True)
+    kept.mkdir(parents=True)
+    filed(step, "s1", "gemm64/k2/3", mtime=100)
+    filed(step, "s2", "gemm64/k2/4", mtime=200, warm=True)
+    assert N.keep_session(step, kept, PIN) == {
+        "session": "gemm64-k2/kept-session", "label": "gemm64/k2/3",
+        "proof_sha512": json.loads((step / "verifier-0" / "s1" / "session.json").read_text())["proof_sha512"]}
+    assert sorted(p.name for p in (kept / N.KEPT_SESSION).iterdir()) == sorted(N.SESSION_FILES)
+
+
+@pytest.mark.parametrize("change, says", [
+    ({"warm": True}, "its row in sessions.jsonl isn't a timed, accepted session without an error"),
+    ({"accepted": False}, "it wasn't accepted with every repetition"),
+    ({"circuit": "0" * 128}, "its circuit isn't the row's pin"),
+    ({"said": 2}, "2 of the verifiers' 2 SESSION lines carry its timings"),
+    ({"proof": b"rep9"}, "circuit.rep0.bin isn't the proof the session recorded for circuit/rep0"),
+])
+def test_no_session_is_kept_where_none_is_an_accepted_timed_one_of_the_pin_and_the_record_says_why(tmp_path, change,
+                                                                                                   says):
+    step, kept = tmp_path / "rate" / "gemm64-k2", tmp_path / "out" / "gemm64-k2"
+    step.mkdir(parents=True)
+    kept.mkdir(parents=True)
+    filed(step, "s1", "gemm64/k2/3", mtime=100, **change)
+    record = N.keep_session(step, kept, PIN)
+    assert record["session"] is None and record["why"] == f"verifier-0/s1: {says}"
+    assert not (kept / N.KEPT_SESSION).exists()
+    assert N.keep_session(tmp_path / "none", kept, PIN) == {"session": None, "why": "the verifiers filed no session"}
 
 
 def test_the_result_lists_every_file_plan_judges_the_run_by(tmp_path, monkeypatch):
@@ -1541,6 +1670,24 @@ def test_the_timed_step_refuses_a_card_or_versions_that_are_not_the_specs(tmp_pa
     assert [argv[0] for argv in node.ran] == [sys.executable, "gpu-lease"] and node.ran[0][1] == SP.STAGER, "nothing timed"
     assert says in node.read(N.POINT_FILE)["refused"] and says in node.read("result.json")["validation"]["detail"]
     assert not (node.run_dir / S.RATES).exists() and not (node.run_dir / START).exists()
+
+
+def test_the_timed_step_refuses_a_toolkit_that_is_not_the_specs_though_the_point_read_it_before_the_lease(tmp_path,
+                                                                                                         monkeypatch):
+    """The point refuses a wrong toolkit before the lease, so no run of the point reaches the timed step's own read
+    with one: an nvcc that differs inside the lease (another setup, another path) is refused there too."""
+
+    node = Node(tmp_path, monkeypatch, answers={"nvcc --version": NVCC.replace(CUDA, "12.9.41")})
+    spec = SP.load_spec(node.root / node.spec, root=node.root)
+    (node.run_dir / "out").mkdir()
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "3")
+    assert N.timed(spec, SP.point(spec, POINT), node.scratch_root, node.run_dir, run=node.run, ask=node.ask,
+                   now=lambda: 1_700_000_000.0, stamp=lambda: dict(node.host)) == N.REFUSED
+    assert node.ran == [], "nothing timed"
+    assert node.read(N.TIMED_FILE)["refused"].startswith(
+        f"the node's driver and CUDA toolkit are {{'driver': '{DRIVER}', 'cuda_toolkit': '12.9.41'}}, and spec 'steady' "
+        f"says {{'driver': '{DRIVER}', 'cuda_toolkit': '{CUDA}'}}")
+    assert not (node.run_dir / START).exists()
 
 
 #: the toolkit's version refused before any statement or card: what the node's nvcc answers, and what the refusal says
