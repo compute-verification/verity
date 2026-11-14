@@ -44,7 +44,7 @@ def leafCap : ℕ := 2 ^ 23 + 2 ^ 14 + 2
 
 /-- Whether level 0's codeword of `Zk.schedule m` has at most `2^23` symbols. -/
 def zkLen0 (m : ℕ) : Bool :=
-  match Zk.schedule m with
+  match Zk.schedule false m with
   | .ok (s, _) => decide (((schedOf s).levels.headD default).logLen ≤ 23)
   | .error _ => true
 

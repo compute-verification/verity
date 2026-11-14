@@ -27,7 +27,7 @@ from verity_vllm.acquire.sources import moe_align_source
 from verity_vllm.engine import vllm_adapter as va
 from verity_vllm.observe import capture
 from verity_vllm.observe.events import RunHeader
-from verity_vllm.pipeline import match_capture as m1_capture
+from verity_vllm.pipeline import match_capture
 from verity_vllm.pipeline.tp import rank_worker as RW
 from verity_vllm.pipeline.tp.rank_worker import TP2CaptureWorkerExtension
 
@@ -338,7 +338,7 @@ def _observed(monkeypatch, w: _Rank, out: Path) -> _Recorder:
     header = RunHeader("log/v1", "2026-01-01T00:00:00Z", "id", {}, {}, {})
     monkeypatch.setattr(capture, "make_header", lambda engine, workload, **kw: header)
     monkeypatch.setattr(capture, "Capture", lambda engine, **kw: SimpleNamespace(rec=rec, roots=[], install=lambda: None))
-    monkeypatch.setattr(m1_capture, "dump_cos_sin", lambda engine, rank_dir: None)
+    monkeypatch.setattr(match_capture, "dump_cos_sin", lambda engine, rank_dir: None)
     monkeypatch.setattr(va, "versions_doc", lambda engine: {})
     w.tp2_install(out_dir=str(out), workload={}, case="C", cp={}, engine_kwargs={}, env_flags={}, snapshot_steps=[], snapshot_max_bytes=0,
                   adapter_revision="r", wheel_sha256=None, vllm_commit=None)

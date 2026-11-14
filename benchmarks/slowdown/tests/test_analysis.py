@@ -271,7 +271,7 @@ def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatc
     assert record["reference-remote-h200"]["certified"] is None
     certified = record["onsite-w63"]["certified"]
     assert certified["r_in"] == pytest.approx(91_075) and certified["window_buckets"] == 32
-    assert certified["faulty_unit_bits"] == 356_592
+    assert certified["incorrect_block_bits"] == 356_592
     reference = run.certified(build(REG, "reference-onsite-h200"))
     assert not reference["declared"] and reference["intake"] == 1
     assert run.certified_md(reference)[0] == ("**Certified ingress:** 3.23e+06 bit/s into a location, intake 1 × α Φ: "

@@ -42,14 +42,14 @@ order (`JointAuditV5.sessions`, `seqG`); sessions run at once are not this leg's
   the roots guard and the roots finders' premises: a strategy of the window's audit at which, wherever every
   member's roots fix their domains, more than an `ε` share of the population is incorrect is accepted with
   probability at most `Window.sessionDelta`.
-* **The projection's target** (`WindowCouplingTarget`): the sampled verdict in the period's game is at most as likely
+* **The projection's target** (`ExecutionPhaseCouplingTarget`): the sampled verdict in the period's game is at most as likely
   as the window's audit accepting (`JointAuditV5.Accepts`: the session of every member with a proof block in the
   sample) at the projected strategy, plus the two-continuation finders' terms, the hiding term, the read finder's
   collision and the forger's forgery.
-* **The vocabulary at the deployment's windows** (`WindowDeployed`, `WindowCovers`), and **the claim's transfer**
-  (`WindowDeployed.claim`): where every member's roots fix their domains and the claim fails at a strategy, more than
-  an `ε` share of the window's population is incorrect at the projected strategy (`JointAuditV5.wrongSet`).
-* **`spotSound_of_window`**: the leg, from the coupling at each window.
+* **The vocabulary at the deployment's windows** (`ExecutionPhaseDeployed`, `ExecutionPhaseCovers`), and **the claim's transfer**
+  (`ExecutionPhaseDeployed.claim`): where every member's roots fix their domains and the claim fails at a strategy, more than
+  an `ε` share of the window's population is incorrect at the projected strategy (`JointAuditV5.incorrectSet`).
+* **`spotSound_of_executionPhase`**: the leg, from the coupling at each window.
 -/
 
 @[expose] public section
@@ -392,14 +392,14 @@ theorem le_add_rootsErr {nJ : ℕ} {p : ℝ≥0∞} (hp : p ≤ 1) : ∀ (ms : L
 
 /-- **The window's knowledge soundness at a claim that fails**: a strategy of the window's audit at which, wherever
 every member's roots fix their domains (`Window.RootsFix`), more than an `ε` share of the population's proof blocks
-is incorrect (`JointAuditV5.wrongSet`) is accepted, the session of every member with a proof block in the sample,
+is incorrect (`JointAuditV5.incorrectSet`) is accepted, the session of every member with a proof block in the sample,
 with probability at most the window's error at `t` calls, where the per-finder premises hold at each member's
 session played alone and each member's roots finder meets its own (`Window.RootsCR`). It is
 `Flock.SecurityProofs.JointShareV5` at the window, the sample's miss and the members' terms summed, under the roots
 guard (`le_add_rootsErr`), which costs each member's roots term. -/
 theorem Window.ks (W : Window) (t : ℕ) (τ : FlockSoundness.Game.Strategy (W.joint t).game)
     (hF : ∀ _ : Nonempty (W.joint t).EndΩ, JointFinderCR (W.joint t) τ) (hcr : W.RootsCR)
-    (hI : ∀ _ : Nonempty (W.joint t).EndΩ, W.RootsFix → W.ε * W.nJ < (((W.joint t).wrongSet τ).card : ℝ)) :
+    (hI : ∀ _ : Nonempty (W.joint t).EndΩ, W.RootsFix → W.ε * W.nJ < (((W.joint t).incorrectSet τ).card : ℝ)) :
     Verity.Game.prob (fun o => (W.joint t).Accepts o) (W.joint t).game τ ≤ W.sessionDelta t := by
   by_cases he : Nonempty (W.joint t).EndΩ
   · exact show _ ≤ W.sampleMiss + (W.joint t).eps + (W.ms.map Member.rootsErr).sum from
@@ -417,7 +417,7 @@ window's audit it is read as, at the window widened by them and the strategy's S
 finder and the forger of the device's signature; and the two-continuation finders, one per round the device opens
 after a digest of the prover's message in any member's session, one for the record the commitment is a digest of, and
 one for the digests the composition's commitment binds, each at most `2t + 2h` SHA-512 calls on every coin. -/
-structure WindowConstructions (V : Vocab d α) where
+structure ExecutionPhaseConstructions (V : Vocab d α) where
   coins : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Verity.Game.Strategy (V.game θ F c) → Widening
   project : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
@@ -442,14 +442,14 @@ structure WindowConstructions (V : Vocab d α) where
 
 /-- **The window a strategy of the period's game is projected into**: `W` widened by the coins the projection
 reads. -/
-noncomputable abbrev WindowConstructions.live {V : Vocab d α} (K : WindowConstructions V) (W : Window)
+noncomputable abbrev ExecutionPhaseConstructions.live {V : Vocab d α} (K : ExecutionPhaseConstructions V) (W : Window)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) : Window :=
   W.extend (K.coins W θ F c σ)
 
 /-- **The leg's per-finder SHA-512 premises at a strategy and the window `W`**: `JointShareV5`'s at the projected
 strategy and the strategy's calls (`JointFinderCR`), `cr/sha-512` as the strict birthday bound at each
 two-continuation finder, and `ecr/sha-512` at each member's roots finder at its calls (`Window.RootsCR`). -/
-structure WindowFinderCR (V : Vocab d α) (K : WindowConstructions V) (W : Window) (θ : ByteArray)
+structure ExecutionPhaseFinderCR (V : Vocab d α) (K : ExecutionPhaseConstructions V) (W : Window) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) : Prop where
   session : ∀ _ : Nonempty ((K.live W θ F c σ).joint (V.cost θ F c σ)).EndΩ,
     JointFinderCR ((K.live W θ F c σ).joint (V.cost θ F c σ)) (K.project W θ F c σ)
@@ -464,7 +464,7 @@ widened by the projection's coins and the strategy projected there, that verity-
 every member with a proof block in the sample (`JointAuditV5.Accepts`), plus the square root of each two-continuation
 finder's success, the coin trees' hiding term, the read finder's collision and the forger's forgery of the device's
 signature. -/
-def WindowCouplingTarget (V : Vocab d α) (k : Verity.Registration.Composite) (K : WindowConstructions V)
+def ExecutionPhaseCouplingTarget (V : Vocab d α) (k : Verity.Registration.Composite) (K : ExecutionPhaseConstructions V)
     (W : Window) (θ : ByteArray) (F : Array ByteArray) : Prop :=
   ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
     Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ ≤
@@ -480,7 +480,7 @@ def WindowCouplingTarget (V : Vocab d α) (k : Verity.Registration.Composite) (K
 windows): where `S` holds no window and the parameters name the one-stage form, each strategy that meets the further
 finders' premises and the read finder's (`Vocab.FinderCR`) makes the sampled verdict accept with probability at most
 the published `δ` at its calls. -/
-def WindowCovers (V : Vocab d α) (k : Verity.Registration.Composite)
+def ExecutionPhaseCovers (V : Vocab d α) (k : Verity.Registration.Composite)
     (S : ByteArray → Array ByteArray → Option Window) : Prop :=
   ∀ θ F, S θ F = none → (∃ p, ParamsAt θ p) → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
     V.finderCR .sampled θ F c σ → V.FinderCR .sampled θ F c σ →
@@ -488,12 +488,12 @@ def WindowCovers (V : Vocab d α) (k : Verity.Registration.Composite)
 
 /-- **Soundness's vocabulary at `.sampled` reads the constructions `K` at the deployment's windows `S`** (`Deployed`,
 at windows): the finder is `K`'s read finder and the forger `K`'s, with no loss term; `error`'s condition holds the
-leg's per-finder premises (`WindowFinderCR`); the published `δ` is at least the window's, at the window widened by the
+leg's per-finder premises (`ExecutionPhaseFinderCR`); the published `δ` is at least the window's, at the window widened by the
 projection's coins; and **the claim's transfer** (`claim`): where every member's roots fix their domains
 (`Window.RootsFix`), at a strategy whose extracted transcript fails the claim at the published share, more than the
 window's `ε` share of its population's proof blocks is incorrect at the projected strategy
-(`JointAuditV5.wrongSet`: every member's, in the committed trace fixed at the joint registration). -/
-structure WindowDeployed (V : Vocab d α) (K : WindowConstructions V)
+(`JointAuditV5.incorrectSet`: every member's, in the committed trace fixed at the joint registration). -/
+structure ExecutionPhaseDeployed (V : Vocab d α) (K : ExecutionPhaseConstructions V)
     (S : ByteArray → Array ByteArray → Option Window) : Prop where
   finder : ∀ θ F c σ, V.finder .sampled θ F c σ = K.readFinder θ F c σ
   forger : ∀ θ F c σ, V.forger .sampled θ F c σ = K.forger θ F c σ
@@ -502,9 +502,9 @@ structure WindowDeployed (V : Vocab d α) (K : WindowConstructions V)
     ¬ Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε →
     ∀ _ : Nonempty ((K.live W θ F c σ).joint (V.cost θ F c σ)).EndΩ,
       (K.live W θ F c σ).ε * (K.live W θ F c σ).nJ <
-        ((((K.live W θ F c σ).joint (V.cost θ F c σ)).wrongSet (K.project W θ F c σ)).card : ℝ)
+        ((((K.live W θ F c σ).joint (V.cost θ F c σ)).incorrectSet (K.project W θ F c σ)).card : ℝ)
   finderCR : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
-    V.finderCR .sampled θ F c σ → V.premises .sampled θ F c σ → WindowFinderCR V K W θ F c σ
+    V.finderCR .sampled θ F c σ → V.premises .sampled θ F c σ → ExecutionPhaseFinderCR V K W θ F c σ
   delta : ∀ θ F W, S θ F = some W → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
     (K.live W θ F c σ).delta (V.cost θ F c σ) (V.crBound θ .sampled (V.cost θ F c σ)) ≤
       V.delta θ .sampled (V.cost θ F c σ)
@@ -512,15 +512,15 @@ structure WindowDeployed (V : Vocab d α) (K : WindowConstructions V)
 variable (V : Vocab d α) (k : Verity.Registration.Composite)
 
 /-- **SPOT's leg over a window of several members**: soundness's vocabulary at `.sampled` reading the constructions
-`K` at the deployment's windows `S` (`WindowDeployed`), which cover the one-stage form (`WindowCovers`), meets SPOT's
-target at composite `k`, from the coupling at each window (`WindowCouplingTarget`). Where `error`'s premises hold and
+`K` at the deployment's windows `S` (`ExecutionPhaseDeployed`), which cover the one-stage form (`ExecutionPhaseCovers`), meets SPOT's
+target at composite `k`, from the coupling at each window (`ExecutionPhaseCouplingTarget`). Where `error`'s premises hold and
 the claim fails, the coupling bounds the verdict by the window's audit's acceptance at the projected strategy and the
 finders' terms; `Window.ks` (`JointShareV5`, under the roots guard) bounds the first by the sample's miss, the
 members' terms summed and their roots terms, each roots finder's premise its own term, the strict birthday bound
 each two-continuation finder, `FinderCR` the read finder and `LmsUnforgeable` the forger. -/
-theorem spotSound_of_window {K : WindowConstructions V} {S : ByteArray → Array ByteArray → Option Window}
-    (hD : WindowDeployed V K S) (hCov : WindowCovers V k S)
-    (hC : ∀ θ F W, S θ F = some W → WindowCouplingTarget V k K W θ F) : V.SpotSound k := by
+theorem spotSound_of_executionPhase {K : ExecutionPhaseConstructions V} {S : ByteArray → Array ByteArray → Option Window}
+    (hD : ExecutionPhaseDeployed V K S) (hCov : ExecutionPhaseCovers V k S)
+    (hC : ∀ θ F W, S θ F = some W → ExecutionPhaseCouplingTarget V k K W θ F) : V.SpotSound k := by
   intro θ F c σ
   by_cases hP : ∃ p, ParamsAt θ p
   swap

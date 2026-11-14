@@ -679,7 +679,7 @@ def p2SessionFn (j : Json) : V Json := do
   pure (Json.mkObj [("held", held.json), ("results", .arr results), ("answer", P2Session.answer held s)])
 
 /-- The session `j` gives (`sessionFn`'s input) run through its events by `Session.run`, and its window `t`. -/
-private def drawnSession (j : Json) : V (Session.State × Int) := do
+private def drawnRun (j : Json) : V (Session.State × Int) := do
   let reg ← registrationOf (← J.get j "registration" "input")
   let (params, coins, appendCoins, notBeforeNs) ← sessionOf j
   let events ← (← J.arr j "events" "input").mapM eventOf
@@ -705,7 +705,7 @@ private def spanResultJ (x : Session.Result × Session.State) : Json :=
 /-- `{session…, "t"}`: window t's draws and, for each, the `pub` and `signs` rows the verifier derives
 (`Span.publicWords`, `Span.signWords`); refused for a window with no draws awaiting their check. -/
 def spanPublicFn (j : Json) : V Json := do
-  let (s, t) ← drawnSession j
+  let (s, t) ← drawnRun j
   let some (w, drawn) := s.awaiting t | throw "the window has no draws awaiting their check"
   pure (Json.mkObj [("draws", .arr (drawn.map pairJ)), ("rows", .arr (drawn.map fun (i, p) =>
     Json.mkObj [("pub", toJson (Span.publicWords s.reg w i p)), ("signs", toJson (Span.signWords s.reg w i))]))])
@@ -713,14 +713,14 @@ def spanPublicFn (j : Json) : V Json := do
 /-- `{session…, "t", "layout", "held": [{"public", "instances"}]}`: window t decided by `Span.spanHeld` on the public
 files given, taken as accepted (`Session.verifyHeld`). -/
 def spanHeldFn (j : Json) : V Json := do
-  let (s, t) ← drawnSession j
+  let (s, t) ← drawnRun j
   let held ← (← J.arr j "held" "input").mapM fun h => do pure (← hex h "public", ← instancesOf h)
   pure (spanResultJ (Session.verifyHeld s t (← layoutOf j) held))
 
 /-- `{session…, "t", "auditor": {"params", "layout"}, "span": {"statements": [{"pub", "record", "evidence",
 "instances"}], "blobs"}}`: window t decided from the span (`Session.verifySpan`). -/
 def spanFn (j : Json) : V Json := do
-  let (s, t) ← drawnSession j
+  let (s, t) ← drawnRun j
   let a ← J.get j "auditor" "input"
   let x ← J.get j "span" "input"
   let statements ← (← J.arr x "statements" "span").mapM fun st => do
