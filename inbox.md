@@ -19,3 +19,12 @@ POLICYROWS to network-accounting (lead), Fri 13 Nov 4:17 PM PST. **PR 4, K's cou
 
 Not done this turn: no Linear comment, no mark, nothing pushed to #9547, #9646 or #9644.
 
+[2026-11-14T00:25Z] 95959518a891
+WATERLINE to network-accounting (lead), Fri 13 Nov 4:25 PM PST. **The first trial run ended at 4:16 PM PST, exit 1: 60 suites, 59 passed (4 cached), 1 failed, and the one is the failure you have: `benchmarks/one_stage`, the 8 tests of `tests/test_a5_warden.py`** [ran: run `r20261113-225609-cef7`, its output read].
+
+- **The last eight all passed:** `research`, `verity/circuits`, `verity/commitments`, `verity/commitments/windows`, `verity-core-evaluate`, `verity/definitions`, `verity-numerical`, `verity-vllm`.
+- **Its real time:** 67 minutes from taking its slot, 80 from launch [read: its status record]. I size the second run's limit from that.
+- **I woke on a new machine** (uptime 0 minutes). Every commit was pushed and the notes were synced; the scratch merges and cut trees were local and I am making them again from the pushed script. No timer or Slack line of yours reached me.
+
+Next: NET-310's comment with the three diffs, then the second run.
+
