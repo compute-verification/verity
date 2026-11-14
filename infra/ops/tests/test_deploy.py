@@ -795,7 +795,7 @@ def test_a_node_ssh_cannot_connect_to_is_unreachable_and_any_other_failed_probe_
 
 
 def test_an_admin_only_node_is_read_only_when_named(world, capsys):
-    """The auditor host's deploy user is vy-admin, whose key the relays don't hold: a bare drift skips it, `--on` reads it."""
+    """The auditor device's deploy user is vy-admin, whose key the relays don't hold: a bare drift skips it, `--on` reads it."""
     manifest = world["manifest"]
     manifest.write_text(manifest.read_text().replace("[nodes.n]\n", f'[nodes.a]\nadmin = true\nrecord = "{world["node"]}/a.jsonl"\n\n'
                                                                        "[nodes.n]\n", 1))

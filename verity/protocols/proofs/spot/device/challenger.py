@@ -117,7 +117,7 @@ open's `for`, else its `by` (`lane_of`).  The verifier pins the challenger key f
 deployment; `key_of_record` reads the operator's published pin), and refuses any open or period-open naming another
 key's
 SHA-512 before it checks a signature, so a ledger signed under its own key can't pin itself.  Then the ledger is
-the operator's reference check, `verify_ledger` and `verify_periods` (one `_verify`, which the auditor's host runs
+the operator's reference check, `verify_ledger` and `verify_periods` (one `_verify`, which the auditor's device runs
 too): each
 entry chained and signed at strictly increasing leaves of the key (a ledger restored with its key's state forks at a
 reused leaf), a reserve first in its session and expiring its minutes after its start, one open a root and a session,
@@ -128,7 +128,7 @@ opened under v2, ended and closed, its end naming its record's leaf and commitme
 sealing the session's record, close, release log and refused hellos; then its record names the open's host and is
 signed at that leaf over that commitment, its signed close names the ledger's session id, and its release log and
 refused hellos are the ones the end sealed (`session_named`).  A ledger older than the window's end is refused, as is a
-window it opens no session for, so one session's coins pass for one window only.  The auditor host's operator publishes
+window it opens no session for, so one session's coins pass for one window only.  The auditor device's operator publishes
 the ledger's heads;
 `ledger_head` checks each, refuses any two that don't extend one another, and takes the longest.  Every entry is under
 the one pinned key, so a ledger whose key changes is refused: no entry, signed under the old key, hands the ledger to a
@@ -163,7 +163,7 @@ pins the open's commit (`pins_reason`), and that commit is on main's first-paren
 (`first_parent_reason`; the auditor's ``git rev-list --first-parent origin/main``, an argument, never the host's or the
 prover's word).  Ancestry is not enough: main lands each change as a merge, so a branch commit merged into main is in
 main's history, but main's check ran on the merge's tree, never on the branch commit's.  That the host ran the commit
-its open names is the auditor-trusted host's word (`trusted-host`).  Every path that credits a session reads it
+its open names is the auditor-trusted device's word (`trusted-host`).  Every path that credits a session reads it
 through `pinned_session`: `credited_session` (the pin first, then the circuit) and `trusted_session_of`.
 `audited_session` checks no pin and credits nothing.
 
@@ -1680,7 +1680,7 @@ def declared_day(ledger: Any, window: Any, key: ChallengerKey, verify: Verify) -
 
 
 def ledger_head(heads: Any, key: ChallengerKey, verify: Verify) -> list[str]:
-    """The auditor's ledger as the auditor host's operator published it: every head of `heads` (each its lines; None
+    """The auditor's ledger as the auditor device's operator published it: every head of `heads` (each its lines; None
     when the verifier has none)
     checked under the pinned key `key` (`audited_session`'s check of a ledger), any two extending one another, and of them
     the longest.  Raises `CoinError` naming why (and which head, when there are several), so a ledger forked, cut or
@@ -1868,7 +1868,7 @@ def first_parent_reason(session: str, pinned: Any, main: Any) -> str | None:
 
 def pinned_session(ledger: Any, window: Any, key: ChallengerKey, pins: Any, main: Any, verify: Verify) -> Audited:
     """`audited_session`, from main's code: the window's session as the auditor's ledger names it, when the host's pins
-    log `pins` (its lines; the auditor host's operator's published one) records the open's pin (`pins_reason`) and the
+    log `pins` (its lines; the auditor device's operator's published one) records the open's pin (`pins_reason`) and the
     verifier's own copy of
     main's first-parent history `main` holds it (`first_parent_reason`).  Raises `CoinError` naming why, so a session
     the host ran from any other tree fails closed.  For PoUW this is what makes a credited window's coins come from a

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # clock_calib.sh's part inside the lease: clock_calib_lease.sh BINARY OUT. The leased GPU only (GPU_LEASE_UUID).
 # Reading C's question: how precisely can an auditor's own clock time a known-length reference kernel? A reference
-# kernel of a known cycle count is launched REPS times at several lengths, each timed three ways (the auditor's host
+# kernel of a known cycle count is launched REPS times at several lengths, each timed three ways (the auditor's device
 # steady_clock, the chip's %globaltimer, clock64 cycles); the spread of the host-timed clock across reps is the
 # auditor-side measurement uncertainty u. Timing lower-bounds the clock (a prover can always run slower), so this
 # measures u for the lower-bound reading only. Clocks are restored on exit.
