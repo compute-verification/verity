@@ -54,7 +54,6 @@ from . import cpuset, ledger, model, nebius1, nebius2, status
 
 DESCRIPTION = Path(__file__).parents[2] / "descriptions" / "nebius.toml"
 NODES = status.NODES
-HOSTS = status.HOSTS
 LEAN_SLOTS = "/workspace/research/locks/lean-slots"
 CHECK_SLOTS = "/workspace/research/locks/slots"
 DIRECT = {"direct-gpus": "/etc/vy/direct-gpus", "direct-cpus": "/etc/vy/direct-cpus"}
@@ -933,7 +932,7 @@ def main_diff(description: str | Path, which: str, as_json: bool, key: Path | No
         return 2
     keys = d[1]
     now = int(clock())
-    runner = runner or (lambda node: status.ssh(HOSTS[node], key))
+    runner = runner or (lambda node: status.reach(node, key))
     nodes = _nodes(which)
     with ThreadPoolExecutor(len(nodes)) as ex:
         raws = list(ex.map(lambda n: read(n, runner(n)), nodes))

@@ -37,7 +37,6 @@ from verity.definitions.registry import moe_pad as MP
 from verity.definitions.registry.prims import BF16, F32, I32
 
 E, VPT, H, INTER = 4, 2, 16, 16
-I = INTER   # the name `test_moe_pad_route_a3.py` imports
 BOT16, BOT32, BOT1 = L.enc_bot(16), L.enc_bot(32), L.enc_bot(1)
 INV16, INV32, INV1 = L.inv(16), L.inv(32), L.inv(1)
 ON, OFF = L.enable_word(1), L.enable_word(0)      # the enable words: Active(1) / Active(0) (B7)

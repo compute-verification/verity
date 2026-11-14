@@ -80,7 +80,7 @@ The report goes to the job's `out/prod_repro.txt` and `out/prod_repro.json`. Und
 run's files; the rest of `out/` is in the run's record whole. A job with no result of the benchmark's cost (one that
 served ours alone) gets one whose validation is the tokens line. For GLM-5.3 at the recipe's settings (`prod-record`
 over `prod`) the result also holds the cost line's figure as the measurement `vllm/prod-serving-cost-glm53`, in
-percent of stock's serving time, the number `benchmarks/metrics.toml` holds the goal to: only where it stands as the
+percent of stock's serving time, the number `benchmarks/prod_repro/metrics.toml` holds the goal to: only where it stands as the
 benchmark's own measurement (a sessions load, a value, the same work on both sides; `serve_tax.result_of`) and the
 two arms are at the same settings. Of `prod-record` it holds two more: `vllm/prod-replay-match-glm53`, the percent of
 the replayed window's served tokens the replay gave back before a request's first difference, where the replay's
@@ -115,14 +115,18 @@ replay that differs, the first token that does and the first step.
   that kept counters, the calls of the indexer's top-k, the rows of more than its keys that were rewritten, and
   those of them with a tie across the k-th key, where vLLM's own kernels may select another set from run to run. The
   processes keep them under `PRIVATE`; the job's report reads them there and keeps the counts in
-  `out/topk_counters.json`. The counts are lower bounds (a process writes them every few thousand calls and when it
-  exits), and a replay in which no process kept any shows nothing of the top-k having run there.
+  `out/topk_counters.json`. A process writes its calls at the end of each one, so they are there when vLLM kills it,
+  as it does a serving worker. It reads its rows from its device every few thousand calls and when it exits in order,
+  so a killed process's rows are a lower bound: `rows_at` is the calls the processes had made when their rows were
+  read, and the report says so where it is below the calls. A replay in which no process kept any shows nothing of
+  the top-k having run there.
 - **each pass**, where the job served arms beside the three (`--arms`): every pass of the load every arm served, a
   line a pass in the order served, by the counters the benchmark read off its server before and after it (the pass's
   own `meta.json`; they are vLLM's own on the server's `/metrics`, so every arm's are read the same way, with a step
   trace or without, and the first line names the two the accepted share is of): its engine steps, its drafts and how
   many of the tokens they proposed the model accepted, and beside them
-  its output tokens and its seconds as the cost counts them; `left out` marks a lifetime's warm-up. Then how each
+  its output tokens and its seconds as the cost counts them; `left out` marks a lifetime's warm-up, and a pass whose
+  record holds no output tokens or no seconds (one none of whose requests was served) says so. Then how each
   arm's requests were sampled, and whether its client sent their seeds; and for each directory whether its server
   was started on the canonical top-k (its record's environment) and what the top-k's processes counted there.
   These lines are in no verdict. They are what an arm served beside the three is read by: two arms that differ in
@@ -188,10 +192,10 @@ replay that differs, the first token that does and the first step.
   the loader builds and decodes back to the pass's counts, with its bits a row and, not sent, what the counts' entropy
   taken each alone would come to. Under it: the kept count's own figures as the loader gives them (`K`, the rows, the
   rows that kept each count, their entropy and its most, the code's bits and an ideal coder's, the bits where it is
-  derived); that the kept
-  count costs 0 where the audited block derives it, which rests on a Definition of the accept test that does not exist
-  yet; how the pass's sampled requests were seeded, from each one's own arrival (what a sampled request with no seed
-  there was sampled with is in no record: its tokens cannot be replayed); and the pass. The loader's own
+  derived); that the kept count costs 0 where the audited block derives it, which rests on a block of the served
+  Program calling the accept test's Definition (`SampledAccept_v1`), which none does yet; how the pass's sampled
+  requests were seeded, from each one's own arrival (what a sampled request with no seed there was sampled with is in
+  no record: its tokens cannot be replayed); and the pass. The loader's own
   replay of the scheduler must reproduce every step of the pass: where it does not, or the serve has no draft, the
   line is not measured and says the loader's reason.
 
@@ -202,7 +206,8 @@ the measured ones and names the arms that were not served whole.
 
 - **The advice line's serve is not under the network certifier.** No arm of this command is served under the
   certifier's record or the certified tick, so the arrivals are charged at what they would cost without the tick. The
-  kept count is charged at its code's bits: no Definition holds the accept test, so nothing derives it yet. A serve with
+  kept count is charged at its code's bits: the accept test has a Definition, and no block of a served Program calls
+  it, so nothing derives the count yet. A serve with
   no draft (every model but GLM-5.3 here) has no line: the loader's table of a draft's advice is the one read.
 - **The recipe's settings are GLM-5.3's alone.** For every other model the arms are the benchmark's own: speculative
   decoding off and a context limit of 4,096 tokens unless `--max-model-len` is given.
