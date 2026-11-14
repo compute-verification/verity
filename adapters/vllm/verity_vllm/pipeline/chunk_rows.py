@@ -2,7 +2,7 @@
 (`unit_rows`), a chunk's member (`unit_member`), table reads (`reads`) and statement (`statement`), the most of them one
 flock-circuit statement holds (`chunk_cap`, a partition file's ``chunk_cap``), and a template's units read once cut into
 its chunks (`split`).  The window's chunks (`serving_rows.members`) are laid out by `unit_rows`, and the verifier's circuit
-(``benchmarks/one_stage/compose_circuit.py --template``) by `unit_rows` and `statement`.  Each function takes the template as
+(``verity/protocols/proofs/spot/verifier/one_stage/compose_circuit.py --template``) by `unit_rows` and `statement`.  Each function takes the template as
 `serving_rows.template` reads it.  `zk_refusal` is why ``verify --zk`` refuses a statement's form, and `zk_check` refuses a
 partition file whose ``zk`` says its window is for such sessions and that names a template of that form."""
 from __future__ import annotations
