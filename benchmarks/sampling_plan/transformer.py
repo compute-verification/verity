@@ -44,34 +44,34 @@ import json
 import sys
 from dataclasses import asdict, dataclass, replace
 from fractions import Fraction
-from math import ceil, log, log2
+from math import ceil, log
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from inputs import CARDS, I, observations  # noqa: E402
+from inputs import CARDS, I, cap, observations  # noqa: E402
 
-from verity.protocols import reporting
-from verity.protocols.spot.verifier.profile import Stratified, Stratum  # noqa: E402
-from verity.protocols.spot.candidates import Shape, cuts, shape_of  # noqa: E402
-from verity.protocols.spot.costfit import Fitted, fit  # noqa: E402
-from verity.protocols.spot.verifier.one_stage.draw import work_k, work_table  # noqa: E402
-from verity.protocols.spot.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
+from verity import protocol
+from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum  # noqa: E402
+from verity.protocols.proofs.spot.prover.candidates import Shape, cuts, shape_of  # noqa: E402
+from verity.protocols.proofs.spot.prover.costfit import Fitted, fit  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage.draw import work_k, work_table  # noqa: E402
+from verity.protocols.proofs.spot.prover.optimize import (Candidate, TensorCommit, CostModel, Objective,  # noqa: E402
                                                            Plan, ReplayGrain, certify, density_bound, for_target,
                                                            frontier, ln_upper, row_ands)
 from verity.circuits.codec import descriptor_id  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
-from verity.definitions.ops import fp32 as F, gemm as G, prims as P  # noqa: E402
+from verity.circuits.ops import fp32 as F, gemm as G, prims as P  # noqa: E402
 
-#: core's reporting deltas (`reporting`), as floats
-DELTAS = tuple(map(float, reporting.DELTAS))
+#: core's reporting deltas (`verity.protocol`), as floats
+DELTAS = tuple(map(float, protocol.DELTAS))
 #: the server-time block, assumed: the Phase 2 default, 20 minutes, which a `gpu-lease`'s 30-minute ceiling sets; no
 #: wipe has been timed, and the census has no block length
 BLOCK_S = 1200
 #: the datacenter, assumed: the census has no datacenter size
 SERVERS = 10_000
-#: core's monitoring periods (`reporting`), seconds by name
-PERIODS = dict(reporting.PERIODS)
+#: core's monitoring periods (`verity.protocol`), seconds by name
+PERIODS = dict(protocol.MONITORING_PERIODS)
 #: the target, a share of the block's ANDs certified at most incorrect: a share of the work scales with the model where a
 #: count of units does not (a coarser cut has fewer units); 1e-3 is the small model's knee (halving it costs about 8%
 #: more, each halving past it over 10%), held fixed for every size
@@ -85,7 +85,7 @@ TILE_COLS = 32
 
 
 def pieces() -> dict[str, int]:
-    """Every pinned piece's ANDs (circuit-check's pins beside `verity.definitions.ops`)."""
+    """Every pinned piece's ANDs (circuit-check's pins beside `verity.circuits.ops`)."""
     out: dict[str, int] = {}
     for f in sorted(Path(P.__file__).parent.glob("*.circuit-check.json")):
         out |= {k: v["and"] for k, v in json.loads(f.read_text()).get("pieces", {}).items() if "and" in v}
@@ -161,16 +161,11 @@ def requests_per_block(sequences: int, step_s: float, positions: int, block_s: f
     return round(block_s / step_s * sequences / positions)
 
 
-def _cap(ands: int) -> int:
-    """A statement's units under m = k_log + nbl <= 35 (`int8_llama.cap`)."""
-    return min(1 << max(0, 35 - (ceil(log2(max(ands, 2))) + 1)), 1 << 20)
-
-
 def _counted(s: Shape, memo: dict[str, Shape]) -> Shape:
-    """`s` credited its ANDs as work (unless it names its own), and its statement cap from its ANDs and rows."""
+    """`s` credited its ANDs as work (unless it names its own), and its statement cap from its ANDs and rows (`cap`)."""
     if s.id in memo:
         return memo[s.id]
-    out = replace(s, work=s.work or s.ands, cap=_cap(s.ands + sum(row_ands(r) for r in s.rows)),
+    out = replace(s, work=s.work or s.ands, cap=cap(s.ands, s.rows),
                   parts=tuple((_counted(c, memo), k) for c, k in s.parts),
                   ways=tuple((label, tuple((_counted(c, memo), k) for c, k in ps)) for label, ps in s.ways))
     memo[s.id] = out
@@ -351,7 +346,7 @@ class Serving:
     step_s: float | None = None
 
 
-def serve(m: Model, s: Serving) -> tuple[Commitment, ...]:
+def serve(m: Model, s: Serving) -> tuple[TensorCommit, ...]:
     """Every serve-time commitment of the block beside the units' own outputs (which `Candidate.commit_bits` carries):
     the requests' bytes in, the in-flight requests' KV cache at the close (the carried state; also the QKV units'
     outputs, so a copy `overlaps` would price), PoUW's CP-W receipts under h1 (2 (K/32 + m) u32 a 32 x 32 tile, the
@@ -366,7 +361,7 @@ def serve(m: Model, s: Serving) -> tuple[Commitment, ...]:
             ("carry", "KV cache of the in-flight requests at the close", m.inflight * m.context * m.kv_bytes),
             ("pouw:h1", "CP-W receipts", m.requests * (m.positions * per_token + m.generate * head)),
             ("bandwidth", "receipts over the audited store", s.audit_passes * s.audit_store / 4096 * 64)]
-    return tuple(Commitment(scale, tensor, b, cost=b * rate) for scale, tensor, b in rows if b)
+    return tuple(TensorCommit(scale, tensor, b, cost=b * rate) for scale, tensor, b in rows if b)
 
 
 def costs(m: Model, s: Serving, card: str = "rtx-pro-6000") -> CostModel:

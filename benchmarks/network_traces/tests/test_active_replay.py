@@ -12,10 +12,10 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity.protocols.certifier.verifier import calibration
-from verity.protocols.certifier.verifier import active
-from verity.protocols.certifier.verifier.active import DATA, encode_frame
-from verity.protocols.certifier.verifier.grid import COMPLETE, GridParams, Reason, Record, Status, Certifier
+from verity.protocols.accounting.certifier.verifier import calibration
+from verity.protocols.accounting.certifier.verifier import active
+from verity.protocols.accounting.certifier.verifier.active import DATA, encode_frame
+from verity.protocols.accounting.certifier.verifier.grid import COMPLETE, GridParams, Reason, BlockGrid, Status, Certifier
 
 HERE = Path(__file__).resolve().parents[1]
 T = 60
@@ -94,7 +94,7 @@ def test_records_round_trip_through_their_packing():
     w.tick()
     record = w.close_window()
     assert record.status == Status(Reason.MONITOR_UNAVAILABLE)
-    clean = Record("requests", 4, ((None, None),) * 3, COMPLETE)
+    clean = BlockGrid("requests", 4, ((None, None),) * 3, COMPLETE)
     for r in (record, clean):
         assert ar.unpack_record(ar.pack_record(r), 64) == r
 
@@ -215,7 +215,7 @@ def test_a_released_frame_that_isnt_the_programs_is_counted_not_a_crash(setup, r
         if r.window == 1:
             t = next(t for t, row in enumerate(r.grid) if row[0] is not None)
             row = (encode_frame(DATA, 99, b"id: 999\n\n", e.frame_bytes), *r.grid[t][1:])
-            r = Record(r.link, r.window, r.grid[:t] + (row,) + r.grid[t + 1 :], r.status)
+            r = BlockGrid(r.link, r.window, r.grid[:t] + (row,) + r.grid[t + 1 :], r.status)
         ar.write_blobs(run / "responses.records", ar.pack_record(r))
     audit = ar.audit_configuration(plan, report, run)
     assert audit["comparisons"]["released_not_the_programs"] == 1
@@ -275,7 +275,7 @@ def test_a_lagged_prover_declares_off_the_tick_and_is_accepted(setup, tmp_path):
     bucket's tick, so the tick at w·T only takes it. Every window takes the rule's choice, none the envelope for want
     of it; they are what the plan declares on the model's run, and the run is accepted and is `run_shaper`'s under
     what was declared."""
-    from verity.protocols.certifier.verifier import online
+    from verity.protocols.accounting.certifier.verifier import online
 
     doc, report, s = setup
     plan = ar.plan_configuration(doc["configurations"][0], s, syncs="cover-2-1", lag=5)

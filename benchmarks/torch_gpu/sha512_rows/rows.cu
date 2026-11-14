@@ -79,7 +79,7 @@ __global__ void __launch_bounds__(SXR_THREADS) k_leaf_setup(LeafRow* rows, u32 G
 
 // T in shared memory (a CTA's 64 KB, loaded once), then each thread's salt words (48 KB a CTA; word w of thread j at
 // w SXR_THREADS + j, so a warp's loads of a word are in 32 banks); the leaves grid-stride over resident CTAs; MINB CTAs
-// an SM caps the registers (1: as many as it wants, 2: 128)
+// an SM limits the registers (1: as many as it wants, 2: 128)
 template <int MINB>
 __global__ void __launch_bounds__(SXR_THREADS, MINB) k_leaves(const __grid_constant__ LeafArgs a) {
   extern __shared__ uint4 smem[];
@@ -174,7 +174,7 @@ struct Variant {
   const char* name;
   RowKernel k;
 };
-// V's digits are the modes of S0, S1, s0 and s1 (verity/definitions/kernels/sha512.cuh); a trailing "s" is ROLL = 0
+// V's digits are the modes of S0, S1, s0 and s1 (verity/circuits/kernels/sha512.cuh); a trailing "s" is ROLL = 0
 #define SXR_V(a, b, c, d) ((a) | (b) << 2 | (c) << 4 | (d) << 6)
 const Variant VARIANTS[] = {
     {"pouw", k_rows<Pouw>},

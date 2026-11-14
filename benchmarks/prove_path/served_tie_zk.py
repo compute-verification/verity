@@ -51,8 +51,8 @@ sys.path[:0] = [str(HERE), str(REPO / "benchmarks/network_traces")]
 
 import leak_scan as LS  # noqa: E402
 import served_tie_window as STW  # noqa: E402
-from verity.protocols.certifier.verifier import served_rows as SR  # noqa: E402
-from verity.protocols.certifier.prover import served_tie as ST  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import served_rows as SR  # noqa: E402
+from verity.protocols.accounting.certifier.prover import served_tie as ST  # noqa: E402
 
 CLASSES = {
     "slice": dict(R=2, P=7, IW=6, L=4096, T=256, IB=8, PB=8),
@@ -272,7 +272,7 @@ def audit(M, N2, a, sg, m: dict, units: list, w: int, run_root: bytes, out: Path
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     local = sorted(u - m["base"] for u in lean_draw["units"] if m["base"] <= u < m["base"] + n)
     sdir = out / "session"
-    record, live, proc = M.a8.session(a, m, sdir, local, port, env=N2.firewall(M, m))
+    record, live, proc = M.a8.session(a, m, sdir, local, port, env=N2.zk_server_env(M, m))
     draw_t = (record or {}).get("unit_draw") or {}
     v = V.check_draw(draw_t, {"population": n}, {"law": "subset", "k": len(local)})
     verdicts = {f"m0-verifier/{name}": {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True

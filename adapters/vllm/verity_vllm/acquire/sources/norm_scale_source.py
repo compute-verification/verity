@@ -22,12 +22,16 @@ import hashlib
 import inspect
 import math
 import time
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from verity_vllm.acquire.norm_tap_src.build_ext import NAME as TAP_NS
 from verity_vllm.acquire.norm_tap_src.build_ext import TAP_VERSION
 from verity_vllm.engine import hooks
+from verity_vllm.log import init_logger
 from verity_vllm.query import norm_scales as NS
+
+logger = init_logger(__name__)
 
 
 def kernel_source_sha256(kernel: Any) -> str:
@@ -83,12 +87,15 @@ class NormScaleSource:
         import torch
 
         self.torch, self.c, self.model = torch, committer, model
-        self.modules = {op: NS.site_of(fam) for op, fam in modules.items()}
-        bad = sorted(op for op, kind in self.modules.items() if kind is None)
-        if not self.modules or bad:
-            raise ValueError(f"norm scales: no norm module to tap ({len(self.modules)}) or modules of no norm family: {bad[:4]}")
+        sites = {op: NS.site_of(fam) for op, fam in modules.items()}
+        bad = sorted(op for op, kind in sites.items() if kind is None)
+        if not sites or bad:
+            raise ValueError(f"norm scales: no norm module to tap ({len(sites)}) or modules of no norm family: {bad[:4]}")
+        self.modules: dict[str, str] = {op: kind for op, kind in sites.items() if kind is not None}
         self.kinds = sorted(set(self.modules.values()))
-        self.so_path, self.ns = so_path, None
+        self.so_path = so_path
+        self.ns: Any = None
+        loaded: str | None = None
         if "cuda" in self.kinds:
             if not so_path:
                 raise RuntimeError("norm scales: the manifest names fused norms and no tap build was given (--norm-tap-so, ops/pod_norm_tap.sh)")
@@ -97,13 +104,14 @@ class NormScaleSource:
             version = int(self.ns.tap_version())
             if version != TAP_VERSION:
                 raise RuntimeError(f"norm scales: {so_path} is tap version {version}, this source launches version {TAP_VERSION}")
+            loaded = so_path
         self.words_per_token = int(words_per_token or len(self.modules))
         self._hooks = hooks.Hooks()
         self._handles: list[Any] = []
         self._scope: list[tuple[str, tuple[int, ...]]] = []
         self._held: list[Any] = []
         self.stats: dict[str, Any] = {"tensors": 0, "bytes": 0, "by_kind": {k: 0 for k in self.kinds}, "errors": 0, "modules": len(self.modules),
-                                      "so": so_path, "so_sha256": _file_sha256(so_path) if self.ns is not None else None, "triton_source": None}
+                                      "so": so_path, "so_sha256": _file_sha256(loaded) if loaded is not None else None, "triton_source": None}
         self.active = False
 
     # ------------------------------------------------------------------------------------------------------------ install / uninstall
@@ -154,7 +162,7 @@ class NormScaleSource:
         scope = self._scope
 
         def pre(_module: Any, args: tuple) -> None:
-            x = args[0] if args else None
+            x: Any = args[0] if args else None
             scope.append((op, tuple(int(d) for d in x.shape[:-1]) if hasattr(x, "shape") else ()))
 
         return pre
@@ -246,13 +254,13 @@ def attach(com: Any, so: str | None, manifest: Mapping[str, Any] | None, require
         return required_classes, None
     modules = NS.manifest_modules(manifest)
     if not modules:
-        print("[delta] REFUSE: --norm-tap-so but the required-value manifest names no norm_scales identity (manifest build --norm-scales)", flush=True)
+        logger.error("[delta] REFUSE: --norm-tap-so but the required-value manifest names no norm_scales identity (manifest build --norm-scales)")
         raise SystemExit(3)
     src = NormScaleSource(com, model if model is not None else getattr(com, "model", None), modules, so,
                           words_per_token=NS.words_per_token(manifest) or None)
     com.attach_source(src)
-    print(f"[delta] norm-scale source attached: {len(modules)} norm modules (sites {', '.join(src.kinds)}), {src.words_per_token} words per "
-          f"token, tap {so} -> committer {com.name}", flush=True)
+    logger.info("[delta] norm-scale source attached: %d norm modules (sites %s), %s words per token, tap %s -> committer %s",
+                len(modules), ", ".join(src.kinds), src.words_per_token, so, com.name)
     if not explicit_classes and NS.FAMILY not in required_classes:
         return (*required_classes, NS.FAMILY), src
     return required_classes, src

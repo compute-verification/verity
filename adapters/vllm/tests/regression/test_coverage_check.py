@@ -52,7 +52,7 @@ def _tree(root: Path, *, manifest: bool = True, layouts: dict | None = None) -> 
     return root
 
 
-class _Row:
+class _Row(resolver.Row):
     """The two sides a check reads: the reference's files (`path` / `has`) and, when given, the candidate's (`candidate`)."""
 
     key = "stand-in-norm-scale-row"
@@ -73,9 +73,6 @@ class _Row:
         if not self.has(rel):
             raise resolver.NotResolvable(rel)
         return self.reference / rel
-
-    def jsonl(self, rel):
-        return [json.loads(line) for line in open(self.path(rel)) if line.strip()]
 
 
 def test_the_candidates_norm_scales_are_covered_by_the_candidates_own_layouts(tmp_path):
@@ -101,7 +98,20 @@ def test_a_candidate_without_its_own_layouts_is_not_checked_against_the_referenc
     with pytest.raises(resolver.NotResolvable, match="the candidate lacks commit/layouts_pair0_instrumented.json.gz"):
         coverage.actual(row)
     row = _Row(_tree(tmp_path / "reference2", layouts=_layouts()), _tree(tmp_path / "candidate2", manifest=False, layouts=_layouts()))
-    assert coverage.applies(row).startswith("manifest.json not resolvable on the candidate")
+    assert (coverage.applies(row) or "").startswith("manifest.json not resolvable on the candidate")
+
+
+def test_the_recorded_coverage_is_the_first_treatment_runs_and_no_line_after_it_is_read(tmp_path):
+    """`_recorded_coverage` stops at the first run that is no control and states a coverage: a line after it is not parsed."""
+    runs = tmp_path / "runs.jsonl"
+    control, treatment = {"arm": "control"}, {"committer": "native", "commit": {"binding": {"coverage": {"missing": 0}}}}
+    runs.write_text(json.dumps(control) + "\n\n" + json.dumps(treatment) + "\n{\n")
+    assert coverage._recorded_coverage(runs) == {"missing": 0}
+    runs.write_text(json.dumps(control) + "\n{\n" + json.dumps(treatment) + "\n")
+    with pytest.raises(json.JSONDecodeError):
+        coverage._recorded_coverage(runs)
+    runs.write_text(json.dumps(control) + "\n")
+    assert coverage._recorded_coverage(runs) is None and coverage._recorded_coverage(None) is None
 
 
 def test_without_a_candidate_the_reference_reproduces_itself(tmp_path):

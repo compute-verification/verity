@@ -8,17 +8,21 @@ from __future__ import annotations
 
 __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
+import contextlib
 import copy
 import hashlib
+import json
+import os
 import struct
 
 import numpy as np
 import pytest
 import torch
-
-from tests.properties import dsv4_marlin_capture_gpu as X
 from verity.definitions.numerics import marlin_moe_rows as MR
-from verity_vllm.properties.record import REGISTRY, digest_of
+
+from tests import fake_vllm
+from tests.properties import dsv4_marlin_capture_gpu as X
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 E, K, N, SMS = 8, 256, 128, 3
 #: the config the stand-in kernel runs: TK 64 (two warp rows), TN 128, 4 blocks per SM, so GRID 12 splits K
@@ -137,6 +141,7 @@ def test_a_larger_moe_block_s_kernel_is_its_own_instantiation(block: int, name: 
     """At a moe block of 16 the small-batch configs at up to 4 blocks per SM without `m_block_size_8`; at 32 two m blocks over the
     large-batch configs at up to 2 (ops.cu:285-292, 325-328, 362-363)."""
     t = X.kernel_template(name)
+    assert t is not None
     k = {"template": t, "grid": [b * SMS, 1, 1], "block": [t["threads"], 1, 1]}
     config, got = X.kernel_config(k, SMS, TYPES, block=block)
     assert config == [16 * t["thread_k_blocks"], 16 * t["thread_n_blocks"], b] and got is ok
@@ -183,7 +188,8 @@ def _listing(sym: str, ops: tuple[str, ...] = ("HMMA.16816.F32.BF16", "FADD", "H
 def test_a_mangled_marlin_symbol_reads_as_its_profiled_name() -> None:
     for threads, n, k in ((256, 8, 8), (128, 8, 4), (128, 4, 8)):
         assert X.mangled_template(_symbol(threads, n, k)) == X.kernel_template(_name(threads, n, k)) is not None
-    assert X.mangled_template(_symbol(128, 8, 4, group_blocks="n1"))["group_blocks"] == -1
+    n1 = X.mangled_template(_symbol(128, 8, 4, group_blocks="n1"))
+    assert n1 is not None and n1["group_blocks"] == -1
     assert X.mangled_template("_ZN7vllm3moe25moe_align_block_size_kernelIiEEvPKT_") is None
     assert X.mangled_template(_symbol(128, 8, 4).replace("ELb0EEEv", "EEEv")) is None, "eleven arguments"
 
@@ -234,8 +240,6 @@ def test_the_jit_phase_reads_each_kernel_back_from_the_driver_cache(tmp_path, mo
 
 
 def test_the_gate_holds_the_driver_to_the_map_s(monkeypatch) -> None:
-    import json
-
     assert X.pinned_driver() == json.loads(X.MAP.read_text())["target"]["driver"]["version"] == "580.173.02"
     monkeypatch.setattr(X.C, "gate", lambda *a: {"driver": "580.173.02", "want": {"min_driver": 575}, "checks": {"driver": True},
                                                  "ok": True})
@@ -310,8 +314,12 @@ LARGE = {(64, 256): 2, (64, 128): 2, (128, 64): 2}
 
 def _served(allow: dict, sms: int = 132, large: dict = LARGE) -> dict:
     """The config at each swept M under ``allow`` at the blocks of 8 and 16 and ``large`` at 32."""
-    return {kind: {str(M): list(X._auto(M, kind, sms, large if X.moe_block_size_of(M) == 32 else allow)) for M in X.SERVED_M}
-            for kind in ("w13", "w2")}
+    def config(M: int, kind: str) -> list[int]:
+        got = X._auto(M, kind, sms, large if X.moe_block_size_of(M) == 32 else allow)
+        assert got is not None, (M, kind)
+        return list(got)
+
+    return {kind: {str(M): config(M, kind) for M in X.SERVED_M} for kind in ("w13", "w2")}
 
 
 @pytest.mark.parametrize("allow,large", [({(128, 128): 2, (64, 128): 4, (128, 64): 4}, LARGE),
@@ -427,7 +435,7 @@ def test_two_align_draws_split_a_case_into_unmoved_and_moved_pairs(tmp_path) -> 
     aligns placed one expert's pairs differently must still check out: the pairs both placed alike are held to each other
     (`unmoved_equal`, which run2's differing moved rows do not break), and run2's moved pairs get a spec of their own, at run2's
     recorded blocks."""
-    ids = np.repeat(np.arange(1, 5), 9)                      # 6 tokens x top-6: experts 1..4, 9 pairs each, two moe blocks each
+    ids: np.ndarray = np.repeat(np.arange(1, 5), 9)                      # 6 tokens x top-6: experts 1..4, 9 pairs each, two moe blocks each
     M = ids.size // X.TOP_K
     st1, ex, ntpp = _align(ids)
     st2 = st1.copy()
@@ -466,7 +474,7 @@ def test_two_align_draws_split_a_case_into_unmoved_and_moved_pairs(tmp_path) -> 
 def test_a_moved_pair_s_words_read_its_own_block(tmp_path) -> None:
     """Run2's moved pairs are compared against the twin at run2's recorded blocks, where they match; at run1's they do not, since
     the two blocks' k-slice cut patterns differ (here par 8 over GRID 12: iters 3, and NT * KT = 4 is no multiple)."""
-    ids = np.repeat(np.arange(1, 5), 9)
+    ids: np.ndarray = np.repeat(np.arange(1, 5), 9)
     M = ids.size // X.TOP_K
     st1, ex, ntpp = _align(ids)
     st2 = st1.copy()
@@ -498,9 +506,6 @@ def test_a_moved_pair_s_words_read_its_own_block(tmp_path) -> None:
 def test_the_replay_relaunches_the_recorded_call(monkeypatch) -> None:
     """`replay` re-launches run1's exact call into a SENTINEL-filled output with a fresh workspace and holds the words to run1's,
     as bits (the vLLM op stood in for here; on the GPU the kernel's slice fold is lock-serialized, so the real one must agree)."""
-    import sys
-    import types
-
     recorded = torch.tensor(np.array([[17, 0x7FA6], [3, 4]], dtype=np.int16)).view(torch.bfloat16)
     state = {"words": recorded.view(torch.int16).clone()}
 
@@ -509,16 +514,10 @@ def test_the_replay_relaunches_the_recorded_call(monkeypatch) -> None:
         assert bool((kw["output"].view(torch.int16) == X.SENTINEL).all()), "the output starts as SENTINEL"
         kw["output"].view(torch.int16).copy_(state["words"])
 
-    ops = types.ModuleType("vllm._custom_ops")
-    ops.moe_wna16_marlin_gemm = gemm
-    chain = ("vllm", "vllm.model_executor", "vllm.model_executor.layers", "vllm.model_executor.layers.quantization",
-             "vllm.model_executor.layers.quantization.utils")
-    mods = {name: types.ModuleType(name) for name in chain}
-    mu = types.ModuleType("vllm.model_executor.layers.quantization.utils.marlin_utils")
-    mu.marlin_make_workspace_new = lambda device, n: "fresh"
-    mods["vllm"]._custom_ops = ops
-    for name, mod in {**mods, "vllm._custom_ops": ops, "vllm.model_executor.layers.quantization.utils.marlin_utils": mu}.items():
-        monkeypatch.setitem(sys.modules, name, mod)
+    workspace = "vllm.model_executor.layers.quantization.utils.marlin_utils:marlin_make_workspace_new"
+    fake = fake_vllm.install(monkeypatch, extra=[workspace])
+    fake["vllm._custom_ops"].moe_wna16_marlin_gemm = gemm
+    fake.set(workspace, lambda device, n: "fresh")
     monkeypatch.setattr(torch.cuda, "synchronize", lambda: None)
     L = {"output": recorded, "call": {"input": "x", "output": "stale", "workspace": "stale"}}
     assert X.replay(L)
@@ -541,7 +540,7 @@ def test_a_case_over_the_edge_experts_is_deterministic_by_its_words(tmp_path) ->
     st, ex, ntpp = _align(ids)
 
     def output(kind: str, payload: bool) -> torch.Tensor:
-        words = np.resize(C, (M * X.TOP_K, X.shape(kind)[1])).astype(np.uint16)
+        words: np.ndarray = np.resize(C, (M * X.TOP_K, X.shape(kind)[1])).astype(np.uint16)
         if payload:
             words[np.unravel_index(np.flatnonzero(((words & 0x7F80) == 0x7F80) & ((words & 0x7F) != 0))[0], words.shape)] ^= 0x0001
         return torch.from_numpy(words.view(np.int16).copy()).view(torch.bfloat16)
@@ -568,7 +567,7 @@ def test_a_case_over_the_edge_experts_is_deterministic_by_its_words(tmp_path) ->
     assert w13["unmoved_equal"] and not w2["unmoved_equal"] and not X._launch_ok({**w2, "identified": True, "replay_ok": True})
 
 
-def w2_blocks(st: list[int], n: int, block: int) -> list[int]:
+def w2_blocks(st: np.ndarray, n: int, block: int) -> list[int]:
     blk = [0] * n
     for i, p in enumerate(st):
         if p < n:
@@ -695,17 +694,10 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys, flip
     the compute cache it points the driver at, the driver pinned to the map's, the comparisons through the spawned worker pool,
     identification against the sweep, the bindings, the per-case verdicts, the sealed record and the exit status, so a slip in the
     orchestration shows here and not in the H200's first hour."""
-    import contextlib
-    import json
-    import os
-    import sys
-    import types
-
-    vc = types.ModuleType("vllm.config")
-    vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
-    vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     for k in ("VLLM_BATCH_INVARIANT", "VLLM_ENABLE_V1_MULTIPROCESSING", "CUDA_CACHE_MAXSIZE"):
         monkeypatch.setenv(k, "")
     for k in X.JIT_ENV[:2]:
@@ -762,8 +754,6 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys, flip
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["dsv4_marlin_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)
 

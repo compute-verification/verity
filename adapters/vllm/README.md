@@ -16,8 +16,7 @@ Verity itself knows nothing of vLLM.
   idle and closes when it is idle again or after `--window-steps`. Each window is one Commit, and `--seal` seals it.
   `--protocols pouw:<scheme>` serves PoUW's H1 arm on the endpoint's own Commit, one H1 window per window, and
   `--remote-verifier` proves the engine's store to PoUB's verifier as it serves. Its module docstring documents every
-  flag and record. The public release leaves out this endpoint and the window circuit, which read the network
-  certifier's encoding, and that encoding stays private, so it ships without a runnable served window.
+  flag and record.
 - **`verity demo vllm`** (`demos/vllm/run.sh`) starts the served-verdicts launcher,
   `benchmarks/one_stage/served_verdicts.sh`, on the node `demos/vllm/placement.toml` names. It runs the Build of
   record, then the endpoint with `--seal` under a GPU lease, and a load. Then come sampled proofs on one sealed window:
@@ -103,7 +102,7 @@ finish inside one served window. The parts, in the order they run:
   commitment, names the window's advice registration (`--advice`) and samples the class's replay blocks once on the
   challenger's coins. `resume` gives the replay side the same stream for the interior registration and the second
   stage. The verifier refuses every two-stage run at its last check (`FORM` in
-  `verity/protocols/spot/verifier/second_stage.py`) until the soundness proof covers that form.
+  `verity/protocols/proofs/spot/verifier/second_stage.py`) until the soundness proof covers that form.
 
 The commands are `benchmarks/serve_tax/run.sh`'s, and its header documents each variable. `ARMS=two-stage` serves with
 the boundary commitment, which it writes under `PRIVATE/two-stage/boundary`. `REPLAY=LOAD REPLAY_FROM=ARM_DIR
@@ -141,7 +140,8 @@ verity_vllm/
     pouw/            PoUW: the executor at each linear layer, and its H1, Pearl-C and lead arms
   properties/        property harnesses: non-interference, kernel census, golden and holdout corpora, tap exactness
   records/           typed stage records, one for each kind one stage writes and another reads
-  ops/, pins/        pod scripts (pod_bootstrap.sh builds a GPU node's runtime); each workload's served pin per device
+  ops/, pins/        pod scripts (pod_bootstrap.sh builds a GPU node's runtime at the pin, vllm_env.sh the environment
+                     of another build of engine.stock.BUILDS beside it); each workload's served pin per device
 workloads/           workload files, each a fixture in the evidence store, read through config.workload_file
 manifests/           checkpoint pins (checkpoints.json), workloads of record (records.json), Definitions, capture maps
 tests/               the suite verity-vllm, a directory for each subpackage; lint/ holds the ratchets (lint/README.md)

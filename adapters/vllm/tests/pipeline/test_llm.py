@@ -11,21 +11,23 @@
   checkpoint or a built engine the class contradicts is refused by name, and so is a launch that states no context limit; the
   class serves at the launch's ``max_model_len``, a length or the one vLLM fits (-1), and the built engine's admission refuses a
   prompt over the engine's limit and a window closed in flight;
-* ``import verity_vllm`` imports neither torch nor vLLM.
+* ``import verity_vllm`` imports neither torch nor vLLM, and neither does taking ``target_of`` from it.
 """
 from __future__ import annotations
 
 import json
 import subprocess
 import sys
-from types import ModuleType, SimpleNamespace
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
 import verity_vllm
+from tests import fake_vllm
 from verity_vllm import config
-from verity_vllm.config import EnginePin
 from verity_vllm import llm as L
+from verity_vllm.config import EnginePin
 from verity_vllm.engine import handle
 from verity_vllm.engine.profiles import engine_classes as EC
 from verity_vllm.errors import Refused
@@ -40,11 +42,13 @@ CTX = 401408
 
 def test_the_package_exports_llm_and_what_it_is_built_from():
     from verity_vllm.engine import spec
+    from verity_vllm.pipeline import serve_seal
     from verity_vllm.program.frontend import target_profile
 
-    assert verity_vllm.__all__ == ["EnginePin", "EngineSpec", "LLM", "TargetProfile"]
+    assert verity_vllm.__all__ == ["EnginePin", "EngineSpec", "LLM", "TargetProfile", "target_of"]
     assert verity_vllm.LLM is L.LLM and verity_vllm.EnginePin is EnginePin
     assert verity_vllm.EngineSpec is spec.EngineSpec and verity_vllm.TargetProfile is target_profile.TargetProfile
+    assert verity_vllm.target_of is serve_seal.target_of
     with pytest.raises(AttributeError, match="no attribute 'Engine'"):
         _ = verity_vllm.Engine
 
@@ -99,6 +103,8 @@ def test_a_repo_pinned_under_two_roles_resolves_to_the_downloaded_one(tmp_path):
 
 
 class _FakeVllm:
+    llm_engine: SimpleNamespace
+
     def __init__(self):
         self.calls = []
 
@@ -114,7 +120,7 @@ class _FakeVllm:
 @pytest.fixture
 def built(monkeypatch):
     from verity_vllm.engine import vllm_adapter as va
-    seen = {}
+    seen: dict[str, Any] = {}
 
     def build_engine(checkpoints, **kw):
         seen.update(kw, checkpoints=checkpoints)
@@ -337,7 +343,7 @@ def built_g(monkeypatch):
     in-process scheduler at the read-back's ``max_model_len``: the launch's, or ``seen["effective"]``'s, standing in for the
     length vLLM fits where the launch states -1."""
     from verity_vllm.engine import vllm_adapter as va
-    seen = {"effective": {}}
+    seen: dict[str, Any] = {"effective": {}}
 
     def build_engine(checkpoints, **kw):
         seen.update(kw)
@@ -458,10 +464,9 @@ def test_class_g_reaches_vllms_engine_args_and_is_read_back_from_its_scheduler_c
             self.llm_engine = SimpleNamespace(vllm_config=vc, engine_core=SimpleNamespace(engine_core=SimpleNamespace(
                 scheduler=_Scheduler(), model_executor=SimpleNamespace())))
 
-    vllm, envs = ModuleType("vllm"), ModuleType("vllm.envs")
-    vllm.LLM, vllm.envs, envs.VLLM_BATCH_INVARIANT = _VllmLLM, envs, False
-    monkeypatch.setitem(sys.modules, "vllm", vllm)
-    monkeypatch.setitem(sys.modules, "vllm.envs", envs)
+    fake = fake_vllm.install(monkeypatch)
+    fake.set("vllm:LLM", _VllmLLM)
+    fake["vllm.envs"].VLLM_BATCH_INVARIANT = False
     monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
     cps = tmp_path / "checkpoints.json"
     cps.write_text(json.dumps({"checkpoints": [{"repo": "r/m", "role": "M", "downloaded": True, "local_path": str(tmp_path)}]}))
@@ -479,6 +484,7 @@ def test_class_g_reaches_vllms_engine_args_and_is_read_back_from_its_scheduler_c
         B.build_engine(cps, case="M", engine_args=args, execution="eager", target=target)
 
 
-def test_importing_the_package_loads_neither_torch_nor_vllm():
-    code = "import sys, verity_vllm; assert not {'torch', 'vllm'} & set(sys.modules), sorted({'torch', 'vllm'} & set(sys.modules))"
+@pytest.mark.parametrize("statement", ["import verity_vllm", "from verity_vllm import target_of"])
+def test_importing_the_package_loads_neither_torch_nor_vllm(statement):
+    code = f"import sys; {statement}; assert not {{'torch', 'vllm'}} & set(sys.modules), sorted({{'torch', 'vllm'}} & set(sys.modules))"
     subprocess.run([sys.executable, "-c", code], check=True, cwd=config.ROOT)

@@ -1,5 +1,5 @@
 """A workload's bytes are a fixture in the evidence store (`config.workload_file`): every one is listed by its directory's SHA256SUMS
-and registered in fixtures/artifacts.json, an absent one is fetched by its art id, a changed one is refused, an unlisted file passes
+and registered in artifacts.json, an absent one is fetched by its art id, a changed one is refused, an unlisted file passes
 through, and `verity-vllm workload-file` makes them present for the shell scripts."""
 from __future__ import annotations
 
@@ -31,22 +31,22 @@ def _fetch_from(data: dict[str, bytes], calls: list):
 
 
 def registered_and_listed(d: Path) -> tuple[set[str], set[str]]:
-    """The workloads of the directory ``d`` that fixtures/artifacts.json registers, and those its SHA256SUMS lists."""
-    reg = json.loads((C.REPO / "fixtures" / "artifacts.json").read_text())
+    """The workloads of the directory ``d`` that artifacts.json registers, and those its SHA256SUMS lists."""
+    reg = json.loads((C.REPO / "artifacts.json").read_text())
     rel = os.path.relpath(d, C.REPO)
     registered = {v for k, v in reg.items() if k.startswith("art:") and isinstance(v, str) and os.path.dirname(v) == rel}
     return registered, {os.path.join(rel, n) for n in C.stored_workloads(d)}
 
 
 def test_every_workload_is_a_fixture_its_directory_lists_and_the_registry_holds():
-    """The tree keeps a workload's name and digest (SHA256SUMS) and its art id (fixtures/artifacts.json), never its bytes
+    """The tree keeps a workload's name and digest (SHA256SUMS) and its art id (artifacts.json), never its bytes
     (tests/test_repository.py holds the registered paths gitignored)."""
     registered, listed = registered_and_listed(C.WORKLOADS)
-    assert registered == listed, (f"in fixtures/artifacts.json, not in a SHA256SUMS: {sorted(registered - listed)}; "
+    assert registered == listed, (f"in artifacts.json, not in a SHA256SUMS: {sorted(registered - listed)}; "
                                   f"in a SHA256SUMS, not registered: {sorted(listed - registered)}")
     loose = sorted(p.name for p in C.WORKLOADS.glob("*.json") if p.name not in C.stored_workloads())
     assert not loose, (f"{loose}: workloads no SHA256SUMS lists. A workload is a fixture: `research data put --kind fixture/v1 --file "
-                       "adapters/vllm/workloads/NAME --preserve`, its id and path in fixtures/artifacts.json, the path in .gitignore, "
+                       "adapters/vllm/workloads/NAME --preserve`, its id and path in artifacts.json, the path in .gitignore, "
                        "and `sha256sum NAME >> SHA256SUMS` in adapters/vllm/workloads/")
 
 
@@ -86,20 +86,21 @@ def test_workload_files_lists_stored_and_present_ones_and_fetches_the_absent_in_
 def test_a_failed_fetch_names_the_workload_and_the_fix(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     (repo / "fixtures").mkdir(parents=True)
-    (repo / "fixtures" / "artifacts.json").write_text("{}")
+    (repo / "artifacts.json").write_text("{}")
     _stored(repo / "w", {"a.json": {}})
+    monkeypatch.chdir(repo / "w")
     seen = []
 
     def run(argv, **kw):
-        seen.append((argv, kw["env"]["PYTHONPATH"].split(os.pathsep)[0]))
+        seen.append((argv, kw))
         return subprocess.CompletedProcess(argv, 1, "", "no source configured")
     monkeypatch.setattr(C.subprocess, "run", run)
     with pytest.raises(RuntimeError, match=r"w/a\.json: stored workloads, not here, and `research data fetch-fixtures` could not fetch "
                                            r"them \(rc 1: no source configured\)"):
         C.workload_file(repo / "w" / "a.json")
-    (argv, pythonpath), = seen
+    (argv, kw), = seen
     assert argv[2:] == ["research", "data", "fetch-fixtures", "--repo", str(repo.resolve()), "--json", str(repo.resolve() / "w" / "a.json")]
-    assert pythonpath == str(repo.resolve() / "tools" / "research" / "src")
+    assert kw["env"]["PYTHONPATH"].split(os.pathsep)[0] == str(repo.resolve() / "tools" / "research" / "src")
 
 
 def test_row_file_finds_a_stored_row_that_is_not_here(tmp_path, monkeypatch):

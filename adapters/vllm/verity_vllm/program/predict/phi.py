@@ -23,11 +23,13 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
-PHI_SCHEMA = "verity-predict/phi/v1"
+from verity_vllm.records.schema_ids import PHI_SCHEMA
+
+__all__ = ["Phi"]
 
 
 @dataclass
@@ -47,28 +49,30 @@ class Phi:
                 "engine": self.engine, "workload": self.workload, "execution": self.execution, "profile": self.profile}
 
     @classmethod
-    def from_json(cls, d: dict) -> "Phi":
+    def from_json(cls, d: dict) -> Phi:
         if d.get("schema") != PHI_SCHEMA:
             raise ValueError(f"phi schema {d.get('schema')!r} != {PHI_SCHEMA!r}")
+        engine, workload = d.get("engine"), d.get("workload")   # a φ that leaves one out declares no engine argument, no request
         return cls(model=dict(d["model"]), target=dict(d["target"]), tp=dict(d.get("tp") or {"world": 1, "rank": 0}),
-                   sampling=dict(d.get("sampling") or {"kind": "greedy"}), engine=dict(d.get("engine") or {}),
-                   workload=dict(d.get("workload") or {}), execution=d.get("execution", "bi-eager"), profile=d.get("profile", "b1-eager-v3"))
+                   sampling=dict(d.get("sampling") or {"kind": "greedy"}), engine=dict(engine) if engine else {},
+                   workload=dict(workload) if workload else {}, execution=d.get("execution", "bi-eager"), profile=d.get("profile", "b1-eager-v3"))
 
     def digest(self) -> str:
         return hashlib.sha256(json.dumps(self.to_json(), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
     @property
     def hf_config(self) -> dict:
-        return dict(self.model.get("hf_config") or {})
+        config = self.model.get("hf_config")   # a model block that carries no config.json has an empty one
+        return dict(config) if config else {}
 
     @property
     def requests(self) -> list[dict]:
-        return list(self.workload.get("requests") or [])
+        declared = self.workload.get("requests")   # a workload that states none has no request
+        return list(declared) if declared else []
 
     def target_profile(self):
         """The declared `TargetProfile`; where the target block does not declare `batch_invariant`, the one the execution label names
         (`TargetProfile.execution_label`: a `bi-*` row runs the batch-invariant kernels, an `eager` row vLLM's defaults)."""
-        from dataclasses import fields
         from verity_vllm.program.frontend.target_profile import TargetProfile
         names = {f.name for f in fields(TargetProfile)}
         tp = TargetProfile.default().with_overrides(**{k: (tuple(v) if k == "compute_capability" else v) for k, v in self.target.items()
@@ -91,11 +95,13 @@ class Phi:
 def _prompt_len(r: dict) -> int:
     if r.get("prompt_token_ids") is not None:
         return len(r["prompt_token_ids"])
-    return int(r.get("prompt_len") or r.get("input_len"))
+    stated: Any = r.get("prompt_len") or r.get("input_len")   # a request that states neither has no length: `int`'s TypeError
+    return int(stated)
 
 
 def _cap(r: dict) -> int:
-    return int(r.get("max_tokens") or (r.get("sampling_params") or {}).get("max_tokens") or 0)
+    params = r.get("sampling_params")   # where a request may state its `max_tokens` instead; one that states it nowhere has 0
+    return int(r.get("max_tokens") or (params.get("max_tokens") if params else None) or 0)
 
 
 def load_phi(path: str | Path) -> Phi:
@@ -106,6 +112,29 @@ def load_phi(path: str | Path) -> Phi:
 #: the prefix cache). A request Program's length rule reads ``max_model_len`` (`steps.compile_steps`), so two compiles of one
 #: served engine's requests that read them differently compile different Programs
 REGISTERED_ENGINE = ("max_num_batched_tokens", "max_model_len", "long_prefill_token_threshold", "max_num_seqs", "enable_prefix_caching")
+#: the ``kv_cache_dtype`` values a launch's request Programs are stated at: vLLM's default, and bf16 by name, the default's
+#: format for a model computed in bf16
+STATED_KV_CACHE = ("auto", "bfloat16")
+#: the engine args that turn speculative decoding on: the config, and vLLM's short forms of its method, model and token count
+SPECULATIVE = ("speculative_config", "spec_method", "spec_model", "spec_tokens")
+
+
+def _refuse_unstated(kw: Mapping[str, Any]) -> None:
+    """A ValueError for engine args that serve what no request Program states: a KV cache format the launch names
+    (a ``kv_cache_dtype`` outside `STATED_KV_CACHE`), whose cache other kernels than the default's may write and read, or
+    speculative decoding (an arg of `SPECULATIVE`), whose decode rows hold draft positions. φ carries neither
+    (`REGISTERED_ENGINE`), so the compiler's check of φ's engine (`domain.engine_facts`) never sees them, and the compile of such
+    a launch would be the Programs of a launch without them, which it did not run."""
+    cache = kw.get("kv_cache_dtype")
+    if cache is not None and cache not in STATED_KV_CACHE:
+        raise ValueError(f"engine kv_cache_dtype={cache!r}: a request Program models the KV cache of a launch at kv_cache_dtype "
+                         f"{' or '.join(STATED_KV_CACHE)} and no other format (an FP8 KV cache is not modelled), so the compile of "
+                         "this launch would be Programs it did not run. Serve with kv_cache_dtype at vLLM's default to compile it")
+    for k in SPECULATIVE:
+        if kw.get(k) is not None:
+            raise ValueError(f"engine {k}={kw[k]!r}: a request Program models no draft tokens (speculative decoding), its decode "
+                             "row is one token, so the compile of this launch would be Programs it did not run. Serve with "
+                             "speculative decoding off to compile it")
 
 
 def engine_of(meta: Mapping[str, Any], rank: int) -> tuple[dict, dict]:
@@ -113,11 +142,14 @@ def engine_of(meta: Mapping[str, Any], rank: int) -> tuple[dict, dict]:
     (``meta``'s ``engine_record``: `LLM.engine_record`'s ``engine_kwargs``; where the launch left ``max_model_len`` to vLLM, -1,
     the length the built engine reads back, ``effective``), and, from a record of the environment its build set
     (``env_flags``), the DSA top-k's (`engine_classes.DSA_TOPK_ENV`) as set or not, so `predict.dsa` refuses a row past INDEX_TOPK
-    the engine served in the kernels' own order; a ValueError for a rank the world doesn't have."""
+    the engine served in the kernels' own order; a ValueError for a rank the world doesn't have, and for a launch that names
+    another KV cache format or decodes speculatively (`_refuse_unstated`)."""
     from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
 
     rec = meta.get("engine_record")
     kw = None if rec is None else rec.get("engine_kwargs")
+    if kw is not None:
+        _refuse_unstated(kw)
     world = 1 if kw is None else int(kw.get("tensor_parallel_size") or 1)
     if not 0 <= rank < world:
         raise ValueError(f"rank {rank}: the run's engine has tensor-parallel world {world}")

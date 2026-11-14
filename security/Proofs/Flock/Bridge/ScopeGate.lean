@@ -12,19 +12,19 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 /-!
 # The sampled audit's knowledge soundness on `verify --zk`'s acceptance (`SampledKSLiveV3`)
 
-`Bridge.SampledKSLiveRoots` takes five things of the statement, the circuit file and the draw as hypotheses beyond the
+`Bridge.SampledKSLiveRoots` takes five things of the statement, the circuit file and the sample as hypotheses beyond the
 parses and the public file's form (`pub.tables = none`, the form without shared rows): an untyped statement, the unit a
-built net (`Built`), the circuit in `Layout.scopeOkH`, the draw's `k` a multiple of the tables, and the `--zk` tags'
+built net (`Built`), the circuit in `Layout.scopeOkH`, the sample's `k` a multiple of the tables, and the `--zk` tags'
 hidden outputs, retained rounds and `hm96-sha512/v1` leaves (`TagsOkZHJ`). `verify --zk` refuses every session outside
 them (`Flock.KsScope.check`, after `Flock.PortRoots.check` in its verdict), so the guarantee reads them off acceptance.
 
 * `Bridge.KsScoped I D kd`: the five.
-* `Bridge.LiveAcceptsScoped I o`: `verify --zk` accepts: `Bridge.LiveAcceptsKS`, and the files and the record's draw
+* `Bridge.LiveAcceptsScoped I o`: `verify --zk` accepts: `Bridge.LiveAcceptsKS`, and the files and the record's sample
   pass `Flock.KsScope.check`.
 * `Bridge.ksScoped_files`, `Bridge.div_of_drawWhy`: the check gives four of the five from the files (the unit is built
-  because `HmRow.parse` built it from rows, `unit_built`), and the fifth, the draw's `k` a multiple of the tables,
-  from the record's draw, which custody (`RecordCustodyZKJ`) makes the verifier's.
-* `SampledKSLiveV3`: at a statement, files and a draw in `KsScoped`, `SampledKSLiveRoots`' bound on
+  because `HmRow.parse` built it from rows, `unit_built`), and the fifth, the sample's `k` a multiple of the tables,
+  from the record's sample, which custody (`RecordCustodyZKJ`) makes the verifier's.
+* `SampledKSLiveV3`: at a statement, files and a sample in `KsScoped`, `SampledKSLiveRoots`' bound on
   `LiveAcceptsScoped`'s event; outside them, `verify --zk` accepts with probability 0. It takes none of the five as a
   hypothesis. `sampledKSLiveV3_of` derives it from `SampledKSLiveV2`, through `Bridge.sampledKSLiveRoots_of`.
 -/
@@ -37,8 +37,8 @@ open FlockSoundness FlockSoundness.Discharge.Exec FlockSoundness.Discharge.ZkExe
   FlockSoundness.Discharge.ZkHidden
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 
-/-- **`SampledKSLiveRoots`' statement, file and draw preconditions**: an untyped statement, the unit a built net, the
-circuit in `Layout.scopeOkH`, the draw's `k` a multiple of the tables (`nTab`), and the `--zk` tags `TagsOkZHJ`. -/
+/-- **`SampledKSLiveRoots`' statement, file and sample preconditions**: an untyped statement, the unit a built net, the
+circuit in `Layout.scopeOkH`, the sample's `k` a multiple of the tables (`nTab`), and the `--zk` tags `TagsOkZHJ`. -/
 structure KsScoped (I : Inputs) (D : Flock.Desc) (kd : ℕ) : Prop where
   typed : I.tags.typed = false
   built : Built D.unroll.unit
@@ -46,7 +46,7 @@ structure KsScoped (I : Inputs) (D : Flock.Desc) (kd : ℕ) : Prop where
   div : kd % nTab I = 0
   tags : TagsOkZHJ I
 
-/-- **`verify --zk` accepts, files, draw and transcript**: `LiveAcceptsKS`, and the files and the record's draw pass
+/-- **`verify --zk` accepts, files, sample and transcript**: `LiveAcceptsKS`, and the files and the record's sample pass
 `Flock.KsScope.check` (the last refusal of `verify --zk`'s verdict). -/
 def LiveAcceptsScoped {n : ℕ} {Reg : Type} (I : Inputs)
     (o : Reg × Finset (Fin n) × FlockSoundness.Discharge.Exec.Transcript) : Prop :=
@@ -54,7 +54,7 @@ def LiveAcceptsScoped {n : ℕ} {Reg : Type} (I : Inputs)
     Flock.KsScope.check (zkTags I) I.circuitFile I.publicFile I.tables I.count
       (FlockSoundness.Discharge.Exec.recordDraw o.2.2.record) = .ok ()
 
-/-- **The files that pass `Flock.KsScope.check` are in four of `KsScoped`'s five**, and the draw passes `drawWhy`. The
+/-- **The files that pass `Flock.KsScope.check` are in four of `KsScoped`'s five**, and the sample passes `drawWhy`. The
 unit is built because `HmRow.parse` built it (`unit_built`, at the untyped tags `tagsWhy` leaves). -/
 theorem ksScoped_files {I : Inputs} {D : Flock.Desc} {pub : Flock.Public} {draw : Option Lean.Json}
     (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D)
@@ -71,8 +71,8 @@ theorem ksScoped_files {I : Inputs} {D : Flock.Desc} {pub : Flock.Public} {draw 
     ⟨(zkTags_hiddenOutputs I).symm.trans ht2, (zkTags_retainRounds I).symm.trans ht3,
       (zkTags_merkleLeaf I).symm.trans ht4⟩, hd⟩
 
-/-- **The record's draw passing `drawWhy` gives the draw's `k` a multiple of the tables**: custody makes an accepted
-record's draw `dj S`, and a `dj S` that parses the verifier's own subset draw of `kd` units. -/
+/-- **The record's sample passing `drawWhy` gives the sample's `k` a multiple of the tables**: custody makes an accepted
+record's sample `dj S`, and a `dj S` that parses the verifier's own subset sample of `kd` units. -/
 theorem div_of_drawWhy {n mPts : ℕ} {Reg : Type} {I : Inputs} {dj : Finset (Fin n) → Lean.Json}
     {Jf : Finset (Fin n) → Reg → ℕ}
     {wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (Jf S R) mPts → FlockSoundness.Discharge.Exec.Transcript}
@@ -101,14 +101,14 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 open Classical in
-/-- **`SampledKSLiveV2` with its statement, file and draw preconditions read off acceptance**: on the event that
-`verify --zk` accepts the transcript, the files and the record's draw (`Bridge.LiveAcceptsScoped`:
-`Bridge.LiveAcceptsKS`, whose ports are row/v1, row/v2 or row-seg/v1 rows of distinct names with no two registered roots
+/-- **`SampledKSLiveV2` with its statement, file and sample preconditions read off acceptance**: on the event that
+`verify --zk` accepts the transcript, the files and the record's sample (`Bridge.LiveAcceptsScoped`:
+`Bridge.LiveAcceptsKS`, whose ports are row/v1, row/v2 or row-seg/v1 rows of distinct published domains with no two registered roots
 one root under different domains, and `Flock.KsScope.check`), SPOT's run passes the registration's
 population (`Bridge.RunPopOk`),
-and the claims relation fails, at a statement, files and a draw in `Bridge.KsScoped` the bound is
+and the claims relation fails, at a statement, files and a sample in `Bridge.KsScoped` the bound is
 `Bridge.SampledKSLiveRoots`', and outside them the event has probability 0. It has none of V2's hypotheses `RowsOk`,
-`dupName = none`, `rootsColl = none` and `PopMatches`, nor `I.tags.typed = false`, `Built D.unroll.unit`,
+`dupId = false`, `rootsColl = none` and `PopMatches`, nor `I.tags.typed = false`, `Built D.unroll.unit`,
 `scopeOkH D.unroll = true`, `kd % nTab I = 0` and `TagsOkZHJ I`; the game's `n` is the public file's population
 (`pub.n = n`), and the public file has no shared rows (`pub.tables = none`), whose shared-row form is
 `SampledKSLiveV5`'s. Its finders' charges are V2's: `2(t' + v)` and `t' + v` for the knowledge finders and `t' + v` per
@@ -160,7 +160,7 @@ def SampledKSLiveV3 : Prop :=
           ⟨r.2.1.val, r.1.val, Discharge.Layout.portRowW D.unroll r.2.1, r.2.2.val⟩
       -- the registration's frame-v3 roots, over the public file's rows
       let roots := Bridge.rootsOf D.unroll pub n
-      let Cd := Bridge.commitDep Cc rows D.unroll n roots
+      let Cd := Bridge.commitDep Cc rows D.unroll pub n roots
       -- the circuit's constants, public
       let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOf D.unroll hs.built n g
       -- cr/sha-512 for the knowledge finders of each table the prover's session runs, at their cost: two runs of the
@@ -183,10 +183,10 @@ def SampledKSLiveV3 : Prop :=
       prob (fun o => Bridge.LiveAcceptsScoped I o ∧ Bridge.RunPopOk desc qr n)
         (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ = 0
 
-/-- **`SampledKSLiveV2` gives `SampledKSLiveV3`**: at a statement, files and a draw in `KsScoped`, V3's event is inside
+/-- **`SampledKSLiveV2` gives `SampledKSLiveV3`**: at a statement, files and a sample in `KsScoped`, V3's event is inside
 `Bridge.SampledKSLiveRoots`' at `KsScoped`'s five, and that follows from V2 (`Bridge.sampledKSLiveRoots_of`); outside
 them no outcome the prover reaches is accepted, since an accepted outcome's files pass `Flock.KsScope.check`
-(`Bridge.ksScoped_files`) and its record's draw is the verifier's (`Bridge.div_of_drawWhy`). -/
+(`Bridge.ksScoped_files`) and its record's sample is the verifier's (`Bridge.div_of_drawWhy`). -/
 theorem sampledKSLiveV3_of (h : SampledKSLiveV2) : SampledKSLiveV3 := by
   have h := Bridge.sampledKSLiveRoots_of h
   intro n Reg I D hD pub hpub hpt hn desc qr kd hkd dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hCust k Rw M hk hRw hM ρ hρ hr

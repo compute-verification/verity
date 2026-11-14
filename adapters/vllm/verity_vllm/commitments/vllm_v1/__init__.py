@@ -1,8 +1,8 @@
 """``vllm-v1``: the commitment framing vLLM's serving Commit path emits, as a named scheme.
 
 A permanent scheme beside frame-v3 (:mod:`..merkle`), selectable by backends.  Spec: ``PROTOCOL.md``
-beside this file.  Conformance vectors: ``vectors.json`` beside it, written by
-``python -m verity_vllm.commitments.vllm_v1.vectors``.  This module is the plain reference: stdlib ``hashlib``
+beside this file.  Conformance vectors: ``vectors.json`` beside it, which
+``adapters/vllm/tests/commitments/vectors.py`` renders from this module.  This module is the plain reference: stdlib ``hashlib``
 only, no fast paths; every byte below is what the integration and its CUDA kernels hash.
 
 The tree rule (pairs ``node``, an odd trailing child ``lift``, zero leaves ``empty``) and the id leaf are the ones
@@ -17,16 +17,23 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
-from verity.errors import InvalidArtifact
-
-from ..leaves import empty_root, fold_path, levels, open_path, path_shape
-from ..leaves import ids_digest as ids_digest
-from ..leaves import leaf_hash as id_leaf
 from verity.commitments.identity import identity_digest, identity_digest_sha512
-from ..leaves import LEAF_TAG, shape_text
 from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.commitments.scheme import LeafLayout, Path
 from verity.commitments.scheme import sha as _sha
+from verity.errors import InvalidArtifact
+
+from ..leaves import (
+    LEAF_TAG,
+    empty_root,
+    fold_path,
+    levels,
+    open_path,
+    path_shape,
+    shape_text,
+)
+from ..leaves import ids_digest as ids_digest
+from ..leaves import leaf_hash as id_leaf
 
 __all__ = [
     "FA2H_KIND_CHUNK",
@@ -40,7 +47,7 @@ __all__ = [
     "TREE",
     "TREE_SHA512",
     "Tree",
-    "VllmV1",
+    "Scheme",
     "domain_digest",
     "id_leaf_layout",
     "pos_leaf_layout",
@@ -247,7 +254,7 @@ def verify_opening(
 
 
 class Tree:
-    """The tree rule alone, over leaf digests in tree order (no root binding): what :class:`VllmV1` folds with."""
+    """The tree rule alone, over leaf digests in tree order (no root binding): what :class:`Scheme` folds with."""
 
     def __init__(self, hash: str = "sha256") -> None:
         self.hash = hash
@@ -333,16 +340,17 @@ def weights_root(geo_digest: bytes, names_digest: bytes, tensor_roots: Sequence[
 def stream_ctx_digest(*, launch_tag: int, src_mask: int, chunk_words: int, leaf_count: int, hash: str = "sha256") -> bytes:
     """SHA-256 of the ASCII text ``{"chunk_words": C, "launch_tag": T, "leaf_count": N, "src_mask": S}`` (decimal)."""
 
-    text = '{"chunk_words": %d, "launch_tag": %d, "leaf_count": %d, "src_mask": %d}' % (
-        _u32(chunk_words, "chunk_words"), _u32(launch_tag, "launch_tag"), _u32(leaf_count, "leaf_count", _U64), _u32(src_mask, "src_mask", 1 << 8)
-    )
+    c, t = _u32(chunk_words, "chunk_words"), _u32(launch_tag, "launch_tag")
+    n, s = _u32(leaf_count, "leaf_count", _U64), _u32(src_mask, "src_mask", 1 << 8)
+    text = f'{{"chunk_words": {c}, "launch_tag": {t}, "leaf_count": {n}, "src_mask": {s}}}'
     return _sha(hash)(text.encode("ascii")).digest()
 
 
 def thread_ctx_digest(*, launch_tag: int, src_mask: int, hash: str = "sha256") -> bytes:
     """SHA-256 of the ASCII text ``{"launch_tag": T, "src_mask": S}`` (decimal)."""
 
-    text = '{"launch_tag": %d, "src_mask": %d}' % (_u32(launch_tag, "launch_tag"), _u32(src_mask, "src_mask", 1 << 8))
+    t, s = _u32(launch_tag, "launch_tag"), _u32(src_mask, "src_mask", 1 << 8)
+    text = f'{{"launch_tag": {t}, "src_mask": {s}}}'
     return _sha(hash)(text.encode("ascii")).digest()
 
 
@@ -595,7 +603,7 @@ def domain_digest(domain: Domain) -> bytes:
     return bytes.fromhex(identity_digest(DOMAIN_DIGEST_TAG, doc))
 
 
-class VllmV1:
+class Scheme:
     """``vllm-v1`` over a statement's ports, each a verifier-held domain; ``root`` is the published (bound) root.
 
     Position-leaf ports need ``value_nbytes[port](position)``: the value length the layout (template or layout digest)

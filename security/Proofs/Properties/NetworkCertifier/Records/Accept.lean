@@ -52,7 +52,7 @@ The check accepts exactly when the evidence fits, the parameters have their dige
 @[expose] public section
 
 open NetworkCheck hiding Params
-open NetworkCheck.Check (Params Certified Link Evidence Grid Profile LinkWindow manifestSet)
+open NetworkCheck.Check (Params Certified LinkOpening Evidence Grid Profile TransferBlocks manifestSet)
 open Properties.NetworkCertifier (EvidenceFits ParamsDigests)
 open Properties.NetworkCertifier.CheckProofs (fits_iff any_ne zip_left)
 open NetworkCheck.RecordsBytes (frameBytes_toEvidence)
@@ -62,7 +62,7 @@ namespace Properties.NetworkRecords
 open CheckProofs
 
 /-- `e`'s egress links read as v2 reads them, paired with their names, are `e`'s. -/
-theorem zip_toLinks {egress : List String} {e : Records.ByteEvidence} {l : String} {L : Link}
+theorem zip_toLinks {egress : List String} {e : Records.ByteEvidence} {l : String} {L : LinkOpening}
     (hm : (l, L) ∈ egress.zip e.toEvidence.links.toList) :
     ∃ link, (l, link) ∈ egress.zip e.links.toList ∧ L = link.toLink := by
   simp only [Records.ByteEvidence.toEvidence, Array.toList_map, List.zip_map_right, List.mem_map] at hm
@@ -86,7 +86,7 @@ theorem fits_bytes {p : Params} {e : Records.ByteEvidence} : EvidenceFits p e.to
   exact Iff.rfl
 
 theorem verdicts_all {p : Params} {c : Records.Commitment} {e : Records.ByteEvidence} {eg ig : ByteArray}
-    (P : LinkWindow → Prop) :
+    (P : TransferBlocks → Prop) :
     (∀ v ∈ (Records.verdicts p c e eg ig).toList, P v) ↔
       (∀ l link, (l, link) ∈ p.egress.toList.zip e.links.toList → ∀ w < p.windows,
         P ⟨.egress, l, w, Records.egressVerdict p c e eg l link

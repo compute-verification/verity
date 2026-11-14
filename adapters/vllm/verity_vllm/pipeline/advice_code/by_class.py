@@ -1,8 +1,9 @@
 """Advice v1's charge by class: each window's bits (`codec.bits_by_window`) split by the field that put them there.
 
 A reader beside the codec. It parses a string as `codec.bits_by_window` does, codes its windows again
-(`window_code.code_window`) through an encoder that notes what each symbol adds to its window's segment, and refuses
-unless the string it wrote is the one it read. It changes no string, no codebook and no registration.
+(`window_code.code_executionPhase`; under a draft their kept counts too, `kept.coder`) through an encoder that notes what each
+symbol adds to its window's segment, and refuses unless the string it wrote is the one it read. It changes no string,
+no codebook and no registration.
 
 **The parts** (`FIELDS`) are integers and sum to the window's charge exactly.
 - A symbol's bits are the shifts the arithmetic coder makes while it codes the symbol (`arith.ArithEncoder.encode`): each
@@ -14,16 +15,21 @@ unless the string it wrote is the one it read. It changes no string, no codebook
   anything, and none to one that coded nothing.
 - `output_len` and `finish` are the window's length terms (`lengths`), plain bits after the segment: each request's
   output length, and the 1 bit that says how it ended, on a stop id or at its length.
+- Under a draft a window has two more (`KEPT`, `fields`), its second segment's: `kept`, the shifts of its kept counts'
+  bits (`kept.Counts.put`), and `kept_end`, what ends that segment.
 
 **The classes** (`CLASSES`) group the fields as the advice's charge is stated: the prefix-cache hits; the admission,
 which is when each request arrived (`decisions`) and in what order (`order`); the terminator, which is how each request
 ended (`finish`); and, outside those, the output lengths, `resumes` and `lag`, and the segment's end. Two classes have
 no field in the code (`NO_FIELD`): an abort, which the code refuses rather than charges, and the release buckets, which
-are the certified record's.
+are the certified record's. Under a draft the kept drafts are a class of their own (`KEPT_CLASS`, `classes`): a
+window's whole second segment, charged while no proof holds the model's accept rule. `kept_rows` counts, beside its
+bits, the rows whose counts a window sends and those that kept a draft.
 
 **What is 0 by construction.** `closed` gives, for a registration, the fields no window of it can charge, each with
 the rules (`RULES`) that hold it there; `where` finds a rule's line in this package's source, so a report cites the
-code as it stands and a rule that moved is refused rather than cited stale.
+code as it stands and a rule that moved is refused rather than cited stale. One rule says what is charged rather than
+what is 0: `length width`, the bits a request's output length and its end are sent in.
 
 **The events** (`observing`, `Seen`). A class's 0 bits say something only where its event happened, so a report
 counts, beside each window's bits, what the replay's scheduler and block pool did at each executed step: the cached
@@ -44,29 +50,38 @@ from typing import Any, NamedTuple
 
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline.advice_code import codec as V
+from verity_vllm.pipeline.advice_code import kept as KP
 from verity_vllm.pipeline.advice_code import pool as P
 from verity_vllm.pipeline.advice_code import replay as R
 from verity_vllm.pipeline.advice_code import window_code as CV
 from verity_vllm.pipeline.advice_code.codec import AdviceCodeError, Record, Registered
 
-__all__ = ["bits_by_class", "CLASSES", "closed", "FIELDS", "NO_FIELD", "no_field", "observing", "Rule", "RULES", "Seen",
-           "SYMBOLS", "WHY", "where"]
+__all__ = ["bits_by_class", "CLASSES", "classes", "closed", "FIELDS", "fields", "KEPT", "KEPT_CLASS", "kept_rows",
+           "KeptRows", "NO_FIELD", "no_field", "observing", "Rule", "RULES", "Seen", "SYMBOLS", "WHY", "where"]
 
 #: a window's parts: its segment's symbols by field, what ends the segment, and its tail's two kinds of term
 FIELDS = ("decisions", "order", "hits", "resumes", "lag", "segment_end", "output_len", "finish")
 
-#: the field of each symbol `window_code.code_window` codes
+#: the field of each symbol `window_code.code_executionPhase` codes
 SYMBOLS = {"n_arrived": "decisions", "arrived": "decisions", "n_hits": "hits", "hit": "hits", "n_resumes": "resumes",
            "resume_gap": "resumes", "n_order": "order", "order_gap": "order", "order_len": "order",
            "order_index": "order", "n_lag": "lag", "lag": "lag"}
+
+#: under a draft, a window's parts beside `FIELDS`, its second segment's: its kept counts' symbols, and what ends it
+KEPT = ("kept", "kept_end")
+#: the field of the one symbol a second segment codes (`kept.Counts`)
+_SECOND = {"kept": "kept"}
 
 #: the classes a charge is stated in, and the fields of each: the three of the five named classes that have a field
 #: (`NO_FIELD` has the other two), then the fields outside the five
 CLASSES = {"hits": ("hits",), "admission": ("decisions", "order"), "terminator": ("finish",),
            "output lengths": ("output_len",), "resumes and lag": ("resumes", "lag"), "segment end": ("segment_end",)}
 
-#: the cap (`window_code.Caps`) on each segment field's count a window
-_CAP = {"decisions": "arrived", "order": "order", "hits": "hits", "resumes": "resumes", "lag": "lag"}
+#: under a draft, the class of a window's second segment (`KEPT`)
+KEPT_CLASS = "kept drafts"
+
+#: the field of `window_code.Caps` that bounds each segment field's count a window
+_BOUND = {"decisions": "arrived", "order": "order", "hits": "hits", "resumes": "resumes", "lag": "lag"}
 
 
 class Rule(NamedTuple):
@@ -97,6 +112,11 @@ RULES = {
                          "codec", "if reg.tick is not None and any(w.arrived or w.order for w in wins):"),
     "no lengths": Rule("a registration that sends no lengths has no length term in any window", "codec",
                        "if not reg.send_lengths:"),
+    "length width": Rule("a request's output length is sent in ⌈log2(max_tokens + 1)⌉ bits and how it ended in 1",
+                         "lengths", "C.width(requests[k].max_tokens + 1), 1)"),
+    "kept count": Rule("under a draft each emitting row's kept count is sent as the bits c > j, each coded in its "
+                       "request's context, and charged whole: no proof holds the accept rule", "kept",
+                       'e.bit("kept", c > j, context(self.before[i], j))'),
     "aborts unmodelled": Rule("the replay refuses what it doesn't model, aborts among them", "replay",
                               "aborts and stop strings", prose=True),
     "aborts refused": Rule("a record with an output the stop rule doesn't end is refused", "codec",
@@ -115,6 +135,16 @@ def no_field(reg: Registered) -> dict[str, tuple[str, ...]]:
     if reg.tick is not None:
         out["release buckets"] = (*out["release buckets"], "tick replay")
     return out
+
+
+def fields(reg: Registered) -> tuple[str, ...]:
+    """A window's parts under a registration: `FIELDS` and, under a draft, `KEPT`."""
+    return FIELDS + KEPT if reg.engine.num_speculative_tokens else FIELDS
+
+
+def classes(reg: Registered) -> dict[str, tuple[str, ...]]:
+    """`CLASSES` under a registration: under a draft the kept drafts are one more (`KEPT_CLASS`)."""
+    return {**CLASSES, KEPT_CLASS: KEPT} if reg.engine.num_speculative_tokens else CLASSES
 
 
 def where(rule: str) -> tuple[str, int]:
@@ -137,18 +167,18 @@ def where(rule: str) -> tuple[str, int]:
 
 def closed(reg: Registered) -> dict[str, tuple[str, ...]]:
     """The fields no window of the registration can charge, each with the rules (`RULES`' keys) that hold it at 0: a
-    segment's field whose count the registered caps hold at 0, the segment's end where they hold every count there,
+    segment's field whose count the registered bounds hold at 0, the segment's end where they hold every count there,
     and the length terms where the registration sends none."""
-    caps, tick = V.book_of(reg).caps, reg.tick is not None
+    bounds, tick = V.book_of(reg).caps, reg.tick is not None
     out: dict[str, tuple[str, ...]] = {}
-    for field, cap in _CAP.items():
-        if getattr(caps, cap):
+    for field, name in _BOUND.items():
+        if getattr(bounds, name):
             continue
-        ours = ("tick caps",) if cap in ("arrived", "order") else ("caps",)
+        ours = ("tick caps",) if name in ("arrived", "order") else ("caps",)
         held = ("tick book",) if reg.book is not None and tick else ours if reg.book is None else ()
-        more = ("refused",) if cap not in ("arrived", "order") else ("tick replay", "tick refused") if tick else ()
+        more = ("refused",) if name not in ("arrived", "order") else ("tick replay", "tick refused") if tick else ()
         out[field] = (*held, "one value", *more)
-    if len(out) == len(_CAP):
+    if len(out) == len(_BOUND):
         out["segment_end"] = ("no segment",)
     if not reg.send_lengths:
         out["output_len"] = out["finish"] = ("no lengths",)
@@ -156,7 +186,7 @@ def closed(reg: Registered) -> dict[str, tuple[str, ...]]:
 
 
 class _Meter:
-    """`window_code.Encoder` behind `code_window`, noting per field the bits each symbol adds to the open segment: the
+    """`window_code.Encoder` behind `code_executionPhase`, noting per field the bits each symbol adds to the open segment: the
     coder's shifts while it codes the symbol, each one bit written or pending."""
 
     def __init__(self, book: CV.Book) -> None:
@@ -168,9 +198,10 @@ class _Meter:
         return len(self.e.w) + (0 if seg is None else seg.pending)
 
     def _note(self, name: str, at: int) -> None:
-        if name not in SYMBOLS:
+        field = SYMBOLS.get(name, _SECOND.get(name))
+        if field is None:
             raise AdviceCodeError(f"the window code's symbol {name!r} has no field in by_class.SYMBOLS")
-        self.by[SYMBOLS[name]] += self._bits() - at
+        self.by[field] += self._bits() - at
 
     def _sym(self, name: str, v: int, lo: int, hi: int) -> int:
         at = self._bits()
@@ -183,6 +214,8 @@ class _Meter:
         out = self.e.bit(name, b, ctx)
         self._note(name, at)
         return out
+
+    bit = _flag  # what `kept.Counts.put` codes a count's bits through
 
 
 #: what holds the requests a step leaves waiting (`Seen.why`): the batch is full, by its sequences (`max_num_seqs`
@@ -313,27 +346,65 @@ def observing() -> Iterator[list[Seen]]:
         yield steps
 
 
+def _kept_terms(data: bytes, record: Record, reg: Registered) -> tuple[list[Any], list[list[int]], Any]:
+    """`codec._parse`'s windows and tails, and under a draft the string's kept terms (`kept.Terms`), which its replay
+    reads; None without one."""
+    wins, tails, d = V._parse(data, reg, record)
+    return wins, tails, V._replayed(wins, tails, d, record, reg)[3] if reg.engine.num_speculative_tokens else None
+
+
 def bits_by_class(data: bytes, record: Record, reg: Registered) -> dict[int, dict[str, int]]:
-    """Each window's charge by field (`FIELDS`): the bits `codec.bits_by_window` charges the window, split, so each
+    """Each window's charge by field (`fields`): the bits `codec.bits_by_window` charges the window, split, so each
     window's parts sum to its charge. Refuses what `codec.bits_by_window` refuses."""
     def run() -> dict[int, dict[str, int]]:
-        wins, tails = V._parse(data, reg, record)
+        wins, tails, kept = _kept_terms(data, record, reg)
         m, st = _Meter(V.book_of(reg)), CV.CoderState()
         parts = []
         for win, values, widths in zip(wins, tails, V.length_widths(record, reg)):
             m.e.window()
-            m.by = dict.fromkeys(FIELDS, 0)
-            CV.code_window(m, win, st)
+            m.by = dict.fromkeys(fields(reg), 0)
+            CV.code_executionPhase(m, win, st)
             for j, (v, n) in enumerate(zip(values, widths)):
                 m.e.raw(v, n)
                 m.by["finish" if j % 2 else "output_len"] += n
             parts.append(m.by)
+        first: tuple[int, ...] | None = None  # each window's charge before its second segment
+        if kept is not None:
+            coded = KP.coder(reg.engine.num_speculative_tokens, kept)
+            for w, by in enumerate(parts):
+                m.e.segment(w)
+                first = first or tuple(m.e.lens)
+                m.by = by
+                coded(m, w)
         enc = m.e.finish()
         if enc.bits != bytes(data):
             raise AdviceCodeError("the windows the string decodes to code as another string")
-        for by, n in zip(parts, enc.lens):
-            by["segment_end"] = n - sum(by.values())
-            if by["segment_end"] not in (0, 2):
-                raise AdviceCodeError(f"a segment ends in {by['segment_end']} bits, not the termination's 2 or none")
+        for by, n, n1 in zip(parts, enc.lens, first or enc.lens):
+            ends = {"segment_end": n1 - sum(by[f] for f in FIELDS)}
+            if first is not None:
+                ends["kept_end"] = n - n1 - by["kept"]
+            if set(ends.values()) - {0, 2}:
+                raise AdviceCodeError(f"a window's segments end in {sorted(ends.values())} bits, not the termination's 2 "
+                                      "or none")
+            by.update(ends)
         return dict(enumerate(parts))
+    return V._total(run)
+
+
+class KeptRows(NamedTuple):
+    """The rows whose kept counts a window sends: how many, how many of them kept a draft, and the drafts they kept."""
+
+    rows: int
+    kept: int
+    drafts: int
+
+
+def kept_rows(data: bytes, record: Record, reg: Registered) -> dict[int, KeptRows]:
+    """Under a draft, each window's emitting rows, as its second segment sends their counts (`KeptRows`): the events
+    its `kept` bits are read beside. Refuses what `codec.bits_by_window` refuses, and a registration with no draft."""
+    def run() -> dict[int, KeptRows]:
+        if not reg.engine.num_speculative_tokens:
+            raise AdviceCodeError("the registered engine serves with no draft, so no row keeps one")
+        terms = _kept_terms(data, record, reg)[2]
+        return {w: KeptRows(len(cs), sum(c > 0 for _, c in cs), sum(c for _, c in cs)) for w, cs in enumerate(terms.windows)}
     return V._total(run)

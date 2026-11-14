@@ -26,7 +26,7 @@ import secrets
 from collections.abc import Callable, Mapping
 from typing import Any
 
-__all__ = ["DEFAULT_SEED", "SeedCoins", "derived", "served"]
+__all__ = ["DEFAULT_SEED", "DERIVED", "UNSEEDED", "SeedCoins", "derived", "param_of", "rule_of", "served"]
 
 #: The public default seed: the first 63 bits of SHA-512 over its name, so nobody chose its value.
 DEFAULT_SEED = int.from_bytes(hashlib.sha512(b"verity-vllm/served-default-seed/v1").digest()[:8], "big") >> 1
@@ -71,9 +71,14 @@ def served(params: Any, request_id: str | None, coin: bytes | None) -> tuple[Any
     rule = rule_of(params)
     if rule == "request":
         return params, rule
-    if rule == "derived" and request_id is None:
+    if rule == "default":
+        seed = DEFAULT_SEED
+    elif request_id is None:
         raise ValueError(UNSEEDED)
-    seed = DEFAULT_SEED if rule == "default" else derived(coin, request_id)
+    elif coin is None:
+        raise ValueError(f"a window's verifier coin is non-empty bytes, not {coin!r}")
+    else:
+        seed = derived(coin, request_id)
     if isinstance(params, Mapping):
         return {**params, "seed": seed}, rule
     out = params.clone() if hasattr(params, "clone") else copy.copy(params)
@@ -98,7 +103,9 @@ class SeedCoins:
 
     def __init__(self, flip: Callable[[], tuple[bytes, str]] | None = None) -> None:
         self.flip = flip or in_process
-        self.index, self.coin, self.source = -1, None, None
+        self.index = -1
+        self.coin: bytes | None = None
+        self.source: str | None = None
 
     def admitting(self, idle: bool) -> bytes:
         """The coin a request admitted now is seeded under: a fresh one when ``idle`` (nothing in the engine, no window open)."""

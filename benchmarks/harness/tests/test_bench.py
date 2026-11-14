@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import argparse
 import calendar
+import gc
 import json
+import logging
 import os
 import re
 import statistics
 import subprocess
 import sys
+import tempfile
 import tomllib
 from dataclasses import replace
 from pathlib import Path
@@ -15,14 +18,42 @@ from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
-
 from verity_config import Admission
+from verity_vllm.engine.env import INDUCTOR_DIR_MARK
 
-from verity_bench import jobs, steady_spec
+import verity_bench.cli as cli
+from verity_bench import jobs, served_table, settings, steady_spec
 from verity_bench.cli import _parser, main
-from verity_bench.vllm.arms import Arm, resolve_arms
+from verity_bench.tool import VLLM_BENCH_POINT
+from verity_bench.vllm import presets
+from verity_bench.vllm import result as result_format
+from verity_bench.vllm.arms import (
+    H1,
+    Arm,
+    build_bound,
+    h1_config,
+    plugin,
+    protocols_config,
+    resolve_arms,
+    window_steps,
+)
+from verity_bench.vllm.engine import (
+    H1_OPENING_STEPS,
+    PASS_COUNTS,
+    ProcessEngineFactory,
+    _kv_cache_tokens,
+    _pass_totals,
+    _pearl_c_run,
+    _ProcessEngine,
+    _VllmEngine,
+    arm_execution,
+    engine_args,
+)
 from verity_bench.vllm.presets import (
+    ENGINE_SETTINGS,
+    FORMER_SPECS,
     GPUS,
+    SOURCE_ROOT,
     SPEC_ROOT,
     Sweep,
     SweepPoint,
@@ -33,16 +64,42 @@ from verity_bench.vllm.presets import (
     resolve_spec,
     served,
 )
-from verity_bench.vllm.result import IdentityMismatch, identity_mismatches, judge, validate
-from verity_bench.vllm.runner import ResidentCapacityError, _token_digest, run_benchmark
+from verity_bench.vllm.result import (
+    IdentityMismatch,
+    identity_mismatches,
+    judge,
+    merge,
+    validate,
+)
+from verity_bench.vllm.runner import (
+    METRICS,
+    OPTIONAL_METRICS,
+    PER_PASS_TOKENS,
+    ResidentCapacityError,
+    _aggregate,
+    _pearl_c_gate,
+    _token_digest,
+    _warm,
+    h1_gate,
+    h1_summary,
+    run_benchmark,
+    summarize,
+)
 from verity_bench.vllm.table import render
+from verity_bench.vllm.timing import (
+    HostProbe,
+    decode_time_per_token,
+    inter_token_latencies,
+    percentile,
+    run_trace,
+)
 
 
 class FakeEngine:
     def __init__(self, arm, events, *, gate_ok=True, bad_tokens=False, kv_tokens=458_752, timed_digest=None,
-                 drift=0.0, timed_ok=True):
+                 drift=0.0, timed_ok=True, per_pass_tokens=False):
         self.arm, self.events, self.gate_ok, self.bad_tokens = arm, events, gate_ok, bad_tokens
-        self.timed_digest, self.drift, self.timed_ok = timed_digest, drift, timed_ok
+        self.timed_digest, self.drift, self.timed_ok, self.per_pass_tokens = timed_digest, drift, timed_ok, per_pass_tokens
         self.identity = {
             "vllm_version": "0.fake+gd9105ea80",
             "kernel_digest": f"digest-{arm.id}",
@@ -58,7 +115,8 @@ class FakeEngine:
     def custom_gate(self):
         self.events.append(("custom-gate", self.arm.id))
         timed = any(e[:2] == ("measure", self.arm.id) for e in self.events)
-        return {"passed": self.gate_ok and (self.timed_ok or not timed), "provided": True}
+        return {"passed": self.gate_ok and (self.timed_ok or not timed), "provided": True,
+                **({PER_PASS_TOKENS: True} if self.per_pass_tokens else {})}
 
     def warmup(self, point):
         self.events.append(("warmup", self.arm.id, point.id))
@@ -88,8 +146,9 @@ class FakeEngine:
 
 class FakeFactory:
     def __init__(self, *, resident_failure=None, gate_ok=True, bad_tokens=None, kv_tokens=None, timed_digest=None,
-                 drift=0.0, kv_after_gate=None, timed_ok=True):
+                 drift=0.0, kv_after_gate=None, timed_ok=True, per_pass_tokens=()):
         self.events = []
+        self.per_pass_tokens = set(per_pass_tokens)
         self.resident_failure = resident_failure
         self.failed = False
         self.gate_ok = gate_ok
@@ -110,7 +169,7 @@ class FakeFactory:
         return FakeEngine(arm, self.events, gate_ok=self.gate_ok,
                           bad_tokens=arm.id == self.bad_tokens,
                           kv_tokens=kv, timed_digest=self.timed_digest.get(arm.id), drift=self.drift,
-                          timed_ok=self.timed_ok)
+                          timed_ok=self.timed_ok, per_pass_tokens=arm.id in self.per_pass_tokens)
 
 
 def inputs():
@@ -202,8 +261,6 @@ def test_direct_dispatch_runs_each_missing_point_on_the_nodes_gpu_slots_as_the_q
 
     from research.pods.nebius.slot_only import through_slot
 
-    from verity_bench.tool import VLLM_BENCH_POINT
-
     root = Path(__file__).resolve().parents[3]
     monkeypatch.setenv("VERITY_BENCH_VENV", "/workspace/jobs/venv312")
     seen = []
@@ -267,7 +324,6 @@ def test_the_served_commits_width_sweep_runs_direct_on_a_dc_vms_one_gpu_as_on_th
         gpu, rtx.preset.model, rtx.preset.revision, rtx.preset.precision)
     attention = {"attention_backend": "FLASH_ATTN", "attention_config": {"flash_attn_version": 2}} if gpu == "b200" else {}
     assert dict(spec.preset.engine_settings) == {**rtx.preset.engine_settings, **attention}
-    from verity_bench.vllm.runner import engine_args
     assert {key: value for key, value in engine_args(spec.preset, "fp8", resident=False, eager=False).items()
             if key.startswith("attention")} == attention
     assert not {key for key in engine_args(rtx.preset, "fp8", resident=False, eager=False) if key.startswith("attention")}
@@ -382,8 +438,6 @@ def test_a_spec_warmups_count_loads_strictly_and_binds_the_identity(tmp_path):
 
 
 def test_an_engine_setting_the_runner_doesnt_read_refuses_by_name(tmp_path):
-    from verity_bench.vllm.presets import ENGINE_SETTINGS
-
     path = tmp_path / "spec.toml"
     path.write_text((SPEC_ROOT / "llama31-8b-fp8-1gpu.toml").read_text().replace(
         "[preset.engine_settings]\n", '[preset.engine_settings]\nmoe_backend = "triton"\n'))
@@ -481,8 +535,6 @@ def test_the_bandwidth_spec_runs_memory_accountings_arms_with_receipts_on_and_th
 
 
 def test_the_served_bandwidth_spec_times_compiled_stock_uncontrolled_beside_its_graph_path_at_six_reps():
-    from verity_bench.vllm import runner
-
     served_spec = resolve_spec("llama31-8b-fp8-1gpu-bandwidth-served-r6")
     assert served_spec.reps == 6 and served_spec.arm_settings["stock-fp8@compiled"].control == "none"
 
@@ -490,8 +542,8 @@ def test_the_served_bandwidth_spec_times_compiled_stock_uncontrolled_beside_its_
     assert compiled.control is None and compiled.execution == "compiled"
     built = []
     for arm in (stock, compiled):
-        preset, eager = runner.arm_execution(arm, served_spec.preset, served_spec.eager)
-        built.append(runner.engine_args(preset, arm.precision, resident=False, eager=eager))
+        preset, eager = arm_execution(arm, served_spec.preset, served_spec.eager)
+        built.append(engine_args(preset, arm.precision, resident=False, eager=eager))
     assert built[0]["compilation_config"] == {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",
                                               "cudagraph_capture_sizes": [1, 8, 32, 128]}
     assert "compilation_config" not in built[1] and built[1]["execution"] == "compiled"
@@ -500,8 +552,6 @@ def test_the_served_bandwidth_spec_times_compiled_stock_uncontrolled_beside_its_
 
 
 def test_a_queued_point_records_its_identity_as_the_key_param_resume_matches():
-    from verity_bench.tool import VLLM_BENCH_POINT
-
     root = Path(__file__).resolve().parents[3]
     plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
     item = plan.points[0]
@@ -511,7 +561,24 @@ def test_a_queued_point_records_its_identity_as_the_key_param_resume_matches():
     for argv in (workload, wrapped):
         params, key = VLLM_BENCH_POINT.resolve_params(argv, root)
         assert key == {"identity": item.identity}
-        assert params["point"] == item.point.id and params["spec"] == "benchmarks/specs/llama31-8b-fp8-1gpu.toml"
+        assert params["point"] == item.point.id and params["spec"] == "benchmarks/harness/specs/llama31-8b-fp8-1gpu.toml"
+
+
+def test_a_spec_named_by_a_path_under_the_specs_former_directory_is_the_spec_of_that_name_here(tmp_path):
+    """A command written while the specs had a directory of their own names a file there. It loads as the spec of that
+    name, a steady-state spec's path resolves the same way, and its points record the path the spec has now."""
+
+    name = "llama31-8b-fp8-1gpu"
+    former = SOURCE_ROOT / FORMER_SPECS / f"{name}.toml"
+    assert presets.former_name(former) == presets.former_name(f"{FORMER_SPECS}/{name}.toml") == name
+    assert presets.former_name(name) is None and presets.former_name(tmp_path / f"{name}.toml") is None
+    assert presets.former_name(f"not-{FORMER_SPECS}/{name}.toml") is None
+    assert load_spec(former) == load_spec(name) and resolve_spec(former) == resolve_spec(name)
+    assert steady_spec.spec_path(former).samefile(SPEC_ROOT / f"{name}.toml")
+    assert jobs._relative_spec(former, SOURCE_ROOT) == served_table.spec_path(name)
+    assert (SOURCE_ROOT / served_table.spec_path(name)).samefile(SPEC_ROOT / f"{name}.toml")
+    with pytest.raises(Exception, match="no benchmark spec"):
+        load_spec(SOURCE_ROOT / FORMER_SPECS / "no-such-spec.toml")
 
 
 def test_every_spec_dispatches_as_a_registered_queue_kind_that_fits_it():
@@ -556,9 +623,6 @@ def test_experimental_arm_can_require_an_isolated_engine(monkeypatch):
 
 
 def test_graphs_are_refused_for_arms_bound_to_the_build():
-    from verity_bench.vllm.arms import build_bound
-    from verity_bench.vllm.runner import ProcessEngineFactory
-
     bound_arm, _control = resolve_arms("sampled-proofs:hm96,stock-fp8")
     assert build_bound(bound_arm) == ("sampled-proofs:hm96",)
     assert build_bound(resolve_arms("stock")[0]) == ()
@@ -566,9 +630,14 @@ def test_graphs_are_refused_for_arms_bound_to_the_build():
         ProcessEngineFactory(eager=False).create(bound_arm, load_spec("llama31-8b-fp8-1gpu").preset, resident=True)
 
 
-def test_a_dead_engine_process_reports_its_own_error_not_a_connection_reset():
-    from verity_bench.vllm.runner import _ProcessEngine
+def test_a_protocol_entry_that_is_refused_binds_no_build_and_says_so(caplog):
+    unknown, _control = resolve_arms("no-such-protocol:x,stock-fp8")
+    with caplog.at_level(logging.INFO, logger="verity_bench.vllm.arms"):
+        assert build_bound(unknown) == ()
+    assert "'no-such-protocol:x' refused" in caplog.text and "the engine's build refuses it" in caplog.text
 
+
+def test_a_dead_engine_process_reports_its_own_error_not_a_connection_reset():
     class DeadConn:
         def __init__(self, final=None):
             self.final = final
@@ -593,15 +662,32 @@ def test_a_dead_engine_process_reports_its_own_error_not_a_connection_reset():
     with pytest.raises(RuntimeError, match="died during gate: RuntimeError: CUDA out of memory"):
         drained.gate(point)
     silent = _ProcessEngine(DeadProcess(), DeadConn(), {})
-    with pytest.raises(RuntimeError, match=r"exit code -9 \(SIGKILL: likely out of memory"):
+    with pytest.raises(RuntimeError, match=r"exit code -9 \(SIGKILL: likely out of memory; its own last error is on the job's stderr\)$"):
         silent.gate(point)
 
+    class TornConn(DeadConn):
+        def poll(self, _timeout):
+            raise ConnectionResetError
 
-def test_closing_an_engine_whose_worker_already_sent_its_error_keeps_that_error():
+    torn = _ProcessEngine(DeadProcess(), TornConn(), {})
+    with pytest.raises(RuntimeError, match=r"exit code -9 .*; its last message could not be read \(ConnectionResetError\)$"):
+        torn.gate(point)
+
+
+def test_an_engines_kv_pool_is_its_blocks_times_their_size_and_none_where_the_engine_hides_either():
+    def llm(cache):
+        return SimpleNamespace(vllm=SimpleNamespace(llm_engine=SimpleNamespace(vllm_config=SimpleNamespace(cache_config=cache))))
+
+    assert _kv_cache_tokens(llm(SimpleNamespace(num_gpu_blocks=28_672, block_size=16))) == 458_752
+    assert _kv_cache_tokens(llm(SimpleNamespace(num_gpu_blocks=None, block_size=16))) is None
+    assert _kv_cache_tokens(llm(SimpleNamespace(block_size=16))) is None
+    assert _kv_cache_tokens(SimpleNamespace(vllm=SimpleNamespace())) is None
+
+
+def test_closing_an_engine_whose_worker_already_sent_its_error_keeps_that_error(capsys):
     """A gate that fails in the worker (an arm's refusal) ends the worker's loop; the runner's cleanup then closes the
-    engine, and that close must not replace the gate's error with a connection error."""
-
-    from verity_bench.vllm.runner import _ProcessEngine
+    engine, and that close must not replace the gate's error with a connection error, only say on stderr that the
+    handshake broke."""
 
     class ExitingConn:
         def send(self, _):
@@ -624,6 +710,7 @@ def test_closing_an_engine_whose_worker_already_sent_its_error_keeps_that_error(
             pass
 
     _ProcessEngine(ExitingProcess(0), ExitingConn(), {}).close()
+    assert "left before the close handshake (EOFError)" in capsys.readouterr().err
     with pytest.raises(RuntimeError, match="exited with code 1 while closing"):
         _ProcessEngine(ExitingProcess(1), ExitingConn(), {}).close()
 
@@ -682,8 +769,6 @@ def test_an_engine_warms_past_its_minimum_until_two_runs_agree_and_says_when_it_
     """A run's plain engines warmed in 7.6 s, 2.3 s, 1.26 s and then ran at 1.26 s: a fixed count that
     happens to cover one host's stall is luck, so past `warmups` an engine warms until two consecutive runs agree."""
 
-    from verity_bench.vllm.runner import _warm
-
     class Stalls:
         def __init__(self, walls):
             self.walls = list(walls)
@@ -711,8 +796,6 @@ def test_a_timed_rep_keeps_its_step_times_request_times_and_host_counters():
     """A slow rep must say where its time went: which steps were slow, which requests waited, and whether the host was
     busy, ran slower code or waited on the device."""
 
-    from verity_bench.vllm.runner import HostProbe, run_trace
-
     timing = {
         "steps": [{"s": 0.0123456789, "prefill_tokens": 512, "decode_tokens": 0},
                   {"s": 0.002, "prefill_tokens": 0, "decode_tokens": 8}],
@@ -727,7 +810,6 @@ def test_a_timed_rep_keeps_its_step_times_request_times_and_host_counters():
         "arrival_s": [0.0, 0.0005],
         "first_output_s": [0.0141, None],
     }
-    import gc
 
     allocations = iter([{"num_device_alloc": 10, "num_alloc_retries": 0}, {"num_device_alloc": 13, "num_alloc_retries": 1}])
     probe = HostProbe(lambda: next(allocations))
@@ -852,8 +934,6 @@ def _serving_defaults_preset():
 
 
 def test_engine_args_pin_the_pool_in_either_mode_and_serving_defaults_leave_compilation_to_vllm():
-    from verity_bench.vllm.runner import engine_args
-
     served_preset = _serving_defaults_preset()
     for resident in (True, False):
         args = engine_args(served_preset, "bfloat16", resident=resident, eager=False)
@@ -870,8 +950,6 @@ def test_engine_args_pin_the_pool_in_either_mode_and_serving_defaults_leave_comp
 
 
 def test_serving_defaults_give_every_arm_process_one_inductor_cache(monkeypatch):
-    from verity_bench.vllm import runner
-
     spawned = []
 
     class Context:
@@ -885,27 +963,25 @@ def test_serving_defaults_give_every_arm_process_one_inductor_cache(monkeypatch)
             return End(), End()
 
         def Process(self, target, args):
-            spawned.append(dict(runner.os.environ))
+            spawned.append(settings.environ())
             return SimpleNamespace(start=lambda: None, join=lambda: None)
 
-    monkeypatch.setenv(runner.INDUCTOR_DIR_MARK, "")
+    monkeypatch.setenv(INDUCTOR_DIR_MARK, "")
     monkeypatch.setenv("TORCHINDUCTOR_CACHE_DIR", "/elsewhere")
-    monkeypatch.setattr(runner.tempfile, "mkdtemp", lambda prefix: f"/tmp/{prefix}x")
-    factory = runner.ProcessEngineFactory()
+    monkeypatch.setattr(tempfile, "mkdtemp", lambda prefix: f"/tmp/{prefix}x")
+    factory = ProcessEngineFactory()
     factory.context = Context()
     preset = _serving_defaults_preset()
     for arm in resolve_arms("stock"):
         factory.create(arm, preset, resident=True)
         factory.create(arm, preset, resident=True)
     assert [e["TORCHINDUCTOR_CACHE_DIR"] for e in spawned] == ["/tmp/verity_bench_inductor_x"] * 2
-    assert all(e[runner.INDUCTOR_DIR_MARK] == "1" for e in spawned)
+    assert all(e[INDUCTOR_DIR_MARK] == "1" for e in spawned)
 
 
 def test_a_served_variant_times_a_builtin_engine_in_its_own_execution_under_an_eager_spec(monkeypatch):
     """Every protocol row times eager against eager while vLLM serves compiled: `llama31-8b-fp8-1gpu-compiled-full` times
     the eager rows' stock FP8 engine against itself at vLLM's serving defaults, eager and compiled, in one spec."""
-
-    from verity_bench.vllm import runner
 
     spec = resolve_spec("llama31-8b-fp8-1gpu-compiled-full")
     assert spec.eager and "serving_defaults" not in spec.preset.engine_settings
@@ -937,20 +1013,20 @@ def test_a_served_variant_times_a_builtin_engine_in_its_own_execution_under_an_e
             spawned.append(args)
             return SimpleNamespace(start=lambda: None, join=lambda: None)
 
-    monkeypatch.setenv(runner.INDUCTOR_DIR_MARK, "")
+    monkeypatch.setenv(INDUCTOR_DIR_MARK, "")
     monkeypatch.delenv("TORCHINDUCTOR_CACHE_DIR", raising=False)
-    monkeypatch.setattr(runner.tempfile, "mkdtemp", lambda prefix: f"/tmp/{prefix}x")
-    factory = runner.ProcessEngineFactory(eager=True)
+    monkeypatch.setattr(tempfile, "mkdtemp", lambda prefix: f"/tmp/{prefix}x")
+    factory = ProcessEngineFactory(eager=True)
     factory.context = Context()
     preset, _ = served(spec.preset, spec.eager)
     for arm in (base, served_eager, compiled):
         factory.create(arm, preset, resident=True)
-    built = [runner.engine_args(p, a.precision, resident=True, eager=e) for _, a, p, _, e in spawned]
+    built = [engine_args(p, a.precision, resident=True, eager=e) for _, a, p, _, e in spawned]
     assert [(b["enforce_eager"], b.get("execution"), "compilation_config" in b) for b in built] == [
         (True, None, False), (True, "eager", False), (False, "compiled", False)]
     assert {b["kv_cache_memory_bytes"] for b in built} == {8 << 30}
     assert {b["max_num_batched_tokens"] for b in built} == {4096}
-    assert runner.os.environ["TORCHINDUCTOR_CACHE_DIR"] == "/tmp/verity_bench_inductor_x"
+    assert settings.environ()["TORCHINDUCTOR_CACHE_DIR"] == "/tmp/verity_bench_inductor_x"
 
 
 def test_a_served_variants_arm_settings_take_only_its_control(tmp_path):
@@ -974,8 +1050,6 @@ def test_a_served_variant_loads_its_own_checkpoint_where_the_presets_is_another_
     """`llama31-8b-1gpu-pouw-h1-served` times H1 on the int8 pin over stock FP8 as vLLM serves it, which vLLM can't load
     from the pin (`verity_int8`): its served variant names the pin's BF16 base, and only its engine loads it."""
 
-    from verity_bench.vllm import runner
-
     spec = resolve_spec("llama31-8b-1gpu-pouw-h1-served")
     compiled, int8, h1 = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert [(a.id, a.precision, a.control, a.execution, a.model) for a in (compiled, int8, h1)] == [
@@ -985,13 +1059,13 @@ def test_a_served_variant_loads_its_own_checkpoint_where_the_presets_is_another_
     ]
     assert compiled.to_json()["revision"] == "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814"
     preset, eager = served(spec.preset, spec.eager)
-    built = [runner.arm_execution(a, preset, eager) for a in (compiled, int8, h1)]
+    built = [arm_execution(a, preset, eager) for a in (compiled, int8, h1)]
     assert [(p.model, p.revision, p.case, e) for p, e in built] == [
         ("unsloth/Llama-3.1-8B", "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814", None, False),
         ("verity-int8/Llama-3.1-8B-INT8", "723d342ac443b040931242c768df342b0f6f15a7", "LLAMA31_8B_INT8", True),
         ("verity-int8/Llama-3.1-8B-INT8", "723d342ac443b040931242c768df342b0f6f15a7", "LLAMA31_8B_INT8", True),
     ]
-    args = runner.engine_args(built[0][0], compiled.precision, resident=True, eager=False)
+    args = engine_args(built[0][0], compiled.precision, resident=True, eager=False)
     assert (args["quantization"], args["execution"], args["max_num_batched_tokens"]) == ("fp8", "compiled", 64)
 
     source = (SPEC_ROOT / "llama31-8b-1gpu-pouw-h1-served.toml").read_text()
@@ -1012,12 +1086,10 @@ def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_s
     stock FP8 as its control, and the device, kernel and setup-built cubin, with the harness's challenger as its coins,
     which the adapter's refusals accept."""
 
-    from verity.protocols.pouw.verifier import verifier
-    from verity.protocols.pouw.verifier.coins import CoinCommitment
+    from verity.protocols.accounting.pouw.verifier import verifier
+    from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment
     from verity_vllm.protocols import pouw
     from verity_vllm.protocols.interface import Context
-
-    from verity_bench.vllm.arms import protocols_config
 
     spec = resolve_spec("llama31-8b-1gpu-pouw-protocol-served")
     control, arm, _ = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
@@ -1040,6 +1112,57 @@ def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_s
     ctx = Context(stage="serve", enabled=arm.protocols, settings=config)
     assert pouw.refusals("pearl-c-sm120-v1-h3", ctx) == ()
     assert "device only" in pouw.refusals("pearl-c-sm120-v1-h3", Context(stage="serve", enabled=arm.protocols))[0]
+
+
+def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kernel_from_its_setup(monkeypatch):
+    """`served_pearlplus.sh`'s spec: Llama 3.2 1B's BF16 checkpoint through `pouw:pearl-c-h100-v1-h3` on one H200, its kernel
+    directory and cubin both the setup's (pearl_c_sm90.sh exports them), serial, beside stock FP8 eager and compiled; the
+    adapter's refusals accept it."""
+
+    from verity.protocols.accounting.pouw.verifier import verifier
+    from verity_vllm.protocols import pouw
+    from verity_vllm.protocols.interface import Context
+
+    spec = resolve_spec("llama32-1b-1gpu-pouw-protocol-served-h200")
+    assert (spec.preset.model, spec.preset.gpu_id, spec.preset.gpu_count) == ("unsloth/Llama-3.2-1B", "h200", 1)
+    assert spec.setup == "benchmarks/harness/setup/pearl_c_sm90.sh"
+    control, arm, compiled = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
+    assert [(a.id, a.precision, a.control, a.execution) for a in (control, compiled)] == [
+        ("stock-fp8", "fp8", None, None), ("stock-fp8@compiled", "fp8", None, "compiled")]
+    assert (arm.protocols, arm.precision, arm.control) == (("pouw:pearl-c-h100-v1-h3",), "bfloat16", None)
+    assert arm.protocols_config == {"pouw": {"device": "cuda", "kernel": "$PEARLC_KERNEL", "cubin": "$PEARLC_CUBIN"}}
+    with pytest.raises(ValueError, match=r"\$PEARLC_KERNEL"):
+        protocols_config(arm, {"PEARLC_CUBIN": "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"})
+    monkeypatch.setattr(verifier, "coins", lambda n: b"\1" * n)
+    config = protocols_config(arm, {"PEARLC_KERNEL": "/tree/benchmarks/pouw/pearl_c_sm90",
+                                    "PEARLC_CUBIN": "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"})
+    assert (config["pouw"]["kernel"], config["pouw"]["cubin"]) == ("/tree/benchmarks/pouw/pearl_c_sm90",
+                                                                   "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin")
+    assert pouw.refusals("pearl-c-h100-v1-h3", Context(stage="serve", enabled=arm.protocols, settings=config)) == ()
+
+
+def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(monkeypatch, tmp_path):
+    """``served_passes.py arm`` writes the H200 spec's Pearl-C arm as serve-openai's Pearl+ arm takes it
+    (`serve_pearl.config_of`): `serve_pearl.CONFIG`'s keys alone, the setup's paths read in, no challenges flipped (the
+    server flips each window's); an unset ``$`` value is refused, naming it."""
+    from benchmarks.pouw.pearl_c_vllm import served_passes as SP
+    from verity.protocols.accounting.pouw.verifier import verifier
+    from verity_vllm.pipeline import serve_pearl as SPL
+
+    def flipped(n):
+        raise AssertionError("served_passes.py arm flipped challenges")
+    monkeypatch.setattr(verifier, "coins", flipped)
+    spec, out = str(SPEC_ROOT / "llama32-1b-1gpu-pouw-protocol-served-h200.toml"), tmp_path / "config.json"
+    monkeypatch.delenv("PEARLC_KERNEL", raising=False)
+    monkeypatch.setenv("PEARLC_CUBIN", "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin")
+    with pytest.raises(ValueError, match=r"\$PEARLC_KERNEL"):
+        SP.main(["arm", "--spec", spec, "--out", str(out)])
+    monkeypatch.setenv("PEARLC_KERNEL", "/tree/benchmarks/pouw/pearl_c_sm90")
+    assert SP.main(["arm", "--spec", spec, "--out", str(out)]) == 0
+    doc = json.loads(out.read_text())
+    assert doc == {"pouw": {"device": "cuda", "kernel": "/tree/benchmarks/pouw/pearl_c_sm90",
+                            "cubin": "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"}}
+    assert SPL.config_of(str(out)) == doc
 
 
 def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_path):
@@ -1069,8 +1192,6 @@ def test_a_pearl_c_protocol_arms_passes_are_the_adapters_and_the_harness_only_re
 
     from verity_vllm.protocols.pouw import pearl_c as PPD
 
-    from verity_bench.vllm import runner
-
     class Run(PPD.PearlCDeviceRun):
         def __init__(self):
             self.details = {"passes": []}
@@ -1082,15 +1203,15 @@ def test_a_pearl_c_protocol_arms_passes_are_the_adapters_and_the_harness_only_re
     run = Run()
     option = SimpleNamespace(end_pass=run.end_pass, release=lambda: None)
     llm = SimpleNamespace(protocols=SimpleNamespace(get=lambda name: option if name == "pouw" else None))
-    assert runner._pearl_c_run(llm) is run
-    assert runner._pass_totals(run) == dict.fromkeys(("passes", *runner.PASS_COUNTS), 0)
+    assert _pearl_c_run(llm) is run
+    assert _pass_totals(run) == dict.fromkeys(("passes", *PASS_COUNTS), 0)
     run.end_pass()
     run.end_pass()
-    assert runner._pass_totals(run) == {"passes": 2, "units": 448, "tiles": 10000, "screened_rows": 128,
+    assert _pass_totals(run) == {"passes": 2, "units": 448, "tiles": 10000, "screened_rows": 128,
                                         "failing_rows": 0, "unsure_rows": 2}
     other = SimpleNamespace(protocols=SimpleNamespace(get=lambda name: SimpleNamespace(release=lambda: None)))
-    assert runner._pearl_c_run(other) is None
-    assert runner._pearl_c_run(SimpleNamespace(protocols=None)) is None
+    assert _pearl_c_run(other) is None
+    assert _pearl_c_run(SimpleNamespace(protocols=None)) is None
 
 
 def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(monkeypatch):
@@ -1099,9 +1220,7 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     A live run's coins name its challenge phase, its salt epoch and that epoch's root over the weights' root."""
 
     import torch
-    from verity.protocols.pouw.verifier.salt import epoch_open_root
-
-    from verity_bench.vllm import runner
+    from verity.protocols.accounting.pouw.verifier.salt import epoch_open_root
 
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
 
@@ -1133,15 +1252,15 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
         return (x.float() @ W.float().T).to(torch.bfloat16)
 
     run = Run(exact_y)
-    exact = runner._pearl_c_gate(run)
+    exact = _pearl_c_gate(run)
     assert exact["passed"] and exact["provided"] and exact["schedule"] == "deferred"
     assert exact["coins"] == {"source": "in-process"}
     assert run.stepped and set(run.ats[:-1]) == {7} and run.ats[-1] is None    # the compared passes share one index
     assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
-    wrong = runner._pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)))
+    wrong = _pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)))
     assert not wrong["passed"] and wrong["provided"]
     session = {"session": "s1", "root": "ab" * 64, "commitment": "cd" * 64}
-    live = runner._pearl_c_gate(Run(exact_y, coin_source="challenger", session=session, pass_index=0))
+    live = _pearl_c_gate(Run(exact_y, coin_source="challenger", session=session, pass_index=0))
     after = epoch_open_root(bytes.fromhex("ab" * 64), 0).hex()
     assert live["passed"] and live["coins"] == {"source": "challenger", "session": session, "pass_index": 0,
                                                 "salt_after": after}
@@ -1150,8 +1269,6 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
 def test_pearl_cs_served_row_is_its_protocol_row_beside_the_compiled_engine():
     """`llama31-8b-1gpu-pouw-protocol-served` measures Pearl-C over the compiled engine in one run, so every arm's engine
     shares its step budget, sequence bound and KV pool."""
-
-    from verity_bench.vllm import runner
 
     spec = resolve_spec("llama31-8b-1gpu-pouw-protocol-served")
     pearl = "pouw:pearl-c-sm120-v1-h3"
@@ -1163,8 +1280,8 @@ def test_pearl_cs_served_row_is_its_protocol_row_beside_the_compiled_engine():
     ]
     preset, eager = served(spec.preset, spec.eager)
     for resident in (True, False):
-        built = [runner.engine_args(p, a.precision or p.precision, resident=resident, eager=e)
-                 for a in arms for p, e in [runner.arm_execution(a, preset, eager)]]
+        built = [engine_args(p, a.precision or p.precision, resident=resident, eager=e)
+                 for a in arms for p, e in [arm_execution(a, preset, eager)]]
         assert [(b["enforce_eager"], b.get("execution")) for b in built] == [(True, None), (True, None), (False, "compiled")]
         shared = ("max_num_batched_tokens", "max_num_seqs", "max_model_len", "gpu_memory_utilization",
                   "kv_cache_memory_bytes")
@@ -1187,14 +1304,11 @@ def test_an_h1_arm_is_gated_against_exact_int8_and_each_run_gets_a_window_the_ll
     from verity_vllm.llm import protocol_context, resolve_options
     from verity_vllm.protocols.pouw import h1 as PH
 
-    from verity_bench.vllm.arms import H1, h1_config, protocols_config, window_steps
-    from verity_bench.vllm.runner import H1_OPENING_STEPS, engine_args
-
     spec = resolve_spec("llama31-8b-1gpu-pouw-h1")
     control, arm = resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)
     assert (control.id, control.precision, control.control) == ("stock-int8", "int8_exact", None)
     assert (arm.id, arm.protocols, arm.precision, arm.control) == (H1, (H1,), None, "stock-int8")
-    assert H1 == f"pouw:{PH.SCHEME}"
+    assert f"pouw:{PH.SCHEME}" == H1
     preset, eager = served(spec.preset, spec.eager)
     args = engine_args(preset, "int8_exact", resident=True, eager=eager)
     assert (args["quantization"], args["attention_backend"], args["enforce_eager"]) == ("verity_int8", "CUSTOM", True)
@@ -1226,9 +1340,6 @@ def test_each_h1_run_opens_its_own_window_through_the_llm_and_closes_it_after_se
 
     from verity_vllm.protocols import pouw
 
-    from verity_bench.vllm import runner
-    from verity_bench.vllm.arms import H1
-
     calls: list[tuple[Any, ...]] = []
     window = SimpleNamespace(verdicts={0: {"credit": True}}, refused=[], order_ok=True, steps=130, rows=64, calls=[0],
                              requests=[0], refused_requests=[], coin_source="in-process",
@@ -1248,7 +1359,7 @@ def test_each_h1_run_opens_its_own_window_through_the_llm_and_closes_it_after_se
         return {}, {"extras": {}}
 
     monkeypatch.setattr(pouw, "h1_run", lambda entry: calls.append(("h1_run", entry)) or window)
-    engine = object.__new__(runner._VllmEngine)
+    engine = object.__new__(_VllmEngine)
     engine.llm, engine.h1 = LLM(), {"config": {"pouw": {"rows": 64, "admission": "per-round"}}, "rows": 64,
                                     "windows": []}
     monkeypatch.setattr(engine, "_serve", serve)
@@ -1266,8 +1377,6 @@ def test_each_h1_run_opens_its_own_window_through_the_llm_and_closes_it_after_se
 
 
 def test_an_h1_window_passes_its_gate_only_static_credited_and_entered():
-    from verity_bench.vllm.runner import h1_gate, h1_summary
-
     def run(**over):
         base = dict(verdicts={0: {"credit": True}, 1: {"credit": True}}, refused=[], order_ok=True, steps=130, rows=64,
                     calls=[0, 1], requests=[0], refused_requests=[], coin_source="in-process",
@@ -1295,8 +1404,6 @@ def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_serv
     the preset's capture sizes without torch.compile, at the `compiled` label, which `verity_vllm.LLM` accepts, and its
     run takes the graph path's options and serial schedule."""
 
-    from verity_bench.vllm import runner
-    from verity_bench.vllm.arms import plugin
     from verity_vllm.llm import resolve_options
 
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
@@ -1310,8 +1417,8 @@ def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_serv
     assert arms[-1].engine_label == "graphs-mode0" and arms[-1].to_json()["engine_label"] == "graphs-mode0"
     whole = plugin(arms[-1])
     preset, eager = served(spec.preset, spec.eager)
-    preset, eager = runner.arm_execution(arms[-1], preset, eager)
-    built = {**runner.engine_args(preset, "bfloat16", resident=False, eager=eager), **whole.engine_overrides(None)}
+    preset, eager = arm_execution(arms[-1], preset, eager)
+    built = {**engine_args(preset, "bfloat16", resident=False, eager=eager), **whole.engine_overrides(None)}
     assert built["compilation_config"] == {"mode": 0, "cudagraph_mode": "FULL_DECODE_ONLY",
                                            "cudagraph_capture_sizes": list(spec.preset.engine_settings["capture_sizes"])}
     opts = resolve_options(built)
@@ -1331,7 +1438,6 @@ def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the
     """`llama31-8b-1gpu-pearl-c-whole-served-h200` is the whole-served spec's preset on one H200, the whole-step arm beside
     compiled stock, its setup building pearl_c_sm90's cubin; with PEARLC_KERNEL that directory, the arm takes its record
     (`pearl-c-h100-v1-h3`, a scheme the device path runs) and its build.sh cubin, and builds the same engine."""
-    from verity_bench.vllm import runner
     from verity_vllm.protocols.pouw import pearl_c as PPD
 
     root = Path(__file__).resolve().parents[3]
@@ -1353,16 +1459,14 @@ def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the
     assert whole.scheme == "pearl-c-h100-v1-h3" and whole.kernel_dir.name == "pearl_c_sm90"
     assert whole.kernel_digest(None) is None or (whole.kernel_dir / "pearl_c_sm90.cubin").is_file()
     preset, eager = served(spec.preset, spec.eager)
-    preset, eager = runner.arm_execution(arms[-1], preset, eager)
-    built = {**runner.engine_args(preset, "bfloat16", resident=False, eager=eager), **whole.engine_overrides(None)}
+    preset, eager = arm_execution(arms[-1], preset, eager)
+    built = {**engine_args(preset, "bfloat16", resident=False, eager=eager), **whole.engine_overrides(None)}
     assert built["compilation_config"]["cudagraph_mode"] == "FULL_DECODE_ONLY"
     assert whole.run_options == {"graphs": True, "whole_defer": True, "whole_defer_a": True, "whole_fork_stats": True,
                                  "lag_ends": True, "whole_tree_sm": True, "aside_ends": True} and whole.schedule == "serial"
 
 
 def test_a_sweep_that_samples_other_than_greedily_refuses(tmp_path, monkeypatch):
-    from verity_bench.vllm import presets
-
     quick = (presets.SPEC_ROOT / "quick.toml").read_text().replace('id = "quick"', 'id = "odd"')
     sampled = quick.replace("[output_tokens]", 'sampling = ["greedy", "stochastic"]\n\n[output_tokens]')
     (tmp_path / "odd.toml").write_text(sampled)
@@ -1372,8 +1476,6 @@ def test_a_sweep_that_samples_other_than_greedily_refuses(tmp_path, monkeypatch)
 
 
 def test_inter_token_latency_is_per_token_after_the_first_and_shares_a_multi_token_return():
-    from verity_bench.vllm.runner import inter_token_latencies, percentile
-
     returns = [
         (1.0, {"a": 1}),
         (1.5, {"a": 2, "b": 1}),
@@ -1399,6 +1501,35 @@ def test_result_schema_and_identity_strict_judge():
     assert judge(doc, other, ("git_commit",))["accepted"]
 
 
+def test_a_points_numbers_are_measurements_of_its_result(tmp_path, monkeypatch):
+    preset, points, arms = inputs()
+    doc = run_benchmark(preset, arms, points[:1], sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc")
+    monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"commit": "abc", "card": "none"})
+    (tmp_path / "result.json").write_text(json.dumps({"schema": "research/result/v0.1", "kind": "verity-vllm-benchmark/v1",
+                                                     "run_id": "r1", "measurements": []}))
+    result_format.record(doc, tmp_path, "r1", "out/benchmark.json")
+    held = json.loads((tmp_path / "result.json").read_text())
+    assert held["kind"] == "verity-vllm-benchmark/v1"
+    got = {m["name"]: m for m in held["measurements"]}
+    (row,) = doc["points"]
+    other = next(a for a in row["arms"] if a != doc["baseline"])
+    tpot = row["arms"][other]["metrics"]["time_per_output_token_s"]
+    assert got[f"{other}.time_per_output_token_s"]["value"] == tpot["mean"]
+    assert got[f"{other}.time_per_output_token_s"]["ci95"] == tpot["ci95"]
+    assert got[f"{other}.time_per_output_token_s"]["unit"] == "s"
+    assert got[f"{other}.time_per_output_token_s.ratio"]["value"] == tpot["ratio_to_stock"]["mean"]
+    assert f"{doc['baseline']}.time_per_output_token_s.ratio" not in got
+    assert {m["mark"] for m in got.values()} == {"measured"}
+    assert {m["point"] for m in got.values()} == {row["point"]["id"]}
+    assert len(got) == sum(len(a["metrics"]) * (1 if arm == doc["baseline"] else 2) for arm, a in row["arms"].items())
+
+
+def test_every_metric_a_point_measures_has_a_unit():
+    """`record` reads each metric's unit from `UNITS`, so a metric the runner measures without one would fail the
+    record mid-write, after the run."""
+    assert set(result_format.UNITS) == {*METRICS, *OPTIONAL_METRICS}
+
+
 def test_ratio_table_puts_the_headline_cell_first():
     preset, points, arms = inputs()
     points = (replace(points[0], batch=8), points[0])
@@ -1409,8 +1540,6 @@ def test_ratio_table_puts_the_headline_cell_first():
 
 
 def test_decode_time_per_token_counts_only_decode_only_forwards():
-    from verity_bench.vllm.runner import decode_time_per_token
-
     steps = [
         {"forward": True, "s": 0.9, "prefill_tokens": 512, "decode_tokens": 0},
         {"forward": True, "s": 0.5, "prefill_tokens": 64, "decode_tokens": 7},
@@ -1427,8 +1556,6 @@ def test_decode_time_per_token_counts_only_decode_only_forwards():
 
 
 def test_the_decode_metric_is_reported_only_where_every_rep_has_it():
-    from verity_bench.vllm.runner import _aggregate
-
     arms = (Arm("stock"), Arm("candidate", control="stock"))
     point = expand_sweep("quick")[0]
 
@@ -1491,8 +1618,6 @@ def test_decode_time_charges_a_step_to_the_forward_it_waited_on_and_refuses_unse
     time, so a decode-only step after a prefill carried the prefill: 1.1 s over 16 tokens instead of 0.4 s. Device
     work still running after the last step means the host steps missed it, and the metric is dropped."""
 
-    from verity_bench.vllm.runner import decode_time_per_token
-
     steps = [
         {"forward": True, "s": 0.05, "prefill_tokens": 512, "decode_tokens": 0},
         {"forward": True, "s": 0.9, "prefill_tokens": 0, "decode_tokens": 8},
@@ -1549,9 +1674,6 @@ def test_table_merges_one_specs_point_results_only_when_their_identities_agree(t
     """A dispatched spec runs each point as its own run, so a sweep's table is assembled from
     several results; `verity-bench table` refuses results whose identities differ anywhere but the point's own."""
 
-    from verity_bench.cli import main
-    from verity_bench.vllm.result import merge
-
     preset, (p32,), arms = inputs()
     p8 = replace(p32, batch=8)
 
@@ -1601,8 +1723,10 @@ def test_an_arm_whose_timed_tokens_differ_from_its_controls_keeps_no_points():
 
 
 def test_an_arm_without_a_control_is_timed_on_its_own_gated_tokens_in_resident_mode():
-    """An uncontrolled arm (a Pearl-C protocol arm, whose tokens no stock arm reproduces) must still produce in every
-    timed rep the tokens its gate saw from the same engine; blocks mode times other engines, so it has no such gate."""
+    """An uncontrolled arm must still produce in every timed rep the tokens its gate saw from the same engine; blocks mode
+    times other engines, so it has no such gate, and neither has an arm whose own gate says its tokens carry each pass's
+    coins (`PER_PASS_TOKENS`: a Pearl-C protocol arm, whose every call's noise is seeded by its index across the epoch, so
+    its timed reps never repeat its gated tokens), whose closing gate alone holds its timed reps."""
 
     doc = bench(FakeFactory(timed_digest={"stock-fp8": "other"}))
     [gate] = [g for g in doc["gates"] if g["kind"] == "timed-tokens" and g["arm"] == "stock-fp8"]
@@ -1612,6 +1736,14 @@ def test_an_arm_without_a_control_is_timed_on_its_own_gated_tokens_in_resident_m
     blocks = bench(FakeFactory(resident_failure="candidate"))
     assert blocks["execution"]["interleave"] == "blocks"
     assert not [g for g in blocks["gates"] if g["kind"] == "timed-tokens" and g["control"] is None]
+    arms = (Arm("stock-fp8", precision="fp8"), Arm("pearl"))
+    per_pass = bench(FakeFactory(timed_digest={"pearl": "other"}, per_pass_tokens={"pearl"}), arms=arms)
+    assert per_pass["execution"]["interleave"] == "resident" and per_pass["points"]
+    assert [g["arm"] for g in per_pass["gates"] if g["kind"] == "timed-tokens"] == ["stock-fp8"]
+    assert [g["passed"] for g in per_pass["gates"] if g["kind"] == "arm-closing" and g["arm"] == "pearl"] == [True]
+    closing = bench(FakeFactory(timed_digest={"pearl": "other"}, per_pass_tokens={"pearl"}, timed_ok=False), arms=arms)
+    assert closing["points"] == [] and not all(g["passed"] for g in closing["gates"] if g["kind"] == "arm-closing")
+    validate(per_pass)
     good = bench()
     with pytest.raises(ValueError, match="lacks gates"):
         validate({**good, "gates": [g for g in good["gates"] if g["kind"] != "tokens"]})
@@ -1620,8 +1752,6 @@ def test_an_arm_without_a_control_is_timed_on_its_own_gated_tokens_in_resident_m
 def test_intervals_use_the_t_quantile_for_n_and_ratios_refuse_a_zero_or_missing_baseline_rep():
     """From n = 12 the interval used 1.96 instead of t (11 df: 2.201), too narrow; a zero baseline
     rep was dropped from the ratio, which then averaged the other reps; n = 1 rendered like a measured interval."""
-
-    from verity_bench.vllm.runner import _aggregate, summarize
 
     assert summarize([1.0])["n"] == 1 and "ci95" not in summarize([1.0])
     assert summarize([1.0, 3.0])["ci95"] == pytest.approx([2 - 12.706, 2 + 12.706])
@@ -1787,8 +1917,6 @@ def test_a_requeued_point_deletes_its_earlier_attempts_verdict_before_it_runs(tm
     """A preempted point reruns whole; if it reran in its run directory and died before writing a
     new result.json, the earlier attempt's verdict would stand beside the new attempt's half-written files."""
 
-    import verity_bench.cli as cli
-
     root = Path(__file__).resolve().parents[3]
     plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
     item = plan.points[0]
@@ -1809,9 +1937,6 @@ def test_a_requeued_point_deletes_its_earlier_attempts_verdict_before_it_runs(tm
 def test_the_readme_states_the_contract_the_code_keeps():
     """The README is the harness's contract: every metric, gate kind, mode, schema and kind it names is the
     code's, and the code has none it doesn't name."""
-
-    from verity_bench.vllm import result as result_format
-    from verity_bench.vllm.runner import METRICS, OPTIONAL_METRICS
 
     root = Path(__file__).resolve().parents[3]
     readme = (root / "benchmarks/harness/README.md").read_text()
@@ -1840,8 +1965,8 @@ def test_a_stopped_bandwidth_setup_removes_its_partial_build_even_when_its_build
     partial = tmp_path / "partial"
     partial.mkdir()
     run = subprocess.run(
-        ["bash", "-c", f'set -euo pipefail; declare -A VE_PIDS=(); true & VE_PIDS[x]=$!; wait "${{VE_PIDS[x]}}"; '
-                       f'VE_TMP={partial}; {body}'],
+        ["bash", "-c", (f'set -euo pipefail; declare -A VE_PIDS=(); true & VE_PIDS[x]=$!; wait "${{VE_PIDS[x]}}"; '
+                        f'VE_TMP={partial}; {body}')],
         capture_output=True, text=True,
     )
     assert run.returncode == 143, run.stderr

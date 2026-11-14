@@ -8,13 +8,13 @@ import Mathlib.Tactic.Finiteness.Attr
 
 Definitions only. They mirror `verity/protocols/certifier/prover/window_charge.py`'s `reference_window` one for one,
 with each Python name in its docstring: `ChargeCount_v2{N, H, O, L}`'s charge, the length of
-`window_code.code_window`'s segment for the whole window, counted by advice v1's counting encoder
+`window_code.code_executionPhase`'s segment for the whole window, counted by advice v1's counting encoder
 (`AdviceV1.countStep` and `AdviceV1.finish`, from `arith_encode.py`'s references), and of the length terms' tail after
 it.
 
 A window's advice is its decisions, its hits (in hit units; advice v1 sends none), its order entries (each deviating
 arrival's position and rank) and its length terms (each request's output_len and finish, for the requests whose body
-lands in it). Its symbols, in `window_code.code_window`'s order, all in one segment with one finish:
+lands in it). Its symbols, in `window_code.code_executionPhase`'s order, all in one segment with one finish:
 1. n_arrived, then each decision at the book's KT estimate for its context `min(run, 2)`, as in v1;
 2. n_hits, then each hit's value;
 3. n_resumes, 0;
@@ -108,7 +108,7 @@ def countHi (S : ℕ) : ℕ := 2 ^ S.size - 1
 def zigzag (r rank : ℕ) : ℕ := if rank ≤ r then 2 * (r - rank) else 2 * (rank - r) - 1
 
 /-- **What the whole window's charge reads of the registered book** (`WindowBook`, and `first_carry`): each of
-`window_code.code_window`'s integer symbols' table (`SYMBOLS`: n_arrived, n_hits, hit, n_resumes, n_order, order_gap,
+`window_code.code_executionPhase`'s integer symbols' table (`SYMBOLS`: n_arrived, n_hits, hit, n_resumes, n_order, order_gap,
 order_index, n_lag), and `priors`, the decisions' contexts' first KT counts. -/
 structure Book where
   arrived : Table
@@ -132,7 +132,7 @@ structure Carry where
 order entries, each the arrival's position and rank `(p, r)` (`order`); and the length terms, each the request's
 max_tokens and output_len `(m, n)` (`lens`; its finish is one bit whatever it is). A disabled slot changes nothing, so
 the charge is a function of these. -/
-structure Window where
+structure Advice where
   ds : List Bool
   hits : List ℕ
   order : List (ℕ × ℕ)
@@ -166,10 +166,10 @@ def entrySyms (bk : Book) : ℕ → ℕ → List (ℕ × ℕ) → Option (List S
         (binned bk.gap GAP_CAP (e.1 - pos) ++ (binned bk.index ZIG_CAP (zigzag e.2 rank) ++ q.1), q.2)
     else none
 
-/-- **The window's symbols** (`reference_window`), in `window_code.code_window`'s order, and the carry after them: n_arrived,
+/-- **The window's symbols** (`reference_window`), in `window_code.code_executionPhase`'s order, and the carry after them: n_arrived,
 the decisions, n_hits, the hits, n_resumes (0), n_order, the entries, n_lag (0). A count over `S` slots has
 `hi = 2^bitlen(S) − 1`. -/
-def syms (bk : Book) (N H O : ℕ) (cy : Carry) (x : Window) : Option (List Sym × Carry) :=
+def syms (bk : Book) (N H O : ℕ) (cy : Carry) (x : Advice) : Option (List Sym × Carry) :=
   (decSyms cy.dec x.ds).bind fun d =>
     (hitSyms bk x.hits).bind fun hs =>
       (entrySyms bk cy.pos cy.rank x.order).map fun e =>
@@ -188,7 +188,7 @@ def tailBits : List (ℕ × ℕ) → Option ℕ
 hit slots, `O` order slots and `L` length slots, under the book `bk` and the carry `cy`, the charge (the segment's,
 then the length terms' tail) and the next window's carry. It refuses a carry whose run is past 2 or whose rank is past
 `INDEX_CAP + 1`, and a charge of `2^CW` bits or more. -/
-def window (bk : Book) (N H O L : ℕ) (cy : Carry) (x : Window) : Option (ℕ × Carry) :=
+def window (bk : Book) (N H O L : ℕ) (cy : Carry) (x : Advice) : Option (ℕ × Carry) :=
   if x.ds.length ≤ N ∧ x.hits.length ≤ H ∧ x.order.length ≤ O ∧ x.lens.length ≤ L ∧ cy.dec.run < 3 ∧
       cy.rank ≤ INDEX_CAP + 1 then
     (syms bk N H O cy x).bind fun q => ((codeAll Tally.fresh q.1).bind finish).bind fun c =>
@@ -196,7 +196,7 @@ def window (bk : Book) (N H O L : ℕ) (cy : Carry) (x : Window) : Option (ℕ �
   else none
 
 /-- **A run's charges**: each window's, the carry passed along. -/
-def session (bk : Book) (N H O L : ℕ) : Carry → List Window → Option (List ℕ)
+def session (bk : Book) (N H O L : ℕ) : Carry → List Advice → Option (List ℕ)
   | _, [] => some []
   | cy, x :: ws => (window bk N H O L cy x).bind fun p => (session bk N H O L p.2 ws).map fun ls => p.1 :: ls
 
@@ -204,12 +204,12 @@ def session (bk : Book) (N H O L : ℕ) : Carry → List Window → Option (List
 def Book.first (bk : Book) : Carry := ⟨⟨bk.priors, 0⟩, 0, 0⟩
 
 /-- **The run's charges per window**, from the session's first carry, for the advice of `W` windows. -/
-def charges (bk : Book) (N H O L : ℕ) {W : ℕ} (a : Fin W → Window) : Option (List ℕ) :=
+def charges (bk : Book) (N H O L : ℕ) {W : ℕ} (a : Fin W → Advice) : Option (List ℕ) :=
   session bk N H O L bk.first (List.ofFn a)
 
 /-- **Advice v1's whole windows**: the advice of `W` windows whose charge no window refuses. A refused window fails its
 unit, so no accepted run has other advice. -/
-def Streams (bk : Book) (N H O L W : ℕ) : Type := {a : Fin W → Window // (charges bk N H O L a).isSome}
+def Streams (bk : Book) (N H O L W : ℕ) : Type := {a : Fin W → Advice // (charges bk N H O L a).isSome}
 
 /-- **The whole window's charge** (I1's `bits(advice, w)`): window `w`'s. -/
 def bits (bk : Book) (N H O L : ℕ) {W : ℕ} (a : Streams bk N H O L W) (w : Fin W) : ℕ :=

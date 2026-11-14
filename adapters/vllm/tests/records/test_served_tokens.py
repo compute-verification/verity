@@ -60,7 +60,7 @@ def _tp(doc: dict, fields: tuple[str, ...]) -> dict:
 
 
 def test_the_real_record_loads():
-    t = ServedTokens.load(REAL)
+    t = ServedTokens.of(_real(), str(REAL))
     assert t.where == str(REAL) and t.lag == 1 and len(t.requests) == 1
     r = t.requests[0]
     assert r == ServedRequest(request_id="d73b90fd-3f5e-5f82-a4c7-16a7321ad556", generated_token_ids=_real()["requests"][0]["generated_token_ids"],
@@ -254,9 +254,9 @@ def _omitted(rid: str) -> str:
 
 
 @pytest.mark.parametrize("requests,shortfall", [((T.R0, T.R1), None),
-                                               ((T.R0, T.R1_EOS), "engine steps [2, 3]: live requests observed [1, 0] != programmed [2, 1] -- "
-                                                                  "the shortfall is not after a verified EOS (['r1'] stopped early without one): "
-                                                                  "declared schedule not exercised")],
+                                               ((T.R0, T.R1_EOS), ("engine steps [2, 3]: live requests observed [1, 0] != programmed [2, 1] -- "
+                                                                   "the shortfall is not after a verified EOS (['r1'] stopped early without one): "
+                                                                   "declared schedule not exercised"))],
                          ids=["served to the cap", "eos stop"])
 @pytest.mark.parametrize("tokens_optional", [False, True])
 def test_g6_refuses_a_declared_request_the_driver_omits(memory, tmp_path, requests, shortfall, tokens_optional):
@@ -280,8 +280,8 @@ def test_g6_refuses_a_request_the_program_does_not_declare(memory, tmp_path):
     _write(oracle, {**doc, "requests": doc["requests"] + [dict(_req(doc, "r1"), request_id="r9")]})
     got = _outcome(gp, oracle)
     assert got["verdict"] == "FAIL" and got["failed"] == ["G6"]
-    assert got["G6"]["problems"] == ["the driver's capture/tokens.json carries request(s) ['r9'] the Program does not declare: served "
-                                     "tokens of no declared request are not an execution of the Program"]
+    assert got["G6"]["problems"] == [("the driver's capture/tokens.json carries request(s) ['r9'] the Program does not declare: served "
+                                      "tokens of no declared request are not an execution of the Program")]
 
 
 def test_g6_refuses_a_request_the_driver_names_twice(memory, tmp_path):
@@ -290,5 +290,5 @@ def test_g6_refuses_a_request_the_driver_names_twice(memory, tmp_path):
     _write(oracle, {**doc, "requests": doc["requests"] + [copy.deepcopy(_req(doc, "r1"))]})
     got = _outcome(gp, oracle)
     assert got["verdict"] == "FAIL" and got["failed"] == ["G6"]
-    assert got["G6"]["problems"] == ["the driver's capture/tokens.json has more than one entry for request(s) ['r1']: which one the driver "
-                                     "served is not stated"]
+    assert got["G6"]["problems"] == [("the driver's capture/tokens.json has more than one entry for request(s) ['r1']: which one the driver "
+                                      "served is not stated")]

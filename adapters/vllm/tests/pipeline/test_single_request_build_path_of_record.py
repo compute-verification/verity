@@ -13,9 +13,14 @@ import sys
 from pathlib import Path
 
 import pytest
-
-from tests.pipeline.test_single_request_build_path import VLLM_DIR, _compose, _decode_cold, _run
 from verity.circuits.codec import canonical_json, program_digest
+
+from tests.pipeline.test_single_request_build_path import (
+    VLLM_DIR,
+    _compose,
+    _decode_cold,
+    _run,
+)
 
 #: workload 101's Build: `build_request/` (the derived request Program) and
 #: `build_workload/` (the workload Program GP-01 composed)
@@ -38,9 +43,9 @@ def _rekey_sha512(d: Path) -> None:
     """Workload 101's Build recorded its Program digest under SHA-256, before the identities moved to SHA-512. The record must be the SHA-256
     digest of the descriptor the Build wrote; each file of the request dir then carries that same descriptor's SHA-512 digest in its
     place, so nothing but the digest changes."""
-    desc = json.load(gzip.open(d / "descriptor.json.gz"))
+    desc = json.loads(gzip.decompress((d / "descriptor.json.gz").read_bytes()))
     old = hashlib.sha256(canonical_json({k: v for k, v in desc.items() if k != "annotations"})).hexdigest()
-    assert json.load(open(d / "result.json"))["program"]["digest"] == old
+    assert json.loads((d / "result.json").read_text())["program"]["digest"] == old
     new = program_digest(desc)
     for p in d.glob("*.json"):
         p.write_text(p.read_text().replace(old, new))
@@ -76,7 +81,7 @@ def test_101s_program_view_and_word_lookups_resolve_every_call(tmp_path):
     build = _build_101(tmp_path)
     code = ("import json, sys\n"
             "from verity_vllm.query import program_view as PV\n"
-            "from verity.definitions import word as WQ\n"
+            "from verity.circuits import word as WQ\n"
             "from verity.definitions.numerics.rows import EVALUATORS\n"
             "P = PV.from_instances(sys.argv[1] + '/build_request/instances.json.gz')\n"
             "specs = {(c.family, json.dumps(c.statics, sort_keys=True, default=str)): c for c in P.calls}\n"

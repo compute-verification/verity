@@ -8,11 +8,14 @@ those Inputs. A site is one collective at every rank, keyed by k and the slice o
 (`rank_sites`). `pair` pairs each rank's segment j with rank j's own partial at the same site: by k and the slice, never by node
 order, since dead-free compilation drops a dead collective with its producer at every rank. What doesn't pair is refused by
 name: a collective live at some ranks only, ranks that combine a site with different Definitions, a peer segment that isn't
-one slice of the Input its rank sends, a collective read inside a batch or a scan.
+one slice of the Input its rank sends, a collective that isn't a call, a combine's output read inside a scan.
 
-Each site also records, per rank, who reads its combine's output (``Site.readers``): every call reading leaves of it, which
-the window wires from the combine units that compute those leaves: at a collective site too, every value a unit reads is the
-output of the unit that computed it, never a free witness. A combine's output read inside a batch or a scan is refused by name.
+Each site also records, per rank, who reads its combine's output (``Site.readers``): every call or batch reading leaves of
+it, which the window wires from the combine units that compute those leaves: at a collective site too, every value a unit
+reads is the output of the unit that computed it, never a free witness. A batch is one reader, its run of the argument it
+reads stated as a call's is; its count and each argument's axis, as a batch producer's, are the rank Program's
+(``RankSites.batches``), which ``ranks`` binds. A combine's output read inside a scan, by a batch that produces a collective's partial, or through an
+argument batched on an axis other than 0 is refused by name.
 
 The prover and the verifier derive the binding from the rank Programs of record alone, so it is part of the registered circuit
 and never supplied; `pipeline.tp.wires` lowers it to a window's wires."""
@@ -27,6 +30,8 @@ from typing import Any
 
 from verity.circuits.refs import runs
 
+__all__ = ["RankSites", "RequestBinding", "pair", "rank_sites"]
+
 BINDING_TAG = "verity-vllm/tp-binding/v1"
 PEERS = "peers_"
 
@@ -34,22 +39,25 @@ PEERS = "peers_"
 Run = tuple[int, int, int]
 #: a site's key: the peer Inputs' collective index k and the slice ``[lo, hi)`` of them its combine reads
 Key = tuple[int, int, int]
-#: a read of a combine's output: the reading call node, its argument, the leaf of that argument the read fills from, and the
-#: leaves ``[lo, hi)`` of the combine's output it reads
+#: a read of a combine's output: the reading call or batch node, its argument, the leaf of that argument the read fills from,
+#: and the leaves ``[lo, hi)`` of the combine's output it reads
 Reader = tuple[int, int, int, int, int]
+#: a batch producer's or reader's members and each argument's axis (None: shared)
+Batch = tuple[int, tuple[int | None, ...]]
 
 
 @dataclass(frozen=True)
 class RankSites:
     """One rank's collectives in one request Program (`rank_sites`): by site, its combine node, the parameter its parts are,
     and its own partial's runs, and the reads of its combine's output (``readers``); ``fns`` the combine, producer and reader
-    nodes' Definitions, by node."""
+    nodes' Definitions, by node; ``batches`` each batch producer's and reader's members and axes, by node."""
     world: int
     rank: int
     digest: str
     sites: Mapping[Key, tuple[int, str, tuple[Run, ...]]]
     fns: Mapping[int, Any] = field(compare=False, repr=False)
     readers: Mapping[Key, tuple[Reader, ...]] = field(default_factory=dict)
+    batches: Mapping[int, Batch] = field(default_factory=dict, compare=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -69,11 +77,12 @@ class Site:
 @dataclass(frozen=True)
 class RequestBinding:
     """A request's binding: ``world`` ranks, each one's request Program digest (``ranks``), its sites by key; ``fns`` each rank's
-    combine and producer Definitions, by node (`RankSites.fns`)."""
+    combine and producer Definitions, by node (`RankSites.fns`), and ``batches`` its batch nodes (`RankSites.batches`)."""
     world: int
     ranks: tuple[str, ...]
     sites: tuple[Site, ...]
     fns: Mapping[int, Mapping[int, Any]] = field(compare=False, repr=False, default_factory=dict)
+    batches: Mapping[int, Mapping[int, Batch]] = field(compare=False, repr=False, default_factory=dict)
 
     def record(self) -> dict[str, Any]:
         return {"world": self.world, "ranks": list(self.ranks),
@@ -92,7 +101,8 @@ def _segments(rs: list[tuple[str, int, int, int]], world: int, what: str) -> lis
     total = sum(hi - lo for *_, lo, hi in rs)
     if total % world:
         raise ValueError(f"{what}: its parts are {total} leaves, not {world} equal segments")
-    n, out, at = total // world, [[] for _ in range(world)], 0
+    n, at = total // world, 0
+    out: list[list[tuple[str, int, int, int]]] = [[] for _ in range(world)]
     for space, idx, lo, hi in rs:
         while lo < hi:
             seg, off = divmod(at, n)
@@ -116,6 +126,7 @@ def rank_sites(body: Any, world: int, rank: int, digest: str = "") -> RankSites:
     peer = {i: int(name[len(PEERS):]) for i, (name, _) in enumerate(body.params) if name.startswith(PEERS)}
     sites: dict[Key, tuple[int, str, tuple[Run, ...]]] = {}
     fns: dict[int, Any] = {}
+    batches: dict[int, Batch] = {}
     for at, node in enumerate(body.nodes):
         read = [a for a, arg in enumerate(node.args) if any(s == "p" and i in peer for s, i, _, _ in runs(arg.refs))]
         if not read:
@@ -145,20 +156,31 @@ def rank_sites(body: Any, world: int, rank: int, digest: str = "") -> RankSites:
         sites[key] = (at, node.fn.signature()[0][read[0]][0], tuple((i, lo, hi) for _, i, lo, hi in segs[rank]))
         fns[at] = node.fn
         fns.update((i, body.nodes[i].fn) for _, i, _, _ in segs[rank])
+        batches.update((i, (body.nodes[i].n, tuple(body.nodes[i].axes))) for _, i, _, _ in segs[rank]
+                       if body.nodes[i].form == "batch")
     combines = {node: key for key, (node, _, _) in sites.items()}
+    producing = {i for _, _, own in sites.values() for i, _, _ in own}
     readers: dict[Key, list[Reader]] = {}
     for at, node in enumerate(body.nodes):
         for a, arg in enumerate(node.args):
             off = 0
             for s, i, lo, hi in runs(arg.refs):
                 if s == "n" and i in combines:
-                    if node.form != "call":
-                        raise ValueError(f"{where}: node {at} ({node.fn.id}) reads collective node {i}'s output in a "
-                                         f"{node.form} node: a combine's output is read by calls")
+                    what = f"{where}: node {at} ({node.fn.id}) reads collective node {i}'s output"
+                    if node.form not in ("call", "batch"):
+                        raise ValueError(f"{what} in a {node.form} node: a combine's output is read by calls and batches")
+                    if node.form == "batch":
+                        if at in producing:
+                            raise ValueError(f"{what} in a batch that produces a collective's partial: a batch reader is "
+                                             "no site's producer")
+                        if node.axes[a] not in (0, None):
+                            raise ValueError(f"{what} in its argument {a}, batched on axis {node.axes[a]}: a batch reads "
+                                             "it mapped on axis 0 or shared")
+                        batches[at] = (node.n, tuple(node.axes))
                     readers.setdefault(combines[i], []).append((at, a, off, lo, hi))
                     fns[at] = node.fn
                 off += hi - lo
-    return RankSites(world, rank, digest, sites, fns, {k: tuple(v) for k, v in readers.items()})
+    return RankSites(world, rank, digest, sites, fns, {k: tuple(v) for k, v in readers.items()}, batches)
 
 
 def pair(ranks: Sequence[RankSites]) -> RequestBinding:
@@ -178,11 +200,12 @@ def pair(ranks: Sequence[RankSites]) -> RequestBinding:
     for key in sorted(keys):
         ids = [x.fns[x.sites[key][0]].id for x in ranks]
         if len(set(ids)) != 1:
-            r = next(r for r, i in enumerate(ids) if i != ids[0])
-            raise ValueError(f"collective {key[0]}'s [{key[1]}, {key[2]}): rank 0 combines it with {ids[0]}, rank {r} with {ids[r]}")
+            other = next(j for j, i in enumerate(ids) if i != ids[0])
+            raise ValueError(f"collective {key[0]}'s [{key[1]}, {key[2]}): rank 0 combines it with {ids[0]}, rank {other} with {ids[other]}")
         sites.append(Site(*key, tuple(x.sites[key][:2] for x in ranks), tuple(x.sites[key][2] for x in ranks),
                           tuple(x.readers.get(key, ()) for x in ranks)))
-    return RequestBinding(world, tuple(x.digest for x in ranks), tuple(sites), {x.rank: x.fns for x in ranks})
+    return RequestBinding(world, tuple(x.digest for x in ranks), tuple(sites), {x.rank: x.fns for x in ranks},
+                          {x.rank: x.batches for x in ranks})
 
 
 def derive(bodies: Sequence[Any], digests: Sequence[str] | None = None) -> RequestBinding:

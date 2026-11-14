@@ -19,6 +19,7 @@ import signal
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import tomllib
 import types
 from pathlib import Path
@@ -960,6 +961,53 @@ def test_n1s_replacement_plan_prints_each_create_for_a_deploy_node_and_calls_not
     assert not re.search(r"\bcat [^|'>]*(\.ssh/vy-cluster'|lean-cache\.env)", r.stdout)       # a key or env file is copied, never printed
     assert r.stdout.count("tar -C ~/.ssh -cf - vy-cluster vy-cluster.pub' | ") == nodes and "sudo tar -C /etc/verity -cf - lean-cache.env' | " in r.stdout
     assert subprocess.run(["bash", str(NEBIUS / "n1_replacement.sh"), "plan", "elsewhere"], capture_output=True).returncode == 2
+    # no file holds a project's id: each create reads it from the variable of its node's region
+    projects = re.findall(r"NEBIUS_REGION=(\S+) NEBIUS_PROJECT_ID=(\S+) ", r.stdout)
+    assert len(projects) == nodes and all(p == "$NEBIUS_PROJECT_ID_" + region.upper().replace("-", "_") for region, p in projects)
+
+
+@pytest.mark.parametrize("held, missing", [
+    ({}, "NEBIUS_PROJECT_ID_EU_WEST2 is unset: the id of the project"),
+    ({"NEBIUS_PROJECT_ID_EU_WEST2": "project-e00west", "NEBIUS_PROJECT_ID_UK_SOUTH1": "project-e00south"},
+     "NEBIUS_TENANT_ID is unset: the id of the tenant"),
+    ({"NEBIUS_PROJECT_ID_EU_WEST2": "project-e00west", "NEBIUS_PROJECT_ID_UK_SOUTH1": "project-e00south",
+      "N1R_TENANT": "tenant-e00example"}, "VY_NEBIUS_1_HOST is unset: vy-nebius-1's address"),
+])
+def test_n1s_replacement_preflight_ends_naming_the_first_id_or_address_the_environment_lacks(tmp_path, held, missing):
+    """The provider's ids and n1's address are the environment's: preflight ends naming the first one unset, before it
+    makes any Nebius call or opens any ssh."""
+    called = tmp_path / "called"
+    for name in ("nebius", "ssh"):
+        (tmp_path / name).write_text(f"#!/bin/bash\ntouch {called}\nexit 1\n")
+        (tmp_path / name).chmod(0o755)
+    base = {k: v for k, v in os.environ.items() if not k.startswith(("NEBIUS_", "N1R_", "VY_"))}
+    r = subprocess.run(["bash", str(NEBIUS / "n1_replacement.sh"), "preflight", "now"], capture_output=True, text=True,
+                       env={**base, "NEBIUS_BIN": str(tmp_path / "nebius"), "PATH": f"{tmp_path}:/usr/bin:/bin", **held})
+    assert r.returncode == 2 and r.stderr.startswith(f"n1_replacement: {missing}"), r.stderr
+    assert r.stdout == "" and not called.exists()
+
+
+def test_resolve_project_refuses_to_go_on_without_the_projects_id(tmp_path):
+    """No file holds a project's id: with NEBIUS_PROJECT_ID unset, launch.sh's and teardown.sh's resolve_project ends naming
+    it before any Nebius call; set, it is the project; set empty, the project is looked up by name, as before."""
+    script = (f". {NEBIUS / 'common.sh'}; nb() {{ echo \"$*\" >> \"$CALLS\"; echo '{{\"items\": []}}'; }}; "
+              "resolve_project && echo \"project $PROJECT_ID\"")
+    calls = tmp_path / "calls"
+    held = {k: v for k, v in os.environ.items() if not k.startswith("NEBIUS_")}
+
+    def resolve(**env: str) -> subprocess.CompletedProcess:
+        calls.unlink(missing_ok=True)
+        return subprocess.run(["bash", "-c", script], capture_output=True, text=True,
+                              env={**held, "CALLS": str(calls), "XDG_RUNTIME_DIR": str(tmp_path), **env})
+
+    r = resolve()
+    assert r.returncode == 1 and r.stderr.startswith("nebius: NEBIUS_PROJECT_ID is not set: the id of the project") and not calls.exists()
+    r = resolve(NEBIUS_PROJECT_ID="project-e00example")
+    assert (r.returncode, r.stdout) == (0, "project project-e00example\n"), r.stderr
+    assert calls.read_text() == "compute instance list --parent-id project-e00example\n"
+    r = resolve(NEBIUS_PROJECT_ID="", NEBIUS_TENANT_ID="tenant-e00example")
+    assert r.returncode == 1 and "no project named vy-nebius in tenant tenant-e00example" in r.stderr
+    assert calls.read_text() == "iam v2 project list --parent-id tenant-e00example --all\n"
 
 
 def test_launch_refuses_to_spend_without_yes_and_a_lease():
@@ -2001,27 +2049,62 @@ elif a[0] == "logs":
 N1_OLD, N1_FUTURE = 1_000_000_000, 4_102_444_800     # a run's records last changed in 2001 (settled, and stale for a pod), or in 2100
 N1_CUSTODY = pytest.mark.skipif(shutil.which("bash") is None or shutil.which("flock") is None or not Path("/proc/self/stat").exists(),
                                 reason="n1_custody.sh is bash, and takes a flock")
+#: where _n1_custody's tree goes when a directory above tmp_path fails n1_custody.sh's rule; each is removed as its test ends
+CUSTODY_TMP, _CUSTODY_BASES = Path("/tmp"), []
+
+
+def _owned_up(d: Path) -> bool:
+    """Whether d and every directory above it, as written and resolved, passes n1_custody.sh's rule for a directory above the tree
+    it runs: root's or this uid's, and writable by its owner alone unless sticky."""
+    for p in {d, d.resolve()}:
+        for a in (p, *p.parents):
+            st = a.stat()
+            if st.st_uid not in (0, os.geteuid()) or (st.st_mode & 0o022 and not st.st_mode & 0o1000):
+                return False
+    return True
+
+
+def _custody_base(tmp_path: Path) -> Path:
+    """Where _n1_custody puts the tree and the Python the round runs, which it refuses under a directory another uid could change:
+    tmp_path, whose own mode the helper sets, unless a directory above it fails that rule (a `research run` job's scratch, its
+    TMPDIR, is group-writable), then a new directory of mode 700 under CUSTODY_TMP."""
+    if _owned_up(next(a for a in tmp_path.parents if a.exists())):
+        return tmp_path
+    assert _owned_up(CUSTODY_TMP), (f"a directory above {tmp_path} and above {CUSTODY_TMP} could be changed by another uid, so no "
+                                    "round would run a tree under either: give the tests a TMPDIR whose every directory up from / is "
+                                    "root's or yours and writable by its owner alone, or sticky")
+    _CUSTODY_BASES.append(Path(tempfile.mkdtemp(prefix="n1-custody-", dir=CUSTODY_TMP)))
+    return _CUSTODY_BASES[-1]
+
+
+@pytest.fixture(autouse=True)
+def _no_custody_base_left():
+    yield
+    while _CUSTODY_BASES:
+        shutil.rmtree(_CUSTODY_BASES.pop(), ignore_errors=True)
 
 
 def _n1_custody(tmp_path: Path) -> types.SimpleNamespace:
     """Node 1 for n1_custody.sh: its runs roots `jobs` (store uid 1000) and `research` (1001), node 2's relay copies under jobs/runs-n2,
     and the Secret's R2 as the fs vault `vault`. `run` makes a run dir from the run_v0.2 fixture (a pod's, pod-RUN, unless `host`),
     `round_` runs one round through FAKE_KUBECTL and a sudo that logs its argv (at `clock`, when given, as _n2_custody's), `created`
-    lists the Jobs created so far, `job` reads one back with its outcome, `command` its container's command, `held` the holds."""
+    lists the Jobs created so far, `job` reads one back with its outcome, `command` its container's command, `held` the holds.
+    `src`, `pyhome` and `py` are the tree and the Python the round runs, under `_custody_base`."""
     src_root = Path(registry.__file__).resolve().parents[2]
     n = types.SimpleNamespace(jobs=tmp_path / "jobs", research=tmp_path / "research", state=tmp_path / "state", vault=tmp_path / "vault",
                               log=tmp_path / "calls.log", absent=tmp_path / "absent.toml", remote=tmp_path / "vault.toml")
     bin_, kjobs, home = tmp_path / "bin", tmp_path / "k8s", tmp_path / "home"
-    for d in (n.jobs / "runs", n.research / "runs", bin_, kjobs, n.vault, home, tmp_path / "py" / "bin"):
+    base = _custody_base(tmp_path)
+    for d in (n.jobs / "runs", n.research / "runs", bin_, kjobs, n.vault, home, base / "py" / "bin"):
         d.mkdir(parents=True)
     # the round runs only a tree and a Python that no other uid can change: copies, not links into the checkout
-    shutil.copytree(src_root, tmp_path / "src" / "tools" / "research" / "src", ignore=shutil.ignore_patterns("__pycache__"))
-    shutil.copy(src_root.parent / "store.pod.toml", tmp_path / "src" / "tools" / "research" / "store.pod.toml")
-    (tmp_path / "py" / "bin" / "python3").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
-    (tmp_path / "py" / "bin" / "python3").chmod(0o755)
-    for p in (tmp_path, tmp_path / "src", *(tmp_path / "src").rglob("*"), tmp_path / "py", *(tmp_path / "py").rglob("*")):
-        p.chmod(p.stat().st_mode & ~0o022)       # tmp_path too: a subdirectory a test makes takes the node's umask (002 on node 1)
-    n.src, n.py = tmp_path / "src", tmp_path / "py" / "bin" / "python3"
+    shutil.copytree(src_root, base / "src" / "tools" / "research" / "src", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copy(src_root.parent / "store.pod.toml", base / "src" / "tools" / "research" / "store.pod.toml")
+    (base / "py" / "bin" / "python3").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
+    (base / "py" / "bin" / "python3").chmod(0o755)
+    for p in (base, base / "src", *(base / "src").rglob("*"), base / "py", *(base / "py").rglob("*")):
+        p.chmod(p.stat().st_mode & ~0o022)       # base too: a subdirectory a test makes takes the node's umask (002 on node 1)
+    n.src, n.pyhome, n.py = base / "src", base / "py", base / "py" / "bin" / "python3"
     n.remote.write_text(f'[remote]\ntype = "fs"\npath = "{n.vault}"\n')
     (bin_ / "kubectl").write_text(f"#!{sys.executable}\n{FAKE_KUBECTL}")
     (bin_ / "sudo").write_text(f'#!/bin/sh\necho "sudo $*" >> {n.log}\n[ "$1 $2" = "-n -u" ] || exit 1\nshift 3\nexec "$@"\n')
@@ -2064,7 +2147,7 @@ def _n1_custody(tmp_path: Path) -> types.SimpleNamespace:
                               env={**os.environ, "PATH": f"{path}:{os.environ['PATH']}", "HOME": str(home), "KSTATE": str(kjobs),
                                    "KLOG": str(n.log), "KHOME": str(home), "KVAULT": str(n.remote), "RESEARCH_STORE_CONFIG": str(n.absent),
                                    "VY_CUSTODY_QUIET": "", "VY_CUSTODY_BOOT": "boot-n1", "VY_CUSTODY_PY": str(n.py),
-                                   "VY_CUSTODY_PYHOME": str(tmp_path / "py"), "VY_CUSTODY_STATE": str(n.state), "VY_CUSTODY_SRC": str(n.src),
+                                   "VY_CUSTODY_PYHOME": str(n.pyhome), "VY_CUSTODY_STATE": str(n.state), "VY_CUSTODY_SRC": str(n.src),
                                    "VY_CUSTODY_ROOTS": f"{n.jobs}/runs={n.jobs}/store=1000,{n.research}/runs={n.research}/store=1001",
                                    "VY_CUSTODY_RELAY": f"{n.jobs}/runs-n2={n.jobs}/store=1000", "VY_CUSTODY_MAX_FILES": "10", **env})
 
@@ -2388,8 +2471,8 @@ def test_n1_custody_runs_only_a_tree_and_a_python_no_other_uid_can_change(tmp_pa
     rid = "r20261003-200000-0f01"
     node.run(node.jobs, rid, "done")
     tree, custody_py = node.src / "tools" / "research", node.src / "tools" / "research" / "src" / "research" / "store" / "custody.py"
-    (tmp_path / "py" / ".lock").write_text("")
-    (tmp_path / "py" / ".lock").chmod(0o666)
+    (node.pyhome / ".lock").write_text("")
+    (node.pyhome / ".lock").chmod(0o666)
     said = []
     for p, mode in ((tree, 0o777), (custody_py, 0o664), (node.src, 0o775), (node.py, 0o757)):
         was = p.stat().st_mode
@@ -2401,10 +2484,29 @@ def test_n1_custody_runs_only_a_tree_and_a_python_no_other_uid_can_change(tmp_pa
         said.append(out.stdout)
     assert "on this host and in Jobs with the Secret research-r2" in said[0]
     elsewhere = node.round_(VY_CUSTODY_PY=sys.executable)
-    assert elsewhere.returncode == 3 and f"refused: {sys.executable} is no interpreter under {tmp_path / 'py'}" in elsewhere.stdout
+    assert elsewhere.returncode == 3 and f"refused: {sys.executable} is no interpreter under {node.pyhome}" in elsewhere.stdout
     assert node.created() == [] and "sudo" not in (node.log.read_text() if node.log.exists() else ""), "a refused round runs nothing"
     ok = node.round_()
     assert ok.returncode == 0 and node.created()[0] == f"n1-custody-{rid}", ok.stdout + ok.stderr
+
+
+@N1_CUSTODY
+def test_n1_custody_tests_hold_whatever_the_mode_of_the_directory_their_tmp_path_sits_under(tmp_path):
+    """A `research run` job's scratch, the TMPDIR its tests' tmp_path sits under, is group-writable (775), and a round rightly
+    refuses a tree under a directory another uid could change: the custody tests build the tree and the Python the round runs
+    where every directory up from / passes, and a round there runs, while a tree under the 775 directory is still refused by name."""
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    scratch.chmod(0o775)
+    node = _n1_custody(scratch / "test")
+    rid = "r20261003-200000-0f02"
+    node.run(node.jobs, rid, "done")
+    ok = node.round_()
+    assert ok.returncode == 0 and node.created()[0] == f"n1-custody-{rid}", ok.stdout + ok.stderr
+    under = scratch / "custody"
+    shutil.copytree(node.src, under, symlinks=True)
+    out = node.round_(VY_CUSTODY_SRC=str(under))
+    assert out.returncode == 3 and f"refused: {scratch} could be changed by a uid other than root and " in out.stdout, out.stdout
 
 
 @N1_CUSTODY
@@ -2830,6 +2932,31 @@ def _n1_lease(monkeypatch, tmp_path, holders=(), **env):
     return m, calls, state
 
 
+def _table_locks(monkeypatch, m) -> dict[int, int]:
+    """The GPU locks kept in a table, {gpu: the pid that holds its lock}, in place of `flock` processes and the machine's lock
+    list: `fence` and `unfence` write the controller's fences into it, a test writes a lease into it under the lease's pid
+    (`locks[0] = os.getpid()`), and `lock_holders` and `cmdline` answer from it alone.  For a test of what the controller
+    decides, not of the locks.  The real `lock_holders` is a read of every flock on the machine, which no test holds: the
+    kernel hands /proc/locks out a page per read, so a lock another process releases between two reads leaves a lock held
+    throughout unlisted; it matches by inode number, whatever the filesystem, so a lock another process holds on a file with
+    a GPU lock's inode number reads as a lease on that GPU, which the controller then leaves unfenced; and a real fence is a
+    process the machine may fail to start."""
+    held: dict[int, int] = {}
+    fence_pids = range(5_000_000, 6_000_000)               # above the kernel's largest pid: no process of the machine's
+    unused = iter(fence_pids)
+
+    def unfence(gone: list[int]) -> None:
+        for i in [i for i, pid in held.items() if pid in gone]:
+            del held[i]
+
+    monkeypatch.setattr(m, "fence", lambda i, t: None if i in held else held.setdefault(i, next(unused)))
+    monkeypatch.setattr(m, "unfence", unfence)
+    monkeypatch.setattr(m, "lock_holders", lambda: {m.lock_path(i).stat().st_ino: [pid] for i, pid in held.items()})
+    monkeypatch.setattr(m, "cmdline", lambda pid: next((["flock", str(m.lock_path(i)), m.FENCE_CMD]
+                                                        for i, p in held.items() if p == pid and pid in fence_pids), []))
+    return held
+
+
 def test_n1_lease_setup_makes_lease_files_writable_as_root_but_never_through_a_link(monkeypatch, tmp_path):
     """The lease dir is 0777 and setup's chmod runs as root, so a job that planted a symlink to a file of root's there (or a hard
     link, or swapped a listed file for a symlink) had root make that file world-writable."""
@@ -2863,6 +2990,9 @@ def test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_ho
     m, calls, _ = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-1", "gpu-pool-1-x", "GPU-c")])
     (tmp_path / "gl" / "2.foreign").write_text(f"pid={os.getpid()} mem=94000MiB user=research seen=2026-10-19T01:20:00Z cmd=vllm worker\n"
                                                "pid=5000000 mem=2048MiB user=research seen=2026-10-19T01:20:00Z cmd=gone\n")
+    # the lease dir is new and its lock files not yet made: nobody holds them, whatever lock the machine's list has under the
+    # inode numbers they then get (a file just released and deleted leaves its number to the next one made)
+    monkeypatch.setattr(m, "lock_holders", dict)
     s = m.Controller().tick(1_800_000_000.0)
     assert s["pool"] == 1 and [bool(g["fence_pids"]) for g in s["gpus"]] == [True, True, False, True]
     assert [g.get("foreign") for g in s["gpus"]] == [None, None, [{"pid": str(os.getpid()), "mem": "94000MiB", "user": "research",
@@ -2876,10 +3006,12 @@ def test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_ho
     assert two.returncode == 75
 
 
-@needs_flock
-def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkeypatch, tmp_path, reap):
+def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkeypatch, tmp_path):
+    """What the controller decides, tick by tick, over fences it only records (`_table_locks`): that a real fence keeps
+    gpu-lease off its GPU is `test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_holders_gpu`'s."""
     import fcntl
     m, calls, state = _n1_lease(monkeypatch, tmp_path, VY_POOL_IDLE_S=120)
+    fences = _table_locks(monkeypatch, m)
     c = m.Controller()
     w = tmp_path / "gl" / "wait.1.4242"
     w.write_text("pid=4242 n=1 run=r-x who=backend-sweep-2 since=2026-09-30T22:00:00Z\n")
@@ -2891,25 +3023,26 @@ def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkey
     assert len(created) == 1 and created[0]["spec"]["template"]["spec"]["containers"][0]["resources"] == {
         "requests": {"nvidia.com/gpu": "1"}, "limits": {"nvidia.com/gpu": "1"}}      # no CPU or memory: waiters hold the queue's
     assert created[0]["metadata"]["labels"]["kueue.x-k8s.io/queue-name"] == "provers" and s["pool"] == 0
-    assert all(g["fence_pids"] for g in s["gpus"])
+    assert [g["fence_pids"] for g in s["gpus"]] == [[fences[i]] for i in range(4)]
     state["holders"] = [(created[0]["metadata"]["name"], "hold-1", "GPU-b")]
     before = len(calls)
     s = c.tick(t + 10)
     assert s["pool"] == 1 and not s["gpus"][1]["fence_pids"] and not [a for a, _ in calls[before:] if a[0] == "create"]
+    assert sorted(fences) == [0, 2, 3] and [bool(g["fence_pids"]) for g in s["gpus"]] == [True, False, True, True]
     os.close(fd)
     w.unlink()
     c.tick(t + 20)
-    assert not [a for a, _ in calls if a[:2] == ("delete", "job")]
+    assert not [a for a, _ in calls if a[:2] == ("delete", "job")] and sorted(fences) == [0, 2, 3]
     s = c.tick(t + 20 + 121)
     assert [a[2] for a, _ in calls if a[:2] == ("delete", "job")] == [created[0]["metadata"]["name"]]
-    assert s["gpus"][1]["fence_pids"]
+    assert s["gpus"][1]["fence_pids"] == [fences[1]] and s["gpus"][1]["holder"] is None
 
 
-@needs_flock
-def test_n1_lease_named_pool_labels_its_own_holders_and_a_blocked_pool_grants_nothing_new(monkeypatch, tmp_path, reap):
+def test_n1_lease_named_pool_labels_its_own_holders_and_a_blocked_pool_grants_nothing_new(monkeypatch, tmp_path):
     import fcntl
     m, calls, state = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-circuits-1", "gpu-pool-circuits-1-x", "GPU-b")],
                                 VY_POOL_NAME="circuits", VY_POOL_QUEUE="deployments-gpu")
+    _table_locks(monkeypatch, m)
     c = m.Controller()
     t = 1_800_000_000.0
     s = c.tick(t)
@@ -3094,16 +3227,17 @@ def test_gpu_stray_judges_only_a_process_listed_before_and_after_the_leases_are_
     assert "pid 21 (default/nd-x) ran on GPU 1 without a lease" in (pool / "blocked").read_text()
 
 
-@needs_flock
-def test_n1_lease_expires_a_lease_past_its_until_and_stops_one_outside_the_pool(monkeypatch, tmp_path, reap):
-    import fcntl
+def test_n1_lease_expires_a_lease_past_its_until_and_stops_one_outside_the_pool(monkeypatch, tmp_path):
+    """What the controller decides about a lease it reads, over locks the test records (`_table_locks`): a read of the
+    machine's lock list can leave a lease held throughout unlisted, which the controller then sees a tick later."""
     m, calls, state = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-1", "gpu-pool-1-x", "GPU-a")])
+    locks = _table_locks(monkeypatch, m)
     monkeypatch.setattr(m, "pod_uid_of", lambda pid: "uid-job-pod")
     t = 1_800_000_000.0
     c = m.Controller()
     c.tick(t)
-    lock = os.open(tmp_path / "gl" / "0.lock", os.O_WRONLY)
-    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    assert sorted(locks) == [1, 2, 3]                      # GPU 0 is the pool's: no fence holds its lock
+    locks[0] = os.getpid()
     (tmp_path / "gl" / "0.owner").write_text(f"pid={os.getpid()} run=r-x who=backend-sweep-2 uuid=GPU-a "
                                              f"since={m.iso(t - 3600)} until={m.iso(t - 200)} cmd=bash -c x\n")
     state["pods"].append(("job-x", "job-pod", "-"))
@@ -3118,13 +3252,12 @@ def test_n1_lease_expires_a_lease_past_its_until_and_stops_one_outside_the_pool(
     assert not [a for a, _ in calls if a[0] == "delete"]
     s = c.tick(t + 3)
     assert [e["ev"] for e in s["events"]] == ["lease-outside-pool"] and ("delete", "pod", "job-pod", "--wait=false") in [a for a, _ in calls]
-    os.close(lock)
 
 
-@needs_flock
-def test_n1_lease_grows_only_within_the_queues_unborrowed_quota_and_sigterms_a_host_process_lease(monkeypatch, tmp_path, reap):
+def test_n1_lease_grows_only_within_the_queues_unborrowed_quota_and_sigterms_a_host_process_lease(monkeypatch, tmp_path):
     import fcntl
     m, calls, state = _n1_lease(monkeypatch, tmp_path, VY_POOL_MAX=3)
+    locks = _table_locks(monkeypatch, m)
     monkeypatch.setattr(m, "pod_uid_of", lambda pid: None)
     w = tmp_path / "gl" / "wait.1.4242"
     w.write_text("pid=4242 n=3 run=r-x who=adhoc:me since=2026-09-30T22:00:00Z\n")
@@ -3150,23 +3283,22 @@ def test_n1_lease_grows_only_within_the_queues_unborrowed_quota_and_sigterms_a_h
     c3 = m.Controller()
     c3.tick(t)
     proc = subprocess.Popen(["cat"], stdin=subprocess.PIPE)          # blocks until signalled
-    lock = os.open(tmp_path / "gl" / "0.lock", os.O_WRONLY)
-    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    assert 0 not in locks                                            # its holder runs: GPU 0's fence is gone
+    locks[0] = proc.pid
     (tmp_path / "gl" / "0.owner").write_text(f"pid={proc.pid} run=r-x who=adhoc:me since={m.iso(t - 3600)} until={m.iso(t - 200)} cmd=x\n")
     s = c3.tick(t + 1)
     assert [e["ev"] for e in s["events"]] == ["expired"] and not [a for a, _ in calls if a[:2] == ("delete", "pod")]
     assert proc.wait() == -15
-    os.close(lock)
 
 
-@needs_flock
 def test_n1_lease_borrows_only_for_preemptible_waiters_before_its_deadline_and_sigkills_a_lease_that_outlives_sigterm(
-        monkeypatch, tmp_path, reap):
+        monkeypatch, tmp_path):
     import fcntl
     t = 1_800_000_000.0
     m, calls, state = _n1_lease(monkeypatch, tmp_path, VY_POOL_MAX=3, VY_POOL_BORROW=1,
                                 VY_POOL_BORROW_UNTIL=datetime.datetime.fromtimestamp(t + 60, datetime.timezone.utc)
                                 .strftime("%Y-%m-%dT%H:%M:%SZ"))
+    locks = _table_locks(monkeypatch, m)
     monkeypatch.setattr(m, "pod_uid_of", lambda pid: None)
     bench = {"metadata": {"ownerReferences": [{"name": "nd-m0-bench"}]},
              "status": {"admission": {"clusterQueue": "provers"}, "conditions": [{"type": "QuotaReserved", "status": "True"}]},
@@ -3190,13 +3322,12 @@ def test_n1_lease_borrows_only_for_preemptible_waiters_before_its_deadline_and_s
     c.tick(t)
     proc = subprocess.Popen(["sh", "-c", "trap '' TERM; echo ready; exec cat"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     assert proc.stdout.readline() == b"ready\n"   # the trap is set before the lease is signalled
-    lock = os.open(tmp_path / "gl" / "0.lock", os.O_WRONLY)
-    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    assert 0 not in locks                         # its holder runs: GPU 0's fence is gone
+    locks[0] = proc.pid
     (tmp_path / "gl" / "0.owner").write_text(f"pid={proc.pid} run=r-x who=adhoc:me since={m.iso(t - 3600)} until={m.iso(t - 200)} cmd=x\n")
     assert [e.get("signal") for e in c.tick(t + 1)["events"]] == ["SIGTERM"]
     assert [e.get("signal") for e in c.tick(t + 1 + m.KILL_AFTER_S)["events"]] == ["SIGKILL"]
     assert proc.wait() == -9
-    os.close(lock)
 
 
 def _policy_lease(monkeypatch, tmp_path, max_: int, policy: str | None = None):
@@ -3278,6 +3409,49 @@ def test_n1_lease_sees_a_waiter_that_a_read_of_proc_locks_misses(monkeypatch, tm
     os.close(fd)
     assert len([a for a, _ in calls if a[0] == "create"]) == 3
     assert not m.waiters()
+
+
+def test_n1_lease_lock_holders_lists_each_held_flocks_pid_under_its_inode_number(monkeypatch, tmp_path):
+    """`lock_holders` over a text in /proc/locks' form: the pid of each flock held, in the text's order, under the inode
+    number its `MAJ:MIN:INODE` ends in.  A POSIX or OFD lock, a request waiting behind a lock (`->`) and a line cut short
+    are nobody's flock.  With no path it reads the kernel's list."""
+    m, _, _ = _n1_lease(monkeypatch, tmp_path)
+    text = tmp_path / "locks"
+    text.write_text("1: FLOCK  ADVISORY  WRITE 4242 fe:20:604607 0 EOF\n"
+                    "2: POSIX  ADVISORY  WRITE 4243 fe:20:604607 0 EOF\n"
+                    "3: FLOCK  ADVISORY  READ  4244 00:2e:77 0 EOF\n"
+                    "4: OFDLCK ADVISORY  WRITE -1 fe:20:78 0 EOF\n"
+                    "5: FLOCK  ADVISORY  READ  4245 00:2e:77 0 EOF\n"
+                    "6: FLOCK  ADVISORY  WRITE 4246 103:05:9 0 EOF\n"
+                    "6: -> FLOCK  ADVISORY  WRITE 4247 103:05:9 0 EOF\n"
+                    "7: FLOCK  ADVISORY  WRITE 4248\n"
+                    "\n")
+    assert m.lock_holders(text) == {604607: [4242], 77: [4244, 4245], 9: [4246]}
+    assert m.lock_holders.__defaults__ == (Path("/proc/locks"),)
+
+
+@needs_flock
+def test_n1_lease_tells_its_fence_from_a_lease_by_the_command_line_of_the_locks_pid(monkeypatch, tmp_path, reap):
+    """A lock's pid is the controller's fence when its command line is a fence's on that GPU's lock, and a lease's otherwise:
+    a `flock` helper holding the lock that isn't a fence, a process that names no lock, a pid no process has (gpu-lease's
+    helper, long gone), another GPU's fence.  The fence and the helper are real; which pid holds which lock is given as
+    `lock_holders` returns it, not read from the machine's list."""
+    m, _, _ = _n1_lease(monkeypatch, tmp_path)
+    t = 1_800_000_000.0
+    fence = m.fence(0, t)
+    assert fence
+    lease = subprocess.Popen(["flock", "-n", "-x", str(m.lock_path(1)), "sh", "-c", "echo locked; exec cat"],
+                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, start_new_session=True)
+    assert lease.stdout.readline().strip() == b"locked"
+    ino = [m.lock_path(i).stat().st_ino for i in range(4)]
+    gone = 5_000_000                                       # above the kernel's largest pid: no process of the machine's
+    monkeypatch.setattr(m, "lock_holders", lambda: {ino[0]: [fence], ino[1]: [lease.pid], ino[2]: [os.getpid(), gone],
+                                                    ino[3]: [fence]})
+    s = m.Controller().tick(t)
+    m.unfence([fence])
+    lease.communicate()                                    # its stdin closes: `cat` ends, and the helper with it
+    assert [g["fence_pids"] for g in s["gpus"]] == [[fence], [], [], []]
+    assert ["lease" in g for g in s["gpus"]] == [False, True, True, True]
 
 
 @needs_flock

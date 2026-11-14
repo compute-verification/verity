@@ -1,4 +1,4 @@
-"""WP2: the auxiliary-witness checker Check(x, y, h) for the frozen target's transition unit and, by chaining,
+"""The auxiliary-witness checker Check(x, y, h) for the frozen target's transition unit and, by chaining,
 for the proof block.
 
 This is a REFERENCE: Python ints, clarity over speed, no field.  Its decomposition into gadgets, its hint layout
@@ -6,10 +6,10 @@ and its predicate names are one way to write the relation and are NOT canonical 
 backend must preserve is the set of accepted (x, y) pairs (section 1) and, if it embeds the relation in a prime
 field, the additional bounds of section 3.
 
-The executable semantics it must agree with on the finite domain is ``verity.definitions.silicon.models`` (``tc_dot`` =
-two ``group_sum`` steps of the Ampere BF16 m16n8k16 model), then ``verity.definitions.silicon.cast.f32_to_bf16`` for the VU.
-Nothing here is derived from that module; ``reference.py`` re-states the same arithmetic parametrically so the
-reduced-width searches have a reference, and the differential tests compare the checker to ``silicon`` itself.
+The executable semantics it must agree with on the finite domain is ``verity.circuits.silicon.models`` (``tc_dot`` =
+two ``group_sum`` steps of the Ampere BF16 m16n8k16 model), then ``verity.circuits.silicon.cast.f32_to_bf16_word`` for
+the VU.  Nothing here is derived from that module; ``reference.py`` re-states the same arithmetic parametrically so
+the reduced-width searches have a reference, and the differential tests compare the checker to ``silicon`` itself.
 
 Layout.  ``params.py`` the widths as data (``REAL``, ``TOY``, ``TINY``); ``tables.py`` the four lookup tables;
 ``ctx.py`` the five predicates on Python ints (``IntCtx``) and as z3 constraints (``Z3Ctx``); ``gadgets.py`` one
@@ -19,7 +19,7 @@ class per gadget with ``contract(p)`` (ranges as data), ``gen`` (honest hints) a
 FP8 (silicon Phase 0).  ``Params`` carries two formats -- the operand's (``sig``, ``exp``, ``op_nan_rule``) and the
 accumulator's (``acc_sig``, ``acc_exp``) -- and admits an adder narrower than the accumulator (``width <
 acc_sig``, the *lossy* case of Hopper/Ada E4M3: 14 < 24).  ``Params.from_model(model)`` derives them from a
-``verity.definitions.silicon.models.GroupSum``; at ``AMPERE_BF16_M16N8K16`` it is ``REAL`` and nothing below changes (contracts,
+``verity.circuits.silicon.models.GroupSum``; at ``AMPERE_BF16_M16N8K16`` it is ``REAL`` and nothing below changes (contracts,
 hint layout and outputs at ``REAL``/``TOY``/``TINY`` are byte-identical to the BF16-only checker).  In the lossy
 case one gadget joins the data flow before ``AlignState``: ``RescaleState`` (M = 2^drop P + r, r < 2^drop, P < 2^W),
 the truncation of the incoming FP32 significand to the adder width that ``GroupSum.step`` performs; ``Normalise``
@@ -108,7 +108,7 @@ are range-checked once by the unit) then gives y = tc_dot(x).  Per gadget:
 
 The VU.  ``check_vu`` chains K/16 units from c_0 = 0 through their output words and ends with ``Epilogue``.  An
 infinite intermediate word has the all-ones exponent field and is rejected by the next unit's ``Fp32Decode``, as
-``verity_sp1.proofs.families`` rejects it (``tc_dot_chain`` raises); an infinite final word is cast to the BF16
+``verity.circuits.silicon.models`` rejects it (``tc_dot_chain`` raises); an infinite final word is cast to the BF16
 infinity.  Soundness of the chain is soundness of the units by induction on the chunk index.
 
 Evidence (see ``search.py`` and the tests).  Exhaustive enumeration of every input x every joint hint assignment
@@ -118,8 +118,8 @@ mutation: no alternative hint value is accepted.  z3 at the real widths per gadg
 differs from the reference"; SAT as soon as any one of the named bounds (``attained``, ``onehot``, ``rem``,
 ``window``, the range of v, ``zero_sign``, ``clamp_proof``, ``ovf_proof``) is dropped, i.e. each of them is
 load-bearing.  One full group step at the real widths with two independent hint copies on one concrete input:
-UNSAT.  The negative tests mutate each gadget's hints in the handoff's named ways and check the rejecting
-predicate.
+UNSAT.  The negative tests mutate each gadget's hints in the ways ``tests/checker/test_negative.py`` names and check the
+rejecting predicate.
 
 --------------------------------------------------------------------------------------------------------------------
 2. Unresolved obligations

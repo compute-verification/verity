@@ -3,12 +3,16 @@ value families excluded (`--retain-exclude`), byte ranges of its stream (`_HostR
 
 from __future__ import annotations
 
+import bisect
 from typing import Any
 
 import torch
 
-from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES
+from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, value_family
 from verity_vllm.commit.committer.plan_cache import PlanMetas
+
+__all__ = ["GPU_CHUNK_BYTES", "HIDDEN_M1_FAMILIES", "retain_exclude_families"]
+
 
 class _HostWindows:
     """The raw bytes of one step retained on host as pinned windows (P0 windowed staging); quacks like the contiguous `keep` tensor for
@@ -17,6 +21,7 @@ class _HostWindows:
     kept -- the replay opening path at batch sizes whose whole raw stream does not fit the pod's host cgroup); a slice touching a window
     that was not retained is an error, never zeros."""
     is_cuda = False
+    on_device: bool                 # set, to True, only on a block whose views are the device pool's until their release
 
     def __init__(self, wins: list[tuple[int, Any, int]], used: int, W: int, chunk: int = GPU_CHUNK_BYTES) -> None:
         self.wins = {int(k): (hv, int(n)) for k, hv, n in wins if n}
@@ -62,7 +67,7 @@ class _HostWindows:
                 parts.append(hv[a:b])
         return parts[0] if len(parts) == 1 else torch.cat(parts)
 
-    def cpu(self) -> "_HostWindows":
+    def cpu(self) -> _HostWindows:
         return self
 
 
@@ -75,6 +80,7 @@ class _HostRanges:
     may span consecutive ranges (a window boundary splits one retained region in two) but never a gap: a gap is a KeyError, never
     zeros.  Same duck type as `_HostWindows` / the contiguous `keep` tensor."""
     is_cuda = False
+    on_device: bool                 # as `_HostWindows.on_device`
 
     def __init__(self, ranges: list[tuple[int, int, Any]], used: int, excluded: dict[str, int] | None = None, chunk: int = GPU_CHUNK_BYTES) -> None:
         self.ranges = sorted(((int(lo), int(hi), hv) for lo, hi, hv in ranges if hi > lo), key=lambda r: r[0])
@@ -92,7 +98,6 @@ class _HostRanges:
 
     def _cover(self, lo: int, hi: int) -> list[tuple[int, int, Any]] | None:
         """The consecutive retained ranges covering [lo, hi) with no gap, or None."""
-        import bisect
         i = bisect.bisect_right(self._lows, lo) - 1
         if i < 0:
             return None
@@ -123,7 +128,7 @@ class _HostRanges:
         parts = [hv[max(lo, rlo) - rlo:min(hi, rhi) - rlo] for rlo, rhi, hv in cov]
         return parts[0] if len(parts) == 1 else torch.cat(parts)
 
-    def cpu(self) -> "_HostRanges":
+    def cpu(self) -> _HostRanges:
         return self
 
 
@@ -150,11 +155,10 @@ def retain_exclude_families(spec: str | None) -> set[str]:
     return out
 
 
-def _excluded_chunk_ranges(metas: list, exclude: set[str], chunk: int = GPU_CHUNK_BYTES) -> list[tuple[int, int, str]]:
+def _excluded_chunk_ranges(metas: list | PlanMetas, exclude: set[str], chunk: int = GPU_CHUNK_BYTES) -> list[tuple[int, int, str]]:
     """The chunk-aligned INTERIOR [lo, hi) of every tensor of an excluded value family in step-stream order (merged when adjacent): the
     bytes retain=host + exclude does not copy off the staging window.  Boundary chunks shared with a neighbouring tensor are retained
     (the neighbour opens from host); a tensor shorter than one chunk contributes nothing."""
-    from verity_vllm.commit.committer.native_host import value_family
     out: list[tuple[int, int, str]] = []
     spans = zip(metas.names, metas.offsets, metas.sizes) if isinstance(metas, PlanMetas) else (   # name, byte offset in the step stream, nbytes
         (m.name, int(m.dev_off) if int(getattr(m, "dev_off", -1)) >= 0 else int(m.stream_off), int(m.nbytes)) for m in metas)

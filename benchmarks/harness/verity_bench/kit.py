@@ -4,19 +4,31 @@
 - `host_stamp()`: where a number was measured, as one dict: the card, each GPU's UUID and clocks, the driver, CUDA, the node
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
-- `writer(out).measurement(name, value, unit, ...)`: appends one measurement to the run's result: under a research run
+- `writer(out).measurement(name, value, unit, ..., mark=..., period=None, over=None, member=None)`: appends one measurement to the run's result: under a research run
   (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
   `writer(out).validation(status, checker, detail, evidence=())` writes the run's validation there, once.
+  `writer(out).fingerprint(**fields)`, `.measurement_file(path)` and `.artifact(path)` add what actually ran and the files
+  `research` keeps; the first of them writes all three of its keys, so a result that uses none holds none.
 
 **A result** is `RESULT_SCHEMA`, the form `research` reads a run's `result.json` in: `run_id`, `measurements` and the run's
 `validation` (`status`, `checker`, `detail` and `evidence`, the files it stands on, as paths relative to the result's
 directory: under a research run, the run's). Each
-measurement is the form a reader of numbers takes, `value`, `unit`, `commit` and `run`, with its `name`, its 95% interval
-(`ci95`, ``[low, high]``), its `target`, the `verdict` of its check against that target, the `inputs` it was computed from
-(other measurements' names, run or `art:` ids) and the `host` stamp it was written under; a measurement with no value
-(`value` None) may say why (`why`, held only where given). The writer appends: every
+measurement is the form a reader of numbers takes, `value`, `unit`, `commit` and `run`, with its `name`, its `mark`, its
+95% interval (`ci95`, ``[low, high]``), its `target`, the `verdict` of its check against that target, the `inputs` it was
+computed from (other measurements' names, run or `art:` ids) and the `host` stamp it was written under; a measurement with
+no value (`value` None) may say why (`why`, held only where given), and any measurement may carry keys of its
+benchmark's own (`extra`), such as what its number rests on. **A mark** says how the value was had, one of `MARKS`,
+which every measurement gives, one with no value the mark it would have had: ``"measured"``, computed from a run of
+record's own records (its timings, its verifier's output, the registered parameters it ran at); ``"modeled"``, from a
+model or stated figures no run measured, or scaled past what a run covered; ``"partial"``, measured on part of what its
+name covers. The writer also puts it first among the `inputs`, where the console's Metrics tab reads it until it reads
+`mark`. A measurement of a figure that is over a span of time or of compute says which, each as its own field and held
+only where given: `period`, one of `PERIODS` (a verification phase, a week, a month or a year), and `over`, one of
+`OVER` (the world's compute or one datacenter's). A measurement of one member of a set (a deployed guarantee, a lead)
+says which as `member`, a non-empty string, held only where given. The writer appends: every
 writer of a research run, whatever its `out`, appends to the run's one result and keeps what the run already wrote there.
-A result holds one run's measurements, one a name, and one validation, so a rerun writes a fresh directory.
+A result holds one run's measurements, one a name, period, `over` and member (a name given none is one of them), and one
+validation, so a rerun writes a fresh directory.
 
 **A measurement is a number, and its verdict is its target check.** Nothing under `benchmarks/` writes a verdict of record or
 a seal: a verdict of record is its protocol's verifier's, and a seal its Commit's. So the writer refuses a value that isn't
@@ -62,6 +74,18 @@ OF_RECORD = frozenset("accept accepts accepted accepting acceptance reject rejec
 #: the statuses of a validation the writer writes: whether the run's own gates held (the schema's third, ``not_run``, is a
 #: result with no validation)
 VALIDATION_STATUSES = ("passed", "failed")
+#: the result's two lists of files relative to its directory, which `research` keeps with the run: the detailed records and
+#: what else is worth keeping
+FILES = ("measurement_files", "artifacts")
+#: how a measurement's value was had, its `mark`: from a run of record's own records, from a model or stated figures no
+#: run measured, or measured on part of what its name covers
+MARKS = ("measured", "modeled", "partial")
+#: the monitoring period a measurement's value is over, its `period`: one verification phase, a week, a month or a year
+PERIODS = ("phase", "week", "month", "year")
+#: the compute a measurement's value is over, its `over`: the world's or one datacenter's
+OVER = ("world", "datacenter")
+#: the first word of an input, which the console's Metrics tab reads a mark from (as `markOf` does)
+LEADING_WORD = re.compile(r"^([a-z]+)\b")
 
 
 # ---- the lease ---------------------------------------------------------------------------------------------------------------
@@ -218,6 +242,12 @@ def _target_check(verdict: Any, target: Any) -> str | None:
     return verdict
 
 
+def _inside(rel: Any) -> bool:
+    """Whether `rel` is a path relative to a result's directory and inside it, as a string."""
+
+    return isinstance(rel, str) and bool(rel) and not Path(rel).is_absolute() and ".." not in Path(rel).parts
+
+
 @contextlib.contextmanager
 def _locked(directory: Path) -> Iterator[None]:
     """One appender at a time in `directory`: two processes of a job each keep their measurement."""
@@ -241,16 +271,38 @@ class Writer:
 
     def measurement(self, name: str, value: float | None, unit: str, interval: Sequence[float] | None = None,
                     target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
-                    why: str | None = None) -> dict:
-        """Appends one measurement to `out/result.json` and returns it: `value` in `unit` (None where the benchmark has no
-        finite value to give, and then `why`, in words, where given), its 95% `interval` (low, high), which the result
-        holds as `ci95`, the key `paired` gives it under, its `target`, the `verdict` of its check against that target, and
-        the `inputs` it was computed from, with this run, its commit and the host stamp. It refuses what isn't a
-        measurement (a value that isn't a number, a verdict with no target or in a verdict of record's or a seal's words,
-        a `why` beside a value), a name the result already holds, and a result of another run."""
+                    why: str | None = None, *, mark: str | None = None, period: str | None = None,
+                    over: str | None = None, member: str | None = None,
+                    extra: Mapping[str, Any] | None = None) -> dict:
+        """Appends one measurement to `out/result.json` and returns it: `value` in `unit` (None where the benchmark has
+        no finite value to give, and then `why`, in words, where given), its `mark`, its 95% `interval` (low, high),
+        which the result holds as `ci95`, the key `paired` gives it under, its `target`, the `verdict` of its check
+        against that target, and the `inputs` it was computed from, with this run, its commit and the host stamp, and
+        beside them the keys of `extra`, each a JSON value the benchmark states of the number. The mark, one of `MARKS`,
+        is required, a value of None's too, which takes the mark its value would have had. It is also the first of
+        `inputs`, the bare word, unless the given first input already opens with it (``"modeled: ..."``), which the
+        console's Metrics tab reads it from until it reads `mark`. `period` (one of `PERIODS`) and `over` (one of `OVER`)
+        say what span of time and of compute the value is over, and `member` which member of a set it is for, each its own
+        field where given. It refuses what isn't a measurement (a value that isn't a number, a verdict with no target or
+        in a verdict of record's or a seal's words, a `why` beside a value), a missing or unknown mark and a first input
+        that opens with another one, a period or an `over` it doesn't know, a member that isn't a non-empty string, an
+        `extra` key the entry already has a meaning for or a value that isn't JSON, a name, period, `over` and member the
+        result already holds, and a result of another run."""
 
         if not isinstance(name, str) or not name.strip():
             raise ValueError(f"a measurement has a name, not {name!r}")
+        if not isinstance(mark, str) or mark not in MARKS:
+            raise ValueError(f"{name}'s mark is one of {', '.join(map(repr, MARKS))}, how its value was had (a value of "
+                             f"None takes the one it would have had), not {mark!r}: pass mark=...")
+        if period is not None and (not isinstance(period, str) or period not in PERIODS):
+            raise ValueError(f"{name}'s period is one of {', '.join(map(repr, PERIODS))}, the monitoring period its value "
+                             f"is over, or None where it is over none, not {period!r}: pass period=... with one of them")
+        if over is not None and (not isinstance(over, str) or over not in OVER):
+            raise ValueError(f"{name}'s over is one of {', '.join(map(repr, OVER))}, the compute its value is over, or None "
+                             f"where it is over no such scope, not {over!r}: pass over=... with one of them")
+        if member is not None and (not isinstance(member, str) or not member.strip()):
+            raise ValueError(f"{name}'s member names which member of a set its value is for, a non-empty string, or None "
+                             f"where it is for no one member, not {member!r}")
         if not isinstance(unit, str):
             raise ValueError(f"{name}'s unit is a string, not {unit!r}")
         if why is not None and (value is not None or not isinstance(why, str) or not why.strip()):
@@ -259,6 +311,12 @@ class Writer:
         inputs = [inputs] if isinstance(inputs, (str, bytes)) else list(inputs)
         if not all(isinstance(i, str) and i for i in inputs):
             raise ValueError(f"{name}'s inputs are the names of what it was computed from, each a string, not {inputs!r}")
+        opens = (found := LEADING_WORD.match(inputs[0])) and found.group(1) if inputs else None
+        if opens in MARKS and opens != mark:
+            raise ValueError(f"{name}'s first input opens with the mark {opens!r} and its mark is {mark!r}: give the one "
+                             f"mark it has, as mark= and at the head of its first input")
+        if opens != mark:
+            inputs = [mark, *inputs]
         if interval is not None:
             try:
                 low, high = interval
@@ -267,16 +325,27 @@ class Writer:
             if (low := _number("interval", low)) > (high := _number("interval", high)):
                 raise ValueError(f"{name}'s interval is (low, high), not {interval!r}")
             interval = [low, high]
-        entry = {"name": name, "value": None if value is None else _number("value", value), "unit": unit,
-                 "commit": self.stamp["commit"], "run": self.run, "ci95": interval,
+        spans = {key: x for key, x in (("period", period), ("over", over), ("member", member)) if x is not None}
+        entry = {"name": name, "value": None if value is None else _number("value", value), "unit": unit, "mark": mark,
+                 **spans, "commit": self.stamp["commit"], "run": self.run, "ci95": interval,
                  "target": None if target is None else _number("target", target),
                  "verdict": _target_check(verdict, target), "inputs": inputs, "host": dict(self.stamp)}
         if why is not None:
             entry["why"] = why
+        for key, held in (extra or {}).items():
+            if not isinstance(key, str) or key in entry or key in ("why", "period", "over", "member"):
+                raise ValueError(f"{name}'s extra key {key!r} is a key the measurement already has a meaning for")
+            try:
+                json.dumps(held, allow_nan=False)
+            except (TypeError, ValueError):
+                raise ValueError(f"{name}'s extra {key} is a JSON value, not {held!r}") from None
+            entry[key] = held
         with self._open() as (path, doc):
-            if any(m.get("name") == name for m in doc["measurements"]):
-                raise ValueError(f"{path} already holds a measurement named {name}: a result holds one a name (a rerun writes "
-                                 "a fresh directory)")
+            key = (name, period, over, member)
+            if any((m.get("name"), m.get("period"), m.get("over"), m.get("member")) == key for m in doc["measurements"]):
+                raise ValueError(f"{path} already holds a measurement named {name} at period={period!r}, over={over!r} and "
+                                 f"member={member!r}: a result holds one a name, period, over and member (a rerun writes a "
+                                 "fresh directory)")
             doc["measurements"].append(entry)
         return entry
 
@@ -298,7 +367,7 @@ class Writer:
         if not isinstance(evidence, (list, tuple)):
             raise ValueError(f"a validation's evidence is a list of paths relative to {self.out}, not {evidence!r}")
         for rel in evidence:
-            if not isinstance(rel, str) or not rel or Path(rel).is_absolute() or ".." in Path(rel).parts:
+            if not _inside(rel):
                 raise ValueError(f"a validation's evidence is a list of paths relative to {self.out} and inside it, each a "
                                  f"string, not {rel!r}")
         block = {"status": status, "checker": checker, "detail": detail, "evidence": list(evidence)}
@@ -308,6 +377,65 @@ class Writer:
                                  "fresh directory)")
             doc["validation"] = block
         return block
+
+    def fingerprint(self, **fields: Any) -> dict:
+        """Adds `fields` to the result's `workload_fingerprint`, what actually ran (a script, its arguments, a mode), and
+        returns the fingerprint. It always holds `source_sha`, the commit `research run` shipped (`RESEARCH_SOURCE_SHA`;
+        None outside one), which the writer reads, so it refuses a field of that name, a field the fingerprint already
+        holds and a value that isn't JSON. Like `measurement_file` and `artifact`, it writes all three of the keys."""
+
+        if "source_sha" in fields:
+            raise ValueError("a fingerprint's source_sha is the commit research run shipped, which the writer reads "
+                             "(RESEARCH_SOURCE_SHA), not a field to give")
+        for key, value in fields.items():
+            try:
+                json.dumps(value, allow_nan=False)
+            except (TypeError, ValueError):
+                raise ValueError(f"a fingerprint's {key} is a JSON value, not {value!r}") from None
+        with self._open() as (path, doc):
+            held = self._attach(path, doc)["workload_fingerprint"]
+            if again := sorted(held.keys() & fields.keys()):
+                raise ValueError(f"{path}'s fingerprint already holds {', '.join(again)}: a fingerprint holds each once")
+            held.update(fields)
+        return dict(held)
+
+    def measurement_file(self, rel: str) -> str:
+        """Names one file of the run's detailed records in the result's `measurement_files` and returns it: a path relative
+        to the result's directory and inside it, as `evidence` is, which `research` keeps with the run. A file is named
+        once, here or as an artifact."""
+
+        return self._name("measurement_files", rel)
+
+    def artifact(self, rel: str) -> str:
+        """Names one file or directory worth keeping in the result's `artifacts` and returns it, as `measurement_file`
+        does."""
+
+        return self._name("artifacts", rel)
+
+    def _name(self, key: str, rel: str) -> str:
+        if not _inside(rel):
+            raise ValueError(f"a result's {key} are paths relative to {self.out} and inside it, each a string, not {rel!r}")
+        rel = Path(rel).as_posix()
+        with self._open() as (path, doc):
+            named = self._attach(path, doc)
+            if any(Path(p).as_posix() == rel for k in FILES for p in named[k]):
+                raise ValueError(f"{path} already names {rel}: a file is named once, as a measurement file or an artifact")
+            named[key].append(rel)
+        return rel
+
+    @staticmethod
+    def _attach(path: Path, doc: dict) -> dict:
+        """`doc` with the three keys `research` reads besides its measurements and validation: `workload_fingerprint` with
+        its `source_sha`, and `FILES`' two lists, each added where it is missing."""
+
+        if not isinstance(doc.setdefault("workload_fingerprint", {}), dict):
+            raise ValueError(f"{path}'s workload_fingerprint isn't an object: the writer adds only to a {RESULT_SCHEMA} result")
+        doc["workload_fingerprint"].setdefault("source_sha", settings.RESEARCH_SOURCE_SHA)
+        for key in FILES:
+            held = doc.setdefault(key, [])
+            if not isinstance(held, list) or not all(isinstance(p, str) for p in held):
+                raise ValueError(f"{path}'s {key} aren't a list of paths: the writer adds only to a {RESULT_SCHEMA} result")
+        return doc
 
     @contextlib.contextmanager
     def _open(self) -> Iterator[tuple[Path, dict]]:

@@ -251,7 +251,8 @@ if [ ! -f /etc/systemd/system/vy-disk-guard.timer ]; then
 fi
 run sudo systemctl daemon-reload
 run sudo systemctl enable --now vy-disk-guard.timer
-# the store eviction: hourly, as ubuntu (the job store's owner), drop only local copies the remote store holds until 2500 GB are free
+# the store eviction: hourly, as ubuntu (the job store's owner), drop only local copies the remote store holds until 2500 GB are free.
+# A pass runs main's copy of research, which only `research deploy install` places (deploy.toml): until then it refuses.
 run sudo install -m 755 "$SRC/store_evict.sh" /usr/local/bin/vy-store-evict
 # and the same for research's own store and check runs (/workspace/research/{store,runs}), as research, their owner
 for u in store_evict.service store_evict.timer store_evict_research.service store_evict_research.timer; do

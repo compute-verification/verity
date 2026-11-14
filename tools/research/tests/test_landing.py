@@ -19,10 +19,10 @@ from pathlib import Path
 
 import pytest
 
-from research import landing, merge
+from research import landing, merge, remote
 from research.landing import AFTER_LANDING, AFTER_LANDING_OPTIONAL, SLIM_JUDGED, SLIM_STEPS, Landing, gating
 from research.policy import SCHEMA as POLICY_SCHEMA
-from research.queue import PR, Member
+from research.queue import PR, Member, merge_main
 from test_queue import World, _git
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "research"
@@ -126,7 +126,7 @@ def _failed_run(tmp_path, test: str, trace: str, steps: str = '{"step": "lean-su
 
 #: the analysis's packages, as an audit's log names each after its scratch directory
 SPEC, PROOFS = "security", "security/Proofs"
-LEAN_AUDIT_LOG = f"""lean-audit: verity/hardware/world: PASS reused (eabc707c8940): every file its audit reads is unchanged
+LEAN_AUDIT_LOG = f"""lean-audit: verity/protocols/interface/world: PASS reused (eabc707c8940): every file its audit reads is unchanged
 AUDIT /workspace/research/cache/verity-check/lean-audit-scratch-2957380-6l2lanb_/{PROOFS}: FAIL; built WITHOUT a sandbox
   build: exit 1
     warning: ../Proofs/Flock/Recursive/PartTie.lean:168:47: Used `tac1 <;> tac2`
@@ -298,14 +298,14 @@ def test_lean_errors_reads_the_audits_orphan_and_layers_failures(tmp_path):
     than every PR touching Lean."""
     from research.landing import lean_errors
 
-    flock = "verity/protocols/flock/verifier"
+    flock = "verity/protocols/proofs/flock/verifier"
     log = (f"AUDIT /w/lean-audit-scratch-1-x/{flock}: FAIL  14588 declarations in 159 modules\n"
            "  orphan: Flock/Test/KnownRead.lean is not imported by the roots (Flock, FlockVerify) nor under `exempt`: nothing builds"
            " or audits it\n  note: 267 definitions of the spec (VStar) are read by no guarantee\n"
-           "AUDIT /w/lean-audit-scratch-1-x/verity/protocols/pouw/verifier/lean/check: FAIL  944 declarations in 13 modules\n"
+           "AUDIT /w/lean-audit-scratch-1-x/verity/protocols/accounting/pouw/verifier/lean/check: FAIL  944 declarations in 13 modules\n"
            "  layers: PouwCheck.Credit imports Flock.Program, outside PouwCheck.Credit's layer (Std.Data.HashMap)\n")
     assert lean_errors(log) == {f"{flock}/Flock/Test/KnownRead.lean",
-                                "verity/protocols/pouw/verifier/lean/check/PouwCheck/Credit.lean"}
+                                "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Credit.lean"}
 
 
 def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
@@ -377,7 +377,7 @@ def test_status_fetches_only_paths_under_the_run_dir_beside_its_records(tmp_path
 def test_forces_cold_reads_the_paths_that_move_most_circuit_check_keys():
     from research.queue import forces_cold
 
-    assert forces_cold(["verity/definitions/circuits/library.py"]) and forces_cold(["uv.lock"]) and forces_cold(["x/y.circuit-check.py"])
+    assert forces_cold(["verity/circuits/library.py"]) and forces_cold(["uv.lock"]) and forces_cold(["x/y.circuit-check.py"])
     assert forces_cold(["tools/verity/circuit_check/src/circuit_check/cache.py"])
     assert forces_cold(["adapters/vllm/verity_vllm/pipeline/serving_rows.py"])          # else hundreds of targets rerun
     assert not forces_cold(["adapters/vllm/tests/pipeline/test_row.py", "tools/research/src/research/landing.py"])
@@ -621,7 +621,7 @@ def test_a_check_of_a_candidate_sends_the_upstream_build_only_when_what_lean_agr
     the base, and none for a root."""
     asked, changed = [], [False]
     monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: asked.append((base, commit, tool)) or (
-        {"lean-agreement": ["verity/protocols/flock/prover/"]} if changed[0] else {}))
+        {"lean-agreement": ["verity/protocols/proofs/flock/prover/"]} if changed[0] else {}))
     h = Harness(world, monkeypatch)
     h.q._clone()
     base, sha = _main(world), world.change({"f.txt": "1\n"})
@@ -711,45 +711,186 @@ def test_a_step_more_than_one_shard_holds_passed_only_once_every_shard_that_hold
     assert shard_steps([[bare]], [False]) == [{"lean-build": "passed"}], "an unsharded run: its steps.jsonl"
 
 
-def test_run_states_reads_runs_in_parallel_and_keeps_each_state_with_its_run(tmp_path, monkeypatch):
+def _row(d: Path, state: str) -> tuple[Path, dict]:
+    """A read of run dir ``d`` (`landing.read_run`): it, and its `research status --json` row in ``state``."""
+    d.mkdir(parents=True, exist_ok=True)
+    return d, {"state": state, "rc": {"done": 0, "failed": 1}.get(state), "dir": str(d)}
+
+
+def test_run_states_reads_runs_in_parallel_and_keeps_each_state_with_its_run(tmp_path):
     """Reading about 40 runs one `research status` (an ssh round trip) at a time took a tick 33 min. Several are read at once, and each answer stays with the run it is about, whatever order they finish in."""
     seen: set[int] = set()
     lock = threading.Lock()
 
-    def run(argv, **kw):
-        rid = argv[argv.index("status") + 1]
+    def read(rid, names):
         with lock:
             seen.add(threading.get_ident())
         state = {"r1": "running", "r2": "done", "r3": "failed"}.get(rid)
-        if state is None:
-            return subprocess.CompletedProcess(argv, 1, "", "no such run")
-        d = tmp_path / rid
-        d.mkdir(exist_ok=True)
-        rc = 0 if state == "done" else (1 if state == "failed" else None)
-        return subprocess.CompletedProcess(argv, 0, json.dumps({"runs": [{"state": state, "rc": rc, "dir": str(d)}]}), "")
+        return None if state is None else _row(tmp_path / rid, state)
 
-    monkeypatch.setattr(landing.subprocess, "run", run)
     ids = ["r3", "r1", "nope", "r2"]
-    out = landing.run_states(tmp_path, ids)
+    out = landing.Reads(read=read, node=str).states(tmp_path, ids)
     assert list(out) == ids
     assert out["r1"][0] == "running" and out["r2"][:2] == ("done", 0) and out["r3"][:2] == ("failed", 1)
     assert out["nope"] == ("unknown", None, None, None)
     assert seen and threading.get_ident() not in seen, "read on worker threads, not one after another on the caller's"
 
 
-def test_each_keeps_order_and_runs_a_single_item_inline():
-    assert landing._each(lambda x: x * 2, [3, 1, 2]) == [6, 2, 4]
-    me = threading.get_ident()
-    assert landing._each(lambda _: threading.get_ident(), ["only"]) == [me]
-    assert landing._each(lambda x: x, []) == []
+def test_reads_keep_order_and_read_a_single_run_inline(tmp_path):
+    me, at = threading.get_ident(), []
+    one = landing.Reads(read=lambda rid, names: at.append(threading.get_ident()) or _row(tmp_path / rid, "done"), node=str)
+    assert list(one.states(tmp_path, ["only"])) == ["only"] and at == [me]
+    assert one.states(tmp_path, []) == {} and one.evidence(tmp_path, []) == []
 
 
-def test_evidence_drops_runs_it_cannot_fetch_and_keeps_the_rest_in_order(tmp_path, monkeypatch):
-    got = {"r1": tmp_path / "r1", "r3": tmp_path / "r3"}
-    for d in got.values():
-        d.mkdir()
-    monkeypatch.setattr(landing, "_fetch", lambda repo, rid, names: got.get(rid))
-    assert landing.evidence(Path("."), ["r3", "r2", "r1"]) == [got["r3"], got["r1"]]
+def test_evidence_drops_runs_it_cannot_fetch_and_keeps_the_rest_in_order_and_fetches_a_failed_suites_log(tmp_path):
+    """`Reads.evidence`: the runs' `EVIDENCE` first, then of a run whose suite failed, that suite's log with its guard's report
+    and its children's reads."""
+    asked = []
+    failed = _failed_run(tmp_path, "test_x", "t.py:1")
+
+    def read(rid, names):
+        asked.append((rid, names))
+        return {"r1": _row(tmp_path / "r1", "done"), "run": (failed, {"state": "failed", "dir": str(failed)})}.get(rid)
+
+    assert landing.Reads(read=read, node=str).evidence(Path("."), ["run", "r2", "r1"]) == [failed, tmp_path / "r1"]
+    assert sorted(asked) == sorted([("run", landing.EVIDENCE), ("r2", landing.EVIDENCE), ("r1", landing.EVIDENCE),
+                                    ("run", ("suites/pkg.log", "suites/pkg.json", "suites/pkg.reads"))])
+
+
+def _remote_run(root: Path, rid: str, state: str = "running") -> Path:
+    """The local dir of a run launched on a node, its status.json as last fetched in ``state``."""
+    d = root / rid
+    d.mkdir(parents=True)
+    (d / "remote.json").write_text(json.dumps({"host": "h", "port": 22, "machine": "m1", "remote_run_dir": f"/runs/{rid}"}))
+    (d / "status.json").write_text(json.dumps({"state": state}))
+    return d
+
+
+class Node:
+    """`remote.fetch` from a node: each fetch recorded (the run, the files asked), the run's status.json then the next of its
+    ``states`` (the last once they run out; None: the fetch fails)."""
+
+    def __init__(self, monkeypatch, **states):
+        self.fetches, self.states = [], {r: list(s) for r, s in states.items()}
+        monkeypatch.setattr(remote, "fetch", self.fetch)
+
+    def fetch(self, d: Path, *, also=(), **kw) -> dict:
+        self.fetches.append((d.name, also))
+        st = self.states[d.name]
+        if (state := st.pop(0) if len(st) > 1 else st[0]) is None:
+            return {"last_fetch_error": {"rc": 255}}
+        (d / "status.json").write_text(json.dumps({"state": state, **({"rc": 0} if state == "done" else {})}))
+        return {}
+
+
+def test_a_run_is_read_in_process_with_the_files_asked_and_not_the_nodes_memory_or_a_checks_timings(tmp_path, monkeypatch):
+    """`read_run` reads a run as `research status RUN --json --also NAME...` does, in the loop's process and without the two ssh
+    round trips of the command's that nothing it judges reads: the node's memory and holds, and a check's timings against the
+    machine's newest finished check, about 5 s of each running run's 7."""
+    from research import cli
+    from research.checkview import CHECK_FILES
+
+    monkeypatch.setattr(cli, "_read_holds", lambda *a: pytest.fail("read the node's memory and holds"))
+    monkeypatch.setattr(cli, "_check_view", lambda *a: pytest.fail("read a check's timings"))
+    monkeypatch.setattr(landing.subprocess, "run", lambda *a, **k: pytest.fail("ran a subprocess"))
+    d = _remote_run(tmp_path, "r1")
+    node = Node(monkeypatch, r1=["running"])
+    got = landing.read_run("r1", ("steps.jsonl.progress", "check-live.json"), tmp_path)
+    assert got is not None and got[0] == d and got[1]["state"] == "running" and Path(got[1]["dir"]) == d
+    assert node.fetches == [("r1", tuple(dict.fromkeys(("steps.jsonl.progress", "check-live.json", *CHECK_FILES))))]
+    assert landing.read_run("nope", (), tmp_path) is None
+
+
+def test_an_ended_run_is_fetched_until_a_fetch_begun_after_its_end_brought_the_files_asked_and_then_never(tmp_path, monkeypatch):
+    """A fetch copies a run dir's files one after another, its live record and spans before status.json, so the fetch that
+    finds a run ended may hold what it wrote before its end; one begun after brings its last, after which nothing changes, so
+    no later read of those files fetches them (each tick refetched every ended run, 1–2 s each).  A file not yet asked is
+    fetched once more; a failed fetch brings nothing."""
+    _remote_run(tmp_path, "r1")
+    node = Node(monkeypatch, r1=["running", "done"])
+    names = ("steps.jsonl.progress", "check-live.json")
+    assert landing.read_run("r1", names, tmp_path)[1]["state"] == "running" and len(node.fetches) == 1
+    assert landing.read_run("r1", names, tmp_path)[1]["state"] == "done"
+    assert len(node.fetches) == 3, "the fetch that found it ended, and one begun after"
+    assert landing.read_run("r1", names, tmp_path)[1]["state"] == "done"
+    assert landing.read_run("r1", names[:1], tmp_path)[1]["state"] == "done"
+    assert len(node.fetches) == 3, "its files as a fetch begun after its end brought them"
+    landing.read_run("r1", ("suites/pkg.log",), tmp_path)
+    landing.read_run("r1", ("suites/pkg.log", *names), tmp_path)
+    assert [also[0] for _, also in node.fetches[3:]] == ["suites/pkg.log"]
+
+    _remote_run(tmp_path, "r2", "done")
+    flaky = Node(monkeypatch, r2=[None, "done"])
+    for _ in range(3):
+        landing.read_run("r2", names, tmp_path)
+    assert len(flaky.fetches) == 2, "a fetch that failed, then the one that brought them"
+
+
+def test_a_tick_reads_each_run_once_and_again_only_for_files_it_has_not_fetched(tmp_path):
+    """Inside `Reads.tick` the judging of every candidate reads each run once, all of them at once first, however many times a
+    judge asks for its state and evidence (two rounds a candidate, one after another, while an early pass reads its runs too);
+    a log not yet fetched is read alone, and a read that fails keeps the tick's earlier one.  Outside a tick each ask reads
+    afresh."""
+    asked, gone = [], set()
+
+    def read(rid, names):
+        asked.append((rid, names))
+        return None if rid in gone else _row(tmp_path / rid, "running")
+
+    reads = landing.Reads(read=read, node=str)
+    with reads.tick(["r1", "r2", "r1"]):
+        assert sorted(asked) == [("r1", landing.EVIDENCE), ("r2", landing.EVIDENCE)], "read at once before any judge asks"
+        gone.add("r1")
+        assert reads.states(tmp_path, ["r1", "r2"])["r1"][0] == "running"
+        assert reads.evidence(tmp_path, ["r2", "r1"]) == [tmp_path / "r2", tmp_path / "r1"]
+        reads([("r1", ("suites/a.log",))])
+        reads([("r1", ("suites/a.log",)), ("r2", landing.PROGRESS)])
+        assert reads.states(tmp_path, ["r1"])["r1"][0] == "running", "its failed read keeps the tick's earlier one"
+    assert asked[2:] == [("r1", ("suites/a.log",))]
+    del asked[:]
+    reads.states(tmp_path, ["r2"])
+    reads.states(tmp_path, ["r2"])
+    assert asked == [("r2", (*landing.PROGRESS, landing.LIVE))] * 2, "outside a tick each ask reads afresh"
+
+
+def test_a_slow_node_holds_no_more_than_its_share_of_the_readers(tmp_path):
+    """A node that answers slowly (a stalled ssh, 120 s to a probe's timeout) held every reader its runs reached, the runs
+    of every other node waiting behind it.  Its runs hold at most `NODE_JOBS` readers, and every other node's runs are read
+    while they do: the slow node's reads end only once the last of the others' has.  Its runs come first and outnumber the
+    readers, so a pool with no share per node puts every reader on it; a read finding more of its node's in flight than its
+    share answers at once, so that pool fails here rather than hangs."""
+    slow = [f"s{k}" for k in range(landing.STATUS_JOBS + 2)]
+    fast = [f"f{k}" for k in range(landing.STATUS_JOBS)]
+    lock, flying, over, others_done, done = threading.Lock(), {"slow": 0, "fast": 0}, [], threading.Event(), []
+
+    def node(rid):
+        return "slow" if rid.startswith("s") else "fast"
+
+    def read(rid, names):
+        n = node(rid)
+        with lock:
+            flying[n] += 1
+            if flying[n] > landing.NODE_JOBS:
+                over.append((rid, flying[n]))
+            free = n == "fast" or bool(over)
+        try:
+            if not free:
+                others_done.wait()
+            return _row(tmp_path / rid, "running")
+        finally:
+            with lock:
+                flying[n] -= 1
+                if n == "fast":
+                    done.append(rid)
+                    if len(done) == len(fast):
+                        others_done.set()
+
+    ids = [*slow, *fast]
+    out = landing.Reads(read=read, node=node).states(tmp_path, ids)
+    assert not over, f"more of one node's runs read at once than its share: {over}"
+    assert list(out) == ids and all(s[0] == "running" for s in out.values())
+    assert sorted(done) == sorted(fast)
 
 
 def test_the_evidence_of_an_attempt_is_fetched_once(world, monkeypatch):
@@ -882,8 +1023,9 @@ def test_the_owner_of_each_unmarked_pr_stacked_on_a_landed_one_hears_once_to_mer
     tip = _main(world)
     state = {"told": []}
     h.d._stacked(state, [Member(1, h1, "lane-1", tip)], tip)
-    assert sorted(h.posts) == [f"@lane-2 queue: #2's base #1 landed in main at {tip[:12]}; merge main into #2",
-                               f"@lane-4 queue: #4's base #1 landed in main at {tip[:12]}; merge main into #4"]
+    assert sorted(h.posts) == [f"@lane-2 queue: #2's base #1 landed in main at {tip[:12]}: {merge_main('#2', gh.prs[2].branch)}",
+                               f"@lane-4 queue: #4's base #1 landed in main at {tip[:12]}: {merge_main('#4', 'cursor/w-4')}"]
+    assert "`python3 tools/move/restack.py cursor/w-4 --main MOVE`, then merge today's `main`" in h.posts[-1]
     assert set(state["told"]) == {"stacked:2<1", "stacked:4<1"}
     h.posts.clear()
     h.d._stacked(state, [Member(1, h1, "lane-1", tip)], tip)
@@ -913,7 +1055,7 @@ def test_after_members_reach_main_they_are_caught_up_with_their_run_their_stacke
     assert h.after == [(since, {h1: "r1 r2", tip: "r1 r2"})]
     assert swept == [("main", "origin", {"cursor/w-9": 9})]
     assert state["told"] == ["stacked:2<1"]
-    assert h.posts == [f"@lane-2 queue: #2's base #1 landed in main at {tip[:12]}; merge main into #2"]
+    assert h.posts == [f"@lane-2 queue: #2's base #1 landed in main at {tip[:12]}: {merge_main('#2', gh.prs[2].branch)}"]
 
 
 # -- the verdict carry's judgement and a check's auto plan

@@ -4,7 +4,7 @@ rtxpro6000 row, the evidence the sm_120 block-FP8 Definitions will cite.
 vLLM runs as that row's engine does with the dense linears pinned to CUTLASS: `VLLM_USE_DEEP_GEMM=0` (TargetProfile `fp8_block_gemm=
 "cutlass"`, target_profile.py `env()`; DeepGEMM off also turns E8M0 off, so every scale is an f32 word), `VLLM_BATCH_INVARIANT=1`,
 custom ops on.  One GPU process writes one JSON verdict line per case (stdout, prefixed `VERDICT `, and `<out>/verdicts.jsonl`), the
-property record `<out>/blackwell_fp8_capture.json` (`blackwell_fp8_capture`, `properties.record`), and last `FP8-SM120 GO` or `NO-GO`.  On a
+property record `<out>/blackwell_fp8_capture.json` (`blackwell_fp8_capture`, `records.property_record`), and last `FP8-SM120 GO` or `NO-GO`.  On a
 device that is not cc 12.0 it writes one `skip` verdict and exits 3; a NO-GO exits 1.
 
   selection  `init_fp8_linear_kernel` at the row's two FP8 linears selects CutlassFp8BlockScaledMMKernel, and TritonFp8BlockScaledMMKernel
@@ -57,11 +57,22 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.numerics.derived_rows import (
+    add_rn,
+    f2fp_bf16,
+    fma_rn,
+    mul_rn,
+)
+from verity.circuits.ops import fp32, prims
+from verity.definitions.registry import fp8 as F
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_block_fp8_capture_gpu as H
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/blackwell-fp8-capture/v1"
 RECORD = "blackwell_fp8_capture.json"
@@ -98,15 +109,15 @@ SPECIAL_ROWS = (0, 2, 3, 4, 5, 6)
 
 
 def dispatch_class(M: int) -> str:
-    return next(name for name, top in DISPATCH if top is None or M <= top)
+    return next(name for name, top in DISPATCH if top is None or top >= M)
 
 
 # ---------------------------------------------------------------------------------------------------------------------- models
 def _step(dot: str):
     """The vectorised k32 e4m3 step: acc (n,) f32 words, a/b (n, 32) e4m3 bytes -> (n,) f32 words."""
     if dot == "blackwell":
-        from verity.definitions.kernels import tc as K
-        from verity.definitions.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32
+        from verity.circuits.kernels import tc as K
+        from verity.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32
 
         return lambda acc, a, b: np.asarray(K.group_sum_total_batch(BLACKWELL_SM120_E4M3_M16N8K32, acc, a, b)[0], dtype=np.uint32)
     if dot == "hopper":
@@ -133,8 +144,6 @@ def block_row(xq, sx, w, ws, *, G: int, KB: int, form: str = "triton", dot: str 
         mul_add       acc = FADD(FMUL(d, FMUL(a, b)), acc), unfused (no kernel computes it: a discriminator)
 
     from acc = +0; then acc = FMUL(acc, g) when g is given, and `cvt.rn.bf16.f32`."""
-    from verity.definitions.numerics.derived_rows import add_rn, f2fp_bf16, fma_rn, mul_rn
-
     if form not in FORMS:
         raise ValueError(f"unknown scale form {form!r}")
     xq = np.asarray(xq, dtype=np.uint8).reshape(-1)
@@ -150,7 +159,8 @@ def block_row(xq, sx, w, ws, *, G: int, KB: int, form: str = "triton", dot: str 
     for n0 in range(0, N, chunk):
         n1 = min(N, n0 + chunk)
         n = n1 - n0
-        wc, rows = w[n0:n1], np.arange(n0, n1) // G
+        wc = w[n0:n1]
+        rows: np.ndarray = np.arange(n0, n1) // G
         acc = np.zeros(n, dtype=np.uint32)
         for k in range(K // KB):
             d = np.zeros(n, dtype=np.uint32)
@@ -178,21 +188,20 @@ def reference_word(xq, sx, wrow, wsrow, *, G: int, KB: int, form: str, g: int | 
     """`block_row`'s word at one output coordinate (`dot` Blackwell's) as the plain-integer chain of the registered primitives
     `BlackwellE4m3QmmaDot32_v1`, `F32Mul_v1`, `F32Fma_v1`, `F32Add_v1` and `F2fpBf16_v1`; wrow the coordinate's weight row, wsrow its
     weight-scale row."""
-    from verity.definitions.ops import fp32, prims
-
     xq, wrow = [int(v) for v in np.asarray(xq).reshape(-1)], [int(v) for v in np.asarray(wrow).reshape(-1)]
     sx, wsrow = [int(v) for v in np.asarray(sx).reshape(-1)], [int(v) for v in np.asarray(wsrow).reshape(-1)]
     _check(len(xq), G, KB)
     mul, fma = fp32.F32Mul.evaluate, fp32.F32Fma.evaluate
+    step = {"cutlass": lambda d, a, b, acc: fma(d, mul(a, b), acc), "triton": lambda d, a, b, acc: fma(mul(d, a), b, acc),
+            "triton_swap": lambda d, a, b, acc: fma(mul(d, b), a, acc),
+            "mul_add": lambda d, a, b, acc: fp32.F32Add.evaluate(mul(d, mul(a, b)), acc)}[form]
     acc = 0
     for k in range(len(xq) // KB):
         d = 0
         for st in range(KB // 32):
             lo = k * KB + 32 * st
             d = prims.BlackwellE4m3QmmaDot32.evaluate(d, *xq[lo:lo + 32], *wrow[lo:lo + 32])
-        a, b = sx[k * KB // G], wsrow[k * KB // G]
-        acc = {"cutlass": lambda: fma(d, mul(a, b), acc), "triton": lambda: fma(mul(d, a), b, acc),
-               "triton_swap": lambda: fma(mul(d, b), a, acc), "mul_add": lambda: fp32.F32Add.evaluate(mul(d, mul(a, b)), acc)}[form]()
+        acc = step(d, sx[k * KB // G], wsrow[k * KB // G], acc)
     if g is not None:
         acc = mul(acc, int(g))
     return prims.F2fpBf16.evaluate(acc)
@@ -214,11 +223,6 @@ def _row_operands(a: dict[str, np.ndarray], job: dict[str, Any], i: int):
 def compare_gemm(job: dict[str, Any]) -> dict[str, Any]:
     """Rows [i0, i1) of one GEMM launch against `block_row` at the job's statics; on its reference rows the plain-integer chain on
     three coordinates and every alternative on all of them; on a dense launch the activation quant it received, too."""
-    from verity.circuits.evaluation import evaluate
-    from verity.circuits.defs import bind
-    from verity.definitions.numerics import derived_rows as DR
-    from verity.definitions.registry import fp8 as F
-
     a = H._load(job["paths"])
     K, N, Gs, KB, form = job["K"], job["N"], job["G"], job["KB"], job["form"]
     rec = _zero()
@@ -258,11 +262,6 @@ def compare_gemm(job: dict[str, Any]) -> dict[str, Any]:
 
 def compare_quant(job: dict[str, Any]) -> dict[str, Any]:
     """Rows [i0, i1) of one quant call: (q, scale) against `Fp8GroupQuant_v1{K,G}`'s twin, the reference on the job's rows."""
-    from verity.circuits.evaluation import evaluate
-    from verity.circuits.defs import bind
-    from verity.definitions.numerics import derived_rows as DR
-    from verity.definitions.registry import fp8 as F
-
     a = H._load(job["paths"])
     K, Gq = job["K"], job["G"]
     rec = _zero()
@@ -383,7 +382,10 @@ EXPECTED_KERNEL = {"cutlass": ("auto", "CutlassFp8BlockScaledMMKernel"), "triton
 def _linear_kernel(K: int, N: int, name: str | None = None):
     import torch
     from vllm.model_executor.kernels.linear import init_fp8_linear_kernel
-    from vllm.model_executor.layers.quantization.utils.quant_utils import GroupShape, create_fp8_quant_key
+    from vllm.model_executor.layers.quantization.utils.quant_utils import (
+        GroupShape,
+        create_fp8_quant_key,
+    )
 
     return init_fp8_linear_kernel(activation_quant_key=create_fp8_quant_key(static=False, group_shape=GroupShape(1, GROUP)),
                                   weight_quant_key=create_fp8_quant_key(static=True, group_shape=GroupShape(GROUP, GROUP)),
@@ -407,9 +409,19 @@ def selection() -> dict[str, Any]:
                                  for v in got.values())
     try:
         from vllm.model_executor.layers.fused_moe.activation import MoEActivation
-        from vllm.model_executor.layers.fused_moe.config import FusedMoEConfig, FusedMoEParallelConfig, RoutingMethodType
-        from vllm.model_executor.layers.fused_moe.oracle.fp8 import select_fp8_moe_backend
-        from vllm.model_executor.layers.quantization.utils.quant_utils import GroupShape, create_fp8_quant_key, kFp8Dynamic128Sym
+        from vllm.model_executor.layers.fused_moe.config import (
+            FusedMoEConfig,
+            FusedMoEParallelConfig,
+            RoutingMethodType,
+        )
+        from vllm.model_executor.layers.fused_moe.oracle.fp8 import (
+            select_fp8_moe_backend,
+        )
+        from vllm.model_executor.layers.quantization.utils.quant_utils import (
+            GroupShape,
+            create_fp8_quant_key,
+            kFp8Dynamic128Sym,
+        )
 
         cfg = FusedMoEConfig(num_experts=NUM_EXPERTS, experts_per_token=TOP_K, hidden_dim=HIDDEN, intermediate_size=MOE_I,
                              num_local_experts=NUM_EXPERTS, num_logical_experts=NUM_EXPERTS, activation=MoEActivation.SILU, device="cuda",
@@ -440,7 +452,9 @@ def _cuda_kernels(fn) -> list[str]:
 
 def triton_config(K: int, N: int, M: int) -> dict[str, Any]:
     """The config `w8a8_triton_block_scaled_mm` launches at (M, K, N): a tuned file's nearest entry, else its default."""
-    from vllm.model_executor.layers.quantization.utils.fp8_utils import get_w8a8_block_fp8_configs
+    from vllm.model_executor.layers.quantization.utils.fp8_utils import (
+        get_w8a8_block_fp8_configs,
+    )
 
     tuned = get_w8a8_block_fp8_configs(N, K, GROUP, GROUP)
     if tuned:
@@ -501,10 +515,10 @@ def moe_launches(work: Path, name: str, M: int, hot: int, seed: int) -> tuple[li
     from vllm.model_executor.layers.fused_moe.fused_moe import fused_experts
 
     gen = torch.Generator(device="cuda").manual_seed(seed)
-    E, I, Gm = NUM_EXPERTS, MOE_I, MOE_G
-    w1, w2 = _weights(gen, (E, 2 * I, HIDDEN)), _weights(gen, (E, HIDDEN, I))
-    s1 = H._scales(gen, (E, 2 * I // Gm, HIDDEN // Gm), -12, -6)
-    s2 = H._scales(gen, (E, HIDDEN // Gm, I // Gm), -12, -6)
+    E, inter, Gm = NUM_EXPERTS, MOE_I, MOE_G
+    w1, w2 = _weights(gen, (E, 2 * inter, HIDDEN)), _weights(gen, (E, HIDDEN, inter))
+    s1 = H._scales(gen, (E, 2 * inter // Gm, HIDDEN // Gm), -12, -6)
+    s2 = H._scales(gen, (E, HIDDEN // Gm, inter // Gm), -12, -6)
     pair_groups(w1.view(torch.uint8), s1.view(torch.int32), Gm)
     pair_groups(w2.view(torch.uint8), s2.view(torch.int32), Gm)
     x = _activation(gen, M, HIDDEN, Gm)
@@ -532,7 +546,7 @@ def moe_launches(work: Path, name: str, M: int, hot: int, seed: int) -> tuple[li
     qruns = {lab: [q for q in quants if q["label"] == lab] for lab in ("run1", "run2")}
     ids_flat = ids.cpu().numpy().astype(np.int64).reshape(-1)
     used = np.unique(ids_flat)
-    umap = np.full(E, -1, dtype=np.int64)
+    umap: np.ndarray = np.full(E, -1, dtype=np.int64)
     umap[used] = np.arange(used.size)
     q_ok = all(len(qruns[lab]) == 2 and [q["G"] for q in qruns[lab]] == [Gm, Gm] for lab in qruns)
     launches, jobs = [], []
@@ -549,7 +563,7 @@ def moe_launches(work: Path, name: str, M: int, hot: int, seed: int) -> tuple[li
         rec["statics_ok"] = (L["block_shape"] == [Gm, Gm] and L["flags"] == [True, False, False, False, False] and not L["bias"]
                              and L["mul_routed_weight"] == (kind == "w2") and L["top_k"] == (TOP_K if kind == "w13" else 1)
                              and n_pairs == M * TOP_K and L["KB"] == 32 and not L["SWAP"] and L["config"] == H.BATCH_INVARIANT_CONFIG
-                             and K == (HIDDEN if kind == "w13" else I) and N == (2 * I if kind == "w13" else HIDDEN))
+                             and K == (HIDDEN if kind == "w13" else inter) and N == (2 * inter if kind == "w13" else HIDDEN))
         rec["operands_ok"] = bool(fed)
         launches.append(rec)
         sel = torch.as_tensor(used, device="cuda")
@@ -575,7 +589,9 @@ def moe_launches(work: Path, name: str, M: int, hot: int, seed: int) -> tuple[li
 
 def quant_launch(work: Path, K: int, Gq: int, seed: int) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     import torch
-    from vllm.model_executor.layers.quantization.utils.fp8_utils import per_token_group_quant_fp8
+    from vllm.model_executor.layers.quantization.utils.fp8_utils import (
+        per_token_group_quant_fp8,
+    )
 
     gen = torch.Generator(device="cuda").manual_seed(seed)
     x = _activation(gen, QUANT_M, K, Gq)
@@ -615,6 +631,7 @@ def _words_ok(t: dict[str, Any], phase: str) -> bool:
 def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Each case's verdict: its launches' checks, its words (every comparison of its key), its first mismatch."""
     out: dict[str, dict[str, Any]] = {}
+    c: dict[str, Any] | None
     for x in doc["launches"]:
         c = out.setdefault(case_key(x), {"phase": x["phase"], "launches_ok": True, "totals": {k: 0 for k in TOTALS}, "first_mismatch": None})
         c["launches_ok"] = c["launches_ok"] and _launch_ok(x)

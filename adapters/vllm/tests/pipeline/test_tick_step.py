@@ -18,7 +18,7 @@ import random
 from types import SimpleNamespace
 
 import pytest
-from verity.protocols.certifier.verifier import replay_step as RS
+from verity.protocols.accounting.certifier.verifier import replay_step as RS
 
 from verity_vllm.pipeline.advice_code import pool as PL
 from verity_vllm.pipeline.advice_code import replay as RP

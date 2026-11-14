@@ -1,4 +1,4 @@
-"""verity_vllm.pipeline.gc_tuning: process-level cyclic-GC thresholds for the Build's derives and compose, the fold worker, the Match
+"""verity_vllm.gc_tuning: process-level cyclic-GC thresholds for the Build's derives and compose, the fold worker, the Match
 checkers and the manifest build.
 
 The setting is content-neutral by construction (the collector only frees unreachable cycles); these tests pin
@@ -16,12 +16,12 @@ import sys
 
 import pytest
 
-from verity_vllm.pipeline import gc_tuning
 from tests.observe.test_fold_synthetic import memory, toy_log, toy_profile  # noqa: F401  (memory: fixture)
+from verity_vllm import gc_tuning
 from verity_vllm.observe.fold.fold import fold
 
 PROBE = ("import gc, json, sys\n"
-         "from verity_vllm.pipeline.gc_tuning import tune\n"
+         "from verity_vllm.gc_tuning import tune\n"
          "before = gc.get_threshold(); r = tune(); after = gc.get_threshold()\n"
          "print(json.dumps({'before': before, 'ret': r, 'after': after}))\n")
 
@@ -61,7 +61,7 @@ def test_env_contract_in_a_fresh_interpreter(value, expect):
 
 
 EXIT_PROBE = ("import atexit, gc\n"
-              "from verity_vllm.pipeline.gc_tuning import tune\n"
+              "from verity_vllm.gc_tuning import tune\n"
               "n0 = gc.get_freeze_count()\n"
               "atexit.register(lambda: print('frozen' if gc.get_freeze_count() > n0 else 'unfrozen', flush=True))\n"
               "tune(); tune()\n")
@@ -79,7 +79,7 @@ def test_a_tuned_process_freezes_its_heap_at_exit(value, expect):
 
 
 def test_the_exit_freeze_is_registered_once(monkeypatch):
-    hooks = []
+    hooks: list[object] = []
     monkeypatch.setattr(gc_tuning.atexit, "register", hooks.append)
     monkeypatch.setattr(gc_tuning, "_freeze_registered", False)
     saved = gc.get_threshold()
@@ -121,7 +121,10 @@ def test_fold_content_is_identical_under_default_and_tuned_thresholds(memory, mo
         gc.set_threshold(*saved)
     assert r_default.digest == r_tuned.digest
     assert r_default.instances == r_tuned.instances
-    strip = lambda steps: [{k: v for k, v in s.items() if k != "seconds"} for s in steps]   # per-step wall: volatile
+
+    def strip(steps):   # per-step wall: volatile
+        return [{k: v for k, v in s.items() if k != "seconds"} for s in steps]
+
     assert strip(r_default.steps) == strip(r_tuned.steps)
     assert r_default.report.by_spec == r_tuned.report.by_spec and r_default.sampled == r_tuned.sampled
     assert len(r_default.body.nodes) == len(r_tuned.body.nodes)
@@ -135,9 +138,8 @@ def test_tuned_holds_the_thresholds_for_its_block_and_gives_the_callers_back(mon
         with gc_tuning.tuned() as th:
             assert th == gc_tuning.TUNED and gc.get_threshold() == gc_tuning.TUNED
         assert gc.get_threshold() == (700, 10, 10)
-        with pytest.raises(RuntimeError, match="the step failed"):
-            with gc_tuning.tuned():
-                raise RuntimeError("the step failed")
+        with pytest.raises(RuntimeError, match="the step failed"), gc_tuning.tuned():
+            raise RuntimeError("the step failed")
         assert gc.get_threshold() == (700, 10, 10)
         monkeypatch.setenv(gc_tuning.ENV, "default")
         with gc_tuning.tuned() as th:
@@ -153,8 +155,13 @@ def test_tuned_holds_the_thresholds_for_its_block_and_gives_the_callers_back(mon
 
 def test_a_ranks_program_load_runs_under_the_tuned_thresholds(monkeypatch):
     from verity_vllm.pipeline.tp import rank_replay
-    seen = []
-    monkeypatch.setattr(rank_replay, "_load", lambda *a: seen.append((a, gc.get_threshold())) or "loaded")
+    seen: list[tuple[tuple, tuple[int, int, int]]] = []
+
+    def load(*a):
+        seen.append((a, gc.get_threshold()))
+        return "loaded"
+
+    monkeypatch.setattr(rank_replay, "_load", load)
     monkeypatch.setenv(gc_tuning.ENV, "")
     saved = gc.get_threshold()
     assert rank_replay.load({"programs": {}}, 3, 8, definitions=False) == "loaded"
@@ -163,11 +170,10 @@ def test_a_ranks_program_load_runs_under_the_tuned_thresholds(monkeypatch):
 
 def test_the_entry_points_call_tune():
     import inspect
-    from verity_vllm.pipeline import manifest
+
+    from verity_vllm.check.match import batch_decomp, global_match
+    from verity_vllm.pipeline import build, global_program, manifest
     from verity_vllm.pipeline import match as run_config
-    from verity_vllm.check.match import batch_decomp
-    from verity_vllm.check.match import global_match
-    from verity_vllm.pipeline import build, global_program
     assert "gc_tuning import tune" in inspect.getsource(build.main)
     assert "gc_tuning import tune" in inspect.getsource(global_program.main)
     assert "gc_tuning import tune" in inspect.getsource(run_config.fold_worker)

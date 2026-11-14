@@ -13,11 +13,18 @@ from __future__ import annotations
 
 import os
 
-from verity_vllm.program.instances_file import INSTANCES_GZ_LEVEL  # noqa: F401 (read through here)
-from verity_vllm.program.instances_file import instance_rows
+from verity_vllm.program.instances_file import (
+    INSTANCES_GZ_LEVEL,  # noqa: F401 (read through here)
+    instance_rows,
+    write_program_instances,
+)
 from verity_vllm.program.instances_file import write_instances as _write_instances  # noqa: F401 (read through here)
-from verity_vllm.program.instances_file import write_instances_file as _write_instances_file
-from verity_vllm.program.instances_file import write_program_instances
+from verity_vllm.program.instances_file import (
+    write_instances_file as _write_instances_file,
+)
+from verity_vllm.records.schema_ids import INSTANCE_SEQUENCE_SCHEMA
+
+__all__ = ["write_instances"]
 
 
 def _instance_rows(program):
@@ -34,6 +41,7 @@ def _word_rows(program, word):
     from verity.circuits.boolean.trace import word_of
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import CompositeDefinition, bind
+
     from verity_vllm.program.compact import file_items_from_refs
     links: dict[str, str] = {}
     for k, (b, w) in enumerate(zip(program.fn.body.nodes, word.fn.body.nodes, strict=True)):
@@ -82,7 +90,7 @@ def write_instances(out: str, program, digest: str, corr_digest: str | None, sup
     body = (word or program).fn.body
     if params is None and hasattr(body, "params"):
         params = [[n, str(t)] for n, t in body.params]
-    head = {"schema": "cb-a/instance-sequence/v2", "digest": digest, "correspondence_digest": corr_digest, "params": params,
+    head = {"schema": INSTANCE_SEQUENCE_SCHEMA, "digest": digest, "correspondence_digest": corr_digest, "params": params,
             **({"ir": "boolean"} if word is not None else {}), **supplied,
             **({"checks": {**checks, "at": check_rows(body, len(checks["of"]))}} if checks else {})}
     path = os.path.join(out, "instances.json.gz")

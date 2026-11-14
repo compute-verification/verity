@@ -257,7 +257,8 @@ def test_the_two_stage_tick_arm_is_the_launch_line_with_the_tick_on(tmp_path: Pa
         S.server_env(tick, tmp_path, tmp_path / "site", None, 600.0, 600.0, check=glm.check, private=private)
     assert S.changes_of("two-stage-tick") == [*S.changes_of("two-stage"), "admission on the certified tick"]
     assert [(x["name"], x["off"]) for x in S.target_parts(glm, "two-stage-tick")] == [
-        ("the certified tick", []), ("the tie order", []), ("the snapshot bundle", ["the edge snapshot"])]
+        ("the certified tick", []), ("the tie order", []), ("the snapshot bundle", ["the edge snapshot"]),
+        ("the step record", []), ("the boundary commitment", []), ("the history tables", [])]
     with pytest.raises(SystemExit, match="two-stage-tick needs the corpus client"):
         S.main(["passes", "--loads", "chat", "--arms", "two-stage-tick", "--model-id", "glm53"])
 
@@ -285,7 +286,7 @@ def test_the_boundary_rows_arm_keeps_the_prefix_cache_on_and_hands_the_plugin_it
     assert "boundary_rows" not in json.loads(record[S.PLUGIN_ENV])
     # each arm of a job keeps its own under the job's private directory
     sh = (S.HERE / "run.sh").read_text()
-    assert '${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE/$arm"}' in sh
+    assert '${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE/$dir"}' in sh
 
 
 def test_only_the_restore_arms_take_edges_and_only_restore_dumps_there(tmp_path: Path):
@@ -339,6 +340,7 @@ def test_run_shs_replay_runs_at_the_models_width_and_captures_what_it_is_told():
     call = sh[sh.index('"$PY" "$here/replay.py"'):]
     call = call[:call.index("rc=1; }")]
     assert '--tp "$GPUS"' in call and '${REPLAY_CAPTURE:+--capture "$REPLAY_CAPTURE"}' in call
+    assert '${PRIVATE:+--private "$PRIVATE/$dir"}' in call          # where the served arm's other plugins keep their files
 
 
 def test_run_sh_serves_every_model():
@@ -378,7 +380,7 @@ def test_counters_sum_each_over_its_label_sets_and_the_schedule_reads_them():
                  "accepted_tokens": 0.0}
     s = S.schedule_metrics(c)
     assert (s["steps"], s["tokens_per_step"], s["rows_per_step"], s["prompt_cached_share"]) == (50.0, 120.0, 24.0, 0.25)
-    assert "accepted_per_draft" not in s
+    assert "accepted_per_draft" not in s and "draft_accepted_share" not in s
     assert S.schedule_metrics(None) == {} == S.schedule_metrics(dict(c, steps=0.0))
     # an engine that drafts: its drafts, the tokens they proposed and the accepted ones, and not the per-position counter
     drafting = S.counters(METRICS + 'vllm:spec_decode_num_drafts_total{engine="0",model_name="m"} 400.0\n'
@@ -387,6 +389,7 @@ def test_counters_sum_each_over_its_label_sets_and_the_schedule_reads_them():
                           'vllm:spec_decode_num_accepted_tokens_per_pos_total{engine="0",model_name="m",position="0"} 300.0\n')
     assert (drafting["drafts"], drafting["draft_tokens"], drafting["accepted_tokens"]) == (400.0, 2000.0, 700.0)
     assert S.schedule_metrics(drafting)["accepted_per_draft"] == 1.75
+    assert S.schedule_metrics(drafting)["draft_accepted_share"] == 0.35
 
 
 def test_the_table_carries_each_loads_schedule():
@@ -549,8 +552,24 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     # alone is started by it
     for name, m in S.MODELS.items():
         assert bool(m.published) == (m.published_context is not None) == (set(m.published_tokenizer) == set(S.FRONT_ENDS)), name
-    assert [n for n, a in S.ARMS.items() if a.published] == ["published"]
+    assert [n for n, a in S.ARMS.items() if a.published] == ["published", "prod", "prod-again", "prod-record", "prod-seeded",
+                                                             "prod-trace"]
     assert S.ARMS["published"].parent == "compiled" and S.changes_of("published") == []
+
+
+def test_an_added_seed_takes_the_place_of_the_lines_seed():
+    """A job's ``--seed=N`` is the server's seed on the recipe's line, once, where every other flag the line sets is
+    refused; an arm whose line takes no added flag keeps ``--seed 0``."""
+    glm, context = S.MODELS["glm53"], S.published_context("prod", "glm53", None)
+    def seeds(arm: str, added: tuple[str, ...] = ()) -> list[str]:
+        argv = S.server_argv(S.ARMS[arm], glm, Path("/ck"), 8000, max_model_len=context, added=added)
+        return [argv[i + 1] for i, x in enumerate(argv) if x == "--seed"] + [x for x in argv if x.startswith("--seed=")]
+    assert seeds("prod") == ["0"] and seeds("prod", ("--seed=3",)) == ["3"]
+    assert seeds("prod", ("--gpu-memory-utilization=0.95", "--seed=3")) == ["3"]
+    assert seeds("record", ("--seed=3",)) == ["0"]
+    for refused in (("--max-model-len=131072",), ("--seed=1", "--seed=2")):
+        with pytest.raises(SystemExit, match=refused[0].split("=")[0] + ": the arm's line sets it already"):
+            S.server_argv(S.ARMS["prod"], glm, Path("/ck"), 8000, max_model_len=context, added=refused)
 
 
 def test_the_boundary_arm_takes_edges_every_period_or_at_set_times_and_keeps_no_kv_file_at_tp():
@@ -816,7 +835,7 @@ def test_loads_are_named_with_their_rungs_and_the_engines_context_fits_them():
 def test_the_load_that_repeats_a_prefix_is_four_planned_requests_sent_one_at_a_time(tmp_path: Path):
     """Two prompts near the context limit, each sent again with another ending. The client's file gives each request
     its lengths and an id a block, and the second of a pair carries the first's ids for the blocks they share, so the
-    client draws both the same tokens there and no others. One request in flight: a second request starts when the
+    client samples both the same tokens there and no others. One request in flight: a second request starts when the
     prompt it repeats has been computed."""
     load, plan = S.LOADS["prefix"], S.PAIRS
     assert (load.plan, load.prompts, load.rungs, load.number, load.file) == (plan, 4, (1,), False, None)
@@ -982,7 +1001,7 @@ def test_the_full_size_table_is_the_one_its_source_names_and_its_maker_makes(tmp
     assert [(x.prompt, y.prompt, y.blocks) for x, y in repeats] == [
         (x.prompt, y.prompt, y.blocks) for x, y in ((S.PAIRS[0], S.PAIRS[1]), (S.PAIRS[2], S.PAIRS[3]))]
     assert all(x.at_s < y.at_s for x, y in repeats) and M.BLOCK == S.BLOCK
-    # the maker: the rows sent within the span, arrivals the running sum of the draws over the rate, and a long
+    # the maker: the rows sent within the span, arrivals the running sum of the samples over the rate, and a long
     # request's hit as the earlier long request of its book and the whole blocks the two share
     rows = [{"i": 0, "kind": "chat", "prompt_len": 20, "max_tokens": 8, "gap_draw": 0.2},
             {"i": 1, "kind": "long128k", "book": "b", "prompt_len": 200, "max_tokens": 8, "gap_draw": 0.4},
@@ -1111,7 +1130,8 @@ def test_a_loads_dataset_file_is_the_nodes_copy_of_the_pinned_one_or_nothing(tmp
 def test_the_pinned_dataset_is_a_whole_sha512_and_a_commit_of_its_repository():
     ds = S.LOADS["chat"].file
     assert re.fullmatch(r"[0-9a-f]{128}", ds.sha512) and re.fullmatch(r"[0-9a-f]{40}", ds.revision) and ds.size > 0
-    assert [n for n, load in S.LOADS.items() if load.file] == ["chat"] and list(S.LOADS) == ["chat", "long", "prefix"]
+    assert [n for n, load in S.LOADS.items() if load.file] == ["chat", "agentic", "agentic-full", "agentic-256k"]
+    assert list(S.LOADS) == ["chat", "long", "prefix", "agentic", "agentic-full", "agentic-256k"]
 
 
 def test_drive_bench_keeps_the_clients_result_and_counts_its_failed_requests(tmp_path: Path,
@@ -1146,7 +1166,7 @@ def test_drive_bench_keeps_the_clients_result_and_counts_its_failed_requests(tmp
     kept = json.loads((tmp_path / "rep-1" / "result.json").read_text())
     assert kept == result(completed=197, failed=3) | detail and not S.UNKEPT & kept.keys()
     assert "a served answer" not in "".join(f.read_text() for f in (tmp_path / "rep-1").iterdir())
-    assert seeds == [("0", True)]        # the job's environment, with the seed a planned load's tokens are drawn under
+    assert seeds == [("0", True)]        # the job's environment, with the seed a planned load's tokens are sampled under
     assert json.loads((tmp_path / "rep-1" / "meta.json").read_text()) == m
     assert (tmp_path / "rep-1" / "bench.log").read_bytes() == b"Starting main benchmark run...\n"
     for rc, why in ((1, "exited 1"), (0, "saved no result")):
@@ -1192,7 +1212,7 @@ def bench_arm(d: Path, name: str, passes: dict[str, list[dict]], model_id: str =
     return d
 
 
-def test_an_arm_served_by_vllms_client_reads_each_pass_result(tmp_path: Path):
+def test_an_arm_served_by_vllms_client_reads_each_pass_result(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     d = bench_arm(tmp_path, "compiled", {"chat@8": [result(good=150.0), result(good=160.0)], "chat@16": [result(good=40.0)]})
     m = S.arm_metrics(d)
     assert list(m["loads"]) == ["chat@8", "chat@16"] and [r["rep"] for r in m["loads"]["chat@8"]] == [1, 2]
@@ -1204,6 +1224,27 @@ def test_an_arm_served_by_vllms_client_reads_each_pass_result(tmp_path: Path):
     # the client counted goodput against the SLO it ran with: another can't be read from its result
     with pytest.raises(SystemExit, match="serve it again"):
         S.arm_metrics(d, (1.0, 0.05))
+    # a server lifetime of an arm (run --lifetime, --leave-out) says which it is, what it leaves out and its reps
+    assert (m["lifetime"], m["left_out"], m["reps"], m["seeded"]) == (None, 0, None, False)
+    # a sampled arm says whether its client sent a seed; one served before the arms differed in it was sent one
+    sampled = {"chat@8": [result(good=150.0)]}
+    assert [S.arm_metrics(bench_arm(tmp_path / str(i), "compiled", sampled, **meta))["seeded"] for i, meta in enumerate(
+        ({"sampled": S.SAMPLED, "seeded": False}, {"sampled": S.SAMPLED, "seeded": True}, {"sampled": S.SAMPLED}))] == [
+            False, True, True]
+    passes = {"chat@8": [result(good=150.0), result(good=160.0), result(good=155.0)]}
+    two = S.arm_metrics(bench_arm(tmp_path / "second", "compiled", passes, lifetime=2, left_out=1, reps=3))
+    assert (two["lifetime"], two["left_out"], two["reps"]) == (2, 1, 3)
+    (one,) = S.lifetimes([two])
+    assert [(r["rep"], r["lifetime"], r["pass"]) for r in one["loads"]["chat@8"]] == [(5, 2, 2), (6, 2, 3)]
+    assert [r["rep"] for r in one["warm"]["chat@8"]] == [4] and one["lifetimes"] == [2]
+    seen = []
+    monkeypatch.setattr(S, "run", lambda a: seen.append((a.lifetime, a.leave_out)) or 0)
+    run = ["run", "--arm", "prod", "--model-id", "glm53", "--out", str(tmp_path / "o")]
+    assert S.main(run) == 0 == S.main([*run, "--lifetime", "2", "--leave-out", "1"]) and seen == [(None, 0), (2, 1)]
+    sh = (S.HERE / "run.sh").read_text()
+    # the job gives each lifetime its number and a directory of its own, and every arm what it leaves out
+    assert 'dir=$arm.${item##*:}; life=(--lifetime "${item##*:}")' in sh and '${LEAVE_OUT:+--leave-out "$LEAVE_OUT"}' in sh
+    assert '--private "$PRIVATE/$dir"} --out "$OUT/$dir"' in sh
 
 
 def cost_arm(name: str, rate: dict[int, list[float]], load: str = "chat", good: dict[int, list[float]] | None = None) -> dict:
@@ -1406,21 +1447,38 @@ def whole(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
     """`cost_arms` with the measured arm's passes under an arm that has every part of the target on and no change the
     target has no part for."""
     monkeypatch.setitem(S.ARMS, WHOLE, replace(S.ARMS["compiled"], parent="compiled", what="every part of the target",
+                                               plugin=("record", "boundary_rows"), rows={**S.ROWS, "tables": S.TABLES},
                                                env={"VERITY_DSA_TOPK": "canonical"}, tick=True, edges=True))
     return [a | {"arm": WHOLE, "parent": "compiled"} if a["arm"] == "two-stage" else a for a in cost_arms()]
 
 
 def test_a_models_target_is_the_sum_of_its_parts_each_of_changes_an_arm_can_have_on():
+    """GLM-5.3's target is the sum of six named parts, the three the served engine turns on among them (the step record,
+    the two-stage boundary commitment, the history tables), each marked by what its points rest on; a part with another
+    mark, a sum that isn't the target or a change that isn't one of `CHANGES` is refused."""
     glm = S.MODELS["glm53"]
     assert [(p.name, p.points, p.changes, p.basis) for p in glm.target_parts] == [
-        ("the certified tick", 1.63, ("admission on the certified tick",), "modelled"),
-        ("the tie order", 0.25, ("the canonical top-k",), "modelled"),
-        ("the snapshot bundle", 0.17, ("the edge snapshot",), "modelled")]
-    assert glm.target == 2.05 and all(not m.target_parts for m in S.MODELS.values() if m.target is None)
-    with pytest.raises(ValueError, match="the target's parts sum to 1.88, and the target is 2.05"):
+        ("the certified tick", 1.63, ("admission on the certified tick",), "simulated"),
+        ("the tie order", 0.25, ("the canonical top-k",), "modeled"),
+        ("the snapshot bundle", 0.17, ("the edge snapshot",), "modeled"),
+        ("the step record", 0.067, ("the step record",), "modeled"),
+        ("the boundary commitment", 0.0098, ("the two-stage boundary commitment",), "modeled"),
+        ("the history tables", 0.004, ("the history tables",), "modeled")]
+    assert glm.target == 2.13 == round(sum(p.points for p in glm.target_parts), 2) and glm.target_basis == "modeled"
+    assert all(p.basis in S.PART_BASES == ("modeled", "simulated", "measured") for m in S.MODELS.values()
+               for p in m.target_parts)
+    assert all(not m.target_parts for m in S.MODELS.values() if m.target is None)
+    # every change the served engine turns on has a part but prefix caching off
+    assert {c for p in glm.target_parts for c in p.changes} >= set(S.changes_of("two-stage-tick")) - {"prefix caching off"}
+    with pytest.raises(ValueError, match="the target's parts sum to 1.88, and the target is 2.13"):
         replace(glm, target_parts=glm.target_parts[:2])
+    with pytest.raises(ValueError, match="the target's parts sum to 2.05, and the target is 2.13"):
+        replace(glm, target_parts=glm.target_parts[:3])
     with pytest.raises(ValueError, match="names no change of CHANGES: the tick"):
-        replace(glm, target_parts=(S.Part("all", 2.05, ("the tick",)),))
+        replace(glm, target_parts=(S.Part("all", 2.13, ("the tick",)),))
+    with pytest.raises(ValueError, match="rests on none of modeled, simulated, measured: the step record"):
+        replace(glm, target_parts=(*glm.target_parts[:3], replace(glm.target_parts[3], basis="guessed"),
+                                   *glm.target_parts[4:]))
     # an arm's changes are read from its data, and an arm this file doesn't define has none
     assert S.changes_of("compiled") == S.changes_of("compiled-again") == S.changes_of("no such arm") == []
     assert S.changes_of("two-stage") == ["the step record", "prefix caching off", "the two-stage boundary commitment",
@@ -1432,11 +1490,11 @@ def test_a_models_target_is_the_sum_of_its_parts_each_of_changes_an_arm_can_have
     # the launch line leaves off the tick and the edge snapshot, which the snapshot bundle is of
     assert [(p["name"], p["points"], p["off"]) for p in S.target_parts(glm, "two-stage")] == [
         ("the certified tick", 1.63, ["admission on the certified tick"]), ("the tie order", 0.25, []),
-        ("the snapshot bundle", 0.17, ["the edge snapshot"])]
+        ("the snapshot bundle", 0.17, ["the edge snapshot"]), ("the step record", 0.067, []),
+        ("the boundary commitment", 0.0098, []), ("the history tables", 0.004, [])]
     assert all(p["off"] == list(p["changes"]) for p in S.target_parts(glm, "no such arm"))
-    # and it turns on four changes the target has no part for: the cost model keeps the prefix cache on
-    assert S.not_in_target(glm, "two-stage") == ["the step record", "prefix caching off",
-                                                 "the two-stage boundary commitment", "the history tables"]
+    # and it turns on one change the target has no part for: the cost model keeps the prefix cache on
+    assert S.not_in_target(glm, "two-stage") == ["prefix caching off"]
     assert S.not_in_target(glm, "no-prefix-cache") == ["prefix caching off"]
     assert S.not_in_target(glm, "canonical-topk") == S.not_in_target(glm, "compiled") == []
 
@@ -1447,23 +1505,24 @@ def test_a_cost_has_a_verdict_against_the_models_target_only_where_its_arm_is_of
     neither meets nor misses it: the verdict is a fourth value, which is not the "cannot tell" of an interval that
     straddles the target."""
     r = S.cost_report(cost_arms())
-    assert r["verdict"] == S.NOT_COMPARABLE == "not comparable" and (r["target"], r["target_basis"]) == (2.05, "modelled")
+    assert r["verdict"] == S.NOT_COMPARABLE == "not comparable" and (r["target"], r["target_basis"]) == (2.13, "modeled")
     assert [c["verdict"] for c in r["loads"]] == ["not comparable", "not comparable"]
     assert [(p["name"], p["off"]) for p in r["target_parts"] if p["off"]] == [
         ("the certified tick", ["admission on the certified tick"]), ("the snapshot bundle", ["the edge snapshot"])]
-    assert r["not_in_target"] == ["the step record", "prefix caching off", "the two-stage boundary commitment",
-                                  "the history tables"]
+    assert r["not_in_target"] == ["prefix caching off"]
     text = S.cost_text(r)
-    assert text.splitlines()[0].endswith("target ≤ 2.05% (modelled)   verdict: not comparable")
-    assert ("  the target is the sum of its parts: the certified tick 1.63% (modelled), the tie order 0.25% (modelled), "
-            "the snapshot bundle 0.17% (modelled; the pause to copy and hash the cache at each edge and the carried "
-            "pages' hash, with the prefix cache on)\n"
-            "  not comparable: two-stage leaves off admission on the certified tick (the certified tick, 1.63%) and "
-            "the edge snapshot (the snapshot bundle, 0.17%), which the target counts, and turns on the step record, "
-            "prefix caching off, the two-stage boundary commitment and the history tables, which the target has no "
-            "part for, so no cost of it meets or misses the target\n") in text
+    assert text.splitlines()[0].endswith("target ≤ 2.13% (modeled)   verdict: not comparable")
+    assert ("  the target is the sum of its parts: the certified tick 1.63% (simulated; the queue-dependent tick's "
+            "throughput, simulated on traces), the tie order 0.25% (modeled), the snapshot bundle 0.17% (modeled; the "
+            "pause to copy and hash the cache at each edge and the carried pages' hash, with the prefix cache on), "
+            "the step record 0.067% (modeled; ") in text
+    assert ", the boundary commitment 0.0098% (modeled; " in text and ", the history tables 0.004% (modeled; " in text
+    assert ("  not comparable: two-stage leaves off admission on the certified tick (the certified tick, 1.63%) and "
+            "the edge snapshot (the snapshot bundle, 0.17%), which the target counts, and turns on prefix caching off, "
+            "which the target has no part for, so no cost of it meets or misses the target\n") in text
     # no target is made of the parts that are on
-    assert "0.42" not in text and "0.25%)" not in text.split("\n\n")[0].replace("0.25% (modelled)", "")
+    assert "0.42" not in text and "0.331" not in text
+    assert "0.25%)" not in text.split("\n\n")[0].replace("0.25% (modeled)", "")
     # one load alone is not comparable either, and neither is a result's entry
     alone = S.cost_report([a for a in cost_arms() if a["arm"] in ("compiled", "two-stage")])
     assert alone["verdict"] == "not comparable"
@@ -1475,16 +1534,15 @@ def test_a_cost_has_a_verdict_against_the_models_target_only_where_its_arm_is_of
     assert not any(p["off"] for p in r["target_parts"]) and r["not_in_target"] == []
     assert "not comparable" not in S.cost_text(r)
     assert [c["verdict"] for c in r["loads"]] == ["cannot tell", "misses"] and r["verdict"] == "misses"
-    assert "the target is the sum of its parts: the certified tick 1.63% (modelled)" in S.cost_text(r)
-    # every part on is not enough: the launch line with the tick and the edge snapshot still has four changes on that
-    # the target has no part for
+    assert "the target is the sum of its parts: the certified tick 1.63% (simulated" in S.cost_text(r)
+    # every part on is not enough: the launch line with the tick and the edge snapshot still has prefix caching off,
+    # which the target has no part for
     monkeypatch.setitem(S.ARMS, "wider", replace(S.ARMS["two-stage"], tick=True, edges=True))
     wider = S.cost_report([a | {"arm": "wider"} if a["arm"] == "two-stage" else a for a in cost_arms()], arm="wider")
-    assert not any(p["off"] for p in wider["target_parts"]) and len(wider["not_in_target"]) == 4
+    assert not any(p["off"] for p in wider["target_parts"]) and wider["not_in_target"] == ["prefix caching off"]
     assert wider["verdict"] == "not comparable" and {c["verdict"] for c in wider["loads"]} == {"not comparable"}
-    assert ("  not comparable: wider turns on the step record, prefix caching off, the two-stage boundary commitment "
-            "and the history tables, which the target has no part for, so no cost of it meets or misses the target\n"
-            ) in S.cost_text(wider)
+    assert ("  not comparable: wider turns on prefix caching off, which the target has no part for, so no cost of it "
+            "meets or misses the target\n") in S.cost_text(wider)
     # a target that is given has no parts: the cost is compared with it as it is
     given = S.cost_report(cost_arms(), target=10.0)
     assert (given["verdict"], given["target_parts"]) == ("meets", []) and "sum of its parts" not in S.cost_text(given)
@@ -1497,27 +1555,49 @@ def test_each_arms_row_says_what_its_step_turns_on_and_the_targets_part_for_it()
     # the tie order alone is one part, whole: its points are beside the step that measures it
     assert rows["canonical-topk"] == [{"changes": ["the canonical top-k"], "part": "the tie order", "points": 0.25,
                                        "whole": True}]
-    # the cost model has no part for the step record, prefix caching off, the two-stage boundary commitment or the
-    # history tables
-    assert rows["record"] == [{"changes": ["the step record"], "part": None, "points": None, "whole": False}]
+    # and so are the step record and the boundary commitment, each the step of its own arm
+    assert rows["record"] == [{"changes": ["the step record"], "part": "the step record", "points": 0.067,
+                               "whole": True}]
+    assert rows["boundary-rows"] == [{"changes": ["the two-stage boundary commitment"], "part": "the boundary commitment",
+                                      "points": 0.0098, "whole": True}]
+    # the cost model has no part for prefix caching off
     assert rows["no-prefix-cache"] == [{"changes": ["prefix caching off"], "part": None, "points": None, "whole": False}]
-    assert rows["boundary-rows"] == [{"changes": ["the two-stage boundary commitment"], "part": None, "points": None,
-                                      "whole": False}]
     assert rows["two-stage"] == [
         {"changes": ["the canonical top-k"], "part": "the tie order", "points": 0.25, "whole": True},
-        {"changes": ["prefix caching off", "the history tables"], "part": None, "points": None, "whole": False}]
+        {"changes": ["the history tables"], "part": "the history tables", "points": 0.004, "whole": True},
+        {"changes": ["prefix caching off"], "part": None, "points": None, "whole": False}]
     text = S.cost_text(r)
     assert ("| arm | cost over compiled | over | cost over that arm | share of the cost | what the step turns on, and "
             "the target's part for it |\n|---|---:|---|---:|---:|---|\n"
-            "| record | 1.52% [1.01%, 2.04%] | compiled | 1.52% [1.01%, 2.04%] | 22% | the step record: not in the "
-            "model |\n"
+            "| record | 1.52% [1.01%, 2.04%] | compiled | 1.52% [1.01%, 2.04%] | 22% | the step record: the step "
+            "record, 0.067% |\n"
             "| no-prefix-cache | 0.00% [0.00%, 1.01%] | compiled | 0.00% [0.00%, 1.01%] | — | prefix caching off: not "
             "in the model |\n") in text
-    assert "| 3.14% [3.12%, 3.16%] | 45% | the two-stage boundary commitment: not in the model |\n" in text
+    assert "| 3.14% [3.12%, 3.16%] | 45% | the two-stage boundary commitment: the boundary commitment, 0.0098% |\n" in text
     assert "| canonical-topk | 2.56% [2.04%, 3.09%] | compiled | 2.56% [2.04%, 3.09%] | — | the canonical top-k: the " \
            "tie order, 0.25% |\n" in text
-    assert "| 31% | the canonical top-k: the tie order, 0.25%; prefix caching off, the history tables: not in the " \
-           "model |\n" in text
+    assert "| 31% | the canonical top-k: the tie order, 0.25%; the history tables: the history tables, 0.004%; prefix " \
+           "caching off: not in the model |\n" in text
+
+    # each part's measurement beside its points: the step of the arm that turns on its changes and nothing else, at
+    # the number's load and rung; none for a part no arm turns on alone (two-stage turns on the history tables with
+    # the top-k and the cache off)
+    measured = {p["name"]: p["measured"] for p in r["target_parts"]}
+    assert measured == {
+        "the certified tick": None, "the tie order": {"arm": "canonical-topk", "over": "compiled",
+                                                      "value": 2.56, "ci95": [2.04, 3.09]},
+        "the snapshot bundle": None,
+        "the step record": {"arm": "record", "over": "compiled", "value": 1.52, "ci95": [1.01, 2.04]},
+        "the boundary commitment": {"arm": "boundary-rows", "over": "record", "value": 3.14, "ci95": [3.12, 3.16]},
+        "the history tables": None}
+    steps = {x["arm"]: x["step"] for x in r["arms"]}
+    assert all(m == {"arm": m["arm"], "over": m["over"], **steps[m["arm"]]} for m in measured.values() if m)
+    assert ("  each part measured, as the step of the arm that turns on its changes alone over the arm above it: the "
+            "certified tick 1.63%: not measured, no arm here turns on its changes alone; the tie order 0.25%: 2.56% "
+            "[2.04%, 3.09%] (canonical-topk over compiled); the snapshot bundle 0.17%: not measured, no arm here turns "
+            "on its changes alone; the step record 0.067%: 1.52% [1.01%, 2.04%] (record over compiled); the boundary "
+            "commitment 0.0098%: 3.14% [3.12%, 3.16%] (boundary-rows over record); the history tables 0.004%: not "
+            "measured, no arm here turns on its changes alone\n") in text
     # a step that turns on none of our changes has nothing to say
     assert S.in_target(S.MODELS["glm53"], "eager", "compiled") == [] and S._in_target([]) == "—"
 
@@ -1568,7 +1648,7 @@ def test_the_cost_report_is_the_largest_loads_cost_with_the_consoles_keys_first(
     assert "| two-stage | 6.95% " in table and "| boundary-rows | 2.14% " in table and "| record | 3.14% " in table
     lines = S.cost_text(r).splitlines()
     assert lines[0] == ("serving cost, no repeated prefix, glm-5.3, whole over compiled: 6.95% [6.38%, 7.53%]   "
-                        "target ≤ 2.05% (modelled)   verdict: misses")
+                        "target ≤ 2.13% (modeled)   verdict: misses")
     # the row on a repeated prefix is directly under the number, before anything else of the report
     assert lines[1].startswith("  on a repeated prefix, scaled down, ") and lines[4].startswith("    no-prefix-cache, ")
     assert lines[5:7] == [
@@ -1576,7 +1656,7 @@ def test_the_cost_report_is_the_largest_loads_cost_with_the_consoles_keys_first(
         "  in percent of stock's serving compute, lower is better: how much more GPU time whole needs a token than "
         "compiled, an engine on 8 GPUs, both serving the same tokens at the concurrency, of those both served, where "
         "compiled serves the most output tokens a second"]
-    assert (r["id"], r["target_basis"]) == ("vllm/serving-cost-glm53", "modelled")
+    assert (r["id"], r["target_basis"]) == ("vllm/serving-cost-glm53", "modeled")
     text = "\n".join(lines)
     # each load's line: its cost, then both sides' output and prompt tokens a second at its rung and the tokens a request
     assert ("  load chat, ShareGPT's first turns, each decoding its recorded answer's length (vLLM's sharegpt dataset): "
@@ -1616,7 +1696,7 @@ def test_one_load_alone_is_named_and_never_meets_the_target_for_the_number():
     assert S.cost_report([*chat, *row], arm=WHOLE, target=3.0)["verdict"] == "cannot tell"             # and the number still waits for long
     lines = S.cost_text(r).splitlines()
     assert lines[0] == ("serving cost, no repeated prefix, glm-5.3, whole over compiled, load chat alone: 2.04% [1.52%, "
-                        "2.56%]   target ≤ 2.05% (modelled)   verdict: cannot tell")
+                        "2.56%]   target ≤ 2.13% (modeled)   verdict: cannot tell")
     assert lines[1].startswith("  on a repeated prefix, scaled down, ") and lines[4] == (
         "  not the number yet: it is the largest of the costs of its loads (chat, long), and load long has not run")
     long = [cost_arm(name, {4: gs * 2}, load="long")
@@ -1910,10 +1990,10 @@ def test_the_cost_command_prints_the_number_or_its_json_alone(tmp_path: Path, ca
     # what was saved is against the model's target, whose parts the arm leaves off: the same costs, not comparable
     saved = json.loads((tmp_path / "out" / "serving_cost.json").read_text())
     assert (saved["target"], saved["target_basis"], saved["verdict"], saved["loads"][0]["verdict"]) == (
-        2.05, "modelled", "not comparable", "not comparable")
+        2.13, "modeled", "not comparable", "not comparable")
     assert r["target_parts"] == [] and [p["name"] for p in saved["target_parts"] if p["off"]] == [
         "the certified tick", "the snapshot bundle"]
-    assert r["not_in_target"] == [] and len(saved["not_in_target"]) == 4
+    assert r["not_in_target"] == [] and saved["not_in_target"] == ["prefix caching off"]
     of_target = ("target", "target_basis", "target_parts", "not_in_target", "verdict", "loads", "arms")
     assert {k: v for k, v in saved.items() if k not in of_target} == {k: v for k, v in r.items() if k not in of_target}
     assert saved["loads"][0] | {"verdict": "meets"} == r["loads"][0]
@@ -1928,7 +2008,7 @@ def test_a_runs_result_holds_the_number_under_its_metric_id_only_once_every_load
     assert ok and detail == S.cost_text(r).splitlines()[0] and what["loads"] == ["chat", "long", "prefix"]
     assert [m["name"] for m in ms] == ["chat", "long", "prefix", "vllm/serving-cost-glm53"]
     chat, long, under, number = ms
-    about = {"unit": "percent of stock's serving compute", "target": 2.05, "target_basis": "modelled", "better": "lower"}
+    about = {"unit": "percent of stock's serving compute", "target": 2.13, "target_basis": "modeled", "better": "lower"}
     assert all(m | about == m and m["commit"] == "c" * 40 and m["run"] == "r-1" for m in (chat, long, number))
     # the row on a repeated prefix is a measurement with no target and no verdict, and the number's entry carries it
     assert under | about | {"target": None, "target_basis": None} == under and under["verdict"] is None
@@ -1948,9 +2028,9 @@ def test_a_runs_result_holds_the_number_under_its_metric_id_only_once_every_load
     # the launch line's own result carries the fourth verdict, with the changes it leaves off, and still stands
     ours = S.result_of(S.cost_report(cost_arms()))
     assert ours[0] and {m["verdict"] for m in ours[3] if m["name"] != "prefix"} == {"not comparable"}
-    assert [p["off"] for p in ours[3][-1]["target_parts"]] == [["admission on the certified tick"], [], ["the edge snapshot"]]
-    assert ours[3][-1]["not_in_target"] == ["the step record", "prefix caching off", "the two-stage boundary commitment",
-                                            "the history tables"] and number["not_in_target"] == []
+    assert [p["off"] for p in ours[3][-1]["target_parts"]] == [
+        ["admission on the certified tick"], [], ["the edge snapshot"], [], [], []]
+    assert ours[3][-1]["not_in_target"] == ["prefix caching off"] and number["not_in_target"] == []
     # one load alone: its cost, and no entry under the metric's id
     alone = S.cost_report([cost_arm(name, {8: gs * 2}) for name, gs in (("compiled", [2.0] * 3), ("two-stage", [1.95, 1.96, 1.97]))])
     assert [m["name"] for m in S.result_of(alone)[3]] == ["chat"] and S.result_of(alone)[0]
@@ -2013,13 +2093,50 @@ def test_only_an_arm_that_loads_a_plugin_has_this_tree_on_its_servers_path(tmp_p
     assert not S.same_engine("compiled", "canonical-topk") and not S.same_engine("boundary-rows", "two-stage")
 
 
-def run_sh(*flags: str, **env: str) -> tuple[int, str]:
-    """run.sh's flags, read before it asks for the research run it needs: what it refuses, and its exit code."""
+def bash(argv: list[str], env: dict[str, str]) -> tuple[int, str]:
+    """What bash prints for ``argv`` under ``env`` alone, and its exit code."""
     import subprocess
 
-    p = subprocess.run(["bash", str(S.HERE / "run.sh"), *flags], capture_output=True, text=True,
-                       env={"PATH": S.os.environ["PATH"], **env})
+    p = subprocess.run(["bash", *argv], capture_output=True, text=True, env={"PATH": S.os.environ["PATH"], **env})
     return p.returncode, p.stdout + p.stderr
+
+
+def run_sh(*flags: str, **env: str) -> tuple[int, str]:
+    """run.sh's flags, read before it asks for the research run it needs: what it refuses, and its exit code."""
+    return bash([str(S.HERE / "run.sh"), *flags], env)
+
+
+def served_order(arms: str, **env: str) -> list[str]:
+    """The server lifetimes run.sh serves, in order, each ARM:K: its own lines that make the order, run by bash."""
+    lines = (S.HERE / "run.sh").read_text().splitlines()
+    first = lines.index("  order=()")
+    loop = "\n".join(lines[first:lines.index("  done", first) + 1])
+    rc, out = bash(["-c", loop + '\necho "${order[@]}"'], {"ARMS": arms, **env})
+    assert rc == 0, out
+    return out.split()
+
+
+def test_run_sh_serves_the_arms_lifetimes_in_the_order_named_then_turned_round_or_the_turned_order_first():
+    assert served_order("prod prod-record") == ["prod:1", "prod-record:1"]
+    assert served_order("prod prod-record", LIFETIMES="3") == ["prod:1", "prod-record:1", "prod-record:2", "prod:2",
+                                                               "prod:3", "prod-record:3"]
+    # TURNED=1: the last arm named is served first, and the lifetimes of one number are still neighbours
+    assert served_order("prod prod-record", LIFETIMES="2", TURNED="1") == ["prod-record:1", "prod:1", "prod:2", "prod-record:2"]
+    assert served_order("prod prod-record", TURNED="1") == ["prod-record:1", "prod:1"]
+    # both are read before the run, as is the warm-up's seconds, which reach every arm where they are given
+    assert run_sh("--model", "glm53", TURNED="2") == (
+        2, "serve-tax: TURNED=2: 1 begins with the arms' order turned round, 0 with the order named\n")
+    assert run_sh("--model", "glm53", WARM_S="none") == (2, "serve-tax: WARM_S=none: the warm-up's seconds, 0 for none\n")
+    rc, out = run_sh("--model", "glm53", "--arms", "prod prod-record", LIFETIMES="2", LEAVE_OUT="1", TURNED="1", WARM_S="0")
+    assert rc != 0 and "run this under research run" in out
+    sh = (S.HERE / "run.sh").read_text()
+    assert '[ -n "${WARM_S:-}" ] && count+=(--warm-s "$WARM_S")' in sh and sh.count('"${count[@]}"') == 1
+    # so is how long the corpus client waits for a load's last answers: a request at the context limit needs more
+    assert run_sh(ARMS="prod", RATES="limit=1000", DRAIN_S="long") == (
+        2, "serve-tax: DRAIN_S=long: the seconds the corpus client waits for answers after a load's last arrival\n")
+    rc, out = run_sh(ARMS="prod", RATES="limit=1000", DRAIN_S="2400")
+    assert rc != 0 and "run this under research run" in out
+    assert '[ -n "${DRAIN_S:-}" ] && count+=(--drain-s "$DRAIN_S")' in sh
 
 
 def test_run_sh_takes_the_serving_costs_flags_and_refuses_before_it_holds_anything():
@@ -2031,6 +2148,12 @@ def test_run_sh_takes_the_serving_costs_flags_and_refuses_before_it_holds_anythi
         rc, out = run_sh(*flags)
         assert rc != 0 and "run this under research run" in out    # past the flags: only the run is missing
     rc, out = run_sh(ARMS="compiled", RATES="light=1")             # the corpus client's form is untouched
+    assert rc != 0 and "run this under research run" in out
+    # the arms' lifetimes and what each leaves out are read before the run too
+    assert run_sh("--model", "glm53", LIFETIMES="0") == (2, "serve-tax: LIFETIMES=0: how many times the arms are served, 1 or more\n")
+    assert run_sh("--model", "glm53", LEAVE_OUT="6") == (
+        2, "serve-tax: LEAVE_OUT=6: the passes each lifetime leaves out, fewer than its REPS=6\n")
+    rc, out = run_sh("--model", "glm53", "--arms", "prod prod-record", LIFETIMES="6", LEAVE_OUT="1")
     assert rc != 0 and "run this under research run" in out
     sh = (S.HERE / "run.sh").read_text()
     assert 'cost "${dirs[@]}" --arm "${ARMS##* }"' in sh and '--client vllm-bench --loads "$LOADS"' in sh
@@ -2046,7 +2169,7 @@ def test_run_sh_takes_the_serving_costs_flags_and_refuses_before_it_holds_anythi
     # a budget's time left is shared equally by the arms still to serve: the measured arm is served last, and a cost
     # compares only the reps both of its arms have
     assert 'left=$(((BUDGET_MIN * 60 - ($(date +%s) - t_leased)) / to_serve))' in sh
-    assert sh.count("to_serve=$((to_serve - 1))") == 1 and 'to_serve=$(wc -w <<< "${ARMS:-}")' in sh
+    assert sh.count("to_serve=$((to_serve - 1))") == 1 and "to_serve=${#order[@]}" in sh
     # --arms all is every arm vLLM's client can drive from stock up to the launch line, each after the arm it is over
     every = re.search(r'ARMS = all \] && ARMS="([^"]+)"', sh.replace("\"$ARMS\"", "ARMS")).group(1).split()
     assert every[:2] == ["compiled", "compiled-again"] and every[-1] == S.OURS and set(every) <= set(S.ARMS)

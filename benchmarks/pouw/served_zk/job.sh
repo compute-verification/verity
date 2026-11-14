@@ -10,7 +10,7 @@
 # SZ_MEM_PER_JOB, capped to the CPUs; SZ_JOBS=1 is the old serial loop), SZ_MEM_PER_JOB the GB each is budgeted (default 13, the
 # session's serve + prove peak). Each unit's verdicts go to its own file; a reduce after the fan-out folds them into the summary.
 # In order, each step's files under out/:
-#   1. hidden_zk/job.sh's builds (cached under $HZ_CACHE): flock-circuit (proving and selftest builds), Lean flock-verify, a venv
+#   1. hidden_zk/job.sh's builds (cached under $HZ_CACHE): flock-circuit (proving and selftest builds), the Lean verifier, a venv
 #   2. params: the verifier's own parameters of each request's window (<p>/params.json: its context, ε, δ, the grid, P, |W|)
 #   3. commit: served_commit.py commit of the same SZ_CALLS o_proj calls (picked from os.urandom, or SZ_CALL_LIST) on the
 #      "request" and the "other" pass: <p>/commitment.json (public), <p>/advice.json (the prover's entries), rows in scratch
@@ -20,7 +20,7 @@
 #      coin opened after the request pass's weights' root (salt-opening.json), receive (Stream.register: receipt.json;
 #      the challenger re-starts the pass's epoch from its manifest under its own commitment, the request pass, salted by a
 #      beacon before epoch coins, as a recorded replay) and select (draw.json: the epoch's sampling coin opened after the
-#      registration, once, and Lean flock-verify sample --population N --k K' --stream over its key)
+#      registration, once, and the Lean verifier's sample --population N --k K' --stream over its key)
 #   5. per sampled proof block u<t>, as a parallel fan-out (SZ_JOBS at once): stage_tile.py (Pc8TileSide{K=4096,1,1,sm120}), the --zk
 #      session, the opening check, Lean; the selftest build's controls on the first; a filler unit's the same, and the other request's tile staged
 #   6. deliver (the sampled proof blocks' session records' SHA-512) and outcome (one-stage's audit record over every sampled proof block and
@@ -72,7 +72,7 @@ export HZ_CASES=${HZ_CASES:-honest message_byte_differs_from_the_committed_row o
 source "$SRC/benchmarks/pouw/hidden_zk/job.sh"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}
 PASSES=$WORK/passes/${SERVED_RUN:?serve.sh run id}
-export PYTHONPATH=$SRC:$SRC/verity/configuration/config:$SRC/adapters/vllm:$SRC/benchmarks/pouw:$SRC/verity/protocols/flock/prover/python:$SRC/verity/difftest/python
+export PYTHONPATH=$SRC:$SRC/tools/config:$SRC/adapters/vllm:$SRC/benchmarks/pouw:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/tools/difftest/python
 SC="$Z/served_commit.py"
 VPY=${SZ_PYTHON:-$WORK/venv312/bin/python}
 
@@ -88,8 +88,8 @@ jq_() { "$PY" -c "import json, sys; d = json.load(open(sys.argv[1])); print(eval
 mkdir -p "$OUT/request" "$OUT/other"
 # the Lean checks of record (of_record.Record), built here so a failure stops the job before the challenger asks for them
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
-{ (cd "$SRC/verity/protocols/pouw/verifier/lean/check" && lake build pouw-check pouw-check-difftest) \
-  && (cd "$SRC/verity/protocols/spot/verifier/lean" && lake build sampled-proofs-difftest); } > "$OUT/lean-record-build.log" 2>&1 \
+{ (cd "$SRC/verity/protocols/accounting/pouw/verifier/lean/check" && lake build pouw-check pouw-check-difftest) \
+  && (cd "$SRC/verity/protocols/proofs/spot/verifier/lean" && lake build sampled-proofs-difftest); } > "$OUT/lean-record-build.log" 2>&1 \
   || { log "Lean of record build FAILED: $(tail -5 "$OUT/lean-record-build.log")"; exit 3; }
 log "Lean of record: pouw-check, pouw-check-difftest, sampled-proofs-difftest built"
 
@@ -151,7 +151,7 @@ if [ "$V1" != True ]; then
     "$OUT/challenger/coins.json" "$PASSES/coins.json" 2>/dev/null)
   expect coins-pass SAME "${v:-ERROR}"
 fi
-WR=$("$PY" -c "import json, sys; from verity.protocols.pouw.verifier.audit import weights_root; m = json.load(open(sys.argv[1])); \
+WR=$("$PY" -c "import json, sys; from verity.protocols.accounting.pouw.verifier.audit import weights_root; m = json.load(open(sys.argv[1])); \
 print(weights_root({int(w): bytes.fromhex(v['root']) for w, v in m['weights'].items()}).hex())" "$MAN")
 ask coin-salt "$(req op salt after "$WR" out "$OUT/salt-opening.json")"
 expect coin-salt OPENED "$REPLY"

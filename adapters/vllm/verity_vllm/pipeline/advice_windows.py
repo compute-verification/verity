@@ -65,7 +65,7 @@ from verity.commitments.windows import interface as IF
 from verity_vllm.config import option, workload_arg
 
 TRACED = "verity-vllm/advice-windows/traced-of-record/v0"
-I1 = "verity.protocols.certifier.verifier.advice"
+I1 = "verity.protocols.accounting.certifier.verifier.advice"
 SCHEME = IF.ADVICE_SCHEME
 ROW_BITS = IF.ADVICE_ROW_BITS
 _DIGEST = re.compile(r"^[0-9a-f]{128}$")
@@ -260,8 +260,8 @@ class Traced:
 
 
 CAPPED = "verity/prove-path/capped-compiler/v0"
-#: ℓ, the public cap on the advice's encoding in bits: 1 MiB, far above a session's few hundred requests (I1 spends tens of bits a
-#: row); `predict.steps.CAP_BITS`
+#: ℓ when a registration names none, the public cap on the advice's encoding in bits: 1 MiB, far above a session's few hundred
+#: requests (I1 spends tens of bits a row)
 CAP_BITS = 1 << 23
 
 

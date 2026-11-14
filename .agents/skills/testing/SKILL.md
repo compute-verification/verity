@@ -17,10 +17,11 @@ each suite in its own process from its own directory, and `check` runs the same 
 
 ## Run tests
 
-Suites run remotely through `research run --on auto` (AGENTS.md "Tests"). Its launch says where the job went and when
-it should start, and warns when that is over 10 minutes away (`research/auto.py`). Give
-it `--cwd source`, so the job runs in the shipped tree rather than its run directory, and `uv sync` that tree first:
-`suites.py` refuses another checkout's environment. `research status RUN` checks back on it.
+Suites run remotely through `research run --on auto` (AGENTS.md "Tests"). Its launch says where the job went, why, and
+when it should start (`research inspect RUN` says it again on the VM that launched it), and warns when that is over 10
+minutes away (`research/auto.py`). A machine that can start no run takes no job: the launch passes over it for the next,
+saying which and why. Give it `--cwd source`, so the job runs in the shipped tree rather than its run directory, and
+`uv sync` that tree first: `suites.py` refuses another checkout's environment. `research status RUN` checks back on it.
 
 ~~~sh
 R="research run --on auto --cwd source -- bash -lc"
@@ -42,7 +43,7 @@ checkout. It starts its own `research run` in a slot of the research pool `resea
 nodes' check slots take train checks only), so inside a `research run` it is refused, naming this command.
 
 Locally, while editing, one named test file or `-k` selection of under about a minute and 1 GB is fine:
-`cd verity/protocols/flock/prover && uv run pytest tests/test_layouts.py -k round_trip`. It doesn't cache and doesn't load the read guard. The shell
+`cd verity/protocols/proofs/flock/prover && uv run pytest tests/test_layouts.py -k round_trip`. It doesn't cache and doesn't load the read guard. The shell
 hook refuses a local pytest that names no file or `-k`; `AGENT_GUARD_LOCAL_OK=1` is the opt-in.
 
 A pass is cached under a hash of the suite's inputs (its directory, its workspace dependencies, the paths it declares,
@@ -118,7 +119,9 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
 - **A suite over a few minutes declares `parallel = true`** under `[tool.verity.tests]`, once it passes `suites.py SUITE
   --fresh` a few times, and its tests then spread over pytest-xdist workers: they must run in any order and process, and
   session and module fixtures are built once per worker, so keep them cheap. A suite whose workers hold more than
-  `suites.py`'s `TEST_PROCESS_GB` declares `worker_gb`, one worker's peak.
+  `suites.py`'s `TEST_PROCESS_GB` declares `worker_gb`, one worker's peak. One whose workers' count bounds its run (a
+  session fixture each worker builds first) declares `workers`, the count it runs on at least, up to half its run's
+  processes and memory (`suites.py`'s `held_workers`).
 - **A suite that alone makes a check's shard long declares `parts = P`** under `[tool.verity.tests]`: it runs as P parts
   by test id (`suites.py SUITE:K/P`, each collecting every file and running the tests whose node id hashes to K), the
   shard planner spreads them over shards (a lean suite's, `lean-suites:SUITE:K/P`, are named in `ci.toml`'s plans), and
@@ -140,13 +143,17 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
   script run outside both sets it itself, before torch's first primitive, which is when oneDNN reads it.
 - **Isolated:** write only under `tmp_path`, and change the environment, `sys.path` or a module only through
   `monkeypatch`; the runner fails a run whose tests changed a repository file, naming it.
+- **Environment by name:** compare an environment by the names that differ, taken before the assert, never the whole
+  mapping inside an `assert` (`differ = sorted(k for k in got.keys() | want.keys() if got.get(k) != want.get(k))`,
+  then `assert differ == []`): a failing assert prints its sub-expressions' values into the run's published log, the
+  caller's credentials among them (`tests/test_no_environment_in_asserts.py`).
 - **Exact:** compare bit-exact code's words, digests and pinned vectors, not approximations; a negative checks that the
   code rejects by name, not merely that it raises.
 - **Statistical floors from a sweep:** a bound on a sampled quantity (a rate, a spread, a count over random samples) comes
   from a sweep over many seeds, with margin past the worst seed's value; its docstring names the sweep (seeds and worst
   value).
 - **Fixtures:** small ones sit in the suite's own `fixtures/`, shared ones under the root `fixtures/`, registered in
-  `fixtures/artifacts.json`. One over the 256 KiB cap is registered there and gitignored instead: `research data put
+  `artifacts.json`. One over the 256 KiB cap is registered there and gitignored instead: `research data put
   --kind fixture/v1 --file|--tree PATH --preserve`, its id and path into the registry and its path into `.gitignore`.
   So is a benchmark's build input that only a rebuild of its data reads (the selection a stream is built from),
   whatever its size.

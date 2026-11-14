@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parents[3]
 GB = 1 << 30
 #: the warm floor where no check recorded here says more, on the tree's filesystem (the workspace's .venv, the verifier's build)
 #: and the cache's (the audit's scratch builds, uv's cache, the Flock checkout's target/): together 45 GB, the merge trains'
-#: launcher's floor, since a full check peaks at about 40 GB (TB2's and TO3's ran out of space with 31 and 36 GB free)
+#: launcher's floor, since a full check peaks at about 40 GB (checks with 31 and 36 GB free ran out of space)
 TREE_GB, CACHE_GB = 15, 30
 #: one Lean dependency tree unpacked from its bundle (8.0 to 10 GB for the three packages), besides the bundle itself
 DEPS_TREE_GB = 10
@@ -146,7 +146,7 @@ def probe(root: Path, packages: list[str]) -> list[dict]:
     for k, v in sorted(pins(root).items()):
         if k in keys:
             return [{"name": f"{v['package']}'s Lean bundle {k[:12]}", "key": k, "sha256": v["sha256"], "bytes": v["bytes"]}]
-    up = root / "verity" / "protocols" / "flock" / "agreement" / "upstream.json"
+    up = root / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement" / "upstream.json"
     if up.is_file():
         return [{"name": "the pinned upstream build", "sha256": json.loads(up.read_text())["upstream"]["sha256"]}]
     return []
@@ -210,8 +210,8 @@ def _sent(inputs: Path | None, sha256: str) -> bool:
 
 def cpu(root: Path, inputs: Path | None, cpuinfo: Path) -> tuple[list[str], list[str]]:
     """avx512f, when the run carries the pinned upstream build's URL (lean-agreement runs) and that build needs it."""
-    pin = root / "verity" / "protocols" / "flock" / "agreement" / "upstream.json"
-    if not pin.is_file() or not (root / "verity" / "protocols" / "flock" / "verifier" / "lakefile.toml").exists():
+    pin = root / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement" / "upstream.json"
+    if not pin.is_file() or not (root / "verity" / "protocols" / "proofs" / "flock" / "verifier" / "lakefile.toml").exists():
         return ["cpu: no lean-agreement on this tree"], []
     up = json.loads(pin.read_text())["upstream"]
     flags = up.get("rustflags") or "the build host's own (target-cpu=native)"
@@ -327,7 +327,7 @@ def checkout(root: Path, sha: str | None) -> tuple[list[str], list[str]]:
 
 def run(root: Path, inputs: Path | None, custody: Path | None, cache: Path, cpuinfo: Path = Path("/proc/cpuinfo"),
         usage=shutil.disk_usage, sha: str | None = None, runs: Path | None = None, shared: bool = False) -> tuple[list[str], list[str]]:
-    lean = (root / "verity" / "protocols" / "flock" / "verifier" / "lakefile.toml").exists()
+    lean = (root / "verity" / "protocols" / "proofs" / "flock" / "verifier" / "lakefile.toml").exists()
     packages = LA.packages(CHECK.tracked_files(root) or []) if lean else []
     sent = inputs / CHECK.LEAN_DEPS_URLS if inputs is not None else None
     urls = json.loads(sent.read_text()) if sent is not None and sent.is_file() else {}

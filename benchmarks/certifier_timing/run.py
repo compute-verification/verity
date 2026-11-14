@@ -82,7 +82,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path[:0] = [str(HERE), str(ROOT / "verity" / "configuration" / "config")]
+sys.path[:0] = [str(HERE), str(ROOT / "tools" / "config")]
 sys.path.append(str(ROOT))
 
 import channel  # noqa: E402
@@ -500,7 +500,7 @@ def _hello(certifier: str, tree: Path) -> tuple[str, int]:
     is, the network certifier in its cells."""
     if certifier == "relay":
         return parties.HELLO.hex(), SCHEDULE["slots"] * (SCHEDULE["cell_bytes"] - HEADER_BYTES)
-    code = ("import sys; from verity.protocols.certifier.verifier.warden import cells; "
+    code = ("import sys; from verity.protocols.accounting.certifier.verifier.warden import cells; "
             "print(cells(bytes.fromhex(sys.argv[1]), int(sys.argv[2])).hex())")
     done = subprocess.run([sys.executable, "-c", code, parties.HELLO.hex(), str(SCHEDULE["cell_bytes"])],
                           env=os.environ | {"PYTHONPATH": str(tree)}, capture_output=True, text=True, check=True)

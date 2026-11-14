@@ -2,11 +2,11 @@ module
 
 public import Definitions.NetworkCertifier.Guarantees
 public import Definitions.NetworkCertifier.Guarantees.Pooled
-public import Definitions.NetworkCertifier.Guarantees.Period
+public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriod
 public import Definitions.NetworkCertifier.Guarantees.PooledLeak
 public import Definitions.NetworkCertifier.Guarantees.Checked
 public import Definitions.NetworkCertifier.Guarantees.Carried
-public import Definitions.NetworkCertifier.Guarantees.PeriodChecked
+public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodChecked
 public import Proofs.NetworkCertifier.Lemmas
 public import Proofs.NetworkCertifier.Occupancy
 public import Proofs.NetworkCertifier.Counting
@@ -18,26 +18,30 @@ public import Proofs.NetworkCertifier.SampledCharge
 public import Proofs.NetworkCertifier.SampledLeak
 public import Proofs.NetworkCertifier.SampledLeakReg
 public import Proofs.NetworkCertifier.SampledLeakRegPlain
-public import Proofs.NetworkCertifier.PeriodSum
+public import Proofs.NetworkCertifier.MonitoringPeriodSum
 public import Proofs.NetworkCertifier.Pooled
 public import Proofs.NetworkCertifier.TapRows
-public import Proofs.NetworkCertifier.Period
+public import Proofs.NetworkCertifier.MonitoringPeriod
 public import Proofs.NetworkCertifier.PooledLeak
 public import Proofs.NetworkCertifier.Schedule
 public import Proofs.NetworkCertifier.PerWindow
 public import Proofs.NetworkCertifier.Sanity
 public import Proofs.NetworkCertifier.Code
 public import Proofs.NetworkCertifier.Accepted
+public import Proofs.NetworkCertifier.Causal
 public import Proofs.NetworkCertifier.Tap
 public import Proofs.NetworkCertifier.RecordRows
 public import Proofs.NetworkCertifier.Witnesses
+public import Proofs.NetworkCertifier.WitnessToys
+public import Proofs.NetworkCertifier.CountWitnesses
+public import Proofs.NetworkCertifier.MonitoringPeriodWitnesses
 public import Proofs.NetworkCertifier.Checked
 public import Proofs.NetworkCertifier.ResponseCap
 public import Proofs.NetworkCertifier.WitnessesChecked
 public import Proofs.NetworkCertifier.Carried
 public import Proofs.NetworkCertifier.WitnessesCarried
 public import Proofs.NetworkCertifier.PoolRoots
-public import Proofs.NetworkCertifier.PeriodCheckedChecks
+public import Proofs.NetworkCertifier.MonitoringPeriodCheckedChecks
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -83,10 +87,14 @@ behind them. `SampledLeak` composes `SampledCharge`'s count with `SampledAuditAc
 registration's values
 (`NetTiming.sampledLeak_registered`);
 `SampledLeakRegPlain` states it at the deployed plain record (`NetTiming.sampledLeak_registered_plain_sha512`). `Sanity` shows every named assumption satisfiable, and `Witnesses` gives each acceptance guarantee its honest and
-nontrivial lemmas. `Code` proves the certifier's program
+nontrivial lemmas; `CountWitnesses` gives the counts', and `PeriodWitnesses` two more instances of the pooled
+monitoring period's guarantee, at the instances of `Definitions.NetworkCertifier.Witness`, from what `WitnessToys`
+proves there. `Code` proves the certifier's program
 (`certifier_program`, `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
 `Accepted` proves `security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate
 check accepts is a run of the constant-rate Program under the declared advice, so the guarantees here count it.
+`Causal` proves `ExpectedGridCausal` (a later window's sync never changes an earlier window's expected grid) and,
+from it, `EncardProgramRunsLeWindows`: the program's runs over their first `m` windows.
 `SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection, at
 any compiled sampled verifier where `Claims.SamplingGeneric.Compiled.KS` holds. `SampledAuditInstance` takes that
 `Compiled.KS` from the compiler at Flock (`Claims.SamplingGeneric.flockKS`), at the assembled records.
@@ -94,7 +102,7 @@ any compiled sampled verifier where `Claims.SamplingGeneric.Compiled.KS` holds. 
 trace carries the network certifier's registered rows outside the incorrect proof blocks, unless its openings collide with the
 network certifier's; `Period` counts with it. `Checked` proves the leak bound with checked inputs (`SampledLeakChecked`):
 inputs a check pins cost no advice bits, and `WitnessesChecked` gives its nontrivial lemma.
-`PeriodCheckedChecks` checks the period statement with checked inputs (`Guarantees.PeriodLeakChecked`, stated and not
+`PeriodCheckedChecks` checks the period statement with checked inputs (`Guarantees.MonitoringPeriodLeakChecked`, stated and not
 yet proved): which run its check is held to, and its nontrivial lemma.
 `Carried` proves the leak bounds over a carried pool (`SampledLeakCarried`, `PooledLeakCarried`): one
 run's relation at the rows its extracted trace holds, and the period's bound, where an opened row costs no advice bits,
@@ -130,19 +138,16 @@ theorem NoFaultOfAccepted : NetTiming.Guarantees.NoFaultOfAccepted := @NetTiming
 
 theorem RecordedRowEqFill : NetTiming.Guarantees.RecordedRowEqFill := @NetTiming.recorded_row_eq_fill
 theorem EncardAccSeqsLeAdvice : NetTiming.Guarantees.EncardAccSeqsLeAdvice := @NetTiming.encard_accSeqs_le_advice
-theorem EncardAccSeqsLeSync : NetTiming.Guarantees.EncardAccSeqsLeSync := @NetTiming.encard_accSeqs_le_sync
-theorem EncardAccSeqsLeFixedClock : NetTiming.Guarantees.EncardAccSeqsLeFixedClock :=
-  @NetTiming.encard_accSeqs_le_fixedClock
-
+theorem EncardAccSeqsLeAdviceBits : NetTiming.Guarantees.EncardAccSeqsLeAdviceBits :=
+  @NetTiming.encard_accSeqs_le_adviceBits
 theorem EncardAccSeqsLeConstantRate : NetTiming.Guarantees.EncardAccSeqsLeConstantRate :=
-  fun T W ss frames op n D _ => NetTiming.encard_accSeqs_le_constantRate T W ss frames op n D
-theorem EncardAccSeqsLeConstantRateFixedClock : NetTiming.Guarantees.EncardAccSeqsLeConstantRateFixedClock :=
-  fun T W ss hfix frames op n D _ => NetTiming.encard_accSeqs_le_constantRate_fixedClock T W ss hfix frames op n D
-theorem ExpectedRowCausal : NetTiming.Guarantees.ExpectedRowCausal := @NetTiming.expectedRow_causal
-theorem EncardAccSeqsLeConstantRateWindows : NetTiming.Guarantees.EncardAccSeqsLeConstantRateWindows :=
-  fun T W ss frames op n D m _ hm => NetTiming.encard_accSeqs_le_constantRate_windows T W ss frames op n D m hm
+  fun T g E k frames op n D _ => NetTiming.encard_accSeqs_le_constantRate_bits T g E k frames op n D
+theorem ExpectedRowCausal : NetTiming.Guarantees.ExpectedRowCausal :=
+  fun T g E frames t ins a a' ha => NetTiming.constantRate_rows_causal T g E frames t ins a a' ha
+theorem EncardAccSeqsLeConstantRateExecutionPhases : NetTiming.Guarantees.EncardAccSeqsLeConstantRateExecutionPhases :=
+  fun T g E k frames op n D m _ hm => NetTiming.encard_accSeqs_le_constantRate_executionPhases_bits T g E k frames op n D m hm
 theorem EncardDecodableLeConstantRate : NetTiming.Guarantees.EncardDecodableLeConstantRate :=
-  fun I T W ss frames n D m _ hm => NetTiming.encard_decodable_le_constantRate I T W ss frames n D m hm
+  fun I T g E k frames n D m _ hm => NetTiming.encard_decodable_le_constantRate_bits I T g E k frames n D m hm
 
 theorem EncardIngressObsDecodableLe : NetTiming.Guarantees.EncardIngressObsDecodableLe :=
   @NetTiming.encard_ingress_obsDecodable_le
@@ -153,15 +158,15 @@ theorem EncardIngressObsDecodableLeContents : NetTiming.Guarantees.EncardIngress
 theorem EncardIngressDecodableLeContents : NetTiming.Guarantees.EncardIngressDecodableLeContents :=
   @NetTiming.encard_ingress_decodable_le_contents
 
-theorem EncardAccSeqsLeConstantRatePerWindow : NetTiming.Guarantees.EncardAccSeqsLeConstantRatePerWindow :=
-  fun T W ss frames op m D _ => NetTiming.encard_accSeqs_le_constantRate_perWindow T W ss frames op m D
-theorem EncardDecodableLeConstantRatePerWindow : NetTiming.Guarantees.EncardDecodableLeConstantRatePerWindow :=
-  fun I T W ss frames m D _ => NetTiming.encard_decodable_le_constantRate_perWindow I T W ss frames m D
-theorem EncardIngressObsDecodableLePerWindow : NetTiming.Guarantees.EncardIngressObsDecodableLePerWindow :=
-  @NetTiming.encard_ingress_obsDecodable_le_perWindow
-theorem EncardIngressObsDecodableLeContentsPerWindow :
-    NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerWindow :=
-  @NetTiming.encard_ingress_obsDecodable_le_contents_perWindow
+theorem EncardAccSeqsLeConstantRatePerExecutionPhase : NetTiming.Guarantees.EncardAccSeqsLeConstantRatePerExecutionPhase :=
+  @NetTiming.encard_accSeqs_le_constantRate_perExecutionPhase
+theorem EncardDecodableLeConstantRatePerExecutionPhase : NetTiming.Guarantees.EncardDecodableLeConstantRatePerExecutionPhase :=
+  @NetTiming.encard_decodable_le_constantRate_perExecutionPhase
+theorem EncardIngressObsDecodableLePerExecutionPhase : NetTiming.Guarantees.EncardIngressObsDecodableLePerExecutionPhase :=
+  @NetTiming.encard_ingress_obsDecodable_le_perExecutionPhase
+theorem EncardIngressObsDecodableLeContentsPerExecutionPhase :
+    NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerExecutionPhase :=
+  @NetTiming.encard_ingress_obsDecodable_le_contents_perExecutionPhase
 
 theorem EncardAccSeqsSampledLe : NetTiming.Guarantees.EncardAccSeqsSampledLe := @NetTiming.encard_accSeqsSampled_le
 theorem SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted :=
@@ -174,7 +179,7 @@ theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
     fun x hx s P hs hP op =>
       (NetTiming.sampledLeak_reg hSA H D hks L K S lay k δ hδ reg β Dj hβ).2 x hx s P hs hP op _⟩
 
-theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTiming.periodLeak
+theorem MonitoringPeriodLeakAccepted : NetTiming.Guarantees.MonitoringPeriodLeakAccepted := NetTiming.monitoringPeriodLeak
 theorem PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe := NetTiming.pooledIncorrectBlocks
 theorem PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted := NetTiming.pooledLeak
 theorem SampledLeakChecked : NetTiming.Guarantees.SampledLeakChecked := NetTiming.sampledLeakChecked

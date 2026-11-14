@@ -20,6 +20,8 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+__all__ = ["SCALE", "by_class", "first", "raw_metrics", "sass_counts"]
+
 HONEST = "e_l2q"
 SWEEP = [(0.0, "e_plain"), (1.0, "f10_l2q"), (1.5, "f15_l2q"), (2.0, "f20_l2q"), (2.5, "f25_l2q"), (3.0, "e_l2q"),
          (4.0, "f40_l2q")]
@@ -255,7 +257,8 @@ def run_shapes(o: Path, names: set[str]) -> dict[str, tuple[int, int, int]]:
     return out
 
 
-def f(x, d=3):
+def f(x: float | None, d: int = 3) -> str:
+    """x to d decimals; empty for a missing value or a NaN."""
     return "" if x is None or x != x else f"{x:.{d}f}"
 
 
@@ -343,11 +346,11 @@ def main() -> int:
         a.json.write_text(json.dumps({"epoch": epoch, "reports": res, "hot": {f"{k[0]}x{k[1]}x{k[2]}": v for k, v in hot.items()}},
                                      indent=1, default=str))
     if a.toml:
-        lines = [f"# the edited GEMM's executed SASS a MMA (m16n8k32 s8, the peel's included) by census class, from ncu; "
-                 f"cycles are SMSP-cycles a MMA, bounds over census {epoch}",
-                 "# WAIT: the mbarrier retry loop (YIELD or NANOSLEEP, TRYWAIT, BRA), NOROW-priced in bound, left out of "
-                 "work_bound; "
-                 "measured: the hot median at its clock", f'run_dir = "{a.out.parent.name}"', ""]
+        lines = [("# the edited GEMM's executed SASS a MMA (m16n8k32 s8, the peel's included) by census class, from "
+                  f"ncu; cycles are SMSP-cycles a MMA, bounds over census {epoch}"),
+                 ("# WAIT: the mbarrier retry loop (YIELD or NANOSLEEP, TRYWAIT, BRA), NOROW-priced in bound, left out "
+                  "of work_bound; measured: the hot median at its clock"),
+                 f'run_dir = "{a.out.parent.name}"', ""]
         for sh, shape in shapes.items():
             for arm in a.toml_arms.split(","):
                 r = res.get(f"{sh}-{arm}")

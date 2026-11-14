@@ -9,8 +9,8 @@ The census counts them over input families built to trigger each, under Pearl-sh
 promotion from +0 every 4 atoms (G4). A cell is in Pi's domain when G4 is used, or when the chain is pure and k/delta^2 <= 2^15.
 The census passes when every in-domain cell's skippable share is at most 1/400.
 
-The atom is verity.definitions.silicon's HOPPER_E4M3_K32 with a nonzero accumulator (one group of 32, the accumulator
-truncated to 14 bits and joined to the group), vectorized here and checked against verity.definitions.silicon by --selftest.
+The atom is verity.circuits.silicon's HOPPER_E4M3_K32 with a nonzero accumulator (one group of 32, the accumulator
+truncated to 14 bits and joined to the group), vectorized here and checked against verity.circuits.silicon by --selftest.
 The noise is Pearl's shape, simplified: per row, y = x + delta*rms(x)*Z with Z a rank-32 row of unit RMS (lines of
 entries +-(1..128)); alpha = 448/max|y|; codes = RNE_E4M3(alpha*y). Seeds are the tuple (run, unit index, side), so duplicated units get independent noise.
 
@@ -35,9 +35,7 @@ import time
 from pathlib import Path
 
 import numpy as np
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import run_result  # noqa: E402
+import run_result
 
 # ---- E4M3 codec -------------------------------------------------------------------------------------------------------
 MAG = np.zeros(128, dtype=np.float64)
@@ -49,9 +47,9 @@ FIN = MAG[:0x7F]
 Q_MAX = 448.0
 SIG = np.array([(c & 7) | (8 if c >> 3 else 0) for c in range(128)], dtype=np.int64)
 EXP1 = np.array([max(c >> 3, 1) for c in range(128)], dtype=np.int64)
-OFF, PSHIFT = -14, 17        # verity.definitions.silicon.term.E4M3: product_exponent_offset, product_shift
+OFF, PSHIFT = -14, 17        # verity.circuits.silicon.term.E4M3: product_exponent_offset, product_shift
 
-# The accumulator step's adder width and exponent floor (`verity.definitions.silicon.models.GroupSum`, one group of 32): HOPPER_E4M3_K32, or
+# The accumulator step's adder width and exponent floor (`verity.circuits.silicon.models.GroupSum`, one group of 32): HOPPER_E4M3_K32, or
 # the RTX PRO 6000's BLACKWELL_SM120_E4M3_M16N8K32 (mma.sync kind::f8f6f4 m16n8k32).
 ATOMS = {"hopper": (14, -139), "sm120": (26, -133)}
 ATOM = "hopper"
@@ -65,7 +63,7 @@ def set_atom(name: str) -> None:
 
 
 def reference_atom(name: str):
-    from verity.definitions.silicon.models import HOPPER_E4M3_K32, GroupSum
+    from verity.circuits.silicon.models import HOPPER_E4M3_K32, GroupSum
     if name == "hopper":
         return HOPPER_E4M3_K32
     width, zero = ATOMS[name]
@@ -204,9 +202,9 @@ def form_s5(X: np.ndarray, Fc: np.ndarray, delta: float, line_norm: float, rng: 
     live_ok = (np.abs(X) >= 8 * sig[:, None]).sum(1) * 64 <= k
     C = (alpha[:, None] * X).astype(np.float32).astype(np.float64)
     out, sub = [], []
-    for _draw in range(2):
+    for trial in range(2):
         Ec = enc(unit_lines(rows, rng) * (sig * alpha / line_norm)[:, None])
-        if lines_out is not None and _draw == 0:
+        if lines_out is not None and trial == 0:
             lines_out.append(Ec)
         sub.append(float(((Ec & 0x7F) < 8).mean()))
         codes = np.empty((rows, k), dtype=np.uint8)
@@ -296,12 +294,12 @@ def family(name: str, rows: int, cols: int, k: int, FA: np.ndarray, rng: np.rand
     if name.startswith("xcancel-"):
         h, spec = k // 2, name.removeprefix("xcancel-")
         pm1 = "pm1" in spec
-        draw = (lambda shape: rng.choice([-1.0, 1.0], shape)) if pm1 else rng.standard_normal
+        entries = (lambda shape: rng.choice([-1.0, 1.0], shape)) if pm1 else rng.standard_normal
         if spec.startswith("tail-f"):
-            A, B = draw((rows, k)), draw((cols, k))
+            A, B = entries((rows, k)), entries((cols, k))
             A[:, h:] *= 2.0 ** -float(spec.removeprefix("tail-f"))
             return A, B
-        a, b = draw((rows, h)), draw((cols, h))
+        a, b = entries((rows, h)), entries((cols, h))
         if spec.startswith("spikes-"):
             R = float(spec.rsplit("-r", 1)[1])
             pos = np.concatenate([np.arange(0, h, 128) + 1, np.arange(0, h, 128) + 9])
@@ -739,7 +737,8 @@ def main() -> None:
     ap.add_argument("--cross-words", type=int, default=0,
                     help="with --debit: run P1's greedy cross-group search on this many words per cell")
     ap.add_argument("--transfer-words", type=int, default=0,
-                    help="with --debit and --forming s5: the reviewer's transfer test (simulated-draw greedy sets skipped on the real draw)")
+                    help="with --debit and --forming s5: the reviewer's transfer test (greedy sets found on a simulated noise sample, "
+                         "skipped on the real one)")
     ap.add_argument("--atom", choices=tuple(ATOMS), default="hopper",
                     help="the accumulator step: HOPPER_E4M3_K32, or the RTX PRO 6000's BLACKWELL_SM120_E4M3_M16N8K32")
     ap.add_argument("--out", default="pearlc_census.json")

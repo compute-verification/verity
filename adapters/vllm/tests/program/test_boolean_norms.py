@@ -15,24 +15,23 @@ import zlib
 
 import numpy as np
 import pytest
-
+from verity.circuits import boolean as BL
+from verity.circuits import codec
 from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import PrimitiveDefinition, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import standalone_call
-from verity.circuits import boolean as BL
-from verity.circuits import codec
-from verity.circuits.defs import PrimitiveDefinition, bind
 from verity.circuits.parts import n_members
-from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.silicon import fp
-from verity.definitions.ops.boolean import mufu as MU
-from verity.circuits.boolean import trace as TR
+from verity.circuits import word as QW
+from verity.circuits.cross_call import members_check
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import mufu as MU
 from verity.definitions.registry import b1
 from verity.definitions.registry import boolean_norms as BN
 from verity.definitions.registry import prims as P
-from verity.definitions import word as QW
-from verity.definitions.cross_call import members_check
+from verity.circuits.silicon import fp
 
 FULL = os.environ.get("VERITY_VLLM_BOOLEAN_NORMS_FULL")
 
@@ -74,7 +73,7 @@ F32_SPECIALS = np.array([m | s for m in _F32_MAGNITUDES for s in (0, 0x80000000)
 # --- evaluating mixed bodies: each node over every row at once --------------------------------------------------------------
 
 def _gather(vals: dict, refs, n: int) -> np.ndarray:
-    out = np.empty((n, len(refs)), np.uint64)
+    out: np.ndarray = np.empty((n, len(refs)), np.uint64)
     for j, (space, idx, leaf) in enumerate(refs):
         out[:, j] = vals[(space, idx)][:, leaf]
     return out
@@ -132,11 +131,11 @@ def _bf16_rows(rng, n: int, N: int) -> np.ndarray:
     return (x.view(np.uint32) >> 16).astype(np.uint64)
 
 
-def _rand_f32(rng, n: int) -> np.ndarray:
+def _rand_f32(rng, n: int | tuple[int, ...]) -> np.ndarray:
     return rng.integers(0, 1 << 32, n, dtype=np.uint64)
 
 
-def _rand_bf16(rng, n: int) -> np.ndarray:
+def _rand_bf16(rng, n: int | tuple[int, ...]) -> np.ndarray:
     return rng.integers(0, 1 << 16, n, dtype=np.uint64)
 
 
@@ -183,7 +182,7 @@ def test_the_split_output_word_keeps_every_and_and_the_squares_pay_none_for_the_
 
 def test_the_squares_are_their_word_primitives_on_every_bf16_word() -> None:
     rng = np.random.default_rng(1)
-    z = np.arange(1 << 16, dtype=np.uint64)
+    z: np.ndarray = np.arange(1 << 16, dtype=np.uint64)
     assert np.array_equal(_words(bind(BN.RMSNormSquare), z)[:, 0], _w(P.F32Mul, _f32(z), _f32(z)))
     acc = np.concatenate([_rand_f32(rng, 1 << 16), np.tile(F32_SPECIALS, (1 << 16) // len(F32_SPECIALS) + 1)[:1 << 16]])
     zz = np.concatenate([z, rng.permutation(z)])
@@ -271,8 +270,10 @@ def _special_rows(rng, N: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     def r():
         return _bf16_rows(rng, 1, N)[0]
     rows = []
-    z = np.zeros(N, np.uint64)
-    big, tiny, sub = np.full(N, 0x7F7F, np.uint64), np.full(N, 0x0080, np.uint64), np.full(N, 0x0001, np.uint64)
+    z: np.ndarray = np.zeros(N, np.uint64)
+    big: np.ndarray = np.full(N, 0x7F7F, np.uint64)
+    tiny: np.ndarray = np.full(N, 0x0080, np.uint64)
+    sub: np.ndarray = np.full(N, 0x0001, np.uint64)
     rows += [(z, z, r()), (r(), z, z)]
     x = r()
     rows.append((x, x ^ np.uint64(0x8000), r()))
@@ -294,7 +295,7 @@ def _special_rows(rng, N: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return tuple(np.stack([row[k] for row in rows]) for k in range(3))
 
 
-#: the MUFU statics as proofs' Boolean Definitions (`verity.definitions.ops.boolean.mufu`), which the switch binds
+#: the MUFU statics as proofs' Boolean Definitions (`verity.circuits.ops.boolean.mufu`), which the switch binds
 CUDA_BITS = {"RSQRT": bind(MU.RsqrtApprox)}
 TRITON_BITS = {"SQRT": bind(MU.MufuSqrtFtz), "SCALEA": bind(MU.DivFullScaleA), "RCP": bind(MU.DivFullRcp)}
 

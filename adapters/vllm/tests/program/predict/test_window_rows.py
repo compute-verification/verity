@@ -15,12 +15,32 @@ from typing import Any
 
 import numpy as np
 import pytest
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.commitments.gates import embedding as E
+from verity.commitments.windows import interface as IF
+from verity.definitions.registry import io_shell as IO
+from verity.protocols.accounting.certifier.prover import ingress_scan as IS
+from verity.protocols.accounting.certifier.verifier import warden as W
+from verity.protocols.accounting.certifier.verifier.active import id_request
+from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
+from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
+from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+
 from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import CLASS, GRAIN, SPLIT, SPLIT_GRAIN, state_row
-from tests.program.predict.test_window_circuit_fa3 import H200
+from tests.program.predict.test_window_circuit import (
+    CLASS,
+    GRAIN,
+    SPLIT,
+    SPLIT_GRAIN,
+    state_row,
+)
 from tests.program.predict.test_window_circuit import SLOTS as SLOTS_CLASS
+from tests.program.predict.test_window_circuit_fa3 import H200
 from verity_vllm.check.replay.checks import check_rows
 from verity_vllm.check.replay.index import ProgramIndex
+from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.program.instances_file import read_instances
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_builder as WB
@@ -29,19 +49,6 @@ from verity_vllm.program.predict import window_rows as WR
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.naming import write_build
 from verity_vllm.program.predict.steps import compile_steps
-
-from verity.protocols.certifier.prover import ingress_scan as IS
-from verity.protocols.certifier.verifier import warden as W
-from verity.protocols.certifier.verifier.active import id_request
-from verity.protocols.pouw.verifier.audit import hm96_salt
-from verity.protocols.spot.verifier.one_stage import registered as CR
-from verity.protocols.spot.verifier.one_stage import registration as REG
-from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import bind
-from verity.circuits.evaluation import evaluate_batch
-from verity.commitments.gates import embedding as E
-from verity.definitions.registry import io_shell as IO
-from verity.commitments.windows import interface as IF
 
 PROGRAM = "test/model"
 LAW = {"law": "stratified", "k": 2}
@@ -117,6 +124,7 @@ def window():
 
 def _position(fn, family: str) -> list[int]:
     """Each position's node of ``family`` (its first)."""
+    out: dict[int, int]
     pos, out = WR.positions(fn), {}
     for j, n in enumerate(fn.body.nodes):
         if n.fn.name == family:
@@ -211,8 +219,8 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
             (first, _), (end, _) = plan
             (ft, fu), (et, eu) = calls
             assert first.name == "AttnBlockFirst" and end.name == "AttnHeadEnd" and rows.source[ft][fu] == WR.EVALUATED
-            l, o = (np.ascontiguousarray(rows.outs[ft][k][fu:fu + 4]).view("<u4") for k in (1, 2))
-            node = np.asarray(evaluate_batch(end, l, o)).reshape(4, -1).astype(np.uint16)
+            lw, ow = (np.ascontiguousarray(rows.outs[ft][k][fu:fu + 4]).view("<u4") for k in (1, 2))
+            node = np.asarray(evaluate_batch(end, lw, ow)).reshape(4, -1).astype(np.uint16)
             assert np.array_equal(node, rows.outs[et][0][eu:eu + 4])
             assert np.array_equal(node.reshape(-1), WR._words(s.values[j])) and node.any()
 
@@ -238,7 +246,7 @@ def test_a_standin_scan_state_gives_each_slot_its_row_and_max_tokens(window):
     v = WR.standin_state(PROGRAM, CLASS, [(r, m) for r, (_o, _lp, m, _ids) in zip(SLOTS, LANES)], KEY, 1, window=RUN)
     assert WR.scan_slots(low, v.rows) == WR.scan_slots(low, STATE) and v.rows[0] == tuple(STATE[0])
     assert (v.leaves, v.words, v.schema, v.window) == (CLASS.buckets, SS.words(CLASS.scan), CR.SCHEMA_V2, RUN)
-    assert bytes(v.salts[0]) == hm96_salt(KEY, WR.STATE_NONCE + 1, 0) and WR.STATE_NONCE > max(WW.weight_nonces(values).values())
+    assert bytes(v.salts[0]) == hm96_salt(KEY, WR.STATE_NONCE + 1, 0) and max(WW.weight_nonces(values).values()) < WR.STATE_NONCE
     WR.Rows(low, slots, {**values, SS.SCAN_STATE: v})
 
 
@@ -252,6 +260,7 @@ def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[
     from pathlib import Path
 
     spec = importlib.util.spec_from_file_location("scan_traffic", Path(IS.__file__).parent.parent / "verifier" / "tests" / "scan_traffic.py")
+    assert spec is not None and spec.loader is not None
     ST = sys.modules["scan_traffic"] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ST)
     scan = cls.scan
@@ -447,6 +456,46 @@ def test_a_pruned_node_committed_at_every_prompt_position_is_read_at_the_last(wi
         WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows, *_read(two)))
 
 
+def test_a_narrowed_linears_rows_are_its_node_read_whole_at_every_prompt_position(window):
+    """The registered compiler narrows the last layer's fused qkv on the prompt rows before the last to its keys' and
+    values' columns (`program.prune.narrowed`), which the manifest spells ``out@<width>`` beside the last row's whole
+    ``out``, its one row there: both are the node's prefill, read a row a prompt position from the whole rows the record
+    binds under ``out``, since the engine computes every one. Bound at the last row only, the node is refused by name, and
+    a narrowed op with no whole row beside it is refused as an op of neither a row a prompt position nor the last one."""
+    low, _f, _t, weights, slots = window
+    s0, K, nodes = slots[0], NODES, low.fn.body.nodes
+    query = [j for j in range(K) if nodes[j].fn.name == "RoPE"][-2]
+    k, lp, op = query - 1, s0.row[1], f"op{query - 1}"
+    N = WR._fields(nodes[k].fn)[0].leaves
+    w = N - nodes[query].fn.bindings["NHEADS"] * nodes[query].fn.bindings["D"]
+    rows, store = _served(low, s0, T=1)
+    m, _n, dt = next(d for d in rows if d["op_path"] == op)["members"][0]
+
+    def spelt(d):
+        if (d["op_path"], d["step"]) != (op, 0):
+            return d
+        return {**d, "row": 0} if d["row"] == lp - 1 else {**d, "members": [(f"{m}@{w}", w, dt)]}
+
+    program = [spelt(d) for d in rows]
+    assert sorted(d["row"] for d in program if (d["op_path"], d["step"], d["members"][0][0]) == (op, 0, f"{m}@{w}")) \
+        == list(range(lp - 1))
+    record = {**store, (0, op, f"{m}@{w}"): store[(0, op, m)].reshape(lp, N)[:, N - w:].ravel()}
+    served = WR.Served(program, *_read(record))
+    assert len(served.prefill) == K and [(d["row"], d["members"][0][0]) for d in served.prefill[k]] == [(p, m) for p in range(lp)]
+    got = WR.Slot(low.fn, CLASS, SLOTS[0], weights, served)
+    assert got.source == [WR.COMPUTED if p < lp - 1 and j >= K - PRUNED else WR.SERVED for p in range(lp + 1) for j in range(K)]
+    assert all(np.array_equal(a, b) for x, y in zip(got.values, s0.values) for a, b in zip(x, y))
+
+    last = {**record, (0, op, m): store[(0, op, m)][(lp - 1) * N:]}
+    with pytest.raises(ValueError, match=rf"{op}: a narrowed linear's node, read whole at every prompt position, its widest "
+                                         rf"members bound at \[1.0\] rows, not a row a prompt position \({lp}\)"):
+        WR.Served(program, *_read(last))
+    alone = [d for d in program if (d["op_path"], d["step"], d["members"][0][0]) != (op, 0, m)]
+    with pytest.raises(ValueError, match=rf"{op}: prefill rows \[{', '.join(map(str, range(lp - 1)))}\], not one a prompt "
+                                         r"position nor the last one's"):
+        WR.Served(alone, *_read(record))
+
+
 def test_a_call_boundary_is_matched_at_its_site_whatever_its_fx_node_counts_to(window):
     """A call boundary's op path names its fx node, which counts on over the request's steps (the served int8 linears'
     ``…/row_quant`` to ``…/row_quant_63`` at the prefill, ``…/row_quant_64`` on at the first decode step): a decode step's
@@ -474,6 +523,77 @@ def test_a_call_boundary_is_matched_at_its_site_whatever_its_fx_node_counts_to(w
     assert all(np.array_equal(x, y) for u, w in zip(got.values, s0.values) for x, y in zip(u, w))
     with pytest.raises(ValueError, match=r"step 1: none of the prefill's op \('m/row_quant_1', .*\) \(1 ops\)"):
         WR.Served([d for d in rows if d["op_path"] != "m/row_quant_3"], *_read(store))
+
+
+class _Index:
+    """A `ProgramIndex` of served rows (`_served`'s): each row's spec, and the rest as its ``describe`` gives it."""
+
+    def __init__(self, rows) -> None:
+        self.served = rows
+        self.rows = [{"i": i, "spec": d["spec"]} for i, d in enumerate(rows)]
+        self.inst: dict[str, Any] = {}
+
+    def describe(self, r):
+        return {k: v for k, v in self.served[r["i"]].items() if k != "spec"}
+
+
+def _record(store, rid: str, arrive: int, spell) -> CommittedStore:
+    """``store``'s values (`_served`'s) as a record's `CommittedStore`: request ``rid``'s at engine step ``arrive`` plus its
+    step, bound under op path ``spell(op, engine step)``."""
+    entries, blobs = [], {}
+    for (step, op, m), a in store.items():
+        e = arrive + step
+        name = f"{spell(op, e)}/{m}"
+        entries.append({"name": name, "element_offset": 0, "encoding": {"dtype": a.dtype.name},
+                        "identity": {"request_id": rid, "step": e, "op_path": spell(op, e), "output_member": m,
+                                     "element_range": [0, a.size]}})
+        blobs[(e, name)] = a.tobytes()
+    return CommittedStore({"entries": entries}, lambda step, name, lo, hi: blobs[(step, name)][lo:hi])
+
+
+def test_a_later_arrivals_call_boundary_is_read_under_the_fx_node_the_record_binds_it_under(window):
+    """The serve commits a batch's call boundary under one fx node, counted over its earliest arrival's steps (the served
+    int8 linears' ``…/row_quant_64`` at engine step 1 for every request then in the batch), so a request that arrived later
+    has its Program's call boundary at another count: it is read under the record's one op path of its module and op for
+    the request at that engine step. Where its module calls its op twice at a step, or the record binds the request under
+    two such op paths there or none, its read is refused by name."""
+    low, _f, _t, weights, slots = window
+    s0 = slots[0]
+    rows, store = _served(low, s0, T=1)
+    by: dict[tuple, list[int]] = {}
+    for d in rows:
+        by.setdefault(tuple(m[0] for m in d["members"]), []).append(int(d["op_path"][2:]))
+    members, (a, b) = next((ms, sorted(set(v))[:2]) for ms, v in by.items() if len(set(v)) > 1)
+
+    def spelling(module):
+        def spell(op: str, step: int) -> str:
+            k = int(op[2:])
+            n = 2 * step + (k == b)
+            return op if k not in (a, b) else f"{module(k)}/row_quant" + (f"_{n}" if n else "")
+        return spell
+
+    def served(spell, record):
+        program = [{**d, "op_path": spell(d["op_path"], d["step"])} for d in rows]
+        return WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served.of_record(_Index(program), record, "late", 1))
+
+    apart = spelling(lambda k: f"m{k}")
+    record = _record(store, "late", 1, apart)
+    assert record.ops("late", 1)[f"m{a}/row_quant_2"] == set(members)
+    assert not record.has("late", 1, f"m{a}/row_quant", members[0])
+    got = served(apart, record)
+    assert all(np.array_equal(x, y) for u, w in zip(got.values, s0.values) for x, y in zip(u, w))
+
+    one = spelling(lambda k: "m")
+    with pytest.raises(ValueError, match=r"position 0's node \d+: no committed identity for \(late, step 1, m/row_quant/"):
+        served(one, _record(store, "late", 1, one))
+    twice = _record({**store, **{(0, "again", m): store[(0, f"op{a}", m)] for m in members}}, "late", 1,
+                    lambda op, step: f"m{a}/row_quant_9" if op == "again" else apart(op, step))
+    assert {f"m{a}/row_quant_2", f"m{a}/row_quant_9"} <= set(twice.ops("late", 1))
+    with pytest.raises(ValueError, match=rf"position 0's node \d+: no committed identity for \(late, step 1, m{a}/row_quant/"):
+        served(apart, twice)
+    none = _record({key: v for key, v in store.items() if key[:2] != (0, f"op{b}")}, "late", 1, apart)
+    with pytest.raises(ValueError, match=rf"no committed identity for \(late, step 1, m{b}/row_quant_1/"):
+        served(apart, none)
 
 
 @pytest.mark.usefixtures("code_versions_stood_in")
@@ -578,7 +698,7 @@ def test_a_bit_leaf_ports_elements_are_its_bits_least_significant_first():
     """`_as_leaves` and `_packed` against `ScanSlots_v2` and `SlotEntry_v1`, whose ports are words of bit leaves: a state row
     gives `scan_reference`'s lanes through them, and an entry's bits pack to `entry_reference`'s words."""
     scan = SS.bridge(CLASS.scan, CLASS.prompt)
-    row = np.asarray([state_row(CLASS.scan, LANES)], dtype=np.uint64)
+    row: np.ndarray = np.asarray([state_row(CLASS.scan, LANES)], dtype=np.uint64)
     (_, t), = scan.signature()[0]
     out = np.asarray(evaluate_batch(scan, _as_leaves(row, 16, t.leaves), kernel="reference")).reshape(1, -1).astype(np.uint64)
     b = scan.bindings
@@ -606,7 +726,7 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
     win = IF.Window(low.circuit, RUN, LAW, 64, registered=values, forms=WR.FORMS)
     win.supply(CR)
     rows.record(win)
-    bad = {}
+    bad: dict[str, list[int]] = {}
     for fn, n in low.circuit.templates:
         tid = descriptor_id(fn)
         lay = IF.layout(fn)
@@ -632,8 +752,8 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
             part, at = flat[:, at:at + f.leaves], at + f.leaves
             want.append(part if part.shape[1] == got[-1].shape[1] else _packed(part, w))
         got, want = np.concatenate(got, axis=1), np.concatenate(want, axis=1)
-        if (u := np.flatnonzero((got != want).any(axis=1))).size:
-            bad[tid] = u.tolist()
+        if (off := np.flatnonzero((got != want).any(axis=1))).size:
+            bad[tid] = off.tolist()
     assert bad == {}
     c = win.close(salt_key=bytes(32))
     assert c is not None

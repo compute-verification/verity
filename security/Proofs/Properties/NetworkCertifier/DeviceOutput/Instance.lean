@@ -53,6 +53,7 @@ import all Std.Data.DHashMap.Basic
 import all Std.Data.DHashMap.Internal.AssocList.Basic
 import all Std.Data.DHashMap.Internal.Defs
 import all Std.Data.DHashMap.Raw
+public import Properties.NetworkCertifier.DeviceOutput.Runs
 
 /-!
 # The completeness statements' honest cases, instantiated
@@ -60,9 +61,9 @@ import all Std.Data.DHashMap.Raw
 Each completeness statement (`Proofs.Lms.LmsSigns`, `Proofs.Lms.LmsCorrect`, `Proofs.Issuer.IssuerSigns`,
 `CertifierNetwork.DeviceOutputAccepted`) has one instance here whose hypotheses all hold: a toy LMS key (`N = 8`,
 `W = 8`, `H = 1`, two leaves) from a 16-byte identifier and an 8-byte seed, a one-bucket record under it and a 64-byte
-salt, and a one-window configuration with a declared sync whose run ticks each grid once and hands nothing, its every
-salt that one. The run's hypotheses are `step` evaluated by the kernel (`decide +kernel`);
-the key's are `Lms.key`'s acceptance of a 16-byte identifier (`key_ok`), not its tree, which the kernel need not compute.
+salt, and a one-window configuration with a declared sync (`config`, with its `grid`, stated in
+`Properties.NetworkCertifier.DeviceOutput.Runs`) whose run ticks each grid once and hands nothing, its every salt that one. The
+run's hypotheses are `step` evaluated by the kernel (`decide +kernel`); the key's are `Lms.key`'s acceptance of a 16-byte identifier (`key_ok`), not its tree, which the kernel need not compute.
 
 `Digested` is the one hypothesis left as one: `parameters` reads `Flock.canonUtf8`, well-founded recursion the kernel does
 not evaluate, so no proof evaluates it on a configuration (`DeviceOutputAccepted`'s module docstring).
@@ -119,14 +120,12 @@ theorem lmsCorrect_instance : ∃ (N W H : Nat) (toy : Bool) (p : Lms.Params) (I
 
 /-! ## A record the issuer certifies -/
 
-def grid : Params := ⟨1, 1, 9, 1, 1⟩
-
 /-- A certifier session id of 32 zero bytes. -/
 def session : ByteArray := ⟨Array.replicate 32 0⟩
 
 def issuer : Issuer := { key := toyKey, session }
 
-def record : Record := ⟨"responses", 0, #[#[none]], .complete⟩
+def record : BlockGrid := ⟨"responses", 0, #[#[none]], .complete⟩
 
 def digest : ByteArray := ⟨Array.replicate 64 0⟩
 
@@ -152,14 +151,6 @@ theorem issuerSigns_instance : ∃ prepared, ValidKey issuer.key ∧ 0 < 2 ^ iss
 
 /-! ## A run of the device -/
 
-def syncSet : NetworkCertifier.SyncSet := ⟨[0], [1], by simp, by simp, by simp, by simp, by simp⟩
-
-def sync : NetworkCertifier.ClockSync := ⟨0, 1, by decide⟩
-
-/-- One window of one bucket on each grid, its sync declared. -/
-def config : Config :=
-  { egress := grid, ingress := grid, syncSet, syncs := #[sync], windows := 1, origin := 0, slack := 0 }
-
 /-- Each grid ticks once, on time, the link's backlog empty. -/
 def trace : List Event := [.tick .egress 0 0, .tick .ingress 0 0]
 
@@ -177,7 +168,7 @@ theorem syncsDeclared : SyncsDeclared config trace := by unfold SyncsDeclared; d
 
 theorem syncsAdmitted : SyncsAdmitted config trace := by unfold SyncsAdmitted; decide +kernel
 
-theorem sessionFits : SessionFits issuer := by unfold SessionFits; decide +kernel
+theorem attachmentFits : AttachmentFits issuer := by unfold AttachmentFits; decide +kernel
 
 /-- The device's coins give it `salt` for every record. -/
 def salts : Nat → ByteArray := fun _ => salt
@@ -192,9 +183,9 @@ theorem leavesLeft : LeavesLeft issuer 0 config trace := by
 
 /-- **`DeviceOutputAccepted`'s honest case holds** on this configuration, issuer and run, `Digested` aside. -/
 theorem deviceOutputAccepted_hypotheses : Ticking config ∧ FieldsFit config ∧ Distinct config ∧
-    ValidKey issuer.key ∧ SessionFits issuer ∧ SaltsFit salts ∧ Closed config trace ∧ NoFault config trace ∧
+    ValidKey issuer.key ∧ AttachmentFits issuer ∧ SaltsFit salts ∧ Closed config trace ∧ NoFault config trace ∧
     SyncsDeclared config trace ∧ SyncsAdmitted config trace ∧ LeavesLeft issuer 0 config trace :=
-  ⟨ticking, fieldsFit, distinct, toyKey_valid, sessionFits, saltsFit, closed, noFault, syncsDeclared, syncsAdmitted,
+  ⟨ticking, fieldsFit, distinct, toyKey_valid, attachmentFits, saltsFit, closed, noFault, syncsDeclared, syncsAdmitted,
     leavesLeft⟩
 
 /-- So, if its grids have a `parameters_digest`, the check accepts this run's output. -/
@@ -203,7 +194,7 @@ theorem deviceOutputAccepted_instance (hdg : Digested config) :
       ∀ bytes, NetworkCheck.Check.protocol.Accepts (unitParams config issuer.key issuer.session)
         (commitment crs bytes)
         (evidence config trace) :=
-  Proofs.deviceOutputAccepted_proof config trace issuer 0 salts ticking fieldsFit distinct hdg toyKey_valid sessionFits
+  Proofs.deviceOutputAccepted_proof config trace issuer 0 salts ticking fieldsFit distinct hdg toyKey_valid attachmentFits
     saltsFit closed noFault syncsDeclared syncsAdmitted leavesLeft
 
 end Properties.CertifierNetwork.Instance

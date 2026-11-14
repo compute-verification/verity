@@ -10,7 +10,7 @@ modifies a circuit puts its report in the PR, and `check` runs `circuit-check --
   names) and `structural` are imported as modules too.
 - **Loaded by:** `check`, which runs the command and plans it by target (`tools/verity/check/plan.py`); the benchmarks
   that stage or lower a catalog target (`benchmarks/one_stage`, `benchmarks/proof_throughput`, `benchmarks/served_units`,
-  `benchmarks/unit_lowering`); Flock's pod catalog (`verity/protocols/flock/pod/catalog.py`); and a migration tool under
+  `benchmarks/unit_lowering`); Flock's pod catalog (`verity/protocols/proofs/flock/prover/pod/catalog.py`); and a migration tool under
   `adapters/vllm/tools`.
 - **Loads:** every Definition module's sidecar and pins, and the module each belongs to, `verity.circuits`,
   `verity.definitions` and Flock (`verity_flock`). It imports no integration by name: a package under `adapters/`
@@ -47,7 +47,7 @@ from the result cache (`--no-cache` checks it now). It needs about 24 GB a proce
 | `ranges.py` | a family a sidecar registers over a range of statics (`RANGES`), checked at its spots (`--ranges`), and the report's `ranges` |
 | `vectors.py` | the edge and seeded random input vectors |
 | `structural.py`, `structural_slots.py`, `ambient.py`, `by_calls.py` | `--structural` on a template and on a split (`verity_flock.struct_slots`), `--ambient`, and a Program root checked by its calls alone |
-| `cache.py`, `units.py` | the result cache, and the catalog bindings' records, each reused while what it read is unchanged |
+| `cache.py`, `units.py` | the result cache, and the catalog bindings' records, each reused while what it read is unchanged; a checker version no run has used for 72 hours is removed by the next run that uses the cache |
 | `entries.py` | the shared lists' layout, one file per entry (`pins/`) |
 | `cli.py` | the command line and the report (`verity-circuit-check/v1`) |
 

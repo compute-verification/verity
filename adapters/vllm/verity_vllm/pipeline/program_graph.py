@@ -26,21 +26,31 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 import numpy as np
-
 from verity.circuits.codec import definition_digest
 from verity.circuits.defs import bind
+from verity.circuits import word as word_query
+from verity.definitions.encoding import encode_specialization, word_values
 
 from verity_vllm.config import option
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.pipeline.vu_export import template_of
-from verity.definitions.encoding import encode_specialization, word_values
-from verity.definitions import word as word_query
-from verity_vllm.query.program_view import ProgramView, _read_instance_header, from_instances, iter_instance_rows, spec_base, spec_statics
+from verity_vllm.query.program_view import (
+    ProgramView,
+    _read_instance_header,
+    from_instances,
+    iter_instance_rows,
+    spec_base,
+    spec_statics,
+)
+from verity_vllm.query.program_view import specialization as _specialization
+
+__all__ = ["Options", "main"]
 
 SCHEMA = "vllm-program-graph/v1"
 VARYING_MAX = 8
@@ -275,9 +285,9 @@ class _Acc:
         for key in sorted(self.groups, key=lambda k: self.groups[k]["first"]):
             g = self.groups[key]
             spec0 = g["specs"].most_common(1)[0][0]
-            t, p, _m = template_of(spec0)
+            t, params, _m = template_of(spec0)
             if g["varying"]:
-                p = {a: v for a, v in p.items() if a not in g["varying"]}
+                params = {a: v for a, v in params.items() if a not in g["varying"]}
             varying_calls: dict[str, int] = {}
             for sp, k in g["specs"].items():
                 st = spec_statics(sp)
@@ -285,7 +295,7 @@ class _Acc:
                 varying_calls[vk] = varying_calls.get(vk, 0) + k
             out_groups.append({"id": gid[key], "module": g["module"], "definition": g["family"], "statics": g["statics"],
                                "varying": g["varying"], "varying_calls": varying_calls if g["varying"] else None, "specs": len(g["specs"]), "spec": spec0 if len(g["specs"]) == 1 else None,
-                               "calls": g["calls"], "template": t, "template_params": p, "instances": g["instances"],
+                               "calls": g["calls"], "template": t, "template_params": params, "instances": g["instances"],
                                "units_in_run": (units or {}).get(key), "exported_vus": (exported or {}).get(key),
                                "prescribed_reads": {pn: c for (gk, pn), c in sorted(self.param_reads.items()) if gk == key},
                                "param_inputs": _param_inputs(self.param_inputs.get(key))})
@@ -370,8 +380,8 @@ def units_from_strata(strata: dict[str, dict], acc: _Acc, prefix: str) -> dict[t
         if not tot:
             continue
         share = {k: n * acc.groups[k]["calls"] // tot for k in cand}
-        for k in sorted(cand, key=lambda k: -(n * acc.groups[k]["calls"] % tot))[: n - sum(share.values())]:
-            share[k] += 1
+        for key in sorted(cand, key=lambda k: -(n * acc.groups[k]["calls"] % tot))[: n - sum(share.values())]:
+            share[key] += 1
         out.update({k: c for k, c in share.items() if c})
     return dict(out)
 
@@ -443,9 +453,6 @@ def fold_hints(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
             runs.append({"start": k, "count": j - k, "fn": nodes[k]["fn"], "form": nodes[k]["form"], "chained": chained})
         k = j
     return runs
-
-
-_specialization = word_query.specialization
 
 
 def definitions(roots: Iterable[tuple[str, dict[str, Any]]]) -> tuple[dict[str, dict[str, Any]], list[str | None]]:
@@ -532,7 +539,7 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
     the run's gate limits (`word_query.gate_limits`)."""
     memo: dict = {}
     limits = word_query.gate_limits(max_gates)
-    tot = Counter()
+    tot: Counter = Counter()
     by_template: dict[str, Counter] = {}
     viol: Counter = Counter()
     taps: dict[tuple[str, str], list[float]] = {}
@@ -559,10 +566,10 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
                     ys = [cw[v].get(k, (0.0, 0.0))[j] for v in pts]
                     taps.setdefault(k, [0.0, 0.0])[j] += sum(_interp(pts, ys, v) * calls[v] for v in vals)
             rep, lo = rules[pts[-1]], rules[pts[0]]
-            entry = {"per_call": {str(a): {"min": vals[0], "max": vals[-1]}, **{f: {"min": lo[f], "max": rep[f]} for f in per}},
-                     "interpolated": ("between key-block boundaries: units exact, gates and committed words within 0.1 %" if bn else "sampled")
-                     if len(pts) < len(vals) else False,
-                     "partitioned_at": len(pts)}
+            entry: dict[str, Any] = {"per_call": {str(a): {"min": vals[0], "max": vals[-1]}, **{f: {"min": lo[f], "max": rep[f]} for f in per}},
+                                     "interpolated": ("between key-block boundaries: units exact, gates and committed words within 0.1 %" if bn else "sampled")
+                                     if len(pts) < len(vals) else False,
+                                     "partitioned_at": len(pts)}
         else:
             try:
                 rep = word_query.unit_rule(spec(x, x["statics"]), X, W, extras, memo=memo, max_gates=limits)
@@ -598,7 +605,7 @@ def with_word_rules(g: dict[str, Any], X: int = 16, W: int = 32, extras: int = 0
                       "by_template": {k: dict(v) for k, v in sorted(by_template.items()) if v["units"]}, "violations": dict(viol),
                       "taps": tap_rows, "substituted": {k: v.id for k, v in sub.items()} or None}
     g.setdefault("rules", {})["q_word_v1"] = (
-        "verity.definitions.word, no recomputes: each gate and each value is computed in exactly one unit; a value read across units is "
+        "verity.circuits.word, no recomputes: each gate and each value is computed in exactly one unit; a value read across units is "
         "committed once at serving (the Call's inputs are committed; a program's values, its weights, constants and tables and a request's "
         "data and parameters, are registered or run inputs, committed under hiding leaves; only an operation's own constant bits and "
         "wiring are structure); outputs of <= X "
@@ -620,6 +627,12 @@ def _full_roots(x: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
+def _definition_ids(x: dict[str, Any]) -> list[str | None]:
+    """A group's representative Definition ids; a group that states none indexes no Definition."""
+    ids = x.get("definition_ids")
+    return ids if ids else []
+
+
 def catalog(graph_dir: str | Path) -> dict[str, Any]:
     """Every distinct specialization of every `*.program.json` under `graph_dir`, de-duplicated across rows by digest:
     `definitions/<digest[:2]>.json.gz` shards ({digest: {id, definition}}) and `definitions/index.json` ({id: {digest, rows}});
@@ -634,7 +647,8 @@ def catalog(graph_dir: str | Path) -> dict[str, Any]:
         row = f.name[: -len(".program.json")]
         g = json.loads(f.read_text())
         g.pop("definitions", None)
-        roots, spans = [], []
+        roots: list[tuple[str, dict[str, Any]]] = []
+        spans = []
         for x in g["groups"]:
             reps = _full_roots(x)
             spans.append((x, len(roots), len(reps)))
@@ -650,10 +664,11 @@ def catalog(graph_dir: str | Path) -> dict[str, Any]:
         ops = []
         for x, lo, n in spans:
             ks = ids[lo:lo + n]
+            varying = x.get("varying")   # the statics that differ over the group's specializations; a group of one states none
             ops.append({"module": x["module"], "group": x["id"], "definition": x["definition"], "calls": x["calls"], "template": x["template"],
-                        "specs_recorded": x.get("specs"), "specs_enumerated": n, "varying": x.get("varying") or {},
-                        "definitions": [{"id": k, "digest": dig.get(k)} for k in ks]})
-        g["definitions_index"] = {k: dig.get(k) for x in g["groups"] for k in x.get("definition_ids") or [] if k}
+                        "specs_recorded": x.get("specs"), "specs_enumerated": n, "varying": varying if varying else {},
+                        "definitions": [{"id": k, "digest": dig.get(k) if k is not None else None} for k in ks]})
+        g["definitions_index"] = {k: dig.get(k) for x in g["groups"] for k in _definition_ids(x) if k}
         f.write_text(json.dumps(g, separators=(",", ":"), default=str) + "\n")
         (root / f"{row}.ops.json").write_text(json.dumps({"schema": f"{SCHEMA}/ops", "row": row, "ops": ops}, separators=(",", ":")) + "\n")
     for p2, m in sorted(shards.items()):
@@ -684,7 +699,9 @@ def main(a: Options) -> int:
     strata = None
     if a.strata:
         rec = json.loads(Path(a.strata).read_text())
-        strata = (rec.get("sampled_replay") or (rec.get("replay_partition") or {})).get("strata")
+        # a replay record states its strata under `sampled_replay`, a regression record under `replay_partition`; else the run has no units
+        partition = rec.get("sampled_replay") or rec.get("replay_partition")
+        strata = partition.get("strata") if partition else None
     g = program_graph(a.instances, row=json.loads(a.row) if a.row else None, strata=strata, vus_jsonl=a.vus,
                       request_programs=request_programs_of(a.store) if a.store else None)
     if a.word:
@@ -697,5 +714,6 @@ def request_programs_of(store: str | Path) -> dict[str, str]:
     """request -> Build dir of its Program, from a VU store's `programs/*/program.json`."""
     out: dict[str, str] = {}
     for p in Path(store).glob("programs/*/program.json"):
-        out.update({r: d for r, d in (json.loads(p.read_text()).get("build_dirs") or {}).items() if d})
+        build_dirs = json.loads(p.read_text()).get("build_dirs")   # a stored Program that states none places no request
+        out.update({r: d for r, d in build_dirs.items() if d} if build_dirs else {})
     return out

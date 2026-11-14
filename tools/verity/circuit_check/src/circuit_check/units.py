@@ -20,7 +20,8 @@ unchanged tree is the record it replaces, byte for byte, and so is a tarball of 
 task's).
 
 A record counts only when its every read is unchanged where it was (never through a move; a module whose source `inspect`
-looked for only by whether it is there, `_unchanged`) and the roots its binding made now are the ones it lists; else its
+looked for only by whether it is there, `_unchanged`), the roots its binding made now are the ones it lists and its bytes are
+the ones its name digests (a cache may hold records another run built, copied in under the names they had there); else its
 binding is built as the catalog builds it and its record stored again.  The task list is then
 what `cli._tasks` would build: `targets.select` over what the roots reach in `targets.reachable`'s order, PoUW's roots whole,
 each target's units (`targets.BINDINGS`), whether it is a Call (`targets.call_families`: the word Call families,
@@ -38,11 +39,21 @@ Not covered, beyond what `circuit_check.cache` leaves out: a body whose structur
 roots sets (a binding's own state is in its reads; one that makes no root is held by every record), when no other record
 reaches the Definitions that state shapes.  The nightly uncached check is what disagrees then.
 
-The circuit_check suite builds the catalog from these same entries without a cache (`made_entries`, `built_apart`): every
-binding's roots made in one process, then each binding's bodies built in a process forked for it alone, which returns what
-they reach (`_reach`) with a mark on each Definition whose id makes the very object reached (`_by_id`).  Its xdist workers
-share that as JSON (`manifest`, `from_manifest`), and each makes the suite from it (`planned`) and each target from its id
-where it can, building no body (`make`).
+The circuit_check suite's session (its ``tests/conftest.py``) makes the catalog from the records in the cache `check`'s
+circuit-check keeps them in: it takes each one that counts and has ``--records-only`` build and store the others there once,
+then takes those too.  Where that stored none it can take, it builds the catalog from these same entries without a cache
+(`made_entries`, `built_apart`): every binding's roots made in one process, then each binding's bodies built in a process
+forked for it alone, which returns what they reach (`_reach`) with a mark on each Definition whose id makes the very object
+reached (`_by_id`).  Its xdist workers share that as JSON (`manifest`, `from_manifest`), and each makes the suite from it
+(`planned`) and each target from its id where it can, building no body (`make`).
+
+A run can list the records its catalog rests on (`listing`, ``--records-manifest FILE``; the suite's session where
+``CIRCUIT_CHECK_RECORDS_MANIFEST`` names a file): each binding's record, taken or built, by its path in the cache, with the
+read records those entries need.  Every such path ends in the digest of its file's bytes, so a store that carries the files
+to another run's cache under those paths hands it the records, and that run takes each one only as it takes its own.  A
+record is looked for under its key, which holds the process's keyed variables (`cache.key`): a run whose cache holds
+records of this version and none under its own keys says so and names the variables its keys hold, never their values
+(`untaken`).
 
 A ``--catalog-units`` run that forks its targets' processes (`cli.run` with ``--jobs``) builds its bindings so too: each
 binding whose record doesn't count, and every one when none does or there are none, is built in a process forked for it alone
@@ -54,7 +65,8 @@ of the task list's reads.  This process builds no body.  A target that misses, t
 here one after another; the target is held to the descriptor its binding's build gave or its record holds, and one that
 differs is its check's error.  A primitive its id makes, which has no body, is made here (`built_here`), and so is each
 Boolean Definition a binding's build registered (`made_words`, or its module imported): Flock lowers a word primitive by the
-first one registered of that word, so a check forked from here finds the one a full build's would.  A binding whose process
+one builder of that word's Boolean Definitions and refuses it for two, so a check forked from here holds every one a full
+build's would, and finds the builder or the refusal it finds.  A binding whose process
 dies fails the run, as it would kill a build in one process.  When every binding was built apart, the task list's entry is
 stored as a full build stores it, its reads every binding's share and this process's own; it and each record are digested
 where this process stores them, as a full build's are (a full build digests none of its reads where it builds them either).
@@ -106,6 +118,8 @@ REGISTERED = ("<registered>",)
 ROOTS = ("<roots>",)
 #: the version of what `write_slices` writes
 SLICE = "circuit-check-slice/v1"
+#: the version of what `listing` gives
+LISTING = "circuit-check-records/v1"
 #: how many records the registered roots take (`registered_entries`): the longest of their builds bounds a ``--records-only``
 #: run, and one of them all took as long as the longest binding's
 REGISTERED_RECORDS = 8
@@ -125,7 +139,9 @@ class Entry:
     Boolean Definitions its build registered (`_words`), where a process built it apart.  ``made`` None: its roots are the ids
     the catalog's roots record lists (``ids``, `plan`'s ``binding``), made by ``make`` when first read and held to those ids.
     ``effects``: what making its roots did beyond them (`_noting`), or doing that in their place (`_replay`).  ``n``: which of
-    its units' occurrences in the catalog it is (its key's)."""
+    its units' occurrences in the catalog it is (its key's).  ``record``: the entry id of its record in the cache, the one that
+    counted (`_lookup`) or the one this run stored (`store`); None while it has none there.  ``skipped``: the records under
+    its key when none of them counted (`_lookup`)."""
     units: tuple[str, ...]
     kind: str
     label: str
@@ -142,6 +158,8 @@ class Entry:
     make: Callable[[], list[Any]] | None = None
     effects: list[list] | None = None
     n: int = 0
+    record: str | None = None
+    skipped: int = 0
 
     @property
     def roots(self) -> list[Any]:
@@ -409,13 +427,15 @@ def _held(reads: dict) -> dict:
 
 
 def _lookup(cache: Path, repo: Path, e: Entry) -> tuple[dict, dict[str, list[str]]] | None:
-    """``e``'s record and its reads when every read it holds is unchanged (`_unchanged`) and it lists the roots made now; None
-    otherwise, and for one that cannot be read."""
+    """``e``'s record (with its entry id, ``record``) and its reads when every read it holds is unchanged (`_unchanged`) and
+    it lists the roots made now; None otherwise, and for one that cannot be read or whose bytes are not those its name digests
+    (`cache.read`'s ``named``: a cache may hold records copied in from a store, each under the name it had there), with the
+    records passed over counted in ``e.skipped``."""
     with CC.internal():
         found = sorted(CC._dir(cache, e.key).glob("*.json"))
     for p in found:
         try:
-            rec = CC.read(p)
+            rec = CC.read(p, named=True)
             if rec.get("key") != e.key:
                 continue
             reads = rec["reads"]
@@ -426,10 +446,11 @@ def _lookup(cache: Path, repo: Path, e: Entry) -> tuple[dict, dict[str, list[str
                 continue
             for fid in e.root_ids:
                 got["nodes"][fid]["k"]
-            return {**got, "seconds": _took(p)}, reads
+            return {**got, "seconds": _took(p), "record": p.stem}, reads
         except (OSError, KeyError, TypeError, AttributeError, ValueError) as x:
             CC._miss(p, x)
             continue
+    e.skipped = len(found)
     return None
 
 
@@ -491,7 +512,7 @@ def _replay(units: tuple[str, ...], effects: list) -> bool:
     """Do what ``effects`` (`_noting`'s) notes, under ``units`` as making their roots ran (`cache.producing`, so what it makes
     is theirs): import each module, then make each Definition not registered yet, in order, by its id
     (`codec.lookup_primitive`: an input, a family made on demand) or as the Boolean version made on demand of its word
-    (`verity.definitions.boolean.made_on_demand`).  False where a module doesn't import, the next Definition is made by
+    (`targets.HOOKS`' ``made_on_demand``).  False where a module doesn't import, the next Definition is made by
     neither or making it raises: the roots are to be made then, and register the rest as they did."""
     import importlib
 
@@ -512,9 +533,7 @@ def _replay(units: tuple[str, ...], effects: list) -> bool:
                     lookup_primitive(REGISTRY, fid)
                 except KeyError:
                     if word is not None:
-                        from verity.definitions.boolean import made_on_demand
-
-                        made_on_demand(word)
+                        TG._handed("made_on_demand")(word)
                 if not dict.__contains__(REGISTRY.defs, fid):
                     return False
         except Exception:  # noqa: BLE001  (making the roots does it as a full plan does, or raises as one does)
@@ -586,6 +605,7 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
         if hit is not None:
             rec, entry.reads = hit
             entry.nodes, entry.reused, entry.words, entry.seconds = rec["nodes"], True, rec.get("words"), rec.get("seconds")
+            entry.record = rec.get("record")
         elif ahead is not None:
             return plan(cache, repo, log, apart)
         elif kind == "model" and apart is None:
@@ -604,6 +624,7 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
         if hit is not None:
             rec, e.reads = hit
             e.nodes, e.reused, e.words, e.seconds = rec["nodes"], True, rec.get("words"), rec.get("seconds")
+            e.record = rec.get("record")
     if not any(e.reused for e in entries) and apart is None:
         return None
     pinned = TG.pinned()
@@ -661,20 +682,21 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
     return out
 
 
-def store_roots(cache: Path, repo: Path, plan: Plan) -> str | None:
+def store_roots(cache: Path, repo: Path, plan: Plan) -> tuple[str | None, bool]:
     """The catalog's roots record (`ROOTS`): each binding's units, kind, label, root ids and what making them did beyond them
     (`Entry.effects`) in catalog order, the models whose roots or body raised (`targets.ROOT_ERRORS`, each with what making
     its roots did), and the suite's Call families with what working them out did, held to what the task list's entry holds
     (`cache.task_list_reads` of every root and object, with what each binding built apart read of it, ``Plan.listed``) and
-    to every binding's record's reads, digested now, unless one counts already; its entry id."""
+    to every binding's record's reads, digested now, unless one counts already; its entry id, and whether this run stored
+    it."""
     if (hit := CC.lookup(cache, key(ROOTS, 0), repo, moved=False)) is not None:
-        return hit[1]
+        return hit[1], False
     reads = merged([CC.task_list_reads([*(fn for e in plan.entries for fn in e.roots), *plan.objects.values()]),
                     plan.listed or {}, *(e.reads or {} for e in plan.entries)])
     return CC.store(cache, key(ROOTS, 0), repo, reads, {
         "entries": [[list(e.units), e.kind, e.label, e.root_ids, e.effects] for e in plan.entries if e.units != REGISTERED],
         "root_errors": [[label, err, plan.effects["raised"].get(label, [[], []])] for label, err in TG.ROOT_ERRORS],
-        "calls": sorted(plan.calls), "families": plan.effects["families"]})
+        "calls": sorted(plan.calls), "families": plan.effects["families"]}), True
 
 
 def owners(plan: Plan) -> dict[str, str]:
@@ -735,8 +757,8 @@ def made_words(plan: Plan, steps: Iterable[list] | None = None) -> int:
     """Made here: each Boolean Definition (a ``word`` and a ``build``) that a binding's build registered where this process
     didn't build it (``words``: built apart, or its record's) and that this process doesn't hold, from the record that reaches
     it (`make`), else by importing the module that holds it (`_words`: one it registers as it is imported).  Flock lowers a
-    word primitive by the build of the first registered Boolean Definition of that word (`verity_flock.ir_lower`'s
-    ``_boolean_build``), so each check forked from here finds the build a full build's would.  ``steps``: those a full plan
+    word primitive by the one build of that word's Boolean Definitions, and refuses it for two (`verity_flock.ir_lower`'s
+    ``_boolean_build``), so each check forked from here finds the build, or the refusal, a full build's would.  ``steps``: those a full plan
     took (`slices`), else `_word_steps`; each one taken is in ``plan.words``, with whether an object built here already
     stood for its node (`make` then made nothing).  `Stale` for one neither registers; the count made."""
     import importlib
@@ -1011,7 +1033,8 @@ def sliced(mine: dict, shared: dict, repo: Path, log: Callable[[str], None] | No
 def store(cache: Path, repo: Path, entries: list[Entry], only_rebuilt: bool) -> int:
     """Store each binding's record (each rebuilt one's, with ``only_rebuilt``), its reads digested now, each read once for all
     of them (`cache.seen_all`); one built apart with the reads its process recorded, and the CPU seconds it took beside it
-    (``<entry>.seconds``: `_took`), out of the record's bytes; the count stored."""
+    (``<entry>.seconds``: `_took`), out of the record's bytes; the count stored.  Each one stored is its entry's ``record``
+    from then on (`listing`)."""
     side = [u for e in entries if e.units != REGISTERED and not e.root_ids for u in e.units]
     todo = [e for e in entries if not (only_rebuilt and e.reused)]
     reads = [e.reads if e.reads is not None else CC.unit_reads((*e.units, *side) if e.units != REGISTERED else side, e.roots)
@@ -1021,13 +1044,17 @@ def store(cache: Path, repo: Path, entries: list[Entry], only_rebuilt: bool) -> 
         value = {"roots": e.root_ids, "nodes": e.nodes, **({"words": e.words} if e.words is not None else {})}
         if (eid := CC.store(cache, e.key, repo, got, value, now)) is None:
             continue
+        e.record = eid
         n += 1
         if e.seconds is not None:
             took = CC._dir(cache, e.key) / f"{eid}.seconds"
             # a temporary name of this writer's own, as `cache.store` writes an entry
             tmp = took.with_name(f".{took.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp")
-            tmp.write_text(f"{e.seconds}\n")
-            os.replace(tmp, took)
+            try:
+                tmp.write_text(f"{e.seconds}\n")
+                os.replace(tmp, took)
+            except FileNotFoundError as x:             # the version's directory went (`cache.expire`)
+                CC.LOST.append(f"{took.parent.name}: {x!r}")
     return n
 
 
@@ -1036,6 +1063,80 @@ def held(cache: Path, entries: list[Entry]) -> int:
     (`cache.held`): what a run from a copy of it copies."""
     with CC.internal():
         return CC.held(p for k in [*(e.key for e in entries), key(ROOTS, 0)] for p in CC._dir(cache, k).glob("*.json"))
+
+
+def listing(cache: Path, entries: list[Entry], roots: tuple[str | None, bool] | None = None) -> dict:
+    """The records this run's catalog rests on, as a store that carries records between runs reads them (`LISTING`): for each
+    of ``entries`` with a record in ``cache`` (`Entry.record`: the one that counted, or the one this run stored), its binding's
+    name, the record's path from ``cache`` and whether this run built it; the catalog's roots record ``roots``
+    (`store_roots`'s: its entry id and whether this run stored it) after them, as `ROOTS`' name, when the run has one;
+    ``needs``, every read record those entries are read with (`cache.closure`), each once, by its path from ``cache``;
+    ``unstored``, the bindings built whose record was not stored; and the checker's version and, as ``environment``, the
+    names of the variables every one of those records' keys holds (`cache.key`; their values are in the records' keys alone),
+    which a run must share to take them.  Every path ends in the SHA-512 of
+    its file's bytes, so a file a store holds under that path is the one listed, and a fetch that checks the name fetched it
+    whole."""
+    top = Path(os.path.normpath(cache))
+    rows, paths, unstored = [], [], []
+    for e in entries:
+        if e.record is None:
+            unstored.append(e.name)
+            continue
+        paths.append(Path(os.path.normpath(CC._dir(top, e.key) / f"{e.record}.json")))
+        rows.append({"binding": e.name, "record": paths[-1].relative_to(top).as_posix(), "built": not e.reused})
+    if roots is not None and roots[0] is not None:
+        paths.append(Path(os.path.normpath(CC._dir(top, key(ROOTS, 0)) / f"{roots[0]}.json")))
+        rows.append({"binding": ROOTS[0], "record": paths[-1].relative_to(top).as_posix(), "built": roots[1]})
+    k = key(REGISTERED, 0)
+    return {"schema": LISTING, "version": k["version"], "environment": sorted(k["environment"]), "records": rows,
+            "needs": sorted(p.relative_to(top).as_posix() for p in CC.closure(paths) - set(paths)), "unstored": unstored}
+
+
+def write_listing(path: Path, doc: dict) -> None:
+    """``doc`` (`listing`'s) at ``path``, whole: written under a name of this writer's own and renamed into place."""
+    with CC.internal():
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f".{path.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp")
+        tmp.write_text(json.dumps(doc, indent=1) + "\n")
+        os.replace(tmp, path)
+
+
+def untaken(cache: Path | None, entries: list[Entry]) -> dict:
+    """``{"keyed": names}`` when ``cache`` holds a binding's record of this checker's version and none under the key of any
+    of ``entries``, so the run took none; else ``{}``.  The names are those of the variables this process's keys hold
+    (`cache.key`'s environment), never their values.  A record is looked for under its key, so a process with one keyed
+    variable more or fewer than the one that stored the records, or one set otherwise, finds none of them and builds every
+    binding, and its count of the reused alone says nothing of it.  Records under its keys that no longer count are not
+    this: the run counts those as skipped.  Asked before the run stores what it built.  An entry it cannot read is listed
+    with the run's unread ones (`cache.unread`)."""
+    if cache is None or not entries or any(e.reused for e in entries):
+        return {}
+    k = key(REGISTERED, 0)
+    top = Path(cache) / k["version"]
+    with CC.internal():                                # the cache's own files: no read of a build, wherever the cache is
+        if any(CC._dir(cache, e.key).is_dir() for e in entries):
+            return {}
+        for d in sorted(top.iterdir()) if top.is_dir() else ():
+            # every entry of a directory has its key: the first says whether they are bindings' records
+            if d.name == CC.READS or (first := min(d.glob("*.json"), default=None)) is None:
+                continue
+            try:
+                if json.loads(first.read_bytes())["key"]["request"]["target"][0] == REQUEST:
+                    return {"keyed": sorted(k["environment"])}
+            except (OSError, ValueError, KeyError, TypeError, IndexError) as x:
+                CC._miss(first, x)
+    return {}
+
+
+def untaken_note(stats: dict) -> str:
+    """What a run's line on its bindings says when the cache held records and none under its keys (`untaken`'s finding in
+    ``stats``); else nothing."""
+    if "keyed" not in stats:
+        return ""
+    return ("no record was taken though the cache holds records of this version, none under this process's keys: one counts "
+            "only for the same Python, platform and keyed variables, set alike, and this process's variables are "
+            f"{', '.join(stats['keyed']) or 'none'}")
 
 
 def made_entries() -> list[Entry]:

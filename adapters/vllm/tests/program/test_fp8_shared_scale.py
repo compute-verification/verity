@@ -11,15 +11,14 @@ import re
 import types
 
 import pytest
-
-from verity.circuits.evaluation import evaluate
 from verity.circuits.cut import call_scope
 from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.circuits.layout import resolve
+from verity.circuits import word as W
+from verity.definitions.registry import fp8, fp8_vocab
+
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
-from verity.definitions.registry import fp8
-from verity.definitions.registry import fp8_vocab
-from verity.definitions import word as W
 
 SHAPES = [(256, 256), (384, 128), (128, 512)]
 #: (K, N) of `ScaledMmFp8Block_v1`'s circuit-check targets, N = 192 ending mid-block
@@ -85,7 +84,7 @@ def test_bit_equal_on_edge_vectors():
     K, N, G = 256, 256, 128
     old, new = _pair(K, N)
     rng = random.Random(0xF8B10C)
-    seen = set()
+    seen: set[str] = set()
     for k in range(32):
         mode = ("normal", "tiny", "special", "normal")[k % 4]
         p_edge, p_nan = (0.4, 0.0) if k % 8 != 7 else (0.2, 0.0005)
@@ -114,7 +113,7 @@ def test_new_ids_carry_no_version_in_their_names():
     for d in (fp8.ScaledMmFp8BlockSharedScale, fp8.ScaledMmFp8BlockSharedScaleTile, fp8.ScaledMmFp8BlockCoordinateGivenScale):
         name = d.id.rsplit("_v", 1)[0]
         assert d.id == f"{name}_v1" and not re.search(r"[Vv]\d", name) and name.startswith("ScaledMmFp8Block")
-    assert fp8_vocab.SHARED_SCALE == {"ScaledMmFp8Block_v1": fp8.ScaledMmFp8BlockSharedScale}
+    assert {"ScaledMmFp8Block_v1": fp8.ScaledMmFp8BlockSharedScale} == fp8_vocab.SHARED_SCALE
 
 
 def test_the_knob_defaults_to_shared_per_block_and_is_omitted_when_unset():
@@ -169,7 +168,10 @@ class _Ctx:
 
 @pytest.mark.parametrize("scale", [None, "shared-per-block"])
 def test_the_frontend_rule_binds_the_active_targets_construction(monkeypatch, scale):
-    from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_target_profile
+    from verity_vllm.program.frontend.rules.vllm_bindings import (
+        clear_observations,
+        observe_target_profile,
+    )
     from verity_vllm.program.frontend.rules.vllm_bindings import fp8 as R
 
     K, N = 256, 384
@@ -197,7 +199,10 @@ def test_the_frontend_rule_binds_a_ragged_n(monkeypatch):
     import torch
 
     from verity_vllm.program.frontend.derive import Alloc
-    from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_target_profile
+    from verity_vllm.program.frontend.rules.vllm_bindings import (
+        clear_observations,
+        observe_target_profile,
+    )
     from verity_vllm.program.frontend.rules.vllm_bindings import fp8 as R
 
     K, N, G = 6144, 2624, 128
@@ -220,8 +225,12 @@ def test_the_frontend_rule_binds_a_ragged_n(monkeypatch):
         clear_observations()
 
     seen = []
+
+    def untransposed(ctx, v, k, n, name):
+        seen.append((name.rsplit("/", 1)[1], k, n))
+        return name
     monkeypatch.setattr(R, "shape", lambda ctx, v: (K, N))
-    monkeypatch.setattr(R, "_untransposed", lambda ctx, v, k, n, name: seen.append((name.rsplit("/", 1)[1], k, n)) or name)
+    monkeypatch.setattr(R, "_untransposed", untransposed)
     monkeypatch.setattr(R, "rows_of", lambda coll: ([coll, coll], ()))
     monkeypatch.setattr(R, "from_rows", lambda outs, lead: outs)
     clear_observations()

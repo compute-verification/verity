@@ -1,4 +1,4 @@
-"""The difftest of advice v1's in-circuit encoder (`verity.protocols.certifier.verifier.arith_encode`) against the advice
+"""The difftest of advice v1's in-circuit encoder (`verity.protocols.accounting.certifier.verifier.arith_encode`) against the advice
 code's coders (`code.py`, `code_v1`), over what v1 actually codes.
 
 Every stream is `code_v1`'s: a list of windows, each one `code.py` `ArithEncoder` segment with the symbols it took,
@@ -29,7 +29,7 @@ report has its length terms' bits as `ChargeCount_v2` charges them and as v1's s
 replay's step traces in `tests/fixtures` (`test_v1`'s, at T = 20, so they span windows, their decisions cut at the compile
 slice's P·A = 14 whatever `--cut` says) and the fields of the trace-corpus fixture and of sync-crush (`derived.load_trace`;
 its pool evicts, so the derived rules send hits past the bound), and `--fixture PATH` writes them as the vectors the
-certifier's test reads (`verity/protocols/certifier/verifier/tests/fixtures/arith_encode_vectors.json`). LABEL=DIR are
+certifier's test reads (`verity/protocols/accounting/certifier/verifier/tests/fixtures/arith_encode_vectors.json`). LABEL=DIR are
 trace-corpus traces
 (`replay.read_corpus_trace`; `derived.load_corpus_trace`), each read twice: with the warden's ingress, where the
 arrivals are in release order, and with the client's send standing for the release, as v1's own table reads them,
@@ -75,18 +75,18 @@ WHOLE, SEEDED = (4, 2, 2, 2), (12, 10, 8)
 #: the decisions streams' book caps: v1's table caps, which send no hit, resume or lag bit, with room for them
 CAPS = dataclasses.replace(V.TABLE_CAPS, hits=1 << 20, resumes=1 << 12, lag=1 << 12)
 EOS = 2
-FIXTURE = HERE.parents[2] / "verity" / "protocols" / "certifier" / "verifier" / "tests" / "fixtures" / "arith_encode_vectors.json"
+FIXTURE = HERE.parents[2] / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "tests" / "fixtures" / "arith_encode_vectors.json"
 
 
 def _ae() -> Any:
     """`arith_encode`, for the checks only: the streams are code.py's and v1's alone."""
-    from verity.protocols.certifier.verifier import arith_encode as AE
+    from verity.protocols.accounting.certifier.verifier import arith_encode as AE
     assert AE.K_MAX == K
     return AE
 
 
 def _wc() -> Any:
-    from verity.protocols.certifier.prover import window_charge as WC
+    from verity.protocols.accounting.certifier.prover import window_charge as WC
     return WC
 
 
@@ -171,11 +171,11 @@ def decisions(trace: Any, stops: Sequence[int], *, T: int, row_order: str = "bat
 
 def decision_charges(wins: Sequence[Any], book: Any, N: int, rng: random.Random) -> dict[str, Any]:
     """What `ChargeCount_v1` is held to: the book (`Book.to_json()`); each window's decisions alone
-    (`window_charge.Window(arrived=…)`), `code_v1`'s charge for them, and whether the window sends only decisions
+    (`window_charge.Advice(arrived=…)`), `code_v1`'s charge for them, and whether the window sends only decisions
     (then that charge is v1's); and the run's decisions cut again into `code_v1` windows of at most N, each placed in
     N slots in order with disabled slots between (`en`, a disabled slot's bit random), with `code_v1`'s charge for
     each. The cut's sizes are 0, N and random, so its windows reach every bin."""
-    alone = [CV.Window(arrived=w.arrived) for w in wins]
+    alone = [CV.Advice(arrived=w.arrived) for w in wins]
     flat = [b for w in wins for b in w.arrived]
     sizes, at = [], 0
     while at < len(flat):
@@ -183,7 +183,7 @@ def decision_charges(wins: Sequence[Any], book: Any, N: int, rng: random.Random)
         at += sizes[-1]
     cut, at = [], 0
     for n in sizes:
-        cut.append(CV.Window(arrived=tuple(flat[at:at + n])))
+        cut.append(CV.Advice(arrived=tuple(flat[at:at + n])))
         at += n
     rows = []
     for w, length in zip(cut, CV.encode(cut, book).lens, strict=True):
@@ -297,7 +297,7 @@ def window_charges(wins: Sequence[Any], book: Any, cut: tuple[int, int, int, int
     while any(a < len(f) for a, f in zip(at, flat)):
         n = [min(rng.choice([0, S, rng.randrange(S + 1), rng.randrange(S + 1)]), len(f) - a)
              for S, f, a in zip(cut, flat, at)]
-        cutwins.append(CV.Window(arrived=tuple(flat[0][at[0]:at[0] + n[0]]), hits=tuple(flat[1][at[1]:at[1] + n[1]]),
+        cutwins.append(CV.Advice(arrived=tuple(flat[0][at[0]:at[0] + n[0]]), hits=tuple(flat[1][at[1]:at[1] + n[1]]),
                                  order=tuple(flat[2][at[2]:at[2] + n[2]])))
         cutterms.append(flat[3][at[3]:at[3] + n[3]])
         at = [a + k for a, k in zip(at, n)]
@@ -375,7 +375,7 @@ def fields(trace: dict, per: int = 64) -> dict[str, Any] | None:
     n = max(-(-len(c) // per) for c in cols)
     if not n:
         return None
-    wins = [CV.Window(hits=cols[0][j * per:(j + 1) * per], resumes=cols[1][j * per:(j + 1) * per],
+    wins = [CV.Advice(hits=cols[0][j * per:(j + 1) * per], resumes=cols[1][j * per:(j + 1) * per],
                       order=cols[2][j * per:(j + 1) * per], lag=cols[3][j * per:(j + 1) * per]) for j in range(n)]
     return _stream(wins, CV.fit_book([wins]))
 

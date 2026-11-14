@@ -65,6 +65,111 @@ def test_the_gate_adds_in_release_order_and_the_trace_sees_that_order(tmp_path):
     done[0].uninstall()
 
 
+def stops(request: Request) -> str | None:
+    """Why vLLM's scheduler stops a request at its last output id (its ``check_stop``): the parameters'
+    end-of-sequence id, one of their stop ids, or the request's length."""
+    params, out = request.sampling_params, request.output_token_ids
+    if out[-1] == params.eos_token_id:
+        return "eos"
+    if out[-1] in (params.stop_token_ids or ()):
+        return "stop"
+    return "length" if len(out) >= params.max_tokens else None
+
+
+class Params(NS):
+    """vLLM's sampling parameters as far as its stop rule reads them: the end-of-sequence id is a property of a
+    private field."""
+
+    @property
+    def eos_token_id(self):
+        return self._eos_token_id
+
+
+def test_to_length_holds_a_request_sent_without_ignore_eos_to_its_max_tokens_as_one_sent_with_it(tmp_path):
+    """A request as vLLM's front end makes one sent without ``ignore_eos`` (the tokenizer's end-of-sequence id, and
+    the generation config's as stop ids) stops at either; under ``to_length`` the scheduler gets it with the
+    parameters of the same request sent with ``ignore_eos``, and it stops at its length alone. A request with no
+    sampling parameters passes untouched, and an arm without the change leaves every request as it came."""
+    def request(ignore_eos: bool) -> Request:
+        r = Request("r", [1, 2])
+        r.sampling_params = Params(temperature=0.0, max_tokens=4, ignore_eos=ignore_eos, _eos_token_id=None if ignore_eos
+                                   else 7, stop_token_ids=[] if ignore_eos else [8, 9], _all_stop_token_ids={7, 8, 9})
+        return r
+
+    def run(r: Request, ids: list[int]) -> tuple[int, str]:
+        for n in range(1, len(ids) + 1):
+            r.output_token_ids = ids[:n]
+            if why := stops(r):
+                return n, why
+        raise AssertionError("never stopped")
+
+    ids = [5, 7, 8, 9, 6]
+    assert run(request(False), ids) == (2, "eos") and run(request(False), [5, 8, 7]) == (2, "stop")
+    assert run(request(True), ids) == (4, "length")
+    sched = Scheduler()
+    (hooks,) = P.install(sched, {"out": str(tmp_path), "to_length": True})
+    came, pooled = request(False), Request("p", [3])
+    pooled.sampling_params = None
+    sched.add_request(came)
+    sched.add_request(pooled)
+    assert sched.order == ["r", "p"] and run(came, ids) == (4, "length") and pooled.sampling_params is None
+    assert vars(came.sampling_params) == vars(request(True).sampling_params)
+    hooks.uninstall()
+    plain, same = Scheduler(), request(False)
+    (hooks,) = P.install(plain, {"out": str(tmp_path)})
+    plain.add_request(same)
+    assert run(same, ids) == (2, "eos")
+    hooks.uninstall()
+
+
+def test_idle_reset_empties_the_prefix_cache_for_a_request_that_finds_the_scheduler_long_empty(tmp_path):
+    """A pass's first request, which arrives after the scheduler has held nothing for the idle time (or ever), finds
+    the prefix cache reset; a request that arrives while another is in the scheduler, or sooner after the last step
+    than the idle time, does not, so nothing inside a pass resets it. Each reset is recorded with its idle time and
+    the scheduler's answer."""
+    class Cached(Scheduler):
+        resets = 0
+
+        def has_requests(self):
+            return bool(self.requests)
+
+        def reset_prefix_cache(self):
+            self.resets += 1
+            return True
+
+    sched, now, lines = Cached(), [100.0], []
+    idle = P.IdleReset(sched, lines.append, idle_s=5.0, clock=lambda: now[0], now=lambda: 1000.0 + now[0])
+
+    def add(rid: str, at: float) -> int:
+        now[0] = at
+        idle.arrive()
+        sched.add_request(Request(rid, [1]))
+        return sched.resets
+
+    def finish(rid: str, at: float) -> None:
+        now[0] = at
+        sched.finish_requests(rid, "done")
+        idle.step()
+
+    assert add("a", 100.0) == 1                       # the first request ever
+    assert add("b", 130.0) == 1                       # another is in the scheduler
+    finish("a", 131.0)
+    finish("b", 140.0)
+    assert add("c", 144.9) == 1                       # empty, but for less than the idle time
+    finish("c", 150.0)
+    assert add("d", 155.0) == 2                       # the next pass's first
+    assert lines == [{"t": 1100.0, "idle_s": None, "reset": True}, {"t": 1155.0, "idle_s": 5.0, "reset": True}]
+    wired = Cached()
+    done = P.install(wired, {"out": str(tmp_path), "idle_reset": True})
+    wired.add_request(Request("x", [1]))
+    wired.add_request(Request("y", [2]))
+    wired.update_from_output(None, None)
+    (resets,) = tmp_path.glob("prefix_resets.*.jsonl")
+    assert wired.resets == 1 and wired.order == ["x", "y"] and len(resets.read_text().splitlines()) == 1
+    assert isinstance(done[0], P.IdleReset) and done[0].busy_at is not None
+    done[-1].uninstall()
+
+
 def test_a_missing_number_is_skipped_after_its_hold_and_a_held_abort_never_reaches_the_scheduler():
     sched, now = Scheduler(), [0.0]
     gate = P.ReleaseGate(sched.add_request, lambda ids: sched.finish_requests(ids, "aborted"), key=P.release_key,
@@ -143,6 +248,32 @@ def test_token_commit_commits_each_window_prompt_and_sampled_ids_in_order():
     tc.stop()
     assert [g["tokens"] for g in got] == [4, 1] and [g["window"] for g in got] == [0, 1]
     assert seen[0] == bytes([5, 0, 0, 0, 6, 0, 0, 0, 7, 0, 0, 0, 8, 0, 0, 0])
+
+
+def test_served_ids_keeps_each_finished_requests_prompt_ids_and_served_ids(tmp_path, monkeypatch):
+    class Serving(Scheduler):
+        def update_from_output(self, so, mro):
+            return {0: NS(outputs=mro)}
+
+    got: list = []
+    monkeypatch.setattr(P, "_lines_behind", lambda path: (got.append(path.name), got.append)[1])
+    sched = Serving()
+    done = P.install(sched, {"out": str(tmp_path), "ids": True})
+    assert got == [f"ids.{P.os.getpid()}.jsonl"] and not list(tmp_path.iterdir())
+    a, b, c = eid("agentic@2-r1-u0", 0), eid("agentic@2-r1-u1", 0), eid("agentic@2-r1-u1", 1)
+    for rid, prompt in ((a, [5, 6, 7]), (b, [8]), (c, [9, 9])):
+        sched.add_request(Request(rid, prompt))
+    out = lambda rid, ids, reason=None: NS(request_id=rid, new_token_ids=ids, finish_reason=reason)   # noqa: E731
+    sched.update_from_output(None, [out(a, [1, 2]), out(b, [3])])                # a step's tokens, drafts kept among them
+    sched.update_from_output(None, [out(b, [], 1), out(a, [4]), out("other", [0], 1)])
+    assert got[1:] == [{"id": b, "prompt_ids": [8], "output_ids": [3]}]
+    assert sched.finish_requests([c], "aborted") and c not in done[0].open       # an aborted request leaves no line
+    sched.update_from_output(None, [out(a, [5, 6], 0)])
+    assert got[2:] == [{"id": a, "prompt_ids": [5, 6, 7], "output_ids": [1, 2, 4, 5, 6]}] and not done[0].open
+    assert list(got[2]) == ["id", "prompt_ids", "output_ids"]                    # a line opens with its request's id
+    done[-1].uninstall()
+    sched.add_request(Request(eid("agentic@2-r2-u0", 0), [1]))
+    assert not done[0].open
 
 
 def test_kv_edge_starts_at_the_first_step_with_a_kv_cache_outside_a_capture():

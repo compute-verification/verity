@@ -33,7 +33,6 @@ public import Definitions.Pouw.Game.Deadline
 public import Definitions.Pouw.Game.Defs
 public import Definitions.Pouw.Game.Params
 public import Definitions.Pouw.H1Zy
-public import Definitions.Pouw.KeyedLeaf
 public import Definitions.Pouw.M1
 public import Definitions.Pouw.MerkleExtract
 public import Definitions.Pouw.NCP.Defs
@@ -93,6 +92,7 @@ public import Definitions.Pouw.PearlC.TileCheck8
 public import Definitions.Pouw.PearlC.TileCheck4
 public import Definitions.Pouw.PearlC.TileCircuit
 public import Definitions.Pouw.PearlC.TileDraw
+public import Definitions.Pouw.PearlC.Unscale
 public import Definitions.Pouw.PearlC.W1
 public import Definitions.Pouw.PearlC.W1Stop
 public import Definitions.Pouw.PearlC.WholeCircuit
@@ -161,8 +161,6 @@ modules keep their basenames in `Definitions.Pouw`, `Definitions.Pouw.Assumption
   `Definitions.Accounting.Guarantees.FpG1`'s headlines read H1's leaves.
 * `H1Zy`: H1's sampled-leaf statements on words, the bodies of the combine, lane and tile checks (`Combine`, `Lane`,
   `Tile`) on their primitives' word views.
-* `KeyedLeaf`: the lead's keyed commitments, each instance's keyed digest (`Definitions.Hash.Keyed`), and the two games
-  its hiding reads. Their statements are `Definitions.Pouw.Guarantees.KeyedLeaf`.
 * `PearlC`: Pearl-C's Π (`Defs`), its game (`Game`) and its named protocol and error (`Instance`). The device records
   and their prices are `Device` and `DevicePrices`, the hidden audit `Hidden` and `HiddenTileGame`, and the sampled
   audit `Tile`, `TileDraw` and `Completeness`. The units as core circuits are `RowCircuit`, `TileCircuit` and

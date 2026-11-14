@@ -329,7 +329,7 @@ theorem EnqRel.trans {c c' c'' : Certifier} (h : EnqRel c c') (h' : EnqRel c' c'
     fun l p hs => h'.2.2.2.2 l p (h.2.2.2.2 l p hs)⟩
 
 theorem EnqRel.enqueue (c : Certifier) (f : ByteArray) : EnqRel c (c.enqueue f) :=
-  ⟨enqueue_link c f, enqueue_params c f, enqueue_rows c f, enqueue_window c f, fun _ _ h => h.enqueue f⟩
+  ⟨enqueue_link c f, enqueue_params c f, enqueue_rows c f, enqueue_executionPhase c f, fun _ _ h => h.enqueue f⟩
 
 theorem EnqRel.foldl (c : Certifier) (l : Array (Int × ByteArray)) :
     EnqRel c (l.foldl (fun c x => match x with | (_, f) => c.enqueue f) c) :=
@@ -366,7 +366,7 @@ theorem Shape.enqueueFirst {c : Certifier} {link : String} {p : Params} (h : Sha
 theorem EnqRel.enqueueFirst (c : Certifier) (f : ByteArray) : EnqRel c (c.enqueue f true) := by
   refine ⟨?_, ?_, ?_, ?_, fun _ _ h => h.enqueueFirst f⟩ <;>
     rcases enqueue_first_eq c f with he | ⟨r, he⟩ | ⟨-, -, he⟩ <;> rw [he] <;>
-    simp [doFault_link, doFault_params, doFault_rows, doFault_window]
+    simp [doFault_link, doFault_params, doFault_rows, doFault_executionPhase]
 
 theorem takeOwn_rel (b : Bucketer) : b.takeOwn.t = b.t ∧ EnqRel b.certifier b.takeOwn.certifier := by
   unfold Bucketer.takeOwn
@@ -427,7 +427,7 @@ theorem bucketer_tick (b : Bucketer) :
   simp only [follow_certifier]
   split
   · exact ⟨t1.trans hc.1, t2.trans hc.2.1, fun r h => nomatch h⟩
-  · simp only [Certifier.closeWindow]
+  · simp only [Certifier.closeSamplingBlock]
     exact ⟨t1.trans hc.1, t2.trans hc.2.1, fun r h => by cases h; exact t1.trans hc.1⟩
 
 /-- `ingressTick` after its late check. -/
@@ -687,12 +687,12 @@ theorem egressPre_quiet (st : State) (now backlog : Nat) : Quiet st (egressPre s
 
 /-- What one live egress tick does: the next shaper tick `y`, its row written as `r · B` bytes when the link's backlog
 allows, and at the window's last bucket the window's record. -/
-def EgressSpec (c : Config) (st : State) (backlog : Nat) (y : Shaper × Slots × Option Record)
+def EgressSpec (c : Config) (st : State) (backlog : Nat) (y : Shaper × Slots × Option BlockGrid)
     (x : State × Array Action) : Prop :=
   let T := c.egress.buckets
   Good c x.1 ∧ x.1.shaper.t = st.shaper.t + 1 ∧
     ∃ row status, Packed c.egress row ∧ row = y.2.1 ∧
-      ((st.shaper.t + 1) % T = 0 → y.2.2.map Record.status = some status) ∧
+      ((st.shaper.t + 1) % T = 0 → y.2.2.map BlockGrid.status = some status) ∧
       x.2.toList = (if backlog ≤ 4 * bucketBytes c.egress then [.writeLink (wire c.egress row)] else []) ++
         (if (st.shaper.t + 1) % T = 0 then
           [.publish ⟨c.egressLink, st.shaper.t / T, st.shaper.certifier.rows.push row, status⟩ c.egress]
@@ -762,7 +762,7 @@ theorem egressShape_spec {c : Config} {st0 st : State} (hg : Good c st0) (hq : Q
     simp only [hb', hb, hc, ↓reduceIte, List.append_nil]
     rfl
 
-theorem EgressSpec.start {c : Config} {st : State} {backlog : Nat} {y : Shaper × Slots × Option Record}
+theorem EgressSpec.start {c : Config} {st : State} {backlog : Nat} {y : Shaper × Slots × Option BlockGrid}
     {x : State × Array Action} (h : EgressSpec c st backlog y x) (p : Params) (t : Nat) :
     EgressSpec c st backlog y (startAt p t x.1, x.2) := by
   obtain ⟨l, hl⟩ := startAt_shaper p t x.1

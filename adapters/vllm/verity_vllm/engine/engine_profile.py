@@ -18,7 +18,16 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import settings
+from verity_vllm.config import checkpoint_entries, checkpoints_hf_home
 from verity_vllm.engine import env, handle
+from verity_vllm.engine.profiles.cases import CASES
+from verity_vllm.log import init_logger
+from verity_vllm.records.schema_ids import ENGINE_PROFILE_SCHEMA
+
+__all__ = ["ENGINE_SEED", "apply_env", "checkpoint_for", "engine_kwargs", "profile_id_of", "verify_local_weights"]
+
+logger = init_logger(__name__)
 
 DECLARED_ENV = env.ENGINE
 
@@ -42,28 +51,26 @@ def max_model_len_for(cp: dict[str, Any]) -> int:
 
 
 def apply_env() -> dict[str, str]:
-    from verity_vllm.config import checkpoints_hf_home
-
     return env.apply_engine(checkpoints_hf_home())
 
 
 def load_checkpoints(path: str | Path) -> dict[str, dict[str, Any]]:
-    from verity_vllm.config import checkpoint_entries
-
     return {c["repo"]: c for c in checkpoint_entries(path)}
 
 
 def checkpoint_for(case: str, checkpoints_path: str | Path) -> dict[str, Any]:
-    from verity_vllm.config import checkpoint_entries
-    from verity_vllm.engine.profiles.cases import CASES
-
     if case in CASES:
         cp = load_checkpoints(checkpoints_path)[CASES[case]["repo"]]
     else:
-        # generalization sweep: roles registered by verity_vllm/input_provenance/add_checkpoint.py carry `role == case`
+        # a role of the manifest (an entry added to `manifests/checkpoints.json` by hand, or by `fp8-checkpoint pin` or
+        # `int8-checkpoint pin` for a recipe pin) carries `role == case`
         matches = [c for c in checkpoint_entries(checkpoints_path) if c.get("role") == case]
         if not matches:
             raise SystemExit(f"case {case!r}: not in CASES and no checkpoints.json entry with role {case!r}")
+        if len(matches) > 1:
+            raise SystemExit(f"case {case!r}: {len(matches)} pins carry role {case!r} "
+                             f"({', '.join(str(c.get('revision'))[:12] for c in matches)}); a role names one checkpoint, "
+                             "so another revision of a model is pinned under a role of its own")
         cp = matches[0]
     # a recipe pin (fp8_checkpoint, int8_checkpoint) is made on the pod, never downloaded: its snapshot is there or not
     if not (cp.get("downloaded") or cp.get("recipe")) or not cp.get("local_path"):
@@ -188,11 +195,14 @@ def gpu_info() -> dict[str, Any]:
 
 def _tuned_gemm_arch_family(major: int, minor: int):
     try:
-        from vllm.model_executor.determinism.batch_invariant_configs import _get_tuned_matmul_arch_family
+        from vllm.model_executor.determinism.batch_invariant_configs import (
+            _get_tuned_matmul_arch_family,
+        )
         from vllm.platforms.interface import DeviceCapability
 
         return _get_tuned_matmul_arch_family(DeviceCapability(int(major), int(minor)))
-    except Exception:  # noqa: BLE001  (another vLLM layout: the field is absent, not guessed)
+    except Exception as e:  # noqa: BLE001  (another vLLM layout: the field is absent, not guessed)
+        logger.debug("vLLM gave no tuned-GEMM arch family for capability %r.%r: %r", major, minor, e)
         return "<unavailable>"
 
 
@@ -218,7 +228,8 @@ def dist_identity(name: str) -> dict[str, Any]:
             d = {}
         url = d.get("url")
         out["direct_url"] = url
-        h = (d.get("archive_info") or {}).get("hash")
+        info = d.get("archive_info")
+        h = info.get("hash") if info else None
         if isinstance(h, str) and h.startswith("sha256="):
             out["wheel_sha256"] = h.split("=", 1)[1]
         if out["wheel_sha256"] is None and isinstance(url, str) and url.startswith("file://"):
@@ -269,7 +280,7 @@ def breakable_cudagraph() -> bool:
 
 
 def effective_compilation(llm: Any) -> dict[str, Any]:
-    vc = llm.llm_engine.vllm_config
+    vc = handle.engine_of(llm).vllm_config
     cc = vc.compilation_config
     return {
         "mode": str(getattr(cc, "mode", None)),
@@ -286,14 +297,15 @@ def effective_compilation(llm: Any) -> dict[str, Any]:
 def cache_info(llm: Any) -> dict[str, Any]:
     """Effective KV-cache flags (§15.8: 'prefix caching enabled' is recorded as the effective
     value, and whether the recorded workload hit it is in production/workload_exercised.json)."""
-    cc = llm.llm_engine.vllm_config.cache_config
+    vc = handle.engine_of(llm).vllm_config
+    cc = vc.cache_config
     return {
         "enable_prefix_caching": bool(cc.enable_prefix_caching),
         "block_size": int(cc.block_size),
         "kv_cache_dtype": str(getattr(cc, "cache_dtype", "auto")),
-        "enable_chunked_prefill": bool(getattr(llm.llm_engine.vllm_config.scheduler_config, "enable_chunked_prefill", False)),
-        "max_num_seqs": int(getattr(llm.llm_engine.vllm_config.scheduler_config, "max_num_seqs", 0)),
-        "max_num_batched_tokens": int(getattr(llm.llm_engine.vllm_config.scheduler_config, "max_num_batched_tokens", 0)),
+        "enable_chunked_prefill": bool(getattr(vc.scheduler_config, "enable_chunked_prefill", False)),
+        "max_num_seqs": int(getattr(vc.scheduler_config, "max_num_seqs", 0)),
+        "max_num_batched_tokens": int(getattr(vc.scheduler_config, "max_num_batched_tokens", 0)),
     }
 
 
@@ -307,7 +319,7 @@ def _backends_of_runner(runner: Any) -> dict[str, Any]:
             break
     out["linear"] = (
         "vllm.model_executor.determinism.batch_invariant.linear_batch_invariant (triton matmul_persistent)"
-        if os.environ.get("VLLM_BATCH_INVARIANT") == "1"
+        if settings.raw("VLLM_BATCH_INVARIANT") == "1"
         else "UnquantizedLinearMethod._gemm_impl"
     )
     sampler = getattr(runner, "sampler", None)
@@ -346,10 +358,11 @@ def _backends_probe(worker: Any) -> dict[str, Any]:
 def backends_info(llm: Any) -> dict[str, Any]:
     out: dict[str, Any] = {"attention": None, "linear": None, "moe": None, "sampler": None}
     try:
-        tp = int(llm.llm_engine.vllm_config.parallel_config.tensor_parallel_size)
+        tp = int(handle.engine_of(llm).vllm_config.parallel_config.tensor_parallel_size)
         if tp > 1:
-            # the model lives in the worker processes: ask rank 0 (all ranks run the same classes)
-            per_rank = llm.collective_rpc(_backends_probe)
+            # the model lives in the worker processes: ask rank 0 (all ranks run the same classes), through the `vllm.LLM`
+            # a `verity_vllm.LLM` holds, since the wrapper has no `collective_rpc` of its own
+            per_rank = getattr(llm, "vllm", llm).collective_rpc(_backends_probe)
             out = dict(per_rank[0])
             out["ranks"] = len(per_rank)
             out.pop("tp_rank", None)
@@ -388,7 +401,7 @@ def build_manifest(
     if engine_overrides:
         kw.update(engine_overrides)
     doc = {
-        "schema": "verity-vllm/profile/v1",
+        "schema": ENGINE_PROFILE_SCHEMA,
         "case": case,
         "model": {
             "repo": cp["repo"],

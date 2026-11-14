@@ -14,14 +14,16 @@ import json
 from verity_vllm.config import workload_file
 from verity_vllm.target_family import device_token_of_row
 
+__all__ = ["CARD", "NO_CARD", "device_name", "device_name_of_row", "fused_moe_config"]
+
 DEVICE_NAME: dict[str, str] = {"h200": "NVIDIA H200"}
 
-#: the card file (`verity.hardware.cards.load`) each served target is registered on, by the name its device reports, which
+#: the card file (`verity.device.load_card`) each served target is registered on, by the name its device reports, which
 #: `acquire.served_device` holds the device to (`served_device.card_of`: a name in neither this nor `NO_CARD` is refused)
 CARD: dict[str, str] = {"NVIDIA H200": "h200-sxm-141gb", "NVIDIA RTX PRO 6000 Blackwell Server Edition": "rtx-pro-6000-server"}
 
 #: the served targets that have no card file yet, by the same name, each with its reason: these alone are held to no card
-NO_CARD: dict[str, str] = {"NVIDIA B200": "no card file yet: verity/hardware/cards has none for the B200"}
+NO_CARD: dict[str, str] = {"NVIDIA B200": "no card file yet: hardware/cards has none for the B200"}
 
 #: vLLM d9105ea80's tuned fused-MoE configs (model_executor/layers/fused_moe/configs/<file>, `get_config_file_name`), batch size ->
 #: (BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M, num_warps, num_stages); the file below is sha256 ade035ab90cbce92...
@@ -42,9 +44,10 @@ def device_name_of_row(row_id: str) -> str | None:
 
 
 def device_name(workload: str | None) -> str | None:
-    """The name a GPU of the workload's row class reports; None for a class `DEVICE_NAME` does not list or without a workload.  A
-    stored workload is made present and checked first (`config.workload_file`)."""
-    sweep = (json.loads(workload_file(workload).read_text()).get("sweep") or {}) if workload else {}
+    """The name a GPU of the workload's row class reports; None for a class `DEVICE_NAME` does not list, for a workload with no
+    sweep plan, and without a workload.  A stored workload is made present and checked first (`config.workload_file`)."""
+    held = json.loads(workload_file(workload).read_text()).get("sweep") if workload else None
+    sweep = held if held else {}
     return device_name_of_row(sweep.get("row_id") or "")
 
 

@@ -9,14 +9,26 @@
 from __future__ import annotations
 
 import pytest
-from verity_vllm.query.units import ValueRef, boundary
-from verity_vllm.correspondence.reader_for_query import Correspondence, implementation_prefix, parse_call_name
-from verity_vllm.query.module_body import Q_module_body_v1
-from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
-from verity_vllm.query.manifest import format as fmt
+
+from verity_vllm.correspondence.reader_for_query import (
+    Correspondence,
+    implementation_prefix,
+    parse_call_name,
+)
 from verity_vllm.query.compose import merge_ranks
-from verity_vllm.query.required import (Q_MODULE_BODY_ID, Q_WORD_ID, member_name, partition_of, request_manifest, shared_instances,
-                                        under)
+from verity_vllm.query.manifest import format as fmt
+from verity_vllm.query.module_body import module_body_partition
+from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
+from verity_vllm.query.required import (
+    Q_MODULE_BODY_ID,
+    Q_WORD_ID,
+    member_name,
+    partition_of,
+    request_manifest,
+    shared_instances,
+    under,
+)
+from verity_vllm.query.units import ValueRef, boundary
 
 W = "model.model"                                  # the export wrapper holds the served model under `model`
 EMBED_W, QKV_W = f"{W}.embed.weight", f"{W}.layers.0.self_attn.qkv_proj.weight"
@@ -72,10 +84,10 @@ def test_implementation_prefix_is_the_common_suffix_map():
 
 def test_module_bodies_and_boundary():
     P = program()
-    corr = Correspondence(P, implementation_paths=[f"model.layers.0.self_attn.qkv_proj"])
+    corr = Correspondence(P, implementation_paths=["model.layers.0.self_attn.qkv_proj"])
     assert corr.prefix == "model."
     assert corr.implementation_path(f"{W}.embed") == "model.embed"
-    B = boundary(P, Q_module_body_v1(P, corr))
+    B = boundary(P, module_body_partition(P, corr))
     assert {u.id for u in B.units} == {W, f"{W}.embed", f"{W}.layers.0.input_layernorm", f"{W}.layers.0.self_attn.qkv_proj",
                                         f"{W}.layers.0.self_attn.rotary_emb", f"{W}.lm_head", ""}
     assert B.owner[1] == B.owner[2] == B.owner[6] == W
@@ -89,7 +101,7 @@ def test_module_bodies_and_boundary():
 def test_query_rejects_foreign_correspondence():
     P, P2 = program(), program()
     with pytest.raises(ValueError):
-        Q_module_body_v1(P, Correspondence(P2))
+        module_body_partition(P, Correspondence(P2))
 
 
 def test_member_name_is_the_programs_own():
@@ -129,7 +141,7 @@ def test_shared_instances_by_shared_parameter_and_signature():
 
 def test_request_manifest_rows():
     P = program()
-    corr = Correspondence(P, implementation_paths=[f"model.layers.0.self_attn.qkv_proj"])
+    corr = Correspondence(P, implementation_paths=["model.layers.0.self_attn.qkv_proj"])
     res = {"program": {"digest": "d0", "function": "f"}, "attention_impls_observed": {}, "target": {"declared": {"compute_capability": [8, 9]}}}
     r = request_manifest(P, corr, res, request_id="r0", query=Q_MODULE_BODY_ID)
     man = r.manifest
@@ -171,7 +183,7 @@ def test_the_query_of_record_commits_every_call_boundary_and_names_the_partition
     """Under Q_word, h1 (Mul -> Add inside `model`'s own body) crosses Calls: required, spelt under its fx node (`call_boundaries`); every
     module-body row stays as it was.  The header names the query and, given the Program's SHA-512, its verity/partition/v1 object."""
     P = program()
-    corr = Correspondence(P, implementation_paths=[f"model.layers.0.self_attn.qkv_proj"])
+    corr = Correspondence(P, implementation_paths=["model.layers.0.self_attn.qkv_proj"])
     res = {"program": {"digest": "d0", "function": "f"}, "attention_impls_observed": {}, "target": {"declared": {"compute_capability": [8, 9]}}}
     sha = "ab" * 64
     man = request_manifest(P, corr, res, request_id="r0", program_digest=sha).manifest
@@ -265,6 +277,29 @@ def test_merge_ranks_binds_every_collective_output_to_the_peers_partial_and_keep
         merge_ranks([m0, m0])
     with pytest.raises(ValueError, match="one Program digest"):
         merge_ranks([m0, dict(m1, program_digest=m0["program_digest"])])
+    with pytest.raises(ValueError, match=r"declare worlds \[2, 3\]"):
+        merge_ranks([m0, dict(m1, ranks=3)])
+    with pytest.raises(ValueError, match=r"declare worlds \[1\]"):
+        merge_ranks([dict(m0, ranks=1)])
+    with pytest.raises(ValueError, match="different step compositions"):
+        merge_ranks([m0, dict(m1, steps=[0, 1])])
+    with pytest.raises(ValueError, match=f"disagree on alias '{SITE}'"):
+        merge_ranks([m0, dict(m1, op_path_aliases={SITE: [f"{W}.embed", 0]})])
+
+
+def test_merge_ranks_names_each_ranks_partition_and_never_one_ranks_for_all():
+    def manifest(rank: int, program_digest: str | None) -> dict:
+        P = tp_program()
+        res = {"program": {"digest": f"d{rank}", "function": "f"}, "target": {"declared": {"compute_capability": [8, 9]}}, "tp": {"world": 2, "rank": rank}}
+        return request_manifest(P, Correspondence(P), res, request_id="r0", rank=rank, ranks=2, program_digest=program_digest).manifest
+
+    p0, p1 = "0a" * 64, "1b" * 64
+    m0, m1 = manifest(0, p0), manifest(1, p1)
+    assert (m0["query"]["partition"], m1["query"]["partition"]) == (partition_of(p0), partition_of(p1))
+    assert merge_ranks([m1, m0])["query"] == {**m0["query"], "partition": {"by_rank": {"0": partition_of(p0), "1": partition_of(p1)}}}
+    assert merge_ranks([m0, manifest(1, None)])["query"] == {**m0["query"], "partition": {"by_rank": {"0": partition_of(p0)}}}
+    unnamed = merge_ranks([manifest(0, None), manifest(1, None)])["query"]
+    assert unnamed == manifest(0, None)["query"] and "partition" not in unnamed
 
 
 def test_return_slot_policy_is_switchable():

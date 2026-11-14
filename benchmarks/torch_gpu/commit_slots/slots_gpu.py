@@ -18,7 +18,7 @@ for tensors: what the CPU tests hold to the reference.
 
 The plan holds each add's tensors until the side stream has read them (a thread drops them then) or, at the next add,
 until the producer's stream waits for that read (``Plan.release``, ``LAG``), so a producer may free its tables once it
-has added them: their memory goes back to its stream at the read, not at the side stream's tail, and at the HBM cap its
+has added them: their memory goes back to its stream at the read, not at the side stream's tail, and at the HBM limit its
 next allocations find it there without the allocator's retry (which frees the cache and waits on every stream).
 
 With ``graphs=True`` (``StepCommitter``, ``commit``), each add is one CUDA graph launch: the group's passes, captured on its
@@ -62,7 +62,7 @@ __all__ = ["LAG", "TEMP_BYTES", "E", "Pending", "Plan", "SmPartition", "StepComm
 HERE = Path(__file__).resolve().parent
 ENGINE = HERE.parent / "sha512_rows" / "engine.py"
 LAG = 1               # adds a plan holds unread tensors for before their producer waits for the read: 1 keeps no more
-                      # tables alive at the producer's next allocation than it holds itself (at the HBM cap, 2 ran out)
+                      # tables alive at the producer's next allocation than it holds itself (at the HBM limit, 2 ran out)
 TEMP_BYTES = 1 << 30
 TEMP_BUFFERS = 4      # a pass's live (rows, slots) digest buffers at most: row digests, the run, the rest's leaves, a level
 PAD_CHUNK = 16        # pads alone are hashed 2^16 at a time
@@ -609,8 +609,8 @@ class StepCommitter:
     group's outputs in the layout's order, then ``finish``. On a CUDA plan every call goes on the plan's side stream after
     what the current stream has enqueued, and the plan holds each add's tensors until they are read (``Plan.release``),
     those of the add ``lag`` adds back no longer: the stream current when the step was made (``producer``, the tensors'
-    own) waits for their read instead, as `e2e_h200.commit`'s loop waits ``LAG`` (2) groups back. A producer that drops
-    each group's tables once it has made the next group's (e2e_h200's driver) has their memory back as soon as the side
+    own) waits for their read instead, as a serving loop that commits each layer waits a fixed number of groups back. A
+    producer that drops each group's tables once it has made the next group's has their memory back as soon as the side
     stream has read them, and at the default lag of 1 by its next add at the latest. With ``marks`` (a
     list), each phase appends ``(name, event)``, its end on the side stream (timing only). It holds each slot's frontier
     (``frontier``, (slots, depth + 1, 8)) and a pass's temporaries, never a slot's leaves.

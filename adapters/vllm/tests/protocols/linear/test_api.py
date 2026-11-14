@@ -8,8 +8,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
+
 from verity_vllm.errors import Refused
-from verity_vllm.protocols.linear.api import Arm, Control, Forward, LinearSite, PassSpec, Stack
+from verity_vllm.protocols.linear.api import (
+    Arm,
+    Control,
+    Forward,
+    LinearSite,
+    PassSpec,
+    Stack,
+)
 
 SITES = (LinearSite(0, 0, "model.layers.0.self_attn.qkv_proj", 6144, 4096, "bf16"),
          LinearSite(1, 1, "model.layers.0.mlp.down_proj", 4096, 14336, "bf16", has_bias=True))
@@ -132,20 +140,67 @@ def test_a_forward_that_raises_still_ends_at_the_source_and_its_pass_is_ended_un
     stack.activate(PEARLC)
     with pytest.raises(ZeroDivisionError), stack.pass_() as p, stack.forward():
         stack.apply(SITES[0], Layer(), "x", None, original)
-        1 / 0
+        raise ZeroDivisionError("the forward raises")
     assert src.ended == [0] and p.ended == 1 and stack.passes == []
 
 
 def test_arms_switch_only_between_passes_and_name_the_stacks_executor():
     stack = Stack(SITES, Executor())
     stack.activate(PEARLC)
-    with stack.pass_():
-        with pytest.raises(RuntimeError, match="arms switch between passes"):
-            stack.activate(None)
+    with stack.pass_(), pytest.raises(RuntimeError, match="arms switch between passes"):
+        stack.activate(None)
     stack.activate(Arm("bf16", "bf16"))
     assert stack.apply(SITES[0], Layer(), "x", None, original)[0] == "stock"
     with pytest.raises(ValueError, match="this stack's executor is pouw:pearl-c-sm120-v1-h3"):
         stack.activate(Arm("ncp", "bf16", "pouw:ncp-v2"))
+
+
+def test_an_arm_that_executes_on_a_stack_with_no_executor_is_refused():
+    stack = Stack(SITES)
+    with pytest.raises(ValueError, match="this stack's executor is none"):
+        stack.activate(PEARLC)
+    stack.active = PEARLC                 # past `activate`: the pass refuses it too
+    with pytest.raises(RuntimeError, match="this stack has no executor"), stack.pass_():
+        pass
+
+
+def test_a_pass_inside_a_pass_is_refused_and_the_open_one_goes_on():
+    ex = Executor()
+    stack = Stack(SITES, ex)
+    stack.activate(PEARLC)
+    with stack.pass_(PassSpec(index=1)) as p:
+        with pytest.raises(RuntimeError, match="a pass is already open"), stack.pass_(PassSpec(index=2)):
+            pass
+        assert stack.open_pass is p and ex.opened == [p] and p.ended == 0
+        stack.apply(SITES[0], Layer(), "x", None, original)
+    assert p.ended == 1 and stack.passes == [{"pass": 1, "units": 1}] and stack.open_pass is None
+
+
+def test_a_pass_of_a_stack_that_executes_nothing_is_none_and_is_not_recorded():
+    """With no arm, and under an arm that names no executor, `pass_` opens nothing, on a stack that has an executor
+    too: the forward inside it is vLLM's own ``apply``."""
+    ex = Executor()
+    stack = Stack(SITES, ex)
+    for arm in (None, Arm("bf16", "bf16")):
+        stack.activate(arm)
+        with stack.pass_(PassSpec(index=3)) as p:
+            assert p is None and stack.open_pass is None
+            assert stack.apply(SITES[0], Layer(), "x", None, original)[0] == "stock"
+    assert ex.opened == [] and stack.passes == []
+
+
+def test_a_pass_whose_spec_the_stack_refuses_begins_nothing():
+    """`pass_` holds the spec it is handed against the stack as `activate` holds the arm's: a control nothing implements
+    is refused by name before the executor begins a pass, and the arm's own spec still runs after it."""
+    ex = Executor()
+    stack = Stack(SITES, ex)
+    stack.activate(PEARLC)
+    with pytest.raises(Refused, match="control 'tamper'"), stack.pass_(PassSpec(index=4, controls=(Control("tamper"),))):
+        pass
+    assert ex.opened == [] and stack.open_pass is None and stack.passes == []
+    with stack.pass_() as p:
+        pass
+    assert ex.opened == [p] and stack.passes == [{"pass": PEARLC.spec.index, "units": 0}]
 
 
 def test_the_interface_imports_neither_vllm_nor_torch():
@@ -153,3 +208,19 @@ def test_the_interface_imports_neither_vllm_nor_torch():
     mods = {a.name for n in ast.walk(ast.parse(path.read_text())) if isinstance(n, ast.Import) for a in n.names}
     mods |= {n.module for n in ast.walk(ast.parse(path.read_text())) if isinstance(n, ast.ImportFrom) and n.module}
     assert not {m for m in mods if m.split(".")[0] in ("vllm", "torch", "triton", "numpy")}
+
+
+def test_an_arm_set_past_activate_is_answered_as_an_activated_one():
+    """`Stack.active` set without `activate`: a spec the stack refuses is still `Refused`, the class a caller catches, on
+    a stack with no executor too, and a forward outside a pass names the stack's own executor, or the arm's where the
+    stack has none."""
+    stack = Stack(SITES)
+    stack.active = PEARLC
+    with pytest.raises(Refused, match="schedule 'deferred': vLLM own apply runs serial"), stack.pass_(PassSpec(schedule="deferred")):
+        pass
+    with pytest.raises(RuntimeError, match="^pouw:pearl-c-sm120-v1-h3 is active outside a pass"):
+        stack.apply(SITES[0], Layer(), "x", None, original)
+    stack = Stack(SITES, Executor(name="pouw:other"))
+    stack.active = PEARLC
+    with pytest.raises(RuntimeError, match="^pouw:other is active outside a pass"):
+        stack.apply(SITES[0], Layer(), "x", None, original)

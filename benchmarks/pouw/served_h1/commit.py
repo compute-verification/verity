@@ -20,7 +20,7 @@ key; the reference hm96 salt is 192 fresh OS bytes a leaf, which this replaces b
 from __future__ import annotations
 
 import hashlib
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -87,7 +87,7 @@ def levels(dom: CommitmentDomain, frame_leaves: Sequence[bytes]) -> tuple[tuple[
     return tree_levels(dom, list(frame_leaves))
 
 
-def path(lv, index: int) -> list[bytes]:
+def path(lv: Sequence[Sequence[bytes]], index: int) -> list[bytes]:
     out = []
     for level in lv[:-1]:
         out.append(level[index ^ 1])
@@ -107,3 +107,7 @@ def verify(dom: CommitmentDomain, root: bytes, index: int, frame_leaf: bytes, si
 
 def split(frame_leaves: bytes) -> list[bytes]:
     return [frame_leaves[i:i + 64] for i in range(0, len(frame_leaves), 64)]
+
+
+__all__ = ["CommitmentDomain", "INST", "KEY", "RT", "SALT_TAG", "SCHEMA", "domain", "leaf", "leaves", "levels", "path",
+           "receipt_rows", "s8_rows", "s8_table", "salt", "split", "step_root", "verify"]

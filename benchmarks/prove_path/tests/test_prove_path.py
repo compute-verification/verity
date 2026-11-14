@@ -10,6 +10,11 @@ TP stand-in (adapters/vllm's `tests.pipeline.served_tp`, deferred), without prov
   opening, the advice's negatives are refused by name, and a forged unit is committed consistently (one bit of its rows
   changed, every check before the sample passing), so only the proof can refuse it. A plain audit (`--plain`) takes its window
   only inside plain's interim scope, one table under a stratified sample, which a stratified rate states (`a5.plain_refusal`).
+* A forged rank's verdict (`forged_row`), on records written as a5 and a0 write an audit's: behind the ZK server it passes on
+  no proof of the forged unit's member released, and in a plain audit on Lean refusing the proof it read. A Lean verdict on
+  no proof, refused at setup or for want of the session's files, counts for neither. A window its caller says forges a
+  registered read (`records_audit.forged_outcome`'s ``read``) passes on Lean refusing at setup a row of a read that opens
+  no root, and on nothing else; told it forges a unit, the same record fails.
 * An accepted audit's charge terms: λ_δ, β_δ and their sum, off the audit's profile, and c only where the window's leak count
   is within the charge, so a partial window, whose port from a template it lacks is free, states none (`charge_terms`).
 * A single-GPU run's pieces without its Commit: I2's adapter (its requests, its refusal by name, its Program bodies by digest),
@@ -47,10 +52,11 @@ from typing import Any
 
 import pytest
 
-from verity.protocols.spot.verifier.consumers import exfiltration_bound, location_bits
-from verity.protocols.spot.verifier.one_stage import audit as AU, draw as DR, registration as R
+from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
+from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, registration as R
 from verity.circuits.codec import canonical_json
 from verity.commitments.windows import interface as IF, rows as CS
+from verity_difftest import settings as opt
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline import window_advice as WA
@@ -60,6 +66,7 @@ HERE = Path(__file__).resolve().parent
 VLLM = HERE.parents[2] / "adapters" / "vllm"
 sys.path.insert(0, str(HERE.parent))
 import prove_path as PP  # noqa: E402
+import records_audit as RA  # noqa: E402
 
 sys.path.insert(0, str(HERE.parents[1] / "one_stage"))
 import a5 as A5  # noqa: E402
@@ -270,21 +277,297 @@ def test_an_audit_listens_on_ports_no_other_audit_holds():
     assert PP.PORTS.start <= base and base + 2 * A5.RANK_PORTS <= PP.PORTS.stop
 
 
-def _summary(drawn: list[int], accepted: bool | None, lean: bool, before: bool = True) -> dict:
-    return {"members": [{"k": 0, "template": "T", "n": 8, "base": 0}], "draw": drawn,
-            "checks_before_draw": {"registration": before, "source": True},
-            "audit": {"accepted": accepted, "verdicts": {"m0-verifier/m0": lean, "lean-verify/m0": lean}, "why": {}}}
+#: the ZK server's reason for holding back a forged unit's proof, as the prover's record of the session gives it
+HELD = RA.zk_server_refused() + "circuit: the constraints lincheck final fail on a rep's pads"
+#: the verifier's reason on a session whose proof never arrived
+NO_PROOF = "R7: no proof for circuit/rep0 (lone rep)"
+#: Lean's refusals on no proof: for want of a session's proof file, and at the statement's setup
+NO_FILE = "session files: no such file or directory (error code: 2)\n  file: session-m0/sessions/l0000/circuit.rep0.bin"
+AT_SETUP = "setup: one statement per table expected"
+#: Lean's refusal of a forged unit's proof it read, and the verifier's own of the same proof
+ON_THE_PROOF = "lincheck: ConsistencyFailed (sumcheck-final)"
+PROOF_FAILS = 'Lincheck(ConsistencyFailed { which: "sumcheck-final" })'
+#: a forged window's three checks on where it was stopped (`records_audit.forged_outcome`)
+STOPPED = ("no_proof_released", "lean_refused", "read_refused")
 
 
-@pytest.mark.parametrize("summary, ok", [
-    (_summary([0, 1, 2], False, False), True),
-    (_summary([0, 2], False, False), False),
-    (_summary([0, 1, 2], True, True), False),
-    (_summary([0, 1, 2], False, True), False),
-    (_summary([0, 1, 2], False, False, before=False), False),
-], ids=["refused-by-lean", "forged-unit-not-drawn", "accepted", "lean-accepted", "refused-before-the-draw"])
-def test_a_forged_rank_passes_only_when_lean_refuses_its_drawn_forged_unit(summary, ok):
-    assert PP.forged_row(summary, {"member": 0, "unit": 1})["ok"] is ok
+def _summary(sample: list[int], before: bool = True) -> dict:
+    """What a5's summary of an audit of one member of 8 units says of its sample, ``sample``, and of the checks before
+    it: each passed, but the registration's where not ``before``."""
+    return {"members": [{"k": 0, "template": "T", "n": 8, "base": 0}], "draw": sample,
+            "checks_before_draw": {"registration": before, "source": True}}
+
+
+def _stopped(row: dict) -> dict:
+    """A forged window's verdict ``row``'s three checks on where it was stopped (`STOPPED`), its two others holding: the
+    one on the checks before the sample, and the record rejecting."""
+    checks = dict(row["checks"])
+    stopped = {k: checks.pop(k) for k in STOPPED}
+    assert list(checks.values()) == [True, True], row
+    return stopped
+
+
+def _forged(d: Path, lean_why: str | None, *, zk_server: bool, proofs: int | None = 0, stopped: str | None = None,
+            digest: bool = True, sample: tuple[int, ...] = (0, 1, 2), before: bool = True) -> dict:
+    """A forged rank's audit as a5 leaves one in ``d``, its unit 1 of member 0 forged -> a5's summary of it. Member 0's
+    session has ``proofs`` proof streams in the verifier's record of it (no record where None) and a prover's log, written
+    as `a0.run` writes one, whose ``LIVE`` line gives ``stopped`` as why it stopped short. Lean's verdict on the session
+    refuses with ``lean_why`` (it accepts where None, and the audit with it), its own where ``digest``, else a0's stand-in
+    for none. ``zk_server``: the sessions ran behind the ZK server; without it, plain."""
+    import a0
+
+    accepted = lean_why is None
+    m0_why = None if accepted else NO_PROOF if not proofs else PROOF_FAILS
+    session = d / "session-m0"
+    if proofs is not None:
+        (session / "sessions" / "l0000").mkdir(parents=True)
+        (session / "sessions" / "l0000" / "session.json").write_text(json.dumps({
+            "proof_sha512": [{"stream": f"circuit/rep{r}", "bytes": 9, "sha512": "cd" * 64} for r in range(proofs)],
+            "verdict": {"accepted": accepted, "why": m0_why or ""}}))
+    session.mkdir(parents=True, exist_ok=True)
+    live = {"accepted": accepted, "why": m0_why or "", **({"prover_stopped": stopped} if stopped else {})}
+    a0.run([sys.executable, "-c", f"print({'LIVE' + chr(9) + json.dumps(live)!r})"], session / "prove.log")
+    verdicts = {"m0-verifier/m0": {"accepted": accepted, "why": m0_why},
+                "lean-verify/m0": {"accepted": accepted, "why": lean_why, "of_record": True,
+                                   "digest": "ab" * 64 if digest else None}}
+    (d / "audit.json").write_text(json.dumps({"accepted": accepted, "verdicts": verdicts}))
+    return {**_summary(list(sample), before),
+            "arm": "fw" if zk_server else None, **({} if zk_server else {"plain": {"coins": "tree"}}),
+            "audit": {"accepted": accepted, "verdicts": {k: v["accepted"] for k, v in verdicts.items()},
+                      "why": {k: v.get("why") for k, v in verdicts.items() if not v["accepted"]}}}
+
+
+@pytest.mark.parametrize("lean_why, kw, ok, no_proof, lean", [
+    (NO_FILE, {"stopped": HELD}, True, True, None),
+    (AT_SETUP, {"stopped": HELD}, True, True, None),
+    (NO_FILE, {}, False, False, None),
+    ("no session recorded", {"proofs": None, "stopped": HELD, "digest": False}, False, False, None),
+    (ON_THE_PROOF, {"proofs": 2}, False, False, True),
+    (None, {"proofs": 2}, False, False, False),
+    (NO_FILE, {"stopped": HELD, "sample": (0, 2)}, False, True, None),
+    (NO_FILE, {"stopped": HELD, "before": False}, False, True, None),
+], ids=["no-proof-released", "lean-refused-at-setup", "the-prover-stopped-on-its-own", "no-session-recorded",
+        "a-proof-left-and-lean-refused-it", "accepted", "forged-unit-not-sampled", "refused-before-the-sample"])
+def test_behind_the_zk_server_a_forged_rank_passes_on_no_proof_released(tmp_path, lean_why, kw, ok, no_proof, lean):
+    """Under `--zk` the ZK server holds a false member's proof back, so the rank passes on that: the verifier's record of
+    the forged unit's session lists no proof and the prover's gives the ZK server's refusal. Lean's verdict on that session
+    is on no proof, at setup or for want of the session's files, and is no value of ``lean_refused``; a proof that left
+    fails the rank even where Lean refused it."""
+    row = PP.forged_row(_forged(tmp_path, lean_why, zk_server=True, **kw), {"member": 0, "unit": 1}, tmp_path)
+    checks = row["checks"]
+    assert (row["ok"], row["passes_on"]) == (ok, "no_proof_released"), row
+    assert (checks["no_proof_released"], checks["lean_refused"]) == (no_proof, lean), row
+    before, sampled = (v for k, v in checks.items() if k not in ("rejected", *STOPPED))
+    assert (before, sampled) == ("before" not in kw, "sample" not in kw), row
+    assert checks["rejected"] is (lean_why is not None)
+    assert sorted(row["no_value"]) == (["lean_refused"] if lean is None else []), row
+    if lean is None:
+        assert row["no_value"]["lean_refused"] == f"the Lean verifier read no proof: lean-verify/m0: {lean_why.splitlines()[0]}"
+    assert row["sessions"] == {"m0": {"proofs": kw.get("proofs", 0), "prover_stopped": kw.get("stopped")}}
+
+
+@pytest.mark.parametrize("lean_why, kw, ok, lean", [
+    (ON_THE_PROOF, {"proofs": 2}, True, True),
+    (AT_SETUP, {"proofs": 2}, False, None),
+    (NO_FILE, {}, False, None),
+    ("no verdict (rc 139): ", {"proofs": 2, "digest": False}, False, None),
+    (None, {"proofs": 2}, False, False),
+    (ON_THE_PROOF, {"proofs": 2, "sample": (0, 2)}, False, True),
+], ids=["lean-refused-the-proof", "lean-refused-at-setup", "lean-had-no-proof-file", "no-verdict-of-leans-own", "accepted",
+        "forged-unit-not-sampled"])
+def test_a_plain_forged_rank_passes_on_lean_refusing_the_proof_it_read(tmp_path, lean_why, kw, ok, lean):
+    """Under ``--plain`` no ZK server stands before the verifier, so the proof leaves and the rank passes on Lean's own
+    verdict refusing it. A verdict that read no proof (refused at setup or for want of the session's files, or a0's
+    stand-in for none) is no value of ``lean_refused`` and passes nothing, and ``no_proof_released`` has no value."""
+    row = PP.forged_row(_forged(tmp_path, lean_why, zk_server=False, **kw), {"member": 0, "unit": 1}, tmp_path)
+    checks = row["checks"]
+    assert (row["ok"], row["passes_on"]) == (ok, "lean_refused"), row
+    assert (checks["no_proof_released"], checks["lean_refused"]) == (None, lean), row
+    assert row["no_value"]["no_proof_released"] == "the sessions ran behind no ZK server"
+    assert ("lean_refused" in row["no_value"]) is (lean is None), row
+    assert row["sessions"] == {"m0": {"proofs": kw.get("proofs", 0), "prover_stopped": None}}
+
+
+def _two_members(tmp_path: Path) -> tuple[dict, Path]:
+    """A forged window of two sampled members under ``tmp_path/window``, each session a process pair's (`_forged`): member
+    0 honest, its proof left and Lean accepted it; member 1 false, its proof held back by the ZK server -> a5's summary of
+    it for `records_audit.forged_outcome`, and the window's audit directory."""
+    _forged(tmp_path / "honest", None, zk_server=True, proofs=2)
+    false = _forged(tmp_path / "false", NO_FILE, zk_server=True, stopped=HELD)
+    d = tmp_path / "window"
+    d.mkdir()
+    shutil.copytree(tmp_path / "honest" / "session-m0", d / "session-m0")
+    shutil.copytree(tmp_path / "false" / "session-m0", d / "session-m1")
+    verdicts = {f"{k.split('/')[0]}/m{i}": v for i, w in enumerate(("honest", "false"))
+                for k, v in json.loads((tmp_path / w / "audit.json").read_text())["verdicts"].items()}
+    (d / "audit.json").write_text(json.dumps({"accepted": False, "verdicts": verdicts}))
+    return {**false, "audit": {"accepted": False, "why": {}}}, d
+
+
+def test_a_forged_window_of_several_members_passes_on_the_one_whose_proof_was_held(tmp_path):
+    """The records audit knows no forged member, so it reads every sampled member's session: the honest member's proof
+    left and Lean accepted it, the false member's was held back, and Lean's refusal for want of its files is the only
+    one, so ``lean_refused`` has no value."""
+    import records_audit as RA
+
+    s, d = _two_members(tmp_path)
+    row = RA.forged_outcome(s, d)
+    assert row["ok"] is True and _stopped(row) == {"no_proof_released": True, "lean_refused": None, "read_refused": False}, row
+    assert row["sessions"] == {"m0": {"proofs": 2, "prover_stopped": None}, "m1": {"proofs": 0, "prover_stopped": HELD}}
+    assert row["no_value"] == {"lean_refused": "the Lean verifier read no proof: lean-verify/m1: " + NO_FILE.splitlines()[0]}
+    (d / "session-m1" / "prove.log").write_text((d / "session-m0" / "prove.log").read_text())
+    assert RA.forged_outcome(s, d)["ok"] is False
+
+
+def test_a_session_the_audits_proof_server_proved_has_its_stop_in_that_servers_provers_log(tmp_path):
+    """Behind the ZK server an audit's sessions are proved by its proof server's one prover where the members' statements
+    agree on its setup (`a5.proof_server`). No session directory then holds a prover's log: every session's ``LIVE`` line
+    is in that prover's log beside the sessions, between the lines of its stderr, each labelled with its session's
+    directory. The false member's stop is the line under its own label, and the window passes as one of process pairs
+    does. A stop under another label is not its stop: another window's session of the same name, the honest member's, or
+    no line of its own at all. Nor is a line of another form than the prover's: one not opened ``LIVE`` and a tab, or
+    holding JSON that is no object, gives no stop, and one opened so that holds no JSON raises, so in neither case does
+    the window pass. A session directory that holds a prover's log was a process pair's, and that log is read."""
+    import records_audit as RA
+
+    s, d = _two_members(tmp_path)
+    m0, m1 = ((d / f"session-m{k}").resolve() for k in (0, 1))
+    for session in (m0, m1):
+        (session / "prove.log").unlink()
+
+    def served(*lives: tuple[Path, str | None]) -> dict:
+        """The verdict with the proof server's prover's log holding one ``LIVE`` line a (label, stop) of ``lives``."""
+        (d / "proof-server").mkdir(exist_ok=True)
+        (d / "proof-server" / "prover-cpu.log").write_text("".join(
+            f"prove: a line of the prover's stderr\nLIVE\t"
+            f"{json.dumps({'accepted': stop is None, 'label': str(label), **({'prover_stopped': stop} if stop else {})})}\n"
+            for label, stop in lives))
+        return RA.forged_outcome(s, d)
+
+    assert RA.forged_outcome(s, d)["ok"] is False, "a window with no prover's log anywhere"
+    row = served((m0, None), (m1, HELD))
+    assert row["ok"] is True and _stopped(row) == {"no_proof_released": True, "lean_refused": None, "read_refused": False}, row
+    assert row["sessions"] == {"m0": {"proofs": 2, "prover_stopped": None}, "m1": {"proofs": 0, "prover_stopped": HELD}}
+    for lives in (((m0, None), (tmp_path / "other" / "session-m1", HELD)), ((m0, HELD), (m1, None)), ((m0, None),)):
+        row = served(*lives)
+        assert row["ok"] is False and row["checks"]["no_proof_released"] is False, (lives, row)
+        assert row["sessions"]["m1"] == {"proofs": 0, "prover_stopped": None}, (lives, row)
+    line = json.dumps({"accepted": False, "label": str(m1), "prover_stopped": HELD})
+    for other in (f"LIVE {line}", f"live\t{line}", f" LIVE\t{line}", f"SESSION\t{line}", f"LIVE\t[{line}]",
+                  f"LIVE\t{json.dumps(line)}"):
+        (d / "proof-server" / "prover-cpu.log").write_text(f"{other}\n")
+        assert RA.forged_outcome(s, d)["sessions"]["m1"] == {"proofs": 0, "prover_stopped": None}, other
+    for other in (f"LIVE\t{line[:-1]}", f"LIVE\t{line} and more"):
+        (d / "proof-server" / "prover-cpu.log").write_text(f"{other}\n")
+        with pytest.raises(ValueError):
+            RA.forged_outcome(s, d)
+    (d / "proof-server" / "prover-cpu.log").write_bytes(b"\xff\xfe a line that is no text\nLIVE\t" + line.encode() + b"\n")
+    assert RA.forged_outcome(s, d)["sessions"]["m1"] == {"proofs": 0, "prover_stopped": HELD}
+    (m1 / "prove.log").write_text(f"LIVE\t{json.dumps({'accepted': False})}\n")
+    assert served((m0, None), (m1, HELD))["sessions"]["m1"] == {"proofs": 0, "prover_stopped": None}
+
+
+#: Lean's refusal at setup of a statement whose registered read's row does not open the verifier's root for the value read
+READ = "setup: registered reads: port o0: table row 0 does not open tie/model.safetensors/sha512's registered root at position 0"
+#: its refusal at setup on the registered reads where it held no root to open a row against
+NO_ROOT = "setup: registered reads: the statement reads registered values, and the verifier holds no registered roots (--registered)"
+
+
+def _served_as_registered(d: Path, whys: Mapping[int, str], *, accepted: bool | None = None, digest: bool = True,
+                          before: bool = True) -> dict:
+    """A window of three sampled members and no false unit, as a5 leaves its audit in ``d`` behind the ZK server with its
+    proof server proving every session: each session's two proofs left (the verifier's record of it lists them, and the
+    proof server's prover's log gives no stop under its label) and the verifier accepted them. Lean refused member
+    ``k``'s session with ``whys[k]`` (its own verdict where ``digest``, else a0's stand-in for none) and accepted the
+    others; the record rejects where Lean refused one, unless ``accepted`` says -> a5's summary of it."""
+    accepted = not whys if accepted is None else accepted
+    verdicts, lives = {}, []
+    for k in range(3):
+        session = d / f"session-m{k}"
+        (session / "sessions" / "l0000").mkdir(parents=True)
+        (session / "sessions" / "l0000" / "session.json").write_text(json.dumps({
+            "proof_sha512": [{"stream": f"circuit/rep{r}", "bytes": 9, "sha512": "cd" * 64} for r in range(2)],
+            "verdict": {"accepted": True, "why": ""}}))
+        lives.append(f"prove: a line of the prover's stderr\nLIVE\t{json.dumps({'accepted': True, 'label': str(session.resolve())})}\n")
+        verdicts |= {f"m0-verifier/m{k}": {"accepted": True, "why": None},
+                     f"lean-verify/m{k}": {"accepted": k not in whys, "why": whys.get(k), "of_record": True,
+                                           "digest": "ab" * 64 if digest else None}}
+    (d / "proof-server").mkdir()
+    (d / "proof-server" / "prover-cpu.log").write_text("".join(lives))
+    (d / "audit.json").write_text(json.dumps({"accepted": accepted, "verdicts": verdicts}))
+    return {**_summary(list(range(24)), before), "arm": "fw",
+            "members": [{"k": k, "template": "T", "n": 8, "base": 8 * k} for k in range(3)],
+            "audit": {"accepted": accepted, "verdicts": {k: v["accepted"] for k, v in verdicts.items()},
+                      "why": {k: v.get("why") for k, v in verdicts.items() if not v["accepted"]}}}
+
+
+def test_a_window_whose_registered_read_opens_no_pinned_root_passes_on_lean_refusing_that_read_at_setup(tmp_path):
+    """A window serving other values as the registered ones holds no false unit: its sessions' proofs all leave, the ZK
+    server holding none back, and Lean refuses at setup each session whose registered read's row does not open the root
+    the verifier holds. Its caller says a read is what it forges (``read``), and it passes on that refusal, the proofs
+    that left neither asked for nor held against it, behind the ZK server or behind none. Told the window forges a unit,
+    the same record fails: no proof was held back, and Lean refused none it read. Nor is a proof that did not leave held
+    against a forged read: with one session's proof held back, the window still passes on the read Lean refused."""
+    import records_audit as RA
+
+    reads = {1: READ, 2: READ.replace("model.safetensors", "weights/model.embed_tokens.weight@64")}
+    s = _served_as_registered(tmp_path, reads)
+    left = {f"m{k}": {"proofs": 2, "prover_stopped": None} for k in range(3)}
+    no_proof = {"lean_refused": "the Lean verifier read no proof: " + "; ".join(f"lean-verify/m{k}: {why}" for k, why in reads.items())}
+    row = RA.forged_outcome(s, tmp_path, read=True)
+    assert (row["ok"], row["passes_on"]) == (True, "read_refused"), row
+    assert _stopped(row) == {"no_proof_released": False, "lean_refused": None, "read_refused": True}, row
+    assert (row["sessions"], row["no_value"], row["why"]) == (left, no_proof, s["audit"]["why"]), row
+    plain = RA.forged_outcome({**s, "arm": None}, tmp_path, read=True)
+    assert (plain["ok"], plain["passes_on"]) == (True, "read_refused"), plain
+    assert plain["checks"] == {**row["checks"], "no_proof_released": None}, plain
+    for zk_server, on in ((True, "no_proof_released"), (False, "lean_refused")):
+        unit = RA.forged_outcome({**s, "arm": s["arm"] if zk_server else None}, tmp_path)
+        assert (unit["ok"], unit["passes_on"]) == (False, on), unit
+        assert unit["checks"]["read_refused"] is True and unit["sessions"] == left, unit
+    (tmp_path / "session-m1" / "sessions" / "l0000" / "session.json").write_text(json.dumps({"proof_sha512": []}))
+    (tmp_path / "session-m1" / "prove.log").write_text(f"LIVE\t{json.dumps({'accepted': False, 'prover_stopped': HELD})}\n")
+    row = RA.forged_outcome(s, tmp_path, read=True)
+    assert (row["ok"], row["passes_on"]) == (True, "read_refused"), row
+    assert row["checks"]["no_proof_released"] is True and row["sessions"]["m1"] == {"proofs": 0, "prover_stopped": HELD}, row
+
+
+@pytest.mark.parametrize("whys, kw, read_refused", [
+    ({}, {"accepted": False}, False),
+    ({1: NO_FILE}, {}, False),
+    ({1: ON_THE_PROOF}, {}, False),
+    ({1: AT_SETUP}, {}, False),
+    ({1: NO_ROOT}, {}, False),
+    ({1: READ}, {"digest": False}, False),
+    ({1: READ}, {"accepted": True}, True),
+    ({1: READ}, {"before": False}, True),
+], ids=["lean-refused-nothing", "lean-had-no-proof-file", "lean-refused-a-proof-it-read", "at-setup-on-something-else",
+        "at-setup-with-no-root-held-for-the-read", "no-verdict-of-leans-own", "the-record-accepts", "refused-before-the-sample"])
+def test_a_forged_read_passes_on_nothing_but_lean_refusing_at_setup_a_read_that_opens_no_root(tmp_path, whys, kw, read_refused):
+    """Told the window forges a registered read, the audit passes on one thing: a Lean verdict of its own that refuses a
+    session on a row of a registered read not opening the verifier's root. It does not pass where Lean refused nothing,
+    refused only for want of a session's files, refused a proof it read, or refused at setup on something else: the
+    statement's tables, or the registered reads where the verifier held no root to open a row against. A reason a0 wrote in place of
+    a verdict Lean never gave is not Lean's refusal. Nor does the refusal pass a record that accepts, or a window a check
+    before the sample failed."""
+    import records_audit as RA
+
+    row = RA.forged_outcome(_served_as_registered(tmp_path, whys, **kw), tmp_path, read=True)
+    assert (row["ok"], row["passes_on"], row["checks"]["read_refused"]) == (False, "read_refused", read_refused), row
+    assert row["checks"]["rejected"] is (kw.get("accepted") is not True), row
+    assert row["checks"]["lean_refused"] is (True if whys.get(1) == ON_THE_PROOF else None if whys else False), row
+
+
+def test_a_false_units_record_does_not_pass_as_a_forged_read(tmp_path):
+    """A window of a false unit is stopped by the ZK server holding its proof back, and Lean's refusal of that session is
+    for want of its files: no read was refused. Told it forges a read, the audit fails it; told a unit, it passes."""
+    import records_audit as RA
+
+    s, d = _two_members(tmp_path)
+    row = RA.forged_outcome(s, d, read=True)
+    assert (row["ok"], row["passes_on"]) == (False, "read_refused"), row
+    assert _stopped(row) == {"no_proof_released": True, "lean_refused": None, "read_refused": False}, row
+    assert RA.forged_outcome(s, d)["ok"] is True
 
 
 @pytest.fixture(scope="module")
@@ -400,7 +683,7 @@ def test_a_forged_unit_passes_every_check_before_the_draw_and_differs_in_one_bit
 @pytest.mark.slow
 def test_a_plain_audit_takes_the_stand_ins_window_under_a_stratified_rate_only_inside_one_table(tp):
     """`--plain` covers one table under a stratified sample (`a5.PLAIN_SCOPE`): the stand-in's window, one member over every
-    unit, is inside it under the stratified rate a stream's rule states (stratified-rate:1/2, the stratified law at the K its
+    unit, is inside it under the stratified rate a stream's rule states (stratified-rate:1/2, the stratified sampling design at the K its
     one stratum needs), and refused before the sample under the subset or work rate, its own fixed count (subset:8), sampled
     outside a stream, with a second member, or with registered reads or shared rows. A `--zk` audit is refused for none of these."""
     compiler, requests, bound, _o = PP.compiled(tp["args"]["honest"])
@@ -1224,6 +1507,57 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     assert "the checkpoint is not of record" in capsys.readouterr().err and not out.exists()
 
 
+def test_the_weights_registration_is_also_the_first_record_of_the_serves_registration_log(tmp_path, capsys, monkeypatch):
+    """``weights-registration --deployment-record FILE`` writes the committer's registration also as the first record of the
+    serve's registration log (`window_weights.deployment_record`): a `verity/registration/v2` record chained after nothing
+    that registers each rooted weight parameter's entry as the registration states it, by name, and names the unrooted
+    ones in its header, with nothing of the key; the command says its digest (`registration.digest`), which Pearl+'s W
+    names as its ``previous`` on a serve tied to it. So each weight's root is in the log's first record under its value's
+    name, where the inference-only policy's check looks a registered parameter up, by name and root, in the log it is
+    given (its Lean's `isTheta`). Without the flag no such record is
+    written; a registration with a value that is no weight parameter gives none, and a name under a weight's with a
+    suffix `_param` takes no form of (``/bnk``, ``/b<b>/table``, ``/b<b>/vocab``) is such a value: the record is refused
+    whole, never written without the name."""
+    import functools
+
+    from verity_vllm.program.predict import window_weights as WW
+    from verity_vllm.program.predict.window_weights import Grain
+
+    grain = Grain(gemm_words=512, rows=9, select=64)
+    monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
+    run, hf, ck = tmp_path / "serve", tmp_path / "tiny.json", tmp_path / "ck" / "snap"
+    run.mkdir()
+    serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "default_seed": DEFAULT_SEED,
+             "execution": "bi-eager", "target": {"compute_capability": [12, 0], "num_sms": 188}}
+    (run / "serve.json").write_text(json.dumps(serve))
+    hf.write_text(json.dumps(TINY))
+    man = _tiny_checkpoint(ck, serve["model"], serve["revision"])
+    out, key, first = tmp_path / "weights_registration.json", tmp_path / "private" / "weights.key", tmp_path / "first.json"
+    argv = ["weights-registration", "--serve-run", str(run), "--checkpoint-dir", str(ck), "--checkpoints", str(man),
+            "--hf-config", str(hf), "--key", str(key), "--out", str(out)]
+    capsys.readouterr()
+    assert PP.main(argv) == 0 and "deployment" not in json.loads(capsys.readouterr().out) and not first.exists()
+    assert PP.main([*argv, "--deployment-record", str(first)]) == 0
+    reg, rec, said = json.loads(out.read_text()), json.loads(first.read_text()), json.loads(capsys.readouterr().out)
+    assert rec == WW.deployment_record(reg) and said["deployment"] == R.digest(rec) and said["roots"] == 16
+    assert (rec["format"], rec["protocol"], rec["previous"]) == (R.FORMAT_V2, R.PROTOCOL, None)
+    assert [e["value"] for e in rec["registered"]] == sorted(reg["values"])
+    assert {e["value"]: e for e in rec["registered"]} == reg["values"]
+    assert all(set(e) == {"value", "root", "leaves", "words", "domain"} for e in rec["registered"])
+    assert rec["deployment"] == {"kind": WW.DEPLOYMENT, "program": reg["program"], "grain": reg["grain"],
+                                 "model": {"repo": serve["model"], "revision": serve["revision"]},
+                                 "unrooted": sorted(reg["unrooted"])}
+    assert rec["deployment"]["unrooted"] and not {e["value"] for e in rec["registered"]} & set(reg["unrooted"])
+    assert key.read_bytes().hex() not in first.read_text()
+    stem = next(iter(reg["values"])).rpartition("@")[0]
+    for name in ("x", f"{stem}@192/bnk", f"{stem}@3072/b0/table", f"{stem}@192/b0/vocab"):
+        odd = {**reg, "values": {**reg["values"], name: {**next(iter(reg["values"].values())), "value": name}}}
+        with pytest.raises(ValueError, match=re.escape(f"{name!r} is no weight parameter")):
+            WW.deployment_record(odd)
+    with pytest.raises(ValueError, match="never a weights record"):
+        WW.deployment_record({"schema": "other"})
+
+
 def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears_and_tied_embedding(tmp_path, capsys, monkeypatch):
     """The int8 Llama-3.2-1B is an exact-int8 checkpoint (`engine.int8_checkpoint`'s v1: each decoder linear an s8 weight and an f32
     row scale, the embedding bf16 and tied to the LM head), served under a target whose ``int8_exact`` is ``linears``, and
@@ -1544,6 +1878,38 @@ def test_the_compile_command_writes_its_own_builds_with_no_vllm(tmp_path, monkey
     assert json.loads(out.read_text())["templates"]
 
 
+def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_holds_none(tmp_path, monkeypatch):
+    """At a tied window's close (`serve_tie`, before its sample coin) the row dir holds the seal's commit and no Build:
+    ``advice_compile.py`` writes those once the serve is done. So window-commit's I2 loads each Program from its own Build,
+    written from its compile with its names and no vLLM (`own_builds`) into a directory of its own beside ``--out``, gone
+    once it returns, and writes none into the row dir."""
+    from verity_vllm.program.predict import window_circuit as WC
+
+    monkeypatch.setitem(sys.modules, "vllm", None)
+    s = _tiny_served(tmp_path, monkeypatch)
+    out, seen, load = tmp_path / "v3c-w0" / "window", {}, PP.I2Compiler.load
+
+    class Loaded(Exception):
+        pass
+
+    def loaded(i2, rank, world, requests):
+        p = load(i2, rank, world, requests)
+        seen.update(root=Path(i2.programs_root), held={Path(d).parent for d in p.dirs.values()}, digs=p.digs)
+        raise Loaded
+
+    monkeypatch.setattr(PP.I2Compiler, "load", loaded)
+    monkeypatch.setattr(WC, "takes", lambda *a, **k: None)
+    monkeypatch.setattr(WC, "lower", lambda *a, **k: None)
+    (tmp_path / "advice.bin").write_bytes(s.data)
+    with pytest.raises(Loaded):
+        PP.main(["window-commit", "--serve-run", s.a.serve_run, "--window", "0", "--row-dir", s.a.row_dir, "--advice",
+                 str(tmp_path / "advice.bin"), "--key", str(tmp_path / "private" / "key"), "--registration", "unread",
+                 "--checkpoint-dir", "unread", "--law", "rate:1/4", "--out", str(out)])
+    assert seen["root"].parent == out.parent and seen["held"] == {seen["root"]} and not seen["root"].exists()
+    assert seen["digs"] == {u.id: u.digest for u in s.units} and s.compiles == [True, False]
+    assert not list(Path(s.a.row_dir).glob("build_request*"))
+
+
 def test_a_served_windows_record_states_its_window_ingress_and_its_window_figure_is_the_advices_charge(tmp_path, monkeypatch,
                                                                                                       capsys):
     """TINY's served window over layer 0's ``SiluMul_v2{I=128}`` (`LAYER0`), as the registered compiler's ``circuit`` command
@@ -1600,7 +1966,8 @@ def test_the_committers_key_is_made_once_private_and_read_back(tmp_path):
 def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
     """`h1_tie`: with ``--window-registration`` W, H1's registration of the window, and ``--h1-key``, window-commit's
     circuit reads W's tables (`window_class.Tables` of the serve's H1 window Program); none without W. Refused by name
-    without the key, for a W under another Program, and where H1's rounds aren't the class's outputs."""
+    without the key, for a W under another Program, and where H1's rounds aren't the class's outputs. The verifier's
+    window-circuit, which holds no key (not ``key``), reads the same tables."""
     from verity_vllm.program.predict.window_circuit import Tables
     from verity_vllm.protocols.pouw import h1 as PH
     serve, cls = tmp_path / "serve", SimpleNamespace(outputs=2)
@@ -1617,11 +1984,75 @@ def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
     assert w["program"] == meta["program_digest"] and tables == Tables(64, 8, 2)
     with pytest.raises(ValueError, match="give --h1-key"):
         tie(h1_key=None)
+    verifier = argparse.Namespace(serve_run=str(serve), window_registration=str(tmp_path / "w.json"))
+    assert PP.h1_tie(verifier, cls, key=False) == (w, meta, tables)
     (tmp_path / "other.json").write_text(json.dumps({"program": "q" * 128}))
     with pytest.raises(ValueError, match="is no registration under the serve's H1 window Program"):
         tie(window_registration=str(tmp_path / "other.json"))
     with pytest.raises(ValueError, match="H1's windows are 2 rounds, and the class's 4 outputs"):
         tie(SimpleNamespace(outputs=4))
+
+
+def test_window_commits_design_is_the_one_its_rate_names_over_the_circuit_and_a_fixed_count_is_refused():
+    """`window_design`: window-commit's ``--law`` is the rate the window's audit states to its stream, and the window is
+    committed under the sampling design that rate names over the circuit's own proof blocks, so its registration is under
+    the design the stream holds it to: a subset design under a rate, one K for every stratum under a stratified rate, at
+    1 where the rate's denominator is no smaller than the largest stratum. A fixed count, which no stream takes, is
+    refused by name."""
+    from verity.circuits.defs import bind
+    from verity.circuits.ops import gemm as G
+    from verity.protocols.proofs.spot.verifier import service as S
+
+    small, large = (bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8) for k in (64, 128))
+    circuit = IF.Circuit("test", ((small, 3), (large, 37)))
+    program, query = circuit.program()
+    assert PP.window_design("rate:1/40", circuit) == {"law": "subset", "k": 1}
+    assert PP.window_design("rate:1/8", circuit) == {"law": "subset", "k": 5}
+    assert PP.window_design("stratified-rate:1/40", circuit) == {"law": "stratified", "k": 1}
+    dense = PP.window_design("stratified-rate:1/8", circuit)
+    assert dense["law"] == "stratified" and dense["k"] > 1 and dense == S.params_law("stratified-rate:1/8", program, query, None)[0]
+    for fixed in ("subset:1", "stratified:1", "work:1"):
+        with pytest.raises(ValueError, match="a fixed count") as e:
+            PP.window_design(fixed, circuit)
+        assert repr(fixed) in str(e.value)
+
+
+def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows_retained_steps(tmp_path):
+    """`pearl_tie`: with ``--pearl-passes DIR`` (serve_pearl's ``pearl/w<k>/``) and ``--window-registration`` W, Pearl+'s
+    window record, window-commit's circuit is cut at its linears under W's scheme (`window_class.PearlTables`) and reads
+    the retained passes' manifests at their rounds; `h1_tie` then stands aside. Refused by name without W, beside
+    ``--h1-key``, for a W of no Pearl-C scheme, and where the rounds retained aren't the class's outputs."""
+    from verity_vllm.program.predict.window_circuit import PearlTables
+
+    d, cls = tmp_path / "q", SimpleNamespace(outputs=2)
+    d.mkdir()
+    mans = []
+    for i in range(3):
+        (m := tmp_path / f"m{i}.json").write_text(json.dumps({"salt": f"s{i}"}))
+        mans.append({"pass": 4 + i, "units": 1, "manifest": str(m)})
+    (d / "served.json").write_text(json.dumps({"passes": [{"pass": 3, "units": 0}, *mans]}))
+    (tmp_path / "w.json").write_text(json.dumps({"window": {"scheme": "pearl-c-h100-v1-h3"}, "registered": []}))
+
+    def tie(cls=cls, **kw):
+        args = {"pearl_passes": str(d), "window_registration": str(tmp_path / "w.json"), "h1_key": None, **kw}
+        return PP.pearl_tie(argparse.Namespace(**args), cls)
+    assert PP.pearl_tie(argparse.Namespace(window_registration="w"), cls) is None
+    assert PP.h1_tie(argparse.Namespace(window_registration="w", pearl_passes=str(d)), cls) is None
+    with pytest.raises(ValueError, match=r"retained rounds \[0, 1, 2\] aren't its class's 2 outputs"):
+        tie()
+    (d / "retention.json").write_text(json.dumps({"rounds": [0, 1]}))
+    w, got, rounds, tables = tie()
+    assert [m["salt"] for m in got] == ["s0", "s1"] and rounds == [0, 1] and tables == PearlTables("pearl-c-h100-v1-h3")
+    with pytest.raises(ValueError, match="give --window-registration W"):
+        tie(window_registration=None)
+    with pytest.raises(ValueError, match="--h1-key is H1's prover key"):
+        tie(h1_key="key")
+    (tmp_path / "h1.json").write_text(json.dumps({"program": "p" * 128}))
+    with pytest.raises(ValueError, match="is no Pearl\\+ window record"):
+        tie(window_registration=str(tmp_path / "h1.json"))
+    (d / "retention.json").write_text(json.dumps({"rounds": [1, 2]}))
+    with pytest.raises(ValueError, match=r"retained rounds \[1, 2\]"):
+        tie()
 
 
 @pytest.fixture(scope="module")
@@ -1664,12 +2095,20 @@ def _same_commitment(a: Path, b: Path) -> None:
     assert p.returncode == 0, p.stderr[-3000:]
 
 
+#: the mark of the fused cut's two window tests, which take over five minutes on a node between them, in the fixture they
+#: share (`fused`) and the first one's own window: they stay out of every check but the nightly cold one, which runs each by
+#: name with VERITY_SLOW=1 (check.py's `OPT_IN`), and run wherever else VERITY_SLOW asks
+OPT_IN = pytest.mark.skipif(opt.get("VERITY_SLOW") != "1", reason="over five minutes on a node: VERITY_SLOW=1")
+
+
 @pytest.mark.slow
+@OPT_IN
 def test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_and_the_checkpoint(fused, tmp_path):
     """`commit1` on the sealed served window, the per-expert tables read under the committer's key and the expert weights
     composed from the checkpoint (the window's bundle carries none), against the in-Commit hook's window over the same
     committed step.  Minutes: a window of this cut builds its templates' gates once a process, here and in the fixture's, and
-    its registration walks them at each write.  It catches what the adapter's test of `deferred_rows.from_bundle` can't:
+    its registration walks them at each write, so it runs where VERITY_SLOW=1 asks: by name in the nightly cold check, and in
+    no candidate's check (`OPT_IN`).  It catches what the adapter's test of `deferred_rows.from_bundle` can't:
     this command's own window maker, on a sealed window that names no Programs, committing other rows, tables or weights
     than the Commit's own window of the step.  A copy of the window with one bit of one row flipped is refused."""
     a, compiler = _fused_args(fused), PP.Capped(OfRecord(program_dir=fused["program_dir"]))
@@ -1694,10 +2133,11 @@ def test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_a
 
 
 @pytest.mark.slow
+@OPT_IN
 def test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpoint(fused, tmp_path):
     """Each refusal by name and before any registration is written (seconds once the templates are built, over a minute
     alone): only a sealed window shows that it brings neither the tables nor the expert weights, so that `commit1` refuses
-    the cut unless it is handed both."""
+    the cut unless it is handed both.  It takes the fixture's minutes, so it runs where the test above does (`OPT_IN`)."""
     compiler = PP.Capped(OfRecord(program_dir=fused["program_dir"]))
     with pytest.raises(ValueError, match=r"is not among the committer's tables \(commit_tables\)"):
         PP.commit1(_fused_args(fused, serving_rows_tables=None), compiler, [], {}, tmp_path / "w1")

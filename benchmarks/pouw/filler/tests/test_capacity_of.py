@@ -1,15 +1,11 @@
-"""capacity_of.py: the certified share σ of a measured window, from a scored run's entries and from dcap's lfill lines."""
+"""capacity_of.py: the share σ of a measured window that is verified compute, from a scored run's entries and from
+dcap's lfill lines."""
 from __future__ import annotations
 
 import json
-import sys
-from pathlib import Path
 
+import capacity_of as CO
 import pytest
-
-HERE = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(HERE))
-import capacity_of as CO  # noqa: E402
 
 PI = CO.E.machine("VF3r-16")  # the vector of record the readings below are taken on
 GHZ = 2.092e9
@@ -66,10 +62,10 @@ def test_dfill_reads_split_and_co_alike():
 
 def fstep(pump_share=0.58, fused_ms=7.0, fused0_ms=7.0):
     """an fstep co line at B 1: the pump at `pump_share` of the whole GPU's tensor peak beside the flin step"""
-    cap = 1024 * 188 * GHZ
+    peak = 1024 * 188 * GHZ
     return {"mode": "fstep", "place": "co", "B": 1, "L": 2048, "M": 32, "step_sms": 188, "fill_sms": 188, "mhz": 2092.0,
             "pump": {"share": pump_share, "alone_share": 0.57, "rec_bad": 0}, "fill_share_lin": 0.0, "fill_share_att": 0.0,
-            "step_share_fused": 8.04e9 / (fused_ms * 1e-3) / cap, "slowdown": fused_ms / 6.0, "fused_ms": fused_ms,
+            "step_share_fused": 8.04e9 / (fused_ms * 1e-3) / peak, "slowdown": fused_ms / 6.0, "fused_ms": fused_ms,
             "fused0_ms": fused0_ms, "fused0_vs_base": fused0_ms / 6.0, "lin": {"rec_bad": 0}, "att": {"rec_bad": 0},
             "out_mismatches": 0, "lm_mismatches": 0}
 
@@ -80,6 +76,26 @@ def test_fstep_reads_as_dfill_co():
     assert f["sigma"] == pytest.approx(d["sigma"])
     assert f["sigma_run_clock"] == pytest.approx(d["sigma_run_clock"])
     assert f["co_cost"] == 1.0 and f["rec_bad"] == 0 and f["out_bad"] == 0
+
+
+def test_an_fstep_lines_own_fold_wins_over_the_callers():
+    (own,) = CO.fstep_rows(PI, [dict(fstep(), fold="li")])
+    (asked,) = CO.fstep_rows(PI, [fstep()], fold="li")
+    (duo,) = CO.fstep_rows(PI, [fstep()])
+    assert (own["fold"], asked["fold"], duo["fold"]) == ("li", "li", "duo")
+    for k in ("sigma", "sigma_run_clock"):
+        assert own[k] == pytest.approx(asked[k]) and own[k] < 0.9 * duo[k]
+
+
+def test_each_row_is_read_from_its_own_line():
+    slow = dfill("co")
+    slow["arms"]["co_fill"]["mhz"] = 1800.0
+    d = CO.dfill_rows(PI, [slow, dfill("co")])
+    assert [r["mhz"] for r in d] == [1800.0, 2092.0] and d[0]["sigma"] == pytest.approx(d[1]["sigma"])
+    assert d[0]["sigma_run_clock"] > d[1]["sigma_run_clock"]  # the same MACs a second are more of a slower clock's peak
+    f = CO.fstep_rows(PI, [dict(fstep(), mhz=1800.0), fstep()])
+    assert [r["mhz"] for r in f] == [1800.0, 2092.0] and f[0]["sigma"] < f[1]["sigma"]
+    assert f[0]["sigma_run_clock"] == pytest.approx(f[1]["sigma_run_clock"])  # its shares are of the peak at its clock
 
 
 def test_cli_reads_lfill_lines(tmp_path, capsys):

@@ -23,6 +23,7 @@ Notes are records, never messages.
   research msg linear project edit PROJECT [--team KEY...] [--date D|none] [--status S]   # teams, target date, status
   research msg linear milestone create|edit PROJECT NAME [--date D] [--description-file F] [--rename NEW]
   research msg read --thread TS [--since TS] | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: NAME's unread doorbells
+  research msg read --as NAME --mark-through TS [--json]           # mark read only those at or before TS (a --peek listing's last)
   research msg names open|read|close|list|revoke [--as NAME] [--forward-to @NAME] [--succeeds] [--poster BC_ID]  # the names you answer to
   research msg traffic [--hours H] [--json]                        # the monitor: doorbells, pauses, dropped names, unanswered asks
   research msg traffic --latency [--hours H] [--json]              # per lane: asks, answered (by record), median and p90 minutes
@@ -88,6 +89,7 @@ from __future__ import annotations
 import argparse
 import base64
 import fcntl
+import fnmatch
 import html
 import http.client
 import json
@@ -278,6 +280,7 @@ def origin_registry(path: Path, fetch: bool = True) -> dict | None:
 
 
 GROUP_ID_RE = re.compile(r"^S[0-9A-Z]{8,}$")
+STAFF_RE = re.compile(r"[a-z0-9*?][a-z0-9*?._-]{0,40}")                 # a `staffs` name pattern: `review-*`
 
 
 def group_ids(h: dict) -> set[str]:
@@ -384,6 +387,12 @@ def check_registry(reg: dict, path: str) -> dict:
         if not isinstance(ex, list) or len(ex) > EXAMPLES_MAX or not all(isinstance(q, str) and 0 < len(q) <= EXAMPLE_CHARS for q in ex):
             raise SlackError(f"registry {path}: @{name}'s examples: at most {EXAMPLES_MAX} questions, each one line of at most "
                              f"{EXAMPLE_CHARS} characters, in a newcomer's words (what the chat router matches a post against)")
+        staffs, names = h.get("staffs", []), {o.get("handle") for o in reg["handles"]}
+        if not isinstance(staffs, list) or any(not isinstance(p, str) or not STAFF_RE.fullmatch(p)
+                                               or any(fnmatch.fnmatchcase(n, p) for n in names if n) for p in staffs):
+            raise SlackError(f"registry {path}: @{name}'s staffs: the names of the agents its holder alone may register "
+                             "(`research queue delegate`), as lower-case patterns such as `review-*`, each matching no handle, "
+                             "so it can never hand a lane's own name to another")
         lineage = h.get("lineage", [])
         if not isinstance(lineage, list) or not all(isinstance(a, str) and AGENT_ID_RE.fullmatch(a) for a in lineage):
             raise SlackError(f"registry {path}: @{name}'s lineage: the agent ids that held it before (bc-<8 hex> or its full "
@@ -1832,10 +1841,9 @@ def cmd_subscriptions(ns: argparse.Namespace, reg: dict) -> int:
             print(f'subscribe_slack_channel(channelId="{cid or "<#" + key + " id not recorded>"}", topLevelOnly=true, '
                   f"expiresInSeconds={EXPIRES_S})   # #{key}")
     if key := h.get("linear"):
-        print(f'subscribe_linear_issue(options={{"scope": "team", "teamId": "{key}"}}, expiresInSeconds={EXPIRES_S})   '
-              f"# an issue filed into or changing state in @{h['handle']}'s Linear team, a human's included")
-        print(f"# but no comment subscription on {key}: nearly every comment there is @{h['handle']}'s own, and it would wake "
-              "it for each (every handle writes as one app)")
+        print(f"# no Linear subscription on {key}: its events are nearly all @{h['handle']}'s own writes (every handle writes as "
+              "one app), and another handle's ask rings the inbox; a person's new issue rings it through the sweep's audit "
+              "(`unheard`)")
     print(f"# and subscribe_slack_thread(channelId, threadTs, expiresInSeconds={EXPIRES_S}) only for a thread a human may "
           f"answer in (@{h['handle']}'s #ask-daniel card, a thread a named human posted in); renew on every wake")
     print(f"# not for a thread between handles: the inbox already rings @{h['handle']} for each reply addressed to it, and "
@@ -2174,7 +2182,8 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
         if not ns.worker:
             author = acting_as(ns, reg, need(ns.handle, "--as HANDLE, the comment's sender (a lane's worker: --worker NAME)"))["handle"]
             warn_unrouted(text, reg, author)
-        info = lin.gql("query($id: String!) { issue(id: $id) { id identifier url team { key } } }", {"id": issue})["issue"]
+        info = lin.gql("query($id: String!) { issue(id: $id) { id identifier url team { key } labels { nodes { name } } } }",
+                       {"id": issue})["issue"]
         if ns.worker:
             lane = worker_lane or linear.owners(reg).get(info["team"]["key"])
             if not lane:
@@ -2199,12 +2208,12 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
 
 
 def ring_comment(ns: argparse.Namespace, reg: dict, author: str, issue: dict, text: str) -> list[str]:
-    """Ring the inbox of the issue's team's handle and of each name the comment starts with, as `send` would, so nobody
-    polls Linear for comments (no one subscribes to them: every handle writes as one app).  The author is never
-    rung.  One line per name."""
+    """Ring the inbox of the issue's lane (`linear.lane`: its `lane:` label's handle, else its team's handle) and of each
+    name the comment starts with, as `send` would, so nobody polls Linear for comments (no one subscribes to them: every
+    handle writes as one app).  The author is never rung.  One line per name."""
     from . import linear
 
-    owner = linear.owners(reg).get(issue["team"]["key"])
+    owner = linear.lane(issue, reg)
     names = list(dict.fromkeys(([owner] if owner else []) + lead_names(text, reg)))
     routes, api, lines = routes_of(ns), client(ns), []
     ch = channel_id(ns, reg, FRONT_DOOR)
@@ -2489,6 +2498,8 @@ def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
         raise SlackError("read: --thread reads one thread; it doesn't take --as")
     if not (ns.thread or ns.since or ns.handle):
         raise SlackError("read: one of --thread TS, --since TS or --as NAME is required")
+    if ns.mark_through is not None and (not ns.handle or ns.peek or ns.urgent):
+        raise SlackError("read: --mark-through TS marks NAME's doorbells: pass --as NAME, and neither --peek nor --urgent")
     if ns.handle:
         name = ns.handle.lstrip("@")
         r = routes_of(ns).get_route(name, fresh=name not in routes_of(ns).local)
@@ -2839,15 +2850,42 @@ def render_unread(name: str, msgs: list[dict], reg: dict) -> str:
     return "\n".join(lines)
 
 
+def listed_through(name: str, msgs: list[dict]) -> str:
+    """The line a `--peek` listing ends with: the newest doorbell it showed, and the command that marks it and those before it
+    read and none that came after."""
+    newest = max((m["ts"] for m in msgs), key=float)
+    at = datetime.fromtimestamp(float(newest), UTC).strftime("%H:%M:%SZ")
+    return (f"listed through {newest} ({at}): `research msg read --as {name} --mark-through {newest}` marks these read, and "
+            "none that came after")
+
+
+def mark_through(name: str, msgs: list[dict], through: str, as_json: bool = False) -> int:
+    """Mark read the unread doorbells ``msgs`` at or before ``through`` (the ts a listing ended with), never one after it: a
+    doorbell that rang after the listing stays unread, however much later the mark is run."""
+    done = [m for m in msgs if float(m["ts"]) <= float(through)]
+    left = [m["ts"] for m in msgs if float(m["ts"]) > float(through)]
+    mark_read(name, done)
+    if as_json:
+        print(json.dumps({"marked": [m["ts"] for m in done], "unread": left}))
+    else:
+        at = datetime.fromtimestamp(float(through), UTC).strftime("%H:%M:%SZ")
+        print(f"SLACK @{name}: marked {len(done)} read through {through} ({at}); {len(left)} newer stay unread")
+    return 0
+
+
 def inbox_read(ns: argparse.Namespace, reg: dict, r: dict) -> int:
     r = {**r, "channel": r.get("channel") or channel_id(ns, reg, FRONT_DOOR)}
     api = client(ns)
     since = getattr(ns, "since", None)
     msgs = unread(api, r, since)
+    if (through := getattr(ns, "mark_through", None)) is not None:
+        return mark_through(r["name"], msgs, through, ns.json)
     if ns.json:
         print(json.dumps(msgs, indent=2, ensure_ascii=False))
     else:
         print(render_unread(r["name"], msgs, reg))
+        if ns.peek and msgs:
+            print(listed_through(r["name"], msgs))
     if not ns.peek:
         mark_read(r["name"], msgs)
     return 1 if ns.urgent and not any(urgent_doorbell(m, reg) for m in msgs) else 0
@@ -4674,7 +4712,10 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                         "with --as, NAME's doorbells since TS")
     p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="NAME's unread doorbells")
     p.add_argument("--limit", type=int, default=None)
-    p.add_argument("--peek", action="store_true", help="--as: don't mark them read")
+    p.add_argument("--peek", action="store_true", help="--as: don't mark them read; the listing ends with the newest ts it showed")
+    p.add_argument("--mark-through", default=None, metavar="TS", type=since_ts,
+                   help="--as: list nothing, and mark read only the unread doorbells at or before TS (the ts a --peek listing "
+                        "ended with), never one that rang after it")
     p.add_argument("--urgent", action="store_true", help="--as: exit 1 unless an unread doorbell is URGENT")
     p.add_argument("--json", action="store_true")
     p = cmd("ask-daniel", "an ask's page in the Asks for Daniel database and its card in #ask-daniel; `status ID` reads the card's "

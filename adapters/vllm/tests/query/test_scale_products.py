@@ -5,16 +5,27 @@ form (B), the Build and the word check know the family.  The source: tests/acqui
 from __future__ import annotations
 
 import json
+import random
 import types
 
+import numpy as np
 import pytest
-
-from tests.check.test_sampled_replay_fp8 import G, H, I, _program_fp8
-from tests.check.test_sampled_replay_v2_addresses import _v2_manifest
-from verity.definitions.registry import fp8
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_call
+from verity.circuits.evaluation.reference import standalone_call
+from verity.circuits import word as W_
 from verity.definitions.numerics import fp8_twins
+from verity.definitions.registry import fp8
+
+from tests.check.test_sampled_replay_fp8 import INTER, G, H, _program_fp8
+from tests.check.test_sampled_replay_v2_addresses import _v2_manifest
+from verity_vllm.acquire import plan
+from verity_vllm.check import oracle_compare as OC
+from verity_vllm.check.replay import coverage
+from verity_vllm.pipeline import manifest as M
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query.manifest import format as fmt
+from verity_vllm.query import program_view as PV
 
 GU, DN = "model.layers.0.mlp.gate_up_proj", "model.layers.0.mlp.down_proj"
 
@@ -37,14 +48,6 @@ def test_a_ragged_n_commits_its_partial_blocks_products_in_the_sources_order():
     """N = 320 = 2 * 128 + 64: the partial last weight block's K/G products are committed after the whole blocks', nb major, kb minor --
     word for word `fp8_twins.scale_products(x_s, w_s)` over the [cdiv(N, G), K/G] `weight_scale_inv`, the words the source acquires.
     GLM-5.3's `fused_qkv_a_proj` (K = 6144, N = 2624) is 21 x 48 of them per row."""
-    import random
-
-    import numpy as np
-
-    from verity.circuits.evaluation.reference import standalone_call
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate_call
-
     K, N, G = 256, 320, 128
     nb, kb = SP.blocks({"K": K, "N": N, "G": G})
     assert (nb, kb) == (3, 2) and SP.blocks({"K": 6144, "N": 2624, "G": G}) == (21, 48)
@@ -61,11 +64,9 @@ def test_a_ragged_n_commits_its_partial_blocks_products_in_the_sources_order():
 
 
 def test_a_ragged_n_site_is_named_with_its_partial_block():
-    from verity.definitions import word as W_
-
     g = {"family": fp8.ScaledMmFp8BlockSharedScale.id, "statics": {"K": 256, "N": 320, "G": 128},
          "definition": f"{fp8.ScaledMmFp8BlockSharedScale.id}{{K=256,N=320,G=128}}", "calls": 3, "where": DN}
-    assert W_.check_calls([g], acquired=SP.TAP_WORDS)["acquired_interior_words"] == 3 * 3 * 2
+    assert W_.check_calls([g], acquired=SP.TAP_WORDS, specialize=PV.specialization)["acquired_interior_words"] == 3 * 3 * 2
     rows = []
     pop = types.SimpleNamespace(P=types.SimpleNamespace(calls=[types.SimpleNamespace(id=i, family=g["family"], statics=g["statics"],
                                                                                      definition=g["definition"]) for i in range(3)]),
@@ -80,7 +81,7 @@ def test_the_policy_names_the_products_of_every_linear_module_and_step():
     inst = fp8_program(True)
     off, on = _v2_manifest(inst, taps=()), _v2_manifest(inst, taps=(SP.POLICY,))
     rows = [x for x in on["identities"] if x["family"] == SP.FAMILY]
-    dn, gu = (H // G) * (I // G), (2 * I // G) * (H // G)
+    dn, gu = (H // G) * (INTER // G), (2 * INTER // G) * (H // G)
     assert [(x["step"], x["op_path"], x["rows"], x["width"]) for x in rows] == [
         (0, DN, 2, dn), (0, GU, 2, gu), (1, DN, 1, dn), (1, GU, 1, gu), (2, DN, 1, dn), (2, GU, 1, gu)]
     assert all(x["output_member"] == SP.MEMBER and x["dtype"] == "f32" and x["element_range"] == [0, x["rows"] * x["width"]]
@@ -91,7 +92,7 @@ def test_the_policy_names_the_products_of_every_linear_module_and_step():
     assert strip(on) == strip(off) and on["complete"]
     assert SP.policy_of(on) and not SP.policy_of(off)
     assert on["query"]["scale_products"]["words"] == 4 * (dn + gu) and on["query"]["required_families"][-1] == SP.FAMILY
-    assert SP.manifest_sites(on) == {GU: {"n_blocks": 2 * I // G, "k_blocks": H // G}, DN: {"n_blocks": H // G, "k_blocks": I // G}}
+    assert SP.manifest_sites(on) == {GU: {"n_blocks": 2 * INTER // G, "k_blocks": H // G}, DN: {"n_blocks": H // G, "k_blocks": INTER // G}}
 
 
 def test_a_program_without_the_shared_tile_is_unchanged():
@@ -109,16 +110,10 @@ def test_manifest_sites_refuses_two_geometries_at_one_site():
 
 
 def test_the_family_is_in_every_vocabulary():
-    from verity_vllm.acquire import plan
-    from verity_vllm.check import oracle_compare as OC
-    from verity_vllm.check.replay import coverage
-    from verity_vllm.pipeline import manifest as M
-    from verity.definitions import word as W_
-
     assert SP.FAMILY in fmt.FAMILIES and plan.ROUTE_OF_FAMILY[SP.FAMILY] == "scale_tap" and SP.FAMILY in coverage.QUERY_FAMILY_MECHANISM
     assert M.DEFAULT_TAPS == (SP.POLICY,)
     entry = {"identity": {"op_path": DN, "output_member": SP.MEMBER}, "name": f"{DN}/{SP.MEMBER}"}
     assert OC._family_of(entry) == "hidden_stream"
     g = {"family": fp8.ScaledMmFp8BlockSharedScale.id, "statics": {"K": 256, "N": 384, "G": 128},
          "definition": f"{fp8.ScaledMmFp8BlockSharedScale.id}{{K=256,N=384,G=128}}", "calls": 3, "where": DN}
-    assert W_.check_calls([g], acquired=SP.TAP_WORDS)["acquired_interior_words"] == 3 * 3 * 2
+    assert W_.check_calls([g], acquired=SP.TAP_WORDS, specialize=PV.specialization)["acquired_interior_words"] == 3 * 3 * 2

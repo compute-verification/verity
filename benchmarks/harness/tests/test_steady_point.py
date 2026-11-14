@@ -17,7 +17,7 @@ import pytest
 from test_steady import DROP, END, SESSIONS, START, lease, made
 from verity_config import ConfigError
 
-from verity_bench import jobs, kit, settings
+from verity_bench import jobs, kit, served_table, settings
 from verity_bench import prove_records as R
 from verity_bench import steady as S
 from verity_bench import steady_node as N
@@ -29,24 +29,27 @@ from verity_bench.tool import STEADY_POINT
 CIRCUIT = "the circuit of gemm64\n"
 PIN = hashlib.sha512(CIRCUIT.encode()).hexdigest()
 DRIVER, CUDA = "570.86.15", "12.8.93"
-SETUP = "benchmarks/specs/steady-setup.sh"
+SETUP = "benchmarks/harness/specs/steady-setup.sh"
 RECORD = "prove-glm53-flock-steady"
 #: a made-up artifact of the store, and the directory in it that holds a staged statement
 ART, IN_ART = "art:" + "5" * 64, "out/row1"
 #: the made-up run of `test_steady.made`: two provers of `gemm64` on GPU 3, in the run `r-own`
 POINT, RUN = "gemm64-k2", "r-own"
-#: what a row of a run of the point holds beyond the script's own fields
-OWN = {"pin": PIN, "cores": {"count": 10, "list": "0-9", "numa_nodes": [0]},
+#: the staged statement of the spec's `gemm64` row, of `n` 1, as a row states it
+STAGE = {"definition": "Gemm_v1{K=64}", "k_log": 20, "blocks": 1, "full": 8}
+#: what a row of a run of the point holds beyond the script's own fields, and its statement's units as the script writes
+#: them (`n` and `stage.blocks`)
+OWN = {"pin": PIN, "n": 1, "stage": STAGE, "cores": {"count": 10, "list": "0-9", "numa_nodes": [0]},
        SP.VERSIONS: {"driver": DRIVER, "cuda_toolkit": CUDA}}
 #: the made-up tree's files beside its spec: the prover's source, its tests and its document, a build script, the timing
 #: script and the spec's setup
 FILES = {
     "uv.lock": "lock\n", "pyproject.toml": "",
-    "verity/protocols/flock/prover/src/main.rs": "fn main() {}\n",
-    "verity/protocols/flock/prover/cuda/ntt.cu": "// kernel\n",
-    "verity/protocols/flock/prover/tests/test_prover.py": "def test(): pass\n",
-    "verity/protocols/flock/prover/README.md": "the prover\n",
-    "verity/protocols/flock/pod/70-class-sweep.sh": "FLAGS=-O3\n",
+    "verity/protocols/proofs/flock/prover/src/main.rs": "fn main() {}\n",
+    "verity/protocols/proofs/flock/prover/cuda/ntt.cu": "// kernel\n",
+    "verity/protocols/proofs/flock/prover/tests/test_prover.py": "def test(): pass\n",
+    "verity/protocols/proofs/flock/prover/README.md": "the prover\n",
+    "verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh": "FLAGS=-O3\n",
     "benchmarks/one_stage/server_rate.py": "# times\n",
     SETUP: "export VERITY_BENCH_STEADY_BIN=/built/prover\n",
 }
@@ -87,11 +90,11 @@ def tree(tmp_path: Path, spec: dict | None = None, files: dict | None = None, na
         else:
             doc[key] = change
     root = tmp_path / name
-    for path, text in ({**FILES, "benchmarks/specs/steady.toml": toml(doc)} | (files or {})).items():
+    for path, text in ({**FILES, "benchmarks/harness/specs/steady.toml": toml(doc)} | (files or {})).items():
         if text is not None:
             (root / path).parent.mkdir(parents=True, exist_ok=True)
             (root / path).write_text(text)
-    return root, "benchmarks/specs/steady.toml"
+    return root, "benchmarks/harness/specs/steady.toml"
 
 
 def git(root: Path) -> None:
@@ -100,6 +103,38 @@ def git(root: Path) -> None:
     subprocess.run("git init -q && git add . && GIT_AUTHOR_DATE='@1700000000 +0000' GIT_COMMITTER_DATE='@1700000000 +0000' "
                    "git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false commit -qm spec",
                    shell=True, cwd=root, check=True)
+
+
+def test_a_spec_was_added_when_its_first_path_was(tmp_path, monkeypatch):
+    """A spec that moved with its directory was added when the file was added under the former one: the runs recorded
+    under that path started after it, and the pull of the store's attempts reaches back to them."""
+
+    import subprocess
+
+    from verity_bench.vllm.presets import FORMER_SPECS
+
+    def commit(at: int, *argv: str) -> None:
+        when = f"@{at} +0000"
+        for step in (argv, ("add", "-A"), ("-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false",
+                                           "commit", "-qm", "specs")):
+            if step:
+                subprocess.run(["git", *step], cwd=root, check=True,
+                               env={**settings.environ(), "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when})
+
+    monkeypatch.setattr(served_table, "SPECS", "elsewhere/specs")
+    root = tmp_path / "tree"
+    (root / FORMER_SPECS).mkdir(parents=True)
+    (root / FORMER_SPECS / "moved.toml").write_text("moved\n")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    commit(1700000000)
+    (root / "elsewhere" / "specs").mkdir(parents=True)
+    (root / "elsewhere" / "specs" / "new.toml").write_text("new\n")
+    commit(1700009000, "mv", f"{FORMER_SPECS}/moved.toml", "elsewhere/specs/moved.toml")
+    assert not (root / FORMER_SPECS / "moved.toml").exists()
+    assert served_table.spec_added(root, "moved") == 1700000000
+    assert served_table.spec_added(root, "new") == 1700009000
+    with pytest.raises(ValueError, match="git has no commit adding elsewhere/specs/neither.toml here"):
+        served_table.spec_added(root, "neither")
 
 
 def load(tmp_path: Path, **changes) -> SP.SteadySpec:
@@ -151,7 +186,7 @@ REFUSED_SPECS = [
     ({"spec": {"driver": "v570"}}, "`driver` 'v570' isn't a version"),
     ({"spec": {"cuda_toolkit": ""}}, "`cuda_toolkit` '' isn't a version"),
     ({"spec": {"setup": None}}, "setup"),
-    ({"spec": {"setup": "benchmarks/specs/none.sh"}}, "`setup` 'benchmarks/specs/none.sh' is no script of the source tree"),
+    ({"spec": {"setup": "benchmarks/harness/specs/none.sh"}}, "`setup` 'benchmarks/harness/specs/none.sh' is no script of the source tree"),
     ({"spec": {"setup": "../steady-setup.sh"}}, "is no script of the source tree"),
     ({"spec": {"env": {"CUDA_VISIBLE_DEVICES": "0"}}}, "`env` can't set 'CUDA_VISIBLE_DEVICES'"),
     ({"spec": {"env": {"VERITY_BENCH_STEADY_BIN": "/x"}}}, "`env` can't set 'VERITY_BENCH_STEADY_BIN'"),
@@ -171,7 +206,7 @@ REFUSED_SPECS = [
     ({"spec": {"row0": {"staged": ART}}}, "nor a directory of an artifact in the store"),
     ({"spec": {"row0": {"staged": f"{ART}/out/../row"}}}, "nor a directory of an artifact in the store"),
     ({"spec": {"row0": {"staged": f"{ART}/out/*"}}}, "nor a directory of an artifact in the store"),
-    ({"spec": {"row0": {"type": "head block"}}}, "two rows are named head_block in the rate file"),
+    ({"spec": {"row0": {"type": "head block", "n": 4}}}, "two rows are named head_block at n = 4 in the rate file"),
 ]
 
 
@@ -192,17 +227,17 @@ BOUND = {
     "the driver's version": {"spec": {"driver": "570.86.16"}},
     "the CUDA toolkit's version": {"spec": {"cuda_toolkit": "12.9.41"}},
     "the run's environment": {"spec": {"env": {"RUST_MIN_STACK": "2147483648"}}},
-    "which script is the setup": {"spec": {"setup": "benchmarks/specs/other-setup.sh"},
-                                  "files": {"benchmarks/specs/other-setup.sh": FILES[SETUP]}},
+    "which script is the setup": {"spec": {"setup": "benchmarks/harness/specs/other-setup.sh"},
+                                  "files": {"benchmarks/harness/specs/other-setup.sh": FILES[SETUP]}},
     "the block type": {"spec": {"row0": {"type": "gemm32"}}},
     "the statement's units": {"spec": {"row0": {"n": 2}}},
     "the statement's pin": {"spec": {"row0": {"pin": "cd" * 64}}},
     "the warm sessions": {"spec": {"row0": {"warm": 3}}},
     "the period its sessions file in": {"spec": {"row0": {"period": 4}}},
-    "the prover's source": {"files": {"verity/protocols/flock/prover/src/main.rs": "fn main() { loop {} }\n"}},
-    "a kernel": {"files": {"verity/protocols/flock/prover/cuda/ntt.cu": "// another kernel\n"}},
-    "a new source file": {"files": {"verity/protocols/flock/prover/src/extra.rs": "\n"}},
-    "the build's flags": {"files": {"verity/protocols/flock/pod/70-class-sweep.sh": "FLAGS=-O2\n"}},
+    "the prover's source": {"files": {"verity/protocols/proofs/flock/prover/src/main.rs": "fn main() { loop {} }\n"}},
+    "a kernel": {"files": {"verity/protocols/proofs/flock/prover/cuda/ntt.cu": "// another kernel\n"}},
+    "a new source file": {"files": {"verity/protocols/proofs/flock/prover/src/extra.rs": "\n"}},
+    "the build's flags": {"files": {"verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh": "FLAGS=-O2\n"}},
     "the timing script": {"files": {"benchmarks/one_stage/server_rate.py": "# times otherwise\n"}},
     "the setup's text": {"files": {SETUP: "export VERITY_BENCH_STEADY_BIN=/other/prover\n"}},
 }
@@ -214,8 +249,8 @@ UNBOUND = {
     "where a statement is staged": {"spec": {"row0": {"staged": "/dev/shm/gemm64"}}},
     "the row's other counts": {"spec": {"row0": {"provers": [2]}}},
     "another row": {"spec": {"row": [SPEC["row"][0], SPEC["row"][1] | {"n": 8, "warm": 4}]}},
-    "the prover's tests": {"files": {"verity/protocols/flock/prover/tests/test_prover.py": "def test(): assert 1\n"}},
-    "a document": {"files": {"verity/protocols/flock/prover/README.md": "the prover, again\n"}},
+    "the prover's tests": {"files": {"verity/protocols/proofs/flock/prover/tests/test_prover.py": "def test(): assert 1\n"}},
+    "a document": {"files": {"verity/protocols/proofs/flock/prover/README.md": "the prover, again\n"}},
     "a file outside the closure": {"files": {"benchmarks/harness/verity_bench/cli.py": "# the harness\n"}},
 }
 
@@ -241,8 +276,9 @@ def test_the_identity_names_no_commit_and_each_point_has_its_own(tmp_path):
     root, spec = tree(tmp_path)
     plan = P.make_plan(root / spec, root=root, lookup=lambda spec, item, identity: (None, None))
     covered = SP.closure(root, plan.spec)
-    assert sorted(covered) == ["benchmarks/one_stage/server_rate.py", SETUP, "verity/protocols/flock/pod/70-class-sweep.sh",
-                               "verity/protocols/flock/prover/cuda/ntt.cu", "verity/protocols/flock/prover/src/main.rs"]
+    assert set(covered) == {"benchmarks/one_stage/server_rate.py", SETUP, "verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh",
+                            "verity/protocols/proofs/flock/prover/cuda/ntt.cu", "verity/protocols/proofs/flock/prover/src/main.rs"}
+    assert len(covered) == 5
     assert plan.toolchain == P.Sources(plan.toolchain.files_sha256, 5)
     assert jobs.plan_json(plan)["points"][0] == {"point": plan.points[0].point.to_json(), "identity": found["gemm64-k1"],
                                                  "passing_run": None}
@@ -257,19 +293,19 @@ def test_in_a_checkout_only_tracked_files_count_so_a_shipped_tree_gives_the_same
     root, spec = tree(tmp_path, name="checkout")
     git(root)
     assert identities(tmp_path, "checkout") == shipped
-    for left in ("verity/protocols/flock/prover/target/release/flock-circuit", "verity/protocols/flock/prover/src/draft.rs",
-                 "verity/protocols/flock/pod/notes.sh"):
+    for left in ("verity/protocols/proofs/flock/prover/target/release/flock-circuit", "verity/protocols/proofs/flock/prover/src/draft.rs",
+                 "verity/protocols/proofs/flock/prover/pod/notes.sh"):
         (root / left).parent.mkdir(parents=True, exist_ok=True)
         (root / left).write_text("left by a build\n")
     assert identities(tmp_path, "checkout") == shipped, "untracked"
-    assert identities(tmp_path, "checkout", files={"verity/protocols/flock/prover/src/main.rs": "fn main() { loop {} }\n"}
+    assert identities(tmp_path, "checkout", files={"verity/protocols/proofs/flock/prover/src/main.rs": "fn main() { loop {} }\n"}
                       )[POINT] != shipped[POINT], "a tracked file as the working tree has it"
-    subprocess.run(["git", "add", "verity/protocols/flock/prover/src/draft.rs"], cwd=root, check=True)
-    assert identities(tmp_path, "checkout", files={"verity/protocols/flock/prover/src/main.rs": FILES[
-        "verity/protocols/flock/prover/src/main.rs"]})[POINT] != shipped[POINT], "a newly tracked source"
+    subprocess.run(["git", "add", "verity/protocols/proofs/flock/prover/src/draft.rs"], cwd=root, check=True)
+    assert identities(tmp_path, "checkout", files={"verity/protocols/proofs/flock/prover/src/main.rs": FILES[
+        "verity/protocols/proofs/flock/prover/src/main.rs"]})[POINT] != shipped[POINT], "a newly tracked source"
 
 
-@pytest.mark.parametrize("gone", ["benchmarks/one_stage/server_rate.py", "verity/protocols/flock/pod/70-class-sweep.sh"])
+@pytest.mark.parametrize("gone", ["benchmarks/one_stage/server_rate.py", "verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh"])
 def test_a_tree_without_a_path_the_identity_covers_is_refused(tmp_path, gone):
     root, spec = tree(tmp_path, files={gone: None})
     with pytest.raises(ValueError, match=f"holds no {re.escape(gone.rsplit('/', 1)[0] if 'pod' in gone else gone)}"):
@@ -462,6 +498,7 @@ NOT_IT = [
     ({}, {"changes": {"cores": {"count": 10, "list": "0-4,24-28", "numa_nodes": [0, 1]}}},
      "fail: `one_numa_node` (fail): its CPUs (0-4,24-28) are on 2 NUMA nodes (0, 1)"),
     ({}, {"changes": {"pin": "cd" * 64}}, "fail: its `pin` is another circuit's (cdcdcdcdcdcdcdcd...)"),
+    ({}, {"changes": {"n": 2, "stage": STAGE | {"blocks": 2}}}, "fail: its statement holds 2 blocks; the point's `n` is 1"),
     ({}, {"changes": {SP.VERSIONS: {"driver": "570.86.16", "cuda_toolkit": CUDA}}}, "cannot tell: its row's `versions`"),
     ({}, {"changes": {SP.VERSIONS: DROP}}, "cannot tell: its row's `versions` (None) aren't the spec's"),
     ({}, {"changes": {"sessions": 15}}, "fail: it timed 15 sessions after 2 warm ones a prover; the point's are 16 and 2"),
@@ -539,6 +576,9 @@ LABELLED_NOT_IT = [
     ({"flat": DROP}, {}, "cannot tell: `flat` (cannot tell): "),
     ({}, {"leases": None}, "cannot tell: `one_lease_own_card` (cannot tell): "),
     ({"accepted": 19}, {}, "fail: `accepted` (fail): 19 of its 20 sessions accepted"),
+    ({"n": DROP, "stage": DROP}, {}, "cannot tell: its row doesn't say its statement's blocks (`n`, `stage.blocks`"),
+    ({"stage": STAGE | {"blocks": 2}}, {},
+     "cannot tell: its row's `n` (1) and `stage.blocks` (2) aren't one count of its statement's blocks"),
 ]
 
 
@@ -668,7 +708,7 @@ def test_a_derivation_names_a_field_of_a_field_and_a_name_covers_the_fields_unde
     spec, item, identity, store = planned
     files = store.files({SP.VERSIONS: DROP, "flat": DROP, "stage": {"definition": "Gemm_v1{K=64}", "k_log": 20}})
     run = store.ran("r20231114-100000-0001", files)
-    stage = {"definition": "Gemm_v1{K=64}", "k_log": 21, "blocks": 8}
+    stage = {"definition": "Gemm_v1{K=64}", "k_log": 21, "blocks": 1}
 
     def lookup(names):
         art = completed(store, run, files, {"flat": True, "stage": stage}, names=names)
@@ -755,7 +795,7 @@ def test_a_run_is_cannot_tell_where_neither_its_own_row_nor_its_completed_one_ho
     spec, item, identity, store = planned
     files = store.files({SP.VERSIONS: DROP, "flat": DROP})
     run = store.ran("r20231114-100000-0001", files)
-    art = completed(store, run, files, {"stage": {"definition": "Gemm_v1{K=64}", "k_log": 20, "blocks": 8, "full": 8}})
+    art = completed(store, run, files, {"stage": STAGE | {"k_log": 21}})
     found, why = store.lookup()(spec, item, identity)
     assert found is None and why == (f"{run} (labelled `{RECORD}`, its row as completed in {art[:16]}…): cannot tell: "
                                      "`flat` (cannot tell): its row lacks `flat`"), why
@@ -779,6 +819,103 @@ def test_a_run_of_the_point_is_preferred_and_plan_names_only_the_newest_few(plan
     assert why.startswith(f"{runs[4]}: ") and runs[1] not in why
 
 
+# ---- a type at its full statement and at a quarter of one ------------------------------------------------------------------
+
+#: the spec's `gemm64` at its full statement of 8 blocks and at a quarter of it: one circuit, so one pin
+FULL, QUARTER = SPEC["row"][0] | {"n": 8}, SPEC["row"][0] | {"n": 2, "provers": [2]}
+#: what a row of a run of each holds of its statement, by its `n`, as the timing script writes it
+TIMED = {n: {"n": n, "stage": STAGE | {"blocks": n}} for n in (8, 2)}
+
+
+@pytest.fixture
+def sized(tmp_path):
+    """A spec that names `gemm64` at its full statement and at a quarter of it, with a store."""
+
+    root, path = tree(tmp_path, spec={"row": [FULL, QUARTER, SPEC["row"][1]]})
+    return root, path, SP.load_spec(root / path, root=root), Store(tmp_path, root)
+
+
+def test_a_spec_names_a_type_at_its_full_statement_and_a_quarter_side_by_side_and_launches_both(sized):
+    root, path, spec, _ = sized
+    assert [item.id for item in spec.points] == ["gemm64-n8-k1", "gemm64-n8-k2", "gemm64-n2-k2", "head_block-k2"]
+    assert [(item.row.n, item.row.pin) for item in spec.points[1:3]] == [(8, PIN), (2, PIN)]
+    plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, None))
+    assert len({item.identity for item in plan.points}) == 4, "the statement's units are in a point's identity"
+    commands = []
+    assert P.dispatch(plan, root / path, root=root, direct="vy-dc-h200",
+                      execute=lambda command, cwd: commands.append(command) or 0) == 0
+    assert [STEADY_POINT.parse(command) for command in commands] == [
+        {"spec": path, "point": item.point.id, "identity": item.identity} for item in plan.points]
+    assert [SP.point(spec, STEADY_POINT.parse(command)["point"]).row.n for command in commands] == [8, 8, 2, 4]
+
+
+def test_a_full_row_is_no_passed_point_of_its_quarter_nor_a_quarters_row_of_the_full_statement(sized):
+    """The pin is the block circuit's digest, so a quarter's row and its full statement's hold one `pin`: the
+    statement's blocks tell them apart."""
+
+    _, _, spec, _ = sized
+    full, quarter = SP.point(spec, "gemm64-n8-k2"), SP.point(spec, "gemm64-n2-k2")
+    row, files = made(OWN | {SP.VERSIONS: DROP} | TIMED[8])
+    assert SP.point_why(row, files, spec, full) is None
+    assert SP.point_why(row, files, spec, quarter) == "fail: its statement holds 8 blocks; the point's `n` is 2"
+    row, files = made(OWN | {SP.VERSIONS: DROP} | TIMED[2])
+    assert SP.point_why(row, files, spec, quarter) is None
+    assert SP.point_why(row, files, spec, full) == "fail: its statement holds 2 blocks; the point's `n` is 8"
+
+
+def test_the_full_point_and_the_quarter_each_match_their_own_labelled_run(sized):
+    _, _, spec, store = sized
+    full, quarter = SP.point(spec, "gemm64-n8-k2"), SP.point(spec, "gemm64-n2-k2")
+    identity = {item.id: SP.point_identity(spec, item, "f" * 64) for item in (full, quarter)}
+
+    def lookup(item):
+        return store.lookup()(spec, item, identity[item.id])
+
+    full_run = store.ran("r20231114-100000-0001", store.files({SP.VERSIONS: DROP} | TIMED[8]))
+    store.label(full_run, "run_of_record", RECORD)
+    assert lookup(full) == (full_run, None)
+    assert lookup(quarter) == (None, None), "the full statement's row is no run of the quarter's"
+    quarter_run = store.ran("r20231114-110000-0002", store.files({SP.VERSIONS: DROP} | TIMED[2]))
+    store.label(quarter_run, "run_of_record", RECORD)
+    assert lookup(full) == (full_run, None), "the newer quarter's row is no run of the full statement's"
+    assert lookup(quarter) == (quarter_run, None)
+
+    store.label(quarter_run, "superseded_by", "r20231116-100000-0009")
+    wrong = store.ran("r20231115-100000-0003", store.files(TIMED[8]), identity=identity[quarter.id])
+    assert lookup(quarter) == (None, f"{wrong}: fail: its statement holds 8 blocks; the point's `n` is 2"), (
+        "a run of the quarter's identity that timed the full statement; the full statement's labelled row isn't named")
+    own = store.ran("r20231115-110000-0004", store.files(TIMED[2]), identity=identity[quarter.id])
+    assert lookup(quarter) == (own, None) and lookup(full) == (full_run, None)
+
+
+def test_a_run_of_both_sizes_at_one_count_gives_each_point_its_own_row():
+    full, quarter = (SP.SteadyPoint(SP.SteadyRow("gemm64", n, PIN, (2,), 2), 2, 16, sized=True) for n in (8, 2))
+    rows = [made(OWN | TIMED[n])[0] for n in (8, 2)]
+    files = made(rates=json.dumps(rows))[1]
+    assert (SP.own_row(files, full), SP.own_row(files, quarter)) == tuple(rows)
+    assert SP.own_row(made(rates=json.dumps([rows[0], rows[0]]))[1], full) == (
+        "cannot tell: the run's `out/rate/rate.json` holds 2 rows of `gemm64` of 8 blocks at 2 provers")
+
+
+#: a row's statement as it states it, and the blocks `row_blocks` reads, or why it reads none
+ROW_BLOCKS = [
+    ({"n": 8}, 8),
+    ({"n": 8, "stage": {"blocks": 8}}, 8),
+    ({"stage": {"blocks": 8}}, 8),
+    ({"n": 8, "stage": {"blocks": 2}}, "its row's `n` (8) and `stage.blocks` (2) aren't one count of its statement's blocks"),
+    ({"n": 8, "stage": {"blocks": 8.0}}, "its row's `n` (8) and `stage.blocks` (8.0) aren't one count of its statement's "
+                                         "blocks"),
+    ({"n": True}, "its row's `n` (True) isn't one count of its statement's blocks"),
+    ({"n": 0, "stage": "8"}, "its row's `n` (0) isn't one count of its statement's blocks"),
+    ({}, f"its row doesn't say its statement's blocks (`n`, `stage.blocks`, which {SP.TIMER} writes)"),
+]
+
+
+@pytest.mark.parametrize("row, blocks", ROW_BLOCKS, ids=[str(row) for row, _ in ROW_BLOCKS])
+def test_a_rows_statement_blocks_are_its_n_and_its_stage_blocks_where_both_say_one_count(row, blocks):
+    assert SP.row_blocks(row) == blocks
+
+
 # ---- plan, check and run ---------------------------------------------------------------------------------------------------
 
 
@@ -788,8 +925,9 @@ def test_plan_and_check_take_a_steady_spec_and_say_why_a_point_has_no_passing_ru
     store = Store(tmp_path, root)
     points = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, None)).points
     run = store.ran("r20231115-100000-0001", store.files(), identity=points[1].identity)
-    failed = store.ran("r20231115-110000-0002", store.files({"type": "head_block", "pin": "ab" * 64, "flat": False}),
-                       identity=points[2].identity, rc=SP.NOT_PASSED)
+    head = {"type": "head_block", "pin": "ab" * 64, "n": 4, "stage": STAGE | {"blocks": 4}}
+    failed = store.ran("r20231115-110000-0002", store.files(head | {"flat": False}), identity=points[2].identity,
+                       rc=SP.NOT_PASSED)
     monkeypatch.chdir(root)
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "here"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(store.config))
@@ -812,15 +950,15 @@ def test_plan_and_check_take_a_steady_spec_and_say_why_a_point_has_no_passing_ru
 
 
 def test_a_spec_outside_the_specs_directory_or_without_history_is_looked_up_on_this_machine_alone(tmp_path, monkeypatch):
-    """The remote's attempts are pulled since the spec was added, which git says of a spec under `benchmarks/specs`."""
+    """The remote's attempts are pulled since the spec was added, which git says of a spec under `benchmarks/harness/specs`."""
 
     root, path = tree(tmp_path)
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "here"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(Store(tmp_path, root).config))
     (elsewhere := root / "elsewhere.toml").write_text((root / path).read_text())
-    with pytest.raises(ValueError, match="elsewhere.toml isn't a spec of benchmarks/specs.*--local-only"):
+    with pytest.raises(ValueError, match=f"elsewhere.toml isn't a spec of {served_table.SPECS}, .*--local-only"):
         P.make_plan(elsewhere, root=root)
-    with pytest.raises(ValueError, match="git has no commit adding benchmarks/specs/steady.toml"):
+    with pytest.raises(ValueError, match="git has no commit adding benchmarks/harness/specs/steady.toml"):
         P.make_plan(root / path, root=root)
     assert [point.passing_run for point in P.make_plan(elsewhere, root=root, local_only=True).points] == [None] * 3
 
@@ -927,12 +1065,12 @@ class Node:
     """A stand-in for the node under one run of the point: the stager, gpu-lease, the timing script and what the node
     answers. `row`: fields of the row the script writes; `texts`: the run's files as `test_steady.made` takes them;
     `answers`: an answer replaced (None: the command fails); `stamp`: fields of the host stamp replaced; `circuit`,
-    `said` (its pin.txt) and `units`: what the stager stages."""
+    `said` (its pin.txt) and `units`: what the stager stages; `point_id`: the point the run is of."""
 
     def __init__(self, tmp_path: Path, monkeypatch, *, row: dict | None = None, answers: dict | None = None,
                  circuit: str = CIRCUIT, said: str = PIN, units: int = 1, cpus: int = 10, lease_exit: int | None = None,
-                 spec: dict | None = None, stamp: dict | None = None, **texts):
-        self.root, self.spec = tree(tmp_path, spec=spec)
+                 spec: dict | None = None, stamp: dict | None = None, point_id: str = POINT, **texts):
+        self.root, self.spec, self.point_id = *tree(tmp_path, spec=spec), point_id
         self.host = STAMP | (stamp or {})
         self.run_dir = tmp_path / "run"
         self.run_dir.mkdir()
@@ -960,10 +1098,11 @@ class Node:
         #: listings asked, and what the timed step saw of the scratch
         self.fetch, self.listed, self.fetch_exit, self.asked, self.seen = {}, None, 0, [], None
         spec = SP.load_spec(self.root / self.spec, root=self.root)
-        self.identity = SP.point_identity(spec, SP.point(spec, POINT), sha256_of(SP.closure(self.root, spec)))
+        self.identity = SP.point_identity(spec, SP.point(spec, point_id), sha256_of(SP.closure(self.root, spec)))
 
     def args(self, **changes):
-        return N.parse(["--spec", self.spec, "--point", POINT, "--identity", changes.get("identity", self.identity)])
+        return N.parse(["--spec", self.spec, "--point", self.point_id, "--identity",
+                        changes.get("identity", self.identity)])
 
     def ask(self, argv):
         if list(argv[1:5]) == list(N.FETCH):
@@ -977,7 +1116,7 @@ class Node:
         self.ran.append(argv)
         log.write_text("log\n")
         if argv[1:2] == [SP.STAGER]:
-            stage = Path(argv[-1])
+            stage = Path(argv[4])
             stage.mkdir(parents=True)
             (stage / "circuit.txt").write_text(self.circuit)
             (stage / "pin.txt").write_text(self.said + "\n")
@@ -1040,7 +1179,7 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
     stager, lease_argv, timer = node.ran
     scratch = Path(lease_argv[-1])
     assert scratch.parent == node.scratch_root and not scratch.exists(), "the scratch is removed"
-    assert stager == [sys.executable, SP.STAGER, "gemm64", "1", str(scratch / "z" / "gemm64" / "c1" / "stage")]
+    assert stager == [sys.executable, SP.STAGER, "gemm64", "1", str(scratch / "z" / "gemm64" / "c1" / "stage"), "--unbound"]
     assert kit.lease(1, 90) == ["gpu-lease", "1", "--wait", "--max-min", "90", "--"], "the kit's lease, and beside it:"
     assert lease_argv == ["gpu-lease", "1", "--wait", "--max-min", "90", "--preemptible", "--mem-gb", "80", "--",
                           sys.executable, "-m", "verity_bench.steady_node", "--spec", node.spec, "--point", POINT,
@@ -1075,8 +1214,9 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
     assert result["workload_fingerprint"]["identity"] == node.identity
     assert result["schema"] == kit.RESULT_SCHEMA
     assert result["measurements"] == [{
-        "name": "statements_per_s", "value": row["statements_per_s"], "unit": "1/s", "commit": STAMP["commit"],
-        "run": RUN, "ci95": None, "target": None, "verdict": None, "inputs": [], "host": STAMP}], "the kit's writer's"
+        "name": "statements_per_s", "value": row["statements_per_s"], "unit": "1/s", "mark": "measured",
+        "commit": STAMP["commit"], "run": RUN, "ci95": None, "target": None, "verdict": None, "inputs": ["measured"],
+        "host": STAMP}], "the kit's writer's"
 
     spec = SP.load_spec(node.root / node.spec, root=node.root)
     assert SP.point_why(row, S.files_in(node.run_dir), spec, SP.point(spec, POINT), own=True) is None
@@ -1210,6 +1350,20 @@ def test_the_node_side_times_a_row_with_a_period_at_the_points_count_and_records
     assert plain.point() == 0 and S.PERIOD not in plain.read(S.RATES)[0], "a row without a period records none"
 
 
+def test_the_node_side_times_a_quarter_of_a_statement_named_beside_its_full_row(tmp_path, monkeypatch):
+    rows = {"row": [FULL, QUARTER, SPEC["row"][1]]}
+    node = Node(tmp_path, monkeypatch, spec=rows, point_id="gemm64-n2-k2", units=2, row=TIMED[2])
+    assert node.point() == 0
+    stager = node.ran[0]
+    assert stager[2:4] == ["gemm64", "2"] and Path(stager[4]).parts[-3:] == ("gemm64", "c2", "stage")
+    verdict = node.read(N.VERDICT_FILE)
+    assert (verdict["point"], verdict["passed"], verdict["why"]) == ("gemm64-n2-k2", True, None)
+
+    full = Node(tmp_path / "full", monkeypatch, spec=rows, point_id="gemm64-n2-k2", units=2, row=TIMED[8])
+    assert full.point() == SP.NOT_PASSED, "a script that timed the full statement for the quarter"
+    assert full.read(N.VERDICT_FILE)["why"] == "fail: its statement holds 8 blocks; the point's `n` is 2"
+
+
 def test_a_statement_already_on_the_node_is_proved_from_a_copy_checked_against_the_pin(tmp_path, monkeypatch):
     node = Node(tmp_path, monkeypatch)
     (staged := tmp_path / "staged").mkdir()
@@ -1322,16 +1476,16 @@ def test_the_node_side_refuses_a_tree_whose_point_is_not_the_one_it_was_launched
     node = Node(tmp_path, monkeypatch)
     with pytest.raises(ValueError, match=f"point identity changed: this tree gives {POINT} {node.identity}"):
         node.point(identity="0" * 64)
-    (node.root / "verity/protocols/flock/prover/src/main.rs").write_text("fn main() { /* edited on the node */ }\n")
+    (node.root / "verity/protocols/proofs/flock/prover/src/main.rs").write_text("fn main() { /* edited on the node */ }\n")
     with pytest.raises(ValueError, match="a file its time depends on differs from the launching checkout's"):
         node.point()
-    (node.root / "verity/protocols/flock/prover/src/main.rs").write_text(FILES["verity/protocols/flock/prover/src/main.rs"])
+    (node.root / "verity/protocols/proofs/flock/prover/src/main.rs").write_text(FILES["verity/protocols/proofs/flock/prover/src/main.rs"])
     # a shipped tree is no checkout: a file a build left under the closure's directories counts, and the refusal says so
-    (left := node.root / "verity/protocols/flock/prover/target/built.o").parent.mkdir()
+    (left := node.root / "verity/protocols/proofs/flock/prover/target/built.o").parent.mkdir()
     left.write_text("object\n")
     with pytest.raises(ValueError) as shipped:
         node.point()
-    assert ("This tree is no checkout, so every file under verity/protocols/flock/prover, verity/protocols/flock/pod "
+    assert ("This tree is no checkout, so every file under verity/protocols/proofs/flock/prover, verity/protocols/proofs/flock/prover/pod "
             "counts: one the launching checkout doesn't track (what a build or a setup left there) changes the identity "
             "too. Its closure here is ") in str(shipped.value)
     assert re.search(r"Its closure here is \d+ files \(SHA-256 [0-9a-f]{16}\.\.\.\); `plan` prints the launching "
@@ -1340,13 +1494,13 @@ def test_the_node_side_refuses_a_tree_whose_point_is_not_the_one_it_was_launched
     left.unlink()
     git(node.root)
     left.write_text("object\n")
-    (node.root / "verity/protocols/flock/prover/src/main.rs").write_text("fn main() { /* edited in the checkout */ }\n")
+    (node.root / "verity/protocols/proofs/flock/prover/src/main.rs").write_text("fn main() { /* edited in the checkout */ }\n")
     with pytest.raises(ValueError) as checkout:
         node.point()
     assert "differs from the launching checkout's. Its closure here is " in str(checkout.value)
     assert "no checkout" not in str(checkout.value)
     monkeypatch.setenv("RUST_MIN_STACK", "1")
-    (node.root / "verity/protocols/flock/prover/src/main.rs").write_text(FILES["verity/protocols/flock/prover/src/main.rs"])
+    (node.root / "verity/protocols/proofs/flock/prover/src/main.rs").write_text(FILES["verity/protocols/proofs/flock/prover/src/main.rs"])
     with pytest.raises(ValueError, match=r"differs from spec 'steady''s env and setup in \['RUST_MIN_STACK'\]"):
         node.point()
     assert node.ran == [] and not (node.run_dir / "result.json").exists()

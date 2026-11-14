@@ -34,6 +34,15 @@ def test_unreadable_build_result_is_named(tmp_path: Path) -> None:
     assert splits == {"r0": 3, "r1": None, "r2": 3}
     assert len(unreadable) == 1
     assert unreadable[0].startswith(f"{b / 'build_request_b' / 'result.json'}: JSONDecodeError(")
+    (b / "build_request_b" / "result.json").write_text("[" * 200_000 + "]" * 200_000)      # nested past the parser's depth
+    assert _program_splits(b, wl)[1][0].startswith(f"{b / 'build_request_b' / 'result.json'}: RecursionError(")
+
+
+@pytest.mark.parametrize("result", [{}, {"sampling": None}, {"sampling": {}}], ids=["absent", "null", "empty"])
+def test_a_build_result_that_states_no_sampling_declares_no_split_count(tmp_path: Path, result: dict) -> None:
+    b, wl = _build(tmp_path, [{"request_id": "r0", "prompt_len": 4, "max_tokens": 8}, {"request_id": "r1", "prompt_len": 5, "max_tokens": 8}])
+    (b / "build_request_b" / "result.json").write_text(json.dumps({"ok": True, "wrapper": "request", "LP": 5, "T": 7} | result))
+    assert _program_splits(b, wl) == ({"r0": 3, "r1": None}, [])
 
 
 def test_a_workload_the_record_refuses_is_refused_by_name(tmp_path: Path) -> None:

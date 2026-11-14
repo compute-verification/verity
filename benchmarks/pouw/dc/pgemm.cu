@@ -104,15 +104,15 @@ DC_DEV void load_pass(uint32_t ta, int32_t* crow, uint32_t& sink) {
   }
 }
 
-// The register cap a block of `warps` can launch with: an SMSP's 16K registers over the most warps it holds (LW = 4, 17
+// The registers a block of `warps` can launch with: an SMSP's 16K registers over the most warps it holds (LW = 4, 17
 // warps, would get 96, and the honest loader spills there).
-__host__ __device__ constexpr int reg_cap(int warps) {
+__host__ __device__ constexpr int max_regs(int warps) {
   return 16384 / ((warps + 3) / 4 * 32) / 8 * 8 > 255 ? 255 : 16384 / ((warps + 3) / 4 * 32) / 8 * 8;
 }
 __host__ __device__ constexpr int mma_warps(int nb, bool mi) { return mi ? nb : 1; }
 // MI: one MMA warp a tile (each commits only its own tile's MMAs) instead of one for all.
 template <int NB, int LW, int MODE, bool MI>
-__global__ void __maxnreg__(reg_cap(4 * LW + mma_warps(NB, MI)))
+__global__ void __maxnreg__(max_regs(4 * LW + mma_warps(NB, MI)))
     pg100(const int8_t* X, const int8_t* W, int ldx, int n, int k, int lm, uint32_t seed, int32_t* C, uint32_t* R,
           long long* clk) {
 #if defined(__CUDA_ARCH_FEAT_SM100_ALL)

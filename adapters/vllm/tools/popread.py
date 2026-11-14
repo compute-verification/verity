@@ -40,8 +40,9 @@ import random
 import re
 import sys
 from collections import Counter, defaultdict
+from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path
-from typing import Any, Callable, Iterable, Iterator
+from typing import Any
 
 SCHEMA = "popread/v1"
 UNIT_BITS = 16
@@ -282,6 +283,7 @@ def _gate_chunk(a: int, b: int) -> tuple[bytes, bytes, bytes, bytes]:
     """Gates a..b-1 of the Call: per gate its declared width, flags (1: a constant, no parameters; 2: wiring; 4: reads outside
     the Call), and the in-Call operands it reads (CSR: end offsets, operands), as `CallGraph` enumerates them."""
     from array import array
+
     from verity.circuits.cut import WIDE_FAN_IN, wide_operands
     c, call, n, wiring = _GATES
     lo = call.offset
@@ -312,6 +314,7 @@ class LeanGraph:
         import multiprocessing
         from array import array
         from concurrent.futures import ProcessPoolExecutor
+
         from verity.circuits.cut import WIRING, QueryInapplicable, call_scope
         from verity.circuits.layout import resolve
         c, call = call_scope(fn)
@@ -402,6 +405,7 @@ BIG_GATES = 1_000_000
 
 def _cut_pending(i: int, verify_below: int, jobs: int = 1) -> dict[str, Any]:
     import time
+
     from verity.circuits.cut import CallGraph, evaluate_definition, separable
     fn = _PENDING[i]
     t = time.monotonic()
@@ -415,7 +419,7 @@ def _cut_pending(i: int, verify_below: int, jobs: int = 1) -> dict[str, Any]:
 
 class Units:
     """Q_word{X=16} units per activation of each Definition: a unit rule cached under the Definition's content digest
-    (`verity.definitions.word`'s rule directories, whose cut code is core's `cut_word`, or this tool's JSONL `log`), else cut by
+    (`verity.circuits.word`'s rule directories, whose cut code is core's `cut_word`, or this tool's JSONL `log`), else cut by
     `lean_units` in `jobs` forked processes, largest first, each result appended to `log` as it lands.  A Definition of at most
     `verify_below` gates is also cut by the reference (`evaluate_definition`, `CallGraph`); `recut` recuts cached ones too.
     Any disagreement is listed in `summary()["mismatches"]`."""
@@ -444,7 +448,7 @@ class Units:
 
     def of(self, fns: dict[str, Any]) -> dict[str, int]:
         """name -> units per activation of `fns[name]`."""
-        from verity.definitions.word import closure_digest
+        from verity.circuits.word import closure_digest
         digest = {fn.id: closure_digest(fn) for fn in fns.values()}
         by_id: dict[str, int] = {}
         todo: dict[str, Any] = {}
@@ -552,7 +556,9 @@ class Egress:
         w = 2 if have_units else 1
         keys = sorted(self.hist)
         total = sum(self.hist[k][w] for k in keys) or 1
-        E = lambda k: {"bits": k[0], "slots": k[1], "declared_bits": k[2]}
+
+        def E(k: tuple[int, int, int]) -> dict[str, int]:
+            return {"bits": k[0], "slots": k[1], "declared_bits": k[2]}
 
         def quantile(p: float) -> dict[str, int]:
             cum = 0
@@ -732,15 +738,15 @@ def served_live(P: dict[str, Any]) -> tuple[set[tuple[str, int]], set[tuple[str,
     """The template's Calls ("c", i) and attention layers ("a", l) whose writes reach an attention's k or v, which a request's later
     rows read (live at every row), and those that reach k, v or the logits' x (live at the row a request samples)."""
     writes = {("c", i): tuple(c.get("writes") or ()) for i, c in enumerate(P["calls"])}
-    writes.update({("a", l): (a["name"],) for l, a in enumerate(P.get("attention") or ())})
+    writes.update({("a", layer): (a["name"],) for layer, a in enumerate(P.get("attention") or ())})
     readers: dict[str, list[tuple[str, int]]] = defaultdict(list)
     for i, c in enumerate(P["calls"]):
         for r in c["reads"]:
             if "value" in r:
                 readers[r["value"]].append(("c", i))
-    for l, a in enumerate(P.get("attention") or ()):
+    for layer, a in enumerate(P.get("attention") or ()):
         for s in ("q", "k", "v"):
-            readers[a[s]["value"]].append(("a", l))
+            readers[a[s]["value"]].append(("a", layer))
     kv = {a[s]["value"] for a in P.get("attention") or () for s in ("k", "v")}
 
     def reach(targets: set[str]) -> set[tuple[str, int]]:
@@ -761,7 +767,7 @@ SERVED_CONE = ("row: a unit of request r at step s has E = r's sampled ids at st
                "row) the logits, else 0; a sampled id feeds r's next step's input ids, an edge the engine binds")
 
 
-def analyze_served(build: dict[str, Any], *, units: "Units | bool" = False, ignore_eos: bool = False, lag: int = 0) -> dict[str, Any]:
+def analyze_served(build: dict[str, Any], *, units: Units | bool = False, ignore_eos: bool = False, lag: int = 0) -> dict[str, Any]:
     """A served-compiled Build's P_served: per step, each Call's Definition applied written width / its return leaves times per
     token row, attention once per query row and layer, the logits and the sampled id once per request.  The plan runs every
     request to max_tokens, so a request's rows from its own step 1 + LAG on are the activity an EOS stop would key
@@ -770,7 +776,7 @@ def analyze_served(build: dict[str, Any], *, units: "Units | bool" = False, igno
     with it (the Build doesn't record the sampling), so no stop happens and both counts are what one would key."""
     from verity.circuits.codec import encode_program
     from verity.circuits.program import Program
-    from verity.definitions.call_scope import specialization
+    from verity_vllm.query.program_view import specialization
 
     P = build["program"]
     width = {k: int(v["width"]) for k, v in P["values"].items()}
@@ -852,10 +858,10 @@ def analyze_served(build: dict[str, Any], *, units: "Units | bool" = False, igno
         for r in plan["requests"]:
             k, rid, rows = keyed[r["request_id"]], r["request_id"], int(r["tokens"])
             for row, a in enumerate(r["attention"]):
-                for l, att in enumerate(P.get("attention") or ()):
+                for layer, att in enumerate(P.get("attention") or ()):
                     per = max(width[att["q"]["value"]] // info(a["definition"], a["statics"])["ret"], 1)
                     add(base(a["definition"]), a["definition"], a["statics"], per, [att["q"], att["k"], att["v"]], per * k, any_keyed)
-                    live = ("a", l) in live_kv or (row == rows - 1 and ("a", l) in live_x)
+                    live = ("a", layer) in live_kv or (row == rows - 1 and ("a", layer) in live_x)
                     egress(base(a["definition"]), a["definition"], a["statics"], rid, s, per * live, per * (not live))
             lg = plan["logits"]
             add(base(lg["definition"]), lg["definition"], lg["statics"], 1, [P["logits"]["x"], P["logits"]["w"]], int(k), any_keyed)
@@ -954,8 +960,8 @@ def _render_egress_line(e: dict[str, Any]) -> str:
 
 
 def render_egress(reports: Iterable[dict[str, Any]]) -> str:
-    out = ["| Program | egress slots (bits/slot) | E_max slots / bits | median / p99 bits | at E_max (share of weight, families) | "
-           "E = 0 | E_max bits per component |", "|---|---:|---:|---:|---|---:|---|"]
+    out = [("| Program | egress slots (bits/slot) | E_max slots / bits | median / p99 bits | at E_max (share of weight, families) | "
+            "E = 0 | E_max bits per component |"), "|---|---:|---:|---:|---|---:|---|"]
     for r in reports:
         if not (e := r.get("egress")):
             continue
@@ -1019,7 +1025,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--out", required=True)
     for x in (d, s):
         x.add_argument("--rules", action="append", default=[], metavar="PATH",
-                       help="cached unit rules: a `verity.definitions.word` rule directory or a --units-log JSONL (repeatable)")
+                       help="cached unit rules: a `verity.circuits.word` rule directory or a --units-log JSONL (repeatable)")
         x.add_argument("--units-log", default=None, help="append each Definition's cut here (JSONL) as it lands")
         x.add_argument("--jobs", type=int, default=1, help="forked processes cutting Definitions, largest first")
         x.add_argument("--verify-below", type=int, default=0, metavar="GATES",

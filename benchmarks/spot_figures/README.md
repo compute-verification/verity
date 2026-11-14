@@ -1,7 +1,7 @@
 # spot_figures
 
 The SPOT post's Figures 1-4 for one model, derived from the sampled-proofs planner
-(`verity.protocols.spot.optimize`) and the model's cards. A model, not a measurement: every input is a
+(`verity.protocols.proofs.spot.prover.optimize`) and the model's cards. A model, not a measurement: every input is a
 card marked measured or modeled with its source, and each figure's JSON carries every card it read beside every
 plotted series. Lean checks the design behind every exfiltration and skipped-work point of both forms of Figure 1
 (`plancheck`, which builds `sampled-proofs-plancheck` with `lake` on first use; `--no-lean` plans without it): a point
@@ -120,7 +120,10 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     measured, the only line with skipped work). (A) replayed alone, which needs batch-invariant kernels, is a dotted
     comparison at one machine's verification phase that pays their measured tax (`REPLAYS`, `BATCH_INVARIANT`). (A′) is (A)'s serving and tax on the `partition` card `per-expert`'s cut (the MoE cut per
     expert), dash-dot, labelled with the card's `label` (what of the cut is built, checked, proved and served), a
-    line only for a model with that card. A new configuration, such as another cut, is a new entry with its own line.
+    line only for a model with that card; (A″) is the same on the card `head-scores-values`'s cut (a sparse-attention
+    head's key block as its scores unit and its values units on column blocks), a cost model's lines and not a bound
+    while no unit writes the key rows those units each commit. A new configuration, such as another cut, is a new
+    entry with its own line.
   - A two-stage line's first stage is the one the verifier runs: a verification phase, one committed trace and the
     sample over it, samples a whole number K of its replay blocks, never fewer than one
     (`optimize.two_stage_design`'s `registration`, `optimize.registration_sample`). A verification phase spans the
@@ -157,11 +160,11 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     beside it, is printed as out of reach where it meets a limit of the code that runs a second stage today, with
     the first it meets (`total_cost.limits`): a session of more tables than the GPU prover (1), the CPU prover and
     the Lean verifier (64), the challenger's coin commitment (127) or the proved scope (200) takes; more lines of
-    session coins than one challenger session's release log holds; or a second draw of more bytes of live coins
-    than one layout holds. Its bound is then the cost model's alone, of a deployment no code runs. (A) and (A′) are
-    plotted at each of the three sizes, dark to light, and (B) at one machine's; each series gives K, its sessions
-    and the shares of its proving in the phase's statements and on padding. No code builds a verification phase of
-    a datacenter's size, one committer over every machine's boundary rows: that line is the cost model's.
+    session coins than one challenger session's release log holds; or a second sample of more bytes of live coins
+    than one layout holds. Its bound is then the cost model's alone, of a deployment no code runs. (A), (A′) and
+    (A″) are plotted at each of the three sizes, dark to light, and (B) at one machine's; each series gives K, its
+    sessions and the shares of its proving in the phase's statements and on padding. No code builds a verification
+    phase of a datacenter's size, one committer over every machine's boundary rows: that line is the cost model's.
   - Exfiltration: (A) and (A′) in the patterns' form (`card_influenceTwo_le_patterns`), under its two modeling
     conditions (each request serves at most S bits, and no proof block is shared across requests), with the capped
     sets' form (`card_influenceTwo_le_served_min`) at one machine's verification phase beside each, thin and dashed;
@@ -186,7 +189,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
   a curve per share of compute spent on replays, interior commitments and proofs.
   - Scopes are the world (rho's `world-h200` fleet, which computes the census's `world-inference-2027`) and a
     datacenter (the census's `dc-12500-machines-600s`), each over a week, a month and a year
-    (`reporting.PERIODS`).
+    (`verity.protocol.MONITORING_PERIODS`).
   - Costs are the scope's GPU-seconds: a replay costs the `replay` card's factor times what it re-runs at serving's
     MFU (`total_cost.batch`: a machine's replay block, an engine step's batch at one layer, or one request),
     proving a proof block takes the marginal proof overhead (the x-axis) times its FLOP at the H200's dense FP8 peak
@@ -202,11 +205,11 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
   - Every caption says who the deployment's parties are and what its bounds rest on (`ROLES`, `TRUST`). Its parties
     are SPOT[Flock]'s three roles: the inference server serves and commits its values; the proof server replays each
     sampled replay block and proves it with `flock-circuit prove --zk`, with no ZK server and no recursion (the
-    `proof_overhead` card's `dev` arm); and the verifier draws on the challenger's live coins and decides with the Lean
+    `proof_overhead` card's `dev` arm); and the verifier samples on the challenger's live coins and decides with the Lean
     verifier. The network certifier, which stamps each request's release order and bucket at ingress, is a layer of
     its own. The bounds are soundness alone, resting on SHA-512's collision resistance, uniform verifier randomness and
     an honest verifier, and, where a bound reads the certifier's stamp, on the certifier's own assumptions, stated in its
-    layer (`verity/protocols/spot/verifier/README.md`).
+    layer (`verity/protocols/proofs/spot/verifier/README.md`).
   - Each panel names the deployment it assumes (`DEPLOYMENT`: what serving commits, and the replay block) and shows
     its headline design solid and its comparisons thin, dash-dotted, dashed or dotted:
     - exfiltration: two-stage sampling (serving commits only token ids), width-stratified (the headline: the public
@@ -313,7 +316,9 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
   on every rank and step of one request, one stratum per proof-block Definition; its `source` names the census.
   `workload_card.py` writes it from the census file and nothing else, so no stratum is edited by hand. The 128k
   workload's sparse-MLA blocks are that card's, counted over the serve plan's requests as serving splits a row
-  (`breakeven/mla128.py`).
+  (`breakeven/mla128.py`). The figure of record's driver (`breakeven/headline.py`) prices the head as that card's
+  whole key blocks and end block, the forms that verify; `--partition head-scores-values` cuts each head's key block
+  into its scores unit and its values units instead, a modeled cut whose rows carry that card's label.
 
 Limits of the model:
 - A replay re-runs its whole replay block from its edge at the `replay` card's factor. Each sampled request pays its
@@ -325,8 +330,12 @@ Limits of the model:
 - The uncapped two-stage bound charges a wholly incorrect request every bit it commits, its interior included, not
   only what it serves; the capped ones charge at most what it serves, the sets' form on
   `card_influenceTwo_le_served_min` and the patterns' form on `card_influenceTwo_le_patterns`.
-- The patterns' form takes each request to serve at most S bits and no proof block to be shared across requests: a
-  batched or routed block that several requests read needs the planner changed.
+- The patterns' form takes no proof block to be shared across requests and each request to serve exactly S bits.
+  Replay blocks that read one another's values (a batched or routed block that several requests read, a value
+  another replay block committed) are one request there, priced at the replay grain's fan-out F as serving F S bits
+  (`optimize.two_stage_exfil`'s `fanout`). Lean certifies that point only for a window whose groups each hold F replay
+  blocks, and `plancheck.two` writes it only for a caller that says they do (`whole_groups`). Every figure here is at
+  F = 1 (`figure1.FANOUT`).
 - A verification phase's statements are sized for the first stage's count alone: a Definition's blocks in a sampled
   replay block are its own count, and its sessions' padding to one size within a statement, not to one size across
   Definitions. A pod-wide or datacenter-wide verification phase needs one committer over its machines' boundary rows.

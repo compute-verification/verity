@@ -11,28 +11,33 @@ public import Proofs.Properties.Accounting.Remote.Schedule
 `Properties.RegisteredCircuit.ScheduledRequirement`: `Accounting.SecurityProofs.RegisteredCircuitRequirement`'s argument on
 the coins the schedule check accepts. At each prefix, `Properties.RemoteAudit.steered_of_checked` over the coins the
 check accepts there makes the layout the slot of the schedule's `cap + 1` padded bits (`steered_on`). The session priced
-(`RateSketch.pr_session_le`) is `A` on summaries of `a + (cap + 1)` bits, the devices' `a` then the schedule's
-(`SketchSummarySession.widen`), on the schedule's slot, which is the layout on the accepted coins, so there each pass's
+(`RateSketch.pr_run_le`) is `A` on summaries of `a + (cap + 1)` bits, the devices' `a` then the schedule's
+(`SketchSummaryRun.widen`), on the schedule's slot, which is the layout on the accepted coins, so there each pass's
 events are `G`'s (`RateSketch.pass_congr`). A window's reads counted against the samples are `G`'s on a session the check
 accepts at every pass, and its correct receipts on one it refuses, which no shortfall reaches.
+
+Its honest lemma is `Properties.RemoteAudit.scheduled_meets` (the check accepts the deployed session's shape at
+T = 1 s, at 792 bits; the rest of its premises are `G`'s, whose honest lemma is `G`'s), and its nontrivial one is
+`Properties.RemoteAudit.steered_of_checked_nontrivial`: without the check's acceptance, a layout that follows a
+three-way coin is the verifier's and is the slot of no one-bit summary.
 -/
 
 @[expose] public section
 
-namespace Accounting.RateSketch.SketchSummarySession
+namespace Accounting.RateSketch.SketchSummaryRun
 
 variable {a n P N m ρ h S L q ks G d : ℕ}
 
 /-- `A` on summaries of `b` more bits: a summary's session is `A`'s at its first `a` bits. -/
-def widen (A : SketchSummarySession a n P N m ρ h S L q ks G d) (b : ℕ) :
-    SketchSummarySession (a + b) n P N m ρ h S L q ks G d :=
+def widen (A : SketchSummaryRun a n P N m ρ h S L q ks G d) (b : ℕ) :
+    SketchSummaryRun (a + b) n P N m ρ h S L q ks G d :=
   ⟨fun s => A.session fun i => s (Fin.castAdd b i)⟩
 
-theorem widen_session (A : SketchSummarySession a n P N m ρ h S L q ks G d) {b : ℕ} (s : Pous.Bits a)
+theorem widen_run (A : SketchSummaryRun a n P N m ρ h S L q ks G d) {b : ℕ} (s : Pous.Bits a)
     (t : Pous.Bits b) : (A.widen b).session (Fin.append s t) = A.session s := by
   simp only [widen, Fin.append_left]
 
-end Accounting.RateSketch.SketchSummarySession
+end Accounting.RateSketch.SketchSummaryRun
 
 namespace Accounting.RateSketch
 
@@ -40,8 +45,8 @@ variable {n P N ρ S L q G T M : ℕ} {Ω Ca Ch : Type}
 
 /-- A pass's events read its device and its store: sessions that tell the pass one device, on one layout, give it the
 same guessed tags and the same `k + 1` correct digests behind unobtained positions. -/
-theorem pass_congr {a a' k : ℕ} {A : SketchSummarySession a n P N 128 ρ 512 S L q 16 G 2773}
-    {A' : SketchSummarySession a' n P N 128 ρ 512 S L q 16 G 2773}
+theorem pass_congr {a a' k : ℕ} {A : SketchSummaryRun a n P N 128 ρ 512 S L q 16 G 2773}
+    {A' : SketchSummaryRun a' n P N 128 ρ 512 S L q 16 G 2773}
     {steer : SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Pous.Bits a}
     {steer' : SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Pous.Bits a'}
     {enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin 128 → Sector)}
@@ -66,25 +71,24 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_mono)
 
-/-- **The layout steered on the accepted coins.** Under `ScheduleLayoutGap`, on coins `acc` at which the schedule check
-at the committed cap `cap` accepts, the layout is the slot of the schedule's `cap + 1` padded bits:
+/-- **The layout steered on the accepted coins.** On coins `acc` at which the schedule check at the committed cap `cap`
+accepts, the verifier's layout (`sessionLayout`) is the slot of the schedule's `cap + 1` padded bits:
 `Properties.RemoteAudit.steered_of_checked` at each prefix, over the coins `acc` holds of there. -/
 theorem steered_on {Pfx Y : Type} {N T M blocks cap : ℕ} {idx : Pfx → ℕ}
-    {pos : Pfx → Array (ℕ × ℕ) → Array (ℕ × ℕ) → Fin N ↪ Fin T × Fin M} {appended sent : Pfx → Y → Array (ℕ × ℕ)}
-    {layout : Pfx → Y → Fin N ↪ Fin T × Fin M} (gap : Properties.RemoteAudit.ScheduleLayoutGap pos appended sent layout)
+    {dflt : Pfx → Fin N ↪ Fin T × Fin M} {appended sent : Pfx → Y → Array (ℕ × ℕ)}
     (acc : Pfx → Y → Prop)
     (hacc : ∀ c y, acc c y → ∃ sc passes b, RemoteAudit.Schedule.check sc blocks cap passes (appended c y) = .ok b ∧
       (passes[idx c]?).map Prod.snd = some (sent c y)) :
     ∃ (sched : Pfx → Y → Pous.Bits (cap + 1)) (slot : Pfx → Pous.Bits (cap + 1) → Fin N ↪ Fin T × Fin M),
-      ∀ c y, acc c y → layout c y = slot c (sched c y) := by
+      ∀ c y, acc c y → Properties.RemoteAudit.sessionLayout blocks dflt appended sent c y = slot c (sched c y) := by
   classical
   have h : ∀ c, ∃ (sched : {y // acc c y} → Pous.Bits (cap + 1)) (slot : Pous.Bits (cap + 1) → Fin N ↪ Fin T × Fin M),
-      ∀ y : {y // acc c y}, layout c y.1 = slot (sched y) := by
+      ∀ y : {y // acc c y}, Properties.RemoteAudit.sessionLayout blocks dflt appended sent c y.1 = slot (sched y) := by
     intro c
     obtain ⟨sched, slot, hs⟩ := Properties.RemoteAudit.steered_of_checked (Pfx := Unit) (Y := {y // acc c y})
-      (blocks := blocks) (a := cap) (idx := fun _ => idx c) (pos := fun _ => pos c)
-      (appended := fun _ y => appended c y.1) (sent := fun _ y => sent c y.1) (layout := fun _ y => layout c y.1)
-      (fun (_ : Unit) (y : {y // acc c y}) => gap c y.1) (fun (_ : Unit) (y : {y // acc c y}) => hacc c y.1 y.2)
+      (blocks := blocks) (a := cap) (idx := fun _ => idx c) (dflt := fun _ => dflt c)
+      (appended := fun _ y => appended c y.1) (sent := fun _ y => sent c y.1)
+      (fun (_ : Unit) (y : {y // acc c y}) => hacc c y.1 y.2)
     exact ⟨sched (), slot (), fun y => hs () y⟩
   choose sched slot hs using h
   refine ⟨fun c y => if hy : acc c y then sched c ⟨y, hy⟩ else fun _ => false, slot, fun c y hy => ?_⟩
@@ -94,18 +98,18 @@ theorem steered_on {Pfx Y : Type} {N T M blocks cap : ℕ} {idx : Pfx → ℕ}
 /-- **A declared circuit's held and moved bits from an accepted stacked audit, at the committed steering cap**,
 `Properties.RegisteredCircuit.ScheduledRequirement`. -/
 theorem scheduledRequirement : ScheduledRequirement := by
-  intro n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T M ε δ ιW Wc caps Aud Ω Ca Ch _ _ enc choose layout steer
-    joined A blocks cap idx pos appended sent V Kg Dv _ _ W pl ℓ grp bind mm plan addr hn hP hN hE0 hrank hKB hSq hCs
-    hEle hε hB hCC hgap hlife _hres hprop hreads hx RL C γ owned credit tiles store win accepted
+  intro n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T M ε δ ιW Wc caps Aud Ω Ca Ch _ _ enc choose dflt steer
+    joined A blocks cap idx appended sent V Kg Dv _ _ W pl ℓ grp bind mm plan addr layout hn hP hN hE0 hrank hKB hSq
+    hCs hEle hε hB hCC hlife _hres hprop hreads hx RL C γ owned credit tiles store win accepted
   have hE : Gates.EncodeBound Gates.p1024 3 B E εnum εden :=
     Accounting.SecurityProofs.Gates.encodeBound_of hSq hCs hEle hε (by decide)
       Accounting.SecurityProofs.Gates.p1024_floor.1 Accounting.SecurityProofs.Gates.p1024_floor.2
-  obtain ⟨sched, slot, hslot⟩ := steered_on (blocks := blocks) (cap := cap) (idx := idx) hgap accepted
+  obtain ⟨sched, slot, hslot⟩ := steered_on (blocks := blocks) (cap := cap) (idx := idx) (dflt := dflt) accepted
     fun _ _ h => h
   have hB' : ∀ s w η j pre, Assumptions.SketchHashBudget
       ((((A.widen (cap + 1)).session s).window w η).device j pre) (qr * τ) :=
     fun s w η j pre => hB (fun i => s (Fin.castAdd (cap + 1) i)) w η j pre
-  have hsess := pr_session_le (k := k) hrank hKB choose (fun c y => slot c (sched c y))
+  have hsess := pr_run_le (k := k) hrank hKB choose (fun c y => slot c (sched c y))
     (fun c y => Fin.append (steer c y) (sched c y))
     ⟨fun c s => slot c fun i => s (Fin.natAdd a i), fun c y =>
       congrArg (slot c) (funext fun i => (Fin.append_right (steer c y) (sched c y) i).symm)⟩
@@ -118,7 +122,7 @@ theorem scheduledRequirement : ScheduledRequirement := by
     fun c y h pc => pass_congr (k := k) (A := A) (A' := A.widen (cap + 1)) (steer := steer)
       (steer' := fun c y => Fin.append (steer c y) (sched c y)) (enc := enc) (choose := choose) (layout := layout)
       (layout' := fun c y => slot c (sched c y)) (c := c) (y := y)
-      (SketchSummarySession.widen_session A (steer c y) (sched c y)) (hslot c y h).symm pc
+      (SketchSummaryRun.widen_run A (steer c y) (sched c y)) (hslot c y h).symm pc
   have hX : ∀ (c : SketchPrefix n P N 128 ρ 512 16 G 2773) (y : Ω × (Fin T → Ca)) (g : Fin G)
       (R : RateSketch.SketchStream ρ) (O : RateSketch.Oracle N ρ 512 RateSketch.Sector (Fin 16 → ZMod (2 ^ 32))),
       ((passDev A steer c y g).prog c.signs (Data.ofParts (steeredStore enc choose layout c y) R)).rebuildsIn
@@ -155,7 +159,7 @@ theorem scheduledRequirement : ScheduledRequirement := by
     have hwin : win (o, ws) w = win (o, ws') w := by
       show A.win w ws (fun j => steer (SketchPrefix.of ws w j) o) =
         A.win w ws' (fun j => steer (SketchPrefix.of ws' w j) o)
-      simp only [hpre, SketchSummarySession.win, SketchDeployedSession.win]
+      simp only [hpre, SketchSummaryRun.win, SketchDeployedRun.win]
       rw [hη]
     have hstore : store o ws w = store o ws' w := funext fun j => by
       show steeredStore enc choose layout (SketchPrefix.of ws w j) o =
@@ -206,7 +210,7 @@ theorem scheduledRequirement : ScheduledRequirement := by
         (hp.1.mpr ⟨(win x w).kept j (store x.1 x.2 w j) (x.2 w).1 (x.2 w).2.1, t, ht⟩)⟩⟩
     · exact ⟨w, Or.inr ⟨j, Or.inr
         (hp.2.mpr ⟨hr, (win x w).kept j (store x.1 x.2 w j) (x.2 w).1 (x.2 w).2.1, ι, hb⟩)⟩⟩
-  refine le_trans (pr_mono fun x hx' => ?_) ((SketchDeployedSession.pr_deployed_of_unpaid_causal
+  refine le_trans (pr_mono fun x hx' => ?_) ((SketchDeployedRun.pr_deployed_of_unpaid_causal
     (fun o ws w => (win (o, ws) w).correctOn (store o ws w) (ws w).1 (ws w).2.1) rd
     hcor (Xr * τ + C + k * 32768) hn hP hN _ hu).trans (le_of_eq ?_))
   · obtain ⟨hacc, hall, hT | ⟨w, hw⟩⟩ := hx'

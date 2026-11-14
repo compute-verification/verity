@@ -38,7 +38,9 @@ packages it depends on, what it resolves to in `uv.lock`, the paths it lists und
 the environment (Python, the platform, the base image, the `VERITY_*` and `FLOCK_*` variables but those `settings.py` declares
 `where`), and the runner itself.
 Markdown is left out unless a suite lists it. The read guard (`guard/verity_suite_guard.py`) fails a test that opens a
-repository file outside its suite's inputs, so a reused pass never hides a change to something a test read. In a
+repository file outside its suite's inputs, so a reused pass never hides a change to something a test read. It also keeps
+the environment's values out of a failure's text, since a run's log is published: `os.environ` prints as its names, and a
+failing comparison that holds the environment or a copy of it names the variables that differ and prints neither side. In a
 `parallel = true` suite each passing test is also kept on its own, under its module's key.
 
 A long suite runs in parts by test file: `suites.py SUITE --files K/M` (or `SUITE:K/M`, `SUITE:1,3/M`) runs part K of M,
@@ -55,7 +57,8 @@ part, and its parts join as a split suite's do. `ci.toml`'s plans name a lean su
 every part runs the suite whole.
 
 Passes travel between machines as verdict packs (`verdicts.py`). The Lean audit and `circuit-check` reuse their own verdicts
-the same way, each keyed on what it reads. A nightly uncached run, which compiles what it tests and first imports every pass
+the same way, each keyed on what it reads. circuit-check's binding records travel through the store instead, each once
+under its name, which a pack lists (`records.py`). A nightly uncached run, which compiles what it tests and first imports every pass
 the commit's recorded checks hold, must agree with them. A disagreement means some part reads something it doesn't declare,
 and the fix goes in the check. The nightly also runs the opt-in tests `check.py`'s `OPT_IN` names, by name in runs of their
 own with their variables set, which every other check leaves skipped.
@@ -72,6 +75,7 @@ follows.
 | `suites.py` | every test suite, each run in its own process, with passes cached |
 | `guard/` | the read guard, the pytest plugin `suites.py` loads into every suite |
 | `verdicts.py` | passes carried between machines as one verdict pack |
+| `records.py` | circuit-check's binding records, put on the store once and named in the packs, fetched before circuit-check runs |
 | `common.py` | the helpers `check.py` and the Lean check share, apart so the Lean check's key covers them |
 | `plan.py` | `check.py --plan`: what `check` would reuse at a commit and what it would run |
 | `spans.py` | the spans a check run writes beside its steps, which the dashboard reads |
@@ -84,9 +88,11 @@ follows.
 | `drive.toml`, `queue.toml` | the merge queue's flags and its admission rules |
 | `gates/markdown_caps.py` | the warn gate naming a change that puts a Markdown file over its cap |
 | `move_check.py`, `anchors.py` | the certificate of a pure move, and that every path a file reaches from its own place survives it |
-| `merge_map.py` | git's merge driver for `fixtures/artifacts.json` |
+| `merge_map.py` | git's merge driver for `artifacts.json` |
 | `merge_rows.py` | git's merge driver for Markdown: two changes to one table's rows merge row by row |
 | `pins.py` | every file that records a Lean source's digest, with the command that regenerates it |
+| `import_order.py` | writes the generated tables of `tests/import_order.toml`, which folder may import which, from the tree |
+| `tracked_tree.py` | the tracked files of a checkout, and where a Python or Lean import of one resolves, which `tests/test_boundaries.py` reads the import order through |
 | `mutants.py` | deletes each check a verifier source runs, one at a time, and names each deletion its tests miss |
 
 ## Running it
@@ -140,7 +146,7 @@ timing record it is of), and each task is:
 | `argv`, `cwd` | the command `check.py` builds for that part alone (`check.groups`), with `<tree>`, `<cache>`, `<out>` and `<python>` for the tree, the check's cache, the run's output directory and the interpreter; `argv` is null where check can't run it on this tree |
 | `reason` | null, or why `argv` is null: one starting `skipped:` is a skip, any other a failure |
 | `inputs` | `{"closure", "paths"}`: paths and globs from the root that cover what the task reads, and the function that lists them (`suites.inputs_of`, with the runner's files; `lean_audit.inputs`; circuit-check's workspace closure). `["."]` is the whole tree, for a job that declares none |
-| `needs` | the artifacts it reads that another task makes: `lean-build:verity/protocols/flock/verifier/.lake/build`, `flock-circuit-build:$FLOCK_CHECKOUT` |
+| `needs` | the artifacts it reads that another task makes: `lean-build:verity/protocols/proofs/flock/verifier/.lake/build`, `flock-circuit-build:$FLOCK_CHECKOUT` |
 | `outputs` | the artifacts it makes (a build's) |
 | `deps` | the task ids that must end before it starts (its job's ci.toml `needs` and `after`) |
 | `beside` | the tasks that build what it builds (a spec's audit and the packages its `proved_in` names), so best on one worker; no order |
@@ -207,19 +213,6 @@ other's suspects are the PRs whose change touches what it names: a lone one is e
 the gate holds nothing. The team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its
 body) lands on its ready mark alone once the queue's rerun of its map is certified (`tools/move/README.md`);
 `move_check.py` certifies a pure move (`verity check move BASE HEAD`).
-
-## The public boundary
-
-The public monorepo is exported one way from this repository. `public_boundary.toml` is the decided list of what it holds.
-`public_boundary.py` reads what each public file needs (Lean imports, Lake requires, Python imports and dependencies, anchored
-paths, commands) and fails on an edge into a file the export doesn't copy that `public_boundary_allowed.txt` doesn't list; the
-list only shrinks (`tests/test_public_boundary.py`). `public_export.py DEST` is the export's dry run: the public set as one
-commit of fresh history, its manifests pruned to what it copies, each Lean lock stating only what it copies
-(`tools/verity/lean/public_lock.py`), the leftovers a public reader shouldn't meet counted by area, and the third-party pins. It
-never rewords a lock: one whose kept text holds lane text, or names a declaration, a module or a path it leaves out, refuses
-the export by file, section and entry until the lock is reworded, unless the boundary lists it as known residue
-(`[[residue]]`); with `--build` (a node's work: `research run`), each Lake package's `lake build`, the workspace's
-`uv sync` and the licenses of what they fetched. It publishes nothing.
 
 ## Settings
 

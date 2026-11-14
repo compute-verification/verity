@@ -81,7 +81,7 @@ def scheduled(reqs: list[tuple[int, int, int]], budget: int, threshold: int, seq
 
 def session(reqs: list[tuple[int, int, int]]):
     """The window's I1 advice and certified bodies: greedy requests `q<i>` to their max_tokens, prompts of token ids below 256."""
-    from verity.protocols.certifier.verifier import advice as I1
+    from verity.protocols.accounting.certifier.verifier import advice as I1
     steps = scheduled(reqs, ENGINE["max_num_batched_tokens"], ENGINE["long_prefill_token_threshold"])
     requests = tuple(I1.RequestAdvice(f"q{i}", lp, m, "length") for i, (_, lp, m) in enumerate(reqs))
     advice = I1.Advice(requests, tuple(I1.StepAdvice(tuple(

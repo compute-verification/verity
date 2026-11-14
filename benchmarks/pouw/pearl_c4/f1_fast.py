@@ -1,8 +1,8 @@
 """Pearl-C4's F1′ for the verifier, vectorised (numpy), beside the reference's pure-Python rule (`pearl_c4.tile_debit`).
 
-`row_law` is the exact noise distribution of a row, the sampling design `pearl_c4.noise_law` convolves, by one FFT per row sized to the row's
-own support: n = Σ_r (2E_r)(2F_r), F uniform over the 16 E2M1 codes, so its characteristic function is a product of
-powers of one sample's, per |E| magnitude.  It agrees with the reference to float rounding (about 1e-16; a test).
+`row_pmf` is the exact noise distribution of a row, the one `pearl_c4.noise_law` convolves, by one FFT per row sized to
+the row's own support: n = Σ_r (2E_r)(2F_r), F uniform over the 16 E2M1 codes, so its characteristic function is a
+product of powers of one sample's, per |E| magnitude.  It agrees with the reference to float rounding (about 1e-16; a test).
 
 `split_units_fast` is C (the assessor's B), which is
 now the rule itself (`pearl_c4.change_probabilities`, normative for prover and verifier): this is the same computation,
@@ -14,27 +14,30 @@ vectorised, and agrees with the reference to float rounding (a test), inside R1'
 - p_t from 4 lookups, a lower bound: the cells beside the element's own resolve three cells exactly, and each tail
   beyond them counts as one cell, so 1 − max(three cells, two tails) ≤ p_t.  S_w only grows as any p_t falls, at the
   sorted in-block layout.  A 1e-12 slack covers the FFT's rounding.
-- κ inside, the sorted layout, the truncated DPs and the cap at 1 are the reference's (`pearl_c4.split_saving`).
+- κ inside, the sorted layout, the truncated DPs and the limit at 1 are the reference's (`pearl_c4.split_saving`).
 Salt-dead codes take p = 0 from the caller's witness (the verifier already computes it for the forming item)."""
 from __future__ import annotations
 
 import itertools
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from fractions import Fraction
 
 import numpy as np
-from verity.protocols.pouw.prover.schemes import pearl_c4 as F
-from verity.protocols.pouw.prover.schemes import pearl_kw as P
+
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
+
+__all__ = ["certified_modes", "p_lower", "row_pmf", "row_units", "split_units_fast", "window_charges"]
 
 MAGS = (1, 2, 3, 4, 6, 8, 12)                      # |2·value| of the nonzero E2M1 magnitudes
 SLACK = F.F1_EPS
 C = F.FFMA_UNITS / F.SPAN_K
 XM = 4                                              # ½ − c·x < 0 from x = 4 on
 _GAIN = np.array([max(0.0, 0.5 - C * x) for x in range(XM + 1)])
-_EDGES = np.array([-m for m in reversed(F._E2M1_MIDPOINTS)] + list(F._E2M1_MIDPOINTS))
+_EDGES = np.array([-m for m in reversed(F.E2M1_MIDPOINTS)] + list(F.E2M1_MIDPOINTS))
 _COMBOS = np.array(list(itertools.product(range(3), repeat=4)))
-_EXCESS = np.array([F._pair_excess(tuple(js)) for js in _COMBOS])
+_EXCESS = np.array([F.pair_excess(tuple(js)) for js in _COMBOS])
 
 
 def _phi(size: int) -> np.ndarray:
@@ -42,9 +45,9 @@ def _phi(size: int) -> np.ndarray:
     return np.stack([(2 + 2 * sum(np.cos(w * v * h) for h in MAGS)) / 16 for v in MAGS])
 
 
-def row_law(e_row: Sequence[int]) -> tuple[int, np.ndarray]:
+def row_pmf(e_row: Sequence[int]) -> tuple[int, np.ndarray]:
     """(lo, pmf) of n given the E line, as `pearl_c4.noise_law`: the pmf over the consecutive integers from lo."""
-    e2 = np.abs(np.array([F._F2[c] for c in e_row]))
+    e2 = np.abs(np.array([F.E2M1_SIGNED_HALVES[c] for c in e_row]))
     L = int(12 * e2.sum())
     if L == 0:
         return 0, np.ones(1)
@@ -86,7 +89,7 @@ def _edges_between(lo_b: np.ndarray, hi_b: np.ndarray, width: int) -> np.ndarray
     return np.where(s > F.UE4M3_TOP, np.inf, below)
 
 
-def certified_modes(v: np.ndarray, realised: np.ndarray, cdf) -> np.ndarray:
+def certified_modes(v: np.ndarray, realised: np.ndarray, cdf: Callable[[np.ndarray], np.ndarray]) -> np.ndarray:
     """Per block of v (blocks × 16), its modal byte, certified by a local search around the realised byte, or −1."""
     nb = len(v)
     out = np.full(nb, -1, dtype=np.int64)
@@ -119,7 +122,7 @@ def certified_modes(v: np.ndarray, realised: np.ndarray, cdf) -> np.ndarray:
     return out
 
 
-def p_lower(v: np.ndarray, modes: np.ndarray, cdf) -> np.ndarray:
+def p_lower(v: np.ndarray, modes: np.ndarray, cdf: Callable[[np.ndarray], np.ndarray]) -> np.ndarray:
     """Per element (blocks × 16), a lower bound on P(code ≠ modal code) at the block's modal byte, from 4 lookups."""
     vs = _byte_value(np.maximum(modes, 1))[:, None]
     edges = _EDGES[None, None, :] * vs[..., None]                # (blocks, 1, 14)
@@ -153,7 +156,8 @@ def _chunk(pairs: np.ndarray) -> np.ndarray:
 
 
 def _changed(p: np.ndarray) -> np.ndarray:
-    d = np.zeros(p.shape[:-1] + (XM + 1,)); d[..., 0] = 1.0
+    d = np.zeros(p.shape[:-1] + (XM + 1,))
+    d[..., 0] = 1.0
     for t in range(p.shape[-1]):
         q = p[..., t:t + 1]
         nd = d * (1 - q)
@@ -169,9 +173,11 @@ def window_charges(p: np.ndarray, kappa: np.ndarray, block: int = 16) -> np.ndar
     s = np.sort(p.reshape(W, -1, block), axis=-1)
     pairs = s.reshape(W, s.shape[1], block // 2, 2)
     n = block // 8
-    d = np.zeros((W, XM + 1)); d[:, 0] = 1.0
+    d = np.zeros((W, XM + 1))
+    d[:, 0] = 1.0
     for b in range(s.shape[1]):
-        blk = np.zeros((W, XM + 1)); blk[:, 0] = 1.0
+        blk = np.zeros((W, XM + 1))
+        blk[:, 0] = 1.0
         for ch in range(n):
             blk = _conv(blk, _chunk(pairs[:, b, ch::n]))
         d = _conv(d, blk)
@@ -186,12 +192,12 @@ def window_charges(p: np.ndarray, kappa: np.ndarray, block: int = 16) -> np.ndar
 def split_units_fast(x: Sequence[int], alpha: int, e_row: Sequence[int], ae: int, scales: Sequence[int],
                      dead: Sequence[bool], overfit: float = 1) -> tuple[Fraction, dict]:
     """F1′ per word the row feeds (NVFP4), by the cheap sound evaluation: at least `pearl_c4.split_units` on the exact
-    law.  Returns (units, counts)."""
+    distribution.  Returns (units, counts)."""
     k = len(x) - len(x) % F.SPAN_K
     a32 = np.float32(P.f32_of_bits(alpha))
     v = (np.array([P.f32_of_bits(w) for w in x[:k]], dtype=np.float32) * a32).astype(np.float64).reshape(-1, 16)
-    lo, pmf = row_law(e_row)
-    cdf = _cdf(lo, pmf, F._scale_value(F.NVFP4, ae) / 64)
+    lo, pmf = row_pmf(e_row)
+    cdf = _cdf(lo, pmf, F.scale_value(F.NVFP4, ae) / 64)
     realised = np.array(F.hw_scales(F.NVFP4, scales[:k // 16]), dtype=np.int64)
     modes = certified_modes(v, realised, cdf)
     uncertified = modes < 0

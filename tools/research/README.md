@@ -60,16 +60,17 @@ secrets) the environment stands in:
 
 No value is ever printed.
 
-On a cloud VM a long-lived shell can lose the injected secrets that a fresh
-tmux login shell still has. Every `research` command first sets each secret
-named in `$CLOUD_AGENT_INJECTED_SECRET_NAMES` and missing from the shell from
-the tmux server's global environment, where that login shell gets them
-(`secret_hint.recover`); one run under a test doesn't, so a secret the test
-unset stays unset. If one is still missing, the store, `research queue
-ready`, node ssh and the Nebius scripts fail and say `rerun from a fresh tmux
-login shell` (`secret_hint.py`). A shell can lose that list too, so a store
-that has used the remote and now finds none configured fails `research data
-label` and `put` the same way (`LocalStore.remote_lost`).
+On a cloud VM a long-lived shell can lose the injected secrets, which the
+tmux server's global environment keeps while its session `vm-secrets` lives
+(`tools/agent-guard/kept_session.py`; `research doctor` says when it is gone).
+Every `research` command first sets from it each secret the shell lacks of
+those `$CLOUD_AGENT_INJECTED_SECRET_NAMES` names (`secret_hint.recover`; not
+under a test, so a secret a test unset stays unset). If one is still missing,
+the store, `research queue ready`, node ssh and the Nebius scripts fail and
+say `rerun from a fresh tmux login shell` (`secret_hint.py`). A shell can
+lose that list too, so a store that has used the remote and now finds none
+configured fails `research data label` and `put` the same way
+(`LocalStore.remote_lost`).
 
 `research doctor [--role lane|coordinator|infra] [--json]`: can this VM do its job (secret names, status-only
 probes, ssh, `uv sync --check`, disk, clock); each finding names its fix (exit 1); it never prints a value.
@@ -82,13 +83,14 @@ uv run pytest                            # all tests
 
 research run [--project P] [--stage S] [--timeout T] [--expect K=V] [--require-result] [--env K=V] [--cwd DIR] [harness flags] -- CMD...
 research run [--tool NAME|module:NAME] [--scratch NAME]... [--campaign C] [...] -- CMD...      # evidence store, below
-research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [--mem-gb N [--mem-wait S]] [--preflight TOOL] [--wait [--wait-max S]] [...] -- CMD...
+research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--env-host MACHINE] [--exclusive] [--mem-gb N [--mem-wait S]] [--preflight TOOL] [--wait [--wait-max S]] [...] -- CMD...
                                          # --wait: 20 min at most, then exit 79 (research/waitcap.py)
 research run --on MACHINE [--custody-ttl 6h] ...    # the default: the machine puts the attempt + every run file on the store's remote (store README §10.1)
 research run --on MACHINE --no-custody-r2 ...       # opt out: the records stay on the machine until `research fetch --all`
 research run --queue --source GITDIR --project P [--kind K] [--question Q] [--mem-gb G] [--disk-gb N] [--max-min M | --timeout T] [--gpus N]
              [--gpu-model M] [--cpus N] [--class work|bench|...] [--phase cpu|gpu] [--preemptible] [--quiet] [--on NODE] -- CMD...   # the one queue (infra/cluster): placed, then an --on run in its CPU allocation, a GPU leased around the workload alone
 research data custody RUN [--publish] | --triage                 # a run's custody on the remote, from any machine; the runs root by custody state
+research run-preserve PATH [--kind K] [--meta JSON]              # in an --on run's workload: its runner preserves one file of $OUT now (§10.1)
 research fetch RUN [--all]               # records only, or every file sha256-verified with preserved.json written last
 research status [RUN] [--refresh] [--all] [--json]   # under each active run, a `mem` line per cgroup it executes in (scopemem.py):
                                          # current, peak, cap, growth from its own samples, NEAR CAP within 10%; remote: with RUN or --refresh
@@ -98,7 +100,8 @@ research data SUBCOMMAND ...             # the store: put/show/fetch/select/... 
 research pods SUBCOMMAND ...             # the machines: registry, ssh, sync, leases, the budgets guard (src/research/pods/README.md)
 research tele SUBCOMMAND ...             # the harness's own surface (below)
 research jobs add|list|show|cancel|events ...   # the Job queue (below)
-research goals show|set|confirm|done|remove|replace|priority ...   # the Goals page (goals.py)
+research goals show|set|confirm|done|remove|replace|priority|audit|blockers ...   # the Goals page (goals.py); blockers ranks
+                                         # the open blockers by what waits on each (goals_blockers.py)
 research velocity [--line|--json]  # the velocity score from records, never a gate (velocity.py)
 research compare ORIGINAL... REPLAY [--expect E] [--json]   # a replay's verdict against the runs it replays (compare.py)
 research digest --as LANE   # what changed for a lane since its last digest (digest.py)
@@ -153,7 +156,7 @@ bare repo (120 s; `RESEARCH_MERGE_MIRROR`: host, empty skips); a failure logs th
 A tool's declaration may name result steps a merge needs by path (`Tool.merge_requires`, `{step: [path prefixes]}`, read from
 the target's checkout): when the merge's diff touches a prefix, only an attempt whose `result.json` `steps` show that step
 `passed` admits it; `!` patterns leave paths out (`!README.md`: every file of that name under the prefixes). `check` requires
-`lean-agreement` for `verity/protocols/flock/`'s `prover/`, `pod/`, `agreement/`, `verifier/` and `tool.py`, less README.md and
+`lean-agreement` for `verity/protocols/proofs/flock/`'s `prover/`, `pod/`, `agreement/`, `verifier/` and `tool.py`, less README.md and
 PROTOCOL.md; `--train --send FILE` ships what such a step needs. It may also name what runs after a landing
 (`Tool.after_land`, an argv): once `--push` has pushed, it starts detached
 in the checkout with the landed commit appended, and can't change the exit code; `check`'s is its `post_train.py`, the vLLM
@@ -169,16 +172,15 @@ the loop certifies. The mark's preflight refuses a lock merge dropping an entry 
 (`lock_drops`). `research queue status` says what each PR waits for.
 
 The workload receives `RESEARCH_RUN_ID`, `RESEARCH_RUN_DIR` and `OUT` (its `out/`, uploaded in full) and may write
-`$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local
-workload runs in its run directory unless `--cwd` says otherwise (`--cwd source` = the invoking directory, `clone` = a clone of it), so a relative
-`result.json` lands there and never in the checkout; `--env K=V` is set for the
-workload only and recorded as the attempt's `params.env` (values of
-secret-named keys redacted). Every job also starts with `ONEDNN_MAX_CPU_ISA=AVX512_CORE_BF16`
-(`result.env_defaults`, in `params.env` too) unless its `--env`, its command or the runner's environment names it:
-oneDNN's AMX kernel returns a preempted bf16 product wrong now and then. Four facts
-stay separate in `inspect`: exited, result well-formed, validation reported
-passed, preserved. `--require-result` makes exit 0 without a valid result
-exit 65.
+`$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local workload runs in its run directory unless `--cwd`
+says otherwise (`--cwd source` = the invoking directory, `clone` = a clone of it), so a relative `result.json` lands there and
+never in the checkout; `--env K=V` is set for the workload only and recorded as the attempt's `params.env`, the values of
+secret-named keys, of keys ending in `_HOST` and of `FLEET_JUMP` redacted. A brief names a machine, never its address:
+`--env-host vy-challenger-1` gives a job `VY_CHALLENGER_1_HOST` from the register, `eval "$(research pods env vy-challenger-1)"` a shell.
+Every job also starts with `ONEDNN_MAX_CPU_ISA=AVX512_CORE_BF16` (`result.env_defaults`, in `params.env` too) unless its
+`--env`, its command or the runner's environment names it: oneDNN's AMX kernel returns a preempted bf16 product wrong now and
+then. Four facts stay separate in `inspect`: exited, result well-formed, validation reported passed, preserved.
+`--require-result` makes exit 0 without a valid result exit 65.
 
 ### Remote runs
 
@@ -218,12 +220,17 @@ each with its repository file and owner (a Slack handle), and goes there only th
 [PATH ...] --apply` (else a dry run) from a pushed commit (`main`, or a PR's head for a hotfix). Each loop is a systemd unit
 (`units/` beside the manifest, settings in `env/`), never tmux; `install` restarts a running service whose unit, env file
 or running file changed, once the node is `quiet`. A `hold` entry is reported, never installed.
-`research deploy drift` reads each node and names every file that isn't main's (`stale`, `ahead`, `unknown`,
-`missing`), every process running a file replaced since it started (`restart`), and every file in a managed directory
-that no entry lists (`stray`); the hourly preflight probe posts its findings whenever they change (`ops deploy`). A new
-loop or script goes into the repository and the manifest before it runs; a backup of a replaced file is
-`.deploy-prev/`, which `install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ...
---by WHO --apply` (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it.
+`research deploy drift` (`ops deploy`) reads each node and names every file that isn't main's (`stale`, `ahead`, `unknown`,
+`missing`), every process running a file replaced since it started (`restart`, unless its entry says `no_restart`),
+and every file in a managed directory that no entry lists (`stray`); the monitors relay's hourly `drift` monitor opens
+one incident per node and kind. A `whole` tree's copy (the clean-up units' `research`) may be behind main
+between installs, so what it differs from main by is not the node's: its stale files, the files main has added since and
+those main has dropped (`dropped`, never a stray) are one incident of their own once a week of readings has found that copy
+behind, and only a file of it that a branch or no commit has (`ahead`, `unknown`) is the node's at once. A new loop or
+script goes into the repository and the manifest before it runs; a backup of a replaced file is `.deploy-prev/`, which
+`install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ... --by WHO --apply`
+(`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it; it refuses
+a path inside a `whole` tree, where the tree's next install drops what main lacks.
 A Lean build kept from node 1's credentials (the Lean cache's daily one) runs in `vy-lean-sandbox` (`lean_sandbox.py`).
 
 Monitors (`research monitors list|check|run|relay`, `research/monitors.py`) wake their owners: node 1's `vy-monitors.timer`
@@ -353,6 +360,14 @@ by their cgroup scope (what `research cancel` and a timeout stop), `pyspy.py` du
 `source_identity.py` records which source tree each imported package resolves to. Outside `research`, `infra/ops` reads
 `telemetry.job`'s secret-name pattern, and the vLLM integration's tests import `source_identity`.
 
+`telemetry/fixtures/run_fixtures.sh` checks the classifier against the real kernel, which `tests/test_telemetry.py` feeds
+synthetic evidence: each case (`oom_own`, `timeout`, `guardian`, `bystander`, `forkshare`, `writer`, `sampler_killed`,
+`sampler_denied`, `truncated`, `spans`) runs a workload under `tele run`, the memory hog, shared mapping, buffered writer and
+span emitter beside it (`hog.py`, `forkshare.py`, `writer.py`, `spans.py`), and writes what `failure.json` concluded beside the
+case's expectation to `OUT/SUMMARY.txt`. Nothing starts it. Run it by hand after a change to how an attempt's end is classified
+or its cgroup read (`classify.py`, `cgroup.py`, `sample.py`), as root in a Linux pod of its own whose cgroup (v2) has a memory
+limit, since its cases drive that cgroup to an OOM kill: `bash src/research/telemetry/fixtures/run_fixtures.sh OUT [CASE...]`.
+
 ### The Job queue: `research jobs`
 
 `src/research/jobs/` is the client side of the Job queue, the control app's `/api/jobs`: batch, unattended work on pods, where a
@@ -373,9 +388,9 @@ tests. Only `research` imports the package.
 The disk floor: `research run` and `research fetch --all` refuse (exit 3) while the runs root's filesystem has less than
 `$RESEARCH_DISK_FLOOR_GB` free (default 1.5; `0` turns it off), naming the eviction that frees it. `research data custody RUN
 --publish` removes the run's files of 1 MiB and more once custody holds (`--keep-local` keeps them); `run-files.evicted.json`
-names the fetch that restores them. `research data evict --src-dir DIR` (node 1's hourly unit) also deletes each
-shipped source tree that is exactly a commit on a ref of the node's `git/verity.git`, unused and unchanged for 2 h; any doubt
-keeps them all (`store/evict.py`).
+names the fetch that restores them. `research data evict --src-dir DIR` (every node's unit) also deletes each
+shipped source tree that is exactly a commit on a ref of the node's `git/verity.git`, unused and unchanged for 1 h; any doubt
+keeps them all (`store/evict.py`). Its other passes: `store/leftovers.py`.
 
 ### research data
 
@@ -435,7 +450,7 @@ What `research run` does:
   errors` with one line per error class). A configured-but-unusable remote
   (credential env vars unset here) does not stop a local publish: the attempt
   is written, `preserve_error` records why nothing was pushed.
-- Repo replicas: `fixtures/artifacts.json` maps `art:` ids to tracked files
+- Repo replicas: `artifacts.json` maps `art:` ids to tracked files
   registered with `research data put --kind fixture/v1 --file PATH`; `where`
   lists the `repo` replica when the file still hashes to its id.
 - With `--on`, the flags travel to the machine, which runs the same code in
@@ -449,43 +464,50 @@ What `research run` does:
 ### Retention of node data: `research keep`, `research retention`
 
 `src/research/retention.py`: nothing under a node's `/workspace` is deleted without a record that allows it. A record
-(`research/retention/v0`) is a sidecar, `<dir>/.retention.json` or `<file>.retention.json`, so it travels with its data.
-It covers everything beneath its
-path. A directory its owner made read-only gets its record beside it, `<dir>.retention.json`. A directory with both is invalid, and
+(`research/retention/v0`) is a sidecar, `<dir>/.retention.json` or `<file>.retention.json`. It covers everything beneath its
+path. A directory its owner made read-only gets its record beside it, `<dir>.retention.json`, and
 gc leaves a tree whole while any directory in it is read-only. A run dir whose `.custody` says `preserved: true` and which has no sidecar has an implicit record: owner its lane, else its
 campaign, else `runner`; `preserved` its run record; `expires` 48 h after `verified_utc` (`RUN_EXPIRY`); priority `normal`. Nothing
 is written for it, and a sidecar wins.
 
+A finished or runner-dead run that custody did not preserve gets a low-priority retention record that expires 7 days after the run
+directory's last write, so the collector takes it, its only copy (`UNPRESERVED_RUN_EXPIRY`). So does a refused launch.
+One running, queued or in a slot line stays; one whose clone stands waits (`scratch/<run id>` goes first).
+To keep one: `research keep RUNDIR ...` before the 7 days are over, or `research data custody RUN --publish` if it ran.
+gc takes them only with `--unpreserved-runs`; it and the report list them apart.
+
+A launcher's copy of a run on another machine (a directory named as the run's id that holds the launcher's `remote.json`) has no
+record, except under gc's `--launcher-copies`: there it expires 48 hours after its last write, and goes only once the remote holds
+the run's attempt, ended, and a run record with the copy's files (the rule is in `retention.py`'s docstring). A pass under
+`--launcher-copies` deletes launchers' copies and nothing else: any other path it would take is listed as left. `research keep
+COPY ...` keeps one longer. The unit `vy-launcher-copies-gc` runs it hourly over root's runs root on vy-nebius-cpu-7.
+
 ~~~text
 research keep PATH --owner @LANE --expires DATE|never|7d --priority P [--regenerate CMD] [--art ART | --preserve] [--why T] [--by URL]
-research keep show PATH                      # the record covering PATH, explicit or implicit, as JSON
+research keep show PATH    # the record covering PATH, explicit or implicit, as JSON
 research retention report [--root /workspace] [--depth 2] [--json]
-research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--max-paths 200] [--jobs-dir D]... [--store S] [--json] [--apply]
+research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--max-paths 200] [--jobs-dir D]... [--store S] [--unpreserved-runs] [--launcher-copies] [--json] [--apply]
 research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root /workspace] [--jobs-dir D]... [--json] [--apply]
 ~~~
 
 `--preserve` puts the path in the store as `node-data/v1` and pushes it PRESERVED (the store README's §7) before recording its id;
-a failed push records nothing. The report walks with `os.scandir` and `lstat`, never into a recorded path. It lists every recorded
-path and every area in the top `--depth` levels with no record beneath it (`unowned`): unowned and expired first, then totals.
+a failed push records nothing. The report lists every recorded
+path and every area in the top `--depth` levels with no record beneath it (`unowned`).
 
-Policy `default` (`default/v0`) acts only over `--high-pct` (vy-disk-guard's 80%) of blocks or inodes, or with `--force`. It deletes
-the lowest priority, then the oldest expiry, until the filesystem is under `--low-pct` (75%), at most `--max-paths` paths a pass. A
-path qualifies only when its record is valid, of this node, expired, `low` or `normal`, and preserved or regenerable, it holds no
-nested record, and no file in `/workspace/pouw/fill/queue`, `/workspace/pouw/fill/running` or a `--jobs-dir` names it. Just before
-`--apply` deletes a path, its record and the job scripts are read again. A preserved path also needs its artifact to hold every file
-now under it at its size, so files custody trimmed never count as preserved, and its stored copy `verified`, `expired` or
-`withdrawn` on the remote; one that can't be asked about fails the pass (`retention.STORED`). An implicit record's marker must still
-vouch for the run dir (the store README's §10.1). Without `--apply` gc deletes nothing and
-reads no remote; either way it prints every deletion and every skip with its reason. The failure it prevents: hundreds of GiB of
-unowned, unpreserved files on a node that nobody can decide to delete.
+Policy `default` (`default/v0`) acts only over `--high-pct` of blocks or inodes, or with `--force`. It deletes
+the lowest priority, then the oldest expiry, until the filesystem is under `--low-pct`, at most `--max-paths` paths a pass. A
+path qualifies only when its record is valid, of this node, expired, `low` or `normal`, and preserved or regenerable (or an
+unpreserved run's, or a launcher's copy's), it holds no nested record, and no file in `/workspace/pouw/fill/queue`, `/workspace/pouw/fill/running` or a
+`--jobs-dir` names it. Just before `--apply` deletes a path, its record and the job scripts are read again. A preserved path also needs its artifact to hold every file
+now under it at its size, and its stored copy `verified`, `expired` or `withdrawn` on the remote; one that can't be asked about
+fails the pass (`retention.STORED`). A preserved run's marker must still vouch for the run dir (the store README's §10.1). Without
+`--apply` gc deletes nothing and reads no remote; it prints every deletion and skip with its reason.
 
 `rm` is the one way to delete data you don't own on a node, for a cleanup the policy doesn't reach. It deletes a path only when a
 record covers it (its own or an ancestor's), and that record and every record beneath it (sidecars and implicit ones) name the
 `--approved-by` handle as owner and are not `keep`. No job script may name the path, and nothing in it may be read-only or a mount. Each
 decision of an `--apply` (delete, refuse, failed) is a `research/retention-log/v1` line in `/workspace/research/retention/deletions.jsonl`
-with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`. The failure it prevents: a disk cleanup's bare `rm -rf` of
-outputs whose record names another lane as owner, approved by a lane that doesn't own them, which loses them. Here that `rm` is
-refused with the true owner's name.
+with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`.
 
 ### Slack
 

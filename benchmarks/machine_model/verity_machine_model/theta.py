@@ -200,14 +200,14 @@ def has(data: Path) -> bool:
 def _reader(p: Path, cards: dict):
     """`read(v, key)`: a table's (value, grade, source), its `card` line's (every entry it names a ceiling of its card:
     `cards[""]` for `PATH`, `cards["host"]` for `host:PATH`) or its own `key`, `grade` and `source`."""
-    from verity.hardware.cards import number   # here: only a reader of the card needs verity
+    from verity.device import number   # here: only a reader of the card needs verity
 
     def entry(tok: str) -> tuple[str, str, dict]:
         which, _, path = tok.rpartition(":")
         if which not in cards:
             raise SystemExit(f"{p}: {tok} names no card; an entry is PATH, of the device's card, or host:PATH")
         e = cards[which]
-        file = f"verity/hardware/cards/{e['sku']}.toml"
+        file = f"hardware/cards/{e['sku']}.toml"
         for k in path.split("."):
             e = e.get(k) if isinstance(e, dict) else None
         if not isinstance(e, dict) or "value" not in e:
@@ -256,11 +256,11 @@ def theta(data: Path) -> Theta:
         sheet, grade, source = read(v, "sheet")
         rates[v["key"]] = Rate(v["key"], v["what"], v["unit"], sheet, v.get("clock"), v.get("figure"),
                                grade, source, v.get("measured"), v.get("runs", ""), v.get("gap", ""))
-    caps = {}
+    capacities = {}
     for v in t["capacity"]:
         value, grade, source = read(v, "value")
-        caps[v["key"]] = Capacity(v["key"], v["what"], value, v["unit"], grade, source, v.get("measured", ""),
-                                  v.get("gap", ""))
+        capacities[v["key"]] = Capacity(v["key"], v["what"], value, v["unit"], grade, source,
+                                        v.get("measured", ""), v.get("gap", ""))
     writers = tuple(Writer(v["name"], v["rate"], v["per"], v["words"], v["pipe"], dict(v.get("joint", {})))
                     for v in t.get("writer", ()))
     joints = {v["name"]: Joint(v["name"], v["other"], v["source"]) for v in t.get("joint", ())}
@@ -274,7 +274,7 @@ def theta(data: Path) -> Theta:
                    for v in t.get("public", ()))
     sms, _, sms_source = read({"card": "sm.count"}, "sms")
     th = Theta(gpu=t["gpu"], sms=sms, sms_source=sms_source, honest=tuple(t["honest"]),
-               documents=tuple(t["documents"]), clocks=clocks, rates=rates, capacities=caps,
+               documents=tuple(t["documents"]), clocks=clocks, rates=rates, capacities=capacities,
                paths=tuple(t.get("path", ())), fp8=tuple(t.get("fp8", ())), writers=writers, joints=joints,
                units=units, public=public, sha_mix=t.get("sha512_mix"))
     if problems := check(th):
@@ -500,20 +500,20 @@ def bound(t: Theta, reading: str) -> Bound:
     if reading not in (*READINGS, "measured only"):
         raise SystemExit(f"B_RF reads one of sheet, measured, measured only, not {reading}")
     base = "sheet" if reading == "sheet" else "measured"
-    ws, caps, filled, dropped = [], [], [], []
+    ws, ceilings, filled, dropped = [], [], [], []
     for w in t.writers:
         v, f = t.at(w.rate, base)
         if v is None or (f and reading == "measured only"):
             dropped.append(w.name)
             continue
         ws.append(w)
-        caps.append(v / w.per)
+        ceilings.append(v / w.per)
         if f:
             filled.append(w.rate)
     issue, _ = t.at("issue", base)
     A, b = [[1.0] * len(ws)], [issue]
     for p in dict.fromkeys(w.pipe for w in ws):
-        A.append([1 / c if w.pipe == p else 0.0 for w, c in zip(ws, caps)])
+        A.append([1 / c if w.pipe == p else 0.0 for w, c in zip(ws, ceilings)])
         b.append(1.0)
     if base == "measured":
         for j in t.joints.values():

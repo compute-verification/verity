@@ -35,24 +35,39 @@ from __future__ import annotations
 
 import hashlib
 import json
-import sys
 import uuid
+from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
+from typing import Any
 
 import numpy as np
-from dataclasses import dataclass
 
 from verity_vllm import settings
-from verity_vllm.config import (CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, option, row_execution, row_world,
-                                rows_of_record)
+from verity_vllm.config import (
+    CHECKPOINTS,
+    VLLM,
+    WORKLOAD_SCHEMA,
+    WORKLOADS,
+    RowConfig,
+    option,
+    row_execution,
+    row_world,
+    rows_of_record,
+)
 from verity_vllm.engine import served
 from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.engine.profiles.transport import row_custom_all_reduce_off, row_p2p_env
+from verity_vllm.log import init_logger
+from verity_vllm.records.schema_ids import GENERATED_WORKLOAD_SCHEMA
+
+__all__ = ["Options", "main"]
+
+logger = init_logger(__name__)
 
 CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"
 SCHEMA = WORKLOAD_SCHEMA
-SWEEP_SCHEMA = "verity-sweep/workload/v1"
+SWEEP_SCHEMA = GENERATED_WORKLOAD_SCHEMA
 SAMPLING = {
     "greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0},
     "stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.95, "top_k": 0},
@@ -76,8 +91,10 @@ def row_seed(row_id: str) -> str:
 
 
 def rng_for(seed_hex: str, purpose: str) -> np.random.Generator:
+    # imported here, not at the top: it loads the core `verity`, which importing this module does not
+    from verity_vllm.commit import challenge as CH
     h = hashlib.sha256(bytes.fromhex(seed_hex) + b"/" + purpose.encode()).digest()
-    return np.random.default_rng([int.from_bytes(h[i:i + 4], "little") for i in range(0, 32, 4)])
+    return CH.generator([int.from_bytes(h[i:i + 4], "little") for i in range(0, 32, 4)])
 
 
 def sampling_seed(seed_hex: str, index: int) -> int:
@@ -123,7 +140,7 @@ def plan_values(n: int, lo: int, hi: int, rng: np.random.Generator, *, anchor_ne
         return [hi] * n
     out: list[int] = []
     q = _quartile_bounds(lo, hi)
-    near_lo = lo if not anchor_near_lo else int(min(hi, lo + rng.integers(0, 4)))
+    near_lo = lo if not anchor_near_lo else min(hi, lo + int(rng.integers(0, 4)))
     anchors = [hi, near_lo]
     for k in (1, 2, 0, 3):
         a, b = q[k]
@@ -196,41 +213,40 @@ def prefix_sharers(p: dict) -> list[int]:
 # ---------------------------------------------------------------------------------------------------------------------------------
 def check_plan(p: dict) -> list[str]:
     """The sweep's workload requirements; returns the list of violations (empty = PASS).  The B >= 8 clauses apply only for B >= 8."""
-    B, I, O = int(p["batch"]), int(p["max_input"]), int(p["max_output"])
+    B, max_in, max_out = int(p["batch"]), int(p["max_input"]), int(p["max_output"])
     L, C = [int(x) for x in p["input_lengths"]], [int(x) for x in p["output_caps"]]
     lo, olo = int(p["min_input"]), int(p["min_output"])
     bad: list[str] = []
     if len(L) != B or len(C) != B:
         bad.append(f"vector lengths {len(L)}/{len(C)} != batch {B}")
-    if any(not (lo <= x <= I) for x in L):
-        bad.append(f"input length outside [{lo}, {I}]: {L}")
-    if any(not (1 <= c <= O) for c in C):
-        bad.append(f"output cap outside [1, {O}]: {C}")
-    if not any(abs(x - I) <= 3 for x in L):
+    if any(not (lo <= x <= max_in) for x in L):
+        bad.append(f"input length outside [{lo}, {max_in}]: {L}")
+    if any(not (1 <= c <= max_out) for c in C):
+        bad.append(f"output cap outside [1, {max_out}]: {C}")
+    if not any(abs(x - max_in) <= 3 for x in L):
         bad.append("no request within 3 tokens of max_input")
     if B >= 8:
         if len(set(L)) < 6:
             bad.append(f"only {len(set(L))} distinct input lengths (need >= 6)")
         if not any(x <= lo + 3 for x in L):
             bad.append("no request near the minimum input length")
-        qs = {_quartile_of(x, lo, I) for x in L}
+        qs = {_quartile_of(x, lo, max_in) for x in L}
         if qs != {0, 1, 2, 3}:
             bad.append(f"input quartiles covered {sorted(qs)} != [0,1,2,3]")
-        awk = [x for x in L if not _is_pow2(x) and x % 64 != 0 and x not in (I, lo)]
+        awk = [x for x in L if not _is_pow2(x) and x % 64 != 0 and x not in (max_in, lo)]
         if len(awk) < 3:
             bad.append(f"only {len(awk)} awkward non-power-of-two input lengths (need several >= 3)")
         if len(set(C)) < 6:
             bad.append(f"only {len(set(C))} distinct output caps (need >= 6)")
         if not any(c <= max(olo, 4) for c in C):
             bad.append("no very short output cap")
-        if not any(abs(c - O) <= 3 for c in C):
+        if not any(abs(c - max_out) <= 3 for c in C):
             bad.append("no output cap equal/near max_output")
-        cq = {_quartile_of(c, olo, O) for c in C}
+        cq = {_quartile_of(c, olo, max_out) for c in C}
         if len(cq) < 3:
             bad.append(f"output caps not spread across the range (quartiles {sorted(cq)})")
-    if p["sampling"] != "greedy":
-        if len(p["sampling_seeds"]) != B or len(set(p["sampling_seeds"])) != B:
-            bad.append("stochastic row without B distinct per-request sampling seeds")
+    if p["sampling"] != "greedy" and (len(p["sampling_seeds"]) != B or len(set(p["sampling_seeds"])) != B):
+        bad.append("stochastic row without B distinct per-request sampling seeds")
     if p["arrivals"] == "staggered" and B > 1:
         offs = p["arrival_offsets_s"]
         if offs[0] != 0.0 or offs != sorted(offs) or len(set(offs)) < min(B, 4):
@@ -320,7 +336,7 @@ def build_requests(tok: Tok, p: dict) -> list[dict]:
     for i in range(B):
         need = int(p["input_lengths"][i])
         ids, used = _passage(tok, paras, starts[i], need, prefix if i in sharers else None)
-        req = {"request_id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"verity-sweep/{p['row_id']}/{i}")), "index": i,
+        req: dict[str, Any] = {"request_id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"verity-sweep/{p['row_id']}/{i}")), "index": i,
                "prompt_len": need, "max_tokens": int(p["output_caps"][i]), "arrive_step": int(p["arrive_steps"][i]),
                "arrival_offset_s": float(p["arrival_offsets_s"][i]),
                "prompt_token_ids": ids, "prompt_text": tok.decode(ids), "origin": {"corpus": CORPUS.name, "paragraphs": used}}
@@ -334,9 +350,9 @@ def build_requests(tok: Tok, p: dict) -> list[dict]:
 
 
 def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok: Tok | None) -> dict:
-    B, I, O = int(p["batch"]), int(p["max_input"]), int(p["max_output"])
+    B, max_in, max_out = int(p["batch"]), int(p["max_input"]), int(p["max_output"])
     n, sharers = int(p["shared_prefix"]), prefix_sharers(p)
-    reqs = build_requests(tok, p) if tok is not None else [
+    reqs: list[dict[str, Any]] = build_requests(tok, p) if tok is not None else [
         {"request_id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"verity-sweep/{p['row_id']}/{i}")), "index": i,
          "prompt_len": int(p["input_lengths"][i]), "max_tokens": int(p["output_caps"][i]), "arrive_step": int(p["arrive_steps"][i]),
          "arrival_offset_s": float(p["arrival_offsets_s"][i]), **({"shared_prefix_tokens": n} if i in sharers else {}),
@@ -352,11 +368,11 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
     doc = {
         "schema": SCHEMA, "model": hf_repo, "case": case,
         "engine": {"revision": revision, "vllm": VLLM,
-                   "args": {"max_num_batched_tokens": int(max(2048, total_prompt + B)), "max_model_len": int(I + O)}},
+                   "args": {"max_num_batched_tokens": int(max(2048, total_prompt + B)), "max_model_len": int(max_in + max_out)}},
         "seed": 0,
         "variants": variants, "seeds": list(p["sampling_seeds"]),
         "sampling": {"variant": variant, "seed": None, "n": 1, **({"ignore_eos": True} if of_record else {})},
-        "serving_profile": f"sweep-B{B}" + ("-staggered" if p["arrivals"] == "staggered" else ""), "context_class": f"I{I}-O{O}",
+        "serving_profile": f"sweep-B{B}" + ("-staggered" if p["arrivals"] == "staggered" else ""), "context_class": f"I{max_in}-O{max_out}",
         "length_seed": p["seed"], "prompt_seed": p["seed"], "replicate": 0,
         "length_rule": p["length_rule"],
         "expected_engine_steps": horizon,
@@ -368,7 +384,7 @@ def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok:
         "sweep": {k: p[k] for k in ("schema", "row_id", "seed", "batch", "max_input", "max_output", "min_input", "min_output", "sampling",
                                     "sampling_params", "arrivals", "input_lengths", "output_caps", "sampling_seeds", "arrival_offsets_s",
                                     "arrive_steps", "arrival_rule", "length_rule", "seed_rule")},
-        "note": (f"sweep {p['row_id']}: B={B} I<={I} O<={O} {variant} arrivals={p['arrivals']}; prompt lens {p['input_lengths']}, caps "
+        "note": (f"sweep {p['row_id']}: B={B} I<={max_in} O<={max_out} {variant} arrivals={p['arrivals']}; prompt lens {p['input_lengths']}, caps "
                  f"{p['output_caps']}, arrive steps {p['arrive_steps']}; every request to max_tokens => {horizon} engine steps; "
                  f"max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  "
                  + ("A row of record: sampling.ignore_eos, every request done only at its public cap." if of_record else "EOS untouched.")),
@@ -401,7 +417,7 @@ def case_for(hf_repo: str, revision: str, explicit: str | None) -> str | None:
         doc = json.loads(CHECKPOINTS.read_text())
     except (OSError, ValueError):
         return None
-    for c in doc.get("checkpoints", []):    # registry roles (`add_checkpoint.py`): a single identifier, e.g. LLAMA32_1B
+    for c in doc.get("checkpoints", []):    # then a role of the manifest: a single identifier, e.g. LLAMA32_1B
         role = str(c.get("role") or "")
         if c.get("repo") == hf_repo and str(c.get("revision", "")).startswith(revision) and role.replace("_", "").isalnum():
             return role
@@ -444,40 +460,40 @@ def main(a: Options) -> int:
     p = plan(a.row_id, a.batch, a.max_input, a.max_output, sampling=a.sampling, arrivals=a.arrivals, shared_prefix=a.shared_prefix)
     bad = check_plan(p)
     if a.check:
-        print(f"[check] {a.row_id}: B={a.batch} lens={p['input_lengths']} caps={p['output_caps']} steps={p['arrive_steps']} -> "
-              f"{'PASS' if not bad else 'FAIL: ' + '; '.join(bad)}", file=sys.stderr)
+        logger.info("[check] %s: B=%s lens=%s caps=%s steps=%s -> %s", a.row_id, a.batch, p["input_lengths"], p["output_caps"],
+                    p["arrive_steps"], "PASS" if not bad else "FAIL: " + "; ".join(bad))
         if bad:
             return 1
     elif bad:
-        print(f"[warn] §12 self-check: {'; '.join(bad)}", file=sys.stderr)
+        logger.warning("§12 self-check: %s", "; ".join(bad))
 
     tok = None
     if not a.lengths_only:
         tp = Path(a.tokenizer) if a.tokenizer else find_tokenizer(a.hf_repo, a.revision)
         if tp is None:
-            print(f"[error] tokenizer.json for {a.hf_repo}@{a.revision} not found under {hf_home()} — pass --tokenizer or use --lengths-only",
-                  file=sys.stderr)
+            logger.error("tokenizer.json for %s@%s not found under %s — pass --tokenizer or use --lengths-only", a.hf_repo, a.revision, hf_home())
             return 2
         tok = Tok(tp)
     doc = workload_doc(p, hf_repo=a.hf_repo, revision=a.revision, case=case_for(a.hf_repo, a.revision, a.case), tok=tok)
     reasons = dict(r.partition("=")[::2] for r in a.reason)
     if unknown := sorted(set(reasons) - set(served.DEFAULTS)) or [k for k, v in reasons.items() if not v]:
-        print(f"[error] --reason {unknown}: a reason is SWITCH=TEXT for a switch of {sorted(served.DEFAULTS)}", file=sys.stderr)
+        logger.error("--reason %s: a reason is SWITCH=TEXT for a switch of %s", unknown, sorted(served.DEFAULTS))
         return 2
     if a.target:
         from verity_vllm.program.frontend.target_profile import TargetProfile
         t = json.loads(a.target)
-        tp = TargetProfile.from_json({**TargetProfile.default().to_json(), **t})   # validates the fields; cc / SMs come from the host at run time
+        profile = TargetProfile.from_json({**TargetProfile.default().to_json(), **t})   # validates the fields; cc / SMs come from the host at run time
         doc["engine"]["target"] = t
-        doc["engine"]["args"].update(tp.engine_args())
+        doc["engine"]["args"].update(profile.engine_args())
         if "env" in doc["engine"]:
-            doc["engine"]["env"].update(tp.env())
-        doc["sweep"]["execution"] = tp.execution_label
-        exec_suffix = a.row_id.rsplit("__", 1)[-1]
-        if exec_suffix != tp.execution_label:
-            print(f"[error] row id execution suffix {exec_suffix!r} != the target's execution label {tp.execution_label!r}", file=sys.stderr)
+            doc["engine"]["env"].update(profile.env())
+        doc["sweep"]["execution"] = profile.execution_label
+        label = row_execution(a.row_id)
+        exec_suffix = a.row_id if label is None else label
+        if exec_suffix != profile.execution_label:
+            logger.error("row id execution suffix %r != the target's execution label %r", exec_suffix, profile.execution_label)
             return 3
-        if "attention" in tp.int8_parts:
+        if "attention" in profile.int8_parts:
             reasons.setdefault("attention_backend", INT8_ATTENTION_REASON)
     if reasons:
         doc["engine"]["reasons"] = reasons
@@ -489,5 +505,5 @@ def main(a: Options) -> int:
     out = Path(a.out) if a.out else WORKLOADS / f"{a.row_id}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(RowConfig.of(doc).to_json(), indent=1, ensure_ascii=False) + "\n")
-    print(f"{out}: {doc['note'][:220]}", file=sys.stderr)
+    logger.info("%s: %s", out, doc["note"][:220])
     return 0

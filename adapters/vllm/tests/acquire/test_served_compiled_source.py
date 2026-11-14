@@ -12,13 +12,17 @@ from __future__ import annotations
 import contextlib
 import re
 from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity_vllm.acquire.sources import served_compiled_source as S  # noqa: E402
-from verity_vllm.engine.hooks import Hooks  # noqa: E402
+from verity_vllm.acquire.sources import served_compiled_source as S
+from verity_vllm.engine.hooks import Hooks
 
 cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 INSIDE = {"FULL": {"input", "kernel", "attention"}, "PIECEWISE": {"kernel"}, "NONE": set()}
@@ -28,7 +32,7 @@ WIDTH = 4
 class _Committer:
     def __init__(self) -> None:
         self.acq: list[tuple[str, torch.Tensor]] = []
-        self._cur = None
+        self._cur: SimpleNamespace | None = None
         self.gather = False
         self.sources: list = []
 
@@ -60,7 +64,8 @@ class _Sim:
     is also a capture size, so the source must learn it is not a row tensor)."""
 
     def __init__(self, src: S.ServedCompiledSource, monkeypatch) -> None:
-        self.src, self.in_graph, self.replay_key = src, False, None
+        self.src, self.in_graph = src, False
+        self.replay_key: tuple[str, int] | None = None
         monkeypatch.setattr(S, "_capturing", lambda val: self.in_graph)
         self.backends = [_Backend(i) for i in range(3)]
         self.attn = [src._attention_forward(_attn_impl, f"layers.{i}.self_attn.attn") for i in range(2)]
@@ -78,7 +83,7 @@ class _Sim:
                 self.src.capturing = None
 
     def forward(self, ids: torch.Tensor, pos: torch.Tensor, inside: set[str]) -> torch.Tensor:
-        h = None
+        h: Any = None
         for p, be in enumerate(self.backends):
             with self.region("input" in inside):
                 self.src._enter_piece(be, (ids, 7, pos) if p == 0 else (h,))
@@ -171,7 +176,12 @@ def test_replayed_step_commits_the_uncaptured_steps_values(monkeypatch, mode, n,
 def test_batched_captured_copies_are_issued_together_at_each_flush(monkeypatch):
     calls: list[int] = []
     real = torch._foreach_copy_
-    monkeypatch.setattr(torch, "_foreach_copy_", lambda d, s: calls.append(len(d)) or real(d, s))
+
+    def copies(d, s):
+        calls.append(len(d))
+        return real(d, s)
+
+    monkeypatch.setattr(torch, "_foreach_copy_", copies)
     src, _sim, _c = _setup(monkeypatch, sizes=(8,), modes=("FULL",), batch=True)
     # piece 0: its two inputs and two buffers; pieces 1, 2: the attention before them and two buffers (the warm-up pass copies at once)
     assert calls == [4, 3, 3] and src.stats["capture_flushes"] == 3 and src.pending == [] and src.errors == []
@@ -190,7 +200,12 @@ def test_a_strided_recorded_copy_is_copied_alone_with_the_same_bytes():
 def test_a_flush_copies_by_the_widest_word_each_copy_allows(monkeypatch):
     calls: list[tuple[torch.dtype, int]] = []
     real = torch._foreach_copy_
-    monkeypatch.setattr(torch, "_foreach_copy_", lambda d, s: calls.append((d[0].dtype, len(d))) or real(d, s))
+
+    def copies(d, s):
+        calls.append((d[0].dtype, len(d)))
+        return real(d, s)
+
+    monkeypatch.setattr(torch, "_foreach_copy_", copies)
     src = S.ServedCompiledSource()
     vals = [torch.arange(8, dtype=torch.int64), torch.arange(3, dtype=torch.int8), torch.arange(6, dtype=torch.int16)[1:],
             torch.arange(4, dtype=torch.float32)]
@@ -245,7 +260,12 @@ def test_slots_come_from_the_warm_up_pass_and_profiling_drops_them(monkeypatch):
     src._begin_capture(8)
     allocated: list[bool] = []
     real_empty = torch.empty
-    monkeypatch.setattr(torch, "empty", lambda *a, **kw: allocated.append(sim.in_graph) or real_empty(*a, **kw))
+
+    def empty(*a, **kw):
+        allocated.append(sim.in_graph)
+        return real_empty(*a, **kw)
+
+    monkeypatch.setattr(torch, "empty", empty)
     sim.capture("FULL", 8, *_inputs(8, 8, seed=1))
     assert allocated and not any(allocated), "a slot was allocated inside the capture (the graph's pool)"
     assert len(src.plans[("FULL", 8)]) == 2 + 3 * 2 + 2

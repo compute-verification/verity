@@ -3,9 +3,11 @@ traces.
 
 The codec is `verity_vllm.pipeline.advice_code.codec` (`encode`, `decode`, `bits_by_window`; its docstring states what
 is certified, replayed, derived and sent, the windows and the string), re-exported here for the modules and tests that
-load this one by path. This module adds a trace's certified record (`record_of`) and its I1 v0 advice (`advice_of`),
+load this one by path. This module adds a trace's certified record (`record_of`), its I1 v0 advice (`advice_of`) and,
+for a trace served with a draft, which no I1 v0 says, its schedule (`schedule_of`, `schedule_code`'s),
 a trace's residual windows (`windows_of`) and the books held out from it (`held_out_books`), and the table
-(`measure`, `render`):
+(`measure`, `render`), which is of I1 v0 and so has an error row for a trace served with a draft (`by_class.py`
+reads one):
 
     python v1.py LABEL=DIR ... --stops IDS [--T 600 --ingress client --jobs N] --out TABLE.json
 """
@@ -24,13 +26,15 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any, TypeVar
 
-from verity.protocols.certifier.verifier import advice as I1
+from verity.protocols.accounting.certifier.verifier import advice as I1
 from verity_vllm.pipeline.advice_code.codec import (
     advice_of_replay as advice_of_replay, AdviceCodeError, arrival_order as arrival_order, bits_by_window, book_of, CAPS as CAPS,
     charged as charged, check_record as check_record, Decision as Decision, decode as decode,
-    decode_bits as decode_bits, decode_full, encode, length_tails, Record, Registered, release_order as release_order,
+    decode_bits as decode_bits, decode_full, encode, kept_terms as kept_terms, length_tails,
+    length_widths as length_widths, Record, Registered, release_order as release_order,
     replay_record as replay_record, Request, residual, streams, string_of, TICK_CAPS as TICK_CAPS, windows,
 )
+from verity_vllm.pipeline.advice_code.schedule_code import Schedule
 
 HERE = Path(__file__).resolve().parent
 T = TypeVar("T")
@@ -93,7 +97,10 @@ def record_of(trace: Any, stop_ids: Sequence[int], *, bucket_s: float = 0.1) -> 
 def advice_of(trace: Any, record: Record) -> I1.Advice:
     """The trace as I1 v0: its rows in the order its runner ran them, I1's numbering by first row, each admitting row's
     hit its start and its sources the canonical ones, and each kept output released in the record's bucket. The trace's
-    requests are the record's, by id."""
+    requests are the record's, by id. A trace served with a draft is refused: `schedule_of` says it."""
+    if trace.engine.num_speculative_tokens:
+        raise AdviceCodeError("the trace was served with a draft, and I1 v0's rows emit one output each: `schedule_of` "
+                              "gives its schedule")
     steps_rows = [list(st.rows) for st in trace.steps]
     num: dict[int, int] = {}
     order: list[int] = []
@@ -126,6 +133,17 @@ def advice_of(trace: Any, record: Record) -> I1.Advice:
                 kept[j] += 1
         steps.append(I1.StepAdvice(tuple(out)))
     return I1.Advice(requests, tuple(steps), tuple(release))
+
+
+def schedule_of(trace: Any, record: Record) -> Schedule:
+    """The trace as v1's schedule: the order its engine took the requests in and each step's rows, by the record's
+    ordinals, with the drafts each request's emitting rows kept, one 0 an output for a trace served without a draft.
+    The trace's requests are the record's, by id."""
+    ordinal = {q.id: k for k, q in enumerate(record.requests)}
+    arrival = [ordinal[i] for i in trace.ids]
+    kept = {k: tuple(io.kept) if io.kept is not None else (0,) * io.output_len for k, io in zip(arrival, trace.requests)}
+    return Schedule(tuple(arrival), tuple(tuple((arrival[i], start, n) for i, start, n in st.rows) for st in trace.steps),
+                    tuple(kept[k] for k in range(len(arrival))))
 
 
 # --- the corpus table --------------------------------------------------------------------------------------------------
@@ -203,8 +221,8 @@ def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingres
         t1 = time.monotonic()
         got = decode_full(data, rec, reg)
         by = bits_by_window(data, rec, reg)
-        unordered = sum(string_of([CV.Window(w.arrived) for w in wins], reg, tails)[1])
-        untimed = sum(string_of([CV.Window() for _ in wins], reg, tails)[1])
+        unordered = sum(string_of([CV.Advice(w.arrived) for w in wins], reg, tails)[1])
+        untimed = sum(string_of([CV.Advice() for _ in wins], reg, tails)[1])
         row[name] = {"bits": sum(by.values()), "by_window": by, "max_window": max(by.values()),
                      "order_bits": sum(by.values()) - unordered, "timing_bits": sum(by.values()) - untimed,
                      "bytes": len(data), "round_trip": got.advice == adv and got.streams == streams(adv, rec),
@@ -257,7 +275,7 @@ def held_out_books(residuals: Sequence[dict[str, Any]]) -> list[dict | None]:
     """For each trace, the book `code_v1.fit_book` fits on every other trace's windows (None where it has none), as a
     registration would fix it from history before the run; for a trace under the certified tick, where no window's
     segment codes anything, the uniform book under `TICK_TABLE_CAPS`."""
-    runs = [None if "error" in r else [CV.Window(**w) for w in r["windows"]] for r in residuals]
+    runs = [None if "error" in r else [CV.Advice(**w) for w in r["windows"]] for r in residuals]
     out: list[dict | None] = []
     for k, mine in enumerate(runs):
         others = [w for j, w in enumerate(runs) if j != k and w is not None]

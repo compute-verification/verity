@@ -1,5 +1,5 @@
 """The device check's fixture for pearl_c4.cu: inputs and every buffer the kernels write, at a small shape, from the numpy
-twin (`twin.py`) and `verity.protocols.pouw.prover.schemes.pearl_c4`'s hashing.  dev.py's check compares each device buffer with these
+twin (`twin.py`) and `verity.protocols.accounting.pouw.prover.schemes.pearl_c4`'s hashing.  dev.py's check compares each device buffer with these
 byte for byte.
 
   uv run python benchmarks/pouw/pearl_c4/fixture.py OUT [--fmt nvfp4|mxfp4|both] [--shape MxNxK]
@@ -17,18 +17,19 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
-from verity.commitments.crypto.turboshake import turboshake128
-from verity.protocols.pouw.verifier import audit as AU
-from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape
-from verity.protocols.pouw.prover.schemes import pearl_c as C
-from verity.protocols.pouw.prover.schemes import pearl_c4 as F
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 import twin as T
+
+from verity.commitments.crypto.turboshake import turboshake128
+from verity.circuits.kernels.tc import group_sum_total_batch
+from verity.circuits.silicon import fp32
+from verity.circuits.silicon.models import HOPPER_BF16_M16N8K16
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.accounting.pouw.verifier import audit as AU
+from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
 
 SHAPE = (128, 128, 1024)
 WEIGHT = 1
@@ -98,8 +99,8 @@ def build(fmt_name: str, shape: tuple[int, int, int] = SHAPE) -> tuple[dict, dic
         for q in range(F.R):
             acc = 0
             for p in range(F.R):
-                acc = F.fp32.fma(et[p] << 16, gl[p][q], acc)
-            row.append(C._bf16_of_word(F.fp32.add(acc, F.fp32.neg(bfr[q]))))
+                acc = fp32.fma(et[p] << 16, gl[p][q], acc)
+            row.append(C._bf16_of_word(fp32.add(acc, fp32.neg(bfr[q]))))
         mid.append(row)
     pb = np.concatenate([np.array(mid, np.uint16), eb ^ np.uint16(0x8000)], axis=1)
 
@@ -107,7 +108,7 @@ def build(fmt_name: str, shape: tuple[int, int, int] = SHAPE) -> tuple[dict, dic
     c = T.chain(fmt, a.codes, a.scales, b.codes, b.scales, ti, tj)
     u = c.copy()
     for st in range(0, F.PEEL_K, 16):
-        u = T.group_sum_total_batch(T.HOPPER_BF16_M16N8K16, u, pa[ti, st:st + 16], pb[tj, st:st + 16])[0]
+        u = group_sum_total_batch(HOPPER_BF16_M16N8K16, u, pa[ti, st:st + 16], pb[tj, st:st + 16])[0]
     c, u = c.reshape(m, n), u.reshape(m, n)
 
     inv_a = T.u32(np.float32(1) / T.f32(a.alpha))

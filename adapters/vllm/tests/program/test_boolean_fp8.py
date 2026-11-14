@@ -6,17 +6,16 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
+from verity.circuits import boolean as BL
+from verity.circuits import codec
 from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import standalone_call
-from verity.circuits import boolean as BL
-from verity.circuits import codec
-from verity.circuits.defs import bind
-from verity.definitions.ops.boolean import gemm as BG
-from verity.circuits.boolean import trace as TR
 from verity.definitions import boolean as SW
+from verity.circuits.ops.boolean import gemm as BG
 from verity.definitions.registry import boolean_fp8 as BF
 
 #: id -> (And, Xor, Not gates, standalone program digest)

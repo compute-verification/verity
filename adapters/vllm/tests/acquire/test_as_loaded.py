@@ -8,13 +8,24 @@ from __future__ import annotations
 
 import hashlib
 import pickle
-import sys
 import types
 
 import numpy as np
 import pytest
 import torch
 from torch import nn
+
+from tests import fake_vllm
+from tests.check.test_weights_of_record_dsv4_experts import (  # noqa: F401  (dsv4: the checkpoint fixture)
+    EX,
+    INTER,
+    RANK,
+    WORLD,
+    E,
+    H,
+    dsv4,
+)
+from tests.check.test_weights_of_record_routed_experts import _program
 from verity_vllm.acquire import as_loaded as AL
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.replay.opening import model_weights_provider
@@ -22,23 +33,12 @@ from verity_vllm.pipeline.tp import commit as TPC
 from verity_vllm.program.frontend import marlin_moe_leaf as mml
 from verity_vllm.protocols import WeightsView
 
-from tests.check.test_weights_of_record_dsv4_experts import (  # noqa: F401  (dsv4: the checkpoint fixture)
-    EX,
-    RANK,
-    WORLD,
-    E,
-    H,
-    I,
-    dsv4,
-)
-from tests.check.test_weights_of_record_routed_experts import _program
-
 
 class _Mxfp4Method:
     mxfp4_backend, moe_kernel = "marlin", "built"
 
     def __init__(self) -> None:
-        self.num_experts, self.intermediate_size, self.hidden_size = E, I // WORLD, H
+        self.num_experts, self.intermediate_size, self.hidden_size = E, INTER // WORLD, H
         self.moe = types.SimpleNamespace(w13_num_shards=2)
 
 
@@ -50,11 +50,9 @@ def repack(layer, w13, w2, s13, s2):
 
 @pytest.fixture
 def vllm_mxfp4(monkeypatch):
-    mxfp4, oracle = types.ModuleType(mml._MXFP4), types.ModuleType(mml._ORACLE)
-    mxfp4.Mxfp4MoEMethod = _Mxfp4Method
-    oracle.Mxfp4MoeBackend = types.SimpleNamespace(MARLIN="marlin")
-    for module in (mxfp4, oracle):
-        monkeypatch.setitem(sys.modules, module.__name__, module)
+    fake = fake_vllm.install(monkeypatch, extra=[f"{mml._MXFP4}:Mxfp4MoEMethod", f"{mml._ORACLE}:Mxfp4MoeBackend"])   # reached by name
+    fake[mml._MXFP4].Mxfp4MoEMethod = _Mxfp4Method
+    fake[mml._ORACLE].Mxfp4MoeBackend = types.SimpleNamespace(MARLIN="marlin")
 
 
 @pytest.fixture

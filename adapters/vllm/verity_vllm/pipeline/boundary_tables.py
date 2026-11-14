@@ -24,7 +24,7 @@ like the rest (`fill`, which the interior's tables take too). A read past L retu
 
 **What round 2 opens** (`Kept`): each table's rows and salts as built, in files on the node readable by their owner only,
 never under a run's directory or the serve's records, which leave it. `load` gives a served table by its name, for the
-interior to open a drawn span's table under round 1's root; `Kept.span` reads a span's rows at a range of positions with
+interior to open a sampled span's table under round 1's root; `Kept.span` reads a span's rows at a range of positions with
 their salts and public strings, and `Kept.table` rebuilds a table from them, held to its root. The range is an argument:
 the committed step schedule it is to come from isn't there yet.
 """
@@ -42,10 +42,15 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
 from verity.commitments import history as HT
+
 from verity_vllm.commit import history_tables as H
-from verity_vllm.records.boundary_tables import ASSIGN, ROOTS, TableAssignment, TableRoots
+from verity_vllm.records.boundary_tables import (
+    ASSIGN,
+    ROOTS,
+    TableAssignment,
+    TableRoots,
+)
 
 __all__ = ["ASSIGN", "CAPACITY", "KEY", "ROOTS", "WORDS", "Builder", "Channel", "Kept", "Latents", "LocalChannel", "Served",
            "StepHook", "assignment", "class_rows", "computed", "fill", "key", "layers_of", "load", "mla_layers", "name",
@@ -286,7 +291,7 @@ class Builder:
 
     def build(self, doc: Mapping[str, Any]) -> dict[str, Any]:
         """The class's tables' entries (`history.HistoryTable.entry`), or why there are none (`TableRoots`)."""
-        head = {k: doc.get(k) for k in ("window", "run", "prompt", "outputs")}
+        head: dict[str, Any] = {k: doc.get(k) for k in ("window", "run", "prompt", "outputs")}
         try:
             return TableRoots(**head, tables=tuple(self._tables(TableAssignment.of(doc, ASSIGN))), error=None).dump()
         except (ValueError, KeyError, TypeError, RuntimeError, OSError) as e:
@@ -443,7 +448,7 @@ class Kept:
 def load(directory: str | Path, table: str) -> Served:
     """The served table named ``table`` (`name`: its run, class, slot and layer) that rank 0 kept under a serve's private
     directory ``directory`` (its ``tables`` configuration's ``private``, as `Kept.of` puts it): what the interior opens
-    for a drawn span, committed again under round 1's program, name, words and capacity so that its root is round 1's
+    for a sampled span, committed again under round 1's program, name, words and capacity so that its root is round 1's
     port root. On the node only."""
     return Kept(Path(directory).resolve() / "tables").load(table)
 
@@ -544,7 +549,8 @@ class LocalChannel:
     """`Channel` in one process: `assign` builds at once."""
 
     def __init__(self, builder: Builder) -> None:
-        self.builder, self.done = builder, {}
+        self.builder = builder
+        self.done: dict[str, dict[str, Any]] = {}
 
     def assign(self, doc: Mapping[str, Any]) -> None:
         self.done[_stem(doc["window"], doc["run"], doc["prompt"], doc["outputs"])] = self.builder.build(doc)

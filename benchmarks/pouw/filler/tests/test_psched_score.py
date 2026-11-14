@@ -6,25 +6,14 @@ and the arm (psched_arm.py) places a phase filler only beside a split, as a pure
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
-import pytest
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import psched_score as P
+import pytest
 
 A, S, SC = P.A, P.S, P.SC
 ARM = "benchmarks/pouw/filler/psched_arm.py:PhaseSched"
 PBIT = 1 << 62  # dcap.cu's: the phase filler's tile ids carry it, its rounds' tag
-
-
-@pytest.fixture(autouse=True)
-def _one_arms_module(monkeypatch):
-    # test_filler_score loads its own copies of arms and scoring into sys.modules; the arm module imports `arms` when
-    # A.load runs it, and its Filler must be the class check_arm tests against
-    monkeypatch.setitem(sys.modules, "arms", A)
-    monkeypatch.setitem(sys.modules, "scoring", S)
 
 
 def ncu_csv(kernel, rows):
@@ -140,6 +129,23 @@ def test_phase_gates_void_the_score(tmp_path, kw, gate):
     res = P.report(out, arm)
     assert not res["gates"][gate]["ok"] and not res["gates"]["ok"]
     assert res["SCORE"] is None and not res["scored"] and res["score_if_gated"] is not None
+
+
+def test_show_prints_each_gate_from_its_own_dict(tmp_path, capsys):
+    """The locked `score.show` prints a line a gate: its verdict, then the detail it reads from that gate's dict."""
+    res = P.report(*write_run(tmp_path))
+    SC.show(res)
+    said = dict(ln.removeprefix("  gate ").split(": ", 1) for ln in capsys.readouterr().out.splitlines()
+                if ln.startswith("  gate "))
+    g = res["gates"]
+    assert list(said) == [*SC.GATES, "filler_paths"]
+    assert said["slowdown"] == f"pass  worst 1.020 at {g['slowdown']['at']} ({g['slowdown']['phase']})"
+    assert said["receipts"] == f"pass  timed {g['receipts']['timed_checked']} checked, 0 bad"
+    assert said["replay"].startswith(f"pass  {g['replay']['rounds']} rounds, {g['replay']['tiles']:.3g} tiles, ")
+    assert said["honest"].startswith("pass  control (S 2048 credited, ") and said["honest"].endswith(", caught")
+    assert said["dram"] == "pass  0.012% of HBM, counter control 1.006"
+    assert said["clocks"].startswith(f"pass  {g['clocks']['reps']} reps read; nvidia-smi between points: MHz [2092.0, ")
+    assert said["serving_exact"] == "pass  " and said["filler_paths"] == f"pass  {g['filler_paths']['why']}"
 
 
 def test_arm_places_a_phase_filler_only_beside_a_split():

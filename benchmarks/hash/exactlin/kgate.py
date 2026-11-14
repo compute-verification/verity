@@ -12,7 +12,7 @@ Per shape, the reference is the exact arm's own code on the same GPU, `int8_exac
 `dequantize(int_mm(...))`, and:
     fused       quant_rows then scaled_mm into buffers filled with 0xA5 first: xq, s_a and y equal the reference bit for bit
     fused_mm    scaled_mm alone on the reference's xq and s_a: y equal
-    op_bodies   `row_quant` then `product`, the ops' CUDA bodies as `install` serves them: xq, s_a and y equal
+    op_bodies   `row_quant` then `product`, the ops' CUDA bodies (`engine.int8_ops` registers them): xq, s_a and y equal
     control     the same 0xA5 buffers with no launch: must differ from the reference in every buffer
     graph       both kernels captured in a CUDA graph, its buffers 0xA5 again, one replay: equal
     alloc       torch's allocated bytes unchanged by the eager calls and by the capture
@@ -22,25 +22,37 @@ Per shape, the reference is the exact arm's own code on the same GPU, `int8_exac
                 multiple of 16 and the build has it, CUTLASS's GEMM as vLLM calls it and on the transposed product
                 (`cutlass_swapped`); and triton_scaled_mm's kernel at each tile a traced engine freezes (FROZEN_TILES)
                 against its per-call tile
-plus the PTX of both kernels (`exactlin.ptx_check`).  `gate()` returns the document; `ok` is the fused path's verdict
-(stock's differences are findings, not failures).
+plus the PTX of both kernels (`int8_fused.ptx_check`).  With `--zy` also
+    zy          `int8_fused.product_zy` (`verity_int8::scaled_mm_zy`'s CUDA body, H1's fused z/y check) at its served
+                config over T = M rounded up to 32 slots: y equal, the records byte-identical to `int8_exact.scaled_mm_zy`'s,
+                and its PTX
+`--shapes prefill` runs M across the prefill rows' edges (4,096 to 32,768; 4,097, 8,193 and 16,385 masked).  `gate()`
+returns the document; `ok` is the fused path's verdict (stock's differences are findings, not failures).
 
-    python kgate.py --out OUT [--shapes all|decode] [--models llama-3.1-8b,qwen3-8b] [--no-stock] [--dump]
+Which kernel each call ran is observed, not derived: while a shape's checks run, `counting` wraps the bodies a check can
+launch (BODIES) on their modules, and each row's `kernels` holds, check by check, `through_dispatch` and the bodies it ran
+with the config each was handed.  Only `op_bodies` and `zy` go through the ops' dispatch (`int8_fused.product`,
+`product_zy`), which takes `int8_wgmma` where `pick_wgmma` has a row; every other check calls int8_fused's Triton bodies
+itself, so it checks Triton alone, and its `cfg` is the Triton config.  A check that ran no body, or not one GEMM, fails
+the row (`kernels_ok`): the count reads nothing if the dispatch stops looking its bodies up at each call.
+
+    python kgate.py --out OUT [--shapes all|decode|prefill] [--models llama-3.1-8b,qwen3-8b] [--no-stock] [--dump] [--zy]
 """
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import torch
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import exactlin as X
+from verity_vllm.engine import int8_fused as X
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
     from types import ModuleType
 
 MODELS = {
@@ -54,8 +66,9 @@ MODELS = {
 LAYERS = MODELS["llama-3.1-8b"]["linears"]
 MS = (1, 32, 256, 2048, 8192)
 DECODE_MS = (1, 32, 256)
-# the gate's Ms: every exactlin.CONFIGS row (m_max 1, 16, 32, 64, 256) and an M inside two of them, masked tiles
-GATE_MS = {"all": (1, 7, 16, 32, 33, 64, 256, 2048, 8192), "decode": (1, 7, 16, 32, 33, 64, 256)}
+# the gate's Ms: every int8_fused.CONFIGS row (m_max 1, 16, 32, 64, 256) and an M inside two of them, masked tiles
+GATE_MS = {"all": (1, 7, 16, 32, 33, 64, 256, 2048, 8192), "decode": (1, 7, 16, 32, 33, 64, 256),
+           "prefill": (4096, 4097, 8192, 8193, 16384, 16385, 32768)}
 
 
 def shapes_of(models: tuple[str, ...], ms: tuple[int, ...]) -> list[tuple[int, int, int, list[str]]]:
@@ -231,6 +244,65 @@ def work() -> X.Workspace:
     return _WORK[0]
 
 
+#: The bodies a check can launch, each looked up on its module at every call (`int8_fused.product`, `product_zy` and
+#: `row_quant` call them so): int8_fused's Triton kernels, and on sm_90 `int8_wgmma`'s.
+BODIES = (("int8_fused", "quant_rows"), ("int8_fused", "scaled_mm"), ("int8_fused", "scaled_mm_zy"),
+          ("int8_wgmma", "scaled_mm"), ("int8_wgmma", "scaled_mm_zy"))
+GEMMS = frozenset(f"{m}.{n}" for m, n in BODIES if n != "quant_rows")
+#: a GEMM body's config argument: its position and its keyword
+CFG_ARG = {"scaled_mm": 5, "scaled_mm_zy": 7}
+#: the checks that go through the ops' dispatch; every other one calls int8_fused's Triton bodies itself, or none
+DISPATCH = frozenset({"op_bodies", "zy"})
+#: the checks that launch none of BODIES
+NO_LAUNCH = frozenset({"control", "stock"})
+#: while `counting` lasts, each call of BODIES as "module.name" and, for a GEMM, the config it was handed
+RAN: list[str] | None = None
+
+
+def _counted(key: str, f: Callable[..., object], ran: list[str]) -> Callable[..., object]:
+    at = CFG_ARG.get(key.split(".")[1])
+
+    def body(*args: object, **kw: object) -> object:
+        cfg = kw.get("cfg", args[at] if at is not None and len(args) > at else None)
+        ran.append(key if cfg is None else f"{key} {cfg}")
+        return f(*args, **kw)
+    return body
+
+
+@contextlib.contextmanager
+def counting(modules: dict[str, ModuleType] | None = None) -> Iterator[list[str]]:
+    """BODIES wrapped on their modules so each call goes to RAN, and put back after: no timed call runs a wrapper."""
+    global RAN
+    mods = modules or {"int8_fused": X, "int8_wgmma": X.int8_wgmma}
+    saved = [(mods[m], n, getattr(mods[m], n)) for m, n in BODIES]
+    RAN = []
+    for (m, n), (mod, _, f) in zip(BODIES, saved):
+        setattr(mod, n, _counted(f"{m}.{n}", f, RAN))
+    try:
+        yield RAN
+    finally:
+        for mod, n, f in saved:
+            setattr(mod, n, f)
+        RAN = None
+
+
+def ran_since(i: int, check: str) -> dict:
+    """`check`'s record: whether it goes through the dispatch, and the bodies RAN holds from i on."""
+    return {"through_dispatch": check in DISPATCH, "ran": [] if RAN is None else RAN[i:]}
+
+
+def kernels_ok(kernels: dict) -> bool:
+    """Each check that launches ran one GEMM body (int8_fused's own where it calls them itself), and the others none."""
+    for check, rec in kernels.items():
+        gemms = [r.split()[0] for r in rec["ran"] if r.split()[0] in GEMMS]
+        if check in NO_LAUNCH:
+            if rec["ran"]:
+                return False
+        elif len(gemms) != 1 or not (rec["through_dispatch"] or gemms[0].startswith("int8_fused.")):
+            return False
+    return True
+
+
 DUMP_N = 128
 
 
@@ -246,10 +318,32 @@ def dump_replay(path: Path, x: torch.Tensor, xq: torch.Tensor, s: torch.Tensor, 
              y=y[:, :DUMP_N].contiguous().view(torch.int16).cpu().numpy().view(np.uint16))
 
 
+def zy_doc(xq: torch.Tensor, s: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y_ref: torch.Tensor) -> dict:
+    """The served zy op body (`int8_fused.product_zy`, at its own `_plan`) against `int8_exact.scaled_mm_zy`."""
+    from verity_vllm.engine import int8_fused as F
+    e = E()
+    m, n, k = xq.shape[0], w.shape[0], w.shape[1]
+    rows = -(-m // e.UNIT[0]) * e.UNIT[0]
+    i = len(RAN or [])
+    y, zy = F.product_zy(xq, s, w, s_w, rows)
+    torch.cuda.synchronize()
+    kernels = {"zy": ran_since(i, "zy")}
+    zy_ref = e.scaled_mm_zy(xq, s, w, s_w.reshape(-1), rows)[1]
+    cfg = F.pick(m, n, k)
+    doc = {"rows": rows, "cfg": str(cfg), "y_diff": diff(y, y_ref), "records_diff": diff(zy, zy_ref)}
+    yy, zz = torch.empty_like(y), torch.empty_like(zy)
+    i = len(RAN or [])
+    doc["ptx"] = F.ptx_check(F.scaled_mm_zy(xq, s, w, s_w.reshape(-1), yy, zz, rows, cfg, work()))
+    kernels["zy_ptx"] = ran_since(i, "zy_ptx")
+    doc["kernels"] = kernels
+    doc["ok"] = doc["y_diff"] == 0 and doc["records_diff"] == 0 and doc["ptx"]["ok"]
+    return doc
+
+
 def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | None = None, cfg: X.Cfg | None = None,
-        dump: Path | None = None) -> dict:
-    """`cfg` is the GEMM's config (default `exactlin.pick`, what `install` serves); `dump` a directory that gets the
-    graph replay's outputs (`dump_replay`)."""
+        dump: Path | None = None, zy: bool = False) -> dict:
+    """`cfg` is the GEMM's config (default `int8_fused.pick`, what the op serves); `dump` a directory that gets the
+    graph replay's outputs (`dump_replay`); `zy` adds the served zy op body's check (`zy_doc`)."""
     e = E()
     cfg = cfg or X.pick(m, n, k)
     wk = work()
@@ -267,9 +361,12 @@ def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | 
     poison(y2)
     torch.cuda.synchronize()
     before = torch.cuda.memory_allocated()
+    kernels, i = {}, len(RAN or [])
     kq = X.quant_rows(x, xq, s)
     km = X.scaled_mm(xq, s, w, s_w, y, cfg, wk)
+    kernels["fused"], i = ran_since(i, "fused"), len(RAN or [])
     X.scaled_mm(xq_ref, s_ref, w, s_w, y2, cfg, wk)
+    kernels["fused_mm"], i = ran_since(i, "fused_mm"), len(RAN or [])
     torch.cuda.synchronize()
     doc["alloc_eager_bytes"] = torch.cuda.memory_allocated() - before
     doc["fused"] = {"xq_diff": diff(xq, xq_ref), "s_diff": diff(s, s_ref), "y_diff": diff(y, y_ref)}
@@ -277,11 +374,13 @@ def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | 
     xq_op, s_op = X.row_quant(x)
     y_op = X.product(xq_op, s_op, w, s_w)
     torch.cuda.synchronize()
+    kernels["op_bodies"], i = ran_since(i, "op_bodies"), len(RAN or [])
     doc["op_bodies"] = {"xq_diff": diff(xq_op, xq_ref), "s_diff": diff(s_op, s_ref), "y_diff": diff(y_op, y_ref)}
     del xq_op, s_op, y_op
     doc["workspace_zero_after"] = int((wk.ws != 0).sum()) + int((wk.cnt != 0).sum())
     poison(xq, s, y)
     torch.cuda.synchronize()
+    kernels["control"], i = ran_since(i, "control"), len(RAN or [])
     doc["control"] = {"xq_diff": diff(xq, xq_ref), "s_diff": diff(s, s_ref), "y_diff": diff(y, y_ref)}
     g = torch.cuda.CUDAGraph()
     torch.cuda.synchronize()
@@ -290,6 +389,7 @@ def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | 
         X.quant_rows(x, xq, s)
         X.scaled_mm(xq, s, w, s_w, y, cfg, wk)
         doc["alloc_capture_bytes"] = torch.cuda.memory_allocated() - before
+    kernels["graph"], i = ran_since(i, "graph"), len(RAN or [])
     poison(xq, s, y)
     for _ in range(3):
         g.replay()
@@ -311,24 +411,46 @@ def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | 
                  and doc["workspace_zero_after"] == 0
                  and all(v == 0 for v in doc["graph"].values()) and all(v > 0 for v in doc["control"].values())
                  and doc["alloc_eager_bytes"] == 0 and doc["alloc_capture_bytes"] == 0 and all(p["ok"] for p in doc["ptx"]))
+    if zy:
+        doc["zy"] = zy_doc(xq_ref, s_ref, w, s_w, y_ref)
+        kernels.update(doc["zy"].pop("kernels"))
+        doc["ok"] = doc["ok"] and doc["zy"]["ok"]
     if with_stock:
+        i = len(RAN or [])
         doc["stock"] = stock_doc(x, w, s_w, xq_ref, s_ref, y_ref)
+        kernels["stock"] = ran_since(i, "stock")
+    doc["kernels"] = kernels
+    doc["kernels_ok"] = kernels_ok(kernels)
+    doc["ok"] = doc["ok"] and doc["kernels_ok"]
     del x, w, s_w, xq_ref, s_ref, y_ref, xq, s, y, y2
     torch.cuda.empty_cache()
     return doc
 
 
 def gate(shapes: str = "all", with_stock: bool = True, seed: int = 20261019,
-         models: tuple[str, ...] = ("llama-3.1-8b",), dump: Path | None = None) -> dict:
+         models: tuple[str, ...] = ("llama-3.1-8b",), dump: Path | None = None, zy: bool = False) -> dict:
     """`dump` gets each M <= 32 shape's outputs (`one`)."""
     ms = GATE_MS[shapes]
     rows = []
     for n, k, m, names in shapes_of(models, ms):
-        d = one(n, k, m, seed + m, with_stock, names, dump=dump if m <= 32 else None)
+        with counting():
+            d = one(n, k, m, seed + m, with_stock, names, dump=dump if m <= 32 else None, zy=zy)
         rows.append(d)
         print(json.dumps({k: v for k, v in d.items() if k not in ("ptx", "special")}), flush=True)
+    kernels = kernels_summary(rows)
+    print(json.dumps({"kernels": kernels}), flush=True)
     return {"ok": all(r["ok"] for r in rows), "shapes": len(rows), "models": list(models), "poison": f"{POISON:#04x}",
-            "rows": rows, "device": torch.cuda.get_device_name(), "torch": torch.__version__}
+            "kernels": kernels, "rows": rows, "device": torch.cuda.get_device_name(), "torch": torch.__version__}
+
+
+def kernels_summary(rows: list[dict]) -> dict:
+    """Per check, whether it goes through the dispatch, and on how many shapes each GEMM body ran."""
+    out: dict = {}
+    for r in rows:
+        for check, rec in r["kernels"].items():
+            s = out.setdefault(check, {"through_dispatch": rec["through_dispatch"], "gemm": Counter()})
+            s["gemm"].update(b.split()[0] for b in rec["ran"] if b.split()[0] in GEMMS)
+    return {c: {**s, "gemm": dict(sorted(s["gemm"].items()))} for c, s in out.items()}
 
 
 def main() -> int:
@@ -338,10 +460,12 @@ def main() -> int:
     ap.add_argument("--models", default="llama-3.1-8b", help=f"comma-separated, of {tuple(MODELS)}")
     ap.add_argument("--no-stock", action="store_true")
     ap.add_argument("--dump", action="store_true", help="OUT/replay/*.npz, the M <= 32 outputs replay.py checks")
+    ap.add_argument("--zy", action="store_true", help="also check the served zy op body (int8_fused.product_zy)")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    doc = gate(a.shapes, not a.no_stock, models=tuple(a.models.split(",")), dump=out / "replay" if a.dump else None)
+    doc = gate(a.shapes, not a.no_stock, models=tuple(a.models.split(",")), dump=out / "replay" if a.dump else None,
+               zy=a.zy)
     (out / "gate.json").write_text(json.dumps(doc, indent=1) + "\n")
     print(json.dumps({"gate_ok": doc["ok"], "shapes": doc["shapes"]}), flush=True)
     return 0 if doc["ok"] else 4

@@ -229,7 +229,23 @@ def _end_leftovers(em: Emitter, stage: str, pgid: int) -> None:
         pass
 
 
-def run(a: argparse.Namespace, cmd: list[str]) -> int:
+def _end_record(ended: Callable[[], dict[str, Any]] | None, em: Emitter, stage: str) -> dict[str, Any]:
+    """What `ended` adds to the run's terminal status: nothing without one, and nothing but an `ended_failed` mark when it raises."""
+    if ended is None:
+        return {}
+    try:
+        return dict(ended())
+    except Exception as e:  # noqa: BLE001  what the caller records is never the reason a run has no terminal status
+        em.mark(stage, "ended_failed", error=f"{e.__class__.__name__}: {e}"[:300])
+        return {}
+
+
+def run(a: argparse.Namespace, cmd: list[str], poll: Callable[[], None] | None = None,
+        ended: Callable[[], dict[str, Any]] | None = None) -> int:
+    """`poll`, when given, is called on each pass of the loop that waits for CMD, and is dropped, with a `poll_failed` mark, the
+    first time it raises: what the caller watches for while CMD runs (`research run`: a file to preserve, store.run_preserve).
+    `ended`, when given, is called once CMD has ended (or could not start), and what it returns is written into status.json
+    in the same write as the terminal state, so no reader finds a run ended without it (`research run`: research.memmark)."""
     d = Path(a.attempt_dir)
     d.mkdir(parents=True, exist_ok=True)
     em = Emitter(d, proc="tele-run")
@@ -251,7 +267,8 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
         write_json_atomic(d / "job.json", job)
     em.queue("started", stage=a.stage, job=a.job, attempt=a.attempt)
     if (why := uncapped(Cgroup().limits(), session_cap())) is not None:
-        set_status(d, "failed", rc=EX_NO_MEMORY_CAP, signal=None, error=f"no memory cap: {why}", stage=a.stage)
+        set_status(d, "failed", rc=EX_NO_MEMORY_CAP, signal=None, error=f"no memory cap: {why}", stage=a.stage,
+                   **_end_record(ended, em, a.stage))
         em.emit("mark", stage=a.stage, name="no_memory_cap", error=why)
         print(f"[tele run] refused to start the workload: {why}", file=sys.stderr)
         return EX_NO_MEMORY_CAP
@@ -270,7 +287,7 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
         proc = subprocess.Popen(cmd, stdout=stdout, stderr=stderr, start_new_session=True, cwd=a.cwd or None,
                                 env={**os.environ, "RESEARCH_RUN_DIR": str(d.resolve()), "OUT": str((d / OUT_DIR).resolve())})
     except OSError as e:
-        set_status(d, "failed", rc=127, signal=None, error=f"spawn failed: {e}", stage=a.stage)
+        set_status(d, "failed", rc=127, signal=None, error=f"spawn failed: {e}", stage=a.stage, **_end_record(ended, em, a.stage))
         em.emit("mark", stage=a.stage, name="spawn_failed", error=str(e))
         return 127
     st = stat_fields(proc.pid)
@@ -315,6 +332,12 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
                 except Exception as e:      # the watch is never the reason the workload stops
                     em.mark(a.stage, "stall_watch_failed", error=f"{e.__class__.__name__}: {e}"[:300])
                     stall = None
+            if poll is not None:
+                try:
+                    poll()
+                except Exception as e:  # noqa: BLE001  nor is what the caller watches for
+                    em.mark(a.stage, "poll_failed", error=f"{e.__class__.__name__}: {e}"[:300])
+                    poll = None
             if sweep is None and (req := cancel_request(d)) is not None:
                 # research cancel sent SIGTERM to the run's group and scopes already; what is left at the end of its grace is ours to end
                 sweep = Sweep(proc.pid, str(d.resolve()), leader_start=starttime, scopes=req.get("scopes") or [])
@@ -353,7 +376,8 @@ def run(a: argparse.Namespace, cmd: list[str]) -> int:
     outcome = "ok" if rc == 0 else "fail"
     em.span_end(a.stage, sid, outcome=outcome, rc=status_rc, signal=sig, timed_out=timed_out, refs=list(a.declared_output))
     set_status(d, "cancelled" if timed_out else ("done" if rc == 0 else "failed"), rc=status_rc, signal=sig, timed_out=timed_out, ended_mono=t_end,
-               ended_utc=utc_now_ms(), wall_s=t_end - t_start, rc_is_shell_status=True, **({"scope_end": scope_end} if scope_end else {}))
+               ended_utc=utc_now_ms(), wall_s=t_end - t_start, rc_is_shell_status=True, **({"scope_end": scope_end} if scope_end else {}),
+               **_end_record(ended, em, a.stage))
     # ---- stop the sampler (it lingers by itself once the root pid is gone; SIGTERM makes it take final readings now)
     if sampler is not None:
         try:

@@ -63,7 +63,9 @@
                     the FIFO <root>/requests/<run-id>/.launch-ack (`ack_launch`), found from the request path its --remote-json carries,
                     so no wrapper has to pass an fd or the environment through.  A runner (or a wrapper ahead of it) that exits first is
                     refused (RunnerFailed, refused.json with its rc and launcher.log's tail), so `research run --on` exits 3, never
-                    `launched`.  `disk-hold` or `cpu-hold` ahead of the runner acknowledges when it starts holding: the launch stays detached.  When
+                    `launched`.  A runner whose process the machine could not start at all is refused as CannotStart: the machine's
+                    fault, whatever the job, which `research run --on auto` answers by placing the job on another machine.
+                    `disk-hold` or `cpu-hold` ahead of the runner acknowledges when it starts holding: the launch stays detached.  When
                     launch-request can't tell (job.json is there without an ack, the wrapper exited but its process group lives on, or the
                     wait itself failed), it answers started with `unconfirmed` and releases nothing: a live run is never called refused.
     exclusive       --exclusive takes <root>/runs/.exclusive.lock (O_EXCL) naming the run; a live holder refuses the launch with the reason.
@@ -93,6 +95,13 @@
                     prints each process's command line in its stall dumps) is refused before anything starts: by launch-request, the
                     machine's deployed tool_rules.py judging the package that answers, and by the launcher before it ships a --source
                     tree's package.  A package that predates the consult and comes from a launcher that does too is not caught.
+    pool line       a command that names a pool and then the shipped tree's slot.py (`research run --pool`: slot_only.in_pool) is
+                    sent with the machine's own slot.py in the tree's place (slot_only.NODE_SLOT: `main`'s, as `research deploy
+                    install` placed it) where one test over ssh finds a copy there that takes the run (`node_slot_test`) and
+                    whatever reads a run's command there knows the copy (`node_slot_unruled`), so the waiters of a pool's line
+                    are held to one copy's rules whatever tree each ships.  Else the command stays and the launch says so in a
+                    line.  remote.json's `command` is the one sent and its `slot_copy` says which (machine, tree); the run's
+                    slot.json names the copy that ran, with its commit.
     observe/fetch   `research fetch <id>` copies the small records (or --all files) into the local run dir over one ssh+tar, extracted
                     member by member off the pipe (a big run is never in the launcher's memory); remote.json keeps observed_utc.
                     Unreachable means "last observed at T; current status unknown", never "failed".
@@ -150,7 +159,7 @@ REQUEST_SCHEMA = "research/request/v0.1"
 PRESERVED_SCHEMA = "research/preserved/v0.1"
 READY_SCHEMA = "research/source-ready/v0.1"
 READY_FILE = "READY.json"                     # the only marker that makes <root>/src/<identity>/ executable
-_DIRT_MARK = "RESEARCH-TRACKED-DIRT"              # _probe_source: what follows it is `git status` of a READY checkout
+_DIRT_MARK = "RESEARCH-TRACKED-DIRT"              # _probe_source: what follows it is the HEAD and `git status` of a READY checkout
 LEGACY_COMPLETE = ".complete"                 # the pre-verification marker: never sufficient on its own
 SHIP_SOURCE_TIMEOUT_S = 600                   # the floor; a big archive gets size / SHIP_MIN_BYTES_PER_S
 SHIP_MIN_BYTES_PER_S = 64 * 1024              # the slowest link a ship is allowed to be (a laptop -> pod link can run at 130-220 KB/s)
@@ -191,6 +200,24 @@ POD_TARGET_RETRY_S = 2.0
 _TOLD_KEPT: set[str] = set()     # the pods this process has said it reaches at a kept address because RunPod can't be asked
 PREFLIGHT_TIMEOUT_S = 180
 PREFLIGHT_TAIL = 40              # lines of the preflight's stdout and stderr kept in its report
+LAUNCH_DELIVERIES = 3            # how many times `launch` delivers one staged request before it gives up
+
+
+def launch_deadline(mem_wait_s: float | None) -> float:
+    """How long `launch` waits for one delivery of a staged request to answer: the claim and the runner's first record, behind
+    the preflight and the wait for memory the request allows."""
+    return 120 + PREFLIGHT_TIMEOUT_S + (mem_wait_s or 0)
+
+
+def launch_pause(attempt: int) -> float:
+    """The pause after delivery `attempt` (from 0) fails, before the next."""
+    return 3 * (attempt + 1)
+
+
+def launch_limit(mem_wait_s: float | None) -> float:
+    """How long after staging a request `launch` may still deliver it: every delivery's deadline and the pause after it.  A
+    staged request older than this with no run dir is one no launch is still bringing (`store.leftovers.evict_requests`)."""
+    return sum(launch_deadline(mem_wait_s) + launch_pause(k) for k in range(LAUNCH_DELIVERIES))
 
 
 class Refused(Exception):
@@ -222,6 +249,30 @@ class PreflightFailed(Refused):
 class RunnerFailed(Refused):
     """The machine-side runner, or a wrapper ahead of it, exited before writing the run's first record (job.json): an argv it
     rejected, a store preparation that failed, a CPU scope that would not start.  No workload ran."""
+
+
+class CannotStart(Refused):
+    """The machine could start no run, whatever the job: it could not start the runner's process (NOT_STARTED) or make the
+    launch's log and FIFO, or it has no git (NO_GIT) for a run that needs a checkout.  Nothing started, so `research run --on
+    auto` places the job again without the machine.  A refusal that reads the job (its command, its source, its flags, its
+    keys) or the machine's rules and admission (a slot-only or auditor host, memory, an exclusive run, a preflight) is never
+    this one: the same job is refused wherever it goes, or the machine does start runs."""
+
+
+#: `_launch_request`'s words for a runner whose process could not be started
+NOT_STARTED = "the runner could not be started"
+#: in them, an argument list the kernel won't take: the job's own, on any machine
+ARGS_TOO_LONG = f"[Errno {errno.E2BIG}] "
+
+
+def cannot_start(answer: dict[str, Any]) -> str | None:
+    """The reason of a machine's answer to a launch (`_launch_request`'s) when it refused as one that can start no run
+    (CannotStart), None for any other answer.  A shipped research package that predates CannotStart answers RunnerFailed
+    for a runner whose process could not be started, in NOT_STARTED's words, which it says of nothing else: all of those
+    but ARGS_TOO_LONG are read as the machine's too."""
+    reason, fault = str(answer.get("refused") or ""), answer.get("fault")
+    older = fault == RunnerFailed.__name__ and reason.startswith(NOT_STARTED) and ARGS_TOO_LONG not in reason
+    return reason if reason and (fault == CannotStart.__name__ or older) else None
 
 
 # ---- machines ---------------------------------------------------------------------------------------------------------------------------
@@ -561,6 +612,52 @@ def node_tool_rules() -> Any:
     return tool_rules
 
 
+def node_slot_test(command: list[str]) -> str:
+    """What the launch asks a machine about its own slot.py (slot_only.NODE_SLOT) before it names it in ``command``, a run that
+    names a pool (`slot_only.node_copy`), as one shell test. It exits 1 unless the copy is there and names every option the
+    command gives slot.py, since a copy installed before an option was added exits with its usage. Else it exits 0 and says
+    in two words who reads a run's command there (`node_slot_unruled`): `marked` where the machine starts a run only through
+    a check slot (RUNS_VIA_SLOT_FILE), else `open`; and of its own rule (NODE_SLOT_ONLY_FILE) `names` where it knows the
+    copy, `lacks` where it predates it, `none` where the machine has no rule. Any other exit is the ssh's own."""
+    from .pods.nebius import slot_only
+
+    q, copy = shlex.quote, slot_only.NODE_SLOT
+    opts = dict.fromkeys(a for a in command[4:command.index("--", 4)] if a.startswith("--"))
+    knows = "".join(f" && grep -qsF -e {q(o)} {q(copy)}" for o in opts)
+    return (f"{{ test -f {q(copy)}{knows}; }} || exit 1; m=open; test -e {q(RUNS_VIA_SLOT_FILE)} && m=marked; r=none; "
+            f"test -e {q(NODE_SLOT_ONLY_FILE)} && {{ grep -qsF -e {q(copy)} {q(NODE_SLOT_ONLY_FILE)} && r=names || r=lacks; }}; "
+            f"echo $m $r")
+
+
+def node_slot_unruled(answer: str, tool_pkg: Path | None) -> str | None:
+    """Why a machine that answered `node_slot_test` with ``answer`` would not let a run wait by its own slot.py, as words that
+    follow the machine's name; None where it would. Whatever reads a run's command there must know the copy, or it takes the
+    run for one outside a check slot. The machine's own rule, which its timer stops or renices such a run by, must not
+    predate the copy. And where the machine starts a run only through a check slot, the research package that runs there
+    (``tool_pkg``, the one the run ships, else this one) refuses what its rule doesn't know: its rule is the machine's own
+    where the machine has one and the package asks it (`node_slot_only`), else the package's."""
+    from .pods.nebius import slot_only
+
+    def names(file: str, word: str) -> bool:
+        if tool_pkg is None:
+            return True
+        try:
+            return word in (tool_pkg / file).read_text()
+        except (OSError, UnicodeDecodeError):
+            return False
+
+    marked, _, rule = answer.strip().partition(" ")
+    if marked not in ("marked", "open") or rule not in ("names", "lacks", "none"):
+        return f"answered {answer.strip()[:80]!r} when asked whether its own slot.py takes this run"
+    if rule == "lacks":
+        return "has a slot_only.py that predates its own slot.py, and would take this run for one outside a check slot"
+    if marked == "marked" and not (rule == "names" and names("remote.py", "def node_slot_only")) \
+            and not names("pods/nebius/slot_only.py", slot_only.NODE_SLOT):
+        return ("starts a run only through a check slot, and the research package this run ships predates the machine's own "
+                "slot.py: it would refuse this run")
+    return None
+
+
 def source_tool_package(source: Path | None) -> Path | None:
     """The `research` package a shipped source tree carries (tools/research/src/research), or None.  When present it is the tool the
     machine runs: the launcher's own install may be older (a venv elsewhere) and know neither the tree's tools nor its CLI verbs."""
@@ -841,14 +938,14 @@ def archive_manifest(tar_bytes: bytes) -> dict[str, Any]:
     return _manifest_of(io.BytesIO(tar_bytes))
 
 
-# git's default delta-base cache (96 MiB) and unbounded pack windows put `git archive` itself at ~140 MiB on the laptop; these caps give
+# git's default delta-base cache (96 MiB) and unbounded pack windows put `git archive` itself at ~140 MiB on the laptop; these limits give
 # the same bytes at the same speed in ~70 MiB (what remains is about the largest blob, which git holds whole)
-GIT_ARCHIVE_CAPS = ("-c", "core.deltaBaseCacheLimit=8m", "-c", "core.packedGitWindowSize=4m", "-c", "core.packedGitLimit=16m")
+GIT_ARCHIVE_LIMITS = ("-c", "core.deltaBaseCacheLimit=8m", "-c", "core.packedGitWindowSize=4m", "-c", "core.packedGitLimit=16m")
 
 
 def _git_archive(git_dir: Path) -> subprocess.Popen:
     err = tempfile.TemporaryFile()
-    proc = subprocess.Popen(["git", *GIT_ARCHIVE_CAPS, "archive", "--format=tar", "HEAD"], cwd=git_dir, stdout=subprocess.PIPE, stderr=err)
+    proc = subprocess.Popen(["git", *GIT_ARCHIVE_LIMITS, "archive", "--format=tar", "HEAD"], cwd=git_dir, stdout=subprocess.PIPE, stderr=err)
     proc.archive_stderr = err          # Popen.stderr is None when stderr is a file, so the file is kept here
     return proc
 
@@ -942,20 +1039,28 @@ def require_ready_source(path: Path | str, identity: str) -> dict[str, Any]:
     doc = read_ready(Path(path))
     if doc["identity"] != identity:
         raise SourceNotReady(f"{path}/{READY_FILE} names identity {doc['identity']}, the run asked for {identity}; refusing to execute")
-    if dirt := tracked_dirt(Path(path)):
+    if dirt := tracked_dirt(Path(path), identity):
         raise SourceNotReady(f"{path} is shared by every run of {identity}, and an earlier run edited its tracked files ({', '.join(dirt[:3])}); "
                              f"refusing to execute from it: relaunch (the launcher sets it aside and ships the commit afresh), or use --cwd clone")
     return doc
 
 
-def tracked_dirt(path: Path) -> list[str]:
-    """The tracked paths of a shipped checkout that differ from its commit (one run's edit to the shared per-commit tree would
-    otherwise reach every later run of that commit).  Untracked and ignored build output is not dirt; a tree shipped as an archive, with
-    no .git, has nothing to compare and gives none."""
+def _head_dirt(head: str, identity: str) -> list[str]:
+    """The dirt of a shipped checkout whose HEAD (`git rev-parse --verify -q HEAD`, empty when it names no commit) is not the commit
+    the tree is named for: `git status` compares the files with whatever HEAD names, so a run's `git checkout OTHER` there leaves it
+    silent over OTHER's files.  A detached HEAD or a branch at `identity` is the commit."""
+    return [] if head == identity else [f"HEAD is at {head or 'no commit'}, not at {identity}"]
+
+
+def tracked_dirt(path: Path, identity: str) -> list[str]:
+    """What makes a shipped checkout no longer `identity`'s (one run's change to the shared per-commit tree would otherwise reach
+    every later run of that commit): a HEAD that is not `identity` (`_head_dirt`), then the tracked paths that differ from HEAD.
+    Untracked and ignored build output is not dirt; a tree shipped as an archive, with no .git, has nothing to compare and gives none."""
     if not (Path(path) / ".git").exists():
         return []
+    head = subprocess.run(["git", "rev-parse", "--verify", "-q", "HEAD"], cwd=path, capture_output=True, text=True).stdout.strip()
     r = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=path, capture_output=True, text=True)
-    return [line[3:] for line in r.stdout.splitlines() if line.strip()] if r.returncode == 0 else []
+    return _head_dirt(head, identity) + ([line[3:] for line in r.stdout.splitlines() if line.strip()] if r.returncode == 0 else [])
 
 
 def _ready_doc(identity: str, tree: str | None, man: dict[str, Any], verified: str) -> dict[str, Any]:
@@ -964,11 +1069,13 @@ def _ready_doc(identity: str, tree: str | None, man: dict[str, Any], verified: s
 
 
 def _probe_source(ssh: list[str], dest: str) -> tuple[str, dict[str, Any] | None]:
-    """(`ready` | `dirty` | `legacy` | `absent`, READY.json doc when ready or dirty).  `dirty`: READY, but a checkout whose tracked files
-    no longer match its commit; the doc then carries the first such paths under `dirt`."""
+    """(`ready` | `dirty` | `legacy` | `absent`, READY.json doc when ready or dirty).  `dirty`: READY, but a checkout that is no longer
+    its commit's: its HEAD is not the identity READY.json names, or its tracked files don't match HEAD; the doc then carries what
+    was found, as `tracked_dirt` lists it (HEAD, then the first such paths), under `dirt`."""
     q = shlex.quote(dest)
     r = ssh_run(ssh, ["sh", "-c", f"if [ -f {q}/{READY_FILE} ]; then cat {q}/{READY_FILE}; echo; echo {_DIRT_MARK}; "
-                                  f"if [ -e {q}/.git ]; then git -C {q} status --porcelain --untracked-files=no 2>/dev/null | head -5; fi; "
+                                  f"if [ -e {q}/.git ]; then echo \"HEAD $(git -C {q} rev-parse --verify -q HEAD 2>/dev/null)\"; "
+                                  f"git -C {q} status --porcelain --untracked-files=no 2>/dev/null | head -5; fi; "
                                   f"elif [ -e {q} ]; then echo LEGACY; else echo ABSENT; fi"])
     out, _, dirt = r.stdout.decode(errors="replace").partition(_DIRT_MARK)
     out = out.strip()
@@ -982,8 +1089,9 @@ def _probe_source(ssh: list[str], dest: str) -> tuple[str, dict[str, Any] | None
         doc = json.loads(out)
     except ValueError:
         raise SourceNotReady(f"{dest}/{READY_FILE} is not JSON; inspect the machine") from None
-    if paths := [line[3:] for line in dirt.splitlines() if line.strip()]:
-        return "dirty", {**doc, "dirt": paths}
+    lines = [line for line in dirt.splitlines() if line.strip()]          # of a checkout: `HEAD <commit>`, then `git status`
+    if lines and (found := _head_dirt(lines[0][5:], doc.get("identity")) + [line[3:] for line in lines[1:]]):
+        return "dirty", {**doc, "dirt": found}
     return "ready", doc
 
 
@@ -1008,6 +1116,8 @@ def _write_ready(ssh: list[str], dest: str, doc: dict[str, Any]) -> None:
 SHIP_ENV = "RESEARCH_SHIP"                     # `stream` forces the archive stream (the pre-git transport)
 POD_GIT_REPO = "git/verity.git"                # <root>/git/verity.git: the machine's bare repository, fed by `git push`
 _RC_NO_GIT = 69                                # the machine has no git: the archive stream ships instead
+NO_GIT = "the machine has no git"              # `_push_commit`'s reason then: the machine's own answer, whatever the commit
+NO_CHECKOUT = "no_checkout"                    # in the READY doc `ship_source` returns, never the machine's: why git made the tree no checkout
 _RC_TREE = 76                                  # the pushed commit's tree on the machine is not the launcher's
 
 
@@ -1081,7 +1191,7 @@ def _push_commit(ssh: list[str], repo: str, git_dir: Path, sha: str, size: int) 
     r = ssh_run(ssh, ["sh", "-c", f"command -v git >/dev/null 2>&1 || exit {_RC_NO_GIT}; mkdir -p {shlex.quote(str(Path(repo).parent))} && "
                                   f"{{ [ -d {shlex.quote(repo)} ] || git init -q --bare {shlex.quote(repo)}; }}"], timeout=120)
     if r.returncode == _RC_NO_GIT:
-        return "the machine has no git"
+        return NO_GIT
     if r.returncode != 0:
         return f"could not create {repo}: {r.stderr.decode(errors='replace')[-200:].strip()}"
     try:
@@ -1129,16 +1239,16 @@ def _ship_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | No
     return partial, None, True
 
 
-_RC_DIRT = 77                                  # _add_git: the tree's tracked files are not the commit's (its .git stays, so the probe sees dirt)
+_RC_DIRT = 77                                  # _add_git: the tree's HEAD or tracked files are not the commit's (its .git stays, so the probe sees dirt)
 
 
 def _add_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | None, dest: str, doc: dict[str, Any]) -> str | None:
     """Make the READY tree `dest`, shipped by the archive stream, a checkout of `sha` in place, so every later run of the commit finds
     one (a `--cwd clone` run clones it; `suites.py` keys from git's view of it): the commit is pushed as `_ship_git` pushes it, and a
     `--no-checkout` shared clone's .git, detached at `sha` with its index, is renamed into the tree whole, so runs of the commit
-    sharing it are never moved and no file of theirs is written.  Its tracked files must then be the commit's
-    (`git status`), and READY.json is replaced, renamed into place, with `checkout: true` and `transport: stream+git`.  A tree whose
-    files differ keeps the .git, so `_probe_source` reads it as dirty and `ship_source` ships the commit afresh.  None once done,
+    sharing it are never moved and no file of theirs is written.  Its HEAD and its tracked files must then be the commit's
+    (`git status`), and READY.json is replaced, renamed into place, with `checkout: true` and `transport: stream+git`.  A tree where
+    either differs keeps the .git, so `_probe_source` reads it as dirty and `ship_source` ships the commit afresh.  None once done,
     else why not."""
     repo = f"{root}/{POD_GIT_REPO}"
     if not tree:
@@ -1172,10 +1282,10 @@ def _add_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | Non
 
 def _give_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | None, dest: str, doc: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     """`_add_git` on the READY tree `dest` whose READY.json is `doc`, then (state, doc) as `_probe_source` reads it; when git can't
-    be added, one line saying why and ("ready", `doc`)."""
+    be added, one line saying why and ("ready", `doc` with the reason under NO_CHECKOUT)."""
     if why := _add_git(ssh, root, git_dir, sha, tree, dest, doc):
         print(f"research: could not make {dest} a checkout ({why})", file=sys.stderr)
-        return "ready", doc
+        return "ready", {**doc, NO_CHECKOUT: why}
     return _probe_source(ssh, dest)
 
 
@@ -1209,8 +1319,9 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
     """`git archive HEAD` of a clean checkout -> a VERIFIED <root>/src/<identity>/.  Returns (identity, remote dir, READY.json doc).
 
     Identity: the commit sha (a dirty tree is refused; there is no patch digest to name).  Protocol:
-      1. probe <root>/src/<identity>/: READY.json naming this identity -> done, unless it is a checkout whose tracked files an earlier
-         run edited, which is moved to <root>/src/.quarantine/ and shipped afresh; a foreign READY.json -> SourceNotReady (never touched);
+      1. probe <root>/src/<identity>/: READY.json naming this identity -> done, unless it is a checkout an earlier run left at another
+         commit (its HEAD is not the identity) or whose tracked files it edited, which is moved to <root>/src/.quarantine/ and shipped
+         afresh; a foreign READY.json -> SourceNotReady (never touched);
          a directory without READY.json (legacy `.complete`, or an interrupted ship) -> per-file sha256 against the archive: identical
          -> adopted (READY.json written, `verified: legacy-sha256-per-file`); otherwise moved to <root>/src/.quarantine/<identity>-<nonce>/
          (kept for inspection, never executable by name) and shipped afresh;
@@ -1251,10 +1362,11 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
             raise SourceNotReady(f"{dest}/{READY_FILE} names identity {doc.get('identity')!r}, not {sha}; inspect the machine before shipping over it")
         return sha, dest, doc
 
-    def checked_out(have: dict[str, Any], push: bool) -> tuple[str, str, dict[str, Any]]:
-        """The tree just marked READY (ours, or another launcher's that won the rename into place), made a checkout when `push`."""
+    def checked_out(have: dict[str, Any], push: bool, unpushed: str | None = None) -> tuple[str, str, dict[str, Any]]:
+        """The tree just marked READY (ours, or another launcher's that won the rename into place), made a checkout when `push`;
+        one left without .git because the commit never reached the machine says why (`unpushed`) under NO_CHECKOUT."""
         if have.get("checkout") or not push:
-            return sha, dest, have
+            return sha, dest, {**have, NO_CHECKOUT: unpushed} if unpushed and not have.get("checkout") else have
         state, have = _give_git(ssh, root, git_dir, sha, tree, dest, have)
         if state != "ready":
             raise SourceNotReady(f"{dest}'s tracked files are not {sha}'s ({', '.join(have.get('dirt', [])[:3])}): a run edited the "
@@ -1273,6 +1385,7 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
             _write_ready(ssh, dest, doc)
             return checked_out(doc, push)
         _quarantine(ssh, root, dest, sha, f"an unverified tree that did not match the archive ({len(bad)} file(s): {'; '.join(bad[:3])})")
+    unpushed = None
     if push:
         gpartial, why, push = _ship_git(ssh, root, git_dir, sha, tree, man, dest)
         if gpartial is not None:
@@ -1280,6 +1393,7 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
                    "pod_archive_sha256": man.get("pod_archive_sha256")}
             return checked_out(_mark_ready(ssh, gpartial, dest, sha, doc), push)
         print(f"research: git ship to {dest} not used ({why}); shipping the archive stream", file=sys.stderr)
+        unpushed = why
     partial = f"{dest}.partial-{secrets.token_hex(4)}"
     q = shlex.quote(partial)
     # the archive is staged as a file and hashed AS RECEIVED; a digest that is not the launcher's exits 75 before anything is extracted
@@ -1323,7 +1437,7 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
         raise SourceNotReady(f"source tree manifest mismatch after extraction: {len(missing)} missing, {len(extra)} extra "
                              f"(e.g. {(missing or extra)[:3]}); nothing is READY")
     doc = {**_ready_doc(sha, tree, man, "archive-sha256+file-manifest"), "transport": "stream"}
-    return checked_out(_mark_ready(ssh, partial, dest, sha, doc), push)
+    return checked_out(_mark_ready(ssh, partial, dest, sha, doc), push, unpushed)
 
 
 def stage_request(ssh: list[str], root: str, run_id: str, request: dict[str, Any], sends: list[Path],
@@ -1686,7 +1800,7 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
             os.mkfifo(ack, 0o600)
             ack_fd = os.open(ack, os.O_RDONLY | os.O_NONBLOCK)      # before the runner starts, so its non-blocking open finds a reader
         except OSError as e:
-            raise Refused(f"could not prepare the launch ({type(e).__name__}: {e}); not starting {run_id}") from None
+            raise CannotStart(f"could not prepare the launch ({type(e).__name__}: {e}); not starting {run_id}") from None
     except Refused as e:
         _release_launch(req, request_path, mem_rec)
         pf = {"preflight": e.report} if isinstance(e, PreflightFailed) and e.report else {}
@@ -1701,7 +1815,7 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
     if mem_rec:
         remote["mem"] = mem_rec
         env["RESEARCH_MEM_RESERVATION"] = mem_rec["reservation"]      # the runner removes it at exit and does not pass it on
-        env["RESEARCH_RUN_MEM_GB"] = f"{float(req['mem_gb']):g}"       # the workload's: a reservation is no cgroup cap
+        env["RESEARCH_RUN_MEM_GB"] = f"{float(req['mem_gb']):g}"       # the workload's: a reservation is no cgroup limit
     cpus = direct_cpus()
     if cpus:
         remote["cpus"] = f"{format_cpus(cpus)}: {os.environ.get('DIRECT_CPUS_FILE') or DIRECT_CPUS_FILE} (a command may pin itself elsewhere)"
@@ -1736,9 +1850,10 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
                                     start_new_session=True, preexec_fn=(lambda: os.sched_setaffinity(0, cpus)) if cpus else None)
         except OSError as e:
             _release_launch(req, request_path, mem_rec)
-            reason = f"the runner could not be started: {type(e).__name__}: {e}"
-            write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": reason, "fault": RunnerFailed.__name__, "at_utc": utc_now_ms()})
-            return {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": False, "refused": reason, "fault": RunnerFailed.__name__}
+            reason = f"{NOT_STARTED}: {type(e).__name__}: {e}"
+            fault = (RunnerFailed if e.errno == errno.E2BIG else CannotStart).__name__      # every other failure to start is the machine's
+            write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": reason, "fault": fault, "at_utc": utc_now_ms()})
+            return {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": False, "refused": reason, "fault": fault}
         started["runner_pid"] = proc.pid
         try:
             if mem_rec:
@@ -2059,18 +2174,23 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
            source: Path | None, sends: list[Path], cwd: str | None, env: dict[str, str], exclusive: bool,
            mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None,
            preflight_tool: str | None = None, queue: dict[str, Any] | None = None, job_user: str | None = None,
-           gpus: int | None = None, store_read: bool = False, job_namespaces: tuple[str, ...] = ()) -> dict[str, Any]:
+           gpus: int | None = None, store_read: bool = False, job_namespaces: tuple[str, ...] = (),
+           auto: dict[str, Any] | None = None, mem_limit: dict[str, Any] | None = None) -> dict[str, Any]:
     """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody).
+    `mem_limit` (--mem-limit-gb): the memory limit the launch states, `{"gb", "by"}`, which the runner's memory mark is made
+    against (research.memmark); it limits nothing.
     `gpus` (--gpus without --queue): the machine runs the workload under `gpu-lease N --wait` (module doc, GPUs).
     `preflight_tool` (--preflight): run that tool's declared preflight on the machine before this run, whatever the run's --tool.
     `queue` (--queue): the queue's placement (queue_placement); the machine runs the runner under its `wrap`, so the allocation
     is held until the runner, custody included, exits.  `job_user` (--job-user): the machine runs the workload as that user
     (research.jobuser), and refuses the run when it can't; `job_namespaces` (--job-namespaces): the namespace types its unit
-    may make."""
+    may make.  `auto` (--on auto): where the launcher's placement sent the run and why, in the words it printed (the
+    machine, the pool or none for the queue, and `said`); kept in the launch record here and in the machine's request.json,
+    so the reason outlasts the launcher's terminal, and read by nothing that runs the job."""
     local_dir.mkdir(parents=True, exist_ok=False)
     rec: dict[str, Any] = {"schema": "research/remote/v0.1", "run_id": run_id, "machine": machine_name, "project": project, "phase": "resolving",
                            "created_utc": utc_now_ms(), "observed_utc": None, "last_observed": None, "command": command, "launch_args": harness_args,
-                           **({"queue": queue} if queue else {})}
+                           **({"queue": queue} if queue else {}), **({"auto": auto} if auto else {})}
     write_json_atomic(local_dir / "remote.json", rec)
     try:
         m = resolve_machine(machine_name, project)
@@ -2120,6 +2240,9 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if mem_gb and tool_pkg is not None and not (tool_pkg / "mem.py").exists():
             raise Refused(f"--mem-gb: the research package in {source} predates memory admission (no research/mem.py); the machine would "
                           f"ignore the reservation.  Commit a tree that has it, or drop --mem-gb")
+        if mem_limit and tool_pkg is not None and not (tool_pkg / "memmark.py").exists():
+            raise Refused(f"--mem-limit-gb: the research package in {source} predates the memory mark (no research/memmark.py); the "
+                          f"run's record would not say what was stated.  Commit a tree that has it, or drop --mem-limit-gb")
         if preflight_tool and not knows_preflight(tool_pkg):
             raise Refused(f"--preflight: the research package in {source} predates it, so the machine would not run the preflight.  Commit "
                           f"a tree that has it, or drop --preflight")
@@ -2139,11 +2262,24 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if cwd_clone and not knows_clone(tool_pkg):
             raise Refused(f"--cwd clone: the research package in {source} predates it (no research/clone.py), so the machine would look "
                           f"for a directory named clone in the shared tree.  Commit a tree that has it, or pass --cwd source")
-        from .pods.nebius import tool_rules
+        from .pods.nebius import slot_only, tool_rules
 
         if tool_pkg is not None and (why := tool_rules.refusal(tool_pkg)):
             raise Refused(why)
         tool_dir = ship_tool(ssh, m["root"], tool_pkg)
+        if (own := slot_only.node_copy(command)) is not None:
+            # a run in a pool's line: by the machine's own slot.py where it has one, so the line's waiters share one copy's rules
+            asked = ssh_run(ssh, ["sh", "-c", node_slot_test(command)])
+            why = (node_slot_unruled(asked.stdout.decode(errors="replace"), tool_pkg) if asked.returncode == 0 else
+                   "has no slot.py of its own that takes this run" if asked.returncode == 1 else
+                   f"didn't say whether its own slot.py takes this run (exit {asked.returncode})")
+            if why is None:
+                command = own
+            else:
+                print(f"research: {machine_name} {why} ({slot_only.NODE_SLOT}): the run waits in its pool's line by its tree's "
+                      f"{slot_only.SLOT_PATHS[0]} (`research deploy drift --on {machine_name}` lists what the machine has)",
+                      file=sys.stderr)
+            rec.update(command=command, slot_copy="machine" if command is own else "tree")
         rec["tool_from"] = str(tool_pkg) if tool_pkg else "launcher"
         rec["tool_identity"] = tool_identity(tool_pkg)
         rec["tool_checked"] = knows_version_check(tool_pkg)
@@ -2159,15 +2295,18 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         remote_cwd = cwd
         if source is not None:
             tree_sha, src_dir, ready = ship_source(ssh, m["root"], source)
+            # a tree without .git is the machine's doing where its own shell found no git; a push that failed, or the launcher's
+            # choice of the stream, may be anyone's
+            no_git = CannotStart if ready.get(NO_CHECKOUT) == NO_GIT else Refused
             if not ready.get("checkout") and (prog := needs_git(command)):
                 why = f"{SHIP_ENV}=stream" if _stream_forced() else "the line above says why"
-                raise Refused(f"{src_dir} has no .git, as git couldn't reach {machine_name} ({why}), and {prog} needs a git checkout: "
-                              f"the run would wait for its slot, then fail.  Relaunch once a git push reaches {machine_name} ({SHIP_ENV} "
-                              f"unset, git installed there): the launch then makes the shared tree a checkout in place, which --cwd "
-                              f"clone needs too")
+                raise no_git(f"{src_dir} has no .git, as git couldn't reach {machine_name} ({why}), and {prog} needs a git checkout: "
+                             f"the run would wait for its slot, then fail.  Relaunch once a git push reaches {machine_name} ({SHIP_ENV} "
+                             f"unset, git installed there): the launch then makes the shared tree a checkout in place, which --cwd "
+                             f"clone needs too")
             if cwd_clone and not ready.get("checkout"):
-                raise Refused(f"--cwd clone: {src_dir} was shipped without git (transport {ready.get('transport') or 'unrecorded'}), so it "
-                              f"has no .git to clone.  Pass --cwd source to run in it as it is, shared with other runs of the commit")
+                raise no_git(f"--cwd clone: {src_dir} was shipped without git (transport {ready.get('transport') or 'unrecorded'}), so it "
+                             f"has no .git to clone.  Pass --cwd source to run in it as it is, shared with other runs of the commit")
             remote_cwd = src_dir if cwd is None else str(Path(src_dir) / cwd)
             if "--tree-sha" not in harness_args:
                 harness_args = [*harness_args, "--tree-sha", tree_sha]
@@ -2175,6 +2314,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         request = {"schema": REQUEST_SCHEMA, "run_id": run_id, "runs_root": f"{m['root']}/runs", "tool": tool_dir, "python": m["python"],
                    "cwd": remote_cwd, "env": env, "harness_args": harness_args, "command": command, "exclusive": exclusive,
                    "mem_gb": mem_gb, "mem_wait_s": mem_wait_s, "ramlock_dir": m.get("ramlock"),
+                   **({"mem_limit": mem_limit} if mem_limit else {}),
                    "guard": {"idle_min": guard_min} if guard_min else None,
                    "lease_extend_s": lease_extend_s(harness_args),
                    **({"custody": custody_pub} if custody_pub else {}),
@@ -2185,6 +2325,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    **({"job_namespaces": list(job_namespaces)} if job_user and job_namespaces else {}),
                    **({"gpus": gpus} if gpus else {}),
                    **({QUEUE_WRAP: queue["wrap"], QUEUE_WORKLOAD_WRAP: queue.get("workload_wrap") or [], "queue": queue} if queue else {}),
+                   **({"auto": auto} if auto else {}),
                    "cost": {"provider": m.get("provider", "runpod"), "pod_id": m.get("pod_id"), "machine": machine_name, "currency": "USD",
                             "rate_usd_per_hour": tgt["cost_per_hr"], "rate_observed_utc": tgt["rate_observed_utc"], "reason": None},
                    "remote": {"machine": machine_name, "pod_id": m.get("pod_id"), "pod_name": tgt["pod_name"], "host": tgt["host"], "port": tgt["port"],
@@ -2199,14 +2340,14 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         write_json_atomic(local_dir / "remote.json", rec)
         last_err = None
         expect = ["--expect-tool", rec["tool_identity"]] if rec["tool_checked"] else []
-        deadline = 120 + PREFLIGHT_TIMEOUT_S + (mem_wait_s or 0)
-        for attempt in range(3):
+        deadline = launch_deadline(mem_wait_s)
+        for attempt in range(LAUNCH_DELIVERIES):
             try:
                 r = ssh_run(ssh, ["env", f"PYTHONPATH={tool_dir}", m["python"], "-m", "research", "launch-request", *expect, req_path],
                             timeout=deadline)
             except subprocess.TimeoutExpired:  # the request goes on on the machine: a re-delivery waits on its lock for the answer
                 last_err = f"no answer from launch-request in {deadline:g} s"
-                time.sleep(3 * (attempt + 1))
+                time.sleep(launch_pause(attempt))
                 continue
             if r.returncode == 0:
                 out = json.loads(r.stdout.decode().strip().splitlines()[-1])
@@ -2214,9 +2355,10 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
             last_err = r.stderr.decode(errors="replace")[-400:]
             if r.returncode != 255:            # 255 = ssh transport failure: re-deliver the SAME request (idempotent claim)
                 raise launch_request_failure(r.returncode, r.stdout, r.stderr)
-            time.sleep(3 * (attempt + 1))
+            time.sleep(launch_pause(attempt))
         else:
-            rec.update(phase="unknown", note=f"3 deliveries of the staged request failed; it may or may not have started: {last_err}")
+            rec.update(phase="unknown", note=f"{LAUNCH_DELIVERIES} deliveries of the staged request failed; it may or may not have started: "
+                                             f"{last_err}")
             write_json_atomic(local_dir / "remote.json", rec)
             raise Refused(rec["note"])
         rec.update(phase="refused" if out.get("refused") else "launched", launch=out, observed_utc=utc_now_ms())
@@ -2370,7 +2512,7 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
     """Copy records (or everything) from the machine into the local run dir, with the run dir's files ``also`` names beside the
     records (paths under the run dir: the workload's own small progress files and logs).  Unreachable -> observed_utc
     unchanged, reason recorded.  ``timeout`` lowers each ssh call's own (900 s for the records, 120 s for a probe): a waiter's
-    time left under its cap (research.waitcap)."""
+    time left under its limit (research.waitcap)."""
 
     def within(s: float) -> float:
         return s if timeout is None else max(1.0, min(s, timeout))

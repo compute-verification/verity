@@ -54,19 +54,37 @@ from __future__ import annotations
 import json
 import struct
 import sys
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 import numpy as np
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.audit import HM96, HM96_KEY, HM96_SALT, ROW_SCHEMA, rows_domain
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier.credit import CREDIT, draw_root
-from verity.protocols.pouw.verifier.protocol import tagged
-from verity.protocols.spot.device.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
-from verity.commitments import Commitment, Opening, VerificationLimits, hm96, verify_opening
+from verity.commitments import (
+    Commitment,
+    Opening,
+    VerificationLimits,
+    hm96,
+    verify_opening,
+)
 from verity.commitments.hm96 import batch
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sha512_row_seg_digest
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import (
+    HM96,
+    HM96_KEY,
+    HM96_SALT,
+    ROW_SCHEMA,
+    rows_domain,
+)
+from verity.protocols.accounting.pouw.verifier.credit import CREDIT, draw_root
+from verity.protocols.accounting.pouw.verifier.protocol import tagged
+from verity.protocols.proofs.spot.device.challenger import (
+    CoinError,
+    LiveCommitment,
+    LiveOpening,
+    live_reason,
+)
 
 
 @dataclass(frozen=True)
@@ -101,7 +119,9 @@ SLOTS_NONCE = REQUESTS_NONCE + (1 << 40)
 TABLES_NONCE = REQUESTS_NONCE + (1 << 41)
 #: a call's hiding tables under the run's salt key (`pouw_h1.H1Run`): A's T slot rows and scales, z's records
 #: (`pouw_h1_records`)
-TABLE_TAGS = {"a": "verity/pouw/h1/a-table/v1", "z": "verity/pouw/h1/z-table/v2"}
+A_TABLE_TAG = "verity/pouw/h1/a-table/v1"
+Z_TABLE_TAG = "verity/pouw/h1/z-table/v2"
+TABLE_TAGS = {"a": A_TABLE_TAG, "z": Z_TABLE_TAG}
 TABLE_NONCES = {"a": 0, "z": 2}    # j of each table's hm96 nonces
 ROUND_TAG = "verity/pouw/h1/round/v3"
 STEP_TAG = "verity/pouw/h1/step-calls/v1"
@@ -176,6 +196,17 @@ def table_leaves(rows: int, width: int, m: int, *parts: np.ndarray) -> list[byte
     return out + [bytes(width)] * (rows - m)
 
 
+def slots(a: Any, s_a: Any, rows: int) -> tuple[Any, Any]:
+    """The call's A table of `rows` slots, on a's device: its m served rows and scales first, then empty rows, zero bytes
+    under scale 0 (a served row's scale is never 0)."""
+    m = int(a.shape[0])
+    if m > rows:
+        raise ValueError(f"{m} rows past the call's {rows} slots")
+    out, sc = a.new_zeros((rows, int(a.shape[1]))), s_a.reshape(-1).new_zeros(rows)
+    out[:m], sc[:m] = a, s_a.reshape(-1)
+    return out, sc
+
+
 class HidingTable:
     """A hiding table as `MerkleTree` holds it (``domain``, ``commitment``, ``open``), its levels hashed by `hiding_rows`."""
 
@@ -238,6 +269,13 @@ def _root64(h: Any) -> bool:
         return False
 
 
+def table_root(row: Mapping[str, Any], name: str) -> Any:
+    """Manifest row `row`'s root of its call's table `name` (its ``tables``' ``a`` or ``z``, `pouw_h1.H1Run.manifest`);
+    None for a row whose ``tables`` is absent or empty."""
+    tables = row.get("tables")
+    return tables.get(name) if tables else None
+
+
 def tables_reason(salt: bytes, log: Sequence[Mapping[str, Any]], rows: Sequence[Mapping[str, Any]]) -> str | None:
     """Why a slot of some round's slot table names an A-table leaf that no round root commits, given the window's round log
     and its manifest rows (`pouw_h1.H1Run.manifest`): a call at a step no round of the log closes, a logged round whose step
@@ -253,10 +291,11 @@ def tables_reason(salt: bytes, log: Sequence[Mapping[str, Any]], rows: Sequence[
             return (f"call {got[0].get('index')} is at step {s}, which no round of the log closes, so its A table is under "
                     "no round root")
     for x in log:
-        r, got = x.get("round"), steps.get(x.get("round"), [])
+        r: Any = x.get("round")    # the log's value as it is: `tagged` raises on one that is no part of a digest
+        got = steps.get(r, [])
         if not got:
             return f"round {r}'s step has no call, so its slot table names leaves of no committed A table"
-        bare = next((m for m in got if not _root64((m.get("tables") or {}).get("a"))), None)
+        bare = next((m for m in got if not _root64(table_root(m, "a"))), None)
         if bare is not None:
             return (f"call {bare.get('index')} of step {r} has no A table root, so round {r}'s slot table names A-table "
                     "leaves that no round root commits")
@@ -318,23 +357,23 @@ class RoundOpening:
 
 
 def _round(log: Sequence[Mapping[str, Any]], commitment: LiveCommitment, salt: bytes, r: int
-           ) -> tuple[Mapping[str, Any] | None, str | None]:
+           ) -> Mapping[str, Any] | str:
     """Round r's row of the log, once its root is over its parts and its coin is the challenger's round coin r, opened
-    after that root (`live_reason`); else why not."""
+    after that root (`live_reason`); else why not, a string."""
     row = next((x for x in log if x.get("round") == r), None)
     if row is None:
-        return None, f"the round log has no round {r}"
+        return f"the round log has no round {r}"
     why = round_reason(salt, row)
     if why is not None:
-        return None, why
+        return why
     root = bytes.fromhex(row["root"])
     if row.get("coin") is None:
-        return None, f"round {r} has no live coin, so nothing shows its root committed before one"
+        return f"round {r} has no live coin, so nothing shows its root committed before one"
     try:
         why = live_reason(commitment, LiveOpening.from_json(row["coin"]), Wd.ROUND, r, root)
     except CoinError as e:
         why = str(e)
-    return (row, None) if why is None else (None, f"round {r}'s coin: {why}")
+    return row if why is None else f"round {r}'s coin: {why}"
 
 
 def _leaf(binding: bytes, r: int, root_hex: str, rows: int, opening: RoundOpening) -> bool:
@@ -371,22 +410,22 @@ def request_reason(log: Sequence[Mapping[str, Any]], commitment: LiveCommitment,
         return f"request {i} was {late_admission(r)}"
     if opening.value[:-HM96_SALT] != entry.row():
         return f"request {i}: the leaf opened under round {r} is not its entry"
-    row, why = _round(log, commitment, salt, r)
-    if why is not None:
-        return f"request {i}: {why}"
+    row = _round(log, commitment, salt, r)
+    if isinstance(row, str):
+        return f"request {i}: {row}"
     # round 0's request root folds its input-ids table's root into the table's (credit.requests_root, held by credit._arow)
     table = row.get("request_table", row["requests"]) if r == 0 else row["requests"]
     if not _leaf(requests_binding(salt, r), r, table, rows, opening):
         return f"request {i}'s entry doesn't open under round {r}'s request table"
     if (first.round, first.position) != (r, entry.slot):
-        return f"request {i}'s first slot is slot {entry.slot} of step {r}, and slot {first.position} of step {first.round} " \
-               "is opened"
+        return (f"request {i}'s first slot is slot {entry.slot} of step {r}, and slot {first.position} of step {first.round} "
+                "is opened")
     owner, why = _slot(row, salt, rows, first)
     if why is not None:
         return f"request {i}: {why}"
     if owner != i:
-        return f"slot {entry.slot} of step {r} names {'no request' if owner is None else f'request {owner}'}, not request " \
-               f"{i}, whose entry says it was first served there"
+        return (f"slot {entry.slot} of step {r} names {'no request' if owner is None else f'request {owner}'}, not request "
+                f"{i}, whose entry says it was first served there")
     return None
 
 
@@ -399,9 +438,9 @@ def slot_reason(log: Sequence[Mapping[str, Any]], commitment: LiveCommitment, sa
     `first` as `request_reason` takes them under `admission`) is under the slot's round or an earlier one, and a slot past
     the served rows names none; None when it is."""
     s, p = slot.round, slot.position
-    row, why = _round(log, commitment, salt, s)
-    if why is not None:
-        return why
+    row = _round(log, commitment, salt, s)
+    if isinstance(row, str):
+        return row
     if step_digest(salt, s, calls) != bytes.fromhex(row["calls"]):
         return f"step {s}'s calls are not the ones under round {s}'s root"
     owner, why = _slot(row, salt, rows, slot)
@@ -409,8 +448,8 @@ def slot_reason(log: Sequence[Mapping[str, Any]], commitment: LiveCommitment, sa
         return why
     served = next((int(c["served"]) for c in calls if c.get("layer") == 0), 0)
     if p >= served:
-        return None if owner is None else f"slot {p} of step {s} is past the step's {served} served rows and names request " \
-                                          f"{owner}"
+        return None if owner is None else (f"slot {p} of step {s} is past the step's {served} served rows and names request "
+                                           f"{owner}")
     if owner is None:
         return f"slot {p} of step {s} is a served row and names no admitted request: a request served without an entry"
     if entry is None or opening is None or first is None or entry.index != owner:
@@ -471,5 +510,5 @@ __all__ = ["ADMISSIONS", "EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "HidingTabl
            "PER_ROUND", "REQUESTS_NONCE", "ROUND0", "RequestEntry", "RoundOpening", "SLOTS_NONCE", "TABLES_NONCE", "TABLE_NONCES",
            "TABLE_TAGS", "UNENTERED", "batch_order", "draw_root", "first_ids", "hiding_rows", "late_admission",
            "new_requests", "receipts_digest", "request_reason", "request_table", "requests_binding", "round_reason", "round_root",
-           "round_row", "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots_binding",
-           "sort_batch_req_ids", "step_digest", "table_leaves", "tables_reason"]
+           "round_row", "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots", "slots_binding",
+           "sort_batch_req_ids", "step_digest", "table_leaves", "table_root", "tables_reason"]

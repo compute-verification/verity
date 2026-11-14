@@ -7,26 +7,30 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 
 ## Map and commands
 
-The tree is in the layout below. The move that made it changed paths, not code, so a line marked "Target, not yet" says
-what the layout's design has and the tree does not.
+The tree is in the layout below. `tests/tree.toml` is the layout of record, and `tests/test_tree.py` holds the tree to
+it; a line marked "Target, not yet" says what the layout of record has and the tree does not.
 
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
   owning module (`from verity.circuits import Program`); `verity` re-exports nothing.
-  - `verity/protocols/`: one directory per protocol, the list flat: `flock`, `spot`, `recursion`, `pouw`, `pous`, `poub`,
-    `certifier` and `inference_only`. Beside them, `remote` and `onsite` are configurations, not protocols: remote is
-    what an auditor with no devices at the datacenter runs, and onsite what an auditor with devices there runs. Target,
-    not yet: `compose/` (today's `remote/verifier/composition/`), a ninth protocol on top of the audits; `remote/` and
-    `onsite/` under `verity/configurations/`, which no protocol imports; and `experimental/NAME/` for a whole directory
+  - `verity/protocols/`: the protocols in three group directories, two layers on the proofs: `proofs/` holds `flock`, with
+    `spot` and `recursion` on it, what the other protocols call to prove; `accounting/` holds `pouw`, `pous`, `poub` and
+    `certifier` (compute, memory and network) and `registration` (the registration log, checked once, before any
+    challenge; its Lean is still in `interface/`); `policy/` holds `inference_only`, on accounting. Both layers use the
+    proofs, and the proofs use neither. On top of the audits, `compose/` is a tenth protocol. Its `verifier/` holds its
+    Lean (`lean/`) and the two lists of protocols it accepts: `remote/` is what an auditor with no devices at the
+    datacenter runs, and `onsite/` what an auditor with devices there runs. Its `device/` holds the auditor host's
+    challenger service. Target, not yet: `experimental/NAME/` for a whole directory
     no configuration lists. Inside a protocol, `verifier/` is trusted code (a Python verifier until its Lean verifier,
     its `lean/`, replaces it), `prover/` is what its prover builds and its verifier doesn't read, and `device/` is the
     auditor's device (the network certifier, the memory challenger, the challenger).
     `flock/` is the proof system: its Lean verifier and the ZK server (`flock/verifier/`, `Flock.Firewall`), its prover
     (`flock/prover/`: `verity_flock`, its own distribution) and the agreement with upstream's verifier
     (`flock/agreement/`). `spot/verifier/` is sampled proofs, with the integrity profile (`profile`). The inference-only
-    policy's check (`inference_only/verifier/nci/`), `remote/` and `onsite/` are Lean only. `interface/` is the Lean
-    interface each protocol's check implements. Code the move brought from `benchmarks/`, which no unit rule reads yet:
-    `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/`, `poub/verifier/remote_session/`,
-    `inference_only/nci/` and `inference_only/rho/`.
+    policy's check (`inference_only/verifier/nci/`), `remote/` and `onsite/` are Lean only; the policy's Python is its
+    manifest alone (`inference_only/verifier/parties.py`: the verifier, no channel). `interface/` is the Lean
+    interface each protocol's check implements. Code the move brought from `benchmarks/`, which the listing below
+    keeps apart from `verity`'s places (a distribution of its own each, `poub/verifier/remote_session/` a place of its
+    own): `pouw/prover/clear/`, `pouw/verifier/receipts/`, `poub/device/live_verifier/` and `poub/verifier/remote_session/`.
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
     verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
     parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
@@ -38,15 +42,16 @@ what the layout's design has and the tree does not.
   - `verity/commitments/`: the commitment schemes, with `crypto`, `randomness` (the one challenge derivation), `lms`
     and `identity` (Lean), `attest` (an auditor's device's signed period roots) and `windows` (what an adapter hands
     the prover for each execution phase).
-  - `verity/hardware/`: the registered hardware: `cards/` (one TOML data sheet per GPU, host or server model), `site` (its
-    types), `registration` (the registration log) and `record` (a record entry). Target, not yet: the data sheets in a
-    top-level `hardware/` that holds data only, and the types in one file of `verity/`.
-  - `verity/configuration/` (not `verity/configurations/`): `wire` (the wire every party speaks), `deploy` (parties,
-    channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: four files
-    directly under `verity/` (what a party is, the registered hardware, what a protocol declares, the configuration)
-    and `verity/runtime/`, which runs parties over channels.
-  - `verity/claims/`: the security claims' ids. `verity/difftest/`: the Python held to each Lean (target, not yet: under
-    `tools/`). `verity/composite/device/live_challenger/`: the auditor host's challenger service, from `benchmarks/` too.
+  - `verity/hardware/`: the registered hardware: `lean` (the Lean card tables' writer); its types, and the readers of
+    the data sheets, which are in the top-level `hardware/{cards,nodes}/`, are in `verity/`'s `device.py`.
+  - `verity/configuration/`: `wire` (the messages every party speaks), `deploy` (parties,
+    channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: five files
+    directly under `verity/` (`party.py`, `channel.py` for the wire, `device.py`, `protocol.py` and `config.py`, which
+    reads a configuration) and `verity/runtime/`, which runs parties over channels.
+  - `verity/claims/`: the security claims' ids. `tools/difftest/`: the Python held to each Lean (target, not yet: under
+    `tools/`). `verity/protocols/compose/device/live_challenger/`: the auditor host's challenger service, from `benchmarks/` too.
+- `hardware/`: the data sheets, and data only: `cards/` (one TOML data sheet per GPU, host or server model, or time
+  base) and `nodes/` (one per kind of node). The Site's readers (`verity.device`'s `load_card` and `load_node`) read them.
 - `security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `adapters/`: one directory per serving system, holding only what attaches Verity to it: an adapter, which the Design
   rules below still call an integration. `adapters/vllm/` (`verity_vllm`) builds each served workload's circuit and
@@ -55,27 +60,37 @@ what the layout's design has and the tree does not.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).
-- `fixtures/artifacts.json`: every replicated fixture by `art:` id (target, not yet: no `fixtures/`, each file beside
+- `artifacts.json`: every replicated fixture by `art:` id (target, not yet: no `fixtures/`, each file beside
   its reader). `tests/`: invariants of the whole tree. The tree keeps no archive directory: code that is retired is
   deleted, and history keeps every file. The archived proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were
   deleted in `2091252fe3`; `git checkout 2091252fe3^ -- archive` restores them. The H200 demo and the rest of what the
   layout set aside went with the directory; `git checkout 61f13c2275 -- archive` restores it as it last stood.
 - The team's own tooling and machines, which nothing in `verity/` reads: `tools/research/` (runs, the evidence store,
-  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). They stay here and are never
-  exported to the public repository; new infra goes here too. compute-verification/infra holds the website, the executor
-  (its `infra/`) and its `.cursor`, nothing else.
+  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). They stay here, and this
+  repository is public whole; new infra goes here too. The `platform` repository (compute-verification/infra) is where
+  the team's development, coordination and CI harness live: the website, the executor (its `infra/`) and its `.cursor`.
 
-Dependencies point inward (`tests/test_boundaries.py`; every list it holds only shrinks). Its units keep the names they
-had before the layout, in two sets: `core.*`, the verifiers' side, trusted code, and `ml.*`, the provers' side and
-the Python that mirrors the Lean for speed; `PLACE` says where each unit's files are. A verifier imports no ml
-code; until its protocol's verifier is Lean, a Python verifier keeps only the edges into ml that `CORE_ML_EDGES` lists,
-and the units it reads are on the soundness path: `ml.circuits` (`verity/circuits/`), `ml.commitments`
-(`verity/commitments/`), `ml.crypto` (its `crypto/`) and `ml.randomness` (its `randomness/`) (`SOUNDNESS_PATH`, which
-only shrinks; `PLACE` gives the first two a few files outside those directories too); core reaches neither the catalog
-(`ml.circuits.ops`, `ml.circuits.silicon`: `verity/definitions/ops/` and `silicon/`) nor the kernels. The rest can't
-affect soundness. ml never imports core (`ML_IMPORTS_CORE` names the exceptions). Inside `verity` each unit imports only
-what `ALLOWED` lists, and `verity` imports no other distribution of the workspace. Nothing outside `infra/` imports it
-(`INFRA_IMPORTERS`), and nothing under `verity/` imports an adapter (`KNOWN` in `tests/test_integration_boundaries.py`).
+Dependencies point inward, and which folder may import which is one listing, `tests/import_order.toml`, which
+`tests/test_boundaries.py` holds the tree to. Its order, its distributions and each place's paths are kept by hand; its
+tables are the tree's own, written by `uv run tools/verity/check/import_order.py`, so the listing's diff shows what a
+change opens. A file loads only what its own row of the listing or an earlier row holds, in Python and in Lean, but for
+the ties the listing names by file (`against`, which only shrinks). No file under a `verifier/` loads one under a
+`prover/`. `verity`'s own Python is in places, each the directories and files its `place` entry names, and a place's
+Python imports only its own place and the places its `loads` lists: to allow an import, write it, run the generator
+and say why in the pull request. A place under a `verifier/` or a `device/`, or one the listing marks `trusted` (the
+claims' ids, the wire, the deployment layer, the Site, the record, the Lean of the verifiers' side with its tests), is
+the verifiers' side, trusted code; the rest is the provers' side and the Python that mirrors the Lean for speed. Until
+its protocol's verifier is Lean, a trusted place loads and reaches only the places the listing froze for it, and from
+outside the trusted places only the files its `loaded_by` names import one, a test included; these lists only shrink,
+and the generator writes a line into one only under `--grow`. What the trusted places reach outside themselves is the
+soundness path, which only shrinks: `verity/circuits`, `verity/commitments`, `verity/commitments/crypto` and
+`verity/commitments/randomness` (the first two hold a few files outside those directories too, which their `paths`
+name); none reaches the catalog (`verity/circuits/ops/` and `silicon/`) or the kernels. The rest can't affect
+soundness. Python of `verity` in no place only groups packages and imports the standard library alone. A directory
+under `verity/` with an import root of its own is a distribution the listing names with its owner: `verity` loads none
+of them by name (a load by file is read only into `benchmarks/`) and imports no other distribution of the workspace.
+`infra/` is the last row, so nothing outside it loads it but a listed tie, and nothing under `verity/` imports an
+adapter (`KNOWN` in `tests/test_integration_boundaries.py`).
 A Lean package requires Flock's verifier only while `REQUIRES_FLOCK_VERIFIER` lists it, and the three base packages
 require nothing above them (`BASE_LEAN`).
 `benchmarks/` is measurement only: nothing outside it imports its code, by package name or by a path put on `sys.path`
@@ -125,7 +140,9 @@ The rules in force, each stated as itself; the friction skill has the standing r
   leaves: a subtree's digest SHA-512(ks ‖ salt ‖ M_top) under a window's secret key) in frame-v3-sha512 trees, and signatures
   are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
   and Duo receipts, PoUW's per-step keyed u32 mul/xor/rotl folds over committed accumulator words, which bind under the
-  assumption H-μ⁺ (`Accounting.Assumptions.TS.OperandHMu`).
+  assumption H-μ⁺ (`Accounting.Assumptions.TS.OperandHMu`). Transport has one more: ML-KEM-1024, for a cableless remote
+  party's sessions only, its key always XORed with a SHA-512 one (never below hash-only) and never on pair links
+  (`ind-cca/ml-kem-1024`).
 - **Live coins only.** No Fiat–Shamir, except at two rates where live coins are impractical: PoUB's pass seeds
   inside an execution phase, from its live challenge and the previous pass's root; and PoUW's
   per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the execution
@@ -168,9 +185,10 @@ The rules in force, each stated as itself; the friction skill has the standing r
   and later from a separate physical calibration. A device's capacity is an assumed bound on its true peak compute
   capacity, and nothing else: no power certifier, power ceiling, energy floor or meter enters a protocol, premise or
   plan.
-- **Lean is the definition and the verifier.** The provers' Python (the `ml.*` units) mirrors it for the prover's
-  speed, held to it by difftest. Each protocol switches by the friction skill's switching ruling; until then its
-  Python verifier and the ml units it reads stay on `SOUNDNESS_PATH`, and no core → ml edge is added.
+- **Lean is the definition and the verifier.** The provers' Python (the listing's untrusted places) mirrors it for
+  the prover's speed, held to it by difftest. Each protocol switches by the friction skill's switching ruling; until
+  then its Python verifier and what it loads stay on the soundness path (the listing's trusted places), which gains no
+  load.
 - **Soundness and zero knowledge in Lean; completeness may be Python.** What a guarantee says about a cheating
   prover is proved in Lean or rests on an auditor-trusted device; that honest serving passes may be checked in Python.
 - **That a circuit computes what the model computes is completeness, never proved.** It decides only whether
@@ -247,6 +265,9 @@ who acts on it under the loop's `--gate check` (to no one under graph2), and a l
 owner a warning names. How a PR lands, from its ready mark to `main`, and the loop's rule for each case: the team skill's
 Landing.
 
+An owner closes its own PR once `main` holds its change or another PR carries it, with one line naming the commit or PR
+that holds it. Nobody is asked first, and a superseded PR is not left open as a record: the closed PR is the record.
+
 ## Lean
 
 - **Soundness is one theorem.** Protocol soundness (`Verity.Soundness`) is to be one theorem over everything the compiled
@@ -263,8 +284,8 @@ Landing.
   area and protocol reads; an area defines only its own, and no new Lean or Python adds a second definition
   (`tests/test_lean_vocabulary.py`).
 - **Lean is code or security analysis.** Code stays with its subsystem and never requires `security/`: Flock's
-  executable verifier and the ZK server (`verity/protocols/flock/verifier/`, with the release side in
-  `verity/protocols/recursion/verifier/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
+  executable verifier and the ZK server (`verity/protocols/proofs/flock/verifier/`, with the release side in
+  `verity/protocols/proofs/recursion/verifier/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
   PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is
   computed by `Flock.Firewall`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
   hypotheses not yet proved about the live path. The analysis is `security/`, three trees: definitions
@@ -305,6 +326,9 @@ Landing.
 - Solve the task with the smallest clear implementation, reusing code and commands before adding any. Enforce
   deterministic requirements in code, with the fix in the failure message, rather than in prose. Remove obsolete rules and
   machinery rather than accumulating them.
+- **Add only what was asked for.** A design, a page, a schema, a goal or a message holds what solves the stated problem
+  and nothing else. A field, count, label, option or caveat goes in only when it answers a question someone has asked:
+  that the information is at hand, or might be useful later, is no reason. Offer an extra in one line, and don't build it in.
 - **Something broken becomes a benchmark.** A step that fails or costs far too much (an OOM, hours where minutes would
   do) gets a directory under `benchmarks/` with one or two numbers, a guard that a faster version is still correct, its
   baseline and a target. Several workers then drive the numbers down, each with its own approach, branch and `research
@@ -315,6 +339,9 @@ Landing.
   procedure, rewrites every place that states the old way: `git grep` this file, ARCHITECTURE.md, GLOSSARY.md, the
   skills, READMEs, docstrings and CLI help. Fix a stale statement on sight. `tests/test_doc_paths.py` warns on a doc
   naming a dead path.
+- **A survey is answered at once.** A question sent to several people for their answers (a survey, a what-if, a price)
+  asks each to answer on reading it, with what they know now, and sets no later deadline. An answer that lacks a figure
+  says "not known" and the hour it will be known. Each answer is passed on as it arrives, not held for the rest.
 - Never print a secret's value. List environment variable names with `compgen -e`, never `env`, `printenv` or tmux's
   `show-environment`, and an env file's with `python3 tools/agent-guard/envnames.py FILE...` (on another machine,
   `ssh HOST python3 - FILE... < tools/agent-guard/envnames.py`), never `cat`, `sed`, `cut` or `grep` on it or on a glob
@@ -342,7 +369,7 @@ and its parameters). What a run measured, what happened and who decided live out
   the published result.
 - **Where those live:** results in the evidence store, why a line changed in git, and open work, decisions and reports
   outside the repository (the team skill).
-- **An id a tool reads is data, not prose.** It goes in a declared data file the tool reads (`fixtures/artifacts.json`'s
+- **An id a tool reads is data, not prose.** It goes in a declared data file the tool reads (`artifacts.json`'s
   `art:` ids and digests, a lock's records, the handle registry, a table's runs of record), never in a comment, a
   docstring or a doc.
 

@@ -1,9 +1,9 @@
 """stage.py K WORK: the H1 tile unit's statement circuit, built once, and each requested round staged on it (the prover's).
 
 The circuit (`h1unit.Shape(K).stager`, written once to WORK/circuit.txt) is the long step at K = 4096, so it is built while
-the window is served and sampled: once `run.py` writes the window's public shape (WORK/window.json, ``{"k", "slot",
+the window is served and sampled: once `recorded.py` writes the window's public shape (WORK/window.json, ``{"k", "slot",
 "calls"}``), the statement is bound to the window's Program and template-instance partition (`h1unit.Shape.window`), so
-the Lean verifier derives each instance's unit from its own copy of them. `run.py` then drops a request in WORK/requests/
+the Lean verifier derives each instance's unit from its own copy of them. `recorded.py` then drops a request in WORK/requests/
 for each statement, ``NAME.json`` ``{"rows": rows.npz, "set": SET, "out": DIR, "indices": [...]}`` (`window.py open`'s
 rows, the sampled proof blocks' instances in order, and their indices in the Program), and this stages it with Flock's
 `UnitStager.stage` under the window's own salts as a shared-row statement (`h1unit.statement_tables`): each A port's, B
@@ -37,7 +37,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "hidden_zk"))
 
 import h1unit as U  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
 
 NAME = "unit/pouw-h1-tile"
 
@@ -53,7 +53,7 @@ def _ports(ps) -> list:
 def check_against_reference(rows: dict, outs: dict, r: int = U.TILE[0], c: int = U.TILE[1]) -> None:
     """Each instance's staged receipt and ok words are `h1zy.reference`'s (over v3's tile under ``H1_TILE=v3``) on its
     rows' codes and scales (`h1unit.split_row`), its record (`h1unit.split_record`), salt, position and roots."""
-    from verity.protocols.pouw.prover.circuit import h1zy as Z
+    from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
     salt, units, roots = bytes(rows["salt"]), rows["units"], rows["roots"]
     for i, u in enumerate(units):
         a = [U.split_row(rows[f"w_a{x}"][i]) for x in range(r)]
@@ -135,6 +135,8 @@ def main() -> None:
         print("STAGED " + json.dumps(rec), flush=True)
     print("END", flush=True)
 
+
+__all__ = ["check_against_reference"]
 
 if __name__ == "__main__":
     main()

@@ -120,11 +120,11 @@
         "security/Proofs/Core/",
         "security/Definitions/Core/",
         "verity/",
-        "verity/protocols/spot/",
+        "verity/protocols/proofs/spot/",
         "benchmarks/one_stage/",
         "benchmarks/serve_tax/",
         "benchmarks/replay_ladder/",
-        "verity/composite/device/live_challenger/",
+        "verity/protocols/compose/device/live_challenger/",
         "benchmarks/commitments/",
         "benchmarks/multi_unit/",
         "benchmarks/private_circuit/",
@@ -140,14 +140,19 @@
         "adapters/vllm/verity_vllm/protocols/spot.py",
         "security/Definitions/Hash/",
         "security/Proofs/Hash/",
-        "verity/hardware/world/",
-        "verity/hardware/record.py",
-        "verity/hardware/registration.py",
-        "verity/hardware/site/",
+        "verity/protocols/interface/world/",
+        "verity/protocols/accounting/registration/verifier/registration.py",
         "benchmarks/flock_kernels/",
         "benchmarks/two_stage/",
         "benchmarks/definitions/numerics/cuda/",
-        "verity/protocols/interface/"
+        "verity/protocols/interface/",
+        "security/Properties/Challenger.lean",
+        "security/Proofs/Properties/Challenger.lean",
+        "security/Proofs/Properties/Challenger/",
+        "security/Proofs/Properties/Verity/Sampled.lean",
+        "security/Proofs/Properties/Verity/Sampled/",
+        "security/Proofs/Properties/Verity/Recursive.lean",
+        "security/Proofs/Properties/Verity/Recursive/"
       ],
       "branch_suffixes": [
         "95d4",
@@ -186,7 +191,7 @@
         "benchmarks/bool_build_cost/",
         "benchmarks/f32_exhaustive/",
         "benchmarks/mempool/",
-        "verity/definitions/ops/",
+        "verity/circuits/ops/",
         "adapters/vllm/verity_vllm/program/",
         "adapters/vllm/verity_vllm/query/",
         "adapters/vllm/verity_vllm/correspondence/",
@@ -207,7 +212,8 @@
         "adapters/vllm/tests/program/",
         "adapters/vllm/tests/commit/",
         "adapters/vllm/tests/acquire/",
-        "adapters/vllm/tests/query/"
+        "adapters/vllm/tests/query/",
+        "benchmarks/definitions/"
       ],
       "branch_suffixes": [
         "8c79",
@@ -233,26 +239,26 @@
       ],
       "linear": "CMP",
       "owns": [
-        "verity/protocols/pouw/verifier/",
-        "verity/protocols/pouw/prover/",
+        "verity/protocols/accounting/pouw/verifier/",
+        "verity/protocols/accounting/pouw/prover/",
         "security/Definitions/Pouw/",
         "security/Proofs/Pouw/",
         "security/Definitions/Nci.lean",
         "security/Definitions/Nci/",
         "security/Proofs/Nci/",
         "benchmarks/pouw/",
-        "verity/protocols/pouw/clear/",
+        "verity/protocols/accounting/pouw/prover/clear/",
         "benchmarks/machine_model/",
-        "verity/protocols/pouw/receipts/",
+        "verity/protocols/accounting/pouw/verifier/receipts/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
-        "verity/protocols/inference_only/nci/",
+        "benchmarks/nci/",
         "benchmarks/unit_lowering/",
         "benchmarks/compute/",
         ".agents/skills/kernel-engineering/",
         "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
         "adapters/vllm/verity_vllm/protocols/pouw/circuit.py",
-        "adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/",
+        "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/",
         "adapters/vllm/verity_vllm/protocols/pouw/device.py",
         "adapters/vllm/verity_vllm/protocols/pouw/native.py",
         "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/passes.py",
@@ -264,7 +270,7 @@
         "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
         "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
         "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
-        "fixtures/bench-instances/",
+        "benchmarks/numerical/bench-instances/",
         "benchmarks/census/",
         "security/Definitions/Accounting/CoinFlow.lean",
         "security/Definitions/Accounting/Filler.lean",
@@ -317,14 +323,13 @@
       "linear_label": "lane:compute-research",
       "owns": [
         "verity/hardware/",
+        "hardware/",
         "benchmarks/pouw/tensor_kinds/",
         "benchmarks/pouw/opcode_probe/",
         "benchmarks/pouw/sass_census/",
         "benchmarks/pouw/facet_break/",
         "benchmarks/pouw/dc/",
         "benchmarks/pouw/theory/",
-        "benchmarks/pouw/lean_headline.py",
-        "benchmarks/pouw/lean_headline_dc.py",
         "benchmarks/pouw/tests/test_lean_headline.py",
         "benchmarks/pouw/tests/test_lean_headline_dc.py",
         "benchmarks/tensor_duty/",
@@ -345,13 +350,13 @@
       ],
       "linear": "MEM",
       "owns": [
-        "verity/configuration/deploy/",
+        "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime/README.md", "verity/runtime/__init__.py", "verity/runtime/channels.py", "verity/runtime/process.py", "verity/runtime/pyproject.toml", "verity/runtime/runner.py", "verity/runtime/sources.py", "verity/runtime/stream.py", "verity/runtime/tests/", "verity/runtime/transcript.py",
         "security/Definitions/Pous/",
         "security/Proofs/Pous/",
         "benchmarks/bandwidth/",
         "benchmarks/codec_tensor/",
         "benchmarks/kv_filler/",
-        "verity/protocols/poub/device/live_verifier/",
+        "verity/protocols/accounting/poub/device/live_verifier/",
         "benchmarks/memory/",
         "benchmarks/pous/",
         "benchmarks/property_redteam/",
@@ -362,11 +367,11 @@
         "benchmarks/word_codec/",
         "demos/onsite_served/",
         "adapters/vllm/verity_vllm/protocols/pous.py",
-        "verity/protocols/pous/device/",
-        "verity/protocols/pous/",
-        "verity/protocols/pous/prover/",
-        "verity/protocols/poub/verifier/",
-        "verity/definitions/requirement/",
+        "verity/protocols/accounting/pous/device/",
+        "verity/protocols/accounting/pous/",
+        "verity/protocols/accounting/pous/prover/",
+        "verity/protocols/accounting/poub/verifier/",
+        "verity/circuits/requirement/",
         "security/Definitions/Accounting/Bandwidth.lean",
         "security/Definitions/Accounting/Bandwidth/",
         "security/Definitions/Accounting/BandwidthAudit.lean",
@@ -378,10 +383,10 @@
         "security/Definitions/Accounting/Memory.lean",
         "security/Definitions/Accounting/RateAudit.lean",
         "security/Definitions/Accounting/RateAuditDeployed.lean",
-        "security/Definitions/Accounting/RateAuditHorizon.lean",
         "security/Definitions/Accounting/RateAuditInteractive.lean",
         "security/Definitions/Accounting/RateAuditJoint.lean",
         "security/Definitions/Accounting/RateAuditPartial.lean",
+        "security/Definitions/Accounting/RateAuditPooled.lean",
         "security/Definitions/Accounting/RateAuditRemote.lean",
         "security/Definitions/Accounting/RateAuditSketch.lean",
         "security/Definitions/Accounting/RateAuditSketchDeployed.lean",
@@ -406,9 +411,9 @@
         "security/Definitions/Accounting/Guarantees/Memory.lean",
         "security/Definitions/Accounting/Guarantees/RateAudit.lean",
         "security/Definitions/Accounting/Guarantees/RateAuditDeployed.lean",
-        "security/Definitions/Accounting/Guarantees/RateAuditHorizon.lean",
         "security/Definitions/Accounting/Guarantees/RateAuditNamed.lean",
         "security/Definitions/Accounting/Guarantees/RateAuditPartial.lean",
+        "security/Definitions/Accounting/Guarantees/RateAuditPooled.lean",
         "security/Definitions/Accounting/Guarantees/RateAuditRemote.lean",
         "security/Definitions/Accounting/Guarantees/RateAuditSketch.lean",
         "security/Definitions/Accounting/Guarantees/Requirement.lean",
@@ -427,7 +432,12 @@
         "security/Proofs/Accounting/Remote.lean",
         "security/Proofs/Accounting/Requirement.lean",
         "security/Proofs/Accounting/Responder.lean",
-        "security/Proofs/Accounting/Responder/"
+        "security/Proofs/Accounting/Responder/",
+        "security/Properties/Accounting/Requirement.lean",
+        "security/Proofs/Properties/Accounting/Requirement.lean",
+        "security/Definitions/Accounting/Requirement/Placed.lean",
+        "security/Proofs/Accounting/RequirementPouw.lean",
+        "security/Proofs/Accounting/Lemmas/RequirementPouw.lean"
       ],
       "branch_suffixes": [
         "3cf5",
@@ -445,7 +455,7 @@
     {
       "handle": "network-accounting",
       "holder": "bc-61b263cf-c60b-54d2-9f4f-d20a83b15a1a",
-      "remit": "Network accounting: the network certifier (verity/protocols/certifier) and its timing-channel proofs.",
+      "remit": "Network accounting: the network certifier (verity/protocols/accounting/certifier) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0CAGBGSPCJ",
       "retired_usergroups": [
@@ -453,10 +463,10 @@
       ],
       "linear": "NET",
       "owns": [
-        "verity/protocols/inference_only/verifier/nci/",
-        "verity/protocols/certifier/",
-        "verity/protocols/certifier/prover/",
-        "verity/protocols/certifier/device/",
+        "verity/protocols/policy/inference_only/verifier/nci/",
+        "verity/protocols/accounting/certifier/",
+        "verity/protocols/accounting/certifier/prover/",
+        "verity/protocols/accounting/certifier/device/",
         "security/Definitions/NetworkCertifier/",
         "security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/",
@@ -465,7 +475,8 @@
         "benchmarks/datacenter/",
         "benchmarks/network_sim/",
         "benchmarks/prove_path/",
-        "benchmarks/certifier_timing/"
+        "benchmarks/certifier_timing/",
+        "benchmarks/scan_cost/"
       ],
       "branch_suffixes": [
         "728f",
@@ -491,13 +502,16 @@
       "usergroup": "S0CAAA80KGT",
       "retired_usergroups": [
         "S0C5LSDENA1"
+      ],
+      "owns": [
+        "benchmarks/dashboard/"
       ]
     },
     {
-      "handle": "dashboard",
+      "handle": "dashboard-goals",
       "holder": "4d92fa93-101a-42e1-8282-d4a998892829",
-      "remit": "Daniel's dashboards on the console: the Goals page and live plots of running experiments. Asks wait until Daniel opens it; nothing wakes it.",
-      "charter": "Daniel, 2026-11-02 11:24 AM PST",
+      "remit": "Daniel's Goals page on the console, and live plots of running experiments. Asks wait until Daniel opens it; nothing wakes it.",
+      "charter": "Daniel, 2026-11-02 11:24 AM PST; named dashboard-goals by Daniel, 2026-11-13 7:05 PM PST",
       "linear": "CON",
       "examples": [
         "How do I put my goals on Daniel's Goals page?",
@@ -506,14 +520,29 @@
       "usergroup": "S0CEC206YBW"
     },
     {
+      "handle": "dashboard-metrics",
+      "remit": "Daniel's Metrics dashboard on the console: which numbers it shows and how often. Asks wait until Daniel opens it; nothing wakes it.",
+      "charter": "Daniel, 2026-11-13 7:05 PM PST",
+      "linear": "CON",
+      "linear_label": "lane:dashboard-metrics",
+      "examples": [
+        "How do I get my benchmark's number onto the Metrics dashboard?",
+        "Why is a number on the Metrics dashboard stale?"
+      ],
+      "usergroup": "S0CH8FZD0KH"
+    },
+    {
       "handle": "ci",
       "holder": "bc-8d3a66f8-f3da-5dae-9fb0-4a5b381b3d4e",
       "remit": "Open PRs: shepherds each to a passing check and into the merge trains.",
       "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles); named ci, not pr-captain (Daniel, 1:07 PM PDT)",
       "usergroup": "S0C93AFCRT8",
       "linear": "CI",
+      "staffs": [
+        "review-*"
+      ],
       "owns": [
-        "verity/configuration/config/",
+        "tools/config/",
         "tools/verity/check/",
         "tools/verity/cli/",
         "tools/verity/graph/",
@@ -521,7 +550,8 @@
         "tools/move/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
-        "tools/research/src/research/merge.py"
+        "tools/research/src/research/merge.py",
+        "benchmarks/landing/"
       ],
       "branch_suffixes": [
         "4292",
@@ -547,7 +577,8 @@
         "tools/verity/lean/",
         "tools/lean/",
         ".agents/skills/lean-proofs/",
-        "security/"
+        "security/",
+        "benchmarks/proof_status/"
       ],
       "branch_suffixes": [
         "741b",
@@ -611,6 +642,7 @@
         "fixtures/",
         "demos/README.md",
         "demos/lifecycle/",
+        "benchmarks/tree/",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
@@ -628,6 +660,9 @@
         "adapters/vllm/",
         "demos/vllm/",
         "benchmarks/replay_determinism/",
+        "benchmarks/prod_repro/",
+        "benchmarks/serve_tax/metrics.toml",
+        "demos/onsite_served/metrics.toml",
         "ruff.toml"
       ],
       "linear": "VLLM",
@@ -659,9 +694,8 @@
         "benchmarks/recursion_e2e/",
         "benchmarks/recursion_figures/",
         "benchmarks/exfiltration/",
-        "benchmarks/specs/",
+        "benchmarks/harness/specs/",
         "infra/cluster/kinds/benchmarks.toml",
-        "benchmarks/judge.py",
         "benchmarks/README.md"
       ],
       "branch_suffixes": [
@@ -709,7 +743,7 @@
       "usergroup": "S0CA9EAFKED",
       "linear": "TRN",
       "owns": [
-        "verity/protocols/inference_only/rho/",
+        "benchmarks/rho/",
         "benchmarks/circuit_properties/",
         "benchmarks/inference_only/",
         "benchmarks/training_slowdown/"
@@ -733,8 +767,19 @@
       "linear": "PRF",
       "linear_label": "lane:soundness",
       "owns": [
-        "verity/protocols/onsite/verifier/",
-        "verity/protocols/remote/verifier/"
+        "verity/protocols/compose/verifier/onsite/",
+        "verity/protocols/compose/verifier/remote/",
+        "security/Definitions/Claims.lean",
+        "security/Definitions/Claims/",
+        "security/Definitions/WeightSecurity.lean",
+        "security/Definitions/WeightSecurity/",
+        "security/Proofs/WeightSecurity.lean",
+        "security/Proofs/WeightSecurity/",
+        "security/Properties/Verity/",
+        "security/Proofs/Properties/Verity/Soundness.lean",
+        "security/Proofs/Properties/Verity/Coupling.lean",
+        "security/Proofs/Properties/Verity/Subprotocols.lean",
+        "security/Proofs/Properties/Verity/Assembled.lean"
       ],
       "branch_suffixes": [
         "9c4d"

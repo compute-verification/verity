@@ -3,6 +3,9 @@ the lane and top once each, quoting only his own new reply text; the sweep rings
 import calendar
 import gzip
 import importlib.util
+import io
+import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -256,6 +259,85 @@ def test_a_train_that_just_landed_is_not_a_stall_though_drive_built_its_commit_l
     assert [body.split(" (")[0] for _, body, _ in ring.rings] == ["ci: main hasn't moved for 60 min"]
 
 
+class GitHub:
+    """api.github.com for `gh_main`: it records each request's Authorization header and answers with main's head, or with
+    the HTTP status it is told to refuse with."""
+
+    def __init__(self, monkeypatch):
+        self.sent, self.status = [], None
+        monkeypatch.setattr(T.urllib.request, "urlopen", self.open)
+
+    def open(self, req, timeout=None):
+        self.sent.append(req.get_header("Authorization"))
+        if self.status:
+            raise T.urllib.error.HTTPError(req.full_url, self.status, "refused", None, None)
+        ref = {"target": {"oid": "abc1234567", "committedDate": "2026-10-19T18:30:00Z"}, "compare": {"aheadBy": 3}}
+        return io.BytesIO(json.dumps({"data": {"repository": {"ref": ref}}}).encode())
+
+
+def test_each_pass_reads_main_with_the_token_its_source_gives_then_never_one_from_the_loops_start(monkeypatch):
+    """An App token lives an hour and the loop runs for days: the pass an hour after the first reads with the second token
+    its source gives, with no GH_TOKEN in the environment at all, and still rings ci about the stall."""
+    github, state, ring = GitHub(monkeypatch), {}, Ring()
+    tokens = iter(["dummy-first", "dummy-second"])
+    monkeypatch.setattr(T, "gh_token", lambda: next(tokens))
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    for now in (NOW, NOW + 3600):
+        T.sweep_pass(state, ring, {"main": lambda: T.main_stalled(state, ring, now)})
+    assert github.sent == ["Bearer dummy-first", "Bearer dummy-second"]
+    assert [to for to, _, _ in ring.rings] == ["ci"] and next(tokens, None) is None
+
+
+def test_the_sweeps_token_is_what_the_pods_read_helper_prints_at_that_call(monkeypatch):
+    calls, out = [], iter([(0, "dummy-one\n", ""), (0, "dummy-two\n", ""), (1, "", "gh_read_token: GitHub refused: Bad credentials\n"),
+                           (0, "\n", "")])
+
+    def run(argv, **kw):
+        calls.append(tuple(argv))
+        rc, stdout, stderr = next(out)
+        return subprocess.CompletedProcess(argv, rc, stdout, stderr)
+
+    monkeypatch.setattr(T.subprocess, "run", run)
+    assert [T.gh_token(), T.gh_token()] == ["dummy-one", "dummy-two"]
+    with pytest.raises(T.GitHubRefused, match="gave no token .exit 1: gh_read_token: GitHub refused: Bad credentials"):
+        T.gh_token()
+    with pytest.raises(T.GitHubRefused, match="gave no token .exit 0: nothing on stderr"):
+        T.gh_token()
+    assert calls == [("/data/infra/gh_read_token.sh", "--cached")] * 4
+
+
+def test_a_refused_github_read_rings_infra_once_with_what_to_do_and_again_only_after_a_read_that_worked(monkeypatch):
+    """While GitHub refuses the read the stall ring is off, so a refusal is more than a log line: it rings infra once per
+    spell, for a 401 or 403 from GitHub or a token source that gives none; a server error is no refusal and rings nobody."""
+    github, state, ring = GitHub(monkeypatch), {}, Ring()
+    monkeypatch.setattr(T, "gh_token", lambda: "dummy")
+    main = {"main": lambda: T.main_stalled(state, ring, NOW)}
+    github.status = 401
+    T.sweep_pass(state, ring, main)
+    T.sweep_pass(state, ring, main)
+    github.status = 502
+    T.sweep_pass(state, ring, main)
+    (to, body, _), = ring.rings
+    assert to == "infra" and "HTTP 401" in body and "a stalled main rings nobody" in body
+    assert "`/data/infra/gh_read_token.sh > /dev/null`" in body and "`rm /dev/shm/verity-read-token`" in body
+    assert "dummy" not in body
+    github.status = None
+    T.sweep_pass(state, ring, main)
+    assert T.GH_REFUSED_ID not in state["rung"] and state["main_head"]["sha"] == "abc1234567"
+    github.status = 403
+    T.sweep_pass(state, ring, main)
+
+    def none():
+        raise T.GitHubRefused("`gh_read_token.sh --cached` gave no token (exit 1: GitHub refused: Bad credentials)")
+
+    monkeypatch.setattr(T, "gh_token", none)
+    T.sweep_pass(state, ring, main)
+    assert [to for to, _, _ in ring.rings] == ["infra", "infra"] and "HTTP 403" in ring.rings[1][1]
+    T.main_stalled(state, None, NOW, lambda: {"sha": "abc1234567", "committed": "2026-10-19T18:30:00Z", "ahead": 0})
+    T.sweep_pass(state, ring, main)
+    assert len(ring.rings) == 3 and "gave no token (exit 1: GitHub refused: Bad credentials)" in ring.rings[2][1]
+
+
 def test_an_idle_h200_rings_top_once_a_day_after_1500z():
     state, ring = {}, Ring()
     rows = [{"name": "vy-glm53-eu", "platform": "gpu-h200-sxm", "read": True, "gpu_util": [0, 2, 4, 0]},
@@ -378,7 +460,7 @@ def test_each_audit_pass_appends_its_line_with_the_volume_null_when_unread_and_a
     T.linear_audit({}, Ring(), at(19, 22), lambda: FOUND, lambda: VOLUME, None)
     first, second = [T.json.loads(x) for x in log.read_text().splitlines()]
     assert first == {"t": "2026-10-19T20:00:00Z", "findings": 5,
-                     "kinds": {"orphan": 1, "milestone": 0, "lapsed": 0, "undated": 1, "overdue": 0, "quiet": 2, "stale": 0,
+                     "kinds": {"unheard": 0, "orphan": 1, "milestone": 0, "lapsed": 0, "undated": 1, "overdue": 0, "quiet": 2, "stale": 0,
                                "title": 0, "landed": 0, "unlinked": 0, "stray": 0, "lane": 1, "parked": 0, "unstaffed": 0,
                                "slipped": 0, "repeated": 0},
                      "lanes": {"-": {"lane": 1}, "infra": {"orphan": 1, "quiet": 2}, "proofs": {"undated": 1}},

@@ -17,7 +17,13 @@ served token, the prover GPU-seconds a block and where that figure is from (`SOU
   included: the table lists it as unread (`Table.unread`). A row may be staged for its census type in another
   Definition than the type's own (`Steady.form`): the type's row names the Definition its statements are of, as the
   type's Boolean version where the tree registers it as that (`Flock.boolean`) and as another Definition where it
-  doesn't;
+  doesn't. A type's rows at the same prover count and cores that timed statements of other sizes are carried beside
+  the one that prices it (`Cost.sizes`, a row a size), so a reader can split a statement's fixed seconds from its
+  seconds a block; they move no figure of the table;
+- `warm`: no steady-state row, but its own statements proved on one card from warm sessions (`Warm`): after a stated
+  count of warm sessions, the median of a stated count of timed ones (`WARM` and `RUNS`, which the row names), a
+  statement's GPU-seconds over its blocks. It is measured, not at steady state: the steady-state share and the measured
+  status count it as neither, and no other type is priced from it;
 - `family`: no row of its own, but a steady-state row of its Definition and K at other statics, chosen as above, at
   2^Δk its seconds a block (Δk between the two k_logs), the dearest such where there are several, named with the
   Definition its statements are of as a type's own row is. It is priced, not measured: the steady-state share and the
@@ -47,12 +53,16 @@ type with no time has no share of the proving time), and `modeled` otherwise.
 
 **The Lean verifier's seconds and the proof's bytes** are a block's too, from the statements the Lean verifier was
 run on (`LeanVerify`, a `lean-verify` record: one statement of a block type that the Lean verifier's `verify` accepted, each
-run's seconds and its proof files' bytes). A block type with a record of its own takes it, `measured`: its statement's
-seconds (the median of its runs) and bytes over the statement's blocks. Every other type with a k_log is `scaled`:
-the measured statements' median seconds, and bytes, a witness bit times its 2^k_log bits, so a full statement of any
-type is priced as a measured one (`LEAN_SECONDS_BASIS` and `PROOF_BYTES_BASIS` say why, and what no measurement
-backs). Each total a served token is `measured` only when every block type has a record of its own and `modeled`
-otherwise, and names each measured type with its share of the proving time, and the share of the figure it holds.
+run's seconds and its proof files' bytes). Each figure is priced by a size: the seconds by a block's AND gates (the
+census's `ands`), the bytes by its 2^k_log witness bits (`LEAN_SECONDS_BASIS` and `PROOF_BYTES_BASIS` say why, and
+what no measurement backs). A block type takes each from the best source that holds it (`LEAN_SOURCES`): its own
+record (`measured`: its statement's seconds, the median of its runs, and bytes over the statement's blocks); else its
+Definition's measured types (`family`: the same Definition, whichever form a statement was staged in, since a record
+names the census type it was staged for), the dearest of their rates a unit of size times its own size; else the
+rate fitted over every measured statement (`fitted`: their seconds, or bytes, over their sizes) times its own size;
+else none, where it has no size. Each total a served token is `measured` only when every block type has a record of
+its own and `modeled` otherwise, names each measured type with its share of the proving time, and gives the share of
+the figure each source holds.
 """
 
 from __future__ import annotations
@@ -63,9 +73,9 @@ from dataclasses import dataclass, field, replace
 from statistics import linear_regression, median
 from typing import Any, Protocol
 
-STEADY, FAMILY, SINGLE, MODELED, MISSING = "steady", "family", "single", "k_log", "missing"
+STEADY, WARM, FAMILY, SINGLE, MODELED, MISSING = "steady", "warm", "family", "single", "k_log", "missing"
 #: where a block type's proving time is from, best first, as the table words it
-SOURCES = {STEADY: "measured at steady state", FAMILY: "steady state, its family's",
+SOURCES = {STEADY: "measured at steady state", WARM: "measured from warm sessions", FAMILY: "steady state, its family's",
            SINGLE: "measured in a single session", MODELED: "modeled from k_log", MISSING: "missing"}
 #: a full statement's witness bits: a block type's statement holds 2^35 / 2^k_log of its blocks
 STATEMENT_BITS = 2**35
@@ -80,21 +90,31 @@ UNSTATED_CORES = 24
 #: the verifier a steady-state row times
 VERIFIER = ("the proof server's own verifier (`flock-circuit serve --zk`), its seconds a statement (a row's `verify_s`) "
             "over the statement's blocks; the Lean verifier's seconds aren't in these figures")
-#: where a block type's Lean verifier seconds and proof bytes are from: its own `lean-verify` record, or another type's
-LEAN_MEASURED, LEAN_SCALED = "measured", "scaled"
-#: why a scaled type's Lean verifier seconds are the measured statement's a witness bit, and what that leaves unbacked
+#: where a block type's Lean verifier seconds and proof bytes are from, best first: its own `lean-verify` record, its
+#: Definition's measured types at its size, or the rate fitted over every measured statement at its size
+LEAN_MEASURED, LEAN_FAMILY, LEAN_FITTED = "measured", "family", "fitted"
+#: each source of a Lean figure as its line words it
+LEAN_SOURCES = {LEAN_MEASURED: "own", LEAN_FAMILY: "family", LEAN_FITTED: "fitted"}
+#: each source of a block type's Lean verifier seconds as its row marks it: its own statement is a measurement; its
+#: Definition's measured rate at its AND gates is modeled on a measurement of that Definition; the rate fitted over
+#: every measured statement is assumed to hold for a Definition no measurement backs
+LEAN_MARKS = {LEAN_MEASURED: "measured", LEAN_FAMILY: "modeled", LEAN_FITTED: "assumed"}
+#: the circuit file a measured statement was read from, by the statement id its record names
+LEAN_FORMS = {"verity/flock-circuit": "the unrolled circuit file", "verity/flock-circuit/tmpl": "its circuit's templates"}
+#: why a type without a record of its own takes its Lean verifier seconds by its AND gates, and what that leaves unbacked
 LEAN_SECONDS_BASIS = (
     "the Lean verifier reads and sets up a statement from its circuit file, then checks the session: the lincheck's "
     "fold over the circuit's matrix entries, and the rounds and Ligerito queries that the statement's size m fixes "
-    "(`Flock.Schedule.fast100`). Only the last is the same for every full statement; its work on the circuit file grows "
-    "with a block's description, so this prices every type's description at the measured type's, which no measurement "
-    "of a second type backs")
-#: why a scaled type's proof bytes are the measured statement's a witness bit
+    "(`Flock.Schedule.fast100`). The first two grow with a block's gates, so a type is priced by its AND gates, at its "
+    "own Definition's rate where a statement of it was measured: the rate a measured Definition shows prices its other "
+    "statics, and the fitted rate every other Definition, which no measurement of that Definition backs. The last is "
+    "the same for every full statement, and an AND rate prices it in proportion to a statement's gates")
+#: why a type without a record of its own takes its proof bytes by its witness bits
 PROOF_BYTES_BASIS = (
     "a proof file's length is fixed by its statement's shape and by nothing else of the block type: its size m, the "
     "block's k_log and the opening's claims (`Flock.Proof.decodeRead`, `Flock.Zk.reader`). Every full statement has "
-    "m = 35, so its proof is the measured one's but for the lincheck's rounds, two field elements a unit of k_log, and a "
-    "ring switch for each opening claim past the first two")
+    "m = 35, so its proof is a measured one's but for the lincheck's rounds, two field elements a unit of k_log, and a "
+    "ring switch for each opening claim past the first two: a type is priced by its witness bits, not its gates")
 
 
 # ---- the workload ------------------------------------------------------------------------------------------------------------
@@ -104,13 +124,14 @@ PROOF_BYTES_BASIS = (
 class Block:
     """A block type of a census: a Definition at its statics as the census spells it, the served rows it is cut from
     (`kind`, which a cut replaces by), the proof blocks of it a served token takes, log2 of its witness bits, and a
-    block's served MACs where the census holds them."""
+    block's served MACs and AND gates where the census holds them."""
 
     name: str
     kind: str
     per_token: float
     k_log: int | None = None
     macs: float | None = None
+    ands: int | None = None
 
 
 @dataclass(frozen=True)
@@ -134,7 +155,7 @@ class Census:
         """The census of a `block-census/v1` record's `census.json`, one request's counts over its tokens."""
 
         tokens = sum(doc["tokens"].values())
-        blocks = tuple(Block(name, ", ".join(sorted(d["of"])), count / tokens, d.get("k_log"), d.get("macs"))
+        blocks = tuple(Block(name, ", ".join(sorted(d["of"])), count / tokens, d.get("k_log"), d.get("macs"), d.get("ands"))
                        for name, d in doc["definitions"].items() if (count := d["prefill"] + d["decode"]))
         return cls(blocks, doc["per_request"]["circuit_macs"] / tokens, doc["per_request"]["macs"] / tokens)
 
@@ -147,7 +168,7 @@ class Census:
             raise ValueError(f"the cut `{card['name']}` replaces {', '.join(absent)}, which the census doesn't hold: it is "
                              "another census's cut")
         kept = tuple(b for b in self.blocks if b.kind not in replaced)
-        cut = tuple(Block(x["block"], x["kind"], x["per_token"], x.get("k_log"), x.get("macs"))
+        cut = tuple(Block(x["block"], x["kind"], x["per_token"], x.get("k_log"), x.get("macs"), x.get("ands"))
                     for x in card["strata"] if x["per_token"])
         return replace(self, blocks=kept + cut, cut=card["name"])
 
@@ -175,10 +196,13 @@ class Cost:
     names its cells' the same way), the same block at the steady-state types' median seconds a witness bit (the range's
     other end; None for a type measured at steady state), the proof server's verifier's seconds where a record holds
     them, the prover count, the host CPU cores a card and the blocks a statement held that a steady-state figure was
-    measured at, the Lean verifier's seconds and the proof's bytes with where the two are from (`lean_source`: the
-    type's own `lean-verify` record, or scaled from another type's; None with no figure), and the Definition the
+    measured at, the Lean verifier's seconds and the proof's bytes with where each is from (`lean_source` and
+    `proof_bytes_source`, a key of `LEAN_SOURCES`; None with no figure), the measured statement the seconds rest on
+    (`lean_statement`: its own, or its Definition's that prices it; None at the fitted rate), and the Definition the
     statements a steady-state figure was measured on are of, by its id (`definition`: the type's own row's, or that of
-    the family's row it is scaled from; None from any other source)."""
+    the family's row it is scaled from; None from any other source). `sizes` is each statement size the type's own
+    steady-state rows timed at its prover count and cores, as (blocks, a statement's GPU-seconds, the run or art that
+    holds it), the size that prices it first; empty where they timed one size or none."""
 
     source: str
     seconds: float | None = None
@@ -194,6 +218,9 @@ class Cost:
     lean_seconds: float | None = None
     lean_source: str | None = None
     definition: str | None = None
+    proof_bytes_source: str | None = None
+    sizes: tuple[tuple[int, float, str], ...] = ()
+    lean_statement: LeanVerify | None = None
 
 
 @dataclass(frozen=True)
@@ -216,8 +243,9 @@ class Table:
     """A proof system's costs on a census, a row a block type; `range_basis` says what the range's other end is,
     `verifier_basis` which verifier's seconds the rows hold, `unread` the steady-state rows it was given whose
     staged Definition is no block type of the census (they are on no row and enter no figure), `cores` the host CPU
-    cores a card its types are priced at, where its proof system states them, and `lean` the statements the rows' Lean
-    verifier seconds and proof bytes are measured on."""
+    cores a card its types are priced at, where its proof system states them, `lean` the statements the rows' Lean
+    verifier seconds and proof bytes are measured on, and `lean_fitted` the rates fitted over them, seconds an AND gate
+    and bytes a witness bit (None where no measured statement has the size)."""
 
     system: str
     rows: tuple[Row, ...]
@@ -226,6 +254,7 @@ class Table:
     unread: tuple[Steady, ...] = ()
     cores: int | None = None
     lean: tuple[LeanVerify, ...] = ()
+    lean_fitted: tuple[float | None, float | None] = (None, None)
 
     def above(self, row: Row) -> bool:
         """Whether `row`'s figure rests on a steady-state row timed at more cores than the table's host holds."""
@@ -249,7 +278,8 @@ class Table:
 class ProofSystem(Protocol):
     """A proof system's prover on a workload: the blocks it proves a served token and what each costs."""
 
-    name: str
+    @property
+    def name(self) -> str: ...
 
     def table(self, census: Census) -> Table: ...
 
@@ -267,6 +297,30 @@ class Session:
     seconds_per_block: float
     fixed_seconds: float
     statement_blocks: int
+
+
+@dataclass(frozen=True)
+class Warm:
+    """A statement of a block type proved on one card from warm sessions (`stage_prove.sh`, `window.py prove`): the
+    Definition of the block type it was staged for (`definition`, by its id), `blocks` blocks where a full statement
+    holds `full`, after `warm` warm sessions the median GPU-seconds of its `runs` timed ones (`seconds`), every session
+    accepted. `statement` is its name in the run, `run` the run that proved it."""
+
+    definition: str
+    k_log: int
+    blocks: int
+    full: int
+    seconds: float
+    warm: int
+    runs: int
+    run: str
+    statement: str
+
+    @property
+    def note(self) -> str:
+        return (f"`{self.statement}`, {self.blocks} of a full statement's {self.full} blocks, on one card: after "
+                f"{self.warm} warm session{'' if self.warm == 1 else 's'}, the median of {self.runs} timed ones "
+                f"(WARM={self.warm}, RUNS={self.runs})")
 
 
 @dataclass(frozen=True)
@@ -300,6 +354,14 @@ class Steady:
         return self.refused is None and self.gpu_seconds is not None
 
     @property
+    def seconds(self) -> float:
+        """A measured row's GPU-seconds a statement; ValueError on a row that measured none."""
+
+        if self.gpu_seconds is None:
+            raise ValueError(f"`{self.type}` in {self.run} measured no GPU-seconds: {self.refused}")
+        return self.gpu_seconds
+
+    @property
     def proved(self) -> str:
         """The Definition its statements are of, by its id: `form`, else `definition`."""
 
@@ -331,8 +393,10 @@ class LeanVerify:
     """A statement the Lean verifier accepted, as a `lean-verify` record holds it: the staged Definition (by its id),
     its `blocks` blocks of 2^k_log witness bits each where a full statement holds `full`, each run's wall seconds (a
     run is one process of the Lean verifier's `verify`: the statement read and set up, and the one session verified), the bytes
-    of the session's proof files, the run that measured it, its host as the report words it, and what the accept holds
-    (`label`, the record's own words: on the provisional unit cover the verifier compares no Program with the circuit)."""
+    of the session's proof files, the run that measured it, its host as the report words it, what the accept holds
+    (`label`, the record's own words: on the provisional unit cover the verifier compares no Program with the circuit),
+    and the statement id it was verified as (`form`: `LEAN_FORMS` words the two it knows, the unrolled circuit file
+    and its templates; None where the record names none)."""
 
     definition: str
     k_log: int
@@ -343,6 +407,7 @@ class LeanVerify:
     run: str
     host: str
     label: str
+    form: str | None = None
 
     @property
     def bits(self) -> int:
@@ -357,17 +422,64 @@ class LeanVerify:
         return median(self.seconds)
 
 
-def _lean(block: Block, own: LeanVerify | None, per_bit: tuple[float, float] | None) -> dict[str, Any]:
-    """A block's Lean verifier seconds and proof bytes: its own statement's over that statement's blocks, else the
-    measured statements' a witness bit (`per_bit`: seconds, bytes) times its 2^k_log bits, else none."""
+@dataclass(frozen=True)
+class _LeanFigure:
+    """One Lean figure's prices: a block's figure from its own statement (`value` over the statement's blocks), else
+    its Definition's measured statements' figure a unit of size (`statement`: a statement's size), the dearest of them
+    so a family's cheapest member never prices the rest, times the block's `size`; else the rate fitted over every
+    measured statement that has a size, the sum of their figures over the sum of their sizes, times the block's `size`;
+    else none, where the block has no size or no measured statement does."""
 
-    if own is not None:
-        return {"lean_seconds": own.statement_seconds / own.blocks, "proof_bytes": own.proof_bytes / own.blocks,
-                "lean_source": LEAN_MEASURED}
-    if per_bit is None or block.k_log is None:
-        return {}
-    return {"lean_seconds": per_bit[0] * 2**block.k_log, "proof_bytes": per_bit[1] * 2**block.k_log,
-            "lean_source": LEAN_SCALED}
+    timed: Mapping[str, LeanVerify]
+    value: Callable[[LeanVerify], float]
+    statement: Callable[[LeanVerify], float | None]
+    size: Callable[[Block], float | None]
+
+    @property
+    def sized(self) -> list[tuple[LeanVerify, float]]:
+        return [(v, n) for v in self.timed.values() if (n := self.statement(v))]
+
+    @property
+    def fitted(self) -> float | None:
+        sized = self.sized
+        return sum(self.value(v) for v, _ in sized) / sum(n for _, n in sized) if sized else None
+
+    def prices(self) -> Callable[[Block], tuple[float, str, LeanVerify | None] | None]:
+        """A block's figure, its source and the measured statement it rests on (None at the fitted rate)."""
+
+        family: dict[str, tuple[float, str, LeanVerify]] = {}
+        for v, n in self.sized:
+            name = _family(v.definition)[0]
+            rate = (self.value(v) / n, v.definition, v)
+            if (old := family.get(name)) is None or rate[:2] > old[:2]:
+                family[name] = rate
+        fitted = self.fitted
+
+        def price(b: Block) -> tuple[float, str, LeanVerify | None] | None:
+            if (own := self.timed.get(definition_id(b.name))) is not None:
+                return self.value(own) / own.blocks, LEAN_MEASURED, own
+            if (n := self.size(b)) is None:
+                return None
+            if kin := family.get(_family(b.name)[0]):
+                return kin[0] * n, LEAN_FAMILY, kin[2]
+            return None if fitted is None else (fitted * n, LEAN_FITTED, None)
+
+        return price
+
+
+def _lean_figures(census: Census, timed: Mapping[str, LeanVerify]) -> tuple[_LeanFigure, _LeanFigure]:
+    """The Lean verifier's seconds, by AND gates (a measured statement's: its blocks' census `ands`), and the proof's
+    bytes, by witness bits."""
+
+    ands = {definition_id(b.name): b.ands for b in census.blocks}
+
+    def statement_ands(v: LeanVerify) -> float | None:
+        n = ands.get(v.definition)
+        return None if n is None else v.blocks * n
+
+    return (_LeanFigure(timed, lambda v: v.statement_seconds, statement_ands, lambda b: b.ands),
+            _LeanFigure(timed, lambda v: v.proof_bytes, lambda v: v.bits,
+                        lambda b: None if b.k_log is None else 2**b.k_log))
 
 
 def _preferred(s: Steady) -> tuple[int, int, str]:
@@ -379,6 +491,19 @@ def _preferred(s: Steady) -> tuple[int, int, str]:
 
 def _newest(s: Steady) -> tuple[str, int]:
     return s.run, s.blocks
+
+
+def _sizes(s: Steady, rows: Sequence[Steady]) -> list[Steady]:
+    """The rows of `rows` beside `s`, the row that prices its type, that timed statements of another size at its cores
+    in its Definition, one a size, the most blocks first: `s`'s run's where it timed that size, else the newest."""
+
+    by: dict[int, Steady] = {}
+    for x in rows:
+        if x.blocks != s.blocks and x.cores == s.cores and x.proved == s.proved:
+            old = by.get(x.blocks)
+            if old is None or ((x.run == s.run), x.run) > ((old.run == s.run), old.run):
+                by[x.blocks] = x
+    return [by[n] for n in sorted(by, reverse=True)]
 
 
 _FN = re.compile(r'\{"fn":"([^"]*)"\}')
@@ -428,10 +553,10 @@ def _kin(block: Block, kin: Sequence[Steady], cores: int, form: Callable[[Steady
     def dk(s: Steady) -> int:
         return 0 if block.k_log is None else block.k_log - s.k_log
 
-    s = max(kin, key=lambda s: (s.gpu_seconds / s.blocks * 2.0**dk(s), s.definition))
+    s = max(kin, key=lambda s: (s.seconds / s.blocks * 2.0**dk(s), s.definition))
     others = f"; the dearest of {len(kin)} measured" if len(kin) > 1 else ""
     named = form(s) if s.form is None else f"`{s.definition}` in {form(s)}"
-    return Cost(FAMILY, s.gpu_seconds / s.blocks * 2.0**dk(s), s.record,
+    return Cost(FAMILY, s.seconds / s.blocks * 2.0**dk(s), s.record,
                 f"its Definition and K's, `{s.type}` ({named}), {s.at}, {s.fill}, at 2^{dk(s)} its seconds{others}"
                 f"{_above(s, cores)}", s.type, provers=s.provers, cores=s.cores, definition=s.proved)
 
@@ -441,9 +566,12 @@ class Flock:
     """Flock's prover with every block proved, each type priced at `provers` provers on a host that gives a card
     `cores` CPU cores. A type takes its steady-state measurement from the rows at that prover count alone, and among
     them from those timed at `cores` cores: the fullest statement any of them measured, the newest such run's (a row
-    an art holds is its run's). A type those rows measured only at more cores takes the rows at the fewest cores
+    an art holds is its run's). Its rows at those cores that timed another statement size are its `sizes`, each size
+    the row of the pricing row's run where that run timed it, else the newest, and its note names them. A type those
+    rows measured only at more cores takes the rows at the fewest cores
     above, by the same order, and its note says which; a row timed at fewer cores prices nothing, since the host's
-    share is the least a prover holds. Else it takes `card`'s single-session measurement: its own block's, or its
+    share is the least a prover holds. Else it takes its own statements proved from warm sessions (`warm`), the fullest
+    statement's, the newest run's among equals. Else it takes `card`'s single-session measurement: its own block's, or its
     Definition and K's at 2^Δk the seconds and 2^-Δk the statement, Δk between the two k_logs as the census holds
     them; else the k_log model fitted on the card's types. A type no row measured for it names its newest attempt at
     that prover count, the other prover counts that measured it, and the core counts under the host's that did. A row
@@ -465,6 +593,7 @@ class Flock:
     aliases: Sequence[tuple[str, str]] = ()
     lean: Sequence[LeanVerify] = ()
     boolean: Callable[[str, str], bool] | None = None
+    warm: Sequence[Warm] = ()
 
     def table(self, census: Census) -> Table:
         measured: dict[str, Steady] = {}
@@ -478,6 +607,7 @@ class Flock:
 
         unread = []
         names: dict[str, set[str]] = {}
+        sized: dict[str, list[Steady]] = {}
         for definition, type_ in self.aliases:
             if definition in held:
                 names.setdefault(definition, set()).add(type_)
@@ -493,39 +623,51 @@ class Flock:
             if s.measured and s.cores < self.cores:
                 under.setdefault(s.definition, set()).add(s.cores)
                 continue
+            if s.measured:
+                sized.setdefault(s.definition, []).append(s)
             best, order = (measured, _preferred) if s.measured else (tried, _newest)
             if (old := best.get(s.definition)) is None or order(s) > order(old):
                 best[s.definition] = s
-        rates = [s.gpu_seconds / s.blocks / 2**s.k_log for s in measured.values() if s.blocks == s.full]
+        rates = [s.seconds / s.blocks / 2**s.k_log for s in measured.values() if s.blocks == s.full]
         steady_rate = median(rates) if rates else None
         families: dict[tuple[str, int | None], list[Steady]] = {}
         for s in measured.values():
             families.setdefault(_family(s.definition), []).append(s)
         single = self._single(census)
+        warmed: dict[str, Warm] = {}
+        for w in self.warm:
+            if (old := warmed.get(w.definition)) is None or (w.blocks, w.run) > (old.blocks, old.run):
+                warmed[w.definition] = w
         timed: dict[str, LeanVerify] = {}
         for v in self.lean:
-            if v.definition in held and ((old := timed.get(v.definition)) is None or v.run > old.run):
+            if v.definition in held and ((prior := timed.get(v.definition)) is None or v.run > prior.run):
                 timed[v.definition] = v
-        per_bit = (median(v.statement_seconds / v.bits for v in timed.values()),
-                   median(v.proof_bytes / v.bits for v in timed.values())) if timed else None
+        lean_seconds, lean_bytes = _lean_figures(census, timed)
+        seconds_of, bytes_of = lean_seconds.prices(), lean_bytes.prices()
         rows = []
         for b in census.blocks:
             spelled = definition_id(b.name)
-            if s := measured.get(spelled):
-                where = s.held if s.art is None else f"{s.held}, measured in {s.run}"
-                cost = Cost(STEADY, s.gpu_seconds / s.blocks, s.record,
-                            f"`{s.type}` ({form(s)}), {s.at}, {s.fill} ({where}){_above(s, self.cores)}", s.type,
-                            verifier_seconds=None if s.verifier_seconds is None else s.verifier_seconds / s.blocks,
-                            provers=s.provers, cores=s.cores, blocks=s.blocks, definition=s.proved)
+            if m := measured.get(spelled):
+                where = m.held if m.art is None else f"{m.held}, measured in {m.run}"
+                others = _sizes(m, sized[spelled])
+                also = "".join(f"; another size, {o.fill} ({o.record})" for o in others)
+                cost = Cost(STEADY, m.seconds / m.blocks, m.record,
+                            f"`{m.type}` ({form(m)}), {m.at}, {m.fill} ({where}){also}{_above(m, self.cores)}", m.type,
+                            verifier_seconds=None if m.verifier_seconds is None else m.verifier_seconds / m.blocks,
+                            provers=m.provers, cores=m.cores, blocks=m.blocks, definition=m.proved,
+                            sizes=tuple((x.blocks, x.seconds, x.record) for x in [m, *others]) if others else ())
             else:
                 kin = families.get(_family(spelled), [])
-                cost = _kin(b, kin, self.cores, form) if kin else single(b)
+                if w := warmed.get(spelled):
+                    cost = Cost(WARM, w.seconds / w.blocks, w.run, w.note, blocks=w.blocks)
+                else:
+                    cost = _kin(b, kin, self.cores, form) if kin else single(b)
                 why = []
-                if s := tried.get(spelled):
-                    why.append(f"steady state tried as `{s.type}` at {s.at} in {s.run} ({s.held}): {s.refused}")
-                    cost = replace(cost, staged=s.type)
-                if others := elsewhere.get(spelled):
-                    why.append(f"measured at steady state at {', '.join(map(str, sorted(others)))} provers, which "
+                if t := tried.get(spelled):
+                    why.append(f"steady state tried as `{t.type}` at {t.at} in {t.run} ({t.held}): {t.refused}")
+                    cost = replace(cost, staged=t.type)
+                if counts := elsewhere.get(spelled):
+                    why.append(f"measured at steady state at {', '.join(map(str, sorted(counts)))} provers, which "
                                f"price no type at {self.provers}")
                 if fewer := under.get(spelled):
                     why.append(f"measured at steady state at {', '.join(map(str, sorted(fewer)))} cores, which price no "
@@ -534,13 +676,16 @@ class Flock:
                     cost = replace(cost, note="; ".join(filter(None, [cost.note, *why])))
                 if steady_rate is not None and b.k_log is not None and cost.seconds is not None:
                     cost = replace(cost, at_steady_rate=steady_rate * 2**b.k_log)
-            cost = replace(cost, **_lean(b, timed.get(spelled), per_bit))
+            seconds, size = seconds_of(b) or (None, None, None), bytes_of(b) or (None, None, None)
+            cost = replace(cost, lean_seconds=seconds[0], lean_source=seconds[1], proof_bytes=size[0],
+                           proof_bytes_source=size[1], lean_statement=seconds[2])
             rows.append(Row(b.name, b.k_log, b.per_token, cost, b.macs, staged_as=tuple(sorted(names.get(spelled, ())))))
         basis = (None if steady_rate is None else
                  f"every type not measured at steady state at {self.provers} prover{'' if self.provers == 1 else 's'} "
                  f"priced at the full-statement steady-state types' median, "
                  f"{steady_rate:.3g} GPU-seconds a witness bit")
-        return Table(self.name, tuple(rows), basis, VERIFIER, tuple(unread), self.cores, tuple(timed.values()))
+        return Table(self.name, tuple(rows), basis, VERIFIER, tuple(unread), self.cores, tuple(timed.values()),
+                     (lean_seconds.fitted, lean_bytes.fitted))
 
     def _single(self, census: Census) -> Callable[[Block], Cost]:
         """Each block type's cost off the steady state: `single`, `k_log` or `missing`."""
@@ -646,7 +791,7 @@ class Spot:
                 f"{_some(unread)}. It is another census's or cut's plan, or no labelled steady-state row names "
                 "those cells' staged types")
         return Table(f"{self.name}[{inner.system}]", tuple(rows), inner.range_basis, inner.verifier_basis, inner.unread,
-                     inner.cores, inner.lean)
+                     inner.cores, inner.lean, inner.lean_fitted)
 
 
 def _some(names: Sequence[str]) -> str:
@@ -666,11 +811,14 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
     (`_above_cores`). `unread` names each steady-state row that is on no block type's row: what holds it, the run that
     measured it, the type and Definition it staged, its prover count and cores, and a block's GPU-seconds where it is
     a steady-state measurement, else why it isn't. `lean_verifier_seconds_per_token` and `proof_bytes_per_token` are
-    the Lean verifier's seconds and the proof's bytes a served token (`_scaled`), None where no statement was measured,
-    and `lean_verify` names each measured statement, the most proving time first, with its block type's share of the
-    proving time. A row's `definition` is the Definition the statements its figure was measured on are of, by its id,
+    the Lean verifier's seconds and the proof's bytes a served token, with each source's share (`_scaled`), None
+    where no statement was measured, and `lean_verify` names each measured statement, the most proving time first,
+    with its block type's share of the proving time and the statement id it was read as (`form`). A row's
+    `lean_mark` is its Lean verifier seconds' source as `LEAN_MARKS` words it, and `lean_record`, `lean_definition`,
+    `lean_form` and `lean_statement_blocks` the measured statement they rest on (`_lean_statement`). A row's `definition` is the Definition the statements its figure was measured on are of, by its id,
     where the figure is from a steady-state row, the type's own or its family's; its note says which form of the
-    type that Definition is."""
+    type that Definition is. A row's `sizes` is each statement size its own steady-state rows timed (`Cost.sizes`: its
+    blocks, a statement's GPU-seconds and what holds it, the pricing size first), None where they timed one."""
 
     total = table.gpu_seconds_per_token()
     blocks = sum(r.per_token for r in table.rows)
@@ -684,6 +832,9 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
              "cores": r.cost.cores, "statement_blocks": r.cost.blocks, "definition": r.cost.definition, "note": r.cost.note,
              "verifier_seconds": r.cost.verifier_seconds, "proof_bytes": r.cost.proof_bytes,
              "lean_verifier_seconds": r.cost.lean_seconds, "lean_source": r.cost.lean_source,
+             "lean_mark": LEAN_MARKS.get(r.cost.lean_source), **_lean_statement(r.cost.lean_statement),
+             "proof_bytes_source": r.cost.proof_bytes_source,
+             "sizes": [{"blocks": n, "statement_seconds": g, "record": rec} for n, g, rec in r.cost.sizes] or None,
              "time_share": None if r.cost.seconds is None else share(r.per_token * r.cost.seconds, total)}
             for r in table.rows]
     sources = []
@@ -698,19 +849,20 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
     lean = [{"block": r.block, "time_share": None if r.cost.seconds is None else share(r.per_token * r.cost.seconds, total),
              "k_log": v.k_log, "blocks": v.blocks, "full": v.full, "seconds": list(v.seconds),
              "statement_seconds": v.statement_seconds, "proof_bytes": v.proof_bytes, "run": v.run, "host": v.host,
-             "label": v.label}
+             "label": v.label, "form": v.form}
             for r in table.rows if (v := timed.get(definition_id(r.block)))]
     steady = sources[0]["time_share"] or 0.0
-    macs = None if any(r.macs is None for r in table.rows) else sum(r.per_token * r.macs for r in table.rows)
+    known = [r.per_token * r.macs for r in table.rows if r.macs is not None]
+    macs = sum(known) if len(known) == len(table.rows) else None
     missing = [{"block": r.block, "per_token": r.per_token, "block_share": share(r.per_token, blocks),
-                "mac_share": None if macs is None else share(r.per_token * r.macs, macs)}
+                "mac_share": None if macs is None or r.macs is None else share(r.per_token * r.macs, macs)}
                for r in sorted(table.rows, key=lambda r: -r.per_token) if r.cost.seconds is None]
     if missing:
         status = "partial"
     else:
         status = "measured" if table.rows and all(r.cost.source == STEADY for r in table.rows) else "modeled"
     unread = [{"record": s.record, "run": s.run, "type": s.type, "definition": s.definition, "provers": s.provers,
-               "cores": s.cores, "seconds": s.gpu_seconds / s.blocks if s.measured else None, "why": s.refused}
+               "cores": s.cores, "seconds": s.seconds / s.blocks if s.measured else None, "why": s.refused}
               for s in table.unread]
     return {
         "system": table.system, "rows": sorted(rows, key=lambda r: -(r["time_share"] or 0.0)), "sources": sources,
@@ -724,12 +876,22 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
             "gpus_per_serving_gpu_range": [low / serving_seconds, high / serving_seconds],
             "range_basis": table.range_basis, "verifier_basis": table.verifier_basis,
             "verifier_seconds_per_token": _covered(verified, lambda r: r.cost.verifier_seconds, blocks),
-            "lean_verifier_seconds_per_token": _scaled(table.rows, lambda r: r.cost.lean_seconds, LEAN_SECONDS_BASIS),
-            "proof_bytes_per_token": _scaled(table.rows, lambda r: r.cost.proof_bytes, PROOF_BYTES_BASIS),
+            "lean_verifier_seconds_per_token": _scaled(table.rows, lambda r: (r.cost.lean_seconds, r.cost.lean_source),
+                                                       table.lean_fitted[0], LEAN_SECONDS_BASIS),
+            "proof_bytes_per_token": _scaled(table.rows, lambda r: (r.cost.proof_bytes, r.cost.proof_bytes_source),
+                                             table.lean_fitted[1], PROOF_BYTES_BASIS),
             "lean_verify": sorted(lean, key=lambda x: -(x["time_share"] or 0.0)),
             "planned": _planned(table, serving_seconds),
         },
     }
+
+
+def _lean_statement(v: LeanVerify | None) -> dict[str, Any]:
+    """The measured statement a row's Lean verifier seconds rest on: its run, Definition, statement id, and its
+    blocks of a full statement; each None at the fitted rate."""
+
+    return {"lean_record": v and v.run, "lean_definition": v and v.definition, "lean_form": v and v.form,
+            "lean_statement_blocks": v and [v.blocks, v.full]}
 
 
 def steady_rows(doc: Mapping[str, Any]) -> dict[str, Any]:
@@ -757,7 +919,8 @@ def _above_cores(table: Table) -> dict[str, Any] | None:
 
     def of(rows: Sequence[Row]) -> dict[str, Any]:
         return {"block_types": len(rows),
-                "time_share": sum(r.per_token * r.cost.seconds for r in rows) / total if total else None}
+                "time_share": sum(r.per_token * r.cost.seconds for r in rows if r.cost.seconds is not None) / total
+                if total else None}
 
     return {"cores": table.cores, **of(above), "timed_at": sorted({r.cost.cores for r in above}),
             "sources": [{"source": source, **of(mine)} for source in SOURCES
@@ -769,21 +932,22 @@ def _planned(table: Table, serving_seconds: float) -> dict[str, Any] | None:
     where they leave the table's. Over the rows the table prices, each source's GPU-seconds a served token at both
     prices, and the row that holds most of the difference, with its share of it."""
 
-    if not table.rows or any(r.planned is None for r in table.rows):
+    planned = [(r, r.planned) for r in table.rows if r.planned is not None]
+    if not table.rows or len(planned) != len(table.rows):
         return None
-    total = sum(r.per_token * r.planned for r in table.rows)
-    both = [r for r in table.rows if r.cost.seconds is not None]
-    gap = sum(r.per_token * (r.cost.seconds - r.planned) for r in both)
-    top = max(both, key=lambda r: abs(r.per_token * (r.cost.seconds - r.planned)), default=None)
+    total = sum(r.per_token * p for r, p in planned)
+    both = [(r, s, p) for r, p in planned if (s := r.cost.seconds) is not None]
+    gap = sum(r.per_token * (s - p) for r, s, p in both)
+    top = max(both, key=lambda x: abs(x[0].per_token * (x[1] - x[2])), default=None)
     return {
         "gpu_seconds_per_token": total, "gpus_per_serving_gpu": total / serving_seconds,
         "sources": [{"source": source, "block_types": len(mine),
-                     "gpu_seconds_per_token": sum(r.per_token * r.cost.seconds for r in mine),
-                     "planned_gpu_seconds_per_token": sum(r.per_token * r.planned for r in mine)}
-                    for source in SOURCES if (mine := [r for r in both if r.cost.source == source])],
+                     "gpu_seconds_per_token": sum(r.per_token * s for r, s, _ in mine),
+                     "planned_gpu_seconds_per_token": sum(r.per_token * p for r, _, p in mine)}
+                    for source in SOURCES if (mine := [x for x in both if x[0].cost.source == source])],
         "largest": None if top is None or not gap else {
-            "block": top.block, "seconds": top.cost.seconds, "planned_seconds": top.planned,
-            "difference_share": top.per_token * (top.cost.seconds - top.planned) / gap},
+            "block": top[0].block, "seconds": top[1], "planned_seconds": top[2],
+            "difference_share": top[0].per_token * (top[1] - top[2]) / gap},
     }
 
 
@@ -798,17 +962,18 @@ def _covered(rows: Sequence[Row], value: Any, blocks: float) -> dict[str, Any] |
 
 
 
-def _scaled(rows: Sequence[Row], value: Any, basis: str) -> dict[str, Any] | None:
-    """A per-block quantity of the Lean verifier's records summed a served token, None where no statement was
-    measured: `measured` only when every block type has a record of its own, else `modeled`, with the block types
-    measured, scaled and left out (no k_log), the share of the figure the measured ones hold, and the scaling's basis."""
+def _scaled(rows: Sequence[Row], figure: Callable[[Row], tuple[float | None, str | None]], fitted: float | None,
+            basis: str) -> dict[str, Any] | None:
+    """A per-block Lean figure (`figure`: a row's figure and its source) summed a served token, None where no statement
+    was measured: `measured` only when every block type has a record of its own, else `modeled`, with the block types
+    each source prices and its share of the figure (`sources`, by `LEAN_SOURCES`), those left out (no size), the
+    fitted rate a unit of size, and the basis."""
 
-    priced = [r for r in rows if value(r) is not None]
+    priced = [(r, x, source) for r in rows for x, source in [figure(r)] if x is not None]
     if not priced:
         return None
-    own = [r for r in priced if r.cost.lean_source == LEAN_MEASURED]
-    total = sum(r.per_token * value(r) for r in priced)
-    return {"value": total, "status": "measured" if len(own) == len(rows) else "modeled",
-            "measured_block_types": len(own), "scaled_block_types": len(priced) - len(own),
-            "unpriced_block_types": len(rows) - len(priced),
-            "measured_share": sum(r.per_token * value(r) for r in own) / total if total else None, "basis": basis}
+    total = sum(r.per_token * x for r, x, _ in priced)
+    sources = {source: {"block_types": len(mine), "share": sum(r.per_token * x for r, x, _ in mine) / total if total else None}
+               for source in LEAN_SOURCES for mine in [[p for p in priced if p[2] == source]]}
+    return {"value": total, "status": "measured" if sources[LEAN_MEASURED]["block_types"] == len(rows) else "modeled",
+            "sources": sources, "unpriced_block_types": len(rows) - len(priced), "fitted_rate": fitted, "basis": basis}

@@ -1,18 +1,20 @@
-"""Whether the forming term the served debit leaves out could flip a measured tile's verdict.  `pearl_c_debit.forming_elements`
-is a stub (0), and Lean's tile debit (`PearlCSem.tileDebitRev1`) adds fs·(|C|/n)·elems, elems the elements of the tile's
-passing rows R that are salt-dead (`saltDeadP`) or unneeded (every credited column flagged at the element's word).
+"""Whether the forming term could flip the verdict of a tile measured before the served replay charged it.  Lean's tile
+inert work (`PearlCSem.tileDebitRev1`) adds fs·(|C|/n)·elems, elems the elements of the tile's passing rows R that are
+salt-dead (`saltDeadP`) or have every credited column flagged at the element's word, which
+`pearl_c_debit.forming_elements` now replays; a line recorded since (one with ``forming_elements``) has its verdict with
+it, and is refused here.
 
 From each recorded line (`served_debit.py`'s ``*-tiles.jsonl``), exactly, at the cited statement's prices (`STATEMENT`,
-`Prices.sm120Loop`; c moves W_ref only, not capOK): the unneeded elements are at most 32·⌊atoms/|C|⌋, since each is in a
-row and word whose |C| columns are all flagged and `atoms` counts them; so the verdict flips only if the salt-dead elements
-exceed
+`Prices.sm120Loop`; c moves W_ref only, not capOK): the elements of the second kind are at most 32·⌊atoms/|C|⌋, since
+each is in a row and word whose |C| columns are all flagged and `atoms` counts them; so the verdict flips only if the
+salt-dead elements exceed
 
     (ρ·creditDevRev1(m, k, n)·|R|·|C|/(m·n) − (32 + add/G)·atoms − add·zeros)·n/(fs·|C|) − 32·⌊atoms/|C|⌋,
 
 given as `dead_to_flip`, a fraction of the tile's |R|·k elements.  Lean bounds a unit's salt-dead elements at ρ_D = 1/64 of
 its m·k (`FormingP.saltDeadP_card_le`, under its domain conditions), which covers a tile whose rows are its unit's
-(`unit_rows`: decode, |R| = m); a tile of fewer rows has the threshold alone.  Every line's own debit and cap are first
-recomputed at `Prices.sm120` (the scheme's, `LINE`), and a line they don't match is refused.
+(`unit_rows`: decode, |R| = m); a tile of fewer rows has the threshold alone.  Every line's own inert work and its bound
+are first recomputed at `Prices.sm120` (the scheme's, `LINE`), and a line they don't match is refused.
 
   python benchmarks/pouw/pearl_c_vllm/forming_headroom.py LINES.jsonl ... --out FILE
 """
@@ -38,28 +40,31 @@ def credit_rev1(m: int, k: int, n: int, prices: tuple) -> Fraction:
 
 
 def tile(line: dict, prices: tuple) -> tuple[Fraction, Fraction]:
-    """A line's (debit without forming, cap) at `prices`."""
+    """A line's (inert work without forming, inert-work bound) at `prices`."""
     add, _, _, g, _, rho = prices
     m, k, n, rows, cols = line["m"], line["k"], line["n"], line["credited_rows"], line["credited_cols"]
-    debit = (32 + add / g) * line["atoms"] + add * line["later_zero_promotions"]
-    return debit, rho * credit_rev1(m, k, n, prices) * Fraction(rows * cols, m * n)
+    inert = (32 + add / g) * line["atoms"] + add * line["later_zero_promotions"]
+    return inert, rho * credit_rev1(m, k, n, prices) * Fraction(rows * cols, m * n)
 
 
 def dead_to_flip(line: dict, prices: tuple = STATEMENT) -> Fraction:
     """The fraction of the tile's |R|·k elements that must be salt-dead for the forming term to flip its verdict."""
     fs, k, n, rows, cols = prices[2], line["k"], line["n"], line["credited_rows"], line["credited_cols"]
-    debit, cap = tile(line, prices)
-    elems = (cap - debit) * n / (fs * cols) - 32 * (line["atoms"] // cols)
+    inert, bound = tile(line, prices)
+    elems = (bound - inert) * n / (fs * cols) - 32 * (line["atoms"] // cols)
     return elems / (rows * k)
 
 
 def check_line(line: dict) -> None:
-    debit, cap = tile(line, LINE)
+    if "forming_elements" in line:
+        raise ValueError(f"tile {line['tile']}: its line was recorded with the forming term (forming_elements), so its "
+                         "verdict already holds it")
+    inert, bound = tile(line, LINE)
     if line["credited_rows"] == 0 or not line["ok"]:
         raise ValueError(f"tile {line['tile']}: a rejected or rowless tile has no headroom to report")
-    if Fraction(line["debit_exact"]) != debit or abs(Fraction(line["cap"]) - cap) > Fraction(1, 10 ** 6) * cap:
-        raise ValueError(f"tile {line['tile']}: its recorded debit {line['debit_exact']} or cap {line['cap']} is not "
-                         f"Prices.sm120's {debit} / {float(cap)}")
+    if Fraction(line["debit_exact"]) != inert or abs(Fraction(line["cap"]) - bound) > Fraction(1, 10 ** 6) * bound:
+        raise ValueError(f"tile {line['tile']}: its recorded inert work {line['debit_exact']} or bound {line['cap']} "
+                         f"is not Prices.sm120's {inert} / {float(bound)}")
 
 
 def report(paths: list[Path]) -> dict:

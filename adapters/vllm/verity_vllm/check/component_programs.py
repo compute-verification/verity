@@ -1,11 +1,14 @@
-"""A row's component Programs on disk: their dirs under a row dir (`component_program_dirs`), one Program read with its rows left in the
+"""A row's Programs on disk, one a shape: their dirs under a row dir (`component_program_dirs`), one Program read with its rows left in the
 file (`load_program_head`), and per rank the post-load tensors its Build registered (`post_load_tensors`)."""
 from __future__ import annotations
 
+import gzip
 import json
 import os
 from pathlib import Path
 from typing import Any
+
+__all__ = ["load_program_head", "post_load_tensors"]
 
 
 class StoredRows:
@@ -23,7 +26,6 @@ class StoredRows:
 def load_program_head(program_dir: str) -> dict[str, Any]:
     """`format.load_program` with the instance file's header (schema, digest, params) in memory and its rows `StoredRows`.  A document
     whose params or digest follow its rows (not `derive_step`'s order) is read whole, its rows as stored."""
-    import gzip
     from verity_vllm.query.program_view import _read_instance_header
     path = os.path.join(program_dir, "instances.json.gz")
     inst = _read_instance_header(path)
@@ -38,7 +40,7 @@ def load_program_head(program_dir: str) -> dict[str, Any]:
 
 
 def component_program_dirs(programs_root: str) -> list[str]:
-    """Every component Program dir under a row dir: build_request_LP*_T* + the default-shape build_request (with an instances.json.gz)."""
+    """Every Program dir under a row dir, one a shape: build_request_LP*_T* + the default-shape build_request (with an instances.json.gz)."""
     root = Path(programs_root)
     out = sorted(str(p) for p in root.glob("build_request_LP*_T*") if (p / "instances.json.gz").exists())
     if (root / "build_request" / "instances.json.gz").exists():
@@ -48,11 +50,14 @@ def component_program_dirs(programs_root: str) -> list[str]:
 
 def post_load_tensors(builds: dict[int, str]) -> dict[str, list[str]]:
     """Per rank, the names its Build registered as Parameters from the loader's post-load hook (`result.json` `post_load_tensors`, over
-    every component Program of the rank's Build): what `tp2_commit_make` registers on the served model before reading its weights."""
+    every Program of the rank's Build): what `tp2_commit_make` registers on the served model before reading its weights."""
     out = {}
     for r, b in builds.items():
         names: set[str] = set()
         for d in component_program_dirs(str(b)):
-            names |= set((json.loads((Path(d) / "result.json").read_text()).get("post_load_tensors") or {}).get("parameters") or {})
+            fact = json.loads((Path(d) / "result.json").read_text()).get("post_load_tensors")   # a result.json without the block registers nothing
+            made = fact.get("parameters") if fact else None                                       # absent for a model without the post-load hook
+            if made:
+                names |= set(made)
         out[str(r)] = sorted(names)
     return out

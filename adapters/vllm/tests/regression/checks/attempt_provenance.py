@@ -4,20 +4,21 @@ model id + revision, dtype, hw family, tp, batch, input / output lengths, arriva
 id -- and the stages chain: the Match Attempt names the Build artifact it consumed, the Commit names both, and those are the artifacts
 the earlier Attempts published.
 
-Expected = lifted from the fixture (`fixtures.toml` row key + `tp` / `batch`, the in-repo row file's model / engine.revision,
+Expected = lifted from the fixture (`fixtures.toml` row key + `tp` / `batch`, the row's workload's model / engine.revision,
 the query id default).  Actual = read from the candidate Attempts' manifests (`params` restricted to `key_params`).  Applies only in
 candidate mode with attempt ids (`VERITY_REGRESSION_CANDIDATE=r2026…,…`); a directory candidate has no Attempts to cite.
 """
 from __future__ import annotations
 
-import json
-
 from .. import resolver
+
+#: what a test outside this harness may read; the harness reads a check's `NAME`, `applies`, `expected` and `actual` off the module
+__all__ = ["DEFAULT_QUERY"]
 
 NAME = "attempt_provenance"
 TIER = "T0"
 STRENGTH = "strong"
-INPUTS = ("workloads/<row>.json (in-repo)", "the candidate Attempt manifests (research data show <run-id> --json)")
+INPUTS = ("workloads/<row>.json", "the candidate Attempt manifests (research data show <run-id> --json)")
 
 DEFAULT_QUERY = "Q_word_v1{X=16,W=32,R=no-recompute}"
 ROW_FIELDS = ("model_tag", "dtype", "hw", "tp", "batch", "input", "output", "arrivals", "sampling", "exec")
@@ -47,7 +48,7 @@ def applies(row: resolver.Row) -> str | None:
 
 
 def expected(row: resolver.Row) -> dict:
-    wl = json.load(open(row.workload()))
+    wl = resolver.read_json(row.workload())
     cfg = row_config(row.key)
     out = {"row": row.key, "model": wl.get("model"), "revision": (wl.get("engine") or {}).get("revision"), "query": DEFAULT_QUERY, **cfg}
     if row.spec.get("tp") is not None:
@@ -71,13 +72,13 @@ def actual(row: resolver.Row) -> dict:
         configs.append(cfg)
         stage = tool.split(".", 1)[1] if isinstance(tool, str) and tool.startswith("vllm.") else None
         stages[stage or d["id"]] = {"attempt": d["id"], "tool": tool, "inputs": d.get("inputs") or {},
-                                   "artifact": (d.get("outputs") or {}).get(STAGE_OUTPUT.get(tool, ""))}
+                                   "artifact": (d.get("outputs") or {}).get(STAGE_OUTPUT.get(tool or "", ""))}
     # one configuration across the stages (the first attempt's; the others must agree)
     cfg0 = configs[0] if configs else {k: None for k in CONFIG_KEYS}
-    for i, c in enumerate(configs[1:], 1):
+    for i, other in enumerate(configs[1:], 1):
         for k in CONFIG_KEYS:
-            if c.get(k) != cfg0.get(k):
-                problems.append(f"attempt {docs[i]['id']} {k}={c.get(k)!r} != {docs[0]['id']} {cfg0.get(k)!r}")
+            if other.get(k) != cfg0.get(k):
+                problems.append(f"attempt {docs[i]['id']} {k}={other.get(k)!r} != {docs[0]['id']} {cfg0.get(k)!r}")
     # the chain: Match cites the Build's artifact; Commit cites both
     b, m, c = stages.get("build"), stages.get("match"), stages.get("commit")
     if m and b and m["inputs"].get("build") != b["artifact"]:

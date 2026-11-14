@@ -1,19 +1,43 @@
 """The binder's pieces on the CPU, against fake vLLM objects: the KV page layout read off a cache tensor's strides,
-weights and KV registration from a runner, the scheduler's appends, FIFO reuse of freed pages, and a step's pass."""
+weights and KV registration from a runner, the scheduler's appends, FIFO reuse of freed pages, a step's pass, and
+the binder installed on vLLM's classes under the stand-in for vLLM."""
 from __future__ import annotations
 
+import importlib.util
 from collections import deque
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity_vllm.protocols.remote_bandwidth.binder import (  # noqa: E402
-    KERNEL_BLOCK_SIZES, Binder, Every, Inbox, PagedBacking, TorchBacking, page_layout, storage_bytes,
+from verity.protocols.accounting.poub.verifier import audit, codec, memory_map
+from verity.protocols.accounting.poub.verifier import receipts as rb
+
+from tests import fake_vllm
+from verity_vllm.engine.hooks import Hooks, Patch
+from verity_vllm.protocols.remote_bandwidth.binder import (
+    KERNEL_BLOCK_SIZES,
+    Binder,
+    Every,
+    Inbox,
+    PagedBacking,
+    TorchBacking,
+    model_weights,
+    page_layout,
+    storage_bytes,
 )
-from verity_vllm.protocols.remote_bandwidth.interface import Append  # noqa: E402
-from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory  # noqa: E402
+from verity_vllm.protocols.remote_bandwidth.interface import Append, WindowRecord
+from verity_vllm.protocols.remote_bandwidth.registry import (
+    NodeMemory,
+    RemoteBandwidthReceipt,
+    chain,
+)
+from verity_vllm.protocols.remote_bandwidth.verify import verify_opening
 
 PAGES, SLOTS, HEADS, DIM = 6, 16, 2, 32          # a slot is 2 x 32 bf16 = 128 bytes; a plane-page 2 KiB
 
@@ -110,6 +134,36 @@ def test_registration_from_a_runner(shared, interleaved):
     assert s.pool.ids.shape == (PAGES, 4) and s.pool.ids[1].tolist() == [4, 5, 6, 7]
 
 
+def test_the_models_weights_are_each_storage_once_none_empty_and_found_through_its_wrappers():
+    """`model_weights`: a parameter that shares its storage with an earlier one is listed once, under the first name;
+    one of no elements is not listed; and a model held inside wrappers that have no parameters of their own (each with
+    a ``runnable``) is the one listed, which a ``runnable`` of its own does not change."""
+
+    class Model(torch.nn.Module):
+        runnable = None
+
+    w = torch.zeros(4, 8)
+    model = Model()
+    model.first, model.tied = torch.nn.Parameter(w), torch.nn.Parameter(w)
+    model.empty, model.last = torch.nn.Parameter(torch.zeros(0)), torch.nn.Parameter(torch.ones(3))
+    assert [n for n, _ in model.named_parameters()] == ["first", "tied", "empty", "last"]
+    for held in (model, SimpleNamespace(runnable=SimpleNamespace(runnable=model))):
+        got = model_weights(SimpleNamespace(model=held))
+        assert [(x.name, x.source, x.encode) for x in got] == [("first", "param:first", False), ("last", "param:last", False)]
+        assert got[0].tensor.data_ptr() == w.data_ptr() and got[1].tensor.tolist() == [1.0, 1.0, 1.0]
+
+
+def test_a_weight_that_ends_inside_a_block_is_registered_to_its_last_whole_block_and_its_tail_is_counted():
+    """A tensor of 8 blocks and 256 bytes: the region is the 8 blocks, the 256 bytes are counted unregistered under the
+    tensor's name, and under a budget of blocks the tensor takes 8 of it."""
+    for budget, registered in ((None, 8 * 1024), (8, 8 * 1024), (7, 0)):
+        s = NodeMemory()
+        b = Binder(s, block_bytes=1024, weight_blocks=budget)
+        b.on_load(SimpleNamespace(model=torch.nn.Sequential(torch.nn.Linear(64, 33, bias=False))))
+        assert b.unregistered == ({"0.weight[tail]": 256} if registered else {"0.weight": 8 * 1024 + 256}), budget
+        assert [(x.name, x.blocks) for x in s.layout().regions] == ([("0.weight", 8)] if registered else [])
+
+
 @pytest.mark.parametrize("name", KERNEL_BLOCK_SIZES)
 def test_a_kernel_block_size_other_than_the_managers_is_refused(name):
     """Under either runner's name for them.  vLLM gives a cache group whose backend doesn't take the manager's block size
@@ -136,6 +190,56 @@ def test_a_runner_that_names_no_kernel_block_sizes_is_refused(named):
     with pytest.raises(RuntimeError, match=r"names no kernel block sizes \(kernel_block_sizes or _kernel_block_sizes\)"):
         b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
     assert "kv" not in b.stats()["bytes_by_kind"]
+
+
+@pytest.mark.parametrize("bound", [[], None, "absent"])
+def test_a_runner_that_bound_no_kv_caches_is_refused(bound):
+    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    if bound == "absent":
+        del r.kv_caches
+    else:
+        r.kv_caches = bound
+    with pytest.raises(RuntimeError, match="the model runner bound no KV caches"):
+        b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    assert "kv" not in b.stats()["bytes_by_kind"]
+
+
+def test_kv_layers_of_different_page_shapes_are_refused():
+    """One layer's slot is 128 bytes and the next one's 256: the pool is one layout, so the second layer is refused and
+    no layer is registered."""
+    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    r.kv_caches = [torch.zeros(2, PAGES, SLOTS, HEADS, d, dtype=torch.bfloat16) for d in (DIM, 2 * DIM)]
+    with pytest.raises(NotImplementedError, match="KV layers of different page shapes"):
+        b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    assert "kv" not in b.stats()["bytes_by_kind"]
+
+
+@pytest.mark.parametrize("planes_apart, overlap", [(0, True), (0.5, True), (1, True), (2, False)])
+def test_two_kv_layers_whose_planes_overlap_in_one_storage_are_refused(planes_apart, overlap):
+    """Two layers in one storage, the second's pages starting ``planes_apart`` planes after the first's. On the same
+    planes, half a plane on and one plane on (its K plane the first's V plane) they overlap and are refused, with
+    nothing registered; two planes on, the next layer of the storage, they register."""
+    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    whole = torch.zeros(PAGES, 3, 2, SLOTS, HEADS, DIM, dtype=torch.bfloat16)
+    first, plane = whole[:, 0], SLOTS * HEADS * DIM
+    second = torch.as_strided(whole, first.shape, first.stride(), int(planes_apart * plane))
+    r.kv_caches = [first, second]
+    if overlap:
+        with pytest.raises(ValueError, match="two KV layers' pages overlap in one storage"):
+            b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+        assert "kv" not in b.stats()["bytes_by_kind"]
+    else:
+        b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+        assert b.stats()["bytes_by_kind"]["kv"] == 2 * 2 * PAGES * 2048 and b.unregistered == {"kv[unpaged]": 2 * PAGES * 2048}
+
+
+def test_the_bytes_of_a_kv_storage_that_no_layers_page_holds_are_counted_unregistered():
+    """A cache that is the first ``PAGES`` pages of a storage of one page more: the pool is the ``PAGES`` pages, and
+    the last page's two planes are counted, under ``kv[unpaged]``."""
+    b, r = Binder(NodeMemory(), block_bytes=1024), runner()
+    r.kv_caches = [torch.zeros(PAGES + 1, 2, SLOTS, HEADS, DIM, dtype=torch.bfloat16)[:PAGES]]
+    b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
+    assert b.stats()["bytes_by_kind"] == {"kv": 2 * PAGES * 2048} and b.unregistered == {"kv[unpaged]": 2 * 2048}
 
 
 @pytest.mark.parametrize("budget, registered", [(8, 64 * 32 * 4), (7, 0)])
@@ -193,8 +297,26 @@ def test_with_kv_off_the_registered_store_is_the_weights_and_filler_and_no_step_
 
 
 def memory_map_lines(m) -> list:
-    from verity.protocols.poub.verifier import memory_map
     return list(memory_map.parse(m.text().splitlines(keepends=True))[1])
+
+
+def test_a_filler_of_less_than_one_block_is_refused_and_a_longer_one_is_its_whole_blocks():
+    s = NodeMemory()
+    b = Binder(s, passes=False, kv=False)
+    with pytest.raises(ValueError, match="filler of 4095 bytes holds no 4096-byte block"):
+        b.register_filler(4095, "cpu")
+    assert s.layout().regions == ()
+    b.register_filler(4096 + 4095, "cpu")
+    assert b.filler.numel() == 4096 and [(x.name, x.kind, x.blocks) for x in s.layout().regions] == [("filler", "filler", 1)]
+
+
+def test_a_fixed_schedule_of_no_passes_a_window_is_refused_and_one_with_no_last_window_never_closes():
+    with pytest.raises(ValueError, match="a window is at least one pass"):
+        Every(0, lambda t: bytes([t]) * 32)
+    every = Every(1, lambda t: bytes([t]) * 32)
+    assert [every() for _ in range(3)] == [[bytes([t]) * 32] for t in range(3)]
+    two = Every(2, lambda t: bytes([t]) * 32)
+    assert [two() for _ in range(5)] == [[bytes(32)], [], [b"\x01" * 32], [], [b"\x02" * 32]]
 
 
 def test_steps_append_the_scheduled_slots_and_reuse_freed_pages_fifo():
@@ -235,8 +357,8 @@ EMPTY = SimpleNamespace(kv_cache_manager=SimpleNamespace(coordinator=SimpleNames
 
 
 def test_steps_run_in_chained_windows_with_the_readers_roots():
-    from verity_vllm.protocols.remote_bandwidth.registry import chain
-    s, recs = NodeMemory(), []
+    s = NodeMemory()
+    recs: list[WindowRecord] = []
     sigma = [bytes([t]) * 32 for t in range(3)]
     b = Binder(s, block_bytes=1024, messages=Every(2, sigma.__getitem__, windows=3), on_window=recs.append,
                reader=lambda segments: b"\x01" * 64)
@@ -256,15 +378,18 @@ def test_steps_run_in_chained_windows_with_the_readers_roots():
 def test_windows_end_on_the_verifiers_messages_and_the_first_chains_from_the_registration():
     """The verifier's message ends the window at the next pass's start, however many passes it held; chal_0's window
     chains from the registration digest the binder was given."""
-    from verity.protocols.poub.verifier import receipts as rb
-    s, recs, inbox = NodeMemory(), [], Inbox()
+    s, inbox = NodeMemory(), Inbox()
+    recs: list[WindowRecord] = []
     digest = bytes(range(64))
     b = Binder(s, block_bytes=1024, messages=inbox, registration=digest, on_window=recs.append,
                reader=lambda segments: b"\x02" * 64)
     r = runner()
     b.on_load(r)
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
-    step = lambda: b.on_schedule(EMPTY, SimpleNamespace(num_scheduled_tokens={}))
+
+    def step() -> None:
+        b.on_schedule(EMPTY, SimpleNamespace(num_scheduled_tokens={}))
+
     step()
     assert s._open_pass.seed is None
     sigma = [bytes([t + 7]) * 32 for t in range(2)]
@@ -288,8 +413,6 @@ def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote(passes):
     that (a finished request's, in `update_from_output`) frees its appended blocks at the same step, whose line closes
     when the next step opens, and leaves its untouched filler resident; each pass names the step it covers.  Without passes (a remote session runs them), the map is the
     same."""
-    from verity.protocols.poub.verifier import codec, memory_map
-
     s = NodeMemory()
     b = Binder(s, passes=passes)
     r = runner()
@@ -297,7 +420,10 @@ def test_a_steps_memory_map_digests_are_of_the_kv_its_forward_wrote(passes):
     b.on_load(r)
     b.on_kv(r, SimpleNamespace(num_blocks=PAGES))
     m = s.record_memory_map(registration=bytes(range(64)))
-    open_step = lambda: s._open_pass and s._open_pass.step
+
+    def open_step():
+        return s._open_pass and s._open_pass.step
+
     page = Block(1)
     page.ref_cnt = 1
     s.kv_alloc([1, 2])
@@ -324,12 +450,8 @@ def test_with_the_drivers_tiles_a_steps_pass_is_the_drivers_and_opens_against_it
     """Each receipt bound to the tile output before its block (`NoiseTiles`, PoUW's stub), under the driver's own
     receipt: the pass's root is the driver's `Prover`'s over the same blocks, and an opening, made after the next pass,
     verifies with the tile's z."""
-    from verity.protocols.poub.verifier import audit
-    from verity.protocols.poub.verifier import receipts as rb
-    from verity_vllm.protocols.remote_bandwidth.registry import RemoteBandwidthReceipt
-    from verity_vllm.protocols.remote_bandwidth.verify import verify_opening
-
-    s, recs, tiles = NodeMemory(salt_key=bytes(32)), [], audit.NoiseTiles()
+    s, tiles = NodeMemory(salt_key=bytes(32)), audit.NoiseTiles()
+    recs: list[WindowRecord] = []
     b = Binder(s, messages=Every(2, lambda t: bytes([t]) * 32, windows=1), on_window=recs.append, tiles=tiles)
     assert isinstance(b.receipt, RemoteBandwidthReceipt)
     r = runner()
@@ -346,3 +468,182 @@ def test_with_the_drivers_tiles_a_steps_pass_is_the_drivers_and_opens_against_it
     o = s.open([(1, 1)], window=0)[0]
     assert verify_opening(info, pc, s.plan(1, window=0), o, b.receipt, lambda w, i: w, None, tiles.output(pc.seed, 1))
     assert not verify_opening(info, pc, s.plan(1, window=0), o, b.receipt, lambda w, i: w, None, bytes(64))
+
+
+FIRST_RUNNER, RUNNER_V2 = "vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner"
+SITES = {"runner": ("load_model", "initialize_kv_cache"), "pool": ("get_new_blocks", "free_blocks", "touch"),
+         "scheduler": ("schedule", "update_from_output")}
+
+
+def vllms_classes(monkeypatch, store: NodeMemory, first_runner: bool = False) -> SimpleNamespace:
+    """vLLM's model runner, block pool and scheduler as `Binder.install` finds them, under the stand-in for vLLM
+    (`tests.fake_vllm`): each method records its call in ``calls`` (the scheduler's, with whether the store had a pass
+    open) and answers with a value of its own.  As vLLM's, a runner has its model (``loads``) once its own `load_model`
+    ran and its KV caches (``binds``) once its own `initialize_kv_cache` did, so a hook that reads either does so after
+    vLLM's own.  The surface holds Model Runner V2 alone; with ``first_runner`` the first runner's module is there
+    too, with a class of its own."""
+    calls: list[tuple] = []
+
+    def runner_class():
+        class GPUModelRunner:
+            def __init__(self) -> None:
+                held = vars(runner())
+                self.loads, self.binds = held.pop("model"), held.pop("kv_caches")
+                vars(self).update(held)
+
+            def load_model(self, *a, **kw):
+                calls.append(("load_model", a, kw))
+                self.model = self.loads
+                return "loaded"
+
+            def initialize_kv_cache(self, kv_cache_config, is_profiling=False):
+                calls.append(("initialize_kv_cache", is_profiling))
+                self.kv_caches = self.binds
+                return "kv"
+
+        return GPUModelRunner
+
+    class BlockPool:
+        """As vLLM's: a freed page goes back on the free queue, here at its front."""
+
+        def __init__(self) -> None:
+            self.blocks = [Block(i) for i in range(PAGES)]
+            self.free_block_queue = Queue(self.blocks[1:])
+
+        def get_new_blocks(self, n):
+            got = [self.free_block_queue.q.popleft() for _ in range(n)]
+            for b in got:
+                b.ref_cnt = 1
+            calls.append(("get_new_blocks", n))
+            return got
+
+        def free_blocks(self, ordered):
+            calls.append(("free_blocks", type(ordered).__name__))
+            for b in ordered:
+                b.ref_cnt -= 1
+                self.free_block_queue.q.appendleft(b)
+
+        def touch(self, blocks):
+            calls.append(("touch", [b.block_id for b in blocks]))
+            return "touched"
+
+    class Scheduler:
+        def __init__(self) -> None:
+            vars(self).update(vars(EMPTY))
+            self.output = SimpleNamespace(num_scheduled_tokens={})
+
+        def schedule(self, *a, **kw):
+            calls.append(("schedule", a, kw, store.in_pass))
+            return self.output
+
+        def update_from_output(self, so, out):
+            calls.append(("update_from_output", so is self.output, out, store.in_pass))
+            return "outputs"
+
+    fake = fake_vllm.install(monkeypatch, extra=[f"{FIRST_RUNNER}:GPUModelRunner"] if first_runner else ())
+    runners = [runner_class()]
+    fake.set(f"{RUNNER_V2}:GPUModelRunner", runners[0])
+    if first_runner:
+        runners.append(runner_class())
+        fake.set(f"{FIRST_RUNNER}:GPUModelRunner", runners[1])
+    fake.set("vllm.v1.core.block_pool:BlockPool", BlockPool)
+    fake.set("vllm.v1.core.sched.scheduler:Scheduler", Scheduler)
+    owners = [*((c, SITES["runner"]) for c in runners), (BlockPool, SITES["pool"]), (Scheduler, SITES["scheduler"])]
+    return SimpleNamespace(calls=calls, runners=runners, pool=BlockPool, scheduler=Scheduler,
+                           sites={(cls, name): vars(cls)[name] for cls, names in owners for name in names})
+
+
+@pytest.fixture
+def binder():
+    """Makes a test's binders (`Binder`'s arguments) and uninstalls each when the test ends, pass or fail, so a test
+    that fails with its binder installed leaves no live hook behind it."""
+    made: list[Binder] = []
+
+    def make(store: NodeMemory, **kw) -> Binder:
+        made.append(Binder(store, **kw))
+        return made[-1]
+
+    yield make
+    for b in made:
+        b.uninstall()
+
+
+@pytest.mark.parametrize("first_runner", [False, True])
+def test_install_wraps_vllms_classes_and_uninstall_puts_them_back(monkeypatch, binder, first_runner):
+    """`Binder.install` wraps the two methods of each runner module that is there (the first runner's is skipped where
+    it is absent, as under the surface), the pool's three and the scheduler's two, each under the hooks' tag; a
+    runner's wrappers hand back what vLLM's own methods returned, and its loaded model's weights are registered;
+    `uninstall` leaves each class holding what it held, and does nothing on a binder never installed."""
+    s = NodeMemory()
+    v = vllms_classes(monkeypatch, s, first_runner)
+    assert (importlib.util.find_spec(FIRST_RUNNER) is not None) == first_runner
+    b = binder(s, block_bytes=1024)
+    assert b.install() is b
+    hooks = b.hooks
+    assert hooks is not None and len(v.sites) == (9 if first_runner else 7) == len(hooks.entries)
+    assert all(vars(cls)[name] is not own for (cls, name), own in v.sites.items())
+    patches = [e for e in hooks.entries if isinstance(e, Patch)]
+    assert {(e.owner, e.name, e.tag) for e in patches} == {(cls, name, "verity-store") for cls, name in v.sites}
+    for i, cls in enumerate(v.runners):
+        r = cls()
+        r.loads = torch.nn.Sequential(*[torch.nn.Identity()] * i, torch.nn.Linear(64, 32, bias=False))
+        assert r.load_model("x", y=1) == "loaded" and v.calls[-1] == ("load_model", ("x",), {"y": 1})
+        assert r.initialize_kv_cache(SimpleNamespace(num_blocks=PAGES), True) == "kv"
+        assert v.calls[-1] == ("initialize_kv_cache", True)
+    assert [x.name for x in s.layout().regions] == [f"{i}.weight" for i in range(len(v.runners))]
+    b.uninstall()
+    assert all(vars(cls)[name] is own for (cls, name), own in v.sites.items()) and hooks.entries == ()
+    Binder(NodeMemory()).uninstall()
+
+
+def test_installed_a_profiling_kv_cache_registers_nothing_and_the_real_one_registers_the_pool(monkeypatch, binder):
+    """vLLM initializes a KV cache once to profile memory and once for real. The profiling call, its flag by position
+    or by name, registers no pool; the next call, its flag false by position, registers it; the hooks may be the
+    caller's own."""
+    s = NodeMemory()
+    v = vllms_classes(monkeypatch, s)
+    mine = Hooks(tag="mine")
+    b = binder(s, block_bytes=1024).install(mine)
+    assert b.hooks is mine and {e.tag for e in mine.entries} == {"mine"}
+    r, config = v.runners[0](), SimpleNamespace(num_blocks=PAGES)
+    assert r.initialize_kv_cache(config, True) == "kv" and r.initialize_kv_cache(config, is_profiling=True) == "kv"
+    assert v.calls == [("initialize_kv_cache", True)] * 2 and b.stats()["regions"] == 0
+    assert r.initialize_kv_cache(config, False) == "kv" and b.stats()["bytes_by_kind"] == {"kv": 3 * 2 * PAGES * 2048}
+
+
+@pytest.mark.parametrize("kv", [True, False])
+def test_installed_the_pools_pages_are_the_stores_and_a_freed_page_is_not_touched_back(monkeypatch, binder, kv):
+    """`BlockPool.get_new_blocks` allocates the store's pages and `free_blocks` frees them, moved to the back of
+    vLLM's free queue, when it is handed an iterator too; `touch` of a freed page (a prefix-cache hit) is refused, and
+    of a page in use or the null block is vLLM's own. With ``kv=False`` the same calls reach no store."""
+    s = NodeMemory()
+    v = vllms_classes(monkeypatch, s)
+    binder(s, block_bytes=1024, kv=kv).install()
+    v.runners[0]().initialize_kv_cache(SimpleNamespace(num_blocks=PAGES))
+    pool = v.pool()
+    got = pool.get_new_blocks(3)
+    assert [x.block_id for x in got] == [1, 2, 3] and v.calls[-1] == ("get_new_blocks", 3)
+    assert s.pool.allocated[[1, 2, 3]].all() and not s.pool.allocated[4] if kv else s._pool is None
+    assert pool.touch([got[0], pool.blocks[0]]) == "touched" and v.calls[-1] == ("touch", [1, 0])
+    assert pool.free_blocks(iter(got[:2])) is None and v.calls[-1] == ("free_blocks", "list")
+    assert [x.block_id for x in pool.free_block_queue.q] == [4, 5, 1, 2]
+    assert not s.pool.allocated[[1, 2]].any() and s.pool.allocated[3] if kv else s._pool is None
+    with pytest.raises(NotImplementedError, match="the store's binder runs without prefix caching"):
+        pool.touch([got[2], got[0]])
+    assert v.calls[-1] == ("free_blocks", "list")
+
+
+def test_installed_a_steps_pass_opens_after_vllm_schedules_and_ends_before_vllm_reads_the_output(monkeypatch, binder):
+    """`Scheduler.schedule` runs vLLM's own first, with its arguments, and then opens the step's pass;
+    `Scheduler.update_from_output` ends the pass before vLLM's own runs, so the pages vLLM frees there are freed after
+    the step's digests are taken."""
+    s = NodeMemory()
+    v = vllms_classes(monkeypatch, s)
+    b = binder(s, block_bytes=1024).install()
+    v.runners[0]().initialize_kv_cache(SimpleNamespace(num_blocks=PAGES))
+    sched = v.scheduler()
+    assert sched.schedule("a", k=1) is sched.output and v.calls[-1] == ("schedule", ("a",), {"k": 1}, False)
+    assert s.in_pass and b.step == 1
+    assert sched.update_from_output(sched.output, "out") == "outputs"
+    assert v.calls[-1] == ("update_from_output", True, "out", False) and not s.in_pass
+    assert s.counters.calls["end_pass"] == 1

@@ -1,18 +1,32 @@
 """install_from_plan on a TINY nn.Module tree installs exactly the plan's sites -- and nothing a class table would have added."""
 from __future__ import annotations
 
+import types
+from typing import TYPE_CHECKING
+
 import pytest
 
-torch = pytest.importorskip("torch")
-nn = torch.nn
+if TYPE_CHECKING:
+    import torch
+    from torch import nn
+else:
+    torch = pytest.importorskip("torch")
+    nn = torch.nn
 
-from verity_vllm.query.manifest import format as RM  # noqa: E402
-from verity_vllm.acquire import plan as P  # noqa: E402
-from verity_vllm.correspondence.reader_for_acquire import AnnotationCorrespondence, runtime_tree_of  # noqa: E402
-from verity_vllm.acquire.install import IncompletePlan, OccurrenceSink, install_from_plan  # noqa: E402
+from verity_vllm.acquire import plan as P
+from verity_vllm.acquire.install import (
+    IncompletePlan,
+    OccurrenceSink,
+    install_from_plan,
+)
+from verity_vllm.correspondence.reader_for_acquire import (
+    AcquireCorrespondence,
+    runtime_tree_of,
+)
+from verity_vllm.query.manifest import format as RM
 
 PD = "0" * 64
-TABLES = {"HAZARD_LEAVES": set(), "GATHER_FLUSH_LEAVES": set(), "PRE_FLUSH_LEAVES": set()}
+TABLES: dict[str, set[str]] = {"HAZARD_LEAVES": set(), "GATHER_FLUSH_LEAVES": set(), "PRE_FLUSH_LEAVES": set()}
 
 
 class TwoOut(nn.Module):
@@ -72,7 +86,7 @@ def row(family, op, member, step=0, **extra):
 def make(rows, model, runner):
     man = {"schema": RM.SCHEMA, "program_digest": PD, "identities": rows, "manifest_digest": RM.manifest_digest(rows), "wrapper_prefix": "", "op_path_aliases": {}}
     rt = runtime_tree_of(model, runner, source="tiny")
-    return P.acquisition_plan(man, AnnotationCorrespondence(rt), tables=TABLES), rt
+    return P.acquisition_plan(man, AcquireCorrespondence(rt), tables=TABLES), rt
 
 
 def base_rows():
@@ -105,10 +119,13 @@ def test_installs_exactly_the_sites_and_observes_them():
     assert sink.shapes[("blocks.0.norm", "producer_output", "1")] == [[1, 3, 4]] and sink.shapes[("embed", "consumer_input", "in[0]")] == [[1, 3]]
     assert sink.shapes[("runner.sampler", "runner_return", ".sampled_token_ids")] == [[1, 3]] and sink.dtypes[("embed", "consumer_input", "in[0]")] == {"int64"}
     doc = sink.to_json()
+    assert doc["schema"] == "verity-vllm/acquisition-observed/v1"
     assert [(s["module"], s["kind"], s["slot"]) for s in doc["sites"]] == expect and all(s["occurrences"] == 2 for s in doc["sites"])
     inst.remove()
-    assert len(model.blocks[0].proj._forward_hooks) == 0 and len(model.embed._forward_pre_hooks) == 0 and runner.sample.__func__ is Runner.sample
-    model(ids); runner.sample(out)
+    assert len(model.blocks[0].proj._forward_hooks) == 0 and len(model.embed._forward_pre_hooks) == 0
+    assert isinstance(runner.sample, types.MethodType) and runner.sample.__func__ is Runner.sample
+    model(ids)
+    runner.sample(out)
     assert sink.counts[("logits", "producer_output", "out")] == 2          # nothing fires after remove()
 
 
@@ -126,17 +143,6 @@ def test_a_whole_return_site_of_a_module_returning_several_records_each_tensor()
     inst.remove()
 
 
-def test_install_from_the_serialised_document(tmp_path):
-    model, runner = Tiny(), Runner()
-    plan, _ = make(base_rows(), model, runner)
-    path = tmp_path / "plan.json"
-    plan.save(path)
-    doc = P.load_plan(path)
-    inst = install_from_plan(doc, model, runner)
-    assert inst.keys() == [h.key() for h in plan.hooks()]
-    inst.remove()
-
-
 def test_refuses_a_plan_for_another_runtime():
     model, runner = Tiny(), Runner()
     plan, _ = make(base_rows(), model, runner)
@@ -149,15 +155,12 @@ def test_refuses_a_plan_for_another_runtime():
         install_from_plan(plan, model, object())
 
 
-def test_refuses_incomplete_plan_unless_told():
+def test_refuses_incomplete_plan():
     model, runner = Tiny(), Runner()
     plan, _ = make(base_rows() + [row("instance_outputs", "blocks.0.gone", "out")], model, runner)
     assert not plan.complete
     with pytest.raises(IncompletePlan, match="unsupported"):
         install_from_plan(plan, model, runner)
-    inst = install_from_plan(plan, model, runner, refuse_incomplete=False)
-    assert len(inst.installed) == 7
-    inst.remove()
 
 
 def test_promoted_consumer_pre_hook_only():
@@ -167,7 +170,7 @@ def test_promoted_consumer_pre_hook_only():
     assert plan.complete
     sink = OccurrenceSink()
     inst = install_from_plan(plan, model, runner, sink=sink)
-    assert ("logits", "consumer_input", "in[0]") in inst.keys() and not any(s.module == "blocks.0" for s in inst.installed)
+    assert ("logits", "consumer_input", "in[0]") in set(inst.keys()) and not any(s.module == "blocks.0" for s in inst.installed)
     model(torch.tensor([[1, 2]]))
     assert sink.counts[("logits", "consumer_input", "in[0]")] == 1 and sink.shapes[("logits", "consumer_input", "in[0]")] == [[1, 2, 4]]
     inst.remove()

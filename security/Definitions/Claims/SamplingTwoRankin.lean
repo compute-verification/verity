@@ -22,8 +22,9 @@ the admissible sets into a sum over every set, which factors over the replay blo
 * `rankinFactorPatterns`: the patterns' factor, a sum over replay block `ρ`'s patterns
   `c = (r ↦ lightOf |r| U_r)` of `2^{bits(c)}` times the largest `(1 − q_ρ(1 − e_ρ(U)))^θ` over the sets `U ⊆ ρ` of
   pattern `c`.
-* `AdmissibleTwoRankinPatterns`: the patterns' sum is at most `δ^{−θ} ∏_ρ` of the patterns' factors, when each request
-  reads the proof blocks of one replay block, so that a set's pattern is its replay blocks' patterns.
+* `AdmissibleTwoRankinPatterns`: the patterns' sum is at most `δ^{−θ} ∏_ρ` of the patterns' factors, at every split of
+  the served outputs into requests. A request may read the proof blocks of several replay blocks, each of whose factors
+  then counts it.
 * `rankinFactorCapped`: `G_ρ(θ)` with each set's bits capped at `S_ρ`, `Σ_{U ⊆ ρ} 2^{min(b(U), S_ρ)} (…)^θ`.
 * `AdmissibleTwoRankinServed`: the served-output cap's sum, `Σ_{T admissible} 2^{min(b(T), Σ_r min(b(T_r), |r|))}`, is
   at most `δ^{−θ} ∏_ρ` of the capped factors, when distinct requests read disjoint proof blocks and `S_ρ` bounds the
@@ -74,14 +75,14 @@ def AdmissibleTwoRankin : Prop :=
 
 /-- **Rankin's bound on the patterns' count**: on a statement in scope whose first stage misses each set `T` of replay
 blocks with probability at most `∏_{ρ∈T} (1 − q_ρ)`, at rates `q_ρ ≤ 1`, at every `δ > 0`, `θ ≥ 0` and split `req` of
-the served outputs into requests each reading the proof blocks of one replay block, the admissible sets' patterns' sum
-`Σ_p 2^{Σ_r bits(p r)}` is at most `δ^{−θ}` times the product of the replay blocks' patterns' factors. -/
+the served outputs into requests, the admissible sets' patterns' sum `Σ_p 2^{Σ_r bits(p r)}` is at most `δ^{−θ}` times
+the product of the replay blocks' patterns' factors. A request may read the proof blocks of several replay blocks, each
+of whose factors then counts it. -/
 def AdmissibleTwoRankinPatterns : Prop :=
   ∀ (s : AuditStatement) (Pt : Partition) (d : Design.Two) (q : ℕ → ℝ) (δ θ : ℝ) (R : Type) [Fintype R]
     [DecidableEq R] (req : Fin s.prog.outs.length → R), InScopeTwo Pt d s →
     (∀ T ⊆ Finset.range d.part.blocks.length, d.replay.Pa d.part T ≤ ∏ ρ ∈ T, (1 - q ρ)) → (∀ ρ, q ρ ≤ 1) →
     0 < δ → 0 ≤ θ →
-    (∀ r, ∃ ρ, ∀ v ∈ blocksTo s.prog Pt req (Finset.range Pt.blocks.length) r, replayOf Pt d.part v = some ρ) →
       ((∑ p ∈ (admissibleTwo Pt d δ).image
             (fun T r => lightOf s Pt (servedBits req r) (blocksTo s.prog Pt req T r)),
           2 ^ ∑ r, lightBits s Pt (servedBits req r) (p r) : ℕ) : ℝ) ≤

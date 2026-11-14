@@ -20,20 +20,27 @@ Under `correspondence` every module-site Value is CONFIRMED against the record (
 listed `unconfirmed` in the plan -- a finding, not a changed site: the manifest's op_path stands either way, so the plan's content is the
 same under both sources and the plan digest (which excludes the `correspondence` provenance block) says whether anything changed.
 
-The runtime side is `runtime_tree.RuntimeTree` (module-tree facts: which modules the runtime HAS; re-exported here for callers).
+The runtime side is `records.runtime_tree.RuntimeTree` (module-tree facts: which modules the runtime HAS; re-exported here for callers).
 """
 from __future__ import annotations
 
-import os
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
+from verity_vllm.correspondence.runtime import (
+    NAMESPACE,
+    SCHEMA,
+    RuntimeCorrespondence,
+)
 from verity_vllm.query.manifest.format import collector_path, split_name
-from verity_vllm.observe.runtime_tree import RUNNER_PATH, RUNTIME_TREE_SCHEMA, RuntimeTree, mro_names, runtime_tree_from_paths, runtime_tree_of
-from verity_vllm.correspondence.runtime import NAMESPACE, SCHEMA, RuntimeCorrespondence, read_program_dir
+from verity_vllm.records.runtime_tree import (
+    RUNNER_PATH,
+    RuntimeTree,
+    runtime_tree_from_paths,
+    runtime_tree_of,
+)
 
-SOURCES = ("correspondence", "v1_annotations")
 FALLBACK_READ = "the identity row's op_path: required_manifest.split_name(annotations.node_hints)[0] -> collector_path(wrapper_prefix) -> op_path_aliases"
 
 
@@ -56,13 +63,6 @@ class ArgSlot:
 
     def label(self) -> str:
         return f"in[{self.index}]"
-
-
-def read_program_correspondence(program_dir: str | Path) -> tuple[RuntimeCorrespondence | None, str | None, str | None]:
-    """The `runtime-correspondence/v1` table of one derive_step output dir, (table, digest, problem) -- `runtime_correspondence.read_program_dir`,
-    the one loader: `result.json:program.correspondence_digest` is the presence test (a v1-frontend Build -> (None, None, None) without
-    decoding the descriptor); with it the record is loaded and its digest checked against the recorded one."""
-    return read_program_dir(program_dir)
 
 
 def infer_wrapper_prefix(program_modules: Iterable[str], runtime: RuntimeTree) -> str:
@@ -93,15 +93,13 @@ class AcquireCorrespondence:
 
     def __init__(self, runtime: RuntimeTree, *, wrapper_prefix: str = "", aliases: Mapping[str, Any] | None = None,
                  inplace_facts: Mapping[str, Mapping[str, Any]] | None = None, tables: Mapping[str, RuntimeCorrespondence] | None = None,
-                 digests: Mapping[str, str] | None = None, absent: Iterable[str] = (), problems: Iterable[str] = ()) -> None:
+                 digests: Mapping[str, str] | None = None) -> None:
         self.runtime = runtime
         self.wrapper_prefix = wrapper_prefix
         self.aliases = dict(aliases or {})                      # program op_path -> [canonical op_path, invocation] (`op_path_aliases`)
         self.inplace_facts = {str(k): dict(v) for k, v in (inplace_facts or {}).items()}
         self.tables: dict[str, RuntimeCorrespondence] = dict(tables or {})
         self.digests: dict[str, str] = dict(digests or {})
-        self.absent: list[str] = list(absent)
-        self.problems: list[str] = list(problems)
         self.source = "correspondence" if self.tables else "v1_annotations"
         # the export wrapper's attribute prefix (Program `model.model.layers.0...` -> collector `model.layers.0...`): the request manifest
         # carries it (`wrapper_prefix`); a GLOBAL manifest does not -- then it is determined from the runtime tree (the one prefix under
@@ -118,32 +116,6 @@ class AcquireCorrespondence:
                 op = collector_path(m, wrapper_prefix)
                 alias = self.aliases.get(op)
                 self._owned.setdefault(str(alias[0]) if alias else op, set()).add((label, m))
-
-    # -- construction from a Build --------------------------------------------------------------------------------------------------
-
-    @classmethod
-    def from_programs(cls, runtime: RuntimeTree, programs: Iterable[str | Path], *, wrapper_prefix: str = "", aliases: Mapping[str, Any] | None = None,
-                      inplace_facts: Mapping[str, Mapping[str, Any]] | None = None) -> "AcquireCorrespondence":
-        """Read the record of every component Program dir.  `source` is `correspondence` only when EVERY program carries it; a Build with
-        the record on some components and not others falls back as a whole (uniform decision), the components lacking it listed `absent`."""
-        tables: dict[str, RuntimeCorrespondence] = {}
-        digests: dict[str, str] = {}
-        absent: list[str] = []
-        problems: list[str] = []
-        for p in programs:
-            label = os.path.basename(os.path.normpath(str(p)))
-            t, dg, prob = read_program_correspondence(p)
-            if prob:
-                problems.append(prob)
-            if t is None:
-                absent.append(label)
-            else:
-                tables[label] = t
-                digests[label] = dg or ""
-        if absent and tables:
-            problems.append(f"{len(absent)} of {len(absent) + len(tables)} component Programs carry no {SCHEMA} record: the plan falls back to v1_annotations as a whole")
-            tables, digests = {}, {}
-        return cls(runtime, wrapper_prefix=wrapper_prefix, aliases=aliases, inplace_facts=inplace_facts, tables=tables, digests=digests, absent=absent, problems=problems)
 
     # -- the three functions of the correspondence namespace ------------------------------------------------------------------
 
@@ -189,9 +161,10 @@ class AcquireCorrespondence:
         return sorted(self._owned)
 
     def provenance(self) -> dict[str, Any]:
-        """The plan's `correspondence` block (provenance: excluded from the plan digest)."""
+        """The plan's `correspondence` block (provenance: excluded from the plan digest).  It keeps its `absent` and `problems` keys (the
+        component Programs without a record, and what reading them found), both empty: no caller reads a Build's Program dirs."""
         out: dict[str, Any] = {"source": self.source, "schema": SCHEMA if self.tables else None, "namespace": NAMESPACE if self.tables else None,
-                               "programs": dict(sorted(self.digests.items())), "absent": list(self.absent), "problems": list(self.problems),
+                               "programs": dict(sorted(self.digests.items())), "absent": [], "problems": [],
                                "module_paths": len(self._owned), "wrapper_prefix": self.wrapper_prefix, "wrapper_prefix_source": self.wrapper_prefix_source}
         if not self.tables:
             out["fallback"] = FALLBACK_READ
@@ -212,7 +185,5 @@ class AcquireCorrespondence:
         return "unmutated" if not f.get("output_mutated_after", True) else "mutated-after-hook"
 
 
-AnnotationCorrespondence = AcquireCorrespondence      # the adapter's former name (callers written against it keep working)
-
-__all__ = ["SOURCES", "FALLBACK_READ", "ReturnSlot", "ArgSlot", "AcquireCorrespondence", "AnnotationCorrespondence", "read_program_correspondence",
-           "RuntimeTree", "RUNTIME_TREE_SCHEMA", "RUNNER_PATH", "mro_names", "runtime_tree_of", "runtime_tree_from_paths", "RuntimeCorrespondence"]
+__all__ = ["FALLBACK_READ", "ReturnSlot", "ArgSlot", "AcquireCorrespondence",
+           "RuntimeTree", "RUNNER_PATH", "runtime_tree_of", "runtime_tree_from_paths", "RuntimeCorrespondence"]
