@@ -35,7 +35,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   SHA-512 TP run root (`tp.run_root`'s v2, over the ranks' rows-sha512 roots; an old record's SHA-256 v1 root is refused before
   the sample): GLM-5.3's TP8 Commit with
   `SERVING_ROWS=benchmarks/one_stage/glm53_silu_mul_v2_tp8.json` (its SiluMul_v2 partition: every unit of `SiluMul_v2{I=1536}`,
-  the dense layers' 861 per rank, by `subset:512`), or by default the CPU TP stand-in
+  the dense layers' 861 per rank, by `rate:512/861`), or by default the CPU TP stand-in
   (`adapters/vllm/tests/pipeline/served_tp.py`). A member's whole population is one `verity/flock-circuit` statement, whose shape takes at most
   `2^(35 - k_log)` instances: 2,048 at I=1536 (`k_log` 24) and 8,192 at I=256 (`k_log` 22), so a rank's `SiluMul_v2{I=256}`
   (172,200 routed-expert and 21,525 shared-expert units) is not a member. Each session's `circuit.txt` files and lookup tables
@@ -203,7 +203,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   inherits it; with `FC_VERIFIER_CPUS`, the verifiers run on `verifier_cpus` and the provers on the rest), as their
   `count`, their `list` and the `numa_nodes` that hold them. With `--lean`, the last sessions at
   K = 1 also get the Lean verdict inside the server's verdict pool, with its CPU seconds and peak RSS. Without
-  `--lean-program` a proof block's verdict is the `NO_PROGRAM` refusal, as in `served_units`. With it, the row's
+  `--lean-program` a proof block's verdict is the `NO_PROGRAM` refusal. With it, the row's
   Program's descriptor is handed to `verify` (`--program`) and the row keeps what the verdict says of it:
   `program_sha512` only when the Program is held to the circuit, else `program_handed_sha512` and `program_note`, which
   on a statement under the provisional unit cover says the Program was handed and not held to the circuit. With
@@ -218,7 +218,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   record carries its wall time and its summed peak memory (prover, live verifier and ZK server), which is what a CPU node
   spends on one sampled statement of a block's sample.
 - `phase_profile.sh` (with `phase_profile.py`): one GPU prover phase (`PHASE`, default `t.ligerito`) on a pod of its own: the
-  source's build (`AS=base` or `new`) on a served type at full (`UNITS`, default `moe-w13:N=1,SWAP=False`), its transcript
+  source's build (`AS=base` or `new`) on a served type at full (`UNITS`, default the census's decode MoE gate-up block, `census:MoeExpertFp8BlockGemm_v3{K=6144,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v1"}}`), its transcript
   pinned to main's under Flock ZK and Flock's circuit prover, one warm `zk_cost.py` dev process under Nsight Systems with
   CUDA and OS calls traced, and an A/B of base and new.
   `phase_profile.py` cuts each rep's phase at the prover's synchronizes and splits it into GPU time by kernel family and the

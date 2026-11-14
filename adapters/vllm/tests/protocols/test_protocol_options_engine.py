@@ -1,11 +1,13 @@
 """`verity_vllm.protocols` at a built engine: whose settings the engine fills and the refusal where it cannot, a
-composition's hooks taken off before its close, an option closed before its composition, a Match capture's install, and
-which entry binds a row's Build.
+composition's hooks taken off before its close, an option closed before its composition, a Match capture's install, a
+Commit's install, and which entry binds a row's Build.
 
 CPU only.  The PoUW and PoUS adapters are `test_protocol_options`'s stand-ins over its toy linear layers; SPOT's
 adapter is the real one.
 """
 from __future__ import annotations
+
+from typing import Any
 
 import pytest
 
@@ -149,6 +151,43 @@ def test_a_capture_installs_nothing_for_a_target_with_no_such_protocol_or_a_set_
         PO.at_capture(CAPTURED, model, {"pous": {}})
     assert e.value.reasons == ("the protocols config names ['pous'], which this run does not enable",)
     assert capsys.readouterr().out == "" and hooks.live() == before
+    assert all("apply" not in vars(m.quant_method) for m in model.layers)
+
+
+def test_a_commit_installs_its_set_on_its_model_records_it_in_the_versions_and_says_so(monkeypatch, capsys):
+    _both(monkeypatch, [])
+    model, before = Model(), hooks.live()
+    versions: dict[str, Any] = {"engine_kwargs": {}}
+    comp = PO.at_commit(TargetProfile(protocols=(POUS, SPOT)), model, versions)
+    try:
+        assert capsys.readouterr().out == f"[delta] protocol options installed beside the committers: ['{POUS}', '{SPOT}']\n"
+        assert (comp.context.stage, comp.entries) == ("commit", (POUS, SPOT))
+        assert [e.tag for e in hooks.live()[len(before):]] == [POUS] * 3
+        assert versions == {"engine_kwargs": {}, "protocols": {"entries": [POUS, SPOT], "info": comp.info()}}
+        assert versions["protocols"]["info"][POUS] == {"entries": 3}
+    finally:
+        comp.close()
+    assert hooks.live() == before
+
+
+def test_a_commit_that_installs_nothing_records_nothing_and_says_nothing(monkeypatch, capsys):
+    """A target with no protocols, a set the Commit refuses, and a set whose install raises."""
+    _both(monkeypatch, [])
+    model, before = Model(), hooks.live()
+    versions: dict[str, Any] = {"engine_kwargs": {}}
+    declared = TargetProfile(protocols=(POUS, SPOT))
+    assert PO.at_commit(None, model, versions) is None and PO.at_commit(TargetProfile(), model, versions) is None
+    with pytest.raises(PO.Refused) as e:
+        PO.at_commit(declared, model, versions, {"pouw": {}})
+    assert e.value.reasons == ("the protocols config names ['pouw'], which this run does not enable",)
+
+    def install(scheme, target):
+        raise RuntimeError(f"no device for {scheme}")
+
+    _fake_adapter(monkeypatch, "pous", install, schemes=(POUS.partition(":")[2],))
+    with pytest.raises(RuntimeError, match="no device for band-chain/d12/v1"):
+        PO.at_commit(declared, model, versions)
+    assert capsys.readouterr().out == "" and versions == {"engine_kwargs": {}} and hooks.live() == before
     assert all("apply" not in vars(m.quant_method) for m in model.layers)
 
 

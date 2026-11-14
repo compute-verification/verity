@@ -359,14 +359,15 @@ def analysed(out: Path, host: Host, sessions: list[dict], reg: dict, desc: bytes
              commit: str = VERIFIER, line_by: al.lv.Lean | None = None, boundary: dict | None = None,
              lockdown: dict | None = None) -> dict:
     """`auditor_line`'s analysis of the run, its verifier.json recording a binding of the store to `bound` (none if
-    None), the Lean's `hold` answering `lean` (by default bound at the registration's root), the line held to `model`
-    (`--model-pin`'s), `peer` its --peer (None: the record's), `commit` the commit its verifier ran at, each line
+    None; its own keys over the honest binding's), the Lean's `hold` answering `lean` (by default bound at the
+    registration's root), the line held to `model` (`--model-pin`'s), `peer` its --peer (None: the record's), `commit` the commit its verifier ran at, each line
     computed by the Lean verifier `line_by` (None: line.py alone), its credit held to the certifiers' records
     `boundary` (`read_boundary`'s; None: not checked), and its sessions' NoOutsideCompute grounded by `lockdown`
     (`read_lockdown`'s; None: by nothing)."""
     held = {"regions": [], "expected_root": reg["payload_root"]} if lean is None else lean
-    binding = {} if bound is None else {"binding": {**bound, "payload_root": reg["payload_root"],
-                                                    "expected_root": reg["payload_root"], "bound": True, "lean": held}}
+    binding = {} if bound is None else {"binding": {"payload_root": reg["payload_root"],
+                                                    "expected_root": reg["payload_root"], "bound": True, "lean": held,
+                                                    **bound}}
     (out / "verifier.json").write_text(json.dumps(
         {"registration": reg, "sessions": [{**s, "verdict": verdict} for s in sessions]} | binding))
     return al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger], desc=desc,
@@ -393,7 +394,7 @@ def test_the_line_reads_the_sketch_at_its_outside_factor() -> None:
 
 
 @pytest.mark.parametrize("defer_openings", [True, False])
-def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_lean_pinned_and_bound(
+def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_lean_pinned_and_not_refused_a_binding(
         host, tmp_path, monkeypatch, defer_openings):
     """`auditor_line`'s line of record over a gate run of an honest session and a 1/16 dropper, in a period that
     committed the descriptor of the verifier that ran them, on a host whose opens seal its pins log, which records the
@@ -403,8 +404,10 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
     the Lean verifier's line (`line_by` lean) is line.py's, the run's whole analysis the same. When it doesn't, the
     dropper's window and so the period close incomplete, and the line credits zero. A python verdict, a period not yet
     closed, a verifier the period didn't commit, no pins log (under both *credited*, whose
-    `credited_session` reads the pin first, and *pinned*), a store bound to no model or to another, a binding the Lean
-    didn't decide bound at the registration's root, and no model to bind it to each credit nothing, with the reason."""
+    `credited_session` reads the pin first, and *pinned*), a binding to another model, one the Lean didn't decide
+    bound at the registration's root and one that reads other than bound each credit nothing, with the reason, with
+    a model to hold it to or none. A store bound to no model, or with no model to bind it to, is credited as the bound
+    one is, the line conditional on DeveloperStore with its words."""
     host.seal(monkeypatch, PINS)
     out = tmp_path / "run"
     sessions, reg, desc = gate_run(host, out, "honest,skip:0.0625", defer_openings)
@@ -431,7 +434,8 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
         assert s["credit"]["pinned"] == {"commit": PIN, "seal": pins_seal(PINS), "ok": True, "reason": None}
     assert doc["pins"] == pins_seal(PINS)
     t = honest["T"]
-    assert doc["bound"]["ok"] and doc["bound"]["source"] == "--model-pin"
+    assert doc["bound"]["bound"] and doc["bound"]["source"] == "--model-pin"
+    assert (doc["bound"]["store"], doc["bound"]["premise"], doc["bound"]["refused"]) == ("the model's", None, None)
     assert all(s["credit"]["bound"]["ok"] for s in (honest, dropper))
     if defer_openings:
         assert honest["credit"]["ok"] and zero(doc) == {1: ["not accepted"]}
@@ -442,8 +446,9 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
         assert doc["credit"]["summary"].startswith("the line credits session(s) 0; session(s) 1 earn none")
         shares, filler = (" / ".join(f"{honest['shares_auditor_clock'][b][x]:.4%}" for b in al.line.FORMS)
                           for x in ("time", "filler_time"))
-        assert (f"| 0 | {t} | yes | yes | yes | yes | yes | credited: weights {shares}, filler {filler} |"
+        assert (f"| 0 | {t} | yes | yes | yes | yes | credited: weights {shares}, filler {filler} |"
                 in al.table(doc).splitlines())
+        assert "store bound: yes, to synthetic-bf16" in al.table(doc).splitlines()
         assert honest["error"] == al.session_error(sessions[0]) and "error" not in dropper
         lg = sessions[0]["ledger"]
         assert honest["error"]["total"] == lg["declared"]["memory"][al.ledger.SNAPSHOT]["delta"]
@@ -476,9 +481,9 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
         assert doc["line"][t][al.line.TIME_HELD] == {**dict.fromkeys(al.SHARES, 0.0),
                                                      "exact": dict.fromkeys(al.SHARES, "0")}
         assert doc["line"][t]["credited_sessions"] == [] and doc["line"][t]["error"]["sessions"] == []
-        assert doc["credit"]["summary"].startswith("the line credits zero: no session is credited, complete, accepted, "
-                                                   "pinned and bound; session 0: not complete: period p-1 closed "
-                                                   "incomplete")
+        assert doc["credit"]["summary"].startswith("the line credits zero: no session is credited, complete, accepted "
+                                                   "and pinned under a binding not refused; session 0: not complete: "
+                                                   "period p-1 closed incomplete")
     assert doc["measured"][t]["auditor"][al.line.TIME_HELD]["k"] == 0
     unlogged = line("lean", pins=None)
     assert unlogged["sessions"][0]["credit"]["pinned"]["reason"] == NO_PINS and unlogged["pins"] is None
@@ -492,19 +497,77 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
     for bound, model, why in (
             (None, MODEL, "the verifier bound the store to no model (verifier.py --model ROLE --checkpoint DIR --pin "
                           "FILE), so its payload root is the prover's choice"),
-            ({**MODEL, "name": "llama31-8b"}, MODEL, f"the verifier bound the store to llama31-8b ({'ab' * 8}...), not "
-                                                     f"synthetic-bf16 ({'ab' * 8}...)"),
+            (None, None, "no model to bind the store to: the audit's period signs none and no --model-pin names one"),
             (MODEL, None, "no model to bind the store to: the audit's period signs none and no --model-pin names one")):
         unbound = analysed(out, host, sessions, reg, desc, bound=bound, model=model)
-        assert not unbound["credit"]["credited_sessions"] and unbound["bound"]["reason"] == why
-        assert zero(unbound)[0][-1] == "not bound" and unbound["sessions"][0]["credit"]["bound"]["reason"] == why
+        assert unbound["credit"]["credited_sessions"] == doc["credit"]["credited_sessions"]
+        assert unbound["line"] == doc["line"] and unbound["credit"]["zero"] == doc["credit"]["zero"]
+        assert {k: unbound["bound"][k] for k in ("bound", "store", "premise", "refused", "ok", "reason")} == {
+            "bound": False, "store": "the developer's choice", "premise": "DeveloperStore", "refused": None, "ok": True,
+            "reason": why}
+        assert list(unbound["conditional_on"])[-1] == "DeveloperStore"
+        assert unbound["conditional_on"]["DeveloperStore"].startswith(
+            "the verifier held no checkpoint: the store's bytes are the developer's choice")
+        assert (f"store bound: no, the verifier held no checkpoint: the store's bytes are the developer's choice "
+                f"({why}); credited on the other checks, conditional on DeveloperStore") in al.table(unbound)
+        assert al.line_label(unbound) == f"{al.line_label(doc)}, DeveloperStore"
+    contradicting = {**MODEL, "name": "llama31-8b"}
+    for model in (MODEL, None):
+        other_model = analysed(out, host, sessions, reg, desc, bound=contradicting, model=model)
+        if model is None:
+            assert other_model["bound"]["premise"] == "DeveloperStore" and other_model["bound"]["ok"]
+            continue
+        why = f"the verifier bound the store to llama31-8b ({'ab' * 8}...), not synthetic-bf16 ({'ab' * 8}...)"
+        assert not other_model["credit"]["credited_sessions"] and other_model["bound"]["refused"] == why
+        assert zero(other_model)[0][-1] == "not bound" and other_model["sessions"][0]["credit"]["bound"]["reason"] == why
+        assert other_model["bound"]["premise"] is None and "DeveloperStore" not in other_model["conditional_on"]
     alone = "the Lean verifier didn't hold the hello's payload root to the store (`hold`): the binding is store.py's alone"
-    for lean in ({}, {"refused": "no", "expected_root": reg["payload_root"]}, {"regions": [], "expected_root": "00" * 64}):
-        unheld = analysed(out, host, sessions, reg, desc, lean=lean)
-        assert not unheld["credit"]["credited_sessions"] and unheld["bound"]["reason"] == alone
+    for model in (MODEL, None):
+        for lean in ({}, {"refused": "no", "expected_root": reg["payload_root"]},
+                     {"regions": [], "expected_root": "00" * 64}):
+            unheld = analysed(out, host, sessions, reg, desc, lean=lean, model=model)
+            assert not unheld["credit"]["credited_sessions"] and unheld["bound"]["refused"] == alone
+            assert zero(unheld)[0][-1] == "not bound" and unheld["bound"]["premise"] is None
+        untrue = analysed(out, host, sessions, reg, desc, model=model, bound={**MODEL, "bound": False})
+        assert not untrue["credit"]["credited_sessions"] and zero(untrue)[0][-1] == "not bound"
+        assert untrue["bound"]["refused"] == "the verifier didn't hold the hello's payload root to synthetic-bf16's store"
     with pytest.raises(SystemExit, match="--commit"):
         al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger])
 
+
+
+def test_an_unbound_sessions_line_credits_it_conditional_on_the_developers_store_and_exits_0(host, tmp_path,
+                                                                                           monkeypatch, capsys):
+    """A gate run under `BIND=0` (`gate.sh`): its period signs no model (`period-open` without `--model`) and its
+    verifier bound the store to none. `auditor_line.py` prints a line that credits the session on its four checks,
+    conditional on DeveloperStore, printing that the verifier held no checkpoint, so the store's bytes are the
+    developer's choice, and why (no model is there to bind the store to), with `"model": null, "bound": false,
+    "store": "the developer's choice"` in its JSON, and exits 0."""
+    host.seal(monkeypatch, PINS)
+    out = tmp_path / "run"
+    sessions, reg, _ = gate_run(host, out, "honest", True)
+    assert sessions[0]["accepted"]
+    assert host.call(["period-close", "--name", "p-1"])[0] == 0
+    (out / "verifier.json").write_text(json.dumps({"registration": reg,
+                                                   "sessions": [{**s, "verdict": "lean"} for s in sessions]}))
+    (tmp_path / "pins").write_text("".join(f"{x}\n" for x in PINS))
+    (tmp_path / "main").write_text("".join(f"{x}\n" for x in MAIN))
+    monkeypatch.setattr(al, "verifier_tree", lambda commit, repo: (commit, "ab" * 20))
+    rc = al.main([str(out), "--host-bytes", str(1 << 30), "--pin", host.pin, "--period", "p-1", "--ledger",
+                  str(host.host.ledger), "--commit", VERIFIER, "--line-by", "python", "--pins", str(tmp_path / "pins"),
+                  "--main", str(tmp_path / "main")])
+    printed, err = capsys.readouterr()
+    doc = json.loads(printed)
+    why = "no model to bind the store to: the audit's period signs none and no --model-pin names one"
+    words = "the verifier held no checkpoint: the store's bytes are the developer's choice"
+    assert rc == 0 and (f"auditor_line: bound: no, {words} ({why}); credited on the other checks, conditional on "
+                        "DeveloperStore") in err
+    assert "auditor_line: conditional on NoOutsideCompute, binding-split, DeveloperStore" in err
+    assert {k: doc["bound"][k] for k in ("model", "bound", "store", "premise", "reason")} == {
+        "model": None, "bound": False, "store": "the developer's choice", "premise": "DeveloperStore", "reason": why}
+    assert doc["sessions"][0]["credit"]["bound"]["ok"] and doc["sessions"][0]["credit"]["zero"] == []
+    assert doc["credit"]["credited_sessions"] == [0] and doc["credit"]["summary"] == "the line credits session(s) 0"
+    assert doc["conditional_on"]["DeveloperStore"].startswith(words)
 
 def test_a_session_drawn_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not(
         host, tmp_path, monkeypatch):
@@ -598,9 +661,9 @@ def test_a_session_whose_pin_isnt_a_logged_commit_on_mains_first_parent_line_ear
     t = s["T"]
     assert doc["line"][t]["credited_sessions"] == [] and doc["line"][t][al.line.LINK_CHARGED] == {
         **dict.fromkeys(al.SHARES, 0.0), "exact": dict.fromkeys(al.SHARES, "0")}
-    assert doc["credit"]["summary"] == ("the line credits zero: no session is credited, complete, accepted, pinned "
-                                        f"and bound; session 0: {'; '.join(zero)}")
-    assert f"| 0 | {t} | {cells} | yes | zero |" in al.table(doc).splitlines()
+    assert doc["credit"]["summary"] == ("the line credits zero: no session is credited, complete, accepted and pinned "
+                                        f"under a binding not refused; session 0: {'; '.join(zero)}")
+    assert f"| 0 | {t} | {cells} | zero |" in al.table(doc).splitlines()
 
 
 @pytest.mark.parametrize("peer", ["cpu-node", "auditor-host"], ids=["n1", "host-run"])
@@ -736,7 +799,7 @@ def test_a_session_earns_no_credit_when_its_boundarys_certifiers_show_ingress_be
     assert s["credit"]["boundary"]["ok"] and s["credit"]["boundary"]["windows"] == [0]
     assert doc["boundary"]["checked"] and doc["boundary"]["links"] == ["uplink", "bmc"]
     assert doc["conditional_on"] == al.CONDITIONAL_ON
-    assert any(x.startswith(f"| 0 | {s['T']} | yes | yes | yes | yes | yes | yes | credited: ")
+    assert any(x.startswith(f"| 0 | {s['T']} | yes | yes | yes | yes | yes | credited: ")
                for x in al.table(doc).splitlines())
     relay = b"\x09" * 64
     for name, let_in, kw, why in (
