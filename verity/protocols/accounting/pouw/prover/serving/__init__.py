@@ -24,7 +24,8 @@ import importlib
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-_PROVER = "verity.protocols.accounting.pouw.prover"
+_POUW = "verity.protocols.accounting.pouw"
+_PROVER = f"{_POUW}.prover"
 _SERVING = f"{_PROVER}.serving"
 #: each exported name's module and attribute, loaded when first read
 _LAZY = {
@@ -48,6 +49,70 @@ _LAZY = {
     "served_passes": (f"{_SERVING}.pearl_c.window", "served_passes"),
     "coins_of": (f"{_SERVING}.pearl_c.window", "coins_of"),
     "SERVED_SCHEMA": (f"{_SERVING}.pearl_c.window", "SERVED_SCHEMA"),
+    "ADMISSIONS": (f"{_SERVING}.h1.requests", "ADMISSIONS"),
+    "COIN_DRAW": (f"{_POUW}.verifier.window", "DRAW"),
+    "COIN_ROUND": (f"{_POUW}.verifier.window", "ROUND"),
+    "Challenger": (f"{_POUW}.verifier.coins", "Challenger"),
+    "CoinCommitment": (f"{_POUW}.verifier.coins", "CoinCommitment"),
+    "CoinWindow": (f"{_SERVING}.h1.window", "Window"),
+    "CommitTap": (f"{_SERVING}.h1.commit", "CommitTap"),
+    "CreditTrace": (f"{_SERVING}.credit_gate", "Trace"),
+    "DomainError": (f"{_POUW}.verifier.protocol", "DomainError"),
+    "Epoch": (f"{_POUW}.verifier.audit", "Epoch"),
+    "H1Call": (f"{_SERVING}.h1", "Call"),
+    "H1_CHALLENGER": (f"{_SERVING}.h1", "CHALLENGER"),
+    "H1_SCHEME": (f"{_SERVING}.h1", "SCHEME"),
+    "H1_TILE": (f"{_SERVING}.h1", "TILE"),
+    "H1_WEIGHT_KEY": (f"{_SERVING}.h1", "WEIGHT_KEY"),
+    "HM96": (f"{_POUW}.verifier.audit", "HM96"),
+    "HM96_WEIGHTS": (f"{_POUW}.verifier.audit", "HM96_WEIGHTS"),
+    "LEAD_BACKEND": (f"{_SERVING}.lead", "BACKEND"),
+    "LEAD_SCHEME": (f"{_SERVING}.lead", "SCHEME"),
+    "Matmul": (f"{_POUW}.verifier.protocol", "Matmul"),
+    "NCP_CIRCUIT_SCHEMES": (f"{_PROVER}.circuit", "SCHEMES"),
+    "NCP_SCHEMES": (f"{_PROVER}.schemes", "SCHEMES"),
+    "NO_DRAW_SESSION": (f"{_SERVING}.h1.window", "NO_DRAW_SESSION"),
+    "PEARL_C_CALL_CAPACITY": (f"{_SERVING}.pearl_c", "CALL_CAPACITY"),
+    "PEARL_C_SCHEMES": (f"{_SERVING}.pearl_c", "SCHEMES"),
+    "ROUND0": (f"{_SERVING}.h1.requests", "ROUND0"),
+    "SCHEDULES": (f"{_POUW}.verifier.serving", "SCHEDULES"),
+    "Served": (f"{_SERVING}.h1.served", "Served"),
+    "Shape": (f"{_POUW}.verifier.protocol", "Shape"),
+    "Workload": (f"{_POUW}.verifier.audit", "Workload"),
+    "batch_order": (f"{_SERVING}.h1.requests", "batch_order"),
+    "challenger_address": (f"{_SERVING}.h1.challenger", "address"),
+    "closed_on_error": (f"{_SERVING}.h1.window", "closed_on_error"),
+    "commit_committed": (f"{_SERVING}.h1.commit", "committed"),
+    "commit_host": (f"{_SERVING}.h1.commit", "_host"),
+    "commit_rows": (f"{_POUW}.verifier.audit", "commit_rows"),
+    "commit_site": (f"{_SERVING}.h1.commit", "site"),
+    "draw_challenger": (f"{_POUW}.verifier.window", "draw_challenger"),
+    "finish_window": (f"{_SERVING}.h1.window", "finish"),
+    "h1_weight_root": (f"{_SERVING}.h1", "weight_root"),
+    "hook_steps": (f"{_SERVING}.pearl_c.passes", "hook_steps"),
+    "in_process_draw": (f"{_SERVING}.h1.window", "in_process_draw"),
+    "lead_refusals": (f"{_SERVING}.lead", "refusals"),
+    "live_challenger": (f"{_POUW}.verifier.window", "live_challenger"),
+    "live_epoch_reason": (f"{_POUW}.verifier.window", "live_epoch_reason"),
+    "ncp_scheme": (f"{_PROVER}.schemes", "get"),
+    "new_requests": (f"{_SERVING}.h1.requests", "new_requests"),
+    "numpy_of": (f"{_SERVING}.h1", "numpy_of"),
+    "pearl_c_refusals": (f"{_SERVING}.pearl_c", "refusals"),
+    "pearl_c_salt_key": (f"{_SERVING}.pearl_c", "new_salt_key"),
+    "pearl_c_schedule": (f"{_SERVING}.pearl_c", "schedule_of"),
+    "pearl_c_scheme": (f"{_SERVING}.pearl_c", "scheme_of"),
+    "pearl_c_weight_roots": (f"{_SERVING}.pearl_c", "weight_roots"),
+    "period_reason": (f"{_SERVING}.h1.window", "period_reason"),
+    "period_setting": (f"{_SERVING}.h1.window", "period_setting"),
+    "program_salt": (f"{_SERVING}.h1", "program_salt"),
+    "reserved_of": (f"{_SERVING}.h1.window", "reserved_of"),
+    "salt_session": (f"{_SERVING}.h1.window", "salt_session"),
+    "session_setting": (f"{_SERVING}.h1.window", "session_setting"),
+    "traced_as": (f"{_PROVER}.circuit", "traced_as"),
+    "weight_binding": (f"{_POUW}.verifier.audit", "weight_binding"),
+    "weights_root": (f"{_POUW}.verifier.audit", "weights_root"),
+    "window_refusals": (f"{_SERVING}.h1.window", "refusals"),
+    "zy_host": (f"{_SERVING}.h1.records", "host"),
 }
 
 
@@ -97,6 +162,20 @@ def in_process_coins(window: int) -> Any:
     return Challenger(window, verifier.coins)
 
 
+def verifier_coins(n: int) -> bytes:
+    """``n`` bytes of the Lean verifier's entropy (`verifier.coins`), the in-process challengers' coins."""
+    from verity.protocols.accounting.pouw.verifier import verifier
+
+    return verifier.coins(n)
+
+
+def lead_in_process_certifier() -> Any:
+    """The lead's coin link held in this process (`lead.feed.InProcessCertifier`), whose coins credit nothing."""
+    from verity.protocols.accounting.pouw.prover.serving.lead import feed
+
+    return feed.InProcessCertifier()
+
+
 def ready_verifier() -> Any:
     """The Lean verifier's executable, built if it isn't (`verifier.executable`)."""
     from verity.protocols.accounting.pouw.verifier import verifier
@@ -117,4 +196,4 @@ def __dir__() -> list[str]:
 
 
 __all__ = ["MatmulObserver", "MatmulRun", "QuantizedRows", "in_process_coins", "observe_matmul", "ready_verifier",
-           "run_matmul", *_LAZY]
+           "run_matmul", "verifier_coins", "lead_in_process_certifier", *_LAZY]

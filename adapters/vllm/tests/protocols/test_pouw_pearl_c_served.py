@@ -123,7 +123,9 @@ def _device_run_is_the_stand_in(monkeypatch):
     monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: None))
     monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: ROOTS)
+    monkeypatch.setattr(pouw, "pearl_c_weight_roots", PPD.weight_roots)
     monkeypatch.setattr(PPD, "PearlCDeviceRun", Run)
+    monkeypatch.setattr(pouw, "PearlCDeviceRun", Run)
     monkeypatch.setattr(pouw, "_SALT_KEYS", {})
     monkeypatch.setattr(PHW, "EPOCHS", {})
     RUNS.clear()
@@ -245,6 +247,7 @@ def test_each_install_is_an_epoch_of_its_own_under_a_fresh_hm96_key_and_over_one
         return ROOTS
 
     monkeypatch.setattr(PPD, "weight_roots", weight_roots)
+    monkeypatch.setattr(pouw, "pearl_c_weight_roots", PPD.weight_roots)
     w, model, cs, hosts = weights_root(ROOTS), _model(), [], []
     for k in range(2):
         (tmp_path / str(k)).mkdir()

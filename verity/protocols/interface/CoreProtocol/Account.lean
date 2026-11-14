@@ -267,11 +267,24 @@ inductive Uncertified where
   | refused
   deriving DecidableEq, Repr
 
+/-- A figure an answer was computed at, stated under `key` (a count, or ratio text), standing for the registered figure
+`name`: a capacity, which the answer must have taken at least as large as the registration's (`atLeast`), or a time,
+at most as long. -/
+structure Param where
+  name : String
+  key : Key
+  atLeast : Bool := true
+  deriving DecidableEq, Repr
+
 /-- **The form of one amount a protocol publishes**, and the part of the registered hardware it is about. `metric` names
 the amount among its protocol's. Which of the part's leaves it is about is never the answer's to say: it is what the
 auditor's device its check ran under reaches (`Account.witness`). `series` is the key under which an answer names the
 series its steps are numbered in (a session whose steps are counted from its own start), none when every answer's steps
-are numbered in one series: two answers that name different series cannot be shown disjoint. -/
+are numbered in one series: two answers that name different series cannot be shown disjoint. `held` is the key under
+which an answer names the step of that series at which a moment amount held. `tiers` is the key under which an answer
+names the tiers its memory or read amount is about, by its protocol's labels, which `labels` maps to the Site's tiers
+(`TiersNamed`); none when the part's own list is the tiers. `params` are the figures the answer was computed at
+(`Covers`). -/
 structure Amount where
   metric : String
   part : Part
@@ -286,6 +299,10 @@ structure Amount where
   capacity : Option Key := none
   uncertified : Uncertified
   unpriced : List String := []
+  held : Option Key := none
+  tiers : Option Key := none
+  labels : List (String × Tier) := []
+  params : List Param := []
   deriving DecidableEq, Repr
 
 /-- A form `rows` reads: a part that names a tier where it names tiers, a moment exactly for memory, a share only beside
@@ -296,12 +313,28 @@ def Amount.Formed (m : Amount) : Prop :=
 
 instance Amount.instDecidableFormed (m : Amount) : Decidable m.Formed := by unfold Amount.Formed; infer_instance
 
+/-- A time that names its steps. -/
+def Time.named : Time → Bool
+  | .steps _ _ => true
+  | _ => false
+
+/-- **The form of memory held throughout a span**, which `rows` does not read yet: a memory part that names a tier, held
+at every tick of a span whose steps the answer names, a share only beside a verified amount, and a unit that is not
+empty. -/
+def Amount.FormedHeld (m : Amount) : Prop :=
+  m.part.Formed ∧ m.part.flow = false ∧ m.time.named = true ∧ (m.share.isSome = true → m.side = .verified) ∧
+    0 < m.unit.base
+
+instance Amount.instDecidableFormedHeld (m : Amount) : Decidable m.FormedHeld := by
+  unfold Amount.FormedHeld; infer_instance
+
 end Account
 
 /-- **What a protocol accounts for**: its id; the key under which an accepted answer names the key its check ran under,
 the public key of one of the auditor's devices on the site (`witness`; none for a protocol that needs no such device,
 whose answers are about the whole site); the form of each amount it publishes; and the answers its own rest on
-(`rests`, none for a protocol whose check verifies all it reads). An answer that names no key under `witness`, or a key
+(`rests`, none for a protocol whose check verifies all it reads); and the groups of its amounts' metrics that are
+alternative forms of one bound, never added (`alternatives`, which `rows` does not read yet). An answer that names no key under `witness`, or a key
 that no auditor's device or more than one holds (`Site.holder`), counts for nothing, as does one that rests on an answer
 `Account.rows` was not given, or on one that does not accept. -/
 structure Account where
@@ -309,6 +342,7 @@ structure Account where
   witness : Option Account.Key
   amounts : List Account.Amount
   rests : Option Account.Rests := none
+  alternatives : List (List String) := []
   deriving DecidableEq, Repr
 
 namespace Account
@@ -360,6 +394,57 @@ private def sharesOf : Json → Option (List (Option Ratio))
 private def countOf : Json → Option Nat
   | .arr xs => some xs.size
   | j => natOf j
+
+/-- The tiers an answer names under an amount's `tiers` key, each label mapped through `labels`: none where it names
+none, or names a label `labels` does not map. -/
+def Amount.tiersOf (m : Amount) (a : Answer) : Option (List Tier) :=
+  m.tiers.bind fun k => (k.read a).bind fun j => j.getArr?.toOption.bind fun xs =>
+    xs.toList.mapM fun x => x.getStr?.toOption.bind fun s => m.labels.lookup s
+
+/-- **The tiers an answer names**, which `rows` does not read yet: where the amount has a `tiers` key, the answer names
+under it at least one tier, each by a label `labels` maps, and each among the part's own tiers. -/
+def Amount.TiersNamed (m : Amount) (a : Answer) : Prop :=
+  m.tiers = none ∨ ∃ ts, m.tiersOf a = some ts ∧ ts ≠ [] ∧ ∀ t ∈ ts, t ∈ m.part.tiers.getD []
+
+/-- A figure under a key: ratio text, or a count. -/
+private def figureOf (j : Json) : Option Ratio := ratioOf j <|> (natOf j).map Ratio.ofNat
+
+/-- Whether the answer states the figure `p` under its key, and covers the registration's figure for it (`registered`,
+by name): at least as large for a capacity, at most as long for a time. -/
+def Param.covered (p : Param) (registered : String → Option Ratio) (a : Answer) : Bool :=
+  match registered p.name, (p.key.read a).bind figureOf with
+  | some r, some v => if p.atLeast then r.le v else v.le r
+  | _, _ => false
+
+/-- **The figures an answer was computed at cover the registration's**, which `rows` does not read yet: the
+registration holds each of `params`, and the answer states each and covers it. A line computed at a capacity below the
+registered one overstates. -/
+def Amount.Covers (m : Amount) (registered : String → Option Ratio) (a : Answer) : Prop :=
+  ∀ p ∈ m.params, p.covered registered a = true
+
+instance Amount.instDecidableCovers (m : Amount) (registered : String → Option Ratio) (a : Answer) :
+    Decidable (m.Covers registered a) := by
+  unfold Amount.Covers; infer_instance
+
+/-- **Every error an answer states is exact**: ratio text under each amount's error key. A float, which no ratio
+reads exactly, is refused. -/
+def ErrorsExact (c : Account) (a : Answer) : Prop := ∀ m ∈ c.amounts, ((m.error.read a).bind ratioOf).isSome
+
+instance instDecidableErrorsExact (c : Account) (a : Answer) : Decidable (c.ErrorsExact a) := by
+  unfold ErrorsExact; infer_instance
+
+/-- **Alternatives are never added**: each group of `alternatives` names two or more of the account's metrics, and no
+metric is in two groups. -/
+def AlternativesFormed (c : Account) : Prop :=
+  (∀ g ∈ c.alternatives, 2 ≤ g.length ∧ ∀ n ∈ g, n ∈ c.amounts.map (·.metric)) ∧ c.alternatives.flatten.Nodup
+
+instance instDecidableAlternativesFormed (c : Account) : Decidable c.AlternativesFormed := by
+  unfold AlternativesFormed; infer_instance
+
+/-- **An answer that stands for a line of record**, which a protocol's verifier gives outside `Core.Protocol`: accepted,
+under the protocol's id, its published output the line itself, with no profile. -/
+def OfLine (protocol : String) (line : Json) (a : Answer) : Prop :=
+  a.protocol = protocol ∧ a.verdict = .accept ∧ a.published = some line ∧ a.profile = none
 
 /-- What a share `e` leaves of `n`, rounded down: nothing where no share is established. -/
 private def kept (n : Nat) : Option Ratio → Nat

@@ -15,7 +15,7 @@ What code outside this directory may use. Everything else here is internal.
 
 | Entry point | What it is |
 |---|---|
-| `uv run tools/verity/check/suites.py benchmarks/word_codec` | The suite, on the CPU: the references against their vectors and the twins against the references. It writes no result. |
+| `uv run tools/check/suites.py benchmarks/word_codec` | The suite, on the CPU: the references against their vectors and the twins against the references. It writes no result. |
 | `bash benchmarks/word_codec/run.sh`, with `KV_FIELDS`, `KV_SCRIPT` and `KV_ARGS` as its header lists them | `kv.cu` built at each width, its tests, then its benchmark on one GPU (`kv_bench.py` unless `KV_SCRIPT` names another). It writes the gates, timings and profiles as JSON to `$RESEARCH_RUN_DIR/out`. |
 
 Nothing outside `benchmarks/` reads this directory by its path: `kv.cu`, `kv.py` and `kv_bench.py` are PoUB's prover's
@@ -26,7 +26,7 @@ Nothing outside `benchmarks/` reads this directory by its path: `kv.cu`, `kv.py`
 `benchmarks/codec_tensor/bench.py` loads `codec.py`. The `codec_tensor` and `vllm_encoded` suites read its Python as
 inputs. Decided by `rg word_codec` over `verity/`, `benchmarks/`, `demos/`, `tests/` and `adapters/`.
 
-**Run:** `uv run tools/verity/check/suites.py benchmarks/word_codec` checks the references against their vectors
+**Run:** `uv run tools/check/suites.py benchmarks/word_codec` checks the references against their vectors
 (`tests/vectors.json`, `tests/wide_vectors.json` and the prover's `kv_vectors.json`) and the twins against the references, on the
 CPU. `run.sh` is `kv.cu`'s GPU benchmark.
 
