@@ -1,6 +1,6 @@
 module
 
-public import Flock.Firewall.Drive
+public import Flock.ZkServer.Drive
 public import Proofs.Flock.Claims.Complete.Zk.MaskRank
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -62,7 +62,7 @@ all of `GF(2^128)^k`):
 namespace Claims.ZKServer.Rank
 
 open _root_.Flock (F128)
-open _root_.Flock.Firewall.Frame (MaskSlot maskRank lowBit)
+open _root_.Flock.ZkServer.Frame (MaskSlot maskRank lowBit)
 open FlockLevel3 (GF128)
 open FlockComplete.MaskRank (maskRankOk weights maskRankOk_iff)
 
@@ -420,8 +420,8 @@ theorem flatMap_pair (g h : Array F128 → UInt64) :
     simpa using this
 
 theorem eqWord_frame (p : Array F128) (x : ℕ) :
-    _root_.Flock.Firewall.Frame.eqWord p x = FlockSoundness.Discharge.Composed.eqWord p.toList x := by
-  unfold _root_.Flock.Firewall.Frame.eqWord FlockSoundness.Discharge.Composed.eqWord
+    _root_.Flock.ZkServer.Frame.eqWord p x = FlockSoundness.Discharge.Composed.eqWord p.toList x := by
+  unfold _root_.Flock.ZkServer.Frame.eqWord FlockSoundness.Discharge.Composed.eqWord
   simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range', List.forIn_pure_yield_eq_foldl, bind_pure,
     Array.length_toList, Array.getElem!_toList]
   have hs : [:p.size].size = p.size := by simp [Std.Legacy.Range.size]
@@ -431,15 +431,15 @@ theorem eqWord_frame (p : Array F128) (x : ℕ) :
 /-- **The frame's row for the word `x` carries the weight vector at `x`.** -/
 theorem vecOf_row0 (points : Array (Array F128)) (x : ℕ) :
     vecOf (points.map Array.toList).size
-        (points.foldl (fun acc p => (acc.push (_root_.Flock.Firewall.Frame.eqWord p x).lo).push
-          (_root_.Flock.Firewall.Frame.eqWord p x).hi) #[]) =
+        (points.foldl (fun acc p => (acc.push (_root_.Flock.ZkServer.Frame.eqWord p x).lo).push
+          (_root_.Flock.ZkServer.Frame.eqWord p x).hi) #[]) =
       weights (points.map Array.toList) x := by
   funext i
   have hi : i.val < points.size := by have := i.isLt; simpa using this
-  have hrow := row0_toList (fun p => _root_.Flock.Firewall.Frame.eqWord p x) points.toList #[]
+  have hrow := row0_toList (fun p => _root_.Flock.ZkServer.Frame.eqWord p x) points.toList #[]
   rw [Array.foldl_toList] at hrow
-  obtain ⟨h0, h1⟩ := flatMap_pair (fun p => (_root_.Flock.Firewall.Frame.eqWord p x).lo)
-    (fun p => (_root_.Flock.Firewall.Frame.eqWord p x).hi) points.toList i.val (by simpa using hi)
+  obtain ⟨h0, h1⟩ := flatMap_pair (fun p => (_root_.Flock.ZkServer.Frame.eqWord p x).lo)
+    (fun p => (_root_.Flock.ZkServer.Frame.eqWord p x).hi) points.toList i.val (by simpa using hi)
   simp only [vecOf, weights]
   rw [← Array.getElem!_toList, ← Array.getElem!_toList (i := 2 * i.val + 1), hrow]
   simp only [List.nil_append]
@@ -465,8 +465,8 @@ theorem maskRankOk_of_maskRank (points : Array (Array F128)) (m : MaskSlot) (kLo
     AddSubgroup.closure (Set.range fun j : Fin words.length => weights pts words[j])
   show W = ⊤
   have hrow0 : ∀ i < m.blocks * m.n, vecOf pts.size
-      (points.foldl (fun acc p => (acc.push (_root_.Flock.Firewall.Frame.eqWord p (m.word kLog i)).lo).push
-        (_root_.Flock.Firewall.Frame.eqWord p (m.word kLog i)).hi) #[]) ∈ W := by
+      (points.foldl (fun acc p => (acc.push (_root_.Flock.ZkServer.Frame.eqWord p (m.word kLog i)).lo).push
+        (_root_.Flock.ZkServer.Frame.eqWord p (m.word kLog i)).hi) #[]) ∈ W := by
     intro i hi
     have hv := vecOf_row0 points (m.word kLog i)
     rw [hpts] at hv
@@ -548,9 +548,9 @@ theorem words_split (B N K w0 : ℕ) (hN : 0 < N) :
 
 /-- **The statement's mask slot's words are its mask words**: the slot `Drive.maskSlot` takes, word by word, is
 `Composed.maskWordsOf`. -/
-theorem words_maskSlot {st : _root_.Flock.Stmt} {m : MaskSlot} (h : _root_.Flock.Firewall.Drive.maskSlot st = .ok m) :
+theorem words_maskSlot {st : _root_.Flock.Stmt} {m : MaskSlot} (h : _root_.Flock.ZkServer.Drive.maskSlot st = .ok m) :
     (List.range (m.blocks * m.n)).map (m.word st.c.kLog) = FlockSoundness.Discharge.Composed.maskWordsOf st := by
-  unfold _root_.Flock.Firewall.Drive.maskSlot at h
+  unfold _root_.Flock.ZkServer.Drive.maskSlot at h
   unfold FlockSoundness.Discharge.Composed.maskWordsOf
   rw [Array.find?_toList]
   split at h

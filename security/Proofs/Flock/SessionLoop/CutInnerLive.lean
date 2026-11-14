@@ -225,7 +225,7 @@ theorem repCut_inner_stop (coin : ℕ → ℕ → F128) {resp : ℕ → Claims.M
     ∃ L, ((repCut (asksCut coin n) (Hashes.ofSha512 Sha512.hash) st sch rep dom cm0 extras ic src prior
       words).run (Transcript.init #[] dom)).go l = (.error "past the openings", L) ∧
       L[n]! = innerCutBody (src.masked (Zk.PadLayout.new st.m st.kLog sch.k0).fc) src
-        _root_.Flock.Firewall.Session.INNER_CONS i := by
+        _root_.Flock.ZkServer.Session.INNER_CONS i := by
   have hm : 14 ≤ st.m := by omega
   have hIA : CutEq.innerAt l.size st sch extras = l.size + 3 + (st.m - 6) + (3 + (st.fold.kLog - 6)) +
       (2 + extras.size) + 1 + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) := rfl
@@ -250,7 +250,7 @@ theorem repCut_inner_stop (coin : ℕ → ℕ → F128) {resp : ℕ → Claims.M
       rw [Array.size_extract, Replay.pushes_size]
       omega)
   obtain ⟨lgc, hlgc⟩ := ligeritoConstraints_ok (lay := Zk.PadLayout.new st.m st.kLog sch.k0) (msgs := zl) hood hch hmsg
-  have hPF := _root_.Flock.Firewall.Finish.piopCut_fc_go _ st _ src src.masked _ _ extras prior words
+  have hPF := _root_.Flock.ZkServer.Finish.piopCut_fc_go _ st _ src src.masked _ _ extras prior words
     (by exact Nat.le_refl _) (fun _ _ => rfl) hP
   have hfc : zp.finalC = src.masked (Zk.PadLayout.new st.m st.kLog sch.k0).fc := by
     have e := hP.symm.trans hPF
@@ -259,13 +259,13 @@ theorem repCut_inner_stop (coin : ℕ → ℕ → F128) {resp : ℕ → Claims.M
     injection e2 with e3
     injection e3 with e4
     exact congrArg ZerocheckProof.finalC e4
-  have ht₄ := _root_.Flock.Firewall.Finish.ligeritoCut_end coin n st.merkle sch T cm0 (basisVals sws (st.m - 7))
+  have ht₄ := _root_.Flock.ZkServer.Finish.ligeritoCut_end coin n st.merkle sch T cm0 (basisVals sws (st.m - 7))
     (Zk.PadLayout.new st.m st.kLog sch.k0) src t₃ l₃ _ t₄ l₄ h₄
   have hcs3 : rp.cons.size = 3 := FlockSoundness.Discharge.ZkExec.replay_cons_size _ _ _ _ hq
   obtain ⟨L, hL, hLn⟩ := innerCut_stop coin (Zk.PadLayout.new st.m st.kLog sch.k0) ic zp.finalC src
     (rp.cons ++ #[("ring switch ab", rp.abValue.addConst (Zk.claimCheck rp.claims[0]! ss[0]!)),
       ("ring switch c", rp.cValue.addConst (Zk.claimCheck rp.claims[1]! ss[1]!))] ++ lgc) ht₄ l₄ hi
-    (N := _root_.Flock.Firewall.Session.INNER_CONS)
+    (N := _root_.Flock.ZkServer.Session.INNER_CONS)
     (by
       rw [Array.size_append, Array.size_append, hcs3, FlockSoundness.Discharge.ZkExec.ligeritoConstraints_size hlgc]
       rfl)
@@ -280,11 +280,11 @@ theorem repCut_inner_stop (coin : ℕ → ℕ → F128) {resp : ℕ → Claims.M
   try dsimp only
   rw [bind_go h₄]
   try dsimp only
-  rw [bind_go (_root_.Flock.Firewall.Finish.get_run_go _ _)]
+  rw [bind_go (_root_.Flock.ZkServer.Finish.get_run_go _ _)]
   try dsimp only
-  rw [bind_go (_root_.Flock.Firewall.Finish.liftV_run_go hq _ _)]
+  rw [bind_go (_root_.Flock.ZkServer.Finish.liftV_run_go hq _ _)]
   try dsimp only
-  rw [bind_go (_root_.Flock.Firewall.Finish.liftV_run_go hlgc _ _)]
+  rw [bind_go (_root_.Flock.ZkServer.Finish.liftV_run_go hlgc _ _)]
   try dsimp only
   exact FlockComplete.bind_go_err hL
 
@@ -318,7 +318,7 @@ theorem repCut_inner_stop {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDep
       L[repSlot x (2 * j.val + r.val) (innerOff i)]! = FlockComplete.CutFree.innerCutBody
         (src.masked (_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
           (FlockDeploy.tabsOf (stsOf x))[j.val]!.kLog (zkTab x j).sch.k0).fc) src
-        _root_.Flock.Firewall.Session.INNER_CONS i := by
+        _root_.Flock.ZkServer.Session.INNER_CONS i := by
   have hj : j.val < (stsOf x).size := lt_of_jOf j
   have hr := r.isLt
   obtain ⟨-, -, -, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
@@ -443,7 +443,7 @@ theorem runCut_innerBody {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDepl
       FlockComplete.CutFree.innerCutBody
         (((src j.val).rep r.val).masked (_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (stsOf x))[j.val]!.m
           (FlockDeploy.tabsOf (stsOf x))[j.val]!.kLog (zkTab x j).sch.k0).fc) ((src j.val).rep r.val)
-        _root_.Flock.Firewall.Session.INNER_CONS i := by
+        _root_.Flock.ZkServer.Session.INNER_CONS i := by
   have hjs : j.val < (stsOf x).size := lt_of_jOf j
   have hr2 := r.isLt
   have hz₁ : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =

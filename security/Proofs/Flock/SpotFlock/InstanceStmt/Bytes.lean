@@ -28,7 +28,7 @@ are the only hashes of the file; nothing here asks the kernel to build the fixed
 
 namespace SpotFlock.InstanceStmt
 
-open Flock Flock.Firewall RecDeploy.VStarNets
+open Flock Flock.ZkServer RecDeploy.VStarNets
 open Lean (Json)
 
 /-- **What a run fixes in its reference statement**: the input set its session reads (`set`) and its ports' bindings to

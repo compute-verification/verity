@@ -29,7 +29,7 @@ takes of the loop beyond the code is named, each an obligation:
 `SessionLoopZKDeployed` is `SessionLoopZKAt Masked.dataE` at the loop's own link and `Finish` (`LeanRelease.ofLoopLink`:
 `withLink`, the roots of the level 0 the loop drew, `Loop.linkOf`, as its `Commit` carries them; `withFiles`, the record
 and proof files of the loop's `Finish`, `Loop.filesE`). In place of `LinkRoundEq` it
-takes the masked verifier's scope (`Claims.Flock.Scope`) and `Loop.Src` (`flock-firewall-os-src`): every input the loop
+takes the masked verifier's scope (`Claims.Flock.Scope`) and `Loop.Src` (`flock-zk-server-os-src`): every input the loop
 takes from its host and operating system is the tape's, its level-0 inputs (`Loop.Level0Src`) and its rep samples
 (`Loop.RepSrc`). `FinishIs` it does not take: there it is proved (`Loop.finishIsOn`), from the scope, `Loop.Src`,
 `LoopInnerRound0`, `LiveRoundEq` and `SwCausalOn`.
@@ -72,7 +72,7 @@ namespace Claims.ZKServer
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
 open _root_.Flock.Transcript (header)
-open _root_.Flock.Firewall.Frame (Cfg Masker labelFrame)
+open _root_.Flock.ZkServer.Frame (Cfg Masker labelFrame)
 open FlockSoundness.Discharge
 
 set_option synthInstance.maxSize 100000
@@ -83,21 +83,21 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as i
 salts for levels ≥ 1 (`Frames.placeOf` on the loop's `Level0`, which `Level0.draw` drew on the host's packed witness and
 the operating system's bytes, and `Level0.commit` binds at the table's `m`; `Finish.serveLoop`'s salts). -/
 def Loop.realOf {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray))
-    (x : Msg) (w : Flock.Wit) (ρ : R) (k : ℕ) : V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray) :=
+    (x : Msg) (w : Flock.Wit) (ρ : R) (k : ℕ) : V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray) :=
   match FlockDeploy.setupOf true x with
   | some (_, _, sts) => do
     let (g, d, hi) ← src x w ρ k
-    let l ← _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.wideLeaf sts[k / 2]!.m g d
-    let t ← _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit sts[k / 2]!) l
+    let l ← _root_.Flock.ZkServer.Level0.ofDraws sts[k / 2]!.wideLeaf sts[k / 2]!.m g d
+    let t ← _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit sts[k / 2]!) l
     pure (t, hi)
   | none => .error "no session"
 
 /-- **The level 0 the loop samples for table `j`** at the source `src`: `Level0.ofDraws` at table `j`'s `m` on the packed
 witness and sampled bytes `src` gives rep stream `2j` (one level 0 a table, as `Loop.realOf` reads it). -/
 def Loop.level0Of {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray))
-    (x : Msg) (w : Flock.Wit) (ρ : R) (sts : Array Stmt) (j : ℕ) : V _root_.Flock.Firewall.Level0.Level0 := do
+    (x : Msg) (w : Flock.Wit) (ρ : R) (sts : Array Stmt) (j : ℕ) : V _root_.Flock.ZkServer.Level0.Level0 := do
   let (g, d, _) ← src x w ρ (2 * j)
-  _root_.Flock.Firewall.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d
+  _root_.Flock.ZkServer.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d
 
 /-- **The loop's own link** at the source `src`: each table's sampled level-0 root, with no public words, as the loop's
 `Commit` carries them (`Session.relay`'s `commitFrame` of the roots `Level0.ofSession` bound); the empty root where the
@@ -140,10 +140,10 @@ or coins it refuses. -/
 def maskedOf (c : Cfg) : Masker → List (ByteArray × ℕ × Array F128) → Array F128
   | _, [] => #[]
   | s, (r, n, cs) :: rest =>
-    match _root_.Flock.Firewall.Frame.roundFree c s r n with
+    match _root_.Flock.ZkServer.Frame.roundFree c s r n with
     | .error _ => #[]
     | .ok (_, s', free) =>
-      let here := free.map fun o => (_root_.Flock.Firewall.Frame.words r o 1)[0]!
+      let here := free.map fun o => (_root_.Flock.ZkServer.Frame.words r o 1)[0]!
       match s'.answer c cs with
       | .ok s'' => here ++ maskedOf c s'' rest
       | .error _ => here
@@ -151,8 +151,8 @@ def maskedOf (c : Cfg) : Masker → List (ByteArray × ℕ × Array F128) → Ar
 /-- `final_c'`, the masked `final_c` the inner proof's round 0 `r` carries between its headers: the 16 bytes past its
 label frame and its observe's header (`LoopInnerRound0`'s shape). -/
 def finalCOf (r : ByteArray) : F128 :=
-  let o := (_root_.Flock.Firewall.Frame.labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).size + 16
-  (_root_.Flock.Firewall.Frame.words r o 1)[0]!
+  let o := (_root_.Flock.ZkServer.Frame.labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).size + 16
+  (_root_.Flock.ZkServer.Frame.words r o 1)[0]!
 
 /-- **The values a rep's frame took, by pad index**, at its configuration `c`: at the `p`-th pad of the absorbed order,
 the `p`-th masked value plus that pad; at `final_c`'s, `final_c'` plus its pad; `0` elsewhere (`Frames.ownOf`'s array of
@@ -167,17 +167,17 @@ def valsOf (c : Cfg) (masked : Array F128) (fc : F128) : Array F128 :=
 (`valsOf` of the rounds it released, `final_c'` from the inner proof's round 0, the stream's round past its scheduled
 ones), the extra claims at the session's link points, `hi`, and the coins the stream answered each round. -/
 noncomputable def repInOf (x : Msg) (h : List (Msg × Msg)) (spec : SessionSpec) (sts : Array Stmt) (k : ℕ)
-    (draws : ByteArray) (hi : Array ByteArray) : V _root_.Flock.Firewall.Finish.RepIn := do
+    (draws : ByteArray) (hi : Array ByteArray) : V _root_.Flock.ZkServer.Finish.RepIn := do
   let st := sts[k / 2]!
-  let (lay, _) ← _root_.Flock.Firewall.Drive.start st
-  let d := _root_.Flock.Firewall.Frame.Draws.ofBytes lay draws
+  let (lay, _) ← _root_.Flock.ZkServer.Drive.start st
+  let d := _root_.Flock.ZkServer.Frame.Draws.ofBytes lay draws
   let c := Cfg.ofDraws lay d none
   let rounds := seenRounds x h (roundsOf spec sts) k
-  let nSched := rounds.length - _root_.Flock.Firewall.Frame.INNER_ROUNDS
+  let nSched := rounds.length - _root_.Flock.ZkServer.Frame.INNER_ROUNDS
   let fc := finalCOf ((rounds.getD nSched (.empty, 0, #[])).1)
   let link := wordsAt x (h.tail.map fun p => CoinLayer.rd p.2) 0
   return { draws := d, vals := valsOf c (maskedOf c {} rounds) fc,
-           xs := _root_.Flock.Firewall.Drive.extras st (_root_.Flock.Firewall.Drive.linkPoints st link),
+           xs := _root_.Flock.ZkServer.Drive.extras st (_root_.Flock.ZkServer.Drive.linkPoints st link),
            hiSalts := hi, coins := (rounds.map fun r => r.2.2).toArray }
 
 /-- **The loop's proof files** on the history `h` at `x`, the witness `w` and the tape `ρ`, at the level-0 source `src` and
@@ -189,7 +189,7 @@ noncomputable def proofsOf {R : Type} (src : Msg → Flock.Wit → R → ℕ →
   (Array.range spec.repStreams.size).mapM fun k => do
     let (t, hi) ← realOf src x w ρ k
     let q ← repInOf x h spec sts k (draws ρ k) hi
-    _root_.Flock.Firewall.Finish.proofFile t (k % 2) (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8 q
+    _root_.Flock.ZkServer.Finish.proofFile t (k % 2) (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8 q
 
 /-- **The roots the loop's `Commit` carries**: each table's sampled level-0 root (`level0Of`), the empty one where the
 sample is refused. -/
@@ -212,7 +212,7 @@ noncomputable def streamOf (x : Msg) (h : List (Msg × Msg)) (spec : SessionSpec
   ((seenRounds x h (roundsOf spec sts) k).mapIdx fun j (b, n, cs) =>
     ({ n, sha := .empty, coins := cs,
        bytes := some (if j = 0 then
-         _root_.Flock.Firewall.Frames.domainFrame (spec.domain spec.tables[k / 2]! (k % 2)) ++ b else b) } :
+         _root_.Flock.ZkServer.Frames.domainFrame (spec.domain spec.tables[k / 2]! (k % 2)) ++ b else b) } :
       _root_.Flock.Round)).toArray
 
 /-- **The record the auditor assembles** on the history `h` at `x`, the witness `w` and the tape `ρ`, at the level-0 source
@@ -269,7 +269,7 @@ noncomputable def LeanRelease.ofLoopLink
       ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)) :
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)) :
     LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand) :=
   LeanRelease.ofLoop Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) real
@@ -277,9 +277,9 @@ noncomputable def LeanRelease.ofLoopLink
 /-- **The level 0 the loop samples for rep stream `k`** at the source `src`: `Level0.ofDraws` at table `k / 2`'s `m` on the
 packed witness and sampled bytes `src` gives rep stream `k` (`Loop.realOf`'s). -/
 def Loop.level0At {R : Type} (src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray))
-    (x : Msg) (w : Flock.Wit) (ρ : R) (sts : Array Stmt) (k : ℕ) : V _root_.Flock.Firewall.Level0.Level0 := do
+    (x : Msg) (w : Flock.Wit) (ρ : R) (sts : Array Stmt) (k : ℕ) : V _root_.Flock.ZkServer.Level0.Level0 := do
   let (g, d, _) ← src x w ρ k
-  _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.wideLeaf sts[k / 2]!.m g d
+  _root_.Flock.ZkServer.Level0.ofDraws sts[k / 2]!.wideLeaf sts[k / 2]!.m g d
 
 /-- **The link's level 0 is the tape's** at `x`: at every nonce and tape, table `j`'s sampled level 0 (`Loop.level0Of`) has
 `Masked.linkIn`'s inputs. `Loop.Src`'s level-0 half gives it (`Loop.Src.linkLevel0`). -/
@@ -322,20 +322,20 @@ def Loop.RepSrc
     (x : Msg) (w : Flock.Wit) : Prop :=
   ∀ (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce) (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape)
     (j : Fin (Masked.jOf x)) (r : Fin 2),
-    (L₀.draws (ν, t) (2 * j.val + r.val)).size = _root_.Flock.Firewall.Frame.drawBytes (Masked.layE x j) ∧
+    (L₀.draws (ν, t) (2 * j.val + r.val)).size = _root_.Flock.ZkServer.Frame.drawBytes (Masked.layE x j) ∧
     FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j) =
-      drawsPads (_root_.Flock.Firewall.Frame.Draws.ofBytes (Masked.layE x j) (L₀.draws (ν, t) (2 * j.val + r.val))) ∧
-    (∀ q < _root_.Flock.Firewall.Frame.codeLen (Masked.layE x j),
+      drawsPads (_root_.Flock.ZkServer.Frame.Draws.ofBytes (Masked.layE x j) (L₀.draws (ν, t) (2 * j.val + r.val))) ∧
+    (∀ q < _root_.Flock.ZkServer.Frame.codeLen (Masked.layE x j),
       FlockComplete.fitBytes 192 ((Masked.UE.tapeZk t).innerSalt j.val r.val q) =
-        (_root_.Flock.Firewall.Frame.Draws.ofBytes (Masked.layE x j) (L₀.draws (ν, t) (2 * j.val + r.val))).salts.extract
-          (_root_.Flock.Firewall.Frame.SALT * q) (_root_.Flock.Firewall.Frame.SALT * q + _root_.Flock.Firewall.Frame.SALT)) ∧
+        (_root_.Flock.ZkServer.Frame.Draws.ofBytes (Masked.layE x j) (L₀.draws (ν, t) (2 * j.val + r.val))).salts.extract
+          (_root_.Flock.ZkServer.Frame.SALT * q) (_root_.Flock.ZkServer.Frame.SALT * q + _root_.Flock.ZkServer.Frame.SALT)) ∧
     ∀ (g : Array F128) (d : ByteArray) (hi : Array ByteArray),
       src x w (ν, t) (2 * j.val + r.val) = .ok (g, d, hi) →
       ∀ l, 1 ≤ l → l < (Masked.zkTab x j).sch.levels.size →
         ∀ p < 2 ^ ((Masked.zkTab x j).sch.levels.getD l default).d,
-          _root_.Flock.Firewall.Finish.saltAt (hi.getD (l - 1) ByteArray.empty) p = (Masked.UE.tapeZk t).salt j.val r.val l p
+          _root_.Flock.ZkServer.Finish.saltAt (hi.getD (l - 1) ByteArray.empty) p = (Masked.UE.tapeZk t).salt j.val r.val l p
 
-/-- `flock-firewall-os-src` (a trust in the host's inputs and in the operating system's bytes, which the loop reads and
+/-- `flock-zk-server-os-src` (a trust in the host's inputs and in the operating system's bytes, which the loop reads and
 does not check). **Every input the session loop takes from its host and its operating system is the tape's** at `x`, in
 two halves: level 0's inputs at its sizes (`Loop.Level0Src`: the host's packed witness and the bytes `Level0.draw`
 reads) and the rep samples (`Loop.RepSrc`: the bytes `Frames.startRep` and `Finish.serve` read for each rep). Why it is
@@ -361,15 +361,15 @@ def _root_.Flock.Guarantees.LoopInnerRound0 (T : CoinLayer.TableData)
       ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg) (w : Flock.Wit) : Prop :=
   ∀ (ρ : (CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand)
     (h : List (Msg × Msg)) (vals : _) (s0 : _) (spec : SessionSpec) (sts : Array Stmt) (q k j : ℕ)
-    (tr : _root_.Flock.Firewall.Finish.Tab) (hr : Array ByteArray) (rsched : Array (ByteArray × ℕ)),
+    (tr : _root_.Flock.ZkServer.Finish.Tab) (hr : Array ByteArray) (rsched : Array (ByteArray × ℕ)),
     FlockDeploy.setupOf true x = some (s0, spec, sts) → h.length = q + 2 →
     CoinLayer.locate (Loop.roundsOf spec sts) 0 q = (k, j + 1) → real x w ρ k = .ok (tr, hr) →
     Loop.schedSoFar tr (k % 2) (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8
-      (_root_.Flock.Firewall.Drive.extras sts[k / 2]! (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]!
+      (_root_.Flock.ZkServer.Drive.extras sts[k / 2]! (_root_.Flock.ZkServer.Drive.linkPoints sts[k / 2]!
         (Loop.wordsAt x (h.tail.map fun p => CoinLayer.rd p.2) 0))) hr
       ((Array.range (j + 1)).map
         fun i => Loop.wordsAt x (h.tail.map fun p => CoinLayer.rd p.2) (q - (j + 1) + i + 1)) = .ok rsched →
@@ -405,7 +405,7 @@ def _root_.Flock.Guarantees.SessionLoopZKAt (T : CoinLayer.TableData) : Prop :=
         ℕ → V (Array F128 × ByteArray × Array ByteArray))
       (real : Msg → Flock.Wit →
         (CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand →
-        ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)),
+        ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)),
     real = Loop.realOf src →
     ∀ (wk : (LeanRelease.ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit),
     Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w → Loop.Serves x →
@@ -480,7 +480,7 @@ def _root_.Flock.Guarantees.SessionLoopZKDeployed : Prop :=
         ℕ → V (Array F128 × ByteArray × Array ByteArray))
       (real : Msg → Flock.Wit →
         (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
-        ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)),
+        ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)),
     real = Loop.realOf src →
     ∀ (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit),
     Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w → Loop.Serves x →

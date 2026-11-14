@@ -180,7 +180,7 @@ impl LeafSalts {
         s
     }
 
-    /// The level-0 tree's salts sampled elsewhere (the Lean session loop's, `Flock.Firewall.Level0`), before anything reads them:
+    /// The level-0 tree's salts sampled elsewhere (the Lean session loop's, `Flock.ZkServer.Level0`), before anything reads them:
     /// every later [`Self::level0`] answers these bytes.
     pub fn set_level0(&self, s: impl Into<std::sync::Arc<Vec<u8>>>) -> Result<(), String> {
         let mut k = self.kept.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -197,8 +197,8 @@ impl LeafSalts {
         fill_salts(self.key.as_deref(), id, b)
     }
 
-    /// The salts of the next trees from here, sampled elsewhere (the Lean finish's for a firewalled rep's levels ≥ 1,
-    /// `Flock.Firewall.Finish.hiSaltsOf`), in id order, each `leaves` × 192 bytes: the first sample of each such tree at that
+    /// The salts of the next trees from here, sampled elsewhere (the Lean finish's for a zk_served rep's levels ≥ 1,
+    /// `Flock.ZkServer.Finish.hiSaltsOf`), in id order, each `leaves` × 192 bytes: the first sample of each such tree at that
     /// size takes them in place of its own read.
     pub fn preset(&self, trees: Vec<Vec<u8>>) -> Result<(), String> {
         let mut k = self.kept.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -311,7 +311,7 @@ impl Drop for SaltsAhead {
 }
 
 /// Where a proving build's samples read the OS's bytes when not from `getrandom` itself: under the outer ZK server, the Lean
-/// server's `flock-firewall tap` (`firewall::lean_tap`, PROTOCOL.md §10.4), set once before the process's first sample.
+/// server's `flock-zk-server tap` (`zk_server::lean_tap`, PROTOCOL.md §10.4), set once before the process's first sample.
 static OS_SOURCE: std::sync::OnceLock<std::sync::Mutex<Box<dyn FnMut(&mut [u8]) + Send>>> = std::sync::OnceLock::new();
 
 /// Makes `source` the OS bytes of every later sample of this process; `Err` when a source is already set.

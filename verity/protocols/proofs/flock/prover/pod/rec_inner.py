@@ -238,7 +238,7 @@ def window_class(part: str, spec: dict[str, int]) -> str:
 
 
 def release_windows_ms(parts: list[str], spec: str) -> list[int]:
-    """The release schedule's windows (`verity_flock.firewall`, rule 3), one a part, from ``spec``: comma-separated
+    """The release schedule's windows (`verity_flock.zk_server`, rule 3), one a part, from ``spec``: comma-separated
     ``CLASS=SECONDS`` (`window_class`), and ``lead=SECONDS``, added to the first part's: what comes between the inner
     session's connection and the first outer session (the inner proof, icheck, vstage, vcap, oprove's setup)."""
     s = {k: int(v) for k, v in (kv.split("=", 1) for kv in spec.split(",") if kv)}
@@ -254,7 +254,7 @@ def release_windows_ms(parts: list[str], spec: str) -> list[int]:
 
 def release_report(state: Path, session: str, times: list[dict]) -> dict:
     """The recursive session ``session`` on the ZK server's record in ``state`` against its release schedule: each part's
-    window, its release time, when the Lean session loop decided it (``times``, its ``FIREWALL-TIMES`` lines), the
+    window, its release time, when the Lean session loop decided it (``times``, its ``ZK-SERVER-TIMES`` lines), the
     slack between them, and its outcome on the record. ``ok`` when the inner session finished and every part was released,
     in order, at its scheduled time, with no stop and no refusal."""
     ev = [json.loads(ln) for ln in (state / "record.jsonl").read_text().splitlines() if ln.strip()]
@@ -329,7 +329,7 @@ def main(argv=None) -> int:
     rr = sp.add_parser("release-report")
     rr.add_argument("--state", required=True)
     rr.add_argument("--session", required=True)
-    rr.add_argument("--times", nargs="*", default=[], help="files holding the Lean session loop's FIREWALL-TIMES lines")
+    rr.add_argument("--times", nargs="*", default=[], help="files holding the Lean session loop's ZK-SERVER-TIMES lines")
     th = sp.add_parser("tree-held")
     th.add_argument("--challenger", required=True, help="the challenger's directory (its releases.jsonl)")
     th.add_argument("sessions", nargs="+", help="rec_live's session directories (public.json beside session/)")
@@ -349,7 +349,7 @@ def main(argv=None) -> int:
         return 0
     if a.cmd == "release-report":
         times = [json.loads(ln.split(" ", 1)[1]) for f in a.times for ln in Path(f).read_text().splitlines()
-                 if ln.startswith("FIREWALL-TIMES ")]
+                 if ln.startswith("ZK-SERVER-TIMES ")]
         res = release_report(Path(a.state), a.session, times)
         json.dump(res, sys.stdout, sort_keys=True, indent=1)
         print()

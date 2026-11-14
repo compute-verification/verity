@@ -59,7 +59,7 @@ header's `u64`), so the two runs agree wherever every squeeze is below `2^64`:
 
 @[expose] public section
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 open Flock With Transcript
 
@@ -405,4 +405,4 @@ theorem repFwC_br (st : Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : By
 
 end
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish

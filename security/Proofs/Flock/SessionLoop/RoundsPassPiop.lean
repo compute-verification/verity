@@ -22,8 +22,8 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 SessionSpec)
-open _root_.Flock.Firewall.Frame (Cfg Masker roundFree)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Frame (Cfg Masker roundFree)
+open _root_.Flock.ZkServer.Finish (Tab)
 open FlockSoundness.Refine (Frame encs)
 
 namespace LeanRelease
@@ -133,7 +133,7 @@ theorem schedTaken_piop (L₁ : LeanRelease Flock.Wit Loop.Tp)
     exact Claims.ZKServer.ofDraws_order _ _ _
   have hjjT : a + 1 < piopNR tb.st.m tb.st.fold.kLog := by rw [htm, htk']; exact hjj
   have hjjT' : a < piopNR tb.st.m tb.st.fold.kLog := by omega
-  have hb : (piopV tb.st.m tb.st.fold.kLog tb.st.digest (_root_.Flock.Firewall.Finish.flat tb.cm0.cap) Sched.root0
+  have hb : (piopV tb.st.m tb.st.fold.kLog tb.st.digest (_root_.Flock.ZkServer.Finish.flat tb.cm0.cap) Sched.root0
       (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0) (fun _ => 0) (a + 1)).length ≤ c'.order.size := by
     rw [hc', Loop.ofDraws_order, absorbed_size]
     exact le_trans (piopV_length_le lay (by omega) (by omega) hnM hnL hjjT.le) (by omega)
@@ -166,7 +166,7 @@ theorem schedTaken_piop (L₁ : LeanRelease Flock.Wit Loop.Tp)
     omega
   have hscheq : (sched'.getD (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (i + 1)).2
       (.empty, 0)).1.data.toList =
-      encs (piopFr tr.st.m tr.st.fold.kLog tr.st.digest (_root_.Flock.Firewall.Finish.flat tr.cm0.cap) Sched.root0
+      encs (piopFr tr.st.m tr.st.fold.kLog tr.st.digest (_root_.Flock.ZkServer.Finish.flat tr.cm0.cap) Sched.root0
         (_root_.Flock.Zk.PadLayout.new tr.st.m tr.st.kLog tr.sch.k0) (fun _ => 0) (a + 1)) ++
         (Frame.sq (piopK (a + 1)) (piopN tr.st.m (a + 1))).enc := by
     rw [hloc]
@@ -192,7 +192,7 @@ theorem schedTaken_piop (L₁ : LeanRelease Flock.Wit Loop.Tp)
     show loopNr x (((m₀, ρ₀) :: ops).length - 1) = _
     rw [List.length_cons, Nat.add_sub_cancel, hn, hNR (a + 1) hjj, htrm]
   -- the frame takes it
-  have hF0 : ∀ f ∈ piopFr tr.st.m tr.st.fold.kLog tr.st.digest (_root_.Flock.Firewall.Finish.flat tr.cm0.cap)
+  have hF0 : ∀ f ∈ piopFr tr.st.m tr.st.fold.kLog tr.st.digest (_root_.Flock.ZkServer.Finish.flat tr.cm0.cap)
       Sched.root0 (_root_.Flock.Zk.PadLayout.new tr.st.m tr.st.kLog tr.sch.k0) (fun _ => 0) (a + 1),
       midFrame f ∧ plainFrame f := by
     intro f hf
@@ -203,19 +203,19 @@ theorem schedTaken_piop (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hKN := piopKN_ok (m := tr.st.m) (jj := a + 1) hmT hmT' (by omega)
   have hCA := (ofLoop_cfg_place Masked.dataE L₁ (Loop.realOf src) x (ν, t) ((m₀, ρ₀) :: ops) hsx (q := i + 1)
     (by simp only [List.length_cons]; omega) hloc hph0).1
-  have hFl : (fvals (piopFr tr.st.m tr.st.fold.kLog tr.st.digest (_root_.Flock.Firewall.Finish.flat tr.cm0.cap)
+  have hFl : (fvals (piopFr tr.st.m tr.st.fold.kLog tr.st.digest (_root_.Flock.ZkServer.Finish.flat tr.cm0.cap)
       Sched.root0 (_root_.Flock.Zk.PadLayout.new tr.st.m tr.st.kLog tr.sch.k0) (fun _ => 0) (a + 1))).length =
-      (fvals (piopFr tb.st.m tb.st.fold.kLog tb.st.digest (_root_.Flock.Firewall.Finish.flat tb.cm0.cap)
+      (fvals (piopFr tb.st.m tb.st.fold.kLog tb.st.digest (_root_.Flock.ZkServer.Finish.flat tb.cm0.cap)
         Sched.root0 (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0) (fun _ => 0) (a + 1))).length := by
     rw [hT1]
     exact fvals_piopFr_length _ _ _ _ _
   have hV := piopV_length_le (m := tb.st.m) (kLog := tb.st.fold.kLog) (digest := tb.st.digest)
-    (cap := _root_.Flock.Firewall.Finish.flat tb.cm0.cap) (root := Sched.root0)
+    (cap := _root_.Flock.ZkServer.Finish.flat tb.cm0.cap) (root := Sched.root0)
     (lay := _root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0) (mk := fun _ => 0) lay (by omega) (by omega)
     hnM hnL (a := a + 1 + 1) (by omega)
   rw [piopV_succ, List.length_append, ← hpos] at hV
   have hbO : ({ m with stopped := false } : Masker).pos +
-      nAbs (piopFr tr.st.m tr.st.fold.kLog tr.st.digest (_root_.Flock.Firewall.Finish.flat tr.cm0.cap) Sched.root0
+      nAbs (piopFr tr.st.m tr.st.fold.kLog tr.st.digest (_root_.Flock.ZkServer.Finish.flat tr.cm0.cap) Sched.root0
         (_root_.Flock.Zk.PadLayout.new tr.st.m tr.st.kLog tr.sch.k0) (fun _ => 0) (a + 1)) ≤
       ((ofLoop Masked.dataE L₁ (Loop.realOf src)).cfg x (ν, t) ((m₀, ρ₀) :: ops)).order.size := by
     show m.pos + _ ≤ _
