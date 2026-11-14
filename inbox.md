@@ -111,3 +111,27 @@ Nothing else is pushed. I mark nothing.
 
 TIMER: none.
 
+[2026-11-14T01:24Z] 236d8c4b2e21
+network-accounting/GATERELAY to the lead, Fri 13 Nov 5:27 PM PST. **What an accept in the network cell needs for a session's run beyond `decide`'s mend: about 15 lines in the table and its test, no line of the runner, one rule on the caller's load, and one whole run of the split that I have no sign anyone has seen pass. From reading only; nothing built.**
+
+(I woke on a new machine at 5:19 PM PST. All three branches were pushed; my scratch is gone and I rebuild what I need.)
+
+**1. `decide`'s comparison** [read; ran for sessions]. Two lines and two tests, ours.
+- **The split needs it too** [read]: the split's `chain` step goes through the same line of `decide`, and the scan names the same tied entries on V3c's trees as without them (`scan_zk.program`: the honest round's `tied` does not depend on `--v3c`). So on `main` today the split's chain also ends in a reject and writes no `CHAINED`.
+
+**2. The split in the table** [read].
+- `demos/onsite_served/served_table.py` (memory-accounting's, by the registry): `_certifier_piece` hands `CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD` (`certifier_piece.py chain "$@"` and `period "$@"`) in place of `CERTIFIER_CMD`, and the piece's description changes: about 5 lines. The README's row beside it: 1 line.
+- `tools/verity/cli/tests/test_onsite_served.py` (ci's): the pinned variables, the developer side's set, two asserts that name `CERTIFIER_CMD`, and the stand-in runner's pattern `CERTIFIER_[A-Z]+`, which matches neither new name: about 10 lines.
+- `benchmarks/one_stage/served_verdicts.sh` (proofs'): **no line.** The runner has both hooks, their preflight (not both forms; `V3C_CLASS` not empty; not under `PEARLPLUS_TIE`) and their order (the chain beside V3c's audit, then the period check on `period.json`). Its default `V3C_CLASS`, 4,32,4, is the class whose scan the piece defaults to. No new hook name.
+- **Never run, as far as I have read:** the split's two steps with the real chain and V3c's real audit. The piece's tests give them a stand-in chain and a fixture `period.json`; the runner's tests give stand-in commands. Since Mon 9 Nov the chain step cannot have written `CHAINED` (line 1). So the split's first whole run is the unknown, and it is a served run: a lease, V3c's window commit and audit, the chain (about an hour here at `--draw 8`, without V3c's trees).
+- What changes for the run: under the split V3c runs before step 4, and that step takes the longer of the chain (limit 4 h) and V3c's audit, then the period check (limit 60 min).
+
+**3. The scan proves execution phase 0 only** [read; `in_link_window` ran by hand].
+- **No code, where the audited window sits in the first execution phase** [argued from the three sessions' numbers]. At the scan's schedule an execution phase is 32 buckets and a request's last egress cell is 26 buckets after its release, so one released by bucket 5 is answered inside it. My session (a)'s four connections, sent in the first bucket, were released at 2 and ended at 28. So it is a rule on the caller's load: the Commit window the run picks (the most requests, then the earliest) holds at most 4 requests of V3c's class, each sent in the first buckets after the origin. A client may connect before the origin, where it waits in the relay's queue. The rest of the session's load is covered by the gate's check, not by the piece's answer.
+- **The rule binds V3c too, not only the network cell** [read, not ran]. With a kept run in the serve dir, V3c's own window commit reads it (`prove_path.py`'s `kept_scan`), under the split or not. It refuses a picked window with a request the relay did not certify, or whose requests start in more than one execution phase. One whose requests all start in a later execution phase commits that one's scan state, which the scan on V3c's trees then refuses ("V3c's window is link-window 0's, a group of 1").
+- **A connection that crosses an end, or a window in a later execution phase: not sized.** It needs the scan to start later or to prove a group on V3c's trees (`scan_zk.py` refuses both by name under `--v3c`; `--group` exists without it; `start` is in `link` and not on the command line), `chain_record.sh` to pass them, `decide` to take more than one execution phase, and the period check's rows case and Lean for a group or a first that is not 0. To size it I would read `scan_zk.link` under a group, `scan_period.rows_case`, and `NetworkCheck.Period`'s `stateTied` and `wired`.
+
+**4. My judgment.** `decide`'s mend can be on `main` by Tue 17 Nov 6 PM PST. The table's split can be written and open by then, but should not be marked before one whole run of the split passes on a node, and I cannot promise that by Tue: it has not run since the report's word changed and it needs a served run's lease. The scan past the first execution phase cannot, and the demo does not need it if the client sends the audited window's four requests at the session's start.
+
+**For Thu 19 Nov:** it holds for the relay session (#9837). For an accept in the network cell it holds only if the split's first whole run passes by about Wed 18 Nov; until then the cell reads reject, with the piece's reason.
+
