@@ -52,7 +52,7 @@ of the credited work, with the device that did it left to the attribution layer.
 against `T_cred`, the credited work priced on one device's machine, and nothing ties a committed tile to the GPU that
 computed it: the transcript commits tile digests, so a helper can supply whole tiles. A per-GPU reading needs LOC's host
 deduction (what the host CPU can compute of the credited work is deducted) and the peer-GPU premise, every billable GPU
-on the node credited each window or the node as the unit (`machine_model`'s README, "The headline is
+on the node credited each window or the node as the unit (`benchmarks/pouw/machine_model/README.md`, "The headline is
 per node"). Counted per GPU without them, the host's AMX and AVX-512 (and NVLink peers) take every device over 1% on
 some real host.
 
@@ -123,7 +123,7 @@ The window is in the statements' type: `Sm120.checks = 48,000` equal live rounds
 anything about a window of another shape. The ε needs that many rounds. The same two branches with `S` rounds in place
 of 48,000 give ε < 1% only from 8,320 rounds on the measured vector, and on the sheet never: there ε falls to 5.779%,
 `1 − N_w(w* + φ*)/B_♭`, and is under 6% only from 17,460 rounds. Both exceed 100% up to 40 rounds (sheet) and 41
-(measured); these counts are `verity_machine_model.lean_headline`'s `branches` at `S`, not Lean statements.
+(measured); these counts are `benchmarks/pouw/lean_headline.py`'s `branches` at `S`, not Lean statements.
 Compose's live line has the same kind of floor: ε < 1% there needs
 at least 10,552 equal live rounds a window, whatever the sample. The windows run so far have at most 18 rounds.
 

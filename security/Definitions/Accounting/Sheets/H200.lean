@@ -47,8 +47,8 @@ Scope: the machine is one GPU's own SMs. Work a peer GPU on the node does over N
 tiles as 64-byte digests) is outside it: the sheet bounds what the credited GPU's SMs compute, not which GPU computed a
 tile, and `Device.lean`'s side channels don't list NVLink peer offload.
 
-`uv run machine-model --device sm_90 sheet --lean` prints this file from `machine_model`'s `sheet.toml` for sm_90, and
-`machine_model`'s tests hold it to that output.
+`uv run machine-model --device sm_90 sheet --lean` prints this file from
+`benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml`, and the machine model's tests hold it to that output.
 -/
 
 @[expose] public section
