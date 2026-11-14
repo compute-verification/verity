@@ -219,7 +219,7 @@ from verity.protocols.accounting.certifier.verifier.certificate import Certifica
 from verity.protocols.accounting.certifier.verifier.grid import GridParams
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, LogicalFrame, SyncSet
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import audit as OA, partition as P, proofs as PF, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import audit as OA, partition as P, proofs as PF, docket as R
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import Finding
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 

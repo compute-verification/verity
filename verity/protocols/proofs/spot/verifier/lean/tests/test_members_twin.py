@@ -35,8 +35,14 @@ import pytest
 import verity_difftest as D
 from verity.commitments import coin_tree as CT
 from verity.protocols.proofs.spot.device import challenger as Ch
-from verity.protocols.proofs.spot.verifier.one_stage import (closing as CL, draw as DR, members as M, partition as P,
-                                                      proofs as PF, registration as R)
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    closing as CL,
+    draw as DR,
+    members as M,
+    partition as P,
+    proofs as PF,
+    docket as R,
+)
 
 from test_challenger_difftest import Ledger, TreeSession, _pinned, lms_verify
 from test_difftest import (LEAF, PAIR, RECEIVED, SCHEME, STAND_IN_CIRCUIT, TRIPLE, V2_TABLES, WINDOW, Setup,

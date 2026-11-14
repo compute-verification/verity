@@ -3896,7 +3896,6 @@
     {"file": "verity/protocols/proofs/spot/verifier/one_stage/partition.py", "count": 13},
     {"file": "verity/protocols/proofs/spot/verifier/one_stage/produced.py", "count": 10},
     {"file": "verity/protocols/proofs/spot/verifier/one_stage/proofs.py", "count": 27},
-    {"file": "verity/protocols/proofs/spot/verifier/one_stage/registration.py", "count": 23},
     {"file": "verity/protocols/proofs/spot/verifier/one_stage/served.py", "count": 2},
     {"file": "verity/protocols/proofs/spot/verifier/one_stage/verifier.py", "count": 54},
     {"file": "verity/protocols/proofs/spot/prover/optimize.py", "count": 79},
@@ -4675,6 +4674,7 @@
     {"file": "verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py", "count": 23},
     {"file": "verity/protocols/accounting/pouw/prover/kernels/served_zk/replay_core.py", "count": 25},
     {"file": "verity/protocols/accounting/pouw/prover/kernels/served_zk/replay_window.py", "count": 5},
-    {"file": "verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py", "count": 135}
+    {"file": "verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py", "count": 135},
+    {"file": "verity/protocols/proofs/spot/verifier/one_stage/docket.py", "count": 23}
   ]
 }
