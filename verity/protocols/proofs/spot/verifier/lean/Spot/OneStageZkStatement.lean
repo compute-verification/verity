@@ -1175,8 +1175,6 @@ own tags `tags0` and its circuit file. -/
 def tagsAt (tags0 : Flock.Tags) (circuitB : ByteArray) : Flock.Tags :=
   Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1
 
-    program := some p.program }
-
 /-- **What the files' pass keeps of a circuit file**, each a function of the file, the statement's tags and the
 blobs' lookup tables, so the members that name one file share one: the blob under its digest (`circuit`), the pinned
 tables its META looks up (`lookups`), those of them the blobs hold, the lookup tables of a member that names the file
