@@ -372,9 +372,11 @@ def session(tmp_path: Path, mm: dict, *names: str) -> dict:
 
 def test_the_per_member_proof_holds_every_member_and_the_sampled_ones_sessions(tmp_path):
     """The parameters name every member of the window, sampled or not, each by what a5 staged before the sample; a
-    sampled member brings its session and the tables its circuit looks up, one path a table."""
+    sampled member brings its session, and every member, sampled or not, the tables its circuit looks up, one path a
+    table: v2 reads every member's files and holds each to its own circuit's tables among the blobs."""
     reads = {"ports": {"a": {"value": "W"}}}
-    mms = [staged(tmp_path, 0, "t/c0", 0, 3, lookups='{"rcp": {}}'), staged(tmp_path, 1, "t/c1", 3, 2, reads=reads),
+    mms = [staged(tmp_path, 0, "t/c0", 0, 3, lookups='{"rcp": {}}'),
+           staged(tmp_path, 1, "t/c1", 3, 2, lookups='{"ex2": {}}', reads=reads),
            staged(tmp_path, 2, "u/c0", 5, 4, lookups='{"ex2": {}, "rcp": {}}')]
     done = [session(tmp_path, mms[0], "a"), session(tmp_path, mms[2], "b")]
     got = a5.members_proof(mms, done, zk=True)
@@ -386,7 +388,11 @@ def test_the_per_member_proof_holds_every_member_and_the_sampled_ones_sessions(t
         (tmp_path / "session-m0" / "sessions" / "a",), (), (tmp_path / "session-m2" / "sessions" / "b",)]
     assert got["members"][2].proof.circuit == tmp_path / "m2" / "circuit.txt"
     assert got["members"][2].proof.public == tmp_path / "m2" / "pub-4.bin"
-    assert got["tables"] == [tmp_path / "m2" / "tables" / "ex2.u32", tmp_path / "m0" / "tables" / "rcp.u32"]
+    assert got["tables"] == [tmp_path / "m1" / "tables" / "ex2.u32", tmp_path / "m0" / "tables" / "rcp.u32"]
+    w = tmp_path / "w"
+    missed = [staged(w, 0, "t/c0", 0, 3), staged(w, 1, "t/c1", 3, 2, lookups='{"ex2": {}}')]
+    got = a5.members_proof(missed, [session(w, missed[0], "a")], zk=True)
+    assert got["tables"] == [w / "m1" / "tables" / "ex2.u32"]
 
 
 def test_the_per_member_proof_says_why_an_audit_has_none(tmp_path):
