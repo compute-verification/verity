@@ -26,8 +26,8 @@ carries at most `L` bits per window, `RateAudit`'s `c = β_side·(T + RTT)`. Not
 store or the stream: unlike `RateAudit`'s, its on-chip state, device memory and link carry sectors, not arbitrary
 functions of the store. That is the model's content: a device that holds a tile's sketch instead of the tile (256 bytes
 per 4 KiB tile at `k_s = 64`), or a host that computes sketches and sends them over the link after `σ` is revealed, is
-outside it, so the claims registry carries the model (`rate-sketch-verbatim`) and window isolation keeps such a host off
-the link.
+outside it, so a deployment premise carries the model (`rate-sketch-verbatim`) and window isolation keeps such a
+host off the link.
 
 **The guess.** A tile the device queried the oracle at, without having obtained one of its sectors or one of the
 stream's, needed the digest of contents it never saw: the unread sector is uniform and independent of the run, so the

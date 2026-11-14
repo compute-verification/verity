@@ -48,8 +48,8 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: five files
     directly under `verity/` (`party.py`, `channel.py` for the wire, `device.py`, `protocol.py` and `config.py`, which
     reads a configuration) and `verity/runtime/`, which runs parties over channels.
-  - `verity/claims/`: the security claims' ids. `tools/difftest/`: the Python held to each Lean (target, not yet: under
-    `tools/`). `verity/protocols/compose/device/live_challenger/`: the auditor device's challenger service, from `benchmarks/` too.
+  - `tools/difftest/`: the Python held to each Lean (target, not yet: under `tools/`).
+    `verity/protocols/compose/device/live_challenger/`: the auditor device's challenger service, from `benchmarks/` too.
 - `hardware/`: the data sheets, and data only: `cards/` (one TOML data sheet per GPU, host or server model, or time
   base) and `nodes/` (one per kind of node). The Site's readers (`verity.device`'s `load_card` and `load_node`) read them.
 - `security/`: the Lean every guarantee is stated and proved in (Lean, below).
@@ -79,7 +79,7 @@ the ties the listing names by file (`against`, which only shrinks). No file unde
 `prover/`. `verity`'s own Python is in places, each the directories and files its `place` entry names, and a place's
 Python imports only its own place and the places its `loads` lists: to allow an import, write it, run the generator
 and say why in the pull request. A place under a `verifier/` or a `device/`, or one the listing marks `trusted` (the
-claims' ids, the wire, the deployment layer, the Site, the record, the Lean of the verifiers' side with its tests), is
+wire, the deployment layer, the Site, the record, the Lean of the verifiers' side with its tests), is
 the verifiers' side, trusted code; the rest is the provers' side and the Python that mirrors the Lean for speed. Until
 its protocol's verifier is Lean, a trusted place loads and reaches only the places the listing froze for it, and from
 outside the trusted places only the files its `loaded_by` names import one, a test included; these lists only shrink,
