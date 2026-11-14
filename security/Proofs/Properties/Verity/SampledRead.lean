@@ -19,7 +19,7 @@ release log in v2's evidence line by line as v2's check does (`readLog`), with t
 digest, one coin of `COIN_BYTES` bytes each. So the read meets the sample's ask (`DrawRead`) with no premise
 (`drawRead_logRead`, `drawRead_coinsRead`).
 
-* **v2's challenger** (`drawCoins_ok`, `trustedSessionOf_ok`, `sessionNamed_ok`, `sessionOf_ok`, `releasedRootsOf_ok`,
+* **v2's challenger** (`drawCoins_ok`, `trustedChallengePhaseOf_ok`, `challengePhaseNamed_ok`, `challengePhaseOf_ok`, `releasedRootsOf_ok`,
   `challengerStream_ok`): where v2 reads `ξ`, the session's log is a list of lines, the roots of the sample's family are
   those its pairs' root lines show (`sel`), and `ξ` is `COIN_BYTES` bytes for each of them equal to the digest.
 * **What the read shows** (`fresh_readLog`, `countFresh_eq`, and `chunks_flatten` in `SampledLog`): the read's coins of
@@ -36,9 +36,9 @@ digest, one coin of `COIN_BYTES` bytes each. So the read meets the sample's ask 
   `releasedRootsOf_pairsOk`, `treesHeld_records`), so it meets the sample's ask with no premise.
 * **v2's case** (`caseOf_of`): in an accepted composition the case `caseOf` finds under v2's id is the one v2 accepted,
   since the composite's components have distinct ids (`components_nodup`).
-* **The session's law** (`law_of_setsUp`, `coupled_draw_setsUp`, `coupled_draw_coins_setsUp`): v2's parameters in the
+* **The session's sampling design** (`law_of_setsUp`, `coupled_draw_setsUp`, `coupled_draw_coins_setsUp`): v2's parameters in the
   parameters sent are those its case accepted (`paramsAt_case`), so at the session v2 sets up on them (`SetsUp`) the
-  sample's law is the session's wherever its population is (`lawAt_of_lawOf`), and the sample's piece of `CouplingTarget`
+  sample's sampling design is the session's wherever its population is (`lawAt_of_lawOf`), and the sample's piece of `CouplingTarget`
   needs only the population.
 * **The session's population** (`popHeld_of_checkBlobsAt`, `popOk_of_popHeld`, `n_of_popOk`, `n_of_popTied`,
   `coupled_draw_tied`, `coupled_draw_coins_tied`): v2 refuses a record whose population isn't its program's proof
@@ -84,7 +84,7 @@ theorem logStr (j : Json) (s : String)
   cases j <;> first | (cases h; rfl) | cases h
 
 set_option maxHeartbeats 1000000 in
-theorem sessionOf_ok {key : ChallengerKey} {record log close : Json} {r : LiveCommitment × Roots × String}
+theorem challengePhaseOf_ok {key : ChallengerKey} {record log close : Json} {r : LiveCommitment × Roots × String}
     (h : challengePhaseOf key record log close = .ok r) :
     ∃ ls lines, log = .arr ls ∧ ls.toList = lines.map .str ∧ releasedRootsOf r.1 lines = .ok r.2.1 := by
   refine of_triple (Q := fun r => ∃ ls lines, log = .arr ls ∧ ls.toList = lines.map .str ∧
@@ -94,24 +94,24 @@ theorem sessionOf_ok {key : ChallengerKey} {record log close : Json} {r : LiveCo
     mapM_ok_spec, releasedRootsOf_spec]
   exact ⟨_, _, rfl, mapM_str (fun j s h => logStr j s h) ‹_›, ‹_›⟩
 
-theorem sessionOf_spec (key : ChallengerKey) (record log close : Json) :
+theorem challengePhaseOf_spec (key : ChallengerKey) (record log close : Json) :
     ⦃⌜True⌝⦄ challengePhaseOf key record log close ⦃⇓? r => ⌜challengePhaseOf key record log close = .ok r⌝⦄ := ok_spec _
 
 theorem hellos_spec {α β : Type} (f : α → Flock.V β) (l : List α) : ⦃⌜True⌝⦄ l.mapM f ⦃⇓? _ => ⌜True⌝⦄ :=
   except_spec _
 
 set_option maxHeartbeats 1000000 in
-theorem sessionNamed_ok {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Roots}
+theorem challengePhaseNamed_ok {a : Audited} {key : ChallengerKey} {session : Json} {r : LiveCommitment × Roots}
     (h : challengePhaseNamed a key session = .ok r) :
     ∃ sid, challengePhaseOf key (Spot.getD session "record") (Spot.getD session "log")
       (Spot.getD session "close") = .ok (r.1, r.2, sid) := by
   refine of_triple (Q := fun r => ∃ sid, challengePhaseOf key (Spot.getD session "record")
     (Spot.getD session "log") (Spot.getD session "close") = .ok (r.1, r.2, sid)) ?_ h
   clear h
-  mvcgen [challengePhaseNamed, -Spec.throw_Except, throw_spec, sessionOf_spec, recordOfJson_spec, hellos_spec]
+  mvcgen [challengePhaseNamed, -Spec.throw_Except, throw_spec, challengePhaseOf_spec, recordOfJson_spec, hellos_spec]
   all_goals exact ⟨_, ‹_›⟩
 
-theorem trustedSessionOf_ok {ledger window : Json} {key : ChallengerKey} {pins main session : Json}
+theorem trustedChallengePhaseOf_ok {ledger window : Json} {key : ChallengerKey} {pins main session : Json}
     {r : LiveCommitment × Roots} (h : trustedChallengePhaseOf ledger window key pins main session = .ok r) :
     ∃ a, challengePhaseNamed a key session = .ok r := by
   unfold trustedChallengePhaseOf at h
@@ -119,7 +119,7 @@ theorem trustedSessionOf_ok {ledger window : Json} {key : ChallengerKey} {pins m
   obtain ⟨a, -, h⟩ := h
   exact ⟨a, h⟩
 
-theorem trustedSessionOf_spec (ledger window : Json) (key : ChallengerKey) (pins main session : Json) :
+theorem trustedChallengePhaseOf_spec (ledger window : Json) (key : ChallengerKey) (pins main session : Json) :
     ⦃⌜True⌝⦄ trustedChallengePhaseOf ledger window key pins main session
       ⦃⇓? r => ⌜trustedChallengePhaseOf ledger window key pins main session = .ok r⌝⦄ := ok_spec _
 
@@ -142,7 +142,7 @@ theorem drawCoins_ok {key : ChallengerKey} {w label : String} {after : ByteArray
       (Spot.getD coins "session") = .ok (cm, roots) ∧
     challengerStream cm (Spot.getD coins "segment") after (some (look roots label)) = .ok ξ) ?_ h
   clear h
-  mvcgen [drawCoins, -Spec.throw_Except, throw_spec, trustedSessionOf_spec, challengerStream_spec]
+  mvcgen [drawCoins, -Spec.throw_Except, throw_spec, trustedChallengePhaseOf_spec, challengerStream_spec]
   all_goals exact fun h => ⟨_, _, ‹_›, h⟩
 
 theorem liveDomain_spec (s : String) (e : Nat) (fs : List (String × Nat)) :
@@ -793,7 +793,7 @@ theorem single_of_case {k : Verity.Registration.Composite} {s : Verity.Sent} {a 
     (hone : OneStatement s.params) : p.members = none :=
   hone p (caseOf_params (caseOf_of hS hcase hacc.1 hacc.2.1 hacc.2.2.1))
 
-/-! ## The session's law -/
+/-! ## The session's sampling design -/
 
 /-- **v2's parameters in the parameters sent are the ones its case accepted**, in a composition composite `k`
 accepted. -/
@@ -813,7 +813,7 @@ theorem lawAt_of_lawOf {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneS
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The session's law is the sample's** where the session's population is: at the session `A` v2 sets up on the
+/-- **The session's sampling design is the sample's** where the session's population is: at the session `A` v2 sets up on the
 parameters `θ` (`SetsUp`), a sample v2 made in a composition composite `k` accepted, on those parameters, over `A.n`
 units, ran under `A.design`. -/
 theorem law_of_setsUp {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
@@ -826,7 +826,7 @@ theorem law_of_setsUp {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A
   rw [paramsAt_case hS hcase hacc hp', hn, lawAt_of_lawOf hL] at hlaw
   exact (Except.ok.inj hlaw).symm
 
-/-- **The sample's piece of `CouplingTarget` at the session v2 sets up**: `coupled_draw`, with the session's law read
+/-- **The sample's piece of `CouplingTarget` at the session v2 sets up**: `coupled_draw`, with the session's sampling design read
 off `SetsUp` on the play's parameters. -/
 theorem coupled_draw_setsUp {V : Vocab d α} {k : Verity.Registration.Composite} (K : Constructions V) (A : Live)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
@@ -1225,7 +1225,7 @@ theorem trustedTreesOf_ok {key : ChallengerKey} {w : String} {coins : Json} {ts 
   refine of_triple (Q := fun ts => ∃ ls lines, Spot.getD (Spot.getD coins "session") "log" = .arr ls ∧
     ls.toList = lines.map .str ∧ coinTreesOf lines = .ok ts) ?_ h
   clear h
-  mvcgen [trustedTreesOf, -Spec.throw_Except, throw_spec, trustedSessionOf_spec, mapM_ok_spec, coinTreesOf_spec]
+  mvcgen [trustedTreesOf, -Spec.throw_Except, throw_spec, trustedChallengePhaseOf_spec, mapM_ok_spec, coinTreesOf_spec]
   all_goals exact fun h => ⟨_, _, ‹_›, mapM_str (fun j s h => logStr j s h) ‹_›, h⟩
 
 theorem treesOf_ok {p : _root_.Spot.OneStageZk.Params} {e : _root_.Spot.OneStageZk.Evidence}
@@ -1337,9 +1337,9 @@ theorem logRead_isSome {k : Verity.Registration.Composite} {s : Verity.Sent} {a 
   obtain ⟨raw, hraw, hrξ⟩ := Properties.Challenger.oneStageZk_reads p c dr hdr ev ξ hξ
   rw [hrξ] at hraw
   obtain ⟨cm, roots, htsn, -⟩ := drawCoins_ok hraw
-  obtain ⟨_, hsn⟩ := trustedSessionOf_ok htsn
-  obtain ⟨_, hso⟩ := sessionNamed_ok hsn
-  obtain ⟨ls, lines, hlog, hls, hrr⟩ := sessionOf_ok hso
+  obtain ⟨_, hsn⟩ := trustedChallengePhaseOf_ok htsn
+  obtain ⟨_, hso⟩ := challengePhaseNamed_ok hsn
+  obtain ⟨ls, lines, hlog, hls, hrr⟩ := challengePhaseOf_ok hso
   have hl := linesOf_of hlog hls
   obtain ⟨ts, htr, hth⟩ := trees_of_checkBlobsAt hm hck
   obtain ⟨key', w, htt⟩ := treesOf_ok htr
@@ -1448,9 +1448,9 @@ theorem shows_logRead {k : Verity.Registration.Composite} {s : Verity.Sent} {a b
   obtain ⟨raw, hraw, hrξ⟩ := Properties.Challenger.oneStageZk_reads p c dr hdr ev ξ hξ
   rw [hrξ] at hraw
   obtain ⟨cm, roots, hts, hstream⟩ := drawCoins_ok hraw
-  obtain ⟨_, hsn⟩ := trustedSessionOf_ok hts
-  obtain ⟨_, hso⟩ := sessionNamed_ok hsn
-  obtain ⟨ls, lines, hlog, hls, hrr⟩ := sessionOf_ok hso
+  obtain ⟨_, hsn⟩ := trustedChallengePhaseOf_ok hts
+  obtain ⟨_, hso⟩ := challengePhaseNamed_ok hsn
+  obtain ⟨ls, lines, hlog, hls, hrr⟩ := challengePhaseOf_ok hso
   rw [logRead_eq (caseOf_of hS hcase hp hc hev) hch hξ (linesOf_of hlog hls)] at h
   obtain ⟨rs, -, h⟩ := Option.bind_eq_some_iff.1 h
   rw [hafter] at hstream

@@ -524,7 +524,7 @@ def roundCommitment (value : String) : Bool :=
   let index (s : String) := !s.isEmpty && s.all Char.isDigit
   roundNamed.contains value || roundIndexed.any fun pre => value.startsWith pre && index (value.drop pre.length).toString
 
-/-- Whether every sample by `d`'s law samples unit `u`: a subset sample of the whole population, a `p = 1` sample, or a unit whose
+/-- Whether every sample by `d`'s sampling design samples unit `u`: a subset sample of the whole population, a `p = 1` sample, or a unit whose
 stratum samples all of its units (`k_s = n_s`). -/
 def drawsInFull (d : Draw.UnitDraw) (u : Nat) : Bool :=
   let full (s : Draw.Stratum) := s.units.any (fun (lo, hi) => lo ≤ u && u < hi) && s.k == s.size

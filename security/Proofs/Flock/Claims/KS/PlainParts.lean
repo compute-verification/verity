@@ -40,7 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 # The plain chain from the concrete simulator's parts
 
 The plain table bound asks, at each plain statement some run accepts, for a simulator of each prover at the verdict
-at the sample (`PlainSimWD`). The concrete simulator `plainSim P` at the coins `plainΦ x` has its uniform law
+at the sample (`PlainSimWD`). The concrete simulator `plainSim P` at the coins `plainΦ x` has its uniform distribution
 (`Pr_plainΦ`), its roots (`plainSim_root`), the simulation (`plainSimRun`), the abort (`plainSimAbortAt`) and, at the
 coupling's chances, the slack's fit (`plain_slack_fits`) and the fork's slack (`plain_fork_le_fnAt`). What it does not
 have yet is two parts, each a named Prop here:

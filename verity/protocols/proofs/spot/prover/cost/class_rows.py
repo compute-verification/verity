@@ -98,6 +98,7 @@ def main(argv=None) -> int:
     from verity.commitments.windows import interface as IF
     from verity_vllm.program.predict.steps import Registered
     from verity_vllm.program.predict.phi import Phi
+    from verity.device import load_card, number
 
     t0 = time.perf_counter()
     if a.tiny:
@@ -107,11 +108,12 @@ def main(argv=None) -> int:
         circuit = class_circuit(reg, cls, None, Grain(gemm_words=512, rows=9, select=64), provable=False)
     else:
         cfg = json.loads((Path.cwd() / "adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json").read_text())
-        target = {"compute_capability": [12, 0], "num_sms": 188}
+        target = {"compute_capability": [12, 0], "num_sms": int(number(load_card("rtx-pro-6000-server")["sm"]["count"]))}
         if a.int8:
             from verity_vllm.program.model import INT8_EXACT_QUANT
             cfg = {**cfg, "quantization_config": dict(INT8_EXACT_QUANT)}
-            target = {"compute_capability": [9, 0], "num_sms": 132, "int8_exact": "linears"}
+            target = {"compute_capability": [9, 0], "num_sms": int(number(load_card("h200-sxm-141gb")["sm"]["count"])),
+                      "int8_exact": "linears"}
         phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=target)
         reg = Registered.of(phi, default_seed=7)
         cls = WindowClass(*map(int, a.cls.split(","))) if a.cls else CLASS_OF_RECORD

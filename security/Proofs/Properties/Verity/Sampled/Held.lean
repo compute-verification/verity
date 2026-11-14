@@ -30,7 +30,7 @@ v2's hold on the record's `unit_draw` (`DrawHeld`). This module gives what v2's 
   since `verify --zk` refuses a session without one (`verdictOf_drawn`); its sampling design is one a soundness claim samples by at
   `--zk` (`ProvedScope.drawLaw`, `lawWhy_zk`), the subset or the stratified sampling design; and the session v2 sets up has no
   `--stratified` input, so `Stmt.setupTables` refuses a stratified sample (`setupTables_stratified`). So the record's sample
-  is the `.subset` print of the member's share of the window's sample under the verifier's law, which `DrawHeld` reads at
+  is the `.subset` print of the member's share of the window's sample under the verifier's sampling design, which `DrawHeld` reads at
   the units v2 drew; the bound is that sampling design's, from v1's window check (`Spot.OneStage.checkAt`), not the
   print's.
 * **A subset sample that decodes is its own print** (`ofJson_subset_eq`): a value `norm` fixes that `UnitDraw.ofJson`
@@ -117,7 +117,7 @@ theorem checkBlobsAt_drawn {p : _root_.Spot.OneStageZk.Params}
   obtain ⟨recB, record, hb, hrec, hd⟩ := step_drawn hstep hall
   exact ⟨record, sessionRecord_eq hs hb hrec, hd⟩
 
-/-- **`setupAt` at a sample holds the sample's law** (`ProvedScope.drawLaw` at `--zk`). -/
+/-- **`setupAt` at a sample holds the sample's sampling design** (`ProvedScope.drawLaw` at `--zk`). -/
 theorem setupAt_drawLaw {W : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} {dj : Json}
     {x : Flock.SessionSpec × Array Flock.Setup × Json × Json}
     (h : _root_.Spot.OneStageZk.setupAt W rd (some dj) = .ok x) :
@@ -141,7 +141,7 @@ theorem drawLaw_ok {zk : Bool} {tags : Flock.Tags} {pt : Bool} {dj : Json}
     | some why => simp [hw] at h
     | none => exact ⟨D, rfl, hw⟩
 
-/-- **The laws a soundness claim samples by at `--zk`**, at public tables: the subset and the stratified sampling design. -/
+/-- **The sampling designs a soundness claim samples by at `--zk`**, at public tables: the subset and the stratified sampling design. -/
 theorem lawWhy_zk {tags : Flock.Tags} {D : Flock.Draw.UnitDraw}
     (h : Flock.ProvedScope.lawWhy true tags false D = none) :
     (∃ kd, D.law = .subset kd) ∨ ∃ K St, D.law = .stratified K St := by
@@ -152,7 +152,7 @@ theorem lawWhy_zk {tags : Flock.Tags} {D : Flock.Draw.UnitDraw}
   | bernoulli a b => simp [hl] at h
   | work K ws => simp [hl] at h
 
-/-- **A session without `--stratified` refuses a stratified sample**: `Stmt.setupTables` holds a stratified sample's law to
+/-- **A session without `--stratified` refuses a stratified sample**: `Stmt.setupTables` holds a stratified sample's sampling design to
 the verifier's own `K`, and refuses it without one. -/
 theorem setupTables_stratified {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock.Coins} {count : ℕ}
     {tables : List (String × ByteArray)} {dj : Json} {partition : Option Json} {program : Option ByteArray}
@@ -523,12 +523,11 @@ theorem push_proved {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Read
       r'.proved = r.proved ++ units := by
   unfold _root_.Spot.OneStageZk.push at h
   dsimp only at h
-  split at h
-  · cases h
-  · obtain ⟨units, hu, h⟩ := ebind_ok h
-    simp only [pure, Except.pure, Except.ok.injEq] at h
-    subst h
-    exact ⟨units, hu, rfl⟩
+  split_ifs at h
+  obtain ⟨units, hu, h⟩ := ebind_ok h
+  simp only [pure, Except.pure, Except.ok.injEq] at h
+  subst h
+  exact ⟨units, hu, rfl⟩
 
 /-- **One session's `step` from the empty run, where every session accepted, passed the population check and proved
 the public file's units its record samples** (`provedUnits`). -/

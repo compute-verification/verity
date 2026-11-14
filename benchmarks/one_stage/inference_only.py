@@ -252,7 +252,7 @@ def kind_of(param: str) -> str | None:
     """The kind (`KINDS`) of the fresh bits a registered parameter's reads fill: ``linears`` for Pearl+'s y of a cut
     linear (`window.y_value`), ``scan_state`` for the scan state row (`scan_state.SCAN_STATE`), else none."""
     from verity_vllm.program.predict import scan_state
-    from verity_vllm.protocols.pouw.pearl_c import window as PWR
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
     if param == scan_state.SCAN_STATE:
         return "scan_state"

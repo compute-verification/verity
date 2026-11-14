@@ -52,7 +52,7 @@ alive. Each module's docstring is its contract.
 | File | What it holds | Loaded from outside `research` by |
 |---|---|---|
 | `registry.py` | The machine registry: one TOML file per machine under `machines.d/` in the notes repository. | `infra/ops` (a released node has no files to read), `benchmarks/numerical` (a pod's id) |
-| `runpod.py` | RunPod's API, which now hosts only the control pod: create, list, get, ssh, terminate. A read asks GraphQL when REST gives no answer, each call is a line of `api-calls.log` with the counts RunPod has left, and a pod's last-read address is kept (`$XDG_STATE_HOME/research/runpod/`) and dialled without asking RunPod only at a host that proves the recorded host key. | `benchmarks/numerical`, `tools/verity/check`'s tests |
+| `runpod.py` | RunPod's API, which now hosts only the control pod: create, list, get, ssh, terminate. A read asks GraphQL when REST gives no answer, each call is a line of `api-calls.log` with the counts RunPod has left, and a pod's last-read address is kept (`$XDG_STATE_HOME/research/runpod/`) and dialled without asking RunPod only at a host that proves the recorded host key. | `benchmarks/numerical`, `tools/check`'s tests |
 | `budgets.py` | `budgets.toml`, every spending limit, at the notes repository's root; `gate` is what `create` asks. | `infra/control` (the guard's host) |
 | `connect.py` | `ssh` and `sync`; `ssh_base` is the ssh command for a name: a RunPod machine's kept address while it is under an hour old and its host proves the recorded host key, else read from RunPod. | `infra/control` |
 | `part.py` | The `research pods` router, `create`, and the reference-part check (`check-part`; `create --require-reference-part`). | |
@@ -79,7 +79,7 @@ added here reaches a node only through a line there.
 | File | What it is |
 |---|---|
 | `nebius/check.py` | The bootstrap check: whether a node is the machine paid for (driver, GPUs, memory, CPUs, data disk and its read rate) with its lease and `gpu-lease` live. It runs on the node, under `research run --on NODE`; its docstring has the line. |
-| `nebius/slot_only.py` | On a node marked for it, stops (or renices) each run that did not come through a check slot. `tools/verity/check` reads the pools' names from it, and `benchmarks/harness`'s tests its `through_slot`. |
+| `nebius/slot_only.py` | On a node marked for it, stops (or renices) each run that did not come through a check slot. `tools/check` reads the pools' names from it, and `benchmarks/harness`'s tests its `through_slot`. |
 | `nebius/wake.py` | The control pod's side of `research run --on`'s wake: it starts a stopped node for an agent that holds no cloud key, only one the registry names and a budget line covers. |
 | `nebius/fleet.py` | The fleet's usage record: `sample`, `report`, `instances`, `quota`, `panels`. |
 | `nebius/node_ops.py` | A shared node's OOM guard, status page and alerts. |

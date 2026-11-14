@@ -174,9 +174,9 @@ theorem secondAlone_of (C : CaseOf) (hU : FirstUnshown C) : SecondAlone C := by
   obtain ⟨ls, hls, hlsl⟩ := firstLines_arr hlines
   obtain ⟨cm, roots, hts, -⟩ := Verity.Sampled.drawCoins_ok hξ
   have hsh := hU o ha p c e key d₁ d₂ cm roots hcase hkey hd₁ hd₂ hw hts
-  obtain ⟨_, hsn⟩ := Verity.Sampled.trustedSessionOf_ok hts
-  obtain ⟨_, hso⟩ := Verity.Sampled.sessionNamed_ok hsn
-  obtain ⟨ls', lines', hlog', hls', hrr⟩ := Verity.Sampled.sessionOf_ok hso
+  obtain ⟨_, hsn⟩ := Verity.Sampled.trustedChallengePhaseOf_ok hts
+  obtain ⟨_, hso⟩ := Verity.Sampled.challengePhaseNamed_ok hsn
+  obtain ⟨ls', lines', hlog', hls', hrr⟩ := Verity.Sampled.challengePhaseOf_ok hso
   rw [hls] at hlog'
   cases hlog'
   rw [hlsl] at hls'

@@ -18,6 +18,7 @@ ea945ed04bc1067c961cfe293c95c61363c7ef3c049fe3f0c8f224e362e3fedc  ../../security
 716545d8988099ea0fcc6fb7c66e92d22c3995b44329bc313b27eb9244657579  ../../security/Proofs/lake-manifest.json
 448e52c18d9a0b5d4a6e4d3cc482568437e08bd8a43af4e7358185b543827e38  ../../security/Proofs/lakefile.toml
 5f740c0f960939fc3b02d098bb49e2eb355b1bbdd617ef7fc895ba175693b3b5  ../../security/Proofs/lakefile.toml
+b65bad4acf45f4e377abaf2d7d345a299e956c4b4641898d21fb8b0a4f193d74  ../../security/Proofs/lakefile.toml
 8021bbef4f4f86e9ab1a08fb173113c49a5547999b3a875ad5e5e5d57fdc2592  ../../security/Proofs/lake-manifest.json
 5f2571a309665dbfd06a618f15009cc8a90c15ed8cea46a1e23934ff4d272027  ../../security/Proofs/lake-manifest.json
 7da1a650e183252b7b361dcc355b023cab8a858e021b73f5cdd341c99d1b7873  ../../security/Definitions/Pous.lean
@@ -25,7 +26,7 @@ ea945ed04bc1067c961cfe293c95c61363c7ef3c049fe3f0c8f224e362e3fedc  ../../security
 1f3066f54f873a4ce22cbd07956b486c8cb25d9b9de6785466248c742265b32d  ../../security/Proofs/Pous/Statements.lean
 3990519592c3bc12d2be58e66bd7f2f053e673be369bd28696f82c0df4495740  ../../security/Proofs/Pous/Sanity.lean
 a44731c6ea5ffbcbef0449ceeaf6852beb80e9436a42d077917fd53167fe7538  ../../security/Proofs/Pous/Prob.lean
-21ba83b23b5ac2fca1aad1868fcd32b9311a1724d8d069ce08b15d463bb47d67  ../../security/Proofs/Core/Game/Basic.lean
+4852d0502133214210259e8d40859e52a23e710699daf3fe1c0341f362c1717d  ../../security/Proofs/Core/Game/Basic.lean
 7669d64daa672e7bdab848bfae5934a14cd581ba41e271b57f6352ffb92de738  ../../security/Proofs/Pous/Accounting/Numbers.lean
 ffca7c68c71e2231322fb3f157e04bd0f6704cb69fedccf80c661a6467f19ead  ../../security/Definitions/Pous/Accounting/GradedMeets.lean
 1e194b22d0d75e9d667d3b9f3a034170f4d5b2e21e46ab985e24d23b94736020  ../../security/Definitions/Pous/Accounting/LemmaA.lean

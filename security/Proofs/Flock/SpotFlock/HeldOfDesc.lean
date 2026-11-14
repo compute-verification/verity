@@ -311,7 +311,7 @@ theorem oneStageOk_lawOk (ns : List ℕ) (law : Option _root_.Flock.Draw.Law) :
     oneStageOk ns ((law.map oneStageOf).getD .all) = SampledTwoDesc.lawOk ns law := by
   rcases law with _ | (_ | _ | _ | _) <;> rfl
 
-/-- **The design `Select.select` samples**, from the check's first-stage law. -/
+/-- **The design `Select.select` samples**, from the check's first-stage sampling design. -/
 theorem slotDesign_of_firstLaw {rule : Spot.Select.Rule} {d : Spot.Program} {q : Json} {tb : Option Json}
     {law : Option _root_.Flock.Draw.Law} (h : SampledTwoDesc.firstLaw rule d q tb = .ok law) :
     slotDesign rule d q tb = .ok ⟨[(law.map oneStageOf).getD .all, .all]⟩ := by
