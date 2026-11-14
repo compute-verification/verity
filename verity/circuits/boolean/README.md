@@ -23,7 +23,7 @@ reaches is one of these or a 1-bit input.
   coins, every read's time is below its now and the touched list is sorted, every value private.
 
 The Boolean versions of the primitive circuits are [`verity.circuits.ops`](../ops/README.md)'s (`ops.boolean`), and of
-the served kernels the `boolean_*` modules of `verity.definitions.registry`; `verity.definitions.boolean.boolean_version`
+the served kernels the `boolean_*` modules of `verity_vllm.definitions.registry`; `verity_vllm.definitions.boolean.boolean_version`
 finds the one a word Definition has.
 
 ## Tests
