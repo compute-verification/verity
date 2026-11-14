@@ -295,7 +295,6 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | The Lean takes a data sheet as a parameter | Two Lean tables restate their data sheets |
 | Every benchmark on the dashboard | 5 of 69 wired; 3 of the 5 show a value no older than their schedule allows |
 | The proofs' status on the dashboard: guarantees fully proved, open premises per lead | Printed by the Lean check only |
-| The Lean check passes on the public repository | On Tuesday's export 14 of 16 Lean packages pass |
 | Every area of `security/` has a lead | 826 of its 4,816 files fall to lean because no lead claims them |
 | A memory-read session is proved in zero knowledge | Each span's openings go to the verifier as they are |
 | PoUS's setup is a proof about the store | The check reads the whole store |

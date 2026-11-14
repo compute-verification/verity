@@ -25,7 +25,7 @@ Two phases, so that the card is held only while the kernel runs:
 GO = the gate, no error, every launch deterministic, every byte of the cache outside the slotted rows still 0xA5, both modes'
 words equal, the PTX of both FP8 specialisations the pinned code (PTX_CODE_SHA256), every row of both cases equal to the
 Definition in all 656 bytes and in kv_c_out and k_pe_out, and to the two registered Definitions, and every corner of CORNERS
-reached.  The record, <out>/glm53_ds_mla_write_capture.json, carries `ok` and the digest `properties.record.digest_of` takes.
+reached.  The record, <out>/glm53_ds_mla_write_capture.json, carries `ok` and the digest `records.property_record.digest_of` takes.
 
     cd adapters/vllm; PY=/workspace/venv312/bin/python      # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/glm53_ds_mla_write_capture_gpu.py --phase gpu --out DIR --scratch /tmp
@@ -56,7 +56,7 @@ from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_dsa_capture_gpu as DS
 from tests.properties import glm53_fused_rmsnorm_capture_gpu as FR
-from verity_vllm.properties.record import digest_of
+from verity_vllm.records.property_record import digest_of
 
 SCHEMA = "verity-vllm/glm53-ds-mla-write-capture/v1"
 RECORD = "glm53_ds_mla_write_capture.json"
@@ -91,7 +91,7 @@ def tile_rows(rng: np.random.Generator, n: int) -> np.ndarray:
     2^-113, whose amax * f32(1/448) crosses FLT_MIN; a served scale; one value of magnitude [1, 2) over the rest at 2^-15, which
     quantise to e4m3 subnormals and zeros; 16 exact -0), tile 3 values of scale about 1, which give the row its sum of squares.  No
     NaN or inf: in kv_c one makes r NaN or +0 for the whole row (`special_rows` has those); here they come from the weights."""
-    out = np.empty((n, KVL), dtype=np.uint16)
+    out: np.ndarray = np.empty((n, KVL), dtype=np.uint16)
     for i in range(n):
         for t in range(NT - 1):
             form, cols = (i + 3 * t) % 5, slice(TILE * t, TILE * t + TILE)
@@ -114,7 +114,7 @@ def tile_rows(rng: np.random.Generator, n: int) -> np.ndarray:
 
 
 def corner_weight() -> np.ndarray:
-    w = np.full(KVL, 0x3F80, dtype=np.uint16)
+    w: np.ndarray = np.full(KVL, 0x3F80, dtype=np.uint16)
     for col, word in PLANT:
         w[col] = word
     return w
@@ -162,7 +162,7 @@ def case_words(outdir: Path, case: str, o: dict[str, Any]) -> dict[str, Any]:
     """Both modes, twice each: the case's record (its checks) with its words saved under <out>/words/<case>/."""
     slots = o["slots"].cpu().numpy()
     written = np.flatnonzero(slots >= 0)
-    rest = np.ones(DS.NB * DS.BLOCK, dtype=bool)
+    rest: np.ndarray = np.ones(DS.NB * DS.BLOCK, dtype=bool)
     rest[slots[written]] = False
     arrays: dict[str, np.ndarray] = {"kv": np.concatenate([DS._u16(o["kv_c"]), DS._u16(o["k_pe"])], axis=1),
                                      "w": DS._u16(o["kv_rms_w"]), "cs": DS._u16(o["cs"][o["pos"]]), "slots": slots}
@@ -171,7 +171,7 @@ def case_words(outdir: Path, case: str, o: dict[str, Any]) -> dict[str, Any]:
         a, b = launch(o, mode == "indexer"), launch(o, mode == "indexer")
         checks[f"{mode}/deterministic"] = all(np.array_equal(a[k], b[k]) for k in a)
         checks[f"{mode}/untouched_sentinel"] = bool((a["cache"][rest] == SENTINEL).all())
-        rows = np.zeros((len(slots), ROW), dtype=np.uint8)
+        rows: np.ndarray = np.zeros((len(slots), ROW), dtype=np.uint8)
         rows[written] = a["cache"][slots[written]]
         arrays |= {f"{mode}_kv_out": a["kv_out"], f"{mode}_kpe_out": a["kpe_out"], f"{mode}_rows": rows}
     checks["modes_equal"] = all(np.array_equal(arrays[f"indexer_{k}"], arrays[f"shared_{k}"]) for k in ("kv_out", "kpe_out", "rows"))
@@ -238,9 +238,9 @@ def gpu_phase(outdir: Path, scratch: str | None, min_driver: int, want_cc: str, 
 # --------------------------------------------------------------------------------------------------------------------- compare
 def want_row(ref: list[int]) -> np.ndarray:
     """The 656 bytes the Definition's outputs give: nope, the scales little-endian, latent[KVL:] little-endian."""
-    nope = np.asarray(ref[KVL + R:KVL + R + KVL], dtype=np.uint8)
-    scale = np.asarray(ref[KVL + R + KVL:], dtype=np.uint32).view(np.uint8)
-    rope = np.asarray(ref[KVL:KVL + R], dtype=np.uint16).view(np.uint8)
+    nope: np.ndarray = np.asarray(ref[KVL + R:KVL + R + KVL], dtype=np.uint8)
+    scale: np.ndarray = np.asarray(ref[KVL + R + KVL:], dtype=np.uint32).view(np.uint8)
+    rope: np.ndarray = np.asarray(ref[KVL:KVL + R], dtype=np.uint16).view(np.uint8)
     return np.concatenate([nope, scale, rope])
 
 
@@ -314,7 +314,7 @@ def summary(doc: dict[str, Any]) -> dict[str, Any]:
 
 def _verdict(doc: dict[str, Any], gpu: dict[str, Any]) -> bool:
     s = doc["summary"]
-    reached = Counter()
+    reached: Counter[str] = Counter()
     for case in CASES:
         reached.update(s.get(case, {}).get("corners", {}))
     return bool(gpu["gate"]["ok"] and not gpu["errors"] and not doc["errors"] and gpu["ptx"].get("ok") is True
