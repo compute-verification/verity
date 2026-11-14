@@ -1,10 +1,12 @@
 # The retired word "law" outside the proof system's paths, in the Glossary's words: what `tools/move/rename.py --map
 # tools/move/law_words_map.toml` renames. GLOSSARY.md: "law", "draw law", `law` identifiers, the Lean's `Law` -> the
 # sampling design. A name takes proofs' spelling (`law_lean_map.toml`): its law part becomes `SamplingDesign`,
-# `sampling_design` or `SAMPLING_DESIGN` (`WorkLaw` to `WorkSamplingDesign`); prose takes "sampling design".
+# `sampling_design` or `SAMPLING_DESIGN` (`WorkLaw` to `WorkSamplingDesign`); prose takes "sampling design". The
+# adapter's test constants take the `DESIGN` its other tests already hold, so the adapter has one spelling.
 # It renames the names whose definitions are on this side (the PoUW plan's `WorkLaw`, `CountLaw`, `TileLaw` and
 # `window_laws`, the configuration's `default_law`, the adapter's `window_law` module and its `law_of`, the served
-# commit's `law_of`, test constants `LAW`) and prose that names the sampling design by a possessive or a qualifier.
+# commit's `law_of`, test constants `LAW`), the Lean names proofs' map renamed where Python cites them (`Law.toJson`),
+# and prose that names the sampling design by a possessive or a qualifier.
 # Left by this map:
 # - proofs' paths (`verity/protocols/proofs/`, the Flock and SPOT areas of `security/`, the lane's benchmarks, the
 #   files `law_prose_map.toml` names), and the names defined there (`Law`, `selection_law`, `params_law`, `second_law`,
@@ -48,6 +50,9 @@
 "CountLaw" = "CountSamplingDesign"
 "TileLaw" = "TileSamplingDesign"
 "a4_law" = "a4_sampling_design"
+"Law.toJson" = "SamplingDesign.toJson"
+"Flock.Draw.Law.bernoulli" = "Flock.Draw.SamplingDesign.bernoulli"
+"Law.subset_miss" = "SamplingDesign.subset_miss"
 
 [[words_in]]
 files = ["adapters/**", "benchmarks/pouw/**", "**/served_zk/served_commit.py"]
@@ -62,13 +67,17 @@ files = ["**/served_table.py"]
 
 [[words_in]]
 files = ["verity/commitments/**/tests/test_blocks.py", "verity/commitments/**/tests/test_interface.py",
-         "verity/protocols/compose/**/test_composition_difftest.py", "adapters/**/test_tp_wires.py",
-         "adapters/**/served_rope.py", "adapters/**/test_edge_history.py", "adapters/**/served_experts.py",
-         "adapters/**/test_serving_rows_bundle.py", "adapters/**/test_serving_rows_boolean.py",
-         "adapters/**/test_window_circuit_pearl.py", "adapters/**/test_window_rows.py", "adapters/**/protocols/spot.py"]
+         "verity/protocols/compose/**/test_composition_difftest.py"]
 [words_in.words]
 "REUSING_LAW" = "REUSING_SAMPLING_DESIGN"
 "LAW" = "SAMPLING_DESIGN"
+
+[[words_in]]
+files = ["adapters/**/test_tp_wires.py", "adapters/**/served_rope.py", "adapters/**/test_edge_history.py",
+         "adapters/**/served_experts.py", "adapters/**/test_serving_rows_bundle.py",
+         "adapters/**/test_serving_rows_boolean.py", "adapters/**/protocols/spot.py"]
+[words_in.words]
+"LAW" = "DESIGN"
 
 [rewrite]
 exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
@@ -86,7 +95,7 @@ exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.p
            "benchmarks/certifier_term/**", "benchmarks/network_e2e/**", "benchmarks/network_sim/**",
            "benchmarks/certifier_timing/**", "benchmarks/scan_cost/**", "benchmarks/datacenter/**",
            "benchmarks/nci/**", "**/vectors/**", "GLOSSARY.md", "tests/lint/**", "tests/test_retired_terms.py",
-           "tests/test_lean_vocabulary.py", "tools/verity/check/tests/test_move_check.py"]
+           "tests/test_lean_vocabulary.py", "**/test_move_check.py"]
 
 [keep]
 patterns = ['"[a-z0-9_-]*laws?[a-z0-9_-]*"', "'[a-z0-9_-]*laws?[a-z0-9_-]*'", 'note:[\w./-]+', 'art:[0-9a-f]+',
