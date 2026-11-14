@@ -88,7 +88,8 @@ def bread(param: str, step: int) -> dict:
 
 
 EX_RANKS = W.ranks_of({"of": [{"units": {"A": 2, "B": 2}, "window": H, "wires": 1}] * 2, "prefix": W.PREFIX})
-EX_REGS = [{"rank": r, "digest": "", "circuit": "", "run": "", "members": [held("A/c0", 0, 2, 1), held("B/c0", 0, 2, 1)]}
+EX_REGS = [{"rank": r, "digest": "", "circuit": "", "run": "", "members": [held("A/c0", 0, 2, 1), held("B/c0", 0, 1, 1),
+                                                                          held("B/c1", 1, 1, 1)]}
            for r in (0, 1)]
 
 
@@ -103,9 +104,15 @@ def test_the_readers_parts_and_wire_tree_are_the_lean_guards():
     assert [(m[0], m[2]) for m in W.parts_of(EX_RANKS, EX_REGS, [("A", 3), ("A", 1), ("A", 2)])] == [(1, 0), (0, 0)]
     assert W.parts_of(EX_RANKS, EX_REGS, [("A", 4)]) is None
     ms = W.parts_of(EX_RANKS, EX_REGS, [("A", 1), ("A", 3)])
-    assert W.wire_tree_failures(EX_RANKS, EX_REGS, {"wires": [wire(0, 0), wire(2, 2)]}, ms) == []
-    assert [c for c, _ in W.wire_tree_failures(EX_RANKS, EX_REGS, {"wires": [wire(0, 0), wire(2, 2), wire(0, 1, "y")]},
-                                                ms)] == ["ranks-wire-tree"]
+
+    def one(a: int, b: int) -> dict:
+        return {"at": a, "base": b, "out": "o0", "port": "z", "radix": [1], "reader": "A", "step": [1], "writer": "B"}
+
+    def codes(ws: list) -> list[str]:
+        return [c for c, _ in W.wire_tree_failures(EX_RANKS, {"wires": ws}, ms)]
+    assert codes([wire(0, 0), wire(2, 2)]) == []
+    assert codes([wire(0, 0), wire(2, 2), wire(0, 1, "y")]) == ["ranks-wire-tree"]
+    assert codes([one(0, 0), one(1, 1)]) == [] and codes([one(0, 0), one(1, 2)]) == ["ranks-wire-tree"]
 
 
 def test_table_rows_are_refused_as_round_2_refuses_them():

@@ -38,7 +38,8 @@ WIRES_WHY = ("the joined record's first wires are not each rank's own wires move
              "rank order, or a wire after them has its reader units in no one rank or all its writers in its reader's rank")
 READS_WHY = ("the joined record's registered declarations are not its ranks', each named r<r>/... and at its rank's units, "
              "in rank order, or a rank's record has values or histories")
-WIRE_TREE_WHY = "a sampled reader member reads through one wire writer rows that lie in more than one writer member, or in none"
+WIRE_TREE_WHY = ("a sampled reader member reads one port through writer rows in more than one rank's window, or in none: its "
+                 "session reads each wired port from one rank's committed tree")
 PARTS_WHY = "a sampled unit is in no rank member"
 NO_REGISTERED = {"openings": [], "params": {}, "reads": [], "roots": [], "tables": []}
 #: the `two-stage-form` refusal's detail (`Spot.SecondStage.FORM_WHY`)
@@ -331,24 +332,36 @@ def _box(p: Mapping[str, Any], lo: int, hi: int) -> tuple[int, int]:
     return a, b
 
 
-def _tree_ok(ranks: Sequence[tuple[str, Mapping[str, int], int]], registrations: Sequence[Mapping[str, Any]],
-             m: tuple[int, str, int, int, int], w: Mapping[str, Any]) -> bool:
+def _writer_ranks(ranks: Sequence[tuple[str, Mapping[str, int], int]], m: tuple[int, str, int, int, int],
+                  w: Mapping[str, Any]) -> list[int] | None:
+    """`Spot.SecondWindow.writerRanks`."""
     r, t, _j, base, units = m
     lo, c, ru = segment(ranks, t, r)[0] + base, w["cut"][1], _reader_units(w)
     if t != w["reader"] or not max(lo, w["at"]) < min(lo + units, w["at"] + ru):
-        return True
+        return []
     a, b = (max(lo, w["at"]) - w["at"]) * c, (min(lo + units, w["at"] + ru) - w["at"]) * c - 1
     x, y = _box(w, a, b)
-    p, q = (member_of(ranks, registrations, w["writer"], x), member_of(ranks, registrations, w["writer"], y)) \
-        if x >= 0 else (None, None)
-    return p is not None and q is not None and p[:3] == q[:3]
+    if x < 0:
+        return None
+    p, q = _rank_of(ranks, w["writer"], x, x), _rank_of(ranks, w["writer"], y, y)
+    return [p] if p is not None and p == q else None
 
 
-def wire_tree_failures(ranks: Sequence[tuple[str, Mapping[str, int], int]], registrations: Sequence[Mapping[str, Any]],
-                       record: Mapping[str, Any], ms: Sequence[tuple[int, str, int, int, int]]) -> list[tuple[str, Any]]:
+def _tree_ok(ranks: Sequence[tuple[str, Mapping[str, int], int]], ws: Sequence[Mapping[str, Any]],
+             m: tuple[int, str, int, int, int]) -> bool:
+    """`Spot.SecondWindow.treeOk`."""
+    for port in _distinct([w["port"] for w in ws if w["reader"] == m[1]]):
+        rss = [_writer_ranks(ranks, m, w) for w in ws if w["reader"] == m[1] and w["port"] == port]
+        if any(x is None for x in rss) or len({r for x in rss for r in x}) > 1:
+            return False
+    return True
+
+
+def wire_tree_failures(ranks: Sequence[tuple[str, Mapping[str, int], int]], record: Mapping[str, Any],
+                       ms: Sequence[tuple[int, str, int, int, int]]) -> list[tuple[str, Any]]:
     """`Spot.SecondWindow.wireTreeFailures`: ``ranks-wire-tree``."""
     ws = _all(_list(record, "wires"), _pattern)
-    ok = ws is not None and all(_tree_ok(ranks, registrations, m, w) for m in ms for w in ws)
+    ok = ws is not None and all(_tree_ok(ranks, ws, m) for m in ms)
     return [] if ok else [("ranks-wire-tree", WIRE_TREE_WHY)]
 
 
@@ -372,5 +385,5 @@ def failures(allow: bool, record: Mapping[str, Any], records: Sequence[Mapping[s
     if ranks is not None:
         ms = parts_of(ranks, registrations, sample)
         found += [("ranks-members", PARTS_WHY)] if ms is None else (
-            wire_tree_failures(ranks, registrations, record, ms) + session_failures(record, statements))
+            wire_tree_failures(ranks, record, ms) + session_failures(record, statements))
     return [("two-stage-form", FORM_WHY)] if not found and not allow else found

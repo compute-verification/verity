@@ -19,7 +19,7 @@
   `second-population`, `second-roots`, `second-sample`, `second-read`, `second-values`, `second-refs`, `second-tables`
   and `second-verified`, read against the rank member in place of an interior part, with the window-domain binding at
   the rank's program, partition digest and run (`portBinding`); and `ranks-wire-tree`: the writer rows a sampled reader
-  member reads through one wire lie in one writer member.
+  member reads through a port lie in one rank's window, so its session reads the port from one committed tree.
 * **The form**: it runs behind `Spot.SecondStage.FORM`, the one switch, and is refused last (`two-stage-form`) while
   that is off.
 
@@ -125,29 +125,37 @@ def partsOf? (rs : Spot.Ranks.Ranks) (regs : Array Spot.Ranks.Registered) (sampl
   pure (ms.foldl (fun acc m => if acc.any (sameMember m) then acc else acc.push m) #[])
 
 def WIRE_TREE_WHY : String :=
-  "a sampled reader member reads through one wire writer rows that lie in more than one writer member, or in none"
+  "a sampled reader member reads one port through writer rows in more than one rank's window, or in none: its " ++
+  "session reads each wired port from one rank's committed tree"
 
-/-- Whether wire `w`'s writer rows that member `m`'s units read lie in one writer member: the closed-form box on the
-writers of the reader indices in `m` (`Spot.Wires.Wire.box`) has both ends in one member, which holds every unit
-between them. -/
-def treeOk (rs : Spot.Ranks.Ranks) (regs : Array Spot.Ranks.Registered) (m : Spot.Ranks.Member)
-    (w : Spot.Wires.Wire) : Bool :=
+/-- The ranks whose units hold the writer rows member `m`'s units read through wire `w`: none read, `some []`; all in
+one rank, that rank, by the closed-form box (`Spot.Wires.Wire.box`) on the writers of the reader indices in `m`, whose
+two ends in one rank put every writer between them there; else none. -/
+def writerRanks (rs : Spot.Ranks.Ranks) (m : Spot.Ranks.Member) (w : Spot.Wires.Wire) : Option (List Nat) :=
   let lo := (rs.segment m.template m.rank).1 + m.base
-  if !w.readsIn (m.template, lo, m.units) then true else
+  if !w.readsIn (m.template, lo, m.units) then some [] else
   let (a, b) := w.indicesIn lo m.units
   let (x, y) := w.box a b
-  let writerOf := Spot.Ranks.memberOf rs regs w.writer
-  decide (0 ≤ x) && match writerOf x.toNat, writerOf y.toNat with
-    | some p, some q => sameMember p q
-    | _, _ => false
+  if x < 0 then none else
+  match rs.rankOf w.writer x.toNat x.toNat, rs.rankOf w.writer y.toNat y.toNat with
+  | some p, some q => if p == q then some [p] else none
+  | _, _ => none
 
-/-- `ranks-wire-tree` of the sampled members `ms` over the joined record `rec`: the writer rows a sampled reader member
-reads through one wire lie in one writer member, so one writer session holds every row the reader's session reads
-through it. Work per sampled member and wire, never per unit. -/
-def wireTreeFailures (rs : Spot.Ranks.Ranks) (regs : Array Spot.Ranks.Registered) (rec : Json)
-    (ms : Array Spot.Ranks.Member) : List (String × Json) :=
+/-- Member `m` reads each wired port of its template from one rank's tree: the writer rows every wire of that port
+reads in `m` lie in one rank (`writerRanks`). Writer members don't matter: a rank's docket commits one tree a port over
+all its members, each member a range of its leaves. -/
+def treeOk (rs : Spot.Ranks.Ranks) (ws : Array Spot.Wires.Wire) (m : Spot.Ranks.Member) : Bool :=
+  (distinct ((ws.filter (·.reader == m.template)).map (·.port))).all fun port =>
+    match (ws.filter fun w => w.reader == m.template && w.port == port).toList.mapM (writerRanks rs m) with
+    | some rss => (distinct rss.flatten.toArray).size ≤ 1
+    | none => false
+
+/-- `ranks-wire-tree` of the sampled members `ms` over the joined record `rec`: each reads every wired port of its
+template from one rank's committed tree (`treeOk`), the one tree its session's registered read of the port names.
+Work per sampled member and wire, never per unit. -/
+def wireTreeFailures (rs : Spot.Ranks.Ranks) (rec : Json) (ms : Array Spot.Ranks.Member) : List (String × Json) :=
   match patternsOf? rec with
-  | some ws => if ms.all fun m => ws.all (treeOk rs regs m) then [] else [("ranks-wire-tree", Json.str WIRE_TREE_WHY)]
+  | some ws => if ms.all (treeOk rs ws) then [] else [("ranks-wire-tree", Json.str WIRE_TREE_WHY)]
   | none => [("ranks-wire-tree", Json.str WIRE_TREE_WHY)]
 
 /-- What `Spot.SecondStage`'s statement checks read of the joined record `rec` that this reader builds: its wires. -/
@@ -175,7 +183,7 @@ def readJ (param : String) (step : Nat) : Json :=
 def exRanks : Spot.Ranks.Ranks := ⟨#[⟨"", #[("A", 2), ("B", 2)], 1⟩, ⟨"", #[("A", 2), ("B", 2)], 1⟩]⟩
 
 def exRegs : Array Spot.Ranks.Registered := #[0, 1].map fun r =>
-  ⟨r, "", "", "", #[⟨"A/c0", 0, 2, #[]⟩, ⟨"B/c0", 0, 2, #[]⟩]⟩
+  ⟨r, "", "", "", #[⟨"A/c0", 0, 2, #[]⟩, ⟨"B/c0", 0, 1, #[]⟩, ⟨"B/c1", 1, 1, #[]⟩]⟩
 
 end Example
 
@@ -191,13 +199,18 @@ end Example
   some [(1, "B", 1), (2, "B", 2), (1, "o0", 2)]
 #guard (partsOf? exRanks exRegs #[("A", 3), ("A", 1), ("A", 2)]).map (·.toList.map fun m => (m.rank, m.index)) ==
     some [(1, 0), (0, 0)] && (partsOf? exRanks exRegs #[("A", 4)]).isNone
--- Rank 0's member `A/c0` reads writer units 1 and 2 through the third wire: rank 0's `B/c0` and rank 1's.
+-- Rank 0's member `A/c0` reads writer units 0 and 1, two writer members of one rank (a step's two selects), through its
+-- wire: accepted. Through the third wire it reads writer units 1 and 2, of two ranks' trees; through `z`, two wires
+-- read one port from two ranks: both refused.
 #guard
   let ms := (partsOf? exRanks exRegs #[("A", 1), ("A", 3)]).getD #[]
   let recOf (ws : Array Json) : Json := Json.mkObj [("wires", .arr ws)]
-  (wireTreeFailures exRanks exRegs (recOf #[wireJ 0 0, wireJ 2 2]) ms).isEmpty &&
-    (wireTreeFailures exRanks exRegs (recOf #[wireJ 0 0, wireJ 2 2, wireJ 0 1 "y"]) ms).map (·.1) ==
-      ["ranks-wire-tree"]
+  let one (a b : Nat) : Json := Json.mkObj [("at", num a), ("base", num b), ("out", .str "o0"), ("port", .str "z"),
+    ("radix", .arr #[num 1]), ("reader", .str "A"), ("step", .arr #[num 1]), ("writer", .str "B")]
+  (wireTreeFailures exRanks (recOf #[wireJ 0 0, wireJ 2 2]) ms).isEmpty &&
+    (wireTreeFailures exRanks (recOf #[wireJ 0 0, wireJ 2 2, wireJ 0 1 "y"]) ms).map (·.1) == ["ranks-wire-tree"] &&
+    (wireTreeFailures exRanks (recOf #[one 0 0, one 1 1]) ms).isEmpty &&
+    (wireTreeFailures exRanks (recOf #[one 0 0, one 1 2]) ms).map (·.1) == ["ranks-wire-tree"]
 -- A registered read listing `table_rows` at its key port: `KEY_ROWS_WHY` where the key is wired, else `TABLE_ROWS_WHY`.
 #guard
   let stmt := Json.mkObj [("draw", Json.mkObj []), ("header", Json.mkObj []),
@@ -221,7 +234,7 @@ def failures (allow : Bool) (rec : Json) (records : Array Json) (served : Array 
     | none => ranks
     | some rs => match partsOf? rs regs sample with
       | none => ranks ++ [("ranks-members", Json.str PARTS_WHY)]
-      | some ms => ranks ++ wireTreeFailures rs regs rec ms ++ sessionFailures rec ms stmts
+      | some ms => ranks ++ wireTreeFailures rs rec ms ++ sessionFailures rec ms stmts
   if found.isEmpty && !allow then [("two-stage-form", Json.str Spot.SecondStage.FORM_WHY)] else found
 
 /-- **Round 2's check over the joined record** (module docstring), the form allowed when `allow` (`Spot.SecondStage.FORM`
