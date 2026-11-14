@@ -835,7 +835,10 @@ def partition(j):
 
 def registration(j):
     j = _json(j)
-    v = _registration_verdict(_params_of(j), j.get("record") if isinstance(j, dict) else None)
+    p = _params_of(j)
+    if "members" in j:
+        p = {**p, "link_members": _link_members(j["members"])}
+    v = _registration_verdict(p, j.get("record"))
     return {"codes": list(v.codes), **({} if v.fanout is None else {"fanout": v.fanout}),
             **({"rests_on_period_check": list(v.rests_on_period_check)} if v.rests_on_period_check else {})}
 
@@ -1119,6 +1122,23 @@ def public_units(j):
     return {"exactly": PF.units_exactly(units, indices)}
 
 
+def _link_members(ms) -> list:
+    """The members a piece is handed (`LinkPoints.membersOfJson`), as `link_points`' functions and `registration.check`
+    read them: each its units' ranges and its circuit's units a proof block."""
+    if not isinstance(ms, list):
+        raise D.Reject("the members are not a list")
+    members = []
+    for m in ms:
+        if not (isinstance(m, dict) and _nat(m.get("vus_per_block"))):
+            raise D.Reject("a member's vus_per_block is not a natural number")
+        us = m.get("units")
+        if not (isinstance(us, list) and us and all(isinstance(r, list) and len(r) == 2 and all(map(_int, r))
+                                                    and 0 <= r[0] < r[1] for r in us)):
+            raise D.Reject("a member's units are not a nonempty list of [lo, hi] with 0 <= lo < hi")
+        members.append((us, m["vus_per_block"]))
+    return members
+
+
 def link_points(j):
     """Each member's fewest and most sampled proof blocks under the sampling design over the population when the sample ends (None where none
     does), and the members whose link points differ (`link_points.bounds`, `refused`; Lean `LinkPoints.piece`)."""
@@ -1128,17 +1148,7 @@ def link_points(j):
     law, n = j.get("law"), j["population"]
     if not isinstance(law, dict) or (why := law_problem(law, n)):
         raise D.Reject(f"the law: {why}" if isinstance(law, dict) else "the law is not an object")
-    if not isinstance(j.get("members"), list):
-        raise D.Reject("the members are not a list")
-    members = []
-    for m in j["members"]:
-        if not (isinstance(m, dict) and _nat(m.get("vus_per_block"))):
-            raise D.Reject("a member's vus_per_block is not a natural number")
-        us = m.get("units")
-        if not (isinstance(us, list) and us and all(isinstance(r, list) and len(r) == 2 and all(map(_int, r))
-                                                    and 0 <= r[0] < r[1] for r in us)):
-            raise D.Reject("a member's units are not a nonempty list of [lo, hi] with 0 <= lo < hi")
-        members.append((us, m["vus_per_block"]))
+    members = _link_members(j.get("members"))
     try:
         return {"bounds": [None if b is None else list(b) for b in LP.bounds(law, n, members)],
                 "refused": LP.refused(law, n, members)}
@@ -2534,10 +2544,17 @@ KEY_PARAMS = (f"the challenger's key is not at the deployed LMS parameters (W = 
               "reads the challenger's signatures only under those")
 
 
-def decode_params_v2(j) -> dict:
-    """`OneStageZk.paramsOfJson`'s refusals of v1's part of the parameters: v1's (`covered_params`,
+def subset_only(kind: str) -> str:
+    """`OneStageZk.SUBSET_ONLY`"""
+    return (f"the sampling design is {kind}, which the one-statement audit's soundness statement doesn't cover: "
+            "it covers a subset sampling design")
+
+
+def parsed_params_v2(j) -> dict:
+    """`OneStageZk.paramsParsed`'s refusals of v1's part of the parameters: v1's (`covered_params`,
     `OneStage.paramsOfJson`), then parameters naming no challenger (`NO_CHALLENGER`), or one whose key is at other LMS
-    parameters than the deployed ones (`KEY_PARAMS`)."""
+    parameters than the deployed ones (`KEY_PARAMS`). Its sampling design is the sampling design v1 resolved, under any kind v1
+    parses."""
     rest = {k: v for k, v in j.items() if k != "proofs"}
     p = covered_params(rest)
     if "challenger" not in rest:
@@ -2546,6 +2563,20 @@ def decode_params_v2(j) -> dict:
     if (key.W, key.H) != DEPLOYED:
         raise D.Reject(KEY_PARAMS)
     return p
+
+
+def subset_design(p: dict) -> dict:
+    """`OneStageZk.paramsOfJson`'s last refusal, of parsed parameters (`parsed_params_v2`) whose sampling design is no
+    `subset` one, by its kind (`subset_only`): a rate stated as text is its design over the population by here."""
+    if p["law"]["law"] != "subset":
+        raise D.Reject(subset_only(p["law"]["law"]))
+    return p
+
+
+def decode_params_v2(j) -> dict:
+    """`OneStageZk.paramsOfJson`'s refusals of v1's part of the parameters: `parsed_params_v2`'s, then a sampling design
+    that is no `subset` one (`subset_design`)."""
+    return subset_design(parsed_params_v2(j))
 
 
 def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: int = 1,
@@ -2720,15 +2751,17 @@ def test_v2_refuses_a_population_out_of_order(server, server_v2):
         assert (out["verdict"], out["reason"]) == ("reject", want), (s.templates, out)
 
 
-def test_the_per_member_form_as_written_is_what_v2_parses_and_never_checks(tmp_path, server, server_v2):
+def test_the_per_member_form_as_written_is_what_v2_parses_and_its_check_reads(tmp_path, server, server_v2):
     """`proofs.members_v2` writes v2's per-member form of ``proofs`` for a window of several members, and
     `OneStageZk`'s parsers read what it wrote (`proofs.members_parsed`, the executable's ``members``:
-    `membersParamsOfJson`, `membersEvidenceOf`, `membersHeld`), on an audit v1 accepts: every member with its files'
-    digests, its units and its ``vus_per_block``, and a statement for each member with a session, in the members'
-    order. The command's line says ``parsed, not checked`` and names no verdict, and the audit refuses the same case
-    for its keys, so no check of the form is reached. What the parsers refuse the command refuses with their reason:
-    statements out of the members' order, a statement of two sessions or of a member the parameters don't name, v1's
-    ``sessions`` other than the statements', and either file in the one statement's form."""
+    `membersParamsOfJson`, `membersEvidenceOf`, `membersHeld`, `sampledHeld`), on an audit v1 accepts: every member
+    with its files' digests, its units and its ``vus_per_block``, and a statement for each member with a session, in
+    the members' order, each a member the evidence's ``proved_units`` hold a unit of. The command's line says
+    ``parsed, not checked`` and names no verdict. The audit's check reads the same case in the form and rejects it at
+    the first check that fails: the stand-in sessions' records name no coin tree the challenger's release log shows.
+    What the parsers refuse the command refuses with their reason: statements out of the members'
+    order, a statement of two sessions, of a member the parameters don't name or of a member the sample holds no unit
+    of, v1's ``sessions`` other than the statements', and either file in the one statement's form."""
     rec, _, base, params = _audit_v1_accepts(SETUPS[3], "v2-members", server)
 
     def member(k: int, name: str, lo: int, hi: int, *sessions: str) -> PF.Member:
@@ -2750,7 +2783,8 @@ def test_the_per_member_form_as_written_is_what_v2_parses_and_never_checks(tmp_p
     assert names == ["s0", "s1"] and [st_["member"] for st_ in pe["statements"]] == [ms[0].name, ms[2].name]
     assert blobs == [f for m in (ms[0], ms[2]) for f in (m.proof.circuit, m.proof.public, m.proof.sessions[0] / "session.json",
                                                          m.proof.sessions[0] / "rep-0.bin")] + [ms[1].proof.circuit, ms[1].proof.public]
-    p2, e2 = params | {"proofs": pm}, base | {"proofs": pe, "sessions": names}
+    # the sample: a unit of each member with a session, and none of the member without one
+    p2, e2 = params | {"proofs": pm}, base | {"proofs": pe, "sessions": names, "proved_units": [1, 4]}
     got, refused = PF.members_parsed(p2, e2)
     assert refused is None, refused
     assert got == {
@@ -2762,7 +2796,7 @@ def test_the_per_member_form_as_written_is_what_v2_parses_and_never_checks(tmp_p
 
     case = {"blobs": [f.read_bytes().hex() for f in blobs], "commitment": _hex(rec), "evidence": _hex(e2), "params": p2}
     out = server_v2.exchange(_json(case))
-    assert (out["verdict"], out["reason"]) == ("reject", "params: the keys of proofs are not circuit, public, registered")
+    assert (out["verdict"], out["reason"]) == ("reject", f"proofs: session s0's coins are not the challenger's: {NO_TREE}")
 
     def why(p: dict = p2, e: dict = e2) -> str:
         got, refused = PF.members_parsed(p, e)
@@ -2779,6 +2813,10 @@ def test_the_per_member_form_as_written_is_what_v2_parses_and_never_checks(tmp_p
         "proofs: member x/c0: the parameters name no such member")
     assert why(e=e2 | {"proofs": {"statements": [first, {**last, "member": ms[0].name}]}}) == (
         f"proofs: member {ms[0].name}: a second statement: a member's units are one statement's")
+    assert why(e=e2 | {"proved_units": [1, 3]}) == (
+        f"proofs: member {ms[2].name}: the sample holds none of its units, and a member the sample missed has no statement")
+    assert why(e=e2 | {"proved_units": [2, 3, 4]}) == (
+        f"proofs: member {ms[0].name}: the sample holds none of its units, and a member the sample missed has no statement")
     assert why(e=e2 | {"sessions": names[::-1]}) == (
         "evidence: proofs: the sessions are not the evidence's sessions, in order")
     one = {"sessions": [x for st_ in pe["statements"] for x in st_["sessions"]]}
@@ -2850,7 +2888,9 @@ def test_link_points_refuses_a_law_none_of_whose_draws_ends():
 def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
     """v2 reads its sample's coins as v1 does (`OneStageZk.coinsOf`, v1's `coinsOf`), and only from the auditor's
     challenger under a key at the deployed parameters: parameters naming none, one without a window (`NO_CHALLENGER`) or
-    one whose key is at other parameters (`KEY_PARAMS`) are refused, as is evidence holding more than its limits
+    one whose key is at other parameters (`KEY_PARAMS`) are refused, as are parameters whose sampling design is no
+    `subset` one (`subset_only`: a `stratified` or `work` one, as an object or as a rate stated as text, while a rate
+    that names the audit's subset sampling design over the population is read as that sampling design), and evidence holding more than its limits
     (`Challenger.LIMITS`: an opening's path one digest past `MAX_PATH`, and the evidence at it read on), and evidence
     whose coins are not the challenger's signed release is rejected: none, the record carrying its own key, coins under
     another key, on another window, of another family or released after another digest, a session record or close whose
@@ -2861,12 +2901,18 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
     than theirs is rejected after them (`checkBlobsAt`, v1's `checkAt`). Each step Lean rejects at is the Python
     reference's: `decode_params_v2`, `coins_within`, `_coins_of`, then v1's `check` with the session's verdict the
     reject its blobs give, its record on the coin tree the challenger sampled."""
-    s, law = SETUPS[3], {"k": 3, "law": "stratified"}
+    s, law = SETUPS[3], {"k": 3, "law": "subset"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
     after = bytes.fromhex(R.digest(rec))
     circuit, public = STAND_IN_CIRCUIT, _public_of(rec)
     failed = {"flock-verify/s": {"accepted": False, "of_record": True}}
+    table = {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}}
+    uncovered = {"a stratified design": ({"k": 3, "law": "stratified"}, None, "stratified"),
+                 "a work design": ({"k": 3, "law": "work"}, table, "work"),
+                 "a work design with no table": ({"k": 3, "law": "work"}, None, "work"),
+                 "a stratified rate": ("stratified-rate:1/2", None, "stratified"),
+                 "a work rate": ("work-rate:1/2", table, "work")}
 
     def audit_of(d: Drawn, draw: dict, coins, **params) -> dict:
         proved = DR.proved(draw)
@@ -2988,6 +3034,15 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
              for name in DRAW_MUTATIONS if name not in ("before", "unread", "read-tampered", "other-after")}
         for name, (want, a) in cases.items():
             assert (python(a), lean(a)) == (want, want), (seed, name)
+        for name, (other, work, kind) in uncovered.items():
+            a = audit_of(d, draw, coins, law=other, **({} if work is None else {"work_table": work}))
+            with pytest.raises(D.Reject) as refused:
+                decode_params_v2(a["params"])
+            out = outcome(a)
+            assert (str(refused.value), out["verdict"], out["reason"]) == (
+                subset_only(kind), "reject", f"params: {subset_only(kind)}"), (seed, name)
+        rate = audit_of(d, draw, coins, law="rate:3/5")
+        assert decode_params_v2(rate["params"])["law"] == law and (python(rate), lean(rate)) == ("verdict", "verdict"), seed
         for name, (c, why) in unclosed(coins).items():
             a = audit_of(d, draw, c)
             e = {k: v for k, v in a["evidence"].items() if k != "proofs"} | {"verdicts": failed}
@@ -3675,12 +3730,23 @@ def _cut(population: int, cuts: list[int], owners: list[int]) -> list[list[list[
     return list(out.values())
 
 
+def _cut_members(population: int, members: tuple, gs: list[int], bad: int, k: int) -> list[dict]:
+    """Members as a piece is handed them (`LinkPoints.membersOfJson`): `[0, population)` cut by `members` (`_cut`), each
+    `gs` units a proof block; `bad` from 1 to 4 breaks the `k`-th: a unit past the population, two of its ranges
+    meeting, no unit a proof block, or no range."""
+    ms = [{"units": us, "vus_per_block": gs[i % len(gs)]} for i, us in enumerate(_cut(population, *members))]
+    if 1 <= bad <= 4 and ms:
+        m = ms[k % len(ms)]
+        m |= [{"units": [*m["units"], [population, population + 1]]}, {"units": [*m["units"], m["units"][0]]},
+              {"vus_per_block": 0}, {"units": []}][bad - 1]
+    return ms
+
+
 def _link_case(kind: str, k: int, population: int, strata: tuple, works: list[int], members: tuple, gs: list[int],
                bad: int) -> dict:
     """A `link_points` input: a `kind` law of `k` over `population` units, a stratified or work sampling design's strata cut by
     `strata` (`_cut`) with each stratum's k its rule's (work `works`, floor 1), and members cut by `members`, each `gs`
-    units a proof block; `bad` from 1 to 4 breaks one member: a unit past the population, two of its ranges meeting, no
-    unit a proof block, or no range."""
+    units a proof block, one of them broken where `bad` says (`_cut_members`)."""
     n_k = k % population + 1 if population else k
     if kind == "subset":
         law = {"k": k % (population + 2), "law": kind}
@@ -3695,12 +3761,7 @@ def _link_case(kind: str, k: int, population: int, strata: tuple, works: list[in
         total = sum(t["work"] * LP.size(t["units"]) for t in ss)
         law = {"k": n_k, "law": kind, "strata": [{**t, "k": work_k(n_k, t["work"], LP.size(t["units"]), total, 1)}
                                                  for t in ss] if total else ss}
-    ms = [{"units": us, "vus_per_block": gs[i % len(gs)]} for i, us in enumerate(_cut(population, *members))]
-    if 1 <= bad <= 4 and ms:
-        m = ms[k % len(ms)]
-        m |= [{"units": [*m["units"], [population, population + 1]]}, {"units": [*m["units"], m["units"][0]]},
-              {"vus_per_block": 0}, {"units": []}][bad - 1]
-    return {"law": law, "members": ms, "population": population}
+    return {"law": law, "members": _cut_members(population, members, gs, bad, k), "population": population}
 
 
 CUTS = st.tuples(st.lists(st.integers(0, 60), max_size=6), st.lists(st.integers(0, 3), min_size=1, max_size=4))
@@ -3711,6 +3772,29 @@ LINK_POINTS = D.Port(PIECES, "link_points", link_points, st.one_of(
     st.builds(lambda law, n, ms: {"law": law, "members": ms, "population": n}, JSON, st.integers(-1, 9), JSON),
     JSON), package=PACKAGE)
 
+#: Windows a member of which can hold nine sampled proof blocks or eight, which open 4 link points and 3 at one unit a
+#: proof block: one template's 24 proof blocks, and PAIR's two with TRIPLE's eighteen, a stratum each.
+LINK_SETUPS = [Setup(P.population_program(PAIR, 24), P.template_instance_query(PAIR.id)),
+               Setup(P.mixed_population_program([(PAIR, 2), (TRIPLE, 18)]), P.template_instances_query([PAIR.id, TRIPLE.id]))]
+PROGRAMS.update({s.sha512: s.program for s in LINK_SETUPS})
+
+
+def _registration_members(a: dict, cut: int, gs: list[int], bad: int) -> dict:
+    """The `registration` piece's input of the audit `a` with the per-member form's members: the record's population
+    cut in two at `cut`, or whole where it holds under two units, each `gs` units a proof block, one broken where
+    `bad` says (`_cut_members`)."""
+    n = a["record"].get("population") if isinstance(a["record"], dict) else None
+    n = n if _nat(n) else 0
+    return {**_REGISTRATION_OF(a),
+            "members": _cut_members(n, ([cut % (n - 1) + 1] if n > 1 else [], [0, 1]), gs, bad, cut)}
+
+
+#: `registration` inputs with members: audits of `LINK_SETUPS`' windows and of the small ones, with at most one change.
+REGISTRATIONS_WITH_MEMBERS = st.one_of(
+    *[st.builds(_registration_members, changed_audits(most=1, setups=setups), st.integers(0, 60),
+                st.lists(st.sampled_from([1, 1, 2]), min_size=1, max_size=2), st.integers(0, 20))
+      for setups in (LINK_SETUPS, LINK_SETUPS, LINK_SETUPS, SETUPS)],
+    st.builds(lambda a, ms: {**_REGISTRATION_OF(a), "members": ms}, changed_audits(most=0), JSON))
 
 _FITS_HEX = st.binary(max_size=6).map(bytes.hex)
 _FITS_JSON = st.recursive(st.none() | st.booleans() | st.integers(-300, 300) | TEXT | st.sampled_from(["\n\r\t\\", "\x1f\x7f"]),
@@ -6096,6 +6180,69 @@ def test_a_piece_agrees(pieces, port, examples):
     assert stats.outputs > examples // 4 and stats.rejects > 0, stats
 
 
+def test_link_points_holds_the_per_member_forms_members_as_the_python_does(pieces):
+    """The registration's `link-points` on the per-member form's members, Lean's answers the Python's (the piece's
+    ``members``, which `Registration.check` reads as it reads the ones `OneStageZk.membersParamsOfJson` hands it from a
+    case's parameters; `registration.check`'s ``members``). Two windows of two members at one unit a proof block:
+    PAIR's two proof blocks and TRIPLE's eighteen, a template each, and one template's twenty-four cut in half. A row
+    is a sampling design with each member's fewest and most sampled proof blocks over the samples that end, the members
+    a sample that ends misses (fewest none) and the members whose fewest and most open different link points (3 up to
+    eight proof blocks, 4 up to sixteen, 5 past). The `link_points` piece answers those counts and the members of
+    either list, and the registration is refused, for `link-points` alone, exactly where a list holds a member:
+
+    * a stratum inside each member (`stratified:10` over the two templates), or a subset that leaves out one proof
+      block (`subset:19`, `subset:23`): no sample misses a member and each has one count, so the registration passes;
+    * `subset:9` over two and eighteen misses PAIR's member and holds seven to nine of TRIPLE's, 3 link points or 4;
+    * `subset:20` over the halves holds eight to twelve of each, 3 link points or 4, and misses neither;
+    * `subset:2` over two and eighteen, and `stratified:1` over the halves, whose one stratum holds both members,
+      miss either member and give each one count: link points alone pass them;
+    * a Bernoulli sampling design of rate 0 samples nothing, so each member's fewest and most are none: link points
+      alone pass it.
+
+    With no members, the one-statement form's, every record passes. Then registrations of such windows and of small
+    ones, their members cut at random and some broken, agree, a share of them refused for their link points and a
+    share passed."""
+    two = [{"units": [[0, 2]], "vus_per_block": 1}, {"units": [[2, 20]], "vus_per_block": 1}]
+    half = [{"units": [[0, 12]], "vus_per_block": 1}, {"units": [[12, 24]], "vus_per_block": 1}]
+    rows = [(1, two, {"k": 10, "law": "stratified"}, [[1, 1], [9, 9]], [], []),
+            (1, two, {"k": 19, "law": "subset"}, [[1, 2], [17, 18]], [], []),
+            (0, half, {"k": 23, "law": "subset"}, [[11, 12], [11, 12]], [], []),
+            (1, two, {"k": 9, "law": "subset"}, [[0, 2], [7, 9]], [0], [1]),
+            (0, half, {"k": 20, "law": "subset"}, [[8, 12], [8, 12]], [], [0, 1]),
+            (1, two, {"k": 2, "law": "subset"}, [[0, 2], [0, 2]], [0, 1], []),
+            (0, half, {"k": 1, "law": "stratified"}, [[0, 1], [0, 1]], [0, 1], []),
+            (1, two, {"law": "bernoulli", "p": "0/1"}, [[0, 0], [0, 0]], [0, 1], [])]
+    for setup, members, design, bounds, missed, differ in rows:
+        s = LINK_SETUPS[setup]
+        rec = _record_of(s, None, design, WINDOW, leaf_layer=LEAF)
+        assert [i for i, (lo, _) in enumerate(bounds) if lo == 0] == missed, design
+        assert [i for i, (lo, hi) in enumerate(bounds) if LP.nbl(1, lo) != LP.nbl(1, hi)] == differ, design
+        refused = sorted({*missed, *differ})
+        counts = {"law": rec["law"], "members": members, "population": rec["population"]}
+        assert link_points(counts) == {"bounds": bounds, "refused": refused}, design
+        assert D.replay(LINK_POINTS, counts, pieces) == ("output", D.canonical(link_points(counts))), design
+        given = {"params": {"anchors": [], "delta": "1/1000", "law": design, "leaf_layer": LEAF, "log": [],
+                            "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": None,
+                            "scheme": SCHEME, "work_table": None}, "record": rec}
+        codes = ["link-points"] if refused else []
+        for case, want in (({**given, "members": members}, codes), (given, []), ({**given, "members": []}, [])):
+            reg = registration(case)
+            assert reg["codes"] == want, (design, case.get("members"))
+            assert D.replay(REGISTRATION, case, pieces) == ("output", D.canonical(reg))
+        if design["law"] == "stratified":
+            assert [t["k"] for t in rec["law"]["strata"]] == ([1, 9] if setup else [1])
+    seen: dict[bool, int] = {}
+
+    def counted(j):
+        out = registration(j)
+        refused = "link-points" in out["codes"]
+        seen[refused] = seen.get(refused, 0) + 1
+        return out
+    stats = D.run(D.Port(PIECES, "registration", counted, REGISTRATIONS_WITH_MEMBERS, package=PACKAGE), examples=400,
+                  server=pieces)
+    assert stats.outputs > 100 and stats.rejects > 0 and min(seen.get(True, 0), seen.get(False, 0)) > 20, (stats, seen)
+
+
 def test_r8_reads_the_readers_python_does(pieces):
     """R8 past a population program, Lean's answers the Python's: two calls of `PAIR` on one pair of `x`, or a batch
     broadcasting it, share the run Input `x` at F 1, and the registration is refused (`R8-shared-input`); a call reading
@@ -8347,7 +8494,11 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
     Bernoulli law at 0 < p < 1 are refused (`paramsOfJson`), and evidence whose sample carries a closure
     (`evidenceOf`), after its commitment's digest, v2's parameters naming a challenger at the deployed LMS parameters so
     that its refusals of parameters naming none (`NO_CHALLENGER`) or another key (`KEY_PARAMS`) aren't what refuse them;
-    the same work audit without the closure is accepted by v1."""
+    the same work audit without the closure is accepted by v1. v1 accepts an honest audit under a `subset`, `stratified`
+    or `work` sampling design; v2, whose one statement's soundness statement covers a subset sampling design alone,
+    refuses the parameters of the `stratified` and the `work` one by their kind (`subset_only`), and the `subset` ones'
+    it doesn't. So v2 refuses the
+    work audit that carries the closure at its parameters, and a subset audit whose sample carries one at its evidence."""
     for kind, stage in (("bernoulli", "params: "), ("closure", "evidence: ")):
         params, rec, evidence = _covered_case(kind)
         case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
@@ -8363,6 +8514,14 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
                                   "proofs": {"circuit": _sha(circuit), "public": _sha(public), "registered": None},
                                   "window_root": d.ledger.window["root"]}}
         out = server_v2.exchange(_json(v2))
+        if kind == "closure":
+            assert (out["verdict"], out["reason"]) == ("reject", f"params: {subset_only('work')}"), out
+            covered, held, plain = _covered_case("subset")
+            sample = plain["draw"]
+            widened = {**sample, "closure": [u for u in range(sample["population"]) if u not in sample["units"]][:1]}
+            carried = {k: v for k, v in plain.items() if k != "verdicts"} | {"draw": widened, "proofs": {"sessions": []}}
+            out = server_v2.exchange(_json({**v2, "commitment": _hex(held), "evidence": _hex(carried),
+                                            "params": {**v2["params"], "law": covered["law"], "work_table": None}}))
         assert out["verdict"] == "reject" and out["reason"].startswith(stage), (kind, out)
         assert "soundness statement doesn't cover" in out["reason"], (kind, out)
         if kind == "bernoulli":
@@ -8380,7 +8539,10 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
         assert D.replay(ONE_STAGE, case, server)[0] == "accept", kind
         two = {**v2, "params": {**v2["params"], "law": params["law"], "work_table": params["work_table"]}}
         out = server_v2.exchange(_json(two))
-        assert not (out["reason"] or "").startswith("params: "), (kind, out)
+        if kind in ("stratified", "work"):
+            assert (out["verdict"], out["reason"]) == ("reject", f"params: {subset_only(kind)}"), (kind, out)
+        else:
+            assert not (out["reason"] or "").startswith("params: "), (kind, out)
 
 
 def test_the_run_refuses_a_population_out_of_order(pieces):
