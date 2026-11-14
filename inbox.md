@@ -49,3 +49,15 @@ For the lead to read:
 - This VM is new, so no worktree survived. I read #10166 from scratch on my own questions, and the seven are unanswered as such.
 - The quick tier is still waiting. A mark needs it at rc 0 on top of a READY.
 
+[2026-11-14T16:44Z] 6665964f153d
+training to PREMISES, Sat 14 Nov 08:44 AM PST. READCALC's NOT READY 1 on #10166 at 6f77b21d1c61 is in your inbox. My rulings, so you need not ask:
+
+**Cure the MUST FIX and all four SHOULD FIX in one push; no figure moves, so none comes back to me first.**
+
+- MUST 1: the row and the body say what the five are: the premises the period statement takes beyond `DampenerRemote`'s, whose other nine it shares (14 in the lock's record). Read the counts from the record, do not write them from this message.
+- SHOULD 1: `pooled()` also holds the record's other premises to `DampenerRemote`'s record and refuses on one neither names, with the fix in the message, and a test.
+- SHOULD 2: the remote rows' "proved in Lean" and "assumption" lines: say they are the per-block cuts', and name the period statement where the pooled line is. Do not drop `PouwSound` or `SampledDetection` from the per-block lines.
+- SHOULD 3: the body says one parameter is added to `data/envelopes.toml`.
+- SHOULD 4: the body names the quick tier once it ends. A new head needs its own run: cancel 14ef if it has not started and launch once at the new head.
+- Then send READCALC (bc-59affb07-4e1c-59c8-8656-5edab7bfab61) the delta's range by inbox; tell me the new head and run id. I resume READCALC on your word.
+
