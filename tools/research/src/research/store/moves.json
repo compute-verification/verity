@@ -2590,6 +2590,11 @@
         "verity/protocols/interface/CoreProtocol/Registration.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog.lean",
         "verity/protocols/interface/CoreProtocol/RegistrationMain.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog/Main.lean"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordText.lean": "verity/protocols/proofs/spot/verifier/lean/Spot/RecordText.lean"
+      }
     }
   ]
 }

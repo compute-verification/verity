@@ -114,7 +114,7 @@
    "except": [],
    "why": "the count of (c, k)-inference blocks is code, as NciCheck.Desc is: Lean core, C-Flock's program decoder, the check's instance format and refusals, and the description-sized check's summaries and θ"
   },
-  "NciCheck.RecordText": {
+  "Spot.RecordText": {
    "imports": ["Flock.Sigma", "Flock.TemplateQuery", "Spot.Wires"],
    "except": [],
    "why": "what an execution phase's circuit record's text declares is code, read from the decoded Program and the parsed text alone: Flock's program decoder and template queries, a type's bits read from its structure (Flock.Sigma, which imports the decoder alone) and SPOT's reader of the record's wires; nothing else of NciCheck, so that a package NciCheck requires can hold it, no Mathlib and nothing of Security"
@@ -123,12 +123,12 @@
    "imports": [
     "Flock.TemplateQuery",
     "Spot.Wires",
-    "NciCheck.RecordText",
+    "Spot.RecordText",
     "NciCheck.Baseline",
     "NciCheck.DefinitionDigest"
    ],
    "except": [],
-   "why": "the check of an execution phase's circuit record is code, as NciCheck.Baseline is: θ's provenance check and what it imports, Flock's template queries, SPOT's reader of the record's wires, what the record's text declares (NciCheck.RecordText) and the Definition's closure digest; nothing of NciCheck.Count, no Mathlib and nothing of Security"
+   "why": "the check of an execution phase's circuit record is code, as NciCheck.Baseline is: θ's provenance check and what it imports, Flock's template queries, SPOT's reader of the record's wires, what the record's text declares (Spot.RecordText) and the Definition's closure digest; nothing of NciCheck.Count, no Mathlib and nothing of Security"
   },
   "NciCheck.RecordCount": {
    "imports": ["NciCheck.Record", "NciCheck.Count"],
