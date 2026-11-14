@@ -457,9 +457,12 @@ def divert_output(run_dir: Path, custody_dir: Path) -> bool:
 
 
 def _key_expiry(custody_dir: Path) -> str | None:
+    if not (Path(custody_dir) / CRED_FILE).exists():
+        return None
     try:
         return json.loads((Path(custody_dir) / CRED_FILE).read_text()).get("expires_utc")
-    except (OSError, ValueError, AttributeError):
+    except (OSError, ValueError, AttributeError) as e:
+        print(f"research data: {Path(custody_dir) / CRED_FILE} unread, so its key's expiry is not known ({type(e).__name__})", file=sys.stderr, flush=True)
         return None
 
 
@@ -777,9 +780,12 @@ def triage_row(st: Any, run_dir: Path, *, verify_remote: bool = False, now: floa
 
 
 def _read(p: Path) -> dict[str, Any] | None:
+    if not p.exists():
+        return None
     try:
         d = json.loads(p.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"research data: {p} unread, read as none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     return d if isinstance(d, dict) else None
 

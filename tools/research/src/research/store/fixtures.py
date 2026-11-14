@@ -26,6 +26,7 @@ import re
 import secrets
 import shutil
 import subprocess
+import sys
 import tempfile
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -303,7 +304,8 @@ def hydrate_stubs(store: LocalStore, repo: Path, paths: Sequence[str] = (), *, s
             if f.is_symlink() or not f.is_file() or f.stat().st_size > STUB_MAX:
                 continue
             mt = STUB.match(f.read_bytes())
-        except OSError:
+        except OSError as e:
+            print(f"research data: {rel} unread, so it is not checked as a stub ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if mt:
             stubs[rel] = (mt.group(1).decode(), int(mt.group(2)))

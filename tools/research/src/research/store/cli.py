@@ -693,7 +693,8 @@ def _run_file(st: LocalStore, run_id: str, rel: str) -> object:
     try:
         art = ((st.get_attempt(run_id) or {}).get("outputs") or {}).get("run_record")
         return json.loads((st.fetch(art, paths=[rel]) / rel).read_text()) if art else None
-    except (StoreError, OSError, ValueError):
+    except (StoreError, OSError, ValueError) as e:
+        print(f"research data: {rel} of run {run_id}'s run record not read ({type(e).__name__})", file=sys.stderr, flush=True)
         return None
 
 

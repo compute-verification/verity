@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sys
 import tempfile
 import traceback
 from pathlib import Path
@@ -71,9 +72,12 @@ def open_store(store: Any = None, root: str | os.PathLike[str] | None = None) ->
 
 
 def _read(p: Path) -> dict[str, Any] | None:
+    if not p.exists():
+        return None
     try:
         d = json.loads(p.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"research data: {p} unread, read as none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     return d if isinstance(d, dict) else None
 

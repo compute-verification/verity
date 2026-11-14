@@ -51,7 +51,8 @@ def _lockfiles_at(source_root: Path, tree: str) -> dict[str, str]:
     for name in E.LOCKFILES:
         try:
             r = subprocess.run(["git", "cat-file", "-p", f"{tree}:{name}"], cwd=source_root, capture_output=True, timeout=30)
-        except (OSError, subprocess.TimeoutExpired):
+        except (OSError, subprocess.TimeoutExpired) as e:
+            print(f"research data: {name} not read from the tree ({type(e).__name__})", file=sys.stderr, flush=True)
             continue
         if r.returncode == 0:
             out[name] = hashlib.sha256(r.stdout).hexdigest()
@@ -73,8 +74,8 @@ def _rows(rows: Any) -> list[dict[str, Any]]:
             try:
                 out.append(json.loads(r["manifest_json"]))
                 continue
-            except ValueError:
-                pass
+            except ValueError as e:
+                print(f"research data: a row's manifest_json is not JSON, so the row is shown as it is ({e})", file=sys.stderr, flush=True)
         out.append(r if isinstance(r, dict) else {"id": str(r)})
     return out
 
