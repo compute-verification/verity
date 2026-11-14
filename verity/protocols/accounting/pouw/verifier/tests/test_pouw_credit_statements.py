@@ -11,7 +11,12 @@ session sampled. `prove` makes those proofs with the files a prover would hold,
 the ``--registered`` file `h1window.table_reads_file`'s form, so a window is credited only when credit handed the
 verifier the files the prover proved against. `spot/tests/test_proofs.py` holds the real verifier to
 rejecting tampered proof bytes and to the circuit file's digest; `test_pouw_credit.py` holds `credit.registered_file`
-to `h1window.table_reads_file` byte for byte."""
+to `h1window.table_reads_file` byte for byte.
+
+The verdict acted on is the Lean's (`verifier.of_record`): `Credit.window`'s and `Credit.periodCredit`'s on the outcomes
+the statement runs gave, and the challenger's salt check's (`core_check.salt_of_record`, on the salt difftest's cases),
+each equal to its Python twin's on honest and refused evidence, and a refusal wherever the two differ or the Lean gives
+no answer."""
 from __future__ import annotations
 
 import hashlib
@@ -20,11 +25,14 @@ import json
 import random
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import credit as Cr
 from verity.protocols.accounting.pouw.verifier import live_reads as LR
+from verity.protocols.accounting.pouw.verifier import verifier as V
 from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
@@ -619,3 +627,79 @@ def test_a_period_whose_live_statement_fails_earns_nothing(seed, tmp_path, verif
     p.write_text(json.dumps(rec))
     got, refused = Cr.period_credit(d["key"], d["ledger"], d["pins"], d["main"], d["name"], windows, rc.lms_verify)
     assert got is None and refused[0] == "window" and "live: round 0's live@0 session " in refused[1], refused
+
+
+@pytest.fixture
+def asked(monkeypatch):
+    """`verifier.lean` as credit and the salt check ask it: ``fns``, each function asked in order; ``say[fn]``, an answer
+    to `fn` in place of the Lean's."""
+    lean, out = V.lean, SimpleNamespace(fns=[], say={})
+
+    def spy(fn, value):
+        out.fns.append(fn)
+        return out.say[fn](value) if fn in out.say else lean(fn, value)
+
+    monkeypatch.setattr(V, "lean", spy)
+    return out
+
+
+def _disagree(refused, fn: str) -> bool:
+    return refused[0] == V.DISAGREE and f"disagree on {fn}, so it stands refused: the Lean answered " in refused[1]
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_an_honest_windows_credit_is_the_leans_on_its_outcomes(seed, tmp_path, verifier, asked):
+    """The window's verdict is the Lean `Credit.window`'s on the outcomes the statement runs gave, its Python twin's the
+    same."""
+    d, statements = window(seed, tmp_path)
+    assert credit(d, statements) == (_credited(d), None)
+    assert asked.fns[-1] == "window" and "credit-verified" in asked.fns and "credit-live-verified" in asked.fns
+
+
+def test_a_window_the_lean_and_its_python_twin_disagree_on_is_refused(tmp_path, verifier, asked, monkeypatch):
+    """Either side off the other refuses the window, and so does a Lean that gives no answer: the Python twin is never
+    the fallback."""
+    d, statements = window(0, tmp_path)
+    asked.say["window"] = lambda _v: {"credited": [*_credited(d), len(d["calls"])]}
+    got, refused = credit(d, statements)
+    assert got is None and _disagree(refused, "window"), refused
+    asked.say["window"] = lambda _v: {"refused": ["window", "stub"]}
+    assert _disagree(credit(d, statements)[1], "window")
+
+    def gone(_v):
+        raise V.LeanError("pouw-check-difftest ended on window")
+
+    asked.say["window"] = gone
+    got, refused = credit(d, statements)
+    assert got is None and refused == (V.DISAGREE, "the Lean verifier of record gave no answer to window, so it stands "
+                                                   "refused: pouw-check-difftest ended on window")
+    del asked.say["window"]
+    python = Cr._window
+    monkeypatch.setattr(Cr, "_window", lambda *a: (lambda g, w: (g and ([*g[0], len(d["calls"])], *g[1:]), w))(
+        *python(*a)))
+    assert _disagree(credit(d, statements)[1], "window")
+    monkeypatch.setattr(V, "RECORD_VERDICT", "python")
+    asked.fns.clear()
+    assert credit(d, statements) == ([*_credited(d), len(d["calls"])], None) and "window" not in asked.fns
+
+
+@pytest.mark.parametrize("seed", SEEDS[:1])
+def test_an_honest_periods_credit_is_the_leans_and_a_disagreement_refuses_it(seed, tmp_path, verifier, asked):
+    d, windows = _period(seed, tmp_path)
+    args = (d["key"], d["ledger"], d["pins"], d["main"], d["name"], windows, rc.lms_verify)
+    got, refused = Cr.period_credit(*args)
+    assert refused is None and got["windows"] == [_credited(w) for w in windows] and asked.fns[-1] == "period"
+    asked.say["period"] = lambda _v: {"credited": {**got, "k": got["k"] + 1}}
+    got, refused = Cr.period_credit(*args)
+    assert got is None and _disagree(refused, "period"), refused
+
+
+@pytest.mark.parametrize("name", ["honest", *rc.SALT_NAMES])
+def test_the_salt_check_of_record_is_the_leans_with_its_python_twin_beside_it(name, asked):
+    case = rc.salt_instance(random.Random(f"{name}/0"), name)
+    python = CC.salt(*rc.salt_args(case))
+    assert CC.salt_of_record(*rc.salt_args(case)) == python and asked.fns == ["salt"]
+    assert python is None or name != "honest"
+    asked.say["salt"] = lambda _v: None if python is not None else {"refused": ["salt", "stub"]}
+    refused = CC.salt_of_record(*rc.salt_args(case))
+    assert _disagree(refused, "salt"), refused

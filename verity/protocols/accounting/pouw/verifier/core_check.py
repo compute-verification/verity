@@ -83,6 +83,7 @@ from typing import Any, NamedTuple
 
 from verity.protocols.accounting.pouw.verifier import coins as Co
 from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import verifier as V
 from verity.protocols.accounting.pouw.verifier import window as Wd
 from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 from verity.protocols.proofs.spot.device import challenger as Ch
@@ -1774,6 +1775,17 @@ def salt(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any,
     return None if why is None else ("coin", f"the salt's {why}")
 
 
+def salt_of_record(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, weights_root: Any,
+                   requests_root: Any, opening: Any, verify: Ch.Verify) -> tuple[str, str] | None:
+    """`salt`'s verdict of record: the Lean `PouwCheck.saltCheck`'s (`verifier.of_record`, which checks the challenger's
+    signatures itself), with `salt` its Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
+    python = salt(key, ledger, pins, main, window, session, weights_root, requests_root, opening, verify)
+    got = V.of_record("salt", {"key": key, "ledger": ledger, "pins": pins, "main": main, "window": window,
+                               "session": session, "weights": weights_root, "requests": requests_root,
+                               "opening": opening}, None if python is None else {"refused": list(python)})
+    return None if got is None else tuple(got["refused"])
+
+
 def rounds(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, roots: Any, openings: Any,
            verify: Ch.Verify) -> tuple[str, str] | None:
     """None when `openings` are a live execution phase's round coins, read through the challenger's own session and never a
@@ -1856,5 +1868,5 @@ def line(a: dict) -> str:
 __all__ = ["ANSWER_KEYS", "COIN_KEY", "FORMATS", "ID", "LEVEL", "LIVE", "ONE_STAGE", "Refused", "SCHEME", "SIGNED_LIVE",
            "VALUES_TAG", "WINDOW_VALUES", "answer", "answer_of", "canonical", "case", "check", "commitment", "digest",
            "draw", "evidence", "integrity", "integrity_json", "law_name", "line", "live_epoch", "live_salt", "lms_verify",
-           "opening", "params", "pass_epoch", "ratio", "recorded_reason", "registered", "rounds", "salt", "unit_draw",
+           "opening", "params", "pass_epoch", "ratio", "recorded_reason", "registered", "rounds", "salt", "salt_of_record", "unit_draw",
            "values_root", "verify_path", "window_anchors", "window_domain", "window_salt", "work_k", "work_units"]

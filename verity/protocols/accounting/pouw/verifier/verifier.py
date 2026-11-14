@@ -7,7 +7,10 @@ execution phase's statements are judged here too: `credit.window` and `credit.pe
 `lean("credit-verified", …)` (`PouwCheck.Verified`), with `credit._verified` the reference, and each round's live
 outcome from `lean("credit-live-verified", …)` (`PouwCheck.LiveVerified`), with `credit._live_verified` the reference,
 on the circuit files its credit period's open committed, `lean("credit-committed-files", …)` (`PouwCheck.CommittedFiles`),
-with `credit.committed_files` the reference.
+with `credit.committed_files` the reference. The verdicts acted on are the Lean's too (`of_record`): `credit.window`'s
+and `credit.period_credit`'s, `lean("window", …)` and `lean("period", …)` (`PouwCheck.Credit.window`,
+`Credit.periodCredit`) on those outcomes, and the challenger's salt check's, `lean("salt", …)` (`PouwCheck.saltCheck`,
+`core_check.salt_of_record`), each with its Python twin beside it, and a disagreement between them is a refusal.
 
 `RECORD_VERDICT` is the switch, and setting it to ``"python"`` is the one line that undoes it.
 
@@ -31,6 +34,8 @@ from pathlib import Path
 from typing import Any
 
 RECORD_VERDICT = "lean"
+#: the refusal code of an answer of record the Lean and its Python twin disagree on, or the Lean can't give
+DISAGREE = "disagree"
 
 PACKAGE = Path(__file__).resolve().parent / "lean" / "check"
 EXE = "pouw-check-difftest"
@@ -118,6 +123,28 @@ def lean(fn: str, value: Any) -> Any:
     if kind != "output":
         raise LeanError(f"{EXE} rejected {fn}'s input: {body}")
     return body
+
+
+def _said(x: Any) -> str:
+    s = json.dumps(x, sort_keys=True, separators=(",", ":"))
+    return s if len(s) <= 600 else s[:600] + "…"
+
+
+def of_record(fn: str, value: Any, python: Any) -> Any:
+    """The answer of record to `fn` on `value` (`pouw-check-difftest`'s inputs), whose Python twin answered `python`
+    in the difftest's JSON form: `python` under ``RECORD_VERDICT = "python"``; else the Lean's (`lean`) when it is
+    that same answer, and ``{"refused": [DISAGREE, why]}`` naming both when it isn't or the Lean can't give one. The
+    Python is the twin the Lean is held to, never its fallback."""
+    if RECORD_VERDICT != "lean":
+        return python
+    try:
+        got = lean(fn, value)
+    except (LeanError, TypeError, ValueError) as e:
+        return {"refused": [DISAGREE, f"the Lean verifier of record gave no answer to {fn}, so it stands refused: {e}"]}
+    if got != json.loads(json.dumps(python)):
+        return {"refused": [DISAGREE, f"the Lean verifier of record and its Python twin disagree on {fn}, so it "
+                                      f"stands refused: the Lean answered {_said(got)}, the Python {_said(python)}"]}
+    return got
 
 
 def coins(n: int) -> bytes:
