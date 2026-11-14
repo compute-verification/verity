@@ -6449,7 +6449,7 @@ def test_a_piece_agrees(pieces, port, examples):
 
 def test_the_callers_check_agrees(callers):
     """The caller's check (`VStar.Recursive.Caller.check`, `spot-flock-caller`) gives the Python's codes
-    (`caller.check`) on the registration piece's inputs: SPOT's check no longer makes these codes, so this port is the
+    (`caller.check`) on the docket piece's inputs: SPOT's check no longer makes these codes, so this port is the
     one that holds them."""
     stats = D.run(CALLER, examples=700, server=callers)
     assert stats.outputs > 175 and stats.rejects > 0, stats

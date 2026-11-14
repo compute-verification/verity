@@ -12,7 +12,7 @@ the bound as that run's. The figure of record, every period's cells included, is
 both checks the tight ℓ_{a,j} rests on and the lock (a toy one in `security/`'s lock's place) lists every premise's
 discharge, taking no assumption but a standing one, and otherwise charges ℓ_a + 1 bits for each tied audit of each
 phase, ℓ_a the cap of the run's published advice registration (no figure where it published none, and an error where an
-audit's own registration binds an advice), with what is open named and no tighter figure beside it. A tied audit
+audit's own docket binds an advice), with what is open named and no tighter figure beside it. A tied audit
 drawn in part charges its slot entries in k_{skip,j}; each cell states its share of the schedule's egress capacity,
 and the served egress is missing. SPOT's coins are live only where
 every COINS line names the live challenger at a named peer, and the network certifier's chain draws only where each
@@ -83,7 +83,7 @@ SCAN = {"delta": "1/1048576", "drawn": 126, "units": 126, "wrong_units": 0, "fre
 PUBLIC = {"K": 756 + 756 + 9088 + 63, "audits": [{"delta": "1/100", "drawn": 2, "units": 1024, "wrong_units": 0}],
           "cells": 756, "eps": "1/1048576", "scans": [SCAN], "schedules": 756, "windows": 1}
 K = PUBLIC["K"]
-#: the period's one compute audit's registration, V3c's class window's, which binds no advice or compiler
+#: the period's one compute audit's docket, V3c's class window's, which binds no advice or compiler
 NO_ADVICE = {"format": "verity/registration/v2", "window": {"circuit": "cd" * 64}}
 #: the run's advice registration as `served_verdicts.py public-registration` publishes it, its advice committed padded to
 #: its compiler's cap ℓ_a = 2^23 (`advice_windows.pad`)
@@ -167,14 +167,14 @@ def pin_of(public: bytes) -> dict:
 
 
 def registration_of(pin: dict) -> str:
-    """The case's commitment: a registration record, as canonical JSON in hex, holding ``pin``'s leaf layer."""
+    """The case's commitment: a docket, as canonical JSON in hex, holding ``pin``'s leaf layer."""
     return canonical_json({"format": "verity/registration/v1", "leaf_layer": pin["leaf_layer"]}).hex()
 
 
 def sampled_case(out: Path, proofs: dict | None = None, public: str | None = None, member: str | None = None) -> Path:
     """Remote's SPOT case beside ``out`` (`auditor_args`), as `served_cases.sampled_case` writes one: its blobs
     `FILES_REGISTERED` and a session's file, its params θ naming ``proofs`` (the one statement's circuit file by SHA-512
-    unless given; with ``member``, that member's under proofs.members), its commitment the registration holding the leaf
+    unless given; with ``member``, that member's under proofs.members), its commitment the docket holding the leaf
     layer of a5's pin of the public file at staging, written beside it (`pin_of`), and its evidence naming the
     statement's public file ``public`` (the registered one's SHA-512 unless given; with ``member``, as that drawn
     member's statement)."""
@@ -472,7 +472,7 @@ def accepted(tmp_path: Path, public: dict = PUBLIC, windows: int = 1, caps: list
     """A run whose network certifier accepted ``public``, its case the period's of ``windows`` execution phases at
     ``schedule``, whose caps are the schedule's (`Schedule.rowsCells`) unless given, the network certifier's key, LMS
     parameters and session the auditor's record's (`CERTIFIER`) and any other ``params``, and whose commitment holds
-    ``audits``' registrations, with ``registration`` its published advice registration, none where None, ``coins`` its
+    ``audits``' dockets, with ``registration`` its published advice registration, none where None, ``coins`` its
     COINS line's sampled-proofs part (`served_out`), ``draws`` its chain report, none where None, and remote's
     composite and, where ``onsite``, onsite's (`with_onsite`), the composite of record that composed its case."""
     pouw = {"protocol": "verity/pouw/period/v1", "owner": "compute-accounting", "verdict": "accept", "reason": None}
@@ -1150,7 +1150,7 @@ def test_w63k4_at_a_4_s_tick_charges_800_bits_a_phase_beside_its_advice_whatever
 @pytest.mark.parametrize("drawn, entries", [(1, 896), (16, 0)])
 def test_w63k4s_tied_audit_drawn_in_part_charges_its_slot_entries_and_drawn_whole_doesnt(tmp_path, drawn, entries):
     """w63k4's schedule with a toy tied audit: w63k4 at a 4 s tick over three execution phases, each phase's tied audit
-    one of 16 proof blocks (V3c's registration has millions) drawn subset:1 (charged), its draw read at δ_i = 2^-64
+    one of 16 proof blocks (V3c's docket has millions) drawn subset:1 (charged), its draw read at δ_i = 2^-64
     with a bound of 15 beside its answer's 8 at 1/2, so k_{skip,j} is its E_w = 896 slot-entry bits beside the
     schedule's and the jitter's 800: with ℓ_{a,j} = 0, both checks held and no open premise, 1,696 bits a phase of
     record, of the schedule's egress capacity of 4 lanes · 4 slots · 32 buckets of 512-byte cells a phase. eps is each
@@ -1864,7 +1864,7 @@ FILES = [{"sha512": "e1" * 64, "template": "toy-a"}, {"sha512": "e2" * 64, "temp
 def test_an_accepted_network_verdict_is_established_only_where_each_listed_circuit_file_is_the_one_verified(
         tmp_path, capsys, how, why):
     """auditor-listing on the run: each circuit file the period's audit lists is, by SHA-512, the one its audit's
-    sessions were verified against, V3c's published period (`OR.PERIOD`), whose registration is the one the case's
+    sessions were verified against, V3c's published period (`OR.PERIOD`), whose docket is the one the case's
     commitment holds for that audit. Where it holds, the network certifier's accepted verdict stands, the run of
     record. Where it doesn't, whatever else holds, the verdict is not established, its Lean answer's accept beside it,
     with no bound and nothing conditional on the listing: another file, a file fewer, the period of another audit, no
@@ -1931,7 +1931,7 @@ def test_a_period_listing_no_circuit_files_holds_auditor_listing_and_one_with_no
 
 
 #: the scan's state as V3c's audit's window commits it in its activations, the entry the period holds to the scan's
-#: state (`NetworkCheck.Period.auditStateEntries`), and V3c's audit's registration whose window commits it
+#: state (`NetworkCheck.Period.auditStateEntries`), and V3c's audit's docket whose window commits it
 STATE_ENTRY = {"value": OR.SCAN_STATE, "root": "5a" * 64, "domain": "d5" * 64, "leaves": 64, "words": 8}
 STATED = {**NO_ADVICE, "window": {**NO_ADVICE["window"],
                                   "activations": {"program": "ab" * 64, "values": {OR.SCAN_STATE: STATE_ENTRY}}}}
@@ -1980,7 +1980,7 @@ NO_OWN = (f"audit 0's window commits {OR.SCAN_STATE} in its activations, and the
 def test_the_network_and_composite_verdicts_are_established_only_where_v3cs_reads_of_the_scans_state_opened_at_its_entry(
         tmp_path, capsys, how, why):
     """scan-state-pinned on the run: V3c's audit's window commits the scan's state in its activations, the entry the
-    period holds to the scan's state, and one-stage's registration checks read nothing of the window, so the audit's
+    period holds to the scan's state, and one-stage's docket checks read nothing of the window, so the audit's
     driver pins its registered reads there. Where the entry its registered reads opened the state at (its published
     summary's registered.own) is that activations entry by value, root and domain, the audit accepted and its record
     reported each sampled member's registered reads, the network certifier's verdict and the composite of record's stand
@@ -2104,11 +2104,11 @@ def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_onl
     run is of record. A public file changed after the draw, the evidence naming
     the changed one, isn't the pin's, nor is one beside a completed entry of another file, a completed entry whose body
     isn't its member's staged body or one on a member with no staged entry, and a pin rewritten to it isn't, by its
-    bodies' leaf layer, the registration's the case commits to, which the coins committed to. Where no file of the
+    bodies' leaf layer, the docket's the case commits to, which the coins committed to. Where no file of the
     case's is the circuit file θ names or the public file the evidence names, a drawn member's statement names no
     member of θ's, θ isn't the one the composite states, the run
     gave no case or a file it registers is gone, the public file isn't the pinned one, or the run gave no pin or its
-    case commits to a registration the composite doesn't state, auditor-listing doesn't hold: the network certifier's
+    case commits to a docket the composite doesn't state, auditor-listing doesn't hold: the network certifier's
     verdict, the composite of record's and SPOT's, its subprotocol there, are not established, each its Lean accept
     beside it, with no bound and no member credited, and the run isn't of record."""
     out = accepted(tmp_path)
@@ -2209,7 +2209,7 @@ RELAY_NOT = ("--public-pin's completed file for m0 isn't completed from its stag
 ])
 def test_a_completed_public_file_is_held_to_its_members_staged_body(tmp_path, how, relaid, done, why):
     """A drawn member's completed file (a5's ``completed`` entry, pinned once the tie held) is accepted only completed
-    from the same member's staged body, which R4 holds to the registration: a member not re-laid keeps the staged body
+    from the same member's staged body, which R4 holds to the docket: a member not re-laid keeps the staged body
     under its completed header, and an instance-major member's (the staged entry's ``relaid``) is the staged body re-laid
     port-major under identity refs (`flock_inputs.relay`), its instances read off the completed header. A member with no
     draw is held to its staged pair alone. Any other completed entry is refused, naming the member."""
