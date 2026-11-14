@@ -29,8 +29,10 @@ import pytest
 import verity_vllm.pipeline.row_records as R
 from tests.pipeline.test_row import PD, STAGE_START, _record_manifest, _summary_row
 from tests.pipeline.test_row_match import _match_row
+from tests.pipeline.test_tp_fold_match_records import _main as fold_match_run
 from verity_vllm.config import CHECKPOINTS, WORKLOADS, workload_file
 from verity_vllm.pipeline import row_json
+from verity_vllm.pipeline.workload import plan
 from verity_vllm.query.manifest.format import components_fold_digest
 
 SAMPLED = WORKLOADS / "llama32-1b__bf16__l40s__tp1__b8__i1024__o128__mixed__stoch-t0.8-p0.95__bi-eager.json"
@@ -801,14 +803,23 @@ def test_a_served_shape_is_said_for_a_request_that_generated_something_and_did_n
 
 
 def _tp_workload(tmp_path: Path, args: dict[str, Any], **top: Any) -> str:
-    sweep = {"batch": 2, "max_input": 8, "max_output": 4, "input_lengths": [8, 5], "output_caps": [4, 3]}
+    """A workload of two requests, prompts of 8 and 5 tokens with token limits 4 and 3, in the sweep `workload.plan` writes: the
+    list of token limits is the one it writes after the prompt lengths."""
+    sweep = plan("row", 2, 8, 4, sampling="greedy", arrivals="none")
+    names = list(sweep)
+    sweep |= {"input_lengths": [8, 5], names[names.index("input_lengths") + 1]: [4, 3]}
     return _put(tmp_path / "wl.json", {"sweep": sweep, "schema": "verity-vllm/workload/v2", "model": "m", "engine": {"revision": "0" * 40, "args": args}, **top})
 
 
 def test_a_tp_rows_shape_reads_its_engine_lengths_where_stated_else_its_envelope_and_counts_its_requests(tmp_path, monkeypatch):
     """The token budget is the workload's where it is under ``B * MML``; the requests are the workload's list, else one per input length."""
     asked = []
-    monkeypatch.setattr(R, "checkpoint_dir", lambda *a: asked.append(a) or "/ck")
+
+    def checkpoint_dir(*a: Any) -> str:
+        asked.append(a)
+        return "/ck"
+
+    monkeypatch.setattr(R, "checkpoint_dir", checkpoint_dir)
     shapes = [(5, 2), (8, 3)]
     assert R.tp_shape(_tp_workload(tmp_path, {}), "cks.json", "hf") == {"B": 2, "I": 8, "O": 4, "requests": 2, "shapes": shapes, "MML": 12, "MNBT": 12, "ck": "/ck"}
     assert asked == [("m", "0" * 40, "hf", "cks.json")]
@@ -853,7 +864,15 @@ def test_a_tp_manifest_that_is_absent_or_not_complete_is_not_of_record_for_that_
         assert R.tp_manifest_not_of_record(d, every) == "absent or not complete", doc
 
 
-def test_a_tp_rows_check_and_fold_lines_state_each_field_of_their_documents(tmp_path):
+@pytest.fixture
+def stages_name(tmp_path_factory, monkeypatch) -> str:
+    """The name the fold Match's writer gives its block of verdicts by stage, the one that holds `fold_per_rank`: a `tp-fold-match`
+    (`test_tp_fold_match_records`'s, its stages stood in) writes the document, and its readers look the block up by that name."""
+    doc = fold_match_run(tmp_path_factory.mktemp("fold"), monkeypatch)[1]
+    return next(name for name, block in doc.items() if isinstance(block, dict) and "fold_per_rank" in block)
+
+
+def test_a_tp_rows_check_and_fold_lines_state_each_field_of_their_documents(tmp_path, stages_name):
     m = str(tmp_path)
     assert R.tp_check_line(m) == "" and R.tp_fold_line(m) == "" and R.tp_served_shapes(m) == []
     rank0 = {"n_collectives": 11, "build_signature_len": 12, "n_steps": 13}
@@ -863,8 +882,8 @@ def test_a_tp_rows_check_and_fold_lines_state_each_field_of_their_documents(tmp_
     assert R.tp_check_line(m) == line
     _put(tmp_path / "tp2_match.json", {**check, "tokens": {}})
     assert R.tp_check_line(m) == line.replace("tokens False", "tokens None")
-    _put(tmp_path / "fold_match" / "tp2_fold_match.json", {"pass": False, "legs": {"a": 1}, "problems": ["p1", "p2", "p3", "p4"]})
-    assert R.tp_fold_line(m) == 'pass False legs {"a": 1} problems ["p1", "p2", "p3"]'
+    _put(tmp_path / "fold_match" / "tp2_fold_match.json", {"pass": False, stages_name: {"a": 1}, "problems": ["p1", "p2", "p3", "p4"]})
+    assert R.tp_fold_line(m) == f'pass False {stages_name} {{"a": 1}} problems ["p1", "p2", "p3"]'
     requests = [{"prompt_token_ids": [1, 2, 3], "generated_token_ids": [4, 5]}, {"prompt_token_ids": [1], "generated_token_ids": [7, 8, 9]}]
     _put(tmp_path / "capture" / "tokens.json", {"requests": requests})
     assert R.tp_served_shapes(m) == ["3,1", "1,2"]
@@ -879,7 +898,7 @@ def test_a_tp_document_passed_only_where_it_states_pass_true(tmp_path, passed):
         assert passed(str(p)) is said, doc
 
 
-def test_a_tp_match_summary_states_its_stages_exits_and_the_blocks_of_each_document_it_read(tmp_path):
+def test_a_tp_match_summary_states_its_stages_exits_and_the_blocks_of_each_document_it_read(tmp_path, stages_name):
     m = tmp_path / "match"
     R.tp_match_summary(str(m), 1, 2, 3, -1, "FAIL", "")
     assert _read(tmp_path / "match_summary.json") == {
@@ -887,12 +906,13 @@ def test_a_tp_match_summary_states_its_stages_exits_and_the_blocks_of_each_docum
         "fold_rc": None, "fold_profile": None, "tp2_match": {}, "tp2_fold_match": None}
     check = {"pass": True, "structure": {"pass": True}, "provenance": {"pass": False}, "tokens": {"pass": True}}
     _put(m / "tp2_match.json", {**check, "other": 1})
-    _put(m / "fold_match" / "tp2_fold_match.json", {"pass": True, "legs": [1], "problems": [], "seconds": 9, "other": 1})
+    fold = {"pass": True, stages_name: [1], "problems": [], "seconds": 9}
+    _put(m / "fold_match" / "tp2_fold_match.json", {**fold, "other": 1})
     for fold_rc in (0, 4):
         R.tp_match_summary(str(m), 0, 0, 0, fold_rc, "PASS", "prof")
         assert _read(tmp_path / "match_summary.json") == {
             "pass": True, "level": "fold (D90 per-rank fold Match + collective-level)", "capture_rc": 0, "control_rc": 0, "check_rc": 0,
-            "fold_rc": fold_rc, "fold_profile": "prof", "tp2_match": check, "tp2_fold_match": {"pass": True, "legs": [1], "problems": [], "seconds": 9}}, fold_rc
+            "fold_rc": fold_rc, "fold_profile": "prof", "tp2_match": check, "tp2_fold_match": fold}, fold_rc
     _put(m / "tp2_match.json", {"pass": False, "tokens": {}})
     R.tp_match_summary(str(m), 0, 0, 0, 0, "FAIL", "prof")
     assert _read(tmp_path / "match_summary.json")["tp2_match"] == {"pass": False, "tokens": {}}   # a block it does not state is left out
