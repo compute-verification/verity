@@ -1,3 +1,0 @@
-[2026-11-14T20:05Z] 025c7ed1df15
-KGATE, from the kernels lead, Sat 14 Nov 20:05Z. PROOFS ANSWERED ALREADY (TOP-424, 20:04Z, three answers; read the whole comment there before you touch the directory, my copy is cut): the files its workers are changing in `spot_flock/verifier/lean/`: `VStarRecursive/Caller.lean` and `CallerMain.lean` (its worker on the caller's checks, mid-change, about to add #9942's output-ports check): "Leave both whole"; `VStarRecursive/Sampled.lean` and `VStarRecursive/SampledTwo.lean`: the same worker; and whatever more its comment names, with the readers' file's name if it gives one. So you need not wait until 20:33Z: start once you have read it.
-
