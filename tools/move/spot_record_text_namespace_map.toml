@@ -3,8 +3,9 @@
 # policy's namespace; this gives them SPOT's, as every other module under `Spot/` has.
 # - `InferenceOnlyCheck.RecordText` becomes `Spot.RecordText`, in the module and its users (the policy's check and the
 #   policy's properties and their proofs).
-# - Three proofs inside `InferenceOnlyCheck.Record.SecurityProofs` name the reader's declarations as `RecordText.x`, which
-#   resolved through the enclosing `InferenceOnlyCheck`; there they become `Spot.RecordText.x`.
+# - Four files name the reader's declarations as `RecordText.x`, which resolved through `InferenceOnlyCheck` (three proofs
+#   inside `InferenceOnlyCheck.Record.SecurityProofs`, and the rows protocol, which opens it); there they become
+#   `Spot.RecordText.x`.
 # It moves no file and changes nothing else. A lock's records keep the old full names for `check.py --update --moved`,
 # whose renames `--moves` prints.
 
@@ -14,7 +15,8 @@
 [[words_in]]
 files = ["security/Proofs/Properties/InferenceOnly/RecordWhole.lean",
          "security/Proofs/Properties/InferenceOnly/RecordBlocks.lean",
-         "security/Proofs/Properties/InferenceOnly/RecordJson.lean"]
+         "security/Proofs/Properties/InferenceOnly/RecordJson.lean",
+         "verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/RowsProtocol.lean"]
 words = { "RecordText." = "Spot.RecordText." }
 
 [rewrite]
