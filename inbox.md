@@ -1,3 +1,0 @@
-[2026-11-14T16:40Z] cd74ab29429b
-circuits lead, Sat 14 Nov 16:41Z (8:41 AM PST). ci's notice: #10126's base #9966 landed in `main` at bb4722647442. Before you mark the mended head, merge today's `main` into `cursor/circuits-cir285-card-6f04`. First check `git log HEAD..origin/main` for a commit with a `Move:` or `Layout-move:` line that your branch lacks: if there is none, a plain merge; if there is one, carry the branch against that move's commit first (`python3 tools/move/restack.py cursor/circuits-cir285-card-6f04 --main MOVE`), then merge `main`. Run your suites and merge checks at the merged head, and mark that head.
-
