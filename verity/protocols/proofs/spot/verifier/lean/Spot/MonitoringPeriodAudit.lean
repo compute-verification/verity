@@ -221,7 +221,7 @@ structure Audit where
 
 /-- A window with its accepted audits. -/
 structure Passed where
-  window : Window
+  window : Run
   audits : Array Audit
 
 /-- A session of the lane that is another registration's: the circuit the period that lists it committed, and the
@@ -270,7 +270,7 @@ abbrev Inner :=
 /-- One case at a window: the registration's record and what the audit `inner` answers on it. The case's registration
 is the one the session sampled (`want`, `evidence`); the parameters at the window are one-stage v2's and its public
 file shares no rows (`names`); its evidence is one-stage v2's (`evidence`). -/
-def caseAt (inner : Inner) (p : AuditParams) (ledger pins session : Json) (w : Window) (want : String)
+def caseAt (inner : Inner) (p : AuditParams) (ledger pins session : Json) (w : Run) (want : String)
     (before : Array Json) (k : Case) (bs : Core.Blobs) :
     Except (Code × String) (Json × Core.Outcome OneStage.Public Core.Integrity) := do
   let c ← match Flock.canon k.registration >>= fun s => OneStage.commitmentOf s.toUTF8 with
@@ -300,7 +300,7 @@ reject refuses the period (`audit`), and an undecided is kept as the period's, t
 still checked. The sampled registrations and the cases are matched as lists: a property of the check splits a list's
 match, and Lean generates no equations for an array literal's. -/
 def executionPhaseAt (inner : Inner) (p : AuditParams) (r : Read) (ledger pins : Json) (bs : Core.Blobs) (st : Progress)
-    (w : Window) (ev : RunEvidence) : Except (Code × String) Progress := do
+    (w : Run) (ev : RunEvidence) : Except (Code × String) Progress := do
   let (a, opened) ← coinOf (Challenger.auditedIn r.wins r.periods (Json.mkObj [("root", Json.str w.root)]))
   if let some why := Challenger.pinsReason a.session opened pins then throw (Code.coin, why)
   if let some why := Challenger.firstParentReason a.session a.pinned p.main then throw (Code.coin, why)
