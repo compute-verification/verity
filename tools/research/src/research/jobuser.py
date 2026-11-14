@@ -11,7 +11,7 @@ whose vy-sudo has the job's forms, each root command goes through it, `root`): n
 privileges and no capabilities; the host read-only but for its run dir, and no other run's dir, no launch request, no /home or
 /root; its own /tmp, /dev/shm and IPC; an empty /run but for the two files resolv.conf points at and the GPU lease dirs, so the
 resolver's own socket, which looks names up for a caller in any network namespace, stays out with the rest of /run; /etc/verity
-and the k3s state hidden; link-local addresses (the cloud metadata service) unreachable; the CPUs, memory cap and nice it was
+and the k3s state hidden; link-local addresses (the cloud metadata service) unreachable; the CPUs, memory limit and nice it was
 started with; and only the variables job_env passes, from a file only root reads (no value travels on a command line).  The
 unit keeps the node's network namespace, so what listens on its loopback (the resolver's stub, for one) or on an abstract
 socket there stays reachable.  SIGTERM, SIGINT or SIGHUP stops the unit (SIGTERM, then SIGKILL after TIMEOUT_STOP_S) and exits
@@ -191,7 +191,7 @@ def memory_max(proc_cgroup: str = "/proc/self/cgroup", root: str = "/sys/fs/cgro
         path = next(ln.split(":", 2)[2].strip() for ln in Path(proc_cgroup).read_text().splitlines() if ln.startswith("0::"))
     except (OSError, StopIteration):
         return None
-    caps = []
+    limits = []
     p = Path(path)
     while True:
         try:
@@ -199,11 +199,11 @@ def memory_max(proc_cgroup: str = "/proc/self/cgroup", root: str = "/sys/fs/cgro
         except (OSError, ValueError):
             v = "max"
         if v.isdigit():
-            caps.append(int(v))
+            limits.append(int(v))
         if p == p.parent:
             break
         p = p.parent
-    return min(caps) if caps else None
+    return min(limits) if limits else None
 
 
 @dataclass

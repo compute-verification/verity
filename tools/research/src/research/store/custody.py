@@ -143,14 +143,14 @@ def select(run_dir: Path, cap: int | None = None) -> tuple[list[str], list[dict[
     declared glob (`declared_globs`; fnmatch on the path relative to the run dir, so `*` crosses `/`: `out/*` is all of out/, `*` is
     everything), and undeclared files up to `cap` bytes in total."""
     d = Path(run_dir)
-    cap = UNDECLARED_CAP_BYTES if cap is None else cap
+    limit = UNDECLARED_CAP_BYTES if cap is None else cap
     globs = declared_globs(d)
     kept, trimmed, used = [], [], 0
     for rel in run_files(d):
         size = (d / rel).stat().st_size
         if is_run_file(rel) or any(fnmatch.fnmatchcase(rel, g) for g in globs):
             kept.append(rel)
-        elif used + size <= cap:
+        elif used + size <= limit:
             used += size
             kept.append(rel)
         else:

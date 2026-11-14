@@ -95,7 +95,7 @@ KINDS: dict[str, str] = {
                         "labels target, instruction, level, anchor",
     # vLLM integration (adapters/vllm/verity_vllm/pipeline/research_tools.py; one Attempt per sweep stage).
     "vllm-build/v1": "one Build of a row's Program: payload tree = build_summary.json + required-value manifest + descriptor "
-                     "files (never the instance set); meta {row, program_digest, correspondence_digest?, stage_status}",
+                     "files (never the input set); meta {row, program_digest, correspondence_digest?, stage_status}",
     "vllm-config-record/v1": "a row of the circuit database (verity_vllm.records): payload file = config_record.json "
                              "(verity-vllm/config-record/v1: the row's config, its Programs' digests per rank (a request Program's census "
                              "digest beside it), the Match, Commit and replay "
@@ -161,7 +161,7 @@ KINDS: dict[str, str] = {
                        "payload tree = request.json + out/ (verifier.json, challenger/, verifier.log, registry.json, "
                        "transcripts/*.json.gz + SHA256SUMS) + end.json, and replay/ once replayed; meta {run, by, pinned, peer, "
                        "period, requested_utc, end {rc, ended_utc}, replay}",
-    "m3-drawn-blocks/v1": "one live draw's proof blocks of a registered H200 step, what "
+    "m3-drawn-blocks/v1": "one live sample's proof blocks of a registered H200 step, what "
                           "DRAWPROVE proves: payload tree = step-registration.json, receipt.json, draw.json, summary.json and "
                           "blocks/<g>/ (window/, a one-member window registered subset:1, and bundle.json + bundle.bin, a "
                           "drawn-unit-bundle/v2); meta {lane, registration, registration_art, program, coin_session, runs, branch, "

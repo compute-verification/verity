@@ -494,7 +494,7 @@ research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json 
                                               --remote: both / LOCAL ONLY (not durable) / REMOTE ONLY per assertion; exit 1 if any is local only
 research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]   refuses what the vocabulary (§8.1) cannot place
 research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
-                                              the durability gate: attempt manifest + artifacts + labels on the remote, else the failing legs;
+                                              the durability gate: attempt manifest + artifacts + labels on the remote, else the parts that fail;
                                               exit 4: WITHDRAWN (§7.4)
 research data vocab [--json]                  the label vocabulary (§8.1): key, asserter group, value form, enum values, status
 research data vocab-check [--json]            what in labels/ is off the vocabulary, read-only (`vocab_check.py`)

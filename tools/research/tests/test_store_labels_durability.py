@@ -1,6 +1,6 @@
 """Labels are durable with what they describe (r20: assertions made on pods lived only in the pod's store; `push` / `publish` moved
 manifests and blobs and nothing under `labels/`).  `push RUN` / `publish` / `preserved` cover the attempt, its derivation and its
-outputs' assertions; a failed label push makes the attempt NOT preserved and the gate names the leg; a wiped index is rebuilt from
+outputs' assertions; a failed label push makes the attempt NOT preserved and the gate names the part; a wiped index is rebuilt from
 the remote listing with provenance intact; conflicting assertions coexist."""
 from __future__ import annotations
 
@@ -123,7 +123,7 @@ def test_push_run_carries_labels_and_a_wiped_index_is_rebuilt_from_the_remote_wi
     capsys.readouterr()
 
 
-def test_preserved_refuses_and_names_the_labels_leg_when_a_label_push_fails(env, tmp_path, monkeypatch, capsys):
+def test_preserved_refuses_and_names_the_labels_part_when_a_label_push_fails(env, tmp_path, monkeypatch, capsys):
     vault = env / "vault"
     failing = LabelsFail(FsRemote(vault))
     monkeypatch.setattr(L, "load_remote", lambda path=None: failing)
@@ -139,7 +139,7 @@ def test_preserved_refuses_and_names_the_labels_leg_when_a_label_push_fails(env,
     assert rc == 1, out
     assert f"{RUN}  attempt  NOT preserved: labels: 2 assertion(s) not pushed (labels/{RUN}/" in out
     assert "0/2 preserved" in out and "2 NOT pushed" in out
-    assert (vault / "attempts" / f"{RUN}.json").exists() and (vault / "manifests").is_dir(), "manifests and payloads did land; the labels leg is what failed"
+    assert (vault / "attempts" / f"{RUN}.json").exists() and (vault / "manifests").is_dir(), "manifests and payloads did land; the labels part is what failed"
     assert not (vault / "labels").exists() and len(failing.refused) == 2
     rc = main(["preserved", RUN])
     out = capsys.readouterr().out
@@ -148,7 +148,7 @@ def test_preserved_refuses_and_names_the_labels_leg_when_a_label_push_fails(env,
     rep = P.check(st, [RUN])
     assert rep["preserved"] is False and rep["targets"][0]["legs"] == {"manifest": True, "artifacts": True, "labels": False}
     assert [x["kind"] for x in rep["not_preserved"]] == ["labels"] and all(x.endswith(".json: absent on the remote") for x in rep["not_preserved"][0]["errors"])
-    # the artifact alone: its own assertion is its leg
+    # the artifact alone: its own assertion is its part
     assert main(["preserved", art]) == 1 and "legs failing: labels" in capsys.readouterr().out
     # a publish in the same condition says so (never raises into the runner)
     d = tmp_path / "runs" / RUN_ID
@@ -158,7 +158,7 @@ def test_preserved_refuses_and_names_the_labels_leg_when_a_label_push_fails(env,
     pub = A.publish(d, store=st)
     assert pub["published"] and pub["preserved"] is False and pub["preserve_error"].startswith("labels: 1 assertion(s) not pushed")
     assert pub["labels"]["local"] == 1 and pub["labels"]["failed"] and not pub["labels"]["pushed"]
-    assert all(pub["preserved_artifacts"].values()), "the artifacts leg passed; the labels leg is the reason"
+    assert all(pub["preserved_artifacts"].values()), "the artifacts part passed; the labels part is the reason"
 
     # the fault clears: the same commands repair and the gate opens
     monkeypatch.setattr(L, "load_remote", lambda path=None: FsRemote(vault))
@@ -170,7 +170,7 @@ def test_preserved_refuses_and_names_the_labels_leg_when_a_label_push_fails(env,
     st2 = LocalStore()
     assert P.check(st2, [RUN])["targets"][0]["legs"] == {"manifest": True, "artifacts": True, "labels": True}
     assert P.check(st2, [RUN], mode="recorded")["targets"][0]["legs"]["labels"] is None, "offline: not checked, not counted"
-    # --no-labels is explicit about leaving the leg out: the push reports no labels line and the gate stays shut for a new assertion
+    # --no-labels is explicit about leaving the labels out: the push reports no labels line and the gate stays shut for a new assertion
     st2.add_label(RUN, "note", "late", "alice")
     assert main(["push", RUN, "--no-labels"]) == 0 and "labels:" not in capsys.readouterr().out
     assert main(["preserved", RUN]) == 1 and "1 local assertion(s) absent" in capsys.readouterr().out
