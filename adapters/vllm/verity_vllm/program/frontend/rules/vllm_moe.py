@@ -45,25 +45,43 @@ DECLARED construction (`vllm_bindings.active_target_profile().effective_moe_cons
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import torch
-
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array
-from verity_vllm.program.frontend.derive import Alloc, StaticIndex, refuse
-from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
+
+from verity_vllm.log import init_logger
+from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo, ViewRule
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
-from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_tensor, triton_launch
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
-from verity_vllm.program.frontend.rules.vllm_bindings.pins import moe_expert_refusal, moe_expert_role
+from verity_vllm.program.frontend.rules.common import (
+    dtype_is,
+    from_rows,
+    known,
+    rows_of,
+    shape,
+)
+from verity_vllm.program.frontend.rules.triton_iface import (
+    launch_meta,
+    launch_tensor,
+    triton_launch,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    active_target_profile,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.pins import (
+    moe_expert_refusal,
+    moe_expert_role,
+)
+from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 
 aten = torch.ops.aten
+logger = init_logger(__name__)
 
 #: the fused_moe_kernel launch fields pinned to the bf16 unquantized path the Definitions model.  `src_sha256` is the kernel body of the
 #: pinned vLLM (recorded from the cp-moe export; another body with the same name refuses).  Tile constexprs are geometry the f32 accumulator
 #: is invariant to along K only in k16 chunks (BLOCK_SIZE_K % 16 == 0, checked), so they are recorded, not pinned.
-MOE_GEMM_PINS = {
+MOE_GEMM_PINS: dict[str, Any] = {
     "kernel": "vllm.model_executor.layers.fused_moe.fused_moe.fused_moe_kernel",
     "src_sha256": "90674f19ec8363c7321df3e29e29ad1e2137720c2005b561e087ddb5e823e48b",  # vLLM d9105ea80 fused_moe_kernel.src (cp-moe)
     "constexprs": {"SPLIT_K": 1, "HAS_BIAS": False, "SWAP_AB": False, "USE_TD": False, "use_fp8_w8a8": False, "use_int8_w8a8": False,
@@ -107,12 +125,9 @@ def _moe_C_op(name: str) -> set:
     try:
         import vllm  # noqa: F401
         return {getattr(torch.ops._moe_C, name).default}
-    except Exception:  # noqa: BLE001 — vLLM not importable: no targets
+    except Exception as e:  # noqa: BLE001 — vLLM not importable: no targets
+        logger.debug_once("no rule targets torch.ops._moe_C.%s: %s", name, repr(e))
         return set()
-
-
-def _val_matches(v, node) -> bool:
-    return isinstance(v, torch.fx.Node) and v is node
 
 
 # -- the declared construction: which family owns the block ------------------------------------------------------------------
@@ -216,8 +231,8 @@ class TopkSoftmaxRule(InPlaceRule):
     modes = frozenset({"profile"})
     info = RuleInfo("TopkSoftmax[vllm-moe]", 1, "in-place-binding",
                     applies_to="_moe_C.topk_softmax(Tensor! w, Tensor! ids, Tensor! tei, logits, bool renormalize, Tensor? bias, Tensor? is_padding)",
-                    preconditions=("logits is bf16 [M, E] with E in the difftested set (64, 128); renormalize a static bool (False -> MoeRouterTopK_v1, "
-                                   "True -> MoeRouterTopKNorm_v1); bias None; is_padding None",
+                    preconditions=(("logits is bf16 [M, E] with E in the difftested set (64, 128); renormalize a static bool (False -> MoeRouterTopK_v1, "
+                                   "True -> MoeRouterTopKNorm_v1); bias None; is_padding None"),
                                    "w is an unwritten allocation [M, TOPK] f32; ids [M, TOPK] i32; tei [M, TOPK] i32"),
                     evidence_domain="structural; numerics: MoeRouterTopK_v1 (vLLM _moe_C.topk_softmax fused kernel, cp-moe xcheck)")
 
@@ -303,8 +318,8 @@ class FusedMoeKernelRule(InPlaceRule):
                                    "a is bf16 [rows, K] row-major with rows*top_k == num_valid_tokens; b is bf16 [E, N, K] contiguous (stride_bk 1, stride_bn K, stride_be N*K)",
                                    "c is an unwritten allocation of num_valid_tokens rows of N; K % BLOCK_SIZE_K == 0, BLOCK_SIZE_K % 16 == 0",
                                    "launch geometry == the difftested one (BLOCK 64/64/32, GROUP_SIZE_M 8, 4 warps, 3 stages: vLLM's BI default for these stacks at every M)",
-                                   "schedule: sorted_token_ids_ptr is a MoeSchedule marker over an i32 [M, TOPK] ids value, or naive_block_assignment with "
-                                   "expert_ids_ptr the i32 pair ids value; topk_weights_ptr is the f32 [M, TOPK] routed weights value when MUL_ROUTED_WEIGHT"),
+                                   ("schedule: sorted_token_ids_ptr is a MoeSchedule marker over an i32 [M, TOPK] ids value, or naive_block_assignment with "
+                                   "expert_ids_ptr the i32 pair ids value; topk_weights_ptr is the f32 [M, TOPK] routed weights value when MUL_ROUTED_WEIGHT")),
                     evidence_domain="structural; numerics: MoeExpertGemm_v1 / MoeExpertGemmW_v1 (the same Triton kernel; f32 accumulator, k16 chunks; cp-moe xcheck), _v2{DOT} where registry.targets.moe_expert_dot names a step")
 
     def targets(self):
@@ -369,7 +384,7 @@ class FusedMoeKernelRule(InPlaceRule):
                 return "naive_block_assignment with a sorted_token_ids_ptr"
             if ids_t is None or not isinstance(ctx.val(ids_t), Coll) or ctx.dtype_of(ids_t) != torch.int32:
                 return "naive schedule: expert_ids_ptr is not an i32 value collection"
-            if math.prod(shape(ctx, ids_t)) != nv:
+            if math.prod(known(shape(ctx, ids_t))) != nv:
                 return f"naive schedule: expert_ids {shape(ctx, ids_t)} is not {nv} pairs"
         else:
             if sorted_t is None or not isinstance(ctx.val(sorted_t), MoeSchedule):
@@ -383,7 +398,7 @@ class FusedMoeKernelRule(InPlaceRule):
             w_t = launch_tensor(node, meta, "topk_weights_ptr")
             if w_t is None or not isinstance(ctx.val(w_t), Coll) or ctx.dtype_of(w_t) != torch.float32:
                 return "MUL_ROUTED_WEIGHT: topk_weights_ptr is not an f32 value collection"
-            if math.prod(shape(ctx, w_t)) != nv:
+            if math.prod(known(shape(ctx, w_t))) != nv:
                 return f"topk_weights {shape(ctx, w_t)} is not {nv} pairs"
         return None
 
@@ -614,10 +629,10 @@ class PaddedFusedMoeKernelRule(InPlaceRule):
     info = RuleInfo("PaddedFusedMoeKernel[vllm-moe]", 1, "in-place-binding",
                     applies_to="verity_cba::triton_launch of fused_moe.fused_moe_kernel when moe_construction = padded (kernel name + source + constexprs pinned)",
                     preconditions=("FusedMoeKernel[vllm-moe]'s launch pins (bf16 unquantized path, difftested tiling)",
-                                   "up: a is the bf16 [M,H] hidden value (M*top_k == num_valid_tokens, top_k == the route's TOPK); b bf16 [E,2I,H] contiguous; "
-                                   "the schedule is the route's PaddedSchedule (sorted) or the route's topk_ids marker (naive)",
-                                   "down: a is the PaddedAct of the up launch ([M*TOPK, I]); topk_weights_ptr the route's topk_weights marker; "
-                                   "b bf16 [E,H,I] contiguous; top_k == 1",
+                                   ("up: a is the bf16 [M,H] hidden value (M*top_k == num_valid_tokens, top_k == the route's TOPK); b bf16 [E,2I,H] contiguous; "
+                                   "the schedule is the route's PaddedSchedule (sorted) or the route's topk_ids marker (naive)"),
+                                   ("down: a is the PaddedAct of the up launch ([M*TOPK, I]); topk_weights_ptr the route's topk_weights marker; "
+                                   "b bf16 [E,H,I] contiguous; top_k == 1"),
                                    "c is an unwritten allocation of num_valid_tokens rows of N"),
                     evidence_domain="structural; numerics: inside MoeFfnFixedL_v1 (MoeExpertBody_v1 = the pair body without the expert-axis gather)")
 
@@ -658,9 +673,9 @@ class PaddedFusedMoeKernelRule(InPlaceRule):
         if (sc.get("stride_am"), sc.get("stride_ak")) != (K, 1):
             return f"a strides {sc.get('stride_am')},{sc.get('stride_ak')} are not row-major [rows, K]"
         if (sc.get("stride_be"), sc.get("stride_bk"), sc.get("stride_bn")) != (N * K, 1, K):
-            return f"b strides are not a contiguous [E, N, K] stack"
+            return "b strides are not a contiguous [E, N, K] stack"
         if (sc.get("stride_cm"), sc.get("stride_cn")) != (N, 1):
-            return f"c strides are not row-major rows of N"
+            return "c strides are not row-major rows of N"
         if K % sc.get("BLOCK_SIZE_K"):
             return f"BLOCK_SIZE_K={sc.get('BLOCK_SIZE_K')!r} does not divide K={K}"
         route = self._route(node, ctx, meta, sc, nv)
@@ -783,7 +798,6 @@ class PaddedSiluAndMulRule(InPlaceRule):
                     evidence_domain="structural; numerics: inside MoeFfnFixedL_v1 (SiluMul_v1{I} of MoeExpertBody_v1)")
 
     def targets(self):
-        from verity_vllm.program.frontend.rules.vllm_iface import targets_for
         return targets_for("silu_and_mul")
 
     def applies(self, node, ctx):
@@ -848,13 +862,13 @@ class PaddedMoeSumRule(InPlaceRule):
         y, out = node.args[:2]
         dn = ctx.val(y)
         up, route = dn.act.up, dn.act.up.route
-        M, E, TOPK, VPT, H, I = route.M, route.E, route.TOPK, route.VPT, up.H, up.I
-        fn = ctx.kind("moe_ffn_fixed", node, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
+        M, E, TOPK, VPT, H, INTER = route.M, route.E, route.TOPK, route.VPT, up.H, up.I
+        fn = ctx.kind("moe_ffn_fixed", node, E=E, TOPK=TOPK, VPT=VPT, H=H, I=INTER)
         hint = ctx.hint_name(node)
         outs = [ctx.call(fn, up.x_rows[t], route.rows[t], up.w13, dn.w2, node=node, rule=self, name=f"{hint}[{t}]") for t in range(M)]
         ctx.rebind(out, from_rows(outs, (M,)), self, what="output")
         w13, w2 = ctx.weight_of(up.w13_node), ctx.weight_of(dn.w2_node)
-        ctx.record(self, node, {"E": E, "TOPK": TOPK, "VPT": VPT, "H": H, "I": I, "rows": M, "schedule": up.schedule, "moe_construction": PADDED,
+        ctx.record(self, node, {"E": E, "TOPK": TOPK, "VPT": VPT, "H": H, "I": INTER, "rows": M, "schedule": up.schedule, "moe_construction": PADDED,
                                 "W13_is_parameter": w13.name if w13 else None, "W2_is_parameter": w2.name if w2 else None,
                                 "lift_of_record": "LMoeFfnL_v1 (hand-authored; registry.lifted.register_hand_lift)"},
                    emitted=f"{fn.id} x{M}")
@@ -870,4 +884,4 @@ VLLM_MOE_RULES = [PaddedTopkSoftmaxRule(), PaddedMoeAlignBlockSizeRule(), Padded
 __all__ = ["VLLM_MOE_RULES", "TopkSoftmaxRule", "MoeAlignBlockSizeRule", "FusedMoeKernelRule", "MoeSumRule", "MoeSchedule", "DeadOutput",
            "PaddedTopkSoftmaxRule", "PaddedMoeAlignBlockSizeRule", "PaddedFusedMoeKernelRule", "PaddedViewRule", "PaddedSiluAndMulRule", "PaddedMoeSumRule",
            "PaddedRoute", "PaddedStage", "PaddedSchedule", "PaddedUp", "PaddedAct", "PaddedDown", "active_moe_construction", "INDEXED_READ", "PADDED",
-           "MOE_GEMM_PINS", "TOPK_SOFTMAX_VPT", "TOPK_SOFTMAX_E_TESTED"]
+           "MOE_GEMM_PINS", "TOPK_SOFTMAX_VPT", "TOPK_SOFTMAX_E_TESTED", "INDEXED_READ_ORDERED"]

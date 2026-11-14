@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import threading
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -141,7 +142,7 @@ def test_a_full_pool_waits_for_an_earlier_windows_release():
     pool = DP.DevicePool(4096, device="cpu")
     pool._cv = _Seen()
     pool.take(3072, "w0")
-    got = {}
+    got: dict[str, Any] = {}
     t = threading.Thread(target=lambda: got.update(v=pool.take(2048, "w1")))
     t.start()
     pool._cv.waiting.wait()
@@ -158,7 +159,7 @@ def test_the_open_windows_own_bytes_are_refused_not_waited_on():
         pool.take(2048, "w0")
     pool.take(1024, "w1")
     pool._cv = _Seen()
-    got = {}
+    got: dict[str, Any] = {}
     t = threading.Thread(target=lambda: got.update(e=pytest.raises(RuntimeError, pool.take, 2048, "w2")))
     t.start()
     pool._cv.waiting.wait()
