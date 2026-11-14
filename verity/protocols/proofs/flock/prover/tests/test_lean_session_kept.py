@@ -1,0 +1,159 @@
+"""The ZK server's kept session loop (`Flock/Firewall/Session.lean`'s `kept`, `flock-firewall session --kept`): one loop
+for every statement of a window, which reads the window's partition and program once and takes each member's statement
+on its standard input (`member LEN`, then the member's flags as a JSON array). What it must keep of `flock-firewall
+session` is what an accepted session means: each session is of one member's statement from its start to its end, the one
+current when it started, whatever `member` arrives while it is open; its `Hello` is the one a loop of that member's own
+sends (`test_lean_hello.py`'s recorded `Hello` at the loop's nonce), and its plan is `session --schedule`'s on the
+member's flags. A session before any member is refused without reaching the auditor, and a member's flags never name
+the window's files or the loop's own flags."""
+from __future__ import annotations
+
+import json
+import socket
+import subprocess
+
+import pytest
+from test_lean_hello import BIN, NONCE, _args, _record, built  # noqa: F401
+from test_lean_session import REGISTER, STOP, Auditor, _answer, call, coins, draw, hello, plain, reason, zk  # noqa: F401
+
+
+class Kept:
+    """A running `flock-firewall session --kept` on the window's flags `window`."""
+
+    def __init__(self, window: list[str] | None = None):
+        self.p = subprocess.Popen([str(BIN), "session", "--kept", *(window or [])], stdin=subprocess.PIPE,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        line = self.p.stdout.readline().decode()
+        assert line.startswith("LISTENING "), (line, self.p.stderr.read().decode() if self.p.poll() is not None else "")
+        host, port = line.split()[1].split(":")
+        self.addr = (host, int(port))
+        assert self.p.stdout.readline().decode().startswith("FRAMES ")
+
+    def send(self, verb: str, body: bytes) -> None:
+        self.p.stdin.write(f"{verb} {len(body)}\n".encode() + body)
+        self.p.stdin.flush()
+
+    def line(self) -> str:
+        return self.p.stdout.readline().decode().rstrip("\n")
+
+    def member(self, args: list[str]) -> str:
+        self.send("member", json.dumps(args).encode())
+        return self.line()
+
+    def schedule(self, sample: str) -> list[str]:
+        self.send("schedule", sample.encode())
+        first = self.line()
+        return [first, *(self.line() for _ in range(int(first.split()[1]) if first.startswith("ok ") else 0))]
+
+    def connect(self) -> socket.socket:
+        return socket.create_connection(self.addr)
+
+    def close(self):
+        self.p.stdin.close()
+        assert self.p.wait() == 0
+
+
+@pytest.fixture
+def junk(tmp_path):
+    (tmp_path / "c").write_bytes(b"x")
+    (tmp_path / "p").write_bytes(b"x")
+    return ["--circuit", str(tmp_path / "c"), "--public", str(tmp_path / "p")]
+
+
+@pytest.mark.parametrize("flags", [["--circuit", "c"], ["--verifier", "127.0.0.1:9"], ["--schedule"]])
+def test_its_start_takes_the_windows_flags_alone(flags):
+    p = subprocess.run([str(BIN), "session", "--kept", *flags], input=b"", capture_output=True, check=False)
+    assert p.returncode == 2 and p.stderr.decode().startswith("--kept: the window's flags alone"), p.stderr
+
+
+def test_a_session_before_the_first_member_is_refused():
+    k = Kept()
+    s = k.connect()
+    assert reason(call(s, REGISTER)) == STOP + "a session before the kept loop's first member"
+    s.close()
+    k.close()
+
+
+@pytest.mark.parametrize("extra, why", [
+    (["--partition", "f"], "a member's flags name --partition, which is the kept loop's"),
+    (["--program", "f"], "a member's flags name --program, which is the kept loop's"),
+    (["--salt-key", "f"], "a member's flags name --salt-key, which is the kept loop's"),
+])
+def test_a_member_never_names_the_windows_files(junk, extra, why):
+    k = Kept()
+    assert k.member([*junk, "--verifier", "127.0.0.1:9", *extra]) == f"refused {why}"
+    k.close()
+
+
+def test_a_member_names_its_auditor(junk):
+    k = Kept()
+    assert k.member(junk) == "refused a member's flags name no --verifier HOST:PORT"
+    k.send("member", b"{}")
+    assert k.line() == "refused a member's flags that are not a JSON array"
+    k.close()
+
+
+def test_a_request_it_cannot_read_ends_the_loop():
+    k = Kept()
+    k.p.stdin.write(b"no such request\n")
+    k.p.stdin.flush()
+    assert k.line() == "err a request `no such request`"
+    assert k.p.wait() == 1
+
+
+def test_a_members_session_is_set_up_on_its_files(junk):
+    """A member of files no statement sets up from: `ok`, and its session's `Hello` is refused at the setup, as a loop of
+    its own refuses it, without reaching the auditor."""
+    auditor = Auditor(plain)
+    k = Kept()
+    assert k.member([*junk, "--verifier", auditor.addr]) == "ok"
+    s = k.connect()
+    assert call(s, REGISTER) == draw("null")
+    assert reason(call(s, hello(""))).startswith(STOP + "the Lean Hello: setup: ")
+    s.close()
+    k.close()
+    assert [[f[0] for f in c] for c in auditor.got] == [[10]]
+
+
+def _sent_hello(auditor: Auditor, i: int) -> str:
+    """The `Hello` that left session `i` for the auditor."""
+    sent = auditor.got[i][1]
+    assert sent[:1] == b"\x01", sent[:40]
+    return sent[5:].decode()
+
+
+@pytest.mark.slow
+def test_each_session_is_of_the_member_current_at_its_start(zk):
+    """Two members, the fixture's statement over its 16-unit and its 32-unit population, through one kept loop. A session
+    of the first sends the first's recorded `Hello` at the loop's nonce. A second member sent while a session is open is
+    answered only once that session ends, and that session's `Hello` is still the first member's; the session after it
+    sends the second's. At each member, the plan is `session --schedule`'s on the member's flags."""
+    first, n16, null = _record(zk, "selftest/honest")
+    second, n32, _ = _record(zk, "m26")
+    answers = {10: draw("null"), 1: _answer(), 3: b"\x01", 7: coins([])}
+    auditor = Auditor(lambda f: answers[f[0]])
+    members = [_args(zk, "pub-16.bin"), _args(zk, "pub-32.bin")]
+    fresh = [subprocess.run([str(BIN), "session", "--schedule", *args], input=null.encode(), capture_output=True,
+                            check=True).stdout.decode().splitlines() for args in members]
+    k = Kept()
+    assert k.member([*members[0], "--verifier", auditor.addr]) == "ok"
+    assert k.schedule(null) == fresh[0]
+    s = k.connect()
+    call(s, REGISTER)
+    call(s, hello(""))
+    s.close()
+    s = k.connect()
+    call(s, REGISTER)
+    k.send("member", json.dumps([*members[1], "--verifier", auditor.addr]).encode())
+    call(s, hello(""))
+    s.close()
+    assert k.line() == "ok"
+    s = k.connect()
+    call(s, REGISTER)
+    call(s, hello(""))
+    s.close()
+    assert k.schedule(null) == fresh[1]
+    k.close()
+    for i, (want, nonce) in enumerate([(first, n16), (first, n16), (second, n32)]):
+        got = _sent_hello(auditor, i)
+        assert got == want.replace(nonce, NONCE.search(got)[1]), i
