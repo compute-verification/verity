@@ -114,7 +114,7 @@ the link's points and its pads' commitments `ic i`, the session's `2·|tables|` 
 where the masked prover's coin checks pass by `¬ BadZk`. -/
 def ProverRunsAt (c : Case H rel) : Prop :=
   ∀ (v : ℕ → Schedule × ℕ) (cm : ℕ → Commit) (e : ℕ → Array Claim)
-    (ic : ℕ → ℕ → InnerCommit), (∀ i < c.sts.size, Zk.schedule (Setup.ofCircuit c.sts[i]!).m = .ok (v i) ∧
+    (ic : ℕ → ℕ → InnerCommit), (∀ i < c.sts.size, Zk.schedule (Setup.ofCircuit c.sts[i]!).wideLeaf (Setup.ofCircuit c.sts[i]!).m = .ok (v i) ∧
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit c.sts[i]!).merkle
         ((v i).1.levels.getD 0 default) (v i).2 (packed (traces c.sts c.w)[i]! (Setup.ofCircuit c.sts[i]!).m)
         (c.ω.extra i) (c.ω.lanePad i) (c.ω.salt i 0 0) = .ok (cm i) ∧
@@ -173,7 +173,7 @@ theorem Case.sessionRuns (c : Case H rel) (hS : StmtAt c) (hR : ProverRunsAt c) 
   have hsch := hschs
   unfold schedsPZk at hsch
   obtain ⟨hs1, hs2⟩ := FlockSoundness.Discharge.Exec.array_mapM_ok_getElem hsch
-  have hv : ∀ i (hi : i < c.sts.size), Zk.schedule (Setup.ofCircuit c.sts[i]).m = .ok schs[i]! := by
+  have hv : ∀ i (hi : i < c.sts.size), Zk.schedule (Setup.ofCircuit c.sts[i]).wideLeaf (Setup.ofCircuit c.sts[i]).m = .ok schs[i]! := by
     intro j hj
     have hv := hs2 j (by rw [htabs]; exact hj) (by rw [hs1, htabs]; exact hj)
     simp only [tabsOf, Array.getElem_map, monadLift_self] at hv

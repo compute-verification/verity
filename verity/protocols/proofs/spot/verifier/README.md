@@ -215,8 +215,10 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   registration's circuit, and a session of the lane that holds no coin of the family is refused unless a period
   that commits another circuit lists it: a root committed under this registration and never sampled refuses the
   period. It publishes each window with the registration audited and each session of the lane that is another
-  registration's, by that registration's circuit and its session alone, of which it holds nothing. Nothing calls it
-  yet but its difftest, and it has no executable.
+  registration's, by that registration's circuit and its session alone, of which it holds nothing. Its executable
+  is `spot-monitoring-period` (`id`, `check PARAMS COMMITMENT EVIDENCE [BLOB ...]`, `serve`); nothing calls it yet
+  but its difftest. What its accept means is stated in `security/Properties/Spot/MonitoringPeriod.lean`, and whose ledger it
+  reads in `security/Properties/Spot/MonitoringPeriodLedger.lean`.
 - **The challenger** (`challenger`, Lean of record `Spot/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor device its coins reach the developer's
   machine only through that machine's certifier coin link (`verity/protocols/compose/device/live_challenger/auditor.py`, the coins' path).
@@ -577,3 +579,12 @@ At the window's open, before it serves, the stream samples its seed salt (`Strea
 challenger's `seed-salt` family after the open root, which no sample reads. The record names it (`window.seed_salt`), a
 certified input its circuits read, public as coins. A verifier reads it from the challenger's log (`coins.seed_salt_of`,
 Lean `Challenger.seedSaltOf`), and R6 holds the window to it (`R6-seed-salt`, `tests/test_registered.py`).
+
+### The registered compiler
+
+A verifier that reads the registration log's registered compiler (`compiler`: the log's item as its view publishes it,
+with its digest and the public length ℓ of the advice it reads, or null when the log registers none) holds the record's
+window to name that compiler by its digest (`window.compiler.digest`, `R6-compiler`) and advice of at most ℓ bits
+(`window.advice.bits`, `R6-advice-length`); where the log registers none, a window naming a compiler or advice is
+`R6-compiler`. Lean `Registration.compilerOk` and `adviceOk`, in `RunCompiler` of R6; `tests/test_registered.py` and
+the difftest's `test_advice_no_registered_compiler_reads_is_refused_by_name`.
