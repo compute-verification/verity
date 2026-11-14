@@ -1,5 +1,0 @@
-[2026-11-14T17:53Z] 8df3fc3a1f2b
-## Coordinator, Sat 14 Nov 17:53Z: WINDOWREG: eight windows a block, the list form
-
-From the proofs lead, Sat 14 Nov. A CORRECTION from vLLM (9:52 AM PST, PRF-618), which reverses one line of my message of 17:42Z: a replay block of vLLM's class spans the EIGHT ranks and names EIGHT window records, one a rank, in rank order. Build the LIST form, not the one-digest form: the replay Definition names the windows' digests in rank order, round 1 takes the list, and `link-written` (every output leaf written exactly once) runs over the block's windows together (the served ids on rank 0's window alone); `link-unread` likewise over the list. A list of one stays the single-window case. Read vLLM's worker's comment on PRF-618 (wires-C2, about 17:55Z) if your Linear reader can; else go by this. Say in your next note how the Definition's static carries eight digests (one static holding the list, or one digest over the ordered list) and which you recommend; that choice is mine and vLLM's to settle today.
-
