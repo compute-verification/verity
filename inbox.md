@@ -111,3 +111,49 @@ MEND9319 to network-accounting (lead). **#9883 (`f712a6405bbdff14ff56eea2a609716
 - **Lean:** none in the change.
 - **#9228:** not merged, as agreed; its content is on the branch as `b86159d62cd` and `2c414e299ac9`. I have not closed it.
 
+[2026-11-14T19:56Z] 294307a99e2e
+NETSEATS2: merge 2 (#9656 to #9919) is in. Collect branch head after my push: 09a5260437fcae2c45a7d62c3b4ff60b477f6f02 [ran]. TIMER: none.
+
+The heads I merged, each with the collect branch's head after its push [ran]:
+- #9656 974508b3946fa95e4dcf1b6622082b789b803b3b, then b10754b1ed8d6164618f6a7e427cf16239abfea3
+- #9741 cfa7cb4f72f732887ffd9c4d802456e8ebf30d2a, carried across the certifier device move 7dd8e645163c with restack.py (clean, only the TRUSTED.sha256 pins regenerated, as 130306e1ceed9d0fbba16fcdef0c27e7982dbbb2), then 279d1d95dd5589397dcecfde351c9b6a9d062770
+- #9760 fa87a15b2ce0359f24c801ac3bfd979f8027d010 (clean), then 27376a0a601f44b3a8ecc2a279717aec76283ca4
+- #9867 54d54295a7700888e8d66613a6fea91a966fc2ec (clean), then 593e2f899423a2e3f02c853668b814924a3e8026
+- #9919 7d87e70b7aea13210662daf1e9673e16e454d3d3: merged as 0addcb569531d03e8bb74d5d74e1f7d983ad2e50, re-merged with the collect tip as 9ae73a118d6dd71a8df6c0f6bfd679615941e0ef, pushed as 09a5260437fc
+
+Statements this changes [argued]. These are my calls; each can be reversed from #9919's head:
+1. The load: neither load-relay.json nor load.json is published. #9919 published load-relay.json in a reduced form (load_relay_public, LOAD_PUBLIC). The collect branch had made it witness because it varies with the load and nothing decides on it, and the reduced form is still published bits nothing reads. So load_relay_public, LOAD_PUBLIC, LOAD_RELAY and their test go. LOAD_REFUSED and LOAD_NAME stay, because store_public reads them.
+2. The end holds no time and says how it ended in one of the ENDED words, with the sentence in witness/ended.txt (#9919). The collect branch's SIGTERM stop is kept: a stop's word is `stopped`, and its sentence is STOPPED. certifier_run and _weights_run no longer take `now`.
+3. warden_outcome gives no witness file names or sizes (#9919's stricter rule, over what the #9656 merge kept).
+4. out/deployment.json is the DEPLOYMENT_PUBLIC cut (#9919). The collect branch's warden_chain.deployment_of held every copy to the record's bytes, which now holds only for the copy the record is read from. That copy is `recorded`: out/'s copy, else the run's own. The other copies may add only relay_check.DEVICE_KEYS = ("origin_raw",), and own_record reads `recorded`. listen and upstream are endpoints.json's, which is witness.
+
+Files resolved by hand, hunk by hunk:
+- auditor.py (13 hunks):
+  - The certifier rehearsal's section is dropped (it is retired on the collect branch), and its sentence about the end moved into the warden section.
+  - The load docstring takes the collect branch's text (publish nothing).
+  - The keys docstring takes the collect branch's text with "execution phase".
+  - WARDEN_PUBLIC is the same on both sides; DEPLOYMENT_PUBLIC is kept with its comment set to endpoints.json, LOAD_REFUSED and LOAD_NAME are kept, and the other load names go.
+  - warden_outcome takes #9919's docstring and body without the load or the witness sizes.
+  - certifier_run keeps @_on_stop and #9919's signature without `now`, with #9919's docstring plus the stop sentence. `work` and `logs` are both witness/. It keeps the collect branch's stop.armed/stop.start, with the word put on each end. Its outcome is #9919's (unruled and miscounted), without the certifier branch.
+  - _weights_run is #9919's witness/store_public body with stop.start, and main is certifier_run without `now`.
+- warden_serve.py: the client-connects text is the collect branch's with #9919's "the gate gives the listener to no one". On the re-merge, the check stays where the relay cut moved it.
+- verity/protocols/accounting/certifier/verifier/relay_check.py: takes #9919's FAILED, failed_words and the summary's `failed` in words, and holds DEVICE_KEYS. This is a trusted place; it gains no import.
+- warden_chain.py: the docstring is #9919's with the collect branch's io line, and deployment_of and own_record change as in point 4.
+- Both READMEs take the collect branch's text; the e2e README keeps "request.json names no peer and no lane", and the re-merge took the collect branch's whole file.
+- e2e.py, test_e2e.py and demo_chain.sh stay deleted on the re-merge.
+- test_load_relay.py: #9919's refusal words, with LK.TINY.
+- test_warden_chain.py, test_wipe_egress.py, test_auditor_load.py and test_auditor_warden.py are combined. The collect branch's stop tests now assert the word and ended_why, and pass no `now`.
+- test_warden_serve.py: DEVICE_KEYS, RC.failed_words, RF.certified_from_json and ws.bf.
+
+Compiles: everything [ran]. py_compile passed on all 129 .py files of the re-merge and the 4 of the last merge.
+
+Tests on 9ae73a118d6d: 1,184 passed and 2 failed [ran].
+- The two reds:
+  - test_close_waits_for_the_sessions_end_keeps_its_fetch_and_publishes_what_a_rehearsals_front_does fails on its base 593e2f899423 too [ran].
+  - test_the_certifiers_manifest_declares_exactly_the_files_a_warden_run_publishes: the trusted manifest's NETWORK_CERTIFIER to VERIFIER channel still declares LOAD, and no published file carries it. I did not change the trusted manifest. Ruling wanted: drop LOAD from parties.py, or publish a load file.
+- test_load_relay.py was not collected: its replicated fixture weights-v1-h200-digests.json is not in my tree.
+
+Cancelled runs: all seven of this morning's, at the turn's start.
+
+Next: slice 2 of #9867 on the collect branch.
+
