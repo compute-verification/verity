@@ -22,9 +22,9 @@ inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proo
           # PoUS's setup, P2 and vk, which a P2 store is under (`p2.py`)
           "verity/protocols/accounting/pous",
           "verity/protocols/accounting/pous/prover",
-          # the deployment layer and its wire, which the session's parties run on (`session_parties.py`), the
-          # prover's party (`session_prover.py`), which test_session_parties.py runs against the verifier's, and the
-          # monitoring periods, which `monitoring` reads
+          # the deployment layer and its wire, which the session's parties run on (`session_parties.py`), the prover's
+          # party (`session_prover.py`), which test_session_parties.py runs against the verifier's, and the monitoring
+          # periods, which `monitoring` reads
           "verity/channel.py", "verity/runtime", "verity/tests/tests/test_channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py",
           "verity/protocols/accounting/poub/prover/__init__.py", "verity/protocols/accounting/poub/prover/session_prover.py",
           # the honest provers and the period's prover side, which the tests run against the verifier's

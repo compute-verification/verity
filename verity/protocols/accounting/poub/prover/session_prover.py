@@ -11,8 +11,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from verity.protocol import ProtocolDef
 from verity.party import Finish, Identity, Received, Send
+from verity.protocol import ProtocolDef
 from verity.channel import Message, Phase, Refused
 from verity.protocols.accounting.poub.verifier import coins as C
 from verity.protocols.accounting.poub.verifier import period as P
