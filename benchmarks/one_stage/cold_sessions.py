@@ -4,7 +4,7 @@ part, its peak memory and its Lean verdict, or the text it was refused with.
     python benchmarks/one_stage/cold_sessions.py plan --window W --members K,K,...
         # each member's statement from the window's files (``summary.json``'s members, the public file's header), or exit 1
         # naming what is missing
-    python benchmarks/one_stage/cold_sessions.py prove --window W --interface F --bin B --firewall L --member K
+    python benchmarks/one_stage/cold_sessions.py prove --window W --interface F --bin B --zk-server L --member K
         --arm gpu|cpu [--device D --card UUID] --out O [--timeout S]
         # one session on a proof server of its own: O/<arm>/session-m<k>/cold.json and a COLD line
     python benchmarks/one_stage/cold_sessions.py verify --window W --interface F --lean V --member K --arm A --out O
@@ -13,7 +13,7 @@ part, its peak memory and its Lean verdict, or the text it was refused with.
         # O/table.json and O/table.md, a row a member
 
 A window is an audit's ``audit/window`` (`a5.audit`'s): ``m<k>/`` (``circuit.txt``, ``inst-N.bin``, ``pub-N.bin``,
-``registered.json`` where the member reads registered values), ``session-m<k>/draw.json``, ``partition.json``,
+``registered.json`` where the member reads registered values), each session's sample (``session-m<k>/``, `a0.SAMPLE_FILE`), ``partition.json``,
 ``program.json`` and ``summary.json``; ``--interface`` is the window's registered circuit record. Each session is the one
 `a5.proof_server` proves an audit's member in, behind the ZK server: a `ProofServer` of its own (so its prover and its
 verifier start cold), ``verify_ahead=0``, its Lean session loop set up as `a0.prover_env` says, on the member's own sample
@@ -37,6 +37,7 @@ import os
 import re
 import resource
 import signal
+import subprocess
 import sys
 import threading
 import time
@@ -71,7 +72,7 @@ def plan(a: argparse.Namespace) -> int:
         if m is None:
             bad.append(f"m{k}: not in summary.json")
             continue
-        need = [d / "circuit.txt", d / f"inst-{m['n']}.bin", d / f"pub-{m['n']}.bin", window / f"session-m{k}" / "draw.json"]
+        need = [d / "circuit.txt", d / f"inst-{m['n']}.bin", d / f"pub-{m['n']}.bin", window / f"session-m{k}" / a0.SAMPLE_FILE]
         if missing := [str(f) for f in need if not f.exists()]:
             bad.append(f"m{k}: missing {missing}")
             continue
@@ -79,7 +80,7 @@ def plan(a: argparse.Namespace) -> int:
         print("PLAN " + json.dumps({"k": k, "n": m["n"], "template": m["template"], "pin": pin,
                                     "circuit_bytes": (d / "circuit.txt").stat().st_size,
                                     "registered": (d / "registered.json").exists(),
-                                    "draw": json.loads(need[3].read_text())}), flush=True)
+                                    "sample": json.loads(need[3].read_text())}), flush=True)
     for f in (window / "partition.json", window / "program.json"):
         if not f.exists():
             bad.append(f"missing {f}")
@@ -88,30 +89,31 @@ def plan(a: argparse.Namespace) -> int:
     return 1 if bad else 0
 
 
-def tree(roots: list[int]) -> dict[int, int]:
-    """Every live descendant of ``roots`` (themselves included), each by its root."""
-    out, todo = {}, [(r, r) for r in roots]
-    while todo:
-        p, root = todo.pop()
-        if p in out:
-            continue
-        out[p] = root
-        for t in Path(f"/proc/{p}/task").glob("*/children"):
-            try:
-                todo += [(int(c), root) for c in t.read_text().split()]
-            except OSError:
-                pass
+def processes() -> dict[int, tuple[int, int]]:
+    """Every process's parent and RSS in KiB, from one `ps`."""
+    out = {}
+    for line in subprocess.run(["ps", "-e", "-o", "pid=,ppid=,rss="], capture_output=True, text=True).stdout.splitlines():
+        pid, ppid, rss = (int(x) for x in line.split())
+        out[pid] = (ppid, rss)
     return out
 
 
-def rss_kb(pid: int) -> int:
-    try:
-        for line in Path(f"/proc/{pid}/status").read_text().splitlines():
-            if line.startswith("VmRSS:"):
-                return int(line.split()[1])
-    except OSError:
-        pass
-    return 0
+def tree_rss(roots: dict[int, str]) -> dict[str, int]:
+    """The summed RSS in KiB of each root's tree (itself and every descendant), by the root's name."""
+    procs, kids = processes(), {}
+    for pid, (ppid, _) in procs.items():
+        kids.setdefault(ppid, []).append(pid)
+    sums = {}
+    for root, name in roots.items():
+        todo, seen = [root], set()
+        while todo:
+            p = todo.pop()
+            if p in seen or p not in procs:
+                continue
+            seen.add(p)
+            sums[name] = sums.get(name, 0) + procs[p][1]
+            todo += kids.get(p, [])
+    return sums
 
 
 class Trees:
@@ -125,10 +127,7 @@ class Trees:
 
     def _run(self) -> None:
         while not self._stop.wait(self.every):
-            names = {pid: name for name, pid in self.ps.pids.items()}
-            sums: dict[str, int] = {}
-            for p, root in tree(list(names)).items():
-                sums[names[root]] = sums.get(names[root], 0) + rss_kb(p)
+            sums = tree_rss({pid: name for name, pid in self.ps.pids.items()})
             self.peak_kb = max(self.peak_kb, sum(sums.values()))
             for n, kb in sums.items():
                 self.by_tree[n] = max(self.by_tree.get(n, 0), kb)
@@ -165,9 +164,9 @@ def prove(a: argparse.Namespace) -> int:
     st = statement(window, Path(a.interface), k)
     sdir = session_dir(Path(a.out), a.arm, k)
     sdir.mkdir(parents=True, exist_ok=True)
-    draw = json.loads((window / f"session-m{k}" / "draw.json").read_text())
-    (sdir / "draw.json").write_text(json.dumps(draw))
-    env = {**a0.prover_env(a.firewall, st), "FC_PHASE_TIMES": "1"}
+    sample = json.loads((window / f"session-m{k}" / a0.SAMPLE_FILE).read_text())
+    (sdir / a0.SAMPLE_FILE).write_text(json.dumps(sample))
+    env = {**a0.prover_env(a.zk_server, st), "FC_PHASE_TIMES": "1"}
     devices = [a.device] if a.arm == "gpu" else None
     ps = ProofServer(a.bin, sdir / "proof-server", devices=devices, env=env, verify_ahead=0, verdicts=1,
                      challenger=a0.own_challenger(zk=True))
@@ -178,7 +177,7 @@ def prove(a: argparse.Namespace) -> int:
             try:
                 os.killpg(pid, signal.SIGKILL)
             except ProcessLookupError:
-                pass
+                print(f"cold_sessions: pid {pid} had already exited at signal {sig}", file=sys.stderr, flush=True)
         os._exit(128 + sig)
 
     signal.signal(signal.SIGTERM, stop)
@@ -187,13 +186,13 @@ def prove(a: argparse.Namespace) -> int:
     card = SR.Device(a.card) if a.card else None
     host = Trees(ps)
     rec = {"k": k, "n": m["n"], "template": m["template"], "arm": a.arm, "device": a.device if devices else None,
-           "card": a.card, "circuit_bytes": (st["dir"] / "circuit.txt").stat().st_size, "draw": draw,
+           "card": a.card, "circuit_bytes": (st["dir"] / "circuit.txt").stat().st_size, "sample": sample,
            "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     t0 = time.time()
     pin = a0.public_header(st["dir"], m["n"])["circuit_sha512"]
     s = ps.submit(Statement(pin=pin, circuit=st["dir"] / "circuit.txt", tables=st["dir"] / "tables",
                             instances=st["dir"] / f"inst-{m['n']}.bin", public=st["dir"] / f"pub-{m['n']}.bin"),
-                  draw, str(sdir.resolve()), out=sdir / "sessions")
+                  sample, str(sdir.resolve()), out=sdir / "sessions")
     try:
         s.result()
         rec["error"] = None
@@ -303,7 +302,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--out", required=True)
         if name == "prove":
             p.add_argument("--bin", required=True, help="flock-circuit (or its stamping wrapper)")
-            p.add_argument("--firewall", required=True, help="Lean's flock-firewall (or its stamping wrapper)")
+            p.add_argument("--zk-server", required=True, help="the ZK server's Lean session loop (or its stamping wrapper)")
             p.add_argument("--device", type=int, default=0, help="with --arm gpu: the CUDA index the prover proves on")
             p.add_argument("--card", help="the card's UUID, for its memory (nvidia-smi -i)")
             p.add_argument("--stamps", help="member_seconds.wrap's stamps.txt")

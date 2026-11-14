@@ -924,7 +924,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             return summary, False
         union_draw, drawn_law, receipt = dict(draw.draw), dict(draw.law), dict(draw.registration.receipt)
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
-    (out / "draw.json").write_text(json.dumps(union_draw, sort_keys=True))
+    (out / a0.SAMPLE_FILE).write_text(json.dumps(union_draw, sort_keys=True))
     after: dict[str, dict] = {}
     if any(m.wired for m in mine.members):
         bad = WI.check_drawn(mine.members, publics, union_draw["units"])
@@ -966,7 +966,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         # a plain session is served the stream's stratified sample itself, its one member the whole window (`plain_refusal`)
         session_draw, session_law = ((union_draw, drawn_law) if plain(a) else
                                      ({"law": "subset", "population": m.n, "k": len(local), "units": local}, {"law": "subset", "k": len(local)}))
-        (sdir / "draw.json").write_text(json.dumps(session_draw, sort_keys=True))
+        (sdir / a0.SAMPLE_FILE).write_text(json.dumps(session_draw, sort_keys=True))
         t = time.time()
         stage(served, mm, files)
         return {"mm": mm, "local": local, "sdir": sdir, "staged_s": time.time() - t, "session_draw": session_draw,
@@ -989,7 +989,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             return {**s, "handle": h}
         t = time.time()
         env = {"FC_COINS": "tree"} if plain(a) else a0.prover_env(a.firewall, mm["st"])
-        record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / "draw.json",
+        record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / a0.SAMPLE_FILE,
                                   zk=not plain(a), env=env, prove_timeout=a.session_timeout,
                                   tree_from=None if relay is None else relay.flags)
         session_s = round(time.time() - t, 1)

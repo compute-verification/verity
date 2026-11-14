@@ -22,7 +22,7 @@ def window(root: Path, ks: list[int]) -> Path:
         (d / "inst-4.bin").write_bytes(b"i")
         (d / "pub-4.bin").write_text(json.dumps({"circuit_sha512": f"pin{k}"}) + "\n")
         (w / f"session-m{k}").mkdir()
-        (w / f"session-m{k}" / "draw.json").write_text(json.dumps({"k": 1, "law": "subset", "population": 4, "units": [2]}))
+        (w / f"session-m{k}" / C.a0.SAMPLE_FILE).write_text(json.dumps({"k": 1, "population": 4, "units": [2]}))
     (w / "summary.json").write_text(json.dumps({"members": [{"k": k, "n": 4, "template": "T_v1{N=1}"} for k in ks]}))
     (w / "partition.json").write_text("{}")
     (w / "program.json").write_text("{}")
@@ -33,7 +33,7 @@ def test_the_plan_names_each_members_statement_and_exits_1_naming_a_missing_file
     w = window(tmp_path, [5, 7])
     assert C.main(["plan", "--window", str(w), "--members", "5,7"]) == 0
     plans = [json.loads(x.split(" ", 1)[1]) for x in capsys.readouterr().out.splitlines() if x.startswith("PLAN ")]
-    assert [(p["k"], p["n"], p["pin"], p["draw"]["units"]) for p in plans] == [(5, 4, "pin5", [2]), (7, 4, "pin7", [2])]
+    assert [(p["k"], p["n"], p["pin"], p["sample"]["units"]) for p in plans] == [(5, 4, "pin5", [2]), (7, 4, "pin7", [2])]
     (w / "m7" / "inst-4.bin").unlink()
     assert C.main(["plan", "--window", str(w), "--members", "5,7,9"]) == 1
     out = capsys.readouterr().out
@@ -48,7 +48,7 @@ def test_the_zk_servers_part_of_the_clock_is_what_witness_proving_and_wait_leave
 def test_the_table_has_a_row_a_member_with_each_arms_session_or_its_refusal(tmp_path):
     def rec(arm: str, k: int, accepted: bool) -> dict:
         return {"k": k, "arm": arm, "template": "AttnBlockFirst_v1{D=64}", "circuit_bytes": 1234, "accepted": accepted,
-                "refusal": None if accepted else "FIREWALL-REFUSED: no answer", "session_wall_s": 9.0,
+                "refusal": None if accepted else "recv: failed to fill whole buffer", "session_wall_s": 9.0,
                 "prover_built_s": 1.0, "verifier_built_s": 2.0, "live": {"e2e_s": 5.0}, "outside_s": 1.0,
                 "host_peak_gib": 3.0, "device_peak_mib": 4096}
     for arm, k, ok in (("gpu", 8, True), ("cpu", 8, True), ("gpu", 127997, False)):
@@ -60,4 +60,4 @@ def test_the_table_has_a_row_a_member_with_each_arms_session_or_its_refusal(tmp_
     rows = (tmp_path / "table.md").read_text().splitlines()[2:]
     assert len(rows) == 2 and rows[0].startswith("| m8 | `AttnBlockFirst_v1` | 1,234 |")
     assert "verdict 7.0 s accepted" in rows[0] and "card 4096 MiB" in rows[0] and "no verdict" in rows[0]
-    assert "refused: FIREWALL-REFUSED: no answer" in rows[1] and rows[1].endswith("| not run |")
+    assert "refused: recv: failed to fill whole buffer" in rows[1] and rows[1].endswith("| not run |")

@@ -2,7 +2,7 @@
 # One cold session a member of a kept window behind the ZK server, on one card and on the CPU prover in turn
 # (cold_sessions.py), with the builds as zk_cost.sh makes them. Run from the verity tree on a GPU node, as a GPU host job:
 #   bash benchmarks/one_stage/cold_sessions.sh COLD_STAGE=probe|build|run COLD_ARCHIVE=FILE COLD_MEMBERS=K,K,... COLD_CARD=I
-# env: COLD_ARCHIVE (a .tar.zst holding audit/window/{m<k>/,session-m<k>/draw.json,partition.json,program.json,summary.json}
+# env: COLD_ARCHIVE (a .tar.zst holding audit/window/{m<k>/,session-m<k>/ (its sample),partition.json,program.json,summary.json}
 #        and window/circuit.json, the window's registered circuit record)
 #      COLD_MEMBERS (run in this order, each member's arms one after the other)  COLD_ARMS=gpu,cpu  COLD_CARD (an index)
 #      COLD_CPUS=0-9 (every session's processes)  COLD_LEAN_CPUS=10-11 (the Lean verdicts, one at a time, beside the sessions)
@@ -120,23 +120,23 @@ OUT=$O/lean bash benchmarks/proof_throughput/verify.sh BUILD_ONLY=1 PT_WORK="$PT
 wait
 BIN=$(sed -n 's/^BINARY=//p' "$O/build.txt" | tail -1)
 LEAN=$(sed -n 's/.*BUILD_ONLY: \(\S*\) .*/\1/p' "$O/lean/job.log" 2>/dev/null | tail -1)
-FW=${LEAN%/*}/flock-firewall
-if [ -x "$LEAN" ] && [ ! -x "$FW" ]; then
+LOOP=${LEAN%/*}/flock-firewall
+if [ -x "$LEAN" ] && [ ! -x "$LOOP" ]; then
   command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
-  (exec 8>"$PT_WORK/lean.lock"; flock 8; [ -x "$FW" ] || (cd "$(readlink -f "${LEAN%/build/bin/*}")/.." && lake build flock-firewall)) \
-    > "$O/lake-firewall.log" 2>&1
+  (exec 8>"$PT_WORK/lean.lock"; flock 8; [ -x "$LOOP" ] || (cd "$(readlink -f "${LEAN%/build/bin/*}")/.." && lake build flock-firewall)) \
+    > "$O/lake-loop.log" 2>&1
 fi
-for p in "$BIN" "$LEAN" "$FW" "$PY"; do
-  [ -x "$p" ] || { log "missing: '$p'"; tail -20 "$O/build.txt" "$O/lean-build.txt" "$O/lake-firewall.log" 2>/dev/null; exit 1; }
+for p in "$BIN" "$LEAN" "$LOOP" "$PY"; do
+  [ -x "$p" ] || { log "missing: '$p'"; tail -20 "$O/build.txt" "$O/lean-build.txt" "$O/lake-loop.log" 2>/dev/null; exit 1; }
 done
-sha256sum "$BIN" "$LEAN" "$FW" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
+sha256sum "$BIN" "$LEAN" "$LOOP" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
 [ "$STAGE" = build ] && { log "build: done"; exit 0; }
 
 card_free || exit 11
 trap 'rm -rf "$SCR"' EXIT
 unpack || exit 1
 S=$SCR/sessions; mkdir -p "$S"
-read -r WBIN WLEAN WFW < <("$PY" benchmarks/one_stage/member_seconds.py wrap "$SCR/stamped" "$BIN" "$LEAN" "$FW" | tr '\n' ' ')
+read -r WBIN WLEAN WLOOP < <("$PY" benchmarks/one_stage/member_seconds.py wrap "$SCR/stamped" "$BIN" "$LEAN" "$LOOP" | tr '\n' ' ')
 export GPU_LEASE_WHO=${GPU_LEASE_WHO:-proofs/cold-sessions/${RESEARCH_RUN_ID:-local}}
 END=${COLD_END:-$(( $(date +%s) + 86400 ))}
 est() { local v="COLD_EST_$1_$2" w="COLD_EST_$1"; echo "${!v:-${!w:-1800}}"; }
@@ -160,11 +160,11 @@ for k in ${COLD_MEMBERS//,/ }; do
     if [ "$arm" = gpu ]; then
       card_free || { rc=11; break 2; }
       "${LEASE[@]}" 1 --on "$COLD_CARD" --cores "$CPUS" --max-min "$mm" -- bash -c '"$@" --device "$CUDA_VISIBLE_DEVICES" --card "$GPU_LEASE_UUID"' _ \
-        "$PY" benchmarks/one_stage/cold_sessions.py prove "${args[@]}" --bin "$WBIN" --firewall "$WFW" \
+        "$PY" benchmarks/one_stage/cold_sessions.py prove "${args[@]}" --bin "$WBIN" --zk-server "$WLOOP" \
         --stamps "$SCR/stamped/stamps.txt" --timeout $(( mm * 60 - 30 )) >> "$O/cold.log" 2>> "$O/cold.err"
       x=$?
     else
-      taskset -c "$CPUS" "$PY" benchmarks/one_stage/cold_sessions.py prove "${args[@]}" --bin "$WBIN" --firewall "$WFW" \
+      taskset -c "$CPUS" "$PY" benchmarks/one_stage/cold_sessions.py prove "${args[@]}" --bin "$WBIN" --zk-server "$WLOOP" \
         --stamps "$SCR/stamped/stamps.txt" --timeout $(( mm * 60 )) >> "$O/cold.log" 2>> "$O/cold.err"
       x=$?
     fi
