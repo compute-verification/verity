@@ -20,17 +20,17 @@ from verity.protocols.accounting.pouw.verifier.serving import PassCommitment
 
 from tests.protocols._needs_torch import torch
 from verity_vllm import protocols as PO
-from verity_vllm.commit import lead_rows as L
+from verity.protocols.accounting.pouw.prover.serving.lead import rows as L
 from verity_vllm.engine import hooks
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_experts as X
 from verity_vllm.errors import Refused
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw import lead as PL
-from verity_vllm.protocols.pouw.lead import feed as F
-from verity_vllm.protocols.pouw.lead import record as R
-from verity_vllm.protocols.pouw.pearl_c import passes as PP
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving import lead as PL
+from verity.protocols.accounting.pouw.prover.serving.lead import feed as F
+from verity.protocols.accounting.pouw.prover.serving.lead import record as R
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import passes as PP
 
 K = 64
 ENTRY = f"pouw:{PL.SCHEME}"

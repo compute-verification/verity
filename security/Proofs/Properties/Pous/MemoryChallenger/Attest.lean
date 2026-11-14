@@ -2,7 +2,7 @@ module
 
 public import Lms.Sign
 public import Proofs.Flock.Claims.Finder
-public import Proofs.Properties.NetworkCertifier.Device.Lms
+public import Proofs.Properties.Certifier.Device.Lms
 public import Proofs.Properties.Pous.MemoryChallenger.Tree
 public import Properties.Attest
 import all Init.Data.String.Defs
@@ -89,7 +89,7 @@ open Flock Flock.FV3.Sha512
 open Accounting.Assumptions
 open MemoryChallenger.Properties.SecurityProofs.Tree (CF next base lev le_pow_log2ceil lev_size get!_mem hash_size
   lev_width levels_size levels_get levels_eq root_eq frame_last frame_two node_hash leaf_hash next_get isEmpty_of_size)
-open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj split_bytes be64_size be64_size_inj)
+open Properties.Certifier.Bytes (bs bs_append bs_length bs_inj split_bytes be64_size be64_size_inj)
 
 /-- `ByteArray`'s `==` is its arrays', which is lawful. -/
 local instance instLawfulBEqByteArray_attest : LawfulBEq ByteArray where

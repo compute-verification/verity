@@ -122,7 +122,7 @@ research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool
 units: `population.py` writes, per N, a population of about N units over a layered call hierarchy (by default 234 root
 batches of 234 templates over six levels of at most 1,800 composites, about 8,100 Definitions; `POPULATION_ARGS`
 changes them), and `population/Main.lean`, built in a scratch Lake package against the checkout's verifier, times
-`Partition.unitGates` (one gate table per program, `unitGates_eq_unitGatesFast`), `Slots.popOk` (from the ranges,
+`Partition.unitGates` (a range at a time, `TemplateQuery.unitGates`), `Slots.popOk` (from the ranges,
 `popOk_eq_popOkRanges`: no replay unit and no input gate is built) and the references: `TemplateQuery.gates` on every
 unit, each recomputing its offset and template through an unmemoized walk, and `popOk` as stated, off `Slots.layout`'s
 population, at N and either side of it. It fails where a reference differs. The references run up to `REF_MAX` units

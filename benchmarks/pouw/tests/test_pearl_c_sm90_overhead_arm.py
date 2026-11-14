@@ -31,8 +31,8 @@ from verity.protocols.accounting.pouw.verifier import audit  # noqa: E402
 from verity.protocols.accounting.pouw.verifier import window as Wd  # noqa: E402
 from verity.protocols.accounting.pouw.verifier.protocol import Shape as Unit  # noqa: E402
 from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA  # noqa: E402
-from verity_vllm.protocols.pouw import pearl_c as PPD  # noqa: E402
-from verity_vllm.protocols.pouw.pearl_c import served_y as SY  # noqa: E402
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD  # noqa: E402
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY  # noqa: E402
 
 
 def _load(name: str, path: Path):
