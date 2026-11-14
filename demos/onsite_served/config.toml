@@ -126,9 +126,9 @@ after = ["Openings"]
 [[channel]]
 from = "network-certifier"
 to = "workers"
-messages = ["out-opening"]
+messages = ["out-opening", "records", "cells-salts"]
 
 [[channel]]
 from = "network-certifier"
 to = "verifier"
-messages = ["out-record"]
+messages = ["out-record", "certificate", "registration", "load"]
