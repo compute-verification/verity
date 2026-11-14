@@ -24,6 +24,7 @@ ROOT_A, ROOT_B = "ab" * 64, "cd" * 64
 class FakeLocal:
     def __init__(self, root: Path, main: list[str]) -> None:
         self.root, self.pin, self.session, self.opened = root, main[0], None, []
+        self.key = AC.Ch.ChallengerKey(4, 5, b"\x07" * 80)
 
     def open(self, root: str, layout: list, minutes: int, scheme: str) -> tuple[str, str, str]:
         self.opened.append((root, layout, minutes, scheme))
@@ -31,7 +32,7 @@ class FakeLocal:
         return "127.0.0.1:4242", "5e" * 32, "c0" * 64
 
     def finish(self, dest: Path) -> tuple[Path, Path, Path, AC.Ch.ChallengerKey]:
-        return dest / "session", dest / "windows.jsonl", dest / "pins.jsonl", AC.Ch.ChallengerKey(4, 5, b"\x07" * 80)
+        return dest / "session", dest / "windows.jsonl", dest / "pins.jsonl", self.key
 
 
 @pytest.fixture
@@ -50,6 +51,7 @@ def party(tmp_path, monkeypatch):
 def test_the_verifier_opens_and_finishes_a_session_on_the_challenger_party(party, tmp_path):
     p, address = party
     lb = AC.Loopback(address)
+    assert lb.key == p.local.key
     assert lb.open(ROOT_A, [["work", 3]]) == ("127.0.0.1:4242", "5e" * 32, "c0" * 64)
     assert lb.session == "s1" and p.local.opened == [(ROOT_A, [["work", 3]], AC.MINUTES, AC.SCHEME)]
     session, ledger, pins, key = lb.finish(tmp_path / "dest")
