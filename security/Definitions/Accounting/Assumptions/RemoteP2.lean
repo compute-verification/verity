@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Assumptions.RateAudit
+public import Definitions.Poub.Assumptions.RateAudit
 public import Definitions.Accounting.Assumptions.RemoteHeld
 import Mathlib.Basic.ENNReal.Real
 

@@ -3,8 +3,8 @@ module
 public import Definitions.Accounting.Actual
 public import Definitions.Accounting.Additive
 public import Definitions.Accounting.Actual.Sampler
-public import Definitions.Accounting.Bandwidth
-public import Definitions.Accounting.BandwidthAudit
+public import Definitions.Poub.Bandwidth
+public import Definitions.Poub.BandwidthAudit
 public import Definitions.Pouw.BoundReceipt
 public import Definitions.Pouw.BoundSketch
 public import Definitions.Accounting.Bridge
@@ -39,18 +39,18 @@ public import Definitions.Pouw.Pouw
 public import Definitions.Pouw.PouwWitness
 public import Definitions.Accounting.NetWitness
 public import Definitions.Pouw.PouwWork
-public import Definitions.Accounting.RateAudit
-public import Definitions.Accounting.RateAuditDeployed
-public import Definitions.Accounting.RateAuditInteractive
-public import Definitions.Accounting.RateAuditJoint
-public import Definitions.Accounting.RateAuditPartial
-public import Definitions.Accounting.RateAuditPooled
-public import Definitions.Accounting.RateAuditRemote
-public import Definitions.Accounting.RateAuditSketch
-public import Definitions.Accounting.RateAuditSketchDeployed
-public import Definitions.Accounting.RateAuditSketchInteractive
-public import Definitions.Accounting.RateAuditSketchLayout
-public import Definitions.Accounting.ReadUnit
+public import Definitions.Poub.RateAudit
+public import Definitions.Poub.RateAuditDeployed
+public import Definitions.Poub.RateAuditInteractive
+public import Definitions.Poub.RateAuditJoint
+public import Definitions.Poub.RateAuditPartial
+public import Definitions.Poub.RateAuditPooled
+public import Definitions.Poub.RateAuditRemote
+public import Definitions.Poub.RateAuditSketch
+public import Definitions.Poub.RateAuditSketchDeployed
+public import Definitions.Poub.RateAuditSketchInteractive
+public import Definitions.Poub.RateAuditSketchLayout
+public import Definitions.Poub.ReadUnit
 public import Definitions.Accounting.Records
 public import Definitions.Accounting.RecordsToy
 public import Definitions.Accounting.Remote
@@ -79,7 +79,7 @@ account on one device model.
 
 The lock's `deployed` guarantees for the area, the bandwidth audit's and PoUB's, each with the module that states it:
 
-* `Accounting.Guarantees.RemoteRunConservationDeployed` (`Definitions.Accounting.Guarantees.RateAuditDeployed`):
+* `Accounting.Guarantees.RemoteRunConservationDeployed` (`Definitions.Poub.Guarantees.RateAuditDeployed`):
   PoUB at its deployed parameters.
 * `Accounting.Guarantees.RemoteRunConservationSketchDeployed` (the same module): PoUB's sketch session at the
   deployed receipt parameters, under the per-pass hash budget.

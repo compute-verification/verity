@@ -4,9 +4,9 @@ public import Definitions.Accounting.Guarantees.Actual
 public import Definitions.Accounting.Guarantees.Actual.Threaded
 public import Definitions.Accounting.Guarantees.Actual.Slowdown
 public import Definitions.Accounting.Guarantees.Additive
-public import Definitions.Accounting.Guarantees.Bandwidth
-public import Definitions.Accounting.Guarantees.Bandwidth.Causal
-public import Definitions.Accounting.Guarantees.BandwidthAudit
+public import Definitions.Poub.Guarantees.Bandwidth
+public import Definitions.Poub.Guarantees.Bandwidth.Causal
+public import Definitions.Poub.Guarantees.BandwidthAudit
 public import Definitions.Pouw.Guarantees.BoundReceipt
 public import Definitions.Pouw.Guarantees.BoundSketch
 public import Definitions.Pouw.Guarantees.Bridges
@@ -35,13 +35,13 @@ public import Definitions.Pouw.Guarantees.PerRun
 public import Definitions.Accounting.Guarantees.PeriodBinding
 public import Definitions.Pouw.Guarantees.Pouw
 public import Definitions.Pouw.Guarantees.PouwWork
-public import Definitions.Accounting.Guarantees.RateAudit
-public import Definitions.Accounting.Guarantees.RateAuditDeployed
-public import Definitions.Accounting.Guarantees.RateAuditNamed
-public import Definitions.Accounting.Guarantees.RateAuditPartial
-public import Definitions.Accounting.Guarantees.RateAuditPooled
-public import Definitions.Accounting.Guarantees.RateAuditRemote
-public import Definitions.Accounting.Guarantees.RateAuditSketch
+public import Definitions.Poub.Guarantees.RateAudit
+public import Definitions.Poub.Guarantees.RateAuditDeployed
+public import Definitions.Poub.Guarantees.RateAuditNamed
+public import Definitions.Poub.Guarantees.RateAuditPartial
+public import Definitions.Poub.Guarantees.RateAuditPooled
+public import Definitions.Poub.Guarantees.RateAuditRemote
+public import Definitions.Poub.Guarantees.RateAuditSketch
 public import Definitions.Accounting.Guarantees.Responder
 public import Definitions.Accounting.Guarantees.ServingBlocks
 public import Definitions.Accounting.Guarantees.ServingBlocks.Witnesses
@@ -60,7 +60,7 @@ public import Definitions.Accounting.Guarantees.Sheet
 public import Definitions.Pouw.Guarantees.TS.Stages
 public import Definitions.Pouw.Guarantees.TS.FoldFanIn
 public import Definitions.Pouw.Guarantees.TS.LowBit
-public import Definitions.Accounting.RateAuditRemote
+public import Definitions.Poub.RateAuditRemote
 
 /-! Resource accounting's guarantee statements: the joint guarantee and its covert residual, the joint guarantee over
 a period audited by every protocol, over a horizon of periods and over a horizon of server-time blocks and the

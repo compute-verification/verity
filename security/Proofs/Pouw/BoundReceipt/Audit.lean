@@ -2,7 +2,7 @@ module
 
 public import Mathlib
 public import Definitions.Pouw.Guarantees.BoundReceipt
-public import Proofs.Accounting.RateAudit.Audit
+public import Proofs.Poub.RateAudit.Audit
 
 /-!
 # Receipts bound to the matmul: the proofs

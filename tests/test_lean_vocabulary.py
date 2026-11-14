@@ -426,11 +426,11 @@ KNOWN_MAX = 415
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
 KNOWN: dict[str, str] = {
     # security/Definitions/
-    "security/Definitions/Accounting/Bandwidth/Game.lean::Bandwidth.Device":
+    "security/Definitions/Poub/Bandwidth/Game.lean::Bandwidth.Device":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes it (deleted) (memory-accounting)",
-    "security/Definitions/Accounting/Bandwidth/Game.lean::Bandwidth.Store":
+    "security/Definitions/Poub/Bandwidth/Game.lean::Bandwidth.Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
-    "security/Definitions/Accounting/Bandwidth/Interactive.lean::Bandwidth.InteractiveDevice":
+    "security/Definitions/Poub/Bandwidth/Interactive.lean::Bandwidth.InteractiveDevice":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes its interactive case (deleted) (memory-accounting)",
     "security/Definitions/Pouw/BoundReceipt.lean::Accounting.BoundReceipt.Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
@@ -450,21 +450,21 @@ KNOWN: dict[str, str] = {
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: the Site plus the device model (lean)",
     "security/Definitions/Pouw/PouwWork.lean::Accounting.PouwWork.Verdict":
         "duplicate of `Core.Verdict`: becomes a spec verdict over it, once the spec has one (compute-accounting)",
-    "security/Definitions/Accounting/RateAudit.lean::Accounting.Rate.Coins":
+    "security/Definitions/Poub/RateAudit.lean::Accounting.Rate.Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
-    "security/Definitions/Accounting/RateAudit.lean::Accounting.Rate.Device":
+    "security/Definitions/Poub/RateAudit.lean::Accounting.Rate.Device":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes it (deleted) (memory-accounting)",
-    "security/Definitions/Accounting/RateAudit.lean::Accounting.Rate.Store":
+    "security/Definitions/Poub/RateAudit.lean::Accounting.Rate.Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
-    "security/Definitions/Accounting/RateAuditInteractive.lean::Accounting.Rate.InteractiveDevice":
+    "security/Definitions/Poub/RateAuditInteractive.lean::Accounting.Rate.InteractiveDevice":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes its interactive case (deleted) (memory-accounting)",
-    "security/Definitions/Accounting/RateAuditPooled.lean::Accounting.Rate.Session":
+    "security/Definitions/Poub/RateAuditPooled.lean::Accounting.Rate.Session":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a run over sampling periods (memory-accounting)",
-    "security/Definitions/Accounting/RateAuditSketch.lean::Accounting.RateSketch.Coins":
+    "security/Definitions/Poub/RateAuditSketch.lean::Accounting.RateSketch.Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
-    "security/Definitions/Accounting/RateAuditSketch.lean::Accounting.RateSketch.Device":
+    "security/Definitions/Poub/RateAuditSketch.lean::Accounting.RateSketch.Device":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes it (deleted) (memory-accounting)",
-    "security/Definitions/Accounting/RateAuditSketchInteractive.lean::Accounting.RateSketch.InteractiveDevice":
+    "security/Definitions/Poub/RateAuditSketchInteractive.lean::Accounting.RateSketch.InteractiveDevice":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes its interactive case (deleted) (memory-accounting)",
     "security/Definitions/Accounting/Remote/Draw.lean::Accounting.Remote.Draw.Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",

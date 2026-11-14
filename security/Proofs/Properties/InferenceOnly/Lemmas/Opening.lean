@@ -4,8 +4,8 @@ public import Properties.InferenceOnly.Opening
 public import Properties.InferenceOnly.PinnedRead
 public import Properties.Verity.Sha512
 public import Flock.Hm96
-public import Proofs.Accounting.ReadUnit
-public import Proofs.Accounting.ReadUnit.BitsPorts
+public import Proofs.Poub.ReadUnit
+public import Proofs.Poub.ReadUnit.BitsPorts
 public import Proofs.Properties.InferenceOnly.RecordForm
 
 /-!

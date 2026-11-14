@@ -12,7 +12,7 @@
   "Proofs.Flock",
   "Proofs.Hash",
   "Proofs.Accounting",
-  "Proofs.Accounting.Bandwidth",
+  "Proofs.Poub.Bandwidth",
   "Proofs.Spot",
   "Proofs.WeightSecurity",
   "Proofs.Properties.Pouw",

@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.RateAudit
+public import Definitions.Poub.RateAudit
 
 /-!
 # Receipts bound to the matmul: the generic-mix game on two locations (trusted)
