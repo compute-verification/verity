@@ -259,7 +259,6 @@ NOT_READ = {
     "lean_changed.py": "the Lean fast path, which runs beside the audit",
     "merge.py": "git's merge driver for lean-audit.json",
     "modules.py": "the codemod onto Lean's module system, which the ratchet and the merge driver load",
-    "public_lock.py": "a lock as the public export ships it, which `tools/verity/check/public_export.py` loads",
     "run_daily.py": "the build cache's daily publish",
     "siblings.py": "the sibling check of `verity lean try --siblings`, which `lean_changed.py` and the CLI load",
     "tool.py": "the store's declarations of the scheduled runs",

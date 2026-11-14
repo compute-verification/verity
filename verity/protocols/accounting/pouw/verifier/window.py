@@ -751,7 +751,7 @@ def _registered_root(registration: Mapping[str, Any]) -> tuple[bytes, bytes]:
     return root, dom
 
 
-def instance_ts(registration: Mapping[str, Any], drawn: Sequence[int], sigma: int, cap: int) -> list[int]:
+def instance_ts(registration: Mapping[str, Any], sampled: Sequence[int], sigma: int, cap: int) -> list[int]:
     """Session σ's tile indices: sampled[σ·cap + s] while that is sampled, N − 1 after.  Raises ValueError unless the sample is
     the registration's K′ distinct indices of [0, N), ascending, and σ one of its S sessions."""
     n, law = registration.get("population"), registration.get("law")
@@ -760,16 +760,17 @@ def instance_ts(registration: Mapping[str, Any], drawn: Sequence[int], sigma: in
     k = law.get("k") if isinstance(law, Mapping) and law.get("law") == "subset" else None
     if not _positive(k):
         raise ValueError(f"the registration's law {law!r} is not subset:K′")
-    drawn = list(drawn)
-    if len(drawn) != k or any(not isinstance(t, int) or isinstance(t, bool) for t in drawn) or drawn != sorted(set(drawn)) \
-            or not 0 <= drawn[0] <= drawn[-1] < n:
+    sampled = list(sampled)
+    if len(sampled) != k or any(not isinstance(t, int) or isinstance(t, bool) for t in sampled) \
+            or sampled != sorted(set(sampled)) or not 0 <= sampled[0] <= sampled[-1] < n:
         raise ValueError(f"the draw is not {k} distinct ascending indices of [0, {n})")
     if not isinstance(sigma, int) or not 0 <= sigma < sessions(k, cap):
         raise ValueError(f"session {sigma!r} is not one of the window's {sessions(k, cap)}")
-    return [drawn[sigma * cap + s] if sigma * cap + s < k else n - 1 for s in range(cap)]
+    return [sampled[sigma * cap + s] if sigma * cap + s < k else n - 1 for s in range(cap)]
 
 
-def public_inputs(registration: Mapping[str, Any], drawn: Sequence[int], sigma: int, cap: int, domain_h3: bytes) -> bytes:
+def public_inputs(registration: Mapping[str, Any], sampled: Sequence[int], sigma: int, cap: int,
+                  domain_h3: bytes) -> bytes:
     """F_σ: the verifier's own ``--public-inputs`` file for session σ's `cap` tile instances, from the registration (the
     one-stage record: its population N, its sampling design subset:K′ and its execution phase root and domain at port `PORT`), its own sample,
     σ, the cap and `domain_h3`, the domain id of the pass's -h3 tile tree (the verifier's own, from the pass's execution phase and
@@ -779,7 +780,7 @@ def public_inputs(registration: Mapping[str, Any], drawn: Sequence[int], sigma: 
     if len(domain_h3) != _DIGEST:
         raise ValueError("the pass's -h3 domain id is 64 bytes")
     common = root + dom + side_domain(dom, "a").domain_id + side_domain(dom, "b").domain_id + bytes(domain_h3)
-    body = b"".join(t.to_bytes(16, "little") + common for t in instance_ts(registration, drawn, sigma, cap))
+    body = b"".join(t.to_bytes(16, "little") + common for t in instance_ts(registration, sampled, sigma, cap))
     head = {"format": PUBLIC_INPUTS_FORMAT, "instances": cap, "ports": [dict(p) for p in PUBLIC_PORTS]}
     return json.dumps(head, sort_keys=True).encode() + b"\n" + body
 
