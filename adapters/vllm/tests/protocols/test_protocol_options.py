@@ -471,8 +471,6 @@ def test_a_commit_with_pous_records_its_options_and_its_verdict_stands(monkeypat
     assert rec["profile_digest"] == p.digest()
     assert rec["protocols"][1] == {"entry": "sampled-proofs:rows-sha512",
                                    "commitment": {"run_roots": ["ab" * 32], "program_digest": "cd" * 32, "manifest_digest": "ef" * 32}}
-    assert rec["protocols"][1] == {"entry": "sampled-proofs:rows-sha512",
-                                   "commitment": {"run_roots": ["ab" * 32], "program_digest": "cd" * 32, "manifest_digest": "ef" * 32}}
 
 
 DEFAULT_PATH = """
