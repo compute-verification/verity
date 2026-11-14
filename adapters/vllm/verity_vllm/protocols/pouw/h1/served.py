@@ -759,11 +759,6 @@ class Served:
                 + [HW.table(self.program, "zy", c) for c in cs] + [self.pub_table(c) for c in cs]
                 + ([self.receipt_table(c) for c in cs] if self.receipts is not None else []))
 
-    def values(self) -> dict[str, int]:
-        """Each registered value's words a row."""
-        self.settle()
-        return {v: r.words for v, r in self.registered.items()}
-
     def roots(self) -> dict[str, str]:
         self.settle()
         return {v: r.root.hex() for v, r in self.registered.items()}
