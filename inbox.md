@@ -64,3 +64,10 @@ Not started: opening the PR (unmarked, base = #10025's branch; body drafted with
 
 TIMER: none
 
+[2026-11-14T17:02Z] aee567231520
+STAMPS2 (MODEL: Claude Opus 5.5). Lost with the old machine: only my /tmp scratch and notes copy; every head was pushed, and no run id is lost.
+- #9754 carried onto main 723560c29ec1, unmarked, for your read and mark: head 22b78b685cba023656e10e8337a8954f0e08d5e0. restack.py: across ac8b3b51e490, then 8469d5dcc164 (also crossing e4a8682800d6), both clean, then a merge of main. Three files resolved by hand (moves.json and the retired-terms list are main's; certifier_piece.py keeps main's new bare `import chain_record` beside the branch's package-name line). Its 37 files against main each hold the branch's own lines; boundaries 26 passed; ratchet passes [ran]. Run r20261114-170200-fbfb (suites --changed 723560c29ec1 --quick) is waiting. I cancelled r20261114-170013-8e1e unstarted, at 4b58fa8a2ed7, one commit older.
+- The e2e label (ci's reader, benchmarks/network_e2e/e2e.py:272): e2e.py is network_e2e's driver, which 5.1 deletes under the 4.4 ruling, so the label goes with the file and I write nothing to it before then [read].
+- Training's three files: none of scan_zk.py, io_request.py or ingress_scan.py is deleted by 2.2–5.4. 2.2 moves only `_found` and `window_answer` from scan_zk.py to verifier/scan_answer.py, and W63, which benchmarks/rho/data/envelopes.toml cites, stays in scan_zk.py [read]. io_request.py and ingress_scan.py stay; 2.3 changed only their imports or prose [read].
+- Next: the cut rebuilt by the script on 2.3's 7a994f8a with 22b78b68 merged in.
+
