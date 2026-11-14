@@ -91,6 +91,7 @@ from typing import Any, BinaryIO
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 from verity.commitments import hm96  # noqa: E402
 from verity.commitments.hm96 import batch as HB  # noqa: E402

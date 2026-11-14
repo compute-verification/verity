@@ -71,11 +71,14 @@ import argparse
 import json
 import pickle
 import statistics
+import sys
 import tempfile
 import time
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 import blob_files as bf
 import certifier_key as ck
@@ -416,7 +419,7 @@ def _device(params: WardenParams, releases: Sequence[tuple[int, int]], lengths) 
 
 def cost(params: WardenParams, load: str, phases: int, height: int) -> dict:
     """The module docstring's cost of a close of `params` under `load`, over `phases` execution phases."""
-    import warden_serve as ws  # at its use: it imports this module
+    from benchmarks.network_traces import warden_serve as ws  # at its use: it imports this module
 
     releases = loaded(params, load)
     hands, pickles, longest = [], [], []

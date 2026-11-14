@@ -185,10 +185,12 @@ import traceback
 from dataclasses import asdict, replace
 from pathlib import Path
 
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+
 import blob_files as bf
 import certifier_key as ck
 import connection_rows_run as crr
-import load_relay as lr
+from benchmarks.network_traces import load_relay as lr
 import runner_cli as cli
 import stall_probe
 from active_replay import _quiet_runtime, _usage, pack_record, unpack_record

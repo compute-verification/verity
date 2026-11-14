@@ -471,9 +471,9 @@ campaign, else `runner`; `preserved` its run record; `expires` 48 h after `verif
 is written for it, and a sidecar wins.
 
 A finished or runner-dead run that custody did not preserve gets a low-priority retention record that expires 7 days after the run
-directory's last write, so the collector takes it (`UNPRESERVED_RUN_EXPIRY`). The whole directory goes: it is the only copy.
-One running, queued or in a slot line stays, and one whose clone stands waits (`scratch/<run id>` goes first).
-To keep one: `research keep RUNDIR ...` before the 7 days are over, or `research data custody RUN --publish`.
+directory's last write, so the collector takes it, its only copy (`UNPRESERVED_RUN_EXPIRY`). So does a refused launch.
+One running, queued or in a slot line stays; one whose clone stands waits (`scratch/<run id>` goes first).
+To keep one: `research keep RUNDIR ...` before the 7 days are over, or `research data custody RUN --publish` if it ran.
 gc takes them only with `--unpreserved-runs`; it and the report list them apart.
 
 A launcher's copy of a run on another machine (a directory named as the run's id that holds the launcher's `remote.json`) has no

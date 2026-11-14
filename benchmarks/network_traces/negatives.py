@@ -98,9 +98,10 @@ from typing import Any, Callable, NamedTuple
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 import active_replay as ar  # noqa: E402
-import certifier_serve as cs  # noqa: E402
+from benchmarks.network_traces import certifier_serve as cs  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import audit as host_audit, head_check as HC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.active import CANONICAL_STREAM, DATA, HEADER, ID_NAME_BYTES, compact_finish_violations, compact_record_data, decode_frame, encode_frame, id_event_data  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.id_form import id_request  # noqa: E402
@@ -215,7 +216,8 @@ def warden_frame(run: Path, at: int | None = None) -> dict:
     default) changed in its bucket's row, and the row opened at its position. The honest row's read climbs to the
     signed root and the changed one's doesn't (`WARDEN_READ`)."""
     try:
-        WR, WS = importlib.import_module(WARDEN_ROWS_MODULE), importlib.import_module("warden_serve")
+        WR = importlib.import_module(WARDEN_ROWS_MODULE)
+        WS = importlib.import_module("benchmarks.network_traces.warden_serve")
     except ModuleNotFoundError as err:
         raise NotApplicable(f"no warden cells: {err.name} isn't in this tree") from None
     link, direction = WS.CERTIFIED[WS.EGRESS]
