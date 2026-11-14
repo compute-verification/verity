@@ -36,7 +36,7 @@ steps, every leg in one shape, the Lean verdict with the JointPooledLive error s
   The product (`PRODUCTS`) is onsite's, every leg, unless ``product`` names another: remote's composes sampled proofs
   and PoUW, and its other legs are ``dropped``, not run and not composed, so they are never ``missing``.
 * ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
-  core's `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointPooledLive's union bound over them at this
+  core's `MONITORING_PERIODS`, its blocks over all compute (machines × blocks a machine) and JointPooledLive's union bound over them at this
   block's errors (``error_sum`` × blocks), and the per-block error each δ of `DELTAS` needs over the period (δ / blocks).
   Each reads with the block's ``joint_horizon.named_terms`` beside it, once a block.
 
@@ -53,7 +53,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.reporting import DELTAS, PERIODS
+from verity.protocol import DELTAS, MONITORING_PERIODS
 from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
 
 FORMAT = "verity/block-record/v2"
@@ -254,7 +254,7 @@ def monitoring_period(deployment: Mapping[str, Any], error_sum: Fraction) -> dic
     Each period's sum is ``error_sum`` over its blocks and leaves out what ``error_sum`` does: it reads with the block's
     ``joint_horizon.named_terms`` beside it, once a block."""
     periods = {}
-    for name, seconds in PERIODS:
+    for name, seconds in MONITORING_PERIODS:
         per_machine = seconds // int(deployment["window_s"])
         blocks = int(deployment["machines"]) * per_machine
         union = error_sum * blocks
