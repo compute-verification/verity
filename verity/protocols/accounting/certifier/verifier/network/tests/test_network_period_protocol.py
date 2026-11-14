@@ -125,7 +125,8 @@ ROWS_REFUSALS = {
     "rows-prog-unwired": ("is no compute audit's slot entries",) * 2,
     "rows-state-untied": (PC.UNSTATED,) * 2,
     "rows-state-misindexed": (PC.MISREAD,) * 2,
-    "rows-state-unpinned": (PC.UNPINNED,) * 2,
+    "rows-start-unpinned": (PC.UNPINNED,) * 2,
+    "rows-start-carried": (PC.CARRIED,) * 2,
     "rows-circuit-swapped": (PC.UNHELD,) * 2,
     "rows-ok-unheld": (PC.UNOK,) * 2,
     "rows-one-tick": (f"{PC.UNCOMPUTED}: T = 1: a scan has at least two ticks",) * 2,
@@ -137,9 +138,10 @@ def test_the_rows_form_refuses_what_it_must(server):
     connection (traffic past its Program slots), a registration not under the deployment key, the scan's answer for
     another window's rows, rows under a schedule whose digest isn't the bound one (one field off, or another response
     cap or none), scans at two δ, a scan answered over
-    other than its 2T units, a scan whose `prog` is no compute audit's output, one whose `prog` is an audit's output but
-    no `SlotEntry_v1` or `SelectEntry_v1` template's entries, a scan whose state is not its wired audit's
-    `SCAN_STATE`, a tied audit registered under another Program than the class circuit, a scan whose ok bits are not
+    other than its 2T + 1 units, a scan whose `prog` is no compute audit's output, one whose `prog` is an audit's output
+    but no `SlotEntry_v1` or `SelectEntry_v1` template's entries, a scan whose state is not its wired audit's
+    `SCAN_STATE`, one whose start is not opened to the empty state, a period that is not the run's first link-window
+    alone, a tied audit registered under another Program than the class circuit, a scan whose ok bits are not
     at the schedule's constants, and one under a schedule of one tick, which has no constants: Lean and the mirror each
     refuse every one at that check."""
     for m, (lean, mirror) in ROWS_REFUSALS.items():
@@ -298,11 +300,13 @@ def test_a_tied_audit_that_runs_another_circuit_is_refused(server, monkeypatch):
 
 
 def test_a_scan_whose_units_read_their_state_off_the_chain_is_refused(server, monkeypatch):
-    """Ingress unit t reads `sin` at state leaf t and registers its `o1` at leaf t + 1, as the scan's registration
-    states (`PC.state_reads`), so the rows form refuses, in Lean and in the mirror and by name, each way those reads can
-    leave the chain while the state stays tied by root and domain (`PC.MISREADS`): a `sin` at leaf t + 1, an `o1` at
-    leaf t, a run over other units, the two runs swapped, the reads or a run missing or renamed, and a field no
-    natural; and a mirror that skips the reads accepts what Lean refuses."""
+    """The start unit registers its `o0` at state leaf 0, and bucket t, unit t + 1, reads `sin` at leaf t and
+    registers its `o1` at leaf t + 1, as the scan's registration states (`PC.state_reads`), so the rows form refuses,
+    in Lean and in the mirror and by name, each way those reads can leave the chain while the state stays tied by
+    root and domain (`PC.MISREADS`): a `sin` at leaf t + 1, an `o1` at leaf t or t + 2, the start unit's `o0` at leaf
+    1, a run over other units, the buckets' two runs swapped, the reads or a run missing or renamed, a field no
+    natural, and the reads of a scan with no start unit; and a mirror that skips the reads accepts what Lean
+    refuses."""
     misreads = PC.MISREADS
     for u in misreads:
         monkeypatch.setattr(PC, "MISREADS", (u,))
@@ -317,24 +321,44 @@ def test_a_scan_whose_units_read_their_state_off_the_chain_is_refused(server, mo
         refused_by_lean_alone(build("rows-state-misindexed", n, small=True), server, PC.MISREAD)
 
 
-def test_a_scan_whose_row_0_is_not_the_empty_state_is_refused(server, monkeypatch):
-    """Row 0 of the scan's state, which no unit computes and the Programs anchored at bucket 0 read, must open to the
-    empty state, so the rows form refuses, in Lean and in the mirror and by name, each way the opening can fail
-    (`PC.UNPINS`): a state tree whose row 0 the prover chose, opened as committed, no opening, another salt or path,
-    another word count, leaf 1's opening, and a field of another type; and a mirror that skips the opening accepts
-    what Lean refuses."""
+def test_a_scan_whose_start_is_not_the_empty_state_is_refused(server, monkeypatch):
+    """The start unit's input, which no unit computes, is a registered row the run's first link-window must open to
+    the empty state, so the rows form refuses, in Lean and in the mirror and by name, each way the opening can fail
+    (`PC.UNPINS`): a start whose row the prover chose, opened as committed, no opening, another salt, another word
+    count, no start entry, one under another name, one named by port alone, a second at another root, and a field of
+    another type; and a mirror that skips the opening accepts what Lean refuses."""
     unpins = PC.UNPINS
     for u in unpins:
         monkeypatch.setattr(PC, "UNPINS", (u,))
         for n in range(3):
-            case = build("rows-state-unpinned", n, small=n % 2 == 0)
+            case = build("rows-start-unpinned", n, small=n % 2 == 0)
             assert PC.UNPINNED in reference(case)["reason"], (u, n, reference(case))
             verdict, out = D.replay(PORT, case, server)
             assert verdict == REJECT and PC.UNPINNED in json.loads(out)["reason"], (u, n, out)
     monkeypatch.setattr(PC, "UNPINS", unpins)
-    monkeypatch.setattr(PC, "_state_empty", lambda p, reg: True)
+    monkeypatch.setattr(PC, "_start_empty", lambda reg: True)
     for n in range(2):
-        refused_by_lean_alone(build("rows-state-unpinned", n, small=True), server, PC.UNPINNED)
+        refused_by_lean_alone(build("rows-start-unpinned", n, small=True), server, PC.UNPINNED)
+
+
+def test_a_period_that_is_not_the_runs_first_link_window_alone_is_refused(server, monkeypatch):
+    """A link-window after the run's first starts from the state the one before it ended in, which the check holds to
+    nothing, so the rows form refuses, in Lean and in the mirror and by name, a period of a later link-window and one
+    of the first and the next (`PC.CARRIES`), each stating a start opened to the empty state; and a mirror that takes
+    any link-window's start accepts what Lean refuses."""
+    carries = PC.CARRIES
+    for u in carries:
+        monkeypatch.setattr(PC, "CARRIES", (u,))
+        for n in range(3):
+            case = build("rows-start-carried", n, small=n % 2 == 0)
+            assert case["params"]["first"] + case["params"]["windows"] > 1, (u, n)
+            assert PC.CARRIED in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and PC.CARRIED in json.loads(out)["reason"], (u, n, out)
+    monkeypatch.setattr(PC, "CARRIES", carries)
+    monkeypatch.setattr(PC, "_start_refusal", lambda w, reg: None)
+    for n in range(2):
+        refused_by_lean_alone(build("rows-start-carried", n, small=True), server, PC.CARRIED)
 
 
 def test_a_scan_whose_ok_bits_are_not_the_schedules_constants_is_refused(server, monkeypatch):
@@ -345,8 +369,8 @@ def test_a_scan_whose_ok_bits_are_not_the_schedules_constants_is_refused(server,
     under another port, named a second time at another root, beside a port ending `/o0` that is no member's, every
     member at another schedule's constants, a root or domain that is no string, the entries by value under
     `registered`, and the members of a group of two execution phases' scan (`PC.PAIR`), which the rows form, one
-    execution phase a registration, does not read; and a mirror that skips the comparison accepts what Lean
-    refuses."""
+    execution phase a registration, does not read; the start unit's `start/o0`, a state and no ok bit, is at any
+    root; and a mirror that skips the comparison accepts what Lean refuses."""
     unok = PC.UNOKS
     for u in unok:
         monkeypatch.setattr(PC, "UNOKS", (u,))
@@ -369,7 +393,7 @@ def ok_entries(case: dict) -> list[dict[str, tuple]]:
 
 
 def test_two_members_at_one_root_are_each_held_to_it(server, monkeypatch):
-    """At T = 3 the scan's `ingress-0` and `last` are one proof block of the ingress template each, so their ok bits
+    """At T = 2 the scan's `ingress-0` and `last` are one proof block of the ingress template each, so their ok bits
     are at one frame domain and one root under two ports (`rows-ok-equal`): Lean accepts the period with the mirror's
     public, each port held to its own constant. At that schedule each way of naming another (`PC.UNOKS`) is refused
     by both, by name, a registration that names one of the two ports and not the other among them: a root another
@@ -379,8 +403,9 @@ def test_two_members_at_one_root_are_each_held_to_it(server, monkeypatch):
         case = build("rows-ok-equal", n, small=n % 2 == 0)
         assert case["params"]["schedule"]["window"] == PC.EQUAL_T
         for at in ok_entries(case):
-            assert sorted(at) == ["egress-0/o0", "first/o0", *twins]
-            assert at[twins[0]] == at[twins[1]] and len(set(at.values())) == 3, at
+            at.pop(scan_ok.START, None)
+            assert sorted(at) == ["egress-0/o0", *twins]
+            assert at[twins[0]] == at[twins[1]] and len(set(at.values())) == 2, at
         out = reference(case)
         assert out["verdict"] == ACCEPT, (n, out)
         verdict, got = D.replay(PORT, case, server)
@@ -392,7 +417,8 @@ def test_two_members_at_one_root_are_each_held_to_it(server, monkeypatch):
         for n in range(8 if u == "missing" else 2):
             case = build("rows-ok-unheld", n, small=n % 2 == 0)
             assert case["params"]["schedule"]["window"] == PC.EQUAL_T
-            one_twin += any(len(set(twins) & set(at)) == 1 and len(at) == 3 for at in ok_entries(case))
+            one_twin += any(len(set(twins) & set(at)) == 1 and len(set(at) - {scan_ok.START}) == 2
+                            for at in ok_entries(case))
             assert PC.UNOK in reference(case)["reason"], (u, n, reference(case))
             verdict, out = D.replay(PORT, case, server)
             assert verdict == REJECT and PC.UNOK in json.loads(out)["reason"], (u, n, out)
@@ -634,8 +660,8 @@ def test_the_scan_is_read_off_its_program(server):
     compute audit's output), an ingress and an egress instance's committed bits (their returns: a u16 with the state
     and view, or with the row), and its slot entries' bits (lanes · T / every entries of its `prog` ports' width); and
     Lean and the mirror refuse, as parameters, a scan that isn't a descriptor, another Program's, one in the checker
-    form (its egress row an input), one whose templates have other parameters or other than 1, T − 1 and T instances,
-    or rows other than the schedule's, one whose lane reads another row of its input than its bucket's or another
+    form (its egress row an input), one whose templates have other parameters or other than 1, T and T instances,
+    one with no start unit's template, or rows other than the schedule's, one whose lane reads another row of its input than its bucket's or another
     lane's input, one with an input gate no template's, and each negative of a check of the rows the scan's ties
     equate, of what `NetTiming.BoundaryGates.Fits` asks or of the input nodes its arguments read."""
     for n in range(3):
@@ -654,12 +680,12 @@ def test_the_scan_is_read_off_its_program(server):
 def test_each_scan_check_refuses_its_negative(server):
     """Each of the scan's checks of the rows its ties equate, of what `NetTiming.BoundaryGates.Fits` asks and of the
     input nodes its arguments read refuses, in Lean and in the mirror, a scan that passes every check before it
-    (`PC.scan_negatives`): one whose ingress view is not its egress `state`'s leaves, one (a window of more than one
-    bucket) whose `sin` is not the returned state's, one past the resolution's walk, one whose root doesn't return
-    an egress leaf, one whose egress template passes a parameter's leaves through, one whose bucket 0 row is a constant
-    gate's, one with an egress argument a later ingress output, one whose egress state is an ingress row's input, one
-    (a window of more than one bucket) whose `sin` reads its row's input node, one whose egress state is lane 0's
-    slot entries' input node, one with an input node no argument reads, and one whose ingress template names a later
+    (`PC.scan_negatives`): one whose ingress view is not its egress `state`'s leaves, one whose `sin` is not the
+    returned state's, one whose start unit takes or returns a state of other leaves, one past the resolution's walk,
+    one whose root doesn't return an egress leaf, one whose egress template passes a parameter's leaves through, one
+    whose ingress row is a constant gate's, one with an egress argument an ingress output, one whose egress state is
+    the ingress rows' input, one whose `sin` reads its row's input node, one whose start unit reads the buckets'
+    `sin`'s input node, one whose egress state is lane 0's slot entries' input node, one with an input node no argument reads, and one whose ingress template names a later
     root node."""
     for n in range(3):
         case = build("rows-honest", n, small=n % 2 == 0)
