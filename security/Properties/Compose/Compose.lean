@@ -62,7 +62,7 @@ program `p` and query:
   seed names a value exactly when it is a registered input, and `Accounting.Compose.SeedNamed` fails wherever a
   seeded round reads an activation (a run input or an earlier round's output), which is why the seeded statements
   credit nothing on today's code either;
-* **the sample**: the code's sample under the `subset:K_d` law, from `L` uniform bytes (`Select.select`, its sampled proof blocks
+* **the sample**: the code's sample under the `subset:K_d` sampling design, from `L` uniform bytes (`Select.select`, its sampled proof blocks
   then its closure, `Properties.Spot.bytesOf`), is accepted and samples no unit of a set `U` no more often than
   `subsetDraw K_d` of a uniform permutation of the population's `N_p` tiles misses `U`.
 

@@ -119,7 +119,7 @@ theorem monitoringPeriodTwoReg_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Co
   exact h
 
 /-- **The period bound from the committed form**: `CompilerKSRegTwo` gives `CompilerMonitoringPeriodTwoReg`, with each window's
-miss bound from its draw laws (`compilerMissTwo`) and its refusal of what is out of scope from its contract
+miss bound from its sampling designs (`compilerMissTwo`) and its refusal of what is out of scope from its contract
 (`CompiledTwo.Sessions.refuses`). -/
 theorem compilerMonitoringPeriodTwoReg_of (hks : CompilerKSRegTwo) : CompilerMonitoringPeriodTwoReg := by
   intro Coin _ _ _ A O V Tick Adv H Lv r₁ r₂ hA hS hr₁ hr₁' hr₂ hr₂' hrate
