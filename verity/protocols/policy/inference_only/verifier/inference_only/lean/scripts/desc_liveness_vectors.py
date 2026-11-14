@@ -6,7 +6,7 @@ Writes `DIR/desc_liveness/cases.jsonl`, one case per line: `{"id", "mode", "smal
 `InferenceOnlyCheck.Desc` (θ and the owners per root node) on one Program shape, with `n` (a scan's iterations, a batch's members)
 small and past anything walked one by one (2^22 to 2^52). `InferenceOnlyCheck/DescLivenessMain.lean` fails unless
 `InferenceOnlyCheck.Desc.check` gives on `small` what `InferenceOnlyCheck.check` gives on it expanded gate by gate, and on `big` a verdict
-equal to `small`'s (`mode` `same`) or with the same novel reads per inference block (`novel`, where the gates grow with `n`).
+equal to `small`'s (`mode` `same`) or with the same fresh input bits per inference block (`novel`, where the gates grow with `n`).
 
 The shapes are the fuzzer's, on which `InferenceOnlyCheck.Desc` once
 overflowed its stack, ran for a time linear in `n` or ran out of memory, and the closed forms that replaced those walks:
@@ -158,7 +158,7 @@ def passbatch(n: int, how: str) -> dict:
 
 def swap(n: int) -> dict:
     """A carry of two leaves from inputs `a` and `b` (in θ), the step returning it swapped; a gate reads the final
-    carry's leaf 0, `a` after an even number of iterations (8 novel bits) and `b` after an odd number (none)."""
+    carry's leaf 0, `a` after an even number of iterations (8 fresh input bits) and `b` after an odd number (none)."""
     P = Program()
     root = Body(P, [])
     xa, xb = root.input(8), root.input(8)
@@ -173,7 +173,7 @@ def swap(n: int) -> dict:
 def exit_xs(n: int) -> dict:
     """A carry of three leaves from three inputs, shifted down one place an iteration, the last filled from the
     iteration's `xs` row, a batch of `n` members of `W` sharing a fourth input, in θ; a gate reads the final carry's
-    leaf 0: the `xs` row of iteration `n - 3` (no novel bits), or for `n < 3` the initial carry's leaf `n` (8)."""
+    leaf 0: the `xs` row of iteration `n - 3` (no fresh input bits), or for `n < 3` the initial carry's leaf `n` (8)."""
     P = Program()
     root = Body(P, [])
     xs = [root.input(8) for _ in range(4)]
@@ -193,7 +193,7 @@ def carry_read(n: int, xs: bool) -> dict:
     """A step with a gate reading its carry's leaf 0, the first iteration's an input in θ. Without `xs`: a carry of two
     leaves from inputs `a` (in θ) and `b` that the step returns as `(c[1], c[1])`, so every iteration after the first
     reads `b`; with `xs`: a carry of one leaf from `a` the step returns from its `xs` row, a batch of `n` members of `W`
-    sharing `b`. Either way, 8 novel bits, which only the iterations after the first read."""
+    sharing `b`. Either way, 8 fresh input bits, which only the iterations after the first read."""
     P = Program()
     root = Body(P, [])
     op = P.prim("Op8_v1", [V(8)], V(8))
@@ -219,7 +219,7 @@ def carry_read(n: int, xs: bool) -> dict:
 
 def xs_part(n: int) -> dict:
     """A step with a gate reading leaf 1 of its `xs` row `(V8, V8)`, the rows a batch of `n` members of `W2`, which
-    returns its first input, in θ, and its second passed through `W`, both shared: 8 novel bits from leaf 1, none from
+    returns its first input, in θ, and its second passed through `W`, both shared: 8 fresh input bits from leaf 1, none from
     leaf 0, and 8 from the initial carry, which the last gate reads."""
     P = Program()
     root = Body(P, [])

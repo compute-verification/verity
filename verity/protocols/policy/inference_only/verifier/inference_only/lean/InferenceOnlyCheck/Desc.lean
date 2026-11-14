@@ -21,7 +21,7 @@ per root node instead of per gate:
   any inference block, so its entry is only read for its form.
 
 The expansion, θ as the gates of its nodes and each gate's owner its root node's, is an instance of `InferenceOnlyCheck.evaluate`, and
-the verdict is the one `InferenceOnlyCheck.evaluate` gives on it: `gates`, per inference block its size and novel reads, the verdict and the first
+the verdict is the one `InferenceOnlyCheck.evaluate` gives on it: `gates`, per inference block its size and fresh input bits, the verdict and the first
 failing inference block with its rule.
 
 ## What is computed, once per Definition
@@ -44,7 +44,7 @@ make one run maps any piece by one affine map, whole members of any other batch 
 pass-through goes back through the node's arguments. A root node's reads are those segments, copies all alike as one and
 one copy piece by piece, so that each names one node's gates: whole members returning leaves of several shared arguments
 are one copy of pieces of as many nodes (`Seg.split`). Per inference block, its reads are those with the inference block's own nodes and θ's taken
-out, and its novel reads the width of their union (`freshWidth`): copies of one frame that nothing else meets are
+out, and its fresh input bits the width of their union (`freshWidth`): copies of one frame that nothing else meets are
 counted as copies times one copy's width.
 
 Pass-throughs are taken in closed form in the number of members and iterations: whole members of a batch returning what
