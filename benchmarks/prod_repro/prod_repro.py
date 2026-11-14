@@ -1,9 +1,9 @@
 """vLLM at its serving settings, replayed: what one served job shows, as the settings it ran with and three lines (README.md).
 
-    prod_repro.py arms [--model ID] [--out OUT]
+    prod_repro.py arms [--model ID] [--out OUT] [--among ARM ...]
     prod_repro.py limit --model ID
-    prod_repro.py report OUT [--stock ARM] [--ours ARM] [--again ARM] --load NAME [--replayed PASS] [--rep 1]
-                         [--replay DIR] [--expect-replay] [--private DIR]
+    prod_repro.py report OUT [--stock ARM] [--ours ARM] [--again ARM] [--beside ARM ...] --load NAME
+                         [--replayed PASS] [--rep 1] [--replay DIR] [--expect-replay] [--private DIR]
                          [--target PERCENT] [--json]
 
 ``report`` reads a finished job's out/ as the serving cost benchmark leaves it (`benchmarks/serve_tax`: a directory an
@@ -16,6 +16,13 @@ arm, and its replay's), prints the report and writes it to OUT/prod_repro.json a
   the replay's own record says (the served arm's other vLLM general plugins and its environment: the canonical DSA
   top-k's), with the top-k's counters of the replay's processes and of serving's where the job kept them
   (``--private``, the benchmark's PRIVATE; `topk_kept`);
+- where the job served arms beside the three (``--beside``, the runner's ``--arms``: arms that differ from stock
+  or from ours in one thing), which are in what ran and in no line of the three: each pass of the load every arm
+  served, a line a pass in the order served, by the counters the benchmark read off its server before and after it
+  (`passes`): its engine steps, its drafts and how many of their tokens were accepted, its output tokens and its
+  seconds; then how each arm's requests were sampled and whether its client sent their seeds, and for each
+  directory whether its server was on the canonical top-k and what the top-k's processes counted there. These
+  lines are in no verdict; the report's JSON holds them for every job;
 - the settings each of the two arms ran with, read from its launch line, its engine's own configuration (the step
   trace's header) and its counters: a setting the serve did not turn on is ``off``, and one its files can't confirm
   says so; and the adapter's record of the value settings in force in each server's environment and in the replay's
@@ -60,7 +67,7 @@ request's first difference (`MATCH`) and the advice in bits a request (`ADVICE`)
 ``arms`` prints the three arms a job serves by default (`default_arms`): the arms at vLLM's published serving settings
 (`PROD`) for a model whose recipe the benchmark holds, else stock compiled vLLM, stock again and the step record
 (`TODAY`); with ``--out``, the three an earlier job's out/ is read as, which ``report`` reads it as too where none is
-named.
+named; with ``--among``, the arms a job lists (the runner's ``--arms``), the set whose arm of ours is among them.
 
 ``limit`` prints the context limit a job serves the model at where it names none (`LIMITS`), or nothing.
 """
@@ -74,7 +81,7 @@ import os
 import re
 import sys
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -92,11 +99,12 @@ TODAY = ("compiled", "compiled-again", "record")
 #: the most serving with our changes may cost over stock, in percent of stock's serving time
 TARGET = 1.0
 #: by model, as the benchmark names it: the id its cost at vLLM's published settings (`PROD`'s ours over its stock) is
-#: recorded under in a run's result.json (`measurement`; benchmarks/metrics.toml), and that measurement's unit
+#: recorded under in a run's result.json (`measurement`; benchmarks/prod_repro/metrics.toml), and that measurement's
+#: unit
 METRICS = {"glm53": "vllm/prod-serving-cost-glm53"}
 UNIT = "percent of stock's serving time"
 #: by model: the ids the replay's match and the advice of the pass it re-ran are recorded under, of ours at vLLM's
-#: published settings (`PROD`'s ours), and their units (`measurements`; benchmarks/metrics.toml)
+#: published settings (`PROD`'s ours), and their units (`measurements`; benchmarks/prod_repro/metrics.toml)
 MATCH = {"glm53": "vllm/prod-replay-match-glm53"}
 ADVICE = {"glm53": "vllm/prod-advice-bits-glm53"}
 MATCH_UNIT, ADVICE_UNIT = "percent of served tokens", "bits a request"
@@ -163,10 +171,15 @@ DIGEST_SHOWN = 12
 NOT_COUNTED = "  past an end-of-text token: not counted, no arm's passes hold a count of the requests that went on past one"
 
 
-def default_arms(model_id: str | None = None, out: Path | None = None) -> tuple[str, str, str]:
+def default_arms(model_id: str | None = None, out: Path | None = None, among: Sequence[str] = ()) -> tuple[str, str, str]:
     """The arms of a job that names none: `PROD` where the benchmark has them and holds vLLM's recipe for the model (it
     refuses an arm at the published settings for a model with none), else `TODAY`. An earlier job's ``out`` is read as
-    `PROD` where it holds that set's arm of ours."""
+    `PROD` where it holds that set's arm of ours. A job that lists the arms it serves (the runner's --arms,
+    ``among``) is of the set whose arm of ours the list names, whatever its out/ holds: one that ended before ours
+    was served is still read as the arms it was to serve."""
+    for names in (PROD, TODAY):
+        if names[2] in among:
+            return names
     if out is not None:
         return PROD if arm_dirs(out, PROD[2])[0].is_dir() else TODAY
     model = S.MODELS.get(model_id)
@@ -258,14 +271,19 @@ def replay_state(replay_dir: Path, expected: bool) -> dict:
 
 def topk_counters(dirs: list[Path]) -> dict | None:
     """The canonical top-k's counters over the processes that kept theirs in ``dirs`` (`dsa_topk.log_to`: a file a
-    process, written every few thousand calls and at its exit, so each figure is a lower bound): the processes, the
-    calls of the indexer's top-k and the rows of more than its keys that were rewritten. None where no process kept
-    any."""
+    process, written over at the end of each of its calls, so a killed process's calls are in it; its rows are its
+    device's as last read, every few thousand calls and at an exit in order): the processes, the calls of the
+    indexer's top-k, the rows of more than its keys that were rewritten, those of them with a tie across the k-th
+    key, the rows where vLLM's own kernels may select another set from run to run, and the calls the processes had
+    made when those rows were read (``rows_at``: where it is below the calls, the rows are a lower bound). None where no
+    process kept any."""
     recs = [json.loads(f.read_text()) for d in dirs if d.is_dir() for f in sorted(d.glob("dsa_topk.*.json"))]
     if not recs:
         return None
-    return {"processes": len(recs), "calls": sum(sum(r["calls"].values()) for r in recs),
-            "rows_long": sum(dev.get("rows_long", 0) for r in recs for dev in r["rows"].values())}
+    calls = [sum(r["calls"].values()) for r in recs]
+    return {"processes": len(recs), "calls": sum(calls),
+            **{k: sum(dev.get(k, 0) for r in recs for dev in r["rows"].values()) for k in ("rows_long", "rows_tied")},
+            "rows_at": sum(r.get("rows_at", n) for r, n in zip(recs, calls))}
 
 
 def topk_kept(out: Path, private: Path | None, ours: str, replay: str) -> dict:
@@ -284,7 +302,7 @@ def topk_kept(out: Path, private: Path | None, ours: str, replay: str) -> dict:
     kept = {name: topk_counters([Path(log.replace(S.PRIVATE, str(private / d))) for d in ds]) if log else None
             for name, ds in (("replay", [replay]), ("served", [d.name for d in arm_dirs(out, ours)]))}
     kept["served"] = kept["served"] or before.get("served")
-    f.write_text(json.dumps(kept, indent=1))
+    f.write_text(json.dumps(kept | {k: before[k] for k in ("dirs",) if k in before}, indent=1))
     return {"kept": True, **kept}
 
 
@@ -300,6 +318,58 @@ def replay_engine(out: Path, ours: str, replay_dir: Path, private: Path | None) 
     under = rec["served_under"]
     return {"arm": ours, "under": under,
             "topk": topk_kept(out, private, ours, replay_dir.name) if under and under["env"].get(TOPK) else None}
+
+
+# ----------------------------------------------------------------------------------------------------- every pass
+
+def topk_by_dir(out: Path, private: Path | None, dirs: list[Path]) -> dict | None:
+    """The canonical top-k's counters of each directory of ``dirs`` whose server was started under it (its record's
+    environment names where its processes keep them, `TOPK_LOG`), by the directory's name (`topk_counters`; None for
+    one whose processes kept none). With ``private`` they are read there, each directory's under its name, and kept
+    in OUT beside the replay's (`TOPK_KEPT`, under ``dirs``); without, they are the ones the job's own report kept,
+    None where it kept none. A directory's are also the kept ones where the private directory holds none for it, as
+    serving's are in `topk_kept`."""
+    f = out / TOPK_KEPT
+    before = json.loads(f.read_text()) if f.is_file() else {}
+    if private is None:
+        return before.get("dirs")
+    logs = {d.name: log for d in dirs if (log := (json.loads((d / "meta.json").read_text()).get("env") or {}).get(TOPK_LOG))}
+    kept = {name: topk_counters([Path(log.replace(S.PRIVATE, str(private / name)))]) or (before.get("dirs") or {}).get(name)
+            for name, log in logs.items()}
+    if kept:
+        f.write_text(json.dumps({**before, "dirs": kept}, indent=1))
+    return kept
+
+
+def passes(out: Path, dirs: dict[str, list[Path]], per: dict[str, list[dict]], load: str, private: Path | None) -> dict:
+    """Every pass of ``load`` the job's arms served, in the order they were served where every pass's record says
+    when it began (else the arms' order), each with the counters the benchmark read off its server before and after
+    it (the pass's own record: `serve_tax.SCHEDULE`, vLLM's own on the server's /metrics, so one reader for every
+    arm, with a step trace or without): its engine steps and, where the engine drafted, its drafts,
+    the tokens they proposed and the tokens of them the model accepted; beside them its output tokens and its
+    seconds as the cost counts them, and whether it is one its lifetime leaves out.
+    With them, by arm, whether its requests were sampled and whether its client sent their seeds (its record), and by
+    directory, whether its server was started on the canonical top-k (its record's environment) and what the top-k's
+    processes counted there (`topk_by_dir`). It is in no verdict: it is what an arm served beside stock and ours (the
+    runner's --arms) is read by, and the report prints it for a job that served one."""
+    rows, sampling, on = [], {}, {}
+    for a, ms in per.items():
+        for d, m in zip(dirs[a], ms):
+            rec = json.loads((d / "meta.json").read_text())
+            sampling[a] = {"sampled": bool(rec.get("sampled")), "seeded": bool(rec.get("sampled")) and bool(m["seeded"])}
+            on[d.name] = bool((rec.get("env") or {}).get(TOPK))
+            for name, reps in m["loads"].items():
+                for r in reps if of_load(name, load) else ():
+                    began = json.loads((d / name / f"rep-{r['rep']}" / "meta.json").read_text())
+                    c = began.get("schedule") or {}
+                    rows.append({"dir": d.name, "arm": a, "pass": name, "rep": r["rep"], "left_out": r["rep"] <= m["left_out"],
+                                 **{k: c.get(k) for k in ("steps", "drafts", "draft_tokens", "accepted_tokens")},
+                                 "output_tokens": r.get("output_tokens"), "seconds": r.get("span_s"),
+                                 "t0_unix": began.get("t0_unix")})
+    if all(x["t0_unix"] is not None for x in rows):
+        rows.sort(key=lambda x: x["t0_unix"])
+    return {"measured": True, "passes": rows, "sampling": sampling,
+            "topk": {"on": on, "kept": topk_by_dir(out, private, [d for a in per for d in dirs[a]])}}
 
 
 # ------------------------------------------------------------------------------------------------------- the settings
@@ -805,9 +875,10 @@ def advice(dirs: list[Path], ours: str, load: str, rep: int, replay_dir: Path) -
 
 def report(out: Path, stock: str | None, ours: str, again: str | None, load: str, rep: int = 1, replay_dir: Path | None = None,
            target: float = TARGET, replayed: str | None = None, expect_replay: bool = False,
-           private: Path | None = None) -> dict:
+           private: Path | None = None, beside: Sequence[str] = ()) -> dict:
     replay_dir = replay_dir or out / "replay-compiled"
     names = [a for a in (stock, again, ours) if a]
+    names += [a for a in beside if a not in names]
     held = {a: arm_dirs(out, a) for a in names}
     states = {d.name: read(f"how far {d.name} got", lambda d=d: arm_state(d, load)) for a in names for d in held[a]}
     dirs = {a: ds for a in names if (ds := [d for d in held[a] if (d / "meta.json").is_file()])}
@@ -854,8 +925,10 @@ def report(out: Path, stock: str | None, ours: str, again: str | None, load: str
             figure["metric"] = ids.get(meta.get("model_id")) if ours == PROD[2] else None
     return {"schema": SCHEMA, "model": meta.get("model"), "checkpoint": meta.get("checkpoint"),
             "run": meta.get("run_id"), "commit": meta.get("commit"), "limits": limits(meta.get("model_id")),
-            "load": load, "arms": {"stock": stock, "again": again, "ours": ours, "served": sorted(by)},
-            "ran": {"arms": states, "unread": unread, "replay": state, "replay_engine": engine},
+            "load": load, "arms": {"stock": stock, "again": again, "ours": ours, "served": sorted(by),
+                                   **({"beside": list(beside)} if beside else {})},
+            "ran": {"arms": states, "unread": unread, "replay": state, "replay_engine": engine,
+                    "passes": read("the passes", lambda: passes(out, dirs, per, load, private))},
             "settings": sets, "circuit_ahead_of_serving": NO_CIRCUIT,
             "value_settings": read("the adapter's record of them", lambda: value_settings(dirs, stock, ours, replay_dir)),
             "tokens": toks, "cost": line, "advice": plan}
@@ -876,7 +949,7 @@ def outputs(out: Path, replay_dir: Path) -> list[str]:
 def measurement(r: dict) -> dict | None:
     """The cost line as a measurement under its metric id (``metric``: `METRICS`), every figure in `UNIT`, where the
     cost stands (``stands``) and ours and stock were served at the same settings: else the figure is not our changes'
-    cost (`UNLIKE`). None otherwise."""
+    cost (`UNLIKE`). None otherwise. Its mark is at the head of its first input, ``measured:`` and what was timed."""
     c = r["cost"]
     if not (c.get("measured") and c.get("stands") and c.get("metric")) or c.get("settings_differ"):
         return None
@@ -884,7 +957,9 @@ def measurement(r: dict) -> dict | None:
     return {"name": c["metric"], "value": S._pct(c["value"]), "unit": UNIT, "better": "lower", "target": c["target"],
             "ci95": life["ci95"] and [S._pct(x) for x in life["ci95"]], "verdict": c["verdict"], "load": r["load"],
             "stock": r["arms"]["stock"], "ours": r["arms"]["ours"], "lifetimes": life["pairs"], "commit": r["commit"],
-            "run": r["run"]}
+            "run": r["run"],
+            "inputs": [f"measured: {r['arms']['ours']}'s serving time over {r['arms']['stock']}'s on the {r['load']} load, "
+                       f"the mean over {life['pairs']} server lifetime{'s' * (life['pairs'] != 1)} an arm"]}
 
 
 def measurements(r: dict) -> list[dict]:
@@ -1129,10 +1204,7 @@ def _engine(e: dict) -> list[str]:
         return [f"  the replay's engine: vLLM's own ({e['arm']} serves with no other vLLM plugin of ours than its record)"]
 
     def one(c: dict | None, none: str) -> str:
-        if c is None:
-            return none
-        return (f"{c['processes']} process{'' if c['processes'] == 1 else 'es'} kept counters: at least {c['calls']:,} "
-                f"calls of the indexer's top-k, {c['rows_long']:,} rows of more than its keys rewritten")
+        return none if c is None else _topk(c)
 
     names = ", ".join(x.split("=")[0].strip() for x in under["plugins"])
     env = ", ".join(f"{k}={v}" for k, v in under["env"].items())
@@ -1146,6 +1218,75 @@ def _engine(e: dict) -> list[str]:
     elif t:
         lines += ["  the canonical top-k in the replay: " + one(t["replay"], "NO process kept counters: nothing shows it ran there"),
                   "  the canonical top-k while serving: " + one(t["served"], "NO process kept counters: nothing shows it ran there")]
+    return lines
+
+
+def _topk(c: dict) -> str:
+    """What the canonical top-k's processes counted (`topk_counters`), with the calls their rows were read after where
+    that is below the calls; counters kept before the ties were hold none, and ones kept before ``rows_at`` was are
+    read as rows read at the last call."""
+    at = c.get("rows_at", c["calls"])
+    return (f"{c['processes']} process{'' if c['processes'] == 1 else 'es'} kept counters: at least {c['calls']:,} "
+            f"calls of the indexer's top-k, {c['rows_long']:,} rows of more than its keys rewritten"
+            + (f", {c['rows_tied']:,} of them with a tie across the k-th key" if "rows_tied" in c else "")
+            + ("" if at == c["calls"] else f", the rows as read after {at:,} of the calls"))
+
+
+def _names(xs: Sequence[str]) -> str:
+    return xs[0] if len(xs) == 1 else f"{', '.join(xs[:-1])} and {xs[-1]}"
+
+
+def _served(tokens: float | None, seconds: float | None) -> str:
+    """A pass's output tokens and its seconds, or which of the two its record does not hold: a pass none of whose
+    requests was served has neither (`serve_tax.load_metrics`), and its line is still written."""
+    if tokens is None and seconds is None:
+        return "its record holds no output tokens and no seconds"
+    if tokens is None:
+        return f"its record holds no output tokens, {seconds:.1f} s"
+    if seconds is None:
+        return f"{tokens:,.0f} output tokens, its record holds no seconds"
+    return f"{tokens:,.0f} output tokens in {seconds:.1f} s"
+
+
+def _passes(v: dict) -> list[str]:
+    """Each pass's counters, a line a pass, with its output tokens and its seconds where its record holds them
+    (`_served`); then how each arm's requests were sampled, and for each directory whether its server was on the
+    canonical top-k and what its processes counted there."""
+    if not v["measured"]:
+        return [f"each pass: {v['why']}"]
+    if not v["passes"]:
+        return []
+    lines = ["each pass, by the engine's counters read before and after it (in no verdict):",
+             f"  every arm's are the server's own on /metrics, one reader: the draft tokens accepted are "
+             f"{S.SCHEDULE['accepted_tokens']} over {S.SCHEDULE['draft_tokens']}, the tokens its drafts proposed"]
+    for x in v["passes"]:
+        if x["steps"] is None:
+            counted = "its record holds no counters of the engine's"
+        else:
+            counted = f"{x['steps']:,.0f} engine steps" + (
+                f", {x['drafts']:,.0f} drafts, {x['accepted_tokens']:,.0f} of their {x['draft_tokens']:,.0f} tokens accepted "
+                f"({x['accepted_tokens'] / x['draft_tokens']:.2%})" if x["drafts"] and x["draft_tokens"] else ", no drafts")
+        lines.append(f"  {x['dir']} {x['pass']} rep {x['rep']}{', left out' if x['left_out'] else ''}: {counted}; "
+                     f"{_served(x['output_tokens'], x['seconds'])}")
+    how = {"greedy": [a for a, x in v["sampling"].items() if not x["sampled"]],
+           "sampled with no seed sent": [a for a, x in v["sampling"].items() if x["sampled"] and not x["seeded"]],
+           "sampled, each under a seed its client sent": [a for a, x in v["sampling"].items() if x["seeded"]]}
+    lines.append("  the requests: " + "; ".join(f"{what} ({_names(arms)})" for what, arms in how.items() if arms))
+    t = v["topk"]
+    off = [d for d, on in t["on"].items() if not on]
+
+    def one(d: str) -> str:
+        if t["kept"] is None or d not in t["kept"]:
+            return f"{d} on, its counters not kept (" + (
+                "the job named no PRIVATE directory)" if t["kept"] is None else "its record names no place for them)")
+        if (c := t["kept"][d]) is None:
+            return f"{d} on, and NO process kept counters: nothing shows it ran there"
+        return f"{d} {_topk(c)}"
+
+    lines.append("  the canonical top-k, by directory: " + "; ".join(
+        [one(d) for d, on in t["on"].items() if on]
+        + [f"not on for {_names(off)} (no {TOPK} in the environment {'its record names' if len(off) == 1 else 'their records name'})"]
+        * bool(off)))
     return lines
 
 
@@ -1255,6 +1396,7 @@ def text(r: dict) -> str:
     else:
         lines.append("  the replay: none was asked for")
     lines += _engine(ran["replay_engine"])
+    lines += _passes(ran["passes"]) if r["arms"].get("beside") else []
     lines += [f"settings of {ours}" + (f", with {stock}'s beside:" if stock else ":"),
               _setting("prefix caching", "prefix_caching", r),
               _setting("speculative decoding", "speculative_decoding", r),
@@ -1328,6 +1470,8 @@ def main(argv: list[str] | None = None) -> int:
     q = sub.add_parser("arms", help="the arms a job serves by default: stock, stock again, ours")
     q.add_argument("--model", help="the model the job serves, as the benchmark names it")
     q.add_argument("--out", type=Path, help="an earlier job's out/, read again: the arms it is read as")
+    q.add_argument("--among", nargs="*", default=(), metavar="ARM",
+                   help="the arms the job lists (the runner's --arms): the three are the set whose arm of ours is among them")
     q = sub.add_parser("served", help="exit 0 where an arm of a job's out/ served the load without an error")
     q.add_argument("out", type=Path)
     q.add_argument("arm")
@@ -1338,6 +1482,9 @@ def main(argv: list[str] | None = None) -> int:
                                    "served ours alone")
     p.add_argument("--again", help="stock in a second server lifetime, the noise floor ('' for none)")
     p.add_argument("--ours")
+    p.add_argument("--beside", nargs="*", default=(), metavar="ARM",
+                   help="the arms the job served beside those three (the runner's --arms): in what ran and among the "
+                        "passes, and in no line of the three")
     p.add_argument("--load", required=True)
     p.add_argument("--replayed", metavar="PASS",
                    help="the pass of ours the replay re-ran, as the benchmark names it (default: the load; by vLLM's "
@@ -1353,7 +1500,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--json", action="store_true", help="print the JSON object alone")
     a = ap.parse_args(argv)
     if a.cmd == "arms":
-        print(" ".join(default_arms(a.model, a.out)))
+        print(" ".join(default_arms(a.model, a.out, a.among)))
         return 0
     if a.cmd == "served":
         ss = [arm_state(d, a.load) for d in arm_dirs(a.out, a.arm)]
@@ -1361,7 +1508,7 @@ def main(argv: list[str] | None = None) -> int:
     stock, again, ours = default_arms(out=a.out)
     r = report(a.out, (stock if a.stock is None else a.stock) or None, a.ours or ours,
                (again if a.again is None else a.again) or None, a.load, a.rep,
-               a.replay, a.target, a.replayed, a.expect_replay, a.private)
+               a.replay, a.target, a.replayed, a.expect_replay, a.private, a.beside)
     r["failed"] = failed(r)
     (a.out / "prod_repro.json").write_text(json.dumps(r, indent=1))
     (a.out / "prod_repro.txt").write_text(text(r))

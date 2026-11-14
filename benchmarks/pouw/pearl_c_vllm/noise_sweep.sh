@@ -34,7 +34,7 @@ if [ -f "$SHIP_TAR" ]; then
   stamp "ship of kernel tree $KTREE from $SHIP_TAR"
 else
   stamp "ship build"
-  CUDA=/usr/local/cuda-13.0 bash benchmarks/pouw/pearl_c_sm120/build.sh "$S/ship-${HEAD:0:8}" > "$OUT/build.log" 2>&1 \
+  CUDA=/usr/local/cuda-13.0 bash benchmarks/pouw/pearl_c_sm120/ship.sh "$S/ship-${HEAD:0:8}" > "$OUT/build.log" 2>&1 \
     || { stamp "BUILD_FAIL"; tail -20 "$OUT/build.log"; exit 11; }
   mkdir -p "$SHIPS" && tar -cf "$S/ship.tar" -C "$S" "ship-${HEAD:0:8}" && mv "$S/ship.tar" "$SHIP_TAR.$$" && mv "$SHIP_TAR.$$" "$SHIP_TAR"
 fi
