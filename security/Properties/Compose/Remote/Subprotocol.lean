@@ -39,8 +39,8 @@ statement in `Properties.Compose.Remote.SubprotocolDeployed`:
 `Plays` is the component's acceptance (`DecodedAccepted` unfolded at `Poub.Protocol.protocol`, whose decoders
 are `decodeParams`, `decodeCommitment` and `decodeEvidence`) with what picks out the record the line reads: the
 commitment decodes to the node's registration, and the parameters and the log to the node's session parameters and
-windows a sample and the record's coins, append coins, clock floor and events. It is in the event, not a hypothesis: a log
-that is not the record's is an outcome the bound counts nothing for, not one the statement assumes away.
+windows a sample and the record's coins, append coins, clock floor and events. It is in the event, not a hypothesis: a
+log that is not the record's is an outcome the bound counts nothing for, not one the statement assumes away.
 
 Each property is its verifier's instance of a form over the verifier, so that its witnesses can say what the verifier
 contributes. `AcceptIsVerifiedFor chk` and `PublishedEpsFor chk` are `AcceptIsVerified` and `PublishedEps` at a check
@@ -171,12 +171,13 @@ the event and the trace (`Verified`) and `sum` for the record the line and its p
 (`Record.summary`). `LineHeld` is it at `Verified` and `Record.summary`. -/
 def LineHeldBy (ver : Node → Record → Prop) (sum : Node → Record → Option Poub.Session.Summary) : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
-    (rest : DrawCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → DrawCoins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → DrawCoins node.samples κ X → Finset ℕ) (com : DrawCoins node.samples κ X → Cm)
-    (T : Trace (DrawCoins node.samples κ X)) (R : Receipts node.samples κ X) (δs δnet : ℝ),
+    (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → SampleCoins node.samples κ X → Record)
+    (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
+    (com : SampleCoins node.samples κ X → Cm)
+    (T : Trace (SampleCoins node.samples κ X)) (R : Receipts node.samples κ X) (δs δnet : ℝ),
     let r := played recs com
     let F := recordCommitted node recs correct
-    ∀ (O : Outside (traceBy T node ver r)) (I : Ingress (DrawCoins node.samples κ X)),
+    ∀ (O : Outside (traceBy T node ver r)) (I : Ingress (SampleCoins node.samples κ X)),
     Paced (traceBy T node ver r) (paceBy sum node r) → Covers (traceBy T node ver r) →
     SketchBoundAt (traceBy T node ver r) O δs → Covered (traceBy T node ver r) O I →
     IngressCounted (traceBy T node ver r) I δnet → (∀ c, Live (F.view c)) →
@@ -195,13 +196,14 @@ paced session read `sum` (`Record.summary`). `LineHeldAtSubprotocol`
 def LineHeldAtSubprotocolBy (acc : Node → Record → ByteArray → ByteArray → ByteArray → Prop)
     (ver : Node → Record → Prop) (sum : Node → Record → Option Poub.Session.Summary) : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
-    (rest : DrawCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → DrawCoins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → DrawCoins node.samples κ X → Finset ℕ) (com : DrawCoins node.samples κ X → Cm)
-    (T : Trace (DrawCoins node.samples κ X)) (R : Receipts node.samples κ X) (δs δnet : ℝ)
-    (a b e : DrawCoins node.samples κ X → ByteArray),
+    (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → SampleCoins node.samples κ X → Record)
+    (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
+    (com : SampleCoins node.samples κ X → Cm)
+    (T : Trace (SampleCoins node.samples κ X)) (R : Receipts node.samples κ X) (δs δnet : ℝ)
+    (a b e : SampleCoins node.samples κ X → ByteArray),
     let r := played recs com
     let F := recordCommitted node recs correct
-    ∀ (O : Outside (traceBy T node ver r)) (I : Ingress (DrawCoins node.samples κ X)),
+    ∀ (O : Outside (traceBy T node ver r)) (I : Ingress (SampleCoins node.samples κ X)),
     Paced (traceBy T node ver r) (paceBy sum node r) → Covers (traceBy T node ver r) →
     SketchBoundAt (traceBy T node ver r) O δs → Covered (traceBy T node ver r) O I →
     IngressCounted (traceBy T node ver r) I δnet → (∀ c, Live (F.view c)) →
@@ -237,10 +239,11 @@ def QBytesAtSubprotocolBy
     (acc : Node → Record → ByteArray → ByteArray → ByteArray → Poub.Protocol.Public → Prop)
     (ver : Node → Record → Prop) (sum : Node → Record → Option Poub.Session.Summary) : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.samples → Pous.Bits κ → Blocks receiptMax)
-    (rest : DrawCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → DrawCoins node.samples κ X → Record)
-    (correct : Cm → Fin node.samples → DrawCoins node.samples κ X → Finset ℕ) (com : DrawCoins node.samples κ X → Cm)
-    (T : Trace (DrawCoins node.samples κ X)) (R : Receipts node.samples κ X)
-    (a b e : DrawCoins node.samples κ X → ByteArray),
+    (rest : SampleCoins node.samples κ X → Fin node.samples → ℕ → ℕ) (recs : Cm → SampleCoins node.samples κ X → Record)
+    (correct : Cm → Fin node.samples → SampleCoins node.samples κ X → Finset ℕ)
+    (com : SampleCoins node.samples κ X → Cm)
+    (T : Trace (SampleCoins node.samples κ X)) (R : Receipts node.samples κ X)
+    (a b e : SampleCoins node.samples κ X → ByteArray),
     let r := played recs com
     let F := recordCommitted node recs correct
     (∀ c, Live (F.view c)) →

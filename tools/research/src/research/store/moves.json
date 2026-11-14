@@ -4108,6 +4108,30 @@
         "security/Proofs/Accounting/Capacity.lean": "security/Proofs/Registration/Capacity.lean",
         "security/Proofs/Accounting/Device.lean": "security/Proofs/Registration/Device.lean"
       }
+    },
+    {
+      "paths": {
+        "security/Definitions/Slowdown/Guarantees/RemotePeriod.lean": "security/Definitions/Slowdown/Guarantees/RemoteMonitoringPeriod.lean",
+        "security/Proofs/Pouw/Period.lean": "security/Proofs/Pouw/MonitoringPeriod.lean",
+        "security/Proofs/Pouw/Period/": "security/Proofs/Pouw/MonitoringPeriod/",
+        "security/Proofs/Pouw/PeriodJ10R.lean": "security/Proofs/Pouw/MonitoringPeriodJ10R.lean",
+        "security/Proofs/Pouw/PeriodJ10R/": "security/Proofs/Pouw/MonitoringPeriodJ10R/",
+        "security/Proofs/Pouw/PeriodJ10RStrata.lean": "security/Proofs/Pouw/MonitoringPeriodJ10RStrata.lean",
+        "security/Proofs/Pouw/PeriodJ10RStrata/": "security/Proofs/Pouw/MonitoringPeriodJ10RStrata/",
+        "security/Proofs/Slowdown/RemotePeriod.lean": "security/Proofs/Slowdown/RemoteMonitoringPeriod.lean",
+        "security/Proofs/WeightSecurity/RegPeriod.lean": "security/Proofs/WeightSecurity/RegMonitoringPeriod.lean",
+        "security/Proofs/WeightSecurity/TwoProdPeriod.lean": "security/Proofs/WeightSecurity/TwoProdMonitoringPeriod.lean",
+        "security/Proofs/WeightSecurity/TwoRegPeriod.lean": "security/Proofs/WeightSecurity/TwoRegMonitoringPeriod.lean",
+        "security/Properties/Pouw/Period.lean": "security/Properties/Pouw/MonitoringPeriod.lean",
+        "security/Properties/Pouw/Period/": "security/Properties/Pouw/MonitoringPeriod/",
+        "security/Properties/Pouw/PeriodJ10R.lean": "security/Properties/Pouw/MonitoringPeriodJ10R.lean",
+        "security/Properties/Pouw/PeriodJ10RStrata.lean": "security/Properties/Pouw/MonitoringPeriodJ10RStrata.lean"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/pipeline/window_law.py": "adapters/vllm/verity_vllm/pipeline/window_sampling_design.py"
+      }
     }
   ]
 }

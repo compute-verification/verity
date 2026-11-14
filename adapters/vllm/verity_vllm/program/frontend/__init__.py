@@ -1,19 +1,19 @@
-"""verity_vllm.program.frontend: the Torch-to-circuit translator.
+"""verity_vllm.program.frontend: the vLLM half of the Torch-to-circuit translator, whose walk is the PyTorch adapter's
+(`verity_torch.frontend`).
 
     Gate -> exactly one Value<w>.
     Composite interfaces -> ordered collections of value references.
     Commitment positions -> physical authentication locations for those values,
                             not semantic components of gate outputs.
 
-`derive` (needs torch) turns a traced torch model into a `Program`. `correspond` (program correspondence across
-reference encodings) and `provenance` (the registry's version, which a derivation's provenance holds) are pure
-`verity.circuits` and import without torch. Dead gates are `verity.circuits.liveness`. The package re-exports nothing:
-a name is imported from the module that defines it, and importing a module loads only what that module imports.
+`vllm_derive` (needs torch) derives a `Program` under the vLLM adapter's rules (`rules/`), its profiles' vocabulary
+and its two served rules (`seed_rule`, `stop_rule`). The package re-exports nothing: a name is imported from the module
+that defines it, and importing a module loads only what that module imports.
 
-What the translator imports from the rest of the adapter. Its modules are those directly in this directory but
-`train_step`, which derives a training step on top of it; `rules/` is not counted here. Every import they make of
-`verity_vllm` outside this directory is one of these names, and each name here is imported
-(`tests/program/test_frontend_adapter_imports.py`): a new one is added here with what it is for, or done without.
+What the translator imports from the rest of the adapter. Its modules are those directly in this directory; `rules/`
+is not counted here. Every import they make of `verity_vllm` outside this directory is one of these names, and each
+name here is imported (`tests/program/test_frontend_adapter_imports.py`): a new one is added here with what it is for,
+or done without.
 
     verity_vllm.settings                                      the declared environment, for the record of what the host set
     verity_vllm.engine.env                                    vLLM's switches, pinned before the export imports vLLM
@@ -35,7 +35,6 @@ Of the served kernels' circuits (`verity_vllm.definitions`), which the translato
     verity.circuits.ops.boolean.versions.boolean_function                    a derived Program's function on bits,
     verity.circuits.ops.boolean.versions.NoBooleanVersion                    why a word Definition has no Boolean version,
     verity.circuits.ops.boolean.versions.sigma_check                         and the check of bits against σ of the words
-    verity_vllm.definitions.replay.replayer                             the body builder that re-emits a recorded body
     verity_vllm.definitions.numerics.fa3_model                          FlashAttention-3's CPU model, a target's FA3 tile
     verity_vllm.definitions.registry.prims                              the B1 profile's primitives, a target's steps,
     verity_vllm.definitions.registry.b1                                 and its composites; both name the registry's version
@@ -71,7 +70,7 @@ Of the served kernels' circuits (`verity_vllm.definitions`), which the translato
     verity_vllm.definitions.registry.sampling.bit_at                    a word's bit, which `seed_rule` states the seed in
     verity_vllm.definitions.registry.stop_rule                          where a request's output stops, for `stop_rule`,
     verity_vllm.definitions.registry.stop_check                         and the check of a request's length
-    verity_vllm.definitions.registry.tables.table_type                  a registered table's parameter, for `registration`
+    verity_vllm.definitions.registry.prims.I32                          the 32-bit word of a request's ids and lengths, for `stop_rule`
     verity_vllm.definitions.registry.topp_geometry.registered_splits    the registered top-p split count, for `vllm_meta`
 
 Of vLLM itself, the modules that turn a graph into a Program make one read, and a guarded one: `targets` and

@@ -73,7 +73,7 @@ def evidence(b: bytes) -> dict:
 
 
 #: the guarantee a credited period is proved under
-GUARANTEE = "Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod"
+GUARANTEE = "Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod"
 TILE_ID = "PouwH1Tile_v"
 #: the one tile the guarantee covers: a sampled per-call unit over it is proved as its 32 lanes and their combine
 COVERED_TILE = "PouwH1Tile_v5{"

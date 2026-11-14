@@ -1,6 +1,6 @@
 module
 
-public import Properties.Pouw.PeriodJ10R
+public import Properties.Pouw.MonitoringPeriodJ10R
 public import Proofs.Accounting.Served
 public import Proofs.Compose.ComposeMonitoringPeriod.Honest
 public import Proofs.Flock.Soundness.Audit.StratifiedProj
@@ -27,9 +27,9 @@ public import Proofs.Flock.Soundness.Audit.StratifiedProj
 
 open Claims renaming Ex → expect
 
-namespace Properties.Pouw.PeriodJ10R.SecurityProofs
+namespace Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs
 
-open Properties.Pouw.PeriodJ10R Pouw.RelativeSecurity
+open Properties.Pouw.MonitoringPeriodJ10R Pouw.RelativeSecurity
 open Accounting.SecurityProofs.Compose.Budget (forall_mem_subsetDraw rest card_le_rest prob_mem)
 open Accounting.SecurityProofs.TS.Stages (prob_prod)
 open Properties.Served.SecurityProofs (card_rest_le)
@@ -187,4 +187,4 @@ theorem tileStratumAcceptProb_eq_exp {nB mB : ℕ} (σ : Fin nB → Fin mB) (k :
   rw [tileStratumAcceptProb_eq_proj]
   exact FlockSoundness.Audit.SamplingDesign.stratified_proj_escape_eq_exp σ k hk sT B hc
 
-end Properties.Pouw.PeriodJ10R.SecurityProofs
+end Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs

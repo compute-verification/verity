@@ -11,7 +11,7 @@ import Proofs.WeightSecurity.Stop
 /-!
 # A period of two-stage windows at the committed traces, proved
 
-`PeriodTwoReg` is `period_undetected` at `twoRegRec`. Each record reads only the strategy its window is played with, so
+`MonitoringPeriodTwoReg` is `period_undetected` at `twoRegRec`. Each record reads only the strategy its window is played with, so
 both of a window's bounds hold at every strategy: `hacc` is `CompiledTwo.KSRegTwo`'s first conjunct at the statement
 and prover it sends, and `hstage` is `CompiledTwo.MissTwo` at the count it fixes (`regCount`).
 
@@ -19,10 +19,10 @@ and prover it sends, and `hstage` is `CompiledTwo.MissTwo` at the count it fixes
   probability at most `ε_reg,2` at the statement and prover it sends, and never out of scope.
 * `twoRegRec_missed_le`: its sample misses the committed incorrect set with probability at most `(1 − r₁·r₂)^n`, `n`
   the count its strategy fixes.
-* `periodTwoReg_of`: `PeriodTwoReg` from each window's `KSRegTwo` and `MissTwo`, its refusal of what is out of scope,
+* `monitoringPeriodTwoReg_of`: `MonitoringPeriodTwoReg` from each window's `KSRegTwo` and `MissTwo`, its refusal of what is out of scope,
   and the two stages' rates in scope.
-* `compilerPeriodTwoReg_of`: `CompilerPeriodTwoReg` from `CompilerKSRegTwo`, through `compilerMissTwo`. So
-  **`CompilerPeriodTwoReg` is proved** (`compilerPeriodTwoReg`), at `compilerKSRegTwo`.
+* `compilerMonitoringPeriodTwoReg_of`: `CompilerMonitoringPeriodTwoReg` from `CompilerKSRegTwo`, through `compilerMissTwo`. So
+  **`CompilerMonitoringPeriodTwoReg` is proved** (`compilerMonitoringPeriodTwoReg`), at `compilerKSRegTwo`.
 -/
 
 @[expose] public section
@@ -97,13 +97,13 @@ theorem twoRegRec_missed_le (H : Msg → Msg) (L : CompiledTwo Coin A) {r₁ r�
 
 /-- **The period at the committed traces, from each window's committed form and miss bound**: when every window's
 verifier meets `CompiledTwo.KSRegTwo` and `CompiledTwo.MissTwo` at rates `r₁` and `r₂`, refuses what is out of its
-scope, and has the two stages' rates at every statement in scope, `PeriodTwoReg` holds. -/
-theorem periodTwoReg_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) {r₁ r₂ : ℝ} (hr₁ : 0 ≤ r₁) (hr₁' : r₁ ≤ 1)
+scope, and has the two stages' rates at every statement in scope, `MonitoringPeriodTwoReg` holds. -/
+theorem monitoringPeriodTwoReg_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) {r₁ r₂ : ℝ} (hr₁ : 0 ≤ r₁) (hr₁' : r₁ ≤ 1)
     (hr₂ : 0 ≤ r₂) (hr₂' : r₂ ≤ 1) (hks : ∀ t, (Lv t).KSRegTwo H) (hmiss : ∀ t, (Lv t).MissTwo H r₁ r₂)
     (href : ∀ t x (P : Prover Unit) r, (run H P (Lv t).V x () r).out = .acc → (Lv t).Scope x)
     (hrate : ∀ t x s Pt d, (Lv t).parse x = some s → (Lv t).partition s = some Pt → (Lv t).two s = some d →
       InScopeTwo Pt d s → d.FirstRate r₁ ∧ d.SecondRate Pt r₂) :
-    PeriodTwoReg (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv r₁ r₂ := by
+    MonitoringPeriodTwoReg (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv r₁ r₂ := by
   intro T ε s herr M
   have hx0 : 0 ≤ 1 - r₁ * r₂ := by nlinarith
   have h := period_undetected (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
@@ -118,17 +118,17 @@ theorem periodTwoReg_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) {r�
   rw [← ENNReal.ofReal_pow hx0] at h
   exact h
 
-/-- **The period bound from the committed form**: `CompilerKSRegTwo` gives `CompilerPeriodTwoReg`, with each window's
+/-- **The period bound from the committed form**: `CompilerKSRegTwo` gives `CompilerMonitoringPeriodTwoReg`, with each window's
 miss bound from its draw laws (`compilerMissTwo`) and its refusal of what is out of scope from its contract
 (`CompiledTwo.Sessions.refuses`). -/
-theorem compilerPeriodTwoReg_of (hks : CompilerKSRegTwo) : CompilerPeriodTwoReg := by
+theorem compilerMonitoringPeriodTwoReg_of (hks : CompilerKSRegTwo) : CompilerMonitoringPeriodTwoReg := by
   intro Coin _ _ _ A O V Tick Adv H Lv r₁ r₂ hA hS hr₁ hr₁' hr₂ hr₂' hrate
-  exact periodTwoReg_of H Lv hr₁ hr₁' hr₂ hr₂' (fun t => hks Coin A (Lv t) H hA (hS t).1 (hS t).2)
+  exact monitoringPeriodTwoReg_of H Lv hr₁ hr₁' hr₂ hr₂' (fun t => hks Coin A (Lv t) H hA (hS t).1 (hS t).2)
     (fun t => compilerMissTwo Coin A (Lv t) H (hS t).2 r₁ r₂ hr₁ hr₁' hr₂ hr₂')
     (fun t x P r h => (hS t).2.refuses x Unit P () r h) hrate
 
-/-- **The period bound at the committed traces**: `compilerPeriodTwoReg_of` at `compilerKSRegTwo`. -/
-theorem compilerPeriodTwoReg : CompilerPeriodTwoReg :=
-  compilerPeriodTwoReg_of compilerKSRegTwo
+/-- **The period bound at the committed traces**: `compilerMonitoringPeriodTwoReg_of` at `compilerKSRegTwo`. -/
+theorem compilerMonitoringPeriodTwoReg : CompilerMonitoringPeriodTwoReg :=
+  compilerMonitoringPeriodTwoReg_of compilerKSRegTwo
 
 end WeightSecurity.SecurityProofs

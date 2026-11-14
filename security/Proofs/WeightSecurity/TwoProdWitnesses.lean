@@ -8,24 +8,24 @@ import Proofs.Core.Game.Basic
 import Proofs.Core.ValueSalts
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Witnesses.SamplingTwoReg
-import Proofs.WeightSecurity.TwoProdPeriod
+import Proofs.WeightSecurity.TwoProdMonitoringPeriod
 
 /-!
 # The two-stage period's product form says something
 
-`CompilerPeriodTwoProd`'s premise holds at an instance, with the premises its committed-trace forms add
-(`periodTwoProd_regVal`, `periodTwoLead_regVal`), and `PeriodTwoLead` and `PeriodTwoProd` fail where it doesn't.
+`CompilerMonitoringPeriodTwoProd`'s premise holds at an instance, with the premises its committed-trace forms add
+(`monitoringPeriodTwoProd_regVal`, `monitoringPeriodTwoLead_regVal`), and `MonitoringPeriodTwoLead` and `MonitoringPeriodTwoProd` fail where it doesn't.
 
-* `periodTwoProd_honest`: at `twoLTwo`'s verification phases, `twoA` is knowledge sound and every phase's commitment
+* `monitoringPeriodTwoProd_honest`: at `twoLTwo`'s verification phases, `twoA` is knowledge sound and every phase's commitment
   binds and its sessions meet the two-stage contract (`compilerKSTwo_honest`). The instance is a toy of two sessions
   over SHA-512, and no served verifier.
-* `periodTwoLead_nontrivial`, `periodTwoProd_nontrivial`: at `sksLTwo`'s verification phases, which accept after one
+* `monitoringPeriodTwoLead_nontrivial`, `monitoringPeriodTwoProd_nontrivial`: at `sksLTwo`'s verification phases, which accept after one
   round and sample nothing, both statements fail at the committed boundary trace and `δ = 1/2`. One verification phase,
   played by `twoStrat` at the silent prover, is accepted surely and samples no proof block
   (`acceptedSampledAt_sksLTwo`: the hypothesis holds at `ε = 0`), while its missProb is `0` (`escAt_sksLTwo`: its
   committed boundary trace opens nothing, so its replay block holds an incorrect proof block at every interior): the
   event holds surely and the bound is `1/2`.
-* `sksLTwo_not_sessions`: so `sksLTwo` does not meet the two-stage contract, the premise `compilerPeriodTwoProd` takes.
+* `sksLTwo_not_sessions`: so `sksLTwo` does not meet the two-stage contract, the premise `compilerMonitoringPeriodTwoProd` takes.
 -/
 
 @[expose] public section
@@ -99,8 +99,8 @@ theorem value_prodBelow_one (H : Msg → Msg) (L : CompiledTwo Coin A)
 
 /-- **The product form's premises hold together** at `twoLTwo`'s verification phases: `twoA` is knowledge sound and
 every phase's commitment binds and its sessions meet the two-stage contract (`compilerKSTwo_honest`), which are
-`periodTwoProd_regVal`'s and `periodTwoLead_regVal`'s premises; the last conjunct is `CompilerPeriodTwoProd`'s one. -/
-theorem periodTwoProd_honest :
+`monitoringPeriodTwoProd_regVal`'s and `monitoringPeriodTwoLead_regVal`'s premises; the last conjunct is `CompilerMonitoringPeriodTwoProd`'s one. -/
+theorem monitoringPeriodTwoProd_honest :
     (twoA Bool).KS FlockDeploy.sha512 ∧
       (∀ _t : ℕ, (twoLTwo Bool).commit.Binds FlockDeploy.sha512 ∧ (twoLTwo Bool).Sessions FlockDeploy.sha512) ∧
       ∀ _t : ℕ, (twoLTwo Bool).Sessions FlockDeploy.sha512 := by
@@ -142,11 +142,11 @@ theorem escAt_sksLTwo_regVal :
     escAt (sksLTwo Bool) [] ((sksLTwo Bool).regVal FlockDeploy.sha512 silentP [] ()) = 0 :=
   escAt_sksLTwo [] (val := (sksLTwo Bool).regVal FlockDeploy.sha512 silentP [] ()) (sksL_regVal _ silentP [] () 0)
 
-/-- **`PeriodTwoLead` fails** at `sksLTwo`'s verification phases, the committed boundary trace and `δ = 1/2`: one
+/-- **`MonitoringPeriodTwoLead` fails** at `sksLTwo`'s verification phases, the committed boundary trace and `δ = 1/2`: one
 verification phase, at the empty statement and the silent prover, samples nothing and has missProb `0`, so its escapes
 multiply below `1/2` surely, while the bound is `1/2`. -/
-theorem periodTwoLead_nontrivial :
-    ¬ PeriodTwoLead (O := Unit) (V := Unit) (Tick := Unit) (Adv := Unit) FlockDeploy.sha512 (fun _ => sksLTwo Bool)
+theorem monitoringPeriodTwoLead_nontrivial :
+    ¬ MonitoringPeriodTwoLead (O := Unit) (V := Unit) (Tick := Unit) (Adv := Unit) FlockDeploy.sha512 (fun _ => sksLTwo Bool)
       (fun _ _ x P => (sksLTwo Bool).regVal FlockDeploy.sha512 P x ()) := by
   intro h
   let m : (Unit → Unit) × Unit × Unit := (fun _ => (), (), ())
@@ -162,11 +162,11 @@ theorem periodTwoLead_nontrivial :
   rw [hv] at h1
   norm_num at h1
 
-/-- **`PeriodTwoProd` fails** at `sksLTwo`'s verification phases, the committed boundary trace and `δ = 1/2`: one
+/-- **`MonitoringPeriodTwoProd` fails** at `sksLTwo`'s verification phases, the committed boundary trace and `δ = 1/2`: one
 verification phase, at the empty statement and the silent prover, is accepted surely with missProb `0`, while the bound
 is `1/2`. -/
-theorem periodTwoProd_nontrivial :
-    ¬ PeriodTwoProd (O := Unit) (V := Unit) (Tick := Unit) (Adv := Unit) FlockDeploy.sha512 (fun _ => sksLTwo Bool)
+theorem monitoringPeriodTwoProd_nontrivial :
+    ¬ MonitoringPeriodTwoProd (O := Unit) (V := Unit) (Tick := Unit) (Adv := Unit) FlockDeploy.sha512 (fun _ => sksLTwo Bool)
       (fun _ _ x P => (sksLTwo Bool).regVal FlockDeploy.sha512 P x ()) := by
   intro h
   let m : (Unit → Unit) × Unit × Unit := (fun _ => (), (), ())
@@ -184,11 +184,11 @@ theorem periodTwoProd_nontrivial :
   rw [hv] at h1
   norm_num at h1
 
-/-- **`sksLTwo` does not meet the two-stage contract**, the premise `compilerPeriodTwoProd` takes: under it,
-`PeriodTwoLead` would hold at `sksLTwo`'s verification phases. -/
+/-- **`sksLTwo` does not meet the two-stage contract**, the premise `compilerMonitoringPeriodTwoProd` takes: under it,
+`MonitoringPeriodTwoLead` would hold at `sksLTwo`'s verification phases. -/
 theorem sksLTwo_not_sessions : ¬ (sksLTwo Bool).Sessions FlockDeploy.sha512 := fun hS =>
-  periodTwoLead_nontrivial
-    (compilerPeriodTwoProd Bool (toyA Bool) Unit Unit Unit Unit FlockDeploy.sha512 (fun _ => sksLTwo Bool)
+  monitoringPeriodTwoLead_nontrivial
+    (compilerMonitoringPeriodTwoProd Bool (toyA Bool) Unit Unit Unit Unit FlockDeploy.sha512 (fun _ => sksLTwo Bool)
       (fun _ _ x P => (sksLTwo Bool).regVal FlockDeploy.sha512 P x ()) fun _ => hS).1
 
 end WeightSecurity.SecurityProofs
