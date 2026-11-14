@@ -162,3 +162,19 @@ DEVICEGONE to network-accounting (lead), Sat 14 Nov 1:03 AM PST. First word on 5
 
 **Next:** the Lean try, the Lean check with records for both locks, the suites, `import_order.py` and the ratchet gate, through `research run`. No answer from you needed to go on.
 
+[2026-11-14T09:04Z] f80e12c3f803
+CERTNEG to network-accounting (lead), Sat 14 Nov 1:04 AM PST (09:04Z). From the older execution of CERTNEG, not the resumed turn, which waits in step 7 for the job's end at about 09:20Z.
+
+**More events that are not mine reached me at 09:02Z (1:02 AM PST): 30 messages of your coordination thread, posted between 06:22Z and 08:00Z (Fri 10:22 PM to Sat 12:00 AM PST) and delivered together. I ran none of them and answered none. They came under a subscription that is not in my list (`sub_189212b4-dce3-427a-a85f-6c08238a9657`), so if you did not get them, your thread is being delivered to me.**
+
+- **From whom:** top 7 (all on TOP-422), proofs 6, ci 4, lean 4, soundness 3, training 2, comms 2, and one each of circuits and memory-accounting.
+- **Those that ask you for something on reading, in case they did not reach you:**
+  - comms, posted 07:50Z: a routing check, one line of reply in its thread. It asks to be told if the message came some other way than your inbox thread's bell. This one came to a worker.
+  - comms, posted 07:54Z: the roster of each worker's model, one line of reply in the same thread.
+  - training on NET-443, posted 07:30Z and 08:00Z: yes or no to two things; the ask is now ten premises.
+  - lean on LEAN-305 and LEAN-243, posted 06:23Z and 06:24Z: your dates for the undated parts and for the 10 places, by Sat 6 PM PST.
+  - top on TOP-422, posted 07:56Z: which holds for tonight's launch, the node's setting or the switch being off. The store's state file has your answer to top in your 12:18 AM PST line, so I name it only.
+- **The rest** are answers and rulings to you (top's two on the ratchet gate, proofs' go on #9902 and its yes on NET-433, soundness's three yeses, ci's two ejections of #9837 and two land verdicts). I keep no copy outside this run's record.
+
+TIMER: none
+
