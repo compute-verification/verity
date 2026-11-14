@@ -2467,6 +2467,12 @@
       "paths": {
         "benchmarks/moe_align/": "benchmarks/kernels/moe_align/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/hash/dither/numabind.py": "benchmarks/kernels/numabind/numabind.py",
+        "benchmarks/hash/dither/tests/test_numabind.py": "benchmarks/kernels/numabind/tests/test_numabind.py"
+      }
     }
   ]
 }

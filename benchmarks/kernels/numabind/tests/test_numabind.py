@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Never
 
 import pytest
 
-DITHER = Path(__file__).resolve().parents[1]
+DITHER = (Path(__file__).resolve().parents[3] / "hash" / "dither")
 sys.path.insert(0, str(DITHER))
 import numabind  # noqa: E402
 

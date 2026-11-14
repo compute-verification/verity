@@ -6,7 +6,7 @@
 # overheads are against stock.  DITHER_NSYS=1 runs it under nsys with the prof op's per-step kernels (steps.py).
 # SERVED_SCRIPT (a path from the repository root) runs another script in sbench.py's place, e.g. values.py; SERVED_KGATE=1|0
 # forces the gate on or off.  Inside the lease everything runs on the leased GPU's NUMA node, as dither's sbench.sh runs it
-# (benchmarks/hash/dither/numabind.py, DITHER_NUMA=0 unbound; env/numa.json and summary.json's "numa" say which).
+# (benchmarks/kernels/numabind/numabind.py, DITHER_NUMA=0 unbound; env/numa.json and summary.json's "numa" say which).
 # On an H200 under a GPU lease:
 #   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/kernels/exactlin/served.sh \
 #     --arms stock-cutlass,stock,exact,exact-fused --gate --ops decode --reps 3 --t 64 --gpu-mem 0.2

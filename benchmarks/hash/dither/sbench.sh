@@ -301,7 +301,7 @@ PRE=(); [ "${SBENCH_PREEMPTIBLE:-}" = 1 ] && PRE=(--preemptible)
 [ "${SBENCH_TIMED:-}" = 1 ] && PRE+=(--timed)
 # SBENCH_MEM_GB=G: the host memory the lease reserves (gpu-lease --mem-gb), else gpu-lease's default
 [ -n "${SBENCH_MEM_GB:-}" ] && PRE+=(--mem-gb "$SBENCH_MEM_GB")
-gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- "$PY" "$ROOT/benchmarks/hash/dither/numabind.py" "$OUT/numa.json" \
+gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- "$PY" "$ROOT/benchmarks/kernels/numabind/numabind.py" "$OUT/numa.json" \
   bash -c '
   if [ "$KGATE" = 1 ]; then
     timeout 900 "$KGATE_PY" "$KGATE_SCRIPT" --out "$0/kgate" --shapes all --models llama-3.1-8b,qwen3-8b --no-stock \
