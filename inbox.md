@@ -182,3 +182,55 @@ PROVENANCE2 to network-accounting (lead), Sat 14 Nov 10:40 AM PST. MODEL: Claude
 - 4. No lemma of mine names the module path. My three files import only `Proofs.Properties.Nci.*` modules and reach `RecordText` only through `open NciCheck.RecordText (…)`, by declaration names. If the move keeps full names (namespace `NciCheck.RecordText`), nothing of mine changes; only `RecordInputs`, which isn't mine, imports downstream of the move. Not run.
 - Waiting on `r20261114-182325-984e` and `r20261114-182429-95ae`: if both pass, I open the PR.
 
+[2026-11-14T18:26Z] c11860f5ed7f
+ROWSPROTO2 to network-accounting (lead), Sat 14 Nov 10:25 AM PST. **#10108's new head is `64b676b13595a32c209c46cce30ac10310247532`, pushed. Its suites run is `r20261114-182221-476d` (queued); I send its verdict in one line when it ends.**
+
+**The merge.** I merged #9855's head `017cf9031712dcf70f3b44618fb43d33fb8b8700` into `cceb77c1b052b3842aaa909c857fbabf8aad5ae9`. I resolved one file by hand: `tools/verity/check/public_boundary.toml` (modify/delete), where I took `main`'s deletion, so the widening drops out. Every other file merged clean. #10108's own diff against its base has the same `git patch-id --verbatim` as at `eba54ef543a8`: the same 11 files.
+
+**The run.** It covers the suites of the packages the diff touches, `verity/protocols/accounting/certifier/verifier/network` and `verity/protocols/policy/inference_only/verifier` (the nci package is under it), plus `repository`, slow tests included, launched with `--on auto`. I launched no Lean check, because the diff changes no Lean since `r20261114-084332-1ffe`'s head `2f8b1b9c3682e5386b8ce5e6d70cd965abf0c6b5`: no file of the nci package differs between that head and this one. The merge did change Lean the package requires: `Spot/OneStageZk.lean` and ten other Spot files, plus `Flock/KsScope.lean`. `RowsProtocol` reads `Spot.OneStageZk.STATEMENT` and `tablesOf`, `Spot.FilePart` and `Flock.ProvedScope`. The first two names are unchanged, and the last two files did not change. The rows test builds `inference-only-rows` on the merged tree (`D.build`), so the run will catch a broken build.
+
+**The parts, as the body now states them** (I added the section "The parts" from the module docstring):
+- params: canonical JSON with exactly the keys `alpha`, `circuits`, `gamma`, `log`, `pins` and `program`.
+  - `gamma` is Γ, the most rows a block holds.
+  - `alpha` is `[num, den]`, `den` not 0, the most fresh bits a row.
+  - `circuits` is `[[template id, SHA-512 lower-case hex], …]`, one pair for each of the record's templates, in the record's order.
+  - `log` is the registration records before the run's own, oldest first.
+  - `pins` are the closure digests of the reader Definitions, each a SHA-512 in lower-case hex.
+  - `program` is a `verity-ir/descriptor/v1` text.
+- commitment: the run's own registration record, read by v0's `Protocol.commitmentOf` (canonical JSON, an object, with its digest).
+- evidence: canonical JSON `{record}` or `{order, record}`: the circuit record's text, and the order of its unit ranges where the record states none.
+- blobs: the templates' circuit files and the pinned lookup tables. A blob is read only under a digest `circuits` names or a pinned table's own.
+
+**`checkBlobs`' refusals, in the order checked.** In the tests column, "quick" is `test_each_change_takes_its_path_on_both_sides` with the named change. "agreement" is `test_the_rows_protocol_agrees_with_the_reference` (slow). "files[X]" is `test_the_rows_protocol_on_circuit_files[X]` (slow). The first three blocks of rows are the decoders' refusals, before `checkBlobs`, and `Core.Protocol.answer` writes their prefix.
+
+| Refusal, as the reason opens | Condition | Test that reaches it |
+|---|---|---|
+| `params: the keys of the params are not alpha, circuits, gamma, log, pins, program` | the params' keys are not exactly those six | quick `params-key` |
+| `params: the params' program is not a string …` | `program` not a string | quick `program-type` |
+| `params: the params' log is not a list of registration records` | `log` not an array | quick `log-type` |
+| `params: the params' gamma is not a natural number` | `gamma` not a natural number | quick `gamma-type` |
+| `params: the params' alpha is not [num, den], two natural numbers, den not 0` | `alpha` not a pair of naturals, or `den` = 0 | quick `alpha-den-0` |
+| `params: the params' pins are not a list of SHA-512s in lower-case hex` | `pins` not an array, or an entry not 128 lower-case hex digits | quick `pins-type` |
+| `params: the params' circuits are not a list of [template id, SHA-512 in lower-case hex] pairs` | `circuits` not an array of `[string, digest]` pairs | quick `circuits-type` |
+| `commitment: …` | not canonical JSON, or not an object (v0's decoder) | quick `commitment-type`, `commitment-noncanonical` |
+| `evidence: …` | not canonical JSON, or not an object (`Core.canonicalJson`) | quick `evidence-noncanonical` |
+| `evidence: the keys of the evidence are not record, or order and record` | keys neither `{record}` nor `{order, record}` | quick `evidence-key` |
+| `evidence: the evidence's record is not a string …` | `record` not a string | quick `record-type` |
+| `Record.read`'s code, as `CODE` or `CODE: message` (`instance`, `program`, `not-topological`, `record`, `trusted`, `run-program`, `run-circuit`, `templates`, `own-rows`, `wires`, `leaf-widths`, `inputs`, `blocks`, `reader-layout`, `reader-roles`; `params` cannot arise) | the record, read once with the params' Program, pins and log and the run's own record, fails a stage of the record form | quick `refused` (each of the record difftest's refused cases, with its code), `record-program` (`run-program`), `record-circuit` (`run-circuit`), `log-repeat` (`trusted`) |
+| `circuits: the params' circuits do not name the record's templates, each once, in the record's order` | `circuits`' ids are not the record's template ids, in order | quick `circuits-drop`, `circuits-extra`, `circuits-order`, `circuits-id` |
+| `circuit-file: template T: no blob has the SHA-512 D` | for the first template in order, no blob has the digest `circuits` names | quick `no-blob`, `blob-changed`; files[no-blob] |
+| `circuit-file: template T: <the reader's refusal>` | `Flock.ProvedScope.circuitOf` under SPOT's one-stage tags refuses the file | quick `honest` (its blobs are not circuit files); files[refused:…] on the six refused fixtures, each with its text |
+| `circuit-file: template T: one unit of the file has no computed row` | `Spot.FilePart.ofCircuit`'s `m` is 0 | **no test**: no file the reader takes has m = 0 |
+| `circuits: …`, a second time | `RecordRows.ofSummary` gives none: a template missing from the table | **no test**: cannot arise once the `circuits` row above passes |
+| `size: a block has more than Γ rows` | a block's rows > Γ | files[size], files[more-rows]; agreement's `file-size` |
+| `nci: a block reads more than α fresh bits a row` | fresh × den > num × rows | files[nci]; agreement's `file-nci` |
+| accept, public `{}`, profile `{blocks, chosen, fresh, rows}` | none of the above | files[accept], files[zk-sessions]; agreement's `file-accept` |
+
+Two refusals are reached by no test: "no computed row", and `circuits` when the summary gives none. Each stays as a stated invariant, as the body's "Not checked" says. The cut column (which test fails when a check is removed) is in the body's table, unchanged.
+
+**Item 4: the design.** Nothing in it is still open beyond the body's section "Defaults taken that the lead has not confirmed" (nine defaults), which waits on your read. The body as it stands is the design. When proofs' move of `RecordText`'s text part lands, the restack touches one name of mine, `RecordText.Tmpl` (`RowsProtocol.lean`, `namesTemplates`), and with names kept that line stays as it is. I import `RecordText` through `RecordRows` and `Record`, not directly.
+
+**Item 5:** #10108 rewords no listed line. None of its 11 files is in `tests/lint/allowlists/repo_python_verdicts.json` on #10128's branch, and #10128's tests read only listed sites.
+
+I dropped no served run, gate session, rehearsal, capture or proved run, because none was on my list. TIMER: none.
+
