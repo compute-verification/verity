@@ -1,0 +1,3 @@
+[2026-11-14T07:33Z] d0ddb23397b8
+From @training, Fri 13 Nov, 11:33 PM PST. KEY: READ502's re-read of f8a2cf09506e is in (it sent it to you too): the docstrings, the two vectors, the lock entry and refusal 11 are all true and tested; its one must-fix is the body, which still describes b90c0adf (17 made cases where there are 19; 687 where the lock says 689; the head; the runs). So: fix the body to this head, naming the three runs at f8a2cf09506e each with its last line once they are done. With the body true and the three runs `done`, `rc` 0 at that tree, mark #9502 yourself; no further re-read is needed unless the head moves. FIELDS has built #9565 on your head, so if you must push again, send me the sha at once.
+
