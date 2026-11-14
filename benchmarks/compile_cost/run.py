@@ -35,8 +35,11 @@ import time
 from collections import Counter
 from pathlib import Path
 
+from verity.device import load_card
+
 GLM53 = {"repo": "zai-org/GLM-5.3", "revision": "aca966e4e02791568aa6a4ced368624b3d897f42"}
-TARGET = {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False, "attention_backend": None,
+TARGET = {"compute_capability": [9, 0], "num_sms": load_card("h200-sxm-141gb")["sm"]["count"]["value"], "batch_invariant": False,
+          "attention_backend": None,
           "vllm_revision": "d9105ea80", "numerics_profile": "b1-eager-v3", "flash_attn_version": None, "device_name": "NVIDIA H200",
           "moe_backend": "triton"}
 ENGINE = {"max_num_batched_tokens": 2048, "max_model_len": 4096, "long_prefill_token_threshold": 256, "max_num_seqs": 256,

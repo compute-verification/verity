@@ -389,8 +389,6 @@ class ToyRecord:
         )
         from tests.observe import test_fold_synthetic as tfs
         self.tfs = tfs
-        if not tfs._real_memory_available():
-            tfs.install_stub_memory()
         self._orig = (list(tfs.SAMPLED), list(tfs.PROMPT))
         if prompt is not None:
             tfs.PROMPT[:] = prompt

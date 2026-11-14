@@ -18,7 +18,7 @@
 #                    party's (TRUSTED_SHA512 below, wipe_party.AUDITOR_KEYS's), so another challenger needs its own.
 #                    The pin is the deployment's, never read from the session it judges: set empty, or in a tree that
 #                    pins none, no key is pinned and the piece refuses. It decides only which session is accepted: the
-#                    record says trusted-host holds only under the key AUDITOR_KEYS pins for the challenger's host,
+#                    record says trusted-device holds only under the key AUDITOR_KEYS pins for the challenger's host,
 #                    and under any other pin reads a rehearsal with no bound
 #   WIPE_READS       the reads the gate's verb runs, which the leg holds the session to (5500)
 #   WIPE_NODE        the wiped server's id (this host's name, as served_verdicts.py record's --node defaults to)
