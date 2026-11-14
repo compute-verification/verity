@@ -29,7 +29,7 @@ each only after what its log holds before it is recorded (`FlipsAfterRecorded`),
 the log (`VerifierReadsLog`), then the probability over the challenger's flips that the verifier's coin `i` exists and
 its sample (`L.draw`) misses every block of a set of at least `K` blocks fixed before it is at most `L.miss K`. -/
 def SampleAfterRecorded : Prop :=
-  ∀ {U R : Type} (L : Law U) (n : Nat) (log : (Fin n → L.Ω) → Log R L.Ω) (vc : (Fin n → L.Ω) → List L.Ω)
+  ∀ {U R : Type} (L : SamplingDesign U) (n : Nat) (log : (Fin n → L.Ω) → Log R L.Ω) (vc : (Fin n → L.Ω) → List L.Ω)
     (i : Nat) (bad : Log R L.Ω → Finset U) (K : Nat),
     ChallengerLogsCoins log → FlipsAfterRecorded log → VerifierReadsLog vc log →
       Game.prCoin (fun ω => ∃ c, (vc ω)[i]? = some c ∧ K ≤ (bad ((log ω).before i)).card ∧

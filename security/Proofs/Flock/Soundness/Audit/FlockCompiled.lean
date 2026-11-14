@@ -187,7 +187,7 @@ theorem prob_sessionC (S : Finset (Fin n)) (R : Reg) (τ : Strategy (sessionC H 
       prob (fun out : OutC 𝔽 D => out.accepted = true) ((plan S R).game H E) (tabStrat H E plan τ) :=
   prob_map _ _ _ _
 
-variable {L : Law n}
+variable {L : SamplingDesign n}
 
 /-- **The compiled audit's analysis.** `X` is the committed transcript (the link theorem defines
 it), `decode` reads the witness, `Kr` is the extractor's rerun count, one for both terms. -/

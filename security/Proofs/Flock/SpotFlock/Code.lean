@@ -822,7 +822,7 @@ def pinOk (t : ℕ) (w : FlockDeploy.Raw) : Bool :=
   | none => false
 
 /-- **Template `t`'s part of the second stage's population** in a replay sample of `q` blocks: its `q · n_t` slots from
-`q · Σ_{t' < t} n_{t'}`, as `Select.secondLaw` lays out the cells, template by template. -/
+`q · Σ_{t' < t} n_{t'}`, as `Select.secondSamplingDesign` lays out the cells, template by template. -/
 def partAt (q t : ℕ) : Spot.SecondStage.Part :=
   ⟨h.names.getD t "", q * (h.reg.ns.toList.take t).sum, h.reg.ns.getD t 0⟩
 

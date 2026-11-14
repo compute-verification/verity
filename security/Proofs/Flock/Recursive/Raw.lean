@@ -63,7 +63,7 @@ ports `own`, the sample file `dj` and the record writer `wr` of the live session
 `rd`, and `hown`, are `ZkOuterD`'s at each typing of the session (`ht`, a setup `y₀` at table 0, the parse `hc` and the
 load `hpub`), which they read. -/
 structure ZkOuterR (mPts nv J : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Built c.unit)
-    (hscope : Layout.scopeOk c = true) (Lv : Law nv) where
+    (hscope : Layout.scopeOk c = true) (Lv : SamplingDesign nv) where
   I : Inputs
   own : Array Flock.Registered.Port
   dj : Finset (Fin nv) → Lean.Json
@@ -93,7 +93,7 @@ def castOut {J J' : ℕ} (h : J' = J) (mPts : ℕ) (o : LiveOutJ J' mPts) : Live
 
 /-- **Implications at every outcome of `liveJ`'s live audit bound probabilities**: at the registration the prover sends,
 each of the sampling design's samples and each output of the live session written by `wr`. -/
-theorem prob_auditLive_liveJ_mono {nv : ℕ} {Lv : Law nv} {Reg' : Type} {J mPts : ℕ} (dg : ByteArray → ByteArray)
+theorem prob_auditLive_liveJ_mono {nv : ℕ} {Lv : SamplingDesign nv} {Reg' : Type} {J mPts : ℕ} (dg : ByteArray → ByteArray)
     (N : ℕ) (wr : Finset (Fin nv) → Reg' → LiveOutJ J mPts → Exec.Transcript)
     (τ : Strategy (auditLive Lv Reg' (liveJ dg J mPts N wr))) {p q : Reg' × Finset (Fin nv) × Exec.Transcript → Prop}
     (h : ∀ ω o', p (τ.1, Lv.draw ω, wr (Lv.draw ω) τ.1 o') → q (τ.1, Lv.draw ω, wr (Lv.draw ω) τ.1 o')) :
@@ -108,7 +108,7 @@ theorem prob_auditLive_liveJ_mono {nv : ℕ} {Lv : Law nv} {Reg' : Type} {J mPts
 
 /-- **A live audit whose table counts are all `J` is the live audit of `J` tables**, its names carried across by the
 casts along the counts. -/
-theorem liveJ_sigma {nv : ℕ} (Lv : Law nv) {Reg' : Type} (dg : ByteArray → ByteArray) (J mPts N : ℕ)
+theorem liveJ_sigma {nv : ℕ} (Lv : SamplingDesign nv) {Reg' : Type} (dg : ByteArray → ByteArray) (J mPts N : ℕ)
     (wr : Finset (Fin nv) → Reg' → LiveOutJ J mPts → Exec.Transcript) (L : Finset (Fin nv) → Reg' → ℕ)
     (hL : ∀ S R, L S R = J) :
     (⟨auditLive Lv Reg' fun S R => (liveSession dg (L S R) mPts N).map fun o => wr S R (castOut (hL S R) mPts o),
@@ -143,7 +143,7 @@ theorem seqC_congr' {S : ℕ} {T α : Fin S → Type} {gs gs' : (j : Fin S) → 
 namespace ZkOuterR
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (dg : ByteArray → ByteArray) (N : ℕ)
+  {Lv : SamplingDesign nv} (x : ZkOuterR mPts nv J Reg' c hU hscope Lv) (dg : ByteArray → ByteArray) (N : ℕ)
 
 /-- V*'s live session at the history. -/
 abbrev game : Game (Reg' × Finset (Fin nv) × Exec.Transcript) := auditLive Lv Reg' (liveJ dg J mPts N x.wr)
@@ -289,14 +289,14 @@ theorem not_acceptsZKR_fresh (I : Inputs) (ht : I.tags.typed = false) (hTags : T
 
 /-- **The session refusing everything**: `z` with the own list `freshOwn` (`not_acceptsZKR_fresh`). -/
 noncomputable def ZkOuter.refuse {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
-    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (z : ZkOuter mPts nv J Reg' c hU hscope Lv) :
+    {hscope : Layout.scopeOk c = true} {Lv : SamplingDesign nv} (z : ZkOuter mPts nv J Reg' c hU hscope Lv) :
     ZkOuter mPts nv J Reg' c hU hscope Lv :=
   { z with
     own := freshOwn c
     hown := fun _ _ _ h => (not_acceptsZKR_fresh z.I z.ht z.hTags z.hcH _ h).elim }
 
 /-- A session of the verifier's circuit at one history, as the prover supplies it. -/
-abbrev VStmt.OuterR (Q : VStmt) (Reg' : Type) := ZkOuterR Q.mPts Q.nv Q.J Reg' Q.c Q.hU Q.hscope Q.law.live
+abbrev VStmt.OuterR (Q : VStmt) (Reg' : Type) := ZkOuterR Q.mPts Q.nv Q.J Reg' Q.c Q.hU Q.hscope Q.samplingDesign.live
 
 section Sessions
 
@@ -454,7 +454,7 @@ end Rounds
 
 section Transport
 
-variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {β : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {β : Type}
 
 /-- **The recursive prover's strategy with each outer session's strategy carried by `φ`**: the same registration,
 messages and coins. -/

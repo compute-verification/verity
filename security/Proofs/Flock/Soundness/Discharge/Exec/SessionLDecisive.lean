@@ -1032,26 +1032,26 @@ theorem batchedSessionL_decisive (H : List UInt8 → D) (E : Merkle.Enc (List �
 /-! ## The one-stage audit over it -/
 
 /-- **The audit can accept**, on every registration and every sample. -/
-theorem audit_reaches_accept (L : Law n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
+theorem audit_reaches_accept (L : SamplingDesign n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) (R : Reg) (ω : L.Ω) :
     Reaches (audit L Reg (batchedSessionL H E Lf plan)) (true, L.draw ω) :=
   ⟨R, ω, reaches_map (fun ok => (ok, L.draw ω)) (batchedSessionL_reaches_true H E Lf plan (L.draw ω) R)⟩
 
 /-- **The audit can reject**, on every registration and every sample where the plan has a table. -/
-theorem audit_reaches_reject (L : Law n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
+theorem audit_reaches_reject (L : SamplingDesign n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) (R : Reg) (ω : L.Ω)
     (hne : plan (L.draw ω) R ≠ []) :
     Reaches (audit L Reg (batchedSessionL H E Lf plan)) (false, L.draw ω) :=
   ⟨R, ω, reaches_map (fun ok => (ok, L.draw ω)) (batchedSessionL_reaches_false H E Lf plan (L.draw ω) R hne)⟩
 
 /-- **The audit is productive** when registrations exist. -/
-theorem audit_productive [Nonempty Reg] (L : Law n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
+theorem audit_productive [Nonempty Reg] (L : SamplingDesign n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts)) :
     Productive (audit L Reg (batchedSessionL H E Lf plan)) :=
   ⟨inferInstance, fun R ω => productive_map _ (batchedSessionL_productive H E Lf plan (L.draw ω) R)⟩
 
 /-- **The audit is decisive** when registrations exist and the plan has a table on every sample. -/
-theorem audit_decisive [Nonempty Reg] (L : Law n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
+theorem audit_decisive [Nonempty Reg] (L : SamplingDesign n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (hne : ∀ S R, plan S R ≠ []) :
     Decisive (audit L Reg (batchedSessionL H E Lf plan)) := by
@@ -1061,13 +1061,13 @@ theorem audit_decisive [Nonempty Reg] (L : Law n) (H : List UInt8 → D) (E : Me
     audit_reaches_accept L H E Lf plan R ω, audit_reaches_reject L H E Lf plan R ω (hne _ _)⟩
 
 /-- **A tile's audit is decisive**: the one-stage audit over the salted batched session of a one-table plan. -/
-theorem audit_tile_decisive [Nonempty Reg] (L : Law n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
+theorem audit_tile_decisive [Nonempty Reg] (L : SamplingDesign n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (T : Finset (Fin n) → Reg → TabSpec mPts) :
     Decisive (audit L Reg (batchedSessionL H E Lf fun S R => [T S R])) :=
   audit_decisive L H E Lf _ fun _ _ => List.cons_ne_nil _ _
 
 /-- **A tile's audit verdict is decisive**: `audit_tile_decisive` on the verdict alone. -/
-theorem audit_tile_decisive_verdict [Nonempty Reg] (L : Law n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
+theorem audit_tile_decisive_verdict [Nonempty Reg] (L : SamplingDesign n) (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
     (Lf : Merkle.Leaf (List 𝔽) Sl D H) (T : Finset (Fin n) → Reg → TabSpec mPts) :
     Decisive ((audit L Reg (batchedSessionL H E Lf fun S R => [T S R])).map Prod.fst) := by
   obtain ⟨R⟩ := ‹Nonempty Reg›

@@ -53,7 +53,7 @@ namespace FlockSoundness.Discharge.Recursion
 open Game Audit Refine StrictCR
 open scoped ENNReal
 
-variable {n : ℕ} {L : Law n} {Reg Cm Reg₂ Reg' : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}
+variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg₂ Reg' : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}
 
 theorem valueAt_of_some {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {vsrc : ValueSrc L Reg Cm Reg₂ I Vs} {R : Reg} {ω : L.Ω} {t : List (Cm × I.Coin)} {R₂ : Reg₂} {j : Fin S}
