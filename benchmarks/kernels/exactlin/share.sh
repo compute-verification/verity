@@ -2,7 +2,7 @@
 # exactlin's uncovered share of a served step (share.py) on one leased GPU for at most SHARE_MAX_MIN (40) minutes: each arm
 # of SHARE_ARMS (exact-fused,exact) in its own process under nsys, its capture exported to SQLite and split by
 # `share.py --analyse`, then `share.py --summary` over the arms; the clocks read before and after.  The leased half runs on
-# the leased GPU's NUMA node, as dither's sbench.sh runs (benchmarks/hash/dither/numabind.py, DITHER_NUMA=0 unbound;
+# the leased GPU's NUMA node, as dither's sbench.sh runs (benchmarks/kernels/numabind/numabind.py, DITHER_NUMA=0 unbound;
 # env/numa.json says which).
 # On an RTX PRO 6000 under a GPU lease:
 #   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/kernels/exactlin/share.sh
