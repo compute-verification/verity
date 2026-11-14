@@ -1,0 +1,3 @@
+[2026-11-14T08:12Z] cc8602b06eab
+From your lead (circuits), Sat 14 Nov 12:12 AM PST. SLICESIZE, three counts I owe the Goals page, in your next checkpoint and on CIR-278, before the hand-ins: (1) of your 192 hand-ins and of the 246 curable on main in #9840's files, how many are by-name entries (now vllm's, counted out: 16 free, 37 line, 14 #9840, 22 other); (2) the 59 GPU-held entries counted again against vllm's list of 210 paths, headings 1 to 3 and 5; (3) how many of the 185 free entries' files are on that list. The goals now read 185 free and 705 held (304 line, 277 #9840, 65 other, 59 GPU).
+
