@@ -30,7 +30,7 @@ def _commit(row: bytes) -> bytes:
 
 
 def _outcome(unit: P.SessionUnit) -> V.UnitOutcome:
-    return V.UnitOutcome(unit.definition.id, True, tuple(_commit(r) for r in unit.rows),
+    return V.UnitOutcome(unit.definition.id, True, tuple(_commit(r) for r in (*unit.rows, *unit.outputs)),
                          tuple((p, r) for p, (r, kind) in enumerate(zip(unit.rows, unit.kinds)) if kind == "known"))
 
 
@@ -73,7 +73,7 @@ def _row(o: V.UnitOutcome, p: int, value: bytes) -> V.UnitOutcome:
 
 @pytest.mark.parametrize("break_, reason", [
     (lambda p: dataclasses.replace(p, signature=_row(p.signature, 1, bytes(64))), "the signed message is not"),
-    (lambda p: dataclasses.replace(p, rounds=p.rounds[:3] + (_row(p.rounds[3], 1, p.digest.rows[3]),) + p.rounds[4:]),
+    (lambda p: dataclasses.replace(p, rounds=p.rounds[:3] + (_row(p.rounds[3], 1, p.digest.rows[-1]),) + p.rounds[4:]),
      "round 3's record is not"),
     (lambda p: dataclasses.replace(p, rounds=p.rounds[:-1]), "the session's proofs are not"),
     (lambda p: dataclasses.replace(p, digest=_replace(p.digest, accepted=False)), "the signed digest's proof is not"),

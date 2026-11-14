@@ -2,15 +2,17 @@
 the clear; it reads the outcomes of ``k + 2`` proofs, linked only by their committed rows.
 
     unit 0      PousSessionSig_v1{N, W, H}          (key, m, sig): the signature over m verifies under the key
-    unit 1      PousSessionDigest_v1{k, HEAD, LIMIT} (head, domain, ctx, r0 ... r⌈k/2⌉−1, m): m is the digest the
-                signature signs over the header and the records, and every record names its round and is on time
+    unit 1      PousSessionDigest_v1{k, HEAD, LIMIT} (head, domain, ctx, r0 ... r⌈k/2⌉−1) -> (ok, m, r0 ... r⌈k/2⌉−1):
+                m the digest the signature signs over the header and the records, ok that every record names its
+                round and is on time, and the records rows as read
     unit j + 2  PousRound_v1{block_bytes, j mod 2}  (row, records, j, i): record j names round j and index i and holds the
                 digest of the registered row at i
 
-(`pous.prover.session_circuit`). A unit's outcome is its program, whether its proof was accepted, each parameter's
-committed row as the proof system stages it (one ``hm96-sha512/row/v2`` row per parameter), and the values of the
-parameters that are public in its proof, which this module computes again from the commitment, the openings and the key.
-The links: unit 0's ``m`` is unit 1's ``m``, and unit j + 2's records row is unit 1's row ⌊j/2⌋. `check_session` is
+(`pous.prover.session_circuit`). A unit's outcome is its program, whether its proof was accepted with its ok output 1,
+each parameter's committed row and then each output's as the proof system stages them (one ``hm96-sha512/row/v2`` row
+each, `windows.interface.unit_rows`), and the values of the parameters that are public in its proof, which this module
+computes again from the commitment, the openings and the key. The links, which the window's wires make: unit 0's ``m``
+is unit 1's output m, and unit j + 2's records row is unit 1's records output ⌊j/2⌋. `check_session` is
 `memory_challenger.verdict` with the session's rows read only through those proofs; `run.check_at` calls
 `memory_challenger.verdict` until PoUS's verifier switches to it.
 """
@@ -102,8 +104,9 @@ def known_reasons(commitment: mc.SessionCommitment, openings: Sequence[mc.CoinOp
     domain = mc._domain(mc.RECORD_BINDING, commitment.session, commitment.k).domain_id
     ctx = _field(_ROLE) + public_key[:16] + _field(_field(commitment.session))
     by_j = _by_j(openings)
+    head = _head(commitment)
     want = [(proofs.signature, "the signature's", {0: public_key}),
-            (proofs.digest, "the signed digest's", {0: _head(commitment), 1: domain, 2: ctx})]
+            (proofs.digest, "the signed digest's", {0: head + bytes(len(head) % 2), 1: domain, 2: ctx})]
     for j, out in enumerate(proofs.rounds):
         o = by_j.get(j)
         if o is not None:
@@ -118,17 +121,17 @@ def known_reasons(commitment: mc.SessionCommitment, openings: Sequence[mc.CoinOp
 
 
 def link_reasons(commitment: mc.SessionCommitment, proofs: SessionProofs) -> tuple[str, ...]:
-    """The committed rows that link the proofs: unit 0's m (its row 1) is unit 1's m (its last row), and round j's records
-    row (its row 1) is unit 1's row 3 + ⌊j/2⌋."""
+    """The committed rows that link the proofs: unit 0's m (its row 1) is unit 1's output m (its row 4 + T, T = ⌈k/2⌉),
+    and round j's records row (its row 1) is unit 1's records output ⌊j/2⌋ (its row 5 + T + ⌊j/2⌋)."""
     reasons: list[str] = []
-    k, d = commitment.k, proofs.digest.rows
-    if len(proofs.rounds) != k or len(d) != 4 + _rows(k) or len(proofs.signature.rows) != 3:
+    k, d, t = commitment.k, proofs.digest.rows, _rows(commitment.k)
+    if len(proofs.rounds) != k or len(d) != 5 + 2 * t or len(proofs.signature.rows) != 4:
         return (f"the session's proofs are not one signature's, one signed digest's over {_rows(k)} records rows and "
                 f"{k} rounds'",)
-    if proofs.signature.rows[1] != d[-1]:
+    if proofs.signature.rows[1] != d[4 + t]:
         reasons.append("the signed message is not the signed digest's")
     for j, out in enumerate(proofs.rounds):
-        if len(out.rows) != 4 or out.rows[1] != d[3 + j // 2]:
+        if len(out.rows) != 5 or out.rows[1] != d[5 + t + j // 2]:
             reasons.append(f"round {j}'s record is not the signed digest's")
     return tuple(reasons)
 
