@@ -11,7 +11,10 @@ import Mathlib.Basic.ENNReal.Real
 For a session it accepts and certifies, `MemoryChallenger.WipeProtocol.check` (`verity/wipe/v0`, whose verdict is
 `StreamedWipe.verdict`) publishes `foreign_bits = 512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `eps = 2^-128`
 (`certify`): `n` labels, `k` timed reads, `r = ratio k`, `R` the declared memory past the fill, `E` the egress count
-the evidence gives the check (`WipeProtocol.Evidence.egress`; no session signs one), `egress_mib` whole MiB.
+the evidence gives the check (`WipeProtocol.Evidence.egress`; no session signs one), `egress_mib` whole MiB. No network
+certifier signs `E` yet, so `check` publishes `uncounted` (`certify` at `EGRESS_MAX_UNITS`) for every session it
+accepts and certifies none: until the check that composes the wipe with the network certifier, no session meets this
+hypothesis.
 `WipeSurvivorBound` says that every prover strategy `τ` of the
 device model (`Accounting.Wipe.Strategy`), with the labels `prf K` of the challenger's key `K`, meets the survivor bound
 (`Verity.Wipe.SurvivorBound`) at `foreign_bits` and

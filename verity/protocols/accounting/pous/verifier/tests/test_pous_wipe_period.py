@@ -1,13 +1,15 @@
 """`wipe_period` and `wipe_party`: one wipe in one process, on an injected clock, and the memory challenger's side and
 the prover's over a socket pair, each verdict of `verity/wipe/v0` (the Lean's is `MemoryChallenger.WipeProtocol`,
-difftested in `verity/protocols/accounting/pous/device/lean/tests/test_wipe_protocol.py`): an honest segment certified at
-`StreamedWipeMeetsReads`' threshold at the challenger's `k` (11,709,069 + E bits at `k = 2152`, `r = 24`) with `E` the
-egress its evidence gives, its bound vacuous when the evidence gives none, an egress out of range rejected, a prover
+difftested in `verity/protocols/accounting/pous/device/lean/tests/test_wipe_protocol.py`): an honest segment accepted
+and not certified (`uncounted`) whatever egress its evidence gives, since no network certifier signs that count, with
+the count named as the evidence writer's (`certify` computes `StreamedWipeMeetsReads`' threshold at the challenger's
+`k`, 11,709,069 + E bits at `k = 2152`, `r = 24`, for the check that composes the wipe with the network certifier),
+an egress out of range rejected, a prover
 keeping one label past it and a late read rejected, a session the prover left undecided; the challenger chooses `k`
 (`wipe_party --reads`) and refuses a request that names it. The certificate is checked at `k = 2906`, the H200's
 (`StreamedWipeMeetsH200`), and against the streamed wipe's own bound. The leg runs
 whole against a challenger side on a host of its own (`wipe_side.py`), its record naming what the bound doesn't cover
-(the links leaving the node, the undeclared tiers, an uncounted egress, what a joint store's disks leave outside the
+(the links leaving the node, the undeclared tiers, the egress, what a joint store's disks leave outside the
 boundary), the reads and the session's window. The verifier trusts the one key its pin names (`wipe.trusted_sha512`): a
 session signed under another is rejected, and a challenger on its own host with no key pinned is refused. The record
 says `trusted-host` holds only for a session signed under the key `wipe_party.AUDITOR_KEYS` pins for the challenger's
@@ -50,16 +52,29 @@ SEGMENT_2152 = 11_709_069
 """`512·(⌈2^19/24⌉ − 1) + 2^19 + 11 + 130`: one segment's threshold at `k = 2152`, `r = 24`."""
 
 
-def test_an_honest_segment_is_certified_at_its_reads() -> None:
+#: what every accepted segment publishes (`uncounted`): `certify` at `EGRESS_MAX_UNITS`, its bound vacuous
+VACUOUS = {"certified": False, "egress_mib": sw.EGRESS_MAX_UNITS, "eps": "0", "foreign_bits": M, "k": W.READS,
+           "memory_bits": M, "r": 24}
+
+
+def writer(egress_mib: int) -> str:
+    return (f"the egress count is {egress_mib} MiB, the evidence writer's, which no network certifier signed: no wipe is "
+            "certified on it until the check that composes the wipe with the network certifier")
+
+
+def test_an_honest_segment_is_accepted_and_not_certified() -> None:
+    """The evidence's 3 MiB is the evidence writer's count, which no network certifier signed: the wipe is accepted
+    and publishes `uncounted`, not `certify` at 3 MiB, which is what certifying it would publish."""
     w = _run(W.params_for(), egress_mib=sw.egress_units(3 * sw.EGRESS_UNIT_BITS - 5))
     key, = w.case["params"]["trusted"]
     assert w.verdict == "accept" and w.report == {"ended": sw.COMPLETE, "host": "n0", "reads": W.READS,
                                                   "key_sha512": hashlib.sha512(bytes.fromhex(key)).hexdigest(),
                                                   "key_pinned": False}
-    assert w.answer["public"] == {"certified": True, "egress_mib": 3, "eps": f"1/{2 ** 128}",
-                                  "foreign_bits": SEGMENT_2152 + 3 * sw.EGRESS_UNIT_BITS, "k": W.READS,
-                                  "memory_bits": M, "r": 24}
-    assert w.answer["profile"]["gaps"] == [] and w.answer["profile"]["tiers"] == [[W.TIER, 1 << 25]]
+    assert w.answer["public"] == VACUOUS == W.uncounted(W.params_for())
+    assert W.certify(W.params_for(), 3) == {"certified": True, "egress_mib": 3, "eps": f"1/{2 ** 128}",
+                                            "foreign_bits": SEGMENT_2152 + 3 * sw.EGRESS_UNIT_BITS, "k": W.READS,
+                                            "memory_bits": M, "r": 24}
+    assert w.answer["profile"]["gaps"] == [writer(3)] and w.answer["profile"]["tiers"] == [[W.TIER, 1 << 25]]
     assert w.answer["profile"]["certificate"] == {"eps": f"1/{2 ** 128}", "max_reads": W.MAX_READS, "outside_bits": 0,
                                                   "r": 24, "reads": W.READS}
     evidence = json.loads(bytes.fromhex(w.case["evidence"]))
@@ -70,17 +85,22 @@ def test_an_honest_segment_is_certified_at_its_reads() -> None:
 
 def test_an_uncounted_egress_bounds_nothing() -> None:
     """With no egress in the evidence the check takes `EGRESS_MAX_UNITS`: the wipe is accepted and not certified, as
-    it is when the evidence says `EGRESS_MAX_UNITS` itself; one MiB less is certified."""
-    vacuous = {"certified": False, "egress_mib": sw.EGRESS_MAX_UNITS, "eps": "0", "foreign_bits": M, "k": W.READS,
-               "memory_bits": M, "r": 24}
+    it is when the evidence says `EGRESS_MAX_UNITS` itself, and its gap says the count bounds nothing."""
     gaps = [f"the egress count is {sw.EGRESS_MAX_UNITS} MiB, outside 0 to {sw.EGRESS_MAX_UNITS - 1}: it bounds nothing"]
     for egress in (None, sw.EGRESS_MAX_UNITS):
         w = _run(W.params_for(), egress_mib=egress)
-        assert w.verdict == "accept" and w.answer["public"] == vacuous and w.answer["profile"]["gaps"] == gaps
+        assert w.verdict == "accept" and w.answer["public"] == VACUOUS and w.answer["profile"]["gaps"] == gaps
         assert json.loads(bytes.fromhex(w.case["evidence"]))["egress_mib"] == egress
     assert W.egress_of(None) == sw.EGRESS_MAX_UNITS and W.egress_of(0) == 0
-    last = _run(W.params_for(), egress_mib=sw.EGRESS_MAX_UNITS - 1)
-    assert last.verdict == "accept" and last.answer["public"]["certified"] and last.answer["profile"]["gaps"] == []
+
+
+@pytest.mark.parametrize("egress", [0, sw.EGRESS_MAX_UNITS - 1])
+def test_a_count_in_range_certifies_nothing(egress: int) -> None:
+    """Every count from 0 to `EGRESS_MAX_UNITS − 1`, 0 included, is the evidence writer's: the wipe is accepted, not
+    certified, and its gap names the count (the Lean's `zero-egress` is the 0)."""
+    w = _run(W.params_for(), egress_mib=egress)
+    assert w.verdict == "accept" and w.answer["public"] == VACUOUS and w.answer["profile"]["gaps"] == [writer(egress)]
+    assert W.writer_gap(egress) == [writer(egress)] and W.writer_gap(sw.EGRESS_MAX_UNITS) == W.writer_gap(-1) == []
 
 
 @pytest.mark.parametrize("egress", [-1, -(1 << 40), sw.EGRESS_MAX_UNITS + 1, 10 ** 15])
@@ -204,7 +224,8 @@ def test_the_split_wipe(how: str) -> None:
     want = {"honest": "accept", "foreign": "reject", "left": "undecided"}[how]
     assert a["verdict"] == want, a
     if how == "honest":
-        assert c.ended == sw.COMPLETE and answered == W.READS and a["public"]["egress_mib"] == 0
+        assert c.ended == sw.COMPLETE and answered == W.READS and a["public"] == W.uncounted(SMALL)
+        assert a["profile"]["gaps"][-1] == writer(0)
     elif how == "foreign":
         assert c.ended == sw.WRONG and answered == len(c.batches)
     else:
@@ -320,7 +341,7 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     assert record["window"]["challenger"] == record["report"]["window"] and set(record["window"]["prover"]) == {
         "clock", "t0", "t1"}
     gaps = record["uncertified"]
-    assert not any(g.startswith("key custody") for g in gaps) and gaps[0].startswith("egress: uncounted, the check was")
+    assert not any(g.startswith("key custody") for g in gaps) and gaps[0] == UNCOUNTED
     assert any(g.startswith("tier host-dram: the host's DRAM outside the declared tier (") for g in gaps)
     assert [g.split(":")[0] for g in gaps if g.startswith("link ")] == ["link control", "link challenger"]
     s = W.summary(record)
@@ -352,19 +373,45 @@ def test_the_leg_refuses_a_session_at_other_reads(tmp_path, monkeypatch) -> None
     assert extras == [("--reads", "5231")]
 
 
+UNCOUNTED = ("egress: uncounted, the check was given no network certifier's count over the session, so the bound is "
+             "vacuous")
+
+
+def writers(egress_mib: int) -> str:
+    return (f"egress: {egress_mib} MiB, the evidence writer's count, which no network certifier signed, so the check "
+            "certifies no wipe on it until the check that composes the wipe with the network certifier")
+
+
+def test_a_pinned_session_with_a_zero_count_is_not_certified(tmp_path, monkeypatch) -> None:
+    """A session signed under the challenger host's pinned key, with period.json's `wipe.egress_bits = 0`: the premise
+    holds and the count is 0, which no network certifier signed, so the wipe is accepted and not certified, and the
+    record names the egress as the evidence writer's count."""
+    monkeypatch.setitem(WP.AUDITOR_KEYS, "auditor", wipe_side.key_sha512())
+    out = tmp_path / "out"
+    answer = W.leg(_side(tmp_path, monkeypatch, {"egress_bits": 0}), "n0", out)
+    assert answer["verdict"] == "accept", answer
+    assert WP.holds(answer["profile"]["placement"]) and answer["public"] == VACUOUS
+    assert json.loads(bytes.fromhex(json.loads((out / "wipe.case.json").read_text())["evidence"]))["egress_mib"] == 0
+    gaps = json.loads((out / "wipe.json").read_text())["uncertified"]
+    assert gaps[0] == writers(0) and not any(g.startswith("key custody") for g in gaps)
+    assert answer["profile"]["gaps"] == [writer(0)]
+
+
 def test_the_periods_egress_goes_to_the_check_and_never_to_the_challenger(tmp_path, monkeypatch) -> None:
     """period.json's `wipe.egress_bits` is evidence: the check is given it in whole MiB, wherever the
-    challenger runs, and the challenger's command names no egress. The check publishes `certify` at it."""
+    challenger runs, and the challenger's command names no egress. The check certifies nothing on it and the record
+    names it as the evidence writer's count."""
     period = _side(tmp_path, monkeypatch, {"egress_bits": 3 * sw.EGRESS_UNIT_BITS - 5})
     extras, of = [], WP.side_of
     monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): extras.append(extra) or of(doc, node, d, extra))
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out)
     assert extras == [()]
-    assert answer["verdict"] == "accept" and answer["public"] == W.certify(W.params_for(), 3) and answer["public"]["certified"]
+    assert answer["verdict"] == "accept" and answer["public"] == VACUOUS
     evidence = json.loads(bytes.fromhex(json.loads((out / "wipe.case.json").read_text())["evidence"]))
     assert evidence["egress_mib"] == 3 and "egress_bits" not in evidence["signed"]
-    assert not any(g.startswith("egress") for g in json.loads((out / "wipe.json").read_text())["uncertified"])
+    assert [g for g in json.loads((out / "wipe.json").read_text())["uncertified"] if g.startswith("egress")] == [
+        writers(3)]
 
 
 UNTRUSTED = "the session is signed by a key that is not a trusted memory challenger's"

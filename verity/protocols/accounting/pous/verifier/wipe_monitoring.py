@@ -2,7 +2,9 @@
 from one accepted wipe's answer as `wipe_period.certify` publishes it: at most `foreign_bits` of the declared tiers'
 `memory_bits` hold anything but the fill, except with `eps` plus the wipe's labels' and coins' PRF advantage (SHA-512
 as PRF: not priced, not assumed). `eps` is 2^-128 when the bound covers the session; when it doesn't, `foreign_bits` is
-`memory_bits` and `eps` 0, the vacuous statement.
+`memory_bits` and `eps` 0, the vacuous statement. `verity/wipe/v0` publishes the vacuous statement for every wipe it
+accepts (`wipe_period.uncounted`), since no network certifier signs its evidence's egress count, so a run's own answer
+pools nothing until the check that composes the wipe with the network certifier publishes `certify` at a count.
 
 A deployment of `machines` machines, each wiped every `cadence_s` seconds (`CADENCE_S`, a day, by default) as this one
 was, has T = machines·⌊period/cadence_s⌋ wipes in a period, each on the memory challenger's own live coins, against one
@@ -21,7 +23,7 @@ No number here prices a PRF's advantage, and none assumes it away. The table say
 by it, in the same closing words (`UNPRICED`).
 
 `short_sessions` is PoUB's too (`remote_bandwidth.monitoring`). The periods and δs are the reporting grid's
-(`verity.protocols.reporting`), and T is the core's `block_count` (`verity.periods`).
+(`verity.protocol`'s `MONITORING_PERIODS` and `DELTAS`), and T is its `block_count`.
 
 An uncounted wipe, one whose check was given no egress count, stays vacuous: `counted` refuses every `wipe-egress/v1`
 record (`REFUSED`), because the memory challenger signs its session's times on its raw monotonic clock and a record's
@@ -43,8 +45,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, NoReturn
 
-from verity.periods import block_count
-from verity.protocols.reporting import DELTAS, PERIODS
+from verity.protocol import DELTAS, MONITORING_PERIODS, block_count
 
 from . import wipe_period
 
@@ -144,7 +145,7 @@ def table(answer: Mapping[str, Any], machines: int, cadence_s: int = CADENCE_S, 
         return head | {"periods": None, "why": f"the wipe's bound is vacuous (foreign_bits = memory_bits): {gaps}"}
     eps = Fraction(answer["public"]["eps"])
     periods = {}
-    for name, seconds in PERIODS:
+    for name, seconds in MONITORING_PERIODS:
         per_machine, t = block_count(seconds, cadence_s), block_count(seconds, cadence_s, machines)
         row: dict[str, Any] = {"seconds": seconds, "wipes": t, "wipes_per_machine": per_machine}
         if t == 0:

@@ -10,9 +10,10 @@ is `verity/wipe/v0`'s, under S1's LMS; `test_answer` the test signers' protocol'
 
 `build(m, seed)` makes one wipe with the change `m` (`EXPECT`), signed by the memory challenger's tests' key at S1's
 deployed parameters (`mc_cases.deployed_signer`) so that `verity/wipe/v0` itself takes it: an honest wipe at a small fill
-and `READS` reads, one 32 MiB segment at `READS` reads and one at `REMOTE_READS` with a MiB declared past the fill (each
-accepted and certified at `StreamedWipeMeetsReads`' threshold for its `k`, its evidence giving an egress count), an
-honest wipe whose evidence gives no egress (accepted and not certified), one whose evidence gives an egress outside 0 to
+and `READS` reads, one 32 MiB segment at `READS` reads and one at `REMOTE_READS` with a MiB declared past the fill, and
+an honest wipe whose evidence gives an egress of 0 (each accepted and not certified, its evidence giving an egress count
+that no network certifier signs), an honest wipe whose evidence gives no egress (accepted and not certified), one whose
+evidence gives an egress outside 0 to
 `EGRESS_MAX_UNITS` (rejected), a prover keeping one
 label past that threshold of foreign content, a read past its deadline, a session the prover left before it ended
 (unsigned), a commitment of another server or session, an untrusted key, a record edited after it was signed, and
@@ -146,7 +147,7 @@ def wipe_case(commitment: sw.WipeCommitment, signed: sw.SignedWipe | None, trust
 
 
 EXPECT = {
-    "honest": ACCEPT, "segment": ACCEPT, "reads": ACCEPT, "uncounted": ACCEPT,
+    "honest": ACCEPT, "segment": ACCEPT, "reads": ACCEPT, "zero-egress": ACCEPT, "uncounted": ACCEPT,
     "foreign": REJECT, "late": REJECT, "other-server": REJECT, "other-session": REJECT, "untrusted": REJECT,
     "tampered": REJECT, "egress-range": REJECT,
     "unsigned": UNDECIDED,
@@ -171,6 +172,8 @@ def _build(m: str, seed: int) -> dict:
     egress: int | None = sw.egress_units(r.randrange(1, 4 << 23))
     if m == "uncounted":
         egress = None
+    elif m == "zero-egress":
+        egress = 0
     elif m == "egress-range":
         egress = r.choice([-1, -1 - r.randrange(1 << 20), sw.EGRESS_MAX_UNITS + 1, 10 ** 15])
     if m == "foreign":

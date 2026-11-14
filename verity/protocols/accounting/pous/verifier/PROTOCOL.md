@@ -513,12 +513,12 @@ is neither empty nor 128 lowercase hex digits; the Lean judge refuses a signed s
 
 **The egress.** The session signs no egress count. `verity/wipe/v0`'s check takes one as evidence beside the signed
 session: `{"egress_mib": N | null, "signed": …}`, `N` in whole MiB as `egress_units` gives them (rounded up,
-saturating at `EGRESS_MAX_UNITS = 2^15 − 1`). That one value is the `E` its public output is computed at
-(`certify`). With `null` the check takes `EGRESS_MAX_UNITS`, so the wipe is accepted and not certified; a value outside
-0 to `EGRESS_MAX_UNITS` is rejected. The wipe's check holds the value to nothing: whoever writes the evidence gives
-it. That it is the network certifier's count over the span between the session's start and end marks is what the
-check composing the wipe with the network certifier establishes, and until it does, C6 below is a premise about the
-evidence.
+saturating at `EGRESS_MAX_UNITS = 2^15 − 1`), with `null` taken as `EGRESS_MAX_UNITS`; a value outside 0 to
+`EGRESS_MAX_UNITS` is rejected. The wipe's check holds the value to nothing: whoever writes the evidence gives it. So
+it computes no bound at it: an accepted wipe publishes `certify` at `EGRESS_MAX_UNITS` (`uncounted`), not certified,
+and its profile names the value as the evidence writer's. That the value is the network certifier's count over the
+span between the session's start and end marks is what the check composing the wipe with the network certifier is to
+establish, and that check is what is to publish `certify` at it.
 
 The verdict a caller records is the Lean's: `MemoryChallenger.StreamedWipe.verdict`, the executable
 `streamed-wipe-verdict`, which `wipe_verdict.judge` (beside the Lean package) sends the signed session, the commitment,
@@ -548,8 +548,8 @@ indices before it. Batch sizes above 1 are implemented and timed, but not covere
 and the Python's alike, rejects such a session however it ran (`batch size B is uncovered: …`).
 
 **What is public.** The commitment (protocol structure, with the server's declared tiers: the model's size), the
-verdict (`Verdict.public()`) and the evidence's egress in whole MiB, 0 to `2^15 − 1` (the protocol's outputs, 16 bits
-in all), and the coins once the session is signed (`WipeMemoryChallenger.coins()`, the verifier's samples). The signed
+verdict (`Verdict.public()`) and the evidence's egress in whole MiB, 0 to `2^15 − 1`, in the profile (the protocol's
+outputs, 16 bits in all), and the coins once the session is signed (`WipeMemoryChallenger.coins()`, the verifier's samples). The signed
 session (its start mark, its times and its batch records) is witness, as a memory-challenger
 session is: the prover proves `verdict` of it through the proof system, and only the verdict is published. The marks
 make nothing new public: the start message is a digest of the commitment, which is public already, and the end message
@@ -603,11 +603,16 @@ is 38,902,167,181 bits at the same `r` and `k`. A fill that leaves memory out
 counts it in `R` in full, so the same 5 GB needs a larger `r`: what an accepted session certifies is the threshold at
 its own `N` and `R`.
 
-`verity/wipe/v0` publishes this threshold at the session's `k`, which the memory challenger chooses (`wipe_party
+`certify` computes this threshold at the session's `k`, which the memory challenger chooses (`wipe_party
 --reads`, 2152 by default) and its commitment names, at `r = ratio(k)`, the largest `r` the condition allows, with `R`
 every declared tier's bytes past the fill (`wipe_period.certify`, `MemoryChallenger.WipeProtocol.certify`; from 1 to
 `MAX_READS = 2^17` reads). One 32 MiB segment at `k = 2152` (`r = 24`) is 11,709,069 bits plus the egress, under the
 family's `⌈M/19⌉ = 14,128,182`; the H200 filled whole at `k = 2906` is `StreamedWipeMeetsH200`'s figure.
+
+No network certifier signs the evidence's egress count yet, so `verity/wipe/v0` computes that threshold and publishes
+none: an accepted session publishes `certify` at `EGRESS_MAX_UNITS` (`uncounted`), `certified` false and the bound
+vacuous, whatever count the evidence names, and its profile names that count as the evidence writer's (`writerGap`,
+`wipe_period.writer_gap`). The check that composes the wipe with the network certifier is what is to certify it.
 
 **What it rests on.** No named assumption. The PRF enters as the advantage term in the conclusion, which C3 bounds for
 an efficient prover. The physical premises are the game's shape, and the deployment must make them true:

@@ -468,7 +468,8 @@ private theorem wpre_nil (schemes : Schemes) (trusted : List ByteArray) (s : Str
   exact ite_eq_left ht
 
 /-- The compiled check accepts a signed session that passes each of the verdict's checks, on the period's server and
-session, with an egress count in the evidence within 0 to `EGRESS_MAX_UNITS`. -/
+session, with an egress count in the evidence within 0 to `EGRESS_MAX_UNITS`, publishing `certify` at
+`EGRESS_MAX_UNITS`. -/
 private theorem check_accepts (p : WipeProtocol.Params) (c : StreamedWipe.Commitment) (e : WipeProtocol.Evidence)
     (s : StreamedWipe.Signed) (hsv : c.server = p.server) (hss : c.session = p.session) (hse : e.signed = some s)
     (he0 : 0 ≤ e.egress) (he1 : e.egress ≤ StreamedWipe.EGRESS_MAX_UNITS)
@@ -481,7 +482,8 @@ private theorem check_accepts (p : WipeProtocol.Params) (c : StreamedWipe.Commit
         s.batches[b].count = min (c.params.batch : Int) ((c.params.k : Int) - s.batches[b].first) ∧
         s.batches[b].wrong = 0 ∧ 0 ≤ s.batches[b].elapsedNs ∧ s.batches[b].elapsedNs ≤ (c.params.limitNs : Int) ∧
         (b = 0 → s.fillEndNs ≤ s.batches[b].sendNs)) :
-    WipeProtocol.protocol.check p c e = .accept (WipeProtocol.certify c.params e.egress) (c.params, e.egress) := by
+    WipeProtocol.protocol.check p c e =
+      .accept (WipeProtocol.certify c.params StreamedWipe.EGRESS_MAX_UNITS) (c.params, e.egress) := by
   have hv : StreamedWipe.verdict SCHEMES p.trusted.toList s c =
       (MemoryChallenger.StreamedWipe.Findings.mk #[], Core.Verdict.accept) := by
     rw [wverdict_eq, wpre_nil _ _ s c hk hcm hcov hend hsize,

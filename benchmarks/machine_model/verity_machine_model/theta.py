@@ -200,7 +200,7 @@ def has(data: Path) -> bool:
 def _reader(p: Path, cards: dict):
     """`read(v, key)`: a table's (value, grade, source), its `card` line's (every entry it names a ceiling of its card:
     `cards[""]` for `PATH`, `cards["host"]` for `host:PATH`) or its own `key`, `grade` and `source`."""
-    from verity.hardware.cards import number   # here: only a reader of the card needs verity
+    from verity.device import number   # here: only a reader of the card needs verity
 
     def entry(tok: str) -> tuple[str, str, dict]:
         which, _, path = tok.rpartition(":")
