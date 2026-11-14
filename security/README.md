@@ -219,7 +219,7 @@ arithmetic, and the range T_max of computation the claim rules out. Information 
 through preparation that isn't charged. The setting does not say that θ can't produce an acceptable model cheaply: that
 is the question.
 
-**Coverage of efficient methods** (`InferenceOnly.Assumptions.CoversEfficientMethods`). Let Core(A, x) say that the
+**Coverage of efficient methods** (`Slowdown.Assumptions.CoversEfficientMethods`). Let Core(A, x) say that the
 computation meets the premises of one of part 2's assemblies at the block budgets and carries at least its minimum
 weighted total Ω_*. Uniformly over the programs, the initial information and the experiment,
 
@@ -410,7 +410,7 @@ $$ \mathrm{slowdown} \;\ge\; \frac{\Omega_*}{C_{\mathrm{ref}}\,\big[\bar\zeta\,f
 
 and the bound holds except with probability η + δ: an accepted run reaches the target in less fleet-time only if it
 lacks the covered structure, which coverage allows below T_max with probability at most η
-(`InferenceOnly.Guarantees.CapabilityFloor`), or lies outside 𝒜, which protocol soundness allows with probability at most δ
+(`Slowdown.Guarantees.CapabilityFloor`), or lies outside 𝒜, which protocol soundness allows with probability at most δ
 (part 3). Let Ω_ref be the reference's count in the same convention and ζ_ref = Ω_ref/C_ref. Under the required-count
 floor Ω_* ≥ Ω_ref/α,
 
@@ -450,7 +450,7 @@ None of these is assumed silently; each would restate the conclusion:
 |---|---|---|
 | The actual circuit | `Accounting.Placed`, `Accounting.Placed.region` | Defined |
 | Registered objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.RegisteredCircuit`, `Verity.Committed`; the site and its registration log, `Verity.Site` and `Verity.Registration`; B, a_j and loc_j not yet in Lean | Partly defined |
-| Coverage | `InferenceOnly.Assumptions.CoversEfficientMethods` | A named assumption in the lock; Core not yet read off a run's circuit; untested |
+| Coverage | `Slowdown.Assumptions.CoversEfficientMethods` | A named assumption in the lock; Core not yet read off a run's circuit; untested |
 | Lemma 1 | `Verity.Guarantees.BlockDescription` | Proved |
 | Information premises | `Slowdown.Assumptions.DescriptionHard`, `Slowdown.Assumptions.MinEntropyHard`, `Slowdown.Assumptions.SourceHard`, `Slowdown.Assumptions.Recovers`, `Slowdown.Capability.Items` | Named assumptions in the lock, taken by the repertoire's proofs; no price measured at a decoder budget; several uniform activation rates refuted by exact decoders |
 | Structure | `Slowdown.Capability.Consumers`, `Slowdown.Capability.Consumers.Upstream`, `Slowdown.Capability.Consumers.OverlapWeights` | Defined; the certificate not yet checked on a named training circuit |
@@ -467,7 +467,7 @@ None of these is assumed silently; each would restate the conclusion:
 | Onsite's k_S | `Pous.Guarantees.StreamedWipe`, `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` | Proved per window; nothing composes them into k_S |
 | Accounting | the assignment of a run's counted multiplications not yet in Lean | Open |
 | Rate ceiling ζ̄ | the inline hypotheses of `Slowdown.Guarantees.SlowdownRemote`; a named Prop not yet in Lean | Open |
-| The floor | `InferenceOnly.Guarantees.CapabilityFloor` | Proved, under coverage |
+| The floor | `Slowdown.Guarantees.CapabilityFloor` | Proved, under coverage |
 | Slowdown | `Accounting.Slowdown.slowdown`, `Accounting.Slowdown.threshold`, `Accounting.Slowdown.cost` | Defined, with cost in fleet-time; no theorem reads it |
 | The bounds | `Slowdown.Guarantees.SlowdownRemote`, `Slowdown.Guarantees.SlowdownThreaded` | Proved as arithmetic over inline hypotheses, not over the definition above |
 
@@ -530,12 +530,12 @@ the statement's named assumptions, not the conditions on its inputs and setup (t
 | Subprotocol | Guarantee | Status |
 |---|---|---|
 | SPOT | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/ScopeGate.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance (`SHA512CRStrict`, `SHA512CRExpected`) at its finders |
-| PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `SampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `verity-verify-proof --zk --registered` accepts) |
+| PoUW | `Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditMonitoringPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/MonitoringPeriod.lean` | Proved under named assumptions: `ServiceSound`, `SampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `verity-verify-proof --zk --registered` accepts) |
 | PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean`; in the shared coin game, `Pous.Period.PeriodHeldSha512`, `Properties/Pous/PeriodGame.lean` | Proved under named assumptions: the device model `DeviceModel`, the instantiation `Instantiates` (`pous-ring-instantiation`), and `P2RingAuditSecure`, an open conjecture; the coin-game form adds `Hash.Assumptions.Sha512Prf` at the memory challenger's two tests, its `ε_prf` in the bound, and names the certificate's fit (`Fits`) and the run's not reading the primitive (`ReadsNoPrimitive`) |
-| Bandwidth audit, PoUB's per-pass lemma | `Accounting.Guarantees.Remote.AuditRO`, `Definitions/Accounting/Guarantees/RemotePass.lean` | Proved, in the random-oracle model |
+| Bandwidth audit, PoUB's per-pass lemma | `Accounting.Guarantees.Remote.AuditRO`, `Definitions/Compose/Guarantees/RemotePass.lean` | Proved, in the random-oracle model |
 | Network certification | `NetTiming.Guarantees.MonitoringPeriodLeakAccepted`, `Definitions/Certifier/Guarantees/MonitoringPeriod.lean` | Proved under named assumptions: `TrustedDevice`, and SPOT's `Claims.SamplingGeneric.Compiled.KS` and `Claims.Sampling.CommitmentScheme.Binds`; each window is bounded alone, with no union over the period yet |
 | Memory wipes | `Pous.Guarantees.StreamedWipe`, `Definitions/Pous/Guarantees/StreamedWipe.lean` | Proved; the PRF enters as its advantage term |
-| PoUB | `Properties.Poub.Line.LineHeld`, `Properties/Accounting/Remote/Line.lean` | Inside protocol soundness: its P2 audit (`Poub.P2Protocol`, on PoUS's store) is one of onsite's seven subprotocols, so `Verity.soundness_of_subprotocols` at `.onsite` covers it through its target, `BandwidthAuditSound`. In its own form it is proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Draw.Assumptions` |
+| PoUB | `Properties.Poub.Line.LineHeld`, `Properties/Compose/Remote/Line.lean` | Inside protocol soundness: its P2 audit (`Poub.P2Protocol`, on PoUS's store) is one of onsite's seven subprotocols, so `Verity.soundness_of_subprotocols` at `.onsite` covers it through its target, `BandwidthAuditSound`. In its own form it is proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Sample.Assumptions` |
 
 PoUW has other guarantees, outside protocol soundness.
 
@@ -550,7 +550,7 @@ policy and the one-stage audit commit to one record and every window of the peri
 PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store.
 
 - **Guarantees:** the table's SPOT row and PoUW's period guarantee,
-  `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, both proved. Neither is stated yet as its target in
+  `Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod`, both proved. Neither is stated yet as its target in
   `Verity.remote_soundness_of_subprotocols`, so the two compose by hand. At remote, SPOT's one-stage form is
   v2, which runs `verity-verify-proof --zk` on the sessions' files and reads the challenger's signed coins (v1, which takes
   verdicts as evidence, is refused); where v2 accepts, its session is in V5's event
@@ -571,7 +571,7 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   before it at most as often as the sampling design allows (`Verity.Guarantees.SampleAfterRecorded`, proved); none of
   remote's guarantees reads `CoinsConfidential`, and no `.lean` file defines `OneClock`. Network certifiers and memory
   challengers are onsite's.
-- **Not the remote composite.** `Accounting.Remote` and `Properties.Accounting.Remote` are PoUB
+- **Not the remote composite.** `Accounting.Remote` and `Properties.Compose.Remote` are PoUB
   (`verity/protocols/accounting/poub/verifier`), which proves the bits a node read from its registered store; it is a subprotocol
   of onsite only.
 

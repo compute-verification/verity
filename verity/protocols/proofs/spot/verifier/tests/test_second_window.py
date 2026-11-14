@@ -73,6 +73,11 @@ def test_wires_and_reads_are_the_ranks_moved_to_their_units():
         return ([] if W.wires_ok(ranks, joined, [rank, rank]) else ["ranks-wires"]) + \
             ([] if W.reads_ok(ranks, joined, [rank, rank]) else ["ranks-reads"])
     reads = [read("r0/w", 0), read("r1/w", 2)]
+
+    def wide(b: int, s: int) -> dict:
+        return {"at": 0, "base": b, "out": "o0", "port": "x", "radix": [4], "reader": "A", "step": [s], "writer": "B"}
+    assert codes([wire(0, 0), wire(2, 2), wide(3, -1)], reads) == []
+    assert codes([wire(0, 0), wire(2, 2), wide(0, 1)], reads) == ["ranks-wires"]
     assert codes([wire(0, 0), wire(2, 2), wire(2, 0)], reads) == []
     assert codes([wire(0, 0), wire(2, 0)], reads) == ["ranks-wires"]
     assert codes([wire(0, 0), wire(2, 2), wire(0, 0)], reads) == ["ranks-wires"]

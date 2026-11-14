@@ -102,7 +102,7 @@ def test_the_parameters_name_no_device():
                                       ("form-per-unit", "takes per-unit noise"),
                                       ("form-v6", "is not over PouwH1Tile_v5"), ("form-strata", "units at 2 K's")])
 def test_an_uncovered_form_is_refused_by_name(name, why):
-    """Every form `H1J10RCheckedCreditPeriod` doesn't cover is refused before the credit, naming the form and the
+    """Every form `H1J10RCheckedCreditMonitoringPeriod` doesn't cover is refused before the credit, naming the form and the
     guarantee, and the same period in the covered form (J10-R's per-call unit over PouwH1Tile_v5, at one K) is credited."""
     for seed in range(3):
         got = PC.case_twin(cases.instance(random.Random(f"{name}/{seed}"), name))

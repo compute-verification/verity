@@ -387,7 +387,7 @@ def test_a_prover_that_exits_0_with_a_session_unrecorded_fails_that_session(bina
 def test_each_verifier_on_its_own_challenger_audited_at_close(binary, tmp_path, monkeypatch):
     """With challengers, each type's verifier is started with its challenger's flags, and `close` hands each challenger
     every session its verifier filed, at once, and gives each session its verifier's result (a stand-in challenger: the
-    real one is `challengers`', whose audit `prove_leg`'s FLOCK_CHALLENGER=1 run checks)."""
+    real one is `challengers`', whose audit `prove_subprotocol`'s FLOCK_CHALLENGER=1 run checks)."""
     from verity_flock import proof_server as PS
 
     started, ended = [], {}

@@ -34,11 +34,4 @@ def ReadBound : Prop :=
     Assumptions.ThetaRegistered r d (PartialContainment.ofContainment M) →
     (Reads Γ r : ℝ) ≤ α * d.D.size d.D.computed
 
-/-- **Inference complies as declared**: a Boolean declaration divided into sessions of exactly `c` gates, padding
-included, each reading from outside itself only registered information and its own prompt `prompt u` of at most `k`
-bits, complies at `(c, k)`, and its slowdown factor is at most 1. -/
-def Inference : Prop :=
-  ∀ (c k : ℕ) (d : RegisteredCircuit) (B : ℕ) (P : Partition d.D B) (prompt : Fin B → Finset (Fin d.D.N)),
-    d.D.Boolean → Assumptions.Sessions d P prompt c k → Complies c k d ∧ slowdown (Complies c k) d ≤ 1
-
 end InferenceOnly.Guarantees

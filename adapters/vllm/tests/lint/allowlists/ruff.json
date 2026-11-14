@@ -17,7 +17,6 @@
     {"file": "tests/program/_wout_prototype_20260917.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.circuits.refs.Affine` imported but unused"},
     {"file": "tests/program/_wout_prototype_20260917.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.circuits.refs.Concat` imported but unused"},
     {"file": "tests/program/_wout_prototype_20260917.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.circuits.refs.Strided` imported but unused"},
-    {"file": "tests/program/beyond_gemm.py", "kind": "BLE001", "symbol": "main", "detail": "Do not catch blind exception: `Exception`"},
     {"file": "tests/program/test_dsa_derive.py", "kind": "S102", "symbol": "test_the_shims_leave_a_model_without_their_layers_unchanged", "detail": "Use of `exec` detected"},
     {"file": "tests/properties/dsv4_indexer_capture_gpu.py", "kind": "F821", "symbol": "gpu", "detail": "Undefined name `o`", "count": 4},
     {"file": "tests/properties/dsv4_indexer_capture_gpu.py", "kind": "F821", "symbol": "gpu", "detail": "Undefined name `st`", "count": 2},

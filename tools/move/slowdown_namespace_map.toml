@@ -2,7 +2,8 @@
 #
 # `tools/move/slowdown_area_map.toml` moved the bound's files to `Slowdown` and kept their declarations' names. This map
 # renames them as the directory does: each declaration of a file under `security/*/Slowdown/`, and the bound's premises
-# in `Definitions/Assumptions.lean` (`Cut.Assumptions`, `Formalism.Assumptions`), from `InferenceOnly.` to `Slowdown.`.
+# in `Definitions/Assumptions.lean` (`Cut.Assumptions`, `Formalism.Assumptions`), from `InferenceOnly.` to `Slowdown.`; the
+# coverage floor's too (`CapabilityFloor*`, `CoversEfficientMethods`), which the accounting split moved into the area.
 # A namespace that holds only those is one word; a declaration in a namespace the policy shares (`Guarantees`,
 # `Assumptions`, `SecurityProofs`, the root) is its own. In the moved files, `namespace` and `end` lines follow.
 # The policy's names keep `InferenceOnly.`, and so do the modules that stay (`[keep]`). The locks keep the old names
@@ -282,6 +283,13 @@ files = ["*"]
 "InferenceOnly.SecurityProofs.weightsIncompressibleSlots_of" = "Slowdown.SecurityProofs.weightsIncompressibleSlots_of"
 "InferenceOnly.SecurityProofs.weightsIncompressible_of_inputs" = "Slowdown.SecurityProofs.weightsIncompressible_of_inputs"
 "InferenceOnly.Small" = "Slowdown.Small"
+"InferenceOnly.Assumptions.CoversEfficientMethods" = "Slowdown.Assumptions.CoversEfficientMethods"
+"InferenceOnly.Guarantees.CapabilityFloor" = "Slowdown.Guarantees.CapabilityFloor"
+"InferenceOnly.Guarantees.CapabilityFloorHonest" = "Slowdown.Guarantees.CapabilityFloorHonest"
+"InferenceOnly.Guarantees.CapabilityFloorNontrivial" = "Slowdown.Guarantees.CapabilityFloorNontrivial"
+"InferenceOnly.SecurityProofs.CapabilityFloor" = "Slowdown.SecurityProofs.CapabilityFloor"
+"InferenceOnly.SecurityProofs.CapabilityFloorHonest" = "Slowdown.SecurityProofs.CapabilityFloorHonest"
+"InferenceOnly.SecurityProofs.CapabilityFloorNontrivial" = "Slowdown.SecurityProofs.CapabilityFloorNontrivial"
 
 [[words_in]]
 files = ["security/Definitions/Slowdown/*", "security/Proofs/Slowdown/*", "security/Proofs/Slowdown.lean"]

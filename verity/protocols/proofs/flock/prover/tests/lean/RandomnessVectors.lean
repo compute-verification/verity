@@ -8,7 +8,7 @@ Vectors for `verity.randomness` v2 and the PoUW window draw, from the soundness 
   `streamWide`, which the tests hold equal to it.
 * `extra`: keys, streams, `uniform` and `subset` values on inputs of the spec's own, among them PoUW's closure-draw domain
   and `plan.draw`'s `("call", forward, position, "stratum", name)` contexts, which Python's `Key` must match.
-* `window`: `PlanDraw.executionPhase` on small executionPhases: the draw of each, and a repeated call index refused.
+* `window`: `PlanDraw.executionPhase` on small execution phases: the draw of each, and a repeated call index refused.
 
 Regenerate with `tests/lean/generate.sh`.
 -/
@@ -146,7 +146,7 @@ def extra : Json := .arr <| keys.toArray.map fun (src, dom, ctx) =>
 def stratumJson (s : Stratum) : Json :=
   Json.mkObj [("name", .str s.name), ("units", .arr (s.units.toArray.map num)), ("k", num s.k)]
 
-/-- Small executionPhases: two calls, and the same with a call index repeated. -/
+/-- Small execution phases: two calls, and the same with a call index repeated. -/
 def executionPhases : List (List Call) :=
   [[⟨[.int 0, .int 5], [⟨"NcpTile_v1", [0, 1, 2, 3, 4, 5], 2⟩, ⟨"NcpDigest_v1", [6, 7], 1⟩]⟩,
     ⟨[.int 1, .int 5], [⟨"NcpTile_v1", [8, 9, 10, 11], 2⟩, ⟨"NcpDigest_v1", [12], 1⟩]⟩],

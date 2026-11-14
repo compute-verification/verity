@@ -4,8 +4,8 @@ module
 # The openings' pooled bound
 
 `audit.pooled`'s horizon reading of a session's openings, in exact rationals: the most wrong receipts
-W = Σ_t f_t·U_t its windows' samples leave except with δ, each window's share at most min(1 − s_t/U_t, B/s_t) (`floors`),
-and the largest of those (`floor`). Window t has U_t receipts and drew s_t of them.
+W = Σ_t f_t·U_t its windows' samples leave except with δ, each window's share at most min(1 − s_t/U_t, B/s_t)
+(`floors`), and the largest of those (`floor`). Window t has U_t receipts and drew s_t of them.
 
 The budget B stands for d̄·S = S·(1 − δ^(1/S)), S = Σ_t s_t, from above: B = S·(1 − q) for q = m/2^`ROOT_BITS`
 whose S-th power is at most δ, certified in integers (`below`: the power by squaring, each product rounded up at
@@ -14,7 +14,7 @@ bisection finds (`root`), so B exceeds S·(1 − δ^(1/S)) by at most S·2^-`ROO
 
 W is the greedy over the windows by U_t/s_t falling (`order`, `fill`): each takes the largest share its cap and the
 budget left allow, the fractional knapsack's optimum. `Properties.Poub.PooledCovers` states that W is at least
-`Accounting.Remote.Draw.pooled`, the bound `PooledSample` reads. `pooled.py` is held to this by the difftest
+`Accounting.Remote.Sample.pooled`, the bound `PooledSample` reads. `pooled.py` is held to this by the difftest
 (`tests/test_pooled.py`). Code: Lean core only.
 -/
 

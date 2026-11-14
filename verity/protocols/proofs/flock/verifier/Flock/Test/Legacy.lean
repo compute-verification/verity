@@ -5,7 +5,7 @@ meta import Flock.ProvedScope
 
 /-!
 The legacy statement forms (`ProvedScope.legacyStatements`) are refused: a legacy statement's name is no statement
-`verify` sets up and meets `ProvedScope.legacyWhy`, and every statement before hm96-sha512 rows (the netlist statement and
+`verify` sets up and meets `ProvedScope.legacyWhy`, and every statement before hm96-sha512 rows (the `verity/flock-netlist/v1` statement and
 the BLAKE3-row circuit statements up to `631567f7`) fails `ProvedScope.statementRules` first, with or without `--zk`.
 -/
 

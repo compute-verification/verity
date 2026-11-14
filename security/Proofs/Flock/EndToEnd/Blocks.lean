@@ -41,8 +41,8 @@ open FlockSoundness FlockSoundness.Game Flock.Guarantees
 open scoped ENNReal
 
 /-- The incorrect proof blocks of the sampling blocks of `I`, as a sum over every sampling block weighing `0` outside `I`. -/
-theorem sum_filter_incorrect (I : Finset ℕ) (l : List WindowRec) :
-    ((l.filter fun r => r.idx ∈ I).map WindowRec.incorrect).sum =
+theorem sum_filter_incorrect (I : Finset ℕ) (l : List SamplingBlockRec) :
+    ((l.filter fun r => r.idx ∈ I).map SamplingBlockRec.incorrect).sum =
       (l.map fun r => if r.idx ∈ I then r.incorrect else 0).sum := by
   induction l with
   | nil => rfl
@@ -57,7 +57,7 @@ theorem integrity_on (W : ℕ → SamplingBlock) (T : ℕ) (I : Finset ℕ) {q :
     (hA3 : ∀ t ∈ I, Assumptions.UniformRandomBytes (W t).Lb (W t).src)
     (s : Strategy (Period.game W T)) (hs : MonitoringPeriodGood (fun t => (W t).game) (fun t => (W t).CR) 0 T s) (M : ℕ) :
     value (fun l => (∀ r ∈ l, r.idx ∈ I → r.accepted) ∧
-        M ≤ ((l.filter fun r => r.idx ∈ I).map WindowRec.incorrect).sum) (Period.run W T s) ≤
+        M ≤ ((l.filter fun r => r.idx ∈ I).map SamplingBlockRec.incorrect).sum) (Period.run W T s) ≤
       ENNReal.ofReal (1 - q) ^ M + ∑ t ∈ I, ((W t).ks + (W t).link) := by
   set x : ℝ≥0∞ := ENNReal.ofReal (1 - q)
   have hx : x ≤ 1 := ENNReal.ofReal_le_one.2 (by linarith)
@@ -83,7 +83,7 @@ theorem integrity_on (W : ℕ → SamplingBlock) (T : ℕ) (I : Finset ℕ) {q :
           (pow_le_pow_left₀ zero_le ((W t).one_sub_le hq (hqt t ht)) _)
       · exact ⟨0, fun _ => ite_eq_right_of_eq_false _ _ (eq_false ht), (prob_le_one _ _ _).trans_eq (pow_zero x).symm⟩) T 0 s M hs
   calc value (fun l => (∀ r ∈ l, r.idx ∈ I → r.accepted) ∧
-        M ≤ ((l.filter fun r => r.idx ∈ I).map WindowRec.incorrect).sum) (Period.run W T s)
+        M ≤ ((l.filter fun r => r.idx ∈ I).map SamplingBlockRec.incorrect).sum) (Period.run W T s)
       ≤ value (fun l => (∃ r ∈ l, r.idx ∈ I ∧ r.accepted ∧ r.sampledWrong) ∨
           ((∀ r ∈ l, r.idx ∈ I → ¬ r.sampledWrong) ∧
             M ≤ (l.map fun r => if r.idx ∈ I then r.incorrect else 0).sum)) (Period.run W T s) := by

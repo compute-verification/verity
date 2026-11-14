@@ -988,7 +988,7 @@ private def spare : Account :=
                   uncertified := .refused }] }
 
 /-- A session of the memory challenger whose key is `key`, or of none. -/
-private def session (n : Nat) (eps : String) (certified : Bool := true) (key : Option String := some chalKey) :
+private def challengePhase (n : Nat) (eps : String) (certified : Bool := true) (key : Option String := some chalKey) :
     Answer :=
   accept "toy/held" [("certified", .bool certified), ("eps", .str eps), ("s_bits", Lean.toJson n)]
     (key.map fun k => ("key", .str k)).toList
@@ -1124,18 +1124,18 @@ private def cached : Site :=
 #guard ((table [] [] { auditor with sheet := fun _ => some (rated .zero 4200000000000000) }).take 2).map
     (fun r => (r.reading, r.capacity)) == [("stated", some 4000000000), ("bound", some 4200000000)]
 -- an amount at a moment: a row for each session and one for the period, the least verified at the errors summed
-#guard cells ((table [held] [session 6000000000 "1/100", session 5000000000 "1/50"]).take 3) ==
+#guard cells ((table [held] [challengePhase 6000000000 "1/100", challengePhase 5000000000 "1/50"]).take 3) ==
   [("held", "node0", "registered", some 8589934592, some 6000000000, some 2589934592, "1/100"),
    ("held", "node0", "registered", some 8589934592, some 5000000000, some 3589934592, "1/50"),
    ("held", "node0", "registered", some 8589934592, some 5000000000, some 3589934592, "3/100")]
-#guard ((table [held] [session 6000000000 "1/100", session 5000000000 "1/50"]).take 3).map
+#guard ((table [held] [challengePhase 6000000000 "1/100", challengePhase 5000000000 "1/50"]).take 3).map
     (fun r => (r.session, r.sessions)) == [(some 0, 1), (some 1, 1), (none, 2)]
 -- sessions whose protocol says one answer pools the period's error state no error for the period, each still its own
 #guard ((table [{ held with amounts := held.amounts.map fun m => { m with pool := .once } }]
-    [session 6000000000 "1/100", session 5000000000 "1/50"]).take 3).map (fun r => r.status) ==
+    [challengePhase 6000000000 "1/100", challengePhase 5000000000 "1/50"]).take 3).map (fun r => r.status) ==
   [.certified, .certified, .noBound]
 -- a session that certifies nothing verifies nothing, whatever amount it states
-#guard cells ((table [held] [session 6000000000 "0" false]).take 1) ==
+#guard cells ((table [held] [challengePhase 6000000000 "0" false]).take 1) ==
   [("held", "node0", "registered", some 8589934592, some 0, some 8589934592, "0")]
 -- a free amount with its own capacity: the memory the wipe did not cover is free too, and a wipe of more memory than
 -- is registered frees nothing
@@ -1185,7 +1185,7 @@ private def cached : Site :=
 -- two answers that each pool a period's error state no error for the period
 #guard ((table [worked] [credit, credit]).take 1).map (fun r => r.status) == [.noBound]
 -- what the answers cover is not charged again
-#guard cells ((table [held, sent, worked] [session 6000000000 "1/100", check 3000 1000 "1/1000", credit]).drop 5) ==
+#guard cells ((table [held, sent, worked] [challengePhase 6000000000 "1/100", check 3000 1000 "1/1000", credit]).drop 5) ==
   [("not audited", "hbm0", "registered", some 3200000, some 0, some 3200000, "0"),
    ("not audited", "gpu0", "registered", some (8 * 63 * 2 ^ 30), some 0, some (8 * 63 * 2 ^ 30), "0")]
 #guard ((table [sent] [check 3000 400 "1/1000"]).take 1).map (fun r => (r.toJson.compress)) ==
@@ -1434,11 +1434,11 @@ private def upper (x : Site.Loc) : Site.Loc := if x.id == "cert0" then { x with 
 
 -- an answer that names no key, a key no device holds, a key two devices hold, or a device that reaches none of its
 -- part's leaves counts for nothing
-#guard cells (table [held] [session 6000000000 "1/100" (key := none)]) == cells (table [] [])
-#guard cells (table [held] [session 6000000000 "1/100" (key := some "ff")]) == cells (table [] [])
+#guard cells (table [held] [challengePhase 6000000000 "1/100" (key := none)]) == cells (table [] [])
+#guard cells (table [held] [challengePhase 6000000000 "1/100" (key := some "ff")]) == cells (table [] [])
 #guard cells (rowsOf ⟨[sheet], twice, links⟩ digest (keysOf twice) period [sent] [check 3000 400 "1/1000"]) ==
   cells (rowsOf ⟨[sheet], twice, links⟩ digest (keysOf twice) period [] [])
-#guard cells (table [held] [session 6000000000 "1/100" (key := some certKey)]) == cells (table [] [])
+#guard cells (table [held] [challengePhase 6000000000 "1/100" (key := some certKey)]) == cells (table [] [])
 -- a challenger's key: a read row over a host's DRAM leaf, at the host, as the whole site's row reads it there
 private def spareAt : Account := { spare with witness := some (.profile "key") }
 #guard ((rowsOf hostRated digest auditor period [spareAt]
@@ -1447,7 +1447,7 @@ private def spareAt : Account := { spare with witness := some (.profile "key") }
   [("node0", .certified, some (9754 * 1000), some (9754 * 1000 - (3000 + 9754 * 600)), some (3000 + 9754 * 600))]
 -- a challenger that reaches two hosts: one row over both
 private def heldDram : Account := { held with amounts := held.amounts.map fun m => { m with part := .memory [.dram] } }
-#guard cells ((wideRows [heldDram] [session 6000000000 "1/100"]).take 1) ==
+#guard cells ((wideRows [heldDram] [challengePhase 6000000000 "1/100"]).take 1) ==
   [("held", "node0, node1", "registered", some (8 * 2 * 2 ^ 31), some 6000000000, some (8 * 2 * 2 ^ 31 - 6000000000),
     "1/100")]
 -- audits under a challenger's key: two of one key over overlapping spans count the larger once; two devices' give a

@@ -109,7 +109,7 @@ def CoinTree.make (session : ByteArray) (blocks : Nat) (indices : Array Nat) (ke
 
 /-- `derive(source, COIN_DOMAIN, {"session", "blocks", "k"})` and its `uniform(blocks, j)` for `j < k`: the indices.
 `derive` refuses an empty source (a `TypeError`), and `uniform` no blocks. -/
-def drawIndices (source session : ByteArray) (blocks k : Nat) : E (Array Nat) := do
+def sampleIndices (source session : ByteArray) (blocks k : Nat) : E (Array Nat) := do
   if source.isEmpty then throw "source must be nonempty bytes: a key holder's secret"
   let key := FlockSoundness.Randomness.derive source COIN_DOMAIN
     [("session", .bytes session), ("blocks", .int blocks), ("k", .int k)]
@@ -122,7 +122,7 @@ def drawIndices (source session : ByteArray) (blocks k : Nat) : E (Array Nat) :=
 /-- `CoinTree.draw(source, session, blocks, k, key=key, salts=salts)`: the key and salts as given (the driver takes them
 from the world's coins). -/
 def CoinTree.draw (source session : ByteArray) (blocks k : Nat) (key : ByteArray) (salts : Array ByteArray) : E CoinTree := do
-  CoinTree.make session blocks (← drawIndices source session blocks k) key salts
+  CoinTree.make session blocks (← sampleIndices source session blocks k) key salts
 
 def CoinTree.k (t : CoinTree) : Nat := t.indices.size
 

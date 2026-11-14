@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Remote.Fork
+public import Definitions.Compose.Remote.Fork
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,7 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The receipts' binding bound in its fork form: a lemma
 
-`ReceiptsBindingOfFork`, the step of `Definitions.Accounting.Guarantees.RemoteBinding`'s `ReceiptsBindingOfCR` that
+`ReceiptsBindingOfFork`, the step of `Definitions.Compose.Guarantees.RemoteBinding`'s `ReceiptsBindingOfCR` that
 assumes no hash: the binding term is at most `Σ_t √(|L_t|·s_t·(fork_t + split_t))`. `ReceiptsBindingOfCR` is it with each
 window's fork finder meeting `Claims.StrictBirthday`, and is the guarantee `ledger.binding` charges. This is a
 `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem of the same name, and audited with
@@ -47,7 +47,7 @@ the proofs: no record pins it.
 
 namespace Accounting.Guarantees.Remote
 
-open Accounting.Remote.Draw
+open Accounting.Remote.Sample
 
 /-- **The receipts' binding term, in its fork form.** For a session `D` on the first blocks `prf` and fallbacks `rest`,
 its receipts `R`, and sets `L_t` holding every receipt window `t` opens, the binding term is at most
@@ -55,9 +55,9 @@ its receipts `R`, and sets `L_t` holding every receipt window `t` opens, the bin
 coins hash a SHA-512 collision between the checks of one receipt's two openings (`Receipts.fork`), `split_t` the chance
 that their roots split (`Receipts.split`). -/
 def ReceiptsBindingOfFork : Prop :=
-  ∀ {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] (D : Remote.Draw.Run n m s κ X)
+  ∀ {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X] (D : Remote.Sample.Run n m s κ X)
     (R : Receipts n κ X)
-    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ),
+    (prf : Fin n → Pous.Bits κ → Blocks m) (rest : SampleCoins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ),
     (∀ t ω, D.opened prf rest t ω ⊆ L t) →
     (R.binding D prf rest).toReal ≤
       ∑ t, √((L t).card * s t * ((R.fork D prf rest t).toReal + (R.split D prf rest t).toReal))

@@ -11,7 +11,7 @@ At a commitment `c` whose bytes carry no statement (`stmtOf c = none`) no `Joins
 prints, and `stmtOf c` is that print.
 
 `couplingTwo_of_stmtOf_none` is `CouplingTargetTwo`'s body at such a `c`, at any `terms`, from those two alone, and
-`joinedCouplingOfDistribution_decoded` is the two-stage leg's coupling with `CouplesAt` taken only where the commitment carries
+`joinedCouplingOfDistribution_decoded` is the two-stage subprotocol's coupling with `CouplesAt` taken only where the commitment carries
 a statement.
 -/
 
@@ -55,7 +55,7 @@ theorem couplingTwo_of_stmtOf_none {V : Vocab d α} {k : Verity.Registration.Com
     CouplingTwoAt V k A θ F c σ t :=
   .inl (prob_zero_of_stmtOf_none hwire hcc hn σ)
 
-/-- **The two-stage leg's coupling, with `CouplesAt` only where the commitment decodes**: `joinedCouplingAt` at each
+/-- **The two-stage subprotocol's coupling, with `CouplesAt` only where the commitment decodes**: `joinedCouplingAt` at each
 commitment that carries a statement, and `couplingTwo_of_stmtOf_none` at each that carries none, from the composite's
 wiring at `θ` and `CaseCommits`, which read no commitment. -/
 theorem joinedCouplingOfDistribution_decoded (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)

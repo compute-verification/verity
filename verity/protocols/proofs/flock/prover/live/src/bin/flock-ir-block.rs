@@ -3,9 +3,9 @@
 //! live session. The session protocol is flock-pure-gpu's, minus the frame-v3
 //! commitments (the unit inputs and outputs are public, read by the verifier from its own instance file).
 //!
-//!   flock-ir-block serve    --listen ADDR --out DIR --instances FILE --netlist FILE --pin SHA256 [--tables DIR] [--sessions N] [--operator LANE]
-//!   flock-ir-block prove    --verifier ADDR --instances FILE --netlist FILE [--tables DIR] [--gpu] [--runs N] [--warm W]
-//!   flock-ir-block selftest --instances FILE --netlist FILE [--tables DIR] [--gpu] [--only CASE]
+//!   flock-ir-block serve    --listen ADDR --out DIR --instances FILE --circuit-description FILE --pin SHA256 [--tables DIR] [--sessions N] [--operator LANE]
+//!   flock-ir-block prove    --verifier ADDR --instances FILE --circuit-description FILE [--tables DIR] [--gpu] [--runs N] [--warm W]
+//!   flock-ir-block selftest --instances FILE --circuit-description FILE [--tables DIR] [--gpu] [--only CASE]
 //!
 //! Before anything, the instance file is checked against the circuit description (`ir_block::cut_map`, `check_cuts`): a cut
 //! template's cut words must be exactly what the native tail computes from the units' words, evaluated here (`ir_tail`, the MUFU
@@ -523,7 +523,7 @@ fn selftest(ctx: &Ctx, gpu: bool) {
         }
         let v = if gpu && load_case(ctx, name).is_none() {
             let out = std::process::Command::new(std::env::current_exe().unwrap())
-                .args(["selftest", "--gpu", "--instances", &arg("--instances", ""), "--netlist", &arg("--netlist", ""), "--tables", &arg("--tables", "tables"), "--only", name])
+                .args(["selftest", "--gpu", "--instances", &arg("--instances", ""), "--circuit-description", &arg("--circuit-description", ""), "--tables", &arg("--tables", "tables"), "--only", name])
                 .output()
                 .expect("spawn a case");
             let text = String::from_utf8_lossy(&out.stdout);
@@ -604,20 +604,20 @@ fn main() {
     let cmd = std::env::args().nth(1).unwrap_or_default();
     let tb = Instant::now();
     let inst = Arc::new(IrInstances::load(&arg("--instances", "instances.bin")));
-    let net_text = std::fs::read_to_string(arg("--netlist", "net.txt")).expect("netlist");
+    let net_text = std::fs::read_to_string(arg("--circuit-description", "net.txt")).expect("circuit description");
     let net = IrUnitNet::parse(&net_text);
     let pin = arg("--pin", "");
     if cmd == "serve" && pin.is_empty() {
         refuse("serve needs --pin (the pinned lowering's sha256)".into());
     }
     if !pin.is_empty() && hex(&net.sha256) != pin {
-        refuse(format!("the netlist's sha256 {} is not the pinned lowering {pin}", hex(&net.sha256)));
+        refuse(format!("the circuit description's sha256 {} is not the pinned lowering {pin}", hex(&net.sha256)));
     }
     if inst.unit != net.name || inst.header["unit_sha256"].as_str() != Some(hex(&net.sha256).as_str()) {
-        refuse("the instance file was staged for another unit netlist".into());
+        refuse("the instance file was staged for another unit circuit description".into());
     }
     if (inst.in_words, inst.out_words) != (net.in_words, net.out_cols.len()) {
-        refuse("instance words do not match the netlist's IO".into());
+        refuse("instance words do not match the circuit description's IO".into());
     }
     if let Err(e) = check_order(&net) {
         refuse(e);
@@ -646,6 +646,6 @@ fn main() {
                 println!("LIVE\t{v}");
             }
         }
-        _ => eprintln!("usage: flock-ir-block serve|prove|selftest --instances FILE --netlist FILE [--pin SHA256] ..."),
+        _ => eprintln!("usage: flock-ir-block serve|prove|selftest --instances FILE --circuit-description FILE [--pin SHA256] ..."),
     }
 }

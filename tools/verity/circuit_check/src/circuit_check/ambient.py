@@ -1,5 +1,5 @@
 """``circuit-check --ambient TARGET..``: each target's flat lowering (`verity_flock.ir_lower.lower`, laid out as
-``flock-ir-unit/v2`` text by `ir_lower.netlist`) is a function of the Definition alone, its builders' operands and statics,
+``flock-ir-unit/v2`` text by `ir_lower.circuit_description`) is a function of the Definition alone, its builders' operands and statics,
 and of nothing else they could read. Two fresh interpreters lower every target:
 
   plain      PYTHONHASHSEED=0, the cwd as given, the targets in the order given, each lowered once;
@@ -133,7 +133,7 @@ def text(target: Any, junk: int = 0) -> str:
         del C.inputs["ambient"]
     C, _ins, words = ST._lowered(target, C)
     lay = IL.layout(C, list(C.inputs), [f"o{j}" for j in range(len(words))])
-    return IL.netlist(lay, "unit")
+    return IL.circuit_description(lay, "unit")
 
 
 def _child(opts: dict) -> None:

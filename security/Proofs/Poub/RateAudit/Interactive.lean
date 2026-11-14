@@ -1,7 +1,7 @@
 module
 
 public import Mathlib
-public import Proofs.Accounting.Device
+public import Proofs.Registration.Device
 public import Proofs.Poub.RateAudit.Relay
 
 /-!

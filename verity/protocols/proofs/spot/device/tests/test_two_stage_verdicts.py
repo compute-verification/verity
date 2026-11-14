@@ -1,7 +1,7 @@
 """The second stage's reads of a replay block whose fused blocks open registered tables (`two_stage.verdicts`,
 `two_stage.verifier_reads`): each block's ``root`` and ``domain`` are values the verifier supplies from the entries it
 pinned (`interior_rows.Supply`'s ``tables``), and its verdict ``o1`` reads a value the verifier fills with 1
-(`second_stage.VERDICT_ONE`), placed as its root, so Lean's registered reads open a block's verdict only where it is 1.
+(`second_stage.VERDICT_ONE_LEAF`, one 16-bit leaf a row), placed as its root, so Lean's registered reads open a block's verdict only where it is 1.
 Without the verdicts the second stage reads ``o1`` at the block's own port, which holds it only to the prover's
 commitment of it.
 
@@ -100,14 +100,14 @@ def test_a_fused_block_on_registered_tables_has_its_verdict_at_a_value_placed_as
     """The block's one verdict is its ``o1`` at ``<root's value>/opened``, a row a table, unit j reading row j // W,
     as the tie its caller passes places its root; a block the tie leaves out has none (the adapter's own test holds
     that its tie refuses a fused block left to round 1's history, as the interior refuses it). The verifier's copy of
-    the value is `second_stage.VERDICT_ONE` at every row, which round 2 reads as the verifier's bytes of 1."""
+    the value is `second_stage.VERDICT_ONE_LEAF` at every row, which round 2 reads as the verdict's 1, one 16-bit leaf."""
     (v,) = TS.verdicts([_member()], _links(), _tied)
     assert v == TS.Verdict(TID, SS.OPENING_VERDICT, f"{KEY}/root/opened", T, AT)
     history = (*(replace(x, tables=None) for x in SUPPLIES), *_links()[len(SUPPLIES):])
     assert TS.verdicts([_member()], history, _tied) == ()
     src = TS.verdict_sources((v,), Q)
-    assert src == {v.value: [[{"bytes": "00000001"}]] * (Q * T)}
-    assert SS.supplied_of(src) == ((v.value, (SS.VERDICT_ONE,) * (Q * T)),)
+    assert src == {v.value: [[{"bytes": "0001"}]] * (Q * T)}
+    assert SS.supplied_of(src) == ((v.value, (SS.VERDICT_ONE_LEAF,) * (Q * T)),)
 
 
 def test_the_verifier_reads_the_verdict_at_its_value_and_never_at_the_blocks_own_port():
@@ -163,7 +163,7 @@ def test_round_two_takes_a_fused_blocks_tables_from_the_auditors_pins():
     """`second-inputs` at round 2: a fused block's row, salt and path pass where its root and domain are the tables the
     auditor's params pin, round 1's record registering none of them. They are refused, with `second_stage.INPUTS_WHY`
     and the row named, where the params pin no table or one of the two, where the pin's root or domain id is another
-    than the one the verifier filled from the tables' docket, or where it pins the table at another count of
+    than the one the verifier filled from the tables' registration, or where it pins the table at another count of
     rows; the same entries registered by round 1's record instead pass as before. The run is refused either way: no
     statement is given here, so ``second-statements`` or the design's own codes refuse it before the form's."""
     own = _pinned_round_two(PINS)
