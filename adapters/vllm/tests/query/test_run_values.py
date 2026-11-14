@@ -13,7 +13,7 @@ from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Tuple, Value
-from verity.definitions.registry import prims
+from verity_vllm.definitions.registry import prims
 
 from verity_vllm.acquire import plan as PL
 from verity_vllm.correspondence.reader_for_acquire import (

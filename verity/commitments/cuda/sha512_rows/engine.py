@@ -4,7 +4,7 @@ frame-v3-sha512 leaves, nodes and pads a level at a time, bit for bit the refere
 A digest is 8 u64 words, each the big-endian value of its 8 bytes (int64 tensors on a device, uint64 arrays on the host):
 ``digests(words)`` gives the bytes, ``words(digests)`` the words. ::
 
-    E = Engine("cuda", build=DIR)                        # a CUDA device; Engine("host", build=DIR) is the host twin
+    E = Engine("host", build=DIR)                        # the host twin; a CUDA device takes a subclass's runtime()
     rows = E.rows([[(0, 0, 32768)], [(1, 0, 16384), (2, 0, 4)]], tensors)   # parts (tensor, byte offset, bytes), at most 2
     x = E.row_digests(rows, slots)                       # (G, S, 8): SHA-512(P(8 nbytes) || row g of slot s)
     lt = E.leaf_table(dids, did_of_row, rank, position, salt_row)   # each row's frame leaf and its salt's index
@@ -18,6 +18,9 @@ A digest is 8 u64 words, each the big-endian value of its 8 bytes (int64 tensors
 of a slot's row. The salt comes from the caller: ``SaltKey(key, nonce0)`` derives row ``salt_row``'s y in slot s as ChaCha20
 chunks 3 salt_row .. 3 salt_row + 2 under ``key`` with nonce ``nonce0 + s`` (Flock's ``hm96_salt``, commit_slots'
 ``row_salts``), or ``salts`` gives every y. Calls run on the current torch stream and don't synchronize.
+
+On a CUDA device the calls run on a tensor runtime (torch) that verity doesn't import: ``Engine.runtime`` raises here, and a
+subclass supplies it (the benchmarks' ``benchmarks/torch_gpu/sha512_rows/torch_engine.py``).
 
 The host twin counts what it hashes (``counts()``: compressions, those over a constant schedule, ChaCha20 chunks), so the
 tests hold each call to its compressions a digest.
@@ -55,6 +58,10 @@ HOST_SOURCES = (SHA512, ROW_COMMIT, HERE / "rows.cuh", HERE / "rows_host.cpp")
 NVCC_FLAGS = ("-O3", "-std=c++17", "-Xcompiler", "-fPIC", "-shared", "-Xptxas", "-v")
 CFLAGS = ("-O2", "-std=c++17", "-fPIC", "-shared")
 DEFAULT_VARIANT = "0000"
+#: what ``Engine.runtime`` raises until a subclass supplies it
+NEEDS_RUNTIME = ("the engine on a CUDA device runs on a tensor runtime (torch) that verity doesn't import "
+                 "(kernels/gpu-code-out-of-benchmarks): use a subclass whose runtime() returns it, as the benchmarks' "
+                 "torch_engine.Engine does")
 
 INST = hm96.SHA512
 KEY = INST.default_key
@@ -239,7 +246,7 @@ class Engine:
         if self.host:
             self.torch, self.device, self.lib = None, "host", host_lib(build)
         else:
-            import torch
+            torch = self.runtime()
             self.torch, self.device = torch, torch.device(device)
             if self.device.index is None:
                 self.device = torch.device("cuda", torch.cuda.current_device())
@@ -253,6 +260,10 @@ class Engine:
         self.table = self._up(hankel_table(self.key).reshape(-1))
         self.ms_salt = self.midstate(INST.salt_prefix)
         self.ms_leaf = self.midstate(INST.leaf_prefix(self.key))
+
+    def runtime(self) -> Any:
+        """The tensor module a CUDA device's calls run on (torch): raises here, and a subclass supplies it."""
+        raise NotImplementedError(NEEDS_RUNTIME)
 
     # --- memory ----------------------------------------------------------------------------------------------------------
 

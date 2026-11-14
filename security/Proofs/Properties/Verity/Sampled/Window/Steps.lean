@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.Sampled.Window.Closing
 public import Proofs.Properties.Verity.Sampled.MemberForm.Order
 
 /-!
-# Sampled proofs' coupling over a window: the members' steps, from each session's read
+# SPOT's coupling over a window: the members' steps, from each session's read
 
 `MemberSteps` at a window whose members each have one table, at the sessions' readings (`sessionReading`: the
 `u`-th session's rounds are the `u`-th tree's, its link's, its rep rounds' and its closing round's) and the sessions'

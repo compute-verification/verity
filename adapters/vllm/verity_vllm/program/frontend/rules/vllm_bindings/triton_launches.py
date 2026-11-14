@@ -6,7 +6,7 @@ import sys
 
 import torch
 from verity.circuits.refs import Coll
-from verity.definitions.registry.dsa_norm import check_block
+from verity_vllm.definitions.registry.dsa_norm import check_block
 
 from verity_torch.frontend.derive import Alloc
 from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget
@@ -20,7 +20,7 @@ from verity_torch.frontend.rules.common import (
     rows_of,
     shape,
 )
-from verity_vllm.program.frontend.rules.profile import BF16, _bias_shape
+from verity_torch.frontend.rules.profile import BF16, _bias_shape
 from verity_vllm.program.frontend.rules.triton_iface import (
     launch_meta,
     launch_tensor,

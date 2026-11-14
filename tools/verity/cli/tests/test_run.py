@@ -481,6 +481,16 @@ def test_remotes_development_composite_is_no_composite():
     assert "verity/remote/v0" not in K.COMPOSITES and "verity/remote/v0" not in SP.SUBPROTOCOLS
 
 
+@pytest.mark.parametrize("cid", sorted(K.UNACCEPTED))
+def test_onsites_smaller_sets_are_read_and_hashed_and_verity_run_runs_neither(tmp_path, cid):
+    """Each of onsite's two smaller sets is a deployment with an id of its own, never onsite's: `check` reads it and
+    `verity run` stops before any party with the goal that brings it."""
+    cfg = config(K.UNACCEPTED[cid])
+    assert K.composite(cfg["protocols"], REG.components) == cid and K.digest(cfg) != K.digest(config())
+    with pytest.raises(NotImplementedError, match="demos/onsite-demo"):
+        run(tmp_path, registry(), cfg=cfg)
+
+
 def test_verity_run_refuses_a_configuration_that_is_no_composite(tmp_path, capsys):
     cfg = config(REMOTE)
     cfg["protocols"] = ["sampled-proofs"]
@@ -519,11 +529,11 @@ def test_parties_apart_meet_only_at_a_configured_listen_port(tmp_path, capsys):
     rc, _ = run(tmp_path, registry(), "--on", "auditor-1", cfg=auditor)
     captured = capsys.readouterr()
     assert rc == 2 and said(captured.out) == [{"party": "network-certifier", "exit": 0}]
-    assert "refused listen: the verifier dials zk_server, workers" in captured.err
+    assert "refused listen: the verifier dials firewall, workers" in captured.err
     prover = tmp_path / "prover"
     prover.mkdir()
     rc, _ = run(prover, registry(), cfg=auditor)
-    assert rc == 2 and "refused listen: zk_server, workers listen for the verifier" in capsys.readouterr().err
+    assert rc == 2 and "refused listen: firewall, workers listen for the verifier" in capsys.readouterr().err
     party(auditor, "firewall").update(address="10.0.0.5", listen=7001)
     party(auditor, "workers").update(listen=7002)
     assert D.listening(K.check(auditor, REG.components, REG.workloads)) == {"firewall": "10.0.0.5:7001",

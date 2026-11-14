@@ -11,7 +11,7 @@ public import Proofs.Properties.Verity.Sampled.Deployed
 public import Proofs.Properties.Verity.Sampled.Leaves
 
 /-!
-# Sampled proofs' leg of `Verity.Soundness`: the session v2 sets up
+# SPOT's leg of `Verity.Soundness`: the session v2 sets up
 
 The leg is `Verity.Vocab.SpotSound` at the one-stage form of a composite's sampled component
 (`VStar.Recursive.Sampled.protocol`), v2's audit (`Spot.OneStageZk`), from Flock's knowledge soundness of the
@@ -261,8 +261,8 @@ theorem stops_le_maxLeaves : 2 * (1 + A.N) ≤ maxLeaves := by
 theorem rounds_tree : 2 * 2 ^ A.coinSpec.roundsLog + 1 ≤ A.rounds := le_rfl
 
 /-- **The registration** the live audit's prover sends before the sample: the registration record's digest, the head of
-the registration log after it (`Spot.Registration.digest`), which the period's composite commitment binds
-under sampled proofs' id (`Core.Composition.bind`) and the sample's coins are released after (`coinsRead`'s `after`). -/
+the registration log after it (`Spot.Docket.digest`), which the period's composite commitment binds
+under SPOT's id (`Core.Composition.bind`) and the sample's coins are released after (`coinsRead`'s `after`). -/
 abbrev Reg (_ : Live) : Type := ByteArray
 
 /-- **The coin trees' hiding term**: each leaf the device's coin trees hold in a play, twice, at `2^-257`, the leftover
@@ -628,7 +628,7 @@ def CouplingTarget (V : Vocab d α) (k : Verity.Registration.Composite) (K : Con
           ENNReal.ofReal ((K.readFinder θ F c σ).Pr Verity.sha512Msg) +
           ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify))
 
-/-- **Composite `k` reads sampled proofs at v2**: its `.sampled` component is `VStar.Recursive.Sampled.protocol`. Its
+/-- **Composite `k` reads SPOT at v2**: its `.sampled` component is `VStar.Recursive.Sampled.protocol`. Its
 one-stage form is one-stage v2's audit (`Spot.OneStageZk.checkBlobs`), whose check computes each session's
 verdict from the session's files; one-stage v1, whose verdicts are the prover's, is refused
 (`VStar.Recursive.Sampled.V1_REFUSED`). -/
@@ -669,7 +669,7 @@ def OneStatement (θ : ByteArray) : Prop :=
 `Spot.Draw.deriveSamplingDesign` derives, or else the expanded rule's (`Spot.Draw.flockSamplingDesign` at
 `Spot.Draw.derive`'s), as `Spot.OneStage.sampledFrom` reads it before `Spot.Draw.sampleUnits`
 samples. -/
-def samplingDesignAt (v : _root_.Spot.Registration.Verifier) (n : ℕ) : Flock.V Flock.Draw.SamplingDesign := do
+def samplingDesignAt (v : _root_.Spot.Docket.Verifier) (n : ℕ) : Flock.V Flock.Draw.SamplingDesign := do
   let samplingDesignJ ← _root_.Spot.Draw.derive v.program v.query v.samplingDesign v.workTable
   let derived ← _root_.Spot.Draw.deriveSamplingDesign v.program v.query v.samplingDesign v.workTable
   pure (derived.getD (← _root_.Spot.Draw.flockSamplingDesign samplingDesignJ n))
@@ -731,10 +731,15 @@ structure PinnedTables where
   file : String → Option ByteArray
   hash : ∀ sha b, file sha = some b → Flock.hexOf (Flock.Sha512.hash b) = sha
 
+/-- **The pinned files held by a deployment**: lookup by the SHA-512 hex digest the circuit names. The bytes are
+deployment data; the proof that a successful lookup has the requested digest follows from `find?`, without evaluating
+SHA-512 in a theorem. -/
+def PinnedTables.ofFiles (files : Array ByteArray) : PinnedTables where
+  file sha := tableFile sha files
+  hash _ _ h := tableFile_hash h
+
 /-- **No pinned table registered**: the registered files of a deployment that registers none. -/
-def PinnedTables.empty : PinnedTables where
-  file _ := none
-  hash _ _ h := by cases h
+def PinnedTables.empty : PinnedTables := .ofFiles #[]
 
 /-- **The lookup tables a circuit file registers**: each pinned table its META looks up
 (`Spot.OneStageZk.lookupsOf`, none where it refuses), at its registered file (`PinnedTables.file`). -/
@@ -1062,13 +1067,14 @@ def SampleLinkFirst (label : String) (after : ByteArray) (log : List Verity.Rele
 
 /-- **The deployment's sessions `S` cover the sampled verdict's one-stage form at composite `k`**: where `S` holds no
 session and the parameters name the one-stage form (`ParamsAt`), each strategy of the period's game that meets the
-further finders' premises (`Vocab.finderCR`, the condition of `error` SPOT's target reads it under) makes the sampled
-verdict accept with probability at most the published `δ` at its calls: `0` where the verdict never accepts, `⊤` where
-the deployment claims nothing. Parameters naming the recursive form (`VStar.Recursive`) are not this target's. -/
+further finders' premises and the finder's (`Vocab.finderCR`, `Vocab.FinderCR`, both in the condition of `error` SPOT's
+target reads it under) makes the sampled verdict accept with probability at most the published `δ` at its calls: at
+most the finder's collision bound where the verdict accepts only off v2's registered tables, `⊤` where the deployment
+claims nothing. Parameters naming the recursive form (`VStar.Recursive`) are not this target's. -/
 def Covers (V : Vocab d α) (k : Verity.Registration.Composite) (S : ByteArray → Array ByteArray → Option Live) :
     Prop :=
   ∀ θ F, S θ F = none → (∃ p, ParamsAt θ p) → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
-    V.finderCR .sampled θ F c σ →
+    V.finderCR .sampled θ F c σ → V.FinderCR .sampled θ F c σ →
       Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ ≤ V.delta θ .sampled (V.cost θ F c σ)
 
 /-- **Soundness's vocabulary at `.sampled` reads the constructions `K` at the deployment's sessions `S`**: each session

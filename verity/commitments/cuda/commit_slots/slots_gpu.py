@@ -14,7 +14,9 @@ A step is committed as its groups' outputs arrive::
 
 or at once, ``commit(plan, step, salt_key, outputs, slots)``, the reference's ``slots.commit`` signature with the plan in place
 of the context and layout. ``Plan(..., "host", build=DIR)`` runs the same calls on the engine's host twin (g++), with numpy arrays
-for tensors: what the CPU tests hold to the reference.
+for tensors: what the CPU tests hold to the reference. On a CUDA device the plan's engine (``Plan.ENGINE``) needs a tensor
+runtime (torch) that verity doesn't import: a subclass of ``Plan`` supplies one whose ``runtime()`` returns it (the
+benchmarks' ``benchmarks/torch_gpu/commit_slots/torch_plan.py``), and the plan's partition and graphs take torch from it.
 
 The plan holds each add's tensors until the side stream has read them (a thread drops them then) or, at the next add,
 until the producer's stream waits for that read (``Plan.release``, ``LAG``), so a producer may free its tables once it
@@ -43,8 +45,6 @@ from __future__ import annotations
 
 import collections
 import contextlib
-import importlib.util
-import sys
 import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -53,33 +53,18 @@ from typing import Any
 
 import numpy as np
 
-import slots as S
+from verity.commitments.cuda.commit_slots import slots as S
+from verity.commitments.cuda.sha512_rows import engine as E
 from verity.commitments.merkle import merkle_depth
 
 __all__ = ["LAG", "TEMP_BYTES", "E", "Pending", "Plan", "SmPartition", "StepCommitter", "build", "commit", "driver_bindings",
            "regroup"]
 
-HERE = Path(__file__).resolve().parent
-ENGINE = HERE.parent / "sha512_rows" / "engine.py"
 LAG = 1               # adds a plan holds unread tensors for before their producer waits for the read: 1 keeps no more
                       # tables alive at the producer's next allocation than it holds itself (at the HBM limit, 2 ran out)
 TEMP_BYTES = 1 << 30
 TEMP_BUFFERS = 4      # a pass's live (rows, slots) digest buffers at most: row digests, the run, the rest's leaves, a level
 PAD_CHUNK = 16        # pads alone are hashed 2^16 at a time
-
-
-def _load_engine() -> Any:
-    name = "sha512_rows_engine"
-    if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, ENGINE)
-        assert spec is not None and spec.loader is not None
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[name] = mod
-        spec.loader.exec_module(mod)
-    return sys.modules[name]
-
-
-E = _load_engine()
 
 
 def _arch(major: int, minor: int) -> str:
@@ -145,13 +130,11 @@ class _Graph:
     n: int
 
 
-def driver_bindings() -> tuple[Any, Any]:
-    """The CUDA driver's Python bindings and the check of a call's status, as torch holds them for its ``GreenContext``
-    (``torch.cuda._utils``): what an ``SmPartition`` is made through. RuntimeError where this Python has none, saying
-    what it lacks."""
-    import torch
-    from torch.cuda import _utils
-
+def driver_bindings(torch: Any) -> tuple[Any, Any]:
+    """The CUDA driver's Python bindings and the check of a call's status, as ``torch`` (the module) holds them for its
+    ``GreenContext`` (``torch.cuda._utils``): what an ``SmPartition`` is made through. RuntimeError where this Python has
+    none, saying what it lacks."""
+    _utils = torch.cuda._utils
     drv, ok = getattr(_utils, "_cuda_bindings_driver", None), getattr(_utils, "_check_cuda_bindings", None)
     if drv is None or ok is None:
         raise RuntimeError(
@@ -168,10 +151,8 @@ class SmPartition:
     kernels on its SMs alone, while the primary context's streams still run on every SM. The split rounds ``sms`` up to
     the device's granularity; ``sms`` and ``rest`` are the counts it gave."""
 
-    def __init__(self, sms: int, device: Any) -> None:
-        import torch
-
-        self.drv, self.ok = driver_bindings()
+    def __init__(self, sms: int, device: Any, torch: Any) -> None:
+        self.drv, self.ok = driver_bindings(torch)
         self.torch = torch
         self.index = torch.device(device).index
         self.index = torch.cuda.current_device() if self.index is None else self.index
@@ -300,16 +281,19 @@ class Plan:
     gave), and the leaf kernel's persistent grid fills those alone: the commit then shares the device with work on the
     other SMs instead of taking turns with it for all of them. The bytes are the same at every ``sms``."""
 
+    #: the engine a plan runs on; its ``runtime()`` raises on a CUDA device until a subclass supplies it
+    ENGINE: type[E.Engine] = _Engine
+
     def __init__(self, context: bytes, layout: S.CommitShape, device: Any, arch: str | None = None,
                  temp_bytes: int = TEMP_BYTES, leaf_minb: int = 0, sms: int = 0, *, build: Path,
                  default: str = E.DEFAULT_VARIANT) -> None:
         self.context, self.layout, self.temp_bytes, self.leaf_minb = context, layout, temp_bytes, leaf_minb
-        self.engine = _Engine(device, arch, default=default, build=build)
+        self.engine = self.ENGINE(device, arch, default=default, build=build)
         self.host, self.torch, self.device = self.engine.host, self.engine.torch, self.engine.device
         self.unit_dids = E.words(S.unit_domain_ids(context, layout))
         self.slot_did = S.slot_domain(context, layout).domain_id
         self.depth = merkle_depth(layout.unit_count)
-        self.partition = SmPartition(sms, self.device) if sms and not self.host else None
+        self.partition = SmPartition(sms, self.device, self.torch) if sms and not self.host else None
         self.sms = self.partition.sms if self.partition else 0
         if self.host:
             self.stream = None

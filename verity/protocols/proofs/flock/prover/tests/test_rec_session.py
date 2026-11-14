@@ -811,7 +811,7 @@ def _opening(d: Path, relay, rng) -> SimpleNamespace:
     proof = V.load(d, RL.STACKED)[2][0]
     res = A.residuals(sr.sh, A.decode(sr.sh, proof), rounds, [], pts, claims=[m["claim"] for _, m in sr.reps])[0]
     return SimpleNamespace(public=public, private=private, vf=vf, sr=sr, residuals=[i for i, x in enumerate(res) if x],
-                           vstar=V.check(public, private, {0: proof}, RL.STACKED))
+                           vstar=V.check_twin(public, private, {0: proof}, RL.STACKED))
 
 
 def test_the_relay_commits_r_and_opens_it_at_the_sparse_claims_in_the_same_session(stacked_session, tmp_path):

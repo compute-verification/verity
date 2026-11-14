@@ -3,7 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.Window.Sessions
 
 /-!
-# Sampled proofs' coupling over a window: the rounds a session's trace leaves on one stream
+# SPOT's coupling over a window: the rounds a session's trace leaves on one stream
 
 A member's session's trace answers its rounds at releases of the one play's log (`Window/Answered.lean`), and the
 window's readings say which opening is which session's round (`Window/Sessions.lean`). This module reads, on lists

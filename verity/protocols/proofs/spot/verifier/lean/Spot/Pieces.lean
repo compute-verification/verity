@@ -76,6 +76,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `template_circuits`: a two-stage run's params naming each template's circuit file by SHA-512 and its statements'
   reference header and registered reads, in the check's order (`Run.templateCircuits`), and the tables they pin
   (`Run.pinnedTables`);
+* `tables_served`: whether each history table an interior reads is a port of the boundary registration's record at its
+  root and domain (`Run.tablesServed`);
 * `stream`: the proof system stream's own rules, one op's decision on what they hold of the stream (`Stream.run`);
 * `fleet`: the fleet's rules over its streams' operators, one op's decision on what they hold of the fleet (`Fleet.run`);
 * `hello`: the run's Hello on its record, its coin tree at run scope (`Hello.check`).
@@ -256,25 +258,28 @@ def fanout (j : Json) : V Json := do
     ("shared", Lean.toJson (Partition.sharedInputs p.prog rs held))]
 
 /-- `{"params", "record"}` to R1–R8's codes, and under a template query that applies the fan-out the verdict publishes
-(`Partition.fanout?`) and, when any, the tied values R8 let through (`Registration.tiedThrough`), whatever the
-record. With `"members"` (`LinkPoints.membersOfJson`), the per-member form's members, the check holds them to
-`link-points` after R8, as it does the ones `OneStageZk.membersParamsOfJson` hands it from a case's parameters. -/
+(`Partition.fanout?`) and, when any, the tied values R8 let through (`Docket.tiedThrough`), whatever the record.
+With `"members"` (`LinkPoints.membersOfJson`), the per-member form's members, the check holds them to `link-points`
+after R8, as it does the ones `OneStageZk.membersParamsOfJson` hands it from a case's parameters. It is SPOT's check
+alone: the caller's facts (the declared day, the binding, the seed salt, the registered compiler, the pool's marks and
+chain, and the verdicts) are the caller's check's (`VStar.Recursive.Caller.check`), which this package can't load;
+`spot-flock-caller` serves it, and the verifier runs both (`one_stage.verifier.check`, `Caller.gate`). -/
 def registration (j : Json) : V Json := do
   let v := (← params (getD j "params")).verifier
   let members ← match field? j "members" with
     | some ms => LinkPoints.membersOfJson ms
     | none => pure #[]
   let v := { v with members }
-  let cs := (Registration.check (getD j "record") v).map Json.str
-  let through := Registration.tiedThrough v
+  let cs := (Docket.check (getD j "record") v).map Json.str
+  let through := Docket.tiedThrough v
   return Json.mkObj (("codes", Json.arr cs) :: ((Partition.fanout? v.program v.query).map ("fanout", Lean.toJson ·)).toList
     ++ (if through.isEmpty then [] else [("rests_on_period_check", Lean.toJson through)]))
 
-/-- `{"params"}` to `registered_entries` under the verifier's window root and fixed values (`Registration.ownEntries`):
+/-- `{"params"}` to `registered_entries` under the verifier's window root and fixed values (`Docket.ownEntries`):
 `{value: {"leaves", "words", "word_bits", "domain"}}`, null where it raises. -/
 def registered (j : Json) : V Json := do
   let v := (← params (getD j "params")).verifier
-  return orNull (fun es => Json.mkObj (es.toList.map fun e => (e.value, e.toJson))) (Registration.ownEntries v)
+  return orNull (fun es => Json.mkObj (es.toList.map fun e => (e.value, e.toJson))) (Docket.ownEntries v)
 
 /-- `{"program", "value", "words", "leaves", "word_bits"}`, two strings and three natural numbers, and an optional
 `"window"`, to `registered.domain(...).domain_id` in hex; refused where it raises (a width but 16 or 32, a window that is
@@ -722,7 +727,7 @@ def checkPublic (j : Json) : V Json := do
   let declared ← ps.mapM fun
     | .str s => pure s
     | _ => throw "a declared item is not a string"
-  let query ← Registration.queryDigest (getD j "query")
+  let query ← Docket.queryDigest (getD j "query")
   return (← Service.checkPublic (getD j "record") (getD j "scheme") query values declared).toJson
 
 /-- `{"verdicts", "sessions", "outputs"}` to the outcome's verdict checks' `{"ok", "codes", "detail"}`
@@ -1061,6 +1066,15 @@ def templateCircuits (j : Json) : V Json := do
     ("reads", Json.arr (reads.map fun (t, v) => Json.arr #[Json.str t, Lean.toJson v])),
     ("tables", Json.arr (tables.map fun (p, e) => Json.arr #[Json.str p, e]))]
 
+/-- `{"record", "tables": [[name, root, domain], ...]}` (root and domain lowercase hex) to `{"served": bool}`: whether
+each history table the interior reads is one the boundary registration's record served (`Run.tablesServed`). -/
+def tablesServed (j : Json) : V Json := do
+  let .arr ts := getD j "tables" | throw "tables is not a list"
+  let tables ← ts.mapM fun
+    | .arr #[.str n, .str r, .str d] => return (n, ← Flock.unhex r, ← Flock.unhex d)
+    | _ => throw "a table is [name, root, domain], its root and domain hex strings"
+  return Json.mkObj [("served", Json.bool (Run.tablesServed (getD j "record") tables))]
+
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),
    ("fanout", fanout), ("registration", registration),
@@ -1081,7 +1095,8 @@ def table : List (String × (Json → V Json)) :=
    ("public_ports", publicPorts), ("session_registered", sessionRegistered), ("record", record), ("across", across),
    ("across_all", acrossAll),
    ("check_public", checkPublic),
-   ("check_verdicts", checkVerdicts), ("run", run), ("template_circuits", templateCircuits), ("hello", Hello.check),
+   ("check_verdicts", checkVerdicts), ("run", run), ("template_circuits", templateCircuits),
+   ("tables_served", tablesServed), ("hello", Hello.check),
    ("fits", fits),
    ("pop_order", popOrder),
    ("challenger_commitment", Challenger.commitmentPiece),

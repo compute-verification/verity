@@ -1,6 +1,6 @@
 module
 
-public import Spot.Registration
+public import Spot.Docket
 public import Proofs.Flock.Claims.Sampling.Reference.Deployed
 public import Proofs.Flock.Claims.Sampling.Reg
 import Mathlib.Algebra.Order.Floor.Extended

@@ -181,7 +181,7 @@ def launch(outdir: Path, name: str, o: dict[str, np.ndarray], seed: int) -> tupl
 
 def bind_check() -> dict[str, Any]:
     from verity.circuits.defs import bind
-    from verity.definitions.registry import dsa
+    from verity_vllm.definitions.registry import dsa
 
     fn = bind(dsa.DsaMqaLogitV3, H=H, D=D)
     return {"bindings": {fn.id: bool(fn.signature())}, "ok": bool(fn.signature())}
