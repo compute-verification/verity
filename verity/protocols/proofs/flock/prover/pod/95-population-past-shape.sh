@@ -98,7 +98,8 @@ challenger_end $O/challenger; echo "challenger exit $?"
 challenger_audit $O/challenger $SESS; echo "challenger audit $?"
 
 wait $LP; [ -x $LEAN_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
-$LEAN_BIN verify --statement verity/flock-circuit --coins tree --circuit $D/circuit.txt --public $D/pub-$N.bin \
+. verity/protocols/proofs/spot/verifier/one_stage/verifier_env.sh
+$(verifier_env) $LEAN_BIN verify --statement verity/flock-circuit --coins tree --circuit $D/circuit.txt --public $D/pub-$N.bin \
   --partition $D/partition.json --program $D/program.json --session $SESS > $O/lean-honest.log 2>&1
 echo "honest rc $?"
 grep -h '^VERDICT' $O/lean-honest.log | head -1 | cut -c1-600
