@@ -214,14 +214,15 @@ def test_a_member_with_no_statement_has_its_files_held_by_both_before_any_sessio
     assert why.startswith(f"proofs: member {A}: {M.UNREAD[0]}"), why
 
 
-def test_a_member_no_statement_names_is_held_to_the_blobs_lookup_tables(tmp_path):
+def test_a_member_no_statement_names_is_held_to_its_own_circuits_lookup_tables(tmp_path):
     """A window audited with a statement of its second member alone: the first member, which no statement names, is
-    held to the blobs' pinned lookup tables as a sampled one is (`OneStageZk.tablesHeld`, the first check of every
-    member's files), before any session. With its circuit looking up ``rcp`` where the blobs hold no table, both
-    refuse it for the tables. The other way, blobs holding ``rcp``'s table where its circuit looks up none: the twin
-    refuses it on blobs with a file under ``rcp``'s pinned digest. Lean's check finds a blob by the SHA-512 of its
-    bytes, so its side of that row needs the table's own bytes, which this suite does not load: both sides on the
-    table itself are `benchmarks/one_stage`'s (``tests/test_members_tables.py``)."""
+    held to its own circuit's lookup tables among the blobs as a sampled one is (`OneStageZk.ownTables`, the first read
+    of every member's files), before any session. With its circuit looking up ``rcp`` where the blobs hold no table,
+    both refuse it for the tables. The other way, blobs holding a file under ``rcp``'s pinned digest where its circuit
+    looks up none: the twin does not refuse it for the table, and answers as it does without it, at the member's
+    circuit, a stand-in that does not parse. Lean's check finds a blob by the SHA-512 of its bytes, so its side of that
+    row needs the table's own bytes, which this suite does not load: both sides on the table itself are
+    `benchmarks/one_stage`'s (``tests/test_members_tables.py``)."""
     a = Audit("members-twin-no-statement-tables", opened=(B,))
     assert [st["member"] for st in a.evidence["proofs"]["statements"]] == [B]
     looks = a.put(b"a circuit\nMETA " + json.dumps({"lookups": {"rcp": {}}}).encode() + b"\n")
@@ -229,12 +230,12 @@ def test_a_member_no_statement_names_is_held_to_the_blobs_lookup_tables(tmp_path
     assert run is None and why == M.run_reason(run, refused), (why, refused)
     assert why == f"proofs: member {A}: {PF.NO_TABLES}: the circuit looks up rcp, the blobs hold none", why
 
-    a.ask(tmp_path / "holds")
+    _, plain = a.ask(tmp_path / "holds")
     blobs = M.blobs_of(sorted((tmp_path / "holds").iterdir()))
-    run, refused = M.members_run(_json(a.params), _json(a.rec), _json(a.evidence),
-                                 blobs | {PF.MUFU_SHA512["rcp"]: next(iter(blobs.values()))}, program=a.s.program,
-                                 verify=lms_verify, verdict=_never)
-    assert run is None and refused == f"member {A}: {PF.NO_TABLES}: the circuit looks up none, the blobs hold rcp"
+    held = M.members_run(_json(a.params), _json(a.rec), _json(a.evidence),
+                         blobs | {PF.MUFU_SHA512["rcp"]: next(iter(blobs.values()))}, program=a.s.program,
+                         verify=lms_verify, verdict=_never)
+    assert held == plain and held[0] is None and held[1].startswith(f"member {A}: {M.UNREAD[0]}"), (held, plain)
 
 
 def test_the_twin_answers_leans_reason_on_the_logs_order_and_the_registrations_roots(tmp_path):
