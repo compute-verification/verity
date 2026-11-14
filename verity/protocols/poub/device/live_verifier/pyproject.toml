@@ -33,4 +33,6 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "tools/research/src/research",
           "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py",
           "verity/protocols/poub/device/__init__.py",
-          "verity/composite/__init__.py", "verity/composite/device/__init__.py", "verity/composite/device/live_challenger/__init__.py"]
+          "verity/composite/__init__.py", "verity/composite/device/__init__.py", "verity/composite/device/live_challenger/__init__.py",
+          # the sender's witness rule, which the compose gate's own (host.py's `witness`) is held to
+          "benchmarks/one_stage/served_verdicts.py"]
