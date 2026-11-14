@@ -109,6 +109,21 @@ def test_the_state_keeps_every_live_pods_rate_its_own_host_exempt_and_foreign_on
     assert state["rate_all"] == 16.0 and state["unrated"] == ["n"]
 
 
+@pytest.mark.parametrize("rate", ["n/a", [1.5], {"usd": 1}, "nan", float("inf"), True])
+def test_a_pod_whose_rate_is_not_a_number_is_unrated_and_the_poll_goes_on_as_before(rate):
+    """The guard is what stops spend: a provider's odd costPerHr on a pod outside its scope makes that pod unrated and changes
+    nothing else the poll does."""
+    pods = [pod("a", "vy-a-1", 1, 5), pod("f", "ligerito-h100", 9, 5)]
+    plain, odd = FakeRunPod(pods), FakeRunPod([*pods, {**pod("x", "ligerito-x", 0, 5), "costPerHr": rate}])
+    s_plain, s_odd, l_plain, l_odd = G.new_state(T0), G.new_state(T0), [], []
+    for t in (T0, T0 + 3600):
+        step(plain, TOML, s_plain, t, l_plain)
+        step(odd, TOML, s_odd, t, l_odd)
+    assert s_odd["rate_all"] == 10.0 and s_odd["unrated"] == ["x"]
+    assert {k: v for k, v in s_odd.items() if k != "unrated"} == {k: v for k, v in s_plain.items() if k != "unrated"}
+    assert l_odd == l_plain and odd.deleted == plain.deleted
+
+
 def test_a_line_at_its_cap_terminates_its_pods_and_holds_until_the_cap_is_raised():
     api = FakeRunPod([pod("a", "vy-a-1", 2, 5), pod("b", "vy-a-2", 2, 5), pod("g", "vy-a-big-1", 2, 5)])
     state, lines = G.new_state(T0), []

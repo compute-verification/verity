@@ -90,7 +90,7 @@ def test_a_rate_that_cant_be_read_makes_the_total_null_with_its_why_never_a_smal
         "vy-nebius-cpu-2, vy-nebius-cpu-3 have no rate in the machines registry; the budget guard's last poll was 11.8 min "
         "ago, over 10")
     _guard(tmp_path, monkeypatch, T0, unrated=["pod-a", "pod-b"])
-    assert why(_rows(T0, 6.34)) == "RunPod pods pod-a, pod-b list no costPerHr"
+    assert why(_rows(T0, 6.34)) == "RunPod pods pod-a, pod-b list no costPerHr that is a number"
     state.write_text(json.dumps({"last_ok_poll": T0, "rate_now": 40.0}))
     assert why(_rows(T0, 6.34)) == "the budget guard's state has no `rate_all`: its guard predates it"
     _guard(tmp_path, monkeypatch, None)

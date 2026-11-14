@@ -73,7 +73,7 @@ def runpod_rate(now: float, state: Path | None = None) -> tuple[float | None, st
         return None, "the budget guard's state has no `rate_all`: its guard predates it"
     if unrated := s.get("unrated"):
         return None, f"RunPod pod{'s' if len(unrated) > 1 else ''} {', '.join(unrated)} list{'' if len(unrated) > 1 else 's'} " \
-                     "no costPerHr"
+                     "no costPerHr that is a number"
     if now - t > STALE_S:
         return None, f"the budget guard's last poll was {(now - t) / 60:.1f} min ago, over {STALE_S // 60}"
     return float(rate), None
