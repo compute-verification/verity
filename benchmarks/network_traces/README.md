@@ -32,7 +32,10 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   record's id form by default, and `rehearse` names its traffic's (`--egress`: id with `--ids`, else bytes);
   `connection_rows_run.py` is a run's connection rows (`--lengths 1|2 [--content P,O[,ROWS] ...]`: the schedule's flags,
   the publisher's keep of each execution phase's tables, or under `--lengths 2` of the network certifier's word that
-  it has none, their check, and `cost`, which measures a close);
+  it has none, their check, which is handed the SHA-512 of the network certifier's public key and its session
+  (`check --key-sha512 HEX --session HEX`), holds the run's deployment record to them and, with `--registrations FILE`
+  and no problem found, writes what it was checked under and then each registration it held, and `cost`, which
+  measures a close);
   `warden_chain.py` is the chain's reads of a relay run, and `warden_zk.py` reads the relay's bucket rows in the proof
   system.
 - **Proofs in zero knowledge.** Each driver proves its proof blocks with Flock `prove --zk` behind the Lean ZK server
