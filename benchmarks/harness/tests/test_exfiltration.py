@@ -9,7 +9,7 @@ rows. The runs' case is row (i); here its rows stand for the command's row, the 
 label, with what prices each row's proving or that its rows don't record it. Then the network certifier's part beside
 them at the requests its calculator counts by default, the sampling plan's; its figures of record at two release schedules, held to its own document; what rests on the set-time card printed
 only under the calculator's label; the output count beside the sums that take it at 0, which the stop verdicts'
-reader's answer names; every figure's error, summed
+reader's answer names, and it names none while the reader asks the rule without a schedule; every figure's error, summed
 over everything it covers, at the scans' δ the term states, and no amount where it is 1 or more, on term documents
 with made-up errors; every input's mark; each refusal by name; and the command."""
 
@@ -681,9 +681,11 @@ def test_the_output_count_is_beside_the_sums_that_take_it_at_zero(tmp_path, list
     certifier's row for the design before its stop block charges it, as its schedules, and the command reads it from
     there, in every monitoring period. The sums that take it at 0 are named from the stop verdicts' reader's answer,
     never from a schedule that reads 0: with no run carrying the stop class's record no sum does, the rows that
-    would hold it as their schedules, the inputs list no output count and the print says so; where the answer holds
-    an execution phase of a link, the sums under `all three` and `design` take it at 0 on that execution phase, marked
-    assumed, and the print says on how many beside each."""
+    would hold it as their schedules, the inputs list no output count and the print says so. The reader's answer
+    holds no execution phase whatever a run's files hold, since the reader asks the network certifier's rule
+    without a schedule and the rule charges no class below a schedule it was not handed: with a class's four
+    verdicts in the run of record, in the reader's own format and with its formats listed, no row is named, no sum
+    takes the count at 0, and the print's lines say the schedule was not handed."""
 
     lb = term()
     doc = E.build(store=recorded(tmp_path).fresh(), root=REPO)
@@ -722,58 +724,51 @@ def test_the_output_count_is_beside_the_sums_that_take_it_at_zero(tmp_path, list
     count = wide["periods"][-1]["output_count"]
     assert count["bits_a_request"] == pytest.approx(13) and count["GB"] == pytest.approx(28_899_014, abs=0.5)
 
-    # the reader's answer holds one execution phase of a link: the sums under the rows it names take the count at 0
-    # there, and there alone
-    one = "on 1 execution phase(s) of a link"
+    # the run of record holds a class's four verdicts in the reader's own format, each accepted and complete, with
+    # its controls and its rates, and the reader lists their formats. The reader asks the rule without a schedule,
+    # so its answer holds no execution phase: no row is named, and no sum takes the count at 0
     store = with_verdicts(tmp_path / "held", [], held=held_phase(listed)).store
     held = E.build(store=store, root=REPO)
     answer = held["certifier"]["stop"]
     assert (answer["rows"], answer["held_phases"], answer["below"], answer["runs"], answer["superseded"]) == (
-        ["lengths", "all three", "design"], 1, False, [HOLDER], [])
+        ["lengths", "all three", "design"], 0, False, [HOLDER], [])
     assert len(answer["verdicts"]) == 4 and {v["mark"] for v in answer["verdicts"]} == {E.RUN_NOT_PROVED}
     # the document is the calculator's on the reader's own answer on the run that carries the record, and no other's
     asked = lb.document(lb.inputs(response_ids=E.RESPONSE_IDS), stop=reader().of_runs(store, [HOLDER], []))
     assert answer == {k: asked["stop"][k] for k in ("rows", "held_phases", "below", "why", "verdicts")} | {
         "runs": [HOLDER], "superseded": []}
-    of = {(r["scope"], r["period"], r["row"]): r["term"]["2"]["GB"] for r in asked["rows"]}
-    for p, before in zip(held["periods"], doc["periods"], strict=True):
-        count, sums = p["output_count"], p["together"]
-        assert {name: t["certifier_GB"] for name, t in sums.items()} == {
-            name: of[p["compute"], p["period"], name] for name in E.TOGETHER}
-        assert count == before["output_count"] | {"at_zero_in": ["all three", "design"]}
-        # the design is below the design before its stop block by the count of the one execution phase held
-        below = sums[E.OUTPUT_COUNT]["certifier_GB"] - sums["design"]["certifier_GB"]
-        assert below == pytest.approx(count["GB"] / p["phases"], rel=1e-2) and below > 0
-        assert {name: t for name, t in sums.items() if name not in answer["rows"]} == {
-            name: t for name, t in before["together"].items() if name not in answer["rows"]}
-    by = {i["input"]: i for i in held["inputs"]}
-    assert (by["output_count"]["part"], by["output_count"]["value"], by["output_count"]["mark"]) == ("network certifier", 0, "assumed")
-    assert by["output_count"]["source"] == (
-        f"not counted in the sums under `all three` and `design` {one}: until a served audit has sampled a stop block the "
-        "server chooses a response's output count, which the network certifier's row `design, no stop block` charges 11 "
-        "bits a request as its schedules")
+    assert answer["why"] == [
+        "each connection is charged its whole schedule: the schedule was not handed for 1 of the 1 class(es) that hold "
+        "a row in the 1 execution phase(s) read, so the rule charges none of those below it, and 0 of the 1 lack a "
+        "verdict: this reader is handed no schedule and asks the rule without one",
+        reader().SERVE_NAMED,
+        "the link responses, execution phase 3, class 0: charged its whole schedule on each of its 4 rows: the "
+        "schedule was not handed",
+        f"`out/registrations.jsonl` of {HOLDER} says its registrations were checked under the network certifier's key "
+        f"whose SHA-512 is {'5a' * 64}, in the session {'c3' * 32}: the reader holds neither, and compares them with "
+        "nothing"]
+    bare = E.build(store=recorded(tmp_path / "bare", planned=False).store, root=REPO)
+    assert held["periods"] == bare["periods"] == doc["periods"] and held["inputs"] == bare["inputs"]
+    assert {tuple(p["output_count"]["at_zero_in"]) for p in held["periods"]} == {()}
     text = E.render(held)
-    assert f"with no advice priced and with a response's output count taken at 0 under `all three` and `design` {one}: " in text
-    assert ("- the output count: 24,453,012 GB (assumed), 11 bits a request. Until a served audit has sampled a stop block the "
-            "server chooses a response's output count, and the network certifier's row `design, no stop block` charges it "
-            f"as its schedules. The sums under `all three` and `design` take it at 0 {one}, as they price no advice. ") in text
-    assert ("- the stop class of the network certifier's rows `lengths`, `all three` and `design` is charged below its "
-            f"schedule {one} and its whole schedule on every other execution phase of a monitoring period, by the answer of "
-            "the stop verdicts' reader (`stop_verdicts.of_runs`) on the runs that carry "
+    assert "with no advice priced and with a response's output count taken at 0 under no row: " in text
+    assert ("as its schedules. No sum takes it at 0: those under `all three` and `design` hold it too, their stop class "
+            "charged its whole schedule.") in text
+    assert ("- the stop class of the network certifier's rows `lengths`, `all three` and `design` is charged its whole "
+            "schedule, by the answer of the stop verdicts' reader (`stop_verdicts.of_runs`) on the runs that carry "
             f"`{E.VERDICTS}` ({HOLDER}). A sum takes the output count at 0 only on an execution phase the reader's answer "
             "holds, never because its row's schedules read 0:\n"
-            "  - 1 of the 1 execution phase(s) read are charged below their schedule: ") in text
+            "  - each connection is charged its whole schedule: the schedule was not handed for 1 of the 1 class(es) ") in text
     assert [line[4:] for line in text.splitlines() if line.startswith("  - ")] == answer["why"]
-    assert f"(assumed): the sum under `design` takes it at 0 {one}.\n" in text
-    assert f" The sum under `all three` takes the output count at 0 {one} too. " in text
-    assert ("26,392,406 GB by the design no run has behind it, its stop class charged its whole schedule on all but 1 "
-            "execution phase(s) of a link, each at D_j = 2") in text
-    # the same files with no format listed in the reader hold nothing: no row is named, as with no record
+    assert "what a response's output count is charged while the server chooses it (assumed): no sum of this table takes it at 0.\n" in text
+    assert "he sum under" not in text and "| output_count |" not in text and "execution phase(s) of a link" not in text
+    # the same files with no format listed in the reader hold nothing either, each verdict missing: as with no record
     reader().FORMATS.clear()
     unlisted = E.build(store=with_verdicts(tmp_path / "unlisted", [], held=held_phase(listed)).store, root=REPO)
     assert (unlisted["certifier"]["stop"]["held_phases"], unlisted["certifier"]["stop"]["runs"]) == (0, [HOLDER])
-    bare = E.build(store=recorded(tmp_path / "bare", planned=False).store, root=REPO)
-    assert unlisted["periods"] == bare["periods"] == doc["periods"] and unlisted["inputs"] == bare["inputs"]
+    assert unlisted["certifier"]["stop"]["verdicts"] == [] and unlisted["certifier"]["stop"]["why"][2].endswith(
+        "the compute audit is missing; the schedule was not handed")
+    assert unlisted["periods"] == held["periods"] and unlisted["inputs"] == held["inputs"]
 
 
 def test_every_figure_carries_its_error_at_the_scans_delta_the_term_states(tmp_path):
@@ -1470,7 +1465,8 @@ def reader():
 @pytest.fixture
 def listed(monkeypatch) -> dict[str, str]:
     """The reader with a format listed for each of its four verdicts, as its own tests list them: it lists none, so
-    without this no run's files hold an execution phase. The formats, by verdict."""
+    without this every verdict of a run's files reads as missing. With it the reader still holds no execution
+    phase: it asks the network certifier's rule without a schedule. The formats, by verdict."""
 
     sv = reader()
     formats = {kind: f"a format of the {kind}" for kind in sv.CC.VERDICTS}
@@ -1479,13 +1475,15 @@ def listed(monkeypatch) -> dict[str, str]:
 
 
 def held_phase(formats: Mapping[str, str]) -> dict[str, list[dict]]:
-    """A run's files, in the stop verdicts' reader's own format and by the names it reads, that hold one execution
-    phase of a link: the registrations' file, whose first line says what its offline check was handed, with the
-    registration of a head whose one class holds 4 rows; the four verdicts on that class and head, each accepted
-    and complete, the stop record's and the response tie's at the registered rate; each verifier's negative
-    control, refused for its word; and the serve's registration with those two verdicts' streams, each registering
-    every block of 4. ``formats`` is each verdict's format (`listed`). Nothing here is read by the command: the
-    reader reads it and answers."""
+    """A run's files, in the stop verdicts' reader's own format and by the names it reads, of one execution phase
+    of a link with everything the reader holds a class to: the registrations' file, whose first line says what its
+    offline check was handed, with the registration of a head whose one class holds 4 rows; the four verdicts on
+    that class and head, each accepted and complete, the stop record's and the response tie's at the registered
+    rate; each verifier's negative control, refused for its word; and the serve's registration with those two
+    verdicts' streams, each registering every block of 4. ``formats`` is each verdict's format (`listed`). The
+    reader holds no execution phase on them: it asks the network certifier's rule without a schedule, and the rule
+    charges no class below a schedule it was not handed. Nothing here is read by the command: the reader reads it
+    and answers."""
 
     sv = reader()
     CC, C = sv.CC, sv.C
@@ -1543,15 +1541,17 @@ def test_with_no_verdicts_of_record_the_print_is_as_it_was_byte_for_byte(tmp_pat
 
 def test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apart_from_measured(tmp_path, listed):
     """Every piece accepted and every control refused by the verifier that accepted its piece, none of them proved: the
-    output count's 0 is `run, not proved`, printed "run (Python verifier, not proved)" with each verdict's run and
-    verifier, and the summary counts it apart from measured. The class prints `complete on class C of serve S at rate
-    1/1 (run, not proved: ...; Python verifier for ...)`, with what is open in words and no issue's id, and no line
-    calls it proved. The controls name another class, which is not read.
+    class prints `complete on class C of serve S at rate 1/1 (run, not proved: ...; Python verifier for ...)`, with
+    what is open in words and no issue's id, and no line calls it proved. The controls name another class, which is
+    not read.
 
-    The 0 is there to mark only where the stop verdicts' reader's answer holds an execution phase: the run of record
-    holds one in the reader's own format beside its verdicts (`held_phase`), and the sums under `all three` and
-    `design` take the count at 0 on it. The same verdicts in a run that holds nothing the reader reads complete the
-    class and move no figure and no input."""
+    The output count's 0 would carry that mark, printed "run (Python verifier, not proved)" with each verdict's run
+    and verifier and counted apart from measured, only where the stop verdicts' reader's answer holds an execution
+    phase. It holds none: the run of record holds a class's four verdicts in the reader's own format beside these
+    (`held_phase`), the reader asks the network certifier's rule without a schedule, and the rule charges no class
+    below a schedule it was not handed. So no sum takes the count at 0, no input carries the mark and no figure
+    moves: the periods and the inputs are those of the store with no verdict. The same verdicts in a run that holds
+    nothing the reader reads say the same of the class."""
 
     base = E.build(store=recorded(tmp_path / "base", planned=False).store, root=REPO)
     doc = E.build(store=with_verdicts(tmp_path, complete(), held=held_phase(listed)).store, root=REPO)
@@ -1563,46 +1563,26 @@ def test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apar
         ("stop_record", None), ("response_tie", None), ("response_tie", "id"), ("request_tie", None),
         ("request_tie", "max_tokens"), ("second_stage", None)]
     assert [sorted(v.keys() & set(E.CLASS_FIELDS)) for v in stop["verdicts"] if v["control"]] == [[], []]
-    by, before = {i["input"]: i for i in doc["inputs"]}, {i["input"]: i for i in base["inputs"]}
-    count = by["output_count"]
-    assert (count["part"], count["value"], count["mark"]) == ("network certifier", 0, E.RUN_NOT_PROVED)
-    assert count["source"].startswith(
-        "taken at 0 in the sums under `all three` and `design` on 1 execution phase(s) of a link: the stop class's "
-        f"verdicts of record, `{E.VERDICTS}` "
-        f"({HOLDER}), are {said}, its boundary's registration `{'ab' * 64}`: the stop record, `accept` on "
-        "r20261113-000000-a001 by `made_up.stop_verifier` at "
-        f"{VERIFIER['commit']}, not proved: {OPEN}; the response tie, `accept` on r20261113-000000-a002 by ")
-    assert ("the response tie, the control with a changed id, `refuse` on r20261113-000000-a006 by `made_up.stop_verifier`"
-            in count["source"])
-    assert count["source"].endswith("Without them the server chooses a response's output count, which the network "
-                                    "certifier's row `design, no stop block` charges 11 bits a request as its schedules")
-    assert {k: i for k, i in by.items() if k != "output_count"} == before and "output_count" not in before
-    # the answer holds one execution phase of a link: the sums under the rows it names are below the base's by that
-    # execution phase's count, and nothing else of a monitoring period moves
-    answer, named = doc["certifier"]["stop"], ["all three", "design"]
-    assert (answer["held_phases"], answer["below"], answer["runs"], answer["superseded"]) == (1, False, [HOLDER], [])
-    for p, b in zip(doc["periods"], base["periods"], strict=True):
-        assert p["output_count"] == b["output_count"] | {"at_zero_in": named} and b["output_count"]["at_zero_in"] == []
-        assert {k: v for k, v in p.items() if k not in ("output_count", "together")} == {
-            k: v for k, v in b.items() if k not in ("output_count", "together")}
-        assert {name: t for name, t in p["together"].items() if name not in named} == {
-            name: t for name, t in b["together"].items() if name not in named}
-        for name in named:
-            below = b["together"][name]["certifier_GB"] - p["together"][name]["certifier_GB"]
-            assert below == pytest.approx(p["output_count"]["GB"] / p["phases"], rel=1e-2) and below > 0
+    # the reader read the class's four verdicts and holds no execution phase: the schedule was not handed. No row is
+    # named, so no input is the output count's and nothing of a monitoring period moves
+    answer = doc["certifier"]["stop"]
+    assert (answer["held_phases"], answer["below"], answer["runs"], answer["superseded"]) == (0, False, [HOLDER], [])
+    assert len(answer["verdicts"]) == 4 and answer["why"][0].endswith(reader().NO_SCHEDULE)
+    assert answer["why"][2].endswith("class 0: charged its whole schedule on each of its 4 rows: the schedule was not handed")
+    assert doc["inputs"] == base["inputs"] and "output_count" not in {i["input"] for i in base["inputs"]}
+    assert doc["periods"] == base["periods"] and {tuple(p["output_count"]["at_zero_in"]) for p in doc["periods"]} == {()}
     assert doc["value"] == base["value"]
 
     text = E.render(doc)
     marks = {m: sum(i["mark"] == m for i in doc["inputs"]) for m in E.MARKS}
-    assert (marks[E.RUN_NOT_PROVED], marks["measured"], marks["assumed"], len(doc["inputs"])) == (
-        1, sum(i["mark"] == "measured" for i in base["inputs"]), sum(i["mark"] == "assumed" for i in base["inputs"]),
-        len(base["inputs"]) + 1)
-    assert (f"of {len(doc['inputs'])} inputs, {marks['measured']} is measured, {marks['modeled']} modeled, 1 simulated, "
-            f"{marks['assumed']} assumed and 1 run (Python verifier, not proved).\n") in text
-    assert f"| network certifier | output_count | 0 | bit/request | run (Python verifier, not proved) | {count['source']} |" in text
-    assert ("take it at 0 on 1 execution phase(s) of a link, as they price no advice. The stop class's verdicts of record "
-            f"(`{E.VERDICTS}`, {HOLDER}): {said}.\n") in text
+    assert (marks[E.RUN_NOT_PROVED], marks["measured"], len(doc["inputs"])) == (0, 1, len(base["inputs"]))
+    assert (f"of {len(doc['inputs'])} inputs, 1 is measured, {marks['modeled']} modeled, 1 simulated and "
+            f"{marks['assumed']} assumed.\n") in text
+    assert "run (Python verifier" not in text and "| output_count |" not in text
+    assert ("No sum takes it at 0: those under `all three` and `design` hold it too, their stop class charged its whole "
+            f"schedule. The stop class's verdicts of record (`{E.VERDICTS}`, {HOLDER}): {said}.\n") in text
     assert f"- the stop class: {HOLDER} (`{E.VERDICTS}`): 6 verdicts, {said}\n" in text
+    assert [line[4:] for line in text.splitlines() if line.startswith("  - ")] == answer["why"]
     assert [line for line in text.splitlines() if "proved" in line.replace("not proved", "")] == []
 
     # the same verdicts in a run that holds nothing the reader reads: the class is complete, the reader's answer
@@ -1630,11 +1610,13 @@ def test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apar
 
 
 def test_proved_by_on_every_piece_makes_it_measured(tmp_path, listed):
-    """Only where every piece's record names the Lean guarantee that proves its verifier is the output count's 0
-    measured; it is then counted with the measured inputs and nothing of the command's prints as not proved but the
-    scan's accept, in the `scan` row's own line. The 0 is there to mark only where the stop verdicts' reader's answer
-    holds an execution phase, which the run of record holds in the reader's own format (`held_phase`); the answer's
-    own line says the serve its verdicts name is run, not proved, and the command prints it as the reader says it."""
+    """Only where every piece's record names the Lean guarantee that proves its verifier is the class's mark
+    measured, and then nothing of the command's prints as not proved but the scan's accept, in the `scan` row's own
+    line, and the reader's own line that the serve its verdicts name is run, not proved, which the command prints
+    as the reader says it. The output count's 0 would be measured with the class, and counted with the measured
+    inputs, only where the stop verdicts' reader's answer holds an execution phase. It holds none, the schedule
+    not handed, though the run of record holds a class's four verdicts in the reader's own format (`held_phase`):
+    so no input is the output count's and nothing is measured more."""
 
     proved = [v | {"proved_by": f"Made.Up.{v['piece']}", "open": None} for v in complete()]
     base = E.build(store=recorded(tmp_path / "base", planned=False).store, root=REPO)
@@ -1643,15 +1625,15 @@ def test_proved_by_on_every_piece_makes_it_measured(tmp_path, listed):
     assert (stop["complete"], stop["mark"], stop["said"]) == (True, "measured", (
         f"{ON} (measured: proved by `Made.Up.stop_record`, `Made.Up.response_tie`, `Made.Up.request_tie` and "
         "`Made.Up.second_stage`)"))
-    count = next(i for i in doc["inputs"] if i["input"] == "output_count")
-    assert count["mark"] == "measured" and "proved by `Made.Up.second_stage`" in count["source"]
+    answer = doc["certifier"]["stop"]
+    assert (answer["held_phases"], len(answer["verdicts"])) == (0, 4) and answer["why"][0].endswith(reader().NO_SCHEDULE)
+    assert (doc["inputs"], doc["periods"]) == (base["inputs"], base["periods"])
     measured = sum(i["mark"] == "measured" for i in base["inputs"])
     text = E.render(doc)
-    assert f"inputs, {measured + 1} are measured, " in text
+    assert measured == 1 and f"- of {len(base['inputs'])} inputs, 1 is measured, " in text
     assert [line for line in text.splitlines() if "not proved" in line and term().SCAN_ACCEPT not in line] == [
         f"  - {reader().SERVE_NAMED}"]
-    assert ("| network certifier | output_count | 0 | bit/request | measured | taken at 0 in the sums under `all three` "
-            "and `design` on 1 execution phase(s) of a link: ") in text
+    assert "| output_count |" not in text and "taken at 0 in the sums" not in text
     # with nothing in the reader's format the class is as proved and no sum takes the count at 0: nothing is measured more
     alone = E.build(store=with_verdicts(tmp_path / "alone", proved).store, root=REPO)
     assert (alone["stop_class"]["mark"], alone["inputs"], alone["periods"]) == ("measured", base["inputs"], base["periods"])

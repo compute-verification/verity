@@ -107,7 +107,7 @@ Open premises (`open`):
   `nci_check` (`../../../policy/inference_only/verifier/nci/lean`), `core_protocol` (`../../../interface`), and `lms` and
   `core_identity` (`verity/commitments/lms/lean`, `verity/commitments/identity`); the certifier program, no package. The
   modules, `verity.circuits`, `verity.commitments`, `verity.commitments.crypto`, `verity.protocols.proofs.spot.verifier` and,
-  `coin_link` alone, `verity.protocols.proofs.spot.device`, and, `parties` alone, `verity.protocol` and `verity.channel`;
+  `parties` alone, `verity.protocol` and `verity.channel`;
   never the prover side, which `../device/program/lean/scripts/window_vectors.py` and the tests import.
 - **Not here**: the certifier's host programs (`benchmarks/network_traces`).
 
@@ -318,8 +318,8 @@ A spec-level reference for network accounting's timing channel:
   `--registered` port of the proof blocks that read a table, one a row (`port`); under form 2, the signed word
   that an execution phase has no head (`check_no_head`);
 - how an execution phase's class is charged (`class_charge.charge`): below its schedule only with a count above 0
-  in that head and its four verdicts, each accepted, complete and on the head, all of one serve and registration;
-  else its whole schedule;
+  in that head, its four verdicts, each accepted, complete and on the head, all of one serve and registration,
+  and the head's schedule handed, one that can be tied; else its whole schedule;
 - its deployment manifest (`parties`): no party of it runs under the runtime;
 - the output value the certifier relayed as a registered value (`out_commit`): `commit_out` commits its rows at the
   reading program's registered shape (`OutShape`: its program, the value, ``words`` a row and ``rows``, both sides
@@ -431,7 +431,7 @@ From `verity`, `advice_check`, `compile_slice` and `served_statics` take the cir
 those and the hm96 leaves, and `charge_chain` and `window_charge` those and hm96, and from SPOT the produced rows.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`security/`, area `NetworkCertifier`).
 
-The coin link (`coin_link`, run by `verity/protocols/compose/device/live_challenger/coin_link.py`) carries a window's session
+The coin link (`../device/coin_link.py`, run by `verity/protocols/compose/device/live_challenger/coin_link.py`) carries a window's session
 between the prover and the challenger: it re-cuts every frame into cells and re-clocks both directions on their own
 grids, exempts only the verified, expected, once-only coin openings, and counts everything else
 (`protocol/coin-link.md`).

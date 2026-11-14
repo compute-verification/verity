@@ -33,7 +33,8 @@ them, and of nothing a server or a prover says. This is the one statement of the
 - `max_tokens` is the u32 the request's first cell holds at `active.MAX_TOKENS_AT`, in `active.ID_DIGITS`
   characters after the key `{"max_tokens":`, which the reading holds to that place
   (`active.id_request_max_tokens`). Every released request has it, so the rule has no default to apply. It is the
-  number the device reads at ingress under the response cap and holds the response to, so it is at most the cap.
+  number the device reads at ingress under the response cap and holds the response to, so it is from 1 to the cap:
+  ingress refuses a request that asks for no token.
 - The count of the prompt's ids is the cells' prompt fields, one id each, at least 1. It is at most its class's P:
   a canonical id request's length is a function of its prompt's count and B alone and grows with the count, and a
   release is filed only in a class whose `request_room`, the length at P ids, holds its request (`tables` refuses
@@ -97,18 +98,45 @@ more than O, is refused, never cut short.
   releases, so releases with one past it are no execution phase's of the schedule, and none of them is laid.
 - In a schedule with request words a class's words table holds, at row r, the words of the request of its request
   table's row r. A release filed in a class whose request `request_words` doesn't read is refused, naming the
-  release: it is no release of the network certifier's under the schedule. Neither is one whose `max_tokens` is
-  past the schedule's `max_tokens_cap` or whose ids are more than its `max_tokens`, which is refused the same way.
-  These are `tables`' own checks of what the device already holds: in every table laid, a words row's
-  `max_tokens` is at most the schedule's and at least its response row's count, and its count of prompt ids is at
-  most its class's P.
+  release: it is no release of the network certifier's under the schedule. Neither is one whose `max_tokens` is 0
+  or past the schedule's `max_tokens_cap` or whose ids are more than its `max_tokens`, which is refused the same
+  way. These are `tables`' own checks of what the device already holds: in every table laid, a words row's
+  `max_tokens` is from 1 to the schedule's and at least its response row's count, and its count of prompt ids is
+  at most its class's P.
 
 **The filing** (`file`): a release's class is the first the schedule lists that holds it. The rule reads the
-release as the network certifier cut it and nothing a server says. It has one caller, `connection_rows.tables`, and
-`tables` lays whatever class that caller gives. The network certifier releases no request longer than the
-schedule's largest class holds (the schedule's `request_bound`: ingress refuses it), so none it releases is unfiled
-for its request's length; and a class of the largest P holds the most ids a response releases ("The classes"), so
-none is unfiled for its ids. Every release of a schedule's own network certifier fits a class.
+release as the network certifier cut it and nothing a server says. It is called in one place, in `connection_rows`,
+which lays the tables by it (`connection_rows.tables`) and lists each class's releases by it
+(`connection_rows.filed`, through `filed` here); `tables` lays whatever class it is given. The network certifier
+releases no request longer than the schedule's largest class holds (the schedule's `request_bound`: ingress
+refuses it), so none it releases is unfiled for its request's length; and a class of the largest P holds the most
+ids a response releases ("The classes"), so none is unfiled for its ids. Every release of a schedule's own network
+certifier fits a class.
+
+Under form 2 the rule files in no class a release that ended in a `FAIL` before any `DATA` cell, whatever class
+holds it. The network certifier released no id of it, so its response row would hold none, and its slots of the
+lengths and fails tables say how it ended. So no table of form 2 has an end row (1, 0), a class's count is of its
+releases that ended in their `END` or released an id, and such a `FAIL` is the one release of a schedule's own
+network certifier that has no content row. The rule reads the release's end as the network certifier cut it, which
+no server can compute: which releases a class holds is the network certifier's to say. Under form 1 the rule reads
+no end, and such a release has its rows.
+
+**A schedule that can be tied** (`can_be_tied`; `untied` says what keeps one from it). A class is tied where a
+response tie's proof block returns each of its response rows (`certifier.prover.response_tie`). Three things of
+the schedule are needed for that, whatever a run holds:
+
+- each P is listed once, so a release's class is told by its request's length alone;
+- every class has one O, so a response row has one width, the one the compute side commits its ids at. The
+  schedule doesn't know that width: that the O is it is held where a tie's statement is made, since a row of
+  another width is another committed value;
+- it has a response limit (`max_tokens_cap`), so a released request asks for at most the limit. The limit is then
+  at most that O: a schedule whose response releases more ids than a class of its largest P holds is refused
+  ("The classes").
+
+This is a word about a schedule and no refusal of one: a schedule that fails it is built and served as any other,
+none of its classes is tied, and each is charged its whole schedule. It is read where a tie's shape is taken from
+a schedule (`response_tie.tied`) and where a class is charged by the schedule its head names
+(`class_charge.charge`).
 
 **A row of zero bytes** is what every table of form 1 holds where no release is filed (`empty_rows`, the one
 statement of it), and each table's decoder reads it its own way. `request_of` refuses it: its count is 0, and a
@@ -381,6 +409,32 @@ def classes(params: WardenParams) -> tuple[tuple[int, ...], ...]:
     return tuple(out)
 
 
+def untied(params: WardenParams) -> str | None:
+    """What keeps the schedule's classes from being tied (the module docstring's "A schedule that can be tied"), or
+    None where nothing does: it has no content rows, it lists a P in two classes, its classes have two O's, or it
+    has no response limit."""
+    listed = sized(params)
+    if not listed:
+        return "it has no content rows, so no class to tie"
+    sizes = [P for P, _, _ in listed]
+    if twice := [P for P in dict.fromkeys(sizes) if sizes.count(P) > 1]:
+        at = ", ".join(str(i) for i, P in enumerate(sizes) if P == twice[0])
+        return (f"it lists P={twice[0]} prompt ids in classes {at}, and a release's class is told by its "
+                f"request's length alone only where each P is listed once")
+    if len(widths := sorted({O for _, O, _ in listed})) > 1:
+        return (f"its classes hold O={', '.join(map(str, widths))} ids, and a tied schedule's response rows have "
+                f"one width, one O for every class")
+    if params.max_tokens_cap is None:
+        return ("it has no response limit (max_tokens_cap), so a released request may ask for more ids than a "
+                "class holds")
+    return None
+
+
+def can_be_tied(params: WardenParams) -> bool:
+    """Whether the schedule can be tied: nothing keeps its classes from it (`untied`)."""
+    return untied(params) is None
+
+
 def most_classes(params: WardenParams) -> int:
     """The most classes a schedule lists: the head counts its tables in a u16, and after `lengths` and `fails` a
     class has three of them (`MOST_CLASSES`), or four in a schedule with request words."""
@@ -441,7 +495,10 @@ def ids_of(packed: bytes) -> tuple[int, ...]:
 
 def file(params: WardenParams, release: Released) -> int | None:
     """The class the network certifier files a release in (the module docstring's "The filing"): the first of the
-    schedule's that holds its request's bytes and its ids, or None where none does."""
+    schedule's that holds its request's bytes and its ids, or None where none does, and, where a class's tables
+    hold its held rows and no other (`counted`), for a release that ended in a `FAIL` before any `DATA` cell."""
+    if counted(params) and release.failed and not release.outputs:
+        return None
     B = params.cell_bytes
     for i, (P, O, _) in enumerate(sized(params)):
         if len(release.request) <= request_room(B, P) and len(release.ids) <= U32_BYTES * O:
@@ -449,15 +506,10 @@ def file(params: WardenParams, release: Released) -> int | None:
     return None
 
 
-def tables(params: WardenParams, released: Sequence[Released],
-           filing: Sequence[int | None]) -> dict[str, list[bytes]]:
-    """An execution phase's content tables (the module docstring's "The tables") from its releases in release order
-    and each one's class in `filing`, None for a release filed in none: each table its held rows and, under form 1,
-    zero rows to the class's rows. ValueError for a schedule without content rows, releases out of order or without
-    the content of their lengths slots, a class the schedule doesn't list, a release filed in a class that doesn't
-    hold it, under form 2 a release filed in a class past its R-th, naming the release, the class and R, or in a
-    schedule with request words a release filed in a class whose request `request_words` doesn't read, whose
-    `max_tokens` is past the response cap or whose ids are more than its `max_tokens`, naming the release."""
+def _laid(params: WardenParams, released: Sequence[Released],
+          filing: Sequence[int | None]) -> tuple[list[list[Released]], dict[int, tuple[int, int]]]:
+    """The releases `tables` lays in each class, in row order, and in a schedule with request words each one's
+    words by its place in the release order: `tables`' checks, and its refusals."""
     if params.content is None:
         raise ValueError("the schedule has no content rows (WardenParams.content)")
     if len(filing) != len(released):
@@ -494,13 +546,27 @@ def tables(params: WardenParams, released: Sequence[Released],
                 raise ValueError(f"release {r.order}, filed in class {i}, has a request without words: "
                                  f"{e}") from None
             asked, most = words[r.order][0], params.max_tokens_cap
-            if asked > most or r.outputs > asked:
+            if not asked or asked > most or r.outputs > asked:
                 raise ValueError(f"release {r.order}, filed in class {i}, has a max_tokens of {asked} and "
                                  f"{r.outputs} ids where the schedule's max_tokens_cap is {most}: the network "
-                                 f"certifier releases no request whose max_tokens is past it and no id past a "
-                                 f"request's max_tokens")
+                                 f"certifier releases no request whose max_tokens is 0 or past it and no id past "
+                                 f"a request's max_tokens")
+    return filed, words
+
+
+def tables(params: WardenParams, released: Sequence[Released],
+           filing: Sequence[int | None]) -> dict[str, list[bytes]]:
+    """An execution phase's content tables (the module docstring's "The tables") from its releases in release order
+    and each one's class in `filing`, None for a release filed in none: each table its held rows and, under form 1,
+    zero rows to the class's rows. ValueError for a schedule without content rows, releases out of order or without
+    the content of their lengths slots, a class the schedule doesn't list, a release filed in a class that doesn't
+    hold it, under form 2 a release filed in a class past its R-th, naming the release, the class and R, or in a
+    schedule with request words a release filed in a class whose request `request_words` doesn't read, whose
+    `max_tokens` is 0 or past the response cap or whose ids are more than its `max_tokens`, naming the release."""
+    laid, words = _laid(params, released, filing)
+    B, listed = params.cell_bytes, sized(params)
     out: dict[str, list[bytes]] = {}
-    for i, ((P, O, rows), mine) in enumerate(zip(listed, filed)):
+    for i, ((P, O, rows), mine) in enumerate(zip(listed, laid)):
         made = ([request_row(r.request, B, P) for r in mine], [response_row(ids_of(r.ids), O) for r in mine],
                 [end_row(r.failed, r.outputs) for r in mine])
         for name, held_, empty in zip(names(i), made, empty_rows(B, P, O)):
@@ -510,9 +576,17 @@ def tables(params: WardenParams, released: Sequence[Released],
     return out
 
 
+def filed(params: WardenParams, released: Sequence[Released],
+          filing: Sequence[int | None]) -> tuple[tuple[int, ...], ...]:
+    """The releases `tables` lays in each class, class by class in the schedule's order, each by its place in the
+    release order (`Released.order`) and in row order: row r of class i's tables is of release `filed(…)[i][r]`.
+    A release with no content row is in no class's. `tables`' refusals."""
+    return tuple(tuple(r.order for r in mine) for mine in _laid(params, released, filing)[0])
+
+
 __all__ = ["END", "END_BYTES", "END_SLOT", "ENDED", "FAILED", "MIN_SIZE", "MOST_CLASSES", "NO_COUNT", "REQUEST",
-           "RESPONSE", "TIE_WORDS", "U32_BYTES", "WORDS", "WORDS_BYTES", "WORDS_ROW", "check_ids", "check_size",
-           "classes", "counted", "empty_rows", "end_of", "end_row", "file", "held", "ids_of", "layout",
-           "most_classes", "most_ids", "names", "names_of", "request_bytes", "request_of", "request_room",
+           "RESPONSE", "TIE_WORDS", "U32_BYTES", "WORDS", "WORDS_BYTES", "WORDS_ROW", "can_be_tied", "check_ids",
+           "check_size", "classes", "counted", "empty_rows", "end_of", "end_row", "file", "filed", "held", "ids_of",
+           "layout", "most_classes", "most_ids", "names", "names_of", "request_bytes", "request_of", "request_room",
            "request_row", "request_words", "response_bytes", "response_of", "response_row", "sized", "tables",
-           "tables_of", "words_name", "words_of", "words_row"]
+           "tables_of", "untied", "words_name", "words_of", "words_row"]

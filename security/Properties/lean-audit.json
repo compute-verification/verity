@@ -105,6 +105,11 @@
    "digest": "54d52ad10bb17118bb32e7c108b7b17656ea700c2e9d8830a07c2d76473e2c0c",
    "why": "The statements the two-stage bound speaks of: a well-formed two-stage design over a topological program its partitions partition."
   },
+  "Claims.SamplingGeneric.Compiled.Scope": {
+   "owner": "@network-accounting",
+   "digest": "a8711fb89d051d62f4852a2a177baf5d84781ac11493a4a0f128f32c51edb387",
+   "why": "The statements the scan's scope is stated of: those in the compiled sampled verifier's sampling scope."
+  },
   "Core.Protocol.Accepts": {
    "owner": "@lean",
    "digest": "fbbdd8ad1d1bb7bde0514a7f9ab5927c23b8899438d98c87e59214f559ec2469",
@@ -693,12 +698,6 @@
   "Properties.NetworkScan.Flattens": {
    "owner": "@network-accounting",
    "digest": "958b48d427a4799a495e8498981cebdafaf311689c3fefb050bf30006a382055",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Properties.NetworkScan.ScopeMatches": {
-   "owner": "@network-accounting",
-   "digest": "53aaae828029d5c710cf801e04027478005e1eeb8b42b3d2601d1139c64954f2",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -6296,12 +6295,12 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
-    "open": ["Properties.NetworkScan.ScopeMatches", "Properties.NetworkScan.StmtFlattens"],
+    "domain": ["Claims.SamplingGeneric.Compiled.Scope"],
+    "open": ["Properties.NetworkScan.StmtFlattens"],
     "reads": []
    },
    "type_hash": "d70f95c8f051885651c1b727c6f333e519052fb99bdaf4abc4858f12e4d32ab2",
-   "unfolded_hash": "6d0b6ddcf2dde3b3b6200883681a3378d233403f1b484b93db38681539ccfc2b"
+   "unfolded_hash": "6ea48691cee20728d8bf6253da3129f7cf7954f32dcf2d3c8ec3fc345773439b"
   },
   "Properties.NetworkScan.scanScopeAcc_nontrivial": {
    "owner": "@network-accounting",
@@ -6324,14 +6323,16 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "582298c59a690867e4e8a6103ddfb3bce4cce2dcb8cc0309166996912ce17384"
+   "type_hash": "e59a6151538784fb4f104269b876b0302ca8f348df6375be46ff059814c7eeda"
   },
   "Properties.NetworkScan.scan_honest": {
    "owner": "@network-accounting",
    "signature": [
     "Properties.NetworkScan.scan_honest :",
     "  And (Eq (Flock.canon Lean.Json.null) (Except.ok \"null\"))",
-    "    (Properties.NetworkScan.Flattens Flock.Program.instInhabitedProg.default { gates := List.nil, outs := List.nil })"
+    "    (And",
+    "      (Properties.NetworkScan.Flattens Flock.Program.instInhabitedProg.default { gates := List.nil, outs := List.nil })",
+    "      (Exists fun A => Exists fun D => Exists fun x => D.Scope x))"
    ],
    "assumptions": [],
    "premises": {
@@ -6340,7 +6341,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "0c362245031511320743c959fb43f44ed992217b2dee837436de85f0257b643c"
+   "type_hash": "83e4519da1d4fb21cd0f80026fb2d4bfa835f5bb6df001c90199abbc819b98a1"
   },
   "Properties.Period.monitoringPeriodIsSpec": {
    "owner": "@network-accounting",
@@ -15635,7 +15636,7 @@
    }
   },
   "Definitions.Claims.SamplingGeneric": {
-   "digest": "2022c9d8bb6c65acfb5d36e0f6a1d83c4369963dbf6717a967da4b998065cae4",
+   "digest": "cb79bf966bc54bc9af7e55b33d766fff153342f79014f175552721bbac2343ab",
    "definitions": {
     "Claims.SamplingGeneric.Arg": "a3523e27db94bc0fc6aa14e539db934e8b8be4d90fc860bd46115063083b28bf",
     "Claims.SamplingGeneric.Arg.Sh": "c203deac38bebd31bed2dc00f48e18497a84f780d1f4be00f2af4ea1cfc3e461",
@@ -15643,8 +15644,7 @@
     "Claims.SamplingGeneric.Compiled": "d31474bef821fbfcebbdcf9c10096da66f5fb767eda57499378ae5ab82e0c18f",
     "Claims.SamplingGeneric.Compiled.Scope": "a8711fb89d051d62f4852a2a177baf5d84781ac11493a4a0f128f32c51edb387",
     "Claims.SamplingGeneric.Compiled.parse": "4504637f7cf40386256ec9a31b59843a16c6fb791f155f3175f1720696aa6511",
-    "Claims.SamplingGeneric.Compiled.partition": "b4c9e96ee6686e83a0526245863e4c433599cc0a0e3e6fa2284fe6ab0b5dca47",
-    "Claims.SamplingGeneric.Compiled.scopeCheck": "97ea8047dc2a67b01f2ccb4af90017e0a7b6d7aa5fe1c00d95dc21c12da8096f"
+    "Claims.SamplingGeneric.Compiled.partition": "b4c9e96ee6686e83a0526245863e4c433599cc0a0e3e6fa2284fe6ab0b5dca47"
    }
   },
   "Definitions.Claims.SamplingServed": {
@@ -15963,7 +15963,7 @@
    }
   },
   "Definitions.Core.Interaction": {
-   "digest": "56d31bc6c3717baefcba070cf26ec9789b38053346a1d0c90a90edb952a459ea",
+   "digest": "866b9b8c85285c567cacbf503dfd444cf0ae0258e9f3e898215f3b57c74aa7eb",
    "definitions": {
     "Claims.Collision": "c9aa38dcdefc9acdf1e2b55b91bd771bda4cbf43d796761cda34074058a3c4da",
     "Claims.Ex": "c2c94d12b1a732e69312adbfd75898bd82844441f36c75ab6c132a808e7f85ff",
@@ -15984,7 +15984,6 @@
     "Claims.Out.rej": "ecd0be2fb93cb8c70662611f8eebcda8e8df7d68f25347d8d2984235a87e705e",
     "Claims.Prover": "c453957b0e4ec4d7b15811b452bc33c53387cfff949e0c4f91e38d137b316136",
     "Claims.Rel": "91554708c3efade1d522cd62f7b89ccda5e212508367fd93c4ad46d4f95de84b",
-    "Claims.ScopeMatches": "538116d92383dc3ca64a56e414f5c194316a39ca450d8f8be7637010c20646b8",
     "Claims.Seen": "a5a26fcf9d19ac1d8786011d3c64460317e7aae403a4244fe48b2aee8e809ca1",
     "Claims.StrictBirthday": "2524ac64f3909c7f4b0126db591da827d8cf49630cde77c96a9e21c75ed1fd1b",
     "Claims.Verifier": "dbfceca0fe9e4682ceaf2c145e93800086d8196f616b38e7100c68809a61d8f8",
@@ -24191,19 +24190,18 @@
    }
   },
   "Properties.NetworkScan": {
-   "digest": "c883acbd67e23a2db21d7eb8db91038c647cd96a5d4e48fa98c0d014e164568b",
+   "digest": "26b8a986c208b2167db86a37feb372a7176ccc6e3823012eaeb9a8b09ccac957",
    "definitions": {
     "Properties.NetworkScan.ScanFits": "5f2430c038392abe606d6578beef8615a1e0b800b56c8205341082a209c10906",
-    "Properties.NetworkScan.ScanScopeAcc": "08a0f93c3bc27e0e417f378310df7af618055aef4e1988cdc3d044b0c0b54095",
+    "Properties.NetworkScan.ScanScopeAcc": "8986598ccf55a131dded20597e8e97983a0837c85cd621ae328a011f0a60b625",
     "Properties.NetworkScan.gateAt": "e4aebb4c0d3ac773a86f2760eaa99f09c90a0fe73f2465ed07b03be6aa8f9572",
     "Properties.NetworkScan.layOf": "ec06a92959f6b08e3ea35e5185baf6268e43c79f6da3d0793cbd9eb46dcdc127",
     "Properties.NetworkScan.scanLayout": "e20dc682d93b04e93b017c91e7b177e5f44822a56f35c62b63432b9e76b975f0"
    }
   },
   "Properties.NetworkScan.Assumptions": {
-   "digest": "a60ef9ba669155366fd20c9f8c079764001760b01078052d2621c6d6719e16b3",
+   "digest": "eb34475df239785c557ab3cdfb8fd2cbc81b81b70b650cc91d61698dc84b9814",
    "definitions": {
-    "Properties.NetworkScan.ScopeMatches": "53aaae828029d5c710cf801e04027478005e1eeb8b42b3d2601d1139c64954f2",
     "Properties.NetworkScan.StmtFlattens": "e631d74ea293deb3e23e26932f06ec6564877bf01793f61fbe8680be3716a7b5"
    }
   },

@@ -34,10 +34,25 @@ i the schedule lists, a release's rows in the class `content_rows.file` gives it
 each is of the class's rows, the held ones first and zero rows after them. Under form 2 each is the class's held
 rows and no other, so a class's tables have one count of rows, the execution phase's releases filed in it, at most
 R = `WardenParams.phase_releases`, and none where none is filed; a hand that files more than R in a class is
-refused (`content_rows.tables`). In a schedule with request words a class has a fourth table, `words.i`: at row r
+refused (`content_rows.tables`), and a release that ended in a `FAIL` before any `DATA` cell is filed in none
+(`content_rows`' "The filing"). In a schedule with request words a class has a fourth table, `words.i`: at row r
 the two words the network certifier reads from the request of `request.i`'s row r (`content_rows.request_words`:
-its `max_tokens` and the count of its prompt's ids). `tables` is the filing rule's one caller.
+its `max_tokens` and the count of its prompt's ids). The filing rule is called in one place (`_filing`), which
+`tables` lays the content tables by.
 They rest on `trusted-host` as the lengths and fails tables do.
+
+**The filed releases** (`filed`, `filed_record`, `not_filed`). Which class a release is filed in turns on how the
+network certifier ended it (`content_rows`' "The filing"), which no server computes. So with each execution phase's
+head the network certifier hands the prover, beside the rows' salts, the releases it filed in each class:
+
+    {"format": FILED, "link", "window", "head", "classes": [[N, ...], ...]}
+
+`classes` is class by class in the schedule's order, each class's releases by their place in the release order
+(`Released.order`) and in row order: row r of class i's tables is of release `classes[i][r]`. `head` is the digest
+of the head signed over those tables, so the list is that head's and is final with it. An execution phase that has
+no head has the record with `head` and `classes` null. The record is witness, as the salts are. It is made by the
+same call of the rule as the tables. No verifier reads it and no guarantee rests on it: it tells a prover which
+release each row of the head's tables is of.
 
 **A row's slots** (`check_slots`): the lengths row's proof block returns the whole row after its two words, and a
 proof block's outputs fit one public size class, so a row has at most (`UNIT_CLASS_MAX` − 2·16) / 96 slots. It is the
@@ -57,7 +72,7 @@ salt_k is fresh for each row of each table. The opening (`Rows`: each table's ro
 network certifier's to hand to the prover alone. A table of no row, which only a class's under form 2 can be, has no
 leaf: its domain is the one above at rows = 0 and its root is 64 zero bytes (`NO_ROWS_ROOT`), which no read opens.
 
-**The signed head** (`Head`) is public, as a hiding root is, one for each link's execution phase:
+**The signed head** (`Head`), one for each link's execution phase:
 
     H     = u16be len(link) ‖ link ‖ u64be window ‖ parameters (64 bytes) ‖ u16be tables ‖ entry of each table
     entry = u16be len(name) ‖ name ‖ u32be rows ‖ u32be row bytes ‖ domain (64 bytes) ‖ root (64 bytes)
@@ -101,7 +116,8 @@ the word makes nothing else public. That an execution phase gets one of the two 
 certifier's own code (`trusted-host`): its signer signs the digest it is asked to. Under form 1 an execution phase
 that isn't handed has no certificate of either kind.
 
-**The registration** (`registration`) is the head and its certificate as one public JSON object:
+**The registration** (`registration`) is the head and its certificate as one JSON object, kept on a run's private
+side (the auditor's gate publishes its certificate alone):
 
     {"format": REGISTRATION, "link", "window", "parameters", "word_bits", "row_schema",
      "tables": [{"name", "value", "rows", "words", "domain", "root", "layout"}, ...],
@@ -159,6 +175,7 @@ HEAD_TAG = "verity-network-certifier/connection-rows/v1"
 REGISTRATION = "verity-network-certifier/connection-rows-registration/v1"
 NO_HEAD_TAG = "verity-network-certifier/connection-rows-no-head/v1"
 NO_HEAD = "verity-network-certifier/connection-rows-no-head-word/v1"
+FILED = "verity-network-certifier/connection-rows-filed/v1"
 LENGTHS, FAILS = "lengths", "fails"
 #: a slot of each table: u32 N + 1 ‖ u32 bytes ‖ u32 n, and u16 class ‖ u16 at
 SLOT = {LENGTHS: struct.Struct("<III"), FAILS: struct.Struct("<HH")}
@@ -211,7 +228,7 @@ def tables(params: WardenParams, strides: Sequence[Sequence[Released]]) -> dict[
     """An execution phase's tables, every one its head lists and in the head's order, from its releases by slot
     stride, as the network certifier hands them: the lengths and fails tables (the module docstring's) and, in a
     schedule with content rows, each class's own, every release in the class the network certifier's rule files it
-    in (`content_rows.file`, of which this is the one caller). ValueError for a schedule without connection rows, or
+    in (`content_rows.file`, by its one call, `_filing`). ValueError for a schedule without connection rows, or
     releases that aren't one execution phase's of it."""
     (_, T, size), (_, _, fails_size) = tables_of(params)[:2]
     K = params.stride_releases
@@ -230,8 +247,37 @@ def tables(params: WardenParams, strides: Sequence[Sequence[Released]]) -> dict[
                                    for r in stride).ljust(fails_size, b"\0"))
     if params.content is not None:
         released = [r for stride in strides for r in stride]
-        out |= CT.tables(params, released, [CT.file(params, r) for r in released])
+        out |= CT.tables(params, released, _filing(params, released))
     return out
+
+
+def _filing(params: WardenParams, released: Sequence[Released]) -> list[int | None]:
+    """Each release's class by the network certifier's rule (`content_rows.file`, which is called here alone)."""
+    return [CT.file(params, r) for r in released]
+
+
+def filed(params: WardenParams, strides: Sequence[Sequence[Released]]) -> tuple[tuple[int, ...], ...]:
+    """The releases of an execution phase's hand that `tables` lays in each class of a schedule with content rows,
+    class by class, each by its place in the release order and in row order (`content_rows.filed`). ValueError as
+    `tables` raises it."""
+    released = [r for stride in strides for r in stride]
+    return CT.filed(params, released, _filing(params, released))
+
+
+def filed_record(head: Head, params: WardenParams, strides: Sequence[Sequence[Released]]) -> dict[str, Any]:
+    """What the network certifier hands the prover of an execution phase's filing once its head is signed (the
+    module docstring's "The filed releases"): the releases of `strides` in each class, under the digest of `head`,
+    the head of their tables. ValueError for a head whose count of a class is not the class's releases."""
+    classes = filed(params, strides)
+    if CT.counted(params) and [head.table(CT.names(i)[0]).rows for i in range(len(classes))] != list(map(len, classes)):
+        raise ValueError("the head is not this hand's: it counts other rows of a class than the hand files in it")
+    return {"format": FILED, "link": head.link, "window": head.window, "head": head.digest().hex(),
+            "classes": [list(c) for c in classes]}
+
+
+def not_filed(link: str, window: int) -> dict[str, Any]:
+    """The same record of an execution phase that has no head: no list, under no head."""
+    return {"format": FILED, "link": link, "window": window, "head": None, "classes": None}
 
 
 def releases(params: WardenParams, lengths: Sequence[bytes], fails: Sequence[bytes]) -> list[list[Released]]:
@@ -354,8 +400,8 @@ class Entry:
 
 @dataclass(frozen=True, slots=True)
 class Head:
-    """What the network certifier signs, once, for an execution phase's connection rows: its tables. Public, since each
-    root is hiding."""
+    """What the network certifier signs, once, for an execution phase's connection rows: its tables. A run keeps it
+    on its private side, in the registration."""
 
     link: str
     window: int
@@ -499,8 +545,8 @@ def _layout(params: WardenParams, window: int, table: str) -> dict[str, int]:
 
 
 def registration(head: Head, certificate: Certificate, params: WardenParams) -> dict[str, Any]:
-    """The public record of an execution phase's connection rows: the head, each table's format and order, and the one
-    certificate."""
+    """The record of an execution phase's connection rows: the head, each table's format and order, and the one
+    certificate. A run keeps it on its private side; the auditor's gate publishes the certificate alone."""
     return {"format": REGISTRATION, "link": head.link, "window": head.window, "parameters": head.parameters.hex(),
             "word_bits": WORD_BITS, "row_schema": SCHEMA,
             "tables": [{"name": e.name, "value": value_name(head.link, e.name, head.window), "rows": e.rows,

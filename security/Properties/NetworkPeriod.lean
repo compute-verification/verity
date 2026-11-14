@@ -396,13 +396,13 @@ def RatioReadsBack : Prop :=
 `prescribed`, a ratio not in lowest terms), so a witness states it at its own audits' profiles. -/
 def ProfileReadsBackAt (i : Core.Integrity) : Prop := Core.Integrity.ofJson i.toJson = .ok i
 
-/-- `check` accepts a rows-form period that has an execution phase and a compute audit, under the public key of a key at
-the deployed LMS parameters. -/
+/-- `check` accepts a rows-form period that has an execution phase and a compute audit, under parameters one of whose
+entries' keys is the public key of a key at the deployed LMS parameters. -/
 def RowsExecutionPhaseAccepted : Prop :=
   ∃ (I seed : ByteArray) (k : Lms.PrivateKey) (p : Params) (c : Commitment) (e : Evidence) (pub : Public)
     (prof : Profile) (s : Schedule) (sd : ByteArray) (scan : Scan),
-    Lms.key Lms.deployed I seed = .ok k ∧ p.lms = Lms.deployed ∧ p.key = k.publicKey ∧ p.form = .rows s sd scan ∧
-      0 < c.windows.size ∧ 0 < c.audits.size ∧ check p c e = .accept pub prof
+    Lms.key Lms.deployed I seed = .ok k ∧ p.lms = Lms.deployed ∧ (∃ x ∈ p.entries, x.key = k.publicKey) ∧
+      p.form = .rows s sd scan ∧ 0 < c.windows.size ∧ 0 < c.audits.size ∧ check p c e = .accept pub prof
 
 /-- The one-stage answers the period check reads: each compute audit's, then each link-window's. -/
 def answersRead (e : Evidence) : Array Core.Answer := e.audits ++ e.windows.map (·.answer)

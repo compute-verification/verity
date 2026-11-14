@@ -27,7 +27,7 @@ from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer
-from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_class_charge import four
+from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_class_charge import ONCE, TIED, four
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_lengths import (B, LEN, PLAIN, PLAIN_DIGEST, P,
                                                                                       T, answer, id_req, response,
                                                                                       traffic)
@@ -195,6 +195,8 @@ SENT = ((11, 22, 33), tuple(range(8)), (), (7, 8, 9, 10), (), (1, 2), (99,))
 FAILED = (False, False, False, False, True, True, True)
 #: the class the network certifier's rule files each in, and its row there
 FILED = ((0, 0), (2, 0), (2, 1), (0, 1), (1, 0), (1, 1), (1, 2))
+#: the same under the lengths rows' form 2, where the rule files a `FAIL` before any `DATA` cell in no class
+HELD_FILED = (*FILED[:4], None, (1, 0), (1, 1))
 #: the clients that go away after their release, by connect order from 1, and the bucket each is gone from: one whose
 #: server ends the response, and one whose server stops answering
 GONE = {4: 16, 8: 27}
@@ -262,8 +264,10 @@ def read(issuer: Issuer, phase: int, strides, params: WardenParams) -> tuple:
     return opened, doc, head, domains
 
 
-#: the releases three loads file in each class: the traffic's first execution phase, its second, and one of none
-COUNTS = {"first": (2, 0, 2, 0), "second": (0, 3, 0, 0), "none": (0, 0, 0, 0)}
+#: the releases three loads file in each class under form 1: the traffic's first execution phase, its second, and
+#: one of none; and under form 2, which files the second's `FAIL` before any `DATA` cell in no class
+LAID = {"first": (2, 0, 2, 0), "second": (0, 3, 0, 0), "none": (0, 0, 0, 0)}
+COUNTS = LAID | {"second": (0, 2, 0, 0)}
 
 
 @pytest.fixture(scope="module")
@@ -479,31 +483,103 @@ def test_a_request_longer_than_the_largest_class_holds_is_refused_at_ingress_and
 
 def test_an_execution_phase_a_longer_request_reached_releases_only_what_its_classes_count(monkeypatch):
     """What the ingress bound is for, at the rule that charges a class (`class_charge.charge`). Under form 2 a head
-    counts each class's held rows, and the rule charges a class below its schedule on that class's four verdicts. A
-    release filed in no class is in no count and no verdict is of it, so an execution phase holding one would be
-    charged nothing for it. With the bound, the execution phase a longer request reached releases only what its
-    classes count: its head's counts add up to its releases, so the verdicts that charge it no schedule are of
-    every release it holds. With ingress at its cells' bound alone, as it was, the same traffic's execution phase
-    holds a release more than its head counts, and the rule charges it no schedule on the same verdicts."""
+    counts each class's held rows, and the rule, handed a schedule that can be tied, charges a class below its
+    schedule on that class's four verdicts. A release filed in no class is in no count and no verdict is of it, so
+    an execution phase holding one would be charged nothing for it. With the bound, the execution phase a longer
+    request reached releases only what its classes count: its head's counts add up to its releases, so the
+    verdicts that charge it no schedule are of every release it holds. With ingress at its cells' bound alone, as
+    it was, the same traffic's execution phase holds a release more than its head counts, and the rule charges it
+    no schedule on the same verdicts."""
     arrivals = {0: [cells(id_req(2, 129), B)], 1: [cells(id_req(1, 128), B)]}
 
     def phases() -> list[tuple[int, list[int], int]]:
         """Each execution phase that released: its releases, its head's count of each class, and how many of its
         connections the rule charges their whole schedule with every class's four verdicts accepted and complete."""
-        device, _, _ = run([answer((5,)), answer((7, 8))], arrivals, params=HELD, windows=3)
+        device, _, _ = run([answer((5,)), answer((7, 8))], arrivals, params=TIED, windows=3)
         out = []
         for phase, strides in device.lengths:
             if not strides or not any(strides):
                 continue
-            head = CR.Rows.commit(LINK, phase, CR.tables(HELD, strides), HELD, signers.SESSION).head
-            charges = [CC.charge(head, i, four(i, head)) for i in range(len(HELD.content))]
+            head = CR.Rows.commit(LINK, phase, CR.tables(TIED, strides), TIED, signers.SESSION).head
+            charges = [CC.charge(head, i, four(i, head), TIED) for i in range(len(TIED.content))]
             assert [c.below for c in charges] == [bool(c.count) for c in charges]
             out.append((sum(map(len, strides)), [c.count for c in charges], sum(c.schedules for c in charges)))
         return out
 
-    assert phases() == [(1, [0, 0, 1, 0], 0)]
-    monkeypatch.setattr(type(HELD), "request_bound", property(lambda self: self.ingress_cells * self.payload))
-    assert phases() == [(2, [0, 0, 1, 0], 0)]
+    assert phases() == [(1, [0, 0, 1], 0)]
+    monkeypatch.setattr(type(TIED), "request_bound", property(lambda self: self.ingress_cells * self.payload))
+    assert phases() == [(2, [0, 0, 1], 0)]
+
+
+def test_a_schedule_can_be_tied_with_each_p_once_one_o_and_a_response_limit_and_is_a_schedule_without_them():
+    """The word a tie and a charge read of a schedule (`content_rows.can_be_tied`): each P listed once, one O for
+    every class and a response limit, under either form of the lengths rows and in any order of the classes.
+    `untied` says which of them a schedule lacks. The word refuses no schedule: one that can't be tied is built
+    and its hand laid as it was. A limit past the one O is no schedule's, by the schedule's own check of its
+    largest class, so the word has no such case."""
+    assert CT.can_be_tied(TIED) and CT.untied(TIED) is None
+    for other in (dataclasses.replace(TIED, max_tokens_cap=3), dataclasses.replace(TIED, content=ONCE[::-1]),
+                  dataclasses.replace(CON, content=tuple((*c, 2) for c in ONCE), max_tokens_cap=8)):
+        assert CT.can_be_tied(other), other.content
+    twice = "it lists P=128 prompt ids in classes 2, 3, and a release's class is told by its request's length alone"
+    for schedule, why in ((LEN, "it has no content rows, so no class to tie"),
+                          (dataclasses.replace(TIED, content=(*ONCE, (16, 8))),
+                           "it lists P=16 prompt ids in classes 1, 3"),
+                          (dataclasses.replace(TIED, content=((4, 4), (16, 8), (128, 8))),
+                           "its classes hold O=4, 8 ids, and a tied schedule's response rows have one width"),
+                          (dataclasses.replace(TIED, max_tokens_cap=None), "it has no response limit (max_tokens_cap)"),
+                          (HELD, twice), (CON, twice)):
+        assert not CT.can_be_tied(schedule) and CT.untied(schedule).startswith(why), why
+    with pytest.raises(ValueError, match="hold at most O=4 ids, and a response of the schedule releases up to 8"):
+        dataclasses.replace(TIED, content=tuple((P, 4) for P, _ in ONCE))
+    assert CT.classes(HELD) == HELD.content and CT.classes(CON) == CON.content
+
+
+def test_a_ties_shape_is_taken_only_from_a_schedule_that_can_be_tied_and_is_its_one_os():
+    """The response tie reads the word where it takes a shape from a schedule (`response_tie.tied`): a tied
+    class's proof block has the one O every class of the schedule has, in a stop class or a no-stop class. No
+    shape is taken from a schedule that can't be tied, and the refusal says what keeps the schedule from it."""
+    for stop in (True, False):
+        assert RT.tied(TIED, stop) == RT.Shape(8, stop)
+        assert RT.tied(dataclasses.replace(TIED, content=tuple((P, 4) for P, _ in ONCE), max_tokens_cap=4),
+                       stop) == RT.Shape(4, stop)
+        for schedule in (HELD, CON, LEN, dataclasses.replace(TIED, max_tokens_cap=None)):
+            with pytest.raises(ValueError) as refused:
+                RT.tied(schedule, stop)
+            assert str(refused.value) == f"no class of the schedule is tied: {CT.untied(schedule)}"
+    with pytest.raises(ValueError, match="a stop class \\(True\\) or a no-stop class \\(False\\)"):
+        RT.tied(TIED, 1)
+
+
+def test_a_class_of_a_schedule_that_cant_be_tied_is_charged_its_whole_schedule_where_the_schedule_is_handed(loads):
+    """`class_charge.charge` reads the word where it is handed the head's schedule. A class of a schedule that can
+    be tied is charged below its schedule on its four verdicts. A class of one that can't be is at its whole
+    schedule on the same four, and the line says what keeps the schedule from it. With no schedule handed the
+    class is at its whole schedule on the same four, whichever its schedule is, and the line says the schedule was
+    not handed. A schedule that is not the head's is refused, by the parameters' digest the head holds."""
+    for schedule, why in ((TIED, ""), (HELD, CT.untied(HELD)), (dataclasses.replace(TIED, max_tokens_cap=None),
+                                                                "it has no response limit (max_tokens_cap), so a "
+                                                                "released request may ask for more ids than a class "
+                                                                "holds")):
+        head = CR.Rows.commit(LINK, 0, CR.tables(schedule, loads["first"]), schedule, signers.SESSION).head
+        cls = next(i for i in range(len(schedule.content)) if CC.count(head, i))
+        got, bare = CC.charge(head, cls, four(cls, head), schedule), CC.charge(head, cls, four(cls, head))
+        assert (bare.below, bare.untied, bare.owed, bare.differ) == (False, CC.NOT_HANDED, (), ())
+        assert bare.schedules == bare.count and bare.why() == (
+            f"class {cls}: charged its whole schedule on each of its {bare.count} rows: the schedule was not handed")
+        assert (got.below, got.untied, got.owed, got.differ) == (not why, why, (), ())
+        assert got.schedules == (got.count if why else 0) and got.read == bare.read
+        if why:
+            assert got.why() == (f"class {cls}: charged its whole schedule on each of its {got.count} rows: its "
+                                 f"schedule can't be tied: {why}")
+        # a verdict that doesn't count is named beside it, and a class of no row owes nothing either way
+        less = CC.charge(head, cls, {k: v for k, v in four(cls, head).items() if k != CC.RESPONSE_TIE}, schedule)
+        assert (less.below, less.untied, less.owed) == (False, why, ((CC.RESPONSE_TIE, CC.MISSING, ()),))
+        empty = next(i for i in range(len(schedule.content)) if not CC.count(head, i))
+        assert (CC.charge(head, empty, {}, schedule).below, CC.charge(head, empty, {}, schedule).untied) == (False, "")
+        with pytest.raises(ValueError, match="the schedule handed has the parameters' digest .* a class is charged "
+                                             "by its own head's schedule"):
+            CC.charge(head, cls, four(cls, head), dataclasses.replace(schedule, max_tokens_cap=2))
 
 
 def test_a_schedule_is_refused_unless_a_class_of_its_largest_p_holds_the_most_ids_a_response_releases():
@@ -631,9 +707,10 @@ def test_the_registration_of_a_schedule_with_content_rows_refuses_anything_but_i
 
 
 def test_under_form_2_a_classes_tables_are_its_held_rows_and_no_other(ran, loads):
-    """Under form 2 the same hand lays, for each class, the rows form 1 lays first and nothing after them: a row a
-    release filed in the class, in release order, and three tables of no row where none is filed. The lengths and
-    fails tables are form 1's. A class's rows are all held at R: R releases filed in it are laid, and with one more
+    """Under form 2 the same hand lays, for each class, the rows form 1 lays first, less the row of a `FAIL` before
+    any `DATA` cell, and nothing after them: a row a release filed in the class, in release order, and three tables
+    of no row where none is filed. The lengths and fails tables are form 1's. A class's rows are all held at R: R
+    releases filed in it are laid, and with one more
     the hand is refused, naming the release, the class and R, where form 1 leaves a release past a class's rows
     unfiled. The commitment takes a class's three tables only at one count of at most R. The device hands under
     form 2 what it hands under form 1, and its last execution phase, of no release, too; the records' reading
@@ -641,10 +718,12 @@ def test_under_form_2_a_classes_tables_are_its_held_rows_and_no_other(ran, loads
     for load, strides in loads.items():
         one, two = CR.tables(CON, strides), CR.tables(HELD, strides)
         assert list(two) == list(one) and all(two[name] == one[name] for name in ("lengths", "fails"))
-        for i, count in enumerate(COUNTS[load]):
-            assert [two[name] for name in CT.names(i)] == [one[name][:count] for name in CT.names(i)]
+        for i, (count, laid) in enumerate(zip(COUNTS[load], LAID[load])):
+            kept = [r for r, end in enumerate(one[f"end.{i}"][:laid]) if CT.end_of(end) != (True, 0)]
+            assert len(kept) == count
+            assert [two[name] for name in CT.names(i)] == [[one[name][r] for r in kept] for name in CT.names(i)]
             assert all(CT.held(row) for row in two[f"request.{i}"])
-            assert [CT.held(row) for row in one[f"request.{i}"]] == [True] * count + [False] * (CLASSES[i][2] - count)
+            assert [CT.held(row) for row in one[f"request.{i}"]] == [True] * laid + [False] * (CLASSES[i][2] - laid)
     R = HELD.phase_releases
     a = loads["first"][0][0]
     assert CT.file(HELD, a) == CT.file(CON, a) == 0
@@ -680,6 +759,73 @@ def test_under_form_2_a_classes_tables_are_its_held_rows_and_no_other(ran, loads
     device, _, _ = run(answers, arrivals, params=HELD, windows=3, client=leaving(GONE))
     assert device.lengths == [(0, loads["first"]), (1, loads["second"]), (2, loads["none"])]
     assert CR.of_records(HELD, *records(device)[:2]) == dict(device.lengths)
+
+
+def test_under_form_2_a_fail_before_any_data_cell_is_filed_in_no_class(ran, loads):
+    """Where a class's tables hold its held rows and no other, the rule files in no class a release that ended in a
+    `FAIL` before any `DATA` cell. It reads the release's end as the network certifier cut it: the same release
+    ended in its `END`, or failed after an id, is filed in the class that holds it. So no table of the execution
+    phase has an end row (1, 0), a class's count is of its releases that ended in their `END` or released an id,
+    and the release's lengths and fails slots are the ones it had. Under form 1 the rule reads no end, and the
+    same release has its row."""
+    _, _, _, handed = ran
+    got = released(handed)
+    assert [(r.failed, r.outputs) for r in got] == [(failed, len(sent)) for failed, sent in zip(FAILED, SENT)]
+    assert [CT.file(HELD, r) for r in got] == [at and at[0] for at in HELD_FILED]
+    assert [CT.file(CON, r) for r in got] == [i for i, _ in FILED]
+    none = got[4]
+    assert (none.failed, none.outputs, HELD_FILED[4], FILED[4]) == (True, 0, None, (1, 0))
+    assert CT.file(HELD, none._replace(failed=False)) == 1
+    assert CT.file(HELD, none._replace(outputs=1, ids=bytes(4))) == 1
+    one, two = CR.tables(CON, loads["second"]), CR.tables(HELD, loads["second"])
+    assert [CT.end_of(row) for row in one["end.1"]] == [(True, 0), (True, 2), (True, 1)]
+    assert [CT.end_of(row) for row in two["end.1"]] == [(True, 2), (True, 1)]
+    assert [len(two[name]) for name in CT.names(1)] == [2, 2, 2]
+    assert not any(CT.end_of(row) == (True, 0) for load in loads.values()
+                   for name, rows in CR.tables(HELD, load).items() if name.startswith("end.") for row in rows)
+    for name in ("lengths", "fails"):
+        assert two[name] == one[name]
+    assert [r.order for stride in CR.releases(HELD, two["lengths"], two["fails"]) for r in stride] == [4, 5, 6]
+    # `content_rows.tables` lays the class it is given: told a class for the release, it lays its row
+    told = CT.tables(HELD, [r for stride in loads["second"] for r in stride], [1, 1, 1])
+    assert [CT.end_of(row) for row in told["end.1"]] == [(True, 0), (True, 2), (True, 1)]
+
+
+def test_the_filed_releases_are_each_classes_rows_by_release_number_under_the_signed_head(loads, counted, monkeypatch):
+    """What the network certifier hands the prover of an execution phase's filing: each class's releases by their
+    place in the release order, in row order, so row r of class i's tables is of release `classes[i][r]`, under the
+    digest of the head signed over those tables. Under form 2 the list leaves out the `FAIL` before any `DATA`
+    cell, and each class's list is as long as the head's count of it; under form 1 it is the releases whose rows
+    are held. It is made by the one call of the rule the tables are laid by: with another rule there, both are that
+    rule's. A head that counts other rows than the hand files is refused, and an execution phase with no head has
+    the record with no list."""
+    _, by_load = counted
+    for params, table in ((HELD, HELD_FILED), (CON, FILED)):
+        for load, strides in loads.items():
+            got = [r for stride in strides for r in stride]
+            want = [[r.order for r in got if table[r.order] and table[r.order][0] == i]
+                    for i in range(len(CLASSES))]
+            assert [list(c) for c in CR.filed(params, strides)] == want
+            tables = CR.tables(params, strides)
+            by_order = {r.order: r for r in got}
+            for i, orders in enumerate(want):
+                p = CLASSES[i][0]
+                assert [CT.request_of(row, B, p) for row in tables[f"request.{i}"][:len(orders)]] == \
+                    [by_order[n].request for n in orders]
+    assert CR.filed(HELD, loads["second"]) == ((), (5, 6), (), ()) and CR.filed(CON, loads["second"])[1] == (4, 5, 6)
+    for load, (_, doc, head, _) in by_load.items():
+        record = CR.filed_record(head, HELD, loads[load])
+        assert record == {"format": CR.FILED, "link": LINK, "window": 0, "head": doc["certificate"]["digest"],
+                          "classes": [list(c) for c in CR.filed(HELD, loads[load])]}
+        assert [len(c) for c in record["classes"]] == list(COUNTS[load]) == [e.rows for e in head.tables[2::3]]
+        assert json.loads(json.dumps(record)) == record
+    with pytest.raises(ValueError, match="the head is not this hand's"):
+        CR.filed_record(by_load["first"][2], HELD, loads["second"])
+    assert CR.not_filed(LINK, 3) == {"format": CR.FILED, "link": LINK, "window": 3, "head": None, "classes": None}
+    monkeypatch.setattr(CT, "file", lambda params, r: 3)
+    assert CR.filed(HELD, loads["second"]) == ((), (), (), (4, 5, 6))
+    assert [len(rows) for name, rows in CR.tables(HELD, loads["second"]).items() if name.startswith("end.")] == \
+        [0, 0, 0, 3]
 
 
 def test_under_form_2_one_head_counts_each_classes_held_rows_and_its_other_fields_are_the_schedules(loads, counted):
@@ -773,7 +919,7 @@ def test_a_form_2_registration_whose_classes_three_tables_differ_in_rows_is_refu
     for load, name, rows, like in (
             ("first", "response.0", 1, "request.0 table 2"), ("first", "end.0", 3, "response.0 table 2"),
             ("first", "response.1", 1, "request.1 table 0"), ("first", "end.2", 0, "response.2 table 2"),
-            ("second", "end.1", 2, "response.1 table 3"), ("none", "response.3", 6, "request.3 table 0")):
+            ("second", "end.1", 3, "response.1 table 2"), ("none", "response.3", 6, "request.3 table 0")):
         _, doc, _, _ = by_load[load]
         with pytest.raises(ValueError, match=f"{name} table has rows {rows}, and its class's {like}: a class's tables"):
             CR.check_registration(recounted(doc, {name: rows}), key, signers.SESSION, HELD, LINK, 0)
@@ -960,12 +1106,17 @@ def test_the_response_tie_on_the_certifiers_end_row_returns_the_response_row_it_
     the blocks' rows. That holds for a connection that ended, one that failed after two ids and before any, and the
     two the client aborted. With an id the server never sent below the count the block's row is another, and the
     read refuses it. The same blocks read the tables of either of the lengths rows' forms: under form 2 a class's
-    table is the releases' rows alone, a block each, and a class without one has no row to read."""
+    table is the releases' rows alone, a block each, and a class without one has no row to read; the connection
+    that failed before any id is filed in no class there, so no block is of it."""
     handed, by_phase = tied
     for phase, (opened, _, head, domains) in by_phase.items():
         cases: dict[int, list] = {i: [] for i in range(len(CLASSES))}
+        filed = HELD_FILED if CT.counted(opened.params) else FILED
         for release in (r for stride in handed[phase] for r in stride):
-            i, r = FILED[release.order]
+            if filed[release.order] is None:
+                assert (release.failed, release.outputs) == (True, 0)
+                continue
+            i, r = filed[release.order]
             o = CLASSES[i][1]
             end = opened.table(f"end.{i}").rows[r]
             assert CT.end_of(end) == (FAILED[release.order], len(SENT[release.order]))

@@ -4084,7 +4084,7 @@
     {"file": "verity/protocols/accounting/certifier/verifier/calibration.py", "count": 5},
     {"file": "verity/protocols/accounting/certifier/verifier/certificate.py", "count": 10},
     {"file": "verity/protocols/accounting/certifier/verifier/charge_chain.py", "count": 2},
-    {"file": "verity/protocols/accounting/certifier/verifier/coin_link.py", "count": 3},
+    {"file": "verity/protocols/accounting/certifier/device/coin_link.py", "count": 3},
     {"file": "verity/protocols/accounting/certifier/verifier/compile_slice.py", "count": 3},
     {"file": "verity/protocols/accounting/certifier/verifier/grid.py", "count": 2},
     {"file": "verity/protocols/accounting/certifier/verifier/head_check.circuit-check.py", "count": 3},

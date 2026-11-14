@@ -157,6 +157,9 @@ from the signed head of an execution phase and the verdict records on a class of
   charged its whole schedule on every row; a verdict without `complete` reads as not complete;
 - so it is where the class's records on that head name two serves or two registrations: the head holds the network
   certifier's rows to a serve, and these two names hold the values the verdicts judge to it;
+- so it is where the rule is not handed the schedule the head names, or that schedule can't be tied (each P listed
+  once, one O for every class and a response limit): with no schedule handed that word was not asked, and the
+  line says the schedule was not handed;
 - a class with a count of 0 owes none.
 
 `benchmarks/network_traces/stop_verdicts.py` reads the records and hands the calculator the answer (`of_runs`, `stop`).
@@ -192,6 +195,11 @@ The records are in the evidence store, in the run files of the runs that carry
   registered its class under (`registration`), and the one of a verdict's own stream (`stream_registration`),
   which follows it and registers the rate that stream's population is sampled at.
 
+The reader is handed no schedule and asks the rule without one. So as it stands it holds no execution phase,
+whatever a run's files hold: each class that holds a row is charged its whole schedule, and its line and the
+answer's first line say the schedule was not handed. The rest of this section is what the reader holds of a class
+the rule charges below.
+
 The reader holds what the rule charges below to two more things, which the rule doesn't read:
 
 - **A negative control.** An execution phase is held only where each verifier that accepted has, at the same commit,
@@ -216,6 +224,8 @@ The reader holds what the rule charges below to two more things, which the rule 
   rate. The rate is the registration's and never the verdict's own word, so a verdict that states `1/1` under a
   registration that says otherwise is refused by name. So is a record that names no registration of its stream, a
   registration that was not handed, one that follows another record, and one whose sampling design is no subset.
+  The stop record's `population` is held to the head's count of the class: the stop record is of every row of the
+  class and of no other, which `1/1` of a population of another size doesn't say.
   A failure is final for what its verdict speaks for, one execution phase's class at `1/1`; a rate below `1/1`
   widens the failure to the whole registered population, for when the reader takes one. The rate of the compute
   audit's second stage is not held here.

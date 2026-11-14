@@ -2456,6 +2456,13 @@
       "paths": {
         "verity/hardware/registration.py": "verity/protocols/accounting/registration/verifier/registration.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/certifier/verifier/coin_link.py": "verity/protocols/accounting/certifier/device/coin_link.py",
+        "verity/protocols/accounting/certifier/verifier/device_needs.py": "verity/protocols/accounting/certifier/device/device_needs.py",
+        "verity/protocols/accounting/certifier/verifier/device_party.py": "verity/protocols/accounting/certifier/device/device_party.py"
+      }
     }
   ]
 }

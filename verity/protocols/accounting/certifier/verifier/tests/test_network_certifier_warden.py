@@ -760,6 +760,18 @@ def test_a_request_past_the_cap_is_refused_at_ingress_with_its_own_reason_never_
     refused(id_req((1 << 32) - 1))
 
 
+def test_a_request_of_max_tokens_0_is_refused_at_ingress_under_a_response_limit_and_released_without_one():
+    """Under a response limit a request that asks for no token is refused as one past the limit is, by the same
+    reason: none of its bytes is cut into a cell or reaches the server. The least a released request asks for is
+    1. A schedule without one reads no request's `max_tokens`, and releases the same request."""
+    assert active.id_request_max_tokens(id_req(0)[:GP]) == 0
+    refused(id_req(0))
+    _, _, server, e = capped(id_req(1), id_answer([7]))
+    assert (e["failed"], e["max_tokens"], e["release"]) == (None, 1, 0) and server.conns[0].received
+    _, _, server, e = capped(id_req(0), id_answer([7]), params=GATED)
+    assert (e["failed"], e["max_tokens"], e["release"]) == (None, None, 0) and server.conns[0].received
+
+
 def malformed_requests() -> dict[str, bytes]:
     """Requests whose `max_tokens` the network certifier can't read as `active.id_request` writes one."""
     good, at = id_req(4), active.MAX_TOKENS_AT
@@ -783,10 +795,10 @@ def test_a_request_whose_max_tokens_field_does_not_parse_is_refused(name):
 
 def test_a_response_past_its_requests_max_tokens_fails_limit_at_that_cell():
     """Under the cap a server is held to its request's `max_tokens`: a third id on a request of two fails the
-    connection (limit) at egress cell 2, none of that id's bytes leaving, and a request of zero gets its END alone or
-    fails at cell 0. Without a cap the same response is released whole."""
-    for max_tokens, ids, outcome in ((2, [1, 2, 3], ("limit", 2)), (2, [1, 2], (None, None)), (0, [], (None, None)),
-                                     (0, [7], ("limit", 0))):
+    connection (limit) at egress cell 2, none of that id's bytes leaving, and a request of one gets its END alone
+    where its server sends no id, or fails at cell 1 on a second. Without a cap the same response is released whole."""
+    for max_tokens, ids, outcome in ((2, [1, 2, 3], ("limit", 2)), (2, [1, 2], (None, None)), (1, [], (None, None)),
+                                     (1, [7, 8], ("limit", 1))):
         warden, client, _, e = capped(id_req(max_tokens), id_answer(ids))
         assert (e["failed"], e["failed_at"]) == outcome
         sent = ids[:max_tokens]
@@ -802,12 +814,13 @@ def test_a_response_past_its_requests_max_tokens_fails_limit_at_that_cell():
 
 def test_the_audit_holds_released_requests_and_responses_to_the_cap():
     """The audit under a cap reads each request's `max_tokens` from its cells: records an uncapped run made, with a
-    request past the cap released or a response past its request's `max_tokens`, are refused; a `cap` reason under a
-    schedule without a cap is not the schedule's."""
-    warden, _, _, _ = capped(id_req(5), id_answer([1]), params=GATED)
-    verdict = audit(CAPPED, *records(warden))
-    assert verdict["windows"][0]["problems"] == ["connection 1: its request's max_tokens (5) is past the cap, and was "
-                                                 "released"]
+    request past the cap or of 0 released or a response past its request's `max_tokens`, are refused; a `cap` reason
+    under a schedule without a cap is not the schedule's."""
+    for max_tokens in (5, 0):
+        warden, _, _, _ = capped(id_req(max_tokens), id_answer([]), params=GATED)
+        verdict = audit(CAPPED, *records(warden))
+        assert verdict["windows"][0]["problems"] == [f"connection 1: its request's max_tokens ({max_tokens}) is "
+                                                     "not from 1 to the cap, and was released"]
     warden, _, _, _ = capped(id_req(2), id_answer([1, 2, 3]), params=GATED)
     verdict = audit(CAPPED, *records(warden))
     assert verdict["windows"][0]["problems"] == ["connection 1: its response has 3 DATA cells, past its max_tokens (2)"]
