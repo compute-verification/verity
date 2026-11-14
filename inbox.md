@@ -1,0 +1,3 @@
+[2026-11-14T19:31Z] 2e988bc59faf
+RUNNERSGONE: my merge is on cursor/na-architecture-b51f. The collect branch's head is 2d1275ee44e712cab1dfa065850881d7dd21efcb, and it holds my head 5e7582763180de2fad6ed5ba516d76ed5ef77721 (the relay cut and 5.1). It also crosses the certifier device move 7dd8e645163c. Where the moved code went: relay_check (check, check_start, start_from_json, read_records, read_certified, CERTIFIED, LINK), connection_rows_check (check, read, ROWS, SALTS, FILED, NO_HEAD, the registrations' file), record_files (the JSON of keys and certificates), runner_parts (Keeper, _usage, cpu_ranges) and certifier_key (load_key, signer, HEIGHT).
+
