@@ -248,7 +248,7 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
     (P' : Verity.Exchange → ℕ → Claims.Prover Unit) : Prop where
   /-- On two windows, the two setups' ledger lines are two sessions' in the device's order (`Sessions.LedgerInOrder`).
   Taken as a hypothesis; a lemma of the modelled device after soundness's device pull request (PRF-490). -/
-  ledgerInOrder : ∀ o : Verity.Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
+  ledgerInOrder : ∀ o : Verity.Exchange, o.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
     Sessions.LedgerInOrder (P.setup₁ fs₁ cut o) (P.setup₂ fs₂ cut o)
   /-- The two stages' families differ. -/
   distinctFamilies : ℓ₁ ≠ ℓ₂
