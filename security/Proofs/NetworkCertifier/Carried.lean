@@ -518,7 +518,7 @@ theorem encard_pooledCarried_le {L K S m : ℕ} (lay : AuditStatement → Bounda
     (chains : Fin m → Bool) (genesis : Fin m → Hash.Row) {Ω Conn Cell Srv Dev Z : Type} [Fintype Conn]
     (arr : Srv → Conn → Arrivals Cell) (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
     (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
     (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (Zs : Set Z)
     (schedOf : Z → (Fin m → Ω) → CertifierSchedule Conn) (srvOf : Z → (Fin m → Ω) → Srv)
     (dec : (Fin m → Ω) → (Conn → List (ℕ × CellView Cell)) → Z)
@@ -667,7 +667,7 @@ theorem pooledLeakChecked_of_carried {L K S : ℕ} (lay : AuditStatement → Bou
     {Ω : Type} [Fintype Ω] [Nonempty Ω] {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
     (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
     (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (Zs : Set Z)
     (schedOf : Z → (Fin m → Ω) → CertifierSchedule Conn) (srvOf : Z → (Fin m → Ω) → Srv)
     (dec : (Fin m → Ω) → (Conn → List (ℕ × CellView Cell)) → Z)
