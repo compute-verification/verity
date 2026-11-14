@@ -35,8 +35,9 @@ s = pf.read_text()
 if '#include "prove_chunk.cuh"' not in s:
     s = s.rstrip("\n") + '\n\n#include "prove_chunk.cuh"\n'
     print("prove_ffi.cu includes prove_chunk.cuh")
-# cudafe++ names an anonymous namespace _GLOBAL__N__<hash>_..., the hash over nvcc's options and the source's absolute path,
-# which a module id file passed with -Xcudafe doesn't override, so the cubin's symbols would differ by where the tree sits.
+# cudafe++ names an anonymous namespace _GLOBAL__N__<hash>_..., and the hash differs with the directory the source sits in;
+# a module id file passed with -Xcudafe doesn't fix it (nvcc passes its own after it), so the cubin's symbols would differ by
+# where the tree sits.
 # A named namespace, with a using-directive standing in for the anonymous one's, leaves lookup unchanged.
 if "namespace {\n" in s:
     assert s.count("\nnamespace {\n") == 1 and s.count("\n} // namespace\n") == 1, "prove_ffi.cu's anonymous namespace changed"
