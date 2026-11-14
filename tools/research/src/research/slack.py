@@ -23,6 +23,7 @@ Notes are records, never messages.
   research msg linear project edit PROJECT [--team KEY...] [--date D|none] [--status S]   # teams, target date, status
   research msg linear milestone create|edit PROJECT NAME [--date D] [--description-file F] [--rename NEW]
   research msg read --thread TS [--since TS] | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: NAME's unread doorbells
+  research msg read --as NAME --mark-through TS [--json]           # mark read only those at or before TS (a --peek listing's last)
   research msg names open|read|close|list|revoke [--as NAME] [--forward-to @NAME] [--succeeds] [--poster BC_ID]  # the names you answer to
   research msg traffic [--hours H] [--json]                        # the monitor: doorbells, pauses, dropped names, unanswered asks
   research msg traffic --latency [--hours H] [--json]              # per lane: asks, answered (by record), median and p90 minutes
@@ -2496,6 +2497,8 @@ def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
         raise SlackError("read: --thread reads one thread; it doesn't take --as")
     if not (ns.thread or ns.since or ns.handle):
         raise SlackError("read: one of --thread TS, --since TS or --as NAME is required")
+    if ns.mark_through is not None and (not ns.handle or ns.peek or ns.urgent):
+        raise SlackError("read: --mark-through TS marks NAME's doorbells: pass --as NAME, and neither --peek nor --urgent")
     if ns.handle:
         name = ns.handle.lstrip("@")
         r = routes_of(ns).get_route(name, fresh=name not in routes_of(ns).local)
@@ -2846,15 +2849,42 @@ def render_unread(name: str, msgs: list[dict], reg: dict) -> str:
     return "\n".join(lines)
 
 
+def listed_through(name: str, msgs: list[dict]) -> str:
+    """The line a `--peek` listing ends with: the newest doorbell it showed, and the command that marks it and those before it
+    read and none that came after."""
+    newest = max((m["ts"] for m in msgs), key=float)
+    at = datetime.fromtimestamp(float(newest), UTC).strftime("%H:%M:%SZ")
+    return (f"listed through {newest} ({at}): `research msg read --as {name} --mark-through {newest}` marks these read, and "
+            "none that came after")
+
+
+def mark_through(name: str, msgs: list[dict], through: str, as_json: bool = False) -> int:
+    """Mark read the unread doorbells ``msgs`` at or before ``through`` (the ts a listing ended with), never one after it: a
+    doorbell that rang after the listing stays unread, however much later the mark is run."""
+    done = [m for m in msgs if float(m["ts"]) <= float(through)]
+    left = [m["ts"] for m in msgs if float(m["ts"]) > float(through)]
+    mark_read(name, done)
+    if as_json:
+        print(json.dumps({"marked": [m["ts"] for m in done], "unread": left}))
+    else:
+        at = datetime.fromtimestamp(float(through), UTC).strftime("%H:%M:%SZ")
+        print(f"SLACK @{name}: marked {len(done)} read through {through} ({at}); {len(left)} newer stay unread")
+    return 0
+
+
 def inbox_read(ns: argparse.Namespace, reg: dict, r: dict) -> int:
     r = {**r, "channel": r.get("channel") or channel_id(ns, reg, FRONT_DOOR)}
     api = client(ns)
     since = getattr(ns, "since", None)
     msgs = unread(api, r, since)
+    if (through := getattr(ns, "mark_through", None)) is not None:
+        return mark_through(r["name"], msgs, through, ns.json)
     if ns.json:
         print(json.dumps(msgs, indent=2, ensure_ascii=False))
     else:
         print(render_unread(r["name"], msgs, reg))
+        if ns.peek and msgs:
+            print(listed_through(r["name"], msgs))
     if not ns.peek:
         mark_read(r["name"], msgs)
     return 1 if ns.urgent and not any(urgent_doorbell(m, reg) for m in msgs) else 0
@@ -4681,7 +4711,10 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                         "with --as, NAME's doorbells since TS")
     p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="NAME's unread doorbells")
     p.add_argument("--limit", type=int, default=None)
-    p.add_argument("--peek", action="store_true", help="--as: don't mark them read")
+    p.add_argument("--peek", action="store_true", help="--as: don't mark them read; the listing ends with the newest ts it showed")
+    p.add_argument("--mark-through", default=None, metavar="TS", type=since_ts,
+                   help="--as: list nothing, and mark read only the unread doorbells at or before TS (the ts a --peek listing "
+                        "ended with), never one that rang after it")
     p.add_argument("--urgent", action="store_true", help="--as: exit 1 unless an unread doorbell is URGENT")
     p.add_argument("--json", action="store_true")
     p = cmd("ask-daniel", "an ask's page in the Asks for Daniel database and its card in #ask-daniel; `status ID` reads the card's "

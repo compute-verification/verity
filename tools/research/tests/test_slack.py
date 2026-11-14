@@ -3509,6 +3509,31 @@ def test_read_as_since_rereads_the_doorbells_after_ts_and_never_moves_the_mark_b
     assert rc == 2 and "one of --thread TS, --since TS or --as NAME" in err
 
 
+def test_mark_through_marks_what_a_peek_listed_and_never_a_doorbell_that_rang_after(fake, registry, routes_dirs, capsys):
+    """A `--peek` listing, then a bare `read --as` minutes later to mark it, marked the doorbells that rang in between, unread.
+    The listing ends with the newest ts it showed, and `--mark-through` that ts leaves every later doorbell unread."""
+    inbox(fake, routes_dirs, "top")
+    run(capsys, "ask", "--as", "circuits", "--to", "@top", "--text", "first")
+    run(capsys, "ask", "--as", "circuits", "--to", "@top", "--text", "second")
+    rc, out, _ = run(capsys, "read", "--as", "top", "--peek")
+    first, second = json.loads(run(capsys, "read", "--as", "top", "--peek", "--json")[1])
+    at = datetime.fromtimestamp(float(second["ts"]), UTC).strftime("%H:%M:%SZ")
+    assert rc == 0 and out.splitlines()[-1] == (f"listed through {second['ts']} ({at}): `research msg read --as top "
+                                                f"--mark-through {second['ts']}` marks these read, and none that came after")
+    run(capsys, "ask", "--as", "circuits", "--to", "@top", "--text", "third, after the listing")
+    rc, out, _ = run(capsys, "read", "--as", "top", "--mark-through", second["ts"])
+    assert rc == 0 and out.strip() == f"SLACK @top: marked 2 read through {second['ts']} ({at}); 1 newer stay unread"
+    assert slack.seen_path("top").read_text().strip() == second["ts"]
+    left = json.loads(run(capsys, "read", "--as", "top", "--peek", "--json")[1])
+    assert [m["text"].endswith("third, after the listing") for m in left] == [True]
+    rc, out, _ = run(capsys, "read", "--as", "top", "--mark-through", first["ts"], "--json")
+    assert rc == 0 and json.loads(out) == {"marked": [], "unread": [left[0]["ts"]]}
+    assert slack.seen_path("top").read_text().strip() == second["ts"]
+    for bad in (("--thread", first["ts"]), ("--as", "top", "--peek"), ("--as", "top", "--urgent")):
+        rc, _, err = run(capsys, "read", *bad, "--mark-through", second["ts"])
+        assert rc == 2 and "--mark-through TS marks NAME's doorbells: pass --as NAME" in err
+
+
 def test_a_clone_holding_a_closed_route_rings_the_reopened_published_one(fake, registry, routes_dirs, capsys):
     """An inbox reopened since this clone was pulled: a sender whose clone still holds it closed rings the published route."""
     root = fake.add(COORD, text=f"{slack.INBOX_HEAD}console. pointers", username="console", bot_id=BOT)
