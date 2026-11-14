@@ -98,6 +98,9 @@ sense, ePrint 2024/1434), for the audit's value layer.
 - **Where it is used.** The link theorem takes it for the finders it builds from the prover it bounds (`LinkCR … R τ …`).
   `flock_batched_linkSoundE` gives the bound at each prover whose finders satisfy it, and `⊤` at any other
   (`linkBoundCR`); the end-to-end theorems take `hCR` for `σ`'s finders alone.
+- **What its cost counts.** A link finder's cost is its count of SHA-512 evaluations and nothing else. The compiled
+  link finder (`Exec.outCL`) also decodes each extracted table with the radius decoder (`Exec.candL`), which hashes
+  nothing: the decoder's running time is not bounded by that count.
 - **Why it is plausible:** `assumption-notes/a2-sha512-expected-time-cr.md`.
 - **Upstream:** watch entries `collision-resistance`, `keyed-cr` and `rom-cr` (see Upstream status).
 
