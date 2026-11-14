@@ -25,7 +25,7 @@ from verity_vllm.protocols.pouw.h1 import requests as RQ
 _ROOT = re.compile(r"^[0-9a-f]{128}$")
 #: why a window's sampling coin has no session to be read from
 NO_DRAW_SESSION = ("the verifier names no draw session: a window's draw coin is its own draw session's, opened withheld "
-                   "on its draw root (CMP-177)")
+                   "on its draw root")
 
 
 def _draw(commits: Mapping[str, Any]) -> Mapping[str, Any]:
