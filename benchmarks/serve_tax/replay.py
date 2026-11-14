@@ -1,7 +1,7 @@
 """Replay one served window of a ``record`` arm (`serve_tax`) under its recorded schedule, and say how close it came.
 
     replay.py --arm-dir OUT/record --load NAME [--rep 1] [--checkpoint DIR] [--eager] [--against EARLIER_OUT] [--tp N]
-              [--capture ID,... [--capture-template T]] [--private DIR] --out DIR
+              [--capture ID,... [--capture-template T] [--capture-moe MODULE,...]] [--private DIR] --out DIR
 
 The window is the load's requests: its step trace's steps from the first one's arrival to the last one's finish, all of them
 the load's own (each load starts from an empty prefix cache and ends drained). A request's prompt ids are the plan's and
@@ -27,7 +27,9 @@ differing requests (each one's lengths and first differing position), the replay
 arm's meta.json has its server's: `serve_tax.value_settings`); replay_tokens.jsonl.gz has every request's replayed tokens, which ``--against`` compares a
 later replay's with, to tell a replay that differs from serving from one that differs from itself. ``--capture`` takes the
 named requests' logits rows and ids at every rank's sampler (`verity_vllm.engine.sampler_capture`) into OUT/capture, a
-token-select span each, and replay.json says whether each one's ids are the ones served.
+token-select span each, and replay.json says whether each one's ids are the ones served. ``--capture-moe``, in an
+``--eager`` replay, also takes those requests' rows of each launch of the named MoE modules at every rank
+(`verity_vllm.engine.moe_capture`) into OUT/capture/moe.
 """
 from __future__ import annotations
 
@@ -194,7 +196,7 @@ def params(r: dict, logprobs: bool = False) -> Any:
 
 
 def replay(w: dict, checkpoint: Path, eager: bool, logprobs: bool = False, tp: int = 1,
-           capture: tuple[list[str], Path] | None = None) -> dict:
+           capture: tuple[list[str], Path] | None = None, moe: list[str] | None = None) -> dict:
     sys.path.insert(0, str(ROOT / "adapters/vllm"))
     from verity_vllm.engine import sampler_capture as SC
     from verity_vllm.engine.hooks import Hooks
@@ -204,6 +206,9 @@ def replay(w: dict, checkpoint: Path, eager: bool, logprobs: bool = False, tp: i
     eng = engine(checkpoint, w["header"], eager, tp)
     if capture:
         eng.collective_rpc(SC.install, args=(capture[0],))
+    if capture and moe:
+        from verity_vllm.engine import moe_capture as MC
+        eng.collective_rpc(MC.install, args=(capture[0], moe))
     ready = time.monotonic() - t0
     trace = StepTrace().install(eng)
     limit, served = trace.records[0]["config"].get("max_model_len"), w["header"]["config"].get("max_model_len")
@@ -253,10 +258,11 @@ def replay(w: dict, checkpoint: Path, eager: bool, logprobs: bool = False, tp: i
         eng.step()
     wall = time.monotonic() - start
     takes = eng.collective_rpc(SC.take, args=(str(capture[1]),)) if capture else None
+    moe_takes = eng.collective_rpc(MC.take, args=(str(capture[1].parent / "moe"),)) if capture and moe else None
     hooks.uninstall()
     trace.uninstall()
     return {"ready_s": ready, "wall_s": wall, "steps": [r for r in trace.records if r["kind"] == "step"], "tokens": tokens,
-            "logprobs": lps, "takes": takes}
+            "logprobs": lps, "takes": takes, "moe_takes": moe_takes}
 
 
 def emitted_at(steps: list[dict]) -> dict[str, list[int]]:
@@ -357,6 +363,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--capture", help="engine ids: take their logits rows and ids at the sampler (`sampler_capture`) into "
                                       "OUT/capture, each a span of --capture-template's units")
     ap.add_argument("--capture-template", default="TokenSelect_v4{V=154880}")
+    ap.add_argument("--capture-moe", help="MoE modules, by their names in the model: with --capture and --eager, take those "
+                                          "requests' rows of each of their launches (`moe_capture`) into OUT/capture/moe")
     ap.add_argument("--private", type=Path, help="a directory outside every run's, for what the served arm's other "
                                                  "plugins keep on the node (the canonical top-k's counters)")
     ap.add_argument("--out", type=Path, required=True)
@@ -365,6 +373,9 @@ def main(argv: list[str] | None = None) -> int:
         if a.private and a.private.resolve().is_relative_to(public.resolve()):
             raise SystemExit(f"the private directory {a.private} is inside {public}, which leaves the node: --private DIR, "
                              "outside every run's directory")
+    if a.capture_moe and not (a.capture and a.eager):
+        raise SystemExit("--capture-moe takes the launches of --capture's requests at their Python launch sites, which a "
+                         "compiled engine's steps don't run: give it with --capture and --eager")
     if sys.flags.hash_randomization:
         raise SystemExit("run with PYTHONHASHSEED=0, as the served engine did: the scheduler iterates sets of request ids")
     meta = json.loads((a.arm_dir / "meta.json").read_text())
@@ -380,7 +391,7 @@ def main(argv: list[str] | None = None) -> int:
     checkpoint = a.checkpoint or Path(meta["checkpoint"])
     w = window(a.arm_dir, a.load, a.rep)
     capture = (a.capture.split(","), a.out / "capture" / "ranks") if a.capture else None
-    got = replay(w, checkpoint, a.eager, a.logprobs, a.tp, capture)
+    got = replay(w, checkpoint, a.eager, a.logprobs, a.tp, capture, a.capture_moe.split(",") if a.capture_moe else None)
     out = {"schema": "verity-bench/serve-tax/replay/v0", "arm_dir": str(a.arm_dir), "served_run_id": meta.get("run_id"),
            "run_id": SHARED.RESEARCH_RUN_ID, "load": a.load, "rep": a.rep, "mode": "eager" if a.eager else "compiled",
            "served_under": {"plugins": [entry for entry, _ in served.general], "by": "the replay" if under else "the job",
@@ -402,6 +413,12 @@ def main(argv: list[str] | None = None) -> int:
         out["capture"] = {rid: {"tokens": len(s["tokens"]), "as_served": s["tokens"] == served[rid], "program": s["program"]}
                           for rid, s in spans.items()}
         out["capture_missing"] = sorted(set(capture[0]) - set(spans))
+    if a.capture_moe:
+        from verity_vllm.engine import moe_capture as MC
+        moe = MC.spans(got["moe_takes"], got["steps"])
+        MC.write(a.out / "capture" / "moe", moe)
+        out["capture_moe"] = {rid: {"pieces": len(s["pieces"]), "ranks": sorted(s["ranks"], key=int)} for rid, s in moe.items()}
+        out["capture_moe_missing"] = sorted(set(a.capture.split(",")) - set(moe))
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "replay.json").write_text(json.dumps(out, indent=1))
     write_tokens(a.out, got["tokens"])
