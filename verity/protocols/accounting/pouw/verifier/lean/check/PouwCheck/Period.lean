@@ -23,8 +23,8 @@ windows is credited (`Credit.window`), and a refused window refuses the period. 
 the head of the registration log the period is accounted against (a SHA-512 digest, 128 lowercase hex), the
 challenger key the verifier pins (`Spot.Challenger.ChallengerKey`), its own copy of main's first-parent history (newest
 first), the name of the period it credits (a string), the id the registration log registered the period's device under
-(a nonempty string, which the check reads only for its form) and the ordered ids of the sessions the challenger's ledger opened for the period's windows (each window's and its
-sample's, `sessionId?`; the empty list names none). The registration's three (`head`, `place`, `sessions`,
+(a nonempty string, which the check reads only for its form) and the ordered ids of the sessions the challenger's
+ledger opened for the period's windows (each window's and its sample's, `sessionId?`; the empty list names none). The registration's three (`head`, `place`, `sessions`,
 `Registered`) come all or none: parameters with none of them, `{"key", "main", "name"}` (`aloneKeys`), run the period
 alone, against no registration log, and parameters with some but not all are refused (`KEYS_FORM`).
 

@@ -15,8 +15,9 @@ noise (``PouwH1Tile`` v1, v3 or v4), a J10-R unit over a tile other than ``PouwH
 one K. Then it is `credit._period_outcomes`, all or nothing, and last a session of the period's close the parameters
 don't list or that repeats one before it is refused (``sessions``). It accepts publishing the period's credit
 (``{windows, work, k, delta, eps}``) with the parameters' challenger ``key``, the close's open ``roots`` and the
-period's span in ledger entries (``start``, ``length``), naming no device (the accounting layer binds ``key`` to one), with the profile ``{period, windows}``, or rejects with the first refusal, ``code: why``. Each
-sampled proof block's and each round's proof outcome is the verifier's verdict, which the evidence carries."""
+period's span in ledger entries (``start``, ``length``), naming no device (the accounting layer binds ``key`` to
+one), with the profile ``{period, windows}``, or rejects with the first refusal, ``code: why``. Each sampled proof
+block's and each round's proof outcome is the verifier's verdict, which the evidence carries."""
 from __future__ import annotations
 
 import hashlib
