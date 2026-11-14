@@ -29,7 +29,7 @@ from verity.circuits.partition import Hierarchy, Level
 MARGIN = 2.0 ** -30
 
 #: the per-window δ, the one failure probability a window's ε is reported at: PoUW's credit and its grind premium, and
-#: the remote bandwidth audit's pooled bound
+#: PoUB's pooled bound
 WINDOW_DELTA = Fraction(1, 2 ** 40)
 
 

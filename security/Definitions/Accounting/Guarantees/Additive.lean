@@ -6,7 +6,7 @@ public import Definitions.Accounting.Additive
 # Compute additivity's capacity from the machine model 𝓜 (trusted)
 
 Compute additivity (W: `Accounting.Assumptions.RateComputeAdditive` for a joint run,
-`Accounting.Remote.Assumptions.ComputeAdditive` for the remote audit) says the works the subprotocols certify on one
+`Accounting.Remote.Assumptions.ComputeAdditive` for PoUB) says the works the subprotocols certify on one
 node add under its capacity. 𝓜 (`Verity.Accel.Machine`) gives the capacity part, counted once per resource:
 
 * **Rates add over runs back to back** (`AccelRate`). A device's period is runs of 𝓜 back to back

@@ -27,7 +27,7 @@ class LeanError(RuntimeError):
 
 @functools.cache
 def build(package: Path = PACKAGE) -> Path:
-    """`lake build remote-audit-verifier` in the remote audit's Lake package, once a process, and the executable's
+    """`lake build remote-audit-verifier` in PoUB's Lake package, once a process, and the executable's
     path."""
     if shutil.which("lake") is None:
         raise LeanError(f"lake is not on the PATH, so {EXE} cannot be built: put elan's bin on the PATH "

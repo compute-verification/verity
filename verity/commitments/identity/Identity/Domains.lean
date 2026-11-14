@@ -150,7 +150,7 @@ abbrev WIPE_MONITORING_PERIOD : String := "verity/wipe-monitoring-period/v1"
 abbrev WIPE_PROTOCOL : String := "verity/wipe/v0"
 abbrev WIPE_EGRESS : String := "wipe-egress/v1"
 
--- Not yet read from here: the remote bandwidth audit
+-- Not yet read from here: PoUB
 abbrev REMOTE_BANDWIDTH_P2_BLOCK4 : String := "p2-unit4/v0"
 abbrev STORE_ORDER : String := "store-order/v0"
 abbrev REMOTE_BANDWIDTH_MONITORING_PERIOD : String := "verity/remote-bandwidth-monitoring-period/v1"

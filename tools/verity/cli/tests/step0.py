@@ -152,7 +152,7 @@ def unserved(what: str) -> Check:
 CHECKS: dict[str, Check] = {"certifier": unserved("network-period check"), "pouw": unserved("PoUW window check"),
                             "pearl-plus": unserved("Pearl+ run verdict"),
                             "inference-only": unserved("inference-only policy check"),
-                            "pous": unserved("PoUS run check"), "bandwidth": unserved("remote bandwidth session"),
+                            "pous": unserved("PoUS run check"), "bandwidth": unserved("PoUB session"),
                             "wipe": unserved("memory challenger's wipe check")}
 
 

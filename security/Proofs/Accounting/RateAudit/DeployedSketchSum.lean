@@ -693,7 +693,7 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_mono)
 
-/-- **The remote bandwidth audit with deployed tensor-sketch receipts, for the verbatim class, under the per-pass
+/-- **PoUB with deployed tensor-sketch receipts, for the verbatim class, under the per-pass
 hash budget: the sum form.** `Accounting.Guarantees.RemoteRunConservationSketch`'s statement with one added named
 assumption — across each pass's `G` candidate oracles the queries total at most `qtot`
 (`Accounting.Assumptions.SketchHashBudget`) — and the receipt term

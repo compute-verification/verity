@@ -19,7 +19,7 @@ any other answer, 2 on none.
 
 ``answer``: the session of `served_bandwidth.sh`, over a store of the node's own on its disk.
 
-The remote bandwidth session's record (`benchmarks/pous/p2_v1/bandwidth.py session`'s ``session.json``) as a core answer
+The PoUB session's record (`benchmarks/pous/p2_v1/bandwidth.py session`'s ``session.json``) as a core answer
 in ``DIR/answer.json`` (`answer`): the verifier's answer, held to the verifier's own record of it where the session has
 one, in the core interface's form (`p2_party.core_answer`), with γ against ``R``. The session runs on the card after
 window K was served, beside it: serving is not hooked, so its reads are the session's own, not the engine's reads of the
@@ -91,7 +91,7 @@ def answer(session: Mapping[str, Any], scope: str, r_bytes_per_s: int | None) ->
 
 def collect(out: Path, window: int) -> dict[str, Any] | None:
     """The answer the PoUS piece's bandwidth session wrote to `out` for `window` (module docstring), None when it wrote
-    none; ValueError when what it wrote isn't a core answer of the remote bandwidth audit."""
+    none; ValueError when what it wrote isn't a core answer of PoUB."""
     import served_verdicts as S
 
     files = [out / f for f in ("answer.json", "bandwidth.json")]
@@ -100,7 +100,7 @@ def collect(out: Path, window: int) -> dict[str, Any] | None:
     a, summary = (json.loads(f.read_text()) for f in files)
     S.check_answer(a)
     if a.get("protocol") != p2_party.PROTOCOL:
-        raise ValueError(f"the answer in {out} is {a.get('protocol')!r}'s, not the remote bandwidth audit's")
+        raise ValueError(f"the answer in {out} is {a.get('protocol')!r}'s, not PoUB's")
     if summary.get("window") != window:
         a = {"commitment": None, "profile": None, "protocol": p2_party.PROTOCOL, "public": None,
              "reason": f"the bandwidth answer in {out} is window {summary.get('window')}'s, not window {window}'s: the "

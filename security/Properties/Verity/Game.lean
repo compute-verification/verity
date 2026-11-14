@@ -138,7 +138,7 @@ inductive Subprotocol
   | inferenceOnly
   /-- PoUS: space -/
   | pous
-  /-- PoUB-P2, the remote bandwidth audit's P2 session on PoUS's store: bits read from device memory -/
+  /-- PoUB-P2, PoUB's P2 session on PoUS's store: bits read from device memory -/
   | poub
   /-- the network certifier: communication through the network certifiers -/
   | network

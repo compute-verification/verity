@@ -35,9 +35,9 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The remote audit's named assumptions (trusted)
+# PoUB's named assumptions (trusted)
 
-What the remote audit's node-level bounds (`Accounting.SecurityProofs.Remote`) assume beyond the model's rows, each a
+What PoUB's node-level bounds (`Accounting.SecurityProofs.Remote`) assume beyond the model's rows, each a
 named `Prop` on a run:
 
 * `Identity` is statement C's: no undeclared device of any kind. Every location that could read, hold or rebuild a

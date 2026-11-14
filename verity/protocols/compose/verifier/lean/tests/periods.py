@@ -1,5 +1,5 @@
 """Onsite's real subprotocols' cases for the composition's difftest, each with the answer its Python verifier gives it
-(`reference.Recorded`), all on one store: the committed 9-block `C*` of the remote bandwidth audit's fixture
+(`reference.Recorded`), all on one store: the committed 9-block `C*` of PoUB's fixture
 (`remote_bandwidth/tests/fixtures/p2-store.json`), registered for PoUB-P2 on its PoUS setup. Space's
 (`pous.period.audit` of that `C*` on node `n0`, signed by a key at S1's deployed parameters, `mc_cases.deployed_signer`)
 honest, under a prover that answers every other round with zeros, the honest audit's case committed to a setup with

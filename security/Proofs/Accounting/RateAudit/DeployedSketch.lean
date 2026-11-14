@@ -593,7 +593,7 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_mono)
 
-/-- **The remote bandwidth audit with deployed tensor-sketch receipts, for the verbatim class**
+/-- **PoUB with deployed tensor-sketch receipts, for the verbatim class**
 (`Accounting.Guarantees.RemoteRunConservationSketch`). -/
 theorem RemoteRunConservationSketch : Accounting.Guarantees.RemoteRunConservationSketch := by
   intro n P N m ρ h S L q ks G d r X ε A dbar dw hn hP hN hm hr32 hdw hRank hX

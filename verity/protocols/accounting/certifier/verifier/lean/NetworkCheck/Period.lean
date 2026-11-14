@@ -189,7 +189,7 @@ the client read), `jitter` = `⌈log2 Dj^steps⌉`, and `K` the sum of the terms
 of a sync of Σ_sync to the `m` execution phases, so it is the same whichever syncs the certifier ran them under, and
 needs none of them. `eps` is the `δ` part of the probability that `K` fails to bound the period's leak, the union of
 its audits' `δ`; each audit's knowledge error and collision errors add to it, and the check evaluates neither: their
-exact sum in lowest terms (`Core.Ratio.toString`, `"0"` with no audits), as PoUS's and remote bandwidth's publics carry
+exact sum in lowest terms (`Core.Ratio.toString`, `"0"` with no audits), as PoUS's and PoUB's publics carry
 theirs.
 
 In the rows form the terms are `MonitoringPeriodLeakAccepted`'s over its windows, the link-windows' scans, whose statements read

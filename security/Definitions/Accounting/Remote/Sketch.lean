@@ -3,10 +3,10 @@ module
 public import Definitions.Accounting.RateAuditSketch
 
 /-!
-# The receipts' sketch over a remote audit session: the seeds' keys and the passes' devices (trusted)
+# The receipts' sketch over a PoUB session: the seeds' keys and the passes' devices (trusted)
 
 The model `Accounting.Remote.Held.Assumptions.SketchBound` is derived on (`Accounting.Guarantees.Remote`'s
-`SketchBoundRun`). A remote audit session over a registered store of `N` blocks runs `P` credited passes. Pass `j`'s
+`SketchBoundRun`). A PoUB session over a registered store of `N` blocks runs `P` credited passes. Pass `j`'s
 seed (`seed_i` in `remote_bandwidth.receipts`) fixes its key: the `k_s × 4096` signs `S_i` it derives and the receipt
 hash at that seed, `y = SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be(j) ‖ σ)` with `σ = S_i·e_j`, an `h`-bit
 tag of the block's index and its sketch words (`RateSketch.sketch`). There is no certified stream (`ρ = 0`). The prover
@@ -60,7 +60,7 @@ instance instFintypeModelCoins (β : Type) [Fintype β] (P N m h ks : ℕ) (G : 
   letI : Fintype (Keys P N m h ks G) := instFintypeKeys P N m h ks G
   exact inferInstance
 
-/-- A remote audit session: pass `j`'s candidate `c` runs `device b j η c` on the prover's coins `b` and the earlier
+/-- A PoUB session: pass `j`'s candidate `c` runs `device b j η c` on the prover's coins `b` and the earlier
 passes' keys `η`; `keys b D x` is every candidate's key, SHA-512's at its seed, for the prover's coins `b`, the store
 `D` and SHA-512's outputs read at `x`; and `kept ω j` is the candidate whose receipts pass `j` sends, any function of
 the outcome. -/

@@ -22,7 +22,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # their twins in `verity.definitions.numerics`; both read `verity.definitions.evidence` and its `evidence.json`),
 # and the integration's quarantine, difftest and relation modules. `demo.py`'s registry walk reads
 # `verity.definitions.boolean` too.
-# The key-binding test reads the remote audit, on the commitments, the randomness, the profile and the kernels' plans.
+# The key-binding test reads PoUB, on the commitments, the randomness, the profile and the kernels' plans.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits",
           "verity/channel.py",
           "verity/circuits/kernels", "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",

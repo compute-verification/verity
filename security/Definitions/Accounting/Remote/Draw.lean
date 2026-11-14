@@ -38,7 +38,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The remote audit's opening draw (trusted)
+# PoUB's opening draw (trusted)
 
 The draw `audit.pooled` reads, as the verifier runs it. A session has `n` windows, in order. Window `t` registers its
 `U_t ≤ m` receipts and their roots, which fix which of them are correct unless an opening collides (`Receipts`). Then

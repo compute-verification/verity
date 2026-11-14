@@ -3,9 +3,9 @@ module
 public import Definitions.Accounting.Assumptions.RemoteHeld
 
 /-!
-# The memory a remote audit shows held (trusted)
+# The memory a PoUB session shows held (trusted)
 
-What an accepted remote audit session certifies about the node's memory, over its registered store of `N` blocks, at
+What an accepted PoUB session certifies about the node's memory, over its registered store of `N` blocks, at
 each outcome of the audit's coins (a per-run reading): the probability that the session is accepted and the bound
 fails is at most the premises' errors summed. These are the protocol's declared memory line (`PROTOCOL.md` §7,
 "Declared outputs"; `remote_bandwidth/ledger.py`), at `X = s/E + β` blocks a tick brought back by rebuilds and the

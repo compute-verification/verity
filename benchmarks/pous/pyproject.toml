@@ -28,7 +28,7 @@ inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proo
           "verity/commitments", "verity/commitments/crypto",
           "verity/commitments/randomness",
           "benchmarks/census/hardware.json", "benchmarks/numerical/python/verity_numerical/bench/placement.py",
-          # the remote bandwidth audit over the P2 store, which p2_v1/serve.py runs, and what it imports; its party's
+          # PoUB over the P2 store, which p2_v1/serve.py runs, and what it imports; its party's
           # Lean verifier, `remote-audit-verifier`, which `p2_party` has `lake` build in remote_bandwidth/lean
           "verity/protocols/accounting/poub/verifier", "verity/protocols/proofs/spot/verifier/profile.py",
           "verity/protocols/proofs/spot/verifier/__init__.py", "verity/protocols/proofs/spot/device/challenger.py",

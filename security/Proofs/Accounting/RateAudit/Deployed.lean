@@ -5,7 +5,7 @@ public import Definitions.Accounting.Guarantees.RateAuditDeployed
 public import Proofs.Accounting.RateAudit.Run
 
 /-!
-# The remote bandwidth audit as deployed: the proof
+# PoUB as deployed: the proof
 
 **Completions as side reads.** A pass device with completions is simulated by an interactive device of
 `RatePaidNamedRO`'s class (`PIDevice.toInteractive`): its chip reads a completion's `x` bits from the side sources, at
@@ -781,7 +781,7 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_mono)
 
-/-- **The remote bandwidth audit as deployed: an accepted session conserves its words**
+/-- **PoUB as deployed: an accepted session conserves its words**
 (`Accounting.Guarantees.RemoteRunConservation`). -/
 theorem RemoteRunConservation : Accounting.Guarantees.RemoteRunConservation := by
   intro n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A dbar dw hn hP hN hb hrc hdw hW hF hA
@@ -811,7 +811,7 @@ theorem RemoteRunConservation : Accounting.Guarantees.RemoteRunConservation := b
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 
-/-- **The remote bandwidth audit at its deployed parameters**
+/-- **PoUB at its deployed parameters**
 (`Accounting.Guarantees.RemoteRunConservationDeployed`). -/
 theorem RemoteRunConservationDeployed : Accounting.Guarantees.RemoteRunConservationDeployed := by
   intro n P N ρ S L q r s G lam τ cRoot F cost tier A hn hP hN hc hq hG hW hF hA

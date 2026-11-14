@@ -313,7 +313,7 @@ def one_record(product: R.Same, cases: list[dict], windows: bool = False) -> lis
     return [on(c) for c in cases]
 
 
-#: The generic remote bandwidth audit's id: not a subprotocol of onsite, whose bandwidth is PoUB-P2 (`generic-bandwidth`
+#: PoUB's generic session's id: not a subprotocol of onsite, whose bandwidth is PoUB-P2 (`generic-bandwidth`
 #: names PoUB-P2's case by it, its params and its entry, under a commitment that binds it).
 GENERIC_BANDWIDTH = "verity/remote-bandwidth/v0"
 #: The binding breaks come five times: with `commitment-size` they are the breaks that leave every subprotocol's case standing,

@@ -69,8 +69,8 @@ the filler's per-check luck, a state-bounded game's soundness as its capacity
 guarantee, derived state's share of the capacity residual, the rate audit's residency and bandwidth with the rebuild
 charged as compute, with partial completion and with a sketch-then-hash tag, the remote rate audit's conservation over
 tiers and chained passes, the causal pooled bound on its samples and its conservation with named words, the one
-composed guarantee for the remote bandwidth audit as deployed and its deployed instance, the remote
-bandwidth audit's conservation and node-level guarantees on the actual-circuit model, the actual circuit's capacity
+composed guarantee for PoUB as deployed and its deployed instance, PoUB's
+conservation and node-level guarantees on the actual-circuit model, the actual circuit's capacity
 theorem, runtime corollary, memory cap over threads with its rate, dark gates and the compute dampener's windows,
 localization, composition and fit, compute additivity's capacity from the machine model 𝓜,
 the obligations B1, B2 and B4, the tag and sketch guarantees, Lemma B with (H-μ⁺) derived from fresh coins and Lemma B′
@@ -79,7 +79,7 @@ receipts bound to the matmul, what a relay of the deployed bound receipt's sketc
 (the bandwidth audit's guarantee), their per-run forms, PoUW's work lower bound on an isolated node, PoUW's credit on an
 arbitrary declared circuit compiled to its templates, a declared circuit's live and read bits from the blocks the audit
 credits, PoUW's credits and help as its placed execution's gates, the grinding premium under hashed seeds and the
-deployed tile's moment, stacking's carrier lemma with the deployed remote audit for devices that read from carriers,
+deployed tile's moment, stacking's carrier lemma with PoUB as deployed for devices that read from carriers,
 also read against a declared circuit's requirement, and the composed guarantee for a declared circuit that passes the
 stacking property: its credited live and read bits from an accepted stacked audit. -/
 

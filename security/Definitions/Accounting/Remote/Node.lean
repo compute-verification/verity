@@ -4,9 +4,9 @@ public import Mathlib.Basic.Real.Basic
 public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 
 /-!
-# The remote bandwidth audit's node, its parameters and the γ terms (trusted)
+# PoUB's node, its parameters and the γ terms (trusted)
 
-The remote bandwidth audit (`docs/remote-bandwidth-exhaustion.md`) certifies that a node's memory read bandwidth went to
+PoUB (`verity/protocols/accounting/poub/verifier/PROTOCOL.md`) certifies that a node's memory read bandwidth went to
 registered data. The node is a set of compute (every GPU die, host CPU and root complex: the console's actual-circuit
 model's location `X_N`), its memory tiers and its boundary links (the NIC; NVLink to any GPU outside the node). A memory
 tier (each GPU's HBM, the host's DRAM) is a location whose links all go to the node's compute; with the tag's oracle a
@@ -58,7 +58,7 @@ structure Node (τ : Type) where
   /-- a tier's rate is within its calibrated ceiling -/
   rate_le : ∀ m, rate m ≤ ceil m
 
-/-- The remote audit's parameters over an audited interval. -/
+/-- PoUB's parameters over an audited interval. -/
 structure Audit where
   /-- |I|: the audited interval's ticks, `P` passes of `T + RTT` each -/
   T : ℕ

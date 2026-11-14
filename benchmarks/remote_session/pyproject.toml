@@ -1,4 +1,4 @@
-# The remote bandwidth audit's sessions end to end: the verifier's process (`verifier_process.py`, which runs
+# PoUB's sessions end to end: the verifier's process (`verifier_process.py`, which runs
 # `verity/protocols/accounting/poub/verifier/session/verifier.py`, their wire `wire.py` beside it) and the prover's
 # (`prover.py`, its GPU backend `device.py` and `session.cu`). Not a package: `run.sh` runs both on a GPU node, and the suite
 # runs both over a loopback socket with the driver's reference as the prover's backend
@@ -12,7 +12,7 @@
 # log records its pin as main's, and the verifier bound the store to the pinned model; every line says it is conditional
 # on NoOutsideCompute, and `--boundary` (off by default) holds each session's credit to the network certifiers' records
 # of the gate node's boundary. That store, what a pinned
-# checkpoint alone fixes, and the binding the verifier decides (`verifier.py --model`) are the remote audit's own
+# checkpoint alone fixes, and the binding the verifier decides (`verifier.py --model`) are PoUB's own
 # (`verity/protocols/accounting/poub/verifier/store.py`); `store_layout.py` writes pins and synthetic checkpoints.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -39,13 +39,13 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           # the challenger's coins name their claim instance (spot/challenger.py's `coin_claim`)
           "verity/claims/__init__.py",
           # the Lean verifier the sessions run beside audit.AuditRun, which computes auditor_line.py's line
-          # (lean_verifier.py): what `lake build remote-audit-verifier` reads, the remote audit's package and its
+          # (lean_verifier.py): what `lake build remote-audit-verifier` reads, PoUB's package and its
           # path requires
           "verity/protocols/proofs/flock/verifier/Flock", "verity/protocols/proofs/flock/verifier/lakefile.toml",
           "verity/protocols/proofs/flock/verifier/lake-manifest.json", "verity/protocols/proofs/flock/verifier/lean-toolchain",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "verity/commitments/randomness", "verity/circuits/difftest",
-          # a transcript replayed through both verifiers (the remote audit's lean/tests/replay.py, over the difftest)
+          # a transcript replayed through both verifiers (PoUB's lean/tests/replay.py, over the difftest)
           "tools/difftest/python",
           # engine.py's kv.so (test_store_layout imports it) opens through the benchmarks' one loader
           "benchmarks/word_codec/cuda_lib.py",

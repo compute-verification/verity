@@ -18,7 +18,7 @@ contents are a circuit's values, which depend on the encodings only through the 
 
 * `CarrierBits`, the carrier lemma: memory holding a circuit's values holds at most its input and encoded bits about
   the store, `I + q·b` for `I` input bits and `q` blocks encoded.
-* `StackedRunConservationSketchDeployed`: the remote audit's conservation at the deployed parameters
+* `StackedRunConservationSketchDeployed`: PoUB's conservation at the deployed parameters
   (`RemoteRunConservationSketchDeployed`) with a store per pass, made by the append-coin rule: each append's blocks
   are keyed by a coin flipped after its root has committed their digests, so the writers' choices for it are fixed
   before (`Accounting.appendCoinBlocks`), and pass `j` reads the blocks its layout names at the session's coins flipped
@@ -39,7 +39,7 @@ contents are a circuit's values, which depend on the encodings only through the 
 The stacked sessions charge an encode at the gate model's cost (`encodeBitsCost`, nonlinear units of
 `Definitions/Accounting/Gates`: budgeted units and data products, `⊤` where the model has no circuit computing the
 words).
-They rest on the remote audit's random oracle and named assumptions, and on more: the gate model's two conjectures
+They rest on PoUB's random oracle and named assumptions, and on more: the gate model's two conjectures
 `Accounting.Assumptions.SquaringFloor` (a squaring mod `p` costs `e` nonlinear units) and
 `Accounting.Assumptions.ChainSum` (a codec word's `k · S` chained squarings cost their sum, so a word costs
 `E ≤ k · S · e`), and `Accounting.Assumptions.KeyBinding` (under the append-coin rule, the blocks a pass reads are
@@ -88,7 +88,7 @@ def CarrierBits : Prop :=
     (∀ E, c.inputs E ≤ I ∧ c.encoded E ≤ X) →
     Nat.card (Set.range fun E => c.run E) ≤ 2 ^ (I + X)
 
-/-- **The remote audit at the deployed parameters with a store per pass, with stacking: carriers are rebuilds of
+/-- **PoUB at the deployed parameters with a store per pass, with stacking: carriers are rebuilds of
 bounded size in every pass, and every appended block is keyed after its writers chose it.**
 `RemoteRunConservationSketchDeployed`'s game and bound, with each pass on its own store, made by the append-coin
 rule (`Accounting.appendCoinBlocks`; remote_bandwidth's PROTOCOL.md §3–§4). The store is `T` appends of `M` block
@@ -193,7 +193,7 @@ def StackedRunConservationSketchDeployed : Prop :=
       ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
         (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ 96) + (n * P : ℝ≥0∞) * δ
 
-/-- **The remote audit with relaying side sources on a store made by the append-coin rule, with stacking: a carrier is
+/-- **PoUB with relaying side sources on a store made by the append-coin rule, with stacking: a carrier is
 a side source of its circuit's bits.** `RemoteRunConservationRelay`'s game and bound on a store made by the
 append-coin rule (`Accounting.appendCoinBlocks`), one for the session: `T` appends of `M` block positions, each
 append's choices `choose ω a κ_<a` reading the codec and the coins of the appends before it, its own coin keying its
@@ -263,7 +263,7 @@ def StackedRunConservationRelay : Prop :=
       ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
         (n * P * G : ℝ≥0∞) * ((N.choose m : ℝ≥0∞) * 2 ^ (L + C) / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam) + δ
 
-/-- **The stacked remote audit at the deployed parameters with a store per pass, read against a declared circuit's
+/-- **Stacked PoUB at the deployed parameters with a store per pass, read against a declared circuit's
 requirement.** `StackedRunConservationSketchDeployed`'s session, hypotheses and bound, with the session's shortfall
 measured against a declared circuit `W`'s requirement (`Definitions/Accounting/Requirement.lean`) over a window `win`
 of engine steps. The window has at most `n·P` steps, one for each pass the session's passes are bound to (a pass names
@@ -345,7 +345,7 @@ def StackedRequirementSketchDeployed : Prop :=
       ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
         (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ 96) + (n * P : ℝ≥0∞) * δ
 
-/-- **The stacked remote audit with relaying side sources, read against a declared circuit's requirement.**
+/-- **Stacked PoUB with relaying side sources, read against a declared circuit's requirement.**
 `StackedRunConservationRelay`'s session, hypotheses and bound, with the session's tier reads measured against a
 declared circuit `W`'s requirement over a window `win` of at most `n·P` engine steps, as in
 `StackedRequirementSketchDeployed`: at each step the memory map `mm` holds `W`'s credited blocks

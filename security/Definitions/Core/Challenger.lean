@@ -24,7 +24,7 @@ challenger is impractical; there, randomness is derived from a challenger's coin
 
 * PoUW's per-matmul noise seeds, each hashed from the verification phase's salt (one challenger coin per phase), the
   call's position, and the committed roots of its operands;
-* the remote bandwidth audit's pass seeds within a phase, each hashed from the phase's challenger coin and the previous
+* PoUB's pass seeds within a phase, each hashed from the phase's challenger coin and the previous
   pass's root.
 
 Neither is a coin of this log: a statement about one reads it through the coin it is derived from.

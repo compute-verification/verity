@@ -99,4 +99,4 @@ from the evidence store; under `research run` writes an accepted session's amoun
 `$RESEARCH_RUN_DIR/result.json`, and the printed document to `$RESEARCH_RUN_DIR/out/memory.json`, and `--loopback`
 leaves `run.sh`'s records beside the document. A run that ran `--loopback` keeps a loopback's document there whatever
 it prints afterwards: it is how `--from` knows that run's session for a loopback. **Backs:** no Lean guarantee or
-claim; the number is the ledger's γ of one session, which the remote audit's own analysis bounds.
+claim; the number is the ledger's γ of one session, which PoUB's own analysis bounds.

@@ -5,7 +5,7 @@ public import Randomness
 /-!
 # Bytes and SHA-512
 
-The byte encodings the remote audit's formats use (`int.to_bytes`, `int.from_bytes`) and Flock's SHA-512. Its trees
+The byte encodings PoUB's formats use (`int.to_bytes`, `int.from_bytes`) and Flock's SHA-512. Its trees
 are frame-v3-sha512 (`Flock.FV3.Sha512`): a receipt tree and the payload tree start at 0, an append's tree at its first
 index.
 -/

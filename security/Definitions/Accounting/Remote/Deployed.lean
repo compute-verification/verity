@@ -5,10 +5,10 @@ public import Definitions.Accounting.RateAuditDeployed
 import Mathlib.Basic.ENNReal.Real
 
 /-!
-# The deployed game's session as a run of the remote audit (trusted)
+# The deployed game's session as a run of PoUB (trusted)
 
 `Run.ofDeployed` reads a deployed session (`Accounting.Rate.DeployedSession`, `Definitions/Accounting/RateAuditDeployed.lean`)
-as a run of the remote audit (`Accounting.Remote.Run`) on a node `Nd` with parameters `a`, over the session's coins: the
+as a run of PoUB (`Accounting.Remote.Run`) on a node `Nd` with parameters `a`, over the session's coins: the
 store and every window's coins, uniform. The audit's passes are the session's `n·P`; its declared capacity is meant to be
 the session's `n·P·N·b` bits, which the guarantees over it take as a hypothesis on `Nd` and `a`.
 
@@ -40,7 +40,7 @@ open Accounting.Rate
 
 variable {n P N b h ρ S L q r s d G τ : ℕ}
 
-/-- A deployed session as a run of the remote audit on node `Nd` with parameters `a`, with `X` bits completed a pass. -/
+/-- A deployed session as a run of PoUB on node `Nd` with parameters `a`, with `X` bits completed a pass. -/
 def Run.ofDeployed (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X : ℕ) (Nd : Node (Fin τ))
     (a : Audit) : Run Nd a (Store N b × (Fin n → WindowCoins P N b h ρ r s d)) where
   accepts x := ∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1
@@ -61,7 +61,7 @@ def Run.ofDeployed (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ 
   workOut _ := 0
   other _ := 0
 
-/-- Window `w` of a deployed session as a run of the remote audit on node `Nd` with parameters `a`, over the session's
+/-- Window `w` of a deployed session as a run of PoUB on node `Nd` with parameters `a`, over the session's
 coins: `Run.ofDeployed`'s fields at window `w`'s `P` passes, accepting when every window's draw passes. -/
 def Run.ofDeployedWindow (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ) (X : ℕ)
     (Nd : Node (Fin τ)) (a : Audit) : Run Nd a (Store N b × (Fin n → WindowCoins P N b h ρ r s d)) where

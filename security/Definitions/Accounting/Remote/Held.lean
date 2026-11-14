@@ -6,9 +6,9 @@ public import Mathlib.Order.Interval.Finset.Nat
 public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 
 /-!
-# What a remote audit shows held: the node's memory as a trace (trusted)
+# What a PoUB session shows held: the node's memory as a trace (trusted)
 
-A remote audit session over a registered store of `N` blocks, at each outcome `ω` of the audit's coins `Ω` (uniform,
+A PoUB session over a registered store of `N` blocks, at each outcome `ω` of the audit's coins `Ω` (uniform,
 `Pouw.pr`), seen as a trace of where each registered block is, tick by tick on the verifier's clock:
 
 * `mem ω t`: the registered blocks in node memory (every GPU's HBM and the host's DRAM) at tick `t`;
@@ -44,7 +44,7 @@ namespace Accounting.Remote.Held
 
 open Finset
 
-/-- A remote audit session's registered store as a trace of the node's memory, over coins `Ω`. -/
+/-- A PoUB session's registered store as a trace of the node's memory, over coins `Ω`. -/
 structure Trace (Ω : Type) where
   /-- `N`, the registered blocks -/
   blocks : ℕ
