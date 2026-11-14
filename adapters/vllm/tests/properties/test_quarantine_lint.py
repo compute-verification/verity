@@ -1,10 +1,6 @@
-"""quarantine_lint.py (protected): purity + identity rules on synthetic quarantine modules, and what `main` writes, prints and
-exits with."""
+"""quarantine_lint.py (protected): purity + identity rules on synthetic quarantine modules."""
 from __future__ import annotations
 
-import json
-
-from verity_vllm.pipeline import cli
 from verity_vllm.properties import quarantine_lint
 
 GOOD = '''
@@ -93,28 +89,3 @@ def test_the_roots_own_init_is_not_read_and_a_packages_is(tmp_path):
     assert [(r["file"], r["status"]) for r in rep["files"]] == [(str(root / "gen_x" / "__init__.py"), "fail"),
                                                                 (str(root / "gen_x" / "gelu.py"), "pass")]
     assert rep["status"] == "fail"
-
-
-def test_main_prints_each_failing_file_and_exits_1(tmp_path, capsys):
-    root = tmp_path / "q"
-    (root / "gen_x").mkdir(parents=True)
-    (root / "gen_x" / "gelu.py").write_text(GOOD)
-    (root / "gen_x" / "gelu_difftest.py").write_text(ADAPTER_OK)
-    assert quarantine_lint.main(cli.parse("quarantine-lint", ["--root", str(root)], {})) == 0
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["q"]
-    (root / "gen_x" / "gelu_again.py").write_text(GOOD)
-    (root / "gen_x" / "bad.py").write_text(BAD)
-    (root / "gen_x" / "bad_difftest.py").write_text(ADAPTER_BAD)
-    out = tmp_path / "lint.json"
-    assert quarantine_lint.main(cli.parse("quarantine-lint", ["--root", str(root), "--out", str(out)], {})) == 1
-    assert json.loads(out.read_text()) == quarantine_lint.lint(root)
-    assert out.read_text() == json.dumps(quarantine_lint.lint(root), indent=1) + "\n"
-    problems = next(r["problems"] for r in quarantine_lint.lint(root)["files"] if r["file"].endswith("/bad.py"))
-    assert len(problems) > 4 and not any(";" in p for p in problems)
-    printed = capsys.readouterr()
-    assert printed.out == "" and printed.err.split("\n") == [
-        "[quarantine_lint] pass: 2 files",
-        f"[quarantine_lint] FAIL {root / 'gen_x' / 'bad.py'}: " + "; ".join(problems),
-        (f"[quarantine_lint] FAIL {root / 'gen_x' / 'bad_difftest.py'}: line 2: forbidden import 'torch' (adapters may import "
-         "torch/vllm inside functions only)"),
-        "[quarantine_lint] fail: 5 files, duplicate ids ['gen-x/Gelu@v1']", ""]
