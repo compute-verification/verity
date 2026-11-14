@@ -64,7 +64,7 @@ theorem pooledIntegrity_rate (W : ℕ → SamplingBlock) (T num den : ℕ) (δ :
       LinkCRZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
         (reg ((W t).sim τ)) (cont ((W t).sim τ)) (W t).k (W t).Rw (W t).M (W t).t') :
     value (fun l => (∀ r ∈ l, r.accepted) ∧
-        Real.log (1 / δ) / ((num : ℝ) / den) ≤ ((l.map WindowRec.incorrect).sum : ℝ)) (Period.run W T s) ≤
+        Real.log (1 / δ) / ((num : ℝ) / den) ≤ ((l.map SamplingBlockRec.incorrect).sum : ℝ)) (Period.run W T s) ≤
       ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ((W t).ks + (W t).link) :=
   Flock.SecurityProofs.IntegrityPooled W T ((num : ℝ) / den) δ (div_pos (Nat.cast_pos.2 hnum) (Nat.cast_pos.2 hden))
     hδ (fun t ht => samplingBlock_rate (W t) (hn t ht) (hrate t ht) hden) hA3 s hT hL
@@ -90,7 +90,7 @@ theorem pooledIntegrityCarried_rate (S : CarriedBlocks) (num den : ℕ) (δ : �
       (outOf (rdSig fun _ => (S.leaf x).rd) (S.leaf x).op (S.leaf x).col)
       (finderCost (rdSig fun _ => (S.leaf x).rd) (S.leaf x).costMix)) :
     value (fun l => (∀ r ∈ l, r.accepted) ∧
-        Real.log (1 / δ) / ((num : ℝ) / den) ≤ ((l.map WindowRec.incorrect).sum : ℝ)) (S.run s) ≤
+        Real.log (1 / δ) / ((num : ℝ) / den) ≤ ((l.map SamplingBlockRec.incorrect).sum : ℝ)) (S.run s) ≤
       ENNReal.ofReal δ + ∑ b ∈ Finset.range S.B, S.err b + ∑ x, (S.leaf x).carry :=
   Flock.SecurityProofs.IntegrityPooledCarried S ((num : ℝ) / den) δ
     (div_pos (Nat.cast_pos.2 hnum) (Nat.cast_pos.2 hden)) hδ

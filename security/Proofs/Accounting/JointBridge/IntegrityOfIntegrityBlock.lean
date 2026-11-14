@@ -42,7 +42,7 @@ theorem IntegrityOfIntegrityBlock : Accounting.Guarantees.Bridge.IntegrityOfInte
         ¬ r.Holds c p .sampled (Function.update ξ (r.own .sampled) x)) →
       (∀ w ∈ R.record (Function.update ξ (r.own .sampled) x), w.accepted) ∧
         Real.log (1 / δ) / q ≤
-          (((R.record (Function.update ξ (r.own .sampled) x)).map Flock.Guarantees.WindowRec.incorrect).sum : ℝ) := by
+          (((R.record (Function.update ξ (r.own .sampled) x)).map Flock.Guarantees.SamplingBlockRec.incorrect).sum : ℝ) := by
     rintro x ⟨hacc, hfail⟩
     refine ⟨(R.accepts_iff _).1 hacc, ?_⟩
     have hfail' : ¬ (((r.parts.incorrect (r.trace (Function.update ξ (r.own .sampled) x))).card : ℝ) ≤
@@ -51,10 +51,10 @@ theorem IntegrityOfIntegrityBlock : Accounting.Guarantees.Bridge.IntegrityOfInte
     rw [R.wrong_eq] at hlt
     exact hcert.trans hlt.le
   have hlaw := R.samplingDesign ξ fun l => (∀ w ∈ l, w.accepted) ∧
-    Real.log (1 / δ) / q ≤ ((l.map Flock.Guarantees.WindowRec.incorrect).sum : ℝ)
+    Real.log (1 / δ) / q ≤ ((l.map Flock.Guarantees.SamplingBlockRec.incorrect).sum : ℝ)
   have hev : FlockSoundness.Game.value (fun l => (∀ w ∈ l.filter (fun w => w.idx ∈ S.sessions b), w.accepted) ∧
         Real.log (1 / δ) / q ≤
-          (((l.filter fun w => w.idx ∈ S.sessions b).map Flock.Guarantees.WindowRec.incorrect).sum : ℝ))
+          (((l.filter fun w => w.idx ∈ S.sessions b).map Flock.Guarantees.SamplingBlockRec.incorrect).sum : ℝ))
         (S.run (R.strat ξ)) =
       FlockSoundness.Game.value (S.BlockMissProb q δ b) (S.run (R.strat ξ)) :=
     FlockSoundness.Game.value_congr (fun l => by
