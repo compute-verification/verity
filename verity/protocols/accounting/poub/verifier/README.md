@@ -177,6 +177,8 @@ A transcript that doesn't name its session's pace replays only with the pace its
   and its challenger, on their own clock and coins, which time each root by its arrival (`Received.at`), disclose the
   session's coins at its end (`audit.AuditRun.disclose`) and finish with its answer and case; and the prover, on its
   node's store (`capabilities["store"]`), which checks each challenge it was sent against them (`period.Prover.end`).
+- `workload.py`: the audit's channels with the workload, which name PoUS's two messages (`CHANNELS`);
+  `tests/test_workload_messages.py` holds the list.
 - `wire.py`: the openings frame a prover sends a window's openings in, and a window's openings from its frames
   (`openings_of`), beside `lean/RemoteAudit/Wire.lean`'s.
 - `memory_map.py`: memory-map/v1, serving's record of the KV pages it wrote and freed, as the audit's appends,

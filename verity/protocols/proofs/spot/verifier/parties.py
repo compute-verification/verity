@@ -127,6 +127,7 @@ from verity.runtime.runner import ProtocolDef
 from verity.channel import Body, Hex, Int, Message, Schema, Str
 
 from .one_stage import registration as R
+from .workload import MAX_BLOCKS, REPLAY
 
 ID = R.PROTOCOL
 #: SPOT as both composites compose it (`VStar.Recursive.Sampled`): one-stage v2's audit (`ID`'s record, the
@@ -161,10 +162,9 @@ COINS = ("simulated", "development")
 #: a listed subprotocol whose party gave no case: its own decoders refuse it
 NO_CASE = {"commitment": "", "evidence": "", "params": {}}
 ABSENT = "absent"
-MAX_BLOCKS = 1 << 16
 MAX_REGISTRATION = 1 << 24
 MAX_SAMPLE = 1 << 24
-MAX_REPLAY = MAX_PROOF = (1 << 32) - 1
+MAX_PROOF = (1 << 32) - 1
 CHALLENGER_SCHEMA = Schema("Challenger", 1, "structure", {"address": Str(255), "pin": Str(64, r"[0-9a-f]{40}|[0-9a-f]{64}")})
 DONE_SCHEMA = Schema("Done", 1, "structure")
 REGISTRATION_SCHEMA = Schema("Registration", 1, "commitment", {"block": Int(0, MAX_BLOCKS - 1)}, Body(max=MAX_REGISTRATION))
@@ -181,7 +181,7 @@ MANIFEST = Manifest(
               Schema("Firewall", 1, "structure", {"sha512": Hex(64), "sessions": Int(1, 1 << 10)}),
               REGISTRATION_SCHEMA))
 SPOT_SCHEMAS = (CHALLENGER_SCHEMA, DONE_SCHEMA, REGISTRATION_SCHEMA,
-                Schema("Replay", 1, "private", {"block": Int(0, MAX_BLOCKS - 1)}, Body(max=MAX_REPLAY)),
+                REPLAY,
                 Schema("Draw", 1, "coins", {"block": Int(0, MAX_BLOCKS - 1), "address": Str(255)}, Body(max=MAX_SAMPLE)),
                 Schema("Proof", 1, "private", {"block": Int(0, MAX_BLOCKS - 1)}, Body(max=MAX_PROOF)))
 

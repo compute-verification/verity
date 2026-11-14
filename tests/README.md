@@ -6,6 +6,7 @@ tree; a package's tests live in its own `tests/`. Its tests read the whole tree,
 | What they hold the tree to | Tests |
 | --- | --- |
 | the dependency rules | `test_boundaries.py`, `test_integration_boundaries.py`, `test_vllm_public_api.py` |
+| the messages between the workload and the prover, one list | `test_workload_messages.py` |
 | what the tree may hold, and Markdown caps | `test_repository.py`, `test_protocol_specs.py` |
 | no dead reference after a move | `test_doc_paths.py`, `test_module_strings.py`, `test_gate_paths.py`, `test_pythonpath_entries.py` |
 | prose that stays true | `test_retired_terms.py`, `test_provider_names.py`, `test_glossary_lean_names.py` |

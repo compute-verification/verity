@@ -246,6 +246,8 @@ k = window.k_prime(eps, delta, work.credited, work.n, tile_work)   # K′, the s
 - `protocol`: the `PoUWScheme` interface.
 - `parties`: PoUW's prover, challenger and verifier on the deployment layer (`MANIFEST`, `PROTOCOL`), each machine's work
   a capability it is given.
+- `workload`: PoUW's messages with the workload, as message types and its channel from the workload to the prover
+  (`MESSAGES`, `CHANNELS`); `tests/test_workload_messages.py` holds the list.
 - `audit`, `coins`, `salt`, `window`, `core_check`, `credit`, `identifier`, `registration`, `weights`, `operands`,
   `live_reads`: the Python references the Lean is held to, and the reference rules not yet ported.
 - `verity/protocols/accounting/pouw/prover/`, the prover's, which core doesn't import: the named schemes (`schemes/`) and `circuit/`,
