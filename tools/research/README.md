@@ -468,11 +468,17 @@ One running, queued or in a slot line stays, and one whose clone stands waits (`
 To keep one: `research keep RUNDIR ...` before the 7 days are over, or `research data custody RUN --publish`.
 gc takes them only with `--unpreserved-runs`; it and the report list them apart.
 
+A launcher's copy of a run on another machine (a directory named as the run's id that holds the launcher's `remote.json`) has no
+record, except under gc's `--launcher-copies`: there it expires 48 hours after its last write, and goes only once the remote holds
+the run's attempt, ended, and a run record with the copy's files (the rule is in `retention.py`'s docstring). A pass under
+`--launcher-copies` deletes launchers' copies and nothing else: any other path it would take is listed as left. `research keep
+COPY ...` keeps one longer. The unit `vy-launcher-copies-gc` runs it hourly over root's runs root on vy-nebius-cpu-7.
+
 ~~~text
 research keep PATH --owner @LANE --expires DATE|never|7d --priority P [--regenerate CMD] [--art ART | --preserve] [--why T] [--by URL]
 research keep show PATH    # the record covering PATH, explicit or implicit, as JSON
 research retention report [--root /workspace] [--depth 2] [--json]
-research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--max-paths 200] [--jobs-dir D]... [--store S] [--unpreserved-runs] [--json] [--apply]
+research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--max-paths 200] [--jobs-dir D]... [--store S] [--unpreserved-runs] [--launcher-copies] [--json] [--apply]
 research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root /workspace] [--jobs-dir D]... [--json] [--apply]
 ~~~
 
@@ -483,7 +489,7 @@ path and every area in the top `--depth` levels with no record beneath it (`unow
 Policy `default` (`default/v0`) acts only over `--high-pct` of blocks or inodes, or with `--force`. It deletes
 the lowest priority, then the oldest expiry, until the filesystem is under `--low-pct`, at most `--max-paths` paths a pass. A
 path qualifies only when its record is valid, of this node, expired, `low` or `normal`, and preserved or regenerable (or an
-unpreserved run's), it holds no nested record, and no file in `/workspace/pouw/fill/queue`, `/workspace/pouw/fill/running` or a
+unpreserved run's, or a launcher's copy's), it holds no nested record, and no file in `/workspace/pouw/fill/queue`, `/workspace/pouw/fill/running` or a
 `--jobs-dir` names it. Just before `--apply` deletes a path, its record and the job scripts are read again. A preserved path also needs its artifact to hold every file
 now under it at its size, and its stored copy `verified`, `expired` or `withdrawn` on the remote; one that can't be asked about
 fails the pass (`retention.STORED`). A preserved run's marker must still vouch for the run dir (the store README's §10.1). Without
