@@ -1,6 +1,6 @@
 """`capture.py` never holds a step's tensors in memory for the coins: ``--keep all`` writes one as it is recorded only up to
 ``--keep-max-mib`` and spools the rest, ``--keep opened`` spools each and moves only the opened layers' to the blobs once the
-coins are drawn, ``--keep none`` keeps none, and past ``--min-free-gib`` nothing more is written or spooled (an opened
+coins are flipped, ``--keep none`` keeps none, and past ``--min-free-gib`` nothing more is written or spooled (an opened
 tensor lost to the floor is counted as missing)."""
 from __future__ import annotations
 
