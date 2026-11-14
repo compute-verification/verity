@@ -30,11 +30,11 @@ The protocol premises the code can't be checked against yet:
   bit, and the bits are bounded per forward (`SerialForwards`, `Pouw.Lead.Forward.Accepted`).
 
 The device premises:
-* `CertifierCoins` (`trusted-host` at the network certifier): the certifier reads the `A` root a strategy registered
+* `CertifierCoins` (`trusted-device` at the network certifier): the certifier reads the `A` root a strategy registered
   and releases the coins, a one-to-one decoding of its own entropy, to the node alone. `G` takes it as a hypothesis
   and is stated over the entropy: at each entropy value, the strategy runs at the coins the device releases
   (`released`), so its bound averages over the coins uniformly because the device runs `certCode`.
-* `SerialForwards` (`trusted-host` at the network certifier, with the verifier's refusal of overlapping forwards): the
+* `SerialForwards` (`trusted-device` at the network certifier, with the verifier's refusal of overlapping forwards): the
   bits a forward's calls exchange are at most what the certifier counted for the forward, its release included.
 -/
 
@@ -177,7 +177,7 @@ with `coinsOf` of the entropy, a fixed one-to-one decoding of the entropy alone.
 def certCode {Ent : Type} (coinsOf : Ent ≃ Coins L) : Hash.Digest × Ent → Hash.Digest × Coins L :=
   fun x => (x.1, coinsOf x.2)
 
-/-- `pouw-certifier-coins` (proposed; `trusted-host` at the network certifier). **The certifier flips the coins after
+/-- `pouw-certifier-coins` (proposed; `trusted-device` at the network certifier). **The certifier flips the coins after
 it reads `A`'s root**: the auditor-trusted certifier `cert` runs `certCode coinsOf`, reading the root a strategy
 registered and the device's own entropy and releasing `coinsOf` of the entropy. `coinsOf` is an equivalence, so
 uniform entropy gives uniform coins, independent of `A` and of a strategy's pre-coin tables: a short seed with a fixed
@@ -185,7 +185,7 @@ expansion doesn't meet it. The device releases the coins only to the node, over 
 else until the call's words root registers; `G`'s model reads that as the coins entering only the node's execution
 (`Strategy.exec`). Not a property of `NetworkCertifier`: that program samples and releases no coins.
 
-Rationale: `trusted-host`; the certifier is the auditor's hardware on a machine the prover doesn't control. -/
+Rationale: `trusted-device`; the certifier is the auditor's hardware on a machine the prover doesn't control. -/
 def CertifierCoins {Device Ent : Type} (cert : Device) (coinsOf : Ent ≃ Coins L)
     (runC : Device → Hash.Digest × Ent → Hash.Digest × Coins L) : Prop :=
   Verity.Assumptions.TrustedDevice cert runC (certCode coinsOf)
@@ -196,7 +196,7 @@ def released {Device Ent : Type} (cert : Device) (runC : Device → Hash.Digest 
     (σ : Strategy L) (e : Ent) : Coins L :=
   (runC cert (σ.aRoot, e)).2
 
-/-- `pouw-serial-forwards` (proposed; `trusted-host` at the network certifier, with the verifier's refusal of
+/-- `pouw-serial-forwards` (proposed; `trusted-device` at the network certifier, with the verifier's refusal of
 overlapping forwards). **A forward's calls exchange at most what the certifier counted for it**: the bits a forward's
 calls' executions exchange (`Exec.egress`), summed, are at most the bits the network certifier counted over the
 forward's span and the bits its release carries.
@@ -208,7 +208,7 @@ forward's span and the bits its release carries.
   the one event that carries bits across the boundary, at most `⌈log₂(r + 1)⌉` at the window's rate `r`, counted
   once (`Forward.release`).
 
-Rationale: `trusted-host`; the certifier is the auditor's hardware on the node's links, and counts what crosses them.
+Rationale: `trusted-device`; the certifier is the auditor's hardware on the node's links, and counts what crosses them.
 The hold isn't built yet: a certifier that releases each frame at the window's rate as it is handed lets a frame
 inside a forward's span carry its bytes, far past a decode forward's bits, and the premise is false for it. Nor does a
 span reach back before its first call's `A` root: an outside machine that holds `A` can send each call's root before

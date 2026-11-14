@@ -2195,7 +2195,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
     try:
         m = resolve_machine(machine_name, project)
         if m.get("auditor"):
-            raise Refused(f"machine {machine_name!r} is an auditor host: it takes no research run, from anyone. Its service is "
+            raise Refused(f"machine {machine_name!r} is an auditor device: it takes no research run, from anyone. Its service is "
                           f"reached only through its gate: {m['auditor']}")
         guard_min = guard_idle_min(m)
         custody_pub: dict[str, Any] | None = None
@@ -2413,7 +2413,7 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
     ssh = {n: m for n, m in ms.items() if isinstance(m, dict) and m.get("provider") == "ssh"}
     skipped = [] if on else sorted(restricted(ssh))
     names = [on] if on else sorted(n for n in ssh if n not in skipped)
-    not_asked = (f"; not asked: the auditor hosts {', '.join(skipped)}, which refuse lanes' keys (--on NAME asks one)"
+    not_asked = (f"; not asked: the auditor devices {', '.join(skipped)}, which refuse lanes' keys (--on NAME asks one)"
                  if skipped else "")
     answers: dict[str, str] = {}
     targets = []

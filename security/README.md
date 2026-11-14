@@ -56,7 +56,7 @@ incorrect set of the trace the extractor recovers.
    - Domain: a witness in the relation, at a statement the loop serves, in Flock's scope.
    - Real: `Claims.Hm96Hiding` bounds δ₁ and δ_{K*}, and SHA-512 collision resistance the fork term; at the operating
      system's bytes, `UniformRandomBytesTest` (`recursiveZK_os_gap`).
-   - Folds into: `Loop.Src` (the loop's inputs from its host are the tape's) into `trusted-host` and
+   - Folds into: `Loop.Src` (the loop's inputs from its host are the tape's) into `trusted-device` and
      `UniformRandomBytesTest`.
    - Open: `SwCausalOn`, the tables' side's one unproved premise; per worker, `LoopInnerRound0`, `LiveRoundEq` and
      `FillRoundEq`; and `OuterViewZK`.
@@ -75,7 +75,7 @@ incorrect set of the trace the extractor recovers.
 **The real assumptions.** Items 1 to 3 rest on three, each under the lock's `open` until `Definitions/Assumptions.lean`
 declares it (The lock): `Claims.ExpectedCR` (SHA-512 collision resistance, which the other SHA-512 shapes
 fold into), `Claims.Hm96Hiding` (hm96 leaves hide at the pinned key) and `UniformRandomBytesTest` (the operating
-system's bytes are uniform up to η on each test). Beside them the statements read `trusted-host`, Core's challenger
+system's bytes are uniform up to η on each test). Beside them the statements read `trusted-device`, Core's challenger
 premises (`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`) and `Hash.Assumptions.LmsUnforgeable`.
 
 ## The security argument
@@ -558,7 +558,7 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   `SharedNoiseLucks`. Trust model: nothing the developer runs or hosts is trusted, and every coin is live,
   with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor devices. The challenger, which
   flips each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
-  (`trusted-host`); the verifier is the auditor's own check. Two premises about where the challenger runs are
+  (`trusted-device`); the verifier is the auditor's own check. Two premises about where the challenger runs are
   onsite's (`verity/protocols/proofs/spot/verifier/README.md`): `CoinsConfidential`, the named Prop
   `Pouw.Assumptions.CoinsConfidential` (`Definitions/Pouw/Assumptions/Dither.lean`, in the lock, taken by
   `Pouw.Guarantees.Dither.FleetSound`), and `OneClock`, prose only.

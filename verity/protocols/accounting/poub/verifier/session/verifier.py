@@ -1593,14 +1593,14 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
     ap.add_argument("--challenger", default="local", choices=challengers.KINDS,
                     help="where each session's coins come from (`challengers`): a challenger in this process (local, "
                          "the default), serve.py started for the session on this machine (serve), or the auditor "
-                         "host's challenger through its gate (gate), its out/ under OUT/challenger and its record "
+                         "device's challenger through its gate (gate), its out/ under OUT/challenger and its record "
                          "and release log checked when the session ends")
     ap.add_argument("--challenger-key", type=Path, metavar="DIR",
                     help="serve's LMS key directory, outside OUT (made there on first use)")
     ap.add_argument("--challenger-params", metavar="W,H",
                     help="serve's LMS width and height for a key it makes (default lms.DEPLOYED's)")
     ap.add_argument("--challenger-ssh", metavar="WORDS",
-                    help="gate: ssh's options and destination for the auditor host, the lane's gate key among them "
+                    help="gate: ssh's options and destination for the auditor device, the lane's gate key among them "
                          "(-i KEY research@HOST)")
     ap.add_argument("--challenger-peer", metavar="NAME", help="gate: this machine's name in the host's /etc/vy/peers")
     ap.add_argument("--challenger-pin", metavar="SHA512", help="gate: the SHA-512 of the challenger's public key")

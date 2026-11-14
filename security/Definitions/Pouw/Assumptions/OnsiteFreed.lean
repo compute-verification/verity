@@ -76,7 +76,7 @@ reaches a machine outside the registered devices only through a bit their progra
 confidential (`CoinsConfidential`). For the MVP that holds by placement: the device that runs a
 server's network certifier also produces that server's live coins, and private messages travel only on private links
 (`WitnessPathPrivate`), so no coin leaves the boundary the certifier counts but through
-the links it counts. Trust in that device and its host provider is `trusted-host`. A coin readable outside the
+the links it counts. Trust in that device and its host provider is `trusted-device`. A coin readable outside the
 boundary falsifies the premise: an outside machine computes the block's words from it and returns the root in 512
 bits. -/
 def OutsourceWithinEgressPeriod (G : Accel) (P : RoundProto) (k : ℕ) (μ : G.Res → ℝ) (β : ℝ) : Prop :=

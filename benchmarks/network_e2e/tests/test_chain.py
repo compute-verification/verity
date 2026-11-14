@@ -599,7 +599,7 @@ def test_the_report_carries_every_stage_on_the_planned_profile(virtual, tmp_path
         assert section in md, section
     assert "| glm-forged | True | 0 | False | 10 | 2 | — | True | True | 1.5 | — | — | — | stand-in |" in md
     assert any(x.startswith("Advice form: the stand-in's pre-v0 JSON") for x in r["stubbed"])
-    assert any(x.startswith("Auditor host") for x in r["stubbed"])
+    assert any(x.startswith("Auditor device") for x in r["stubbed"])
     summary = pp / "glm" / "summary.json"
     summary.write_text(json.dumps(json.loads(summary.read_text()) | {"ok": False}))
     r = e2e.run(_args(virtual, tmp_path / "out2", advice=str(tmp_path / "s.json"), prove_path=[str(pp)]), [],
@@ -696,8 +696,8 @@ def test_on_the_advice_profile_the_rehearsals_check_is_the_verdict_and_the_advic
             f"({tie_why})") in md
     assert any(x.startswith("N2 on the advice profile") for x in r["stubbed"])
     at = e2e.where({"honest": {"dir": runs / "honest", "gate": None}}, "vy-nebius-1:18080")
-    assert at["where"].startswith("off the developer's node: better than the loopback, though not yet the auditor host")
-    assert any(x.startswith("Auditor host: the certifier ran on another node") for x in chain.stubs(at, True))
+    assert at["where"].startswith("off the developer's node: better than the loopback, though not yet the auditor device")
+    assert any(x.startswith("Auditor device: the certifier ran on another node") for x in chain.stubs(at, True))
     (tmp_path / "peers").write_text("# machine: ssh\nvy-nebius-2 -i k research@10.0.0.2\n")
     with pytest.raises(SystemExit, match="no vy-nebius-1 in"):
         e2e.forward("vy-nebius-1:18080", tmp_path / "forward.log", tmp_path / "peers")

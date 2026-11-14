@@ -24,7 +24,7 @@ stated here against its functions, for every input.
   is one opening per recorded round root, opening `i` the epoch's round coin `i`, opened against the coin commitment
   fixed before the epoch and after the verifier recorded round `i`'s root. Round `i`'s noise key (`roundKey`) is
   derived from that coin and that root. That the coin is uniform and hidden from the prover until it is opened is the
-  live coins' trust (`trusted-host`), which no property states.
+  live coins' trust (`trusted-device`), which no property states.
 -/
 
 @[expose] public section

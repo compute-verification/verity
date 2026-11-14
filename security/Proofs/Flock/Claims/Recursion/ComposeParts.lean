@@ -54,7 +54,7 @@ the challenger opened for the statement's parts recorded, and the staging before
 `composed_run` carries it to the parts' runs (`OneRunOf`): `composed_parts`' shared set `S` is what the record staged
 before any session opened, and the parts' sessions are exactly the ones it opened, one per V* statement, so a part
 retried until it accepts is refused. That the record is the challenger's, and that the challenger logs every `Hello` it
-answers, is the auditor-trusted challenger's (`trusted-host`), as its other records are.
+answers, is the auditor-trusted challenger's (`trusted-device`), as its other records are.
 -/
 
 @[expose] public section

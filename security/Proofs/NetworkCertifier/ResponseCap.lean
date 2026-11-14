@@ -11,7 +11,7 @@ meta import Definitions.NetworkCertifier.ResponseCap
 `m - j` data cells (`dataCells_lane_capped`): a data cell past the first `m` is late, so the lane fails there and pads
 to its end. So the network certifier's code under the cap sends each connection at most its admitted `max_tokens`
 (`dataCells_cappedCode`), which is at most the cap and at most the request's own (`admitted_le`):
-`Guarantees.ResponseCapped`. Under `trusted-host` the network certifier's run is that code, so its run sends no more
+`Guarantees.ResponseCapped`. Under `trusted-device` the network certifier's run is that code, so its run sends no more
 (`responseCapped_run`).
 
 The `#guard` holds the capped lane to the Python network certifier's cells under a cap of four (the test harness of
@@ -79,7 +79,7 @@ theorem responseCapped : Guarantees.ResponseCapped := by
   obtain ⟨h1, h2⟩ := admitted_le cap (mt c)
   exact ⟨Nat.le_trans h h1, Nat.le_trans h h2⟩
 
-/-- Under `trusted-host`, a network certifier running the code under the cap sends each connection at most the cap's
+/-- Under `trusted-device`, a network certifier running the code under the cap sends each connection at most the cap's
 and its request's `max_tokens` data cells. -/
 theorem responseCapped_run {κ Cell Srv Dev : Type} (s : CertifierSchedule κ) (cap : ℕ) (mt : κ → Option ℕ)
     (arr : Srv → κ → Arrivals Cell) (dev : Dev) (run : Dev → Srv → κ → List (ℕ × CellView Cell))

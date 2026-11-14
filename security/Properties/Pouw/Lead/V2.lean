@@ -27,7 +27,7 @@ instantiate `Reads`, and the properties are stated at `PouwCheck`'s v2 protocol 
 
 The bits a call exchanges are not part of its acceptance: the network certifier counts them per forward, and the case
 refuses a forward whose counted and release bits pass its credited calls' bits (`EgressWithin`), the check
-`Pouw.Lead.Forward.Accepted` reads. The certifier counts every bit the node exchanges (`trusted-host`).
+`Pouw.Lead.Forward.Accepted` reads. The certifier counts every bit the node exchanges (`trusted-device`).
 
 `TiesToAccepted` is the property the accounting reads. `AcceptedOf` is what it gives: at an accepted window's credited
 call, a strategy that registered the call's `A` root and words root, both the honest ones, is `Accepted` at the case's

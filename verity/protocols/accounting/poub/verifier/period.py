@@ -28,7 +28,7 @@ made, min(s, U) of a draw's U receipts, which can be fewer.
 `leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for bandwidth: the store is the period's records
 (`pous.period.records`, every copy of the auditor's ledger in them cut to the entries their window cites). The
 verifier and its challenger are a party of their own (`verifier_party`) on `period.json`'s `challenger_host`, with coins
-fresh from that host's OS, and the prover runs on the node. `trusted-host`'s premise, that they run on a machine
+fresh from that host's OS, and the prover runs on the node. `trusted-device`'s premise, that they run on a machine
 the developer doesn't control, holds only when the challenger host isn't the node, and the leg says which
 (`verifier_party.placement`). The prover reads a store in its process's memory, not a remote node's.
 """
@@ -309,7 +309,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     (`verifier_party.side_of`; on this node by default, as a process of its own, with its own coins) and the prover
     here. With `remote-audit-protocol` among the period's tools the Lean verifier answers and must agree
     with the Python; it writes `out/bandwidth.case.json` (onsite's bandwidth case) and `out/bandwidth.json`. Which host
-    ran each party, and whether `trusted-host`'s premise holds (`verifier_party.placement`), go in
+    ran each party, and whether `trusted-device`'s premise holds (`verifier_party.placement`), go in
     `bandwidth.json` and in an accepted answer's profile (`placement`); `bandwidth.json` names the term its `eps`
     leaves out beside it (`ledger.NAMED_TERMS`)."""
     from . import ledger, verifier_party  # here: the party imports this module, and this function alone reads the ledger

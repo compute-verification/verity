@@ -53,7 +53,7 @@ the bound is on the period's coins and no secret enters it. Its `δ` is taken at
 `PooledLeakAccepted` is taken as it is stated, so the proof also supplies what only its count reads, none of which the
 realization holds: each execution phase's number of proof blocks (one past the largest index in its incorrect sets),
 the bits a proof block commits (the most over those), the schedules (the run's, at the phases' coins) and the most
-cells each gives a connection. The network certifier's trust (`trusted-host`) and its record format holding the run's
+cells each gives a connection. The network certifier's trust (`trusted-device`) and its record format holding the run's
 schedules are the realization's `trusted` and `fits`.
 -/
 

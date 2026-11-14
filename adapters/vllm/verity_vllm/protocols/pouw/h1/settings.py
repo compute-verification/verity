@@ -131,7 +131,7 @@ def refusals(scheme: str, settings: Any, stage: str, filled: tuple[str, ...] = (
     if scheme == PH.SCHEME and stage != "capture" and (not runner or (not rounds and settings.challenger is None)):
         out.append(f"{scheme}: each admitted request's entry goes under the root of the round that admits it, before "
                    "that round's coin: the pouw settings 'runner' (the engine's model runner, where its scheduler's "
-                   "admissions arrive) and 'challenger' (the auditor host's, HOST:PORT) or, in tests, 'rounds' (the "
+                   "admissions arrive) and 'challenger' (the auditor device's, HOST:PORT) or, in tests, 'rounds' (the "
                    "window's round coins, a LiveRecord)")
     elif scheme != PH.SCHEME:
         if settings.runner is not None and scheme not in PPD.SCHEMES:

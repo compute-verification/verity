@@ -12,7 +12,7 @@ import Mathlib.Tactic.SetLike
 /-!
 # What the tap's certifier saw is what its warden sent
 
-`Definitions.NetworkCertifier.Tap`. Under `trusted-host` the tap's run is its code, so the cells the client receives
+`Definitions.NetworkCertifier.Tap`. Under `trusted-device` the tap's run is its code, so the cells the client receives
 are the warden's code's (`certifier_cells`) and, on a schedule the record format holds (`RecordFormat.fits`), read back from the
 record the same run writes (`certifier_cells_read`): what the certifier saw is what the warden sent, by the one code run. Of the data reaching the tap on a connection, each cell its
 lane sends before its fail cell is in the record, as that cell's data in its bucket (`certifier_data_read`). The rest of the
