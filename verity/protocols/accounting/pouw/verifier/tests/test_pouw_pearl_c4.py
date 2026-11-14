@@ -170,7 +170,7 @@ def test_accounting_at_8192():
     assert wref == shape.wmm + 32 * 8192 ** 2 + 256 * 8192 ** 2 + 117 * 8192 ** 2
     assert credit == shape.wmm + 32 * 8192 ** 2 + 256 * 8192 ** 2 + 98 * 8192 ** 2 == wref - 19 * 8192 ** 2
     assert round(wref / shape.wmm, 3) == 1.049
-    gamma = 1 - Fraction(399, 400) * (1 - F.CAP) * Fraction(credit, wref)
+    gamma = 1 - Fraction(399, 400) * (1 - F.INERT_SHARE) * Fraction(credit, wref)
     assert round(float(gamma) * 100, 3) == 0.719
     assert s.job_cost(8192, 8192) == 117 * 8192 ** 2 + 32 * 8192 ** 2 + 1024 * 8192 + 16 * 8192 * 1024
 
@@ -345,7 +345,7 @@ def test_dead_screen_is_90_rho_squared(fmt):
 
 
 @pytest.mark.parametrize("fmt", FMTS)
-def test_row_rules_and_debit(fmt):
+def test_row_rules_and_inert_work(fmt):
     f = F.FORMATS[fmt]
     rows = [F.parse_row(r, 1024) for r in V.rows("rules", "A", 3, 1024)]
     assert all(F.row_passes(f, x) for x in rows) and not any(any(F.dead_blocks(f, x)) for x in rows)
@@ -358,7 +358,7 @@ def test_row_rules_and_debit(fmt):
     e = [F.line(b"\x02" * 32, F.ROLE_EA, i) for i in range(4)]
     a = F.form(f, [one] + rows, e, F.basis(b"\x01" * 32, F.ROLE_FA, 1024))
     b = F.form(f, [one] + rows, e, F.basis(b"\x01" * 32, F.ROLE_FB, 1024))
-    clean = F.tile_debit(f, a, b, [1, 2, 3], [1, 2, 3], 4096, e, e)
+    clean = F.tile_inert_work(f, a, b, [1, 2, 3], [1, 2, 3], 4096, e, e)
     assert clean.counts["salt_dead_a"] == clean.counts["salt_dead_b"] == 0 and clean.int8 == 0
     # F1′: NVFP4's scales move with the salt, so a Gaussian window's saving survives κ only on rare samples (a trace, under
     # 10^-4 units against a cap of 29.5); MXFP4's UE8M0 scales don't, so its windows keep it (about 6% of this tile's cap
@@ -372,7 +372,7 @@ def test_row_rules_and_debit(fmt):
     # 3ρ reaches code 0.5 on the extreme sample, so it stays live)
     dead = F.salt_dead(f, one, a.alpha[0], a.ae[0])
     assert dead[1] and sum(dead[:f.block]) >= f.block - 2 and not any(dead[f.block:])
-    d = F.tile_debit(f, a, b, [0, 1], [0, 1], 4096, e, e)
+    d = F.tile_inert_work(f, a, b, [0, 1], [0, 1], 4096, e, e)
     dead_b = F.salt_dead(f, b.x[0], b.alpha[0], b.ae[0])
     assert d.counts["screened_block_pairs"] == 1 and d.identity == d.subgrid == d.windows == 0
     assert 0 < d.dead_pairs == d.counts["dead_pairs"] == sum(p and q for p, q in zip(dead, dead_b)) <= f.block
@@ -406,7 +406,7 @@ def witness_elements(s, ops) -> int:
 
 
 @pytest.mark.parametrize("blocks", (2, 4))
-def test_a_row_the_old_cap_rejected_is_admitted_and_debited_on_the_witness(blocks):
+def test_a_row_the_old_inert_bound_rejected_is_admitted_and_debited_on_the_witness(blocks):
     """Screened blocks past D-SS's retired one-in-64 cap, on A alone: the row is credited, item 4 charges only the
     witness's salt-dead and unneeded elements (not every element of a screened block), no block pair
     is screened, and the tile stays under ρ."""
@@ -414,12 +414,12 @@ def test_a_row_the_old_cap_rejected_is_admitted_and_debited_on_the_witness(block
     assert sum(F.dead_blocks(s.fmt, x)) == blocks > (len(x) // s.fmt.block) // 64 and F.row_passes(s.fmt, x)
     assert sum(F.salt_dead(s.fmt, x, ops.a.alpha[0], ops.a.ae[0])[:blocks * s.fmt.block]) <= blocks
     assert CW.check_opened(s, record, tile, a_rows, b_rows, ops) is None
-    d = s.last_debit
+    d = s.last_inert_work
     assert d.counts["screened_blocks_a"] == blocks and d.dead_pairs == 0
     assert d.counts["forming_elements"] == witness_elements(s, ops) < blocks * s.fmt.block
     assert d.counts["screened_only_elements"] > 0
     assert d.forming == Fraction(F.FORMING_CREDITED * witness_elements(s, ops) * 4, 1024)
-    assert 0 < d.total <= s.tile_cap(record, ops, range(4), range(4))[1]
+    assert 0 < d.total <= s.tile_inert_bound(record, ops, range(4), range(4))[1]
 
 
 def test_a_row_whose_screened_blocks_pass_r1_is_rejected_by_f1_prime():
@@ -430,9 +430,9 @@ def test_a_row_whose_screened_blocks_pass_r1_is_rejected_by_f1_prime():
     assert F.row_passes(s.fmt, x) and sum(F.salt_dead(s.fmt, x, ops.a.alpha[0], ops.a.ae[0])[:16 * s.fmt.block]) <= 16
     reason = CW.check_opened(s, record, tile, a_rows, b_rows, ops)
     assert reason is not None and "R1's bound" in reason
-    assert s.row_debit_ratio(record, ops, "A", 0) > 1
-    cap = s.tile_cap(record, ops, range(4), range(4))[1]
-    d = s.last_debit
+    assert s.row_inert_work_ratio(record, ops, "A", 0) > 1
+    cap = s.tile_inert_bound(record, ops, range(4), range(4))[1]
+    d = s.last_inert_work
     assert d.counts["screened_blocks_a"] == 16 and d.dead_pairs == 0 and d.total > cap
     assert d.counts["forming_elements"] == witness_elements(s, ops) and d.forming + d.int8 + d.identity + d.subgrid < cap
     assert d.split > cap
@@ -463,15 +463,15 @@ def test_item_3_charges_per_element_where_both_codes_are_salt_dead():
     a live one (dead zeros included) charges nothing; and it never exceeds the block form."""
     s, record, ops = dead_tile(True, True)
     assert all(all(F.salt_dead(s.fmt, x, al, ae)) for side in (ops.a, ops.b) for x, al, ae in zip(side.x, side.alpha, side.ae))
-    s.tile_cap(record, ops, range(2), range(2))
-    d = s.last_debit
+    s.tile_inert_bound(record, ops, range(2), range(2))
+    d = s.last_inert_work
     assert d.dead_pairs == 4 * 1024 == 4 * (1024 // F.ATOM) * F.ATOM
     assert d.dead_pairs <= s.fmt.block * d.counts["screened_block_pairs"]
     for a_dead, b_dead in ((True, False), (False, True)):
         s, record, ops = dead_tile(a_dead, b_dead)
-        s.tile_cap(record, ops, range(2), range(2))
+        s.tile_inert_bound(record, ops, range(2), range(2))
         dead = ops.a if a_dead else ops.b
-        assert any(c & 7 == 0 for c in dead.codes[0]) and s.last_debit.dead_pairs == 0
+        assert any(c & 7 == 0 for c in dead.codes[0]) and s.last_inert_work.dead_pairs == 0
 
 
 @pytest.mark.parametrize("a_blocks, b_blocks", ((4, 4), (16, 16), (2, 0)))
@@ -480,16 +480,16 @@ def test_item_3_never_charges_more_than_its_block_form(a_blocks, b_blocks):
     count is at most `block` per co-screened block pair (`saltDead4_screened`), and on four co-screened blocks it is their
     four spikes, 4 units, where the block form charged 64 and failed the tile's cap (about 56 units)."""
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(a_blocks, b_blocks)
-    s.tile_cap(record, ops, range(4), range(4))
-    d = s.last_debit
+    s.tile_inert_bound(record, ops, range(4), range(4))
+    d = s.last_inert_work
     assert d.counts["screened_block_pairs"] == min(a_blocks, b_blocks)
     assert d.dead_pairs <= s.fmt.block * d.counts["screened_block_pairs"]
     if (a_blocks, b_blocks) == (4, 4):
         assert d.dead_pairs == 4 and CW.check_opened(s, record, tile, a_rows, b_rows, ops) is None
-        assert s.fmt.block * d.counts["screened_block_pairs"] > s.tile_cap(record, ops, range(4), range(4))[1]
+        assert s.fmt.block * d.counts["screened_block_pairs"] > s.tile_inert_bound(record, ops, range(4), range(4))[1]
 
 
-def test_the_provers_debit_is_the_verifiers():
+def test_the_provers_inert_work_is_the_verifiers():
     """Items 3 and 4 read the witness from the tile's own forming on both sides, so a prover forming the committed rows
     from the unit's seeds gets the verifier's debit exactly; over the credited rows only, the spiked row's dead pairs
     drop out."""
@@ -498,11 +498,11 @@ def test_the_provers_debit_is_the_verifiers():
     noise = s.noise(ctx)
     a, e_a = s._side(a_rows, tile.rows, F.ROLE_EA, F.ROLE_FA, noise.seed_a, noise.seed_b, k)
     b, e_b = s._side(b_rows, tile.cols, F.ROLE_EB, F.ROLE_FB, noise.seed_b, noise.seed_b, k)
-    mine = F.tile_debit(s.fmt, a, b, range(4), range(4), 1024, e_a, e_b, 4)
-    s.tile_cap(record, ops, range(4), range(4))
-    assert mine == s.last_debit and mine.dead_pairs == 4
-    s.tile_cap(record, ops, [1, 2, 3], range(4))
-    assert s.last_debit.dead_pairs == 0 and s.last_debit.counts["words"] == 12
+    mine = F.tile_inert_work(s.fmt, a, b, range(4), range(4), 1024, e_a, e_b, 4)
+    s.tile_inert_bound(record, ops, range(4), range(4))
+    assert mine == s.last_inert_work and mine.dead_pairs == 4
+    s.tile_inert_bound(record, ops, [1, 2, 3], range(4))
+    assert s.last_inert_work.dead_pairs == 0 and s.last_inert_work.counts["words"] == 12
 
 
 def test_word_replay_charges_identity_atoms_and_sub_grid_blocks():
@@ -566,7 +566,7 @@ def formed(f: F.Fmt, rows, role_e: int, role_f: int, k: int):
 
 
 @pytest.mark.parametrize("family", [spike_row, narrow_cell_row], ids=["spike", "narrow-cell"])
-def test_f1_prime_charges_the_base_split_rows_past_the_cap(family):
+def test_f1_prime_charges_the_base_split_rows_past_the_inert_bound(family):
     """F1′: the spike rows, which the support witness reads as salt-live (every other item 0),
     and the narrow-cell rows, which escape a count of near-deterministic codes, are both charged far past the cap, while
     the Gaussian side carries nothing."""
@@ -575,8 +575,8 @@ def test_f1_prime_charges_the_base_split_rows_past_the_cap(family):
     assert all(F.row_passes(f, x) and not any(F.dead_blocks(f, x)) for x in rows)
     a, e_a = formed(f, rows, F.ROLE_EA, F.ROLE_FA, k)
     b, e_b = formed(f, [F.parse_row(r, k) for r in V.rows("rules", "B", 4, k)], F.ROLE_EB, F.ROLE_FB, k)
-    d = F.tile_debit(f, a, b, range(4), range(4), n, e_a, e_b)
-    cap = F.CAP * Fraction(F.PearlC4(hashing="h0").credit_of(Shape(1, k, n)), n) * 16
+    d = F.tile_inert_work(f, a, b, range(4), range(4), n, e_a, e_b)
+    cap = F.INERT_SHARE * Fraction(F.PearlC4(hashing="h0").credit_of(Shape(1, k, n)), n) * 16
     assert d.split > 50 * cap
     gauss = [F.change_probabilities(f, b.x[j], b.alpha[j], e_b[j], b.ae[j], [False] * k, b.scales[j]) for j in range(4)]
     assert sum(F.split_units(f, p, modes, b.scales[j]) for j, (p, modes) in enumerate(gauss)) < Fraction(1, 10 ** 4)
@@ -608,7 +608,7 @@ def test_b_tilde_rows_are_charged_at_the_overfit_factor():
     assert F.F1_B_OVERFIT == 10
     a, e_a = formed(f, [F.parse_row(r, k) for r in V.rows("rules", "A", 2, k)], F.ROLE_EA, F.ROLE_FA, k)
     b, e_b = formed(f, [narrow_cell_row(i) for i in range(2)], F.ROLE_EB, F.ROLE_FB, k)
-    d = F.tile_debit(f, a, b, range(2), range(2), n, e_a, e_b)
+    d = F.tile_inert_work(f, a, b, range(2), range(2), n, e_a, e_b)
     per_b = [F.row_f1(f, b, e_b, j, F.salt_dead(f, b.x[j], b.alpha[j], b.ae[j]), F.F1_B_OVERFIT)[0] for j in range(2)]
     once = [F.row_f1(f, b, e_b, j, F.salt_dead(f, b.x[j], b.alpha[j], b.ae[j]))[0] for j in range(2)]
     per_a = [F.row_f1(f, a, e_a, i, F.salt_dead(f, a.x[i], a.alpha[i], a.ae[i]))[0] for i in range(2)]
@@ -717,7 +717,7 @@ def r1_tile():
     return s, ctx, tile, a_rows, b_rows, ops
 
 
-def test_r1_uncredits_a_row_whose_own_debit_passes_its_cell_cap():
+def test_r1_uncredits_a_row_whose_own_inert_work_passes_its_cell_bound():
     """R1: the spike row's own F1′ passes ρ·(its cell credit), so it must be
     declared excluded; declared so, the tile passes, since the Gaussian rows' debit is far under the cap.  Credited, it
     fails the tile; an excluded Gaussian row passes the per-row rules and R1, so its exclusion fails.  The honest
@@ -725,8 +725,8 @@ def test_r1_uncredits_a_row_whose_own_debit_passes_its_cell_cap():
     s, ctx, tile, a_rows, b_rows, ops = r1_tile()
     k = ctx.matmul.shape.k
     assert all(F.row_passes(s.fmt, F.parse_row(r, k)) for r in a_rows + b_rows)
-    assert s.row_over_debit(W.UnitRecord(ctx.matmul, 4, k), ops, "A", 0)
-    assert not any(s.row_over_debit(W.UnitRecord(ctx.matmul, 4, k), ops, side, p) for side in "AB" for p in (1, 2, 3))
+    assert s.row_over_inert_work(W.UnitRecord(ctx.matmul, 4, k), ops, "A", 0)
+    assert not any(s.row_over_inert_work(W.UnitRecord(ctx.matmul, 4, k), ops, side, p) for side in "AB" for p in (1, 2, 3))
     assert CW.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (0,)), tile, a_rows, b_rows, ops) is None
     reason = CW.check_opened(s, W.UnitRecord(ctx.matmul, 4, k), tile, a_rows, b_rows, ops)
     assert reason is not None and reason.startswith("A row 0 is credited") and "R1's bound" in reason
@@ -742,7 +742,7 @@ def test_r1_allows_either_declaration_inside_its_tolerance_band():
     k = ctx.matmul.shape.k
 
     class Near(F.PearlC4):
-        def row_debit_ratio(self, record, ops, side, pos):
+        def row_inert_work_ratio(self, record, ops, side, pos):
             return {("A", 0): Fraction(10), ("A", 1): 1 + Fraction(1, 10 ** 10)}.get((side, pos), Fraction(0))
 
     near = Near("nvfp4")
@@ -773,20 +773,20 @@ def test_b_ovf_discounts_credit_by_its_pinned_table():
     assert ("b_ovf", tuple((nb, str(b)) for nb, b in F.B_OVF)) in s.certificate.parameters
 
 
-def test_r1_and_the_tile_cap_read_the_discounted_credit(monkeypatch):
+def test_r1_and_the_tile_inert_bound_read_the_discounted_credit(monkeypatch):
     """R1's per-row bound and the tile cap are ρ times `credit_of`'s share, so B-OVF's discount tightens both: on a
     unit of n = 1,024 (β = 0.50%) the cap and the bound fall by exactly the credit's ratio to the undiscounted one."""
     s, record, tile, a_rows, b_rows, ops, x = screened_tile(4, 4)
     k, n = record.k_kept, record.matmul.shape.n
     disc = s.credit_of(Shape(1, k, n))
-    cap = s.tile_cap(record, ops, range(4), range(4))[1]
-    ratio = s.row_debit_ratio(record, ops, "B", 0)
-    assert cap == F.CAP * Fraction(disc, n) * 16
+    cap = s.tile_inert_bound(record, ops, range(4), range(4))[1]
+    ratio = s.row_inert_work_ratio(record, ops, "B", 0)
+    assert cap == F.INERT_SHARE * Fraction(disc, n) * 16
     monkeypatch.setattr(F, "B_OVF", ((128, Fraction(0)),))
     plain = s.credit_of(Shape(1, k, n))
     assert plain - disc == math.ceil(Fraction(50, 10_000) * n * k) > 0
-    assert s.tile_cap(record, ops, range(4), range(4))[1] == cap * Fraction(plain, disc)
-    assert s.row_debit_ratio(record, ops, "B", 0) == ratio * Fraction(disc, plain)
+    assert s.tile_inert_bound(record, ops, range(4), range(4))[1] == cap * Fraction(plain, disc)
+    assert s.row_inert_work_ratio(record, ops, "B", 0) == ratio * Fraction(disc, plain)
 
 
 def test_a_drawn_tile_evaluates_each_rows_f1_once():
@@ -804,10 +804,10 @@ def test_a_drawn_tile_evaluates_each_rows_f1_once():
     record = W.UnitRecord(ctx.matmul, 4, k, (0,))
     assert CW.check_opened(s, record, tile, a_rows, b_rows, ops) is None
     assert sorted(calls) == sorted((id(side), p) for side in (ops.a, ops.b) for p in range(4))
-    s.tile_cap(record, ops, range(4), range(4))
+    s.tile_inert_bound(record, ops, range(4), range(4))
     assert len(calls) == 8
-    assert s.last_debit == F.tile_debit(s.fmt, ops.a, ops.b, range(4), range(4), shape.n, ops.e_a, ops.e_b, shape.m)
-    s.tile_cap(record, copy.copy(ops), [1], [0])
+    assert s.last_inert_work == F.tile_inert_work(s.fmt, ops.a, ops.b, range(4), range(4), shape.n, ops.e_a, ops.e_b, shape.m)
+    s.tile_inert_bound(record, copy.copy(ops), [1], [0])
     assert len(calls) == 10
 
 
@@ -884,7 +884,7 @@ def test_f2_charges_a_formed_tile_whose_scales_sit_at_one_byte():
     rows = [spike_row(i, k, top=9.88) for i in range(4)]
     a, e_a = formed(f, rows, F.ROLE_EA, F.ROLE_FA, k)
     b, e_b = formed(f, rows, F.ROLE_EB, F.ROLE_FB, k)
-    d = F.tile_debit(f, a, b, range(4), range(4), n, e_a, e_b, m)
+    d = F.tile_inert_work(f, a, b, range(4), range(4), n, e_a, e_b, m)
     save = F.int8_saving(f, a.scales, b.scales, m, n)
     assert save > 0 and d.int8 == Fraction(save) * 16 * k
 
@@ -1048,8 +1048,8 @@ def test_h3_draws_each_rows_e_a_from_its_own_digest():
 
     s, h0 = V.scheme("nvfp4", True, "h3"), V.scheme("nvfp4", True)
     assert (s.name, s.commitment_hash) == ("pearl-c-nvfp4-v0-h3", "hm96-sha512")
-    assert SchemeId.parse(s.name).hashing == "h3" and hash_format(s) is HASH_FORMATS["h3"] and CW.row_cap(s)
-    assert hash_format(h0) is HASH_FORMATS["h0"] and not CW.row_cap(h0) and h0.commitment_hash == "sha256"
+    assert SchemeId.parse(s.name).hashing == "h3" and hash_format(s) is HASH_FORMATS["h3"] and CW.row_inert_bound(s)
+    assert hash_format(h0) is HASH_FORMATS["h0"] and not CW.row_inert_bound(h0) and h0.commitment_hash == "sha256"
     assert dict(s.certificate.parameters)["hashing"] == "h3" and "hashing" not in dict(h0.certificate.parameters)
     assert all("cr/sha-512" in x.certificate.claims and not any("blake3" in c for c in x.certificate.claims) for x in (s, h0))
     for bad in ("h1", "h2", "h3s"):
@@ -1112,7 +1112,7 @@ def test_v_ex_a_voluntary_row_that_passes_the_rules_is_accepted():
     assert any("A row 5 is excluded but passes" in (r or "") for r in reasons)
 
 
-def test_v_ex_leaves_r1_and_the_cap_on_the_credited_rows():
+def test_v_ex_leaves_r1_and_the_inert_bound_on_the_credited_rows():
     """A voluntary row doesn't shelter the others from R1: a row declared credited over R1's bound still fails its tile.
     The spike row itself may be given up instead of excluded.  By the band rule a voluntary row takes its band's credit,
     so a tile whose rows share its band has nothing under the cap; a credited row of the next band still has its cap, and
@@ -1124,7 +1124,7 @@ def test_v_ex_leaves_r1_and_the_cap_on_the_credited_rows():
     assert CW.check_opened(s, W.UnitRecord(ctx.matmul, 4, k, (), (), (0,)), tile, a_rows, b_rows, ops) is None
 
     class NoR1(F.PearlC4):
-        def row_debit_ratio(self, record, ops, side, pos):
+        def row_inert_work_ratio(self, record, ops, side, pos):
             return Fraction(0)
 
     s = NoR1("nvfp4")
@@ -1162,7 +1162,7 @@ def failures(s, epoch, prover, tr, splits, records) -> set[str]:
     return {v.reason for v in CW.audit(s, epoch, prover, tr, splits, records, E.challenger(), 8).audit.verdicts if not v.ok}
 
 
-def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_cap():
+def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_inert_bound():
     """`volunteer`, the honest prover's remedy for a tile over the cap, on a scheme whose debit puts tile position 7 at 20
     units per word against a cap of 1 per credited word, at a salt key where R1 also excludes A row 15.  R1's rows are
     `declare`'s on the transcript, excluded, so `volunteer` gives up only A row 7 (not a column, which leaves the tile
@@ -1170,7 +1170,7 @@ def test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_cap():
     fails R1 whatever `volunteer` gives up, and giving up both rows passes V-EX's count cap, one A row at m = 32."""
 
     class Heavy(F.PearlC4):
-        def tile_cap(self, record, ops, rows, cols):
+        def tile_inert_bound(self, record, ops, rows, cols):
             return Fraction(20 * len(cols) * (7 in rows)), Fraction(len(rows) * len(cols))
 
     s = Heavy("nvfp4", k_min=128, tile=(16, 16), n_min=16)

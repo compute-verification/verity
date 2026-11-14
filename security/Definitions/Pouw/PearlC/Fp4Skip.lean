@@ -10,7 +10,7 @@ chain `Fp4Atom.chain` (no promotion): `sm120Nvf4` for `pearl-c-nvfp4-v0`, `sm120
 soundness, and the exactness lemma that ties term 2 to zero-sum atoms, are in `Pouw.PearlC.Fp4Freeze`; this module
 imports no proofs, so the device record may read it.
 
-* **Term 2, the lone-skip flags** (`fp4PureFlags`): P1's `debit_pure` at the FP4 atom, the FP4 twin of `flagsAt P 0`.
+* **Term 2, the lone-skip flags** (`fp4PureFlags`): P1's `inert_work_pure` at the FP4 atom, the FP4 twin of `flagsAt P 0`.
   Atom `t` of a chain is flagged when the chain is in the model and skipping `t` alone, in place (its incoming word
   passes through, `skipOne`), leaves the chain's final word unchanged. Computed by replay (`chainMask`).
 * **Term 3, the dead × dead pairs** (`dead`, `deadPair`): D-SS's `dead(b)` (theory §1; `pearl_c4.dead_blocks`), k-block
@@ -18,7 +18,7 @@ imports no proofs, so the device record may read it.
   exact mean of `x_l²` over `l = 0, 8, 16, …` (`rhoSq`, `pearl_c4._exact_rho_sq`). It reads the clean row alone, so it
   is salt-free. A pair is dead on both A's row and B's row.
 * **The counts** (`atomWords`, `pairWords`) over a tile `rows × cols` (`Finset.univ` for the unit), and the debits at a
-  price per atom-word (`pureDebit`, 64 at one unit per MAC) and per pair-word (`deadDebit`, 16 on NVFP4).
+  price per atom-word (`pureInertWork`, 64 at one unit per MAC) and per pair-word (`deadInertWork`, 16 on NVFP4).
 * **A block's contribution** (`blockTerms`): the group terms of k-block `β`'s groups, as the atom holding it reads them;
   what a dead × dead pair lets a program precompute. `blockOf` is one operand's codes and scale byte of the block.
 -/
@@ -55,7 +55,7 @@ def loneMask (t : Nat) : List Bool := List.replicate t false ++ [true]
 def skipOne (p : Fp4Atom) (t c : Nat) (a b : List Nib) (sa sb : List (Fin 256)) : Option Nat :=
   chainMask p (loneMask t) c a b sa sb
 
-/-- **The lone-skip flags** (term 2; `debit_pure` at the FP4 atom): atom `t < K/k` of the chain from `c` is flagged when
+/-- **The lone-skip flags** (term 2; `inert_work_pure` at the FP4 atom): atom `t < K/k` of the chain from `c` is flagged when
 the chain is in the model and skipping `t` alone, in place, leaves its final word unchanged. -/
 def fp4PureFlags (p : Fp4Atom) (c : Nat) (a b : List Nib) (sa sb : List (Fin 256)) (t : Nat) : Bool :=
   decide (t < a.length / p.k) && (p.chain c a b sa sb).isSome &&
@@ -79,7 +79,7 @@ def atomWords (p : Fp4Atom) (k : ℕ) (flag : Fin m → Fin n → ℕ → Bool) 
   ∑ i ∈ rows, ∑ j ∈ cols, (flaggedAtoms p k flag i j).card
 
 /-- **Term 2's debit** on the tile `rows × cols`: `c` per flagged atom-word (`c = 64`, `p.k`, at one unit per MAC). -/
-def pureDebit (p : Fp4Atom) (k : ℕ) (c : ℚ) (flag : Fin m → Fin n → ℕ → Bool) (rows : Finset (Fin m))
+def pureInertWork (p : Fp4Atom) (k : ℕ) (c : ℚ) (flag : Fin m → Fin n → ℕ → Bool) (rows : Finset (Fin m))
     (cols : Finset (Fin n)) : ℚ :=
   c * atomWords p k flag rows cols
 
@@ -118,8 +118,8 @@ def pairWords (p : Fp4Atom) (k : ℕ) (pair : Fin m → Fin n → ℕ → Bool) 
   ∑ i ∈ rows, ∑ j ∈ cols, (deadBlocks p k pair i j).card
 
 /-- **Term 3's debit** on the tile `rows × cols`: `c` per dead × dead pair-word (`c = 16`, `p.block` on NVFP4, at one
-unit per MAC; `pearl_c4.tile_debit` charges `p.block`). -/
-def deadDebit (p : Fp4Atom) (k : ℕ) (c : ℚ) (pair : Fin m → Fin n → ℕ → Bool) (rows : Finset (Fin m))
+unit per MAC; `pearl_c4.tile_inert_work` charges `p.block`). -/
+def deadInertWork (p : Fp4Atom) (k : ℕ) (c : ℚ) (pair : Fin m → Fin n → ℕ → Bool) (rows : Finset (Fin m))
     (cols : Finset (Fin n)) : ℚ :=
   c * pairWords p k pair rows cols
 

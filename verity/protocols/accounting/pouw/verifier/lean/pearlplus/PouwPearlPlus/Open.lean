@@ -135,13 +135,13 @@ def output (ans : RunAnswer) : Json :=
     ("commitment", jopt (ans.plan.map (hex ·.root))),
     ("source", jopt (ans.plan.map (hex ·.source))),
     ("drawn", match ans.plan with | some pl => (pl.drawn : Nat) | none => .null),
-    ("over_cap", jstr ans.overCap.name),
+    ("over_cap", jstr ans.overInertBound.name),
     ("verdicts", .arr (ans.verdicts.map fun v => Json.mkObj [("pass", (v.pass : Nat)), ("tile", (v.tile : Nat)),
-      ("ok", .bool (v.ok ans.overCap)), ("reason", jopt v.reason)]).toArray),
+      ("ok", .bool (v.ok ans.overInertBound)), ("reason", jopt v.reason)]).toArray),
     ("work", match ans.work with
       | some c => Json.mkObj [("credited", (c.credited : Nat)), ("credited_tiles", (c.creditedTiles : Nat)),
           ("macs", (c.macs : Nat)), ("rho", jstr (toString c.rho)), ("epsilon", jstr (toString c.epsilon)),
-          ("over_cap_draws", (c.overCapDraws : Nat))]
+          ("over_cap_draws", (c.overInertBoundDraws : Nat))]
       | none => .null),
     ("tie", match ans.tie with
       | some t => Json.mkObj (([("record", jstr t.record), ("tables", (t.tables : Nat))] : List (String × Json)) ++

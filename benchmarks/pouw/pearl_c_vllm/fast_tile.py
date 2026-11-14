@@ -1,13 +1,13 @@
-"""Batch forms of a served tile's replay for `served_debit.py`: every place a Pearl-C v1 tile's check runs the device's E4M3
+"""Batch forms of a served tile's replay for `served_inert_work.py`: every place a Pearl-C v1 tile's check runs the device's E4M3
 atom one word at a time, run over all of the tile's words at once on numpy (`verity.circuits.kernels.tc.group_sum_total_batch`, the
 atom's bit-exact batch form).
 
 - `_pairs`: `pearl_c.chain` on every (a, b) pair of two lists of code rows: C̃'s words (`checked`), the fused columns of the peel factors
   (`peel_factors_a`, `peel_factors_b`) and G (`gram`).
 - `form_v1`: `pearl_c.form_v1`, the per-element atom of v1's forming, with its scalar statistics, E′ and cast.
-- `chain_debit`: `pearl_c_debit.chain_debit`, every word's masked group words, its totals, the backward bisection of the
-  later promotions' intervals and its flags, over the tile's words together; `word_debits` keeps each word's counts apart
-  (`volunteer_pass.py` sums them over any rows and columns); `tile_debit`, `pearl_c_debit.tile_debit`, adds the forming
+- `chain_inert_work`: `pearl_c_inert_work.chain_inert_work`, every word's masked group words, its totals, the backward bisection of the
+  later promotions' intervals and its flags, over the tile's words together; `words_inert_work` keeps each word's counts apart
+  (`volunteer_pass.py` sums them over any rows and columns); `tile_inert_work`, `pearl_c_inert_work.tile_inert_work`, adds the forming
   elements from the words' flags and each row's salt-dead elements (the support's two ends on every element at once).
 
 Each returns exactly what its scalar reference returns.  Wherever a word, an accumulator or a promotion leaves the finite
@@ -17,7 +17,7 @@ exception) is the reference's own.  FP32 adds and products are numpy float32's, 
 
 `install(scheme)` puts them in place of the scalar functions for a Pearl-C v1 scheme on a promoted device, with the `blake3`
 package's BLAKE3 (the same digests) for the plain-Python one, and returns the function that puts the scalar ones back:
-`served_debit.py` and `verify_run.py --fast` replay every Nth tile both ways and stop on any difference (``--cross-check``).
+`served_inert_work.py` and `verify_run.py --fast` replay every Nth tile both ways and stop on any difference (``--cross-check``).
 """
 from __future__ import annotations
 
@@ -28,12 +28,12 @@ import numpy as np
 from verity.circuits.kernels import tc as K
 from verity.circuits.silicon import fp32
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c_debit as D
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_inert_work as D
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 
 _TOP = 0x7F7FFFFF
 _NEG_ZERO = np.uint32(0x80000000)
-_SCALAR = {"chain": C.chain, "form_v1": C.form_v1, "chain_debit": D.chain_debit, "tile_debit": D.tile_debit}
+_SCALAR = {"chain": C.chain, "form_v1": C.form_v1, "chain_inert_work": D.chain_inert_work, "tile_inert_work": D.tile_inert_work}
 
 
 class _Scalar(Exception):
@@ -190,7 +190,7 @@ def _promote(total: np.ndarray, word: np.ndarray) -> np.ndarray:
 
 def _least(pred, n: int) -> np.ndarray:
     """Per lane, the least key x in the finite FP32 range with pred(x) (monotone), or one past the top if there is none:
-    `pearl_c_debit._least`'s bisection on every lane at once."""
+    `pearl_c_inert_work._least`'s bisection on every lane at once."""
     none = ~pred(np.full(n, _TOP, np.int64))
     lo, hi = np.full(n, -_TOP, np.int64), np.full(n, _TOP, np.int64)
     while True:
@@ -208,14 +208,14 @@ def _carried(x: np.ndarray, w: np.ndarray) -> np.ndarray:
     return _key(_plus_zero(_add(_word(x), w)))
 
 
-def _debit(a: np.ndarray, b: np.ndarray, device) -> tuple[np.ndarray, np.ndarray]:
+def _inert_work(a: np.ndarray, b: np.ndarray, device) -> tuple[np.ndarray, np.ndarray]:
     """Per word (a's rows by b's, row-major): its flagged atoms and its later promotions into a +0 total."""
     flags, zeros = _flags(a, b, device)
     return flags.sum(axis=1, dtype=np.int64), zeros
 
 
 def _flags(a: np.ndarray, b: np.ndarray, device) -> tuple[np.ndarray, np.ndarray]:
-    """Per word (a's rows by b's, row-major): its atom flags (`pearl_c_debit.word_flags`, words x k/32) and its later
+    """Per word (a's rows by b's, row-major): its atom flags (`pearl_c_inert_work.word_flags`, words x k/32) and its later
     promotions into a +0 total."""
     g_, atom = device.g, device.atom.k
     ra, k = a.shape
@@ -277,7 +277,7 @@ def _fp8(w: np.ndarray) -> np.ndarray:
 
 
 def _salt_dead(alpha: int, x: np.ndarray, beta: int, device) -> np.ndarray:
-    """`pearl_c_debit.salt_dead` on one formed row: the support's two ends from f32(α·x), each element's codes compared."""
+    """`pearl_c_inert_work.salt_dead` on one formed row: the support's two ends from f32(α·x), each element's codes compared."""
     k, atom = x.shape[0], device.atom.k
     acc = _finite(_mul(np.full(k, alpha, np.uint32), x.astype(np.uint32)))
     cb = np.full((k, atom), D.flat_code(beta), np.int64)
@@ -285,20 +285,20 @@ def _salt_dead(alpha: int, x: np.ndarray, beta: int, device) -> np.ndarray:
     return (c[0] == c[1]) | ((c[0] | c[1]) & 0x7F == 0)
 
 
-def chain_debit(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]], device=D.H100) -> tuple[int, int]:
-    """`pearl_c_debit.chain_debit`: (flagged atoms, later +0 promotions) over every word of the tile."""
+def chain_inert_work(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]], device=D.H100) -> tuple[int, int]:
+    """`pearl_c_inert_work.chain_inert_work`: (flagged atoms, later +0 promotions) over every word of the tile."""
     try:
         if not len(a_rows) or not len(b_rows):
             raise _Scalar
-        atoms, zeros = _debit(_rows(a_rows), _rows(b_rows), device)
+        atoms, zeros = _inert_work(_rows(a_rows), _rows(b_rows), device)
         return int(atoms.sum()), int(zeros.sum())
     except _Scalar:
-        return _SCALAR["chain_debit"](a_rows, b_rows, device)
+        return _SCALAR["chain_inert_work"](a_rows, b_rows, device)
 
 
-def tile_debit(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]],
+def tile_inert_work(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]],
                formed: Sequence[tuple[int, Sequence[int], int]], device=D.H100) -> tuple[int, int, int]:
-    """`pearl_c_debit.tile_debit`: (flagged atoms, later +0 promotions, forming elements) over every word of the tile."""
+    """`pearl_c_inert_work.tile_inert_work`: (flagged atoms, later +0 promotions, forming elements) over every word of the tile."""
     try:
         if not len(a_rows) or not len(b_rows) or len(formed) != len(a_rows):
             raise _Scalar
@@ -315,20 +315,20 @@ def tile_debit(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]],
             elements += int((np.repeat(every[i], device.atom.k) | dead).sum())
         return int(flags.sum()), int(zeros.sum()), elements
     except _Scalar:
-        return _SCALAR["tile_debit"](a_rows, b_rows, formed, device)
+        return _SCALAR["tile_inert_work"](a_rows, b_rows, formed, device)
 
 
-def word_debits(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]], device=D.H100
+def words_inert_work(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]], device=D.H100
                 ) -> tuple[np.ndarray, np.ndarray]:
-    """`pearl_c_debit.word_debit` on every word (a, b) of the tile: (flagged atoms, later +0 promotions), each an
-    a_rows x b_rows array, whose sums over any rows and columns are `chain_debit`'s on them."""
+    """`pearl_c_inert_work.word_inert_work` on every word (a, b) of the tile: (flagged atoms, later +0 promotions), each an
+    a_rows x b_rows array, whose sums over any rows and columns are `chain_inert_work`'s on them."""
     try:
         if not len(a_rows) or not len(b_rows):
             raise _Scalar
-        atoms, zeros = _debit(_rows(a_rows), _rows(b_rows), device)
+        atoms, zeros = _inert_work(_rows(a_rows), _rows(b_rows), device)
         return atoms.reshape(len(a_rows), len(b_rows)), zeros.reshape(len(a_rows), len(b_rows))
     except _Scalar:
-        got = [[D.word_debit(a, b, device) for b in b_rows] for a in a_rows]
+        got = [[D.word_inert_work(a, b, device) for b in b_rows] for a in a_rows]
         return (np.array([[sum(f) for f, _ in row] for row in got], np.int64).reshape(len(a_rows), len(b_rows)),
                 np.array([[z for _, z in row] for row in got], np.int64).reshape(len(a_rows), len(b_rows)))
 
@@ -353,7 +353,7 @@ def _native_blake3():
 def install(scheme, debit: bool = True) -> callable:
     """Put the batch forms in place for `scheme` (Pearl-C v1 on a promoted device), and the `blake3` package's BLAKE3 in place
     of the plain-Python one wherever a loaded module holds it; returns the undo.  ``debit=False`` leaves
-    `pearl_c_debit.chain_debit` and `tile_debit` to the caller (`served_debit.py` records the tile rule's through a
+    `pearl_c_inert_work.chain_inert_work` and `tile_inert_work` to the caller (`served_inert_work.py` records the tile rule's through a
     wrapper of its own)."""
     import sys
     from verity.commitments.crypto import blake3 as pure
@@ -400,8 +400,8 @@ def install(scheme, debit: bool = True) -> callable:
     swap(C, "peel_factors_a", peel_factors_a)
     swap(C, "peel_factors_b", peel_factors_b)
     if debit:
-        swap(D, "chain_debit", chain_debit)
-        swap(D, "tile_debit", tile_debit)
+        swap(D, "chain_inert_work", chain_inert_work)
+        swap(D, "tile_inert_work", tile_inert_work)
     swap(type(scheme), "checked", checked)
 
     def undo():

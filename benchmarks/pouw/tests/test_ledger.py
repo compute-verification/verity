@@ -255,13 +255,13 @@ def test_price_twins_read_each_pin_s_statement_path_price_and_value_and_skip_wha
                                                                              Fraction(26680734301, 1376663200000))
 
 
-LIFTED = "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192"
-LIFTED_G = "Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192"
+LIFTED = "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1InertShare1000_8192"
+LIFTED_G = "Pouw.Guarantees.PearlC.GapSm120v1LoopCast8p72Rev1InertShare1000_8192"
 LIFTED_SOURCE = """namespace Pouw.Guarantees.PearlC
 
 open Pouw.PearlC Pouw.PearlC.Assumptions
 
-def GapSm120v1LoopCast8p72Rev1Cap1000_8192 : Prop :=
+def GapSm120v1LoopCast8p72Rev1InertShare1000_8192 : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
     (sem : PearlCSem Q R S),
     TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
@@ -374,8 +374,8 @@ def test_the_checked_in_table_gives_the_panel_s_published_gamma(statement, path,
 
 @pytest.mark.parametrize("n, issue, loop", [(8192, "205211/55610750", "1648180439/446072750000"),
                                              (16384, "5273/1466810", "1058166877/294158650000")])
-def test_v1_publishes_at_its_cap_1_1000_from_both_price_twins(n, issue, loop):
-    """v1's statement is at 1/1,000 now: its twins at the cast 8.72 are DeviceSm120CapRev1Gap's at FADD 8.00 (0.36901% at
+def test_v1_publishes_at_its_inert_share_1_1000_from_both_price_twins(n, issue, loop):
+    """v1's statement is at 1/1,000 now: its twins at the cast 8.72 are DeviceSm120InertBoundRev1Gap's at FADD 8.00 (0.36901% at
     8,192³, 0.35949% at 16,384³) and the loop-price twin's (0.36949%, 0.35973%), the larger published; its 1/400 twins
     are history."""
     t = P.load()
@@ -383,7 +383,7 @@ def test_v1_publishes_at_its_cap_1_1000_from_both_price_twins(n, issue, loop):
     assert g["cap"] == "1/1000" and g["missing"] == [] and g["pins"] == ["pinned"]
     assert {p: v["gamma"] for p, v in g["by_price"].items()} == {"8": issue, "1047/125": loop}
     assert (g["published"], g["published_at"]) == (loop, "1047/125")
-    assert g["by_price"]["8"]["pin"] == f"Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1Cap1000_{n}"
+    assert g["by_price"]["8"]["pin"] == f"Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1InertShare1000_{n}"
     assert all(P.lookup(t, "pearl-c-sm120/v1", path, n, n)["by_price"] == {} for path in ("cast-8", "cast-16", "cast-32.06"))
     assert P.lookup(t, "pearl-c-sm120/v2", "cast-8.72", n, n)["published"] is not None
 
@@ -403,14 +403,14 @@ def test_v1_publishes_at_llama_3_1_8b_s_linears_from_both_price_twins(nk):
     assert g["missing"] == [] and g["pins"] == ["pinned"] and (g["shape"], g["layout"]) == (None, None)
     assert {p: v["gamma"] for p, v in g["by_price"].items()} == {"8": issue, "1047/125": loop}
     assert (g["published"], g["published_at"]) == (loop, "1047/125")
-    assert g["by_price"]["8"]["pin"] == f"Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1Cap1000_n{n}k{k}"
+    assert g["by_price"]["8"]["pin"] == f"Pouw.SecurityProofs.PearlC.GapSm120v1Cast8p72Rev1InertShare1000_n{n}k{k}"
 
 
 def test_a_layout_reads_its_own_twins_whose_gamma_is_its_worst_linear_s():
     t = P.load()
     g = P.lookup(t, "pearl-c-sm120/v1", "cast-8.72", None, None, layout="llama31_8b")
     assert g["missing"] == [] and (g["published"], g["published_at"]) == (LLAMA[(4096, 14336)][1], "1047/125")
-    assert g["by_price"]["1047/125"]["pin"] == "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_llama31_8b"
+    assert g["by_price"]["1047/125"]["pin"] == "Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1InertShare1000_llama31_8b"
     assert P.lookup(t, "pearl-c-sm120/v1", "cast-8.72", 6144, 4096, layout="qwen3_8b")["missing"] == [
         f"a forming-credited twin of pearl-c-sm120/v1 on cast-8.72 at layout qwen3_8b, FADD {f}, cap 1/1000"
         for f in ("8", "1047/125")]

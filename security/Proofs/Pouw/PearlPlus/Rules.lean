@@ -8,9 +8,9 @@ public import Proofs.Pouw.PearlPlus.Words
 # Pearl+'s bridge, part (c): the check's per-row rules and inert-work replay are the game's
 
 `Rule.rowsFailure` decides each opened row by `row_passes` (the floor on the exact product ρ·α, and `live_row` on the
-exact statistic), and `Rule.capCheck` the inert-work bound by `word_debit`, a word's flagged atoms and its later
+exact statistic), and `Rule.inertBoundCheck` the inert-work bound by `word_inert_work`, a word's flagged atoms and its later
 promotions into a +0 total. The game reads `PearlCSem.RowOK` (the FMA floor `ρ·α − 1 ≥ 0` and `LiveRow` at δ = 1 under
-`Stat.every8`) and the tile's inert work `tileDebitRev1`, on `Skip.unitFlags` and `laterZeroPromos`.
+`Stat.every8`) and the tile's inert work `tileInertWorkRev1`, on `Skip.unitFlags` and `laterZeroPromos`.
 
 `rowsAreTheRules` proves the rules from the row statistics (`StatsAreTheRow`) and ρ's finiteness (`StatsRhoIsFinite`);
 `rowPasses_iff` is the rules on one row given both. The floor agrees because ρ and α are finite FP32 words with
@@ -45,19 +45,19 @@ def RowsAreTheRules : Prop :=
 def StatsRhoIsFinite : Prop :=
   ∀ (x : Array ℕ) (s ρw αw βw : ℕ), Words.s5Stats x = .ok (s, ρw, αw, βw) → (wordQ ρw).isSome
 
-/-- **(c) A word's replayed debit is the game's**: where `word_debit` is a value on a word's two rows of codes, its flagged
+/-- **(c) A word's replayed debit is the game's**: where `word_inert_work` is a value on a word's two rows of codes, its flagged
 atoms are `Skip.unitFlags`' and its later promotions into a +0 total are `laterZeroPromos`' at the H100 record. -/
-def DebitIsTheReplay : Prop :=
+def InertWorkIsTheReplay : Prop :=
   ∀ {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Pouw.Fp8Atom.Code) (B : Matrix (Fin n) (Fin k) Pouw.Fp8Atom.Code)
     (i : Fin m) (j : Fin n) (f z : ℕ),
-    Rule.wordDebit (Array.ofFn fun l => (A i l).val) (Array.ofFn fun l => (B j l).val) = .ok (f, z) →
+    Rule.wordInertWork (Array.ofFn fun l => (A i l).val) (Array.ofFn fun l => (B j l).val) = .ok (f, z) →
       f = ((Finset.range (k / 32)).filter fun t => Pouw.PearlC.Skip.unitFlags A B i j t = true).card ∧
         z = Pouw.PearlC.laterZeroPromos Pouw.PearlC.devH100 A B i j
 
-/-- **(c) The replay reads the semantics' codes**: under `WordsAreTheSemantics`' hypotheses, `word_debit` on the check's
-A′ and B̃ codes of a word whose row passes the rules is `word_debit` on the semantics' noisy codes of that word
+/-- **(c) The replay reads the semantics' codes**: under `WordsAreTheSemantics`' hypotheses, `word_inert_work` on the check's
+A′ and B̃ codes of a word whose row passes the rules is `word_inert_work` on the semantics' noisy codes of that word
 (`unitChain`). The check's code for a zero may be `0x80` where the semantics' is `0x00`, so this is stated on
-`word_debit`'s result, not on the codes. -/
+`word_inert_work`'s result, not on the codes. -/
 def ReplayReadsTheCodes : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (H : Q → R) (s : S) (U : Pouw.PearlC.Workload) (u : ℕ)
     (act : Codes) (salt rootB : ByteArray) (wn : Words.FixedNoise) (rows cols : List ℕ) (ops : Words.Ops),
@@ -72,8 +72,8 @@ def ReplayReadsTheCodes : Prop :=
       (cols.map (rowBytesOf (U.fixed (U.layout.fixedId u)) (U.layout.shape u).k)) = .ok ops →
     ∀ (x z : ℕ) (i : Fin (U.layout.shape u).m) (j : Fin (U.layout.shape u).n), rows[x]? = some i.val →
       cols[z]? = some j.val → (semH3 saltOf rootOf : PearlCSem Q R S).RowOK (U.layout.shape u).m (U.layout.shape u).k act i →
-      Rule.wordDebit ops.a.codes[x]! ops.b.codes[z]! =
-        Rule.wordDebit (Array.ofFn fun l => (((semH3 saltOf rootOf : PearlCSem Q R S).unitChain H s U u act).1 i l).val)
+      Rule.wordInertWork ops.a.codes[x]! ops.b.codes[z]! =
+        Rule.wordInertWork (Array.ofFn fun l => (((semH3 saltOf rootOf : PearlCSem Q R S).unitChain H s U u act).1 i l).val)
           (Array.ofFn fun l => (((semH3 saltOf rootOf : PearlCSem Q R S).unitChain H s U u act).2 j l).val)
 
 /-! ## A word's fields, as `parts` reads them -/
