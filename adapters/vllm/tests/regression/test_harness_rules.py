@@ -6,7 +6,9 @@ skip unless VERITY_REGRESSION_REBUILD=1 (the post-train job), which selects them
 manifest's rows beyond v1 are its "promoted" facts whatever the engine is called (`v2-query`, `q-word` since S1).  A post-flip reference
 row (no `commit_summary.json`) is summarised from its own evidence.  A row's `manifest_flags` replaces POLICIES_OFF.  A merged
 Programs view outlives the trees it was assembled from, and a row's tree evicted under the suite is fetched again.  Each process
-rebuilds in a scratch of its own.  A row's pins are files.toml's, and without it nothing resolves unpinned.
+rebuilds in a scratch of its own.  A row's pins are files.toml's, and without it nothing resolves unpinned.  A check module loads
+neither numpy, torch nor the core `verity` as it is imported.  A row's batch is its workload's, whether or not the workload was
+fetched before.
 """
 from __future__ import annotations
 
@@ -14,17 +16,21 @@ import gzip
 import hashlib
 import json
 import shutil
+import subprocess
+import sys
 
 import pytest
 
+from tests.regression import checks, resolver, store_io
 from tests.regression import decisions as D
-from tests.regression import resolver
 from tests.regression import test_regression as TR
 from tests.regression.checks import commit_summary as CS
 from tests.regression.checks import manifest_digest as MD
+from tests.regression.checks import program_digest as PD
+from verity_vllm import config
 
 
-class _Fake:
+class _Fake(resolver.Row):
     def __init__(self, docs: dict):
         self.docs = docs
 
@@ -35,8 +41,8 @@ class _Fake:
         return self.docs[rel]
 
 
-def _ident(op: str, member: str = "out", step: int = 0) -> dict:
-    return {"program_digest": "p", "request_id": "r0", "step": step, "invocation": 0, "op_path": op, "output_member": member,
+def _ident(op: str) -> dict:
+    return {"program_digest": "p", "request_id": "r0", "step": 0, "invocation": 0, "op_path": op, "output_member": "out",
             "element_range": [0, 4], "rank": 0, "family": "instance_outputs"}
 
 
@@ -78,7 +84,6 @@ def test_the_rebuilds_skip_unless_asked_for_or_a_candidate_states_the_manifest(m
 def test_the_post_train_job_selects_exactly_the_checks_that_skip_in_check():
     """post_train.py runs `-m "regression and rebuild"`: every `REBUILD` check carries the mark and nothing else does, so what
     `check` skips is what the job runs."""
-    from tests.regression import checks
     marked = {p.id.split("-")[1] for p in TR._params() if any(m.name == "rebuild" for m in p.marks)}
     assert marked == {c.NAME for c in checks.all_checks() if getattr(c, "REBUILD", False)} >= {"manifest_digest", "step_segmentation"}
     assert any(m.name == "rebuild" for m in TR.test_negative_57_refusal_reproduces.pytestmark)
@@ -110,7 +115,7 @@ def test_a_malformed_retirement_is_named(monkeypatch):
 def test_a_registered_fixture_is_found_by_its_path():
     reg = json.loads(resolver.REGISTRY.read_text())
     art, rel = next(iter(reg.items()))
-    assert resolver.registered(resolver.REGISTRY.parents[1] / rel) == art
+    assert resolver.registered(resolver.REGISTRY.parent / rel) == art
     assert resolver.registered(resolver.EXPECTED_DIR / "no-such-row.json") is None
     assert resolver.registered(resolver.FILES) is not None
 
@@ -150,6 +155,17 @@ def test_a_post_flip_reference_row_is_summarised_from_its_own_evidence(tmp_path,
     assert act["rc"] == 0 and act["pass"] is True and act["engine_settings"]["max_num_seqs"] == 8 and act["n_treatment"] == 1
 
 
+@pytest.mark.parametrize(("depth", "inner", "kept"), [(0, "0.5", 0.5), (0, "auto", "auto"), (200_000, "", None)],
+                         ids=["json", "no-json", "nested-past-what-json-reads"])
+def test_an_engine_arg_json_cannot_read_stays_the_text_of_the_command_line(tmp_path, monkeypatch, depth, inner, kept):
+    """`summarize` reads each `--engine-arg` as JSON, and keeps the text of one that `json.loads` does not read, whatever it raises."""
+    row = _post_flip_row(tmp_path, monkeypatch, rc=None)
+    value = "[" * depth + inner + "]" * depth
+    (tmp_path / "rows" / "k" / "commit.log").write_text(f"$ commit --engine-arg x={value} --max-num-seqs 8\n")
+    settings = CS.actual(row)["engine_settings"]
+    assert settings["max_num_seqs"] == 8 and settings["x"] == (value if kept is None else kept)
+
+
 def test_a_post_flip_rows_rc_is_its_verdicts(tmp_path, monkeypatch):
     row = _post_flip_row(tmp_path, monkeypatch, rc=3)
     assert CS.actual(row)["rc"] == 3 and CS.actual(row)["pass"] is False
@@ -183,7 +199,6 @@ def test_a_merged_programs_view_outlives_the_trees_it_links_from(tmp_path, monke
 def test_a_store_tree_evicted_under_the_suite_is_fetched_again(tmp_path, monkeypatch):
     """An eviction of trees/ between a check's `applies` and its `actual` must not lose the row's inputs: a row's fetched tree is
     fetched again once it is gone."""
-    from tests.regression import store_io
     fetches = []
 
     def fetch(art):
@@ -193,9 +208,11 @@ def test_a_store_tree_evicted_under_the_suite_is_fetched_again(tmp_path, monkeyp
         return tmp_path / art
     monkeypatch.setattr(store_io, "fetch", fetch)
     row = resolver.Row("k", {"row": 9, "artifacts": {"record": "art:t"}}, fixtures={})
-    assert (row._store_root("record") / "match" / "tokens.json").is_file()
+    first = row._store_root("record")
+    assert first is not None and (first / "match" / "tokens.json").is_file()
     shutil.rmtree(tmp_path / "art:t")
-    assert (row._store_root("record") / "match" / "tokens.json").is_file() and fetches == ["art:t", "art:t"]
+    again = row._store_root("record")
+    assert again is not None and (again / "match" / "tokens.json").is_file() and fetches == ["art:t", "art:t"]
     assert row._store_root("record") and fetches == ["art:t", "art:t"], "a tree still there is not fetched again"
 
 
@@ -212,6 +229,56 @@ def test_two_processes_rebuilding_one_row_share_no_scratch(tmp_path, monkeypatch
     assert one.parent == other.parent == tmp_path / "r19-regress" / "k"
 
 
+def test_a_rows_batch_is_its_workloads_whether_or_not_the_workload_was_fetched_before(tmp_path, monkeypatch):
+    """The digest of record is the workload's from two requests up, so the lift counts the row's requests.  It reads the workload
+    as every other check does (`row.workload()`, which fetches one the store keeps), so it lifts the same in a tree nothing has
+    fetched into.  Only a row whose workload the tree does not hold has no batch: a stored one that cannot be fetched is the
+    fetch's refusal."""
+    root = tmp_path / "vllm"
+    (root / "workloads").mkdir(parents=True)
+    doc = json.dumps({"requests": [{"request_id": "r0"}, {"request_id": "r1"}]})
+    (root / "workloads" / config.DIGESTS).write_text(f"{hashlib.sha256(doc.encode()).hexdigest()}  k.json\n")
+    monkeypatch.setattr(resolver, "VLLM_ROOT", root)
+    fetched: list[str] = []
+
+    def fetch(paths):
+        for p in paths:
+            p.write_text(doc)
+            fetched.append(p.name)
+    monkeypatch.setattr(config, "_fetch", fetch)
+    for key in ("k", "unheld"):
+        (tmp_path / "rows" / key).mkdir(parents=True)
+        (tmp_path / "rows" / key / "build_summary.json").write_text(json.dumps(
+            {"request": {"program_digest": "request-d"}, "workload": {"workload_digest": "workload-d"}}))
+    monkeypatch.setenv(resolver.ROWS_ROOT_ENV, str(tmp_path / "rows"))
+    monkeypatch.delenv(resolver.CANDIDATE_ENV, raising=False)
+    row = resolver.Row("k", {"row": 9}, fixtures={})
+    exp = PD.expected(row)
+    assert (exp["batch"], exp["program_digest_of_record"], fetched) == (2, "workload-d", ["k.json"])
+    assert PD.expected(row) == exp and fetched == ["k.json"], "on disk now: the same lift, and nothing fetched again"
+    unheld = PD.expected(resolver.Row("unheld", {"row": 10}, fixtures={}))
+    assert (unheld["batch"], unheld["program_digest_of_record"], fetched) == (None, "request-d", ["k.json"])
+
+    def refuse(paths):
+        raise RuntimeError(f"{[p.name for p in paths]}: stored workloads, not here, and not fetched")
+    monkeypatch.setattr(config, "_fetch", refuse)
+    (root / "workloads" / "k.json").unlink()
+    with pytest.raises(RuntimeError, match=r"\['k.json'\]: stored workloads, not here"):
+        PD.expected(row)
+
+
 def test_a_rows_manifest_flags_replace_the_policies_off():
     assert MD._flags(resolver.Row("k", {"row": 9}, fixtures={})) == MD.POLICIES_OFF
     assert MD._flags(resolver.Row("k", {"row": 9, "manifest_flags": []}, fixtures={})) == []
+
+
+@pytest.mark.parametrize("name", checks.ORDER)
+def test_importing_a_check_module_loads_neither_numpy_torch_nor_the_core(name):
+    """`tests.regression.checks.<name>`, imported alone in a fresh interpreter: `checks.all_checks()` imports every one of them to lift a
+    contract or to say which apply, and only a recomputation needs numpy, torch or the core `verity`."""
+    code = ("import importlib, sys\n"
+            "before = set(sys.modules)\n"
+            "importlib.import_module(sys.argv[1])\n"
+            "loaded = sorted({m.partition('.')[0] for m in set(sys.modules) - before} & {'numpy', 'torch', 'verity'})\n"
+            "assert not loaded, f'{sys.argv[1]} loads {loaded} as it is imported: import them in the function that recomputes'\n")
+    subprocess.run([sys.executable, "-c", code, f"tests.regression.checks.{name}"], check=True, cwd=resolver.VLLM_ROOT)

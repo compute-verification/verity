@@ -6,7 +6,7 @@ lowered through Flock's circuit prover (M0's `UnitStager`, the path `a11.py` sta
   largest sub-Definition of the unit that has every piece, lowered the same way;
 * ``too-big``: an instance needs a block past `circuit.K_MAX` (or a statement past the spec's m <= 35).
 
-    PYTHONPATH=<tree>:<tree>/verity/protocols/flock/prover/python:<tree>/adapters/vllm \\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a11_kinds.py --descriptor descriptor.json.gz --out kinds.json [--jobs 8] [--mem-gb 96]
     ... a11_kinds.py --table kinds.json --only MoeSum_v1,TokenSelect_v1 --out kinds-b.json   # those kinds again, census kept
 
@@ -275,7 +275,7 @@ def definition(spec: str):
     """The registered specialization a Definition id names (``Fam_vN{K=V,...}``, each value a Python literal or else a
     registered Definition's id)."""
     from verity.definitions.registry.catalog import load as load_registry
-    from verity.definitions.call_scope import specialization
+    from verity.circuits.call_scope import specialization
     load_registry()
     fam, _, body = spec.partition("{")
     statics, depth, cur = {}, 0, ""

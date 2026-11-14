@@ -39,7 +39,16 @@ from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASS
 from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.engine import hooks, moe_align, sparse_mla, topp_pin  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
 from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
+from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm import settings
+from verity_vllm.records.schema_ids import (
+    CENSUS_RANK_SCHEMA,
+    ENGINE_PROFILE_SCHEMA,
+    LATE_READ_CHECK_SCHEMA,
+    TP_PARAM_HASHES_SCHEMA,
+)
+
+__all__ = ["EXTENSION"]
 
 
 def repo_modules_loaded() -> dict[str, Any]:
@@ -47,6 +56,7 @@ def repo_modules_loaded() -> dict[str, Any]:
     the collector's JIT C++/CUDA sources when native_collect was loaded -- what RAN, written from the running process (not a static closure).
     Paths relative to the repo root; a module outside the repo (site-packages, vllm) is not listed."""
     import sys as _sys
+
     from verity_vllm.config import ROOT as root
     roots = [root, root / "vllm-poc"]
     files: set[str] = set()
@@ -96,6 +106,34 @@ def _jsonable(x: Any) -> Any:
     return json.loads(json.dumps(x, default=str))
 
 
+def _block(doc: dict, name: str) -> dict:
+    """The block `name` of a document this rank reads: its own facts, the driver's weights pin and replay options, its weights of
+    record, the manifest of record.  Empty for a document that holds none, or holds it null or empty: each field read off it is then
+    None, which its reader takes as not stated (no Program dir for this rank, a world of 1, no digest for this rank)."""
+    block = doc.get(name)
+    return block if block else {}
+
+
+def _listed_for(per_rank: dict | None, rank: int) -> list:
+    """What a per-rank option of the driver (`{"<rank>": [...]}`: the post-load tensors, the shards to serve from another rank) lists
+    for this rank; empty for an option the driver left out and for one that lists nothing for this rank."""
+    listed = (per_rank or {}).get(str(rank))
+    return list(listed if listed else [])
+
+
+def _per_request(stated: Any, n_req: int) -> dict[str, int]:
+    """A number for each request `r<i>` of the batch, from the table the driver stated: 0 for a request the table leaves
+    out, and for every request when there is no table."""
+    table = stated if stated else {}
+    return {f"r{i}": int(table.get(f"r{i}", 0)) for i in range(n_req)}
+
+
+def _collector_counters(rc: Any) -> dict[str, Any]:
+    """The counters a run's native collector stated; none when its committer has no collector, or states none."""
+    stated = rc.extra.get("native_collect")
+    return stated if stated else {}
+
+
 def _commit_timing(com: Any, rc: Any) -> dict[str, Any]:
     """Where a rank's Commit spent its time in the run that ended: per step, the root's lag behind the step's end, the worker's
     hashing and the queue behind it; the span accounting (per step too); the staging ring's waits; the Python collections that paused
@@ -107,7 +145,7 @@ def _commit_timing(com: Any, rc: Any) -> dict[str, Any]:
     return {"steps": [{"step": s.step, "t_end": s.t_step_end, "lag_s": s.t_root_ready - s.t_step_end, "hashing_s": s.hashing_s,
                        "backlog": s.backlog_at_step_end, "bytes": s.n_bytes, "tensors": s.n_tensors} for s in rc.steps],
             "spans": rc.spans, "windows": rc.extra.get("windows"), "gc": rc.extra.get("gc"),
-            "collector": {k: v for k, v in (rc.extra.get("native_collect") or {}).items() if k != "fa2_wrap"}, "sources": sources}
+            "collector": {k: v for k, v in _collector_counters(rc).items() if k != "fa2_wrap"}, "sources": sources}
 
 
 class _LLMShim:
@@ -126,7 +164,7 @@ def _tp_facts(worker: Any) -> dict[str, Any]:
     import torch
     from vllm.distributed import parallel_state as ps
 
-    out: dict[str, Any] = {"pid": os.getpid(), "ppid": os.getppid(), "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+    out: dict[str, Any] = {"pid": os.getpid(), "ppid": os.getppid(), "cuda_visible_devices": settings.raw("CUDA_VISIBLE_DEVICES"),
                            "worker_class": type(worker).__mro__[1].__module__ + "." + type(worker).__mro__[1].__name__,
                            "worker_mro": [f"{c.__module__}.{c.__name__}" for c in type(worker).__mro__[:4]],
                            "runner_class": f"{type(worker.model_runner).__module__}.{type(worker.model_runner).__name__}"}
@@ -148,7 +186,7 @@ def _tp_facts(worker: Any) -> dict[str, Any]:
         out["tp"]["pp_world_size"] = int(ps.get_pp_group().world_size)
     except Exception as e:  # noqa: BLE001
         out["tp_error"] = repr(e)
-    out["nccl_env"] = settings.redact({k: v for k, v in os.environ.items() if k.startswith("NCCL_")})
+    out["nccl_env"] = settings.redact({k: v for k, v in settings.environ().items() if k.startswith("NCCL_")})
     pc = worker.vllm_config.parallel_config
     out["parallel_config"] = {k: getattr(pc, k, None) for k in ("tensor_parallel_size", "pipeline_parallel_size", "world_size",
                                                                  "distributed_executor_backend", "disable_custom_all_reduce",
@@ -173,9 +211,8 @@ def swap_label(label: str, sw: dict | None, step: int | None) -> str:
     does not -- a ranged swap never touches a step-less consumer)."""
     if not sw:
         return label
-    if sw.get("mode") == "steps":
-        if step is None or not (int(sw["lo"]) <= int(step) <= int(sw["hi"])):
-            return label
+    if sw.get("mode") == "steps" and (step is None or not (int(sw["lo"]) <= int(step) <= int(sw["hi"]))):
+        return label
     if label == sw["a"]:
         return sw["b"]
     if label == sw["b"]:
@@ -195,7 +232,7 @@ def register_post_load_tensors(model: Any, names: list[str]) -> list[str]:
         v = getattr(parent, attr, None)
         if isinstance(v, torch.nn.Parameter):
             continue
-        if not isinstance(v, torch.Tensor):
+        if parent is None or not isinstance(v, torch.Tensor):
             raise TypeError(f"the Build registers the post-load tensor {n!r} as a Parameter; the served model holds no tensor there")
         delattr(parent, attr)
         parent.register_parameter(attr, torch.nn.Parameter(v, requires_grad=False))
@@ -204,6 +241,10 @@ def register_post_load_tensors(model: Any, names: list[str]) -> list[str]:
 
 class TP2CaptureWorkerExtension:
     """Mixed into vLLM's Worker (`worker_extension_cls`); `self` is the Worker of one rank."""
+
+    #: the Worker's own attributes that these methods read
+    model_runner: Any
+    vllm_config: Any
 
     # ------------------------------------------------------------------ topology
 
@@ -254,7 +295,7 @@ class TP2CaptureWorkerExtension:
         rank_dir.mkdir(parents=True, exist_ok=True)
         runner = self.model_runner
         model = runner.get_model()
-        post_load = register_post_load_tensors(model, list((post_load_tensors or {}).get(str(rank)) or []))
+        post_load = register_post_load_tensors(model, _listed_for(post_load_tensors, rank))
         engine = va.Engine(llm=_LLMShim(self), runner=runner, model=model, cp=dict(cp), kwargs=dict(engine_kwargs),
                            env_flags=dict(env_flags), build_s=0.0, case=case, target=target)
         header = make_header(engine, workload, adapter_revision=adapter_revision, wheel_sha256=wheel_sha256, vllm_commit=vllm_commit,
@@ -267,7 +308,7 @@ class TP2CaptureWorkerExtension:
         # engine.kwargs["tensor_parallel_size"] to build_manifest)
         man = header.profile
         pid_adapter = header.profile_id
-        if isinstance(man, dict) and man.get("schema") == "verity-vllm/profile/v1":
+        if isinstance(man, dict) and man.get("schema") == ENGINE_PROFILE_SCHEMA:
             from verity_vllm.engine import engine_profile as prof
             man.setdefault("parallelism", {})["tensor_parallel_size"] = world
             man.setdefault("engine_kwargs", {})["tensor_parallel_size"] = world
@@ -301,7 +342,7 @@ class TP2CaptureWorkerExtension:
     def tp2_close(self) -> dict[str, Any]:
         import torch
 
-        v = self._tp2
+        v: dict[str, Any] = self._tp2
         cap, rank = v["cap"], v["rank"]
         torch.cuda.synchronize()
         stats = cap.close()
@@ -347,7 +388,7 @@ class TP2CaptureWorkerExtension:
                  "reduce_results", "gather_output", "skip_bias_add", "use_fused_embedding")
         for name, m in model.named_modules():
             cls = type(m).__name__
-            if not (cls.endswith(("ParallelLinear", "Embedding", "LMHead")) or cls == "LogitsProcessor"):
+            if not (cls.endswith(("ParallelLinear", "Embedding", "LMHead")) or cls == LC.LOGITS):
                 continue
             d = {k: getattr(m, k, None) for k in attrs if hasattr(m, k)}
             si = getattr(m, "shard_indices", None)
@@ -355,7 +396,7 @@ class TP2CaptureWorkerExtension:
                 d["shard_indices"] = {k: getattr(si, k) for k in dir(si) if not k.startswith("_") and isinstance(getattr(si, k), int)}
             d["class"] = f"{type(m).__module__}.{cls}"
             mods[name] = d
-        doc = {"schema": "verity-capture/tp2-param-hashes/v0", "rank": rank, "world_size": int(_tp_facts(self)["tp"]["world_size"]),
+        doc = {"schema": TP_PARAM_HASHES_SCHEMA, "rank": rank, "world_size": int(_tp_facts(self)["tp"]["world_size"]),
                "n_params": sum(1 for v in params.values() if v["kind"] == "param"), "n_buffers": sum(1 for v in params.values() if v["kind"] == "buffer"),
                "total_bytes": sum(v["nbytes"] for v in params.values()), "tensors": params, "modules": _jsonable(mods)}
         out = Path(out_dir)
@@ -443,7 +484,10 @@ class TP2CaptureWorkerExtension:
         # from inside its forward (OlmoeAttention._apply_qk_norm: q and k all-gathered, twice per layer) is invisible to the wrappers
         # above, so structure would count fewer collectives per step than the Build's links and FAIL.  The one census shared
         # with the committer's TPPartialSource names the modules (hooked below) and the python modules to patch, a ruled-out call's too.
-        from verity_vllm.engine.collectives.collective_sites import mid_module_site_census, patch_targets
+        from verity_vllm.engine.collectives.collective_sites import (
+            mid_module_site_census,
+            patch_targets,
+        )
         census = mid_module_site_census(model, world)
         st["mid_sites"] = {s["name"]: s for s in census["sites"]}
         sites += patch_targets(census["sites"] + census["ruled_out"])
@@ -476,7 +520,7 @@ class TP2CaptureWorkerExtension:
             st["cur"] = st["cur_stack"].pop() if st["cur_stack"] else None
 
         cand = [(n, type(m).__name__, m) for n, m in model.named_modules()
-                if type(m).__name__ in ("RowParallelLinear", "VocabParallelEmbedding", "LogitsProcessor", "ParallelLMHead") + MOE_COLLECTIVE_CLASSES
+                if type(m).__name__ in (LC.ROW_LINEAR, LC.EMBEDDING, LC.LOGITS, LC.LM_HEAD) + MOE_COLLECTIVE_CLASSES
                 or getattr(m, "reduce_results", False) is True
                 or n in st["mid_sites"]]                                          # mid-module sites: hooked for the module name
         moe_paths = [n for n, c, _m in cand if c in MOE_COLLECTIVE_CLASSES]
@@ -543,7 +587,7 @@ class TP2CaptureWorkerExtension:
         rank = int(facts["tp"]["rank"])
         runner = self.model_runner
         model = runner.get_model()
-        post_load = register_post_load_tensors(model, list((post_load_tensors or {}).get(str(rank)) or []))
+        post_load = register_post_load_tensors(model, _listed_for(post_load_tensors, rank))
         eng = SimpleNamespace(llm=_LLMShim(self), runner=runner, model=model, cp=cp, kwargs=engine_kwargs, env_flags={}, build_s=0.0, case=case)
         args = SimpleNamespace(arena_mb=arena_mb, chunk=None, hash_threads=None, profile_hooks=False, commit_scheme=commit_scheme)
         com = make_committer(kind, eng, args, f"{run_id}/rank{rank}")
@@ -562,7 +606,7 @@ class TP2CaptureWorkerExtension:
         try:
             from verity_vllm.acquire.sources.moe_source import MoeBlockSource
 
-            msrc = MoeBlockSource(com, model, world=int((facts.get("tp") or {}).get("world_size") or 1), manifest=man)
+            msrc = MoeBlockSource(com, model, world=int(_block(facts, "tp").get("world_size") or 1), manifest=man)
             if msrc.layers:
                 com.attach_source(msrc)
                 res["moe_source"] = {"layers": len(msrc.layers), "tensors_per_layer": msrc.stats.get("tensors_per_layer"),
@@ -622,7 +666,7 @@ class TP2CaptureWorkerExtension:
         # Program's shard map prescribes is wrong.  Applied BEFORE register_weights (the rank commits what it serves); the per-rank pin,
         # composed for THIS rank, must FAIL naming the parameter.  A replicated parameter cannot be mis-served this way (refused by name).
         res["serve_shard_from"] = None
-        ssf = list((serve_shard_from or {}).get(str(rank)) or []) if isinstance(serve_shard_from, dict) else []
+        ssf = _listed_for(serve_shard_from, rank) if isinstance(serve_shard_from, dict) else []
         if ssf:
             if not (isinstance(weights_pin, dict) and weights_pin.get("checkpoint_dir")):
                 raise RuntimeError(f"rank {rank}: --serve-shard-from needs --checkpoint-dir (the other rank's shard is composed from the pinned checkpoint)")
@@ -648,14 +692,14 @@ class TP2CaptureWorkerExtension:
                     raise RuntimeError(f"rank {rank}: {pname} is replicated on every rank ({note.get('shard')}) -- no other rank's shard to serve")
                 own, _ = WR.compose(pname, list(p.shape), bits, ck, world=world_, rank=rank)
                 with torch.no_grad():
-                    before = hashlib.sha256(p.data.detach().contiguous().cpu().view(torch.uint8).numpy().tobytes()).hexdigest()
+                    sha_before = hashlib.sha256(p.data.detach().contiguous().cpu().view(torch.uint8).numpy().tobytes()).hexdigest()
                     t = torch.from_numpy(_np.ascontiguousarray(arr)).view(p.dtype).reshape(p.shape)
                     p.data.copy_(t.to(p.device))
-                    after = hashlib.sha256(p.data.detach().contiguous().cpu().view(torch.uint8).numpy().tobytes()).hexdigest()
+                    sha_after = hashlib.sha256(p.data.detach().contiguous().cpu().view(torch.uint8).numpy().tobytes()).hexdigest()
                 own_sha = hashlib.sha256(_np.ascontiguousarray(own).tobytes()).hexdigest()
                 applied.append({"rank": rank, "param": pname, "from_rank": frm, "shard_rule": note.get("shard"), "sources": note.get("sources"),
-                                "served_before_sha256": before, "served_after_sha256": after, "own_shard_of_record_sha256": own_sha,
-                                "own_equals_before": own_sha == before, "after_equals_before": after == before})
+                                "served_before_sha256": sha_before, "served_after_sha256": sha_after, "own_shard_of_record_sha256": own_sha,
+                                "own_equals_before": own_sha == sha_before, "after_equals_before": sha_after == sha_before})
             res["serve_shard_from"] = applied
         # the weights the rank registers, pins and replays: its MXFP4 Marlin experts' fields as loaded (`acquire.as_loaded`, bound by the TP
         # driver with the checkpoint of record), every other tensor as served
@@ -671,7 +715,7 @@ class TP2CaptureWorkerExtension:
         if isinstance(weights_pin, dict) and weights_pin.get("checkpoint_dir"):
             try:
                 from verity_vllm.check import weights_of_record as WR
-                pdir = (weights_pin.get("program_dirs") or {}).get(str(rank))
+                pdir = _block(weights_pin, "program_dirs").get(str(rank))
                 if not pdir:
                     raise RuntimeError(f"rank {rank}: no rank Program dir for the weights of record")
                 if not os.path.exists(os.path.join(str(pdir), "instances.json.gz")):
@@ -683,7 +727,7 @@ class TP2CaptureWorkerExtension:
                     pdir = subs[0]
                 rec = WR.build_record(str(pdir), str(weights_pin["checkpoint_dir"]), checkpoints_manifest=weights_pin.get("checkpoints_manifest"),
                                       model=weights_pin.get("model"), shard_pin=weights_pin.get("shard_pin"))
-                rtp = (rec.get("tp") or {})
+                rtp = _block(rec, "tp")
                 world_ = int(facts["tp"]["world_size"])
                 if int(rtp.get("world") or 1) != world_ or int(rtp.get("rank") or 0) != int(rank):
                     raise RuntimeError(f"rank {rank}: weights of record built from a Program of tp={rtp}, not this rank's (world {world_}, rank {rank})")
@@ -702,7 +746,7 @@ class TP2CaptureWorkerExtension:
                     chk["result"] = False
                     chk["why"] = (f"rank {rank}: checkpoint shards NOT pinned by manifests/checkpoints.json (all_shards_pinned={chk.get('all_shards_pinned')!r}): "
                                   f"the record is over the files at the checkpoint dir, not the checkpoint of record (W1); " + str(chk.get("why") or ""))[:400]
-                elif isinstance(chk["w2_program_of_record"]["rank_program_digest_of_record"], str) and os.path.exists(os.path.join(str((weights_pin.get("program_dirs") or {}).get(str(rank))), "instances.json.gz")) \
+                elif isinstance(chk["w2_program_of_record"]["rank_program_digest_of_record"], str) and os.path.exists(os.path.join(str(_block(weights_pin, "program_dirs").get(str(rank))), "instances.json.gz")) \
                         and str(rec.get("program_digest") or "") not in ("", chk["w2_program_of_record"]["rank_program_digest_of_record"]):
                     chk["result_before_w2"] = chk.get("result")
                     chk["result"] = False
@@ -743,7 +787,7 @@ class TP2CaptureWorkerExtension:
         if hasattr(com, "identity_check"):
             try:
                 from verity_vllm.acquire import fa2_plane_classes as FP
-                _pdir = ((replay or {}).get("programs") or {}).get(str(rank)) or ((weights_pin or {}).get("program_dirs") or {}).get(str(rank))
+                _pdir = _block(replay or {}, "programs").get(str(rank)) or _block(weights_pin or {}, "program_dirs").get(str(rank))
                 _impls, _impls_path = FP.attention_impls_of_record(program_dir=_pdir, programs_root=_pdir) if _pdir else (None, None)
                 _decls = FP.declarations_from_attention_impls(_impls) if _impls else []
                 if _decls:
@@ -769,7 +813,7 @@ class TP2CaptureWorkerExtension:
             # this rank's Program digest must be the manifest's digest for this rank (a manifest of another Program = wrong Program)
             try:
                 man = json.loads(Path(required_manifest).read_text())
-                pdr = (man.get("program_digest_per_rank") or {}).get(str(rank))
+                pdr = _block(man, "program_digest_per_rank").get(str(rank))
                 if pdr is None and isinstance(man.get("program_digest"), str):
                     pdr = man["program_digest"]
                 if not program_digest:
@@ -777,7 +821,7 @@ class TP2CaptureWorkerExtension:
                     self._tp2_commit["program_digest"] = pdr
                 res["required_manifest"] = {"path": required_manifest, "manifest_digest": man.get("manifest_digest"), "complete": man.get("complete"),
                                             "program_digest_for_rank": pdr, "program_digest_matches": (pdr == program_digest),
-                                            "identities": (man.get("populations") or {}).get("identities"), "ranks": man.get("ranks")}
+                                            "identities": _block(man, "populations").get("identities"), "ranks": man.get("ranks")}
                 self._tp2_commit["manifest_doc"] = man
             except Exception as e:  # noqa: BLE001
                 res["required_manifest"] = {"path": required_manifest, "error": repr(e)[:300]}
@@ -836,17 +880,19 @@ class TP2CaptureWorkerExtension:
                 sampled_replay = self._deferred_replay(rc, defer) if defer else self._tp2_sampled_replay(rc)
             if slot:
                 sampled_replay["host_slot"] = slot
+        errors = rc.extra.get("errors")
+        errors = errors if errors else []
         return _jsonable({"rank": st["rank"], "run_root": rc.run_root.hex(), "binding": binding, "attribution": attribution, "match_oracle": match_oracle,
                           "sampled_replay": sampled_replay, "weights_pin": st.get("weights_pin"),
                           "steps": len(rc.steps), "leaves_per_step": [s.n_leaves for s in rc.steps],
                           "leaves": sum(s.n_leaves for s in rc.steps), "bytes_bound": sum(s.n_bytes for s in rc.steps), "tensors": sum(s.n_tensors for s in rc.steps),
                           "root_ready_delay_s": rc.root_ready_delay_s, "finalize_s": rc.t_finalize_s, "spans_total_s": rc.spans["total_s"],
                           "expected_tensors": rc.extra.get("expected_tensors"), "committed_tensors": rc.extra.get("committed_tensors"),
-                          "errors_n": rc.extra.get("errors_n", len(rc.extra.get("errors") or [])), "errors": (rc.extra.get("errors") or [])[:10],
+                          "errors_n": rc.extra.get("errors_n", len(errors)), "errors": errors[:10],
                           "collector_failure": rc.extra.get("collector_failure"), "identity_check": rc.extra.get("identity_check"), "expected_manifest": com.expected_manifest() if hasattr(com, "expected_manifest") else None,
                           "classes": class_coverage(d), "declaration": d, "weight_registration": rc.weight_registration,
                           "persistent_bytes": rc.persistent_bytes, "temporary_bytes_peak": rc.temporary_bytes_peak, "bounded_staging": rc.extra.get("bounded_staging"),
-                          "plans_cached": (rc.extra.get("native_collect") or {}).get("plans_cached"), "pinned_pool_bytes": rc.extra.get("pinned_pool_bytes"),
+                          "plans_cached": _collector_counters(rc).get("plans_cached"), "pinned_pool_bytes": rc.extra.get("pinned_pool_bytes"),
                           "timing": _commit_timing(com, rc)})
 
     def _tp2_logical_request(self, rid: str, step: int | None = None) -> str:
@@ -855,7 +901,8 @@ class TP2CaptureWorkerExtension:
         identity of that request goes UNBOUND and coverage FAILS for it (fail-closed; this was the r15-tp06 B8 first-attempt FAIL:
         96330/96493 unbound per rank with the raw `<uuid>-<hex>` ids in the map)."""
         st = self._tp2_commit
-        order = dict(st.get("request_ids") or {}) or {str(r): f"r{i}" for i, r in enumerate(st.get("request_order") or [])}
+        ids, listed = st.get("request_ids"), st.get("request_order")
+        order = dict(ids) if ids else {str(r): f"r{i}" for i, r in enumerate(listed if listed else [])}
         rid = str(rid)
         if rid in order:
             lg = order[rid]
@@ -881,8 +928,8 @@ class TP2CaptureWorkerExtension:
             return None
         import numpy as np
 
-        from verity_vllm.check import oracle_compare as OC
         from verity_vllm.acquire.sources.partial_source import _committed
+        from verity_vllm.check import oracle_compare as OC
 
         com, rank = st["com"], int(st["rank"])
         rd = OC.OpenedReader(com, rc)
@@ -890,7 +937,7 @@ class TP2CaptureWorkerExtension:
         layouts = getattr(com, "_layouts", None) or {}
         seen: dict[str, int] = {}
         checked, steps_checked = 0, 0
-        mismatches: list[dict] = []
+        mismatches: list[dict | None] = []
         missing: list[dict] = []
         for s in sorted(int(k) for k in layouts):
             metas = layouts[s] if s in layouts else layouts[str(s)]
@@ -932,14 +979,14 @@ class TP2CaptureWorkerExtension:
                 checked += 1
             steps_checked += 1
         n_mis = len(mismatches)
-        mismatches = [x for x in mismatches if x is not None]
+        named = [x for x in mismatches if x is not None]
         lens = {lg: {"sampled_rows_committed": seen.get(lg, 0), "match_record_generated": len(mt[lg])} for lg in sorted(mt)}
         len_ok = all(v["sampled_rows_committed"] == v["match_record_generated"] for v in lens.values())
         ok = n_mis == 0 and not missing and len_ok and checked > 0 and steps_checked > 0
         why = None
         if not ok:
             if n_mis:
-                f = mismatches[0]
+                f = named[0]
                 why = (f"rank {rank}: step {f.get('step')}: {f['why']}" if "why" in f else
                        f"rank {rank}: {n_mis} of {checked} committed sampled rows disagree with the Match record (first: step {f.get('step')} row {f.get('row')} "
                        f"labelled {f.get('request')} k={f.get('k')}: committed {f.get('committed')} != match {f.get('match_record')})")
@@ -951,7 +998,7 @@ class TP2CaptureWorkerExtension:
                 why = f"rank {rank}: nothing checked"
         return {"ok": ok, "rank": rank, "reference": "tp2_match capture arm tokens.json (per request generated ids; independent instrumented run)",
                 "identity": "runner.sampler/sampled_token_ids row j of step s -> request of row j in this rank's request->rows map (step_rows) -> k-th sampled token of that request",
-                "steps_checked": steps_checked, "rows_checked": checked, "requests": lens, "mismatches_n": n_mis, "mismatches": mismatches[:12],
+                "steps_checked": steps_checked, "rows_checked": checked, "requests": lens, "mismatches_n": n_mis, "mismatches": named[:12],
                 "missing_steps": missing[:8], "swap_requests_negative": st.get("swap_requests"), "value_source": rd.record(), "why": why}
 
     def _tp2_binding(self, rc: Any) -> dict[str, Any] | None:
@@ -978,7 +1025,7 @@ class TP2CaptureWorkerExtension:
             return {"skipped": f"B={n_req} > 1 but the rank's collector recorded no step_rows ({getattr(com, 'step_rows_why', None)}) -- no coverage verdict"}
         try:
             requests = [f"r{i}" for i in range(n_req)]
-            arrivals = {f"r{i}": int((st.get("arrivals") or {}).get(f"r{i}", 0)) for i in range(n_req)}
+            arrivals = _per_request(st.get("arrivals"), n_req)
             man_doc = st.get("manifest_doc") if st.get("required_manifest") else None
             binder = Binder.of_manifest(man_doc, rank=rank, ports=source_ports(com.sources), arrivals=arrivals) if man_doc else None
             bmap = bd.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, rank=rank, weight_registration=rc.weight_registration, request_rows=request_rows, binder=binder,
@@ -994,14 +1041,14 @@ class TP2CaptureWorkerExtension:
             if tps is not None:
                 by_path = {d["op_path"]: d for d in struct["modules"]}
                 for site, cls in tps.sites:
-                    mem = f"shard_rank{rank}" if cls == "LogitsProcessor" else f"part_rank{rank}"
+                    mem = f"shard_rank{rank}" if cls == LC.LOGITS else f"part_rank{rank}"
                     if site in by_path:
                         by_path[site]["members"] = list(by_path[site]["members"]) + [mem]
                     else:
                         struct["modules"].append({"op_path": site, "class": cls, "invocations": 1, "members": [mem]})
                     tp_members += 1
                 struct["tp_partial_sites"] = len(tps.sites)
-            caps = {f"r{i}": int((st.get("caps") or {}).get(f"r{i}", 0)) for i in range(n_req)}
+            caps = _per_request(st.get("caps"), n_req)
             horizon = max(arrivals[k] + caps[k] for k in caps) if any(caps.values()) else len(rc.steps)
             wl = {"program_digest": pd, "requests": requests, "steps": horizon, "ranks": [rank],
                   "request_steps": {k: list(range(arrivals[k], arrivals[k] + caps[k])) for k in caps} if any(caps.values()) else None}
@@ -1016,7 +1063,8 @@ class TP2CaptureWorkerExtension:
                 pop_all, man_hdr = bd.load_required_manifest(st["required_manifest"], pd, requests=requests, steps=horizon, ranks=[rank], arrivals=arrivals)
                 pop = [i for i in pop_all if int(i[7]) == rank]          # identity = (pd, rid, step, inv, op, member, (lo, hi), rank)
                 man_hdr["rows_for_rank"], man_hdr["rows_all_ranks"] = len(pop), len(pop_all)
-                man_hdr["program_digest_for_rank"] = ((st.get("manifest_doc") or {}).get("program_digest_per_rank") or {}).get(str(rank))
+                per_rank = man_doc.get("program_digest_per_rank") if man_doc else None
+                man_hdr["program_digest_for_rank"] = per_rank.get(str(rank)) if per_rank else None
                 source = "required-manifest (Program(rank) x canonical query, rows with rank=r)"
                 if not pop:
                     return {"error": f"required manifest has no rows for rank {rank} ({man_hdr.get('path')})", "rank": rank}
@@ -1029,13 +1077,18 @@ class TP2CaptureWorkerExtension:
             # to WHICH block a request was bound to; this is what makes an omitted / relabelled / duplicated request fail named on a rank
             comp = bd.composition_check(man_hdr, bmap) if (man_hdr is not None and hasattr(bd, "composition_check")) else None
             if comp is not None:
-                cov["composition"] = {k: v for k, v in comp.items() if k != "problems"} | {"problems": (comp.get("problems") or [])[:3]}
+                stated = {k: v for k, v in comp.items() if k != "problems"}
+                problems = comp.get("problems")
+                cov["composition"] = stated | {"problems": problems[:3] if problems else []}
             if man_hdr is not None and man_hdr.get("complete") is False:            # unmodelled Program families -> not a population
-                cov = dict(cov, ok=False, error="manifest incomplete: unmodelled Program families " + "; ".join(f"{k} x{v}" for k, v in sorted((man_hdr.get("unmodelled") or {}).items())))
+                unmodelled = man_hdr.get("unmodelled")
+                families = "; ".join(f"{k} x{v}" for k, v in sorted(unmodelled.items())) if unmodelled else ""
+                cov = dict(cov, ok=False, error="manifest incomplete: unmodelled Program families " + families)
             elif man_hdr is not None and man_hdr.get("program_digest_for_rank") not in (None, pd):
                 cov = dict(cov, ok=False, error=f"manifest Program digest for rank {rank} {str(man_hdr.get('program_digest_for_rank'))[:16]} != this rank's Program {pd[:16]}")
             elif comp is not None and not comp.get("ok"):
-                cov = dict(cov, ok=False, missing=list(cov.get("missing") or []), error=f"rank {rank}: " + str(comp.get("error") or "composition check failed"))
+                missing = cov.get("missing")
+                cov = dict(cov, ok=False, missing=list(missing) if missing else [], error=f"rank {rank}: " + str(comp.get("error") or "composition check failed"))
             ctx_ok, ctx_why = bd.map_context_check(bmap, rc) if hasattr(bd, "map_context_check") else (None, "n/a")
             st["bmap"] = bmap
             st["pop"] = pop
@@ -1080,10 +1133,10 @@ class TP2CaptureWorkerExtension:
         """THIS rank's picks for the cross-rank collective-output pass, from the COMMITTED bytes (`pipeline.tp.xrank_dump`),
         each all-reduce on a captured route under the route the engine's all-reduce switches take on this GPU."""
         import torch
+        from verity.definitions.registry.tp_allreduce import device_of, settings_of
 
         from verity_vllm.engine import env as engine_env
         from verity_vllm.pipeline.tp import xrank_dump as XD
-        from verity.definitions.registry.tp_allreduce import device_of, settings_of
 
         settings = settings_of(self.vllm_config.parallel_config.disable_custom_all_reduce, engine_env.snapshot())
         p = torch.cuda.get_device_properties(torch.cuda.current_device())
@@ -1219,8 +1272,10 @@ class TP2CaptureWorkerExtension:
             res["t6_4"] = self._t6_4_check(com, rc)
             # the bind-time-clone count for the SAME /out members: committed /out != TPPartialSource's _bytes(y) at bind
             # (compare()'s by_member['out']: tensors - tap_equal); any nonzero = late read whatever the next-norm/0 comparison says
-            tpp = res.get("tp_partials") or {}
-            bm = (tpp.get("by_member") or {}).get("out") or {}
+            tpp = res.get("tp_partials")
+            by_member = tpp.get("by_member") if tpp else None    # a compare that did not run, raised or failed early counts no member
+            out = by_member.get("out") if by_member else None
+            bm = out if out else {}                              # no `/out` compared
             res["t6_4"]["out_tensors_vs_clone"] = int(bm.get("tensors") or 0)
             res["t6_4"]["clone_mismatches"] = int(bm.get("tensors") or 0) - int(bm.get("tap_equal") or 0) if bm else None
             res["t6_4"]["clone_rule"] = "committed <L>.mlp.experts/out == TPPartialSource bind-time clone _bytes(y) (tp_partials.by_member.out); None = no /out compared"
@@ -1229,7 +1284,7 @@ class TP2CaptureWorkerExtension:
             elif res["t6_4"].get("result") is None and (res["t6_4"]["clone_mismatches"] or 0) > 0:
                 res["t6_4"]["result"] = False           # not-applicable by the pair rule, but a committed /out differs from its bind-time clone
         except Exception as e:  # noqa: BLE001
-            res["t6_4"] = {"schema": "verity/commit-integ/t6_4-check/v1", "result": False, "error": repr(e)[:300]}
+            res["t6_4"] = {"schema": LATE_READ_CHECK_SCHEMA, "result": False, "error": repr(e)[:300]}
         if vc is not None:
             vc.uninstall()
         if tps is not None:
@@ -1287,7 +1342,7 @@ class TP2CaptureWorkerExtension:
         evs = kernel_trace.load_trace(tr)
         ks = kernel_trace.kernels_of_trace_events(evs)
         summary = kernel_trace.summarize_kernels(ks)
-        cpu_ops = {}
+        cpu_ops: dict[str, int] = {}
         for e in evs:
             if e.get("ph") == "X" and e.get("cat") == "cpu_op":
                 cpu_ops[e.get("name", "")] = cpu_ops.get(e.get("name", ""), 0) + 1
@@ -1295,7 +1350,7 @@ class TP2CaptureWorkerExtension:
             with open(tr, "rb") as fi, gzip.open(str(tr) + ".gz", "wb") as fo:
                 shutil.copyfileobj(fi, fo)
         tr.unlink()
-        doc = {"schema": "verity-capture/census-rank/v0", "rank": rank, "pid": os.getpid(), "n_kernels": len(ks),
+        doc = {"schema": CENSUS_RANK_SCHEMA, "rank": rank, "pid": os.getpid(), "n_kernels": len(ks),
                "device_us": round(sum(float(e.get("dur", 0.0) or 0.0) for e in ks), 1), "kernels": summary,
                "cpu_ops": dict(sorted(cpu_ops.items(), key=lambda kv: -kv[1])[:200]),
                "method": "one torch.profiler.profile(activities=[CPU, CUDA]) session in this rank's process over the whole observed-free "

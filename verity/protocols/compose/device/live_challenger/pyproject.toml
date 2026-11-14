@@ -1,0 +1,34 @@
+# The proof system's challenger on its auditor host: `serve.py` over `verity.protocols.proofs.spot.device.remote`, which
+# `auditor.py` runs there as the auditor user, one session a window under its signed ledger (`run.sh`: a development
+# session elsewhere). Not a package: the suite runs serve.py as a process over loopback with a test key, the Lean verifier's
+# coins stubbed (`tests/stub_serve.py`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_auditor_certifier.py",
+    "tests/test_auditor_load.py",
+    "tests/test_auditor_rt4.py",
+    "tests/test_auditor_warden.py",
+    "tests/test_coin_link.py",
+    "tests/test_serve.py",
+]
+# The load's verbs read and write the store with `benchmarks/network_traces/load_relay.py`, which commits with the
+# certifier's transfer rows and PoUS's P2 scheme. The rehearsal unit's RuntimeMaxSec bounds the gate's --minutes.
+inputs = ["benchmarks/network_traces/load_relay.py", "verity/protocols/accounting/certifier", "verity/protocols/accounting/pous",
+          "verity/channel.py",
+          "tools/research/src/research/pods/nebius/challenger/vy-certifier@.service",
+          "verity/__init__.py", "verity/errors.py", 
+          "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/proofs/spot/verifier/__init__.py",
+          "verity/claims/__init__.py",
+          "verity/protocols/proofs/spot/device/challenger.py", "verity/protocols/proofs/spot/device/coins.py",
+          "verity/protocols/proofs/spot/device/remote.py",
+          "verity/protocols/proofs/spot/verifier/one_stage", "verity/circuits",
+          "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness", "verity/protocols/accounting/pouw/verifier",
+          "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py",
+          "verity/definitions/__init__.py", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/device/__init__.py",
+          "verity/protocols/accounting/pouw/prover",
+          "verity/protocols/compose/__init__.py", "verity/protocols/compose/device/__init__.py",
+          "verity/circuits/ops/__init__.py", "verity/circuits/ops/fp32.py", "verity/circuits/ops/gemm.py", "verity/circuits/ops/ncp.py", "verity/circuits/ops/prims.py", "verity/circuits/ops/prims_evidence.json", "verity/circuits/ops/scalar.py", "verity/circuits/ops/sqrt.py", "verity/circuits/silicon/__init__.py", "verity/circuits/silicon/cast.py", "verity/circuits/silicon/errors.py", "verity/circuits/silicon/fp.py", "verity/circuits/silicon/fp32.py", "verity/circuits/silicon/fp4.py", "verity/circuits/silicon/instructions.py", "verity/circuits/silicon/instructions_evidence.json", "verity/circuits/silicon/integer.py", "verity/circuits/silicon/integer_evidence.json", "verity/circuits/silicon/models.py", "verity/circuits/silicon/models_evidence.json", "verity/circuits/silicon/term.py", "verity/circuits/silicon/total.py", "verity/circuits/silicon/total_fp8.py", "verity/circuits/silicon/total_fp8_evidence.json", "verity/circuits/ops/boolean/__init__.py", "verity/circuits/ops/boolean/cast.py", "verity/circuits/ops/boolean/elementwise.py", "verity/circuits/ops/boolean/gemm.py", "verity/circuits/ops/boolean/int8.py", "verity/circuits/ops/boolean/scalar.py", "verity/circuits/ops/boolean/softmax.py", "verity/circuits/ops/boolean/sqrt.py"]

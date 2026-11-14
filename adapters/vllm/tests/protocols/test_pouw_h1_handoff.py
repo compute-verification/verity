@@ -6,29 +6,47 @@ from __future__ import annotations
 import json
 import os
 import pickle
+import re
 import shlex
 import socket
 import subprocess
 import sys
+from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity_vllm import protocols as PO  # noqa: E402
-from verity_vllm.engine import int8_ops  # noqa: E402
-from verity_vllm.protocols import pouw  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import challenger as PHC  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import handoff as HO  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import kept as KP  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import prover as PV  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import served as SV  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import window as PHW  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
-from tests.protocols import challenger_host as CH  # noqa: E402
-from tests.protocols.test_pouw_h1 import K, Int8Arm, Linear, Model, _entry, _gate, _host, _remote, _so  # noqa: E402
+from tests.protocols import challenger_host as CH
+from tests.protocols import pouw_h1_gpu as GPU
+from tests.protocols.test_pouw_h1 import (
+    Int8Arm,
+    K,
+    Linear,
+    Model,
+    _entry,
+    _gate,
+    _host,
+    _remote,
+    _so,
+)
+from verity_vllm import protocols as PO
+from verity_vllm.engine import int8_ops
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity_vllm.protocols.pouw.h1 import handoff as HO
+from verity_vllm.protocols.pouw.h1 import kept as KP
+from verity_vllm.protocols.pouw.h1 import prover as PV
+from verity_vllm.protocols.pouw.h1 import served as SV
+from verity_vllm.protocols.pouw.h1 import window as PHW
 
 
 @pytest.fixture(autouse=True)
@@ -131,7 +149,6 @@ def test_the_close_stage_completes_the_serving_stages_record(tmp_path, monkeypat
     measured and released on the challenge phase's stream, its sample's challenge phase opened through ``--gate``, and the
     record (``pouw_h1_gpu.json``) completed with its commitment, the challenge phase closed and each call's A table under
     its round's root."""
-    from tests.protocols import pouw_h1_gpu as GPU
     host, out = _host(tmp_path, monkeypatch), tmp_path / "out"
     run = _served(_remote(transcript_dir=str(out), served=SV.Served(window=bytes(64))), n=64, arm=ZyArm)
     HO.suspend(run, tmp_path / "state")
@@ -156,12 +173,44 @@ def test_the_close_stage_completes_the_serving_stages_record(tmp_path, monkeypat
 def test_a_gate_verb_reaches_the_gate_over_ssh_word_for_word():
     """The live gate's forced command splits ssh's remote command line with ``shlex.split``: a reserve's ``--families``
     (JSON, with spaces) arrives as one word, and a local gate gets the words as they are."""
-    from tests.protocols import pouw_h1_gpu as GPU
     ssh = ["ssh", "-i", "k", "-o", "BatchMode=yes", "research@host"]
     verb = ["reserve", "--peer", "vy-nebius-2", "--families", PHC.families(18)]
     got = GPU.gate_argv(ssh, verb)
     assert got[:len(ssh)] == ssh and shlex.split(" ".join(got[len(ssh):])) == verb
     assert GPU.gate_argv(["python", "-I", "local_gate.py", "d"], verb) == ["python", "-I", "local_gate.py", "d", *verb]
+
+
+def test_the_harness_gate_runs_each_verb_as_its_command_and_reads_what_the_gate_answers(monkeypatch):
+    """`pouw_h1_gpu.gate_command` over a stand-in command. An open whose answer has no commitment yet reads it from the
+    challenge phase's status, and a withheld open must say withheld and signed and carry none. A reserve names the scheme
+    and the families of its rounds, withheld when it has no rounds, and raises on a refusal or on a withheld one the gate
+    reserved plain. ``ended`` is the status that has its end entry."""
+    answers = {"open": {"session": "s0", "commitment": None}, "reserve": {"session": "s1"},
+               "status": {"commitment": "c0", "open": {}, "end": {"rc": 0}}}
+    ran: list[list[str]] = []
+
+    def run(argv, **_kw):
+        ran.append(argv)
+        return SimpleNamespace(returncode=0, stdout=json.dumps(answers[argv[1]]), stderr="")
+
+    monkeypatch.setattr(GPU.subprocess, "run", run)
+    gate = GPU.gate_command(["gate"])
+    assert gate.argv == ["gate"]
+    assert gate("s0", "aa") == {"session": "s0", "commitment": "c0"}
+    assert ran == [["gate", "open", "--session", "s0", "--root", "aa"], ["gate", "status", "s0"]]
+    assert gate.ended("s0") == answers["status"]
+    with pytest.raises(ValueError, match=re.escape(f"the gate's open of s0: {PHW.WITHHELD_OPEN}")):
+        gate("s0", "aa", withhold=True)
+    answers["open"] = {"session": "s0", "withheld": True, "signed": True}
+    assert gate("s0", "aa", withhold=True) == answers["open"]
+    assert gate.reserve("peer", 3) == {"session": "s1"}
+    assert ran[-1] == ["gate", "reserve", "--peer", "peer", "--scheme", PHC.SCHEME, "--families", PHC.families(3)]
+    with pytest.raises(ValueError, match=re.escape(f"s1 plain: {PHW.WITHHELD_OPEN}")):
+        gate.reserve("peer", None)
+    assert ran[-1][-2] != PHC.families(3) and ran[-1][-1] == "--withhold"
+    answers["reserve"] = {"refused": "no slot"}
+    with pytest.raises(ValueError, match=r"the gate refused the reserve \(exit 0\)"):
+        gate.reserve("peer", 3)
 
 
 def test_the_stream_outlives_the_process_that_handed_it_over(tmp_path):
@@ -182,11 +231,14 @@ def test_the_stream_outlives_the_process_that_handed_it_over(tmp_path):
         assert there.recv(7) == b"round 2"
 
 
+@pytest.mark.slow
 def test_every_served_row_of_a_saved_window_rebuilds_from_the_provers_directory(tmp_path, monkeypatch):
     """The served trees a window saves keep no rows, and `pouw_h1_kept.kept_row` rebuilds every row of each
     of its step A tables, z tables and its ``b/<K>`` from the prover's directory and the saved state, each committing to
-    its tree's ``b || c`` under the tree's own salt; a kept A code changed afterwards rebuilds a row that isn't."""
-    from verity.protocols.spot.verifier.one_stage import registered as G
+    its tree's ``b || c`` under the tree's own salt; a kept A code changed afterwards rebuilds a row that isn't.
+
+    Slow, about two minutes on a check node: it holds every leaf of every tree, which a sample of rows would not, so a
+    rebuild that is right for a tree's first rows and wrong past a call's or a step's boundary is caught."""
     _host(tmp_path, monkeypatch)
     prover = tmp_path / "prover"
     run = _served(_remote(transcript_dir=str(tmp_path / "w"), served=SV.Served(window=bytes(64), prover=str(prover))),

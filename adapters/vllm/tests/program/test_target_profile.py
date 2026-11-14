@@ -8,8 +8,19 @@ import json
 
 import pytest
 
-from verity_vllm.program.frontend.target_profile import (ApplicabilityError, ArtifactIdentity, TargetProfile, canonical_bytes, check_reuse, load_artifact,
-                                               parse_target_arg, profile_mismatches, reuse_mismatches)
+from verity_vllm.program.frontend.target_profile import (
+    ApplicabilityError,
+    ArtifactIdentity,
+    TargetProfile,
+    _json_default,
+    canonical_bytes,
+    check_reuse,
+    load_artifact,
+    moe_experts_class_of,
+    parse_target_arg,
+    profile_mismatches,
+    reuse_mismatches,
+)
 
 B0_DIGEST = "59b35d80faf29438d21a0ea1c96c877ec69e2f21174f11b835ac1ef04c1ed496"  # B0 request 8/4 (identical on every build host)
 CV = {"schema": "cb-a/aot-artifact/v1", "rules": [{"id": "TritonGemm[vllm-bi]", "version": 1}], "sources_sha256": "ab" * 32}
@@ -32,6 +43,46 @@ def test_default_profile_is_the_admitted_sm89_record_and_canonical():
     assert p.capability_str == "8.9" and p.sm_arch == "sm_89"
     assert p.canonical() == canonical_bytes(p.to_json()) and TargetProfile.from_json(json.loads(p.canonical())) == p
     assert TargetProfile(compute_capability=[8, 9]) == p  # list vs tuple canonicalise to the same profile
+
+
+def test_canonical_bytes_are_compact_sorted_ascii_json_with_a_set_as_its_sorted_list():
+    """The bytes an artifact's identity hashes: a tuple is a list and a set its sorted list at any depth, keys are sorted and
+    kept as JSON writes them, and what JSON cannot hold is a TypeError."""
+    obj = {"b": (1, [2, {"z": frozenset({3, 1, 2})}]), "a": {"y", "x"}, 3: None, "é": 1.5, "t": ((0, 5), {(1, 2), (0, 7)})}
+    plain = {"b": [1, [2, {"z": [1, 2, 3]}]], "a": ["x", "y"], "3": None, "é": 1.5, "t": [[0, 5], [[0, 7], [1, 2]]]}
+    with pytest.raises(TypeError):
+        canonical_bytes(obj)  # an int key beside str keys has no order
+    del obj[3], plain["3"]
+    want = b'{"a":["x","y"],"b":[1,[2,{"z":[1,2,3]}]],"t":[[0,5],[[0,7],[1,2]]],"\\u00e9":1.5}'
+    assert canonical_bytes(obj) == canonical_bytes(plain) == want
+    assert canonical_bytes({2: "b", 10: "a"}) == b'{"2":"b","10":"a"}'  # sorted as the ints they are
+    for bad in (object(), {"a": object()}, [{1, "a"}], {(1, 2): 3}):
+        with pytest.raises(TypeError):
+            canonical_bytes(bad)
+
+
+def test_canonical_bytes_take_and_refuse_what_json_does():
+    """json's encoder walks the value, with no Python frame a level and its own watch for a value that holds itself: a
+    value nested 2,000 deep, twice the frames an interpreter allows by default, has its bytes, one that holds itself is a
+    ValueError, and one JSON cannot hold is a TypeError that names its type."""
+    deep = 2000  # a number, not the interpreter's limit now: code this process ran earlier may have raised that
+    in_lists: object = 0
+    in_dicts: object = 0
+    for _ in range(deep):
+        in_lists, in_dicts = [in_lists], {"k": in_dicts}
+    assert canonical_bytes(in_lists) == b"[" * deep + b"0" + b"]" * deep
+    assert canonical_bytes(in_dicts) == b'{"k":' * deep + b"0" + b"}" * deep
+    ring: list = []
+    ring.append(ring)
+    knot: dict = {"k": []}
+    knot["k"].append(knot)
+    for held in (ring, knot, {"a": {"b"}, "z": ring}):
+        with pytest.raises(ValueError, match="Circular reference detected"):
+            canonical_bytes(held)
+    for bad, name in ((object(), "object"), ({"a": b"x"}, "bytes"), ([1, {2}, range(3)], "range")):
+        with pytest.raises(TypeError, match=f"not canonicalisable: {name}"):
+            canonical_bytes(bad)
+    assert _json_default((1, 2)) == [1, 2]  # json writes a tuple itself and never hands one over
 
 
 def test_profile_rejects_unknown_and_invalid_fields():
@@ -132,6 +183,27 @@ def test_parse_target_arg_overrides_the_default():
     assert TargetProfile.default().env() == {"VLLM_BATCH_INVARIANT": "1"} and TargetProfile(batch_invariant=False).env() == {"VLLM_BATCH_INVARIANT": "0"}
 
 
+L40S = {"multi_processor_count": 142, "compute_capability": "8.9"}
+NO_BACKENDS = object()
+
+
+@pytest.mark.parametrize("backends", [NO_BACKENDS, None, {}, [], 0, ""], ids=["left out", "null", "no backend", "an empty list", "zero", "an empty string"])
+def test_a_run_profile_whose_backends_are_left_out_or_empty_is_its_device_document(backends):
+    # a record that reports no attention backend forces no FA version: the target is the device's, with the selector's version
+    doc = {"gpu": L40S} if backends is NO_BACKENDS else {"gpu": L40S, "backends": backends}
+    assert TargetProfile.from_run_profile(doc) == TargetProfile.from_gpu_document(L40S)
+
+
+def test_a_run_profile_takes_a_reported_fa_version_only_where_it_is_not_the_selectors():
+    device = TargetProfile.from_gpu_document(L40S)
+    assert device.flash_attn_version is None and device.effective_flash_attn_version() == 2
+    assert TargetProfile.from_run_profile({"gpu": L40S, "backends": {"attention_backend": "FLASH_ATTN"}}) == device
+    assert TargetProfile.from_run_profile({"gpu": L40S, "backends": {"attention_flash_attn_version": 2}}) == device
+    for reported in (3, "3"):
+        forced = TargetProfile.from_run_profile({"gpu": L40S, "backends": {"attention_flash_attn_version": reported}})
+        assert forced == device.with_overrides(flash_attn_version=3)
+
+
 def test_compiled_profile_declares_the_execution_and_keeps_eager_digests():
     """`compilation="piecewise"` -> execution label `bi-compiled`, run-time engine args enforce_eager False + PIECEWISE CUDA
     graphs, derivation-side args unchanged (eager trace by construction), a declared engine block for GP-01/GM-01; eager profiles serialise
@@ -163,6 +235,21 @@ def test_compiled_profile_declares_the_execution_and_keeps_eager_digests():
     with pytest.raises(ValueError):
         TargetProfile(compilation="full")
     assert parse_target_arg('{"compilation": "piecewise"}').execution_label == "bi-compiled"
+
+
+def test_a_compiled_profile_declares_its_program_and_its_claim_in_these_words():
+    """The two texts of a compiled profile's engine block: the derivation from its parenthesis on, the claim whole.  A Build that writes
+    the block puts them in the artifact's identity, and components compose only where their blocks are equal, so a word of them changes
+    here too.  They name no module and cite nothing."""
+    me = TargetProfile(compilation="piecewise").modelled_engine()
+    assert me["program_derivation"].endswith(
+        " artifact (GEMM/attention/lm_head existing Definitions; fused norm/act/RoPE regions new Definitions), applicability pinned by the "
+        "compilation facts + kernel_set digest")
+    assert me["claim"] == (
+        "P_compiled kernel-level conformance: every non-weight buffer of every kernel launch is committed under graph replay (wrapper-level "
+        "hooks, kernels untouched) and the kernel relations are replayed bit-for-bit from the committed bytes; the eager Program is NOT a "
+        "model of this execution (P_compiled != P_eager: roundings elided, residual recomputed unrounded, other reduction orders; tokens "
+        "diverge from eager). Attention = eager FA2 splitting op; lm_head eager")
 
 
 def test_breakable_profile_applies_vllms_breakable_graphs_at_its_capture_sizes():
@@ -246,7 +333,6 @@ class _Model:
 
 
 def test_moe_experts_class_is_read_back_from_every_fused_moe_layer():
-    from verity_vllm.program.frontend.target_profile import moe_experts_class_of
     TritonExperts, DeepGemmExperts = type("TritonExperts", (), {}), type("DeepGemmExperts", (), {})
     linear = _Layer(fp8_linear=object())
     assert moe_experts_class_of(_Model(linear, _Layer())) is None
@@ -257,6 +343,7 @@ def test_moe_experts_class_is_read_back_from_every_fused_moe_layer():
 def test_the_engine_refuses_another_experts_class_than_the_declared_one(monkeypatch):
     pytest.importorskip("torch")
     import types
+
     from verity_vllm.engine import build as B
     t = TargetProfile(moe_backend="triton")
     monkeypatch.setattr(B.torch.cuda, "get_device_properties",
@@ -291,6 +378,7 @@ def test_an_engine_whose_attention_carries_no_fa_version_is_no_fa_version_questi
     layers: the engine is judged on its device and kernels; a FlashAttention impl at another version is still a mismatch."""
     pytest.importorskip("torch")
     import types
+
     from verity_vllm.engine import build as B
     t = TargetProfile(compute_capability=(9, 0), num_sms=132)
     monkeypatch.setattr(B.torch.cuda, "get_device_properties", lambda i: types.SimpleNamespace(major=9, minor=0, multi_processor_count=132))

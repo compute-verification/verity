@@ -13,22 +13,63 @@ import json
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.config import RowEngine, row_execution, workload_file
+
+# prefill-chunk / token-step attribution (torch-free, unit-tested)
+from verity_vllm.engine import chunks as _chunks
 from verity_vllm.engine import static_schedule
-from verity_vllm.config import RowEngine, workload_file
+
+# step-indexed arrivals (torch-free module, unit-tested)
+from verity_vllm.engine.arrivals import run_requests_arrivals
+from verity_vllm.engine.build import (  # noqa: F401
+    CASE,
+    EXECUTION_ENFORCE_EAGER,
+    Engine,
+    build_engine,
+    case_of,
+    compilation_facts,
+    effective_execution_doc,
+    engine_kwargs_for,
+    execution_label_of,
+    observed_flash_attn_version,
+    parse_engine_args,
+    parse_target_arg,
+    prepare_compiled_process_cache,
+    resolved_async_scheduling,
+    target_mismatches,
+    target_of_workload,
+    vllm_has_flashinfer,
+)
+from verity_vllm.engine.code_identity import (  # noqa: F401
+    _VERITY_INDUCTOR_DIR_MARK,
+    CUBIN_CODE_IDENTITY_RULE,
+    CUBIN_DENY_LIST,
+    cubin_code_sha256,
+    cubin_code_sha256_normalized,
+    cubin_section_denied,
+    cubin_section_detail,
+    cubin_sections,
+    generated_kernels_of_this_process,
+    loaded_code_objects,
+    loaded_code_objects_delta,
+)
+from verity_vllm.engine.handle import engine_of, scheduler_or_none
+from verity_vllm.engine.run_facts import (  # noqa: F401
+    ACCEPTED,
+    ACCEPTED_PROFILE_ID,
+    ACCEPTED_RECORD,
+    host_doc,
+    model_config_subset,
+    profile_manifest,
+    versions_doc,
+)
 from verity_vllm.program import prefix_plan as PP
-from verity_vllm.engine.arrivals import run_requests_arrivals  # step-indexed arrivals (torch-free module, unit-tested)
-from verity_vllm.engine import chunks as _chunks  # prefill-chunk / token-step attribution (torch-free, unit-tested)
-from verity_vllm.engine.handle import scheduler_or_none
-from verity_vllm.engine.build import (CASE, EXECUTION_ENFORCE_EAGER, Engine, build_engine, case_of, compilation_facts,  # noqa: F401
-                                      effective_execution_doc, engine_kwargs_for, execution_label_of, observed_flash_attn_version,
-                                      parse_engine_args, parse_target_arg, prepare_compiled_process_cache, resolved_async_scheduling,
-                                      target_mismatches, target_of_workload, vllm_has_flashinfer)
-from verity_vllm.engine.code_identity import (_VERITY_INDUCTOR_DIR_MARK, CUBIN_CODE_IDENTITY_RULE, CUBIN_DENY_LIST,  # noqa: F401
-                                              cubin_code_sha256, cubin_code_sha256_normalized, cubin_section_denied,
-                                              cubin_section_detail, cubin_sections, generated_kernels_of_this_process,
-                                              loaded_code_objects, loaded_code_objects_delta)
-from verity_vllm.engine.run_facts import (ACCEPTED, ACCEPTED_PROFILE_ID, ACCEPTED_RECORD, host_doc, model_config_subset,  # noqa: F401
-                                          profile_manifest, versions_doc)
+
+__all__ = ["Engine", "WARMUP_SEED", "build_engine", "case_of", "effective_execution_doc", "execution_label_of",
+           "execution_of_workload", "fresh_prefix_cache", "generated_kernels_of_this_process", "load_workload",
+           "loaded_code_objects", "loaded_code_objects_delta", "observed_flash_attn_version", "parse_engine_args",
+           "resolved_async_scheduling", "run_requests", "sampling_params", "target_mismatches", "target_of_workload",
+           "throwaway_requests", "versions_doc"]
 
 
 def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
@@ -39,9 +80,10 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
     eng = RowEngine.of(doc)
     # an optional top-level `sampling` block selects the variant and the request seeds / fan-out:
     # {"variant": "greedy", "seed": null, "n": 1} (defaults = the greedy runs); a request may override `seed` / `n`.
-    samp = dict(doc.get("sampling") or {})
+    block, variants, sweep = doc.get("sampling"), doc.get("variants"), doc.get("sweep")    # each may be absent, null or empty
+    samp = dict(block) if block else {}
     variant = str(samp.get("variant", "greedy"))
-    params = (doc.get("variants") or {}).get(variant)
+    params = variants.get(variant) if variants else None
     if params is None:
         if variant != "greedy":
             raise KeyError(f"workload {path}: sampling variant {variant!r} is not in `variants`")
@@ -67,7 +109,7 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
         if r.get("variant") is not None:
             # a request may pin ANOTHER variant (mixed batch: one greedy row next to a sampled row); the
             # request record then carries its own temperature / top_p / top_k and the manifest lists them per request
-            rp = (doc.get("variants") or {}).get(str(r["variant"]))
+            rp = variants.get(str(r["variant"])) if variants else None
             if rp is None:
                 raise KeyError(f"workload {path}: request {r['request_id']} variant {r['variant']!r} is not in `variants`")
             req.update({"variant": str(r["variant"]), "temperature": float(rp.get("temperature", 0.0)),
@@ -80,9 +122,10 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
     for rid, toks in ACCEPTED_TOKENS.items():
         accepted.setdefault(rid, list(toks))
     temperature = float(params.get("temperature", 0.0))
-    sampling = {"temperature": temperature, "top_p": float(params.get("top_p", 1.0)), "top_k": int(params.get("top_k", 0)),
-                "logprobs": None, "seed": seed, "n": n, "variant": variant,
-                "greedy": temperature == 0.0 and all(p["temperature"] == 0.0 for p in per_request)}
+    sampling: dict[str, Any] = {
+        "temperature": temperature, "top_p": float(params.get("top_p", 1.0)), "top_k": int(params.get("top_k", 0)),
+        "logprobs": None, "seed": seed, "n": n, "variant": variant,
+        "greedy": temperature == 0.0 and all(p["temperature"] == 0.0 for p in per_request)}
     if per_request:
         sampling["per_request"] = per_request
     if samp.get("ignore_eos"):
@@ -96,7 +139,7 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
             "expected_engine_steps": doc.get("expected_engine_steps"),
             # the workload's row id and the execution it declares (row-id suffix / explicit field): the
             # GPU stages hand `execution` to build_engine so enforce_eager is the workload's, never the harness's literal
-            "row_id": (doc.get("sweep") or {}).get("row_id") if isinstance(doc.get("sweep"), dict) else doc.get("row_id"),
+            "row_id": sweep.get("row_id") if isinstance(sweep, dict) else doc.get("row_id"),
             "execution": execution_of_workload(doc),
             # the workload's declared TargetProfile overrides (`engine.target`, written by pipeline/workload.py --target): the channel
             # `target_of_workload` documents -- rc3 dropped it here, so every GPU stage built its engine with target=None (engine ARGS
@@ -123,14 +166,13 @@ def execution_of_workload(workload: dict | None) -> str | None:
     a sweep (no row id: the caller's default applies and the header records `declared_execution: null`)."""
     if not isinstance(workload, dict):
         return None
-    sw = workload.get("sweep") if isinstance(workload.get("sweep"), dict) else {}
+    sweep = workload.get("sweep")
+    sw = sweep if isinstance(sweep, dict) else {}
     for v in (workload.get("execution"), sw.get("execution")):
         if isinstance(v, str) and v:
             return v
     rid = sw.get("row_id") or workload.get("row_id")
-    if isinstance(rid, str) and "__" in rid:
-        return rid.rsplit("__", 1)[1]
-    return None
+    return row_execution(rid) if isinstance(rid, str) else None
 
 
 def sampling_params(req: dict, sampling: dict) -> Any:
@@ -239,7 +281,7 @@ def throwaway_requests(engine: Engine, like: list[dict], seed: int) -> list[dict
     sampling fields (`THROWAWAY_SAMPLING_FIELDS`): the warm-up stages the same layout as the run it stands in for."""
     from verity_vllm.commit import challenge
 
-    vocab = int(getattr(engine.llm.llm_engine.vllm_config.model_config.hf_config, "vocab_size", 32000))
+    vocab = int(getattr(engine_of(engine.llm).vllm_config.model_config.hf_config, "vocab_size", 32000))
     rng = challenge.generator(seed)
     out = []
     for i, r in enumerate(like):

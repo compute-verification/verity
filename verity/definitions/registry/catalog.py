@@ -8,7 +8,7 @@ imported its module.  A reader of Definitions beyond the registry names their pa
 from __future__ import annotations
 
 #: the packages `load` imports, by scope
-SCOPES = {"registry": "verity.definitions.registry", "ops": "verity.definitions.ops"}
+SCOPES = {"registry": "verity.definitions.registry", "ops": "verity.circuits.ops"}
 _LOADED: dict[str, list[str]] = {}
 
 
@@ -19,8 +19,8 @@ def load(scope: str | tuple[str, ...] = "registry", _package=None, _errors: list
 
     ``_package`` and ``_errors`` are its own descent into a subpackage, which imports that package's modules in name order, each
     subpackage's right after it, and returns nothing: the descent stays in `load`, so circuit-check's cache holds what it lists by
-    the modules' names (`cache._ENUMERATORS`), and each name a listing yields is only compared, imported or written into an
-    error."""
+    the modules' names (`enumerators` in this module's sidecar), and each name a listing yields is only compared, imported or
+    written into an error."""
     import importlib
     import pkgutil
 

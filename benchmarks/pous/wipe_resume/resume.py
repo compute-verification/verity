@@ -10,7 +10,7 @@ to.
 **The streamed wipe.** `L_i = SHA-512(LABEL_TAG ‖ K ‖ u64 i)` under the memory challenger's key `K`, which the prover
 never holds. The only state short of a label from which labels resume is the challenger's: SHA-512's state after
 the 67 bytes of `LABEL_TAG ‖ K` (rounds 0–7 in `wipe_stream.c`), which is `K`'s worth. Each prover below runs whole
-sessions of `streamed_wipe.Challenger` (sequential reads, batch size 1), signed by a test signer and judged by
+sessions of `streamed_wipe.WipeMemoryChallenger` (sequential reads, batch size 1), signed by a test signer and judged by
 `wipe_verdict.judge`:
 
 - `honest`: keeps every label. Expect accept.
@@ -45,20 +45,19 @@ import math
 import os
 import sys
 import tempfile
-import time
 from collections.abc import Callable
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path[:0] = [str(ROOT), str(ROOT / "verity/protocols/pous/verifier/tests")]
+sys.path[:0] = [str(ROOT), str(ROOT / "verity/protocols/accounting/pous/verifier/tests")]
 
 import pous_test_signer as ts  # noqa: E402
-from verity.protocols.pous.verifier import streamed_wipe as sw  # noqa: E402
-from verity.protocols.pous.verifier import wipe_period as W  # noqa: E402
+from verity.protocols.accounting.pous.verifier import streamed_wipe as sw  # noqa: E402
+from verity.protocols.accounting.pous.verifier import wipe_period as W  # noqa: E402
 
-WIPE_VERDICT = ROOT / "verity/protocols/pous/device/lean/wipe_verdict.py"
+WIPE_VERDICT = ROOT / "verity/protocols/accounting/pous/device/lean/wipe_verdict.py"
 LABEL = sw.LABEL_BYTES
 BAND_SHARE = Fraction(5 * 200, 65_536)
 """What the band attack keeps of a block: five 200-byte SHAKE256 states of a 64 KiB block."""
@@ -85,7 +84,7 @@ def dropped(n: int, k: int) -> int:
 class Honest:
     """Keeps every label; its prior content was the whole store, and the fill overwrites it."""
 
-    def __init__(self, n: int, c: sw.Challenger) -> None:
+    def __init__(self, n: int, c: sw.WipeMemoryChallenger) -> None:
         self.store = bytearray(os.urandom(n * LABEL))
         self.z = bytes(self.store)
 
@@ -103,7 +102,7 @@ class Naive(Honest):
     """Keeps prior content in the room of the last `dropped(N, at_k)` labels (`at_k` the session's reads unless
     given) and answers those reads from it."""
 
-    def __init__(self, n: int, c: sw.Challenger, at_k: int | None = None) -> None:
+    def __init__(self, n: int, c: sw.WipeMemoryChallenger, at_k: int | None = None) -> None:
         self.cut = n - dropped(n, c.params.k if at_k is None else at_k)
         self.store = bytearray(n * LABEL)
         self.store[LABEL * self.cut:] = os.urandom(LABEL * (n - self.cut))
@@ -126,7 +125,8 @@ class Resume(Honest):
     """The band attack's strategy on the streamed fill (module docstring): `KEPT` bytes of each label and 63 of prior
     content a slot, `SEEDS` whole labels, and a key search, the only way to the state labels resume from, at a read."""
 
-    def __init__(self, n: int, c: sw.Challenger, *, clock: Callable[[], int], search_ns: int, tries: int) -> None:
+    def __init__(self, n: int, c: sw.WipeMemoryChallenger, *, clock: Callable[[], int], search_ns: int,
+                 tries: int) -> None:
         self.n, self.clock, self.search_ns, self.tries = n, clock, search_ns, tries
         self.store = bytearray(os.urandom(n * LABEL))
         self.z = self.keep()
@@ -175,7 +175,7 @@ class KeyLeak(Honest):
     """Handed `K`: keeps SHA-512's state after `LABEL_TAG ‖ K`, the challenger's own resume point (32 bytes of `K`),
     and prior content in the whole store; a read is one compression from that state."""
 
-    def __init__(self, n: int, c: sw.Challenger) -> None:
+    def __init__(self, n: int, c: sw.WipeMemoryChallenger) -> None:
         super().__init__(n, c)
         self.head = hashlib.sha512(sw.LABEL_TAG + c.key)
 
@@ -194,7 +194,7 @@ class KeyLeak(Honest):
 class Untiered(Honest):
     """Every label in `outside`, memory the commitment doesn't declare; prior content in the whole declared store."""
 
-    def __init__(self, n: int, c: sw.Challenger) -> None:
+    def __init__(self, n: int, c: sw.WipeMemoryChallenger) -> None:
         super().__init__(n, c)
         self.outside = bytearray(n * LABEL)
 
@@ -219,20 +219,20 @@ def _stats(xs: list[int]) -> dict[str, int] | None:
     return {"n": len(s), "p50": s[len(s) // 2], "p99": s[min(len(s) - 1, (99 * len(s)) // 100)], "max": s[-1]}
 
 
-def session(name: str, make: Callable[[int, sw.Challenger], Any], *, n: int, k: int, limit_ns: int, signer, log,
-            judge: Callable[..., Any], decide: str, clock: Callable[[], int], tag: bytes = b"",
+def session(name: str, make: Callable[[int, sw.WipeMemoryChallenger], Any], *, n: int, k: int, limit_ns: int, signer,
+            log, judge: Callable[..., Any], decide: str, clock: Callable[[], int], tag: bytes = b"",
             coin_secret: bytes | None = None) -> dict[str, Any]:
     """One whole session against the prover `make(n, challenger)` builds; its record (module docstring). The coins
     are the OS's, sampled when the fill completes, unless `coin_secret` fixes them."""
     sid = hashlib.sha512(b"verity-pous/wipe-resume/session\0" + name.encode() + b"\0" + tag).digest()[:32]
-    c = sw.Challenger(os.urandom(32), SERVER, sid, params(n, k, limit_ns), signer, log=log, clock=clock,
-                      coin_secret=coin_secret)
+    c = sw.WipeMemoryChallenger(os.urandom(32), SERVER, sid, params(n, k, limit_ns), signer, log=log, clock=clock,
+                                coin_secret=coin_secret)
     prover = make(n, c)
     z_before = hashlib.sha512(prover.z).hexdigest()
     for start, data in c.fill(1 << 14):
         prover.receive(start, data)
     c.run(prover.answer)
-    signed = c.close(egress_bits=0)
+    signed = c.close()
     v, sides = judge(signed, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES, decide=decide)
     kept = prover.keep()
     out = {"prover": name, "labels": n, "k": k, "limit_ns": limit_ns, "ended": signed.ended,
@@ -278,7 +278,7 @@ def sampling(*, n: int, k: int, at_k: int, sessions: int, signer, log, judge, de
             "expected": sessions * p, "p": p, "z_score": (accepted - sessions * p) / sd if sd else None}
 
 
-def run(*, n: int, k: int, limit_ns: int, decide: str, scratch: Path, clock: Callable[[], int] = time.perf_counter_ns,
+def run(*, n: int, k: int, limit_ns: int, decide: str, scratch: Path, clock: Callable[[], int] = sw.raw_clock_ns,
         untimed_tries: int = UNTIMED_TRIES, sample_n: int = 4096, sample_k: int = 12, sample_sessions: int = 600,
         judge: Callable[..., Any] | None = None, coin_secret: bytes | None = None) -> dict[str, Any]:
     """Every prover's session at `N = n`, `k` reads, then `sample_sessions` of `sampling` (none at 0)."""

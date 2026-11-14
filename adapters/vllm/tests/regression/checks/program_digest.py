@@ -7,15 +7,11 @@ of record (the git sha of the tree that ran each stage) beside them -- lifted, n
 at 89af272 (the `v1-reference` commit); a v2 reproduces the DIGESTS, not the sha.
 
 Rebuild part (NOT run here; tier T2, 1-4 h and 18-181 GB RAM per row on the meta device, no GPU needed): on a big-RAM pod,
-`STAGES=build bash verity_vllm/ops/row_pod.sh <row> <role> <hf repo> <rev> build` with `--target` = the recorded
+`verity-vllm row run <row> <role> <hf repo> <rev> --stages build` with the Build's `--target` (the row's declared target) = the recorded
 `build_request/artifact.json.target_profile`, then compare `build_summary.json` digests to this expected document.  In candidate mode the
 v2's `build_summary.json` is read instead and compared to the same expected.
 """
 from __future__ import annotations
-
-import glob
-import json
-import os
 
 from .. import resolver
 
@@ -36,10 +32,19 @@ def _digests_of(bs: dict) -> dict:
     return out
 
 
+def _batch(row: resolver.Row) -> int | None:
+    """How many requests the row's workload declares; None for a row whose workload this tree does not hold.  A workload the store
+    keeps is fetched (`row.workload()`), so the answer is the same whether or not anything read the workload before."""
+    try:
+        return len(resolver.read_json(row.workload()).get("requests") or [])
+    except resolver.NotResolvable:
+        return None
+
+
 def expected(row: resolver.Row) -> dict:
     bs = row.json("build_summary.json")
-    out = {"build_summary": _digests_of(bs)}
-    b = len(json.load(open(row.workload())).get("requests") or []) if row.has("build_summary.json") and (resolver.VLLM_ROOT / "workloads" / f"{row.key}.json").is_file() else None
+    out: dict = {"build_summary": _digests_of(bs)}
+    b = _batch(row)
     of_record = out["build_summary"]["workload"] if (b or 0) > 1 else out["build_summary"]["request"]
     out["program_digest_of_record"] = of_record
     out["batch"] = b
@@ -53,16 +58,16 @@ def expected(row: resolver.Row) -> dict:
 def actual(row: resolver.Row) -> dict:
     cand = row.candidate("build_summary.json")
     if cand is not None:
-        bs = json.load(open(cand))
+        bs = resolver.read_json(cand)
         d = _digests_of(bs)
-        b = len(json.load(open(row.workload())).get("requests") or [])
+        b = len(resolver.read_json(row.workload()).get("requests") or [])
         out = {"build_summary": d, "program_digest_of_record": d["workload"] if b > 1 else d["request"], "batch": b, "source": "candidate"}
         # the two keys `expected()` lifts from the record's commit/ and build_workload/: from the candidate's own documents when it has
         # them, else declared not applicable (a Build-only rebuild has no Commit to key a binding by) -- never lifted from the record
         mv = row.candidate("commit/manifest_verify.json")
-        out["commit_keyed_by"] = json.load(open(mv)).get("used_program_digest") if mv is not None else resolver.not_applicable("the candidate ran no Commit: no commit/manifest_verify.json")
+        out["commit_keyed_by"] = resolver.read_json(mv).get("used_program_digest") if mv is not None else resolver.not_applicable("the candidate ran no Commit: no commit/manifest_verify.json")
         wp = row.candidate("build_workload/workload_program.json")
-        out["workload_program_digest"] = json.load(open(wp)).get("workload_digest") if wp is not None else resolver.not_applicable("the candidate has no build_workload/workload_program.json")
+        out["workload_program_digest"] = resolver.read_json(wp).get("workload_digest") if wp is not None else resolver.not_applicable("the candidate has no build_workload/workload_program.json")
         return out
     # self-check: the chain read from the Build's own per-shape artifacts, independent of build_summary.json's copy
     exp = expected(row)

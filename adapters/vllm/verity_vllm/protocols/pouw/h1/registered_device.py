@@ -1,11 +1,11 @@
 """`pouw_h1_registered.commit`'s hashing on the GPU: a registered value's ``b || c`` strings and every level of its
-frame-v3-sha512 tree, computed by `protocol_options/pouw_cuda/registered_rows.cu` from the rows' words, the salts sampled on
-the device (ChaCha20 under the run's key at the value's nonce, `audit.hm96_salt`) or given, under the domain id the host
-computes (`registered.domain`).
+frame-v3-sha512 tree, computed by `verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/registered_rows.cu` from the
+rows' words, the salts sampled on the device (ChaCha20 under the run's key at the value's nonce, `audit.hm96_salt`) or given,
+under the domain id the host computes (`registered.domain`).
 
 A call's z/y records are two tables' rows: its registered ``zy@<c>`` and its call z table (`pouw_h1_tables_device`, under
 ``hm96-sha512/row-seg/v1``). With ``also``, `device_hash` commits both from one read of each record
-(`pouw_cuda/zy_commit.cu`, on `verity.definitions.kernels`' ``row_commit.cuh``): each record's two row digests from the same loads,
+(`pouw_cuda/zy_commit.cu`, on `verity.circuits.kernels`' ``row_commit.cuh``): each record's two row digests from the same loads,
 each table's leaf, the value's tree as before and the call table's a level at a time, the call table's root `Hashing.also`.
 `host_zy` is its twin on the CPU (`zy_commit_host.cpp`).
 
@@ -33,11 +33,17 @@ from typing import Any
 
 import numpy as np
 from verity.commitments import hm96
-from verity.commitments.rowleaf import (ROW_SEG_BYTES, sha512_row_seg_prefix, sha512_row_seg_segment_prefix,
-                                           sha512_row_seg_segments, sha512_row_v2_prefix)
-from verity.definitions.kernels import ROW_COMMIT, SHA512
+from verity.commitments.rowleaf import (
+    ROW_SEG_BYTES,
+    sha512_row_seg_prefix,
+    sha512_row_seg_segment_prefix,
+    sha512_row_seg_segments,
+    sha512_row_v2_prefix,
+)
+from verity.circuits.kernels import ROW_COMMIT, SHA512
 
 from verity_vllm.commit import row_tables_device as RTD
+from verity_vllm.protocols.pouw.h1.nodes import Nodes
 
 __all__ = ["CHUNK_BYTES", "Hashing", "Pub", "Table", "ZyArgs", "available", "device_commit", "device_hash", "device_lib",
            "device_public_salts", "hashing", "host_commit", "host_lib", "host_public_salts", "host_zy", "nvcc", "pub",
@@ -250,21 +256,21 @@ def _salts(row_salts: bytes, n: int) -> np.ndarray:
     return np.frombuffer(row_salts, np.uint8).copy()
 
 
-def _out(bcs: np.ndarray, levels: np.ndarray, W: int) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
-    """The device's big-endian words as `Registered`'s ``bcs`` and ``levels``."""
-    nodes = levels.byteswap().view("V64").tolist()
+def _out(bcs: np.ndarray, levels: np.ndarray, W: int) -> tuple[Nodes, tuple[Nodes, ...]]:
+    """The device's big-endian words as `Registered`'s ``bcs`` and ``levels``, each node's bytes made on read."""
+    nodes = levels.byteswap().view(np.uint8)
     out, off, w = [], 0, W
     while True:
-        out.append(tuple(nodes[off:off + w]))
+        out.append(Nodes(nodes[64 * off:64 * (off + w)], 64))
         off += w
         if w == 1:
             break
         w //= 2
-    return tuple(bcs.byteswap().view("V128").tolist()), tuple(out)
+    return Nodes(bcs.byteswap().view(np.uint8), 128), tuple(out)
 
 
 def host_commit(words: np.ndarray, key: bytes, nonce: int, row_salts: bytes | None,
-                domain_id: bytes) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
+                domain_id: bytes) -> tuple[Nodes, tuple[Nodes, ...]]:
     """The ``b || c`` strings and tree levels of ``words`` ``(n, W)`` u16 by the kernels' functions on the CPU: the device
     path's twin."""
     rows = _rows(words)

@@ -7,27 +7,36 @@ from __future__ import annotations
 from collections import Counter
 
 import numpy as np
-
-from verity_vllm.program.predict import build as PB
-from verity_vllm.program.predict.phi import Phi
-from verity_vllm.program import prune as PR
-from verity_vllm.program.prune import (_read, _renumbered, batched_form, dead_free, dead_units, kept_records, narrowed, swapped,
-                                       without_dead_units)
-from verity.definitions.boolean import boolean_version
-from verity.definitions.registry import b1, gemm_bias, topp_words as TW
-
-from verity.circuits.defs import Body, Node, bind
+from verity.circuits.defs import Body, BodyNode, bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.liveness import dead_gates
-from verity.definitions.ops import gemm as G
-from verity.definitions.ops.prims import BF16
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided
 from verity.circuits.types import Array
+from verity.definitions.boolean import boolean_version
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops.prims import BF16
+from verity.definitions.registry import b1, gemm_bias
+from verity.definitions.registry import topp_words as TW
 
-TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
-        "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
-        "max_position_embeddings": 64, "hidden_act": "silu"}
+from verity_vllm.program import prune as PR
+from verity_vllm.program.predict import build as PB
+from verity_vllm.program.predict.phi import Phi
+from verity_vllm.program.prune import (
+    _read,
+    _renumbered,
+    batched_form,
+    dead_free,
+    dead_units,
+    kept_records,
+    narrowed,
+    swapped,
+    without_dead_units,
+)
+
+TINY: dict = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
+              "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
+              "max_position_embeddings": 64, "hidden_act": "silu"}
 PHI = Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, target={"compute_capability": [12, 0], "num_sms": 188})
 
 
@@ -102,7 +111,7 @@ def test_the_dead_free_form_binds_the_top_p_select_to_v3():
     binds it to v3 at the same V and S, with v2's arguments and output and none of its dead gates."""
     sd = bind(TW.GumbelTopPTokenSelectV2, V=3, S=2)
     args = tuple(Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(sd.body.params))
-    body = Body(sd.body.params, sd.body.ret_type, [Node("call", sd, args, sd.body.ret_type)], Affine("n", 0, 0, 1), [0, sd.gates])
+    body = Body(sd.body.params, sd.body.ret_type, [BodyNode("call", sd, args, sd.body.ret_type)], Affine("n", 0, 0, 1), [0, sd.gates])
     (a,), (b,) = body.nodes, swapped(body).nodes
     assert (a.fn.id, b.fn.id) == ("GumbelTopPTokenSelect_v2{V=3,S=2}", "GumbelTopPTokenSelect_v3{V=3,S=2}")
     assert (b.form, b.args, b.out) == (a.form, a.args, a.out)
@@ -112,9 +121,9 @@ def test_the_dead_free_form_binds_the_top_p_select_to_v3():
 def test_the_dead_free_form_passes_a_batch_of_a_primitive_through():
     """A batch node's function can be a primitive (the mask form's top-level batches of a `Const`), which has no `base_id`;
     `swapped` leaves it as it is rather than reading one."""
-    from verity.definitions.ops.prims import const
+    from verity.circuits.ops.prims import const
     c = const(16, 0)
-    body = Body((), Array(4, c.ret), [Node("batch", c, (), Array(4, c.ret), axes=(), n=4)], Affine("n", 0, 0, 4), [0, 4])
+    body = Body((), Array(4, c.ret), [BodyNode("batch", c, (), Array(4, c.ret), axes=(), n=4)], Affine("n", 0, 0, 4), [0, 4])
     assert swapped(body) is body
 
 
@@ -179,13 +188,15 @@ def test_an_attentions_key_sequences_renumber_as_cuts_of_one_renumbered_log():
     cuts = [log.cut(j) for j in (2, 3, 4)] + [log.cut(3, [Affine("n", 7, 0, 1)])]
     assert all(c.prefix is not None for c in cuts)
     new = [0, 1, 2, 3, 3, 4, 5, 6]  # node 3 dead: 4, 6 and 7 become 3, 5 and 6
-    memo, logs = {}, {}
+    memo: dict = {}
+    logs: dict = {}
     got = [_renumbered(c, new, memo, logs) for c in cuts]
     assert got[0] is cuts[0] and got[1].prefix[0] is got[2].prefix[0] is got[3].prefix[0] is not log
     assert got[1].parts[0] is log.parts[0] and got[3].parts[2] is got[2].parts[2]
     for c, g in zip(cuts, got):
         assert [p.to_json() for p in g.parts] == [p.to_json() for p in _renumbered(Concat(list(c.parts)), new, {}, {}).parts]
-    read, done = set(), {}
+    read: set = set()
+    done: dict = {}
     for g in reversed(got):
         _read(g, read, done)
     assert read == {0, 2, 3, 5, 6}
@@ -219,7 +230,8 @@ def test_liveness_steps_over_each_part_of_a_layers_key_rows_once_reading_the_lon
         log.append(Affine("n", k, 0, 1))
         cuts.append(log.cut(k + 1, [Affine("n", n + k, 0, 1)]))
     parts.stepped = 0
-    read, done = set(), {}
+    read: set = set()
+    done: dict = {}
     for c in reversed(cuts):
         _read(c, read, done)
     assert read == set(range(2 * n)) and parts.stepped == n
@@ -237,7 +249,7 @@ def _linears() -> Body:
     and Gemm_v1 (read whole)."""
     fns = [bind(G.Gemm, K=16, N=6, DOT=DOT), bind(gemm_bias.GemmBiasV2, K=16, N=6, DOT=DOT), bind(b1.Gemm, K=16, N=6)]
     params = tuple(fns[1].body.params)
-    nodes = [Node("call", fn, tuple(Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(fn.body.params)), fn.body.ret_type)
+    nodes = [BodyNode("call", fn, tuple(Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(fn.body.params)), fn.body.ret_type)
              for fn in fns]
     ret = Concat([Affine("n", 0, 2, 2), Strided("n", 1, 1, 2, 3, 1, 4), Explicit((("n", 0, 3), ("n", 1, 1))), Affine("n", 2, 0, 6)])
     offsets = [0]

@@ -8,7 +8,11 @@ from __future__ import annotations
 
 import time
 from collections import Counter
-from typing import Any, Callable, Iterable
+from collections.abc import Callable, Iterable
+from typing import Any
+
+__all__ = ["OPENED_METHOD", "ORDINAL_SEP", "OpenedReader", "OpeningNotVerified", "UnverifiedUnlinked", "filed",
+           "meta_by_name", "opened_check", "opened_in_children"]
 
 ORDINAL_SEP = "#ord"      # `<member name>#ord<tensor_ordinal>`: the reader's exact meta of a shared module's k-th invocation
 
@@ -89,13 +93,6 @@ class OpenedReader:
             return ro.value[off:off + hi - lo]
         finally:
             self.seconds += time.perf_counter() - t0
-
-    def or_none(self, step: int, name: str, lo: int, hi: int) -> bytes | None:
-        """For a consumer that fails an unread entry by name: a read that does not verify is None (and counted in `failed`)."""
-        try:
-            return self(step, name, lo, hi)
-        except OpeningNotVerified:
-            return None
 
     def record(self) -> dict[str, Any]:
         return {"source": "opened", "method": OPENED_METHOD, "run_root": bytes(self.run.run_root).hex(), "reads": int(self.stats["reads"]),

@@ -79,10 +79,10 @@ def test_the_registries_import_every_module_with_a_sidecar_and_key_the_task_list
 
 @pytest.mark.slow
 def test_every_operation_is_checked_and_reaches_no_table_outside_the_library(catalog):
-    """The guard does not visit an operation (`verity.definitions.circuits.operations`), so a table an operation reached would be hidden: every
+    """The guard does not visit an operation (`verity.circuits.operations`), so a table an operation reached would be hidden: every
     listed operation has a specialization here, and none reaches a primitive that holds a table the library does not list."""
-    from verity.definitions.circuits import constants as K
-    from verity.definitions.circuits import operations as O
+    from verity.circuits import constants as K
+    from verity.circuits import operations as O
 
     suite = catalog.suite
     ops = [fn for fid in suite if catalog.reached[fid][0] in O.OPERATIONS and O.is_operation(fn := suite[fid])]
@@ -298,7 +298,7 @@ def test_an_id_only_the_catalog_registers_resolves_through_the_suite(monkeypatch
     """`circuit-check <id>` finds a suite target that the registries hold only once the catalog's roots are traced (the gathers
     `boolean_gather.gather_bf16(n)` builds) or whose id writes a dict static as its digest (`gf2k.GfResiduals`'s schema), and
     an id neither knows still raises."""
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     real = W.specialization
 
@@ -590,8 +590,8 @@ def test_a_parameter_over_the_input_budget_without_a_probe_fails_by_name():
 def _wide_gemm():
     """`Gemm_v2` at K=32, N=64, with an input budget its weight's 2,048 leaves are over and 32 vectors of its x fit in."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops import gemm as G
-    from verity.definitions.ops import prims as P
+    from verity.circuits.ops import gemm as G
+    from verity.circuits.ops import prims as P
 
     return bind(G.Gemm, K=32, N=64, DOT=P.AmpereBF16TcDot16), dataclasses.replace(OPTS, input_budget=1024, vectors=40)
 
@@ -651,7 +651,7 @@ def _wide_experts(E: int):
     """`MoeExpertFp8Gemm_v1` over E experts at the sidecar's small statics, with an input budget its expert stack's E N K leaves
     are over and 8 vectors of its other parameters fit in."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops.prims import BlackwellE4m3QmmaDot32
+    from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32
     from verity.definitions.registry import fp8_moe_experts as X
 
     return (bind(X.MoeExpertFp8Gemm, E=E, K=128, N=80, G=64, KB=32, SWAP=False, DOT=BlackwellE4m3QmmaDot32),
@@ -1021,7 +1021,7 @@ def test_a_boolean_call_that_recomputes_across_units_passes_with_the_count():
 def test_a_boolean_call_with_another_partition_code_still_fails(monkeypatch):
     """Under v2 only `gate-recomputed` is reported instead of refused: a Boolean Call whose cut has any other code fails by name."""
     from verity.circuits.partition import CutVerdict
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     real = W.units
 
@@ -1043,7 +1043,7 @@ def test_the_partition_cuts_a_call_once(monkeypatch):
     `word.Graph` of it, and the record and failures of cutting it twice; a Definition cut member by member (`word.separable`) is
     cut whole once, by `partition` alone."""
     from verity.circuits.types import Value
-    from verity.definitions import word as W
+    from verity.circuits import word as W
     from verity.definitions.registry import prims as P
 
     real_rule, cuts = W.unit_rule, []
@@ -1390,13 +1390,13 @@ def test_a_word_definition_that_differs_from_its_boolean_definition_is_caught():
 
 
 def test_a_boolean_constant_is_checked_on_its_one_instance():
-    """A Boolean constant (`Const<w>[0x..]_v2`, `verity.definitions.ops.boolean.scalar.const_word`) takes no operands: its lowering
+    """A Boolean constant (`Const<w>[0x..]_v2`, `verity.circuits.ops.boolean.scalar.const_word`) takes no operands: its lowering
     and its word view each compare its one vector, every bit, so a constant one bit off its word constant is named."""
     from verity.circuits import boolean as BL
     from verity.circuits.boolean.forms import const_bits
     from verity.circuits.boolean.trace import definition
-    from verity.definitions.ops import prims as MP
-    from verity.definitions.ops.boolean import scalar as BS
+    from verity.circuits.ops import prims as MP
+    from verity.circuits.ops.boolean import scalar as BS
     from verity.circuits.types import Array
 
     e = CK.check_definition(BS.const_word(32, 0x3727C5AC), OPTS, pins=PINS)
@@ -1529,7 +1529,7 @@ def test_a_gated_definitions_circuit_digest_is_held_to_its_pin():
     place: its own digest passes, another fails by name, and none warns."""
     from verity.circuits.codec import program_digest
     from verity.circuits.program import Program
-    from verity.protocols.certifier.verifier import served as SV
+    from verity.protocols.accounting.certifier.verifier import served as SV
 
     d = SV.unit(8, 3, 1, 2, 2, 0)
     digest = program_digest(Program(d))
@@ -1630,7 +1630,7 @@ def _whole_boolean(name, build):
     from verity.circuits.boolean.trace import definition
     from verity.circuits.defs import bind
     from verity.circuits.evaluation.reference import resolve, signature_of
-    from verity.definitions.ops.boolean import scalar as SB
+    from verity.circuits.ops.boolean import scalar as SB
 
     t = resolve(bind(definition(name, 1, build, (("a", SB.BIT), ("b", SB.BIT), ("c", SB.BIT)), SB.BIT, register=False)))
     F = CK.Findings()

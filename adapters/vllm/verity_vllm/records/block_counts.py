@@ -13,6 +13,8 @@ from typing import Any
 
 from verity_vllm.records.fields import RecordError, objects, only, required
 
+__all__ = ["BlockClass", "BlockJudgment", "RULES", "shape_checks"]
+
 SCHEMA = "verity-vllm/inference-block-judgment/v1"
 FIELDS = ("format", "day", "declaration", "c", "k", "n", "table", "classes", "checks", "verdict", "reason")
 CLASS = ("definition", "slots", "steps", "gates", "unpriced", "fresh")
@@ -29,8 +31,8 @@ def _nat(doc: Mapping[str, Any], key: str, where: str, name: str) -> int:
     return v
 
 
-def _counts(doc: Any, where: str, name: str) -> dict[str, int]:
-    if not isinstance(doc, Mapping) or not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in doc.values()):
+def _counts(doc: Mapping[str, Any], where: str, name: str) -> dict[str, int]:
+    if not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in doc.values()):
         raise RecordError(where, name, "is not {primitive: natural}")
     return {str(k): int(v) for k, v in sorted(doc.items())}
 

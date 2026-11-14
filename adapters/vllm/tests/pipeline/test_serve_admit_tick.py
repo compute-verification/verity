@@ -13,9 +13,7 @@ import json
 import queue
 import random
 import socket
-import sys
 import threading
-import types
 from collections import deque
 from collections.abc import Iterator, Sequence
 from pathlib import Path
@@ -23,12 +21,14 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from verity.protocols.certifier.verifier import release as REL
+from verity.protocols.accounting.certifier.verifier import release as REL
 
+from tests import fake_vllm
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Tokenizer
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_admit as sa
+from verity_vllm.pipeline import serve_head as hd
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import tick_plugin as tp
 
@@ -60,7 +60,9 @@ class Sched:
         self.skipped_waiting: deque[Req] = deque()
         self.running: list[Req] = []
         self.finished_req_ids: set[str] = set()
-        self.seqs, self.steps, self.added = seqs, [], []
+        self.seqs = seqs
+        self.steps: list[list[str]] = []
+        self.added: list[str] = []
         self.scheduler_config = SimpleNamespace(policy=policy)
         self.vllm_config = SimpleNamespace(parallel_config=SimpleNamespace(data_parallel_size=dp))
 
@@ -367,6 +369,25 @@ def test_an_open_gate_adds_a_lost_releases_request_at_once_like_any_other():
     assert g.sched.added == ["r0", "r1"] and g.gate.lost == {0, 1} and g.gate.counts["dropped"] == 0
 
 
+def test_a_dropped_requests_abort_stops_at_the_gate():
+    """The gate keeps the id of each request it drops for a lost release, the one it held when the line came and the
+    one that comes after it, and takes it out of ``finish_requests``' ids as it does a held request's: the scheduler is
+    handed no id of a request it never saw, whatever it would do with one. An id is kept only until its abort."""
+    g = Gated()
+    for n in range(4):
+        g.release(n, bucket=0)
+    g.arrive("r0")
+    g.arrive("r1")
+    g.mark(4, lost=[0, 2])                           # r0 is held when its line comes
+    g.arrive("r2")                                   # r2 comes after it
+    g.arrive("r3")
+    assert g.sched.added == [] and sorted(g.gate.held) == [1, 3]
+    assert g.gate.finished(["r0", "probe", "r3", "r2"]) == ["probe"]                  # r3 is held: its abort drops it, as before
+    assert g.gate.dropped_ids == set() and g.gate.finished("r0") == ["r0"]
+    assert counts(g) == {"admitted": 0, "lost": 2, "dropped": 2, "aborted": 1, "held_now": 1}
+    assert g.step() and g.sched.added == ["r1"]
+
+
 def test_unnumbered_aborted_passed_and_new_runs():
     g = Gated()
     g.arrive("probe", out=5)
@@ -539,7 +560,8 @@ GREEDY = b'{"prompt": [1], "temperature": 0}'
 
 class App:
     def __init__(self, status: int = 200) -> None:
-        self.status, self.seen = status, []
+        self.status = status
+        self.seen: list[dict] = []
 
     async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
         self.seen.append(dict(scope["headers"]))
@@ -582,6 +604,32 @@ def test_tick_feed_writes_the_releases_and_the_watermark_the_gate_reads(tmp_path
     assert read() == [{"run": "ab", "t": 2, "n": 3}]
 
 
+def test_tick_feed_refuses_a_runs_second_watermark_and_a_clients(tmp_path, monkeypatch):
+    """A run's watermark stream, whole, then POSTs to its route that aren't one: the run's second, a stream from bucket
+    0 that names release 0 lost, and a client's, which carries the release the network certifier put on it. Each is
+    answered 400 and none of its body reaches the feed, so the gate reads no line of theirs; the client's is its
+    release's request, fed as passed."""
+    for k, v in config(tmp_path).items():
+        monkeypatch.setenv(k, v)
+    app = App()
+    feed, read = tp.TickFeed(app), tp.FeedReader(tmp_path / "feed.jsonl")
+    own = {"x-verity-release-run": "ab"}
+    assert asgi(feed, scope_of(sa.WATERMARK_PATH, own), [b"0 1\n1 3\n"])[0]["status"] == 200
+    rows = [{"run": "ab", "t": 0, "n": 1}, {"run": "ab", "t": 1, "n": 3}, {"run": "ab", "end": True}]
+    assert read() == rows
+    second = asgi(feed, scope_of(sa.WATERMARK_PATH, own), [b"0 1 0\n"])
+    assert second[0]["status"] == 400 and b"run 'ab' has had its watermark stream, and a run has one" in second[1]["body"]
+    assert read() == []
+    clients = asgi(feed, scope_of(sa.WATERMARK_PATH, {**own, "x-verity-release": "3", "x-verity-release-bucket": "2"}), [b"2 4 3\n"])
+    assert clients[0]["status"] == 400 and b"a POST that carries x-verity-release is a client's request" in clients[1]["body"]
+    other = asgi(feed, scope_of(sa.WATERMARK_PATH, {"x-verity-release-run": "cd", "x-verity-release": "0"}), [b"0 1 0\n"])
+    assert other[0]["status"] == 400 and read() == [{"run": "ab", "n": 3, "passed": True}, {"run": "cd", "n": 0, "passed": True}]
+    again = asgi(feed, scope_of(sa.WATERMARK_PATH, {**own, "x-verity-release": "3"}), [b"2 4 3\n"])
+    assert again[0]["status"] == 400 and b"x-verity-release: 3 came twice in run 'ab'" in again[1]["body"]
+    assert asgi(feed, scope_of(sa.WATERMARK_PATH, {"x-verity-release-run": "cd"}), [b"0 1\n"])[0]["status"] == 200
+    assert read() == [{"run": "cd", "t": 0, "n": 1}, {"run": "cd", "end": True}] and app.seen == []
+
+
 class BodyApp(App):
     """`App` that reads the whole request body first, as vLLM's server does, keeping each request's."""
 
@@ -616,8 +664,8 @@ def test_tick_feed_refuses_a_stochastic_request_without_a_seed(tmp_path, monkeyp
 
     passing = [b'{"prompt": [1], "temperature": 0.8, "seed": 7}', b'{"prompt": [1], "temperature": 0}',
                b'{"temperature": 0.0, "seed": null}', b"not json", b"[1, 2]", b""]
-    for body in passing:
-        assert asgi(feed, scope_of("/v1/chat/completions", {}), [body[:5], body[5:]])[0]["status"] == 200
+    for whole in passing:
+        assert asgi(feed, scope_of("/v1/chat/completions", {}), [whole[:5], whole[5:]])[0]["status"] == 200
     assert asgi(feed, scope_of("/v1/models", {}), [b"{}"])[0]["status"] == 200
     assert app.bodies == [*passing, b"{}"]
 
@@ -675,7 +723,9 @@ class EngineCoreProc:
     """vLLM's ``EngineCoreProc`` as `register`'s hooks drive it."""
 
     def __init__(self, sched: Any) -> None:
-        self.scheduler, self.input_queue, self.aborts_queue = sched, queue.Queue(), queue.Queue()
+        self.scheduler = sched
+        self.input_queue: queue.Queue[tuple[str, Any]] = queue.Queue()
+        self.aborts_queue: queue.Queue[Any] = queue.Queue()
         self.running, self.idle_calls = True, 0
 
     def _process_input_queue(self) -> None:
@@ -700,16 +750,13 @@ def plugin(tmp_path, monkeypatch):
     """`register` over stand-ins of vLLM's scheduler and engine core modules; its hooks come off afterwards."""
     for k, v in config(tmp_path).items():
         monkeypatch.setenv(k, v)
-    sched_mod, core_mod = types.ModuleType("vllm.v1.core.sched.scheduler"), types.ModuleType("vllm.v1.engine.core")
 
     class Scheduler(Sched):
         pass
 
-    sched_mod.Scheduler, core_mod.EngineCoreProc = Scheduler, EngineCoreProc
-    for name, mod in (("vllm", types.ModuleType("vllm")), ("vllm.v1", types.ModuleType("vllm.v1")),
-                      ("vllm.v1.core", types.ModuleType("vllm.v1.core")), ("vllm.v1.core.sched", types.ModuleType("vllm.v1.core.sched")),
-                      ("vllm.v1.engine", types.ModuleType("vllm.v1.engine")), (sched_mod.__name__, sched_mod), (core_mod.__name__, core_mod)):
-        monkeypatch.setitem(sys.modules, name, mod)
+    fake = fake_vllm.install(monkeypatch)
+    fake.set("vllm.v1.core.sched.scheduler:Scheduler", Scheduler)
+    fake.set("vllm.v1.engine.core:EngineCoreProc", EngineCoreProc)
     tp.register()
     tp.register()
     try:
@@ -807,7 +854,8 @@ class SchedEngine:
     scheduled request."""
 
     def __init__(self) -> None:
-        self.sched, self.live, self.n = Sched(), {}, 0
+        self.sched, self.n = Sched(), 0
+        self.live: dict[str, str] = {}
 
     def add_request(self, request_id: str, prompt: dict, params: Any) -> None:
         self.n += 1
@@ -867,7 +915,7 @@ def test_serve_openais_frontend_answers_a_lost_release_and_forgets_them_when_the
 
     adm = sa.Admission("h0", "e0", [1], None, got.append, {}, release=admit.key(head(0)))
     admit.submit(adm)
-    w = admit.watermark(RUN)
+    w = admit.watermark({"x-verity-release-run": RUN})
     assert w.feed(line(0, 2, [0, 1]))
     assert q == [("tick", {"key": "e0", "run": RUN, "n": 0, "bucket": None}), adm,
                  ("tick", {"run": RUN, "t": 0, "n": 2, "lost": [0, 1]}), ("abort", "e0")]     # the gate drops it, then its abort
@@ -881,6 +929,38 @@ def test_serve_openais_frontend_answers_a_lost_release_and_forgets_them_when_the
     assert not w.feed(line(1, 3, [1]))                   # release 1 is bucket 0's: the watermark breaks, and the gate opens
     assert q[4:] == [("tick", {"run": RUN, "error": "watermark (1, 3) after (0, 2): its lost releases [1] rise from 2 below n"})]
     assert admit.key(head(1)) == (RUN, 1) and len(got) == 1     # the open gate adds every request at once, so it comes in
+
+
+def test_a_run_has_one_watermark_stream_and_a_clients_post_is_none():
+    """`TickAdmit.watermark` over the engine loop's queue, a list. While the run's stream is open, a second POST that
+    names the run is refused before any of it is read, so the lost releases it would name are neither refused nor
+    aborted and the first stream goes on; it is refused after that stream's end too. A POST that carries a release is
+    a client's, whatever run it names: it is refused, takes no run's stream, and its release is passed to the gate."""
+    q: list[Any] = []
+    admit = sa.TickAdmit(q.append, lambda eid: q.append(("abort", eid)), lambda rec: q.append(("tick", rec)))
+    got: list[sa.Delta] = []
+    own = {"x-verity-release-run": RUN}
+    adm = sa.Admission("h0", "e0", [1], None, got.append, {}, release=admit.key({**own, "x-verity-release": "0"}))
+    admit.submit(adm)
+    w = admit.watermark(own)
+    assert w.feed(line(0, 2))
+    before = list(q)
+    for _ in range(2):
+        with pytest.raises(ValueError, match="/verity/watermark: run 'ab' has had its watermark stream, and a run has one"):
+            admit.watermark(own)
+    assert q == before and got == [] and admit.key({**own, "x-verity-release": "1"}) == (RUN, 1)
+    with pytest.raises(ValueError, match="/verity/watermark: a POST that carries x-verity-release is a client's request"):
+        admit.watermark({"x-verity-release-run": "cd", "x-verity-release": "5"})
+    assert q[len(before):] == [("tick", {"run": "cd", "n": 5, "passed": True})]
+    with pytest.raises(ValueError, match="x-verity-release: 5 came twice in run 'cd'"):
+        admit.watermark({"x-verity-release-run": "cd", "x-verity-release": "5"})
+    assert admit.watermark({"x-verity-release-run": "cd"}).feed(line(0, 6, [5]))      # the client's took no stream of cd's
+    assert w.feed(line(1, 3)) and w.close()
+    assert q[len(before) + 1:] == [("tick", {"run": "cd", "t": 0, "n": 6, "lost": [5]}), ("tick", {"run": RUN, "t": 1, "n": 3}),
+                                   ("tick", {"run": RUN, "end": True})]
+    with pytest.raises(ValueError, match="run 'ab' has had its watermark stream"):
+        admit.watermark(own)
+    assert admit.summary() == {"numbered": 1, "unordered": 0, "passed": 1, "lost": 1, "watermarks": 2, "runs": 2}
 
 
 @contextlib.contextmanager
@@ -975,6 +1055,136 @@ def test_serve_openai_skips_a_lost_release_over_http():
     assert (s["admitted"], s["lost"], s["dropped"], s["aborted"], s["skipped"], s["late"], s["opened"]) == (1, 2, 1, 0, 0, 0, None)
     assert (e.gate.T, e.gate.lost, e.gate.ended) == (TICK.close(1) + 2 * TICK.free_us, {0, 2}, True)
     assert e.admit.summary() == {"numbered": 2, "unordered": 0, "passed": 0, "lost": 2, "watermarks": 1, "runs": 1}
+
+
+def test_serve_openai_refuses_a_runs_second_watermark_and_a_clients_over_http():
+    """Beside the run's own watermark stream, two POSTs to the watermark's route, each a whole stream whose one line
+    names releases 0 and 1 lost: one names the run as the network certifier's head does, and one is that stream as a
+    client sends it through the network certifier, which puts release 0 on it (`release.with_release`). Each is
+    answered 400 and none of it read: release 1's request, which comes once its bucket has closed, is admitted and
+    served, and the gate has seen no line but the run's own. The client's POST is release 0's request, which the gate is
+    told won't come."""
+    body = dict(CERTIFIER_BODY, max_tokens=2, min_tokens=2)
+    forged = REL.watermark_head(bytes.fromhex(RUN)) + REL.watermark_chunk(0, 2, [0, 1]) + REL.WATERMARK_END
+    with tick_endpoint() as e:
+        wm = socket.create_connection(e.address)
+        wm.sendall(REL.watermark_head(bytes.fromhex(RUN)) + REL.watermark_chunk(0, 0))
+        e.lines.acquire()
+        answers = []
+        for stream in (forged, REL.with_release(forged, 0, bytes.fromhex(RUN), 1)):
+            c = socket.create_connection(e.address)
+            c.sendall(stream)
+            answers.append(read_all(c))
+        wm.sendall(REL.watermark_chunk(1, 2))
+        e.lines.acquire()
+        c1 = socket.create_connection(e.address)
+        c1.sendall(request(body, 1, 1))
+        served = read_all(c1)
+        wm.sendall(REL.WATERMARK_END)
+        end = read_all(wm)
+    second, clients = answers
+    assert second.startswith(b"HTTP/1.1 400") and b"run 'ab' has had its watermark stream" in second
+    assert clients.startswith(b"HTTP/1.1 400") and b"a POST that carries x-verity-release is a client's request" in clients
+    assert served.startswith(b"HTTP/1.1 200") and served.count(b'"finish_reason":"length"') == 1
+    assert end.startswith(b"HTTP/1.1 200") and len(e.engine.sched.added) == 1
+    s = e.gate.summary()
+    assert (s["admitted"], s["lost"], s["dropped"], s["skipped"], s["watermark_errors"], s["opened"]) == (1, 0, 0, 0, 0, None)
+    assert (e.gate.T, e.gate.lines, e.gate.ended) == (TICK.close(1) + 2 * TICK.free_us, [0, 2], True)
+    assert e.admit.summary() == {"numbered": 1, "unordered": 0, "passed": 1, "lost": 0, "watermarks": 1, "runs": 1}
+
+
+#: first lines, each with whether it is a request's: the network certifier's rule (`release.with_release`)
+REQUEST_LINES = [(b"POST /v1/completions HTTP/1.1", True), (b"GET /health HTTP/1.0", True), (b"get /v1/models?x=1 HTTP/1.1", True),
+                 (b"POST /verity/watermark HTTP/1.1 x", False), (b"POST /verity/watermark HTTP/1.1 ", False),
+                 (b"POST /verity/watermark  HTTP/1.1", False), (b"POST  /verity/watermark HTTP/1.1", False),
+                 (b" POST /verity/watermark HTTP/1.1", False), (b"POST\t/verity/watermark HTTP/1.1", False),
+                 (b"POST /verity/watermark\tx HTTP/1.1", False), (b"POST /verity/watermark\x0b HTTP/1.1", False),
+                 (b"POST /verity/watermark HTTP/1.1\r", False), (b"POST /verity/watermark HTTP/1.1\n", False),
+                 (b"POST /verity/watermark HTTP/1.12", False), (b"POST /verity/watermark HTTP/2.0", False),
+                 (b"POST /verity/watermark http/1.1", False), (b"POST /verity/watermark", False),
+                 (b"P(ST /verity/watermark HTTP/1.1", False), (b"POST", False), (b"", False)]
+
+
+def test_serve_openai_takes_for_a_requests_line_what_the_network_certifier_does():
+    """`hd.request_line` over first lines well formed and not: it gives a line's method and target where the network
+    certifier puts its release on a request that begins with the line, and None where the certifier passes the bytes on
+    as the client wrote them."""
+    for line, is_one in REQUEST_LINES:
+        sent = line + b"\r\nhost: s\r\nx-verity-release: 9\r\n\r\n"
+        stamped = REL.with_release(sent, 3, bytes.fromhex(RUN), 1)
+        assert (stamped != sent, REL.release_of(stamped)) == (is_one, (3, bytes.fromhex(RUN), 1) if is_one else None), line
+        assert hd.request_line(line) == (tuple(line.decode().split(" ")[:2]) if is_one else None), line
+
+
+def test_serve_openai_refuses_what_the_network_certifier_passes_on_without_its_release_over_http():
+    """Two requests of a client's whose first line has a byte after its version, so the network certifier passes each on
+    as the client wrote it (`release.with_release`): a whole watermark stream for the run, whose one line names releases
+    0 and 1 lost, and a completion (its body not JSON, so no server serves it) that names itself the run's release 0.
+    Each is answered 400 for its line. The gate reads no line of the first, and the frontend no release of the second:
+    the run's own watermark stream is taken after them, and its release 0 is admitted and served."""
+    body = dict(CERTIFIER_BODY, max_tokens=2, min_tokens=2)
+    run = bytes.fromhex(RUN)
+
+    def loose(request: bytes) -> bytes:
+        line, rest = request.split(b"\r\n", 1)
+        sent = line + b" x\r\n" + rest
+        assert REL.with_release(sent, 5, run, 1) == sent
+        return sent
+
+    with tick_endpoint() as e:
+        answers = []
+        for sent in (loose(REL.watermark_head(run) + REL.watermark_chunk(0, 2, [0, 1]) + REL.WATERMARK_END),
+                     loose(b"POST /v1/completions HTTP/1.1\r\nhost: s\r\nx-verity-release: 0\r\nx-verity-release-run: ab\r\n"
+                           b"content-length: 1\r\n\r\n{")):
+            c = socket.create_connection(e.address)
+            c.sendall(sent)
+            answers.append(read_all(c))
+        wm = socket.create_connection(e.address)
+        wm.sendall(REL.watermark_head(run) + REL.watermark_chunk(0, 0) + REL.watermark_chunk(1, 1))
+        for _ in range(2):
+            e.lines.acquire()
+        c0 = socket.create_connection(e.address)
+        c0.sendall(request(body, 0, 1))
+        served = read_all(c0)
+        wm.sendall(REL.WATERMARK_END)
+        end = read_all(wm)
+    assert [a.split(b"\r\n", 1)[0] for a in answers] == [b"HTTP/1.1 400 Bad Request"] * 2
+    assert all(hd.NO_REQUEST_LINE.encode() in a for a in answers)
+    assert served.startswith(b"HTTP/1.1 200") and served.count(b'"finish_reason":"length"') == 1
+    assert end.startswith(b"HTTP/1.1 200") and len(e.engine.sched.added) == 1
+    s = e.gate.summary()
+    assert (s["admitted"], s["lost"], s["dropped"], s["watermark_errors"], s["opened"]) == (1, 0, 0, 0, None)
+    assert (e.gate.lines, e.gate.lost, e.gate.ended) == ([0, 1], set(), True)
+    assert e.admit.summary() == {"numbered": 1, "unordered": 0, "passed": 0, "lost": 0, "watermarks": 1, "runs": 1}
+
+
+def test_serve_openai_names_a_header_as_the_network_certifier_does():
+    """A request with a client's own release headers, one byte before each one's name or between the name and its
+    colon, on which the network certifier then puts its release (`release.with_release`), dropping those of the
+    client's it takes for release headers. One over HTTP, the byte ``\\xa0`` (its body not JSON, so it is answered at
+    once): the frontend has read the certifier's release of it, not the client's. Then each of the 256 bytes in each
+    place: whichever fields the certifier kept, the server's headers (`hd.header_fields`) give the certifier's
+    release, as the certifier's own reader does."""
+    run = bytes.fromhex(RUN)
+
+    def stamped(pre: bytes, post: bytes, n: int, rest: bytes = b"\r\n") -> bytes:
+        own = b"".join(pre + h + post + b": " + v + b"\r\n" for h, v in ((REL.RELEASE_HEADER, b"7"), (REL.RUN_HEADER, b"cd"),
+                                                                        (REL.BUCKET_HEADER, b"9")))
+        return REL.with_release(b"POST /v1/completions HTTP/1.1\r\nhost: s\r\n" + own + rest, n, run, 1)
+
+    sent = stamped(b"\xa0", b"", 0, b"content-length: 1\r\n\r\n{")
+    assert b"\xa0x-verity-release: 7\r\n" in sent
+    with tick_endpoint() as e:
+        c = socket.create_connection(e.address)
+        c.sendall(sent)
+        answer = read_all(c)
+    assert answer.startswith(b"HTTP/1.1 400") and b"the body is not JSON" in answer
+    assert e.admit.seen == {RUN: {0}}
+    for b in range(256):
+        for pre, post in ((bytes([b]), b""), (b"", bytes([b]))):
+            line, *fields = stamped(pre, post, 3)[:-4].split(b"\r\n")
+            assert REL.release_of(stamped(pre, post, 3)) == (3, run, 1)
+            assert sa.release_of(hd.header_fields(fields)) == (RUN, 3, 1), (pre, post)
 
 
 def test_the_flag_takes_tick_with_the_engine_class_step_times():

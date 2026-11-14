@@ -3,6 +3,7 @@ import json
 import math
 
 import pytest
+import torch
 from synthetic import SHAPE, tiny_registry, write_config
 
 from training_slowdown import as_math, codecs, config, library, of_record, starts
@@ -43,6 +44,12 @@ def test_a_steps_rows_a_forward_are_divided_out_of_its_token_shapes_and_their_ma
                              ("other", "param", "mm", [[D, 3], [3, D]], 7, 7 * 3 * D * D))
     with pytest.raises(ValueError, match="not one whole number of rows of 1024"):
         of_record.per_row(struct | {"updated": [*struct["updated"], [D, 0, CTX * D, CTX, 16]]}, SHAPE)
+    # a row that names its op's dtype, a seventh field, is read as the row of six: the dtype is no part of an entry,
+    # so an op at one shape in two dtypes is one entry of both rows' counts
+    product, *others = struct["log"]
+    named = struct | {"log": [[*row, "bfloat16"] for row in struct["log"]]}
+    in_two = struct | {"log": [[*product[:4], 1, macs, "bfloat16"], [*product[:4], 1, macs, "float32"], *others]}
+    assert of_record.per_row(named, SHAPE) == of_record.per_row(in_two, SHAPE) == got
 
 
 def attention(rows: int, calls: int) -> tuple:
@@ -198,8 +205,9 @@ def test_the_cpus_norm_is_expected_where_the_step_trains_no_gain_and_the_record_
 def test_a_plans_codecs_must_each_be_of_the_records_kind_of_encoding(monkeypatch):
     """A record's format may have several codec kinds (here a made-up second one for `quant`). A plan of either, or
     of both, is that kind; one that keeps a tensor whole is not, and neither is any plan beside a format this table
-    doesn't know."""
+    doesn't know. A program's own model's tensors whole (`model`) are the whole tensors a plan of `identity` keeps."""
     assert of_record.e_kind(["scaledquant"], "quant") == [] == of_record.e_kind(["identity"], "full")
+    assert of_record.e_kind(["identity"], "model") == [] and of_record.e_kind(["scaledquant"], "model") != []
     monkeypatch.setitem(of_record.E_KINDS, "quant", ("scaledquant", "coded"))
     for kinds in (["scaledquant"], ["coded"], ["scaledquant", "coded"]):
         assert of_record.e_kind(kinds, "quant") == []
@@ -207,8 +215,8 @@ def test_a_plans_codecs_must_each_be_of_the_records_kind_of_encoding(monkeypatch
         "E's kind: the config's plan is identity, coded, the record's format quant (scaledquant or coded)"]
     assert of_record.e_kind(["coded"], "full") == [
         "E's kind: the config's plan is coded, the record's format full (identity)"]
-    assert of_record.e_kind(["identity"], "model") == [
-        "E's kind: the config's plan is identity, the record's format model (none known here)"]
+    assert of_record.e_kind(["identity"], "codes") == [
+        "E's kind: the config's plan is identity, the record's format codes (none known here)"]
     assert of_record.e_kind([], "full") == ["E's kind: the config's plan is empty, the record's format full (identity)"]
     # the sizes are printed and not compared
     assert of_record.e_sizes(["scaledquant"], 1200, {"format": "quant", "e_bytes": 1000}, 30) == (
@@ -337,7 +345,8 @@ def test_every_held_entry_is_an_entry_of_the_library_with_its_record_named():
     runs = of_record.held()
     assert set(runs) <= {p.stem for p in library.entries()}
     for h in runs.values():
-        assert set(h) - {"record_only", "partial"} == {"run", "art", "path", "sha256"}
+        assert set(h) - {"record_only", "partial", "step"} == {"run", "art", "path", "sha256"}
+        assert "step" not in h or (set(h["step"]) == {"counted", "why"} and h["step"]["counted"] > of_record.STEPS)
         assert len(h["sha256"]) == 64 and h["art"].startswith("art:")
         assert "partial" not in h or as_math.parse(h["partial"])  # an ask `as_math` reads
         assert all(set(line) == {"phase", "kind", "op", "shapes", "count", "macs", "why"}
@@ -387,11 +396,12 @@ def as_cuda(struct: dict, rows: int) -> dict:
     """A CPU step's structure as the records hold CUDA's step: attention one fused kernel a call at torch's formula
     (`fused`), the norm one fused kernel counted at its updated gains alone, each weight read at the bits this step
     reads it at (a route casts on a CPU as on CUDA). The step's every attention backward asks for q's, k's and v's,
-    or this refuses to write it."""
+    or this refuses to write it. Its rows name no dtype, as those records' don't, whether the step's rows name one
+    (the counter's do, a seventh field) or not."""
     x, s = [rows, CTX, D], [rows, CTX, 1]
     kernel = {(*e[:3], json.dumps(e[3])): e[4] for e in attention(rows, calls=1)}
     calls, out = {}, []
-    for phase, kind, op, shapes, count, macs in struct["log"]:
+    for phase, kind, op, shapes, count, macs, *_ in struct["log"]:
         at = json.loads(shapes)
         if (phase, kind, op, shapes) in kernel:
             calls[phase, op, shapes] = count // kernel[phase, kind, op, shapes]
@@ -406,9 +416,10 @@ def as_cuda(struct: dict, rows: int) -> dict:
     return {"updated": struct["updated"], "log": out + fused(rows, forward.pop(), backward.pop())}
 
 
-def held_to(root, entry: str, rec: dict, record_only=(), partial: str | None = None):
+def held_to(root, entry: str, rec: dict, record_only=(), partial: str | None = None, step: dict | None = None):
     """`rec` as `entry`'s run of record under `root`: where its records are, and the data file naming it, the
-    gradients `partial` says its attention backward asked for and the lines `record_only` of its program."""
+    gradients `partial` says its attention backward asked for, the lines `record_only` of its program and the step
+    `step` says is compared."""
     run, path = "r-made-up", "out/run/run.json"
     (root / "records" / run / "out" / "run").mkdir(parents=True)
     raw = json.dumps(rec).encode()
@@ -417,8 +428,24 @@ def held_to(root, entry: str, rec: dict, record_only=(), partial: str | None = N
                     for line in record_only)
     (root / "held.toml").write_text(f'[held."{entry}"]\nrun = "{run}"\nart = "art:{"0" * 64}"\npath = "{path}"\n'
                                     f'sha256 = "{hashlib.sha256(raw).hexdigest()}"\n'
-                                    + (f'partial = "{partial}"\n' if partial else "") + lines)
+                                    + (f'partial = "{partial}"\n' if partial else "")
+                                    + (f'step = {{ counted = {step["counted"]}, why = {json.dumps(step["why"])} }}\n'
+                                       if step else "") + lines)
     return root / "records", root / "held.toml"
+
+
+def test_a_made_up_record_is_written_from_a_step_whose_rows_name_a_dtype_or_none():
+    """`as_cuda` reads a counted step's rows as the counter writes them, each naming its op's dtype in a seventh
+    field, and rows of six, and writes the same record from either: rows of six, the norm one fused kernel and
+    attention one row a kernel."""
+    x = [2, CTX, D]
+    bare = a_step(2, *attention(2, calls=1), ("fwd", "updated", "mul", [x, G], 1, 2 * CTX * D),
+                  ("fwd", "act", "mul", [x, [2, CTX, 1]], 3, 3 * 2 * CTX * D))
+    named = bare | {"log": [[*row, "bfloat16"] for row in bare["log"]]}
+    record = as_cuda(bare, rows=2)
+    assert {len(row) for row in bare["log"]} == {6} and {len(row) for row in named["log"]} == {7}
+    assert as_cuda(named, rows=2) == record and {len(row) for row in record["log"]} == {6}
+    assert [row[2] for row in record["log"]] == ["mm", "_fused_rms_norm", FLASH, FLASH + "_backward"]
 
 
 @pytest.mark.slow
@@ -490,21 +517,59 @@ def test_the_command_names_each_expected_difference_and_exits_1_on_any_other(tmp
     assert "  DIFFERS   log, the record's step only: fwd/updated _fused_rms_norm" in out
 
 
-def test_a_difference_no_rule_names_is_printed_and_the_command_exits_1(tmp_path, capsys, monkeypatch):
-    """The command on a count made up here, so no step is counted: a step equal to its record's exits 0, and so does
-    one whose record has a line more that the data file names; a product the record lacks, which no rule names, is
-    printed as a difference and exits 1; so does a step the capture refused, which is compared with nothing."""
+def test_an_entry_that_states_its_step_is_counted_to_it_and_the_output_says_which_and_why(tmp_path, capsys,
+                                                                                         monkeypatch):
+    """An entry whose trained weights leave θ after the second step states the step compared (`step`): the config is
+    counted to it, that step is the one set beside the record's, and the output prints it with the entry's why. An
+    entry that states none is counted to `STEPS`."""
     reg = tiny_registry(tmp_path / "reg")
     path = write_config(tmp_path / "a.toml")
     cfg = config.load(path, starts.registry(reg))
-    mine = count()
-    monkeypatch.setattr(of_record, "counted", lambda *a: mine)
+    mine, asked = count(), []
+
+    def counted(cfg, rows, out, n=of_record.STEPS):
+        asked.append(n)
+        other = {"updated": [], "log": []}
+        return mine | {"steps": [{"struct": "o"}] * (n - 1) + [{"struct": "s"}],
+                       "structures": mine["structures"] | {"o": other}}
+
+    monkeypatch.setattr(of_record, "counted", counted)
     rec = {"start_record": {"name": "tiny", "digest": cfg.start.digest}, "structures": dict(mine["structures"]),
            "steps": [{"struct": "s"}] * cfg.budget["steps"], "checkpoints": [{"format": "full", "e_bytes": 20}]}
+    why = "a gain behind a zero matrix gets no gradient at the first step"
+    records, held = held_to(tmp_path, "a", rec, step={"counted": 3, "why": why})
+    assert of_record.main([str(path), "--records", str(records), "--held", str(held), "--starts", str(reg)]) == 0
+    out = capsys.readouterr().out
+    assert asked == [3] and out.startswith("a, held to r-made-up (out/run/run.json): equal\n")
+    assert ("  step      the config's step 3, 2 forwards of one row, counted on a CPU, beside the record's modal "
+            f"structure, which 3 of its 3 steps have, 1 row a forward divided out; of_record.toml states step 3: "
+            f"{why}\n") in out and "identity, 10 B after 3 steps" in out
+    records, held = held_to(tmp_path / "unstated", "a", rec)
+    assert of_record.main([str(path), "--records", str(records), "--held", str(held), "--starts", str(reg)]) == 0
+    assert asked == [3, of_record.STEPS] and "the config's step 2," in capsys.readouterr().out
+
+
+def test_a_difference_no_rule_names_is_printed_and_the_command_exits_1(tmp_path, capsys, monkeypatch):
+    """The command on a count made up here, so no step is counted: a step equal to its record's exits 0, and so does
+    one whose record has a line more that the data file names; a product the record lacks, which no rule names, is
+    printed as a difference and exits 1; so does a step the capture refused, which is compared with nothing. The step
+    is counted at the CPU thread count its record states, and at a job's default (held at one by the suite's
+    fixture) where the record names none, as the output says."""
+    reg = tiny_registry(tmp_path / "reg")
+    path = write_config(tmp_path / "a.toml")
+    cfg = config.load(path, starts.registry(reg))
+    mine, at = count(), []
+    monkeypatch.setattr(of_record, "counted", lambda *a: at.append(torch.get_num_threads()) or mine)
+    rec = {"start_record": {"name": "tiny", "digest": cfg.start.digest}, "structures": dict(mine["structures"]),
+           "steps": [{"struct": "s"}] * cfg.budget["steps"], "checkpoints": [{"format": "full", "e_bytes": 20}]}
+    records, held = held_to(tmp_path / "counted", "a", rec | {"threads": 3})
+    assert of_record.main([str(path), "--records", str(records), "--held", str(held), "--starts", str(reg)]) == 0
+    assert "\n  threads   3, the record's\n" in capsys.readouterr().out and at.pop() == 3
     records, held = held_to(tmp_path, "a", rec)
     argv = [str(path), "--records", str(records), "--held", str(held), "--starts", str(reg)]
     assert of_record.main(argv) == 0
     out = capsys.readouterr().out
+    assert at.pop() == 1 and "\n  threads   1, a job's default: the record names no count\n" in out
     assert out.startswith("a, held to r-made-up (out/run/run.json): equal\n") and "DIFFERS" not in out
     assert ("  step      the config's step 2, 2 forwards of one row, counted on a CPU, beside the record's modal "
             "structure, which 3 of its 3 steps have, 1 row a forward divided out\n") in out
@@ -532,6 +597,24 @@ def test_a_difference_no_rule_names_is_printed_and_the_command_exits_1(tmp_path,
     out = capsys.readouterr().out
     assert out.startswith("a, held to r-made-up (out/run/run.json): refused: the capture refused the step")
     assert "DIFFERS" not in out and "1 entry: 0 equal, 0 differ, 1 refused." in out
+
+
+def test_a_record_that_states_more_than_one_thread_is_counted_under_the_math_kernel_and_not_refused(tmp_path, capsys):
+    """The real count through the command, of a record that states two CPU threads where the suite holds one: torch's
+    fused CPU attention kernel at more than one thread makes a count invalid, so the config's step is counted under
+    the math kernel a CPU job holds attention at (`run.cpu_attention`), and the entry is equal to its record."""
+    reg = tiny_registry(tmp_path / "reg")
+    path = write_config(tmp_path / "a.toml")
+    cfg = config.load(path, starts.registry(reg))
+    cpu = of_record.counted(cfg, 1, tmp_path / "count")
+    first, second = cpu["steps"]
+    rec = {k: v for k, v in cpu.items() if k != "trace"} | {
+        "steps": [first, second, second], "start_record": {"name": "tiny", "digest": cfg.start.digest}, "threads": 2}
+    records, held = held_to(tmp_path, "a", rec)
+    assert of_record.main([str(path), "--records", str(records), "--held", str(held), "--starts", str(reg)]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("a, held to r-made-up (out/run/run.json): equal\n")
+    assert "\n  threads   2, the record's\n" in out and "1 entry: 1 equal, 0 differ, 0 refused." in out
 
 
 def test_a_record_that_is_missing_or_another_file_is_refused_with_its_fetch_line(tmp_path):

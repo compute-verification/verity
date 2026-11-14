@@ -20,7 +20,7 @@ Three exact backends, each with that epilogue in that order (run.py's `--kernel`
   m16n8k32; on sm_90 a second exact kernel beside wgmma.
 - **any card: `int_mm.py`** (`--kernel int_mm`): `torch._int_mm`, cuBLASLt's s32 GEMM, then the epilogue as its own
   launch, `"fused"` (one Triton kernel of the Definition's PTX, held to `int_mm.ptx_audit`) or `"eager"` (four torch
-  kernels). `int_mm.linear` is the plain GEMM that `p2_stage` and `j10r_sm90` call.
+  kernels). `int_mm.linear` is the plain GEMM that `p2_stage` calls.
 
 Set aside: vLLM's CUTLASS int8 GEMM (its epilogue applies s_w first; on the transposed product it is the Definition's
 order but needs M a multiple of 16 and writes y^T), a baseline in `bench.py`.
@@ -48,7 +48,7 @@ roofline analysis to synthetic curves (CPU).
 
 ~~~text
 # from the tree's root, on a CPU node with CUDA 13's nvcc
-uv sync --all-packages --extra torch-cpu && bash benchmarks/torch_gpu/s8_linear/build.sh /tmp/s8-linear-ship
+bash benchmarks/torch_gpu/s8_linear/build.sh /tmp/s8-linear-ship
 tar -C /tmp/s8-linear-ship -cf /tmp/s8-ship.tar .
 # on an H200 with CUDA torch, vLLM and `gpu-lease`
 OUT=DIR S8_SHIP=/tmp/s8-ship.tar bash benchmarks/torch_gpu/s8_linear/run.sh "run.py" "tune.py" \

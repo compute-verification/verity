@@ -90,14 +90,14 @@ open Classical in
 /-- **The credited size `S`**: the live size of every block of the windows before the first refusal
 (`CreditWindows.AcceptedUpTo`), `creditLive` with each block's size in place of its words. -/
 noncomputable def creditedSize {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : WindowPlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
+    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
     (sz : Fin Np → ℕ) (x : Paths (Paths C Cd.rounds × B) n) : ℝ :=
   ∑ w : Fin n, if ws.AcceptedUpTo x w then ∑ t : Fin Np, (liveSize Sc Cd Np (Wp.liveAt x w) sz t : ℝ) else 0
 
 open Classical in
 /-- **The right blocks' size**: the size of every block of credited words that `right` names in each window. At
 `SampledLayer.Good` it is the size whose values the period certifies right: a good block is live in a credited window
-(`periodMode` skips every other block whole). -/
+(`monitoringPeriodMode` skips every other block whole). -/
 noncomputable def rightSize {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ} (sz : Fin Np → ℕ)
     (right : Fin n → Fin Np → Prop) : ℝ :=
   ∑ w : Fin n, ∑ t : Fin Np, if right w t ∧ tileWords Sc Cd Np t ≠ 0 then (sz t : ℝ) else 0
@@ -128,7 +128,7 @@ function of the period's coins. Add the registered declaration `D`, the lowering
 except with probability `δ_s + n·(δ_bind + δ_ks)` (δ_coin plus δ_crypto), an accepted period's right blocks have total
 credit size at least `(1 − ε_skip)₊·S` AND gates. Here `S` is the credited size of the windows before the first
 refusal (`creditedSize`) and `ε_skip = σ·ε(j)·N_live/S` (`epsSkip`, at H1's `ε(j)` and live words). A block is right
-(`SampledLayer.Good` under `periodMode`) when the run computed it and every block that writes it a value after its coin.
+(`SampledLayer.Good` under `monitoringPeriodMode`) when the run computed it and every block that writes it a value after its coin.
 E1(c) (`accounting-ts-unit-fixed`) reads that as its words being its own right values.
 
 It is a statement about values, not a compute claim: right values aren't work. It needs no
@@ -145,7 +145,7 @@ def RightValues : Prop :=
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V) (enc : C → ByteArray)
     (place : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → Place)
     (tile : Noise → List (List ℕ) → Fin (tileCount σ sT) → (ℕ → V) → Prop)
-    (Wp : WindowPlay C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
+    (Wp : ExecutionPhasePlay C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
     (Pl : Play (Coin C Ξ Cd.rounds σ sT) n K T L U) (ρ δs δbind δks : ℝ),
     Scope Sc Cd δs →
     0 < ρ → ρ ≤ 1 →
@@ -153,8 +153,8 @@ def RightValues : Prop :=
     (∀ j, stageShare (tileStage Cd (tileCount σ sT)) (shareCone Sc Cd (tileCount σ sT)) j ≤ 1) →
     (∀ t : Fin (tileCount σ sT), 0 < shareCone Sc Cd (tileCount σ sT) t →
       tileLuck Sc Cd (tileCount σ sT) t ≤ 7 / 8 ∧ tileLuck0 Sc Cd (tileCount σ sT) t ≤ 1 / 2) →
-    Pl.game = periodGame (tileStage Cd (tileCount σ sT)) (liveCone Sc Cd (tileCount σ sT)) 1 1 (k sT) Wp →
-    Wp.EveryWindow (fun live _ => DeadConeDead Sc Cd (tileCount σ sT) live) →
+    Pl.game = monitoringPeriodGame (tileStage Cd (tileCount σ sT)) (liveCone Sc Cd (tileCount σ sT)) 1 1 (k sT) Wp →
+    Wp.EveryExecutionPhase (fun live _ => DeadConeDead Sc Cd (tileCount σ sT) live) →
     PrefixOf (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
       (j10rAtCoin hr enc place tile)) Pl.game →
     (∀ w, prob (fun x => (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
@@ -166,7 +166,7 @@ def RightValues : Prop :=
       rightSize Sc Cd (M.size ledger) (fun w t =>
         (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
           (j10rAtCoin hr enc place tile)).Good
-          (periodMode Cd Wp (tileRun σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
+          (monitoringPeriodMode Cd Wp (tileRun σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
             (j10rAtCoin hr enc place tile))) x w t) <
         creditFloor Sc Cd (tileCount σ sT) (ws.prefixLen x) (creditLive Sc Cd Wp ws x)
           (creditedSize Sc Cd Wp ws (M.size ledger) x) (M.size ledger) 1 1 (j10rRate (k sT) ρ) δs) ≤

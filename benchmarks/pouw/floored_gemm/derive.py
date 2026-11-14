@@ -1,15 +1,23 @@
 """The duo receipts of one 128 x 128 tile, the CPU reference the edited GEMMs' references share.
 
 `tile_receipts` folds a tile's u32 words after each step (masked_gemm's mref.py's duo receipts, one tile at a time) under
-ref.py's keys; `TM`, `BN`, `WM` and `NCT` are the tile's shape and `U_TAG` the SHA-512 tag of lpgemm.cu's U. A reader puts
-this directory on its path, or binds `ref`, before it imports this module.
+ref.py's keys; `TM`, `BN`, `WM` and `NCT` are the tile's shape and `U_TAG` the SHA-512 tag of lpgemm.cu's U. It loads the
+ref.py beside it from its file, so a reader in another directory loads this file the same way: it puts nothing on its
+path, and the name `derive` stays with the directory whose own scripts import one by it (harness/).
 """
 from __future__ import annotations
 
-import numpy as np
-from ref import key_mul, key_xor, mix32, rot_of, rotl
+import importlib.util
+from pathlib import Path
 
-__all__ = ["BN", "NCT", "TM", "U_TAG", "WM", "mix32", "tile_receipts"]
+import numpy as np
+
+__all__ = ["BN", "NCT", "TM", "U_TAG", "WM", "key_mul", "mix32", "tile_receipts"]
+
+_spec = importlib.util.spec_from_file_location("floored_gemm_ref", Path(__file__).resolve().with_name("ref.py"))
+_ref = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_ref)
+key_mul, key_xor, mix32, rot_of, rotl = _ref.key_mul, _ref.key_xor, _ref.mix32, _ref.rot_of, _ref.rotl
 
 U_TAG = 6
 TM = BN = 128

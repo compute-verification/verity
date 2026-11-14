@@ -7,7 +7,7 @@
 # TOML's integers) and `l0_bpb` θ's bits per byte on the whole search pool (provenance.search_pool.bpb).
 #
 # A data: its tokenizer, the sha256 of its built stream's manifest and tokenizer.json, the selection the stream was
-# built from (a fixture in fixtures/artifacts.json, which the manifest names by sha256), each held-out set's tokens by
+# built from (a fixture in artifacts.json, which the manifest names by sha256), each held-out set's tokens by
 # sha256, and where a node holds each.
 
 installed = "/workspace/research/te/starts"

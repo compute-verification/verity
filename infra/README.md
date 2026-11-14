@@ -1,7 +1,7 @@
 # infra
 
 Our machines: the shared CPU and GPU nodes, the control pod that watches them, and the tools that launch the coordinators.
-Nothing outside `infra/` imports it, apart from the files `INFRA_IMPORTERS` in `tests/test_boundaries.py` names; the
+Nothing outside `infra/` imports it, apart from the ties `tests/import_order.toml` lists into its row, the last; the
 `research` command reaches `ops` and `cluster` by running them, never by import. `cluster`, `control`, `cursor` and
 `slack-events` each have a README with the detail; `ops` and `nebius` are described here. This page maps each machine
 and loop to its code.
@@ -52,7 +52,7 @@ node 1 runs the console's `node1` group (`tools/research/console/`). The manifes
 | The control disk alert and the notes sync check | `infra/control/control_disk_alert.py`, `control_disk.sh` |
 | Store index, garbage collection and fixture export | `infra/control/store_index.sh`, `store_gc.sh`, `fixtures_export.sh` |
 | The resource steward | `infra/control/steward-run.sh` |
-| GitHub App tokens for drive and the notes | `infra/control/gh_app_token.sh`, `gh_notes_token.sh` |
+| GitHub App tokens for drive and the notes, and the read-only one every watcher reads GitHub with | `infra/control/gh_app_token.sh`, `gh_notes_token.sh`, `gh_read_token.sh` |
 | `research msg` as root, for credentials that live only on the pod | `infra/control/msg.sh` |
 | The dead-man's switch, which alerts when the pod stops | `infra/control/deadman/` |
 

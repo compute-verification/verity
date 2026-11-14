@@ -10,19 +10,38 @@ from __future__ import annotations
 import gzip
 import json
 import random
+from typing import Any
 
 import pytest
-from verity_vllm.query.units import PartitionError, ValueRef, VerificationUnit, boundary, partition_by
+
+from verity_vllm.program import compact as C
 from verity_vllm.query import module_body as mb
 from verity_vllm.query import program_view as pv
-from verity_vllm.query.module_body import boundary_without_literals, literal_calls, without_literals
-from verity_vllm.query.program_view import CallView, ProgramView, from_instances, param_reads, reads_any_of
+from verity_vllm.query.module_body import (
+    boundary_without_literals,
+    literal_calls,
+    without_literals,
+)
+from verity_vllm.query.program_view import (
+    CallView,
+    ProgramView,
+    from_instances,
+    param_reads,
+    reads_any_of,
+)
+from verity_vllm.query.units import (
+    PartitionError,
+    ValueRef,
+    VerificationUnit,
+    boundary,
+    partition_by,
+)
 
 EPS = '{"f64":"0x1p-17"}'
 PARAMS = [["prompt", "Array<4,Value<32>>"],
           ["weights", "{m.a.weight: Array<4,Array<8,Value<16>>>, m.b.weight: Array<8,Array<4,Value<16>>>, m.n.weight: Array<4,Value<16>>}"]]
 # weights leaves: m.a.weight [0, 32), m.b.weight [32, 64), m.n.weight [64, 68)
-ROWS = [
+ROWS: list[dict[str, Any]] = [
     {"i": 0, "spec": "Embedding_v1{V=8,H=4}", "form": "call", "name": "m.embed/embedding[0]", "args": [[["p", 0, 0, 1]], [["p", 1, 0, 32]]]},
     {"i": 1, "spec": "Gemm_v1{K=4,N=8}", "form": "call", "name": "m.a/linear[0]", "args": [[["n", 0, 0, 4]], [["p", 1, 0, 32]]]},
     # a fused norm: TWO ports ("0" = normed, "1" = residual); reads Call 1 and the norm weight (a range inside the record)
@@ -193,15 +212,15 @@ def test_the_columnar_boundary_without_literals_is_boundarys(monkeypatch, step, 
     again in a later one keeps its first read), on Programs with outputs among the crossing Values, beside them and made by a literal."""
     monkeypatch.setattr(mb, "_READS_PER_STEP", step)
     P0 = from_instances(doc(attention_like_rows(60, seed)))
-    lit = literal_calls(P0)
+    lit, none = literal_calls(P0), frozenset[int]()
     outs = (ValueRef(len(P0.calls) - 1, "out"), ValueRef(2, "1"), ValueRef(-1, "out"), *(ValueRef(k, "out") for k in sorted(lit)[:1]))
     for P in (P0, ProgramView(P0.calls, P0.params, outs, P0.digest, P0.source)):
-        for literals in (lit, frozenset()):
+        for literals in (lit, none):
             a, b = boundary_without_literals(P, QUERIES[q], literals), without_literals(boundary(P, QUERIES[q]), literals)
             assert a.read_by._d is None
             assert list(a.produced_in.items()) == list(b.produced_in.items()) and a.values == b.values
             assert [(u.id, u.calls) for u in a.units] == [(u.id, u.calls) for u in b.units] and a.owner == b.owner
-            assert dict(a.read_by) == b.read_by and a.read_by == b.read_by
+            assert dict(a.read_by) == b.read_by and a.read_by == b.read_by and len(a.read_by) == len(b.read_by)
     assert lit and any(v.call in lit for v in boundary(P0, QUERIES["word"]).values), "the rows give the literal filter something to drop"
 
 
@@ -241,7 +260,6 @@ def test_a_wide_record_resolves_by_bisection_to_the_linear_scans_ports():
 def test_stored_progressions_resolve_to_the_columns_of_their_runs():
     """v2 rows (node and parameter progressions, `compact.file_items_from_runs`) build the same columns as their per-leaf v1 runs:
     every Value in the same order, for strided weight reads of a wide record, gathers over producer Calls and overlapping runs."""
-    from verity_vllm.program import compact as C
     rng = random.Random(9)
     edges = sorted(rng.sample(range(1, 40_000), 199))
     wide = tuple(pv.Port(f"f{k}", lo, hi, hi - lo, 16) for k, (lo, hi) in enumerate(zip([0] + edges, edges + [40_000])))
@@ -279,7 +297,6 @@ def test_weight_read_progressions_resolve_to_the_columns_and_reads_of_their_runs
     builds the columns its per-leaf runs build and the reads the reader this replaced gives them, beside progressions that cross
     fields, sit in a gap between fields, are empty, have one run or none, step backwards or over parameters, on a single-port and
     an overlapping table."""
-    from verity_vllm.program import compact as C
     rng = random.Random(11)
     edges = sorted(rng.sample(range(1, 30_000), 149))
     gapped = []
@@ -356,7 +373,6 @@ def test_a_repeated_parameter_operand_resolves_once_to_the_columns_and_reads_of_
     """The memo of a document's parameter operands builds the columns the Builder without it builds and the reads the reader this
     replaced gives, for operands that are one list again, a copy of it, equal runs that are other objects, more operands sharing a
     first run than the memo keeps, parameter runs then a Call's, and a Call reading a weight port before the repeat; under any cap."""
-    from verity_vllm.program import compact as C
     monkeypatch.setattr(pv, "RESOLVE_MEMO_RUNS", cap)
     monkeypatch.setattr(pv, "RESOLVE_MEMO_MIN", least)
     rng = random.Random(13)
@@ -404,3 +420,120 @@ def test_a_repeated_parameter_operand_resolves_once_to_the_columns_and_reads_of_
         want: list[ValueRef] = []
         _resolve_reads_ref([C.runs_from_file_items(o) for o in ops], port_of, ins, ["call"] * len(rows), want)
         assert tuple(P.call(i).reads) == tuple(want), i
+
+
+def test_a_spec_the_registry_does_not_hold_has_no_ports_and_says_so():
+    with pytest.raises(KeyError, match="NoSuch_v1 is not a registered Definition"):
+        pv.definition_ports("NoSuch_v1{N=1}")
+    assert "NoSuch_v1{N=1}" not in pv._PORTS_CACHE
+    with pytest.raises(TypeError, match=r"Gemm_v1: statics \['N'\] are not in the spec"):
+        pv.definition_ports("Gemm_v1{K=4}")
+
+
+def test_a_call_a_port_or_an_input_the_view_does_not_hold_is_a_key_error():
+    P, R = from_instances(doc()), reference_from_instances(doc())
+    assert P.call(2).ports == ("0", "1") and P.call(2).port("1") == pv.Port("1", 4, 8, 4, 16)
+    with pytest.raises(KeyError) as none:
+        P.call(2).port("2")
+    assert none.value.args == (f"Call 2 ({ROWS[2]['spec']}) has no port '2'",)
+    assert P.input(-2).name == "weights" and P.input(-2).ports == ("m.a.weight", "m.b.weight", "m.n.weight") and P.input(-1).ports == ("out",)
+    for iid in (0, -3):
+        with pytest.raises(KeyError, match=f"^{iid}$"):
+            P.input(iid)
+    shuffled = ProgramView(tuple(reversed(R.calls)), R.params, (), None, "instances")     # hand-built: its Calls are not at their ids
+    assert [shuffled.call(i).id for i in range(8)] == list(range(8)) and shuffled.call(3) is R.calls[3]
+    with pytest.raises(KeyError, match="^0$"):
+        ProgramView((R.calls[1],), R.params, (), None, "instances").call(0)
+
+
+def test_lazy_sequences_compare_hash_add_and_print_as_their_tuples():
+    P, Q = from_instances(doc()), from_instances(doc())
+    calls, reads = P.calls, P.call(3).reads
+    assert calls == tuple(calls) and calls == list(calls) and calls == Q.calls
+    assert calls != tuple(calls)[:7] and calls != (*calls[:7], calls[0]), "another length, and another Call at one place"
+    assert calls != 8 and (calls == "calls") is False, "no other type is a sequence of Calls"
+    assert hash(calls) == hash(tuple(calls)) == hash(Q.calls) and P == Q and hash(P) == hash(Q), "two views of one document are one key"
+    assert calls + (None,) == (*calls, None) and isinstance(calls + (), tuple) and calls + Q.calls == (*calls, *calls)
+    assert reads == list(reads) and reads == Q.call(3).reads and reads != Q.call(4).reads and reads != 3 and (reads == "reads") is False
+    assert (repr(calls), repr(reads)) == ("_Calls(n=8)", "_Reads(call=3, n=3)")
+
+
+def test_a_row_that_reads_a_later_call_is_no_body_in_order(tmp_path):
+    rows = [dict(r) for r in ROWS]
+    rows[1] = dict(rows[1], args=[[["n", 5, 0, 4]], [["p", 1, 0, 32]]])
+    with pytest.raises(ValueError, match="^instance rows are not a body in order: Call 1 reads Call 5, not yet read$"):
+        from_instances(doc(rows))
+    p = tmp_path / "instances.json"
+    p.write_text(json.dumps(doc(rows)))
+    with pytest.raises(ValueError, match="^instance rows are not a body in order: Call 1 reads Call 5, not yet read$"):
+        from_instances(str(p))                                # a file: streamed, then read as a document, which says the same
+
+
+def test_a_batch_read_past_its_single_instance_signature_is_its_first_port_once():
+    """A `batch` row's ports are one instance's: a run past them is another member's output, read as the first port."""
+    rows = [dict(r) for r in ROWS]
+    rows[2] = dict(rows[2], form="batch")
+    rows.append({"i": 8, "spec": "Gemm_v1{K=4,N=8}", "form": "call", "name": "m.c/linear[0]",
+                 "args": [[["n", 2, 8, 12], ["n", 2, 12, 16]], [["n", 2, 4, 8]], [["p", 1, 0, 32]]]})
+    P = from_instances(doc(rows))
+    assert_same_view(P, reference_from_instances(doc(rows)))
+    assert tuple(P.call(8).reads) == (ValueRef(2, "0"), ValueRef(2, "1"), ValueRef(-2, "m.a.weight"))
+    one = [dict(r, form="call") for r in rows]
+    assert tuple(from_instances(doc(one)).call(8).reads) == (ValueRef(2, "1"), ValueRef(-2, "m.a.weight")), "a `call` row has no other member"
+    # what a body returns resolves as an operand does: each Value once, in the order its runs first touch it
+    b = pv._instances_columns(pv._params_view(PARAMS), rows)
+    runs = [("n", 2, 8, 12), ("n", 2, 0, 8), ("n", 1, 0, 4), ("p", 1, 0, 40), ("p", 0, 0, 4), ("c", 0, 0, 1), ("n", 3, 20, 24), ("p", 1, 68, 70), ("n", 1, 0, 4)]
+    assert b.outputs(runs) == (ValueRef(2, "0"), ValueRef(2, "1"), ValueRef(1, "out"), ValueRef(-2, "m.a.weight"), ValueRef(-2, "m.b.weight"),
+                               ValueRef(-1, "out"), ValueRef(3, "out"))
+    assert b.outputs([("n", 2, 8, 12), ("n", 2, 12, 16)]) == (ValueRef(2, "0"),), "a batch's other members, as a Call reads them"
+    assert b.outputs([("c", 0, 0, 1)]) == () and b.outputs([("n", 2, 4, 6), ("p", 1, 64, 65)]) == (ValueRef(2, "1"), ValueRef(-2, "m.n.weight"))
+    assert pv._instances_columns(pv._params_view(PARAMS), one).outputs([("n", 2, 8, 12)]) == ()
+
+
+def test_a_file_is_streamed_the_same_at_every_chunk_size_and_a_cut_file_says_where(tmp_path, monkeypatch):
+    text = json.dumps(doc())
+    spaced = text.replace('"rows": [', '"rows"   :\n   [  ').replace("}, {", "} ,\n {")
+    assert json.loads(spaced) == doc() and spaced != text
+    p, q, cut = (tmp_path / name for name in ("instances.json", "spaced.json", "cut.json"))
+    p.write_text(text)
+    q.write_text(spaced)
+    for chunk in range(1, 97):
+        monkeypatch.setattr(pv, "_CHUNK", chunk)
+        assert list(pv.iter_instance_rows(str(p))) == ROWS and list(pv.iter_instance_rows(str(q))) == ROWS, chunk
+    ends: tuple[tuple[str, list[int], str], ...] = (
+        ('{"schema": "x"}', [], "cut.json: instance sequence without a rows array"), ('{"rows"', [], "cut.json: rows array not opened"),
+        ('{"rows": [', [], "cut.json: rows array not closed"), ('{"rows": [{"i": 0}, ', [0], "cut.json: rows array not closed"),
+        ('{"rows": [{"i": 0}, {"i": 1, "spec"', [0], "Expecting ':' delimiter"))
+    for chunk in (3, 1 << 22):
+        monkeypatch.setattr(pv, "_CHUNK", chunk)
+        for cut_text, rows, why in ends:
+            cut.write_text(cut_text)
+            got = []
+            with pytest.raises(ValueError, match=why):
+                for r in pv.iter_instance_rows(str(cut)):
+                    got.append(r["i"])
+            assert got == rows, (chunk, cut_text)
+
+
+def test_an_instance_files_head_is_read_up_to_its_rows_however_long(tmp_path):
+    long = dict(doc(), digest="d" * 70_000)                   # a head longer than the first read of it
+    p = tmp_path / "instances.json"
+    p.write_text(json.dumps(long))
+    assert pv._read_instance_header(str(p)) == {k: v for k, v in long.items() if k != "rows"}
+    view = from_instances(str(p))
+    assert view.digest == "d" * 70_000
+    assert_same_view(view, reference_from_instances(long))
+    for text in ('{"schema": "x"}', json.dumps({"schema": "x", "digest": "d" * 70_000}), ""):
+        p.write_text(text)
+        for read in (pv._read_instance_header, from_instances):
+            with pytest.raises(ValueError, match="instances.json: instance sequence without a rows array"):
+                read(str(p))
+
+
+def test_a_program_of_more_port_names_than_a_column_indexes_is_refused():
+    def record(n: int) -> dict:
+        return {"params": [["w", "{" + ", ".join(f"f{i}: Value<8>" for i in range(n)) + "}"]], "rows": []}
+
+    assert len(from_instances(record(1 << 16)).params[0].port_table) == 1 << 16
+    with pytest.raises(ValueError, match="distinct port names"):
+        from_instances(record((1 << 16) + 1))

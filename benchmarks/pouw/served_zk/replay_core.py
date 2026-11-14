@@ -50,18 +50,16 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+import of_record as OR
 import verity_difftest as D
 
-from verity.protocols.pouw.verifier import coins as Co
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier import verifier as PV
-from verity.protocols.pouw.verifier import window as Wd
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import of_record as OR
+from verity.protocols.accounting.pouw.verifier import coins as Co
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import verifier as PV
+from verity.protocols.accounting.pouw.verifier import window as Wd
 
 REPO = Path(__file__).resolve().parents[3]
-LEAN = REPO / "verity/protocols/pouw/verifier/lean/check"
+LEAN = REPO / "verity/protocols/accounting/pouw/verifier/lean/check"
 V2_ART = "art:08afd6b23db47295569411eb024868fb39e6dbae6a11a3835657be263321621d"
 V2_TILE = "Pc8TileSide_v1{K=4096,TM=1,TN=1,DEV='sm120'}"
 REGISTRATION_RULES = ("window", "window-form", "public-items", "level", "public-value", "population", "law", "query",
@@ -482,6 +480,8 @@ def main(argv: list[str] | None = None) -> int:
     print(t["line"])
     return 0 if t["same_verdict"] == t["cases"] and t["lean_same"] == t["compared"] else 1
 
+
+__all__ = ["store_runs"]
 
 if __name__ == "__main__":
     sys.exit(main())

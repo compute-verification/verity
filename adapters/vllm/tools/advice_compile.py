@@ -43,6 +43,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+from verity_vllm.engine.served_seed import DEFAULT_SEED
+from verity_vllm.program.predict import phi as P
+
 MANIFEST = "verity-vllm/served-window-programs/v1"
 
 
@@ -72,23 +75,17 @@ def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
 def engine_of(meta: dict, rank: int) -> tuple[dict, dict]:
     """The registration's tensor-parallel world at ``rank`` and its engine args, from the run's engine record
     (`predict.phi.engine_of`, whose ValueError it raises)."""
-    from verity_vllm.program.predict import phi as P
-
     return P.engine_of(meta, rank)
 
 
 def checkpoint_dtype(hf_config: dict) -> str | None:
     """The checkpoint dtype φ states, read from the pinned config's `quantization_config` (`predict.phi.checkpoint_dtype`)."""
-    from verity_vllm.program.predict import phi as P
-
     return P.checkpoint_dtype(hf_config)
 
 
 def phi_of(meta: dict, hf_config: dict, rank: int):
     """The registration's φ (module docstring): `predict.phi.served_phi`, the one formula of a served engine's φ, which a served
     window's registered compiler reads too (`prove_path.phi_of_serve`); `engine_of`'s ValueError is raised."""
-    from verity_vllm.program.predict import phi as P
-
     return P.served_phi(meta, hf_config, rank)
 
 
@@ -105,8 +102,6 @@ def window_coin(run: Path, window: int) -> dict | None:
 def registered_seed(meta: dict) -> int:
     """The default seed the registration fixes, `engine.served_seed.DEFAULT_SEED`; a ValueError when the run's server says it
     filled in another (or says none), since a request that sent no seed would be compiled under a seed its sample didn't use."""
-    from verity_vllm.engine.served_seed import DEFAULT_SEED
-
     seed = meta.get("default_seed")
     if type(seed) is not int or seed != DEFAULT_SEED:
         raise ValueError(f"the run's server filled in default seed {seed!r}, and the registered one is "

@@ -1,4 +1,4 @@
-"""The library list (`verity.definitions.circuits.library`): the measured MUFU tables and core's tensor-core steps and casts are `library`,
+"""The library list (`verity.circuits.library`): the measured MUFU tables and core's tensor-core steps and casts are `library`,
 everything else `program`; the list's digest is pinned, so an edit without a version bump fails here."""
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import re
 import pytest
 
 from verity.circuits.defs import REGISTRY
-from verity.definitions.circuits import library as L
-from verity.definitions.ops import prims  # noqa: F401  (registers the listed Definitions)
+from verity.circuits import library as L
+from verity.circuits.ops import prims  # noqa: F401  (registers the listed Definitions)
 
 #: `digest()` of VERSION 2. A change to the list needs a new VERSION, then this pin.
 DIGEST_V2 = ("353600e311538d244317fbb43634d934a24edd7594029bf33e537f64bd3c0c77"
@@ -45,8 +45,8 @@ def test_the_digest_is_pinned():
 
 def test_every_core_primitive_declares_only_library_tables():
     from verity.circuits.defs import PrimitiveDefinition
-    from verity.definitions.ops import mufu  # noqa: F401  (registers the MUFU primitives)
-    core = ("verity.circuits.", "verity.definitions.circuits.", "verity.definitions.ops.", "verity.definitions.silicon.")
+    from verity.circuits.ops import mufu  # noqa: F401  (registers the MUFU primitives)
+    core = "verity.circuits."
 
     names = {t.name for t in L.TABLES}
     declared = {d.id: d.tables for d in REGISTRY.defs.values()

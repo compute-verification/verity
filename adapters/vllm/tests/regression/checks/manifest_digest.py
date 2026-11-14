@@ -1,8 +1,8 @@
 """(a) The manifest of record reproduces: rebuild `manifest.json` from the row's request Programs x declared workload with the CURRENT
-code, by the exact path `row_pod.sh` uses (`verity-vllm manifest build-global --fixture WL --programs-root ROW --workload-digest WD`
+code, by the exact path a row's Build uses (`pipeline.row_build`: `verity-vllm manifest build-global --fixture WL --programs-root ROW --workload-digest WD`
 at B>=2; `verity-vllm manifest build --program ROW/build_request --workload WL` at B=1) and compare:
 
-    manifest_digest     sha256 over the sorted (family + IDENTITY_KEY) rows     -- `manifest_format.manifest_digest`
+    manifest_digest     SHA-512 over the sorted (family + IDENTITY_KEY) rows    -- `manifest_format.manifest_digest`
     program_digest      the Program digest the identities are keyed by          -- GP-01's workload digest (B>=2) / the request Program's (B=1)
     identities          the identity count
     identity_rows_sha256  sha256 over the sorted canonical IDENTITY_KEY tuples (family-blind): byte-for-byte equality of the identity SET
@@ -12,7 +12,7 @@ Expected is lifted from `commit/manifest_verify.json` (used_digest / used_progra
 rebuild said `ok`) and, when the recorded manifest.json is reachable, from the file itself.  STRONG: a single identity row moved,
 dropped or renamed changes the digest.  TP rows (#70, #75: rank Programs under build/rank*/) are not built by this path -> not applicable.
 The builder is the integration's (the query path `verity-vllm manifest`, Q_module_body_v1 -- the same build / build-global flags
-row_pod.sh uses).
+a row's Build uses).
 
 `actual` also states what the built manifest PROMOTED (interior rows whose output crosses a module
 boundary, flagged `promoted: true`) -- the facts a labelled decision on the fixture may name (`resolver.sanction`; #57's decision):
@@ -35,6 +35,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from verity_vllm.query.manifest.format import IDENTITY_KEY
+
 from .. import resolver
 
 NAME = "manifest_digest"
@@ -53,7 +55,6 @@ def applies(row: resolver.Row) -> str | None:
 
 
 def _identity_key(r: dict) -> str:
-    from verity_vllm.query.manifest.format import IDENTITY_KEY
     return json.dumps([r[k] if k != "element_range" else list(r[k]) for k in IDENTITY_KEY], separators=(",", ":"), sort_keys=True)
 
 
@@ -131,7 +132,7 @@ def expected(row: resolver.Row) -> dict:
     return out
 
 
-BUILDER = "verity_vllm.pipeline.cli"         # Q_module_body_v1 over the Program + correspondence (same build / build-global flags as row_pod.sh)
+BUILDER = "verity_vllm.pipeline.cli"         # Q_module_body_v1 over the Program + correspondence (same build / build-global flags as a row's Build)
 POLICIES_OFF = ["--no-norm-scales", "--no-router-softmax", "--no-vocab-range"]    # the manifests of record predate them
 
 
@@ -143,7 +144,7 @@ def _flags(row: resolver.Row) -> list[str]:
 
 def _rebuild_argv(row: resolver.Row, programs_root: Path, out: Path) -> list[str]:
     wl = row.workload()
-    fx = json.load(open(wl))
+    fx = resolver.read_json(wl)
     b = len(fx.get("requests") or [])
     base = [sys.executable, "-m", BUILDER, "manifest"]
     if b > 1:
@@ -159,8 +160,7 @@ def _rebuild_argv(row: resolver.Row, programs_root: Path, out: Path) -> list[str
 def actual(row: resolver.Row) -> dict:
     cand = row.candidate("manifest.json")
     if cand is not None:                                   # candidate mode: the v2 implementation's manifest.json IS the thing under test
-        with open(cand) as f:
-            man = json.load(f)
+        man = resolver.read_json(cand)
         return dict(_summary(man, with_rows=True), **_promotion(row, man), source="candidate")
     root = row.programs_root()
     if root is None:
@@ -172,7 +172,7 @@ def actual(row: resolver.Row) -> dict:
     (scratch / "manifest.rebuilt.log").write_text(p.stdout[-20000:] + "\n--- stderr ---\n" + p.stderr[-20000:])
     if p.returncode != 0 or not out.is_file():
         return {"rebuild_rc": p.returncode, "rebuild_argv": argv, "rebuild_tail": (p.stdout + p.stderr).strip()[-1500:], "source": "rebuild"}
-    man = json.load(open(out))
+    man = resolver.read_json(out)
     res = dict(_summary(man, with_rows=True), **_promotion(row, man), source="rebuild", rebuild_rc=0,
                rebuild_engine=(man.get("engine") or man.get("populations", {}).get("engine") or (man.get("query") or {}).get("engine") or resolver.ENGINE))
     return res

@@ -4,10 +4,10 @@ Two halves, one CLI:
 
   GPU pod (torch, vLLM):
     verity-vllm census --workload workloads/workload_32x16_1req.json --out DIR
-        Builds the engine exactly like `bench/m1_capture.py` (κ, `vllm_adapter.build_engine`), runs the uninstrumented
+        Builds the engine exactly like `pipeline/m1_capture.py` (κ, `vllm_adapter.build_engine`), runs the uninstrumented
         throwaway warm-up (Triton JIT / cuBLAS / allocator / CUPTI), then runs the workload request with **no observer, no
         Triton hook, no module hooks**: every `engine.step()` is wrapped in its own `torch.profiler.profile(activities=
-        [CPU, CUDA], record_shapes=False)` (the pattern of `out/curve/e10/kern_profile.py:183-199`), so the device kernels
+        [CPU, CUDA], record_shapes=False)`, so the device kernels
         of engine step k are attributed to step k without any marker inside the runner.  Writes DIR/census.json: per step
         the device kernel names (demangled, as Kineto reports them) with count / total device µs / first grid+block, the
         sampled tokens after the step, plus the run-level histogram; the per-step Chrome traces go to DIR/traces/ (gz).
@@ -15,8 +15,8 @@ Two halves, one CLI:
 
   laptop (torch-free):
     verity-vllm census --reconcile DIR/census.json --log data/logs/m1.jsonl.gz \
-        [--profile vllm_d9105ea80_sm89_eager] [--report out/capture/reports/census_m1]
-        Resolves the M1 log with `bench/resolve_log.resolve_log` and, per step, collects the kernel names every resolution
+        --profile vllm_d9105ea80_sm89_eager [--report out/capture/reports/census_m1]
+        Resolves the M1 log with `observe.fold.resolve_log.resolve_log` and, per step, collects the kernel names every resolution
         part declares (`Compute.kernels` / `Transparent.kernels` over `resolver.parts_of`) plus the profile's
         `kernel_allowlist`.  Every census kernel of the same step must be matched by at least one declared name
         (`KERNEL_MATCH`: declared name -> regexes over the demangled kernel name; substring fallback).  Reports the residue
@@ -38,14 +38,13 @@ and a declared name with no launch in the step, an alternative the step did not 
 
 Kernel names: Kineto reports demangled CUDA names (`void vllm::fused_add_rms_norm_kernel<c10::BFloat16, 8>(...)`,
 `flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<64, 64, 128, 4, ...>, ...>`, `Memcpy DtoH (Device -> Pinned)`, `Memset
-(Device)`, Triton kernels by their function name `matmul_kernel_persistent`).  The declared names in `patterns.py` and the
-profile's allowlist are short tokens; `KERNEL_MATCH` is the explicit bridge.
+(Device)`, Triton kernels by their function name `matmul_kernel_persistent`).  The declared names in `observe/fold/patterns/`
+and the profile's allowlist are short tokens; `KERNEL_MATCH` is the explicit bridge.
 """
 
 from __future__ import annotations
 
 import gzip
-import hashlib
 import json
 import re
 import time
@@ -56,8 +55,14 @@ from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.config import UsageError, option, workload_arg
-from verity_vllm.observe.kernel_trace import kernels_of_trace_events, load_trace, summarize_kernels
-from verity_vllm.properties.record import seal
+from verity_vllm.observe.fold.resolver import Compute, Transparent, parts_of
+from verity_vllm.observe.kernel_trace import (
+    kernels_of_trace_events,
+    load_trace,
+    summarize_kernels,
+)
+from verity_vllm.properties import kernel_allowlist
+from verity_vllm.records.property_record import REGISTRY, seal
 
 # ---------------------------------------------------------------------------------------------------------
 # declared name -> regexes over the demangled kernel name (torch-free)
@@ -313,8 +318,6 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
 def declared_kernels_of_step(resolutions: list, roots: list) -> tuple[dict[str, set[str]], dict[str, set[int]], dict[str, int]]:
     """From one step's resolutions: declared kernel -> {pattern names}, declared kernel -> {root event ids that declare it},
     declared kernel -> number of parts declaring it."""
-    from verity_vllm.observe.fold.resolver import Compute, Transparent, parts_of
-
     pats: dict[str, set[str]] = {}
     events: dict[str, set[int]] = {}
     parts_n: Counter = Counter()
@@ -332,8 +335,6 @@ def declared_kernels_of_step(resolutions: list, roots: list) -> tuple[dict[str, 
 
 def declaring_events(resolutions: list, roots: list, kernel: str) -> list[dict]:
     """The step's root events whose resolution declares `kernel`: id, op, module and the allocations its declaring parts write."""
-    from verity_vllm.observe.fold.resolver import Compute, Transparent, parts_of
-
     out = []
     for root, r in zip(roots, resolutions):
         parts = [p for p in parts_of(r) if isinstance(p, (Compute, Transparent)) and kernel in p.kernels]
@@ -361,10 +362,8 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
 
     profile, prof_mod = load_profile(profile_name)
     # protected: a profile cannot allowlist kernels by itself
-    from verity_vllm.properties.kernel_allowlist import KERNEL_ALLOWLIST as FROZEN_ALLOWLIST
-    from verity_vllm.properties.kernel_allowlist import LAUNCH_COUNT_ALLOWLIST
-    allow = set(FROZEN_ALLOWLIST) | set(proposed_allowlist)
-    profile_extra_allowlist = sorted(set(profile.kernel_allowlist) - set(FROZEN_ALLOWLIST))
+    allow = set(kernel_allowlist.KERNEL_ALLOWLIST) | set(proposed_allowlist)
+    profile_extra_allowlist = sorted(set(profile.kernel_allowlist) - set(kernel_allowlist.KERNEL_ALLOWLIST))
     per_step_roots: dict[int, list] = {}
 
     def on_step(se, sr):
@@ -375,7 +374,7 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
     census_steps = [s for s in census["steps"] if s.get("step") is not None]
     steps_out = []
     residue_total: Counter = Counter()
-    kernel_rows: "OrderedDict[str, dict]" = OrderedDict()   # kernel name -> {counts per step, claims}
+    kernel_rows: OrderedDict[str, dict] = OrderedDict()   # kernel name -> {counts per step, claims}
     ambiguous: list[dict] = []
     count_mismatches: list[dict] = []
     count_exempt: Counter = Counter()                        # allowlisted declared name -> steps whose count differed
@@ -400,7 +399,7 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
             row["us"][i] = d["us"]
             row["claims"].update(cl)
             for c in cl:
-                row["patterns"].update(pats[c] if c in pats else {"allowlist"})
+                row["patterns"].update(pats.get(c, {"allowlist"}))
             if not cl:
                 residue.append({"kernel": name, "count": d["count"], "us": d["us"]})
                 residue_total[name] += d["count"]
@@ -421,8 +420,8 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
                 counts[k]["infrastructure"] = census_count - sum(launched.values())
             if not launched or sum(launched.values()) == len(events[k]):
                 continue
-            if k in LAUNCH_COUNT_ALLOWLIST:
-                counts[k]["exempt"] = LAUNCH_COUNT_ALLOWLIST[k]
+            if k in kernel_allowlist.LAUNCH_COUNT_ALLOWLIST:
+                counts[k]["exempt"] = kernel_allowlist.LAUNCH_COUNT_ALLOWLIST[k]
                 count_exempt[k] += 1
                 continue
             evs = declaring_events(sr.resolutions, per_step_roots[i], k)
@@ -444,8 +443,8 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
                          "steps_present": sorted(row["counts"]), "claims": sorted(row["claims"]),
                          "patterns": sorted(row["patterns"]), "residue": not row["claims"]})
     total_kernels = sum(cs["n_kernels"] for cs in census_steps)
-    rep = {
-        "schema": "verity-capture/census-reconciliation/v2",
+    rep: dict[str, Any] = {
+        "schema": REGISTRY["census"].schema,
         "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "census": {"utc": census.get("utc"), "workload_sha256": (census.get("workload") or {}).get("sha256"),
                    "engine_steps": census.get("engine_steps"), "steps_with_device_work": len(census_steps),
@@ -464,7 +463,7 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
         "steps": steps_out,
         "ambiguous": ambiguous[:64],
         "count_mismatches": count_mismatches,
-        "count_allowlist": {k: LAUNCH_COUNT_ALLOWLIST[k] for k in sorted(count_exempt)},
+        "count_allowlist": {k: kernel_allowlist.LAUNCH_COUNT_ALLOWLIST[k] for k in sorted(count_exempt)},
         "match_table": {k: list(v) for k, v in KERNEL_MATCH.items()},
         "compute_kernels": sorted(COMPUTE_KERNELS),
         "allowlist": sorted(allow), "profile_extra_allowlist": profile_extra_allowlist,
@@ -594,7 +593,8 @@ class Options:
                                    help="GPU half: LLM(**kw) override key=value (JSON value), repeatable")
     reconcile: str | None = option("--reconcile", default=None, help="laptop half: path to census.json")
     log: str = option("--log", default="data/logs/m1.jsonl.gz")
-    profile: str = option("--profile", default="vllm_d9105ea80_sm89_eager")
+    profile: str | None = option("--profile", default=None,
+                                 help="laptop half: the profile the log resolves against, a module of verity_vllm.observe.fold.profiles or a dotted path")
     report: str = option("--report", default="out/capture/reports/census_m1", help="laptop half: report base path (.json/.md)")
     propose_allowlist: str = option("--propose-allowlist", default="",
                                     help="laptop half: comma list of declared names to treat as allowlisted (what-if)")
@@ -602,6 +602,8 @@ class Options:
 
 def main(args: Options) -> int:
     if args.reconcile:
+        if args.profile is None:
+            raise UsageError("--reconcile needs --profile, the profile the log resolves against")
         census = json.loads(Path(args.reconcile).read_text())
         rep = reconcile(census, args.log, args.profile, tuple(x for x in args.propose_allowlist.split(",") if x))
         base = Path(args.report)

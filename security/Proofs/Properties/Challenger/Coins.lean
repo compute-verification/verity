@@ -9,20 +9,23 @@ public import Proofs.Properties.Pous.MemoryChallenger.Attest
 
 `challengerStream` reads the segment's openings as its family's coins `start`, `start + 1`, … of the commitment it is
 given (`liveReason`), concatenates their coins, and requires their indices to be exactly those the family's roots, as
-the run's release log shows them, released after `after` (`stream_ok`). So when the commitment and the roots are a
+the run's release log shows them, released after `after`, every one of those roots `after` (`stream_ok`). So when the commitment and the roots are a
 run's (`s.commitment`, `releasedRootsOf`), the stream is `Run.released`, the run's own coins at those indices
 (`stream_released`), or the fixed finder outputs a break. `drawCoins` reads the stream under the commitment and roots
-of the session the ledger opens (`drawCoins_ok`), and that commitment is its record's (`trustedSession_record`), so the
-coins a sample reads are any such run's released coins, or a break (`drawn_released`). `drawCoins` compares the segment's
+of the session the ledger opens (`drawCoins_ok`), and that commitment is its record's (`trustedChallengePhase_record`), so the
+coins a sample reads are any such run's released coins, or a break (`drawn_released`). `coinsReason` reads what
+`drawCoins` reads from the same evidence under the key it is handed, holds the evidence's copy of main's history to the
+one it is handed, and holds the bytes read to the start of the stream (`coinsReason_none`, `coinsReason_draw`).
+`drawCoins` compares the segment's
 label by `jsonStrIs`, a match the kernel reduces, so its check gives the label (`jsonStrIs_eq`).
 
 Each opening `liveReason` accepts climbs its path to the commitment's root (`Coin.reason_ok`). The run's root is
-`Flock.FV3.root` over its leaves, the top of `FrameV3Sha512`'s tree (`Tree.lev`) over them under the run's domain
-(`root_eq`: frame-v3's integers are `natBytes`, `uint_eq`), and `Registered.climbL` is `Attest`'s `climbRec`
-(`climbL_eq`). The device hashes every node of that tree (`node_mem`) and every leaf's strings (`leaf_mem`); the
-reader hashes each opening's (`opening_mem`). So under no collision among what the two hash (`CF`), `Attest.climb_bind`
-makes the opening's leaf digest the run's leaf at its position, and `Coin.coin_eq` makes its coin the run's coin there
-(`coin_of_opening`). A collision among them is a break the finder outputs (`cf_of_not_break`).
+`Flock.FV3.root` over its leaves, the top of `Flock.FV3.Domain`'s tree (`Tree.lev`) over them under the run's domain
+(`root_eq`), and `Registered.climbL` is `Attest`'s `climbRec` (`climbL_eq`). The device hashes every node of that tree
+(`node_mem`) and every leaf's strings (`leaf_mem`); the reader hashes each opening's (`opening_mem`). So under no
+collision among what the two hash (`CF`), `Attest.climb_bind` makes the opening's leaf digest the run's leaf at its
+position, and `Coin.coin_eq` makes its coin the run's coin there (`coin_of_opening`). A collision among them is a break
+the finder outputs (`cf_of_not_break`).
 
 `collisionIn_valid`, `collisionIn_ne_none` and `findBreak_valid` are the finder's two outputs, read over
 `Properties.Challenger`'s definitions.
@@ -34,8 +37,8 @@ namespace Properties.Challenger.Coins
 
 open Lean (Json)
 open Spot Spot.Challenger
-open MemoryChallenger.Properties.SecurityProofs.Tree (CF next base lev le_depth lev_size hash_size)
-open MemoryChallenger.Attest.Properties.SecurityProofs (climbRec climb_bind)
+open MemoryChallenger.Properties.SecurityProofs.Tree (CF next base lev le_pow_log2ceil lev_size hash_size)
+open MemoryChallenger.Attest.Properties.SecurityProofs (climbRec climb_bind climbL_climbRec)
 open Properties.Pouw.LiveSalt (jsonStrIs_eq)
 open Properties.Pouw.LiveSalt.Coin (leafMsg coin_eq reason_ok)
 
@@ -109,36 +112,24 @@ theorem cf_of_not_break (hb : ¬ Break dev key label coins) :
     · cases hf
     · exact collisionIn_ne_none hx hy hne he (Option.map_eq_none_iff.1 hf)
 
-/-! ## frame-v3's integers, climb and tree -/
-
-/-- frame-v3's `uint` is `natBytes`: minimal big-endian, one zero byte for 0. -/
-theorem uint_eq (x : Nat) : Flock.FV3.uint x = FrameV3Sha512.uint x := by
-  have hn : (Nat.log2 x + 8) / 8 = max 1 (((if x = 0 then 0 else Nat.log2 x + 1) + 7) / 8) := by
-    split
-    · subst x; decide
-    · omega
-  unfold Flock.FV3.uint FrameV3Sha512.uint FlockSoundness.Randomness.natBytes
-  simp only [hn]
+/-! ## frame-v3's climb and tree -/
 
 theorem shift_eq (c : Nat) : c >>> 1 = c / 2 := by rw [Nat.shiftRight_eq_div_pow, Nat.pow_one]
 
-theorem node_eq (d : FrameV3Sha512.Domain) (l i : Nat) (a b : ByteArray) :
-    Flock.Registered.node d.id l i a b = d.node l i a b := by
-  simp only [Flock.FV3.Sha512.node, FrameV3Sha512.Domain.node, FrameV3Sha512.hash, uint_eq]
+theorem node_eq (d : Flock.FV3.Sha512.Domain) (l i : Nat) (a b : ByteArray) :
+    Flock.Registered.node d.id l i a b = d.node l i a b := rfl
 
 /-- `Registered.climbL` is `Attest`'s `climbRec`. -/
-theorem climbL_eq (d : FrameV3Sha512.Domain) : ∀ (path : List ByteArray) (cur : ByteArray) (idx l : Nat),
-    Flock.Registered.climbL d.id cur idx l path = climbRec d l idx cur path
-  | [], _, _, _ => rfl
-  | sib :: rest, cur, idx, l => by
-    rw [Flock.FV3.Sha512.climbL, climbRec, climbL_eq d rest, shift_eq, node_eq, node_eq]
+theorem climbL_eq (d : Flock.FV3.Sha512.Domain) (path : List ByteArray) (cur : ByteArray) (idx l : Nat) :
+    Flock.Registered.climbL d.id cur idx l path = climbRec d l idx cur path :=
+  (Flock.FV3.Sha512.climbL_eq d.id cur idx l path).trans (climbL_climbRec d path l idx cur)
 
 /-- The node frames `Registered.climbL` hashes are `Attest`'s `climbInputs`. -/
-theorem frames_eq (d : FrameV3Sha512.Domain) : ∀ (path : List ByteArray) (cur : ByteArray) (idx l : Nat),
+theorem frames_eq (d : Flock.FV3.Sha512.Domain) : ∀ (path : List ByteArray) (cur : ByteArray) (idx l : Nat),
     climbFrames d.id cur idx l path = MemoryChallenger.Attest.Properties.climbInputs d l idx cur path
   | [], _, _, _ => rfl
   | sib :: rest, cur, idx, l => by
-    simp only [climbFrames, MemoryChallenger.Attest.Properties.climbInputs, shift_eq, uint_eq]
+    simp only [climbFrames, MemoryChallenger.Attest.Properties.climbInputs, shift_eq]
     split <;> exact congrArg _ (frames_eq d rest _ _ _)
 
 theorem log2ceil_pow (D : Nat) : Flock.log2ceil (2 ^ D) = D := by
@@ -153,30 +144,30 @@ theorem log2ceil_pow (D : Nat) : Flock.log2ceil (2 ^ D) = D := by
     have hu := (Nat.log2_lt hne).mpr (show 2 ^ (D + 1) - 1 < 2 ^ (D + 1) by omega)
     omega
 
-theorem log2ceil_nextPow2 (n : Nat) : Flock.log2ceil (Flock.nextPow2 n) = FrameV3Sha512.depth n :=
+theorem log2ceil_nextPow2 (n : Nat) : Flock.log2ceil (Flock.nextPow2 n) = Flock.log2ceil n :=
   log2ceil_pow _
 
-theorem fold_next (d : FrameV3Sha512.Domain) (L : Array ByteArray) : ∀ k s,
+theorem fold_next (d : Flock.FV3.Sha512.Domain) (L : Array ByteArray) : ∀ k s,
     (List.range' s k).foldl (fun a l => next d l a) (lev d L s) = lev d L (s + k)
   | 0, _ => rfl
   | k + 1, s => by
     rw [List.range'_succ, List.foldl_cons, show s + (k + 1) = s + 1 + k by omega]
     exact fold_next d L k (s + 1)
 
-/-- **`FV3.root` is the top of `FrameV3Sha512`'s tree** over the same leaves, under the domain `dom`. -/
+/-- **`FV3.root` is the top of `FV3.Domain`'s tree** over the same leaves, under the domain `dom`. -/
 theorem root_eq (dom : ByteArray) (n : Nat) (L : Array ByteArray) :
-    Flock.FV3.root dom L Flock.Sha512.hash = (lev ⟨dom, n⟩ L (FrameV3Sha512.depth L.size))[0]! := by
+    Flock.FV3.root dom L Flock.Sha512.hash = (lev ⟨dom, 0, n⟩ L (Flock.log2ceil L.size))[0]! := by
   unfold Flock.FV3.root
-  simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range', List.forIn_pure_yield_eq_foldl, pure_bind, uint_eq]
-  have hs : [:Flock.log2ceil (Flock.nextPow2 L.size)].size = FrameV3Sha512.depth L.size := by
+  simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range', List.forIn_pure_yield_eq_foldl, pure_bind]
+  have hs : [:Flock.log2ceil (Flock.nextPow2 L.size)].size = Flock.log2ceil L.size := by
     simp [Std.Legacy.Range.size, log2ceil_nextPow2]
   rw [hs]
-  have h := fold_next ⟨dom, n⟩ L (FrameV3Sha512.depth L.size) 0
+  have h := fold_next ⟨dom, 0, n⟩ L (Flock.log2ceil L.size) 0
   simp only [Nat.zero_add] at h
-  show ((List.range' 0 (FrameV3Sha512.depth L.size)).foldl (fun a l => next ⟨dom, n⟩ l a)
-    (lev ⟨dom, n⟩ L 0)).getD 0 ByteArray.empty = _
+  show ((List.range' 0 (Flock.log2ceil L.size)).foldl (fun a l => next ⟨dom, 0, n⟩ l a)
+    (lev ⟨dom, 0, n⟩ L 0)).getD 0 ByteArray.empty = _
   rw [h]
-  have h1 := lev_size ⟨dom, n⟩ L _ le_rfl
+  have h1 := lev_size ⟨dom, 0, n⟩ L _ le_rfl
   simp only [Nat.sub_self, Nat.pow_zero] at h1
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (by omega), getElem!_pos _ 0 (by omega)]
   rfl
@@ -187,10 +178,9 @@ theorem getElem!_toList (a : Array ByteArray) (i : Nat) : a.toList[i]! = a[i]! :
   simp only [getElem!_def, Array.getElem?_toList]
 
 /-- The node frames of level `l` of the tree over `L` under `d`. -/
-def levFrames (d : FrameV3Sha512.Domain) (L : Array ByteArray) (l : Nat) : List ByteArray :=
+def levFrames (d : Flock.FV3.Sha512.Domain) (L : Array ByteArray) (l : Nat) : List ByteArray :=
   (List.range ((lev d L l).size / 2)).map fun i =>
-    MemoryChallenger.Properties.frameInput "node"
-      [d.id, FrameV3Sha512.uint l, FrameV3Sha512.uint i, (lev d L l)[2 * i]!, (lev d L l)[2 * i + 1]!]
+    Flock.FV3.input "node" [d.id, Flock.FV3.uint l, Flock.FV3.uint i, (lev d L l)[2 * i]!, (lev d L l)[2 * i + 1]!]
 
 /-- One step of the device's node fold: the node frames over a level, and the level above. -/
 def nodeStep (dom : ByteArray) (acc : List ByteArray × List ByteArray) (depth : Nat) :
@@ -204,25 +194,25 @@ def nodeStep (dom : ByteArray) (acc : List ByteArray × List ByteArray) (depth :
 
 /-- The device's node fold over the tree's levels from `s` gives the levels above and their frames. -/
 theorem fold_frames (dom : ByteArray) (n : Nat) (L : Array ByteArray) : ∀ k s (acc : List ByteArray),
-    (List.range' s k).foldl (nodeStep dom) ((lev ⟨dom, n⟩ L s).toList, acc) =
-      ((lev ⟨dom, n⟩ L (s + k)).toList, acc ++ (List.range' s k).flatMap (levFrames ⟨dom, n⟩ L))
+    (List.range' s k).foldl (nodeStep dom) ((lev ⟨dom, 0, n⟩ L s).toList, acc) =
+      ((lev ⟨dom, 0, n⟩ L (s + k)).toList, acc ++ (List.range' s k).flatMap (levFrames ⟨dom, 0, n⟩ L))
   | 0, s, acc => by simp
   | k + 1, s, acc => by
     rw [List.range'_succ, List.foldl_cons]
-    have hf : (List.range ((lev ⟨dom, n⟩ L s).toList.length / 2)).map (fun i =>
-          fv3Message "node" [dom, Flock.FV3.uint s, Flock.FV3.uint i, (lev ⟨dom, n⟩ L s).toList[2 * i]!,
-            (lev ⟨dom, n⟩ L s).toList[2 * i + 1]!]) = levFrames ⟨dom, n⟩ L s := by
-      simp only [levFrames, Array.length_toList, getElem!_toList, uint_eq]
+    have hf : (List.range ((lev ⟨dom, 0, n⟩ L s).toList.length / 2)).map (fun i =>
+          fv3Message "node" [dom, Flock.FV3.uint s, Flock.FV3.uint i, (lev ⟨dom, 0, n⟩ L s).toList[2 * i]!,
+            (lev ⟨dom, 0, n⟩ L s).toList[2 * i + 1]!]) = levFrames ⟨dom, 0, n⟩ L s := by
+      simp only [levFrames, Array.length_toList, getElem!_toList]
       rfl
-    have hl : (levFrames ⟨dom, n⟩ L s).map Flock.Sha512.hash = (lev ⟨dom, n⟩ L (s + 1)).toList := by
+    have hl : (levFrames ⟨dom, 0, n⟩ L s).map Flock.Sha512.hash = (lev ⟨dom, 0, n⟩ L (s + 1)).toList := by
       simp only [levFrames, List.map_map, lev, next, Array.toList_map, Array.toList_range]
       rfl
     simp only [nodeStep, hf, hl]
     rw [fold_frames dom n L k (s + 1), List.flatMap_cons, List.append_assoc, show s + 1 + k = s + (k + 1) by omega]
 
 theorem nodes_eq (dom : ByteArray) (n : Nat) (L : Array ByteArray) (k : Nat) :
-    (List.range k).foldl (nodeStep dom) ((lev ⟨dom, n⟩ L 0).toList, []) =
-      ((lev ⟨dom, n⟩ L k).toList, (List.range k).flatMap (levFrames ⟨dom, n⟩ L)) := by
+    (List.range k).foldl (nodeStep dom) ((lev ⟨dom, 0, n⟩ L 0).toList, []) =
+      ((lev ⟨dom, 0, n⟩ L k).toList, (List.range k).flatMap (levFrames ⟨dom, 0, n⟩ L)) := by
   rw [List.range_eq_range', fold_frames, List.nil_append, Nat.zero_add]
 
 theorem leaves_size (s : Run) (dom : ByteArray) : (s.leaves dom).size = total s.families := by
@@ -244,16 +234,15 @@ theorem leaves_get (s : Run) (dom : ByteArray) {p : Nat} (hp : p < total s.famil
 theorem mem_deviceHashed {pk dom : ByteArray} {s : Run} {c : LiveCommitment} {x : ByteArray} (hs : s ∈ dev.runs pk)
     (hd : liveDomain s.scheme s.epoch s.families = .ok dom) (hc : s.commitment = some c)
     (hx : x ∈ ((List.range (total s.families)).flatMap fun p => leafHashed s.scheme dom p (s.coins p) (s.salts p)) ∨
-      x ∈ (List.range (FrameV3Sha512.depth (total s.families))).flatMap
-        (levFrames ⟨dom, total s.families⟩ (s.leaves dom))) :
+      x ∈ (List.range (Flock.log2ceil (total s.families))).flatMap
+        (levFrames ⟨dom, 0, total s.families⟩ (s.leaves dom))) :
     x ∈ deviceHashed dev pk := by
-  have hb : (lev ⟨dom, total s.families⟩ (s.leaves dom) 0).toList =
+  have hb : (lev ⟨dom, 0, total s.families⟩ (s.leaves dom) 0).toList =
       (s.leaves dom).toList ++ ((List.range (Flock.nextPow2 (total s.families) - total s.families)).map fun k =>
         fv3Message "pad" [dom, Flock.FV3.uint (total s.families + k)]).map Flock.Sha512.hash := by
-    simp only [lev, base, leaves_size, Array.toList_append, Array.toList_map, Array.toList_range, List.map_map,
-      uint_eq]
+    simp only [lev, base, leaves_size, Array.toList_append, Array.toList_map, Array.toList_range, List.map_map]
     rfl
-  have hn := nodes_eq dom (total s.families) (s.leaves dom) (FrameV3Sha512.depth (total s.families))
+  have hn := nodes_eq dom (total s.families) (s.leaves dom) (Flock.log2ceil (total s.families))
   rw [hb] at hn
   unfold deviceHashed
   simp only [List.mem_append, List.mem_flatMap]
@@ -271,11 +260,11 @@ theorem mem_deviceHashed {pk dom : ByteArray} {s : Run} {c : LiveCommitment} {x 
 /-- The device hashes every node of its run's tree. -/
 theorem node_mem {pk dom : ByteArray} {s : Run} {c : LiveCommitment} (hs : s ∈ dev.runs pk)
     (hd : liveDomain s.scheme s.epoch s.families = .ok dom) (hc : s.commitment = some c) {l i : Nat}
-    (hl : l < FrameV3Sha512.depth (s.leaves dom).size)
-    (hi : i < (lev ⟨dom, total s.families⟩ (s.leaves dom) l).size / 2) :
-    MemoryChallenger.Properties.frameInput "node" [dom, FrameV3Sha512.uint l, FrameV3Sha512.uint i,
-      (lev ⟨dom, total s.families⟩ (s.leaves dom) l)[2 * i]!,
-      (lev ⟨dom, total s.families⟩ (s.leaves dom) l)[2 * i + 1]!] ∈ deviceHashed dev pk := by
+    (hl : l < Flock.log2ceil (s.leaves dom).size)
+    (hi : i < (lev ⟨dom, 0, total s.families⟩ (s.leaves dom) l).size / 2) :
+    Flock.FV3.input "node" [dom, Flock.FV3.uint l, Flock.FV3.uint i,
+      (lev ⟨dom, 0, total s.families⟩ (s.leaves dom) l)[2 * i]!,
+      (lev ⟨dom, 0, total s.families⟩ (s.leaves dom) l)[2 * i + 1]!] ∈ deviceHashed dev pk := by
   refine mem_deviceHashed hs hd hc (.inr ?_)
   rw [leaves_size] at hl
   simp only [List.mem_flatMap, List.mem_range]
@@ -373,17 +362,16 @@ theorem coin_of_opening {pk : ByteArray} {S : List ByteArray} (cf : CF S) {s : R
     subst hdd
     have hpos : pos < total s.families := position_lt hp
     set L := s.leaves dom
-    set d : FrameV3Sha512.Domain := ⟨dom, total s.families⟩
+    set d : Flock.FV3.Sha512.Domain := ⟨dom, 0, total s.families⟩
     have hL : L.size = total s.families := leaves_size s dom
     have hdg : (Flock.Sha512.hash (leafMsg dom pos ⟨s.scheme, s.epoch, s.families, Flock.FV3.root dom L Flock.Sha512.hash⟩
         o)) = (lev d L 0)[pos]! := by
       refine climb_bind cf (leaves_width s dom) ?_ o.path 0 pos _ ?_ ?_ (hash_size _) hw ?_ ?_
       · intro l i hl hi
         exact hD _ (node_mem hs hd hsc hl hi)
-      · rw [Nat.zero_add, hlen, hL]
-        rfl
+      · rw [Nat.zero_add, hlen, hL] <;> rfl
       · rw [Nat.sub_zero, hL]
-        exact Nat.lt_of_lt_of_le hpos (le_depth _)
+        exact Nat.lt_of_lt_of_le hpos (le_pow_log2ceil _)
       · intro x hx
         rw [← frames_eq d] at hx
         refine hR x (liveHashed_mem (o := o) hd hp ?_)
@@ -434,8 +422,8 @@ theorem forIn_ok {P : Json × Nat → LiveOpening → Prop} {f : Json × Nat →
       exact ⟨o :: os, .cons ho hos, hout⟩
 
 /-- **What `challengerStream` reads when it accepts**: the segment's label, start and openings, each opening read as
-the family's coin `start + i` and accepted, the stream their coins concatenated, and their indices those the roots show
-released after `after`. -/
+the family's coin `start + i` and accepted, the stream their coins concatenated, their indices those the roots show
+released after `after`, and every root `after`. -/
 theorem stream_ok {c : LiveCommitment} {segment : Json} {after ξ : ByteArray} {rs : List ByteArray}
     (h : challengerStream c segment after (some rs) = .ok ξ) :
     ∃ (l : String) (start : Nat) (openings : Array Json) (os : List LiveOpening),
@@ -444,7 +432,8 @@ theorem stream_ok {c : LiveCommitment} {segment : Json} {after ξ : ByteArray} {
       List.Forall₂ (fun (p : Json × Nat) (o : LiveOpening) => LiveOpening.ofJson p.1 = .ok o ∧
         liveReason c o l ((start + p.2 : Nat) : Int) after = .ok none) openings.toList.zipIdx os ∧
       ξ = os.foldl (fun acc o => acc ++ o.coin) .empty ∧
-      (rs.zipIdx.filter (·.1 == after)).map (·.2) = List.range' start openings.size := by
+      (rs.zipIdx.filter (·.1 == after)).map (·.2) = List.range' start openings.size ∧
+      ∀ r ∈ rs, r = after := by
   unfold challengerStream at h
   simp only [bind, Except.bind] at h
   split at h
@@ -457,28 +446,31 @@ theorem stream_ok {c : LiveCommitment} {segment : Json} {after ξ : ByteArray} {
         · cases h
         · rename_i v hv
           split at h
-          · rename_i hord
-            cases h
-            refine (forIn_ok (P := fun (p : Json × Nat) (o : LiveOpening) =>
-              LiveOpening.ofJson p.1 = .ok o ∧ liveReason c o l ((start + p.2 : Nat) : Int) after = .ok none)
-              ?_ _ _ _ hv).elim fun os ⟨hos, hout⟩ =>
-                ⟨l, start, openings, os, hl, hst, hop, hos, hout, beq_iff_eq.1 hord⟩
-            intro ⟨doc, i⟩ b r hr
-            simp only at hr
-            split at hr
-            · cases hr
-            · rename_i o ho
+          · split at h
+            · rename_i hall hord
+              cases h
+              refine (forIn_ok (P := fun (p : Json × Nat) (o : LiveOpening) =>
+                LiveOpening.ofJson p.1 = .ok o ∧ liveReason c o l ((start + p.2 : Nat) : Int) after = .ok none)
+                ?_ _ _ _ hv).elim fun os ⟨hos, hout⟩ =>
+                  ⟨l, start, openings, os, hl, hst, hop, hos, hout, beq_iff_eq.1 hord,
+                    fun r hr => beq_iff_eq.1 (List.all_eq_true.1 hall r hr)⟩
+              intro ⟨doc, i⟩ b r hr
+              simp only at hr
               split at hr
               · cases hr
-              · rename_i w hw
+              · rename_i o ho
                 split at hr
                 · cases hr
-                · rename_i hn
-                  cases w with
-                  | some why => exact absurd rfl (hn why)
-                  | none =>
-                    cases hr
-                    exact ⟨o, ⟨ho, hw⟩, rfl⟩
+                · rename_i w hw
+                  split at hr
+                  · cases hr
+                  · rename_i hn
+                    cases w with
+                    | some why => exact absurd rfl (hn why)
+                    | none =>
+                      cases hr
+                      exact ⟨o, ⟨ho, hw⟩, rfl⟩
+            · cases h
           · cases h
       · cases h
     · cases h
@@ -530,7 +522,7 @@ theorem stream_released {s : Run} {c : LiveCommitment} {roots : Roots} {r : Chal
   · exact .inr hb
   refine .inl ?_
   have cf := cf_of_not_break hb
-  obtain ⟨l, start, openings, os, hl', hst, hop, hos, rfl, hord⟩ := stream_ok h
+  obtain ⟨l, start, openings, os, hl', hst, hop, hos, rfl, hord, -⟩ := stream_ok h
   rw [hl] at hl'
   cases hl'
   subst hrc
@@ -568,43 +560,43 @@ theorem recordOfJson_ok (j : Json) :
     ⦃⌜True⌝⦄ ChallengerRecord.ofJson j ⦃⇓? r => ⌜ChallengerRecord.ofJson j = .ok r⌝⦄ := ok_spec _
 
 set_option maxHeartbeats 1000000 in
-/-- `sessionOf` returns its record's commitment. -/
-theorem sessionOf_record {record log close : Json} {res : LiveCommitment × Roots × String}
-    (h : sessionOf key record log close = .ok res) :
+/-- `challengePhaseOf` returns its record's commitment. -/
+theorem challengePhaseOf_record {record log close : Json} {res : LiveCommitment × Roots × String}
+    (h : challengePhaseOf key record log close = .ok res) :
     ∃ r, ChallengerRecord.ofJson record = .ok r ∧ r.commitment = res.1 := by
   refine of_triple (Q := fun res => ∃ r, ChallengerRecord.ofJson record = .ok r ∧ r.commitment = res.1) ?_ h
   clear h
-  mvcgen [sessionOf, -Spec.throw_Except, throw_spec, recordReason_spec, recordOfJson_ok, closeMessage_spec,
+  mvcgen [challengePhaseOf, -Spec.throw_Except, throw_spec, recordReason_spec, recordOfJson_ok, closeMessage_spec,
     mapM_spec, releasedRootsOf_spec]
   all_goals exact ⟨_, by assumption, rfl⟩
 
-theorem sessionOf_record_spec (record log close : Json) :
-    ⦃⌜True⌝⦄ sessionOf key record log close
+theorem challengePhaseOf_record_spec (record log close : Json) :
+    ⦃⌜True⌝⦄ challengePhaseOf key record log close
       ⦃⇓? res => ⌜∃ r, ChallengerRecord.ofJson record = .ok r ∧ r.commitment = res.1⌝⦄ :=
-  triple_of fun _ => sessionOf_record
+  triple_of fun _ => challengePhaseOf_record
 
 set_option maxHeartbeats 1000000 in
-/-- `sessionNamed` returns its session record's commitment. -/
-theorem sessionNamed_record {a : Audited} {session : Json} {res : LiveCommitment × Roots}
-    (h : sessionNamed a key session = .ok res) :
+/-- `challengePhaseNamed` returns its session record's commitment. -/
+theorem challengePhaseNamed_record {a : Audited} {session : Json} {res : LiveCommitment × Roots}
+    (h : challengePhaseNamed a key session = .ok res) :
     ∃ r, ChallengerRecord.ofJson (getD session "record") = .ok r ∧ r.commitment = res.1 := by
   refine of_triple
     (Q := fun res => ∃ r, ChallengerRecord.ofJson (getD session "record") = .ok r ∧ r.commitment = res.1) ?_ h
   clear h
-  mvcgen [sessionNamed, -Spec.throw_Except, throw_spec, sessionOf_record_spec, recordOfJson_ok, mapM_spec]
+  mvcgen [challengePhaseNamed, -Spec.throw_Except, throw_spec, challengePhaseOf_record_spec, recordOfJson_ok, mapM_spec]
 
-/-- `trustedSessionOf` returns its session record's commitment. -/
-theorem trustedSession_record {ledger window pins main session : Json} {res : LiveCommitment × Roots}
-    (h : trustedSessionOf ledger window key pins main session = .ok res) :
+/-- `trustedChallengePhaseOf` returns its session record's commitment. -/
+theorem trustedChallengePhase_record {ledger window pins main session : Json} {res : LiveCommitment × Roots}
+    (h : trustedChallengePhaseOf ledger window key pins main session = .ok res) :
     ∃ r, ChallengerRecord.ofJson (getD session "record") = .ok r ∧ r.commitment = res.1 := by
-  unfold trustedSessionOf at h
+  unfold trustedChallengePhaseOf at h
   obtain ⟨a, -, ha⟩ := bind_ok.1 h
-  exact sessionNamed_record ha
+  exact challengePhaseNamed_record ha
 
 /-- What `drawCoins` reads when it accepts: the session the ledger opens on `window` under `key`, a segment of family
 `label`, and the stream of its openings under that session's commitment and `label`'s roots. -/
 theorem drawCoins_ok {window : String} {after ξ : ByteArray} (h : drawCoins key window label after coins = .ok ξ) :
-    ∃ c roots, trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
+    ∃ c roots, trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
         (getD coins "pins") (getD coins "main") (getD coins "session") = .ok (c, roots) ∧
       getD (getD coins "segment") "label" = Json.str label ∧
       challengerStream c (getD coins "segment") after
@@ -623,16 +615,50 @@ theorem drawCoins_ok {window : String} {after ξ : ByteArray} (h : drawCoins key
       · cases h
   · cases h
 
+/-- What `coinsReason` reads when it gives no reason: the stream `drawCoins` reads from the same evidence under `key`,
+the evidence's copy of main's history the one `coinsReason` is handed, and `read` the start of that stream, ending
+inside its last coin. -/
+theorem coinsReason_none {main : Json} {window : String} {after read : ByteArray}
+    (h : coinsReason key main coins window label after read = none) :
+    ∃ ξ, drawCoins key window label after coins = .ok ξ ∧ sameMain main (getD coins "main") = true ∧
+      ξ.extract 0 read.size = read ∧ (read.size + COIN_BYTES - 1) / COIN_BYTES = ξ.size / COIN_BYTES := by
+  unfold coinsReason at h
+  split at h
+  · cases h
+  · rename_i ξ hd
+    split at h
+    · cases h
+    · rename_i hm
+      unfold startReason at h
+      split at h
+      · cases h
+      · rename_i hpre
+        split at h
+        · cases h
+        · rename_i hall
+          exact ⟨ξ, hd, by simpa using hm, by simpa using hpre, by simpa using hall⟩
+
+/-- **The coin check of a stream's run reads the challenger's sample**: where `coinsReason` gives no reason under `key`,
+`drawCoins` under `key` reads, from the same evidence, coins of the same family that `read` is the start of. -/
+theorem coinsReason_draw {main : Json} {window : String} {after read : ByteArray}
+    (h : coinsReason key main coins window label after read = none) :
+    ∃ ξ, drawCoins key window label after coins = .ok ξ ∧ read.size ≤ ξ.size ∧ ξ.extract 0 read.size = read := by
+  obtain ⟨ξ, hd, -, hpre, -⟩ := coinsReason_none h
+  refine ⟨ξ, hd, ?_, hpre⟩
+  have hs : (ξ.extract 0 read.size).size = read.size := congrArg ByteArray.size hpre
+  rw [ByteArray.size_extract] at hs
+  omega
+
 /-- **The coins a sample reads are the ones its session released**: when `drawCoins` reads `ξ` from a segment of family
 `label`, `ξ` is the coins of `label` released after `after` by any run of the key's device whose commitment and roots
 are the session's, or the fixed finder outputs a break. -/
 theorem drawn_released {window : String} {after ξ : ByteArray} (h : drawCoins key window label after coins = .ok ξ) :
-    ∃ c roots, trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
+    ∃ c roots, trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
         (getD coins "pins") (getD coins "main") (getD coins "session") = .ok (c, roots) ∧
       ∀ s ∈ dev.runs key.pub, s.commitment = some c → releasedRootsOf c s.log = .ok roots →
         ξ = s.released label after ∨ Break dev key label coins := by
   obtain ⟨c, roots, hts, hl, hst⟩ := drawCoins_ok h
-  obtain ⟨r, hr, hrc⟩ := trustedSession_record hts
+  obtain ⟨r, hr, hrc⟩ := trustedChallengePhase_record hts
   exact ⟨c, roots, hts, fun s hs hsc hroots => stream_released hs hsc hroots hr hrc hl hst⟩
 
 end Properties.Challenger.Coins

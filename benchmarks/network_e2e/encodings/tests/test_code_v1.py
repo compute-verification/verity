@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.certifier.prover.window_charge import Window as W
+from verity.protocols.accounting.certifier.prover.window_charge import Advice as W
 
 HERE = Path(__file__).resolve().parent
 
@@ -198,7 +198,7 @@ def _plain(bits: list[int], n: int):
         out = []
         for _ in range(n):
             d.window()
-            out.append(V.code_window(d, None, st))
+            out.append(V.code_executionPhase(d, None, st))
         d.finish()
         return out
     except ValueError:

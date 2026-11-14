@@ -38,6 +38,8 @@ Faults (negatives): `compiled_omit:<substring>` -- tensors whose name contains i
 """
 from __future__ import annotations
 
+import gc
+import hashlib
 import json
 import os
 import time
@@ -45,7 +47,11 @@ from typing import Any
 
 import torch
 
-from verity_vllm.acquire.sources.inductor_hooks import FLUSH, PREFIX, install_codegen_hooks
+from verity_vllm.acquire.sources.inductor_hooks import (
+    FLUSH,
+    PREFIX,
+    install_codegen_hooks,
+)
 from verity_vllm.engine import hooks
 
 GRAPH_MODES = ("FULL", "PIECEWISE")
@@ -551,9 +557,6 @@ class ServedCompiledSource:
         that launched.  A live autotuner's state is no record of a launch: the one a wrapper's call() runs need not be any module's
         global, nor even the live one of its kernel text (Qwen3-8B's combo kernels: one live autotuner each, never run).  The served
         Build binds each launch to its one executed config (`acquire.served`) and refuses a kernel launched with two."""
-        import gc
-        import hashlib
-
         from torch._inductor.runtime.triton_heuristics import CachingAutotuner
 
         def cfg(c: Any) -> dict[str, Any]:
@@ -622,7 +625,7 @@ def _committed(committer: Any, step: int, name: str) -> torch.Tensor | None:
     return raw.cpu().clone().view(dtype).reshape(meta.shape)
 
 
-def linkage(committer: Any, ids_name: str = "c00.input/ids", sampled_name: str = "runner.sampler/sampled_token_ids") -> dict[str, Any]:
+def linkage(committer: Any) -> dict[str, Any]:
     """For every request that decodes at two consecutive engine steps, the token id committed as step s+1's input equals the token
     committed as step s's sample.  Read from the committed bytes (a stale or misplaced slot read fails here)."""
     rows = getattr(committer, "step_rows", {}) or {}
@@ -631,7 +634,7 @@ def linkage(committer: Any, ids_name: str = "c00.input/ids", sampled_name: str =
         nxt = rows.get(s + 1)
         if not nxt:
             continue
-        sampled, ids = _committed(committer, s, sampled_name), _committed(committer, s + 1, ids_name)
+        sampled, ids = _committed(committer, s, "runner.sampler/sampled_token_ids"), _committed(committer, s + 1, "c00.input/ids")
         if sampled is None or ids is None:
             continue
         sampled = sampled.reshape(-1)
@@ -644,3 +647,6 @@ def linkage(committer: Any, ids_name: str = "c00.input/ids", sampled_name: str =
             if int(ids[lo]) != int(sampled[i]):
                 bad.append({"step": s + 1, "request": rid, "input": int(ids[lo]), "sampled": int(sampled[i])})
     return {"checked": checked, "mismatches": len(bad), "first": bad[:3], "passed": checked > 0 and not bad}
+
+
+__all__ = ["ServedCompiledSource", "linkage"]

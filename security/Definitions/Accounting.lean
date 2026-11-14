@@ -22,12 +22,11 @@ public import Definitions.Accounting.Gates
 public import Definitions.Accounting.Headline
 public import Definitions.Accounting.HeadlineDc
 public import Definitions.Accounting.Joint
-public import Definitions.Accounting.JointBlocks
 public import Definitions.Accounting.JointPeriod
 public import Definitions.Accounting.JointBridge.CreditedWords
 public import Definitions.Accounting.JointBridge.SpaceOfPeriodHeld
 public import Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
-public import Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted
+public import Definitions.Accounting.JointBridge.CommOfMonitoringPeriodLeakAccepted
 public import Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted
 public import Definitions.Accounting.JointBridge.CommOfPooledLeakAcceptedWitness
 public import Definitions.Accounting.JointLive
@@ -42,10 +41,10 @@ public import Definitions.Accounting.NetWitness
 public import Definitions.Accounting.PouwWork
 public import Definitions.Accounting.RateAudit
 public import Definitions.Accounting.RateAuditDeployed
-public import Definitions.Accounting.RateAuditHorizon
 public import Definitions.Accounting.RateAuditInteractive
 public import Definitions.Accounting.RateAuditJoint
 public import Definitions.Accounting.RateAuditPartial
+public import Definitions.Accounting.RateAuditPooled
 public import Definitions.Accounting.RateAuditRemote
 public import Definitions.Accounting.RateAuditSketch
 public import Definitions.Accounting.RateAuditSketchDeployed
@@ -77,16 +76,16 @@ account on one device model.
 
 The lock's `deployed` guarantees for the area, the bandwidth audit's and PoUB's, each with the module that states it:
 
-* `Accounting.Guarantees.RemoteSessionConservationDeployed` (`Definitions.Accounting.Guarantees.RateAuditDeployed`):
+* `Accounting.Guarantees.RemoteRunConservationDeployed` (`Definitions.Accounting.Guarantees.RateAuditDeployed`):
   PoUB at its deployed parameters.
-* `Accounting.Guarantees.RemoteSessionConservationSketchDeployed` (the same module): PoUB's sketch session at the
+* `Accounting.Guarantees.RemoteRunConservationSketchDeployed` (the same module): PoUB's sketch session at the
   deployed receipt parameters, under the per-pass hash budget.
-* `Accounting.Guarantees.StackedSessionConservationSketchDeployed` (`Definitions.Accounting.Guarantees.Stacking`): PoUB
+* `Accounting.Guarantees.StackedRunConservationSketchDeployed` (`Definitions.Accounting.Guarantees.Stacking`): PoUB
   with a store per pass. `Accounting.Guarantees.StackedRequirementSketchDeployed` (the same module) reads
   it against a registered circuit's requirement.
 * `Accounting.Guarantees.Remote.SketchBoundDeployed` (`Definitions.Accounting.Guarantees.RemoteSketch`): the sketch
   bound at the deployed receipts.
-* `Bandwidth.Guarantees.AuditRO` (`Definitions.Accounting.Guarantees.Bandwidth`): the bandwidth audit in the
+* `Accounting.Guarantees.Remote.AuditRO` (`Definitions.Accounting.Guarantees.RemotePass`): the bandwidth audit in the
   random-oracle model. It is the bandwidth audit's row in `security/README.md`.
 * `Properties.RemoteAudit.Line.LineHeld` (`Properties.Accounting.Remote.Line`): the memory line of record,
   link-charged. It is PoUB's row in `security/README.md`.
@@ -99,7 +98,7 @@ The area's other guarantees are `Accounting.Guarantees.X`, stated in the module 
 * `JointPeriodLive`, `JointPooledLive` and `JointPooledBlocksLive` (`JointLive`): the joint guarantee over one period,
   over `m` periods and over `B` server blocks, as one causal game over the subprotocols' per-period guarantees.
 * `ComputeOfPouw` (`Pouw`): PoUW's guarantee is the compute guarantee, at certificate `(1 − γ)(1 − εs)·W`.
-* `Compose.CircuitCredit` (`Compose`) and `ComposeMonitoringPeriod.CircuitCreditPeriod` (`ComposeMonitoringPeriod`):
+* `Compose.CircuitCredit` (`Compose`) and `ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` (`ComposeMonitoringPeriod`):
   PoUW's credit on a registered circuit it compiles, over one execution phase and over a monitoring period.
 * `TS.Sm90SheetHeadline` (`HeadlineDc`) and `TS.Sm120SheetHeadline` (`Headline`): the headline at H200's and sm_120's
   data sheets.
@@ -130,9 +129,8 @@ This module imports the area's definitions; the lock's `layers` lists what they 
   guarantee read as its account. `JointLive` is a period as a causal game. `NetWitness` is the run the network
   certifier's bridge fails at, and `JointBridge.CommOfPooledLeakAcceptedWitness` an honest run of its monitoring
   period, pooled.
-* Server blocks and reads. `JointBlocks` and `Wipe` are server blocks, each opened by a memory wipe, and the
-  streamed-label wipe on the device model. `ReadUnit` is a unit that returns one row of a registered table at an index
-  another unit picks.
+* The wipe and reads. `Wipe` is the streamed-label wipe on the device model. `ReadUnit` is a unit that returns one row
+  of a registered table at an index another unit picks.
 * The compute audit. `Pouw`, `PouwWork` and `PouwWitness` are PoUW's game, its work on one node of the actual circuit
   and the run its witnesses fail at. `Compose` and `ComposeMonitoringPeriod` are PoUW as a compile pass over a
   registered circuit. `HMu` and `CoinFlow` are the receipt-luck premise and a Program's coin flow. `Served`, `Filler`,

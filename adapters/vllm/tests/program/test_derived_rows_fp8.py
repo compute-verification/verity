@@ -4,15 +4,10 @@ words (`data/fp8_block_operands.npz`: `_C.per_token_group_fp8_quant` + blockwise
 Python >= 3.12 (`veritor.core.silicon_total_fp8`, the scalar QGMMA step)."""
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
-
-if sys.version_info < (3, 12):  # pragma: no cover
-    pytest.skip("veritor.core needs Python 3.12", allow_module_level=True)
-
 from verity.circuits import Program, bind
 from verity.definitions.numerics import derived_rows as D
 from verity.definitions.registry import fp8 as F
@@ -33,7 +28,8 @@ def _rand_e4m3(rng, n: int, p_zero: float = 0.1, p_sub: float = 0.1) -> np.ndarr
 # ------------------------------------------------------------------------------------------------------------ the k32 step
 
 def test_tc_dot32_e4m3_matches_the_total_model_on_random_operands_and_accumulators() -> None:
-    from verity.definitions.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32 as PIPE, tc_dot_total_e4m3
+    from verity.circuits.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32 as PIPE
+    from verity.circuits.silicon.total_fp8 import tc_dot_total_e4m3
 
     rng = np.random.default_rng(7)
     n = 4000
@@ -50,7 +46,8 @@ def test_tc_dot32_e4m3_matches_the_total_model_on_random_operands_and_accumulato
 
 def test_tc_dot32_e4m3_cancellation_and_subnormal_accumulators() -> None:
     """The 14-bit adder's truncation of the ACCUMULATOR (`acc + 0 != acc`) and the denormalisation path below 2^-126."""
-    from verity.definitions.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32 as PIPE, tc_dot_total_e4m3
+    from verity.circuits.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32 as PIPE
+    from verity.circuits.silicon.total_fp8 import tc_dot_total_e4m3
 
     rng = np.random.default_rng(3)
     n = 2000
@@ -67,8 +64,8 @@ def test_tc_dot32_e4m3_cancellation_and_subnormal_accumulators() -> None:
 
 
 def test_tc_dot32_e4m3_flags_nan_bytes_and_nonfinite_accumulators() -> None:
-    a = np.zeros((3, 32), dtype=np.uint8)
-    b = np.zeros((3, 32), dtype=np.uint8)
+    a: np.ndarray = np.zeros((3, 32), dtype=np.uint8)
+    b: np.ndarray = np.zeros((3, 32), dtype=np.uint8)
     a[1, 5] = 0x7F                                                          # e4m3 NaN
     acc = np.array([0, 0, 0x7F800000], dtype=np.uint32)                     # lane 2: +inf accumulator
     _got, nf = D.tc_dot32_e4m3(acc, a, b)
@@ -133,9 +130,9 @@ def test_promotion_is_ffma_ascending_in_the_twin() -> None:
     """The adversarial case of test_fp8.test_fp8_block_promotion_is_ffma_ascending, through the vectorised row."""
     one, onehalf = 0x38, 0x3C
     K, G = 256, 128
-    xq = np.zeros(K, dtype=np.uint8)
+    xq: np.ndarray = np.zeros(K, dtype=np.uint8)
     xq[0] = xq[G] = one
-    w = np.zeros((G, K), dtype=np.uint8)                                      # N = G = 128 columns, column 0 carries the case
+    w: np.ndarray = np.zeros((G, K), dtype=np.uint8)                                      # N = G = 128 columns, column 0 carries the case
     w[0, 0], w[0, G] = one, onehalf
     sx = np.array([0x3F800000] * 2, dtype=np.uint32)
     mid = int(np.float32(1.0 + 2.0 ** -8).view(np.uint32))

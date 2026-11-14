@@ -61,10 +61,11 @@ it, and fast-forwards `main` only to a candidate with no new failure:
 - Before marking, run the Lean check of the packages and the suites your change touches (the testing skill's pre-mark
   run), plus a suite's slow tier when you changed its core. Prefer small PRs.
 - Reviewers ci staffs, never the owner, record a verdict at the head (`research queue review N --land|--hold REASON --by
-  LANE`); no other per-head grant exists. While drive.toml's `lowrisk_lane` is on, a PR touching nothing its
+  LANE`), signed as that reviewer once ci's holder registers its agent (`research queue delegate AGENT --by review-NN`);
+  no other per-head grant exists. While drive.toml's `lowrisk_lane` is on, a PR touching nothing its
   `lowrisk_excludes` names (Lean, locks, Lake files, the verifiers, the soundness-path Python) lands on its ready mark
   alone, with no verdict (the low-risk lane), as does a move's PR (`Move: tools/move/MAP.toml`), whatever it touches,
-  once the loop certifies its map, from `main`, rerun on its batch's tip; under `signed_verdicts`, not one changing
+  once the loop certifies its map, from `main`, rerun on its batch's tip; with `signed_verdicts` true, not one changing
   `SIGNED_GUARDS`.
 - The loop builds candidates from the marked PRs with a land verdict or on their mark alone, in the priority file's order
   and then by mark time, each after the PRs it contains, so a stack lands its bases first: `main`'s tip, or the candidate
@@ -81,9 +82,10 @@ it, and fast-forwards `main` only to a candidate with no new failure:
   (every PR when none does): a lone suspect is ejected, its mark withdrawn and its owner sent the failed tasks' logs,
   several are bisected, and in the same tick the candidate and those above it are built again without them; a PR held,
   ejected or unmarked leaves the same way, taking no other PR out. A failure above the lowest candidate waits for its
-  base's check unless only its own PRs meet it. A failure of the machines is retried and rung to @infra; a red off the
-  gate (circuit-check, ratchet-gate) holds nothing. Only the loop moves `main`: GitHub's rulesets let only its App push
-  it. Citations and tables read only `main`'s commits.
+  base's check unless only its own PRs meet it. A failure of the machines (a timeout, a kill, a full disk) is no red and
+  blames no PR: it is retried on other machines and rung to @infra, and only one that persists from runs that started the
+  candidate's steps splits it, ejecting nobody; a red off the gate (circuit-check, ratchet-gate) holds nothing. Only the
+  loop moves `main`: GitHub's rulesets let only its App push it. Citations and tables read only `main`'s commits.
 - When a changed lock record lands on `main`, Daniel gets a DM showing it; that DM is the check, and nothing waits on it.
 - Anyone may do whatever it takes to cut check time: a change to how `check` runs lands without its file owner's review,
   and the owner is told. infra owns check time and its spend, and ci owns landing: no agent acts between a ready mark
@@ -121,10 +123,10 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
 - **Workers run where they can't take you down**: as cloud subagents (`Task` with `environment: "cloud"`, a standing
   request for every agent here, so nobody asks first) or as detached `research run`s; a local subagent only for a short
   read-only lookup. A cloud worker boots from the environment's snapshot, so its brief is complete (the task, the
-  done-condition, the deadline, "reread `git show origin/main:AGENTS.md`"), tells it to create
-  `cursor/<lane>-<topic>-<hex>` from `origin/main` and push only there, and names an inbox branch it reads hourly
-  (`git show origin/B:inbox/<agent-id>.md`); larger changes go in when you resume it. It opens its own PR, or reports
-  its branch and SHA for its launcher to.
+  done-condition, the deadline, "reread `git show origin/main:AGENTS.md`") and tells it to create
+  `cursor/<lane>-<topic>-<hex>` from `origin/main` and push only there. Write no brief or message to a branch (Daniel,
+  13 Nov): later word goes by `inbox.py send` or a resume, a document on a Linear issue or in Notion. It opens its own
+  PR, or reports its branch and SHA for its launcher to.
 - **Pick a worker's model by its task**, as `Task`'s `model`, a standing request for every agent here: name it on every
   launch, never `inherit` or left out. `claude-opus-5-5-high` is the default: moving files, reading code, a count or a
   sweep, a specified change with its tests, a merge, a review, a swarm seat, a proof of a fixed statement.
@@ -133,10 +135,13 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   Leads run Fable: they plan and launch. A resume keeps its model, so a Fable worker whose task is Opus's is not
   resumed: it tells its launcher, who briefs an Opus worker from its note.
 - **Reach a running agent** on any VM through its shell commands, since it never rereads a shared file mid-run:
-  `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`, and
-  its shell hook delivers it within about a minute or as its turn ends (`--local`: a subagent on your VM, at once);
+  `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`,
+  and its next shell command delivers it (`--local`: a subagent on your VM, no
+  push). Nothing delivers it at a turn's end, and one waiting then may be gone by the next turn: an agent whose turn
+  has ended is resumed with the text itself.
   `inbox.py selftest` checks your own VM end to end.
-- **Stay reachable.** Push and write a one-line checkpoint note at least every 60 minutes; when you'd wait on a run, end
+- **Stay reachable.** Push and write a one-line checkpoint note every 60 minutes and before ending a turn: a resume
+  or a timer's wake puts a worker on a new machine, with only what it pushed. When you'd wait on a run, end
   your turn naming its id and ETA, and your launcher resumes you. The control pod's agent watch flags a stalled or
   stopped agent and an out-of-memory kill. A worker resumed twice, whose base branch is gone, or silent past the watch's
   flag is relaunched fresh from its last note. Briefs ask for a checkpoint before long work and word red-team work

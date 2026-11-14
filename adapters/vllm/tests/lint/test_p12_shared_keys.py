@@ -7,7 +7,7 @@ Checked today, against ``allowlists/p12_shared_keys.json``:
 * ``row-id-split``: splitting a string on ``"__"`` (``split``/``rsplit``/``partition``/``rpartition``), the other way
   the row id gets parsed.
 * ``root-list``: a hand-written list, tuple or set of string literals naming code roots (``verity_vllm``, ``verity``,
-  ``research``, ``adapters/vllm``, ``verity/...``, ``verity/circuits/...`` (its census aside), ``verity/definitions/kernels/...``,
+  ``research``, ``adapters/vllm``, ``verity/...``, ``verity/circuits/...`` (its census aside), ``verity/circuits/kernels/...``,
   ``verity/core/...``, ``tools/research/...`` or paths under them), which is
   how code identity gets defined outside the one ``code_identity()``.
 
@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import ast
 import re
-from functools import lru_cache
+from functools import cache
 
 from . import _ratchet as R
 
@@ -29,8 +29,8 @@ RULE = "P12 (each shared key has one owner)"
 OWNERS = frozenset({"verity_vllm/config.py", "verity_vllm/pipeline/identity.py", "verity_vllm/target_family.py",
                     "verity_vllm/pipeline/source_identity.py", "verity_vllm/pipeline/release_json.py"})
 ROW_REGEX = re.compile(r"__\(?(?:\?:)?(?:tp|bi|b|i|o|c)?\(?\\d|__\[\^_\]|\[\^_\]\+__")
-CODE_ROOT = re.compile(r"^(?:\.\./)*(?:(verity_vllm|verity|verity.circuits|verity.definitions.kernels|verity.core|research|adapters/vllm|tools/research)(?:/|$)"
-                       r"|verity/circuits/(?!census)|verity/definitions/kernels/|verity/core/)")
+CODE_ROOT = re.compile(r"^(?:\.\./)*(?:(verity_vllm|verity|verity.circuits|verity.circuits.kernels|verity.core|research|adapters/vllm|tools/research)(?:/|$)"
+                       r"|verity/circuits/(?!census)|verity/circuits/kernels/|verity/core/)")
 
 
 def file_violations(src: str, rel: str) -> list[R.Violation]:
@@ -49,13 +49,13 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
             out.append(R.Violation(rel, "row-id-split", symbol, f"{node.func.attr}('__')", node.lineno))
         elif isinstance(node, (ast.Tuple, ast.List, ast.Set)) and len(node.elts) >= 2 \
                 and all(R.is_str(e) for e in node.elts):
-            roots = [e.value for e in node.elts if CODE_ROOT.match(e.value)]
+            roots = [e.value for e in node.elts if R.is_str(e) and CODE_ROOT.match(e.value)]
             if roots:
                 out.append(R.Violation(rel, "root-list", symbol, ", ".join(roots)[:120], node.lineno))
     return out
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[R.Violation, ...]:
     out: list[R.Violation] = []
     for p in R.library_files():
