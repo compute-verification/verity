@@ -368,10 +368,15 @@ def run_mode(args) -> int:
     torch.set_num_threads(args.threads)
     windows = e2e.wikitext_windows(args.model, args.windows)
     ids_digest = hashlib.sha256(json.dumps(windows).encode()).hexdigest()
-    shard, shards = map(int, args.part.split("/"))
-    if not 0 <= shard < shards:
-        raise SystemExit(f"--part {args.part}: I/N with 0 <= I < N")
-    lo, hi = shard * len(windows) // shards, (shard + 1) * len(windows) // shards
+    if args.range:
+        lo, hi = map(int, args.range.split(":"))
+    else:
+        shard, shards = map(int, args.part.split("/"))
+        if not 0 <= shard < shards:
+            raise SystemExit(f"--part {args.part}: I/N with 0 <= I < N")
+        lo, hi = shard * len(windows) // shards, (shard + 1) * len(windows) // shards
+    if not 0 <= lo < hi <= len(windows):
+        raise SystemExit(f"windows {lo}:{hi}: not inside 0:{len(windows)}")
     print(json.dumps({"mode": args.mode, "windows": len(windows), "range": [lo, hi], "tokens": sum(len(w) - 1 for w in windows),
                       "windows_sha256": ids_digest, "threads": torch.get_num_threads()}), flush=True)
     model = load(args.model)
@@ -399,12 +404,21 @@ def run_mode(args) -> int:
                 a["per_window"].append(part)
                 print(f"WINDOW {i + 1}/{len(windows)} {mode} nll {part:.3f} ppl_so_far {math.exp(a['nll'] / a['count']):.4f} "
                       f"t {time.perf_counter() - t0:.0f}s", flush=True)
+        docs = write(out, modes, acc, state, groups, args, len(windows), ids_digest, lo, i + 1, t0)
+    for doc in docs:
+        print(json.dumps({k: v for k, v in doc.items() if k not in ("per_window_nll", "top1")}), flush=True)
+    return 0
+
+
+def write(out, modes, acc, state, groups, args, windows, ids_digest, lo, done, t0) -> list[dict]:
+    """Each mode's windows lo:done so far, rewritten after every window, so a run cut short keeps what it finished."""
+    docs = []
     for mode in modes:
         a = acc[mode]
         head = mode == "pearl-head"
         doc = {"schema": "verity-pouw/pearl-c-cpu-quality/v1", "mode": mode, "scheme": None if mode == "bf16" else
-               "pearl-c-h100-v1-h3 (emulated)", "model": args.model, "windows": len(windows), "windows_sha256": ids_digest,
-               "range": [lo, hi], "run_with": modes,
+               "pearl-c-h100-v1-h3 (emulated)", "model": args.model, "windows": windows, "windows_sha256": ids_digest,
+               "range": [lo, done], "run_with": modes,
                "seed": SEED, "atoms": ATOMS["mode"], "threads": torch.get_num_threads(), "seconds": time.perf_counter() - t0,
                "nll": a["nll"], "tokens": a["count"], "perplexity": math.exp(a["nll"] / a["count"]),
                "per_window_nll": a["per_window"], "top1": a["top1"],
@@ -413,9 +427,11 @@ def run_mode(args) -> int:
                "excluded_a_rows": {k: dict(zip(("floor", "live", "rows"), v if head or k == "linear" else [0, 0, 0]))
                                    for k, v in state["excluded_a"].items()},
                "rows_b": {"linear": sum(g.n for g in groups if g.kind == "linear"), "head": groups[-1].n}}
-        (out / f"quality-{mode}-{shard}of{shards}.json").write_text(json.dumps(doc))
-        print(json.dumps({k: v for k, v in doc.items() if k not in ("per_window_nll", "top1")}), flush=True)
-    return 0
+        path = out / f"quality-{mode}-w{lo:03d}.json"
+        path.with_suffix(".tmp").write_text(json.dumps(doc))
+        path.with_suffix(".tmp").replace(path)
+        docs.append(doc)
+    return docs
 
 
 def _words(t: torch.Tensor) -> list[list[int]]:
@@ -570,6 +586,7 @@ def main() -> int:
     ap.add_argument("--windows", type=int, help="the first N windows (default all 141)")
     ap.add_argument("--part", default="0/1", metavar="I/N",
                     help="the I-th of N contiguous ranges of the windows; --summary joins a mode's parts")
+    ap.add_argument("--range", metavar="A:B", help="windows A to B (exclusive), in place of --part")
     ap.add_argument("--threads", type=int, default=torch.get_num_threads())
     ap.add_argument("--atoms", choices=("exact", "fp32"), default="exact",
                     help="the forming's atoms and the peel factors' chains: the H100's (default), or FP32 sums")
