@@ -81,7 +81,7 @@ theorem scanFits : ScanFits := by
 theorem scanScopeAcc : ScanScopeAcc := scanScopeAcc_of_scanFits scanFits
 
 /-- One slot of one lane and two ticks (T = 2): the schedule of the nontrivial instances. -/
-def oneSlot : NetworkCheck.Period.Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 2, none⟩
+def oneSlot : NetworkCheck.Period.Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 2, none, none, none, false⟩
 
 /-- A circuit that returns nothing fits no layout over a horizon of at least one step: step 0's egress presence gate
 isn't returned. -/

@@ -1,5 +1,6 @@
 """leak_bounds, the one calculator of K, in its scaling by links. `per_link` and `at_link_rate` give chain_record.leak's
-rows on a warden run's files, and `datacenter` is links × `per_link` for identical links, each link at δ / links.
+rows on a network certifier run's files, and `datacenter` is links × `per_link` for identical links, each link at δ /
+links.
 
 K's terms are `NetworkCheck.Period`'s rows form's, transcribed here from the Lean (`clog2`, `capsTerm`, `rowsTerms`,
 `eps`) rather than from the calculator:
@@ -38,7 +39,7 @@ CENSUS = HERE.parents[1] / "benchmarks" / "census"
 RHO = HERE.parents[1] / "benchmarks" / "rho" / "data"
 #: the scan class of a window class of KO 1 at 4 lanes, a timestep every 16 buckets (`scan_state.scan_class(4, 1, 16)`)
 KO1 = IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=1, KI=1024)
-#: the warden's scan class, KO 64 (`scan_zk.CLASS`)
+#: the network certifier's scan class, KO 64 (`scan_zk.CLASS`)
 W63 = replace(KO1, KO=64)
 #: 8 requests a sampling block of 32 buckets of 100 ms
 RATE = 2.5
@@ -68,7 +69,7 @@ def test_per_link_and_at_link_rate_are_chain_records_rows(tmp_path):
     (run / "out").mkdir(parents=True)
     (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))
     (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 75, "requests": 100}}))
-    doc = cr.leak(run, {"draw": {"honest": 64}})
+    doc = cr.leak(run, {"draw": {"honest": 65}})
     at = {"T": 32, "tau": Fraction(1, 10), "egress_cells": 65}
     per_s = Fraction(100, 75) / Fraction(32, 10)
     link = LB.link(sz.CLASS, per_s, **at)
@@ -190,7 +191,7 @@ def test_eps_is_the_scans_delta_summed():
 def test_the_pooled_datacenter_pays_its_incorrect_blocks_whatever_it_serves():
     n, one = LB.datacenter_links(), Fraction(1, 100)
     floor = LB.datacenter({LB.link(KO1, 0, T=32): n}, "week", "anchors", one)
-    faulty = n * 15 * (LB.link(KO1, 0, T=32).b + math.log2(189_000 * 64 + 1))
+    faulty = n * 15 * (LB.link(KO1, 0, T=32).b + math.log2(189_000 * 65 + 1))
     jitter = n * 189_000 * clog2(LB.JITTER_BOUND ** 32)
     assert LB.fmax(one / n) == 15 and floor.share == floor.bits / LB.WEIGHTS.bits
     assert floor.bits == pytest.approx(faulty + jitter)

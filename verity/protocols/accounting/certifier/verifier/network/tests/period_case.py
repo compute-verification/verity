@@ -17,27 +17,31 @@ and `eps`, the union of those deltas as an exact ratio string, and in the rows f
 (`max_tokens_cap`) when it has one.
 
 `build(m, seed, small)` makes a period with one change `m` (`EXPECT`, each aimed at one path of the check, or malformed
-parameters, commitments, evidence and cases). In the clock form: the link-windows of one link from the session's window
+parameters, commitments, evidence and cases). In the clock form: the execution phases of one link from the session's
+window
 `first`, each registered under the link's Program with its provenance, certified at both ends by a small LMS key in a
 sampled network certifier session, its clock certificate signing a sync of Σ_sync salted (`clock_commitment`, the sync and
 the salt in no case), and answered by one-stage with its one unit proved. In the rows form (a change named `rows-…`):
-each link-window's ingress and egress rows committed and registered under a small sampled schedule
+each execution phase's ingress and egress rows committed and registered under a small sampled schedule
 (`warden_rows.Cells.commit` and `registration`, signed by the same key; `capped`: a schedule with a response cap, and
 `cap-schedule` the parameters or a registration under it with another cap or none), its three records certified
 (`past-slots`: none of them and neither registration, as the network certifier leaves a window in which it refused a
 connection), and
 the scan's registration holding both rows' roots and domains and each lane j's `scan/prog<j>` (`prog_name`) at the root
-and domain of chunk j's entries port of that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1`
-at its smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its smallest binding beside a stand-in scan
-slots' `ScanSlots_v2`, each a pinned Definition with one member a slot) in its own audit's registration and Program
-(`_prog_tied`, `_wired`), and its
+and domain of chunk j's entries port of that execution phase's slot entries' template (`slot_entry`,
+`io_shell.SlotEntry_v1` at its smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its smallest binding
+beside a stand-in scan slots' `ScanSlots_v2`, each a pinned Definition with one member a slot) in its own audit's
+registration and Program (`_prog_tied`, `_wired`), and its
 state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), a state tree of T rows
-(`_state_tree`) whose units' reads its `window` states as the chain (`state_reads`, `_state_read`) and whose leaf 0 it
-opens to the empty state (`state_empty`, `_state_empty`), and each member's ok bits
+(`_state_tree`) whose units' reads its `window` states as the chain (`state_reads`, `_state_read`), its start (`START`,
+the start unit's input) a registered row its `window` opens to the empty state (`start_empty`, `_start_empty`), and
+each member's ok bits
 (`<member>/o0`) at the schedule's constant (`_ok_entries`; `ok-unheld`: one execution phase's broken, `UNOKS`; `ok-equal`:
-a schedule of three ticks, where two members' are at one domain and root; `one-tick`: a schedule of one tick, which
+a schedule of two ticks, where two members' are at one domain and root; `one-tick`: a schedule of one tick, which
 has no constants), answered by one-stage with a
-stratified or subset sample at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
+stratified or subset sample at the period's δ; a rows period is one execution phase, and one of more is refused
+(`start-carried`, `CARRIES`), while one whose execution phase is not the run's first is accepted at any start, charged
+the state's full width (`start-charged`, `CHARGES`); the scan's Program is its generator form, stand-ins of its three templates
 at small widths in the Boolean profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in
 the checker form is a bad scan (`bad_scans`), as is each negative of a check of the rows the scan's ties equate, of
 what `NetTiming.BoundaryGates.Fits` asks or of the input nodes its arguments read (`scan_negatives`). Beside them, the
@@ -48,10 +52,10 @@ sample (a work sampling design's) and its bound on incorrect proof blocks, every
 `prog` is tied to, or, each accepted and charged, its slot entries' and scan slots' templates whole and the rest in part
 (`tied-partial`, a stratum a template, `_by_template`), one or two of its proof blocks sampled (`tied-sampled`,
 `subset:k`, the demo's sample), or its slot entries' or scan slots' stratum in part too (`tied-entries-sampled`,
-`tied-slots-sampled`), and a link-window whose scan's state is not its
+`tied-slots-sampled`), and an execution phase whose scan's state is not its
 wired audit's `SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions,
 at another root or domain, or none, `UNSTATES`), as is one whose units read their state off the chain
-(`state-misindexed`, `MISREADS`) and one whose row 0 isn't opened to the empty state (`state-unpinned`, `UNPINS`).
+(`state-misindexed`, `MISREADS`) and one whose start isn't opened to the empty state (`start-unpinned`, `UNPINS`).
 The tied audits run one class circuit, one Program a case, whose SHA-512 is the parameters' `circuit` (`_held`), and
 an execution phase whose tied audit runs another, or under another `circuit`, is refused (`circuit-swapped`,
 `UNHOLDS`).
@@ -84,13 +88,13 @@ from pathlib import Path
 
 import verity_difftest as D
 from verity_difftest import protocol as P
-from verity.protocols.accounting.certifier.verifier import scan_ok
+from verity.protocols.accounting.certifier.verifier import content_rows, io_request, scan_ok
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.certificate import (SALT_BYTES, Certificate, Direction, LmsKey,
                                                             certificate_digest, clock_digest)
-from verity.protocols.accounting.certifier.verifier.active import HEADER, ID_DIGITS, MAX_TOKENS_AT
+from verity.protocols.accounting.certifier.verifier.active import HEADER, ID_DIGITS, ID_FIELD_BYTES, MAX_TOKENS_AT
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, SyncSet
-from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, WardenParams
+from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, OPTIONAL_FIELDS, WardenParams
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G, registration as R
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k
@@ -120,7 +124,11 @@ PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "prog
 ROWS_PARAMS_KEYS = ["audits", "cells", "circuit", "first", "jitter", "key", "link", "lms", "program", "scan",
                     "schedule", "session", "windows"]
 SCHEDULE_KEYS = sorted(INTEGER_FIELDS)
-CAPPED_SCHEDULE_KEYS = sorted([*INTEGER_FIELDS, "max_tokens_cap"])
+#: the keys a schedule has only where it sets them (`optionalScheduleKeys`)
+OPTIONAL_SCHEDULE_KEYS = sorted(OPTIONAL_FIELDS)
+#: what the check says of a schedule with connection rows (`connectionRowsRefusal`)
+CONNECTION_ROWS = ("schedule: connection rows: the check reads no connection rows' registration, so it refuses a "
+                   "schedule with lengths rows, content rows or request words (connectionRowsCheck)")
 CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
 CLOCK_WINDOW_KEYS = ["answer", "certificates", "clock"]
 ROWS_WINDOW_KEYS = ["answer", "certificates", "registrations"]
@@ -209,18 +217,21 @@ class Params:
 @dataclasses.dataclass(frozen=True)
 class Scan:
     """`Scan`: the scan's monitoring period (T), its own free inputs (none: its `prog` is a compute audit's slot
-    entries, `_wired`, whose free inputs a link-window's term counts, `_tied_audits`), the bits one ingress and one
-    egress instance commit, and its slot entries' bits (`E_w`), all a tied audit's incorrect proof blocks can set."""
+    entries, `_wired`, whose free inputs an execution phase's term counts, `_tied_audits`), the bits one ingress and one
+    egress instance commit, its slot entries' bits (`E_w`), all a tied audit's incorrect proof blocks can set, and its
+    state's full width (`start`: the start unit's ``sin``, what a period's first start that is not the run's first is
+    charged, `_start_refusal`)."""
     steps: int
     free: int
     ingress: int
     egress: int
     entries: int = 0
+    start: int = 0
 
 
 @dataclasses.dataclass(frozen=True)
 class Commitment:
-    """One-stage's registration records of the audits and the link-windows, as they decode."""
+    """One-stage's registration records of the audits and the execution phases, as they decode."""
     audits: list[dict]
     windows: list[dict]
     bytes: bytes
@@ -292,12 +303,29 @@ def rows_wf_refusal(s: WardenParams, windows: int) -> str:
             "two frames could encode alike (rowsWf)")
 
 
+def connection_rows(s: WardenParams) -> bool:
+    """`Schedule.connectionRows`: whether the schedule registers connection rows, its lengths rows, which a schedule
+    with content rows has too, as one with request words has content rows. Each is asked, as the Lean asks it."""
+    return s.lengths is not None or s.content is not None or s.request_words is not None
+
+
+def _classes(j) -> tuple[tuple[int, ...], ...]:
+    """A schedule's content rows' classes as its JSON holds them: a list of lists of naturals."""
+    return tuple(tuple(_nat(x, "schedule.content") for x in _of(c, list, "schedule.content"))
+                 for c in _of(j, list, "schedule.content"))
+
+
 def _schedule(j) -> WardenParams:
     """`scheduleOf`: `WardenParams`' integer fields, each a positive integer, B past a cell's header, and B, S and T
-    u32s, in the id egress form, and its response cap when it has one (`WardenParams.max_tokens_cap`)."""
-    keys = CAPPED_SCHEDULE_KEYS if isinstance(j, dict) and sorted(j) == CAPPED_SCHEDULE_KEYS else SCHEDULE_KEYS
+    u32s, in the id egress form, and each optional field the schedule sets (`OPTIONAL_SCHEDULE_KEYS`), as
+    `WardenParams` holds it. `request_words` is the JSON `true` or it is refused: `WardenParams` reads `None` as
+    unset, and `scheduleOf` refuses a key that is there and not `true`."""
+    keys = sorted(SCHEDULE_KEYS + [k for k in OPTIONAL_SCHEDULE_KEYS if isinstance(j, dict) and k in j])
     _exactly(j, keys, "schedule")
-    values = {k: _nat(j[k], "schedule") for k in keys}
+    if "request_words" in keys and j["request_words"] is not True:
+        raise D.Reject("schedule: request_words is true, for a schedule with request words, or unset")
+    values = {k: _classes(j[k]) if k == "content" else j[k] if k == "request_words" else _nat(j[k], "schedule")
+              for k in keys}
     try:
         s = WardenParams(**values)
     except ValueError as e:
@@ -332,13 +360,12 @@ def prog_params(lanes: int) -> tuple[str, ...]:
     return tuple(f"prog{j}" for j in range(lanes))
 
 
-def first_params(lanes: int) -> tuple[str, ...]:
-    """`firstParams`: bucket 0's parameters in the generator form (`ingress_scan.IngressScanFirst`)."""
-    return ("row", *prog_params(lanes))
+#: `startParams`: the start unit's parameters in the generator form (`ingress_scan.IngressScanStart`)
+START_PARAMS = ("sin",)
 
 
 def ingress_params(lanes: int) -> tuple[str, ...]:
-    """`ingressParams`: each later ingress bucket's parameters (`ingress_scan.IngressScanBucket`)."""
+    """`ingressParams`: each ingress bucket's parameters (`ingress_scan.IngressScanBucket`)."""
     return ("row", "sin", *prog_params(lanes))
 
 
@@ -368,12 +395,18 @@ def _same_leaves(a, b) -> bool:
 
 
 def _ingress_return(ret, sin, state) -> bool:
-    """`ingressReturn`: a tuple of exactly a u16, a state of the leaves of `sin` (the later ingress template's, None
-    where there is none) and a view of the leaves of `state`, the egress template's."""
+    """`ingressReturn`: a tuple of exactly a u16, a state of the leaves of `sin`, the ingress template's own, and a
+    view of the leaves of `state`, the egress template's."""
     if ret[0] != "Tuple" or len(ret[1]) != 3:
         return False
     out, passed, view = ret[1]
-    return out == BOOL_U16 and (sin is None or _same_leaves(passed, sin)) and _same_leaves(view, state)
+    return out == BOOL_U16 and _same_leaves(passed, sin) and _same_leaves(view, state)
+
+
+def _start_return(ret, own, sin) -> bool:
+    """`startReturn`: the start template's return a tuple of exactly one row, and that row and its own parameter
+    `own` each of the leaves of `sin`, an ingress bucket's."""
+    return ret[0] == "Tuple" and len(ret[1]) == 1 and _same_leaves(ret[1][0], sin) and _same_leaves(own, sin)
 
 
 def _parts(refs: dict, nodes: list) -> list[dict]:
@@ -564,13 +597,14 @@ def _audit(a, ctx: str) -> Audit:
 
 def _scan(j, program: str, s: WardenParams) -> Scan:
     """`scanOf`: the scan's terms from its Program's descriptor, which must be the registered Program and the generator
-    form of the schedule's link-window in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`), an egress template
-    with a row among its parameters (the checker form) refused first, and an ingress return that is not a u16, a
-    state of `sin`'s leaves and a view of the egress `state`'s (`_ingress_return`), the rows the scan's two ties
-    equate. Then what `NetTiming.BoundaryGates.Fits` asks: the
+    form of the schedule's execution phase in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`): the start unit, T
+    ingress buckets and T egress buckets. An egress template with a row among its parameters (the checker form) is
+    refused first, and an ingress return that is not a u16, a state of `sin`'s leaves and a view of the egress
+    `state`'s (`_ingress_return`), or a start template that does not take and return a state of those leaves
+    (`_start_return`): the rows the scan's ties equate. Then what `NetTiming.BoundaryGates.Fits` asks: the
     walk within `FUEL` (`_walkable`), the root returning every egress leaf, the egress template returning only gates it
-    computes (`_own_returns`), each ingress row and every template's row, state and egress argument one input node's
-    leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `⌊t / every⌋` of lane j's
+    computes (`_own_returns`), the ingress row and every template's row, state and egress argument one input node's
+    leaves (`_input_arg`), no egress argument the ingress rows', bucket t's `prog<j>` row `⌊t / every⌋` of lane j's
     own input node of its slot entries (`_reads_entries`), the row, state and egress arguments' input nodes
     pairwise distinct and none a lane's slot entries' (`argsApart`), each of those arguments all its node's leaves,
     each lane's slot entries' node its entries' leaves and no other input node (`inputsRead`), and the Program
@@ -587,36 +621,36 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     T, row = s.window, ["Array", s.lanes * s.slots * s.cell_bytes, BOOL_BYTE]
     if not templates:
         raise D.Reject("scan: no template")
-    (xf, bf), later, (xe, be) = templates[0], templates[1:-1], templates[-1]
+    xe, be = templates[-1]
     if any(k == "row" or t == row for k, t in be["params"]):
         raise D.Reject("scan: the egress template takes its row as an input (the checker form)")
-    if len(templates) not in (2, 3):
+    if len(templates) != 3:
         raise D.Reject("scan: not the generator form's templates")
+    (xs, bs), (xi, bi) = templates[:2]
     names = lambda b: tuple(k for k, _ in b["params"])  # noqa: E731
     L = s.lanes
-    if (names(bf) != first_params(L) or any(names(b) != ingress_params(L) for _, b in later)
-            or names(be) != EGRESS_PARAMS):
+    if names(bs) != START_PARAMS or names(bi) != ingress_params(L) or names(be) != EGRESS_PARAMS:
         raise D.Reject("scan: the templates' parameters are not the generator form's")
-    counts = [(xf, 1), *((x, T - 1) for x, _ in later), (xe, T)]
-    if len(later) != (T > 1) or not all(x["form"] == "batch" and x["n"] == n for x, n in counts):
-        raise D.Reject(f"scan: not bucket 0, {T - 1} later ingress buckets and {T} egress buckets")
-    if bf["params"][0][1] != row or any(b["params"][0][1] != row for _, b in later):
-        raise D.Reject("scan: an ingress template's row is not the schedule's")
-    ety = bf["params"][1][1]
-    if any(t != ety for _, t in bf["params"][1:]) or any(
-            any(t != ety for _, t in b["params"][2:]) or b["ret_type"] != bf["ret_type"] for _, b in later):
-        raise D.Reject("scan: the ingress templates' entry ports' types or returns differ")
+    if not all(x["form"] == "batch" and x["n"] == n for x, n in ((xs, 1), (xi, T), (xe, T))):
+        raise D.Reject(f"scan: not the start unit, {T} ingress buckets and {T} egress buckets")
+    if bi["params"][0][1] != row:
+        raise D.Reject("scan: the ingress template's row is not the schedule's")
+    ety = bi["params"][2][1]
+    if any(t != ety for _, t in bi["params"][2:]):
+        raise D.Reject("scan: the ingress template's entry ports' types differ")
     if be["ret_type"] != ["Tuple", [BOOL_U16, row]]:
         raise D.Reject("scan: the egress template doesn't return a u16 and the schedule's row")
-    if not _ingress_return(bf["ret_type"], later[0][1]["params"][1][1] if later else None, be["params"][0][1]):
-        raise D.Reject("scan: the ingress templates don't return a u16, a state of a later bucket's sin's leaves and a "
-                       "view of an egress bucket's state's leaves, so a tie of the scan's state or view would equate "
-                       "rows of two lengths (NetworkCheck.Period.ingressReturn)")
+    sin = bi["params"][1][1]
+    if not (_ingress_return(bi["ret_type"], sin, be["params"][0][1])
+            and _start_return(bs["ret_type"], bs["params"][0][1], sin)):
+        raise D.Reject("scan: the ingress template doesn't return a u16, a state of its sin's leaves and a view of an "
+                       "egress bucket's state's leaves, or the start template doesn't take and return a state of "
+                       "those leaves, so a tie of the scan's state or view would equate rows of two lengths "
+                       "(NetworkCheck.Period.ingressReturn, startReturn)")
     inputs = sum(int(w[1]) * _members(x) for x in nodes if (w := INPUT_ID.match(callees[x["fn"]])))
     bits = lambda ps: sum(bits_of(t) for _, t in ps)  # noqa: E731
     nb = T // s.every
-    if inputs != (bits(bf["params"][:1]) + (T - 1) * sum(bits(b["params"][:2]) for _, b in later)
-                  + T * bits(be["params"]) + L * nb * bits_of(ety)):
+    if inputs != bits(bs["params"]) + T * bits(bi["params"][:2]) + T * bits(be["params"]) + L * nb * bits_of(ety):
         raise D.Reject("scan: an input gate that is no template's row, state or egress parameter, nor one of the slot "
                        "entries")
     if not _walkable(j):
@@ -630,27 +664,25 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     if not _own_returns(j)(callees[xe["fn"]]):
         raise D.Reject("scan: the egress template returns a leaf it doesn't compute (a parameter's, passed through), "
                        "so an egress gate would be an input (NetTiming.BoundaryGates.Fits)")
-    ingress = [xf, *(x for x, _ in later)]
-    rows = [_input_arg(x["args"][0], nodes, j) if x["args"] else None for x in ingress]
-    if None in rows:
-        raise D.Reject("scan: an ingress template's row is not one input node's leaves, so an ingress gate would be no "
-                       "input (NetTiming.BoundaryGates.Fits)")
-    own_args = [*xf["args"][:1], *(a for x, _ in later for a in x["args"][:2]), *xe["args"]]
-    if (len(xf["args"]) != 1 + L or any(len(x["args"]) != 2 + L for x, _ in later)
+    rows = _input_arg(xi["args"][0], nodes, j) if xi["args"] else None
+    if rows is None:
+        raise D.Reject("scan: the ingress template's row is not one input node's leaves, so an ingress gate would be "
+                       "no input (NetTiming.BoundaryGates.Fits)")
+    own_args = [*xs["args"][:1], *xi["args"][:2], *xe["args"]]
+    if (len(xs["args"]) != 1 or len(xi["args"]) != 2 + L
             or any(_input_arg(a, nodes, j) is None for a in own_args)):
         raise D.Reject("scan: a template's row, state or egress argument is not one input node's leaves")
-    if any(_input_arg(a, nodes, j) in rows for a in xe["args"]):
-        raise D.Reject("scan: an egress template's argument is an ingress row's input node, so an egress gate would "
+    if any(_input_arg(a, nodes, j) == rows for a in xe["args"]):
+        raise D.Reject("scan: an egress template's argument is the ingress rows' input node, so an egress gate would "
                        "depend on the ingress (NetTiming.BoundaryGates.Fits)")
-    r0 = [_member_ref(xf, 1 + i, 0, 0, j) for i in range(L)]
+    r0 = [_member_ref(xi, 2 + i, 0, 0, j) for i in range(L)]
     pks = [r[1] for r in r0 if r is not None]
     if (len(pks) != L or any(r[0] == "p" for r in r0) or len(set(pks)) != L
-            or any(k in rows or not (k < len(nodes) and _is_input(nodes[k], j)) for k in pks)):
+            or any(k == rows or not (k < len(nodes) and _is_input(nodes[k], j)) for k in pks)):
         raise D.Reject("scan: bucket 0's prog<j> reads no input node of lane j's own, its slot entries', distinct from "
                        "every other lane's")
     E = leaves_of(ety)
-    if not (_reads_entries(xf, 1, 0, s.every, E, pks, j)
-            and all(_reads_entries(x, 2, 1, s.every, E, pks, j) for x, _ in later)):
+    if not _reads_entries(xi, 2, 0, s.every, E, pks, j):
         raise D.Reject(f"scan: bucket t's prog<j> is not row ⌊t / {s.every}⌋ of lane j's slot entries' input node, "
                        "its slot of the boundary bucket t reads (NetworkCheck.Period.readsEntries)")
     own = [_input_arg(a, nodes, j) for a in own_args]
@@ -668,7 +700,8 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     if not _topological(j):
         raise D.Reject("scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program is not "
                        "topological, so a gate's operands could be gates after it")
-    return Scan(T, 0, bits_of(bf["ret_type"]), bits_of(be["ret_type"]), L * nb * bits_of(ety))
+    return Scan(T, 0, bits_of(bi["ret_type"]), bits_of(be["ret_type"]), L * nb * bits_of(ety),
+                bits_of(bs["params"][0][1]))
 
 
 def params(j) -> Params:
@@ -704,6 +737,8 @@ def params(j) -> Params:
         sync_set, schedule, scan = _sync_set(j["sync_set"]), None, None
     else:
         schedule = _schedule(j["schedule"])
+        if connection_rows(schedule):
+            raise D.Reject(CONNECTION_ROWS)
         sync_set, scan = None, _scan(j["scan"], program, schedule)
     windows = _nat(j["windows"], "windows")
     if windows < 1:
@@ -997,16 +1032,18 @@ def _run(j, lo: int, hi: int, leaf: int) -> bool:
 
 
 def state_reads(T: int) -> dict:
-    """The scan's state reads its registration's `window` states (`stateRead`): `sin` units 1 … T − 1 from leaf 1,
-    `o1` units 0 … T − 2 from leaf 1, unit t's `sin` at leaf t and its `o1` at leaf t + 1."""
-    return {STATE: {"o1": {"leaf": 1, "units": [0, T - 1]}, "sin": {"leaf": 1, "units": [1, T]}}}
+    """The scan's state reads its registration's `window` states (`stateRead`): `o0` unit 0, the start unit, at leaf
+    0; `sin` units 1 … T from leaf 0 and `o1` units 1 … T − 1 from leaf 1, unit t + 1, bucket t, its `sin` at leaf t
+    and its `o1` at leaf t + 1."""
+    return {STATE: {"o0": {"leaf": 0, "units": [0, 1]}, "o1": {"leaf": 1, "units": [1, T]},
+                    "sin": {"leaf": 0, "units": [1, T + 1]}}}
 
 
 def _state_read(p: Params, reg: dict) -> bool:
     """`stateRead`: the registration's `window`'s `reads` of `STATE` are `state_reads` at the schedule's T."""
     r = _get(_get(_get(reg, "window"), "reads"), STATE)
     T = p.schedule.window
-    return _run(_get(r, "sin"), 1, T, 1) and _run(_get(r, "o1"), 0, T - 1, 1)
+    return _run(_get(r, "o0"), 0, 1, 0) and _run(_get(r, "sin"), 1, T + 1, 0) and _run(_get(r, "o1"), 1, T, 1)
 
 
 class _Domain:
@@ -1019,28 +1056,40 @@ class _Domain:
         self.domain_id, self.count = domain_id, count
 
 
-def _state_empty(p: Params, reg: dict) -> bool:
-    """`stateEmpty`: the registration's `window`'s ``empty`` of `STATE` opens leaf 0 of its first state entry's root
-    and domain to the empty state, ``words`` (at least 1) zero u16 words under a 192-byte ``salt``, through ``path``,
-    one sibling a level of T leaves."""
-    o, es, T = _get(_get(_get(reg, "window"), "empty"), STATE), _states(reg), p.schedule.window
-    w = _natural(_get(o, "words"))
-    if not es or not w:
-        return False
-    salt, path, root, dom = (_unhex(_get(o, "salt")), _unhex(_get(o, "path")), _unhex(es[0].get("root")),
-                             _unhex(es[0].get("domain")))
-    if salt is None or path is None or root is None or dom is None or len(salt) != ADV.INST.salt_bytes \
-            or len(path) != 64 * clog2(T):
-        return False
-    bc = ADV.INST.commit_string(ADV.INST.default_key, BitRowLeaf(16 * w).layout().digest(bytes(2 * w)), salt)
-    return G.verify_read(_Domain(dom, T), root, 0, bc, path, G.SCHEMA_V2)
+#: `startName`: the registered value an execution phase's scan starts from, the start unit's `sin`
+START = "0.sin"
 
 
-def state_empty(tree: ADV.Committed) -> dict:
-    """The opening of a state tree's leaf 0 its registration's `window` gives as ``empty`` (`stateEmpty`): its words,
-    salt and path."""
-    o = tree.open(0)
-    return {STATE: {"path": b"".join(o.path).hex(), "salt": o.salt.hex(), "words": tree.n_bits // 16}}
+def _starts(reg: dict) -> list[dict]:
+    """`startEntries`: a registration's `registered` entries whose value is `START`."""
+    return [e for e in _entries(reg, "registered") if e.get("value") == START]
+
+
+def _row_bc(row: bytes, salt: bytes) -> bytes:
+    """The hm96 b‖c of a row of u16 words, `row` their bytes, under `salt` (`Registered.knownPayload`)."""
+    return ADV.INST.commit_string(ADV.INST.default_key, BitRowLeaf(8 * len(row)).layout().digest(row), salt)
+
+
+def _start_empty(reg: dict) -> bool:
+    """`startEmpty`: the registration has a start entry (`_starts`), and its `window`'s ``empty`` of `START` opens
+    every one to the empty state: ``words`` (at least 1) zero u16 words under a 192-byte ``salt``, whose leaf under
+    the entry's domain is the entry's root, a tree of the one leaf."""
+    o, es = _get(_get(_get(reg, "window"), "empty"), START), _starts(reg)
+    w, salt = _natural(_get(o, "words")), _unhex(_get(o, "salt"))
+    if not es or not w or salt is None or len(salt) != ADV.INST.salt_bytes:
+        return False
+    bc = _row_bc(bytes(2 * w), salt)
+    return all((root := _unhex(e.get("root"))) is not None and (dom := _unhex(e.get("domain"))) is not None
+               and G.verify_read(_Domain(dom, 1), root, 0, bc, b"", G.SCHEMA_V2) for e in es)
+
+
+def start_empty(words: int, salt: bytes, domain: bytes, row: bytes | None = None) -> tuple[dict, dict]:
+    """The empty state as a scan's registration starts from it (`startEmpty`): its `registered` entry of `START`, a
+    tree of the one row of `words` zero u16 words (or of `row`, a row the prover chose) under `salt` at the domain
+    whose id is `domain`, and the opening its `window` gives as ``empty``."""
+    root = G.leaf(_Domain(domain, 1), 0, _row_bc(bytes(2 * words) if row is None else row, salt), G.SCHEMA_V2)
+    return ({"domain": domain.hex(), "leaves": 1, "root": root.hex(), "value": START, "words": words},
+            {START: {"salt": salt.hex(), "words": words}})
 
 
 def _state_tied(p: Params, audits: list[dict], reg: dict) -> bool:
@@ -1072,12 +1121,13 @@ def _prog_tied(audits: list[dict], reg: dict) -> bool:
 
 
 def _tied_in(audits: list[dict], windows: list[dict], i: int) -> bool:
-    """`tiedIn`: some link-window's `prog` is audit `i`'s output (`_tied_audits`)."""
+    """`tiedIn`: some execution phase's `prog` is audit `i`'s output (`_tied_audits`)."""
     return any(i in _tied_audits(audits, reg) for reg in windows)
 
 
 def records(link: str) -> tuple[tuple[str, Direction], ...]:
-    """The rows form's certified records of a link-window (`warden_serve.CERTIFIED`): requests, responses, fails."""
+    """The rows form's certified records of an execution phase (`warden_serve.CERTIFIED`): requests, responses,
+    fails."""
     return (link, INGRESS), (link, EGRESS), (f"{link}-fails", EGRESS)
 
 
@@ -1104,8 +1154,8 @@ def _rows_window_check(p: Params, audits: list[dict], w: int, reg: dict,
         raise Finding(REJECT, f"{what}: the scan's prog is no compute audit's output")
     prof, pub = _answered(what, reg, x.answer)
     f = _facts(what, prof, pub)
-    if f.units != 2 * p.schedule.window:
-        raise Finding(REJECT, f"{what}: profile: {f.units} units, not the scan's 2T")
+    if f.units != 2 * p.schedule.window + 1:
+        raise Finding(REJECT, f"{what}: profile: {f.units} units, not the scan's 2T + 1")
     return f, sum(p.audits[i].free for i in _tied_audits(audits, reg))
 
 
@@ -1157,18 +1207,31 @@ STRATUM_OVERSAMPLED = "more than the stratum holds"
 STRATA_SIZES = "their sizes do not sum to the level's"
 #: `wiredCheck`'s refusal, after its window's number.
 UNWIRED = "the scan's prog is no compute audit's slot entries"
-#: `stateCheck`'s refusals, after its window's number: the state untied, its reads off the chain, its row 0 unopened.
+#: `stateCheck`'s refusals, after its window's number: the state untied, its reads off the chain.
 UNSTATED = "the scan's state is no wired audit's SCAN_STATE"
 MISREAD = "the scan's state reads are not its transitions' chain"
-UNPINNED = "the scan's state's row 0 is not the empty state"
+#: `startCheck`'s refusals, after its window's number: an execution phase after its period's first, and the run's first
+#: one's start that is not the empty state.
+CARRIED = "the scan's start is the state the execution phase before it ended in"
+UNPINNED = "the scan's start is not the empty state"
 
 
 def _state_refusal(p: Params, audits: list[dict], reg: dict) -> str | None:
     """`stateCheck`'s refusal of the scan of an execution phase's transfer blocks: none when its state is tied
-    (`_state_tied`) and its row 0 opened to the empty state (`_state_empty`)."""
+    (`_state_tied`)."""
     if not _state_tied(p, audits, reg):
         return UNSTATED if _state_read(p, reg) else MISREAD
-    return None if _state_empty(p, reg) else UNPINNED
+    return None
+
+
+def _start_refusal(w: int, i: int, reg: dict) -> str | None:
+    """`startCheck`'s refusal of execution phase `w`'s scan, the `i`-th of its period: none when it is its period's
+    first and, where it is the run's first, execution phase 0, its scan starts from the empty state (`_start_empty`).
+    A period's first that is not the run's first starts from a state the check holds to nothing, and is charged
+    (`public`'s ``start``)."""
+    if i != 0:
+        return CARRIED
+    return None if w != 0 or _start_empty(reg) else UNPINNED
 
 
 #: `heldCheck`'s refusal, after its execution phase's number.
@@ -1203,11 +1266,13 @@ def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int, entries:
 
 
 def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]] | None = None,
-           charged: list[Facts] = ()) -> dict:
+           charged: list[Facts] = (), start: int = 0) -> dict:
     """K and its terms over `MonitoringPeriodLeakAccepted`'s windows: the clock form's compute audits, or the rows form's
-    link-windows' scans (`scans`, each its facts, its tied audits' free inputs and its `β_w`; None in the clock form),
-    where a compute audit's own terms are in none, a tied audit's free inputs are in its link-window's `free` and its
-    incorrect proof blocks in its `faulty_entries`, and the δ of a tied audit sampled in part (`charged`) is in `eps`."""
+    execution phases' scans (`scans`, each its facts, its tied audits' free inputs and its `β_w`; None in the clock
+    form), where a compute audit's own terms are in none, a tied audit's free inputs are in its execution phase's `free`
+    and its incorrect proof blocks in its `faulty_entries`, the δ of a tied audit sampled in part (`charged`) is in
+    `eps`, and the period's first start, where it is not the run's first, is charged ``start``, the state's full width,
+    once."""
     cells = sum(clog2(cap + 1) for cap in p.cells)
     if scans is None:
         units = [_terms(a.free, a.steps, a.bits, f, p.jitter) for a, f in zip(p.audits, facts)]
@@ -1217,10 +1282,10 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int]] | 
         s = p.scan
         units = [_terms(s.free + tied, s.steps, max(s.ingress, s.egress), f, p.jitter, b) for f, tied, b in scans]
         schedules = cells
-        out = {"audits": [_facts_json(f) for f in facts], "scans": units}
+        out = {"audits": [_facts_json(f) for f in facts], "scans": units, "start": start}
         if p.schedule.max_tokens_cap is not None:
             out["max_tokens_cap"] = p.schedule.max_tokens_cap
-    K = schedules + cells + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"]
+    K = schedules + cells + start + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"]
                                 + t.get("faulty_entries", 0) for t in units)
     eps = sum((Fraction(t["delta"]) for t in units), Fraction(0)) + sum((f.delta for f in charged), Fraction(0))
     return out | {"K": K, "cells": cells, "eps": str(eps), "schedules": schedules, "windows": p.windows}
@@ -1251,6 +1316,8 @@ def check(p: Params, c: Commitment, e) -> tuple:
         findings.append(Finding(REJECT, "a scan's δ is not the period's"))
     if p.schedule is not None and not rows_wf(p.schedule, p.windows):
         findings.append(Finding(REJECT, rows_wf_refusal(p.schedule, p.windows)))
+    if p.schedule is not None and connection_rows(p.schedule):
+        findings.append(Finding(REJECT, CONNECTION_ROWS))
     charged = {}
     for i, (audit, reg, a) in enumerate(zip(p.audits, c.audits, audits)):
         tied = p.schedule is not None and _tied_in(c.audits, c.windows, i)
@@ -1266,6 +1333,8 @@ def check(p: Params, c: Commitment, e) -> tuple:
                      if not _wired(p, c.audits, reg)]
         findings += [Finding(REJECT, f"window {p.first + i}: {why}") for i, reg in enumerate(c.windows)
                      if (why := _state_refusal(p, c.audits, reg))]
+        findings += [Finding(REJECT, f"window {p.first + i}: {why}") for i, reg in enumerate(c.windows)
+                     if (why := _start_refusal(p.first + i, i, reg))]
         # `okChecks`: the schedule's constants, hashed once a period, and each registration compared to them; a
         # schedule with none refuses every registration
         try:
@@ -1286,8 +1355,8 @@ def check(p: Params, c: Commitment, e) -> tuple:
         return ACCEPT, public(p, facts), {"link": p.link, "windows": p.windows}
     beta = [p.scan.entries if any(i in charged and charged[i].wrong >= 1 for i in _tied_audits(c.audits, reg)) else 0
             for reg in c.windows]
-    return ACCEPT, public(p, facts, [(f, t, b) for (f, t), b in zip(scans, beta)], list(charged.values())), {
-        "link": p.link, "windows": p.windows}
+    return ACCEPT, public(p, facts, [(f, t, b) for (f, t), b in zip(scans, beta)], list(charged.values()),
+                          0 if p.first == 0 else p.scan.start), {"link": p.link, "windows": p.windows}
 
 
 def reference(case) -> dict:
@@ -1339,7 +1408,7 @@ EXPECT = {
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
     "rows-answer-bound": REJECT, "rows-answer-oversampled": REJECT, "rows-delta": REJECT, "rows-units": REJECT,
     "rows-prog-untied": REJECT, "rows-prog-unwired": REJECT, "rows-state-untied": REJECT, "rows-state-misindexed": REJECT,
-    "rows-state-unpinned": REJECT, "rows-circuit-swapped": REJECT,
+    "rows-start-unpinned": REJECT, "rows-start-carried": REJECT, "rows-start-charged": ACCEPT, "rows-circuit-swapped": REJECT,
     "rows-ok-unheld": REJECT, "rows-ok-equal": ACCEPT, "rows-one-tick": REJECT,
     "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": UNDECIDED,
     "rows-audit-profile": REJECT, "rows-audit-bound": REJECT, "rows-audit-program": REJECT, "rows-audit-units": REJECT,
@@ -1393,17 +1462,23 @@ def _refused(answer: dict, verdict: str) -> dict:
 
 #: The schedule's fields that leave its rows' shape (B, S, T) as it is: a change to one changes only its digest.
 SAME_SHAPE = ("bucket_ms", "delay", "egress_cells", "ingress_buckets", "ingress_cells", "queue")
-#: The orders of a link-window's three records' certificates other than their own.
+#: The orders of an execution phase's three records' certificates other than their own.
 SWAPS = ((0, 2, 1), (1, 0, 2), (1, 2, 0), (2, 0, 1), (2, 1, 0))
 
 
 def schedule_json(s: WardenParams) -> dict:
-    cap = {} if s.max_tokens_cap is None else {"max_tokens_cap": s.max_tokens_cap}
-    return {k: getattr(s, k) for k in SCHEDULE_KEYS} | cap
+    """The schedule as the parameters hold it: its integer fields, and each optional field it sets."""
+    optional = {k: getattr(s, k) for k in OPTIONAL_SCHEDULE_KEYS if getattr(s, k) is not None}
+    if s.content is not None:
+        optional["content"] = [list(c) for c in s.content]
+    return {k: getattr(s, k) for k in SCHEDULE_KEYS} | optional
 
 
 #: The least cell of a schedule with a response cap: its payload holds an id request's `max_tokens`.
 CAPPED_CELL = HEADER.size + MAX_TOKENS_AT + ID_DIGITS
+#: The least cell of a schedule with lengths rows: its payload holds an id request's head and first prompt id
+#: (`firstPromptEnd`).
+LENGTHS_CELL = HEADER.size + io_request.layout(1 << 12).start + ID_FIELD_BYTES
 
 
 def _small_schedule(r: random.Random, small: bool, capped: bool = False, T: int | None = None) -> WardenParams:
@@ -1441,9 +1516,8 @@ def _ingress_ret(S):
     return Tuple(U16_BITS, Array(S.STATE, BIT), Array(S.VIEW, BIT))
 
 
-def _first_sig(S):
-    progs = (Array(S.PROG, BIT),) * (len(S.NAMES) - 1)
-    return tuple(zip(S.NAMES, (Array(S.ROW, BYTE_BITS), *progs))), _ingress_ret(S)
+def _start_sig(S):
+    return tuple(zip(S.NAMES, (Array(S.STATE, BIT),))), Tuple(Array(S.OUT, BIT))
 
 
 def _ingress_sig(S):
@@ -1455,10 +1529,8 @@ def _egress_sig(S):
     return tuple(zip(S.NAMES, (Array(S.WORDS, U16_BITS),))), Tuple(U16_BITS, Array(S.ROW, BYTE_BITS))
 
 
-def _first(B, S, row, *progs):
-    b, p = row[0][0], progs[0][0]
-    return tuple_of(B.call(bind(SPREAD, N=OUT_BITS), b, p), B.batch(MIX, p, b, axes=(None, None), n=S.STATE),
-                    B.batch(MIX, p, b, axes=(None, None), n=S.VIEW))
+def _start(B, S, sin):
+    return tuple_of(B.batch(MIX, sin[0], sin[0], axes=(None, None), n=S.OUT))
 
 
 def _ingress(B, S, row, sin, *progs):
@@ -1473,11 +1545,12 @@ def _egress(B, S, state):
                     B.batch(bind(SPREAD, N=8), s, s, axes=(None, None), n=S.ROW))
 
 
-#: Stand-ins of the scan's templates in the generator form, with their parameters and returns as `IngressScanFirst`,
+#: Stand-ins of the scan's templates in the generator form, with their parameters and returns as `IngressScanStart`,
 #: `IngressScanBucket` and `EgressBucket` have them at small widths, in the Boolean profile's types: each unit computes
-#: and returns its rows.
+#: and returns its rows. The start unit takes a state of `STATE` bits and returns one of `OUT`.
 _STATICS = ("NAMES", "ROW", "STATE", "PROG", "VIEW")
-FIRST_BUCKET = CompositeDefinition("NetworkPeriodScanFirst", 0, _STATICS, _first_sig, _first, register=False)
+START_UNIT = CompositeDefinition("NetworkPeriodScanStart", 0, ("NAMES", "STATE", "OUT"), _start_sig, _start,
+                                 register=False)
 INGRESS_BUCKET = CompositeDefinition("NetworkPeriodScanIngress", 1, _STATICS, _ingress_sig, _ingress, register=False)
 EGRESS_BUCKET = CompositeDefinition("NetworkPeriodScanEgress", 1, ("NAMES", "WORDS", "ROW"), _egress_sig, _egress,
                                     register=False)
@@ -1504,10 +1577,12 @@ CHECKER_EGRESS = CompositeDefinition(
 
 def _scan_root(members: list[tuple], lanes: int, nb: int, every: int, prog: int, skew: int = 0,
                shared: bool = False) -> Program:
-    """The scan's root in the generator form: each `(template, n, fixed)` of `members` one batch over its buckets, in
-    order, its first `fixed` parameters inputs of its own and each later one, lane j's `prog<j>`, at bucket t row
-    `⌊t / every⌋` (the last row past the rows), or `skew` rows on, cyclically, of lane j's input `prog<j>` of the
-    slot entries, `nb` rows of `prog` bits (lane 0's for every lane, `shared`)."""
+    """The scan's root in the generator form: each `(template, n, fixed)` of `members` one batch over its units, in
+    order, its first `fixed` parameters inputs of its own and each later one, lane j's `prog<j>`, at bucket t (the
+    first unit that reads slot entries bucket 0, each next such unit the next bucket) row `⌊t / every⌋` (the last
+    row past the rows), or `skew` rows on, cyclically, of lane j's input `prog<j>` of the slot entries, `nb` rows of
+    `prog` bits (lane 0's for every lane, `shared`). A template that reads none (the start unit's, the egress
+    buckets') counts no bucket."""
     sigs = [t.signature() for t, _, _ in members]
 
     def signature(S):
@@ -1522,7 +1597,7 @@ def _scan_root(members: list[tuple], lanes: int, nb: int, every: int, prog: int,
             reads = [array_of([entries[0 if shared else j][(min((start + m) // every, nb - 1) + skew) % nb]
                                for m in range(n)]) for j in range(len(ps) - fixed)]
             outs.append(B.batch(t, *args[at:at + fixed], *reads, axes=(0,) * len(ps)))
-            at, start = at + fixed, start + n
+            at, start = at + fixed, start + (n if reads else 0)
         return coll_concat(signature(S)[1], outs)
 
     defn = CompositeDefinition("NetworkPeriodScan", 0, ("templates", "counts", "lanes", "nb", "every", "skew", "shared"),
@@ -1534,25 +1609,27 @@ def _scan_root(members: list[tuple], lanes: int, nb: int, every: int, prog: int,
 @lru_cache(maxsize=None)
 def scan_descriptor(T: int, row: int, widths: tuple[int, int, int, int], counts: tuple[int, ...] | None = None,
                     names: tuple[tuple[str, ...], ...] | None = None, checker: bool = False, lanes: int = 1,
-                    every: int = 1, skew: int = 0, shared: bool = False) -> str:
-    """The canonical descriptor of a scan's Program in the generator form: bucket 0's stand-in instance, `T − 1` later
-    ingress instances (no template when there are none) and `T` egress instances (or `counts`), each ingress template's
-    row `row` bytes, the ingress buckets' state, entry and view bits and the egress bucket's state words `widths` (in
-    the generator form the view is 16 bits a state word, the egress bucket reading it as u16 words), and
-    `lanes` entry ports a bucket, bucket t's `prog<j>` row `⌊t / every⌋` of lane j's input `prog<j>` of the slot
-    entries (`_scan_root`), or `skew` rows on, cyclically, or lane 0's input (`shared`); `checker`: in the checker form
-    instead, `T` ingress and `T` egress instances (or `counts`) that take their rows."""
+                    every: int = 1, skew: int = 0, shared: bool = False, start: tuple[int, int] | None = None) -> str:
+    """The canonical descriptor of a scan's Program in the generator form: the start unit's stand-in instance, `T`
+    ingress instances and `T` egress instances (or `counts`, a template of no instance left out), the ingress
+    template's row `row` bytes, the ingress buckets' state, entry and view bits and the egress bucket's state words
+    `widths` (in the generator form the view is 16 bits a state word, the egress bucket reading it as u16 words), the
+    start unit taking and returning a state of those bits (or of `start`'s two counts), and `lanes` entry ports a
+    bucket, bucket t's `prog<j>` row `⌊t / every⌋` of lane j's input `prog<j>` of the slot entries (`_scan_root`), or
+    `skew` rows on, cyclically, or lane 0's input (`shared`); `checker`: in the checker form instead, `T` ingress and
+    `T` egress instances (or `counts`) that take their rows."""
     state, prog, view, words = widths
     ingress = {"ROW": row, "STATE": state, "PROG": prog, "VIEW": view}
-    names = names or (first_params(lanes), ingress_params(lanes), EGRESS_PARAMS)
+    names = names or (START_PARAMS, ingress_params(lanes), EGRESS_PARAMS)
     if checker:
         templates = (bind(CHECKER_INGRESS, NAMES=CHECKER_PARAMS[0], **ingress),
                      bind(CHECKER_EGRESS, NAMES=CHECKER_PARAMS[1], WORDS=words, ROW=row))
         program = population.mixed_population_program([(t, n) for t, n in zip(templates, counts or (T, T)) if n])
         return D.canonical(codec.encode_program(program))
-    templates = (bind(FIRST_BUCKET, NAMES=names[0], **ingress), bind(INGRESS_BUCKET, NAMES=names[1], **ingress),
+    took, gave = start or (state, state)
+    templates = (bind(START_UNIT, NAMES=names[0], STATE=took, OUT=gave), bind(INGRESS_BUCKET, NAMES=names[1], **ingress),
                  bind(EGRESS_BUCKET, NAMES=names[2], WORDS=words, ROW=row))
-    kept = [(t, n, f) for t, n, f in zip(templates, counts or (1, T - 1, T), (1, 2, len(names[2]))) if n]
+    kept = [(t, n, f) for t, n, f in zip(templates, counts or (1, T, T), (1, 2, len(names[2]))) if n]
     return D.canonical(codec.encode_program(_scan_root(kept, lanes, T // every, every, prog, skew, shared)))
 
 
@@ -1638,19 +1715,20 @@ def templates_of(desc: dict) -> list[tuple[str, str, int]]:
             if (d := defs[k := callees[x["fn"]]])["form"] != "primitive"]
 
 
-#: How `rows-prog-untied` breaks its link-window's tie of the scan's `prog` to an audit's output, at every lane: the
+#: How `rows-prog-untied` breaks its execution phase's tie of the scan's `prog` to an audit's output, at every lane: the
 #: scan's `scan/prog<j>` entries at another root or domain, the audit's chunks' entries at ports that are no unit's
 #: output nor a chunk's entries port, no `scan/prog<j>` entry or each under another name (`scan/prog` among them),
 #: the chunks' entries in the scan's own registration and in no audit's, or no entry's root a string
 UNTIES = ("root", "domain", "port", "missing", "renamed", "scan", "untyped")
-#: How `rows-prog-unwired` breaks its link-window's wiring at one lane j while its tie holds: the audit's chunk j
+#: How `rows-prog-unwired` breaks its execution phase's wiring at one lane j while its tie holds: the audit's chunk j
 #: entry at an output port (another unit's `o1`, or the chunk's own), at another `SlotEntry_v1` or `SelectEntry_v1`
 #: template's entries port than any of its Program's, at another chunk's (`chunk`), of other than T / every leaves
 #: (`leaves`), the scan's lane j entry named another lane's (`lane`), its Program's slot entries' template one member
 #: off a slot each, or that template under its name and descriptor id with another body (`RENAMED_SLOT_ENTRY`,
 #: `RENAMED_SELECT_ENTRY`)
 UNWIRES = ("output", "key", "chunk", "leaves", "lane", "members", "body")
-#: How `rows-state-untied` breaks its link-window's tie of the scan's state to its wired audit's `SCAN_STATE` while its
+#: How `rows-state-untied` breaks its execution phase's tie of the scan's state to its wired audit's `SCAN_STATE` while
+#: its
 #: `prog` stays wired: the scan's state entry at another root or domain (a state tree that skips or alters one of the
 #: scan's transitions), no state entry or one under another name, at another audit's `SCAN_STATE`, its root no string,
 #: or a second state entry at another root; the wired audit's `SCAN_STATE` absent, at another root, beside a second, or
@@ -1666,14 +1744,23 @@ WINDOW_PROGRAM = "stand-in/window"
 #: (`audit`), or the parameters' `circuit` another digest: of no Program, the scan's, or an untied audit's (`params`)
 UNHOLDS = ("audit", "params")
 #: How `rows-state-misindexed` puts the state reads of its transfer blocks' scan off the chain while its state stays
-#: tied by root and domain: unit t's `sin` at leaf t + 1 (a leaf no unit registered) or its `o1` at leaf t (over the
-#: state before it), a run over other units, the two ports' runs swapped, the reads or a port's run missing or under
-#: another name, or a field no natural
-MISREADS = ("sin-leaf", "o1-leaf", "units", "swapped", "missing", "untyped")
-#: How `rows-state-unpinned` leaves row 0 of its transfer blocks' scan unopened while its reads and its tie hold: a
-#: state tree whose row 0 is a state the prover chose, opened as committed; the opening missing or under another name,
-#: its salt or its path another, its words another count, leaf 1's opening in its place, or a field of another type
-UNPINS = ("row", "missing", "salt", "path", "words", "leaf", "untyped")
+#: tied by root and domain: bucket t's `sin` at leaf t + 1 (the leaf its own `o1` registers), its `o1` at leaf t (over
+#: the state before it) or t + 2, the start unit's `o0` at leaf 1, a run over other units, the two buckets' ports' runs
+#: swapped, the reads or a port's run missing or under another name, a field no natural, or the reads of a scan with no
+#: start unit, bucket 0 unit 0 and nothing registered at leaf 0 (`older`)
+MISREADS = ("sin-leaf", "o1-leaf", "o0-leaf", "units", "swapped", "missing", "untyped", "older")
+#: How `rows-start-unpinned` leaves the start of its transfer blocks' scan unheld while its state's reads and tie hold:
+#: the start entry's root a row the prover chose, opened as committed; the opening missing or under another name, its
+#: salt another, its words another count; no start entry, one under another name or key, one in `roots` and none in
+#: `registered`, a second at another root; or a field of another type
+UNPINS = ("row", "missing", "salt", "words", "entry", "renamed", "roots", "extra", "untyped")
+#: How `rows-start-carried` makes its period more than one execution phase: more after the run's first, or more after
+#: a later one
+CARRIES = ("later", "more")
+#: How `rows-start-charged` states the start of a period whose one execution phase is not the run's first, which the
+#: check holds to nothing and charges: the empty state's opening (None), or one of `UNPINS` that leaves the scan's state
+#: entries as they are
+CHARGES = (None, "row", "missing", "salt", "words", "entry", "extra")
 #: How `rows-ok-unheld` breaks its execution phase's scan's ok bits while every other check holds: one member's
 #: `<member>/o0` entry at another root (a tree with a row that is not the ok row, or under other salts), domain or
 #: leaf count; no entry for it, or for any member; its entry under another port; a second entry for it at another
@@ -1681,21 +1768,21 @@ UNPINS = ("row", "missing", "salt", "path", "words", "leaf", "untyped")
 #: root or domain no string; the entries by value under `registered`, which the period reads no ok bit from; or the
 #: members of a group of two execution phases' scan (`PAIR`), each at the root of its ok rows
 UNOKS = ("root", "domain", "leaves", "missing", "renamed", "extra", "other", "untyped", "registered", "group")
-#: The T `rows-ok-equal` runs at: the least where two members, `ingress-0` and `last`, are one proof block of one
-#: template each, so their ok bits are at one domain and one root
-EQUAL_T = 3
-#: The T `rows-one-tick` runs at: its one bucket would be the scan's first and its last, so it has no constants
+#: The T `rows-ok-equal` runs at: where two members, `ingress-0` and `last`, are one proof block of one template
+#: each, so their ok bits are at one domain and one root
+EQUAL_T = 2
+#: The T `rows-one-tick` runs at: `ingress-0` would be a member of no proof block, so it has no constants
 ONE_TICK = 1
 
 
 def PAIR(T: int) -> tuple[tuple[str, str, int], ...]:
-    """The members (name, template, proof blocks) of one scan over a group of two execution phases of `T` ticks, as
-    the staging names them: bucket 0's `first`; `ingress-0`, buckets 1 … T − 1, and `ingress-1`, buckets T … 2T − 2;
-    `last`, bucket 2T − 1; and `egress-0` and `egress-1`, T buckets each. The rows form reads one execution phase a
-    registration, so such a registration is refused: `ingress-0` is over T − 1 buckets, not T − 2, and `ingress-1`
-    and `egress-1` are no member of one execution phase's scan."""
-    return (("first", "first", 1), ("ingress-0", "ingress", T - 1), ("ingress-1", "ingress", T - 1),
-            ("last", "ingress", 1), ("egress-0", "egress", T), ("egress-1", "egress", T))
+    """The members with an ok bit (name, template, proof blocks) of one scan over a group of two execution phases of
+    `T` ticks: `ingress-0`, buckets 0 … T − 1, and `ingress-1`, buckets T … 2T − 2; `last`, bucket 2T − 1; and
+    `egress-0` and `egress-1`, T buckets each. The rows form reads one execution phase a registration, so such a
+    registration is refused: `ingress-0` is over T buckets, not T − 1, and `ingress-1` and `egress-1` are no member
+    of one execution phase's scan."""
+    return (("ingress-0", "ingress", T), ("ingress-1", "ingress", T - 1), ("last", "ingress", 1),
+            ("egress-0", "egress", T), ("egress-1", "egress", T))
 
 
 def _present(e: dict) -> dict:
@@ -1728,12 +1815,10 @@ def _prog_entries(rp: random.Random, tie: dict, where: str, untie: str | None, u
     return [_present(x) for x in out]
 
 
-def _state_tree(rp: random.Random, T: int, empty: bool = True) -> ADV.Committed:
-    """A scan's state tree of T rows of one to three u16 words under random salts and binding: row 0 the empty state, or
-    a state the prover chose (``empty`` False, its first byte nonzero), the others any."""
+def _state_tree(rp: random.Random, T: int) -> ADV.Committed:
+    """A scan's state tree of T rows of one to three u16 words, any, under random salts and binding."""
     w = rp.randint(1, 3)
-    first = bytes(2 * w) if empty else bytes([rp.randrange(1, 256)]) + rp.randbytes(2 * w - 1)
-    rows = [first, *(rp.randbytes(2 * w) for _ in range(T - 1))]
+    rows = [rp.randbytes(2 * w) for _ in range(T)]
     return ADV.commit(rows, 16 * w, rp.randbytes(64), salts=[rp.randbytes(ADV.INST.salt_bytes) for _ in rows])
 
 
@@ -1748,47 +1833,61 @@ def _misread(rp: random.Random, T: int) -> dict | None:
     """The scan's `window`'s ``reads`` off the chain, as one of `MISREADS` says; None for none."""
     reads = state_reads(T)
     s, how = reads[STATE], rp.choice(MISREADS)
-    port = rp.choice(["sin", "o1"])
+    port = rp.choice(["o0", "sin", "o1"])
     if how == "sin-leaf":
-        s["sin"]["leaf"] = 2
+        s["sin"]["leaf"] = 1
     elif how == "o1-leaf":
-        s["o1"]["leaf"] = 0
+        s["o1"]["leaf"] = rp.choice([0, 2])
+    elif how == "o0-leaf":
+        s["o0"]["leaf"] = 1
     elif how == "units":
         lo, hi = s[port]["units"]
-        s[port]["units"] = rp.choice([[lo, hi + 1], [lo + 1, hi + 1], [hi, lo] if lo != hi else [lo + 1, hi]])
+        s[port]["units"] = rp.choice([[lo, hi + 1], [lo + 1, hi + 1], [hi, lo]])
     elif how == "swapped":
         s["sin"], s["o1"] = s["o1"], s["sin"]
     elif how == "missing":
         return rp.choice([None, {}, {"scan/state2": s}, {STATE: {k: v for k, v in s.items() if k != port}},
                           {STATE: {k if k != port else port.upper(): v for k, v in s.items()}}])
+    elif how == "older":
+        return {STATE: {"o1": {"leaf": 1, "units": [0, T - 1]}, "sin": {"leaf": 1, "units": [1, T]}}}
     else:
-        s[port] = rp.choice([s[port] | {"leaf": rp.choice(["1", True, -1, None])},
+        s[port] = rp.choice([s[port] | {"leaf": rp.choice([str(s[port]["leaf"]), True, -1, None])},
                              s[port] | {"units": rp.choice([s[port]["units"][:1], s[port]["units"] + [0],
                                                             {"lo": s[port]["units"][0]}, str(s[port]["units"])])}])
     return reads
 
 
-def _unpinned(rp: random.Random, tree: ADV.Committed, how: str) -> dict | None:
-    """The scan's `window`'s ``empty`` of `tree` unopened, as `how`, one of `UNPINS`, says; None for none. A tree whose
-    row 0 the prover chose (``row``) is opened as committed."""
-    e = state_empty(tree)
-    o, T = e[STATE], len(tree.rows)
+def _unpinned(rp: random.Random, words: int, salt: bytes, domain: bytes,
+              how: str) -> tuple[list[dict], list[dict], dict | None]:
+    """A scan's registration's start unheld, as `how`, one of `UNPINS`, says: its `registered` entries, its `roots`
+    entries and its `window`'s ``empty`` (None for none). A start entry whose row the prover chose (``row``) is
+    opened as committed."""
+    row = bytes([rp.randrange(1, 256)]) + rp.randbytes(2 * words - 1) if how == "row" else None
+    entry, e = start_empty(words, salt, domain, row)
+    o = e[START]
     if how == "missing":
-        return rp.choice([None, {}, {"scan/state2": o}])
+        return [entry], [], rp.choice([None, {}, {"0.sin2": o}, {STATE: o}])
     if how == "salt":
         o["salt"] = _flip_hex(rp, o["salt"])
-    elif how == "path":
-        o["path"] = rp.choice([_flip_hex(rp, o["path"]), o["path"][:-128], o["path"] + rp.randbytes(64).hex()]) \
-            if T > 1 else rp.randbytes(64).hex()
     elif how == "words":
-        o["words"] = rp.choice([o["words"] + 1, 0] + ([o["words"] - 1] if o["words"] > 1 else []))
-    elif how == "leaf" and T > 1:
-        x = tree.open(1)
-        o |= {"path": b"".join(x.path).hex(), "salt": x.salt.hex()}
-    elif how in ("leaf", "untyped"):
-        o |= rp.choice([{"salt": o["salt"].upper()} if any(c in "abcdef" for c in o["salt"]) else {"salt": 7},
-                        {"words": rp.choice([str(o["words"]), True, -1, None])}, {"path": None}])
-    return e
+        o["words"] = rp.choice([words + 1, 0] + ([words - 1] if words > 1 else []))
+    elif how == "entry":
+        return [], [], e
+    elif how == "renamed":
+        entry = rp.choice([{("port" if k == "value" else k): v for k, v in entry.items()},
+                           entry | {"value": rp.choice(["1.sin", "0.sin/", "0.Sin", "sin", "0.sin0", STATE])}])
+    elif how == "roots":
+        return [], [{("port" if k == "value" else k): v for k, v in entry.items()}], e
+    elif how == "extra":
+        return [entry, entry | {"root": rp.randbytes(64).hex()}], [], e
+    elif how == "untyped":
+        if rp.random() < 0.5:
+            o |= rp.choice([{"salt": o["salt"].upper()} if any(c in "abcdef" for c in o["salt"]) else {"salt": 7},
+                            {"words": rp.choice([str(words), True, -1, None])}, {"salt": None}])
+        else:
+            entry = entry | rp.choice([{"root": rp.choice([None, 7, entry["root"][:-1]])},
+                                       {"domain": rp.choice([None, False, "g" + entry["domain"][1:]])}])
+    return [entry], [], e
 
 
 def _state_entries(rp: random.Random, states: dict, i: int, where: str, unstate: str | None) -> list[dict]:
@@ -1815,8 +1914,9 @@ def _state_entries(rp: random.Random, states: dict, i: int, where: str, unstate:
 
 def _ok_entries(ro: random.Random, T: int, unok: str | None) -> tuple[str, list[dict]]:
     """The scan's registration's entries for its members' ok bits, and the list they go in: each member's
-    `<member>/o0` in `roots` at the schedule's constant (`scan_ok.constants`), broken as `unok` says. A schedule of
-    one tick has no constants: its registration names those of two ticks."""
+    `<member>/o0` in `roots` at the schedule's constant (`scan_ok.constants`), broken as `unok` says, and at times
+    the start unit's `start/o0` (`scan_ok.START`), a state and no ok bit, at any root. A schedule of one tick has no
+    constants: its registration names those of two ticks."""
     es = [{"domain": c.domain, "leaves": c.leaves, "port": c.port, "root": c.root}
           for c in scan_ok.constants(max(T, 2))]
     hit = ro.randrange(len(es))
@@ -1846,15 +1946,17 @@ def _ok_entries(ro: random.Random, T: int, unok: str | None) -> tuple[str, list[
     elif unok == "group":
         es = [{"domain": c.domain, "leaves": c.leaves, "port": c.port, "root": c.root}
               for c in (scan_ok.constant(*m) for m in PAIR(T))]
+    if ro.random() < 0.5:
+        es.append({"domain": ro.randbytes(64).hex(), "leaves": 1, "port": scan_ok.START, "root": ro.randbytes(64).hex()})
     ro.shuffle(es)
     return "roots", [_present(x) for x in es]
 
 
 def _output_entries(rp: random.Random, i: int, ties: dict, nb: int, aimed: int, untie: str | None,
                     unwire: str | None = None, hit: int = 0) -> list[dict]:
-    """Audit `i`'s registration's `roots`: for each link-window's `prog` tied to it, each lane's chunk's entries port
-    its tie names at the chunk's root and domain (`nb` leaves, a timestep's row each), and an input port's entry at
-    another root; at link-window `aimed`, every chunk's broken as `untie` says, or lane `hit`'s as `unwire` says."""
+    """Audit `i`'s registration's `roots`: for each execution phase's `prog` tied to it, each lane's chunk's entries
+    port its tie names at the chunk's root and domain (`nb` leaves, a timestep's row each), and an input port's entry at
+    another root; at execution phase `aimed`, every chunk's broken as `untie` says, or lane `hit`'s as `unwire` says."""
     out = []
     for w, x in ties.items():
         if x["audit"] != i or (w == aimed and untie == "scan"):
@@ -1942,7 +2044,7 @@ def _strata_resize(r: random.Random, strata: list[dict], seed: int) -> int:
 
 def build(m: str, seed: int, small: bool = False) -> dict:
     """A period's case with the change `m`, in the form `m` names (`form_of`), every choice sampled from `seed`; `small`:
-    the toy key, as few link-windows and audits as `m` needs."""
+    the toy key, as few execution phases and audits as `m` needs."""
     r = random.Random(f"network-period {m} {seed}")
     rp = random.Random(f"network-period prog {m} {seed}")
     ro = random.Random(f"network-period ok {m} {seed}")
@@ -1955,14 +2057,19 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     # every form binds the link in its window record's canonical JSON, whose strings are ASCII without DEL
     link = r.choice(["eth0", "a", "d-e"])
     program = hashlib.sha512(b"link program %d" % r.randrange(3)).hexdigest()
-    least_windows = 2 if m in ("undecided-and-reject", "clock-reused", "delta") else 1
+    carry = rp.choice(CARRIES) if m == "start-carried" else None
+    least_windows = 2 if m in ("undecided-and-reject", "clock-reused", "delta") or carry else 1
     least_audits = 2 if m == "state-untied" else \
         1 if m.startswith("audit") or m in ("undecided-and-reject", "count-audits") else 0
-    n_windows = r.randint(least_windows, least_windows if small else 3)
+    # a rows period is one execution phase (`startCheck`): more only where the change asks, refused, and a later one
+    # than the run's first only where the change asks, charged its start
+    n_windows = r.randint(least_windows, least_windows if small or (rows and not carry) else 3)
     n_audits = r.randint(least_audits, max(least_audits, 1) if small else 2)
-    # a rows link-window's own audit, and at times one no link-window ties, which may leave units unsampled
+    # a rows execution phase's own audit, and at times one no execution phase ties, which may leave units unsampled
     n_audits = max(n_audits, n_windows + (0 if small else rp.randint(0, 1))) if rows else n_audits
     first = r.choice([0, 0, r.randrange(1, 6)])
+    if rows:
+        first = rp.randrange(1, 6) if carry == "later" or m == "start-charged" else 0
     if rows:
         sched = bound = _small_schedule(r, small, capped=m in ("capped", "cap-schedule"),
                                         T={"ok-equal": EQUAL_T, "one-tick": ONE_TICK}.get(m))
@@ -1990,21 +2097,20 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     untie = rp.choice(UNTIES) if m == "prog-untied" else None
     unwire = rp.choice(UNWIRES) if m == "prog-unwired" else None
     unstate = rp.choice(UNSTATES) if m == "state-untied" else None
-    unpin = rp.choice(UNPINS) if m == "state-unpinned" else None
+    unpin = rp.choice(UNPINS) if m == "start-unpinned" else rp.choice(CHARGES) if m == "start-charged" else None
     unhold = rp.choice(UNHOLDS) if m == "circuit-swapped" else None
-    # each audit's `SCAN_STATE`, the state tree of the transfer blocks tied to it, whose leaf 0 the scan opens
-    trees = {i: _state_tree(rp, sched.window, not (unpin == "row" and i == ties[first + t]["audit"]))
-             for i in range(n_audits)} if rows else {}
+    # each audit's `SCAN_STATE`, the state tree of the transfer blocks tied to it
+    trees = {i: _state_tree(rp, sched.window) for i in range(n_audits)} if rows else {}
     states = {i: {"root": x.root.hex(), "domain": ADV.domain(x.binding, len(x.rows)).domain_id.hex()}
               for i, x in trees.items()}
     unok = ro.choice(UNOKS) if m == "ok-unheld" else None
     if untie == "untyped":
         for c in ties[first + t]["chunks"]:
             c["root"] = rp.choice([None, 7, False])
-    # the lane whose wiring the aimed link-window's `unwire` breaks
+    # the lane whose wiring the aimed execution phase's `unwire` breaks
     hit = rp.randrange(lanes) if lanes else 0
-    # the changes that sample the aimed link-window's audit stratified by its templates, its slot entries' and scan slots'
-    # whole (`tied-partial`) or one of them in part
+    # the changes that sample the aimed execution phase's audit stratified by its templates, its slot entries' and scan
+    # slots' whole (`tied-partial`) or one of them in part
     by_template = m in ("tied-partial", "tied-entries-sampled", "tied-slots-sampled")
     if m in ("tied-sampled", "tied-oversampled", "tied-stratum-oversampled", "tied-strata-sizes") or by_template:
         a = ties[first + t]["audit"]
@@ -2115,28 +2221,36 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         entries.insert(r.randrange(len(entries) + 1),
                        {"domain": r.randbytes(64).hex(), "root": r.randbytes(64).hex(), "value": "decoy"})
         T = sched.window
-        units = 2 * T + (1 if aimed and m == "units" else 0)
-        strata = [{"k": r.randint(1, T), "name": d.value, "size": T} for d in (INGRESS, EGRESS)] \
-            if r.random() < 0.5 and units == 2 * T else None
+        units = 2 * T + 1 + (r.choice([1, -1]) if aimed and m == "units" else 0)
+        strata = [{"k": r.randint(1, n), "name": name, "size": n}
+                  for name, n in (("start", 1), (INGRESS.value, T), (EGRESS.value, T))] \
+            if r.random() < 0.5 and units == 2 * T + 1 else None
         k = sum(s["k"] for s in strata) if strata else r.randint(1, units)
+        cuts = [0, 1, T + 1, 2 * T + 1]
         law = {"k": k, "law": "subset"} if strata is None else {"k": k, "law": "stratified", "strata": [
-            {"k": s["k"], "template": s["name"], "units": [[j * T, (j + 1) * T]]} for j, s in enumerate(strata)]}
+            {"k": s["k"], "template": s["name"], "units": [[lo, hi]]} for s, lo, hi in zip(strata, cuts, cuts[1:])]}
         if aimed and m == "answer-oversampled":
             k = _oversample(r, units, k, strata)
         fmt, where = r.choice(FORMATS), r.choice(["roots", "registered"])
         entries += _prog_entries(rp, ties[w], where, untie if aimed else None, unwire == "lane" and aimed, hit)
         entries += _state_entries(rp, states, ties[w]["audit"], where, unstate if aimed else None)
         rp.shuffle(entries)
-        tree = trees[ties[w]["audit"]]
         reads = _misread(rp, T) if aimed and m == "state-misindexed" else state_reads(T)
-        empty = _unpinned(rp, tree, unpin) if aimed and unpin else state_empty(tree)
+        # the scan's start, the empty state at a domain of its own, which every execution phase here states but where
+        # the change states another: a period's later one is refused, and one not the run's first charged, whatever it
+        # states
+        start = (rp.randint(1, 3), rp.randbytes(ADV.INST.salt_bytes), rp.randbytes(64))
+        (by_value, by_port, empty) = _unpinned(rp, *start, unpin) if aimed and unpin else \
+            ((got := start_empty(*start))[:1], [], got[1])
         window = {"kind": "stand-in", "window": w} | ({} if reads is None else {"reads": reads}) | (
             {} if empty is None else {"empty": empty})
         rec = {"format": fmt, "law": law, "partition": f"{link}/scan/{w}", "population": units, "program": program,
                "protocol": ONE_STAGE, where: entries, "window": window}
         there, oks = _ok_entries(ro, T, unok if aimed else None)
-        rec[there] = rec.get(there, []) + oks
-        ro.shuffle(rec[there])
+        for into, more in ((there, oks), ("registered", list(by_value)), ("roots", by_port)):
+            if more:
+                rec[into] = rec.get(into, []) + more
+                ro.shuffle(rec[into])
         if aimed and m == "program":
             rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), program.upper(), None])
         digest = bytes.fromhex(R.digest(rec))
@@ -2399,7 +2513,7 @@ def _bad_params(p: dict, n: int) -> list:
                   p | {"schedule": s | {"window": U32}}, p | {"schedule": s | {"every": s["window"] + 1}},
                   p | {"schedule": s | {"every": 0}}, p | {"sync_set": {"deltas": [0], "rhos": [[1, 1]]}},
                   p | {"circuit": p["circuit"][:-2]}, p | {"circuit": p["circuit"].upper()}, p | {"circuit": 0},
-                  p | {"circuit": None}, *_bad_caps(s, p), *bad_scans(p)]
+                  p | {"circuit": None}, *_bad_caps(s, p), *bad_lengths(p), *connection_rows_params(p), *bad_scans(p)]
 
 
 def bad_cells(p: dict) -> list[dict]:
@@ -2419,6 +2533,60 @@ def _bad_caps(s: dict, p: dict) -> list[dict]:
         p | {"schedule": wide | {"cell_bytes": CAPPED_CELL - 1, "max_tokens_cap": 1}}]
 
 
+def _lengths_schedule(s: dict) -> dict:
+    """An uncapped schedule `s` with the fields a schedule with lengths rows holds: a cell of at least `LENGTHS_CELL`,
+    ingress that ends by the delay, and a connection that ends within a window of its admission."""
+    return s | {"cell_bytes": max(s["cell_bytes"], LENGTHS_CELL), "delay": 1, "ingress_buckets": 1,
+                "egress_cells": min(s["egress_cells"], s["slots"] * s["window"])}
+
+
+def _words_schedule(s: dict) -> dict:
+    """A schedule with lengths rows `s` (`_lengths_schedule`) with request words: content rows under the lengths
+    rows' form 2, `max_tokens_cap` 1 below at least two egress cells, which a connection of a window of two buckets
+    or more still ends within, and a cell that holds an id request's `max_tokens`."""
+    return s | {"cell_bytes": max(s["cell_bytes"], CAPPED_CELL), "egress_cells": max(s["egress_cells"], 2),
+                "lengths": 2, "content": [[2, 2]], "max_tokens_cap": 1, "request_words": True}
+
+
+def connection_rows_params(p: dict) -> list[dict]:
+    """Rows-form parameters whose schedule has connection rows, each one change to `p`'s uncapped schedule
+    (`_lengths_schedule`): lengths rows of each form, content rows of the form's classes with them, and request
+    words with form 2's (`_words_schedule`). Each is a schedule `scheduleOf` reads, as `WardenParams` builds it, and
+    one the check refuses by name (`CONNECTION_ROWS`)."""
+    s = _lengths_schedule(p["schedule"])
+    return [p | {"schedule": s | rows} for rows in (
+        {"lengths": 1}, {"lengths": 2}, {"lengths": 1, "content": [[2, 2, 1]]}, {"lengths": 2, "content": [[2, 2]]},
+        {"lengths": 2, "content": [[2, 4], [4, 2]]})] + [p | {"schedule": _words_schedule(s)}]
+
+
+def bad_lengths(p: dict) -> list[dict]:
+    """Rows-form parameters whose schedule's lengths rows or content rows `scheduleOf` refuses, each one change to
+    `p`'s uncapped schedule with lengths rows (`_lengths_schedule`). Lengths rows: a form that is not 1 or 2,
+    ingress that ends after the delay, a connection that outlasts the window, egress cells past a u16's count, a
+    cell that doesn't hold an id request's first prompt id, and a slot stride of more releases than a lengths row
+    has slots. Content rows: without lengths rows, of no class, of the other form's numbers, of a size that is no
+    power of two, of more ids than a response row has, of more prompt ids than a request has bytes, of no row or of
+    more rows than the lengths table has slots, and classes that are no list of lists of naturals. Request words
+    (`_words_schedule`): not `true`, under form 1, without content rows, and without `max_tokens_cap`."""
+    s = _lengths_schedule(p["schedule"])
+    words = _words_schedule(s)
+    one, two = s | {"lengths": 1}, s | {"lengths": 2}
+    slots = s["window"] // s["every"] * WardenParams(**one).stride_releases
+    past = 1 << (s["ingress_cells"] * (s["cell_bytes"] - HEADER.size)).bit_length()
+    schedules = [s | {"lengths": form} for form in (0, 3, True, "1", [1])] + [
+        one | {"ingress_buckets": 2}, one | {"egress_cells": s["slots"] * s["window"] + 1},
+        two | {"egress_cells": (1 << 16) + 1}, one | {"cell_bytes": LENGTHS_CELL - 1}, two | {"lanes": 2731}] + [
+        with_rows | {"content": classes} for with_rows, classes in (
+            (s, [[2, 2]]), (two, []), (two, [[2, 2, 1]]), (one, [[2, 2]]), (two, [[3, 2]]), (two, [[2, 1]]),
+            (two, [[2, 2 * content_rows.most_ids()]]), (two, [[past, 2]]), (one, [[2, 2, 0]]),
+            (one, [[2, 2, slots + 1]]), (two, "x"), (two, [2, 2]), (two, [[True, 2]]), (two, [[2, -1]]),
+            (two, [[2]]), (one, [[2, 2, 1, 1]]))] + [
+        words | {"request_words": v} for v in (False, 1, "true", None)] + [
+        words | {"lengths": 1, "content": [[2, 2, 1]]}, {k: v for k, v in words.items() if k != "content"},
+        {k: v for k, v in words.items() if k != "max_tokens_cap"}]
+    return [p | {"schedule": schedule} for schedule in schedules]
+
+
 def bad_audits(p: dict) -> list[dict]:
     """Parameters whose audits `auditOf` refuses, each one change to `p`: an audit without its monitoring period, with a
     negative free count, not a list, and an audit whose Program isn't a descriptor, is of another schema, or has no
@@ -2435,23 +2603,23 @@ def _scan_widths(desc: dict) -> tuple[int, int, int, int]:
     bits, and the egress template's state words."""
     sig = {tuple(k for k, _ in d["body"]["params"]): d["body"] for d in desc["definitions"].values()
            if d["form"] == "composite"}
-    first = next(b for k, b in sig.items() if k[:2] == ("row", "prog0"))
+    ingress = next(b for k, b in sig.items() if k[:2] == ("row", "sin"))
     egress = sig[EGRESS_PARAMS]
-    _, state, view = first["ret_type"][1]
-    return state[1], first["params"][1][1][1], view[1], egress["params"][0][1][1]
+    _, state, view = ingress["ret_type"][1]
+    return state[1], ingress["params"][2][1][1], view[1], egress["params"][0][1][1]
 
 
 def bad_scans(p: dict) -> list[dict]:
     """Rows-form parameters whose scan `scanOf` refuses, each one change to `p`: not a descriptor, another Program's
     (its SHA-512 not `program`), and, each under its own SHA-512, the checker form (its egress row an input), templates
-    with other parameters, another number of instances, rows not the schedule's, a lane's `prog<j>` another row of its
+    with other parameters, another number of instances, no start unit's template, rows not the schedule's, a lane's `prog<j>` another row of its
     input than its bucket's or another lane's input, an input gate no template's, and each negative of a check of the
     rows the scan's ties equate, of what `NetTiming.BoundaryGates.Fits` asks or of the input nodes its arguments read
     (`scan_negatives`)."""
     s, desc = p["schedule"], p["scan"]
     T, row, widths = s["window"], s["lanes"] * s["slots"] * s["cell_bytes"], _scan_widths(desc)
     L, every = s["lanes"], s["every"]
-    first, ingress = first_params(L), ingress_params(L)
+    ingress = ingress_params(L)
 
     def own(text: str) -> dict:
         d = json.loads(text)
@@ -2468,13 +2636,15 @@ def bad_scans(p: dict) -> list[dict]:
     return [p | {"scan": "x"}, p | {"scan": {"free": 0, "steps": 0}}, p | {"scan": desc | {"schema": "verity-ir/v0"}},
             p | {"scan": json.loads(scan(T, row, (widths[0] + 1, *widths[1:])))},
             own(scan(T, row, widths, checker=True)),
-            own(scan(T, row, widths, names=(("row", "seed"), ingress, EGRESS_PARAMS))),
-            *([own(scan(T, row, widths, names=(first, ("row", "sin", "seed"), EGRESS_PARAMS)))] if T > 1 else []),
-            own(scan(T, row, widths, names=(first, ingress, ("words",)))),
+            own(scan(T, row, widths, names=(("seed",), ingress, EGRESS_PARAMS))),
+            own(scan(T, row, widths, names=(START_PARAMS, ("row", "sin", "seed"), EGRESS_PARAMS))),
+            own(scan(T, row, widths, names=(START_PARAMS, ingress, ("words",)))),
             own(scan(T, row, widths, lanes=L + 1)),
-            own(scan(T, row, widths, counts=(1, T - 1, T + 1))),
-            own(scan(T, row, widths, counts=(2, T - 1, T))),
-            own(scan(T, row, widths, counts=(1, T, T))),
+            own(scan(T, row, widths, counts=(1, T, T + 1))),
+            own(scan(T, row, widths, counts=(2, T, T))),
+            own(scan(T, row, widths, counts=(1, T + 1, T))),
+            own(scan(T, row, widths, counts=(1, T - 1, T))),
+            own(scan(T, row, widths, counts=(0, T, T))),
             own(scan(T, row + 1, widths)),
             *([own(scan(T, row, widths, skew=1))] if T // every > 1 else []),
             *([own(scan(T, row, widths, shared=True))] if L > 1 else []),
@@ -2492,18 +2662,19 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
     """Rows-form parameters each refused by one of `scanOf`'s checks of the rows its ties equate, of what
     `NetTiming.BoundaryGates.Fits` asks or of the input nodes its arguments read, and by none before it, each one change
     to `p`'s generator-form scan under its own SHA-512, with a fragment of both refusals: `view`, the ingress
-    templates' view one bit more than the egress template's `state`; `state` (when `T > 1`), the later ingress
-    template's `sin` one bit more than the state the templates return (its input node and the template's argument
-    grown with it);
+    template's view one bit more than the egress template's `state`; `state`, the ingress template's `sin` one bit
+    more than the state it returns (its input node and the template's argument grown with it); `start`, the start
+    unit's `sin` one bit more than the ingress template's, and `start-out`, the state it returns one bit more;
     `walk`, the egress template calling a composite of `2^90` gates in three nested batches, unread, so the walk to an
     operand is past `FUEL`; `returns`, the root returning an input leaf for the last egress leaf; `computes`, the egress
-    template returning its `state`'s first 16 leaves as its u16; `row`, bucket 0's row bound to a constant primitive's
+    template returning its `state`'s first 16 leaves as its u16; `row`, the ingress template's row bound to a constant primitive's
     gates (an input node like it appended, keeping the input count); `argument`, egress member 0's first state leaf the
-    last ingress template's first output leaf (a later step's ingress when `T > 1`); `ingress`, the egress state the
-    last ingress template's row input node (resized, the state's node resized to keep the count); `shared` (when
-    `T > 1`), the later ingress template's `sin` its row's input node from its first leaf, the `sin` input node left
-    unread; `entries`, the egress state lane 0's slot entries' input node (resized, the state's node resized to keep
-    the count); `unread`, an input node of no members appended, which no argument reads; and `topological`, the last
+    ingress template's first output leaf; `ingress`, the egress state the
+    ingress template's row input node (resized, the state's node resized to keep the count); `shared`, the ingress
+    template's `sin` its row's input node from its first leaf, the `sin` input node left
+    unread; `carried`, the start unit's `sin` the ingress template's `sin`'s input node from its first leaf, its own
+    input node left unread; `entries`, the egress state lane 0's slot entries' input node (resized, the state's node resized to keep
+    the count); `unread`, an input node of no members appended, which no argument reads; and `topological`, the
     ingress template's row input node moved after the templates, so the template names a later node."""
     desc, sched = p["scan"], p["schedule"]
 
@@ -2522,19 +2693,21 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
 
     out, two_lengths = {}, "would equate rows of two lengths"
     state, prog, view, words = _scan_widths(desc)
+    shape = (sched["window"], sched["lanes"] * sched["slots"] * sched["cell_bytes"])
     out["view"] = own(json.loads(scan_descriptor(
-        sched["window"], sched["lanes"] * sched["slots"] * sched["cell_bytes"], (state, prog, view + 1, words),
-        lanes=sched["lanes"], every=sched["every"]))), two_lengths
+        *shape, (state, prog, view + 1, words), lanes=sched["lanes"], every=sched["every"]))), two_lengths
+    for name, start in (("start", (state + 1, state)), ("start-out", (state, state + 1))):
+        out[name] = own(json.loads(scan_descriptor(
+            *shape, (state, prog, view, words), lanes=sched["lanes"], every=sched["every"], start=start))), two_lengths
 
     d, nodes, ts = parts()
-    if len(ts) == 3:
-        x = nodes[ts[1]]
-        sin = d["definitions"][d["callees"][x["fn"]]]["body"]["params"][1]
-        sin[1] = ["Array", state + 1, ["Value", 1]]
-        ks, n = x["args"][1]["refs"]["affine"][1], x["n"] * (state + 1)
-        nodes[ks] = nodes[ks] | {"n": n, "out": typed(d, ["Array", n, ["Value", 1]])}
-        x["args"][1] = {"refs": {"affine": ["n", ks, 0, n]}, "type": typed(d, ["Array", x["n"], sin[1]])}
-        out["state"] = own(d), two_lengths
+    x = nodes[ts[1]]
+    sin = d["definitions"][d["callees"][x["fn"]]]["body"]["params"][1]
+    sin[1] = ["Array", state + 1, ["Value", 1]]
+    ks, n = x["args"][1]["refs"]["affine"][1], x["n"] * (state + 1)
+    nodes[ks] = nodes[ks] | {"n": n, "out": typed(d, ["Array", n, ["Value", 1]])}
+    x["args"][1] = {"refs": {"affine": ["n", ks, 0, n]}, "type": typed(d, ["Array", x["n"], sin[1]])}
+    out["state"] = own(d), two_lengths
 
     d, nodes, ts = parts()
     v, mix = typed(d, ["Value", 1]), d["callees"].index(MIX.id)
@@ -2566,12 +2739,12 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
     out["computes"] = own(d), "returns a leaf it doesn't compute"
 
     d, nodes, ts = parts()
-    k0 = nodes[ts[0]]["args"][0]["refs"]["affine"][1]
+    k0 = nodes[ts[1]]["args"][0]["refs"]["affine"][1]
     d["definitions"][ZERO] = {"form": "primitive", "id": ZERO, "params": [], "ret": ["Value", 1]}
     d["callees"].append(ZERO)
     nodes.append(dict(nodes[k0]))
     nodes[k0] = nodes[k0] | {"fn": len(d["callees"]) - 1}
-    out["row"] = own(d), "an ingress template's row is not one input node's leaves"
+    out["row"] = own(d), "the ingress template's row is not one input node's leaves"
 
     d, nodes, ts = parts()
     a = nodes[ts[-1]]["args"][0]
@@ -2585,16 +2758,20 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
     nodes[kr] = nodes[kr] | {"n": max(R, S), "out": typed(d, ["Array", max(R, S), ["Value", 1]])}
     nodes[ks] = nodes[ks] | {"n": min(R, S), "out": typed(d, ["Array", min(R, S), ["Value", 1]])}
     nodes[ts[-1]]["args"][0]["refs"] = {"affine": ["n", kr, 0, S]}
-    out["ingress"] = own(d), "an egress template's argument is an ingress row's input node"
+    out["ingress"] = own(d), "an egress template's argument is the ingress rows' input node"
 
     d, nodes, ts = parts()
-    if len(ts) == 3:
-        row, sin = nodes[ts[1]]["args"][:2]
-        sin["refs"] = {"affine": ["n", row["refs"]["affine"][1], 0, sin["refs"]["affine"][3]]}
-        out["shared"] = own(d), "(NetworkCheck.Period.argsApart)"
+    row, sin = nodes[ts[1]]["args"][:2]
+    sin["refs"] = {"affine": ["n", row["refs"]["affine"][1], 0, sin["refs"]["affine"][3]]}
+    out["shared"] = own(d), "(NetworkCheck.Period.argsApart)"
 
     d, nodes, ts = parts()
-    ks, kp = nodes[ts[-1]]["args"][0]["refs"]["affine"][1], _member_ref(nodes[ts[0]], 1, 0, 0, d)[1]
+    own_sin, sin = nodes[ts[0]]["args"][0], nodes[ts[1]]["args"][1]
+    own_sin["refs"] = {"affine": ["n", sin["refs"]["affine"][1], 0, own_sin["refs"]["affine"][3]]}
+    out["carried"] = own(d), "(NetworkCheck.Period.argsApart)"
+
+    d, nodes, ts = parts()
+    ks, kp = nodes[ts[-1]]["args"][0]["refs"]["affine"][1], _member_ref(nodes[ts[1]], 2, 0, 0, d)[1]
     S, E = nodes[ks]["n"], nodes[kp]["n"]
     nodes[kp] = nodes[kp] | {"n": max(S, E), "out": typed(d, ["Array", max(S, E), ["Value", 1]])}
     nodes[ks] = nodes[ks] | {"n": min(S, E), "out": typed(d, ["Array", min(S, E), ["Value", 1]])}
@@ -2696,8 +2873,8 @@ def verdict_of(kind: str) -> str:
 
 
 def case(kind: str, seed: int = 0, form: str = "clock") -> dict:
-    """A small period of the form (`build(..., small=True)`: the toy key, as few link-windows and audits as its change
-    needs) aimed at `kind`, its change and every choice sampled from `seed`."""
+    """A small period of the form (`build(..., small=True)`: the toy key, as few execution phases and audits as its
+    change needs) aimed at `kind`, its change and every choice sampled from `seed`."""
     ms = AIMS[form][kind]
     return build(ms[random.Random(f"network-period {kind} {seed}").randrange(len(ms))], seed, small=True)
 

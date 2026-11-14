@@ -17,11 +17,12 @@ windows: `#Ss · ((∏_c (cap_c + 1)) · ∏_i (2^#(free inputs) · #faultySets 
 communication audit's bridge to `MonitoringPeriodLeakAccepted`) instantiates it at the run's caps and the windows' facts, and
 supplies each of the statement's quantities as at most the check's number:
 
-- in the clock form the windows are the compute audits: `#Ss ≤ #Σ_sync ^ (link-windows)` (each link-window under one
-  sync of Σ_sync), an audit's free inputs at most its layout's (`free`), its incorrect sets at most the sets of at most `b`
-  of its `N` units, `β` at most `b · bits` with `bits` the most one of its Program's units commits (`faulty_bits`), and
+- in the clock form the windows are the compute audits: `#Ss ≤ #Σ_sync ^ (execution phases)` (each execution phase under
+  one sync of Σ_sync), an audit's free inputs at most its layout's (`free`), its incorrect sets at most the sets of at
+  most `b` of its `N` units, `β` at most `b · bits` with `bits` the most one of its Program's units commits
+  (`faulty_bits`), and
   `Dj^k` at most `jitter ^ steps`;
-- in the rows form the windows are the link-windows' scans: `#Ss ≤ ∏_c (cap_c + 1)` (a schedule is its lanes'
+- in the rows form the windows are the execution phases' scans: `#Ss ≤ ∏_c (cap_c + 1)` (a schedule is its lanes'
   lengths), a window's free inputs at most its scan's Program's and its tied audits' (`free`: the egress renders the
   outputs of the audits its scan's `prog` is tied to, so the bits the prover chose of their inputs are the window's),
   each window's incorrect sets at most the sets of at most `b` of its `N` units, `β` at most `b · max(b_ing, b_eg)`
@@ -32,18 +33,19 @@ The rows form's terms charge a tied audit (one a scan's `prog` is an output of) 
 proof blocks only as the slot entries they can set, since the scan reads the audit only through its `prog` and its
 state is the scan's own. The check accepts a tied audit at any sample; the consistency check of one is `RowsProgWired`
 and `RowsStateTied`, and what it publishes of one sampled in part is `RowsTiedCharged`. `RowsProgWired` says it accepts
-no link-window whose scan's `prog` is not a compute audit's slot entries, a lane's tree the entries port of its chunk
-of a `SlotEntry_v1` or `SelectEntry_v1` template of that audit's own Program. `RowsStateTied` says it accepts no
-link-window whose scan's state is not the `SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or
+no execution phase whose scan's `prog` is not a compute audit's slot entries, a lane's tree the entries port of its
+chunk of a `SlotEntry_v1` or `SelectEntry_v1` template of that audit's own Program. `RowsStateTied` says it accepts no
+execution phase whose scan's state is not the `SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or
 alters one of the scan's transitions is no Program's input. `RowsStateEmpty` says it accepts none whose scan's
 registration does not open row 0 of that state to the empty state, the one row no unit of the scan computes.
 `RowsCircuitHeld` says it accepts none whose tied audit's registration names a Program other than the class circuit,
-the parameters' `circuit`.
+the parameters' `circuit`. `RowsStartCharged` says the public it accepts a period with charges the period's first start,
+where that is not the run's first, the scan's state's full width as a term of `K` of its own, once a period.
 `RowsTiedCharged` says the public it accepts with supplies
 the charge itself: `charged` is the facts of each tied audit sampled in part (`drawn < units`), each once, so each
 one's δ is in `eps` (`Public.eps` sums the terms' facts' and `charged`'s, and nothing else), and where such an audit's
-bound is at least one incorrect proof block, the term of every link-window whose scan's `prog` is its output has every
-slot entry bit (`faultyEntries` at `scan.entries`), the number `RowsKBoundsCount` takes as `faulty`. No tied audit
+bound is at least one incorrect proof block, the term of every execution phase whose scan's `prog` is its output has
+every slot entry bit (`faultyEntries` at `scan.entries`), the number `RowsKBoundsCount` takes as `faulty`. No tied audit
 names more sampled than its level holds (`factsOf` refuses a profile that does), so one that is not charged names as
 many: `drawn = units`. Each says its conclusion (`RowsProgWiredAt`, `RowsStateTiedAt`,
 `RowsTiedChargedAt`) of every period `check` accepts, and so is, by definition, its property of any period check at
@@ -51,7 +53,7 @@ many: `drawn = units`. Each says its conclusion (`RowsProgWiredAt`, `RowsStateTi
 `acceptAllRows`, a check that accepts every period. Each guarantee writes its acceptance of `check` out rather than
 being its `…Of check`: the shape rule reads the acceptance off the statement's own binders.
 `RowsCapPublished` says an accepted period's public names its schedule's response cap, and `RowsCapPublishedOf` is
-its property of any period check, false at `acceptAllRows` too.
+its property of any period check, false at `acceptAllRows` too; so of `RowsStartCharged` and `RowsStartChargedOf`.
 
 `RowsOkHeld` says the rows form accepts no execution phase whose scan's registration names its proof blocks' ok bits
 anywhere but at the constants of the schedule's `T` (`NetworkCheck.ScanOk`): the schedule has at least two ticks, each
@@ -71,7 +73,7 @@ open NetworkCheck.Period
 
 /-- **The clock form's `K` bounds `MonitoringPeriodLeakAccepted`'s count at the check's numbers.** For the caps `caps` of `m`
 connections, `n` compute audits `a` and their facts `w`, the jitter bound `jitter`, `#Σ_sync` `syncs` and `windows`
-link-windows: `#Ss` at `syncs ^ windows` (`schedules`), `∏_c (cap_c + 1)` at `∏_j (caps j + 1)` (`cells`), and audit
+execution phases: `#Ss` at `syncs ^ windows` (`schedules`), `∏_c (cap_c + 1)` at `∏_j (caps j + 1)` (`cells`), and audit
 `i`'s `2^#(free inputs)` at `2 ^ (a i).free`, `#faultySets` at `atMost N b`, `2^β` at `2 ^ (b · (a i).bits)` (each of
 its at most `b` incorrect proof blocks commits at most its Program's widest unit's bits) and `Dj^k` at `jitter ^ (a i).steps`,
 their product is at most `2 ^ K`. -/
@@ -82,22 +84,24 @@ def ClockKBoundsCount : Prop :=
       2 ^ (terms (Array.ofFn a) (Array.ofFn w) (Array.ofFn caps) jitter syncs windows).K
 
 /-- **The rows form's `K` bounds `MonitoringPeriodLeakAccepted`'s count at the check's numbers.** For the caps `caps` of `m`
-connections, the facts `w` of `n` link-windows' scans, their tied audits' free inputs `tied` (`tiedAudits`) and the
+connections, the facts `w` of `n` execution phases' scans, their tied audits' free inputs `tied` (`tiedAudits`) and the
 slot entry bits their tied audits' incorrect proof blocks can set `faulty` (`faultyEntries`), under one scan's terms `scan`, the
-jitter bound `jitter` and the charged audits' facts `charged`: `#Ss` and `∏_c (cap_c + 1)` each at `∏_j (caps j + 1)`
-(`schedules` and `cells`), and window `i`'s `2^#(free inputs)` at `2 ^ (scan.free + tied i)`, `#faultySets` at
-`atMost N b`, `2^β` at `2 ^ (b · max(b_ing, b_eg))` times `2 ^ faulty i` and `Dj^k` at `jitter ^ scan.steps`, their
-product is at most `2 ^ K`. -/
+jitter bound `jitter`, the charged audits' facts `charged` and the period's charged start `start`: the start's free
+inputs at `2 ^ start`, `#Ss` and `∏_c (cap_c + 1)` each at `∏_j (caps j + 1)` (`schedules` and `cells`), and window
+`i`'s `2^#(free inputs)` at `2 ^ (scan.free + tied i)`, `#faultySets` at `atMost N b`, `2^β` at
+`2 ^ (b · max(b_ing, b_eg))` times `2 ^ faulty i` and `Dj^k` at `jitter ^ scan.steps`, their product is at most
+`2 ^ K`. -/
 def RowsKBoundsCount : Prop :=
   ∀ (facts : Array Facts) (scan : Scan) (jitter windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ) (w : Fin n → Facts)
-    (tied faulty : Fin n → ℕ) (charged : Array Facts),
-    (∏ j, (caps j + 1)) * ((∏ j, (caps j + 1)) * ∏ i, (2 ^ (scan.free + tied i) * atMost (w i).units (w i).wrong *
-        2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps * 2 ^ faulty i)) ≤
+    (tied faulty : Fin n → ℕ) (charged : Array Facts) (start : ℕ),
+    2 ^ start * ((∏ j, (caps j + 1)) * ((∏ j, (caps j + 1)) * ∏ i, (2 ^ (scan.free + tied i) *
+        atMost (w i).units (w i).wrong * 2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps *
+        2 ^ faulty i))) ≤
       2 ^ (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) (Array.ofFn caps) jitter windows
-        charged).K
+        charged start).K
 
-/-- What `RowsProgWired` says of a period its check accepted: in the rows form, each link-window's scan's registration
-is wired to the audits' slot entries (`wired`). -/
+/-- What `RowsProgWired` says of a period its check accepted: in the rows form, each execution phase's scan's
+registration is wired to the audits' slot entries (`wired`). -/
 def RowsProgWiredAt (p : Params) (c : Commitment) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
     ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → wired p.audits s c.audits reg = true
@@ -107,8 +111,8 @@ def RowsProgWiredOf (chk : Params → Commitment → Evidence → Core.Outcome P
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → RowsProgWiredAt p c
 
-/-- **The rows form accepts no link-window whose scan's `prog` is not a compute audit's slot entries.** If the check
-accepts a period in the rows form, each link-window's scan's registration has, for each lane `j`, its `scan/prog<j>`
+/-- **The rows form accepts no execution phase whose scan's `prog` is not a compute audit's slot entries.** If the check
+accepts a period in the rows form, each execution phase's scan's registration has, for each lane `j`, its `scan/prog<j>`
 entry at the root and domain of one audit's entries port of chunk `j`, `<descriptor id>/c<j>/o0` of `T / every` leaves,
 of a template node of that audit's own Program calling `SlotEntry_v1` or `SelectEntry_v1` (whose select and collector
 end in `SlotEntry_v1`), a Definition the check pins by its closure digest (`entryPins`, so a template under either name
@@ -118,7 +122,7 @@ def RowsProgWired : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsProgWiredAt p c
 
-/-- What `RowsStateTied` says of a period its check accepted: in the rows form, each link-window's scan's state
+/-- What `RowsStateTied` says of a period its check accepted: in the rows form, each execution phase's scan's state
 entries are at one root and domain, its registration states its units' reads of that state as the chain
 (`stateRead`), and an audit wired to it has its own there (`stateTied`). -/
 def RowsStateTiedAt (p : Params) (c : Commitment) : Prop :=
@@ -130,14 +134,14 @@ def RowsStateTiedOf (chk : Params → Commitment → Evidence → Core.Outcome P
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → RowsStateTiedAt p c
 
-/-- **The rows form accepts no link-window whose scan's state is not its wired audit's `SCAN_STATE`.** If the check
-accepts a period in the rows form, each link-window's scan's registration has a state entry (`stateEntries`: a `roots`
-port `scan/state` or a `registered` value `verity/certifier/scan-state/v1`), every one at one root and domain, and an
-audit whose slot entries are the scan's `prog` (`wired`) has one, every one at that root and domain (`stateTied`). The
-scan's units read their state at that root and register the state their transition computes there, as the scan's
-registration states their reads (`stateRead`: unit `t` reads row `t` and registers row `t + 1`), so the state a slot's
-Program reads is the scan's, and a `SCAN_STATE` that skips or alters a transition, at another root or domain, is
-refused. -/
+/-- **The rows form accepts no execution phase whose scan's state is not its wired audit's `SCAN_STATE`.** If the check
+accepts a period in the rows form, each execution phase's scan's registration has a state entry (`stateEntries`: a
+`roots` port `scan/state` or a `registered` value `verity/certifier/scan-state/v1`), every one at one root and domain,
+and an audit whose slot entries are the scan's `prog` (`wired`) has one, every one at that root and domain
+(`stateTied`). The scan's units read their state at that root and register the state their transition computes there, as
+the scan's registration states their reads (`stateRead`: unit `t` reads row `t` and registers row `t + 1`), so the state
+a slot's Program reads is the scan's, and a `SCAN_STATE` that skips or alters a transition, at another root or domain,
+is refused. -/
 def RowsStateTied : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsStateTiedAt p c
@@ -164,24 +168,27 @@ def RowsCircuitHeld : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsCircuitHeldAt p c
 
-/-- What `RowsStateEmpty` says of a period its check accepted: in the rows form, the scan's registration of
-each execution phase's transfer blocks opens row 0 of its state to the empty state (`stateEmpty`). -/
+/-- What `RowsStateEmpty` says of a period its check accepted: where its first execution phase is the run's first
+(`p.first = 0`), in the rows form, the scan's registration of each execution phase's transfer blocks registers its
+start, the start unit's `sin`, as the empty state (`startEmpty`). -/
 def RowsStateEmptyAt (p : Params) (c : Commitment) : Prop :=
-  ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
-    ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → stateEmpty s reg = true
+  p.first = 0 → ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+    ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg → startEmpty reg = true
 
 /-- `RowsStateEmpty` of the period check `chk`: `RowsStateEmptyAt` of every period `chk` accepts. -/
 def RowsStateEmptyOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → RowsStateEmptyAt p c
 
-/-- **The rows form accepts no execution phase's transfer blocks whose scan's state's row 0 is not the empty state.** If
-the check accepts a period in the rows form, the scan's registration of each execution phase's transfer blocks opens
-leaf 0 of its state, its first state entry's root and domain, to a row of zero u16 words under the salt and the path it
-states (`stateEmpty`). With `RowsStateTied`, whose `stateTied` holds the scan's units' reads of that state to the chain
-(`stateRead`: unit `t` reads row `t` and registers row `t + 1`), every row a slot's Program reads is the empty state or
-one the scan's transition computed from the row before it: row 0, which no unit computes and the Programs anchored at
-bucket 0 read, is not the prover's word. -/
+/-- **The rows form accepts no execution phase's transfer blocks of the run's first period whose scan's state's row 0 is
+not the empty state.** If the check accepts a period in the rows form whose first execution phase is the run's first,
+the scan's registration of each execution phase's transfer blocks has a start entry, the start unit's `sin`, and opens every one, at its root and domain, to a row of zero u16 words under the
+salt it states (`startEmpty`). The start unit copies its `sin` to row 0 of the scan's state. With `RowsStateTied`,
+whose `stateTied` holds the scan's units' reads of that state to the chain (`stateRead`: the start unit registers row
+0, unit `t` reads row `t` and registers row `t + 1`), every row a slot's Program reads is the empty state or one the
+scan's transition computed from the row before it: row 0, which the Programs anchored at bucket 0 read, is not the
+prover's word. A period whose first execution phase is not the run's first starts from a state the check holds to
+nothing, and is charged it instead (`RowsStartCharged`). -/
 def RowsStateEmpty : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsStateEmptyAt p c
@@ -202,7 +209,7 @@ def tiedInPart (tied : ℕ → Bool) (facts : Array Facts) : Array Facts :=
 is `tiedInPart` of the public's audits' facts under the commitment's ties (`tiedIn`), and each tied audit `i` has an
 answer `x` whose facts `f` (`AuditFacts`) are the public's `audits[i]` and name no more sampled than its level holds
 (`f.drawn ≤ f.units`); if it is sampled in part (`f.drawn < f.units`), `f` is among
-`pub.charged` and, when its bound is at least one incorrect proof block (`1 ≤ f.wrong`), every link-window `w` whose
+`pub.charged` and, when its bound is at least one incorrect proof block (`1 ≤ f.wrong`), every execution phase `w` whose
 scan's `prog` is its output (`tiedAudits`) has `faultyEntries = scan.entries` in the public's term `pub.units[w]`. -/
 def RowsTiedChargedAt (p : Params) (c : Commitment) (e : Evidence) (pub : Public) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
@@ -222,13 +229,14 @@ def RowsTiedChargedOf (chk : Params → Commitment → Evidence → Core.Outcome
     chk p c e = .accept pub prof → RowsTiedChargedAt p c e pub
 
 /-- **The rows form charges every tied audit it accepts sampled in part.** If the check accepts a period in the rows
-form with the public `pub`, then `pub.charged` is the facts of each audit that some link-window's scan's `prog` is an
-output of (`tiedIn`) and that is sampled in part (`drawn < units`), in the audits' order and each once (`tiedInPart` of
+form with the public `pub`, then `pub.charged` is the facts of each audit that some execution phase's scan's `prog` is
+an output of (`tiedIn`) and that is sampled in part (`drawn < units`), in the audits' order and each once (`tiedInPart`
+of
 `pub.audits`). `Public.eps` sums the δ of the terms' facts and of `charged`, and of nothing else, so each such audit's
 δ is in `eps`. And for each such audit whose bound is at least one incorrect proof block, the public's term of every
-link-window whose scan's `prog` is its output has `faultyEntries` at the scan's every slot entry bit (`Scan.entries`),
-which `K` sums. So the `faulty` `RowsKBoundsCount` takes and the δ of the audits it is read from are the check's own,
-of every period it accepts.
+execution phase whose scan's `prog` is its output has `faultyEntries` at the scan's every slot entry bit
+(`Scan.entries`), which `K` sums. So the `faulty` `RowsKBoundsCount` takes and the δ of the audits it is read from are
+the check's own, of every period it accepts.
 
 Every tied audit of an accepted period names no more sampled than its level holds: the check reads both counts off the
 answer's profile, the level's size and its `subset`'s `k` or its strata's `k` summed, and refuses a profile that names
@@ -241,12 +249,12 @@ def RowsTiedCharged : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsTiedChargedAt p c e pub
 
-/-- A period check that accepts every period, publishing the rows form's terms of no link-window, no audit's facts and
-no charge: what `RowsProgWiredOf`, `RowsStateTiedOf`, `RowsTiedChargedOf`, `RowsCapPublishedOf` and `RowsOkHeldOf`
-must fail at for `RowsProgWired`, `RowsStateTied`, `RowsTiedCharged`, `RowsCapPublished` and `RowsOkHeld` (each its
-`…Of` at `check`) to say something. -/
+/-- A period check that accepts every period, publishing the rows form's terms of no execution phase, no audit's facts
+and no charge: what `RowsProgWiredOf`, `RowsStateTiedOf`, `RowsTiedChargedOf`, `RowsCapPublishedOf`,
+`RowsStartChargedOf` and `RowsOkHeldOf` must fail at for `RowsProgWired`, `RowsStateTied`, `RowsTiedCharged`,
+`RowsCapPublished`, `RowsStartCharged` and `RowsOkHeld` (each its `…Of` at `check`) to say something. -/
 def acceptAllRows (p : Params) (_ : Commitment) (_ : Evidence) : Core.Outcome Public Profile :=
-  .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] p.cells p.jitter p.windows) { link := p.link, windows := p.windows }
+  .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0, 0⟩ #[] p.cells p.jitter p.windows) { link := p.link, windows := p.windows }
 
 /-- The public `pub` publishes the response cap of the period's schedule (`Form.maxTokensCap`): the rows form's
 `max_tokens_cap`, none when its schedule has none and in the clock form. -/
@@ -254,8 +262,8 @@ def CapPublished (p : Params) (pub : Public) : Prop := pub.maxTokensCap = p.form
 
 /-- **The period check publishes its schedule's response cap.** If the check accepts a period, its public's
 `max_tokens_cap` is the cap of the schedule the parameters name (`CapPublished`), the schedule whose digest every
-link-window's registrations bind (`rowsCheck`): a reader of the public, the communication audit's charge, reads the cap
-the network certifier held each released response to (`NetTiming.Guarantees.ResponseCapped`), and none where the
+execution phase's registrations bind (`rowsCheck`): a reader of the public, the communication audit's charge, reads the
+cap the network certifier held each released response to (`NetTiming.Guarantees.ResponseCapped`), and none where the
 schedule has none. -/
 def RowsCapPublished : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
@@ -267,12 +275,39 @@ def RowsCapPublishedOf (chk : Params → Commitment → Evidence → Core.Outcom
     chk p c e = .accept pub prof → CapPublished p pub
 
 /-- A rows-form schedule of one lane and one slot stride of two ticks (T = 2, `every` 2), with a response cap of 4. -/
-def cappedSchedule : Schedule := ⟨0, 0, 0, 0, 2, 0, 0, 1, 0, 0, 2, some 4⟩
+def cappedSchedule : Schedule := ⟨0, 0, 0, 0, 2, 0, 0, 1, 0, 0, 2, some 4, none, none, false⟩
 
-/-- The rows-form period of no link-window and no audit under `cappedSchedule`, at the deployed LMS parameters: the
+/-- The rows-form period of no execution phase and no audit under `cappedSchedule`, at the deployed LMS parameters: the
 period `RowsCapPublished`'s witnesses are stated at. -/
 def cappedPeriod : Params :=
-  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows cappedSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0, none⟩
+  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows cappedSchedule .empty ⟨0, 0, 0, 0, 0, 0⟩, 0, none⟩
+
+/-- The public `pub` charges the period's first start (`Public.start`): none where it is the run's first
+(`p.first = 0`), whose start `RowsStateEmpty` holds to the empty state, and in the rows form otherwise the scan's state's
+full width, the bits of the start unit's `sin` (`Scan.start`); none in the clock form. -/
+def StartCharged (p : Params) (pub : Public) : Prop :=
+  pub.start = match p.form with
+    | .rows _ _ scan => if p.first = 0 then 0 else scan.start
+    | .clock _ => 0
+
+/-- **The period check charges a period that does not begin the run its first start, at the state's full width.** If
+the check accepts a period, its public's `start` is the scan's state's full width where the period's first execution
+phase is not the run's first, and 0 where it is (`StartCharged`); `K` adds it once, a term of its own (`Public.K`). That
+start is the state the execution phase before the period ended in, which the check holds to nothing, so an
+adversary-chosen start carries no more than the bits `K` counts for it (`RowsKBoundsCount`'s `start`). -/
+def RowsStartCharged : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → StartCharged p pub
+
+/-- `RowsStartCharged` of any period check. -/
+def RowsStartChargedOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    chk p c e = .accept pub prof → StartCharged p pub
+
+/-- The rows-form period of no execution phase and no audit under `cappedSchedule` that begins at the run's execution
+phase 1, under a scan whose state is 5 bits wide: the period `RowsStartCharged`'s witnesses are stated at. -/
+def chargedPeriod : Params :=
+  ⟨#[], #[], 1, 1, "", Lms.deployed, .empty, .empty, "", .rows cappedSchedule .empty ⟨0, 0, 0, 0, 0, 5⟩, 0, none⟩
 
 /-- The `roots` entry `e` is the ok bits' constant of the scan's member `m` (its name, template and proof blocks'
 count, `ScanOk.members`): its port is `<name>/o0`, its leaves are the member's proof blocks' count, and its domain and
@@ -288,14 +323,19 @@ def OkEntry (m : String × String × ℕ) (e : Lean.Json) : Prop :=
 /-- What `RowsOkHeld` says of a period its check accepted: in the rows form under a schedule of `T` ticks, of each
 execution phase's scan's registration `reg`: `T` is at least 2; each member of the scan at `T` (`ScanOk.members`) has
 a `roots` entry (`ScanOk.rootsOf`) that is its constant (`OkEntry`); and every `roots` entry whose port ends `/o0`
-(`ScanOk.okPort`) is the constant of a member of the scan at `T`. -/
+(`ScanOk.okPort`) but the start unit's (`ScanOk.START`, `start/o0`) is the constant of a member of the scan at `T`.
+The start unit's `o0` is the state it copies, a row of the scan's state, and no ok bit; no statement here reads its
+entry. That it is the one port exempt leans on the check's guard: `ScanOk.held` refuses, through `ScanOk.entryHeld`,
+every other added port ending `/o0` that is no member's constant, as `ScanOk.lean`'s last `#guard` holds (`other/o0`
+refused, `START` held). -/
 def RowsOkHeldAt (p : Params) (c : Commitment) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
     ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg →
       2 ≤ s.window ∧
       (∀ m ∈ NetworkCheck.ScanOk.members s.window, ∃ e ∈ NetworkCheck.ScanOk.rootsOf reg, OkEntry m e) ∧
       ∀ e ∈ NetworkCheck.ScanOk.rootsOf reg, ∀ q : String, e.getObjValD "port" = .str q →
-        NetworkCheck.ScanOk.okPort q = true → ∃ m ∈ NetworkCheck.ScanOk.members s.window, OkEntry m e
+        NetworkCheck.ScanOk.okPort q = true → q ≠ NetworkCheck.ScanOk.START →
+          ∃ m ∈ NetworkCheck.ScanOk.members s.window, OkEntry m e
 
 /-- `RowsOkHeld` of the period check `chk`: `RowsOkHeldAt` of every period `chk` accepts. -/
 def RowsOkHeldOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
@@ -305,29 +345,35 @@ def RowsOkHeldOf (chk : Params → Commitment → Evidence → Core.Outcome Publ
 /-- **The rows form accepts no execution phase whose scan's ok bits are registered anywhere but at the constants of
 its schedule.** If the check accepts a period in the rows form under a schedule of `T` ticks, then `T ≥ 2` wherever it
 has an execution phase, and each execution phase's scan's registration names, for each member of the scan at `T`
-(`ScanOk.members`: `first`, `ingress-0` at `T ≥ 3`, `last` and `egress-0`), the port `<member>/o0` at the member's
-proof blocks' count, at its `o0` frame domain and at the root of that many ok rows under the public salts
-(`OkEntry`), and names no other port ending `/o0`: every such entry is a member's constant. The domain and the root
-are functions of `T` alone, which the check computes (`ScanOk.consts`), so a registration that names a member's `o0`
-at a root of the prover's choosing, at another count or domain, or under a name no member has, is refused. A member's
-proof blocks' ok words are rows of the tree its statement reads at `o0`; that the statement reads the tree at the root
-the registration names is the registration's check's, which the period check does not read. -/
+(`ScanOk.members`: `ingress-0`, buckets `0 … T − 2`, `last`, bucket `T − 1`, and `egress-0`, the `T` egress buckets),
+the port `<member>/o0` at the member's proof blocks' count, at its `o0` frame domain and at the root of that many ok
+rows under the public salts (`OkEntry`), and names no port ending `/o0` other than a member's constant and the start
+unit's (`ScanOk.START`, `start/o0`). The domain and the root are functions of `T` alone, which the check computes
+(`ScanOk.consts`), so a registration that names a member's `o0` at a root of the prover's choosing, at another count
+or domain, or under a name neither a member nor the start unit has, is refused. A member's proof blocks' ok words are
+rows of the tree its statement reads at `o0`; that the statement reads the tree at the root the registration names is
+the registration's check's, which the period check does not read. The start unit's `o0` is the state it copies, a row
+of the scan's state, and no ok bit, and its entry is at any root, leaves and domain here: `RowsStateTied` holds the
+scan's reads of its state, unit 0's `o0` at leaf 0 (`stateRead`), and no statement here holds the entry `start/o0` to
+that state's root. That `start/o0` is the one port exempt leans on the check's guard: `ScanOk.held` refuses, through
+`ScanOk.entryHeld`, every other added port ending `/o0` that is no member's constant, as `ScanOk.lean`'s last `#guard`
+holds (`other/o0` refused, `START` held). -/
 def RowsOkHeld : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsOkHeldAt p c
 
 /-- A rows-form schedule of one slot, one lane and two ticks (`T = 2`). -/
-def pairSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 2, none⟩
+def pairSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 2, none, none, none, false⟩
 
 /-- The rows-form period of `n` execution phases and no audit under `pairSchedule`, at the deployed LMS parameters:
 the periods `RowsOkHeld`'s witnesses are stated at. -/
 def pairParams (n : ℕ) : Params :=
-  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0⟩, n, none⟩
+  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0, 0⟩, n, none⟩
 
 /-- The rows-form period of no execution phase and no audit under `pairSchedule` whose parameters name the class
 circuit `c`, at the deployed LMS parameters: the period `RowsCircuitHeld`'s honest witness is stated at. -/
 def heldMonitoringPeriod : Params :=
-  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0, some "c"⟩
+  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0, 0⟩, 0, some "c"⟩
 
 /-- A commitment of one execution phase whose scan's registration names no root, so no member's ok bits. -/
 def unnamedCommitment : Commitment := ⟨#[], #[Lean.Json.mkObj []], .empty⟩

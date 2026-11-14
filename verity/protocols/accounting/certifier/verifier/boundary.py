@@ -5,20 +5,16 @@ declares them, and the verifier's check, before it samples, that the layout fits
 record is ``circuit.json``, `verity/window-circuit/v1` (`verity.commitments.windows.interface.circuit_record`), whose SHA-512 the
 registration binds, so the layout is public and fixed before any coin.
 
-**The record's ``boundary``**, one template a side (and the ingress side's first bucket's), whose proof blocks are its
-execution phases' buckets:
+**The record's ``boundary``**, one template a side, whose proof blocks are its execution phases' buckets:
 
     {"format": "verity/boundary/v3",
      "egress":  {"template": "<id>", "frame": "<output>", "verdict": "<output>", "links": L, "buckets": T, "slots": R,
                  "frame_bytes": B},
-     "ingress": {"template": "<id>", "frame": "<parameter>", "links": LI, "buckets": T, "slots": RI, "frame_bytes": BI,
-                 "first": "<id>"}}
+     "ingress": {"template": "<id>", "frame": "<parameter>", "links": LI, "buckets": T, "slots": RI, "frame_bytes": BI}}
 
 Proof block ℓ·T + t of a side's template, in its proof blocks' order (the partition's), is bucket t of link ℓ: the
-template has exactly links·T proof blocks. With ``first`` (optional, ingress only, T ≥ 2), proof block ℓ of that
-template is bucket 0 of link ℓ and proof block ℓ·(T − 1) + t − 1 of ``template`` is bucket t ≥ 1, so the two have links
-and links·(T − 1) proof blocks, and both read the frame row. Step t is bucket t of the window on both sides, so the
-sides share T, the horizon k. An integration writes the field with `Boundary.record`, and the verifier reads it with
+template has exactly links·T proof blocks. Step t is bucket t of the window on both sides, so the sides share T, the
+horizon k. An integration writes the field with `Boundary.record`, and the verifier reads it with
 `parse`.
 
 * **Egress** (`egress.EgressBucket`, the scan's egress side, in generator form): ``frame`` is an output row of R·B
@@ -32,7 +28,7 @@ sides share T, the horizon k. An integration writes the field with `Boundary.rec
   Only the verdict is public: a proof block's public output is at most 16 bits, and the frame is a committed output.
   v2's checked row, whose frame was a parameter row (an input) its verdict held to the cells the proof block rendered,
   is retired with v2.
-* **Ingress** (`ingress_scan.IngressScanBucket`, and `IngressScanFirst` its ``first``): ``frame`` is a parameter row of
+* **Ingress** (`ingress_scan.IngressScanBucket`): ``frame`` is a parameter row of
   RI·BI bytes, the network certifier's ingress row t of link ℓ, which the proof block reads as its registered input
   port. `Layout.ingress t` is the ingress links' frame rows at bucket t, in link order, each in row order.
 
@@ -56,8 +52,8 @@ it); a record that fits only at the gate grain is refused. In the scan, ingress 
 unit and read by the other under one `b ‖ c`, so the record declares it a wire.
 
 `Fits` is structural, never semantic: a served window fits in the step-indexed scan's form (`ingress_scan`), whose
-bucket t proof block reads bucket t's ingress row and the state bucket t − 1 carries (bucket 0's, `IngressScanFirst`'s,
-the empty state, constants of its circuit), and whose Programs start at fixed boundaries and read their slots there, so
+bucket t proof block reads bucket t's ingress row and the state bucket t − 1 carries (bucket 0's, the scan's start's,
+`ingress_scan.IngressScanStart`), and whose Programs start at fixed boundaries and read their slots there, so
 an egress bucket reaches ingress only through earlier buckets' state, whatever the arrival steps and prompt lengths. A
 window in any other form, such as an egress bucket that reads every request's ids, is refused: the verifier gains no
 form ahead of its proof. The record must also name the boundary's rows, and no
@@ -75,14 +71,11 @@ FORMAT = "verity/boundary/v3"
 CIRCUIT = "verity/window-circuit/v1"
 _COUNTS = ("links", "buckets", "slots", "frame_bytes")
 FIELDS = {"egress": ("template", "frame", "verdict", *_COUNTS), "ingress": ("template", "frame", *_COUNTS)}
-#: each side's optional fields
-OPTIONAL = {"egress": (), "ingress": ("first",)}
 
 
 @dataclass(frozen=True)
 class Side:
-    """One side of the boundary: its template, its frame row, its egress verdict row, its schedule's counts, and the
-    template of its first bucket when another holds it."""
+    """One side of the boundary: its template, its frame row, its egress verdict row and its schedule's counts."""
 
     template: str
     frame: str
@@ -91,28 +84,14 @@ class Side:
     slots: int
     frame_bytes: int
     verdict: str | None = None
-    first: str | None = None
 
     @property
     def words(self) -> int:
         """The frame row's u16 words: the bucket's R·B bytes."""
         return self.slots * self.frame_bytes // 2
 
-    def counts(self) -> dict[str, int]:
-        """Each of its templates' proof blocks: links·T, or with ``first`` links and links·(T − 1)."""
-        if self.first is None:
-            return {self.template: self.links * self.buckets}
-        return {self.first: self.links, self.template: self.links * (self.buckets - 1)}
-
-    def at(self, link: int, t: int) -> tuple[str, int]:
-        """The template that holds bucket t of link ``link`` and its proof block there, in the template's proof blocks'
-        order."""
-        if self.first is None:
-            return self.template, link * self.buckets + t
-        return (self.first, link) if t == 0 else (self.template, link * (self.buckets - 1) + t - 1)
-
     def ports(self) -> tuple[str, ...]:
-        return tuple(f"{tid}/{p}" for tid in self.counts() for p in (self.frame, self.verdict) if p is not None)
+        return tuple(f"{self.template}/{p}" for p in (self.frame, self.verdict) if p is not None)
 
 
 @dataclass(frozen=True)
@@ -135,8 +114,7 @@ class Boundary:
 
     def record(self) -> dict[str, Any]:
         """The circuit record's ``boundary`` field, which `parse` reads back: what an integration writes."""
-        return {"format": FORMAT, **{name: {k: getattr(s, k) for k in (*FIELDS[name], *OPTIONAL[name])
-                                            if getattr(s, k) is not None} for name, s in self.sides()}}
+        return {"format": FORMAT, **{name: {k: getattr(s, k) for k in FIELDS[name]} for name, s in self.sides()}}
 
     def unit(self, doc: Mapping[str, Any], side: str, link: int, t: int) -> int:
         """The global proof block (the population's index) that holds bucket t of link ``link`` of ``side``."""
@@ -147,9 +125,8 @@ class Boundary:
 
 
 def _side(name: str, doc: Any) -> Side:
-    if not isinstance(doc, Mapping) or not set(FIELDS[name]) <= set(doc) <= {*FIELDS[name], *OPTIONAL[name]}:
-        raise ValueError(f"boundary {name}: the fields {list(FIELDS[name])}, and optionally {list(OPTIONAL[name])}, not "
-                         f"{doc!r}")
+    if not isinstance(doc, Mapping) or set(doc) != set(FIELDS[name]):
+        raise ValueError(f"boundary {name}: the fields {list(FIELDS[name])}, not {doc!r}")
     if any(not isinstance(doc[k], str) or not doc[k] for k in doc if k not in _COUNTS):
         raise ValueError(f"boundary {name}: its templates and rows are named by nonempty strings, not {doc!r}")
     if any(type(doc[k]) is not int or doc[k] < 1 for k in _COUNTS):
@@ -158,9 +135,6 @@ def _side(name: str, doc: Any) -> Side:
         raise ValueError(f"boundary {name}: a cell is whole u16 words, not {doc['frame_bytes']} bytes")
     if doc.get("verdict") == doc["frame"]:
         raise ValueError(f"boundary {name}: the verdict row is not the frame row {doc['frame']!r}")
-    if "first" in doc and (doc["first"] == doc["template"] or doc["buckets"] < 2):
-        raise ValueError(f"boundary {name}: a first bucket's template is another than {doc['template']!r}, over two "
-                         f"buckets or more, not {doc['first']!r} over {doc['buckets']}")
     return Side(**{k: doc[k] for k in doc})
 
 
@@ -227,8 +201,7 @@ def _latest(sources: Sequence[Sequence[int]], readers: Sequence[Sequence[int]]) 
 
 
 def _global(units: Mapping[str, tuple[int, int]], s: Side, link: int, t: int) -> int:
-    tid, i = s.at(link, t)
-    return units[tid][0] + i
+    return units[s.template][0] + link * s.buckets + t
 
 
 def _own_row(s: Side, tid: str, m: Mapping[str, Any]) -> str | None:
@@ -285,21 +258,18 @@ def refusal(doc: Mapping[str, Any]) -> str | None:
                 f"{sorted(b.ports())}: I/O the layout doesn't hold is I/O no audit reads")
     members = {tid: [m for m in doc["members"] if m["template"] == tid] for tid in units}
     for name, s in b.sides():
-        how = ({s.template: f"links·buckets = {s.links}·{s.buckets}"} if s.first is None else
-               {s.first: f"links = {s.links}", s.template: f"links·(buckets − 1) = {s.links}·{s.buckets - 1}"})
-        for tid, n in s.counts().items():
-            if tid not in units:
-                return f"boundary {name}: {tid} is no template of the circuit"
-            if units[tid][1] != n:
-                return f"boundary {name}: {tid} has {units[tid][1]} units, not {how[tid]}"
+        if s.template not in units:
+            return f"boundary {name}: {s.template} is no template of the circuit"
+        if units[s.template][1] != s.links * s.buckets:
+            return (f"boundary {name}: {s.template} has {units[s.template][1]} units, not links·buckets = "
+                    f"{s.links}·{s.buckets}")
     for m in members[b.egress.template]:
         if why := _returned(b.egress, m):
             return why
     if b.ingress:
-        for tid in b.ingress.counts():
-            for m in members[tid]:
-                if why := _own_row(b.ingress, tid, m):
-                    return why
+        for m in members[b.ingress.template]:
+            if why := _own_row(b.ingress, b.ingress.template, m):
+                return why
     total = sum(n for _lo, n in units.values())
     try:
         readers = _readers(doc, total)

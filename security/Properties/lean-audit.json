@@ -1415,6 +1415,10 @@
    "honest": ["Properties.NetworkPeriod.rowsOkHeld_honest"],
    "nontrivial": "Properties.NetworkPeriod.rowsOkHeld_nontrivial"
   },
+  "Properties.NetworkPeriod.rowsStartCharged": {
+   "honest": ["Properties.NetworkPeriod.rowsStartCharged_honest"],
+   "nontrivial": "Properties.NetworkPeriod.rowsStartCharged_nontrivial"
+  },
   "Properties.NetworkPeriod.rowsCircuitHeld": {
    "honest": ["Properties.NetworkPeriod.rowsCircuitHeld_honest"],
    "nontrivial": "Properties.NetworkPeriod.rowsCircuitHeld_nontrivial"
@@ -6252,6 +6256,15 @@
     "reads": []
    },
    "type_hash": "200ccf2077b4213f64919e6646d0d9be87eca136e6aed2dc80e1b376ca9bc4d8"
+  },
+  "Properties.NetworkPeriod.rowsStartCharged": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsStartCharged_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsStartCharged_nontrivial": {
+   "owner": "@network-accounting"
   },
   "Properties.NetworkPeriod.rowsCircuitHeld": {
    "owner": "@network-accounting",

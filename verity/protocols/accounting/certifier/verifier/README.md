@@ -314,8 +314,7 @@ A spec-level reference for network accounting's timing channel:
 - the run's boundary in a window's circuit (`boundary`): the circuit record's ``boundary``, which names the template
   whose proof block ℓ·T + t holds bucket t of egress link ℓ (`EgressBucket`'s frame, the row it computes and returns,
   committed as a registered read of the network certifier's row, and its u16 verdict, whose bit 0 is the slots' presence) and of
-  ingress link ℓ (its frame parameter row, the network certifier's registered row; with ``first``, `IngressScanFirst` holds bucket
-  0), the same gates whatever the load, so arrival steps and prompt lengths stay private (`NetTiming.BoundaryGates`); its
+  ingress link ℓ (its frame parameter row, the network certifier's registered row), the same gates whatever the load, so arrival steps and prompt lengths stay private (`NetTiming.BoundaryGates`); its
   format is `verity/boundary/v3`. `refusal`, the verifier's check before it samples, checks that the layout fits the
   circuit (`NetTiming.BoundaryGates.Fits`: no egress gate is an input, and each is one the circuit returns) at the record's
   grain, which contains the gate grain's, held to `prog_fits`, `BoundaryGates.Fits` itself on a flattened program; the scan's
@@ -352,9 +351,13 @@ A spec-level reference for network accounting's timing channel:
   bits (`<member>/o0`) at another root than its ok rows' under public salts, a constant of T ≥ 2 (`scan_ok`), and one whose
   scan's state isn't that audit's `SCAN_STATE`, by root and domain (`stateTied`): the scan's state tree is the window
   state (`window_state`),
-  each row but the empty state's the one a unit computes (its o1) and the next reads (its sin), both registered reads,
+  each row but leaf 0's the one a unit computes (its o1) and the next reads (its sin), both registered reads,
   so a Program reads the states the scan's steps computed;
-  `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. The period check, the
+  `IngressScanStart`, the scan's start, commits leaf 0 by gates: the state its execution phase's record names (the
+  empty state in the run's first execution phase, the previous one's last state row after it), so every bucket, the
+  first included, is `IngressScanBucket`; the period check holds that state to the empty state in the run's first
+  execution phase and, in a period's first that is not the run's first, charges it once at the state's full width
+  (`startCheck`, the public's `start`). The period check, the
   step from a period's records to the network bound, reads the inference-only policy's layout check. Programs start at
   fixed slots a network timestep: a timestep is `EVERY` buckets, the network certifier's `every`, which divides its
   execution phase, with `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a

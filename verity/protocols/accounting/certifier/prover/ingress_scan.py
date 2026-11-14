@@ -1,8 +1,8 @@
 """The ingress side of the step-indexed scan: one proof block a certifier bucket t, `IngressScanBucket`, which reads
 bucket t's ingress row, the carried state S_{t−1} and the Programs' row at t, and computes S_t from them and S_t's
-egress view, its outputs beside an ok bit (the generator form); the first bucket's, `IngressScanFirst`, reads no state
-and starts from the empty one. Every switch is computed from the state and the rows; none is witness. Nothing here is
-in a Spec.
+egress view, its outputs beside an ok bit (the generator form); the scan's start, `IngressScanStart`, gives the first
+bucket its S_{−1}. Every switch is computed from the state and the rows; none is witness. Nothing here is in a
+Spec.
 
 **The row** is `warden_rows.window_rows`' row t of the ingress link: S = lanes·r slots of B-byte cells, lane block ρ
 (slots ρ·r … ρ·r + r − 1) the ρ-th live connection by ordinal and a block no connection holds r·B zero bytes. Its cells
@@ -12,7 +12,8 @@ are the network certifier's (`warden.read_cell`): `DATA` of P = B − 9 bytes, `
 a bucket's cells of a connection are `DATA`, at most one `END`, then `PAD`s, and only `PAD`s once its `END` is in.
 
 **Fixed slots a timestep.** A timestep is EVERY buckets,
-its boundary the bucket t ≡ 0 mod EVERY of the scan, and the warden's window is whole timesteps (EVERY divides T,
+its boundary the bucket t ≡ 0 mod EVERY of the scan, and the network certifier's window is whole timesteps (EVERY
+divides T,
 `Class.serves`), so every execution phase has its boundaries at the same buckets and one window circuit serves them all.
 A request admitted at bucket s is anchored at A(s), the first boundary at or after s + WITHIN (`Class.anchor`), WITHIN
 the class's ingress bound δ in buckets, and its Program reads its slot in S_{A−1}. Each boundary has SLOTS = lanes
@@ -54,20 +55,22 @@ offset t0 − 1, with row −1, the first execution phase's, the empty state's, 
 (71 words at w63's class), the row `SlotEntry_v1` writes. Entry j is the outputs of the
 Program in slot j of the boundary at or before t, its `read` 1. The unit reads entry j only where slot j is due and
 occupied (anchored at t, `occ` 1 in S_{t−1}); every other entry, and every entry's padding, is ignored, so a
-link-window's buckets of one timestep can all read their boundary's entries, and a due slot whose `occ` is 0 takes n and
+execution phase's buckets of one timestep can all read their boundary's entries, and a due slot whose `occ` is 0 takes n
+and
 `out` zero: an empty slot's outputs are masked by its occupancy word and never reach the egress. An occupied slot whose
 entry is absent (`read` 0) is refused: a request no Program reads would reach the server with no Program's outputs
 counting it. It is the form the Programs' outputs are tied to: a Program gives all its outputs at its anchor, and the
-slot holds them in `out` through its last egress bucket, past the link-window's end where that is later (a group's scan
-carries its state across its link-windows). In a link-window of nb = T / EVERY boundaries, bucket t's `prog<j>` reads
-row j·nb + ⌊t / EVERY⌋ of one slot-entries input (`NetworkCheck.Period`'s `readsEntries`), the row of slot j at boundary
-⌊t / EVERY⌋ as `SlotEntry_v1` lays them out. Unless that input is a compute audit's `SlotEntry_v1` template's entries,
-its `read` bit is the prover's word: an entry of `read` 1, n 0 and no outputs for a request no Program reads passes
-these gates (o0's ok 1), and an unwired input is a free input the prover commits, not a zero. So the refusal of an
-absent entry holds against an honest prover only, and the period check refuses such a link-window (`wired`), and one
-whose scan's state is not that audit's `SCAN_STATE`, by root and domain (`stateTied`). The scan's state tree is the
-window state (`window_state`), each row but the empty state's the S_t one unit computes (its o1) and the next reads (its
-sin), both registered reads, so each row a Program reads is the one the scan's step computed from the row before.
+slot holds them in `out` through its last egress bucket, past the execution phase's end where that is later (a group's
+scan carries its state across its execution phases). In an execution phase of nb = T / EVERY boundaries, bucket t's
+`prog<j>` reads row j·nb + ⌊t / EVERY⌋ of one slot-entries input (`NetworkCheck.Period`'s `readsEntries`), the row of
+slot j at boundary ⌊t / EVERY⌋ as `SlotEntry_v1` lays them out. Unless that input is a compute audit's `SlotEntry_v1`
+template's entries, its `read` bit is the prover's word: an entry of `read` 1, n 0 and no outputs for a request no
+Program reads passes these gates (o0's ok 1), and an unwired input is a free input the prover commits, not a zero. So
+the refusal of an absent entry holds against an honest prover only, and the period check refuses such an execution phase
+(`wired`), and one whose scan's state is not that audit's `SCAN_STATE`, by root and domain (`stateTied`). The scan's
+state tree is the window state (`window_state`), each row but the empty state's the S_t one unit computes (its o1) and
+the next reads (its sin), both registered reads, so each row a Program reads is the one the scan's step computed from
+the row before.
 
 **The egress view** (`view`) of S_t is `egress.EgressBucket`'s state at b = t: b, then each slot's live, q, admitted,
 n and its KO output ids at `egress`'s offsets (`egress.Shape(B, lanes·r, r, NR, KO, IDB, D)`): egress bucket t reads
@@ -114,19 +117,23 @@ from one bucket's ingress to a later bucket's gates: each step reads the state t
 arrivals and the prompt lengths, which stay private.
 
 **Where it runs.** `row`, `sin` and each `prog<j>` are a registered read, an input port `Registered.checkPort` accepts:
-`row` the warden's signed row t (`warden_rows.bucket_port`), `sin` the scan's state row t − 1 and `prog<j>` the
-slot-entries row of slot j at t's boundary. o1 and o2 are gates, never inputs: the unit's statement commits o1 as the
-scan's state row t and o2 as its view row t, each registered as a read of its row (`checkPort` accepts a hidden-output
-statement's output row, the verifier's PROTOCOL.md §16.13), so bucket t + 1's `sin` and egress bucket t's `state`, which
-read those rows, read what bucket t computed: the carried state and the view are wires through the registered roots. The
-first bucket's unit, `IngressScanFirst`, has no `sin`: its S_{−1} is the empty state, constants of the circuit, so no
-row the prover commits stands in for it. Only o0 is public: a unit proof's public output is at most 16 bits, and o1 and
-o2 are committed.
+`row` the network certifier's signed row t (`warden_rows.bucket_port`), `sin` the scan's state row t − 1 and `prog<j>`
+the slot-entries row of slot j at t's boundary. o1 and o2 are gates, never inputs: the unit's statement commits o1 as
+the scan's state row t and o2 as its view row t, each registered as a read of its row (`checkPort` accepts a
+hidden-output statement's output row, the verifier's PROTOCOL.md §16.13), so bucket t + 1's `sin` and egress bucket t's
+`state`, which read those rows, read what bucket t computed: the carried state and the view are wires through the
+registered roots. Only o0 is public: a unit proof's public output is at most 16 bits, and o1 and o2 are committed.
+
+**The start.** `IngressScanStart` is the first unit of every execution phase's scan: its `sin` is the state the scan
+starts from, a registered read of the value the execution phase's record names for it (the empty state in the run's
+first execution phase, the previous execution phase's last state row in every later one), and its output is `sin`,
+each bit through two NOTs, committed as the row the execution phase's state tree holds at leaf 0, the row its first
+bucket's `sin` and its first boundary's Programs read. So that row is the start by gates, and no bucket's unit is
+another Definition for it: every bucket, the first included, is `IngressScanBucket`.
 
     IngressScanBucket{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO, KI}(row: Array<lanes·r·B, Byte>, sin: Array<NS>,
         prog0 … prog<lanes − 1>: Array<NE>) -> (u16, Array<NS>, Array<NV>)
-    IngressScanFirst{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO, KI}(row: Array<lanes·r·B, Byte>,
-        prog0 … prog<lanes − 1>: Array<NE>) -> (u16, Array<NS>, Array<NV>)
+    IngressScanStart{B, r, lanes, C, IDB, EVERY, WITHIN, D, KO, KI}(sin: Array<NS>) -> (Array<NS>)
         NS = `state_bits`: 96 + lanes·(338 + CB + (KO + C·K)·IDB) rounded up to a multiple of 16, K = (B − 9) // 11
         NE = `entry_bits`: 33 + KO·IDB rounded up to a multiple of 16 (`SlotEntry_v1`'s row)
         NV = `view_bits`: 32 + lanes·(112 + KO·IDB rounded up to a multiple of 16)
@@ -137,7 +144,10 @@ from dataclasses import dataclass, field, replace
 from functools import cached_property
 from typing import Sequence
 
+from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import ONE, OR, ZERO, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.defs import CompositeDefinition
+from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.commitments.gates.frame_v3 import _part
 from verity.protocols.accounting.certifier.prover import egress as EG
@@ -563,8 +573,8 @@ def step(cls: Class, row: bytes, st: State, prog: Sequence[Entry] | None = None)
 
 def reference(cls: Class, row: bytes, sin: Sequence[int] | None, prog: Sequence[int]
               ) -> tuple[int, list[int] | None, list[int] | None]:
-    """`IngressScanBucket`'s outputs in the clear (`IngressScanFirst`'s for sin None, the empty state): ok, and S_t
-    and its egress view at t where ok is 1, None where it is 0."""
+    """`IngressScanBucket`'s outputs in the clear (sin None: the empty state): ok, and S_t and its egress view at t
+    where ok is 1, None where it is 0."""
     before = empty(cls) if sin is None else decode(cls, sin)
     st = step(cls, row, before, prog_decode(cls, prog))
     if st is None:
@@ -649,9 +659,14 @@ def _sig(S):
     return (("row", Array(cls.S * cls.B, BYTE)), ("sin", Array(state_bits(cls), BIT)), *_progs(cls)), _outs(cls)
 
 
-def _sig_first(S):
-    cls = _cls(S)
-    return (("row", Array(cls.S * cls.B, BYTE)), *_progs(cls)), _outs(cls)
+def _sig_start(S):
+    state = Array(state_bits(_cls(S)), BIT)
+    return (("sin", state),), Tuple(state)
+
+
+def _body_start(B, S, sin):
+    # gates, never a pass-through: an output that is an input wire commits nothing the statement computes
+    return tuple_of(B.batch(BL.NOT, B.batch(BL.NOT, sin, axes=(0,)), axes=(0,)))
 
 
 def _eq(C, x: Sequence, y: Sequence):
@@ -728,12 +743,6 @@ def _build(C, S, *e):
     cls = _cls(S)
     n = cls.S * cls.B
     return _scan(C, cls, e[:n], list(e[n]), [b for p in e[n + 1:] for b in p])
-
-
-def _build_first(C, S, *e):
-    cls = _cls(S)
-    n = cls.S * cls.B
-    return _scan(C, cls, e[:n], [ZERO] * state_bits(cls), [b for p in e[n:] for b in p])
 
 
 def _scan(C, cls: Class, row: Sequence, sin: list, prog: list) -> list:
@@ -896,26 +905,22 @@ IngressScanBucket = _part(
     "`SlotEntry_v1`'s row of its slot), and its egress view at t (`egress.EgressBucket`'s state), with 1 in bit 0 of "
     "the first output iff every check of the step holds: " + _STEP, version=3)
 IngressScanBucket.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins
-IngressScanFirst = _part(
-    "IngressScanFirst", STATICS, _sig_first, _build_first,
-    "the scan's first state S_0 = `ingress_scan.step` of the empty state (all zeros, constants), bucket 0's ingress "
-    "row and the Programs' entries prog0 … prog<lanes − 1>, and its egress view at 0, with 1 in bit 0 of the first "
-    "output iff every check of the step holds: " + _STEP, version=3)
-IngressScanFirst.gated = True  # type: ignore[attr-defined]  # circuit-check holds its digest pins
+IngressScanStart = CompositeDefinition(
+    "IngressScanStart", 1, STATICS, _sig_start, _body_start, conformance="exact-model-tested",
+    doc="the scan's start: sin, the state an execution phase's scan starts from (`state_bits` bits, the class's "
+        "state row), each bit through two NOTs, so the row its output commits is sin")
 
 
-def arguments(cls: Class, cases: Sequence[tuple[bytes, Sequence[int], Sequence[int]] | tuple[bytes, Sequence[int]]]
-              ) -> list[list]:
-    """The arguments for (row, sin, prog) cases (`IngressScanBucket`) or (row, prog) cases (`IngressScanFirst`):
-    each row's bytes as bits, least significant first, sin as it is, and prog's entry rows, one port each
-    (`prog_rows`)."""
+def arguments(cls: Class, cases: Sequence[tuple[bytes, Sequence[int], Sequence[int]]]) -> list[list]:
+    """`IngressScanBucket`'s arguments for (row, sin, prog) cases: each row's bytes as bits, least significant first,
+    sin as it is, and prog's entry rows, one port each (`prog_rows`)."""
     rows = [[[b >> i & 1 for i in range(8)] for b in c[0]] for c in cases]
-    sins = [[list(c[1]) for c in cases]] if len(cases[0]) == 3 else []
-    progs = [prog_rows(cls, c[-1]) for c in cases]
-    return [rows, *sins, *([p[j] for p in progs] for j in range(cls.NR))]
+    progs = [prog_rows(cls, c[2]) for c in cases]
+    return [rows, [list(c[1]) for c in cases], *([p[j] for p in progs] for j in range(cls.NR))]
 
 
-__all__ = ["Class", "Entry", "IngressScanBucket", "IngressScanFirst", "NONE", "STATICS", "Slot", "State", "arguments",
+__all__ = ["Class", "Entry", "IngressScanBucket", "IngressScanStart", "NONE", "STATICS", "Slot",
+           "State", "arguments",
            "decode", "due", "empty", "encode", "entry", "entry_bits", "entry_encode", "entry_layout", "held", "layout",
            "position", "prog_bits", "prog_decode", "prog_encode", "prog_rows", "programs", "reference", "scan",
            "slot_row", "state_bits", "step", "token_row", "view", "view_bits", "view_encode", "window_state"]

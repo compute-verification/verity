@@ -145,16 +145,16 @@ whether and where a connection fails, chooses one of at most (cells + 1) outcome
 (with lengths rows at the connection's first egress slot), and are the client's own doing. A tick that runs more than `slack` past its boundary faults every grid's window
 (`monitor-unavailable`), as the active certifier's do.
 
-**The pacer** (`Warden(paced=…)`, which a warden on the host's clock must have): a bucket written on the loop leaves
-when its tick runs, and the loop reads every server, so when a server writes within a bucket, which the prover chooses,
-moves when the bucket reaches the clients. With `paced`, seconds past `slack`, each tick hands its bucket, every live
-connection's cells as a part for that connection's socket, to a process of its own (`pacer.Pacer`), which releases it
-at `origin` + t·τ + `paced` on the host's monotonic clock, a time fixed before the bucket is made; each connection's
-socket reaches the pacer at its admission, and its last bucket's part closes the pacer's copy. A bucket that reached
-the pacer after its time, whose release started more than `slack` after it, or that the pacer released with a
-connection's socket not yet its own, faults every grid's window `monitor-unavailable`, as a late tick does. Only a
-warden on an injected clock, a test's, writes each bucket on its loop (`paced` None). A window's three records are
-published once every bucket of it that was handed is released, or by the
+**The pacer** (`Warden(paced=…)`, which a network certifier on the host's clock must have): a bucket written on the loop
+leaves when its tick runs, and the loop reads every server, so when a server writes within a bucket, which the prover
+chooses, moves when the bucket reaches the clients. With `paced`, seconds past `slack`, each tick hands its bucket,
+every live connection's cells as a part for that connection's socket, to a process of its own (`pacer.Pacer`), which
+releases it at `origin` + t·τ + `paced` on the host's monotonic clock, a time fixed before the bucket is made; each
+connection's socket reaches the pacer at its admission, and its last bucket's part closes the pacer's copy. A bucket
+that reached the pacer after its time, whose release started more than `slack` after it, or that the pacer released with
+a connection's socket not yet its own, faults every grid's window `monitor-unavailable`, as a late tick does. Only a
+network certifier on an injected clock, a test's, writes each bucket on its loop (`paced` None). A window's three
+records are published once every bucket of it that was handed is released, or by the
 next window's first tick, faulted `monitor-unavailable` if one isn't by then. A client that reads slowly holds only its
 own bytes in the pacer, and one more than `WRITE_BACKLOG` behind is closed, as on the loop.
 
@@ -406,9 +406,9 @@ OPTIONAL_FIELDS = ("max_tokens_cap", "lengths", "content", "request_words")
 #: the lengths rows' forms (the module docstring's "The lengths rows"): which execution phases are handed, and whether
 #: one that isn't is ended without releases
 LENGTHS_FORMS = (1, 2)
-#: `WardenParams`' integer fields, every one but `egress` and the optional ones: the schedule the period check reads
-#: (`scheduleOf`) beside its `max_tokens_cap` when it has one, whose egress form is the id form and which has no lengths
-#: rows
+#: `WardenParams`' integer fields, every one but `egress` and the optional ones: the fields of every schedule the
+#: period check reads (`scheduleOf`), which reads beside them each optional field a schedule sets, and whose egress
+#: form is the id form
 INTEGER_FIELDS = tuple(f.name for f in fields(WardenParams) if f.name not in ("egress", *OPTIONAL_FIELDS))
 
 
@@ -615,8 +615,9 @@ class Warden:
       docstring's "The pacer"), which releases it `paced` after its boundary on the host's monotonic clock, `origin`'s
       clock then, to each connection's socket (`writer.get_extra_info("socket")`); `releases` holds each bucket's
       `pacer.Report` once its writes end. On the host's clock (`clock` `time.monotonic`) `paced` is required: only a
-      warden on an injected clock writes each bucket on its loop;
-    - `until(predicate)` waits until the warden's state satisfies it, for a caller that drives a `VirtualClock`."""
+      network certifier on an injected clock writes each bucket on its loop;
+    - `until(predicate)` waits until the network certifier's state satisfies it, for a caller that drives a
+      `VirtualClock`."""
 
     def __init__(self, params: WardenParams, connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
                  windows: int, clock: Callable[[], float] = time.monotonic,
@@ -1136,14 +1137,14 @@ class Warden:
 
 def audit(params: WardenParams, ingress: Sequence[BlockGrid], egress: Sequence[BlockGrid],
           fails: Sequence[BlockGrid]) -> dict:
-    """The read of a run's records in the clear (a rehearsal's; a deployment's is N2's, in ZK). Every cell is a warden
-    cell; in every bucket of each direction each live connection has r cells, in ordinal order, and admissions are in
-    ordinal order; each connection's ingress is data and padding, then one `END` and padding to its bucket a; and its
-    egress is exactly the schedule's for (its admission s, its egress cells): padding through bucket s + D − 1 (up to
-    its `FAIL`, for a client's failure before then), then `DATA` in every slot, then one `END` or `FAIL`, then padding
-    to the bucket's end. Every `FAIL` has one reason in the `fails` record, in its bucket, and every reason its `FAIL`.
-    In the id egress form every egress `DATA` and `END` cell is one `io_tie.parse_cell` reads. Every reason is the
-    schedule's (`WardenParams.reasons`). Under a response cap each connection's `max_tokens` is read from its first
+    """The read of a run's records in the clear (a rehearsal's; a deployment's is N2's, in ZK). Every cell is a network
+    certifier cell; in every bucket of each direction each live connection has r cells, in ordinal order, and admissions
+    are in ordinal order; each connection's ingress is data and padding, then one `END` and padding to its bucket a; and
+    its egress is exactly the schedule's for (its admission s, its egress cells): padding through bucket s + D − 1 (up
+    to its `FAIL`, for a client's failure before then), then `DATA` in every slot, then one `END` or `FAIL`, then
+    padding to the bucket's end. Every `FAIL` has one reason in the `fails` record, in its bucket, and every reason its
+    `FAIL`. In the id egress form every egress `DATA` and `END` cell is one `io_tie.parse_cell` reads. Every reason is
+    the schedule's (`WardenParams.reasons`). Under a response cap each connection's `max_tokens` is read from its first
     request cell as the network certifier read it: a request cut into cells has one at most the cap, its response at
     most that many `DATA` cells, and only a request with no cells is refused (cap). A window is accepted when its three
     records are complete, its cells are the schedule's and the egress form's and no connection failed in it. With

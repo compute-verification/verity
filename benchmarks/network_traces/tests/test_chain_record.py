@@ -134,7 +134,7 @@ def test_certs_refuses_a_changed_signature(honest, tmp_path):
 
 
 class _Accepting(audit.Audit):
-    """A reference audit that accepts every link-window it is asked about."""
+    """A reference audit that accepts every execution phase it is asked about."""
 
     def check_link(self, link, records, frames, syncs, *args, **kwargs):
         return [audit.Verdict(link, w, None) for w in range(len(syncs))]
@@ -246,7 +246,7 @@ def _steps(tmp_path, job: dict, endpoint: bool = True) -> SimpleNamespace:
         n2=put("n2.json", {"ok": True, "members": {
             "honest": {"windows": [window], "network": {"accepted": True}, "ok": True},
             "tampered": {"windows": [window | {"accepted": False}], "network": {"accepted": False}, "ok": True}}}),
-        scan=put("scan.json", {"ok": True, "T": 1, "rounds": {"honest": {"audit": {"window_accepted": True}}}}),
+        scan=put("scan.json", {"ok": True, "T": 1, "rounds": {"honest-0": {"audit": {"window_accepted": True}}}}),
         job=put("job.json", job), warden_run="g1/warden")
 
 
@@ -435,7 +435,7 @@ def test_a_scan_only_report_exits_0_on_the_expected_verdicts_and_1_on_a_wrong_on
     n2_summary, steps.n2 = steps.n2, None
     rnd = lambda accepted, found=(): {"audit": {"window_accepted": accepted, "received": {"verifier_found": list(found)}}}
     put = lambda honest, forged, ok=True: Path(steps.scan).write_text(json.dumps(
-        {"ok": ok, "T": 32, "rounds": {"honest": honest, "forged": forged}}))
+        {"ok": ok, "T": 32, "rounds": {"honest-0": honest, "chain-0": forged}}))
     args = ["report", "--custody", steps.custody, "--certs", steps.certs, "--endpoint", steps.endpoint, "--scan",
             steps.scan, "--job", steps.job, "--warden-run", steps.warden_run]
     run = lambda name: (cr.main(args + ["--out", str(tmp_path / name)]),
@@ -444,7 +444,7 @@ def test_a_scan_only_report_exits_0_on_the_expected_verdicts_and_1_on_a_wrong_on
     put(rnd(True), rnd(False))
     rc, got = run("pass")
     assert rc == 0 and got["verdict"] == "scan accepted" and got["scope"] == cr.SCAN_ONLY == "scan only, N2 not given"
-    assert got["steps"]["n2"]["verdict"] == "not given" and got["negatives_refused"] == {"scan/forged": True}
+    assert got["steps"]["n2"]["verdict"] == "not given" and got["negatives_refused"] == {"scan/chain-0": True}
     assert "Verdict: **scan accepted**, scan only, N2 not given." in (tmp_path / "pass" / "report.md").read_text()
 
     put({"audit": {**rnd(True)["audit"], "rests_on_period_check": ["prog"]}}, rnd(False))
@@ -452,7 +452,7 @@ def test_a_scan_only_report_exits_0_on_the_expected_verdicts_and_1_on_a_wrong_on
     scan = got["steps"]["scan"]
     assert rc == 0 and got["verdict"] == f"scan {cr.RESTS}" == "scan accepted on the period check"
     assert scan["verdict"] == cr.RESTS and scan["rests_on_period_check"] == ["prog"] and "refuses" in scan["why"]
-    assert scan["rounds"]["honest"]["rests_on_period_check"] == ["prog"] and got["why"]["scan"].startswith(cr.RESTS)
+    assert scan["rounds"]["honest-0"]["rests_on_period_check"] == ["prog"] and got["why"]["scan"].startswith(cr.RESTS)
     md = (tmp_path / "tied" / "report.md").read_text()
     assert f"Verdict: **scan {cr.RESTS}**" in md and f"| scan | {cr.RESTS} |" in md and "| scan | accepted |" not in md
 
@@ -461,14 +461,14 @@ def test_a_scan_only_report_exits_0_on_the_expected_verdicts_and_1_on_a_wrong_on
     assert rc == 1 and got["scope"] == cr.SCAN_ONLY and got["verdict"] == "scan refused"
     md = (tmp_path / "forged-accepted" / "report.md").read_text()
     assert "Verdict: **scan refused**, scan only, N2 not given." in md
-    assert (got["steps"]["scan"]["verdict"], got["steps"]["scan"]["why"]) == ("failed", "forged: window accepted")
+    assert (got["steps"]["scan"]["verdict"], got["steps"]["scan"]["why"]) == ("failed", "chain-0: window accepted")
     put(rnd(False), rnd(False))
     rc, got = run("honest-refused")
     assert rc == 1 and got["verdict"] == "scan refused"
     put(rnd(True, ["head egress 3 @64"]), rnd(False))
     rc, got = run("leak")
     assert rc == 1 and got["verdict"] == "scan refused"
-    assert got["steps"]["scan"]["why"] == "honest: witness pieces found at the verifier: ['head egress 3 @64']"
+    assert got["steps"]["scan"]["why"] == "honest-0: witness pieces found at the verifier: ['head egress 3 @64']"
     put(rnd(True), rnd(False), ok=False)
     assert run("not-ok")[0] == 1
     Path(steps.scan).unlink()
@@ -487,7 +487,7 @@ def test_a_scan_only_report_exits_0_on_the_expected_verdicts_and_1_on_a_wrong_on
     assert "Verdict: **accepted**." in cr.markdown(got)
     put(rnd(True), rnd(True))
     got = cr.report(steps)
-    assert got["scope"] is None and got["verdict"] == "refused" and got["negatives_refused"]["scan/forged"] is False
+    assert got["scope"] is None and got["verdict"] == "refused" and got["negatives_refused"]["scan/chain-0"] is False
 
 
 def test_the_scans_block_round_is_accepted_like_its_honest_round_and_is_no_negative(tmp_path):
@@ -495,12 +495,16 @@ def test_the_scans_block_round_is_accepted_like_its_honest_round_and_is_no_negat
         return {"audit": {"window_accepted": accepted}}
 
     def scan(block):
-        return {"ok": True, "T": 1, "rounds": {"block": rnd(block), "honest": rnd(True), "chain": rnd(False)}}
+        return {"ok": True, "T": 1, "rounds": {"block-0": rnd(block), "honest-0": rnd(True), "chain-0": rnd(False),
+                                               "block-1": rnd(True), "honest-1": rnd(True), "stale-2": rnd(False)}}
 
     got = cr.scan_step(scan(True), "g1/warden")
-    assert got["verdict"] == "accepted" and got["negatives"] == {"chain": True}, got
+    assert got["verdict"] == "accepted" and got["negatives"] == {"chain-0": True, "stale-2": True}, got
     got = cr.scan_step(scan(False), "g1/warden")
-    assert (got["verdict"], got["why"]) == ("failed", "block: window refused")
+    assert (got["verdict"], got["why"]) == ("failed", "block-0: window refused")
+    second = scan(True)
+    second["rounds"]["honest-1"] = rnd(False)
+    assert cr.scan_step(second, "g1/warden")["verdict"] == "refused"
 
 
 def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
@@ -512,7 +516,7 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     (run / "out").mkdir(parents=True)
     (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))
     (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 75, "requests": 100}}))
-    doc = cr.leak(run, {"draw": {"honest": 64}, "T": 32})
+    doc = cr.leak(run, {"draw": {"honest": 65}, "T": 32})
     assert doc["widths"] == {"NS": 149_648, "NE": 1_136, "entries": 8, "NV": 4_832, "egress_row": 65_536}
     assert doc["terms"]["b"] == 154_480 and doc["terms"]["fmax"] == {"0.01": 5, "1e-06": 14}
     assert doc["terms"]["schedules_per_request"] == doc["terms"]["cells_per_request"] == 7
@@ -527,12 +531,12 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     assert week["registered"]["per_period"] == pytest.approx(lw * (8 * 1_136 + 32 + rate * cap))
     assert week["anchors"]["per_link_window"] == pytest.approx(rate * (1_121 + cap) + 32)
     assert week["anchors"]["pooled"]["0.01"] - week["anchors"]["per_period"] == pytest.approx(
-        5 * (154_480 + math.log2(lw * 64 + 1)))
+        5 * (154_480 + math.log2(lw * 65 + 1)))
     assert Fraction(week["anchors"]["eps"]) == Fraction(189_000, 2 ** 20)
     for scope, n in doc["links"].items():
         assert rows["week", scope, "registered"]["per_period"] == pytest.approx(n * week["registered"]["per_period"])
         assert Fraction(rows["week", scope, "registered"]["eps"]) == n * Fraction(189_000, 2 ** 20)
-    with pytest.raises(SystemExit, match="drew 16 of 64"):
+    with pytest.raises(SystemExit, match="drew 16 of 65"):
         cr.leak(run, {"draw": {"honest": 16}})
     (run / "out/deployment.json").write_text(json.dumps({"params": {**asdict(sz.PARAMS), "lanes": 8}}))
     with pytest.raises(ValueError, match="lanes = 4"):
@@ -583,10 +587,10 @@ def test_a_refused_report_names_each_failing_step_and_its_why_and_a_scan_that_ex
         return {"audit": {"window_accepted": True, "received": {"verifier_found": list(k)}}}
 
     Path(steps.scan).write_text(json.dumps({"ok": False, "T": 1, "rounds": {
-        "honest": found("first o1 0 @0"), "chain": found("first o1 0 @0"), "tampered": found()}}))
+        "honest-0": found("start o0 0 @0"), "chain-0": found("start o0 0 @0"), "tampered-0": found()}}))
     got = cr.report(steps)
-    why = ("scan_zk exited 1; honest: witness pieces found at the verifier: ['first o1 0 @0']; chain: witness pieces "
-           "found at the verifier: ['first o1 0 @0']; scan_zk's ok is not true")
+    why = ("scan_zk exited 1; honest-0: witness pieces found at the verifier: ['start o0 0 @0']; chain-0: witness "
+           "pieces found at the verifier: ['start o0 0 @0']; scan_zk's ok is not true")
     assert (got["verdict"], got["steps"]["scan"]["verdict"], got["steps"]["scan"]["why"]) == ("refused", "failed", why)
     assert got["why"] == {"scan": f"failed: {why}"}
     Path(steps.job).write_text(json.dumps(ok | {"rc": {"n2": "0", "scan": "1"}, "why": {"scan": "done: FAILED"}}))

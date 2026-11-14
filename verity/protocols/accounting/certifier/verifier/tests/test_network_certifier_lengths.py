@@ -32,6 +32,26 @@ PLAIN_DIGEST = ("b064f2c3e90f5059b7393bcbca02b7b94d514041946423a253fa1cca6de11ee
                 "1898e2e0368e1a03d9e5f8a910fc91ac2f8154924ccd7f669f8b0f4d99964808")
 CAPPED_DIGEST = ("6dc8692fb13c37e45ce4d4229a8377931b434ff5c72fd243aeb2d0596dc0226e"
                  "b987b7a37d81a0baeed20ac5eb52ee614b991797a45e85c3fba8916f34361c22")
+#: PLAIN's digest with lengths rows, with content rows and with request words, each the one the period check's Lean
+#: computes for the same schedule (`NetworkCheck.ConnectionRowsGuards`' guards on `plainSchedule`): the changes to
+#: PLAIN, then the digest
+ROWS_DIGESTS = (
+    ({"lengths": 1}, "98280d93904a794e8b443e0c2bb917e0ce0fbb20462a8e99f42fdbe06b0b8510"
+                     "bc65791cc41703428a43976695a2fb75330780df7434190990751efd1202bd13"),
+    ({"lengths": 2}, "804c6d03b6666a89155a1c4f41c31c7d02c90978cf6d5a28b6a41bbe54131d2c"
+                     "6ea7c345d593c1b204775de7b4bab8f1b264bfed3ec60bb9018d3bee4243335a"),
+    ({"lengths": 1, "content": ((2, 2, 1), (4, 8, 16))},
+     "f5a916f78cead6daa18dd2913f37aeb53acf2e2557bceb70a33326d786927891"
+     "4bb9cc7e1c9737ba575ebb86bb5632d1d6d95cfabea982eda3af34081ac1384a"),
+    ({"lengths": 2, "content": ((2, 2), (4, 8))},
+     "d2217081ba58125d65abf5eef16979e867596c702dea76e3f3d55bb698cb490c"
+     "dee255fe7b76238dc4b4147b60191d30179391ecca9e29aed228723e822f9811"),
+    ({"lengths": 2, "content": ((2, 2), (4, 8)), "max_tokens_cap": 4},
+     "5c079664862cfe253a9794957b6af18c8d0cd41adf1e2608e624663cde1038f8"
+     "3f792222b44885914fde2364290676e742cf28c1f93c55f093953fc7f1be6d3e"),
+    ({"lengths": 2, "content": ((2, 2), (4, 8)), "max_tokens_cap": 4, "request_words": True},
+     "213b8b63d87459e4b76591beab56ea7b2ac6b9c888566ca4cd43b0d511584459"
+     "b84624493f8e18377327c4402ab301982b8fda184864fb9f2879502707781b47"))
 
 
 # --- the mode ----------------------------------------------------------------------------------------------------
@@ -51,6 +71,24 @@ def test_the_lengths_rows_form_is_a_parameter_no_other_schedule_hashes():
     capped = dataclasses.replace(PLAIN, max_tokens_cap=4)
     assert capped.digest.hex() == CAPPED_DIGEST
     assert len({PLAIN.digest, LEN.digest, capped.digest, dataclasses.replace(capped, lengths=1).digest}) == 4
+
+
+def test_a_schedule_with_rows_hashes_as_the_period_check_reads_it():
+    """The digest of a schedule with lengths rows, with content rows, with `max_tokens_cap` beside them and with
+    request words is the one the period check's Lean computes for the schedule it parses (`Schedule.digest`), pinned
+    on both sides; so are a
+    slot stride's releases, an execution phase's and a connection's span (`Schedule.strideReleases`,
+    `executionPhaseReleases` and `span`), and the least cell of a schedule with lengths rows (`firstPromptEnd`)."""
+    for change, digest in ROWS_DIGESTS:
+        assert dataclasses.replace(PLAIN, **change).digest.hex() == digest, change
+    assert (LEN.stride_releases, LEN.phase_releases, LEN.span) == (2, 6, 9)
+    for change, releases in (({"ingress_buckets": 1}, 6), ({"delay": 12}, 4), ({"lanes": 5, "ingress_buckets": 5}, 20)):
+        assert dataclasses.replace(LEN, **change).phase_releases == releases, change
+    assert dataclasses.replace(LEN, delay=12).span == 16
+    assert Q.layout(B).start + 11 == 378
+    assert dataclasses.replace(LEN, cell_bytes=HEADER.size + 378).lengths == 1
+    with pytest.raises(ValueError, match="first prompt field isn't in its first cell|doesn't fit its first cell"):
+        dataclasses.replace(LEN, cell_bytes=HEADER.size + 377)
 
 
 def test_a_schedule_with_lengths_rows_is_one_whose_releases_fit_them():
