@@ -217,7 +217,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
           "(SHA-256 for hm96-sha256/v1, SHA-512 for hm96-sha512/v1)", "Hash-derived key", "standard"),
     Entry("honest-verifier", "assumption", "The verifier follows the protocol", "Honest verifier", "standard"),
-    # `Verity.Assumptions.TrustedHost` (security/Definitions/Core/Assumptions.lean) states its part about one run; no
+    # `Verity.Assumptions.TrustedDevice` (security/Definitions/Core/Assumptions.lean) states its part about one run; no
     # attestation hardware backs it
     Entry("trusted-host", "assumption",
           "The auditor's device runs its stated code, timing included, on a host the prover doesn't control, with its CPU "

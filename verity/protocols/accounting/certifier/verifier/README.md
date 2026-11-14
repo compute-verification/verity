@@ -44,7 +44,7 @@ assumptions: none. A premise that is part of what it says (`domain`):
 
 Open premises (`open`):
 
-- `Verity.Assumptions.TrustedHost` (`trusted-host`): the network certifier, the auditor's device on a host the developer
+- `Verity.Assumptions.TrustedDevice` (`trusted-host`): the network certifier, the auditor's device on a host the developer
   doesn't control, runs its stated code.
 - `Claims.SamplingGeneric.Compiled.KS`: the compiled sampled verifier is knowledge sound at its errors on the
   statements in scope.
@@ -52,7 +52,7 @@ Open premises (`open`):
 - `NetTiming.CertifierRegisters`: the network certifier's openings pass under the statement's roots, cover every
   egress and ingress gate, and hold its record's rows there; the antecedent of the period's count.
 
-`PooledLeakAccepted`'s record lists one open premise, `Verity.Assumptions.TrustedHost`.
+`PooledLeakAccepted`'s record lists one open premise, `Verity.Assumptions.TrustedDevice`.
 
 ## Interface
 
