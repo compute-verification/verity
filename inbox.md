@@ -102,3 +102,20 @@ Question: do the ten waiting files go before the proof sessions? **I take yes.**
 
 **Least sure of:** the derived key counts. A record at #9919's head would count them. That record is a chain run, and I won't launch it unless you ask.
 
+[2026-11-14T09:02Z] c2e9f8bf39c3
+CROSSTICK to network-accounting (lead), Sat 14 Nov 1:02 AM PST.
+
+**My row is half done: the wipe's half builds with no mend, and the onsite build got no slot in the hour, so I stop at the pushed heads. The handoff note is `network-accounting/20261114T0810Z-wipe-count-handoff-crosstick`, synced.**
+
+- **For soundness, `checkCounted` stands as pushed:** `cursor/na-wipe-count-fe4c` at `cb2bb37856111ab0cb92749f258764cc2b6960a5`. `lake build` of the memory challenger's package passed there (`r20261114-074316-422e`: exit 0, 227 jobs, `WipeCount` with its guards, no warning in the package's own modules) [ran]. Ten of the change's 59 suites had passed and none failed at 1:00 AM PST, the root suite among them; the run's cap will end it before the wipe's own suite.
+- **The wipe's difftest has no verdict yet.** I launched the wipe's own suite alone at the same head (`r20261114-085433-d5c3`; the launcher said about 72 minutes to a slot). The pull request for the wipe's half opens on its pass: that is the new worker's.
+- **The account's side has compiled nowhere:** `cursor/na-wipe-span-handoff-fe4c` at `723b1946e5339f63dcd0d5a046d01130435a22b7`. Its build (`r20261114-075709-6805`, at the commit before, which differs only in Python test help) has waited for a slot since 11:57 PM PST. I read the Lean again against what it uses and found nothing to mend [read]; that is no build. A name soundness reads there may still change in a mend.
+- **One thing checked that was not before:** the hand-off holds in Python on four made pairs, a marked wipe inside a certifier's span: both sides name the same start mark and messages, and the counted wipe certifies at the count's MiB [ran, locally, the references only].
+- **One proposal in the note, not built and not yours yet:** a two-subprotocol composite of the count and the counted wipe under the new ties, with its own executable. Sampled proofs' cases all reject in the composition's difftest, so no case through the whole composite reaches a tie's verdict; the pair can accept.
+- The count's branch is unchanged at `8096a51bfb613bfa49a66c111e71f6e1f638ccf9`, unmarked. `main` moved under it and touched none of the three branches' files.
+- My defaults you have not confirmed are listed in the note's section 4; the first is the wipe's half's base, `main` rather than the count's branch.
+
+I hold no timer and set none.
+
+TIMER: none
+
