@@ -117,9 +117,9 @@ REGISTRATION = {"schema": "verity-vllm/advice-registration/v1", "row_bits": 256,
 
 
 def test_the_published_registration_pads_the_advices_length_to_the_cap(tmp_path, capsys):
-    """The advice docket's public form states no length of the advice but its compiler's cap, counts and refuses
+    """The advice registration's public form states no length of the advice but its compiler's cap, counts and refuses
     none of its requests, names no window, and keeps its roots, compiler and binding's root."""
-    got = S.public_docket(REGISTRATION)
+    got = S.public_registration(REGISTRATION)
     assert got["binding"]["advice"] == {"root": "ab" * 64, "bits": 8388608} and got["rows"] == 32768
     assert got["padded"] == list(S.PADDED) and got["commit"] == {"run_id": "r1/wK", "run_root": "ef" * 64}
     assert not {"requests", "compiled", "refused", "window", "bits_by_window"} & set(got) and "392" not in json.dumps(got)
@@ -2479,7 +2479,7 @@ def _weights(tmp_path: Path, **extra: str) -> tuple[int, list[str]]:
 
 
 def test_the_weights_step_writes_the_serves_first_registration_record_and_says_who_wrote_it(tmp_path):
-    """The serve's weights step asks ``weights-registration`` for the serve's first docket too
+    """The serve's weights step asks ``weights-registration`` for the serve's first registration record too
     (deployment-registration.json in the serve dir, the one Pearl+'s W is chained after and a deferral lists among its
     follow-on's inputs), copies it out beside the docket, and says its digest and that the developer wrote it
     before the first request with no auditor holding the digest. A refused docket leaves neither file."""
@@ -2603,7 +2603,7 @@ def test_with_no_class_but_record_there_is_no_inference_only_policy_or_verdict(t
 def test_the_inference_only_verdict_judges_the_windows_record_at_the_class_with_inference_only_check_where_the_build_built_it(
         tmp_path, lean):
     """The verdict reads the policy, the serve dir, window K's circuit record at the class, its docket and the
-    weights docket's pins, and writes the public verdict into the record and the full one in the serve dir; it
+    weights registration's pins, and writes the public verdict into the record and the full one in the serve dir; it
     runs `inference-only-check --count` only where the build built it. $OUT names no window."""
     rc, lines, calls = _inference_only(tmp_path, "inference-only", "7", lean=lean)
     d, out = tmp_path / "serve", tmp_path / "out"
