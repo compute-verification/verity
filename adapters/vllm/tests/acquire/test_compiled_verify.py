@@ -5,6 +5,9 @@ why."""
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 
 import pytest
 
@@ -100,3 +103,14 @@ def test_a_field_a_build_leaves_out_is_read_as_empty(tmp_path, capsys, held):
     assert rc == 0 and rec["ok"] is True
     assert (rec["used_rows_digest"], rec["used_identities"], rec["rebuilt_identities"]) == (none, 0, None)
     assert rec["used_artifact"] is None and rec["rebuilt_artifact"] is None
+
+
+def test_importing_the_commands_module_loads_neither_numpy_nor_torch_nor_the_core():
+    """`cli` imports `verity_vllm.acquire.compiled` when `compiled` is named.  Only `assign_wrappers`, which the served Build calls,
+    imports the Build's refusal from `acquire.inductor_templates`, whose module loads numpy and the Definitions."""
+    code = ("import sys; before = set(sys.modules); import verity_vllm.acquire.compiled; "
+            "print(sorted({m.split('.')[0] for m in set(sys.modules) - before} & {'numpy', 'torch', 'verity'}))")
+    child = subprocess.run([sys.executable, "-c", code], env={**os.environ, "PYTHONPATH": os.pathsep.join(p for p in sys.path if p)},
+                           capture_output=True, text=True, check=False)
+    assert child.returncode == 0, child.stderr
+    assert child.stdout.strip() == "[]"
