@@ -555,6 +555,10 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   v2, which runs `verity-verify-proof --zk` on the sessions' files and reads the challenger's signed coins (v1, which takes
   verdicts as evidence, is refused); where v2 accepts, its session is in V5's event
   (`Verity.Sampled.checkBlobs_event`), which has a coupling.
+- **The inference-only policy at remote** (`Properties.Remote.SecurityProofs.acceptInferenceOnly`, proved): remote's
+  accept gives `InferenceOnlyHeld`, whose SPOT case is `StageHeld`, the one-stage form's. It has no clause for the
+  two-stage form, which the verifier refuses while `SecondStage.FORM` is false; switching it on needs the two-stage
+  clause first.
 - **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `SHA512CRStrict`,
   `SHA512CRExpected`, `TileServiceSound`, `TileSampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `UnitFixed` and
   `SharedNoiseLucks`. Trust model: nothing the developer runs or hosts is trusted, and every coin is live,
