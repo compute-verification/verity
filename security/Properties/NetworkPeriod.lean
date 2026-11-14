@@ -325,7 +325,9 @@ execution phase's scan's registration `reg`: `T` is at least 2; each member of t
 a `roots` entry (`ScanOk.rootsOf`) that is its constant (`OkEntry`); and every `roots` entry whose port ends `/o0`
 (`ScanOk.okPort`) but the start unit's (`ScanOk.START`, `start/o0`) is the constant of a member of the scan at `T`.
 The start unit's `o0` is the state it copies, a row of the scan's state, and no ok bit; no statement here reads its
-entry. -/
+entry. That it is the one port exempt leans on the check's guard: `ScanOk.held` refuses, through `ScanOk.entryHeld`,
+every other added port ending `/o0` that is no member's constant, as `ScanOk.lean`'s last `#guard` holds (`other/o0`
+refused, `START` held). -/
 def RowsOkHeldAt (p : Params) (c : Commitment) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
     ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg →
@@ -353,7 +355,9 @@ rows of the tree its statement reads at `o0`; that the statement reads the tree 
 the registration's check's, which the period check does not read. The start unit's `o0` is the state it copies, a row
 of the scan's state, and no ok bit, and its entry is at any root, leaves and domain here: `RowsStateTied` holds the
 scan's reads of its state, unit 0's `o0` at leaf 0 (`stateRead`), and no statement here holds the entry `start/o0` to
-that state's root. -/
+that state's root. That `start/o0` is the one port exempt leans on the check's guard: `ScanOk.held` refuses, through
+`ScanOk.entryHeld`, every other added port ending `/o0` that is no member's constant, as `ScanOk.lean`'s last `#guard`
+holds (`other/o0` refused, `START` held). -/
 def RowsOkHeld : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsOkHeldAt p c
