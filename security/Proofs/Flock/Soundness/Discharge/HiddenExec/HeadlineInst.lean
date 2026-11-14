@@ -138,7 +138,7 @@ theorem rsAtHI_computes (hU : Built c.unit) (hpr : Layout.PortReads c hU) (hw : 
 unit's copies, the stage nets and the lookup slots, wired), and its outputs the output words' bits (`outsOfI`): against
 any live prover `τ`, verity-verify-proof accepts with at least `K` incorrect proof blocks of `instProg c n`, at the simulated prover's
 committed values (1 on the constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with probability
-at most `miss(K) + ε_ks + δ_link`.
+at most `miss(K) + ε_ks + ε_bind`.
 
 Its circuit conditions, in place of `hscope`: the rows fit (`hrf`, as `scopeOkH`'s rows give), every input a unit row
 reads is a port bit (`hpr`), and `wiresAcyclic` passed (`hw`). The public file may carry shared-row tables. The other

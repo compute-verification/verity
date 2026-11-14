@@ -11,7 +11,7 @@ public import Proofs.Flock.Bridge.Deployed
 trace commitment: for every live prover, the probability that verity-verify-proof accepts and the committed transcript fixed
 at registration (`XplurZC`), read as the sampling witness `Bridge.witDep` of the session's statement (`Bridge.stmtOf`
 at the circuit's constants `Bridge.constsOf` and the design `subset kd`, `Bridge.partOf` at the population's strata
-`ns`), is outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` is at most `δ + ε_ks + δ_link`, `EndToEndHidden`'s terms. `RelS` is read at SHA-512 (`Claims.Sampling.sha512Msg`), under the registration's frame-v3 roots over the public
+`ns`), is outside `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` is at most `δ + ε_ks + ε_bind`, `EndToEndHidden`'s terms. `RelS` is read at SHA-512 (`Claims.Sampling.sha512Msg`), under the registration's frame-v3 roots over the public
 file's rows (`Bridge.rootsOf`), and at the deployed commitment `Bridge.commitDep`, whose layout is the game's rows read
 off the circuit file (`HiddenExec.rowOfH`); nothing of the commitment, its roots or its hash is a free parameter. Its
 named assumptions are `EndToEndHidden`'s: A3, `live-verifier`, `cr/sha-512` and `ecr/sha-512`.
@@ -65,7 +65,7 @@ open Classical in
 registration's roots and the deployed commitment,
 $$\Pr[\text{verity-verify-proof accepts} \wedge \neg\,\mathrm{RelS}_\delta(\mathrm{witDep}(X))] \le
   \delta + \varepsilon_{ks} + \delta_{link}, \qquad \delta = \binom{n-K_0}{kd} / \binom{n}{kd},$$
-`X` the committed transcript fixed at registration (`XplurZC`), `ε_ks` and `δ_link` `EndToEndHidden`'s. -/
+`X` the committed transcript fixed at registration (`XplurZC`), `ε_ks` and `ε_bind` `EndToEndHidden`'s. -/
 def SampledKSLive : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)

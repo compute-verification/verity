@@ -48,7 +48,7 @@ stratified sampling design on the challenger's coins, a byte source A3 makes uni
 part's one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`, verity-verify-proof accepts at `own`
 with at least `K` incorrect proof blocks of `Placed.keyProgP c pi hU n`, at the simulated prover's committed values (1 on the
 constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with probability at most
-`miss(K) + ε_ks + δ_link`. -/
+`miss(K) + ε_ks + ε_bind`. -/
 theorem flock_headline_exec_hiddenP {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)

@@ -470,6 +470,7 @@ loaded_by = [
     "verity/protocols/accounting/poub/prover/session_prover.py",
     "verity/protocols/accounting/poub/prover/word_codec/kv.py",
     "verity/protocols/accounting/poub/prover/word_codec/kv_bench.py",
+    "verity/protocols/accounting/poub/tests/session_harness.py",
 ]
 
 [[place]]
