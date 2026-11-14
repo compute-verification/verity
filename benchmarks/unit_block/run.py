@@ -49,6 +49,7 @@ def build(word_id: str, firsts: list[int], stage: int, scratch: Path) -> dict:
     from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     from verity_vllm.definitions import boolean as BB
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
     from verity_flock import circuit as FC
     from verity_flock import class_statement as CS
 
