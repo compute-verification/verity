@@ -44,7 +44,7 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
     null, as the policy's check reads them: ``--log``, else with ``--serve-dir`` the serve's H1 log through R's
     ``previous``, `h1_log`, each window's docket W and record R up to the window's W; else, on a serve whose
     window record is Pearl+'s, that W, which Pearl+'s case's parts hold, and before it the serve's first
-    registration record where W is chained after one, `pearl_log`; empty when R names no
+    docket where W is chained after one, `pearl_log`; empty when R names no
     previous record), ``program`` (v1's params' Program as canonical text, the one the record's ``program`` names) and
     ``parameters`` (its program function's, which the descriptor doesn't carry: the population program rebuilt over its
     root's templates, and the registered values v1's own ``parameters`` name ahead of them, held to the record's
