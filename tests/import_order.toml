@@ -164,6 +164,7 @@ loaded_by = [
 [[place]]
 paths = [
     "verity/channel.py",
+    "verity/party.py",
     "verity/runtime/__init__.py",
     "verity/runtime/framing.py",
     "verity/runtime/handshake.py",
@@ -730,7 +731,6 @@ trusted = true
 paths = [
     "verity/runtime",
     "verity/config.py",
-    "verity/party.py",
     "verity/protocol.py",
     "verity/tests/tests/test_periods.py",
     "verity/tests/tests/test_periods_difftest.py",

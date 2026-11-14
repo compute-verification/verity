@@ -16,6 +16,7 @@ untraced = ["tests/test_periods_difftest.py"]
 # what it imports, and the package's configuration).
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/device.py",
           "verity/channel.py", "verity/protocol.py", "verity/runtime/handshake.py", "verity/runtime/framing.py",
+          "verity/party.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/runtime/__init__.py", "verity/hardware/__init__.py",
           "tools/difftest", "verity/protocols/interface", "verity/protocols/proofs/flock/verifier/lakefile.toml",

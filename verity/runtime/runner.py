@@ -47,12 +47,12 @@ from typing import Any
 
 from verity.channel import Int, Message, MessageTypes, Refused, Schema, Str, canonical
 from verity.runtime.framing import decode, encode, parse, split
-from verity.runtime.handshake import NONCE_BYTES, Handshake, Key, Verify
+from verity.runtime.handshake import NONCE_BYTES, Handshake, Verify
 
 from . import sources as S
 from .channels import Adversary, MemoryPipe, Pipe, Playback, TcpListen, dial
 from verity.protocol import SOURCES, Manifest, PlaceResult, ProtocolDef, place, site_of
-from verity.party import Action, Finish, Identity, Party, Received, LogEntry, Send, Timer
+from verity.party import Action, Finish, Identity, Key, Party, Received, LogEntry, Send, Timer
 from .transcript import Entry, PartyLog, record
 
 MODES = ("live", "simulated", "mixed", "replay")

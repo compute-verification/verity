@@ -30,10 +30,17 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from verity.channel import KINDS, Message
-from verity.runtime.handshake import Key
 
 type Params = Mapping[str, Any]
 """A protocol's public structural parameters, canonical JSON."""
+
+
+class Key(Protocol):
+    """A party's key: its public half, and `sign(message)`, which a stateful hash-based scheme refuses past its last leaf."""
+
+    public_key: bytes
+
+    def sign(self, message: bytes) -> bytes: ...
 
 
 @dataclass(frozen=True)
@@ -106,4 +113,4 @@ class Party(Protocol):
     def on(self, msg: Received) -> list[Action]: ...
 
 
-__all__ = ["Action", "Finish", "Identity", "Params", "Party", "Received", "LogEntry", "Send", "Timer"]
+__all__ = ["Action", "Finish", "Identity", "Key", "Params", "Party", "Received", "LogEntry", "Send", "Timer"]
