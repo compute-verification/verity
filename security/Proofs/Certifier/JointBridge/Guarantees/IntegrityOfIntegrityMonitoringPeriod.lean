@@ -19,7 +19,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 /-!
 # The integrity audit of a period is Flock's integrity audit over a monitoring period's sampling blocks (trusted)
 
-A period's sampled-proofs audit (`Audit.sampled`) is Flock's integrity audit over the period's sampling blocks
+A period's SPOT audit (`Audit.sampled`) is Flock's integrity audit over the period's sampling blocks
 (`Flock.Guarantees.IntegrityPooled`): `T` sampling blocks `W t`, each a `--zk` session under hidden outputs with a
 fresh live subset sample, against one adaptive prover. `RealizesIntegrityOfIntegrityMonitoringPeriod` ties a `PeriodRun` to it: the
 sampled audit's own coins drive the period's game at the prover's strategy, its verdict is verity-verify-proof's on every
@@ -37,7 +37,7 @@ namespace Accounting
 open FlockSoundness FlockSoundness.Game Flock.Guarantees
 open scoped ENNReal
 
-/-- Period `r`'s sampled-proofs audit is Flock's integrity audit over the `T` sampling blocks `W t` of the period
+/-- Period `r`'s SPOT audit is Flock's integrity audit over the `T` sampling blocks `W t` of the period
 (`Flock.Guarantees.Period.run`). Every field is a property of the deployed run:
 
 * `strat`, `record`, `samplingDesign`: the node is one prover strategy of the period's game at each value of the other audits'
@@ -60,15 +60,15 @@ structure RealizesIntegrityOfIntegrityMonitoringPeriod {ι : Type} {d : Device �
   strat : ((i : I) → Ω i) → FlockSoundness.Game.Strategy (Flock.Guarantees.Period.game W T)
   /-- the sampling blocks' records at the coins: verity-verify-proof's verdict and the incorrect proof blocks of each sampling
   block -/
-  record : ((i : I) → Ω i) → List Flock.Guarantees.WindowRec
+  record : ((i : I) → Ω i) → List Flock.Guarantees.SamplingBlockRec
   /-- the sampled audit's own coins drive the period's game at the strategy -/
-  samplingDesign : ∀ (ξ : (i : I) → Ω i) (E : List Flock.Guarantees.WindowRec → Prop),
+  samplingDesign : ∀ (ξ : (i : I) → Ω i) (E : List Flock.Guarantees.SamplingBlockRec → Prop),
     ENNReal.ofReal (Pouw.pr fun x : Ω (r.own .sampled) => E (record (Function.update ξ (r.own .sampled) x))) =
       FlockSoundness.Game.value E (Flock.Guarantees.Period.run W T (strat ξ))
   /-- the sampled audit accepts exactly when verity-verify-proof accepts every sampling block -/
   accepts_iff : ∀ ξ, r.accepts .sampled ξ ↔ ∀ w ∈ record ξ, w.accepted
   /-- the run's incorrect proof blocks are the sampling blocks' (M1, the program-from-circuit correspondence) -/
-  wrong_eq : ∀ ξ, (r.parts.incorrect (r.trace ξ)).card = ((record ξ).map Flock.Guarantees.WindowRec.incorrect).sum
+  wrong_eq : ∀ ξ, (r.parts.incorrect (r.trace ξ)).card = ((record ξ).map Flock.Guarantees.SamplingBlockRec.incorrect).sum
   /-- the partition's units are the sampling blocks' units -/
   units_eq : r.units = ∑ t ∈ Finset.range T, (W t).n
   /-- every unit of the partition has at least one gate -/
@@ -79,7 +79,7 @@ namespace Guarantees.Bridge
 open FlockSoundness.Audit FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
   FlockSoundness.Discharge.ZkHidden in
 /-- **The integrity audit of a period, from Flock's integrity audit over a monitoring period.** For a period `r` whose
-sampled-proofs audit realizes Flock's integrity audit over `T` sampling blocks `W t`
+SPOT audit realizes Flock's integrity audit over `T` sampling blocks `W t`
 (`RealizesIntegrityOfIntegrityMonitoringPeriod`), each sampling block's sample covering at least a fraction `q > 0` of its units,
 under A3 for every sampling block's sample bytes and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512` (`LinkCRZC`) at every
 strategy the node plays a sampling block with on some run (`Period.Plays`), at certificates whose share `ε` of the

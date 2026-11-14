@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The network chain's run of record (chain_record.py) on a CPU machine, from the gate's fetched tarballs, on hidden_zk's
 # builds (its job.sh, sourced: Flock's flock-circuit and the Lean verity-verify-proof, the verifier) with the
-# ZK server's Lean frame, N2's network-records and the sampled-proofs verifier built in the tree. From a clone, in one of
+# ZK server's Lean frame, N2's network-records and the SPOT verifier built in the tree. From a clone, in one of
 # the network slots, as a job of at most 240 minutes on a CPU node whose input is the gate's tarball GATE.tgz:
 #   env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/check/slot.py --by LANE -- \
 #     env CR_MEM_GB=128 CR_GATES=GATE.tgz bash benchmarks/network_traces/chain_record.sh
@@ -36,7 +36,7 @@
 # comma-separated,      e.g. 128001 for Llama-3.2-1B; a network certifier run records none)  CR_TIE_WINDOWS (the tie's
 # execution phases, the run's all
 #      by default)  CR_TIE_GPU=1 and CR_N2_GPU=1 (the tie's and N2's provers on the GPU)  CR_N2_DRAW (n2_zk.py's
-#      --draw K: N2's period sampled, K of the link-windows sampled on the verifier's coins; every one by default)
+#      --draw K: N2's period sampled, K of the execution phases sampled on the verifier's coins; every one by default)
 #      CR_AUDIT (the served units' compute audit windows, space-separated directories: the report's --audit, d1's K)
 #      CR_PINS (the verifier's own pins, a JSON {param: root}: the report's --pins, the registered rows K leaves out)
 #      CR_PERIOD_ANSWER (certifier/v0's network-period check answer on the period, X.answer.json with its case
@@ -176,7 +176,7 @@ if [ -n "${CR_ENDPOINT:-}" ]; then
     cp "${EP:-$W/endpoint}/advice.log" "$OUT/endpoint/" 2>/dev/null
   fi
 fi
-(cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \

@@ -115,8 +115,8 @@ def files (name : String) (done : Array D) (ls : Array BlockLayout) (unit : Nat)
   let placed := (List.range ls.size).filter fun j => u.parts.any (·.1 == j)
   let fs := placed.toArray.map fun j =>
     let d := digests.getD j ""
-    (s!"{d}.txt", netlist (done.getD j default) (d.take 16).toString)
-  return #[("root.txt", netlist u name)] ++ fs ++ #[("delta.txt", deltaText ls digests u)]
+    (s!"{d}.txt", circuitDescription (done.getD j default) (d.take 16).toString)
+  return #[("root.txt", circuitDescription u name)] ++ fs ++ #[("delta.txt", deltaText ls digests u)]
 
 theorem rows_eq (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) :
     Typed.rows tags bytes tables = (do

@@ -53,7 +53,7 @@
  },
  "outcome": {
   "what": "the stream's outcome of the second stage's sample",
-  "verifier": "sampled-proofs-verifier",
+  "verifier": "spot-verifier",
   "decided_by": "lean"
  },
  "withheld": {

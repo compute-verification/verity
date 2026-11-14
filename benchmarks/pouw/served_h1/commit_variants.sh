@@ -11,7 +11,7 @@
 # key's lane (GATE_LANE, default vllm) has a period open, and saves each live arm's Commit session tree and its sample
 # session's (GATE fetch, $OUT/<leg>/commit-session.tgz and commit-draw-session.tgz) for pouw_h1_gpu.py --check-challenger
 # (its --draw-dir). The units kernel is built for the node's card
-# (arch.sh: ARCH, 120a or 90a); LEG_ARGS are more pouw_h1_gpu.py flags for every arm (another int8 pin: --base-role
+# (arch.sh: ARCH, 120a or 90a); SUBPROTOCOL_ARGS are more pouw_h1_gpu.py flags for every arm (another int8 pin: --base-role
 # LLAMA32_1B --role LLAMA32_1B_INT8 --repo verity-int8/Llama-3.2-1B-INT8) and PY the node's Python (default
 # /workspace/jobs/venv312's; an H200 node's is /workspace/cp/venv312's).
 #
@@ -44,7 +44,7 @@ cd adapters/vllm
 rc_all=0
 for leg in ${LEGS:-v1}; do
   mkdir -p "$OUT/$leg"
-  read -r -a extra <<< "${LEG_ARGS:-}"
+  read -r -a extra <<< "${SUBPROTOCOL_ARGS:-}"
   case "$leg" in j10r*) extra+=(--j10r) ;; esac
   case "$leg" in *-live) extra+=(--challenger "${CHALLENGER:?}" --gate "${GATE:?}" --peer "${PEER:?}"
                                  --period "${PERIOD:-commit-$(date -u +%Y%m%dT%H%M%SZ)-$leg}" --circuits "${CIRCUITS:?}") ;; esac

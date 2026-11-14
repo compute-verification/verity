@@ -19,7 +19,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 /-!
 # The integrity audit of a server-time block is Flock's integrity audit of that block (trusted)
 
-A server-time block's sampled-proofs audit (`Audit.sampled` of the block's period, `Accounting.PeriodRun`) is Flock's
+A server-time block's SPOT audit (`Audit.sampled` of the block's period, `Accounting.PeriodRun`) is Flock's
 integrity audit of block `b` of a server's monitoring period of sessions with carried state
 (`Flock.Guarantees.IntegrityBlockCarried`): the sessions `t` in `S.sessions b`, each a sampling block `S.W t`
 (`Flock.Guarantees.SamplingBlock`), a `--zk` session under hidden outputs with a fresh live subset sample, played by one
@@ -32,7 +32,7 @@ sampling blocks'.
 
 `IntegrityOfIntegrityBlock` is `PeriodRun.Sound` for the server-time block's sampled audit at error
 `δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t) + Σ_ℓ δ_carry,ℓ,b`, `IntegrityBlockCarried`'s: the coins model's per-period
-guarantee, which the one theorem's sampled-proofs target couples into the causal game (`Accounting.PeriodLive`).
+guarantee, which the one theorem's SPOT target couples into the causal game (`Accounting.PeriodLive`).
 
 With no carried leaf the monitoring period's run is `Flock.Guarantees.ServerBlocks.run`
 (`Flock.Guarantees.CarriedBlocks.run_ofServer`), the carried term is `0` and the finder premise is vacuous, so the
@@ -49,7 +49,7 @@ namespace Accounting
 open FlockSoundness FlockSoundness.Game Flock.Guarantees
 open scoped ENNReal
 
-/-- The period `r` of server-time block `b` has as its sampled-proofs audit Flock's integrity audit of block `b` of
+/-- The period `r` of server-time block `b` has as its SPOT audit Flock's integrity audit of block `b` of
 the server's monitoring period of sessions `S` with carried leaves (`Flock.Guarantees.CarriedBlocks`), each session a
 sampling block `S.W t`. Every field is a property of the deployed run:
 
@@ -79,16 +79,16 @@ structure RealizesIntegrityOfIntegrityBlock {ι : Type} {d : Device ι} {α : Ty
   coins) -/
   strat : ((i : I) → Ω i) → FlockSoundness.Game.Strategy S.game
   /-- block `b`'s sampling blocks' records at the coins: verity-verify-proof's verdict and the incorrect proof blocks of each -/
-  record : ((i : I) → Ω i) → List Flock.Guarantees.WindowRec
+  record : ((i : I) → Ω i) → List Flock.Guarantees.SamplingBlockRec
   /-- the period's sampled audit's own coins drive the monitoring period's game at the strategy, on block `b`'s
   sampling blocks -/
-  samplingDesign : ∀ (ξ : (i : I) → Ω i) (E : List Flock.Guarantees.WindowRec → Prop),
+  samplingDesign : ∀ (ξ : (i : I) → Ω i) (E : List Flock.Guarantees.SamplingBlockRec → Prop),
     ENNReal.ofReal (Pouw.pr fun x : Ω (r.own .sampled) => E (record (Function.update ξ (r.own .sampled) x))) =
       FlockSoundness.Game.value (fun l => E (l.filter fun w => w.idx ∈ S.sessions b)) (S.run (strat ξ))
   /-- the sampled audit accepts exactly when verity-verify-proof accepts every sampling block of the server-time block -/
   accepts_iff : ∀ ξ, r.accepts .sampled ξ ↔ ∀ w ∈ record ξ, w.accepted
   /-- the period's incorrect proof blocks are its sampling blocks' (M1, the program-from-circuit correspondence) -/
-  wrong_eq : ∀ ξ, (r.parts.incorrect (r.trace ξ)).card = ((record ξ).map Flock.Guarantees.WindowRec.incorrect).sum
+  wrong_eq : ∀ ξ, (r.parts.incorrect (r.trace ξ)).card = ((record ξ).map Flock.Guarantees.SamplingBlockRec.incorrect).sum
   /-- the partition's units are the block's sampling blocks' units -/
   units_eq : r.units = ∑ t ∈ S.sessions b, (S.W t).n
   /-- every unit of the partition has at least one gate -/
@@ -99,7 +99,7 @@ namespace Guarantees.Bridge
 open FlockSoundness.Audit FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
   FlockSoundness.Discharge.ZkHidden FlockSoundness.LinkFinder in
 /-- **The integrity audit of a server-time block, from Flock's integrity audit of that block.** For the period `r` of
-server-time block `b` whose sampled-proofs audit realizes Flock's integrity audit of block `b` of the server's
+server-time block `b` whose SPOT audit realizes Flock's integrity audit of block `b` of the server's
 sessions `S` with carried leaves (`RealizesIntegrityOfIntegrityBlock`), each of the block's samples covering at least a
 fraction `q > 0` of its sampling block's units, under A3 for each of the block's sample bytes, `cr/sha-512` (`TableCRZ`)
 and `ecr/sha-512` (`LinkCRZC`) at every strategy the node plays a sampling block with on some run (`Period.Plays`), and

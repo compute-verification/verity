@@ -107,7 +107,7 @@ fn domain_of(c: &Composite, tables: usize, table: &str, rep: usize) -> Vec<u8> {
     rep_domain(domain_tag(c), tables, table, rep)
 }
 
-/// The Merkle hash of every Ligerito level: hm96-sha512/v1 leaves under SHA-512 nodes in a production build (feature `sha512`,
+/// The Merkle hash of every Ligerito level: hm96-sha512/v1 leaves under SHA-512 nodes in the prover's build (feature `sha512`,
 /// verity's Flock patch).
 #[cfg(feature = "sha512")]
 const MERKLE: HashKind = HashKind::Hm96Sha512;

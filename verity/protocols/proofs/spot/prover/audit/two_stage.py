@@ -121,7 +121,7 @@ Each DIR a class's (``w<window>/p<P>-o<O>/``), every one of one window (``second
 files); COUNTS.json each check template's own count in place of one for all, ``{descriptor id: k_t}`` (`counts`);
 FILE.json the interior values, ``[[name, schema], ...]``; VALUES.json the replay block's parameters the interior
 docket registers as values, ``[[name, rows a sampled span, leaf type], ...]`` (`interior_rows.span_values`);
-REGISTRATION.json the window's advice docket, whose ``binding`` the records' windows name; CAPTURE the replay's
+REGISTRATION.json the window's advice registration, whose ``binding`` the records' windows name; CAPTURE the replay's
 capture of the sampled spans; PARAMS.json the auditor's params; IDS.json the capture's request id for a span's engine
 id, where they differ; REPLAY.json the record the replay wrote beside CAPTURE; RULE the stop rule as JSON,
 ``{"ids": [...], "max_model_len": n, "outputs": T}`` (`boundary_stop.Stop.of`); PRIVATE the directory the serve kept
@@ -143,7 +143,7 @@ one file for both commands: each stage's evidence carries the copy of main's his
 the stream holds both to the copy ``second`` is given.
 
 A ``local`` session's challenger reads its coins through
-``sampled-proofs-verifier``, which must be built first (``lake build sampled-proofs-verifier`` in
+``spot-verifier``, which must be built first (``lake build spot-verifier`` in
 ``verity/protocols/proofs/spot/verifier/lean``): building it on first use outlasts the local gate's start.
 ``two_stage_small.sh`` runs both commands on a CPU node at small statics.
 """
@@ -617,7 +617,7 @@ TIED_WHY = ("its reads' verdicts are of the members the adapter's `interior_link
 class Verdict:
     """The verdict of a read of registered tables and the value it reads: template ``template``'s output ``port``
     (`second_stage.OPENING_VERDICT`) reads ``value``, which the verifier fills with 1 at every row
-    (`second_stage.VERDICT_ONE`, `verdict_sources`), ``per`` rows a sampled span, unit j its row ``at[j]``, as the
+    (`second_stage.VERDICT_ONE_LEAF`, `verdict_sources`), ``per`` rows a sampled span, unit j its row ``at[j]``, as the
     template's ``root`` and ``domain`` are placed. Lean's registered reads then open the read's verdict only where it is
     1, so a read that does not open its table at its key is refused there, and not only on the prover's side."""
     template: str
@@ -638,8 +638,8 @@ def verdicts(members: Sequence[CS.Member], links: Sequence[IR.Link], tied: Tied)
 
 def verdict_sources(vs: Sequence[Verdict], q: int) -> dict[str, list[list[dict[str, str]]]]:
     """The challenger's copy of each of ``vs``' values for ``q`` sampled spans (`Stream.register_interiors`'
-    ``supplied``): every row `second_stage.VERDICT_ONE`, the verifier's bytes of 1."""
-    return {v.value: [[{k: n} for k, n in SS.VERDICT_ONE] for _ in range(q * v.per)] for v in vs}
+    ``supplied``): every row `second_stage.VERDICT_ONE_LEAF`, the verdict's 1 as one 16-bit leaf."""
+    return {v.value: [[{k: n} for k, n in SS.VERDICT_ONE_LEAF] for _ in range(q * v.per)] for v in vs}
 
 
 @dataclass(frozen=True)

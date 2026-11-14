@@ -9,7 +9,7 @@ import Proofs.Properties.Verity.Sampled.CoinMap
 import Proofs.Properties.Verity.Sampled.RecordDraw
 
 /-!
-# The two-stage leg's projection, assembled
+# The two-stage subprotocol's projection, assembled
 
 `projection_of` proves `ProjectionOf`: the projection's named pieces give its bound. The argument is probability
 bookkeeping over the pieces' `Prop`s, and reads nothing of the form's check but what they state.

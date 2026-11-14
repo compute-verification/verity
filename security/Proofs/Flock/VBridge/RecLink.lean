@@ -12,7 +12,7 @@ import all Init.Data.String.Defs
 /-!
 # V*'s `RecLink{UB, PB}` unit computes its reference
 
-`VStar.linkUnit UB PB` is the netlist V* writes for one row of a recursive session's link table. This file proves that,
+`VStar.linkUnit UB PB` is the circuit description V* writes for one row of a recursive session's link table. This file proves that,
 wherever its rows hold, its outputs are the bytes `Flock.RecLinkRef` says: each opened row's hm96 tree leaf
 (`RecLinkTree.leaf` of `Hm96.Default512.commitString`) climbed by its siblings (`Flock.climb` under `RecLinkRef.scheme`) to
 the position the table row names (`RecLinkRef.posOf`), then 64 zero bytes, when the row passes `RecLinkRef.okRef`, and

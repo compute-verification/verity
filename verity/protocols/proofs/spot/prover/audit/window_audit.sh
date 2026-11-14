@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-stage audit, run A5, on a CPU machine: a deferred Commit's window, a stand-in, through docket, the verifier's Lean
 # sample, M0's prover and the Lean verifier (a5.py). The Commit is the CPU RoPE d64 fixture (adapters/vllm
-# tests/pipeline/served_rope: the production committer, sealed into a deferred replay bundle), and the window is
+# tests/pipeline/served_rope: the serving committer, sealed into a deferred replay bundle), and the window is
 # `verity-vllm serving-rows` on it; with WINDOW=served it is the in-Commit hook's over the same members (served_rope --served),
 # which A5 takes only over a SHA-512 run root of record. The fixture's members are committed under rows-sha512, which the window
 # names as its record's; COMMIT_SCHEME, if set, must say so (vllm-v1 is kept only to read recorded runs, and A5 over one is a5.py on
@@ -41,7 +41,7 @@ BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
 LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof; FWL=${LEAN%/*}/flock-zk-server
 ZKS=(); if [ "${ZK_SERVER:-0}" = 1 ]; then ZKS=(--zk-server $FWL); fi
-(cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier sampled-proofs-difftest) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
+(cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier spot-difftest) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 # every member's server on a challenger of its own (`a0.session`); its coins and its audit are the build above
 export FLOCK_CHALLENGER=${FLOCK_CHALLENGER:-1} CHALLENGER_PY=$PY CHALLENGER_REPO=$REPO
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256

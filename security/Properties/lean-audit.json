@@ -25,12 +25,9 @@
   "Properties.InferenceOnly.Desc",
   "Properties.InferenceOnly.Desc.Verdict",
   "Properties.InferenceOnly.Desc.Cover",
-  "Properties.Certifier.Device",
   "Properties.Pous",
   "Properties.Certifier.Check",
   "Properties.Certifier.Check.TransferBlocks",
-  "Properties.Certifier.DeviceOutput",
-  "Properties.Certifier.DeviceOutput.Runs",
   "Properties.Hash.Identity",
   "Properties.Annot",
   "Properties.Core.Evaluate",
@@ -94,16 +91,16 @@
   "Properties.Core.Site",
   "Properties.InferenceOnly.Opening",
   "Properties.Certifier.JointBridge.SpaceOfPeriodHeld",
-  "Properties.Compose.Remote",
-  "Properties.Compose.Remote.Coins",
-  "Properties.Compose.Remote.Shared",
-  "Properties.Compose.Remote.Pooled",
+  "Properties.Poub.Remote",
+  "Properties.Poub.Remote.Coins",
+  "Properties.Poub.Remote.Shared",
+  "Properties.Poub.Remote.Pooled",
   "Properties.Compose.Compose",
-  "Properties.Compose.Remote.Line",
-  "Properties.Compose.Remote.Schedule",
-  "Properties.Compose.Remote.Live",
-  "Properties.Compose.Remote.Subprotocol",
-  "Properties.Compose.Remote.SubprotocolDeployed",
+  "Properties.Poub.Remote.Line",
+  "Properties.Poub.Remote.Schedule",
+  "Properties.Poub.Remote.Live",
+  "Properties.Poub.Remote.Subprotocol",
+  "Properties.Poub.Remote.SubprotocolDeployed",
   "Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod",
   "Properties.Certifier.JointBridge.WorkOfCreditedWords",
   "Properties.Certifier.JointBridge.ServiceSoundOfSessions"
@@ -406,24 +403,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.Remote.Draw.Assumptions.Counted": {
-   "owner": "@memory-accounting",
-   "digest": "7a8c819fae43610cbc75553dce53068663b261f469c9c15658421a40cbeb18e8",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Accounting.Remote.Draw.Assumptions.Live": {
-   "owner": "@memory-accounting",
-   "digest": "a8f18ca134c7c35043aacd9f71b0f2679da98d3cd7894f71707fc8d2438c0241",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Accounting.Remote.Draw.Assumptions.Refused": {
-   "owner": "@memory-accounting",
-   "digest": "56944d0dddbb3a9e4d270e9e0e39a5c350c516cbb49a2525f7a2f68193e6408d",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Accounting.Remote.Held.Assumptions.Covered": {
    "id": "certifier-coverage",
    "owner": "@memory-accounting",
@@ -452,6 +431,24 @@
   "Accounting.Remote.Held.Assumptions.SketchBoundAt": {
    "owner": "@memory-accounting",
    "digest": "8b630261ad87876a09caac09d0d2d22c41e3b9724fd6ef88f9782a3083b23020",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Accounting.Remote.Sample.Assumptions.Counted": {
+   "owner": "@memory-accounting",
+   "digest": "7a8c819fae43610cbc75553dce53068663b261f469c9c15658421a40cbeb18e8",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Accounting.Remote.Sample.Assumptions.Live": {
+   "owner": "@memory-accounting",
+   "digest": "a8f18ca134c7c35043aacd9f71b0f2679da98d3cd7894f71707fc8d2438c0241",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Accounting.Remote.Sample.Assumptions.Refused": {
+   "owner": "@memory-accounting",
+   "digest": "56944d0dddbb3a9e4d270e9e0e39a5c350c516cbb49a2525f7a2f68193e6408d",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -710,18 +707,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Properties.Certifier.Observes": {
-   "owner": "@network-accounting",
-   "digest": "d92d4a950294ff745f05bb5221187f8348e3c61db2f865425adcdc7dc655d605",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Properties.Certifier.OpensFrames": {
-   "owner": "@network-accounting",
-   "digest": "a31edfd11ee10f10f56befb43637d44e98cc1bb0e4252878e82324e714d2b3ef",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Properties.NetworkRecords.FramesOf": {
    "owner": "@network-accounting",
    "digest": "15939184318b9517079ed653af45cc40bfc707ff19a88343c31ce50a25ce0549",
@@ -965,14 +950,14 @@
   "Pous.Period.SecurityProofs.periodHeld": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.Instantiates"],
   "Pous.Period.SecurityProofs.periodHeldDeployed": ["Pous.P2.Assumptions.P2RingAuditSecure", "Pous.Period.DeviceModel", "Pous.Period.Instantiates"],
   "Properties.Poub.Line.SecurityProofs.lineHeld": [
-   "Accounting.Remote.Draw.Assumptions.Counted",
-   "Accounting.Remote.Draw.Assumptions.Live",
-   "Accounting.Remote.Draw.Assumptions.Refused",
    "Accounting.Remote.Held.Assumptions.Covered",
    "Accounting.Remote.Held.Assumptions.Covers",
    "Accounting.Remote.Held.Assumptions.IngressCounted",
    "Accounting.Remote.Held.Assumptions.Paced",
-   "Accounting.Remote.Held.Assumptions.SketchBoundAt"
+   "Accounting.Remote.Held.Assumptions.SketchBoundAt",
+   "Accounting.Remote.Sample.Assumptions.Counted",
+   "Accounting.Remote.Sample.Assumptions.Live",
+   "Accounting.Remote.Sample.Assumptions.Refused"
   ],
   "Properties.Pouw.MonitoringPeriod.SecurityProofs.h1CheckedCreditMonitoringPeriod": [
    "Accounting.Assumptions.Compose.GuessLuckAt",
@@ -1053,14 +1038,12 @@
   "Base",
   "Circuits",
   "Commitments",
-  "Properties.Certifier.Device",
   "NetworkCertifier",
   "NetworkCheck",
   "Lms",
   "Properties.Hash.Identity",
   "Properties.Certifier.Check",
   "Definitions.Certifier",
-  "Properties.Certifier.DeviceOutput",
   "Properties.Pous",
   "PousCheck.P2",
   "PousCheck.Params",
@@ -1071,7 +1054,7 @@
   "Evaluate.TC.Spec",
   "Evaluate.TC.Dots",
   "Evaluate.TC.Fp8Atom",
-  "VStarRecursive.Protocol",
+  "VStarRecursion.Protocol",
   "VStarRecursive.Sampled",
   "Evaluate.Prims",
   "Definitions.Core.Scalar",
@@ -1092,7 +1075,6 @@
   "Properties.Attest",
   "Definitions.Pous",
   "Definitions.Pous.Assumptions",
-  "Properties.Compose.Remote",
   "Poub",
   "Properties.Accounting",
   "CircuitRequirement",
@@ -1126,10 +1108,11 @@
   "Definitions.Pouw.Assumptions.ServedWork",
   "Properties.Assumptions",
   "Properties.ZkServer",
-  "ZkServer"
+  "ZkServer",
+  "Properties.Poub.Remote"
  ],
  "claims": {
-  "modules": ["Properties.Compose.Remote.Subprotocol"],
+  "modules": ["Properties.Poub.Remote.Subprotocol"],
   "witnesses": {
    "Properties.Poub.Subprotocol.AcceptIsVerifiedFor": {
     "fails": "Properties.Poub.Subprotocol.acceptIsVerified_nontrivial",
@@ -1481,10 +1464,6 @@
   "InferenceOnlyCheck.Properties.SecurityProofs.ProtocolAccepts": {
    "nontrivial": "InferenceOnlyCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial"
   },
-  "Proofs.Certifier.encardProgramRunsLeExecutionPhases": {
-   "honest": ["Proofs.Certifier.encardProgramRunsLeExecutionPhases_honest"],
-   "nontrivial": "Proofs.Certifier.encardProgramRunsLeExecutionPhases_nontrivial"
-  },
   "Properties.Poub.codeLayoutTiles": {
    "honest": ["Properties.Poub.codeLayoutTiles_honest"],
    "nontrivial": "Properties.Poub.codeLayoutTiles_nontrivial"
@@ -1724,18 +1703,6 @@
   "PousCheck.Properties.SecurityProofs.timedAuditAccepts": {
    "type_hash": "0f53ba049259791adadc5f1d70c663732dd8fd92cf36ccfdd2d5758122d1bbd4",
    "unfolded_hash": "d16e8f3e2a6ff3d2bdabdc2709488831ff94bcef0fb55bbf9dd6fdfd9e1c7837"
-  },
-  "Proofs.Certifier.acceptedRunsAreProgramRuns": {
-   "type_hash": "c149bb063996cfd7747078d73e0e18672f15cd3c9580fec061994328bb9d7f9b",
-   "unfolded_hash": "f0c9716126c9cf8ceed6f3ff5cf74b044a53c656ce5616e12a2174c2f39c66da"
-  },
-  "Proofs.Certifier.encardAcceptedObservationsLe": {
-   "type_hash": "e6864860dcc529afba634806f512b5d695318aac5fc33da7bcbd8452570ec5dd",
-   "unfolded_hash": "f4e495414acf85516695966cd01d342c99755c914894a213e7ae8466dbd3690b"
-  },
-  "Properties.Certifier.acceptedRowsAreProgramRows": {
-   "type_hash": "c8aafb7a6a13db849ae25237b62ea987e1165cc75c194b0ad265b5908068c101",
-   "unfolded_hash": "194fa267bd2fc2b3e80f13bb9c4e57dd8c3574164a7a958fbc75504bbd881b41"
   },
   "Properties.Certifier.acceptsOneRecordEach": {
    "type_hash": "d42de92f7820044006cc71b9e70572f5e891cf1517633894a1af4134899c7cf5",
@@ -2319,7 +2286,12 @@
    "why": "the period's work at the deployed check's accepted prefix is stated against the check's own verdict (`PouwCheck.protocol.check`) and the accounting model's period, its proofs and its named claims (`Definitions.Compose.ComposeMonitoringPeriod`, `Definitions.Accounting.Assumptions`), never a proof"
   },
   "Properties.Pouw.MonitoringPeriodJ10R": {
-   "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck", "Properties.Pouw.MonitoringPeriod"],
+   "imports": [
+    "Definitions.Accounting",
+    "Definitions.Accounting.Assumptions",
+    "PouwCheck",
+    "Properties.Pouw.MonitoringPeriod"
+   ],
    "except": [],
    "why": "the period's credit at served H1's accepted prefix is stated against its own verdict (`PouwCheck.Credit.window`) and draw (`Credit.drawnOf`), the accounting model's period and J10-R's noise (`Definitions.Compose.ComposeMonitoringPeriod`, `Definitions.Pouw.TS.J10R`), its named claims and `Properties.Pouw.MonitoringPeriod`'s salt premise, never a proof"
   },
@@ -2344,7 +2316,11 @@
    "why": "the challenger's binding is stated against the code's own functions (the interface's `Live`, the challenger's reader `sampleCoins`, its record, close and ledger messages) and a model of the device's log on Lean core: nothing of Mathlib or of `security`, never a proof"
   },
   "Properties.Pouw.ServedWork": {
-   "imports": ["Definitions.Pouw.Dither", "Definitions.Pouw.Assumptions.ServedWork", "Properties.Pouw.MonitoringPeriodJ10R"],
+   "imports": [
+    "Definitions.Pouw.Dither",
+    "Definitions.Pouw.Assumptions.ServedWork",
+    "Properties.Pouw.MonitoringPeriodJ10R"
+   ],
    "except": [],
    "why": "the served protocol's work is stated over the words guarantee at the served protocol's accepted prefix (`Properties.Pouw.MonitoringPeriodJ10R`), the accelerator model (`Definitions.Pouw.Dither`) and SAK at the served words (`Definitions.Pouw.Assumptions.ServedWork`), never a proof"
   },
@@ -2359,9 +2335,9 @@
    "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder and resolution, the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.BoundaryGates.Fits`) and its own flattening and named deployment premises (`Properties.NetworkScan.Flattens`, `Properties.NetworkScan.Assumptions`), never a proof"
   },
   "Properties.Pous.Wipe": {
-   "imports": ["Definitions.Pous.Wipe", "MemoryChallenger.WipeProtocol"],
+   "imports": ["Definitions.Pous.Accounting.Wipe", "MemoryChallenger.WipeProtocol"],
    "except": [],
-   "why": "an accepted wipe's survivor bound is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`) and core's device and its wipe (`Definitions.Core.Blocks`), through the streamed wipe's prover strategy and observed event on that device (`Definitions.Pous.Wipe`), never a proof"
+   "why": "an accepted wipe's survivor bound is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`) and core's device and its wipe (`Definitions.Core.Blocks`), through the streamed wipe's prover strategy and observed event on that device (`Definitions.Pous.Accounting.Wipe`), never a proof"
   },
   "Properties.Attest": {
    "imports": [
@@ -2527,7 +2503,7 @@
    "why": "what a two-stage point's bits bound is stated against its own function and the factor bounds' covers, on the two-stage count's definitions: never a proof"
   },
   "Properties.Accounting.RegisteredCircuit": {
-   "imports": ["Definitions.Accounting", "Properties.Compose.Remote.Schedule"],
+   "imports": ["Definitions.Accounting", "Properties.Poub.Remote.Schedule"],
    "except": [],
    "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.Accounting`, `Accounting.Guarantees.RegisteredCircuitRequirement`'s module) and the schedule check's statements and gap (`Properties.Poub.Schedule`), never a proof"
   },
@@ -2550,11 +2526,11 @@
    "imports": [
     "Properties.InferenceOnly.Record",
     "Properties.Flock.Circuit.CircuitOf",
-    "Definitions.Poub.ReadUnit",
+    "Definitions.Accounting.ReadUnit",
     "Spot.Bits"
    ],
    "except": [],
-   "why": "a reader's ports as gates are stated over the record's roles (Properties.InferenceOnly.Record), the circuit a parsed circuit file describes (Properties.Flock.Circuit.CircuitOf), a read unit's gates (Definitions.Poub.ReadUnit) and SPOT's map from a Definition's parameters to a file's gates (Spot.Bits), never over a proof",
+   "why": "a reader's ports as gates are stated over the record's roles (Properties.InferenceOnly.Record), the circuit a parsed circuit file describes (Properties.Flock.Circuit.CircuitOf), a read unit's gates (Definitions.Accounting.ReadUnit) and SPOT's map from a Definition's parameters to a file's gates (Spot.Bits), never over a proof",
    "sealed": true
   },
   "Properties.Pouw.PearlPlusTie": {
@@ -2572,31 +2548,15 @@
    "except": [],
    "why": "whose ledger the period's check reads is stated against the check's own reader (`Spot.MonitoringPeriod.read`), the vocabulary of the period's statements (`Properties.Spot.MonitoringPeriod`) and the challenger's model of the device's log (`Properties.Challenger`: `History`, `Break`), on Lean core: nothing of Mathlib or of `security`, never a proof"
   },
-  "Properties.Certifier.Device": {
-   "imports": ["CertifierDevice.Device", "CertifierDevice.Issuer"],
-   "except": [],
-   "why": "the properties are stated against the device's own step and issuer, on Lean core: nothing of Mathlib or of `security`"
-  },
   "Properties.Certifier.Check": {
    "imports": ["NetworkCheck.Check", "NetworkCheck.TransferBlocks", "Properties.Hash.Identity", "Lms.Sign"],
    "except": [],
-   "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
+   "why": "the properties are stated against the code's own functions, the check's and N2's execution phase verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
   },
   "Properties.Certifier.Records": {
    "imports": ["NetworkCheck.RecordsGrid", "Properties.Certifier.Check"],
    "except": [],
    "why": "what the records check's acceptance means is stated against its own functions and the reference Program's grid, with v2's statements of the evidence, the syncs and the heads, never a proof"
-  },
-  "Properties.Certifier.DeviceOutput": {
-   "imports": [
-    "Properties.Certifier.Device",
-    "Properties.Certifier.Check",
-    "Properties.Certifier.DeviceOutput",
-    "Definitions.Certifier",
-    "Mathlib.Data.Set.Card"
-   ],
-   "except": [],
-   "why": "the guarantees join the device's statements and the check's, with the network lane's premise (`Definitions.Certifier.Premises`) and the reference Program they are read against: stated over their definitions, never a proof"
   },
   "Properties.ZkServer": {
    "imports": ["ZkServer"],
@@ -2690,50 +2650,50 @@
    "except": [],
    "why": "a joint period's PoUW bridge from a credit in words is stated over the joint period (`Definitions.Compose.JointPeriod`), its realization (`Definitions.Certifier.JointBridge.CreditedWords`) and its named premises (`Definitions.Pouw.Assumptions.CreditedWords`), never a proof or a source protocol's statement"
   },
-  "Properties.Compose.Remote": {
-   "imports": ["Poub", "Properties.Compose.Remote"],
+  "Properties.Poub.Remote.Pooled": {
+   "imports": ["Definitions.Accounting", "Poub"],
+   "except": [],
+   "why": "the pooled bound the verifier computes (`Poub.Pooled`) and the W the memory line reads (`Poub.Line`) are stated against the draw's model they cover (`Definitions.Poub.Remote.Sample`), never a proof"
+  },
+  "Properties.Poub.Remote": {
+   "imports": ["Poub", "Properties.Poub.Remote"],
    "except": [
-    "Properties.Compose.Remote.Pooled",
-    "Properties.Compose.Remote.Line",
-    "Properties.Compose.Remote.Line.Premises",
-    "Properties.Compose.Remote.Line.Record",
-    "Properties.Compose.Remote.Schedule",
-    "Properties.Compose.Remote.Subprotocol",
-    "Properties.Compose.Remote.SubprotocolDeployed"
+    "Properties.Poub.Remote.Pooled",
+    "Properties.Poub.Remote.Line",
+    "Properties.Poub.Remote.Line.Premises",
+    "Properties.Poub.Remote.Line.Record",
+    "Properties.Poub.Remote.Schedule",
+    "Properties.Poub.Remote.Subprotocol",
+    "Properties.Poub.Remote.SubprotocolDeployed"
    ],
    "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`",
    "sealed": true
   },
-  "Properties.Compose.Remote.Pooled": {
-   "imports": ["Definitions.Accounting", "Poub"],
-   "except": [],
-   "why": "the pooled bound the verifier computes (`Poub.Pooled`) and the W the memory line reads (`Poub.Line`) are stated against the draw's model they cover (`Definitions.Compose.Remote.Draw`), never a proof"
-  },
-  "Properties.Compose.Remote.Line": {
+  "Properties.Poub.Remote.Line": {
    "imports": [
     "Definitions.Pouw.Basic",
-    "Definitions.Compose.Remote",
+    "Definitions.Poub.Remote",
     "Definitions.Accounting.Assumptions",
     "Poub",
-    "Properties.Compose.Remote.Line"
+    "Properties.Poub.Remote.Line"
    ],
    "except": [],
-   "why": "the memory line of record is stated against the line's and the verifier's own functions (Poub) and the memory model's trace, paced session, draw and premises (Definitions.Compose.Remote, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
+   "why": "the memory line of record is stated against the line's and the verifier's own functions (Poub) and the memory model's trace, paced session, draw and premises (Definitions.Poub.Remote, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
   },
-  "Properties.Compose.Remote.Schedule": {
-   "imports": ["Definitions.Accounting", "Poub", "Properties.Compose.Remote"],
+  "Properties.Poub.Remote.Schedule": {
+   "imports": ["Definitions.Accounting", "Poub", "Properties.Poub.Remote"],
    "except": [],
    "why": "the schedule check (`Poub.Schedule`) is stated against the code, and the gap it leaves against the layout vocabulary it feeds (`Definitions.Accounting.Schedule`), never a proof"
   },
-  "Properties.Compose.Remote.Subprotocol": {
-   "imports": ["Poub", "Properties.Compose.Remote.Line"],
+  "Properties.Poub.Remote.Subprotocol": {
+   "imports": ["Poub", "Properties.Poub.Remote.Line"],
    "except": [],
    "why": "the bandwidth component's refinement is stated against its own check (`Poub.Protocol`) and the memory line of record (`Properties.Poub.Line`), whose model vocabulary it reads through that module; never a proof"
   },
-  "Properties.Compose.Remote.SubprotocolDeployed": {
-   "imports": ["Properties.Compose.Remote.Subprotocol"],
+  "Properties.Poub.Remote.SubprotocolDeployed": {
+   "imports": ["Properties.Poub.Remote.Subprotocol"],
    "except": [],
-   "why": "the component's three properties at its deployed check, closed, are stated over `Properties.Compose.Remote.Subprotocol`'s vocabulary and the check and the memory line it reads; never a proof"
+   "why": "the component's three properties at its deployed check, closed, are stated over `Properties.Poub.Remote.Subprotocol`'s vocabulary and the check and the memory line it reads; never a proof"
   }
  },
  "reads_exempt": {
@@ -12649,10 +12609,9 @@
  },
  "shape": {
   "premises": [
-   "Definitions.Certifier.Premises",
    "Definitions.Accounting.Assumptions",
-   "Properties.Compose.Remote.Line.Premises",
-   "Properties.Compose.Remote.Schedule"
+   "Properties.Poub.Remote.Line.Premises",
+   "Properties.Poub.Remote.Schedule"
   ],
   "statements": ["Properties"],
   "properties": {
@@ -13778,18 +13737,6 @@
     "function": "PouwCheck.PearlPlus.draw",
     "outcome": "none"
    },
-   "Proofs.Certifier.acceptedRunsAreProgramRuns": {
-    "function": "NetworkCheck.Check.protocol.check",
-    "outcome": "accept"
-   },
-   "Proofs.Certifier.encardAcceptedObservationsLe": {
-    "function": "NetworkCheck.Check.protocol.check",
-    "outcome": "none"
-   },
-   "Properties.Certifier.acceptedRowsAreProgramRows": {
-    "function": "NetworkCheck.Check.protocol.check",
-    "outcome": "accept"
-   },
    "Properties.Certifier.acceptsOneRecordEach": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "accept"
@@ -13821,10 +13768,6 @@
    "Properties.Certifier.transferBlocksAcceptMeans": {
     "function": "NetworkCheck.TransferBlocks.verdict",
     "outcome": "accept"
-   },
-   "Proofs.Certifier.expectedGridCausal": {
-    "function": "NetworkCheck.Check.expectedGrid",
-    "outcome": "none"
    },
    "Properties.ZkServer.admitNext": {
     "function": "Core.ZkServer.admit",
@@ -13981,10 +13924,6 @@
    "InferenceOnlyCheck.SecurityProofs.ServedComplies": {
     "function": ["InferenceOnlyCheck.Properties.Record.Form.read", "InferenceOnlyCheck.Properties.Record.Form.rate"],
     "outcome": "accept"
-   },
-   "Proofs.Certifier.encardProgramRunsLeExecutionPhases": {
-    "function": "NetworkCertifier.handingBuckets",
-    "outcome": "none"
    },
    "Properties.Poub.acceptChecksOpenings": {
     "function": "Poub.verifyWindow",
@@ -29522,7 +29461,7 @@
     "VStar.rowLine": "ab93587c702fbaa39c07489ba4bea6c2afc786fd4db8544e4db97136c0f577c1"
    }
   },
-  "VStarRecursive.Protocol": {
+  "VStarRecursion.Protocol": {
    "digest": "24c25e7e86c7a9b3f7c1147bc75bef036012f248ffa0b1416223d26adf00d5f5",
    "definitions": {
     "VStar.Recursive.Evidence": "750759ed94774839b812282e5b64d4c4f9cdff16ee8b980a1089dba40596a8f0",

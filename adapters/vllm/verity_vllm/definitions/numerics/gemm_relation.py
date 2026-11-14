@@ -357,7 +357,7 @@ def coverage(node: Any, opened_inputs: Mapping[str, Any]) -> dict[str, Any]:
     impl = _runtime_impl_of(n)
     rop = runtime_op_of(n)
     arch = str(_const(n, opened_inputs, "arch") or "sm_80")
-    arch_note = "" if arch in VALIDATED_ARCHS else (f"; arch {arch} assumed parameter-identical to sm_80 (production GEMM not measured there)" if arch in ASSUMED_ARCHS else None)
+    arch_note = "" if arch in VALIDATED_ARCHS else (f"; arch {arch} assumed parameter-identical to sm_80 (serving GEMM not measured there)" if arch in ASSUMED_ARCHS else None)
     if arch_note is None:
         return {"covered": False, "family": None, "kernel_path": impl, "spec": None, "reason": f"unresolved: no validated per-instruction model for arch {arch!r}"}
     explicit_split = _const(n, opened_inputs, "split_k")

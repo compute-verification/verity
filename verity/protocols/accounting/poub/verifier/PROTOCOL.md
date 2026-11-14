@@ -1356,7 +1356,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   period. They take windows of one size, \(M = P \cdot N\), and samples with replacement. The record's windows differ
   in \(U_t\), and its samples are distinct, which only lowers the chance that they all pass. `pooled` applies the same
   argument at each window's own
-  size: `Accounting.Guarantees.Remote.PooledSample` states it on the deployed sample (`Accounting.Remote.Draw`: `Key.subset`
+  size: `Accounting.Guarantees.Remote.PooledSample` states it on the deployed sample (`Accounting.Remote.Sample`: `Key.subset`
   on the first SHA-512 blocks a window's coin gives, released after its roots, the sampler exact on each sample's first
   word and its fallbacks free), for windows the prover sizes after the earlier windows' coins, each below
   \(2^{448}\) receipts (the verifier's `RECEIPT_LIMIT`, \(2^{64}\), keeps them there), at δ plus
@@ -1651,7 +1651,7 @@ the case under a key and a session its params name before it replays any entry (
   \(\varepsilon = 257 \cdot\) `timing.sign_rank_at_most(16, 11)` \(= 2^{-95.2491}\) (\(2^{-96.2548}\) at 4,096-byte
   blocks' 128 sectors). The memory line's `SketchBoundAt` follows from it by `SketchBoundLine`, which holds at every
   \(m\).
-- No property in `security/Properties/Compose/Remote` states yet what the Lean accepts of a P2 session; the difftest
+- No property in `security/Properties/Poub/Remote` states yet what the Lean accepts of a P2 session; the difftest
   (`lean/tests/test_p2.py`'s `p2_session`) holds `audit.AuditRun` over the P2 codec to it.
 - Not yet built: the registry's one live registration a node for P2, and the zero-knowledge opening unit of a P2 unit
   (§8).

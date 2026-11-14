@@ -2,7 +2,7 @@ module
 
 public import Proofs.Accounting.RegisteredCircuit.Requirement
 public import Properties.Accounting.RegisteredCircuit
-public import Proofs.Properties.Compose.Remote.Schedule
+public import Proofs.Properties.Poub.Remote.Schedule
 
 /-!
 # A declared circuit's space and bandwidth at the committed steering cap, proved

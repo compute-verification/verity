@@ -1229,12 +1229,12 @@ def test_held_over_time_charges_what_a_burst_frees_in_one_groups_slack_and_the_s
 
 def test_a_paced_lines_ingress_charge_brings_the_bursts_the_ledger_states_for_its_routes():
     """`ingress_bursts` is `ledger.Node.stated`'s B: the rebuild batch in flight always, one second at the disks'
-    measured rate for the charge up to it, and a link window once the charge passes the disks (the link-charged
+    measured rate for the charge up to it, and a link burst once the charge passes the disks (the link-charged
     line)."""
     assert FIGURES.disk_bytes_per_s == 4.311e9
     assert verifier.ingress_bursts(0.0, FIGURES) == timing.CHIP_BYTES
     assert verifier.ingress_bursts(4.311e9, FIGURES) == timing.CHIP_BYTES + 4.311e9
-    assert verifier.ingress_bursts(54.311e9, FIGURES) == timing.CHIP_BYTES + 4.311e9 + timing.LINK_WINDOW_BYTES
+    assert verifier.ingress_bursts(54.311e9, FIGURES) == timing.CHIP_BYTES + 4.311e9 + timing.LINK_BURST_BYTES
 
 
 def test_the_paced_line_refuses_a_session_any_of_whose_passes_leaves_a_registered_block_out():

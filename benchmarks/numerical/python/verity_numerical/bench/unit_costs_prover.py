@@ -112,7 +112,7 @@ NODE_GIB = 1716
 #: one NVIDIA RTX PRO 6000 Blackwell Server Edition: 97,887 MiB
 GPU_GIB = 97_887 / 1024
 SLOTS = 16
-#: bytes of flock-ir-unit/v2 text per nonzero: the largest of four registered units' (``ir_lower.netlist``: GEMM tc-step 4.93,
+#: bytes of flock-ir-unit/v2 text per nonzero: the largest of four registered units' (``ir_lower.circuit_description``: GEMM tc-step 4.93,
 #: RoPE pair 4.73, SiLU element 4.33, RMSNorm-Triton N=128 6.04)
 BYTES_PER_NNZ = 6.04
 #: the circuit text that is not a unit's description (SHA-512 compressions, hm96 rows, META): the smallest recorded circuit's,

@@ -671,7 +671,7 @@ def build_scan_step(C, X, cache, st, fa, forced, out, hit, cert):
 
 def _front(C, xs, amt, n):
     """xs[amt:amt + n], zero entries past the end (`replay_chain._front`'s shifter; importing that module would make
-    this one read the sampled-proofs package)."""
+    this one read the SPOT package)."""
     zero = [ZERO] * len(xs[0])
     cur = [list(e) for e in xs]
     for j in reversed(range(len(amt))):

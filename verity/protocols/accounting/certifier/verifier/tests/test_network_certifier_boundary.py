@@ -307,7 +307,7 @@ def _words(t) -> int:
 
 
 @pytest.mark.parametrize("G", [1, 2])
-def test_the_scans_link_windows_fit(G):
+def test_the_scans_phases_fit(G):
     """A group of G execution phases in the composed scan's generator form at w63's class (`benchmarks/network_traces/
     scan_zk.py`), one link of G·T buckets: the scan's start (`IngressScanStart`), G·T `IngressScanBucket` and G·T
     `EgressBucket` proof blocks, each member's rows and outputs its Definition's signature's. The ingress frame is the

@@ -13,7 +13,7 @@ records enters the chain.
   certifier's key and session are the auditor's, never a file the prover's node holds; a copy beside the one the
   record was read off (`recorded`) adds only the auditor's device's keys (`relay_check.DEVICE_KEYS`). `own_record`
   is the record a job that ran the network certifier itself holds (a local rehearsal's, the job its own auditor).
-* `link`: N2's link on the run (`service.LinkWindows` with its `service.WardenProfile`): the network certifier's link
+* `link`: N2's link on the run (`service.TransferBlocks` with its `service.WardenProfile`): the network certifier's link
   name, its one grid both ends', its key and session, its windows and parameters digest, and no sync (the network
   certifier runs no shaper clock and signs none, so no clock certificate enters N2 here).
 * `pairs`: each execution phase's certified (egress, ingress) records, ``certified.jsonl``'s, from window 0 until the
@@ -66,7 +66,7 @@ PROXY = ("a certifier rehearsal's run (its records through active.Proxy in front
 CERTIFIER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
 #: an id request's fields (`id_form.id_request`'s keywords but the frame's)
 FIELDS = ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")
-#: a network certifier link declares no sync, so its Σ_sync is never read (`service.LinkWindows`'s ``warden``); one
+#: a network certifier link declares no sync, so its Σ_sync is never read (`service.TransferBlocks`'s ``warden``); one
 #: value for the field
 UNREAD_SYNCS = SyncSet((0,), (Fraction(1),))
 #: the auditor's record of a network certifier run, ``CERTIFIER_KEY``'s form: ``deployment``, the gate's own
@@ -121,7 +121,7 @@ def deployment(run: Path) -> tuple[dict, W.WardenParams]:
     if params.digest.hex() != dep.get("digest"):
         raise SystemExit(f"{run}: deployment.json's digest isn't its parameters'")
     if not dep.get("run_id"):
-        raise SystemExit(f"{run}: deployment.json names no run id, which N2's link-windows' domains need")
+        raise SystemExit(f"{run}: deployment.json names no run id, which N2's execution phases' domains need")
     return dep, params
 
 
@@ -171,10 +171,10 @@ def own_record(run: Path) -> dict:
             "deployment_sha512": hashlib.sha512(data).hexdigest(), "deployment": dep}
 
 
-def link(run: Path) -> tuple[SVC.LinkWindows, dict, W.WardenParams]:
+def link(run: Path) -> tuple[SVC.TransferBlocks, dict, W.WardenParams]:
     """N2's link on the run (the module docstring's `link`), its deployment and the network certifier's schedule."""
     dep, params = deployment(run)
-    lw = SVC.LinkWindows(dep["link"], params.grid, UNREAD_SYNCS, RF.read_public(dep["key"]), dep["run_id"],
+    lw = SVC.TransferBlocks(dep["link"], params.grid, UNREAD_SYNCS, RF.read_public(dep["key"]), dep["run_id"],
                          bytes.fromhex(dep["session"]), ingress=params.grid, proof_deadline=RC.PROOF_DEADLINE_S,
                          warden=SVC.WardenProfile(dep["windows"], params.digest))
     return lw, dep, params
