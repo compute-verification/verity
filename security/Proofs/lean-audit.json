@@ -40,6 +40,7 @@
   "Proofs.Properties.Pous",
   "Proofs.Properties.NetworkCertifier.Check",
   "Proofs.Properties.Hash.Identity",
+  "Proofs.Properties.Hash.Lms",
   "Proofs.Properties.Core.Evaluate",
   "Proofs.Properties.NetworkCertifier.Records",
   "Proofs.Properties.Core.Period",
