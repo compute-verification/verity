@@ -2167,9 +2167,9 @@
    "due": "2026-11-30"
   },
   "Nci.Assumptions.CheatingAtMost": {
-   "owner": "@network-accounting",
+   "owner": "@training",
    "digest": "89add569caacb16556501cbd98787134ad9098307d8b22fc10f53b164cd1ade2",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.Coverage": {
@@ -2179,15 +2179,15 @@
    "due": "2026-11-30"
   },
   "Nci.Assumptions.CoversEfficientMethods": {
-   "owner": "@network-accounting",
+   "owner": "@training",
    "digest": "5278d5015393ac6b9b6a5609004ebec37b4caeafd791a72d8ba08aa4dca862c4",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.DescriptionHard": {
-   "owner": "@network-accounting",
+   "owner": "@training",
    "digest": "acf4d99142d8d1f6398750eb5cf307f3047dbec15dd21f5bc86041b38b7ea321",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.Fits": {
@@ -2203,15 +2203,15 @@
    "due": "2026-11-30"
   },
   "Nci.Assumptions.IdentitySchedule": {
-   "owner": "@network-accounting",
+   "owner": "@training",
    "digest": "f7d502370c0b00f07fc595e4a3f3c837796aa8596c248dffed41b6719df60bfa",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.MinEntropyHard": {
-   "owner": "@network-accounting",
+   "owner": "@training",
    "digest": "ac056d32cda0731b25c07ec1e66d1dff9f413d1672320b350a7002582c48cab7",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.ParameterHard": {
@@ -2227,9 +2227,9 @@
    "due": "2026-11-30"
   },
   "Nci.Assumptions.PouwPerWindow": {
-   "owner": "@network-accounting",
+   "owner": "@training",
    "digest": "73c9272c6730698f6165c13cdc251d08c790d55adbdb9688fff024707355941a",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.PouwSound": {
@@ -2251,9 +2251,9 @@
    "due": "2026-11-30"
   },
   "Nci.Assumptions.Recovers": {
-   "owner": "@network-accounting",
+   "owner": "@training",
    "digest": "d9edc87f9d67a1e87668b32bf8eeaa3407c435c23af1795ffb1b1833af22309a",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.ReferenceLayered": {
@@ -2275,15 +2275,15 @@
    "due": "2026-11-30"
   },
   "Nci.Assumptions.SampledPerWindow": {
-   "owner": "@network-accounting",
+   "owner": "@training",
    "digest": "77104bd85c50c8f0996b5b055c8263f036328b6ed9d9730b5ec70e223843542d",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.SourceHard": {
-   "owner": "@network-accounting",
+   "owner": "@training",
    "digest": "b4b411c3d977a74a745755ede9735c9bce7b83e332c5c971637bfbed2f748260",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.SourcesCover": {
@@ -2305,9 +2305,9 @@
    "due": "2026-11-30"
   },
   "Nci.Assumptions.UnmonitoredAtMost": {
-   "owner": "@network-accounting",
+   "owner": "@training",
    "digest": "a2f3af521431f3a9eb4420c21e04149188f6bcfdb664984c54505a4d514502c2",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.WeightsIncompressible": {
@@ -2341,33 +2341,33 @@
    "due": "2026-11-30"
   },
   "Nci.Capability.Consumers.OverlapWeights": {
-   "owner": "@network-accounting",
+   "owner": "@training",
    "digest": "67fd0381a6d22e3df9462d31aee8c2fb53d78a03ef3ccf7262ac549c65f30313",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Capability.Consumers.RequiresState": {
-   "owner": "@network-accounting",
+   "owner": "@training",
    "digest": "b6284d74c738e31004e961b08225fefd8fb49030b47739e363c502344ad442e8",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Capability.Consumers.Upstream": {
-   "owner": "@network-accounting",
+   "owner": "@training",
    "digest": "eb8367f381166e28864222741be0201193858a4010150fa5bd0e23acab48c757",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Capability.HeldPriceAtMost": {
-   "owner": "@network-accounting",
+   "owner": "@training",
    "digest": "5344e552ed3f9d96c26f35e4ea3f5a00f624b7c37bfcdec70e169545364b78bd",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Capability.Selects": {
-   "owner": "@network-accounting",
+   "owner": "@training",
    "digest": "a8aaaf2ed3716b7e44556a765256be878c94d4c0f5221c3f73ebb9c41c08eac0",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.CompliesRate": {
