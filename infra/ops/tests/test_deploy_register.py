@@ -345,7 +345,7 @@ def test_bringing_up_a_machine_gives_it_the_list_and_the_key_and_puts_it_in_ever
     def lists() -> list[str | None]:
         return [p.read_text() if (p := tmp / n / "etc" / "peers").exists() else None for n in nodes]
 
-    assert _main(fleet, *roll, "--apply") == 1              # before its launch it is passed by, and the others hold the list
+    assert _main(fleet, *roll, "--apply") == 0              # before its launch it is passed by, and the others hold the list
     assert f"{new}  passed by: staged (its quota is asked for) and not in the register" in capsys.readouterr().out
     assert lists() == [LIST, LIST, None]
 
@@ -414,16 +414,24 @@ def test_a_roll_changes_nothing_when_a_node_refuses_stops_at_the_first_that_fail
     assert "lists /NODE/etc/nothing as a file made from the register" in capsys.readouterr().err
 
 
-def test_a_roll_passes_by_a_staged_node_the_register_does_not_hold_and_an_admin_only_node_unless_named(fleet, capsys):
+def test_a_roll_passes_by_a_node_that_has_no_machine_and_an_admin_only_node_unless_named(fleet, capsys):
+    """A node staged ahead of its machine, and one whose machine was released, have nothing to install: no failure of the roll."""
     manifest = fleet["manifest"]
     manifest.write_text(manifest.read_text().replace("[nodes.b]\n", '[nodes.b]\nstaged = "created when the quota lands"\n')
                         .replace("[nodes.c]\n", "[nodes.c]\nadmin = true\n"))
-    assert _main(fleet, "roll", "/NODE/etc/peers", "--by", "lane-x", "--apply") == 1
+    assert _main(fleet, "roll", "/NODE/etc/peers", "--by", "lane-x", "--apply") == 0
     assert "b  passed by: staged (created when the quota lands) and not in the register" in capsys.readouterr().out
     assert [(fleet["tmp"] / n / "etc" / "peers").exists() for n in "abc"] == [True, False, False]
     machine(fleet["reg"], "b", "192.0.2.30")                # the staged machine exists now: it is installed as any other
     assert _main(fleet, "roll", "/NODE/etc/peers", "--by", "lane-x", "--apply", "--on", "b", "c") == 0
     assert [(fleet["tmp"] / n / "etc" / "peers").read_text() for n in "bc"] == [LIST, LIST]
+
+    machine(fleet["reg"], "b", None)                        # its machine is released: the others go on without it
+    machine(fleet["reg"], "vy-cpu-11", "192.0.2.21")
+    fleet["calls"].clear()
+    assert _main(fleet, "roll", "/NODE/etc/peers", "--by", "lane-x", "--apply") == 0
+    assert "b  passed by: released in the register" in capsys.readouterr().out and "b" not in {n for n, _ in fleet["calls"]}
+    assert ["vy-cpu-11" in (fleet["tmp"] / n / "etc" / "peers").read_text() for n in "abc"] == [True, False, False]
 
 
 def test_register_is_a_copied_files_and_accept_a_register_made_files(tmp_path):

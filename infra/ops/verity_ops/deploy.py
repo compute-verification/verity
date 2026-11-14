@@ -85,8 +85,8 @@ taken out, with `--allow-shrink` or without, and every other line stays as it wa
 time: it reads every node first and changes nothing if one refuses; then each node accepts the key, so that a machine a list comes to name
 already takes the key from every node; then each node's file is installed and read back, and the roll stops at the first node
 whose file doesn't read `ok`. A node that can't be reached is passed by and named last, with the install that brings it up to
-date (exit 1); a staged node the register doesn't hold is passed by. So a machine joins the others in three steps: register it,
-copy the key to it, and `roll`.
+date (exit 1); a node with no machine (one the register marks released, or a staged one it doesn't hold) is passed by and is
+no failure. So a machine joins the others in three steps: register it, copy the key to it, and `roll`.
 """
 from __future__ import annotations
 
@@ -1164,8 +1164,9 @@ def told(f: dict) -> list[str]:
 def roll(nodes: dict[str, Node], path: str, ref: str, by: str, run: Runner, apply: bool = False, repo: Path = REPO,
          allow_shrink: bool = False, only: list[str] | None = None, say: Callable[[str], None] = print) -> int:
     """Put the register-made `path` on every node that lists it (the admin-only ones only when `only` names them), one node at
-    a time (the docstring's `roll`). 0 when every node holds the register's text, 1 when one was passed by; Refused before
-    anything changed when a node's install would refuse; RuntimeError at the first node whose file doesn't read ok."""
+    a time (the docstring's `roll`). 0 when every node that has a machine holds the register's text, 1 when one couldn't be
+    reached; Refused before anything changed when a node's install would refuse; RuntimeError at the first node whose file
+    doesn't read ok."""
     if missing := [n for n in only or [] if n not in nodes]:
         raise Refused(f"no node {missing[0]!r} in deploy.toml")
     picked = [nodes[n] for n in sorted(only or (n for n, nd in nodes.items() if not nd.admin), key=natural)
@@ -1173,10 +1174,11 @@ def roll(nodes: dict[str, Node], path: str, ref: str, by: str, run: Runner, appl
     if not picked:
         raise Refused(f"no node {'of those named ' if only else ''}lists {path} as a file made from the register "
                       "(`register = true` in deploy.toml)")
-    reg, away, refused, todo = register(), {}, {}, []
+    reg, none, away, refused, todo = register(), {}, {}, {}, []
     for node in picked:
-        if node.staged and node.name not in reg.live:
-            away[node.name] = f"staged ({node.staged}) and not in the register"
+        if node.name in reg.gone or (node.staged and node.name not in reg.live):
+            none[node.name] = "released in the register" if node.name in reg.gone else \
+                f"staged ({node.staged}) and not in the register"
             continue
         try:
             f = install(node, ref, by, [path], run, False, repo, allow_shrink)["files"][0]
@@ -1191,7 +1193,7 @@ def roll(nodes: dict[str, Node], path: str, ref: str, by: str, run: Runner, appl
         todo.append(node)
         say(f"{node.name}  {'unchanged' if f['changed'] is False else 'would install'}  {'; '.join(told(f))}")
     later = f"`research deploy install NODE {path} --by {by} --apply`"
-    for name, why in away.items():
+    for name, why in {**none, **away}.items():
         say(f"{name}  passed by: {why}")
     if refused:
         raise Refused("; ".join(refused.values()) + f". Nothing changed on any node ({len(refused)} of {len(picked)} refuse)")
