@@ -183,7 +183,7 @@ def test_ready_gives_the_committer_the_private_engines_fields_from_llms_public_n
 
 
 def test_a_local_checkpoint_commits_under_vllms_model_path_without_the_private_engine(monkeypatch):
-    from verity_bench.vllm.runner import _DirectLLM
+    from verity_bench.vllm.engine import _DirectLLM
 
     runner = _Runner()
     direct = _DirectLLM(_vllm(runner), {})
@@ -206,7 +206,7 @@ def _prof_module(monkeypatch) -> tuple[ModuleType, list[str]]:
 
 
 def test_the_stock_profiling_arm_ranges_the_runner_of_a_local_checkpoint_without_the_private_engine(monkeypatch):
-    from verity_bench.vllm.runner import _DirectLLM
+    from verity_bench.vllm.engine import _DirectLLM
 
     prof, ranges = _prof_module(monkeypatch)
     runner = _Runner()
