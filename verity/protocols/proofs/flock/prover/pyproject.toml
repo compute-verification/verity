@@ -199,11 +199,11 @@ paths = ["verity/protocols/accounting/pouw/verifier/tests"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_derive.py"]
-paths = ["verity/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
+paths = ["adapters/vllm/verity_vllm/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_flock_rows.py"]
-paths = ["verity/circuits/ops", "verity/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock"]
+paths = ["verity/circuits/ops", "adapters/vllm/verity_vllm/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_keyed.py"]
@@ -262,7 +262,7 @@ paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "verity/protocols/accounting/certifier",
     "verity/protocols/accounting/pous",
-    "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/windows",
+    "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/windows",
 ]
 
 [[tool.verity.tests.reads]]

@@ -1,6 +1,6 @@
 """Adversarial tests for stage DENSE B1, Program side — **padded baseline (experimental)**.  Attack A5 (the 32-bit cap dropping
 the lifted bit) on the leaf layout, T-1 refusals, the exact-count arithmetic against the Program's own arity for EVERY `a_r`, and
-the deletion rule as a function — on the TINY shape (`test_lifted_dense_b1` measures the real B0 shape).  Skips on a tree without `verity.definitions.registry.lifted`.
+the deletion rule as a function — on the TINY shape (`test_lifted_dense_b1` measures the real B0 shape).  Skips on a tree without `verity_vllm.definitions.registry.lifted`.
 """
 
 from __future__ import annotations
@@ -13,11 +13,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-L = pytest.importorskip("verity.definitions.registry.lifted")
-_ = pytest.importorskip("verity.definitions.registry.lifted", reason="the lifted registry").leaf_words  # DENSE B1 additions present?
+L = pytest.importorskip("verity_vllm.definitions.registry.lifted")
+_ = pytest.importorskip("verity_vllm.definitions.registry.lifted", reason="the lifted registry").leaf_words  # DENSE B1 additions present?
 
 from verity.circuits import Program  # noqa: E402
-from verity.definitions.registry import b1  # noqa: E402
+from verity_vllm.definitions.registry import b1  # noqa: E402
 
 from tests.program.test_serve3 import LP, TINY  # noqa: E402
 

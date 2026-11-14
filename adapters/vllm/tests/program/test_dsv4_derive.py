@@ -48,17 +48,17 @@ import torch
 import torch.fx.traceback as fxt
 import torch.nn as nn
 from torch._library.infer_schema import infer_schema
-from verity.definitions.numerics import deepgemm_twins as DT
-from verity.definitions.numerics import dsv4_compressor_twin as DC
-from verity.definitions.numerics import dsv4_qnorm_insert_twin as TQ
-from verity.definitions.numerics import flashmla_prefill_twin as FP
-from verity.definitions.numerics import flashmla_twin as FT
-from verity.definitions.numerics import marlin_moe_rows as MR
-from verity.definitions.numerics import mhc_twin as W
-from verity.definitions.numerics.dsv4_moe_twin import clamp_twin, hash_twin, router_twin
-from verity.definitions.numerics.serve3_reference import materialize
-from verity.definitions.registry import bf16_gemm_check as BC
-from verity.definitions.registry import hopper
+from verity_vllm.definitions.numerics import deepgemm_twins as DT
+from verity_vllm.definitions.numerics import dsv4_compressor_twin as DC
+from verity_vllm.definitions.numerics import dsv4_qnorm_insert_twin as TQ
+from verity_vllm.definitions.numerics import flashmla_prefill_twin as FP
+from verity_vllm.definitions.numerics import flashmla_twin as FT
+from verity_vllm.definitions.numerics import marlin_moe_rows as MR
+from verity_vllm.definitions.numerics import mhc_twin as W
+from verity_vllm.definitions.numerics.dsv4_moe_twin import clamp_twin, hash_twin, router_twin
+from verity_vllm.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.definitions.registry import hopper
 
 from tests import fake_vllm
 from tests.program.test_dsa_norm import ptx_block_model

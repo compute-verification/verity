@@ -1,5 +1,5 @@
 """The unfused norm chain (`ir.ops.rms_norm` / `ir.ops.fused_add_rms_norm` as ATen on an f32 copy, vLLM
-`GemmaRMSNorm.forward_native`) derived by the op-shaped rules of `vllm_bindings` into the promoted `verity.definitions.registry.dense` kinds of
+`GemmaRMSNorm.forward_native`) derived by the op-shaped rules of `vllm_bindings` into the promoted `verity_vllm.definitions.registry.dense` kinds of
 the pinned `b1-eager-v3` vocabulary — the SAME specialization ids, in the SAME order, as the eager Match fold resolves the chain to
 (`verity_vllm/observe/fold/profiles/gen_dense_gemma2_patterns.py`), so `cb_a.compare` can be canonical-equal.
 
@@ -25,7 +25,7 @@ import torch.nn as nn
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import MEAN_PINS, clear_observations, observe_export_facts, vllm_ruleset
-from verity.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.numerics.serve3_reference import materialize
 
 PROF = dict(mode="profile", profile="b1-eager-v3")
 BF = torch.bfloat16

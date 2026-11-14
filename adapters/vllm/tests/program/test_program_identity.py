@@ -8,8 +8,8 @@ import pytest
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array
-from verity.definitions.registry import b1
-from verity.definitions.registry.prims import BF16, Bf16Add, Bf16AddF2fp
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry.prims import BF16, Bf16Add, Bf16AddF2fp
 
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.program_identity import check_identity

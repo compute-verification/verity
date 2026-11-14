@@ -1,5 +1,5 @@
 """The FA2 scope of a model served with logit soft-capping
-(`attn_logit_softcapping > 0`: Gemma-2) -> `AttentionSoftcap_v1{T,NH,KVH,D,BN,CAP}` (`verity.definitions.registry.dense`,
+(`attn_logit_softcapping > 0`: Gemma-2) -> `AttentionSoftcap_v1{T,NH,KVH,D,BN,CAP}` (`verity_vllm.definitions.registry.dense`,
 exact `MufuTanh` over all 2^32 sm_89 words), or
 `AttentionSoftcap_v2` under FA2's per-iteration `Check_inf`.
 

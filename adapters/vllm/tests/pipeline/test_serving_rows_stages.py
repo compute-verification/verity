@@ -28,12 +28,12 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.commitments.windows import wiring as WI
-from verity.definitions import boolean as BB
-from verity.definitions.registry import boolean_topp_stages as BT
-from verity.definitions.registry import sampling as SA
-from verity.definitions.registry import sampling_rows as SR
-from verity.definitions.registry import topp_keep_builder as K
-from verity.definitions.registry import topp_stages as T
+from verity_vllm.definitions import boolean as BB
+from verity_vllm.definitions.registry import boolean_topp_stages as BT
+from verity_vllm.definitions.registry import sampling as SA
+from verity_vllm.definitions.registry import sampling_rows as SR
+from verity_vllm.definitions.registry import topp_keep_builder as K
+from verity_vllm.definitions.registry import topp_stages as T
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity_flock.class_statement import UnitStager
 

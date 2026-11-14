@@ -25,8 +25,8 @@ import numpy as np
 import pytest
 from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.program import Program
-from verity.definitions.registry import b1
-from verity.definitions.registry import lifted as L
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import lifted as L
 
 C = b1.B0_CONFIG  # HuggingFaceTB/SmolLM2-135M: NL=30, H=576, NH=9, KVH=3, D=64, V=49152
 LP, CAP = 256, 32
