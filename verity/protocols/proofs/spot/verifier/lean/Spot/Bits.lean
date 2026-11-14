@@ -43,8 +43,8 @@ describes, where each of its gates sits, and each unit's gates and inputs. The s
 * `Members`, `base`, `wiresOf`: an audit's members, each a statement on a circuit file over some of the partition's VUs,
   side by side, and each source bit's wire to the first claims position at its commitment position, compared at the
   partition's VUs: the writer's output bit, else the first copy.
-* `defWidth d`, `bitsOf`, `fieldsOf`, `wordsOf`, `retWords`: the width of a primitive's leaf, a type's bits, a return's
-  fields, and the 16-bit words a parameter and a return are packed on, a return each field on words of its own.
+* `defWidth d`, `bitsOf`, `wordsOf`, `retWords`: the width of a primitive's leaf, a type's bits, and the 16-bit words a
+  parameter and a return are packed on, a return each field (`Flock.Program.fieldsOf`) on words of its own.
 * `runsOf`, `paramsWhy`: a file's input rows run by parameter, and whether its unit's input ports read each parameter's
   words off them.
 * `check c P tmpl`: why Bits doesn't lay `c` out as template `tmpl` of `P`, or none.
@@ -684,18 +684,12 @@ def defWidth (d : Flock.Program.Defn) : Nat :=
 /-- **A type's bits**: its leaves' widths summed. -/
 def bitsOf (t : Flock.Program.Ty) : Nat := t.widths.foldl (· + ·) 0
 
-/-- **A return's fields**: a tuple's or a record's, else the return itself. -/
-def fieldsOf : Flock.Program.Ty → List Flock.Program.Ty
-  | .tuple fs => fs.toList
-  | .record fs => fs.toList.map (·.2)
-  | t => [t]
-
 /-- **A value's 16-bit words**: its bits packed sixteen to a word, least significant first, the last word's high bits
 padding. A parameter is one value. -/
 def wordsOf (t : Flock.Program.Ty) : Nat := (bitsOf t + 15) / 16
 
-/-- **A return's words**: each field packed on words of its own (`wordsOf`). -/
-def retWords (t : Flock.Program.Ty) : Nat := ((fieldsOf t).map wordsOf).sum
+/-- **A return's words**: each field (`Flock.Program.fieldsOf`) packed on words of its own (`wordsOf`). -/
+def retWords (t : Flock.Program.Ty) : Nat := ((Flock.Program.fieldsOf t).map wordsOf).sum
 
 /-! ## The file against its Program -/
 
