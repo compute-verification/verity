@@ -242,7 +242,7 @@ def main(argv=None, slots=None, quiet=False):
     ap.add_argument("--statement", default="verity/flock-circuit")
     ap.add_argument("--coins", default=None)
     ap.add_argument("--stratified", default=None, metavar="K",
-                    help="the verifier's own K, for sessions sampled by the stratified law (Lean only; upstream reads the sample)")
+                    help="the verifier's own K, for sessions sampled by the stratified sampling design (Lean only; upstream reads the sample)")
     ap.add_argument("--zk", action="store_true", help="flock-circuit --zk sessions (upstream: the live build's replay)")
     ap.add_argument("--session-tables", default=None, help="the tables of every session")
     ap.add_argument("--tables", default=None, help="the pinned MUFU tables, for circuits with lookup slots")
@@ -250,7 +250,7 @@ def main(argv=None, slots=None, quiet=False):
     ap.add_argument("--lean-refuses", default=None, metavar="WHY",
                     help="D12 at a statement's form: every session refused with WHY once every check has passed, compared as accepted")
     ap.add_argument("--lean-refuses-drawn", default=None, metavar="WHY",
-                    help="D12 at a sample law: every session whose record carries a unit sample refused at setup with WHY; upstream "
+                    help="D12 at a sampling design: every session whose record carries a unit sample refused at setup with WHY; upstream "
                          "gives each its expected verdict")
     ap.add_argument("--lean-refuses-drawless", default=None, metavar="WHY",
                     help="D12 at a session without a sample: refused with WHY once every check has passed, compared as accepted")
