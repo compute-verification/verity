@@ -228,7 +228,7 @@ LOAD_FILES = (
     f'"summary": {{"requests": 4, "load": {LOAD_SUMMARY!r}}}}}))\n')
 
 
-def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_registrations_and_relay_alone(stored):
+def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_registrations_alone(stored):
     rc, out = gate(stored, LOAD)
     run = json.loads(out)["run"]
     tunnels, sinks, ups, seen = [], [], [], []
@@ -251,10 +251,12 @@ def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_reg
     assert req["load"]["shape"] == "tiny" and work == d / A.WITNESS and url == f"http://127.0.0.1:{local}"
     assert kw == {"sinks": [("127.0.0.1", p) for p in locals_], "store": stored.store}
     assert end["device"] == "warden" and end["rc"] == 0 and end["ended"] == "the rehearsal ended"
-    assert end["load"] == RELAY and end["verdict"] == {"accepted": True, "problems": 0, "requests": 4,
-                                                       "load": LOAD_SUMMARY}
-    assert set(end["files"]) == {"deployment.json", "cells.jsonl", "certificates.jsonl", "load.json",
-                                 "load-relay.json", "tunnel.log", "rehearse.log"}
+    assert "load" not in end and end["verdict"] == {"accepted": True, "problems": 0, "requests": 4,
+                                                    "load": LOAD_SUMMARY}
+    assert set(end["files"]) == {"deployment.json", "cells.jsonl", "certificates.jsonl", "load.json", "tunnel.log",
+                                 "rehearse.log"}
+    assert json.loads((d / A.WITNESS / "load-relay.json").read_text()) == RELAY and "load-relay.json" in end["witness"]
+    assert not (d / "out" / "load-relay.json").exists()
     assert json.loads((d / "out" / "load.json").read_text())["registrations"] == [{"root": "ab" * 64}]
     assert "load-heads.json" in end["witness"]
     public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()

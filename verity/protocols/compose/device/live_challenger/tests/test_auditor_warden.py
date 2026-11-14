@@ -263,17 +263,17 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_re
 
 
 #: each file a warden run publishes to `out/` (`WARDEN_PUBLIC`, and `warden_outcome`'s `certificates.jsonl`) by the
-#: certifier's message that carries it to the verifier, None for one no message declares yet
+#: certifier's message that carries it to the verifier
 PUBLISHED = {"deployment.json": NC.DEPLOYMENT, "cells.jsonl": NC.REGISTRATION, "load.json": NC.LOAD,
-             "certificates.jsonl": NC.CERTIFICATE, "groups.json": NC.GROUPS, "load-relay.json": None}
+             "certificates.jsonl": NC.CERTIFICATE, "groups.json": NC.GROUPS}
 
 
 def test_the_certifiers_manifest_declares_exactly_the_files_a_warden_run_publishes():
-    """Every file a warden run publishes is one of the certifier's messages to the verifier or is named here as one no
-    message declares yet; the verifier's channel carries those messages and the out side's record, nothing else."""
+    """Every file a warden run publishes is one of the certifier's messages to the verifier, and the verifier's channel
+    carries those messages and the out side's record, nothing else."""
     assert set(A.WARDEN_PUBLIC) | {"certificates.jsonl"} == set(PUBLISHED)
     (to_verifier,) = (c.messages for c in NC.MANIFEST.channels if c.receiver == NC.VERIFIER)
-    assert sorted(to_verifier) == sorted({m for m in PUBLISHED.values() if m} | {NC.OUT_RECORD})
+    assert sorted(to_verifier) == sorted({*PUBLISHED.values(), NC.OUT_RECORD})
 
 
 @pytest.mark.parametrize("argv, witness", [

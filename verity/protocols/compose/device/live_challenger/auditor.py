@@ -339,9 +339,10 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   `--witness` file on the developer's host and nowhere here: this host never writes a salt. The developer then starts its
   endpoint on the weights the sink wrote, and the warden's one signer (its publisher process) signs the load's 733
   heads in the serving session before its first window, so one key and one session carry the load and the windows;
-  `out/` publishes `load.json` (the load's registrations, which the block record pins) and `load-relay.json` (the
-  relay's counts and the sink's acknowledgements, or why it was refused), and the end carries the relay's and the
-  check's `load` (values and how many registered).
+  `out/` publishes `load.json` (the load's registrations, which the block record pins), and the end's verdict carries
+  the check's `load` (values and how many registered). `load-relay.json` (the relay's counts and the sink's
+  acknowledgements, or why it was refused) varies with the load and nothing decides on it, so it is witness, beside
+  the cells' salts.
 - **A rehearsal's sampling** (`sampling`, both verbs): `--temperature` 0 to 2 (0 by default) and `--top-p` above 0
   and at most 1 (1 by default), each a plain decimal of at most 4 places, recorded in every request and passed on
   every one (`sampling_argv`), so every request the rehearsal sends carries both: an endpoint applies its own
@@ -516,7 +517,7 @@ PROMPTS = "prompts.json"
 #: `warden_serve.py rehearse` writes is witness and stays in `witness/`, which `fetch` gives the run's own lane alone.
 #: `groups.json` (a `--window-per-group` run's) is each group's request indices and link-windows, the request's
 #: public counts and the scan's schedule alone
-WARDEN_PUBLIC = ("deployment.json", "cells.jsonl", "groups.json", "load.json", "load-relay.json")
+WARDEN_PUBLIC = ("deployment.json", "cells.jsonl", "groups.json", "load.json")
 WITNESS = "witness"
 #: the shapes of interface 1's weights a store holds and a load relays (`load_relay.SHAPES`)
 LOAD_SHAPES = ("h200", "tiny")
@@ -2625,8 +2626,7 @@ def warden_outcome(out: Path, witness: Path) -> dict:
     """A warden rehearsal's public outcome, from what `warden_serve.py rehearse` wrote to `witness`:
     `WARDEN_PUBLIC`'s files copied to `out`, `certified.jsonl`'s certificates without the heads and salts they sign
     (`out/certificates.jsonl`), each registration's root by value, the check's verdict (`accepted`, how many problems,
-    `WARDEN_COUNTS`), each witness file by name and size alone, and a load's relay (`load-relay.json`: its counts and
-    the sink's acknowledgements, or why it was refused)."""
+    `WARDEN_COUNTS`), and each witness file by name and size alone."""
     for name in WARDEN_PUBLIC:
         if (witness / name).is_file():
             shutil.copyfile(witness / name, out / name)
@@ -2647,12 +2647,7 @@ def warden_outcome(out: Path, witness: Path) -> dict:
         verdict = {"accepted": check.get("accepted"), "problems": len(check.get("problems") or []),
                    **{k: summary[k] for k in WARDEN_COUNTS if k in summary}}
     sizes = {str(p.relative_to(witness)): p.stat().st_size for p in sorted(witness.rglob("*")) if p.is_file()}
-    try:
-        load = json.loads((out / "load-relay.json").read_text())
-    except (OSError, ValueError):
-        load = None
-    return {"verdict": verdict, "registrations": registrations, "witness": sizes,
-            **({} if load is None else {"load": load})}
+    return {"verdict": verdict, "registrations": registrations, "witness": sizes}
 
 
 def forward_argv(ssh: list[str], local: int, remote: int, back: tuple[int, int] | None = None) -> list[str]:
