@@ -1154,103 +1154,120 @@ def wired(members) -> list[str]:
         [f"view {b}" for b in sorted(state) if o2 and o2.get(b) != state[b]]
 
 
-def host(out: Path, run: Path | None = None, draw: int | None = None, setup: Setup = W63, group: int = 1,
-         start: int = 0, v3c: Path | None = None) -> SimpleNamespace:
-    """The run (`link`'s, of `run` when given, on V3c's trees with `v3c`) and every round's members as the host reads
-    them (no lowering, no proof): what the test holds. A sample (`draw`) changes no round: each is refused by
-    Lean's registered reads, which hold every table row, sampled or not."""
-    at = link(out, run, setup, group, start, v3c)
-    got = {}
-    for name, (templates, outcome) in rounds_of(at).items():
-        got[name] = [member(at, name, mb) for mb in members_of(templates, group, at.T,
-                                                               at.unread.bucket if at.unread else 1,
-                                                               entries_of(setup.cls, group, at.T), setup.cls.NR)]
-        if not predicted(at, name, got[name]) or (name == "honest" and wired(got[name])):
-            raise SystemExit(f"{name}: the host's read of the round isn't {outcome}: "
-                             f"{[(m.name, m.refused, m.outputs) for m in got[name]]}, chains {wired(got[name])}")
-    return SimpleNamespace(at=at, rounds=got, draw=draw)
-
-
-# --- the carried shape ------------------------------------------------------------------------------------------------
-
 def empty_start(program: str, cls: IS.Class) -> REG.Registered:
-    """The carried start of a run's first link-window, as the verifier computes it: the empty state's row as one-stage's
+    """The start of a run's first link-window, as the verifier computes it: the empty state's row as one-stage's
     registered value `CARRY` of the Program with digest ``program``, a row/v2 row under the public salt of a value the
     verifier fills (`registered.supplied_salts`). Nothing of it is the prover's, so the verifier pins its root."""
     return REG.Registered.commit(program, CARRY, [_words(IS.encode(cls, IS.empty(cls)))],
                                  REG.supplied_salts(program, CARRY, 1), schema=BitRowLeaf.hiding_schema)
 
 
-def carried_window(whole: SimpleNamespace, w: int, start, claimed: list[int] | None = None) -> SimpleNamespace:
-    """Link-window w of `link`'s run as the carried shape registers it, alone: its rows of each link, the chain's
-    buckets w·T … (w + 1)·T − 1 as its buckets 0 … T − 1, and the prover's trees over them, bound to the session and
-    its own ingress head: ``state``, T leaves, leaf t the state bucket t reads and leaf 0 the one it starts from;
-    each lane's slot entries at its T / EVERY boundaries; ``view``. ``start`` is the tree its start unit's ``sin``
-    opens, leaf 0: `empty_start`'s for the run's first link-window, else the link-window before's last o1 (its
-    member's `Frame`). With ``claimed`` (the stale round) the start unit is given that row for its ``sin`` in place
-    of ``start``'s, and the state tree is the one row it copies."""
+def window_of(whole: SimpleNamespace, w: int, start, claimed: list[int] | None = None) -> SimpleNamespace:
+    """Link-window w of `link`'s run as its rounds register it, alone: its number in the run (``number``), its rows of
+    each link (``sides``), the chain's buckets w·T … (w + 1)·T − 1 as its buckets 0 … T − 1, and the prover's trees
+    over them, bound to the session and its own ingress head: ``state``, T leaves, leaf t the state bucket t reads and
+    leaf 0 the one it starts from; each lane's slot entries at its T / EVERY boundaries; ``view``; with V3c's window,
+    its trees in their place (`v3c_trees`). ``start`` is the tree its start unit's ``sin`` opens, leaf 0:
+    `empty_start`'s for the run's first link-window, else the link-window before's last o1 (its member's `Frame`).
+    The group's negatives placed in it, each None elsewhere: ``swapped``, the chain round's state tree, leaves a + 1
+    and a + 2 swapped; ``unread``, the unread round's unit and slot entries' tree; ``tampered``, the tampered round's
+    egress rows; and ``void``, its buckets with a FAIL. With ``claimed`` (the stale round) the start unit is given
+    that row for its ``sin`` in place of ``start``'s, and the state tree is the one row it copies."""
     cls, T, ch = whole.setup.cls, whole.T, whole.chain
-    lo, nb, side = w * T, T // cls.EVERY, whole.sides["ingress"][w]
+    lo, nb, sides = w * T, T // cls.EVERY, {s: ws[w] for s, ws in whole.sides.items()}
+    heads = [sides["ingress"].head]
     sub = SimpleNamespace(ingress=ch.ingress[lo:lo + T], egress=ch.egress[lo:lo + T],
                           view=lambda t: ch.view(lo + t), outputs=lambda t: ch.outputs(lo + t))
-    rows = {"state": IS.window_state(cls, ch.states[1:], lo, T),
-            **{p: e[w * nb:(w + 1) * nb] for p, e in zip(lane_kinds(cls), slot_entries(cls, ch.progs))},
-            "view": ch.views[lo:lo + T]}
-    trees = {k: tree(k, r, [side.head], whole.session) for k, r in rows.items()}
+    states = IS.window_state(cls, ch.states[1:], lo, T)
+    entries = [e[w * nb:(w + 1) * nb] for e in slot_entries(cls, ch.progs)]
+    trees = {k: tree(k, r, heads, whole.session)
+             for k, r in (("state", states), *zip(lane_kinds(cls), entries), ("view", ch.views[lo:lo + T]))}
+    if whole.v3c is not None:
+        trees.update(v3c_trees(whole.v3c, cls, states, entries))
+    swapped = unread = tampered = None
     if claimed is not None:
         trees["state"] = tree("state", [claimed], [s.head for s in whole.sides["ingress"]], whole.session)
-    return SimpleNamespace(setup=whole.setup, chain=sub, T=T, G=1, windows=[whole.windows[w]], params=whole.params,
+    else:
+        if whole.swap is not None and whole.swap // T == w:
+            a, rows = whole.swap - lo, list(states)
+            rows[a + 1], rows[a + 2] = rows[a + 2], rows[a + 1]
+            swapped = tree("state", rows, heads, whole.session)
+        if (u := whole.unread) is not None and u.bucket // T == w:
+            unread = SimpleNamespace(bucket=u.bucket - lo, slot=u.slot, entry=u.entry - w * nb, q=u.q,
+                                     tree=tree(f"prog{u.slot}", u.rows[w * nb:(w + 1) * nb], heads, whole.session))
+        if (t := whole.tampered) is not None and t.window == w:
+            tampered = SimpleNamespace(**{**vars(t), "bucket": t.bucket - lo})
+    return SimpleNamespace(setup=whole.setup, chain=sub, T=T, number=whole.windows[w], params=whole.params,
                            session=whole.session, source=whole.source, trees=trees, start=start, claimed=claimed,
-                           sides={s: [ws[w]] for s, ws in whole.sides.items()}, ordinals=whole.ordinals,
-                           block_sets=[block_set([side.head], whole.session, j) for j in range(cls.NR)])
+                           sides=sides, ordinals=whole.ordinals, swapped=swapped, unread=unread, tampered=tampered,
+                           void=[t - lo for t in whole.void if t // T == w] if claimed is None else [],
+                           v3c=whole.v3c, block_sets=[block_set(heads, whole.session, j) for j in range(cls.NR)])
 
 
-def carried(out: Path, run: Path | None = None, setup: Setup = TEST2, group: int = 2,
-            program: str | None = None) -> SimpleNamespace:
-    """The carried shape's rounds as the host reads them (no lowering, no proof), ``--carried``: `link`'s run of
-    ``group`` link-windows, each a round of its own (``carried-<w>``, `CARRIED`'s members of `carried_window`), its
-    start unit's ``sin`` the first's `empty_start` and each later one's the round before's ``last`` member's o1, the
-    `Frame` that round's record names `CARRY_PORT`; each accepted, every read held, every output 1 and its chains
-    wired from the start unit's o0. Then the stale round (``stale-<group>``, `STALE`): a start unit alone, as a
+def round_trees(at: SimpleNamespace, name: str, templates: tuple[str, ...]) -> dict:
+    """The prover's trees a round's registration names (``scan/<kind>``): the link-window's, the chain round's state
+    tree and the unread round's slot entries' in their places; an egress-only round's the view alone, the block
+    round's the state and each lane's slot entries, the stale round's the one state row its start unit copies."""
+    kind = kind_of(name)
+    trees = {**at.trees, **({"state": at.swapped} if kind == "chain" else {}),
+             **({f"prog{at.unread.slot}": at.unread.tree} if kind == "unread" else {})}
+    reads = {("egress",): ("view",), BLOCK: ("state", *lane_kinds(at.setup.cls)), STALE: ("state",)}.get(templates)
+    return {k: v for k, v in trees.items() if reads is None or k in reads}
+
+
+def host(out: Path, run: Path | None = None, draw: int | None = None, setup: Setup = W63, group: int = 1,
+         start: int = 0, v3c: Path | None = None, program: str | None = None) -> SimpleNamespace:
+    """The run (`link`'s, of `run` when given, on V3c's trees with `v3c`) and every round's members as the host reads
+    them (no lowering, no proof): what the test holds. Each of the group's link-windows is a registration of its own
+    (`window_of`), its rounds `rounds_of`'s, named ``<kind>-<its number>`` (`round_name`), in link-window order: its
+    start unit's ``sin`` the first's `empty_start` and each later one's the honest round before's ``last`` member's
+    o1, the `Frame` that round's record names `CARRY_PORT`; an honest round's chains are wired from the start unit's
+    o0. Then, unless the run is void, the stale round (``stale-<last + 1>``, `STALE`): a start unit alone, as a
     link-window after the group's last would register it, its ``sin`` given the state the last link-window started
-    from in place of the one it ended in, which opens no leaf of the last record's port ("does not open").
-    ``program``: the digest of the Program the link-windows are registered under, the scan's own (`scan_program`) by
-    default, which the first start's domain and salt bind."""
-    whole = link(out, run, setup, group)
-    if whole.void:
-        raise SystemExit(f"--carried: the warden failed a connection in buckets {whole.void}; the carried shape is "
-                         "read on a run it didn't")
+    from in place of the one it ended in, which opens no leaf of the last record's port ("does not open"). A sample
+    (`draw`) changes no round: each is refused by Lean's registered reads, which hold every table row, sampled or
+    not. ``program``: the digest of the Program the link-windows are registered under, the scan's own
+    (`scan_program`) by default, which the first start's domain and salt bind.
+
+    -> ``whole`` (`link`'s), ``rounds`` (by name, in order: its ``kind``, link-window ``number``, ``templates``,
+    ``outcome``, link-window ``at``, ``members`` and ``trees``, `round_trees`) and ``draw``."""
+    whole = link(out, run, setup, group, start, v3c)
     cls, T, ch = setup.cls, whole.T, whole.chain
-    first = empty_start(program or PA.program_digest(scan_program(cls, CARRIED, 1, T)), cls)
-    start = Held(first.domain, IS.state_bits(cls), (bit_row((list(first.rows[0]), 16))[0],), first.salts)
-    if start.root != first.root or _bits(start, 0) != ch.states[0]:
-        raise SystemExit("--carried: the empty state's row under one-stage's registered domain isn't the root the "
-                         "verifier pins (empty_start), or isn't the state the chain starts from")
-    rounds = []
-    for w in range(group + 1):
-        stale = w == group
-        name, templates = (f"stale-{w}", STALE) if stale else (f"carried-{w}", CARRIED)
-        claimed = ch.states[(group - 1) * T] if stale else None
-        if stale and claimed == _bits(start, 0):
-            raise SystemExit("--carried: the last link-window ends in the state it started from, so the stale round "
-                             "would claim the honest start")
-        at = carried_window(whole, min(w, group - 1), start, claimed)
-        ms = [member(at, name, mb) for mb in members_of(templates, 1, T)]
-        good = "does not open" in (ms[0].refused or "") if stale else not wired(ms) and all(
-            m.refused is None and (m.outputs is None or set(m.outputs) == {1}) for m in ms)
-        if not good:
-            raise SystemExit(f"{name}: the host's read of the round isn't {'does not open' if stale else 'accepted'}: "
-                             f"{[(m.name, m.refused, m.outputs) for m in ms]}, chains {wired(ms)}")
-        rounds.append(SimpleNamespace(name=name, templates=templates, stale=stale, at=at, members=ms, start=start,
-                                      trees={"state": at.trees["state"]} if stale else at.trees))
-        if not stale:
-            start = next(m for m in ms if m.name == "last").frames["o1"]
-    return SimpleNamespace(whole=whole, T=T, rounds=rounds)
+    first = empty_start(program or PA.program_digest(scan_program(cls, TEMPLATES, T)), cls)
+    begin = Held(first.domain, IS.state_bits(cls), (bit_row((list(first.rows[0]), 16))[0],), first.salts)
+    if begin.root != first.root or _bits(begin, 0) != ch.states[0]:
+        raise SystemExit("the empty state's row under one-stage's registered domain isn't the root the verifier pins "
+                         "(empty_start), or isn't the state the chain starts from")
+    rounds: dict[str, SimpleNamespace] = {}
+
+    def read(at: SimpleNamespace, number: int) -> None:
+        for kind, (templates, outcome) in rounds_of(at).items():
+            name = round_name(kind, number)
+            ms = [member(at, name, mb) for mb in members_of(templates, T, at.unread.bucket if at.unread else 0,
+                                                            entries_of(cls, T), cls.NR)]
+            if not predicted(at, name, ms) or (kind == "honest" and wired(ms)):
+                raise SystemExit(f"{name}: the host's read of the round isn't {outcome}: "
+                                 f"{[(m.name, m.refused, m.outputs) for m in ms]}, chains {wired(ms)}")
+            rounds[name] = SimpleNamespace(name=name, kind=kind, number=number, templates=templates, outcome=outcome,
+                                           at=at, members=ms, trees=round_trees(at, name, templates))
+
+    for w in range(group):
+        at = window_of(whole, w, begin)
+        read(at, at.number)
+        begin = next(m for m in rounds[round_name("honest", at.number)].members if m.name == "last").frames["o1"]
+    if not whole.void:
+        claimed = ch.states[(group - 1) * T]
+        if claimed == _bits(begin, 0):
+            raise SystemExit("the last link-window ends in the state it started from, so the stale round would claim "
+                             "the honest start")
+        at = window_of(whole, group - 1, begin, claimed)
+        read(at, at.number + 1)
+    return SimpleNamespace(whole=whole, T=T, rounds=rounds, draw=draw)
 
 
 def carry_of(pg: SimpleNamespace, cls: IS.Class, log: list[dict], port: dict) -> SimpleNamespace:
-    """A carried round's start, on both sides, given the verifier's log of the run's earlier records and the start
-    member's ``sin`` port as the host read it (``port``, `member`).
+    """A round's start, on both sides, given the verifier's log of the run's earlier records and the start member's
+    ``sin`` port as the host read it (``port``, `member`).
 
     The verifier's (``check``, `verifier.check`'s parameters beside the round's own): it expects `CARRY` registered, one
     row/v2 row of the state's words, and holds it, with no earlier record, to the root it computes itself (`empty_start`,
@@ -1259,7 +1276,9 @@ def carry_of(pg: SimpleNamespace, cls: IS.Class, log: list[dict], port: dict) ->
     one-stage's (`registered.reads_file` on its Program, the value's root and domain that port's, ``domains``), and
     the start member's file must be it: SystemExit otherwise.
 
-    The prover's (``record``): the record's ``previous`` and its entry of `CARRY`.
+    The prover's (``record``): the record's ``previous`` and its entry of `CARRY`; and, where the start is the empty
+    state's, its opening as the record's `window` gives it (``empty``, `NetworkCheck.Period`'s `startEmpty`): the
+    state's ``words`` zero u16 words under the verifier's public ``salt``.
 
     ``negatives(rec)``: the round's record ``rec`` changed, or checked another way, as ``{name: (record, parameters,
     code)}``, each refused with ``code``: ``another-root``, the entry at a root that isn't the held one (`R7-held`);
@@ -1271,14 +1290,16 @@ def carry_of(pg: SimpleNamespace, cls: IS.Class, log: list[dict], port: dict) ->
     if log:
         e = next((r for r in log[-1]["roots"] if r["port"] == CARRY_PORT), None)
         if e is None:
-            raise SystemExit(f"--carried: the log's last record names no {CARRY_PORT}, and a carried start reads it")
-        root, dom, how = e["root"], e["domain"], {"outputs": {CARRY: {"port": CARRY_PORT}}}
+            raise SystemExit(f"the log's last record names no {CARRY_PORT}, and the start of the link-window after "
+                             "it reads it")
+        root, dom, how, empty = e["root"], e["domain"], {"outputs": {CARRY: {"port": CARRY_PORT}}}, None
     else:
         first = empty_start(PA.program_digest(pg.program), cls)
         root, dom, how = first.root.hex(), first.domain.domain_id.hex(), {"pinned": {CARRY: first.root.hex()}}
+        empty = {"words": values[CARRY], "salt": first.salts[0].hex()}
     mine = REG.reads_file(pg.program, pg.query, values, {CARRY: root}, domains={CARRY: dom}, schemas=schemas)["ports"]
     if list(mine) != ["sin"] or {**mine["sin"], "reads": mine["sin"]["reads"][:1]} != port:
-        raise SystemExit(f"--carried: the start member's --registered port of sin isn't the verifier's own "
+        raise SystemExit(f"the start member's --registered port of sin isn't the verifier's own "
                          f"(registered.reads_file at the start's root and domain): {port} != {mine}")
     check = {"log": list(log), "registered": values, "schemas": schemas, **how}
     entry = {"value": CARRY, "root": root, "leaves": port["leaves"], "words": port["words"], "domain": dom}
@@ -1296,7 +1317,7 @@ def carry_of(pg: SimpleNamespace, cls: IS.Class, log: list[dict], port: dict) ->
         return out
 
     return SimpleNamespace(check=check, record={"previous": RG.digest(log[-1]) if log else None, "registered": [entry]},
-                           root=root, domain=dom, negatives=negatives)
+                           root=root, domain=dom, empty=empty, negatives=negatives)
 
 
 # --- the statements ---------------------------------------------------------------------------------------------------
