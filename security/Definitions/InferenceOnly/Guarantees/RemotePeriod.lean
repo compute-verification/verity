@@ -3,7 +3,7 @@ module
 public import Definitions.InferenceOnly.Guarantees.Remote
 
 /-!
-# The compute dampener, remote protocol, over a monitoring period: the statement
+# The slowdown, remote protocol, over a monitoring period: the statement
 
 `SlowdownRemote` over a monitoring period of `T` windows (results are per monitoring period), with its
 premises on the protocols, `PouwSound`, `SampledDetection` and one declaration's count verdict, replaced by what each
@@ -68,7 +68,7 @@ namespace InferenceOnly.Guarantees
 
 open Verity InferenceOnly.Slowdown
 
-/-- **The compute dampener, remote protocol, over a monitoring period.** A monitoring period of `T` windows, window `t`
+/-- **The slowdown, remote protocol, over a monitoring period.** A monitoring period of `T` windows, window `t`
 with its own uniform coins `Ω t`, independent of the others' (a window is a round of live coins: the deployment's
 window, or a finer cut of it where its PoUW and sampled-proofs coins are flipped at different times). Every bound on a
 window holds at any value `ξ` of the other windows' coins, over its own (`ξ[t ↦ a]`, `a` uniform on `Ω t`).
