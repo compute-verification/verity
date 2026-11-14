@@ -125,6 +125,9 @@ schedule it runs under, and the certificate the key signed for both once, before
 **The check**, in order; any rejection rejects, then any undecided answer leaves the period undecided:
 
 * the commitment registers the parameters' audits and `m` link-windows, and the evidence answers each;
+* the listed entries (`startChecks`): their starts strictly increase (`entriesOrderRefusal`), and no two of them have
+  one key identifier and different keys (`entriesKeyRefusal`), which the decoder refuses too and the check refuses of
+  any parameters;
 * listed entry `i` (`startChecks`): the evidence shows a start for each listed entry, and entry
   `i`'s is its session's certified start (`startRefusal`, `certificate.CertifiedStart.refusal`'s checks in its
   order): an egress certificate of window 0 under the link `<link>-origin`, which no record's certificate names; the
@@ -1539,7 +1542,7 @@ def follows (xb x : Start) : Bool := xb.ordinal + 1 == x.ordinal
 
 /-- Listed entry `i`'s start's finding: a refusal unless the start shown for it is its session's
 certified start (`startRefusal`), the entry starts where its key's first listed entry puts it (`heldTo`, by key
-identifier, which names one key, `certifierEntriesOf`), and its session is the one right after that of its key's entry
+identifier, which names one key, `entriesKeyRefusal`), and its session is the one right after that of its key's entry
 listed before it (`follows`). A key's first listed entry is held to itself: its start is the auditor's pin, and each
 later entry of the key is read off it by the certifier's signatures. -/
 def startCheck (p : Params) (s : Schedule) (sd : ByteArray) (starts : Array Start) (i : Nat) (e : Entry) (x : Start) :
@@ -1565,11 +1568,33 @@ def startCheck (p : Params) (s : Schedule) (sd : ByteArray) (starts : Array Star
       else none
     | none => none
 
-/-- The listed entries' starts' findings: one an entry, in order (`startCheck`), or the one finding that the evidence
-does not show a start for each listed entry. -/
+/-- Why the listed entries' starts do not strictly increase, at the first entry whose start is not after the one listed
+before it, or none. The decoder refuses such a list too (`certifierEntriesOf`); the check refuses it of any
+parameters, so the entries' stretches are in order wherever it accepts. -/
+def entriesOrderRefusal (p : Params) : Option String :=
+  ((p.entries.zip (p.entries.extract 1)).zipIdx.find? fun ((x, y), _) => y.start ≤ x.start).map fun ((x, y), i) =>
+    s!"entries: out of order: entry {i + 1} starts at {y.start}, not after entry {i}'s {x.start}: list the entries by \
+      their stretches' starts, no two at one"
+
+/-- Why two listed entries have one key identifier (`I`, a key's first 16 bytes) and different keys, at the first such
+pair, or none. The check pairs a key's entries by identifier (`startCheck`), and the decoder refuses such a list too
+(`certifierEntriesOf`); the check refuses it of any parameters, so wherever it accepts an identifier names one key. -/
+def entriesKeyRefusal (p : Params) : Option String :=
+  let ix := p.entries.zipIdx
+  (ix.findSome? fun (a, i) => (ix.find? fun (b, j) => i < j && a.key.extract 0 16 == b.key.extract 0 16 &&
+      a.key != b.key).map fun (_, j) => (i, j)).map fun (i, j) =>
+    s!"entries: two keys with one key identifier (a key's first 16 bytes), entries {i} and {j}: an identifier \
+      names one key"
+
+/-- The listed entries' starts' findings: the one finding that the entries' starts do not strictly increase
+(`entriesOrderRefusal`), else that two of them have one key identifier and different keys (`entriesKeyRefusal`), else
+the one finding that the evidence does not show a start for each listed entry, else one an entry, in order
+(`startCheck`). -/
 def startChecks (p : Params) (e : Evidence) : Array (Option (Core.Verdict × String)) := match p.form with
   | .rows s sd _ =>
-    if e.starts.size ≠ p.entries.size then
+    if let some why := entriesOrderRefusal p then #[some (.reject, why)]
+    else if let some why := entriesKeyRefusal p then #[some (.reject, why)]
+    else if e.starts.size ≠ p.entries.size then
       #[some (.reject, s!"starts: {e.starts.size} shown for {p.entries.size} listed entries: show each listed \
         entry's session's signed start, in the entries' order")]
     else (p.entries.zip e.starts).zipIdx.map fun ((en, x), i) => startCheck p s sd e.starts i en x
@@ -1621,6 +1646,25 @@ def startChecks (p : Params) (e : Evidence) : Array (Option (Core.Verdict × Str
     !follows (start 7 1) { start 180007 1 with ordinal := 2 } && !follows (start 7 1) (start 180007 1) &&
     !follows { start 7 1 with ordinal := 1 } (start 180007 1) &&
     (startChecks p ⟨#[], #[], #[start 0 1]⟩).map (·.map (·.2)) == #[some "starts: 1 shown for 3 listed entries: show \
+      each listed entry's session's signed start, in the entries' order"]
+-- the entries' order and their keys' identifiers are the check's own, before the starts: an entry that starts before
+-- the one listed before it, or at its start, is refused (`entriesOrderRefusal`), and so are two keys with one
+-- identifier (`entriesKeyRefusal`); one key listed in two sessions is neither
+#guard
+  let key := fun (b c : UInt8) => (⟨Array.replicate 16 b ++ Array.replicate 64 c⟩ : ByteArray)
+  let session := fun (b : UInt8) => (⟨Array.replicate attachmentBytes b⟩ : ByteArray)
+  let found := fun (es : Array Entry) =>
+    let p : Params := {
+      audits := #[], cells := #[], first := 0, jitter := 1, link := "a", lms := Lms.deployed, entries := es,
+      program := "", form := .rows defaultSchedule .empty ⟨0, 0, 0, 0, 0⟩, windows := 1 }
+    (startChecks p ⟨#[], #[], #[]⟩).map (·.map (·.2))
+  found #[⟨key 1 1, session 7, 3⟩, ⟨key 2 2, session 8, 2⟩] == #[some "entries: out of order: entry 1 starts at 2, \
+      not after entry 0's 3: list the entries by their stretches' starts, no two at one"] &&
+    found #[⟨key 1 1, session 7, 2⟩, ⟨key 2 2, session 8, 2⟩] == #[some "entries: out of order: entry 1 starts at \
+      2, not after entry 0's 2: list the entries by their stretches' starts, no two at one"] &&
+    found #[⟨key 1 1, session 7, 0⟩, ⟨key 2 2, session 8, 1⟩, ⟨key 1 3, session 9, 2⟩] == #[some "entries: two \
+      keys with one key identifier (a key's first 16 bytes), entries 0 and 2: an identifier names one key"] &&
+    found #[⟨key 1 1, session 7, 0⟩, ⟨key 1 1, session 9, 2⟩] == #[some "starts: 0 shown for 2 listed entries: show \
       each listed entry's session's signed start, in the entries' order"]
 
 /-- The key of one-stage's public outputs that holds its registration check's tied Inputs: the run Inputs it let
