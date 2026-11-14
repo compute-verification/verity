@@ -83,7 +83,7 @@ the challenger's coins the unit sample reads and the proof system's epoch salt (
 and its randomness unpredictable.
 
 The verifier has no randomness of its own: the unit sample reads the challenger's coins from its log, and the challenger
-flips them from `IO.getRandomBytes` on its own host (`sampled-proofs-verifier`'s `coins`). To Lean's logic an `IO`
+flips them from `IO.getRandomBytes` on its own host (`spot-verifier`'s `coins`). To Lean's logic an `IO`
 action is a function of the world, and `IO.getRandomBytes` an opaque constant, so a `Prop` saying its bytes are random
 would be refutable, and every theorem taking it vacuous. At run time, Lean v4.34.0's runtime implements it as
 `lean_io_get_random_bytes` (`src/runtime/io.cpp`), which reads `/dev/urandom` on Unix and calls `BCryptGenRandom` on

@@ -1,6 +1,6 @@
 # The one-stage audit runs (a0 ... a11) and composite.py (onsite's and remote's cases from their subprotocols' cases, on
 # a stub executable). Not a package: the suite tests where a5 gets its coins (`a5_coins.py`) on a toy window
-# through `service.Stream` and the Lean verifier (`sampled-proofs-verifier`, built with lake on first use), and
+# through `service.Stream` and the Lean verifier (`spot-verifier`, built with lake on first use), and
 # M1's family census sizing split proof blocks and candidates (`m1_families.py --estimate`, on stand-ins: nothing is
 # lowered) and the proof-block census over it (`block_census.py`, on stand-in sized units), R2's other population (`r2_population.py`) and A8's scan of what the verifier received (`a8.scan`), on toy
 # files, composite's onsite and remote cases from their subprotocols' cases (`composite.py`, on a stub executable),
@@ -40,11 +40,11 @@ artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-veri
 # What the suite's test process may reach with the processes it starts, past the runner's default for one:
 # `test_audit_two_members`' audit holds a session's prover and verifier and the ZK server's Lean at once.
 worker_gb = 6
-# `verity`: the stream and its verifiers of record, and the Lean packages `sampled-proofs-verifier` builds from; its lakefile,
+# `verity`: the stream and its verifiers of record, and the Lean packages `spot-verifier` builds from; its lakefile,
 # named on its own, is the package its tests build (`one_stage.verifier.executable`), so check runs them after lean-build.
 # `verity/protocols/policy/inference_only/verifier/lean/lakefile.toml`, named on its own too: served_cases' inference-only case goes through
 # that package's `inference-only` check, which its tests `lake build` there, beside one-stage v1's case through
-# `sampled-proofs-one-stage`, v2's through `sampled-proofs-one-stage-zk` and remote's sampled proofs case through
+# `spot-one-stage`, v2's through `spot-one-stage-zk` and remote's SPOT case through
 # `vstar-recursive sampled` (`verity/protocols/proofs/spot_flock_recursion/verifier/lean`); its slow test builds the 4,32,4 class's
 # window circuit (`adapters/vllm/verity_vllm`).
 # `verity/protocols/compose/device/live_challenger`: the challenger reserve's tests open a session on its local auditor device (auditor.py), whose

@@ -169,7 +169,7 @@ def test_a_reserve_that_cant_cover_the_samples_is_refused_naming_need_and_reserv
 def local(tmp_path: Path, monkeypatch, ranks: list[int], root: str | None = None, dest: str = "challenger", **kw):
     """`a5_coins.start` on a local challenger session under `tmp_path` (on `ROOT`, or ``root``; finished into ``dest``),
     pinned on this tree's commit. Its serve.py runs under
-    live_challenger's stub of the Lean verifier's coins (`stub_serve.py`), so the test builds no `sampled-proofs-verifier`."""
+    live_challenger's stub of the Lean verifier's coins (`stub_serve.py`), so the test builds no `spot-verifier`."""
     A = AC._module("a5_auditor", AC.TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
     real = A.serve_argv
     monkeypatch.setattr(A, "serve_argv", lambda *a, **k: [sys.executable, str(STUB), *real(*a, **k)[2:]])

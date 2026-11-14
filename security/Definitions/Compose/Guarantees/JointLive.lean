@@ -8,7 +8,7 @@ public import Definitions.Core.Blocks
 
 In the one theorem's form, a period is one causal game (`Verity.Game`), each device release
 sampled after the bytes it answers and the evidence last; its claims are read off the run it ends in
-(`Accounting.PeriodLive`), the sampled-proofs claim on the fixed extractor's values (`PeriodLive.extract`), PoUW's in
+(`Accounting.PeriodLive`), the SPOT claim on the fixed extractor's values (`PeriodLive.extract`), PoUW's in
 gates, and its break is the probability that a fixed finder built from the strategy outputs a collision
 (`PeriodLive.finder`, `PeriodLive.collides`).
 

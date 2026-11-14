@@ -321,7 +321,7 @@ Flock's circuit prover (`verity_flock.circuit`) is on `main`, but a run does not
 `pod.sh` takes `git archive`s of the circuit prover's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
 inputs sent with the run; it builds `flock-circuit` and `verity-verify-proof` once per pod, then runs the driver, whose
 `--m0-pythonpath` names that tree. The drivers' checks go through the verifier
-(`one_stage.verifier`), which builds the sampled-proofs Lean in the run's tree on its first check, hence `--cwd clone`:
+(`one_stage.verifier`), which builds the SPOT Lean in the run's tree on its first check, hence `--cwd clone`:
 
 ~~~sh
 bash benchmarks/one_stage/pod.sh    # a job run from a clone of the tree, with m0.tar, lean.tar and set.tar sent
