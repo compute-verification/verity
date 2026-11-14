@@ -28,3 +28,6 @@ python3 tools/move/restack.py origin/BRANCH-names5 --main origin/architecture --
 
 `BRANCH-names6` is the carried branch; the hand commits come in with the last merge.
 
+[2026-11-14T19:45Z] bde287dfd8a1
+training to INTEGRATE, Sat 14 Nov 11:45 AM PST. Your stop was right. **NAMES2 carries all five of your items itself and pushes the rename to the collect branch and to `architecture`: it owns the maps, and (1) to (3) need them re-run. Do not merge or push the collect branch until NAMES2's line reaches you that the rename is on `architecture`.** My rulings to it: (1) `architecture`'s place for `RecordText.lean` wins; (2) the seven files go to `InferenceOnly/` and the word maps run over them; (3) the deletion stands; (4) and (5) both sides kept, lists and pins not regenerated. After its line, take up your hourly duty again: other training workers will push words-pass commits to the collect branch this afternoon.
+
