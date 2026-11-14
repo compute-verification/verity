@@ -65,7 +65,7 @@ def served_header(ref: Mapping[str, Any], rec: Mapping[str, Any], k: int, lo: in
 
 
 def checked(statement: Mapping[str, Any], tables: int | None = 1) -> dict[str, Any]:
-    """What `flock-verify verify`'s verdict names of the session of second-stage statement `statement` it checked, which
+    """What `verity-verify-proof verify`'s verdict names of the session of second-stage statement `statement` it checked, which
     round 2 holds the statement to (`second_stage.verified_of`): the SHA-512 of its header's canonical JSON, of its
     registered reads' when it reads any, its sample, and the `tables` it set the session up as (one, as the
     verifier runs it; None: a verdict naming no count)."""

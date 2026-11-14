@@ -18,7 +18,7 @@
 #               (the GPU's busy time, not its utilization counter's)
 #   5. cpu      per statement of CPU_STATEMENTS (and without --zk, CPU_PLAIN_STATEMENTS), the same session set without --gpu
 #               (the CPU prover), no lease
-#   6. lean     Lean's flock-verify (verity/protocols/proofs/flock/verifier, built into FLOCK_WORK keyed by its sources) on every session
+#   6. lean     Lean's verity-verify-proof (verity/protocols/proofs/flock/verifier, built into FLOCK_WORK keyed by its sources) on every session
 #               steps 4 and 5 kept of `served` and `served-plain`, on the verifier's cores: `verify --zk` of served's --zk sets,
 #               and `verify` of served-plain's plain sets as the plain-leaves statement on its full sample; per session its verdict,
 #               wall and peak memory in out/lean (hm96 leaves without --zk are outside Lean's plain scope, so not verified)
@@ -210,13 +210,13 @@ LEAN_BAD=0
 if has lean; then
   echo "== lean $(date -u +%T)"
   LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier)
-  LV=$FW/lean-$LSHA/flock-verify
+  LV=$FW/lean-$LSHA/verity-verify-proof
   if [ ! -x $LV ]; then
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none > /dev/null
     rm -rf $FW/lean-src && LEAN_SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $FW/lean-src) \
-      && (cd $LEAN_SRC && /usr/bin/time -v -o $O/time-lean-build.txt lake build flock-verify) > $O/lean-build.log 2>&1 \
-      && mkdir -p $(dirname $LV) && cp $LEAN_SRC/.lake/build/bin/flock-verify $LV || { tail -30 $O/lean-build.log; exit 1; }
+      && (cd $LEAN_SRC && /usr/bin/time -v -o $O/time-lean-build.txt lake build verity-verify-proof) > $O/lean-build.log 2>&1 \
+      && mkdir -p $(dirname $LV) && cp $LEAN_SRC/.lake/build/bin/verity-verify-proof $LV || { tail -30 $O/lean-build.log; exit 1; }
   fi
   mkdir -p $O/lean
   for name in served served-plain; do

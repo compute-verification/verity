@@ -73,7 +73,7 @@ open scoped ENNReal
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-! ## flock-verify's tables at `count > 1` under hidden outputs -/
+/-! ## verity-verify-proof's tables at `count > 1` under hidden outputs -/
 
 section Parts
 

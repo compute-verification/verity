@@ -38,16 +38,16 @@ public import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
 public import Proofs.Flock.Soundness.Discharge.Exec.SessionLDecisive
 
 /-!
-# The refinement: flock-verify's acceptance and the audit as Lean defines it
+# The refinement: verity-verify-proof's acceptance and the audit as Lean defines it
 
 The acceptance lemmas (`accepts_*`) are about public-output statements only: each takes `hh : hiddenOutputs = false`,
-since with hidden outputs flock-verify sets up its tables with `setupHidden`, about which nothing here is proved.
+since with hidden outputs verity-verify-proof sets up its tables with `setupHidden`, about which nothing here is proved.
 
-* `Event`: flock-verify's verdict on a session directory (`Accepts`), the live audit whose outcome carries it
+* `Event`: verity-verify-proof's verdict on a session directory (`Accepts`), the live audit whose outcome carries it
   (`auditLive`), and the refinement at one strategy pair (`ExecRefines`);
 * `SessionL`: the batched session under a leaf scheme (`tableAfterL`, `sessionBL`, `batchedSessionL`), and over any
   table run (`sessionG`, `batchedSessionG`);
-* `Setup`: under a tag without hidden outputs, flock-verify's acceptance sets up each table with `setupH`
+* `Setup`: under a tag without hidden outputs, verity-verify-proof's acceptance sets up each table with `setupH`
   (`accepts_setupH`, `setupH_public`);
 * `Tables`: under such a tag, each accepted table is one accepting run of `tableAfterL` at `leaf512`
   (`accepts_tables_hm96`);
@@ -55,7 +55,7 @@ since with hidden outputs flock-verify sets up its tables with `setupHidden`, ab
   every `hm96Rows` tag pinned today (`setupH_hm96`), and `accepts_tables_hm96` without `hms`
   (`accepts_tables_hm96_of_leaf`, without hidden outputs);
 * `Retained`: every `hm96Rows` tag pinned today retains round bytes, so, without hidden outputs, every round of a
-  record flock-verify accepts carries its framed bytes (`accepts_retained`), as `liveTable`'s rounds do, and every
+  record verity-verify-proof accepts carries its framed bytes (`accepts_retained`), as `liveTable`'s rounds do, and every
   stream satisfies `Refine/Frames.lean`'s `AllRetained` (`accepts_allRetained`);
 * `VerifyK`: what the acceptance walkers read of `verify`, at the verdict with its digest comparisons read through
   `keep` (`AcceptsK`, `verifyK_ok_tables`, `decodeWithK_points`, `decodeWithK_allRetained`), `verify`'s at `keep := id`;
@@ -81,16 +81,16 @@ since with hidden outputs flock-verify sets up its tables with `setupHidden`, ab
 * `HeadlineL`: the headline over the salted session (`Prog.flock_headline_L`, the bound of `Prog.flock_headline`), and
   at the executable (`Prog.flock_headline_execL`), where only `hRef` stands for the refinement;
 * `Live`: the refinement for one-table sessions of the challenger, with `bad = ⊥`, given `Decodes` (`execRefines_one`),
-  and the headline at flock-verify's verdict with no `bad` term (`Prog.flock_headline_live`);
+  and the headline at verity-verify-proof's verdict with no `bad` term (`Prog.flock_headline_live`);
 * `Decode`: two pieces of `DecodesAll`: a run on two lists is a run on one tape with those messages and coins
   (`Plays.toT`), and the accepted proof's cap is a function of `root_B` (`capOfRoot`, `verify_cap_hm96`);
 * `Emit`, `FramesLigerito`, `FramesRep`: the frames a run emits, round by round (`Emitted`, `chunks`), for each phase
   of a rep and for the whole rep (`zerocheck_emitted`, `lincheck_emitted`, `ringSwitch_emitted`, `ligerito_frames`,
   `rep_rounds`), on streams whose rounds all retained their bytes;
-* `Rounds`: so, when flock-verify accepts under tags that retain rounds and have no hidden outputs, round `k` of each
+* `Rounds`: so, when verity-verify-proof accepts under tags that retain rounds and have no hidden outputs, round `k` of each
   rep's stream retained the bytes of chunk `k` of the rep's frames (`RepRounds`, `accepts_rep_rounds`);
 * `Verdict`: the openings and salts the proof files decode to (`opnOf`), and the verdict part of `Decodes`: at
-  flock-verify's acceptance under a tag without hidden outputs, each table's salted verdict at `capOfRoot root_B[j]`
+  verity-verify-proof's acceptance under a tag without hidden outputs, each table's salted verdict at `capOfRoot root_B[j]`
   and `opnOf` accepts on the reps' runs (`table_verdict_hm96`, `accepts_verdict_hm96`);
 * `Shape`: where a rep's coins fall among its messages is the game's: every run of a rep follows a static spine read
   off `m`, `k_log`, the number of claims and the schedule (`repShape`, `repC_spine`, `repC_kinds`), so two runs with the

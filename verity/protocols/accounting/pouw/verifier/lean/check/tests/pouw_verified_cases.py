@@ -96,7 +96,7 @@ def _answers(rng: random.Random, case: dict, asks: list[dict], name: str, starts
             pub, ok = ports[Cr.PUB_PORT], ports[Cr.OK_PORT]
             match name:
                 case "error":
-                    ans = {"error": rng.choice(["flock-verify ended on a signal", "no such file: public.bin"])}
+                    ans = {"error": rng.choice(["verity-verify-proof ended on a signal", "no such file: public.bin"])}
                 case "refused":
                     ans = {"refused": [rng.choice(["proof", "circuit", "registration"]),
                                        "the statement's public file is not its circuit's"]}
@@ -402,7 +402,7 @@ def _lanes_answers(rng: random.Random, case: dict, asks: list[dict], name: str, 
                 case "lanes-units":
                     f.update(rng.choice([{"units": [0, 1]}, {"units": []}, {"program": C._hex(rng)}]))
                 case "lanes-error":
-                    ans = {"error": rng.choice(["flock-verify ended on a signal", "no such file: public.bin"])}
+                    ans = {"error": rng.choice(["verity-verify-proof ended on a signal", "no such file: public.bin"])}
                 case "lanes-refused":
                     ans = {"refused": [rng.choice(["proof", "circuit", "registration"]),
                                        "the statement's public file is not its circuit's"]}

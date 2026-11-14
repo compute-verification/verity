@@ -41,7 +41,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # The outer verifier: `verify --zk` with the recursive inputs, in public-coin form
 
-`VO` is the shipped verifier the compiled verifier runs once per V* part (`flock-verify verify --zk` with its recursive
+`VO` is the shipped verifier the compiled verifier runs once per V* part (`verity-verify-proof verify --zk` with its recursive
 flags) as a `Claims.Verifier`, built as `FlockDeploy.V true` is: the same messages and coins (the link message, the
 rounds, the last message, each round answered by its live coin) and the same decision (`FlockDeploy.decision`: the
 shipped verdict over `OC`, `Zk.verifyWithM Hashes.oc`, then the custody checks), at the recursive setup

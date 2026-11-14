@@ -2572,6 +2572,20 @@
    "except": [],
    "why": "a history table's registered root is stated against the root check's own functions (`Spot.HistoryTable`), the hash area's history-table root (`Definitions.Hash.HistoryTable`) and the verifier's SHA-512 as a model hash (`Verity.sha512`), never a proof"
   },
+  "Properties.Nci.Record": {
+   "imports": [
+    "NciCheck.DefinitionDigest",
+    "NciCheck.RecordText",
+    "Flock.TemplateQuery",
+    "Spot.Wires",
+    "Spot.Bits",
+    "Properties.Nci",
+    "Properties.Nci.Record"
+   ],
+   "except": [],
+   "why": "the circuit record's properties are stated over the code they are about (the record's text as NciCheck.RecordText reads it, the closure digest, Flock's template query, and SPOT's wiring check and bit counts) and the NCI properties they conclude, never over a proof",
+   "sealed": true
+  },
   "Properties.Pouw.PearlPlus": {
    "imports": ["PouwPearlPlus", "Definitions.Pouw.PearlC.Unscale", "Definitions.Core.Fp32", "Properties.Pouw.Commit"],
    "except": [],
@@ -2612,20 +2626,6 @@
    "imports": ["Properties.Accounting.Remote.Subprotocol"],
    "except": [],
    "why": "the component's three properties at its deployed check, closed, are stated over `Properties.Accounting.Remote.Subprotocol`'s vocabulary and the check and the memory line it reads; never a proof"
-  },
-  "Properties.Nci.Record": {
-   "imports": [
-    "NciCheck.DefinitionDigest",
-    "NciCheck.RecordText",
-    "Flock.TemplateQuery",
-    "Spot.Wires",
-    "Spot.Bits",
-    "Properties.Nci",
-    "Properties.Nci.Record"
-   ],
-   "except": [],
-   "why": "the circuit record's properties are stated over the code they are about (the record's text as NciCheck.RecordText reads it, the closure digest, Flock's template query, and SPOT's wiring check and bit counts) and the NCI properties they conclude, never over a proof",
-   "sealed": true
   },
   "Properties.Pouw.PearlPlusTie": {
    "imports": [
@@ -13398,6 +13398,14 @@
     "function": "PouwCheck.Credit.Internal.credited",
     "outcome": "accept"
    },
+   "Properties.Challenger.Drawn.familyOneCommitment": {
+    "function": "Spot.Challenger.drawCoins",
+    "outcome": "accept"
+   },
+   "Properties.Challenger.Drawn.familyOneCommitmentRead": {
+    "function": "Spot.Challenger.coinsReason",
+    "outcome": "accept"
+   },
    "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
     "function": "NciCheck.Protocol.check",
     "outcome": "accept"
@@ -13614,6 +13622,10 @@
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
    },
+   "NciCheck.SecurityProofs.ServedComplies": {
+    "function": ["NciCheck.Properties.Record.Form.read", "NciCheck.Properties.Record.Form.rate"],
+    "outcome": "accept"
+   },
    "Properties.Pouw.PearlPlus.acceptMeans": {
     "function": "PouwCheck.PearlPlus.check",
     "outcome": "accept"
@@ -13738,18 +13750,6 @@
     "function": ["PouwCommit.rowsDomain", "PouwCheck.PearlPlus.opens"],
     "outcome": "accept"
    },
-   "NciCheck.SecurityProofs.ServedComplies": {
-    "function": ["NciCheck.Properties.Record.Form.read", "NciCheck.Properties.Record.Form.rate"],
-    "outcome": "accept"
-   },
-   "Properties.Challenger.Drawn.familyOneCommitment": {
-    "function": "Spot.Challenger.drawCoins",
-    "outcome": "accept"
-   },
-   "Properties.Challenger.Drawn.familyOneCommitmentRead": {
-    "function": "Spot.Challenger.coinsReason",
-    "outcome": "accept"
-   },
    "Properties.Pouw.PearlPlus.workIsTheCredit": {
     "function": "PouwCheck.PearlPlus.check",
     "outcome": "accept"
@@ -13820,6 +13820,7 @@
    "Properties.Served.SampleMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.sampleMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.RegisteredCircuitRequirement's game, premises and bound (its frozen reason in security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
    "Accounting.ReadUnit.ExpertReadAccepted": "unstated: what `flock-read-tmpl 256 3072` checks before it exits 0 (render `readTmpl 256 3072`, parse the text back, run `ReadNet.check` on the parsed template); `TableReadBinding`'s honest lemma in the Security lock takes it as an open premise, and no theorem here proves it yet",
+   "NciCheck.Properties.Record.DigestPins": "unstated: the closure digest pins the decoded Definition (two Program texts that give a key one closure digest decode it to one Definition, or two byte strings the digests hashed collide under SHA-512); a premise of what a pinned reader opens, which is a theorem no guarantee lists, and no theorem proves the pin yet",
    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound": "frozen (no-function,world-unlisted): ServiceSound from ProofSoundAt, a union bound over each window's sessions of the deployed check's layer (Properties.Accounting.JointBridge.Sessions.checkLayer, PouwCheck.protocol.check's acceptance and Public.drawn): no deployed function's outcome is one hypothesis, its sound case is the named premise Accounting.Assumptions.TS.ProofSoundAt, and its conclusion is a Pouw.RelativeSecurity.prob event that shape.events does not list; no new premise",
    "Pous.Period.SecurityProofs.pooledShort_log": "frozen (premise): periodHeld pooled over a monitoring period of U windows, each window's joint run, audit and other audits' coins fixed before its own capacity coins (Pous.Period.FixedBefore) and its strategy any under the device model: the probability that at least M windows are accepted with no break and a certificate short of the held state (Pous.Period.ShortAccepted) is at most delta', for every z > 1 and every M >= ((z - 1) U (delta + eps_max) + log (1 / delta')) / log z (Pous.Period.CountMeets). Its event's acceptance is an abstract audit's (Pous.Period.Audits.Accepts) over an abstract joint run of the device model, and it takes periodHeld's premises (P2RingAuditSecure, Pous.Period.DeviceModel, Pous.Period.Instantiates, the certificate's fit in the ring game's state bound, Pous.Period.Fits) and FixedBefore, none of them under shape.premises. delta' is delta_PoUS, a public deployment parameter that no component publishes.",
    "Properties.Pouw.PeriodJ10R.TileStratumAcceptProb": "unstated: proved in security_proofs by Properties.Pouw.PeriodJ10R.SecurityProofs.tileStratumAcceptProb (Proofs.Pouw.PeriodJ10R.Stratum): the tile coordinate (tileDraw, the first k s_T places of a uniform permutation of stratum s_T) misses B with stratum s_T's hypergeometric factor, since a uniform permutation's k-prefix misses B with C(N - |B|, k)/C(N, k) exactly (miss_eq), and that escape equals the escape of Law.stratified's coordinate s_T (Law.stratified_proj_escape, by tileStratumAcceptProb_eq_proj). A lemma, not a premise: no guarantee states it, since its proof is security_proofs' and stratum is restated here until it moves to Definitions.",
@@ -13827,7 +13828,6 @@
    "Pous.Period.SecurityProofs.periodHeldSha512": "frozen (premise): periodHeldCoins at the deployed memory challenger's streams (Pous.Period.challengerStreams: derive and stream, SHA-512 keyed by its 64-byte secret source), over the source and the hm96 coins, at bound δ + ε_max + ε(t, 1) + ε(t, 6720); it adds Hash.Assumptions.Sha512Prf (prf/sha-512, ASK-184) at the derivation's two tests, the coin key and the streams' 105 · 64 blocks, to periodHeld's premises, none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldCoinsAt": "frozen (premise): periodHeldAt in the shared coin game, as periodHeldCoins is periodHeld's, at every point and block count N from 2^19 to 2^27; it takes periodHeldAt's premises (Pous.Guarantees.RoundsBound at 105 rounds, the open conjecture P2RingRoundSecureWide, Pous.Period.RingDeviceAt and Pous.Period.Fits) and Pous.Period.ReadsNoPrimitive, none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldSha512At": "frozen (premise): periodHeldCoinsAt at the deployed memory challenger's streams at N blocks, at bound δ + ε_max + ε(t, 1) + ε(t, 6720); it adds Hash.Assumptions.Sha512Prf (prf/sha-512, ASK-184) at the derivation's two tests to periodHeldAt's premises, none of them under shape.premises.",
-   "NciCheck.Properties.Record.DigestPins": "unstated: the closure digest pins the decoded Definition (two Program texts that give a key one closure digest decode it to one Definition, or two byte strings the digests hashed collide under SHA-512); a premise of what a pinned reader opens, which is a theorem no guarantee lists, and no theorem proves the pin yet",
    "Properties.Pouw.PearlPlus.TieMeans": "unstated: what `tieOf` establishes of W: its format and digest, one round a pass, its version against the tie's weights, and each call's A rows, y and weight rows registered once under the pass's roots; a draft statement, unproved",
    "Properties.Pouw.PearlPlus.AcceptedIsHeldToW": "unstated: an accepted verdict on an input that names W is a run held to W whose opened tiles are accepted (`Run.Accepts`), read off `check` and `plan`; a draft statement, unproved",
    "Properties.Pouw.PearlPlus.YAtWIsTheCall": "unstated: over t uniform work-weighted tickets, an accepted run whose table holds its openings has its untied tiles hold more than ε of its ticket weight with probability at most δ + q / 2^256, at (1 − ε)^t ≤ δ under ecr/sha-512 at the play's finder; a draft statement, unproved, whose acceptance is an abstract run's (`Run.Accepts`), not one function's",
@@ -13836,14 +13836,15 @@
    "Properties.Pouw.PearlPlus.UntiedCellsAtMost": "unstated: a run whose wrong share is at most ε has at most `cellsAt` ε untied credited cells, a fact of the run's passes and table with no probability in it, proved (`Properties.Pouw.PearlPlus.untiedCellsAtMost`, in `Proofs.Properties.Pouw.PearlPlus.Tie`) and stated by no guarantee yet: the step from `YAtWIsTheCall`'s share to a count of cells",
    "Properties.Pouw.PearlPlus.UntiedCellsAtW": "unstated: `YAtWIsTheCall` as a count of cells: an accepted run whose table holds its openings has more than `cellsAt` ε untied credited cells with probability at most δ + q / 2^256; a draft statement, unproved, whose acceptance is an abstract run's (`Run.Accepts`)",
    "Properties.Pouw.PearlPlus.PeriodUntiedCellsAtW": "unstated: `PeriodYAtWIsTheCall` as a count of cells: a sequence's accepted prefix holds more untied credited cells than `Runs.cellsUpTo` with probability at most δ + q / 2^256; a draft statement over the period's runs as functions of its coins, unproved",
-   "Properties.Spot.MonitoringPeriod.LedgerMeans": "unstated: what the ledger's half of the period's check returns (Spot.MonitoringPeriod.windowsOf): the ledger verifies under the verifier's key and reaches the monitoring period's end, and every root the lane committed in the monitoring period is returned once, a window when its session can be sampled and another session when it cannot, each window's session ended in a closed period of windows only; it takes no premise; a draft statement, which gets a guarantee entry with its honest and nontrivial witnesses",
-   "Properties.Spot.MonitoringPeriod.AcceptMeans": "unstated: what the period's check accepts (Spot.MonitoringPeriod.checkWith, at any audit of one registration): it publishes this registration's circuit, the ledger's half's windows in order and, of its other sessions, what Spot.MonitoringPeriod.registeredIn returns, and each window has exactly one audit, the check's own at that window (Properties.Spot.MonitoringPeriod.AuditedAt); it takes no premise; a draft statement, which gets a guarantee entry with its honest and nontrivial witnesses",
-   "Properties.Spot.MonitoringPeriod.CommittedOnce": "unstated: under an accept of the period's check (Spot.MonitoringPeriod.checkWith), every root the lane committed in the monitoring period is on a session that a period committing a circuit lists, every such root under this registration's circuit (the verifier's parameter, Spot.MonitoringPeriod.registrationOf) is the root of exactly one published window, which has one audit entry, and each published window is such a root; it says nothing of the audit entry (Properties.Spot.MonitoringPeriod.AcceptMeans), of a root under another circuit (Properties.Spot.MonitoringPeriod.OthersElsewhere) or of what ties this registration's circuit to the audit's parameters; it takes no premise, and says nothing of whose ledger was presented (Properties.Spot.MonitoringPeriod.LedgerLinesOfDevice); a draft statement, which gets a guarantee entry with its honest and nontrivial witnesses",
-   "Properties.Spot.MonitoringPeriod.OthersElsewhere": "unstated: under an accept of the period's check (Spot.MonitoringPeriod.checkWith), the other sessions it publishes are exactly the roots the lane committed in the monitoring period on a session that a period committing another circuit than this registration's lists, each once, by that circuit and its session; nothing is held of such a root, not that its circuit is a registration and not that any check audited it; it takes no premise, and says nothing of whose ledger was presented (Properties.Spot.MonitoringPeriod.LedgerLinesOfDevice); a draft statement, no guarantee's",
-   "Properties.Spot.MonitoringPeriod.DecodedMeans": "unstated: what the period's decoder gives its check (Spot.MonitoringPeriod.AuditParams.of): the key's JSON handed to each window's audit reads as the key the ledger is checked under, and audit names none of challenger, window_root, seed_salt, day and declarations; it takes no premise; a lemma about the decoder that a reader of Properties.Spot.MonitoringPeriod.AcceptMeans takes beside it, no guarantee's statement",
-   "Properties.Spot.MonitoringPeriod.AuditedSession": "unstated: the session the period's check audits at a window (Spot.Challenger.auditedIn on the window's root) is the session the window names, for every ledger the ledger's half reads and every window it returns; it takes no premise; a lemma about the ledger's half that a reader of Properties.Spot.MonitoringPeriod.AuditedAt takes beside it, no guarantee's statement",
-   "Properties.Spot.MonitoringPeriod.LedgerLinesOfDevice": "unstated: each line of a ledger the period's check reads (Spot.MonitoringPeriod.read) is an entry under its place's number that says, its signature aside, what a line of the device's own ledger under the verifier's key says, or the fixed finder outputs a break (an LMS forgery or a SHA-512 collision); it takes no premise, and does not say the presented ledger is whole; a draft statement, which gets a guarantee entry with its honest and nontrivial witnesses",
-   "Properties.Spot.MonitoringPeriod.LedgerOfDevice": "unstated: the ledger the period's check reads (Spot.MonitoringPeriod.read) is the device's own from its first line, none dropped and none added, up to a line stamped at or after the monitoring period's end, or a break; it takes Properties.Spot.MonitoringPeriod.Numbered (a line of the device's ledger that is an entry numbered i is its line i), a hypothesis of this statement alone that no guarantee takes, and a lemma of the modelled device once the model builds its whole ledger; no guarantee entry while it takes it"
+   "Properties.Spot.MonitoringPeriod.LedgerMeans": "unstated: what the ledger's half of the period's check returns (Spot.MonitoringPeriod.windowsOf): the ledger verifies under the verifier's key and reaches the monitoring period's end, and every root the lane committed in the monitoring period is returned once, a window when its session can be sampled and another session when it cannot, each window's session ended in a closed period of windows only; proved with no premise in security_proofs by Properties.Spot.MonitoringPeriod.ledgerMeans; a draft statement, which gets a guarantee entry with its honest and nontrivial witnesses",
+   "Properties.Spot.MonitoringPeriod.AcceptMeans": "unstated: what the period's check accepts (Spot.MonitoringPeriod.checkWith, at any audit of one registration): it publishes this registration's circuit, the ledger's half's windows in order and, of its other sessions, what Spot.MonitoringPeriod.registeredIn returns, and each window has exactly one audit, the check's own at that window (Properties.Spot.MonitoringPeriod.AuditedAt); proved with no premise in security_proofs by Properties.Spot.MonitoringPeriod.acceptMeans; a draft statement, which gets a guarantee entry with its honest and nontrivial witnesses",
+   "Properties.Spot.MonitoringPeriod.CommittedOnce": "unstated: under an accept of the period's check (Spot.MonitoringPeriod.checkWith), every root the lane committed in the monitoring period is on a session that a period committing a circuit lists, every such root under this registration's circuit (the verifier's parameter, Spot.MonitoringPeriod.registrationOf) is the root of exactly one published window, which has one audit entry, and each published window is such a root; it says nothing of the audit entry (Properties.Spot.MonitoringPeriod.AcceptMeans), of a root under another circuit (Properties.Spot.MonitoringPeriod.OthersElsewhere) or of what ties this registration's circuit to the audit's parameters; proved with no premise in security_proofs by Properties.Spot.MonitoringPeriod.committedOnce; it says nothing of whose ledger was presented (Properties.Spot.MonitoringPeriod.LedgerLinesOfDevice); a draft statement, which gets a guarantee entry with its honest and nontrivial witnesses",
+   "Properties.Spot.MonitoringPeriod.OthersElsewhere": "unstated: under an accept of the period's check (Spot.MonitoringPeriod.checkWith), the other sessions it publishes are exactly the roots the lane committed in the monitoring period on a session that a period committing another circuit than this registration's lists, each once, by that circuit and its session; nothing is held of such a root, not that its circuit is a registration and not that any check audited it; proved with no premise in security_proofs by Properties.Spot.MonitoringPeriod.othersElsewhere; it says nothing of whose ledger was presented (Properties.Spot.MonitoringPeriod.LedgerLinesOfDevice); a draft statement, no guarantee's",
+   "Properties.Spot.MonitoringPeriod.DecodedMeans": "unstated: what the period's decoder gives its check (Spot.MonitoringPeriod.AuditParams.of): the key's JSON handed to each window's audit reads as the key the ledger is checked under, and audit names none of challenger, window_root, seed_salt, day and declarations; proved with no premise in security_proofs by Properties.Spot.MonitoringPeriod.decodedMeans; a lemma about the decoder that a reader of Properties.Spot.MonitoringPeriod.AcceptMeans takes beside it, no guarantee's statement",
+   "Properties.Spot.MonitoringPeriod.AuditedSession": "unstated: the session the period's check audits at a window (Spot.Challenger.auditedIn on the window's root) is the session the window names, for every ledger the ledger's half reads and every window it returns; proved with no premise in security_proofs by Properties.Spot.MonitoringPeriod.auditedChallengePhase; a lemma about the ledger's half that a reader of Properties.Spot.MonitoringPeriod.AuditedAt takes beside it, no guarantee's statement",
+   "Properties.Spot.MonitoringPeriod.LedgerLinesOfDevice": "unstated: each line of a ledger the period's check reads (Spot.MonitoringPeriod.read) is an entry under its place's number that says, its signature aside, what a line of the device's own ledger under the verifier's key says, or the fixed finder outputs a break (an LMS forgery or a SHA-512 collision); proved with no premise in security_proofs by Properties.Spot.MonitoringPeriod.ledgerLinesOfDevice; it does not say the presented ledger is whole; a draft statement, which gets a guarantee entry with its honest and nontrivial witnesses",
+   "Properties.Spot.MonitoringPeriod.LedgerOfDevice": "unstated: the ledger the period's check reads (Spot.MonitoringPeriod.read) is the device's own from its first line, none dropped and none added, up to a line stamped at or after the monitoring period's end, or a break; it takes Properties.Spot.MonitoringPeriod.Numbered (a line of the device's ledger that is an entry numbered i is its line i), a hypothesis of this statement alone that no guarantee takes, and a lemma of the modelled device once the model builds its whole ledger; proved from that hypothesis in security_proofs by Properties.Spot.MonitoringPeriod.ledgerOfDevice; no guarantee entry while it takes it",
+   "Properties.Spot.MonitoringPeriod.LedgerOfDeviceSigned": "unstated: every line of the ledger the period's check reads (Spot.MonitoringPeriod.read) but the last is the device's own line whole, its signature included, so the LMS leaf read from each is the device's, or the finder at the lines' whole texts (Properties.Spot.MonitoringPeriod.findLineBreak: Properties.Challenger.findBreak on the ledger, else a SHA-512 collision among the presented lines' and the device's whole texts) outputs a break; the last presented line's signature stays free; it takes Properties.Spot.MonitoringPeriod.Numbered and Properties.Spot.MonitoringPeriod.Chained (the device's line after a line names as prev the SHA-512 of that line's whole text), hypotheses of this statement alone that no guarantee takes, and lemmas of the modelled device once the model builds its whole ledger; proved from them in security_proofs by Properties.Spot.MonitoringPeriod.ledgerOfDeviceSigned; no guarantee entry while it takes them"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {

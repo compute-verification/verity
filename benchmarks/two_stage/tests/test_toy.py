@@ -243,7 +243,7 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
     def sha512(j) -> str:
         return hashlib.sha512(canonical_json(j)).hexdigest()
 
-    # what `flock-verify verify`'s verdict of record names of each session it checked
+    # what `verity-verify-proof verify`'s verdict of record names of each session it checked
     verified = SS.verified_of({f"lean-verify/m{k}": {
         "of_record": True, "accepted": True, "public_header_sha512": sha512(s["header"]), "unit_draw": s["draw"],
         "session_tables": 1, **({} if s["registered"] is None else {"registered_sha512": sha512(s["registered"])})}

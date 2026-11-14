@@ -32,9 +32,9 @@ evidence that keeps the caller's facts too is completeness, `Properties.Spot.acc
 
 **The caller's facts** (`CallerHeld`) are not `AcceptMeans`'s. The registration check also holds the record to what
 SPOT's caller hands the verifier beside the record and SPOT's own log: the day's declared program (`DeclaredDay`), the
-window's stream and prover, its seed salt, its pool's reset, once a week, and its window opening the pool the previous
-window of record left, or the empty pool where the public rule or its reset restarts it, for a verifier with a pool
-(`PoolChained`). They are stated where SPOT is called, of the case the caller's check accepted
+window's stream and prover, its seed salt, its registered compiler and advice length, its pool's reset, once a week,
+and its window opening the pool the previous window of record left, or the empty pool where the public rule or its
+reset restarts it, for a verifier with a pool (`PoolChained`). They are stated where SPOT is called, of the case the caller's check accepted
 (`Properties.Remote.StageHeld`), and proved of this check as `Properties.Spot.callerHeld_of_accept`.
 
 The digest the receipt is held to is the commitment's own (`Commitment.digest`), which `OneStage.commitmentOf` computes
@@ -169,6 +169,13 @@ def RunPoolSpent (rec : Json) (v : Registration.Verifier) : Prop :=
 (`Registration.Pool.spentBefore`). -/
 def PoolResetOnce (v : Registration.Verifier) : Prop :=
   (match v.pool with | some p => !(p.reset && p.spentBefore v.log) | none => true) = true
+
+/-- The record's window names the registration log's compiler by its digest and advice of at most its public length ℓ in
+bits, and neither a compiler nor advice where the log registers none (`Registration.Verifier.compiler`); anything when
+the verifier reads no log's compiler. -/
+def RunCompiler (rec : Json) (v : Registration.Verifier) : Prop :=
+  Registration.compilerOk (getD rec "window") v.compiler = true ∧
+    Registration.adviceOk (getD rec "window") v.compiler = true
 
 /-- R6: the record names the digest of the prover's last earlier record (null when the log is empty, or when that record
 has no digest), and no earlier record has its window. -/
@@ -307,14 +314,15 @@ def Registered (v : Registration.Verifier) (rec law : Json) : Prop :=
 beside the record and SPOT's own log. The record names its day's declared program (`DeclaredDay`, the registration
 log's declarations); its window names the stream and the prover a verifier is bound to (`binding`), the seed salt the
 verifier read from the challenger's log (`RunSeedSalt`) and its pool's reset, week and spent mark (`RunPoolReset`,
-`RunPoolWeek`, `RunPoolSpent`), at most one reset a week (`PoolResetOnce`); and, when the verifier expects values
-registered, the window opens the pool the previous window of record left (`PoolChained`). -/
+`RunPoolWeek`, `RunPoolSpent`), at most one reset a week (`PoolResetOnce`), and the registration log's compiler and
+advice within its length (`RunCompiler`); and, when the verifier expects values registered, the window opens the pool
+the previous window of record left (`PoolChained`). -/
 def CallerHeld (rec : Json) (v : Registration.Verifier) : Prop :=
   DeclaredDay rec v ∧
   (∀ sp, v.binding = some sp → jeq (getD (getD rec "window") "stream") (.str sp.1) = true ∧
     jeq (getD (getD rec "window") "prover") (.str sp.2) = true) ∧
   RunSeedSalt rec v ∧ RunPoolReset rec v ∧ RunPoolWeek rec v ∧ RunPoolSpent rec v ∧ PoolResetOnce v ∧
-  (ExpectsV2 v → PoolChained rec v)
+  RunCompiler rec v ∧ (ExpectsV2 v → PoolChained rec v)
 
 /-! ## The sample: the registered law over the registered population -/
 

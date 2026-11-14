@@ -18,9 +18,9 @@ here, and its theorem is below it.
 * `ExecRefinesTables`: the refinement for any plan,
   `ExecRefines … (LiveAccepts I) ⊥ (audit … (batchedSessionL … plan)) (simAuditJ …)` given `DecodesOnJ`.
 * `HeadlineTables`: `Prog.flock_headline_live_on` with `plan S R` of any length `J`, at the live stratified sample.
-* `HeadlineTablesSubset`: the same at the live subset sample, with count curve `C(n − K, kd) / C(n, kd)`; flock-verify
+* `HeadlineTablesSubset`: the same at the live subset sample, with count curve `C(n − K, kd) / C(n, kd)`; verity-verify-proof
   takes no other sample at `J > 1`.
-* `AcceptsTables`: flock-verify's acceptance at `count > 1`: the record's sample, when there is one, is a subset sample;
+* `AcceptsTables`: verity-verify-proof's acceptance at `count > 1`: the record's sample, when there is one, is a subset sample;
   the session's units (the sample's, without one the population's) split into `count` equal parts; and table `j` is
   `setupH`'s statement under `Tags.tableIdentity count j` at the subset sample `partDraw` of part `j`.
 
@@ -186,7 +186,7 @@ def partDraw (population : ℕ) (units : Array ℕ) (count j : ℕ) : Json :=
     ("units", Json.arr ((units.extract (j * (units.size / count)) (j * (units.size / count) + units.size / count)).map
       Lean.toJson))]
 
-/-- **flock-verify's acceptance at more than one table.** When `Accepts I t` at `count > 1` under a tag without hidden
+/-- **verity-verify-proof's acceptance at more than one table.** When `Accepts I t` at `count > 1` under a tag without hidden
 outputs: the tag allows several tables and `count ≤ 64`; the record's sample, when there is one, is a subset or stratified
 sample, whose
 population and units are the session's (without one, the population's every unit); the units split into `count`
