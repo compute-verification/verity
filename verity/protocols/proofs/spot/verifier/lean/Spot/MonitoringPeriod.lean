@@ -1,5 +1,5 @@
 /-
-Sampled proofs' period, the ledger's half: which sessions of a lane the auditor's ledger opened during a monitoring
+SPOT's monitoring period, the ledger's half: which sessions of a lane the auditor's ledger opened during a monitoring
 period, and which of them are the period's windows (`tests/test_period_difftest.py` holds this to a Python reference
 that lives in the test alone: there is no Python verifier).
 
@@ -27,7 +27,7 @@ refusal is the answer: there is at least one (`missing`); each is in a period of
 period is closed, and every session it lists that was opened is a window (`period`); no session it lists was left
 unopened, and each window has ended (`missing`). The lane's other sessions are returned beside the windows (`others`)
 with nothing held of them here: the period's check refuses each that is not another registration's
-(`Spot.Period.registeredIn`).
+(`Spot.MonitoringPeriod.registeredIn`).
 
 The difftest's piece: `period_windows`.
 -/
@@ -37,7 +37,7 @@ public import Spot.ChallengerSession
 
 @[expose] public section
 
-namespace Spot.Period
+namespace Spot.MonitoringPeriod
 
 open Lean (Json)
 open Flock (V)
@@ -45,7 +45,7 @@ open Flock (V)
 /-- Why a period's check refuses. The ledger's half: the ledger is not the auditor's (`coin`), it does not reach the
 monitoring period's end (`early`), a window is in no period (`outside`), a window's period is open or holds a session
 that is no window (`period`), or there is no window, a reserve never opened or a window not ended (`missing`). The
-audits' half (`Spot.PeriodAudit`): a window's period commits another circuit than this registration's, or a session
+audits' half (`Spot.MonitoringPeriodAudit`): a window's period commits another circuit than this registration's, or a session
 of this registration's holds no coin of the family (`period`); a session of the lane that holds no coin of the family
 is of no registration (`outside`); a window's session is not the one the ledger sealed, or did not run main's code or
 withhold its coins (`coin`); it sampled no registration (`missing`) or several (`members`); the evidence is not one
@@ -267,4 +267,4 @@ def windowsPiece (j : Json) : V Json := do
           ("windows", Json.arr (ws.windows.map Window.toJson))]
       | .error (code, why) => Json.mkObj (refusedJson code why ++ [sessions])
 
-end Spot.Period
+end Spot.MonitoringPeriod

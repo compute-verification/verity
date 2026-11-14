@@ -187,7 +187,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   its module's docstring says; the refusal accepts nothing and never
   exits 0 (`refusal_exit`). A window's sessions run on its challenger's session, each closed there after its evidence
   (`one_stage.closing`, `challenger.members_tree_reason`).
-- **A monitoring period's sessions in the auditor's ledger** (`Spot/Period.lean`, Lean only; the Python it is held
+- **A monitoring period's sessions in the auditor's ledger** (`Spot/MonitoringPeriod.lean`, Lean only; the Python it is held
   to is a reference in `lean/tests/test_period_difftest.py`): from the ledger's signed lines, under the auditor's
   challenger key, every session of a lane that the ledger opens on a root during a monitoring period, whatever its
   layout (`sessionsOf`), and of those the windows, the sessions whose layout holds the sample's family (`windowsOf`),
@@ -196,7 +196,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   another split the entries exactly whatever the stamps say. It refuses a ledger that does not reach the stop, a
   window in no period of the lane, a period left open or listing a session that is no window, a reserve never opened
   and a window that has not ended. It reads the ledger only: no window is audited here.
-- **Sampled proofs' period** (`Spot/PeriodAudit.lean`, `verity/sampled-proofs/period/v1`, Lean only, with the same
+- **SPOT's monitoring period** (`Spot/MonitoringPeriodAudit.lean`, `verity/sampled-proofs/period/v1`, Lean only, with the same
   reference): the check that every window of a lane's monitoring period passed the one-stage audit on its proofs
   (`OneStageZk`), on the one sample its challenger session gave it. Its commitment is the auditor's ledger; its
   evidence is the host's pins log and, for each window, the session's files and one case. The verifier's parameters

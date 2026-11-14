@@ -1,9 +1,9 @@
 /-
-Sampled proofs' period, the audits' half, and the period's check (`verity/sampled-proofs/period/v1`, `protocol`): did
+SPOT's monitoring period, the audits' half, and the period's check (`verity/sampled-proofs/period/v1`, `protocol`): did
 every root a lane committed at the auditor's challenger during a monitoring period, in a period of the lane that
-commits this registration's circuit, pass sampled proofs' audit, on the one sample the challenger gave it?
+commits this registration's circuit, pass SPOT's audit, on the one sample the challenger gave it?
 
-The period's check audits every window the ledger's half lists (`Spot.Period.windowsOf`) with the one-stage audit on
+The period's check audits every window the ledger's half lists (`Spot.MonitoringPeriod.windowsOf`) with the one-stage audit on
 the proofs themselves (`OneStageZk`). The verifier holds one set of parameters for the whole monitoring period
 (`AuditParams`): the ledger's half's, its copy of main's first-parent history (`main`), this registration's circuit
 (`registration`), and `audit`, one-stage v2's parameters less what a window sets. A case supplies nothing of the
@@ -74,12 +74,12 @@ needs them audited asks for each such registration's own check.
 -/
 module
 
-public import Spot.Period
+public import Spot.MonitoringPeriod
 public import Spot.OneStageZk
 
 @[expose] public section
 
-namespace Spot.Period
+namespace Spot.MonitoringPeriod
 
 open Lean (Json)
 open Flock (V)
@@ -482,4 +482,4 @@ def checkPiece : Json → V Json := checkPieceWith OneStageZk.checkBlobs
 /-- The period's check's answer with the stand-in for one-stage v2 (`stubInner`), as `checkPieceWith` gives it. -/
 def checkStubPiece : Json → V Json := checkPieceWith stubInner
 
-end Spot.Period
+end Spot.MonitoringPeriod
